@@ -2,7 +2,7 @@
 
 ## Overview
 
-Interactive cleanup of team trace data and agents. Every destructive action requires user confirmation via request_user_input.
+Interactive cleanup of team trace data and agents. Every destructive action requires user confirmation via main-chat user gate.
 
 ## Order of Operations
 
@@ -16,7 +16,7 @@ Interactive cleanup of team trace data and agents. Every destructive action requ
 Read `trace.jsonl` via `trace-ops.sh read`, calculate entry counts by kind.
 
 ```
-request_user_input:
+main-chat user gate:
   question: |
     Cleanup for team {TEAM_NAME}:
     
@@ -38,7 +38,7 @@ request_user_input:
 ## Step 2: Trace Cleanup
 
 ```
-request_user_input:
+main-chat user gate:
   question: |
     trace.jsonl: {N} entries
     Oldest: {date}, Newest: {date}
@@ -55,19 +55,19 @@ request_user_input:
 
 **Archive logic:**
 
-- Read current `trace.jsonl`
-- Split into keep/archive based on selection
-- Append archived entries to `trace-archive.jsonl` (create if not exists)
-- Rewrite `trace.jsonl` with kept entries only
-- Reset `trace.cursor` via `trace-ops.sh cursor <dir> set ""`
+Use the bundled `trace-ops.sh archive` for the whole operation after confirmation; never append or
+truncate trace files directly. Policies: `all`, `keep-days 30`, `keep-last 50`,
+`keep-issues-insights`. It holds the shared trace lock, binds regular-file identities, publishes
+archive/live/cursor together with rollback on error, and reports JSON counts. Concurrent supported
+operations can report locked: retry after the owner completes. Successive retries do not duplicate
+archived rows. Cursor resets only when rows move. Non-cooperative file edits are outside the lock
+contract; identity changes fail closed. Incomplete rollback retains the lock and recovery evidence:
+STOP and report its path; do not retry or remove that lock automatically.
 
 **EXECUTE** using shell:
 ```bash
 # Example: archive all, start fresh.
-# Truncation is LAST on purpose: if an earlier link fails the chain aborts with trace.jsonl intact.
-cat ".codex/teams/{TEAM}/trace.jsonl" >> ".codex/teams/{TEAM}/trace-archive.jsonl" && \
-bash "<skill-directory>/scripts/trace-ops.sh" cursor ".codex/teams/{TEAM}" set "" && \
-printf '' > ".codex/teams/{TEAM}/trace.jsonl" && \
+bash "<skill-directory>/scripts/trace-ops.sh" archive ".codex/teams/{TEAM}" all && \
 echo "✅ Archived" || echo "❌ FAILED"
 ```
 
@@ -82,7 +82,7 @@ roster has zero such rows and cleanup must not create a profile or row. Upgrade 
 Show inactive/problematic agents (domain agents only):
 
 ```
-request_user_input:
+main-chat user gate:
   question: |
     Inactive agents (0 tasks or last activity >30 days):
     | Agent | Last activity | Tasks total |
@@ -95,10 +95,10 @@ request_user_input:
     - "Keep all"
 ```
 
-If "per agent" — loop request_user_input for each:
+If "per agent" — loop main-chat user gate for each:
 
 ```
-request_user_input:
+main-chat user gate:
   question: "Agent {name}: {domain}, last active {date}, {N} tasks total. Delete?"
   options: ["Delete", "Keep"]
 ```
@@ -204,3 +204,8 @@ rm -rf ".codex/teams/{TEAM}" && echo "✅ Purged" || echo "❌ FAILED"
 Archive files live in `.codex/teams/{TEAM_NAME}/` alongside `trace.jsonl`.
 
 `trace-archive.jsonl` — same JSONL format as `trace.jsonl`. Entries appended on each cleanup. Multiple cleanups accumulate in the same archive file.
+
+
+## Native user gates
+
+Required approval: main presents a concrete, reviewable proposal in chat and waits for an actual user reply before dependent action. Existing authorization for the same scope remains valid; do not ask again. Optional clarification: use `request_user_input_async` only if exposed, or `request_user_input` only if available in the current runtime/mode, for optional choices and never approval. Otherwise ask in main chat. Delegated agents return unresolved questions to main. Silence, elapsed time and tool errors are not approval.

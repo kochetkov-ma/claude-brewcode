@@ -63,17 +63,17 @@ Model split:
 Group by type and complexity (avoid mixing haiku/sonnet in one block), balance line count, keep related files together (same package/dir). Data-file block (YAML/JSON/CSV with comments) -> haiku for unicode fixes.
 
 ## Phase 4 -- parallel execution
-Launch ALL Task calls in a single message for true parallelism. Each block prompt states its files, the sub-flow each file uses, the two-pass rules, and requests JSON.
+Main launches ALL Agent calls in one message. Each brief carries the SKILL.md Delegation fields,
+owned files/sub-flow/two-pass rules and JSON contract; delegates never nest or expand ownership.
 
 ```
-Task(subagent_type="general-purpose", model="haiku", prompt="[CUSTOM_INSTRUCTIONS_IF_ANY]\nBlock 1 files: [...]. Per file apply its flow rules from <ROOT>/skills/text-human/reference/flows/<flow>.md plus ai-patterns.md / human-patterns.md. Two-pass: STRIP then gated INJECT. Return JSON.")
-Task(subagent_type="general-purpose", model="sonnet", prompt="[CUSTOM_INSTRUCTIONS_IF_ANY]\nBlock 2 files: [...]. Same rules. Return JSON.")
+Agent(subagent_type="general-purpose", model="haiku", prompt="[CUSTOM_INSTRUCTIONS_IF_ANY]\nBlock 1 files: [...]. Per file apply its flow rules from <ROOT>/skills/text-human/reference/flows/<flow>.md plus ai-patterns.md / human-patterns.md. Two-pass: STRIP then gated INJECT. Return JSON.")
+Agent(subagent_type="general-purpose", model="sonnet", prompt="[CUSTOM_INSTRUCTIONS_IF_ANY]\nBlock 2 files: [...]. Same rules. Return JSON.")
 ```
 
-> `<ROOT>` = the value `${CLAUDE_PLUGIN_ROOT}` resolves to in THIS skill. Substitute the
-> absolute path into every sub-agent prompt before spawning — subagents get no plugin-root
-> variable of their own, so an unexpanded `${CLAUDE_PLUGIN_ROOT}` or `$BT_PLUGIN_ROOT`
-> leaves them with no flow rules and they humanize against nothing.
+> Resolve `<ROOT>` to this skill's `${CLAUDE_PLUGIN_ROOT}` before handing paths to general-purpose
+> SAs. Plugin-agent definitions substitute their own bare `${CLAUDE_PLUGIN_ROOT}`; that does not
+> grant a generic delegate this skill's resource path. Never use removed `$BT_PLUGIN_ROOT`.
 
 If a custom prompt was provided, prepend to EVERY sub-agent prompt:
 ```
@@ -97,7 +97,7 @@ Collect JSON from all agents -> merge stats -> unified Humanization Report (see 
 ## Error handling
 | Error | Action |
 |-------|--------|
-| Agent timeout | Continue with other blocks |
+| Agent failure/partial output | Keep completed edits/evidence, report incomplete block, continue others; never count unverified work done |
 | File read error | Skip, note in report |
 | Binary file | Skip, note in report |
 | No changes | Report "No humanization required" |

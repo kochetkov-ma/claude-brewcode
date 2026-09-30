@@ -2,6 +2,9 @@
 
 Multi-agent quorum review of E2E scenarios and tests.
 
+Run this coordination in the main session. Ordinary delegated agents cannot spawn Agent:
+return the bounded review request to the main orchestrator; never assume nested delegation.
+
 ## R0: Prerequisite Check
 
 Check `.claude/agents/e2e-*.md` count. If <3 → "Run `/brewcode:e2e install` first." STOP.
@@ -32,12 +35,11 @@ Each part should be reviewable independently.
 
 ## R4: Quorum Review (3x reviewer per part)
 
-For each part, spawn 3 e2e-reviewer agents in parallel via Task tool. One reviewer = ONE part
-(~<=5 files); a part bigger than that is split in R3 first, and every part's reviewers go out in
-ONE message.
+Per part: 3 independent e2e-reviewers via Agent, parallel in ONE message. One reviewer owns
+ONE part (~<=5 files); split larger parts in R3 first.
 
 ```
-Task(subagent_type="e2e-reviewer", prompt="
+Agent(subagent_type="e2e-reviewer", prompt="
 GOAL: this project's E2E suite is being audited before the user is asked to act on it; you are
       one of 3 independent votes on part {PART}, which is how we separate real defects from taste.
 ROLE: you own the review of part {PART}. Read-only -- do NOT fix anything, do NOT review other
@@ -71,7 +73,7 @@ Merge findings across all 3 reviewers per part.
 For confirmed findings only — one re-checker per part, all parts fanned out in ONE message:
 
 ```
-Task(e2e-automation-tester OR e2e-scenario-analyst, prompt="
+Agent(e2e-automation-tester OR e2e-scenario-analyst, prompt="
 GOAL: a quorum review flagged issues in this project's E2E suite; before anyone is asked to fix
       them we need a second, different pair of eyes so we do not churn on false positives.
 ROLE: you re-check the confirmed findings for part {PART}. Read-only -- do NOT fix anything, do

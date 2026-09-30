@@ -6,9 +6,8 @@
  * Channel: hookSpecificOutput.additionalContext — updatedInput is IGNORED on
  *          UserPromptSubmit in CC 2.1.x (silently dropped, no error).
  * Cadence: fires on the 1st real prompt, then every 10th (10, 20, 30, ...) —
- *          same session-keyed marker pattern as think-short-prompt-counter.mjs
- *          (private 0700 tmp dir we own, atomic write, lstat-only, planted
- *          symlink rejected). Meta-replies are skipped before the counter is
+ *          session-keyed markers in a private 0700 tmp dir we own (atomic write,
+ *          lstat-only, planted symlink rejected). Meta-replies are skipped before the counter is
  *          touched, so they never consume or land on an inject slot.
  *          role-recall.mjs re-injects after compaction, so coverage stays.
  * Cap:     9000 chars, under the 2.1.174 10K disk-spill threshold.

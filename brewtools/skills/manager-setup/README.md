@@ -11,7 +11,7 @@ The two layers are orthogonal: codewords shape the Manager mindset; the wall enf
 
 ## Codewords (SOFT — always active)
 
-Detection — `++m` (plan-aware), the review group `++rr` → `++r` (longest-prefix first), and `++a` (Architecture — standalone independent group, no prefix collision).
+Alphabetic codewords are case-insensitive standalone tokens. Manager, architecture, and review are independent groups; `++rr` wins over `++r`. A standalone `+++` adds cron planning only when the hook payload confirms Plan mode (`permission_mode === 'plan'`), independently of `++m`. Context order when combined is cron planning, manager, architecture, then the selected review block. Your original prompt, including codewords, is preserved.
 
 | Type anywhere in your prompt | Means | Injects | When |
 |------------------------------|-------|---------|------|
@@ -19,6 +19,7 @@ Detection — `++m` (plan-aware), the review group `++rr` → `++r` (longest-pre
 | `++rr` | Regression Review — after each significant phase: no regression + project standard + correctness; two-phase review→double-check→fix; final cross-review at task end | Regression Review discipline (`review-regression`) block | Always — tested before `++r`; codeword-only |
 | `++r` | Review — two-phase multi-agent review→double-check→fix after each significant change | Review discipline (`review-double`) block | Always — codeword-only (no ambient/wall injection) |
 | `++a` | Architecture — architecture-first directive before implementation: fits existing project architecture/patterns/rules, robust + scalable + SIMPLE (no over-engineering), find the closest well-built counterpart in the repo and take its principles (additive to conventions/rules/docs, not a replacement), clean seams | `[DIRECTIVE: ARCHITECTURE-FIRST]` block | Independent group; combines with `++m`/`++rr`/`++r`; mode-agnostic — same block in normal and plan mode (written into the plan in plan mode) |
+| `+++` | Plan task-specific session anti-drift scheduling for execution | `cron-plan` block | Only verified Plan mode; requires neither `++m` nor the hard wall |
 
 The block applies to that one turn only. When the HARD wall is armed, the Manager (full) block is also ambient-injected every turn — no codeword needed. Codewords and wall injection are independent. Review codewords (`++rr`/`++r`) are never ambient-injected.
 
@@ -27,7 +28,7 @@ The block applies to that one turn only. When the HARD wall is armed, the Manage
 | Command | What it does |
 |---------|-------------|
 | `/brewtools:manager-setup` | No argument = `status`. |
-| `/brewtools:manager-setup status` | Print wall state (armed/disarmed, level, registered?), prompt sources, and both injected blocks |
+| `/brewtools:manager-setup status` | Print wall state, prompt sources, codeword behavior, and resolved prompt blocks |
 | `/brewtools:manager-setup install` | Install the HARD wall guard into this project. Asks to confirm before arming (`AskUserQuestion`) unless your prompt already said so explicitly (e.g. "enable the hard wall") — plain `install` or autonomy phrasing never counts; declining still installs and leaves `state.hard=false`. `/reload` only on FIRST install. |
 | `/brewtools:manager-setup upgrade` | Re-copy the guard from the current plugin version and re-register if missing. `hard`/`level` preserved; aborts if not installed. |
 | `/brewtools:manager-setup enable` | Arm an already-installed wall (state flip only) — same confirm gate as `install`; declining aborts with nothing changed. Not installed → routes you to `install`. |
@@ -95,7 +96,7 @@ The HARD wall is an **installed-into-the-project** `PreToolUse` guard, NOT a plu
 
 | Bucket | Tools | Main session |
 |--------|-------|-------------|
-| ALWAYS-ALLOW | read: `Read`, `Grep`, `Glob`, `NotebookRead` · delegate: `Task`, `Agent`, `Skill`, `SlashCommand`, `ListAgents`, `SendMessage`, `Monitor` · plan: `EnterPlanMode`, `ExitPlanMode` · discovery: `ToolSearch` · track: `TaskCreate/Update/List/Get`, `TodoWrite`, `ReportFindings` · shells: `BashOutput`, `KillShell`, `KillBash` · MCP meta: `ListMcpResourcesTool`, `ReadMcpResourceTool` · `AskUserQuestion` | Allowed — none of them can mutate the workspace |
+| ALWAYS-ALLOW | read: `Read`, `Grep`, `Glob`, `NotebookRead` · delegate: `Task`, `Agent`, `Skill`, `SlashCommand`, `ListAgents`, `SendMessage`, `Monitor` · plan: `EnterPlanMode`, `ExitPlanMode` · discovery: `ToolSearch` · track: `TaskCreate/Update/List/Get`, `TodoWrite`, `ReportFindings` · timers: `CronCreate`, `CronList`, `CronDelete` · shells: `BashOutput`, `KillShell`, `KillBash` · MCP meta: `ListMcpResourcesTool`, `ReadMcpResourceTool` · `AskUserQuestion` | Allowed by this wall; each tool's permissions and active mode still apply |
 | ALWAYS-BLOCK | `Write`, `Edit`, `NotebookEdit`, `WebFetch`, `Artifact` (default-deny — it publishes), MCP-write tools | Denied |
 | LEVEL-gated | `Bash`, `WebSearch`, MCP-read tools | Decided by `level` |
 
@@ -134,6 +135,46 @@ Universal fallback: delegate to a subagent — `Task`/`Agent` are always allowed
 |------|-------------|-------|
 | `full` | `++m` (not in plan mode) | Manager role + protocol: decompose → TaskGraph → delegate → observe → integrate. Hands off everything. |
 | `planmode` | `++m` when `permission_mode === 'plan'` (auto — no separate codeword) | Full block + Plan Mode addon: the plan itself must encode the whole TaskGraph in English, pre-decomposed with owners, dependencies, and parallel markers. |
+| `cron-plan` | Standalone `+++` when `permission_mode === 'plan'` | Read-only anti-drift timer planning; scheduling deferred to execution |
+| `architect` | `++a` | Architecture-first design using project patterns |
+| `review-double` | `++r`, without `++rr` | Two-phase review discipline |
+| `review-regression` | `++rr` | Regression-focused review discipline |
+
+## Plan-only session anti-drift
+
+While already in Plan mode, type:
+
+```text
++++ plan the API migration and task tracking
+```
+
+This includes a future execution step through task-board: one unique session timer per active
+top-level task, hourly by default or at your requested cadence. Prepare the task's methodology,
+base work units, complete unique prompt, timezone, schedule id, delivered tick count, and stop
+rule. Child work units share their parent's timer. Planning writes no task files and creates or
+deletes no timers.
+
+Each delivered tick rereads goal, methodology, anti-drift controls, and user corrections;
+collects available active-agent evidence; reconciles statuses, dependencies, and remaining
+work; and refreshes the task graph. Retain all unfinished nodes and the latest ten completed
+nodes, preserving older completion evidence outside the active graph. Check drift against
+acceptance criteria, correct deviations within scope, and advance authorized unblocked work.
+
+Report at most five short lines: local time/timezone, tick number and elapsed time; 🟢 results;
+🔵 remaining work and next action; 🔴 present problems/blockers/questions; ⚪ drift verdict.
+Omit empty rows and keep full evidence in task records.
+
+The main session's task-board flow owns scheduling and verifies stopping on completion or
+cancellation. Missing scheduling tools are reported as a gap; stored intent is not a live
+timer. Timers are session-scoped, and scheduled time does not guarantee exact receipt or
+delivery after session closure. Outside verified Plan mode, `+++` adds no cron context.
+
+CronCreate, CronList, and CronDelete pass the hard wall so task-board can own live timer
+lifecycle during execution. This allowlist does not override read-only Plan mode: preparation
+stays in the plan, and timer creation/deletion waits for authorized execution.
+
+These are Claude Code product hooks and scheduling contracts. Codex uses its own native
+instructions and available tools; these files do not configure Codex runtime state.
 
 ## Customizing the prompt
 
@@ -195,6 +236,9 @@ Universal fallback: delegate to a subagent — `Task`/`Agent` are always allowed
 /brewtools:manager-setup refactor the auth module
 ```
 
-## Docs
+## Related
 
-Full docs: [https://doc-claude.brewcode.app/brewtools/skills/manager-setup/](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/)
+- [Brewtools overview](../../README.md)
+- [Skill source](SKILL.md) and [cron planning prompt](references/cron-plan.md)
+- [Task Board Setup](../task-board-setup/README.md)
+- [Full documentation](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/)

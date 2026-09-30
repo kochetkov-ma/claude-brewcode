@@ -1,14 +1,14 @@
 # 07 -- Step 5 (optional): CLAUDE.md optimization
 
-[DICT: CMD=root CLAUDE.md, LOCAL=CLAUDE.local.md, MOD=module/subproject, MODCMD=module-level CLAUDE.md, RULES=.claude/rules/*.md, BUDGET=line budget, TO=brewtools:text-optimize skill, DIR=free-text prompt directive]
+[DICT: CMD=root CLAUDE.md, LOCAL=CLAUDE.local.md, MOD=module/subproject, MODCMD=module-level CLAUDE.md, RULES=.claude/rules/**/*.md, BUDGET=line budget, TO=brewtools:text-optimize skill, DIR=free-text prompt directive]
 
-OPTIONAL, opt-in phase. PROPOSE-ONLY: every change is gated behind AskUserQuestion; never restructure without explicit approval. Runs AFTER the board is scaffolded + verified (P5), only if the user opted in at P0. Replaces the legacy "do NOT touch CLAUDE.md" stance: this phase is the SANCTIONED, gated way to touch it.
+OPTIONAL, opt-in at P0; runs AFTER board scaffolding + verification (P5). PROPOSE-ONLY: every change needs AskUserQuestion approval, including restructuring CLAUDE.md.
 
 > **Verified lazy-loading mechanic (source: code.claude.com/docs/en/memory, fetched 2026-06-14).** Bake this into every proposal rationale:
 > - Root CMD + all ancestor CLAUDE.md/CLAUDE.local.md: **loaded in full AT LAUNCH**, every session, regardless of length.
 > - Subdirectory (nested) CLAUDE.md: **NOT loaded at launch -- loaded ON-DEMAND when Claude reads a file in that subtree.**
 > - `@path` imports: **EAGER -- expanded into context at launch.** They help organization but do NOT reduce root context.
-> - `.claude/rules/*.md` with `paths:` FM: on-demand when matching files are touched; without `paths:`: at launch.
+> - `.claude/rules/**/*.md` (recursive) with `paths:` FM: on-demand when matching files are touched; without `paths:`: at launch.
 > CONSEQUENCE: to shrink always-on context, push MOD detail into a NESTED MODCMD. NEVER use `@import` for that goal (eager = no savings). This is the justification stated to the user in the module-split proposal.
 
 ---
@@ -26,12 +26,12 @@ If `OPTIN` is false -> SKIP this entire file; do nothing.
 
 ## Directive influence (DIR)
 
-`DIR` is free text. Match case-insensitive substrings to toggle sub-steps. Default = all sub-steps ENABLED (still each individually AskUser-gated). DIR only flips which sub-steps are OFFERED; it never bypasses a gate.
+Match DIR substrings case-insensitively; all sub-steps are offered by default. DIR toggles offers, never approval gates.
 
 | DIR hint (substring) | Effect |
 |----------------------|--------|
 | `skip module split`, `no module`, `no nested` | disable 5d (module split) |
-| `skip local`, `no local`, `keep secrets inline` | disable 5b (local-only extraction) -- but STILL warn if hard secrets found |
+| `skip local`, `no local`, `keep secrets inline` | disable 5b (preference extraction); still flag detected credentials, never copy their values into LLM instructions |
 | `skip dedup`, `no dedup`, `skip rules` | disable 5e (rules dedup/compress) |
 | `also dedupe rules`, `dedup rules` | force-enable 5e even if other hints narrow scope |
 | `budget N`, `max N lines`, `target N` | override BUDGET_OPTIMAL=N (and OVER=N*1.5 rounded) |
@@ -39,7 +39,7 @@ If `OPTIN` is false -> SKIP this entire file; do nothing.
 | `report only`, `dry run`, `propose only` | run 5a detection + present a full plan, but make NO edits even if approved -- emit plan as the deliverable |
 | anything else | record as free-form intent; apply best-effort to phrasing of proposals, do NOT invent new behaviors |
 
-If DIR is ambiguous or conflicts (e.g. `skip rules` + `also dedupe rules`), surface the conflict in the P5.5 AskUser intro and let the user pick.
+Ambiguous/conflicting DIR (e.g. `skip rules` + `also dedupe rules`) -> user resolves it in the P5.5 AskUser intro.
 
 ---
 
@@ -52,11 +52,12 @@ Locate the root CMD: prefer `TARGET/CLAUDE.md`, else `TARGET/.claude/CLAUDE.md`.
 CMD=""
 for c in "$TARGET/CLAUDE.md" "$TARGET/.claude/CLAUDE.md"; do test -f "$c" && CMD="$c" && break; done
 test -n "$CMD" && wc -l < "$CMD" | tr -d ' ' && echo "CMD=$CMD" || echo "NO_CMD"
-ls "$TARGET/.claude/rules/"*.md 2>/dev/null || echo "NO_RULES"
+if test -d "$TARGET/.claude/rules/"; then find "$TARGET/.claude/rules/" -type f -name '*.md' | sort; else echo "NO_RULES"; fi
 test -f "$TARGET/CLAUDE.local.md" && echo "LOCAL_EXISTS" || echo "LOCAL_ABSENT"
 ```
 
-Then `Read` the CMD (and each `RULES` file) into context. Produce a DETECTION object (no writes):
+Scan CMD and RULES locally for credential candidates before reading their prose; redact values from tool output.
+Read sanitized content only. Never open credential stores. Produce a DETECTION object (no writes):
 
 ```
 CMD_PATH    = <abs>
@@ -64,7 +65,7 @@ CMD_LINES   = <int>                # current line count
 BUDGET_OPTIMAL = 200               # or DIR override
 BUDGET_OVER    = 300               # or DIR override (optimal*1.5)
 OVER        = CMD_LINES > BUDGET_OVER         # bool
-LOCAL_ITEMS = [ {line, snippet, kind} ... ]   # see 5b heuristics
+LOCAL_ITEMS = [ {line, snippet, kind} ... ]   # secrets: masked snippet only, never a value; see 5b
 MODULES     = [ {dir, why, has_own_cmd} ... ] # see 5d detection
 RULES       = [ {path, lines} ... ]
 DUP_SPANS   = [ {a, b, overlap_summary} ... ] # cross-file dup/overlap, see 5e
@@ -82,25 +83,25 @@ Scan CMD lines for items that should NOT be in a team-shared, committed file:
 | secret | `password`, `passwd`, `secret`, `token`, `api[_-]?key`, `bearer`, `BEGIN .*PRIVATE KEY`, AWS-style `AKIA[0-9A-Z]{16}`, long base64/hex blobs assigned to a var |
 | abs machine path | absolute paths under `/Users/<name>/`, `/home/<name>/`, `C:\Users\`, `/opt/<host-specific>` -- machine/user-specific, not repo-relative |
 | host/user config | personal localhost ports/URLs, `localhost:<port>` sandbox URLs, `~/.ssh`, hostnames, personal emails, "my " sandbox/test data |
-NEVER print full secret values back to the user in the proposal -- mask (`sk-...AB12`). Flag line numbers + masked snippet + kind.
+NEVER expose secret values in tool output, proposals or any LLM file. Flag line numbers + masked snippet (`sk-...AB12`) + kind. Detection is heuristic; uncertain items are held for review, not copied.
 
 ---
 
-## 5b. PROPOSE: extract local-only items -> CLAUDE.local.md  (gated)
+## 5b. PROPOSE: local preferences -> CLAUDE.local.md; credentials -> references only (gated)
 
-If `DIR` disabled 5b: skip, BUT if any `kind=secret` was found, still emit a one-line warning ("hard secrets detected in committed CLAUDE.md; consider re-running without skip-local").
+If `DIR` disabled 5b: skip, but flag any detected credentials without values. Never interpret this as permission to copy them.
 
-If LOCAL_ITEMS non-empty, AskUserQuestion:
+Separate non-secret personal preferences/machine paths/host config from credentials. If LOCAL_ITEMS non-empty, AskUserQuestion:
 
-> **Found N local-only items in committed CLAUDE.md** (secrets / machine paths / host config). These leak into every teammate's context and (for secrets) into git. Propose: move them to `CLAUDE.local.md` (gitignored, loaded only for you), leaving CMD clean.
-> - Move all N to CLAUDE.local.md (create it + add to .gitignore)
+> **Found N local-only items in CLAUDE.md.** Move approved non-secret preferences to `CLAUDE.local.md` (gitignored, automatically loaded for you). Credential values must stay outside all LLM instruction files; propose only a lookup reference naming an environment variable/keychain/secret-manager entry, with separate approval for removing an existing value.
+> - Move non-secret preferences; approve concrete credential references separately
 > - Let me pick which to move
 > - Leave as-is (do not touch)
 
 On approval:
 1. If `CLAUDE.local.md` absent -> create it at `TARGET/CLAUDE.local.md` with a header `# Local-only (gitignored) -- machine/user-specific, not committed`.
-2. Append the approved items (verbatim values) under topical headings.
-3. Remove them from CMD (Edit, not Write; bottom-up by line number).
+2. Merge approved NON-SECRET items under topical headings; never clobber existing LOCAL. Do not copy credential values to LOCAL, CMD, MODCMD, RULES or other LLM files, even when gitignored.
+3. Remove approved preferences from CMD (Edit, bottom-up). Replace an existing credential only after explicit approval of its concrete non-secret lookup reference and a confirmed secure source outside LLM files; otherwise leave it unchanged and report the unresolved item. Never relocate credentials or rewrite history automatically.
 4. Ensure `CLAUDE.local.md` is gitignored:
    ```bash
    grep -qxF "CLAUDE.local.md" "$TARGET/.gitignore" 2>/dev/null || echo "(needs .gitignore entry)"
@@ -128,7 +129,7 @@ If OVER: assemble a concrete decomposition PLAN combining 5d (module split), 5e 
 > - Apply only steps I pick
 > - Skip decomposition (leave CLAUDE.md as-is)
 
-Apply ONLY approved steps. Each sub-step (5d/5e/5f) below still narrates what it does, but execution is gated by THIS approval (do not re-ask per sub-step unless the user chose "only steps I pick", then confirm the subset).
+Narrate 5d/5e/5f and apply ONLY steps approved here. Re-ask only to confirm the subset after "only steps I pick".
 
 ---
 
@@ -146,7 +147,7 @@ For each approved MOD in MODULES:
    | web    | apps/web/      | UI, build, e2e |
    ```
    Keep ONLY the index in root; the detail lives in the MODCMD.
-> Rationale to state in the proposal: nested CLAUDE.md loads ONLY when Claude touches that subtree, so module detail leaves the always-on root context. Do NOT use `@import` here -- imports are eager and would not save context.
+> State the verified loading rationale above: nested MODCMD reduces launch context; eager `@import` does not.
 > Do NOT move CROSS-cutting / repo-wide rules into a single module; those stay in root or go to a `.claude/rules/*.md`.
 
 ---
@@ -156,13 +157,13 @@ For each approved MOD in MODULES:
 1. From DUP_SPANS, identify content duplicated or overlapping across `.claude/rules/*.md` and between rules and CMD.
 2. PROPOSE (folded into 5c plan, or its own AskUser if 5c not triggered): single-source each fact. Keep repo-wide invariants in CMD or an unscoped rule; keep path-specific guidance in a `paths:`-scoped rule. Delete the duplicate copies.
 3. Apply approved dedup via Edit.
-> Single-source-of-truth: a fact in two places drifts; pick the correct home (path-scoped rule for path-specific, CMD/unscoped rule for global).
+> Canonical home: path-scoped rule for path-specific facts; CMD/unscoped rule for global facts.
 
 ---
 
 ## 5f. Delegate compression to brewtools:text-optimize
 
-After structural moves (5b/5d/5e), the remaining CMD + touched MODCMD + RULES should be token-compressed by the dedicated skill, NOT hand-compressed here.
+After 5b/5d/5e, delegate compression of remaining CMD + touched MODCMD + RULES to TO; do not hand-compress.
 
 - Recommend/invoke: `brewtools:text-optimize` auto-detects `CLAUDE.md` and `.claude/rules/*.md` as LLM-only files and selects DEEP mode (DICT header + symbol substitution + verification rounds).
 - Default invocation (after this phase's edits are approved + applied):
@@ -172,14 +173,14 @@ After structural moves (5b/5d/5e), the remaining CMD + touched MODCMD + RULES sh
   ```
   Multiple files in one call run in parallel: `/brewtools:text-optimize CLAUDE.md, <MOD>/CLAUDE.md`.
 - DIR `aggressive`/`deep` -> pass `-d`; DIR `max`/`extreme`/`atomic` -> pass `-x` (max mode, 2 mandatory verify rounds). Otherwise let auto-detect pick deep for these files.
-- text-optimize has its OWN AskUser/verification; do not duplicate it here. This phase's job is to RECOMMEND/INVOKE it on the touched files, then re-count lines for the final report.
+- TO owns its AskUser/verification; do not duplicate it. RECOMMEND/INVOKE on touched files, then re-count for the report.
 > Do NOT inline-reimplement compression. Single source of compression logic = text-optimize.
 
 ---
 
 ## 5g. Markup / structure pass (all touched docs)
 
-For every doc this phase wrote or edited (CMD, MODCMD, CLAUDE.local.md, touched RULES): ensure headers form a clean hierarchy, prose -> tables/bullets where it compresses, code fences valid, consistent terminology. This is light and folds into text-optimize's structural rules; do not double-apply if 5f ran on the same file.
+For CMD, MODCMD, LOCAL and RULES edited here: clean heading hierarchy, compact tables/bullets, valid fences and consistent terms. TO covers this structure; do not repeat it on files handled by 5f.
 
 ---
 
@@ -191,7 +192,7 @@ wc -l < "$CMD_PATH" | tr -d ' '
 ```
 Report:
 - CMD line count: BEFORE -> AFTER (vs optimal/over).
-- Local-only items moved: count + that CLAUDE.local.md was created/updated + gitignore status.
+- Non-secret preferences moved: count + LOCAL created/updated + gitignore status; credentials: references changed or unresolved, values never copied.
 - Modules split: list of MODCMD written + that root now indexes them.
 - Rules dedup: spans removed.
 - text-optimize: whether invoked, mode, resulting reduction.
@@ -209,6 +210,6 @@ Set `CMD_DECOMPOSED = true` iff 5d wrote/updated at least one MODCMD -- this fla
 | No root CLAUDE.md | report + SKIP (do NOT create a root CLAUDE.md) |
 | User declines a proposal | make NO edit for that sub-step; proceed to next |
 | `report only` / dry-run DIR | detection + full plan only; ZERO edits even if "approve" |
-| Secret found | mask in output; on move, warn that gitignore != history purge; never echo full value |
+| Secret found | mask before tool output; never copy values to LLM files; concrete reference/removal requires approval; gitignore != history purge |
 | DIR conflict | surface in AskUser intro; user decides |
 | Edits | Edit (not Write), bottom-up by line number; never clobber an existing MODCMD |

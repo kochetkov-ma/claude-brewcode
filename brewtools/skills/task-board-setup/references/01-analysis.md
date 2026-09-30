@@ -4,16 +4,18 @@
 
 Goal: inspect the TARGET repo and produce a FINDINGS object, then CONFIRM it with the user before any generation.
 
-## Spawn (parallel -- one message, multiple Task calls)
+## Spawn (parallel -- one message, multiple Agent calls)
 
 Spawn these in a SINGLE message so they run concurrently. Use `subagent_type` shown; fall back to `general-purpose` if an agent is unavailable.
+
+All Agent calls originate in the MAIN session; analysis agents return their bounded findings and never spawn children.
 
 > Sizing: one agent = ONE analysis dimension -- ~<=10 steps; a dimension too big for that is split further and all parts fanned out in the SAME message.
 
 ### Agent A -- domains + release style  (`Plan`)
 
 ```
-Task(subagent_type="Plan", prompt="
+Agent(subagent_type="Plan", prompt="
 GOAL: deploying a file-based Kanban into the repo at TARGET=<abs path>. You are scoping its id scheme --
   every emitted artifact is parametrized from this, so a wrong domain list produces broken ids repo-wide.
 ROLE: you own DOMAINS + RELEASE_STYLE. Analyze and report only -- do NOT create, write or edit any file, and
@@ -45,7 +47,7 @@ Evidence: bullet the files/commands you used (git tag -l | head, package.json/bu
 ### Agent B -- exclusions + doc inventory  (`Explore`)
 
 ```
-Task(subagent_type="Explore", prompt="
+Agent(subagent_type="Explore", prompt="
 GOAL: deploying a file-based Kanban into the repo at TARGET=<abs path>. The curator agent that ships with it
   must never write outside .claude/features/, and the board must be seeded from the task docs the repo already
   has -- both come from this inventory.
@@ -76,7 +78,7 @@ DOCS:
 ### Agent C -- domain agents inventory  (`Explore`)
 
 ```
-Task(subagent_type="Explore", prompt="
+Agent(subagent_type="Explore", prompt="
 GOAL: deploying a file-based Kanban into the repo at TARGET=<abs path>, with a spec + system-design layer on
   top. The design doc is NEVER authored by a lone generalist -- it is fanned out to the repo's OWN domain
   agents, one per touched domain. Which agents exist decides whether that rule can be upheld at all.
@@ -160,8 +162,8 @@ Present FINDINGS compactly, then ask. Confirm DOMAINS and EXCLUSIONS especially 
 > 7. Toggle SPEC_MODE (on/off)
 
 `SPEC_MODE=on` installs the spec + system-design layer: a `task-spec` skill, the spec/design templates,
-spec triage in `task-tracker`, and the coverage + close gates. `SPEC_MODE=off` behaves exactly as today --
-one task = one file, nothing extra emitted.
+spec triage in `task-tracker`, and the coverage + close gates. `SPEC_MODE=off` omits only that spec layer;
+task files, methodology, graph, session progress and anti-drift contracts remain baseline.
 
 > **SPEC_MODE default:** `on` when the repo has at least one domain agent OR more than one domain.
 > Otherwise no default -- ask the user plainly, with a one-line description of each choice.

@@ -8,13 +8,13 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 # publish — share content, get link
 
 <Callout type="caution">
-**Your content stays local until you explicitly run this skill.** The skill asks for namespace and password interactively — nothing is uploaded until you confirm both prompts. Owner tokens (needed for deletion) are stored only in `.claude/brewpage-history.md` and never printed to conversation.
+**Choose visibility before publishing.** The skill resolves the namespace and password policy before upload. Private means unlisted, not access-restricted: anyone with the link can open it unless a password is set. Owner tokens needed for deletion are stored locally and never printed to conversation.
 </Callout>
 
-<Callout type="warning" title="Password protection did not work before v5.0.0">
-Every upload block referenced a `PASS_H` array built from a `$PASSWORD` variable that nothing ever assigned. The password was resolved in conversation and each Bash call is a fresh shell, so the header expanded to nothing: the page was published **unprotected** while the skill still reported a password. Nothing surfaced the mismatch except opening the link logged out.
-
-The blocks now carry a `{password_header}` placeholder the model substitutes before running, and the skill states the rule as mandatory: substitute `-H "X-Password: <pass>"` or delete the line, and never report a password you did not substitute. **If you published a protected page with an earlier version, treat it as public** — delete it with its owner token and publish again.
+<Callout type="note" title="Use a local password file">
+Choose no password or provide the absolute path to an existing local password file. Do not paste
+the password into chat. The skill reuses that file through private transport and does not read
+its contents into model-visible output or generate and print a random password.
 </Callout>
 
 <Callout type="warning" title="Site publishing produced a fake success — fixed">
@@ -31,7 +31,7 @@ Publishing a directory as a site built its archive with `mktemp`, which leaves a
 
 <CardGrid>
   <Card title="brewpage-mcp" icon="package" href="https://www.npmjs.com/package/brewpage-mcp">
-    Official MCP server for BrewPage Sites API (v1.2.0, multi-file support). Install: `claude mcp add brewpage npx -- -y brewpage-mcp`
+    Official MCP server for BrewPage Sites API (v1.2.0, multi-file support). Install: `claude mcp add brewpage npx -- -y brewpage-mcp@1.2.0`
   </Card>
   <Card title="OpenAPI Spec" icon="document" href="https://kochetkov-ma.github.io/brewpage-openapi/">
     Full API contract, Scalar UI. Use when building custom integrations or calling the API directly.
@@ -49,7 +49,7 @@ Publishing a directory as a site built its archive with `mktemp`, which leaves a
 | Arguments | Inline text, a file path, a directory, or a `.zip` archive. `--ttl N` = days (default 15), `--entry filename` = entry file for site uploads |
 | Model | haiku |
 | Invocation | user-only (`disable-model-invocation: true`) |
-| Tools | Read, Bash, AskUserQuestion, Glob |
+| Tools | Read, Write, Bash, AskUserQuestion, Glob |
 | Requires | `jq` on `PATH`; `zip`/`unzip`/`node` as well for directory or zip site uploads |
 
 ## When to use
@@ -58,7 +58,7 @@ Publishing a directory as a site built its archive with `mktemp`, which leaves a
 - **Host a JSON dataset** — `/brewdoc:publish '{"status":"ok","count":42}'` → browseable JSON page
 - **Upload any file** — `/brewdoc:publish screenshot.png --ttl 1` → direct download link, expires in 1 day
 - **Deploy a static site** — `/brewdoc:publish ./dist/ --entry index.html` → full multi-file site with routing
-- **Password-protect a page** — set a password at the interactive prompt; page is hidden from gallery
+- **Password-protect a page** — choose an existing local password file without exposing its contents in chat
 
 ## Examples
 
@@ -89,6 +89,7 @@ Publishing a directory as a site built its archive with `mktemp`, which leaves a
 | Input | Detected type | Endpoint |
 |-------|--------------|----------|
 | Plain text or markdown string | HTML | `POST /api/html?format=markdown` |
+| Existing .md or .markdown file | MARKDOWN | `POST /api/html` with markdown format; rendered page rather than raw download |
 | Starts with `{` or `[` | JSON | `POST /api/json` |
 | Existing local file path | FILE | `POST /api/files` (multipart) |
 | Directory or `.zip` file | SITE | `POST /api/sites` (archive built/verified by `publish.mjs`, then uploaded) |
@@ -109,7 +110,7 @@ Entry file detection for sites: `--entry` flag → `index.html` if present → f
   <li>
     <div>
       <strong>Detect content type</strong>
-      <p>Classifies the input as SITE, FILE, JSON, or HTML — in that order. Computes size and shows a pre-publish summary before any interaction.</p>
+      <p>Classifies the input as SITE, MARKDOWN, FILE, JSON, or HTML — in that order. Computes size and shows a pre-publish summary.</p>
     </div>
   </li>
   <li>
@@ -120,8 +121,8 @@ Entry file detection for sites: `--entry` flag → `index.html` if present → f
   </li>
   <li>
     <div>
-      <strong>Ask password</strong>
-      <p>Choose: no password, a generated 6-char random password, or your own (min 4 chars). Password-protected pages are hidden from the gallery. The answer is then substituted into the <code>&#123;password_header&#125;</code> placeholder of the upload block — substituting it is a mandatory step, not an optional one.</p>
+      <strong>Resolve password policy</strong>
+      <p>Choose no password or provide the absolute path to an existing local password file with at least four characters. The prompt asks for the path only. Password contents stay outside chat and model-visible tool output; private transport supplies the upload header.</p>
     </div>
   </li>
   <li>
@@ -143,7 +144,15 @@ Entry file detection for sites: `--entry` flag → `index.html` if present → f
 
 **Security — owner token:** The `ownerToken` field from the API response is captured inside the Bash block and written directly to `.claude/brewpage-history.md`. The LLM only sees `OK {url}` or `FAILED: ...` — never the token value, and never the raw response body on failure.
 
-**Security — password header:** `{password_header}` is a placeholder in the same class as `{content}`, `{ns}` and `{days}` — the model rewrites it before the block runs. There is no `$PASSWORD` shell variable and never was one that got assigned; that is exactly what made the pre-5.0.0 version publish unprotected pages. Substituting is mandatory: `-H "X-Password: <pass>"` when a password was chosen, the whole line deleted when it was not.
+**Security — password policy:** each upload uses explicit none or file mode. None ignores all
+password files, including stale inputs from previous runs. File mode takes only an existing
+local source path; the helper copies its bytes into private transport and supplies a curl header
+file. Passwords never become shell literals, curl arguments, conversation output, or generated
+random values. Invalid files or control characters stop publishing.
+
+**Run isolation:** allocate a unique private run directory before preparing inputs. Do not reuse
+a previous run or shared input directory. Content and target paths belong to that run; only the
+password source path is recorded, and its contents are not read through model-visible tools.
 
 **History file format** — each upload block creates `.claude/brewpage-history.md` with this header if it does not exist yet, then appends one row:
 

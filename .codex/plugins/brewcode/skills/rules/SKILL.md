@@ -30,3 +30,7 @@ Before the first write — and before the report on a read-only run — state in
 7. Report changed rules, index rows, optimization measurements, and validation evidence.
 
 The index makes rules discoverable; it does not auto-load their bodies. During later work, read the indexed rule whose `Load when` condition matches the task.
+
+## Native user gates
+
+Required approval: main presents a concrete, reviewable proposal in chat and waits for an actual user reply before dependent action. Existing authorization for the same scope remains valid; do not ask again. Optional clarification: use `request_user_input_async` only if exposed, or `request_user_input` only if available in the current runtime/mode, for optional choices and never approval. Otherwise ask in main chat. Delegated agents return unresolved questions to main. Silence, elapsed time and tool errors are not approval.

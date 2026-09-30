@@ -4,7 +4,7 @@ description: "Documentation plugin for Claude Code: docsync-setup, memory-sync-s
 order: 20
 ---
 
-import { Card, CardGrid, Callout, InstallPrompt } from '../../../components/mdx';
+import { Card, CardGrid, Callout, InstallPrompt, UpdateNotice } from '../../../components/mdx';
 
 # Brewdoc Overview
 
@@ -12,8 +12,11 @@ Brewdoc is a documentation toolkit plugin (a set of utilities for working with d
 It keeps documentation in sync with the codebase, optimizes content for LLM consumption,
 and exports documents to ready-made formats.
 
+**5 skills · no shipped agents · no registered plugin hooks.** Optional docsync hooks are
+installed in the target project.
+
 <Callout type="note" title="The -setup naming rule">
-  A `-setup` suffix marks a skill that **installs a mechanism you afterwards use instead of the skill** -- project-local hooks, or a generated `/memory-sync` command. Recurring tools you run again and again keep bare names (`md-to-pdf`, `publish`, `my-claude`). Every `-setup` skill shares one canonical mode set, in this order: `status | install | upgrade | enable | disable | uninstall | purge`. No argument means `status` when it is installed and `install` when it is not. **Every** brewdoc skill -- `-setup` and bare tool alike -- is **user-invoked only**: `user-invocable: true` plus `disable-model-invocation: true`, so the model never fires any of them on its own and none of their descriptions occupy its context. That holds for all 28 skills in the suite, and it is a deliberate trade about context cost rather than an oversight -- see the [FAQ](/faq/#auto-invoke).
+  A `-setup` suffix marks a skill that **installs a mechanism you afterwards use instead of the skill** -- project-local hooks, or a generated `/memory-sync` command. Recurring tools you run again and again keep bare names (`md-to-pdf`, `publish`, `my-claude`). Every `-setup` skill shares one canonical mode set, in this order: `status | install | upgrade | enable | disable | uninstall | purge`. No argument means `status` when it is installed and `install` when it is not. **Every** brewdoc skill -- `-setup` and bare tool alike -- is **user-invoked only**: `user-invocable: true` plus `disable-model-invocation: true`, so the model never fires any of them on its own and none of their descriptions occupy its context. That holds for all 27 distributed skills in the suite -- see the [FAQ](/faq/#auto-invoke).
 </Callout>
 
 ## Installation
@@ -50,11 +53,21 @@ Brewdoc contains 5 skills, each handling a separate documentation task.
   </Card>
   <Card title="Publish" icon="link" href="/brewdoc/skills/publish/">
     Publish text, markdown, JSON, files, or a whole multi-file site (directory or `.zip`) to brewpage.app.
-    Interactive namespace and password selection. Owner token saved locally for later delete. Needs `jq` (and `zip` for directory uploads).
+    Choose no password or an existing local password file without pasting its contents.
+    Owner token saved locally for later delete. Needs `jq` (and `zip` for directory uploads).
   </Card>
 </CardGrid>
 
 ## Commands
+
+Docsync installation validates inputs before writing hooks, configuration and settings. It retains
+existing settings backups and session state. On a write failure, recovery restores only files
+that still match this run's writes, preserves concurrent edits and reports any recovery gap.
+
+Generated memory-sync honors user restrictions such as "only rules" or "do not touch agents".
+Its scope, depth and reach are separate choices. It verifies claims against current code and
+loading behavior, with non-growth and independent verification; preserving useful material
+requires the documented evidence and budget gates rather than widening the requested scope.
 
 | Command | Purpose | Model | Arguments |
 |---------|---------|-------|-----------|
@@ -91,7 +104,7 @@ conversation use `${CLAUDE_SKILL_DIR}` to access their own files.
   Each skill is self-contained and independent of the others.
 
   **Brewcode** covers the project's own engineering surface: conventions, rules, domain
-  agent teams, semantic code search and deep review — 9 skills, 5 agents, 2 lifecycle hooks.
+  agent teams, semantic code search and deep review — 9 skills, 5 agents, 4 registered hook commands.
 
   Both plugins install from the same `claude-brewcode` marketplace but operate independently.
 </Callout>
@@ -117,4 +130,9 @@ Every artifact a brewdoc `-setup` skill installs now carries the same provenance
   <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewdoc/">
     Source code, README, and configuration files.
   </Card>
+  <Card title="Memory Sync Setup" icon="brain" href="/brewdoc/skills/memory-sync-setup/">
+    Scope controls and evidence-backed synchronization for project instructions.
+  </Card>
 </CardGrid>
+
+<UpdateNotice />

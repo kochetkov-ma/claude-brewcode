@@ -86,6 +86,82 @@ try {
   assert.equal(portableStatus.stdout.includes(`project_root=${realpathSync(project)} root_resolved=yes`), true, 'deadline status must resolve project state above a nested cwd');
   assert.equal(portableStatus.stdout.includes('project: guard=no cleanup=no guard_refs=1 cleanup_refs=1 legacy_refs=0 settings_valid=yes'), true, 'deadline status must recognize one exact guard and one exact cleanup');
 
+  // GIVEN: real installed assets and metadata written by the authoritative config producer,
+  // with an older release version but the current runbook content_version.
+  const hooksDir = join(project, '.claude', 'hooks');
+  mkdirSync(hooksDir, { recursive: true });
+  for (const script of ['agent-deadline-guard.mjs', 'agent-deadline-cleanup.mjs']) {
+    writeFileSync(join(hooksDir, script), readFileSync(join(HERE, '..', 'assets', script)));
+  }
+  const configPath = join(project, '.claude', 'agent-deadline.json');
+  const configBlock = fencedBlockAfter(readFileSync(RUNBOOK, 'utf8'), '**EXECUTE** config write');
+  const configWrite = spawnSync('bash', ['-c', configBlock], { encoding: 'utf8', env: { ...statusEnv, ROOT: project, RUNBOOK, MINUTES: '20', OVERRIDES: '{}', PLUGIN_VERSION: '1.0.0' }, timeout: 30000 });
+  assert.equal(configWrite.status, 0, `authoritative deadline producer must write current CV: ${configWrite.stderr}`);
+  const currentConfig = JSON.parse(readFileSync(configPath, 'utf8'));
+  assert.equal(currentConfig.version, '1.0.0', 'fixture release provenance is older than the installed plugin');
+  const settingsBeforeProbe = readFileSync(settingsPath, 'utf8');
+
+  // WHEN: the actual skill probe reads producer-shaped installation metadata.
+  const currentContent = spawnSync('bash', ['-c', statusBlock], { cwd: nested, encoding: 'utf8', env: statusEnv, timeout: 30000 });
+
+  // THEN: matching CVs remain current despite older release provenance; status is read-only.
+  assert.equal(currentContent.status, 0, 'deadline metadata status exits successfully');
+  assert.match(currentContent.stdout, /project:.*config_version=1\.0\.0.*content_state=current/, 'matching installed content must not trigger an upgrade for release drift');
+  assert.equal(readFileSync(settingsPath, 'utf8'), settingsBeforeProbe, 'current status preserves all foreign settings byte-for-byte');
+
+  // GIVEN: the producer-shaped config has a valid but older content version.
+  writeFileSync(configPath, JSON.stringify({ ...currentConfig, content_version: '0.0.1' }));
+  // WHEN: the canonical probe compares content metadata.
+  const staleContent = spawnSync('bash', ['-c', statusBlock], { cwd: nested, encoding: 'utf8', env: statusEnv, timeout: 30000 });
+  // THEN: real content drift is stale, without touching settings.
+  assert.equal(staleContent.status, 0, 'stale deadline metadata remains a readable status');
+  assert.match(staleContent.stdout, /project:.*content_state=stale/, 'changed config content version reports stale');
+  assert.equal(readFileSync(settingsPath, 'utf8'), settingsBeforeProbe, 'stale status preserves foreign settings');
+
+  // GIVEN: current config metadata but a changed installed cleanup hook CV.
+  writeFileSync(configPath, JSON.stringify(currentConfig));
+  const cleanupPath = join(hooksDir, 'agent-deadline-cleanup.mjs');
+  const cleanupBytes = readFileSync(cleanupPath, 'utf8');
+  writeFileSync(cleanupPath, cleanupBytes.replace(/content_version=[0-9.]+/, 'content_version=0.0.1'));
+  // WHEN: status compares each installed hook with its own source asset.
+  const staleHook = spawnSync('bash', ['-c', statusBlock], { cwd: nested, encoding: 'utf8', env: statusEnv, timeout: 30000 });
+  // THEN: the secondary hook cannot hide behind current config/guard metadata.
+  assert.equal(staleHook.status, 0, 'secondary hook CV remains readable');
+  assert.match(staleHook.stdout, /project:.*content_state=stale/, 'changed cleanup hook CV reports stale');
+  assert.match(staleHook.stdout, /content_findings=agent-deadline-cleanup\.mjs:0\.0\.1->[0-9]+\.[0-9]+\.[0-9]+/, 'status names the stale secondary hook and both CVs');
+  writeFileSync(cleanupPath, cleanupBytes);
+
+  for (const [label, contentVersion] of [['missing', undefined], ['malformed', 'not-a-version']]) {
+    // GIVEN: installed components with missing/malformed config CV.
+    writeFileSync(configPath, JSON.stringify({ ...currentConfig, content_version: contentVersion }));
+    // WHEN: status reads incomplete metadata.
+    const partial = spawnSync('bash', ['-c', statusBlock], { cwd: nested, encoding: 'utf8', env: statusEnv, timeout: 30000 });
+    // THEN: no release-version fallback can manufacture a current result.
+    assert.equal(partial.status, 0, `${label} deadline CV is reported without aborting`);
+    assert.match(partial.stdout, /project:.*config_content_version=n\/a.*content_state=partial/, `${label} CV reports partial explicitly`);
+    assert.equal(readFileSync(settingsPath, 'utf8'), settingsBeforeProbe, `${label} metadata probe never changes foreign settings`);
+  }
+
+  // GIVEN: current content that was deliberately disabled.
+  writeFileSync(configPath, JSON.stringify({ ...currentConfig, enabled: false }));
+  const disabledBytes = readFileSync(configPath, 'utf8');
+  // WHEN: the canonical status probe runs.
+  const disabledContent = spawnSync('bash', ['-c', statusBlock], { cwd: nested, encoding: 'utf8', env: statusEnv, timeout: 30000 });
+  // THEN: content freshness and enabled state stay independent, and neither file changes.
+  assert.equal(disabledContent.status, 0, 'disabled deadline status succeeds');
+  assert.match(disabledContent.stdout, /project:.*enabled=false.*content_state=current/, 'disabled setup stays disabled with current content');
+  assert.equal(readFileSync(configPath, 'utf8'), disabledBytes, 'status does not re-enable or rewrite the disabled config');
+  assert.equal(readFileSync(settingsPath, 'utf8'), settingsBeforeProbe, 'disabled status leaves foreign settings untouched');
+
+  // GIVEN: a malformed installed hook marker containing a valid-looking prefix.
+  writeFileSync(cleanupPath, cleanupBytes.replace(/content_version=([0-9.]+)/, 'content_version=$1broken'));
+  // WHEN: the canonical status reads its CV token.
+  const malformedHook = spawnSync('bash', ['-c', statusBlock], { cwd: nested, encoding: 'utf8', env: statusEnv, timeout: 30000 });
+  // THEN: malformed metadata is partial, with no prefix-based freshness guess.
+  assert.equal(malformedHook.status, 0, 'malformed hook metadata is reported without aborting');
+  assert.match(malformedHook.stdout, /project:.*enabled=false.*content_state=partial/, 'malformed hook CV remains partial without re-enabling');
+  writeFileSync(cleanupPath, cleanupBytes);
+
   // GIVEN: a legacy absolute guard entry appears beside the portable entries.
   parsed.hooks.PreToolUse.unshift({ matcher: '.*', hooks: [{ type: 'command', command: 'node', args: ['/legacy/.claude/hooks/agent-deadline-guard.mjs'], timeout: 5 }] });
   writeFileSync(settingsPath, JSON.stringify(parsed, null, 2));

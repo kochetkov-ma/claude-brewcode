@@ -192,6 +192,51 @@ const write = (p, body) => { mkdirSync(dirname(p), { recursive: true }); writeFi
   check('the genuinely owned stale ref is still swept', existsSync(stale), false);
 }
 
+// ── 9. recursive rule inventory stays consistent through scan, emit and status ──
+{
+  // GIVEN top-level/nested rules, an excluded dependency copy, and independently owned agents/conventions.
+  const root = project('recursive-rules');
+  write(join(root, 'CLAUDE.md'), '# Project\n');
+  write(join(root, '.claude/rules/root.md'), '# Root rule\n');
+  write(join(root, '.claude/rules/domain/nested rule.md'), '---\npaths: src/domain/**\n---\n# Scoped rule');
+  write(join(root, '.claude/rules/domain/deep/leaf.md'), '# Deep rule\n');
+  write(join(root, '.claude/rules/domain/readme.txt'), 'not a Markdown rule\n');
+  write(join(root, '.claude/rules/node_modules/copy.md'), '# Excluded dependency\n');
+  write(join(root, '.claude/agents/review/expert.md'), '---\nname: expert\ndescription: Review domain\n---\n');
+  write(join(root, '.claude/convention/root.md'), '# Convention\n');
+  write(join(root, '.claude/convention/nested/out.md'), '# Outside single-level convention scope\n');
+  const rulePaths = ['.claude/rules/domain/deep/leaf.md', '.claude/rules/domain/nested rule.md', '.claude/rules/root.md'];
+  const before = rulePaths.map(p => hash(join(root, p)));
+
+  // WHEN the real producer scans, emits its consumer and reports live status.
+  const scan = run(root, 'scan');
+  check('recursive rules scan exits 0', scan.code, 0);
+  check('scan lists every recursive rule exactly once in path order',
+    scan.out.split('\n').filter(l => l.startsWith('.claude/rules/')).map(l => l.split(' :: ')[0]), rulePaths);
+  check('nested rule metadata and unterminated final line survive scanning',
+    scan.out.split('\n').find(l => l.startsWith(rulePaths[1] + ' :: ')),
+    '.claude/rules/domain/nested rule.md :: 4 lines :: src/domain/**');
+  const expected = '6 files: 1 root, 0 nested CLAUDE.md, 0 AGENTS.md, 3 rules, 1 conventions, 1 agents, 0 skill files';
+  check('scan counts recursive rules without top-level double counting',
+    scan.out.split('\n').find(l => l.startsWith('SURFACE_COUNTS=')), `SURFACE_COUNTS=${expected}`);
+  const emit = run(root, 'emit');
+  check('recursive-rule emit exits 0', emit.code, 0);
+  check('emitted consumer stamps the same complete inventory',
+    read(join(root, SKILL, 'SKILL.md')).split('\n').find(l => l.startsWith('surface_files:')), `surface_files: "${expected}"`);
+  const status = run(root, 'status');
+  check('recursive-rule status exits 0', status.code, 0);
+  check('status agrees on live and emitted counts without self-inventory drift',
+    status.out.split('\n').filter(l => /^SURFACE_FILES_(NOW|STAMPED)=/.test(l)),
+    ['SURFACE_FILES_NOW=6', 'SURFACE_FILES_STAMPED=6']);
+  check('status keys remain unique for key-value consumers',
+    status.out.trim().split('\n').map(l => l.split('=')[0]).length,
+    new Set(status.out.trim().split('\n').map(l => l.split('=')[0])).size);
+  // THEN scan/status/emit did not mutate the source rules or independently owned files.
+  check('source rule bytes remain unchanged', rulePaths.map(p => hash(join(root, p))), before);
+  check('single-level convention ownership remains unchanged', read(join(root, '.claude/convention/nested/out.md')),
+    '# Outside single-level convention scope\n');
+}
+
 rmSync(BASE, { recursive: true, force: true });
 console.log(`\n${failed === 0 ? 'PASS' : 'FAIL'}  passed=${passed} failed=${failed}`);
 process.exit(failed === 0 ? 0 : 1);

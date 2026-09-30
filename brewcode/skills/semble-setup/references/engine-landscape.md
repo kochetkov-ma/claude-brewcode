@@ -35,7 +35,7 @@
 | PyPI | https://pypi.org/pypi/semble/json |
 | Бенчмарки | `benchmarks/README.md`, `benchmarks/results/*.json` (19 файлов результатов + `.gitkeep`) |
 | Кэш-логика | `_MIN_REVALIDATE_FACTOR = 3` в источнике semble |
-| Наши хуки | `brewcode/skills/semble-setup/assets/semble-{session,reminder,explore}.mjs` |
+| Наши хуки (current local producers, checked 2026-09-30) | `brewcode/skills/semble-setup/assets/semble-{session,prefetch,stats,reminder,subagent}.mjs` |
 | Наше правило | `.claude/rules/semble-first.md` |
 
 ### Тип
@@ -72,7 +72,7 @@ Embedding-based семантический поиск по коду. MCP-сер�
 | 1 | Лучшее качество/скорость в собственном открытом бенчмарке: NDCG@10 0.854 при индексе 518 ms и p50 запроса 0.91 ms |
 | 2 | Настоящая natural-language семантика — запрос это предложение, а не список ключевых слов |
 | 3 | Полностью offline и CPU-only, без внешних API-ключей и без векторной БД |
-| 4 | Нет демона -> нет фонового процесса, который надо чистить, и нет гонок за кэш |
+| 4 | Нет демона -> нет фонового процесса, который надо чистить. Exact content leaves в 0.5.5 устраняют cross-content eviction; параллельные вызовы, очистка и reindex всё ещё могут конкурировать за кэш |
 | 5 | Открытый воспроизводимый харнесс с сырыми JSON-результатами в репозитории |
 
 ### Минусы
@@ -163,7 +163,7 @@ Recall при фиксированном token-бюджете:
 | `semble-agents.sh` | - | патчит frontmatter агентов, добавляя 2 MCP-тула в `tools:` |
 | permissions | - | allow-only |
 
-Телеметрии использования у нас нет: в `state.json` нет ни одного счётчика вызовов. Ключи — `schema` (константа 1), `phase`, `enabled`, `scope`, `cacheRoot`, `repoHash`, `completed[]`, `notes[]`, `version`, `generated_by`, `last_updated` (дата последней записи, `YYYY-MM-DD`, `sc_state_patch` в `scripts/lib/semble-common.sh`).
+В `state.json` нет агрегированных счётчиков вызовов, но текущие хуки пишут best-effort события использования в `.claude/semble/telemetry.jsonl` (`semble-stats.mjs` и остальные наблюдатели выше). Ошибки записи подавляются; это не гарантия полного учёта и не сравнительная метрика против grep. Upstream `savings.jsonl` — отдельный источник. Ключи state — `schema` (константа 1), `phase`, `enabled`, `scope`, `cacheRoot`, `repoHash`, `completed[]`, `notes[]`, `version`, `generated_by`, `last_updated` (дата последней записи, `YYYY-MM-DD`, `sc_state_patch` в `scripts/lib/semble-common.sh`).
 
 ---
 

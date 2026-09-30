@@ -170,13 +170,13 @@ check('skill.tools', LINES.filter((l) => l.startsWith('allowed-tools:'))[0],
   'Write is declared — the inputs travel as files now');
 check('skill.lib.sourced', countLines(/^\. "\$\{CLAUDE_SKILL_DIR\}\/scripts\/brewpage-lib\.sh" \|\| \{ echo "FAILED: publish helper library not found"; exit 1; \}$/), 5,
   'all five publish blocks source the lib');
-check('skill.validate.called', countLines(/^bp_begin '\{ns\}' '\{days\}' '(\{entry\})?' \|\| exit 1$/), 5,
+check('skill.validate.called', countLines(/^bp_begin '\{ns\}' '\{days\}' '(\{entry\})?' '\{run_id\}' '\{password_mode\}' \|\| exit 1$/), 5,
   'all five blocks run the shared prelude, which validates before doing anything');
 check('skill.history.init', [
-  sh("bp_begin 'mysite' '15' '' >/dev/null", { cwd: BASE, env: { CLAUDE_PROJECT_DIR: BASE } }).status,
-  sh("bp_begin 'my site' '15' '' >/dev/null", { cwd: BASE, env: { CLAUDE_PROJECT_DIR: BASE } }).status,
+  sh("run=$(bp_prepare); bp_begin 'mysite' '15' '' \"${run##*/}\" none >/dev/null", { cwd: BASE, env: { CLAUDE_PROJECT_DIR: BASE } }).status,
+  sh("run=$(bp_prepare); bp_begin 'my site' '15' '' \"${run##*/}\" none >/dev/null", { cwd: BASE, env: { CLAUDE_PROJECT_DIR: BASE } }).status,
 ], [0, 1], 'bp_begin validates and prepares the history file, and fails the block on a bad namespace');
-check('skill.ns.quoted', [countLines(/^bp_begin /), countLines(/^bp_begin '\{ns\}' '\{days\}' '(\{entry\})?' \|\| exit 1$/)],
+check('skill.ns.quoted', [countLines(/^bp_begin /), countLines(/^bp_begin '\{ns\}' '\{days\}' '(\{entry\})?' '\{run_id\}' '\{password_mode\}' \|\| exit 1$/)],
   [5, 5], 'every substituted parameter sits inside single quotes');
 check('skill.history.relative', countLines(/HISTORY_FILE="\.claude/), 0,
   'no block hardcodes a cwd-relative history path any more');
@@ -189,8 +189,8 @@ check('skill.placeholders', [
 ], [0, 0, 0], 'no prompt-derived text, JSON or password placeholder is left in shell source');
 check('skill.password.file', countLines(/^RESPONSE=\$\(bp_post "https:\/\/brewpage\.app\/api\//), 5,
   'all five blocks POST through bp_post, which adds the X-Password header from a file');
-check('skill.payload.file', countLines(/-d @"\$PAYLOAD_FILE"/), 1,
-  'the JSON body is posted from a file, never inlined');
+check('skill.payload.file', countLines(/-d @"\$PAYLOAD_FILE"/), 2,
+  'JSON and markdown bodies are posted from files, never inlined');
 
 // ── BD01 + BD-N03: the upload is gated on the verifier ─────────────────────
 {
@@ -208,8 +208,8 @@ check('skill.payload.file', countLines(/-d @"\$PAYLOAD_FILE"/), 1,
   const ok = sh('bp_archive_gate 0 "ENTRY: index.html" "" && printf %s "$ENTRY"', { cwd: BASE });
   check('gate.confirm', [confirm.status, confirm.out.startsWith('CONFIRM:'), ok.status, ok.out], [2, true, 0, 'index.html'],
     'the gate stops for confirmation on flagged entries and otherwise hands back the manifest ENTRY');
-  check('gate.tmpzip', countLines(/^TMPZIP="\$BP_TMPDIR\/brewpage-site-\$\$\.zip"$/), 1,
-    'the archive path is derived per-process, not from mktemp');
+  check('gate.tmpzip', countLines(/^TMPZIP="\$BP_RUN_DIR\/site\.zip"$/), 1,
+    'the archive path belongs to the unique private run directory');
   check('gate.mktemp', countLines(/\$\(mktemp/), 0,
     'no block calls mktemp any more — its 0-byte file is what made zip exit 3 (BD-N03)');
 }

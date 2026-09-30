@@ -83,7 +83,9 @@ if [[ -n "$BASE_URL" ]]; then
     PROVIDER="deepseek"
   elif [[ "$BASE_URL" == *"z.ai"* ]]; then
     PROVIDER="glm"
-  elif [[ "$BASE_URL" == *"dashscope"* ]]; then
+  elif [[ "$BASE_URL" == 'https://dashscope-intl.aliyuncs.com/apps/anthropic' \
+       || "$BASE_URL" == 'https://coding-intl.dashscope.aliyuncs.com/apps/anthropic' \
+       || "$BASE_URL" =~ ^https://[A-Za-z0-9][A-Za-z0-9-]*\.(cn-beijing|ap-southeast-1|us-east-1)\.maas\.aliyuncs\.com/apps/anthropic$ ]]; then
     PROVIDER="qwen"
   elif [[ "$BASE_URL" == *"minimax"* ]]; then
     PROVIDER="minimax"

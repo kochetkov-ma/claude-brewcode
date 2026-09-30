@@ -4,21 +4,21 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { validateNativePackage } from './validate-native-package.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const VERSION = '4.0.6';
-const EXPECTED = { brewcode: [5, 3], brewdoc: [1, 0], brewtools: [5, 1] };
+const EXPECTED = { brewcode: [5, 3], brewdoc: [1, 0], brewtools: [4, 1] };
 const EXPECTED_SKILLS = {
-  brewcode: ['agents', 'convention', 'rules', 'superreview-setup', 'teams-setup'],
+  brewcode: ['agents', 'convention-setup', 'rules', 'superreview-setup', 'teams-setup'],
   brewdoc: ['md-to-pdf'],
-  brewtools: ['manager-setup', 'task-board-setup', 'text-human', 'text-optimize', 'think-short-setup']
+  brewtools: ['manager-setup', 'task-board-setup', 'text-human', 'text-optimize']
 };
 // Canonical setup-skill mode set, in the mandated order. A skill declares the subset it
 // supports in its source `argument-hint`; the Codex variant must document each one.
 const CANONICAL_MODES = ['status', 'install', 'upgrade', 'enable', 'disable', 'uninstall', 'purge'];
 const MANUAL_NATIVE_SKILLS = new Set([
-  'brewcode/convention', 'brewcode/rules', 'brewcode/teams-setup', 'brewtools/manager-setup', 'brewtools/task-board-setup',
-  'brewtools/think-short-setup'
+  'brewcode/agents', 'brewcode/convention-setup', 'brewcode/rules', 'brewcode/teams-setup', 'brewtools/manager-setup', 'brewtools/task-board-setup'
 ]);
 const errors = [];
 let retainedResources = 0;
@@ -37,7 +37,7 @@ const TEAM_SHARED_REQUIREMENTS = [
   '## Invocation and approval',
   'With no mode, choose `status` when the named team exists; otherwise choose `install`',
   'PLAN — brewcode:teams-setup',
-  'Every mutating mode requires `request_user_input` approval',
+  'Every mutating mode requires existing authorization or explicit main-chat approval',
   'An absent `trace.jsonl` is valid before the first event or after cleanup',
   'Before any team mutation, run the read-only, offline preflight `python3 -I -S scripts/prepare-tokenizer.py check`',
   'Only after that approval, run `python3 -I -S scripts/prepare-tokenizer.py prepare && python3 -I -S scripts/prepare-tokenizer.py check`',
@@ -66,6 +66,73 @@ function nativeTeamContractErrors(source) {
   }
   if (source.length > 12500) found.push(`native teams workflow exceeds compact ceiling: ${source.length} chars > 12500`);
   return found;
+}
+
+const NATIVE_AGENT_REFERENCES = [
+  'agent-context-and-execution.md', 'agent-frontmatter-fields.md', 'agent-scope-and-tools.md',
+  'agent-sync.md', 'agent-template.md'
+];
+
+function nativeAgentAuthoringErrors(skillRoot) {
+  const found = [];
+  const skillFile = path.join(skillRoot, 'SKILL.md');
+  if (!fs.existsSync(skillFile)) return ['native agent SKILL.md missing'];
+  const source = fs.readFileSync(skillFile, 'utf8');
+  for (const mode of ['status', 'list', 'create', 'improve', 'review', 'sync']) {
+    if (!source.includes('`' + mode + '`')) found.push(`native agent mode missing ${mode}`);
+  }
+  if (!source.includes('`*.toml`')) found.push('native agent discovery must enumerate TOML');
+  if (source.includes('../skills/references/mode-sync.md')) found.push('native agent sync has an unshipped sibling dependency');
+  const briefBlock = source.match(/```json\n([\s\S]*?)\n```/);
+  let brief;
+  try { brief = JSON.parse(briefBlock?.[1] || ''); }
+  catch { found.push('native agent main brief must be valid JSON'); }
+  if (brief) {
+    if (Object.keys(brief).sort().join(',') !== 'message,task_name') found.push('native agent main brief uses unsupported native fields');
+    if (typeof brief.message !== 'string') found.push('native agent main brief message must be text');
+    else {
+      for (const label of ['GOAL', 'ROLE', 'SCOPE', 'CONTEXT', 'CONSUMER', 'DONE']) {
+        if (!new RegExp('^' + label + ':', 'm').test(brief.message)) found.push(`native agent main brief lacks ${label}`);
+      }
+      if (!/^SCOPE:.*\/agents\/\{name\}\.toml\b/m.test(brief.message)) found.push('native agent main brief target must be TOML');
+      if (/\/agents\/\{name\}\.md\b|valid frontmatter/.test(brief.message)) found.push('native agent main brief still creates a foreign artifact');
+    }
+  }
+  const references = path.join(skillRoot, 'references');
+  if (!fs.existsSync(references)) return [...found, 'native agent references missing'];
+  const names = fs.readdirSync(references).filter(name => name.endsWith('.md')).sort();
+  if (names.join(',') !== NATIVE_AGENT_REFERENCES.join(',')) found.push('native agent reference inventory must match dedicated schema/template/discovery/context/sync');
+  for (const name of NATIVE_AGENT_REFERENCES) {
+    if (!fs.existsSync(path.join(references, name))) found.push(`native agent reference missing ${name}`);
+  }
+  const documents = [skillFile, path.join(skillRoot, 'README.md'), ...names.map(name => path.join(references, name))];
+  for (const file of documents) {
+    if (!fs.existsSync(file)) { found.push(`native agent document missing ${path.basename(file)}`); continue; }
+    const text = fs.readFileSync(file, 'utf8');
+    if (/code\.claude\.com|CC 2\.1|omitClaudeMd|cacheTtl|maxTurns|permissionMode|disallowedTools|mcpServers/.test(text)) found.push(`native agent document contains a foreign schema ${path.basename(file)}`);
+    for (const match of text.matchAll(/\]\(([^)]+)\)/g)) {
+      const link = match[1].split('#')[0];
+      if (!link || /^[a-z]+:\/\//i.test(link)) continue;
+      const target = path.resolve(path.dirname(file), link);
+      if (!fs.existsSync(target)) found.push(`native agent document has broken link ${link}`);
+    }
+  }
+  return found;
+}
+
+if (process.argv[2] === '--check-native-agent-authoring') {
+  const root = process.argv[3];
+  if (!root) {
+    process.stderr.write('usage: validate-compat.mjs --check-native-agent-authoring <skill-root>\n');
+    process.exit(2);
+  }
+  const found = nativeAgentAuthoringErrors(root);
+  if (found.length) {
+    process.stderr.write(found.map(error => '- ' + error).join('\n') + '\n');
+    process.exit(1);
+  }
+  process.stdout.write('Native agent authoring closure passed.\n');
+  process.exit(0);
 }
 
 if (process.argv[2] === '--check-native-teams') {
@@ -120,18 +187,17 @@ function checkHookCommand(plugin, distRoot, hook) {
   }
 }
 
-// brewcode/agents references documenting Claude Code's own env vars, hook events, and SA
-// runtime -- no Codex equivalent exists, so generate-compat.mjs never mirrors them.
+// Source runtime references are excluded from mechanical copying; applicable native agent
+// counterparts are generated independently and checked by nativeAgentAuthoringErrors.
 const CLAUDE_ONLY_AGENT_REFERENCES = [
   'references/agent-context-and-execution.md', 'references/agent-known-issues.md', 'references/agent-scope-and-tools.md',
   'references/hooks-changes.md', 'references/hooks-env.md', 'references/hooks-events.md', 'references/hooks-templates.md',
-  'references/hooks-types-config.md'
+  'references/hooks-types-config.md', 'references/hooks-io-contract.md'
 ];
 
 function resourceTarget(plugin, skill, relative) {
   if (relative === 'SKILL.md' || relative.startsWith('.claude/') || relative.includes('/__pycache__/') || relative.endsWith('.pyc')) return null;
   if (plugin === 'brewtools' && skill === 'manager-setup' && ['references/hard.md', 'references/intent-routing.md'].includes(relative)) return null;
-  if (plugin === 'brewtools' && skill === 'think-short-setup' && (relative === 'assets/think-short-subagent.mjs' || relative.startsWith('tests/'))) return null;
   if (plugin === 'brewcode' && skill === 'agents' && CLAUDE_ONLY_AGENT_REFERENCES.includes(relative)) return null;
   return relative.replaceAll('claude-md', 'agents-md').replaceAll('claude-local', 'codex-local');
 }
@@ -151,6 +217,14 @@ function checkFloatingInstalls(file, source) {
       if (!pinned) fail(`${path.relative(ROOT, file)}:${index + 1}: npm install must use an exact package version`);
     }
   }
+}
+
+function hasNonNativeSyntax(relativeFile, source) {
+  const modelAdvice = /^(?:brewtools\/\.codex|\.codex\/plugins\/brewtools)\/skills\/text-optimize\/references\/[^/]+\.md$/.test(relativeFile);
+  const checked = modelAdvice ? source.replace(/\bClaude(?: Code)?\b/g, '') : source;
+  const forbidden = /(Skill\s*\(\s*skill\s*=|spawn_agent\s*\([^)]*(?:subagent_type|model\s*=|prompt\s*=)|\$(?:code|doc):|\.codex\/agents\/[^\s'"`]+\.md|BC_PLUGIN_ROOT|BT_PLUGIN_ROOT|CLAUDE(?:_[A-Z0-9_]+)?|\bClaude(?: Code)?\b|\.claude(?:\/|\\)|(?:^|\/)plugins\/cache\/|settings(?:\.local)?\.json|AskUserQuestion|allowed-tools:|permissionMode:|@latest|:latest|@main|ubuntu-latest|default: "latest")/m;
+  const foreignExecution = /\b(?:Agent|Task|Read|Write|Edit|Grep|Glob|Bash)\s*\(|(?:^|[\s`])claude\s+(?:-p\b|--|plugin\b)/m;
+  return forbidden.test(checked) || (modelAdvice && foreignExecution.test(source));
 }
 
 for (const [plugin, [skillCount, agentCount]] of Object.entries(EXPECTED)) {
@@ -209,6 +283,14 @@ for (const [plugin, [skillCount, agentCount]] of Object.entries(EXPECTED)) {
     if (plugin === 'brewcode' && entry.name === 'teams-setup') {
       for (const error of nativeTeamContractErrors(source)) fail(`brewcode/teams-setup: ${error}`);
     }
+    if (plugin === 'brewcode' && entry.name === 'agents') {
+      for (const error of nativeAgentAuthoringErrors(path.dirname(skillFile))) fail(`brewcode/agents: ${error}`);
+    }
+    if (plugin === 'brewcode' && entry.name === 'convention-setup') {
+      for (const requirement of ['Codex does not auto-load', 'AGENTS.md', 'disabled; do not load', '.codex/convention/', 'content_version', 'scripts/convention.sh status']) {
+        if (!source.includes(requirement)) fail(`brewcode/convention-setup: missing native discovery/lifecycle contract ${requirement}`);
+      }
+    }
 
     const sourceRoot = path.join(pluginRoot, 'skills', entry.name);
     const targetRoot = path.join(skillsRoot, entry.name);
@@ -263,27 +345,24 @@ for (const [plugin, [skillCount, agentCount]] of Object.entries(EXPECTED)) {
     }
   }
 
-  const forbidden = /(Skill\s*\(\s*skill\s*=|spawn_agent\s*\([^)]*(?:subagent_type|model\s*=|prompt\s*=)|\$(?:code|doc):|\.codex\/agents\/[^\s'"`]+\.md|BC_PLUGIN_ROOT|BT_PLUGIN_ROOT|CLAUDE(?:_[A-Z0-9_]+)?|\bClaude(?: Code)?\b|\.claude(?:\/|\\)|(?:^|\/)plugins\/cache\/|settings(?:\.local)?\.json|AskUserQuestion|allowed-tools:|permissionMode:|@latest|:latest|@main|ubuntu-latest|default: "latest")/m;
   for (const root of [path.join(pluginRoot, '.codex'), distRoot]) {
     for (const file of textFiles(root)) {
       const source = fs.readFileSync(file, 'utf8');
-      if (forbidden.test(source)) fail(`${path.relative(ROOT, file)}: contains non-native or floating compatibility syntax`);
+      if (hasNonNativeSyntax(path.relative(ROOT, file), source)) fail(`${path.relative(ROOT, file)}: contains non-native or floating compatibility syntax`);
       if (/\bbc-rules-organizer\b/.test(source)) fail(`${path.relative(ROOT, file)}: contains retired Codex agent bc-rules-organizer`);
       if (/\$brewcode:spec\b|\/brewcode:spec\b/.test(source)) fail(`${path.relative(ROOT, file)}: contains removed Codex skill brewcode:spec`);
       checkFloatingInstalls(file, source);
     }
   }
 
-  const validator = path.join(process.env.HOME, '.codex', 'skills', '.system', 'plugin-creator', 'scripts', 'validate_plugin.py');
-  const result = spawnSync('python3', [validator, distRoot], { encoding: 'utf8' });
-  if (result.status !== 0) fail(`${plugin}: direct plugin-creator validation failed: ${result.stdout || result.stderr}`);
+  for (const error of validateNativePackage(distRoot)) fail(`${plugin}: native package validation failed: ${error}`);
 }
 
 const managerRoot = path.join(ROOT, 'brewtools', '.codex', 'skills', 'manager-setup');
 const managerMetadata = `${fs.readFileSync(path.join(managerRoot, 'SKILL.md'), 'utf8')}\n${fs.readFileSync(path.join(managerRoot, 'agents', 'openai.yaml'), 'utf8')}`;
 if (!/allow_implicit_invocation: false/.test(managerMetadata)) fail('manager must require explicit user invocation');
 
-for (const skill of ['task-board-setup', 'think-short-setup']) {
+for (const skill of ['task-board-setup']) {
   const metadata = fs.readFileSync(path.join(ROOT, 'brewtools', '.codex', 'skills', skill, 'agents', 'openai.yaml'), 'utf8');
   if (!/allow_implicit_invocation: false/.test(metadata)) fail(`${skill} must require explicit user invocation`);
 }

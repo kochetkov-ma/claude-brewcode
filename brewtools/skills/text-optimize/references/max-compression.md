@@ -2,6 +2,9 @@
 
 Max mode = deep compression + atomic-fact-line rewriting + format-aware tables. LLM-only. Opt-in via `-x`/`--max`. ALWAYS runs 2 verification rounds. Use only when caller explicitly wants maximum density and accepts review burden.
 
+Cited research figures are historical results, not universal gains/current-file measurements.
+Apply model-specific advice only to its named model; follow current `rules-review.md` authority.
+
 > Inherits everything in `deep-compression.md`, including aggressive lossy rules A.1-A.4 (dotted, rules-review.md category A) with their loss-ledger requirement. Max adds 4 techniques (B1, A1, B3, B4) + 4 guardrails (C1-C4) + mandatory 2-round verify. Dotless A1 below = ASCII operator dialect, distinct from dotted A.1 (line fusion).
 
 ## Atomic Fact-Line Decomposition (B1)
@@ -29,7 +32,7 @@ count diverge here — judge B1 by an actual token estimate, not `wc -w`, whenev
 
 ## ASCII Operator Dialect (A1 — CRITICAL)
 
-Prefer ASCII digraphs over unicode glyphs. Measured token cost (tiktoken cl100k/o200k, live):
+Prefer ASCII digraphs over unicode glyphs. Recorded token cost (tiktoken cl100k/o200k):
 
 | Glyph | Tokens | ASCII | Tokens |
 |-------|--------|-------|--------|
@@ -75,7 +78,7 @@ CONDITIONAL:
 > 2 bob user
 
 **Measured** (`wc -w`): before 26 words / 5 lines, after 12 words / 3 lines = -53.8% — a real win on
-both words and tokens (pipe alignment and separator rows carry no data).
+words; token savings require a named-tokenizer measurement (separator rows carry no data).
 
 ## Chain-of-Density Final Pass (B4)
 
@@ -98,7 +101,7 @@ Inherits ALL of `deep-compression.md` Iron Rules (the lossless guard) unchanged 
 list here, re-read it there. Max adds:
 - Scope qualifiers preserved verbatim (C2)
 - 2 mandatory verification rounds, independent methods: claim inventory + self-QA probe (never optional)
-- Semantic match must be >= 95% -> else warn user with loss list
+- Semantic match must be >= 95%; below threshold -> patch owned loss/review or refuse with loss list
 - 100% sub-gate: numbers, names, negations, scope qualifiers
 
 ## Stop Condition
@@ -118,7 +121,14 @@ Never silently ship lossy max output. Two rounds use DIFFERENT methods — they 
 |-------|--------|
 | 1 — Claim inventory | Decompose ORIGINAL into numbered atomic claims, ONE predicate per claim (over-decomposition hurts verifier accuracy, arXiv:2411.02400). Check each claim derivable from COMPRESSED. Label: kept \| merged \| lost \| distorted \| elided-known (A.4). Match % = (kept + merged) / total |
 | 2 — Self-QA probe | Generate 10-20 questions from ORIGINAL targeting entities, numbers, conditions, negations. Answer each from COMPRESSED ONLY. Mismatch = loss. Patch, recompute both scores |
-| Gates | Overall >= 95% AND 100% sub-gate: every number, name, negation, and scope qualifier answerable/verbatim (CompactPrompt arXiv:2510.18043). Sub-gate fail -> patch via Chain-of-Density pass (B4) -> re-verify. Still failing -> WARNING + full loss list, ship with caveat |
+| Gates | Overall >= 95% AND 100% sub-gate: every number, name, negation, and scope qualifier answerable/verbatim (CompactPrompt arXiv:2510.18043). Failure -> patch owned loss via B4, checkpoint repair immediately, repeat required review. Still failing -> refuse acceptance + full loss list; never ship with caveat |
+
+Immediately checkpoint each known owned atomic write/deletion/repair with
+`text-guard.sh checkpoint --run-dir <RUN_DIR> <file>` before further edits/checks; never record
+others' intervening changes or manufacture proof during failure/recovery. Mechanical verification
+uses `--no-restore`. Full snapshot recovery needs authorization and matching existing draft proof;
+missing/mismatched proof -> `RESTORE_REFUSED`, exit 1, current bytes preserved. Writer self-checks
+never replace the skill's independent acceptance gate.
 
 Dedup audit: dedup-merged facts count as PRESERVED (kept once). Loss list fmt (1 fact/line, atomic):
 > lost: artifact retention policy (30d) dropped

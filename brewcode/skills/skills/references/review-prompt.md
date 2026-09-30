@@ -24,13 +24,13 @@ Read the entire skill directory: SKILL.md, references/, scripts/, tests/, README
 | 10 | References guard | Each reference load has: "If not found, STOP" or equivalent error handling |
 | 11 | Scripts executable | All `.sh` files in `scripts/` have `chmod +x` and execute without error |
 | 12 | Scripts paths | Scripts use `${CLAUDE_SKILL_DIR}` for own files, never hardcoded absolute paths |
-| 13 | Scripts pattern | Every bash block ends with `&& echo "OK" \|\| echo "FAILED"` or equivalent pass/fail signal |
+| 13 | Scripts pattern | Bash blocks expose pass/fail and preserve the producer's exit status; tee/tail/echo must not mask Claude, timeout or gate failures. Bare exempt commands may report their own status |
 | 14 | Tests exist | `tests/` directory exists with test files for each script |
 | 15 | Tests pass | All tests execute successfully, cover happy path + at least one error path |
 | 16 | README exists | `README.md` present in skill directory |
 | 17 | README quality | Has Quick Start section, content matches actual skill behavior |
 | 18 | Progressive L1 | Description acts as L1 (~100 words equivalent): enough to decide whether to invoke |
-| 19 | Progressive L2 | Body acts as L2 (<500 lines): full instructions without needing references |
+| 19 | Progressive L2 | Body acts as L2 (<500 lines): complete workflow, load conditions, reference paths and missing-reference guards; specialized instructions may live in explicitly loaded L3 references |
 | 20 | Progressive L3 | References act as L3: loaded on demand per phase, not eagerly |
 | 21 | Security: secrets | No hardcoded tokens, passwords, API keys, or credentials anywhere |
 | 22 | Security: injection | No unescaped user input in bash blocks, no `eval` on external data |
@@ -38,7 +38,7 @@ Read the entire skill directory: SKILL.md, references/, scripts/, tests/, README
 | 24 | Frontmatter `version` | Skill's behaviour lives outside its own directory (binary on PATH, wrapper in an image, remote service) -> `version:` present. Free-form string, not semver, no ordering. `updated:` is not a substitute |
 | 25 | Prompt contract: argument-hint | `argument-hint` present and starts with `[prompt]` (prompt is position 1, always optional). Applies even to exempt skills (`prompt-contract.md` section 5) |
 | 26 | Prompt contract: body section | Not exempt -> body has a `## Prompt contract` section (boilerplate from `prompt-contract.md` section 6), summarizing the resolution algorithm |
-| 27 | Prompt contract: PLAN block | Not exempt -> a `PLAN --` block is printed once, before the first action (read-only modes too, immediately before their report), with all 5 literal labels `INPUT:`, `MODE:`, `SCOPE:`, `DO:`, `RESULT:` |
+| 27 | Prompt contract: PLAN block | Not exempt -> `PLAN — <invoked skill name>` printed once before the first action (read-only modes immediately before their report), with literal labels in order: `INPUT:`, `MODE:`, `SCOPE:`, `DO:`, `RESULT:` |
 | 28 | Prompt contract: mode table | Not exempt AND 2+ modes -> the mode keyword table has a `Mutates?` column and at least one Cyrillic (RU) keyword per mode row |
 
 ---

@@ -40,7 +40,7 @@ Expected flow: the skill prints the current status table, states the plan ("copy
 
 <Steps>
   <li><div><strong>Status first, always</strong><p>Before any mode runs, the skill checks both project and global scope for the three hook files, <code>settings.json</code> wiring and an existing config, and prints a state table. Nothing installs or removes blind.</p></div></li>
-  <li><div><strong>Mode decided from free text</strong><p>No arguments defaults to <code>status</code> if installed anywhere, else <code>install</code>. Otherwise the skill reads intent — <code>install</code>, <code>upgrade</code>, <code>enable</code>, <code>disable</code>, <code>uninstall</code>, <code>purge</code> — including RU triggers like "поставь" or "вычисти всё". Ambiguity between install and a removal verb triggers <code>AskUserQuestion</code> instead of a guess.</p></div></li>
+  <li><div><strong>Mode decided from free text</strong><p>Empty input defaults to status whether installed or absent. Explicit modes win; otherwise whole-word intent selects a mode. Destructive ambiguity is clarified before actions.</p></div></li>
   <li><div><strong>Plan stated before any question</strong><p>The skill writes out, in plain text, exactly what changes: which files, which paths, which <code>settings.json</code> entries — before asking anything.</p></div></li>
   <li><div><strong>Only missing answers are asked</strong><p>Scope (Project / Global / Both) and thresholds (default 1000 / 2500, one question yields both numbers) are asked via <code>AskUserQuestion</code> only if not already given. A custom pair must satisfy <code>passTokens &lt; fileTokens</code> or the config write aborts.</p></div></li>
   <li><div><strong>File work delegated to hook-creator</strong><p>A single <code>brewcode:hook-creator</code> spawn per mode-and-scope combination copies all three files as a unit, merges or strips the two <code>settings.json</code> entries, and writes or edits <code>agent-return.json</code>. Both scopes at once means two spawns in one message.</p></div></li>
@@ -73,8 +73,8 @@ Sizing tiers, `t = Math.ceil(last_assistant_message.length / 4)`, both boundarie
 
 | Mode | Effect | Hook files | settings.json | Config |
 |------|--------|-----------|----------------|--------|
-| `status` (default if installed) | report only | — | — | — |
-| `install` (default if not installed) | wire + configure | 3 copied | 2 entries merged | written |
+| `status` (default with empty input) | report only | — | — | — |
+| `install` | wire + configure | 3 copied | 2 entries merged | written |
 | `upgrade` | re-emit from the current plugin version, thresholds preserved | 3 re-copied | entries re-merged | values preserved, metadata re-stamped |
 | `enable` | resume enforcement | kept | kept | `enabled: true` |
 | `disable` | pause enforcement | kept | kept | `enabled: false` |
@@ -100,6 +100,7 @@ Config discovery walks up from the hook process's cwd (16 levels), probing `<dir
   "passTokens": 1000,
   "fileTokens": 2500,
   "version": "X.Y.Z",
+  "content_version": "X.Y.Z",
   "generated_by": "brewtools:agent-return-setup",
   "last_updated": "YYYY-MM-DD"
 }
@@ -110,11 +111,16 @@ Config discovery walks up from the hook process's cwd (16 levels), probing `<dir
 | `enabled` | must be exactly `true`; anything else, or no config at all, turns both hooks into no-ops — the enable/disable mechanism |
 | `passTokens` | pass ceiling, the number quoted as `budget` in both block orders; positive integer; default `1000` |
 | `fileTokens` | compress/file tier boundary; positive integer; default `2500` |
-| `version` / `generated_by` / `last_updated` | provenance, re-stamped on every write; `status` compares `version` against the installed plugin to flag a stale install |
+| `version` / `content_version` / `generated_by` / `last_updated` | Provenance restamped on install, upgrade, enable, and disable; content_version tracks changed generator content, while version identifies the producing plugin release |
 
 **Threshold precedence, per threshold, first hit wins:** the config key — the env var (`AGENT_RETURN_PASS` / `AGENT_RETURN_FILE`, parsed with `Number()` not `parseInt()`) — the built-in `1000` / `2500`. Only a positive integer is accepted at either level; `1.7`, `abc`, `-5`, `0`, `NaN`, `Infinity` all fall through.
 
 Config values are read on every hook call — changing `enabled` or either threshold takes effect immediately, no restart. Hook **wiring** changes need a new session.
+
+Setup-status compares each artifact's content_version with the source for that artifact,
+then corroborates copied hook bytes and ownership. Hook and config-generator content versions
+can differ, and unchanged content need not match a newer plugin release number. A missing
+comparison source is reported as unknown, not a fabricated stale verdict.
 
 ### Evidence behind 1000 / 2500
 

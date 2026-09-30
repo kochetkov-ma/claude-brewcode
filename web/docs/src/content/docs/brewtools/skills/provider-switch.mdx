@@ -1,273 +1,145 @@
 ---
 title: "Provider Switch"
-description: "Switch to alternative AI providers when Anthropic rate limits hit — keep coding for ~$10/month"
+description: "Configure alternative Claude Code providers with shell aliases, private credential input and verified model selection while preserving existing choices."
 order: 3120
 ---
-import { Card, CardGrid, Callout, Steps, Badge, Spoiler, UpdateNotice } from '../../../../components/mdx';
+import { Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# provider-switch — switch LLM provider
+# Provider Switch
 
-<Callout type="tip">
-**NEW — DeepSeek V4 (April 24, 2026)** — added as priority default. `deepseek-v4-pro` (1.6T MoE, 1M context, thinking modes), [top open-source on SWE-bench](https://www.swebench.com/) (self-reported 80.6% Verified / 55.4% Pro), verified prompt caching (90% discount, automatic). Alias `claudeds`. No compat flags required.
+Configure DeepSeek, Z.ai/GLM, Qwen/DashScope, MiniMax or OpenRouter for Claude Code.
+The skill writes a provider alias to `~/.zshrc`, keeps existing choices unless you select a change,
+and provides status and connectivity checks. Provider billing, model support and rate limits
+remain separate from your Anthropic subscription.
 
-**GPT-5.5 (OpenAI, native API)** — has a first-party OpenAI API (`gpt-5.5`); also reachable through `claudeor` (OpenRouter) as one route among many. Anthropic's current baseline is now Claude Opus 4.8.
-</Callout>
+## Quick reference
 
-### SWE-bench snapshot (June 2026)
+| Field | Value |
+|-------|-------|
+| Command | `/brewtools:provider-switch [prompt] [status\|install\|verify\|model-check\|help\|<provider-name>]` |
+| Default | Read-only status |
+| Output | Provider alias and selected configuration in `~/.zshrc` |
+| Model | opus |
+| Credentials | Existing shell environment variable or private local file; never paste keys into chat |
 
-| Model | Access | Verified | Pro | Notes |
-|-------|--------|----------|-----|-------|
-| Gemini 3.1 Pro | Native (Google) | 80.6% (self-reported) | ~46.1% (self-reported) | Only publisher-stated Verified here; Pro from Scale, thinking mode |
-| DeepSeek V4 Pro | Native (DeepSeek) | 80.6% (self-reported) | 55.4% (self-reported) | `claudeds` — top open-source; 90% auto cache discount |
-| GLM-5.2 | Native (Z.ai) | — | 62.1% (self-reported) | `claudeglm` — strong per dollar |
-| MiniMax-M3 | Native (MiniMax) | — | ~59% (self-reported) | `claudeminimax` — cheapest per token |
-| Qwen 3.7 Plus | Native (Alibaba) | — | 56.6% (self-reported) | `claudeqwen` — 1M context |
-| Claude Opus 4.8 | Native (Anthropic) | — | — | Anthropic baseline; no Verified % published |
-| GPT-5.5 | Native (OpenAI) | — | — | Native OpenAI API; also via OpenRouter |
-| GPT-5.5 Codex | Native (OpenAI Codex) | — | — | No public benchmark figures |
+## When to use
 
-At publication the independent leaderboards (SWE-bench Verified and Scale SWE-bench Pro) had not yet listed the newest 2026 models; vendor figures are marked "(self-reported)" and the only publisher-stated Verified shown is Gemini 3.1 Pro (Google).
+- Configure an alternative provider for a new Claude Code session.
+- Inspect existing aliases and model selections without changing them.
+- Check connectivity or refresh provider reference information before a requested change.
 
-Sources: [SWE-bench](https://www.swebench.com/) · [SWE-bench Pro (Scale)](https://labs.scale.com/leaderboard/swe_bench_pro_public)
-
-<Callout type="caution">
-**Anthropic Max costs $100-200/month.** Hard rate limits still run out mid-workday. Thursday evening, Friday morning — locked out. Paid premium, zero output.
-</Callout>
-
-<Callout type="tip">
-**One command fixes it.** Run `claudeds` or `claudeglm` — Claude Code switches to DeepSeek V4, GLM-5.2, or another backup. Cost: ~$10/month backup budget. New terminal = back on Anthropic.
-</Callout>
-
-## Your week on Anthropic Max
+## Setup
 
 <Steps>
-  <li>
-    <div>
-      <strong>Monday</strong>
-      <p>Fresh cycle. Claude Code at full speed. Everything works.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Wednesday</strong>
-      <p>Heavy refactor. Deep in code. Limits at 60%.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Thursday evening</strong>
-      <p>Rate limit hit. Claude Code stops responding. Stuck.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Friday without backup</strong>
-      <p>Full workday lost. Waiting for next cycle. $200 paid, no output.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Friday with provider-switch</strong>
-      <p><code>claudeds</code> — back to coding in 3 seconds. Same quality. $0.04 per session.</p>
-    </div>
-  </li>
+  <li><div><strong>Choose the provider</strong><p>Get a key through that provider's console. For Qwen, identify the billing product, region and workspace before choosing an endpoint.</p></div></li>
+  <li><div><strong>Run the skill</strong><p>Use <code>/brewtools:provider-switch install</code> or name one provider. Supply the key through an existing shell variable or a private file. Confirm the alias and model choices.</p></div></li>
+  <li><div><strong>Launch a session</strong><p>Load the new alias in your shell, then run it to start Claude Code. The alias sets provider variables before launch. To return to Anthropic, launch from a shell without those provider overrides.</p></div></li>
 </Steps>
 
-## The math
-
-<CardGrid>
-  <Card title="Without backup" icon="warning">
-    $100-200/month subscription. Limits hit Thursday. Friday = zero productivity.
-  </Card>
-  <Card title="With provider-switch" icon="check">
-    Same subscription + ~$10/month on backup. Limits hit Thursday. Friday = full workday. Zero downtime.
-  </Card>
-</CardGrid>
-
-## One command. That's it.
-
-```bash
-claudeds  # DeepSeek V4 Pro (PRIORITY) — 1.6T MoE, 1M ctx
-claudeglm       # GLM-5.2 — strong coding per dollar, 1M ctx
-claudeqwen      # Qwen 3.7 Plus — 1M context window
-claudeminimax    # MiniMax-M3 — cheapest per token, 1M ctx
-claudeor         # OpenRouter — 200+ models, pick any
+```text
+/brewtools:provider-switch status
+/brewtools:provider-switch install
+/brewtools:provider-switch openrouter
 ```
 
-<Callout type="tip">
-Each alias sets env vars and launches Claude Code automatically. To return to your Anthropic subscription — open a new terminal.
-</Callout>
+```bash
+claudeds       # DeepSeek
+claudeglm      # Z.ai / GLM
+claudeqwen     # Qwen / DashScope
+claudeminimax  # MiniMax
+claudeor       # OpenRouter, user-selected catalog model
+```
 
-## Setup in 2 minutes
+These are default alias names; custom names begin with `claude` and contain lowercase
+letters and digits only. Existing model and endpoint choices survive a reference refresh.
 
-<Steps>
-  <li>
-    <div>
-      <strong>Get an API key</strong>
-      <p>Sign up at your chosen provider (links below). Top up $5-10. Takes 30 seconds.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Run the skill</strong>
-      <p><code>/brewtools:provider-switch install</code> — when it asks for a key, save it to a private file or export it in your shell. Never paste a key into the chat; the skill reads it out of band. Alias is written to <code>&#126;/.zshrc</code> automatically.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Done</strong>
-      <p>Next time limits hit: type <code>claudeds</code>. Back to coding.</p>
-    </div>
-  </li>
-</Steps>
+## Providers, models and pricing
 
-## Providers
+Model catalogs and prices change. Check the direct provider's current terms for region,
+context tier, input/output, cache hits and your billing product before choosing a model.
+Provider references were refreshed on 2026-09-30. Use these primary catalogs and pricing pages
+before setup, rather than assuming a fixed monthly cost or comparative quality ranking.
 
-<CardGrid>
-  <Card title="DeepSeek V4" icon="rocket" href="https://platform.deepseek.com">
-    <Badge variant="accent" text="Priority" /> <Badge variant="accent" text="Top open-source" /> <Badge variant="accent" text="Cache verified" /> **deepseek-v4-pro** — 1.6T MoE, 1M context, thinking modes. SWE-bench Verified 80.6%, Pro 55.4% (both self-reported). 90% cache discount, automatic. Alias `claudeds`. No compat flags. [Leaderboard](https://www.swebench.com/).
-  </Card>
-  <Card title="Z.ai / GLM" icon="star" href="https://z.ai/subscribe">
-    <Badge variant="accent" text="Strong coding perf" /> <Badge variant="accent" text="Cache verified" /> **glm-5.2** — $1.40 / $4.40 per 1M tokens, cached input $0.26. 1M context. SWE-bench Pro 62.1% (self-reported). Backend auto-cache (native).
-  </Card>
-  <Card title="Qwen" icon="document" href="https://modelstudio.console.alibabacloud.com/ap-southeast-1?tab=dashboard#/api-key">
-    <Badge variant="accent" text="Cache verified" /> **qwen3.7-plus** — ~$0.50 / $2.00 per 1M tokens. 1M context. Implicit cache 20%, explicit 10% of standard (confirmed in billing).
-  </Card>
-  <Card title="MiniMax" icon="money" href="https://platform.minimax.io">
-    <Badge variant="accent" text="Cache verified" /> **MiniMax-M3** — $0.30 / $1.20 per 1M tokens. 1M context. Cheapest option with documented cache pricing.
-  </Card>
-  <Card title="OpenRouter" icon="sync" href="https://openrouter.ai">
-    200+ models, one route among many. **GPT-5.5** has a native OpenAI API (`gpt-5.5`) and is also reachable here; route to GPT-5.5 Codex, Gemini 3.1 Pro, GLM, Qwen, Llama, or Claude Opus 4.8. One config, any provider. Custom model IDs validated via API.
-  </Card>
-</CardGrid>
+| Provider | Alias | Primary reference |
+|----------|-------|-------------------|
+| DeepSeek | `claudeds` | [Models and pricing](https://api-docs.deepseek.com/quick_start/pricing/) |
+| Z.ai / GLM | `claudeglm` | [Pricing](https://docs.z.ai/guides/overview/pricing) |
+| Qwen / DashScope | `claudeqwen` | [Claude Code integration](https://www.alibabacloud.com/help/en/model-studio/claude-code) and [model pricing](https://www.alibabacloud.com/help/en/model-studio/model-pricing) |
+| MiniMax | `claudeminimax` | [Pay-as-you-go pricing](https://platform.minimax.io/docs/guides/pricing-paygo) |
+| OpenRouter | `claudeor` | [Live catalog](https://openrouter.ai/api/v1/models) and [model variants](https://openrouter.ai/docs/guides/routing/model-variants/overview) |
 
-<Callout type="caution">
-**Qwen: Singapore region only.** The Anthropic-compatible endpoint works ONLY with API keys from the **Singapore** region. Open [Model Studio → Singapore → API Key](https://modelstudio.console.alibabacloud.com/ap-southeast-1?tab=dashboard#/api-key), create a key there. Valid format: `sk-...` (~36 chars). Keys from Frankfurt (`sk-ws-...`) return 403.
-</Callout>
+DeepSeek remains the repository's priority provider; that is a configuration policy, not a
+benchmark claim. Direct-provider pricing and OpenRouter routing prices can differ. Prompt
+cache support, thresholds and TTL depend on the provider and route; check the current reference
+and response/billing evidence instead of assuming a universal discount.
 
-<Spoiler title="Technical details">
+### Qwen region, workspace and plan
 
-### How it works
+Match the key to the endpoint's region, workspace and billing product. The official integration
+lists pay-as-you-go endpoints for Beijing, Singapore and Virginia, and different endpoints for
+Coding Plan and Token Plan. Region or key validity cannot be inferred from its prefix or length.
+The skill preserves an existing endpoint unless you select a change. See the
+[Alibaba Cloud integration guide](https://www.alibabacloud.com/help/en/model-studio/claude-code).
 
-Each alias sets 4-6 environment variables (`ANTHROPIC_BASE_URL`, auth key, model overrides) and runs `claude`. Claude Code reads these on startup and connects to the alternative provider instead of Anthropic.
+### OpenRouter selection
 
-Env vars only persist in the current shell session. Opening a new terminal resets everything — Claude Code uses your Anthropic subscription again.
+Before presenting model choices, the skill refreshes the public catalog and verifies every
+selected ID, including menu, default and custom selections. A successful fetch, valid JSON and
+an exact catalog match are required. Missing IDs prompt suggestions and at most two retries;
+request/parser failures are reported as verification failures. No model is written on failure,
+and there is no automatic replacement of the user's configured model.
 
-### Credential handling
+The selected ID maps to Opus, Sonnet and Haiku slots together. OpenRouter IDs are not given an
+automatic `[1m]` suffix. Context length and capabilities come from the selected catalog entry;
+provider routing suffixes have their own rules in the
+[OpenRouter variant reference](https://openrouter.ai/docs/guides/routing/model-variants/overview).
 
-| Rule | Why |
-|------|-----|
-| The API key is piped to the writer script on **stdin**, never passed as an argument | argv is visible to `ps` for the life of the process and is written verbatim into the session transcript. The script rejects a key given as an argument |
-| The `verify` connectivity test sends the key through `curl -s -K -` (a config block on stdin), never an `Authorization` header on the command line — same rule for every provider, not only one | argv is world-readable via `ps` for the life of the process |
-| The OpenRouter model-list lookup (custom model validation) sends no auth header at all | The catalogue endpoint is public and unauthenticated — there is nothing to send |
-| There is no model-invisible channel for a runtime secret in Claude Code 2.1.233 | `AskUserQuestion` returns plain text straight into the transcript, and plugin `userConfig` `"sensitive": true` is enable-time only — never substituted into skill or agent text. So the skill reads the key from an environment variable already set in your shell, or a file you create yourself; it never asks you to type one into the conversation |
-| The `&#126;/.zshrc.bak` snapshot is created under `umask 077`, `chmod 600`, and deleted once the write succeeds | The backup holds whatever keys were already in `&#126;/.zshrc`; a world-readable copy nothing cleans up is a second leak |
-| Line edits go through `awk` + temp file + `mv` | `sed -i ''` is BSD-only, so `set-key` / `set-alias` / `remove-key` / `remove-alias` were broken on every Linux machine |
-| `DEEPSEEK_API_KEY` is part of the status key list | It was missing, so DeepSeek -- the priority default -- re-prompted for a key it already had on every run |
+## Verification
 
-### Auth by provider
+| Command | Result and limit |
+|---------|------------------|
+| `status` | Read-only configured-provider table |
+| `verify` | Minimal API requests to configured providers; can consume provider usage and reports actual responses |
+| `model-check` | In-session model diagnostics after launching an alias; model self-identification alone is not authoritative identity proof |
+| `help` | Switching reference |
 
-| Provider | Auth pattern | Notes |
-|----------|-------------|-------|
-| All providers | `ANTHROPIC_AUTH_TOKEN` + `ANTHROPIC_API_KEY=""` | Unified: Bearer token + empty API key blocks OAuth fallback |
+A catalog lookup is public and unauthenticated. It proves an ID is listed, not that your account
+can use it or that a paid inference request succeeded.
 
-### Context window
+## Credentials and compatibility
 
-Claude Code defaults to 200K for non-Anthropic providers. The `[1m]` suffix on model names (e.g., `qwen3.7-plus[1m]`) forces 1M context. Applied automatically by the skill.
+Keys enter the writer on stdin rather than command arguments. Connectivity checks pass secrets
+through curl configuration input; the model-list lookup needs no auth header. The shell backup
+is private and cleaned after a successful write. Do not paste a runtime secret into an
+`AskUserQuestion` answer or a report.
 
-### Skill arguments
+| Provider | Compatibility flags installed from its reference |
+|----------|--------------------------------------------------|
+| DeepSeek | None |
+| Z.ai / GLM and MiniMax | `CLAUDE_ENABLE_BYTE_WATCHDOG=0`, `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` |
+| Qwen / DashScope | `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` |
+| OpenRouter | None |
 
-| Argument | What it does |
-|----------|-------------|
-| _(none)_ | Show status table |
-| `install` | Interactive setup (was `setup` before v5.0.0) |
-| `deepseek` / `ds` / `glm` / `qwen` / `minimax` / `openrouter` | Single-provider setup |
-| `verify` | Test all configured tokens against endpoints |
-| `model-check` | Identify which model is actually responding (run inside provider session). Matched before `status` -- otherwise the `status\|check` pattern swallows it as a substring |
-| `help` | Switching cheat sheet |
+Aliases set `ANTHROPIC_AUTH_TOKEN` and an explicit empty `ANTHROPIC_API_KEY` along with the
+base URL and model mapping. This avoids unintended OAuth fallback. Supported context settings
+are provider-specific; a model-name hint cannot create context capacity a provider does not offer.
 
-### Research delegation
+## Reference refresh
 
-When the skill refreshes its provider reference files, it spawns **one agent per provider** — five `Task` calls in a single message (DeepSeek, Z.ai/GLM, Qwen/DashScope, MiniMax, OpenRouter). `Task` is in the skill's `allowed-tools`, so that fan-out actually happens instead of collapsing into a serial single-agent crawl.
-
-A big task handed to one agent is an agent gone for an hour: you cannot observe it, cannot correct it, and it usually drifts off-target. One subagent = **one provider**, ~5 files, ~10 steps — never all five providers in one prompt.
-
-Each research prompt carries six fields; a bare one-line task is never enough:
-
-| Field | Content |
-|-------|---------|
-| GOAL | refresh the reference files so users get current model ids, pricing and endpoints |
-| ROLE | research and report only — the skill applies changes later, the agent edits nothing |
-| SCOPE | in — that provider's doc sources; out — other providers, `&#126;/.zshrc`, any reference file on disk |
-| CONTEXT | the current on-disk baseline (model, alias, endpoint) to diff against; four siblings fetch the rest |
-| CONSUMER | the skill diffs the table, shows it to the user, who approves each update before anything is written |
-| DONE | a Field / Current / Fetched / Source URL table — say "no change" explicitly, never omit a field |
-
-An omitted field reads as "unknown" downstream and blocks that provider's whole update, which is why DONE spells out the shape.
-
-</Spoiler>
-
-<Spoiler title="Prompt caching">
-
-Claude Code automatically sends `cache_control` markers to reduce input token costs. Only **input** tokens can be cached — output tokens are always billed at full rate, regardless of provider.
-
-### Provider support
-
-| Provider | Prompt Cache | Status | Details |
-|----------|:---:|---|---|
-| **DeepSeek V4** | Yes | **Verified** | Automatic on 1024+ token repeated prefixes. 90% discount ($0.03/M on Pro). No opt-in required |
-| **MiniMax** | Yes | **Verified** | Fully documented — pricing, response fields, TTL |
-| **Qwen** | Yes | **Verified** | Implicit cache 20%, explicit 10% of standard rate. Min 1024 tokens. Confirmed in Alibaba billing |
-| **Z.ai / GLM** | Yes | **Verified** | Backend auto-cache (native). Applied transparently at the provider side |
-| **OpenRouter** | Model-dependent | — | Anthropic models: yes. Non-Anthropic (Qwen, GLM): routed to provider cache |
-
-### MiniMax cache pricing (MiniMax-M3)
-
-| Token type | Price / 1M | vs Standard input |
-|------------|--:|---|
-| Standard input | $0.30 | — |
-| Cache write (first request) | $0.375 | +25% |
-| Cache read (subsequent) | **$0.06** | **-80%** |
-
-Cache TTL: 5 minutes, auto-refreshed on each hit. Minimum: 512 input tokens.
-
-### What this means in practice
-
-A typical Claude Code request (~250K input tokens) with 90% cache hit rate:
-
-| Provider | Cost per request | Without cache |
-|----------|--:|--:|
-| **DeepSeek V4 Pro** (cached) | **~$0.01** | $0.44 |
-| **MiniMax** (cached) | ~$0.02 | $0.08 |
-| **Qwen** (cached, explicit 10%) | ~$0.02 | $0.13 |
-| **Anthropic Opus 4.8** (cached) | ~$0.24 | $1.25 |
-| **Z.ai / GLM** (backend cache) | ~$0.35 | $0.35 |
-
-</Spoiler>
-
-## Already set up? Verify it works.
-
-<Steps>
-  <li>
-    <div>
-      <strong>Test tokens</strong>
-      <p><code>/brewtools:provider-switch verify</code> — sends a minimal request to each configured provider. Shows HTTP status and response for every token.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Check the model</strong>
-      <p>Run your alias (<code>claudeglm</code>), then <code>/brewtools:provider-switch model-check</code> — asks 5 diagnostic questions to confirm which model is actually responding. No curl, no scripts — the model answers directly.</p>
-    </div>
-  </li>
-</Steps>
+The main coordinator dispatches one bounded research agent per provider using `Agent`, with
+GOAL, ROLE, SCOPE, CONTEXT, CONSUMER and DONE. Each returns a Current/Fetched/Source URL table
+for model IDs, pricing and endpoints; it does not edit shell configuration. The skill presents
+verified differences for user selection before writes, preserving choices that were not changed.
 
 <CardGrid>
   <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">
-    All brewtools skills in one place.
+    Text, provider and deployment utilities.
   </Card>
   <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/provider-switch">
-    Source code and provider references.
+    Skill, provider references and validation helpers.
+  </Card>
+  <Card title="Plugin Update" icon="sync" href="/brewtools/skills/plugin-update/">
+    Keep installed plugin source current before refreshing provider configuration.
   </Card>
 </CardGrid>
 

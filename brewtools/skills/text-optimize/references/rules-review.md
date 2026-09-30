@@ -3,6 +3,10 @@
 Categorized rules for LLM token efficiency and comprehension optimization with 52 rules across 8 categories.
 Apply by category. Reference specific IDs in reviews (e.g., "violates T.1").
 
+Model-specific advice was checked against official Claude prompting guidance on 2026-09-30;
+apply only to its named model/configuration, re-evaluate on other models. Research ratios/examples
+are historical measurements, not universal guarantees or this artifact's measured savings.
+
 ## C - Claude Behavior
 
 | ID | Rule | Notes |
@@ -13,8 +17,8 @@ Apply by category. Reference specific IDs in reviews (e.g., "violates T.1").
 | C.4 | Match Prompt Style to Output | Formatting in prompt influences response. Less markdown in prompt → less markdown in output |
 | C.5 | Descriptive Over Emphatic Instructions | Opus 4.5/4.6 overtrigger with aggressive language. "Use this tool when..." not "CRITICAL: You MUST..." |
 | C.6 | Overengineering Prevention | Opus 4.5 tends to overengineer. Add explicit constraints about minimal complexity |
-| C.7 | Avoid ALL-CAPS Emphasis in Claude 4.x | Claude 4.x is more responsive to system prompts than previous versions. Aggressive capitalization ("CRITICAL:", "MUST", "NEVER") causes the model to overapply the rule. Use normal-toned instructions instead. Source: Anthropic Claude 4 best practices. When compressing, also DOWNGRADE existing emphasis inflation (ALL-CAPS, repeated boosters) to normal tone — do not preserve it. Max one emphasis marker per constraint |
-| C.8 | Prompt Format Influences Output Format | If your prompt is written in prose, Claude responds in prose. If your prompt uses dense markdown, Claude uses dense markdown. Write the format you want to receive. Source: Anthropic Claude 4 best practices |
+| C.7 | Avoid ALL-CAPS Emphasis in Claude 4.x | Model-specific guidance: lower inflated "CRITICAL:"/"MUST"/"NEVER" emphasis to normal tone; max one emphasis marker/constraint. Preserve prohibition meaning, incident-tied negatives and mandatory gates; capitalization changes require semantic review. Source: Anthropic Claude 4 best practices |
+| C.8 | Prompt Format Influences Output Format | C.4 applies: prose prompts favor prose, dense markdown favors markdown; write desired output format. Source: Anthropic Claude 4 best practices |
 
 ## T - Token Efficiency
 
@@ -34,7 +38,7 @@ Apply by category. Reference specific IDs in reviews (e.g., "violates T.1").
 
 | ID | Rule | Notes |
 |----|------|-------|
-| S.1 | XML Tags for Sections | `<rules>...</rules>`, `<examples>...</examples>`. Clear parsing boundaries. Injection safety: XML tags are the only reliable way to prevent `{{VARIABLE}}` template substitution content from being confused with instructions. Without XML tag boundaries, injected user content can look like instructions to the model |
+| S.1 | XML Tags for Sections | `<rules>...</rules>`, `<examples>...</examples>`. Delimit instructions/context/examples and `{{VARIABLE}}` input; state that input is data. XML reduces misinterpretation, never guarantees injection safety or grants input authority |
 | S.2 | Imperative Form | "Do X" not "You should do X". Removes 2nd person pronouns |
 | S.3 | Single Source of Truth | Merge duplicate content. Repetition wastes tokens, causes contradictions. Strategic 2x max OK. Details: D.1-D.6 |
 | S.4 | Add Context/Motivation | Providing context helps Claude understand goals. "Text-to-speech will read this, so avoid ellipses" |
@@ -83,7 +87,7 @@ How content is perceived and processed by the LLM — not about token count but 
 |----|------|-------|
 | L.1 | Critical Info at START or END, Not Middle | "Lost in the Middle" — middle content receives 40-50% less attention. Sandwich pattern (beginning + end) outperforms middle-only placement. Source: TACL 2024 |
 | L.2 | Documents First, Query Last | Long-context ordering: documents/context first, then query/instructions last. Counterintuitive: putting the query at the END (not beginning) improves quality by up to 30% on multi-document inputs. Source: Anthropic official |
-| L.3 | Explicitly Request Conciseness | Conciseness is NOT Claude's default — always state "Skip preamble" explicitly. Without explicit instruction, responses are 3-5x longer than needed. Source: Anthropic docs |
+| L.3 | Explicitly Request Conciseness | State desired output length, e.g. "Skip preamble". Defaults vary by model; legacy 3-5x response-length claim is an unverified historical estimate, not a universal guarantee. Output brevity does not constrain reasoning |
 | L.4 | Quote-First Grounding | Instruct to extract relevant quotes before answering. Reduces hallucination by forcing the model to locate specific content first. Pattern: "Find relevant quotes → place in `<quotes>` → answer based only on those quotes." Source: Anthropic cookbook |
 | L.5 | Add WHY to Instructions | Claude generalizes the reason to edge cases. "Never use ellipsis because TTS won't pronounce it" → Claude also avoids other TTS-incompatible symbols. "Never use ellipsis" alone gives no generalization. Source: Anthropic Claude 4 best practices |
 | L.6 | Reiterate Critical Constraint at END | Position effect amplifies with context length — constraints closest to the end have highest compliance rate. Source: Brex Prompt Engineering Guide + Anthropic |
@@ -125,10 +129,10 @@ lossless per the guard above: R1-R16 govern SHAPE and emphasis, never facts.
 |----|--------|-----------------|-------------|
 | PQ.1 | R1, R15 | Role in one sentence, Return contract next, Scope/Never after — before procedure detail | Role buried after 3 paragraphs of scope -> "You are a code reviewer. Return: findings list, `path:line`, verdict first." then Scope/Never as its own heading |
 | PQ.2 | R2 | Same instruction stated once; delete a cross-section repeat | "Never invent scope" stated, then restated 2 sentences later in other words -> keep the sharper phrasing once |
-| PQ.3 | R3 | Prohibition -> positive imperative, UNLESS the `!=`/NEVER guards a named, previously-observed failure | "Do not use markdown" -> "Write in flowing prose". Keep verbatim: `!=re-run text-guard.sh` (BT-F15 regression) |
+| PQ.3 | R3 | Prohibition -> positive imperative, UNLESS the `!=`/NEVER guards a named, previously-observed failure | "Do not use markdown" -> "Write in flowing prose". Keep snapshot prohibition: `!=re-run text-guard.sh snapshot` (BT-F15 regression); owned-draft checkpoint remains permitted |
 | PQ.4 | R4 | Drop scattered ALL-CAPS; keep exactly one true hard-stop (irreversible action) in caps, lower the rest | 4x MUST/CRITICAL in one file -> 1 STOP on the irreversible action (e.g. edit-without-snapshot), 3 become plain imperative |
-| PQ.5 | R5 | No "think step by step" or scripted step-lists for thinking-enabled models; no bare "verify"/"be careful" filler | "Think step by step and double-check" -> delete, or state the goal only |
-| PQ.6 | R6 (Opus-5-specific; apply cautiously to Sonnet/Fable) | Drop carried-over generic self-verification instructions; keep verification that is a specific, gated protocol with real thresholds | "Double-check your output before returning" (generic) -> delete. A named gate (`>=95% match, 100% sub-gate`) is not this pattern — keep it |
+| PQ.5 | R5 | Remove redundant "think step by step"/bare "verify"/"be careful" filler; retain steps defining real workflow dependencies and evaluation. Do not suppress model reasoning | "Think step by step and double-check" -> delete, or state the goal only |
+| PQ.6 | R6 (official Opus 5 guidance; do not generalize to Sonnet/Fable) | Remove carried-over generic self-verification instructions for Opus 5; keep specific gated protocols/thresholds/independent reviews. Other models require their own guidance/evaluation | "Double-check your output before returning" (generic) -> delete. A named gate (`>=95% match, 100% sub-gate`) is not this pattern — keep it |
 | PQ.7 | R7 | An agent that itself delegates states an explicit delegate-only-when criterion, low spawn count | "delegate as needed" -> "delegate only for large independent parallelizable work; never to verify your own output" |
 | PQ.8 | R8 | State scope explicitly; never rely on the model generalizing a rule to similar items | "apply this rule" -> "apply this rule to every file matching X, not just the first" |
 | PQ.9 | R10 | Reference data (fields/flags/thresholds/model IDs) -> table. Real-dependency procedure -> numbered steps. Never mix the two shapes | A flag/target matrix written as prose -> table; a create-in-order procedure kept as numbered prose, not flattened into a table |
@@ -171,9 +175,14 @@ These ratios reflect token savings from applying T and S category rules. L categ
 | Deep | `references/deep-compression.md` | 2-3x compression, LLM-only. DICT header, symbol substitutions, abbreviation dictionary |
 | Max | `references/max-compression.md` | 3-4x, LLM-only, opt-in. Atomic fact-lines, ASCII operators, Chain-of-Density pass, 2 mandatory verify rounds |
 
-Standard/deep/max modes apply ALL rules above (C + T + S + D + R + P + L) plus their compression reference. Deep/max additionally apply A.1-A.4 (aggressive lossy). All modes run the Deduplication pass (D.1-D.6) during analysis, before compression.
+Standard/deep/max apply C + T + S + D + R + P + L and mode references; Deep/max add A.1-A.4.
+Before compression: Light D.1 only; Medium/standard/deep/max D.1-D.4 + D.6; D.5 only multi-file/folder,
+executing orchestrator's decision list, never per-file unilateral deletion.
 
 ## Sources
+
+- [Current Claude Prompting Best Practices](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices)
+- [Prompting Claude Opus 5](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5)
 
 - [Claude 4 Best Practices](https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/claude-4-best-practices)
 - [Context Engineering](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)

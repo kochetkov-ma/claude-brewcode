@@ -20,7 +20,7 @@ Check `.claude/agents/e2e-*.md` count.
 
 ## S2: Project Analysis
 
-Spawn 3-5 Explore agents in ONE message via Task tool — one agent = ONE focus row below; never
+Spawn 3-5 Explore agents in ONE message via Agent tool — one agent = ONE focus row below; never
 hand one agent the whole analysis.
 
 | # | Focus |
@@ -56,11 +56,10 @@ Create agents via agent-creator in 2 batches:
 - e2e-scenario-analyst
 - e2e-automation-tester
 
-One creator = ONE agent definition; that is why the roster goes out as 3 + 2 parallel spawns, not
-one big task. Each batch is spawned in ONE message.
+One creator owns ONE definition; roster splits into 3 + 2 parallel spawns, each batch in ONE message.
 
 ```
-Task(subagent_type="brewcode:agent-creator", prompt="
+Agent(subagent_type="brewcode:agent-creator", prompt="
 GOAL: this project is standing up an E2E practice; the approved roster is its permanent crew and
       you write ONE member of it so later e2e modes can spawn it by name.
 ROLE: you own `.claude/agents/{AGENT_NAME}.md` only. Do NOT create or edit the other agents in
@@ -84,12 +83,29 @@ DONE: file written and parses; report as: path | model | tools | description lin
 - e2e-manual-tester
 - e2e-reviewer (disallowedTools: Write, Edit, Bash)
 
-After each batch: AskUser "Optimize agent prompts with text-optimizer?" If yes, spawn one `Task(subagent_type="brewtools:text-optimizer", prompt="Optimize .claude/agents/{agent-name}.md. Output report with metrics.")` per agent file. `brewtools` not installed -> skip, say so.
+After each batch: AskUserQuestion "Optimize agent prompts with text-optimizer?"
+No -> preserve created agents and continue. `brewtools` absent -> skip, report it.
+Yes -> the main caller resolves and reads installed `brewtools/skills/text-optimize/SKILL.md`
+and its required references, then follows its canonical Phase 0-3 orchestration for only this
+batch's `.claude/agents/{agent-name}.md` files. Do not model-invoke the distributed skill through
+`Skill`: `disable-model-invocation: true` applies. Read/follow its workflow under this approval.
+
+Main snapshots before edits and builds original fact inventories; then dispatches one optimizer
+per file with the canonical GOAL/ROLE/SCOPE/CONTEXT/CONSUMER/DONE brief, resolved references,
+mode/depth, `<RUN_DIR>` and snapshot path, plus dedup decisions (none -> retain every cross-file fact).
+Writers never nest optimization or accept their own drafts. Each owned atomic edit/repair gets an
+immediate known-draft checkpoint; never capture others' changes or manufacture recovery proof.
+Main runs `verify --no-restore` and required independent semantic gates, repairs owned loss or
+refuses acceptance with safe recovery status. Missing snapshot/state/references -> stop optimization.
+After acceptance, recheck parsed frontmatter, roster model/tools, `description` <=100 chars
+(optimal ~80), single line, role + 2-3 triggers and no `<example>` blocks before S5.
+Failed optimization -> stop before S5 unless safe recovery restored valid created agents and
+the same roster/frontmatter checks pass; report the optimization refusal separately.
 
 ## S5: Rules Generation
 
 1. ```
-   Task(subagent_type="e2e-architect", prompt="
+   Agent(subagent_type="e2e-architect", prompt="
    GOAL: the e2e-* agents just created will write every test in this repo against one rules file;
          this task produces the project-specific half of it.
    ROLE: you own rules research and drafting. Read-only on the codebase -- do NOT edit agents,
@@ -108,7 +124,7 @@ After each batch: AskUser "Optimize agent prompts with text-optimizer?" If yes, 
    ```
 2. Merge findings with base rules from `${CLAUDE_SKILL_DIR}/references/e2e-rules.md`
 3. ```
-   Task(subagent_type="e2e-reviewer", prompt="
+   Agent(subagent_type="e2e-reviewer", prompt="
    GOAL: this rules file is about to become the standing law for every E2E agent in the repo;
          you are the last gate before it is persisted.
    ROLE: validate the merged rules. Read-only -- do NOT edit the rules, agents, or code.

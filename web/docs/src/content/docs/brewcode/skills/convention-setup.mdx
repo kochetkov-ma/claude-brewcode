@@ -1,0 +1,135 @@
+---
+title: "Convention Setup"
+description: "Extract architecture, coding and testing conventions, then install reversible loading guidance before creating project agents and review tools."
+order: 1105
+---
+import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+
+# Convention Setup
+
+<Badge variant="primary" text="opus" /> <Badge variant="accent" text="7 lifecycle modes" /> <Badge variant="secondary" text="project scope" /> <Badge variant="accent" text="user-invoked" />
+
+## Quick reference
+
+| Field | Value |
+|-------|-------|
+| Command | `/brewcode:convention-setup` |
+| Default | `install` |
+| Lifecycle | `status · install · upgrade · enable · disable · uninstall · purge` |
+| Extraction | `full · conventions · rules · paths` |
+| Input | Free-text brief, optional mode, and optional scoped paths |
+| Tools | Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion, Skill |
+
+## What it does
+
+Convention setup captures architecture, representative implementations, coding patterns, and
+testing conventions from your repository. It writes three project documents and installs a
+loading rule that tells agents which document to read before implementation or review.
+
+Run it after semantic search and **before teams-setup**. Conventions form the foundation for
+project agents and review tools; creating a team is not a prerequisite. The read-only
+[setup dashboard](/brewcode/skills/setup-status/) includes it in this position.
+
+## When to use
+
+- Establish shared coding and testing patterns before generating project agents.
+- Refresh conventions after a major refactor with `upgrade`.
+- Analyse selected modules with `paths`.
+- Extract additional accepted rules from existing documents with `rules`.
+- Pause convention loading while keeping the documents and accepted rules.
+
+## Example
+
+```text
+/brewcode:convention-setup install
+```
+
+Expected result: after inspecting status, analysing the code, and reviewing the proposed
+conventions and rules, the skill produces:
+
+| Artifact | Purpose |
+|----------|---------|
+| `.claude/convention/reference-patterns.md` | Representative implementations, coding patterns, and anti-patterns |
+| `.claude/convention/testing-conventions.md` | Test data, test structure, and assertion patterns |
+| `.claude/convention/project-architecture.md` | Architecture, dependencies, and repository layout |
+| `.claude/rules/convention.md` | Loading guidance for the three documents |
+
+The generated documents carry provenance metadata. The loading rule uses the same content-version
+source and is discoverable by `setup-status`. Extra project rules depend on which proposals you accept.
+
+## Workflow
+
+<Steps>
+  <li><div><strong>Resolve intent and report status</strong><p>The skill prints its PLAN block, resolves mode and scope from your brief, and probes the installation. Read-only status asks no questions. Outcome-changing ambiguity is clarified before work; ownership or live/disabled path collisions stop the operation.</p></div></li>
+  <li><div><strong>Analyse active layers in parallel</strong><p>Detect the stack and source paths, then analyse the applicable code and test layers with bounded agents. Large repositories can use scoped paths. Candidates include actual file paths and evidence of established patterns.</p></div></li>
+  <li><div><strong>Select reference implementations</strong><p>An architecture-capable agent or Plan agent compares candidates and resolves overlapping suggestions. The chosen references anchor the coding, testing, and architecture documents.</p></div></li>
+  <li><div><strong>Generate, compact, and review documents</strong><p>Three document owners work independently. When available, text optimization compacts their output. Review the proposed conventions and request corrections before proceeding.</p></div></li>
+  <li><div><strong>Organize accepted rules</strong><p>Full extraction proposes avoid and best-practice rules, checks for duplicates, and presents them for acceptance. The conventions-only mode skips this phase. Additional CLAUDE.md references are added only when explicitly requested.</p></div></li>
+  <li><div><strong>Validate and install loading guidance</strong><p>Validate the three documents before installing or refreshing the loading rule. Existing rule wording is preserved while its metadata is refreshed. A disabled loading rule stays disabled during install or upgrade.</p></div></li>
+</Steps>
+
+## Lifecycle modes
+
+| Mode | Behavior |
+|------|----------|
+| `status` | Report state and loading-rule path without writing |
+| `install` (default) | Extract conventions, validate documents, and create or refresh loading guidance |
+| `upgrade` | Repeat extraction against current evidence; preserve local wording and disabled state |
+| `enable` | Restore the parked loading rule without changing its body |
+| `disable` | Rename the loading rule to `.claude/rules/convention.md.disabled` |
+| `uninstall` | Remove the owned loading rule; keep convention documents |
+| `purge` | Remove the owned loading rule and the three owned convention documents |
+
+A bare invocation chooses `install`, including on an existing project. Use `status` explicitly
+for inspection. Lifecycle-only actions do not regenerate documents. Before purge, the skill
+confirms the exact three document paths unless you have explicitly requested their deletion.
+
+<Callout type="warning" title="Disabling loading has a narrow scope">
+  Disable parks only the generated loading rule. Accepted coding rules, manual CLAUDE.md
+  references, convention documents, and unrelated files remain. Uninstall and purge also
+  preserve accepted rules and CLAUDE.md. They do not erase project knowledge outside their
+  owned artifacts.
+</Callout>
+
+The helper refuses to modify an unowned loading rule or purge unowned documents. If both live
+and disabled loading rules exist, it reports the collision instead of choosing one.
+
+## Additional extraction modes
+
+| Mode | Example | Scope |
+|------|---------|-------|
+| `full` | `/brewcode:convention-setup full` | Full extraction, accepted rules, validation, and loading guidance |
+| `conventions` | `/brewcode:convention-setup conventions` | Generate the three documents and install or refresh loading guidance while preserving disabled state; skip additional rule extraction |
+| `rules` | `/brewcode:convention-setup rules` | Consume existing convention documents for rules extraction |
+| `paths` | `/brewcode:convention-setup paths src/payments,src/billing` | Refresh scoped evidence while retaining other layers |
+
+The conventions-only mode still installs or refreshes `convention.md`; other rules stay untouched.
+Rules-only mode requires existing convention documents. Scoped mode reaches rule organization;
+it does not discard unrelated document layers.
+
+## Technical details
+
+The skill delegates one bounded layer or document per agent. Its brief specifies goal, ownership,
+paths, existing and parallel work, the next consumer, and acceptance evidence. Analysis activates
+layers appropriate to the detected stack rather than assuming every repository has the same design.
+
+The bundled `scripts/convention.sh` handles lifecycle checks, document validation, loader
+installation, reversible parking, and owned removal. It compares the loading rule and all three
+documents against the skill's current content version. A parked loader reports disabled even if
+documents need refresh; incomplete artifacts report partial.
+
+Generated conventions are project-specific. Upgrade uses current repository evidence and preserves
+local wording rather than replacing documents with a generic template. It refreshes owned loader
+metadata without changing the loader's existing body or enabling a parked installation.
+
+## Related
+
+<CardGrid>
+  <Card title="Brewcode overview" icon="document" href="/brewcode/overview/">Project analysis, conventions, agents, and review tools.</Card>
+  <Card title="Full Setup" icon="settings" href="/full-setup/">The dependency order from search and conventions through documentation sync.</Card>
+  <Card title="Setup Status" icon="eye" href="/brewcode/skills/setup-status/">Inspect conventions alongside the other ten setups.</Card>
+  <Card title="Rules" icon="clipboard" href="/brewcode/skills/rules/">Generate additional project rules from actual evidence.</Card>
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/convention-setup">Skill instructions, lifecycle helper, layer definitions, and templates.</Card>
+</CardGrid>
+
+<UpdateNotice />

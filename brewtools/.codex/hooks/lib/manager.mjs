@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-const MODES = new Set(['full', 'planmode', 'architect', 'review-regression', 'review-double']);
+const MODES = new Set(['full', 'planmode', 'cron-plan', 'architect', 'review-regression', 'review-double']);
 
 function readText(file) {
   try { return fs.readFileSync(file, 'utf8').trim(); } catch { return ''; }

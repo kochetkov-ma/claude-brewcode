@@ -15,6 +15,10 @@ last_updated: "{LAST_UPDATED}"
 **ROLE:** Self-contained deep-review coordinator + final validator.
 **OUTPUT:** ONE merged, de-duplicated, severity-prioritized, validated report.
 
+Main-session coordination only. Ordinary delegated agents cannot spawn Agent; return the
+review request to the main orchestrator instead. Review workers never re-delegate or edit
+files; coordinator report writing and the explicitly scoped self-sync remain allowed.
+
 ---
 
 ## Prompt contract
@@ -29,9 +33,9 @@ never keyword-scored) and `{DEPTH}` (HOW THOROUGH — semantic, resolved from th
 | `QUICK` | `quick`, `quick look`, `fast`, `just check`, `sanity check`, `did I do what was asked`, `am I on track` | `быстро`, `по-быстрому`, `просто проверь`, `то ли я сделал` | no (read-only review) |
 
 1. `{MODE}` resolves first, deterministically, per Mode Detection below — never from these keywords.
-2. `{DEPTH}` then scores by distinct whole-word keyword hits in the remaining prompt (table above); depth
-   words are CONSUMED and stripped before the remainder becomes `{FOCUS}`. No match -> `QUICK` (the default).
-3. Neither axis is ever asked about via `request_user_input` — both are computed per Mode/Depth Detection below;
+2. `{DEPTH}` scores distinct whole-word/whole-phrase hits in the Depth keyword table;
+   highest unique score wins, tie/zero -> QUICK. Consume depth words before `{FOCUS}`.
+3. Neither axis is ever asked about via `main-chat user gate` — both are computed per Mode/Depth Detection below;
    this skill never guesses interactively.
 4. Empty arguments -> `{MODE}` per rule 3a/3b (git state) below, `{DEPTH} = QUICK`.
 5. Prose that is not a mode/scope token is still input: it becomes `{FOCUS}` after depth words are stripped.
@@ -47,7 +51,7 @@ DO:     <gates, intent pass, and — EXTENDED only — expert fan-out, scope pas
 RESULT: <the merged report + chat summary>
 ```
 
-Labels are literal; values follow the conversation language.
+Labels are literal; authored plan values are English; INPUT remains verbatim.
 
 ---
 
@@ -60,7 +64,7 @@ Labels are literal; values follow the conversation language.
 | 4 | Check the focus ordering below: principle/architecture conformance -> correctness -> reuse -> pins -> style | **skipped** | yes |
 | 5 | Resolve the SANCTIONED SCOPE baseline (task + issue + recorded decisions); audit scope creep / blast radius / under-delivery — an unsanctioned touch is a first-class finding, not a nitpick | **skipped** | yes |
 | 6 | Run ONE targeted parallel fan-out — only the agents the changed files actually need | **skipped** | yes |
-| 7 | VALIDATION: per-finding adversarial re-verification of EVERY candidate, then an request_user_input gate on unsanctioned scope expansion, then merge + consistency check | adversarial part **skipped**; merge/rank/consistency run in-session | yes |
+| 7 | VALIDATION: per-finding adversarial re-verification of EVERY candidate, then an main-chat user gate gate on unsanctioned scope expansion, then merge + consistency check | adversarial part **skipped**; merge/rank/consistency run in-session | yes |
 | 8 | ONE merged report + chat summary, drift verdict first | yes (short) | yes |
 
 > **Bash-first:** some macOS builds ship no native `Grep`/`Glob` tool. Every command here is shell-based
@@ -167,16 +171,17 @@ echo "$FILES" | head -50   # DISPLAY only — truncating the shown list is fine;
 
 ## Depth Detection (semantic — resolve IMMEDIATELY after `{MODE}`, then ANNOUNCE)
 
-`{DEPTH}` has EXACTLY TWO values, `QUICK` and `EXTENDED`, and is inferred by YOU from the user's prompt and the
-run's context — the same way `{MODE}` rule 1 reads intent from prose. **There is NO flag, NO `--fast`, NO CLI
-token for depth; never invent one and never tell the user to pass one.** Depth is orthogonal to `{MODE}`: any
-mode can run at either depth.
+`{DEPTH}` has EXACTLY TWO values, QUICK and EXTENDED, resolved from the Depth keyword table
+in Prompt contract: count distinct whole-word/whole-phrase hits; highest unique score wins,
+tie/zero -> documented QUICK default, without a question gate. **There is NO flag, NO `--fast`,
+NO CLI token for depth; never invent one or tell the user to pass one.** Depth is orthogonal
+to `{MODE}`: any scope mode can run at either depth.
 
-| # | Signal (checked in order) | `{DEPTH}` |
+| # | Resolution | `{DEPTH}` |
 |---|---------------------------|-----------|
-| 1 | The prompt asks for DEPTH, completeness or expertise, in any language: "deep", "go deep", "thorough", "properly", "full review", "full audit", "audit", "expert review", "review everything", "all the experts", "before release", "before merge", "pre-merge review", "serious review" — RU: "глубоко", "глубокий", "по полной", "тщательно", "полный ревью", "аудит", "перед релизом" | `EXTENDED` |
-| 2 | The prompt asks for SPEED or a sanity check: "quick", "quick look", "fast", "just check", "sanity check", "did I do what was asked", "am I on track" — RU: "быстро", "по-быстрому", "просто проверь", "то ли я сделал" | `QUICK` |
-| 3 | Anything else — a focus directive, a bare scope token, an empty prompt, genuine ambiguity | `QUICK` (DEFAULT) |
+| 1 | EXTENDED keyword score uniquely exceeds QUICK | `EXTENDED` |
+| 2 | QUICK keyword score uniquely exceeds EXTENDED | `QUICK` |
+| 3 | Tie, no hits, focus-only prose, bare scope token or empty prompt | `QUICK` (DEFAULT) |
 
 > **Depth words are CONSUMED here.** Strip them from the prompt before treating the remainder as a `{FOCUS}`
 > directive — "deep review, focus on auth" resolves to `{DEPTH}=EXTENDED` + `{FOCUS}=auth`, never to a focus of
@@ -210,10 +215,9 @@ order (highest first). Bake this exact ordering into BOTH the shared agent promp
 
 ## Domain experts — selected at RUNTIME from the live roster
 
-The skill picks its own experts each run. The table below is the EXPECTED RESULT as of generation time, not a
-frozen contract: **READ `references/agent-prompt.md` FIRST and EXECUTE its "Dynamic expert selection" procedure** —
-it holds the roster command, the recon-agent exclusion list, the selection steps and the fallback chain. On any
-disagreement between the table and the live roster, **the live roster wins**.
+Per run, **READ `references/agent-prompt.md` FIRST and execute "Dynamic expert selection"**:
+roster command, recon exclusions, selection and fallback chain. The table is the expected
+generation-time result; disagreement -> **live roster wins**, never a frozen contract.
 
 | Guard | Rule |
 |-------|------|
@@ -234,9 +238,8 @@ PLUS up to two GENERAL cross-cutting agents — they are NOT auto-spawned every 
 
 ## The intent pass — `intent-guard`, spawned at BOTH depths, ALWAYS
 
-`intent-guard` (`.codex/agents/intent-guard.toml`) answers the one question no domain expert asks: **was the thing
-that was DELIVERED the thing that was ASKED for?** Drift starts small at the first turn and is large by the last;
-an agent can follow an approved plan faithfully for hours and still ship something nobody requested.
+`intent-guard` (`.codex/agents/intent-guard.toml`) compares **DELIVERED vs ASKED**, outside domain review.
+Following an approved plan faithfully can still accumulate drift from the original request.
 
 | Rule | Detail |
 |------|--------|
@@ -261,12 +264,10 @@ One-line gist per pointer only — the file is the authority. Phase 0 PREFLIGHT-
 
 ---
 
-## Delegation (applies to EVERY sub-agent task this skill spawns)
+## Delegation (applies to EVERY Agent this skill spawns)
 
-A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct it, and it
-usually drifts off-target. One subagent = ONE bounded unit — one deliverable (here: ONE file group's review),
-~<=5 files, ~<=10 steps. Bigger MUST be split into N tasks, all spawned in ONE message — split an oversized
-group into two groups rather than handing one agent half the repo.
+One subagent = ONE file-group review, ~<=5 files, ~<=10 steps. Split larger groups into N
+tasks, all spawned in ONE message; an hour-long agent drifts beyond observation/correction.
 
 Every spawn prompt MUST carry:
 
@@ -396,7 +397,7 @@ RESULT: one merged, validated report + chat summary
 9. If `FILES` is empty (`COUNT == 0`) -> **exit** ("Nothing to deep-review for {MODE} / {SCOPE}.") — but still
    report any gate failure from step 4. This applies at BOTH depths: an empty change set has no delivery to
    compare against the request either.
-10. If `COUNT > 50` (and `{MODE}` != `FULL_PROJECT`) -> request_user_input: narrow the scope (per-folder / per-commit)
+10. If `COUNT > 50` (and `{MODE}` != `FULL_PROJECT`) -> main-chat user gate: narrow the scope (per-folder / per-commit)
     or proceed anyway. **`EXTENDED` only** — `QUICK` costs one agent that reads NAMES and counts, so file volume
     does not scale it; never ask at `QUICK`. For `FULL_PROJECT`, proceed but warn it is a large, slower pass.
 11. Optionally study context with read-only `Explore` agents — `EXTENDED` only, at MOST 2, and only for
@@ -437,7 +438,7 @@ Group the `{FILE_LIST}` by path. **Enable ONLY the groups whose files actually c
 
 ### Phase 2 — ONE parallel fan-out (find candidates)
 
-Everything selected is spawned in **ONE message**. At `QUICK` that message contains exactly ONE `sub-agent task` — the
+Everything selected is spawned in **ONE message**. At `QUICK` that message contains exactly ONE `Agent` — the
 INTENT pass below — and nothing else in this phase applies. At `EXTENDED` the intent pass rides in the SAME
 message as the domain owners, the two scope passes and any general agent.
 
@@ -449,41 +450,7 @@ the brief below passes CONTEXT ONLY and deliberately restates none of it. Skip t
 `not run` everywhere and never let the run read as clean.
 
 ```
-Codex delegation brief (task_role="intent-guard", message="
-## superreview — INTENT pass: asked vs delivered ({PROJECT_NAME})
-
-GOAL: one anti-drift check over this change set — is the DELIVERED work the work that was ASKED for?
-ROLE: exactly the role your own agent file defines. Follow it verbatim: tier collection, the <=15 tool-call
-evidence budget, the drift classes, the <=10-finding cap, the verdict line. Nothing is restated here, so READ
-YOUR FILE and do not improvise a different job. Do NOT review code quality, correctness, framework usage,
-security or style — other passes own those (at QUICK depth they simply do not run, and that is deliberate:
-you are not their stand-in).
-SCOPE: this run only — {MODE} / {SCOPE}, depth {DEPTH}. Read-only; edit nothing.
-
-**The request, VERBATIM (tier 5, and tier 1 when no external source exists):**
-{USER_REQUEST}
-**Files changed ({COUNT}):** {FILE_LIST}
-**Diff range:** {SCOPE}  (empty for FULL_PROJECT / UNCOMMITTED)
-**Mechanical gate results (already run — never re-run a build or a test):** {GATE_RESULTS}
-**Sanctioned baseline resolved by this skill:** {SCOPE_BASELINE}
-  (`not resolved (QUICK)` means nobody pre-resolved it — resolve your own tiers from the locations your file
-   names, and record any tier you cannot reach as absent. Never invent one.)
-**Review corpus rule:** git-IGNORED is OUT. The instruction tree (`.codex/**`, `AGENTS.md`) is AUTHORITY you
-CITE, never a drift target; the task board is a BASELINE input, never a subject.
-
-CONTEXT: Phase 0 resolved the mode, the depth and the gates and announced them. At QUICK you are the ONLY agent
-in this run. At EXTENDED domain owners and two scope passes run beside you right now — they own code quality and
-sanctioned-surface accounting; do not duplicate them, and do not soften your verdict because they exist.
-CONSUMER: the coordinator puts your verdict line at the TOP of the chat summary and of the report's Intent
-section, and merges your JSON rows into the finding table. At EXTENDED a validator RANKS your rows but does not
-re-litigate them, so your evidence has to stand on its own.
-DONE: the verdict line first, then the numbered findings, then the merge-contract JSON object and nothing after
-it. ONE override on the JSON in your file, for this project: add \"verdict\": \"CONFIRMED-BY-EVIDENCE\" to every
-row. The `intent` category and the `intent#<class>` rule come from your own file and are RESERVED for you —
-keep them exactly as written there.
-A row without a quoted ASKED, a named SOURCE tier and a concrete DELIVERED path/count/command-output is NOT
-self-evidenced: DROP it rather than ship it. Empty findings + `VERDICT: ALIGNED` is a good result.
-")
+spawn_agent({"task_name":"intent_guard_1","message":"Assigned role: intent-guard. The main session supplies matching native role instructions when available; report a role gap rather than claiming a custom type was instantiated. Perform this bounded work only; do not spawn or delegate children.\n\n## superreview — INTENT pass: asked vs delivered ({PROJECT_NAME})\n\nGOAL: one anti-drift check over this change set — is the DELIVERED work the work that was ASKED for?\nROLE: exactly the role your own agent file defines. Follow it verbatim: tier collection, the <=15 tool-call\nevidence budget, the drift classes, the <=10-finding cap, the verdict line. Nothing is restated here, so READ\nYOUR FILE and do not improvise a different job. Do NOT review code quality, correctness, framework usage,\nsecurity or style — other passes own those (at QUICK depth they simply do not run, and that is deliberate:\nyou are not their stand-in).\nSCOPE: this run only — {MODE} / {SCOPE}, depth {DEPTH}. Read-only; edit nothing.\n\n**The request, VERBATIM (tier 5, and tier 1 when no external source exists):**\n{USER_REQUEST}\n**Files changed ({COUNT}):** {FILE_LIST}\n**Diff range:** {SCOPE}  (empty for FULL_PROJECT / UNCOMMITTED)\n**Mechanical gate results (already run — never re-run a build or a test):** {GATE_RESULTS}\n**Sanctioned baseline resolved by this skill:** {SCOPE_BASELINE}\n  (`not resolved (QUICK)` means nobody pre-resolved it — resolve your own tiers from the locations your file\n   names, and record any tier you cannot reach as absent. Never invent one.)\n**Review corpus rule:** git-IGNORED is OUT. The instruction tree (`.codex/**`, `AGENTS.md`) is AUTHORITY you\nCITE, never a drift target; the task board is a BASELINE input, never a subject.\n\nCONTEXT: Phase 0 resolved the mode, the depth and the gates and announced them. At QUICK you are the ONLY agent\nin this run. At EXTENDED domain owners and two scope passes run beside you right now — they own code quality and\nsanctioned-surface accounting; do not duplicate them, and do not soften your verdict because they exist.\nCONSUMER: the coordinator puts your verdict line at the TOP of the chat summary and of the report's Intent\nsection, and merges your JSON rows into the finding table. At EXTENDED a validator RANKS your rows but does not\nre-litigate them, so your evidence has to stand on its own.\nDONE: the verdict line first, then the numbered findings, then the merge-contract JSON object and nothing after\nit. ONE override on the JSON in your file, for this project: add \"verdict\": \"CONFIRMED-BY-EVIDENCE\" to every\nrow. The `intent` category and the `intent#<class>` rule come from your own file and are RESERVED for you —\nkeep them exactly as written there.\nA row without a quoted ASKED, a named SOURCE tier and a concrete DELIVERED path/count/command-output is NOT\nself-evidenced: DROP it rather than ship it. Empty findings + `VERDICT: ALIGNED` is valid only after comparison\nwith a readable governing intent baseline. Otherwise return `VERDICT: not run — intent baseline unavailable`\nand empty findings; invent no drift row.\n"})
 ```
 
 Its rows enter `{CANDIDATES}` with `source: intent-guard` and verdict `CONFIRMED-BY-EVIDENCE`.
@@ -513,37 +480,7 @@ reported as INFORMATIONAL; **skip pass B** (no single task, so no criteria and n
 to `Explore`):
 
 ```
-Codex delegation brief (task_role="{SCOPE_AGENT_A}", message="
-## superreview — SCOPE pass A: DIFF SIDE (shapes 1-6, single axis)
-
-READ-ONLY run: audit ONLY the scope + blast radius OF THE CHANGED FILES. Do NOT edit the board, do NOT touch any
-file, do NOT create, edit or close an issue. Other agents own correctness, architecture and style; scope pass B
-owns delivery (scope#D*) and closeout (scope#C*) — do NOT score those and do NOT judge whether a criterion was
-delivered.
-
-READ (path only): .codex/skills/superreview/references/scope.md — section 2 (ownership map), section 3 (the
-6-shape taxonomy + severity map), section 4 (the binding NOT-creep exclusion list). Apply them verbatim.
-
-**Sanctioned baseline (already resolved in Phase 0 — re-verify anything you doubt, never widen it):**
-{SCOPE_BASELINE}
-**Ownership signals:** {OWNERSHIP}
-**Files changed:** {FILE_LIST}
-**Diff range:** {SCOPE}
-
-Per file: (1) is it inside the sanctioned surface implied by the acceptance criteria? (2) if not, is there a
-RECORDED decision sanctioning it (task notes / issue comment / docs decision log)? cite it; (3) if not, classify
-by shape 1-6 and score per the severity map; (4) name WHO ELSE is hit — other owner or shared surface.
-OVERLAP: a file owned by a neighbouring task is legitimate when the sanctioned deliverable cannot be correct
-without it AND the boundary is recorded (section 4) — unrecorded but correctness-driven overlap is shape 6, NEVER
-a shape-1 blocker.
-
-An unsanctioned edit to a shared surface is a P0, not a nitpick. But do not manufacture findings: the exclusion
-list in section 4 is binding, and a missing baseline caps you at P2.
-
-Report in the standard finding JSON, category \"scope-creep\", rule \"scope#<shape-number>\" ONLY. In every
-\"description\" state: the baseline source you checked against (task id / issue id / decision id / UNKNOWN), the
-shape id, and the owner or shared surface impacted. \"suggestion\" = split it out / revert it / record the decision.
-")
+spawn_agent({"task_name":"scope_agent_a_2","message":"Assigned role: {SCOPE_AGENT_A}. The main session supplies matching native role instructions when available; report a role gap rather than claiming a custom type was instantiated. Perform this bounded work only; do not spawn or delegate children.\n\n## superreview — SCOPE pass A: DIFF SIDE (shapes 1-6, single axis)\n\nREAD-ONLY run: audit ONLY the scope + blast radius OF THE CHANGED FILES. Do NOT edit the board, do NOT touch any\nfile, do NOT create, edit or close an issue. Other agents own correctness, architecture and style; scope pass B\nowns delivery (scope#D*) and closeout (scope#C*) — do NOT score those and do NOT judge whether a criterion was\ndelivered.\n\nREAD (path only): .codex/skills/superreview/references/scope.md — section 2 (ownership map), section 3 (the\n6-shape taxonomy + severity map), section 4 (the binding NOT-creep exclusion list). Apply them verbatim.\n\n**Sanctioned baseline (already resolved in Phase 0 — re-verify anything you doubt, never widen it):**\n{SCOPE_BASELINE}\n**Ownership signals:** {OWNERSHIP}\n**Files changed:** {FILE_LIST}\n**Diff range:** {SCOPE}\n\nPer file: (1) is it inside the sanctioned surface implied by the acceptance criteria? (2) if not, is there a\nRECORDED decision sanctioning it (task notes / issue comment / docs decision log)? cite it; (3) if not, classify\nby shape 1-6 and score per the severity map; (4) name WHO ELSE is hit — other owner or shared surface.\nOVERLAP: a file owned by a neighbouring task is legitimate when the sanctioned deliverable cannot be correct\nwithout it AND the boundary is recorded (section 4) — unrecorded but correctness-driven overlap is shape 6, NEVER\na shape-1 blocker.\n\nAn unsanctioned edit to a shared surface is a P0, not a nitpick. But do not manufacture findings: the exclusion\nlist in section 4 is binding, and a missing baseline caps you at P2.\n\nReport in the standard finding JSON, category \"scope-creep\", rule \"scope#<shape-number>\" ONLY. In every\n\"description\" state: the baseline source you checked against (task id / issue id / decision id / UNKNOWN), the\nshape id, and the owner or shared surface impacted. \"suggestion\" = split it out / revert it / record the decision.\n"})
 ```
 
 **Pass B — baseline side.** Owner: `{SCOPE_AGENT_B}`. Its core job is proving or disproving an ABSENCE across the
@@ -551,55 +488,7 @@ whole corpus — a search problem, so a read-only searcher (built-in `Explore`) 
 and closeout ride together: both reason from the baseline outward and share ONE tracker context, `{PR_ISSUE_JSON}`:
 
 ```
-Codex delegation brief (task_role="{SCOPE_AGENT_B}", message="
-## superreview — SCOPE pass B: BASELINE SIDE (delivery scope#D*, closeout scope#C*)
-
-READ-ONLY run: audit ONLY whether the sanctioned scope was fully DELIVERED and correctly CLOSED OUT. Do not edit
-any file, do not touch the board, do not create, edit or close an issue, and do NOT re-fetch tracker data — the
-issue + PR data you need is pasted below. Scope pass A owns the changed-file shapes 1-6 — do NOT score those.
-
-You SEARCH the codebase; you do not read a diff. A criterion may be satisfied by code this change never touched,
-and a criterion delivered under a DIFFERENT NAME reads exactly like absence. Use `rg` / `grep` / `git ls-files`
-across the source tree AND the tests, by CONCEPT and by SYNONYM, before claiming anything is missing. Proving or
-disproving an absence IS the job, not a side task.
-
-READ (path only): .codex/skills/superreview/references/scope.md — section 3b (the DELIVERY map D1-D5 plus the
-mandatory PROOF OF ABSENCE rules) and section 4b (the CLOSEOUT map C1-C4). Apply them verbatim.
-
-**Sanctioned baseline (already resolved in Phase 0 — re-verify anything you doubt, never widen it):**
-{SCOPE_BASELINE}
-**Issue + PR data (fetched in Phase 0 — this is your whole tracker context; never re-fetch it):**
-{PR_ISSUE_JSON}
-**Files changed:** {FILE_LIST}
-**Diff range:** {SCOPE}
-
-DELIVERY (section 3b): score every acceptance criterion / issue done-when D1-D5 — full scope must be DELIVERED,
-and a reduction is clean ONLY when its blocker is recorded and named (then report it as an accepted reduction,
-not a finding).
-SCOPE IDS — ONLY if the baseline above carries a `## Scope` table (`id | block | in/out | status`): walk EVERY `in`
-id and score the claimed `status` against the corpus, per the status table in section 3b — `done` with nothing
-implementing it is D1/D2 (the proof rules below still bind: a `done` claim is not evidence), an implemented block
-still marked `not-started`/`in-progress` is D5 (stale record, P3), an honestly unfinished id is NOT a finding, and
-an implemented `out` id belongs to pass A as shape 2 — mention it, do not score it. Cite each as `<TASK-ID>#S<n>`;
-`scope#S*` is RESERVED, never a rule id. ANCHOR a D5 on the IMPLEMENTING code — the hunk that proves the block
-landed; `file`/`lineStart` may NEVER be the board file (INPUT only, never a finding location), and the stale row
-lives in the finding TEXT. A `done` id with nothing implementing it has no such anchor: that is D1/D2 under PROOF
-OF ABSENCE, not D5. **No `## Scope` table in the baseline -> skip this paragraph silently: no tally, no
-note, no finding.** Report the id tally (done-as-claimed / total `in`, plus how many `in` ids are legitimately
-unfinished — those are NOT findings) for the report's scope section.
-D1 and D4 are ABSENCE claims. Every scope#D* finding MUST carry, in \"description\": (a) the criterion QUOTED
-VERBATIM from the task/issue, and (b) the exact search command you ran and its empty result. No quote or no cited
-search = you may not claim P0: report it at P2 with \"deliveryProofMissing\": true, for the Phase 3b gate.
-CLOSEOUT (section 4b) — ONLY if the data above contains a PR, else record \"PR: none\" and skip it: PR body
-(shipped / deliberately NOT built / what consumers may rely on), the Closes-vs-Refs split, a closeout comment on
-every issue touched, AI attribution anywhere, and the short-and-clear bar in BOTH directions.
-
-Do not manufacture findings: a missing baseline caps you at P2, and an unquoted, unsearched absence is never P0.
-
-Report in the standard finding JSON, category \"scope-creep\", rule \"scope#D<n>\" | \"scope#C<n>\" ONLY.
-\"suggestion\" = deliver the criterion / record the blocker / fix the PR body or the Closes-Refs split / add the
-closeout comment.
-")
+spawn_agent({"task_name":"scope_agent_b_3","message":"Assigned role: {SCOPE_AGENT_B}. The main session supplies matching native role instructions when available; report a role gap rather than claiming a custom type was instantiated. Perform this bounded work only; do not spawn or delegate children.\n\n## superreview — SCOPE pass B: BASELINE SIDE (delivery scope#D*, closeout scope#C*)\n\nREAD-ONLY run: audit ONLY whether the sanctioned scope was fully DELIVERED and correctly CLOSED OUT. Do not edit\nany file, do not touch the board, do not create, edit or close an issue, and do NOT re-fetch tracker data — the\nissue + PR data you need is pasted below. Scope pass A owns the changed-file shapes 1-6 — do NOT score those.\n\nYou SEARCH the codebase; you do not read a diff. A criterion may be satisfied by code this change never touched,\nand a criterion delivered under a DIFFERENT NAME reads exactly like absence. Use `rg` / `grep` / `git ls-files`\nacross the source tree AND the tests, by CONCEPT and by SYNONYM, before claiming anything is missing. Proving or\ndisproving an absence IS the job, not a side task.\n\nREAD (path only): .codex/skills/superreview/references/scope.md — section 3b (the DELIVERY map D1-D5 plus the\nmandatory PROOF OF ABSENCE rules) and section 4b (the CLOSEOUT map C1-C4). Apply them verbatim.\n\n**Sanctioned baseline (already resolved in Phase 0 — re-verify anything you doubt, never widen it):**\n{SCOPE_BASELINE}\n**Issue + PR data (fetched in Phase 0 — this is your whole tracker context; never re-fetch it):**\n{PR_ISSUE_JSON}\n**Files changed:** {FILE_LIST}\n**Diff range:** {SCOPE}\n\nDELIVERY (section 3b): score every acceptance criterion / issue done-when D1-D5 — full scope must be DELIVERED,\nand a reduction is clean ONLY when its blocker is recorded and named (then report it as an accepted reduction,\nnot a finding).\nSCOPE IDS — ONLY if the baseline above carries a `## Scope` table (`id | block | in/out | status`): walk EVERY `in`\nid and score the claimed `status` against the corpus, per the status table in section 3b — `done` with nothing\nimplementing it is D1/D2 (the proof rules below still bind: a `done` claim is not evidence), an implemented block\nstill marked `not-started`/`in-progress` is D5 (stale record, P3), an honestly unfinished id is NOT a finding, and\nan implemented `out` id belongs to pass A as shape 2 — mention it, do not score it. Cite each as `<TASK-ID>#S<n>`;\n`scope#S*` is RESERVED, never a rule id. ANCHOR a D5 on the IMPLEMENTING code — the hunk that proves the block\nlanded; `file`/`lineStart` may NEVER be the board file (INPUT only, never a finding location), and the stale row\nlives in the finding TEXT. A `done` id with nothing implementing it has no such anchor: that is D1/D2 under PROOF\nOF ABSENCE, not D5. **No `## Scope` table in the baseline -> skip this paragraph silently: no tally, no\nnote, no finding.** Report the id tally (done-as-claimed / total `in`, plus how many `in` ids are legitimately\nunfinished — those are NOT findings) for the report's scope section.\nD1 and D4 are ABSENCE claims. Every scope#D* finding MUST carry, in \"description\": (a) the criterion QUOTED\nVERBATIM from the task/issue, and (b) the exact search command you ran and its empty result. No quote or no cited\nsearch = you may not claim P0: report it at P2 with \"deliveryProofMissing\": true, for the Phase 3b gate.\nCLOSEOUT (section 4b) — ONLY if the data above contains a PR, else record \"PR: none\" and skip it: PR body\n(shipped / deliberately NOT built / what consumers may rely on), the Closes-vs-Refs split, a closeout comment on\nevery issue touched, AI attribution anywhere, and the short-and-clear bar in BOTH directions.\n\nDo not manufacture findings: a missing baseline caps you at P2, and an unquoted, unsearched absence is never P0.\n\nReport in the standard finding JSON, category \"scope-creep\", rule \"scope#D<n>\" | \"scope#C<n>\" ONLY.\n\"suggestion\" = deliver the criterion / record the blocker / fix the PR body or the Closes-Refs split / add the\ncloseout comment.\n"})
 ```
 
 Each agent MUST search-first (Bash `grep`/`rg` + verify imports) before flagging any
@@ -619,8 +508,9 @@ via Phase 3.
 > the pool: step 2 (merge + de-duplicate), step 3 (map severity -> P0-P3 by the SAME priority map below) and
 > step 4 (consistency check). Record the result as `{MERGED}` and the run as validated — a QUICK run is NOT
 > `INCOMPLETE` on validation grounds, because nothing in it was left unvalidated. The one exception is the
-> intent pass itself failing to run (missing agent, failure, timeout): its only producer is gone, so that run
-> IS `INCOMPLETE` — see Error Handling.
+> intent pass being unavailable (missing agent, failure, timeout, or no readable governing intent baseline):
+> that run IS `INCOMPLETE`, even with green gates and no findings — see Error Handling. Baseline unavailability
+> applies at BOTH depths; the scope pass's UNKNOWN baseline is a separate assessment.
 
 **`EXTENDED` from here to the end of Phase 3b.**
 
@@ -648,143 +538,7 @@ its own slice; **run step 2 (merge + de-duplicate) ONCE, in a final pass over th
 Sum `stats` from the final pass, never from the batches.
 
 ```
-Codex delegation brief (task_role="{VALIDATOR_AGENT}", message="
-## superreview — per-finding VALIDATION + Merge ({PROJECT_NAME})
-
-GOAL: produce ONE merged, de-duplicated, priority-sorted report for {MODE} / {SCOPE} that a human can act on
-without re-checking it. Candidates come from parallel domain owners who each saw only their own file group, so
-some are already fixed, misread, out of scope, or the same issue reported twice.
-ROLE: you are the adversarial validator + final arbiter. For EVERY candidate finding (no sampling, no skipping),
-READ the ACTUAL code at the cited file:line and try to DISPROVE it. Decide CONFIRM or REJECT per finding. Only
-CONFIRMed findings may appear in the final report. Then merge the survivors. Do NOT edit code, do NOT review
-files outside the set below, do NOT invent findings — the one exception is a miss you deliberately RESTORE.
-SCOPE: in — the candidate pool + the cited code + the files under review, listed below. Out — applying fixes,
-low/medium security, prose outside the JSON.
-
-**READ (paths only — read them yourself, nothing is pasted here):**
-  .codex/skills/superreview/references/{STACK_REF}      — stack facts + per-stack checks.
-  .codex/skills/superreview/references/agent-prompt.md  — the SAME focus ordering the Phase 2 agents were given;
-    apply it verbatim as your effort ordering and tie-break.
-  .codex/skills/superreview/references/scope.md         — baseline precedence, the 6-shape taxonomy + severity map,
-    the delivery/closeout maps and the NOT-creep exclusion list, for validating every 'scope-creep' candidate.
-
-**Your own Phase 2 findings, if any:** {OWN_FINDING_IDS | none}. Hold those to a STRICTER bar than the rest —
-argue against them twice, and REJECT on any doubt. You may not skip them, and you may not wave them through.
-
-**Sanctioned scope baseline (resolved in Phase 0 — the yardstick for every scope-creep candidate):**
-{SCOPE_BASELINE}
-**Ownership signals:** {OWNERSHIP}
-**Mechanical gate results (verdict CONFIRMED-BY-EXECUTION — never re-validate, never reject):** {GATE_RESULTS}
-Findings with source 'gate' already carry their verdict, issued by the run itself; pass them through untouched and
-only RANK them. No other source may use that verdict — everything else you output is \"CONFIRM\" or it does not ship.
-
-**Intent findings (source 'intent-guard', category 'intent', verdict CONFIRMED-BY-EVIDENCE):** same treatment as
-gate rows and for the same reason — they carry their own evidence (a verbatim ASKED quote + its source tier + the
-delivered path/count). PASS THEM THROUGH UNTOUCHED: do not re-verify them, do not reject them, do not rewrite their
-description, do not count them against your batch budget. You RANK them and you may de-duplicate a scope-creep row
-that says the same thing (keep the intent row, union the sources). You may NEVER promote another finding to
-CONFIRMED-BY-EVIDENCE, and you may never author an intent row yourself.
-
-**Candidate findings (pool from the domain owners + the scope passes + any included general agents):**
-{CANDIDATES}
-**Files under review:** {FILE_LIST}
-**Focus:** {FOCUS}
-
-CONTEXT: Phase 0 resolved the mode/scope and announced it; Phase 2 already ran the targeted fan-out and each
-candidate is tagged with its producing agent as `source`. You are the GATE — nothing has been shown to the user
-yet, and no other agent runs after you except the report writer.
-CONSUMER: Phase 4 writes your JSON straight into `.codex/reports/{TIMESTAMP}_superreview/REPORT.md` using
-`references/report-template.md`, and Phase 5 prints your `stats` + `verdict` in the chat summary. Any text
-outside the JSON object breaks both; a finding without file + lineStart/lineEnd cannot be rendered.
-DONE: JSON only, in the schema below — findings ORDERED P0 -> P3, every row with file:line + an actionable
-suggestion, plus `dropped`, `verdict` and `stats` filled.
-
-**Focus ordering (effort + tie-breaks, highest first):** {FOCUS}
-  Security = report ONLY if CRITICAL (P0); ignore low/medium.
-  Also validate OVER-COMPLEXITY findings (category over-complexity): speculative abstraction, gold-plating,
-  premature generalization, KISS/YAGNI-removable indirection, collapsible duplication. Keep them (with the simpler
-  shape) when real; drop if the complexity is justified.
-
-### 1. Reverse-validate EACH candidate (per finding — drop false positives)
-  a. Existence — does the cited code/line actually exist and exhibit the issue NOW? (REJECT if not / already fixed)
-  b. Accuracy — is the claim a correct reading of the code? (REJECT if it misreads the code)
-  c. Actionability — is there a concrete fix path? (REJECT if vague / not actionable)
-  d. Severity — right for the focus ordering? SCALE CALIBRATION: harm reachable only under concurrency/load this
-     system does not have -> P3 or REJECT; a race claim with no stated traffic assumption -> REJECT.
-  e. Rule truth — does the cited rule actually say that, and does its scope cover the cited file? REJECT on scope
-     mismatch or an unverified framework-shape claim (verify against the installed dependency, not memory).
-  Adversarial: actively argue AGAINST each finding first. It survives ONLY if it withstands a-e. Do this for every
-  single candidate; none is reported unverified.
-  Over-complexity: keep with the simpler-shape suggestion when real, drop if the complexity is justified.
-  Scope-creep: REJECT when the file is implied by the acceptance criteria, required to make the sanctioned change
-  compile/pass the gates, covered by a RECORDED decision (cited or found), board bookkeeping for THIS task, or on
-  the scope.md section-4 exclusion list. CONFIRM only with the baseline source named. Baseline UNKNOWN -> cap at P2
-  and set \"sanctionUnknown\": true — PERMANENT for this run; Phase 3b may lower further but never restores a
-  pre-cap P0/P1 while UNKNOWN. REJECT a shape-1 claim on a neighbour's file when the overlap was correctness-driven
-  AND recorded; demote to shape 6 when only the recording is missing.
-  DELIVERY (scope#D*): D1/D4 are ABSENCE claims, the easiest false P0 here. CONFIRM at P0 only when the finding
-  QUOTES the criterion verbatim AND cites the search that proved absence — then RE-RUN that search yourself plus
-  one synonym/concept variant across source AND tests; any hit -> REJECT. No quote or no cited search -> cap at P2,
-  set \"deliveryProofMissing\": true, route to Phase 3b. D5 is the opposite claim — a PRESENCE: CONFIRM only after
-  reading the code the row cites, REJECT if that code does not implement the id, and never rank it above P2.
-  CLOSEOUT (scope#C*) — void when no PR exists.
-  You MAY ADD a finding of your own ONLY for a P0-grade issue you directly observe (source: \"validator\") — never
-  lower-priority. Run the SAME a-e pass on your own addition, quote the proof, set \"selfValidated\": true.
-
-### 2. Merge + de-duplicate ACROSS agents
-  Same file +/-5 lines + same category = ONE finding. Keep the most detailed description, highest severity,
-  union of sources (comma-join). A 'duplicate/reuse' miss + an 'architecture' flag on the same code = one row.
-
-### 3. Prioritize (MANDATORY P0 -> P3)
-  - P0 = architecture/boundary BLOCKERS + hard-rule bypasses + CRITICAL security (logged secret, missing auth,
-         injection) + any miss you RESTORE + UNSANCTIONED scope shape 1 (foreign surface / shared contract /
-         another owner's files) + an undelivered acceptance criterion (scope#D1) + an unrecorded scope reduction
-         (scope#D4). D1/D4 reach P0 ONLY with the section-3b proof; `deliveryProofMissing` or `sanctionUnknown`
-         caps the row at P2 per step 1, and that cap wins over this map.
-  - P1 = confirmed functional-correctness + architecture/boundary issues + other gate failures + scope shapes 2
-         and 5 + a partially delivered criterion (scope#D2) + a misleading closeout artefact (scope#C2).
-  - P2 = reuse misses/duplication + over-complexity + version-pin violations + scope shapes 3, 4, 6, scope#D3, the
-         remaining scope#C* rows, and any scope finding with baseline UNKNOWN + test-quality issues rated major+.
-  - P3 = business-requirements nits + minor over-complexity + warnings + style + minor/info + a stale scope-id
-         status (scope#D5) — P2 only when that row is the task's only delivery record.
-  - INTENT rows (category 'intent') rank by the severity intent-guard already assigned — blocker -> P0,
-    critical -> P1, major -> P2, minor -> P3 — and no baseline cap applies to them: intent-guard resolved and
-    named its own source tier, so its evidence IS the yardstick. Never re-score an intent row downward because
-    the scope baseline came back UNKNOWN; those are two different yardsticks.
-
-### 4. Consistency check on the merged list
-  No duplicate rows, severities monotonic with priority, every row has file:line + actionable suggestion,
-  findings ORDERED P0 -> P3.
-
-**Output JSON ONLY:**
-{
-  \"findings\": [{
-    \"id\": \"P0-1\", \"priority\": \"P0|P1|P2|P3\", \"source\": \"agent(s)|gate|intent-guard|validator\",
-    \"file\": \"path\", \"lineStart\": 42, \"lineEnd\": 45,
-    \"category\": \"boundary|architecture|scope-creep|intent|reuse|over-complexity|security|logic|persistence|test-quality|pins|style\",
-    \"severity\": \"blocker|critical|major|minor\",
-    \"rule\": \"avoid#N|architecture#N|scope#1|scope#D1|scope#C2|intent#scope|intent#tests|... or null\",
-    \"title\": \"...\", \"description\": \"...\", \"suggestion\": \"...\",
-    \"existing\": \"path|null\", \"reuse\": \"REUSE|EXTEND|CONSIDER|KEEP_NEW|null\",
-    \"scopeShape\": 1, \"sanctionUnknown\": false, \"deliveryProofMissing\": false,
-    \"impactedOwner\": \"task/person/shared surface|null\",
-    \"verdict\": \"CONFIRM|CONFIRMED-BY-EXECUTION|CONFIRMED-BY-EVIDENCE|UNVALIDATED\", \"selfValidated\": false, \"confidence\": 0.9
-  }],
-  \"dropped\": [{\"title\": \"...\", \"reason\": \"already-fixed|false-positive|not-actionable|unverified-rule|in-sanctioned-scope|duplicate-of:P0-1\"}],
-  \"verdict\": \"APPROVED|CONDITIONAL|REWORK\",
-  \"intentVerdict\": \"ALIGNED|MINOR DRIFT|MAJOR DRIFT|not run — <one clause of why, copied VERBATIM from intent-guard>\",
-  \"stats\": {\"p0\": 0, \"p1\": 0, \"p2\": 0, \"p3\": 0, \"scopeCreep\": 0, \"intent\": 0, \"overComplexity\": 0, \"candidates\": 0, \"confirmed\": 0, \"confirmedByExecution\": 0, \"confirmedByEvidence\": 0, \"unvalidated\": 0, \"dropped\": 0}
-}
-(scopeShape / sanctionUnknown / deliveryProofMissing / impactedOwner: only on 'scope-creep', else null/false.)
-Every row MUST carry a \"verdict\". \"candidates\" = confirmed + confirmedByExecution + confirmedByEvidence +
-unvalidated + dropped; if that does not balance, a finding went missing — fix it before returning.
-\"intentVerdict\" is COPIED from intent-guard's verdict line, never re-derived by you and never softened.
-
-### Verdict rule
-- REWORK if any P0; CONDITIONAL if any P1/P2 (no P0); APPROVED if only P3 / none.
-- Any row with verdict UNVALIDATED -> append `- INCOMPLETE` to the verdict, whatever it is. An INCOMPLETE run may
-  never read as APPROVED without qualification.
-")
+spawn_agent({"task_name":"validator_agent_4","message":"Assigned role: {VALIDATOR_AGENT}. The main session supplies matching native role instructions when available; report a role gap rather than claiming a custom type was instantiated. Perform this bounded work only; do not spawn or delegate children.\n\n## superreview — per-finding VALIDATION + Merge ({PROJECT_NAME})\n\nGOAL: produce ONE merged, de-duplicated, priority-sorted report for {MODE} / {SCOPE} that a human can act on\nwithout re-checking it. Candidates come from parallel domain owners who each saw only their own file group, so\nsome are already fixed, misread, out of scope, or the same issue reported twice.\nROLE: you are the adversarial validator + final arbiter. For EVERY candidate finding (no sampling, no skipping),\nREAD the ACTUAL code at the cited file:line and try to DISPROVE it. Decide CONFIRM or REJECT per finding. Only\nCONFIRMed findings may appear in the final report. Then merge the survivors. Do NOT edit code, do NOT review\nfiles outside the set below, do NOT invent findings — the one exception is a miss you deliberately RESTORE.\nSCOPE: in — the candidate pool + the cited code + the files under review, listed below. Out — applying fixes,\nlow/medium security, prose outside the JSON.\n\n**READ (paths only — read them yourself, nothing is pasted here):**\n  .codex/skills/superreview/references/{STACK_REF}      — stack facts + per-stack checks.\n  .codex/skills/superreview/references/agent-prompt.md  — the SAME focus ordering the Phase 2 agents were given;\n    apply it verbatim as your effort ordering and tie-break.\n  .codex/skills/superreview/references/scope.md         — baseline precedence, the 6-shape taxonomy + severity map,\n    the delivery/closeout maps and the NOT-creep exclusion list, for validating every 'scope-creep' candidate.\n\n**Your own Phase 2 findings, if any:** {OWN_FINDING_IDS | none}. Hold those to a STRICTER bar than the rest —\nargue against them twice, and REJECT on any doubt. You may not skip them, and you may not wave them through.\n\n**Sanctioned scope baseline (resolved in Phase 0 — the yardstick for every scope-creep candidate):**\n{SCOPE_BASELINE}\n**Ownership signals:** {OWNERSHIP}\n**Mechanical gate results (verdict CONFIRMED-BY-EXECUTION — never re-validate, never reject):** {GATE_RESULTS}\nFindings with source 'gate' already carry their verdict, issued by the run itself; pass them through untouched and\nonly RANK them. No other source may use that verdict — everything else you output is \"CONFIRM\" or it does not ship.\n\n**Intent findings (source 'intent-guard', category 'intent', verdict CONFIRMED-BY-EVIDENCE):** same treatment as\ngate rows and for the same reason — they carry their own evidence (a verbatim ASKED quote + its source tier + the\ndelivered path/count). PASS THEM THROUGH UNTOUCHED: do not re-verify them, do not reject them, do not rewrite their\ndescription, do not count them against your batch budget. You RANK them and you may de-duplicate a scope-creep row\nthat says the same thing (keep the intent row, union the sources). You may NEVER promote another finding to\nCONFIRMED-BY-EVIDENCE, and you may never author an intent row yourself.\n\n**Candidate findings (pool from the domain owners + the scope passes + any included general agents):**\n{CANDIDATES}\n**Files under review:** {FILE_LIST}\n**Focus:** {FOCUS}\n\nCONTEXT: Phase 0 resolved the mode/scope and announced it; Phase 2 already ran the targeted fan-out and each\ncandidate is tagged with its producing agent as `source`. You are the GATE — nothing has been shown to the user\nyet, and no other agent runs after you except the report writer.\nCONSUMER: Phase 4 writes your JSON straight into `.codex/reports/{TIMESTAMP}_superreview/REPORT.md` using\n`references/report-template.md`, and Phase 5 prints your `stats` + `verdict` in the chat summary. Any text\noutside the JSON object breaks both; a finding without file + lineStart/lineEnd cannot be rendered.\nDONE: JSON only, in the schema below — findings ORDERED P0 -> P3, every row with file:line + an actionable\nsuggestion, plus `dropped`, `verdict` and `stats` filled.\n\n**Focus ordering (effort + tie-breaks, highest first):** {FOCUS}\n  Security = report ONLY if CRITICAL (P0); ignore low/medium.\n  Also validate OVER-COMPLEXITY findings (category over-complexity): speculative abstraction, gold-plating,\n  premature generalization, KISS/YAGNI-removable indirection, collapsible duplication. Keep them (with the simpler\n  shape) when real; drop if the complexity is justified.\n\n### 1. Reverse-validate EACH candidate (per finding — drop false positives)\n  a. Existence — does the cited code/line actually exist and exhibit the issue NOW? (REJECT if not / already fixed)\n  b. Accuracy — is the claim a correct reading of the code? (REJECT if it misreads the code)\n  c. Actionability — is there a concrete fix path? (REJECT if vague / not actionable)\n  d. Severity — right for the focus ordering? SCALE CALIBRATION: harm reachable only under concurrency/load this\n     system does not have -> P3 or REJECT; a race claim with no stated traffic assumption -> REJECT.\n  e. Rule truth — does the cited rule actually say that, and does its scope cover the cited file? REJECT on scope\n     mismatch or an unverified framework-shape claim (verify against the installed dependency, not memory).\n  Adversarial: actively argue AGAINST each finding first. It survives ONLY if it withstands a-e. Do this for every\n  single candidate; none is reported unverified.\n  Over-complexity: keep with the simpler-shape suggestion when real, drop if the complexity is justified.\n  Scope-creep: REJECT when the file is implied by the acceptance criteria, required to make the sanctioned change\n  compile/pass the gates, covered by a RECORDED decision (cited or found), board bookkeeping for THIS task, or on\n  the scope.md section-4 exclusion list. CONFIRM only with the baseline source named. Baseline UNKNOWN -> cap at P2\n  and set \"sanctionUnknown\": true — PERMANENT for this run; Phase 3b may lower further but never restores a\n  pre-cap P0/P1 while UNKNOWN. REJECT a shape-1 claim on a neighbour's file when the overlap was correctness-driven\n  AND recorded; demote to shape 6 when only the recording is missing.\n  DELIVERY (scope#D*): D1/D4 are ABSENCE claims, the easiest false P0 here. CONFIRM at P0 only when the finding\n  QUOTES the criterion verbatim AND cites the search that proved absence — then RE-RUN that search yourself plus\n  one synonym/concept variant across source AND tests; any hit -> REJECT. No quote or no cited search -> cap at P2,\n  set \"deliveryProofMissing\": true, route to Phase 3b. D5 is the opposite claim — a PRESENCE: CONFIRM only after\n  reading the code the row cites, REJECT if that code does not implement the id, and never rank it above P2.\n  CLOSEOUT (scope#C*) — void when no PR exists.\n  You MAY ADD a finding of your own ONLY for a P0-grade issue you directly observe (source: \"validator\") — never\n  lower-priority. Run the SAME a-e pass on your own addition, quote the proof, set \"selfValidated\": true.\n\n### 2. Merge + de-duplicate ACROSS agents\n  Same file +/-5 lines + same category = ONE finding. Keep the most detailed description, highest severity,\n  union of sources (comma-join). A 'duplicate/reuse' miss + an 'architecture' flag on the same code = one row.\n\n### 3. Prioritize (MANDATORY P0 -> P3)\n  - P0 = architecture/boundary BLOCKERS + hard-rule bypasses + CRITICAL security (logged secret, missing auth,\n         injection) + any miss you RESTORE + UNSANCTIONED scope shape 1 (foreign surface / shared contract /\n         another owner's files) + an undelivered acceptance criterion (scope#D1) + an unrecorded scope reduction\n         (scope#D4). D1/D4 reach P0 ONLY with the section-3b proof; `deliveryProofMissing` or `sanctionUnknown`\n         caps the row at P2 per step 1, and that cap wins over this map.\n  - P1 = confirmed functional-correctness + architecture/boundary issues + other gate failures + scope shapes 2\n         and 5 + a partially delivered criterion (scope#D2) + a misleading closeout artefact (scope#C2).\n  - P2 = reuse misses/duplication + over-complexity + version-pin violations + scope shapes 3, 4, 6, scope#D3, the\n         remaining scope#C* rows, and any scope finding with baseline UNKNOWN + test-quality issues rated major+.\n  - P3 = business-requirements nits + minor over-complexity + warnings + style + minor/info + a stale scope-id\n         status (scope#D5) — P2 only when that row is the task's only delivery record.\n  - INTENT rows (category 'intent') rank by the severity intent-guard already assigned — blocker -> P0,\n    critical -> P1, major -> P2, minor -> P3 — and no baseline cap applies to them: intent-guard resolved and\n    named its own source tier, so its evidence IS the yardstick. Never re-score an intent row downward because\n    the scope baseline came back UNKNOWN; those are two different yardsticks.\n\n### 4. Consistency check on the merged list\n  No duplicate rows, severities monotonic with priority, every row has file:line + actionable suggestion,\n  findings ORDERED P0 -> P3.\n\n**Output JSON ONLY:**\n{\n  \"findings\": [{\n    \"id\": \"P0-1\", \"priority\": \"P0|P1|P2|P3\", \"source\": \"agent(s)|gate|intent-guard|validator\",\n    \"file\": \"path\", \"lineStart\": 42, \"lineEnd\": 45,\n    \"category\": \"boundary|architecture|scope-creep|intent|reuse|over-complexity|security|logic|persistence|test-quality|pins|style\",\n    \"severity\": \"blocker|critical|major|minor\",\n    \"rule\": \"avoid#N|architecture#N|scope#1|scope#D1|scope#C2|intent#scope|intent#tests|... or null\",\n    \"title\": \"...\", \"description\": \"...\", \"suggestion\": \"...\",\n    \"existing\": \"path|null\", \"reuse\": \"REUSE|EXTEND|CONSIDER|KEEP_NEW|null\",\n    \"scopeShape\": 1, \"sanctionUnknown\": false, \"deliveryProofMissing\": false,\n    \"impactedOwner\": \"task/person/shared surface|null\",\n    \"verdict\": \"CONFIRM|CONFIRMED-BY-EXECUTION|CONFIRMED-BY-EVIDENCE|UNVALIDATED\", \"selfValidated\": false, \"confidence\": 0.9\n  }],\n  \"dropped\": [{\"title\": \"...\", \"reason\": \"already-fixed|false-positive|not-actionable|unverified-rule|in-sanctioned-scope|duplicate-of:P0-1\"}],\n  \"verdict\": \"APPROVED|CONDITIONAL|REWORK\",\n  \"intentVerdict\": \"ALIGNED|MINOR DRIFT|MAJOR DRIFT|not run — <one clause of why, copied VERBATIM from intent-guard>\",\n  \"stats\": {\"p0\": 0, \"p1\": 0, \"p2\": 0, \"p3\": 0, \"scopeCreep\": 0, \"intent\": 0, \"overComplexity\": 0, \"candidates\": 0, \"confirmed\": 0, \"confirmedByExecution\": 0, \"confirmedByEvidence\": 0, \"unvalidated\": 0, \"dropped\": 0}\n}\n(scopeShape / sanctionUnknown / deliveryProofMissing / impactedOwner: only on 'scope-creep', else null/false.)\nEvery row MUST carry a \"verdict\". \"candidates\" = confirmed + confirmedByExecution + confirmedByEvidence +\nunvalidated + dropped; if that does not balance, a finding went missing — fix it before returning.\n\"intentVerdict\" is COPIED from intent-guard's verdict line, never re-derived by you and never softened.\n`not run — intent baseline unavailable` is the supported assessment-gap reason: keep empty findings and\nmark the run INCOMPLETE at BOTH depths, even with green gates. Do not invent a verdict enum or drift finding.\n\n### Verdict rule\n- REWORK if any P0; CONDITIONAL if any P1/P2 (no P0); APPROVED if only P3 / none.\n- Any row with verdict UNVALIDATED OR intent baseline unavailable -> append `- INCOMPLETE` to the verdict,\n  whatever it is. An INCOMPLETE run may\n  never read as APPROVED without qualification.\n"})
 ```
 
 Record output as `{MERGED}`. If the validator fails or is unavailable: retry once, then run the SAME prompt on the
@@ -793,7 +547,7 @@ marked `"verdict": "UNVALIDATED"` per row (never `CONFIRM`, never quietly droppe
 and the unvalidated COUNT carried into the report header, the Stats table and the chat summary. Gate rows keep
 `CONFIRMED-BY-EXECUTION` regardless — execution still happened.
 
-### Phase 3b — SCOPE GATE (request_user_input; after validation, before the report)
+### Phase 3b — SCOPE GATE (main-chat user gate; after validation, before the report)
 
 > **`{DEPTH}` = `QUICK` -> SKIP.** The gate only ever fires on `scope-creep` rows, and QUICK runs no scope pass,
 > so the pool contains none. Intent rows NEVER enter this gate at either depth: they are not scope-sanction
@@ -804,7 +558,7 @@ Scan `{MERGED}` for CONFIRMED `scope-creep` findings of shape **1, 2 or 5** carr
 cited decision, PLUS any `scope#D1` / `scope#D4` row carrying `deliveryProofMissing: true`. None -> skip silently.
 
 Otherwise ask the user — the full rule (batching, option wording, non-interactive fallback, recording duty) is
-`references/scope.md` section 5; do not restate it, apply it. In short: ONE `request_user_input` call, <=4 questions,
+`references/scope.md` section 5; do not restate it, apply it. In short: ONE `main-chat user gate` call, <=4 questions,
 each naming the files + the surface + who else is impacted + the baseline checked, recommended option first. The
 gate REWRITES existing validated rows only — it may never ADD a finding; an answer that reveals a new issue is
 material for the NEXT run. Then rewrite the affected rows in `{MERGED}`:
@@ -843,6 +597,8 @@ intent-guard wrote it (`ALIGNED` / `MINOR DRIFT` / `MAJOR DRIFT` + its one claus
 the sections that had no producer — Boundary & Architecture, Reuse, Over-Complexity, Scope Discipline, Dropped in
 Validation — are written as `not run (QUICK depth)` rather than as empty tables: an empty table reads as "checked,
 nothing found", which would be a lie.
+Copy `not run — intent baseline unavailable` exactly into DRIFT and mark the report INCOMPLETE at either depth,
+including zero-findings runs. Scope-baseline UNKNOWN alone does not imply this intent-baseline gap.
 
 ### Phase 4b — SELF-SYNC (`EXTENDED` only, COORDINATOR only, BEFORE the Phase 5 summary)
 
@@ -882,11 +638,11 @@ Code, tests, docs and the report stay READ-ONLY here as everywhere: the ONLY wri
 ```
 Super Review complete — MODE={MODE} / DEPTH={DEPTH} (branch {BRANCH}), {COUNT} files, {N} agents.
 
-DRIFT: {ALIGNED | MINOR DRIFT | MAJOR DRIFT} — {intent-guard's clause, verbatim} | intent pass NOT RUN ({reason})
+DRIFT: {INTENT_VERDICT verbatim, including not run — intent baseline unavailable | not run — other recorded reason}
        Sources: T1 {label|none} / T2 {…} / T3 {…} / T4 {…} / T5 transcript
        {N} intent finding(s): {intent#class - one-line title, highest drift first, max 3 shown}
 
-VERDICT: {APPROVED | CONDITIONAL | REWORK}{ - INCOMPLETE if anything went unvalidated}
+VERDICT: {APPROVED | CONDITIONAL | REWORK}{ - INCOMPLETE if anything went unvalidated or intent baseline unavailable}
 Gates: {gate} {OK|FAIL|not run} / ...
 Experts (live roster): {group -> agent, ...}{, DEGRADED: ...} | none (QUICK)
 Validation: {all {N} findings validated | {U} of {N} UNVALIDATED ({reason}) — this run is INCOMPLETE}
@@ -937,15 +693,15 @@ superreview does NOT run /simplify or any skill and does NOT edit code — these
 | Focus | ordered | user directive (depth words stripped) wins; default table above; scope discipline is part of rank 1; security only if P0; unused at `QUICK` |
 | Review corpus | IGNORED = OUT, else IN | see "What the review corpus IS" |
 | Expert selection | RUNTIME from `.codex/agents/*.toml` | live roster each run; the emitted table = expected result at generation time |
-| Mechanical gates | `{GATE_COMMANDS}` (Phase 0 step 4) | verdict `CONFIRMED-BY-EXECUTION`, the only non-adversarial verdict |
+| Mechanical gates | `{GATE_COMMANDS}` (Phase 0 step 4) | non-adversarial verdict `CONFIRMED-BY-EXECUTION`; intent evidence uses the distinct `CONFIRMED-BY-EVIDENCE` verdict |
 | Scope baseline | {TRACKER_LABEL} (read-only) | Phase 0 step 5 / `references/scope.md`; never invented — none -> `UNKNOWN`, findings cap P2 (permanent) |
 | Scope pass A / B | `{SCOPE_AGENT_A}` diff-side / `{SCOPE_AGENT_B}` baseline-side | always at `EXTENDED`, except B in `FULL_PROJECT`; not spawned at `QUICK`; A = shapes 1-6, B = delivery + closeout |
-| Scope gate | `request_user_input`, Phase 3b | fires per the Phase 3b trigger; never lifts the UNKNOWN-baseline P2 cap |
+| Scope gate | `main-chat user gate`, Phase 3b | fires per the Phase 3b trigger; never lifts the UNKNOWN-baseline P2 cap |
 | Fan-out | targeted | `QUICK`: `intent-guard` only. `EXTENDED`: `intent-guard` + non-empty domain groups + 2 scope passes + {0,1,2} general agents, model's call |
-| Validation | `EXTENDED`, per-finding | Phase 3 reverse-checks EVERY verdictless candidate; unvalidatable -> `UNVALIDATED`, run INCOMPLETE, counted everywhere. Skipped at `QUICK` (nothing verdictless in the pool) — a QUICK run is not INCOMPLETE unless the intent pass itself failed to run |
+| Validation | `EXTENDED`, per-finding | Phase 3 reverse-checks EVERY verdictless candidate; unvalidatable -> `UNVALIDATED`, run INCOMPLETE, counted everywhere. Skipped at `QUICK` (nothing verdictless in the pool); unavailable intent or its governing baseline still makes the run INCOMPLETE |
 | Validator agent | first non-owning in the Phase 3 chain (`{VALIDATOR_AGENT}` -> `{ARBITER_AGENT}` -> generic) | batches <=40, max 4 spawns, merge/de-dup ONCE over all batches |
 | Report dir | `<repo-root>/.codex/reports/{TIMESTAMP}_superreview/` | Merged report, findings sorted P0 -> P3 |
-| Max files | 50 (except `FULL_PROJECT`) | `EXTENDED` only — request_user_input: narrow or proceed. Never asked at `QUICK` |
+| Max files | 50 (except `FULL_PROJECT`) | `EXTENDED` only — main-chat user gate: narrow or proceed. Never asked at `QUICK` |
 | Search tool | Bash `rg`/`grep`/`git ls-files` | reuse-first search; note which in report |
 | Self-sync | Phase 4b, `EXTENDED` only, coordinator only | corrects THIS file + `references/scope.md` in place from in-context data; line delta `<= 0`, PROVEN by a before/after `wc -l`; facts only — decisions, missing experts and `intent-guard.toml` are PROPOSALS |
 
@@ -956,18 +712,19 @@ superreview does NOT run /simplify or any skill and does NOT edit code — these
 | Condition | Action |
 |-----------|--------|
 | Depth signal ambiguous / absent | Resolve `QUICK` (the default). Never ask, never invent a flag; the ANNOUNCE tells the user how to escalate |
-| Prompt mixes depth signals ("quick deep check") | Rule 1 wins — an explicit depth request beats a speed word; announce which signal decided it |
+| Prompt mixes depth signals ("quick deep check") | Highest distinct keyword score wins; this example ties, so QUICK. Announce the score/default reason; no new question or depth flag |
 | `intent-guard` agent file missing | Intent pass `not run` + reason, in ANNOUNCE + report + chat summary. At `QUICK` the run reports GATES ONLY and MUST NOT read as clean; recommend re-generating with `$brewcode:superreview-setup` |
 | `intent-guard` fails or times out | Retry ONCE, then record `intent: not run (agent failed)`. At `QUICK` that makes the run `INCOMPLETE` — its only producer is gone; at `EXTENDED` the rest of the fan-out still stands, flagged |
+| No readable governing intent baseline | Copy `not run — intent baseline unavailable` verbatim through merged `intentVerdict`, report and chat DRIFT. Empty findings; INCOMPLETE at BOTH depths even with green gates. No ALIGNED claim, fabricated finding, or new enum |
 | Intent finding without a quote / tier / evidence | It should never arrive (intent-guard drops it). If one does, DROP it with reason `not-actionable` — never upgrade it to `CONFIRM` and never ship it unevidenced |
 | No changed files for scope | **Exit** ("Nothing to deep-review for {SCOPE}") — still report any gate failure |
 | Gates cannot run (toolchain/deps missing) | Record `Gates: not run (<reason>)`; NEVER invent results; continue the fan-out |
 | Gate command fails to start | Non-zero exit -> `GATE <g> FAIL`; mark `not run` + reason if the script is absent; continue |
-| >50 files (non-`FULL_PROJECT`) | `EXTENDED` only — request_user_input: narrow (per-folder / per-commit) or proceed anyway. At `QUICK` proceed without asking (one agent reads names + counts, so volume does not scale it) |
+| >50 files (non-`FULL_PROJECT`) | `EXTENDED` only — main-chat user gate: narrow (per-folder / per-commit) or proceed anyway. At `QUICK` proceed without asking (one agent reads names + counts, so volume does not scale it) |
 | Live roster empty/unreadable | Fall back to the emitted group->agent table; warn in the report |
 | A domain agent unavailable | Fall back to built-in `Explore` with the same prompt; mark the group DEGRADED in the report |
 | Only recon agents match a group | Do NOT use them — route to `Explore`, note it |
-| Empty candidate pool, gates green, >=1 agent RETURNED | Skip Phase 3 — verdict APPROVED |
+| Empty candidate pool, gates green, >=1 agent RETURNED | Skip Phase 3 — verdict APPROVED only if intent was assessed against a readable governing baseline; otherwise retain the applicable INCOMPLETE reason |
 | Empty pool because agents FAILED | **Never APPROVED** — absence of evidence, not evidence of absence. Some returned -> verdict tagged `INCOMPLETE ({n}/{N} agents returned)`; NONE returned -> `INCOMPLETE — review did not run` |
 | Every validator-chain candidate owns part of the pool | Prefer the smallest-share owner, tell it which findings are its own; generic agent only if impossible, note the downgrade |
 | Validator unavailable / fails | Retry once, then the next agent in the chain; chain exhausted -> ship remaining as `UNVALIDATED`, verdict suffixed `- INCOMPLETE`, counted in header + Stats + chat |
@@ -978,8 +735,8 @@ superreview does NOT run /simplify or any skill and does NOT edit code — these
 | `{PR_ISSUE_JSON}` empty | Pass B still runs DELIVERY vs the local task; records `PR: none`, skips closeout `scope#C*` |
 | Scope gate cannot be asked (non-interactive) | Report at the priority the finding ENTERED with, tagged `unconfirmed-sanction`; never silently downgrade or upgrade past a cap |
 | Agent timeout | Retry once, then mark that source unavailable + warn; the verdict inherits INCOMPLETE — a timed-out group was NOT reviewed |
-| Validation rejects everything, gates green | Report "No issues survived validation" — verdict APPROVED |
-| All sources clean | Report "No issues found across standards, architecture, scope and correctness" — verdict APPROVED |
+| Validation rejects everything, gates green | Report "No issues survived validation" — verdict APPROVED only with an assessed intent baseline; otherwise retain INCOMPLETE |
+| All sources clean | Report "No issues found across standards, architecture, scope and correctness" — verdict APPROVED only with an assessed intent baseline; otherwise retain INCOMPLETE |
 | Phase 4b self-sync would GROW the file (measured `wc -l`) | Do NOT write. Report `Self-sync: skipped (would grow +{N})` and name what it wanted to add — a correction that cannot be paid for is a proposal |
 | Phase 4b correction touches a DECISION | Do NOT write it. Print it as a proposal line; only the user changes decisions |
 | Arguments are prose, not a scope token | Extract the commit/branch/folder/focus from the prose; never treat the first word as the scope |

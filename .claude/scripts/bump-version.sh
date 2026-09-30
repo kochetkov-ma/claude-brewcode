@@ -60,10 +60,7 @@ brewcode/skills/semble-setup/assets/semble-first.md.template|fm|brewcode:semble-
 brewcode/skills/semble-setup/assets/sembleignore.template|sh|brewcode:semble-setup
 brewcode/skills/teams-setup/scripts/trace-ops.sh|sh|brewcode:teams-setup
 brewcode/skills/teams-setup/SKILL.md|marker|brewcode:teams-setup
-brewtools/skills/think-short-setup/assets/think-short-session.mjs|mjs|brewtools:think-short-setup
-brewtools/skills/think-short-setup/assets/think-short-prompt-counter.mjs|mjs|brewtools:think-short-setup
-brewtools/skills/think-short-setup/assets/think-short-subagent.mjs|mjs|brewtools:think-short-setup
-brewtools/skills/think-short-setup/assets/think-short-prompt.md|marker|brewtools:think-short-setup
+brewcode/skills/convention-setup/SKILL.md|marker|brewcode:convention-setup
 brewtools/skills/agent-deadline-setup/assets/agent-deadline-guard.mjs|mjs|brewtools:agent-deadline-setup
 brewtools/skills/agent-deadline-setup/assets/agent-deadline-cleanup.mjs|mjs|brewtools:agent-deadline-setup
 brewtools/skills/agent-return-setup/assets/agent-return-budget.mjs|mjs|brewtools:agent-return-setup

@@ -10,9 +10,9 @@ model: sonnet
 
 # Text Humanizer
 
-Universal, context-aware humanizer. Works on source code, comments, docstrings, technical docs, commits/PRs, published articles, and reddit/chat text. It picks ONE flow from context, lazy-loads only that flow plus the relevant pattern sections, and runs a two-pass model: STRIP validated AI tells, then a gated INJECT of human style fit for the domain.
-
-Position: removes AI surface artifacts and fits register -- it does NOT claim to detect authorship.
+Humanizes source/comments/docstrings, technical docs, commits/PRs, articles and reddit/chat.
+Choose ONE flow, lazy-load its rules/relevant pattern sections, STRIP validated AI tells then
+gated INJECT domain style. Removes surface artifacts/fits register; never claims authorship detection.
 
 ## Prompt contract
 
@@ -43,7 +43,7 @@ DO:     <2-5 imperative bullets>
 RESULT: <what the user ends up holding>
 ```
 
-Labels are literal; values follow the conversation language. Print it right after Phase 0
+Labels/plan values are English; INPUT remains verbatim. Print right after Phase 0
 announces `Flow: <name> -- <reason>`, before Phase 1 touches any file. SCOPE names the resolved
 target paths -- for `mixed`, the resolved block list.
 
@@ -51,8 +51,6 @@ target paths -- for `mixed`, the resolved block list.
 
 - PASS 1 -- STRIP: remove validated AI tells per `@reference/ai-patterns.md`. Only HIGH-tier universal-strip acts on single instances. MED density-signals act ONLY when several co-occur. Behavior-changing items (hallucinated refs, fake tickets, try/except-everything) are SURFACED for review, never auto-edited.
 - PASS 2 -- INJECT (gated): apply `@reference/human-patterns.md` for the flow's domain. HARD-OFF for code / API / formal-contract. GLOBAL GUARD: never inject typos, errors, or fabricated references in any flow.
-
----
 
 ## Phase 0 -- Greedy flow detection (do this FIRST)
 
@@ -98,8 +96,6 @@ Accept all of: path, commit hash, folder, free-text prompt, path+prompt, no args
 
 Pattern files (load the sections the flow needs): `@reference/ai-patterns.md`, `@reference/human-patterns.md`.
 
----
-
 ## Phase 0.5 -- Clean-tree precondition (every flow that writes)
 
 This skill rewrites files in place and keeps no backup, so git IS the undo. Before the first edit,
@@ -110,7 +106,8 @@ git status --porcelain -- <resolved paths>
 ```
 
 - Empty -> proceed.
-- Non-empty -> ONE `AskUserQuestion` listing the dirty paths: proceed on them / process only the
+- Non-empty -> use existing explicit authorization for those named dirty edits, else ONE
+  `AskUserQuestion` listing paths: proceed on them / process only the
   clean ones / abort. This is the skill's single clarifying question -- it replaces, not adds to,
   the Phase 0 scoping question, and `mixed`'s commit-mode check is this same gate scoped to the
   commit's paths.
@@ -121,10 +118,10 @@ Inline text and other non-file input skip this -- nothing on disk changes.
 
 ## Phase 1 -- Execute the flow
 
-- Single file or inline text -> apply the chosen flow's rules directly, no Task delegation.
-- mixed (commit / folder) -> follow `@reference/flows/mixed.md`: block split, haiku/sonnet classification, parallel Task launch, JSON aggregation. Each file is routed to its correct flow's rules.
+- Single file or inline text -> apply the chosen flow's rules directly, no Agent delegation.
+- mixed (commit / folder) -> follow `@reference/flows/mixed.md`: block split, haiku/sonnet classification, parallel Agent launch, JSON aggregation. Each file is routed to its correct flow's rules.
 
-Custom prompt, when present, is prepended to direct processing and to every sub-agent Task prompt:
+Custom prompt, when present, is prepended to direct processing and to every sub-agent Agent prompt:
 ```
 CUSTOM INSTRUCTIONS (highest priority, override defaults):
 <customPrompt>
@@ -133,22 +130,23 @@ CUSTOM INSTRUCTIONS (highest priority, override defaults):
 
 ### Delegation (mixed flow)
 
-A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct it, and it usually drifts off-target. One subagent = ONE bounded unit — ONE block of ~<=5 files, ~<=10 steps. A large commit or folder MUST be split into N blocks, all spawned in ONE message.
+Main owns every spawn/acceptance; delegates never nest and return decisions to main. One SA =
+ONE block/~<=5 files/~<=10 steps. Large commit/folder MUST split into N blocks, spawned in ONE message.
 
 Every spawn prompt MUST carry:
 
 | Field | Content |
 |-------|---------|
-| GOAL | the overall task and why it exists — the point beyond the file edit |
-| ROLE | what this agent owns; what it must NOT touch |
-| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
-| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what THIS agent needs |
-| CONSUMER | who or what uses the result next, and the shape it must fit |
-| DONE | acceptance criteria + the exact report shape you want back |
+| GOAL | overall task/purpose beyond editing |
+| ROLE | owned responsibility + forbidden changes |
+| SCOPE | exact paths/commands in/out of bounds |
+| CONTEXT | prior work/owners, parallel work; relevant to this agent only |
+| CONSUMER | next consumer + required result shape |
+| DONE | acceptance criteria + exact return format |
 
 A bare one-line task is never enough. Shape:
 ```
-Task(subagent_type="general-purpose", prompt="
+Agent(subagent_type="general-purpose", prompt="
 GOAL: humanizing <commit|folder> so it reads as human-written; you own block <N>/<M>,
   siblings own the rest and the reports are merged into one Humanization Report.
 ROLE: edit only your block's files in place. Do NOT touch files outside the block,
@@ -164,8 +162,6 @@ DONE: JSON per the mixed.md aggregation schema — stripped, injected, surfaced 
   Surfaced items are listed, never applied.
 ")
 ```
-
----
 
 ## Output -- Humanization Report
 
@@ -202,7 +198,7 @@ start over dirty paths without an explicit answer.
 ## Error handling
 | Error | Action |
 |-------|--------|
-| Agent timeout | Continue with other blocks |
+| Agent failure/partial output | Keep completed edits/evidence, report incomplete block, continue others; never count unverified work done |
 | File read error | Skip, note in report |
 | Binary file | Skip, note in report |
 | No changes | Report "No humanization required" |

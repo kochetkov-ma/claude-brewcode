@@ -1,230 +1,129 @@
 ---
 title: "Text Optimize"
-description: "Optimizes text and docs for LLM token efficiency with 52 validated rules. Five modes: light, medium, standard, deep, max."
+description: "Compress files with protected facts, immutable originals, owned-draft checkpoints, mode-specific review, and measured results."
 order: 3101
 ---
-import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+import { Badge, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# text-optimize — deep token optimization
+# Text Optimize
 
-<Callout type="caution">
-**Verbose prompts waste tokens and blur Claude's focus.** Every filler sentence, passive construction, and prose paragraph that could be a table adds cost and dilutes instruction signal. There is no native "compress this" in Claude Code — you get the full context or nothing.
-</Callout>
-
-<Callout type="tip">
-**52 validated rules, five modes, parallel processing.** The skill reads your files, applies the right rule set for the mode, verifies references, and reports exact before/after metrics. For humanizing AI-generated text, see [`/brewtools:text-human`](/brewtools/skills/text-human/).
-</Callout>
-
-<Callout type="note" title="What's new in 6.2.0">
-A Prompt-quality pass (PQ.1-PQ.13) now runs at Medium mode and above — see [Prompt-quality pass (PQ)](#prompt-quality-pass-pq) under Delegation. Every mode also stops at a named [stop condition](#stop-conditions) instead of a felt-right ratio.
-</Callout>
+<Badge text="sonnet" /> <Badge text="5 modes" /> <Badge text="user-invoked" />
 
 ## Quick reference
 
 | Field | Value |
 |-------|-------|
 | Command | `/brewtools:text-optimize` |
-| Arguments | `[-l\|-s\|-d\|-x\|--max] [file\|folder\|path1,path2]` |
-| Model | sonnet |
-| Context | session |
-| Tools | Read, Write, Edit, Bash, Grep, Glob, Task, AskUserQuestion |
+| Input | Free-text prompt, optional depth flag, and file/folder/comma-separated targets |
+| Tools | Read, Write, Edit, Bash, Grep, Glob, Agent, AskUserQuestion |
+| Mutation | Every mode edits files in place after pre-edit snapshot |
+| Output | Edited targets, measured size changes, acceptance verdicts, and evidence paths |
 
-## When to use
+## What it does
 
-- **Shrink CLAUDE.md** — deep mode compresses with a DICT header; LLM-only output, 2-3x reduction
-- **Clean up agent/skill definitions** — medium mode strips filler, converts prose to tables, merges redundant sections
-- **Prepare user-facing docs** — standard mode targets 30-50% compression while staying human-readable
-- **Light pass on production prompts** — `-l` removes filler and fixes tone; structure untouched, safe to apply without review
+Reduce repetition and wording overhead in instructions or documents while preserving their
+behavior and protected facts. The skill coordinates one file owner per target, snapshots original
+bytes before edits, checks the draft mechanically, and applies mode-specific semantic acceptance.
+A shorter file is not accepted solely because it is shorter.
 
-## Modes
-
-| Mode | Flag | Target | Compression | Human-readable | Verification |
-|------|------|--------|-------------|----------------|---------------|
-| Light | `-l` | Any file | Minimal | Yes | Sub-gate only |
-| Medium | _(default)_ | Any file | Moderate | Yes | Self-check (fact inventory) |
-| Standard | `-s` | Docs, README | 30-50% | Yes | 1 round (≥98% match) |
-| Deep | `-d` | CLAUDE.md, system prompts, agent/skill defs, KNOWLEDGE | 2-3x | No — LLM-only | 1-2 rounds (≥95% match) |
-| Max | `-x`/`--max` | CLAUDE.md, system prompts, KNOWLEDGE | 3-4x | No — LLM-only | 2 mandatory rounds (≥95% + 100% sub-gate) |
-
-**Auto-detection:** when no flag is given, the skill reads the file path and header. `CLAUDE.md`, `.claude/rules/*.md`, `KNOWLEDGE.*` → deep candidate. `README.md`, `docs/` → standard candidate. Ambiguous → asks via `AskUserQuestion`. **Max is never auto-selected** — requires an explicit `-x`/`--max` flag or an explicit max/extreme compress hint.
-
-**Every mode is guarded on disk.** Before any file is touched, the skill snapshots each target byte-for-byte into a private run directory under `.claude/reports/` — the git tree over the targets must be clean first, or the run refuses. After the optimization pass, a mechanical script diffs the snapshot against the result and checks that every number, version, file path, `!=` prohibition, and ALL-CAPS modal keyword (`NEVER`, `ALWAYS`, `MUST NOT`, `REQUIRED`, `MANDATORY`) is still present. A single miss restores the file to its pre-edit bytes and reports exactly what vanished — this applies to every mode, light included, not just standard/deep/max. Standard, deep, and max additionally run an independent semantic gate on top (see Verification in the flow below).
-
-**Measured, not assumed.** Deep mode's own worked examples land at 2.2x-3.5x compression (`wc -w`) — one 248-word block compresses to 94 words, -62.1%, 2.64x. Standard's filler-heavy example: 59 → 19 words, -67.8%. Max's table-to-TSV conversion: 26 → 12 words, -53.8%. The mode table's 30-50% / 2-3x / 3-4x targets are typical ranges, not a number to force — reaching the stop condition below is what ends the pass.
-
-### Stop conditions
-
-Standard, deep, and max each stop at a named trigger, never a felt-right ratio:
-
-| Mode | Stops the moment | Reference |
-|------|-------------------|-----------|
-| Standard | The next cut would touch a name/number/path/version/flag, or a merge would combine facts with different scope/numbers/conditions (D.6) | `standard-compression.md` § Stop Condition |
-| Deep | An A.2 drop would touch a noun/numeral/negation/entity, an A.4 candidate isn't clearly generic training-knowledge, the DICT header would exceed 20 entries, or a term used `<3x` would get a DICT entry | `deep-compression.md` § Stop Condition |
-| Max | The 20% deletion ceiling would be crossed, a B1 atomic line would need a cross-line pronoun to stay readable, or Round-2 self-QA misses a number/name/negation/scope qualifier | `max-compression.md` § Stop Condition |
+Use it for agent/skill instructions, rules, README files, and documentation. Numbers, names,
+examples, negations, scope, paths, versions, flags, and conditions remain protected. Record
+explicitly authorized factual replacements separately from optimization loss.
 
 ## Examples
 
-```bash
-# Single file, medium mode (default)
-/brewtools:text-optimize CLAUDE.md
-
-# Light mode — safe, minimal changes, no restructuring
-/brewtools:text-optimize -l .claude/agents/reviewer.md
-
-# Standard mode — 30-50% reduction, stays readable
+```text
+/brewtools:text-optimize -l .claude/rules/project.md
 /brewtools:text-optimize -s README.md
-
-# Deep mode — max compression for CLAUDE.md, review diff after
 /brewtools:text-optimize -d CLAUDE.md
-
-# Max mode — 3-4x compression (opt-in)
-/brewtools:text-optimize -x CLAUDE.md
-
-# Multiple files in parallel
-/brewtools:text-optimize agents/planner.md, agents/executor.md, CLAUDE.md
-
-# All markdown files in a directory
-/brewtools:text-optimize -d agents/
+/brewtools:text-optimize -x .claude/agents/domain-expert.md
+/brewtools:text-optimize -s README.md,docs/guide.md
 ```
 
-Natural language works **as arguments after the command** — the skill is user-invoked only and never fires on its own: `/brewtools:text-optimize compress this for context` → deep mode, `/brewtools:text-optimize slim down the README` → standard mode.
+Natural-language instructions go after the command. Flags and paths can appear within the prompt;
+explicit depth flags win. Ambiguous scope receives one scoping question.
 
-## Flow
+## Modes and acceptance
+
+| Mode | Flag | Transformation | Required review |
+|------|------|----------------|-----------------|
+| Light | `-l` | Minimal cleanup, exact-duplicate D.1 only, no restructuring | Mechanical sub-gate; no semantic agent |
+| Medium | Default or detected | General compression | Zero-loss fact self-check and skill review |
+| Standard | `-s` | Human-readable compression | Fresh independent review; at least 98% kept/merged |
+| Deep | `-d` | Dense instruction rewriting with ledgers | Fresh independent review; at least 95%; repair failed gates |
+| Max | `-x` / `--max` | Opt-in atomic claims and deep techniques | At least 95% plus mandatory second independent self-QA method |
+
+All modes run the mechanical gate. Standard, deep, and max additionally require **100%
+preservation of numbers, names, negations, and scope qualifiers**. A percentage threshold does
+not authorize removing project-specific obligations. Confirmed loss blocks acceptance.
+
+Without an explicit flag, instruction files can select deep, human-facing docs standard, and
+unknown content medium. Max requires explicit opt-in through a flag or maximum/extreme-compression
+intent; it is never silently selected by file type.
+
+## Workflow
 
 <Steps>
-  <li>
-    <div>
-      <strong>Parse input</strong>
-      <p>Extracts mode flag, file paths, and any prompt hints (<code>"deep compress"</code>, <code>"for LLM"</code>). No args → optimizes ALL: <code>CLAUDE.md</code>, <code>.claude/agents/\*.md</code>, <code>.claude/skills/\*\*/SKILL.md</code>.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Auto-detect mode</strong>
-      <p>If no flag, classifies each file by path and header. Confident classification runs silently with a short notice. Ambiguous files trigger a single <code>AskUserQuestion</code> with mode options.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Snapshot before editing</strong>
-      <p>Requires a clean git tree over the target files, then <code>scripts/text-guard.sh snapshot</code> copies every target byte-for-byte into a private <code>RUN_DIR</code> under <code>.claude/reports/</code> (created with <code>umask 077</code>) before any edit happens. A dirty target or a non-git root refuses with an error — nothing is written until the snapshot exists. Every mode goes through this step, not just deep and max.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Analysis phase</strong>
-      <p>Parallel <code>Explore</code> agents scan each file for structure, cross-references, and redundancies. Results feed the optimization context.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Optimization phase</strong>
-      <p>Parallel <code>text-optimizer</code> agents apply the rule set for the selected mode. Medium mode and above additionally run the Prompt-Quality pass (PQ.1-PQ.13, prompt-shaped content only) before the wording pass — see Prompt-quality pass (PQ) above. Deep mode builds a DICT header for repeated terms and runs an aggressive lossy pass (A.1-A.4) — merges related lines, drops low-value words, paraphrases shorter, and elides generic facts the model already knows; A.2 word drops are ledgered but gate-neutral, A.4 elisions are labeled <code>elided-known</code> and count against the &gt;=95% gate. Standard mode loads <code>standard-compression.md</code> reference. All modes verify file paths (R.1), URLs (R.2), and circular refs (R.3).</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Verification — restore, not warn</strong>
-      <p>Two gates run after every optimization pass, both comparing the on-disk snapshot against the on-disk result — never the agent's own account of what it changed:</p>
-      <p><strong>Sub-gate, every mode</strong> — <code>text-guard.sh verify</code> checks that every number, version, file path, <code>!=</code> prohibition, and ALL-CAPS modal keyword from the snapshot still appears in the result. Any miss restores the file to its pre-edit bytes immediately and prints the exact missing tokens — a refusal, not a warning attached to a bad file.</p>
-      <p><strong>Semantic gate, standard/deep/max</strong> — a fresh agent that did not write the compression reads both files from disk, builds a numbered fact inventory, and scores it against the mode's threshold:</p>
-
-| Mode | Rounds | Gate |
-|------|--------|------|
-| Light / Medium | sub-gate only / self-check + sub-gate | 100% lossless |
-| Standard | 1 | ≥98% match |
-| Deep | 1-2 | ≥95% match + 100% sub-gate on numbers/names/negations/scope |
-| Max | 2 mandatory | ≥95% + 100% sub-gate on numbers/names/negations/scope |
-
-      <p>A semantic FAIL restores the file the same way the sub-gate does. The run directory is never deleted automatically — it stays on disk so the diff or the loss list is available after the run.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Report</strong>
-      <p>Each file produces a report: lines/tokens before and after, rules applied by ID, issues found and fixed, cross-reference verification status. Files are modified in-place; a restored file is reported as restored, with the missing tokens or the loss list and a suggested lighter mode.</p>
-    </div>
-  </li>
+  <li><div><strong>Resolve mode, scope, and rules</strong><p>Parse the prompt, read the base rules and applicable mode references, and print the PLAN block with resolved target paths and depth.</p></div></li>
+  <li><div><strong>Snapshot before editing</strong><p>Require clean targets or explicit authorization for named dirty-file edits. Save original bytes in a private run directory and supply RUN_DIR to each writer. Missing snapshot evidence prevents editing and acceptance.</p></div></li>
+  <li><div><strong>Assign one owner per file</strong><p>Brief each writer with goal, ownership, scope, relevant analysis and parallel work, next consumer, and acceptance criteria. Independent file owners work in parallel and preserve concurrent edits.</p></div></li>
+  <li><div><strong>Inventory, deduplicate, and compress</strong><p>Inventory facts and cross-references. Light removes exact duplicates only; other modes distinguish repeated facts from different scopes or conditions. Medium and above can apply prompt-quality rewriting to prompt-shaped targets.</p></div></li>
+  <li><div><strong>Checkpoint each known owned draft immediately</strong><p>After every owned atomic write, deletion, or repair, record the exact known draft before further edits or checks. Never capture another writer's intervening bytes as ownership proof.</p></div></li>
+  <li><div><strong>Verify without automatic restoration</strong><p>Run text-guard.sh verify --no-restore against original and current disk files. Classify missing mechanical tokens as preserved meaning, authorized replacement, or actual loss. Then run the required semantic checks; independent reviewers do not rely on the optimizer's report.</p></div></li>
+  <li><div><strong>Repair or refuse, then report</strong><p>Patch confirmed owned losses, checkpoint repairs, and repeat required review. Unresolved loss or uncertain recovery prevents acceptance. Return measured changes and evidence instead of pasting optimized files.</p></div></li>
 </Steps>
 
-## Delegation
+## Original snapshots and safe recovery
 
-<Callout type="warning">
-**A big task handed to one agent = an agent gone for an hour.** You cannot observe it, you cannot correct it, and it usually drifts off-target. One `text-optimizer` agent = **one file**, ~10 steps. A folder or comma-separated multi-path run is split one file per agent, all spawned in a single message — never one agent for the whole folder.
-</Callout>
+**A failed check preserves current bytes.**
 
-Every spawn prompt carries six fields. A bare one-line task is never enough:
+Originals live under `<RUN_DIR>/orig/<repo-relative-path>`. They remain immutable but readable:
+writers and reviewers can compare against them, but must not rewrite, delete, or recreate them.
+Keep the run directory and name it in the report for later user inspection.
 
-| Field | Content |
-|-------|---------|
-| GOAL | cut token cost across the run without losing meaning; this agent owns one file |
-| ROLE | optimize that file in place — no behavior change, no dropped names, numbers, paths, versions, prohibitions |
-| SCOPE | in — the one file; out — every other path, `references/` are read-only inputs |
-| CONTEXT | mode already chosen, Phase 1 `Explore` findings supplied, siblings hold the other files |
-| CONSUMER | the skill merges every Optimization Report into one summary; other files still link to this file's headings |
-| DONE | dedup pass (D.1-D.6) → transformations → ref checks (R.1-R.3) → mode verification → Optimization Report |
+The guard's `verify --no-restore` reports missing protected tokens while retaining the current
+file. A mechanical pass alone does not establish semantic equivalence. Missing snapshot/state
+prevents acceptance.
 
-The CONSUMER field is what keeps a parallel run coherent: a heading renamed without care breaks a sibling agent's cross-reference in the same batch.
+Full snapshot restoration needs authorization and a previously recorded owned-draft checkpoint
+matching current bytes. Missing proof or intervening changes causes RESTORE_REFUSED; preserve
+the file and report the gap. Never create a checkpoint at failure or restore time to bypass this
+check. Before targeted repair, compare current bytes with the last known owned draft.
 
-### Prompt-quality pass (PQ)
+## Deduplication and verification
 
-Medium mode and above run a second pass beyond wording cleanup: 13 rules (`PQ.1`-`PQ.13`, `references/rules-review.md` `## PQ`) that reshape prompt-shaped content only — system prompt, `CLAUDE.md`, agent definition, skill `SKILL.md` — the same four types Light mode explicitly skips. PQ changes structure and emphasis, never a fact.
+Same-file dedup preserves each distinct fact once. Different numbers, conditions, or scope are
+different facts. Outside light mode, intentional emphasis is limited according to the ruleset.
+Cross-file dedup belongs to the main coordinator: specify the canonical owner and a summary
+pointer explicitly. A writer applies only assigned decisions; unassigned redundancies remain
+suggestions.
 
-| Rule | Bad | Good |
-|------|-----|------|
-| PQ.1 | Role buried after 3 paragraphs of scope | Role in one sentence, Return contract next, Scope/Never as its own heading after |
-| PQ.3 | "Do not use markdown" | "Write in flowing prose" — an incident-tied `!=`/NEVER stays verbatim (e.g. `!=re-run text-guard.sh`) |
-| PQ.4 | 4x MUST/CRITICAL in one file | 1 STOP on the irreversible action, the other 3 become plain imperative |
-| PQ.6 | "Double-check your output before returning" (generic filler) | Deleted — a named gate like `>=95% match, 100% sub-gate` is a real protocol, not filler, and stays |
-| PQ.9 | A flag/target matrix written as prose | Table — a create-in-order procedure stays numbered prose, never flattened into a table |
-| PQ.11 | A 150-line agent body with 3 abbreviations used twice each | No DICT header — inline the 3 terms; DICT only past >=5 abbreviations each reused >=3x |
+Faithful fusions and paraphrases count as kept/merged. Known-fact elisions are recorded as
+elided-known and count against deep/max's loss gate. Word drops that distort meaning fail the
+fact check. Max also uses original-derived questions answered from compressed text only,
+including a critical-fact sub-gate.
 
-**Runs at:** Medium, Standard, Deep, Max — never Light.
+Stop when further cuts threaten protected facts or the selected mode's stopping rules.
+Reference compression targets are guidance, not required or guaranteed savings.
 
-**Lossless guard, unchanged by PQ:** numbers, dates, versions, model IDs byte-exact (`claude-sonnet-5`, never "Sonnet 5"), CLI flags/options verbatim (`-x`, `--max`), thresholds/gates/percentages exactly as stated (`>=95%`, `~20%`), URLs, file paths, ports, named entities, negations (`!=`/NEVER/MUST NOT), scope qualifiers. A drop touching any of these is a defect caught by the 100% sub-gate — never a valid PQ edit.
+## Measured results
 
-<details>
-<summary>Rule categories (52 rules)</summary>
+Report words, bytes, and characters with their counting methods. `wc -w`, `wc -c`, and
+`wc -m` measure different things. Token counts require a named tokenizer/encoding.
+Characters divided by four is a rough proxy, never measured tokens or proven savings.
 
-| Category | Rule IDs | Scope |
-|----------|----------|-------|
-| Claude behavior | C.1-C.8 | Literal following, avoid "think", positive framing, match style, descriptive instructions, overengineering, avoid ALL-CAPS, prompt format |
-| Token efficiency | T.1-T.8, T.10 | Tables, bullets, one-liners, inline code, abbreviations, filler, comma lists, arrows, strip whitespace |
-| Structure | S.1-S.8 | XML tags, imperative, single source, context/motivation, blockquotes, progressive disclosure, consistent terminology, ref depth |
-| Deduplication | D.1-D.6 | Exact-duplicate merge, near-duplicate merge (most specific variant wins), cross-format duplicate (prose vs table), emphasis cap ≤2/doc, cross-file dedup (canonical location + pointer), wrong-merge guard |
-| Reference integrity | R.1-R.3 | Verify file paths, check URLs, linearize circular refs |
-| Perception | P.1-P.6 | Examples near rules, hierarchy, bold keywords, standard symbols, instruction order, default over options |
-| LLM Comprehension | L.1-L.8 | Critical info position, documents-first, conciseness, quote-first, add WHY, reiterate constraint, prompt repetition, preserve scope qualifiers |
-| Aggressive lossy | A.1-A.4 | Line fusion, low-value word drop, aggressive paraphrase, known-fact elision (deep/max only) |
-| Prompt quality | PQ.1-PQ.13 | Role-first return contract, dedupe repeats, positive imperative (incident-tied `!=` kept), one hard-stop cap, drop step-by-step/verify filler, explicit scope, table-vs-procedure shape, example over adjective, DICT threshold gate — prompt-shaped content only, Medium+ |
+Reports include before/after measurements, change and ratio, semantic match, rule ids,
+verification verdict, and dedup summary. Full inventories and loss/dedup ledgers belong in
+report files. The skill accepts only results that pass its mechanical and mode-specific checks;
+failed runs report exact losses and can recommend a lighter mode.
 
-A dedup pass runs in every mode during analysis, before compression. Dedup-merged facts count as preserved: match % = (kept + merged) / total. PQ runs at Medium+ only, on prompt-shaped content only — never Light, never generic docs/README.
-
-**Mode-to-rules mapping:**
-
-| Mode | Applies | Notes |
-|------|---------|-------|
-| Light | C.1-C.8, T.6, D.1, R.1-R.3, P.1-P.4, L.1-L.8 | Text cleanup only — no restructuring, no PQ |
-| Medium | All rules (C + T + S + D + R + P + L) + PQ (prompt-shaped content) | Balanced transformations |
-| Standard | All rules + PQ (prompt-shaped content) + `standard-compression.md` | 30-50% compression, 1 verification round |
-| Deep | All rules + PQ (prompt-shaped content) + A.1-A.4 + `deep-compression.md` | DICT header, symbol substitutions, aggressive lossy pass, 1-2 verification rounds |
-| Max | All rules + PQ (prompt-shaped content) + A.1-A.4 + `deep-compression.md` + `max-compression.md` (opt-in) | 3-4x compression, 2 mandatory verification rounds + 100% sub-gate |
-
-</details>
+## Related
 
 <CardGrid>
-  <Card title="Text Human" icon="sparkle" href="/brewtools/skills/text-human/">
-    Remove AI artifacts and humanize content — the complement to text-optimize.
-  </Card>
-  <Card title="text-optimizer agent" icon="brain" href="/brewtools/agents/text-optimizer/">
-    The subagent that handles single-file optimization in parallel batches.
-  </Card>
-  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/text-optimize">
-    Source code, rule references, and compression guides.
-  </Card>
-  <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">
-    All brewtools skills — text, SSH, deploy, plugin management.
-  </Card>
+  <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">Text utilities and workflow tools.</Card>
+  <Card title="Text Optimizer" icon="sparkle" href="/brewtools/agents/text-optimizer/">The bounded file writer and its checkpoint/return contract.</Card>
+  <Card title="Context Slim" icon="zap" href="/brewtools/skills/context-slim/">Coordinate context cleanup across project instruction surfaces.</Card>
+  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/text-optimize">Mode rules, snapshot guard, verification, and recovery contracts.</Card>
 </CardGrid>
 
 <UpdateNotice />

@@ -16,7 +16,7 @@ const PARKED_CONFLICT = join(
 const MODES = ['status', 'install', 'upgrade', 'enable', 'disable', 'uninstall', 'purge'];
 const SHARED_GATES = [
   'PLAN — brewcode:teams-setup',
-  'Every mutating mode requires `request_user_input` approval',
+      'Every mutating mode requires existing authorization or explicit main-chat approval',
   'An absent `trace.jsonl` is valid before the first event or after cleanup',
   'Before any team mutation, run the read-only, offline preflight `python3 -I -S scripts/prepare-tokenizer.py check`',
   'Only after that approval, run `python3 -I -S scripts/prepare-tokenizer.py prepare && python3 -I -S scripts/prepare-tokenizer.py check`',

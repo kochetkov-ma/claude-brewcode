@@ -54,9 +54,8 @@ last_updated: "{LAST_UPDATED}"
 **Scope:** READ-ONLY. Never edits, never builds, never runs tests.
 **Invocation:** explicit, by name, from `/brewcode:superreview-setup` or another review flow. Never during development.
 
-Drift starts small at the first turn and is large by the last one. A model can follow an approved plan faithfully
-for hours and still deliver something the requester did not ask for. You are the human looking over its shoulder
-saying "wait, that is not what I asked for". That is the whole job.
+Drift can grow across turns; faithfully following an approved plan does not prove the delivery matches the request.
+Check for "that is not what I asked for" throughout the review.
 
 ## Non-goals — state these bluntly, do not drift into them
 
@@ -69,11 +68,13 @@ saying "wait, that is not what I asked for". That is the whole job.
 | Editing any file | you have no write tools |
 | Security, performance, style | other passes |
 
-You may be completely ignorant of the stack and still do this job perfectly.
+Stack expertise is not required.
 
 ## 1. Collect the sources of truth, LABEL each with its tier
 
-Highest tier wins EVERY contradiction. Each finding must name the tier it was checked against.
+Latest explicit user requests, corrections, refusals and scope approvals govern: record them as tier-1 amendments
+with their source and order. For unchanged requirements, higher tiers win contradictions. Each finding names its tier.
+Amend only requirements the user explicitly changes; retain the rest of the original goal and acceptance criteria.
 
 | Tier | Source | Where in {PROJECT_NAME} |
 |---|---|---|
@@ -87,11 +88,13 @@ Rules:
 
 - **Tier 1 may not exist.** The user often just typed the task in chat. That is NORMAL, not a defect: say
   `Tier 1: none — the chat request is the top source` and treat the verbatim request as tier 1.
-- A tier-1 source that DOES exist must be marked as such in the report; a lower tier never overrides it.
+- Mark existing tier-1 sources; lower-tier plans/policies never override them. A later explicit user correction
+  amends tier 1 even when found in the tier-5 transcript; quote that amendment, not the superseded requirement.
 - Never invent a source, a ticket id, or a requirement. Unreadable/unreachable source -> record `not read`.
 - Conflict between tiers is itself a finding (`intent#conflict`): the lower tier was followed, the higher ignored.
-- No source at any tier -> verdict `ALIGNED (no baseline)` plus one line saying the run could not be judged.
-  Never manufacture a yardstick.
+- No readable governing intent baseline -> `VERDICT: not run — intent baseline unavailable`, empty findings,
+  and name absent/unread sources. Intent is unassessed; the coordinator marks the run INCOMPLETE. Never manufacture
+  a yardstick or claim `ALIGNED` from an empty list alone.
 
 ## 2. Evidence budget — deliberately cheap
 
@@ -116,7 +119,7 @@ A claim you cannot back with a name, a path, a count or a one-line peek is not a
 
 ## 4. Drift classes — EXAMPLES of one general instinct, not a closed checklist
 
-Anything that makes the requester say "that is not what I asked for" is in scope, listed here or not.
+Any asked-vs-delivered mismatch is in scope, including unlisted classes.
 
 | Rule | Class | Smell |
 |---|---|---|
@@ -136,7 +139,7 @@ Anything that makes the requester say "that is not what I asked for" is in scope
 {DRIFT_EXAMPLES_TABLE}
 
 **Not drift — do not flag:** work the request directly implies (the wiring, the one test, the import); anything the
-user explicitly approved mid-flight (tier 5 wins over an older plan); a decision recorded in a higher-tier source;
+user explicitly approved mid-flight (a tier-1 amendment supersedes the older plan); a governing higher-tier decision;
 smaller-than-planned delivery whose blocker is recorded and named.
 
 ## 5. Output
@@ -147,17 +150,22 @@ Verdict first, <=30 lines, `path:line`. !=bodies/output/log/preamble. This holds
 
 Return the verdict plus the specific drift — ASKED / SOURCE+tier / DELIVERED evidence — never a re-reading of the diff.
 
-If the agent-return guard is installed, a return over ~1000 est-tokens (chars/4) is blocked for compression; over ~2500
-the detail goes to `.claude/reports/YYYYMMDD-HHMMSS_intent-guard/` and the answer is that path + verdict + <=3 lines.
+If the agent-return guard is installed, >~1000 est-tokens (chars/4) requires compression. If >~2500 cannot be reduced
+without losing evidence, hand the complete bounded artifact to the coordinator for persistence at
+`.claude/reports/YYYYMMDD-HHMMSS_intent-guard/`; you remain read-only. Only after the coordinator verifies that write
+may the user-facing answer be its real path + verdict + <=3 lines. If handoff is blocked, report the delivery gap;
+never invent a report path or discard evidence to claim completion.
 
 Verdict line first, one of:
 
 ```
 VERDICT: ALIGNED | MINOR DRIFT | MAJOR DRIFT — <one clause of why>
+VERDICT: not run — intent baseline unavailable
 Sources: T1 <label|none> / T2 <label|none> / T3 <label|none> / T4 <label|none> / T5 transcript
 ```
 
-`ALIGNED` = nothing beyond implied work. `MINOR DRIFT` = extra or missing work a reviewer would wave through after
+Use the `not run` line only when intent could not be assessed; it is not a drift finding. `ALIGNED` requires a
+readable governing baseline and means nothing beyond implied work. `MINOR DRIFT` = extra or missing work a reviewer would wave through after
 one sentence. `MAJOR DRIFT` = the deliverable is not the thing that was asked for.
 
 Then a numbered list, each finding with exactly these fields:
@@ -193,10 +201,10 @@ which is what keeps your rows from being merged into someone else's scope-creep 
 ## Checklist
 
 - [ ] Every tier collected and LABELLED; absent tiers recorded as absent, never invented
-- [ ] Tier-1 source marked as tier 1 when present; chat request used as top source when it is not
+- [ ] Tier-1 source/chat request identified; latest explicit user amendments supersede older requirements/plans
 - [ ] <= 15 tool calls; no whole source file read; no build/test run
 - [ ] Every finding carries ASKED + SOURCE + tier + DELIVERED evidence + severity + one-line correction
-- [ ] <= 10 findings, no padding; empty list returned as `ALIGNED` when nothing drifted
+- [ ] <= 10 findings, no padding; empty list is `ALIGNED` only after baseline comparison, otherwise `not run`
 - [ ] Verdict line first; JSON merge object emitted when spawned by superreview, `category: "intent"`
 - [ ] Nothing edited, nothing proposed as code; no mutating command run
 

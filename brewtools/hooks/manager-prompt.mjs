@@ -1,5 +1,6 @@
 // brewtools:manager-setup — UserPromptSubmit hook.
 // Injects Manager/Architecture/Review mode block(s) via additionalContext. Triggers:
+//   +++ -> anti-drift cron planning, only when permission_mode === 'plan'.
 //   1. Codeword in prompt (always, regardless of state). FOUR codewords in THREE
 //      INDEPENDENT groups; a prompt may activate one from each:
 //        Manager group:
@@ -37,15 +38,19 @@ function capText(s, max = 9000) {
 
 (async () => {
   try {
-    const { prompt = '', cwd, permission_mode } = await readStdin();
+    const input = await readStdin();
+    const { cwd, permission_mode } = input;
+    const prompt = typeof input.prompt === 'string' ? input.prompt : '';
     const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT;
 
-    const hasM  = /(?<![\w+])\+\+m(?![\w])/.test(prompt);
-    const hasRR = /(?<![\w+])\+\+rr(?![\w])/.test(prompt);
-    const hasR  = /(?<![\w+])\+\+r(?![\w])/.test(prompt);
-    const hasA  = /(?<![\w+])\+\+a(?![\w])/.test(prompt);
+    const hasM  = /(?<![\w+])\+\+m(?![\w])/i.test(prompt);
+    const hasRR = /(?<![\w+])\+\+rr(?![\w])/i.test(prompt);
+    const hasR  = /(?<![\w+])\+\+r(?![\w])/i.test(prompt);
+    const hasA  = /(?<![\w+])\+\+a(?![\w])/i.test(prompt);
+    const cronMode = permission_mode === 'plan' && /(?<![\p{L}\p{N}\p{M}_+])\+\+\+(?![\p{L}\p{N}\p{M}_+])/u.test(prompt)
+      ? 'cron-plan' : null;
 
-    // Two independent groups. Manager (++m) is plan-aware: when the session is in
+    // Manager (++m) is plan-aware: when the session is in
     // plan mode (permission_mode === 'plan') it injects the planmode block (full +
     // plan addon), otherwise the plain full block. Review: ++rr wins over ++r.
     let managerMode = null, managerHeader = null;
@@ -72,10 +77,13 @@ function capText(s, max = 9000) {
       reviewHeader = 'User typed `++r` — Two-phase review discipline is active for this turn:';
     }
 
-    if (managerMode || archMode || reviewMode) {
+    if (cronMode || managerMode || archMode || reviewMode) {
       // Codeword(s) present -> inject matching block(s) ALWAYS (state-independent).
       const blocks = [];
-      for (const [mode, head] of [[managerMode, managerHeader], [archMode, archHeader], [reviewMode, reviewHeader]]) {
+      for (const [mode, head] of [
+        [cronMode, 'User typed `+++` in Plan mode — plan the task anti-drift cron:'],
+        [managerMode, managerHeader], [archMode, archHeader], [reviewMode, reviewHeader]
+      ]) {
         if (!mode) continue;
         const { text } = resolvePrompt(mode, cwd, pluginRoot);
         if (text) blocks.push(`${head}\n\n${text}`);

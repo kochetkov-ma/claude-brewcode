@@ -24,7 +24,7 @@ const EXPECTED_HEADINGS = [
 const LEGACY_HEADINGS = [
   'Immutable Traits (do NOT change during update)',
   'Update Protocol',
-  'sub-agent task Acceptance Protocol',
+  'Task Acceptance Protocol',
   'Return Contract',
   'Domain Instructions',
   'Trace Instructions (optional — best effort)',
@@ -1177,7 +1177,7 @@ for (const literal of [
   'at most two repair cycles',
   'obtain approval for roster actions',
   '`status` asks nothing',
-  'Every mutating mode requires `request_user_input` approval',
+  'Every mutating mode requires existing authorization or explicit main-chat approval',
   'An absent `trace.jsonl` is valid before the first event or after cleanup',
   'Before any team mutation, run the read-only, offline preflight `python3 -I -S scripts/prepare-tokenizer.py check`',
   'Only after that approval, run `python3 -I -S scripts/prepare-tokenizer.py prepare && python3 -I -S scripts/prepare-tokenizer.py check`',

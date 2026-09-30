@@ -1,182 +1,135 @@
 # Task Board Setup
 
-> Generator -- deploys a self-contained, file-based Kanban (board + curator agent + dashboard skill + rule) into ANY repo, parametrized by a multi-agent analysis of that repo.
+Install a file-based task board with domain methodology, per-task review and test plans,
+a derived task graph, and session anti-drift timers. An optional spec/design layer supports
+tasks that need explicit product or architecture decisions.
 
-| Field | Value |
-|-------|-------|
-| Command | `/brewtools:task-board-setup` |
-| Model | opus |
-| Arguments | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge]` (optional) `[target repo path]` (empty = current dir) `["free-text directive"]` (optional) |
+## Quick start
 
-## Overview
-
-`task-board-setup` is a one-shot scaffolder. Point it at a repo and it analyses the codebase, confirms findings with you, then writes a complete file-based task-tracking system into `.claude/`. After it runs, the repo has its own `/task-board` skill and `task-tracker` agent -- no further dependency on this generator.
-
-It runs from the main conversation and is multi-agent: it spawns subagents for the heavy repo analysis and the legacy-doc sweep, and orchestrates their output. It does not hand-do bulk work.
-
-## What it deploys
-
-| Artifact | Path | Role |
-|----------|------|------|
-| Curator agent | `.claude/agents/task-tracker.md` | Owns the board: create/move/close tasks, groom backlog, keep `board.md` in sync. Writes ONLY `.claude/features/**`. |
-| Dashboard skill | `.claude/skills/task-board/SKILL.md` | On-demand `/task-board` -- view/add/move/backlog/groom; delegates bulk passes to the agent. |
-| Paths-scoped rule | `.claude/rules/tasks.md` | Lifecycle, id convention, required FM, grooming -- plus "run `task-tracker` at the start of any task". Auto-loads on `.claude/features/**`. |
-| Board + control | `.claude/features/{board,TRACKER,TASK_TEMPLATE,INDEX}.md` + `{backlog,todo,progress,closed,specs}/` | The Kanban itself. |
-| Spec skill (SPEC_MODE) | `.claude/skills/task-spec/SKILL.md` | `/task-spec <ID>` -- authors the spec + design docs via a domain-architect fan-out. |
-| Spec templates (SPEC_MODE) | `.claude/features/specs/{SPEC_TEMPLATE,DESIGN_TEMPLATE}.md` | Fixed section skeletons for the two spec documents. |
-
-## How it works (4 steps + optional spec layer + optional CLAUDE.md pass)
-
-1. **Analyze** -- parallel subagents (`architect` + `Explore` + a domain-agent inventory pass) derive: domain id-segments, source-dir exclusions the curator must never touch, release style (`vX.Y.Z` tag / commit SHA / none), doc language, an inventory of existing task docs, and the target's own `.claude/agents/**` roster mapped to domains. Findings confirmed via AskUserQuestion (which also asks about `SPEC_MODE` and the optional CLAUDE.md pass).
-2. **Generate `task-tracker`** -- the curator agent, parametrized from Step 1.
-3. **Generate `task-board`** -- the on-demand dashboard skill.
-3.5. **Generate `task-spec`** (SPEC_MODE only) -- the spec + design authoring skill, baked with the repo's own domain agents.
-4. **Generate rule + scaffold + sweep** -- writes `tasks.md`, scaffolds `.claude/features/**` (plus the two spec templates under SPEC_MODE), then a multi-agent sweep migrates legacy backlog/feature docs into the board (dedup, migrate done into `closed/`, author `board.md`).
-5. **CLAUDE.md optimization** (P5.5, optional, opt-in) -- runs AFTER the board is deployed; see below.
-
-## Spec + system-design layer (optional, `SPEC_MODE`)
-
-Confirmed in the same AskUserQuestion as the rest of the findings. `SPEC_MODE=off` is the default-compatible path: nothing below is emitted and every artifact is byte-identical to the pre-spec-layer generator.
-
-With `SPEC_MODE=on`, a non-trivial task becomes THREE documents instead of one:
-
-| Doc | Path | Owns |
-|-----|------|------|
-| Task | `.claude/features/{backlog,todo,progress,closed}/<ID>.md` | WHAT + WHY -- context, links, the ask, and a `## Scope` table of blocks `S1..Sn` |
-| Product spec | `.claude/features/specs/<ID>-spec.md` | HOW -- decisions `D1..Dn`, resolved questions, open questions `Q1..Qn`, scope-coverage matrix |
-| Design spec | `.claude/features/specs/<ID>-design.md` | Architecture -- components, data flow, interfaces, failure modes, complexity budget, non-goals |
-
-The task's frontmatter gains `spec: none | pending | full | design-only`. It is ALWAYS written -- "no spec" is a recorded decision, never an omission. A task needs a spec if it touches more than one domain, more than ~5 files, adds an integration or dependency, changes a schema/API/contract, is ambiguous, or the user asked for a design.
-
-### The emitted `task-spec` skill
-
-Three invocation paths, all supported:
-
-| Path | Form |
-|------|------|
-| Explicit | `/task-spec <ID>` (default `full`), `/task-spec <ID> design`, `/task-spec <ID> refresh` |
-| Plain prose | model-invoked -- "architect this task", "write the spec", "системный дизайн", "продумай архитектуру". No skill name needed |
-| Redirect | `task-tracker` ends its report with `NEXT: run /task-spec <ID> (spec required: <reason>)` when a task needs a spec and has none. An agent cannot call a skill for the main session, so it hands the call back to you |
-
-**Domain-architect fan-out is mandatory.** The design document is never written by a single generalist. For every domain the task touches, `task-spec` spawns at least one agent -- the repo's own domain agent first, then any architecture-capable project agent, then the built-in `Plan` -- all in ONE message, and names per domain which one was used in the design's `## Evidence`. Domains with no owning agent are reported as gaps at install time and again in the design.
-
-### Gates
-
-| Gate | Rule |
-|------|------|
-| Coverage | every `in` scope id must appear as `covered` in BOTH coverage tables; any `partial`/`uncovered` keeps the spec at `status: draft` |
-| Close | `progress -> closed` is blocked while any open question is `blocking: yes`. Override only by an explicit `SPEC WAIVER: <reason>` line in the task's `## Notes` |
-| Sync | editing the task's `## Scope` invalidates both specs -- back to `draft`, run `/task-spec <ID> refresh` |
-
-### `upgrade` -- retrofit onto an existing board
-
-A repo that already has `.claude/features/board.md` cannot be re-installed. Use the `upgrade` verb to add the spec layer to it:
-
-```bash
+```text
+/brewtools:task-board-setup status
+/brewtools:task-board-setup install
+/brewtools:task-board-setup install /path/to/repo
 /brewtools:task-board-setup upgrade /path/to/repo
 ```
 
-Upgrade is **additive only**: it writes the new `task-spec` skill and the spec templates outright, recovers the original findings from the deployed artifacts, and re-runs the domain-agent inventory. Every edit of an existing file is shown as a diff and gated behind AskUserQuestion. Existing task ids, scope ids and board rows are never renumbered or deleted; backfilled `spec:` values are `pending` or `none`, never `full`.
+An existing board defaults to status; a fresh target defaults to install. Supply a free-text
+directive to steer analysis. The generator analyses domains, source exclusions, existing task
+documents, project agents, and review/check conventions; confirms findings; generates the
+machinery; and migrates legacy task documents through bounded owners. It never commits.
 
-It also **restamps** the nine stamped artifacts -- `version`, `generated_by`, `last_updated` in their frontmatter, nothing else. That step is ungated and runs even when the content layer is already complete, because the `version:` of `.claude/features/board.md` is what `/brewcode:setup-status` reads: without it, `status` would keep reporting `stale` after every successful `upgrade`.
+Use the generated `/task-board` afterwards. Task-tracker owns task records, transitions, backlog
+grooming, and board/graph reconciliation; it writes only under `.claude/features/**`.
 
-## CLAUDE.md optimization (optional, gated)
+## Installed system
 
-An opt-in phase that runs once the board is in place. It is strictly **propose-only** -- every change is behind AskUserQuestion, nothing is rewritten without your yes. It:
+| Artifact | Purpose |
+|----------|---------|
+| `.claude/agents/task-tracker.md` | Board curator |
+| `.claude/skills/task-board/SKILL.md` | View, add, move, backlog, and groom flows; main-session timer ownership |
+| `.claude/rules/tasks.md` | Task lifecycle and progress instructions |
+| `.claude/features/board.md` | Canonical task list and status counts |
+| `.claude/features/METHODOLOGY.md` | Shared domain review strategy and reliable checks |
+| `.claude/features/ANTI-DRIFT.md` | Tick prompts, reconciliation, scheduling, and reporting contract |
+| `.claude/features/task-graph.md` | Derived work units, owners, dependencies, and evidence |
+| `.claude/features/PROGRESS.md` | Current session progress |
+| Tracker, index, task template, and status folders | Task records under backlog, todo, progress, and closed |
+| Optional task-spec skill and spec templates | Product and design specifications |
 
-- reports the target `CLAUDE.md` line count vs the ~200-line optimal / 300-line ceiling;
-- proposes moving secrets / machine-specific config to a gitignored `CLAUDE.local.md`;
-- proposes splitting per-module detail into nested module `CLAUDE.md` files. Claude Code loads these on-demand only when you work in that subtree, shrinking the always-on root context -- this is NOT done via `@import`, which is eager and saves nothing;
-- proposes dedup across `.claude/rules/*.md`;
-- delegates token-compression of the touched files to `brewtools:text-optimize`.
+There are **12 stamped control artifacts when the spec layer is present**, including the three
+methodology/anti-drift/graph controls. Task templates and individual task cards have their own
+task schema and are not restamped as generated controls. Upgrade refreshes control provenance
+separately from task decisions, prompts, runtime state, and evidence.
 
-The free-text directive (argument 2) tunes this phase: toggle individual sub-steps (`skip module split`, `also dedupe rules`), set a line budget (`budget 250`), control compression aggressiveness (`aggressive`), or run it as a plan only (`report only`).
+## Methodology before implementation
 
-## Quick Start
+Shared methodology comes from the domain's risks, authoritative repository instructions, review
+strategy, and actual check commands. Every accepted task is written in advance with its own
+Methodology, base work units, owners, dependencies, acceptance criteria, parent id when relevant,
+and complete unique Anti-drift cron prompt. Queued accepted tasks retain prepared prompts;
+raw backlog ideas need not become work units until accepted.
 
-```bash
-# No verb: status if a board is already deployed here, otherwise install
-/brewtools:task-board-setup
+The baseline work is: confirm goal/scope and latest corrections; assign bounded work; implement;
+simplify; review correctness/safety, then clarity and missing validation; run reliable checks;
+reconcile records and evidence; stop the task's timer when finished or cancelled. Each task
+specializes this method instead of copying an unrelated task's test strategy.
 
-# What is deployed in this repo?
-/brewtools:task-board-setup status
+## Session anti-drift
 
-# Deploy into another repo
-/brewtools:task-board-setup install /path/to/some-repo
+**Prepare every task; schedule when it becomes active.**
 
-# Deploy + tune the optional CLAUDE.md pass via a directive
-/brewtools:task-board-setup install ../repo "also dedupe rules, skip module split"
+The main session's task-board flow owns one live session timer per active top-level task,
+hourly by default (`0 * * * *`). Your cadence override or opt-out takes precedence. Child work
+units use their parent's timer. Task-tracker returns timer actions to the main session rather
+than creating timers from a child agent.
 
-# Retrofit the spec + design layer onto a repo that already has a board
-/brewtools:task-board-setup upgrade ../repo
+Task-board lists timers first, matches task id and absolute project root, and reconciles only
+this task's timer. It announces effective cadence, timezone, confirmed id/state, known first
+due time, session scope, and stop/change controls. Native scheduling tools must be available;
+otherwise it saves intent and reports that scheduling is unavailable.
 
-# Pause the board: park the agent/skills/rule, tasks and files all stay
-/brewtools:task-board-setup disable ../repo
+Each delivered tick:
 
-# Resume it -- nothing is regenerated
-/brewtools:task-board-setup enable ../repo
+- Rereads shared/task methodology, anti-drift, goal/spec, user corrections, and task records.
+- Requests concise owner evidence and reconciles statuses, dependencies, counts, and next work.
+- Rebuilds the graph with every unfinished node and the latest ten completed nodes; preserves older completion evidence in task Notes or closed records before pruning graph rows.
+- Checks drift against goal and acceptance criteria, corrects deviations within scope, quantifies remaining work or marks it unknown, and advances unblocked authorized work.
+- Records actual receipt time and delivered tick number, then reports at most five short lines.
 
-# Remove the generated agent/skills/rule, KEEP every task under .claude/features/**
-/brewtools:task-board-setup uninstall ../repo
-
-# Remove all of it, tasks included
-/brewtools:task-board-setup purge ../repo
+```text
+🔵 TASK-ID · HH:MM timezone · tick N · elapsed
+🟢 Achievements supported by evidence
+🔵 Remaining work / next action
+🔴 Present problems / blockers / user questions
+⚪ Drift verdict / correction / check unavailable
 ```
 
-## Modes
+Omit empty rows; detailed evidence stays in task records. Completion, cancellation, or parking
+stops this task's timers and verifies their absence. Failed cleanup stays a reported gap.
+Resume rechecks live scheduling state. Saved ids are not proof of a live timer.
 
-| Mode | Agent + skills + rule | `.claude/features/**` | Asks |
-|------|----------------------|------------------------|------|
-| `status` | — | — | never — read-only |
-| `install` | written | written | full P1 confirmation |
-| `upgrade` | spec layer added + metadata restamped | additive edits only + metadata restamped | per-file diff gate (the restamp is never asked) |
-| `disable` | renamed to `*.disabled` | untouched | never |
-| `enable` | renamed back | untouched | never |
-| `uninstall` | deleted | **kept** | one confirmation |
-| `purge` | deleted | deleted | one confirmation, task counts stated |
+Timers belong to the session. Scheduling is approximate; due time, firing, and receipt are
+distinct. Persisted task records do not guarantee delivery after session closure.
 
-Canonical order: `status | install | upgrade | enable | disable | uninstall | purge`. No verb = `status` when a board is already deployed at the target, `install` when it is not. `init`, `on`, `off`, `setup`, `remove`, `reset`, `create`, `update` and `cleanup` are no longer command words.
+## Planning
 
-`disable` is the reversible pause, not a removal. Claude Code discovers a project agent only as `.claude/agents/<name>.md`, a project skill only as `<dir>/SKILL.md`, and auto-loads a rule only as `.claude/rules/*.md` -- so renaming those four to `*.disabled` is the entire switch. Every byte survives, `.claude/features/**` is never touched, and `enable` moves them back without re-running a single analysis agent. `uninstall` and `purge` delete the parked twins along with the live files, so a DISABLED board leaves nothing orphaned.
+Plan mode remains read-only. Include task methodology, base work, graph reconciliation, saved
+prompt, timer execution step, and a final PROGRESS refresh. Create or delete timers and write
+records only during authorized execution. Delivered ticks during planning report proposed
+reconciliation. A task-board view reports state without scheduling.
 
-## ID convention (deployed)
+The plugin's standalone `+++` codeword adds this planning requirement only when its hook payload
+confirms Plan mode; it does not need `++m`.
 
-Ids are `UPPER-KEBAB`: `<PREFIX>-<DOMAIN>-<SLUG>`.
+## Optional spec/design layer
 
-| Prefix | Use |
-|--------|-----|
-| `T-` | feature / product task |
-| `BUG-` | defect |
-| `M-` | maintenance / refactor / tech-debt |
-| `EPIC-` | umbrella over several tasks |
+Spec generation is independent of baseline methodology, graph, progress, and anti-drift controls.
+With specs enabled, `/task-spec <ID>` generates product and design documents through domain agents.
+Task scope, decisions, open questions, and coverage remain explicit; blocking questions prevent
+closing unless an explicit waiver is recorded. Changing scope requires spec refresh.
 
-`<DOMAIN>` is the per-repo first kebab segment, discovered in Step 1 (e.g. brewpage uses `HTML, KV, SITE, SEO, ...`).
+Installation asks whether to enable this layer. Upgrade adds missing controls and can retrofit
+the spec layer, preserving task ids and user content. Existing-file changes are shown for approval;
+task-specific methodology and saved prompts are not replaced.
 
-## Notes
+## Lifecycle
 
-- Refuses `install` if `.claude/features/board.md` already exists (board already deployed -- use `/task-board` to operate it, or `upgrade` to add the spec layer).
-- `upgrade` without an existing `board.md` is refused too -- there is nothing to upgrade; run `install` instead.
-- `uninstall` never deletes tasks; only `purge` does, and it states the counts before asking. Neither reverts a P5.5 `CLAUDE.md` edit -- that is on git history.
-- `SPEC_MODE=off` emits nothing spec-related; the output is byte-identical to the pre-spec-layer generator.
-- Steps 1-4 never touch the target's `CLAUDE.md`; the start-of-task rule lives only in `.claude/rules/tasks.md`. The optional, opt-in P5.5 pass is the only sanctioned, fully-gated path that modifies `CLAUDE.md` (propose-only).
-- Never commits -- that is a user/manager action.
-- Sweep subagents write only under `.claude/features/**`; source dirs are off-limits.
+| Mode | Behavior |
+|------|----------|
+| `status` | Read-only inventory |
+| `install` | Generate into a fresh target; refuse an existing board |
+| `upgrade` | Add missing layers and refresh generated controls on an existing board |
+| `enable` / `disable` | Restore or park discovery entries without deleting task data |
+| `uninstall` | Remove generated machinery; retain task records |
+| `purge` | Remove machinery and task data under .claude/features |
 
-## References
+An optional, explicitly accepted CLAUDE.md optimization pass is separate from board generation.
+Removing the board does not reverse those accepted edits.
 
-| File | Purpose |
-|------|---------|
-| `references/01-analysis.md` | Step 1 analysis prompts + domain-agent inventory + AskUserQuestion confirmation contract |
-| `references/02-task-tracker-agent.md` | `task-tracker` agent template (placeholders) |
-| `references/03-task-board-skill.md` | `task-board` skill template |
-| `references/04-tasks-rule.md` | `tasks.md` rule template (incl. run-at-start rule) |
-| `references/05-features-templates.md` | `.claude/features/**` file templates |
-| `references/06-doc-sweep.md` | Multi-agent doc-sweep procedure |
-| `references/07-claude-md-optimize.md` | Optional P5.5 CLAUDE.md optimization (propose-only, directive-tuned) |
-| `references/08-task-spec-skill.md` | `task-spec` skill template (SPEC_MODE) |
-| `references/09-spec-templates.md` | `SPEC_TEMPLATE.md` + `DESIGN_TEMPLATE.md` (SPEC_MODE) |
-| `references/10-upgrade.md` | `upgrade` mode -- retrofit the spec layer onto a deployed board |
+## Related
 
-## Documentation
-
-Full docs: https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/
+- [Brewtools overview](../../README.md)
+- [Skill source](SKILL.md)
+- [Methodology and timer contract](references/11-methodology-cron.md)
+- [Upgrade procedure](references/10-upgrade.md)
+- [Full documentation](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/)

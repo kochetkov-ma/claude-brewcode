@@ -6,7 +6,7 @@ Substitute `{{DOMAINS}}`, `{{LANG}}`, `{{CLOSE_MARKER_SHORT}}` (same map as ref 
 
 ## Spec-layer placeholders (`SPEC_MODE` gate)
 
-When `SPEC_MODE=on`, substitute both placeholders below. When `SPEC_MODE=off`, REMOVE the entire `{{SPEC_RULES}}` LINE -- do not leave it blank -- so the emitted rule TABLE is byte-identical to the pre-spec-layer original (12 rules, unchanged rule 6). The `## Session progress` section below the table is UNGATED -- part of both modes' baseline, never removed.
+When `SPEC_MODE=on`, substitute both placeholders below. When `SPEC_MODE=off`, REMOVE the entire `{{SPEC_RULES}}` LINE -- do not leave it blank -- so the emitted rule TABLE keeps 12 rules and unchanged rule 6. Session progress and methodology/anti-drift sections are UNGATED baseline in both modes, never removed.
 
 `{{SPEC_FM_FIELD}}` is INLINE inside rule 6. On `off`, delete the token itself and nothing else -- the rest of that line stays byte-identical, no stray space. On `on` it expands to:
 
@@ -59,7 +59,7 @@ Canonical task LIST: `.claude/features/board.md`. Task files: `.claude/features/
 | 5 | First kebab segment = a repo domain { {{DOMAINS}} }. e.g. `T-{{FIRST_DOMAIN}}-SLUG`, `BUG-{{FIRST_DOMAIN}}-SLUG`, `M-{{FIRST_DOMAIN}}-SLUG` |
 | 6 | Required FM fields: `id, title, status, priority, owner, created, updated{{SPEC_FM_FIELD}}` |
 | 7 | `backlog/` = ungated inbox. GROOM loop: promote -> `todo`, merge dupes, or trash. !=leave groomed items behind |
-| 8 | **At the START of ANY task, run the `task-tracker` agent in ISOLATION (a spawned subagent via Task, NOT inlined) to claim/sync the board** -- it bookends every task: claim `todo->progress` at start; reconcile `board.md` + INDEX at end |
+| 8 | **At the START of ANY task, run the `task-tracker` agent in ISOLATION (a spawned subagent via Agent, NOT inlined) to claim/sync the board** -- it bookends every task: claim `todo->progress` at start; reconcile `board.md` + INDEX at end |
 | 9 | This repo has NO root `TODO.md` -- NEVER invent one. The board lives ONLY under `.claude/features/` |
 | 10 | {{LANG}} only. Closing: record {{CLOSE_MARKER_SHORT}} in `## Notes` |
 | 11 | After closing tasks, COMMIT the `.claude/features/**` change -- closure !=done until committed |
@@ -76,6 +76,14 @@ Canonical task LIST: `.claude/features/board.md`. Task files: `.claude/features/
 | P2 | The MAIN SESSION keeps it current: refresh it in the SAME change as any transition, and before ending any turn that moved work. Stale `PROGRESS.md` = the session cannot say where it is |
 | P3 | **Plan mode:** a plan that touches any task MUST carry an explicit final step `update .claude/features/PROGRESS.md`. A plan without it is incomplete -- write the step into the plan, do not rely on remembering |
 | P4 | `task-tracker` WATCHES it: every run it rewrites the five fields from `board.md` + the task files and reports staleness in one line. It cannot run a skill for you -- act on its `NEXT:` line yourself |
+
+## Methodology and anti-drift
+
+At EVERY task start, read `.claude/features/METHODOLOGY.md` + `ANTI-DRIFT.md`; derive task Methodology from the domain (review strategy, reliable checks, base work/owners/dependencies and parent id). The isolated tracker claims/reconciles files, then the main session runs `task-board` to create/reconcile one unique session timer per active top-level task, hourly unless the user overrides or opts out; announce the verified schedule. Save the task-specific COMPLETE tick prompt/runtime state in its task file before creation. Main session alone owns timer calls; missing tools are reported, never disguised as scheduling.
+
+Each delivered tick rereads methodology/anti-drift, task/spec/goal/user corrections; requests owner evidence; reconciles statuses/dependencies/counts and rebuilds derived `task-graph.md`; keeps ALL unfinished nodes + latest 10 done, archives older evidence first. Force a goal/acceptance drift check, correct deviations within scope, advance unblocked work; report local time, tick number, elapsed, achievements, remaining/next and present problems/blockers/questions in at most five compact lines with only 🟢🔵🔴⚪. Completion/cancellation/parking -> main-session task-board deletes the timer and verifies absence. Runtime contract: `ANTI-DRIFT.md`.
+
+Plan mode: include task methodology, graph/base work, saved prompt and an explicit execution step to reconcile/create its timer; include final PROGRESS refresh. Respect read-only planning: no file writes or timer creation/deletion until execution is allowed. Ticks delivered during planning report proposed changes only.
 ```
 
 > Note on rule 8: this is the EXTRA rule beyond the brewpage etalon -- it mandates running `task-tracker` as a spawned, isolated subagent at the start of any task (never inlined into the main session). Keep it phrased as a hard requirement.

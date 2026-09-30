@@ -2,18 +2,18 @@
 
 [DICT: DOCS=migration inventory from Step 1, FEAT=TARGET/.claude/features, EXCL=source-path exclusions]
 
-Goal: consolidate every existing backlog/feature/task doc found in Step 1 (`DOCS`) into the new board: dedup, trash cruft, migrate ready/done items into `closed/`, format `backlog/`, then author the real `board.md` (filling the skeleton from 4b).
+Goal: consolidate every Step 1 backlog/feature/task doc (`DOCS`) into the new board: dedup, skip cruft, route ready/done items to `todo/`/`closed/` respectively, format `backlog/`, then fill the 4b `board.md` skeleton.
 
 > Sweep subagents write ONLY under `TARGET/.claude/features/**`. They must NOT edit any EXCLUSIONS dir. Reading source docs to extract tasks is fine; modifying source is not.
 
-## Spawn (parallel -- one message, multiple Task calls)
+## Spawn (parallel -- one message, multiple Agent calls)
 
 Partition the `DOCS` inventory across N subagents (1 if small, 2-3 if many docs / large). Each gets a slice, a one-letter slice tag (`A`, `B`, `C` ...) and the same contract. Use `general-purpose` (it must Read source docs and Write under `.claude/features/`).
 
 > Sizing: one agent = ONE doc slice — ~<=5 docs, ~<=10 steps; a bigger slice is split into more slices, all fanned out in the SAME message.
 
 ```
-Task(subagent_type="general-purpose", prompt="
+Agent(subagent_type="general-purpose", prompt="
 GOAL: deploying a file-based Kanban into TARGET=<abs path>; the board skeleton exists and this pass fills it
   from the repo's pre-existing task/backlog docs. Skip it and the board ships empty while the repo keeps two
   sources of truth.

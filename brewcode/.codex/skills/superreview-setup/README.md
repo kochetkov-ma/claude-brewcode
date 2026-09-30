@@ -42,7 +42,7 @@ A project-tailored `superreview` skill:
 9. **Per-finding adversarial VALIDATION gate** (EXTENDED) — a NON-OWNING validator reverse-validates every verdictless
    candidate (batched <=40, max 4 spawns), drops false positives, merges + de-dups + prioritizes. Anything
    unvalidatable is reported as `UNVALIDATED` and the run is marked `INCOMPLETE` — a degraded run can never look clean.
-10. **Scope gate** (EXTENDED) — `request_user_input` on unsanctioned expansion or an unproven absence; it rewrites
+10. **Scope gate** (EXTENDED) — `main-chat user gate` on unsanctioned expansion or an unproven absence; it rewrites
     priorities only, never adds findings and never lifts the UNKNOWN-baseline cap.
 11. **ONE merged P0-P3 report** at `.codex/reports/{TIMESTAMP}_superreview/REPORT.md`, whose Intent / Drift section
     carries intent-guard's `VERDICT:` line verbatim and whose closing `## VERDICT` section leads with a `DRIFT:`
@@ -148,7 +148,7 @@ After generation, run the emitted skill in that project. Depth comes from how yo
 |-------|--------|
 | 0 | Read the emit templates this skill ships (`references/`) |
 | 1 | `generate.sh scan` + analysis: tech stack, build, test, DB, agent roster, rules/convention, source groups, gate commands, tracker |
-| 1.5 | request_user_input for genuinely ambiguous params (scope baseline + tracker, shared surfaces, arbiter agent, domain mapping, dominant stack, gate commands) |
+| 1.5 | main-chat user gate for genuinely ambiguous params (scope baseline + tracker, shared surfaces, arbiter agent, domain mapping, dominant stack, gate commands) |
 | 1.6 | **Domain experts (mandatory)** — classify the roster, find uncovered groups, create the missing experts via `brewcode:agent-creator`, re-scan |
 | 1.6b | **`intent-guard` (create-or-reuse)** — no gate, no question: the shared writer creates `.codex/agents/intent-guard.toml` when absent (or unusable), REUSES it untouched when present |
 | 2 | Export scalar placeholders -> `generate.sh emit` (sed substitution, copies templates + chosen stack ref + `scope.md` + the intent agent, and saves the pristine templates to `.template-baseline/`). **Refuses on a live installation** — see [Re-generation](#re-generation-upgrade-not-re-emit) |
@@ -207,3 +207,8 @@ always-shared surface appears. It re-wires the emitted skill to the current proj
 ## Documentation
 
 Full docs: [superreview-setup](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/)
+
+
+## Native user gates
+
+Required approval: main presents a concrete, reviewable proposal in chat and waits for an actual user reply before dependent action. Existing authorization for the same scope remains valid; do not ask again. Optional clarification: use `request_user_input_async` only if exposed, or `request_user_input` only if available in the current runtime/mode, for optional choices and never approval. Otherwise ask in main chat. Delegated agents return unresolved questions to main. Silence, elapsed time and tool errors are not approval.

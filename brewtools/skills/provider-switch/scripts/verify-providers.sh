@@ -1,6 +1,6 @@
 #!/bin/bash
 set -uo pipefail
-# Usage: verify-providers.sh [deepseek|glm|qwen|minimax|openrouter|all]
+# Usage: verify-providers.sh [deepseek|glm|qwen|minimax|openrouter|all] [--requests DIRECTORY]
 # Tests provider tokens by sending a minimal Anthropic API request.
 
 # Load API keys from ~/.zshrc by PARSING the export lines — never `eval`, which would execute
@@ -28,6 +28,16 @@ command -v jq >/dev/null 2>&1 && HAVE_JQ=true
 
 TARGET="${1:-all}"
 TARGET_LOWER="$(echo "$TARGET" | tr '[:upper:]' '[:lower:]')"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REQUEST_DIR=".claude/provider-switch/requests"
+if [[ $# -gt 1 ]]; then
+  if [[ $# == 3 && "$2" == '--requests' ]]; then
+    REQUEST_DIR="$3"
+  else
+    echo "Usage: verify-providers.sh [deepseek|glm|qwen|minimax|openrouter|all] [--requests DIRECTORY]"
+    exit 1
+  fi
+fi
 
 verify_provider() {
   local name="$1"
@@ -37,6 +47,28 @@ verify_provider() {
   local key="${!key_var:-}"
 
   echo "PROVIDER=$name"
+  local request="$REQUEST_DIR/$name.json" connection base client_model
+  if [[ -f "$request" ]]; then
+    if ! connection=$(python3 "$SCRIPT_DIR/provider-alias.py" --connection "$request" "$name"); then
+      echo "PROBE_SOURCE=invalid-selected-request"
+      echo "HTTP_CODE=-"
+      echo "RESPONSE=selected alias request could not be validated"
+      echo "STATUS=fail"
+      echo ""
+      return
+    fi
+    base="${connection%%$'\n'*}"
+    client_model="${connection#*$'\n'}"
+    endpoint="${base%/}/v1/messages"
+    model="${client_model%\[1m\]}"
+    echo "PROBE_SOURCE=selected-request"
+    echo "REQUESTED_CLIENT_MODEL=$client_model"
+  else
+    echo "PROBE_SOURCE=legacy-default"
+    echo "PROBE_NOTE=selected alias request unavailable; probing legacy default, configured endpoint/model not verified"
+  fi
+  echo "PROBE_URL=$endpoint"
+  echo "PROBE_MODEL=$model"
 
   if [[ -z "$key" ]]; then
     echo "KEY_SET=false"
@@ -146,7 +178,7 @@ run_openrouter() {
   local alias_file="${XDG_CONFIG_HOME:-$HOME/.config}/claude/provider-aliases.json"
   if [[ -f "$alias_file" ]]; then
     local alias_model
-    alias_model="$(python3 -c "import json;d=json.load(open('$alias_file'));print(d.get('openrouter',{}).get('model',''))" 2>/dev/null || true)"
+    alias_model="$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d.get("openrouter",{}).get("model",""))' "$alias_file" 2>/dev/null || true)"
     [[ -n "$alias_model" ]] && model="$alias_model"
   fi
   verify_provider "openrouter" \

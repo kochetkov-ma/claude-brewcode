@@ -1,196 +1,133 @@
 ---
 title: "Text Optimizer"
-description: "Optimizes text/docs for LLM token efficiency across five modes, light to opt-in max. Triggers: optimize prompt, reduce tokens, compress."
+description: "Compress instructions and documents with mode-specific fact checks, immutable originals, owned-draft checkpoints, and independent acceptance review."
 order: 3201
 ---
-import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+import { Badge, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# Verbose docs cost tokens. The optimizer earns them back.
+# Text Optimizer
 
-<Callout type="caution">
-**Every redundant word in a CLAUDE.md, agent definition, or system prompt is a token Claude reads on every turn.** At scale — multi-agent sessions, long-running tasks, compact-heavy workflows — that overhead compounds. Standard prose writing habits produce 2–3x more tokens than necessary for LLM consumption.
-</Callout>
-
-<Callout type="tip">
-**Mention the target file and intent — the agent picks the right mode automatically.** LLM-only files (agents, rules, SKILL.md) default to `deep`; user-facing docs default to `standard`. Override with `-l`, `-s`, `-d`, or `-x` (opt-in) flags when needed. For skill-level access, see [`/brewtools:text-optimize`](/brewtools/skills/text-optimize/).
-</Callout>
-
-<Callout type="note" title="What's new in 6.2.0">
-Step 3b now runs a Prompt-quality rewrite (`PQ.1`-`PQ.13`) on prompt-shaped targets before the wording pass — see [Flow](#flow) for where it sits and [Return Contract](#return-contract) for the lossless guard it never crosses.
-</Callout>
+<Badge text="sonnet" /> <Badge text="5 modes" /> <Badge text="owned edits only" />
 
 ## Quick reference
 
 | Field | Value |
 |-------|-------|
-| Model | sonnet |
+| Agent | `brewtools:text-optimizer` |
+| Triggers | optimize prompt, reduce tokens, compress |
 | Tools | Read, Write, Edit, Glob, Grep, Bash, WebFetch |
-| Skills | [text-optimize](/brewtools/skills/text-optimize/) |
-| Triggers | "optimize prompt", "reduce tokens", "compress" |
-| Modes | `light`, `medium` (default), `standard` (30–50%, human-readable), `deep` (2–3×, LLM-only with DICT+symbols), `max` (opt-in, 3–4×, `-x`/`--max`) |
-| PQ pass | Medium+ only, prompt-shaped content only (system prompt / CLAUDE.md / agent def / skill `SKILL.md`) — 13 rules, `PQ.1`-`PQ.13`, never Light |
-| Scope | One bounded unit per run — one deliverable, ~5 files, ~10 steps |
+| Main-session entry | [text-optimize](/brewtools/skills/text-optimize/) |
+| Output | Per-file measured size changes, semantic checks, rule ids, and report path |
 
-## Scope guard
+## What it does
 
-The agent sizes the job before it starts compressing.
+Compress text while preserving the facts and behavior that make it useful. The optimizer
+removes repetition, tightens wording, and applies the selected mode's transformations.
+Numbers, names, dates, paths, versions, examples, negations, and scope qualifiers remain
+protected. Authorized factual replacements are recorded separately from loss.
 
-| Situation | What the agent does |
-|-----------|--------------------|
-| Task fits one bounded unit — one deliverable, ~5 files, ~10 steps | Runs it |
-| Bigger, or several independent deliverables | Stops **before starting**, returns a split proposal: 2-N bounded subtasks, each with scope and suggested owner |
-| Scope grows mid-flight | Stops at the next clean boundary, reports done / remaining / how to split |
-| Brief missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance | States the assumption in the report. It cannot ask — a subagent has no question channel — so an open decision comes back to the caller as a named option plus a recommendation, never a guess. Never invents scope |
-
-"Optimize every file in `.claude/`" comes back as a split proposal, not as an hour of unsupervised
-rewriting. Point it at one file or one tight group and it runs straight through.
+Use the text-optimize skill to coordinate snapshots and acceptance. The writer owns a bounded
+file edit; it does not re-delegate, change Git, or accept its own optimization.
 
 ## When to use
 
-- **Bloated CLAUDE.md** — project instructions grown beyond control; `deep` mode trims to the minimum Claude needs
-- **Agent/skill definitions** — trim prose, tighten trigger lists, remove filler from system prompts
-- **README or docs/** — `standard` mode cuts verbosity while keeping the file human-readable
-- **Pre-release token audit** — run before bumping a version to catch regressions in instruction size
-- **Rules files** — `.claude/rules/*.md` often accumulate redundant explanations; `deep` removes them safely
+- Tighten agent, skill, or rule instructions without weakening scope or safety conditions.
+- Remove accidental duplicate facts within a document.
+- Keep README and documentation readable while reducing verbosity.
+- Compare compression against an explicit fact inventory and actual size measurements.
 
-## Examples
+## Example
 
-```
-"Optimize this prompt for fewer tokens"
-"This CLAUDE.md is too long, compress it"
-"Make this more token-efficient"
-"deep compress brewtools/agents/text-optimizer.md"
+```text
+/brewtools:text-optimize -s README.md
+/brewtools:text-optimize -l .claude/rules/project.md
+/brewtools:text-optimize -d .claude/agents/domain-expert.md
 ```
 
-```bash
-# Explicit mode flags (passed as part of your message)
-"optimize -d brewcode/.claude/agents/developer.md"   # deep
-"optimize -s web/docs/README.md"                      # standard
-"optimize -l my-notes.md"                             # light (structure only)
-"optimize -x brewcode/.claude/agents/developer.md"    # max (opt-in)
-```
+The main skill snapshots the original before delegating the file. Expect an edited file and
+a compact report with measured words/characters, verification evidence, and unresolved losses.
+An unverified result is not accepted merely because it is shorter.
 
-## Flow
+## Modes
+
+| Mode | Behavior |
+|------|----------|
+| Light | Limited cleanup; only exact-duplicate D.1 removal, without restructuring |
+| Medium | General compression with a zero-loss fact self-check |
+| Standard | Human-readable compression and independent semantic review |
+| Deep | Dense instruction compression with explicit ledgers and semantic review |
+| Max | Explicit opt-in only; deep techniques plus atomic claims and two verification methods |
+
+Without a flag, LLM instruction files default to deep, human-facing docs to standard,
+and unknown content to medium. Max is never auto-selected. Prompt-quality rewriting applies
+only to prompt-shaped content at medium or above, never to light.
+
+Mode targets are guidance, not promised savings. Report this file's measured result instead
+of presenting reference-example ratios as its outcome.
+
+## Workflow
 
 <Steps>
-  <li>
-    <div>
-      <strong>Determine mode</strong>
-      <p>Checks your message for a flag (<code>-l</code>, <code>-s</code>, <code>-d</code>, <code>-x</code>) or context hints. No flag: LLM-only files (agents, rules, SKILL.md, KNOWLEDGE.*) → <code>deep</code>; README/docs → <code>standard</code>; unknown → <code>medium</code> (default). <code>-x</code>/<code>--max</code> is opt-in only — never auto-selected.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Load references</strong>
-      <p>Reads `${CLAUDE_PLUGIN_ROOT}/skills/text-optimize/references/rules-review.md` (always). Standard mode also loads `standard-compression.md`; deep mode loads `deep-compression.md`; max mode loads both `deep-compression.md` and `max-compression.md`. Stops with an error if the base rules file is missing — no optimization without the ruleset.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Analyze target</strong>
-      <p>Reads the file, identifies content type from the priority table (system prompt / CLAUDE.md / agent / skill / doc / README), measures baseline lines and token estimate, notes critical facts to preserve.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Dedup pass</strong>
-      <p>Before compressing (all modes): builds a numbered atomic-fact inventory and flags repeats (exact, reworded, cross-format).</p>
-
-      - Merge accidental dups into the most specific statement (D.1–D.3)
-      - Cap intentional emphasis at 2 per document — full form early, short echo at the end (D.4)
-      - Different scope, numbers, or conditions = different facts, never merged (D.6)
-      - Multi-file runs: D.5 is decided by the orchestrator, not this agent — it applies only the dedup rows named in its brief, each row a canonical location plus a pointer carrying a 1-line summary, never a bare pointer that loses the fact it replaces. Deep/max log a dedup ledger
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Prompt-quality pass — Step 3b (Medium+, prompt-shaped content only)</strong>
-      <p>For system prompt / CLAUDE.md / agent definition / skill <code>SKILL.md</code> targets, mode ≥ Medium (never Light): applies <code>rules-review.md</code>'s <code>## PQ</code> rules before Step 4's wording pass. Role in one sentence with the Return contract next (PQ.1); delete a same-instruction repeat (PQ.2); "don't do X" → "do Y", but an incident-tied <code>!=</code>/NEVER stays untouched (PQ.3); scattered ALL-CAPS collapse to one true hard-stop (PQ.4); delete "think step by step"/bare "verify" filler for a thinking-enabled target (PQ.5-PQ.6, PQ.6 is Opus-5-specific — apply cautiously to Sonnet/Fable); an agent that itself delegates states an explicit delegate-only-when criterion (PQ.7); table for reference data, numbered steps for a real-dependency procedure, never mixed (PQ.9); DICT only past the size/repetition threshold (PQ.11). Still lossless: PQ changes shape and emphasis, never a path, version, flag, threshold, or model ID.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Compress</strong>
-      <p>Applies the ruleset for the chosen mode, escalating technique and target ratio:</p>
-
-      | Mode | Adds | Target |
-      |------|------|--------|
-      | Light/Medium | Rule groups C → T → S → R → P (rules-review.md) — PQ already ran at Step 3b for Medium | — |
-      | Standard | + filler removal, paragraph-to-bullet, prose-to-table | 30–50% |
-      | Deep | + DICT header (terms used 3+×), symbol substitutions, structural compression, aggressive lossy pass (A.1 fusion &rarr; A.3 paraphrase &rarr; A.2 word drop &rarr; A.4 known-fact elision) | 2–3× (measured 2.2×–3.5× on worked examples, `wc -w`) |
-      | Max (opt-in) | + atomic fact-lines, ASCII operator dialect, format-aware tables, Chain-of-Density pass, same aggressive lossy pass as deep | 3–4× |
-
-      Deep/max log every A.2 drop and A.4 elision to a loss ledger alongside the dedup ledger — A.1 fusions and A.3 paraphrases are not losses, they're recorded as merged/kept. Each mode stops at a named condition, not a felt-right ratio — see Stop conditions on the [text-optimize skill page](/brewtools/skills/text-optimize/).
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Verify</strong>
-      <p>Verification scales with mode. Dedup-merged facts always count as preserved, never as loss. A.1 fused and A.3 paraphrased facts also count as preserved; A.4 elisions get a distinct <code>elided-known</code> label and are checked against the same gate as any other loss. A.2 drops are ledgered but gate-neutral; a drop that degrades meaning marks the fact <code>distorted</code>.</p>
-
-      | Mode | Rounds | Gate |
-      |------|--------|------|
-      | Light | none | — |
-      | Medium | self-check vs fact inventory | zero loss |
-      | Standard | 1 | (kept + merged) / total ≥ 98% |
-      | Deep | 1-2 | round 2 patches if match < 95% |
-      | Max | 2 (mandatory, independent self-QA probe) | ≥ 95% overall + 100% on numbers/names/negations/scope |
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Report</strong>
-      <p>Outputs <code>## Optimization Report: [filename]</code> with a metrics table (lines / chars / words / ~tokens — before, after, change%, ratio), semantic match % for standard/deep/max, rule IDs applied, issues fixed, verification result, and a dedup summary (N merged, N emphasis repeats capped).</p>
-    </div>
-  </li>
+  <li><div><strong>Require the original snapshot</strong><p>The main skill creates the pre-edit snapshot and supplies RUN_DIR. Missing snapshot information stops the writer before editing. Snapshot files are readable comparison evidence and remain immutable.</p></div></li>
+  <li><div><strong>Load rules and inventory facts</strong><p>Read the base rules and selected mode references. Measure words, bytes, and characters separately; enumerate critical facts and applicable conditions before rewriting.</p></div></li>
+  <li><div><strong>Deduplicate within assigned ownership</strong><p>Light uses D.1 only. Other modes distinguish repeated facts from different scopes, numbers, or conditions. Cross-file deduplication requires the main owner's explicit canonical-location decision and a meaningful summary pointer.</p></div></li>
+  <li><div><strong>Edit and checkpoint the known draft immediately</strong><p>After each owned atomic write, deletion, or repair, record that exact draft before another edit or check. Preserve concurrent changes; never record another writer's bytes as proof of ownership.</p></div></li>
+  <li><div><strong>Verify without automatic restoration</strong><p>The skill runs the mechanical guard with --no-restore and applies mode-specific fact checks. Standard, deep, and max require a fresh independent verifier who compares original and current files without relying on the writer's report.</p></div></li>
+  <li><div><strong>Patch confirmed owned losses or refuse acceptance</strong><p>Repair only the owned draft, checkpoint immediately, and repeat required review. Unsafe or unproven recovery is refused; the current file stays intact. Report actual metrics and remaining losses.</p></div></li>
 </Steps>
 
-<details>
-<summary>Internals — content type priorities and verification thresholds</summary>
+## Snapshots and safe recovery
 
-| Content Type | Primary Rules | Default Mode |
-|--------------|---------------|--------------|
-| System prompt | C.1-C.8, T.1-T.8, T.10, PQ | deep |
-| CLAUDE.md | S.1-S.8, T.1-T.8, T.10, D.1-D.6, PQ | deep |
-| Agent definition | C.5, C.7, S.2, P.1, PQ | deep |
-| Skill SKILL.md | S.6, P.1-P.6, R.1-R.3, L.1-L.8, PQ | deep |
-| Documentation | T.1-T.8, T.10, S.1-S.8, D.1-D.6, L.1-L.8 | standard |
-| README | T.1-T.8, T.10, S.1-S.8, L.1-L.8 | standard |
+**Original evidence is immutable; current drafts need ownership proof.**
 
-A.1-A.4 (aggressive lossy) apply whenever the resolved mode is deep or max, regardless of content type. PQ applies at Medium mode and above, only for the four prompt-shaped rows above — never Light, never Documentation/README.
+The pre-edit original lives under `<RUN_DIR>/orig/<repo-relative-path>`. Read it for comparison;
+do not edit, delete, or recreate it. Progress reports are not backups. The writer checkpoints
+each known owned draft immediately after its edit, including an owned deletion or repair.
 
-**Lossless guard, unchanged by PQ:** numbers, dates, versions, model IDs byte-exact (`claude-sonnet-5`, never "Sonnet 5"), CLI flags/options verbatim (`-x`, `--max`), thresholds/gates/percentages exactly as stated (`>=95%`, `~20%`), URLs, file paths, ports, named entities, negations, scope qualifiers — never a valid A.2/A.4 drop or PQ edit target. Full rule table: [text-optimize skill page](/brewtools/skills/text-optimize/).
+The mechanical guard uses `verify --no-restore`: failures preserve current bytes and print
+evidence for classification. A mechanical pass cannot prove semantic equivalence. Missing state
+or snapshots prevents acceptance.
 
-**Verification thresholds:**
-- Light: no verification pass
-- Medium: self-check — re-check fact inventory against output, zero loss required
-- Standard: 1 round — fact inventory original vs compressed, gate (kept + merged) / total ≥ 98%, patch any slips
-- Deep — Round 1: atomic-fact inventory from the original, each fact labeled kept/merged/lost/distorted, match % = (kept + merged)/total
-- Deep — Round 2: if match < 95% — patch missing facts and re-verify; if still < 95% — warn user with explicit loss list
-- Max — Round 1: claim inventory (one predicate per claim), labels kept/merged/lost/distorted/elided-known, match % = (kept + merged)/total
-- Max — Round 2 (mandatory, independent): self-QA probe of 10–20 questions from the original, answered from the compressed text only. Gates: ≥ 95% overall + 100% sub-gate on numbers, names, negations, and scope qualifiers
+Full restoration requires authorization and an already recorded checkpoint matching current
+bytes. Missing proof or intervening changes produces RESTORE_REFUSED and leaves the file
+untouched. Creating a checkpoint at failure or restore time cannot manufacture ownership.
+Targeted repairs also require checking current bytes against the last known draft.
 
-</details>
+## Semantic acceptance
 
-## Return Contract
+| Mode | Required checks |
+|------|-----------------|
+| Every mode | Mechanical sub-gate and skill-owned acceptance |
+| Light | No semantic agent round |
+| Medium | Writer fact self-check plus skill review; zero loss |
+| Standard | Independent fact review; at least 98% kept/merged |
+| Deep | Independent fact review; at least 95%; repair and recheck failed gates |
+| Max | At least 95%, plus mandatory second independent method: original-derived self-QA |
 
-Verdict first, `<=30 lines`, `path:line` — never the optimized text, before/after excerpts, or the full ledgers pasted back into the reply. One line per file: `path` — words/chars/~tokens before → after, change %, ratio, semantic match % (the lossless check), rule IDs applied, verify pass/fail, dedup N merged / N emphasis capped. Ledgers and fact inventories go straight to `.claude/reports/YYYYMMDD-HHMMSS_text-optimize/report.md`; the reply returns that path plus the headline numbers.
+Standard, deep, and max also require **100% preservation of numbers, names, negations, and scope
+qualifiers**. Mode percentages never authorize deleting project-specific obligations.
+Merged duplicate facts and faithful paraphrases count as preserved. Known-fact elisions are
+ledgered and count as loss; a word drop that distorts a fact fails that fact's check.
+Unresolved confirmed loss blocks acceptance rather than shipping with a caveat.
 
-[`/brewtools:agent-return-setup`](/brewtools/skills/agent-return-setup/) enforces this at ~1000 / ~2500 est-tokens when installed; the contract itself ships unconditionally.
+## Measurement and reports
+
+Use `wc -w` for words, `wc -c` for bytes, and `wc -m` for characters. These are different
+measurements. Token counts require a named tokenizer and encoding. Characters divided by four
+is only a rough proxy; it is not measured tokens or proof of token savings.
+
+The final return is verdict-first and compact: file paths, before/after sizes, counting method,
+change/ratio, semantic match, rule ids, verification verdict, and dedup summary. Fact inventories,
+loss/dedup ledgers, and detailed evidence stay in report files. Finished-file checkpoints and
+progress are recorded as work proceeds so interrupted work can resume from evidence.
+
+## Related
 
 <CardGrid>
-  <Card title="text-optimize skill" icon="rocket" href="/brewtools/skills/text-optimize/">
-    Invoke compression directly as a skill — all five modes, same ruleset.
-  </Card>
-  <Card title="text-human skill" icon="document" href="/brewtools/skills/text-human/">
-    Reverse direction: remove AI artifacts and humanize machine-written text.
-  </Card>
-  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewtools/agents/text-optimizer.md">
-    Agent definition, rule references, and compression spec files.
-  </Card>
-  <Card title="Brewtools overview" icon="puzzle" href="/brewtools/overview/">
-    All brewtools skills and agents — text, secrets, SSH, deploy.
-  </Card>
+  <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">Text utilities, agents, and task orchestration.</Card>
+  <Card title="Text Optimize" icon="sparkle" href="/brewtools/skills/text-optimize/">The main skill that owns snapshots, delegation, and acceptance.</Card>
+  <Card title="Context Slim" icon="zap" href="/brewtools/skills/context-slim/">Coordinate context cleanup across instruction surfaces.</Card>
+  <Card title="Agent source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewtools/agents/text-optimizer.md">Writer scope, checkpoints, measurement, and mode rules.</Card>
 </CardGrid>
 
 <UpdateNotice />

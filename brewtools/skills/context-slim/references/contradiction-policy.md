@@ -53,9 +53,13 @@ Guards on every step:
 1. **Preference/identity EXEMPT.** Anything stating who the user is or what they prefer (name, spelling,
    accounts, tone, workflow choice) is never deleted or "corrected" - e.g. `~/.claude/CLAUDE.md` "Spell
    **Maksim**: !=Maxim". A preference cannot be false.
-2. **Every deletion is ledgered and restorable.** Snapshot before the first edit
+2. Every deletion is ledgered with recoverable snapshot evidence. Snapshot before the first edit
    (`brewtools/skills/text-optimize/scripts/text-guard.sh snapshot`); ledger row = path, line range, layer,
-   dropped text, survivor path, evidence command. `restore --run-dir D` puts it back.
+   dropped text, survivor path, evidence command. Immediately after each owned atomic edit/deletion,
+   run `text-guard.sh checkpoint --run-dir D <file>` for that known draft/deletion before later
+   edits/checks; never checkpoint during failure/recovery or capture another writer's changes.
+   `restore --run-dir D` requires authorization plus matching existing ownership proof; mismatch or
+   absent proof -> `RESTORE_REFUSED`, exit 1, current bytes preserved. Report actual recovery status.
 3. **No global write without `--global`** (`dedup-arbitration.md` 5) - the losing GLOBAL statement is only
    reported. With `--global` granted the cross-project guard still binds, and it binds on **rewrites as
    well as deletions**: an L3 statement may only be rewritten when the replacement holds for EVERY
@@ -64,6 +68,9 @@ Guards on every step:
    that bar -> report the proposed text, write nothing.
 
 ## 3. Worked case: Grep/Glob availability
+
+Historical case, observed 2026-08-08 on the named build/repository. Preserve its evidence and
+scope; it does not establish current binary behavior, declarations or machine-wide facts today.
 
 Read both sides:
 
@@ -77,7 +84,7 @@ Step 1 applies - it is verifiable. `CLAUDE.md:101-103` WINS on three pieces of s
 
 | Evidence | Check | Result |
 |----------|-------|--------|
-| Newer verified CC version | 2.1.226 (L1) vs 2.1.117 (L3) | L1 is 109 minor builds newer and carries an explicit "verified" stamp |
+| Newer verified CC version | 2.1.226 (L1) vs 2.1.117 (L3) | L1 is 109 patch builds newer and carries an explicit "verified" stamp |
 | Live declarations | `grep -l '^tools:.*Glob' brew*/agents/*.md .claude/agents/*.md \| wc -l` | `9` = the 8 plugin agents + `.claude/agents/docs-writer.md`, exactly as CLAUDE.md:101 states |
 | Dated observation | "a `Glob` call fired 2026-08-08" | a tool that does not exist cannot be called; one successful call falsifies "NO Grep/Glob" |
 

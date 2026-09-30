@@ -4,6 +4,9 @@
 
 Standard mode compresses text while keeping it human-readable. Target: **30-50% reduction**. Unlike deep mode, output must remain clear to humans, not just LLMs. Use for README files, documentation, API references, and user-facing docs.
 
+Research ratios below describe cited studies/examples, not universal gains. Measure this artifact;
+preserve names/numbers/negations/scope over a target ratio.
+
 ## 2. Filler Removal Patterns
 
 Apply filler removal from `rules-review.md` rule T.6 as baseline. Standard mode additional patterns:
@@ -55,12 +58,19 @@ After compression, verify:
 - [ ] Negative rules remain negative
 - [ ] Examples still present (at least one per concept)
 - [ ] Document still readable by a human unfamiliar with the topic
-- [ ] Compression ratio is 30-50%
+- [ ] Actual ratio measured; 30-50% is a guide, never a reason to lose facts
 - [ ] No information merged incorrectly (two different concepts collapsed into one)
 - [ ] Headers and structure still logical
 - [ ] Terminology kept consistent — same concept uses the SAME term throughout (no paraphrase-for-variety; synonym variation hurts LLM retrieval)
 - [ ] Fact-inventory gate: extract atomic facts from original, check each in compressed; (kept + dedup-merged) / total >= 98% — patch any slip, one round
 - [ ] Dedup-merged facts counted as preserved, not lost; no two DIFFERENT facts merged into one (D.6)
+
+After each owned atomic write/deletion or repair, immediately record the known draft with
+`text-guard.sh checkpoint --run-dir <RUN_DIR> <file>` before further edits/checks. Never record
+intervening other-writer bytes or manufacture proof during recovery. Verify with `--no-restore`;
+confirmed loss -> patch owned loss and repeat required independent review, or refuse acceptance.
+Full restore requires authorization plus matching pre-existing draft proof; absent/mismatched proof
+-> `RESTORE_REFUSED`, exit 1, preserve current bytes. Never claim recovery without successful output.
 
 ## 6. What NOT to Compress
 
@@ -71,7 +81,9 @@ After compression, verify:
 - Version numbers, dates, URLs, model IDs (byte-exact)
 - Command-line examples, CLI flags/options, thresholds and gates (`>=98%`, `30-50%`) verbatim
 
-> **Note:** Never convert config blocks to TOML for "efficiency" — TOML is the most token-heavy structured format (more overhead than YAML/JSON). For uniform tabular data prefer markdown tables or TSV/CSV; for nested data prefer compact JSON.
+> Never convert config blocks to TOML for "efficiency". Preserve executable formats; cited format
+> benchmarks found TOML heavier than YAML/JSON, not a universal ranking. Uniform prompt data:
+> markdown tables or TSV/CSV; nested prompt data: compact JSON.
 
 ## 7. Before/After Examples
 

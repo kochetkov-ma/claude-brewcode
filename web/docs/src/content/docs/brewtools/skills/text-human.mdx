@@ -1,6 +1,6 @@
 ---
 title: "Text Human"
-description: "Universal context-aware humanizer: strips AI surface artifacts and fits register across code, docs, articles, reddit/chat, and commits. Two-pass model with greedy flow detection."
+description: "Clean surface artifacts across code and prose while preserving functional directives, useful contracts and verified references."
 order: 3102
 ---
 import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
@@ -8,7 +8,9 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 # text-human -- universal AI artifact humanizer
 
 <Callout type="caution">
-**AI pair-programming sessions leave fingerprints.** Fake issue references (`BUG-001`, `ISSUE-42`), unicode long dashes, curly quotes, comment blocks like `// Added by AI`, metronomic prose cadence, and inflated vocabulary (`leverage`, `delve`, `seamless`) accumulate silently across commits, docs, and articles.
+Humanization targets surface artifacts such as self-attribution comments and repetitive prose.
+Ticket IDs, Unicode and comments can carry real meaning; appearance alone does not prove fabrication
+or justify changing program behavior.
 </Callout>
 
 <Callout type="tip">
@@ -20,10 +22,10 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 | Field | Value |
 |-------|-------|
 | Command | `/brewtools:text-human` |
-| Arguments | `[path\|commit\|folder\|text] [custom instructions]` |
+| Arguments | `[prompt] [path\|commit\|folder\|text] [custom instructions]` |
 | Model | sonnet (haiku for simple blocks in mixed flow) |
 | Context | session |
-| Tools | Read, Write, Edit, Grep, Glob, Bash, Task, AskUserQuestion |
+| Tools | Read, Write, Edit, Grep, Glob, Bash, Agent, AskUserQuestion |
 
 ## When to use
 
@@ -102,18 +104,29 @@ No arguments? The skill asks: commit hash, file path, folder, or paste text.
   <li>
     <div>
       <strong>Parallel execution (mixed flow)</strong>
-      <p>Commit or folder scope uses the mixed flow dispatcher: files split into blocks by complexity, classified as haiku (simple config/data/text) or sonnet (source with logic, tests, complex SQL). All <code>Task</code> calls fire in one message for true parallelism. Each sub-agent receives its block, the flow rules, and any custom instructions prepended at highest priority. The skill substitutes the <strong>resolved absolute path</strong> of the rules directory into every sub-agent prompt before spawning — subagents get no plugin-root variable of their own, so an unexpanded one would leave them humanizing against no rules at all. Commit mode is current-worktree: the hash only selects which file names changed, then edits land on today's content at those paths, not the historical blob — the same clean-tree gate runs again here, scoped to the commit's paths, before any block agent spawns.</p>
+      <p>Commit or folder scope uses bounded mixed-flow blocks, with haiku for simple content and sonnet for logic, tests or complex SQL. Main launches <code>Agent</code> calls together and supplies resolved absolute rule paths and custom instructions. Preservation constraints still apply. A commit selects changed paths; edits affect current worktree content after the scoped clean-tree gate.</p>
     </div>
   </li>
   <li>
     <div>
       <strong>Humanization Report</strong>
-      <p>Results merge into a unified report: detected flow, scope, files/blocks processed, haiku/sonnet split, per-file strip and inject counts, a surfaced-for-review section listing behavior-changing items, and totals. Files are edited in place -- use git to revert.</p>
+      <p>Results merge into a report of flow, scope, processed files/blocks, model split, strip/inject counts and behavior-changing items surfaced for review. Files are edited in place; review the resulting diff.</p>
     </div>
   </li>
 </Steps>
 
 ## Delegation (mixed flow)
+
+Functional preservation overrides cosmetic cleanup. Keep meaningful private/internal and test
+contracts, fixture assumptions, tool-consumed docs and doctests. Preserve GIVEN/WHEN/THEN/AND
+and Arrange/Act/Assert comments, plus lint, type, security, build, license and coverage directives
+byte-for-byte, including unexplained `noqa` or ESLint suppressions. Missing reasons are surfaced.
+
+A cosmetic pass does not migrate types or APIs, remove/narrow suppressions, convert useful
+JavaDoc into ordinary comments, or change debug output. Such changes require separate explicit
+scope and relevant checks. Real tickets remain regardless of ID pattern; removal requires proof
+that an ID was invented and resolves to no real ticket in the actual tracker/provenance. Missing
+access or uncertainty is reported rather than guessed away.
 
 <Callout type="warning">
 **A big task handed to one agent = an agent gone for an hour.** You cannot observe it, you cannot correct it, and it usually drifts off-target. In the mixed flow one subagent = **one block** of ~5 files, ~10 steps. A large commit or folder is split into N blocks, all spawned in a single message.
@@ -163,7 +176,9 @@ Hallucinated package/method/URL refs, fabricated tickets, try/except-everywhere,
 
 **PASS 1 -- What gets kept**
 
-WHY comments, public API docs, real project tickets (JIRA-456, GH-123), `@throws` with conditions, structural SQL/YAML banners, complex algorithm explanations, BDD comments.
+WHY comments, useful contracts at any visibility or test location, fixture assumptions,
+tool-consumed documentation/doctests, real tickets of any pattern, conditional `@throws`,
+structural banners, algorithm explanations, BDD comments and functional directives.
 
 **PASS 2 -- Injection weight matrix**
 
@@ -185,7 +200,9 @@ WHY comments, public API docs, real project tickets (JIRA-456, GH-123), `@throws
 | 11-20 | 1500-3000 | 7 | parallel |
 | 21+ | 3000+ | 10 | parallel |
 
-**Position:** removes AI surface artifacts and fits register -- does NOT claim to detect authorship. MED/weak detectors hit 61% FP on non-native English; HIGH universals are mechanical artifacts with near-zero human false positives.
+The skill cleans surface artifacts and fits register; it does not determine authorship.
+Weak signals need contextual evidence, and functional preservation takes priority over every
+cosmetic pattern.
 
 </details>
 
@@ -194,7 +211,7 @@ WHY comments, public API docs, real project tickets (JIRA-456, GH-123), `@throws
     Trim token waste from prompts and docs. Complements text-human for pre-commit cleanup.
   </Card>
   <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/text-human">
-    Source: SKILL.md, flows/ (code, docs, social, article, mixed), ai-patterns.md, human-patterns.md.
+    SKILL.md and reference/ flows, preservation rules and language-specific guidance.
   </Card>
   <Card title="Brewtools overview" icon="rocket" href="/brewtools/overview/">
     All brewtools skills -- text, secrets, deploy, SSH, provider switching.

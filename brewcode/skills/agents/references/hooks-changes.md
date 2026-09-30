@@ -1,8 +1,8 @@
 # Hook Changes & Version History Reference
 
-What moved between 2.1.234 and 2.1.269, the full version history, known bugs, and two facts flagged unverified elsewhere in this skill's references.
+Hook deltas through Claude Code 2.1.285. Verified 2026-09-30 against [official hooks](https://code.claude.com/docs/en/hooks) and the [upstream changelog](https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md). Version rows below preserve historical additions; current schemas live in the linked hook references.
 
-## Changes 2.1.234 -> 2.1.269
+## Changes 2.1.234 -> 2.1.285
 
 | Version | Change | What to do differently |
 |---------|--------|-------------------------|
@@ -11,18 +11,28 @@ What moved between 2.1.234 and 2.1.269, the full version history, known bugs, an
 | 2.1.251 | `PreModelSwitch`/`PostModelSwitch` added | gate a switch with `PreModelSwitch` `permissionDecision` allow/deny/ask; its timeout BLOCKS the switch, opposite of PTU |
 | 2.1.267 | `StopFailure.error` gains `cloud_credential_error`; `allowedHttpHookUrls`/`httpHookAllowedEnvVars`/`allowedChannelPlugins` fixed fail-closed on an unreadable value | match the 12-value StopFailure enum; don't assume a broken allowlist value fails open anymore |
 | 2.1.268 | `CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS` now actually extends `SessionEnd` hooks lacking their own `timeout` (was a no-op); `PermissionRequest` hooks fixed to fire in `--print` mode | headless (`-p`) sessions can now rely on `PermissionRequest` firing |
+| 2.1.274 | plugin hooks/hooks.json accepts top-level `$schema`; repeated Stop prompt blocks no longer resend the full condition prompt | schema metadata is allowed; still prevent unresolvable Stop loops |
+| 2.1.275 | SubagentStop matcher no longer matches every subagent when its agent type is empty | retain exact agent-type matchers |
+| 2.1.280 | PermissionRequest skips agent hooks; hook telemetry records output sizes and disk-spill counts | permission decisions require command/HTTP/MCP decision JSON; prompt ok:false does not deny |
+| 2.1.281 | blocking MCP hooks wait for connecting servers; `--bg` now requires workspace trust; unquoted plugin-root shell commands get validation warnings | authenticate MCP before invocation; use exec args; keep background workspace trust |
+| 2.1.284 | Elicitation/ElicitationResult `decision:block` now declines; failed hook stderr/status logging fixed; first noninteractive turn waits for hook-named MCP servers | structured elicitation veto works; debug failures without assuming stderr was absent |
+| 2.1.285 | ExitPlanMode hooks receive the current plan; synchronous hooks finish when their child daemons keep output open; cancellation prevents late hook starts | inspect current plan input; detach persistent work deliberately; canceled hooks must not be assumed to have run |
+
+### Current contract corrections
+
+Setup discards JSON fields on every exit code. Valid JSON is parsed on nonzero exits for standard events; exit 2 still blocks where supported. TaskCreated ignores continue:false and accepts decision:block; TaskCompleted honors continue:false only for teammate-triggered completion. Async timeout is unenforced, asyncRewake timeout remains enforced. PermissionRequest fields are now documented unambiguously: behavior allow/deny, deny message/interrupt. See `hooks-io-contract.md`, `hooks-events.md`, and `hooks-types-config.md`.
 
 ## Known Bugs
 
 | Bug | Impact | Status | Workaround |
 |-----|--------|--------|------------|
-| #14281 | duplicate `<system-reminder>` injection | active | make context idempotent |
+| #14281 | historical duplicate `<system-reminder>` injection report | current issue status not reverified | make context idempotent |
 
-> All routing channels (`UI`, `AC`, `decision`/`reason`, `systemMessage`, `permissionDecision`) are High reliability today; fix history is in Version History below -- no separate table.
+> Choose channels from the event-specific routing matrix; historical fixes do not guarantee every field is supported on every event.
 
 ## Version History
 
-> Single merged table (event/feature additions + bug fixes) through 2.1.269. Facts marked "current" are confirmed-live but not version-pinpointed.
+> Historical event/feature additions and fixes through 2.1.268; newer deltas are above. Facts marked "current" are confirmed by the current official reference but not version-pinpointed.
 
 | Ver | Event/Feature | Type |
 |-----|--------------|------|
@@ -85,10 +95,9 @@ What moved between 2.1.234 and 2.1.269, the full version history, known bugs, an
 | current | `disableAllHooks`, `allowedHttpHookUrls`, `allowManagedHooksOnly` managed settings keys | new settings |
 | current | Managed/enterprise confirmed HIGHEST precedence (not lowest) | clarification |
 
-## Flagged unverified -- re-check before shipping
+## Verification limits
 
-- `PostToolUseFailure` stdin fields are limited data per current docs -- verify before depending on them (`hooks-io-contract.md`, Message Routing Matrix).
-- `PermissionRequest` output: 2.1.233 testing found `decision.behavior` limited to `allow|deny` with the deny reason on `decision.message`; current docs disagree with themselves across fetches, sometimes adding `ask` or naming the reason field `permissionDecisionReason` instead. Verify with a live `claude --debug` log (`Hook JSON output had unrecognized keys` names the real field) before depending on either form (`hooks-io-contract.md`, PR -- Allow/Deny).
+This refresh checks official contracts and repository fixtures, not every event in a live Claude runtime. Historical sensitive-path observations remain explicitly dated in `hooks-env.md`; do not promote them to universal permission guarantees. PostToolUseFailure context/schema and PermissionRequest message fields are supported by the current official reference.
 
 ## Sources
 

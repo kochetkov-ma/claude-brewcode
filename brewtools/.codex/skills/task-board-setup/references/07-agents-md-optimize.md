@@ -1,15 +1,14 @@
 # 07 -- Step 5 (optional): AGENTS.md optimization
 
-[DICT: CMD=root AGENTS.md, LOCAL=AGENTS.local.md, MOD=module/subproject, MODCMD=module-level AGENTS.md, RULES=.codex/rules/*.md, BUDGET=line budget, TO=brewtools:text-optimize skill, DIR=free-text prompt directive]
+[DICT: CMD=root AGENTS.md, LOCAL=AGENTS.local.md, MOD=module/subproject, MODCMD=module-level AGENTS.md, RULES=.codex/rules/**/*.md, BUDGET=line budget, TO=brewtools:text-optimize skill, DIR=free-text prompt directive]
 
-OPTIONAL, opt-in phase. PROPOSE-ONLY: every change is gated behind request_user_input; never restructure without explicit approval. Runs AFTER the board is scaffolded + verified (P5), only if the user opted in at P0. Replaces the legacy "do NOT touch AGENTS.md" stance: this phase is the SANCTIONED, gated way to touch it.
+OPTIONAL, opt-in at P0; runs AFTER board scaffolding + verification (P5). PROPOSE-ONLY: every change needs main-chat user gate approval, including restructuring AGENTS.md.
 
-> **Verified lazy-loading mechanic (source: developers.openai.com/codex/guides/agents-md, fetched 2026-06-14).** Bake this into every proposal rationale:
-> - Root CMD + all ancestor AGENTS.md/AGENTS.local.md: **loaded in full AT LAUNCH**, every session, regardless of length.
-> - Subdirectory (nested) AGENTS.md: **NOT on-demand -- concatenated ONCE at session start.** Codex walks git root -> CWD and concatenates every AGENTS.md it finds into one instruction chain, capped by `project_doc_max_bytes` (32 KiB default; later/nested files are dropped first over the cap); a nested AGENTS.md wins for its own subtree only because it sits later in that one concatenation (verified: https://developers.openai.com/codex/guides/agents-md, 2026-09-12).
-> - `@path` imports: **EAGER -- expanded into context at launch.** They help organization but do NOT reduce root context.
-> - `.codex/rules/*.md` with `paths:` FM: on-demand when matching files are touched; without `paths:`: at launch.
-> CONSEQUENCE: to shrink always-on context, push MOD detail into a NESTED MODCMD. NEVER use `@import` for that goal (eager = no savings). This is the justification stated to the user in the module-split proposal.
+> **Native instruction discovery (source: https://learn.chatgpt.com/docs/agent-configuration/agents-md, verified 2026-09-30).** Bake this into every proposal rationale:
+> - Codex builds its instruction chain once per run: global guidance, then at most one non-empty instruction file per directory from project root to launch CWD. `AGENTS.override.md` precedes `AGENTS.md`, then configured fallback names. The combined project content is capped by `project_doc_max_bytes` (32 KiB default); later guidance takes precedence when included.
+> - Nested AGENTS.md outside that launch path is not automatically included when a file is read. Launch a new run from the module directory or explicitly read its guidance before module work.
+> - `@path` is not a native instruction-include directive. `.codex/rules/**/*.md` and `AGENTS.local.md` require explicit loading instructions; `paths:` metadata does not enable automatic loading.
+> CONSEQUENCE: module-local guidance keeps unrelated detail out of a root-launched run, but must be loaded explicitly for module work or discovered by a new module-launched run. Keep repo-wide invariants in root and maintain an explicit rule index; do not promise automatic lazy loading or a byte budget from line counts.
 
 ---
 
@@ -26,12 +25,12 @@ If `OPTIN` is false -> SKIP this entire file; do nothing.
 
 ## Directive influence (DIR)
 
-`DIR` is free text. Match case-insensitive substrings to toggle sub-steps. Default = all sub-steps ENABLED (still each individually AskUser-gated). DIR only flips which sub-steps are OFFERED; it never bypasses a gate.
+Match DIR substrings case-insensitively; all sub-steps are offered by default. DIR toggles offers, never approval gates.
 
 | DIR hint (substring) | Effect |
 |----------------------|--------|
 | `skip module split`, `no module`, `no nested` | disable 5d (module split) |
-| `skip local`, `no local`, `keep secrets inline` | disable 5b (local-only extraction) -- but STILL warn if hard secrets found |
+| `skip local`, `no local`, `keep secrets inline` | disable 5b (preference extraction); still flag detected credentials, never copy their values into LLM instructions |
 | `skip dedup`, `no dedup`, `skip rules` | disable 5e (rules dedup/compress) |
 | `also dedupe rules`, `dedup rules` | force-enable 5e even if other hints narrow scope |
 | `budget N`, `max N lines`, `target N` | override BUDGET_OPTIMAL=N (and OVER=N*1.5 rounded) |
@@ -39,7 +38,7 @@ If `OPTIN` is false -> SKIP this entire file; do nothing.
 | `report only`, `dry run`, `propose only` | run 5a detection + present a full plan, but make NO edits even if approved -- emit plan as the deliverable |
 | anything else | record as free-form intent; apply best-effort to phrasing of proposals, do NOT invent new behaviors |
 
-If DIR is ambiguous or conflicts (e.g. `skip rules` + `also dedupe rules`), surface the conflict in the P5.5 AskUser intro and let the user pick.
+Ambiguous/conflicting DIR (e.g. `skip rules` + `also dedupe rules`) -> user resolves it in the P5.5 AskUser intro.
 
 ---
 
@@ -52,11 +51,12 @@ Locate the root CMD: prefer `TARGET/AGENTS.md`, else `TARGET/.codex/AGENTS.md`. 
 CMD=""
 for c in "$TARGET/AGENTS.md" "$TARGET/.codex/AGENTS.md"; do test -f "$c" && CMD="$c" && break; done
 test -n "$CMD" && wc -l < "$CMD" | tr -d ' ' && echo "CMD=$CMD" || echo "NO_CMD"
-ls "$TARGET/.codex/rules/"*.md 2>/dev/null || echo "NO_RULES"
+if test -d "$TARGET/.codex/rules/"; then find "$TARGET/.codex/rules/" -type f -name '*.md' | sort; else echo "NO_RULES"; fi
 test -f "$TARGET/AGENTS.local.md" && echo "LOCAL_EXISTS" || echo "LOCAL_ABSENT"
 ```
 
-Then `Read` the CMD (and each `RULES` file) into context. Produce a DETECTION object (no writes):
+Scan CMD and RULES locally for credential candidates before reading their prose; redact values from tool output.
+Read sanitized content only. Never open credential stores. Produce a DETECTION object (no writes):
 
 ```
 CMD_PATH    = <abs>
@@ -64,7 +64,7 @@ CMD_LINES   = <int>                # current line count
 BUDGET_OPTIMAL = 200               # or DIR override
 BUDGET_OVER    = 300               # or DIR override (optimal*1.5)
 OVER        = CMD_LINES > BUDGET_OVER         # bool
-LOCAL_ITEMS = [ {line, snippet, kind} ... ]   # see 5b heuristics
+LOCAL_ITEMS = [ {line, snippet, kind} ... ]   # secrets: masked snippet only, never a value; see 5b
 MODULES     = [ {dir, why, has_own_cmd} ... ] # see 5d detection
 RULES       = [ {path, lines} ... ]
 DUP_SPANS   = [ {a, b, overlap_summary} ... ] # cross-file dup/overlap, see 5e
@@ -82,25 +82,25 @@ Scan CMD lines for items that should NOT be in a team-shared, committed file:
 | secret | `password`, `passwd`, `secret`, `token`, `api[_-]?key`, `bearer`, `BEGIN .*PRIVATE KEY`, AWS-style `AKIA[0-9A-Z]{16}`, long base64/hex blobs assigned to a var |
 | abs machine path | absolute paths under `/Users/<name>/`, `/home/<name>/`, `C:\Users\`, `/opt/<host-specific>` -- machine/user-specific, not repo-relative |
 | host/user config | personal localhost ports/URLs, `localhost:<port>` sandbox URLs, `~/.ssh`, hostnames, personal emails, "my " sandbox/test data |
-NEVER print full secret values back to the user in the proposal -- mask (`sk-...AB12`). Flag line numbers + masked snippet + kind.
+NEVER expose secret values in tool output, proposals or any LLM file. Flag line numbers + masked snippet (`sk-...AB12`) + kind. Detection is heuristic; uncertain items are held for review, not copied.
 
 ---
 
-## 5b. PROPOSE: extract local-only items -> AGENTS.local.md  (gated)
+## 5b. PROPOSE: local preferences -> AGENTS.local.md; credentials -> references only (gated)
 
-If `DIR` disabled 5b: skip, BUT if any `kind=secret` was found, still emit a one-line warning ("hard secrets detected in committed AGENTS.md; consider re-running without skip-local").
+If `DIR` disabled 5b: skip, but flag any detected credentials without values. Never interpret this as permission to copy them.
 
-If LOCAL_ITEMS non-empty, request_user_input:
+Separate non-secret personal preferences/machine paths/host config from credentials. If LOCAL_ITEMS non-empty, main-chat user gate:
 
-> **Found N local-only items in committed AGENTS.md** (secrets / machine paths / host config). These leak into every teammate's context and (for secrets) into git. Propose: move them to `AGENTS.local.md` (gitignored, loaded only for you), leaving CMD clean.
-> - Move all N to AGENTS.local.md (create it + add to .gitignore)
+> **Found N local-only items in AGENTS.md.** Move approved non-secret preferences to `AGENTS.local.md` (a gitignored reference; explicitly read it when applicable, never assume automatic loading). Credential values must stay outside all LLM instruction files; propose only a lookup reference naming an environment variable/keychain/secret-manager entry, with separate approval for removing an existing value.
+> - Move non-secret preferences; approve concrete credential references separately
 > - Let me pick which to move
 > - Leave as-is (do not touch)
 
 On approval:
 1. If `AGENTS.local.md` absent -> create it at `TARGET/AGENTS.local.md` with a header `# Local-only (gitignored) -- machine/user-specific, not committed`.
-2. Append the approved items (verbatim values) under topical headings.
-3. Remove them from CMD (Edit, not Write; bottom-up by line number).
+2. Merge approved NON-SECRET items under topical headings; never clobber existing LOCAL. Do not copy credential values to LOCAL, CMD, MODCMD, RULES or other LLM files, even when gitignored.
+3. Remove approved preferences from CMD (Edit, bottom-up). Replace an existing credential only after explicit approval of its concrete non-secret lookup reference and a confirmed secure source outside LLM files; otherwise leave it unchanged and report the unresolved item. Never relocate credentials or rewrite history automatically.
 4. Ensure `AGENTS.local.md` is gitignored:
    ```bash
    grep -qxF "AGENTS.local.md" "$TARGET/.gitignore" 2>/dev/null || echo "(needs .gitignore entry)"
@@ -119,8 +119,8 @@ If NOT OVER: state it's within budget; offer optional tidy (markup pass 5g) but 
 If OVER: assemble a concrete decomposition PLAN combining 5d (module split), 5e (rules dedup), 5f (compress), then AskUser ONCE with the whole plan before applying any of it:
 
 > **AGENTS.md is <CMD_LINES> lines (over the <BUDGET_OVER> ceiling; optimal ~<BUDGET_OPTIMAL>).** Proposed decomposition to get back under budget:
-> 1. Move detail for modules `<M1, M2, ...>` into per-module AGENTS.md (it overrides root for that subtree and keeps root short so `project_doc_max_bytes` never truncates it). Root keeps a 2-line module index.  [est -X lines]
-> 2. Move topic blocks `<...>` into path-scoped `.codex/rules/*.md` (load only when matching files are touched).  [est -Y lines]
+> 1. Move module detail for `<M1, M2, ...>` into per-module AGENTS.md; root keeps a compact index requiring an explicit read before module work when outside the launch path. A module-launched run discovers its local guidance subject to the combined byte cap.  [est -X lines]
+> 2. Move topic blocks `<...>` into `.codex/rules/*.md`; add complete root rule-index entries with path, load condition and purpose, requiring explicit reads when the condition matches.  [est -Y lines]
 > 3. Dedup overlap with existing rules `<...>`; delete duplicated spans.  [est -Z lines]
 > 4. Deep-compress the remainder via brewtools:text-optimize.  [est -W lines]
 > Projected: <CMD_LINES> -> ~<TARGET_LINES>.
@@ -128,7 +128,7 @@ If OVER: assemble a concrete decomposition PLAN combining 5d (module split), 5e 
 > - Apply only steps I pick
 > - Skip decomposition (leave AGENTS.md as-is)
 
-Apply ONLY approved steps. Each sub-step (5d/5e/5f) below still narrates what it does, but execution is gated by THIS approval (do not re-ask per sub-step unless the user chose "only steps I pick", then confirm the subset).
+Narrate 5d/5e/5f and apply ONLY steps approved here. Re-ask only to confirm the subset after "only steps I pick".
 
 ---
 
@@ -136,17 +136,17 @@ Apply ONLY approved steps. Each sub-step (5d/5e/5f) below still narrates what it
 
 For each approved MOD in MODULES:
 1. Gather the CMD content that is module-specific (build/test cmds, layout, conventions for that subtree).
-2. Write/extend `<MOD.dir>/AGENTS.md` (a NESTED file -- this is what makes it override the root for that subtree). If `has_own_cmd`, MERGE (Edit), do not clobber. Improve markup (headers, tables, bullets).
+2. Write/extend `<MOD.dir>/AGENTS.md` (discovered for a run launched from that module, or explicitly read before module work). If `has_own_cmd`, MERGE (apply_patch), do not clobber. If an override file exists, account for its precedence before proposing a change. Improve markup (headers, tables, bullets).
 3. In the ROOT CMD, REPLACE the moved block with a MAX-COMPRESSED index: a couple of lines, e.g.:
    ```
-   ## Modules (each has its own AGENTS.md, which overrides this file for that subtree)
+   ## Modules (read the module AGENTS.md before work when outside the launch instruction chain)
    | Module | Path | Owns |
    |--------|------|------|
    | api    | services/api/  | handlers, OpenAPI, db migrations |
    | web    | apps/web/      | UI, build, e2e |
    ```
    Keep ONLY the index in root; the detail lives in the MODCMD.
-> Rationale to state in the proposal: a nested AGENTS.md overrides root for its own subtree (both are concatenated at session start, nested last, so nested wins) and keeps root short so `project_doc_max_bytes` never truncates it. Codex has no `@import`-style eager-include mechanism at all, so that concern does not apply here.
+> State the verified discovery rationale above: module detail can leave the root instruction chain, but require an explicit read before module work or a new run launched from the module. Native Codex does not expand `@import` as an instruction include.
 > Do NOT move CROSS-cutting / repo-wide rules into a single module; those stay in root or go to a `.codex/rules/*.md`.
 
 ---
@@ -154,15 +154,15 @@ For each approved MOD in MODULES:
 ## 5e. Rules dedup + compress  (disabled if DIR says skip; forced if DIR says also dedupe rules)
 
 1. From DUP_SPANS, identify content duplicated or overlapping across `.codex/rules/*.md` and between rules and CMD.
-2. PROPOSE (folded into 5c plan, or its own AskUser if 5c not triggered): single-source each fact. Keep repo-wide invariants in CMD or an unscoped rule; keep path-specific guidance in a `paths:`-scoped rule. Delete the duplicate copies.
+2. PROPOSE (folded into 5c plan, or its own AskUser if 5c not triggered): single-source each fact. Keep repo-wide invariants in CMD or an explicitly indexed rule required for all work; keep path-specific guidance in a rule whose index specifies its load condition. `paths:` alone does not load it. Delete the duplicate copies.
 3. Apply approved dedup via Edit.
-> Single-source-of-truth: a fact in two places drifts; pick the correct home (path-scoped rule for path-specific, CMD/unscoped rule for global).
+> Canonical home: explicitly indexed rule for path-specific facts; CMD or an always-required indexed rule for global facts.
 
 ---
 
 ## 5f. Delegate compression to brewtools:text-optimize
 
-After structural moves (5b/5d/5e), the remaining CMD + touched MODCMD + RULES should be token-compressed by the dedicated skill, NOT hand-compressed here.
+After 5b/5d/5e, delegate compression of remaining CMD + touched MODCMD + RULES to TO; do not hand-compress.
 
 - Recommend/invoke: `brewtools:text-optimize` auto-detects `AGENTS.md` and `.codex/rules/*.md` as LLM-only files and selects DEEP mode (DICT header + symbol substitution + verification rounds).
 - Default invocation (after this phase's edits are approved + applied):
@@ -172,14 +172,14 @@ After structural moves (5b/5d/5e), the remaining CMD + touched MODCMD + RULES sh
   ```
   Multiple files in one call run in parallel: `$brewtools:text-optimize AGENTS.md, <MOD>/AGENTS.md`.
 - DIR `aggressive`/`deep` -> pass `-d`; DIR `max`/`extreme`/`atomic` -> pass `-x` (max mode, 2 mandatory verify rounds). Otherwise let auto-detect pick deep for these files.
-- text-optimize has its OWN AskUser/verification; do not duplicate it here. This phase's job is to RECOMMEND/INVOKE it on the touched files, then re-count lines for the final report.
+- TO owns its AskUser/verification; do not duplicate it. RECOMMEND/INVOKE on touched files, then re-count for the report.
 > Do NOT inline-reimplement compression. Single source of compression logic = text-optimize.
 
 ---
 
 ## 5g. Markup / structure pass (all touched docs)
 
-For every doc this phase wrote or edited (CMD, MODCMD, AGENTS.local.md, touched RULES): ensure headers form a clean hierarchy, prose -> tables/bullets where it compresses, code fences valid, consistent terminology. This is light and folds into text-optimize's structural rules; do not double-apply if 5f ran on the same file.
+For CMD, MODCMD, LOCAL and RULES edited here: clean heading hierarchy, compact tables/bullets, valid fences and consistent terms. TO covers this structure; do not repeat it on files handled by 5f.
 
 ---
 
@@ -191,13 +191,13 @@ wc -l < "$CMD_PATH" | tr -d ' '
 ```
 Report:
 - CMD line count: BEFORE -> AFTER (vs optimal/over).
-- Local-only items moved: count + that AGENTS.local.md was created/updated + gitignore status.
+- Non-secret preferences moved: count + LOCAL created/updated + gitignore status; credentials: references changed or unresolved, values never copied.
 - Modules split: list of MODCMD written + that root now indexes them.
 - Rules dedup: spans removed.
 - text-optimize: whether invoked, mode, resulting reduction.
 - A one-line flag if any secret was found that predates this run (rotate + history note).
 
-Set `CMD_DECOMPOSED = true` iff 5d wrote/updated at least one MODCMD -- this flag is consumed by the task-tracker agent template addition (ref 02) so the generated agent knows the target's AGENTS.md is decomposed/lazy-loaded.
+Set `CMD_DECOMPOSED = true` iff 5d wrote/updated at least one MODCMD -- this flag is consumed by the task-tracker agent template addition (ref 02) so the generated agent knows the target's AGENTS.md is decomposed and requires explicit module-guidance reads outside the launch instruction chain.
 
 ---
 
@@ -209,6 +209,11 @@ Set `CMD_DECOMPOSED = true` iff 5d wrote/updated at least one MODCMD -- this fla
 | No root AGENTS.md | report + SKIP (do NOT create a root AGENTS.md) |
 | User declines a proposal | make NO edit for that sub-step; proceed to next |
 | `report only` / dry-run DIR | detection + full plan only; ZERO edits even if "approve" |
-| Secret found | mask in output; on move, warn that gitignore != history purge; never echo full value |
+| Secret found | mask before tool output; never copy values to LLM files; concrete reference/removal requires approval; gitignore != history purge |
 | DIR conflict | surface in AskUser intro; user decides |
 | Edits | Edit (not Write), bottom-up by line number; never clobber an existing MODCMD |
+
+
+## Native user gates
+
+Required approval: main presents a concrete, reviewable proposal in chat and waits for an actual user reply before dependent action. Existing authorization for the same scope remains valid; do not ask again. Optional clarification: use `request_user_input_async` only if exposed, or `request_user_input` only if available in the current runtime/mode, for optional choices and never approval. Otherwise ask in main chat. Delegated agents return unresolved questions to main. Silence, elapsed time and tool errors are not approval.

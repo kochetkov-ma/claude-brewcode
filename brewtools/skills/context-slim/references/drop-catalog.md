@@ -1,7 +1,7 @@
 # Drop Catalog -- instructions the model already follows by default
 
 Decision basis for `brewtools:context-slim`. A row here is a **candidate** for deletion, never an
-automatic delete: it costs tokens on every request and buys no behavioural delta. Companion:
+automatic delete: verify actual loading and behavioral delta for the target model/configuration. Companion:
 `keep-catalog.md` (invariants that must survive byte-exact). Extends `text-optimize` rule **A.4**
 (Common-Knowledge Elision) -- same ledger, same "unsure -> keep" tiebreak.
 
@@ -114,6 +114,9 @@ guard and did not have one. Dedup and drop must agree on what is quoted text.
 
 ## Inverted near-twins -- these LOOK droppable and are KEEPS
 
+Model advice applies only to its named model/configuration; generic verification candidates
+never override mandatory tests/gates/independent review. Examples are historical evidence.
+
 An instruction earns its tokens when it **inverts or tightens** a documented default, names a
 threshold, or names a project fact. Same surface words, opposite verdict.
 
@@ -121,7 +124,7 @@ threshold, or names a project fact. Same surface words, opposite verdict.
 |---|----------------------|----------------------------------------|----------------------------|
 | 1 | "write clean, readable code" | "Comments only where they earn it: non-obvious logic + public API docstrings; !=narrate self-evident code" | Inverts the model's default to comment liberally |
 | 2 | "be concise" | "Verdict first, <=30 lines, `path:line`, !=preamble" | PBP: latest models are "less verbose" but still need explicit preamble suppression; adds a number |
-| 3 | "think step by step" | "Think short: minimal internal reasoning, no exploring aloud" | Inverts the default; OAI/PBP say prescribing CoT is at best inert |
+| 3 | "think step by step" | "Report verdict, evidence and next action; <=30 lines" | Defines visible output; never suppresses internal reasoning |
 | 4 | "handle errors appropriately" | "grep-filter pipelines under `set -o pipefail` need `\|\| true`" (`.claude/rules/avoid.md:7`) | Names the exact failure and the exact fix |
 | 5 | "follow best practices" | "Pin exact semver X.Y.Z everywhere; `@latest`/`:latest`/`@main` forbidden" (`~/.claude/rules/avoid.md:4`) | A prohibition the model does not default to |
 | 6 | "write tests" | "GIVEN/WHEN/THEN comments, descriptive names, no logs in tests" | Project test contract, not the generic habit |

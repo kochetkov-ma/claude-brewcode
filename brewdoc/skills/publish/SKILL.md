@@ -28,7 +28,8 @@ prompt.
 4. Outcome-changing ambiguity (namespace, password) -> the two dedicated `AskUserQuestion` calls in Steps 4-5;
    nothing else asks.
 
-Then print this block ONCE, before Step 6 (the publish call):
+Print this block ONCE before the first tool action, including filesystem probes and questions.
+Use `unresolved` for type/namespace/password until determined; report resolved stats in Step 3.
 
 ```
 PLAN — brewdoc:publish
@@ -116,24 +117,20 @@ Password protection (if set, page is hidden from gallery):
 
 Options:
 1) No password (default)
-2) Random: {generated 6-char password, e.g. "kx7p2m"}
-3) Enter custom password (min 4 chars)
-4) Skip → no password
+2) Use an existing local password file (min 4 characters)
+3) Skip → no password
 
-Reply with a number or your custom password.
+Reply with a number and, for option 2, the absolute local file path. Do not paste password contents.
 ```
 
-Generate random password **EXECUTE** using Bash tool:
-```bash
-LC_ALL=C tr -dc 'a-z0-9' < /dev/urandom | head -c6 2>/dev/null
-```
+Resolution: `1`, `3`, or empty → `none`; `2` plus an existing local password-file path → `file`.
+Never Read the password file or generate/print its contents through model-visible tools.
 
-Resolution: `1`, `4`, or empty → no password | `2` → use generated random password | `3` or custom text → use as-is.
-
-> **A password is passed as a FILE, never as shell text.** If a password was chosen, `Write` it — the
-> password alone, no trailing prose — to `<PROJECT_ROOT>/.claude/tmp/brewpage-password.txt`. If no password
-> was chosen, write nothing: the Step 6 blocks add the `X-Password` header exactly when that file exists and
-> delete the file afterwards. Never report a password unless you actually wrote that file.
+> Password contents travel only through the private run's input/header files, never shell literals or
+> curl argv. Choose explicit `password_mode=none|file`; `none` ignores every password file, including stale
+> shared files. For `file`, Write only its absolute source path into
+> `<run_dir>/brewpage-password-source.txt`; the helper copies its bytes into private transport files.
+> Never print contents in commands, logs or reports. It rejects control characters/header injection.
 
 ### Step 6: Publish and Save Token (secure)
 
@@ -151,97 +148,108 @@ have validated them yourself:
 
 A value that fails its pattern is a hard stop — re-ask, never "clean it up" and never substitute it anyway.
 
-**Before running a block, `Write` the inputs it reads** (absolute paths under `<PROJECT_ROOT>/.claude/tmp/`):
+**Allocate one private run directory before writing any inputs**, after resolving the namespace/password
+choice. EXECUTE:
+
+```bash
+. "${CLAUDE_SKILL_DIR}/scripts/brewpage-lib.sh" || exit 1
+bp_prepare
+```
+
+Use the printed absolute path as `run_dir`; its generated `brewpage.XXXXXX` basename is `run_id`.
+Never reuse a previous run, read shared `brewpage-*` inputs, or substitute a user-supplied run id.
+Then `Write` inputs inside this directory (mode 700):
 
 | File | Written for | Contents |
 |------|-------------|----------|
 | `brewpage-content.md` | HTML / MARKDOWN text | the text to publish, verbatim |
 | `brewpage-payload.json` | JSON | the JSON document, verbatim |
 | `brewpage-target-path.txt` | FILE / SITE(dir) / SITE(zip) | the absolute source path, one line |
-| `brewpage-password.txt` | any type, only if a password was chosen | the password, one line |
+| `brewpage-password-source.txt` | any type, only for `file` password mode | absolute source password-file path, one line; never its contents |
 
 For a MARKDOWN **file** (type MARKDOWN from Step 2), `Read` it and `Write` its text into
 `brewpage-content.md`, then run the HTML/Markdown block — the `?format=markdown` endpoint renders it styled
 instead of serving a raw download.
 
-Every block starts with the same two lines: source `scripts/brewpage-lib.sh`, then `bp_begin` — it re-validates
+Every block uses strict mode, sources `scripts/brewpage-lib.sh`, then calls `bp_begin` with the generated
+run id and explicit `none|file` policy — it re-validates
 `{ns}`/`{days}`/`{entry}`, requires `jq`, resolves the PROJECT ROOT (`CLAUDE_PROJECT_DIR` →
 `git rev-parse --show-toplevel` → upward `.git`/`.claude` walk → `PWD`), creates `$HISTORY_FILE` there with
 mode `600`, and appends it plus `.claude/tmp/` to the project `.gitignore`. A nested cwd can no longer scatter
 a second token file below the project. The library also owns the parts every block used to repeat: `bp_post`
-(adds `X-Password` when Step 5 wrote the password file), `bp_finish` (URL, owner token → history, the single
+(adds `X-Password` from a private header file only in `file` mode), `bp_finish` (URL, owner token → history, the single
 `OK`/`FAILED` line, `.fileCount` for `site`) and `bp_archive_gate` (the shared verdict on a `publish.mjs` run).
 
 **HTML/Markdown text** — **EXECUTE** using Bash tool:
 ```bash
+set -euo pipefail
 . "${CLAUDE_SKILL_DIR}/scripts/brewpage-lib.sh" || { echo "FAILED: publish helper library not found"; exit 1; }
-bp_begin '{ns}' '{days}' '' || exit 1
+bp_begin '{ns}' '{days}' '' '{run_id}' '{password_mode}' || exit 1
 
-CONTENT=$(cat "$BP_TMPDIR/brewpage-content.md") || { echo "FAILED: content file missing"; exit 1; }
-PAYLOAD=$(jq -n --arg c "$CONTENT" '{content: $c}')
+PAYLOAD_FILE="$BP_RUN_DIR/payload.json"
+jq -n --rawfile c "$BP_RUN_DIR/brewpage-content.md" '{content: $c}' > "$PAYLOAD_FILE"
 RESPONSE=$(bp_post "https://brewpage.app/api/html?ns=$NS&ttl=$DAYS&format=markdown" \
-  -H "Content-Type: application/json" -d "$PAYLOAD")
-rm -f "$PWFILE" "$BP_TMPDIR/brewpage-content.md"
+  -H "Content-Type: application/json" -d @"$PAYLOAD_FILE")
 bp_finish "$RESPONSE" "$DAYS" html
 ```
 
 **JSON** — **EXECUTE** using Bash tool:
 ```bash
+set -euo pipefail
 . "${CLAUDE_SKILL_DIR}/scripts/brewpage-lib.sh" || { echo "FAILED: publish helper library not found"; exit 1; }
-bp_begin '{ns}' '{days}' '' || exit 1
+bp_begin '{ns}' '{days}' '' '{run_id}' '{password_mode}' || exit 1
 
-PAYLOAD_FILE="$BP_TMPDIR/brewpage-payload.json"
+PAYLOAD_FILE="$BP_RUN_DIR/brewpage-payload.json"
 jq empty "$PAYLOAD_FILE" 2>/dev/null || { echo "FAILED: payload is not valid JSON"; exit 1; }
 RESPONSE=$(bp_post "https://brewpage.app/api/json?ns=$NS&ttl=$DAYS" \
   -H "Content-Type: application/json" -d @"$PAYLOAD_FILE")
-rm -f "$PWFILE" "$PAYLOAD_FILE"
 bp_finish "$RESPONSE" "$DAYS" json
 ```
 
 **File** — **EXECUTE** using Bash tool:
 ```bash
+set -euo pipefail
 . "${CLAUDE_SKILL_DIR}/scripts/brewpage-lib.sh" || { echo "FAILED: publish helper library not found"; exit 1; }
-bp_begin '{ns}' '{days}' '' || exit 1
+bp_begin '{ns}' '{days}' '' '{run_id}' '{password_mode}' || exit 1
 
-SRC=$(cat "$BP_TMPDIR/brewpage-target-path.txt") || { echo "FAILED: target path missing"; exit 1; }
+SRC=$(cat "$BP_RUN_DIR/brewpage-target-path.txt") || { echo "FAILED: target path missing"; exit 1; }
 [ -f "$SRC" ] || { echo "FAILED: not a file: $SRC"; exit 1; }
 RESPONSE=$(bp_post "https://brewpage.app/api/files?ns=$NS&ttl=$DAYS" -F "file=@$SRC")
-rm -f "$PWFILE" "$BP_TMPDIR/brewpage-target-path.txt"
 bp_finish "$RESPONSE" "$DAYS" file
 ```
 
 **Site (directory)** — **EXECUTE** using Bash tool:
 ```bash
+set -euo pipefail
 . "${CLAUDE_SKILL_DIR}/scripts/brewpage-lib.sh" || { echo "FAILED: publish helper library not found"; exit 1; }
-bp_begin '{ns}' '{days}' '{entry}' || exit 1
+bp_begin '{ns}' '{days}' '{entry}' '{run_id}' '{password_mode}' || exit 1
 
-SRC=$(cat "$BP_TMPDIR/brewpage-target-path.txt") || { echo "FAILED: target path missing"; exit 1; }
-TMPZIP="$BP_TMPDIR/brewpage-site-$$.zip"
-MANIFEST=$(node "${CLAUDE_SKILL_DIR}/scripts/publish.mjs" pack --dir "$SRC" --out "$TMPZIP" ${ENTRY:+--entry "$ENTRY"})
-RC=$?
+SRC=$(cat "$BP_RUN_DIR/brewpage-target-path.txt") || { echo "FAILED: target path missing"; exit 1; }
+TMPZIP="$BP_RUN_DIR/site.zip"
+RC=0
+MANIFEST=$(node "${CLAUDE_SKILL_DIR}/scripts/publish.mjs" pack --dir "$SRC" --out "$TMPZIP" ${ENTRY:+--entry "$ENTRY"}) || RC=$?
 printf '%s\n' "$MANIFEST"
 bp_archive_gate "$RC" "$MANIFEST" "$TMPZIP" || exit $?
 
 RESPONSE=$(bp_post "https://brewpage.app/api/sites?ns=$NS&ttl=$DAYS&entry=$ENTRY" \
   -H "User-Agent: ClaudeCode/1.0" -F "archive=@$TMPZIP")
-rm -f "$TMPZIP" "$PWFILE" "$BP_TMPDIR/brewpage-target-path.txt"
 bp_finish "$RESPONSE" "$DAYS" site
 ```
 
 **Site (ZIP file)** — **EXECUTE** using Bash tool:
 ```bash
+set -euo pipefail
 . "${CLAUDE_SKILL_DIR}/scripts/brewpage-lib.sh" || { echo "FAILED: publish helper library not found"; exit 1; }
-bp_begin '{ns}' '{days}' '{entry}' || exit 1
+bp_begin '{ns}' '{days}' '{entry}' '{run_id}' '{password_mode}' || exit 1
 
-SRC=$(cat "$BP_TMPDIR/brewpage-target-path.txt") || { echo "FAILED: target path missing"; exit 1; }
-MANIFEST=$(node "${CLAUDE_SKILL_DIR}/scripts/publish.mjs" inspect --zip "$SRC" ${ENTRY:+--entry "$ENTRY"})
-RC=$?
+SRC=$(cat "$BP_RUN_DIR/brewpage-target-path.txt") || { echo "FAILED: target path missing"; exit 1; }
+RC=0
+MANIFEST=$(node "${CLAUDE_SKILL_DIR}/scripts/publish.mjs" inspect --zip "$SRC" ${ENTRY:+--entry "$ENTRY"}) || RC=$?
 printf '%s\n' "$MANIFEST"
 bp_archive_gate "$RC" "$MANIFEST" "" || exit $?
 
 RESPONSE=$(bp_post "https://brewpage.app/api/sites?ns=$NS&ttl=$DAYS&entry=$ENTRY" \
   -H "User-Agent: ClaudeCode/1.0" -F "archive=@$SRC")
-rm -f "$PWFILE" "$BP_TMPDIR/brewpage-target-path.txt"
 bp_finish "$RESPONSE" "$DAYS" site
 ```
 
@@ -268,7 +276,10 @@ For a private (non-`public`) namespace, append one short line after the link (sk
 
 **Needs confirmation** (bash printed `CONFIRM: ...`, exit 2): nothing was uploaded. Show the manifest lines
 the block printed, name the flagged entries, and use ONE `AskUserQuestion` — publish anyway / cancel. On
-"publish anyway", re-run the same block with `BREWPAGE_CONFIRMED=1` prefixed. On cancel, stop.
+"publish anyway", allocate a fresh run, rewrite its inputs and re-run with `BREWPAGE_CONFIRMED=1`.
+All five blocks clean their owned run on success/failure/confirmation exits. If cancelled before the
+block starts, source the helper, call `bp_run_dir '{run_id}' && bp_cleanup`, then stop. Preserve all
+other runs and user source files; never delete the shared tmp directory.
 
 **Error** (bash printed `FAILED: ...`):
 ```
@@ -277,7 +288,7 @@ Publish failed: {the FAILED line, verbatim}
 
 ## Notes
 
-- Use `jq -n --arg c "$CONTENT" '{content: $c}'` to safely encode text content. **`format` is a query param**, not a body field — `/api/html` ignores any `format` key inside the JSON body and reads only `?format=` from the URL. Wrong location = server applies default `html` and stores markdown as raw text.
+- Use `jq -n --rawfile c <input-file> '{content: $c}'` to encode text into the run's payload file. **`format` is a query param**, not a body field — `/api/html` ignores any `format` key inside the JSON body and reads only `?format=` from the URL. Wrong location = server applies default `html` and stores markdown as raw text.
 - TTL default: `15` days. Namespace must be alphanumeric (3-32 chars).
 - Owner-token history lives at `<project-root>/.claude/brewpage-history.md` — project root resolved by `scripts/brewpage-lib.sh` (`CLAUDE_PROJECT_DIR` → git toplevel → upward `.git`/`.claude` walk → `PWD`), created mode `600`, and added to the project `.gitignore`. To **delete** a published page, find its owner token there and use the delete command in that file's header.
 - To **update a published site**, `PUT` the new bundle to the same site URL (`PUT /api/sites/{ns}/{id}`) with your `X-Owner-Token` — the uploaded bundle fully replaces the file set (adds new files, removes absent ones, overwrites matching) and the link never changes. No DELETE-then-POST needed.

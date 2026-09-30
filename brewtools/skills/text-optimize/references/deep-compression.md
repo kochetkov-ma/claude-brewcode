@@ -2,6 +2,9 @@
 
 Reference for deep compression mode applied to LLM-only documents (CLAUDE.md, system prompts, agent/skill definitions, KNOWLEDGE files).
 
+Research/token figures below retain their cited tokenizer/example scope; remeasure this artifact.
+Current model-specific prompting advice belongs to `rules-review.md`; never generalize across models.
+
 ## Symbol Substitution
 
 | Symbol | Meaning |
@@ -76,6 +79,8 @@ Beyond `rules-review.md` T.6: drop articles (the/a/an) when meaning survives wit
 clauses ("which is", "that are"), and hedging ("might", "possibly", "could potentially") — state
 direct facts instead.
 
+Keep uncertainty when it changes the claim; removing a factual hedge is not filler removal.
+
 ## Structural Compression Patterns
 
 - Conditionals: `if X -> Y` or `X ? Y : Z` | prohibitions: `!=X bc Y` (must not X because Y)
@@ -123,9 +128,16 @@ rounded, or dropped:
 - CLI flags/options verbatim (`-x`, `--max`); model IDs byte-exact (`claude-sonnet-5`, never "Sonnet 5")
 - Thresholds, gates, percentages exactly as stated (`>=95%`, `~20%` ceiling) — never rounded
 - Negative rule semantics (use `!=` notation) | >=1 example per rule that originally had examples
-- DICT header at document start
+- DICT header at document start when Dictionary Format's repetition/size threshold is met
 - Dedup ledger: every merged pair recorded (kept <- dropped); merged facts count as preserved in verification
 - Loss ledger: every A.2/A.4 drop recorded (dropped -> reason); never elide project-specific facts (names, numbers, paths, versions, prohibitions)
+
+Checkpoint each known owned atomic write/deletion/repair immediately with
+`text-guard.sh checkpoint --run-dir <RUN_DIR> <file>` before further edits/checks; never capture
+others' intervening changes or manufacture ownership at failure/restore time. `verify --no-restore`
+keeps current bytes. Patch owned loss and repeat independent review, or refuse acceptance.
+Authorized full restore requires matching existing draft proof; absent/mismatched proof refuses
+with `RESTORE_REFUSED`, exit 1, preserving current bytes. Originals remain read-only to the writer.
 
 ## Stop Condition
 

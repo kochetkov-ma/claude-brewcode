@@ -17,6 +17,10 @@ last_updated: "{LAST_UPDATED}"
 **ROLE:** Self-contained deep-review coordinator + final validator.
 **OUTPUT:** ONE merged, de-duplicated, severity-prioritized, validated report.
 
+Main-session coordination only. Ordinary delegated agents cannot spawn Agent; return the
+review request to the main orchestrator instead. Review workers never re-delegate or edit
+files; coordinator report writing and the explicitly scoped self-sync remain allowed.
+
 ---
 
 ## Prompt contract
@@ -31,8 +35,8 @@ never keyword-scored) and `{DEPTH}` (HOW THOROUGH — semantic, resolved from th
 | `QUICK` | `quick`, `quick look`, `fast`, `just check`, `sanity check`, `did I do what was asked`, `am I on track` | `быстро`, `по-быстрому`, `просто проверь`, `то ли я сделал` | no (read-only review) |
 
 1. `{MODE}` resolves first, deterministically, per Mode Detection below — never from these keywords.
-2. `{DEPTH}` then scores by distinct whole-word keyword hits in the remaining prompt (table above); depth
-   words are CONSUMED and stripped before the remainder becomes `{FOCUS}`. No match -> `QUICK` (the default).
+2. `{DEPTH}` scores distinct whole-word/whole-phrase hits in the Depth keyword table;
+   highest unique score wins, tie/zero -> QUICK. Consume depth words before `{FOCUS}`.
 3. Neither axis is ever asked about via `AskUserQuestion` — both are computed per Mode/Depth Detection below;
    this skill never guesses interactively.
 4. Empty arguments -> `{MODE}` per rule 3a/3b (git state) below, `{DEPTH} = QUICK`.
@@ -49,7 +53,7 @@ DO:     <gates, intent pass, and — EXTENDED only — expert fan-out, scope pas
 RESULT: <the merged report + chat summary>
 ```
 
-Labels are literal; values follow the conversation language.
+Labels are literal; authored plan values are English; INPUT remains verbatim.
 
 ---
 
@@ -169,16 +173,17 @@ echo "$FILES" | head -50   # DISPLAY only — truncating the shown list is fine;
 
 ## Depth Detection (semantic — resolve IMMEDIATELY after `{MODE}`, then ANNOUNCE)
 
-`{DEPTH}` has EXACTLY TWO values, `QUICK` and `EXTENDED`, and is inferred by YOU from the user's prompt and the
-run's context — the same way `{MODE}` rule 1 reads intent from prose. **There is NO flag, NO `--fast`, NO CLI
-token for depth; never invent one and never tell the user to pass one.** Depth is orthogonal to `{MODE}`: any
-mode can run at either depth.
+`{DEPTH}` has EXACTLY TWO values, QUICK and EXTENDED, resolved from the Depth keyword table
+in Prompt contract: count distinct whole-word/whole-phrase hits; highest unique score wins,
+tie/zero -> documented QUICK default, without a question gate. **There is NO flag, NO `--fast`,
+NO CLI token for depth; never invent one or tell the user to pass one.** Depth is orthogonal
+to `{MODE}`: any scope mode can run at either depth.
 
-| # | Signal (checked in order) | `{DEPTH}` |
+| # | Resolution | `{DEPTH}` |
 |---|---------------------------|-----------|
-| 1 | The prompt asks for DEPTH, completeness or expertise, in any language: "deep", "go deep", "thorough", "properly", "full review", "full audit", "audit", "expert review", "review everything", "all the experts", "before release", "before merge", "pre-merge review", "serious review" — RU: "глубоко", "глубокий", "по полной", "тщательно", "полный ревью", "аудит", "перед релизом" | `EXTENDED` |
-| 2 | The prompt asks for SPEED or a sanity check: "quick", "quick look", "fast", "just check", "sanity check", "did I do what was asked", "am I on track" — RU: "быстро", "по-быстрому", "просто проверь", "то ли я сделал" | `QUICK` |
-| 3 | Anything else — a focus directive, a bare scope token, an empty prompt, genuine ambiguity | `QUICK` (DEFAULT) |
+| 1 | EXTENDED keyword score uniquely exceeds QUICK | `EXTENDED` |
+| 2 | QUICK keyword score uniquely exceeds EXTENDED | `QUICK` |
+| 3 | Tie, no hits, focus-only prose, bare scope token or empty prompt | `QUICK` (DEFAULT) |
 
 > **Depth words are CONSUMED here.** Strip them from the prompt before treating the remainder as a `{FOCUS}`
 > directive — "deep review, focus on auth" resolves to `{DEPTH}=EXTENDED` + `{FOCUS}=auth`, never to a focus of
@@ -212,10 +217,9 @@ order (highest first). Bake this exact ordering into BOTH the shared agent promp
 
 ## Domain experts — selected at RUNTIME from the live roster
 
-The skill picks its own experts each run. The table below is the EXPECTED RESULT as of generation time, not a
-frozen contract: **READ `references/agent-prompt.md` FIRST and EXECUTE its "Dynamic expert selection" procedure** —
-it holds the roster command, the recon-agent exclusion list, the selection steps and the fallback chain. On any
-disagreement between the table and the live roster, **the live roster wins**.
+Per run, **READ `references/agent-prompt.md` FIRST and execute "Dynamic expert selection"**:
+roster command, recon exclusions, selection and fallback chain. The table is the expected
+generation-time result; disagreement -> **live roster wins**, never a frozen contract.
 
 | Guard | Rule |
 |-------|------|
@@ -236,9 +240,8 @@ PLUS up to two GENERAL cross-cutting agents — they are NOT auto-spawned every 
 
 ## The intent pass — `intent-guard`, spawned at BOTH depths, ALWAYS
 
-`intent-guard` (`.claude/agents/intent-guard.md`) answers the one question no domain expert asks: **was the thing
-that was DELIVERED the thing that was ASKED for?** Drift starts small at the first turn and is large by the last;
-an agent can follow an approved plan faithfully for hours and still ship something nobody requested.
+`intent-guard` (`.claude/agents/intent-guard.md`) compares **DELIVERED vs ASKED**, outside domain review.
+Following an approved plan faithfully can still accumulate drift from the original request.
 
 | Rule | Detail |
 |------|--------|
@@ -263,12 +266,10 @@ One-line gist per pointer only — the file is the authority. Phase 0 PREFLIGHT-
 
 ---
 
-## Delegation (applies to EVERY Task this skill spawns)
+## Delegation (applies to EVERY Agent this skill spawns)
 
-A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct it, and it
-usually drifts off-target. One subagent = ONE bounded unit — one deliverable (here: ONE file group's review),
-~<=5 files, ~<=10 steps. Bigger MUST be split into N tasks, all spawned in ONE message — split an oversized
-group into two groups rather than handing one agent half the repo.
+One subagent = ONE file-group review, ~<=5 files, ~<=10 steps. Split larger groups into N
+tasks, all spawned in ONE message; an hour-long agent drifts beyond observation/correction.
 
 Every spawn prompt MUST carry:
 
@@ -439,7 +440,7 @@ Group the `{FILE_LIST}` by path. **Enable ONLY the groups whose files actually c
 
 ### Phase 2 — ONE parallel fan-out (find candidates)
 
-Everything selected is spawned in **ONE message**. At `QUICK` that message contains exactly ONE `Task` — the
+Everything selected is spawned in **ONE message**. At `QUICK` that message contains exactly ONE `Agent` — the
 INTENT pass below — and nothing else in this phase applies. At `EXTENDED` the intent pass rides in the SAME
 message as the domain owners, the two scope passes and any general agent.
 
@@ -451,7 +452,7 @@ the brief below passes CONTEXT ONLY and deliberately restates none of it. Skip t
 `not run` everywhere and never let the run read as clean.
 
 ```
-Task(subagent_type="intent-guard", prompt="
+Agent(subagent_type="intent-guard", prompt="
 ## superreview — INTENT pass: asked vs delivered ({PROJECT_NAME})
 
 GOAL: one anti-drift check over this change set — is the DELIVERED work the work that was ASKED for?
@@ -484,7 +485,9 @@ it. ONE override on the JSON in your file, for this project: add \"verdict\": \"
 row. The `intent` category and the `intent#<class>` rule come from your own file and are RESERVED for you —
 keep them exactly as written there.
 A row without a quoted ASKED, a named SOURCE tier and a concrete DELIVERED path/count/command-output is NOT
-self-evidenced: DROP it rather than ship it. Empty findings + `VERDICT: ALIGNED` is a good result.
+self-evidenced: DROP it rather than ship it. Empty findings + `VERDICT: ALIGNED` is valid only after comparison
+with a readable governing intent baseline. Otherwise return `VERDICT: not run — intent baseline unavailable`
+and empty findings; invent no drift row.
 ")
 ```
 
@@ -515,7 +518,7 @@ reported as INFORMATIONAL; **skip pass B** (no single task, so no criteria and n
 to `Explore`):
 
 ```
-Task(subagent_type="{SCOPE_AGENT_A}", prompt="
+Agent(subagent_type="{SCOPE_AGENT_A}", prompt="
 ## superreview — SCOPE pass A: DIFF SIDE (shapes 1-6, single axis)
 
 READ-ONLY run: audit ONLY the scope + blast radius OF THE CHANGED FILES. Do NOT edit the board, do NOT touch any
@@ -553,7 +556,7 @@ whole corpus — a search problem, so a read-only searcher (built-in `Explore`) 
 and closeout ride together: both reason from the baseline outward and share ONE tracker context, `{PR_ISSUE_JSON}`:
 
 ```
-Task(subagent_type="{SCOPE_AGENT_B}", prompt="
+Agent(subagent_type="{SCOPE_AGENT_B}", prompt="
 ## superreview — SCOPE pass B: BASELINE SIDE (delivery scope#D*, closeout scope#C*)
 
 READ-ONLY run: audit ONLY whether the sanctioned scope was fully DELIVERED and correctly CLOSED OUT. Do not edit
@@ -621,8 +624,9 @@ via Phase 3.
 > the pool: step 2 (merge + de-duplicate), step 3 (map severity -> P0-P3 by the SAME priority map below) and
 > step 4 (consistency check). Record the result as `{MERGED}` and the run as validated — a QUICK run is NOT
 > `INCOMPLETE` on validation grounds, because nothing in it was left unvalidated. The one exception is the
-> intent pass itself failing to run (missing agent, failure, timeout): its only producer is gone, so that run
-> IS `INCOMPLETE` — see Error Handling.
+> intent pass being unavailable (missing agent, failure, timeout, or no readable governing intent baseline):
+> that run IS `INCOMPLETE`, even with green gates and no findings — see Error Handling. Baseline unavailability
+> applies at BOTH depths; the scope pass's UNKNOWN baseline is a separate assessment.
 
 **`EXTENDED` from here to the end of Phase 3b.**
 
@@ -650,7 +654,7 @@ its own slice; **run step 2 (merge + de-duplicate) ONCE, in a final pass over th
 Sum `stats` from the final pass, never from the batches.
 
 ```
-Task(subagent_type="{VALIDATOR_AGENT}", prompt="
+Agent(subagent_type="{VALIDATOR_AGENT}", prompt="
 ## superreview — per-finding VALIDATION + Merge ({PROJECT_NAME})
 
 GOAL: produce ONE merged, de-duplicated, priority-sorted report for {MODE} / {SCOPE} that a human can act on
@@ -781,10 +785,13 @@ suggestion, plus `dropped`, `verdict` and `stats` filled.
 Every row MUST carry a \"verdict\". \"candidates\" = confirmed + confirmedByExecution + confirmedByEvidence +
 unvalidated + dropped; if that does not balance, a finding went missing — fix it before returning.
 \"intentVerdict\" is COPIED from intent-guard's verdict line, never re-derived by you and never softened.
+`not run — intent baseline unavailable` is the supported assessment-gap reason: keep empty findings and
+mark the run INCOMPLETE at BOTH depths, even with green gates. Do not invent a verdict enum or drift finding.
 
 ### Verdict rule
 - REWORK if any P0; CONDITIONAL if any P1/P2 (no P0); APPROVED if only P3 / none.
-- Any row with verdict UNVALIDATED -> append `- INCOMPLETE` to the verdict, whatever it is. An INCOMPLETE run may
+- Any row with verdict UNVALIDATED OR intent baseline unavailable -> append `- INCOMPLETE` to the verdict,
+  whatever it is. An INCOMPLETE run may
   never read as APPROVED without qualification.
 ")
 ```
@@ -845,6 +852,8 @@ intent-guard wrote it (`ALIGNED` / `MINOR DRIFT` / `MAJOR DRIFT` + its one claus
 the sections that had no producer — Boundary & Architecture, Reuse, Over-Complexity, Scope Discipline, Dropped in
 Validation — are written as `not run (QUICK depth)` rather than as empty tables: an empty table reads as "checked,
 nothing found", which would be a lie.
+Copy `not run — intent baseline unavailable` exactly into DRIFT and mark the report INCOMPLETE at either depth,
+including zero-findings runs. Scope-baseline UNKNOWN alone does not imply this intent-baseline gap.
 
 ### Phase 4b — SELF-SYNC (`EXTENDED` only, COORDINATOR only, BEFORE the Phase 5 summary)
 
@@ -884,11 +893,11 @@ Code, tests, docs and the report stay READ-ONLY here as everywhere: the ONLY wri
 ```
 Super Review complete — MODE={MODE} / DEPTH={DEPTH} (branch {BRANCH}), {COUNT} files, {N} agents.
 
-DRIFT: {ALIGNED | MINOR DRIFT | MAJOR DRIFT} — {intent-guard's clause, verbatim} | intent pass NOT RUN ({reason})
+DRIFT: {INTENT_VERDICT verbatim, including not run — intent baseline unavailable | not run — other recorded reason}
        Sources: T1 {label|none} / T2 {…} / T3 {…} / T4 {…} / T5 transcript
        {N} intent finding(s): {intent#class - one-line title, highest drift first, max 3 shown}
 
-VERDICT: {APPROVED | CONDITIONAL | REWORK}{ - INCOMPLETE if anything went unvalidated}
+VERDICT: {APPROVED | CONDITIONAL | REWORK}{ - INCOMPLETE if anything went unvalidated or intent baseline unavailable}
 Gates: {gate} {OK|FAIL|not run} / ...
 Experts (live roster): {group -> agent, ...}{, DEGRADED: ...} | none (QUICK)
 Validation: {all {N} findings validated | {U} of {N} UNVALIDATED ({reason}) — this run is INCOMPLETE}
@@ -939,12 +948,12 @@ superreview does NOT run /simplify or any skill and does NOT edit code — these
 | Focus | ordered | user directive (depth words stripped) wins; default table above; scope discipline is part of rank 1; security only if P0; unused at `QUICK` |
 | Review corpus | IGNORED = OUT, else IN | see "What the review corpus IS" |
 | Expert selection | RUNTIME from `.claude/agents/*.md` | live roster each run; the emitted table = expected result at generation time |
-| Mechanical gates | `{GATE_COMMANDS}` (Phase 0 step 4) | verdict `CONFIRMED-BY-EXECUTION`, the only non-adversarial verdict |
+| Mechanical gates | `{GATE_COMMANDS}` (Phase 0 step 4) | non-adversarial verdict `CONFIRMED-BY-EXECUTION`; intent evidence uses the distinct `CONFIRMED-BY-EVIDENCE` verdict |
 | Scope baseline | {TRACKER_LABEL} (read-only) | Phase 0 step 5 / `references/scope.md`; never invented — none -> `UNKNOWN`, findings cap P2 (permanent) |
 | Scope pass A / B | `{SCOPE_AGENT_A}` diff-side / `{SCOPE_AGENT_B}` baseline-side | always at `EXTENDED`, except B in `FULL_PROJECT`; not spawned at `QUICK`; A = shapes 1-6, B = delivery + closeout |
 | Scope gate | `AskUserQuestion`, Phase 3b | fires per the Phase 3b trigger; never lifts the UNKNOWN-baseline P2 cap |
 | Fan-out | targeted | `QUICK`: `intent-guard` only. `EXTENDED`: `intent-guard` + non-empty domain groups + 2 scope passes + {0,1,2} general agents, model's call |
-| Validation | `EXTENDED`, per-finding | Phase 3 reverse-checks EVERY verdictless candidate; unvalidatable -> `UNVALIDATED`, run INCOMPLETE, counted everywhere. Skipped at `QUICK` (nothing verdictless in the pool) — a QUICK run is not INCOMPLETE unless the intent pass itself failed to run |
+| Validation | `EXTENDED`, per-finding | Phase 3 reverse-checks EVERY verdictless candidate; unvalidatable -> `UNVALIDATED`, run INCOMPLETE, counted everywhere. Skipped at `QUICK` (nothing verdictless in the pool); unavailable intent or its governing baseline still makes the run INCOMPLETE |
 | Validator agent | first non-owning in the Phase 3 chain (`{VALIDATOR_AGENT}` -> `{ARBITER_AGENT}` -> generic) | batches <=40, max 4 spawns, merge/de-dup ONCE over all batches |
 | Report dir | `<repo-root>/.claude/reports/{TIMESTAMP}_superreview/` | Merged report, findings sorted P0 -> P3 |
 | Max files | 50 (except `FULL_PROJECT`) | `EXTENDED` only — AskUserQuestion: narrow or proceed. Never asked at `QUICK` |
@@ -958,9 +967,10 @@ superreview does NOT run /simplify or any skill and does NOT edit code — these
 | Condition | Action |
 |-----------|--------|
 | Depth signal ambiguous / absent | Resolve `QUICK` (the default). Never ask, never invent a flag; the ANNOUNCE tells the user how to escalate |
-| Prompt mixes depth signals ("quick deep check") | Rule 1 wins — an explicit depth request beats a speed word; announce which signal decided it |
+| Prompt mixes depth signals ("quick deep check") | Highest distinct keyword score wins; this example ties, so QUICK. Announce the score/default reason; no new question or depth flag |
 | `intent-guard` agent file missing | Intent pass `not run` + reason, in ANNOUNCE + report + chat summary. At `QUICK` the run reports GATES ONLY and MUST NOT read as clean; recommend re-generating with `/brewcode:superreview-setup` |
 | `intent-guard` fails or times out | Retry ONCE, then record `intent: not run (agent failed)`. At `QUICK` that makes the run `INCOMPLETE` — its only producer is gone; at `EXTENDED` the rest of the fan-out still stands, flagged |
+| No readable governing intent baseline | Copy `not run — intent baseline unavailable` verbatim through merged `intentVerdict`, report and chat DRIFT. Empty findings; INCOMPLETE at BOTH depths even with green gates. No ALIGNED claim, fabricated finding, or new enum |
 | Intent finding without a quote / tier / evidence | It should never arrive (intent-guard drops it). If one does, DROP it with reason `not-actionable` — never upgrade it to `CONFIRM` and never ship it unevidenced |
 | No changed files for scope | **Exit** ("Nothing to deep-review for {SCOPE}") — still report any gate failure |
 | Gates cannot run (toolchain/deps missing) | Record `Gates: not run (<reason>)`; NEVER invent results; continue the fan-out |
@@ -969,7 +979,7 @@ superreview does NOT run /simplify or any skill and does NOT edit code — these
 | Live roster empty/unreadable | Fall back to the emitted group->agent table; warn in the report |
 | A domain agent unavailable | Fall back to built-in `Explore` with the same prompt; mark the group DEGRADED in the report |
 | Only recon agents match a group | Do NOT use them — route to `Explore`, note it |
-| Empty candidate pool, gates green, >=1 agent RETURNED | Skip Phase 3 — verdict APPROVED |
+| Empty candidate pool, gates green, >=1 agent RETURNED | Skip Phase 3 — verdict APPROVED only if intent was assessed against a readable governing baseline; otherwise retain the applicable INCOMPLETE reason |
 | Empty pool because agents FAILED | **Never APPROVED** — absence of evidence, not evidence of absence. Some returned -> verdict tagged `INCOMPLETE ({n}/{N} agents returned)`; NONE returned -> `INCOMPLETE — review did not run` |
 | Every validator-chain candidate owns part of the pool | Prefer the smallest-share owner, tell it which findings are its own; generic agent only if impossible, note the downgrade |
 | Validator unavailable / fails | Retry once, then the next agent in the chain; chain exhausted -> ship remaining as `UNVALIDATED`, verdict suffixed `- INCOMPLETE`, counted in header + Stats + chat |
@@ -980,8 +990,8 @@ superreview does NOT run /simplify or any skill and does NOT edit code — these
 | `{PR_ISSUE_JSON}` empty | Pass B still runs DELIVERY vs the local task; records `PR: none`, skips closeout `scope#C*` |
 | Scope gate cannot be asked (non-interactive) | Report at the priority the finding ENTERED with, tagged `unconfirmed-sanction`; never silently downgrade or upgrade past a cap |
 | Agent timeout | Retry once, then mark that source unavailable + warn; the verdict inherits INCOMPLETE — a timed-out group was NOT reviewed |
-| Validation rejects everything, gates green | Report "No issues survived validation" — verdict APPROVED |
-| All sources clean | Report "No issues found across standards, architecture, scope and correctness" — verdict APPROVED |
+| Validation rejects everything, gates green | Report "No issues survived validation" — verdict APPROVED only with an assessed intent baseline; otherwise retain INCOMPLETE |
+| All sources clean | Report "No issues found across standards, architecture, scope and correctness" — verdict APPROVED only with an assessed intent baseline; otherwise retain INCOMPLETE |
 | Phase 4b self-sync would GROW the file (measured `wc -l`) | Do NOT write. Report `Self-sync: skipped (would grow +{N})` and name what it wanted to add — a correction that cannot be paid for is a proposal |
 | Phase 4b correction touches a DECISION | Do NOT write it. Print it as a proposal line; only the user changes decisions |
 | Arguments are prose, not a scope token | Extract the commit/branch/folder/focus from the prose; never treat the first word as the scope |

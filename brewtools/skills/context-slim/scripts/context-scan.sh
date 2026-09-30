@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# context-scan.sh - discover + measure everything that permanently enters the LLM context.
+# context-scan.sh - discover potential context inventory and byte-size proxies.
 #
 #   context-scan.sh [--root PATH] [--global] [--tier T] [--json] [--help]
 #
@@ -8,11 +8,11 @@
 #   --tier T      always-on | per-spawn | per-invocation | all   (default: all)
 #   --json        emit JSON on stdout (default, and the only output format)
 #
-# Tiers: always-on = loaded into EVERY request (CLAUDE.md, rules, conventions, AGENTS.md, memory,
-# agent `description:` fields, hook-injected text). per-spawn = agent .md bodies, paid once per
-# subagent. per-invocation = SKILL.md + references/*.md, paid when a skill is invoked.
+# Tiers are inventory buckets, not observed loading: always-on includes conditional/imported
+# instructions and memory; per-spawn inventories agent files; per-invocation inventories skills
+# and lazy references. Loading conditions are reported separately; totals are potential sizes.
 #
-# Exit: 0 ok | 2 usage/state error (nothing written).
+# Exit: 0 complete inventory | 2 usage/state/discovery error (partial JSON has scan_issues; no project writes).
 set -euo pipefail
 export LC_ALL=C
 
@@ -53,25 +53,49 @@ PRUNE=( -name .git -o -name node_modules -o -name dist -o -name build -o -name .
         -o -name .codex -o -name tmp -o -name web -o -name plugins -o -name projects -o -name .template-baseline
         -o -name backups -o -name reports -o -name worktrees )
 
-ROWS=$(mktemp); SEEN=$(mktemp)
-trap 'rm -f "$ROWS" "$SEEN"' EXIT
+ROWS=$(mktemp); SEEN=$(mktemp); ISSUES=$(mktemp); FIND_ERRORS=$(mktemp)
+trap 'rm -f "$ROWS" "$SEEN" "$ISSUES" "$FIND_ERRORS"' EXIT
 
 N_A=0; B_A=0; T_A=0; N_S=0; B_S=0; T_S=0; N_I=0; B_I=0; T_I=0
 
-json_esc() { printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/	/\\t/g'; }
+json_esc() {
+  local value="$1"
+  value=${value//\\/\\\\}; value=${value//\"/\\\"}
+  value=${value//$'\n'/\\n}; value=${value//$'\r'/\\r}; value=${value//$'\t'/\\t}
+  printf '%s' "$value"
+}
+# Follow links only in declared instruction roots; broad project discovery stays physical.
+find_docs() { # label instruction_root
+  local label="$1" path="$2" detail status=1
+  if [ -d "$path" ]; then
+    if find -L "$path" -type d \( "${PRUNE[@]}" \) -prune -o -type f -name '*.md' -print 2>"$FIND_ERRORS"; then
+      status=0
+    else
+      status=$?
+    fi
+    if [ "$status" -eq 0 ] && [ ! -s "$FIND_ERRORS" ]; then return 0; fi
+    detail=$(cat "$FIND_ERRORS")
+  elif [ -L "$path" ]; then
+    detail="Instruction directory link does not resolve to a directory"
+  else
+    return 0
+  fi
+  printf '{"root":"%s","path":"%s","kind":"discovery-incomplete","exit_status":%s,"detail":"%s"}\n' \
+    "$label" "$(json_esc "$path")" "$status" "$(json_esc "$detail")" >> "$ISSUES"
+}
 
-# Token proxy = chars/4, the same sizing agent-return-setup uses for subagent returns.
-# Byte count stands in for chars; UTF-8 prose inflates it slightly, which is the conservative direction.
-add_row() { # root_label tier path kind estimated bytes
-  local label="$1" tier="$2" path="$3" kind="$4" est="$5" bytes="$6" tok key
+# Legacy token_model stays chars/4; the actual proxy is bytes/4, not a tokenizer measurement.
+# UTF-8 byte counts differ from character counts; no bound on tokenizer error is claimed.
+add_row() { # root_label tier path kind estimated bytes [loading]
+  local label="$1" tier="$2" path="$3" kind="$4" est="$5" bytes="$6" loading="${7:-runtime-dependent}" tok key
   case "$TIER_FILTER" in all|"$tier") ;; *) return 0 ;; esac
   [ "${bytes:-0}" -gt 0 ] 2>/dev/null || return 0
   key="$tier|$path|$kind"
   grep -qxF "$key" "$SEEN" && return 0
   printf '%s\n' "$key" >> "$SEEN"
   tok=$((bytes / 4))
-  printf '{"path":"%s","root":"%s","tier":"%s","kind":"%s","bytes":%s,"tokens":%s,"estimated":%s}\n' \
-    "$(json_esc "$path")" "$label" "$tier" "$kind" "$bytes" "$tok" "$est" >> "$ROWS"
+  printf '{"path":"%s","root":"%s","tier":"%s","kind":"%s","bytes":%s,"tokens":%s,"estimated":%s,"loading":"%s"}\n' \
+    "$(json_esc "$path")" "$label" "$tier" "$kind" "$bytes" "$tok" "$est" "$loading" >> "$ROWS"
   case "$tier" in
     always-on)      N_A=$((N_A + 1)); B_A=$((B_A + bytes)); T_A=$((T_A + tok)) ;;
     per-spawn)      N_S=$((N_S + 1)); B_S=$((B_S + bytes)); T_S=$((T_S + tok)) ;;
@@ -79,12 +103,29 @@ add_row() { # root_label tier path kind estimated bytes
   esac
 }
 
-add_whole() { # label path tier
+add_whole() { # label path tier [loading]
   [ -f "$2" ] || return 0
-  add_row "$1" "$3" "$2" file false "$(wc -c < "$2" | tr -d ' ')"
+  add_row "$1" "$3" "$2" file false "$(wc -c < "$2" | tr -d ' ')" "${4:-runtime-dependent}"
 }
 
-# Only the frontmatter `description:` of an agent is always-on; the body is per-spawn.
+add_memory() { # label memory_file
+  case "${2##*/}" in
+    MEMORY.md) add_whole "$1" "$2" always-on memory-index-limited ;;
+    *) add_whole "$1" "$2" always-on on-demand ;;
+  esac
+}
+
+add_rule() { # label rule_file
+  local loading="unscoped-rule"
+  if awk 'NR == 1 && $0 !~ /^---[[:space:]]*$/ {exit}
+          NR > 1 && /^---[[:space:]]*$/ {exit}
+          /^paths:/ {found=1} END {exit !found}' "$2"; then
+    loading="path-scoped-rule"
+  fi
+  add_whole "$1" "$2" always-on "$loading"
+}
+
+# Agent description fields are discovery inventory; bodies belong to per-spawn inventory.
 # Handles both the inline form and the `description: |` / `>` block scalar (whose value is the
 # indented lines that follow, not the marker char).
 add_desc() { # label agent_md
@@ -110,18 +151,22 @@ add_hook() { # label mjs
 }
 
 scan_root() { # label root
-  local label="$1" root="$2" f d
+  local label="$1" root="$2" f d r
   [ -d "$root" ] || return 0
 
   # --- always-on -------------------------------------------------------------
-  for f in "$root/CLAUDE.md" "$root/CLAUDE.local.md" "$root/AGENTS.md" "$root/.claude/AGENTS.md"; do
-    add_whole "$label" "$f" always-on
+  for f in "$root/CLAUDE.md" "$root/CLAUDE.local.md"; do
+    add_whole "$label" "$f" always-on startup-instruction
   done
-  # Claude Code loads rules/ and convention/ ONE level deep - never recurse here.
-  for f in "$root"/rules/*.md "$root"/.claude/rules/*.md "$root"/.claude/convention/*; do
-    add_whole "$label" "$f" always-on
+  for f in "$root/AGENTS.md" "$root/.claude/AGENTS.md"; do
+    add_whole "$label" "$f" always-on client-or-import-dependent
   done
-  while IFS= read -r f; do add_whole "$label" "$f" always-on; done < <(
+  while IFS= read -r f; do add_rule "$label" "$f"; done < <(
+    { find_docs "$label" "$root/rules"; find_docs "$label" "$root/.claude/rules"; } | sort)
+  for f in "$root"/.claude/convention/*; do
+    add_whole "$label" "$f" always-on import-or-read-required
+  done
+  while IFS= read -r f; do add_memory "$label" "$f"; done < <(
     find "$root/.claude/memory" -type f -name '*.md' 2>/dev/null | sort)
 
   while IFS= read -r f; do add_hook "$label" "$f"; done < <(
@@ -129,24 +174,25 @@ scan_root() { # label root
 
   # --- per-spawn: agent bodies (+ their description field, above) -------------
   while IFS= read -r f; do
-    add_whole "$label" "$f" per-spawn
+    add_whole "$label" "$f" per-spawn selected-agent
     add_desc "$label" "$f"
     # `! -path '*/skills/*'` excludes a SKILL directory that happens to be named `agents`
     # (brewcode/skills/agents/) - its SKILL.md is per-invocation, its README.md is not context at all.
   done < <(find "$root" -type d \( "${PRUNE[@]}" \) -prune -o -type f -path '*/agents/*.md' ! -path '*/skills/*' -print 2>/dev/null | sort)
 
-  # --- per-invocation: SKILL.md + references/*.md ------------------------------
+  # --- per-invocation: skill bodies and references read on demand -------------
   while IFS= read -r f; do
     d=$(dirname "$f")
-    add_whole "$label" "$f" per-invocation
-    for r in "$d"/references/*.md; do add_whole "$label" "$r" per-invocation; done
+    add_whole "$label" "$f" per-invocation invoked-skill
+    while IFS= read -r r; do add_whole "$label" "$r" per-invocation on-demand; done < <(
+      find_docs "$label" "$d/references" | sort)
   done < <(find "$root" -type d \( "${PRUNE[@]}" \) -prune -o -type f -name 'SKILL.md' -print 2>/dev/null | sort)
 }
 
 scan_root project "$ROOT"
-# The per-project memory dir lives under $HOME, outside the repo, but is always-on for it.
+# Default auto-memory inventory; configured paths and actual loaded content are not observed.
 MEM="$HOME/.claude/projects/$(printf '%s' "$ROOT" | tr '/' '-')/memory"
-while IFS= read -r f; do add_whole project "$f" always-on; done < <(
+while IFS= read -r f; do add_memory project "$f"; done < <(
   find "$MEM" -type f -name '*.md' 2>/dev/null | sort)
 
 [ "$SCAN_GLOBAL" -eq 1 ] && scan_root global "$GLOBAL_ROOT"
@@ -156,11 +202,15 @@ grand_b=$((B_A + B_S + B_I)); grand_t=$((T_A + T_S + T_I)); grand_n=$((N_A + N_S
 {
   printf '{\n  "roots": {"project": "%s", "global": %s},\n' "$(json_esc "$ROOT")" \
     "$( [ "$SCAN_GLOBAL" -eq 1 ] && printf '"%s"' "$(json_esc "$GLOBAL_ROOT")" || printf 'null')"
-  printf '  "tier_filter": "%s",\n  "token_model": "chars/4",\n  "files": [\n' "$TIER_FILTER"
+  printf '  "tier_filter": "%s",\n  "token_model": "chars/4",\n' "$TIER_FILTER"
+  printf '  "measurement": {"scope": "potential-inventory", "token_proxy": "bytes/4", "actual_loading_observed": false},\n  "files": [\n'
   sed -e 's/^/    /' -e '$!s/$/,/' "$ROWS"
+  printf '  ],\n  "scan_issues": [\n'
+  sed -e 's/^/    /' -e '$!s/$/,/' "$ISSUES"
   printf '  ],\n  "totals": {\n'
   printf '    "always-on": {"files": %s, "bytes": %s, "tokens": %s},\n' "$N_A" "$B_A" "$T_A"
   printf '    "per-spawn": {"files": %s, "bytes": %s, "tokens": %s},\n' "$N_S" "$B_S" "$T_S"
   printf '    "per-invocation": {"files": %s, "bytes": %s, "tokens": %s},\n' "$N_I" "$B_I" "$T_I"
   printf '    "grand": {"files": %s, "bytes": %s, "tokens": %s}\n  }\n}\n' "$grand_n" "$grand_b" "$grand_t"
 }
+if [ -s "$ISSUES" ]; then exit 2; fi

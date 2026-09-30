@@ -23,9 +23,9 @@ follow in any order. Nobody types keys: resolve mode + scope FROM the prompt.
 2. Else score modes by distinct whole-word keyword hits (table below). Highest unique score wins.
    Tie with a destructive mode -> `AskUserQuestion`; tie with `status` -> `status`;
    tie of two mutating modes -> the keyword appearing first; all zero -> `status`.
-3. Empty arguments -> `status`; ask ONE scoping `AskUserQuestion` only when the answer
-   changes what gets written. A read-only run asks nothing.
-4. Outcome-changing ambiguity -> ONE `AskUserQuestion` (max 4 questions) BEFORE any work.
+3. Empty -> `status`. Bundle material unresolved write decisions in ONE `AskUserQuestion`
+   (max 4 questions), before work. Read-only asks nothing except an explicitly requested menu.
+4. Use prompt/history answers; never repeat resolved questions or routine approval calls.
 5. Prose that is not a mode/id/path is still input: extract the id, path or target from it.
 
 Then print this block ONCE, before the first action:
@@ -39,7 +39,7 @@ DO:     <2-5 imperative bullets>
 RESULT: <what the user ends up holding>
 ```
 
-Labels are literal; values follow the conversation language.
+Labels/plan values are English; INPUT preserves the user's verbatim text.
 
 ## Constants
 
@@ -51,10 +51,8 @@ Labels are literal; values follow the conversation language.
 
 ## Step 1 — Input gate
 
-Treat the **entire** user input (`$ARGUMENTS`) as ONE free-form natural-language prompt — no keyword grammar, no argument parser (`argument-hint` is only a loose example).
-
-- prompt non-empty -> go to **Step 2**
-- prompt empty / whitespace-only -> go to **Step 3**
+Treat all `$ARGUMENTS` as one RU/EN prompt; `argument-hint` is guidance, not positional grammar.
+Empty/whitespace -> `status`; otherwise Step 2. Explicit menu request -> Step 3.
 
 ## Step 2 — Auto-mode selection
 
@@ -73,20 +71,10 @@ prose-extraction case, not a keyword hit.
 
 **Batch flag:** plural form, "все" / "all", or multiple names/paths -> fan-out (one specialist spawn per item).
 
-Then **print the PLAN block (MANDATORY, before any work)** per the Prompt contract above:
+Print the canonical PLAN once after resolving scope/mode, before work; MODE includes explicit/default
+or the quoted matched keyword. SCOPE includes resolved targets/paths. Proceed to Step 4.
 
-```
-PLAN — brewcode:rules
-INPUT:  <prompt verbatim, or "(empty)">
-MODE:   <mode> — matched keyword: <evidence quoted from the prompt> | default
-SCOPE:  <targets/paths resolved this step>
-DO:     <2-5 imperative bullets for what Step 4 is about to run>
-RESULT: <what the user ends up holding>
-```
-
-Proceed to **Step 4**.
-
-## Step 3 — No-prompt menu (single AskUserQuestion, scoped + cross-link)
+## Step 3 — Explicitly requested menu (single AskUserQuestion, scoped + cross-link)
 
 Ask ONE AskUserQuestion. Question: `What do you want to do with rules?`
 Options (in this order):
@@ -99,17 +87,14 @@ Options (in this order):
 - `List (plain)`
 - `Nothing / cancel`
 
-After the choice:
-- `Nothing / cancel` -> stop.
-- `create` or `improve` -> ask ONE follow-up AskUserQuestion for the target/description
-  plus the artifact-specific params (see "Artifact-specific params" below).
-- Then print the PLAN block using the Step 2 format (`MODE` reason = `default` or `explicit`
-  depending on the menu choice) and proceed to **Step 4**.
+Cancel -> stop. Otherwise use the choice plus prompt/history for target/description and artifact params;
+do not ask a follow-up after using the one-question allowance. Safe missing params -> stated defaults;
+write-critical unresolved params -> report the missing decision before writing. Print PLAN, then Step 4.
 
-## Delegation (applies to EVERY Task spawn in this skill)
+## Delegation (applies to EVERY Agent spawn in this skill)
 
-A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct
-it, and it usually drifts off-target. One subagent = ONE bounded unit — one deliverable
+Main owns every spawn; delegates return decisions/results and never nest or accept their own output.
+One subagent = ONE bounded unit — one deliverable
 (here: ONE rule file), ~<=5 files, ~<=10 steps. Bigger MUST be split into N tasks, all spawned
 in ONE message.
 
@@ -117,12 +102,12 @@ Every spawn prompt MUST carry:
 
 | Field | Content |
 |-------|---------|
-| GOAL | the overall task and why it exists — the point beyond the file edit |
-| ROLE | what this agent owns; what it must NOT touch |
-| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
-| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what THIS agent needs |
-| CONSUMER | who or what uses the result next, and the shape it must fit |
-| DONE | acceptance criteria + the exact report shape you want back |
+| GOAL | overall task/purpose beyond editing |
+| ROLE | owned responsibility + forbidden changes |
+| SCOPE | exact paths/commands in/out of bounds |
+| CONTEXT | prior work/owners, parallel work; relevant to this agent only |
+| CONSUMER | next consumer + required result shape |
+| DONE | acceptance criteria + exact return format |
 
 A bare one-line task is never enough.
 
@@ -131,21 +116,26 @@ A bare one-line task is never enough.
 - `status` -> go to **Step 5**.
 - `status (all)` -> go to **Step 5**, running the collector for agents + rules + skills together.
 - `list` -> run `LIST_CMD`, print the plain inventory it produces, then STOP (no status assembly).
-- `create` -> gather minimal params (Step 3 / artifact-specific), spawn `SPECIALIST` via Task.
+- `create` -> resolve minimal artifact params; spawn `SPECIALIST` via Agent.
   Batch -> spawn one `SPECIALIST` per item, ALL in ONE message (parallel).
-- `improve` -> resolve target(s), spawn `SPECIALIST` via Task per target (parallel for batch).
+- `improve` -> resolve targets; spawn `SPECIALIST` via Agent per target (parallel for batch).
 - `review` -> spawn the project's reviewer agent from `.claude/agents/`, else `general-purpose`
   (two-phase: review -> double-check findings -> report).
+- After organizer returns, main loads/follows the installed `/brewtools:text-optimize` Medium
+  workflow (do not model-invoke its DMI skill through `Skill`) on exactly the written paths:
+  snapshot before its edits, capture `RUN_DIR`, run mechanical/inventory gates, then
+  `rules.sh validate`. Delegates never spawn optimizers. Missing brewtools -> report skipped,
+  not blocked; preserve the written rules and their validation evidence.
 
 ## Step 5 — Real status (NOT a flat list)
 
 Delegate collection to ONE Explore/Bash subagent, then assemble a rich status (never a bare list):
 
 - **Inventory by scope:** plugin (BC) / project (`.claude/`) / global (`~/.claude/`) — counts + names + load path.
-- **State:** enabled/disabled (toggle markers `_SKILL.md` / `_<name>.md`), model.
+- **State:** enabled/disabled via setup config or `<name>.disabled` parking; flag legacy `_SKILL.md`/`_<name>.md` markers; model.
 - **Overlaps / conflicts:** same-name across scopes (shadowing), duplicate triggers/descriptions, naming collisions.
 - **Health flags:** missing README/frontmatter; agents missing `Bash` in `tools:` (macOS search rule);
-  skills with weak description triggers; rules duplicated in CLAUDE.md.
+  LLM-invocable skills with weak description triggers; rules duplicated in CLAUDE.md.
 
 For the `Status (all)` menu option: run the SAME collector for agents + rules + skills together.
 
@@ -154,7 +144,7 @@ For the `Status (all)` menu option: run the SAME collector for agents + rules + 
 ```
 # rules [<mode>]
 ## Detection
-| Input  | <prompt or "(none -> menu)"> |
+| Input  | <prompt or "(empty -> status)"> |
 | Mode   | <mode> |
 | Reason | <why this mode> |
 | Targets| <names/paths> |
@@ -177,16 +167,17 @@ For `status` mode the report **is** the Step 5 status table.
 
 ## Artifact-specific params (create / improve only)
 
-Note: rules has only an ORGANIZER (bc-rules-organizer), no separate creator — creation is
-organizer-driven. For `create`/`improve`: AskUserQuestion for the knowledge source —
+Rules has only an ORGANIZER, no separate creator. Infer source/slice from prompt/history; bundle
+material unresolved values in ONE AskUserQuestion (max 4). Knowledge source options:
 (a) KNOWLEDGE.jsonl path (parse t:"❌"->avoid, t:"✅"->practice), (b) inline prompt
 (<path> + text), (c) session learnings (extract 5 most impactful findings as ❌/✅).
 Spawn SPECIALIST (brewcode:bc-rules-organizer) with the Delegation shape — GOAL: the project needs a
 deduplicated, machine-usable rule set in `.claude/rules/`; ROLE: this agent owns ONLY the target
-rule files, never CLAUDE.md and never global rules; CONTEXT: the knowledge source and its parsed
+rule files plus `.claude/reports/YYYYMMDD-HHMMSS_rules-organizer/`, never CLAUDE.md/global rules;
+CONTEXT: the knowledge source and its parsed
 entries are already chosen above (do NOT re-ask), the existing `.claude/rules/*.md` are the
-dedup baseline, and no sibling agent touches those files; CONSUMER: Claude Code auto-loads
-`.claude/rules/*.md` into every session, so entries must be table rows, not prose, and the Step 6
+dedup baseline, and no sibling agent touches those files; CONSUMER: unscoped rules load at startup,
+`paths:` rules load lazily for matching files; entries are table rows, not prose. Step 6
 report needs the per-file added/merged/skipped counts; SCOPE + DONE per the template below:
   - Update PROJECT .claude/rules/ — NEVER ~/.claude/rules/
   - Plugin templates: ${CLAUDE_PLUGIN_ROOT}/templates/rules/
@@ -199,10 +190,11 @@ report needs the per-file added/merged/skipped counts; SCOPE + DONE per the temp
     forbidden as Source).
 Fallback if agent unavailable: error "brewcode:bc-rules-organizer not available — install brewcode plugin".
 
-### Scope of a specialized rule file (ASK before creating one)
+### Scope of a specialized rule file (resolve before creating)
 
 A `{prefix}-avoid.md` / `{prefix}-best-practice.md` applies to ONE slice of the repo. Before
-running `create-specialized`, AskUserQuestion for that slice and pass it as the `paths` argument
+running `create-specialized`, resolve that slice from authorized context or the ONE question batch;
+if unresolved return the missing decision without writing. Pass it as the `paths` argument
 (a YAML flow list, e.g. `'["src/payment/**", "**/payment/**"]'`). Omitting the argument makes the
 script derive a glob from the prefix and print it with a confirm-me warning; passing `["**/*"]` is
 refused outright — a specialized rule that matches everything is auto-loaded into every request,

@@ -9,9 +9,9 @@ Inspect repository instructions, architecture, tests, and recent changes, then c
 
 ## Complete native workflow
 
-Follow every phase below. When a phase delegates work, use Codex collaboration with only `task_name` and `message`; treat each "Codex delegation brief" block as role and message content, not executable syntax. Use `request_user_input` for the documented user gates. Resolve `<skill-directory>`, `<plugin-root>`, `<project-root>`, and `<arguments>` before running commands.
+Follow every phase below. When a phase delegates work, use Codex collaboration with only `task_name` and `message`; treat each "Codex delegation brief" block as role and message content, not executable syntax. Required approval: main presents a concrete, reviewable proposal in chat and waits for an actual user reply before dependent action. Existing authorization for the same scope remains valid; do not ask again. Optional clarification: use `request_user_input_async` only if exposed, or `request_user_input` only if available in the current runtime/mode, for optional choices and never approval. Otherwise ask in main chat. Delegated agents return unresolved questions to main. Silence, elapsed time and tool errors are not approval. Resolve `<skill-directory>`, `<plugin-root>`, `<project-root>`, and `<arguments>` before running commands.
 
-<!-- brewcode-meta: version=6.2.0 content_version=5.6.0 generated_by=brewcode:superreview-setup -->
+<!-- brewcode-meta: version=6.3.0 content_version=6.3.0 generated_by=brewcode:superreview-setup -->
 
 # Super Review Generator (brewcode:superreview-setup)
 
@@ -25,7 +25,7 @@ resolution + semantic DEPTH resolution -> MECHANICAL GATES -> ANNOUNCE -> the IN
 depths) -> [EXTENDED only:] route changed files to project DOMAIN-EXPERT agents selected at RUNTIME -> resolve the
 SANCTIONED SCOPE baseline -> reference (not restate) the project's `.codex/rules` + convention files -> ONE
 targeted parallel fan-out (domain experts + 2 scope passes + intent) -> per-finding adversarial VALIDATION gate ->
-scope gate (request_user_input) -> ONE merged P0-P3 report at
+scope gate (main-chat user gate) -> ONE merged P0-P3 report at
 `.codex/reports/{TIMESTAMP}_superreview/REPORT.md`, READ-ONLY (recommends `/simplify`, never edits).
 
 > **Three things make or break the emitted skill:**
@@ -58,12 +58,12 @@ follow in any order. Nobody types keys: resolve the verb + fine-tune focus FROM 
 1. Strip flags. An explicit verb token anywhere wins outright, no scoring — the seven canonical verbs
    are in the Verb routing table below.
 2. Else score verbs by distinct whole-word keyword hits (Verb routing table below). Highest unique
-   score wins. Tie involving `purge` (destructive) -> `request_user_input`; tie with `status` ->
+   score wins. Tie involving `purge` (destructive) -> `main-chat user gate`; tie with `status` ->
    `status`; tie of two mutating verbs -> the keyword appearing first; all zero -> `status` if
    `.codex/skills/superreview/SKILL.md` or its `.disabled` twin exists, else `install`.
-3. Empty arguments -> the default above; ask ONE scoping `request_user_input` only when the answer
+3. Empty arguments -> the default above; ask ONE scoping `main-chat user gate` only when the answer
    changes what gets written. `status` asks nothing.
-4. Outcome-changing ambiguity -> ONE `request_user_input` (max 4 questions) BEFORE any work.
+4. Outcome-changing ambiguity -> ONE `main-chat user gate` (max 4 questions) BEFORE any work.
 5. Prose that names no verb is the fine-tune prompt, not an error — it is woven into the emitted
    skill's Focus ordering (Phase 1.5), never treated as the verb by its first word.
 
@@ -163,7 +163,7 @@ session start.
 only writer, and it is shared with `$brewcode:teams-setup`, which may have put it there. Deleting or
 parking it would silently break an unrelated team install. All four modes print it as `KEPT`.
 
-**Confirm before deleting.** `uninstall` and `purge` each `request_user_input` exactly once, listing the
+**Confirm before deleting.** `uninstall` and `purge` each `main-chat user gate` exactly once, listing the
 real paths (`find .codex/skills/superreview -type f | sort`) and, for `purge`, the number of review
 reports being destroyed, with `uninstall` offered as the keep-the-reports alternative. A declined
 confirmation ends the run cleanly — delete nothing.
@@ -177,12 +177,10 @@ Then report the script's `MOVED:` / `REMOVED:` / `KEPT:` lines verbatim. Not ins
 say so and **STOP**; never "disable" or "purge" something that was never emitted.
 
 
-### Delegation (applies to every sub-agent task this generator spawns AND to the fan-out it emits)
+### Delegation (applies to every Agent this generator spawns AND to the fan-out it emits)
 
-A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct
-it, and it usually drifts off-target. One subagent = ONE bounded unit — one deliverable
-(here: ONE file group's review), ~<=5 files, ~<=10 steps. Bigger MUST be split into N tasks, all
-spawned in ONE message — that is why the emitted skill routes file GROUPS to domain owners.
+One subagent owns one bounded file-group review: one deliverable, ~<=5 files, ~<=10 steps.
+Split larger groups into N disjoint tasks, all spawned in one message, so progress stays observable.
 
 Every spawn prompt MUST carry:
 
@@ -215,8 +213,8 @@ single agent that owns half the repo.
 
 ### Phase 1 — Analyze the TARGET project
 
-Gather everything the emitted skill must be wired to. Explore the code with Bash search (`grep`->ugrep / `find`->bfs
-on macOS CC; native Grep/Glob are no-ops there).
+Gather the emitted skill's inputs with available native `Grep`/`Glob`; when unavailable, use Bash
+`rg`/`find` (or installed `ugrep`/`bfs`). Do not infer tool availability from macOS.
 
 **EXECUTE** using shell (project scan):
 ```bash
@@ -247,9 +245,9 @@ From it (plus your own reads) determine:
 the secondary stack(s) in `DOMAIN_AGENTS_TABLE` / `FILE_GROUP_MAP`. (One stack reference doc is emitted; the rule
 pointers cover the rest.)
 
-### Phase 1.5 — Clarify genuinely ambiguous params (request_user_input)
+### Phase 1.5 — Clarify genuinely ambiguous params (main-chat user gate)
 
-Use request_user_input ONLY for params you cannot reliably infer. Never auto-guess a non-obvious choice. Typical questions:
+Use main-chat user gate ONLY for params you cannot reliably infer. Never auto-guess a non-obvious choice. Typical questions:
 
 - **The scope baseline** — which tracker sanctions work (file board / GitHub issues / Jira / none), and the
   branch -> issue convention. Without it the emitted skill caps every scope finding at P2, so ASK when unsure.
@@ -274,7 +272,7 @@ in `FILE_GROUP_MAP` has a real owner:
    never source files) — they may never own a review group.
 2. **Find the gaps** — every group with no confident owner. A gap means the emitted skill falls back to `Explore`
    for that surface, i.e. a permanently DEGRADED axis.
-3. **Fill the gaps (default action).** request_user_input listing the uncovered groups, recommending "create the
+3. **Fill the gaps (default action).** main-chat user gate listing the uncovered groups, recommending "create the
    missing domain experts". On approval, spawn `brewcode:agent-creator` — ONE agent per missing domain, ALL in ONE
    message — each with the group's paths, the project rules that bind it, and the responsibility it owns. Then
    re-run the roster scan so the new agents enter `DOMAIN_AGENTS_TABLE` / `FILE_GROUP_MAP`.
@@ -298,7 +296,7 @@ unconditionally by the emitted skill at BOTH depths, so the emitted skill is bro
 | **Single writer** | `scripts/generate.sh` is the ONLY writer of `.codex/agents/intent-guard.toml`, via ONE shared implementation exposed as two subcommands: `emit` (full generation, Phase 2) and `emit-agent` (the agent alone, no superreview skill involved — this is what `$brewcode:teams-setup` calls instead of authoring its own copy). **Never hand-write the file.** `brewcode:agent-creator` may only ADAPT the seeded BLOCKs of an already-written file; it may never author it |
 | **Reuse wins** | a USABLE file already exists -> the writer prints `INTENT_GUARD: REUSE <path>` and leaves it BYTE-UNTOUCHED. An existing intent-guard is the project's own tuned version (or a sibling generator's) and outranks this template. Do not "refresh" it, do not diff-merge it, do not fill BLOCKs in it. "Usable" = non-empty AND carrying `name: intent-guard` frontmatter AND free of unresolved `{UPPER_SNAKE}` tokens; an empty, truncated or placeholder-laden file is treated as ABSENT and recreated |
 | **Migrate, never re-emit** | a file carrying the RETIRED `<!-- intent-guard template vN -->` stamp is ours but pre-standard: the writer prints `INTENT_GUARD: MIGRATED <path>` and restamps METADATA ONLY — the four frontmatter keys and the tail anchor. Every tailored line survives byte-for-byte, so this is the `upgrade restamps it` path, not a regeneration. A file with NO stamp of either generation is the project's own hand-written agent and is only ever REUSED |
-| **No request_user_input** | creation is not gated. Do not ask whether to create it; it is part of the emitted artifact, like `references/scope.md` |
+| **No main-chat user gate** | creation is not gated. Do not ask whether to create it; it is part of the emitted artifact, like `references/scope.md` |
 | **Roster scan** | note in Phase 1 whether the file is present (`generate.sh scan` reports it) so the Phase 5 summary can say CREATED vs REUSED |
 | **Not an expert** | never count it toward the domain-expert requirement, never put it in `DOMAIN_AGENTS_TABLE` / `FILE_GROUP_MAP` / `SIMPLIFY_AGENTS`, never make it `VALIDATOR_AGENT` or a scope-pass owner. `generate.sh validate` excludes it from the expert count for exactly this reason |
 
@@ -549,11 +547,11 @@ Recap of the canonical shape the emitted SKILL.md implements (full text in `refe
 | **Depth detection** | SEMANTIC, from the prompt, right after the mode: `QUICK` (DEFAULT — depth words absent, or a speed word present) \| `EXTENDED` (the prompt asks for depth/completeness/expertise, any language). **No flag, no CLI token.** Depth words are consumed here and stripped before the rest becomes `{FOCUS}`. Orthogonal to mode; both ANNOUNCEd, along with how to escalate |
 | Mechanical gates | Real build/lint/type/test run FIRST (BOTH depths); their output is `CONFIRMED-BY-EXECUTION`, passed to every agent so nobody re-runs them |
 | **Intent pass** | `intent-guard` spawned at BOTH depths, unconditionally, never via the roster procedure. Rows carry `CONFIRMED-BY-EVIDENCE` (verbatim ASKED quote + source tier + delivered path/count) and BYPASS the adversarial validator by design; category `intent`, rules `intent#<class>`. At `QUICK` it is the entire review |
-| Scope baseline | `EXTENDED` only. sub-agent task + issue + recorded decisions resolved read-only; no baseline -> `UNKNOWN` and a PERMANENT P2 cap on scope findings. At `QUICK` it is skipped — intent-guard resolves its own tiers |
+| Scope baseline | `EXTENDED` only. Task + issue + recorded decisions resolved read-only; no baseline -> `UNKNOWN` and a PERMANENT P2 cap on scope findings. At `QUICK` it is skipped — intent-guard resolves its own tiers |
 | Routing | `EXTENDED` only. Experts selected at RUNTIME from the live roster; enable ONLY non-empty groups; recon agents excluded; no owner -> `Explore` + DEGRADED marker; add `{0,1,2}` general agents by judgement |
 | Fan-out | ONE parallel message. `QUICK`: `intent-guard` alone. `EXTENDED`: `intent-guard` + domain experts + scope pass A (diff side, shapes 1-6) + scope pass B (baseline side, delivery D1-D5 + closeout C1-C4); shared JSON finding contract; search-first before flagging reuse/duplication |
 | Validation | `EXTENDED` only. A NON-OWNING validator reverse-validates EVERY verdictless candidate (adversarial, per-finding gate, batched <=40), merges + de-dups + prioritizes P0-P3; unvalidatable -> `UNVALIDATED` and the run is `INCOMPLETE`. At `QUICK` the pool is entirely self-verdicted, so the coordinator merges + ranks in-session and the run is NOT `INCOMPLETE` |
-| Scope gate | `EXTENDED` only. `request_user_input` on unsanctioned expansion / unproven absence; rewrites priorities only, never adds findings, never lifts the UNKNOWN cap. Intent rows never enter it |
+| Scope gate | `EXTENDED` only. `main-chat user gate` on unsanctioned expansion / unproven absence; rewrites priorities only, never adds findings, never lifts the UNKNOWN cap. Intent rows never enter it |
 | **Self-sync** | `EXTENDED` only, coordinator only, after the report: Phase 4b corrects the emitted SKILL.md + `references/scope.md` IN PLACE from data already in context — routing table vs the live roster, a gate that reported `not run` because the command does not exist, an `UNKNOWN`/mismatched scope baseline, a shared surface a scope finding named. Line delta `<= 0`, facts only; DECISIONS, missing experts and `intent-guard.toml` are PROPOSALS printed in the summary, never writes |
 | Report | ONE merged report at `.codex/reports/{TIMESTAMP}_superreview/REPORT.md`, sorted P0->P3, every row carrying its verdict, with a Scope Discipline / Blast Radius section; READ-ONLY; recommends `/simplify` + a Manager-mode fix session; never edits code |
 

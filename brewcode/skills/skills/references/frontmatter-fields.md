@@ -1,7 +1,7 @@
 # Frontmatter Field Reference
 
-Complete supported SKILL.md frontmatter set, 20 fields (`skills:326-345` @ CC 2.1.233 baseline,
-cross-checked against docs fetched 2026-09-12 for 2.1.269). Anything else -> the supported
+Complete supported SKILL.md frontmatter set, 20 fields (live [skills docs](https://code.claude.com/docs/en/skills),
+cross-checked 2026-09-30 through CC 2.1.285). Anything else -> the supported
 `metadata:` map, which CC accepts but ignores (`skills:343`). An invented key (`cli:` outside the
 house convention below, `updated:`) is not a feature — CC ignores it and claude.ai upload /
 Skills API / `package_skill.py` hard-fail on it (`skills:354`, error text `skills:358`; allowed set
@@ -17,40 +17,40 @@ there is only `name, description, license, compatibility, metadata, allowed-tool
 > **Command name != `name` at every level.** Personal/project SK: the command comes from the DIR
 > name, `name` is only a display label (`skills:374`, `skills:326`). PLG SK: `name` sets only the
 > last segment, namespaced by the plugin (`skills:377`). Upstream permits `name` != dir; brewcode
-> does NOT — all 28 shipped SKs keep `name` == dir. Follow the house rule, never relax the validator.
+> does NOT — shipped SKs keep `name` == dir. Follow the house rule, never relax the validator.
 
 ## Invocation Control
 
 | Field | Type | Default | Meaning |
 |---|---|---|---|
-| `when_to_use` | string | none | Extra activation guidance appended to `description`; counts toward the same 1536-char listing-display cap. Docs-confirmed, not in the 2.1.234-2.1.269 changelog slice |
+| `when_to_use` | string | none | Extra activation guidance appended to `description`; counts toward the same 1536-char listing-display cap |
 | `disable-model-invocation` (DMI) | bool | false | `true` = user-only via `/name`. Also blocks preload into SAs (`skills:331`) and, per docs, scheduled-task firing — a strict superset of "LLM never auto-invokes it" |
-| `user-invocable` (UI-F) | bool | true | `false` = hidden from `/` menu, Claude-only background knowledge |
+| `user-invocable` (UI-F) | bool | true | `false` = hidden from `/` menu and direct `/name` invocation disabled, Claude-only background knowledge |
 | `argument-hint` | string | none | Autocomplete hint. House rule: prompt-first, `[prompt] [mode...]` — see `prompt-contract.md` |
 
 Config matrix: `(default)` = user+Claude invocable, DESC counted in listing budget. `DMI: true` =
-user only, Claude never (0 budget). `UI-F: false` = Claude only, DESC still counted. Both true = SK
-inaccessible — never combine.
+user only, Claude never (0 budget). `UI-F: false` = Claude only, DESC still counted. `DMI: true` +
+`UI-F: false` = inaccessible — never combine. Both fields `true` is the REQUIRED house setting.
 
 ## Execution Control
 
 | Field | Type | Default | Meaning |
 |---|---|---|---|
-| `allowed-tools` (AT) | string \| list | none | **Pre-approval, NOT a sandbox.** Grants tools without a permission prompt for the invoking TURN only; restricts nothing — every tool stays callable (`skills:333,513`). Now also accepts a YAML list, not only a comma string. Never a bare `Bash`/`Write`/`Edit`/`Agent` — narrowest pattern (`Bash(git status:*)`) or omit the key |
-| `disallowed-tools` (DT) | string \| list | none | The ONLY key that removes anything: drops tools from the pool while the SK is active (`skills:334,528`). Cannot fully remove `EndConversation` while any other tool remains |
-| `model` | enum | session model | `opus`, `sonnet`, `haiku`, `fable` (alias -> canonical `claude-fable-5`, Mythos tier above Opus, v2.1.170), or `inherit` (this agent's own frontmatter value — runs on whatever model the session is using). Fixed in **2.1.259**: was ignored in interactive sessions, and auto-mode running an unsupported `model:` now falls back to the session model instead of erroring |
+| `allowed-tools` (AT) | string \| list | none | **Pre-approval, NOT a sandbox.** Grant for the invoking turn; clears on the next user message. Other tools follow permission settings; deny/ask rules still win. Accepts space/comma string or YAML list. Never bare `Bash`/`Write`/`Edit`/`Agent` — narrowest pattern (`Bash(git status:*)`) or omit |
+| `disallowed-tools` (DT) | string \| list | none | Removes tools for the invoking turn; clears on the next user message. Cannot fully remove `EndConversation` while any other tool remains |
+| `model` | string | session model | `/model` values including aliases (`opus`, `sonnet`, `haiku`, `fable` -> `claude-fable-5`, v2.1.170), full IDs, or `inherit`. Inline override clears next user prompt; excluded `availableModels` values and models unsupported by auto/classifier mode keep the session model. With `context: fork`, selects the SA model; excluded values follow SA override rules. Interactive handling fixed in **2.1.259** |
 | `effort` | enum | inherit | `low, medium, high, xhigh, max` — no `auto`. Since v2.1.80. Fixed in **2.1.267**: was ignored on models with a pinned default effort (Opus 4.7, Opus 4.8, Fable 5) |
 | `context` | enum(`fork`) | inline | `fork` = isolated SA. Kickoff-prompt streaming (and, with `--forward-subagent-text`, turn text) fixed in **2.1.265** |
 | `background` | bool | true | Fork-only. `false` = wait for the result in the invoking turn instead of backgrounding (default true since v2.1.218) |
-| `agent` | string | general-purpose | With `context: fork`. Only `Explore`, `Plan`, `general-purpose` are confirmed built-in — see `design-patterns.md`. Custom: `.claude/agents/` / `~/.claude/agents/` via `agent: my-custom-agent` |
-| `hooks` | object | none | Hooks scoped to the SK's lifecycle, `if:` glob condition since v2.1.85. See Hooks below |
+| `agent` | string | general-purpose | With `context: fork`. Built-in task choices: `Explore`, `Plan`, `general-purpose`; upstream also has `claude` and specialized helpers. Verify availability instead of assuming `developer`/`tester`/`reviewer`. Custom: `.claude/agents/` / `~/.claude/agents/` via `agent: my-custom-agent` |
+| `hooks` | object | none | Registered on invocation and retained for the session; `if:` glob condition since v2.1.85. See Hooks below |
 
-## Docs-confirmed, not in the 2.1.234-2.1.269 changelog slice
+## Additional supported fields
 
 | Field | Type | Default | Meaning |
 |---|---|---|---|
 | `arguments` | string \| list | none | Declares named args -> enables `$name` substitution in the body, in addition to `$0`/`$1`/`$ARGUMENTS`. **Available upstream, NOT required by house convention** — the house prompt-contract keeps one free-form `[prompt]` string (`argument-hint` position 1); use `arguments:` only where a genuinely named, structured arg earns its own slot |
-| `paths` | string \| list | none | Glob(s) scoping where the skill is offered |
+| `paths` | string \| list | none | Glob(s) limiting automatic activation to matching files; comma string or YAML list, same format as path-specific rules |
 | `shell` | enum | bash | Shell used to run `` !`command` `` dynamic-CTX blocks (bash/powershell) |
 | `metadata` | map | none | Free-form key/value block for registries/third-party tooling; CC itself ignores it |
 | `license` | string | none | SPDX identifier — Agent Skills spec field, CC ignores |
@@ -89,7 +89,7 @@ in settings.json and in agent frontmatter (`hooks:424`).
 `decision: "block"` still adds a `reason` next to the tool result, and `updatedToolOutput` replaces
 what Claude sees (`hooks:1923`).
 
-> PLG caveat: SK-frontmatter hooks do not fire for PLG skills ([#17688](https://github.com/anthropics/claude-code/issues/17688)) — use the plugin's own `hooks.json` instead.
+> Historical PLG caveat: [#17688](https://github.com/anthropics/claude-code/issues/17688) reported SK-frontmatter hooks not firing. Live docs support skill hooks without that blanket exclusion; verify the installed version. Prefer plugin `hooks.json` for plugin-wide behavior.
 
 ## SKILL.md skeleton
 
@@ -120,5 +120,5 @@ Imperative form: "Do X" (not "You should do X").
 | `skill.md` (lowercase) | Must be `SKILL.md` (uppercase) — lowercase silently ignored ([#17417](https://github.com/anthropics/claude-code/issues/17417)) |
 | Reserved SK names (`anthropic`, `claude`) | Won't load — avoid these two words as `name` |
 | DESC over spec/listing caps | May be truncated — front-load keywords, cut filler |
-| `agent:` set to `developer`/`tester`/`reviewer` | Only `Explore`/`Plan`/`general-purpose` are built in — a generated SK naming anything else fails to resolve its SA on first run |
+| `agent:` set to uninstalled `developer`/`tester`/`reviewer` | These are not standard built-in task agents — verify the custom definition is discoverable before naming it |
 | Bare top-level `once: true` | `once` is a suboption of a hook entry (`hooks.<Event>[].hooks[].once`), never a sibling of `name`/`description` |

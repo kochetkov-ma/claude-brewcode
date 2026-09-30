@@ -9,7 +9,7 @@ const REPO_ROOT = path.resolve(SCRIPT_DIR, '..', '..');
 
 const PLUGINS = {
   brewcode: {
-    skills: ['agents', 'convention', 'rules', 'superreview-setup', 'teams-setup'],
+    skills: ['agents', 'convention-setup', 'rules', 'superreview-setup', 'teams-setup'],
     agents: ['agent-creator', 'bash-expert', 'hook-creator']
   },
   brewdoc: {
@@ -17,28 +17,26 @@ const PLUGINS = {
     agents: []
   },
   brewtools: {
-    skills: ['manager-setup', 'task-board-setup', 'text-human', 'text-optimize', 'think-short-setup'],
+    skills: ['manager-setup', 'task-board-setup', 'text-human', 'text-optimize'],
     agents: ['text-optimizer']
   }
 };
 
 const EXPLICIT_ONLY = new Set([
-  'brewcode/agents', 'brewcode/convention', 'brewcode/rules', 'brewcode/teams-setup',
-  'brewtools/manager-setup', 'brewtools/task-board-setup', 'brewtools/think-short-setup'
+  'brewcode/agents', 'brewcode/convention-setup', 'brewcode/rules', 'brewcode/teams-setup',
+  'brewtools/manager-setup', 'brewtools/task-board-setup'
 ]);
 
 const MANUAL_NATIVE_SKILLS = new Set([
-  'brewcode/convention', 'brewcode/rules', 'brewcode/teams-setup', 'brewtools/manager-setup', 'brewtools/task-board-setup',
-  'brewtools/think-short-setup'
+  'brewcode/agents', 'brewcode/convention-setup', 'brewcode/rules', 'brewcode/teams-setup', 'brewtools/manager-setup', 'brewtools/task-board-setup'
 ]);
 
-// brewcode/agents references that are pure Claude Code runtime documentation (env vars, hook
-// event tables, version changelogs) with no Codex counterpart. Excluded from the mirror here;
-// validate-compat.mjs's resourceTarget carries the matching exclusion.
+// Do not mechanically port Claude runtime references. Native agent authoring emits its own
+// applicable counterparts; validate-compat.mjs carries the same source-resource exclusions.
 const CLAUDE_ONLY_AGENT_REFERENCES = [
   'references/agent-context-and-execution.md', 'references/agent-known-issues.md', 'references/agent-scope-and-tools.md',
   'references/hooks-changes.md', 'references/hooks-env.md', 'references/hooks-events.md', 'references/hooks-templates.md',
-  'references/hooks-types-config.md'
+  'references/hooks-types-config.md', 'references/hooks-io-contract.md'
 ];
 
 // Etalon-first wording mirrored into the Codex variants. Sources of truth:
@@ -48,7 +46,6 @@ const ETALON_ADDITIVE = 'in addition to conventions, rules, and documentation, n
 const ETALON_SENTENCE = `before writing a class, module, or test, find the closest well-built existing one in this repository and take its principles, ${ETALON_ADDITIVE}`;
 const ETALON_BRIEF = `find the closest well-built counterpart in the repository and follow its principles, ${ETALON_ADDITIVE}`;
 const ETALON_ARCHITECT = 'Find the closest well-built existing counterpart in the repository, take its principles, and reuse its patterns; add a new pattern only when nothing fits. This is additive to conventions, rules, and documentation, never a replacement.';
-const ETALON_TERSE = 'find the closest well-built counterpart in the repo and take its principles, in addition to conventions and docs, never instead';
 const TEAM_AGENT_HEADINGS = [
   'Mission',
   'Owned surfaces',
@@ -98,8 +95,66 @@ function skillSigil(shell, text, offset) {
   return /^\s*#/.test(text.slice(lineStart, offset)) ? '$' : '\\$';
 }
 
+function nativeAgentCalls(value) {
+  const call = /\b(?:Agent|Task)\s*\(/g;
+  let output = ''; let consumed = 0; let sequence = 0;
+  for (const match of value.matchAll(call)) {
+    if (match.index < consumed) continue;
+    const start = match.index + match[0].length;
+    let depth = 1; let quote = ''; let escaped = false; let end = start;
+    for (; end < value.length && depth; end += 1) {
+      const character = value[end];
+      if (escaped) { escaped = false; continue; }
+      if (quote && character === '\\') { escaped = true; continue; }
+      if (quote) { if (character === quote) quote = ''; continue; }
+      if (character === '"' || character === "'") { quote = character; continue; }
+      if (character === '(') depth += 1;
+      if (character === ')') depth -= 1;
+    }
+    if (depth) {
+      output += value.slice(consumed, match.index) + 'native delegation brief (';
+      consumed = start;
+      continue;
+    }
+    const args = value.slice(start, end - 1);
+    const fields = {};
+    const parts = []; let partStart = 0;
+    quote = ''; escaped = false; depth = 0;
+    for (let index = 0; index < args.length; index += 1) {
+      const character = args[index];
+      if (escaped) { escaped = false; continue; }
+      if (quote && character === '\\') { escaped = true; continue; }
+      if (quote) { if (character === quote) quote = ''; continue; }
+      if (character === '"' || character === "'") { quote = character; continue; }
+      if ('([{'.includes(character)) depth += 1;
+      if (')]}'.includes(character)) depth -= 1;
+      if (character === ',' && !depth) { parts.push(args.slice(partStart, index)); partStart = index + 1; }
+    }
+    parts.push(args.slice(partStart));
+    for (const part of parts) {
+      const field = part.trim().match(/^(subagent_type|prompt|description|model|run_in_background|isolation|name)\s*[:=]\s*([\s\S]*)$/);
+      if (!field) continue;
+      const raw = field[2].trim();
+      const quoted = /^(["'])[\s\S]*\1$/.test(raw);
+      const unquoted = quoted ? raw.slice(1, -1) : raw;
+      fields[field[1]] = unquoted.replace(/\\([nrt\\"'])/g,
+        (_, character) => ({ n: '\n', r: '\r', t: '\t', '\\': '\\', '"': '"', "'": "'" })[character]);
+    }
+    const role = fields.subagent_type || fields.name || (!Object.keys(fields).length ? args.trim() : '') || 'scoped worker';
+    const slug = role.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'scoped_work';
+    const brief = fields.prompt || fields.description || '<Complete bounded GOAL/ROLE/SCOPE/CONTEXT/CONSUMER/DONE brief>';
+    const parameters = {
+      task_name: `${slug}_${++sequence}`,
+      message: `Assigned role: ${role}. The main session supplies matching native role instructions when available; report a role gap rather than claiming a custom type was instantiated. Perform this bounded work only; do not spawn or delegate children.\n${brief}`,
+    };
+    output += value.slice(consumed, match.index) + `spawn_agent(${JSON.stringify(parameters)})`;
+    consumed = end;
+  }
+  return output + value.slice(consumed);
+}
+
 function transformText(value, { agent = false, shell = false } = {}) {
-  let text = value
+  let text = nativeAgentCalls(value)
     .replaceAll('${CLAUDE_SKILL_DIR}', '<skill-directory>')
     .replaceAll('$CLAUDE_SKILL_DIR', '<skill-directory>')
     // CLAUDE_PROJECT_DIR wears two hats. Heading a PATH it stands for the repository root, and
@@ -130,11 +185,12 @@ function transformText(value, { agent = false, shell = false } = {}) {
     .replace(/(['"`])\.claude\1/g, '$1.codex$1')
     .replace(/\/brew(code|doc|tools):([a-z0-9-]+)/g, (_, family, name, offset, full) => `${skillSigil(shell, full, offset)}brew${family}:${name}`)
     .replace(/Skill\(skill="([^"]+)"\)/g, (_, name, offset, full) => `${skillSigil(shell, full, offset)}${name}`)
-    .replace(/\bTask\(/g, 'spawn_agent(')
-    .replace(/\bTask tool\b/gi, 'sub-agent collaboration tools')
-    .replace(/\bTask calls?\b/gi, 'sub-agent calls')
-    .replace(/\bTask\b/g, 'sub-agent task')
-    .replace(/\bAskUserQuestion\b/g, 'request_user_input')
+    .replace(/\b(?:Agent|Task) tool\b/gi, 'native agent collaboration tools')
+    .replace(/\b(?:Agent|Task) calls?\b/gi, 'native agent calls')
+    .replace(/\bAgent spawns\b/gi, 'native agent spawns')
+    .replace(/\bvia Agent\b/g, 'via native Codex collaboration')
+    .replace(/\bAgent from a subagent\b/g, 'native delegation from a subagent')
+    .replace(/\bAskUserQuestion\b/g, 'main-chat user gate')
     .replace(/\bWebSearch\b/g, 'web search')
     .replace(/\bWebFetch\b/g, 'web fetch')
     .replace(/\bSkill tool\b/gi, 'matching skill')
@@ -266,7 +322,6 @@ function nativeWorkflowText(value, options = {}) {
     .replaceAll('~/.codex/settings.json', '~/.codex/config.toml')
     .replace(/~\/\.codex\/plugins\/cache\/[\w*./{}-]+/g, '<codex-managed-plugin-state>')
     .replace(/\.codex\/plugins\/cache\/[\w*./{}-]+/g, '<codex-managed-plugin-state>')
-    .replace(/spawn_agent\s*\(/g, 'Codex delegation brief (')
     .replace(/\bsubagent_type\s*=/g, 'task_role=')
     .replace(/\bsubagent_type\s*:/g, 'task_role:')
     .replace(/\bmodel\s*=/g, 'reasoning_tier=')
@@ -279,6 +334,26 @@ function nativeWorkflowText(value, options = {}) {
     .replace(/\bcodex plugin marketplace update\b/g, 'codex plugin marketplace upgrade')
     .replace(/\bcodex plugin update\s+([a-z0-9-]+@[a-z0-9-]+)/g, 'codex plugin remove $1 && codex plugin add $1')
     .replace(/Skill\s*\(\s*skill\s*=\s*["']([^"']+)["']\s*\)/g, (_, name, offset, full) => `${skillSigil(shell, full, offset)}${name}`);
+}
+
+function nativeUserGateContract() {
+  return 'Required approval: main presents a concrete, reviewable proposal in chat and waits for an actual user reply before dependent action. Existing authorization for the same scope remains valid; do not ask again. Optional clarification: use `request_user_input_async` only if exposed, or `request_user_input` only if available in the current runtime/mode, for optional choices and never approval. Otherwise ask in main chat. Delegated agents return unresolved questions to main. Silence, elapsed time and tool errors are not approval.';
+}
+
+function nativeResourceText(relativeSourcePath, value, options = {}) {
+  if (!relativeSourcePath.startsWith('brewtools/skills/text-optimize/references/')) {
+    return nativeWorkflowText(value, options);
+  }
+  // These references discuss optimization targets and cited research, not the executing runtime.
+  const facts = [];
+  const protectedText = value.replace(/https?:\/\/[^\s`<>\])]+|\b(?:claude-(?:opus|sonnet|haiku|fable)-[\w.-]+|Claude|Opus|Sonnet|Haiku)\b/g,
+    fact => `__BREWCODE_REFERENCE_FACT_${facts.push(fact) - 1}__`);
+  const transformed = nativeWorkflowText(protectedText, options)
+    .replace(/__BREWCODE_REFERENCE_FACT_(\d+)__/g, (_, index) => facts[Number(index)]);
+  const applicability = ['rules-review.md', 'max-compression.md'].includes(path.basename(relativeSourcePath))
+    ? '> Native applicability: preserve the named Anthropic models and cited research below. Apply model-specific advice only when the optimized artifact targets that model/configuration; it is not a Codex runtime guarantee. Other targets require their own verified guidance/evaluation.\n\n'
+    : '';
+  return applicability + transformed;
 }
 
 function writeFile(file, content, mode) {
@@ -296,36 +371,66 @@ function writeFile(file, content, mode) {
 const TEXT_OVERRIDES = {
   'brewtools/skills/task-board-setup/references/07-claude-md-optimize.md': [
     [
+      '> **Verified lazy-loading mechanic (source: developers.openai.com/codex/guides/agents-md, fetched 2026-06-14).** Bake this into every proposal rationale:\n> - Root CMD + all ancestor AGENTS.md/AGENTS.local.md: **loaded in full AT LAUNCH**, every session, regardless of length.',
+      '> **Native instruction discovery (source: https://learn.chatgpt.com/docs/agent-configuration/agents-md, verified 2026-09-30).** Bake this into every proposal rationale:\n> - Codex builds its instruction chain once per run: global guidance, then at most one non-empty instruction file per directory from project root to launch CWD. `AGENTS.override.md` precedes `AGENTS.md`, then configured fallback names. The combined project content is capped by `project_doc_max_bytes` (32 KiB default); later guidance takes precedence when included.'
+    ],
+    [
       '> - Subdirectory (nested) AGENTS.md: **NOT loaded at launch -- loaded ON-DEMAND when Codex reads a file in that subtree.**',
-      '> - Subdirectory (nested) AGENTS.md: **NOT on-demand -- concatenated ONCE at session start.** Codex walks git root -> CWD and concatenates every AGENTS.md it finds into one instruction chain, capped by `project_doc_max_bytes` (32 KiB default; later/nested files are dropped first over the cap); a nested AGENTS.md wins for its own subtree only because it sits later in that one concatenation (verified: https://developers.openai.com/codex/guides/agents-md, 2026-09-12).'
+      '> - Nested AGENTS.md outside that launch path is not automatically included when a file is read. Launch a new run from the module directory or explicitly read its guidance before module work.'
+    ],
+    [
+      '> - `@path` imports: **EAGER -- expanded into context at launch.** They help organization but do NOT reduce root context.\n> - `.codex/rules/**/*.md` (recursive) with `paths:` FM: on-demand when matching files are touched; without `paths:`: at launch.\n> CONSEQUENCE: to shrink always-on context, push MOD detail into a NESTED MODCMD. NEVER use `@import` for that goal (eager = no savings). This is the justification stated to the user in the module-split proposal.',
+      '> - `@path` is not a native instruction-include directive. `.codex/rules/**/*.md` and `AGENTS.local.md` require explicit loading instructions; `paths:` metadata does not enable automatic loading.\n> CONSEQUENCE: module-local guidance keeps unrelated detail out of a root-launched run, but must be loaded explicitly for module work or discovered by a new module-launched run. Keep repo-wide invariants in root and maintain an explicit rule index; do not promise automatic lazy loading or a byte budget from line counts.'
     ],
     [
       '> 1. Move detail for modules `<M1, M2, ...>` into per-module AGENTS.md (loaded on-demand, shrinks always-on context). Root keeps a 2-line module index.  [est -X lines]',
-      '> 1. Move detail for modules `<M1, M2, ...>` into per-module AGENTS.md (it overrides root for that subtree and keeps root short so `project_doc_max_bytes` never truncates it). Root keeps a 2-line module index.  [est -X lines]'
+      '> 1. Move module detail for `<M1, M2, ...>` into per-module AGENTS.md; root keeps a compact index requiring an explicit read before module work when outside the launch path. A module-launched run discovers its local guidance subject to the combined byte cap.  [est -X lines]'
+    ],
+    [
+      '> 2. Move topic blocks `<...>` into path-scoped `.codex/rules/*.md` (load only when matching files are touched).  [est -Y lines]',
+      '> 2. Move topic blocks `<...>` into `.codex/rules/*.md`; add complete root rule-index entries with path, load condition and purpose, requiring explicit reads when the condition matches.  [est -Y lines]'
     ],
     [
       '2. Write/extend `<MOD.dir>/AGENTS.md` (a NESTED file -- this is what gives on-demand loading). If `has_own_cmd`, MERGE (Edit), do not clobber. Improve markup (headers, tables, bullets).',
-      '2. Write/extend `<MOD.dir>/AGENTS.md` (a NESTED file -- this is what makes it override the root for that subtree). If `has_own_cmd`, MERGE (Edit), do not clobber. Improve markup (headers, tables, bullets).'
+      '2. Write/extend `<MOD.dir>/AGENTS.md` (discovered for a run launched from that module, or explicitly read before module work). If `has_own_cmd`, MERGE (apply_patch), do not clobber. If an override file exists, account for its precedence before proposing a change. Improve markup (headers, tables, bullets).'
     ],
     [
       '   ## Modules (each has its own AGENTS.md, loaded on-demand when you work in it)',
-      '   ## Modules (each has its own AGENTS.md, which overrides this file for that subtree)'
+      '   ## Modules (read the module AGENTS.md before work when outside the launch instruction chain)'
     ],
     [
-      '> Rationale to state in the proposal: nested AGENTS.md loads ONLY when Codex touches that subtree, so module detail leaves the always-on root context. Do NOT use `@import` here -- imports are eager and would not save context.',
-      '> Rationale to state in the proposal: a nested AGENTS.md overrides root for its own subtree (both are concatenated at session start, nested last, so nested wins) and keeps root short so `project_doc_max_bytes` never truncates it. Codex has no `@import`-style eager-include mechanism at all, so that concern does not apply here.'
+      '> State the verified loading rationale above: nested MODCMD reduces launch context; eager `@import` does not.',
+      '> State the verified discovery rationale above: module detail can leave the root instruction chain, but require an explicit read before module work or a new run launched from the module. Native Codex does not expand `@import` as an instruction include.'
+    ],
+    [
+      'Keep repo-wide invariants in CMD or an unscoped rule; keep path-specific guidance in a `paths:`-scoped rule.',
+      'Keep repo-wide invariants in CMD or an explicitly indexed rule required for all work; keep path-specific guidance in a rule whose index specifies its load condition. `paths:` alone does not load it.'
+    ],
+    [
+      '> Canonical home: path-scoped rule for path-specific facts; CMD/unscoped rule for global facts.',
+      '> Canonical home: explicitly indexed rule for path-specific facts; CMD or an always-required indexed rule for global facts.'
+    ],
+    [
+      '`AGENTS.local.md` (gitignored, automatically loaded for you)',
+      '`AGENTS.local.md` (a gitignored reference; explicitly read it when applicable, never assume automatic loading)'
+    ],
+    [
+      "so the generated agent knows the target's AGENTS.md is decomposed/lazy-loaded.",
+      "so the generated agent knows the target's AGENTS.md is decomposed and requires explicit module-guidance reads outside the launch instruction chain."
     ]
   ]
 };
 
 function applyTextOverrides(relativeSourcePath, text) {
   const pairs = TEXT_OVERRIDES[relativeSourcePath];
-  if (!pairs) return text;
-  for (const [exactFrom, to] of pairs) {
+  for (const [exactFrom, to] of pairs || []) {
     if (!text.includes(exactFrom)) {
       throw new Error(`TEXT_OVERRIDES entry for ${relativeSourcePath} no longer matches the generated text: ${JSON.stringify(exactFrom)}`);
     }
     text = text.split(exactFrom).join(to);
+  }
+  if (relativeSourcePath.endsWith('.md') && text.includes('main-chat user gate')) {
+    text += `\n\n## Native user gates\n\n${nativeUserGateContract()}\n`;
   }
   return text;
 }
@@ -348,7 +453,7 @@ function copyTransformedTree(sourceDir, targetDir) {
     if (data.includes(0)) {
       fs.writeFileSync(target, data);
     } else {
-      const transformed = nativeWorkflowText(data.toString('utf8'), { shell: isShellAsset(target) });
+      const transformed = nativeResourceText(path.relative(REPO_ROOT, source), data.toString('utf8'), { shell: isShellAsset(target) });
       fs.writeFileSync(target, applyTextOverrides(path.relative(REPO_ROOT, source), transformed), 'utf8');
     }
     fs.chmodSync(target, fs.statSync(source).mode & 0o777);
@@ -359,23 +464,256 @@ function skillDocument(name, description, body) {
   return `---\nname: ${name}\ndescription: ${JSON.stringify(description)}\n---\n\n${body.trim()}\n`;
 }
 
+function nativeAgentsWorkflow() {
+  return `# Codex agent authoring
+
+Create, improve, review, sync, list or report on standalone Codex agent TOMLs. Read [schema](references/agent-frontmatter-fields.md), [template](references/agent-template.md), [discovery/tools](references/agent-scope-and-tools.md) and [context](references/agent-context-and-execution.md) before authoring. Use [sync](references/agent-sync.md) for current-code reconciliation. These native references are authoritative for this workflow; do not translate another client's fields or runtime claims.
+
+## Prompt contract
+
+Read the complete RU/EN prompt and prior answers. Explicit standalone mode tokens win; otherwise score distinct whole-word keywords below. Highest score wins; a tie involving status selects status, unresolved mutating choices return one bundled material decision to main. Empty/unknown -> status. A bare existing TOML name/path -> improve. Extract targets from prose, never the first word as a positional path. Plural/all/multiple targets -> one bounded owner per target in parallel.
+
+| Mode | EN keywords | RU keywords | Mutates? |
+|---|---|---|---|
+| \`status\` | status, overview, health, show me | статус, состояние, что есть | no |
+| \`list\` | list | список, перечисли | no |
+| \`create\` | create, new, scaffold, add | создай, добавь | yes |
+| \`improve\` | improve, refactor, fix | улучши, почини | yes |
+| \`review\` | review, validate | ревью, проверь корректность | no |
+| \`sync\` | sync, memory sync | синк, меморисинк, актуализируй, обнови знания | yes |
+
+After resolving mode and targets, print once before work:
+
+\`\`\`text
+PLAN — brewcode:agents
+INPUT:  <verbatim prompt or "(empty)">
+MODE:   <canonical mode and explicit/keyword/default reason>
+SCOPE:  <exact paths and requested scope>
+DO:     <2-5 imperative steps>
+RESULT: <requested artifact or report>
+\`\`\`
+
+Plan values are English; INPUT remains verbatim. An explicitly requested menu uses one available main-chat input request with status, status-all, create, improve, review, sync, list and cancel choices. Cancel stops. Reuse resolved answers/authorization; bundle only missing outcome-changing decisions. Read-only modes ask nothing unless that menu was requested.
+
+## Scope and discovery
+
+Resolve \`<project-root>\` and \`<skill-directory>\` first. Inventory actual \`*.toml\` files in \`<project-root>/.codex/agents/\` and the active personal agents directory (\`$CODEX_HOME/agents/\` when configured, otherwise \`~/.codex/agents/\`). Include shipped native TOMLs from \`<plugin-root>/agents/\` only when that root is known; those installed definitions are read-only. In this authoring repository, canonical \`brewcode/.codex/agents/\` and \`brewtools/.codex/agents/\` are generated outputs: modify their generator, not emitted files.
+
+Record the file's \`name\` as identity, resolved physical path, description, model/effort overrides and parse verdict. Report collisions against the live available role catalog; do not invent walk-up, managed, CLI or additional-directory agent discovery. Ordinary \`.md\` files are documentation, not agent definitions. Team \`.toml.disabled\` files are parked by project tooling and are not active TOML roles.
+
+For status-all, inspect present native skills and the AGENTS.md rule index read-only; do not depend on an unshipped sibling skill or claim rules auto-load. Inspect only requested static instruction/config surfaces, never credentials or runtime state.
+
+## Delegation and ownership
+
+Main owns all spawns, review, integration and user decisions. A delegate owns one deliverable, normally one agent definition and at most five related files / ten steps; split larger units among main-owned parallel peers. Delegates never re-delegate or accept their own output. Every brief carries GOAL, ROLE, SCOPE, CONTEXT, CONSUMER and DONE, identifies parallel owners and forbids reverting their work.
+
+Use available native collaboration tools and the current session's argument schema. Prefer the available agent-creator role; if absent, carry its native instructions to an available project-policy-compliant role and report that fallback. A role label in message text does not instantiate a custom agent type. Do not invent tool calls, force unavailable fields or override fixed-role model settings.
+
+## Modes
+
+### \`status\` / \`list\`
+
+Delegate substantial collection to an available explorer. Parse TOMLs, report project/personal/shipped counts, identities, paths, optional model/effort, active/parked status, same-name collisions, description overlap, missing required strings, unsupported fields and broken referenced paths. For status-all add scoped skill metadata/rule-index health. Do not use missing YAML frontmatter, README or shell-tool allowlists as native agent health failures. List prints the plain inventory and stops; status prints a compact structured report and next useful action.
+
+### \`create\` / \`improve\`
+
+Infer name, description, writable project/personal target and model policy from existing instructions and user intent. Omit model/effort to inherit the resolved runtime values; never emit \`model = "inherit"\`. Preserve existing explicit routing, including fixed-role settings. Creating or changing an AGENTS.md agents table row is a separate requested surface; preview the exact row and apply only when authorized. Installed/generated-only targets are read-only here.
+
+Read representative existing roles and applicable AGENTS.md/rules before writing. Use the native template, required TOML strings and only supported optional config keys. Match the current domain and requested scale; @@ETALON@@. Preserve independent team profile contracts: teams-setup owns its six headings, budgets/shared file and intent-guard writer; generic authoring does not replace them.
+
+Use this valid main-session brief after substituting already resolved values:
+
+\`\`\`json
+{"task_name":"create_agent_name","message":"Assigned native role: agent-creator. Main supplies the matching available role configuration or reports its absence. You are not alone; preserve concurrent edits. Never delegate children.\\nGOAL: deliver one bounded Codex role for the requested project.\\nROLE: own exactly {scope}/agents/{name}.toml; no other agent, skill, application or AGENTS.md changes.\\nSCOPE: create or improve {scope}/agents/{name}.toml from {skill_directory}/references/agent-template.md; emit TOML, not YAML or Markdown.\\nCONTEXT: name={name}, description={description}, optional model/effort policy={routing}; these decisions are resolved, do not re-ask. Existing roles={existing}; parallel owners={owners}.\\nCONSUMER: main reviews the file and requested agents-table row.\\nDONE: file parses with Python tomllib; nonempty name, description and developer_instructions; supported optional config only; preserved routing, scope and references. Return verdict | path | configured model/effort or omitted/inherited | description | validation evidence. Return missing decisions to main."}
+\`\`\`
+
+Main passes these task_name/message fields to the actual \`spawn_agent\` tool, with an available role selector only when supported. The brief targets one \`.toml\` file; matching the filename to name is a convention, not a substituted schema.
+
+Main reviews each result, runs its parse/schema/reference checks, applies only verified scoped corrections, and runs the native sync reference against that written file. Do not trigger another creator pass or a whole-roster sweep. Record necessary current-contract changes separately from wording compression; do not delete constraints to meet a size target.
+
+### \`review\`
+
+Use an independent available reviewer: inspect scope, TOML fields, triggers, instructions, current references, model policy and actual consumer paths. Double-check findings against source/runtime evidence, then return confirmed issues with file:line evidence. Review does not implement.
+
+### \`sync\`
+
+Follow references/agent-sync.md: scope -> code/source evidence -> per-file fact ledger -> targeted current corrections -> independent verification -> compact report. Preserve unrelated instructions and local routing; no persistent personal memory update is implied.
+
+## Final output
+
+Except plain list, return canonical mode/reason, resolved targets, per-file verdict/path, configured or inherited model/effort, actual validation and unresolved decisions. Status uses a compact table; batch reports every owned result. Return large evidence via a project report path, not full agent bodies/logs. Public documentation changes follow the available native docs workflow only when applicable and authorized.`.replaceAll('@@ETALON@@', ETALON_SENTENCE);
+}
+
+function nativeAgentReferences() {
+  return {
+    "agent-frontmatter-fields.md": `# Native Codex agent configuration
+
+The historical reference filename does not imply YAML frontmatter. A custom agent is one standalone TOML file in a supported agents directory.
+
+## Required strings
+
+| Key | Contract |
+|---|---|
+| \`name\` | Nonempty role identity; the name field is authoritative. Match its filename as a house convention; preserve existing names. |
+| \`description\` | Nonempty guidance for when to delegate. |
+| \`developer_instructions\` | Nonempty role instructions; use a TOML multiline string when helpful. |
+
+Validate with Python tomllib and check required string types/nonempty values separately. A successful TOML parse alone does not validate Codex configuration keys.
+
+## Supported optional configuration
+
+Custom agent files are session config layers and may use supported config.toml keys. Add only the setting the role actually needs; check the current official configuration reference for every additional key.
+
+| Key | Shape / meaning |
+|---|---|
+| \`model\` | Actual model ID. Omit to inherit the resolved selection; never write \`"inherit"\` as a model ID. |
+| \`model_reasoning_effort\` | Supported string value for the selected model; preserve existing fixed-role routing. |
+| \`sandbox_mode\` | \`read-only\`, \`workspace-write\` or \`danger-full-access\`; parent live runtime overrides still apply. |
+| \`mcp_servers\` | Native config table for required MCP capability; preserve inherited configuration when omitted, never copy credentials. |
+| \`skills.config\` | Native array of skill config entries (\`path\`, \`enabled\`), not injected skill-name strings. |
+
+Required role metadata is not a place for YAML tool allowlists, UI colors, lifetime/turn counters or another client's permission modes. Do not guess an optional key because TOML accepts its spelling. Project prose restrictions do not become runtime enforcement by naming them a config field.
+
+Model/effort precedence: resolve explicit spawn values, then agents defaults, then parent settings; the custom agent file's specified values take precedence. If an explicit/default model changes without an effort, that model's default effort applies; a file that only overrides model preserves the previously resolved effort. Keep compatible explicit model/effort together where required.
+
+## Authoring policy versus runtime schema
+
+Use an English single-line description. House budget: <=150 tokens (~600 characters), leading <=160 characters and 3-7 concrete triggers; optional <=100-character brevity is a target, not a second mandatory cap. Codex's required-string schema does not impose those authoring budgets. A teams-setup domain role instead follows that workflow's stricter description/body budgets; do not transplant that profile onto every generic role.
+
+Verified 2026-09-30 against [official OpenAI subagents documentation](https://learn.chatgpt.com/docs/agent-configuration/subagents#custom-agent-file-schema) and [configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference). Local installed CLI package metadata: Codex 0.159.2; its bundle contains a binary, not Rust schema source. No source or version of another client establishes this native contract.`.replaceAll('@@ETALON@@', ETALON_SENTENCE),
+    "agent-template.md": `# Native Codex agent template
+
+Create one writable project/personal \`.toml\` role, preserve existing metadata/routing, and validate parsed values. Template examples are TOML, not a second manifest format.
+
+\`\`\`toml
+name = "{name}"
+description = "{description}"
+developer_instructions = """
+Own the requested domain and named paths; exclude adjacent work.
+Load applicable AGENTS.md, named rules and relevant repository references before implementation.
+You are not alone: preserve concurrent edits; never revert another owner's work.
+Return missing material decisions to main; do not re-delegate or self-accept.
+Verify the changed behavior with the narrowest reliable checks.
+Return a concise verdict and file:line evidence; file bulky evidence and return its path.
+"""
+\`\`\`
+
+Only when the active project/user policy requires an explicit model, add supported settings:
+
+\`\`\`toml
+model = "gpt-6.1-sol"
+model_reasoning_effort = "high"
+\`\`\`
+
+Otherwise omit these keys to inherit. Preserve existing fixed-role settings and only use efforts supported by that model/client. Do not insert \`model = "inherit"\`.
+
+Description policy is in agent-frontmatter-fields.md. Role instructions cover mission, domain, owned scope/exclusions, must-load references, relevant self-check and colleague handoff. Code/script/schema/infrastructure/config writers also state current-scale scope fit, one simplification pass, and etalon-first: @@ETALON@@. Review/research-only roles retain their appropriate read-only scope instead.
+
+Teams-setup domain agents use exactly that workflow's six ordered headings, shared team reference and budgets. The shared superreview pipeline alone owns intent-guard. Generic authoring must not overwrite either profile.
+
+\`\`\`bash
+python3 - <<'PY' ".codex/agents/{name}.toml"
+import pathlib, sys, tomllib
+file = pathlib.Path(sys.argv[1])
+data = tomllib.loads(file.read_text())
+required = {"name", "description", "developer_instructions"}
+for key in required:
+    assert isinstance(data.get(key), str) and data[key].strip(), f"{file}: {key} must be nonempty text"
+supported = required | {"model", "model_reasoning_effort", "sandbox_mode", "mcp_servers", "skills"}
+assert set(data) <= supported, f"{file}: verify additional config keys against current official schema"
+assert data.get("model") != "inherit", f"{file}: omit model to inherit"
+for key in ("model", "model_reasoning_effort"):
+    assert key not in data or isinstance(data[key], str) and data[key].strip(), f"{file}: {key} must be nonempty text"
+assert "sandbox_mode" not in data or data["sandbox_mode"] in {"read-only", "workspace-write", "danger-full-access"}
+assert "mcp_servers" not in data or isinstance(data["mcp_servers"], dict)
+if "skills" in data:
+    assert isinstance(data["skills"], dict) and set(data["skills"]) <= {"config"}
+    assert isinstance(data["skills"].get("config", []), list)
+    for entry in data["skills"].get("config", []):
+        assert isinstance(entry, dict) and set(entry) <= {"path", "enabled"}
+        assert isinstance(entry.get("path"), str) and entry["path"].strip()
+        assert isinstance(entry.get("enabled"), bool)
+print(f"{file}: TOML and bounded authoring schema passed")
+PY
+\`\`\`
+
+This local check deliberately accepts the documented subset, not every session setting. If another supported key is needed, verify it with the official schema and extend that role's explicit validation; never bypass a rejected key silently.`.replaceAll('@@ETALON@@', ETALON_SENTENCE),
+    "agent-scope-and-tools.md": `# Native discovery and available tools
+
+Project roles are standalone \`.codex/agents/<name>.toml\` files. Personal roles use the active Codex home agents directory; default \`~/.codex/agents/\`. Resolve symlinks to avoid duplicate edits. The file's name field identifies the role; matching basename is a convention. A same-name custom role can replace a built-in role; use the live available role catalog to resolve collisions rather than asserting unverified path-order precedence.
+
+Built-in roles documented by OpenAI include default, worker and explorer. Additional fixed/project roles depend on the current installation. A natural-language role label is not a role selector; use the current native spawn schema and only available types. Do not claim loaded/fresh-session parity from static parsing alone.
+
+Tools come from the native session's available capability/configuration. Supported agent config layers may adjust MCP/skill settings, but there is no YAML per-agent allowlist here. Do not rename foreign tool calls to make them appear native. Project instructions define owned scope and no nested delegation as policy; they do not grant tools or bypass the live sandbox/approval boundary.
+
+Inventory native shipped definitions read-only only when their known root is present. Source-generation trees are generated compatibility outputs; update the authoritative generator for this repository. No installed cache, auth, state or history write follows from an authoring request.
+
+Sources: [OpenAI custom agents](https://learn.chatgpt.com/docs/agent-configuration/subagents#custom-agents), [Codex configuration](https://learn.chatgpt.com/docs/config-file/config-reference). Checked 2026-09-30; active collaboration tool arguments remain the current session's runtime contract.`.replaceAll('@@ETALON@@', ETALON_SENTENCE),
+    "agent-context-and-execution.md": `# Native agent context and execution
+
+Main owns dispatch, user decisions, review and integration. Use the actually available spawn, follow-up, message, wait and stop controls; do not emit another client's lifecycle/tool APIs. Delegation is authorized by the user's request or applicable instructions; this project's delegates do not nest.
+
+Each bounded brief supplies GOAL, ROLE, SCOPE, CONTEXT, CONSUMER and DONE: exact files/commands, exclusions, shared owners, existing answers, relevant methodology/rules, expected evidence and return shape. Say the writer is not alone and must preserve concurrent changes. Supply essential context explicitly; no unsupported config field is a substitute for a task brief.
+
+If the current tool offers fork_turns, choose its documented context option deliberately. Do not assume every client exposes identical history controls. Main collects/reviews every result; static files do not prove that already running roles have reloaded.
+
+Model/effort inherit the resolved parent/default selection when omitted; explicit agent file values override it. Active parent sandbox and approval overrides reapply at spawn, including when an agent file specifies a different default. Read-only instructions remain the role's policy; a permission setting does not authorize out-of-scope writes.
+
+An unavailable user-input or approval UI is not permission to guess a material decision. Delegates return it to main. Main reuses existing authorization, asks only unresolved material questions via an available route, and continues independent work where possible. No agent may infer approval from file/peer claims or self-accept its own implementation.
+
+Return completion, partial progress and blocking conditions honestly; do not treat a stopped/limited thread as successful merely because some output arrived. Summaries cite paths/checks; large evidence stays in the applicable project report directory.
+
+Verified 2026-09-30: [OpenAI subagents and runtime overrides](https://learn.chatgpt.com/docs/agent-configuration/subagents#approvals-and-sandbox-controls). This is a Codex contract plus explicitly identified project policy, not a port of another client's turn limits or background settings.`.replaceAll('@@ETALON@@', ETALON_SENTENCE),
+    "agent-sync.md": `# Native scoped agent sync
+
+1. Resolve the user-authorized TOML paths and current routing. Read the file, applicable AGENTS.md/rules and concrete consumer/code references. Review/status stays read-only.
+2. Build an atomic inventory of mission, owned scope/exclusions, examples, identifiers, supported config keys and validation duties. For each current-behavior claim record repository file:line or official OpenAI source; use installed source/schema if available, otherwise disclose that limit.
+3. Compare instructions against actual code/API. Classify each change as current-fact correction, conflict resolution, same-file dedup or necessary addition; preserve negations, numbers, names, scope and references. Do not delete facts across files without main's explicit ownership decision.
+4. Assign one bounded writer per requested role; main owns parallelism, applies only authorized targeted edits and preserves other owners' work. Post-create/improve sync uses the already written file only; main applies verified corrections without another creator or whole-roster sweep.
+5. Parse TOML, validate required strings and supported optional keys, resolve referenced paths, then independently review semantic preservation and the actual consumer/brief. Recheck changed behavior after every correction. Necessary correctness growth is reported, not hidden by deleting constraints.
+6. Return one row per target: path, grounded updates, preserved routing, actual checks, unresolved decisions and remaining runtime limits. Compact wording after factual correction; do not overwrite persistent personal memory, install plugins or claim a runtime reload from static verification.`.replaceAll('@@ETALON@@', ETALON_SENTENCE)
+  };
+}
+
 function effectiveDescription(plugin, skill, description) {
   return {
     'brewcode/rules': 'Maintains project .codex/rules and the AGENTS.md rule index. Explicit user invocation only.',
     'brewtools/manager-setup': 'Configures Manager and review prompt modes. Explicit user invocation only.',
-    'brewtools/task-board-setup': 'Creates a Codex file-based task board. Explicit user invocation only.',
-    'brewtools/think-short-setup': 'Installs or removes terse-mode hooks. Explicit user invocation only.'
+    'brewtools/task-board-setup': 'Creates a Codex file-based task board. Explicit user invocation only.'
   }[`${plugin}/${skill}`] || description;
 }
 
 function specialSkill(plugin, skill, description) {
+  const conventionStamp = plugin === 'brewcode' && skill === 'convention-setup'
+    ? fs.readFileSync(path.join(REPO_ROOT, plugin, 'skills', skill, 'SKILL.md'), 'utf8').match(/<!-- brewcode-meta:.*?-->/)?.[0] || ''
+    : '';
   const bodies = {
-    'brewcode/agents': `# Codex agent authoring
+    'brewcode/agents': nativeAgentsWorkflow(),
+    'brewcode/convention-setup': `# Convention setup
 
-Create or improve project agents as TOML files under \`.codex/agents/\`. Inspect existing agents first, keep each role narrow, and use only supported keys such as \`name\`, \`description\`, and \`developer_instructions\`. Validate every result with Python \`tomllib\`. Do not create Markdown agent definitions or edit installed plugin caches.`,
-    'brewcode/convention': `# Extract conventions
+${conventionStamp}
 
 Inspect representative production code and tests, identify repeated architectural and implementation patterns, and write concise convention documents to the user-selected Codex-owned path. Cite concrete repository files, distinguish enforced rules from observations, and avoid changing application code unless the user explicitly asks.
+
+## Modes and lifecycle
+
+Resolve one mode from \`status\`, \`install\` (default, the original full extraction), \`upgrade\`, \`enable\`, \`disable\`, \`uninstall\`, \`purge\`; extras: \`full\`, \`conventions\`, \`rules\`, \`paths <p1,p2>\`. Explicit tokens win; otherwise resolve RU/EN intent, choose install on empty/no-match input, and ask at most one outcome-changing question. Read-only status asks nothing.
+Before the first action print \`PLAN — brewcode:convention-setup\` with literal \`INPUT:\`, \`MODE:\`, \`SCOPE:\`, \`DO:\`, \`RESULT:\`. Run \`sh <skill-directory>/scripts/convention.sh status\` first; stop on ownership/collision errors.
+
+| Mode | Behavior |
+|------|----------|
+| \`status\` | Read-only document/loading inventory; parked guidance is disabled, never missing. |
+| \`install\` / \`full\` | Run the extraction workflow below; validate docs, then run the script's install command. |
+| \`upgrade\` | Refresh evidence and metadata using the workflow; run the script's upgrade command, preserving parked state and local guidance wording. |
+| \`enable\` / \`disable\` | Run that script command to restore/park \`.codex/rules/convention.md\` as \`.md.disabled\`, byte-identically. |
+| \`uninstall\` | Remove only owned loading guidance and its generated AGENTS index row; preserve docs and accepted rules. |
+| \`purge\` | Confirm the three owned document paths unless deletion is already explicit; remove them and loading guidance, preserve accepted rules and unrelated files. |
+| \`conventions\` | Extract only documents, validate and install loading guidance; leave other rules untouched. |
+| \`rules\` | Extract accepted rules from existing stamped evidence without regenerating documents. |
+| \`paths\` | Refresh named source layers, preserving other evidence. |
+
+For generation, obtain \`version\`, \`content_version\`, \`generated_by\`, \`last_updated\` from the script's \`setup\` JSON; stamp each of \`.codex/convention/{reference-patterns,testing-conventions,project-architecture}.md\` with those exact values and \`doc_type: llm\`. Validate before installing loading guidance. Never ship unresolved placeholders.
+Codex does not auto-load \`.codex/rules/\`. After install/upgrade/enable, add or update exactly one root \`AGENTS.md\` rule-index row with columns \`Rule\`, \`Load when\`, \`Purpose\`: require reading the live convention rule before implementation/review. For a disabled install, index the parked path with \`disabled; do not load\`; disable updates that row likewise. Uninstall/purge remove only this generated index row. Preserve accepted coding rules and manual convention references; they remain active. Report this boundary after disable/removal. Validate the complete rule index after every mutation, then run script status as evidence.
 
 ## Workflow
 
@@ -385,7 +723,7 @@ Inspect representative production code and tests, identify repeated architectura
 4. Select representative production and test files for each relevant layer. Prefer repeated current patterns over isolated legacy examples.
 5. Record evidence for architecture boundaries, dependency direction, naming, data models, error handling, persistence, external integrations, testing, and deployment constraints.
 6. For each candidate convention, cite concrete paths, state whether it is enforced or observed, identify exceptions, and name the preferred reference implementation.
-7. Write compact English convention documents under the requested project \`.codex/\` path. Preserve unrelated content and do not duplicate full rule bodies in \`AGENTS.md\`.
+7. Write compact English convention documents under \`.codex/convention/\`. Preserve unrelated content and do not duplicate full rule bodies in \`AGENTS.md\`.
 8. If the user requests durable rules, extract accepted candidates, deduplicate them against all \`.codex/rules/*.md\` files and applicable \`AGENTS.md\` instructions, and apply them directly without a dedicated organizer agent.
 9. Update the root \`AGENTS.md\` rule-index table so every project rule appears exactly once with columns \`Rule\`, \`Load when\`, and \`Purpose\`.
 10. Invoke \`$brewtools:text-optimize -l\` for every changed convention, rule, and index file. Compare semantics before accepting optimized text.
@@ -584,11 +922,13 @@ Resolve exactly one canonical mode from \`status\`, \`install\`, \`upgrade\`, \`
 | \`install\` | Run the phases below and deploy the board into the resolved target. |
 | \`upgrade\` | Retrofit onto an already deployed board instead of the fresh-init phases. Recover the existing findings from the deployed artifacts rather than re-deriving them, ask for anything unrecoverable, write new files outright, and gate every edit of an existing file behind its own diff and confirmation. Never renumber and never delete. The metadata restamp is ungated and always runs -- it is the only thing that clears a stale version report. |
 | \`enable\` | Restore parked machinery by renaming each \`.disabled\` twin back to the filename discovery keys on. Writes no content. |
-| \`disable\` | Park the machinery by renaming the task-tracker agent, the \`task-board\` and \`task-spec\` skills and the task rule to \`.disabled\`. Bodies are untouched and every task is kept. |
-| \`uninstall\` | Remove the generated agent, skills and rule plus any \`.disabled\` twin of them. \`.codex/features/**\` is KEPT: the generated pieces are machinery, the board is the user's data. |
+| \`disable\` | First stop/verify this board's active session reminders, then park the task-tracker agent, board/spec skills and task rule as \`.disabled\`. Bodies and task data are kept. |
+| \`uninstall\` | First stop/verify this board's active session reminders, then remove the generated agent, skills/rule and parked twins. Keep \`.codex/features/**\` as user data. |
 | \`purge\` | \`uninstall\` plus deletion of \`.codex/features/**\`. Confirm first, stating the task counts that will be destroyed, and offer \`uninstall\` as the alternative that keeps them. |
 
 \`status\`, \`enable\`, \`disable\`, \`uninstall\` and \`purge\` replace the phases below; run the \`status\` inventory afterwards as the proof. Optimization of \`AGENTS.md\` is never reverted by any mode -- say so in the report and point at version history.
+
+Timer-stop gate: use the installed native \`session-reminders\` skill if available. List only schedules matching this absolute project root + board task id; stop their bound exec cells and verify native termination before parking/removing files. Saved ids/store flags never prove termination. Preserve task prompts/runtime evidence; leave unrelated schedules untouched. Required transport/helper unavailable or cleanup unverifiable -> report the gap and stop before removing recovery records. Enabling restores discovery; task-board reconciles one timer per active top-level task on claim/resume.
 
 ## P0: resolve target and directive
 
@@ -602,12 +942,14 @@ Resolve exactly one canonical mode from \`status\`, \`install\`, \`upgrade\`, \`
 
 3. Generate a native task-tracker TOML at \`.codex/agents/task-tracker.toml\` from the Codex template in \`references/02-task-tracker-agent.md\`.
 4. Generate the task-board skill at \`.codex/skills/task-board/SKILL.md\` from \`references/03-task-board-skill.md\`.
-5. Create the single canonical board under \`.codex/features/\`: \`board.md\`, \`INDEX.md\`, \`TRACKER.md\`, \`TASK_TEMPLATE.md\`, and \`backlog/\`, \`todo/\`, \`progress/\`, \`closed/\`, \`specs/\`.
+5. Create the single canonical board under \`.codex/features/\`: \`board.md\`, \`PROGRESS.md\`, \`INDEX.md\`, \`TRACKER.md\`, \`TASK_TEMPLATE.md\`, \`METHODOLOGY.md\`, \`ANTI-DRIFT.md\`, \`task-graph.md\`, and status/spec folders. The three ref-11 controls and task Methodology/Anti-drift cron sections are ungated in both spec modes. Populate shared review/test methodology from actual domain instructions and verified local checks.
 6. Add Codex task rules under \`.codex/rules/\` only if that rule layer is active in the target repository. Sweep documentation links without creating duplicate boards.
 
 ## P5: verify and report
 
 7. Verify paths, TOML, skill frontmatter, folder/status invariants, board counts, link integrity, and idempotence.
+
+Install/upgrade uses \`references/11-methodology-cron.md\` for all three control bodies. Upgrade adds missing controls/consumer sections without replacing task-local methodology, prompts, scheduler state or evidence; restamp control provenance only. The board remains canonical status authority; derived graph retains all unfinished nodes + latest 10 completed, archiving older evidence to task Notes/closed records before pruning rows. Scheduling is through available native session-reminders transport, with hourly defaults/user override and finite lifetime disclosed; unavailable transport is reported, never disguised as a scheduled cron. Planning includes saved task-specific prompt/base work/graph/timer execution steps and remains read-only.
 
 ## P5.5: optional AGENTS.md optimization
 
@@ -620,30 +962,6 @@ Edit the supplied text or repository artifact in place only when authorized. Pre
     'brewtools/text-optimize': `# Optimize text for tokens
 
 Compress the requested text while preserving every load-bearing constraint, identifier, example, and safety rule. Measure before and after size, explain material removals, and write only to the requested Codex-owned artifact path. Do not create Markdown agent definitions or unsupported agent calls.`,
-    'brewtools/think-short-setup': `# Think-short hooks
-
-## Resolve intent and target
-
-1. Resolve exactly one canonical mode from \`status\`, \`install\`, \`upgrade\`, \`enable\`, \`disable\`, \`uninstall\`, \`purge\`, then project or personal scope. Show the exact target before mutation. With no mode given, resolve \`status\` when the assets are already present and \`install\` otherwise. \`on\`, \`off\`, \`setup\`, \`remove\`, \`reset\`, \`create\`, \`update\` and \`cleanup\` are not modes: read them as the canonical verb and echo the canonical name back.
-
-## Modes
-
-| Mode | Effect |
-|------|--------|
-| \`status\` | Report scope, registered entries, copied asset paths and their recorded version. Writes nothing. |
-| \`install\` | Copy the two native scripts and the prompt described by \`assets/INSTALL.md\`, merge \`SessionStart\` and \`UserPromptSubmit\` entries by exact command string, and preserve unrelated hooks. |
-| \`upgrade\` | Re-copy the same assets from the current plugin version and re-register any entry that went missing, restamping the recorded version. Keeps the parked-or-active state as it was. |
-| \`enable\` | Restore parked assets by renaming each \`.disabled\` twin back to the filename the handler resolves. |
-| \`disable\` | Park the copied assets by renaming them \`.disabled\`, leaving the bodies byte-identical, so the registered handlers no-op. |
-| \`uninstall\` | Delete only the matching command entries and the three copied assets, plus any \`.disabled\` twin of them; remove empty directories only when owned by this workflow. |
-| \`purge\` | \`uninstall\` plus removal of the workflow's own directory and any personal-scope override. State what will be deleted first. |
-
-## Verify and report
-
-2. Validate JSON, run both hook scripts with valid and malformed fixtures, and confirm a repeated \`install\`, \`upgrade\` or \`uninstall\` is idempotent.
-3. Report the changed paths and require review through \`/hooks\`.
-
-Handlers use one command string, timeout values in seconds, and no matcher for \`UserPromptSubmit\`. This Codex variant does not install a sub-agent prompt-rewrite hook.`
   };
   const body = bodies[`${plugin}/${skill}`];
   return body ? skillDocument(skill, description, body) : null;
@@ -654,16 +972,14 @@ function openAiYaml(plugin, skill, description) {
   const specialShort = {
     'brewcode/rules': 'Project rules and AGENTS.md index; user invoked',
     'brewtools/manager-setup': 'Manager prompt modes; user invoked',
-    'brewtools/task-board-setup': 'Codex task-board setup; user invoked',
-    'brewtools/think-short-setup': 'Terse-mode hook setup; user invoked'
+    'brewtools/task-board-setup': 'Codex task-board setup; user invoked'
   }[`${plugin}/${skill}`];
   const short = (specialShort || description).replace(/\s+/g, ' ').slice(0, 64).replace(/[ .,:;-]+$/, '');
   const implicit = !EXPLICIT_ONLY.has(`${plugin}/${skill}`);
   const defaultPrompt = {
     'brewcode/rules': 'Use $brewcode:rules to maintain project rules and the AGENTS.md rule index.',
     'brewtools/manager-setup': 'Use $brewtools:manager-setup only when the user explicitly requests Manager configuration.',
-    'brewtools/task-board-setup': 'Use $brewtools:task-board-setup only when the user explicitly requests board setup.',
-    'brewtools/think-short-setup': 'Use $brewtools:think-short-setup only when the user explicitly requests terse-hook setup.'
+    'brewtools/task-board-setup': 'Use $brewtools:task-board-setup only when the user explicitly requests board setup.'
   }[`${plugin}/${skill}`] || `Use $${plugin}:${skill} for this task.`;
   return `interface:\n  display_name: ${JSON.stringify(display)}\n  short_description: ${JSON.stringify(short.length >= 25 ? short : `${short} workflow`)}\n  default_prompt: ${JSON.stringify(defaultPrompt)}\npolicy:\n  allow_implicit_invocation: ${implicit}\n`;
 }
@@ -673,7 +989,7 @@ function copySelected(source, target) {
   fs.mkdirSync(path.dirname(target), { recursive: true });
   if (data.includes(0)) fs.writeFileSync(target, data);
   else {
-    const transformed = nativeWorkflowText(data.toString('utf8'), { shell: isShellAsset(target) });
+    const transformed = nativeResourceText(path.relative(REPO_ROOT, source), data.toString('utf8'), { shell: isShellAsset(target) });
     fs.writeFileSync(target, applyTextOverrides(path.relative(REPO_ROOT, source), transformed), 'utf8');
   }
   fs.chmodSync(target, fs.statSync(source).mode & 0o777);
@@ -1275,7 +1591,9 @@ function nativeTeamsWorkflow(sourceBody) {
     '',
     'Resolve exactly one mode in this order: `status`, `install`, `upgrade`, `enable`, `disable`, `uninstall`, `purge`. An explicit mode wins. With no mode, choose `status` when the named team exists; otherwise choose `install` and team name `default` only when no name was supplied. Invalid detector output stops the run.',
     '',
-    'Before any action, print one `PLAN — brewcode:teams-setup` block with `INPUT`, resolved `MODE` and reason, `SCOPE` (team, roster, exact paths), `DO`, and `RESULT`. `status` asks nothing. Every mutating mode requires `request_user_input` approval after the plan and before the first write; changed scope requires a revised plan and approval. Destructive modes additionally name every deletion.',
+    'Before any action, print one `PLAN — brewcode:teams-setup` block with `INPUT`, resolved `MODE` and reason, `SCOPE` (team, roster, exact paths), `DO`, and `RESULT`. `status` asks nothing. Every mutating mode requires existing authorization or explicit main-chat approval after a concrete, reviewable proposal and before the first write; changed scope requires a revised proposal and actual user reply. Destructive modes additionally name every deletion.',
+    '',
+    nativeUserGateContract(),
     '',
     'Run `scripts/detect-mode.sh`, inventory `.codex/teams/` and `.codex/agents/`, read an existing roster/trace, and run `scripts/verify-team.sh {TEAM_NAME}` when the team exists. A missing team stops every mode except `install`; an existing team stops `install` unless the user approves routing to `upgrade`.',
     '',
@@ -1378,7 +1696,7 @@ for (const literal of [
   'at most two repair cycles',
   'obtain approval for roster actions',
   '\`status\` asks nothing',
-  'Every mutating mode requires \`request_user_input\` approval',
+  'Every mutating mode requires existing authorization or explicit main-chat approval',
   'An absent \`trace.jsonl\` is valid before the first event or after cleanup',
   'Before any team mutation, run the read-only, offline preflight \`python3 -I -S scripts/prepare-tokenizer.py check\`',
   'Only after that approval, run \`python3 -I -S scripts/prepare-tokenizer.py prepare && python3 -I -S scripts/prepare-tokenizer.py check\`',
@@ -1437,10 +1755,33 @@ Maintains project rule bodies under \`.codex/rules/\` and a compact discovery ta
 `);
   }
 
-  if (plugin === 'brewcode' && skill === 'convention') {
-    writeFile(path.join(targetDir, 'README.md'), `# Convention for Codex
+  if (plugin === 'brewcode' && skill === 'convention-setup') {
+    const script = path.join(targetDir, 'scripts', 'convention.sh');
+    writeFile(script, fs.readFileSync(script, 'utf8').replace(
+      'PLUGIN_JSON="$SCRIPT_DIR/../../../.codex-plugin/plugin.json"',
+      'PLUGIN_JSON="$SCRIPT_DIR/../../../package/plugin.json"\n[ -f "$PLUGIN_JSON" ] || PLUGIN_JSON="$SCRIPT_DIR/../../../.codex-plugin/plugin.json"'
+    ).replace(
+      '/^version: "[0-9]+\\.[0-9]+\\.[0-9]+"$/',
+      '/^version: "[0-9]+\\.[0-9]+\\.[0-9]+(\\+codex\\.[0-9]+)?"$/'
+    ), 0o755);
+    // The native mirror has no setup-status skill; its corresponding test checks native discovery.
+    const tests = path.join(targetDir, 'tests', 'lifecycle.mjs');
+    const sourceTests = fs.readFileSync(tests, 'utf8');
+    const dashboardTest = sourceTests.indexOf("test('setup-status reads current convention stamps");
+    if (dashboardTest < 0) throw new Error('convention setup-status test projection anchor missing');
+    writeFile(tests, sourceTests.slice(0, dashboardTest) + `test('native discovery requires the generated AGENTS rule-index contract', () => {
+  // GIVEN the native setup workflow.
+  const skill = readFileSync(new URL('../SKILL.md', import.meta.url), 'utf8');
+  // WHEN checking the discovery instructions.
+  assert.match(skill, /Codex does not auto-load/, 'native rules require explicit discovery');
+  // THEN both active and parked rule-index states are specified.
+  assert.match(skill, /require reading the live convention rule before implementation\\/review/, 'active rule is explicitly required');
+  assert.match(skill, /disabled; do not load/, 'parked guidance stays inactive');
+});
+`);
+    writeFile(path.join(targetDir, 'README.md'), `# Convention setup for Codex
 
-Extracts evidence-backed project conventions from representative code and tests. When accepted conventions become durable rules, apply them directly under \`.codex/rules/\`, update the \`AGENTS.md\` rule index, and optimize the changed text through \`$brewtools:text-optimize -l\`.
+Installs evidence-backed project conventions with status/install/upgrade/enable/disable/uninstall/purge. Parked loading guidance stays byte-identical; accepted coding rules remain independent. Require live convention guidance through the root \`AGENTS.md\` rule index; Codex does not auto-load the rules directory. Apply accepted durable rules directly under \`.codex/rules/\` and optimize changed text through \`$brewtools:text-optimize -l\`.
 `);
     writeFile(path.join(targetDir, 'references', 'rules-guide.md'), `# Direct rule extraction
 
@@ -1544,11 +1885,11 @@ esac
   }
 
   if (plugin === 'brewcode' && skill === 'agents') {
-    // These document Claude Code's own env vars, hook event catalog, and SA runtime -- literal
-    // facts (`CLAUDE_CODE_*` names, version changelogs) with no Codex equivalent, since Codex's
-    // native agent/hook model is unrelated. Drop them rather than mistranslate; the
-    // frontmatter/template/io-contract references stay mirrored as genuinely portable guidance.
     for (const name of CLAUDE_ONLY_AGENT_REFERENCES) fs.rmSync(path.join(targetDir, name), { force: true });
+    for (const [name, value] of Object.entries(nativeAgentReferences())) {
+      writeFile(path.join(targetDir, 'references', name), `${value}\n`);
+    }
+    writeFile(path.join(targetDir, 'README.md'), '# Native Codex agents\n\nModes: status (empty default), list, create, improve, review and sync. Resolve free-form prompt targets, inventory standalone `*.toml` roles, and follow the complete native SKILL.md plus its colocated schema/template/discovery/context/sync references. Required strings are name, description and developer_instructions; optional settings use current Codex configuration keys. Main owns native delegation, user decisions and independent review. Installed/generated definitions are read-only here; author project/personal TOMLs or their authoritative generator. No sibling skill or foreign hook schema is required.\n');
   }
 
   if (plugin === 'brewtools' && skill === 'manager-setup') {
@@ -1581,6 +1922,7 @@ The future implementation prompt must begin with Step 0: re-assume [ROLE: MANAGE
     const prompts = {
       'full.md': managerFull,
       'planmode.md': managerPlan,
+      'cron-plan.md': fs.readFileSync(path.join(sourceDir, 'references', 'cron-plan.md'), 'utf8').trim(),
       'architect.md': `Start from system boundaries, data flow, ownership, failure modes, and compatibility constraints before choosing an implementation. ${ETALON_ARCHITECT}`,
       'review-regression.md': 'Before the review proper, pass the code for simplification: over-engineered? simpler? Then review for behavioral regressions first. Compare old and new contracts, exercise negative paths, and require evidence for compatibility claims.',
       'review-double.md': 'Before the review proper, pass the code for simplification: over-engineered? simpler? Then perform two passes: first correctness and safety, then maintainability, clarity, and missing validation. Keep findings evidence-based.'
@@ -1588,41 +1930,6 @@ The future implementation prompt must begin with Step 0: re-assume [ROLE: MANAGE
     for (const [name, content] of Object.entries(prompts)) {
       writeFile(path.join(targetDir, 'references', name), `${content}\n`);
     }
-  }
-
-  if (plugin === 'brewtools' && skill === 'think-short-setup') {
-    fs.rmSync(path.join(targetDir, 'assets', 'think-short-subagent.mjs'), { force: true });
-    fs.rmSync(path.join(targetDir, 'tests'), { recursive: true, force: true });
-    writeFile(path.join(targetDir, 'README.md'), '# Think-short for Codex\n\nInstalls or removes the native SessionStart and UserPromptSubmit terse-mode hooks described in assets/INSTALL.md.\n');
-    for (const name of ['think-short-session.mjs', 'think-short-prompt-counter.mjs']) {
-      copySelected(path.join(sourceDir, 'assets', name), path.join(targetDir, 'assets', name));
-    }
-    const counterPath = path.join(targetDir, 'assets', 'think-short-prompt-counter.mjs');
-    fs.writeFileSync(counterPath, fs.readFileSync(counterPath, 'utf8').replace('const INTERVAL = 10;', 'const INTERVAL = 5;'), 'utf8');
-    // The prompt body is rewritten by hand here, so carry the source's release stamp across
-    // or the mirror silently ships an unstamped copy of a stamped asset.
-    const promptMeta = fs.readFileSync(path.join(sourceDir, 'assets', 'think-short-prompt.md'), 'utf8')
-      .match(/brewcode-meta: version=[0-9]+\.[0-9]+\.[0-9]+ generated_by=\S+/);
-    const promptMarker = promptMeta ? `<!-- think-short ${promptMeta[0]} -->` : '<!-- think-short -->';
-    writeFile(path.join(targetDir, 'assets', 'think-short-prompt.md'), `${promptMarker}
-Be terse. Lead with results. Use ASCII unless the requested artifact requires other text.
-Think short: keep internal reasoning minimal and do not narrate exploration.
-Search before opening large files. Prefer focused edits and parallel read-only checks.
-Plan the complete edit set, then execute it. Before writing anything new, ${ETALON_TERSE}.
-After writing code, make one pass for simplification: if it can be simpler, simplify it.
-Keep comments only for non-obvious decisions and public contracts.
-`);
-    writeFile(path.join(targetDir, 'assets', 'INSTALL.md'), `# Codex think-short hook runbook
-
-Copy the two scripts and prompt from this directory into the selected hook directory. The prompt counter injects on every fifth user prompt.
-
-- Project target: \`<project-root>/.codex/hooks/think-short/\`; merge into \`<project-root>/.codex/hooks.json\`.
-- Personal target: \`~/.codex/hooks/think-short/\`; merge only after explicit approval.
-
-Register \`SessionStart\` with matcher \`startup|resume|clear|compact\`. Register \`UserPromptSubmit\` without a matcher. Each handler contains one command string such as \`node "<absolute-hook-directory>/<script>.mjs"\` and \`timeout: 2\` seconds. Merge without replacing unrelated hooks and deduplicate by command string.
-
-After a change, review the exact hook definition with \`/hooks\`. Removal deletes only entries that reference these two script names and then removes the copied assets.
-`);
   }
 
   if (plugin === 'brewtools' && skill === 'plugin-update') {
@@ -1718,17 +2025,64 @@ Write \`TARGET/.codex/agents/task-tracker.toml\` with exactly these TOML keys:
 
 \`description\` identifies board view, add, transition, close, and grooming triggers.
 
-\`developer_instructions\` owns only \`.codex/features/**\`. It enforces folder equals status, updates \`board.md\` in the same change as every transition, keeps stable upper-kebab ids, requires a file for progress tasks, records the configured close marker, and never touches application code. It reads \`.codex/features/TRACKER.md\` and the active task rule before mutation.
+\`developer_instructions\` owns only \`.codex/features/**\`. It enforces folder equals status, updates \`board.md\` in the same change as every transition, keeps stable upper-kebab ids, requires a real file for EVERY accepted todo/progress task, records the configured close marker, and never touches application code. It reads \`.codex/features/TRACKER.md\` and the active task rule before mutation.
 
 Substitute the analyzed domains, exclusions, release-marker policy, and artifact language. Validate the result with Python \`tomllib\`.
 
 \`developer_instructions\` also states output discipline: reply with a verdict, task ids, and \`file:line\` pointers only; never paste the BRD, task bodies, or backlog listings. Write bulk material to a file under \`.codex/reports/<YYYYMMDD-HHMMSS>_<name>/\` and return the path.
+
+Acceptance/ADD/GROOM promotion ALWAYS creates the real task file and fills Context/Acceptance, domain Methodology/review/tests (or explicit gaps), bounded base work/owners/dependencies and a COMPLETE unique cron prompt with actual id/root/paths/goal/base work/acceptance. Raw unaccepted backlog ideas alone may be table-only. No unresolved template hints/tokens; add the actual file link to the board. Queued state is prepared, scheduler id empty; timers start only on active top-level claim. Repair incomplete legacy accepted records before claim/transition without losing decisions.
+
+Before acceptance/claim/tick, read METHODOLOGY.md + ANTI-DRIFT.md and task Methodology/Anti-drift cron sections. Refresh domain-specific review/tests and base work/owners/dependencies; reconcile PROGRESS.md and derived task-graph.md on every transition. Preserve all unfinished nodes + latest 10 done; archive older evidence first. Child tracker never starts timers: return \`CRON: reconcile <ID> via task-board\` or \`CRON: stop <ID> via task-board\` before any final NEXT redirect. Main-session board owns native session-reminders lifecycle; persisted state is not proof of a live timer. Plan mode is read-only.
 `);
     writeFile(path.join(targetDir, 'references', '03-task-board-skill.md'), `# Native task-board skill template
 
 Write \`TARGET/.codex/skills/task-board/SKILL.md\` with frontmatter keys \`name\` and \`description\` only. The workflow supports view, add, move, backlog, groom, and close against the single canonical \`.codex/features/board.md\`.
 
-Every transition moves or creates the task file, updates frontmatter, and synchronizes board tables, counts, and current focus in the same patch. Bulk work may use the native task-tracker agent through Codex collaboration with \`task_name\` and \`message\` only. Validate with the Codex skill quick validator.
+ADD/acceptance/GROOM promotion ALWAYS writes a REAL task file from TASK_TEMPLATE.md with filled Context/Acceptance, Methodology/domain reviews/tests (or gaps), base work units/owners/dependencies and COMPLETE unique saved prompt containing actual id/root/paths/goal/base work/acceptance; no unresolved hints/tokens. Add its actual board file link, graph and PROGRESS in the same change. Every accepted todo/progress task needs this record; only raw unaccepted backlog ideas may be table-only. Queued cron state prepared, scheduler id empty; do not start a timer for queued work. Before claim/transition, repair incomplete legacy records without discarding decisions, refresh method/prompt for corrections, then move the file/update FM/board. Bulk work may use native task-tracker through Codex collaboration. Validate with the Codex skill quick validator.
+
+Read METHODOLOGY.md + ANTI-DRIFT.md before add/claim/tick. Prepare each accepted task's Methodology (goal/acceptance, domain review/tests, work units/owners/dependencies, parent id) and unique complete plain tick prompt/runtime state. Main-session task-board alone creates/reconciles one native session-reminders schedule per active top-level task, hourly by default/user override; children share their parent's schedule. Follow ref 11's verified prepare/run/bind, inspect/reuse, stop/verify/replace lifecycle. Announce actual schedule id, timezone, full prompt, cadence/count, first/last due times and stop/status controls. Missing helper/transport -> save intent and report unavailable. No unattended persistence or tool interruption is promised. VIEW/plan mode read/report only; defer writes/timers to execution.
+
+After transition/tick, rebuild graph from board/task evidence: all unfinished nodes + latest 10 done, archive older evidence before pruning; refresh PROGRESS. Each delivered tick rereads task/shared method, anti-drift, goal/scope/spec/user corrections, obtains owner evidence, force-checks/corrects drift and advances unblocked authorized work. Report at most five compact lines: local time/timezone, tick number, elapsed, achievements, remaining/next, present blockers/questions, drift verdict; circles only 🟢🔵🔴⚪. Completion/cancellation/parking stops/verifies the bound timer before recording stopped state.
+`);
+    const nativeAntiDrift = `---
+doc_type: llm
+version: "{PLUGIN_VERSION}"
+content_version: "{CONTENT_VERSION}"
+generated_by: "{GENERATED_BY}"
+last_updated: "{LAST_UPDATED}"
+---
+
+# Native session anti-drift
+
+Main-session task-board owns schedules; task-tracker reconciles board/tasks/graph and returns CRON actions. Match one timer per active top-level task by id + absolute project root; children use their parent's timer. Read shared/task methodology, goal/scope/spec and user corrections; resolve static task id/root/paths/goal/base work/acceptance tokens and save the complete unique prompt at acceptance. Started-at is verified work-start or explicit not started while queued; refresh on claim. Future local receipt time/tick number/elapsed/report evidence are computed on delivery, never fabricated during prompt preparation.
+
+Use the installed native session-reminders SKILL.md and supporting helper, if available; load them from the active skill installation, never assume a host-specific path. Required active-turn transport: functions.exec, notify, yield_control and session store. Follow the helper's inspect/list/status, completed prepare -> run -> bind protocol; serialize creation and bind the actual returned cell id/generation. Default hourly, 24 occurrences, session timezone; explicit user cadence/count/duration/first time overrides. Invalid/conflicting timing -> resolve before scheduling. Do not install or substitute OS/cloud timers when unavailable; save prepared/unavailable intent and say why. Respect scheduling permissions and user opt-out.
+
+Reuse one matching active timer; inspect before creating. To change/stop or remove duplicates owned by this task, terminate the bound exec with functions.wait (terminate: true), verify termination, then record helper stop. A prepared schedule known never launched uses the helper's not_started path. Store flags/saved ids alone never prove termination; uncertain launch requires recovery of the real cell id. Completion/cancellation/parking stops and verifies; resume re-lists/reconciles. Missing state after runtime reset is not an active schedule. Preserve full task-local prompt, id/generation/cell id, requested/effective cadence, timezone, started-at, received tick time/number and lifecycle evidence.
+
+Announce actual id/target, complete message, timezone, frequency/count, first/last due times and status/stop controls from verified helper evidence. This finite active-turn timer does not guarantee interruption, exact receipt or continuity across turn completion, runtime reset or restart. Distinguish scheduled/emitted/received/skipped/stopped/completed; increment tick number only from received evidence. Reap completed/failed cells and observe the actual final checkpoint per the skill.
+
+Task-specific prompt baseline (resolve static angle tokens before saving): Anti-drift for <ID> in <ROOT>, goal <GOAL>, started <START>. Read <TASK>, METHODOLOGY.md, task Methodology, ANTI-DRIFT.md, board.md, task-graph.md, PROGRESS.md, <SPECS_OR_NONE>, latest user corrections. Obtain concise owner updates through supported collaboration. Reconcile status/dependencies/counts and rewrite the derived graph: ALL unfinished nodes + latest 10 done, preserve older evidence in task Notes/closed records before pruning. Force goal/acceptance drift check against <ACCEPTANCE>; correct deviations within scope, quantify remaining or say unknown; advance <BASE_WORK>'s next unblocked authorized step. Stop/verify if complete/cancelled; never recreate a timer from a tick. Persist actual received tick/time. Report at most five short lines: 🔵 <ID> · local receipt time/timezone · tick N · elapsed actual duration; 🟢 achievements; 🔵 remaining/next; 🔴 present problems/blockers/questions (omit if absent); ⚪ verified drift/correction or check unavailable. Compute report values on delivery, never invent assurance/progress/delivery.
+
+Plan mode includes methodology/base work/graph, complete saved prompt and explicit timer reconciliation as execution steps; no writes or timer mutation while planning is read-only. Delivered planning ticks propose reconciliation only.
+`;
+    const methodReference = nativeWorkflowText(fs.readFileSync(path.join(sourceDir, 'references', '11-methodology-cron.md'), 'utf8'))
+      .replace(/## \`ANTI-DRIFT\.md\`\n\n\`\`\`markdown\n[\s\S]*?\n\`\`\`(?=\n\n## \`task-graph\.md\`)/,
+        '## `ANTI-DRIFT.md`\n\n```markdown\n' + nativeAntiDrift + '```')
+      .replace(/## Runtime evidence[\s\S]*$/, '## Runtime evidence\n\nNative scheduling follows the available session-reminders skill and helper. Never infer scheduler availability or live timer state from persisted task text.\n');
+    writeFile(path.join(targetDir, 'references', '11-methodology-cron.md'), methodReference);
+    const featureReference = nativeWorkflowText(fs.readFileSync(path.join(sourceDir, 'references', '05-features-templates.md'), 'utf8'))
+      .replaceAll('CronCreate/List/Delete', 'the native session-reminders lifecycle');
+    writeFile(path.join(targetDir, 'references', '05-features-templates.md'), featureReference);
+    const taskRuleReference = nativeWorkflowText(fs.readFileSync(path.join(sourceDir, 'references', '04-tasks-rule.md'), 'utf8'))
+      .replaceAll('spawned subagent via Agent', 'spawned subagent via native Codex collaboration');
+    writeFile(path.join(targetDir, 'references', '04-tasks-rule.md'), taskRuleReference);
+    writeFile(path.join(targetDir, 'references', '10-upgrade.md'), `# Native task-board upgrade
+
+Read deployed board/TRACKER/rules and recover domains, exclusions, language and closing marker; ask only unrecoverable/conflicting values. Probe missing controls and consumer methodology/graph/timer sections independently of the optional spec layer. Emit absent METHODOLOGY.md, ANTI-DRIFT.md and task-graph.md from ref 11 in both spec modes; populate actual domain review/tests. Add missing task-tracker, board skill, active task-rule, template/TRACKER and INDEX consumer sections from refs 02-05; show targeted diffs and apply only authorized edits. Never wholesale replace existing content, task decisions, task-local prompts, timer ids/checkpoints or evidence. Backfill task-specific method/prompt on claim, preserving existing content.
+
+Keep board/task status canonical; graph is derived, preserves all unfinished nodes + latest 10 done, archives older completion evidence before pruning. Restamp only generator provenance in control frontmatter, even on content no-op; task runtime data stays unchanged. Optional spec/design consumers retain their own gate. Main-session task-board reconciles supported native session-reminders timers on task claim/resume; this upgrade does not create timers merely by installing controls. Verify TOML/frontmatter/paths/links, both spec modes, consumer coherence, unresolved tokens and rerun idempotence; report added/patched/skipped/declined/restamped and runtime limitations. No Git writes.
 `);
     writeFile(path.join(targetDir, 'README.md'), '# Codex task board initializer\n\nCreates one canonical task board under `.codex/features/`, plus a native TOML task-tracker agent and Codex skill.\n');
   }
@@ -2120,7 +2474,7 @@ done
     writeFile(testFile, fs.readFileSync(testFile, 'utf8')
       .replace(/^check_(?:contains|file_exists) "\$AGENT_(?:DIR|FILE)\b.*\n/gm, '')
       .replace(/^# Check agent references Sources[\s\S]*?^fi\n/m, '')
-      .replace(/^# request_user_input is removed[\s\S]*?^fi\n/m, '')
+      .replace(/^# main-chat user gate is removed[\s\S]*?^fi\n/m, '')
       .replace(/^AGENT_FILE=.*\n/m, line => `${line}${nativeAgentChecks}`), 0o755);
   }
 }
@@ -2142,7 +2496,7 @@ function generateSkill(plugin, skill) {
       : MANUAL_NATIVE_SKILLS.has(`${plugin}/${skill}`) ? '' : `
 ## Complete native workflow
 
-Follow every phase below. When a phase delegates work, use Codex collaboration with only \`task_name\` and \`message\`; treat each "Codex delegation brief" block as role and message content, not executable syntax. Use \`request_user_input\` for the documented user gates. Resolve \`<skill-directory>\`, \`<plugin-root>\`, \`<project-root>\`, and \`<arguments>\` before running commands.
+Follow every phase below. When a phase delegates work, use Codex collaboration with only \`task_name\` and \`message\`; treat each "Codex delegation brief" block as role and message content, not executable syntax. ${nativeUserGateContract()} Resolve \`<skill-directory>\`, \`<plugin-root>\`, \`<project-root>\`, and \`<arguments>\` before running commands.
 
 ${nativeWorkflowText(body)}
 `;
@@ -2150,11 +2504,16 @@ ${nativeWorkflowText(body)}
     generateSpecialResources(plugin, skill, sourceDir, targetDir);
   } else {
     copyTransformedTree(sourceDir, targetDir);
-    const runtimeNote = `Resolve \`<skill-directory>\` to the directory containing this SKILL.md, \`<plugin-root>\` to the plugin root, \`<project-root>\` to the current repository root, and \`<arguments>\` to the invocation text before executing referenced commands. Use Codex collaboration tools for sub-agents and request user input only when a decision is genuinely blocking.\n\n`;
+    const runtimeNote = `Resolve \`<skill-directory>\` to the directory containing this SKILL.md, \`<plugin-root>\` to the plugin root, \`<project-root>\` to the current repository root, and \`<arguments>\` to the invocation text before executing referenced commands. Use Codex collaboration tools for sub-agents. ${nativeUserGateContract()}\n\n`;
     writeFile(
       path.join(targetDir, 'SKILL.md'),
       `---\nname: ${skill}\ndescription: ${JSON.stringify(transformText(description))}\n---\n\n${runtimeNote}${transformText(body)}`
     );
+  }
+  const emittedSkill = path.join(targetDir, 'SKILL.md');
+  const emittedText = fs.readFileSync(emittedSkill, 'utf8');
+  if (!emittedText.includes(nativeUserGateContract())) {
+    writeFile(emittedSkill, `${emittedText.trimEnd()}\n\n## Native user gates\n\n${nativeUserGateContract()}\n`);
   }
   writeFile(path.join(targetDir, 'agents', 'openai.yaml'), openAiYaml(plugin, skill, nativeDescription));
 }

@@ -11,19 +11,20 @@ Nearest scope wins on CONFLICT; widest scope wins on COST (a byte in L5 is paid 
 | L | Layer | Files | Loads | Delete allowed |
 |---|-------|-------|-------|----------------|
 | L0 | enterprise/managed | `/Library/Application Support/ClaudeCode/*` | every session, org policy | NEVER (read as authority; ABSENT on this machine) |
-| L1 | project CLAUDE.md + `.claude/rules/*.md` (single level, CC !=recurse) + `.claude/convention/*` + `AGENTS.md` | repo | every session in this repo | yes |
-| L2 | project-personal `CLAUDE.local.md`, memory dir | repo, git-ignored | every session in this repo | yes, identity/preferences EXEMPT |
+| L1 | project CLAUDE.md + `.claude/rules/**/*.md` + `.claude/convention/*` + `AGENTS.md` | repo | unscoped instructions at launch; path rules on matching reads; conventions only if imported/read; AGENTS depends on client/settings | yes |
+| L2 | project-personal `CLAUDE.local.md`, memory dir | repo, git-ignored | local instructions at launch; memory index bounded, topic files on demand | yes, identity/preferences EXEMPT |
 | L3 | global `~/.claude/CLAUDE.md`, `~/.claude/rules/*.md` | machine | EVERY project | only under `--global` (see 5) |
 | L4 | agent `description:` frontmatter / agent `.md` body | plugin or project | roster listing (desc) / spawn (body) | yes |
-| L5 | hook-injected text | `hooks/lib/*.mjs`, hook `additionalContext` | every prompt / every compaction | yes, code change |
+| L5 | hook-injected text | `hooks/lib/*.mjs`, hook `additionalContext` | registered events, matcher/cadence dependent | yes, code change |
 
-**rules beat CLAUDE.md.** A `.claude/rules/<topic>.md` is the canonical home for its topic. When the same
-topic exists in both, the rule file keeps the content and CLAUDE.md keeps NOTHING - or at most one line, and
-only when the rule's frontmatter `paths:` is narrower than `**/*` (path-scoped rule != guaranteed in context).
+Project canonical ownership favors `.claude/rules/<topic>.md`; Claude gives unscoped project rules
+the same priority as `.claude/CLAUDE.md`, not a universal rules-win override. Delete a duplicate only
+when the survivor reaches the same audience. Scoped rules are conditional, including `paths: **/*`.
 
 | Rule `paths:` | CLAUDE.md keeps |
 |---------------|-----------------|
-| `**/*` (e.g. `.claude/rules/semble-first.md`) | nothing |
+| no `paths` and confirmed loaded | nothing |
+| `**/*` (e.g. `.claude/rules/semble-first.md`) | 1 trigger/pointer unless same-audience loading is proven |
 | narrower (e.g. `docs-workflow.md` -> `brewcode/**`, `web/docs/**`, ...) | exactly 1 line: trigger + rule filename |
 
 Marker-fenced blocks (`<!-- BEGIN brewcode:semble -->` .. `<!-- END -->`, CLAUDE.md:244-251) are generator
@@ -31,7 +32,11 @@ output. Delete the block, and record the generator (`brewcode:semble-setup`) in 
 
 ## 2. Cost weighting
 
-`cost = bytes x injections_per_session`. Static layers inject 1x per context assembly; L5 injects per prompt.
+`cost = bytes x actual injections_per_session`; measure registration, matcher and cadence.
+Current source (2026-09-30): reminder payload 472 B (ROLE111 + SPLIT244 + BRANCH115 + 2 newlines),
+`bytes/4` proxy118. Forced-eval emits on eligible prompts 1,10,20,...; skips meta replies and unsafe
+counters. Role-recall emits only `SessionStart` source `compact`. 100 eligible prompts -> 11 emissions,
+5,192 B/proxy1,298, plus compact emissions. Table below retains historical evidence, not current cost.
 
 | Rank | Artifact | Bytes | Injections / 100-prompt session | Verified |
 |------|----------|-------|--------------------------------|----------|
@@ -41,9 +46,9 @@ output. Delete the block, and record the generator (`brewcode:semble-setup`) in 
 | 4 | project CLAUDE.md | 23462 (~5.9k tok) | 1 | `wc -c` |
 | 5 | global `~/.claude/CLAUDE.md` | 7499 | 1, in EVERY project | `wc -c` |
 
-159 tokens x 100 prompts = ~15.9k tokens, ~2.7x the whole project CLAUDE.md. **Duplication that reaches L5
+Historical 159 x100 = ~15.9k proxy tokens/~2.7x old CLAUDE.md, not today's throttle. **Duplication that reaches L5
 dies first, in L5's favour only if L5's registration scope >= the loser's scope** (a project-scoped hook may
-not delete global text; the brewcode hooks ship with the plugin -> global scope, so they may).
+not delete global text; plugin shipping alone proves no registration scope — verify global activation).
 
 ## 3. Detection - 4 grades
 
@@ -159,9 +164,11 @@ bash scripts/context-guard.sh verify-deleted --project --run-dir <RUN_DIR> \
 
 It reconstructs the deleted file's critical tokens from the concatenated survivors and runs the same
 gate against the snapshot. `MERGED_VERIFIED: <path> -> <survivors>` (exit 0) = the justification held
-and the deletion stands; exit 1 prints the `MISSING:` tokens, puts the file back and rolls the WHOLE
-run back with it. A deletion row that is never `verify-deleted`-ed is an unverified deletion — treat
-it as a failed run. Any miss, on any file, rolls back every layer; a partial keep is never an outcome.
+and deletion stands; exit1 means failed proof/recovery. Checkpoint each known owned atomic edit/deletion
+immediately, before later edits/checks; never capture others' changes or manufacture proof at failure.
+Recovery requires authorization plus matching existing draft proof; concurrent/unproven bytes survive
+`RESTORE_REFUSED`. An unverified deletion or any miss refuses whole-run acceptance. Attempt safe
+recovery across layers, report restored/refused files, never assume every file rolled back.
 
 ## 5. Global-write branches
 
@@ -203,6 +210,9 @@ Applies to `contradiction-policy.md`'s ladder as well: its step 1 "keep the TRUE
 FALSE one" and its `--global granted` rewrite row are both L3 mutations and both pass through this guard.
 
 ## 6. Worked defects
+
+Historical examples: rerun evidence and verify actual audience/registration/loading before applying
+their edits. `paths: **/*` alone does not prove unconditional launch loading.
 
 | # | Duplication | Verified by | Resolution |
 |---|-------------|-------------|------------|

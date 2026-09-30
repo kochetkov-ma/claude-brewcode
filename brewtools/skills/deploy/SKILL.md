@@ -21,6 +21,7 @@ follow in any order. Nobody types keys: resolve mode + scope FROM the prompt.
 
 1. Strip flags. An explicit mode token anywhere wins outright, no scoring.
 2. Else score modes by distinct whole-word keyword hits (table in P0). Highest unique score wins.
+   Scored tie with monitor -> read-only monitor; other ties -> ask before actions.
    All zero -> `setup` (no GH CFG) or `monitor` (GH CFG exists).
 3. Empty arguments -> `setup`/`monitor` per the rule above; ask ONE scoping `AskUserQuestion` only
    when the answer changes what gets written. `monitor`/`check` ask nothing.
@@ -40,7 +41,7 @@ DO:     <2-5 imperative bullets>
 RESULT: <what the user ends up holding>
 ```
 
-Labels are literal; values follow the conversation language.
+Labels/plan values are English; INPUT remains verbatim.
 
 <instructions>
 
@@ -49,7 +50,7 @@ Labels are literal; values follow the conversation language.
 ### Fail-Fast
 | Rule | Scope |
 |------|-------|
-| Every Bash call: `&& echo "OK ..." \|\| echo "FAILED ..."` | ALL scripts |
+| Every Bash call reports OK/FAILED and preserves non-zero status; `&& echo "OK ..." \|\| { rc=$?; echo "FAILED ..." >&2; exit "$rc"; }` | ALL scripts; probe/no-data exceptions stay explicit |
 | On FAILED: stop phase, report error, !=retry same command blindly | ALL |
 | Max 2 retries per failed op. After 2nd — report + stop | ALL |
 | Script exits non-zero: read stderr, diagnose, fix root cause, retry ONCE | Scripts |
@@ -106,28 +107,29 @@ ACTION: <attempted>
 FALLBACK: <next OR "asking user">
 ```
 
-### Delegation (any `Task` spawn, e.g. `deploy-admin`)
+### Delegation (any `Agent` spawn, e.g. `deploy-admin`)
 
-A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct it, and it usually drifts off-target. One subagent = ONE bounded unit — one deliverable, ~<=5 files, ~<=10 steps, and never more than ONE repo / ONE environment per agent. Bigger MUST be split into N tasks (one per repo, one per environment), all spawned in ONE message.
+Main owns every spawn/acceptance; delegates never nest and return unresolved decisions. One SA =
+ONE deliverable/~<=5 files/~<=10 steps, ONE repo/ONE environment. Bigger MUST split into N tasks
+(per repo/environment), spawned in ONE message.
 
 Every spawn prompt MUST carry:
 
 | Field | Content |
 |-------|---------|
-| GOAL | the overall task and why it exists — the point beyond the file edit |
-| ROLE | what this agent owns; what it must NOT touch |
-| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
-| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what THIS agent needs |
-| CONSUMER | who or what uses the result next, and the shape it must fit |
-| DONE | acceptance criteria + the exact report shape you want back |
+| GOAL | overall task/purpose beyond editing |
+| ROLE | owned responsibility + forbidden changes |
+| SCOPE | exact paths/commands in/out of bounds |
+| CONTEXT | prior work/owners, parallel work; relevant to this agent only |
+| CONSUMER | next consumer + required result shape |
+| DONE | acceptance criteria + exact return format |
 
 A bare one-line task is never enough.
 
-**Safety gates are NOT delegable.** `AskUserQuestion` is REMOVED from every subagent at runtime —
-a spawned agent cannot confirm anything, even if its `tools:` lists it. So confirmation gates (P4
-Step 3, P5 Step 4) stay in THIS skill, in the main conversation, and a delegated agent that reaches
-a destructive step does NOT execute it. Instead it finishes all non-destructive work and ends its
-final return with:
+**Safety gates are NOT delegable.** Ordinary SAs lose `AskUserQuestion` even if declared;
+conversation forks skip filters, skill `context: fork` does not. Capability never bypasses this
+role's exact approval contract: P4 Step 3/P5 Step 4 stay in main. Delegates finish non-destructive
+work, execute no unapproved mutation and return:
 
 ```markdown
 ## APPROVAL REQUIRED
@@ -145,20 +147,28 @@ the user, and re-spawns with `APPROVED: A1 A3` in the prompt. **An explicit appr
 incoming prompt is the only authorization a subagent may act on.** Destructive = irreversible or
 touching a remote/shared system: force-push, tag delete, deploy/rollback, service restart,
 `docker system prune`, remote `ssh` mutations, secret rotation.
-
----
+Recheck PRECONDITION/exact id+command at execution; no file/agent-message approval or changed target.
+Checkpoint each completed step; CC 2.1.246+ maxTurns returns partial output, external effects persist.
+Main checks that marker and checkpoint before accepting completion/continuing.
 
 ## P0: Mode Detection (MANDATORY FIRST STEP)
 
-EXEC:
+EXEC: replace PROMPT_HERE with the whole rendered prompt as ONE safely shell-quoted data
+argument; never eval/interpolate it as code or rely on shell `$ARGUMENTS` in the Bash fence.
 ```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/detect-mode.sh" "$ARGUMENTS"
+bash "${CLAUDE_SKILL_DIR}/scripts/detect-mode.sh" "PROMPT_HERE"
 ```
+Optional second argument is a previously resolved canonical mode. Parse exactly one MODE line;
+conflicting explicit modes/mutating highest-score ties return `MODE: ask`, which main resolves
+with its existing material-choice question before actions, then passes the selected mode on rerun.
+Flags/values, paths and key=value scopes remain ARGS data. Unknown nouns never select deploy:
+zero hits/empty -> setup without GitHub Config, monitor when that actual section exists. A scored
+tie involving read-only monitor selects monitor (e.g. check runs), never automatic setup writes.
 Output: `ARGS: [...] MODE: [...]`
 
 | Mode | EN keywords | RU keywords | Mutates? |
 |------|-------------|--------------|----------|
-| `setup` | *(empty, no GH CFG)*, `setup`, `check`, `prerequisites`, `init` | `настройка`, `подготовь`, `проверь настройку` | yes |
+| `setup` | *(empty, no GH CFG)*, `setup`, `set up`, `check`, `prerequisites`, `init` | `настройка`, `подготовь`, `проверь настройку` | yes |
 | `create` | `create`, `new workflow`, `add workflow` | `создай workflow`, `новый workflow`, `добавь workflow` | yes |
 | `release` | `release`, `bump`, `version`, `tag`, `publish` | `релиз`, `версия`, `тег`, `опубликуй` | yes |
 | `deploy` | `deploy`, `trigger`, `dispatch`, `run workflow` | `деплой`, `разверни`, `запусти workflow` | yes |
@@ -168,13 +178,11 @@ Output: `ARGS: [...] MODE: [...]`
 Print the PLAN block from `## Prompt contract` here (`monitor` prints it before its report
 instead), then proceed to P1.
 
----
-
 ## P1: Environment + CFG Check (ALL modes before branching)
 
 EXEC:
 ```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/gh-env-check.sh" && echo "OK env-check" || echo "FAILED env-check"
+bash "${CLAUDE_SKILL_DIR}/scripts/gh-env-check.sh" && echo "OK env-check" || { rc=$?; echo "FAILED env-check" >&2; exit "$rc"; }
 ```
 > STOP if FAILED — fix GH env before continuing.
 
@@ -191,6 +199,7 @@ Read CLAUDE.local.md — check `## GitHub Config` + `## Workflows:` sections.
 |-----------|--------|
 | NO_CONFIG + mode=setup | GOTO P2 |
 | NO_CONFIG + mode=create/release/deploy | GOTO P2 (need CFG first) |
+| NO_CONFIG + mode=monitor | report missing CFG + setup next step; remain read-only, never auto-run setup |
 | CFG exists + mode=setup | report existing CFG, AUQ re-setup? |
 | CFG exists + mode=create | GOTO P3 |
 | CFG exists + mode=release | GOTO P4 |
@@ -198,27 +207,25 @@ Read CLAUDE.local.md — check `## GitHub Config` + `## Workflows:` sections.
 | CFG exists + mode=monitor | GOTO P6 |
 | mode=update-agent | GOTO Mode: update-agent |
 
----
-
 ## P2: Setup
 
 ### Step 1: Verify GH Auth
 EXEC:
 ```bash
-gh auth status 2>&1 && echo "OK auth" || echo "FAILED auth"
+gh auth status 2>&1 && echo "OK auth" || { rc=$?; echo "FAILED auth" >&2; exit "$rc"; }
 ```
 If FAILED → instruct: `gh auth login`
 
 ### Step 2: Detect Repo
 EXEC:
 ```bash
-gh repo view --json owner,name,url,defaultBranchRef,visibility 2>/dev/null && echo "OK repo" || echo "FAILED repo"
+gh repo view --json owner,name,url,defaultBranchRef,visibility 2>/dev/null && echo "OK repo" || { rc=$?; echo "FAILED repo" >&2; exit "$rc"; }
 ```
 
 ### Step 3: Check Secrets
 EXEC:
 ```bash
-gh secret list 2>/dev/null && echo "OK secrets" || echo "FAILED secrets"
+gh secret list 2>/dev/null && echo "OK secrets" || { rc=$?; echo "FAILED secrets" >&2; exit "$rc"; }
 ```
 
 ### Step 4: Check SSH Integration
@@ -230,18 +237,18 @@ grep -q "^## SSH Servers" CLAUDE.local.md 2>/dev/null && echo "SSH_SERVERS=exist
 ### Step 5: Discover WFs
 EXEC:
 ```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/workflow-discover.sh" && echo "OK discovery" || echo "FAILED discovery"
+bash "${CLAUDE_SKILL_DIR}/scripts/workflow-discover.sh" && echo "OK discovery" || { rc=$?; echo "FAILED discovery" >&2; exit "$rc"; }
 ```
 
 ### Step 6: Persist CFG
 EXEC:
 ```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/deploy-local-ops.sh" add-github "OWNER" "REPO" "ghcr.io" && echo "OK add-github" || echo "FAILED add-github"
+bash "${CLAUDE_SKILL_DIR}/scripts/deploy-local-ops.sh" add-github "OWNER" "REPO" "ghcr.io" && echo "OK add-github" || { rc=$?; echo "FAILED add-github" >&2; exit "$rc"; }
 ```
 Replace OWNER + REPO with values from Step 2.
 EXEC:
 ```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/deploy-local-ops.sh" add-workflows && echo "OK add-workflows" || echo "FAILED add-workflows"
+bash "${CLAUDE_SKILL_DIR}/scripts/deploy-local-ops.sh" add-workflows && echo "OK add-workflows" || { rc=$?; echo "FAILED add-workflows" >&2; exit "$rc"; }
 ```
 
 ### Step 7: Gitignore
@@ -264,7 +271,12 @@ PV=$(jq -r '.version // empty' "$BT_ROOT/.claude-plugin/plugin.json" 2>/dev/null
 PV=${PV:-$(basename "$BT_ROOT")}
 echo "PLUGIN_VERSION=$PV LAST_UPDATED=$(date +%F)"
 ```
-> **Why the bare form.** `CLAUDE_SKILL_DIR` is a TEXT SUBSTITUTION on the skill prompt, not an env var: CC 2.1.226 rewrites only the EXACT dollar-brace literal `{CLAUDE_SKILL_DIR}` (`replace(/\$\{CLAUDE_SKILL_DIR\}/g, dirname(skillPath))` and a string-pattern `replaceAll`). A brace-modifier form such as `:-fallback` inside the braces is therefore NOT matched, reaches the shell verbatim, and its fallback ALWAYS wins. `CLAUDE_PLUGIN_ROOT` is a real env var but is exported only to hook processes and MCP servers -- never to a skill's Bash tool -- so it is ALWAYS empty here. The skill dir is correct in a cache install AND in a `--plugin-dir` dev run; the cache glob below it is a last-resort fallback only, and it would name the INSTALLED plugin.
+> Use bare `${CLAUDE_SKILL_DIR}`: prompt substitution, not a promised shell env var. Historical
+> 2.1.226 used `replace(/\$\{CLAUDE_SKILL_DIR\}/g, dirname(skillPath))`/`replaceAll`; brace modifiers
+> such as `:-fallback` are not recognized and reach the shell (fallback wins when unset).
+> `CLAUDE_PLUGIN_ROOT` is supplied to hook/MCP processes and substituted in plugin prompt text,
+> not guaranteed as a Bash-tool env var. CSD works in cache installs AND `--plugin-dir` dev runs;
+> the cache glob is last resort and names the INSTALLED plugin, never the source checkout.
 
 Replace placeholders: `{{GITHUB_CONFIG}}`=GH CFG table | `{{WORKFLOW_INVENTORY}}`=WFs table | `{{SERVER_TARGETS}}`=SSH Servers (or "No SSH servers CFG") | `{{SECRETS_LIST}}`=secret names | `{PLUGIN_VERSION}`=`PV` above | `{LAST_UPDATED}`=`date +%F` (`YYYY-MM-DD`, quoted in the frontmatter).
 Write to `.claude/agents/deploy-admin.md`.
@@ -277,8 +289,6 @@ LEFT="$(grep -nE '\{\{|\{(PLUGIN_VERSION|GENERATED_BY|LAST_UPDATED)\}' "$F" || t
 test -z "$LEFT" && echo "✅ no leftover placeholders" || { echo "❌ FAILED -- leftover placeholders:"; echo "$LEFT"; }
 ```
 > **STOP if ❌** -- re-substitute before continuing.
-
----
 
 ## P3: Create WF
 
@@ -300,17 +310,15 @@ AUQ: "What type of GitHub Actions WF?"
 
 EXEC:
 ```bash
-mkdir -p .github/workflows && echo "OK dir" || echo "FAILED dir"
+mkdir -p .github/workflows && echo "OK dir" || { rc=$?; echo "FAILED dir" >&2; exit "$rc"; }
 ```
 Write WF file via Write tool.
 
 ### Step 4: Update CFG
 EXEC:
 ```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/deploy-local-ops.sh" update-workflows && echo "OK update" || echo "FAILED update"
+bash "${CLAUDE_SKILL_DIR}/scripts/deploy-local-ops.sh" update-workflows && echo "OK update" || { rc=$?; echo "FAILED update" >&2; exit "$rc"; }
 ```
-
----
 
 ## P4: Release (CRITICAL)
 
@@ -382,7 +390,7 @@ Options: "Yes, release" | "Change version/scope" | "Cancel"
 
 | BUMP_SCRIPT (Step 0) | Action |
 |----------------------|--------|
-| found | `bash <BUMP_SCRIPT> X.Y.Z && echo "OK bump" \|\| echo "FAILED bump"` |
+| found | `bash "<BUMP_SCRIPT>" X.Y.Z && echo "OK bump" \|\| { rc=$?; echo "FAILED bump" >&2; exit "$rc"; }` |
 | `none`, version files obvious | Edit every version file the repo has (`package.json`, `pyproject.toml`, `gradle.properties`, `*/plugin.json`, `Cargo.toml`, ...) to the SAME X.Y.Z |
 | `none`, unclear | Back to Step 2 — an unknown file set cannot be approved. AUQ: "Which files carry the version?" then re-run the gate |
 
@@ -395,8 +403,8 @@ is `none` — skip this step, put the summary in the tag/release body instead.
 
 ### Step 6: Release Transaction (ONE chain, stop-on-error)
 
-One `&&` chain: a failure stops it instead of leaving a half-published release. `|| echo "FAILED"`
-is banned here — it masks a non-zero exit and reports success to the caller.
+One `&&` chain with an explicit failure handler preserves the failing status; `set -e` alone
+does not stop the caller after a failed non-final link. Emit RELEASED only after the whole chain succeeds.
 
 EXEC:
 ```bash
@@ -407,10 +415,11 @@ git rev-parse -q --verify "refs/tags/v${VER}" >/dev/null && { echo "ABORT: tag v
 BEFORE=$(git tag --list | wc -l | tr -d ' ')
 git add -- "${PATHS[@]}" \
   && git commit -m "v${VER}: <summary>" \
+  && git push origin HEAD \
   && git tag "v${VER}" \
   && [ "$(git tag --list | wc -l | tr -d ' ')" -eq "$((BEFORE + 1))" ] \
-  && git push origin HEAD \
-  && git push origin "refs/tags/v${VER}"
+  && git push origin "refs/tags/v${VER}" \
+  || { rc=$?; echo "FAILED release (exit $rc)" >&2; exit "$rc"; }
 echo "RELEASED v${VER}"
 ```
 
@@ -424,7 +433,8 @@ echo "RELEASED v${VER}"
 > Non-zero exit → report which link failed and the recovery command (`git reset --soft HEAD~1`,
 > `git tag -d vX.Y.Z`). Both are DELETE-level: propose them, !=run them unasked.
 >
-> Both recover a LOCAL failure only. Once `git push origin refs/tags/vX.Y.Z` has succeeded, deleting
+> Both recover a LOCAL failure only before HEAD is pushed; a successful HEAD push already makes the
+> commit public. Once `git push origin refs/tags/vX.Y.Z` has succeeded, deleting
 > or force-moving that tag is irreversible for anyone who already fetched it — their clone keeps the
 > old object and the tag name then means two different commits. The non-destructive escape past that
 > point is always the next patch version.
@@ -434,7 +444,7 @@ Only if POST_SCRIPT was found in Step 0. Otherwise SKIP and report "no post-rele
 EXEC:
 ```bash
 POST_SCRIPT="<absolute path to the post-release script recorded in Step 0>"
-bash "$POST_SCRIPT" && echo "OK post-release" || echo "FAILED post-release"
+bash "$POST_SCRIPT" && echo "OK post-release" || { rc=$?; echo "FAILED post-release" >&2; exit "$rc"; }
 ```
 
 ### Step 8: Monitor CI — correlated to THIS release, never `gh run list -L 3`
@@ -456,7 +466,7 @@ RC=$?; echo "CI_RESULT=$(ght_reason $RC)"
 EXEC:
 ```bash
 . "${CLAUDE_SKILL_DIR}/scripts/lib/deploy-common.sh"
-ght 30 gh release view vX.Y.Z --json tagName,name,isDraft,createdAt 2>/dev/null && echo "OK release" || echo "FAILED release"
+ght 30 gh release view vX.Y.Z --json tagName,name,isDraft,createdAt 2>/dev/null && echo "OK release" || { rc=$?; echo "FAILED release" >&2; exit "$rc"; }
 ```
 Then verify whatever THIS project actually publishes — pick what applies, skip the rest:
 
@@ -469,8 +479,6 @@ Then verify whatever THIS project actually publishes — pick what applies, skip
 
 > Nothing published → report "no external artifact to verify", !=FAILED.
 
----
-
 ## P5: Deploy
 
 ### Step 1: Load Safety Rules
@@ -480,7 +488,7 @@ Read `REF/safety-rules.md`.
 EXEC:
 ```bash
 . "${CLAUDE_SKILL_DIR}/scripts/lib/deploy-common.sh"
-ght 30 gh workflow list --json name,state,id --jq '.[] | select(.state == "active")' 2>/dev/null && echo "OK list" || echo "FAILED list"
+ght 30 gh workflow list --json name,state,id --jq '.[] | select(.state == "active")' 2>/dev/null && echo "OK list" || { rc=$?; echo "FAILED list" >&2; exit "$rc"; }
 ```
 
 ### Step 3: Select WF
@@ -529,8 +537,6 @@ LIVE=$(curl -sf "VERSION_URL" || true)
 ```
 > No `/version` endpoint → say "no version gate available", !=silently downgrade to health-only success.
 
----
-
 ## P6: Monitor
 
 All four steps share one sourced helper — `ght`, never bare `timeout` (see Robustness Rules).
@@ -539,38 +545,34 @@ All four steps share one sourced helper — `ght`, never bare `timeout` (see Rob
 EXEC:
 ```bash
 . "${CLAUDE_SKILL_DIR}/scripts/lib/deploy-common.sh"
-ght 30 gh run list -L 10 --json workflowName,status,conclusion,createdAt,headBranch,event 2>/dev/null && echo "OK runs" || echo "FAILED runs (reason=$(ght_reason $?) watchdog=$(ght_backend))"
+ght 30 gh run list -L 10 --json workflowName,status,conclusion,createdAt,headBranch,event 2>/dev/null && echo "OK runs" || { rc=$?; echo "FAILED runs (reason=$(ght_reason "$rc") watchdog=$(ght_backend))" >&2; exit "$rc"; }
 ```
 
 ### Step 2: WF Status
 EXEC:
 ```bash
 . "${CLAUDE_SKILL_DIR}/scripts/lib/deploy-common.sh"
-ght 30 gh workflow list --json name,state,id 2>/dev/null && echo "OK workflows" || echo "FAILED workflows"
+ght 30 gh workflow list --json name,state,id 2>/dev/null && echo "OK workflows" || { rc=$?; echo "FAILED workflows" >&2; exit "$rc"; }
 ```
 
 ### Step 3: Releases
 EXEC:
 ```bash
 . "${CLAUDE_SKILL_DIR}/scripts/lib/deploy-common.sh"
-ght 30 gh release list -L 5 2>/dev/null && echo "OK releases" || echo "FAILED releases"
+ght 30 gh release list -L 5 2>/dev/null && echo "OK releases" || { rc=$?; echo "FAILED releases" >&2; exit "$rc"; }
 ```
 
 ### Step 4: Failed Run Logs (if conclusion=failure found)
 EXEC:
 ```bash
 . "${CLAUDE_SKILL_DIR}/scripts/lib/deploy-common.sh"
-ght 30 gh run view RUN_ID --log-failed 2>/dev/null | tail -50 && echo "OK logs" || echo "FAILED logs"
+ght 30 gh run view RUN_ID --log-failed 2>/dev/null | tail -50 && echo "OK logs" || { rc=$?; echo "FAILED logs" >&2; exit "$rc"; }
 ```
 Replace RUN_ID with failed run's databaseId.
 
-### Step 5: Update CFG
-EXEC:
-```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/deploy-local-ops.sh" update-workflows && echo "OK update" || echo "FAILED update"
-```
-
----
+### Step 5: CFG Refresh Proposal (read-only)
+Report stale workflow inventory; actual `deploy-local-ops.sh update-workflows` writes belong to
+`setup` or `update-agent`, not read-only monitor. Monitor never silently mutates CLAUDE.local.md.
 
 ## Mode: update-agent
 
@@ -579,13 +581,13 @@ Re-discover all WFs + refresh deploy-admin agent.
 ### Step 1: Discover
 EXEC:
 ```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/workflow-discover.sh" && echo "OK discovery" || echo "FAILED discovery"
+bash "${CLAUDE_SKILL_DIR}/scripts/workflow-discover.sh" && echo "OK discovery" || { rc=$?; echo "FAILED discovery" >&2; exit "$rc"; }
 ```
 
 ### Step 2: Update CFG
 EXEC:
 ```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/deploy-local-ops.sh" update-workflows && echo "OK update" || echo "FAILED update"
+bash "${CLAUDE_SKILL_DIR}/scripts/deploy-local-ops.sh" update-workflows && echo "OK update" || { rc=$?; echo "FAILED update" >&2; exit "$rc"; }
 ```
 
 ### Step 3: Re-read CFG
@@ -599,8 +601,6 @@ Read TPL, replace placeholders with fresh data, write to `.claude/agents/deploy-
 Re-resolve `{PLUGIN_VERSION}` + `{LAST_UPDATED}` exactly as in P2 Step 8 -- a regeneration is a new write, so the stamp is refreshed, never carried over. Report what changed.
 
 </instructions>
-
----
 
 ## Output Format
 

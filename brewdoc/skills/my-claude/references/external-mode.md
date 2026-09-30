@@ -40,6 +40,7 @@ Focus on:
 - `additionalContext` — what it does, when delivered, format
 - `updatedInput` — mutation of tool input
 - `systemMessage` — display in UI
-- `permissionDecision` — allow/block/ask
+- `permissionDecision` — PreToolUse: allow/deny/ask/defer (defer is headless-only); PreModelSwitch: allow/deny/ask.
+  Other events have their own output contracts; top-level `decision: block` is a separate field.
 
 Output to: `${CLAUDE_PROJECT_DIR}/.claude/brewdoc/my-claude/external/YYYYMMDD_context-schema.md`

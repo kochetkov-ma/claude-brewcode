@@ -1,6 +1,6 @@
 services:
   docs:
-    image: ghcr.io/kochetkov-ma/claude-brewcode-docs:${DOCS_TAG:-latest}
+    image: ghcr.io/kochetkov-ma/claude-brewcode-docs:${DOCS_TAG:?set a verified immutable docs tag}
     container_name: brewcode-docs
     restart: unless-stopped
     expose:

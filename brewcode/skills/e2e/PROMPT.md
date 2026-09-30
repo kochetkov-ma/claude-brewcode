@@ -4,7 +4,7 @@
 
 ## Цель
 
-Скилл `brewcode:e2e` + набор E2E-агентов для полного цикла тестирования: анализ → сценарии → автотесты → ревью. Модель: скилл-менеджер делегирует через Task tool.
+Скилл `brewcode:e2e` + набор E2E-агентов для полного цикла тестирования: анализ → сценарии → автотесты → ревью. Модель: скилл-менеджер делегирует через Agent tool.
 
 ---
 
@@ -55,7 +55,7 @@ description: "TODO: <= 120 символов (optimal ~100), single line, что 
 1. **AskUserQuestion всегда** — на каждом ключевом этапе. Промт — контекст, не замена подтверждения.
 2. **Трёхшаговый цикл:** Выполнение → Валидация → Перепроверка → Исправление. Повторяется до 0 проблем.
 3. **Без сценария — не пишем тесты.** E2E-тест создаётся исключительно по утверждённому, воспроизводимому вручную сценарию.
-4. **Делегирование через агентов** — скилл только управляет через Task tool.
+4. **Делегирование через агентов** — скилл только управляет через Agent tool.
 
 ---
 
@@ -84,7 +84,7 @@ description: "TODO: <= 120 символов (optimal ~100), single line, что 
 - **Самокритичность:** агент проверяет результат перед отдачей менеджеру.
 - **Загрузка правил:** агенты, пишущие или ревьюящие код, загружают `e2e-rules.md` до начала работы. Если файл не найден — стоп, сообщить менеджеру.
 - **Eager по умолчанию** — загружать и валидировать до начала работы. `lazy` только если указано явно.
-- **Создание:** через `Task(subagent_type="brewcode:agent-creator")`, батчами по 3-4. Agent `description` <= 100 chars (optimal ~80), single line, role + 2-3 triggers, no `<example>` blocks.
+- **Создание:** через `Agent(subagent_type="brewcode:agent-creator")`, батчами по 3-4. Agent `description` <= 100 chars (optimal ~80), single line, role + 2-3 triggers, no `<example>` blocks.
 
 ---
 
@@ -274,13 +274,13 @@ description: "TODO: <= 120 символов (optimal ~100), single line, что 
 > Направляющие принципы, не финальные решения.
 
 **Создание агентов:**
-- Через `Task(subagent_type="brewcode:agent-creator")` — не вручную
+- Через `Agent(subagent_type="brewcode:agent-creator")` — не вручную
 - Батчами по 3-4 (параллельно)
-- После создания — оптимизация через `Task(subagent_type="brewtools:text-optimizer", prompt="Optimize .claude/agents/{agent-name}.md. Output report with metrics.")`; brewtools не установлен — шаг пропускается
+- После создания — оптимизация через `Agent(subagent_type="brewtools:text-optimizer", prompt="Optimize .claude/agents/{agent-name}.md. Output report with metrics.")`; brewtools не установлен — шаг пропускается
 - Шаблон из `brewcode/skills/teams-setup/references/agent-template.md`
 
 **Создание скилла:**
-- Через `Task(subagent_type="brewcode:skill-creator")`
+- Через `Agent(subagent_type="brewcode:skill-creator")`
 - Паттерны: Progressive Disclosure, Reference Splitting, Mode Switcher (detect-mode.sh)
 - `${CLAUDE_SKILL_DIR}` в SKILL.md (подставляется только там); в промтах агентов — развёрнутый абсолютный путь, а для файлов проекта — путь относительно корня репозитория. `$BC_PLUGIN_ROOT` мёртв (хук удалён в v4.0.0), в сгенерированных агентах `${CLAUDE_PLUGIN_ROOT}` тоже не подставляется
 - Маркер `**EXECUTE** using Bash tool:` + `&& echo "OK" || echo "FAILED"`

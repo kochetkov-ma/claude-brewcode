@@ -50,7 +50,7 @@ no report line, no finding.** Most repos have no such board; their scope axis wo
 | No task file AND no issue resolvable | baseline = `UNKNOWN`; report scope findings at **P2 max** and raise the Phase 3b gate. The cap is PERMANENT for the run — the gate may lower a finding further but NEVER restores a pre-cap P0/P1 while the baseline is still `UNKNOWN` |
 | Branch carries no issue id in the agreed `<type>/<issue>-<slug>` position | match the task by branch NAME in the board; else `UNKNOWN`. Never take a digit run from elsewhere in the branch name (`fix/oauth2-login` -> 2 is the classic false match) |
 | Branch issue id disagrees with the matched task's recorded link | the branch id is unreliable -> baseline = `UNKNOWN`, recorded as `issue N from branch not in task links`. Cross-check ALWAYS |
-| sub-agent task matched by MENTION only (no explicit link) | usable as CONTEXT; treat the baseline as `UNKNOWN` for severity (P2 cap) unless the issue body independently confirms the deliverable |
+| Task matched by MENTION only (no explicit link) | usable as CONTEXT; treat the baseline as `UNKNOWN` for severity (P2 cap) unless the issue body independently confirms the deliverable |
 | MODE = `FULL_PROJECT` | scope axis is INFORMATIONAL only — a full-project sweep has no single task; report shapes 3/4 only. `SKILL.md` runs scope pass A alone there and SKIPS pass B: with no criteria and no single PR, sections 3b + 4b have nothing to score |
 
 ---
@@ -71,7 +71,7 @@ shape 6 when only unrecorded).
 > The instruction tree (`.codex/rules/**`, `.codex/convention/**`, `.codex/agents/**`, `.codex/skills/**`,
 > `AGENTS.md`, `AGENTS.md`) is NOT on this list: it is the AUTHORITY reviewers cite. Whether it is a review target
 > at all is decided by the corpus rule in `SKILL.md` (git-IGNORED = OUT) — a path that is never reviewed cannot
-> carry a review severity. sub-agent task-board files are the baseline INPUT, likewise never a finding target.
+> carry a review severity. Task-board files are the baseline INPUT, likewise never a finding target.
 
 ---
 
@@ -136,7 +136,7 @@ The stale row is cited in the finding TEXT — `<TASK-ID>#S<n>` plus the `status
 A `done` id with NOTHING implementing it has no such anchor and is not a D5 at all: it is D1/D2, whose PROOF OF
 ABSENCE rules below govern both its evidence and where it points. !=guess a location, !=point at the board.
 
-**sub-agent task file with no `## Scope` table -> this whole subsection is a silent no-op:** score the acceptance criteria as
+**Task file with no `## Scope` table -> this whole subsection is a silent no-op:** score the acceptance criteria as
 before, report no id tally, raise nothing. An absent board is the `PR: none` case (section 4b) — SKIP, invent nothing.
 
 ### PROOF OF ABSENCE — mandatory for D1 and D4 (the only P0s built on a negative)
@@ -188,7 +188,7 @@ colleague cannot tell what shipped. **P1** instead of P2 whenever the artefact w
 
 ---
 
-## 5. Phase 3b user gate (request_user_input) — MANDATORY
+## 5. Phase 3b user gate (main-chat user gate) — MANDATORY
 
 **Trigger:** >=1 CONFIRMED scope-creep of shape **1, 2 or 5** whose sanction could NOT be found in section 1, OR a
 `scope#D1` / `scope#D4` row carrying `deliveryProofMissing: true` (section 3b — an absence claim with no verbatim
@@ -196,7 +196,7 @@ criterion and no cited search must be asked about before it can weigh as a P0).
 
 | Rule | Detail |
 |------|--------|
-| Batch | ONE `request_user_input` call, one question per distinct expansion, max 4 (merge the rest into the largest) |
+| Batch | ONE `main-chat user gate` call, one question per distinct expansion, max 4 (merge the rest into the largest) |
 | Question | name the FILES + the surface + who else owns it + the baseline checked; ask whether it is sanctioned. For a `deliveryProofMissing` row: quote the criterion and ask whether it was delivered (possibly under another name) |
 | Options | `Sanctioned — decision exists` (-> demote to P3 "record the decision") / `Not sanctioned — report as {P0\|P1}` (recommended, first) / `Intentional — accept for now` (-> P2, marked `accepted-scope`) |
 | Never ask | shapes 3, 4, 6, every `scope#C*` row, every `scope#D5` stale-status row, and any `scope#D*` row whose proof IS present — report those directly |

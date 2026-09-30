@@ -2,6 +2,8 @@
 
 > Reference for key management, configuration, and hardening.
 
+All commands are scoped templates, not permission to change a host. Classify the exact command/target with `safety-rules.md`; remote/shared mutation, trust/config/permission changes and service actions require main-session approval or a delegate's exact incoming `APPROVED:` envelope ids. Recheck host/preconditions before execution; stop on drift. Use only explicitly named nonsensitive diagnostics; never dump env, private keys, auth files or credential-bearing logs.
+
 ## Key Types
 
 | Type | Algorithm | Recommended | Notes |
@@ -116,6 +118,8 @@ Port 2222
 
 > Update firewall: `ufw allow 2222/tcp && ufw deny 22/tcp`
 
+Both commands are PRIVILEGE actions: obtain exact approval and verify access on the new port before denying the old one; maintain a tested recovery path to avoid lockout.
+
 ## ssh-agent
 
 ### When to Use Forwarding
@@ -123,7 +127,7 @@ Port 2222
 | Scenario | Forward? | Why |
 |----------|----------|-----|
 | Deploy from CI to server | No | Use deploy keys |
-| Jump through bastion | Yes | Need key on intermediate |
+| Jump through bastion | No by default | Prefer ProxyJump; forwarding needs a specific justified/approved exception |
 | Interactive dev session | Maybe | Convenience vs security |
 | Production servers | **Never** | Attack surface |
 
@@ -168,7 +172,7 @@ ssh-keygen -H -f ~/.ssh/known_hosts
 | cloud-init log | `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` in the serial console |
 | Existing trusted path | Same fingerprint seen from a second, already-trusted host |
 
-> No match, no trust: `rm -f "$KH_TMP"` and stop. Never `StrictHostKeyChecking=no`.
+> No match, no trust: clean up the temporary scan and stop. Never `StrictHostKeyChecking=no`. Changed host keys require independent verification; approval alone does not prove a key authentic.
 
 ### Config Option
 
@@ -190,10 +194,10 @@ A changed key is a MITM until proven otherwise — rotation is exactly when veri
 so the new key goes through the SAME scan -> fingerprint -> out-of-band match -> append sequence:
 
 ```bash
-ssh-keygen -R HOST
 KH_TMP=$(mktemp)
 ssh-keyscan -p PORT HOST > "$KH_TMP"
-ssh-keygen -lf "$KH_TMP"          # match against the console BEFORE the next line
+ssh-keygen -lf "$KH_TMP"          # verify independently before approving replacement
+ssh-keygen -R HOST                # exact approved trust-store change only
 umask 077 && cat "$KH_TMP" >> ~/.ssh/known_hosts && rm -f "$KH_TMP"
 ```
 
@@ -222,6 +226,6 @@ chmod 644 ~/.ssh/*.pub ~/.ssh/known_hosts
 |---------|--------------|------------|
 | Permission denied | `ssh -vvv user@host` | Check key permissions, authorized_keys |
 | Connection timeout | `ssh -o ConnectTimeout=5 user@host` | Check firewall, port, IP |
-| Host key changed | `ssh-keygen -R host` | Re-scan with ssh-keyscan |
+| Host key changed | Compare stored/scanned fingerprints | Independently verify the change before approving `ssh-keygen -R host` and installing its replacement |
 | Agent forwarding fails | `ssh-add -l` | Add key to agent |
 | Too many auth failures | `ssh -o IdentitiesOnly=yes -i key user@host` | Specify exact key |

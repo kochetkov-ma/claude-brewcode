@@ -26,7 +26,6 @@ data/
 !web/docs/public/glm-image-badge.png
 d2c-output/
 .playwright-mcp/
-brewtools/skills/think-short/tests/e2e/results/
 
 # Python bytecode
 __pycache__/

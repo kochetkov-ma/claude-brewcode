@@ -39,12 +39,12 @@
 
 ## Docstring Cleanup
 
-Remove docstrings from: private methods, test files, obvious functions. Keep public API docs.
+Remove only redundant docstrings, never by visibility/test location alone. Keep public API, meaningful private/test contracts and tool/runtime-consumed docs or doctests.
 
 | Remove | Keep |
 |--------|------|
-| Private methods (`_method`, `__method`) | Public API |
-| Test files (`test_*.py`) | Complex algorithms |
+| Redundant `_method`/`__method` prose | Meaningful contracts at any visibility |
+| Redundant `test_*.py` prose | Fixture/test assumptions, complex algorithms and GIVEN/WHEN/THEN/AND |
 | Obvious functions (name = purpose) | Non-obvious side effects |
 | Trivial Args restating name | Raises with conditions |
 | Trivial Returns restating function | Examples with edge cases |
@@ -78,14 +78,14 @@ def get_user(user_id: int) -> User:
 ### Private Methods
 
 ```python
-# REMOVE - private methods don't need docstrings:
+# REMOVE - these private-method docstrings only restate their names:
 def _validate_input(self, data: dict) -> bool:
     """Validate the input data."""
 
 def __calculate_hash(self, value: str) -> int:
     """Calculate hash for value."""
 
-# CORRECT - no docstrings:
+# CORRECT - only the redundant examples above lose docstrings:
 def _validate_input(self, data: dict) -> bool:
     ...
 
@@ -115,7 +115,7 @@ class RateLimiter:
 ### Dunder Methods
 
 ```python
-# REMOVE - dunder methods are well-known:
+# REMOVE - these dunder docs add no information:
 def __init__(self, name: str):
     """Initialize with name."""
 
@@ -125,7 +125,7 @@ def __str__(self) -> str:
 def __len__(self) -> int:
     """Return length."""
 
-# CORRECT - no docstrings on dunders:
+# CORRECT - redundant dunder doc removed; meaningful contracts remain:
 def __init__(self, name: str):
     self.name = name
 
@@ -148,15 +148,15 @@ def __eq__(self, other) -> bool:
 ### Type Comments
 
 ```python
-# REMOVE - use type hints instead:
+# KEEP - functional legacy type comments; styling never converts them:
 x = []  # type: List[int]
 y = None  # type: Optional[str]
 
-# CORRECT - inline type hints:
+# PROPOSE ONLY - annotation migration needs explicit scope + target-version/type/runtime checks:
 x: list[int] = []
 y: str | None = None
 
-# KEEP - when type hints not possible:
+# KEEP - type-checker directive, unchanged:
 # type: ignore[arg-type]  # mypy false positive
 ```
 
@@ -166,14 +166,14 @@ y: str | None = None
 |--------|---------|
 | KEEP | `# noqa: E501 - long URL` (with reason) |
 | KEEP | `# type: ignore[override]` (mypy) |
-| REMOVE | `# noqa` without code or reason |
-| REVIEW | Multiple noqa in one file (code smell) |
+| KEEP + SURFACE | `# noqa` without code/reason; it suppresses checks, never remove during styling |
+| KEEP + REVIEW | Multiple noqa in one file; report narrowing/removal proposals only |
 
 ---
 
 ## Test Files
 
-Remove all docstrings from: test files, fixtures, conftest.py.
+Remove only redundant docs in tests, fixtures and conftest.py. Keep fixture lifetime/side effects, test invariants, doctests and tool-consumed docs. Preserve GIVEN/WHEN/THEN/AND and Arrange/Act/Assert.
 
 ```python
 # REMOVE - test file:
@@ -208,12 +208,12 @@ def mock_user():
 
 | Check | Rule |
 |-------|------|
-| [ ] | No docstrings on private methods (`_method`) |
-| [ ] | No docstrings on dunder methods (unless non-standard) |
-| [ ] | No docstrings on test files |
+| [ ] | `_method` docs retain meaningful private contracts |
+| [ ] | Dunder docs lose only redundancy; non-standard contracts retained |
+| [ ] | Test/fixture docs retain useful assumptions and GIVEN/WHEN/THEN |
 | [ ] | No trivial Args/Returns in docstrings |
-| [ ] | No type comments when type hints work |
-| [ ] | `# noqa` comments have explanations |
+| [ ] | Type comments and annotations unchanged; migrations proposal-only |
+| [ ] | `# noqa`/type/security/tool directives unchanged; missing explanations surfaced |
 
 ### Scan Pattern
 

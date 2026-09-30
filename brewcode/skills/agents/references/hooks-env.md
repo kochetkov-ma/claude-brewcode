@@ -2,6 +2,8 @@
 
 Every env var a hook child process sees, the sensitive-path write prompt, and the canonical project-root resolution recipe (JS + sh).
 
+Verified 2026-09-30 against [official hook environment](https://code.claude.com/docs/en/hooks#common-input-fields), [path variables](https://code.claude.com/docs/en/hooks#reference-scripts-by-path), and changelog 2.1.285. The sensitive-path observation below is dated runtime evidence, not a universal permission contract.
+
 ## Environment Variables
 
 | Variable | Description | Available |
@@ -10,7 +12,7 @@ Every env var a hook child process sees, the sensitive-path write prompt, and th
 | `$CLAUDE_PLUGIN_ROOT` | plugin install dir | plugin hooks |
 | `$CLAUDE_PLUGIN_DATA` | persistent per-plugin data dir, survives updates (v2.1.78+); `~/.claude/plugins/data/<plugin-id>/` | plugin hooks |
 | `$CLAUDE_CODE_REMOTE` | `"true"` in remote env | all hooks |
-| `$CLAUDE_ENV_FILE` | path for persistent env vars | SS, CwdChanged, FileChanged |
+| `$CLAUDE_ENV_FILE` | append shell `export` statements; persists into subsequent Bash commands | SS, Setup, CwdChanged, FileChanged |
 | `$CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS` | SessionEnd hooks timeout in ms (DEF 1500ms, v2.1.78+); actually extends hooks lacking their own per-hook `timeout` since v2.1.268 (previously a no-op) | SessionEnd hooks |
 | `$CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` | `1` = scrub Anthropic/cloud credentials from subprocess env (v2.1.83+) | all hooks |
 | `$CLAUDE_PLUGIN_OPTION_<KEY>` | plugin `userConfig` values (v2.1.78+) | plugin hooks |
@@ -19,6 +21,8 @@ Every env var a hook child process sees, the sensitive-path write prompt, and th
 | `CLAUDE_EFFORT` | reasoning-effort override propagated into hook env | v2.1.199+ |
 | `CLAUDE_CODE_BRIDGE_SESSION_ID` | bridge-session identifier | v2.1.199+ |
 | `$CLAUDE_CODE_STOP_HOOK_BLOCK_CAP` | raises the built-in cap on consecutive Stop-hook blocks before CC force-ends the turn regardless (DEF 8) | Stop, SubagentStop |
+
+No `$CLAUDE_MODEL` variable exists; an inherited `ANTHROPIC_MODEL` reflects shell configuration and does not track `/model`. Read SS `model` when present and switch event `to_model`. `OTEL_*` exporter variables are stripped from subprocesses. Runtime path tokens in config and actual child env variables are separate: exec-form `${...}` substitution is performed by Claude Code, not a shell.
 
 > Sensitive-path prompt (2.1.233, verified in binary): a Write/Edit TOOL call under `~/.claude/**` is
 > classified sensitive and routed to a permission ASK -- not a block. Carve-outs under `.claude/`:
@@ -38,12 +42,21 @@ env var -> git toplevel -> upward walk for `.git`/`.claude` -> `PWD`.
 
 ```js
 import { existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 
-/** Project root: CLAUDE_PROJECT_DIR -> upward walk for a root marker -> hook cwd. Never throws. */
+/** Project root: env -> git toplevel -> marker walk -> hook cwd. */
 export function projectRoot(hookCwd) {
   const env = process.env.CLAUDE_PROJECT_DIR;
   if (env && existsSync(env)) return resolve(env);
+
+  try {
+    const root = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+      cwd: hookCwd || process.cwd(), encoding: 'utf8', timeout: 1000,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    if (root && existsSync(root)) return resolve(root);
+  } catch { /* Outside a git checkout: try the root markers. */ }
 
   let dir = resolve(hookCwd || process.cwd());
   for (;;) {
@@ -59,7 +72,7 @@ export function projectRoot(hookCwd) {
 ```sh
 # Project root: CLAUDE_PROJECT_DIR -> git toplevel -> upward walk -> PWD.
 claude_project_root() {
-  if [ -n "$CLAUDE_PROJECT_DIR" ] && [ -d "$CLAUDE_PROJECT_DIR" ]; then
+  if [ -n "${CLAUDE_PROJECT_DIR:-}" ] && [ -d "$CLAUDE_PROJECT_DIR" ]; then
     printf '%s\n' "$CLAUDE_PROJECT_DIR"; return 0
   fi
   if r=$(git rev-parse --show-toplevel 2>/dev/null) && [ -n "$r" ]; then
@@ -67,7 +80,7 @@ claude_project_root() {
   fi
   d=$PWD
   while [ "$d" != "/" ]; do
-    if [ -d "$d/.git" ] || [ -d "$d/.claude" ]; then printf '%s\n' "$d"; return 0; fi
+    if [ -e "$d/.git" ] || [ -d "$d/.claude" ]; then printf '%s\n' "$d"; return 0; fi
     d=$(dirname "$d")
   done
   printf '%s\n' "$PWD"; return 1   # nonzero: caller decides
@@ -79,6 +92,6 @@ ROOT=$(claude_project_root) || echo "WARN: no project root marker found; using $
 | Rule | Detail |
 |------|--------|
 | both fail | a SCRIPT warns on stderr and continues with `PWD`; an INSTALLER about to WRITE aborts non-zero naming what it looked for. Never write to a guessed root |
-| hook exit code | a hook NEVER exits non-zero because the root was ambiguous -- root failure stays fail-open |
+| hook exit code | advisory/context hooks fail open; enforcement hooks must emit the event's deny/block when a required root cannot be established |
 | `input.cwd` | exactly one job: resolving RELATIVE paths inside `tool_input`. Never keys config lookup, state paths or gitignore edits -- `cwd` drifts mid-session (see `CwdChanged`), `CLAUDE_PROJECT_DIR` does not |
 | markers | `.git` OR `.claude`, in that order, never extended per-hook |

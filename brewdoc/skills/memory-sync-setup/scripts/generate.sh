@@ -202,9 +202,10 @@ count_root_md()   { _count "find . -maxdepth 1 -type f \\( -name 'CLAUDE.md' -o 
 count_nested_md() { _count "find . -mindepth 2 -type f -name 'CLAUDE.md' $FIND_EXCL"; }
 count_agents_md() { _count "find . \\( -type f -o -type l \\) -name 'AGENTS.md' $FIND_EXCL"; }
 count_skills()    { { find .claude/skills -type f -name '*.md' -not -path '*/memory-sync/*' 2>/dev/null || true; } | wc -l | tr -d ' '; }
+_rules_md()       { { eval "find .claude/rules -type f -name '*.md' $FIND_EXCL" 2>/dev/null || true; } | sort; }
 
 derive_surface_counts() {
-  _r=$(count_root_md); _n=$(count_nested_md); _a=$(count_agents_md); _u=$(_count_md .claude/rules)
+  _r=$(count_root_md); _n=$(count_nested_md); _a=$(count_agents_md); _u=$(_rules_md | wc -l | tr -d ' ')
   _c=$(_count_md .claude/convention); _g=$(_count_md .claude/agents 99); _s=$(count_skills)
   _tot=$((_r + _n + _a + _u + _c + _g + _s))
   echo "$_tot files: $_r root, $_n nested CLAUDE.md, $_a AGENTS.md, $_u rules, $_c conventions, $_g agents, $_s skill files"
@@ -322,7 +323,7 @@ scan_target() {
 
   _hdr "Rules (.claude/rules/) :: lines :: paths:"
   _anyrule=0
-  for f in .claude/rules/*.md; do
+  while IFS= read -r f; do
     [ -f "$f" ] || continue
     _anyrule=1
     # awk counts a final line with no trailing newline; `|| echo ?` keeps an unreadable file from aborting scan.
@@ -330,7 +331,7 @@ scan_target() {
     _paths=$(grep -m1 '^paths:' "$f" 2>/dev/null | sed 's/^paths:[[:space:]]*//' || true)
     [ -n "$_paths" ] || _paths="(no paths:)"
     printf '%s :: %s lines :: %s\n' "$f" "$_ln" "$_paths"
-  done
+  done < <(_rules_md)
   [ "$_anyrule" -eq 0 ] && echo "(none)"
 
   _hdr "Conventions"

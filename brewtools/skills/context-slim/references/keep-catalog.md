@@ -1,8 +1,13 @@
 # Keep Catalog -- invariants that survive compression byte-exact
 
-Companion to `drop-catalog.md`. Every class below is a **refusal surface**: if a token of this class
-is in the original and absent from the rewrite, the rewrite is restored, not warned about. Dedup that
-collapses repeats is fine -- set semantics, the LAST occurrence is what must survive.
+Companion to `drop-catalog.md`. Missing invariant refuses acceptance; patch owned loss/review or
+recover only authorized checkpoint-proven drafts. Missing proof/concurrent change -> preserve
+current bytes, report `RESTORE_REFUSED`; never automatic discard or warning-only acceptance.
+Dedup collapses repeats with set semantics: the LAST occurrence must survive.
+
+Checkpoint each known owned atomic edit/deletion immediately, never during failure/recovery or
+after intervening other-writer changes. Examples/line labels below are historical evidence,
+not current counts, pins or installed-client claims; regex semantics still match the source helper.
 
 Sections: Invariant classes -> `crit_tokens()` evidence -> Coverage map -> Drop-in extension.
 
@@ -29,7 +34,7 @@ Sections: Invariant classes -> `crit_tokens()` evidence -> Coverage map -> Drop-
 
 ## What `crit_tokens()` covers today
 
-Source: `brewtools/skills/text-optimize/scripts/text-guard.sh:50-62`, verbatim:
+Source: `brewtools/skills/text-optimize/scripts/text-guard.sh`, historical excerpt/line labels 50-62:
 
 ```bash
 # The 100% sub-gate alphabet: numbers/versions, slash-bearing paths, `!=`

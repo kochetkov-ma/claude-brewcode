@@ -37,12 +37,12 @@
 
 ## JavaDoc Cleanup
 
-Remove JavaDoc from: private methods, test files, obvious classes. Keep logic description, remove trivial @param/@return.
+Remove only redundant JavaDoc, regardless of visibility or test location. Keep useful contracts, logic, security/tool directives and non-obvious behavior; strip only trivial @param/@return.
 
 | Remove | Keep |
 |--------|------|
-| All private/package-private methods | Public API docs with non-obvious behavior |
-| All test files (`*Test.java`, `*Spec.kt`, test helpers) | @DisplayName on test methods |
+| Redundant private/package-private docs | Useful contracts on any visibility, including protected methods |
+| Redundant test/helper docs (`*Test.java`, `*Spec.kt`) | Test invariants, fixture contracts, @DisplayName and GIVEN/WHEN/THEN/AND |
 | Obvious DTOs/Entities (name describes purpose) | Complex business logic explanation |
 | All @param (restates param name) | `@throws` with specific conditions |
 | All @return (restates method name) | Non-obvious side effects |
@@ -52,8 +52,8 @@ Remove JavaDoc from: private methods, test files, obvious classes. Keep logic de
 
 **NEVER convert JavaDoc `/** */` to inline `//` comment.** Two rules:
 
-1. **JavaDoc is unnecessary** (private method, obvious class) → DELETE entirely, no replacement
-2. **JavaDoc has useful description but trivial @param/@return** → strip @param/@return, keep description as single-line `/** ... */`
+1. **JavaDoc adds no information** → delete only redundant prose, no replacement; visibility alone proves nothing.
+2. **Useful description with trivial @param/@return** → strip only trivial tags, retain `/** ... */`; single-line only if formatting preserves tags/contract.
 
 ```java
 // BEFORE - useful description + trivial @param/@return:
@@ -77,7 +77,7 @@ BigDecimal convertCurrency(BigDecimal amount, CurrencyCode currency) { }
 ### Private Methods
 
 ```java
-// REMOVE - private methods don't need JavaDoc:
+// REMOVE - these private-method docs merely restate their names:
 /** Validates the filter. */
 private boolean isValidFilter(Filter f) { }
 
@@ -107,7 +107,7 @@ public class CompanyCache { }
 
 ### Test Files
 
-Remove all JavaDoc from: test classes (`*Test.java`, `*Spec.kt`), test helpers (`*Data.java`, `*Requests.java`, `*Fixtures.java`), any file in `src/test/`.
+Review test classes (`*Test.java`, `*Spec.kt`), helpers (`*Data.java`, `*Requests.java`, `*Fixtures.java`) and `src/test/`; remove only redundant docs. Preserve fixture assumptions, edge cases, GIVEN/WHEN/THEN/AND and docs consumed by tools.
 
 ```java
 // REMOVE - test class:
@@ -125,7 +125,7 @@ public class RatesStatsExpectedData {
     public static Stats expected() { }
 }
 
-// CORRECT - no JavaDoc, clear method names:
+// CORRECT - redundant JavaDoc removed; useful test/fixture contracts stay:
 class LoadsHistoryRepositoryTest {
     @Test
     @DisplayName("Should filter loads by company ID")
@@ -160,7 +160,7 @@ Preserve all BDD comments: `// GIVEN`, `// WHEN`, `// THEN`, `// AND`
 ## Issue References
 
 ```java
-// REMOVE - AI-invented numbers:
+// REMOVE ONLY after proof these IDs are invented and resolve to no real ticket:
 // BUG-001 fix: ...
 // FIX-123: ...
 // ISSUE-42: ...
@@ -170,7 +170,7 @@ Preserve all BDD comments: `// GIVEN`, `// WHEN`, `// THEN`, `// AND`
 // Workaround for JIRA-12345
 ```
 
-Keep project-specific ticket patterns (INTELDEV-XXXXX, JIRA-XXXXX). Remove generic patterns (BUG-001, FIX-123).
+Keep real tickets regardless of pattern, including BUG-001/FIX-123. Check the actual tracker/provenance; remove only IDs proved invented AND resolving to no real ticket. Missing access or uncertain resolution -> surface, never guess. INTELDEV-XXXXX/JIRA-XXXXX patterns alone do not prove existence.
 
 ---
 
@@ -178,9 +178,9 @@ Keep project-specific ticket patterns (INTELDEV-XXXXX, JIRA-XXXXX). Remove gener
 
 | Check | Rule |
 |-------|------|
-| [ ] | Private methods: no JavaDoc on private/protected/package-private methods |
-| [ ] | Test files: no JavaDoc on `*Test.java`, `*Spec.kt`, or any file in `src/test/` |
-| [ ] | Test helpers: no JavaDoc on `*Data.java`, `*Requests.java`, `*Fixtures.java` |
+| [ ] | private/protected/package-private docs: redundant prose removed; meaningful contracts retained |
+| [ ] | `*Test.java`, `*Spec.kt`, `src/test/`: useful test docs and GIVEN/WHEN/THEN/AND retained |
+| [ ] | `*Data.java`, `*Requests.java`, `*Fixtures.java`: fixture assumptions retained |
 | [ ] | Obvious DTOs: no JavaDoc if class name is self-explanatory |
 | [ ] | Trivial @param: no `@param id the id` or similar restating param name |
 | [ ] | Trivial @return: no `@return` that restates method name |

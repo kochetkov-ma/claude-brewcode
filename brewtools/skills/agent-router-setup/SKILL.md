@@ -16,8 +16,7 @@ The main loop picks `general-purpose` out of habit while the repo carries a hand
 
 ## Prompt contract
 
-Position 1 of `$ARGUMENTS` is a **free-form prompt** (RU/EN) — modes and flags are optional and may
-follow in any order. Nobody types keys: resolve mode + scope FROM the prompt.
+Treat `$ARGUMENTS` as a free-form RU/EN prompt. Modes/flags may appear anywhere; infer mode and scope from prose.
 
 1. Strip flags. An explicit mode token anywhere wins outright, no scoring.
 2. Else score modes by distinct whole-word keyword hits (table in Step 2). Highest unique score
@@ -106,7 +105,7 @@ Asset paths (all under `$BT_ROOT/skills/agent-router-setup/assets/`):
 
 ## Step 1 — STATUS FIRST, always
 
-Run this before anything else, in EVERY mode. Never install, re-install or remove blind.
+After the initial PLAN, probe status in EVERY mode before installation, reinstallation, or removal.
 
 **EXECUTE** using Bash tool:
 
@@ -216,11 +215,11 @@ Field meanings — do not paraphrase them into something stronger:
 | `level_recorded` | the `level` VALUE stored in the config. It is a RECORD of an install-time choice, **not** proof of what is wired — nothing keeps it honest. `tier2_refs` is the authority on whether the LLM judge actually fires |
 | `content_version` (`hook` / `template` / `config` / `runbook`) | the PRIMARY staleness signal, read from the artifacts themselves: `hook` = the `brewcode-meta:` header of the INSTALLED `.claude/hooks/agent-router.mjs`, `template` = the same header in the plugin's asset copy, `config` = the config's `content_version` key, `runbook` = the header of `assets/INSTALL.md` (the generator behind that config). A difference on either pair -> `stale=yes` -> offer `upgrade`. `n/a` on a side (pre-5.6 artifact, or not installed) = unknown, NOT "current" |
 | `version` / `plugin` | the config's `version` key vs the installed brewtools version. INFORMATIONAL only — it names the release that last WROTE the config, bumps on every release even when nothing changed, and any config write (`enable`/`disable` included) re-stamps it to the current plugin while the hook file on disk stays old. Never decide staleness from it |
-| `roster` | number of `.claude/agents/*.md` files — **`0` means the hook has nothing to route TO**; say so before installing |
+| `roster` | number of `.claude/agents/*.md` files — **`0` means project-roster scoring has no candidates**; the four built-in intent routes still work. Say so before installing |
 
 The status probe parses JSON and validates both complete handler shapes. Exact duplicate tier-1 or tier-2 handlers remain visible as counts above `1`; malformed owned handlers increment `legacy_refs`. Both states are non-effective.
 
-Read the output into a state table and PRINT it to the user:
+Print the status in this table:
 
 | Hook file | portable tier1 | legacy refs | tier2 wired | settings valid | enabled | level (recorded) | hook cv | template cv | stale | roster |
 |-----------|----------------|-------------|-------------|----------------|---------|------------------|---------|-------------|-------|--------|
@@ -248,7 +247,7 @@ PV=${PV:-$(basename "$BT_ROOT")}
 echo "PLUGIN_VERSION=$PV LAST_UPDATED=$(date +%F)"
 ```
 
-> **Why the bare form.** `CLAUDE_SKILL_DIR` is a TEXT SUBSTITUTION on the skill prompt, not an env var: CC 2.1.226 rewrites only the EXACT dollar-brace literal `{CLAUDE_SKILL_DIR}` (`replace(/\$\{CLAUDE_SKILL_DIR\}/g, dirname(skillPath))` and a string-pattern `replaceAll`). A brace-modifier form such as `:-fallback` inside the braces is therefore NOT matched, reaches the shell verbatim, and its fallback ALWAYS wins. `CLAUDE_PLUGIN_ROOT` is a real env var but is exported only to hook processes and MCP servers -- never to a skill's Bash tool -- so it is ALWAYS empty here. The skill dir is correct in a cache install AND in a `--plugin-dir` dev run; the cache glob below it is a last-resort fallback only, and it would name the INSTALLED plugin.
+> **Bare substitution required.** CC 2.1.226 substitutes only the literal `${CLAUDE_SKILL_DIR}` in skill prompts (`replace(/\$\{CLAUDE_SKILL_DIR\}/g, dirname(skillPath))`/`replaceAll`), not env values or `:-fallback`; a modifier reaches Bash unchanged and ALWAYS selects its fallback. `${CLAUDE_PLUGIN_ROOT}` is exported to hooks/MCP, never skill Bash. The skill path works in cache and `--plugin-dir` installs; the cache glob is a last resort and selects the installed plugin.
 
 | Guarantee | Why it holds |
 |-----------|--------------|
@@ -276,11 +275,11 @@ Read `$ARGUMENTS`. Default when there are NO arguments at all = **status**.
 | `purge` | `purge`, `wipe`, `remove everything` | `вычисти всё`, `удали полностью`, `снеси` | yes, destructive |
 | `level fast` \| `level strict` (extra) | `level`, `fast`, `strict` | `дешёвый`, `строгий`, `с LLM`, `без LLM` | yes |
 
-Ambiguous between install and a removal verb → `AskUserQuestion`. Use `AskUserQuestion` ONLY for genuinely destructive ambiguity — never to guess a mode, and never to ask about scope (there is only one).
+Ambiguous between install and a removal verb → `AskUserQuestion`. For mode ambiguity, use `AskUserQuestion` only for a destructive tie; never guess another mode or ask scope (project only). Step 4 may ask the missing level.
 
-## Step 3 — State the plan BEFORE asking anything
+## Step 3 — Explain pending changes before questions
 
-Plain text, before any question:
+Add concrete state/action details to the initial PLAN without repeating its block. Example:
 
 > Current state: agent-router not installed; `.claude/agents/` holds 4 project agents. Plan: copy `agent-router.mjs` into `<repo>/.claude/hooks/`, write `<repo>/.claude/brewtools/agent-router.json` with `level: "fast"`, merge one PreToolUse (`Agent`) entry into `<repo>/.claude/settings.json`. Project scope only. One question first: level.
 
@@ -296,36 +295,24 @@ Skip any question already answered by `$ARGUMENTS` or settled by the status tabl
 
 The `strict` option description MUST carry the cost verbatim: *Claude Code runs all matching hooks in parallel and tier 1 cannot gate tier 2, so strict fires a haiku call on EVERY `Agent` spawn — its own fast exit is the only cost control.*
 
-No scope question. No other questions. `disable`/`enable`/`uninstall`/`purge` ask nothing.
+No scope or other configuration question. `disable`/`enable` ask nothing; `uninstall`/`purge` require only the deletion confirmation in Step 5.
 
-## Step 5 — Print the PLAN block, then act
+## Step 5 — Act on the resolved PLAN
 
-Print the `## Prompt contract` PLAN block, filled with the resolved MODE/SCOPE (exact paths,
-exact `level`, the exact settings.json entry) — then proceed. For `uninstall`/`purge` list
-exactly which files are deleted and confirm once. Status (early exit or explicit `status` mode)
-prints the SAME block, `DO:` reduced to "read state, report", immediately before the table.
+Use the PLAN already printed before Step 1; do not print it twice. Resolve MODE/SCOPE, exact paths, `level`, and settings.json entries before mutation. For `uninstall`/`purge`, list the exact deletions and confirm once. Status and early-exit modes report the table and stop; `DO:` is "read state, report".
 
 ### Delegation
 
-A big task handed to one agent = an agent gone for an hour: unobservable, uncorrectable, drifting. One mode is ONE bounded unit (1 asset file + one settings.json + one config) — a single `hook-creator` spawn, one spawn per mode.
+One mode is ONE bounded unit (1 asset file + one settings.json + one config) — a single `hook-creator` spawn, one spawn per mode.
 
-Every spawn prompt MUST carry:
+Every brief must retain GOAL, ROLE (ownership/exclusions), SCOPE (paths/commands), CONTEXT (completed/parallel work), CONSUMER (next use/output shape), and DONE (acceptance/report).
 
-| Field | Content |
-|-------|---------|
-| GOAL | the overall task and why it exists |
-| ROLE | what this agent owns; what it must NOT touch |
-| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
-| CONTEXT | what is already done, what runs in parallel — trimmed to what THIS agent needs |
-| CONSUMER | who uses the result next and the shape it must fit |
-| DONE | acceptance criteria + the exact report shape |
-
-> **The level only survives if it reaches the SHELL.** `LEVEL`/`RUNBOOK` written as prose in the prompt are just text — the runbook's node blocks read them from `process.env`, and an empty `LEVEL` ABORTS the config and merge blocks (no silent `fast` fallback) instead of losing the user's choice. The spawn prompt below therefore carries the literal `export` line the agent must run FIRST, in the same Bash invocation as every runbook block. Substitute the chosen values into that `export` line, not only into the CONTEXT table.
+> **Export before every runbook Bash block.** `LEVEL`/`RUNBOOK` must reach `process.env`; empty `LEVEL` aborts config and merge (no silent `fast` fallback). Substitute chosen values into both CONTEXT and the literal export below; prose alone cannot set the environment.
 
 Spawn (substitute `MODE`, `LEVEL`, `RUNBOOK`, `ASSETS_DIR`, `PLUGIN_VERSION`, `LAST_UPDATED` from Steps 1-4 and the Config-metadata block — into BOTH the CONTEXT block and the `export` line):
 
 ```
-Task(subagent_type="brewcode:hook-creator", prompt="
+Agent(subagent_type="brewcode:hook-creator", prompt="
 GOAL: the user wants the agent-router hook MODE-ed for THIS project. One PreToolUse hook
 (matcher Agent) checks whether the main loop picked the right agent for a spawn and denies
 with the name of the real expert when it reached for a generic one. Runtime behavior lives

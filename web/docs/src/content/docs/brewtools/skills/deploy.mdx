@@ -25,13 +25,13 @@ import { Card, CardGrid, Callout, Steps, UpdateNotice } from '../../../../compon
 | Agent | [deploy-admin](/brewtools/agents/deploy-admin/) — auto-delegated for complex ops |
 | Config | `CLAUDE.local.md` (gitignored) |
 | Model | opus |
-| Tools | Read, Write, Edit, Bash, Task, AskUserQuestion, Glob, Grep |
+| Tools | Read, Write, Edit, Bash, Agent, AskUserQuestion, Glob, Grep |
 
 ## When to use
 
 - **First-time setup** — `setup` detects repo, enumerates workflows, writes `CLAUDE.local.md`, generates the `deploy-admin` agent
 - **New workflow** — `create` generates YAML from 4 battle-tested templates (Build+GHCR, Deploy VPS, Release, Security Scan)
-- **Release a version** — `release` covers bump → changelog → commit → tag → push → CI verification in one shot
+- **Release a version** — discover tags and preparation, approve the transaction, then stage → commit → HEAD push → tag → tag-ref push → verify
 - **Trigger a deployment** — `deploy` selects a `workflow_dispatch` workflow, confirms, triggers, monitors run
 - **Check CI status** — `monitor` shows recent runs, workflow states, latest releases, failed run logs
 - **Refresh agent** — `update-agent` re-discovers workflows and regenerates the `deploy-admin` agent with current data
@@ -65,7 +65,7 @@ import { Card, CardGrid, Callout, Steps, UpdateNotice } from '../../../../compon
   <li>
     <div>
       <strong>Mode detection</strong>
-      <p>Parses your argument for mode keywords: <code>setup</code>, <code>create</code>, <code>release</code>, <code>deploy</code>, <code>monitor</code>, <code>update-agent</code>. Empty arg with no existing config → setup; with config → monitor.</p>
+      <p>Explicit whole-word mode tokens win; otherwise distinct keyword hits select the mode. Conflicting explicit modes or tied mutating intents require clarification before actions. Empty input uses setup without GitHub Config and monitor when that section exists.</p>
     </div>
   </li>
   <li>
@@ -83,7 +83,7 @@ import { Card, CardGrid, Callout, Steps, UpdateNotice } from '../../../../compon
   <li>
     <div>
       <strong>Operation</strong>
-      <p><strong>create</strong> — generates workflow YAML from template, writes to <code>.github/workflows/</code>, updates config. <strong>release</strong> — probe project tooling → bump → changelog → commit → tag → push → optional post-release script → verify. <strong>deploy</strong> — confirms classification, triggers <code>workflow_dispatch</code>, polls run status, runs VPS health check if applicable.</p>
+      <p>Create proposes workflow configuration. Release discovers project tooling and tags, prepares bump/changelog proposals, and obtains approval before writes. Run the approved chain in project order: stage, commit, HEAD push, tag, and exact tag-ref push. Deploy approves dispatch, resolves the resulting run, and checks deployment health when applicable.</p>
     </div>
   </li>
   <li>
@@ -118,21 +118,21 @@ Nothing in the release path is hardcoded to a particular repo layout:
 
 | Step | Behavior |
 |------|----------|
-| Bump | `BUMP_SCRIPT` found → run it. `none` + version files obvious → edit every version file the repo actually has (`package.json`, `pyproject.toml`, `gradle.properties`, `Cargo.toml`, ...) to the same X.Y.Z. `none` + unclear → ask which files carry the version |
-| Changelog | Written into the `CHANGELOG` file from Step 0, matching the heading style already in that file. `none` → the summary goes into the tag/release body instead |
+| Bump | Propose the discovered helper or exact version-file changes before writes; unresolved version carriers require clarification |
+| Changelog | Propose changes in the existing heading style before writes; without a changelog file, use the tag/release body |
 | Post-release | Runs only if `POST_SCRIPT` was found; otherwise skipped and reported as "no post-release script" |
 | Verify | Checks whichever artifact the project actually publishes — container image, npm/PyPI package, a live `/version` endpoint, a plugin cache entry. Nothing published → "no external artifact to verify", not a failure |
 
 The multi-package flow with its own bump script, plugin-cache verification and doc links lives in `references/release-best-practices.md` as a clearly labelled worked EXAMPLE — a pattern to adapt, not commands to run.
 
 <Callout type="warning">
-**A pushed tag has no rollback.** `git tag -d` and `git push --delete` only undo a mistake made before anyone fetched it. Once `git push origin refs/tags/vX.Y.Z` succeeds, deleting or force-moving that tag is irreversible for anyone who already pulled it — their clone keeps the old object under the same name, so the tag now means two different commits to two different people. The escape past that point is always the next patch version, never a rewritten tag.
+**Local recovery does not undo publication.** Before any push, approved local recovery can address a failed commit/tag step. Once HEAD is pushed, the commit is public; once the tag is pushed, consumers may have fetched it. Report partial publication and use an approved next patch version rather than deleting or moving public history.
 </Callout>
 
 ## Delegation
 
 <Callout type="warning">
-**A big task handed to one agent = an agent gone for an hour.** You cannot observe it, you cannot correct it, and it usually drifts off-target. Every `Task` spawn — `deploy-admin` included — gets ONE bounded unit: one deliverable, ~5 files, ~10 steps, and never more than **one repo / one environment** per agent. A multi-repo or multi-environment job is split into N tasks (one per repo, one per environment), all spawned in a single message.
+Every Agent spawn gets one bounded deliverable, roughly five files and ten steps, for one repo/environment. Independent targets are assigned separate owners in parallel.
 </Callout>
 
 Every spawn prompt carries six fields. A bare one-line task is never enough:
@@ -146,7 +146,11 @@ Every spawn prompt carries six fields. A bare one-line task is never enough:
 | CONSUMER | who or what uses the result next, and the shape it must fit |
 | DONE | acceptance criteria + the exact report shape expected back |
 
-**Safety gates are not delegable.** `AskUserQuestion` is stripped from every subagent at runtime, so a spawned `deploy-admin` cannot confirm anything — the confirmation gates on release (P4 Step 3) and deploy (P5 Step 4) stay in this skill, in the main conversation. A delegated agent finishes all non-destructive work and ends its return with an `## APPROVAL REQUIRED` block instead — one envelope per destructive operation (`COMMAND` / `HOST` / `EFFECT` / `ROLLBACK` / `EVIDENCE` / `PRECONDITION`), or the literal `APPROVAL REQUIRED: none`. This skill shows the envelopes to the user, then re-spawns the agent with `APPROVED: A1 A3` in the prompt — the only authorization a subagent may act on.
+**Safety decisions stay with the main caller.** Ordinary subagents cannot use AskUserQuestion;
+conversation forks retain parent tools, but this distinction does not change the project's
+approval contract. Deploy Admin gathers evidence and returns exact envelopes with COMMAND,
+HOST, EFFECT, ROLLBACK, EVIDENCE, and PRECONDITION. The main caller presents them and passes
+APPROVED ids for exact commands only; execution rechecks preconditions.
 
 <details>
 <summary>Workflows, secrets, and internals</summary>
@@ -183,7 +187,17 @@ The skill reads SSH server inventory from `CLAUDE.local.md` (written by the [ssh
 
 ### Robustness rules
 
-Every Bash call uses `&& echo "OK" || echo "FAILED"` with fail-fast logic. Max 2 retries per operation, max 15 `gh` calls per invocation. Every bounded call runs through a shared watchdog (real `timeout`/`gtimeout` when installed, a bash fallback otherwise — GNU `timeout` is Homebrew-only on macOS): 30 s for `gh` commands, 15 min for `gh run watch`. CI runs are correlated by the pushed commit's `headSha`, not by reading the newest rows of `gh run list` — a bare "latest run" can belong to a concurrent push. A run that can't be matched or times out is reported as such, never silently treated as success.
+Release transaction failures retain their nonzero exit status and stop later steps. Emit
+RELEASED only after every approved step succeeds. Secret setting uses private file/stdin input
+without printing values or passing them as command arguments.
+
+For deployment provenance, correlate the successful source build's exact SHA, run id, and attempt
+with the downstream trigger, actual checkout, and published image. Use bounded version tags or
+SHA/run/attempt tags and verify labels/digests; mutable aliases do not establish provenance.
+Report missing linkage or live health checks as unverified rather than treating an unrelated
+green run as deployment success.
+
+Every Bash call preserves its exit status when reporting OK or FAILED; failure reporting must not turn a failed call into success. Max 2 retries per operation, max 15 `gh` calls per invocation. Every bounded call runs through a shared watchdog (real `timeout`/`gtimeout` when installed, a bash fallback otherwise — GNU `timeout` is Homebrew-only on macOS): 30 s for `gh` commands, 15 min for `gh run watch`. CI runs are correlated by the pushed commit's `headSha`, not by reading the newest rows of `gh run list` — a bare "latest run" can belong to a concurrent push. A run that can't be matched or times out is reported as such, never silently treated as success.
 
 ### Troubleshooting
 

@@ -16,14 +16,15 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 </Callout>
 
 <Callout type="note">
-**docsync-setup is the reference implementation.** Its `last_updated`-based staleness model, and its `version` / `generated_by` / `last_updated` metadata trio at the top of `config.json`, is the pattern the other nine `-setup` skills across brewcode, brewtools and brewdoc were unified onto in v5.1.0.
+**Shared setup metadata.** Docsync is one of 11 setup skills across Brewcode, Brewtools and Brewdoc.
+Its config carries provenance and a separate `content_version` for content-drift checks.
 </Callout>
 
 ## Quick reference
 
 | Field | Value |
 |-------|-------|
-| Command | `/brewdoc:docsync-setup [mode]` |
+| Command | `/brewdoc:docsync-setup [prompt] [mode]` |
 | Canonical modes | `status` · `install` · `upgrade` · `enable` · `disable` · `uninstall` · `purge` |
 | Extras | `sync [--all]` · `reread` · `frontmatter` · free text (RU/EN) |
 | No argument | `status` when the hooks are installed, `install` when they are not |
@@ -84,13 +85,13 @@ runs it on its own — you always invoke it by hand.
   <li>
     <div>
       <strong>Resolve mode</strong>
-      <p>Free text in RU or EN maps to a canonical verb (<code>status</code>, <code>install</code>, <code>upgrade</code>, <code>enable</code>, <code>disable</code>, <code>uninstall</code>, <code>purge</code>) or one of the extras (<code>sync</code>, <code>reread</code>, <code>frontmatter</code>). Empty input picks <code>install</code> when the hooks are not there yet, otherwise <code>status</code>. The old <code>init</code> alias parses as free text and is echoed back as <code>install</code>.</p>
+      <p>Free text in RU or EN resolves a canonical lifecycle verb or an extra mode. Empty input means install when absent, otherwise status. Explicit modes can appear anywhere in the prompt; material unresolved write decisions are bundled before work.</p>
     </div>
   </li>
   <li>
     <div>
       <strong>Install (once)</strong>
-      <p><code>install</code> asks for a staleness threshold (default 7 days) and exclude globs, copies the 3 hooks into <code>.claude/hooks/</code>, writes <code>.claude/docsync/config.json</code>, and idempotently merges <code>.claude/settings.json</code> — always backed up to <code>.bak</code> first. It never adds frontmatter to your docs. <code>upgrade</code> replays the same copy + idempotent merge against the current plugin version while preserving <code>config.json</code> — threshold and excludes survive.</p>
+      <p><code>install</code> asks for a threshold (default 7 days) and excludes, then validates inputs, settings and hook syntax before writes. It copies three hooks, writes configuration and idempotently merges settings. An existing <code>settings.json.bak</code> is retained; a backup is created only when absent. <code>upgrade</code> refreshes provenance and hooks while preserving enabled state, threshold, excludes and other config fields. Neither mode resets session state or adds document frontmatter.</p>
     </div>
   </li>
   <li>
@@ -134,7 +135,13 @@ Staleness is DATE ONLY: `today - last_updated > threshold_days`. No hashing, no 
 
 **Enable/disable polarity — the opposite of what you'd guess.** The flag lives in `config.json` under `"enabled"`, and an **absent key means ENABLED**: every hook's `loadConfig()` reads `enabled: c.enabled !== false`. So `"enabled": false` is installed-but-inert, not missing — a config with no `enabled` key at all is live. This is the reverse of `brewtools:agent-deadline-setup`, whose gate checks `cfg.enabled !== true`, so an absent key there is INERT. Do not assume the two setups share a polarity.
 
-Before this release, `enable`/`disable` required the version/generated_by/last_updated trio to already be present byte-identical, and failed when it was missing. They now ADD the trio when absent, so a pre-standard `config.json` gets backfilled instead of staying unstamped forever.
+Enable/disable refreshes provenance and content-version metadata while preserving threshold and excludes.
+
+**Write failure and recovery.** Install/upgrade snapshots every destination before mutation and
+publishes each file through a checked atomic rename. If a destination changes meanwhile, setup
+stops rather than overwriting it. On failure, rollback restores each committed file's prior bytes
+and mode only if it still matches this run's output; concurrent edits remain intact and recovery
+gaps are reported. This is per-file publication and recovery, not an all-files atomic transaction.
 
 **The three hooks**
 
@@ -148,16 +155,21 @@ The gate's `asked` flag is one boolean per session: after that single block, doc
 
 **Project root resolution — the hooks resolve it themselves, at runtime.** Each hook tries `CLAUDE_PROJECT_DIR` first, then walks upward from the hook's own `cwd` for the nearest `.git` or `.claude` marker, then falls back to that same `cwd` — there is no `git rev-parse` rung inside the hooks. The skill's own install/upgrade/status Bash snippets add one extra rung, `git rev-parse --show-toplevel`, between the env var and the walk; the two agree on every layout except a nested `.claude`, where the hooks — not the skill's shell snippet — decide where config and state actually land. `input.cwd` is never treated as the root: it drifts mid-session, so it is used only to resolve a relative `tool_input` path.
 
-Hooks are self-contained ESM (Node built-ins only), read state from `.claude/docsync/` at runtime, and take effect starting the next session. Line 2 of each carries a `// brewcode-meta: version=… generated_by=brewdoc:docsync-setup` stamp baked at release, so an installed copy can be compared byte-for-byte against the plugin's. `tests/suite-hooks.mjs` exercises all three hooks directly — session isolation, exclude globs, the disabled-polarity fix, gate blocking at most once, a missing config file — 26 checks, all passing.
+Hooks are self-contained ESM (Node built-ins only), read state from `.claude/docsync/` at runtime,
+and take effect starting the next session. Their line-2 metadata supports installed-copy comparison.
+Local hook tests cover session isolation, excludes, enabled polarity, gate blocking and missing
+config. Suite output supplies the current pass/fail totals; this page does not claim a live runtime run.
 
 **State / config** — `.claude/docsync/`:
 
-- `config.json` — `{ "version": "X.Y.Z", "generated_by": "brewdoc:docsync-setup", "last_updated": "2026-08-08", "enabled": true, "threshold_days": 7, "exclude": ["node_modules/**", ...] }` — the three provenance keys come first, in that order, ahead of the skill-private ones
-- `state.json` — install writes `{ "session_id": null, "touched": [], "asked": false }`; the hooks own it from then on, replacing `null` with the live session id and resetting `touched`/`asked` on every session change
+- `config.json` — version/content-version provenance, enabled state, threshold and exclude globs; upgrade retains configuration values while refreshing metadata.
+- `state-<session_id>.json` — hook-owned touched set and asked flag for each session. A missing session id falls back to `state.json`. Install/upgrade preserves existing session files.
 
 **Scope** — all `*.md` in the project minus `exclude` globs and any file marked `doc_type: "skip"`. All three hooks apply both filters, the Stop gate included, so marking a doc `skip` mid-session silences it immediately — even if it was already touched. Only docs actually read or edited in a session are candidates for the end-of-turn nag; untouched docs are never nagged.
 
-**`uninstall`** removes only the 3 docsync hook entries from `settings.json` (foreign entries preserved), deletes the 3 hook files, and asks separately whether to drop `.claude/docsync/` — keeping it means a later `install` reuses the config. **`purge`** is `uninstall` with no survivors: `.claude/docsync/` is deleted outright, foreign settings and the `.bak` backup untouched.
+**`uninstall`** removes only the three docsync hook entries and files, preserving foreign entries,
+then asks whether to remove `.claude/docsync/`. Keeping that directory retains configuration and
+session history. **`purge`** removes it as well; foreign settings and the settings backup remain.
 
 </details>
 

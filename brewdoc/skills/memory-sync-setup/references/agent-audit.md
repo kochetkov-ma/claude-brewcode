@@ -1,9 +1,8 @@
-<!-- brewcode-meta: version=6.2.0 content_version=6.2.0 generated_by=brewdoc:memory-sync-setup -->
+<!-- brewcode-meta: version=6.3.0 content_version=6.3.0 generated_by=brewdoc:memory-sync-setup -->
 # Agent and Skill Re-Audit
 
-The standing best-practice audit `/memory-sync` runs on EVERY agent file and EVERY skill file, on EVERY run, at
-every scope and depth. Cited by the emitted skill's agents batch and skills batch. Agents are not merely
-fact-checked here - they are held to current best practice.
+Every `/memory-sync` run audits every agent and skill at every scope/depth. The emitted agents and skills
+batches cite this standing best-practice audit; fact-checking alone is insufficient.
 
 **Project-specific checks live in the emitted SKILL.md's own check tables.** This file carries only what holds in
 any repo; do not restate the project tables here, and do not weaken them with a generic equivalent.
@@ -55,7 +54,7 @@ Which seats THIS project has is not listed here - the emitted SKILL.md's runtime
 | 2 | `description:` shape | ROLE FIRST in the opening clause, then a concrete trigger list a router can match on | Rewrite role-first; add the real triggers used at the agent's call-sites (skills, CLAUDE.md, other agents) |
 | 3 | Trigger concreteness | Triggers are phrases a user would actually type, not a restatement of the role | Replace vague triggers with the phrases the skill/agent is really called by |
 | 4 | `tools:` minimality | Exactly the tools the BODY uses - nothing aspirational | Remove a tool used NOWHERE in the body; a read-only recon agent carrying `Write` / `Edit` is a defect, not a convenience. Use IMPLIED by the prose but never named (`Agent`, `Skill`, `WebFetch`) -> REPORT, never strip |
-| 5 | Search capability | Any agent that SEARCHES lists `Bash`. On macOS Claude Code, native `Grep` / `Glob` are no-ops, so a searcher without `Bash` cannot search at all | Add `Bash`. Keep `Grep` / `Glob` only as declared fallbacks for non-macOS builds |
+| 5 | Search capability | Search tools the body names are declared and available; native `Grep`/`Glob` availability is runtime-specific, not OS-wide | Keep available native tools; add `Bash` only when the body needs a shell fallback (`rg`/`find`, or installed `ugrep`/`bfs`) |
 | 6 | `model:` | Present only when a non-default model is justified by the work (deep reasoning vs mechanical edits) | Drop an unjustified override; state the justification in one clause where it stays |
 | 7 | Ownership globs | Every path or glob the body claims to own resolves to something real today | Repoint at the moved path; the owned surface is gone -> the agent may be dead, REPORT it |
 | 8 | MCP tool prefixes | Every `mcp__<server>__*` names a CONFIGURED server in this project's MCP inventory | Remove or repoint the prefix. Tool names WITHIN a live server are not checkable offline - never claim they are |
@@ -104,7 +103,7 @@ retired. Do not audit against a remembered key set.
 
 | Class | Handling |
 |-------|----------|
-| MECHANICAL - apply the fix | `name:` mismatch (agent-1, skill-1), role-first description with concrete triggers (agent-2, agent-3), unjustified `model:` override (agent-6), dead path or glob (agent-7, skill-5), a tool entry used NOWHERE in the body (agent-4), missing `Bash` on a searcher (agent-5), dead MCP server prefix (agent-8), broken reference citation and uncited orphan reference (skill-8, skill-9), restated rule replaced by a pointer (agent-12), a prompting-guide rewrite where its lossless guard allows it (agent-13), date stamp, wording compressed |
+| MECHANICAL - apply the fix | `name:` mismatch (agent-1, skill-1), role-first description with concrete triggers (agent-2, agent-3), unjustified `model:` override (agent-6), dead path or glob (agent-7, skill-5), a tool entry used NOWHERE in the body (agent-4), undeclared search tool required by the body (agent-5), dead MCP server prefix (agent-8), broken reference citation and uncited orphan reference (skill-8, skill-9), restated rule replaced by a pointer (agent-12), a prompting-guide rewrite where its lossless guard allows it (agent-13), date stamp, wording compressed |
 | RESPONSIBILITY - report only | Anything that changes WHAT an agent owns or does: widening or narrowing its scope, retargeting its ownership globs to a different subsystem, merging or splitting agents, deleting an agent whose surface is gone, resolving two agents that claim the same seam, ADDING a missing output shape (agent-11 - authoring, and it spends the non-growth budget), stripping a tool whose use is implied in prose but never named, a contradiction between a runtime seat's body and one of its call sites (agent-15 - quote BOTH texts) |
 
 A responsibility change is a design decision. State the finding, the evidence, and the proposed change in the

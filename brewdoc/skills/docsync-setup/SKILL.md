@@ -7,7 +7,7 @@ argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge]
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion]
 model: sonnet
 ---
-<!-- brewcode-meta: version=6.2.0 content_version=6.0.0 generated_by=brewdoc:docsync-setup -->
+<!-- brewcode-meta: version=6.3.0 content_version=6.3.0 generated_by=brewdoc:docsync-setup -->
 
 # docsync-setup
 
@@ -73,9 +73,9 @@ Run in the main conversation (uses `AskUserQuestion`). No `context: fork`.
 > [ -n "$ROOT" ] || { d=$PWD; until [ -d "$d/.git" ] || [ -d "$d/.claude" ] || [ "$d" = / ]; do d=$(dirname "$d"); done; [ "$d" = / ] && ROOT=$PWD || ROOT=$d; }
 > ```
 
-> **Enumerating docs.** Native `Glob`/`Grep` are no-ops on macOS Claude Code
-> (removed in CC 2.1.117+). Enumerate `.md` via the **Bash** tool (`find`/bfs), as
-> shown below; `Glob **/*.md` is a non-macOS fallback only.
+> **Enumerating docs.** Use available native `Glob`/`Grep` tools. If unavailable,
+> enumerate `.md` with Bash `find` (below) and search with `rg`; do not infer tool
+> availability from the operating system.
 
 ## Mode Resolution — prompt-driven
 
@@ -221,136 +221,119 @@ Record `THRESHOLD` (integer, default 7) and `EXCLUDE` (comma-separated globs).
 ROOT="${CLAUDE_PROJECT_DIR}"
 [ -n "$ROOT" ] && [ -d "$ROOT" ] || ROOT=$(git rev-parse --show-toplevel 2>/dev/null || true)
 [ -n "$ROOT" ] || { d=$PWD; until [ -d "$d/.git" ] || [ -d "$d/.claude" ] || [ "$d" = / ]; do d=$(dirname "$d"); done; [ "$d" = / ] && ROOT=$PWD || ROOT=$d; }
-SRC="${CLAUDE_SKILL_DIR}/assets"
-DST="$ROOT/.claude/hooks"
-DOCSYNC="$ROOT/.claude/docsync"
-SETTINGS="$ROOT/.claude/settings.json"
-
-# Plugin version by skill self-location — NEVER hardcode it. config.json is the anchor
-# artifact other tooling (e.g. /brewcode:setup-status) reads the installed version from.
-PLUGIN_JSON="${CLAUDE_SKILL_DIR}/../../.claude-plugin/plugin.json"
-PV=$(node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(process.argv[1],'utf8')).version||'')" "$PLUGIN_JSON" 2>/dev/null || true)
-[ -n "$PV" ] || { echo "❌ cannot read version from $PLUGIN_JSON — reinstall brewdoc"; exit 1; }
-
-# content_version — this SKILL.md's own header marker, self-located the same way PV is.
-SKILL_MD="${CLAUDE_SKILL_DIR}/SKILL.md"
-CV=$(grep -m1 'brewcode-meta:' "$SKILL_MD" | sed -n 's/.*content_version=\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*/\1/p')
-[ -n "$CV" ] || { echo "❌ cannot read content_version from $SKILL_MD — reinstall brewdoc"; exit 1; }
-
-# What existed BEFORE this run — a failed settings merge rolls back only what it created,
-# never a working install's files (install Step 2 is re-run verbatim by `upgrade`).
-HOOKS_EXISTED=1
-for f in docsync-track docsync-watch docsync-gate; do [ -f "$DST/$f.mjs" ] || HOOKS_EXISTED=0; done
-[ -f "$DOCSYNC/config.json" ] && CFG_EXISTED=1 || CFG_EXISTED=0
-
-mkdir -p "$DST" "$DOCSYNC" \
-  && cp "$SRC/docsync-track.mjs" "$SRC/docsync-watch.mjs" "$SRC/docsync-gate.mjs" "$DST/" \
-  && echo "✅ hooks copied to $DST" || { echo "❌ copy FAILED"; exit 1; }
-
-rollback() {
-  cp "$SETTINGS.bak" "$SETTINGS" 2>/dev/null
-  [ "$HOOKS_EXISTED" = 1 ] || rm -f "$DST/docsync-track.mjs" "$DST/docsync-watch.mjs" "$DST/docsync-gate.mjs"
-  [ "$CFG_EXISTED" = 1 ] || rm -f "$DOCSYNC/config.json"
-  echo "↩️ rolled back — settings restored, nothing half-installed left behind"
+MODE=install
+node - "$ROOT" "${CLAUDE_SKILL_DIR}" "$MODE" <<'NODE'
+const fs = require('node:fs');
+const path = require('node:path');
+const { spawnSync } = require('node:child_process');
+const [root, skill, mode] = process.argv.slice(2);
+const names = ['docsync-track', 'docsync-watch', 'docsync-gate'];
+const settings = path.join(root, '.claude/settings.json');
+const config = path.join(root, '.claude/docsync/config.json');
+const planned = [];
+const createdDirs = [];
+const committed = [];
+const temps = [];
+function snapshot(file) {
+  try {
+    const stat = fs.lstatSync(file);
+    if (!stat.isFile()) throw new Error(`not a regular file: ${file}`);
+    return { bytes: fs.readFileSync(file), mode: stat.mode & 0o7777, atime: stat.atime, mtime: stat.mtime };
+  } catch (error) {
+    if (error.code === 'ENOENT') return null;
+    throw error;
+  }
 }
-
-# config.json — replace the two placeholders below before running.
-# The four provenance keys come first, in the standard order, then the skill-private ones.
-printf '{ "version": "%s", "content_version": "%s", "generated_by": "brewdoc:docsync-setup", "last_updated": "%s", "enabled": true, "threshold_days": THRESHOLD_VALUE, "exclude": EXCLUDE_JSON }\n' "$PV" "$CV" "$(date +%F)" > "$DOCSYNC/config.json" \
-  && node -e "JSON.parse(require('fs').readFileSync('$DOCSYNC/config.json','utf8'))" \
-  && echo "✅ config.json written (version $PV, content_version $CV)" || { echo "❌ config.json invalid JSON"; exit 1; }
-
-# State files are per session (`state-<session_id>.json`) and owned by the hooks —
-# install seeds nothing. A pre-6.0 `state.json` is left alone; the gate prunes it.
-mkdir -p "$(dirname "$SETTINGS")"
-[ -f "$SETTINGS" ] || echo '{}' > "$SETTINGS"
-# Backup BEFORE any write — merge must never lose foreign hooks/permissions/env.
-cp "$SETTINGS" "$SETTINGS.bak"
-
-# Exec form (upstream's stated preference for any hook referencing a path placeholder):
-# the placeholder is substituted per `args` element on every shell, whereas a shell-form
-# `$CLAUDE_PROJECT_DIR` resolves to $null under PowerShell and launches node on "/.claude/…".
-# The token is ASSEMBLED here on purpose — written literally it would be substituted into
-# this machine's absolute path by the skill loader and the committed settings.json would
-# stop being portable.
-D='$'; PD="${D}{CLAUDE_PROJECT_DIR}"
-T_ARG="$PD/.claude/hooks/docsync-track.mjs"
-W_ARG="$PD/.claude/hooks/docsync-watch.mjs"
-G_ARG="$PD/.claude/hooks/docsync-gate.mjs"
-
-if command -v python3 >/dev/null 2>&1; then
-  SETTINGS="$SETTINGS" T_ARG="$T_ARG" W_ARG="$W_ARG" G_ARG="$G_ARG" python3 - <<'PY'
-import json, os, sys
-f = os.environ["SETTINGS"]
-raw = ""
-if os.path.exists(f):
-    with open(f, encoding="utf-8-sig") as fh:  # BOM-tolerant
-        raw = fh.read()
-if raw.strip():
-    try:
-        data = json.loads(raw)
-    except Exception as e:
-        sys.stderr.write("docsync: settings.json is not valid JSON (%s) — ABORTING, not clobbering\n" % e)
-        sys.exit(1)
-else:
-    data = {}
-hooks = data.setdefault("hooks", {})
-# Idempotency scans command AND args — exec-form entries carry the path in args.
-def text(h):
-    return " ".join([h.get("command") or ""] + [str(a) for a in (h.get("args") or [])])
-def has(event, needle):
-    return any(needle in text(h) for g in hooks.get(event, []) for h in g.get("hooks", []))
-def add(event, matcher, arg, needle):
-    if has(event, needle): return
-    groups = hooks.setdefault(event, [])
-    if matcher:
-        grp = next((g for g in groups if g.get("matcher") == matcher), None)
-    else:
-        grp = next((g for g in groups if not g.get("matcher")), None)
-    entry = {"type": "command", "command": "node", "args": [arg]}
-    if grp is not None:
-        grp.setdefault("hooks", []).append(entry)
-    else:
-        groups.append({"matcher": matcher, "hooks": [entry]} if matcher else {"hooks": [entry]})
-add("PostToolUse", "Write|Edit|MultiEdit", os.environ["T_ARG"], "docsync-track.mjs")
-add("PostToolUse", "Read", os.environ["W_ARG"], "docsync-watch.mjs")
-add("Stop", "", os.environ["G_ARG"], "docsync-gate.mjs")
-tmp = f + ".tmp"
-json.dump(data, open(tmp, "w"), indent=2)
-os.replace(tmp, f)
-print("OK")
-PY
-  [ $? -eq 0 ] && echo "✅ settings.json merged (python3)" || { echo "❌ merge FAILED"; rollback; exit 1; }
-elif command -v jq >/dev/null 2>&1; then
-  TMP="$(mktemp)"
-  jq --arg t "$T_ARG" --arg w "$W_ARG" --arg g "$G_ARG" '
-    def text: [(.command // "")] + ((.args // []) | map(tostring)) | join(" ");
-    def has(ev; needle): (.hooks[ev] // []) | map(.hooks // [] | map(text) | any(test(needle))) | any;
-    def entry(arg): {"type":"command","command":"node","args":[arg]};
-    def add(ev; matcher; arg; needle):
-      if has(ev; needle) then .
-      else
-        .hooks[ev] = (.hooks[ev] // [])
-        | ( if matcher == "" then (.hooks[ev] | map((.matcher // "") == "") | index(true))
-            else (.hooks[ev] | map((.matcher // "") == matcher) | index(true)) end) as $i
-        | if $i != null then .hooks[ev][$i].hooks += [entry(arg)]
-          else .hooks[ev] += [ (if matcher == "" then {"hooks":[entry(arg)]}
-                                else {"matcher":matcher,"hooks":[entry(arg)]} end) ] end
-      end;
-    .hooks = (.hooks // {})
-    | add("PostToolUse"; "Write|Edit|MultiEdit"; $t; "docsync-track\\.mjs")
-    | add("PostToolUse"; "Read"; $w; "docsync-watch\\.mjs")
-    | add("Stop"; ""; $g; "docsync-gate\\.mjs")
-  ' "$SETTINGS" > "$TMP" && jq empty "$TMP" >/dev/null 2>&1 && mv "$TMP" "$SETTINGS" \
-    && echo "✅ settings.json merged (jq)" || { echo "❌ merge FAILED"; rm -f "$TMP"; rollback; exit 1; }
-else
-  # Not a failure to roll back: the files must stay so the user can wire them by hand.
-  echo "❌ neither python3 nor jq — hooks + config KEPT; add the three entries from assets/INSTALL.md manually"
-fi
+function matches(file, expected) {
+  const actual = snapshot(file);
+  return expected === null ? actual === null : actual !== null && actual.bytes.equals(expected.bytes) && actual.mode === expected.mode;
+}
+function plan(file, bytes, before = snapshot(file)) {
+  planned.push({ file, before, after: { bytes: Buffer.from(bytes), mode: before?.mode ?? 0o600 } });
+}
+function mkdir(dir) {
+  if (fs.existsSync(dir)) return;
+  mkdir(path.dirname(dir));
+  fs.mkdirSync(dir);
+  createdDirs.push(dir);
+}
+function atomic(file, state, expected) {
+  const temp = `${file}.${process.pid}.${temps.length}.tmp`;
+  const fd = fs.openSync(temp, 'wx', state.mode);
+  temps.push(temp);
+  try { fs.writeFileSync(fd, state.bytes); } finally { fs.closeSync(fd); }
+  fs.chmodSync(temp, state.mode);
+  if (!matches(file, expected)) throw new Error(`changed during setup: ${file}`);
+  fs.renameSync(temp, file);
+}
+try {
+  if (!['install', 'upgrade'].includes(mode)) throw new Error('mode must be install or upgrade');
+  const version = JSON.parse(fs.readFileSync(path.join(skill, '../../.claude-plugin/plugin.json'), 'utf8')).version;
+  const header = fs.readFileSync(path.join(skill, 'SKILL.md'), 'utf8');
+  const contentVersion = /brewcode-meta:[^\n]*content_version=([0-9]+\.[0-9]+\.[0-9]+)/.exec(header)?.[1];
+  if (!version || !contentVersion) throw new Error('missing plugin/content version');
+  const threshold = THRESHOLD_VALUE;
+  const exclude = EXCLUDE_JSON;
+  if (!Number.isInteger(threshold) || threshold < 1 || !Array.isArray(exclude) || exclude.some(x => typeof x !== 'string')) throw new Error('invalid threshold or exclude list');
+  const beforeConfig = snapshot(config);
+  const previous = beforeConfig ? JSON.parse(beforeConfig.bytes.toString('utf8').replace(/^\uFEFF/, '')) : {};
+  if (!previous || typeof previous !== 'object' || Array.isArray(previous)) throw new Error('config must be an object');
+  if (mode === 'upgrade' && !beforeConfig) throw new Error('not installed; run install');
+  const { version: oldVersion, content_version, generated_by, last_updated, ...rest } = previous;
+  const next = { version, content_version: contentVersion, generated_by: 'brewdoc:docsync-setup', last_updated: new Date().toISOString().slice(0, 10), ...(mode === 'upgrade' ? rest : { enabled: true, threshold_days: threshold, exclude }) };
+  const beforeSettings = snapshot(settings);
+  const raw = beforeSettings?.bytes.toString('utf8').replace(/^\uFEFF/, '') ?? '';
+  const data = raw.trim() ? JSON.parse(raw) : {};
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('settings must be an object');
+  data.hooks ??= {};
+  if (!data.hooks || typeof data.hooks !== 'object' || Array.isArray(data.hooks)) throw new Error('settings hooks must be an object');
+  for (const [event, matcher, name] of [['PostToolUse', 'Write|Edit|MultiEdit', names[0]], ['PostToolUse', 'Read', names[1]], ['Stop', '', names[2]]]) {
+    const groups = data.hooks[event] ??= [];
+    if (!Array.isArray(groups) || groups.some(g => !g || !Array.isArray(g.hooks) || g.hooks.some(h => !h || typeof h !== 'object' || (h.args !== undefined && !Array.isArray(h.args))))) throw new Error(`invalid ${event} hooks`);
+    if (groups.some(g => g.hooks.some(h => [h.command ?? '', ...(h.args ?? [])].join(' ').includes(`${name}.mjs`)))) continue;
+    let group = groups.find(g => (g.matcher ?? '') === matcher);
+    if (!group) { group = matcher ? { matcher, hooks: [] } : { hooks: [] }; groups.push(group); }
+    group.hooks.push({ type: 'command', command: 'node', args: ['${' + 'CLAUDE_PROJECT_DIR}/.claude/hooks/' + name + '.mjs'] });
+  }
+  for (const name of names) {
+    const source = path.join(skill, 'assets', `${name}.mjs`);
+    const checked = spawnSync(process.execPath, ['--check', source], { encoding: 'utf8' });
+    if (checked.status !== 0) throw new Error(`invalid hook source: ${source}`);
+    plan(path.join(root, '.claude/hooks', `${name}.mjs`), fs.readFileSync(source));
+  }
+  plan(config, JSON.stringify(next, null, 2) + '\n', beforeConfig);
+  // Never overwrite a prior user backup; each rollback uses this run's snapshots.
+  if (!fs.existsSync(`${settings}.bak`)) plan(`${settings}.bak`, beforeSettings?.bytes ?? '{}\n', null);
+  plan(settings, JSON.stringify(data, null, 2) + '\n', beforeSettings);
+  // Validate every input and snapshot every destination before the first mutation.
+  for (const entry of planned) {
+    mkdir(path.dirname(entry.file));
+    atomic(entry.file, entry.after, entry.before);
+    committed.push(entry);
+  }
+  console.log(`docsync ${mode}: hooks, config and settings committed; settings backup: ${settings}.bak`);
+} catch (error) {
+  console.error(`docsync ${mode} failed: ${error.message}`);
+  for (const entry of committed.reverse()) {
+    try {
+      if (!matches(entry.file, entry.after)) throw new Error('concurrent edit preserved; reconcile manually');
+      if (entry.before) {
+        atomic(entry.file, entry.before, entry.after);
+        fs.utimesSync(entry.file, entry.before.atime, entry.before.mtime);
+      } else fs.unlinkSync(entry.file);
+    } catch (rollbackError) { console.error(`rollback ${entry.file}: ${rollbackError.message}`); }
+  }
+  process.exitCode = 1;
+} finally {
+  for (const temp of temps) { try { fs.unlinkSync(temp); } catch (error) { if (error.code !== 'ENOENT') console.error(`cleanup ${temp}: ${error.message}`); } }
+  for (const dir of createdDirs.reverse()) { try { fs.rmdirSync(dir); } catch (error) { if (!['ENOENT', 'ENOTEMPTY', 'EEXIST'].includes(error.code)) console.error(`cleanup ${dir}: ${error.message}`); } }
+}
+NODE
 ```
 
-> **STOP if ❌** — the pre-write backup is at `$SETTINGS.bak`. See
-> `${CLAUDE_SKILL_DIR}/assets/INSTALL.md` for the manual entries.
+> **STOP on nonzero exit.** Validation errors leave destinations untouched; write
+> failures restore each committed file independently, preserving concurrent edits.
+> An existing `settings.json.bak` is retained. Never delete session state files.
 
 ### Step 3: Report + tell the user
 
@@ -369,43 +352,13 @@ Refresh an EXISTING install to the current plugin version. Config and state surv
 
 1. Require `INSTALLED` from first-run detection. If `NOT_INSTALLED` -> say so and
    run `install` instead.
-2. Re-copy the three hook files from `${CLAUDE_SKILL_DIR}/assets` over
-   `$ROOT/.claude/hooks/` (same `cp` as install Step 2), leaving the session state
-   files untouched.
-3. Refresh ONLY the three provenance keys in `.claude/docsync/config.json` —
-   `version`, `generated_by`, `last_updated`. `threshold_days`, `exclude` and
-   `enabled` are preserved verbatim: upgrading a DISABLED install must leave it
-   disabled.
-
-   **EXECUTE** using Bash tool:
-   ```bash
-   ROOT="${CLAUDE_PROJECT_DIR}"
-   [ -n "$ROOT" ] && [ -d "$ROOT" ] || ROOT=$(git rev-parse --show-toplevel 2>/dev/null || true)
-   [ -n "$ROOT" ] || { d=$PWD; until [ -d "$d/.git" ] || [ -d "$d/.claude" ] || [ "$d" = / ]; do d=$(dirname "$d"); done; [ "$d" = / ] && ROOT=$PWD || ROOT=$d; }
-   C="$ROOT/.claude/docsync/config.json"
-   PJ="${CLAUDE_SKILL_DIR}/../../.claude-plugin/plugin.json"
-   SKILL_MD="${CLAUDE_SKILL_DIR}/SKILL.md"
-   node -e '
-     const fs = require("fs");
-     const [c, pj, today, skillMd] = process.argv.slice(1);
-     const v = JSON.parse(fs.readFileSync(pj, "utf8")).version;
-     if (!v) throw new Error("no version in " + pj);
-     const header = fs.readFileSync(skillMd, "utf8").split("\n").find(l => l.includes("brewcode-meta:")) || "";
-     const cvm = /content_version=([0-9]+\.[0-9]+\.[0-9]+)/.exec(header);
-     if (!cvm) throw new Error("no content_version in " + skillMd);
-     const cv = cvm[1];
-     const cfg = JSON.parse(fs.readFileSync(c, "utf8"));
-     const was = cfg.version || "(none)";
-     const { version, content_version, generated_by, last_updated, ...rest } = cfg;
-     const next = { version: v, content_version: cv, generated_by: "brewdoc:docsync-setup", last_updated: today, ...rest };
-     fs.writeFileSync(c, JSON.stringify(next, null, 2) + "\n");
-     console.log(`config.json version ${was} -> ${v}; content_version=${next.content_version}, generated_by=${next.generated_by}, last_updated=${next.last_updated}; enabled=${next.enabled !== false}, threshold_days=${next.threshold_days}, exclude=${JSON.stringify(next.exclude)}`);
-   ' "$C" "$PJ" "$(date +%F)" "$SKILL_MD" && echo "✅ config provenance refreshed" || { echo "❌ config provenance refresh FAILED"; exit 1; }
-   ```
-4. Re-run the settings merge from install Step 2 — it is idempotent, so it only
-   restores entries a user or another tool dropped.
-5. Run the install verification block and report per-check pass/fail, plus
-   `threshold_days` + `exclude` + `enabled` unchanged.
+2. Run the complete transaction from install Step 2 with `MODE=upgrade`,
+   `THRESHOLD_VALUE=7`, and `EXCLUDE_JSON=[]`. Upgrade uses the existing config's
+   private fields, including `threshold_days`, `exclude`, `enabled`, and unknown
+   keys; it refreshes all four provenance keys and repairs missing settings entries.
+   Source hooks, config, and settings are validated before any destination write.
+3. Run the install verification block and report per-check pass/fail, plus
+   `threshold_days` + `exclude` + `enabled` unchanged. Session state is untouched.
 
 ---
 

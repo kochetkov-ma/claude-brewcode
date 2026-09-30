@@ -23,9 +23,9 @@ follow in any order. Nobody types keys: resolve mode + scope FROM the prompt.
 2. Else score modes by distinct whole-word keyword hits (table below). Highest unique score wins.
    Tie with a destructive mode -> `AskUserQuestion`; tie with `status` -> `status`;
    tie of two mutating modes -> the keyword appearing first; all zero -> `status`.
-3. Empty arguments -> `status`; ask ONE scoping `AskUserQuestion` only when the answer
-   changes what gets written. A read-only run asks nothing.
-4. Outcome-changing ambiguity -> ONE `AskUserQuestion` (max 4 questions) BEFORE any work.
+3. Empty -> `status`. Bundle material unresolved write decisions in ONE `AskUserQuestion`
+   (max 4 questions), before work. Read-only asks nothing except an explicitly requested menu.
+4. Use prompt/history answers; never repeat resolved questions or routine approval calls.
 5. Prose that is not a mode/id/path is still input: extract the id, path or target from it.
 
 Then print this block ONCE, before the first action:
@@ -39,7 +39,7 @@ DO:     <2-5 imperative bullets>
 RESULT: <what the user ends up holding>
 ```
 
-Labels are literal; values follow the conversation language.
+Labels/plan values are English; INPUT preserves the user's verbatim text.
 
 ## Constants
 
@@ -51,10 +51,8 @@ Labels are literal; values follow the conversation language.
 
 ## Step 1 — Input gate
 
-Treat the **entire** user input (`$ARGUMENTS`) as ONE free-form natural-language prompt — no keyword grammar, no argument parser (`argument-hint` is only a loose example).
-
-- prompt non-empty -> go to **Step 2**
-- prompt empty / whitespace-only -> go to **Step 3**
+Treat all `$ARGUMENTS` as one RU/EN prompt; `argument-hint` is guidance, not positional grammar.
+Empty/whitespace -> `status`; otherwise Step 2. Explicit menu request -> Step 3.
 
 ## Step 2 — Auto-mode selection
 
@@ -74,20 +72,10 @@ prose-extraction case, not a keyword hit.
 
 **Batch flag:** plural form, "все" / "all", or multiple names/paths -> fan-out (one specialist spawn per item).
 
-Then **print the PLAN block (MANDATORY, before any work)** per the Prompt contract above:
+Print the canonical PLAN once after resolving scope/mode, before work; MODE includes explicit/default
+or the quoted matched keyword. SCOPE includes resolved targets/paths. Proceed to Step 4.
 
-```
-PLAN — brewcode:skills
-INPUT:  <prompt verbatim, or "(empty)">
-MODE:   <mode> — matched keyword: <evidence quoted from the prompt> | default
-SCOPE:  <targets/paths resolved this step>
-DO:     <2-5 imperative bullets for what Step 4 is about to run>
-RESULT: <what the user ends up holding>
-```
-
-Proceed to **Step 4**.
-
-## Step 3 — No-prompt menu (single AskUserQuestion, scoped + cross-link)
+## Step 3 — Explicitly requested menu (single AskUserQuestion, scoped + cross-link)
 
 Ask ONE AskUserQuestion. Question: `What do you want to do with skills?`
 Options (in this order):
@@ -101,17 +89,14 @@ Options (in this order):
 - `List (plain)`
 - `Nothing / cancel`
 
-After the choice:
-- `Nothing / cancel` -> stop.
-- `create` or `improve` -> ask ONE follow-up AskUserQuestion for the target/description
-  plus the artifact-specific params (see "Artifact-specific params" below).
-- Then print the PLAN block using the Step 2 format (`MODE` reason = `default` or `explicit`
-  depending on the menu choice) and proceed to **Step 4**.
+Cancel -> stop. Otherwise use the choice plus prompt/history for target/description and artifact params;
+do not ask a follow-up after using the one-question allowance. Safe missing params -> stated defaults;
+write-critical unresolved params -> report the missing decision before writing. Print PLAN, then Step 4.
 
-## Delegation (applies to EVERY Task spawn in this skill)
+## Delegation (applies to EVERY Agent spawn in this skill)
 
-A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct
-it, and it usually drifts off-target. One subagent = ONE bounded unit — one deliverable
+Main owns every spawn; delegates return decisions/results and never nest or accept their own output.
+One subagent = ONE bounded unit — one deliverable
 (here: ONE skill directory), ~<=5 files, ~<=10 steps. Bigger MUST be split into N tasks, all
 spawned in ONE message.
 
@@ -119,12 +104,12 @@ Every spawn prompt MUST carry:
 
 | Field | Content |
 |-------|---------|
-| GOAL | the overall task and why it exists — the point beyond the file edit |
-| ROLE | what this agent owns; what it must NOT touch |
-| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
-| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what THIS agent needs |
-| CONSUMER | who or what uses the result next, and the shape it must fit |
-| DONE | acceptance criteria + the exact report shape you want back |
+| GOAL | overall task/purpose beyond editing |
+| ROLE | owned responsibility + forbidden changes |
+| SCOPE | exact paths/commands in/out of bounds |
+| CONTEXT | prior work/owners, parallel work; relevant to this agent only |
+| CONSUMER | next consumer + required result shape |
+| DONE | acceptance criteria + exact return format |
 
 A bare one-line task is never enough. See Phase 2 for the canonical spawn shape.
 
@@ -133,9 +118,9 @@ A bare one-line task is never enough. See Phase 2 for the canonical spawn shape.
 - `status` -> go to **Step 5**.
 - `status (all)` -> go to **Step 5**, running the collector for agents + rules + skills together.
 - `list` -> run `LIST_CMD`, print the plain inventory it produces, then STOP (no status assembly).
-- `create` -> gather minimal params (Step 3 / artifact-specific), spawn `SPECIALIST` via Task.
+- `create` -> resolve minimal artifact params; spawn `SPECIALIST` via Agent.
   Batch -> spawn one `SPECIALIST` per item, ALL in ONE message (parallel).
-- `improve` -> resolve target(s), spawn `SPECIALIST` via Task per target (parallel for batch).
+- `improve` -> resolve targets; spawn `SPECIALIST` via Agent per target (parallel for batch).
 - `review` -> spawn the project's reviewer agent from `.claude/agents/`, else `general-purpose`
   (two-phase: review -> double-check findings -> report).
 - `sync` -> read `${CLAUDE_SKILL_DIR}/references/mode-sync.md` and follow it end to end
@@ -152,10 +137,10 @@ A bare one-line task is never enough. See Phase 2 for the canonical spawn shape.
 Delegate collection to ONE Explore/Bash subagent, then assemble a rich status (never a bare list):
 
 - **Inventory by scope:** plugin (BC) / project (`.claude/`) / global (`~/.claude/`) — counts + names + load path.
-- **State:** enabled/disabled (toggle markers `_SKILL.md` / `_<name>.md`), model.
+- **State:** enabled/disabled via setup config or `<name>.disabled` parking; flag legacy `_SKILL.md`/`_<name>.md` markers; model.
 - **Overlaps / conflicts:** same-name across scopes (shadowing), duplicate triggers/descriptions, naming collisions.
 - **Health flags:** missing README/frontmatter; agents missing `Bash` in `tools:` (macOS search rule);
-  skills with weak description triggers; rules duplicated in CLAUDE.md.
+  LLM-invocable skills with weak description triggers; rules duplicated in CLAUDE.md.
 
 For the `Status (all)` menu option: run the SAME collector for agents + rules + skills together.
 
@@ -164,7 +149,7 @@ For the `Status (all)` menu option: run the SAME collector for agents + rules + 
 ```
 # skills [<mode>]
 ## Detection
-| Input  | <prompt or "(none -> menu)"> |
+| Input  | <prompt or "(empty -> status)"> |
 | Mode   | <mode> |
 | Reason | <why this mode> |
 | Targets| <names/paths> |
@@ -190,7 +175,7 @@ For `status` mode the report **is** the Step 5 status table.
 Keep the existing Phase 0 (Discovery: 2-3 parallel Explore agents) and Phase 4 (Review:
 Simple = reviewer + verify + fix; Quorum = 3 reviewers threshold 2/3 + DoubleCheck + fix)
 machinery, but they are reachable ONLY through `create` / `improve` modes — never by default.
-For `create`/`improve`: AskUserQuestion for invocation type (User-only / LLM-auto / Both),
+For `create`/`improve`: resolve invocation type (User-only / LLM-auto / Both),
 testing depth (Quick (Recommended) / Standard / Deep), and review type (Simple / Quorum,
 only if Standard/Deep). Spawn SPECIALIST (brewcode:skill-creator)
 with discovery results + chosen params. Phase 6 summary == the Step 6 output block (do not
@@ -203,7 +188,10 @@ e2e-template.md, summary-template.md.
 
 ### Description Budget
 
-Frontmatter `description`: <= 120 chars (optimal ~100), single line. What + when + 3-5 distinct triggers (comma-list). No filler, no `<example>` blocks. Some registries truncate long descriptions and dilute trigger matching. EN only unless user explicitly asks.
+Description follows `references/frontmatter-fields.md` and activation budget: <=100 tokens
+(~400 chars) by default, spec cap 1024 chars, combined listing cap 1536. Optional brevity target
+<=120 chars (optimal ~100), not a second required cap. Single line, what+when, 3-5 distinct
+triggers, no filler/`<example>`; EN unless requested otherwise. Keep keywords early for registries.
 
 ### Optional frontmatter that is MANDATORY in its case -- `cli`, `version`
 
@@ -279,60 +267,28 @@ Spawn 2-3 Explore agents in parallel (single message).
 
 **Determine Input Type** (create only): path to `.md` file -> read as spec; text prompt -> use as research query.
 
-**Invocation Type** (AskUserQuestion):
+Infer answered params before discovery; one bundled AskUserQuestion (max 4) covers only material
+unknowns across this invocation, never separate calls for each block below. Defaults: Quick;
+Standard -> Simple, Deep -> Quorum. Distributed skills require user-only; local skills may choose
+the other supported invocation options. Main collects decisions; a specialist returns unresolved
+questions. No additional routine plan-approval call; print the already-authorized PLAN.
 
-```
-header: "Invocation"
-question: "Who will invoke this skill?"
-options:
-  - label: "User only (slash command)"   — disable-model-invocation: true, simple description
-  - label: "LLM auto-detect"             — full trigger keyword optimization
-  - label: "Both (default)"              — user slash command + LLM auto-detection
-```
+| Field/header | Question | Options/meaning |
+|---|---|---|
+| `INVOCATION_TYPE` / Invocation | Who will invoke this skill? | User only (slash command): DMI true/simple description; LLM auto-detect: trigger optimization; Both (default for local): slash + auto |
+| `TESTING_DEPTH` / Testing Depth | How thoroughly should the skill be tested? | Quick (Recommended): validator + 3-5 prompts; Standard: +unit tests, 1 reviewer+verification; Deep: +3 reviewers, threshold 2, E2E |
+| `REVIEW_TYPE` / Review Type (Standard/Deep only) | What review approach? | Simple (Standard default): 1 reviewer+1 verifier; Quorum (Deep default): 3 parallel, 2/3 agreement, DoubleCheck |
+| Plan Confirmation (only explicit approval request) | Proceed with this plan? | Proceed / Adjust (Let me change something) / Cancel |
 
-Save as `INVOCATION_TYPE`.
-
-
-**Testing Depth** (AskUserQuestion):
-
-```
-header: "Testing Depth"
-question: "How thoroughly should the skill be tested?"
-options:
-  - label: "Quick (Recommended)" — validate-skill.sh + 3-5 test prompts
-  - label: "Standard"            — + unit tests + simple review (1 reviewer + verification)
-  - label: "Deep"               — + quorum review (3 reviewers, threshold 2) + E2E tests
-```
-
-Save as `TESTING_DEPTH`.
-
-**Review Type** (AskUserQuestion, only if Standard or Deep):
-
-```
-header: "Review Type"
-question: "What review approach?"
-options:
-  - label: "Simple (default for Standard)" — 1 reviewer + 1 verification agent
-  - label: "Quorum (default for Deep)"     — 3 reviewers parallel, threshold 2/3, DoubleCheck
-```
-
-Save as `REVIEW_TYPE`.
-
-**Plan Confirmation** (AskUserQuestion). Output plan summary: action (create/improve), skill path/name, files to create/modify, references used, testing approach, review type.
-
-```
-header: "Plan Confirmation"
-question: "Proceed with this plan?"
-options: [Proceed, Adjust ("Let me change something"), Cancel]
-```
-
-If Adjust — ask what to change, update, re-confirm. If Cancel — stop.
+Save each resolved value. Requested approval shares the one batch; PLAN summarizes
+action, path/name, files to create/modify, references/testing/review. Adjust -> resolve changes before writing; unresolved
+changes return to user. Cancel -> stop; Proceed -> dispatch, no repeated confirmation loop.
 
 ### Phase 2: Create/Improve (skill-creator agent)
 
-Canonical spawn shape (copy this structure for every Task in this skill):
+Canonical spawn shape (copy this structure for every Agent in this skill):
 
-Task(subagent_type="brewcode:skill-creator", model="opus", prompt="
+Agent(subagent_type="brewcode:skill-creator", model="opus", prompt="
   GOAL: {one-line why the user wants this skill} — this task delivers ONE working skill
         the user can invoke immediately.
   ROLE: you own the skill directory {SKILL_DIR} only. Do NOT edit other skills, agents,
@@ -352,7 +308,7 @@ Task(subagent_type="brewcode:skill-creator", model="opus", prompt="
     confirmed findings to this same directory. Leave open questions explicit so they are
     reviewed, not guessed. Your report also feeds the Step 6 user-facing block.
   DONE:
-    - SKILL.md valid frontmatter, description <= 120 chars single line
+    - SKILL.md valid frontmatter, description satisfies canonical budget, single line
     - `cli` + `version` DECIDED, not skipped: `cli:` declared whenever the command is not
       spelled like the skill name (tokens /^[\w.-]{1,42}$/, none from the denylist, never
       inferred from allowed-tools); `version:` present AND bumped whenever the skill's
@@ -378,18 +334,21 @@ Skill-creator Steps 5-5.8 run automatically (validate, unit tests, README). No o
 `REVIEWER` below = the project's reviewer agent from `.claude/agents/`, else `general-purpose`.
 
 **Simple Review (`REVIEW_TYPE` = Simple):**
-1. Task(subagent_type=REVIEWER, model="opus", prompt="Review skill quality at: {SKILL_PATH}\n\n{REVIEW_PROMPT_CONTENT}")
-2. If findings: Task(subagent_type=REVIEWER, model="sonnet", prompt="Verify these review findings against actual code...\n\n{REVIEWER_FINDINGS}")
-3. Confirmed findings: Task(subagent_type="brewcode:skill-creator", model="opus", prompt="Fix verified issues in skill at: {SKILL_PATH}\n\n{CONFIRMED_FINDINGS}")
+1. Agent(subagent_type=REVIEWER, model="opus", prompt="Review skill quality at: {SKILL_PATH}\n\n{REVIEW_PROMPT_CONTENT}")
+2. If findings: Agent(subagent_type=REVIEWER, model="sonnet", prompt="Verify these review findings against actual code...\n\n{REVIEWER_FINDINGS}")
+3. Confirmed findings: Agent(subagent_type="brewcode:skill-creator", model="opus", prompt="Fix verified issues in skill at: {SKILL_PATH}\n\n{CONFIRMED_FINDINGS}")
 
 **Quorum Review (`REVIEW_TYPE` = Quorum):**
 1. Three in parallel (ONE message):
-   Task(subagent_type=REVIEWER, model="opus", prompt="Review skill quality at: {SKILL_PATH}\n\n{REVIEW_PROMPT_CONTENT}")
-   Task(subagent_type=REVIEWER, model="opus", prompt="Review skill quality at: {SKILL_PATH}\n\n{REVIEW_PROMPT_CONTENT}")
-   Task(subagent_type=REVIEWER, model="opus", prompt="Review skill quality at: {SKILL_PATH}\n\n{REVIEW_PROMPT_CONTENT}")
+   Agent(subagent_type=REVIEWER, model="opus", prompt="Review skill quality at: {SKILL_PATH}\n\n{REVIEW_PROMPT_CONTENT}")
+   Agent(subagent_type=REVIEWER, model="opus", prompt="Review skill quality at: {SKILL_PATH}\n\n{REVIEW_PROMPT_CONTENT}")
+   Agent(subagent_type=REVIEWER, model="opus", prompt="Review skill quality at: {SKILL_PATH}\n\n{REVIEW_PROMPT_CONTENT}")
 2. Quorum: same file + +-5 lines + same category = threshold 2/3 agree.
-3. Task(subagent_type=REVIEWER, model="opus", prompt="DoubleCheck: verify quorum findings against code.\n\n{QUORUM_FINDINGS}")
-4. Confirmed: Task(subagent_type="brewcode:skill-creator", model="opus", prompt="Fix verified issues...\n\n{CONFIRMED_FINDINGS}")
+3. Agent(subagent_type=REVIEWER, model="opus", prompt="DoubleCheck: verify quorum findings against code.\n\n{QUORUM_FINDINGS}")
+4. Confirmed: Agent(subagent_type="brewcode:skill-creator", model="opus", prompt="Fix verified issues...\n\n{CONFIRMED_FINDINGS}")
+
+Expand these abbreviated calls with the full Delegation fields; all spawns/fixes run from main,
+each reviewer has read-only scope and returns evidence, never self-acceptance or nested delegation.
 
 > **Collect findings:** compile all confirmed findings (source, severity, issue, fix applied, verified status) into a structured list for the Step 6 output block.
 
@@ -400,13 +359,20 @@ Skill-creator Steps 5-5.8 run automatically (validate, unit tests, README). No o
 2. Create test scenarios in `{SKILL_DIR}/tests/` — 1 per mode (happy path) + 1 edge case per mode.
 3. Execute each scenario — **EXECUTE** using Bash tool:
 ```bash
-TMPDIR=$(mktemp -d)
-mkdir -p "$TMPDIR/.claude/skills"
-cp -r "SKILL_DIR_HERE" "$TMPDIR/.claude/skills/"
-cd "$TMPDIR" && timeout 120 claude -p "PROMPT_HERE" 2>&1 | tee "$TMPDIR/output.log"
-rm -rf "$TMPDIR"
+(
+  set -euo pipefail
+  E2E_TMP=$(mktemp -d)
+  trap 'rm -rf "$E2E_TMP"' EXIT
+  TIMEOUT_BIN=$(command -v timeout || command -v gtimeout)
+  mkdir -p "$E2E_TMP/.claude/skills"
+  cp -r "SKILL_DIR_HERE" "$E2E_TMP/.claude/skills/"
+  cd "$E2E_TMP"
+  "$TIMEOUT_BIN" 120 claude -p "PROMPT_HERE" 2>&1 | tee "$E2E_TMP/output.log"
+  # Add scenario assertions here, before EXIT cleanup.
+)
 ```
-Replace `SKILL_DIR_HERE` / `PROMPT_HERE` with the skill dir and scenario prompt; append assertion commands before cleanup.
+Replace `SKILL_DIR_HERE` / `PROMPT_HERE`; add assertions before the subshell closes. Cleanup runs
+on success/failure; pipefail preserves scenario failure. `timeout` or macOS `gtimeout` must exist.
 
 4. Iteration: scenario failure = fix (max 2 retries). Small issues = fix + re-run. Major issues = back to Phase 2.
 

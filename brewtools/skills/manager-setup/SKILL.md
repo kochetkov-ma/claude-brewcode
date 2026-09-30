@@ -1,10 +1,10 @@
 ---
 name: manager-setup
-description: "Manager mode: installs a hard delegation wall into this project — status, install, upgrade, enable, disable, uninstall, purge, level, edit — and explains/customizes codewords ++m, ++a, ++rr, ++r. Triggers: manager, менеджер, hard mode, хард режим, delegate."
+description: "Manager mode: project hard delegation wall — status, install, upgrade, enable, disable, uninstall, purge, level, edit — and prompt codewords ++m, ++a, ++rr, ++r; bare +++ plans an anti-drift cron only in Plan mode. Triggers: manager, менеджер, hard mode, хард режим, delegate."
 user-invocable: true
 disable-model-invocation: true
 argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge] [level strict|balanced] [edit]"
-allowed-tools: [Read, Bash, AskUserQuestion]
+allowed-tools: [Read, Bash, AskUserQuestion, Agent]
 model: sonnet
 ---
 
@@ -14,16 +14,17 @@ model: sonnet
 >
 > 1. **SOFT codewords (`++m` / `++a` / `++rr` / `++r`) — autonomous, hook-driven, ALWAYS fire.** A `UserPromptSubmit` hook (`hooks/manager-prompt.mjs`) watches every prompt; when it sees a codeword it injects the matching block as `additionalContext` for that one turn. This is NOT enabled/disabled by this skill — it works regardless of skill state. The skill only **explains** it (`status`) and **customizes its TEXT** (`edit`/`purge`).
 >     Detection (longest-prefix first within the review group):
->     - `++m`  → Manager mode. PLAN-AWARE: when the session is in plan mode (`permission_mode === 'plan'`) it injects the `planmode` block (full + plan addon — writes the task graph, uses the tasks tool); otherwise the plain `full` delegate-everything block. There is NO separate `++mp` codeword.
+>     - `++m` → Manager: `permission_mode === 'plan'` selects `planmode` (full + read-only plan addon); otherwise `full`. Plan graph changes and cron creation for execution; write neither in Plan mode. No separate `++mp`.
 >     - `++a`  → Architecture-first directive (`architect`). Injects `[DIRECTIVE: ARCHITECTURE-FIRST]` before implementation — delegate an architecture pass that fits the project's existing architecture, patterns and rules; robust, scalable, and SIMPLE (no over-engineering); find the closest well-built counterpart in the repo and take its principles (additive to conventions/rules, not a replacement), clean seams. Independent group — combines with `++m` and the review group. Mode-agnostic: same block in plan and normal mode (in plan mode it is written into the plan).
 >     - `++rr` → Regression Review discipline (`review-regression`) — after each significant phase: no regression + project standard + correctness; two-phase review→double-check→fix; final cross-review at task end. Tested before `++r`.
 >     - `++r`  → Review discipline (`review-double`) — two-phase multi-agent review→double-check→fix after each significant change; codeword-only (no ambient/wall injection).
+>     - Bare `+++` → `cron-plan`, ONLY when `permission_mode === 'plan'`: plan a unique hourly session anti-drift cron per top-level task (user interval overrides), created during execution through the task board. Outside Plan mode it injects nothing; it does not arm/disarm the wall. Independent of, and combinable with, the other groups.
 >     - When the HARD wall is ON, the Manager (full) block is ALSO auto-injected on EVERY turn — no codeword needed. Codewords and wall injection are independent.
-> 2. **HARD wall — opt-in, this skill only, PER-PROJECT, INSTALLED-INTO-THE-PROJECT, persistent.** The wall is **NOT** a plugin hook. `install` does two things: it **installs** a self-contained `PreToolUse` guard into THIS project (copies the guard file + idempotently registers it in `<cwd>/.claude/settings.local.json`) and, **only after the user has explicitly confirmed arming** (P1 arm-confirmation gate — an `AskUserQuestion` answered "Yes, arm it now", or explicit wording like "enable the hard wall"/"включи хард уолл" already in the user's own prompt; the bare verb `install`/`установи` and any autonomy phrasing like "decide everything yourself"/"автономно" NEVER count as confirmation), **arms** it by flipping `state.hard=true`. Declining still installs the guard, leaving `state.hard=false`. The registered guard then **physically denies** mutating tools (Write/Edit/Bash/WebFetch/...) in the **main session**, leaving only delegate/read/track. Subagents stay fully free (`agent_id` linchpin). `enable` re-arms an already-installed wall — same confirmation gate, decline aborts with nothing changed; `disable` only flips `state.hard=false` — registration stays, the guard no-ops. `uninstall` removes the registration and the copied guard; `purge` also deletes the state file and the prompt overrides. The wall lives in project state + project settings, defaults OFF, persists until `disable`/`uninstall`. There is **no codeword** for the wall.
+> 2. **HARD wall — opt-in, this skill only, project-only, persistent, default OFF; no codeword.** Install a self-contained PreToolUse guard into `<cwd>/.claude/settings.local.json`; it is not a plugin hook. Arming requires P1: explicit user wall-enable wording or "Yes, arm it now"; bare install/enable and autonomy never confirm. Declined install still installs disarmed; declined enable/one-shot changes nothing. The guard denies main-session mutations while subagents remain free (`agent_id`). Actions and exact policies are below.
 >
-> The two layers are orthogonal: the wall enforces delegation by removing hands; the codewords/prompt-text shape the Manager mindset. Either can be used alone.
+> Either layer works independently: wall enforces delegation; codewords supply prompts.
 >
-> **INSTALL-ONCE + STATE-GATE (the safety crux):** the guard is *registered once* in `settings.local.json` (a personal, gitignored file) but is *gated at runtime* by project `state.json {hard}`. Registration is the persistent plumbing; `state.hard` is the live kill-switch. This split exists because **while the wall is armed it DENIES Edit/Bash on arbitrary files** — so `disable` must NOT touch `settings.local.json` (that edit would be blocked). Instead `disable` flips `state.json` with the ONE Bash shape the guard self-exempts, so the state flip always succeeds even at `level strict`. Conclusion: `state.json` is the runtime kill-switch; registration is harmless inert plumbing left in place.
+> **INSTALL-ONCE + STATE-GATE:** register once in personal, gitignored `settings.local.json`; recheck project `state.json {hard}` at runtime. Armed walls deny arbitrary Edit/Bash, so `disable` must never edit settings: flip state through the self-exempt command below, valid even at strict. Registration remains inert while disarmed.
 >
 > **THE EXEMPT COMMAND (memorize this shape — nothing else gets through an armed wall):**
 > ```
@@ -47,7 +48,7 @@ model: sonnet
 1. `node <ABS root>/.claude/brewtools/manager/manager-state.mjs set hard=false` — works at every level, including when `state.json` is corrupt (it rewrites the file).
 2. A genuinely read-only MCP tool denied by the classifier — allowlist it (`balanced` only), same self-exempt command shape, quote the value so the shell keeps `*`:
    `node <ABS root>/.claude/brewtools/manager/manager-state.mjs set 'mcpAllow=mcp__semble_code__*,mcp__github__get_file'` — the list is replaced wholesale, one invalid entry writes nothing (exit 2), and `set 'mcpAllow='` clears it.
-3. Delegate: `Task` is always allowed and subagents are unwalled, so a subagent can run `/brewtools:manager-setup upgrade` or repair state for you.
+3. Delegate: `Agent` is always allowed and subagents are unwalled, so a subagent can run `/brewtools:manager-setup upgrade` or repair state for you.
 4. Two residual cases need action OUTSIDE the session, and there is no in-session workaround — do not go hunting for one:
    - Claude Code changes the PreToolUse payload shape so the guard cannot parse it. Every main-session mutation is then denied. Fix: quit and delete the `brewtools-manager-guard` entry from `.claude/settings.local.json` in an editor.
    - Deleting the whole `.claude/brewtools/` tree disarms the wall (no manager directory = never installed). That is the documented consequence of a manual `rm -rf`, not a way to disable the wall — use `disable` or `uninstall`, which keep settings and files consistent.
@@ -61,7 +62,7 @@ follow in any order. Nobody types keys: resolve the action + scope FROM the prom
 1. Strip flags. An explicit action token anywhere wins outright, no scoring.
 2. Else score actions by distinct whole-word keyword hits (P0 table). Highest unique score wins.
    Tie with a destructive action (`purge`) -> `AskUserQuestion`; tie with `status` -> `status`;
-   tie of two mutating actions -> the keyword appearing first; all zero -> `status`.
+   tie of two mutating actions -> the keyword appearing first; no hits -> `inline-run` for a real task, otherwise `status`.
 3. Empty arguments -> `status`; ask ONE scoping `AskUserQuestion` only when the answer changes
    what gets written or armed. `status` asks nothing.
 4. Outcome-changing ambiguity (incl. `hard-one-shot` vs `manager-run`, enable vs disable) -> ONE
@@ -82,7 +83,7 @@ DO:     <2-5 imperative bullets>
 RESULT: <what the user ends up holding>
 ```
 
-Labels are literal; values follow the conversation language. `install`/`upgrade`/`enable`/
+Labels are literal; authored plan values are English (preserve INPUT verbatim). `install`/`upgrade`/`enable`/
 `disable`/`uninstall`/`purge`/`level` touch the HARD-wall layer; `edit` touches the codewords
 layer (prompt text only); `hard-one-shot` touches BOTH (arms/disarms the wall AND runs the task
 under the codewords contract); `manager-run`/`inline-run` touch only the codewords layer.
@@ -128,7 +129,7 @@ Paths (use `$BT_ROOT` literally in Bash):
 - State helper: `$BT_ROOT/hooks/lib/manager-state.mjs` — exports `resolveState`, `writeState`, `resolveStatePath`; also a CLI: `node <path>/manager-state.mjs get|set hard=<true|false> level=<strict|balanced> mcpAllow=<mcp__srv__tool[,...]|> [--cwd DIR]`
 - Prompt helper: `$BT_ROOT/hooks/lib/manager-prompts.mjs` — exports `resolvePrompt`, `resolvePromptPath`
 - **Guard source (shipped, self-contained, NOT in plugin `hooks.json`):** `$BT_ROOT/hooks/hardmode-guard.mjs` — `install`/`upgrade` copy this into the project
-- Plugin default blocks: `$BT_ROOT/skills/manager-setup/references/<mode>.md` (`full.md`, `planmode.md`)
+- Plugin default prompt inventory: `$BT_ROOT/skills/manager-setup/references/<mode>.md` for `full`, `planmode`, `cron-plan`, `architect`, `review-regression`, `review-double`. `install`/`upgrade` deploy only wall assets; prompt defaults remain plugin-owned and refresh with the plugin. Preserve project/global overrides; status/show/explain resolves all six.
 - Wall policy + canonical status text: `$BT_ROOT/skills/manager-setup/references/hard.md` — **Read it for the install model, status explainer and the allowlist details.**
 
 Project install targets (resolved from `process.cwd()`):
@@ -156,7 +157,7 @@ Actions, canonical order: `status`, `install`, `upgrade`, `enable`, `disable`, `
 
 | Action | EN keywords | RU keywords | Mutates? | Resolves |
 |--------|-------------|--------------|----------|----------|
-| `status` | *(empty)*, `status` | `статус`, `что сейчас` | no | the main explainer, and the default |
+| `status` | *(empty)*, `status`, `state`, `show`, `explain` | `статус`, `состояние`, `что сейчас`, `покажи`, `объясни` | no | the main explainer, and the default |
 | `install` | `install` (no task) | `установи`, `поставь стену` | yes | INSTALL + ARM the HARD wall for this project |
 | `upgrade` | `upgrade` | `обнови`, `перекопируй гард` | yes | re-copy the guard + re-register from the CURRENT plugin version; `hard`/`level` preserved |
 | `enable` | `enable`, `on`, `arm` (no task) | `вкл`, `включи` | yes | ARM an installed wall (state flip only). NOT registered yet → treat as `install` |
@@ -189,7 +190,7 @@ Understood: install + arm the hard wall (project), level=balanced
 ```
 If the action is ambiguous or signals conflict (e.g. enable + disable, a task that might be `hard-one-shot` vs `manager-run`, control implied but no verb) → `AskUserQuestion` with the candidate actions as options. Otherwise proceed.
 
-> Distinguish carefully: `hard-one-shot` (task + "в хард режиме"/"in hard mode") flips the wall and auto-reverts; `manager-run` (task + "от роли менеджера"/"as manager") never touches the wall, discipline by prompt only. If both/neither marker is present and a task exists, ask.
+> `hard-one-shot` flips the wall and auto-reverts; `manager-run` leaves it untouched. Conflicting/unclear markers require a question; a task with no marker uses `inline-run`.
 
 **Arm-confirmation gate (unconditional — not only on ambiguity).** `install`, `enable`, and
 `hard-one-shot` are the only actions that can write `state.hard=true`. Before P2 runs any of them,
@@ -325,21 +326,9 @@ After the block:
 
 ### upgrade  (re-emit the guard from the current plugin version — arm state kept, provenance restamped)
 
-`upgrade` replays the install against the CURRENT plugin version so a `claude plugin update` finally reaches an already-installed project: it re-copies `hardmode-guard.mjs` **and `manager-state.mjs`**, re-registers the entry if it went missing, and — in the same read-merge-atomic-write of `settings.local.json` — sets `env.CLAUDE_CODE_ENABLE_TODO_TOOLS = "1"` on Claude Code >= 2.1.233. A project installed before the off-switch CLI existed has no project copy of `manager-state.mjs`, and one installed before the task-tool gate has no `env` key; `upgrade` is what backfills both, so run it once after updating brewtools. It asks nothing.
+`upgrade` asks nothing: re-copy current `hardmode-guard.mjs` and `manager-state.mjs`, restore a missing registration, and merge `env.CLAUDE_CODE_ENABLE_TODO_TOOLS="1"` on Claude Code >= 2.1.233. This backfills older installs missing the off-switch CLI or task-tool key; run it after updating brewtools. The six default prompts above refresh with the plugin; overrides remain unchanged.
 
-> **It restamps `state.json`, and ONLY the metadata trio.** `setup-status` row 8 reads the
-> top-level `"version"` of `.claude/brewtools/manager/state.json` as the headline; the guard's
-> `brewcode-meta:` line is SECOND precedence, consulted only when that key is absent. So an
-> upgrade that re-copied the guard but left `state.json` alone reported the old version forever
-> and `status` printed `stale` after every `upgrade` — the staleness could never be cleared.
-> The fix is the docsync-setup shape (`brewdoc/skills/docsync-setup/SKILL.md` mode `upgrade`):
-> call `writeState('project', {}, cwd)` — an EMPTY partial. `writeState` merges
-> `{...existing, ...partial}` and then stamps `version` / `generated_by` / `last_updated`, so with
-> nothing in the partial it rewrites the trio and **nothing else**. `hard` and `level` are
-> preserved byte-for-byte out of the existing file: a disarmed wall stays disarmed, an armed one
-> stays armed, a customized `level` survives. That is what `stateUntouched` used to promise and it
-> still holds for the ARM state — the block now reports `armStatePreserved` + `stateRestamped` so
-> the two are not conflated.
+> Restamp only `state.json` metadata through `writeState('project', {}, cwd)` (empty partial; docsync-setup upgrade pattern). Merge `{...existing,...partial}` preserves `hard`, `level`, `mode`, and unknown keys while refreshing `version/generated_by/last_updated`. Report `armStatePreserved` + `stateRestamped`, replacing historical `stateUntouched`. Setup-status row 8 reads top-level state version first, guard `brewcode-meta:` only if absent; not restamping leaves a permanent stale verdict. See `brewdoc/skills/docsync-setup/SKILL.md` upgrade.
 
 It ABORTS when the project has no wall installed. `upgrade` must never be a back door that arms a wall the user never asked for — an uninstalled project is told to run `install`.
 
@@ -465,7 +454,7 @@ node <ABS_CWD>/.claude/brewtools/manager/manager-state.mjs set hard=false
 
 It prints `{"file":...,"action":"written","state":{"hard":false,...}}` on success. That JSON on stdout is the ✅; a non-zero exit with a `manager-state:` line on stderr is the ❌.
 
-> **If it fails with `Cannot find module`** the project was installed by a brewtools older than the off-switch CLI. Do not try to resolve `$BT_ROOT` in the main session — that needs shell operators the armed wall denies. Instead delegate one subagent (`Task`, always allowed, subagents bypass the wall) with: *"run `/brewtools:manager-setup upgrade` in this project, then `node <ABS_CWD>/.claude/brewtools/manager/manager-state.mjs set hard=false`"*.
+> **If it fails with `Cannot find module`** the project was installed by a brewtools older than the off-switch CLI. Do not try to resolve `$BT_ROOT` in the main session — that needs shell operators the armed wall denies. Instead delegate one subagent (`Agent`, always allowed, subagents bypass the wall) with: *"run `/brewtools:manager-setup upgrade` in this project, then `node <ABS_CWD>/.claude/brewtools/manager/manager-state.mjs set hard=false`"*.
 
 > The registered guard stays in `settings.local.json` and continues to fire on every tool call, but reads `state.hard` and immediately no-ops while disarmed. To remove the registration entirely, use `uninstall`.
 
@@ -475,16 +464,9 @@ Removes the manager guard entry from `<cwd>/.claude/settings.local.json` (and th
 
 > **Asymmetry, on purpose:** `uninstall` only deregisters the wall, so it must NOT touch `env.CLAUDE_CODE_ENABLE_TODO_TOOLS`. The task graph is useful with or without a wall, and silently switching `TaskCreate`/`TaskUpdate`/`TaskGet`/`TaskList` off while removing a hook would be a surprise. Only `purge` removes that key.
 
-**This is TWO Bash calls and the order is load-bearing.** Editing settings under an armed wall is blocked, and the deregistration block itself (`BT_ROOT=` prelude, `&& echo` tail, `node --input-type=module -e`) is exactly the shape the guard denies. So step 1 disarms with the bare exempt CLI — that is the only thing that gets through — and only then does step 1's effect make step 2 allowed (a disarmed guard no-ops on everything). Never merge them into one call.
+**TWO separate Bash calls:** disarm with the bare exempt CLI, then deregister. Never merge them: the armed guard denies step 2's `BT_ROOT=`/`&& echo`/`node --input-type=module -e` shape; disarming lets it no-op.
 
-> **Uninstall ordering is a safety property, not tidiness.** The guard fails CLOSED: an installed
-> manager directory whose `state.json` is gone or corrupt DENIES the main session. So the removal
-> order is fixed and step 2 enforces it itself:
-> **deregister → re-read and confirm the entry is gone → only then delete the guard and helper files.**
-> Deleting the files first would leave a registered hook pointing at a missing script; deleting
-> `state.json` while the registration lives is the shape that bricks a session. If a file delete
-> fails, step 2 puts the settings entry BACK and exits non-zero, so the project is never left
-> half-guarded. The block is idempotent: running it twice reports `deregistered:false` and exits 0.
+> Fail-closed ordering: **deregister -> re-read/confirm absence -> delete guard + helper**. Missing/corrupt installed state denies the main session; deleting files first leaves a broken registered hook. Delete failure restores the settings entry and exits nonzero. Repeated uninstall is idempotent: `deregistered:false`, exit 0.
 
 **EXECUTE step 1** using Bash tool — VERBATIM, `<ABS_CWD>` substituted, nothing appended:
 ```bash
@@ -646,12 +628,13 @@ node <ABS_CWD>/.claude/brewtools/manager/manager-state.mjs set level=LEVEL
 
 ### status  (the MAIN user-facing explainer — ALWAYS the teaching surface)
 
-Read merged state, resolve BOTH mode blocks, detect whether the guard is registered in `settings.local.json`, then render the canonical explainer from `references/hard.md`. It must teach the user the FULL model:
+Status/show/explain is read-only: read merged state, resolve the six prompt modes above (including `cron-plan`), detect wall registration, and render the `references/hard.md` explainer with the additions below. It must teach:
 1. **How `++m` works** — ALWAYS, per-turn, hook-driven (`manager-prompt.mjs`), independent of this skill. `++m` is plan-aware: it injects the planmode block (full + plan addon) when `permission_mode === 'plan'`, else the plain full block — there is NO separate `++mp` codeword. Show BOTH resolved blocks (full + planmode) so the user sees each variant. Also state: when the HARD wall is armed, the Manager (full) block is ALSO ambient-injected every turn with no codeword needed (codewords and wall injection are independent). The session-start banner is the other read-only plugin layer.
 2. **The wall delivery model** — it is INSTALLED INTO this project, not a plugin hook: registered (once) in `<cwd>/.claude/settings.local.json` (personal, gitignored), gated at runtime by project `state.json {hard}`. Report BOTH: is it registered? is it armed (`hard`)?
 3. **Current WALL state for THIS project** — `hard` armed/disarmed, `level` strict/balanced, and a brief allowlist summary (what main session may/may not do).
 4. **How the verbs work** — `install` = install+arm (`/reload` only on FIRST install), `upgrade` = re-emit the guard with the arm state preserved and `state.json`'s metadata trio restamped to this plugin version, `enable` = arm an installed wall, `disable` = disarm only (registration kept), `uninstall` = deregister (state + prompt overrides kept, task-graph key kept), `purge` = uninstall + delete state, overrides and the task-graph key, `level` = strictness.
 5. **Task-graph tools** — report whether `TaskCreate`/`TaskUpdate`/`TaskGet`/`TaskList` are actually available: the running Claude Code version, and whether `env.CLAUDE_CODE_ENABLE_TODO_TOOLS` is set in `<ROOT>/.claude/settings.local.json`, `<ROOT>/.claude/settings.json` or `~/.claude/settings.json`. Any layer counts — name the one that wins. Set nowhere on CC >= 2.1.233 → the tools are OFF and the manager framework has no task graph; give the one-line remedy.
+6. **Anti-drift cron planning** — bare `+++` selects `cron-plan` only in Plan mode; planning creates no schedule or board state. Show its resolved source/text. Execution announces and creates a unique task-board session cron per top-level task, hourly unless overridden; task-specific methodology owns its tick instructions/ID/timezone/count/stop rule. Missing scheduler -> explicit gap; completion/cancellation -> stop and verify removal. `+++` does not control the wall.
 
 > **WHILE THE WALL IS ARMED, DO NOT RUN THE BASH BLOCK BELOW** — its `BT_ROOT=` prelude and `&& echo` tail are exactly what the guard denies. Build the same report with always-allowed tools instead:
 > - wall state → Bash, VERBATIM, nothing appended: `node <ABS_CWD>/.claude/brewtools/manager/manager-state.mjs get`
@@ -677,8 +660,8 @@ import fs from 'node:fs'; import path from 'node:path'; import os from 'node:os'
 const cwd = '${ROOT}';
 const root = '${BT_ROOT}';
 const st = resolveState(cwd);
-const full = resolvePrompt('full', cwd, root);
-const plan = resolvePrompt('planmode', cwd, root);
+const promptModes = ['full', 'planmode', 'cron-plan', 'architect', 'review-regression', 'review-double'];
+const prompts = Object.fromEntries(promptModes.map(mode => [mode, resolvePrompt(mode, cwd, root)]));
 const settings = path.join(cwd, '.claude', 'settings.local.json');
 // `registered` is tri-state: true / false / null. null = the settings file exists but could
 // not be parsed, so registration is UNKNOWN — never report unknown as "not registered".
@@ -713,17 +696,17 @@ console.log(JSON.stringify({
   registered, settings, stateVersion, pluginVersion,
   stale: (stateVersion && pluginVersion) ? (stateVersion !== pluginVersion) : null,
   ccVersion: ccVer || null, todoToolsGated, todoToolsLayer,
-  promptSource: { full: full.source, planmode: plan.source },
-  blocks: { full: full.text, planmode: plan.text }
+  promptSource: Object.fromEntries(promptModes.map(mode => [mode, prompts[mode].source])),
+  blocks: Object.fromEntries(promptModes.map(mode => [mode, prompts[mode].text]))
 }, null, 2));
 " && echo "✅ status" || echo "❌ FAILED status"
 ```
 
 > `stateVersion` is `null` on any state file written before the metadata keys existed, and on a project with no state file. `null` means UNKNOWN — never report it as up to date. `stale: true` -> recommend `upgrade`.
 >
-> **Dependency (owner of `brewtools/hooks/lib/manager-state.mjs`):** this reads `version` off `state.json` verbatim. It needs `DEFAULT_STATE` / `writeState` to persist `version` (plugin `X.Y.Z`), `generated_by: "brewtools:manager-setup"` and `last_updated` (`YYYY-MM-DD`) — the JSON trio, never `doc_type` — and `resolveState` to keep passing unknown keys through untouched. That has landed; on a state file written before the metadata keys existed `stateVersion` simply stays `null` — this block cannot break.
+> `brewtools/hooks/lib/manager-state.mjs` writes `version` (plugin X.Y.Z), `generated_by:"brewtools:manager-setup"`, `last_updated` (YYYY-MM-DD), never `doc_type`, through writeState; resolveState preserves unknown keys. DEFAULT_STATE deliberately has no version, so absent/older raw state remains unknown instead of claiming current provenance.
 
-Render using the canonical status block in `references/hard.md`, filling in `hard`, `level`, `stateSource`, prompt sources, and pasting both resolved blocks under their headers. Shape:
+Render `references/hard.md` with `hard`, `level`, `stateSource`, all six prompt sources, and full/planmode/cron-plan blocks under their headers. Architecture/review modes remain independently resolved. Shape:
 ```
 # Manager — status
 
@@ -732,7 +715,8 @@ Type `++m` anywhere   → injects the Manager block for that one turn (plan-awar
 Type `++a` anywhere   → injects the Architecture-first directive for that one turn (mode-agnostic: same block in plan and normal mode).
 Type `++rr` anywhere  → injects the Regression Review contract for that one turn.
 Type `++r` anywhere   → injects the Review contract for that one turn.
-They fire on every prompt that contains them. This skill never turns them on or off.
+Bare `+++` in Plan mode → injects cron-plan: plan hourly session anti-drift scheduling per top-level task; create it during execution, never in Plan mode. Outside Plan mode: no injection.
+The four letter codewords fire on matching prompts regardless of skill state; `+++` additionally requires Plan mode. This skill never enables/disables their hooks.
 
 --- injected by ++m (full — plain mode) ---
 <full block text>
@@ -740,9 +724,12 @@ They fire on every prompt that contains them. This skill never turns them on or 
 --- injected by ++m (planmode — when permission_mode === 'plan') ---
 <planmode block text>
 
+--- injected by bare +++ (cron-plan — Plan mode only) ---
+<cron-plan block text>
+
 ## HARD wall (this project) — registered=<yes|no>  armed=<ON|OFF>  level=<strict|balanced>  (state source: <project|global|default>)
 Delivery: INSTALLED into this project (not a plugin hook). Registered once in .claude/settings.local.json (personal, gitignored), gated at runtime by .claude/brewtools/manager/state.json {hard}.
-When armed, the main session physically cannot Write/Edit/WebFetch — only delegate (Task/Agent), read (Read/Grep/Glob), and track (TodoWrite). For Bash: at level=strict ALL Bash is denied; at balanced only mutating Bash is denied — read-only inspection allowed.
+When armed, the main session cannot Write/Edit/WebFetch; it can delegate (Agent), read (Read/Grep/Glob), track (TodoWrite) and manage session timers (CronCreate/CronList/CronDelete). Task-board owns its timer matching/cleanup; scheduled work still passes through the wall. This exempts no external/OS scheduling. For Bash: strict denies all Bash; balanced permits read-only inspection.
 Allowlist summary: <one-line summary from hard.md for current level>
 State version: <stateVersion or "unknown (written before versioning)">  plugin: <pluginVersion>  <"— run upgrade" when stale>
 
@@ -762,7 +749,7 @@ Level:     /brewtools:manager-setup level strict | balanced
 Exit:      node <ABS project root>/.claude/brewtools/manager/manager-state.mjs set hard=false
            (the ONE self-exempt command — copy verbatim, append nothing. Fallback: delegate to a subagent.)
 
-prompt source: full=<default|project|global>  planmode=<default|project|global>
+prompt source per mode: full, planmode, cron-plan, architect, review-regression, review-double = <default|project|global|missing>
 ```
 
 ### edit  (PROMPT TEXT ONLY)
@@ -830,7 +817,7 @@ Same as `manager-run`: prepend the `full` block, build a TaskGraph, delegate, ne
 
 After ANY non-status action (`install`, `upgrade`, `enable`, `disable`, `uninstall`, `purge`, `level`, `edit`, `hard-one-shot`, `manager-run`, `inline-run`), end by emitting the resolved status (run the `status` Bash block, or reuse a result you already have). At minimum print:
 ```
-registered · armed(hard) · level · state source (project/global/default) · prompt source per mode · codewords (++m ALWAYS — plan-aware: planmode in plan mode, else full)
+registered · armed(hard) · level · state source (project/global/default) · prompt source for all six modes · codewords (++m plan-aware; ++a/++r/++rr always; bare +++ Plan-only, schedule deferred)
 ```
 For `install`/`upgrade` that NEWLY registered, and for `uninstall`/`purge`, also surface the `/reload` note.
 

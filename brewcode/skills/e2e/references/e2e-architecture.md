@@ -19,7 +19,7 @@ Stack-agnostic reference for e2e-architect and e2e-automation-tester agents.
 ├─────────────────────────────────────────────┤
 │  Data Layer                                 │
 │  generation / storage / preparation         │
-│  via API (not direct DB writes)             │
+│  API default; DB exception only per D2      │
 ├─────────────────────────────────────────────┤
 │  Support Layer                              │
 │  KafkaSupport, DatabaseSupport, HttpSupport │
@@ -66,7 +66,7 @@ class OrderCreationE2ETest extends BaseOrderE2E:
         // WHEN
         steps.whenUserCreatesOrder(orderType)
         // THEN
-        verify.thenOrderHasStatus(expectedStatus)
+        steps.thenOrderHasStatus(expectedStatus)
 ```
 
 ### Steps Layer
@@ -85,6 +85,10 @@ class OrderSteps:
         payload = orderData.buildOrderPayload(orderType)
         response = httpSupport.post("/api/orders", payload)
         context.storeOrderId(response.body.id)
+
+    @Step("Order has status {expectedStatus}")
+    thenOrderHasStatus(expectedStatus):
+        verification.thenOrderHasStatus(expectedStatus)
 ```
 
 ### Verification Layer
@@ -109,11 +113,13 @@ class OrderVerification:
 
 ### Data Layer
 
-**Purpose:** Test data generation, preparation, and cleanup. All mutations through API, never direct DB writes.
+**Purpose:** Test data generation, preparation, and cleanup. Public API is preferred; UI is
+acceptable. Direct DB mutation is a last resort ONLY after explicit user confirmation (D2),
+encapsulated as Data -> DatabaseSupport -> Config; tests never write DB directly.
 
 **Naming:** `{Domain}Data` (e.g. `OrderData`, `UserData`)
 
-**Depends on:** Support layer only.
+**Depends on:** Support and Config (generation/settings) only; no upward dependencies.
 
 ```pseudo
 class OrderData:
@@ -187,6 +193,9 @@ class TestConfig:
 
 ## Dependency Rules
 
+Diagram: primary flow. The table below defines every allowed direct edge, including fan-out
+and the separate base lifecycle preparation context.
+
 ```
 Test Classes
     |
@@ -207,11 +216,12 @@ Verification   Data Layer
     Config Layer
 ```
 
-**Allowed dependencies (top-down only):**
+**Allowed direct dependencies (only these top-down edges):**
 
 | Source Layer | Can Access |
 |-------------|-----------|
 | Test Classes | Steps, base classes |
+| Base-class lifecycle setup only | Data, Support, Config for environment/data preparation; scenario actions remain in Steps |
 | Steps | Verification, Data, Support |
 | Verification | Support, Config |
 | Data | Support, Config |
@@ -224,8 +234,14 @@ Verification   Data Layer
 |------|--------|
 | Test Classes -> Support | Tests must not bypass Steps; keeps tests readable |
 | Test Classes -> Data | Data preparation belongs in Steps or base class setup |
-| Test Classes -> Config | Access config through base class or Steps |
+| Test Classes -> Verification | Assertions enter through business Steps, which delegate to Verification |
+| Test Classes -> Config | Use the base-class API or Steps' permitted Verification/Data/Support collaborators; Steps does not gain a direct Config edge |
 | Steps -> Test Classes | No upward dependencies; breaks reusability |
 | Support -> Steps | Support is generic; must not know about business logic |
 | Config -> anything | Config is passive; read-only, no side effects |
-| Any layer -> skip layers | Each layer talks only to the layer directly below. Exception: Steps can access Verification, Data, and Support directly (Steps is the fan-out layer) |
+| Any unlisted direct dependency | Only the edges in the allowed table are legal: Steps fan out to Verification/Data/Support; Verification and Data may also read Config; Support reads Config; Config is a leaf. No arbitrary bypass |
+
+Base lifecycle setup retains its existing preparation responsibility: it may call Data/Support
+and read Config only during setup/cleanup, never expose those calls as test-method shortcuts.
+It does not let test methods call Verification directly. The D2 DB exception remains ONLY
+after explicit user confirmation through Data -> DatabaseSupport, including base-initiated setup.

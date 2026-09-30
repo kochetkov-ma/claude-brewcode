@@ -1,6 +1,6 @@
 ---
 title: "Task Board Setup"
-description: "Multi-agent generator that deploys a file-based Kanban into any repo: board, curator agent, dashboard skill, rule, optional spec/design layer, upgrade mode."
+description: "Install a file-based task board with domain methodology, task-specific work and review plans, session anti-drift timers, and optional specs."
 order: 3125
 ---
 import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
@@ -20,7 +20,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | Skill command | `/brewtools:task-board-setup` |
 | Arguments | `[status \| install \| upgrade \| enable \| disable \| uninstall \| purge] [target repo path \| empty = cwd] [free-text directive]` — e.g. `install /path/to/repo`, `upgrade`, `'skip module split'` |
 | No verb | Resolved from the target: a deployed board reports `status`, a fresh repo gets `install`. A bare path alone installs into that path |
-| Emits | `.claude/agents/task-tracker.md`, `.claude/skills/task-board/SKILL.md`, `.claude/rules/tasks.md`, `.claude/features/**` |
+| Emits | Task-tracker, task-board skill, tasks rule, board tree, domain methodology, anti-drift instructions, task graph, and session progress |
 | Emits (SPEC_MODE) | `.claude/skills/task-spec/SKILL.md`, `.claude/features/specs/{SPEC_TEMPLATE,DESIGN_TEMPLATE}.md` |
 | Spawns | Parallel analysis subagents (architect + Explore + domain-agent inventory) + multi-agent doc sweep — one bounded unit each |
 | Optional | Spec + system-design layer (`SPEC_MODE`), confirmed during Step 1; gated `CLAUDE.md` optimization pass — propose-only, opt-in during confirmation |
@@ -62,7 +62,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 /brewtools:task-board-setup upgrade /path/to/some-repo
 ```
 
-After completion the repo gains `/task-board` (view/add/move tasks) and the `task-tracker` agent auto-runs at the start of every task.
+After completion the repo gains `/task-board` (view/add/move tasks), the `task-tracker` curator, and shared methodology and anti-drift controls. Each task prepares its own work units, review and test strategy, acceptance evidence, and tick prompt before implementation.
 
 ## How it works
 
@@ -88,7 +88,7 @@ After completion the repo gains `/task-board` (view/add/move tasks) and the `tas
   <li>
     <div>
       <strong>Generate <code>task-spec</code> skill (optional, <code>SPEC_MODE</code>)</strong>
-      <p>Runs only if <code>SPEC_MODE</code> was confirmed on in Step 1. Writes <code>.claude/skills/task-spec/SKILL.md</code> — the spec + design authoring flow, parametrized with the repo's own domain-agent roster. When <code>SPEC_MODE</code> is off this step is skipped silently and every other artifact stays byte-identical to the pre-spec-layer generator.</p>
+      <p>Runs only if <code>SPEC_MODE</code> was confirmed on in Step 1. Writes <code>.claude/skills/task-spec/SKILL.md</code> — the spec + design authoring flow, parametrized with the repo's own domain-agent roster. When it is off, spec generation is skipped; task methodology, graph reconciliation, session progress, and anti-drift remain available.</p>
     </div>
   </li>
   <li>
@@ -137,10 +137,78 @@ The same six-field brief ships into your repo. The generated `.claude/skills/tas
 | Paths-scoped rule | `.claude/rules/tasks.md` | Lifecycle, id convention, required FM, grooming — plus "run `task-tracker` at the start of any task". Auto-loads on `.claude/features/**`. |
 | Board file | `.claude/features/board.md` | The Kanban board — counts and task table, authored by the doc sweep. |
 | Session progress | `.claude/features/PROGRESS.md` | SESSION progress against the board — five fields, overwritten in place. Ungated: written in both `SPEC_MODE` states, before any task exists. |
+| Domain methodology | `.claude/features/METHODOLOGY.md` | Shared domain risks, authoritative instructions, review strategy, and reliable check commands; each task specializes it. |
+| Anti-drift instructions | `.claude/features/ANTI-DRIFT.md` | Task-specific tick prompts, timer lifecycle, reconciliation, and compact reporting contract. |
+| Active task graph | `.claude/features/task-graph.md` | Derived dependencies, owners, statuses, and acceptance evidence; all unfinished nodes plus the latest ten completed nodes. |
 | Control files | `.claude/features/{TRACKER,TASK_TEMPLATE,INDEX}.md` + `backlog/README.md` | Tracker log, task template, index, backlog guide. |
 | Folders | `.claude/features/{backlog,todo,progress,closed,specs}/` | Status folders — folder name = task status. |
 | Spec skill (`SPEC_MODE`) | `.claude/skills/task-spec/SKILL.md` | On-demand `/task-spec <ID>` — authors the product + design spec via a domain-architect fan-out. |
 | Spec templates (`SPEC_MODE`) | `.claude/features/specs/{SPEC_TEMPLATE,DESIGN_TEMPLATE}.md` | Fixed section skeletons for the two spec documents. |
+
+## Task methodology and session anti-drift
+
+These controls are installed in both spec modes. The shared methodology comes from your domain
+and repository instructions: how work should be reviewed, which checks are reliable, and what
+evidence proves completion. Every accepted task specializes it in its own `## Methodology`, with
+goal and acceptance criteria, domain reviews/tests, base work units, owners, dependencies, and
+a parent task id when applicable.
+
+The baseline work is to confirm scope and user corrections, assign bounded work, implement,
+simplify, review correctness and safety, review clarity and missing validation, run reliable
+checks, and reconcile evidence and the board. Each task refines those units for its actual goal.
+
+### One session timer per active top-level task
+
+The main session's `/task-board` flow owns timer creation and cleanup. Task-tracker owns file and
+graph reconciliation and returns scheduling actions to the main session. Each top-level task
+stores a complete, unique prompt in `## Anti-drift cron` before scheduling. Queued tasks retain
+prepared prompts; scheduling begins when a task becomes active. Child work units use their
+parent's timer.
+
+The default schedule is hourly (`0 * * * *`). Your cadence override or opt-out takes precedence.
+Task-board lists existing timers before creating one, reuses a matching task/project timer, and
+verifies duplicate removal or replacement. It announces the effective cadence, timezone,
+confirmed timer id and state, known first due time, session scope, and stop/change controls.
+
+With available Claude Code scheduling tools, the main session uses `CronList`, `CronCreate`,
+and `CronDelete`. If tools are unavailable, denied, or at capacity, it retains the task prompt
+and reports that scheduling is unavailable. Saved ids do not prove a timer is live. Timers are
+session-scoped; scheduled time, firing, and actual receipt are distinct, and delivery time is
+approximate. The task record persists evidence, not a scheduler that survives session closure.
+
+### What each delivered tick does
+
+- Reread shared and task methodology, anti-drift controls, current goal/spec, task records, and user corrections.
+- Obtain concise evidence from available active agents; reconcile statuses, dependencies, counts, and next work.
+- Rebuild `task-graph.md`, retaining every unfinished node and the latest ten completed nodes. Preserve older completion evidence in task Notes or closed records before pruning graph rows.
+- Check drift against the goal and acceptance criteria, correct deviations within authorized scope, quantify remaining work or mark it unknown, and advance the next unblocked step.
+- Persist the delivered tick number and actual receipt time, then produce at most five compact lines using only 🟢 🔵 🔴 ⚪ as status circles.
+
+For example, a delivered tick can report:
+
+```text
+🔵 TASK-ID · 14:03 Europe/Lisbon · tick 2 · elapsed 2h
+🟢 Implemented API change; targeted checks pass
+🔵 2 work units remain · next: independent review
+🔴 Blocker: missing fixture · question: provide approved sample?
+⚪ Drift: none verified against recorded acceptance criteria
+```
+
+Omit the blocker/question line when absent. Full evidence belongs in the task record. Graph
+pruning removes rows only: the canonical board and closed task records retain completed work.
+On completion, cancellation, or parking, task-board stops this task's timers and verifies their
+absence; a failed deletion remains a reported cleanup gap. Resume reconciles scheduling again.
+
+### Planning and `+++`
+
+In Plan mode, include methodology, base work and graph reconciliation, the complete task-specific
+prompt, a timer execution step, and the final PROGRESS refresh. Planning is read-only: defer file
+writes and timer creation/deletion until authorized execution. A tick received during planning
+reports proposed reconciliation only.
+
+Typing `+++` in Plan mode injects this planning requirement through the plugin's prompt hook.
+Outside Plan mode, it adds no cron instruction. A `/task-board` view remains read-only and
+reports missing or stale state without scheduling.
 
 ## Session progress (`PROGRESS.md`)
 
@@ -174,7 +242,7 @@ Four rules bind it, in `.claude/rules/tasks.md` under "Session progress":
 ## Spec + design layer (`SPEC_MODE`)
 
 <Callout type="tip">
-Optional, confirmed in the same Step 1 `AskUserQuestion` as the rest of the findings. `SPEC_MODE=off` is the default-compatible path — nothing below is emitted and every other artifact stays byte-identical to the pre-spec-layer generator.
+Optional, confirmed in the same Step 1 `AskUserQuestion` as the rest of the findings. With `SPEC_MODE=off`, spec artifacts below are omitted; methodology, task graph, progress, and anti-drift remain baseline features.
 </Callout>
 
 With `SPEC_MODE=on`, a non-trivial task becomes three documents instead of one:
@@ -258,7 +326,7 @@ Canonical order, shared by every `-setup` skill:
 |------|----------|--------|
 | `status` | either state | Read-only inventory of the target: deployed or not, spec layer present, what to run next. Writes nothing, spawns nothing, asks nothing |
 | `install` | fresh repo | The full multi-agent deploy below. Refuses a repo that already has `.claude/features/board.md` |
-| `upgrade` | deployed board | Retrofits the spec + session-progress layers, additive-only |
+| `upgrade` | deployed board | Adds missing controls and refreshes generated machinery while preserving task-specific methodology, prompts, and evidence |
 | `enable` | deployed board, parked | Restores the machinery parked by `disable` — renames each `.disabled` file back. No re-analysis, no subagents, no confirmation |
 | `disable` | deployed board | Parks the machinery — `task-tracker.md`, `task-board/SKILL.md`, `task-spec/SKILL.md` (if the spec layer is deployed) and `tasks.md` are each renamed to a `.disabled` twin. Claude Code stops discovering them; `.claude/features/**` and every task are untouched |
 | `uninstall` | deployed board | Removes the generated machinery (curator agent, dashboard skill, rule, spec skill) and KEEPS `.claude/features/**` |
@@ -274,21 +342,22 @@ Only a standalone token counts as the verb; `"upgrade the rules wording"` inside
 /brewtools:task-board-setup upgrade /path/to/repo
 ```
 
-Upgrade installs two INDEPENDENT layers, gated file by file — not one all-or-nothing pass:
+Upgrade checks independent layers, gated file by file:
 
 | Layer | Gate | Adds |
 |-------|------|------|
 | Spec layer | `SPEC_MODE`, forced `on` by `upgrade` | `task-spec` skill, `SPEC_TEMPLATE.md`, `DESIGN_TEMPLATE.md`, the spec-related sites inside existing files |
 | Session-progress layer | ungated | `PROGRESS.md` + every site that references it (rule section, `TRACKER.md`, `task-board` skill, `INDEX.md`) |
+| Methodology and anti-drift | ungated | Shared methodology, anti-drift instructions, derived task graph, task-template sections, and runtime/discovery instructions |
 
-A repo that already has the spec layer but predates `PROGRESS.md` (an older run of this generator) gains only the session-progress layer on `upgrade` — no duplicate spec-layer insertion. A fresh init and an `upgrade` on that same repo converge on the identical final state either way.
+A repo with an existing spec layer can still gain missing progress or methodology controls. Upgrade preserves domain decisions, task-specific methodology, saved prompts, runtime state, and completion evidence; it adds missing sections instead of replacing that content.
 
-- New files (the `task-spec` skill, the two spec templates, `PROGRESS.md`) are written outright.
+- Missing control files and approved new spec artifacts are added; existing user content is preserved.
 - Every edit to an existing file is shown as a diff and gated behind `AskUserQuestion`, file by file. Declined means no edit.
 - Task ids, scope ids and board rows are never renumbered, reordered or deleted. The one allowed `board.md` row edit is appending a `spec` cell (`--` until `task-spec` fills it) to each existing progress/todo row.
 - Backfilling `spec:` on existing tasks is opt-in and off by default; when accepted the value is `pending` or `none` — never `full`.
 - Recovers domains / exclusions / language from the already-deployed artifacts instead of re-running analysis, and re-runs only the domain-agent inventory.
-- Re-running `upgrade` on a repo where both layers are already installed is a no-op: `upgrade: no-op, spec layer already installed`.
+- A content-no-op upgrade still reports provenance refresh separately; installed spec artifacts do not bypass missing methodology checks.
 
 ## Output discipline in the generated curator
 
@@ -307,11 +376,13 @@ Task IDs follow `UPPER-KEBAB`: `<PREFIX>-<DOMAIN>-<SLUG>`.
 
 `<DOMAIN>` is the per-repo first kebab id-segment, discovered and confirmed in Step 1 (e.g. a frontend project might use `UI`, `API`, `BUILD`).
 
-## Version and ownership
+## Content version and ownership
 
-Nine artifacts carry a four-key `.md` frontmatter: `doc_type: llm`, `version`, `generated_by: "brewtools:task-board-setup"`, `last_updated` — the `task-tracker` agent, the `task-board` and `task-spec` skills, `.claude/rules/tasks.md`, and the five `.claude/features/**` control files. Per-task cards under `backlog/`, `todo/`, `progress/`, `closed/` deliberately carry none of the four — they are your data, not generated machinery.
+With the optional spec layer deployed, twelve control artifacts carry `doc_type: llm` and the provenance quartet: `version`, `content_version`, `generated_by: "brewtools:task-board-setup"`, and `last_updated`. These are the `task-tracker` agent, `task-board` and `task-spec` skills, `.claude/rules/tasks.md`, and eight controls under `.claude/features/`: `board.md`, `TRACKER.md`, `INDEX.md`, `PROGRESS.md`, `backlog/README.md`, `METHODOLOGY.md`, `ANTI-DRIFT.md`, and `task-graph.md`. Without the optional spec layer, `task-spec` is absent. `TASK_TEMPLATE.md` and per-task cards under `backlog/`, `todo/`, `progress/`, and `closed/` deliberately carry no generator stamps: their frontmatter describes task data.
 
-`upgrade` restamps `version` / `generated_by` / `last_updated` on every run, even when every content row is already a no-op `SKIP`. That restamp is the only thing that clears the `stale` verdict `/brewcode:setup-status` reads off `board.md` — an `upgrade` that reports success without moving the stamp sends you round the same loop next session.
+`content_version` is the headline for content freshness; `version` records the plugin release that wrote the artifact. Setup reads the former from this generator's own `brewcode-meta` marker and resolves the latter from the installed brewtools plugin. `/brewcode:setup-status` reads `board.md` as the anchor, comparing its `content_version` with the generator's content version; legacy anchors without that key fall back to `version`.
+
+Every `upgrade` runs the ungated metadata refresh, even when all content rows are `SKIP`. It updates only the quartet in each present control artifact's existing frontmatter, preserving `doc_type`, body content, task decisions, saved prompts, scheduler ids, and tick counters. A refreshed content stamp can clear the version-related `stale` signal. Metadata refresh does not prove that content changes were accepted or that missing artifacts were repaired; read the separate added, patched, skipped, and declined results and the named absent controls.
 
 <details>
 <summary>Internals: placeholder map + reference files</summary>
@@ -326,6 +397,8 @@ Nine artifacts carry a four-key `.md` frontmatter: `doc_type: llm`, `version`, `
 | `{{REPO_NAME}}` | `basename` of `TARGET` |
 | `{{LANG}}` | Confirmed doc language |
 | `{{TODAY}}` | ISO date (`YYYY-MM-DD`) |
+| `{PLUGIN_VERSION}` / `{CONTENT_VERSION}` | Installed brewtools release / this generator's own `brewcode-meta` content version; resolved independently |
+| `{GENERATED_BY}` / `{LAST_UPDATED}` | `brewtools:task-board-setup` / the same ISO date as `{{TODAY}}` |
 | `{{CLOSE_MARKER}}` / `{{CLOSE_MARKER_SHORT}}` | Derived from `RELEASE_STYLE`: `vtag` → `vX.Y.Z tag + commit SHA` / `vX.Y.Z tag`; `sha` → `commit SHA`; `none` → `date / no tag / superseded / cancelled` / `no tag` |
 
 **Reference files** (loaded from `${CLAUDE_SKILL_DIR}/references/`):
@@ -342,6 +415,7 @@ Nine artifacts carry a four-key `.md` frontmatter: `doc_type: llm`, `version`, `
 | `08-task-spec-skill.md` | `task-spec` skill template (`SPEC_MODE`) |
 | `09-spec-templates.md` | `SPEC_TEMPLATE.md` + `DESIGN_TEMPLATE.md` (`SPEC_MODE`) |
 | `10-upgrade.md` | `upgrade` mode — retrofits the spec layer onto an already-deployed board |
+| `11-methodology-cron.md` | Shared methodology, anti-drift lifecycle, derived task graph, and task-local work and cron sections |
 
 </details>
 
@@ -356,7 +430,7 @@ Nine artifacts carry a four-key `.md` frontmatter: `doc_type: llm`, `version`, `
     All brewtools skills — text-optimize, secrets-scan, deploy, provider-switch, and more.
   </Card>
   <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/task-board-setup">
-    Source files — SKILL.md and all ten reference templates.
+    Source files — SKILL.md and all eleven reference files.
   </Card>
 </CardGrid>
 

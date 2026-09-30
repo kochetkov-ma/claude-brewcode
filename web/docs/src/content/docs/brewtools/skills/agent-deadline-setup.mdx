@@ -11,7 +11,11 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 
 ## What it does
 
-Claude Code has no wall-clock timeout for subagents, and `maxTurns` — when it fires — kills the agent outright and discards its final report. `/brewtools:agent-deadline-setup` installs two hooks that impose a **soft** budget instead: at 80% of the allotted minutes the agent gets one non-blocking "wrap up" directive; past 100% every tool outside a finalization set is denied, so the agent is forced to write its report rather than lose it.
+The subagent turn limit is not a wall-clock deadline: reaching maxTurns can return partial output
+and leave work unfinished. Agent-deadline setup installs a soft elapsed-time budget: at 80% it
+adds a non-blocking wrap-up directive; past 100% it denies tools outside a finalization set.
+Elapsed time is sampled at tool-call boundaries, so a long-running call can exceed the budget
+before another check. The guard encourages finalization; it does not guarantee a complete report.
 
 Run the skill with no arguments and it reports status first — installed scopes, wired hooks, current config — before doing anything else. Every other mode in the canonical set (`install`, `upgrade`, `enable`, `disable`, `uninstall`, `purge`) states its plan, asks only what is still unknown, then delegates the actual file and settings work to the `brewcode:hook-creator` agent. The extras `[project|global]` and `[minutes]` come after the mode word.
 
@@ -90,6 +94,7 @@ Project config wins over global; a malformed project config is skipped and globa
   "byAgentType": {},
   "hardStopRatio": 2,
   "version": "X.Y.Z",
+  "content_version": "X.Y.Z",
   "generated_by": "brewtools:agent-deadline-setup",
   "last_updated": "YYYY-MM-DD"
 }
@@ -101,7 +106,7 @@ Project config wins over global; a malformed project config is skipped and globa
 | `defaultMinutes` | budget applied to every agent type; default `20` |
 | `byAgentType` | per-type overrides, e.g. `{"Explore": 10}`; empty object = one uniform limit |
 | `hardStopRatio` | optional, default `2`, must be `> 1` — multiple of the budget past which the allowance drops to `Write, Edit` only |
-| `version` / `generated_by` / `last_updated` | stamped by `install`/`upgrade`; `/brewcode:setup-status` reads them to flag a stale install |
+| `version` / `content_version` / `generated_by` / `last_updated` | Restamped by install, upgrade, enable, and disable; version records the producing release, content_version records changed generator content |
 
 Budget resolves as `byAgentType[agent_type] ?? defaultMinutes`, read fresh on every hook call.
 
@@ -121,7 +126,11 @@ Budget resolves as `byAgentType[agent_type] ?? defaultMinutes`, read fresh on ev
 
 ### Version and ownership
 
-`install`/`upgrade` write `agent-deadline.json`'s `version`, `generated_by: "brewtools:agent-deadline-setup"` and `last_updated` at top level, alongside the behavior keys. `agent-deadline-guard.mjs` and `agent-deadline-cleanup.mjs` each carry a matching `// brewcode-meta: version=X.Y.Z generated_by=brewtools:agent-deadline-setup` comment on line 2. `upgrade` re-stamps all three, `status` surfaces a stale install by comparing them against the installed plugin version.
+The config carries version, content_version, generated_by, and last_updated beside behavior keys.
+Copied hooks carry baked provenance markers. Setup-status compares each artifact's content_version
+with the source for that artifact, reads producing version as provenance, and corroborates copied
+hook bytes. Generator and hook content versions can differ; neither must equal an unrelated plugin
+release to remain current. Missing source evidence is reported as unknown rather than invented drift.
 
 ## Related
 

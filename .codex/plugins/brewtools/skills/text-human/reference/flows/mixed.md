@@ -22,7 +22,7 @@ Then, over exactly those paths, before ANY agent is spawned:
 `git status --porcelain -- <path>...`
 
 Non-empty output = the selected paths carry uncommitted work that "use git to revert" cannot
-recover. ONE `request_user_input` listing every dirty path: proceed on them / skip them and process
+recover. ONE `main-chat user gate` listing every dirty path: proceed on them / skip them and process
 only the clean ones / abort. Never edit a dirty path without that explicit answer. A path that has
 changed since `<hash>` but is committed is fine -- it is still not the content the hash names, which
 is why the current-worktree semantic is announced up front.
@@ -63,17 +63,17 @@ Model split:
 Group by type and complexity (avoid mixing fast model/balanced model in one block), balance line count, keep related files together (same package/dir). Data-file block (YAML/JSON/CSV with comments) -> fast model for unicode fixes.
 
 ## Phase 4 -- parallel execution
-Launch ALL sub-agent calls in a single message for true parallelism. Each block prompt states its files, the sub-flow each file uses, the two-pass rules, and requests JSON.
+Main launches ALL native agent calls in one message. Each brief carries the SKILL.md Delegation fields,
+owned files/sub-flow/two-pass rules and JSON contract; delegates never nest or expand ownership.
 
 ```
-Codex delegation brief (task_role="general-purpose", reasoning_tier="fast model", message="[CUSTOM_INSTRUCTIONS_IF_ANY]\nBlock 1 files: [...]. Per file apply its flow rules from <ROOT>/skills/text-human/reference/flows/<flow>.md plus ai-patterns.md / human-patterns.md. Two-pass: STRIP then gated INJECT. Return JSON.")
-Codex delegation brief (task_role="general-purpose", reasoning_tier="balanced model", message="[CUSTOM_INSTRUCTIONS_IF_ANY]\nBlock 2 files: [...]. Same rules. Return JSON.")
+spawn_agent({"task_name":"general_purpose_1","message":"Assigned role: general-purpose. The main session supplies matching native role instructions when available; report a role gap rather than claiming a custom type was instantiated. Perform this bounded work only; do not spawn or delegate children.\n[CUSTOM_INSTRUCTIONS_IF_ANY]\nBlock 1 files: [...]. Per file apply its flow rules from <ROOT>/skills/text-human/reference/flows/<flow>.md plus ai-patterns.md / human-patterns.md. Two-pass: STRIP then gated INJECT. Return JSON."})
+spawn_agent({"task_name":"general_purpose_2","message":"Assigned role: general-purpose. The main session supplies matching native role instructions when available; report a role gap rather than claiming a custom type was instantiated. Perform this bounded work only; do not spawn or delegate children.\n[CUSTOM_INSTRUCTIONS_IF_ANY]\nBlock 2 files: [...]. Same rules. Return JSON."})
 ```
 
-> `<ROOT>` = the value `<plugin-root>` resolves to in THIS skill. Substitute the
-> absolute path into every sub-agent prompt before spawning — subagents get no plugin-root
-> variable of their own, so an unexpanded `<plugin-root>` or `$<plugin-root>`
-> leaves them with no flow rules and they humanize against nothing.
+> Resolve `<ROOT>` to this skill's `<plugin-root>` before handing paths to general-purpose
+> SAs. Plugin-agent definitions substitute their own bare `<plugin-root>`; that does not
+> grant a generic delegate this skill's resource path. Never use removed `$<plugin-root>`.
 
 If a custom prompt was provided, prepend to EVERY sub-agent prompt:
 ```
@@ -97,7 +97,12 @@ Collect JSON from all agents -> merge stats -> unified Humanization Report (see 
 ## Error handling
 | Error | Action |
 |-------|--------|
-| Agent timeout | Continue with other blocks |
+| Agent failure/partial output | Keep completed edits/evidence, report incomplete block, continue others; never count unverified work done |
 | File read error | Skip, note in report |
 | Binary file | Skip, note in report |
 | No changes | Report "No humanization required" |
+
+
+## Native user gates
+
+Required approval: main presents a concrete, reviewable proposal in chat and waits for an actual user reply before dependent action. Existing authorization for the same scope remains valid; do not ask again. Optional clarification: use `request_user_input_async` only if exposed, or `request_user_input` only if available in the current runtime/mode, for optional choices and never approval. Otherwise ask in main chat. Delegated agents return unresolved questions to main. Silence, elapsed time and tool errors are not approval.

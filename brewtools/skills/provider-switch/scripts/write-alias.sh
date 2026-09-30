@@ -4,9 +4,11 @@ set -euo pipefail
 # write-alias.sh — Safely write provider configuration to ~/.zshrc
 # Usage: write-alias.sh <action> [args...]
 # Actions: init, set-key, set-alias, remove-key, remove-alias
+# set-alias --request FILE reads structured provider data; legacy NAME BODY is validated, never eval'd.
 # set-key reads the secret from stdin: printf '%s' "$KEY" | write-alias.sh set-key VAR_NAME
 
 ZSHRC="$HOME/.zshrc"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SECTION_START="# ========== Claude Code Provider Aliases =========="
 SECTION_COMMENT="# Managed by brewtools:provider-switch — do not edit manually"
 SECTION_END="# ========== End Claude Code Provider Aliases =========="
@@ -101,17 +103,21 @@ case "$ACTION" in
     ;;
 
   set-alias)
-    NAME="${1:-}"
-    BODY="${2:-}"
-    [[ -z "$NAME" ]] && { echo "FAILED set-alias — no alias name"; exit 1; }
-    [[ -z "$BODY" ]] && { echo "FAILED set-alias — no alias body"; exit 1; }
+    if [[ "${1:-}" == "--request" && $# == 2 ]]; then
+      ALIAS_DATA=$(python3 "$SCRIPT_DIR/provider-alias.py" --request "$2") || exit 1
+    elif [[ $# == 2 ]]; then
+      ALIAS_DATA=$(python3 "$SCRIPT_DIR/provider-alias.py" --legacy "$1" "$2") || exit 1
+    else
+      echo "FAILED set-alias — use --request FILE or legacy NAME BODY"
+      exit 1
+    fi
+    NAME="${ALIAS_DATA%%$'\n'*}"
+    ALIAS_LINE="${ALIAS_DATA#*$'\n'}"
     if ! section_exists; then
       echo "FAILED set-alias — section not found, run init first"
       exit 1
     fi
     backup_zshrc
-    # Build alias line — write via temp file to avoid sed escaping issues
-    ALIAS_LINE="alias ${NAME}='${BODY}'"
     # Check if alias already exists
     if grep -q "^alias ${NAME}=" "$ZSHRC" 2>/dev/null; then
       delete_lines "^alias ${NAME}="

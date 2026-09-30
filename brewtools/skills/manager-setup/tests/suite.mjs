@@ -847,6 +847,54 @@ check(
   'an unrecognised noun denies by design; the message must say so and name mcpAllow as the fix',
 );
 
+// GIVEN an active task-board prompt and either HARD level, WHEN the main session manages
+// its session timer, THEN the exact runtime tools pass while unlisted tools still deny.
+const taskId = 'T-TOOLS-ANTI-DRIFT';
+const cronReference = readFileSync(join(HERE, '..', '..', 'task-board-setup', 'references', '11-methodology-cron.md'), 'utf8');
+const promptTemplate = cronReference.match(/^> (Anti-drift tick for .*)$/m)[1];
+for (const [level, project] of [['balanced', ARMED], ['strict', STRICT]]) {
+  let prompt = promptTemplate;
+  const values = {
+    TASK_ID: taskId, ABSOLUTE_PROJECT_ROOT: project,
+    GOAL: 'Keep the authorized task graph current', STARTED_AT: '2026-09-30T12:00:00Z',
+    TASK_PATH: join(project, '.claude', 'features', 'progress', `${taskId}.md`),
+    SPEC_PATHS_OR_NONE: 'no spec required',
+    ACCEPTANCE_EVIDENCE: 'graph and board agree; guard fixtures pass',
+    BASE_WORK_UNITS: 'W1 tracker reconcile; W2 reviewer verify; W3 main close and stop timer',
+  };
+  for (const [token, value] of Object.entries(values)) prompt = prompt.replaceAll(`<${token}>`, value);
+  check(
+    `cron-${level}-task-board-prompt-resolved`,
+    /<TASK_ID>|<ABSOLUTE_PROJECT_ROOT>|<GOAL>|<STARTED_AT>|<TASK_PATH>|<SPEC_PATHS_OR_NONE>|<ACCEPTANCE_EVIDENCE>|<BASE_WORK_UNITS>/.test(prompt),
+    false,
+    'producer-shaped cron prompt must resolve the concrete task identity, paths, goal and work',
+  );
+  for (const [tool_name, tool_input] of [
+    ['CronCreate', { cron: '0 * * * *', prompt, recurring: true }],
+    ['CronList', {}],
+    ['CronDelete', { id: 'a1b2c3d4' }],
+  ]) {
+    check(
+      `cron-${level}-${tool_name}-main-session-allowed`,
+      runGuard(stdin(project, { agent_type: 'manager', tool_name, tool_input })),
+      PASS_THROUGH,
+      'task-board timer lifecycle stays in the main session at either HARD level',
+    );
+  }
+  check(
+    `cron-${level}-unlisted-schedule-tool-denied`,
+    verdict(runGuard(stdin(project, { tool_name: 'CronPause', tool_input: { id: 'a1b2c3d4' } }))),
+    'deny',
+    'adding three supported cron tools must not allow an unlisted scheduling tool',
+  );
+  check(
+    `cron-${level}-scheduled-main-write-still-denied`,
+    runGuard(stdin(project, { agent_type: 'manager' })),
+    WRITE_DENIAL,
+    'a later scheduled main-session write has no agent_id and remains behind the wall',
+  );
+}
+
 try { rmSync(BASE, { recursive: true, force: true }); } catch { /* ignore */ }
 
 console.log('\n=== hardmode-guard E2E TEST REPORT ===');

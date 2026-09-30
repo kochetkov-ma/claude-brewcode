@@ -7,7 +7,7 @@ argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge]
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion]
 model: opus
 ---
-<!-- brewcode-meta: version=6.2.0 content_version=5.6.0 generated_by=brewcode:superreview-setup -->
+<!-- brewcode-meta: version=6.3.0 content_version=6.3.0 generated_by=brewcode:superreview-setup -->
 
 # Super Review Generator (brewcode:superreview-setup)
 
@@ -173,12 +173,10 @@ Then report the script's `MOVED:` / `REMOVED:` / `KEPT:` lines verbatim. Not ins
 say so and **STOP**; never "disable" or "purge" something that was never emitted.
 
 
-### Delegation (applies to every Task this generator spawns AND to the fan-out it emits)
+### Delegation (applies to every Agent this generator spawns AND to the fan-out it emits)
 
-A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct
-it, and it usually drifts off-target. One subagent = ONE bounded unit — one deliverable
-(here: ONE file group's review), ~<=5 files, ~<=10 steps. Bigger MUST be split into N tasks, all
-spawned in ONE message — that is why the emitted skill routes file GROUPS to domain owners.
+One subagent owns one bounded file-group review: one deliverable, ~<=5 files, ~<=10 steps.
+Split larger groups into N disjoint tasks, all spawned in one message, so progress stays observable.
 
 Every spawn prompt MUST carry:
 
@@ -211,8 +209,8 @@ single agent that owns half the repo.
 
 ### Phase 1 — Analyze the TARGET project
 
-Gather everything the emitted skill must be wired to. Explore the code with Bash search (`grep`->ugrep / `find`->bfs
-on macOS CC; native Grep/Glob are no-ops there).
+Gather the emitted skill's inputs with available native `Grep`/`Glob`; when unavailable, use Bash
+`rg`/`find` (or installed `ugrep`/`bfs`). Do not infer tool availability from macOS.
 
 **EXECUTE** using Bash tool (project scan):
 ```bash

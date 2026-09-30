@@ -4,9 +4,13 @@ description: "How to install the brewcode, brewdoc, brewtools, and brewui plugin
 order: 2
 ---
 
-import { Card, CardGrid, Callout, Steps, Tabs, TabItem, InstallPrompt } from '../../components/mdx';
+import { Card, CardGrid, Callout, Steps, Tabs, TabItem, InstallPrompt, UpdateNotice } from '../../components/mdx';
 
 # Installation
+
+These four products run in Claude Code: 27 skills, 8 agents, and 6 registered plugin hooks.
+The repository's native Codex instructions are separate; this installation does not enable
+Codex plugins or configure Codex authentication or runtime state.
 
 <InstallPrompt plugin="all" mode="install" />
 
@@ -14,7 +18,7 @@ import { Card, CardGrid, Callout, Steps, Tabs, TabItem, InstallPrompt } from '..
 
 | Component | Version | Purpose |
 |-----------|---------|---------|
-| Claude Code CLI | latest | Plugin runtime |
+| Claude Code CLI | 2.1.285 authoring reference | Runtime contracts checked for this release; not a declared minimum version |
 | Node.js | 20+ | Hook runtime |
 | macOS | 13+ | Supported OS |
 
@@ -34,7 +38,7 @@ import { Card, CardGrid, Callout, Steps, Tabs, TabItem, InstallPrompt } from '..
     claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
     ```
 
-    **2. Install the plugins** -- copies both plugins to the local cache:
+    **2. Install the plugins** -- installs all four products:
 
     ```bash
     claude plugin install brewcode@claude-brewcode
@@ -90,20 +94,18 @@ import { Card, CardGrid, Callout, Steps, Tabs, TabItem, InstallPrompt } from '..
   </li>
   <li class="step step-primary">
     <div>
-      <strong>Set up the task board</strong>
+      <strong>Inspect project setup first</strong>
       <p>Inside a Claude Code session, run:</p>
-      <pre><code>/brewtools:task-board-setup install . "one lane per service"</code></pre>
-      <p>It analyzes the repo and deploys a file-based Kanban plus a generated <code>/task-spec</code> skill for per-task specs. In a <em>separate</em> session, follow it with <a href="/brewcode/skills/superreview-setup/"><code>/brewcode:superreview-setup</code></a> to generate a project-tailored deep-review skill. See <a href="/brewtools/skills/task-board-setup/">the skill page</a> for the full argument list.</p>
+      <pre><code>/brewcode:setup-status</code></pre>
+      <p>It probes eleven setups and gives commands ordered by their dependencies. It runs no setup; its only optional write is a separately accepted task-tools settings key.</p>
     </div>
   </li>
   <li class="step step-primary">
     <div>
-      <strong>See what else this project needs</strong>
-      <p>Run the read-only dashboard, then work through the list it gives you, one setup per session:</p>
-      <pre><code>/brewcode:setup-status</code></pre>
-      <p>It writes nothing and runs nothing — it reports every setup as installed, stale, disabled,
-      partial or missing, and prints the exact command for each row. The full ordered run list is on
-      the <a href="/full-setup/">Full Setup</a> page.</p>
+      <strong>Build the project foundation</strong>
+      <p>Follow the dashboard one setup per session: semantic search, conventions before teams, agent consumers, task management, then documentation sync.</p>
+      <pre><code>/brewcode:convention-setup install</code></pre>
+      <p>Conventions supply architecture, coding, and testing patterns before project agents consume them. The <a href="/full-setup/">Full Setup</a> page includes the return guard stage and all setup commands.</p>
     </div>
   </li>
 </Steps>
@@ -131,6 +133,9 @@ claude plugin update brewui@claude-brewcode
   Run <code>/reload-plugins</code> inside your session (preferred), or type <code>exit</code> and run <code>claude</code> again (fallback). Updates are not active until a reload.
 </Callout>
 
+After reloading, rerun setup-status. Plugin updates do not replace artifacts that a setup
+previously copied into your project; follow its scope-specific upgrade commands where needed.
+
 <InstallPrompt plugin="all" mode="update" />
 
 ## Troubleshooting
@@ -154,13 +159,13 @@ claude plugin update brewui@claude-brewcode
 
 <CardGrid>
   <Card title="Quick Start" icon="rocket" href="/quickstart/">
-    Get started in 15 minutes: [conventions](/brewcode/skills/convention/), [task board](/brewtools/skills/task-board-setup/), [deep review](/brewcode/skills/superreview-setup/).
+    Start with [convention setup](/brewcode/skills/convention-setup/), [task board](/brewtools/skills/task-board-setup/), and [deep review](/brewcode/skills/superreview-setup/).
   </Card>
   <Card title="Full Setup" icon="list" href="/full-setup/">
     The 11 <code>-setup</code> skills in recommended order, what each installs, and the mode vocabulary.
   </Card>
   <Card title="Brewcode Overview" icon="building" href="/brewcode/overview/">
-    Architecture, concepts, all 9 brewcode skills, 5 agents, and 2 hooks.
+    Architecture, concepts, all 9 brewcode skills, 5 agents, and 4 registered hooks.
   </Card>
 </CardGrid>
 
@@ -172,3 +177,5 @@ claude plugin update brewui@claude-brewcode
     Source code, README, and configuration files.
   </Card>
 </CardGrid>
+
+<UpdateNotice />

@@ -64,7 +64,7 @@ Normal text resumes here to verify that formatting terminates correctly.
   2. Level 2 — Ordered B.2
      - Level 3 — Mixed B.2.a
 
-### sub-agent task Lists
+### Task Lists
 
 - [x] Completed task
 - [x] Another completed task

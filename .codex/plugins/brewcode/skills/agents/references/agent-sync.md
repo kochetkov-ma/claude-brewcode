@@ -1,0 +1,8 @@
+# Native scoped agent sync
+
+1. Resolve the user-authorized TOML paths and current routing. Read the file, applicable AGENTS.md/rules and concrete consumer/code references. Review/status stays read-only.
+2. Build an atomic inventory of mission, owned scope/exclusions, examples, identifiers, supported config keys and validation duties. For each current-behavior claim record repository file:line or official OpenAI source; use installed source/schema if available, otherwise disclose that limit.
+3. Compare instructions against actual code/API. Classify each change as current-fact correction, conflict resolution, same-file dedup or necessary addition; preserve negations, numbers, names, scope and references. Do not delete facts across files without main's explicit ownership decision.
+4. Assign one bounded writer per requested role; main owns parallelism, applies only authorized targeted edits and preserves other owners' work. Post-create/improve sync uses the already written file only; main applies verified corrections without another creator or whole-roster sweep.
+5. Parse TOML, validate required strings and supported optional keys, resolve referenced paths, then independently review semantic preservation and the actual consumer/brief. Recheck changed behavior after every correction. Necessary correctness growth is reported, not hidden by deleting constraints.
+6. Return one row per target: path, grounded updates, preserved routing, actual checks, unresolved decisions and remaining runtime limits. Compact wording after factual correction; do not overwrite persistent personal memory, install plugins or claim a runtime reload from static verification.

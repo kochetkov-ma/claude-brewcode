@@ -15,7 +15,7 @@ The `description:` triggers stay bilingual EN+RU regardless of `{{LANG}}` (model
 ```markdown
 ---
 name: task-spec
-description: "Authors the product spec and the system-design doc for a task on this repo's board, fanning out to the repo's own domain architect agents -- never designed solo. Writes .codex/features/specs/<ID>-spec.md and <ID>-design.md, then syncs the task frontmatter and board.md. Triggers: system design, architect this, design doc, design document, write the spec, spec out, spec this task, plan this task, architecture for, technical design, design review, needs a spec, системный дизайн, спека, спеку, напиши спеку, архитектура задачи, спланируй задачу, продумай архитектуру, распиши решение, дизайн-документ, с помощью архитектора, привлеки архитекторов. <example> user: продумай архитектуру для T-{{FIRST_DOMAIN}}-SLUG <commentary>Plain prose, no skill named, but this is a design request for a board task -- run task-spec in design mode and fan out to the domain architects.</commentary> </example> <example> user: this one touches the API and the storage layer, write the spec before anyone codes <commentary>Multi-domain + explicit spec ask = the needs-spec heuristic; run task-spec full mode, one architect per touched domain.</commentary> </example> <example> user: scope changed on BUG-{{FIRST_DOMAIN}}-SLUG, the spec is stale now <commentary>Existing docs plus a changed task Scope -> task-spec refresh, preserving D#, Q# and AQ# ids and the Scope status cells.</commentary> </example>"
+description: "Authors specs/<ID>-spec.md and <ID>-design.md for a board task through project domain-architect fan-out; never designs solo. Syncs task frontmatter and board.md. Triggers: system design, architect this, design doc, design document, write the spec, spec out, spec this task, plan this task, architecture for, technical design, design review, needs a spec, stale spec, scope changed, системный дизайн, спека, спеку, напиши спеку, архитектура задачи, спланируй задачу, продумай архитектуру, распиши решение, дизайн-документ, с помощью архитектора, привлеки архитекторов, устарела, скоуп поменялся."
 argument-hint: "[prompt] [<TASK_ID>] [full|design|refresh] [-n|--noask]"
 doc_type: llm
 version: "{PLUGIN_VERSION}"
@@ -49,13 +49,13 @@ the prompt (P0.1 below).
    the remaining arguments wins outright, no scoring.
 2. Else score modes by distinct whole-word keyword hits (table above); highest unique score wins. A
    tie between two of these mutating modes falls to the keyword appearing first in the prompt --
-   none of the three is read-only, so a tie never needs `request_user_input` by itself.
+   none of the three is read-only, so a tie never needs `main-chat user gate` by itself.
 3. All zero, or empty arguments -> `full` (the documented default).
 4. Prose that does not parse as a mode is still input, never an error: P0.1 extracts `<TASK_ID>`
    from it by id pattern or title/slug match -- the first word of a sentence is never guessed as
    the id.
 5. Outcome-changing ambiguity (P0.4 missing `## Scope`, P0.7 architecture questions) still gets ONE
-   `request_user_input` before work starts, per the existing rules in P0 and P5/P6-C below. `-n`/
+   `main-chat user gate` before work starts, per the existing rules in P0 and P5/P6-C below. `-n`/
    `--noask` suppresses those three asks only; P0.1's several-candidates STOP and P0.4's no-`## Scope`
    STOP are ground truth and are never suppressed.
 
@@ -121,6 +121,8 @@ domain agent MUST be stated explicitly there -- silence is a defect. An agent th
 One subagent = ONE bounded unit: ONE domain, ~<=5 files read, ~<=10 steps. Bigger -> split into N
 spawns. All spawns of a phase go in ONE message. A bare one-line prompt is never enough.
 
+Run this skill in the MAIN session; every native agent calls originates there. Child researchers/architects/reviewers return proposals or colleague requests, never spawn their own children; the main session handles re-delegation.
+
 | Field | Content |
 |-------|---------|
 | GOAL | the task being specced and why it exists -- the point beyond the doc |
@@ -142,15 +144,15 @@ spawns. All spawns of a phase go in ONE message. A bare one-line prompt is never
    the `id`/`title` frontmatter of every `.codex/features/{backlog,todo,progress,closed}/*.md`
    (exact match on id, case-insensitive substring on title). No id recoverable (including empty
    arguments): `Glob` `.codex/features/progress/*.md` then `todo/*.md`; one WIP task -> use it;
-   several -> `request_user_input` with the candidate ids; `--noask` -> this ask is NOT skipped: STOP
+   several -> `main-chat user gate` with the candidate ids; `--noask` -> this ask is NOT skipped: STOP
    and report the candidates instead. Never guess -- treating the first word of a sentence as
    `<TASK_ID>` is a defect.
 2. Locate the file: `Glob` `.codex/features/{backlog,todo,progress,closed}/<ID>.md`. Not found -> STOP, report "task <ID> not found".
 3. Read, in this order: the task file, `.codex/features/TRACKER.md` (section 10), `specs/SPEC_TEMPLATE.md`, `specs/DESIGN_TEMPLATE.md`, and any existing `specs/<ID>-spec.md` / `specs/<ID>-design.md`.
-4. Extract `## Scope` rows. No `## Scope` section -> derive `S1..Sn` from the task body, show the proposed table via `request_user_input`, and write it into the task file in P7. Never proceed on an unstated scope -- under `--noask` this ask is NOT skipped either: STOP and report the derived `S#` rows for confirmation.
+4. Extract `## Scope` rows. No `## Scope` section -> derive `S1..Sn` from the task body, show the proposed table via `main-chat user gate`, and write it into the task file in P7. Never proceed on an unstated scope -- under `--noask` this ask is NOT skipped either: STOP and report the derived `S#` rows for confirmation.
 5. Derive TOUCHED DOMAINS: intersect the task text + scope blocks with {{DOMAINS}}. Record the list; it drives P1, P2 and P6 fan-out width.
 6. `refresh` mode: harvest existing `D#`, `Q#` and `AQ#` ids and their text, plus the `## Scope` `status` cell of every id. They are inputs, not drafts to overwrite.
-7. **Clarify BEFORE research** (`--noask`: skip, record `Skipped (--noask mode)`, infer from the task file + code). Ambiguities that would change the architecture are asked NOW, not after both docs are drafted: `request_user_input`, 3-5 questions, max 4 per call.
+7. **Clarify BEFORE research** (`--noask`: skip, record `Skipped (--noask mode)`, infer from the task file + code). Ambiguities that would change the architecture are asked NOW, not after both docs are drafted: `main-chat user gate`, 3-5 questions, max 4 per call.
 
    | # | Category | Ask about |
    |---|----------|-----------|
@@ -170,26 +172,7 @@ One read-only agent per touched domain, ALL in ONE message. Purpose: how the dom
 Spawn ONE architect per touched domain, ALL in ONE message, using the fallback chain. This phase is not optional and is not replaceable by main-session reasoning (G4). Feed each agent the P1 findings for its domain only.
 
 \`\`\`
-Codex delegation brief (task_role="<domain agent | {{ARCHITECT_AGENT}} | Plan>", message="
-GOAL: <ID> -- <task title>. We are designing before anyone codes, because the change spans
-  <touched domains> and a wrong seam here costs a rewrite later.
-ROLE: you own the <domain> slice of the architecture ONLY. Do NOT design other domains, do NOT
-  write code, do NOT edit any file -- you return a proposal, this session writes the doc.
-SCOPE: in -- <domain> sources and contracts (read-only), the task file
-  .codex/features/{progress|todo}/<ID>.md, .codex/features/specs/DESIGN_TEMPLATE.md.
-  Out -- other domains, {{EXCLUSIONS}}, any write anywhere.
-CONTEXT: task Scope ids you must cover: S1 <block>, S3 <block>. Scope and constraints are already
-  settled with the user -- do NOT re-open them: <P0.7 answers>. Already fixed: <decisions from an
-  existing spec, or 'nothing fixed yet'>. Running in parallel: architects for <other domains> --
-  assume their seams exist, name the interface you need from them, do not design their internals.
-  Current-state findings for your domain: <P1 digest, file:line>.
-CONSUMER: this session merges your proposal into .codex/features/specs/<ID>-design.md. Answer in
-  the fixed section headings of DESIGN_TEMPLATE.md so it merges without rewriting.
-DONE: components + responsibilities; the interface you expose and the ones you require from sibling
-  domains; failure modes and their handling; a COMPLEXITY BUDGET -- what you deliberately do NOT
-  build and why (reliable and project-sized beats clever); which Scope ids your slice covers and any
-  it cannot; open architectural questions. Those headings, terse, {{LANG}}, file:line evidence, no code.
-")
+spawn_agent({"task_name":"domain_agent_architect_agent_plan_1","message":"Assigned role: <domain agent | {{ARCHITECT_AGENT}} | Plan>. The main session supplies matching native role instructions when available; report a role gap rather than claiming a custom type was instantiated. Perform this bounded work only; do not spawn or delegate children.\n\nGOAL: <ID> -- <task title>. We are designing before anyone codes, because the change spans\n  <touched domains> and a wrong seam here costs a rewrite later.\nROLE: you own the <domain> slice of the architecture ONLY. Do NOT design other domains, do NOT\n  write code, do NOT edit any file -- you return a proposal, this session writes the doc.\nSCOPE: in -- <domain> sources and contracts (read-only), the task file\n  .codex/features/{progress|todo}/<ID>.md, .codex/features/specs/DESIGN_TEMPLATE.md.\n  Out -- other domains, {{EXCLUSIONS}}, any write anywhere.\nCONTEXT: task Scope ids you must cover: S1 <block>, S3 <block>. Scope and constraints are already\n  settled with the user -- do NOT re-open them: <P0.7 answers>. Already fixed: <decisions from an\n  existing spec, or 'nothing fixed yet'>. Running in parallel: architects for <other domains> --\n  assume their seams exist, name the interface you need from them, do not design their internals.\n  Current-state findings for your domain: <P1 digest, file:line>.\nCONSUMER: this session merges your proposal into .codex/features/specs/<ID>-design.md. Answer in\n  the fixed section headings of DESIGN_TEMPLATE.md so it merges without rewriting.\nDONE: components + responsibilities; the interface you expose and the ones you require from sibling\n  domains; failure modes and their handling; a COMPLEXITY BUDGET -- what you deliberately do NOT\n  build and why (reliable and project-sized beats clever); which Scope ids your slice covers and any\n  it cannot; open architectural questions. Those headings, terse, {{LANG}}, file:line evidence, no code.\n"})
 \`\`\`
 
 Guard: touched domains found but fewer architects spawned than domains -> STOP and fan out properly.
@@ -222,34 +205,19 @@ Merge the P2 proposals into `specs/<ID>-design.md` following `DESIGN_TEMPLATE.md
 
 ### P5 -- ask the user about open questions
 
-Blocking questions from BOTH docs -- `Q#` in the spec, `AQ#` in the design -- via `request_user_input`, batched (max 4 per call). Answered `Q#` -> `## Resolved questions`; answered `AQ#` -> row dropped, the answer folded into the design section it settles, id retired and never reused. Decrement that doc's `open_questions`. Unanswered stays with `blocking: yes` and will block close under G2. !=invent an answer, !=downgrade a question to `blocking: no` to clear the gate. `--noask`: skip this phase entirely, record `Skipped (--noask mode)` in `## Resolved questions`, leave every question open and blocking.
+Blocking questions from BOTH docs -- `Q#` in the spec, `AQ#` in the design -- via `main-chat user gate`, batched (max 4 per call). Answered `Q#` -> `## Resolved questions`; answered `AQ#` -> row dropped, the answer folded into the design section it settles, id retired and never reused. Decrement that doc's `open_questions`. Unanswered stays with `blocking: yes` and will block close under G2. !=invent an answer, !=downgrade a question to `blocking: no` to clear the gate. `--noask`: skip this phase entirely, record `Skipped (--noask mode)` in `## Resolved questions`, leave every question open and blocking.
 
 ### P6 -- two-phase review
 
 **Phase A -- find.** One reviewer per touched domain, ALL in ONE message. Reviewers report findings only; they never edit and nothing is fixed on this pass.
 
 \`\`\`
-Codex delegation brief (task_role="<domain agent | {{ARCHITECT_AGENT}} | Plan>", message="
-GOAL: <ID> -- <task title>. The design and spec drafts are written; we review before they are
-  marked agreed and before implementation starts.
-ROLE: adversarial reviewer for the <domain> slice. Find defects; do NOT fix them, do NOT edit any
-  file, do NOT re-design what is already sound.
-SCOPE: in -- .codex/features/specs/<ID>-design.md, .codex/features/specs/<ID>-spec.md, the task
-  file, and <domain> sources read-only. Out -- other domains' internals, {{EXCLUSIONS}}, any write.
-CONTEXT: your own P2 proposal for this domain was merged with <other domains>; the merge may have
-  bent it. sub-agent task Scope ids: S1..Sn. Open now: Q1 <text> (spec, blocking yes), AQ1 <text> (design).
-CONSUMER: this session re-verifies every finding in a second pass and only then edits the docs.
-  A vague finding is unverifiable and will be dropped.
-DONE: a table -- id | severity (blocker|major|minor) | doc + section | claim | evidence file:line
-  | one-line suggested fix. Explicitly answer: is every in-scope id covered for your domain? is
-  anything over-engineered against the Complexity budget? is any interface underspecified or any
-  failure mode unhandled? Terse, {{LANG}}, no prose essay.
-")
+spawn_agent({"task_name":"domain_agent_architect_agent_plan_2","message":"Assigned role: <domain agent | {{ARCHITECT_AGENT}} | Plan>. The main session supplies matching native role instructions when available; report a role gap rather than claiming a custom type was instantiated. Perform this bounded work only; do not spawn or delegate children.\n\nGOAL: <ID> -- <task title>. The design and spec drafts are written; we review before they are\n  marked agreed and before implementation starts.\nROLE: adversarial reviewer for the <domain> slice. Find defects; do NOT fix them, do NOT edit any\n  file, do NOT re-design what is already sound.\nSCOPE: in -- .codex/features/specs/<ID>-design.md, .codex/features/specs/<ID>-spec.md, the task\n  file, and <domain> sources read-only. Out -- other domains' internals, {{EXCLUSIONS}}, any write.\nCONTEXT: your own P2 proposal for this domain was merged with <other domains>; the merge may have\n  bent it. Task Scope ids: S1..Sn. Open now: Q1 <text> (spec, blocking yes), AQ1 <text> (design).\nCONSUMER: this session re-verifies every finding in a second pass and only then edits the docs.\n  A vague finding is unverifiable and will be dropped.\nDONE: a table -- id | severity (blocker|major|minor) | doc + section | claim | evidence file:line\n  | one-line suggested fix. Explicitly answer: is every in-scope id covered for your domain? is\n  anything over-engineered against the Complexity budget? is any interface underspecified or any\n  failure mode unhandled? Terse, {{LANG}}, no prose essay.\n"})
 \`\`\`
 
 **Phase B -- verify.** Re-check every phase-A finding against the docs and the code BEFORE changing anything: confirmed | rejected (with the reason) | duplicate. Do this here in the main session for small sets; fan out a second, ONE-message verification round when a domain returned many findings. Only CONFIRMED findings are applied; blockers must be applied or explicitly converted into a `Q#` (spec) or `AQ#` (design) with `blocking: yes`. Rejected findings are listed in the final report, not in the docs.
 
-**Phase C -- fix loop, bounded.** `WHILE a confirmed blocker or major finding remains: apply the fixes, re-run phase A for the AFFECTED domains only (ONE message), re-verify per phase B. MAX 3 iterations.` `minor` findings never drive an iteration. Survivors after 3 rounds go to the user via `request_user_input`: accept as-is, or convert each into a `Q#` (spec) / `AQ#` (design) with `blocking: yes`. `--noask`: skip the escalation and convert every survivor into a blocking question. Iteration count and survivors are reported.
+**Phase C -- fix loop, bounded.** `WHILE a confirmed blocker or major finding remains: apply the fixes, re-run phase A for the AFFECTED domains only (ONE message), re-verify per phase B. MAX 3 iterations.` `minor` findings never drive an iteration. Survivors after 3 rounds go to the user via `main-chat user gate`: accept as-is, or convert each into a `Q#` (spec) / `AQ#` (design) with `blocking: yes`. `--noask`: skip the escalation and convert every survivor into a blocking question. Iteration count and survivors are reported.
 
 ### P7 -- coverage gate G1, then write and sync (ONE change)
 
@@ -263,7 +231,7 @@ G1 reads `in` scope ids ONLY: every `in` id from the task must appear in BOTH `#
 Then, as ONE change:
 
 1. Write `specs/<ID>-design.md` and (unless `design` mode) `specs/<ID>-spec.md`.
-2. sub-agent task file FM: add both docs to `links:`; set `spec:` to `full` | `design-only`; bump `updated`. Write back the `## Scope` table if P0 minted it (before `## Acceptance`) -- a minted table's `in` rows start `not-started`, `out` rows `--`. An EXISTING `## Scope` table is left alone; if it is rewritten for any reason, every `status` cell carries through verbatim.
+2. Task file FM: add both docs to `links:`; set `spec:` to `full` | `design-only`; bump `updated`. Write back the `## Scope` table if P0 minted it (before `## Acceptance`) -- a minted table's `in` rows start `not-started`, `out` rows `--`. An EXISTING `## Scope` table is left alone; if it is rewritten for any reason, every `status` cell carries through verbatim.
 3. `board.md`: refresh the task's row and the Feature specs table in the SAME change. A lagging board is a wrong board.
 4. Report -- emit EXACTLY this block. Prose !=a substitute; every row is filled or reads `--`.
 
@@ -309,3 +277,8 @@ Then, as ONE change:
 
 Procedure (authoritative): `.codex/features/TRACKER.md` section 10 | Templates: `.codex/features/specs/{SPEC,DESIGN}_TEMPLATE.md` | Rules: `.codex/rules/tasks.md` | Board + lifecycle: `/task-board`, agent `task-tracker`
 ```
+
+
+## Native user gates
+
+Required approval: main presents a concrete, reviewable proposal in chat and waits for an actual user reply before dependent action. Existing authorization for the same scope remains valid; do not ask again. Optional clarification: use `request_user_input_async` only if exposed, or `request_user_input` only if available in the current runtime/mode, for optional choices and never approval. Otherwise ask in main chat. Delegated agents return unresolved questions to main. Silence, elapsed time and tool errors are not approval.

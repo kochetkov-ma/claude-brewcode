@@ -6,8 +6,9 @@
 loaded at start, full body on invoke. Best for reference material, guidelines, background
 knowledge.
 
-**FORK (`context: fork`):** isolated SA, fresh context, no conversation access. Background by
-default since v2.1.218 (`background: false` waits for the result in the invoking turn). SKILL.md
+**Skill fork (`context: fork`):** regular isolated SA, fresh context, no conversation access. It is
+NOT a conversation fork (`/subtask` / `subagent_type: fork`), which inherits history and skips tool
+filters. Background by default since v2.1.218 (`background: false` waits for the result in the invoking turn). SKILL.md
 body = task prompt. CLAUDE.md loaded, EXCEPT with `agent: Explore` or `agent: Plan` (`skills:692`).
 A fork with guidelines but no actionable task returns nothing useful (`skills:685`).
 
@@ -31,11 +32,12 @@ Research $ARGUMENTS:
 2. Summarize with file references
 ```
 
-Memory behavior: inline keeps full conversation access at any length; `fork` works well for 1-4
-phases and loses task structure/skips phases at 5+ — context fades over extended execution, use
-inline + hooks/external state (TASK.md, a progress log) for longer orchestration.
+House heuristic, not an upstream phase limit: inline retains access to the conversation, subject
+to normal context limits/compaction. Prefer `fork` for a bounded 1-4-phase task; 5+ phases may lose
+structure or skip steps, but no platform contract guarantees that threshold. For longer
+orchestration prefer inline + hooks/external state (TASK.md, a progress log).
 
-Decision matrix: needs conversation history -> inline. Standalone quick task (<4 phases) ->
+House decision matrix: needs conversation history -> inline. Standalone quick task (<4 phases) ->
 `context: fork`. Multi-phase orchestration (4+ phases) -> inline + hooks/external state. Simple
 research/analysis -> `context: fork` + `agent: Explore`. Fork needs a tool outside the background
 pool -> `background: false`. Fork writes files and `/rewind` must work -> `background: false`.
@@ -48,10 +50,10 @@ Only AT the depth limit is `Agent` withheld — a fork keeps it listed but it er
 spawning (`sa:901`). No per-session cap on total SAs (`sa:930`) — the 200-spawn cap added in 2.1.212
 was removed in 2.1.224.
 
-Two filters narrow a SA's pool (`sa:337`); a fork skips both. **`AskUserQuestion` is removed from
-EVERY SA, even when listed in `tools:`** (`sa:340`) — a SK must never instruct a spawned SA to ask
-the user anything; put open questions in its return instead. A background SA additionally keeps
-only the reduced built-in set, which still includes `Skill` and `Agent` (`sa:349`).
+Two filters narrow a regular SA's pool; only a conversation fork skips both. **`AskUserQuestion`
+is removed from regular SAs, even when listed in `tools:`** — a SK must put open questions in the
+SA's return. A background SA keeps the reduced built-in set, including `Skill`, `LSP` (2.1.280+),
+and `Agent` below the depth limit; see `agents/references/agent-scope-and-tools.md` for the full pool.
 
 brewcode workflow prefers spawns from the main conversation — a house preference, not a platform
 limit: nested spawns bypass session binding + hook context injection.
@@ -61,7 +63,7 @@ limit: nested spawns bypass session binding + hook context injection.
 | SK with FORK from **main conversation** | Use this | Lock binding + hook context injection intact |
 | SK with FORK from **SA** | Avoid | Bypasses session binding + coordinator loop |
 | `Agent` tool from **SA** | Avoid | Nested spawn bypasses session binding + hook context injection |
-| `Skill` tool from **SA** | Never | Bypasses hook context injection, and `DMI: true` SKs (every distributed brewcode/brewtools/brewdoc SK) silently no-op — use the SK's twin agent instead |
+| `Skill` tool from **SA** | Avoid in BC | Upstream supports runtime skills; BC distributed SKs use `DMI: true` and cannot be model-invoked — use the twin agent. This is house policy, !=a platform ban |
 | Inline SK (no `context`) from SA | Avoid | Same binding/injection bypass |
 
 ## Agent field
@@ -70,12 +72,13 @@ With `context: fork`, `agent` selects the SA type.
 
 | Agent | Model | Tools | Use for |
 |---|---|---|---|
-| `Explore` | Haiku | Read-only | Read-only analysis, file discovery — fast, safe |
+| `Explore` | Inherit (2.1.198+); Claude API capped at Opus | Read-only | Analysis/file discovery; user/project definition or forced SA model can override |
 | `Plan` | Inherit | Read-only | Planning, structured research |
 | `general-purpose` | Inherit | All | Multi-step tasks (default), code changes |
 
-> Only these three are built in. `developer`/`tester`/`reviewer` do NOT exist — a generated SK
-> naming one fails to resolve its SA on first run. Custom agents: `.claude/agents/` /
+> These are the usual built-in task choices, !=the entire roster: upstream also supplies `claude`
+> and specialized helpers. `developer`/`tester`/`reviewer` require custom discoverable definitions.
+> Custom agents: `.claude/agents/` /
 > `~/.claude/agents/` via `agent: my-custom-agent`.
 
 ## Model selection
@@ -92,21 +95,22 @@ With `context: fork`, `agent` selects the SA type.
 
 `allowed-tools` is a PERMISSION GRANT, not an allowlist. Upstream: it "does not restrict which
 tools are available: every tool remains callable", the listed ones just run "without prompting" —
-for the invoking turn only (`skills:513`). Applies even in an untrusted `-p` run in an untrusted
+for the invoking turn only, clearing on the next user message. Skill content stays in context
+and is not re-read automatically. Applies even in an untrusted `-p` run in an untrusted
 folder — "a skill can grant itself broad tool access" (`skills:515`).
 
 | Goal | Mechanism |
 |---|---|
 | Skip the prompt for the exact commands the SK runs | `allowed-tools`, scoped as narrowly as possible: `Bash(git status:*)`, `Bash(${CLAUDE_SKILL_DIR}/scripts/render.sh *)` — CSD/`${CLAUDE_PROJECT_DIR}`/BPR/`${CLAUDE_PLUGIN_DATA}` are substituted inside `allowed-tools` Bash rules too (`skills:403,409`) |
-| Stop the SK from calling a tool at all | `disallowed-tools` — the only key that removes anything (`skills:334,528`) |
+| Remove a tool for this invoking turn | `disallowed-tools`; restriction clears on next user message |
 | Restrict for the whole session, or across all SKs | permission settings: allow rules for a session-wide grant, deny rules to block (`skills:513,528`) |
 
 Rules: never a bare `Bash`/`Write`/`Edit`/`Agent` in `allowed-tools` — it pre-approves every
 invocation, the opposite of narrowing; write the narrowest Bash pattern or omit the key.
 `allowed-tools` is never needed to make a tool callable — `Skill`/`Agent`/`Read` work with or
 without it, listing only removes the prompt. Autonomous SK that must never stall on input ->
-`disallowed-tools: AskUserQuestion`. An injected `` !`cmd` `` whose permission check is anything
-but allow ABORTS the invocation — pre-approve that exact command with `allowed-tools`.
+`disallowed-tools: AskUserQuestion` (reapply next invocation). Pre-approve exact injected
+`` !`cmd` `` commands with `allowed-tools`; permission deny/ask rules still override the grant.
 
 ## Dynamic context injection
 
@@ -118,9 +122,9 @@ FORK body. Multi-line -> a fenced block opened with ` ```! `.
 | Failure ABORTS the whole invocation | Not just the placeholder — Claude never sees the SK content (`skills:652`) |
 | Non-zero = failure | Carveout: exit 1 from search/comparison commands is normal, output still injected; exit >=2 fails even for those (`skills:654`) |
 | Remedy | Append `\|\| true` to a command expected to exit non-zero (`skills:661`) |
-| Permission | Injected commands never prompt; any non-allow check result ABORTS — pre-approve with `allowed-tools` (`skills:663-665`) |
+| Permission | Outside auto mode, a non-allow result aborts. In auto mode, a command needing approval can defer to Claude's actual shell call; still aborts for `context: fork` with explicit `agent`, or no shell tool. Deny/ask rules override `allowed-tools` |
 | CWD | The session shell's, moves with `cd`. Use CSD/`${CLAUDE_PROJECT_DIR}` for anything that must resolve identically (`skills:643`) |
-| Timeout | Bash tool default 2 min; a kill at timeout aborts the invocation (`skills:645`) |
+| Timeout | Default 2 min; auto-backgrounded commands still render task/output-path info. Commands that cannot auto-background are killed, aborting invocation |
 | Inline form | `` ! `` recognized only at line start or after whitespace — `` KEY=!`cmd` `` stays literal (`skills:612`) |
 | Single pass | Substitution runs ONCE; injected output is not re-scanned (`skills:610`) |
 
@@ -146,17 +150,21 @@ a `${CLAUDE_*}` var. CSD is a string substitution, NOT an env var — not availa
 (use `${CLAUDE_PLUGIN_ROOT}` there). `$ARGUMENTS` inside a ` ```bash ``` ` block is a shell
 variable (empty/undefined), not a CC substitution — put it in text, use a placeholder in the block.
 
-## Skill and Task tools
+## Skill and Agent tools
 
-`Skill(skill="skill-name", args="...")` / `Skill(skill="plugin:skill", args="...")` — native tool
-implementing the agentskills.io standard, compatible with CC/Codex/ChatGPT. Needs no
+`Skill(skill="skill-name", args="...")` / `Skill(skill="plugin:skill", args="...")` — Claude Code
+runtime tool for skills using the agentskills.io format; !=a Codex/ChatGPT tool API. Needs no
 `allowed-tools` entry to be callable; survives both SA tool filters (`sa:349`).
 
-`Agent`/`Task` delegates to SAs (renamed `Agent` in v2.1.49-74; `Task(...)` still resolves as an
-alias). Params: `description` (3-5 words, REQ), `prompt` (REQ), `subagent_type` (REQ, not `agent`
-— that param does not exist), `model` (opus/sonnet/haiku), `run_in_background`, `resume` (agent ID).
+`Agent` delegates to SAs (renamed from `Task` in v2.1.63; old settings/definition names remain
+aliases). Params include `description` (3-5 words), `prompt`, `subagent_type` (BC always explicit,
+not `agent`), `model`, `run_in_background`. Continue an existing resumable SA with
+`SendMessage(to: <agent ID/name>, message: ...)`, the documented continuation API.
 Launch multiple calls in one message for parallel execution rather than serially.
 
 Listing `Agent` in a SA's `tools:` genuinely lets it spawn; only a type list inside the parentheses
-is ignored (`sa:413`). To keep a generated SA read-only, omit `Agent` from its `tools:` or add it
-to `disallowedTools` (`sa:917`) — do NOT assume nesting is off by default.
+is ignored (`sa:413`). A read-only SA should also omit `Agent` from its `tools:` or deny it with
+`disallowedTools`, so a delegate cannot bypass that role's tool restrictions. This alone does not
+make Bash/MCP read-only; do NOT assume nesting is off by default.
+
+> Sources: [skills](https://code.claude.com/docs/en/skills), [subagents](https://code.claude.com/docs/en/sub-agents), [tools](https://code.claude.com/docs/en/tools-reference); checked 2026-09-30 through CC 2.1.285.

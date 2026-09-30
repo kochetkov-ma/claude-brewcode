@@ -1,15 +1,15 @@
 ---
 title: "Quick Start"
-description: "Your first 15 minutes with Brewcode: spec, conventions, deep review"
+description: "Start with project conventions and domain agents, then prepare task methodology, specifications and a project-tailored review skill."
 order: 3
 ---
 
-import { Card, CardGrid, Callout, Steps, Badge } from '../../components/mdx';
+import { Card, CardGrid, Callout, Steps, Badge, UpdateNotice } from '../../components/mdx';
 
 # Quick Start
 
-In 15 minutes you will go through the core Brewcode workflow: from writing a structured specification
-to capturing your project's conventions and generating a project-tailored deep review skill.
+Establish project conventions and domain agents, then prepare a task board, specification and
+project-tailored review skill. Run setup generators in separate sessions.
 
 <Callout type="note" title="Before you begin">
   Make sure Claude Code and the brewcode plugin are installed.
@@ -17,7 +17,7 @@ to capturing your project's conventions and generating a project-tailored deep r
 
   A skill whose name ends in `-setup` installs a mechanism you use afterwards instead of the skill itself; recurring tools keep bare names. The full ordered list lives in [Full Setup](/full-setup/).
 
-  Every command below is one you type yourself. Nothing in this suite auto-activates, and each `-setup` step wants its own fresh session — it asks real questions and spawns a lot of agents.
+  Distributed plugin skills require your explicit command. Generated project skills can be model-invocable. Each setup generator works best in its own fresh session.
 </Callout>
 
 ## Full workflow
@@ -25,34 +25,47 @@ to capturing your project's conventions and generating a project-tailored deep r
 <Steps>
   <li class="step step-primary">
     <div>
-      <strong>Install brewcode</strong> <Badge variant="primary" text="plugin install" />
-      <p>Add the plugin from the marketplace and install it into your Claude Code session:</p>
+      <strong>Install the workflow plugins</strong> <Badge variant="primary" text="plugin install" />
+      <p>Add the marketplace and install Brewcode plus Brewtools for the task board:</p>
       <pre><code>claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
-claude plugin install brewcode@claude-brewcode</code></pre>
+claude plugin install brewcode@claude-brewcode
+claude plugin install brewtools@claude-brewcode</code></pre>
       <p>This step runs once per machine. Reload with <code>/reload-plugins</code> if already inside a session.</p>
     </div>
   </li>
   <li class="step step-primary">
     <div>
-      <strong>Set up the task board</strong> <Badge variant="primary" text="/brewtools:task-board-setup" />
-      <p>Run it once per repo and accept the spec layer when asked:</p>
-      <pre><code>/brewtools:task-board-setup install . "one lane per service"</code></pre>
-      <p>Then write the spec for a task on the board:</p>
-      <pre><code>/task-spec "Implement JWT authorization with role-based access"</code></pre>
-      <p><strong>What happens:</strong> <code>task-board-setup</code> analyzes the repo with parallel agents and
-      deploys a file-based Kanban plus a project-tailored <code>/task-spec</code> skill. <code>/task-spec</code>
-      researches the codebase, asks clarifying questions, and fans out to domain agents for system design.</p>
-      <p><strong>Result:</strong> a task on the board with its own spec and design docs under <code>.claude/features/</code>.</p>
+      <strong>Set up project conventions</strong> <Badge variant="primary" text="/brewcode:convention-setup" />
+      <pre><code>/brewcode:setup-status
+/brewcode:convention-setup install</code></pre>
+      <p><strong>What happens:</strong> parallel agents analyze each architectural layer, extract etalon
+      classes, coding, testing and architecture patterns, and write them into <code>.claude/convention/</code> with reversible loading guidance.</p>
+      <p>Follow the setup dashboard's order: search foundation when applicable, then conventions before teams and review setup. <strong>Result:</strong> a written project reference for later agents.</p>
     </div>
   </li>
   <li class="step step-primary">
     <div>
-      <strong>Capture project conventions</strong> <Badge variant="primary" text="/brewcode:convention" />
-      <pre><code>/brewcode:convention full</code></pre>
-      <p><strong>What happens:</strong> parallel agents analyze each architectural layer, extract etalon
-      classes and recurring patterns, and write them into <code>.claude/convention/</code>.</p>
-      <p><strong>Result:</strong> every later agent has a written reference for how this project does
-      things — no more guessing at style or structure.</p>
+      <strong>Create a domain agent team</strong> <Badge variant="primary" text="/brewcode:teams-setup" />
+      <pre><code>/brewcode:teams-setup install core "one agent per bounded context, plus a migrations specialist"</code></pre>
+      <p>Generates 5-20 project-specific agents with self-selection logic and performance tracking.
+      Use the convention foundation when generating the team. To remove a team later,
+      name it: <code>uninstall core</code>, or <code>purge core</code> to drop its archive and trace
+      files too.</p>
+    </div>
+  </li>
+  <li class="step step-primary">
+    <div>
+      <strong>Set up the task board</strong> <Badge variant="primary" text="/brewtools:task-board-setup" />
+      <p>Run it once per repo and explicitly select the optional spec + design layer when asked:</p>
+      <pre><code>/brewtools:task-board-setup install . "one lane per service"</code></pre>
+      <p>Create the task first, then resolve that existing task by its unique title:</p>
+      <pre><code>/task-board add "Implement JWT authorization with role-based access"
+/task-spec "Implement JWT authorization with role-based access"</code></pre>
+      <p>The board returns the actual task ID; use that ID with <code>/task-spec</code> if titles overlap. Task-spec requires an existing task record and does not create one. If the spec layer was omitted, run task-board setup's <code>upgrade</code> and select it before invoking task-spec.</p>
+      <p><strong>What happens:</strong> <code>task-board-setup</code> analyzes the repo with parallel agents and
+      deploys a file-based Kanban plus a project-tailored <code>/task-spec</code> skill. <code>/task-spec</code>
+      researches the codebase, asks clarifying questions, and fans out to domain agents for system design.</p>
+      <p><strong>Result:</strong> a board with shared domain methodology and a task with its own methodology, spec and design under <code>.claude/features/</code>. When a top-level task becomes active, the main session's task-board announces and creates its unique hourly session anti-drift cron, with a user-selected cadence or opt-out. Delivered ticks reconcile the graph and report progress; timers depend on the active session and runtime limits.</p>
     </div>
   </li>
   <li class="step step-primary">
@@ -64,16 +77,6 @@ claude plugin install brewcode@claude-brewcode</code></pre>
       into one reusable skill installed locally at <code>.claude/skills/</code>.</p>
       <p><strong>Result:</strong> a custom review skill ready to invoke any time you need a deep,
       project-aware code review.</p>
-    </div>
-  </li>
-  <li class="step step-primary">
-    <div>
-      <strong>Create a domain agent team</strong> <Badge variant="primary" text="/brewcode:teams-setup — optional" />
-      <pre><code>/brewcode:teams-setup install core "one agent per bounded context, plus a migrations specialist"</code></pre>
-      <p>Generates 5-20 project-specific agents with self-selection logic and performance tracking.
-      Skip this step if the default agent set is sufficient for your project. To remove a team later,
-      name it: <code>uninstall core</code>, or <code>purge core</code> to drop its archive and trace
-      files too.</p>
     </div>
   </li>
 </Steps>
@@ -106,7 +109,7 @@ claude plugin install brewcode@claude-brewcode</code></pre>
     9 skills: semantic search, deep review, conventions, rules, teams, setup status, and more.
   </Card>
   <Card title="brewtools" icon="wrench" href="/brewtools/overview/">
-    14 skills for text utilities: prompt optimization, AI artifact removal,
+    13 skills for text utilities: prompt optimization, AI artifact removal,
     secrets scanning, SSH, deploy.
   </Card>
   <Card title="brewui" icon="image" href="/brewui/overview/">
@@ -124,6 +127,7 @@ claude plugin install brewcode@claude-brewcode</code></pre>
   </Card>
 </CardGrid>
 
+
 <CardGrid>
   <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
     Download, changelog, and installation instructions.
@@ -132,3 +136,5 @@ claude plugin install brewcode@claude-brewcode</code></pre>
     Source code, README, and configuration files.
   </Card>
 </CardGrid>
+
+<UpdateNotice />

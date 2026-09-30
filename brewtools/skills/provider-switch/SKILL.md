@@ -17,8 +17,7 @@ model: opus
 
 ## Prompt contract
 
-Position 1 of `$ARGUMENTS` is a **free-form prompt** (RU/EN) — modes and flags are optional and may
-follow in any order. Nobody types keys: resolve mode + scope FROM the prompt.
+Treat `$ARGUMENTS` as a free-form RU/EN prompt. Modes/flags may appear anywhere; infer mode and scope from prose.
 
 1. Strip flags. An explicit mode token anywhere wins outright, no scoring.
 2. Else score modes by distinct whole-word keyword hits (mode table in P1 below). Highest unique
@@ -68,8 +67,7 @@ SUGGESTION: <fix>
 
 ## P0: Language Selection
 
-AUQ: "Select language / Выберите язык" | options: "English (Recommended)", "Russian / Русский"
-Default if skipped: English. Remember for session.
+Use the conversation language for read-only modes; ask no language question. For mutating modes, ask only if the language is unresolved: "Select language / Выберите язык" | "English (Recommended)", "Russian / Русский". Default if skipped: English; remember it for the session.
 
 ---
 
@@ -93,7 +91,7 @@ EXEC:
 ```bash
 bash "${CLAUDE_SKILL_DIR}/scripts/detect-mode.sh" "$ARGUMENTS" && echo "OK detect" || echo "FAILED detect"
 ```
-> STOP if FAILED — parse $ARGUMENTS manually (keyword match) as fallback.
+> On FAILED, stop the script phase and report the error; manually match $ARGUMENTS against the table as the documented fallback, never retry blindly.
 
 Output: `ARGS: [...] MODE: [...]`
 
@@ -112,10 +110,7 @@ Output: `ARGS: [...] MODE: [...]`
 
 Typos (`model-cehck`, `cehck`, `hlpe`, `instal`, ...) fuzzy-match to the closest row above.
 
-Prompt contract PLAN block: read-only modes (`status`, `help`, `verify`, `model-check`) print it
-right before their report (P2/P6/P7/P8). `install` prints it once P3 provider selection is
-finalized; `provider-<name>` prints it immediately (scope already known) — both before P4 Step 2's
-first write.
+Print the Prompt contract PLAN once before any P0 question or P1 detection/status call. Read-only modes use "probe state, report"; installation lists the intended provider scope, resolved in P3 before any write. Read-only P2/P6/P7/P8 phases reuse that PLAN without printing it again.
 
 ---
 
@@ -125,7 +120,7 @@ EXEC:
 ```bash
 bash "${CLAUDE_SKILL_DIR}/scripts/check-status.sh" && echo "OK status" || echo "FAILED status"
 ```
-> STOP if FAILED — check ~/.zshrc manually with grep.
+> STOP if FAILED — report the secret-free error; never print raw ~/.zshrc/key assignments into context.
 
 Parse key=value output. Status per PRV:
 - `configured` = ALIAS + KEY both true
@@ -133,7 +128,7 @@ Parse key=value output. Status per PRV:
 - `not configured` = ALIAS false
 - `active` = ACTIVE_PROVIDER matches
 
-If MODE=status: print the Prompt contract PLAN block now, before the table below.
+If MODE=status: use the initial PLAN and report the table below.
 
 Render status table:
 ```
@@ -180,8 +175,7 @@ If MODE=install (no specific PRV): AUQ options:
 
 If MODE=provider-\<name\> → skip to P4 for that PRV only.
 
-Print the Prompt contract PLAN block now — scope (selected PRV(s)) is finalized either way,
-before P4 Step 2's first write.
+Resolve selected PRV(s) in the initial PLAN before P4 Step 2's first write; do not print another PLAN block.
 
 ---
 
@@ -228,10 +222,10 @@ why B requires a relaunch. Put it in `~/.zshrc` if you want it to survive. Prefe
 
 KEY_VAR_NAME: `DEEPSEEK_API_KEY` | `ZAI_API_KEY` | `DASHSCOPE_API_KEY` | `MINIMAX_API_KEY` | `OPENROUTER_API_KEY`
 
-Qwen-specific: read `REF/qwen-dashscope.md` ## How to Get API Key first and show the steps. Warn: key
-MUST be from the Singapore region — other regions return 403. Valid fmt: `sk-...` (~40 chars). The
-model never sees the key, so it cannot validate the format itself — state the rule and let
-`read-secret.sh` report `BYTES` for a sanity check (`sk-ws-` prefix or >100 chars = wrong region).
+Qwen-specific: read `REF/qwen-dashscope.md` ## How to Get API Key first. The key must match the selected
+region, workspace and billing product; Beijing, Singapore and Virginia have documented endpoint shapes.
+Never infer region/validity from prefix or length. Preserve the configured endpoint unless the user selects
+a change; `BYTES` is a transport sanity check, not proof of region or key validity.
 
 Then EXEC exactly one, matching the option the user chose — A first:
 ```bash
@@ -248,14 +242,12 @@ It refuses a file that is group/world readable and leaves `~/.zshrc` mode 600.
 > STOP if FAILED — report the script's own message; it is already secret-free.
 
 ### Step 4: Model Selection (OpenRouter only)
-Read `REF/openrouter-models.md`. AUQ options:
-- "qwen/qwen3.7-plus[1m] — 1M ctx, top coding (Recommended)"
-- "z-ai/glm-5.2 — strong coding (self-reported), 1M"
-- "qwen/qwen3-coder:free — free, 262K, code-focused"
-- "Custom (specify model ID)"
-
-Selected model = OPUS + SONNET + HAIKU simultaneously.
-If Custom: validate via script from `REF/openrouter-models.md` ## Model Validation. If NOT_FOUND → fuzzy suggestions + re-ask. Max 2 retries then fall back to default.
+Read `REF/openrouter-models.md`; refresh its public catalog before offering up to four currently verified
+coding/free candidates plus Other. The dated snapshot is a candidate inventory, not a default change or quality ranking.
+Validate EVERY selection (including menu/default/custom) through its JSON Model Validation flow; successful GET,
+valid JSON and `FOUND` are required. `NOT_FOUND` → suggestions + re-ask, max 2 retries, then stop without a model write.
+Request/parser failure → verification failure, never absence or an automatic fallback. Preserve existing models
+unless the user selects a change. Selected model = OPUS + SONNET + HAIKU simultaneously; never append `[1m]` automatically.
 
 ### Step 5: ALIAS Name
 AUQ: "Alias name for <PRV>:" | options: "<default> (Recommended)", "Custom"
@@ -270,12 +262,36 @@ If Custom: validate — must start with `claude`, no spaces, lowercase alphanume
 | OpenRouter | `claudeor` |
 
 ### Step 6: Write ALIAS
-Construct body from REF file: semicolon-separated exports + `claude` at end.
+Create the request directory with a fixed command before structured Write:
+```bash
+(umask 077; mkdir -p .claude/provider-switch) && echo "OK request-dir" || echo "FAILED request-dir"
+```
+> STOP if FAILED.
+Before updating an existing alias, use structured Write for `.claude/provider-switch/selection-request.json`
+containing its JSON-encoded `alias_name` and `provider`, then run the fixed read-only inspector:
+```bash
+python3 "${CLAUDE_SKILL_DIR}/scripts/provider-alias.py" --inspect .claude/provider-switch/selection-request.json && echo "OK inspect-alias" || echo "FAILED inspect-alias"
+```
+> STOP if FAILED; the existing alias remains unchanged. The inspector returns only validated model/endpoint
+> data, never keys, and never sources/evals `.zshrc`. FOUND → carry its `model_id` and `base_url` forward unless
+> the user explicitly selects changes. ABSENT → use reference defaults for this new install only.
+Use structured Write to create `.claude/provider-switch/alias-request.json` with JSON-encoded fields
+`alias_name`, `provider` (`deepseek|glm|qwen|minimax|openrouter`), and `model_id` from the explicit selection/current
+configuration. `base_url` carries the existing supported endpoint on update; reference default omission is only
+for a new alias. Change endpoint only when explicitly selected (documented Qwen region/product options). No keys or raw alias
+body in this request. The fixed writer validates every alias/model, supplies provider auth/compatibility flags,
+and serializes shell literals. Model grammar: ASCII letters/digits plus `.`, `_`, `-`, slash-separated segments,
+one optional `:route` and `[1m]` suffix; shell metacharacters/control characters are rejected. Do not interpolate
+user text into Bash source, even double-quoted arguments. Require Python 3; stop if unavailable.
 EXEC:
 ```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/write-alias.sh" set-alias "ALIAS_NAME" "ALIAS_BODY" && echo "OK set-alias" || echo "FAILED set-alias"
+bash "${CLAUDE_SKILL_DIR}/scripts/write-alias.sh" set-alias --request .claude/provider-switch/alias-request.json && echo "OK set-alias" || echo "FAILED set-alias"
 ```
 > STOP if FAILED — !=continue to next PRV.
+After successful writing, use structured Write to retain that validated, secret-free request as
+`.claude/provider-switch/requests/<provider>.json` (provider is the fixed enum above). Keep one record for each
+selected provider; never overwrite other providers' records. If recording fails, report the alias write and
+verification gap, stop; do not claim the configured endpoint/model was verified.
 
 ### Step 7: Verify
 EXEC:
@@ -294,10 +310,10 @@ bash "${CLAUDE_SKILL_DIR}/scripts/check-status.sh" && echo "OK final-status" || 
 ```
 Render updated status table (same fmt as P2).
 
-Token verification for each just-CFG PRV:
+Token verification for each just-CFG PRV uses its validated request record (all selected records retained):
 EXEC:
 ```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/verify-providers.sh" all && echo "OK verify" || echo "FAILED verify"
+bash "${CLAUDE_SKILL_DIR}/scripts/verify-providers.sh" all --requests .claude/provider-switch/requests && echo "OK verify" || echo "FAILED verify"
 ```
 Add verification column to table:
 | PRV | Status | Token Test |
@@ -305,6 +321,9 @@ Add verification column to table:
 | Z.ai/GLM | CFG | pass/fail |
 
 If any `fail` → warn, suggest check API key or endpoint.
+`PROBE_SOURCE=selected-request` identifies the selected endpoint/model; `[1m]` is preserved as
+`REQUESTED_CLIENT_MODEL` and stripped only from the API model id. Missing records emit `legacy-default` with
+the exact `PROBE_URL`/`PROBE_MODEL`; even a pass then proves only that default token probe, never the configured alias.
 
 Activation instructions:
 ```
@@ -317,7 +336,7 @@ Return to Anthropic: new terminal → `claude`. Env vars persist current shell o
 
 ## P6: Help Mode
 
-Print the Prompt contract PLAN block now, before explaining.
+Use the initial PLAN; explain:
 
 Read `REF/common.md`. Explain:
 
@@ -335,13 +354,16 @@ Read `REF/common.md`. Explain:
 
 ## P7: Verify Mode
 
-Print the Prompt contract PLAN block now, before the report below.
+Use the initial PLAN for the report below.
 
 EXEC:
 ```bash
 bash "${CLAUDE_SKILL_DIR}/scripts/verify-providers.sh" all && echo "OK verify" || echo "FAILED verify"
 ```
 Parse: KEY_SET, HTTP_CODE, RESPONSE, STATUS per PRV.
+Also report `PROBE_SOURCE`, `PROBE_URL` and `PROBE_MODEL`; a `legacy-default` pass is a default token probe,
+not configured-alias verification. Retained request records are validated before use; invalid records fail
+without a request or fallback. Surface `PROBE_NOTE` and model-mismatch warnings separately.
 
 `pass` requires BOTH: HTTP 200 AND a `.content[].type=="text"` block whose text contains a whole-word
 `OK`. A bare 200 is NOT a pass — an HTML error page, `{}` or a 200-wrapped provider error all return
@@ -375,7 +397,7 @@ Troubleshooting:
 
 ## P8: Model Check Mode
 
-Print the Prompt contract PLAN block now, before the verdict below.
+Use the initial PLAN for the verdict below.
 
 Identify which model responds in current Claude Code session. Runs INSIDE session launched via PRV ALIAS. Asks 5 diagnostic questions to model — no curl/scripts.
 
@@ -390,7 +412,7 @@ EXEC:
 ```bash
 echo "BASE_URL=${ANTHROPIC_BASE_URL:-not_set}" && echo "OPUS_MODEL=${ANTHROPIC_DEFAULT_OPUS_MODEL:-not_set}" && echo "OK detect-provider" || echo "FAILED detect-provider"
 ```
-BASE_URL → PRV: `api.deepseek.com`=DeepSeek | `api.z.ai`=Z.ai/GLM | `dashscope`=Qwen | `minimax`=MiniMax | `openrouter`=OpenRouter
+BASE_URL → PRV: `api.deepseek.com`=DeepSeek | `api.z.ai`=Z.ai/GLM | documented DashScope or regional `maas.aliyuncs.com/apps/anthropic` endpoint=Qwen | `minimax`=MiniMax | `openrouter`=OpenRouter
 
 ### Step 2: Ask 5 Diagnostic Questions
 Send as single prompt block (all at once, no back-and-forth):
@@ -445,7 +467,7 @@ If MODE != update → skip entirely.
 ### Step 1: Load Protocol
 Read `REF/update-protocol.md` for per-PRV sources + update flow.
 
-### Step 2: Spawn PRV Research Agents (ONE message, 5 Task calls)
+### Step 2: Spawn PRV Research Agents (ONE message, 5 Agent calls)
 | Agent | PRV | Sources |
 |-------|-----|---------|
 | 1 | DeepSeek | api-docs.deepseek.com — models, pricing, endpoint |
@@ -456,22 +478,13 @@ Read `REF/update-protocol.md` for per-PRV sources + update flow.
 
 #### Delegation
 
-A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct it, and it usually drifts off-target. One subagent = ONE bounded unit — ONE provider, ~<=5 files, ~<=10 steps. !=hand all five providers to one agent; bigger MUST be split into N tasks, all spawned in ONE message.
+One subagent = ONE bounded unit — ONE provider, ~<=5 files, ~<=10 steps. !=hand all five providers to one agent; bigger MUST be split into N tasks, all spawned in ONE message.
 
-Every spawn prompt MUST carry:
-
-| Field | Content |
-|-------|---------|
-| GOAL | the overall task and why it exists — the point beyond the file edit |
-| ROLE | what this agent owns; what it must NOT touch |
-| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
-| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what THIS agent needs |
-| CONSUMER | who or what uses the result next, and the shape it must fit |
-| DONE | acceptance criteria + the exact report shape you want back |
+Every brief must retain GOAL, ROLE (ownership/exclusions), SCOPE (paths/commands), CONTEXT (completed/parallel work), CONSUMER (next use/output shape), and DONE (acceptance/report).
 
 Shape for agent 2, verbatim pattern for the other four:
 ```
-Task(subagent_type="general-purpose", prompt="
+Agent(subagent_type="general-purpose", prompt="
 GOAL: refreshing this skill's provider reference files so users get current model ids,
   pricing and endpoints; you cover Z.ai/GLM only, four sibling agents cover the others.
 ROLE: research + report. Do NOT edit any file — the skill applies changes in Step 5.
@@ -489,7 +502,7 @@ DONE: table | Field | Current | Fetched | Source URL | for model ids, pricing, e
 ")
 ```
 
-A bare one-line task is never enough. Each agent: WebFetch/WebSearch sources from protocol, extract current model list + pricing + endpoint changes.
+Never use a bare one-line brief. Each agent: WebFetch/WebSearch sources from protocol, extract current model list + pricing + endpoint changes.
 
 ### Step 3: Aggregate + Diff
 Per PRV: model IDs changed? pricing changed? new models? endpoint URL changed? ctx windows changed?

@@ -14,9 +14,10 @@
  * description. No branching decides which asserts run.
  */
 import { spawnSync } from 'node:child_process';
+import assert from 'node:assert/strict';
 import {
   mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, lstatSync,
-  readlinkSync, readdirSync, symlinkSync, utimesSync, realpathSync,
+  readlinkSync, readdirSync, symlinkSync, utimesSync, realpathSync, accessSync, constants, rmSync,
 } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir, homedir } from 'node:os';
@@ -304,10 +305,30 @@ function runCompact(f, transcriptPath, sessionId) {
   check('C3.walksToClaude', projectRoot(nested), f.root, 'the upward walk stops at the .claude marker');
 }
 {
-  const f = fixture('c4-no-marker');
-  const orphan = join(f.dir, 'orphan', 'a', 'b');
-  mkdirSync(orphan, { recursive: true });
-  check('C4.fallsBackToCwd', projectRoot(orphan), orphan, 'with no marker anywhere the hook cwd is the last resort');
+  fixture('c4-no-marker');
+  // Temporary roots can carry markers left by other applications; own only this fixture.
+  const markerFree = dir => {
+    const up = dirname(dir);
+    return [join(dir, '.git'), join(dir, '.claude')].some(existsSync)
+      ? false : up === dir || markerFree(up);
+  };
+  const usableRoot = candidate => {
+    try {
+      accessSync(candidate, constants.W_OK);
+      return markerFree(realpathSync(candidate));
+    } catch { return false; }
+  };
+  const parent = [tmpdir(), '/tmp', '/var/tmp'].find(usableRoot);
+  assert.equal(typeof parent, 'string', 'GIVEN an accessible temporary root with no ancestor project markers');
+  const isolated = realpathSync(mkdtempSync(join(parent, 'bc-root-fallback-')));
+  try {
+    const orphan = join(isolated, 'orphan', 'a', 'b');
+    mkdirSync(orphan, { recursive: true });
+    assert.equal(markerFree(orphan), true, 'GIVEN fallback fixture has no .git or .claude in its ancestor chain');
+    check('C4.fallsBackToCwd', projectRoot(orphan), orphan, 'with no marker anywhere the hook cwd is the last resort');
+  } finally {
+    rmSync(isolated, { recursive: true, force: true });
+  }
 }
 {
   const f = fixture('c5-stale-env');

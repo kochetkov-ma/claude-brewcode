@@ -15,9 +15,9 @@ The `description:` triggers stay bilingual EN+RU regardless of `{{LANG}}` (model
 ```markdown
 ---
 name: task-spec
-description: "Authors the product spec and the system-design doc for a task on this repo's board, fanning out to the repo's own domain architect agents -- never designed solo. Writes .claude/features/specs/<ID>-spec.md and <ID>-design.md, then syncs the task frontmatter and board.md. Triggers: system design, architect this, design doc, design document, write the spec, spec out, spec this task, plan this task, architecture for, technical design, design review, needs a spec, системный дизайн, спека, спеку, напиши спеку, архитектура задачи, спланируй задачу, продумай архитектуру, распиши решение, дизайн-документ, с помощью архитектора, привлеки архитекторов. <example> user: продумай архитектуру для T-{{FIRST_DOMAIN}}-SLUG <commentary>Plain prose, no skill named, but this is a design request for a board task -- run task-spec in design mode and fan out to the domain architects.</commentary> </example> <example> user: this one touches the API and the storage layer, write the spec before anyone codes <commentary>Multi-domain + explicit spec ask = the needs-spec heuristic; run task-spec full mode, one architect per touched domain.</commentary> </example> <example> user: scope changed on BUG-{{FIRST_DOMAIN}}-SLUG, the spec is stale now <commentary>Existing docs plus a changed task Scope -> task-spec refresh, preserving D#, Q# and AQ# ids and the Scope status cells.</commentary> </example>"
+description: "Authors specs/<ID>-spec.md and <ID>-design.md for a board task through project domain-architect fan-out; never designs solo. Syncs task frontmatter and board.md. Triggers: system design, architect this, design doc, design document, write the spec, spec out, spec this task, plan this task, architecture for, technical design, design review, needs a spec, stale spec, scope changed, системный дизайн, спека, спеку, напиши спеку, архитектура задачи, спланируй задачу, продумай архитектуру, распиши решение, дизайн-документ, с помощью архитектора, привлеки архитекторов, устарела, скоуп поменялся."
 argument-hint: "[prompt] [<TASK_ID>] [full|design|refresh] [-n|--noask]"
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Agent, AskUserQuestion
+allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, Agent, AskUserQuestion]
 model: opus
 doc_type: llm
 version: "{PLUGIN_VERSION}"
@@ -123,6 +123,8 @@ domain agent MUST be stated explicitly there -- silence is a defect. An agent th
 One subagent = ONE bounded unit: ONE domain, ~<=5 files read, ~<=10 steps. Bigger -> split into N
 spawns. All spawns of a phase go in ONE message. A bare one-line prompt is never enough.
 
+Run this skill in the MAIN session; every Agent call originates there. Child researchers/architects/reviewers return proposals or colleague requests, never spawn their own children; the main session handles re-delegation.
+
 | Field | Content |
 |-------|---------|
 | GOAL | the task being specced and why it exists -- the point beyond the doc |
@@ -172,7 +174,7 @@ One read-only agent per touched domain, ALL in ONE message. Purpose: how the dom
 Spawn ONE architect per touched domain, ALL in ONE message, using the fallback chain. This phase is not optional and is not replaceable by main-session reasoning (G4). Feed each agent the P1 findings for its domain only.
 
 \`\`\`
-Task(subagent_type="<domain agent | {{ARCHITECT_AGENT}} | Plan>", prompt="
+Agent(subagent_type="<domain agent | {{ARCHITECT_AGENT}} | Plan>", prompt="
 GOAL: <ID> -- <task title>. We are designing before anyone codes, because the change spans
   <touched domains> and a wrong seam here costs a rewrite later.
 ROLE: you own the <domain> slice of the architecture ONLY. Do NOT design other domains, do NOT
@@ -231,7 +233,7 @@ Blocking questions from BOTH docs -- `Q#` in the spec, `AQ#` in the design -- vi
 **Phase A -- find.** One reviewer per touched domain, ALL in ONE message. Reviewers report findings only; they never edit and nothing is fixed on this pass.
 
 \`\`\`
-Task(subagent_type="<domain agent | {{ARCHITECT_AGENT}} | Plan>", prompt="
+Agent(subagent_type="<domain agent | {{ARCHITECT_AGENT}} | Plan>", prompt="
 GOAL: <ID> -- <task title>. The design and spec drafts are written; we review before they are
   marked agreed and before implementation starts.
 ROLE: adversarial reviewer for the <domain> slice. Find defects; do NOT fix them, do NOT edit any

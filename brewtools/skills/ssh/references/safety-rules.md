@@ -9,17 +9,17 @@ The risk categories below are identical for both readers; the GATE is not.
 | Reader | Has `AskUserQuestion`? | Gate |
 |--------|------------------------|------|
 | Main session (the `/brewtools:ssh` skill) | yes | Confirm interactively before executing — see "Confirmation Message Format" |
-| Subagent (`ssh-admin` or any spawned agent) | **no** — stripped from every subagent even when listed in `tools:` | Execute NOTHING — emit an approval envelope, see below |
+| Ordinary SA (`ssh-admin`, including skill `context: fork`) | no — ordinary tool filters remove it even if declared | Run scoped non-destructive work only; return missing decisions and exact approval envelopes to main |
+| Conversation fork | inherits parent pool; question tool may be available | Same SSH role contract: user decisions/approval stay in main; no self-approval |
 
-A subagent cannot ask, confirm, or obtain approval mid-run. "Confirm before X" read by a subagent
-means stall or unconfirmed execution — both are failures. Use the envelope path instead.
+Ordinary SAs cannot ask the user mid-run. A conversation fork's extra tool access does not alter the approval contract. Return missing goal/host/scope/acceptance decisions to main; a safe stated assumption permits only scoped non-destructive work, never unconfirmed execution or expanded scope. Use exact envelopes for gated actions.
 
 ## Classification Levels
 
 | Level | Main session | Subagent | Description |
 |-------|--------------|----------|-------------|
-| **READ** | free | free | Observe system state, no changes |
-| **CREATE** | free | free | Create new resources, no overwrites |
+| **READ** | free | free | Scoped observation without secret exposure |
+| **CREATE** | free | free | Non-destructive local new resources, no overwrites; remote/shared mutation still gated |
 | **MODIFY** | confirm | envelope | Change existing files, configs, permissions |
 | **SERVICE** | confirm | envelope | Start/stop/restart services, containers |
 | **DELETE** | always confirm | ALWAYS envelope | Remove files, containers, volumes, data |
@@ -61,10 +61,12 @@ broader scope, not a retry with different arguments. Re-verify each PRECONDITION
 
 ## READ Commands (free)
 
+Free READ never permits raw credentials or environment dumps. `env`, bare `printenv`, `set` and prefix/wildcard filtering of a full dump are not free diagnostics. Request explicitly named nonsensitive fields, one per portable call (e.g. `printenv LANG`; other candidates LC_ALL/TERM/TZ); omit secret-bearing fields and return missing decisions rather than exposing unknown values. `env VAR=... command` is a wrapper: classify its inner command/effects, not as READ. Apply this locally/remotely and to secret-bearing logs/inspect/argv; external tool guards may further restrict even scoped READ.
+
 | Category | Commands |
 |----------|----------|
 | Filesystem | `ls`, `cat`, `head`, `tail`, `less`, `find`, `tree`, `stat`, `file`, `wc` |
-| System | `uname`, `hostname`, `uptime`, `whoami`, `id`, `groups`, `env`, `printenv` |
+| System | `uname`, `hostname`, `uptime`, `whoami`, `id`, `groups`; explicit nonsensitive env names only |
 | Resources | `df`, `du`, `free`, `top`, `htop`, `vmstat`, `iostat`, `lscpu`, `lsmem` |
 | Network | `ip addr`, `ip route`, `ss`, `netstat`, `ping`, `traceroute`, `dig`, `nslookup`, `curl -I` |
 | Processes | `ps`, `pgrep`, `lsof` |
@@ -169,5 +171,4 @@ If any command returns unexpected output suggesting:
 - Root filesystem nearly full (<5% free)
 - Unexpected running services
 
-**STOP immediately.** Report findings. Main session: ask the user before continuing. Subagent: stop
-and return — you cannot ask, and an unanswered question is silence, not a gate.
+**STOP immediately**, including previously approved operations whose preconditions changed. Main asks before continuing; delegated roles return findings/missing decisions without self-approval. Silence is never approval, regardless of available question tools.

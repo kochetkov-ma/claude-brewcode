@@ -1,7 +1,6 @@
 # Output contract — `brewcode:semble-setup`
 
-Every invocation except an explicitly terse list ends with exactly this, in this order.
-Empty sections print `none`, never disappear.
+Every invocation except an explicitly terse list ends in this order; empty sections print `none`.
 
 ```text
 # Semble <mode>
@@ -56,7 +55,7 @@ Checkpoint: <abs>/.claude/semble/state.json
 
 | Section | Produced by |
 |---------|-------------|
-| Detection | `SKILL.md` routing (`references/intent-routing.md`) |
+| Detection | final `SKILL.md` routing (`references/intent-routing.md`) after status; two plausible modes here on score zero |
 | Before | `semble-status.sh --json` |
 | Actions | the `changed`, `unchanged`, `skipped` and `failed` arrays from every mutating script's `--json`, concatenated in execution order (`semble-mcp.sh`, `semble-guidance.sh`, `semble-agents.sh`, `semble-project.sh`, `semble-remove.sh`) |
 | Verification | `semble-project.sh smoke --json` + `semble-cache.sh info --json` + `semble-project.sh audit --json` |
@@ -72,8 +71,9 @@ Checkpoint: <abs>/.claude/semble/state.json
 | Section set is fixed | Six headings — `Detection`, `Before`, `Actions`, `Verification`, `Current Status`, `Next Step` — always all six, always in this order. A section with nothing to say prints `none`, it is never dropped. |
 | `Before` is the pre-mutation snapshot | Taken by the status run at Step 1, before anything is written. Do not refresh it after the mutation — that is what `Current Status` is for. |
 | `Current Status` is post-mutation | Re-run `semble-status.sh --json` after the last write and read `.verdict`. Never reuse the Step-1 verdict. |
-| `commands` is verbatim and complete | Every command actually executed, one per line, exactly as run — including the ones that failed. Never a paraphrase, never a plan. Nothing that was not run may appear here. |
-| Action buckets preserve script outcomes | Keep every returned array item in execution order. A non-empty bucket prints one item per line; an empty bucket prints `none`. Never collapse a skipped verification into `unchanged`, and never move the phase to `ready` when `warm` or `smoke` was skipped. |
+| `commands` | Every executed command verbatim, one per line, including failures; no paraphrases, plans or unrun commands. |
+| Action buckets | Keep every returned item in execution order, one per line; empty -> `none`. Never merge skipped verification into `unchanged` or enter `ready` when `warm`/`smoke` was skipped. |
+| Failed invocation | Exit 1 may follow successful state/MCP/guidance writes. Report surviving outcomes and rerun status; claim rollback only for surfaces the helper proves restored. `--yes` or a backup never substitutes for concrete authorization. |
 | `scope` | Where `semble_code` is (or would be) registered. Default and expected value is `user`. |
 | `<hash8>` | First 8 hex chars of the repo's sha256 cache-dir name. Rendered as `unknown` when unresolvable. |
 | `variant <index leaf>` | The exact selected content variant. The registered `code docs config` corpus is `index-code-config-docs`; code-only is `index`. Other variants may coexist below the same repo hash and are not folded into this field. |
@@ -83,7 +83,7 @@ Checkpoint: <abs>/.claude/semble/state.json
 | `uncovered` | Printed on every invocation, verbatim as in the template. It is a standing limit of the corpus, not a per-run finding. |
 | the `coreutils` step | `semble-install.sh`'s `.timeout.coreutils.status`: `installed` -> `Actions -> changed`, everything else (`present`, `skipped`, `failed`, declined) -> `Actions -> skipped` with its `.reason` verbatim. It never reaches `failed:` and never changes the verdict — it is an optional upgrade, not a prerequisite. |
 | CLAUDE.md doctrine reconcile | `install --part claudemd` also scans the **root** `CLAUDE.md`, outside the semble markers, for a competing search doctrine. A line that puts grep/Bash/rg **first** or **denies** semantic search is removed and lands in `Actions -> changed` — one summary line naming the count and the `.bak` path, then one `removed L<n>: <verbatim line>` per cut, plus any search-titled heading the cut left empty. A line that merely mentions a search tool is left alone and lands in `Actions -> skipped` with its line number. A line that scopes rg to exact identifiers / regexes / paths / exhaustive enumeration is complementary and is not reported at all. Nothing to reconcile prints `CLAUDE.md: no competing search directive` in `unchanged`. |
-| `Next Step` | Exactly one concrete action, or the literal `none`. Never a list, never a suggestion the user cannot act on immediately. |
+| `Next Step` | One concrete action or `none`; alternatives belong in Detection, never this field. |
 | Verdict domain | `ready | reload_required | verifying | partial | disabled | not_installed | error` (rendered in the human form as `reload required` / `not installed`). |
 
 ---

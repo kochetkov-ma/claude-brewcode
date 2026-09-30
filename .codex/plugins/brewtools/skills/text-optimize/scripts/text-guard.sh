@@ -6,11 +6,12 @@
 # a rewrite that loses a critical fact.
 #
 #   snapshot [--allow-dirty] [--run-dir D] <file>...   copy originals, print RUN_DIR
-#   verify   --run-dir D <file>...                     100% sub-gate; restore on fail
+#   verify   [--no-restore] --run-dir D <file>...      token gate; restore unless disabled
 #   restore  --run-dir D <file>...                     put the snapshot back
+#   checkpoint --run-dir D <file>...                  record owned draft hashes
 #   status   --run-dir D                               list what is snapshotted
 #
-# Exit: 0 ok | 1 gate failed (files restored) | 2 usage/state error, nothing written | 3 precondition
+# Exit: 0 ok | 1 gate failed (restored unless --no-restore) | 2 usage/state error | 3 precondition
 # (dirty tree, or no git recovery path) - nothing was written.
 set -euo pipefail
 # comm(1) demands both inputs collate identically to the sort that produced them.
@@ -24,22 +25,24 @@ die() { printf '%s\n' "$*" >&2; exit 2; }
 
 # CODEX_PROJECT_DIR -> git toplevel -> cwd. Never silent: the chosen root is printed.
 resolve_root() {
-  if [ -n "${CODEX_PROJECT_DIR:-}" ] && [ -d "$CODEX_PROJECT_DIR" ]; then
-    (cd "$CODEX_PROJECT_DIR" && pwd)
+  if [ -n "${CODEX_PROJECT_DIR:-}" ]; then
+    [ -d "$CODEX_PROJECT_DIR" ] || die "❌ invalid CODEX_PROJECT_DIR: $CODEX_PROJECT_DIR"
+    (cd "$CODEX_PROJECT_DIR" && pwd -P)
     return 0
   fi
   local top
   if top=$(git rev-parse --show-toplevel 2>/dev/null) && [ -n "$top" ]; then
-    printf '%s\n' "$top"
+    (cd "$top" && pwd -P)
     return 0
   fi
-  pwd
+  pwd -P
 }
 
 # Path of FILE relative to ROOT, with any leading ./ and ../ refused.
 rel_path() {
   local root="$1" file="$2" abs
-  abs=$(cd "$(dirname "$file")" 2>/dev/null && printf '%s/%s' "$(pwd)" "$(basename "$file")") \
+  [ ! -L "$file" ] || die "❌ symbolic-link target: $file - name the intended real file explicitly"
+  abs=$(cd "$(dirname "$file")" 2>/dev/null && printf '%s/%s' "$(pwd -P)" "$(basename "$file")") \
     || die "❌ cannot resolve $file"
   case "$abs" in
     "$root"/*) printf '%s\n' "${abs#"$root"/}" ;;
@@ -64,7 +67,10 @@ crit_tokens() {
 # `.codex/reports/` holds verbatim copies of possibly private files. Nothing in a
 # consumer repo ignores `.codex/`, so the entry is added before the first copy.
 ensure_gitignore() {
-  local root="$1" gi="$root/.gitignore"
+  local root="$1" gi
+  gi="$root/.gitignore"
+  git -C "$root" rev-parse --git-dir >/dev/null 2>&1 || return 0
+  [ ! -L "$gi" ] || die "❌ refusing to update symbolic-link ignore file: $gi"
   [ -f "$gi" ] || : > "$gi"
   grep -qxF '.codex/reports/' "$gi" && return 0
   printf '.codex/reports/\n' >> "$gi"
@@ -111,6 +117,12 @@ cmd_snapshot() {
   [ "$allow_dirty" -eq 1 ] || require_clean_tree "$root" "${rels[@]}"
 
   [ -n "$run_dir" ] || run_dir="$root/.codex/reports/$(date +%Y%m%d-%H%M%S)_text-optimize"
+  local parent="$run_dir"
+  while [ "$parent" != / ] && [ "$parent" != . ]; do
+    [ ! -L "$parent" ] || die "❌ symbolic-link snapshot path: $parent"
+    parent=$(dirname "$parent")
+  done
+  [ ! -e "$run_dir" ] || die "❌ snapshot directory already exists: $run_dir"
   ensure_gitignore "$root"
 
   # 077 for the whole subtree: the copies are verbatim originals, private files included.
@@ -128,19 +140,65 @@ cmd_snapshot() {
   printf 'RUN_DIR: %s\n' "$run_dir"
 }
 
-# Restores from the snapshot; caller decides the exit code.
+file_hash() {
+  shasum -a 256 "$1" | cut -d' ' -f1
+}
+
+can_restore() {
+  local run_dir="$1" rel="$2" root="$3" current
+  [ ! -L "$root/$rel" ] || return 1
+  current=MISSING
+  [ ! -f "$root/$rel" ] || current=$(file_hash "$root/$rel")
+  [ "$current" != "$(file_hash "$run_dir/orig/$rel")" ] || return 0
+  [ -f "$run_dir/draft/$rel.sha256" ] && [ ! -L "$run_dir/draft/$rel.sha256" ] || return 1
+  [ "$current" = "$(cat "$run_dir/draft/$rel.sha256")" ]
+}
+
+# Restore only bytes still matching explicitly recorded optimizer ownership.
 restore_one() {
   local run_dir="$1" rel="$2" root="$3"
   local snap="$run_dir/orig/$rel"
   [ -f "$snap" ] || die "❌ no snapshot for $rel in $run_dir - run 'snapshot' before editing"
+  can_restore "$run_dir" "$rel" "$root" || {
+    printf 'RESTORE_REFUSED: %s (current bytes lack matching draft ownership)\n' "$rel" >&2
+    return 1
+  }
   cp "$snap" "$root/$rel"
 }
 
+cmd_checkpoint() {
+  local run_dir="" root f rel
+  local -a files=() rels=()
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --run-dir) run_dir="${2:-}"; [ -n "$run_dir" ] || die "❌ --run-dir needs a value"; shift 2 ;;
+      -*) die "❌ unknown option: $1" ;;
+      *) files+=("$1"); shift ;;
+    esac
+  done
+  [ -n "$run_dir" ] && [ "${#files[@]}" -gt 0 ] || die "❌ checkpoint needs --run-dir and files"
+  root=$(resolve_root)
+  for f in "${files[@]}"; do
+    rel=$(rel_path "$root" "$f")
+    [ -f "$run_dir/orig/$rel" ] || die "❌ no snapshot for $rel"
+    [ ! -e "$f" ] || [ -f "$f" ] || die "❌ not a regular draft: $f"
+    rels+=("$rel")
+  done
+  ( umask 077
+    for rel in "${rels[@]}"; do
+      mkdir -p "$run_dir/draft/$(dirname "$rel")"
+      if [ -f "$root/$rel" ]; then file_hash "$root/$rel" > "$run_dir/draft/$rel.sha256"
+      else printf 'MISSING\n' > "$run_dir/draft/$rel.sha256"; fi
+      printf 'CHECKPOINT: %s\n' "$rel"
+    done )
+}
+
 cmd_verify() {
-  local run_dir="" root
+  local run_dir="" root no_restore=0
   local -a files=()
   while [ "$#" -gt 0 ]; do
     case "$1" in
+      --no-restore) no_restore=1; shift ;;
       --run-dir) run_dir="${2:-}"; [ -n "$run_dir" ] || die "❌ --run-dir needs a value"; shift 2 ;;
       -*) die "❌ unknown option: $1" ;;
       *) files+=("$1"); shift ;;
@@ -175,8 +233,15 @@ cmd_verify() {
       printf 'GATE: PASS\nACTION: kept\n'
     else
       printf '%s\n' "$missing" | sed 's/^/  - /'
-      restore_one "$run_dir" "$rel" "$root"
-      printf 'GATE: FAIL\nACTION: restored\n'
+      if [ "$no_restore" -eq 1 ]; then
+        printf 'GATE: FAIL\nACTION: kept\n'
+      else
+        if restore_one "$run_dir" "$rel" "$root"; then
+          printf 'GATE: FAIL\nACTION: restored\n'
+        else
+          printf 'GATE: FAIL\nACTION: kept (restore refused)\n'
+        fi
+      fi
       failed=$((failed + 1))
     fi
   done
@@ -199,6 +264,14 @@ cmd_restore() {
   [ "${#files[@]}" -gt 0 ] || die "❌ restore needs at least one file"
   root=$(resolve_root)
   local f rel
+  for f in "${files[@]}"; do
+    rel=$(rel_path "$root" "$f")
+    [ -f "$run_dir/orig/$rel" ] || die "❌ no snapshot for $rel"
+    can_restore "$run_dir" "$rel" "$root" || {
+      printf 'RESTORE_REFUSED: %s (current bytes lack matching draft ownership)\n' "$rel" >&2
+      exit 1
+    }
+  done
   for f in "${files[@]}"; do
     rel=$(rel_path "$root" "$f")
     restore_one "$run_dir" "$rel" "$root"
@@ -230,6 +303,7 @@ case "$CMD" in
   snapshot) cmd_snapshot "$@" ;;
   verify)   cmd_verify "$@" ;;
   restore)  cmd_restore "$@" ;;
+  checkpoint) cmd_checkpoint "$@" ;;
   status)   cmd_status "$@" ;;
   -h|--help|help) usage ;;
   *) die "❌ unknown command: $CMD" ;;

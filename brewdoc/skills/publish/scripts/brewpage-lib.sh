@@ -92,23 +92,67 @@ bp_validate() {
   return 0
 }
 
-# The prelude every publish block shares. Exports NS/DAYS/ENTRY and PWFILE so the
-# block itself is just: what to send, and bp_finish.
-bp_begin() {
-  NS="$1"; DAYS="$2"; ENTRY="$3"
-  bp_validate "$NS" "$DAYS" "$ENTRY" || return 1
-  bp_history_init || { echo "FAILED: cannot initialize history file"; return 1; }
-  command -v jq >/dev/null || { echo "FAILED: jq required"; return 1; }
-  PWFILE="$BP_TMPDIR/brewpage-password.txt"
+# Allocate before writing inputs; only the generated ASCII basename is substituted into blocks.
+bp_prepare() {
+  mkdir -p "$BP_TMPDIR" || return 1
+  (umask 077; mktemp -d "$BP_TMPDIR/brewpage.XXXXXX")
 }
 
-# POST that carries X-Password exactly when Step 5 wrote the password file.
+bp_run_dir() {
+  local id="${1:-}"
+  case "$id" in
+    brewpage.??????) : ;;
+    *) echo "FAILED: invalid publish run id"; return 1 ;;
+  esac
+  case "$id" in *[!A-Za-z0-9.]*) echo "FAILED: invalid publish run id"; return 1 ;; esac
+  BP_RUN_DIR="$BP_TMPDIR/$id"
+  [ -d "$BP_RUN_DIR" ] && [ ! -L "$BP_RUN_DIR" ] && [ -O "$BP_RUN_DIR" ] &&
+    [ -n "$(find "$BP_RUN_DIR" -maxdepth 0 -type d -perm 0700 -print)" ] || {
+      echo "FAILED: publish run directory must be owned, private and non-symlink"; return 1;
+    }
+}
+
+bp_cleanup() {
+  [ -n "${BP_RUN_DIR:-}" ] || return 0
+  bp_run_dir "${BP_RUN_DIR##*/}" || return 1
+  rm -rf -- "$BP_RUN_DIR"
+}
+
+# Prelude: explicit run id/password policy, no implicit shared credential discovery.
+bp_begin() {
+  NS="$1"; DAYS="$2"; ENTRY="$3"
+  bp_run_dir "${4:-}" || return 1
+  trap bp_cleanup EXIT
+  trap 'exit 1' HUP INT TERM
+  bp_validate "$NS" "$DAYS" "$ENTRY" || return 1
+  case "${5:-}" in none|file) BP_PASSWORD_MODE="$5" ;; *) echo "FAILED: explicit password mode required"; return 1 ;; esac
+  bp_history_init || { echo "FAILED: cannot initialize history file"; return 1; }
+  command -v jq >/dev/null || { echo "FAILED: jq required"; return 1; }
+  BP_HEADER_FILE=""
+  if [ "$BP_PASSWORD_MODE" = file ]; then
+    local source_file="$BP_RUN_DIR/brewpage-password-source.txt" password_source=""
+    [ -f "$source_file" ] && [ ! -L "$source_file" ] || { echo "FAILED: password source path file missing or unsafe"; return 1; }
+    IFS= read -r password_source < "$source_file" || [ -n "$password_source" ] || return 1
+    [ -f "$password_source" ] && [ ! -L "$password_source" ] || { echo "FAILED: password source must be a non-symlink regular file"; return 1; }
+    local password_file="$BP_RUN_DIR/brewpage-password.txt"
+    [ ! -e "$password_file" ] && [ ! -L "$password_file" ] || { echo "FAILED: password transport file already exists"; return 1; }
+    (umask 077; cat -- "$password_source" > "$password_file") || return 1
+    BP_HEADER_FILE="$BP_RUN_DIR/password-header.txt"
+    (umask 077; jq -ner --rawfile password "$password_file" '
+      ($password | rtrimstr("\n")) as $p |
+      if ($p | length) >= 4 and ($p | explode | all(. >= 32 and . != 127))
+      then "X-Password: " + $p else error("invalid password") end
+    ' > "$BP_HEADER_FILE") 2>/dev/null || { echo "FAILED: password must have at least 4 characters and no control characters"; return 1; }
+  fi
+}
+
+# curl reads the header file; neither shell argv nor output contains the password.
 # A function has its own positional parameters, so no `set --` juggling is needed.
 bp_post() {
   local url="$1"
   shift
-  if [ -f "$PWFILE" ]; then
-    curl -s -X POST "$url" -H "X-Password: $(cat "$PWFILE")" "$@"
+  if [ -n "$BP_HEADER_FILE" ]; then
+    curl -s -X POST "$url" -H "@$BP_HEADER_FILE" "$@"
   else
     curl -s -X POST "$url" "$@"
   fi

@@ -10,8 +10,7 @@
 
 ## The one rule that explains everything
 
-Semble classifies a file by its **file suffix only** — `Path(name).suffix.lower()`.
-Not by content, not by shebang, not by name. Three consequences:
+Semble uses **only the suffix** (`Path(name).suffix.lower()`), not content/shebang/name:
 
 | Consequence | Detail |
 |-------------|--------|
@@ -214,11 +213,14 @@ scripts/semble-project.sh audit --json
     "docsOnly": {".md": 12, ".html": 3},
     "excluded": {".json": 9},
     "totals":   {"code": 59, "config": 6, "docsOnly": 15, "excluded": 9,
-                 "indexable": 65, "classified": 89, "unclassified": 0},
+                 "indexable": 80, "classified": 92, "unclassified": 0},
     "skipped":  {"tooLarge": 1, "tinyBlank": 2, "symlinks": 4, "dirs": 3}
   }
 }
 ```
+
+Producer arithmetic: `59 + 6 + 15 = 80` indexable (the old `65` omitted docs); `89` counted files
+plus `1` too-large and `2` tiny-blank = `92` classified. Size-skipped files are classified before exclusion.
 
 | Key | Meaning |
 |-----|---------|
@@ -229,5 +231,4 @@ scripts/semble-project.sh audit --json
 | `totals.unclassified` | a suffix semble does not know at all (e.g. `.log`, `.png`, `.mdx`, `.txt`) — also unreachable |
 | `skipped.dirs` | how many never-walked directories were pruned |
 
-A repo whose `totals.indexable` is 0 has nothing to search: report that instead of running a
-warm query that can only come back empty.
+`totals.indexable == 0`: report no searchable files; skip the empty warm query.

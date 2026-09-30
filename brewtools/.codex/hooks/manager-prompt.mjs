@@ -10,6 +10,7 @@ try {
   } else {
     const text = typeof input.prompt === 'string' ? input.prompt : '';
     const modes = [];
+    if (input.permission_mode === 'plan' && /(?<![\p{L}\p{N}\p{M}_+])\+\+\+(?![\p{L}\p{N}\p{M}_+])/u.test(text)) modes.push('cron-plan');
     if (/(?<![\w+])\+\+m(?![\w])/i.test(text)) modes.push(input.permission_mode === 'plan' ? 'planmode' : 'full');
     if (/(?<![\w+])\+\+a(?![\w])/i.test(text)) modes.push('architect');
     if (/(?<![\w+])\+\+rr(?![\w])/i.test(text)) modes.push('review-regression');

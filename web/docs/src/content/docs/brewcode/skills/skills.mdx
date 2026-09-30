@@ -9,8 +9,10 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 
 <Callout type="tip" title="Prompt-driven">Give a free-form prompt; the skill auto-selects a mode and tells you why. Status is the default — a list only on explicit request.</Callout>
 
-<Callout type="note" title="What's new in 6.2.0">
-`validate-skill.sh` checks 11-14; 4 new references for `skill-creator` — see Validation.
+<Callout type="note" title="Current authoring contracts">
+The authoring references were checked against official Claude Code documentation and changelog
+through 2.1.285. Invocation flags, fork behavior and turn-scoped tool permissions are separate
+from repository naming, prompt and validation requirements.
 </Callout>
 
 ## Quick reference
@@ -18,15 +20,15 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | Field | Value |
 |-------|-------|
 | Command | `/brewcode:skills` |
-| Input | free-form prompt, mode keyword, or empty |
+| Input | `[prompt] [status\|list\|create\|improve\|review\|sync]`; optional mode can appear anywhere |
 | Specialist | `brewcode:skill-creator` agent |
 | List source | `list-skills.sh` — global, project and every installed plugin |
-| Description budget | `<= 120` chars, single line |
+| Description budget | Default ≤100 tokens (roughly 400 characters); spec cap 1024 characters; ≤120 characters is an optional brevity target |
 | Model | opus |
 
 ## When to use
 
-- **Check skill health** — run with no args to open the menu, then pick Status (skills), the recommended default, for a health view across global, project, and plugins
+- **Check skill health** — run with no arguments for a read-only status across global, project and plugin scopes
 - **Fix a non-triggering skill** — `/brewcode:skills improve commit` re-optimizes activation phrases and description
 - **Create from a prompt** — `/brewcode:skills create a semantic code search skill` researches and scaffolds a complete skill
 - **Batch improve a folder** — `/brewcode:skills improve ~/.claude/skills/` processes every SKILL.md in parallel
@@ -42,17 +44,17 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 /brewcode:skills improve commit
 /brewcode:skills list
 /brewcode:skills sync
-/brewcode:skills синк по последнему коммиту
+/brewcode:skills sync against the latest commit
 ```
 
 ## How it works
 
 <Steps>
-  <li><div><strong>Input gate</strong><p>The whole argument is treated as ONE free-form sentence — no keyword grammar, no argument parser. A non-empty prompt goes to mode selection; no input triggers the no-prompt menu.</p></div></li>
-  <li><div><strong>Auto-mode select</strong><p>Announces `Mode: &lt;mode&gt; (skills) — chosen because &lt;evidence&gt;` so you always know which branch executed and why the classifier picked it.</p></div></li>
-  <li><div><strong>No-prompt menu</strong><p>When invoked with no argument, presents a single AskUserQuestion with options (in order): Status (skills) — recommended, Status (all: agents+rules+skills), Create, Improve, Review, Sync skills (memory sync), List (plain), Cancel.</p></div></li>
+  <li><div><strong>Input gate</strong><p>Treats arguments as one free-form prompt, with prompt-first guidance rather than positional grammar. Empty input means status. An explicit mode anywhere wins; otherwise distinct whole-word evidence selects the mode.</p></div></li>
+  <li><div><strong>Resolve and announce</strong><p>Prints one canonical PLAN before work: INPUT, MODE with its reason, SCOPE, DO and RESULT. Uses existing answers and bundles material unresolved write decisions into one AskUserQuestion before writes, with at most four questions. Read-only work asks nothing.</p></div></li>
+  <li><div><strong>Optional menu</strong><p>Only an explicit menu request opens the choices: scoped status, combined agents/rules/skills status, create, improve, review, sync, list or cancel. Resolved questions are not repeated.</p></div></li>
   <li><div><strong>Dispatch</strong><p>Routes to the appropriate handler: `list-skills.sh` for list mode, `brewcode:skill-creator` agent for create/improve, parallel agents for batch, `references/mode-sync.md` for sync. Review mode spawns a single reviewer — the project's agent from `.claude/agents/`, else `general-purpose` — two-phase: review, then double-check findings, then report. After create/improve returns, the coordinator re-runs `mode-sync.md` itself, scoped to only the file just written — no second `skill-creator` spawn — and applies every verdict directly with targeted edits.</p></div></li>
-  <li><div><strong>Real status</strong><p>Four blocks, never a flat list: inventory by scope (plugin / project / global — counts, names, load path), state (enabled or disabled via the <code>_SKILL.md</code> toggle marker, model), overlaps and conflicts (same name shadowed across scopes, duplicate triggers or descriptions), and health flags (missing README or frontmatter, weak description triggers).</p></div></li>
+  <li><div><strong>Real status</strong><p>Four blocks: inventory by scope and load path; state from setup configuration or parked files; overlaps/conflicts; and health flags. Old underscore markers are flagged. Weak trigger descriptions matter for model-invocable skills.</p></div></li>
   <li><div><strong>Final output</strong><p>Structured report: mode executed, skills affected, findings, paths written or changed, and suggested next invocation if follow-up is warranted.</p></div></li>
 </Steps>
 
@@ -69,6 +71,11 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | batch | plural form, "все" / "all", or multiple names or paths | parallel `brewcode:skill-creator` |
 
 ## Delegation
+
+Main owns every `Agent` spawn, supplied with the six-field brief below. Delegates return decisions
+and results rather than nesting or accepting their own output. Ordinary subagents cannot use
+`AskUserQuestion`; conversation forks retain the parent tool pool. A skill's `context: fork`
+creates an ordinary isolated subagent without conversation history.
 
 <Callout type="caution" title="Why the rule exists">
   A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct it, and it usually drifts off-target.
@@ -94,7 +101,7 @@ The Phase 2 spawn is the canonical shape: SCOPE is the skill directory and nothi
 
 Reachable ONLY via create/improve modes.
 
-**User parameters collected via AskUserQuestion:**
+**Parameters resolved from the prompt/history or one bundled pre-write question:**
 
 - Invocation type: User-only / LLM-auto / Both
 - Testing depth: Quick / Standard / Deep
@@ -106,7 +113,10 @@ Reachable ONLY via create/improve modes.
 - Phase 4 Review: Simple = one reviewer + one verify agent. Quorum = three reviewers in parallel, 2/3 consensus threshold, DoubleCheck pass, Skill Creator fixes verified findings.
 - Phase 5 E2E: Deep depth only. Isolated temp project, `claude -p` execution, up to 2 retries per failed scenario.
 
-**Description budget:** `<= 120` chars, single line, trigger keywords included. One number, enforced in both places — the authoring rule in `SKILL.md` and the review checklist in `references/review-prompt.md` — so a skill written to spec passes its own review. The bound is empirical: 16 of the 27 shipped skills sit at or under 120 characters (95-118); the rest run long, up to 410.
+**Description budget:** default ≤100 tokens (roughly 400 characters), spec cap 1024 characters,
+combined description/`when_to_use` listing cap 1536 characters. A ≤120-character description is an optional
+brevity target. Use a single line describing what and when, with 3-5 distinct early trigger terms;
+these are house requirements, not a guarantee of activation.
 
 **Specialist:** `brewcode:skill-creator` agent.
 
@@ -115,20 +125,44 @@ Reachable ONLY via create/improve modes.
 <details>
 <summary>Validation — `validate-skill.sh`</summary>
 
-Every create/improve pass ends with `validate-skill.sh path/to/skill` (Step 6 of the `skill-creator` agent). Checks 1-10 cover structure: YAML delimiters, `name` casing/length/dir-match, `description` caps, body size, the `EXECUTE` keyword on bash blocks, Prompt Contract shape. Four additional checks, all additive — none can fail a previously-passing skill:
+Every create/improve pass ends with `validate-skill.sh path/to/skill` (Step 6 of the `skill-creator` agent). Checks 1-10 cover structure: YAML delimiters, `name` casing/length/dir-match, `description` caps, body size, the `EXECUTE` keyword on bash blocks and Prompt Contract shape. Additional checks include:
 
 | Check | Severity | What it catches |
 |-------|----------|------------------|
 | 11 | warning | Unknown top-level frontmatter key — not in the 20 native SKILL.md fields or the house custom keys |
 | 12 | fail | A bare top-level `once:` — it is a suboption of a hook entry (`hooks.<Event>[].hooks[].once`), never a sibling of `name`/`description` |
-| 13 | warning | `agent:` set to anything outside the three confirmed built-ins (`Explore`, `Plan`, `general-purpose`) — legitimate only if it names a real custom agent |
+| 13 | warning | `agent:` outside the validator's confirmed names (`Explore`, `Plan`, `general-purpose`); verify a real custom agent rather than treating this list as the entire runtime roster |
 | 14 | fail | A UTF-8 BOM at the start of `SKILL.md` — silently ignored by Claude Code before 2.1.239 |
 
 The summary line now reports three counts: `N passed, N failed, N warned`.
 
+Every managed skill must follow the house prompt contract: prompt-first `argument-hint`, a
+`## Prompt contract` section, one five-label PLAN before work, and a multi-mode keyword table
+with `Mutates?` and at least one Russian keyword. Only registered pure lookup skills are exempt.
+
+Static validation proves structure and house contracts. It does not prove activation or useful
+runtime behavior. Live evaluation uses fresh isolated sessions: invoke user-only skills explicitly
+with `/name`; test model-invocable skills with positive and negative prompts. Plugin evaluation
+can supplement these checks. Report skipped or failed evaluations rather than inferring success.
+
 `brewcode:skill-creator`'s knowledge base grew to four reference files it reads on demand instead of keeping inline: `references/frontmatter-fields.md` (full 20-field catalog), `references/design-patterns.md` (structure patterns, resource-path rules), `references/execution-model.md` (context modes, spawning, tool grants), `references/activation-and-troubleshooting.md` (description budget, `/skill-doctor`, known bugs).
 
 </details>
+
+## Invocation and tool permissions
+
+| `disable-model-invocation` | `user-invocable` | Behavior |
+|----------------------------|------------------|----------|
+| false | true | User command and model invocation |
+| true | true | User command only; repository policy for distributed skills |
+| false | false | Model invocation only; hidden from the user command menu |
+| true | false | Inaccessible; avoid this combination |
+
+Disabled model invocation also prevents subagent preloading. Generated project skills can use
+different invocation settings according to their purpose. Skill `allowed-tools` pre-approves
+listed calls for the invoking turn; it is not an exclusive tool allowlist. `disallowed-tools`
+removes tools for that turn. Both effects clear on the next user message while the skill's
+instructions remain in context. Background execution can further narrow available tools.
 
 <details>
 <summary>Sync mode</summary>

@@ -32,7 +32,7 @@ claude mcp add semble_code -s user \
   -- uvx --from 'semble[mcp]==0.5.5' semble --content code docs config
 ```
 
-The fallback cannot set `alwaysLoad`; detection therefore returns `stale_args` and the next repair must use `add-json`. `add-json` does not overwrite an existing entry, so repair removes every `semble_code` scope before re-adding user scope. Removal is `claude mcp remove semble_code -s user`.
+The fallback cannot set `alwaysLoad`; detection therefore returns `stale_args` and the next repair must use `add-json`. `add-json` does not overwrite an existing entry: approved repair removes `semble_code` from EVERY detected scope (`claude mcp remove semble_code -s <scope>`), then re-adds user scope. `-s user` alone removes only the user entry.
 
 This is a local stdio child and has no server authentication secret. The registration stores only the absolute cache path. Never copy credentials, auth state, histories, or tokens into MCP config or setup state.
 
@@ -68,7 +68,7 @@ Each per-call content selection addresses its own on-disk and in-memory variant.
 | `correct` | One user entry; no upstream `semble` conflict; `uvx`; exact 0.5.5 args/default corpus/shared root; `type` absent or `stdio`; `alwaysLoad === true` |
 | `stale_args` | Pin, command, env, type, content argv, or `alwaysLoad` differs |
 | `wrong_scope` | One local/project entry; scope precedence wins even if its args also drift |
-| `duplicate` | More than one `semble_code` scope; ask which to keep and back up affected config files |
+| `duplicate` | More than one `semble_code` scope; show ALL removals + the user-scoped replacement, back up affected config files, and repair only after approval. Keeping local/project skips repair and reports the remaining gap |
 | `upstream_unpinned` | A server literally named `semble` exists, with or without `semble_code`; it uses a floating package, default code-only corpus, and `mcp__semble__*` names; report, never auto-remove |
 | `malformed` | A config file is unparseable; stop and write nothing |
 | `absent` | No `semble_code` entry |

@@ -7,7 +7,7 @@ description: "Creates and manages dynamic teams of domain agents. Triggers: crea
 
 Use collaboration agents only when the user or project instructions explicitly request a team. Split work into bounded independent tasks, keep one owner per file or surface, exchange evidence through collaboration messages, and synthesize results in the parent session. Do not invent unsupported agent parameters or create persistent team configuration unless requested.
 
-<!-- brewcode-meta: version=6.2.0 content_version=6.2.0 generated_by=brewcode:teams-setup -->
+<!-- brewcode-meta: version=6.3.0 content_version=6.3.0 generated_by=brewcode:teams-setup -->
 
 ## Native authority
 
@@ -19,7 +19,9 @@ Before every `team.md` write, resolve `REPORT_ROOT` from the narrowest applicabl
 
 Resolve exactly one mode in this order: `status`, `install`, `upgrade`, `enable`, `disable`, `uninstall`, `purge`. An explicit mode wins. With no mode, choose `status` when the named team exists; otherwise choose `install` and team name `default` only when no name was supplied. Invalid detector output stops the run.
 
-Before any action, print one `PLAN — brewcode:teams-setup` block with `INPUT`, resolved `MODE` and reason, `SCOPE` (team, roster, exact paths), `DO`, and `RESULT`. `status` asks nothing. Every mutating mode requires `request_user_input` approval after the plan and before the first write; changed scope requires a revised plan and approval. Destructive modes additionally name every deletion.
+Before any action, print one `PLAN — brewcode:teams-setup` block with `INPUT`, resolved `MODE` and reason, `SCOPE` (team, roster, exact paths), `DO`, and `RESULT`. `status` asks nothing. Every mutating mode requires existing authorization or explicit main-chat approval after a concrete, reviewable proposal and before the first write; changed scope requires a revised proposal and actual user reply. Destructive modes additionally name every deletion.
+
+Required approval: main presents a concrete, reviewable proposal in chat and waits for an actual user reply before dependent action. Existing authorization for the same scope remains valid; do not ask again. Optional clarification: use `request_user_input_async` only if exposed, or `request_user_input` only if available in the current runtime/mode, for optional choices and never approval. Otherwise ask in main chat. Delegated agents return unresolved questions to main. Silence, elapsed time and tool errors are not approval.
 
 Run `scripts/detect-mode.sh`, inventory `.codex/teams/` and `.codex/agents/`, read an existing roster/trace, and run `scripts/verify-team.sh {TEAM_NAME}` when the team exists. A missing team stops every mode except `install`; an existing team stops `install` unless the user approves routing to `upgrade`.
 

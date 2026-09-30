@@ -2,23 +2,23 @@
 
 ## Available TLs
 
-A SA does NOT get the main conversation's tool set. It inherits built-ins + MCP TLs, then **two filters** narrow it (`docs/sub-agents.md:337-353`). Generate a `tools:` line against the pool the AG will actually run in, !=against a static list.
+A non-fork SA inherits built-ins + MCP TLs, then **two filters** narrow it. `Glob`/`Grep` can also be supplied on macOS/Linux/WSL when absent from main. Verified against live docs + changelog through CC 2.1.285 (2026-09-30); generate `tools:` against the actual execution pool, !=a static list.
 
 | Filter | Applies to | Effect |
 |--------|-----------|--------|
-| 1 -- universal | every SA (forks exempt) | Removes `Agent` (at the depth limit only), `AskUserQuestion`, `EndConversation`, `EnterPlanMode`, `ExitPlanMode` (unless `permissionMode: plan`), `ScheduleWakeup`, `TaskOutput`, `WaitForMcpServers`, `Workflow` -- **even when listed in `tools:`** |
+| 1 -- universal | every SA (conversation forks exempt) | Removes `Agent` (at the depth limit only), `AskUserQuestion`, `EndConversation`, `EnterPlanMode`, `ExitPlanMode` (unless `permissionMode: plan`), `ScheduleWakeup`, `WaitForMcpServers`, `Workflow` -- **even when listed in `tools:`** |
 | 2 -- background only | background SAs (the DEF) | Keeps every MCP TL + only the built-ins in the table below; removes every other built-in, inherited or declared |
 | forks (`/subtask`) | -- | Skip BOTH filters; get the main conversation's exact pool |
 
 | Pool | Built-in TLs available |
 |------|------------------------|
 | Foreground SA | Everything the main conversation has, minus filter 1 (incl. `ListAgents` where cross-session messaging is on) |
-| Background SA (DEF) | `Read`, `Grep`, `Glob`, `Bash`, `PowerShell`, `Edit`, `Write`, `NotebookEdit`, `WebFetch`, `WebSearch`, `TodoWrite`, `Skill`, `ToolSearch`, `EnterWorktree`, `ExitWorktree`, `Monitor`, `TaskStop`, `SendMessage`, `Artifact` + all MCP TLs. **No `ListAgents`. No `TaskCreate`/`TaskGet`/`TaskList`/`TaskUpdate`** |
+| Background SA (DEF) | `Read`, `Grep`, `Glob`, `LSP` (2.1.280+), `Bash`, `PowerShell`, `Edit`, `Write`, `NotebookEdit`, `WebFetch`, `WebSearch`, `TodoWrite`, `Skill`, `ToolSearch`, `EnterWorktree`, `ExitWorktree`, `Monitor`, `TaskStop`, `SendMessage`, `Artifact` + all MCP TLs; `Agent` below the depth limit, `ExitPlanMode` when `permissionMode: plan`, `SubagentHandback` for eligible local non-fork auto-mode SAs (2.1.271+). **No `ListAgents`. No `TaskCreate`/`TaskGet`/`TaskList`/`TaskUpdate`** |
 | AG-teams teammate | Background pool + `TaskCreate`, `TaskGet`, `TaskList`, `TaskUpdate`, `CronCreate`, `CronDelete`, `CronList` (`docs/sub-agents.md:351`) |
 | MCP | `mcp__server__tool` -- survives both filters in every pool |
 
 > Removal is **silent** (`docs/sub-agents.md:349`): a filtered entry raises no warning, so a stale `tools:` name is inert clutter, not breakage. A launch fails only when NOTHING in `tools:` resolves (`docs/sub-agents.md:287`) -- so a `tools:` list made entirely of filtered TLs refuses to launch.
-> The nine filter-1 TLs never belong in a generated `tools:` line. `AskUserQuestion` in particular: **a SA cannot ask the user anything** -- write the AG body to return a decision request to its caller, never "confirm with the user" prose. Forks are the sole exemption.
+> Unconditionally filtered TLs never belong in generated `tools:`; retain `Agent`/`ExitPlanMode` only when their conditions apply. `AskUserQuestion`: **a non-fork SA cannot ask the user anything** -- return a decision request to its caller. A conversation fork is exempt; a skill's `context: fork` is a regular SA and is NOT exempt. `TaskOutput` is deprecated: use `Read` on the task output path; background SAs do not retain it.
 > Task TLs are CONDITIONAL, !=assumed: absent from a background SA, present for a foreground SA and for AG-teams teammates, and absent from every SA in a session that has no Task TLs at all (`docs/sub-agents.md:353`). An AG whose body coordinates a task graph needs an explicit fallback -- when `TaskCreate` is unavailable, track the plan in its report file and return the ordering to the caller.
 
 ## AG Scope & Precedence
@@ -37,7 +37,7 @@ A SA does NOT get the main conversation's tool set. It inherits built-ins + MCP 
 
 ### Discovery: walk-up scan (headline fix -- read this before placing a file)
 
-Priority 2 ("project") is not "repo-root only": CC scans **every `.claude/agents/` folder from cwd walking UP to the repo root**, plus `~/.claude/agents/` and any `--add-dir` target's own `.claude/agents/`. Inside each such folder, subfolders are scanned recursively -- the path is cosmetic, `name:` in the file is the real identity (PLG agents get `plugin:subdir:name`).
+Project scope (priority 3) is not "repo-root only": CC scans **every `.claude/agents/` folder from cwd walking UP to the repo root**, plus `~/.claude/agents/` and any `--add-dir` target's own `.claude/agents/`. Inside each such folder, subfolders are scanned recursively -- the path is cosmetic, `name:` in the file is the real identity (PLG agents get `plugin:subdir:name`).
 
 | Case | Rule |
 |------|------|
@@ -63,11 +63,11 @@ claude --agents '{
 
 | Option | Since | Notes |
 |--------|-------|-------|
-| `subagent_type` | required in practice from 2.1.235 | omission now errors listing available AGs (was a silent `general-purpose` fallback) -- always pass it explicitly in orchestrator AG bodies |
+| `subagent_type` | fallback error clarified 2.1.235 | omission errors when `general-purpose` is unavailable; otherwise fallback can resolve -- BC always passes it explicitly |
 | `model` | restored 2.1.72 | per-invocation override; wins over the definition's `model:`, loses only to `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` (see Model Precedence below) |
 | `isolation` | `worktree` since 2.1.50 | schema also carries `"remote"` (invocation-level only, gated, always backgrounded) -- never valid in FM |
 | `name` | stabilized 2.1.206 | required to spawn a teammate (`Agent(name:...)`) instead of an anonymous SA; `TeamCreate`/`TeamDelete` removed v2.1.178 |
-| `run_in_background` | -- | requests background explicitly; called from an in-process teammate this may fail (error or silent foreground) -- exact version not isolated in the changelog, confirmed only via the current agent-teams doc |
+| `run_in_background` | -- | requests background explicitly; an in-process teammate's `true` request errors when fork mode and background-disable are both off; definition `background: true` also errors for teammate spawns |
 
 ## Model Precedence
 
@@ -76,9 +76,11 @@ claude --agents '{
 | 1 (highest) | `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1` (2.1.257) | forces every SA, teammates included, onto `CLAUDE_CODE_SUBAGENT_MODEL`, overriding both the definition's `model:` and any per-spawn `model` |
 | 2 | Per-spawn `Agent(model:...)` | wins over the definition's `model:` |
 | 3 | Definition `model:` (this AG's FM) | wins over the `CLAUDE_CODE_SUBAGENT_MODEL` default |
-| 4 (lowest) | `CLAUDE_CODE_SUBAGENT_MODEL` (2.1.251+) | a default only, applied when neither 2 nor 3 is set |
+| 4 | `CLAUDE_CODE_SUBAGENT_MODEL` (2.1.251+) | a default only, applied when neither 2 nor 3 is set; `inherit` here means unset |
+| 5 (lowest) | Main conversation's model | used when no higher source selects a model |
 
 > Before 2.1.251, `CLAUDE_CODE_SUBAGENT_MODEL` won over both `model:` and per-spawn `model` -- inverted since. A generated AG that pins a model for cost/quality should note ops can still force it via `_FORCE`.
+> Definition `model: inherit` selects the main model and outranks the env default; Explore/Plan also ignore that default unless `_FORCE` is set. A per-spawn/FM family alias matching main's family keeps main's exact model/version and `[1m]`; the env alias always resolves normally. Organization `availableModels` restrictions can substitute an allowed model.
 
 ## Spawn From Main Conversation Only (BC workflow)
 
@@ -103,6 +105,6 @@ claude --agents '{
 | File-based comms | AGs write results to files, next AG reads |
 | AG Teams | Lead coordinates via Task-graph TLs, teammates spawn via `Agent(name:...)` (BC: keep one level deep from main) |
 
-**AG Teams** -- `TeamCreate`/`TeamDelete` TLs removed v2.1.178 (teammates now spawn via `Agent(name:...)`); coordination runs on `TaskCreate`, `TaskGet`, `TaskList`, `TaskUpdate` plus `CronCreate`/`CronDelete`/`CronList`, which teammates keep on top of the background pool (`docs/sub-agents.md:351`). `TaskStop` is in the background pool for every SA; `TaskOutput` is removed from every SA by filter 1. Hook events: `TeammateIdle`, `TaskCompleted`, `TaskCreated` (v2.1.84).
+**AG Teams** -- `TeamCreate`/`TeamDelete` TLs removed v2.1.178 (teammates now spawn via `Agent(name:...)`); coordination runs on `TaskCreate`, `TaskGet`, `TaskList`, `TaskUpdate` plus `CronCreate`/`CronDelete`/`CronList`, which teammates keep on top of the background pool. `TaskStop` is in that pool; read partial output with `Read`, not deprecated `TaskOutput`. Hook events: `TeammateIdle`, `TaskCompleted`, `TaskCreated` (v2.1.84).
 
 > Sources: [SA docs](https://code.claude.com/docs/en/sub-agents)

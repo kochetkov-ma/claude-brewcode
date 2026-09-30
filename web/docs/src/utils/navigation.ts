@@ -31,7 +31,7 @@ export const navigation: NavSection[] = [
           { title: 'setup-status', slug: 'brewcode/skills/setup-status' },
           { title: 'superreview-setup', slug: 'brewcode/skills/superreview-setup' },
           { title: 'teams-setup', slug: 'brewcode/skills/teams-setup' },
-          { title: 'convention', slug: 'brewcode/skills/convention' },
+          { title: 'convention-setup', slug: 'brewcode/skills/convention-setup' },
           { title: 'rules', slug: 'brewcode/skills/rules' },
           { title: 'review (dynamic)', slug: 'brewcode/skills/review' },
           { title: 'skills', slug: 'brewcode/skills/skills' },
@@ -76,7 +76,6 @@ export const navigation: NavSection[] = [
           { title: 'ssh', slug: 'brewtools/skills/ssh' },
           { title: 'text-human', slug: 'brewtools/skills/text-human' },
           { title: 'text-optimize', slug: 'brewtools/skills/text-optimize' },
-          { title: 'think-short-setup', slug: 'brewtools/skills/think-short-setup' },
         ],
       },
       {

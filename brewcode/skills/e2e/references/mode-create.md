@@ -32,7 +32,7 @@ One analyst = ONE domain of scenarios; a scope spanning several domains is split
 all analysts are spawned in ONE message.
 
 ```
-Task(subagent_type assigned to e2e-scenario-analyst, prompt="
+Agent(subagent_type="e2e-scenario-analyst", prompt="
 GOAL: this project is getting an E2E suite for {SCOPE}; scenarios come first because everything
       downstream -- tests, review, traceability -- is anchored to them.
 ROLE: you own the BDD scenarios for {SCOPE}. Do NOT write test code, do NOT edit production code,
@@ -76,7 +76,7 @@ Location: `{config.scenarioDir}/{domain}/` (e.g., `.claude/e2e/scenarios/checkou
 ```
 cycle = 0
 while cycle < 3:
-  1. Task(e2e-reviewer): validate scenarios against rules.
+  1. Agent(subagent_type="e2e-reviewer"): validate scenarios against rules.
      GOAL: the {SCOPE} scenarios must be rule-clean before a line of test code is written.
      ROLE: review the C3 scenarios. Read-only -- no edits, no new scenarios.
      SCOPE: {config.scenarioDir}/{domain}/**; out of bounds: test code, production code.
@@ -87,7 +87,7 @@ while cycle < 3:
        analyst -- so give scenario id + the rule it breaks + a fix proposal.
      DONE: findings table (scenario | rule | severity | fix proposal) or "no issues".
   2. If no issues → break
-  3. Task(e2e-automation-tester): re-check reviewer findings (cross-domain verification).
+  3. Agent(subagent_type="e2e-automation-tester"): re-check reviewer findings (cross-domain verification).
      GOAL: only real, automatable findings should cost the analyst a rewrite.
      ROLE: verify the reviewer's findings from the automation side. Read-only -- do NOT write
        tests yet, do NOT edit scenarios.
@@ -96,7 +96,7 @@ while cycle < 3:
        you can tell an unautomatable Given/When/Then from a cosmetic complaint.
      CONSUMER: step 4 fixes only what you confirm; C5 shows the user what remains.
      DONE: per finding: real / downgraded / false-positive + one-line reason.
-  4. Confirmed issues → Task(e2e-scenario-analyst): fix.
+  4. Confirmed issues → Agent(subagent_type="e2e-scenario-analyst"): fix.
      GOAL: land the confirmed fixes so the scenarios can go to the user for approval.
      ROLE: you own the scenario files you wrote; do NOT touch tests or other domains' scenarios.
      SCOPE: {config.scenarioDir}/{domain}/** -- only the flagged scenarios.
@@ -129,7 +129,7 @@ One tester = ONE domain's tests (~<=5 files); a scope covering several domains i
 and all testers are spawned in ONE message.
 
 ```
-Task(e2e-automation-tester, prompt="
+Agent(subagent_type="e2e-automation-tester", prompt="
 GOAL: this project is getting an E2E suite; this task delivers the autotests for {SCOPE} so the
       approved scenarios actually run green end to end.
 ROLE: you own the test files for {SCOPE} only. Do NOT edit the scenarios, page objects owned by
@@ -158,7 +158,7 @@ Same pattern as C4 — one reviewer per test domain, all domains fanned out in O
 ```
 cycle = 0
 while cycle < 3:
-  1. Task(e2e-reviewer): review tests against rules + architecture.
+  1. Agent(subagent_type="e2e-reviewer"): review tests against rules + architecture.
      GOAL: the {SCOPE} tests must be rule-clean and layered right before anyone runs them.
      ROLE: review the C6 test files. Read-only -- no edits, no new tests.
      SCOPE: {config.testSourceDir}/{domain}/**; out of bounds: scenarios, production code, CI.
@@ -169,7 +169,7 @@ while cycle < 3:
        give file + line + rule/layer broken + fix proposal.
      DONE: findings table (file | rule or layer | severity | fix proposal) or "no issues".
   2. If no issues → break
-  3. Task(e2e-scenario-analyst): re-check findings (different agent = cross-domain).
+  3. Agent(subagent_type="e2e-scenario-analyst"): re-check findings (different agent = cross-domain).
      GOAL: keep the author from chasing findings that are not real.
      ROLE: verify the reviewer's findings against the approved scenarios. Read-only.
      SCOPE: only the flagged files + their source scenarios.
@@ -177,7 +177,7 @@ while cycle < 3:
        coverage gap from a style preference. Do not re-review unflagged files.
      CONSUMER: step 4 fixes only what you confirm; C9 reports traceability to the user.
      DONE: per finding: real / downgraded / false-positive + one-line reason.
-  4. Confirmed issues → Task(e2e-automation-tester): fix.
+  4. Confirmed issues → Agent(subagent_type="e2e-automation-tester"): fix.
      GOAL: land the confirmed fixes so the suite can compile and run.
      ROLE: you own the test files you wrote; do NOT touch page objects owned by other agents,
        CI config, or production code.
@@ -202,7 +202,7 @@ Compile/syntax check (stack-dependent):
 If fails → re-check once via:
 
 ```
-Task(e2e-automation-tester, prompt="
+Agent(subagent_type="e2e-automation-tester", prompt="
 GOAL: the E2E tests just written for {SCOPE} do not compile; nothing downstream can run until
       they do.
 ROLE: you own the compilation fix in the test files you wrote. Do NOT change test intent, do NOT

@@ -25,7 +25,7 @@ const brewcodeSource = path.join(ROOT, 'brewcode');
 const brewtoolsSource = path.join(ROOT, 'brewtools');
 const brewcodeRoot = path.join(ROOT, '.codex', 'plugins', 'brewcode');
 const brewtoolsRoot = path.join(ROOT, '.codex', 'plugins', 'brewtools');
-const common = { session_id: 'fixture-session', turn_id: 'fixture-turn', cwd: ROOT, model: 'fixture-model', permission_mode: 'default' };
+const common = { session_id: `fixture-session-${process.pid}-${Date.now()}`, turn_id: 'fixture-turn', cwd: ROOT, model: 'fixture-model', permission_mode: 'default' };
 const brewcodeStateDir = path.join(os.tmpdir(), `brewcode-hook-test-${process.pid}-${Date.now()}`);
 const brewcodeEnv = { PLUGIN_ROOT: brewcodeRoot, PLUGIN_DATA: brewcodeStateDir };
 
@@ -74,20 +74,10 @@ assert.deepEqual(invoke(path.join(brewtoolsRoot, 'hooks', 'session-start.mjs'), 
 
 const claudeForced = invoke(path.join(brewcodeSource, 'hooks', 'forced-eval.mjs'), JSON.stringify({ ...common, hook_event_name: 'UserPromptSubmit', prompt: 'Review this code' }));
 assert.equal(claudeForced.hookSpecificOutput.hookEventName, 'UserPromptSubmit');
+fs.rmSync(path.join(os.tmpdir(), 'brewcode-forced-eval', `${common.session_id}.forced-eval-counter`), { force: true });
 const claudeManager = invoke(path.join(brewtoolsSource, 'hooks', 'manager-prompt.mjs'), JSON.stringify({ ...common, hook_event_name: 'UserPromptSubmit', prompt: '++r review this' }), { CLAUDE_PLUGIN_ROOT: brewtoolsSource });
 assert.equal(claudeManager.hookSpecificOutput.hookEventName, 'UserPromptSubmit');
 
-const thinkAssets = path.join(brewtoolsRoot, 'skills', 'think-short-setup', 'assets');
-const thinkSessionId = `fixture-${process.pid}-${Date.now()}`;
-const thinkSession = invoke(path.join(thinkAssets, 'think-short-session.mjs'), JSON.stringify({ ...common, session_id: thinkSessionId, hook_event_name: 'SessionStart', source: 'startup' }));
-assert.equal(thinkSession.hookSpecificOutput.hookEventName, 'SessionStart');
-for (let index = 1; index <= 10; index += 1) {
-  const result = invoke(path.join(thinkAssets, 'think-short-prompt-counter.mjs'), JSON.stringify({ ...common, session_id: thinkSessionId, hook_event_name: 'UserPromptSubmit', prompt: `fixture ${index}` }));
-  if (index === 5 || index === 10) assert.equal(result.hookSpecificOutput.hookEventName, 'UserPromptSubmit');
-  else assert.deepEqual(result, {});
-}
-assert.doesNotThrow(() => invoke(path.join(thinkAssets, 'think-short-prompt-counter.mjs'), '{malformed'));
-fs.rmSync(path.join(os.tmpdir(), 'brewtools-think-short', `${thinkSessionId}.think-short-counter`), { force: true });
 const hookDefinition = fs.readFileSync(path.join(brewcodeRoot, 'hooks', 'hooks.json'));
 const originalHash = crypto.createHash('sha256').update(hookDefinition).digest('hex');
 const changedHash = crypto.createHash('sha256').update(Buffer.concat([hookDefinition, Buffer.from('\n')])).digest('hex');

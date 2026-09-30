@@ -55,19 +55,19 @@ AskUserQuestion:
 
 **Archive logic:**
 
-- Read current `trace.jsonl`
-- Split into keep/archive based on selection
-- Append archived entries to `trace-archive.jsonl` (create if not exists)
-- Rewrite `trace.jsonl` with kept entries only
-- Reset `trace.cursor` via `trace-ops.sh cursor <dir> set ""`
+Use the bundled `trace-ops.sh archive` for the whole operation after confirmation; never append or
+truncate trace files directly. Policies: `all`, `keep-days 30`, `keep-last 50`,
+`keep-issues-insights`. It holds the shared trace lock, binds regular-file identities, publishes
+archive/live/cursor together with rollback on error, and reports JSON counts. Concurrent supported
+operations can report locked: retry after the owner completes. Successive retries do not duplicate
+archived rows. Cursor resets only when rows move. Non-cooperative file edits are outside the lock
+contract; identity changes fail closed. Incomplete rollback retains the lock and recovery evidence:
+STOP and report its path; do not retry or remove that lock automatically.
 
 **EXECUTE** using Bash tool:
 ```bash
 # Example: archive all, start fresh.
-# Truncation is LAST on purpose: if an earlier link fails the chain aborts with trace.jsonl intact.
-cat ".claude/teams/{TEAM}/trace.jsonl" >> ".claude/teams/{TEAM}/trace-archive.jsonl" && \
-bash "${CLAUDE_SKILL_DIR}/scripts/trace-ops.sh" cursor ".claude/teams/{TEAM}" set "" && \
-printf '' > ".claude/teams/{TEAM}/trace.jsonl" && \
+bash "${CLAUDE_SKILL_DIR}/scripts/trace-ops.sh" archive ".claude/teams/{TEAM}" all && \
 echo "✅ Archived" || echo "❌ FAILED"
 ```
 

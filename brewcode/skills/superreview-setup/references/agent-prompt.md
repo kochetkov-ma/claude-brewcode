@@ -16,6 +16,9 @@ Each changed-file group is routed to the domain expert **selected at runtime** f
 contract. Spawn ALL non-empty groups in ONE message (parallel). Every agent gets the SAME finding contract so
 Phase 3 can validate and Phase 4 can merge.
 
+The main-session coordinator spawns these workers. Ordinary delegated agents have no Agent
+tool; workers return findings/decisions to the main session, never re-delegate or edit files.
+
 > Sizing: one agent = ONE file group — ~<=5 files, ~<=10 steps; a bigger group is split into two groups and both
 > are spawned in the SAME message.
 
@@ -23,9 +26,8 @@ Phase 3 can validate and Phase 4 can merge.
 
 ## Dynamic expert selection (run BEFORE building any prompt)
 
-**A review is only as good as its experts.** A generic agent on a domain surface produces generic findings, so the
-selection below is mandatory, not an optimization: derive the real mapping each run so a newly added agent is used
-automatically.
+Derive the live mapping every run: specific domain experts are mandatory; newly added agents
+must be discovered rather than replaced by generic review.
 
 ```bash
 # Live roster: name + description of every project agent
@@ -62,7 +64,7 @@ Selection procedure per changed-file group:
 > it never takes files away from their owner.
 
 ```
-Task(subagent_type="{AGENT}", prompt="
+Agent(subagent_type="{AGENT}", prompt="
 ## superreview — {GROUP} pass ({PROJECT_NAME})
 
 GOAL: one deep review of the {MODE} change set in {PROJECT_NAME}, split by file group so each domain owner judges

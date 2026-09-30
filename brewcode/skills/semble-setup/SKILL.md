@@ -74,8 +74,9 @@ any order. Nobody types keys: resolve mode + scope FROM the prompt.
 Routing table, keyword scoring and the 5-step resolution algorithm are **not duplicated here** — read
 `references/intent-routing.md` (already listed **always** above) and apply it literally in Step 2.
 
-The **PLAN** block is the required output of that resolution: print it once, before the first mutation
-and before the `status` report on a read-only run. `status` still asks nothing.
+Before Step 0 executes, resolve the prompt against known context and print one **PLAN**. If checkpoint
+state is unknown, label the mode provisional and include the Step 1 status probe in DO. Step 2 refines
+from that probe with one short update, never a second PLAN. `status` asks nothing.
 
 ```
 PLAN — brewcode:semble-setup
@@ -138,7 +139,8 @@ Read from the JSON: `.verdict`, `.state.phase`, `.state.enabled`, `.mcp.state`, 
 
 > **An unmeasurable half must never report `ready` with `--strict` exiting 0.** An **errored** `guidance` probe therefore always downgrades the verdict to `partial` (`guidance probe failed: <error>`), whatever the cause — "unit not installed" included, because that leaves the rule, the hooks and the permissions exactly as unproven as a probe that crashed. A **null** measurement never downgrades anything: null means the section was not requested (`--section mcp`), and treating an absent measurement as a defect would fail `--strict` on a healthy repo. `cache` and `agents` stay lenient by design — each witnesses one optional fact and carries its own error for the reader.
 
-Print the **Detection** and **Before** blocks of `references/output-contract.md` now, from this JSON. `Before` is the pre-mutation snapshot and is never refreshed later.
+Keep this JSON as the immutable **Before** snapshot. Step 2 prints Detection/Before after final routing;
+the initial PLAN already preceded Step 0/1 execution. Never refresh Before after a mutation.
 
 ---
 
@@ -149,11 +151,16 @@ Read `references/intent-routing.md` and apply its 5-step algorithm to `$ARGUMENT
 1. Empty / whitespace-only input -> **`status`**, read-only, no questions. Never a mutation.
 2. `phase == "awaiting_reload"` and no mode named -> **`resume`** (checked before scoring).
 3. Highest count of distinct matched keywords wins.
-4. Ties: destructive involved -> ask; `status` involved -> `status`; two mutating modes -> first keyword in the prompt; all zero -> run `status` and offer two plausible modes in **Next Step**.
-5. `AskUserQuestion` at most **once** per invocation, only for a destructive tie, the removal flavour, a scope conflict, the reindex deletion confirmation, or the `install` prerequisite gate (Step 3.1 — a machine-level `brew install`). The `uv` gate (3.1b) and the `coreutils` offer (3.1d) are **mutually exclusive**: 3.1b's question already covers both installs, so 3.1d only runs when 3.1b did not.
+4. Ties: destructive involved -> ask; `status` involved -> `status`; two mutating modes -> first keyword;
+   all zero -> `status`, two plausible modes in **Detection**, one concrete **Next Step**.
+5. Bundle known choices into one `AskUserQuestion` (max 4 questions): routing/removal, MCP scope/repair,
+   machine prerequisites, reindex, pin change, or concrete managed-file replacement. New destructive or
+   permission decisions discovered later require a separate explicit gate unless already authorized.
+   The `uv` (3.1b) and `coreutils` (3.1d) offers remain mutually exclusive; never treat a backup or `--yes`
+   as user consent.
 
-Print the **PLAN** block now (`## Prompt contract` above / `references/intent-routing.md`) — once,
-before Step 1's `status` report and before any mutation. Anything else -> decide, do not ask.
+Refine the provisional mode if Step 1 changes it; report the reason. Print **Detection**/**Before** now,
+before mutations, using the saved Step 1 JSON. Do not repeat the initial PLAN; routine choices need no question.
 
 ### Early exit
 
@@ -165,7 +172,7 @@ If the resolved mode is `status`, or if everything is already `ready` and the in
 |------|-------|
 | `status` | `semble-status.sh --section all --json` (Step 1 output; nothing further) |
 | `install` | Step 3 chain: `semble-install.sh all --json` (probe: `check -> uv -> coreutils -> semble`; exit 4 = confirm) -> confirm -> `semble-install.sh all --yes --json`, or on exit 0 the report-driven `semble-install.sh coreutils --yes --json` offer -> `semble-mcp.sh detect`/`add`/`repair` -> `semble-guidance.sh install` + `semble-agents.sh apply` (Step 3.2b) -> **reload checkpoint** |
-| `upgrade` | `semble-install.sh check --json` + `semble-mcp.sh detect --json` -> `semble-mcp.sh repair --yes --json` -> `semble-guidance.sh install --part all` + `semble-agents.sh apply` (the Step 3.2b block, verbatim) -> **reload checkpoint** |
+| `upgrade` | independently check prerequisites + MCP -> repair only when needed and approved -> always run project guidance/agents after successful preflight -> reload checkpoint when registration changed or already awaiting reload |
 | `enable` | `semble-project.sh enable --yes --json` |
 | `disable` | `semble-project.sh disable --yes --json` |
 | `uninstall` | `AskUserQuestion` flavour -> `semble-remove.sh <integration\|mcp\|cli> --yes --json` |
@@ -174,7 +181,9 @@ If the resolved mode is `status`, or if everything is already `ready` and the in
 | `optimize` | read-only fan-out: `semble-project.sh audit --json` + `semble-cache.sh info --json` + `semble-guidance.sh status --json` + `semble-agents.sh audit --json` |
 | `resume` | Step 4: `semble-state.sh phase verifying` -> `semble-project.sh smoke` -> `semble-guidance.sh install` -> `semble-agents.sh apply` -> `semble-state.sh phase ready` |
 
-Script exit codes are uniform: `0` ok · `1` hard failure, nothing written · `2` bad usage · `3` precondition unmet (recoverable) · `4` confirmation required, nothing written.
+Exit codes: `0` ok · `1` hard failure (earlier writes may survive) · `2` bad usage · `3` recoverable
+precondition/conflict/skipped verification · `4` confirmation required. Read each script's JSON and final
+status; exit 1 is never a universal rollback guarantee. Record actual changed/failed/skipped surfaces.
 
 ---
 
@@ -232,7 +241,8 @@ uvx --from 'semble[mcp]==0.5.5' semble --version
 
 Then one `AskUserQuestion`: *"Run these Homebrew installs now?"* — options `Install` (runs exactly the commands printed above) / `Cancel` (nothing runs; `install` stops and the manual fallback `curl -LsSf https://astral.sh/uv/install.sh | sh` is printed, not run). Say plainly that `brew install` writes to the machine, outside this project, and that `coreutils` is the optional half: it only upgrades `sc_timeout` from its bash watchdog to `gtimeout`. On `Cancel`: emit the report with `Actions -> skipped: brew install uv (declined)` and end the invocation.
 
-> This single question covers both installs, so 3.1d is **skipped** after 3.1c — one `AskUserQuestion` per invocation, never two.
+> Bundle this with known MCP scope/repair choices from Step 1. It covers both installs, so skip 3.1d
+> after 3.1c; a newly discovered required permission/replacement gate follows Step 2 rule 5.
 
 **3.1c — apply, only after an explicit `Install`.**
 
@@ -254,7 +264,7 @@ echo "RC=$RC"
 | # | Condition (from the 3.1a JSON) | Action |
 |---|--------------------------------|--------|
 | 1 | `.timeout.backend != "none"` | Nothing to install. One line: `timeout: <backend> <path> — sc_timeout is bound by a binary.` -> 3.2 |
-| 2 | `.timeout.backend == "none"` **and** `.timeout.coreutils.status == "needs_confirmation"` **and** `.brew.present == true` | **Ask** — the one `AskUserQuestion` of this invocation. -> 3.1e |
+| 2 | `.timeout.backend == "none"` **and** `.timeout.coreutils.status == "needs_confirmation"` **and** `.brew.present == true` | Include the optional offer in the bundled question; apply only if approved. -> 3.1e |
 | 3 | `.timeout.backend == "none"` **and** `.brew.present == false` | One line: `no brew — gtimeout cannot be installed; sc_timeout keeps its bash watchdog (still bounded).` -> 3.2 |
 | 4 | anything else (`skipped` / `failed` / dry / no-network) | One line quoting `.timeout.coreutils.reason`. -> 3.2 |
 
@@ -285,8 +295,8 @@ echo "RC=$RC"
 | `absent` | `semble-mcp.sh add --scope user --yes` |
 | `correct` | no MCP mutation — `add` still writes the project checkpoint itself (see below); no extra step |
 | `stale_args` | show the before/after diff, confirm once, `semble-mcp.sh repair --yes` |
-| `wrong_scope` | one `AskUserQuestion` (migrate to `user` / keep), then `repair --yes` |
-| `duplicate` | one `AskUserQuestion` (which scope to keep), then `repair --yes` |
+| `wrong_scope` | use the bundled migrate-to-`user`/keep decision; repair only if migration was approved |
+| `duplicate` | show every scope repair removes and its user-scoped replacement; migrate only if approved. Keeping another scope skips repair |
 | `upstream_unpinned` | **never auto-remove** the upstream `semble` server. Report the conflict; removal is an explicit user choice |
 | `malformed` | **STOP.** Never write. Report the exact file and parser offset; the user fixes it by hand |
 
@@ -297,21 +307,35 @@ Precedence when several apply: `malformed` > `duplicate` > `wrong_scope` > `stal
 ```bash
 SD="${CLAUDE_SKILL_DIR}"
 [ -n "$SD" ] || SD="$(find "$HOME/.claude/plugins/cache/claude-brewcode/brewcode" -maxdepth 3 -type d -path '*/skills/*' \( -name semble-setup -o -name semble \) 2>/dev/null | sort -V | tail -1)"
-bash "$SD/scripts/semble-mcp.sh" add --scope user --yes --json; RC=$?
+MCP_ACTION=skip   # add for absent/correct; repair only for the approved concrete transition
+if [ "$MCP_ACTION" = add ]; then
+  bash "$SD/scripts/semble-mcp.sh" add --scope user --yes --json; RC=$?
+elif [ "$MCP_ACTION" = repair ]; then
+  bash "$SD/scripts/semble-mcp.sh" repair --yes --json; RC=$?
+else echo "skipped: MCP registration kept by user decision"; RC=0; fi
 echo "RC=$RC"
 [ "$RC" -eq 0 ] && echo "✅" || echo "❌ FAILED"
 ```
 
-> **STOP if ❌** — the registration failed. `add` already wrote the `awaiting_reload` checkpoint *before* touching `~/.claude.json`, and it retries once with `add-json` internally; a second failure leaves the config untouched. Report the raw output and stop.
-> Replace `add --scope user` with `repair` for `stale_args` / `wrong_scope` / `duplicate`.
+> **STOP if ❌** — report surviving state/config changes. `add` writes its checkpoint before config;
+> it tries `add-json` first, then `add`. Both failing can leave `prereq_ready` plus failure notes.
+> `repair` restores MCP config backups on failure; neither path promises no prior state write.
+> Set MCP_ACTION from the matrix, not by guessing. `repair` always targets `user`, removing every
+> existing semble_code scope; keeping local/project registration leaves it unchanged and reports the gap.
 
-> **`correct` needs no follow-up step — `add` writes the checkpoint itself.** The MCP is user-scoped, so on the second project of a machine `add` short-circuits on an already-approved registration; the state file is born only inside an MCP mutation, so that project would end up with no `state.json` at all. `add` therefore writes it on that path too, and its `note` reports the resulting phase. Absent / `prereq_ready` / `error` become `awaiting_reload` — this session still cannot see the server; `verifying`, `ready` and `disabled` take an identity transition, which refreshes the three installer-owned fields (`cacheRoot`, `repoHash`, `resumePrompt`) without walking a verified project backwards. Nothing here is left to the model remembering a block.
+> **`correct`: `add` writes/refreshes the project checkpoint even when registration is unchanged.**
+> Absent/`prereq_ready`/`error` -> `awaiting_reload`; `verifying`/`ready`/`disabled` retain phase while
+> refreshing the three installer-owned fields (`cacheRoot`, `repoHash`, `resumePrompt`). Its `note`
+> names the resulting phase; a second project needs no remembered follow-up. `MCP_ACTION=skip` stops
+> after the report: do not wire the project or claim a reload checkpoint for a declined transition.
 
 ### 3.2b Wire the guidance, permissions and agents — `install` does this itself
 
 Everything that does **not** need a live MCP server is wired now, not left hostage to the user coming back for `resume`. This is the same block as Step 4.2 and every step in it is idempotent, so `resume` re-runs it harmlessly and repairs any drift it finds.
 
-Why it belongs here: a project that stops at 3.3 with a registered server and **no hooks** looks installed and behaves as if semble were never set up. The three nudge hooks read `state.phase` and **do** fire at `awaiting_reload` — they print the resume-aware wording ("Verification has not finished (phase=awaiting_reload) — the first call rebuilds the index and may take minutes") instead of the plain `ready` text. They are never silenced by the checkpoint; only `enabled:false`, `phase disabled`, `phase error`, `phase prereq_ready` and a `completed` list without `mcp` silence them.
+The three nudge hooks fire at `awaiting_reload`, with "Verification has not finished (phase=awaiting_reload)
+— the first call rebuilds the index and may take minutes". Only `enabled:false`, phase `disabled`/`error`/
+`prereq_ready`, or `completed` without `mcp` silence them. Wiring before 3.3 avoids a registered-but-unhooked project.
 
 What is **not** done here and cannot be: the smoke query (Step 4.1) — the server does not exist for this session — and therefore `phase ready`.
 
@@ -321,28 +345,36 @@ What is **not** done here and cannot be: the smoke query (Step 4.1) — the serv
 SD="${CLAUDE_SKILL_DIR}"
 [ -n "$SD" ] || SD="$(find "$HOME/.claude/plugins/cache/claude-brewcode/brewcode" -maxdepth 3 -type d -path '*/skills/*' \( -name semble-setup -o -name semble \) 2>/dev/null | sort -V | tail -1)"
 RC=0
-bash "$SD/scripts/semble-guidance.sh" install --part all --json     || RC=1
-bash "$SD/scripts/semble-agents.sh"   apply --scope project --yes --json; ARC=$?
-echo "agents apply RC=$ARC   # 3 = reported conflict, not a failure"
-{ [ "$ARC" -eq 0 ] || [ "$ARC" -eq 3 ]; } || RC=1
+if bash "$SD/scripts/semble-guidance.sh" install --part all --json; then
+  ARC=0; bash "$SD/scripts/semble-agents.sh" apply --scope project --yes --json || ARC=$?
+  echo "agents apply RC=$ARC   # 3 = reported conflict, not a failure"
+  { [ "$ARC" -eq 0 ] || [ "$ARC" -eq 3 ]; } || RC=1
+else RC=1; fi
 [ "$RC" -eq 0 ] && echo "✅" || echo "❌ FAILED"
 ```
 
 > **STOP if ❌** — report which step failed and what it left behind. The MCP registration from 3.2 stands either way; do not roll it back. `agents apply` exiting `3` is a reported outcome, not a failure.
 > Record `guidance` and `agents` in **Actions**; they are marked complete on the state file in Step 4.3, after `resume` has confirmed them.
 
-**`skipped: rule: user_modified` is never the end of it.** The rule states which suffixes semble indexes; a rule left at an older `--content` set is not a preserved user edit, it is a *wrong fact* the model will act on. `install` prints the full `diff -u` of the rule against the template to stderr — read it:
+**`skipped: rule: user_modified` requires review, not automatic replacement.** Read the printed `diff -u`:
 
 | The diff shows | Do |
 |----------------|----|
-| any change to the corpus / `--content` / "Not in this corpus" section | **Re-run with `--force`** (it backs the file up first) and record `rule: overwritten (backup <path>)` in **Actions** |
-| only local additions elsewhere (extra frontmatter, project prose) | leave it; record `rule: user_modified, kept` and name the one section that is now behind |
+| corpus / `--content` / "Not in this corpus" drift, possibly mixed with local additions | Show the exact file, template diff and local keys/prose that replacement would discard. Preserve it unless that concrete full replacement is explicitly approved; otherwise report the stale fact and proposed targeted correction |
+| only local additions (extra frontmatter, project prose) | keep them; record `rule: user_modified, kept`; name any independently confirmed stale section |
 
 ```bash
-bash "$SD/scripts/semble-guidance.sh" install --part rule --force --json
+SD="${CLAUDE_SKILL_DIR}"
+[ -n "$SD" ] || SD="$(find "$HOME/.claude/plugins/cache/claude-brewcode/brewcode" -maxdepth 3 -type d -path '*/skills/*' \( -name semble-setup -o -name semble \) 2>/dev/null | sort -V | tail -1)"
+APPROVED_REPLACEMENT=0   # set to 1 only for this exact approved full-file replacement
+if [ "$APPROVED_REPLACEMENT" = 1 ]; then
+  bash "$SD/scripts/semble-guidance.sh" install --part rule --force --json
+else echo "skipped: rule: user_modified, kept; replacement not approved"; fi
 ```
 
-> `--force` is the *only* way the rule is ever overwritten, and the backup is `<rule>.bak.<epoch>` next to it. It restores the template **byte for byte** — frontmatter included, so a locally chosen `doc_type` or an extra key of your own is replaced along with the prose. It is in the backup; re-apply it by hand if you meant to keep it.
+> `--force` replaces the whole template byte for byte, including frontmatter/local prose; backup:
+> `<rule>.bak.<epoch>`. A backup does not authorize data loss. Use only the concrete approval above;
+> record `rule: overwritten (backup <path>)` when it runs. The same policy covers `.sembleignore`.
 >
 > The rule is copied verbatim and is never stamped at install time. `doc_type`, `version` and `generated_by` are baked into the plugin's own template by `.claude/scripts/bump-version.sh` at release; there is no `last_updated`, and nothing is substituted here. That is what lets `setup-status` `cmp` the installed rule against the plugin asset and read them as identical (`brewcode/skills/setup-status/references/artifact-metadata.md`, mechanism `a`).
 >
@@ -440,11 +472,12 @@ Then it copies the five hook files into `.claude/hooks/` (`semble-session.mjs`, 
 SD="${CLAUDE_SKILL_DIR}"
 [ -n "$SD" ] || SD="$(find "$HOME/.claude/plugins/cache/claude-brewcode/brewcode" -maxdepth 3 -type d -path '*/skills/*' \( -name semble-setup -o -name semble \) 2>/dev/null | sort -V | tail -1)"
 RC=0
-bash "$SD/scripts/semble-guidance.sh" install --part all --json     || RC=1
-bash "$SD/scripts/semble-agents.sh"   audit --scope project --json  || RC=1
-bash "$SD/scripts/semble-agents.sh"   apply --scope project --yes --json; ARC=$?
-echo "agents apply RC=$ARC   # 3 = reported conflict, not a failure"
-{ [ "$ARC" -eq 0 ] || [ "$ARC" -eq 3 ]; } || RC=1
+if bash "$SD/scripts/semble-guidance.sh" install --part all --json \
+    && bash "$SD/scripts/semble-agents.sh" audit --scope project --json; then
+  ARC=0; bash "$SD/scripts/semble-agents.sh" apply --scope project --yes --json || ARC=$?
+  echo "agents apply RC=$ARC   # 3 = reported conflict, not a failure"
+  { [ "$ARC" -eq 0 ] || [ "$ARC" -eq 3 ]; } || RC=1
+else RC=1; fi
 [ "$RC" -eq 0 ] && echo "✅" || echo "❌ FAILED"
 ```
 
@@ -467,22 +500,27 @@ SMOKE_OK=1   # set to 0 when Step 4.1 reported "status":"skipped" — never gues
 STEPS="prereq mcp permissions guidance agents"
 [ "$SMOKE_OK" = "1" ] && STEPS="$STEPS warm smoke"
 RC=0
-bash "$SD/scripts/semble-state.sh" phase ready    || RC=1
 bash "$SD/scripts/semble-state.sh" complete $STEPS || RC=1
+if [ "$RC" -eq 0 ] && [ "$SMOKE_OK" = 1 ]; then
+  bash "$SD/scripts/semble-state.sh" phase ready || RC=1
+fi
 RECORDED="$(bash "$SD/scripts/semble-state.sh" get completed 2>/dev/null || true)"
 echo "recorded: ${RECORDED:-NOTHING — no state file was written}"
 [ "$RC" -eq 0 ] && echo "✅" || echo "❌ FAILED"
 ```
 
-> **STOP if ❌** — an illegal phase transition, an unknown step name or an unparseable state file. Nothing was written; report the message verbatim and quote the `recorded:` line as it stands.
+> **STOP if ❌** — report the illegal phase/unknown step/parser error and actual surviving writes;
+> quote `recorded:`. A successful earlier state write is not rolled back by a later failure.
 > Report `recorded:` verbatim — it is the state file read back. Never restate `$STEPS` as if it were the outcome.
-> With `SMOKE_OK=0` the phase is still `ready` (the wiring is done) but **Current Status** says `partial - warm and smoke not recorded in state.completed` — `status` names exactly the members of the verification pair that `completed` is missing, so a run that recorded `warm` alone reads `partial - smoke not recorded in state.completed`. **Next Step** is a re-run of `/brewcode:semble-setup resume` once the reason is gone. Never claim a verification that did not run.
+> With `SMOKE_OK=0`, retain `verifying`; Current Status is `partial - warm and smoke not recorded in
+> state.completed`. Status names each missing member: `warm` alone -> `partial - smoke not recorded in
+> state.completed`. Next Step: `/brewcode:semble-setup resume` once the skip reason is gone.
 
 ---
 
 ## Step 5 — The other modes
 
-Each is one delegation. Run Step 1 first, state the plan, then the block.
+Use the initial PLAN and Step 1 snapshot, then the selected block; do not reprint the PLAN.
 
 ### `enable` / `disable`
 
@@ -503,7 +541,7 @@ elif [ "$RC" -eq 3 ] && [ "$STATUS" = "skipped" ]; then echo "⏭️ SKIPPED"
 else echo "❌ FAILED"; fi
 ```
 
-> **STOP if ❌** — report the raw output; state is unchanged.
+> **STOP if ❌** — report the raw output and surviving state/guidance/config changes; no rollback is implied.
 > **⏭️ SKIPPED is not ❌** — `enable` with a skipped warm (offline, dry run, no `uvx`) exits `3` with `"status":"skipped"`: guidance, agents and permissions are done, but no successful search proves readiness, so the phase stops at `verifying` — deliberately neither `ready` nor `error`. Report the `skipped:` lines verbatim and tell the user to re-run `/brewcode:semble-setup resume` once the reason is gone. `status` reports the same gap as `partial - warm and smoke not recorded in state.completed`.
 
 ### `reindex`
@@ -545,40 +583,41 @@ bash "$SD/scripts/semble-agents.sh"   audit --scope project --json || RC=1
 
 ### `upgrade`
 
-Two halves, and **the second one always runs**. The MCP half compares the recorded pin against the approved `0.5.5`: **identical -> no-op** for that half; different -> print the exact `from -> to` transition and the exact commands, confirm once, then re-register through `repair` (which uses `add-json`) and go to the Step 3.3 reload checkpoint. Never `@latest`, never an unpinned `--from semble[mcp]`. On the 0.5.4 -> 0.5.5 transition, a combined cache at bare `index` is legacy: `resume` builds the new exact variant, and `reindex` may remove the old one only after matching its metadata and verifying the replacement.
+After successful preflight, run both halves: a correct MCP at approved `0.5.5` is unchanged;
+otherwise show the exact pin/scope/args transition and repair only when approved. Do not jump to the
+reload checkpoint before the project half. Never `@latest` or unpinned `--from semble[mcp]`.
+Historical 0.5.4 -> 0.5.5: combined bare `index` is legacy; resume builds the selected variant;
+reindex removes the old one only after metadata matching and verified replacement.
 
 **EXECUTE** using Bash tool:
 
 ```bash
 SD="${CLAUDE_SKILL_DIR}"
 [ -n "$SD" ] || SD="$(find "$HOME/.claude/plugins/cache/claude-brewcode/brewcode" -maxdepth 3 -type d -path '*/skills/*' \( -name semble-setup -o -name semble \) 2>/dev/null | sort -V | tail -1)"
-bash "$SD/scripts/semble-install.sh" check --json; bash "$SD/scripts/semble-mcp.sh" detect --json; RC=$?
-echo "RC=$RC"
-[ "$RC" -eq 0 ] && echo "✅" || echo "❌ FAILED"
+IRC=0; bash "$SD/scripts/semble-install.sh" check --json || IRC=$?
+MRC=0; bash "$SD/scripts/semble-mcp.sh" detect --json || MRC=$?
+echo "prerequisites RC=$IRC | MCP detect RC=$MRC"
+if [ "$IRC" -eq 0 ] && [ "$MRC" -eq 0 ]; then echo "✅"
+elif [ "$IRC" -eq 3 ] && [ "$MRC" -eq 0 ]; then echo "⏭️ PRECONDITION — uv/uvx absent"
+else echo "❌ FAILED"; exit 1; fi
 ```
 
-> **STOP if ❌** — do not re-register on an unreadable detection. Apply with `semble-mcp.sh repair --yes --json` only after the user confirms the printed transition.
+> **STOP if ❌** — neither probe may hide the other's error; malformed MCP state also stops.
+> `IRC=3` -> report prerequisites and use Step 3.1's explicit machine gate before retrying upgrade.
+> Apply `semble-mcp.sh repair --yes --json` only for the approved concrete transition.
 
 The project half is **unconditional and runs even when the pin is unchanged** — it is the only thing that moves this install's version stamp. Re-run the Step 3.2b block verbatim: `semble-guidance.sh install --part all` re-copies the rule, `.sembleignore` and the five live hooks from the plugin's assets (a byte-copy: identical files report `unchanged`, a file whose only delta is the release stamp takes the metadata-only re-sync branch, a hand-edited one is skipped and diffed to stderr), **deletes the retired `semble-explore.mjs`** if the install predates the migration, and re-merges the settings entries and permissions.
 
-**EXECUTE** using Bash tool:
-
-```bash
-SD="${CLAUDE_SKILL_DIR}"
-[ -n "$SD" ] || SD="$(find "$HOME/.claude/plugins/cache/claude-brewcode/brewcode" -maxdepth 3 -type d -path '*/skills/*' \( -name semble-setup -o -name semble \) 2>/dev/null | sort -V | tail -1)"
-RC=0
-bash "$SD/scripts/semble-guidance.sh" install --part all --json     || RC=1
-bash "$SD/scripts/semble-agents.sh"   apply --scope project --yes --json; ARC=$?
-echo "agents apply RC=$ARC   # 3 = reported conflict, not a failure"
-{ [ "$ARC" -eq 0 ] || [ "$ARC" -eq 3 ]; } || RC=1
-[ "$RC" -eq 0 ] && echo "✅" || echo "❌ FAILED"
-```
+**EXECUTE** the Step 3.2b block, including its user-modified-file policy. It does not depend on pin drift.
+After both halves, use Step 3.3 only if registration changed or state remains `awaiting_reload`;
+otherwise report the post-write status and any remaining verification gap.
 
 > **STOP if ❌** — report which half failed and what it left behind; the MCP registration stands either way.
 >
 > **Without this block `upgrade` could never clear a `stale` verdict.** `setup-status` reads this install's version out of the frontmatter of `.claude/rules/semble-first.md`, and `semble-guidance.sh install` is the only writer of that file — an `upgrade` that skipped it reported success and left the stamp exactly where it was, so the next `status` printed `stale` again forever.
 >
-> `skipped: rule: user_modified` is the ONE case where the stamp does not move: the hand-edit is preserved on purpose. Read the printed `diff -u` and follow the Step 3.2b table — re-running with `--force` (a backup is taken) is what re-stamps it.
+> `skipped: rule: user_modified` can leave the stamp stale by design: keep the edit and apply Step 3.2b's
+> concrete replacement gate; generic upgrade approval never authorizes `--force` or loss of local keys/prose.
 >
 > **Stray cache root, installs that ran a pre-5.0.1 prefetch hook.** That hook spawned `semble search` without `SEMBLE_CACHE_LOCATION`, so the child used semble's own default root — `~/Library/Caches/semble` on macOS, `$XDG_CACHE_HOME/semble` elsewhere — and built a SECOND copy of every index the MCP server had already built under `semble-code` (measured: 62 MB here). The hook now passes the registered root, so nothing writes there any more, but the old copy is not deleted by any mode: it sits outside the project and this skill does not remove machine-level directories on its own. Report it and hand the user the command — `du -sh ~/Library/Caches/semble` to size it, `rm -rf ~/Library/Caches/semble` to drop it. **The registered shared root is `semble-code`; that single missing suffix is the whole bug.** A pre-0.5.5 `semble-docs/RESERVED-FOR-DOCS.txt` marker is only legacy residue; `purge` removes that root only when the marker is its sole entry.
 

@@ -25,17 +25,16 @@
 # pre-state at all: it is reported SNAPSHOT-ONLY and covered by the manifest, never refused. A dirty
 # TRACKED target still exits 3, naming the paths to commit or stash. --allow-dirty waives that check.
 # --global re-roots at $HOME/.claude and skips the git gate entirely (no git tree there).
-# SIDE EFFECT, accepted: text-guard.sh appends `.claude/reports/` to $ROOT/.gitignore and CREATES
-# ~/.claude/.gitignore if absent. Nothing else under ~/.claude is touched.
+# Git roots gain `.claude/reports/` in .gitignore; non-Git roots create no ignore file.
 #
-# WHOLE-RUN semantics: a verify failure rolls back EVERY file of that run dir, not just the offender
-# (a partial keep is never an outcome). A two-layer run rolls both layers back with one `rollback`.
+# Whole-run rollback requires matching optimizer draft checkpoints for every changed target.
+# Missing proof or concurrent changes refuse recovery and preserve current bytes.
 # `last` and a bare `<ts>` are LAYER-AWARE: with --global/--project they resolve within that layer;
 # with neither, restore/rollback cover every layer dir of the newest run.
 #
 # restore drives off manifest.json (the authority), not off what happens to sit in orig/:
 # a manifest-listed file missing from orig/ is its own error, never a checksum mismatch.
-# restore PUTS BACK what was snapshotted; it never deletes files created after the snapshot.
+# Restore needs matching draft ownership; it never deletes files created after the snapshot.
 # Retention keeps the newest 5 backups; the run's own dir is never a prune candidate.
 #
 # Exit: 0 ok | 1 gate/checksum failed, or a manifest-listed file missing from orig/
@@ -208,7 +207,6 @@ cmd_snapshot() {
   # that a git-ignored `.claude/rules/*.md` is normal, not a refusal.
   if [ "$layer" = global ]; then
     printf '⚠️ global layer: no git tree - the manifest is the only recovery path for %s\n' "$root"
-    printf '⚠️ global layer: text-guard.sh will append .claude/reports/ to %s/.gitignore\n' "$root"
   elif [ "$allow_dirty" -eq 1 ]; then
     printf '⚠️ --allow-dirty: the git clean-tree check on tracked targets is waived\n'
   else
@@ -269,12 +267,22 @@ EOF
   fi
 
   for rel in "${rels[@]}"; do
-    if [ -f "$run_dir/orig/$rel" ]; then targets[${#targets[@]}]="$root/$rel"
+    if [ -f "$run_dir/orig/$rel" ]; then
+      want=$(printf '%s\n' "$entries" | awk -v r="$rel" '{hash=$1; sub(/^[^ ]* /, ""); if ($0 == r) print hash}')
+      if [ "$(sha "$run_dir/orig/$rel")" = "$want" ]; then targets[${#targets[@]}]="$root/$rel"
+      else printf '❌ SNAPSHOT CHECKSUM MISMATCH: %s\n' "$rel" >&2; bad=$((bad + 1)); fi
     else printf '❌ MISSING FROM SNAPSHOT: %s (manifest lists it, %s/orig has no copy)\n' "$rel" "$run_dir" >&2
          gone=$((gone + 1)); fi
   done
+  [ "$bad" -eq 0 ] && [ "$gone" -eq 0 ] || {
+    printf '%s: FAILED - snapshot incomplete or damaged; current bytes preserved (%s)\n' "$label" "$run_dir" >&2
+    return 1
+  }
   [ "${#targets[@]}" -gt 0 ] || { printf '%s: %s missing, 0 restored (%s)\n' "$label" "$gone" "$run_dir" >&2; return 1; }
-  CLAUDE_PROJECT_DIR="$root" bash "$TEXT_GUARD" restore --run-dir "$run_dir" "${targets[@]}"
+  if ! CLAUDE_PROJECT_DIR="$root" bash "$TEXT_GUARD" restore --run-dir "$run_dir" "${targets[@]}"; then
+    printf '%s: FAILED - restoration refused; current bytes preserved (%s)\n' "$label" "$run_dir" >&2
+    return 1
+  fi
 
   # Byte-exactness is the whole point: re-hash every restored file against the manifest.
   while IFS=' ' read -r want rel; do
@@ -307,14 +315,17 @@ cmd_verify() {
   [ -d "$run_dir/orig" ] || die "❌ no snapshot dir: $run_dir/orig"
   [ "${#files[@]}" -gt 0 ] || die "❌ verify needs at least one file"
   root=$(layer_root "${layer:-project}")
-  CLAUDE_PROJECT_DIR="$root" bash "$TEXT_GUARD" verify --run-dir "$run_dir" "${files[@]}" || rc=$?
+  CLAUDE_PROJECT_DIR="$root" bash "$TEXT_GUARD" verify --no-restore --run-dir "$run_dir" "${files[@]}" || rc=$?
   [ "$rc" -eq 0 ] && return 0
   # text-guard restores only the file that failed. A partial keep is never an outcome: put the WHOLE
   # run back. The caller still has to roll the OTHER layer back - `rollback --run-dir A --run-dir B`.
   if [ "$rc" -eq 1 ]; then
     printf 'ROLLBACK: whole run (gate failed) %s\n' "$run_dir"
-    restore_run_dir "$run_dir" ROLLBACK_VERIFIED || true
-    printf 'RUN: FAILED - every file of %s is back at its pre-edit bytes\n' "$run_dir"
+    if restore_run_dir "$run_dir" ROLLBACK_VERIFIED; then
+      printf 'RUN: FAILED - every file of %s is back at its pre-edit bytes\n' "$run_dir"
+    else
+      printf 'RUN: FAILED - recovery incomplete; inspect preserved current files in %s\n' "$run_dir" >&2
+    fi
   fi
   exit "$rc"
 }
@@ -323,8 +334,7 @@ cmd_verify() {
 # ("target vanished", exit 2), so the deleted path is re-created as a STAND-IN holding the
 # survivors' bytes: the 100% gate then answers exactly the question that justifies the deletion -
 # did every critical token of the deleted file survive in the copy that stays?
-# PASS -> the stand-in is removed, the file stays deleted. FAIL -> text-guard has already put the
-# original back, so the deletion is undone, and the whole run rolls back with it.
+# PASS removes only the unchanged owned stand-in; FAIL attempts checkpoint-verified recovery.
 cmd_verify_deleted() {
   local layer=project run_dir="" spec="" root rel rc=0 s
   local -a survivors=() targets=()
@@ -351,18 +361,26 @@ cmd_verify_deleted() {
 
   mkdir -p "$(dirname "$root/$rel")"
   cat "${survivors[@]}" > "$root/$rel"
-  CLAUDE_PROJECT_DIR="$root" bash "$TEXT_GUARD" verify --run-dir "$run_dir" "$root/$rel" || rc=$?
+  local standin_hash
+  standin_hash=$(sha "$root/$rel")
+  CLAUDE_PROJECT_DIR="$root" bash "$TEXT_GUARD" checkpoint --run-dir "$run_dir" "$root/$rel"
+  CLAUDE_PROJECT_DIR="$root" bash "$TEXT_GUARD" verify --no-restore --run-dir "$run_dir" "$root/$rel" || rc=$?
   if [ "$rc" -eq 0 ]; then
+    [ "$(sha "$root/$rel")" = "$standin_hash" ] || die "❌ stand-in changed concurrently: $rel"
     rm -f "$root/$rel"
     printf 'MERGED_VERIFIED: %s -> %s\n' "$rel" "${survivors[*]}"
     return 0
   fi
   if [ "$rc" -eq 1 ]; then
-    printf 'MERGE_UNPROVEN: %s - the survivors do not carry every critical token; %s restored\n' "$rel" "$rel" >&2
+    printf 'MERGE_UNPROVEN: %s - survivors do not carry every critical token\n' "$rel" >&2
     printf 'ROLLBACK: whole run (merge unproven) %s\n' "$run_dir"
-    restore_run_dir "$run_dir" ROLLBACK_VERIFIED || true
-    printf 'RUN: FAILED - every file of %s is back at its pre-edit bytes\n' "$run_dir"
+    if restore_run_dir "$run_dir" ROLLBACK_VERIFIED; then
+      printf 'RUN: FAILED - every file of %s is back at its pre-edit bytes\n' "$run_dir"
+    else
+      printf 'RUN: FAILED - recovery incomplete; inspect preserved current files in %s\n' "$run_dir" >&2
+    fi
   else
+    [ "$(sha "$root/$rel")" = "$standin_hash" ] || die "❌ stand-in changed concurrently: $rel"
     rm -f "$root/$rel"
   fi
   exit "$rc"
@@ -450,17 +468,32 @@ cmd_state() {
   [ -f "${after:-}" ] || die "❌ state needs --after <context-scan JSON>"
   [ -z "$ledger" ] || [ -f "$ledger" ] || die "❌ no such ledger file: $ledger"
   command -v python3 >/dev/null 2>&1 || die "❌ state needs python3 (JSON assembly)"
-  mkdir -p "$(dirname "$out")"
   python3 - "$before" "$after" "$mode" "$flags" "$ledger" "$out" <<'PY'
-import json, sys, datetime
+import json, sys, datetime, os
 before, after, mode, flags, ledger, out = sys.argv[1:7]
 
 def tokens(path):
-    d = json.load(open(path))
-    agg = {}
-    for f in d["files"]:                      # one path can appear per tier/kind - sum them
-        agg[f["path"]] = agg.get(f["path"], 0) + f["tokens"]
-    return agg, d["totals"]["grand"]["tokens"]
+    try:
+        with open(path) as source:
+            d = json.load(source)
+        if not isinstance(d, dict) or not isinstance(d.get("scan_issues"), list) or d["scan_issues"]:
+            raise ValueError("incomplete scanner inventory: scan_issues must be present and empty")
+        if not isinstance(d.get("files"), list):
+            raise ValueError("invalid scanner file inventory")
+        agg = {}
+        for f in d["files"]:                 # one path can appear per tier/kind - sum them
+            if not isinstance(f, dict) or not isinstance(f.get("path"), str) or not f["path"]:
+                raise ValueError("invalid scanner file path")
+            if type(f.get("tokens")) is not int or f["tokens"] < 0:
+                raise ValueError("invalid scanner token count")
+            agg[f["path"]] = agg.get(f["path"], 0) + f["tokens"]
+        total = d["totals"]["grand"]["tokens"]
+        if type(total) is not int or total < 0 or total != sum(agg.values()):
+            raise ValueError("scanner token totals do not match its inventory")
+        return agg, total
+    except (OSError, ValueError, TypeError, KeyError) as error:
+        print(f"State rejected: {path}: {error}", file=sys.stderr)
+        sys.exit(2)
 
 b, bt = tokens(before)
 a, at = tokens(after)
@@ -474,7 +507,7 @@ if ledger:
             continue
         parts = (line.split("\t") + ["", "", ""])[:4]
         drops.append(dict(zip(("path", "lines", "survivor", "reason"), parts)))
-json.dump({
+state = {
     "schema": 1,
     "timestamp": datetime.datetime.now().astimezone().replace(microsecond=0).isoformat(),
     "mode": mode,
@@ -483,8 +516,11 @@ json.dump({
     "achieved_ratio_pct": round((bt - at) * 100.0 / bt, 2) if bt else 0.0,
     "files": files,
     "drops": drops,
-}, open(out, "w"), indent=2, ensure_ascii=False)
-open(out, "a").write("\n")
+}
+payload = json.dumps(state, indent=2, ensure_ascii=False) + "\n"
+os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
+with open(out, "w") as destination:
+    destination.write(payload)
 PY
   validate_json "$out"
   printf 'STATE: written %s\n' "$out"

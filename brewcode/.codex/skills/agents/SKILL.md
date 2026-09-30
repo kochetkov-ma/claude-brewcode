@@ -5,226 +5,82 @@ description: "Creates, improves, syncs Codex subagents. Triggers: create agent, 
 
 # Codex agent authoring
 
-Create or improve project agents as TOML files under `.codex/agents/`. Inspect existing agents first, keep each role narrow, and use only supported keys such as `name`, `description`, and `developer_instructions`. Validate every result with Python `tomllib`. Do not create Markdown agent definitions or edit installed plugin caches.
-
-## Complete native workflow
-
-Follow every phase below. When a phase delegates work, use Codex collaboration with only `task_name` and `message`; treat each "Codex delegation brief" block as role and message content, not executable syntax. Use `request_user_input` for the documented user gates. Resolve `<skill-directory>`, `<plugin-root>`, `<project-root>`, and `<arguments>` before running commands.
-
-
-# agents Skill
-
-> **Agent Management:** create, improve, review, and report on Codex agents from one free-form prompt.
-
-<instructions>
+Create, improve, review, sync, list or report on standalone Codex agent TOMLs. Read [schema](references/agent-frontmatter-fields.md), [template](references/agent-template.md), [discovery/tools](references/agent-scope-and-tools.md) and [context](references/agent-context-and-execution.md) before authoring. Use [sync](references/agent-sync.md) for current-code reconciliation. These native references are authoritative for this workflow; do not translate another client's fields or runtime claims.
 
 ## Prompt contract
 
-Position 1 of `<arguments>` is a **free-form prompt** (RU/EN) — modes and flags are optional and may
-follow in any order. Nobody types keys: resolve mode + scope FROM the prompt.
-
-1. Strip flags. An explicit mode token anywhere wins outright, no scoring.
-2. Else score modes by distinct whole-word keyword hits (table below). Highest unique score wins.
-   Tie with a destructive mode -> `request_user_input`; tie with `status` -> `status`;
-   tie of two mutating modes -> the keyword appearing first; all zero -> `status`.
-3. Empty arguments -> `status`; ask ONE scoping `request_user_input` only when the answer
-   changes what gets written. A read-only run asks nothing.
-4. Outcome-changing ambiguity -> ONE `request_user_input` (max 4 questions) BEFORE any work.
-5. Prose that is not a mode/id/path is still input: extract the id, path or target from it.
-
-Then print this block ONCE, before the first action:
-
-```
-PLAN — brewcode:agents
-INPUT:  <arguments verbatim, or "(empty)">
-MODE:   <resolved> — <explicit | matched keyword: X | default>
-SCOPE:  <resolved paths / target / level / flags>
-DO:     <2-5 imperative bullets>
-RESULT: <what the user ends up holding>
-```
-
-Labels are literal; values follow the conversation language.
-
-## Constants
-
-| Const | Value |
-|-------|-------|
-| ARTIFACT | `agents` |
-| SPECIALIST | `brewcode:agent-creator` |
-| LIST_CMD | Glob `*.md` over `.codex/agents/`, `~/.codex/agents/`, `<plugin-root>/agents/` (shipped, READ-ONLY), and `brewcode/agents/` ONLY when `test -d brewcode/.codex-plugin` (plugin workspace) |
-| SYNC_REF | `<skill-directory>/../skills/references/mode-sync.md` (shared with `$brewcode:skills`) |
-
-## Step 1 — Input gate
-
-Treat the **entire** user input (`<arguments>`) as ONE free-form natural-language prompt — no keyword grammar, no argument parser (`argument-hint` is only a loose example).
-
-- prompt non-empty -> go to **Step 2**
-- prompt empty / whitespace-only -> go to **Step 3**
-
-## Step 2 — Auto-mode selection
-
-Classify the prompt + recent conversation context into exactly ONE mode:
+Read the complete RU/EN prompt and prior answers. Explicit standalone mode tokens win; otherwise score distinct whole-word keywords below. Highest score wins; a tie involving status selects status, unresolved mutating choices return one bundled material decision to main. Empty/unknown -> status. A bare existing TOML name/path -> improve. Extract targets from prose, never the first word as a positional path. Plural/all/multiple targets -> one bounded owner per target in parallel.
 
 | Mode | EN keywords | RU keywords | Mutates? |
-|------|-------------|-------------|----------|
-| `status` | *(empty)*, `status`, `show me`, `health`, `overview` | `статус`, `что есть`, `состояние` | no |
-| `list` | `list` | `список`, `перечисли` | no |
-| `create` | `create`, `new`, `scaffold`, `add` | `создай`, `добавь` | yes |
-| `improve` | `improve`, `refactor`, `fix` | `улучши`, `почини` | yes |
-| `review` | `review`, `validate` | `ревью`, `проверь корректность` | no |
-| `sync` | `sync`, `memory sync` | `синк`, `меморисинк`, `актуализируй`, `обнови знания`, `приведи в соответствие с кодом` | yes |
+|---|---|---|---|
+| `status` | status, overview, health, show me | статус, состояние, что есть | no |
+| `list` | list | список, перечисли | no |
+| `create` | create, new, scaffold, add | создай, добавь | yes |
+| `improve` | improve, refactor, fix | улучши, почини | yes |
+| `review` | review, validate | ревью, проверь корректность | no |
+| `sync` | sync, memory sync | синк, меморисинк, актуализируй, обнови знания | yes |
 
-`improve` also matches a bare existing agent name/path with no keyword at all — that is rule 3.5's
-prose-extraction case, not a keyword hit.
+After resolving mode and targets, print once before work:
 
-**Batch flag:** plural form, "все" / "all", or multiple names/paths -> fan-out (one specialist spawn per item).
-
-Then **print the PLAN block (MANDATORY, before any work)** per the Prompt contract above:
-
-```
+```text
 PLAN — brewcode:agents
-INPUT:  <prompt verbatim, or "(empty)">
-MODE:   <mode> — matched keyword: <evidence quoted from the prompt> | default
-SCOPE:  <targets/paths resolved this step>
-DO:     <2-5 imperative bullets for what Step 4 is about to run>
-RESULT: <what the user ends up holding>
+INPUT:  <verbatim prompt or "(empty)">
+MODE:   <canonical mode and explicit/keyword/default reason>
+SCOPE:  <exact paths and requested scope>
+DO:     <2-5 imperative steps>
+RESULT: <requested artifact or report>
 ```
 
-Proceed to **Step 4**.
+Plan values are English; INPUT remains verbatim. An explicitly requested menu uses one available main-chat input request with status, status-all, create, improve, review, sync, list and cancel choices. Cancel stops. Reuse resolved answers/authorization; bundle only missing outcome-changing decisions. Read-only modes ask nothing unless that menu was requested.
 
-## Step 3 — No-prompt menu (single request_user_input, scoped + cross-link)
+## Scope and discovery
 
-Ask ONE request_user_input. Question: `What do you want to do with agents?`
-Options (in this order):
+Resolve `<project-root>` and `<skill-directory>` first. Inventory actual `*.toml` files in `<project-root>/.codex/agents/` and the active personal agents directory (`$CODEX_HOME/agents/` when configured, otherwise `~/.codex/agents/`). Include shipped native TOMLs from `<plugin-root>/agents/` only when that root is known; those installed definitions are read-only. In this authoring repository, canonical `brewcode/.codex/agents/` and `brewtools/.codex/agents/` are generated outputs: modify their generator, not emitted files.
 
-- `Status (agents)` — **(Recommended)** rich status of this artifact
-- `Status (all: agents+rules+skills)` — cross-link: run the collector for all three
-- `Create new agents`
-- `Improve existing agents`
-- `Review agents`
-- `Sync agents (memory sync)` — re-verify all knowledge vs code, shrink not grow
-- `List (plain)`
-- `Nothing / cancel`
+Record the file's `name` as identity, resolved physical path, description, model/effort overrides and parse verdict. Report collisions against the live available role catalog; do not invent walk-up, managed, CLI or additional-directory agent discovery. Ordinary `.md` files are documentation, not agent definitions. Team `.toml.disabled` files are parked by project tooling and are not active TOML roles.
 
-After the choice:
-- `Nothing / cancel` -> stop.
-- `create` or `improve` -> ask ONE follow-up request_user_input for the target/description
-  plus the artifact-specific params (see "Artifact-specific params" below).
-- Then print the PLAN block using the Step 2 format (`MODE` reason = `default` or `explicit`
-  depending on the menu choice) and proceed to **Step 4**.
+For status-all, inspect present native skills and the AGENTS.md rule index read-only; do not depend on an unshipped sibling skill or claim rules auto-load. Inspect only requested static instruction/config surfaces, never credentials or runtime state.
 
-## Delegation (applies to EVERY sub-agent task spawn in this skill)
+## Delegation and ownership
 
-A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct
-it, and it usually drifts off-target. One subagent = ONE bounded unit — one deliverable
-(here: ONE agent definition), ~<=5 files, ~<=10 steps. Bigger MUST be split into N tasks, all
-spawned in ONE message.
+Main owns all spawns, review, integration and user decisions. A delegate owns one deliverable, normally one agent definition and at most five related files / ten steps; split larger units among main-owned parallel peers. Delegates never re-delegate or accept their own output. Every brief carries GOAL, ROLE, SCOPE, CONTEXT, CONSUMER and DONE, identifies parallel owners and forbids reverting their work.
 
-Every spawn prompt MUST carry:
+Use available native collaboration tools and the current session's argument schema. Prefer the available agent-creator role; if absent, carry its native instructions to an available project-policy-compliant role and report that fallback. A role label in message text does not instantiate a custom agent type. Do not invent tool calls, force unavailable fields or override fixed-role model settings.
 
-| Field | Content |
-|-------|---------|
-| GOAL | the overall task and why it exists — the point beyond the file edit |
-| ROLE | what this agent owns; what it must NOT touch |
-| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
-| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what THIS agent needs |
-| CONSUMER | who or what uses the result next, and the shape it must fit |
-| DONE | acceptance criteria + the exact report shape you want back |
+## Modes
 
-A bare one-line task is never enough.
+### `status` / `list`
 
-## Step 4 — Dispatch
+Delegate substantial collection to an available explorer. Parse TOMLs, report project/personal/shipped counts, identities, paths, optional model/effort, active/parked status, same-name collisions, description overlap, missing required strings, unsupported fields and broken referenced paths. For status-all add scoped skill metadata/rule-index health. Do not use missing YAML frontmatter, README or shell-tool allowlists as native agent health failures. List prints the plain inventory and stops; status prints a compact structured report and next useful action.
 
-- `status` -> go to **Step 5**.
-- `status (all)` -> go to **Step 5**, running the collector for agents + rules + skills together.
-- `list` -> run `LIST_CMD`, print the plain inventory it produces, then STOP (no status assembly).
-- `create` -> gather minimal params (Step 3 / artifact-specific), spawn `SPECIALIST` via sub-agent task.
-  Batch -> spawn one `SPECIALIST` per item, ALL in ONE message (parallel).
-- `improve` -> resolve target(s), spawn `SPECIALIST` via sub-agent task per target (parallel for batch).
-- `review` -> spawn the project's reviewer agent from `.codex/agents/`, else `general-purpose`
-  (two-phase: review -> double-check findings -> report).
-- `sync` -> read `SYNC_REF` and follow it end to end (S1 scope -> S6 report).
-  It replaces Steps 5-6 for this mode.
-- **After `create` / `improve` returns** -> run that same `SYNC_REF` SCOPED TO THE WRITTEN AGENT FILE ONLY:
-  S3 ground truth -> S5 verdicts -> S6 row folded into the Step 6 output. Never a full-roster sweep, never a
-  second `SPECIALIST` spawn — **YOU, the coordinator, apply every S5 verdict yourself with targeted `Edit` calls**
-  (S4's fan-out is the only step that edits, and it is skipped here, so without this nothing would be corrected).
-  Non-growth holds — the new file ends `<=` where the specialist left it.
-  Nothing to correct -> say `sync: no drift` in one line.
+### `create` / `improve`
 
-## Step 5 — Real status (NOT a flat list)
+Infer name, description, writable project/personal target and model policy from existing instructions and user intent. Omit model/effort to inherit the resolved runtime values; never emit `model = "inherit"`. Preserve existing explicit routing, including fixed-role settings. Creating or changing an AGENTS.md agents table row is a separate requested surface; preview the exact row and apply only when authorized. Installed/generated-only targets are read-only here.
 
-Delegate collection to ONE Explore/Bash subagent, then assemble a rich status (never a bare list):
+Read representative existing roles and applicable AGENTS.md/rules before writing. Use the native template, required TOML strings and only supported optional config keys. Match the current domain and requested scale; before writing a class, module, or test, find the closest well-built existing one in this repository and take its principles, in addition to conventions, rules, and documentation, never instead of them. Preserve independent team profile contracts: teams-setup owns its six headings, budgets/shared file and intent-guard writer; generic authoring does not replace them.
 
-- **Inventory by scope:** shipped plugin (`<plugin-root>/agents/`, read-only) / plugin source
-  (`brewcode/agents/`, only in this workspace) / project (`.codex/`) / global (`~/.codex/`) — counts + names + load path.
-- **State:** enabled/disabled (toggle markers `_SKILL.md` / `_<name>.md`), model.
-- **Overlaps / conflicts:** same-name across scopes (shadowing), duplicate triggers/descriptions, naming collisions.
-- **Health flags:** missing README/frontmatter; agents missing `Bash` in `tools:` (macOS search rule);
-  skills with weak description triggers; rules duplicated in AGENTS.md.
+Use this valid main-session brief after substituting already resolved values:
 
-For the `Status (all)` menu option: run the SAME collector for agents + rules + skills together.
-
-## Step 6 — Final formatted output (MANDATORY for every run except `list`)
-
-```
-# agents [<mode>]
-## Detection
-| Input  | <prompt or "(none -> menu)"> |
-| Mode   | <mode> |
-| Reason | <why this mode> |
-| Targets| <names/paths> |
-## Result
-(create/improve/review: each output path + specialist agent + scope/model)
-## Status
-(status mode: full table from Step 5; else short "what changed" for touched artifacts)
-## Next Steps
-(recommendations; ALWAYS remind to run /docs for any created/changed artifact)
+```json
+{"task_name":"create_agent_name","message":"Assigned native role: agent-creator. Main supplies the matching available role configuration or reports its absence. You are not alone; preserve concurrent edits. Never delegate children.\nGOAL: deliver one bounded Codex role for the requested project.\nROLE: own exactly {scope}/agents/{name}.toml; no other agent, skill, application or AGENTS.md changes.\nSCOPE: create or improve {scope}/agents/{name}.toml from {skill_directory}/references/agent-template.md; emit TOML, not YAML or Markdown.\nCONTEXT: name={name}, description={description}, optional model/effort policy={routing}; these decisions are resolved, do not re-ask. Existing roles={existing}; parallel owners={owners}.\nCONSUMER: main reviews the file and requested agents-table row.\nDONE: file parses with Python tomllib; nonempty name, description and developer_instructions; supported optional config only; preserved routing, scope and references. Return verdict | path | configured model/effort or omitted/inherited | description | validation evidence. Return missing decisions to main."}
 ```
 
-For `status` mode the report **is** the Step 5 status table.
+Main passes these task_name/message fields to the actual `spawn_agent` tool, with an available role selector only when supported. The brief targets one `.toml` file; matching the filename to name is a convention, not a substituted schema.
 
-## Edge cases
+Main reviews each result, runs its parse/schema/reference checks, applies only verified scoped corrections, and runs the native sync reference against that written file. Do not trigger another creator pass or a whole-roster sweep. Record necessary current-contract changes separately from wording compression; do not delete constraints to meet a size target.
 
-| Situation | Resolution |
-|-----------|------------|
-| Prose that isn't a mode/id/path (e.g. "fix the memory sync agent") | extract the id/path/target from the prose — never treat the first word as a positional id |
-| PLAN block missing, or printed after work started | defect — file it, do not ship |
+### `review`
 
-## Artifact-specific params (create / improve only)
+Use an independent available reviewer: inspect scope, TOML fields, triggers, instructions, current references, model policy and actual consumer paths. Double-check findings against source/runtime evidence, then return confirmed issues with file:line evidence. Review does not implement.
 
-For `create`: ONE request_user_input batch — (Q1) scope: Project `.codex/agents/` /
-Global `~/.codex/agents/` / Plugin `brewcode/agents/` — offer Plugin ONLY when
-`test -d brewcode/.codex-plugin` succeeds; elsewhere it writes a junk `<cwd>/brewcode/agents/<name>.md`,
-so drop the option. Never write under `<plugin-root>` — the installed plugin is read-only;
-(Q2) model: balanced model (Recommended) /
-high-reasoning model / fast model / inherit (omit model: field); (Q3) update AGENTS.md agents table? yes/no.
-Frontmatter description budget: <= 100 chars, single line, role + 2-3 triggers, EN only.
-Spawn SPECIALIST (brewcode:agent-creator) using the Delegation shape, e.g.:
+### `sync`
 
-```
-Codex delegation brief (task_role="brewcode:agent-creator", message="
-GOAL: user is building an agent roster for this project; this task delivers ONE agent
-      definition that fits alongside the existing ones.
-ROLE: you own exactly one file — {SCOPE_PATH}/{name}.md. Do NOT touch other agents,
-      AGENTS.md, skills, or project source.
-SCOPE: create {SCOPE_PATH}/{name}.md. Out of bounds: every other path.
-CONTEXT: description='{DESC}', scope={SCOPE_PATH} and reasoning_tier={MODEL} are already decided in
-      Step 3 — do NOT re-ask. Agents that already exist and must not be duplicated:
-      {EXISTING_NAMES}. In batch mode {N} sibling agent-creators run in parallel, one file each.
-CONSUMER: this skill's Step 6 report, and the AGENTS.md agents table row appended right after
-      you finish — the description line must drop into that row verbatim.
-DONE: file exists, valid frontmatter, description <= 100 chars single line with 2-3 triggers.
-      Report: path | model | description line | 1-line rationale.
-")
-```
+Follow references/agent-sync.md: scope -> code/source evidence -> per-file fact ledger -> targeted current corrections -> independent verification -> compact report. Preserve unrelated instructions and local routing; no persistent personal memory update is implied.
 
-After creation, if user approved, update the AGENTS.md agents table via Edit (add/replace row).
-For `improve`: resolve agent by name/path across the writable scopes (project / global / plugin
-workspace). A name that matches only under `<plugin-root>/agents/` is read-only — report it and
-stop, do not copy or edit it. ONE request_user_input —
-(Q1) focus: triggers / system-prompt / both (Recommended) / full review; (Q2) update AGENTS.md? yes/no.
-Spawn SPECIALIST to improve, then optional AGENTS.md row update.
+## Final output
 
-</instructions>
+Except plain list, return canonical mode/reason, resolved targets, per-file verdict/path, configured or inherited model/effort, actual validation and unresolved decisions. Status uses a compact table; batch reports every owned result. Return large evidence via a project report path, not full agent bodies/logs. Public documentation changes follow the available native docs workflow only when applicable and authorized.
 
+## Native user gates
+
+Required approval: main presents a concrete, reviewable proposal in chat and waits for an actual user reply before dependent action. Existing authorization for the same scope remains valid; do not ask again. Optional clarification: use `request_user_input_async` only if exposed, or `request_user_input` only if available in the current runtime/mode, for optional choices and never approval. Otherwise ask in main chat. Delegated agents return unresolved questions to main. Silence, elapsed time and tool errors are not approval.

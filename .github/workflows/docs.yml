@@ -34,20 +34,27 @@ jobs:
       - name: Compute image tags
         id: meta
         run: |
+          set -euo pipefail
+          SHA=$(git rev-parse HEAD)
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ && "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ && "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]] || { echo "::error::Build provenance validation failed"; exit 1; }
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             VERSION="${GITHUB_REF_NAME#v}"
-            echo "tags=${IMAGE}:${VERSION},${IMAGE}:latest" >> "$GITHUB_OUTPUT"
-            echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           else
-            BRANCH="${GITHUB_REF_NAME}"
-            BRANCH_SAFE=$(echo "$BRANCH" | sed 's/[^a-zA-Z0-9._-]/-/g')
+            BRANCH_SAFE="${GITHUB_REF_NAME//[^a-zA-Z0-9._-]/-}"
             DESC=$(git describe --tags --long --match "v*.*.*" 2>/dev/null || echo "0.0.0-0-g$(git rev-parse --short HEAD)")
-            BASE_VERSION=$(echo "$DESC" | sed 's/^v//' | sed 's/-.*//')
-            COMMITS_AFTER=$(echo "$DESC" | sed 's/.*-\([0-9]*\)-g.*/\1/')
-            TAG="${BASE_VERSION}-${BRANCH_SAFE}-${COMMITS_AFTER}"
-            echo "tags=${IMAGE}:${TAG}" >> "$GITHUB_OUTPUT"
-            echo "version=${TAG}" >> "$GITHUB_OUTPUT"
+            BASE_VERSION="${DESC#v}"
+            BASE_VERSION="${BASE_VERSION%%-*}"
+            COMMITS_AFTER="${DESC%-g*}"
+            COMMITS_AFTER="${COMMITS_AFTER##*-}"
+            [[ "$COMMITS_AFTER" =~ ^[0-9]+$ ]] || { echo "::error::Invalid git describe distance"; exit 1; }
+            VERSION="${BASE_VERSION}-${BRANCH_SAFE}-${COMMITS_AFTER}"
           fi
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([._-][A-Za-z0-9._-]+)?$ && ${#VERSION} -le 128 ]] || { echo "::error::Build provenance validation failed"; exit 1; }
+          printf 'tags=%s:%s,%s:sha-%s-%s-%s\nversion=%s\nsha=%s\n' \
+            "$IMAGE" "$VERSION" "$IMAGE" "$SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$VERSION" "$SHA" >> "$GITHUB_OUTPUT"
+          mkdir -p web/docs/public
+          printf '{"version":"%s","sha":"%s","buildRunId":"%s"}\n' \
+            "$VERSION" "$SHA" "$GITHUB_RUN_ID" > web/docs/public/build-info.json
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -67,17 +74,28 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           build-args: VERSION=${{ steps.meta.outputs.version }}
+          labels: |
+            org.opencontainers.image.version=${{ steps.meta.outputs.version }}
+            org.opencontainers.image.revision=${{ steps.meta.outputs.sha }}
+            io.brewcode.docs.build-run-id=${{ github.run_id }}
+            io.brewcode.docs.build-attempt=${{ github.run_attempt }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Summary
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+          BUILD_SHA: ${{ steps.meta.outputs.sha }}
         run: |
-          echo "### Docs image pushed" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Version:** \`${{ steps.meta.outputs.version }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Tags:**" >> "$GITHUB_STEP_SUMMARY"
-          IFS=',' read -ra TAGS <<< "${{ steps.meta.outputs.tags }}"
-          for tag in "${TAGS[@]}"; do
-            echo "- \`${tag}\`" >> "$GITHUB_STEP_SUMMARY"
-          done
+          {
+            echo "### Docs image pushed"
+            echo ""
+            echo "**Version:** \`${VERSION}\` / **SHA:** \`${BUILD_SHA}\` / **Build run:** $GITHUB_RUN_ID"
+            echo ""
+            echo "**Tags:**"
+            IFS=',' read -ra TAG_LIST <<< "$TAGS"
+            for tag in "${TAG_LIST[@]}"; do
+              echo "- \`${tag}\`"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -15,23 +15,23 @@ Claude Code uses these env vars to connect to alternative providers:
 
 ## Unified Alias Template
 
-ALL provider aliases MUST follow this exact pattern — no exceptions:
+All provider aliases share this auth/model core; append the provider-specific compatibility flags from its reference before `claude`. Those flags are required exceptions to a byte-identical alias body, not exceptions to the auth/model rules.
 
 ```bash
-alias claude<name>='export ANTHROPIC_BASE_URL=<endpoint>; export ANTHROPIC_AUTH_TOKEN=$<KEY_VAR>; export ANTHROPIC_API_KEY=""; export ANTHROPIC_DEFAULT_OPUS_MODEL=<model>; export ANTHROPIC_DEFAULT_SONNET_MODEL=<model>; export ANTHROPIC_DEFAULT_HAIKU_MODEL=<model>; claude'
+alias claude<name>='export ANTHROPIC_BASE_URL=<endpoint>; export ANTHROPIC_AUTH_TOKEN="$<KEY_VAR>"; export ANTHROPIC_API_KEY=""; export ANTHROPIC_DEFAULT_OPUS_MODEL=<model>; export ANTHROPIC_DEFAULT_SONNET_MODEL=<model>; export ANTHROPIC_DEFAULT_HAIKU_MODEL=<model>; <provider flags if required>; claude'
 ```
 
 | Part | Value | Why |
 |------|-------|-----|
-| `ANTHROPIC_AUTH_TOKEN` | `$KEY_VAR` | Bearer auth — works with ALL providers |
-| `ANTHROPIC_API_KEY` | `""` (empty string) | Prevents OAuth fallback. NOT `unset` — empty string is deterministic |
+| `ANTHROPIC_AUTH_TOKEN` | `"$KEY_VAR"` | Repository Bearer-auth convention; preserve the key as one value |
+| `ANTHROPIC_API_KEY` | `""` | Explicit empty override; do not substitute `unset` |
 | Model vars | Same model for all 3 | One model per provider, no role splitting |
+
+Raw model ids/keys are data, never interpolated into shell/Python source. Use the main skill's safe input/write flow; these templates document controlled values, not a user-text substitution mechanism. Preserve configured models on reference refresh.
 
 ## Returning to Anthropic Subscription
 
-No special alias needed. Env vars set by provider aliases only persist in the current shell session. To return to Anthropic:
-
-**Open a new terminal and run `claude` normally** — it will use your Max subscription via OAuth.
+Provider alias exports persist in that shell session. Open a new terminal and run `claude` normally to use its ordinary Anthropic configuration/login; do not infer a subscription tier or billing state.
 
 ## .zshrc Structure
 
@@ -48,16 +48,13 @@ export DASHSCOPE_API_KEY="..."
 export MINIMAX_API_KEY="..."
 export OPENROUTER_API_KEY="sk-or-v1-..."
 
-# Provider Aliases (unified: AUTH_TOKEN + API_KEY="" + 3 model vars + claude)
-alias claudeds='export ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic; export ANTHROPIC_AUTH_TOKEN=$DEEPSEEK_API_KEY; export ANTHROPIC_API_KEY=""; export ANTHROPIC_DEFAULT_OPUS_MODEL=deepseek-v4-pro; export ANTHROPIC_DEFAULT_SONNET_MODEL=deepseek-v4-pro; export ANTHROPIC_DEFAULT_HAIKU_MODEL=deepseek-v4-pro; claude'
-alias claudeglm='export ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic; export ANTHROPIC_AUTH_TOKEN=$ZAI_API_KEY; export ANTHROPIC_API_KEY=""; export ANTHROPIC_DEFAULT_OPUS_MODEL=glm-5.2; export ANTHROPIC_DEFAULT_SONNET_MODEL=glm-5.2; export ANTHROPIC_DEFAULT_HAIKU_MODEL=glm-5.2; claude'
-alias claudeqwen='export ANTHROPIC_BASE_URL=https://dashscope-intl.aliyuncs.com/apps/anthropic; export ANTHROPIC_AUTH_TOKEN=$DASHSCOPE_API_KEY; export ANTHROPIC_API_KEY=""; export ANTHROPIC_DEFAULT_OPUS_MODEL="qwen3.7-plus[1m]"; export ANTHROPIC_DEFAULT_SONNET_MODEL="qwen3.7-plus[1m]"; export ANTHROPIC_DEFAULT_HAIKU_MODEL="qwen3.7-plus[1m]"; claude'
-# ... etc (same pattern for all providers)
+# Provider Aliases (auth/model core + provider compatibility flags)
+alias claudeds='export ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic; export ANTHROPIC_AUTH_TOKEN="$DEEPSEEK_API_KEY"; export ANTHROPIC_API_KEY=""; export ANTHROPIC_DEFAULT_OPUS_MODEL=deepseek-v4-pro; export ANTHROPIC_DEFAULT_SONNET_MODEL=deepseek-v4-pro; export ANTHROPIC_DEFAULT_HAIKU_MODEL=deepseek-v4-pro; claude'
+alias claudeglm='export ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic; export ANTHROPIC_AUTH_TOKEN="$ZAI_API_KEY"; export ANTHROPIC_API_KEY=""; export ANTHROPIC_DEFAULT_OPUS_MODEL=glm-5.2; export ANTHROPIC_DEFAULT_SONNET_MODEL=glm-5.2; export ANTHROPIC_DEFAULT_HAIKU_MODEL=glm-5.2; export CLAUDE_ENABLE_BYTE_WATCHDOG=0; export CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1; claude'
+alias claudeqwen='export ANTHROPIC_BASE_URL=https://dashscope-intl.aliyuncs.com/apps/anthropic; export ANTHROPIC_AUTH_TOKEN="$DASHSCOPE_API_KEY"; export ANTHROPIC_API_KEY=""; export ANTHROPIC_DEFAULT_OPUS_MODEL="qwen3.7-plus[1m]"; export ANTHROPIC_DEFAULT_SONNET_MODEL="qwen3.7-plus[1m]"; export ANTHROPIC_DEFAULT_HAIKU_MODEL="qwen3.7-plus[1m]"; export CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1; claude'
+# Remaining providers use their own reference; DashScope example retains the legacy endpoint.
 
 # ========== End Claude Code Provider Aliases ==========
 ```
 
-## Usage Pattern
-1. Run provider alias: `claudeglm` — sets env vars and launches Claude in one command
-2. When done, close the terminal
-3. Next time: run `claude` normally = Anthropic subscription, or run alias = provider
+Run a provider alias (e.g. `claudeglm`) to set its env and launch Claude. Close that terminal when done; next session, use ordinary `claude` or a provider alias.

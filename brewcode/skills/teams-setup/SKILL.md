@@ -7,13 +7,17 @@ argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge]
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion, Skill]
 model: opus
 ---
-<!-- brewcode-meta: version=6.2.0 content_version=6.2.0 generated_by=brewcode:teams-setup -->
+<!-- brewcode-meta: version=6.3.0 content_version=6.3.0 generated_by=brewcode:teams-setup -->
 
 <instructions>
 
 # Teams
 
 Manage dynamic teams of domain-specific agents with tracking framework.
+
+Main-session coordinator workflow. Ordinary delegated agents cannot spawn Agent: return
+team-creation/review requests and missing decisions to the main orchestrator. Workers own
+only assigned files, preserve concurrent changes, and never re-delegate or mutate Git.
 
 **Arguments:** `$ARGUMENTS`
 
@@ -60,7 +64,7 @@ DO:     <2-5 imperative bullets>
 RESULT: <what the user ends up holding>
 ```
 
-Labels are literal; values follow the conversation language. `status` still prints it — asks nothing.
+Labels are literal; authored plan values are English, INPUT verbatim. `status` prints it without questions.
 
 ---
 
@@ -169,12 +173,11 @@ trace target must be a non-symlink regular file.
 
 ---
 
-## Delegation (applies to EVERY Task spawn in this skill)
+## Delegation (applies to EVERY Agent spawn in this skill)
 
-A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct
-it, and it usually drifts off-target. One subagent = ONE bounded unit — one deliverable
-(here: ONE agent file), ~<=5 files, ~<=10 steps. Bigger MUST be split into N tasks, all spawned
-in ONE message. That is why agents are created one-per-spawn and reviews are fanned out.
+One subagent = ONE agent-file deliverable, ~<=5 files, ~<=10 steps. Split larger work into N
+tasks, spawned in ONE message; create one agent per spawn and fan out reviews. An hour-long
+agent drifts beyond observation/correction.
 
 Every spawn prompt MUST carry:
 
@@ -196,7 +199,7 @@ Every code/test brief MUST make the agent find the closest well-built counterpar
 
 ### C1: Project Analysis
 
-Spawn 3-5 Explore agents in ONE message via Task tool:
+Spawn 3-5 Explore agents in ONE message via Agent tool:
 
 | # | Focus |
 |---|-------|
@@ -206,7 +209,7 @@ Spawn 3-5 Explore agents in ONE message via Task tool:
 | 4 | CI/CD, testing, deploy, infrastructure |
 | 5 (optional) | Domain boundaries: business logic, API, data layer, UI |
 
-All via `Task(subagent_type="Explore")`. Consolidate into single analysis document.
+All via `Agent(subagent_type="Explore")`. Consolidate into single analysis document.
 
 **For the new team's default `required` policy, also harvest the intent-guard facts** (agent #1 and #4
 cover most of these; add explicit asks to their prompts).
@@ -328,7 +331,7 @@ strip shared rules from a profile until its target `team.md` passes the gate.
    reading. Any `TAKEN` name -> **do not spawn**; go back and rename it with the user first. Also refuse a
    name whose `.claude/agents/{name}.md.disabled` exists with no live file: that is another install's parked
    agent, and writing the live path recreates the dual-copy state both `enable` and `disable` refuse.
-2. For each agent, spawn `Task(subagent_type="brewcode:agent-creator")` — ONE agent file per spawn, never a whole team. Prompt carries GOAL (build this one `{TEAM_NAME}` roster member; siblings own other domains), ROLE (owns `.claude/agents/{name}.md` only), SCOPE (that file; other agents, `team.md`, project source out), CONTEXT (settled mission/domain/project analysis, selected model, 3-4 sibling names; no trigger/domain overlap; the gated shared contract already exists), CONSUMER (C4 adds the final roster row; C5 reviews; the roster routes work), DONE:
+2. For each agent, spawn `Agent(subagent_type="brewcode:agent-creator")` — ONE agent file per spawn, never a whole team. Prompt carries GOAL (build this one `{TEAM_NAME}` roster member; siblings own other domains), ROLE (owns `.claude/agents/{name}.md` only), SCOPE (that file; other agents, `team.md`, project source out), CONTEXT (settled mission/domain/project analysis, selected model, 3-4 sibling names; no trigger/domain overlap; the gated shared contract already exists), CONSUMER (C4 adds the final roster row; C5 reviews; the roster routes work), DONE:
    - `description` <=100 chars (optimal ~80), single-line role + 2-3 triggers, no `<example>`;
    - body <=3200 bytes and <=800 exact `tiktoken==0.13.0` `o200k_base` tokens, with exactly these ordered headings and no others: `## Mission`, `## Owned surfaces`, `## Exclusions`, `## Must-load references`, `## Unique invariants`, `## Unique verification`;
    - `## Must-load references` names `.claude/teams/{TEAM_NAME}/team.md` first;
@@ -357,7 +360,7 @@ strip shared rules from a profile until its target `team.md` passes the gate.
 3. Batch 3-4 agents in parallel per message
 4. After each batch, optimize without changing the six-heading contract:
    ```
-   Task(subagent_type="brewtools:text-optimizer", prompt="Light-optimize .claude/agents/{agent-name}.md; preserve its exact six ordered headings, team.md reference, names/numbers/negations/scope. Output metrics.")
+   Agent(subagent_type="brewtools:text-optimizer", prompt="Light-optimize .claude/agents/{agent-name}.md; preserve its exact six ordered headings, team.md reference, names/numbers/negations/scope. Output metrics.")
    ```
    > `brewtools` not installed (`text-optimizer` unavailable) — skip the pass, agents stay as written.
    > **Never run the optimizer on `.claude/agents/intent-guard.md`.** Its frontmatter `description`
@@ -414,11 +417,11 @@ grep -qF '<!-- generated_by: brewcode:superreview-setup' "$f" 2>/dev/null && ech
 step entirely: the existing file is already project-adapted and must not be rewritten or "refreshed".
 
 `emit-agent` seeds three BLOCKs with GENERIC marked defaults. Spawn ONE
-`Task(subagent_type="brewcode:agent-creator")`, alone (not batched with the domain agents), to replace
+`Agent(subagent_type="brewcode:agent-creator")`, alone (not batched with the domain agents), to replace
 them with project-specific content:
 
 ```
-Task(subagent_type="brewcode:agent-creator", prompt="
+Agent(subagent_type="brewcode:agent-creator", prompt="
   GOAL: team '{TEAM_NAME}' has its fixed review-only member intent-guard — the anti-drift check that
         compares what was ASKED against what was DELIVERED. The file is ALREADY WRITTEN by
         superreview-setup/scripts/generate.sh emit-agent with generic placeholder content in three BLOCKs.
@@ -541,7 +544,7 @@ C4. Either way a `required` team gets its `team.md` row. This phase is skipped f
 
 ### C5: Quorum Review
 
-Spawn 3 reviewer agents in ONE message via Task tool. `REVIEWER` (here and in C7/C9) = the
+Spawn 3 reviewer agents in ONE message via Agent tool. `REVIEWER` (here and in C7/C9) = the
 project's reviewer agent from `.claude/agents/`, else `general-purpose`.
 
 > **`intent-guard` is never the `REVIEWER`.** It is not a general reviewer: it only compares
@@ -582,7 +585,7 @@ FIX: suggested fix
 ### C7: Verification
 
 ```
-Task(subagent_type=REVIEWER, prompt="
+Agent(subagent_type=REVIEWER, prompt="
   Verify these findings against actual agent files. For each:
   1. Read the agent file
   2. Check if the issue actually exists
@@ -597,7 +600,7 @@ Filter out false positives. Final list = verified critical + important issues.
 
 For each verified critical/important issue:
 ```
-Task(subagent_type="brewcode:agent-creator", prompt="
+Agent(subagent_type="brewcode:agent-creator", prompt="
   GOAL: team '{TEAM_NAME}' was just generated and quorum-reviewed; this task clears ONE
         confirmed defect so the roster ships clean.
   ROLE: you own {agent_file} only. Do NOT touch other agent files, team.md, trace.jsonl,
@@ -629,7 +632,7 @@ Batch: up to 3 parallel per message. Minor issues skipped.
 ### C9: Re-verify
 
 ```
-Task(subagent_type=REVIEWER, prompt="
+Agent(subagent_type=REVIEWER, prompt="
   Re-verify these fixes. For each:
   1. Read the fixed agent file
   2. Check original issue is resolved
@@ -777,7 +780,7 @@ If "Let me choose" -> AskUserQuestion per agent. If "Show detailed" -> output fu
 
 | Agent Status | Action |
 |--------------|--------|
-| Needs tuning | `Task(subagent_type="brewcode:agent-creator")` update mode with tracking/issues/insights data |
+| Needs tuning | `Agent(subagent_type="brewcode:agent-creator")` update mode with tracking/issues/insights data |
 | Underperforming (update) | Same as tuning |
 | Underperforming (replace) | Delete agent file + create new via agent-creator |
 | Inactive (delete) | Remove `.claude/agents/{name}.md` + update team.md status to `removed` |

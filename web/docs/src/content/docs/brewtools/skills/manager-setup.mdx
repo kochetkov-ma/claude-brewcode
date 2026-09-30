@@ -1,6 +1,6 @@
 ---
 title: "Manager Setup"
-description: "Codewords ++m/++rr/++r/++a inject a Manager, review or architecture contract per turn; the opt-in HARD wall blocks main-session writes and forces delegation."
+description: "Codewords inject manager, review, architecture, or Plan-only anti-drift cron instructions; an optional project wall enforces delegation."
 order: 3124
 ---
 import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
@@ -10,11 +10,11 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 <Badge variant="default" text="sonnet" /> <Badge variant="accent" text="hook" /> <Badge variant="secondary" text="project only" /> <Badge variant="accent" text="user-invoked" />
 
 <Callout type="tip">
-**What is Manager mode?** You type a short codeword (`++m`, `++rr`, `++r`, or `++a`) anywhere in your message and Claude instantly activates a discipline contract -- just for that one message. `++m` makes Claude a pure orchestrator that delegates all hands-on work -- and when you are in plan mode it automatically adds a full task-graph planning pass. `++rr` and `++r` inject review discipline (anti-regression / two-phase double-check). `++a` injects an architecture-first directive -- design before code, reuse existing patterns, no over-engineering. No setup required. The codeword is stripped from your message; your actual text is preserved.
+Type a standalone codeword (`++m`, `++rr`, `++r`, or `++a`) in your message to add its discipline contract for that turn. Manager delegates hands-on work; review checks changes; architecture designs before implementation. In Plan mode, `+++` independently adds task anti-drift cron planning. The plugin hook supplies these instructions without installing the optional hard wall. It adds context while preserving your original prompt, including the codeword.
 </Callout>
 
 <Callout type="note" title="What's new in 6.2.0">
-All five injected blocks were tightened for token efficiency — see [Codewords](#codewords) for what each one now does and [Two rules that do the heavy lifting](#two-rules-that-do-the-heavy-lifting) for the delegation contract they share.
+The prompt contracts are compact, and `+++` now adds an anti-drift timer execution step only in verified Plan mode. See [Codewords](#codewords) and [Plan-only anti-drift cron](#plan-only-anti-drift-cron).
 </Callout>
 
 ## What actually happens
@@ -68,7 +68,7 @@ Minimize the critical path.
 refactor the payment module
 ```
 
-Your single line becomes: the full Manager contract (above) + your original request. The codeword `++m` is consumed; your text reaches Claude unchanged. Curious how injection works? See [Prompt Injection](/brewtools/prompt-injection/).
+The hook adds the selected Manager contract as context alongside your original prompt; it does not strip the codeword or rewrite your request. The block above illustrates the delegation contract. See [Prompt Injection](/brewtools/prompt-injection/) for the mechanism.
 
 ### Two rules that do the heavy lifting
 
@@ -97,12 +97,43 @@ Your single line becomes: the full Manager contract (above) + your original requ
 | `++rr` | Regression Review | Regression review with double-check -- after each significant phase, run a review focused on no regression + project standard + correctness; before the review proper the code goes through a simplification pass (over-engineered? simpler?); two-phase (review → double-check → fix); mandatory final cross-review at task end |
 | `++r` | Review | Review with double-check -- after each significant change, run a two-phase multi-agent review (review → double-check → fix), preceded by a simplification pass over the code; codeword-only, no ambient injection or wall state change |
 | `++a` | Architecture | Architecture-first pass before coding -- delegate a design that fits the existing project architecture, patterns and rules; robust, scalable, and simple (no over-engineering); find the closest well-built counterpart in the repo, take its principles, reuse its patterns/classes -- additive to conventions/rules/docs, never instead; keep clean seams. Independent group, combines with `++m`/`++rr`/`++r`; same block in normal and plan mode (in plan mode it is written into the plan). |
+| `+++` | Anti-drift cron plan | Only when the hook payload confirms Plan mode: include a task-specific session timer as a future execution step. Independent of `++m`; does not schedule during planning |
 
-Detection order: within the review group, `++rr` is tested before `++r` (longest-prefix first). `++m` is matched as a standalone token; in plan mode it auto-adds the plan addon. `++a` is its own independent group and can combine with either.
+Alphabetic codewords are case-insensitive standalone tokens. Within the review group, `++rr` wins over `++r`. `++m` is plan-aware, and `++a` is independent. A standalone `+++` is also independent; it requires the hook payload's `permission_mode` to equal `plan`. When combined, cron planning context comes first, followed by manager, architecture, and the selected review block. Embedded words and longer plus sequences do not activate these tokens.
 
 Put the codeword anywhere: start, middle, or end of your message. Everything else is passed through unchanged.
 
 The same find-the-closest-counterpart rule is also injected into generated agents by `/brewcode:teams-setup` and `/brewcode:agents`, gated to agents whose domain writes code, scripts, SQL, schemas, or infra -- see [Teams](/brewcode/skills/teams-setup/) and [Agents](/brewcode/skills/agents/).
+
+## Plan-only anti-drift cron
+
+While already in Plan mode, write:
+
+```text
++++ plan the API upgrade and its task tracking
+```
+
+The hook adds a read-only planning requirement without needing `++m` or an armed wall. It asks
+the plan to include one unique session timer per active top-level task through task-board,
+hourly by default or at your requested cadence. The future execution step records the complete
+task-specific prompt, timezone, schedule id, tick count, and stop rule in the task record.
+
+Each planned tick rereads the goal, methodology, anti-drift controls, and user corrections;
+collects concise active-agent evidence; reconciles statuses, dependencies, and remaining work;
+and rebuilds the task graph. It retains every unfinished node and the latest ten completed
+nodes, preserving older completion evidence outside the active graph. It checks progress against
+acceptance criteria, corrects drift within scope, and identifies the next authorized action.
+
+The report uses at most five short lines: local time/timezone, tick number and elapsed time;
+🟢 achievements; 🔵 remaining work and next action; 🔴 present problems/blockers/questions;
+⚪ drift verdict. Empty lines are omitted; detailed evidence stays in task records.
+
+Planning creates no timers and writes no task files. During execution, the main session's
+task-board flow owns timer creation and verifies stopping on completion or cancellation.
+If native scheduling tools are unavailable, it reports the gap instead of claiming a timer
+exists. Timers belong to the session; approximate scheduling does not guarantee exact receipt
+or continued delivery after the session ends. Outside verified Plan mode, `+++` adds no cron
+instruction, though other codewords or an armed wall can still add their own context.
 
 ---
 
@@ -170,6 +201,7 @@ This is what "delegate everything" means in practice -- the wall makes it physic
 |-----------|-------------|
 | Delegate one complex task as Manager, just this turn | `do X ++m` |
 | Start a full parallel plan with task breakdown (in plan mode) | `plan Y ++m` |
+| Include session anti-drift scheduling in an execution plan (in Plan mode) | `plan Y +++` |
 | Enforce the delegation rule for a whole project session | `/brewtools:manager-setup install` |
 | Run one task under the wall then auto-revert | `refactor payment service in hard mode` |
 | Run task as Manager without changing any wall state | `build release plan as manager` |
@@ -300,9 +332,15 @@ Conditions 3-6 were introduced in v5.0.0 to close an arbitrary-code-execution ho
 
 ### Version and ownership
 
-Every write to `state.json` stamps three keys: `version` (the plugin version that wrote it), `generated_by` (`"brewtools:manager-setup"`), and `last_updated`. `last_updated` is the LOCAL calendar date -- fixed from an earlier UTC stamp that dated the file wrong (yesterday's date) anywhere west of UTC after roughly 17:00 local time. `upgrade` now restamps this trio unconditionally, even when the guard file content did not change; before the fix `upgrade` left `state.json` untouched and `status` kept reporting `stale` forever after a plugin update.
+Writes to `state.json` stamp `version`, `content_version`, `generated_by`
+(`"brewtools:manager-setup"`) and `last_updated` when their sources resolve. Version records
+release provenance; content_version records the writer's content revision. The date uses the
+local calendar. Upgrade refreshes metadata while preserving `hard` and `level`.
 
-`hardmode-guard.mjs`, the copied guard, carries the same trio as a `// brewcode-meta: version=X.Y.Z generated_by=brewtools:manager-setup` comment on line 2. `/brewcode:setup-status` reads `state.json`'s `version` key first; only when that key is absent does it fall back to the guard's `brewcode-meta` line.
+The copied guard's line-2 stamp carries `version`, `content_version` and `generated_by`;
+byte-copied assets omit `last_updated`. Setup-status reads `state.json`'s `content_version`
+first, with release-version fallback for older metadata and the guard stamp as the documented
+companion fallback. Release provenance alone does not prove content drift.
 
 One documented exception: `pluginVersion()` in `manager-state.mjs` returns `null` -- and `writeState` then DELETES the `version` key from `state.json` and warns on stderr -- when the plugin version cannot be resolved at all, instead of aborting like every other stamped-artifact writer in this repo. `state.json` is the HARD wall's own off-switch (`set hard=false`); a writer that aborted here would leave the user locked behind an armed wall with no way out. It is the sole licensed exception to "abort when the version can't be resolved."
 
@@ -313,9 +351,9 @@ One documented exception: `pluginVersion()` in `manager-state.mjs` returns `null
 
 ### How the codeword injection works
 
-On every user message, `manager-prompt.mjs` scans the prompt text. It matches `++m` as a standalone token, and tests the review group longest-prefix first (`++rr` before `++r`) so `++rr` is never mis-matched as `++r`. If no codeword is present (and the wall is not armed), the hook exits immediately -- no file I/O, zero overhead.
+On every user message, `manager-prompt.mjs` scans for standalone codewords and checks the payload's permission mode. Review detection gives `++rr` precedence over `++r`; cron planning requires standalone `+++` and `permission_mode === 'plan'`. Without an active codeword, the hook checks wall state and injects the Manager contract only when armed.
 
-The hook resolves the prompt text for the detected mode (`full` or `planmode`) via three-level fallback:
+The hook resolves each selected block (`full`, `planmode`, `cron-plan`, `architect`, `review-regression`, or `review-double`) via three-level fallback:
 
 1. Project override: `.claude/brewtools/manager/prompts/<mode>.md`
 2. Global override: `~/.claude/manager/prompts/<mode>.md`
@@ -323,7 +361,10 @@ The hook resolves the prompt text for the detected mode (`full` or `planmode`) v
 
 Project and global overrides survive plugin updates because they live outside the plugin cache.
 
-When the HARD wall is armed, the Manager (full) block is also ambient-injected every turn with no codeword needed -- codewords and wall injection are independent channels. On top of that, brewtools' `session-start.mjs` reports the armed wall at session start and repeats the same two rules: delegate in bounded units (one deliverable, ~5 files), and brief every agent with goal + scope + what is already done + who consumes the result + acceptance.
+When no active codeword selects a block, an armed wall supplies the ambient Manager `full`
+block. An active codeword branch returns after its selected blocks; it does not also add the
+ambient wall block. Session-start separately reports the armed wall and reminds the session
+to delegate bounded units with complete briefs.
 
 ### Scope table
 
@@ -336,15 +377,10 @@ When the HARD wall is armed, the Manager (full) block is also ambient-injected e
 
 The wall flags (`hard`/`level`) are resolved project-only. Passing `--scope global` to `install`/`enable`/`disable`/`level` is silently ignored (wall has no global scope); the flag only applies to prompt-text override scope in `edit`/`purge`.
 
-### Prompt resolution chain
-
-| Priority | State source | Prompt override source |
-|----------|-------------|----------------------|
-| 1 (highest) | `.claude/brewtools/manager/state.json` | `.claude/brewtools/manager/prompts/<mode>.md` |
-| 2 | `~/.claude/manager/state.json` | `~/.claude/manager/prompts/<mode>.md` |
-| 3 (lowest) | Hardcoded `{"{"}enabled:true, mode:"full"{"}"}` | Plugin `references/<mode>.md` |
-
-Global paths (`~/.claude/*`) are protected from direct Write/Edit tool access (Claude Code v3.4.70+). The skill writes them via bundled Node helpers using atomic lock+tmp+rename.
+State defaults are `hard: false`, `level: "balanced"`, `mode: "full"`; there is no
+default `enabled: true` field. Wall enforcement reads project state only. The informational
+mode can fall back to global state, independently of the prompt-file order above. Bundled
+helpers manage state and override writes; current permissions still apply.
 
 ### Plan Mode addon (auto in plan mode)
 
@@ -363,7 +399,7 @@ When `++m` is used while the session is in plan mode (`permission_mode === 'plan
 |--------|---------------------------|--------|
 | `status` | `/brewtools:manager-setup status` | Full explainer: codewords + wall state + effective prompt sources. Default with no argument |
 | `install` | `/brewtools:manager-setup install` | INSTALL guard + ARM the HARD wall (project). `/reload` on first install only |
-| `upgrade` | `/brewtools:manager-setup upgrade` | Re-copy the guard **and the off-switch CLI** + re-register from the current plugin version; `hard`/`level` preserved; restamps `state.json`'s `version`/`generated_by`/`last_updated` trio unconditionally. Backfills `manager-state.mjs` into projects installed before it existed. Aborts if nothing is installed |
+| `upgrade` | `/brewtools:manager-setup upgrade` | Re-copy the guard and off-switch CLI, re-register, preserve `hard`/`level`, and refresh version/content-version provenance. Backfills a missing CLI; aborts if nothing is installed |
 | `enable` | `/brewtools:manager-setup enable` | ARM an already-installed wall (state flip only). Never installed -> routed to `install` |
 | `disable` | `/brewtools:manager-setup disable` | DISARM the wall (state flip only -- registration kept, guard no-ops) |
 | `uninstall` | `/brewtools:manager-setup uninstall` | Two Bash calls: the bare disarm first, then DEREGISTER guard from `settings.local.json` + delete the copied guard. Then `/reload`. State and prompt overrides kept |
@@ -386,6 +422,7 @@ Type `++m` while in plan mode -> injects the Manager + Plan Mode block for that 
 Type `++rr` anywhere  -> injects the Regression Review contract for that one turn.
 Type `++r` anywhere   -> injects the Review contract for that one turn.
 Type `++a` anywhere   -> injects the Architecture-first contract for that one turn.
+Type `+++` in verified Plan mode -> injects anti-drift cron planning; scheduling waits for execution.
 
 --- injected by ++m (full) ---
 <full Manager block text>
@@ -396,7 +433,7 @@ Type `++a` anywhere   -> injects the Architecture-first contract for that one tu
 ## HARD wall (this project) -- registered=no  armed=OFF  level=balanced  (state source: default)
 State version: <none>  plugin: <X.Y.Z>  (no version key until install/upgrade writes one)
 Install:   /brewtools:manager-setup install    (install+arm; /reload only on FIRST install)
-Upgrade:   /brewtools:manager-setup upgrade    (re-copy the guard; arm state preserved; restamps version/generated_by/last_updated)
+Upgrade:   /brewtools:manager-setup upgrade    (re-copy guard/CLI; arm state preserved; refresh content-version provenance)
 Enable:    /brewtools:manager-setup enable     (arm an already-installed wall)
 Disable:   /brewtools:manager-setup disable    (disarm only -- registration kept, guard no-ops)
 Uninstall: /brewtools:manager-setup uninstall  (deregister from settings.local.json, then /reload)
@@ -416,8 +453,8 @@ Exit:      node <ABS project root>/.claude/brewtools/manager/manager-state.mjs s
 </details>
 
 <CardGrid>
-  <Card title="Think Short" icon="settings" href="/brewtools/skills/think-short-setup/">
-    Companion output-control skill -- inject brevity directives via SessionStart and per-agent PreToolUse rather than per-prompt codewords.
+  <Card title="Task Board Setup" icon="graph" href="/brewtools/skills/task-board-setup/">
+    Domain methodology, task-specific work plans, graph reconciliation, and session anti-drift timers.
   </Card>
   <Card title="Prompt Injection" icon="bolt" href="/brewtools/prompt-injection/">
     How the `++m` / `++rr` / `++r` / `++a` codewords inject the Manager / review / architecture contract into the model -- the full mechanism explained.

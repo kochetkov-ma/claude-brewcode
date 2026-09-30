@@ -1,9 +1,9 @@
 ---
 doc_type: llm
-version: "6.2.0"
-content_version: "5.6.0"
+version: "6.3.0"
+content_version: "6.3.0"
 generated_by: "brewcode"
-last_updated: "2026-09-12"
+last_updated: "2026-09-30"
 ---
 
 # Artifact metadata and versioning
@@ -206,22 +206,12 @@ fragment inside a line-1 HTML comment instead.
 <!-- brewcode-meta: version=X.Y.Z content_version=X.Y.Z generated_by=brewdoc:memory-sync-setup -->
 ```
 
-Four files in production: `brewtools/skills/think-short-setup/assets/think-short-prompt.md`
-(its body is injected into a prompt) and the three
+Three files in production: the
 `brewdoc/skills/memory-sync-setup/references/{memory-guide,agent-audit,hard-sync}.md`.
 `bump-version.sh` calls these kinds `md` and `marker`; `setup-status` reads them with
 its third `.md` fallback - frontmatter `version:` in the first 40 lines, then a
 `| Version |` header row, then a `brewcode-meta:` marker in the first 5 lines
 (`brewcode/skills/setup-status/SKILL.md:514`).
-
-**Quirk: `think-short-prompt.md:1` is the only stamp in the repo with a word BEFORE the
-anchor** - `<!-- think-short brewcode-meta: version=X.Y.Z content_version=X.Y.Z generated_by=... -->`. That is
-legal, and legal by construction rather than by luck: `stamp_rewrite`'s non-frontmatter
-branch is an UNANCHORED global substitution on the `brewcode-meta: version=... generated_by=...`
-fragment (`bump-version.sh:225-226`), and every reader greps for the fragment, never for
-a line start. So the comment may carry any prefix. Nothing strips the comment - the hook
-reads the file and injects it whole (`think-short-prompt-counter.mjs:77-87`,
-`think-short-session.mjs:84-93`); an HTML comment is simply inert in the injected text.
 
 Marker is literally `brewcode-meta:` wherever it appears - it is the grep anchor, not a
 plugin name, and the string does not vary by plugin. brewui ships no stamped asset at

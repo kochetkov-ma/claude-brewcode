@@ -26,8 +26,8 @@ Rules for test data creation and management.
 | # | Rule | Detail | Review Question |
 |---|------|--------|-----------------|
 | D1 | Maximum test data coverage | Not minimal "2 records" — cover main cases with margin | Does test data cover all main cases including edge cases? |
-| D2 | Data via API, not direct DB | Public API = ideal. UI = acceptable. Direct DB = last resort with user confirmation | Is test data created through API/UI, not direct DB writes? |
-| D3 | Separate data generation layer | Data layer as a service callable from tests | Is there a dedicated data layer/service for test data? |
+| D2 | API/UI data preparation by default | Public API ideal, UI acceptable. Direct DB mutation ONLY as a last resort after explicit user confirmation, through Data -> DatabaseSupport; never direct test writes or skipped layers | Does preparation use API/UI, or have explicit confirmation for the last-resort DB exception while preserving layers? |
+| D3 | Separate data generation layer | Data service reached by tests through Steps or base lifecycle preparation; base setup/cleanup may call Data/Support, but test methods never call Data directly | Is there a dedicated data layer/service, reached only through Steps/base lifecycle? |
 | D4 | Parameterized tests mandatory | One test method — multiple data sets | Are tests parameterized with multiple data sets? |
 
 ---
@@ -79,6 +79,6 @@ Rules for the development and review workflow.
 
 | # | Rule | Detail | Review Question |
 |---|------|--------|-----------------|
-| P1 | Three-step cycle | Execute -> Validate (different agent) -> Re-check -> Fix | Is every artifact validated by a different agent than its creator? |
+| P1 | Execute/review/re-check/fix cycle | Execute -> Validate (different agent) -> Re-check -> Fix | Is every artifact validated by a different agent than its creator? |
 | P2 | Re-check EVERY issue after review | Reviewer can be wrong. Verify issue is real before fixing | Are review findings re-checked before applying fixes? |
 | P3 | Rules in project documentation | Stored near agents, loadable by all team members | Are rules accessible at the configured path? |

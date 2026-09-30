@@ -36,7 +36,7 @@ description: |
   <commentary>Explicit AG creation request TRGs this AG</commentary>
   </example>
 ```
-(add a 2nd `<example>` with different phrasing per Rule 6, e.g. "My reviewer agent doesn't trigger reliably")
+(A 2nd `<example>` requires the Description Budget exception; vary phrasing per Rule 6, e.g. "My reviewer agent doesn't trigger reliably".)
 
 ### Rules
 
@@ -110,11 +110,11 @@ If the agent-return guard is installed, a return over ~1000 est-tokens (chars/4)
 | `code` over text, inline over blocks | Identifiers, paths, short vals; blocks only if >3 lines |
 | Comma-separated inline lists | `a, b, c` not bullet per item when saving space |
 | One-liner rules, arrows for flow | `old` -> `new`, conditions with `->` (~40% savings) |
-| No filler, no water | Cut "please note", "it's important", "only", "exactly", "basically" |
+| No filler | Cut courtesy/repetition; preserve load-bearing `only`, `exactly`, negations, conditions and scopes |
 | Positive framing, no aggressive lang | "Do Y" not "Don't X"; "Use when..." not "CRITICAL: MUST..." |
 | Imperative form | "Do X" not "You should do X"; 3rd person for descriptions |
 | Bold for key terms, no extra formatting | `**term**` for emphasis; no decorative lines, headers, dividers |
-| No emojis except status markers | Only 3 allowed: checkmark, cross, warning |
+| Minimal status markers | Prefer 🟢 🔵 🔴 ⚪; PASS/FAIL or check/cross optional; no decorative emojis |
 | Merge duplicates, abbreviate in tables | Single source of truth; REQ, impl, cfg, args, ret, err |
 
 ## Color Semantics
@@ -146,8 +146,8 @@ mapping beyond these repo conventions; the other 4 are free to assign per team.
 - [ ] `name`: lowercase-hyphens only (`[a-z0-9-]+`), no `:`
 - [ ] `description`: within the **Description Budget** above -- single line + role + `Triggers:` keywords by DEF; `<example>` blocks only for an ambiguous AG, under the example-block exception
 - [ ] Placement: file sits in a `.claude/agents/` dir on the walk-up path from the intended launch cwd -- warn if placed under a module subfolder while sessions launch from repo root
-- [ ] `tools`: minimal REQ set (least privilege), every entry survives the filters for the pool this AG runs in -- none of the nine filter-1 TLs, and `Skill` listed only when the AG invokes SKs at runtime
-- [ ] Body carries no "ask/confirm with the user" instruction -- a SA cannot prompt; it returns the decision request to its caller
+- [ ] `tools`: least privilege for the actual foreground/background pool; no unconditionally filtered TLs; `Agent` only below depth cap, `ExitPlanMode` only in plan permission mode, `Skill` only for runtime SKs
+- [ ] Regular SA returns user questions to caller; conversation forks are the exception, skill forks are not
 - [ ] Body's task-graph steps have a no-Task-TL fallback, or the AG is documented as foreground/teammate-only
 - [ ] `isolation`: `worktree` or absent -- `remote` is invocation-level, never FM
 - [ ] `disallowedTools`: no conflict with `tools` if both specified
@@ -158,6 +158,6 @@ mapping beyond these repo conventions; the other 4 are free to assign per team.
 - [ ] Generic code-writing AG -> `## Scope Fit` incl. etalon-first; teams-setup keeps both only in `team.md`
 - [ ] AG with `Agent` in `tools:` -> `## Delegation` states an explicit large/independent/parallelizable criterion and caps spawn counts (R7); absent for AGs that never delegate
 - [ ] READ-ONLY AGs have no Write/Edit TLs
-- [ ] No CD rules duplicated in AG body (already injected)
+- [ ] No inherited CD rules duplicated; if `omitClaudeMd` applies, essential constraints are passed in the delegation prompt
 - [ ] Unique name in scope (no conflict with existing AGs)
 - [ ] Optimized by the `text-optimizer` AG (or skipped -- brewtools absent, noted in report)

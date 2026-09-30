@@ -10,7 +10,7 @@
 
 **Claude Code plugin suite** -- four plugins for development, documentation, text utility, and visual workflows.
 
-A regular Claude Code session hands a big task to one agent and loses sight of it. Brewcode splits work into bounded units, gives every spawn a six-field brief, and re-states the delegation rule on every prompt. Four plugins. 28 skills. 8 agents. 6 lifecycle hooks.
+A regular Claude Code session hands a big task to one agent and loses sight of it. Brewcode splits work into bounded units, gives every spawn a six-field brief, and re-states delegation on eligible prompts 1, 10, 20, and so on, with separate post-compaction recall. Four plugins. 27 skills. 8 agents. 6 registered hook commands.
 
 [**Full Documentation**](https://doc-claude.brewcode.app/getting-started/)
 
@@ -60,7 +60,7 @@ After all commands succeed, run `/reload-plugins`. If `/reload-plugins` is unava
 |--------|---------|--------|---------|
 | [brewcode](brewcode/README.md) | Infinite task execution, quorum reviews, skill/agent creation, semantic search | 9 | `claude plugin install brewcode@claude-brewcode` |
 | [brewdoc](brewdoc/README.md) | Documentation tools: docsync, memory-sync generation, PDF conversion, publishing | 5 | `claude plugin install brewdoc@claude-brewcode` |
-| [brewtools](brewtools/README.md) | Universal text utilities: token optimization, humanization, secrets scanning, plugin updates | 14 | `claude plugin install brewtools@claude-brewcode` |
+| [brewtools](brewtools/README.md) | Universal text utilities: token optimization, humanization, secrets scanning, plugin updates | 13 | `claude plugin install brewtools@claude-brewcode` |
 | [brewui](brewui/README.md) | UI/visual/creative tools (placeholder, currently empty) | 0 | `claude plugin install brewui@claude-brewcode` |
 
 ## Installation
@@ -123,13 +123,21 @@ claude --plugin-dir ./brewcode --plugin-dir ./brewdoc --plugin-dir ./brewtools -
 ### brewcode -- infinite task execution
 
 ```bash
-/brewtools:task-board-setup  # 1. Deploy the task board + a project-tailored /task-spec skill
-/task-spec "Implement JWT authorization"  # 2. Research codebase + write the task spec and design
-/brewcode:superreview-setup  # 3. Generate a project-tailored deep-review skill
+/brewcode:setup-status       # 1. Inspect setup state and the recommended installation order
+/brewcode:convention-setup   # 2. Establish coding, architecture and testing patterns before teams
+/brewcode:teams-setup        # 3. Create agents that use those project conventions
+/brewtools:task-board-setup install  # 4. Deploy the board; select the optional spec/design layer
+/task-board add "Implement JWT authorization"  # 5. Create an accepted task with methodology and work units
+/task-spec <returned-task-id>  # 6. Research and write specs for that existing task
+/brewcode:superreview-setup  # 7. Generate a project-tailored deep-review skill
 /brewcode:setup-status       # anytime: what is installed, stale or missing in this project
 ```
 
-Skills orchestrate, agents execute. Each spawn is a bounded unit with a six-field brief; the `forced-eval` hook re-states the manager role and the split rule on every prompt, and a `role-recall`/`compact-recall` pair re-anchors the same role plus the plan and task graph after a compaction, so work stays observable across compaction cycles.
+Skills orchestrate, agents execute. Each spawn is a bounded unit with a six-field brief; the `forced-eval` hook adds its 472-byte role/split/branch reminder on eligible prompts 1, 10, 20, and so on, and a `role-recall`/`compact-recall` pair re-anchors the same role plus the plan and task graph after a compaction, so work stays observable across compaction cycles.
+
+The task board provides shared domain methodology for reviews and tests, plus a methodology and base work units for each task. When a top-level task becomes active, the main session's `/task-board` announces and creates its unique hourly anti-drift cron; the user can choose another cadence or opt out. Each delivered tick rereads the methodology and goal, collects agent updates, reconciles statuses and dependencies, and keeps all unfinished graph entries plus the latest 10 completed entries. Older completion evidence stays in task records. The compact report gives tick time and number, elapsed time, progress, remaining work, blockers or questions, and the drift verdict. Timers run only while the session is active, subject to runtime limits; unavailable scheduling tools are reported. Completion or cancellation stops the task's timer.
+
+In Plan mode, `+++` adds these methodology, graph and cron steps to the plan. Scheduling and file changes wait until execution. See [Task board setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) and [Manager setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) for the controls.
 
 ### brewdoc -- documentation tools
 
@@ -148,7 +156,7 @@ Skills orchestrate, agents execute. Each spawn is a bounded unit with a six-fiel
 /brewtools:text-human 3be67487             # Remove AI artifacts from a commit
 /brewtools:secrets-scan                    # Scan for leaked credentials
 /brewtools:plugin-update                   # Install or update the plugin suite
-/brewtools:context-slim measure            # Weigh the permanent context surface, read-only
+/brewtools:context-slim measure            # Inventory potential context sources, read-only
 ```
 
 ### brewui -- visual tools
@@ -158,7 +166,7 @@ Placeholder plugin, currently empty. No commands yet -- coming soon.
 ## How It Works
 
 ```
-  /task-spec "..." --> parallel research agents + user Q&A --> per-task spec + design docs
+  accepted task + optional spec layer --> /task-spec <task-id> --> research + Q&A --> spec + design
         │
         v
   project agents from .claude/agents/ --> bounded units, fanned out in ONE message
@@ -166,7 +174,7 @@ Placeholder plugin, currently empty. No commands yet -- coming soon.
         v
   /brewcode:superreview-setup --> project-tailored deep-review skill
 
-  every prompt: forced-eval (UserPromptSubmit) injects 3 lines --
+  eligible prompts 1,10,20,...: forced-eval (UserPromptSubmit) injects 3 lines --
     [ROLE]   scan agents, project .claude/agents/ first; domain expert exists -> delegate
     [SPLIT]  one agent for an hour = drift you cannot observe -> split and fan out
     [BRANCH] no branch chosen -> main; no explicit branch/PR -> take over the whole workspace
@@ -193,9 +201,9 @@ Every spawn prompt carries six fields:
 
 ## Skills Reference
 
-> **The `-setup` suffix** marks a skill you run once to install a mechanism -- afterwards you use what it produced (a generated skill, a hook, an MCP server), not the skill itself. Recurring tools you invoke every day keep bare names. Every `-setup` skill shares one mode vocabulary: `status | install | upgrade | enable | disable | uninstall | purge`, and no argument means `status` when installed, `install` when not. The one exception is `/brewcode:semble-setup`, which always defaults to `status` so a bare invocation never triggers a machine-level package install. All eleven setups implement all seven verbs, via one of two mechanisms: a live config flag re-checked each invocation (semble, agent-deadline, agent-return, agent-router, manager, docsync), or entry-file parking, where the filename discovery keys on is renamed `<name>.disabled` with the body byte-identical (teams, superreview, task-board, think-short, memory-sync).
+> **The `-setup` suffix** marks a skill you run once to install a mechanism -- afterwards you use what it produced (a generated skill, a hook, an MCP server), not the skill itself. Recurring tools you invoke every day keep bare names. Every `-setup` skill shares one mode vocabulary: `status | install | upgrade | enable | disable | uninstall | purge`, and defaults are skill-specific. Semble, manager, agent-deadline, and agent-return default to `status`; a bare semble invocation therefore never triggers a machine-level package install; `/brewcode:convention-setup` defaults to `install` and inspects status before extraction. All eleven setups implement all seven verbs, via one of two mechanisms: a live config flag re-checked each invocation (semble, agent-deadline, agent-return, agent-router, manager, docsync), or entry-file parking, where the filename discovery keys on is renamed `<name>.disabled` with the body byte-identical (teams, superreview, task-board, memory-sync, convention). Convention setup parks only its loading rule; its generated documents remain readable.
 
-> **All 28 skills are user-invoked only.** Every one carries `user-invocable: true` **and** `disable-model-invocation: true` in its frontmatter: the model never sees their descriptions and never auto-activates one. You type `/plugin:skill`, or nothing runs. This is a deliberate trade about context cost -- 28 model-visible descriptions would be a permanent tax on every request -- and these skills do not want auto-activation anyway: eleven of them write real files into your repo after asking you real questions, and the rest are tools you point at a scope you choose.
+> **All 27 skills are user-invoked only.** Every one carries `user-invocable: true` **and** `disable-model-invocation: true` in its frontmatter: the model never sees their descriptions and never auto-activates one. You type `/plugin:skill`, or nothing runs. This is a deliberate trade about context cost -- 27 model-visible descriptions would be a permanent tax on every request -- and these skills do not want auto-activation anyway: eleven of them write real files into your repo after asking you real questions, and the rest are tools you point at a scope you choose.
 
 ### Brewcode (9 skills)
 
@@ -204,7 +212,7 @@ Every spawn prompt carries six fields:
 | `/brewcode:setup-status` | Read-only cross-plugin dashboard: which setup skills are installed, stale, disabled, partial or missing here, plus the exact command to run for each. `disabled` outranks `partial`/`stale`, so a mechanism you turned off on purpose is never reported as broken. Runs nothing itself -- setups are interactive generators that spawn many subagents, and stacking several in one session degrades all of them |
 | `/brewcode:superreview-setup` | Generate a project-tailored deep-review skill: `QUICK` (default, `intent-guard` + mechanical gates) or `EXTENDED` (adds domain-expert fan-out, scope discipline, adversarial validation) depth, read from your prompt |
 | `/brewcode:teams-setup` | Create and manage dynamic teams of domain-specific agents -- every team also gets a fixed review-only `intent-guard` member (not counted in team size). Modes `status`/`install`/`upgrade`/`enable`/`disable`/`uninstall`/`purge`, each taking an optional team `[name]`; `enable`/`disable` park/unpark each roster member's agent file |
-| `/brewcode:convention` | Extract etalon classes, patterns, architecture into convention docs |
+| `/brewcode:convention-setup` | Install project coding, testing and architecture conventions with reversible loading guidance; run early, before teams and review setup |
 | `/brewcode:rules` | Prompt-driven rules management: status, create, improve, review |
 | `/brewcode:skills` | Prompt-driven skill management: status, create, improve, sync, review |
 | `/brewcode:agents` | Prompt-driven agent management: status, create, improve, sync, review |
@@ -221,13 +229,12 @@ Every spawn prompt carries six fields:
 | `/brewdoc:md-to-pdf` | Convert markdown to professional PDF |
 | `/brewdoc:publish` | Publish to brewpage.app -- returns public URL |
 
-### Brewtools (14 skills)
+### Brewtools (13 skills)
 
 | Skill | Purpose |
 |-------|---------|
 | `/brewtools:text-optimize` | LLM token efficiency optimization (52 rules, smart dedup + aggressive lossy) |
 | `/brewtools:text-human` | Remove AI artifacts, humanize code |
-| `/brewtools:think-short-setup` | Install/remove terse-mode hooks (SessionStart + every-10th UserPromptSubmit + SubagentStart) that inject brevity directives; project or global |
 | `/brewtools:agent-deadline-setup` | Install/remove a soft wall-clock budget for subagents -- 80% warns "wrap up", 100% blocks all but finalization tools; project or global, opt-in |
 | `/brewtools:agent-return-setup` | Install/remove a size budget on every subagent's final return -- a SubagentStart hook states the budget, a SubagentStop hook sizes the return (`chars/4`) and blocks at most once, ordering a compress above `passTokens` (default 1000) or a write-to-file above `fileTokens` (default 2500); project or global, opt-in |
 | `/brewtools:agent-router-setup` | EXPERIMENTAL -- install/remove a PreToolUse hook that denies a generic subagent spawn in favor of the real project/plugin expert, or nudges when the fit is only uncertain; project scope only, opt-in |
@@ -237,7 +244,7 @@ Every spawn prompt carries six fields:
 | `/brewtools:plugin-update` | Install and update the full plugin suite |
 | `/brewtools:provider-switch` | Configure alternative API providers (DeepSeek, Z.ai/GLM, Qwen, MiniMax, OpenRouter) |
 | `/brewtools:manager-setup` | Manager mode -- hook-driven codewords `++m` (delegate-everything, plan-aware), `++a` (architecture-first), `++rr` (anti-regression review), `++r` (two-phase double-check); the opt-in HARD wall (`status`/`install`/`upgrade`/`enable`/`disable`/`uninstall`/`purge`, plus `level strict\|balanced` and `edit`) installs a project PreToolUse guard that blocks main-session writes while subagents stay free -- an allowlist of permitted binaries and per-binary flags, failing closed when it cannot parse the command |
-| `/brewtools:task-board-setup` | Deploy a file-based Kanban into ANY repo via multi-agent analysis -- task-tracker agent, task-board skill, tasks rule, .claude/features, plus an optional spec + design layer (`task-spec`) and an `upgrade` mode for existing boards |
+| `/brewtools:task-board-setup` | Deploy a file-based Kanban with task-tracker, task-board, shared domain/task methodology, a derived task graph and unique session anti-drift timers; optional spec + design layer (`task-spec`), plus `upgrade` for existing boards |
 | `/brewtools:context-slim` | Shrink the permanent context surface (project+global CLAUDE.md, rules, agent descriptions, hooks, memory) via cross-layer dedup, default-knowledge removal and per-file compression -- lossless by default, whole-run rollback on any verify miss |
 
 ### Brewui (0 skills)

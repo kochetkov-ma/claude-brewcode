@@ -6,7 +6,7 @@ description: Detailed description of all brewcode plugin commands
 
 # BC Plugin Commands
 
-> **ver:** 6.2.0 | **Author:** Maksim Kochetkov | **License:** MIT
+> **ver:** 6.3.0 | **Author:** Maksim Kochetkov | **License:** MIT
 
 ## Naming
 
@@ -18,9 +18,9 @@ Setup skills draw their modes from one vocabulary, in this order:
 status | install | upgrade | enable | disable | uninstall | purge
 ```
 
-No arguments = `status` when installed, `install` when not -- except `/brewcode:semble-setup`, which always defaults to `status` so a bare invocation can never trigger a machine-level package install.
+No arguments normally means `status` when installed and `install` when absent. `/brewcode:semble-setup` always defaults to `status`; `/brewcode:convention-setup` defaults to `install` and inspects status before extraction.
 
-No setup rejects any of the seven canonical verbs -- all eleven setup skills implement all seven, either via a live config flag (semble, agent-deadline, agent-return, agent-router, manager, docsync) or entry-file parking (teams, superreview, task-board, think-short, memory-sync). Skill-specific extras come after the canonical set, never in place of it (`semble-setup`: `reindex | optimize | resume`).
+No setup rejects any of the seven canonical verbs -- all eleven setup skills implement all seven, either via a live config flag (semble, agent-deadline, agent-return, agent-router, manager, docsync) or entry-file parking (teams, superreview, task-board, memory-sync, convention). Skill-specific extras come after the canonical set, never in place of it (`semble-setup`: `reindex | optimize | resume`).
 
 ## Prompt contract
 
@@ -33,11 +33,11 @@ Before the first action -- read-only modes included, right before their report -
 | # | Command | Purpose | Context | Model | Deps |
 |---|---------|---------|---------|-------|------|
 | 1 | `/brewcode:setup-status` | Read-only: which setups are installed/stale/partial/missing here | session | sonnet | -- |
-| 2 | `/brewcode:superreview-setup` | Generate project-tailored deep-review skill | fork | opus | -- |
+| 2 | `/brewcode:superreview-setup` | Generate project-tailored deep-review skill | session | opus | -- |
 | 3 | `/brewcode:rules` | Sync KB/session learnings → project rules | session | sonnet | -- |
 | 4 | `/brewcode:skills` | SK status/list/create/improve/review/sync | session | opus | -- |
 | 5 | `/brewcode:agents` | AG status/list/create/improve/review/sync | session | opus | -- |
-| 6 | `/brewcode:convention` | Extract conventions/patterns/architecture → rules + docs | session | opus | -- |
+| 6 | `/brewcode:convention-setup` | Extract conventions/patterns/architecture → rules + docs | session | opus | -- |
 | 7 | `/brewcode:teams-setup` | Create/manage specialized AG teams | session | opus | -- |
 | 8 | `/brewcode:e2e` | E2E testing: BDD scenarios, autotests, review | session | opus | -- |
 | 9 | `/brewcode:semble-setup` | Semantic code-search MCP: install/audit/reindex/uninstall | session | opus | -- |
@@ -50,7 +50,9 @@ Before the first action -- read-only modes included, right before their report -
 ## Execution Order
 
 ```
-setup-status --> superreview-setup --> convention --> rules
+setup-status --> semble-setup (when applicable) --> convention-setup --> teams-setup --> superreview-setup
+
+rules / skills / agents / e2e: recurring tools
 ```
 
 Run setup skills one at a time, ideally one per fresh session: each is an interactive generator that fans out subagents, and two in a session degrade each other.
@@ -67,7 +69,7 @@ Run setup skills one at a time, ideally one per fresh session: each is an intera
 | `bash-expert` | inherit | Professional sh/bash scripts for Mac/Linux |
 | `bc-rules-organizer` | haiku | Create/optimize `.claude/rules/*.md` -- internal, spawned only by `/brewcode:rules` |
 
-The three creator AGs are pinned by `agents/tests/suite-creator-contract.mjs`: the CC 2.1.233 hook/sub-agent facts they teach are transcribed as fixtures, so upstream drift fails a test instead of shipping silently.
+The three creator AGs are pinned by `agents/tests/suite-creator-contract.mjs`: the authoring contracts checked through CC 2.1.285 are represented in fixtures, so upstream drift fails a test instead of shipping silently.
 
 ---
 
@@ -89,19 +91,19 @@ Read-only dashboard over every setup skill in the suite (BC + BT + BD). Probes t
 
 | Plugin | Setups |
 |--------|--------|
-| brewcode | `teams-setup`, `semble-setup`, `superreview-setup` |
-| brewtools | `task-board-setup`, `think-short-setup`, `agent-deadline-setup`, `agent-return-setup`, `agent-router-setup`, `manager-setup` |
+| brewcode | `teams-setup`, `semble-setup`, `convention-setup`, `superreview-setup` |
+| brewtools | `task-board-setup`, `agent-deadline-setup`, `agent-return-setup`, `agent-router-setup`, `manager-setup` |
 | brewdoc | `memory-sync-setup`, `docsync-setup` |
 
-Recurring tools with no installed state (`agents`, `rules`, `convention`, `e2e`, `text-optimize`, `secrets-scan`, `md-to-pdf`, …) never appear in the report.
+Recurring tools with no installed state (`agents`, `rules`, `e2e`, `text-optimize`, `secrets-scan`, `md-to-pdf`, …) never appear in the report.
 
 ### Classification
 
 Each row gets exactly one state, evaluated in order: `n/a` -> `disabled` -> `missing` -> `partial` -> `stale` -> `installed`.
 
-**Anchor MISS is decisive.** The anchor is the artifact only that setup writes; without it the row is `missing`, whatever else the project contains. Secondaries must be EXCLUSIVE too -- `teams-setup` claims `.claude/teams/*/trace.jsonl` and `trace-ops.sh`, and `superreview-setup` no longer claims the shared `intent-guard.md`, because a shared file made every project with a hand-written agent report a broken `partial` install.
+**Anchor and secondary presence are checked together.** An absent anchor and absent secondaries mean `missing`; an absent anchor with surviving secondaries means `partial`. Secondaries must be EXCLUSIVE too -- `teams-setup` claims `.claude/teams/*/trace.jsonl` and `trace-ops.sh`, and `superreview-setup` no longer claims the shared `intent-guard.md`, because a shared file made every project with a hand-written agent report a broken `partial` install.
 
-**`disabled` outranks `missing`, `partial` and `stale`.** All eleven setups leave a probeable off-switch, in one of two mechanisms: live config flag -- semble, agent-deadline, agent-return, agent-router, manager, docsync; entry-file parking -- teams, superreview, task-board, think-short, memory-sync. A disabled row offers `enable` and never enters the run-list -- a switched-off mechanism is a choice, not a defect.
+**`disabled` outranks `missing`, `partial` and `stale`.** All eleven setups leave a probeable off-switch, in one of two mechanisms: live config flag -- semble, agent-deadline, agent-return, agent-router, manager, docsync; entry-file parking -- teams, superreview, task-board, memory-sync, convention. A disabled row offers `enable` and never enters the run-list. A live/parked conflict overrides the disabled reading as `partial`. Convention setup parks its loading rule while its documents stay readable.
 
 ### Staleness signals
 
@@ -109,14 +111,14 @@ Each row gets exactly one state, evaluated in order: `n/a` -> `disabled` -> `mis
 
 | Carrier | Used by | How |
 |---------|---------|-----|
-| Frontmatter `content_version:` | semble (`semble-first.md`), superreview + memory-sync (emitted `SKILL.md`), task-board (`board.md`) | Read the key out of the anchor's YAML frontmatter, compare against the plugin's `content_version` for that artifact |
-| `brewcode-meta:` line token | think-short, agent-deadline, agent-return, agent-router | `content_version=` in the `// brewcode-meta:` comment of the byte-copied hook, baked at release; `version=` rides beside it |
+| Frontmatter `content_version:` | semble (`semble-first.md`), superreview + memory-sync (emitted `SKILL.md`), task-board (`board.md`), convention loading rule and three documents | Read the key out of the anchor's YAML frontmatter, compare against the plugin's `content_version` for that artifact |
+| `brewcode-meta:` line token | agent-deadline, agent-return, agent-router | `content_version=` in the `// brewcode-meta:` comment of the byte-copied hook, baked at release; `version=` rides beside it |
 | Top-level JSON key | manager (`state.json`), docsync (`config.json`) | `"content_version"` in the raw JSON. The byte-copied companion's `brewcode-meta:` line is the documented fallback -- read the JSON first, fall through silently, never report `LEGACY` when the fallback answered |
 | Header-table row | teams | `team.md`'s `\| Content Version \| X.Y.Z \|` row of the `Field/Value` block, beside `\| Version \|`. The Agents table's per-agent `Version` column stays `version` -- it shows which write touched each agent, !=content drift, so a roster may legitimately mix values |
 | `cmp` corroboration | every byte-copied asset | Exact only where the installed copy stays byte-identical. Three carve-outs are NOT `cmp` partners: `memory-sync`'s `references/hard-sync.md` (generator fills two BLOCK placeholders -> neither signal reaches it), `.sembleignore` (install appends a measured-candidates block -> stamp still valid, `cmp` never), and `.template-baseline/` (raw template, unresolved placeholders, never version-read) |
-| Absence | task-board | A deployed board with no `.claude/skills/task-spec/` predates the spec+design layer |
+| Absence | task-board | Check task-spec artifacts only when the installed board enables the optional spec/design layer |
 
-Output is one table plus an ordered run-list: `partial` first (broken installs), then `stale`, then `missing`. Commands use the canonical verbs only (`status` · `install` · `upgrade` · `enable` · `disable` · `uninstall` · `purge`) plus the live per-skill extras (`semble-setup`: `reindex | optimize | resume`; `agent-router-setup` / `manager-setup`: `level <...>`). A setup installed but absent from the roster produces a WARNING above the table, never a silent edit.
+Output is one table plus a dependency-staged run-list; within each stage, partial installs precede stale and missing ones. Convention foundation follows search and precedes teams/review. The roster has 11 setups and 23 stamp carriers: brewcode 7, brewtools 13, brewdoc 3. Commands use the canonical verbs only (`status` · `install` · `upgrade` · `enable` · `disable` · `uninstall` · `purge`) plus the live per-skill extras (`semble-setup`: `reindex | optimize | resume`; `agent-router-setup` / `manager-setup`: `level <...>`). A setup installed but absent from the roster produces a WARNING above the table, never a silent edit.
 
 ```
 /brewcode:setup-status
@@ -134,7 +136,7 @@ GENERATOR skill (human-invoked). Analyzes the TARGET project and WRITES a self-c
 | Param | Value |
 |-------|-------|
 | Args | `[prompt] [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [scope]` |
-| Context | fork |
+| Context | session |
 | Model | opus |
 | Deps | none |
 | Tools | Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion |
@@ -206,7 +208,7 @@ All three treat the ENTIRE `$ARGUMENTS` as ONE free-form prompt — no keyword g
 | `review` | "ревью" / "review" / "validate" |
 | `sync` (**`skills`/`agents` only**) | "sync" / "синк" / "memory sync" / "актуализируй" / "приведи в соответствие с кодом" |
 
-**Batch flag** (not a mode): plural / "все" / "all" / multiple names → fan-out, one specialist spawn per item. Empty prompt → AskUserQuestion menu (Status / Status-all / Create / Improve / Review [/ Sync] / List / Cancel). `rules` has no `sync` mode — no memory-sync counterpart to `agents`/`skills`.
+**Batch flag** (not a mode): plural / "все" / "all" / multiple names → fan-out, one specialist spawn per item. Empty prompt → read-only status. Only an explicit menu request opens the choices; unresolved write decisions are bundled once before work. `rules` has no `sync` mode — no memory-sync counterpart to `agents`/`skills`.
 
 ---
 
@@ -271,7 +273,7 @@ Manages Claude Code subagents from a free-form prompt (see shared pattern above,
 
 `sync` -- `SYNC_REF` = `${CLAUDE_SKILL_DIR}/../skills/references/mode-sync.md` (same S1-S6 engine as `/brewcode:skills sync`, scoped to `.claude/agents/*.md` + `*/agents/*.md`). Non-growth: every agent file ends ≤ its original line count.
 
-`create`: AskUserQuestion for scope (Project `.claude/agents/` / Global `~/.claude/agents/` / Plugin `brewcode/agents/`), model (sonnet recommended / opus / haiku / inherit), CLAUDE.md table update. Description budget ≤ 100 chars, 2-3 triggers.
+`create`: AskUserQuestion for scope (Project `.claude/agents/` / Global `~/.claude/agents/` / Plugin `brewcode/agents/`), model (sonnet recommended / opus / haiku / inherit), CLAUDE.md table update. Description budget ≤150 tokens (roughly 600 chars), lead ≤160 chars, 3-7 English triggers; ≤100 chars is an optional brevity target.
 
 > **The Plugin scope option is gated on `test -d brewcode/.claude-plugin`** — offered only inside this workspace. Elsewhere it would write a junk `<cwd>/brewcode/agents/<name>.md`, so the option is dropped. `${CLAUDE_PLUGIN_ROOT}/agents/` is the SHIPPED, read-only copy and is never written to. `LIST_CMD` inventories four scopes: shipped plugin (read-only), plugin source (workspace only), project, global.
 
@@ -284,52 +286,65 @@ Manages Claude Code subagents from a free-form prompt (see shared pattern above,
 
 ---
 
-## 6. `/brewcode:convention`
+## 6. `/brewcode:convention-setup`
 
-Analyzes project to extract etalon classes, patterns, architecture by layer. Generates convention docs in `.claude/convention/` + organizes rules in `.claude/rules/`.
+Install project coding, testing and architecture conventions with reversible loading guidance.
+Run after semantic search and before teams and review setup; teams are not a prerequisite.
 
 | Param | Value |
 |-------|-------|
-| Args | `[prompt] [full\|conventions\|rules\|paths <p1,p2>]` |
+| Args | `[prompt] [status\|install\|upgrade\|enable\|disable\|uninstall\|purge\|full\|conventions\|rules\|paths <p1,p2>]` |
+| Default | `install`, after a read-only status probe |
 | Context | session |
 | Model | opus |
-| Deps | none |
 | Tools | Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion, Skill |
 
-### Modes
+### Lifecycle
 
-| Mode | Trigger | Description |
-|------|---------|-------------|
-| `full` (DEF) | `/brewcode:convention` | P0-P8: detect stack, analyze layers, select etalons, gen docs, extract rules |
-| `conventions` | `conventions` | P0-P6 only. Stops before P7 Rules Organization -- `.claude/rules/` is left untouched |
-| `rules` | `rules` | P0, P7, P7.5, P8: extract rules from `.claude/convention/` docs (requires it to exist) |
-| `paths` | `paths src/a,src/b` | P0-P7 scoped to the given paths |
+| Mode | Effect |
+|------|--------|
+| `status` | Report installed documents, loading rule, ownership and collisions; no writes |
+| `install` | Extract conventions and accepted rules, then install loading guidance |
+| `upgrade` | Refresh current evidence and metadata while preserving local wording and disabled state |
+| `enable` | Restore the generated loading rule's byte-identical body |
+| `disable` | Park only `.claude/rules/convention.md`; documents and accepted rules remain readable/active |
+| `uninstall` | Remove only the generated loading rule |
+| `purge` | Also remove the three owned convention documents; preserve accepted rules and unrelated files |
 
-### Generated Docs
+### Extraction extras
 
-| Doc | Content |
-|-----|---------|
-| `.claude/convention/reference-patterns.md` | Code layers: etalons, patterns, anti-patterns (~300 lines) |
-| `.claude/convention/testing-conventions.md` | Test etalons, assertion conventions (~150 lines) |
-| `.claude/convention/project-architecture.md` | Build, deps, codegen, migrations (~200 lines) |
+| Mode | Scope |
+|------|-------|
+| `full` | Full extraction and loading setup |
+| `conventions` | Convention documents and loading guidance; leave other coding rules untouched |
+| `rules` | Extract accepted rules from existing convention documents |
+| `paths` | Refresh scoped evidence from comma-separated paths without deleting other layers |
 
-### Workflow
+### Generated artifacts
 
-1. P0: Detect stack + scan project via scripts
-2. P1: Filter analysis layers by stack (`references/analysis-layers.md`)
-3. P2: 10 AGs (architect + tester) analyze layers in ONE message
-4. P3: 1 architect selects 1-2 etalons per layer
-5. P4: 3 developer AGs write convention docs in parallel
-6. P5: text-optimizer (brewtools) or fallback rules
-7. P6: User review — approve, revise (max 2 iter), or skip to rules
-8. P7: Extract rules, dedup, interactive batching, bc-rules-organizer — SKIPPED in `conventions` mode
-9. P7.5/P8: Optional CLAUDE.md etalon table + summary
+| Path | Content |
+|------|---------|
+| `.claude/convention/reference-patterns.md` | Representative implementations, patterns and anti-patterns |
+| `.claude/convention/testing-conventions.md` | Test structure and assertion conventions |
+| `.claude/convention/project-architecture.md` | Architecture, build and dependencies |
+| `.claude/rules/convention.md` | Loading guidance for those three documents |
 
+The workflow inspects state, detects the stack, analyzes layers in bounded parallel units,
+selects etalons, writes and reviews documents, optimizes them, and organizes accepted rules.
+It validates the documents before installing loading guidance. New installs add no duplicate
+CLAUDE.md references unless requested. Ownership/collision failures stop without choosing a copy.
+
+```text
+/brewcode:convention-setup install
+/brewcode:convention-setup status
+/brewcode:convention-setup upgrade
+/brewcode:convention-setup rules
+/brewcode:convention-setup paths src/main,src/test
 ```
-/brewcode:convention
-/brewcode:convention rules
-/brewcode:convention paths src/main,src/test
-```
+
+Related: [Convention Setup](https://doc-claude.brewcode.app/brewcode/skills/convention-setup/),
+[Setup Status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/),
+[skill source](../skills/convention-setup/SKILL.md), [Brewcode overview](../README.md).
 
 ---
 

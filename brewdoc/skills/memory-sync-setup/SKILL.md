@@ -7,18 +7,15 @@ argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge]
 allowed-tools: [Read, Edit, Glob, Grep, Bash, Agent, AskUserQuestion]
 model: opus
 ---
-<!-- brewcode-meta: version=6.2.0 content_version=6.2.0 generated_by=brewdoc:memory-sync-setup -->
+<!-- brewcode-meta: version=6.3.0 content_version=6.3.0 generated_by=brewdoc:memory-sync-setup -->
 
 # Memory Sync Generator (brewdoc:memory-sync-setup)
 
 **ROLE:** GENERATOR. It analyzes the TARGET project, then WRITES a self-contained, project-local
 `.claude/skills/memory-sync/` into that repo. It NEVER syncs memory itself -- it emits the skill that does.
 
-**WHY a generator:** generic memory sync produces generic results. Only a skill that already knows THIS repo's
-batches, invariants, fact-verification commands, agent roster and language policy can keep instruction memory
-truthful. A generic sweep cannot tell an intentional Russian trigger alias from a language violation, cannot tell
-a stale lint-rule claim from a correct one, and cannot prove a removed fact is gone from REALITY rather than
-merely deleted from a doc.
+Project-specific batches, invariants, verification commands, roster and language policy distinguish intentional
+Russian aliases from violations, stale lint claims from current ones, and removed facts from deleted prose.
 
 **OUTPUT:** `<target>/.claude/skills/memory-sync/` -- `SKILL.md` + `references/memory-guide.md` +
 `references/agent-audit.md` + `references/hard-sync.md` + `references/prompting-guide.md`. Nothing else is
@@ -235,10 +232,8 @@ a `.memory-sync-emit.*` staging dir beside it) -- it registers no hooks, writes 
 
 ### Delegation (applies to every Agent this generator spawns AND to the fan-out it emits)
 
-A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct it, and it
-usually drifts off-target. One subagent = ONE bounded unit -- one deliverable (here: ONE batch), ~<=5 files,
-~<=10 steps. Bigger MUST be split into N tasks, all spawned in ONE message -- that is exactly why the emitted
-skill splits the surface into disjoint batches instead of handing one agent the whole memory tree.
+One subagent owns one bounded batch: one deliverable, ~<=5 files, ~<=10 steps. Split larger batches into N
+disjoint tasks, all spawned in one message, so progress remains observable and correctable.
 
 Every spawn prompt MUST carry:
 
@@ -264,7 +259,7 @@ Read the emit material this generator ships, relative to `${CLAUDE_SKILL_DIR}`:
 - `references/agent-audit.md` -- the agent/skill re-audit procedure the emitted skill runs every sweep
 - `references/hard-sync.md` -- the two `HARD`-depth deletion passes (`paths:` precision audit + obvious-knowledge
   purge) and their reporting contract; it holds TWO of the thirteen BLOCK placeholders
-- `references/prompting-guide.md` -- the merged Claude 5 + OpenAI/Codex prompting-quality rule table applied at
+- `references/prompting-guide.md` -- the source-verified Claude + OpenAI/Codex prompting-quality rule table applied at
   Phase 2/3; carries no BLOCK placeholders
 
 Confirm the TARGET project is the current working directory. All emitted paths are relative to that repo root.
@@ -279,12 +274,12 @@ Confirm the TARGET project is the current working directory. All emitted paths a
 bash "${CLAUDE_SKILL_DIR}/scripts/generate.sh" scan && echo "✅ scan" || echo "❌ scan FAILED"
 ```
 
-Search with the **Bash** tool (`grep`->ugrep, `find`->bfs on macOS CC; native Grep/Glob are no-ops there). From the
-scan plus your own reads, determine:
+Use available native `Grep`/`Glob`; when unavailable, use Bash `rg`/`find` (or installed `ugrep`/`bfs`). Tool
+availability is runtime-specific, not inferred from macOS. From the scan and your reads, determine:
 
 | Aspect | How to detect | Drives placeholder |
 |--------|---------------|--------------------|
-| **Memory surface** | everything auto-loaded into an LLM context: root `CLAUDE.md`, EVERY nested `**/CLAUDE.md` at ANY depth, `CLAUDE.local.md`, `.claude/rules/*.md` (single level -- CC loads rules non-recursively), conventions (`.claude/convention/**`, `CONVENTIONS.md`, `CONTRIBUTING.md`), the `AGENTS.md` family, `.claude/agents/**`, `.claude/skills/**`, and BOTH memory kinds (next two rows) | `{BATCH_TABLE}`, `{SURFACE_COUNTS}`, `{ENUMERATION_BASH}` |
+| **Memory surface** | instruction/memory files within the user-authorized scope: root `CLAUDE.md`, EVERY nested `**/CLAUDE.md` at ANY depth, `CLAUDE.local.md`, `.claude/rules/**/*.md` (recursive; unscoped rules load at launch, `paths:` rules when matching files are read), conventions (`.claude/convention/**`, `CONVENTIONS.md`, `CONTRIBUTING.md`), the `AGENTS.md` family, `.claude/agents/**`, `.claude/skills/**`, and BOTH memory kinds (next two rows). Inventory does not imply every surface is always loaded; honor explicit scope narrowing | `{BATCH_TABLE}`, `{SURFACE_COUNTS}`, `{ENUMERATION_BASH}` |
 | **VERIFY-ONLY surfaces** | `AGENTS.md` that is a SYMLINK into a projection dir (`.codex/**`) or whose body sits inside vendor markers (`<!-- BEGIN:... -->`); any file whose content another tool owns. Flag them: refs are checked for RESOLUTION, content is NEVER edited | `{BATCH_TABLE}` (VERIFY-ONLY column) |
 | **Memory dir** | `autoMemoryDirectory` in `.claude/settings*.json`, else `~/.claude/projects/<hash>/memory/`. In scope only if the user confirms (Phase 1.5) | `{MEMORY_DIR}` |
 | **Per-agent memory stores** | a tree holding one store per agent, each loading only while its agent runs. ENUMERATE it (`find` / `ls` over the memory root and any per-agent store dir the project configures), never a hardcoded roster, and note each store's INDEX file apart from its rows. A store is born wherever a SESSION ran - per-agent memory resolves against the session CWD, not the repo root - so RECORD WHICH DIRECTORIES ARE PLAUSIBLE SESSION ROOTS in this project (task workspaces, module roots, anything a session would `cd` into) against the runtime/archived trees of the EXCLUDED table: that record is what makes the emitted skill's live/orphan call possible at all (`references/memory-guide.md` rule 5). INDEPENDENT of the row above: stores can exist while `{MEMORY_DIR}` is `none`, so one never gates the other | `{BATCH_TABLE}`, `{ENUMERATION_BASH}` |
@@ -294,7 +289,7 @@ scan plus your own reads, determine:
 | **Git visibility** | `git ls-files -- .claude '*CLAUDE.md' '*AGENTS.md'` compared against the same surface ON DISK, plus the `.gitignore` rules behind it. `git-ignored` OR `mixed` (some rows tracked, some not) -> `git status`/`git diff` can NEVER account for every memory edit, so VERIFY must re-read files directly instead of trusting the diff | `{GIT_VISIBILITY}`, `{VERIFY_EXTRA}` |
 | **Language policy** | which files legitimately carry non-English trigger aliases (agent/skill `description:`, mode-routing tables, `CLAUDE.local.md`), and which surface is English-only. An intentional alias stripped as a "violation" is a regression | `{LANGUAGE_POLICY}` |
 | **Frontmatter conventions** | which of `last_updated`, `doc_type`, `paths:` globs, `[DICT: ...]` headers are in use, and WHERE each belongs | `{INVARIANTS_TABLE}` |
-| **`paths:` precision** | `scan` prints `path :: lines :: paths:` for EVERY `.claude/rules/*.md`. Per rule: name its real subject in one phrase, derive the narrowest glob covering it, compare with the declared one, and resolve it against the repo with BOTH probes exactly as `references/hard-sync.md` prescribes -- `git ls-files -- ':(glob)<glob>'` (plain git `*` crosses `/`, so a broken glob still "matches") AND a filesystem `find` (`git ls-files` is blind to git-ignored trees: a `.gitignore`d `.claude/` returns 0 rows while the tree is full of files). `DANGLING` only when BOTH come back empty. Judge each now -- `OK` / `TOO_BROAD` / `TOO_NARROW` / `DANGLING` / `MISSING` / `CORRECTLY_GLOBAL` | `{PATHS_PRECISION_TABLE}` |
+| **`paths:` precision** | `scan` prints `path :: lines :: paths:` for EVERY `.claude/rules/**/*.md`. Per rule: name its real subject in one phrase, derive the narrowest glob covering it, compare with the declared one, and resolve it against the repo with BOTH probes exactly as `references/hard-sync.md` prescribes -- `git ls-files -- ':(glob)<glob>'` (plain git `*` crosses `/`, so a broken glob still "matches") AND a filesystem `find` (`git ls-files` is blind to git-ignored trees: a `.gitignore`d `.claude/` returns 0 rows while the tree is full of files). `DANGLING` only when BOTH come back empty. Judge each now -- `OK` / `TOO_BROAD` / `TOO_NARROW` / `DANGLING` / `MISSING` / `CORRECTLY_GLOBAL` | `{PATHS_PRECISION_TABLE}` |
 | **Obvious vs domain** | HARVEST real pairs from the target's OWN rules and conventions: a line any competent model already knows (generic craft advice, restated tool docs, textbook pattern definitions) next to the domain fact in the same file that only makes sense because someone HERE decided it. Real quotes from this repo, never invented illustrations | `{OBVIOUS_VS_DOMAIN_TABLE}` |
 | **Stable numbered ids** | rule files whose rows carry stable numbers, and who cites them POSITIONALLY (a reorder silently repoints every citation). Count them per run, never trust a baked number | `{INVARIANTS_TABLE}` |
 | **Reacting hooks** | `docsync-*.mjs` (installed by `/brewdoc:docsync-setup`) or other hooks firing on memory edits (`.claude/settings.json`, `.claude/hooks/**`), their config and threshold. Edits WILL trigger them -- expected; hook files are never edited | `{INVARIANTS_TABLE}`, `{TRACKER_NOTE}` |
@@ -455,7 +450,7 @@ Files written:
 - .claude/skills/memory-sync/references/prompting-guide.md
 
 Run it:  /memory-sync                       -> scope session (default), depth NORMAL, whole surface
-         /memory-sync all "only rules"      -> re-verify every fact, emphasis on rules
+         /memory-sync all "only rules"      -> user-narrowed scope: re-verify only rules, recursively
          /memory-sync branch                -> facts from the branch diff vs {DEFAULT_BRANCH}
          /memory-sync all hard              -> + paths: precision audit + obvious-knowledge purge
 
@@ -566,7 +561,7 @@ the single list -- do not restate it here.
 - `references/hard-sync.md` -- the `HARD`-depth passes: `paths:` precision audit + obvious-knowledge purge, with
   their verdict vocabulary and reporting contract (emitted; holds `{PATHS_PRECISION_TABLE}` +
   `{OBVIOUS_VS_DOMAIN_TABLE}`).
-- `references/prompting-guide.md` -- the merged Claude 5 + OpenAI/Codex prompting-quality rule table applied in
+- `references/prompting-guide.md` -- the source-verified Claude + OpenAI/Codex prompting-quality rule table applied in
   Phase 2/3 (emitted; no BLOCK placeholders).
 - `scripts/generate.sh` -- `scan` / `emit` / `validate` / `restamp` / `status` / `enable` / `disable` /
   `uninstall` / `purge`.

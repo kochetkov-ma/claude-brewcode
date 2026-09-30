@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
 import {
-  chmodSync, existsSync, lstatSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync,
+  chmodSync, existsSync, linkSync, lstatSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync,
   symlinkSync, writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
@@ -1069,6 +1069,185 @@ printf '%s %s' "$migrate_rc" "$read_rc"`);
     JSON.parse(line);
     return true;
   }), true, 'completed migration leaves only valid JSONL rows');
+}
+
+for (const [mode, args, kept] of [
+  ['all', [], []],
+  ['keep-last', ['2'], [1, 2]],
+  ['keep-days', ['30'], [1, 2]],
+  ['keep-issues-insights', [], [1, 2]],
+]) {
+  // GIVEN three exact JSONL records WHEN archiving by policy THEN move only selected bytes once.
+  const teamDir = newTeam(`archive-${mode}`);
+  const lines = [
+    '{"ts":"2000-01-01T00:00:00Z","k":"track","txt":"old"}',
+    '{"ts":"2099-01-01T00:00:00Z","k":"issue","txt":"future issue"}',
+    '{"ts":"2099-01-01T00:00:00Z","k":"insight","txt":"future insight"}',
+  ];
+  writeFileSync(join(teamDir, 'trace.jsonl'), `${lines.join('\n')}\n`);
+  writeFileSync(join(teamDir, 'trace.cursor'), 'old-cursor\n');
+  const prior = '{"txt":"prior archive"}\n';
+  writeFileSync(join(teamDir, 'trace-archive.jsonl'), prior);
+  const result = spawnSync('sh', [TRACE_OPS, 'archive', teamDir, mode, ...args], { encoding: 'utf8', timeout: 8000 });
+  check(`archive.${mode}.exit`, result.status, 0, 'archive policy succeeds');
+  check(`archive.${mode}.counts`, result.stdout, `${JSON.stringify({ archived: 3 - kept.length, kept: kept.length })}\n`,
+    'archive reports exact moved and retained counts');
+  check(`archive.${mode}.live`, readFileSync(join(teamDir, 'trace.jsonl'), 'utf8'),
+    kept.map(index => `${lines[index]}\n`).join(''), 'retained source bytes match policy exactly');
+  const expectedArchive = prior + lines.filter((_, index) => !kept.includes(index)).map(line => `${line}\n`).join('');
+  check(`archive.${mode}.archive`, readFileSync(join(teamDir, 'trace-archive.jsonl'), 'utf8'), expectedArchive,
+    'archive preserves previous bytes and appends exactly the selected source rows');
+  check(`archive.${mode}.cursor`, readFileSync(join(teamDir, 'trace.cursor'), 'utf8'), '\n', 'successful move resets cursor');
+  const retry = spawnSync('sh', [TRACE_OPS, 'archive', teamDir, mode, ...args], { encoding: 'utf8', timeout: 8000 });
+  check(`archive.${mode}.retry`, retry.stdout, `${JSON.stringify({ archived: 0, kept: kept.length })}\n`, 'retry moves no already archived entries');
+  check(`archive.${mode}.retryBytes`, readFileSync(join(teamDir, 'trace-archive.jsonl'), 'utf8'), expectedArchive,
+    'successful retry does not duplicate archive bytes');
+  check(`archive.${mode}.lock`, existsSync(join(teamDir, '.trace-ops.lock')), false, 'completed operation releases shared lock');
+}
+
+{
+  // GIVEN cursor publication fails after archive/live writes WHEN retrying THEN rollback prevents duplicates.
+  const teamDir = newTeam('archive-publication-failure');
+  const live = '{"txt":"live"}\n';
+  const archive = '{"txt":"archived before"}\n';
+  writeFileSync(join(teamDir, 'trace.jsonl'), live);
+  writeFileSync(join(teamDir, 'trace-archive.jsonl'), archive);
+  writeFileSync(join(teamDir, 'trace.cursor'), 'original-cursor\n');
+  const preload = join(teamDir, 'fail-cursor-once.cjs');
+  writeFileSync(preload, `
+const fs = require('node:fs');
+const truncate = fs.ftruncateSync;
+const cursorInode = fs.statSync(process.env.TRACE_ARCHIVE_CURSOR).ino;
+let injected = false;
+fs.ftruncateSync = (fd, length) => {
+  if (!injected && fs.fstatSync(fd).ino === cursorInode) {
+    injected = true;
+    throw new Error('injected cursor publication failure');
+  }
+  return truncate(fd, length);
+};
+`);
+  const result = spawnSync('sh', [TRACE_OPS, 'archive', teamDir, 'all'], {
+    encoding: 'utf8', timeout: 8000,
+    env: { ...process.env, TRACE_ARCHIVE_CURSOR: join(teamDir, 'trace.cursor'),
+      NODE_OPTIONS: `${process.env.NODE_OPTIONS || ''} --require=${preload}`.trim() },
+  });
+  check('archiveFailure.exit', result.status, 1, 'injected publication failure returns explicit failure');
+  check('archiveFailure.reason', result.stderr.includes('injected cursor publication failure'), true, 'failure identifies injected stage');
+  check('archiveFailure.live', readFileSync(join(teamDir, 'trace.jsonl'), 'utf8'), live, 'rollback restores live source bytes');
+  check('archiveFailure.archive', readFileSync(join(teamDir, 'trace-archive.jsonl'), 'utf8'), archive, 'rollback restores archive bytes');
+  check('archiveFailure.cursor', readFileSync(join(teamDir, 'trace.cursor'), 'utf8'), 'original-cursor\n', 'rollback restores cursor bytes');
+  check('archiveFailure.lock', existsSync(join(teamDir, '.trace-ops.lock')), false, 'complete rollback releases lock');
+  const retry = spawnSync('sh', [TRACE_OPS, 'archive', teamDir, 'all'], { encoding: 'utf8', timeout: 8000 });
+  check('archiveFailure.retry', retry.status, 0, 'retry after complete rollback succeeds');
+  check('archiveFailure.retryBytes', readFileSync(join(teamDir, 'trace-archive.jsonl'), 'utf8'), archive + live,
+    'retry archives each original row exactly once');
+}
+
+{
+  // GIVEN archive aliases live trace WHEN cleanup is requested THEN preserve all bytes.
+  const teamDir = newTeam('archive-hardlink-alias');
+  const original = '{"txt":"must survive"}\n';
+  writeFileSync(join(teamDir, 'trace.jsonl'), original);
+  linkSync(join(teamDir, 'trace.jsonl'), join(teamDir, 'trace-archive.jsonl'));
+  const result = spawnSync('sh', [TRACE_OPS, 'archive', teamDir, 'all'], { encoding: 'utf8', timeout: 8000 });
+  check('archiveAlias.exit', result.status, 1, 'aliased trace files are rejected before publication');
+  check('archiveAlias.reason', result.stderr.includes('distinct identities'), true, 'rejection identifies alias conflict');
+  check('archiveAlias.live', readFileSync(join(teamDir, 'trace.jsonl'), 'utf8'), original, 'live bytes remain exact');
+  check('archiveAlias.archive', readFileSync(join(teamDir, 'trace-archive.jsonl'), 'utf8'), original, 'archive bytes remain exact');
+  check('archiveAlias.cursor', existsSync(join(teamDir, 'trace.cursor')), false, 'preflight-created cursor is removed on refusal');
+}
+
+{
+  // GIVEN rollback itself fails WHEN archival aborts THEN retain lock/evidence and refuse retries.
+  const teamDir = newTeam('archive-incomplete-rollback');
+  const original = '{"txt":"recoverable"}\n';
+  writeFileSync(join(teamDir, 'trace.jsonl'), original);
+  const preload = join(teamDir, 'fail-live-truncate.cjs');
+  writeFileSync(preload, `
+const fs = require('node:fs');
+const truncate = fs.ftruncateSync;
+const liveInode = fs.statSync(process.env.TRACE_ARCHIVE_LIVE).ino;
+fs.ftruncateSync = (fd, length) => {
+  if (fs.fstatSync(fd).ino === liveInode) throw new Error('injected persistent live failure');
+  return truncate(fd, length);
+};
+`);
+  const result = spawnSync('sh', [TRACE_OPS, 'archive', teamDir, 'all'], {
+    encoding: 'utf8', timeout: 8000,
+    env: { ...process.env, TRACE_ARCHIVE_LIVE: join(teamDir, 'trace.jsonl'),
+      NODE_OPTIONS: `${process.env.NODE_OPTIONS || ''} --require=${preload}`.trim() },
+  });
+  check('archiveIncomplete.exit', result.status, 2, 'incomplete rollback has distinct failure status');
+  check('archiveIncomplete.reason', result.stderr.includes('rollback incomplete; lock retained; recovery:'), true,
+    'failure identifies retained evidence and lock');
+  check('archiveIncomplete.lock', existsSync(join(teamDir, '.trace-ops.lock')), true, 'uncertain transaction retains shared lock');
+  const recoveryNames = readdirSync(teamDir).filter(name => name.startsWith('.trace-archive-recovery.'));
+  check('archiveIncomplete.recoveryCount', recoveryNames.length, 1, 'exactly one owned recovery record remains');
+  check('archiveIncomplete.original', readFileSync(join(teamDir, recoveryNames[0], 'trace.jsonl'), 'utf8'), original,
+    'recovery record preserves exact pre-publication live bytes');
+  check('archiveIncomplete.manifest', JSON.stringify(JSON.parse(readFileSync(join(teamDir, recoveryNames[0], 'manifest.json'), 'utf8'))
+    .map(({ name, created }) => ({ name, created }))),
+  JSON.stringify([{ name: 'trace.jsonl', created: false }, { name: 'trace-archive.jsonl', created: true }, { name: 'trace.cursor', created: true }]),
+  'recovery manifest identifies each prior file presence');
+  const retry = spawnSync('sh', [TRACE_OPS, 'archive', teamDir, 'all'], { encoding: 'utf8', timeout: 8000 });
+  check('archiveIncomplete.retry', retry.status, 1, 'retry refuses unresolved lock instead of duplicating archive');
+  check('archiveIncomplete.retryReason', retry.stderr.includes('Trace operation locked'), true, 'retry reports unresolved transaction explicitly');
+}
+
+{
+  // GIVEN interrupted publication left recovery evidence WHEN archival restarts THEN refuse unsafe retry.
+  const teamDir = newTeam('archive-interrupted-recovery');
+  const original = '{"txt":"pending recovery"}\n';
+  writeFileSync(join(teamDir, 'trace.jsonl'), original);
+  mkdirSync(join(teamDir, '.trace-archive-recovery.interrupted'));
+  const result = spawnSync('sh', [TRACE_OPS, 'archive', teamDir, 'all'], { encoding: 'utf8', timeout: 8000 });
+  check('archiveInterrupted.exit', result.status, 2, 'unresolved archive evidence blocks further publication');
+  check('archiveInterrupted.reason', result.stderr.includes('unresolved archive recovery:'), true, 'failure identifies retained recovery path');
+  check('archiveInterrupted.live', readFileSync(join(teamDir, 'trace.jsonl'), 'utf8'), original, 'refused retry preserves source bytes');
+  check('archiveInterrupted.lock', existsSync(join(teamDir, '.trace-ops.lock')), true, 'refused retry retains lock for explicit recovery');
+  check('archiveInterrupted.evidence', existsSync(join(teamDir, '.trace-archive-recovery.interrupted')), true,
+    'unresolved evidence is never automatically removed');
+}
+
+{
+  // GIVEN archive owns shared lock WHEN another writer runs THEN retry preserves both before/after rows.
+  const teamDir = newTeam('archive-concurrent-writer');
+  const before = add(teamDir, 'sid00000', 'agent', 'before archive');
+  check('archiveConcurrent.before', before.status, 0, 'pre-archive producer append succeeds');
+  const marker = join(teamDir, '.archive-paused');
+  const release = join(teamDir, '.archive-release');
+  const shimDir = commandShim('archive-pause', 'node', `
+if [ "$1" = "-" ] && [ ! -e "$TRACE_PAUSE_MARKER" ]; then
+  : > "$TRACE_PAUSE_MARKER"
+  while [ ! -e "$TRACE_PAUSE_RELEASE" ]; do sleep 0.01; done
+fi
+exec "$TRACE_REAL_NODE" "$@"`);
+  const result = spawnSync('sh', ['-c', `
+PATH="$TRACE_SHIM_DIR:$PATH" sh "$TRACE_OPS_PATH" archive "$TRACE_TEAM_DIR" all > "$TRACE_TEAM_DIR/archive-out" 2> "$TRACE_TEAM_DIR/archive-err" &
+owner=$!
+tries=0
+while [ ! -e "$TRACE_PAUSE_MARKER" ] && [ "$tries" -lt 500 ]; do tries=$((tries + 1)); sleep 0.01; done
+sh "$TRACE_OPS_PATH" add "$TRACE_TEAM_DIR" sid00001 agent track completed "after archive" > "$TRACE_TEAM_DIR/writer-out" 2> "$TRACE_TEAM_DIR/writer-err"
+contended=$?
+: > "$TRACE_PAUSE_RELEASE"
+wait "$owner"
+archived=$?
+sh "$TRACE_OPS_PATH" add "$TRACE_TEAM_DIR" sid00001 agent track completed "after archive" > "$TRACE_TEAM_DIR/retry-out"
+retried=$?
+printf '%s %s %s' "$archived" "$contended" "$retried"
+`], {
+    encoding: 'utf8', timeout: 15000,
+    env: { ...process.env, TRACE_SHIM_DIR: shimDir, TRACE_OPS_PATH: TRACE_OPS, TRACE_TEAM_DIR: teamDir,
+      TRACE_PAUSE_MARKER: marker, TRACE_PAUSE_RELEASE: release, TRACE_REAL_NODE: process.execPath },
+  });
+  check('archiveConcurrent.statuses', result.stdout, '0 1 0', 'archive succeeds, contention fails explicitly, writer retry succeeds');
+  check('archiveConcurrent.archived', readFileSync(join(teamDir, 'trace-archive.jsonl'), 'utf8'), before.stdout,
+    'archive contains exactly the producer entry committed before cleanup');
+  check('archiveConcurrent.live', readFileSync(join(teamDir, 'trace.jsonl'), 'utf8'), readFileSync(join(teamDir, 'retry-out'), 'utf8'),
+    'live trace contains exactly the producer entry committed after cleanup');
+  check('archiveConcurrent.reason', readFileSync(join(teamDir, 'writer-err'), 'utf8').includes('Trace operation locked'), true,
+    'contended producer never claims successful append');
 }
 
 try {

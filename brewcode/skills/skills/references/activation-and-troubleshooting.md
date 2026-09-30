@@ -16,6 +16,8 @@ examples.
 
 ## Activation reality
 
+Current contracts checked against live official docs + changelog through CC 2.1.285 (2026-09-30).
+
 Auto-activation is best-effort, never a contract. Upstream publishes no activation rate — rank
 methods, never quote a percentage. Known issue ([#10768](https://github.com/anthropics/claude-code/issues/10768), [#15136](https://github.com/anthropics/claude-code/issues/15136), both closed NOT PLANNED).
 
@@ -40,17 +42,15 @@ bug. If a skill still gets evicted under load, re-invoke `/name`.
 
 | Criticality | Config |
 |---|---|
-| CRIT (deploy, commit, send-email) | `disable-model-invocation: true` + use `/name` |
+| CRIT (deploy, commit, send-email) or failure unacceptable | `disable-model-invocation: true` + use `/name` |
 | Important (review, test, docs) | Optimized description + keywords |
 | Nice-to-have (helpers, utils) | Basic description |
 | Background knowledge | `user-invocable: false` |
 
-Rule: failure unacceptable -> `disable-model-invocation: true` + slash command.
-
 ## Description optimization
 
-Claude uses `description` to decide when to invoke. Description quality is the only lever on
-auto-load — upstream publishes no rate, compare variants against your own eval set.
+Claude uses description/activation guidance, invocation settings, paths and listing availability.
+Upstream publishes no activation rate; compare description variants against your eval set.
 
 | Invocation | Style |
 |---|---|
@@ -79,7 +79,7 @@ never appear in the listing.
 
 Only meaningful for a `disable-model-invocation: false` SK. Generate 5 queries that SHOULD trigger
 and 5 tricky near-misses that should NOT (share keywords, need a different tool), run them, iterate
-2-3 times on misses, report the hit rate. A SA can't prompt the user (`execution-model.md`) —
+2-3 times on misses, report the hit rate. A regular SA can't prompt the user (`execution-model.md`) —
 report, do not poll.
 
 Which questions apply, by `DMI`:
@@ -87,7 +87,7 @@ Which questions apply, by `DMI`:
 | SK | Trigger question | Output question | How to run |
 |---|---|---|---|
 | `DMI: true` (every shipped brewcode SK) | Skip — the model never auto-invokes it (`skills:331`), and it is not preloaded into SAs either | Measure | Fresh `claude -p` session invoking `/name` explicitly. Never spawn a SA "with the SK": a `DMI: true` SK silently no-ops from a SA, so a SA-based run measures nothing |
-| `DMI: false` | Measure — did the prompt alone load it? | Measure | Fresh session per prompt; disable via `skillOverrides: "off"` for the baseline half (`skills:759`) |
+| `DMI: false` | Measure — did the prompt alone load it? | Measure | Fresh session per prompt; personal/project baseline via `skillOverrides: "off"`; plugin baseline via `claude plugin eval` with no plugin loaded (`skillOverrides` excludes plugins) |
 
 Wasted steps? All runs writing similar helper scripts -> bundle into `scripts/`. Heavyweight version
 of this loop (evals.json, per-case isolation, grading, A/B): `skill-creator@claude-plugins-official`
@@ -97,15 +97,14 @@ of this loop (evals.json, per-case isolation, grading, A/B): `skill-creator@clau
 
 | Mistake | Fix |
 |---|---|
-| Summary without triggers | Include BOTH the action-verb sentence AND a `Triggers:` line |
-| No `Triggers:` line | Add `Triggers: deploy, release, ship to prod` |
+| Summary without `Triggers:` | Keep action-verb sentence + exact trigger phrases, e.g. `Triggers: deploy, release, ship to prod` |
 | Starts with "Use this skill when" | Start with an action verb: "Deploys..." |
 | Vague description | Specific: "Deploy to k8s" not "Helps with deployment" |
 | First-person description | Third-person: "Deploys..." not "I deploy..." |
 | Second-person body | Imperative: "Do X" not "You should do X" |
 | CRIT without slash | `disable-model-invocation: true` for CRIT ops |
 | Too many skills | Beyond the dynamic listing budget -> some invisible |
-| PLG skills: DMI ignored | PLG skills always in context ([#22345](https://github.com/anthropics/claude-code/issues/22345), unconfirmed against 2.1.233) — copy to `.claude/skills/` if parity needed |
+| PLG DMI behavior differs from contract | Historical [#22345](https://github.com/anthropics/claude-code/issues/22345) remains open; docs support DMI. Reproduce on installed version before copying/moving a skill |
 
 ## Troubleshooting: SK not auto-activating
 
@@ -117,10 +116,10 @@ of this loop (evals.json, per-case isolation, grading, A/B): `skill-creator@clau
 | Was working, stopped | Context compaction | Reattaches under the 5K/skill, 25K combined budget; re-invoke `/name` if evicted |
 | Claude ignores the instruction | Attention competition | Fewer skills, explicit `/name` |
 
-Debug steps: ask "What skills do you have?" — not listed means budget exceeded. Check visible
-thinking for the SK name — absent means the description isn't matching. Test explicit
-`/skill-name` — works means an activation issue, fails means the SK is broken. Force test: "Use
-skill-name skill to do X" — naming the SK is the strongest hint short of `/name`.
+Debug: inspect `/skills`, discovery path, DMI/UI settings, overrides, description/paths and listing
+budget. Missing from a list does not prove budget overflow. Check observable Skill calls; test
+`/skill-name` and distinguish discovery/configuration errors from task failures. Naming an
+LLM-invocable skill is the strongest hint short of `/name`.
 
 ## Validation tools
 
@@ -131,18 +130,20 @@ replacement for it.
 
 ## Known bugs
 
+Issue states checked via official GitHub API 2026-09-30. Reported token costs are original reproductions, !=universal overhead; Closed NOT PLANNED/duplicate !=verified fix.
+
 | # | Bug | Impact | Status | Workaround |
 |---|---|---|---|---|
-| [#39686](https://github.com/anthropics/claude-code/issues/39686) | claude.ai skills silently injected (~6000 tokens) | 37% of SK budget consumed, no opt-out | Open | No workaround |
-| [#22345](https://github.com/anthropics/claude-code/issues/22345) | PLG skills ignore DMI | PLG skills always in context (~4400 tokens) | Open, unconfirmed against 2.1.233 | No workaround |
-| [#17688](https://github.com/anthropics/claude-code/issues/17688) | SK-scoped hooks don't fire in PLGs | Hooks from SKILL.md frontmatter not working for PLG skills | Open | Use PLG `hooks.json` |
-| [#35641](https://github.com/anthropics/claude-code/issues/35641) | `/reload-plugins` doesn't load skills from new PLGs | Skills emitter not called on reload | Open | `/reload-skills` (v2.1.152) re-scans without restart. 2.1.246 fixed a same-symptom "0 skills reported" case — not confirmed identical, re-test before removing this row |
-| [#33080](https://github.com/anthropics/claude-code/issues/33080) | Same-name skill resolution surprises users | A non-bundled skill overrides a same-name bundled skill, no notice | Open | Namespace prefix (e.g. `my-`) if collision unwanted |
-| [#17417](https://github.com/anthropics/claude-code/issues/17417) | `skill.md` lowercase silently ignored | SK not discovered | Open | Use `SKILL.md` uppercase |
-| [#36031](https://github.com/anthropics/claude-code/issues/36031) | User-level skills listed in Desktop autocomplete but not invoked | SKILL.md not loaded in Desktop app | Open, unconfirmed against 2.1.233 | Use CLI |
+| [#39686](https://github.com/anthropics/claude-code/issues/39686) | claude.ai skills silently injected (~6000 tokens in report) | Reported 37% listing-budget use | Closed NOT PLANNED | Check current synced-skill controls and listing budget; do not assume no opt-out |
+| [#22345](https://github.com/anthropics/claude-code/issues/22345) | PLG skills ignore DMI | Reported ~4400 tokens; contradicts supported DMI contract | Open; runtime unverified on 2.1.285 | Reproduce on installed version |
+| [#17688](https://github.com/anthropics/claude-code/issues/17688) | SK-scoped hooks don't fire in PLGs | Historical skill-hook failure | Closed completed | Live docs support skill hooks; use PLG `hooks.json` for plugin-wide behavior |
+| [#35641](https://github.com/anthropics/claude-code/issues/35641) | `/reload-plugins` doesn't load new PLG skills | Historical reload failure | Closed duplicate | `/reload-skills` (v2.1.152); 2.1.246 fixed same-symptom "0 skills" case; verify installed version |
+| [#33080](https://github.com/anthropics/claude-code/issues/33080) | Same-name skill resolution surprises users | Non-bundled skill overrides bundled skill | Closed NOT PLANNED | Namespace prefix (e.g. `my-`) if collision unwanted |
+| [#17417](https://github.com/anthropics/claude-code/issues/17417) | `skill.md` lowercase ignored | SK not discovered; uppercase remains required | Closed completed | Use `SKILL.md` uppercase |
+| [#36031](https://github.com/anthropics/claude-code/issues/36031) | User-level skills listed but not invoked in Desktop | Historical Desktop loading report | Closed NOT PLANNED; 2.1.285 runtime unverified | Compare installed Desktop/CLI versions |
 | [#10768](https://github.com/anthropics/claude-code/issues/10768) / [#15136](https://github.com/anthropics/claude-code/issues/15136) | Auto-activation unreliable | SK not invoked on relevant request | Closed NOT PLANNED | Optimize description, then `/name` |
 
-## Behavior changes worth knowing (2.1.234-2.1.269)
+## Behavior changes worth knowing (2.1.234-2.1.285)
 
 - 2.1.239: BOM'd `.md` files (agents/skills/commands) were silently ignored -> fixed; still author
   clean UTF-8 without a BOM.
@@ -156,6 +157,8 @@ replacement for it.
   `Skill(name)` deny rule didn't cover a nested `<dir>:name` skill — both fixed.
 - 2.1.269: skills synced from claude.ai in cloud sessions are renamed `anthropic-skills:<name>`
   (bare name still works if unclaimed) — partial mitigation for local/cloud name collisions.
+- 2.1.273: terminal sessions sync claude.ai skills at session start and check every ~10 minutes;
+  use the reserved synced namespace for permission rules, not an assumed plugin source.
 
 ## Version history (earlier fixes, no inline home)
 
@@ -178,7 +181,7 @@ filler; every FM key in the supported set or the house custom list (no invented 
 with all 5 labels, 2+ modes -> keyword table with `Mutates?` + RU); body <500 lines, imperative
 form; `context: fork` if standalone; `agent` an appropriate type; `model` matched to complexity;
 `allowed-tools` pre-approval only, no bare `Bash`/`Write`/`Edit`/`Agent`; `disallowed-tools` present
-when the SK must never call a tool (autonomous -> `AskUserQuestion`); examples actually work; no
+when the invoking turn must exclude a tool (autonomous -> `AskUserQuestion`; reapply next invocation); examples actually work; no
 hardcoded secrets; Bash blocks carry the `EXECUTE` keyword + `&& OK || FAIL` + dynamic (CSD/BPR)
 paths.
 
@@ -187,11 +190,10 @@ present and concrete ("Triggers: deploy, release, ship to prod"); single line, n
 within the field-reference caps; third-person ("Deploys..." not "I deploy..."); CRIT operations use
 `disable-model-invocation: true`.
 
-Test it: say the trigger phrase (should auto-load); say "Use [skill-name] skill to..." (higher
+Test LLM-invocable skills: say the trigger phrase (should auto-load); say "Use [skill-name] skill to..." (higher
 activation odds); say `/skill-name` (works unless an Activation Reality caveat applies). Trigger
 test fails but `/name` works -> optimize the description or switch to `DMI: true`.
 
 ## Sources
 
-[CC Skills](https://code.claude.com/docs/en/skills) | [Custom Subagents](https://code.claude.com/docs/en/sub-agents) | [Skill Best Practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices) | [agentskills.io](https://agentskills.io)
-- [GitHub #12541](https://github.com/anthropics/claude-code/issues/12541) — feature request that led to CSD
+[CC Skills](https://code.claude.com/docs/en/skills) | [Custom Subagents](https://code.claude.com/docs/en/sub-agents) | [Skill Best Practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices) | [agentskills.io](https://agentskills.io) | [#12541](https://github.com/anthropics/claude-code/issues/12541) (CSD feature request)

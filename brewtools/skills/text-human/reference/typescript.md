@@ -38,20 +38,20 @@
 
 ## JSDoc Cleanup
 
-Remove JSDoc from: private functions, test files, obvious components. Keep public API docs.
+Remove only redundant JSDoc, never by private/test status alone. Keep API, meaningful internal/test contracts and tags consumed by type, security, lint, build or documentation tools.
 
 | Remove | Keep |
 |--------|------|
-| Internal/private functions | Exported public API |
-| Test files (`*.test.ts`, `*.spec.ts`) | Complex utility functions |
+| Internal/private redundant prose | Meaningful contracts at any visibility |
+| Redundant `*.test.ts`/`*.spec.ts` prose | Test/fixture invariants, complex utilities, GIVEN/WHEN/THEN/AND |
 | Obvious components (name = purpose) | Non-obvious side effects |
 | Trivial `@param` restating name | `@throws`, `@deprecated` |
 | Trivial `@returns` restating function name | `@example` with usage |
-| `@type` when TypeScript infers | Generic type explanations |
+| Proven redundant prose around types | Functional `@type`/tool tags, generic type explanations |
 
 ### JSDoc vs TypeScript
 
-Prefer TypeScript types over JSDoc when both exist:
+Strip prose that duplicates existing TypeScript types only when no tool consumes it. Keep functional JSDoc tags, especially JavaScript `@type`; changing type representation is proposal-only until explicitly authorized.
 
 ```typescript
 // REMOVE - redundant JSDoc with TS types:
@@ -127,20 +127,20 @@ const useAutoCallback = <T extends Function>(fn: T): T => { }
 |--------|---------|
 | KEEP | `// eslint-disable-next-line @typescript-eslint/no-explicit-any` |
 | KEEP | `/* eslint-disable */` at file top with reason |
-| REMOVE | `// eslint-disable` without explanation |
-| REVIEW | Multiple disables in one file (code smell) |
+| KEEP + SURFACE | `// eslint-disable` without explanation; suppression is functional |
+| KEEP + REVIEW | Multiple disables; narrowing/removal needs explicit scope and lint evidence |
 
 ### Preserve
 
 - `// @ts-expect-error` with explanation
-- `// @ts-ignore` (but prefer @ts-expect-error)
+- `// @ts-ignore` unchanged; replacing it with @ts-expect-error is a proposal, not cosmetic cleanup
 - Region comments `// #region`, `// #endregion`
 
 ---
 
 ## Test Files
 
-Remove all JSDoc from: test files, test utilities, mocks, fixtures.
+Remove only redundant docs in tests, utilities, mocks and fixtures. Keep assumptions, edge cases, tool-consumed docs, GIVEN/WHEN/THEN/AND and Arrange/Act/Assert.
 
 ```typescript
 // REMOVE - test file:
@@ -173,11 +173,11 @@ export const createMockUser = () => { }
 
 | Check | Rule |
 |-------|------|
-| [ ] | No JSDoc on internal/unexported functions |
-| [ ] | No JSDoc on test files (`*.test.ts`, `*.spec.ts`) |
-| [ ] | No redundant JSDoc when TS types exist |
+| [ ] | internal/unexported docs retain useful contracts |
+| [ ] | `*.test.ts`/`*.spec.ts` docs retain fixture/test invariants |
+| [ ] | Redundant type prose removed only if no consumer; functional tags retained |
 | [ ] | No JSDoc on obvious React components |
-| [ ] | ESLint disables have explanations |
+| [ ] | ESLint/TSLint/type/security/tool directives unchanged; missing reasons surfaced |
 | [ ] | No `@param`/`@returns` restating obvious info |
 
 ### Scan Pattern

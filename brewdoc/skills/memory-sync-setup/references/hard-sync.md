@@ -1,17 +1,16 @@
-<!-- brewcode-meta: version=6.2.0 content_version=6.2.0 generated_by=brewdoc:memory-sync-setup -->
+<!-- brewcode-meta: version=6.3.0 content_version=6.3.0 generated_by=brewdoc:memory-sync-setup -->
 # Hard Sync
 
-The two aggressive DELETION passes of `/memory-sync`. Cited by the emitted skill's Phase 2 batch prompt at
-`{DEPTH}` = `HARD`, by its Phase 3 VERIFY checkers, by its References table and by its Phase 4 self-sync. Both passes may only SHRINK a file -
-the ONE exception is the PASS A frontmatter repair that adds or widens a `paths:` key.
+Two DELETION passes of `/memory-sync`, cited by Phase 2 at `{DEPTH}` = `HARD`, Phase 3 checkers, References and Phase 4.
+They only shrink, except PASS A frontmatter `paths:` repair on MISSING/TOO_NARROW. The common rule-5 salvage
+gate remains separate: proved orphan, SAME agent, SAME owned batch, both stores authorized, no explicit exclusion;
+recipient growth <= removed-store lines and total delta <= 0. Neither pass widens the user's write set.
 
 ## Prompting-quality depth split
 
-`references/prompting-guide.md` runs at every scope AND depth (Phase 2, before any edit) - it is not a third
-PASS here. What changes with `{DEPTH}` is how much of what it finds gets REWRITTEN: at `NORMAL`, fix a violation
-ONLY where it coincides with a fact/dedup edit already touching that line, otherwise REPORT it; at `HARD`,
-rewrite every remaining violation. Both depths return the guide's `file :: rule# :: line :: before -> after`
-verdict rows - only the count acted on differs.
+`references/prompting-guide.md` runs before edits at every scope/depth, not as a third PASS. At `NORMAL`, rewrite
+only violations on lines already touched by fact/dedup edits; report the rest. At `HARD`, rewrite every remaining
+violation. Both return `file :: rule# :: line :: before -> after` verdict rows; only the applied count differs.
 
 ## The problem
 
@@ -184,5 +183,5 @@ Each batch agent returns, IN ADDITION to its normal per-file JSON, a `"hard"` SU
 Rules for the report itself: quote the deleted line VERBATIM with its line number, never summarise it - the memory
 surface is often git-IGNORED, so a checker cannot recover the context from a diff. `lines_after` > `lines_before`
 at `HARD` depth is a defect, not a judgement call - EXCEPT the PASS A frontmatter repair that adds or widens a
-`paths:` key, the one authorized growth. A file whose `lines_after` is under HALF its `lines_before` needs no extra
-field to be flagged - the ratio IS the flag: the Phase 3 checker re-reads such a file IN FULL and Phase 6 names it.
+`paths:` key, or separately proved rule-5 salvage satisfying the common gates and total budget. A file whose
+`lines_after` is under HALF its `lines_before` needs no extra field: Phase 3 re-reads it IN FULL; Phase 6 names it.

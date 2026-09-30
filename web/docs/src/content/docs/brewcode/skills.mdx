@@ -24,7 +24,10 @@ Setup skills draw their verbs from one vocabulary, in this order:
 
 `status` · `install` · `upgrade` · `enable` · `disable` · `uninstall` · `purge`
 
-A bare invocation means `status` when the mechanism is installed and `install` when it is not — with one deliberate exception: [`semble-setup`](/brewcode/skills/semble-setup/) always defaults to `status`, because its `install` reaches outside the project to run `brew install uv`.
+A bare invocation normally means `status` when installed and `install` when absent.
+[`semble-setup`](/brewcode/skills/semble-setup/) always defaults to `status`, because installation
+reaches outside the project. [`convention-setup`](/brewcode/skills/convention-setup/) defaults to
+`install` and checks status before extraction.
 
 All eleven `-setup` skills implement all seven verbs, via one of two mechanisms: a live config flag the reader re-checks on every invocation, or entry-file parking, where the filename discovery keys on is renamed `<name>.disabled` with the body left byte-identical. [`teams-setup`](/brewcode/skills/teams-setup/) uses parking: `enable`/`disable` move each roster member's agent file between `<agent>.md` and `<agent>.md.disabled`. Skill-specific extras come after the canonical set, never in place of it: `reindex`, `optimize` and `resume` on `semble-setup`.
 
@@ -33,43 +36,50 @@ All eleven `-setup` skills implement all seven verbs, via one of two mechanisms:
 | # | Skill | Command | Model | Purpose |
 |---|-------|---------|-------|---------|
 | 1 | [agents](/brewcode/skills/agents/) | [`/brewcode:agents`](/brewcode/skills/agents/) | opus | Creates, improves, syncs Claude Code subagents |
-| 2 | [convention](/brewcode/skills/convention/) | [`/brewcode:convention`](/brewcode/skills/convention/) | opus | Extracts etalon classes, patterns, architecture into convention docs |
+| 2 | [convention-setup](/brewcode/skills/convention-setup/) | [`/brewcode:convention-setup`](/brewcode/skills/convention-setup/) | opus | Installs coding, testing and architecture conventions with reversible loading guidance |
 | 3 | [e2e](/brewcode/skills/e2e/) | [`/brewcode:e2e`](/brewcode/skills/e2e/) | opus | Orchestrates e2e testing: BDD scenarios, Playwright autotests |
 | 4 | [rules](/brewcode/skills/rules/) | [`/brewcode:rules`](/brewcode/skills/rules/) | sonnet | Syncs KNOWLEDGE.jsonl or session learnings to project rules |
 | 5 | [semble-setup](/brewcode/skills/semble-setup/) | [`/brewcode:semble-setup`](/brewcode/skills/semble-setup/) | opus | Installs, audits and maintains the semble_code semantic code-search MCP |
-| 6 | [setup-status](/brewcode/skills/setup-status/) | [`/brewcode:setup-status`](/brewcode/skills/setup-status/) | sonnet | Read-only dashboard: which setup skills are installed, stale, partial or missing here |
+| 6 | [setup-status](/brewcode/skills/setup-status/) | [`/brewcode:setup-status`](/brewcode/skills/setup-status/) | sonnet | Read-only state and dependency-aware next commands for 11 setups and 23 carriers: brewcode 7, brewtools 13, brewdoc 3 |
 | 7 | [skills](/brewcode/skills/skills/) | [`/brewcode:skills`](/brewcode/skills/skills/) | opus | Lists, improves, creates, syncs Claude Code skills |
 | 8 | [superreview-setup](/brewcode/skills/superreview-setup/) | [`/brewcode:superreview-setup`](/brewcode/skills/superreview-setup/) | opus | Generates a project-tailored deep-review skill: domain-expert routing + scope discipline + mechanical gates + adversarial validation |
 | 9 | [teams-setup](/brewcode/skills/teams-setup/) | [`/brewcode:teams-setup`](/brewcode/skills/teams-setup/) | opus | Creates and manages dynamic teams of domain agents |
 | ★ | [superreview (emitted)](/brewcode/skills/review/) | `/superreview` | opus | **Per-project** deep review — written into your repo by `/brewcode:superreview-setup` |
 
+## Setup foundation
+
 <CardGrid>
-  <Card title="agents" icon="people" href="/brewcode/skills/agents/">
-    Agent creation, improvement, and sync
-  </Card>
-  <Card title="convention" icon="book" href="/brewcode/skills/convention/">
-    Convention analysis and reference classes
-  </Card>
-  <Card title="e2e" icon="check" href="/brewcode/skills/e2e/">
-    E2E testing: scenarios, autotests, quorum review
-  </Card>
-  <Card title="rules" icon="shield" href="/brewcode/skills/rules/">
-    Knowledge-to-rules synchronization
+  <Card title="setup-status" icon="clipboard" href="/brewcode/skills/setup-status/">
+    Read-only setup state and the next command in dependency order.
   </Card>
   <Card title="semble-setup" icon="search" href="/brewcode/skills/semble-setup/">
     Semantic code-search MCP: install, audit, reindex, uninstall
   </Card>
-  <Card title="setup-status" icon="clipboard" href="/brewcode/skills/setup-status/">
-    One table: what is installed, stale or missing here, and the command that fixes each row
+  <Card title="convention-setup" icon="book" href="/brewcode/skills/convention-setup/">
+    Capture project coding, testing and architecture patterns before teams and review.
   </Card>
-  <Card title="skills" icon="puzzle" href="/brewcode/skills/skills/">
-    Skill management and sync
+  <Card title="teams-setup" icon="group" href="/brewcode/skills/teams-setup/">
+    Dynamic agent teams that use the project conventions.
   </Card>
   <Card title="superreview-setup" icon="check" href="/brewcode/skills/superreview-setup/">
     Generate a project-tailored deep-review skill (review + standards merged)
   </Card>
-  <Card title="teams-setup" icon="group" href="/brewcode/skills/teams-setup/">
-    Dynamic agent teams with self-selection and tracking
+</CardGrid>
+
+## Recurring tools
+
+<CardGrid>
+  <Card title="agents" icon="people" href="/brewcode/skills/agents/">
+    Agent status, creation, improvement, review and sync.
+  </Card>
+  <Card title="skills" icon="puzzle" href="/brewcode/skills/skills/">
+    Skill status, creation, improvement, review and sync.
+  </Card>
+  <Card title="rules" icon="shield" href="/brewcode/skills/rules/">
+    Accepted knowledge-to-rules organization and validation.
+  </Card>
+  <Card title="e2e" icon="check" href="/brewcode/skills/e2e/">
+    E2E scenarios, autotests and quorum review.
   </Card>
   <Card title="superreview (emitted)" icon="magic" href="/brewcode/skills/review/">
     Per-project deep review with adversarial validation — written into your repo by <code>/brewcode:superreview-setup</code>
@@ -79,7 +89,10 @@ All eleven `-setup` skills implement all seven verbs, via one of two mechanisms:
 ## Test coverage
 
 <Callout type="note" title="Regression suites, not style linting">
-  `skills/teams-setup/tests/` runs 65 checks against the toggle/verify scripts, and `skills/semble-setup/tests/` runs 7 suites covering core, agents, hooks, integration, project, status and telemetry. Both are exact-equality assertion suites — a future upstream change fails a test instead of shipping silently.
+  Run `bash brewcode/skills/teams-setup/tests/run.sh` for team lifecycle/profile contracts,
+  `node brewcode/skills/convention-setup/tests/lifecycle.mjs` for convention lifecycle,
+  and `bash brewcode/skills/semble-setup/tests/run.sh` for search integration. Suite output
+  supplies current pass/fail totals; these checks do not replace live runtime evaluation.
 </Callout>
 
 ## Delegation — one contract, all nine skills
@@ -90,7 +103,9 @@ Every skill here except read-only `setup-status` fans work out to subagents, and
   A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct it, and it usually drifts off-target.
 </Callout>
 
-One subagent = **ONE bounded unit**: one deliverable, roughly 5 files, roughly 10 steps. Anything bigger is split into N tasks and spawned in **ONE message**, in parallel. That is why `convention` runs 10 layer agents instead of one, `e2e` partitions scenarios across parallel agents, and `teams-setup` creates agents one file per spawn.
+One subagent = **ONE bounded unit**: one deliverable, roughly 5 files, roughly 10 steps. Larger
+work splits into independent parallel assignments. Convention setup partitions layer analysis,
+E2E partitions scenarios, and teams setup creates agents one file per spawn.
 
 Every spawn prompt carries six fields — a bare one-line task is never enough:
 
@@ -103,7 +118,14 @@ Every spawn prompt carries six fields — a bare one-line task is never enough:
 | CONSUMER | who or what uses the result next, and the shape it must fit |
 | DONE | acceptance criteria + the exact report shape you want back |
 
-The same brief lives in the runtime templates these skills read — the `e2e` mode references, `convention`'s rules guide, `teams-setup`'s roster template, and `superreview-setup`'s emitted skill template — so a fan-out three levels deep still gets a full brief.
+The same brief lives in E2E references, convention-setup's rules guide, teams-setup's roster
+template and superreview-setup's emitted template. Main owns spawns and integration; delegates
+return decisions and results rather than nesting.
+
+Agents and skills management default to read-only status. Their prompt-first contracts use
+existing answers, resolve explicit modes anywhere in the prompt, and bundle unresolved write
+decisions into one pre-write question. Creator references follow current Claude Code contracts
+checked through 2.1.285; structural validation and live evaluation provide different evidence.
 
 ## Lifecycle
 
@@ -118,6 +140,24 @@ The recommended skill execution order for a standard project cycle:
   </li>
   <li>
     <div>
+      <strong>Search foundation</strong>
+      <p>Inspect or install semantic search when applicable. <a href="/brewcode/skills/semble-setup/">semble-setup</a></p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Convention foundation</strong>
+      <p>Capture coding, testing and architecture patterns before generating agents. <a href="/brewcode/skills/convention-setup/">convention-setup</a></p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Teams setup</strong>
+      <p>Create project domain agents using those conventions. <a href="/brewcode/skills/teams-setup/">teams-setup</a></p>
+    </div>
+  </li>
+  <li>
+    <div>
       <strong>Superreview setup</strong>
       <p>Generate a per-project deep-review skill tailored to your tech stack and agents. <a href="/brewcode/skills/superreview-setup/">superreview-setup</a></p>
     </div>
@@ -126,12 +166,6 @@ The recommended skill execution order for a standard project cycle:
     <div>
       <strong>Rules</strong>
       <p>Sync learned knowledge to project rules for future sessions. <a href="/brewcode/skills/rules/">rules</a></p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Teams setup (optional)</strong>
-      <p>Install 5-20 project-specific agents with self-selection and performance tracking. <a href="/brewcode/skills/teams-setup/">teams-setup</a></p>
     </div>
   </li>
 </Steps>
@@ -146,12 +180,15 @@ The recommended skill execution order for a standard project cycle:
 ```
 setup-status  (read-only: what is already here)
       |
-superreview-setup --> /superreview (emitted into your repo)
+semble-setup  (search foundation, when applicable)
       |
-      +-- convention (optional)
-      +-- rules
-      +-- teams-setup (optional)
-      +-- semble-setup (optional)
+convention-setup  (coding, architecture and testing foundation)
+      |
+teams-setup --> project domain agents
+      |
+superreview-setup --> /superreview (emitted into your repo)
+
+rules / skills / agents / e2e remain recurring tools
 ```
 
 <Callout type="note" title="Dynamic teams">
@@ -194,6 +231,9 @@ These skills work standalone -- no prerequisite steps required:
   </Card>
   <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills">
     Source code, README, and configuration files.
+  </Card>
+  <Card title="Brewcode overview" icon="document" href="/brewcode/overview/">
+    Plugin skills, agents and hooks.
   </Card>
 </CardGrid>
 

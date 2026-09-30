@@ -6,6 +6,8 @@ Write each block below to its path under `TARGET/.codex/features/`. Substitute `
 
 The `board.md` here is the EMPTY skeleton (counts 0). The Step-4c doc sweep fills it from the migrated docs.
 
+Shared `METHODOLOGY.md`, `ANTI-DRIFT.md` and derived `task-graph.md` templates live in ref 11. They and the task Methodology/Anti-drift cron sections below are UNGATED in both spec modes; emit them on install/upgrade without overwriting task-specific decisions or prompt/state.
+
 ## Spec-mode placeholders (gate: `SPEC_MODE=on`)
 
 Every placeholder below shares ONE gate: `SPEC_MODE`. Exactly TWO kinds -- `line` and `inline`. When `SPEC_MODE=off`, the emitted control files MUST be byte-identical to the pre-spec-layer originals PLUS this file's UNGATED session-progress sites (`PROGRESS.md` itself, `TRACKER.md` section 2's layout line, `TRACKER.md` section 8 step 4, the `INDEX.md` Control-files row) AND the four-key metadata frontmatter on the five control files -- baseline in BOTH modes, never removed:
@@ -87,7 +89,7 @@ generated_by: "{GENERATED_BY}"
 last_updated: "{LAST_UPDATED}"
 ---
 
-# {{REPO_NAME}} sub-agent task Board
+# {{REPO_NAME}} Task Board
 
 > Canonical task list + status. Procedure: [`TRACKER.md`](TRACKER.md). New-task template:
 > [`TASK_TEMPLATE.md`](TASK_TEMPLATE.md). Ungroomed inbox: [`backlog/`](backlog/).
@@ -191,11 +193,14 @@ project. There is NO root `TODO.md` -- never create one.
 .codex/features/
   board.md            <- DASHBOARD: overall status + index table of EVERY task (canonical list)
   PROGRESS.md         <- SESSION progress snapshot (5 fields, overwritten in place); !=a second board
+  METHODOLOGY.md      <- domain review/test strategy; specialized in each task
+  ANTI-DRIFT.md       <- session timer lifecycle and canonical tick prompt
+  task-graph.md       <- derived active work/dependencies + latest 10 completed nodes
   TRACKER.md          <- this procedure
   TASK_TEMPLATE.md    <- copy this to create a new task file
   INDEX.md            <- maps the control files
   backlog/            <- INBOX: ungroomed junk/ideas/dumps; not yet real tasks (README.md permanent)
-  todo/               <- accepted tasks, queued, not started (file optional here)
+  todo/               <- accepted, queued; real task file + filled method/base work/unique prompt required
   progress/           <- WIP; a task file is MANDATORY here
   closed/             <- done/shipped (file optional; keep notable ones)
   specs/              <- per-task implementation specs (linked from task links:)
@@ -217,18 +222,18 @@ Folder name == task status. A task file always lives in the folder matching its 
 
 | Transition | Action |
 |------------|--------|
-| backlog -> todo | groom: a real, scoped task. Give it an id, create a task file (or board row), place under `todo/`. |
+| backlog -> todo | groom: accept a real scoped task by creating `todo/<ID>.md` with filled Methodology/base work and COMPLETE unique prepared cron prompt, then add its linked board row. |
 | backlog -> deleted | groom: noise / done / out of scope. Delete the backlog file. Note nothing. |
 | backlog -> merge | groom: duplicates/extends an existing task. Fold notes in, delete the backlog file. |
-| todo -> progress | pick up: MOVE the file into `progress/` (create from template if table-only), set `status: progress`, set `owner`, set `updated`. |
+| todo -> progress | verify the prepared task record; repair legacy table-only/incomplete records first, refresh method/prompt, then move to progress and set status/owner/updated. |
 | progress -> closed | ship: MOVE the file into `closed/`, set `status: closed`, add a one-line outcome + {{CLOSE_MARKER_SHORT}}.{{SPEC_LC_CLOSE}} |
 | progress -> todo | re-queue/park: MOVE back, set `status: todo`, note why parked. |
 
 Always update `board.md` in the SAME change as any transition. The board lags reality = the board is wrong.
 
-## 4. sub-agent task file format
+## 4. Task file format
 
-Copy `TASK_TEMPLATE.md`. Frontmatter is required; body sections recommended. {{LANG}} only.
+On ANY acceptance/promotion, copy `TASK_TEMPLATE.md` and fill Context/Acceptance, Methodology/base units and COMPLETE unique Anti-drift cron prompt; frontmatter and these sections are required in todo/progress. Template hints/tokens are not filled methodology. Queue state is prepared, no live scheduler id. {{LANG}} only.
 
 \`\`\`markdown
 ---
@@ -251,13 +256,27 @@ Why this exists, what problem it solves.
 ## Acceptance
 - [ ] concrete, checkable outcome
 
+## Methodology
+Parent task: -- (empty for top-level; child work units use their parent's timer)
+Goal/acceptance evidence: (derive from Context/Acceptance and current user instructions)
+Domain method: (reference METHODOLOGY.md; specialize review strategy and reliable check commands)
+Base work: (bounded units with owner, dependencies and checkable completion evidence; include implementation, simplification, two-pass review, validation and board/timer closeout)
+
+## Anti-drift cron
+Started at: --
+Requested/effective cadence: hourly / -- (user override wins)
+Timezone: --
+Scheduler id/state: -- / prepared
+Last delivered tick/number: -- / 0
+Prompt: (write the COMPLETE task-specific plain prompt from ANTI-DRIFT.md before claim/scheduling; include task id, absolute root, paths, goal, base work and acceptance evidence)
+
 ## Notes
 Running log: decisions, blockers, links to PRs/commits/reports.
 \`\`\`
 
 Invariants:
 - `status` frontmatter MUST equal the folder. On any move, change both.
-- A task in `progress/` MUST have a file. In `todo/`/`backlog/` a file is optional.
+- EVERY accepted todo/progress task MUST have a real file with filled Methodology/base work/complete unique prompt. Only raw unaccepted backlog ideas may remain table-only. Queued prompt/state is prepared intent, not a live timer.
 - Closing a task: keep `updated` current and record {{CLOSE_MARKER_SHORT}} in `## Notes`.
 
 ## 5. ID convention
@@ -283,12 +302,12 @@ Examples: `T-{{FIRST_DOMAIN}}-SLUG`, `BUG-{{FIRST_DOMAIN}}-SLUG`, `M-{{FIRST_DOM
 2. **Progress table** -- every WIP task.
 3. **Todo table** -- every queued task (incl. rows with no file yet).
 4. **Backlog** -- count + pointer to `backlog/` (do not enumerate noise here).
-5. **Closed (recent)** -- last N notable closes; older ones live as files in `closed/` only.
+5. **Closed (recent)** -- latest 10 closes; older outcomes/evidence live in task Notes/`closed/` records. Counts include archived closes, not just visible rows.
 
-Table columns: `id | title | prio | owner | file`. The `file` cell links the task file or says `--` when table-only.
+Table columns: `id | title | prio | owner | file`. Every accepted Todo/Progress row links its real task file; `--` means an incomplete legacy record to repair before claim/transition.
 {{SPEC_BOARD_COL_NOTE}}
 
-Rule: if a task exists anywhere (file or row), it is on the board. Edited by hand on every transition. Keep it terse.
+Rule: every unfinished accepted task is on the board; older closed tasks remain discoverable through `closed/` records. Update on every transition. `task-graph.md` is derived from this board and task Methodology/Notes; it retains ALL unfinished nodes + latest 10 completed nodes, never competes with board status/count authority.
 
 ## 7. Backlog grooming (do this periodically)
 
@@ -306,9 +325,9 @@ The `task-tracker` agent and the `task-board` skill both know this loop -- invok
 
 1. Open `board.md` -> read overall status + progress table.
 2. (Optional) groom `backlog/` per section 7.
-3. Pick a `todo` task (respect priority). Move it to `progress/`, set owner, update board.
+3. Pick a `todo` task (respect priority). Read shared/task methodology + anti-drift; fill task method/base work and unique prompt. Move it to `progress/`, set owner, update board/graph/PROGRESS; main-session `task-board` reconciles/announces its session timer (section 11).
 4. Do the work. Keep `## Notes` current, and refresh `PROGRESS.md` whenever something moves.
-5. On done: ship, move the file to `closed/`, record {{CLOSE_MARKER_SHORT}}, update board counts + focus.
+5. On done: ship, move the file to `closed/`, record {{CLOSE_MARKER_SHORT}}, update board counts + focus/graph/PROGRESS; main-session task-board stops/verifies its timer. Preserve all evidence before pruning old done graph rows.
 6. If new work surfaces mid-task, drop it in `backlog/` (do not derail).
 
 ## 9. Ownership & related rules
@@ -317,6 +336,12 @@ The `task-tracker` agent and the `task-board` skill both know this loop -- invok
 - When you start/finish/park a task, follow sections 3 + 8 and keep the board in sync.
 - Non-trivial board work -> delegate to the `task-tracker` agent.
 {{SPEC_TRACKER_SECTION}}
+
+## 11. Domain methodology and session anti-drift
+
+Read `METHODOLOGY.md` for the domain's review/test strategy; EACH accepted/promoted task requires its own REAL todo/progress file with filled `## Methodology` (goal/acceptance, domain reviews/checks or gaps, base units/owners/dependencies, parent id) and `## Anti-drift cron` with a COMPLETE unique task-specific prompt at acceptance, not merely at claim. Resolve every prompt token to actual id/root/paths/goal/base work/acceptance. Queued tasks have state prepared and no live scheduler id. Shared method is domain guidance; task method specializes it. Every active top-level task receives its own hourly session timer unless user-overridden/opted-out; children use their parent's timer. Main-session `task-board` alone owns the native session-reminders lifecycle, announces confirmed scheduling and verifies stopping on completion/cancellation/parking; tracker owns evidence/graph reconciliation and redirects cron actions. Missing tools/permissions/capacity -> report unscheduled intent, never fabricate delivery. Full lifecycle/prompt/report contract: `ANTI-DRIFT.md`.
+
+Each delivered tick rereads task/shared methodology, anti-drift, current goal/scope/spec/user corrections; obtains owner evidence; reconciles statuses/dependencies/counts; rewrites derived `task-graph.md` preserving every unfinished node + latest 10 completed, archiving older evidence first. Force goal/acceptance drift checks/corrections, quantify remaining work and advance the next unblocked authorized step. Compact report: local time/timezone, tick number, elapsed, achievements, remaining/next and present problems/blockers/questions, at most five lines, circles 🟢🔵🔴⚪ only. Planning records methodology/graph/prompt/timer execution steps; read-only plan mode defers writes and timers.
 ```
 
 ### TRACKER section 10 -- `{{SPEC_TRACKER_SECTION}}` expansion (only when `SPEC_MODE=on`)
@@ -333,7 +358,7 @@ Non-trivial tasks get THREE documents. Flat filenames -- !=`specs/<ID>/spec.md`.
 
 | Doc | Path | Owns |
 |-----|------|------|
-| sub-agent task | `{backlog,todo,progress,closed}/<ID>.md` | WHAT + WHY: context, quotes, links, the ask, and the `## Scope` blocks with ids |
+| Task | `{backlog,todo,progress,closed}/<ID>.md` | WHAT + WHY: context, quotes, links, the ask, and the `## Scope` blocks with ids |
 | Product spec | `specs/<ID>-spec.md` | Decisions (`D1..Dn`), resolved questions, OPEN questions (`Q1..Qn`), scope coverage |
 | Design spec | `specs/<ID>-design.md` | Architecture, data flow, interfaces, data model, failure modes + reliability, complexity budget (what we deliberately do NOT build), non-goals, scope coverage, OPEN architectural questions (`AQ1..AQn`) |
 
@@ -419,6 +444,20 @@ Why this task exists and what problem it solves.
 ## Acceptance
 - [ ] concrete, checkable outcome
 
+## Methodology
+Parent task: -- (empty for top-level; child work units use their parent's timer)
+Goal/acceptance evidence: (derive from Context/Acceptance and current user instructions)
+Domain method: (reference METHODOLOGY.md; specialize review strategy and reliable check commands)
+Base work: (bounded units with owner, dependencies and checkable completion evidence; include implementation, simplification, two-pass review, validation and board/timer closeout)
+
+## Anti-drift cron
+Started at: --
+Requested/effective cadence: hourly / -- (user override wins)
+Timezone: --
+Scheduler id/state: -- / prepared
+Last delivered tick/number: -- / 0
+Prompt: (write the COMPLETE task-specific plain prompt from ANTI-DRIFT.md before claim/scheduling; include task id, absolute root, paths, goal, base work and acceptance evidence)
+
 ## Notes
 Running log: decisions, blockers, PR/commit/report links.
 ```
@@ -447,6 +486,9 @@ last_updated: "{LAST_UPDATED}"
 |------|------|
 | [`board.md`](board.md) | Canonical task LIST + status (dashboard: overall status, progress/todo/backlog/closed/specs tables). Every task = a board row. |
 | [`PROGRESS.md`](PROGRESS.md) | SESSION progress against the board: in flight / moved / blocked / next. Five fields, overwritten in place. !=a second board -- rules in `.codex/rules/tasks.md`. |
+| [`METHODOLOGY.md`](METHODOLOGY.md) | Domain-derived review/test method; each task specializes it. |
+| [`ANTI-DRIFT.md`](ANTI-DRIFT.md) | Main-session task-board timer lifecycle, task-specific prompt baseline and compact tick report. |
+| [`task-graph.md`](task-graph.md) | Derived active work/dependencies + latest 10 completed; older evidence remains in task records. |
 | [`TRACKER.md`](TRACKER.md) | The procedure: layout, lifecycle state machine, task-file format, id convention, grooming loop. |
 | [`TASK_TEMPLATE.md`](TASK_TEMPLATE.md) | Copy this to create a new task file. |
 | [`INDEX.md`](INDEX.md) | This file. |
@@ -457,7 +499,7 @@ last_updated: "{LAST_UPDATED}"
 | Folder | Holds |
 |--------|-------|
 | [`backlog/`](backlog/) | Ungroomed inbox -- raw ideas/dumps; groomed into `todo/` or trashed. |
-| [`todo/`](todo/) | Accepted, queued, not started. |
+| [`todo/`](todo/) | Accepted, queued; real task file + filled methodology/base work/complete unique prepared prompt mandatory. |
 | [`progress/`](progress/) | WIP -- a task file is MANDATORY here. |
 | [`closed/`](closed/) | Done / shipped. |
 | [`specs/`](specs/) | Per-task implementation/design specs, linked from a task's `links:`. Not a status folder. |

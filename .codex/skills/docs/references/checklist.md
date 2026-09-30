@@ -27,7 +27,7 @@ Public prose is English, plain, concrete, and user-first: one title → useful b
 
 | MDX invariant | Check |
 |---|---|
-| Frontmatter | Title ≤60 characters, description 50–160 characters, appropriate existing order/schema; layout supplies the sole H1 |
+| Frontmatter/title | Title ≤60 characters, description 50–160 characters, appropriate existing order/schema; verify exactly one H1 in the rendered article. Current DocsLayout and [...id].astro render Content through a slot, supplying no H1: preserve/add the MDX title heading; never delete it based on frontmatter alone |
 | Component imports | `{plugin}/*.mdx`: `../../../components/mdx`; `{plugin}/{skills,agents}/*.mdx`: `../../../../components/mdx`; other depths resolved from file path; all imports used |
 | Steps | Only explicit direct `<li><div><strong>Title</strong><p>…</p></div></li>` children; no Markdown numbered list or ol/ul wrapper inside Steps; nested lists inside li are allowed |
 | Cards | Every icon in live `Card.astro` iconMap; pick existing icon unless component change is in scope. Preserve stretched-link overlay; do not wrap slot/Card in an anchor or rewrite Card as anchor wrapping content; slot links are permitted |

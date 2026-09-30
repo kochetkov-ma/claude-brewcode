@@ -111,12 +111,36 @@ const ALLOWED = new RegExp(`^\\s*printf '%s' ${SENTINEL} \\| .*--password-stdin`
     0,
     'docker-auth-flow.md no longer lists AskUserQuestion as a token source',
   );
-  const tmplAuq = FILES['templates/ssh-admin-agent.md.template'].split('\n').filter((l) => l.includes('AskUserQuestion'));
+  // GIVEN the independently generated ordinary SSH agent template.
+  // WHEN its runtime question policy is inspected.
+  // THEN preserve the fork boundary, return decisions to main, and never call the absent tool.
+  const tmplPolicy = FILES['templates/ssh-admin-agent.md.template'];
   check(
-    'auq.template-mentions-absence-only',
-    tmplAuq,
-    ['You have no `AskUserQuestion`. Do every non-destructive step, execute NOTHING destructive, and end'],
-    'the generated agent mentions AskUserQuestion only to state that it does not have it',
+    'auq.template-ordinary-removal',
+    /ordinary SA\s+loses `AskUserQuestion`/.test(tmplPolicy),
+    true,
+    'the generated ordinary agent states that the question tool is removed',
+  );
+  check(
+    'auq.template-fork-boundary',
+    [
+      /conversation forks retain the parent pool/.test(tmplPolicy),
+      /skill's `context: fork` is ordinary/.test(tmplPolicy),
+    ],
+    [true, true],
+    'conversation forks retain tools; skill context forks remain ordinary agents',
+  );
+  check(
+    'auq.template-decisions-to-main',
+    /Return findings\/decisions to main/.test(tmplPolicy),
+    true,
+    'the generated agent returns unresolved decisions to its caller',
+  );
+  check(
+    'auq.template-no-question-call',
+    (tmplPolicy.match(/\bAskUserQuestion\s*\(/g) || []).length,
+    0,
+    'the generated agent never instructs a question-tool invocation',
   );
   check(
     'auq.template-tools',

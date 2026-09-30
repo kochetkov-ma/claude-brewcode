@@ -175,7 +175,7 @@ request -> RateLimitMiddleware -> BucketStore.take(user_id, cost=1)
 
 ## Data model
 
-*Persistent or cached shapes this introduces: keys, tables, columns, TTLs, indexes, migrations. Omit this whole section if the change stores nothing.*
+*Persistent or cached shapes: keys, tables, columns, TTLs, indexes, migrations. Keep this fixed heading; if the change stores nothing, write `None — no persistent or cached data introduced` instead of the example table.*
 
 | store | key / table | shape | lifetime |
 |-------|-------------|-------|----------|

@@ -1,0 +1,6 @@
+interface:
+  display_name: "Convention Setup"
+  short_description: "Installs project conventions and reversible loading guidance; ex"
+  default_prompt: "Use $brewcode:convention-setup for this task."
+policy:
+  allow_implicit_invocation: false

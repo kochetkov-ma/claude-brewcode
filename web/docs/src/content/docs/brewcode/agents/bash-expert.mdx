@@ -8,19 +8,18 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 # Bash Expert
 
 <Callout type="caution">
-**Ad-hoc bash is the leading cause of deploy incidents.** Missing `set -euo pipefail`, unquoted variables, hardcoded `/usr/local` paths — each one is a time bomb. The agent writes scripts that are correct by construction, not by luck.
+Missing error handling, unquoted variables and hardcoded paths can break scripts on another
+machine. Bash Expert follows repository patterns and checks syntax, ShellCheck findings and error paths.
 </Callout>
 
 <Callout type="tip">
 **Trigger by describing the script you need.** "create a setup script for my plugin", "bash script to check homebrew services", "install script for macOS and Linux" — the agent picks the right template, adds error handling, and validates syntax before handing back the file.
 </Callout>
 
-<Callout type="note" title="What's new in 6.2.0">
-Wording-only refresh — no new capability, no section added or removed:
-- Return Contract now leads the agent definition, ahead of Scope & Checkpoints — matches the current prompting order (role → return contract → scope → procedure → tables)
-- Role sentence reworded for density: "Writes bash/sh scripts for macOS/Linux..." replaces the older "Creates production-quality..." phrasing
-- All 10 numbered sections (Conventions through Deliverable), `tools`, and `maxTurns: 60` are unchanged
-- No Delegation or Scope Fit section was added here — bash-expert works solo end to end, writing and validating its own scripts
+<Callout type="note" title="Current execution contract">
+Bash Expert writes and validates a bounded script itself. Missing decisions return to the main
+caller; it does not spawn nested agents. Its `maxTurns: 60` is an anti-loop stop, with partial
+results and on-disk checkpoints for recovery.
 </Callout>
 
 ## Quick reference
@@ -41,9 +40,19 @@ Bash Expert sizes the task before writing. One bounded unit = one deliverable, r
 | Brief fits one bounded unit | Starts immediately |
 | Brief exceeds ~5 files / ~10 steps, or bundles several independent deliverables | Stops before starting, returns a split proposal: 2-N bounded subtasks, each with scope and a suggested owner |
 | Scope grows mid-flight | Stops at the next clean boundary, reports done / remaining / how to split |
-| Brief is missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance | States the assumption explicitly in the report, or asks once — never invents scope |
+| Brief is missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance | States a safe assumption or returns the unresolved question to the main caller; never invents scope |
 
 "Write the whole CI toolchain" gets a split proposal. "Write the install script for brewtools" gets a script.
+
+Ordinary subagents cannot use `AskUserQuestion`; conversation forks retain the parent's tool
+pool. This ordinary delegated agent returns decision requests to its caller. Claude Code allows
+depth-limited nested delegation, but Brewcode dispatches through the main conversation using
+the `Agent` tool. Bash Expert's own tool list contains no `Agent`.
+
+On `maxTurns` exhaustion, Claude Code 2.1.246+ returns a partial result. The caller inspects it
+and resumes with `SendMessage` rather than marking the work complete. After ShellCheck and a
+smoke run, Bash Expert records each script's path and status in
+`.claude/reports/YYYYMMDD-HHMMSS_bash-expert/report.md`; it reads that checkpoint first on resume.
 
 <Callout type="tip">
 **Got a split proposal instead of a script?** That is the guard working. Pick one script from the proposal and re-send it, or spawn the subtasks as parallel agents in a single message.
@@ -94,7 +103,7 @@ Bash Expert sizes the task before writing. One bounded unit = one deliverable, r
   <li>
     <div>
       <strong>Implement</strong>
-      <p>Writes the script with <code>set -euo pipefail</code>, quoted variables, <code>trap cleanup EXIT</code> where needed, and status symbols (✅ ❌ ⚠️) in output. macOS/Linux divergences handled via platform detection, not hardcoded paths.</p>
+      <p>Writes the script with <code>set -euo pipefail</code>, quoted variables and <code>trap cleanup EXIT</code> where needed. Uses compact status circles and plain warning text; check/cross markers remain optional. Platform detection handles macOS/Linux differences.</p>
     </div>
   </li>
   <li>
@@ -121,15 +130,17 @@ Bash Expert sizes the task before writing. One bounded unit = one deliverable, r
 | Strict mode | `set -euo pipefail` | Every script, by default |
 | Cleanup trap | `trap cleanup EXIT` | Temp files, locks, other resources |
 | Required var | `${VAR:?error msg}` | Mandatory input |
-| Soft failure | `cmd \|\| echo "⚠️ warning"` | Optional steps |
+| Soft failure | `cmd \|\| echo "Warning: optional step failed" >&2` | Optional steps |
 
 ### Mode detection
 
 ```bash
-ARGS_LOWER=$(echo "${1:-}" | tr '[:upper:]' '[:lower:]')
-[[ "$ARGS_LOWER" =~ (install|setup|init) ]] && MODE="install"
-[[ "$ARGS_LOWER" =~ (update|upgrade) ]] && MODE="update"
-[[ -z "$ARGS_LOWER" ]] && MODE="default"
+ARGS_LOWER=$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')
+case "$ARGS_LOWER" in
+  status|install|upgrade|enable|disable|uninstall|purge) MODE="$ARGS_LOWER" ;;
+  '') MODE="default" ;; # Resolve using this setup's documented default.
+  *) echo "Unsupported mode: $ARGS_LOWER" >&2; exit 2 ;;
+esac
 ```
 
 ### Minimal template
@@ -158,23 +169,36 @@ Always derive prefix via `$(brew --prefix)` — never hardcode.
 
 | Element | Pattern |
 |---------|---------|
-| Status symbols | `✅` success · `❌` error · `⚠️` warning · `⏭️` skipped · `🔄` updated |
+| Status symbols | `🟢` success · `🔴` error/blocker · `⚪` pending/skipped · `🔵` active/updated; warnings use `Warning:` |
 | Markdown table | `echo "\| Component \| Status \|"` then the separator row, then data rows |
 | Phase header | `echo "=== Phase 1: Scanning ===" && echo ""` |
 
 ### JSON parsing fallback chain
 
-1. `jq -r '.key' file.json`
-2. `python3 -c "import json,sys;print(json.load(sys.stdin)['key'])"`
-3. `grep -oP '"key":\s*"\K[^"]+' file.json`
+Use a real JSON parser and pass the input file explicitly. Regex extraction is not a JSON parser,
+and macOS's system grep does not support `-P`.
+
+```bash
+if command -v jq >/dev/null; then
+  jq -r '.key' file.json
+elif command -v python3 >/dev/null; then
+  python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["key"])' file.json
+else
+  echo "need jq or python3" >&2; exit 1
+fi
+```
 
 ### Plugin path variables
 
 | Variable | Available in |
 |----------|-------------|
-| `$CLAUDE_PLUGIN_ROOT` | Hooks only |
+| `${CLAUDE_PLUGIN_ROOT}` | Claude expands plugin skill/agent text and hook/MCP commands; ordinary scripts must receive or derive the value |
 | `${CLAUDE_SKILL_DIR}` | Skills (string substitution) |
-| `${CLAUDE_PLUGIN_ROOT}` | Agents (native substitution in agent .md at Task spawn) |
+| `$PLUGIN_ROOT/skills/X/scripts/` | Scripts that explicitly define or receive `PLUGIN_ROOT` |
+
+Plugin agent text receives root substitution at `Agent` spawn. Project-local agents receive no
+plugin-root substitution. Prompt tokens do not guarantee corresponding shell environment variables;
+standalone scripts locate themselves with `SCRIPT_DIR` and derive or accept their root.
 
 ### Anti-patterns
 

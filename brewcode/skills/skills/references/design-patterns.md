@@ -18,13 +18,13 @@ skill-name/
 
 | Pattern | When | Effect |
 |---|---|---|
-| **Progressive Disclosure** | Always | 3 levels: L1 name+description (~100 words, always in context), L2 SKILL.md (<500 lines, on trigger), L3 refs/scripts/agents (on demand, unlimited) |
+| **Progressive Disclosure** | Always | 3 levels: L1 listing metadata (~100 words when offered; DMI SKs excluded), L2 SKILL.md (<500 lines, on invocation), L3 refs/scripts/agents (on demand, bounded by context) |
 | **REF Splitting** | Multi-mode: 2+ modes, >50 lines/mode, >300 lines total | Detect mode -> Read `references/{mode}.md`. Guard: "not found -> ERROR + STOP" |
-| **Agents-as-REFs** | SK-coordinator + multi-step workflow + multiple roles | SA prompts as `.md` in `agents/` inside the SK dir. Coordinator passes the file path; SA reads itself. **0 tokens** in coordinator context. `agents/` is convention, NOT native |
+| **Agents-as-REFs** | SK-coordinator + multi-step workflow + multiple roles | Prompt `.md` in SK `agents/`; coordinator passes path, SA reads body. Coordinator pays path/brief tokens, not the prompt body. `agents/` is convention, NOT native |
 | **Dynamic CTX** | Need live data before launch (git diff, PR info, env) | `` !`command` `` executes BEFORE content reaches Claude |
-| **FORK** | Standalone task, no conversation history, <4 phases | `context: fork` -> isolated SA, background by DEF since v2.1.218. SKILL.md body = task prompt. CLAUDE.md loaded, history not. >5 phases -> memory loss |
+| **Skill fork** | Standalone task, no conversation history; <4 phases is a BC heuristic | `context: fork` -> regular isolated SA, background by DEF since v2.1.218; `background: false` waits. CLAUDE.md follows AG inheritance/omit rules; !=a conversation fork. >5 phases suggests durable state, !=a platform memory-loss threshold |
 | **Executable Bash** | Bash blocks must execute | `**EXECUTE**` keyword + `&& echo OK \|\| echo FAIL` + `> STOP if FAIL`. Without the keyword, bash is examples only |
-| **SK Chaining** | SK invokes another SK | `Skill(skill="name", args="...")`. Needs no `allowed-tools` entry; a SA keeps `Skill` too (`sa:349`). brewcode preference: chain from main — a `DMI: true` SK invoked from a SA silently no-ops |
+| **SK Chaining** | SK invokes another SK | `Skill(skill="name", args="...")`; no `allowed-tools` needed for availability. Runtime SA skills supported upstream; DMI SKs cannot be model-invoked. BC chains distributed SKs from main |
 | **Background Knowledge** | Claude needs context, user needs no slash cmd | `user-invocable: false`. Description stays in context |
 | **Pushy Description** | LLM-invocable skills | Action verb + `Triggers: "phrase1", "phrase2"`. Best odds of auto-load; no published rate |
 | **Preloaded Skills** | SA must follow conventions/patterns | `skills: [name]` in agent frontmatter. Full SK injected at startup |
@@ -37,7 +37,7 @@ auto-discovered. The coordinator passes a **file path**, not content; the SA rea
 | Native agents `.claude/agents/` | "Agents" in SK `agents/` |
 |---|---|
 | Auto-discovered, visible in `/agents` | Reached via Read by path only |
-| Own model, tools, hooks, memory | Inherits from the spawning SA |
+| Definition controls model/tools/memory; PLG hooks ignored | Prompt file alone sets no runtime config; caller selects the spawned AG's definition |
 | YAML frontmatter + Markdown | Plain Markdown (prompt) |
 | Public API | SK implementation detail |
 
@@ -114,8 +114,9 @@ Priority: Enterprise > Personal > Project. Plugin skills invoke as `/plugin-name
 bundled skills via `disableBundledSkills` setting or `CLAUDE_CODE_DISABLE_BUNDLED_SKILLS` env
 (v2.1.169+).
 
-> **Output path (v3.4.70):** SK outputs -> `.claude/<subdir>/` (project-relative). Never Write to
-> `~/.claude/*` (protected-path blocks ALL modes). Exceptions: `commands|agents|skills|worktrees`.
+> **BC output policy:** SK outputs -> project `.claude/<subdir>/`. Upstream treats sensitive
+> `~/.claude/**` writes as permission ASK, not a universal block: bypass can approve; headless
+> `-p` cannot answer prompts. Carve-outs: `commands|agents|skills|worktrees|scheduled_tasks.json`.
 
 ## Unit test skeleton (Step 8)
 

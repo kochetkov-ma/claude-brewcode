@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 6.2.0 |
+| Version | 6.3.0 |
 | Skills | 5 |
 | Agents | 0 |
 | Hooks | 0 |
@@ -81,7 +81,7 @@ claude --plugin-dir ./brewdoc
 
 > **Canonical modes.** Setup skills answer the same verbs, in this order: `status | install | upgrade | enable | disable | uninstall | purge`. No argument = `status` if installed, `install` if not. Extras (`sync`, `reread`, `frontmatter`, a fine-tune prompt) come *after* the canonical verb. The v4 aliases `init`, `on`, `off`, `setup`, `remove` and `reset` are gone -- v5.0.0 is a deliberate breaking change with no back-compat. Both brewdoc setup skills implement `enable`/`disable` -- `docsync-setup` flips the `enabled` key in `.claude/docsync/config.json`, `memory-sync-setup` renames `SKILL.md` <-> `SKILL.md.disabled` -- and both implement `purge`; the Arguments column below is authoritative.
 
-> Every brewdoc skill is `user-invocable: true` **and** `disable-model-invocation: true` -- and so is every one of the 28 skills across the suite. Claude never sees their descriptions and never fires one on its own; you type the command. That is a deliberate trade: 28 model-visible descriptions would cost tokens in every request forever, and none of these skills wants to be auto-triggered. **Skills a generator emits are the opposite by design** -- `/memory-sync`, like `/superreview`, `/task-board` and `/task-spec`, ships model-invocable so Claude can fire it mid-plan; the flag is for distributed `-setup` skills only. Run [`/brewcode:setup-status`](../brewcode/skills/setup-status/README.md) to see what is installed, stale, disabled or missing across every plugin.
+> Every brewdoc skill is `user-invocable: true` **and** `disable-model-invocation: true` -- and so is every one of the 27 skills across the suite. Claude never sees their descriptions and never fires one on its own; you type the command. That is a deliberate trade: 27 model-visible descriptions would cost tokens in every request forever, and none of these skills wants to be auto-triggered. **Skills a generator emits are the opposite by design** -- `/memory-sync`, like `/superreview`, `/task-board` and `/task-spec`, ships model-invocable so Claude can fire it mid-plan. The restriction applies to distributed skills. Run [`/brewcode:setup-status`](../brewcode/skills/setup-status/README.md) to see what is installed, stale, disabled or missing across every plugin.
 
 | Skill | Purpose | Model | Arguments |
 |-------|---------|-------|-----------|
@@ -94,6 +94,10 @@ claude --plugin-dir ./brewdoc
 > Need a portable, plugin-free version? See the standalone [`brewpage-publish`](../skills/brewpage-publish/) (Claude Code) and [`openclaw/brewpage-publish`](../openclaw/brewpage-publish/) (OpenClaw / AgentSkills) skills.
 
 ### Requirements per skill
+
+`docsync-setup` validates installation inputs before writing hooks, configuration and settings.
+It retains an existing settings backup and session state. If a write fails, it restores files
+that still match this run's writes; concurrent edits remain intact and any recovery gap is reported.
 
 | Skill | Needs |
 |-------|-------|
@@ -131,7 +135,7 @@ brewdoc/
     +-- publish/                      # brewpage.app publishing
 ```
 
-> **Brewdoc vs Brewcode:** Brewdoc is a set of documentation utilities and each skill is self-contained. Brewcode covers the project's own engineering surface -- conventions, rules, agent teams, semantic search and deep review -- with 9 skills, 5 agents and 2 hooks. Both install from the same `claude-brewcode` marketplace and operate independently.
+> **Brewdoc vs Brewcode:** Brewdoc is a set of documentation utilities and each skill is self-contained. Brewcode covers the project's own engineering surface -- conventions, rules, agent teams, semantic search and deep review -- with 9 skills, 5 agents and 4 registered hook commands. Both install from the same `claude-brewcode` marketplace and operate independently.
 
 ## Artifact metadata
 

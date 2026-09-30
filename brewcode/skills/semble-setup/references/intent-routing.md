@@ -1,9 +1,7 @@
 # Intent routing — `brewcode:semble-setup`
 
-`$ARGUMENTS` is free text (RU or EN). Lowercase it, strip punctuation, match keywords as **whole words**.
-Multi-word keywords (`set up`, `turn off`, `удали полностью`) match as whole phrases.
-
-This file is normative. The router in `SKILL.md` follows it literally.
+Normative for `SKILL.md`: lowercase free-text RU/EN `$ARGUMENTS`, strip punctuation, match **whole words**;
+multi-word keywords (`set up`, `turn off`, `удали полностью`) match whole phrases.
 
 ---
 
@@ -33,16 +31,21 @@ This file is normative. The router in `SKILL.md` follows it literally.
    - Any tie that includes a destructive mode (`uninstall`, `purge`) -> `AskUserQuestion`. Never guess destructive.
    - Tie between two non-destructive modes where one is `status` -> pick `status` (safe, read-only).
    - Tie between two non-destructive *mutating* modes (e.g. `install` vs `upgrade`) -> pick the one whose keyword appeared **first** in the prompt.
-   - Score 0 for every mode (no keyword matched) -> run `status` and, in the report's **Next Step**, offer the two most plausible modes. Do not ask.
-5. `AskUserQuestion` is used at most **once** per invocation, and only for: (a) a destructive tie, (b) an explicit removal request where the four removal flavours are distinguishable, (c) a scope conflict (MCP present in more than one scope), (d) confirming `reindex` replacement of the resolved `index-code-config-docs` variant, (e) the `install` prerequisite gate — **one** question covering the brew installs the probe reported: `brew install uv` when `semble-install.sh all --json` exits `4` (that same question also carries the optional `brew install coreutils` line when the probe listed it), or, when the probe exits `0`, the standalone `coreutils` offer of SKILL.md 3.1d — raised on `.timeout.coreutils.status == "needs_confirmation"` with `.brew.present == true`, and silently skipped otherwise. The two are mutually exclusive. Nothing else.
+   - Score 0 -> `status`; offer two plausible modes in **Detection** and one concrete **Next Step**. Do not ask.
+5. Bundle known choices into one `AskUserQuestion` (max 4 questions): (a) destructive tie, (b) four removal
+   flavours, (c) concrete MCP scope/args/pin transition, (d) resolved `index-code-config-docs` replacement,
+   (e) machine prerequisites, or a concrete user-modified rule/ignore replacement. New destructive or
+   permission decisions discovered later require an explicit separate gate unless already authorized.
+   The install offer covers `brew install uv` on `all --json` exit `4` and optional `brew install coreutils`
+   when listed. On exit `0`, only 3.1d's coreutils offer applies when `.timeout.coreutils.status ==
+   "needs_confirmation"` and `.brew.present == true`; otherwise skip it. These offers remain mutually exclusive.
 
-> Step 2 is checked **before** scoring. A checkpointed `install` that is waiting for a new session
-> takes precedence over a vague prompt — that is how the interrupted flow resumes by itself.
+> Check Step 2 **before** scoring: a checkpointed install awaiting a new session outranks a vague prompt.
 
-> **Resolution's output is the PLAN block** (`SKILL.md` `## Prompt contract`, prompt-contract.md §4):
-> `INPUT`/`MODE`/`SCOPE`/`DO`/`RESULT`, printed once, before Step 1's `status` report and before any
-> mutation. `MODE` carries the reason from this algorithm verbatim (`explicit`, `matched keyword: X`,
-> `default`, `checkpoint resume`).
+> Print one PLAN (`INPUT`/`MODE`/`SCOPE`/`DO`/`RESULT`) before Step 0 executes. Resolve against known
+> context first; unknown checkpoint state makes the initial mode provisional. Step 1's read-only status
+> supplies that state; Step 2 refines mode with a short update before Detection/Before or mutation, not a
+> second PLAN. Final reasons remain `explicit`, `matched keyword: X`, `default`, `checkpoint resume`.
 
 ---
 
@@ -64,9 +67,10 @@ Read-only `semble-status.sh --section all --json`. No `AskUserQuestion`. No muta
 | 1 | not empty |
 | 2 | phase != `awaiting_reload` |
 | 3 | `working` is not a keyword in any row -> **every mode scores 0** |
-| 4d | run **`status`**; **Next Step** offers the two most plausible modes |
+| 4d | run **`status`**; **Detection** offers two plausible modes, **Next Step** one action |
 
-reason: `no keyword matched (score 0) -> status`. Next Step lists `install` (if the MCP is `absent`) and `resume` (if `awaiting_reload`), otherwise `reindex` and `optimize`. Do **not** ask a question here.
+reason: `no keyword matched (score 0) -> status`. Detection offers `install`/`resume` when absent/awaiting_reload,
+otherwise `reindex`/`optimize`; Next Step names the single applicable action. Do **not** ask here.
 
 ### E3 — `"set up semantic search for this repo"`
 
@@ -136,7 +140,9 @@ Unique winner != permission to run. `purge` still needs `--yes` **and** `--confi
 | 3 | `upgrade`: `обнови` = 1. `reindex`'s `обнови индекс` is a **phrase** and does not match a bare `обнови` |
 | — | winner **`upgrade`**, unique |
 
-reason: `matched keyword: обнови`. Compares the recorded pin against the approved `0.5.5`; identical -> report `unchanged` and stop. State plainly in the report that `"обнови"` was read as *update the pinned version*, not *rebuild the index*, and offer `reindex` in **Next Step**.
+reason: `matched keyword: обнови`. Compare with approved `0.5.5`; identical/correct -> MCP half unchanged,
+then still refresh project guidance/hooks/permissions/agents. State that upgrade refreshes both applicable
+halves, not the index. Offer `reindex` in Detection; Next Step follows the actual post-write status.
 
 ### R3 — `"настрой semble"`
 
@@ -186,7 +192,7 @@ reason: `checkpoint resume`. Had the prompt named a mode (`"статус"`, `"у
 | `"install and update"` | `install` 1 vs `upgrade` 1, both mutating, neither destructive -> **`install`** (`install` appears first) | 4c |
 | `"check what is installed"` | `status`: `check`, `what` = 2 vs `install`: `install` = 1 -> **`status`** | 3 |
 | `"warm the cache"` | `reindex`: `warm` = 1 -> **`reindex`**; warm-only is the no-delete path (`semble-project.sh warm`), so skip the rule-5d deletion question | 3 |
-| MCP found in two scopes, any mode | one `AskUserQuestion`: which scope to keep | 5c |
+| MCP found in two scopes | mutating modes use the bundled keep-scope decision; `status` reports it without asking | 5c |
 
 > When the resolution is not obvious to a reader, the report's **Detection** section must print
 > the winning mode **and its reason** (`matched keyword: X` / `default` / `checkpoint resume` /

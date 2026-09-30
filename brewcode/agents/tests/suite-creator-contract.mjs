@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * suite-creator-contract.mjs - pins the Claude Code 2.1.269 facts that the three
+ * suite-creator-contract.mjs - pins the Claude Code 2.1.285 facts that the three
  * creator agents (hook-creator, skill-creator, agent-creator) teach, so a future
  * drift fails a test instead of shipping silently.
  *
@@ -11,8 +11,9 @@
  * that only verified "agent body contains X" before must never collapse back to
  * one assert just because the text moved.
  *
- * Evidence of record: `.claude/reports/20260912-173000_agents-refresh/delta-{hooks,agents,skills}.md`
- * (fetched 2026-09-12, upstream docs as of CC 2.1.269). Fixtures below are the
+ * Evidence: `.codex/reports/20260930-141456_plugin-refresh/creator-upstream.md`
+ * (official docs fetched 2026-09-30, changelog through CC 2.1.285); historical fixtures:
+ * `.claude/reports/20260912-173000_agents-refresh/delta-{hooks,agents,skills}.md`. Fixtures are the
  * transcription of it, hardcoded so the suite runs standalone (no network, no MCP).
  *
  * Assertion policy: unconditional exact-equality / exact-set checks with a
@@ -21,7 +22,7 @@
  *
  * Usage: node brewcode/agents/tests/suite-creator-contract.mjs
  */
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -90,7 +91,7 @@ const NOTIFICATION_TYPES = [
   'quota_auto_resume_stale',
 ];
 
-const REF_VER = '2.1.269';
+const REF_VER = '2.1.285';
 
 /** Claims that were true once and are now wrong; a hit, in any casing, is a regression. */
 const BANNED = [
@@ -239,6 +240,46 @@ function runHookTemplate(source, stdin) {
   }
 }
 
+// ------------------------------------------ optimizer handoff prerequisites
+
+{
+  // GIVEN: the actual optimizer requires a caller-owned Phase 0 snapshot before editing.
+  const optimizer = readFileSync(join(PLUGIN_ROOT, '../brewtools/agents/text-optimizer.md'), 'utf8');
+  const workflow = readFileSync(join(PLUGIN_ROOT, '../brewtools/skills/text-optimize/SKILL.md'), 'utf8');
+  check('optimizer.requiresCallerSnapshot', /no RUN_DIR in brief.*Phase 0 snapshot missing/.test(optimizer), true,
+    'creator handoff must satisfy the actual optimizer missing-snapshot refusal');
+  check('optimizer.snapshotWorkflow', /Phase 0: Preconditions \+ Snapshot/.test(workflow), true,
+    'the installed skill remains the authority for pre-edit snapshot orchestration');
+
+  for (const file of ['agent-creator.md', 'skill-creator.md']) {
+    // WHEN: the main caller consumes the creator final handoff.
+    const handoff = section(file, '### Optimization handoff', '## Read on demand').join('\n');
+    const required = ['installed Brewtools', 'text-optimize/SKILL.md', 'Medium workflow',
+      'not a `Skill` model invocation', 'Before optimization edits it snapshots targets',
+      'exit 0 + `RUN_DIR`', 'inventories', 'default EMPTY',
+      'GOAL/ROLE/SCOPE/CONTEXT/CONSUMER/DONE', 'concrete target/original paths',
+      'authorized report path', 'known-owned `checkpoint --run-dir`',
+      '`verify --no-restore`', 'fresh independent read-only verifier',
+      'from disk without writer reports', '100% meaning',
+      'preserving concurrent bytes', 'never spawns optimizers/verifiers',
+      'Brewtools absent -> report skipped', 'requested/pending'];
+
+    // THEN: no bare call bypasses the consumer prerequisites or falsely claims acceptance.
+    check(`optimizer.handoff.${file}`, required.filter(token => !handoff.includes(token)), [],
+      `${file} must provide a usable main-owned snapshot/brief/checkpoint/independent acceptance handoff`);
+    check(`optimizer.noBareCall.${file}`, /Agent\(subagent_type="brewtools:text-optimizer"/.test(text[file]), false,
+      `${file} must not request a target-only optimizer call that stops for missing RUN_DIR`);
+    check(`optimizer.validation.${file}`, handoff.includes({
+      'agent-creator.md': 'repeats gates + Validation Checklist',
+      'skill-creator.md': 'repeats gates + `validate-skill.sh`',
+    }[file]), true, `${file} must repeat its artifact validation after optimization repairs`);
+  }
+  check('optimizer.validColor', optimizer.match(/^color:\s*(\S+)$/m)?.[1], 'purple',
+    'optimizer must use a supported color from the authoritative agent-template palette');
+  check('optimizer.colorPaletteSource', /\| blue, purple, orange, pink \|/.test(text['agent-template.md']), true,
+    'the maintained palette must explicitly support the chosen optimizer color');
+}
+
 // ---------------------------------------------------------------- 1. roster
 
 {
@@ -381,7 +422,7 @@ function runHookTemplate(source, stdin) {
 
 {
   // Convention change from the restructure: only hook-creator.md still carries a
-  // "Ref ver:" header; skill-creator.md/agent-creator.md cite the 2.1.269 delta in
+  // "Ref ver:" header; skill-creator.md/agent-creator.md cite the verified baseline in
   // prose instead (their own intro sentence). Guard both forms so neither can drift.
   const refVerFiles = FILES.filter((f) => /Ref ver:/.test(text[f])).sort();
   check('refver.files', refVerFiles, ['hook-creator.md'],
@@ -398,19 +439,24 @@ function runHookTemplate(source, stdin) {
 // ------------------------------- 8. AskUserQuestion is not promised to a SA
 
 {
-  const SA_REMOVAL = /AskUserQuestion[^\n]*(removed|stripped|unavailable)|(?:removed|stripped) from (?:every|EVERY) SA/;
+  const SA_REMOVAL = /AskUserQuestion[^\n]*(removed|stripped|unavailable)|(?:removed|stripped) from ordinary SAs/;
   const declaring = FILES.filter((f) => {
     const fm = text[f].split('\n').slice(0, 15).find((l) => l.startsWith('tools:')) || '';
     return /AskUserQuestion/.test(fm);
   });
-  // Ruling D1-Q3: the tool is stripped from every SA, so a declaration is inert - and
-  // documenting the removal does not license keeping the dead entry.
+  // Ordinary subagents lose this tool; conversation forks retain the parent pool.
+  // These creators use ordinary delegation, so retaining a dead declaration is invalid.
   check('auq.declared', declaring, [],
-    'no creator may declare the inert AskUserQuestion in `tools:`; it is stripped from every SA (Q3)');
+    'no creator may declare AskUserQuestion in `tools:`; ordinary delegated creators cannot use it');
 
   const carrying = FILES.filter((f) => SA_REMOVAL.test(text[f])).sort();
   check('auq.removalFact.files', carrying, ['agent-creator.md', 'skill-creator.md'],
-    'both creators that describe a subagent tool pool must state the AskUserQuestion removal (Q3)');
+    'both creators must state the ordinary-subagent AskUserQuestion removal');
+
+  const forkExceptions = ['agent-creator.md', 'skill-creator.md']
+    .filter((f) => /conversation\s+forks retain the\s+parent(?:'s)? tools/.test(text[f])).sort();
+  check('auq.forkException.files', forkExceptions, ['agent-creator.md', 'skill-creator.md'],
+    'both creators must preserve the conversation-fork exception to tool removal');
 
   check('auq.hookCreatorTools',
     /AskUserQuestion/.test(text['hook-creator.md'].split('\n').slice(0, 15)
@@ -423,12 +469,18 @@ function runHookTemplate(source, stdin) {
 {
   const tpl = section('hooks-templates.md', '## Templates', '## Best Practices').join('\n');
 
-  // Behavioural, not textual: the shipped bash template is run on the stop-hook path,
-  // the one that tempted an early `echo '{}'`. Two objects on stdout = discarded verdict.
+  // GIVEN: the shipped PreToolUse Bash hard-gate template and valid harmless input.
   const bashTpl = (tpl.match(/```bash\n([\s\S]*?)```/) || ['', ''])[1];
+  // WHEN/THEN: the pass-through path emits exactly one structured object.
   check('template.bash.singleStdoutWrite',
-    runHookTemplate(bashTpl, '{"stop_hook_active":true}'), ['{}'],
-    'hooks-templates.md bash template must print exactly one JSON object on every path (BC-A01)');
+    runHookTemplate(bashTpl, '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"pwd"}}'), ['{}'],
+    'hooks-templates.md bash template must print exactly one JSON object on the pass-through path (BC-A01)');
+  // GIVEN/WHEN: malformed input reaches the same policy template.
+  const malformed = spawnSync('bash', ['-c', bashTpl], { input: '{malformed', encoding: 'utf8' });
+  // THEN: the hard gate refuses the call without a misleading approval object.
+  check('template.bash.malformedBlocks',
+    [malformed.status, malformed.stdout, /Invalid PreToolUse Bash input/.test(malformed.stderr)],
+    [2, '', true], 'malformed policy input must exit 2 with stderr feedback and no approval JSON');
   check('template.decideFn',
     (tpl.match(/output\(decide\(await readStdin\(\)\)\)/g) || []).length, 1,
     'hooks-templates.md JS template must emit one object from one decide() call (BC-A01)');
@@ -462,6 +514,41 @@ function runHookTemplate(source, stdin) {
   const tpl = section('agent-template.md', '### 6. Guardrails', '## LLM Text Rules').join('\n');
   check('template.returnContractHeading', /^## Return Contract$/m.test(tpl), true,
     'agent-template.md generated-agent template (Guardrails) must carry a literal "## Return Contract" heading');
+}
+
+// ------------------------------------------------------ 11. current authoring boundaries
+
+{
+  // GIVEN distributed skills and ordinary creator delegation
+  // WHEN inspecting their authoring instructions
+  // THEN policy remains explicit and current capabilities are not suppressed.
+  check('skill.permissions.turnScoped',
+    /AT` grants and `DT` restrictions last only the invoking turn and clear on the next user message/.test(text['skill-creator.md']), true,
+    'skill creator must distinguish persistent instructions from turn-scoped tool permissions');
+  check('skill.invocation.distributedPolicy',
+    /Distributed Brewcode skills require `UI-F: true` \+ `DMI: true`/.test(text['skill-creator.md']), true,
+    'skill creator must retain the distributed explicit-invocation policy');
+  check('skill.context.notConversationFork',
+    /`context: fork` creates an isolated SA, not a conversation fork/.test(text['skill-creator.md']), true,
+    'skill context forks must not promise conversation history');
+  check('agent.omitClaudeMd.managedException',
+    /`omitClaudeMd: true`[\s\S]*?keeps managed policy/.test(text['agent-creator.md']), true,
+    'agent creator must teach omitClaudeMd without promising managed-policy removal');
+  check('agent.plugin.ignoredFields',
+    /Plugin AGs ignore `hooks`, `mcpServers`, `permissionMode`, and `initialPrompt`/.test(text['agent-creator.md']), true,
+    'plugin agents must not promise ignored per-agent configuration');
+  check('creators.noLegacyTaskCalls',
+    FILES.filter((f) => /\bTask\(/.test(text[f])), [],
+    'creator bodies must generate current Agent tool calls');
+  check('hook.stdout.worktreeException',
+    /`WorktreeCreate` emits only the absolute worktree path/.test(text['hook-creator.md']), true,
+    'hook creator must preserve the command WorktreeCreate path-only stdout contract');
+  check('hook.failure.hardGate',
+    /hard gates must deny\/block malformed input,[\s\S]*?exceptions, and invalid output/.test(text['hook-creator.md']), true,
+    'hard gate error paths must not silently approve malformed input or exceptions');
+  check('hook.async.advisoryOnly',
+    /Async hooks cannot block or rewrite inputs/.test(text['hook-creator.md']), true,
+    'hook creator must keep decisions out of async hook designs');
 }
 
 // ---------------------------------------------------------------- report

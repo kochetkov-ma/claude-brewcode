@@ -4,9 +4,9 @@
 
 | Context | Inherited? | Notes |
 |---------|-----------|-------|
-| CD (project + user) | Yes | Via `<system-reminder>`, with "may or may not be relevant" disclaimer. Built-in `Explore`/`Plan` SKIP it (`docs/sub-agents.md:956`) |
-| `.claude/rules/*.md` | Yes | Bundled with CD injection; same `Explore`/`Plan` exception |
-| Git status | Yes | Snapshot from the parent session start. `Explore`/`Plan` skip it regardless |
+| CD (project + user + local; loaded AGENTS.md) | Yes, unless omitted | Built-in `Explore`/`Plan` skip it. `omitClaudeMd: true` (2.1.271+) skips these instructions; managed policy still loads except for managed AG definitions |
+| `.claude/rules/*.md` | Yes, unless omitted | Same `Explore`/`Plan` and `omitClaudeMd` exceptions |
+| Git status | Conditional | Snapshot when SA starts; absent outside Git or when disabled (`includeGitInstructions`). `Explore`/`Plan` skip it regardless |
 | Permissions | Yes | Override via `permissionMode` -- ignored for PLG AGs |
 | TLs / MCP servers | Filtered | Inherited, then narrowed by the two filters -- see Available TLs in `agent-scope-and-tools.md`. `mcpServers` key ignored for PLG AGs; MCP TLs themselves survive both filters |
 | SKs from `skills:` field | Yes | Full content injected at startup |
@@ -18,7 +18,7 @@
 | Output style | No | The SA runs its own SP; forks excepted |
 | Parent's auto memory (`memory/MEMORY.md`) | No | Only AG-specific memory |
 
-> Don't duplicate CD rules in AG body -- already injected. Focus SP on AG-specific role, patterns, checklists.
+> Don't duplicate inherited CD rules in AG body. With `omitClaudeMd`, put any indispensable task constraints in the delegation prompt; the main session retains its instructions. Focus SP on AG-specific role, patterns, checklists.
 > Known bugs: see Known Bugs in `agent-known-issues.md`.
 
 ## SKs: Preload vs Runtime
@@ -57,17 +57,17 @@ When AG spawns from a SK that uses `references/`, AG does NOT have `skill_base_d
 | Foreground | Blocks the main conversation | Prompts pass through as they come up | Filter 1 only |
 | Background | Runs concurrently; the result reaches Claude as a completion notification in a later turn | Since v2.1.186 the prompt SURFACES in the main session naming the asking SA -- approve, or Esc denies that one TL call without stopping the SA (`docs/sub-agents.md:793`). Auto-deny was pre-2.1.186 behaviour | Filter 1 + filter 2 (smaller) |
 
-Mode is picked per spawn by the first matching case (`docs/sub-agents.md:795-798`):
+Mode is picked per `Agent` spawn by the first matching case (live docs, CC 2.1.285):
 
 | # | Condition | Mode |
 |---|-----------|------|
-| 1 | `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` | Foreground, every session kind, fork mode irrelevant |
-| 2 | An in-process AG-teams teammate spawned it | Foreground |
+| 1 | An in-process AG-teams teammate spawned it | Foreground; definition `background: true` errors; with fork mode/background-disable both off, `run_in_background: true` also errors |
+| 2 | `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` | Foreground, every session kind, fork mode irrelevant |
 | 3 | Fork mode ON (the DEF in an interactive session) | Background -- forks and non-forks alike; Claude cannot ask for the foreground |
 | 4 | Fork mode OFF (`-p` headless, Agent SDK unless enabled) | Background by DEF, foreground when Claude needs the result before continuing. `background: true` pins it to BG anyway |
 
-> `background: true` matters only in case 4. There is no `false` value -- to force the foreground use case 1 or case 2, !=a FM flag.
-> Since 2.1.269, case 2 hard-errors instead of silently forcing foreground when the spawned definition itself carries `background: true` -- a shared definition used both standalone and as a teammate must drop that field.
+> `background: true` matters only in case 4. There is no `false` force-foreground switch -- use case 1 or case 2. Skill `context: fork` has its own `background: false` semantics, not this four-case table. A resumed SA runs in BG but keeps its original tool pool.
+> Since 2.1.269, a teammate-spawned SA with `background: true` errors -- omit the field on shared definitions.
 > Steering: with fork mode off, ask Claude for background/foreground; Ctrl+B backgrounds a running task.
 
 ## SA Resource Limits (2.1.233)
@@ -100,6 +100,10 @@ Mode is picked per spawn by the first matching case (`docs/sub-agents.md:795-798
 | Hook | `SubagentStart` / `SubagentStop` -- MAIN session, not inside AG | `SubagentStop` exit 2 forces continuation |
 | Hook | (timer hook) -- none exists | Elapsed time readable only on a TL call |
 | Recovery | `.claude/projects/{project}/{sessionId}/subagents/agent-{agentId}.jsonl` | SA transcript (retention: `cleanupPeriodDays`) |
-| Recovery | `run_in_background: true` + `TaskOutput` | Read partial output live -- from the MAIN session; `TaskOutput` is filtered out of every SA |
+| Recovery | `run_in_background: true` + `Read` | Read the background task's output file live; `TaskOutput` is deprecated and unavailable in the background pool |
 | Recovery | `TaskStop` | Kill a running SA |
 | Recovery | `SendMessage` | Resume a stopped SA with ctx intact |
+
+Auto-mode local non-fork SAs may deliver through `SubagentHandback` (2.1.271+), which is added even if omitted/denied in `tools`. Their `PostToolUse:Agent` result `content` can contain only a hand-back note; capture the report from `PreToolUse`/`PostToolUse:SubagentHandback` `tool_input.message`, !=the note. Explore/Plan are one-shot and return no resumable AG ID. User-cancelled AGs do not auto-resume; permission approval never comes from an AG message.
+
+> Sources: [SA docs](https://code.claude.com/docs/en/sub-agents), [tools](https://code.claude.com/docs/en/tools-reference), [hooks](https://code.claude.com/docs/en/hooks); checked 2026-09-30 through CC 2.1.285.

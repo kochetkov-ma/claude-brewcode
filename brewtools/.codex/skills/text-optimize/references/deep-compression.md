@@ -2,6 +2,9 @@
 
 Reference for deep compression mode applied to LLM-only documents (AGENTS.md, system prompts, agent/skill definitions, KNOWLEDGE files).
 
+Research/token figures below retain their cited tokenizer/example scope; remeasure this artifact.
+Current model-specific prompting advice belongs to `rules-review.md`; never generalize across models.
+
 ## Symbol Substitution
 
 | Symbol | Meaning |
@@ -65,7 +68,7 @@ Status emoji cost 2-4 tokens each (measured): `✅`/`❌` = 2-3 tok, `ℹ️` = 
 
 ## Dictionary Format
 
-Place `[DICT: CC=Codex, KB=knowledge base, SP=system prompt, ...]` at document start when
+Place `[DICT: CC=Claude Code, KB=knowledge base, SP=system prompt, ...]` at document start when
 terms appear 3+ times. Rules: max 20 entries, sort alphabetically, place before the first content
 line, use the abbreviation from DICT throughout — a term used <3x stays inline (rules-review.md R13:
 DICT pays only on a long, repetition-heavy file, not a short one).
@@ -75,6 +78,8 @@ DICT pays only on a long, repetition-heavy file, not a short one).
 Beyond `rules-review.md` T.6: drop articles (the/a/an) when meaning survives without them, relative
 clauses ("which is", "that are"), and hedging ("might", "possibly", "could potentially") — state
 direct facts instead.
+
+Keep uncertainty when it changes the claim; removing a factual hedge is not filler removal.
 
 ## Structural Compression Patterns
 
@@ -120,12 +125,19 @@ Ledger: dropped "write unit tests / catches regressions" + "keep functions small
 Preserve in ALL cases regardless of compression level — the lossless guard, never paraphrased,
 rounded, or dropped:
 - Names, numbers, dates, URLs, file paths, versions, ports, sizes
-- CLI flags/options verbatim (`-x`, `--max`); model IDs byte-exact (`claude-balanced model-5`, never "balanced model 5")
+- CLI flags/options verbatim (`-x`, `--max`); model IDs byte-exact (`claude-sonnet-5`, never "Sonnet 5")
 - Thresholds, gates, percentages exactly as stated (`>=95%`, `~20%` ceiling) — never rounded
 - Negative rule semantics (use `!=` notation) | >=1 example per rule that originally had examples
-- DICT header at document start
+- DICT header at document start when Dictionary Format's repetition/size threshold is met
 - Dedup ledger: every merged pair recorded (kept <- dropped); merged facts count as preserved in verification
 - Loss ledger: every A.2/A.4 drop recorded (dropped -> reason); never elide project-specific facts (names, numbers, paths, versions, prohibitions)
+
+Checkpoint each known owned atomic write/deletion/repair immediately with
+`text-guard.sh checkpoint --run-dir <RUN_DIR> <file>` before further edits/checks; never capture
+others' intervening changes or manufacture ownership at failure/restore time. `verify --no-restore`
+keeps current bytes. Patch owned loss and repeat independent review, or refuse acceptance.
+Authorized full restore requires matching existing draft proof; absent/mismatched proof refuses
+with `RESTORE_REFUSED`, exit 1, preserving current bytes. Originals remain read-only to the writer.
 
 ## Stop Condition
 

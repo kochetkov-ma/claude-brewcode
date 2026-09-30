@@ -7,7 +7,7 @@ argument-hint: "[prompt] [status|install|create|update|review|rules]"
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion, Skill, WebSearch, WebFetch]
 model: opus
 ---
-<!-- brewcode-meta: version=6.2.0 content_version=5.6.0 generated_by=brewcode:e2e -->
+<!-- brewcode-meta: version=6.3.0 content_version=6.3.0 generated_by=brewcode:e2e -->
 
 <instructions>
 
@@ -140,11 +140,10 @@ Status mode reports missing infrastructure instead of blocking.
 ### Review Cycle (create, update modes)
 MAX_CYCLES=3. Pattern: execute -> reviewer validates -> different agent re-checks -> fix confirmed -> repeat.
 
-### Agent Dispatch (delegation contract — applies to EVERY Task spawn)
-All agent work through Task tool. A big task handed to one agent = an agent gone for an hour: you
-cannot observe it, cannot correct it, and it usually drifts off-target. One subagent = ONE bounded
-unit — one deliverable (here: ONE feature's tests), ~<=5 files, ~<=10 steps. Bigger MUST be split
-into N tasks, all spawned in ONE message.
+### Agent Dispatch (delegation contract — applies to EVERY Agent spawn)
+Use Agent tool. One subagent owns ONE deliverable (ONE feature's tests), ~<=5 files, ~<=10 steps.
+Bigger scope MUST split into N tasks, spawned in ONE message. An hour-away agent cannot be
+observed/corrected and risks drift.
 
 Every spawn prompt MUST carry:
 
@@ -160,7 +159,7 @@ Every spawn prompt MUST carry:
 A bare one-line task is never enough. Example:
 
 ```
-Task(subagent_type="e2e-<domain>", prompt="
+Agent(subagent_type="e2e-<domain>", prompt="
 GOAL: the project is getting a Playwright e2e suite; this task delivers the autotests for
       ONE feature so the suite runs green end to end.
 ROLE: you own the test files for {FEATURE} only. Do NOT touch page objects owned by other

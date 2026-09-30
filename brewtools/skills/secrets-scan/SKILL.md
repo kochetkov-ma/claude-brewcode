@@ -12,18 +12,17 @@ model: sonnet
 
 ## Prompt contract
 
-Position 1 of `$ARGUMENTS` is a **free-form prompt** (RU/EN) — modes and flags are optional and may
-follow in any order. Nobody types keys: resolve mode + scope FROM the prompt.
+Treat `$ARGUMENTS` as a free-form RU/EN prompt. Modes/flags may appear anywhere; infer mode and scope from prose.
 
 | Mode | EN keywords | RU keywords | Mutates? |
 |------|-------------|-------------|----------|
 | `scan` | *(empty)*, scan, check, audit, find | скан, проверь, аудит, найди | no |
 | `fix` | fix, remediate, clean up, `--fix` | почини, исправь, зафикси | yes |
 
-1. Strip flags (`--fix` is a flag, not free text). An explicit mode token anywhere wins outright.
+1. Explicit `--fix` resolves to `fix` before stripping flags. An explicit mode token anywhere wins outright.
 2. Else score modes by distinct whole-word keyword hits (table above). Highest unique score wins;
    tie -> `scan` (read-only wins). All zero -> `scan`.
-3. Empty arguments -> `scan`; it is read-only and asks nothing.
+3. Empty arguments -> `scan`; ask no routing question. The Phase 6 findings-triage offer requires approval before any remediation.
 4. `fix` is also auto-offered (not auto-run) whenever CRITICAL/HIGH findings exist, per Phase 6 —
    that offer is the outcome-changing `AskUserQuestion`, not a second resolution pass.
 5. Prose that is not a mode/flag is still input: treat it as scope narrowing (e.g. "scan the api
@@ -40,8 +39,7 @@ DO:     <2-5 imperative bullets>
 RESULT: <what the user ends up holding>
 ```
 
-Labels are literal; values follow the conversation language. Print it at the end of Phase 1,
-once the file list is known, before Phase 2 spawns the scan agents.
+Labels are literal; values follow the conversation language. Print once before Phase 1's first action; fill scope from the requested repository, then use the returned file list without repeating the PLAN.
 
 <phase name="1-setup">
 
@@ -78,26 +76,17 @@ cat "{DIR}/files.txt"
 ## Phase 2: Split & Launch 10 Agents
 
 1. Parse file list → split into 10 chunks (`ceil(total/10)`)
-2. Send 10 Task calls in parallel (single message)
+2. Send 10 Agent calls in parallel (single message)
 
-Config: `Task(subagent_type="general-purpose", model="haiku", description="Agent N/10 scan")`
+Config: `Agent(subagent_type="general-purpose", model="haiku", description="Agent N/10 scan")`
 
 ### Delegation
 
-A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct it, and it usually drifts off-target. The 10-way split IS the sizing rule: one subagent = ONE bounded unit — ONE chunk, ~<=10 steps. A repo big enough that a chunk still exceeds that gets more chunks, not bigger ones; all Task calls go out in ONE message.
+Start with a 10-way split: one agent owns one chunk, ~<=10 steps. Split oversized chunks further; spawn all Agent calls in ONE message.
 
-Every spawn prompt MUST carry:
+Every brief must retain GOAL, ROLE (ownership/exclusions), SCOPE (paths/commands), CONTEXT (completed/parallel work), CONSUMER (next use/output shape), and DONE (acceptance/report).
 
-| Field | Content |
-|-------|---------|
-| GOAL | the overall task and why it exists — the point beyond the file edit |
-| ROLE | what this agent owns; what it must NOT touch |
-| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
-| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what THIS agent needs |
-| CONSUMER | who or what uses the result next, and the shape it must fit |
-| DONE | acceptance criteria + the exact report shape you want back |
-
-A bare one-line task is never enough. The prompt below is that shape; reuse it verbatim per chunk.
+Never use a bare one-line brief. The prompt below is that shape; reuse it verbatim per chunk.
 
 <agent-prompt>
 Agent {N}/10 secrets scanner.
@@ -166,9 +155,7 @@ defect, not a better report.
 
 ## Phase 3: Reconcile & Merge
 
-Every chunk is accounted for before anything is merged. A chunk that silently vanishes is the
-failure this phase exists to prevent: the Summary would still print `Files: {TOTAL}` while ~10% of
-the repo was never read.
+Every chunk is accounted for before anything is merged. A vanished chunk would leave ~10% of the repo unread while Summary still claimed `Files: {TOTAL}`.
 
 1. Write each agent's raw JSON to `{DIR}/agent-{N}.json` and its assigned chunk to
    `{DIR}/assigned-{N}.txt` (one path per line).

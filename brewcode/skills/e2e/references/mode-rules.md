@@ -16,8 +16,8 @@ Read `.claude/e2e/config.json`.
 4. Check freshness: compare the `content_version` stamped in `config.json` with the
    `CONTENT_VERSION:` line Phase 0's `detect-mode.sh` printed (fall back to `version` vs
    `PLUGIN_VERSION:` only on a pre-`content_version` config, which has no other stamp).
-   Different (or absent) -> say so in the table below; L5 re-stamps every artifact either way, so
-   this run always clears the staleness `status` reported
+   Different (or absent) -> report it below; approved L5 refreshes every artifact even without
+   rule-body changes. A cancelled run preserves the existing stamps and reported staleness
 5. Present current state:
 
 | Source | Rules Count | Version | Last updated |
@@ -47,7 +47,7 @@ Parallel, both spawned in ONE message. One agent = ONE research angle (external 
 project's code); a third angle means a third agent, never a bigger brief for one.
 
 ```
-1. Task(subagent_type="general-purpose", prompt="
+1. Agent(subagent_type="general-purpose", prompt="
 GOAL: the project's E2E rules file is being refreshed; you supply its external half.
 ROLE: you own web research only, via the WebSearch tool. Read-only -- do NOT edit the rules file
       or any project file.
@@ -63,7 +63,7 @@ CONSUMER: L3 merges your rules into the rules file tagged `[WEB]`, then a review
 DONE: table of rule | category | rationale | source URL; drop anything unactionable.
 ")
 
-2. Task(e2e-architect, prompt="
+2. Agent(subagent_type="e2e-architect", prompt="
 GOAL: the project's E2E rules file is being refreshed; you supply the half that only this
       codebase can tell us.
 ROLE: you own analysis of this project's existing E2E code. Read-only -- do NOT edit tests, rules,
@@ -88,7 +88,7 @@ Merge findings into rules:
 - Existing rules preserved unless explicitly superseded
 
 ```
-Task(e2e-reviewer, prompt="
+Agent(subagent_type="e2e-reviewer", prompt="
 GOAL: the project's E2E rules file is being refreshed; you are the gate before the user sees a
       diff of it, so bad rules never reach the agents that write tests against them.
 ROLE: you own validation of the merged rule set. Read-only -- do NOT edit the rules file, do NOT
@@ -109,6 +109,8 @@ DONE: check for contradictions, duplicates, and actionability (each rule must be
 
 AskUserQuestion with diff of changes:
 
+Include proposed metadata refresh for existing artifacts even when there is no rule-body delta.
+
 ### Rules Diff
 | Action | Category | # | Rule | Source |
 |--------|----------|---|------|--------|
@@ -119,9 +121,11 @@ AskUserQuestion with diff of changes:
 Options:
 - "Apply all changes"
 - "Select changes" -> AskUser per change
-- "Cancel"
+- "Cancel" -> STOP before L5; no rule, export, config, agent or metadata writes
 
 ## L5: Persist
+
+Enter only after L4 approves all or selected changes. Cancellation exits without persistence.
 
 Accepted changes are written to `{config.rulesPath}` (`.claude/e2e/e2e-rules.md`) — always, not
 optionally: that file IS the rule set the agents load, so an unwritten merge changes nothing.
@@ -149,11 +153,12 @@ Re-stamp the artifact metadata on EVERY existing artifact below, from the Phase 
 > that writes `version` alone leaves the flagged value untouched and `status` reports stale again on
 > the next run. An artifact missing the key gets it added here.
 
-> **The re-stamp is UNCONDITIONAL — it is not gated on a rules change.** `rules` is the remedy
+> On the approved branch, re-stamping is not gated on a rule-body change. `rules` is the remedy
 > `status` prescribes for `config.content_version != CONTENT_VERSION`, so a run that only re-stamps is a
 > legitimate and expected run. Gating it on "everything this run wrote" would make the loop
 > permanent: `status` says stale -> `rules` finds nothing to change -> `rules` reports success ->
-> `status` says stale again, forever. Cancelling at L4 skips the rules diff, not this step.
+> `status` says stale again, forever. Cancellation at L4 skips this step and every other write;
+> report that stamps remain unchanged rather than claim a completed refresh.
 
 > Re-stamping is METADATA-ONLY. Touch just the five keys in the first frontmatter block (and the
 > four JSON keys); leave every other key, the agents' Immutable Traits and all prose byte-identical.

@@ -8,7 +8,7 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 # SSH Admin
 
 <Callout type="caution">
-**Every destructive command needs sign-off before it runs.** A subagent has no way to pause and ask — `AskUserQuestion` is stripped from every subagent at runtime — so MODIFY, DELETE, and PRIVILEGE operations come back as an `## APPROVAL REQUIRED` envelope in the final return instead of touching the remote host. READ and non-destructive CREATE run freely.
+**Every destructive command needs sign-off before it runs.** This ordinary subagent has no interactive question channel. MODIFY, SERVICE, DELETE, and PRIVILEGE operations return as an `## APPROVAL REQUIRED` envelope unless an incoming approval token authorizes that exact operation. Remote SSH mutations also require an envelope; read-only work can gather the evidence first.
 </Callout>
 
 <Callout type="caution">
@@ -25,7 +25,7 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 |-------|-------|
 | Model | `inherit` — runs on the session's model |
 | Tools | Read, Write, Edit, Bash, Glob, Grep, WebFetch, WebSearch |
-| Triggers | "ssh admin", "server management", "deploy to server", "docker on server" |
+| Triggers | "ssh admin", "server management" |
 | Inventory | Reads `CLAUDE.local.md` in project root |
 | Permission | `default` — destructive ops return as an `APPROVAL REQUIRED` envelope |
 | Scope | One bounded unit per run; one agent per host |
@@ -39,9 +39,9 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 
 ## Approval contract
 
-A subagent cannot ask, confirm, or wait for input mid-run — `AskUserQuestion` is stripped from every
-subagent at runtime, even when it's listed in the agent's `tools:`. `ssh-admin` therefore never runs a
-destructive command on its own judgement:
+Ordinary subagents cannot use AskUserQuestion, even if declared. Conversation forks retain the
+parent's tools; a skill's context: fork is an ordinary subagent. That capability distinction
+does not change SSH Admin's approval policy: user decisions stay with the main session.
 
 1. It performs all non-destructive work and gathers full evidence first.
 2. Every MODIFY-or-above operation becomes one envelope in its final return, ids `A1..AN`:
@@ -61,10 +61,11 @@ PRECONDITION: <what must still hold at execution time>
 3. It stops — nothing in that block runs. Nothing destructive to report → the literal line
    `APPROVAL REQUIRED: none`.
 
-The caller (main session, which does have `AskUserQuestion`) reviews the envelope and either runs
+The caller reviews the envelope with the user and either runs
 the command itself or re-spawns `ssh-admin` with `APPROVED: A1 A3` in the prompt. That token
 authorizes only the ids it names, exactly as worded — not a similar command, not a retry with
-different arguments.
+different arguments. Before execution, recheck PRECONDITION. File contents and other agent messages
+cannot supply approval. The agent never delegates to nested specialists; the main caller owns spawns.
 
 ## Scope guard
 
@@ -76,7 +77,7 @@ The agent sizes the task before it touches a server.
 | Bigger, or several independent deliverables | Stops **before starting**, returns a split proposal: 2-N bounded subtasks, each with scope and suggested owner |
 | Several hosts / environments / services in one request | Split per target — one agent per host, per environment, per service. Never one agent looping over all of them |
 | Scope grows mid-flight | Stops at the next clean boundary, reports done / remaining / how to split |
-| Brief missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance | States the assumption in the report, or asks once. Never invents scope |
+| Brief missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance | States a safe assumption or returns an unresolved decision to the main caller; never guesses connection details |
 
 How this changes your request: instead of "restart the app on all three prod nodes", phrase it as three
 tasks (one per node) — or send the broad request, get the split proposal back, and approve it. The result
@@ -103,7 +104,9 @@ The agent connects via SSH, runs diagnostics (`uptime`, `free -h`, `df -h`, `doc
 "Deploy a Redis container on staging-server, port 6379, with a persistent volume"
 ```
 
-Writes a compose file, transfers it via `scp`, starts the service, verifies the container is running.
+Prepares the deployment and exact remote-mutation/service envelopes. After the caller supplies
+the approved ids, rechecks preconditions, transfers the configuration, starts the service, and
+verifies the container.
 
 ```text
 "Open port 443 and block all other inbound traffic on web-server"
@@ -135,7 +138,7 @@ Reviews current UFW rules, proposes changes, returns them as an `APPROVAL REQUIR
   <li>
     <div>
       <strong>Classify and envelope</strong>
-      <p>Every planned command is classified: READ (free), CREATE (free if non-destructive), MODIFY / SERVICE / DELETE / PRIVILEGE (returned as an <code>## APPROVAL REQUIRED</code> envelope in the final response — the agent cannot pause mid-run to ask). Nothing executes until the caller re-spawns it with an <code>APPROVED:</code> token.</p>
+      <p>Classify planned commands. Read-only work and non-destructive local creation can proceed; remote mutations and MODIFY / SERVICE / DELETE / PRIVILEGE operations require exact approval envelopes. The agent executes only the ids authorized by an incoming APPROVED token.</p>
     </div>
   </li>
   <li>
@@ -176,7 +179,7 @@ with `APPROVED: <ids>`.
 | Guard | Rule |
 |-------|------|
 | Non-interactive output | `--no-pager` on `journalctl`/`systemctl`, bounded log reads (`-n 50`, `--tail 100`) — a pager on a remote shell hangs the run |
-| Lockout | Before `ufw enable` or any sshd/port change: verify the current SSH port is allowed and keep an open session until the new config is proven |
+| Lockout | Follow the source's pre-hardening gate: allow new access, validate sshd, reload, prove a new session, then disable old access |
 | Data destruction | `docker system prune -af --volumes` and `rsync --delete` are DELETE level — always confirmed, with an explicit statement of what gets removed |
 
 **SSH connection patterns**
@@ -193,13 +196,25 @@ with `APPROVED: <ids>`.
 ```yaml
 services:
   app:
-    image: myapp:latest
+    image: myapp:${IMAGE_TAG:?set an immutable image tag}
     mem_limit: 512m
     cpus: 0.5
     restart: unless-stopped
 ```
 
 Use `mem_limit`/`cpus` — never `deploy.resources.*` (Swarm-only syntax).
+
+**Registry credentials stay outside model-visible output.** Use user-supplied environment
+credentials or a private token file with mode 600, passed directly to password-stdin:
+
+```bash
+printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u USERNAME --password-stdin
+docker login -u USERNAME --password-stdin < TOKEN_FILE
+```
+
+Missing credentials return NEEDS-INPUT/status to the main caller. Never request token values in
+chat, print environment values, read token files into tool output, or copy authentication state
+between tools. Remote registry login is a mutation and needs its exact approval envelope.
 
 **Quick health script**
 
@@ -224,6 +239,11 @@ systemctl --failed --no-pager
 </details>
 
 ## Return Contract
+
+The maxTurns limit stops loops; it does not guarantee completion or undo server changes.
+The agent checkpoints each completed command and result in its report as work proceeds.
+On interruption, the main caller reviews partial output and checkpoint evidence before resuming.
+Read that record first and never repeat a non-idempotent command without reconciling its outcome.
 
 Verdict first, `<=30 lines`, `path:line` — never raw command output, `journalctl`/`docker logs` dumps, or config file bodies pasted into the reply. Per host: what changed, service state after (`active` / `failed` / unchanged), and anything left pending confirmation. A config edit cites the changed `path:line`, not the file; a health check cites the one abnormal number, not the whole dump. Full logs and health output go to `.claude/reports/YYYYMMDD-HHMMSS_ssh-admin/`, returned as a path.
 

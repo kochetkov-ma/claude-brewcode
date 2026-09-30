@@ -1,7 +1,7 @@
 # Measurement — Token Proxy & Tiers
 
-`scripts/context-scan.sh` is the single source of truth. This document describes what it does and
-records its current reading; it never states a number the script does not produce.
+`scripts/context-scan.sh` produces inventory size proxies, not observed session-token consumption.
+Tables dated 2026-08-16 retain historical evidence; refresh scan/loading state before decisions.
 
 ## Token proxy
 
@@ -13,7 +13,7 @@ Deterministic, dependency-free (no tokenizer in the hot path), and the same sizi
 stand-in; Claude's own BPE table is not pip-installable) over the 186 whole files the scan reports with
 `kind=file` under `--root . --global`. The `field:description` and `hook-payload` rows are excluded —
 they are fragments and an estimate, not files. The ratio is a property of the prose, not of the file
-count, so it carries over to any corpus of the same house style:
+count; recheck on a new corpus rather than assume the correction transfers:
 
 | Metric | Value |
 |--------|-------|
@@ -86,33 +86,39 @@ ALWAYS-ON composition:
 
 ## Tier membership — exactly what the script counts
 
-**ALWAYS-ON** — in every request, unconditionally.
+**ALWAYS-ON** is the scanner's inventory label, not proof of unconditional loading. Current Claude
+memory rules: recursive discovery; path-scoped rules load on matching reads, unscoped at launch.
+Conventions load only if imported/read. Auto memory loads the first 200 lines or 25KB of
+`MEMORY.md`; topic files are on demand. `AGENTS.md` depends on client/settings. Check `/context`.
 
 | File class | Glob / rule |
 |------------|-------------|
 | Project + global `CLAUDE.md`, `CLAUDE.local.md` | `<root>/CLAUDE.md`, `<root>/CLAUDE.local.md` |
 | `AGENTS.md` | `<root>/AGENTS.md`, `<root>/.claude/AGENTS.md` |
-| Rules | `<root>/rules/*.md`, `<root>/.claude/rules/*.md` — SINGLE level, Claude Code does not recurse |
+| Rules | Scanner: `<root>/rules/**/*.md`, `<root>/.claude/rules/**/*.md`, recursive with the prune list below. Inventory includes conditional rules; verify matching reads before claiming actual loading |
 | Conventions | `<root>/.claude/convention/*` — single level, all file types |
 | In-repo memory | `<root>/.claude/memory/**/*.md` — recursive |
-| Per-project memory | `$HOME/.claude/projects/<path-with-slashes-as-dashes>/memory/**/*.md` — lives outside the repo, always-on for it, so it is re-added by explicit path after `projects` is pruned |
+| Per-project memory | `$HOME/.claude/projects/<path-with-slashes-as-dashes>/memory/**/*.md` — scanner inventory outside repo, re-added after `projects` prune; verify configured/shared repo path and index-vs-topic loading |
 | Agent `description:` | frontmatter field only, inline or `\|`/`>` block scalar; the body is PER-SPAWN |
 | Hook-injected text | `*/hooks/*.mjs`, top-level `UPPER_SNAKE` string constants. **ESTIMATE** — the text is emitted by a script, not read from a file; quotes counted, runtime interpolation not |
 
-**PER-SPAWN** — agent `.md` bodies, paid in full on EVERY subagent spawn, never lazy.
+**PER-SPAWN** inventories bodies; only the selected agent's body loads at its spawn.
+Context inheritance differs for ordinary agents and conversation forks.
 
 | File class | Glob / rule |
 |------------|-------------|
 | Agent bodies | `*/agents/*.md`, excluding `*/skills/*` — a SKILL directory named `agents` (brewcode/skills/agents/) is not an agent roster |
 
-**PER-INVOCATION** — paid when a skill is invoked.
+**PER-INVOCATION** inventories bodies/references; invocation loads body, references only when read.
+The sum is potential corpus size, not every invocation's cost.
 
 | File class | Glob / rule |
 |------------|-------------|
 | Skill bodies | any `SKILL.md` under the root |
-| Skill references | `<skill-dir>/references/*.md` — single level, siblings of that `SKILL.md` |
+| Skill references | `<skill-dir>/references/**/*.md` — recursive with the prune list below, inside the sibling `references/` directory of that `SKILL.md`; potential inventory, read on demand |
 
-Not counted anywhere: skill `README.md`, `scripts/**`, `assets/**` — never entering context.
+Scanner excludes skill `README.md`, `scripts/**`, `assets/**`; reads/injected script output can
+enter context. Exclusion is a measurement choice, not a runtime guarantee.
 
 ### Prune list — and why each class is already-counted text
 
@@ -128,7 +134,7 @@ Not counted anywhere: skill `README.md`, `scripts/**`, `assets/**` — never ent
 | `.codex` | Generated mirror of `brew*/skills` + `brew*/agents` (`generate-compat.mjs`). Byte-derived copies of text counted at its source |
 | `.template-baseline` | Raw pre-stamp copies of shipped assets. Same text, one release-stamp apart |
 | `plugins` | `~/.claude/plugins/cache/**` — installed copies of THIS repo's four plugins. Counting both doubles every skill and agent |
-| `projects` | `~/.claude/projects/**` — session transcripts, not loaded config. The one always-on subtree inside it (the per-project `memory/`) is re-added by explicit path |
+| `projects` | `~/.claude/projects/**` — transcript/runtime inventory excluded; configured memory inventory re-added explicitly, not all memory files loaded at launch |
 | `web` | Docs site source (Astro/MDX) — published output, never read into a session |
 | `.git`, `tmp` | VCS objects and scratch |
 | `node_modules`, `dist`, `build`, `.next`, `vendor` | Third-party or derived build artifacts |
@@ -191,3 +197,5 @@ stops the surface from looking virgin after the first run.
 
 MCP servers, plugin enablement, `settings.json`, `~/.claude/plugins/cache/**`. Advisory-only signals
 about these live in `references/mcp-advice.md`, not in this skill's measured tiers or its mutations.
+
+Loading authority: https://code.claude.com/docs/en/memory (checked 2026-09-30).

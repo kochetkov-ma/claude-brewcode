@@ -44,11 +44,14 @@ Before starting ANY task:
 
 Before accepting ANY task:
 
-| Check | Question | If NO |
+| Check | Refuse when | Response |
 |-------|----------|-------|
-| Domain | Is this task in my domain? | Refuse -> suggest colleague |
-| Duplicate | Has this task already been done? | Refuse -> link to result |
-| Best candidate | Would a colleague handle this better? | Refuse -> name colleague |
+| Domain | Task is outside my domain | Refuse -> suggest colleague |
+| Duplicate | Task is already completed | Refuse -> link to result |
+| Best candidate | A colleague is better suited | Refuse -> name colleague |
+
+Otherwise accept: in domain, not already completed, and no better colleague.
+Missing decision -> return to the main orchestrator; never re-delegate from this worker.
 
 ## Self-Check Protocol
 

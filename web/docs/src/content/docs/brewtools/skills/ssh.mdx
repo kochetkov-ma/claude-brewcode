@@ -32,7 +32,7 @@ import { Card, CardGrid, Callout, Steps, Badge, UpdateNotice } from '../../../..
 - **First-time setup** — add a new server: `/brewtools:ssh setup`
 - **System admin** — disk usage, memory, logs, pending updates: `/brewtools:ssh check disk space on vps-main`
 - **Docker ops** — containers, images, compose lifecycle: `/brewtools:ssh show running containers`
-- **Deploy** — pull image, restart service, health check: `/brewtools:ssh pull latest and restart brewcode-docs`
+- **Deploy** — pull a pinned image, restart service, and verify health: `/brewtools:ssh pull ghcr.io/org/app:1.2.3 and restart on vps-main`
 - **Security audit** — firewall rules, fail2ban, sshd config: `/brewtools:ssh check ufw and fail2ban status`
 - **Agent refresh** — after server changes: `/brewtools:ssh update-agent`
 
@@ -46,7 +46,7 @@ import { Card, CardGrid, Callout, Steps, Badge, UpdateNotice } from '../../../..
 /brewtools:ssh check disk space and docker status on vps-main
 
 # Deploy: pull + restart
-/brewtools:ssh pull ghcr.io/org/app:latest and restart on vps-main
+/brewtools:ssh pull ghcr.io/org/app:1.2.3 and restart on vps-main
 ```
 
 ```bash
@@ -63,7 +63,7 @@ import { Card, CardGrid, Callout, Steps, Badge, UpdateNotice } from '../../../..
   <li>
     <div>
       <strong>Mode detection</strong>
-      <p>Auto-parses your intent: <code>setup</code>, <code>connect</code>, <code>configure</code>, <code>update-agent</code>, or <code>execute</code> (default). Empty args with no servers configured → <code>setup</code> automatically.</p>
+      <p>An explicit mode token wins; otherwise score distinct whole-word keywords. Equal top scores or conflicting explicit modes require clarification before action. Without matches, use execute. Empty input selects setup if no servers exist, otherwise execute with server selection.</p>
     </div>
   </li>
   <li>
@@ -99,7 +99,7 @@ import { Card, CardGrid, Callout, Steps, Badge, UpdateNotice } from '../../../..
   <li>
     <div>
       <strong>Execute and report</strong>
-      <p>Simple ops run inline (max 5 SSH calls per invocation). Complex multi-step tasks delegate to the <code>ssh-admin</code> agent via Task tool. Session ends with a summary: server, mode, actions taken, changes made, status.</p>
+      <p>Simple ops run inline (max 5 SSH calls per invocation). Complex multi-step tasks delegate to ssh-admin through Agent. Return the server, mode, actions taken, verified changes, and remaining approval needs.</p>
     </div>
   </li>
 </Steps>
@@ -121,7 +121,12 @@ Every spawn prompt carries six fields. A bare one-line task is never enough:
 | CONSUMER | who or what uses the result next, and the shape it must fit |
 | DONE | acceptance criteria + the exact report shape expected back |
 
-**The confirmation gates are not delegable.** `AskUserQuestion` is stripped from every subagent at runtime — DELETE and PRIVILEGE approval happens in Step 3, in the main conversation, *before* any spawn. A spawned `ssh-admin` does all non-destructive work and ends its return with an `## APPROVAL REQUIRED` block instead — one envelope per destructive operation (`COMMAND` / `HOST` / `EFFECT` / `ROLLBACK` / `EVIDENCE` / `PRECONDITION`), or the literal `APPROVAL REQUIRED: none`. The main session shows the envelopes to the user, then re-spawns the agent with `APPROVED: A1 A3` — the only authorization a subagent may act on.
+**The confirmation gates stay in the main conversation.** Ordinary subagents cannot use
+AskUserQuestion; conversation forks retain parent tools, but that distinction does not change
+this workflow's approval policy. SSH Admin returns unresolved decisions or exact destructive
+operation envelopes with COMMAND, HOST, EFFECT, ROLLBACK, EVIDENCE, and PRECONDITION.
+The main caller presents them and supplies APPROVED ids for exact commands only; the agent
+rechecks preconditions before execution. No pending operations means APPROVAL REQUIRED: none.
 
 <details>
 <summary>Safety classification matrix & internals</summary>
@@ -130,7 +135,7 @@ Every spawn prompt carries six fields. A bare one-line task is never enough:
 
 | Level | Example commands | Confirmation |
 |-------|-----------------|--------------|
-| READ | `ls`, `cat`, `df`, `docker ps`, `systemctl status` | None — runs freely |
+| READ | Bounded nonsensitive file/state probes, `df`, `docker ps`, `systemctl status` | None; secret files and broad environment dumps are excluded |
 | CREATE | `mkdir`, `docker pull`, `touch` | None if non-destructive |
 | MODIFY | `chmod`, `sed`, config edits | Required |
 | SERVICE | `restart`, `reload`, `docker compose up` | Required |
@@ -149,9 +154,11 @@ Every spawn prompt carries six fields. A bare one-line task is never enough:
 | AskUserQuestion per phase | 3 max, combined into one if more needed |
 
 Discovery bounds its own 30 s deadline inline — macOS has no GNU `timeout`, so the script re-execs
-itself under a portable watchdog rather than relying on a shared helper. Skills cannot source
-scripts across skill directories, so `ssh` keeps this logic self-contained instead of importing
-`deploy`'s watchdog module.
+itself under a portable watchdog. Individual SSH operations use the shared, tested helper from
+the same Brewtools plugin: `skills/deploy/scripts/lib/deploy-common.sh`, sourced through
+`CLAUDE_PLUGIN_ROOT`. Its `ght 60 ssh ...` wrapper enforces the 60 s command limit using
+`timeout`, `gtimeout`, or a built-in Bash watchdog; `ght_reason` distinguishes timeout,
+missing tools, and command failure. Discovery keeps its separate 30 s total bound.
 
 **Server discovery collects:**
 
@@ -171,6 +178,16 @@ scripts across skill directories, so `ssh` keeps this logic self-contained inste
 **Fallback strategy:** if a helper script fails, the skill attempts the same operation inline (individual Bash calls). If both fail, it reports `SCRIPT_ERROR` / `EXIT_CODE` / `STDERR` / `PHASE` and stops — no silent swallowing.
 
 **Interactive terminal commands** (e.g., `sudo` with password prompt): use the Claude Code escape hatch `! ssh deploy@your-server` to open a direct terminal session.
+
+Read only explicitly named nonsensitive environment values when diagnostics require them.
+Do not dump env/printenv or expose credential files in tool output. Registry login uses
+user-supplied environment credentials or a private token file through password-stdin; missing
+credentials return an input requirement without asking for their value in chat.
+
+For a new or changed host key, compare the scanned SHA256 fingerprint with an independent
+provider-console or out-of-band record before trusting it. Verify the replacement fingerprint
+before removing an old known_hosts entry; a connection failure alone is not permission to
+erase trust history.
 
 </details>
 

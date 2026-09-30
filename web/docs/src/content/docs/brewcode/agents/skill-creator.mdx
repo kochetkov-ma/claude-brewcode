@@ -1,270 +1,128 @@
 ---
 title: "Skill Creator"
-description: "Creates and improves Claude Code skills. Triggers: create skill, improve skill, fix activation."
+description: "Create or improve Claude Code skills with explicit invocation rules, bounded scope, validated prompt contracts, and realistic output evaluation."
 order: 1205
 ---
-import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
 
 # Skill Creator
 
-<Callout type="caution">
-**Auto-activation is best-effort, never guaranteed — Claude Code publishes no activation rate.** Trigger keywords, description format, and invocation type (user vs. LLM) determine whether Claude ever picks up the skill; `/skill-name` is the only lever a user controls directly. A wrong description silently kills auto-activation — and the bug is invisible until you test it.
-</Callout>
-
-<Callout type="tip">
-**Skill Creator encodes every best practice from Anthropic's official skill docs.** It picks the right context mode, writes an activation-optimized description, validates structure, and generates test prompts — so you don't have to read the agent's 147-line instructions and its four reference files yourself.
-</Callout>
-
-<Callout type="note" title="What's new in 6.2.0">
-The agent body dropped from 897 to 147 lines — most of it moved into four new `references/` files (`frontmatter-fields.md`, `design-patterns.md`, `execution-model.md`, `activation-and-troubleshooting.md`), read on demand instead of always loaded. 8 new frontmatter fields, 4 new `validate-skill.sh` checks — see the frontmatter table / Flow step 4 below. New `## Delegation` and `## Scope Fit` sections keep the agent from over-delegating small work and from over-engineering past what the task actually needs.
-</Callout>
+<Badge text="inherit" /> <Badge text="skill authoring" /> <Badge text="bounded scope" />
 
 ## Quick reference
 
 | Field | Value |
 |-------|-------|
-| Trigger | "create skill", "improve skill", "fix activation" |
-| Model | `inherit` — runs on the session's model |
+| Agent | `brewcode:skill-creator` |
+| Triggers | create skill, improve skill, fix activation |
+| Model | inherit: uses the session model |
 | Tools | Read, Write, Edit, Glob, Grep, Bash, Agent |
+| Output | Skill directory, artifact list, validator/evaluation results, and remaining questions |
 
-## Scope guard
+## What it does
 
-Skill Creator sizes the task before starting. One bounded unit = one deliverable, roughly 5 files, roughly 10 steps.
+Create a reusable Claude Code skill from a concrete workflow, improve an existing skill, or
+apply confirmed review findings. Skill Creator chooses the structure, writes instructions and
+supporting resources, validates the result, and evaluates realistic examples.
 
-| Situation | What the agent does |
-|-----------|---------------------|
-| Brief fits one bounded unit | Starts immediately |
-| Brief exceeds ~5 files / ~10 steps, or bundles several independent deliverables | Stops before starting, returns a split proposal: 2-N bounded subtasks, each with scope and a suggested owner |
-| Scope grows mid-flight | Stops at the next clean boundary, reports done / remaining / how to split |
-| Brief is missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance | States the assumption explicitly in the report, or asks once — never invents scope |
-
-"Build me a plugin with five skills" gets a split proposal — one skill per subtask. One skill, with its references and scripts, is a bounded unit.
-
-<Callout type="tip">
-**Got a split proposal instead of a SKILL.md?** That is the guard working. Pick one skill from the proposal and re-send it, or spawn the subtasks as parallel agents in a single message.
-</Callout>
+Start with a clear goal, exact directory ownership, relevant completed work, the next consumer,
+and acceptance evidence. The agent follows the closest well-built skill in the repository,
+alongside conventions and project rules. It handles one bounded deliverable; larger requests
+return a split proposal before implementation.
 
 ## When to use
 
-- You want a new Claude Code skill and need correct SKILL.md structure from the start
-- An existing skill isn't auto-invoking and you need description optimization
-- You want to capture a workflow from the current conversation into a reusable skill
-- You need to choose the right context mode (`fork` vs inline) or invocation type for a new skill
-- A skill's bash blocks aren't executing — missing `EXECUTE` keyword or `$ARGUMENTS` in bash context
+- Capture a proven workflow as a reusable skill.
+- Add a skill with deterministic scripts and supporting references.
+- Fix incorrect frontmatter, tool assumptions, or invocation behavior.
+- Apply independently confirmed review findings to an existing skill.
 
-## Examples
+## Example
 
+Ask the main session to delegate:
+
+```text
+Create one project skill for database migrations. Own .claude/skills/db-migration/.
+Follow the existing migration workflow and project test commands. Require explicit
+invocation; return artifact paths, validator verdict, and output-evaluation evidence.
 ```
-"Create a skill for database migrations"
-"Claude isn't picking up my skill automatically"
-"Turn what we just did into a skill"
-"My /deploy skill isn't reliable — fix the description"
-"new skill: scan for leaked secrets in git history"
-```
 
-## Flow
+Expected result: a SKILL.md and only the references, scripts, tests, and README needed by
+that workflow. Detailed logs stay in a report file; the final return names written artifacts,
+validation results, and unresolved decisions.
+
+## Workflow
 
 <Steps>
-  <li>
-    <div>
-      <strong>Understand the request</strong>
-      <p>If the current conversation contains a workflow the user wants to capture, the agent extracts it from history first — tools used, steps taken, input/output formats, edge cases encountered. It cannot ask the user anything — <code>AskUserQuestion</code> is removed from every subagent in CC 2.1.233. A missing purpose, invocation type, or trigger phrase gets the safest reading, stated explicitly in the report, with the open question handed back to the caller unanswered.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Pick context mode and invocation type</strong>
-      <p>Critical operations (deploy, commit) get <code>disable-model-invocation: true</code> + slash-only. Background knowledge gets <code>user-invocable: false</code>. Standalone tasks with fewer than 4 phases get <code>context: fork</code>. Multi-phase orchestration stays inline. Model choice follows complexity: opus for orchestration, sonnet for analysis, haiku for simple helpers.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Write SKILL.md with activation-optimized description</strong>
-      <p>Description follows the template: action verb sentence + explicit <code>Triggers: "phrase1", "phrase2"</code> on a single line, brewcode target under ~400 chars (spec hard cap 1024). Third-person, no colons (YAML breaks silently). For user-only skills, a plain one-liner is enough — trigger keywords are wasted tokens when LLM never auto-invokes.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Validate structure and run tests</strong>
-      <p>Runs <code>validate-skill.sh</code> from the brewcode plugin. Checks: valid YAML frontmatter, <code>name</code> ≤ 64 chars, bare with no <code>plugin:</code> prefix and matching the directory name, <code>description</code> ≤ 1024 chars single-line (house target ≤ 400), body under 500 lines, bash blocks have <code>EXECUTE</code> keyword, no hardcoded secrets — plus four checks added in 6.2.0: an unknown frontmatter key (warning), a bare top-level <code>once:</code> (fail), an <code>agent:</code> value outside the three built-ins (warning), and a UTF-8 BOM at the file start (fail). Then spawns 3–5 realistic test prompts to verify activation and output quality.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Generate README and iterate</strong>
-      <p>Fills the standard README template with actual examples, then runs <code>brewtools:text-optimize</code> on the SKILL.md. If test runs reveal a repeated helper pattern, bundles it into <code>scripts/</code> so every future invocation skips the boilerplate.</p>
-    </div>
-  </li>
+  <li><div><strong>Resolve scope and workflow</strong><p>Extract a proven workflow from available conversation context or the caller's brief. Resolve project, personal, or plugin location. Ordinary subagents return unresolved questions to the caller instead of planning an interactive question round.</p></div></li>
+  <li><div><strong>Choose invocation and execution context</strong><p>Distributed Brewcode skills require user-invocable: true and disable-model-invocation: true. Choose forked or inline execution for the actual workflow, and verify any selected custom agent exists.</p></div></li>
+  <li><div><strong>Write the prompt contract and resources</strong><p>Use a free-text prompt entry point, explicit mode detection where needed, and a PLAN block before actions. Keep instructions concise; load schemas and detailed modes from references on demand. Use scripts for deterministic work.</p></div></li>
+  <li><div><strong>Validate and evaluate</strong><p>Run validate-skill.sh, fix confirmed failures, and rerun it after changes. Evaluate three to five realistic prompts against fresh-session baselines. For explicit-only skills, evaluate output through explicit invocation instead of measuring automatic activation.</p></div></li>
+  <li><div><strong>Finish with tests, documentation, and caller-owned optimization</strong><p>Run meaningful script tests when scripts are present. Write a concise README with real examples. Request the final text-optimizer pass from the main caller; the creator does not nest delegation or delegate its own verification.</p></div></li>
 </Steps>
 
-<details>
-<summary>Full workflow internals — phase breakdown, frontmatter reference, patterns</summary>
+## Invocation policy
 
-### Activation reliability by configuration
+| Context | Configuration |
+|---------|---------------|
+| Distributed Brewcode product skill | `user-invocable: true` and `disable-model-invocation: true` |
+| User-only skill outside distributed products | `disable-model-invocation: true` |
+| Model-only knowledge outside distributed products | `user-invocable: false` |
+| Both invocation paths outside distributed products | Default invocation behavior |
 
-Claude Code publishes no activation percentage — rank the methods, don't quote a rate.
+The distributed-product rule is repository policy, stricter than upstream defaults.
+Explicit invocation makes the entry point deliberate; it does not guarantee correct execution.
+Claude Code publishes no automatic-activation percentage.
 
-| Configuration | Reliability |
-|---|---|
-| Basic description, no triggers | Lowest |
-| Optimized description + `Triggers:` line | Higher |
-| `/skill-name` explicit slash command | Highest — the only lever the user controls directly |
-| `disable-model-invocation: true` (user-only) | n/a — LLM never invoked |
+<Callout type="note" title="Evaluate behavior, not invented activation rates">
+  Description and trigger phrasing can affect discovery for model-invocable skills. Use actual
+  triggered/missed and output results from realistic runs. For disable-model-invocation skills,
+  automatic activation and subagent preloading are unavailable by design.
+</Callout>
 
-**Context reattachment after compaction:** skills reattach under a bounded budget — 5K tokens per skill, 25K combined — not an unbounded-loss bug. If a skill still gets evicted under load, re-invoke `/skill-name`.
+## Execution and tools
 
-### Invocation type decision
+**A skill fork is an ordinary subagent, not a conversation fork.** A skill with
+`context: fork` starts an isolated subagent. Ordinary subagents have tool filtering and cannot
+use AskUserQuestion for an interactive user round. Conversation forks retain the parent's tools;
+do not apply ordinary-subagent limitations to that distinct mode.
 
-| Who invokes | Configuration | Description style |
-|---|---|---|
-| User only (slash command) | `disable-model-invocation: true` | Simple one-liner, no triggers needed |
-| LLM only (background) | `user-invocable: false` | Full triggers for auto-activation |
-| Both (default) | (no flags) | Full triggers for auto-activation |
+Upstream supports configurable nested-agent depth, but this project's authoring policy keeps
+delegation with the main caller. Skill Creator completes bounded work itself and returns split
+or optimization requests to the caller. Agent being listed as a tool does not authorize ignoring
+that policy.
 
-**Rule:** If failure is unacceptable (deploy, send-email, delete data) → `disable-model-invocation: true` + slash command only.
+`allowed-tools` preapproves supported calls; it is not a tool-access sandbox. Grants and
+`disallowed-tools` restrictions apply to the invoking turn and clear on the next user message,
+while skill instructions persist. Scope permissions to the required calls instead of
+preapproving every Bash, Write, Edit, or Agent action.
 
-### Skill anatomy
+Dynamic skill-text substitutions such as `${CLAUDE_SKILL_DIR}` are not ordinary environment
+variables available to hooks or agents. Use the documented substitution and resource path for
+the execution surface being authored.
 
-```
-skill-name/
-├── SKILL.md         # frontmatter + instructions (required)
-├── references/      # detailed docs, loaded on demand
-├── examples/        # working code examples
-├── scripts/         # executable utilities
-├── assets/          # templates, images
-└── agents/          # subagent prompts (convention, NOT auto-discovered)
-```
+## Validation and references
 
-### Key design patterns
+The creator uses the bundled validator for frontmatter, naming, prompt contract, structure, and
+other supported checks. A passing validator complements evaluation; it does not prove the workflow
+achieves its goal. Confirmed fixes require another validator run.
 
-| Pattern | When to use |
-|---|---|
-| **Progressive Disclosure** | Always — L1 name+desc in context, L2 SKILL.md on trigger, L3 references on demand |
-| **Reference Splitting** | 2+ modes, >50 lines/mode, >300 lines total — detect mode → load only matching `references/{mode}.md` |
-| **Agents-as-References** | Orchestrator with multi-step workflow -- pass file path to subagent, subagent reads itself. 0 tokens in orchestrator context |
-| **Context Fork** | Standalone task, no history needed, &lt;4 phases — `context: fork` + isolated subagent |
-| **Executable Bash** | `**EXECUTE** using Bash tool:` keyword + `&& echo "✅" \|\| echo "❌"` + `> STOP if ❌` |
-| **Pushy Description** | LLM-invocable skills — action verb + `Triggers: "exact user phrases"`. Raises rate 20% → 50-72% |
+Reference files under `brewcode/skills/skills/references/` provide the current frontmatter catalog,
+execution model, design patterns, activation troubleshooting, prompt contract, and review checklist.
+The source was refreshed against upstream contracts through Claude Code 2.1.285; historical line
+citations in references are context, not a permanent API guarantee.
 
-### Description format
+The agent checkpoints artifact paths and status in its report directory as it works.
+Its maxTurns limit is a loop stop; partial work remains incomplete and must be resumed from evidence.
 
-```yaml
-# LLM-invocable — action verb + Triggers on single line, brewcode target ≤400 chars
-description: "Creates conventional git commits with proper format. Triggers: commit, git commit, save changes."
-
-# User-only — simple one-liner, no triggers needed
-description: "Deploy application to production environment."
-```
-
-Common mistakes: multiline `|` (truncated at the description cap), missing `Triggers:` (stays at 20%), starts with "Use this skill when" (should start with action verb), colon in description (YAML parse failure), setting `permissionMode: bypassPermissions` on production skills — this is equivalent to `--dangerously-skip-permissions` and skips all safety prompts. Only appropriate in sandboxed CI; never the right default for local skills.
-
-### Frontmatter quick reference
-
-| Field | Limits | Notes |
-|---|---|---|
-| `name` | ≤64 chars, bare lowercase-hyphens, must equal directory name | No `plugin:` prefix — Claude Code adds the plugin name itself; a baked prefix renders `/brewcode:brewcode:e2e`. Directory name used if omitted |
-| `description` | ≤1024 chars (spec cap), single line, always quoted; brewcode target ≤400 | ALWAYS in double quotes — em dashes, colons break YAML silently |
-| `disable-model-invocation` | true/false | `true` = 100% reliable, slash-only |
-| `user-invocable` | true/false | `false` = hide from menu, Claude-only |
-| `context` | `fork` | Isolated subagent, fresh context |
-| `agent` | Explore, Plan, general-purpose, or a project agent | With `context: fork` |
-| `model` | opus, sonnet, haiku, `claude-fable-5` | Based on complexity; Fable 5 (Mythos-class) available since CC 2.1.170 — above Opus tier |
-| `effort` | low, medium, high, max, auto | v2.1.80+ |
-| `allowed-tools` | tool list | Minimal set |
-| `disallowed-tools` | tool list | Removes tools while the skill is active (CC 2.1.152) |
-| `argument-hint` | string | Autocomplete hint |
-| `when_to_use` | string | Extra activation guidance appended to `description`, counted toward the same 1536-char listing-display cap |
-| `arguments` | string/list | Declares named args — enables `$name` substitution in the body, alongside `$0`/`$1`/`$ARGUMENTS` |
-| `background` | true/false | Fork-only; `false` waits for the result in the invoking turn instead of backgrounding (default true since v2.1.218) |
-| `paths` | string/list | Glob(s) scoping where the skill is offered |
-| `shell` | bash/powershell | Shell used for `` !`command` `` dynamic-context blocks |
-| `metadata` | map | Free-form key/value block for registries/third-party tooling — CC itself ignores it |
-| `license` | string | SPDX identifier — Agent Skills spec field, CC ignores |
-| `compatibility` | string | Environment requirements, ≤500 chars — Agent Skills spec field, CC ignores |
-| `once` | true/false | **Not a top-level field** — a suboption of a hook entry (`hooks.<Event>[].hooks[].once`), never a sibling of `name`/`description`. A bare top-level `once:` now fails `validate-skill.sh` (check 12) |
-
-### Reference files (read on demand)
-
-The agent body dropped from 897 to 147 lines by moving detail out of the prompt and into `references/` — each file loads only when the step actually needs it, never all nine at once.
-
-| File | Read when |
-|---|---|
-| [`frontmatter-fields.md`](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/skills/references/frontmatter-fields.md) | Deciding or checking any frontmatter field; fixing a validator "unknown key" warning |
-| [`design-patterns.md`](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/skills/references/design-patterns.md) | Choosing a structure pattern, resource paths, executable bash, the unit-test skeleton |
-| [`execution-model.md`](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/skills/references/execution-model.md) | Configuring `context`/`agent`/`model`/tools, dynamic context injection, string substitutions |
-| [`activation-and-troubleshooting.md`](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/skills/references/activation-and-troubleshooting.md) | Writing or debugging description + triggers, activation not working, known bugs |
-| [`prompt-contract.md`](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/skills/references/prompt-contract.md) | Every skill created or improved — mandatory |
-| [`review-prompt.md`](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/skills/references/review-prompt.md) | Spawned to review, or applying confirmed review findings |
-| [`readme-template.md`](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/skills/references/readme-template.md) | Generating `README.md` |
-| [`summary-template.md`](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/skills/references/summary-template.md) | Populating the final report handed back to the caller |
-| [`e2e-template.md`](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/skills/references/e2e-template.md) | Deep testing depth E2E scenarios |
-
-The first four are new in 6.2.0 — they absorbed what used to be inline sections (frontmatter reference, design patterns, execution model, activation/troubleshooting).
-
-### `$ARGUMENTS` in bash blocks
-
-`$ARGUMENTS` inside ` ```bash ``` ` blocks is a shell variable (empty/undefined), NOT Claude Code substitution. Claude Code replaces `$ARGUMENTS` only in markdown text.
-
-```yaml
-# WRONG
-` ```bash
-bash script.sh "$ARGUMENTS"
-` ```
-
-# CORRECT — $ARGUMENTS in text, placeholder in bash
-**Skill arguments received:** `$ARGUMENTS`
-**EXECUTE** using Bash tool:
-` ```bash
-bash script.sh "ARGS_HERE"
-` ```
-Replace ARGS_HERE with the actual value from above.
-```
-
-### Context fork memory behavior
-
-| Mode | Phases | Behavior |
-|---|---|---|
-| Inline (default) | Any | Full conversation access |
-| `context: fork` | 1–4 | Works well, context isolated |
-| `context: fork` | 5+ | Memory loss — forgets task structure, skips phases |
-
-### Additional skill facts (CC 2.1.142+)
-
-Root-level `SKILL.md`: a plugin with a `SKILL.md` at the plugin root (no `skills/` subdirectory) is surfaced as a skill automatically since CC 2.1.142. Useful for single-skill plugins.
-
-`/reload-skills` re-scans skill directories without restarting the session (CC 2.1.152). Use this after editing or adding a `SKILL.md` — no session restart needed.
-
-### Known bugs
-
-| Issue | Impact | Workaround |
-|---|---|---|
-| [#22345](https://github.com/anthropics/claude-code/issues/22345) | Plugin skills ignore `disable-model-invocation` | Copy skill to `.claude/skills/` |
-| [#17688](https://github.com/anthropics/claude-code/issues/17688) | Skill-scoped hooks don't fire in plugins | Use plugin `hooks.json` |
-| [#17417](https://github.com/anthropics/claude-code/issues/17417) | `skill.md` (lowercase) silently ignored | Use `SKILL.md` (uppercase) |
-| [#10768](https://github.com/anthropics/claude-code/issues/10768) / [#15136](https://github.com/anthropics/claude-code/issues/15136) | Auto-activation unreliable, sometimes skipped despite instructions (both closed NOT PLANNED) | Optimize description or use `/name` |
-
-### Subagent spawn constraint
-
-CC allows nested subagent spawning, but prefer spawning from the main conversation so the orchestrator can integrate each agent's result directly. Brewcode agents are stateless and resolve plugin paths via `${CLAUDE_PLUGIN_ROOT}`.
-
-</details>
-
-## Return Contract
-
-Verdict first, `<=30 lines`, `path:line`. No SKILL.md body, no reference contents, no validator transcripts, no eval logs, no preamble. Returns: skill dir path, one line per artifact written (SKILL.md, each <code>references/*</code>, scripts, tests, README), <code>validate-skill.sh</code> verdict (pass, or the failing check), Quick Eval result (triggered / missed, N of M), and whether text-optimizer ran. Eval transcripts, full validator output, and draft bodies go to <code>.claude/reports/&lt;YYYYMMDD-HHMMSS&gt;_skill-creator/</code>, path only.
-
-[`/brewtools:agent-return-setup`](/brewtools/skills/agent-return-setup/) enforces this at ~1000 / ~2500 est-tokens when installed; the contract itself ships unconditionally.
+## Related
 
 <CardGrid>
-  <Card title="Agent Creator" icon="robot" href="/brewcode/agents/agent-creator/">
-    Same workflow for creating agents instead of skills.
-  </Card>
-  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/agents/skill-creator.md">
-    Full agent instructions — frontmatter reference, patterns, known bugs.
-  </Card>
-  <Card title="Brewcode overview" icon="rocket" href="/brewcode/overview/">
-    All brewcode agents, skills, and hooks in one place.
-  </Card>
+  <Card title="Brewcode overview" icon="document" href="/brewcode/overview/">Project skills, agents, and review tools.</Card>
+  <Card title="Skills" icon="puzzle" href="/brewcode/skills/skills/">The user-facing skill creation and improvement workflow.</Card>
+  <Card title="Hook Creator" icon="settings" href="/brewcode/agents/hook-creator/">Create lifecycle hooks against event-specific contracts.</Card>
+  <Card title="Agent source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/agents/skill-creator.md">Scope, validation, evaluation, and caller-owned delegation policy.</Card>
+  <Card title="Authoring references" icon="library" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/skills/references">Frontmatter, execution, prompt contracts, and review guidance.</Card>
 </CardGrid>
 
 <UpdateNotice />

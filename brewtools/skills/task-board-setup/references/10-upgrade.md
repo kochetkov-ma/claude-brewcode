@@ -1,4 +1,4 @@
-# 10 -- upgrade mode: retrofit the spec layer onto a deployed board
+# 10 -- upgrade mode: retrofit missing task-board control layers
 
 Placeholders used: `{{DOMAIN_AGENTS}}`, `{{ARCHITECT_AGENT}}`, `{{DOMAINS}}`, `{{FIRST_DOMAIN}}`, `{{LANG}}`, `{{EXCLUSIONS}}`, `{{TODAY}}`, `{{REPO_NAME}}`, `{{CLOSE_MARKER}}`, `{{CLOSE_MARKER_SHORT}}`, `{PLUGIN_VERSION}`, `{CONTENT_VERSION}`, `{GENERATED_BY}`, `{LAST_UPDATED}`.
 `SPEC_MODE` and `CMD_DECOMPOSED` are GATE variables, never tokens in an emitted body. In upgrade mode `SPEC_MODE` is FORCED `on` and `CMD_DECOMPOSED` is FORCED `false` (upgrade never runs P5.5) -- see U2.
@@ -44,6 +44,7 @@ TARGET="<absolute path resolved in P0>"
 test -n "$TARGET" && test -d "$TARGET" || { echo "MISS TARGET unset or not a dir -- probe did NOT run"; exit 1; }
 T="$TARGET"; F="$T/.claude/features"
 for p in .claude/skills/task-spec/SKILL.md .claude/features/PROGRESS.md \
+  .claude/features/METHODOLOGY.md .claude/features/ANTI-DRIFT.md .claude/features/task-graph.md \
   .claude/features/specs/SPEC_TEMPLATE.md .claude/features/specs/DESIGN_TEMPLATE.md; do
   test -f "$T/$p" && echo "PRESENT $p" || echo "ABSENT  $p"
 done
@@ -65,6 +66,12 @@ mark 5s "$T/.claude/rules/tasks.md"              '`spec:` = REQ FM'
 mark 5p "$T/.claude/rules/tasks.md"              '## Session progress'
 mark 6s "$F/INDEX.md"                            'specs/SPEC_TEMPLATE.md'
 mark 6p "$F/INDEX.md"                            'PROGRESS.md'
+mark 1m "$T/.claude/agents/task-tracker.md"      '## Methodology and anti-drift' 'task-graph.md' 'CRON: reconcile'
+mark 2m "$F/TRACKER.md"                          '## 11. Domain methodology and session anti-drift' 'METHODOLOGY.md' 'ANTI-DRIFT.md'
+mark 3m "$F/TASK_TEMPLATE.md"                    '## Methodology' '## Anti-drift cron'
+mark 4m "$T/.claude/skills/task-board/SKILL.md"  '## Methodology and session timer' 'CronCreate' 'CronDelete'
+mark 5m "$T/.claude/rules/tasks.md"              '## Methodology and anti-drift' 'task-graph.md'
+mark 6m "$F/INDEX.md"                            'METHODOLOGY.md' 'ANTI-DRIFT.md' 'task-graph.md'
 mark 7  "$F/board.md"                            '| owner | file | spec |'
 if test -f "$F/TASK_TEMPLATE.md"; then
   if grep -qE '^spec:' "$F/TASK_TEMPLATE.md" && grep -qF '## Scope' "$F/TASK_TEMPLATE.md" \
@@ -93,6 +100,8 @@ DETECT table:
 |----------|-------|--------|
 | `.claude/skills/task-spec/SKILL.md` | absent \| present | ADD \| SKIP |
 | `.claude/features/PROGRESS.md` | absent \| present | ADD \| SKIP (ungated -- it is not part of the spec layer) |
+| `.claude/features/{METHODOLOGY,ANTI-DRIFT,task-graph}.md` | each absent \| present | ADD \| SKIP individually (ungated; never replace existing methodology/graph evidence) |
+| methodology/runtime consumers | U4 rows `1m`-`6m`, each MARK-OK \| PATCH \| ABSENT | per row SKIP \| PATCH; ABSENT -> ADD from its source reference |
 | `.claude/features/specs/` | absent \| present | MKDIR \| SKIP |
 | `.claude/features/specs/SPEC_TEMPLATE.md` | absent \| present | ADD \| SKIP |
 | `.claude/features/specs/DESIGN_TEMPLATE.md` | absent \| present | ADD \| SKIP |
@@ -106,7 +115,7 @@ DETECT table:
 | task files missing `spec:` FM | `backfill-needed` | BACKFILL (gated) \| SKIP if 0 |
 | task files with no frontmatter | `skipped-no-frontmatter` | SKIP always, named in the report |
 
-A file whose MARK is SPLIT (`<n>s` spec layer, `<n>p` session-progress layer) reports ONE probe line per row; the two are independent install units and a file can be SKIP for one and PATCH for the other. If every row is SKIP and `backfill-needed=0` -> the CONTENT layer is already installed: skip U2's AskUserQuestion, skip U3-U5, **still run U5b**, then report `upgrade: content already installed, metadata restamped to <PV>` and stop.
+A file whose MARK is SPLIT (`<n>s` spec, `<n>p` session progress, `<n>m` methodology/anti-drift) reports ONE probe line per row; these are independent install units. Content no-op requires ALL ADD targets present, ALL patch rows SKIP and `backfill-needed=0`; missing methodology controls/consumers prevent the early no-op. Then skip U2's question/U3-U5, STILL run U5b and report content installed/metadata restamped.
 
 > **U5b is NOT part of that no-op.** This is the single commonest upgrade: the user ran `claude plugin update`, every content row is already SKIP, and the ONLY thing out of date is the version stamp — which is exactly what `setup-status` reads and exactly what it told the user to fix by running `upgrade`. An early STOP here reinstates the bug this file was changed to remove: `status` says `stale`, `upgrade` says `no-op`, forever. U5b needs only `{PLUGIN_VERSION}`/`{CONTENT_VERSION}`/`{GENERATED_BY}`/`{LAST_UPDATED}`, which are re-resolved fresh and never recovered, so it runs with nothing from U2's recovery table.
 
@@ -163,6 +172,9 @@ mkdir -p "$TARGET/.claude/features/specs" && echo "OK specs dir" || echo "FAIL s
 |------|------|------------|
 | `TARGET/.claude/skills/task-spec/SKILL.md` | `references/08-task-spec-skill.md` | exactly the tokens in `08`'s own header `Substitute ...` line -- read it, !=re-enumerate here |
 | `TARGET/.claude/features/PROGRESS.md` | `references/05-features-templates.md`, `## PROGRESS.md` block | `{{REPO_NAME}}`, `{{LANG}}`, `{{TODAY}}`, plus the metadata quartet. Written EMPTY (all five fields `--`); the board's live state is never back-filled into it -- `task-tracker` rewrites it on its next run |
+| `TARGET/.claude/features/METHODOLOGY.md` | `references/11-methodology-cron.md`, matching block | header token set; populate domain instructions/review strategy and verified check commands, preserve task-local decisions |
+| `TARGET/.claude/features/ANTI-DRIFT.md` | `references/11-methodology-cron.md`, matching block | header token set; runtime lifecycle/prompt baseline, never create a timer merely because this control was added |
+| `TARGET/.claude/features/task-graph.md` | `references/11-methodology-cron.md`, matching block | header token set; derive all unfinished work + latest 10 completed nodes from canonical task evidence |
 | `TARGET/.claude/features/specs/SPEC_TEMPLATE.md` | `references/09-spec-templates.md` | exactly the tokens in `09`'s own header `Substitute ...` line |
 | `TARGET/.claude/features/specs/DESIGN_TEMPLATE.md` | `references/09-spec-templates.md` | same header line as above |
 
@@ -194,6 +206,12 @@ Every ROW below: its MARK present -> SKIP that row silently (idempotent). MARK a
 | 6s | `.claude/features/INDEX.md` | spec | `specs/SPEC_TEMPLATE.md` | the SPEC/DESIGN template rows (`05` (G)) |
 | 6p | (same file) | progress | `PROGRESS.md` | the `PROGRESS.md` row in the Control files table |
 | 7 | `.claude/features/board.md` | spec | `\| owner \| file \| spec \|` | STRUCTURAL ONLY -- see below (`05`, rows sited `board.md`) |
+| 1m | `.claude/agents/task-tracker.md` | methodology | `## Methodology and anti-drift` AND `task-graph.md` AND `CRON: reconcile` | ref 02 method/cron handoff, control layout, graph invariant/checklist; tracker has no scheduling tools |
+| 2m | `.claude/features/TRACKER.md` | methodology | `## 11. Domain methodology and session anti-drift` AND both method/control paths | ref 05 section 11, control layout, task-example Methodology/cron sections and session steps; preserve existing method text |
+| 3m | `.claude/features/TASK_TEMPLATE.md` | methodology | `## Methodology` AND `## Anti-drift cron` | ref 05 task Methodology/base work + Anti-drift cron sections, add only absent sections/fields |
+| 4m | `.claude/skills/task-board/SKILL.md` | methodology | `## Methodology and session timer` AND `CronCreate` AND `CronDelete` | ref 03 method/runtime section, timer tools in allowed-tools, control layout/refs, ADD preparation and read-only VIEW correction |
+| 5m | `.claude/rules/tasks.md` | methodology | `## Methodology and anti-drift` AND `task-graph.md` | ref 04 UNGATED method/anti-drift/plan section; preserve existing rule ids |
+| 6m | `.claude/features/INDEX.md` | methodology | all three control filenames | ref 05 control-index rows for METHODOLOGY, ANTI-DRIFT and task-graph |
 
 Rows `3` and `2s` carry a CONJUNCTION MARK -- legal because every conjunct belongs to the SAME layer: for `3`, `^spec:` in FM AND a `## Scope` heading AND the 4-column header `| in/out | status |`; for `2s`, section 10's heading alone was the old marker, and a board upgraded before the execution-status axis carries it. Any one conjunct missing = PATCH, so a half-patched template is repaired instead of reported SKIP forever.
 
@@ -227,6 +245,7 @@ Hard limits for this step:
 | !=renumber existing TRACKER sections or rule-table rows | ids are cited elsewhere |
 | !=install a subset of one ROW's sites | a rule installed without its enforcer is worse than no rule |
 | !=force an unapproved patch | declined = skipped, cleanly, recorded in the report |
+| !=replace task-local Methodology/Anti-drift cron prompt or runtime | user decisions, ids/times/tick counters are task evidence; backfill missing sections on the next task-board claim, not by upgrade |
 
 ### U4b. Cross-file coherence check (after the patch round)
 
@@ -240,6 +259,7 @@ Re-run the PROBE BLOCK and report every half-state -- a rule installed while its
 | `specs/` templates written, `6s` absent | the index omits the files this run just wrote |
 | `PROGRESS.md` added, ANY session-progress row (`1p`, `2p`, `4p`, `5p`, `6p`) still PATCH | the file exists with nothing wired to it -- name every missing row: `5p` is the injection channel (nobody is told to keep it current), `1p` the watcher (it goes stale on the first transition), `4p` the read/refresh path, `2p`/`6p` the discoverability |
 | `7` installed, `3` absent | a column nothing ever populates |
+| ref 11 control files added, ANY row `1m`-`6m` still PATCH/ABSENT | method/timer policy has missing runtime/template/discovery consumers; report exact missing rows |
 
 > **Half-state detected:** `<pair>`. The rule is installed but its enforcer is not.
 > - Complete it -- apply the missing patch now
@@ -287,10 +307,10 @@ set, not the U3 ADD set — so before this step existed, an upgrade edited the a
 left its STAMP on whatever version installed it. `status` printed `stale`, prescribed `upgrade`,
 `upgrade` reported success, and the next `status` printed `stale` again, forever. An ADDed file
 was born with a fresh stamp; a PATCHed or SKIPped one never got one. **A PATCHED file must end up
-stamped exactly like an ADDED one** — which is what this block enforces, by restamping all nine
+stamped exactly like an ADDED one** — which is what this block enforces, by restamping all twelve
 unconditionally.
 
-Nine stamped artifacts — the same nine `setup-status` row 4 names. `TASK_TEMPLATE.md` is
+Twelve stamped control artifacts, including ref 11's three controls; board.md remains setup-status's anchor. `TASK_TEMPLATE.md` is
 deliberately UNSTAMPED (its frontmatter is copied into every task card), and task CARDS under
 `backlog/todo/progress/closed` never carry these keys at all. Neither is touched here.
 
@@ -305,6 +325,9 @@ deliberately UNSTAMPED (its frontmatter is copied into every task card), and tas
 | 7 | `.claude/rules/tasks.md` | 04 |
 | 8 | `.claude/skills/task-board/SKILL.md` | 03 |
 | 9 | `.claude/skills/task-spec/SKILL.md` | 08 |
+| 10 | `.claude/features/METHODOLOGY.md` | 11 |
+| 11 | `.claude/features/ANTI-DRIFT.md` | 11 |
+| 12 | `.claude/features/task-graph.md` | 11 |
 
 Ordering: run AFTER U3/U4/U5, before U6. A file this run ADDed is already correct and the restamp
 is a no-op on it — that is the point, one code path for both.
@@ -330,6 +353,7 @@ case "$LU" in [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;; *) echo "MISS LAST_
 ok=0; miss=0; skip=0
 for rel in .claude/features/board.md .claude/features/TRACKER.md .claude/features/INDEX.md \
            .claude/features/PROGRESS.md .claude/features/backlog/README.md \
+           .claude/features/METHODOLOGY.md .claude/features/ANTI-DRIFT.md .claude/features/task-graph.md \
            .claude/agents/task-tracker.md .claude/rules/tasks.md \
            .claude/skills/task-board/SKILL.md .claude/skills/task-spec/SKILL.md; do
   f="$TARGET/$rel"
@@ -399,8 +423,8 @@ Read the probe output as:
 
 | Probe line | Expected after a full-accept run |
 |------------|----------------------------------|
-| `PRESENT` x4 + `PRESENT dir specs` | ADD set landed (incl. `PROGRESS.md`) |
-| `MARK-OK` x11 (rows `1s`-`7`) | every approved patch landed |
+| `PRESENT` x7 + `PRESENT dir specs` | ADD set landed (incl. PROGRESS + ref 11 controls) |
+| `MARK-OK` x18 (existing 12 + six methodology rows) | every approved patch landed |
 | `backfill-needed=0` | backfill accepted in full |
 
 > **A `PATCH`/`ABSENT`/non-zero line is a MISS only if the user did not decline it.** A declined patch or a declined backfill is expected: report it as `declined`, !=retry, !=re-emit.
@@ -413,6 +437,7 @@ PV="<PLUGIN_VERSION from the SKILL.md block>"; CV="<CONTENT_VERSION from the sam
 bad=0
 for rel in .claude/features/board.md .claude/features/TRACKER.md .claude/features/INDEX.md \
            .claude/features/PROGRESS.md .claude/features/backlog/README.md \
+           .claude/features/METHODOLOGY.md .claude/features/ANTI-DRIFT.md .claude/features/task-graph.md \
            .claude/agents/task-tracker.md .claude/rules/tasks.md \
            .claude/skills/task-board/SKILL.md .claude/skills/task-spec/SKILL.md; do
   f="$TARGET/$rel"; test -f "$f" || continue
@@ -433,7 +458,7 @@ Report the probe rows as these buckets:
 |--------|---------|
 | added | files written (ADD set) + `specs/` dir if created |
 | patched | files edited + which MARK was inserted into each |
-| restamped | U5b: `<ok>/9` artifacts now carrying `version "<PV>"`, and every `ABSENT`/`SKIP` by name. **ALWAYS printed**, including on the content-no-op path -- it is the bucket that proves the next `setup-status` will read `installed` instead of `stale` |
+| restamped | U5b: `<ok>/12` controls carrying version metadata; absent/skipped named; always printed, including content-no-op. Task-local methodology/prompt/runtime untouched |
 | skipped-already-present | ADD files that existed, PATCH files whose MARK was found |
 | declined | patches / backfill the user rejected -- named, so a later rerun can pick them up |
 | half-state | coherence pairs from U4b the user chose to leave incomplete |
@@ -479,4 +504,4 @@ Report the probe rows as these buckets:
 | Task file content (body, not FM) about to change | Forbidden -- U5 touches the FM `spec:` line only |
 | Existing task file has a 3-column `## Scope` (no `status`) | Leave it alone -- read as all-`not-started`. Only the generated control files are widened (U4); the column appears when `task-tracker` / `task-board` next touches that task. Always reported under `legacy scope` |
 | `board.md` change beyond header cells, separator cells, one appended `spec` cell holding `--` per Progress/Todo row, and the `## Feature specs` header reshape on an empty table | Forbidden -- !=reorder rows, !=change existing data-row cell content |
-| A reference template (`08`/`09`/`02`-`05`) missing under `${CLAUDE_SKILL_DIR}/references` | ERROR: reference not found -- reinstall brewtools. STOP |
+| A reference template (`08`/`09`/`11`/`02`-`05`) missing under `${CLAUDE_SKILL_DIR}/references` | ERROR: reference not found -- reinstall brewtools. STOP |

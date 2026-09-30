@@ -9,7 +9,9 @@ Measured sample (this session, 2026-08-16): the `Read` tool's own schema (verbos
 | Constant | Value |
 |----------|-------|
 | Working schema cost | ~200 tok/tool (mid-point estimate) |
-| Fixed tax | `live_tool_count * 200`, resent every turn (schemas are not cached across turns) |
+| Loaded-schema estimate | `live_tool_count * 200` potential context proxy; definitions can be prompt-cached, so context size differs from billed uncached input |
+
+The following 2026-08-16 recommendations are historical heuristics, not current default-setting commands.
 
 | Live tool count | Fixed tax/turn | Advice |
 |------------------|-----------------|--------|
@@ -19,7 +21,11 @@ Measured sample (this session, 2026-08-16): the `Read` tool's own schema (verbos
 
 ## ToolSearch trade-off
 
-Source: `~/.claude/CLAUDE.md`, verified 2026-07-26.
+Current Claude tool search is on by default subject to model/backend/policy support; do not override
+that default solely from the historical 15/25-tool heuristic above. Tool definitions are cacheable;
+measure active loading/cache counters and discovery reliability before recommending changes.
+
+Historical local evidence: `~/.claude/CLAUDE.md`, verified 2026-07-26; not current universal gains.
 
 | Fact | Number |
 |------|--------|
@@ -27,7 +33,9 @@ Source: `~/.claude/CLAUDE.md`, verified 2026-07-26.
 | Cost | Custom non-native MCP tool discovery drops to ~56-88% hit rate |
 | Fix | `alwaysLoad: true` per affected server -- exempts it from deferral |
 
-Recommended `settings.json` shape (apply ONLY to servers actually under-discovered; blanket `alwaysLoad` on every server cancels the 80k saving):
+Server configuration example for project `.mcp.json` (user scope: `~/.claude.json`), not `settings.json`.
+Only suggest `alwaysLoad` for measured under-discovery; blanket loading defeats deferral. This skill
+never applies the example or promises the historical 80k saving:
 
 ```json
 {
@@ -43,11 +51,14 @@ Recommended `settings.json` shape (apply ONLY to servers actually under-discover
 
 ## Plugin-count advice
 
-Each installed plugin carrying an always-fire hook (`UserPromptSubmit`, `SessionStart`) injects text on EVERY matching event, not once. Measured sample: brewcode's `forced-eval.mjs`/`role-recall.mjs` inject 159 tok/prompt (`REMINDER_TEXT`, 636 B, always fires); codeword-gated hooks (brewtools `manager-prompt.mjs`) add more only when triggered, not counted in the always-fire baseline.
+Count actual registered hook emissions, not installed plugins. Current source (2026-09-30):
+`REMINDER_TEXT`472 B/proxy118; forced-eval fires at eligible prompts1,10,20,..., skips meta replies
+and unavailable counters; role-recall fires only on compaction. Old636 B/proxy159 per-prompt sample
+is historical. Codeword-gated `manager-prompt.mjs` adds text only when triggered.
 
 | Signal | Arithmetic | Threshold | Advice |
 |--------|------------|-----------|--------|
-| Active plugins w/ always-fire hooks (P) | `P * 150` tok/prompt (measured avg), `* 50` for a session estimate | P >= 6 (>= 900 tok/prompt, >= 45k/session) | Audit: disable or merge redundant hook logic |
+| Active plugins w/ always-fire hooks (P) | Historical heuristic `P * 150` proxy/prompt, `* 50` session estimate; replace with actual payload x emissions | P >= 6 (old proxy >=900/prompt, >=45k/session) | Audit actual registered/cadenced emissions before suggesting redundant-hook cleanup |
 | | | P < 6 | Not worth the audit |
 
 ## Auto-memory advice
@@ -69,9 +80,12 @@ Exact rendering template for the final run report's Advice section:
 ## Advice (informational, not applied)
 | Signal | Measured | Threshold | Recommendation |
 |--------|----------|-----------|-----------------|
-| Live tool count | <N> | >=25 | Enable ENABLE_TOOL_SEARCH (~80k tok saved); alwaysLoad:true for <servers> |
+| Live tool count | <N>, active search/cache state | >=25 historical heuristic | Evaluate tool search/discovery; suggest alwaysLoad:true only for measured missed <servers>, no fixed savings promise |
 | Active plugins w/ hooks | <P> | >=6 | Audit/disable: <list> |
 | Memory dir staleness | <pct>% | >=60% | Set CLAUDE_CODE_DISABLE_AUTO_MEMORY=1 |
 ```
 
 Render only rows whose measured value crosses its threshold. All rows below threshold -> omit the whole Advice section, do not print an empty/all-clear table.
+
+Current authorities (checked 2026-09-30): https://code.claude.com/docs/en/mcp and
+https://platform.claude.com/docs/en/build-with-claude/prompt-caching.

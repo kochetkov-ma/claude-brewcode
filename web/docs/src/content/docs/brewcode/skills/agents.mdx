@@ -10,7 +10,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 <Callout type="tip" title="Prompt-driven">Give a free-form prompt; the skill auto-selects a mode and tells you why. No keyword grammar.</Callout>
 
 <Callout type="note" title="What's new in 6.2.0">
-`references/` now ships 11 on-demand files for `agent-creator` (`agent-*.md`) and `hook-creator` (`hooks-*.md`) — see [Reference files](#reference-files).
+Agent and hook references were refreshed through Claude Code 2.1.285. They distinguish execution surfaces, plugin-ignored fields, and event-specific hook contracts — see [Reference files](#reference-files).
 </Callout>
 
 ## Quick reference
@@ -18,7 +18,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | Field | Value |
 |-------|-------|
 | Command | `/brewcode:agents` |
-| Input | free-form prompt or empty |
+| Input | free-form prompt; empty defaults to read-only status |
 | Specialist | `brewcode:agent-creator` |
 | List source | `.claude/agents/`, `~/.claude/agents/`, `${CLAUDE_PLUGIN_ROOT}/agents/` (shipped, read-only) |
 | Model | opus |
@@ -46,10 +46,10 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 ## How it works
 
 <Steps>
-  <li><div><strong>Input gate</strong><p>Reads <code>$ARGUMENTS</code>. An empty prompt skips analysis and jumps directly to the No-prompt menu; a non-empty prompt proceeds to mode selection.</p></div></li>
+  <li><div><strong>Input gate</strong><p>Reads the complete free-text prompt. Empty input defaults to read-only status. An explicitly requested menu opens the menu; other prompts resolve a mode and target.</p></div></li>
   <li><div><strong>Auto-mode select</strong><p>Announces <code>Mode: &lt;mode&gt; (agents) — chosen because ...</code> based on keywords, intent, and target presence in the prompt.</p></div></li>
-  <li><div><strong>No-prompt menu</strong><p>Sends a single AskUserQuestion with options: <code>Status (agents)</code> (recommended), <code>Status (all: agents+rules+skills)</code>, <code>Create</code>, <code>Improve</code>, <code>Review</code>, <code>Sync agents (memory sync)</code>, <code>List (plain)</code>, <code>Cancel</code>. The skill continues with the chosen mode.</p></div></li>
-  <li><div><strong>Dispatch</strong><p>Routes to the appropriate handler. Create, improve and sync delegate to the <code>brewcode:agent-creator</code> specialist via Task tool, passing full context — description, scope, model, and improvement focus; review goes instead to the project's reviewer agent from <code>.claude/agents/</code> (falling back to <code>general-purpose</code>), two-phase. Sync mode reads the shared <code>mode-sync.md</code> reference (also used by <code>/brewcode:skills</code>) and fans out one <code>agent-creator</code> subagent per target file. After create/improve completes, the coordinator re-runs that same reference itself, scoped to only the file just written — no extra <code>agent-creator</code> spawn — and applies the verdicts directly with targeted edits.</p></div></li>
+  <li><div><strong>Resolve material decisions once</strong><p>Reuse supplied prompt/history answers. Read-only runs ask nothing unless you request a menu. Before writes, bundle unresolved decisions that change scope or output into one AskUserQuestion call, with at most four questions.</p></div></li>
+  <li><div><strong>Dispatch</strong><p>Create, improve, and sync delegate through Agent to brewcode:agent-creator with bounded ownership and relevant context. Review uses the project's reviewer or general-purpose fallback. Sync fans out one file per owner. After create/improve, the coordinator checks only the written file against the shared sync reference and applies verified corrections.</p></div></li>
   <li><div><strong>Real status</strong><p>Four blocks, never a flat list: inventory by scope (shipped plugin, read-only / plugin source, workspace-only / project / global — counts, names, load path), state (enabled or disabled via the <code>_name.md</code> toggle marker, model), overlaps and conflicts (same name shadowed across scopes, duplicate triggers or descriptions), and health flags (missing README or frontmatter, agents missing <code>Bash</code> in <code>tools:</code>).</p></div></li>
   <li><div><strong>Final output</strong><p>Prints a detection + result table: mode chosen, target, file path, model, scope, and CLAUDE.md update status. Suggests next steps such as <code>/reload-plugins</code> and a test invocation phrase.</p></div></li>
 </Steps>
@@ -84,9 +84,21 @@ under 200 lines.
 | [hooks-types-config.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/hooks-types-config.md) | hook-creator | 5 hook types and their config fields, precedence |
 | [hooks-env.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/hooks-env.md) | hook-creator | Env vars, sensitive-path prompt, project-root resolution |
 | [hooks-templates.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/hooks-templates.md) | hook-creator | Bash/JS hook skeletons, fail-safe design rules, pre-ship checklist |
-| [hooks-changes.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/hooks-changes.md) | hook-creator | Version history 2.1.234 → 2.1.269, known bugs |
+| [hooks-changes.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/hooks-changes.md) | hook-creator | Changes through 2.1.285 and known contract limits |
 
 ## Delegation
+
+Ordinary subagents receive bounded context through the Agent prompt and cannot use AskUserQuestion;
+unresolved user decisions return to the main caller. Conversation forks retain parent history
+and tools. A skill's context: fork is an ordinary subagent, not a conversation fork.
+Upstream nested-agent depth support does not override this project's main-caller ownership of
+delegation, decisions, and acceptance. A partial maxTurns return is unfinished work, even when
+files were written; inspect checkpoint evidence before resuming or declaring completion.
+
+Plugin agents ignore frontmatter hooks, mcpServers, permissionMode, and initialPrompt. Place
+plugin hooks in hooks/hooks.json; use the appropriate local/session surface when those agent
+fields are required. Local files and CLI JSON also have different supported fields. The hook
+references cover 33 events and five handler types with event-specific output and type support.
 
 <Callout type="caution" title="Why the rule exists">
   A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct it, and it usually drifts off-target.
@@ -113,10 +125,10 @@ For `create`, that means the specialist is told the scope and model were already
 | Parameter | Options | Notes |
 |-----------|---------|-------|
 | Scope | Project / Global / Plugin | Project → `.claude/agents/`; Global → `~/.claude/agents/`; Plugin → `brewcode/agents/`, offered only when `test -d brewcode/.claude-plugin` succeeds (the dev/plugin workspace) — elsewhere the option is dropped, since it would write a stray `<cwd>/brewcode/agents/` |
-| Model | sonnet (recommended) / opus or fable / haiku / inherit | `inherit` omits the `model:` field entirely, so the agent runs on the calling session's model |
+| Model | sonnet / opus / haiku / inherit, or a verified supported model id | Inherit uses the caller's model; choose from the current supported catalog rather than an assumed alias |
 | CLAUDE.md update | yes / no | Adds or updates the agent row in the agents table; appends a new section if none exists |
 | Improve focus | triggers / system prompt / both / full review | Asked for improve mode only |
-| Description | free-form, aim ≤100 chars | Used as the agent `description` frontmatter — drives LLM auto-invocation |
+| Description | Canonical budget ≤150 tokens, approximately 600 characters | Drives discovery; ≤100 characters is an optional brevity target, not a second required cap |
 | Specialist | `brewcode:agent-creator` | Handles file scaffolding and prompt engineering; never writes under `${CLAUDE_PLUGIN_ROOT}` — the installed plugin copy is read-only |
 
 `improve` resolves the target across the writable scopes (project / global / plugin workspace) only.

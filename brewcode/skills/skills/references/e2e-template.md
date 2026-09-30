@@ -1,6 +1,8 @@
 # E2E Test Scenario Template
 
 Template for skill E2E tests executed via `claude -p` from bash.
+Run each execution example as a Bash script; capture PIPESTATUS immediately so tee
+cannot hide Claude or timeout failures, even when errexit is enabled.
 
 ---
 
@@ -39,26 +41,44 @@ Template for skill E2E tests executed via `claude -p` from bash.
 **Method A -- Isolated (preferred for CI):**
 
 ```bash
+set -euo pipefail
 TMP=$(mktemp -d)
 mkdir -p "$TMP/.claude/skills"
 cp -r "$SKILL_PATH" "$TMP/.claude/skills/"
-cd "$TMP" && timeout 120 claude -p "{prompt}" 2>&1 | tee "$TMP/output.log"
-EXIT_CODE=$?
+cd "$TMP"
+timeout 120 claude -p "{prompt}" 2>&1 | tee "$TMP/output.log" \
+  && PIPE_CODES=("${PIPESTATUS[@]}") || PIPE_CODES=("${PIPESTATUS[@]}")
+EXIT_CODE=${PIPE_CODES[0]}
+TEE_EXIT_CODE=${PIPE_CODES[1]}
 # run assertions against $TMP/output.log and generated files
 rm -rf "$TMP"
+[ "$EXIT_CODE" -eq 0 ] || exit "$EXIT_CODE"
+exit "$TEE_EXIT_CODE"
 ```
 
 **Method B -- In-session (installed plugin):**
 
 ```bash
-timeout 120 claude -p '/brewcode:skills create name="my-skill"' 2>&1 | tee output.log
+set -euo pipefail
+timeout 120 claude -p '/brewcode:skills create name="my-skill"' 2>&1 | tee output.log \
+  && PIPE_CODES=("${PIPESTATUS[@]}") || PIPE_CODES=("${PIPESTATUS[@]}")
+EXIT_CODE=${PIPE_CODES[0]}
+TEE_EXIT_CODE=${PIPE_CODES[1]}
+[ "$EXIT_CODE" -eq 0 ] || exit "$EXIT_CODE"
+exit "$TEE_EXIT_CODE"
 ```
 
 **Capture and timeout:**
 
 ```bash
-timeout 120 claude -p "..." 2>&1 | tee output.log
-echo "EXIT: $?"
+set -euo pipefail
+timeout 120 claude -p "..." 2>&1 | tee output.log \
+  && PIPE_CODES=("${PIPESTATUS[@]}") || PIPE_CODES=("${PIPESTATUS[@]}")
+EXIT_CODE=${PIPE_CODES[0]}
+TEE_EXIT_CODE=${PIPE_CODES[1]}
+echo "EXIT: $EXIT_CODE | LOG: $TEE_EXIT_CODE"
+[ "$EXIT_CODE" -eq 0 ] || exit "$EXIT_CODE"
+exit "$TEE_EXIT_CODE"
 ```
 
 ---
@@ -100,9 +120,9 @@ head -1 "$FILE" | grep -q "^---" && echo "PASS" || echo "FAIL: no YAML frontmatt
 ```bash
 RESULTS="$TMP/results.txt"
 # ... each assertion appends PASS/FAIL to $RESULTS ...
-FAILS=$(grep -c "FAIL" "$RESULTS")
+FAILS=$(awk '/FAIL/ {failures++} END {print failures+0}' "$RESULTS") # zero matches is valid; read failures still abort
 echo "Total: $(wc -l < "$RESULTS") | Failed: $FAILS"
-[ "$FAILS" -eq 0 ] && echo "E2E PASSED" || echo "E2E FAILED"
+if [ "$FAILS" -eq 0 ]; then echo "E2E PASSED"; else echo "E2E FAILED"; exit 1; fi
 ```
 
 ---

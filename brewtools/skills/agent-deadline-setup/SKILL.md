@@ -12,12 +12,11 @@ model: sonnet
 
 > Installer/configurator skill. It wires two self-contained hooks (PreToolUse guard + SubagentStop cleanup) that put a SOFT wall-clock budget on every subagent — or configures/removes them. All runtime behavior lives in the hook files and in a JSON config; this skill only decides **mode**, **scope** and **budget**, then delegates the file work to the `brewcode:hook-creator` agent following the runbook.
 
-Claude Code has NO wall-clock timeout for subagents, and `maxTurns` kills the agent and discards its final report. These hooks kill nothing — at 80% of the budget the agent gets one non-blocking "wrap up" directive, and past 100% every tool except the finalization set is denied, so the agent is FORCED to write its report instead of losing it.
+Claude Code has no wall-clock timeout for subagents. `maxTurns` stops a run at its turn cap; since 2.1.246 the caller receives a partial-marked result with a continuation hint, while unwritten analysis remains unrecoverable. These hooks kill nothing: at 80% of the budget the agent gets one non-blocking "wrap up" directive; past 100% every tool except the finalization set is denied, directing the agent to finish its report while finalization tools remain available.
 
 ## Prompt contract
 
-Position 1 of `$ARGUMENTS` is a **free-form prompt** (RU/EN) — modes and flags are optional and may
-follow in any order. Nobody types keys: resolve mode + scope FROM the prompt.
+Treat `$ARGUMENTS` as a free-form RU/EN prompt. Modes/flags may appear anywhere; infer mode and scope from prose.
 
 1. Strip flags. An explicit mode token anywhere wins outright, no scoring.
 2. Else score modes by distinct whole-word keyword hits (table in Step 2). Highest unique score
@@ -94,7 +93,7 @@ Asset paths (all under `$BT_ROOT/skills/agent-deadline-setup/assets/`):
 
 ## Step 1 — STATUS FIRST, always
 
-Run this before anything else, in EVERY mode. Never install, re-install or remove blind.
+After the initial PLAN, probe status in EVERY mode before installation, reinstallation, or removal.
 
 **EXECUTE** using Bash tool:
 
@@ -106,6 +105,29 @@ A="$BT_ROOT/skills/agent-deadline-setup/assets"
 test -f "$A/INSTALL.md" && test -f "$A/agent-deadline-guard.mjs" && test -f "$A/agent-deadline-cleanup.mjs" || { echo "❌ FAILED — assets incomplete under BT_ROOT=$BT_ROOT"; exit 1; }
 echo "ASSETS_DIR=$A"
 echo "RUNBOOK=$A/INSTALL.md"
+content_state() {
+  ASSETS="$A" TARGET="$1" node <<'NODE'
+const fs=require("fs"), path=require("path");
+const assets=process.env.ASSETS, target=process.env.TARGET;
+const scripts=["agent-deadline-guard.mjs","agent-deadline-cleanup.mjs"];
+const file=path.join(target,"agent-deadline.json");
+const semver=/^[0-9]+\.[0-9]+\.[0-9]+$/;
+const cvOf=f=>{try{return /content_version=([0-9]+\.[0-9]+\.[0-9]+)(?=\s|$)/.exec(fs.readFileSync(f,"utf8").split("\n").slice(0,3).join("\n"))?.[1]||null;}catch{return null;}};
+let configCV=null;
+try{const c=JSON.parse(fs.readFileSync(file,"utf8")); if(c&&typeof c==="object"&&!Array.isArray(c)&&typeof c.content_version==="string"&&semver.test(c.content_version)) configCV=c.content_version;}catch{}
+const runbookCV=cvOf(path.join(assets,"INSTALL.md"));
+const pairs=scripts.map(script=>[cvOf(path.join(target,"hooks",script)),cvOf(path.join(assets,script))]);
+const findings=[];
+if(!configCV||!runbookCV||configCV!==runbookCV) findings.push("agent-deadline.json:"+(configCV||"n/a")+"->"+(runbookCV||"n/a"));
+pairs.forEach(([installed,source],i)=>{if(!installed||!source||installed!==source) findings.push(scripts[i]+":"+(installed||"n/a")+"->"+(source||"n/a"));});
+let state="missing";
+if(fs.existsSync(file)||scripts.some(script=>fs.existsSync(path.join(target,"hooks",script)))) {
+  if(!configCV||!runbookCV||pairs.some(([installed,source])=>!installed||!source)) state="partial";
+  else state=configCV!==runbookCV||pairs.some(([installed,source])=>installed!==source)?"stale":"current";
+}
+console.log([configCV||"n/a",runbookCV||"n/a",state,findings.join(",")||"none"].join("|"));
+NODE
+}
 claude_project_root() {
   if [ -n "$CLAUDE_PROJECT_DIR" ] && [ -d "$CLAUDE_PROJECT_DIR" ]; then
     printf '%s\n' "$CLAUDE_PROJECT_DIR"; return 0
@@ -171,7 +193,8 @@ NODE
   CFG=none; [ -s "$D/agent-deadline.json" ] && CFG=$(tr -d '\n ' < "$D/agent-deadline.json"); CFG=${CFG:-none}
   EN=n/a; case "$CFG" in *'"enabled":true'*) EN=true;; *'"enabled":false'*) EN=false;; esac
   CV=$({ jq -r '.version // empty' "$D/agent-deadline.json" 2>/dev/null || true; }); CV=${CV:-n/a}
-  echo "$N: guard=$G cleanup=$C guard_refs=$GR cleanup_refs=$CR legacy_refs=$LEGACY settings_valid=$VALID enabled=$EN config_version=$CV config=$CFG"
+  META=$(content_state "$D"); CCV=${META%%|*}; REST_META=${META#*|}; RCV=${REST_META%%|*}; REST_META=${REST_META#*|}; CONTENT=${REST_META%%|*}; FINDINGS=${REST_META#*|}
+  echo "$N: guard=$G cleanup=$C guard_refs=$GR cleanup_refs=$CR legacy_refs=$LEGACY settings_valid=$VALID enabled=$EN config_version=$CV config_content_version=$CCV runbook_content_version=$RCV content_state=$CONTENT content_findings=$FINDINGS config=$CFG"
 done
 PV=$({ jq -r '.version // empty' "$BT_ROOT/.claude-plugin/plugin.json" 2>/dev/null || true; }); PV=${PV:-n/a}
 echo "plugin_version=$PV"
@@ -190,25 +213,28 @@ Field meanings — do not paraphrase them into something stronger:
 | `legacy_refs` | owned handlers that differ from a complete desired tuple, including absolute paths, swapped events, wrong matchers/types/commands/timeouts, extra args/keys, or malformed handler values; any nonzero value requires migration |
 | `settings_valid` | `yes` only when settings are absent/empty or parse as a JSON object; malformed JSON/shape is non-effective |
 | `enabled` | `true`/`false` parsed from the config; `n/a` = no config or no `enabled` key |
-| `config_version` | the config's `version` key vs `plugin_version` on the last line. Different = the config was written by an older brewtools and may predate a shape change -> offer `upgrade`. `n/a` on either side (pre-metadata config, or no config) = unknown, NOT "current" |
+| `config_version` | release provenance only; compare with `plugin_version` for display, never for staleness. A matching release cannot prove current hook/config content |
+| `config_content_version` / `runbook_content_version` | installed config CV versus the authoritative INSTALL.md header; each installed hook is also compared with its corresponding asset header |
+| `content_state` | `current`: all config/hook CV pairs match, regardless of release provenance; `stale`: at least one valid pair differs; `partial`: an installed component has missing/malformed CV or a required counterpart is absent; `missing`: no config or hook files in that scope. Never infer fresh CV from release version or a missing key |
+| `content_findings` | comma-separated `artifact:installed-CV->source-CV` evidence for every mismatched/missing pair, or `none`; `n/a` is explicit missing/malformed metadata, never a guessed fresh version |
 | `config` | whitespace-stripped config contents, or literal `none` |
 
 The status probe parses JSON and validates each script separately against the exact event, matcher, handler keys, type, command, sole arg, and timeout tuple. Duplicates remain visible as counts above `1` and are non-effective.
 
-Read the output into a state table and PRINT it to the user:
+Print the status in this table:
 
-| Scope | Hook files | guard refs | cleanup refs | legacy refs | settings valid | Config | Config ver | Stale | Effective |
+| Scope | Hook files | guard refs | cleanup refs | legacy refs | settings valid | Config | Config ver | Content state | Effective |
 |-------|-----------|------------|--------------|-------------|----------------|--------|------------|-------|-----------|
 
-### Config metadata (the three standard JSON keys)
+### Config metadata (the four standard JSON keys)
 
-Every mode that writes `agent-deadline.json` (`install`, `upgrade`, `enable`, `disable`) leaves these three keys in it alongside the behavior keys. `doc_type` is a `.md`-frontmatter field only and never appears in a JSON carrier:
+Every mode that writes `agent-deadline.json` (`install`, `upgrade`, `enable`, `disable`) leaves these four keys alongside behavior keys. `doc_type` belongs only in `.md` frontmatter:
 
 ```json
-{ "version": "{PLUGIN_VERSION}", "generated_by": "brewtools:agent-deadline-setup", "last_updated": "{LAST_UPDATED}" }
+{ "version": "{PLUGIN_VERSION}", "content_version": "<INSTALL.md header>", "generated_by": "brewtools:agent-deadline-setup", "last_updated": "{LAST_UPDATED}" }
 ```
 
-Resolve `version` and `last_updated` — never hardcode either. **EXECUTE** using Bash tool:
+The runbook resolves `content_version` from its own `brewcode-meta:` header via `$RUNBOOK` and aborts if missing; never pass or hardcode it. Resolve `version` and `last_updated` here. **EXECUTE** using Bash tool:
 
 ```bash
 SD="${CLAUDE_SKILL_DIR}"
@@ -219,13 +245,15 @@ PV=${PV:-$(basename "$BT_ROOT")}
 echo "PLUGIN_VERSION=$PV LAST_UPDATED=$(date +%F)"
 ```
 
-> **Why the bare form.** `CLAUDE_SKILL_DIR` is a TEXT SUBSTITUTION on the skill prompt, not an env var: CC 2.1.226 rewrites only the EXACT dollar-brace literal `{CLAUDE_SKILL_DIR}` (`replace(/\$\{CLAUDE_SKILL_DIR\}/g, dirname(skillPath))` and a string-pattern `replaceAll`). A brace-modifier form such as `:-fallback` inside the braces is therefore NOT matched, reaches the shell verbatim, and its fallback ALWAYS wins. `CLAUDE_PLUGIN_ROOT` is a real env var but is exported only to hook processes and MCP servers -- never to a skill's Bash tool -- so it is ALWAYS empty here. The skill dir is correct in a cache install AND in a `--plugin-dir` dev run; the cache glob below it is a last-resort fallback only, and it would name the INSTALLED plugin.
+> **Bare substitution required.** CC 2.1.226 substitutes only the literal `${CLAUDE_SKILL_DIR}` in skill prompts (`replace(/\$\{CLAUDE_SKILL_DIR\}/g, dirname(skillPath))`/`replaceAll`), not env values or `:-fallback`; a modifier reaches Bash unchanged and ALWAYS selects its fallback. `${CLAUDE_PLUGIN_ROOT}` is exported to hooks/MCP, never skill Bash. The skill path works in cache and `--plugin-dir` installs; the cache glob is a last resort and selects the installed plugin.
 
 | Guarantee | Why it holds |
 |-----------|--------------|
 | The hooks ignore them | `loadConfig()` accepts any non-array JSON object and reads only `enabled`, `defaultMinutes`, `byAgentType`, `hardStopRatio`; unknown keys are inert |
 | `enabled` semantics unchanged | The gate stays `cfg.enabled !== true` -> off. Adding sibling keys touches nothing |
 | Cannot make a valid file unparseable | Written by the runbook's node block that re-serializes the whole object with `JSON.stringify` — never appended as raw text. An invalid project config is skipped and the GLOBAL one takes over, which is a silent behavior change, so a hand-appended line is a defect |
+
+Content state and enabled/wiring are separate signals. Offer `upgrade` for `stale` or `partial`, naming the mismatched/missing metadata or artifact; do not offer it from a release-version difference alone. A deliberately disabled setup remains disabled, even if its content needs repair; upgrade must preserve that choice. Status never edits files or settings.
 
 Effective = `guard=yes cleanup=yes guard_refs=1 cleanup_refs=1 legacy_refs=0 settings_valid=yes enabled=true`. Anything else, including duplicate-one/missing-other registrations or a malformed owned handler, is NOT effective — say so plainly instead of reporting a half-state as installed. Project config wins over global; a broken project config is skipped and global is used.
 
@@ -249,9 +277,9 @@ Read `$ARGUMENTS`. Default when there are NO arguments at all = **status**.
 
 Ambiguous between install and a removal verb → `AskUserQuestion`. Never guess a destructive mode.
 
-## Step 3 — State the plan BEFORE asking anything
+## Step 3 — Explain pending changes before questions
 
-Plain text, before any question:
+Add concrete state/action details to the initial PLAN without repeating its block. Example:
 
 > Current state: agent-deadline not installed anywhere. Plan: copy the 2 hook files into `<repo>/.claude/hooks/`, write `<repo>/.claude/agent-deadline.json`, merge two entries (PreToolUse + SubagentStop) into `<repo>/.claude/settings.json`. I need 2 answers first: scope and budget.
 
@@ -271,34 +299,22 @@ Question 3 is asked ONLY if the user brought up per-type limits themselves; othe
 
 For `disable`/`enable`/`uninstall`/`purge` only question 1 applies, and only when the status table shows the feature present in more than one scope.
 
-## Step 5 — Print the PLAN block, then act
+## Step 5 — Act on the resolved PLAN
 
-Print the `## Prompt contract` PLAN block, filled with the resolved MODE/SCOPE (exact paths,
-exact `defaultMinutes`, exact settings.json entries) — then proceed. For `uninstall`/`purge`
-list exactly which files are deleted and confirm once. Status (early exit or explicit `status`
-mode) prints the SAME block, `DO:` reduced to "read state, report", immediately before the table.
+Use the PLAN already printed before Step 1; do not print it twice. Resolve MODE/SCOPE, exact paths, `defaultMinutes`, and settings.json entries before mutation. For `uninstall`/`purge`, list the exact deletions and confirm once. Status and early-exit modes report the table and stop; `DO:` is "read state, report".
 
 ### Delegation
 
-A big task handed to one agent = an agent gone for an hour: unobservable, uncorrectable, drifting. One mode × one scope is ONE bounded unit (2 asset files + one settings.json + one config) — a single `hook-creator` spawn. "Both scopes" = TWO tasks, spawned in ONE message.
+One mode × one scope is ONE bounded unit (2 asset files + one settings.json + one config) — a single `hook-creator` spawn. "Both scopes" = TWO tasks, spawned in ONE message.
 
-Every spawn prompt MUST carry:
+Every brief must retain GOAL, ROLE (ownership/exclusions), SCOPE (paths/commands), CONTEXT (completed/parallel work), CONSUMER (next use/output shape), and DONE (acceptance/report).
 
-| Field | Content |
-|-------|---------|
-| GOAL | the overall task and why it exists |
-| ROLE | what this agent owns; what it must NOT touch |
-| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
-| CONTEXT | what is already done, what runs in parallel — trimmed to what THIS agent needs |
-| CONSUMER | who uses the result next and the shape it must fit |
-| DONE | acceptance criteria + the exact report shape |
-
-> **The budget only survives if it reaches the SHELL.** `MINUTES`/`OVERRIDES`/`RUNBOOK` written as prose in the prompt are just text — the runbook's node blocks read them from `process.env`, and an un-exported `MINUTES` now ABORTS the config write (no built-in `20` fallback) instead of silently losing the user's choice. The spawn prompt below therefore carries the literal `export` line the agent must run FIRST, in the same Bash invocation as every runbook block. Substitute the chosen values into that `export` line, not only into the CONTEXT table.
+> **Export before every runbook Bash block.** `MINUTES`/`OVERRIDES`/`RUNBOOK` must reach `process.env`; missing `MINUTES` aborts (no built-in `20` fallback). Substitute chosen values into both CONTEXT and the literal export below; prose alone cannot set the environment.
 
 Spawn (substitute `MODE`, `SCOPE`, `MINUTES`, `OVERRIDES`, `HARD_STOP_RATIO`, `RUNBOOK`, `ASSETS_DIR`, `PLUGIN_VERSION`, `LAST_UPDATED` from Steps 1-4 and the Config-metadata block — into BOTH the CONTEXT block and the `export` line):
 
 ```
-Task(subagent_type="brewcode:hook-creator", prompt="
+Agent(subagent_type="brewcode:hook-creator", prompt="
 GOAL: the user wants the agent-deadline hooks MODE-ed for SCOPE. Two hooks (PreToolUse
 guard + SubagentStop cleanup) impose a soft wall-clock budget on subagents: warn at 80%,
 deny non-finalization tools past 100%. Runtime behavior lives entirely in the hook files
@@ -341,7 +357,8 @@ CONTEXT:
   Uninstall = strip handlers by those two basenames, drop empty entries/event arrays, delete the 2
   files, KEEP the config. Purge = uninstall + delete config + tmp state.
   METADATA: every mode that WRITES the config (install, upgrade, enable, disable) must leave
-  these three keys in agent-deadline.json: version=\$PLUGIN_VERSION,
+  these four keys in agent-deadline.json: version=\$PLUGIN_VERSION,
+  content_version=<read by the runbook from its own brewcode-meta header; never hardcoded>,
   generated_by=\"brewtools:agent-deadline-setup\", last_updated=\$LAST_UPDATED. No doc_type —
   it is a .md-frontmatter field and never belongs in a JSON carrier. Set them INSIDE
   the runbook's node block that re-serializes the object with JSON.stringify — never by
@@ -365,7 +382,7 @@ Re-run the Step 1 status block and print the refreshed table, plus:
 - what changed (files, settings.json, config values),
 - **a NEW session is required for hook WIRING changes** (install/upgrade/uninstall/purge) — `/reload-plugins` is not needed, these are plain settings.json hooks;
 - **config VALUE changes** (`enabled`, `defaultMinutes`, `byAgentType`, `hardStopRatio`) are read live — no restart;
-- the config `version` now written into the file, and whether it matches `plugin_version`;
+- release `version` as provenance, config/runbook `content_version` and the hook comparisons; report `content_state`, never infer freshness from a release bump;
 - the soft-deadline caveat: time is sampled at tool-call boundaries only; pair with `BASH_MAX_TIMEOUT_MS` for long single commands.
 
 ---

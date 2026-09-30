@@ -12,7 +12,7 @@
  */
 import { spawnSync } from 'node:child_process';
 import {
-  mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, statSync, realpathSync,
+  mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, statSync, realpathSync, symlinkSync,
 } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -129,7 +129,7 @@ function makeRepo({ commit = true, nested = false } = {}) {
     '.claude/reports/ is appended to .gitignore exactly once');
 
   // Idempotent: a second run must not duplicate the entry.
-  const res2 = guard(['snapshot', abs], repo);
+  const res2 = guard(['snapshot', '--run-dir', join(BASE, 'second-snapshot'), abs], repo);
   check('snapshot.second.exit', res2.status, 0, 'a second snapshot of the same clean file exits 0');
   check('snapshot.gitignore.idempotent', readFileSync(join(repo, '.gitignore'), 'utf8').split('\n')
     .filter((l) => l === '.claude/reports/').length, 1,
@@ -163,6 +163,8 @@ function makeRepo({ commit = true, nested = false } = {}) {
     'the refusal names the missing git recovery path');
   const forced = guard(['snapshot', '--allow-dirty', abs], repo);
   check('nogit.allow-dirty.exit', forced.status, 0, '--allow-dirty overrides the git precondition');
+  check('nogit.no-gitignore', existsSync(join(repo, '.gitignore')), false,
+    'authorized non-git snapshot creates no unrelated ignore file');
 }
 
 // ── 4. verify PASS: a lossless compression keeps every critical token ───────
@@ -192,6 +194,8 @@ function makeRepo({ commit = true, nested = false } = {}) {
   const origSha = sha(abs);
   const runDir = field(guard(['snapshot', abs], repo).out, 'RUN_DIR');
   writeFileSync(abs, readFileSync(FIX_LOSSY));
+  check('loss.checkpoint', guard(['checkpoint', '--run-dir', runDir, abs], repo).status, 0,
+    'optimizer records its owned draft before recovery');
   check('loss.precondition', sha(abs) === origSha, false,
     'the lossy rewrite really did change the file before the gate ran');
 
@@ -207,6 +211,88 @@ function makeRepo({ commit = true, nested = false } = {}) {
     'the report names the dropped negation, prohibition, number and path');
   check('loss.restored', sha(abs), origSha, 'the target is byte-identical to the pre-edit original');
   check('loss.file-path', field(res.out, 'FILE'), rel, 'the report names the repo-relative path');
+}
+
+// GIVEN a failed compression plus concurrent edit, WHEN verifying without restore, THEN keep current bytes.
+{
+  const { repo, rel, abs } = makeRepo();
+  const snapshot = guard(['snapshot', abs], repo);
+  check('no-restore.snapshot', snapshot.status, 0, 'original snapshot succeeds before editing');
+  const runDir = field(snapshot.out, 'RUN_DIR');
+  writeFileSync(abs, `${readFileSync(FIX_LOSSY, 'utf8')}\nconcurrent user change\n`);
+  const current = sha(abs);
+  const res = guard(['verify', '--no-restore', '--run-dir', runDir, abs], repo);
+  check('no-restore.exit', res.status, 1, 'missing facts still fail with exit 1');
+  check('no-restore.gate', field(res.out, 'GATE'), 'FAIL', 'report honestly records failed gate');
+  check('no-restore.action', field(res.out, 'ACTION'), 'kept', 'report records preserved draft');
+  check('no-restore.current', sha(abs), current, 'concurrent edit and lossy draft survive unchanged');
+  check('no-restore.snapshot-intact', sha(join(runDir, 'orig', rel)), sha(FIX_ORIG),
+    'verification preserves original snapshot bytes');
+}
+
+// GIVEN symlink targets or snapshot destinations, WHEN snapshotting, THEN reject before writing.
+// GIVEN a checkpoint followed by another writer, WHEN restoring, THEN refuse without erasing that writer.
+{
+  const { repo, rel, abs } = makeRepo();
+  const snapshot = guard(['snapshot', abs], repo);
+  check('concurrent.snapshot', snapshot.status, 0, 'snapshot exists before owned draft');
+  const runDir = field(snapshot.out, 'RUN_DIR');
+  writeFileSync(abs, readFileSync(FIX_LOSSY));
+  check('concurrent.checkpoint', guard(['checkpoint', '--run-dir', runDir, abs], repo).status, 0,
+    'owned draft is recorded immediately after optimizer write');
+  writeFileSync(abs, `${readFileSync(abs, 'utf8')}\nother writer\n`);
+  const current = sha(abs);
+  const res = guard(['restore', '--run-dir', runDir, abs], repo);
+  check('concurrent.restore-refused', res.status, 1, 'changed draft refuses recovery with exit 1');
+  check('concurrent.refusal-message', res.err.includes('RESTORE_REFUSED: rules.md'), true,
+    'refusal names the file lacking ownership proof');
+  check('concurrent.bytes', sha(abs), current, 'other writer bytes survive refused restore');
+  const verified = guard(['verify', '--run-dir', runDir, abs], repo);
+  check('concurrent.default-verify', verified.status, 1, 'legacy verification still fails missing facts');
+  check('concurrent.verify-kept', field(verified.out, 'ACTION'), 'kept (restore refused)',
+    'legacy verification reports refused recovery honestly');
+  check('concurrent.verify-bytes', sha(abs), current, 'legacy verify cannot erase concurrent writes');
+  check('concurrent.snapshot-intact', sha(join(runDir, 'orig', rel)), sha(FIX_ORIG),
+    'original snapshot survives rejected recovery');
+}
+
+// GIVEN symlink targets or snapshot destinations, WHEN snapshotting, THEN reject before writing.
+{
+  const { repo, abs } = makeRepo();
+  const link = join(repo, 'linked.md');
+  symlinkSync(abs, link);
+  check('symlink.target', guard(['snapshot', '--allow-dirty', link], repo).status, 2,
+    'target symlink requires explicitly naming real owner');
+  check('symlink.target-preserved', sha(abs), sha(FIX_ORIG), 'symlink refusal preserves owner bytes');
+  const outside = join(BASE, 'snapshot-owner');
+  mkdirSync(outside);
+  const snapshotLink = join(repo, 'snapshot-link');
+  symlinkSync(outside, snapshotLink);
+  check('symlink.snapshot',
+    guard(['snapshot', '--run-dir', join(snapshotLink, 'run'), abs], repo).status, 2,
+    'snapshot parent symlink is refused');
+  check('symlink.no-copy', existsSync(join(outside, 'run')), false,
+    'snapshot refusal writes nothing through linked parent');
+  const ignoreOwner = join(BASE, 'ignore-owner');
+  writeFileSync(ignoreOwner, 'preserved\n');
+  symlinkSync(ignoreOwner, join(repo, '.gitignore'));
+  check('symlink.ignore', guard(['snapshot', abs], repo).status, 2,
+    'snapshot cannot append through symlink ignore file');
+  check('symlink.ignore-preserved', readFileSync(ignoreOwner, 'utf8'), 'preserved\n',
+    'external ignore owner bytes remain exact');
+}
+
+// GIVEN an existing snapshot, WHEN reusing its run directory, THEN retain original evidence.
+{
+  const { repo, rel, abs } = makeRepo();
+  const runDir = join(BASE, 'immutable-run');
+  check('reuse.first', guard(['snapshot', '--run-dir', runDir, abs], repo).status, 0,
+    'first snapshot creates recoverable pre-state');
+  writeFileSync(abs, 'replacement draft\n');
+  check('reuse.refused', guard(['snapshot', '--allow-dirty', '--run-dir', runDir, abs], repo).status, 2,
+    'existing snapshot directory cannot be overwritten');
+  check('reuse.original', sha(join(runDir, 'orig', rel)), sha(FIX_ORIG),
+    'original pre-state survives snapshot reuse attempt');
 }
 
 // ── 6. nested path, explicit --run-dir, restore and status ─────────────────
@@ -225,6 +311,8 @@ function makeRepo({ commit = true, nested = false } = {}) {
     [rel], 'status lists exactly the snapshotted relative path');
 
   writeFileSync(abs, 'obliterated\n');
+  check('restore.checkpoint', guard(['checkpoint', '--run-dir', runDir, abs], repo).status, 0,
+    'explicit restore has recorded draft ownership');
   const rs = guard(['restore', '--run-dir', runDir, abs], repo);
   check('restore.exit', rs.status, 0, 'restore exits 0');
   check('restore.report', field(rs.out, 'RESTORED'), rel, 'restore names the path it put back');

@@ -19,9 +19,9 @@
 
 ## `mcpServers` — deliberate SPEC override
 
-**No `mcpServers` key is ever added.** Claude Code 2.1.223 documents no `mcpServers` frontmatter field for subagents; subagents inherit the session's MCP servers, and an unknown key only risks frontmatter validation noise. This overrides SPEC line 222, whose own wording is conditional ("when explicit self-contained MCP declaration is required by the final design" — it is not).
+**No `mcpServers` is added by this helper.** The 2.1.223 absence rationale is withdrawn: CC 2.1.285 supports local/user fields, ignored for plugin agents. This migration extends only `tools:` for inherited MCP; SPEC line 222's conditional declaration ("when explicit self-contained MCP declaration is required by the final design") is unnecessary here.
 
-An **existing** `mcpServers` key is preserved byte-for-byte and left in place. The suite asserts that no file gains one.
+Existing `mcpServers` stays byte-identical; the suite asserts no file gains one.
 
 ## Transformation table
 
@@ -66,7 +66,7 @@ Frontmatter = the block between a line-1 `---` (BOM tolerated) and the next line
 | `unchanged` | `inherits`, `already-present`, `already-allowed`, `not-present` (revert) | nothing needed doing |
 | `conflict` | `disallowed-tools` | a `disallowedTools` entry blocks the tools; nothing written |
 | `skipped` | `no-frontmatter`, `unterminated-frontmatter`, `duplicate-tools-key`, `malformed-tools-value`, `too-large`, `symlink`, `not-md` | not a file we may edit |
-| `failed` | `write-error`, `verify-mismatch`, `restore-failed`, `read-error` | the write or the post-write verification failed; the original was restored from the backup |
+| `failed` | `write-error`, `verify-mismatch`, `restore-failed`, `read-error` | read/write/verification failed; restoration is attempted when possible. `restore-failed` means it was not proven; retain/report the backup |
 
 In `audit` the `action` is a **prediction** — nothing is written and `backup` is always `""`. In `apply`, `backup` is `""` for every file that was written and verified (the copy has been removed) and an absolute path only for a `failed` one.
 

@@ -4,7 +4,7 @@ description: Document your Claude Code installation - setup, architecture, web r
 user-invocable: true
 disable-model-invocation: true
 argument-hint: "[prompt] [ext [context]] | [r <query>] — no args = internal installation docs"
-allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Agent, Task, WebFetch, WebSearch, AskUserQuestion]
+allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Agent, WebFetch, WebSearch, AskUserQuestion]
 model: opus
 ---
 
@@ -36,7 +36,7 @@ DO:     <2-5 imperative bullets>
 RESULT: <doc path(s) written under ${CLAUDE_PROJECT_DIR}/.claude/brewdoc/my-claude/>
 ```
 
-Labels are literal; values follow the conversation language.
+Labels are literal; authored work-artifact values are English; preserve INPUT verbatim.
 
 ## Mode Detection
 
@@ -69,7 +69,8 @@ Built-in `/team-onboarding` (CC 2.1.101+) is enough for a quick teammate handoff
 
 ## Delegation
 
-A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct it, and it usually drifts off-target. One subagent = ONE bounded unit — one source group, ~<=5 files, ~<=10 steps. Bigger MUST be split into N tasks, all spawned in ONE message.
+One subagent = one source group, ~<=5 files, ~<=10 steps. Split larger work into N tasks,
+spawned in ONE message; an hour-long agent drifts beyond observation/correction.
 
 Every spawn prompt MUST carry:
 
@@ -150,7 +151,7 @@ If an existing entry for the same mode exists: use AskUserQuestion — header: "
 **Process:**
 1. Spawn 3 parallel `Explore` agents, one per source group: (1) global `~/.claude` config, (2) project `.claude` config, (3) memory files. Brief each in full shape, e.g. group (1):
    ```
-   Task(subagent_type="Explore", prompt="
+   Agent(subagent_type="Explore", prompt="
    GOAL: producing a document describing this user's whole Claude Code installation;
      you cover the global ~/.claude layer only, another agent covers project + memory.
    ROLE: read-only inventory of global config. Do NOT edit any file, do NOT read project files.

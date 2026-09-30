@@ -1,6 +1,6 @@
 ---
 title: "Rules Organizer"
-description: "Internal agent that organizes .claude/rules/*.md with path-specific frontmatter and LLM-optimized tables. Spawned only by /brewcode:rules."
+description: "Internal organizer for accepted project rules: scoped frontmatter, deduplicated tables, per-file checkpoints and main-caller optimization."
 order: 1210
 ---
 import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
@@ -8,16 +8,16 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 # Rules Organizer
 
 <Callout type="note">
-**Internal agent — no direct or automatic use.** `bc-rules-organizer` is spawned only by [`/brewcode:rules`](/brewcode/skills/rules/), never by you directly and never auto-selected by Claude for an unrelated prompt. It exists as a page here because it ships as one of brewcode's 5 agents and deserves the same reference treatment as the other 4.
+Internal agent with no direct or automatic invocation. The main orchestrator supplies an accepted,
+bounded rule batch through [rules](/brewcode/skills/rules/) or the rule-writing phase of
+[convention-setup](/brewcode/skills/convention-setup/). Convention setup establishes project patterns
+early, before teams and review setup.
 </Callout>
 
-<Callout type="note" title="What's new in 6.2.0">
-The agent definition was restructured (role → return contract → scope → procedure → tables) and one long-standing loading claim got corrected:
-- `paths:`-scoped rules load lazily, not at session start — see Loading (verified 2.1.269) below.
-- New rule files scaffold via `rules.sh create`/`create-specialized` — see Workflow step 4 below.
-- The rule-file frontmatter contract is now explicit: beyond `paths:`, every file needs `description`, `doc_type`, `version`, `generated_by`, `last_updated`.
-- New **Scope Fit** guardrail — find the closest existing rule file before writing a new one; keep changes additive, never a wholesale replacement.
-- Sections renamed for density (Table Formats → Table formats, Frontmatter Reference → Frontmatter, Checkpointing + Return Contract → Return) — same content, tighter headings.
+<Callout type="note" title="Current execution contract">
+The organizer writes its briefed rules and its own checkpoint/report. The main caller owns
+optimizer spawns, snapshots, `RUN_DIR` and acceptance. Loading behavior was rechecked through
+Claude Code 2.1.285; the agent uses the existing rule scaffold and validation gates.
 </Callout>
 
 ## Quick reference
@@ -26,23 +26,28 @@ The agent definition was restructured (role → return contract → scope → pr
 |-------|-------|
 | Model | `haiku` — pinned, cheap file reorganization |
 | Tools | Read, Write, Edit, Glob, Grep, Bash, Agent |
-| Write access | `.claude/rules/` directory only |
+| Write access | Briefed `.claude/rules/` files plus its checkpoint/report directory |
 | `maxTurns` | 60 — anti-loop stop, not a budget |
-| Invocation | Spawned by `/brewcode:rules` via the Task tool — not a slash command, no manual trigger |
+| Invocation | Main-caller `Agent` spawn for the accepted rule batch; no manual trigger |
 
 ## Scope guard
 
-Rules Organizer never sizes or splits a brief itself — `/brewcode:rules` already batches and confirms the rule set before the single spawn, so scope is fixed to what it was handed.
+The main caller batches and confirms one bounded unit before spawning the organizer. Scope
+stays fixed to the brief; out-of-scope work returns to the caller.
 
 | Situation | What the agent does |
 |-----------|---------------------|
-| Brief matches the accepted rule batch | Writes only inside `.claude/rules/` — every other path is off-limits |
+| Brief matches the accepted rule batch | Writes the briefed rules and its checkpoint/report; no global rules or CLAUDE.md writes |
 | Request reaches beyond rule organization | Reports it back instead of expanding scope |
-| Brief omits CONTEXT (what the skill already did) or CONSUMER (who reads the rules next) | States the assumption in the report, or asks once — never invents scope |
-| `maxTurns: 60` is hit mid-run | Run aborts; rules already written survive, next run resumes from the last file logged in the report |
+| Brief omits CONTEXT (what the skill already did) or CONSUMER (who reads the rules next) | States a safe assumption or returns the question to main; never invents scope |
+| `maxTurns: 60` is hit mid-run | Written files survive; main checks the partial result before acceptance and can resume with `SendMessage`; the agent reads its checkpoint first |
 | Before writing a new rule file (Scope Fit) | Finds the closest well-built existing rule file in `.claude/rules/*.md` first and takes its principles — additive, never a wholesale replacement; after finishing, one pass to cut files/config/indirection if the result can be simpler |
 
 ## What it does
+
+Ordinary subagents cannot use `AskUserQuestion`; conversation forks retain the parent's tool
+pool. This organizer returns unresolved decisions to the main caller. It never delegates,
+even though `Agent` appears in its allowed tools. Main owns all research and optimizer spawns.
 
 Rules Organizer takes rules extracted from a source file (CLAUDE.md, docs, code) and turns them into `.claude/rules/*.md` files with correct `paths:` frontmatter — one file per logical scope, deduplicated against everything already there, formatted as numbered tables instead of prose.
 
@@ -94,13 +99,13 @@ The skill reads the source, proposes rule candidates, asks you to accept/reject 
   <li>
     <div>
       <strong>Checkpoint per file</strong>
-      <p>Appends each finished file (path + what changed) to <code>.claude/reports/YYYYMMDD-HHMMSS_rules-organizer/report.md</code> right after writing it — not held to the end. If <code>maxTurns</code> is hit, written rules survive; the run resumes from the last file listed in that report.</p>
+      <p>Appends each finished file (path + change) to <code>.claude/reports/YYYYMMDD-HHMMSS_rules-organizer/report.md</code> immediately. Claude Code 2.1.246+ returns partial output on turn exhaustion. Main checks that marker before accepting or resuming; the organizer reads the checkpoint first.</p>
     </div>
   </li>
   <li>
     <div>
       <strong>Optimize and report</strong>
-      <p>Spawns <code>brewtools:text-optimizer</code> once per created/updated file, all in one message — skipped with a note if <code>brewtools</code> is not installed, never a blocker. Returns a final report: files created/updated table, rule counts, and next-step checklist.</p>
+      <p>Returns written paths and optimization requests to main. The caller follows the installed <code>brewtools:text-optimize</code> Medium workflow: snapshot before edits, supply <code>RUN_DIR</code>, dispatch optimizers, review the result and rerun rule validation. Required mode gates and any independent verification remain in the caller's workflow. The organizer never launches an optimizer directly. Missing Brewtools is reported as skipped; valid written rules remain usable.</p>
     </div>
   </li>
 </Steps>
@@ -127,14 +132,16 @@ last_updated: "2026-09-12"
 
 Patterns must be quoted (`"**/*.tsx"`, not bare) and given as an array, never a bare string; `doc_type` is the one unquoted value (`doc_type: llm` exactly).
 
-### Loading (verified 2.1.269)
+### Loading (rechecked through 2.1.285)
 
 | Frontmatter | Behavior |
 |-------------|----------|
 | No `paths` | Loads at session start, same priority as project CLAUDE.md |
 | With `paths` | Loads lazily — only when Claude reads a file matching the glob, not on every tool use |
 
-This reverses bug [#16299](https://github.com/anthropics/claude-code/issues/16299)'s old claim that all rules load at session start regardless of `paths:` — no longer reproducible. Because scoping now genuinely delays loading, a rule that must fire before any file is in context stays unscoped:
+The source reference supersedes the old all-rules-at-start observation in
+[#16299](https://github.com/anthropics/claude-code/issues/16299). A rule that must apply before
+any file is read stays unscoped:
 
 | Rule kind | `paths:`? |
 |-----------|-----------|
@@ -172,7 +179,10 @@ Verdict first, `<=30 lines`, `path:line`. No rule-file bodies, no pasted tables,
 
 <CardGrid>
   <Card title="rules skill" icon="link" href="/brewcode/skills/rules/">
-    The only entry point that spawns this agent — interactive extraction and batching.
+    Interactive extraction, accepted batches and main-caller optimization.
+  </Card>
+  <Card title="Convention Setup" icon="clipboard" href="/brewcode/skills/convention-setup/">
+    Establish coding, testing and architecture patterns before creating teams.
   </Card>
   <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/agents/bc-rules-organizer.md">
     Agent definition, table formats, and dedup protocol in full.

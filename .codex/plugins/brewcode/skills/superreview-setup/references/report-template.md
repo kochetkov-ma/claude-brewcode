@@ -21,6 +21,7 @@ Output: `.codex/reports/{TIMESTAMP}_superreview/REPORT.md`. ONE consolidated, va
 **Sanctioned scope:** task {T-ID | none} / issue {id | none | not reached} / decisions {ids | none} — {K}/{COUNT} files outside it | not resolved (QUICK)
 **Gates:** {gate} {OK|FAIL|not run} / ...
 **Intent pass:** intent-guard — **{ALIGNED | MINOR DRIFT | MAJOR DRIFT}** | not run ({reason})
+**Intent baseline:** {readable governing request + latest explicit user amendments | unavailable — intent unassessed, run INCOMPLETE}
 **Validation:** {all {N} findings validated | **{U} UNVALIDATED of {N} — run is INCOMPLETE ({reason})**} — every row below carries a verdict | not needed (QUICK — every row carries CONFIRMED-BY-EXECUTION or CONFIRMED-BY-EVIDENCE)
 **Search tool used:** {Bash rg/grep/git ls-files}
 **Agents run (derived from live roster):** {AGENT_LIST}{, DEGRADED: <group> -> generic} | intent-guard only (QUICK)
@@ -44,11 +45,14 @@ Output: `.codex/reports/{TIMESTAMP}_superreview/REPORT.md`. ONE consolidated, va
 
 **VERDICT: {ALIGNED | MINOR DRIFT | MAJOR DRIFT} — {intent-guard's one clause, VERBATIM}**
 {or: **INTENT PASS NOT RUN** — {reason}. This run cannot say whether the delivery matches the request.}
+{If the guard returned `not run — intent baseline unavailable`, copy that reason verbatim: the pass was attempted
+but intent remains unassessed. Mark the run INCOMPLETE even with green gates and zero findings; invent no finding.}
 
 **Sources:** T1 {label | none — the chat request is the top source} / T2 {spec | none} / T3 {plan | none} /
 T4 {policy | none} / T5 transcript
-**The request, verbatim:** "{what the user actually asked for}"
-**Findings:** {N} (cap 10) — an empty list with `ALIGNED` is a good result, not a gap
+**Governing amendments:** {latest explicit user corrections/refusals/approvals, quoted in order and treated as T1 | none}
+**The request, verbatim:** {quoted governing request | unavailable — never invent}
+**Findings:** {N} (cap 10) — empty + `ALIGNED` is valid only after comparison with a readable governing baseline
 
 | # | ASKED (verbatim) | Source (tier) | DELIVERED (evidence) | Why drift | Rule | Severity | Correction |
 |---|------------------|---------------|----------------------|-----------|------|----------|------------|
@@ -117,7 +121,7 @@ command; `CONFIRMED-BY-EVIDENCE` = intent-guard row, cite the ASKED quote + tier
 
 **DRIFT: {ALIGNED | MINOR DRIFT | MAJOR DRIFT | intent pass not run} — {clause, verbatim}**
 
-**{APPROVED | CONDITIONAL | REWORK}{ - INCOMPLETE ({U} unvalidated) if any row is UNVALIDATED}**
+**{APPROVED | CONDITIONAL | REWORK}{ - INCOMPLETE ({U} unvalidated / intent baseline unavailable) if either applies}**
 
 ## Stats
 
@@ -144,7 +148,8 @@ command; `CONFIRMED-BY-EVIDENCE` = intent-guard row, cite the ASKED quote + tier
 - **Drift first:** {if MAJOR DRIFT: **the deliverable is not the thing that was asked for** — settle that before
   any other finding; fixing quality inside the wrong deliverable is wasted work. | if MINOR DRIFT: {N} small
   deltas from the request — wave through or correct, one sentence each. | if ALIGNED: the delivery matches the
-  request; the findings below are quality only.}
+  request; the findings below are quality only. | if intent baseline unavailable: obtain the governing request
+  and amendments, then rerun the intent pass; delivery alignment remains unassessed.}
 - {if DEPTH == QUICK: **This was a QUICK run** — intent + gates only. No domain expert, scope pass or adversarial
   validation ran, so nothing below claims the code is good. For the full pass, re-run saying "deep review".}
 - **To FIX the findings:** start a NEW session (English), turn on **Manager mode (`++m`)**, and DELEGATE the fixes
@@ -170,12 +175,13 @@ command; `CONFIRMED-BY-EVIDENCE` = intent-guard row, cite the ASKED quote + tier
 - **Severity:** blocker (outage/breach/data-loss) > critical (significant bug/perf/boundary) > major (maintainability) > minor (style).
 - **Reuse:** REUSE (import existing 90-100%) | EXTEND (add params to existing 70-89%) | CONSIDER (evaluate 50-69%) | KEEP_NEW (<50%, justified).
 - **Run verdict:** REWORK if any P0; CONDITIONAL if any P1/P2 (no P0); APPROVED if only P3 / none; suffix
-  `- INCOMPLETE` whenever any row is UNVALIDATED.
+  `- INCOMPLETE` whenever any row is UNVALIDATED or the intent baseline is unavailable, including zero-findings runs.
 - **Row verdict:** CONFIRM (adversarially validated) | CONFIRMED-BY-EXECUTION (gate output, command + line cited) |
   CONFIRMED-BY-EVIDENCE (intent-guard row: ASKED quote + source tier + delivered evidence cited) |
   UNVALIDATED (validation could not run). No row ships without one.
 - **Drift verdict:** ALIGNED (nothing beyond implied work) | MINOR DRIFT (extra/missing work a reviewer waves
-  through after one sentence) | MAJOR DRIFT (the deliverable is not the thing that was asked for).
+  through after one sentence) | MAJOR DRIFT (the deliverable is not the thing that was asked for). `not run — intent
+  baseline unavailable` records an assessment gap, never ALIGNED or a fabricated drift row.
 - **Intent classes:** intent#scope | scale | indirection | files | tests | deps | arch | policy | skip |
   artifacts | naming | conflict — full definitions in `.codex/agents/intent-guard.toml`.
 - **Depth:** QUICK (default — intent pass + gates, 1 agent) | EXTENDED (full fan-out + validation + scope gate,

@@ -2,9 +2,61 @@
 
 ---
 
+## v6.3.0 (2026-09-30)
+
+> Docs: [convention-setup](https://doc-claude.brewcode.app/brewcode/skills/convention-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) | [task-board-setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) | [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [prompt injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/) | [full setup](https://doc-claude.brewcode.app/full-setup/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [text-optimize](https://doc-claude.brewcode.app/brewtools/skills/text-optimize/)
+
+> Docs: [bash-expert](https://doc-claude.brewcode.app/brewcode/agents/bash-expert/) | [rules organizer](https://doc-claude.brewcode.app/brewcode/agents/bc-rules-organizer/) | [text-optimizer](https://doc-claude.brewcode.app/brewtools/agents/text-optimizer/) | [ssh-admin](https://doc-claude.brewcode.app/brewtools/agents/ssh-admin/) | [deploy-admin](https://doc-claude.brewcode.app/brewtools/agents/deploy-admin/) | [context-slim](https://doc-claude.brewcode.app/brewtools/skills/context-slim/) | [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/) | [SSH](https://doc-claude.brewcode.app/brewtools/skills/ssh/) | [deploy](https://doc-claude.brewcode.app/brewtools/skills/deploy/) | [text-human](https://doc-claude.brewcode.app/brewtools/skills/text-human/) | [agent-deadline](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline-setup/) | [agent-return](https://doc-claude.brewcode.app/brewtools/skills/agent-return-setup/) | [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/) | [memory-sync](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/) | [docsync](https://doc-claude.brewcode.app/brewdoc/skills/docsync-setup/)
+
+### brewcode
+
+#### Changed
+
+- **`convention-setup`** replaces the convention command with a setup lifecycle: `status`, `install`, `upgrade`, `enable`, `disable`, `uninstall`, `purge`. It captures coding, testing and architecture patterns, then installs reversible loading guidance. `setup-status` includes it after search foundation and before teams and review setup.
+- **Creator agents and references** refreshed against official Claude Code documentation and changelog through 2.1.285. Skill invocation and tool permissions, agent forks and plugin fields, hook payloads, event-specific blocking and asynchronous behavior now follow the current contracts. Repository authoring policies remain explicit and separate from runtime capabilities.
+- **All eight shipped agents** now use clearer scope, caller-decision, return and partial-result/checkpoint contracts. Main owns optimizer dispatch and snapshot-backed acceptance.
+
+#### Fixed
+
+- **Intent review** honors latest explicit user amendments. An unreadable governing request makes the review `INCOMPLETE`, even with passing mechanical gates and no findings; read-only guards hand evidence to the coordinator.
+
+### brewtools
+
+#### Added
+
+- **Domain and per-task methodology** in task-board setup: review strategy, verified test commands, acceptance evidence and bounded base work units. The board remains the status authority; the task graph keeps all unfinished entries and the latest 10 completed entries, with older evidence preserved in task records.
+- **Unique session anti-drift cron** for each active top-level task, created by the main session's `task-board` flow. Default cadence is hourly, with a user-selected cadence or opt-out. Each delivered tick rereads methodology and goal, collects active-agent updates, reconciles the graph and checks drift before a compact report of time, tick number, elapsed work, progress, remaining work and blockers or questions. Completion or cancellation stops and verifies removal of the timer. Session/runtime limits apply; unavailable scheduling is reported.
+- **Bare `+++` in Plan mode** injects the methodology, graph and cron planning steps. Scheduling and file changes wait until execution; the codeword adds no cron directive outside Plan mode.
+
+#### Changed
+
+- **Instructions and text optimization** tightened through duplicate removal, contradiction checks and compression while retaining scope, prohibitions, examples and validation requirements. Recovery preserves concurrent edits and reports unverified results.
+
+#### Fixed
+
+- **Context slimming** inventories nested rules and linked instruction references accurately; safe recovery preserves concurrent edits and reports refused restoration.
+- **Provider switching** verifies every selected OpenRouter catalog ID before writing and preserves existing choices. Qwen setup matches region, workspace and billing product; structured request data prevents prompt-derived shell injection. Pricing references replace stale cost and benchmark promises.
+- **SSH and deployment** keep secrets out of command arguments, require explicit authority for external changes, and preserve partial-result evidence. Release sequences stop on a failed Git step rather than reporting success after a failed push.
+- **Text humanization** preserves meaningful private/test contracts, fixture assumptions, BDD comments and lint/type/security directives. Cosmetic cleanup cannot change debug output, APIs or suppressions; ticket removal needs proof of fabrication and failed real resolution.
+- **Deadline and return setup** distinguish turn limits from time budgets, retain partial-result checkpoints and separate content drift from deliberate disabled state.
+
+#### Removed
+
+- Obsolete brevity hooks, their setup, assets, runtime registrations and public documentation. The suite now contains 27 skills, 8 agents and 6 registered hook commands.
+
+### brewdoc
+
+#### Fixed
+
+- **Docsync install/upgrade** validates before writes, preserves existing settings backups and session files, and restores individual failed writes without overwriting concurrent edits.
+- **Memory sync** inventories rules recursively and honors user-narrowed writes across batches, references, salvage and self-sync. Verification excludes secret values and uses minimum necessary evidence.
+- **Publishing** isolates each run's inputs and cleanup. Explicit no-password mode ignores stale password files; protected uploads use an existing local password file without exposing its contents in chat or command arguments.
+
+---
+
 ## v6.2.0 (2026-09-12)
 
-> Docs: [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [bc-rules-organizer](https://doc-claude.brewcode.app/brewcode/agents/bc-rules-organizer/) | [bash-expert](https://doc-claude.brewcode.app/brewcode/agents/bash-expert/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [agents](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | [text-optimizer](https://doc-claude.brewcode.app/brewtools/agents/text-optimizer/) | [ssh-admin](https://doc-claude.brewcode.app/brewtools/agents/ssh-admin/) | [deploy-admin](https://doc-claude.brewcode.app/brewtools/agents/deploy-admin/) | [text-optimize](https://doc-claude.brewcode.app/brewtools/skills/text-optimize/) | [think-short-setup](https://doc-claude.brewcode.app/brewtools/skills/think-short-setup/) | [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/)
+> Docs: [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [bc-rules-organizer](https://doc-claude.brewcode.app/brewcode/agents/bc-rules-organizer/) | [bash-expert](https://doc-claude.brewcode.app/brewcode/agents/bash-expert/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [agents](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | [text-optimizer](https://doc-claude.brewcode.app/brewtools/agents/text-optimizer/) | [ssh-admin](https://doc-claude.brewcode.app/brewtools/agents/ssh-admin/) | [deploy-admin](https://doc-claude.brewcode.app/brewtools/agents/deploy-admin/) | [text-optimize](https://doc-claude.brewcode.app/brewtools/skills/text-optimize/) | [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/)
 
 > All 8 plugin agents rewritten for Claude Code 2.1.269 and the Claude 5 family prompting guidance (role -> Return contract -> Scope/Never -> procedure; short bodies, reference catalogs on disk); creators teach the current formats (20 skill fields, 17 agent fields incl. `experimental.cacheTtl`, 33 hook events incl. `PreModelSwitch`/`PostModelSwitch`, corrected exit-code semantics); text-optimizer gained a prompt-quality (PQ) pass; memory-sync-setup ships `prompting-guide.md` (Claude + OpenAI/Codex rules) and a prompt-quality step; hook reminders trimmed and throttled.
 
@@ -34,7 +86,6 @@
 - **`text-optimizer` + `text-optimize` references** gained a PQ.1-PQ.13 prompt-quality pass, sharpened lossless guard, per-mode stop condition, measured examples
 - **`ssh-admin`/`deploy-admin`/`text-optimizer`** prompts tightened (all safety rows kept; `deploy-admin`'s `HOST:` envelope field restored)
 - **`manager-setup`** codeword blocks (`full`/`architect`/`planmode`/`review-double`/`review-regression`) ~40% shorter; `planmode` now embeds the 6-step protocol
-- **`think-short-setup`** reminder now every 20th prompt (was 10th), shorter prompt text
 - **`task-board-setup`** Codex mirror: durable generator override for the AGENTS.md loading claim (`TEXT_OVERRIDES` in `.codex/scripts/generate-compat.mjs`)
 
 ### brewdoc
@@ -166,7 +217,7 @@
 
 ## v6.0.0 (2026-08-16)
 
-> Docs: [brewcode hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [bash-expert](https://doc-claude.brewcode.app/brewcode/agents/bash-expert/) | [bc-rules-organizer](https://doc-claude.brewcode.app/brewcode/agents/bc-rules-organizer/) | [brewcode:agents](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [brewcode:skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [convention](https://doc-claude.brewcode.app/brewcode/skills/convention/) | [rules](https://doc-claude.brewcode.app/brewcode/skills/rules/) | [e2e](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) | [superreview-setup](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | [teams-setup](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) | [docsync-setup](https://doc-claude.brewcode.app/brewdoc/skills/docsync-setup/) | [md-to-pdf](https://doc-claude.brewcode.app/brewdoc/skills/md-to-pdf/) | [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/) | [my-claude](https://doc-claude.brewcode.app/brewdoc/skills/my-claude/) | [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/) | [deploy-admin](https://doc-claude.brewcode.app/brewtools/agents/deploy-admin/) | [ssh-admin](https://doc-claude.brewcode.app/brewtools/agents/ssh-admin/) | [text-optimizer](https://doc-claude.brewcode.app/brewtools/agents/text-optimizer/) | [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [deploy](https://doc-claude.brewcode.app/brewtools/skills/deploy/) | [ssh](https://doc-claude.brewcode.app/brewtools/skills/ssh/) | [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/) | [secrets-scan](https://doc-claude.brewcode.app/brewtools/skills/secrets-scan/) | [text-optimize](https://doc-claude.brewcode.app/brewtools/skills/text-optimize/) | [text-human](https://doc-claude.brewcode.app/brewtools/skills/text-human/) | [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) | [task-board-setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) | [think-short-setup](https://doc-claude.brewcode.app/brewtools/skills/think-short-setup/) | [agent-deadline-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline-setup/) | [agent-return-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-return-setup/) | [agent-router-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-router-setup/)
+> Docs: [brewcode hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [bash-expert](https://doc-claude.brewcode.app/brewcode/agents/bash-expert/) | [bc-rules-organizer](https://doc-claude.brewcode.app/brewcode/agents/bc-rules-organizer/) | [brewcode:agents](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [brewcode:skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [convention-setup](https://doc-claude.brewcode.app/brewcode/skills/convention-setup/) | [rules](https://doc-claude.brewcode.app/brewcode/skills/rules/) | [e2e](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) | [superreview-setup](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | [teams-setup](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) | [docsync-setup](https://doc-claude.brewcode.app/brewdoc/skills/docsync-setup/) | [md-to-pdf](https://doc-claude.brewcode.app/brewdoc/skills/md-to-pdf/) | [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/) | [my-claude](https://doc-claude.brewcode.app/brewdoc/skills/my-claude/) | [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/) | [deploy-admin](https://doc-claude.brewcode.app/brewtools/agents/deploy-admin/) | [ssh-admin](https://doc-claude.brewcode.app/brewtools/agents/ssh-admin/) | [text-optimizer](https://doc-claude.brewcode.app/brewtools/agents/text-optimizer/) | [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [deploy](https://doc-claude.brewcode.app/brewtools/skills/deploy/) | [ssh](https://doc-claude.brewcode.app/brewtools/skills/ssh/) | [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/) | [secrets-scan](https://doc-claude.brewcode.app/brewtools/skills/secrets-scan/) | [text-optimize](https://doc-claude.brewcode.app/brewtools/skills/text-optimize/) | [text-human](https://doc-claude.brewcode.app/brewtools/skills/text-human/) | [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) | [task-board-setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) | [agent-deadline-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline-setup/) | [agent-return-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-return-setup/) | [agent-router-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-router-setup/)
 
 > A correctness release. An audit of all four plugins produced 122 findings; every one was re-verified against a Claude Code 2.1.233 source snapshot, fixed across four waves, reviewed, then re-checked by mutation testing and repaired again. The theme is that the guards, the secret handling and the agent instructions were all written against an older Claude Code and against the happy path -- a guard that could not parse its input let the command through, a provider test put an API key on the `curl` command line where `ps` shows it, and the creator agents taught hook and agent APIs that 2.1.233 no longer has. Nothing here changes how you invoke anything; a lot here changes what happens when something goes wrong. Test suites now cover the parts that had none.
 
@@ -184,7 +235,7 @@
 #### Changed
 
 - **`AskUserQuestion` is gone from every subagent in 2.1.233**, so agents that asked for approval mid-run silently stalled. `ssh-admin`, `deploy-admin` and the generated `ssh`/`deploy` agent templates now emit an `## APPROVAL REQUIRED` envelope in their return and stop, leaving the decision with the caller
-- `agent-return-setup`, `agent-router-setup`, `think-short-setup` and `manager-setup` assets re-verified against 2.1.233 hook payloads
+- `agent-return-setup`, `agent-router-setup` and `manager-setup` assets re-verified against 2.1.233 hook payloads
 
 #### Added
 
@@ -263,16 +314,11 @@
 
 ## v5.6.1 (2026-08-14)
 
-> Docs: [think-short-setup](https://doc-claude.brewcode.app/brewtools/skills/think-short-setup/) | [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/)
-
-> `think-short`'s subagent style injection never reached a single subagent. It ran on `PreToolUse` (matcher `Task|Agent`) and wrote `hookSpecificOutput.updatedInput.prompt` — a single-writer/last-wins channel: parallel hooks all receive the ORIGINAL `tool_input` and the consumer is a plain assignment, so the last hook to return silently overwrites every other. To avoid clobbering someone else's Task hook the asset shipped a "foreign Task hook detected -> yield" gate, and in practice it yielded and injected nothing.
+> Docs: [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/)
 
 ### brewtools
 
 #### Fixed
-
-- **think-short subagent injection now actually fires.** Moved from `PreToolUse:Task|Agent` to `SubagentStart`, emitting `additionalContext` — a channel the bundle ACCUMULATES across hooks, so several injectors coexist without overwriting each other. The whole coexistence/yield machinery is gone: 283 -> 70 lines
-- Asset renamed `assets/think-short-task.mjs` -> `assets/think-short-subagent.mjs`; `upgrade` removes the stale `PreToolUse` hook and its `settings.json` entry before installing the new one
 
 ### brewcode
 
@@ -379,7 +425,7 @@
 
 ## v5.5.0 (2026-08-10)
 
-> Docs: [agent-return-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-return-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) | [teams-setup](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) | [superreview-setup](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | [think-short-setup](https://doc-claude.brewcode.app/brewtools/skills/think-short-setup/) | [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [bash-expert](https://doc-claude.brewcode.app/brewcode/agents/bash-expert/) | [bc-rules-organizer](https://doc-claude.brewcode.app/brewcode/agents/bc-rules-organizer/) | [text-optimizer](https://doc-claude.brewcode.app/brewtools/agents/text-optimizer/) | [ssh-admin](https://doc-claude.brewcode.app/brewtools/agents/ssh-admin/) | [deploy-admin](https://doc-claude.brewcode.app/brewtools/agents/deploy-admin/)
+> Docs: [agent-return-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-return-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) | [teams-setup](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) | [superreview-setup](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [bash-expert](https://doc-claude.brewcode.app/brewcode/agents/bash-expert/) | [bc-rules-organizer](https://doc-claude.brewcode.app/brewcode/agents/bc-rules-organizer/) | [text-optimizer](https://doc-claude.brewcode.app/brewtools/agents/text-optimizer/) | [ssh-admin](https://doc-claude.brewcode.app/brewtools/agents/ssh-admin/) | [deploy-admin](https://doc-claude.brewcode.app/brewtools/agents/deploy-admin/)
 
 > A subagent's last message is the only thing its caller ever reads, and nothing sized it. Agents returned whole files, whole diffs, whole transcripts — the caller paid for all of it and used three lines. This release gives the return a budget: a new opt-in setup enforces one at runtime, and every shipped agent, every generated agent and every agent template now carries a single Return Contract section that says what the last message is for.
 
@@ -395,7 +441,6 @@
 #### Changed
 
 - **`text-optimizer`, `ssh-admin` and `deploy-admin`** each replaced their own output rules with one Return Contract section: what the last message is for, what never goes in it, and where a large artifact goes instead
-- **`think-short-setup`'s family-hook stem set** gained `agent-return`, so the new hooks are recognized as family and think-short keeps rewriting the subagent prompt instead of yielding to what looks like a foreign `PreToolUse` hook
 
 ### brewcode
 
@@ -588,7 +633,7 @@
 
 ## v5.2.2 (2026-08-09)
 
-> Docs: [convention](https://doc-claude.brewcode.app/brewcode/skills/convention/) | [rules](https://doc-claude.brewcode.app/brewcode/skills/rules/) | [teams-setup](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) | [docsync-setup](https://doc-claude.brewcode.app/brewdoc/skills/docsync-setup/) | [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/)
+> Docs: [convention-setup](https://doc-claude.brewcode.app/brewcode/skills/convention-setup/) | [rules](https://doc-claude.brewcode.app/brewcode/skills/rules/) | [teams-setup](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) | [docsync-setup](https://doc-claude.brewcode.app/brewdoc/skills/docsync-setup/) | [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/)
 
 > A duplication audit across all 26 skills. Most of what it found was deliberate structure, not redundancy — the entries below are the cases where it found a real defect.
 
@@ -657,7 +702,7 @@
 
 ## v5.1.0 (2026-08-09)
 
-> Docs: [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) | [superreview-setup](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | [teams-setup](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) | [e2e](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [rules](https://doc-claude.brewcode.app/brewcode/skills/rules/) | [convention](https://doc-claude.brewcode.app/brewcode/skills/convention/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [brewcode hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [bash-expert](https://doc-claude.brewcode.app/brewcode/agents/bash-expert/) | [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [bc-rules-organizer](https://doc-claude.brewcode.app/brewcode/agents/bc-rules-organizer/) | [task-board-setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) | [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [think-short-setup](https://doc-claude.brewcode.app/brewtools/skills/think-short-setup/) | [agent-deadline-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline-setup/) | [agent-router-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-router-setup/) | [deploy](https://doc-claude.brewcode.app/brewtools/skills/deploy/) | [ssh](https://doc-claude.brewcode.app/brewtools/skills/ssh/) | [text-human](https://doc-claude.brewcode.app/brewtools/skills/text-human/) | [deploy-admin](https://doc-claude.brewcode.app/brewtools/agents/deploy-admin/) | [ssh-admin](https://doc-claude.brewcode.app/brewtools/agents/ssh-admin/) | [text-optimizer](https://doc-claude.brewcode.app/brewtools/agents/text-optimizer/) | [brewtools prompt injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/) | [docsync-setup](https://doc-claude.brewcode.app/brewdoc/skills/docsync-setup/) | [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/) | [md-to-pdf](https://doc-claude.brewcode.app/brewdoc/skills/md-to-pdf/) | [my-claude](https://doc-claude.brewcode.app/brewdoc/skills/my-claude/) | [full-setup](https://doc-claude.brewcode.app/full-setup/)
+> Docs: [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) | [superreview-setup](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | [teams-setup](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) | [e2e](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [rules](https://doc-claude.brewcode.app/brewcode/skills/rules/) | [convention-setup](https://doc-claude.brewcode.app/brewcode/skills/convention-setup/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [brewcode hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [bash-expert](https://doc-claude.brewcode.app/brewcode/agents/bash-expert/) | [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [bc-rules-organizer](https://doc-claude.brewcode.app/brewcode/agents/bc-rules-organizer/) | [task-board-setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) | [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [agent-deadline-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline-setup/) | [agent-router-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-router-setup/) | [deploy](https://doc-claude.brewcode.app/brewtools/skills/deploy/) | [ssh](https://doc-claude.brewcode.app/brewtools/skills/ssh/) | [text-human](https://doc-claude.brewcode.app/brewtools/skills/text-human/) | [deploy-admin](https://doc-claude.brewcode.app/brewtools/agents/deploy-admin/) | [ssh-admin](https://doc-claude.brewcode.app/brewtools/agents/ssh-admin/) | [text-optimizer](https://doc-claude.brewcode.app/brewtools/agents/text-optimizer/) | [brewtools prompt injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/) | [docsync-setup](https://doc-claude.brewcode.app/brewdoc/skills/docsync-setup/) | [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/) | [md-to-pdf](https://doc-claude.brewcode.app/brewdoc/skills/md-to-pdf/) | [my-claude](https://doc-claude.brewcode.app/brewdoc/skills/my-claude/) | [full-setup](https://doc-claude.brewcode.app/full-setup/)
 
 > **Two themes.** First, `semble-setup` stops nagging and starts fetching: the two advisory hooks that never once produced a search are deleted, and a prefetch hook that injects real file paths takes their place. Second, every generated and shipped artifact in the suite carries the same four metadata keys — and, more to the point, every `upgrade` can now actually *clear* the stale verdict it is prescribed for. Before this release five setups reported `stale` forever after a successful `upgrade`, and a semble install still shaped like v1 reported `ready` with `nextStep: none`, so nobody mid-migration was ever told to migrate.
 
@@ -668,7 +713,6 @@
 | `semble-setup` installed in a project | `/brewcode:semble-setup install` once, per project | Migrates you off the two retired hooks and reconciles the settings entries. **There is no manual step** — `install` deletes `semble-reminder.mjs`/`semble-explore.mjs`, purges their settings rows and wires the three live hooks |
 | a `semble-setup` install and disk to reclaim | `rm -rf ~/Library/Caches/semble` by hand | Pre-5.0.1 prefetch runs left a stray cache root there, tens of MB depending on repo size. No mode deletes it; the supported cache lives elsewhere |
 | `manager-setup`, `task-board-setup`, `superreview-setup`, `memory-sync-setup` or `e2e` installed | run that skill's `upgrade` once | Each one's `upgrade` used to leave the version stamp untouched, so `setup-status` reported `stale` after a successful upgrade, forever. All five now restamp unconditionally |
-| `think-short-setup` installed alongside `semble-setup` | `/brewtools:think-short-setup upgrade` | The task hook's family list still named the two hooks retired in 5.0.0 and had never heard of `semble-prefetch.mjs`/`semble-stats.mjs`, so it did not recognise them as family and did not yield to them |
 | `docsync-setup` installed | `/brewdoc:docsync-setup upgrade` | Writes the three provenance keys into `config.json` — the only place `setup-status` can read a docsync version from. `enabled`, `threshold_days` and `exclude` are preserved verbatim, so a disabled install stays disabled |
 | `agent-deadline-setup` or `agent-router-setup` installed | run that skill's `upgrade` once, per scope | Their configs (`.claude/agent-deadline.json`, `.claude/brewtools/agent-router.json`) gain the three provenance keys in this release. A pre-5.1 config has none, so `status` and `setup-status` report it as unknown/`stale`; only a writing mode (`upgrade`) adds them. Behaviour keys are read back and preserved |
 | a `superreview-setup` install | `/brewcode:superreview-setup upgrade` | Repairs retroactively: the stack reference is now derived from the installed tree instead of falling back to `python.md` on every project |
@@ -768,7 +812,6 @@
 
 #### Changed
 
-- **think-short-setup: the family-hook list is now a stem prefix set** — ten `FAMILY_HOOK_STEMS` matched by an anchored regex, replacing a hardcoded 15-entry filename list that still named `semble-reminder.mjs`/`semble-explore.mjs` and had never heard of `semble-prefetch.mjs`/`semble-stats.mjs`
 - **agent-router-setup: `status` renames `level` to `level_recorded` and pairs it with `tier2_refs`.** The docs now say plainly that `level` is enforced by nothing and that `tier2_refs` is the authority on whether the LLM judge fires, with an instruction to report the mismatch rather than paper over it
 - **manager-setup: `upgrade` stops claiming `stateUntouched`.** It calls `writeState('project', {})` to restamp the metadata trio only, and reports `armStatePreserved` and `stateRestamped` separately; `hard`/`level` still merge through verbatim
 - **task-board-setup: placeholder verification greps both brace families** (`\{\{` and `\{(PLUGIN_VERSION|GENERATED_BY|LAST_UPDATED)\}`) — the old `grep -rn '{{'` passed a file holding an unresolved single-brace token. `uninstall`/`purge` and the partial guard now account for `.disabled` twins
@@ -820,14 +863,13 @@
 
 #### Fixed
 
-- **Codex mode parity was worse than measured.** `manager-setup` documented three retired aliases (`on`, `off`, `reset`), `task-board-setup` documented none of the seven canonical modes, and `think-short-setup` documented only `install`/`remove`. All three are at parity, and `validate-compat.mjs` gains a mode-parity gate: a canonical mode declared in a source `argument-hint` and missing from the Codex variant now fails validation
-- **The `.codex` generator shipped an unstamped mirror of a stamped asset.** `think-short-prompt.md` is hand-rewritten for Codex and was emitted with a bare `<!-- think-short -->` marker while its source carries a `brewcode-meta` stamp, so the mirror had no version at all. The generator now carries the source's stamp into the marker
+- **Codex mode parity was worse than measured.** `manager-setup` documented three retired aliases (`on`, `off`, `reset`), `task-board-setup` documented none of the seven canonical modes. Both are at parity, and `validate-compat.mjs` gains a mode-parity gate: a canonical mode declared in a source `argument-hint` and missing from the Codex variant now fails validation
 
 ---
 
 ## v5.0.0 (2026-08-08)
 
-> Docs: [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) | [superreview-setup](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | [teams-setup](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) | [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [e2e](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [convention](https://doc-claude.brewcode.app/brewcode/skills/convention/) | [rules](https://doc-claude.brewcode.app/brewcode/skills/rules/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [task-board-setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) | [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [think-short-setup](https://doc-claude.brewcode.app/brewtools/skills/think-short-setup/) | [agent-deadline-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline-setup/) | [agent-router-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-router-setup/) | [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/) | [deploy](https://doc-claude.brewcode.app/brewtools/skills/deploy/) | [secrets-scan](https://doc-claude.brewcode.app/brewtools/skills/secrets-scan/) | [text-human](https://doc-claude.brewcode.app/brewtools/skills/text-human/) | [deploy-admin](https://doc-claude.brewcode.app/brewtools/agents/deploy-admin/) | [docsync-setup](https://doc-claude.brewcode.app/brewdoc/skills/docsync-setup/) | [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/) | [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/) | [my-claude](https://doc-claude.brewcode.app/brewdoc/skills/my-claude/) | [full-setup](https://doc-claude.brewcode.app/full-setup/) | [faq](https://doc-claude.brewcode.app/faq/)
+> Docs: [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) | [superreview-setup](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | [teams-setup](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) | [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [e2e](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [convention-setup](https://doc-claude.brewcode.app/brewcode/skills/convention-setup/) | [rules](https://doc-claude.brewcode.app/brewcode/skills/rules/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [task-board-setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) | [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [agent-deadline-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline-setup/) | [agent-router-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-router-setup/) | [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/) | [deploy](https://doc-claude.brewcode.app/brewtools/skills/deploy/) | [secrets-scan](https://doc-claude.brewcode.app/brewtools/skills/secrets-scan/) | [text-human](https://doc-claude.brewcode.app/brewtools/skills/text-human/) | [deploy-admin](https://doc-claude.brewcode.app/brewtools/agents/deploy-admin/) | [docsync-setup](https://doc-claude.brewcode.app/brewdoc/skills/docsync-setup/) | [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/) | [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/) | [my-claude](https://doc-claude.brewcode.app/brewdoc/skills/my-claude/) | [full-setup](https://doc-claude.brewcode.app/full-setup/) | [faq](https://doc-claude.brewcode.app/faq/)
 
 > **BREAKING.** Ten skills were renamed and one was deleted. There are no back-compat aliases — an old command name is simply not found. Migrate with the table below.
 
@@ -838,7 +880,6 @@
 | If you have | Do this | Why |
 |-------------|---------|-----|
 | `manager-setup` installed in a project | `/brewtools:manager-setup upgrade` once, per project | The disarm command changed shape and now needs a `manager-state.mjs` helper copied into the project. `upgrade` backfills it and preserves `hard`/`level` exactly. Without it, disarming fails with `Cannot find module` |
-| `think-short-setup` installed alongside `agent-router-setup` or `agent-deadline-setup` | `/brewtools:think-short-setup upgrade` | think-short has been injecting **nothing** while its status block said `3/3 enabled`. See brewtools Fixed |
 | a page published with `/brewdoc:publish` and a password | treat it as public; delete and republish | The password header was never actually sent. See brewdoc Fixed |
 | a team created by `/brewcode:teams` or `teams-setup` | `/brewcode:teams-setup upgrade <name>` | Existing teams self-heal: the dead trace variable is repaired, so `trace.jsonl` starts recording and `upgrade` stops proposing to delete every agent as inactive |
 
@@ -850,7 +891,6 @@
 | `/brewcode:semble` | `/brewcode:semble-setup` |
 | `/brewcode:superreview` | `/brewcode:superreview-setup` |
 | `/brewtools:task-board-init` | `/brewtools:task-board-setup` |
-| `/brewtools:think-short` | `/brewtools:think-short-setup` |
 | `/brewtools:agent-deadline` | `/brewtools:agent-deadline-setup` |
 | `/brewtools:agent-router` | `/brewtools:agent-router-setup` |
 | `/brewtools:manager` | `/brewtools:manager-setup` |
@@ -897,7 +937,6 @@
 #### Fixed
 - **`manager-setup`: the HARD wall could not be disarmed from the main session, and its one exemption was a code-execution hole.** Both halves are closed. The wall blocks `Write`/`Edit`/`Bash` in the main session, so the documented exit — itself a `Bash` call — was denied by the very thing it was meant to exit; the wall was a trap you could only leave by editing state files the wall also protected. The exit is now exactly one command shape, `node <ABS project root>/.claude/brewtools/manager/manager-state.mjs set hard=false`, and `install`/`upgrade` copy that helper into the project so it needs no path resolution. Separately, the old exemption matched loosely enough to execute arbitrary code: it is now granted only when the command starts with `node `, the FIRST argument after `node` is that exact helper path (a `manager-state.mjs` substring elsewhere does not count), and the remainder is the helper's own CLI — with no shell operator outside quotes, no `$` expansion, and no `node` eval flag (`-e`/`--eval`/`-p`/`--print`/`--input-type`/`--require`/`--import`/`--loader`). A `BT_ROOT=` prelude, an `&& echo` tail, a `|| echo` or a `test -f` each turn the exemption off. **Existing installs must run `/brewtools:manager-setup upgrade` once** to get the helper; it never calls `writeState`, so an armed wall stays armed and a disarmed one stays disarmed
 - **`manager-setup`: `ALWAYS_ALLOW` audited.** Plan-mode sessions were trapped — the tools a plan-mode session needs were not on the list, so the wall blocked the session's own workflow. Task-tracking tools were unreachable for the same reason, which is perverse in a mechanism whose whole point is delegation and tracking. Both classes are now allowed
-- **`think-short-setup` silently stopped injecting the moment any sibling hook registered on the same matcher.** Its yield check looked for a file that was deleted in v4.0.0; finding a *different* hook on the matcher, it deferred and emitted nothing. So every project that installed `agent-router-setup` or `agent-deadline-setup` has been running with think-short doing exactly nothing — while its own status block still reported `3/3 enabled`. That combination, a dead mechanism plus a status display that confirms it is alive, is the worst shape a bug can take, and it shipped for several releases. The yield check now tests for the condition that actually exists. Run `upgrade` on affected projects
 - **`deploy`'s release mode hardcoded this repo's private tooling.** The generic release path referenced scripts and paths that exist only in claude-brewcode, so it was unusable in any other project — the exact repos it is meant for. Removed. Three script-level aborts fixed alongside it
 - **`provider-switch`: the API key was passed as an argv value,** which puts it in the process table for every user on the machine and in shell history. It is no longer passed as an argument. `remove-key` left the key behind in `~/.zshrc.bak`, world-readable, so "removing" a key published it instead — the backup is now handled properly. `sed -i ''` (a macOS-only spelling) silently misbehaved on Linux and is fixed. `model-check` was unreachable code. `KEY_DEEPSEEK` added
 - **`secrets-scan` really filters the file list it claimed to have filtered.** The filter was documented and computed, then the unfiltered list was scanned
@@ -905,7 +944,7 @@
 - **`deploy-admin` agent shipped 5 unsubstituted `{{PLACEHOLDER}}` tokens** in live prose sections, not in template blocks, so the agent was instructing itself with literal placeholder text
 
 #### Changed
-- **`task-board-init` -> `task-board-setup`, `think-short` -> `think-short-setup`, `agent-deadline` -> `agent-deadline-setup`, `agent-router` -> `agent-router-setup`, `manager` -> `manager-setup`.** `manager-setup`'s HARD wall loses `on`/`off`/`reset` for `enable`/`disable`/`purge`; `level strict|balanced` and `edit` are unaffected. The `++m`/`++a`/`++rr`/`++r` codewords are hook-driven and independent of the skill name — they keep working untouched
+- **`task-board-init` -> `task-board-setup`, `agent-deadline` -> `agent-deadline-setup`, `agent-router` -> `agent-router-setup`, `manager` -> `manager-setup`.** `manager-setup`'s HARD wall loses `on`/`off`/`reset` for `enable`/`disable`/`purge`; `level strict|balanced` and `edit` are unaffected. The `++m`/`++a`/`++rr`/`++r` codewords are hook-driven and independent of the skill name — they keep working untouched
 - **`/brewtools:provider-switch setup` is now `/brewtools:provider-switch install`.** The skill keeps its bare name: switching providers is something you do repeatedly, not once
 
 ### brewdoc
@@ -933,7 +972,7 @@
 
 ## v4.10.1 (2026-08-08)
 
-> Docs: [memory-sync-init](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-init/)
+> Docs: [memory-sync-init](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/)
 
 ### brewdoc
 
@@ -953,7 +992,7 @@
 
 ## v4.10.0 (2026-08-08)
 
-> Docs: [superreview](https://doc-claude.brewcode.app/brewcode/skills/superreview/) | [teams](https://doc-claude.brewcode.app/brewcode/skills/teams/) | [e2e](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [agents](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [task-board-init](https://doc-claude.brewcode.app/brewtools/skills/task-board-init/) | [manager](https://doc-claude.brewcode.app/brewtools/skills/manager/) | [prompt-injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/) | [memory-sync-init](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-init/)
+> Docs: [superreview](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | [teams](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) | [e2e](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [agents](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [task-board-init](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) | [manager](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [prompt-injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/) | [memory-sync-init](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/)
 
 ### brewcode
 
@@ -977,7 +1016,6 @@
 #### Fixed
 - **`task-board-init upgrade` no longer double-inserts:** the spec layer and the session-progress layer are now two independent MARK/insert sets. Previously a board that already had the spec layer but lacked `PROGRESS.md` failed the combined marker check and re-inserted every already-present spec block. A fresh init and an upgrade now converge on the same final state, verified for all three starting states
 - **`--noask` scope was overstated:** it claimed to suppress every question while two blocking stops still asked
-- **`think-short` prompt lost a rule:** the etalon rewrite had dropped "check existing **libraries** for the needed functionality", so third-party reuse stopped being prompted. Restored at zero net lines. `think-short` also now states that the prompt is copied at install time, so an existing install needs a re-run to pick up prompt changes
 - **`++a` had no additive clause** — the architect directive stated the etalon rule without "additive to conventions/rules/docs", the exact misreading the rule exists to prevent
 
 ### brewdoc
@@ -1000,7 +1038,7 @@
 
 ## v4.9.0 (2026-08-08)
 
-> Docs: [superreview](https://doc-claude.brewcode.app/brewcode/skills/superreview/) | [teams](https://doc-claude.brewcode.app/brewcode/skills/teams/) | [task-board-init](https://doc-claude.brewcode.app/brewtools/skills/task-board-init/) | [memory-sync-init](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-init/)
+> Docs: [superreview](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | [teams](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) | [task-board-init](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) | [memory-sync-init](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/)
 
 ### brewcode
 
@@ -1044,7 +1082,7 @@
 
 ## v4.8.0 (2026-08-06)
 
-> Docs: [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [agents](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [semble](https://doc-claude.brewcode.app/brewcode/skills/semble/) | [agent-router](https://doc-claude.brewcode.app/brewtools/skills/agent-router/) | [agent-deadline](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline/)
+> Docs: [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [agents](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [semble](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [agent-router](https://doc-claude.brewcode.app/brewtools/skills/agent-router-setup/) | [agent-deadline](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline-setup/)
 
 ### brewcode
 
@@ -1067,14 +1105,14 @@
 
 ## v4.7.1 (2026-08-06)
 
-> Docs: [agent-router](https://doc-claude.brewcode.app/brewtools/skills/agent-router/)
+> Docs: [agent-router](https://doc-claude.brewcode.app/brewtools/skills/agent-router-setup/)
 
 ### brewtools
 
 #### Fixed
 - **agent-router:** an agent the router redirects TO can never be an agent the router flags. `neverFlag` now seeds with `brewcode:agent-creator`, `brewcode:skill-creator`, `brewcode:hook-creator`, `brewcode:bash-expert` — spawning one of them is by definition already the right expert. Made structural rather than a hardcoded list: `normalizeConfig` unions `neverFlag` with every `expert` in the effective `intents` table, so a custom `intents` entry exempts its own expert automatically. Tier-2 judge prompt short-circuits on the same set. The install runbook writes the full 8-entry list — a short list there would silently override the code default. 65 tests, all green
 
-> Docs: [agent-router](https://doc-claude.brewcode.app/brewtools/skills/agent-router/) | [agent-deadline](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline/) | [manager](https://doc-claude.brewcode.app/brewtools/skills/manager/) | [semble](https://doc-claude.brewcode.app/brewcode/skills/semble/)
+> Docs: [agent-router](https://doc-claude.brewcode.app/brewtools/skills/agent-router-setup/) | [agent-deadline](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline-setup/) | [manager](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [semble](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/)
 
 ### brewtools
 
@@ -1097,7 +1135,7 @@
 
 ## v4.6.0 (2026-08-05)
 
-> Docs: [agents](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [rules](https://doc-claude.brewcode.app/brewcode/skills/rules/) | [spec](https://doc-claude.brewcode.app/brewcode/skills/spec/) | [convention](https://doc-claude.brewcode.app/brewcode/skills/convention/) | [teams](https://doc-claude.brewcode.app/brewcode/skills/teams/) | [e2e](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [superreview](https://doc-claude.brewcode.app/brewcode/skills/superreview/) | [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [bash-expert](https://doc-claude.brewcode.app/brewcode/agents/bash-expert/) | [manager](https://doc-claude.brewcode.app/brewtools/skills/manager/) | [think-short](https://doc-claude.brewcode.app/brewtools/skills/think-short/) | [task-board-init](https://doc-claude.brewcode.app/brewtools/skills/task-board-init/) | [agent-deadline](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline/) | [text-human](https://doc-claude.brewcode.app/brewtools/skills/text-human/) | [text-optimize](https://doc-claude.brewcode.app/brewtools/skills/text-optimize/) | [guide](https://doc-claude.brewcode.app/brewdoc/skills/guide/) | [memory](https://doc-claude.brewcode.app/brewdoc/skills/memory/)
+> Docs: [agents](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [rules](https://doc-claude.brewcode.app/brewcode/skills/rules/) | spec | [convention-setup](https://doc-claude.brewcode.app/brewcode/skills/convention-setup/) | [teams](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) | [e2e](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [superreview](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [bash-expert](https://doc-claude.brewcode.app/brewcode/agents/bash-expert/) | [manager](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [task-board-init](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) | [agent-deadline](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline-setup/) | [text-human](https://doc-claude.brewcode.app/brewtools/skills/text-human/) | [text-optimize](https://doc-claude.brewcode.app/brewtools/skills/text-optimize/) | guide | memory
 
 ### brewcode
 
@@ -1116,7 +1154,6 @@
 #### Changed
 - **manager `++m`:** protocol step 6 — once ALL code is written (not per-piece), file one recommended final task to simplify the whole written code and strip over-engineering, delegated like any other task
 - **manager `++r` / `++rr`:** a simplification pass ("over-engineered? simpler?") runs before the review proper
-- **think-short:** injected prompt gained "think short: minimal internal reasoning, no exploring aloud" and a post-write "can this be simpler?" pass; em-dash replaced with ASCII
 - **task-board-init:** generated `task-tracker` agent gained an `Output discipline` section (verdict + task ids + `file:line`; no BRD/task-body/backlog dumps; bulk -> `.claude/reports/<ts>_<name>/`) plus a matching checklist item; analysis agent A is now `Plan`
 - **agent-deadline:** `byAgentType` examples repointed from the deleted `brewcode:developer` to `brewtools:text-optimizer`
 
@@ -1135,7 +1172,7 @@
 
 ## v4.5.3 (2026-08-02)
 
-> Docs: [semble](https://doc-claude.brewcode.app/brewcode/skills/semble/)
+> Docs: [semble](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/)
 
 ### brewcode
 
@@ -1154,7 +1191,7 @@
 
 ## v4.5.2 (2026-08-02)
 
-> Docs: [semble](https://doc-claude.brewcode.app/brewcode/skills/semble/)
+> Docs: [semble](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/)
 
 ### brewcode
 
@@ -1177,7 +1214,7 @@
 
 ## v4.5.1 (2026-08-02)
 
-> Docs: [brewcode/hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | [brewtools/prompt-injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/) | [brewtools:manager](https://doc-claude.brewcode.app/brewtools/skills/manager/)
+> Docs: [brewcode/hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | [brewtools/prompt-injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/) | [brewtools:manager](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/)
 
 ### brewcode
 
@@ -1197,7 +1234,7 @@
 
 ## v4.5.0 (2026-08-02)
 
-> Docs: [semble](https://doc-claude.brewcode.app/brewcode/skills/semble/)
+> Docs: [semble](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/)
 
 ### brewcode
 
@@ -1215,7 +1252,7 @@
 
 > **grepai removed.** The `/brewcode:grepai` skill, the `bc-grepai-configurator` agent, the two project hooks it self-installed, the `grepai-first` rule template and every "use `grepai_search` first" instruction across all four plugins are gone. Every place that pointed at semantic search now points at the Bash search path (`grep`->ugrep, `find`->bfs, `rg`) that this macOS Claude Code build actually has. brewcode is now **8 skills / 9 agents**.
 
-> Docs: [brewcode overview](https://doc-claude.brewcode.app/brewcode/overview/) | [brewcode skills](https://doc-claude.brewcode.app/brewcode/skills/) | [brewcode agents](https://doc-claude.brewcode.app/brewcode/agents/) | [brewcode hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | [spec](https://doc-claude.brewcode.app/brewcode/skills/spec/) | [convention](https://doc-claude.brewcode.app/brewcode/skills/convention/) | [superreview](https://doc-claude.brewcode.app/brewcode/skills/superreview/) | [architect](https://doc-claude.brewcode.app/brewcode/agents/architect/) | [developer](https://doc-claude.brewcode.app/brewcode/agents/developer/) | [reviewer](https://doc-claude.brewcode.app/brewcode/agents/reviewer/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [guide](https://doc-claude.brewcode.app/brewdoc/skills/guide/) | [text-human](https://doc-claude.brewcode.app/brewtools/skills/text-human/) | [getting-started](https://doc-claude.brewcode.app/getting-started/) | [installation](https://doc-claude.brewcode.app/installation/) | [quickstart](https://doc-claude.brewcode.app/quickstart/)
+> Docs: [brewcode overview](https://doc-claude.brewcode.app/brewcode/overview/) | [brewcode skills](https://doc-claude.brewcode.app/brewcode/skills/) | [brewcode agents](https://doc-claude.brewcode.app/brewcode/agents/) | [brewcode hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | spec | [convention-setup](https://doc-claude.brewcode.app/brewcode/skills/convention-setup/) | [superreview](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | architect | developer | reviewer | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | guide | [text-human](https://doc-claude.brewcode.app/brewtools/skills/text-human/) | [getting-started](https://doc-claude.brewcode.app/getting-started/) | [installation](https://doc-claude.brewcode.app/installation/) | [quickstart](https://doc-claude.brewcode.app/quickstart/)
 
 ### brewcode
 
@@ -1255,7 +1292,7 @@
 
 > Repo-wide prompt audit (delegation contract, scope guards, dead-weight removal) **plus** subagent resource limits: verified frontmatter contract, calibrated `maxTurns` across all agents, and the new `agent-deadline` skill — a soft wall-clock deadline that forces a subagent to finalize instead of being killed.
 
-> Docs: [brewcode hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | [spec](https://doc-claude.brewcode.app/brewcode/skills/spec/) | [grepai](https://doc-claude.brewcode.app/brewcode/skills/grepai/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [agents](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [rules](https://doc-claude.brewcode.app/brewcode/skills/rules/) | [teams](https://doc-claude.brewcode.app/brewcode/skills/teams/) | [superreview](https://doc-claude.brewcode.app/brewcode/skills/superreview/) | [convention](https://doc-claude.brewcode.app/brewcode/skills/convention/) | [e2e](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [developer](https://doc-claude.brewcode.app/brewcode/agents/developer/) | [tester](https://doc-claude.brewcode.app/brewcode/agents/tester/) | [reviewer](https://doc-claude.brewcode.app/brewcode/agents/reviewer/) | [architect](https://doc-claude.brewcode.app/brewcode/agents/architect/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [bash-expert](https://doc-claude.brewcode.app/brewcode/agents/bash-expert/) | [memory](https://doc-claude.brewcode.app/brewdoc/skills/memory/) | [docsync](https://doc-claude.brewcode.app/brewdoc/skills/docsync/) | [my-claude](https://doc-claude.brewcode.app/brewdoc/skills/my-claude/) | [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/) | [guide](https://doc-claude.brewcode.app/brewdoc/skills/guide/) | [manager](https://doc-claude.brewcode.app/brewtools/skills/manager/) | [prompt-injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/) | [task-board-init](https://doc-claude.brewcode.app/brewtools/skills/task-board-init/) | [text-human](https://doc-claude.brewcode.app/brewtools/skills/text-human/) | [text-optimize](https://doc-claude.brewcode.app/brewtools/skills/text-optimize/) | [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/) | [secrets-scan](https://doc-claude.brewcode.app/brewtools/skills/secrets-scan/) | [ssh](https://doc-claude.brewcode.app/brewtools/skills/ssh/) | [deploy](https://doc-claude.brewcode.app/brewtools/skills/deploy/) | [think-short](https://doc-claude.brewcode.app/brewtools/skills/think-short/) | [agent-deadline](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline/) | [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) | [ssh-admin](https://doc-claude.brewcode.app/brewtools/agents/ssh-admin/) | [deploy-admin](https://doc-claude.brewcode.app/brewtools/agents/deploy-admin/) | [text-optimizer](https://doc-claude.brewcode.app/brewtools/agents/text-optimizer/)
+> Docs: [brewcode hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | spec | grepai | [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [agents](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [rules](https://doc-claude.brewcode.app/brewcode/skills/rules/) | [teams](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) | [superreview](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | [convention-setup](https://doc-claude.brewcode.app/brewcode/skills/convention-setup/) | [e2e](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | developer | tester | reviewer | architect | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [bash-expert](https://doc-claude.brewcode.app/brewcode/agents/bash-expert/) | memory | [docsync](https://doc-claude.brewcode.app/brewdoc/skills/docsync-setup/) | [my-claude](https://doc-claude.brewcode.app/brewdoc/skills/my-claude/) | [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/) | guide | [manager](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [prompt-injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/) | [task-board-init](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) | [text-human](https://doc-claude.brewcode.app/brewtools/skills/text-human/) | [text-optimize](https://doc-claude.brewcode.app/brewtools/skills/text-optimize/) | [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/) | [secrets-scan](https://doc-claude.brewcode.app/brewtools/skills/secrets-scan/) | [ssh](https://doc-claude.brewcode.app/brewtools/skills/ssh/) | [deploy](https://doc-claude.brewcode.app/brewtools/skills/deploy/) | [agent-deadline](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline-setup/) | [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) | [ssh-admin](https://doc-claude.brewcode.app/brewtools/agents/ssh-admin/) | [deploy-admin](https://doc-claude.brewcode.app/brewtools/agents/deploy-admin/) | [text-optimizer](https://doc-claude.brewcode.app/brewtools/agents/text-optimizer/)
 
 ### brewcode
 
@@ -1296,14 +1333,13 @@
 - **agents:** `## Scope guard` in text-optimizer, ssh-admin, deploy-admin — ssh-admin and deploy-admin additionally split per host, repo, and environment
 
 #### Fixed
-- **think-short:** the global install/remove merge parsed `settings.json` inside a swallowing `try/catch` and then wrote unconditionally — one stray comma in `~/.claude/settings.json` and the whole file (model, env, the entire `Bash(rm *)` deny-list, every foreign hook) was replaced by the two think-short entries. It now aborts and leaves the file byte-identical. Hook dedupe also compares full paths instead of basenames, so reinstalling into a different hooks dir no longer leaves a settings entry pointing at a deleted file
 - **task-board-init:** frontmatter `name:` was bare `task-board-init`, missing the `brewtools:` prefix
 - **text-human:** frontmatter was invalid YAML (unquoted `description`/`argument-hint` containing `--` and `:`); both now quoted
 - **provider-switch:** `Task` added to `allowed-tools` — phase P9 spawns 5 Tasks and previously could not
 
 #### Changed
 - **manager:** skill description 604 -> 231 chars, triggers preserved
-- **ssh, deploy, secrets-scan, think-short, text-optimize, plugin-update:** generic `gh` / `docker` / `systemd` command tables and stack-detection boilerplate removed
+- **ssh, deploy, secrets-scan, text-optimize, plugin-update:** generic `gh` / `docker` / `systemd` command tables and stack-detection boilerplate removed
 
 ## v4.2.4 (2026-07-30)
 
@@ -1329,7 +1365,7 @@
 
 ## v4.2.2 (2026-07-20)
 
-> Docs: [task-board-init](https://doc-claude.brewcode.app/brewtools/skills/task-board-init/) | [bc-grepai-configurator](https://doc-claude.brewcode.app/brewcode/agents/bc-grepai-configurator/)
+> Docs: [task-board-init](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) | bc-grepai-configurator
 
 ### brewtools
 
@@ -1390,7 +1426,7 @@
 
 > The legacy `auto-sync` skill, its `bd-auto-sync-processor` agent, the old `auto-sync:*` frontmatter tag mechanism (swept from ~44 files), and the skill-creator template injection were removed completely.
 
-> Docs: [docsync](https://doc-claude.brewcode.app/brewdoc/skills/docsync/) | [brewdoc overview](https://doc-claude.brewcode.app/brewdoc/overview/)
+> Docs: [docsync](https://doc-claude.brewcode.app/brewdoc/skills/docsync-setup/) | [brewdoc overview](https://doc-claude.brewcode.app/brewdoc/overview/)
 
 ### brewdoc
 #### Added
@@ -1412,16 +1448,15 @@
 
 ## v4.0.5 (2026-07-05)
 
-> New Manager codeword `++a` (Architecture-first) plus a think-short comment-discipline gate. `++a` is a third independent codeword group alongside `++m` (manager) and `++rr`/`++r` (review): it injects a `[DIRECTIVE: ARCHITECTURE-FIRST]` block that forces an architecture pass before implementation — design fitting the project's existing architecture/patterns/rules, robust + scalable + simple (no over-engineering), reuse-first, clean seams. Mode-agnostic (same block in normal and plan mode; in plan mode it is written into the plan) and combinable with `++m`/`++rr`/`++r`. think-short now tells the model to comment like a human, not an AI — fewer comments, only where non-obvious, docstrings/JavaDoc/PyDoc kept.
+> New Manager codeword `++a` (Architecture-first). `++a` is a third independent codeword group alongside `++m` (manager) and `++rr`/`++r` (review): it injects a `[DIRECTIVE: ARCHITECTURE-FIRST]` block that forces an architecture pass before implementation — design fitting the project's existing architecture/patterns/rules, robust + scalable + simple (no over-engineering), reuse-first, clean seams. Mode-agnostic (same block in normal and plan mode; in plan mode it is written into the plan) and combinable with `++m`/`++rr`/`++r`.
 
-> Docs: [manager](https://doc-claude.brewcode.app/brewtools/skills/manager/) | [prompt-injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/) | [think-short](https://doc-claude.brewcode.app/brewtools/skills/think-short/)
+> Docs: [manager](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [prompt-injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/)
 
 ### brewtools
 #### Added
 - **manager:** `++a` codeword — Architecture-first directive. Independent third group (combines with `++m` and the review group); injects `references/architect.md` (`[DIRECTIVE: ARCHITECTURE-FIRST]`); mode-agnostic, written into the plan in plan mode. Hook detection + injection order manager -> architect -> review; `architect` added to `VALID_MODES`
 
 #### Changed
-- **think-short:** injected prompt gains a comment-discipline gate — comment like a human not an AI: fewer comments, only non-obvious logic / public APIs / docstrings; stop line-by-line AI-slop narration; docstrings (JavaDoc/PyDoc) kept, just terser
 
 ---
 
@@ -1429,7 +1464,7 @@
 
 > Strengthens Manager mode so the role survives the plan/exit boundary. The plan-mode block now forces the role INTO the plan itself (PREAMBLE restating `[ROLE: MANAGER]` + protocol, explicit `STEP 0` = re-assume role + build the whole TaskGraph + delegate on exit), because the injected hook context dies when plan mode ends while the plan document persists. Both `full` and `planmode` prompt blocks recompacted (~35% shorter) without losing meaning. brewcode's `forced-eval` reminder gains a standing `[ROLE]` manager delegation line.
 
-> Docs: [manager](https://doc-claude.brewcode.app/brewtools/skills/manager/)
+> Docs: [manager](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/)
 
 ### brewtools
 #### Changed
@@ -1444,9 +1479,9 @@
 
 ## v4.0.3 (2026-07-01)
 
-> Restricts 15 skills across brewcode/brewdoc/brewtools to user-only invocation (`disable-model-invocation: true`) — side-effect or config-mutating skills (create agent/skill/team, generate spec/e2e/convention docs, sync rules, optimize memory, document installation, manager mode, plugin-update, provider-switch, task-board-init, think-short, guide) no longer auto-trigger from LLM description matching; still callable via `/plugin:skill`.
+> Restricts side-effect or config-mutating skills across brewcode/brewdoc/brewtools to user-only invocation (`disable-model-invocation: true`) (create agent/skill/team, generate spec/e2e/convention docs, sync rules, optimize memory, document installation, manager mode, plugin-update, provider-switch, task-board-init, guide) no longer auto-trigger from LLM description matching; still callable via `/plugin:skill`.
 
-> Docs: [agents](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [convention](https://doc-claude.brewcode.app/brewcode/skills/convention/) | [e2e](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [rules](https://doc-claude.brewcode.app/brewcode/skills/rules/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [spec](https://doc-claude.brewcode.app/brewcode/skills/spec/) | [teams](https://doc-claude.brewcode.app/brewcode/skills/teams/) | [guide](https://doc-claude.brewcode.app/brewdoc/skills/guide/) | [memory](https://doc-claude.brewcode.app/brewdoc/skills/memory/) | [my-claude](https://doc-claude.brewcode.app/brewdoc/skills/my-claude/) | [manager](https://doc-claude.brewcode.app/brewtools/skills/manager/) | [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) | [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/) | [task-board-init](https://doc-claude.brewcode.app/brewtools/skills/task-board-init/) | [think-short](https://doc-claude.brewcode.app/brewtools/skills/think-short/)
+> Docs: [agents](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [convention-setup](https://doc-claude.brewcode.app/brewcode/skills/convention-setup/) | [e2e](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [rules](https://doc-claude.brewcode.app/brewcode/skills/rules/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | spec | [teams](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) | guide | memory | [my-claude](https://doc-claude.brewcode.app/brewdoc/skills/my-claude/) | [manager](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) | [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/) | [task-board-init](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/)
 
 ### brewcode
 #### Changed
@@ -1458,19 +1493,7 @@
 
 ### brewtools
 #### Changed
-- **manager, plugin-update, provider-switch, task-board-init, think-short:** added `disable-model-invocation: true` — user-invoked only, prevents accidental config/hook/provider mutation from ambiguous LLM-detected triggers
-
----
-
-## v4.0.2 (2026-06-30)
-
-> Patch fix — think-short's own smoke test was broken since the v4.0.0 family-roots purge.
-
-> Docs: [think-short](https://doc-claude.brewcode.app/brewtools/skills/think-short/)
-
-### brewtools
-#### Fixed
-- **think-short:** `SKILL.md` still listed `family-roots.mjs` as a required asset and smoke-tested it, but the file was deleted in v4.0.0's family-roots purge — every install hit a false `❌ missing family-roots.mjs`. Removed the 3 stale references; asset list and smoke test now match the actual 3-script + prompt.md asset set.
+- **manager, plugin-update, provider-switch, task-board-init:** added `disable-model-invocation: true` — user-invoked only, prevents accidental config/hook/provider mutation from ambiguous LLM-detected triggers
 
 ---
 
@@ -1478,7 +1501,7 @@
 
 > Docs-only follow-up to v4.0.0 — purges leftover v3.19.0 task-system documentation debt from the site so docs match the real plugin.
 
-> Docs: [brewcode overview](https://doc-claude.brewcode.app/brewcode/overview/) | [agents](https://doc-claude.brewcode.app/brewcode/agents/) | [grepai](https://doc-claude.brewcode.app/brewcode/skills/grepai/) | [superreview](https://doc-claude.brewcode.app/brewcode/skills/superreview/) | [getting-started](https://doc-claude.brewcode.app/getting-started/) | [quickstart](https://doc-claude.brewcode.app/quickstart/) | [installation](https://doc-claude.brewcode.app/installation/)
+> Docs: [brewcode overview](https://doc-claude.brewcode.app/brewcode/overview/) | [agents](https://doc-claude.brewcode.app/brewcode/agents/) | grepai | [superreview](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | [getting-started](https://doc-claude.brewcode.app/getting-started/) | [quickstart](https://doc-claude.brewcode.app/quickstart/) | [installation](https://doc-claude.brewcode.app/installation/)
 
 ### docs
 #### Removed
@@ -1496,7 +1519,7 @@
 
 > **MAJOR / breaking** — injection-hook architecture removed across all plugins; plugin-root now resolved natively via `${CLAUDE_PLUGIN_ROOT}`.
 
-> Docs: [brewcode hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | [brewcode overview](https://doc-claude.brewcode.app/brewcode/overview/) | [grepai](https://doc-claude.brewcode.app/brewcode/skills/grepai/) | [superreview](https://doc-claude.brewcode.app/brewcode/skills/superreview/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [brewdoc hooks](https://doc-claude.brewcode.app/brewdoc/hooks/) | [brewtools hooks](https://doc-claude.brewcode.app/brewtools/hooks/) | [think-short](https://doc-claude.brewcode.app/brewtools/skills/think-short/) | [manager](https://doc-claude.brewcode.app/brewtools/skills/manager/)
+> Docs: [brewcode hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | [brewcode overview](https://doc-claude.brewcode.app/brewcode/overview/) | grepai | [superreview](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | brewdoc hooks | brewtools hooks | [manager](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/)
 
 ### brewcode
 #### Removed
@@ -1521,16 +1544,15 @@
 
 ### brewtools
 #### Removed
-- **pre-task.mjs + lib/family-roots.mjs:** deleted; `skills/think-short/assets/family-roots.mjs` removed
+- **pre-task.mjs + lib/family-roots.mjs:** deleted
 - **skills debate, skill-toggle, agent-toggle:** removed entirely (incl. `_shared/toggle`)
 #### Changed
 - **session-start.mjs:** stripped of `BT_PLUGIN_ROOT` injection + session-id display (manager HARD-wall awareness kept)
-- **think-short:** task hook injects `${injection}\n\n${tool_input.prompt}`, copies 4 files; E2E suite updated (family-roots tests removed)
 - brewtools registers 2 hooks (session-start, manager-prompt)
 
 ### docs
 #### Changed
-- root `CLAUDE.md`, all plugin READMEs, `brewcode/docs/*`, `brewdoc/docs/hooks.md`, `web/docs` MDX (hooks/overview/think-short/grepai/skills/agents) and `brewdoc/skills/guide/references/*` updated to new hook inventory + native `${CLAUDE_PLUGIN_ROOT}` + grepai self-install + Mode Switcher removal
+- root `CLAUDE.md`, all plugin READMEs, `brewcode/docs/*`, `brewdoc/docs/hooks.md`, `web/docs` MDX (hooks/overview/grepai/skills/agents) and `brewdoc/skills/guide/references/*` updated to new hook inventory + native `${CLAUDE_PLUGIN_ROOT}` + grepai self-install + Mode Switcher removal
 
 ---
 
@@ -1579,7 +1601,7 @@
 
 ## v3.19.1 (2026-06-29)
 
-> Docs: [brewcode overview](https://doc-claude.brewcode.app/brewcode/overview/) | [setup skill](https://doc-claude.brewcode.app/brewcode/skills/setup/) | [convention skill](https://doc-claude.brewcode.app/brewcode/skills/convention/) | [e2e skill](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [rules skill](https://doc-claude.brewcode.app/brewcode/skills/rules/) | [skills skill](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [agents skill](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [teams skill](https://doc-claude.brewcode.app/brewcode/skills/teams/) | [teardown skill](https://doc-claude.brewcode.app/brewcode/skills/teardown/) | [standards-review skill](https://doc-claude.brewcode.app/brewcode/skills/standards-review/)
+> Docs: [brewcode overview](https://doc-claude.brewcode.app/brewcode/overview/) | setup skill | [convention-setup](https://doc-claude.brewcode.app/brewcode/skills/convention-setup/) | [e2e skill](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [rules skill](https://doc-claude.brewcode.app/brewcode/skills/rules/) | [skills skill](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [agents skill](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [teams skill](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) | teardown skill | standards-review skill
 
 > Partial revert of v3.19.0: only `plan` + `start` stay removed. Everything else the strip removed is restored.
 
@@ -1598,7 +1620,7 @@
 
 ## v3.19.0 (2026-06-29)
 
-> Docs: [brewcode overview](https://doc-claude.brewcode.app/brewcode/overview/) | [spec skill](https://doc-claude.brewcode.app/brewcode/skills/spec/) | [grepai skill](https://doc-claude.brewcode.app/brewcode/skills/grepai/)
+> Docs: [brewcode overview](https://doc-claude.brewcode.app/brewcode/overview/) | spec skill | grepai skill
 
 ### brewcode
 #### Removed
@@ -1677,7 +1699,7 @@ The `manager-prompt.mjs` hook now injects BOTH codeword groups (manager + review
 
 ## v3.18.0 (2026-06-27)
 
-> Docs: [brewui overview](https://doc-claude.brewcode.app/brewui/overview/) | [brewui skills](https://doc-claude.brewcode.app/brewui/skills/) | [brewcode agents](https://doc-claude.brewcode.app/brewcode/agents/) | [brewdoc auto-sync](https://doc-claude.brewcode.app/brewdoc/skills/auto-sync/)
+> Docs: [brewui overview](https://doc-claude.brewcode.app/brewui/overview/) | [brewui skills](https://doc-claude.brewcode.app/brewui/skills/) | [brewcode agents](https://doc-claude.brewcode.app/brewcode/agents/) | brewdoc auto-sync
 
 Documentation sync to reality: internal agents hidden from public docs, brewui shipped as an empty-but-installable placeholder, and skill/agent counts recomputed across all doc levels. Skill total is now 32; shipped agents 16.
 
@@ -1707,7 +1729,7 @@ Documentation sync to reality: internal agents hidden from public docs, brewui s
 
 ## v3.17.0 (2026-06-27)
 
-> Docs: [brewcode hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | [brewtools manager](https://doc-claude.brewcode.app/brewtools/skills/manager/)
+> Docs: [brewcode hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | [brewtools manager](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/)
 
 Hook modernization for Claude Code SDK 2.1.195. All changes are backward-compatible and presence-guarded -- zero behavior regression.
 
@@ -1795,7 +1817,7 @@ Docs-only release: full 3-level documentation sync.
 
 ## v3.15.0 (2026-06-14)
 
-> Docs: [brewtools:manager](https://doc-claude.brewcode.app/brewtools/skills/manager/) | [brewtools prompt-injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/)
+> Docs: [brewtools:manager](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [brewtools prompt-injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/)
 
 ### brewtools
 
@@ -1809,18 +1831,18 @@ Docs-only release: full 3-level documentation sync.
 
 ## v3.14.5 (2026-06-14)
 
-> Docs: [brewtools:manager](https://doc-claude.brewcode.app/brewtools/skills/manager/) | [brewtools:think-short](https://doc-claude.brewcode.app/brewtools/skills/think-short/)
+> Docs: [brewtools:manager](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/)
 
 ### brewtools
 
 #### Fixed
-- **docs:** removed Russian text that had leaked into rendered examples and trigger tables on the manager and think-short pages -- all examples and invocations are now English. The skills still accept Russian natural language; that is now noted in one English line per page pointing to the skill's SKILL.md for the full RU+EN trigger list. Repo-wide sweep confirms zero Cyrillic in any docs MDX.
+- **docs:** removed Russian text that had leaked into rendered examples and trigger tables on the manager page -- all examples and invocations are now English. The skill still accepts Russian natural language; that is now noted in one English line pointing to the skill's SKILL.md for the full RU+EN trigger list. Repo-wide sweep confirms zero Cyrillic in any docs MDX.
 
 ---
 
 ## v3.14.4 (2026-06-14)
 
-> Docs: [brewtools:manager](https://doc-claude.brewcode.app/brewtools/skills/manager/)
+> Docs: [brewtools:manager](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/)
 
 ### brewtools
 
@@ -1831,7 +1853,7 @@ Docs-only release: full 3-level documentation sync.
 
 ## v3.14.3 (2026-06-14)
 
-> Docs: [brewtools:manager](https://doc-claude.brewcode.app/brewtools/skills/manager/) | [Prompt Injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/)
+> Docs: [brewtools:manager](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [Prompt Injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/)
 
 ### brewtools
 
@@ -1853,7 +1875,7 @@ Docs-only release: full 3-level documentation sync.
 
 ## v3.14.1 (2026-06-14)
 
-> Docs: [Prompt Injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/) | [brewtools:manager](https://doc-claude.brewcode.app/brewtools/skills/manager/)
+> Docs: [Prompt Injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/) | [brewtools:manager](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/)
 
 ### brewtools
 
@@ -1867,7 +1889,7 @@ Docs-only release: full 3-level documentation sync.
 
 ## v3.14.0 (2026-06-14)
 
-> Docs: [brewtools:task-board-init](https://doc-claude.brewcode.app/brewtools/skills/task-board-init/) | [brewtools:manager](https://doc-claude.brewcode.app/brewtools/skills/manager/)
+> Docs: [brewtools:task-board-init](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) | [brewtools:manager](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/)
 
 ### brewtools
 
@@ -1881,7 +1903,7 @@ Docs-only release: full 3-level documentation sync.
 
 ## v3.13.0 (2026-06-14)
 
-> Docs: [brewtools:manager](https://doc-claude.brewcode.app/brewtools/skills/manager/)
+> Docs: [brewtools:manager](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/)
 
 ### brewtools
 
@@ -1933,7 +1955,7 @@ Docs-only release: full 3-level documentation sync.
 
 ## v3.12.1 (2026-06-13)
 
-> Docs: [brewtools/skills/manager](https://doc-claude.brewcode.app/brewtools/skills/manager/)
+> Docs: [brewtools/skills/manager](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/)
 
 > **Theme:** multi-agent review hardening of v3.12.0 `brewtools:manager` — security + correctness fixes and repo-wide count consistency.
 
@@ -1953,7 +1975,7 @@ Docs-only release: full 3-level documentation sync.
 
 ## v3.12.0 (2026-06-13)
 
-> Docs: [brewtools/skills/manager](https://doc-claude.brewcode.app/brewtools/skills/manager/)
+> Docs: [brewtools/skills/manager](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/)
 
 > **Theme:** new `brewtools:manager` skill + a `UserPromptSubmit` hook that turns a short codeword into an on-demand, auto-injected "delegate-everything" Manager prompt — controllable by natural language, editable, and surviving plugin updates.
 
@@ -2049,7 +2071,7 @@ Docs-only release: full 3-level documentation sync.
 
 ## v3.9.0 (2026-05-12)
 
-> Docs: [brewcode/skills/start](https://doc-claude.brewcode.app/brewcode/skills/start/) | [brewcode/agents/reviewer](https://doc-claude.brewcode.app/brewcode/agents/reviewer/) | [brewcode/agents/architect](https://doc-claude.brewcode.app/brewcode/agents/architect/) | [brewcode/agents/developer](https://doc-claude.brewcode.app/brewcode/agents/developer/) | [brewtools/skills/plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/)
+> Docs: brewcode/skills/start | brewcode/agents/reviewer | brewcode/agents/architect | brewcode/agents/developer | [brewtools/skills/plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/)
 
 ### brewcode
 
@@ -2065,7 +2087,6 @@ Docs-only release: full 3-level documentation sync.
 #### Added
 - **plugin-update Phase 2b (token-details table):** `plugin-update/SKILL.md` adds a per-plugin token-cost table populated from `claude plugin --help` exit-code precheck; degrades gracefully if `--help` is unavailable on the running CC version.
 - **plugin-update Phase 5b (prune):** post-update prune of stale plugin cache versions, gated by the same `--help` precheck. No-op on unsupported CC versions.
-- **effort=low auto-enables think-short=light:** `brewtools/hooks/session-start.mjs` and `pre-task.mjs` detect effort.level=low at session/task boundaries and auto-enable `think-short=light` for the session, guarded by a session-marker to stay idempotent across reruns.
 
 ### docs
 
@@ -2079,7 +2100,7 @@ Docs-only release: full 3-level documentation sync.
 
 ## v3.8.0 (2026-05-12)
 
-> Docs: [brewtools/skills/skill-toggle](https://doc-claude.brewcode.app/brewtools/skills/skill-toggle/) | [brewcode/skills/grepai](https://doc-claude.brewcode.app/brewcode/skills/grepai/) | [brewcode/skills/teardown](https://doc-claude.brewcode.app/brewcode/skills/teardown/)
+> Docs: brewtools/skills/skill-toggle | brewcode/skills/grepai | brewcode/skills/teardown
 
 ### All plugins
 
@@ -2119,20 +2140,19 @@ Docs-only release: full 3-level documentation sync.
 
 ## v3.7.19 (2026-05-12)
 
-> Docs: [brewtools/skills/think-short](https://doc-claude.brewcode.app/brewtools/skills/think-short/) | [brewtools/plugin](https://doc-claude.brewcode.app/brewtools/)
+> Docs: [brewtools/plugin](https://doc-claude.brewcode.app/brewtools/overview/)
 
 ### brewtools
 
 #### Fixed
-- **plugin schema:** removed `config` block from `plugin.json` (Claude Code 2.1.139 dropped support; was a BLOCKER causing schema validation to fail). think-short defaults relocated to inline `DEFAULT_THINK_SHORT` constant in `helpers/state.mjs`. Env-var override `THINK_SHORT_DEFAULT` and global/project state files unchanged.
-- **think-short env:** `process.env.CLAUDE_SESSION_ID` → `process.env.CLAUDE_CODE_SESSION_ID` (3 sites in `SKILL.md`). Template variable `${CLAUDE_SESSION_ID}` unchanged.
+- **plugin schema:** removed `config` block from `plugin.json` (Claude Code 2.1.139 dropped support; was a BLOCKER causing schema validation to fail).
 - **docs:** updated fallback-chain documentation in MDX and SKILL.md to reflect removed plugin.json config block.
 
 ---
 
 ## v3.7.18 (2026-05-12)
 
-> Docs: [brewcode:setup](https://doc-claude.brewcode.app/brewcode/skills/setup/)
+> Docs: brewcode:setup
 
 ### brewcode
 #### Fixed
@@ -2168,7 +2188,7 @@ Docs-only release: full 3-level documentation sync.
 
 ## v3.7.15 (2026-04-29)
 
-> Docs: [brewcode:setup](https://doc-claude.brewcode.app/brewcode/skills/setup/) | [bc-rules-organizer](https://doc-claude.brewcode.app/brewcode/agents/bc-rules-organizer/)
+> Docs: brewcode:setup | [bc-rules-organizer](https://doc-claude.brewcode.app/brewcode/agents/bc-rules-organizer/)
 
 ### brewcode
 #### Fixed
@@ -2181,7 +2201,7 @@ Docs-only release: full 3-level documentation sync.
 
 ## v3.7.14 (2026-04-29)
 
-> Docs: [brewcode:setup](https://doc-claude.brewcode.app/brewcode/skills/setup/) | [bc-rules-organizer](https://doc-claude.brewcode.app/brewcode/agents/bc-rules-organizer/) | [bc-coordinator](https://doc-claude.brewcode.app/brewcode/agents/bc-coordinator/)
+> Docs: brewcode:setup | [bc-rules-organizer](https://doc-claude.brewcode.app/brewcode/agents/bc-rules-organizer/) | bc-coordinator
 
 ### brewcode
 #### Fixed
@@ -2268,12 +2288,10 @@ Docs-only release: full 3-level documentation sync.
 
 ## v3.7.7 (2026-04-22)
 
-> Docs: [brewtools:think-short](https://doc-claude.brewcode.app/brewtools/skills/think-short/) | [brewtools:agent-toggle](https://doc-claude.brewcode.app/brewtools/skills/agent-toggle/) | [brewtools:skill-toggle](https://doc-claude.brewcode.app/brewtools/skills/skill-toggle/) | [brewui:glm-design-to-code](https://doc-claude.brewcode.app/brewui/skills/glm-design-to-code/) | [brewui:image-gen](https://doc-claude.brewcode.app/brewui/skills/image-gen/) | [brewtools:text-optimizer](https://doc-claude.brewcode.app/brewtools/agents/text-optimizer/) | [brewui:glm-zai-specialist](https://doc-claude.brewcode.app/brewui/agents/glm-zai-specialist/) | [brewcode:hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [brewcode:skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [brewcode:agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [brewcode:tester](https://doc-claude.brewcode.app/brewcode/agents/tester/) | [brewcode:developer](https://doc-claude.brewcode.app/brewcode/agents/developer/)
+> Docs: brewtools:agent-toggle | brewtools:skill-toggle | brewui:glm-design-to-code | brewui:image-gen | [brewtools:text-optimizer](https://doc-claude.brewcode.app/brewtools/agents/text-optimizer/) | brewui:glm-zai-specialist | [brewcode:hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [brewcode:skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [brewcode:agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | brewcode:tester | brewcode:developer
 
 ### brewtools
 #### Changed
-- **think-short:** profile directives compressed with zero semantic loss. `light` ~35 -> ~20 tok, `medium` ~70 -> ~35 tok, `aggressive` ~200 -> ~120 tok. Removed redundant phrase examples, README-level justifications after dashes, duplicated directives. Critical `User instructions always override these rules` retained in aggressive. All profiles now ASCII-only (em-dash -> hyphen), matching the profile's own rule.
-- **think-short (SKILL.md):** description frontmatter compressed ~480 -> ~60 tokens. English-only triggers. Lead sentence <=160 chars.
 - **agent-toggle / skill-toggle (SKILL.md):** descriptions compressed ~255 -> ~45 tokens each. English-only triggers.
 - **text-optimizer (agent):** description tuned to ~170 tokens - kept 2 examples since it is a frequently invoked agent.
 - **session-start hook:** dropped redundant `brewtools: active | session: X` line from `additionalContext` (retained in `systemMessage` UI log). Saves ~30 tokens per session.
@@ -2290,36 +2308,6 @@ Docs-only release: full 3-level documentation sync.
 - **tester / developer (agents):** descriptions compressed ~35%, example blocks removed (triggers already convey intent).
 - **skill-creator / agent-creator:** new "Description Budget" section enforces <=100 tok (skills) / <=150 tok (agents) default, English-only triggers, <=1 example for future creations.
 - **skills/skills/SKILL.md / skills/agents/SKILL.md:** creation flows now carry the same description-budget rule inline.
-
----
-
-## v3.7.6 (2026-04-21)
-
-> Docs: [brewtools:think-short](https://doc-claude.brewcode.app/brewtools/skills/think-short/)
-
-### brewtools
-#### Changed
-- **think-short:** profiles extended with tool discipline and "think before acting" directives. `light` now includes "think through edits before executing"; `medium` gains Grep-before-Read, Edit-over-Write, parallel independent calls, no re-Read of just-edited files; `aggressive` adds bundle-edits, `replace_all` for N-identical edits, and gather-then-parallel-Edits pattern. Output-style directives retained in all profiles. Injection points unchanged (SessionStart + PreToolUse:Task). README profile table updated with new token estimates.
-
----
-
-## v3.7.5 (2026-04-20)
-
-> Docs: [brewtools:think-short](https://doc-claude.brewcode.app/brewtools/skills/think-short/)
-
-### brewtools
-#### Fixed
-- **think-short:** SKILL.md Bash examples now work when invoked via slash command from the main conversation. Fixes: (1) `$CLAUDE_PLUGIN_ROOT` not inherited by Bash tool — added dynamic `BT_ROOT` resolver (glob newest cache dir, no hardcoded version), (2) imports realigned with actual helper exports (`writeState`, `resolveEffectiveState`, `getPaths`, `safeWriteJson`), (3) removed double `think-short think-short:` log prefix by switching to the `log` re-export from `state.mjs`, (4) P2 mutation simplified to a single `writeState(scope, patch, cwd)` call. Smoke-test block appended at the end of SKILL.md. Hooks and helpers unchanged.
-
----
-
-## v3.7.4 (2026-04-20)
-
-> Docs: [brewtools:think-short](https://doc-claude.brewcode.app/brewtools/skills/think-short/)
-
-### brewtools
-#### Added
-- **think-short:** new skill — toggle terse-output mode for Claude Code sessions. Injects brevity directives into the main conversation (SessionStart hook) and into sub-agent prompts (PreToolUse:Task hook). 3 profiles — `light` / `medium` / `aggressive`. Commands: `on`, `off`, `profile X`, `status`, `blacklist add|remove`. NL parsing (RU+EN): `включись`, `уровень 3`, `агрессивный`, `level 2`, `максимально`, etc. Default blacklist skips agents that need verbose output (`debate`, `docs-writer`, `architect`). State merged via chain `env → project → global → plugin.json → hardcoded`. Atomic state writes (O_NOFOLLOW, 0600). Cache-friendly — SessionStart profile is injected once and cached; PreToolUse:Task prepends first 2 lines of the profile fresh per sub-agent spawn. Disabled by default.
 
 ---
 
@@ -2377,7 +2365,7 @@ Docs-only release: full 3-level documentation sync.
 
 ## v3.6.2 (2026-04-16)
 
-> Docs: [skill-toggle](https://doc-claude.brewcode.app/brewtools/skills/skill-toggle/) | [agent-toggle](https://doc-claude.brewcode.app/brewtools/skills/agent-toggle/)
+> Docs: skill-toggle | agent-toggle
 
 ### brewtools
 #### Added
@@ -2388,7 +2376,7 @@ Docs-only release: full 3-level documentation sync.
 
 ## v3.6.1 (2026-04-16)
 
-> Docs: [skill-toggle](https://doc-claude.brewcode.app/brewtools/skills/skill-toggle/) | [agent-toggle](https://doc-claude.brewcode.app/brewtools/skills/agent-toggle/)
+> Docs: skill-toggle | agent-toggle
 
 ### brewtools
 #### Fixed
@@ -2398,7 +2386,7 @@ Docs-only release: full 3-level documentation sync.
 
 ## v3.6.0 (2026-04-16)
 
-> Docs: [skill-toggle](https://doc-claude.brewcode.app/brewtools/skills/skill-toggle/) | [agent-toggle](https://doc-claude.brewcode.app/brewtools/skills/agent-toggle/)
+> Docs: skill-toggle | agent-toggle
 
 ### brewtools
 #### Added
@@ -2569,7 +2557,7 @@ Workaround for upstream [#47747](https://github.com/anthropics/claude-code/issue
 
 ## v3.4.70 (2026-04-11)
 
-> Docs: [brewdoc:my-claude](https://doc-claude.brewcode.app/brewdoc/skills/my-claude/) | [brewdoc:guide](https://doc-claude.brewcode.app/brewdoc/skills/guide/) | [brewdoc:auto-sync](https://doc-claude.brewcode.app/brewdoc/skills/auto-sync/)
+> Docs: [brewdoc:my-claude](https://doc-claude.brewcode.app/brewdoc/skills/my-claude/) | brewdoc:guide | brewdoc:auto-sync
 
 ### brewdoc
 #### Fixed
@@ -2604,7 +2592,7 @@ Workaround for upstream [#47747](https://github.com/anthropics/claude-code/issue
 
 ## v3.4.68 (2026-04-11)
 
-> Docs: [review (dynamic)](https://doc-claude.brewcode.app/brewcode/skills/review/) | [setup](https://doc-claude.brewcode.app/brewcode/skills/setup/) | [debate](https://doc-claude.brewcode.app/brewtools/skills/debate/)
+> Docs: [review (dynamic)](https://doc-claude.brewcode.app/brewcode/skills/review/) | setup | debate
 
 ### docs
 #### Added
@@ -2774,7 +2762,7 @@ Workaround for upstream [#47747](https://github.com/anthropics/claude-code/issue
 
 ## v3.4.54 (2026-04-10)
 
-> Docs: [guide](https://doc-claude.brewcode.app/brewdoc/guide/) | [FAQ](https://doc-claude.brewcode.app/faq/)
+> Docs: guide | [FAQ](https://doc-claude.brewcode.app/faq/)
 
 ### brewdoc
 #### Changed
@@ -2811,7 +2799,7 @@ Workaround for upstream [#47747](https://github.com/anthropics/claude-code/issue
 
 ## v3.4.52 (2026-04-10)
 
-> Docs: [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) | [FAQ](https://doc-claude.brewcode.app/faq/) | [installation](https://doc-claude.brewcode.app/installation/) | [guide](https://doc-claude.brewcode.app/brewdoc/skills/guide/)
+> Docs: [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) | [FAQ](https://doc-claude.brewcode.app/faq/) | [installation](https://doc-claude.brewcode.app/installation/) | guide
 
 ### brewtools
 #### Added
@@ -2868,7 +2856,7 @@ Or, if brewtools is already installed, just run `/brewtools:plugin-update`.
 
 ## v3.4.50 (2026-04-09)
 
-> Docs: [debate](https://doc-claude.brewcode.app/brewtools/skills/debate/) | [brewtools](https://doc-claude.brewcode.app/brewtools/overview/) | [brewcode skills](https://doc-claude.brewcode.app/brewcode/skills/)
+> Docs: debate | [brewtools](https://doc-claude.brewcode.app/brewtools/overview/) | [brewcode skills](https://doc-claude.brewcode.app/brewcode/skills/)
 
 ### brewcode
 #### Changed
@@ -2896,7 +2884,7 @@ Or, if brewtools is already installed, just run `/brewtools:plugin-update`.
 
 ## v3.4.49 (2026-04-08)
 
-> Docs: [brewui image-gen](https://doc-claude.brewcode.app/brewui/skills/image-gen/)
+> Docs: brewui image-gen
 
 ### brewui
 #### Changed
@@ -2906,7 +2894,7 @@ Or, if brewtools is already installed, just run `/brewtools:plugin-update`.
 
 ## v3.4.48 (2026-04-07)
 
-> Docs: [brewcode](https://doc-claude.brewcode.app/plugin/brewcode/)
+> Docs: [brewcode](https://doc-claude.brewcode.app/brewcode/overview/)
 
 ### brewui
 #### Changed
@@ -2916,7 +2904,7 @@ Or, if brewtools is already installed, just run `/brewtools:plugin-update`.
 
 ## v3.4.47 (2026-04-07)
 
-> Docs: [brewtools ssh](https://doc-claude.brewcode.app/brewtools/skills/ssh/) | [brewtools deploy](https://doc-claude.brewcode.app/brewtools/skills/deploy/) | [brewui glm-design-to-code](https://doc-claude.brewcode.app/brewui/skills/glm-design-to-code/) | [brewtools ssh-admin](https://doc-claude.brewcode.app/brewtools/agents/ssh-admin/) | [brewtools deploy-admin](https://doc-claude.brewcode.app/brewtools/agents/deploy-admin/) | [brewui glm-openrouter-specialist](https://doc-claude.brewcode.app/brewui/agents/glm-openrouter-specialist/) | [brewui glm-zai-specialist](https://doc-claude.brewcode.app/brewui/agents/glm-zai-specialist/)
+> Docs: [brewtools ssh](https://doc-claude.brewcode.app/brewtools/skills/ssh/) | [brewtools deploy](https://doc-claude.brewcode.app/brewtools/skills/deploy/) | brewui glm-design-to-code | [brewtools ssh-admin](https://doc-claude.brewcode.app/brewtools/agents/ssh-admin/) | [brewtools deploy-admin](https://doc-claude.brewcode.app/brewtools/agents/deploy-admin/) | brewui glm-openrouter-specialist | brewui glm-zai-specialist
 
 ### brewcode
 #### Changed
@@ -2945,7 +2933,7 @@ Or, if brewtools is already installed, just run `/brewtools:plugin-update`.
 
 ## v3.4.46 (2026-04-07)
 
-> Docs: [deploy skill](https://doc-claude.brewcode.app/brewcode/skills/deploy/) | [deploy-admin agent](https://doc-claude.brewcode.app/brewcode/agents/deploy-admin/)
+> Docs: [deploy skill](https://doc-claude.brewcode.app/brewtools/skills/deploy/) | [deploy-admin agent](https://doc-claude.brewcode.app/brewtools/agents/deploy-admin/)
 
 ### brewcode
 #### Added
@@ -2963,7 +2951,7 @@ Or, if brewtools is already installed, just run `/brewtools:plugin-update`.
 
 ## v3.4.45 (2026-04-07)
 
-> Docs: [image-gen](https://doc-claude.brewcode.app/brewui/skills/image-gen/)
+> Docs: image-gen
 
 ### brewui
 #### Changed
@@ -2976,7 +2964,7 @@ Or, if brewtools is already installed, just run `/brewtools:plugin-update`.
 
 ## v3.4.44 (2026-04-07)
 
-> Docs: [ssh skill](https://doc-claude.brewcode.app/brewcode/skills/ssh/) | [ssh-admin agent](https://doc-claude.brewcode.app/brewcode/agents/ssh-admin/) | [image-gen](https://doc-claude.brewcode.app/brewui/skills/image-gen/)
+> Docs: [ssh skill](https://doc-claude.brewcode.app/brewtools/skills/ssh/) | [ssh-admin agent](https://doc-claude.brewcode.app/brewtools/agents/ssh-admin/) | image-gen
 
 ### brewcode
 #### Added
@@ -2998,7 +2986,7 @@ Or, if brewtools is already installed, just run `/brewtools:plugin-update`.
 
 ## v3.4.43 (2026-04-07)
 
-> Docs: [brewui overview](https://doc-claude.brewcode.app/brewui/overview/) | [image-gen](https://doc-claude.brewcode.app/brewui/skills/image-gen/)
+> Docs: [brewui overview](https://doc-claude.brewcode.app/brewui/overview/) | image-gen
 
 ### brewui (NEW PLUGIN)
 #### Added
@@ -3011,7 +2999,7 @@ Or, if brewtools is already installed, just run `/brewtools:plugin-update`.
 
 ## v3.4.42 (2026-04-06)
 
-> Docs: [publish](https://doc-claude.brewcode.app/brewdoc/publish/)
+> Docs: [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
 
 ### brewdoc
 #### Added
@@ -3026,7 +3014,7 @@ Or, if brewtools is already installed, just run `/brewtools:plugin-update`.
 
 ## v3.4.41 (2026-04-06)
 
-> Docs: [publish](https://doc-claude.brewcode.app/brewdoc/publish/)
+> Docs: [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
 
 ### brewdoc
 #### Changed
@@ -3036,7 +3024,7 @@ Or, if brewtools is already installed, just run `/brewtools:plugin-update`.
 
 ## v3.4.39 (2026-04-06)
 
-> Docs: [publish](https://doc-claude.brewcode.app/brewdoc/publish/)
+> Docs: [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
 
 ### brewdoc
 #### Changed
@@ -3047,7 +3035,7 @@ Or, if brewtools is already installed, just run `/brewtools:plugin-update`.
 
 ## v3.4.37 (2026-04-06)
 
-> Docs: [teams](https://doc-claude.brewcode.app/brewcode/skills/teams/) | [hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | [agents](https://doc-claude.brewcode.app/brewcode/agents/) | [auto-sync](https://doc-claude.brewcode.app/brewdoc/auto-sync/)
+> Docs: [teams](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) | [hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | [agents](https://doc-claude.brewcode.app/brewcode/agents/) | auto-sync
 
 ### brewcode
 #### Fixed
@@ -3066,7 +3054,7 @@ Or, if brewtools is already installed, just run `/brewtools:plugin-update`.
 
 ## v3.4.36 (2026-04-06)
 
-> Docs: [teams](https://doc-claude.brewcode.app/brewcode/skills/teams/) | [hooks](https://doc-claude.brewcode.app/brewcode/hooks/)
+> Docs: [teams](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) | [hooks](https://doc-claude.brewcode.app/brewcode/hooks/)
 
 ### brewcode
 #### Fixed
@@ -3078,7 +3066,7 @@ Or, if brewtools is already installed, just run `/brewtools:plugin-update`.
 
 ## v3.4.35 (2026-04-06)
 
-> Docs: [teams](https://doc-claude.brewcode.app/brewcode/skills/teams/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [guide](https://doc-claude.brewcode.app/brewdoc/guide/)
+> Docs: [teams](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | guide
 
 ### brewcode
 #### Changed
@@ -3119,7 +3107,7 @@ Or, if brewtools is already installed, just run `/brewtools:plugin-update`.
 
 ## v3.4.28 (2026-04-05)
 
-> Docs: [debate](https://doc-claude.brewcode.app/brewcode/skills/debate/)
+> Docs: debate
 
 ### brewcode
 #### Added
@@ -3129,7 +3117,7 @@ Or, if brewtools is already installed, just run `/brewtools:plugin-update`.
 
 ## v3.4.26 (2026-04-04)
 
-> Docs: [glm-design-to-code](https://doc-claude.brewcode.app/brewcode/skills/glm-design-to-code/)
+> Docs: glm-design-to-code
 
 ### brewcode
 #### Added
@@ -3140,7 +3128,7 @@ Or, if brewtools is already installed, just run `/brewtools:plugin-update`.
 
 ## v3.4.25 (2026-04-04)
 
-> Docs: [glm-design-to-code](https://doc-claude.brewcode.app/brewcode/skills/glm-design-to-code/)
+> Docs: glm-design-to-code
 
 ### brewcode
 #### Added
@@ -3159,7 +3147,7 @@ Or, if brewtools is already installed, just run `/brewtools:plugin-update`.
 
 ## v3.4.24 (2026-04-03)
 
-> Docs: [glm-design-to-code](https://doc-claude.brewcode.app/brewcode/skills/glm-design-to-code/)
+> Docs: glm-design-to-code
 
 ### brewcode
 #### Changed
@@ -3173,7 +3161,7 @@ Or, if brewtools is already installed, just run `/brewtools:plugin-update`.
 
 ## v3.4.23 (2026-04-03)
 
-> Docs: [glm-design-to-code](https://doc-claude.brewcode.app/brewcode/skills/glm-design-to-code/)
+> Docs: glm-design-to-code
 
 ### brewcode
 #### Fixed

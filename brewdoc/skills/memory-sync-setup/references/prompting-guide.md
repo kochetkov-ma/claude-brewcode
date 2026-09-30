@@ -1,14 +1,10 @@
-<!-- brewcode-meta: version=6.2.0 content_version=6.2.0 generated_by=brewdoc:memory-sync-setup -->
+<!-- brewcode-meta: version=6.3.0 content_version=6.3.0 generated_by=brewdoc:memory-sync-setup -->
 # Prompting Quality Guide
 
-Applied to every INSTRUCTION file the sweep touches - CLAUDE.md at any depth, `.claude/rules/*.md`, the
-`AGENTS.md` family, and agent/skill bodies. Never applied to code or docs (those stay owned by `docs/**` and the
-doc flow). Cited by every `/memory-sync` batch agent in Phase 2, before it edits anything, the same way
-`references/memory-guide.md` is. Current vendor prompting guidance for two audiences reading the SAME projected
-file: Claude 5 (Opus 5 / Sonnet 5 / Fable 5.1) reads CLAUDE.md and agent/skill bodies directly; Codex reads the
-`AGENTS.md` projection of the same content. A rule tagged `openai-only` fixes something only the AGENTS.md
-projection is read against; `claude` fixes something only the Claude-side prompt is read against; `both` applies
-to either reading.
+Apply only to instruction files: CLAUDE.md at any depth, `.claude/rules/*.md`, the `AGENTS.md` family,
+agent/skill bodies. Code/docs remain owned by their source/doc flow. Phase 2 batches read this alongside
+`references/memory-guide.md`. `claude` targets Claude instructions; `openai-only` the Codex projection;
+`both` either. Official sources checked 2026-09-30: Opus 5 / Sonnet 5 / Fable 5.1 advice is model-scoped research, not universal policy. Preserve house budgets, tests, self-check criteria, independent review and consent.
 
 ---
 
@@ -19,26 +15,26 @@ lossless guard below). Source keys resolve in the legend at the end.
 
 | # | Rule | Applies | Detect | Rewrite (bad -> good) | Source |
 |---|------|---------|--------|------------------------|--------|
-| 1 | Role + output contract first; hard constraints in their own section, never folded into the role sentence | both | opening paragraph is scope/procedure/background, not a role sentence + a return-shape line | "You're a specialized assistant that manages calendars and has three tools..." -> "Role: <one sentence>. Return: <shape/fields>." then a separate Scope/Never section | PEBP, SA |
-| 2 | State each instruction once - no duplicate reminders across hooks, sections or files | both | the same directive text/keyword fires from two+ places (e.g. a per-prompt hook copy already covered by SessionStart; a rule restated in an agent body) | keep the tightest instance, delete the rest, point the duplicate at the canonical one | CCBP, PEBP, HOOK |
-| 3 | Check every rule pair for contradiction before shipping | both | two rows in the same file cannot both be satisfied literally | "never schedule without consent" + "auto-assign the earliest slot" -> "auto-assign, then inform before confirming" | O5 |
-| 4 | Positive imperative; keep ONLY a prohibition that guards a named, previously-observed failure | both | a "don't do X" with no incident/postmortem named nearby | reword as "do Y instead"; leave an `!=` row untouched if it (or `avoid.md`) names the incident it prevents | PEBP, avoid.md |
-| 5 | Drop scattered ALL-CAPS; at most one true hard-stop word per artifact | both | grep -o for MUST/NEVER/CRITICAL/ALWAYS in caps returns more than one hit in a file | lower-case all but the single guard on an irreversible action | CCBP |
-| 6 | No chain-of-thought asks or hand-written step-by-step scaffolding aimed at a reasoning/thinking-enabled model | both | "think step by step", "explain your reasoning", or a numbered thinking scaffold | "think step by step then answer" -> state the goal only; non-thinking models get "consider"/"evaluate", never the literal word "think" | PEBP, O7 |
-| 7 | Remove a SELF-verification instruction aimed at a model that already verifies its own work - never an INDEPENDENT review stage | claude | a Claude-5-targeted prompt carrying "include a final verification step for any non-trivial task", "use a subagent to verify", "double-check your answer", "re-verify before responding", or legacy harness scaffolding that adds a separate verification step | delete the self-check, and add an explicit scope boundary if one is missing. CARVE-OUT, never deleted: a stage where a DIFFERENT actor re-checks work it did not produce - a pipeline's checker phase, a CI gate, a second-reader step, a check script. Deleting one of those removes a control, not a dated instruction | OPUS5, MIG |
-| 8 | Subagent delegation restraint - explicit criterion, low spawn counts, one capable agent until real limits are hit | both | a delegating agent/skill with no stated delegation threshold, or a linear task split across many agents | add "delegate only large/independent/parallelizable work; never delegate a handful of tool calls; never spawn to verify your own work" | OPUS5, O14 |
-| 9 | State scope explicitly - never rely on the model to silently generalize one example | both | a rule stated once by example, with no "for every file/case matching X" | name the scope explicitly instead of relying on generalization | SONNET5 |
-| 10 | Reference data -> table; a real-dependency procedure -> numbered prose; separate distinct instruction blocks with a heading or tag | both | a table cell hides a multi-step procedure, or two unrelated instruction blocks share no separating heading/tag | split into a table (data) + numbered steps (procedure); wrap each block under its own heading | CCBP, O9 |
-| 11 | Concrete example or named reference file over a vague adjective | both | "clean" / "thorough" / "professional" / "good" with no example or file pointer nearby | "write clean code" -> "follow the pattern in `<file>`" or a short before/after snippet | PEBP, SONNET5 |
-| 12 | File-size budgets for authored artifacts | both | `wc -w`/`wc -c`: SKILL.md over 500 lines / 2000 words, agent `.md` over 1500 words, hook `additionalContext` over 9000 chars (session) or 500 chars (per-prompt) | move overflow into `references/`; trim the hook string | SKC, HOOK |
-| 13 | Conciseness stated explicitly - qualitative on claude, numeric in the `openai-only` projection. Scope: RESPONSE length; rule-12 artifact budgets are a separate, still-standing subject | both | claude: no conciseness instruction, or an inherited numeric word/bullet cap tuned for an older model's verbosity. openai-only: "be concise" with no attached number | claude: Opus 5's replies run longer than prior Opus models' and effort doesn't reliably shorten them, so add a qualitative instruction - e.g. "keep responses focused, brief, and concise". An inherited number is questioned but stays (lossless guard bars deletion), flagged `uncertain`. openai-only: "answer concisely" -> "<=5 bullets, 1 sentence each" | OPUS5, MIG, O6 |
-| 14 | `[DICT: ...]` header only above the size threshold that earns it | both | a `[DICT:]` block on a file under ~150 lines, or fewer than 5 abbreviations each reused fewer than 3 times | drop the header and spell terms inline; keep it only at CLAUDE.md / large-rule-file scale | house judgment |
-| 15 | AGENTS.md build/size-cap/nested-override mechanics | openai-only | a rule assumes AGENTS.md re-reads mid-session, a root AGENTS.md nears/exceeds 32 KiB, or a nested AGENTS.md restates a root rule instead of overriding it | keep the root short, push subtree specifics into nested AGENTS.md, and state only the override there | O1, O2, O3 |
-| 16 | AGENTS.md / CLAUDE.md content is commands, style and conventions - never history, marketing or task state | both | a paragraph of project history, marketing prose or live task state inside CLAUDE.md/AGENTS.md | move history to README; keep only agent-actionable commands and conventions | O4 |
-| 17 | Root/system-level rules always outrank a developer-level file; never spend words asserting override authority | both | a developer-level file (CLAUDE.md/AGENTS.md/skill body) claims it can override safety/system rules | delete the assertion; state the actually-desired in-policy behaviour directly | O13 |
-| 18 | Explicit stop conditions and safe-vs-unsafe action boundaries for agentic tasks | both | "keep working until done" with no named boundary around a risky/irreversible action | "keep working until done" -> "stop and ask before any <irreversible action>; otherwise continue until resolved" | O10 |
-| 19 | Fossils - text that outlived the model it was written for | both | a retired model id in an instruction file; migration-relative phrasing on a behavioural rule ("now works differently", "no longer", "also counts", "instead of") diffed against a prompt version no reader saw; a mitigation tied to no model still in use | state the current rule as if it were the only one that ever existed; a dated passage carrying NO model id is rewritten or deleted whole, but one that NAMES a model id is REPORTED with the retired model named in the verdict row - never deleted or re-pointed here, the lossless guard on model ids is absolute | house judgment |
-| 20 | No severity floor or conservatism directive inside a review/audit instruction | claude | a review/audit prompt carrying "only report high-severity issues", "be conservative", "only flag critical", or any threshold on WHICH findings to report | the model follows a severity floor literally and reports less; ask for everything and filter in a separate pass - "report every issue you find", with the filtering as a distinct downstream step | OPUS5, SONNET5 |
+| 1 | Role + output contract first; separate hard constraints | both | unclear role or return shape | "Role: <one sentence>. Return: <shape/fields>." then Scope/Never; preserve required fields | PEBP, SA |
+| 2 | Deduplicate within the same audience and scope | both | the same directive fires twice for the same reader | keep the canonical instance and a resolvable pointer; retain copies needed by readers who cannot see that source | CCBP, PEBP, HOOK |
+| 3 | Resolve contradictions with evidence and scope | both | same subject/scope, incompatible instructions | "never schedule without consent" + "auto-assign" -> "propose the earliest slot; schedule after consent". Verify facts; unavailable checks -> defer both unchanged. Preserve preferences; ledger resolutions | O5, house policy |
+| 4 | Prefer positive imperatives; preserve exclusions | both | a prohibition hides the desired action | "do Y instead" only if the exclusion survives; retain incident-backed `!=`, safety, consent and ownership boundaries without requiring an incident citation | PEBP, avoid.md |
+| 5 | Remove decorative ALL-CAPS; preserve true invariants | both | repeated MUST/NEVER/CRITICAL/ALWAYS as emphasis | prefer at most one stylistic emphasis outside hard stops; keep every required field and irreversible-action guard equally binding | CCBP, house policy |
+| 6 | State goals/evidence; avoid requests for hidden reasoning | both | "think step by step", "explain your reasoning", prescribed thinking scaffold | state the outcome/output contract; retain dependent execution steps and verification criteria. Thinking advice depends on model/config, not a universal ban on "think" | PEBP, O7 |
+| 7 | Scope over-verification advice; preserve project checks | claude | optional generic self-check aimed specifically at Opus 5 duplicates work | trim redundant nudges only for that model; preserve required tests, self-check criteria, independent checker/CI/second-reader stages and check scripts. Unsupported removal -> `uncertain` | OPUS5, PEBP, O8 |
+| 8 | Delegate bounded independent work under project policy | both | unclear delegation criterion or overlapping ownership | define scope, consumer and acceptance; parallelize independent work. Opus 5 damping does not impose low spawn counts or ban required independent verification across all models | SA, OPUS5, O14 |
+| 9 | State scope explicitly | both | one example is silently generalized | name "every file/case matching X"; keep its qualifier | SONNET5 |
+| 10 | Tables for data; steps for real dependencies | both | a table hides a procedure or unrelated blocks have no boundary | separate data tables, numbered procedures and headed/tagged instruction blocks | CCBP, O9 |
+| 11 | Concrete examples or named references | both | "clean"/"thorough"/"professional"/"good" without evidence | name `<file>` as the pattern or supply a short before/after example | PEBP, SONNET5 |
+| 12 | House artifact budgets; supporting material in references | both | SKILL.md over 500 lines / 2000 words, agent `.md` over 1500 words, hook `additionalContext` over 9000 chars (session) or 500 chars (per-prompt) | move overflow to `references/`; preserve contracts. These are house thresholds; verify runtime caps separately | SKC, HOOK, house policy |
+| 13 | Response length follows the user/output contract; rule 12 governs files | both | missing length guidance or model-wide numeric-cap assumption | request concise replies where appropriate; "<=5 bullets, 1 sentence each" is an optional example, not a Codex requirement. Inherited limits remain unless explicitly changed; otherwise `uncertain` | PEBP, OPUS5, O6 |
+| 14 | `[DICT: ...]` only when its size pays off | both | file under ~150 lines, or fewer than 5 abbreviations each reused fewer than 3 times | spell terms inline; keep the header only at CLAUDE.md / large-rule scale | house judgment |
+| 15 | Codex discovery, combined size and nested overrides | openai-only | automatic mid-run reread assumed or combined chain nears 32 KiB | discovery is once per run; `project_doc_max_bytes` defaults to 32 KiB combined. `AGENTS.override.md` precedes `AGENTS.md` per level; nearer directories override earlier guidance. Verify configured limits | O1, O2, O3 |
+| 16 | Instruction files hold commands, style and conventions | both | history, marketing or task state in CLAUDE.md/AGENTS.md | move history to README; keep actionable project conventions | O4 |
+| 17 | Respect runtime instruction precedence | both | local file claims system/safety authority or root AGENTS.md outranks a nested override | remove the authority claim; root-directory files are not system messages. Codex directory precedence follows rule 15 | O13, O1 |
+| 18 | State success, stopping conditions and authorization boundaries | both | "keep working until done" lacks criteria or irreversible-action boundaries | complete authorized work; ask only outside existing authority. Preserve explicit approval gates; invent no universal confirmation flow | O10 |
+| 19 | Detect fossils without changing pinned facts | both | retired model id or migration-relative behaviour rule | state the current rule directly. A passage without a model id may be rewritten/deleted; one naming a model id is REPORTED, never deleted/repointed here. Preserve the lossless guard | house judgment |
+| 20 | Preserve review scope and downstream filtering | claude | generic model advice changes the requested severity scope | report evidence-backed findings within scope; filter only in the authorized stage. Preserve explicit severity caps and review gates; propose policy changes separately | OPUS5, SONNET5, house policy |
 
 Dropped as redundant rather than merged: R14 (hook reminder cadence) and R16 (state parallelism once) are single
 instances of rule 2 above, folded into its detect signal rather than kept as separate rows; R9 (lossless
@@ -82,14 +78,18 @@ rule's `detect` signal and confirms no fact moved.
 Stop compressing or rewriting a passage the MOMENT a fact would change - a path, a version, a flag, a threshold, a
 model id, an incident-backed prohibition, or a canonical list. Report it as `uncertain` instead of guessing.
 
----
-
 ## Legend
 
+Vendor guidance is evidence, not authority to replace house policy. Keys resolve directly:
 `PEBP`=https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices
 `OPUS5`=https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5
 `SONNET5`=https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-sonnet-5
-`MIG`=https://platform.claude.com/docs/en/models/opus-5/migration-guide `CCBP`=code.claude.com/docs/en/best-practices
-`SA`=code.claude.com/docs/en/sub-agents `SKC`=`brewcode/agents/skill-creator.md` `HOOK`=`brewcode/hooks/lib/{reminder,utils}.mjs`.
-`O1`-`O14` resolve in the OpenAI/Codex rules report cited by this plugin's own prompting refresh; full rationale
-for both families is intentionally not duplicated here - it lives with that refresh, not in a shipped reference.
+`CCBP`=https://code.claude.com/docs/en/best-practices `SA`=https://code.claude.com/docs/en/sub-agents
+`SKC`=`brewcode/agents/skill-creator.md` `HOOK`=`brewcode/hooks/lib/utils.mjs`; style budgets are house policy.
+`O1`, `O2`, `O3`, `O4`=https://learn.chatgpt.com/docs/agent-configuration/agents-md (discovery, size, layering, conventions).
+`O5`, `O6`, `O9`, `O11`, `O12`, `O13`=https://developers.openai.com/api/docs/guides/prompt-engineering (clarity, format, examples, roles).
+`O7`=https://developers.openai.com/api/docs/guides/reasoning-best-practices (internal-reasoning prompts).
+`O8`=https://developers.openai.com/api/docs/guides/evaluation-best-practices (evidence/evaluation).
+`O10`=https://developers.openai.com/api/docs/guides/reasoning (goals, constraints, verification).
+`O14`=https://code.claude.com/docs/en/sub-agents (delegation, not a universal spawn-count limit).
+`MIG`=https://platform.claude.com/docs/en/models/opus-5/migration-guide is withdrawn: fetching failed on 2026-09-30; use OPUS5 directly.

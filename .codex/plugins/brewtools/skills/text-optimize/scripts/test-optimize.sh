@@ -77,7 +77,7 @@ for flag in "\-l" "\-s" "\-d" "\-x"; do
   check_contains "$SKILL_DIR/SKILL.md" "$flag" "SKILL.md contains mode flag '$flag'"
 done
 
-check_contains "$SKILL_DIR/SKILL.md" "request_user_input" "SKILL.md contains request_user_input in allowed-tools"
+check_contains "$SKILL_DIR/SKILL.md" "main-chat user gate" "SKILL.md contains main-chat user gate in allowed-tools"
 check_contains "$SKILL_DIR/SKILL.md" "text-guard.sh" "SKILL.md wires the Phase 0/3 preservation guard"
 check_file_exists "$SKILL_DIR/scripts/text-guard.sh" "Script: text-guard.sh exists"
 check_file_exists "$SKILL_DIR/tests/suite-guard.mjs" "Suite: suite-guard.mjs exists"

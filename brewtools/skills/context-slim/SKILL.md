@@ -1,6 +1,6 @@
 ---
 name: context-slim
-description: Compresses everything that permanently enters the LLM context - project and global CLAUDE.md, rules, agent descriptions, hook text, memory - by cross-layer dedup, default-knowledge removal and deep per-file compression. Triggers - slim context, compress context, dedupe rules, сожми контекст, ужми правила.
+description: Compresses potential LLM context sources - project and global CLAUDE.md, rules, agent descriptions, hook text, memory - by cross-layer dedup, default-knowledge removal and deep per-file compression. Triggers - slim context, compress context, dedupe rules, сожми контекст, ужми правила.
 user-invocable: true
 disable-model-invocation: true
 argument-hint: "[prompt] [measure|preview|slim|hard|bodies|restore] [--target=N%] [--global] [--memory] [--noask] [ts]"
@@ -10,9 +10,10 @@ model: opus
 
 # Context Slim
 
-Cuts the token weight of the permanent context surface with three levers — cross-layer dedup,
+Cuts the inventory size of potential context sources with three levers — cross-layer dedup,
 default-knowledge removal, deep per-file compression. Every exact value, key, path, pin and
-non-default instruction survives byte-exact or the whole run is rolled back and reported FAILED.
+non-default instruction survives byte-exact or acceptance fails. Recover only recorded owned
+drafts; concurrent changes remain intact and recovery refusal is reported explicitly.
 Orchestration ONLY: every decision rule lives in `references/`, read at the phase that needs it.
 
 ## Prompt contract
@@ -42,7 +43,7 @@ DO:     <2-5 imperative bullets>
 RESULT: <what the user ends up holding>
 ```
 
-Labels are literal; values follow the conversation language.
+Labels are literal; INPUT stays verbatim; authored values follow the active work-artifact language policy.
 
 ## Modes
 
@@ -62,11 +63,14 @@ alone it means `bodies` + `slim`.
 
 | Tier | Content | In default scope |
 |------|---------|------------------|
-| ALWAYS-ON | project+global `CLAUDE.md`/`CLAUDE.local.md`, `rules/*.md`, `.claude/convention/*`, `AGENTS.md`, memory, agent `description:` fields, hook-injected text | yes |
-| PER-SPAWN | agent `.md` bodies — a spawn pays the WHOLE `.md`, they are NOT lazy | yes |
-| PER-INVOCATION | `SKILL.md` bodies + `references/*.md` | opt-in via `bodies` only |
+| ALWAYS-ON | Potential instruction inventory: startup files, recursive rules (path-scoped rules are conditional), imported/read conventions, client-dependent `AGENTS.md`, memory index/topics, agent descriptions, hook text | yes |
+| PER-SPAWN | Agent `.md` files; only the selected agent loads at spawn | yes |
+| PER-INVOCATION | Invoked `SKILL.md` bodies + recursive references read on demand | opt-in via `bodies` only |
 
-Exact membership globs, the `chars/4` token proxy and its measured error: `references/measurement.md`.
+Tier totals are potential inventory, not observed session context. `loading` reports conditions;
+`measurement.actual_loading_observed=false` requires checking runtime context before claiming actual
+cost. Legacy `token_model=chars/4` denotes the `bytes/4` proxy; Unicode/tokenizer error is corpus-dependent.
+Membership and historical measurements: `references/measurement.md`.
 `--memory` includes the memory directories; `--target=N%` is measured against THIS run's freshly
 scanned scope, never a prior run (measurement.md, "Target-ratio baseline rule").
 
@@ -91,7 +95,7 @@ mutation. Cite it, obey it, do not restate it.
 | 2 | Snapshot (fail-closed) | backups only | yes |
 | 3 | Cross-layer dedup analysis — orchestrator only | no | yes |
 | 4 | Fan out one optimizer subagent per file | yes | — |
-| 5 | Verify + independent checker | rolls the WHOLE run back on any miss | yes |
+| 5 | Verify + independent checker | checkpoint-proven recovery on miss; unsafe recovery refused | yes |
 | 6 | Re-measure, lossy escalation gate | conditional | — |
 | 7 | Ratchet state + report | state file only | — |
 
@@ -128,9 +132,11 @@ bash "${CLAUDE_PLUGIN_ROOT}/skills/context-slim/scripts/context-scan.sh" --root 
 [ $rc -eq 0 ] && echo "✅ EXIT:$rc" || echo "❌ FAILED EXIT:$rc"
 ```
 
-> **STOP if ❌** — nothing downstream has a baseline. Fix the root or the flags and re-run.
+> **STOP on nonzero, invalid JSON, or missing/malformed/nonempty `scan_issues`** — partial rows are diagnostics,
+> never a measurement baseline. Fix discovery and re-run; do not use partial totals in metrics, state or reports.
 
-The JSON carries `files[]` (path, tier, kind, bytes, tokens, estimated) and `totals` per tier. Print
+The JSON carries `files[]` (path, tier, kind, bytes, tokens, estimated, loading), inventory `measurement`,
+`scan_issues` and `totals` per tier. Print
 the PLAN block NOW, with `SCOPE` naming real paths and real tier counts from this output. `measure`
 prints the per-tier table and the Advice section and stops here.
 
@@ -147,7 +153,10 @@ bash "${CLAUDE_PLUGIN_ROOT}/skills/context-slim/scripts/context-guard.sh" snapsh
 [ $rc -eq 0 ] && echo "✅ EXIT:$rc" || echo "❌ FAILED EXIT:$rc"
 ```
 
-> **STOP if ❌** — read the number. `EXIT:3` is a DIRTY **TRACKED** TARGET: the guard names the exact paths — surface them verbatim, tell the user to commit or stash THOSE paths, then re-run; NEVER pass `--allow-dirty` on the user's behalf, it is theirs to type. `EXIT:2` is a usage/state error — most often a `--run-dir` that already holds a snapshot, which the guard REFUSES to overwrite. Do not pass `--run-dir` to `snapshot` at all: the auto-named `<ts>-<layer>` dir cannot collide. Any other non-zero is a snapshot failure — no edit may follow.
+> STOP on nonzero. `EXIT:3`: dirty TRACKED paths; show them verbatim, require explicit named-edit
+> authorization before `--allow-dirty` (existing authorization suffices), otherwise ask user to
+> commit/stash those paths. `EXIT:2`: usage/state error, including existing snapshot directory;
+> use auto-named `<ts>-<layer>` dirs. Any other nonzero: snapshot failure, no edit follows.
 >
 > `SNAPSHOT-ONLY: <n> untracked/git-ignored target(s)` is NOT an error and never blocks the run. Git has no pre-state for those files — `.claude/` and `CLAUDE.md` are git-ignored in many repos, this one included — so the manifest is their ONLY recovery path, which is exactly what phase 2 exists for. Relay the line: it names the files `git checkout` cannot bring back. Git covers TRACKED targets; the snapshot covers all of them.
 >
@@ -158,7 +167,8 @@ bash "${CLAUDE_PLUGIN_ROOT}/skills/context-slim/scripts/context-guard.sh" snapsh
 [ $rc -eq 0 ] && echo "✅ EXIT:$rc" || echo "❌ FAILED EXIT:$rc"
 ```
 
-> **STOP if ❌** — no global edit happens without a manifest. Same side effect one level up: the guard re-roots at `$HOME/.claude` via `CLAUDE_PROJECT_DIR` and CREATES `~/.claude/.gitignore` containing `.claude/reports/` if absent. Nothing else under `~/.claude` is touched.
+> STOP on nonzero: no global edit without manifest. Guard re-roots at `$HOME/.claude` via
+> `CLAUDE_PROJECT_DIR`; non-Git roots create no `.gitignore`.
 
 Capture the printed `MANIFEST:` path of EACH layer — phases 5-7 need both run dirs, and a project run
 dir can never verify or restore a global file. The guard JSON-validates each manifest with `jq`, else
@@ -209,14 +219,24 @@ Then spawn one `brewtools:text-optimizer` per file, ALL in ONE message. Each spa
 |-------|---------|
 | GOAL | cut permanent context weight across N files; this agent owns one file, siblings own the rest |
 | ROLE | optimize `{file}` in place; do NOT touch any other path, do NOT judge cross-layer dedup |
-| SCOPE | in — `{file}`. Out — every other path, `{RUN_DIR}/orig/**` (never read, write or re-snapshot) |
+| SCOPE | edit `{file}` only; read snapshot for comparison; `{RUN_DIR}/orig/**` never written/deleted/re-snapshotted |
 | CONTEXT | depth = deep (LLM-only files) or standard (user-facing); the drop rows from phase 3, verbatim; the drop-catalog and keep-catalog paths; siblings run in parallel |
 | CONSUMER | the skill merges every report; the file itself is loaded as a permanent prompt, and sibling files still point at its headings |
-| DONE | apply exactly the listed rows, run the mode's verification, return the Optimization Report (before/after tokens, rules applied, loss ledger, semantic match %) |
+| DONE | apply listed rows; checkpoint each owned atomic edit/deletion immediately; mode verification; report before/after size (named tokenizer or chars/4 proxy), rules, losses, semantic match % |
 
 Decision authority per line: `references/drop-catalog.md` (52 default-knowledge patterns + the 14
 inverted near-twins that LOOK droppable and are KEEPS + the decision rule 0-5, unresolved = KEEP) and
 `references/keep-catalog.md` (invariant classes + `crit_tokens_ext()`). Ship the paths, not contents.
+
+After each owned atomic write/deletion and before any later edit/check, record the known draft:
+
+```bash
+CLAUDE_PROJECT_DIR="<LAYER_ROOT>" bash "${CLAUDE_PLUGIN_ROOT}/skills/text-optimize/scripts/text-guard.sh" checkpoint --run-dir <LAYER_RUN_DIR> <file>
+```
+
+Record only bytes just produced by this optimizer (or its completed deletion); another writer's
+intervening change -> preserve bytes and report uncertain recovery. Never manufacture proof at
+failure/rollback time. Refresh after owned repairs. Guard checks recorded hashes, cannot infer ownership.
 
 ### Phase 5 — verify (BARRIER)
 
@@ -238,7 +258,7 @@ Read the number, both layers must reach `EXIT:0`:
 | `EXIT:` | Meaning | Action |
 |---------|---------|--------|
 | 0 | every critical token survived | proceed to step 2 |
-| 1 | gate/checksum failed, or a manifest-listed file has no copy in `orig/` — the guard has ALREADY rolled that layer's WHOLE run back to its pre-edit bytes | that is the outcome, not a warning — roll the OTHER layer back too (below) and report the run FAILED |
+| 1 | gate/checksum failure, missing snapshot or refused restoration | refuse acceptance; read recovery output, attempt only checkpoint-proven recovery for other layer, report FAILED and exact preserved/refused files |
 | 2 | usage/state error: no snapshot for these paths in this run dir (phase 2 skipped, or the wrong layer's run dir), or an unreadable/invalid manifest | STOP, do not accept the result. Re-check you paired each layer with its own run dir before concluding the snapshot is missing |
 | other | guard failure | STOP |
 
@@ -248,23 +268,31 @@ A dedup row that DELETES a file is verified with `verify-deleted`, never plain `
 bash "$G" verify-deleted --project --run-dir <RUN_DIR> --survivor <survivor path> <deleted file>
 ```
 
-`MERGED_VERIFIED` = proven, the deletion stands. `EXIT:1` = unproven: the file is put back and the whole run rolls back with it.
+`MERGED_VERIFIED` proves deletion. `EXIT:1` means unproven; recovery may be refused for missing
+ownership evidence/concurrent edits. Report actual restored/refused files, never assumed rollback.
 
 Step 2, semantic. Spawn ONE INDEPENDENT checker subagent (`general-purpose`, read-only, not an author
 of any rewrite) per file, all in one message. It re-reads every dropped item from the phase 3 ledger
 against the current file and the snapshot: is each dropped fact still present, or provably present in
 its named survivor?
 
-Any miss anywhere, mechanical or semantic, in either layer -> roll back EVERY layer of the run, then report FAILED. A partial keep is never an outcome, and a per-file restore is not one either:
+Any mechanical/semantic miss in either layer refuses acceptance for the whole run. Attempt recovery
+for every layer with existing ownership proof; preserve concurrent files, report FAILED and exact
+recovery/refusals. A partially recovered run is never accepted:
 
 ```bash
 bash "$G" rollback --run-dir <PROJECT_RUN_DIR> --run-dir <GLOBAL_RUN_DIR>   # omit the layer that did not run
 ```
 
+Require exit 0 before claiming every file restored. Exit 1/refusal leaves current bytes intact for
+that refused layer; inspect output and snapshot evidence, never overwrite or checkpoint to bypass it.
+
 ### Phase 6 — re-measure and the lossy escalation gate
 
-Re-run `context-scan.sh` over the same scope and compare against phase 1. `--target` met, or no
-target given -> go to phase 7.
+Re-run phase 1's `context-scan.sh` command with the same scope/flags and retain its actual exit code. Nonzero,
+invalid JSON, or missing/malformed/nonempty `scan_issues` -> **STOP**: report incomplete measurement, preserve
+verified edits/prior state, and fix/re-run discovery. Never compute savings, compare `--target`, escalate or
+enter phase 7 from partial rows. Only complete scans compare against phase 1; target met/absent -> phase 7.
 
 Target unmet in ANY mutating mode (`slim`, `hard`, `bodies`) -> the gate fires; the mode decides only
 how far the lossy pass may go, never whether the user is asked. First test the surface — **EXECUTE**
@@ -292,7 +320,8 @@ PLAN defect, not a reason to cut meaning. Report the shortfall, ask nothing, go 
 **Decline preserves the LOSSLESS result, not the pre-run tree** — say so, never promise an untouched
 tree. Phases 4-5 are committed and verified before this gate can fire, by construction: it compares a
 re-measure that exists only after those writes. The pre-run tree stays one command away, named in the
-report: bare `rollback` (every layer of the newest run).
+report: bare `rollback` (every layer of newest run), subject to matching draft ownership; later
+concurrent changes refuse recovery.
 
 ### Phase 7 — ratchet state + report
 
@@ -304,6 +333,9 @@ G="${CLAUDE_PLUGIN_ROOT}/skills/context-slim/scripts/context-guard.sh"
 bash "$G" state --mode <mode> --flags "<flags>" --before <phase1.json> --after <phase6.json> --ledger <ledger.tsv>; rc=$?
 [ $rc -eq 0 ] && echo "✅ EXIT:$rc" || echo "❌ FAILED EXIT:$rc"
 ```
+
+Nonzero -> **STOP**: no achieved/success report or state-publication claim. The guard rejects partial, missing
+or malformed discovery evidence before writes; preserve prior state and repair/re-run the failed scan.
 
 It writes `.claude/brewtools/context-slim/state.json` — run timestamp, mode, flags, per-file
 before/after tokens, achieved ratio, drop ledger — and JSON-validates it (schema: measurement.md,
@@ -330,8 +362,9 @@ files that will be overwritten. `--noask` does not skip this.
 Selection is LAYER-AWARE: with `--global`/`--project`, `last` and a bare `<ts>` resolve inside THAT
 layer; with neither flag and no file arguments, both cover EVERY layer dir of the run in one call.
 Naming files pins one layer (default `--project`) — a global path passed to the project run dir exits
-2. `rollback` is `restore` for whole run dirs, used by phase 5. Both put back what the manifest lists;
-neither removes files the run created.
+2. `rollback` is `restore` for whole run dirs, used by phase 5. Both restore manifest-listed files
+only with matching recorded draft hashes (already-original files need no overwrite); neither
+removes run-created files. Missing proof/concurrent change -> refuse and preserve current bytes.
 
 ```bash
 G="${CLAUDE_PLUGIN_ROOT}/skills/context-slim/scripts/context-guard.sh"
@@ -345,8 +378,9 @@ bash "$G" rollback --run-dir <A> --run-dir <B>   # whole run, all files, named l
 
 The manifest, not the flag, decides where files go back. Every restored file is re-hashed against it;
 the last line per run dir is `RESTORE_VERIFIED:`/`ROLLBACK_VERIFIED: <N> mismatches, <M> missing from
-snapshot` — only `0, 0` with `EXIT:0` is a restore. `EXIT:1` = a checksum mismatch, or a
-manifest-listed file `orig/` has no copy of. `EXIT:2` = usage/state error: missing, unreadable or
+snapshot` — only `0, 0` with `EXIT:0` proves restoration. `EXIT:1` also covers checksum mismatch,
+missing manifest-listed snapshot, or `RESTORE_REFUSED` for unproven/changed draft ownership.
+Failed/refused recovery never proves all files restored. `EXIT:2` = usage/state error: missing, unreadable or
 invalid manifest, a named file NOT in the manifest, or a path outside the snapshot root.
 
 ## Iron rules
@@ -358,10 +392,10 @@ invalid manifest, a named file NOT in the manifest, or a path outside the snapsh
 | Confirm destruction | `hard`, `restore` and any `--global` write need an explicit ENTRY confirmation. `--noask` suppresses clarifying questions ONLY, never these |
 | Never self-edit | `brewtools/skills/context-slim/**` is excluded from phase 4 in every mode — the run may not rewrite its own decision basis |
 | Print the exit code | Every gate prints `EXIT:$rc`; 1, 2 and 3 mean different things and the phases branch on the number |
-| Dirty TRACKED target refused | Exit 3 names the paths to commit or stash. Untracked/git-ignored targets are `SNAPSHOT-ONLY`, never refused — the manifest is their recovery path. `--allow-dirty` is the user's to type |
+| Dirty TRACKED target refused | Exit 3 names paths. Explicit named-edit authorization permits `--allow-dirty`; otherwise commit/stash. Untracked/git-ignored targets are `SNAPSHOT-ONLY`, covered by manifest |
 | Global opt-in | `--global` to write `~/.claude`; read as authority always. A project-layer survivor NEVER justifies a global deletion |
 | Dedup is the skill's | Cross-layer judgement never leaves phase 3. Agents execute rows, they do not decide them |
-| Refuse, don't warn | Any verify miss rolls back the WHOLE run, every layer, and reports FAILED. Never a partial keep |
+| Refuse, don't warn | Any miss refuses whole-run acceptance; recover checkpoint-proven drafts only, preserve concurrent files, report FAILED and actual recovery status |
 | Unsure -> keep | The drop-catalog decision rule's tiebreak, at every depth |
 | RU keyword columns | Never stripped — `validate-skill.sh` check 10 fails without them (`language-policy.md` CARVE-OUT) |
 | Live numbers only | Every number in the report comes from THIS run's `context-scan.sh` output, never baked |

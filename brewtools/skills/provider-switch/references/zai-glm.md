@@ -9,9 +9,9 @@
 | Pay model | Pay-per-token, no subscription needed |
 
 ## Auth Note
-Z.ai supports both `x-api-key` and Bearer token auth. Uses `ANTHROPIC_AUTH_TOKEN` (unified with other providers). Must set `ANTHROPIC_API_KEY=""` to prevent OAuth fallback.
+Bearer `ANTHROPIC_AUTH_TOKEN`, explicit empty `ANTHROPIC_API_KEY`; x-api-key also supported. [Claude integration](https://docs.z.ai/devpack/tool/claude), checked 2026-09-30, confirms base/Bearer setup. Preserve `glm-5.2`; newer-model docs do not authorize migration.
 
-## Model
+## Configured Model / Direct Snapshot — 2026-09-30
 | Field | Value |
 |-------|-------|
 | Model ID | `glm-5.2` |
@@ -21,6 +21,8 @@ Z.ai supports both `x-api-key` and Bearer token auth. Uses `ANTHROPIC_AUTH_TOKEN
 | Cached input $/1M | $0.26 |
 | SWE-bench Pro | 62.1% (self-reported) |
 
+USD per 1M from [direct pricing](https://docs.z.ai/guides/overview/pricing), checked 2026-09-30. Context/benchmark are the provider's [GLM-5.2 announcement](https://z.ai/blog/glm-5.2) claims, not a local benchmark. OpenRouter route prices differ.
+
 Same model for all three Claude Code roles (opus/sonnet/haiku).
 
 ## Compatibility Flags (REQUIRED)
@@ -29,7 +31,7 @@ Same model for all three Claude Code roles (opus/sonnet/haiku).
 
 ## Alias
 ```bash
-alias claudeglm='export ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic; export ANTHROPIC_AUTH_TOKEN=$ZAI_API_KEY; export ANTHROPIC_API_KEY=""; export ANTHROPIC_DEFAULT_OPUS_MODEL=glm-5.2; export ANTHROPIC_DEFAULT_SONNET_MODEL=glm-5.2; export ANTHROPIC_DEFAULT_HAIKU_MODEL=glm-5.2; export CLAUDE_ENABLE_BYTE_WATCHDOG=0; export CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1; claude'
+alias claudeglm='export ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic; export ANTHROPIC_AUTH_TOKEN="$ZAI_API_KEY"; export ANTHROPIC_API_KEY=""; export ANTHROPIC_DEFAULT_OPUS_MODEL=glm-5.2; export ANTHROPIC_DEFAULT_SONNET_MODEL=glm-5.2; export ANTHROPIC_DEFAULT_HAIKU_MODEL=glm-5.2; export CLAUDE_ENABLE_BYTE_WATCHDOG=0; export CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1; claude'
 ```
 
 ## Dashboard

@@ -1,10 +1,12 @@
 ---
 title: "superreview-setup"
-description: "Generates a project-tailored deep-review skill: an anti-drift intent pass at every depth, plus domain-expert routing, scope discipline and mechanical gates at EXTENDED depth."
+description: "Generate a project-tailored review skill with intent checks at every depth, mechanical gates and an extended domain-expert review."
 order: 1108
 ---
 
 import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+
+# Superreview Setup
 
 <Badge text="opus" />
 <Badge text="generator" />
@@ -22,11 +24,11 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 
 | Field | Value |
 |-------|-------|
-| Command | `/brewcode:superreview-setup [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] "<fine-tune-prompt>" [scope]` |
-| Arguments | an optional leading mode verb (canonical order `status \| install \| upgrade \| enable \| disable \| uninstall \| purge`), then `<fine-tune-prompt>` — free-text emphasis that reorders the emitted skill's Focus table; optional `[scope]` hint passed through |
-| No verb | `status` when `.claude/skills/superreview/` already exists, otherwise `install`; with a prompt but no verb, always `install` and the whole argument string is the fine-tune prompt |
+| Command | `/brewcode:superreview-setup [prompt] [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [scope]` |
+| Arguments | Free-text focus plus optional lifecycle mode anywhere in the prompt and a scope hint |
+| No verb | Resolve from prompt evidence; with no evidence, `status` for an installed or parked skill, otherwise `install` |
 | Model | opus |
-| Tools | Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion |
+| Tools | Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion |
 | Depth (emitted skill) | `QUICK` (default) or `EXTENDED` — inferred from the emitted skill's own prompt at run time, in any language; no flag on either skill |
 | Output | `.claude/skills/superreview/` plus `.claude/agents/intent-guard.md` in the target project |
 
@@ -51,8 +53,9 @@ reorders the emitted Focus table — scope discipline can be raised, never dropp
 
 ## Modes
 
-An explicit verb routes in front of the fine-tune prompt, in canonical order `status | install |
-upgrade | enable | disable | uninstall | purge`.
+An explicit lifecycle verb anywhere in the prompt wins. Otherwise prompt evidence resolves the
+verb, using installed state for the default. Outcome-changing write questions are bundled once
+before work; status asks nothing.
 
 | Mode | What runs | Writes |
 |------|-----------|--------|
@@ -64,10 +67,13 @@ upgrade | enable | disable | uninstall | purge`.
 | `uninstall` | `generate.sh uninstall` — deletes the generated skill directory (`SKILL.md` + `references/` + `.template-baseline/`), but keeps the review reports under `.claude/reports/*_superreview/` and `.claude/agents/intent-guard.md`. Confirms once via `AskUserQuestion`, listing the real paths. **Stops there** | deletes the skill dir only |
 | `purge` | `generate.sh purge` — `uninstall` plus deletes every `.claude/reports/*_superreview/` directory. `intent-guard.md` still survives — it is shared with `/brewcode:teams-setup` and only `generate.sh emit`/`emit-agent` ever write it. Confirms once, naming the report count being destroyed. **Stops there** | deletes the skill dir and the review reports |
 | *(no args at all)* | `status` when `.claude/skills/superreview/` exists, otherwise `install` | status: no |
-| *(no verb, but a prompt)* | Same as `install`; the whole argument string is the fine-tune prompt | yes |
+| *(no explicit verb, but a prompt)* | Resolve lifecycle intent; remaining prose supplies focus. With no matching evidence, use the installed-state default | depends on resolved mode |
 
 <Callout type="tip" title="Why the -setup suffix">
-`superreview-setup` installs a mechanism: after it runs you use the emitted `/superreview` in your own repo, not this skill. Canonical vocabulary across every setup skill: `status`, `install`, `upgrade`, `enable`, `disable`, `uninstall`, `purge`. Recurring tools like [`/brewcode:convention`](/brewcode/skills/convention/) keep bare names.
+`superreview-setup` installs the project-local `/superreview`. Set up
+[`convention-setup`](/brewcode/skills/convention-setup/) before teams and review setup so the generator
+can use your coding, testing and architecture patterns. Recurring tools such as `rules`, `skills`
+and `agents` keep bare names.
 </Callout>
 
 ## When to use
@@ -232,12 +238,13 @@ are IN (`git ls-files --others --exclude-standard` catches new, unignored files)
 
 ### Depth — QUICK vs EXTENDED
 
-Depth is resolved the same way as mode: read out of the prompt's own words, in any language. There
-is no `--fast`/`--deep` flag and none is planned — asking for depth in prose is the interface.
+Ask for depth in prose. The emitted skill compares distinct whole-word/phrase matches in its
+QUICK and EXTENDED keyword table: the higher score wins; ties and no matches select QUICK.
+There is no depth flag or additional CLI token. File-selection mode and Git scope stay unchanged.
 
 | | `QUICK` (default) | `EXTENDED` |
 |---|---|---|
-| Triggered by | anything else, or a speed word ("quick", "fast", "быстро") | a depth/completeness/expertise word ("deep", "thorough", "full review", "глубоко", "детально") |
+| Triggered by | Higher QUICK score, tie or no match ("quick", "fast", "быстро") | Higher EXTENDED score ("deep", "thorough", "full review", "глубоко") |
 | Spawns | 1 (`intent-guard`) | `intent-guard` + domain experts + scope pass A + scope pass B + `{0,1,2}` general |
 | Mechanical gates | yes | yes |
 | Intent / drift pass (`intent-guard`) | yes | yes |
@@ -245,14 +252,14 @@ is no `--fast`/`--deep` flag and none is planned — asking for depth in prose i
 | Scope baseline + scope gate | no | yes |
 | Adversarial validation | no — pool is self-verdicted | yes, per finding |
 | Interrupts on &gt;50 files | no | yes |
-| `INCOMPLETE` possible | only if the intent pass itself fails to run | yes (on `UNVALIDATED`, or a failed intent pass) |
+| `INCOMPLETE` possible | Intent pass missing/failed or governing intent baseline unreadable | Those gaps, plus `UNVALIDATED` findings |
 | Self-sync (Phase 4b) | no | yes, coordinator only, after the report |
 
 ```
 /superreview "the auth refactor"                 -> QUICK    (English, implicit)
-/superreview "быстрая проверка авторизации"       -> QUICK    (Russian, explicit)
+/superreview "quick look at the auth refactor"   -> QUICK    (English, explicit)
 /superreview "deep review of the auth refactor"   -> EXTENDED (English, explicit)
-/superreview "детальная проверка авторизации"     -> EXTENDED (Russian, explicit)
+/superreview "full review of the auth refactor"  -> EXTENDED (English, explicit)
 ```
 
 Mode and depth are independent axes, both announced before any review starts: mode picks the file
@@ -298,14 +305,20 @@ Source hierarchy — tier 1 always wins:
 
 | Tier | Source | Absent case |
 |------|--------|--------------|
-| 1 | External/original — tracker ticket, Slack thread, quoted requirements, the user's verbatim words | Normal, not a defect: the chat request itself becomes tier 1 |
+| 1 | Governing request — ticket/thread, quoted requirements or user's verbatim request, with latest explicit amendments | Use the readable chat request; if no governing baseline is readable, intent remains unassessed |
 | 2 | Local spec / design doc | `none` |
 | 3 | Local plan / task board / task graph | `none` |
 | 4 | Project policy — root + nested `CLAUDE.md`, rules, conventions | `none` |
-| 5 | Session transcript — what the user said mid-flight | always available |
+| 5 | Session transcript — execution context | Unavailable transcript is reported; never reconstructed from guesses |
 
 A contradiction between tiers is itself a finding; the higher tier wins and is labeled as such in the
-report. Sources are never invented.
+report. Latest explicit user corrections, refusals and scope approvals amend tier 1 even when
+found in the transcript. They supersede older requirements or plans. Sources are never invented.
+
+If the governing request cannot be read, the guard returns
+`not run — intent baseline unavailable` with empty findings. The coordinator copies that reason
+and marks the review `INCOMPLETE`, even when every mechanical gate passes and there are no findings.
+An empty finding list means `ALIGNED` only after comparison with a readable governing baseline.
 
 Evidence is deliberately cheap: session transcript, file and directory names, `git diff --stat`,
 dependency-manifest diff, doc headings — never a whole-file read, a build, a test run, or a linter.
@@ -333,6 +346,7 @@ leads with a verdict line plus a source-tier line:
 
 ```
 VERDICT: ALIGNED | MINOR DRIFT | MAJOR DRIFT — <one clause of why>
+VERDICT: not run — intent baseline unavailable
 Sources: T1 <label|none> / T2 <label|none> / T3 <label|none> / T4 <label|none> / T5 transcript
 ```
 
@@ -342,6 +356,10 @@ Every freshly emitted `## 5. Output` section also carries a Return Contract clau
 first, &lt;=30 lines, `path:line`, no file bodies / command output / logs / preamble — the same
 shape [`/brewtools:agent-return-setup`](/brewtools/skills/agent-return-setup/) enforces at the
 token level when that guard is installed.
+
+The intent guard stays read-only. Long evidence is returned to the coordinator to persist in
+the report directory. A path is reported only after the coordinator verifies the write; a blocked
+handoff remains a delivery gap rather than an invented report path or discarded evidence.
 
 <Callout type="warning" title="Known limitation: an existing intent-guard.md does not pick this up on its own">
 `intent-guard.md` is reused byte-untouched by contract, so a pre-existing agent never gains the new
@@ -564,8 +582,8 @@ surfaces current between runs, so a trigger below is for a change SELF-SYNC cann
   <Card title="The emitted skill" icon="magic" href="/brewcode/skills/review/">
     What `/superreview` does once it lands in your repo: modes, gates, scope gate, merged report.
   </Card>
-  <Card title="convention skill" icon="star" href="/brewcode/skills/convention/">
-    Another generator skill: writes project-wide coding conventions into `.claude/convention/`.
+  <Card title="Convention Setup" icon="star" href="/brewcode/skills/convention-setup/">
+    Establish coding, testing and architecture conventions before teams and review setup.
   </Card>
   <Card title="setup-status" icon="clipboard" href="/brewcode/skills/setup-status/">
     Read-only dashboard: it diffs `.template-baseline/` against the plugin templates to tell installed from stale.

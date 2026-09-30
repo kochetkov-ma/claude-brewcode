@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Drift check for the blocks the four opt-in-guard INSTALL.md runbooks share.
+ * Drift check for the blocks the opt-in-guard INSTALL.md runbooks share.
  *
  * Each runbook is EMITTED INTO A USER'S REPO and must stay fully self-contained,
  * so the shared blocks cannot be factored out into an include — every copy has to
@@ -29,7 +29,7 @@ const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SKILLS = join(REPO, 'brewtools', 'skills');
 const runbook = (name) => join(SKILLS, `${name}-setup`, 'assets', 'INSTALL.md');
 
-const ALL = ['agent-return', 'agent-deadline', 'agent-router', 'think-short'];
+const ALL = ['agent-return', 'agent-deadline', 'agent-router'];
 
 /** `canonical` is the file that owns the wording; `files` are all carriers. */
 const BLOCKS = [
@@ -56,7 +56,7 @@ const BLOCKS = [
     // agent-router is EXCLUDED on purpose: its ladder inserts an ownership-marker probe
     // (.claude/brewtools/agent-router.json) ahead of the git toplevel so the installer and
     // the hook resolve the same root at runtime. Deliberate divergence, not drift.
-    files: ['agent-return', 'agent-deadline', 'think-short'],
+    files: ['agent-return', 'agent-deadline'],
     why: 'CLAUDE_PROJECT_DIR -> git toplevel -> upward walk -> PWD. A divergent ladder installs '
        + 'into a nested .claude/ that the running Claude Code never reads.',
   },
@@ -68,7 +68,7 @@ const BLOCKS = [
     // runbook's own write tools (printf vs cat heredoc) and is intentionally local.
     stopAt: 'without bypass.',
     canonical: 'agent-return',
-    files: ['agent-return', 'agent-deadline', 'think-short'],
+    files: ['agent-return', 'agent-deadline'],
     why: 'Permission semantics of ~/.claude: ASK in default/acceptEdits, auto-approved only under '
        + 'bypassPermissions, hard failure headless. Wrong here and a global install hangs unattended.',
   },

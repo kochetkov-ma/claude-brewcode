@@ -114,8 +114,10 @@ check('yaml.count', blocks.length, 4, 'the reference ships exactly four workflow
   check('f09.no-interpolation', offenders, [],
     'BT-F09: every context reaches shell/JS through env:, never pasted into the source by ${{ }}');
 }
-check('f09.input-validated', (tplText.match(/\^\[A-Za-z0-9\._-\]\{1,128\}\$/g) || []).length, 2,
-  'the image_tag allowlist appears twice: the regex test and its ::error:: message');
+check('f09.input-validated', [
+  (blocks[1].match(/\^\[A-Za-z0-9\._-\]\{1,128\}\$/g) || []).length,
+  blocks[1].includes('A bounded version or SHA-run tag is required'),
+], [1, true], 'image_tag has a syntax allowlist plus a bounded version/SHA-run gate; aliases are rejected');
 check('f09.deployment-id-parsed', (tplText.match(/Number\.parseInt\(process\.env\.DEPLOYMENT_ID/g) || []).length, 2,
   'both deployment-status steps parse the id as an integer instead of pasting it into JS');
 check('f09.no-pr-target', blocks.flatMap((b) => b.split('\n').filter((l) => l.includes('pull_request_target'))), [],
@@ -132,7 +134,10 @@ check('f09.no-pr-target', blocks.flatMap((b) => b.split('\n').filter((l) => l.in
     const m = l.match(/^\s*uses:\s*(\S+)\s*$/);
     if (m) uses.push(m[1]);
   }
-  check('pin.uses-count', uses.length, 15, 'every step that uses an action is accounted for');
+  check('pin.uses-count', uses.length, 17, 'the two additional actions authenticate image reads and verify the source build');
+  check('provenance.actions', blocks[1].split('\n').filter((l) => /^      - name: (Log in to GHCR|Verify successful source build)$/.test(l)), [
+    '      - name: Log in to GHCR', '      - name: Verify successful source build',
+  ], 'new action count corresponds to the registry and source-build checks, not an unexplained pin change');
   check('pin.uses-set', [...new Set(uses)].sort(), [
     'actions/checkout@v7.0.1',
     'actions/github-script@v9.0.0',

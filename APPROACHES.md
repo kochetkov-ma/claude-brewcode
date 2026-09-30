@@ -85,8 +85,6 @@ classDiagram
   }
 
   class S4["4 - Context economy"] {
-    hook think-short - open and every 10th prompt
-    text think-short-prompt.md
     mcp semble-code pinned 0.5.5
     rule semble-first.md - always loaded
     hook semble-session and semble-reminder.mjs
@@ -111,7 +109,7 @@ classDiagram
     skill task-board-setup - agent skills rule board
     skill docsync-setup - 3 hooks and config
     skill memory-sync-setup - 1 skill
-    skill manager-setup and think-short-setup
+    skill manager-setup and convention-setup
     skill semble-setup - MCP at user scope
     skill agent-return agent-deadline agent-router setup
     skill setup-status - reports and writes nothing
@@ -154,14 +152,14 @@ classDiagram
   S1 --> S2 : injects the codeword blocks every turn
   S6 --> S2 : arms the inert hard wall
   S6 --> S3 : installs the router deadline and return hooks
-  S6 --> S4 : installs think-short and semble
+  S6 --> S4 : installs search hooks and convention loading
   S6 --> S5 : emits the superreview skill and the team roster
   S6 ..> S8 : every emitted skill carries the prompt contract
   S6 ..> IG : teams-setup reuses that file - no second write
   S5 --> IG : generate.sh emit-agent is the ONE writer
   S5 --> S7 : the member agents it spawns carry these sections
   S2 --> S3 : the 6-field brief opens every spawn
-  S4 --> S3 : re-injects tone and search rule at each spawn
+  S4 --> S3 : injects search guidance at each spawn
   S3 --> S7 : its budget is quoted in every Return Contract
   S8 ..> S7 : shares the four provenance stamp keys
 
@@ -190,7 +188,6 @@ sequenceDiagram
     BC->>MS: banner, update check
     BC->>MS: plan symlink on clear
     BT->>MS: hard wall notice, only if armed
-    PH->>MS: think-short tone directive
     PH->>MS: semble repo directive
     PH->>MS: semble-first rule, always loaded
   end
@@ -205,10 +202,9 @@ sequenceDiagram
   rect rgba(31,111,235,0.14)
     Note over U,PH: UserPromptSubmit, every turn
     U->>MS: prompt
-    BC->>MS: ROLE, SPLIT, BRANCH
+    BC->>MS: ROLE, SPLIT, BRANCH only eligible prompts 1,10,20,...
     BT->>MS: codewords ++m ++a ++rr ++r
     BT->>MS: auto manager block while wall is on
-    PH->>MS: think-short, every 10th prompt
     PH->>MS: semble prefetch, 3 ranked paths
   end
 
@@ -224,7 +220,6 @@ sequenceDiagram
     PH--xMS: router names the real expert
     PH->>MS: haiku judge, strict level only
     MS->>SA: Task spawn
-    PH->>SA: think-short tone directive
     PH->>SA: return contract announced
     PH->>SA: semble subagent nudge
     Note over SA: no AskUserQuestion here - approvals leave as envelopes
@@ -258,7 +253,7 @@ These run the moment the plugin is installed. No setup skill, no config file, no
 
 | Approach | File | Scope | Trigger | Fires when | Excerpt | Purpose | Problem solved | Project-specific |
 |---|---|---|---|---|---|---|---|---|
-| Delegation reminder on every prompt | `brewcode/hooks/forced-eval.mjs` | plugin-shipped | `UserPromptSubmit`, timeout 2 s | Every prompt, slash commands included. Skipped only for one-word replies: `yes`, `no`, `ok`, `continue`, a bare number, a single letter | `[ROLE] Manager: scan agents ... expert for this domain exists -> delegate regardless of size; ... [SPLIT] One agent for an hour = drift you cannot observe ... [BRANCH] Stay on the current branch; none chosen -> main.` - the text itself is not in this file: it is `REMINDER_TEXT` from `brewcode/hooks/lib/reminder.mjs`, shared with `role-recall.mjs` | Re-state role, subagent sizing and branch default every turn | The model does domain work itself while a project expert agent exists; one giant agent runs for an hour; a feature branch nobody asked for | no |
+| Delegation reminder on eligible prompts | `brewcode/hooks/forced-eval.mjs` | plugin-shipped | `UserPromptSubmit`, timeout 2 s | Eligible prompts 1, 10, 20, ...; slash commands included. Skip empty/meta replies and unavailable counters: `yes`, `no`, `ok`, `continue`, a bare number, a single letter | `[ROLE] Manager: scan agents ... expert for this domain exists -> delegate regardless of size; ... [SPLIT] One agent for an hour = drift you cannot observe ... [BRANCH] Stay on the current branch; none chosen -> main.` - the text itself is not in this file: it is `REMINDER_TEXT` from `brewcode/hooks/lib/reminder.mjs`, shared with `role-recall.mjs` | Re-state role, sizing and branch defaults at eligible cadence | The model does domain work itself while a project expert agent exists; one giant agent runs for an hour; a feature branch nobody asked for | no |
 | Session banner, update check, plan symlink | `brewcode/hooks/session-start.mjs` | plugin-shipped | `SessionStart`, timeout 3 s | Every session start. The symlink part runs only when `source === 'clear'`, and only if the newest `.md` in `~/.claude/plans/` is under 60 s old (`PLAN_FRESHNESS_MS`, `:35`); it then points `<repo>/.claude/plans/LATEST.md` at that global file. Two containment checks, both refusals: `<repo>/.claude/plans` that is itself a **symlink** is left alone and nothing is linked - `mkdirSync`/`symlinkSync` follow it and would write `LATEST.md` outside the project root (`:140-148`); and an existing `LATEST.md` is replaced only when it is a symlink whose target resolves inside the plans dir, so a hand-written file, a directory or a foreign symlink is preserved and logged as a conflict (`claimLatestLink`, `:74-107`). The whole output is a `systemMessage` for the human - the model is sent nothing | `brewcode: <root> \| session: <id> \| perm: <mode>` and, when out of date, `UPDATE brewcode <installed> -> <released>: <link to the releases page>`; the link step logs `Linked: .claude/plans/LATEST.md -> <plan name>` | Show the live build and permission mode; keep the just-written plan reachable from the project | Running an old build silently; losing the plan file when Plan Mode clears the session | no |
 | Role frame re-injected after a compaction | `brewcode/hooks/role-recall.mjs` | plugin-shipped | `SessionStart` with `"matcher": "compact"`, timeout 2 s | Only after a compaction, auto or `/compact`. Belt-and-braces on top of the matcher: anything but `input.source === 'compact'` returns `{}`, so `startup`, `resume`, `clear` and `fork` are silent - they still carry the frame. Unconditional otherwise, and compactions chain | The same three lines as `forced-eval.mjs`, byte-for-byte: both import `REMINDER_TEXT` from `brewcode/hooks/lib/reminder.mjs`, which exists so `[ROLE]` / `[SPLIT]` / `[BRANCH]` cannot drift between two hooks on two different events | Put the manager role back in front of the model at the one moment the summary has just collapsed every earlier copy of it | An auto-compaction has no prompt, so `forced-eval.mjs` never fires; after a few compactions the session quietly stops delegating | no |
 | Plan, intent and task graph re-anchored after a compaction | `brewcode/hooks/compact-recall.mjs` | plugin-shipped | `SessionStart` with `"matcher": "compact"`, timeout 2 s | Same moment, same `source === 'compact'` guard, and it ALWAYS injects there. It scans this session's `transcript_path` only - `statSync` must report a regular file (a FIFO reports size 0 and then blocks `readFileSync` forever) of at most `MAX_TRANSCRIPT_BYTES`, `64 * 1024 * 1024`; then `Buffer.lastIndexOf` / `includes`, no JSONL parsing, ~6 ms scan (one buffer read plus five substring scans) on an 8.13 MB transcript, ~30 ms full process wall clock standalone / ~55 ms spawned from a node parent (node startup dominates). Ladder, first match wins, five rungs since v6: `plan-file` -> `plan-latest` -> `plan-missing` -> `plan-in-summary` -> `intent`. `plan-latest` reads `<root>/.claude/plans/LATEST.md` (`compact-recall.mjs:150-164`) and exists because a plan that PREDATES the transcript - `--resume`, or a session resumed after `/clear` - leaves no `planFilePath` to scan for; that link is hook-owned and project-scoped, so it can never be another repo's plan, and it sits above `plan-missing` because a real file beats a dead path. `[TASKS]` is appended only when the transcript contains `"name":"TaskCreate"` | `[PLAN] Read <path> with the Read tool before doing any work. It holds the role model and the delegation split for this session ...`, or `[PLAN] Read <root>/.claude/plans/LATEST.md ... It is this project's latest plan, carried over from before the compact ...`, or `[PLAN] The plan file for this session is gone or unreadable at <path>. Rebuild the frame from the compact summary plus TaskList, not from scratch.`, or `[PLAN] This session ran in plan mode; no plan file is available. ...`, or `[INTENT] Re-read the user ORIGINAL task and intent from the compact summary and keep executing THAT. Do not continue from the most recently remembered fragment, and do not re-scope the work.` Plus, when a graph exists: `[TASKS] Then call TaskList: a task graph created before the compact ALREADY EXISTS in this session. ... The built-in reminder lags several turns and may show empty, so TaskList is the authority. Then resume the work.` | Say what we were doing, from this session's own record, before the model decides for itself | The session loses the user's original task and starts a brand-new task graph on top of the old one | no |
@@ -285,7 +280,7 @@ Notes for this section:
   being ignored. `additionalContext` accumulates across every hook registered on the same event - no
   clobbering, any number of hooks compose. `PreToolUse` `additionalContext` reaches only the parent
   session, never a subagent; `SubagentStart` `additionalContext` reaches the subagent and supports an
-  `agent_type` matcher. This is why think-short's subagent injection (below) moved off `updatedInput`.
+  `agent_type` matcher. Use the channel belonging to the intended recipient.
 - brewcode registers three hooks on `SessionStart`, and they split cleanly. `session-start.mjs` runs on every
   start and sends the model nothing - its whole output is a `systemMessage` for the human. The other two,
   `role-recall.mjs` and `compact-recall.mjs`, sit in a `"matcher": "compact"` group, run only after a
@@ -322,7 +317,7 @@ Notes for this section:
 
 ## 2. Delegation and manager discipline
 
-The forced-eval `[ROLE]` / `[SPLIT]` / `[BRANCH]` lines from section 1 are the base layer: they are always on.
+The forced-eval role/split/branch reminder is plugin-registered and emits on eligible prompts 1,10,20,...; post-compaction recall is separate.
 Everything below is optional and sits on top of that base. Codewords ship with the plugin and always work; the
 wall has to be installed first.
 
@@ -397,9 +392,6 @@ repeated here.
 
 | Approach | Installed by | Scope | Trigger | Fires when | Excerpt | Off switch | Purpose | Problem solved | Project-specific |
 |---|---|---|---|---|---|---|---|---|---|
-| think-short at session open | `/brewtools:think-short-setup install` | choice: project or global, one target per run | `SessionStart` | Every session start or resume; also resets the per-session counter and prunes markers older than ~1 day | `Be terse. Results first, no preamble/filler/sycophancy. ASCII only. ... Grep before Read. Edit over Write. Parallel calls in one message.` ... `Keep code simple - do not over-engineer. ... find the closest well-built counterpart in the repo` | `disable` renames `think-short-prompt.md` to `.disabled`; hooks stay wired and no-op | Set output style and coding taste for the whole session | Verbose, sycophantic, over-commented output; serial tool calls | no |
-| think-short reminder every 10th prompt | same | same | `UserPromptSubmit` | Prompts 10, 20, 30 ... of a session. `const INTERVAL = 10`, never the first | The same text, re-injected verbatim | same rename switch | Re-anchor terseness after the opening directive is buried | Terseness decays as the session grows | no |
-| think-short into every subagent | same | same | `SubagentStart` | Every subagent spawn. Delivers the directive as `hookSpecificOutput.additionalContext` | The same body, unmodified | same rename switch; `additionalContext` accumulates across hooks, so no coexistence/yield logic is needed | Give subagents the same output contract | A subagent inherits no parent context and returns a wall of prose | no |
 | Pinned semantic-search MCP | `/brewcode:semble-setup install` | MCP at **user** scope (`semble[mcp]==0.5.5`, `alwaysLoad: true`), registered with `--content code docs config`; everything else project | user runs the skill | The MCP is registered once, into `~/.claude.json`, and is then available in every project on the machine - but only from a NEW session. A fresh registration is invisible to the session that made it, so install stops at a reload checkpoint and finishes via `resume` | Exposes `mcp__semble_code__search` and `mcp__semble_code__find_related`; both require `repo` and accept optional per-call `content=code|docs|config|all`. Omitting `content` uses the registered corpus. One shared cache root keeps each exact selection in a sibling variant: combined `index-code-config-docs`, code-only `index`, and corresponding variants for other selections | `disable` sets `state.enabled=false`; nothing is deleted, all hooks read the flag | Make semantic search available before a grep habit forms | Grep fails on behaviour and intent questions where the wording is absent from the code | yes for project state; the MCP is machine-wide |
 | semble-first rule and CLAUDE.md block | same | project | context auto-load | Every request, as part of the always-loaded instructions. Two files: the full table lives in `.claude/rules/semble-first.md`, and a 6-line summary is written into `<repo>/CLAUDE.md` between the literal markers `<!-- BEGIN brewcode:semble -->` and `<!-- END brewcode:semble -->`. Re-install replaces the marked range in place and never appends a second block; a BEGIN without its END reports `malformed marker block` and changes nothing | `Semantic search first: ONE mcp__semble_code__search with repo = absolute project root, top_k=5, max_snippet_lines=10 - then open the hit at start_line. rg/Grep stays for exact identifiers, regexes, paths and exhaustive enumeration.` plus `top-k is a ranked sample, not a list: "every/all" is unanswerable in principle.` | `uninstall`/`purge` remove the text; `disable` leaves it and only silences the hooks | Teach the tool split once, in the always-loaded layer | The same question searched twice - semble then an equivalent `rg` - and semble used for enumeration it cannot do | yes, text is generic |
 | semble session directive | same | project | `SessionStart`, timeout 5 s | Session start, only when `.claude/semble/state.json` phase is `ready` or `awaiting_reload` | `semble: use ONE mcp__semble_code__search first (repo=<cwd>, top_k=5, max_snippet_lines=10), then open the hit at start_line.` | `enabled` flag | Restate the contract with the real repo path filled in | The model calls the MCP without `repo`, which is required and never inferred | yes |
@@ -409,11 +401,9 @@ repeated here.
 | semble agent migration | same, `semble-agents.sh apply` | project `.claude/agents/**/*.md` | one-off at install, upgrade or resume | An agent declares a `tools:` allowlist that lacks the two MCP tool names | Appends `mcp__semble_code__search, mcp__semble_code__find_related` to `tools:` in whatever list form it uses | `--revert`; wildcards and `disallowedTools` conflicts are skipped | Make sure every project agent can call the tool the rule names | A rule ordering semble-first inside an agent with no permission to call it | yes |
 | semble telemetry - `semble-stats.mjs` | same | project | `PostToolUse` and `PostToolUseFailure`, both with matcher `mcp__semble_code__search\|mcp__semble_code__find_related\|Bash\|Grep\|Glob\|Read` | After every matching tool call, whether it succeeded or failed. One file registered twice, which is why 5 semble hook files produce 6 settings entries. It is the only hook in the whole suite on `PostToolUseFailure` - a search that errored is still a data point about which tool was reached for | None - pure observer, always `{}`. Log at `.claude/semble/telemetry.jsonl`, trimmed at 2 MB | `enabled` flag | Measure whether semble calls actually displaced grep-shaped calls | Adoption claims with no numbers behind them | yes |
 | Session learnings compacted into the rule layer | `/brewcode:rules` | project `.claude/rules/` only, **never** `~/.claude/rules/` | user runs the skill | You run it after a session that produced a lesson worth keeping. It syncs `KNOWLEDGE.jsonl` or the session's learnings into `avoid.md`, `best-practice.md` and `{prefix}-avoid.md` / `{prefix}-best-practice.md` for one slice of the repo | `Claude Code auto-loads .claude/rules/*.md into every session, so entries must be table rows, not prose` (`rules/SKILL.md:189`) | not a `-setup` skill: delete or trim the rule file | Grow the always-loaded layer in the cheapest shape there is | A lesson learned twice; a rule file that turns into an essay and costs every request | yes |
-| Etalon and convention extraction | `/brewcode:convention` | project | user runs the skill | You run it on a repo whose patterns are not written down. Default mode `full`; mode `rules` writes only into `.claude/rules/` | `argument-hint: "[prompt] [full\|conventions\|rules\|paths <p1,p2>]"` | same - delete what it wrote | Name the repo's real etalon classes and patterns once, in the layer every session already reads | Every agent re-deriving the house style from scratch, and each one deriving it differently | yes |
+| Etalon and convention setup | `/brewcode:convention-setup` | project | user runs the setup after search and before teams | Default install; seven lifecycle modes plus full/conventions/rules/paths extraction | Three generated convention documents and `.claude/rules/convention.md` loading guidance | Disable parks the loader; upgrade preserves wording and disabled state; uninstall keeps docs, purge removes owned docs; both keep accepted rules and CLAUDE.md | Establish architecture, coding, and testing patterns before agents consume them | Repeated inconsistent rediscovery of project patterns | yes |
 
-The order these arrive in a session: think-short comes first, at session open, and sets the tone of the
-output. semble-first comes next and decides how the session looks things up. The manager text comes last,
-once per turn, and turns the session from a worker into a coordinator.
+Search guidance arrives at session start. Manager context is added on its codeword turn or armed-wall fallback. Setup order is agent-return inspection, search, conventions, teams, agent consumers, task-board, then memory-sync and docsync.
 
 ## 5. Review and anti-drift
 
@@ -611,9 +601,9 @@ hard-coded as `*/.claude/skills/claude-plugin-guide` in `validate-skill.sh:19`; 
 
 Prose and a checklist say what an artefact should do. From v6 the load-bearing half is also pinned by a
 runnable suite, so a future edit that breaks a contract fails a test instead of shipping quietly. Nine
-harnesses were added or hardened in this release, 565 checks in total, all passing. Eight further suite
+harnesses were added or hardened in this release, 565 checks in total, all passing. Seven further suite
 dirs predate v6 (`semble-setup`, `docsync-setup`, `agent-deadline-setup`, `agent-return-setup`,
-`agent-router-setup`, `manager-setup`, `provider-switch`, `think-short-setup`).
+`agent-router-setup`, `manager-setup`, `provider-switch`).
 
 | Suite | Checks | What it pins |
 |---|---|---|
@@ -679,38 +669,30 @@ Other hooks on the same event do speak to the model. semble's speaks only when i
 }
 ```
 
-**What the model sees**, with think-short installed:
+**What the model sees:** semantic-search guidance. The human gets the version banner; the model receives search instructions without version chatter.
 
-```text
-Be terse. Results first, no preamble/filler/sycophancy. ASCII only.
-Think short: minimal internal reasoning, no exploring aloud.
-...
-semble: use ONE mcp__semble_code__search first (repo=/Users/you/proj, top_k=5, ...), then open the hit at start_line. rg stays for exact/exhaustive matching.
-```
-
-The human gets the version banner; the model gets tone and search rules, and nothing about versions.
-
-### B. Every prompt: the always-on reminder
+### B. Eligible prompts: the delegation reminder
 
 **You type:** `add a retry to the upload client`
 
-`brewcode/hooks/forced-eval.mjs:55` returns the same three lines every turn - `REMINDER_TEXT` from
-`lib/reminder.mjs`, capped at 9000 chars:
+`brewcode/hooks/forced-eval.mjs` counts eligible non-meta prompts and emits REMINDER_TEXT
+on counts 1,10,20,..., capped at 9000 characters. The shared text measures 74 whitespace-separated
+words and 472 ASCII bytes/characters; bytes/4 is a rough 118-token proxy, not a tokenizer count:
 
 ```json
 {
   "hookSpecificOutput": {
     "hookEventName": "UserPromptSubmit",
-    "additionalContext": "[ROLE] Manager: scan agents (project .claude/agents/ first) - expert for this domain exists -> delegate regardless of size; ...\n[SPLIT] One agent for an hour = drift you cannot observe: split into bounded units (1 deliverable, ~5 files, ~20 min), ...\n[BRANCH] Stay on the current branch; none chosen -> main. ..."
+    "additionalContext": "[ROLE] Manager: check .claude/agents/ (project first); domain expert -> delegate regardless of size, else self.\n[SPLIT] One agent for an hour = drift you cannot observe: bounded units (1 deliverable, ~5 files, ~20 min), fan out in ONE message; real data handoff = dependency, else parallel; spawn prompt: goal + scope + done-so-far + consumer + acceptance.\n[BRANCH] No branch/PR instruction -> stay current, else main; take over ALL workspace changes incl. other sessions."
   }
 }
 ```
 
-The model sees those three lines appended after your prompt, about 90 words, every single turn. The channel
+The model receives these three lines only on the eligible cadence, not every turn. The channel
 is `additionalContext`, never `updatedInput` - that field is silently dropped on `UserPromptSubmit` in
 CC 2.1.x. Type a bare `ok` instead and `forced-eval.mjs:48` matches its skip list (`:41-46`) and writes `{}`:
 nothing is added, which is the normal quiet case, not an error. The same three lines come back after a
-compaction, from the same constant, through a different hook - example H.
+compaction, from the same constant, through a different hook - example G.
 
 ### C. A codeword turn: `++m`
 
@@ -741,24 +723,7 @@ TaskGraph, delegate, observe, integrate. ...
 
 Several hundred words for one turn, then gone. Both hooks fire on the same event, so the model gets both.
 
-### D. The periodic one: think-short every 10th prompt
-
-**You type:** anything. `think-short-prompt-counter.mjs:70` bumps a per-session counter and checks
-`count % 10`. On prompts 1 through 9 it writes `{}`. On prompt 10, 20, 30 it writes the whole prompt file
-back (`:86`):
-
-```json
-{
-  "hookSpecificOutput": {
-    "hookEventName": "UserPromptSubmit",
-    "additionalContext": "Be terse. Results first, no preamble/filler/sycophancy. ASCII only.\n...\nComment like a human, not an AI. ..."
-  }
-}
-```
-
-The same ~120 words that opened the session are re-stated once per ten turns, so terseness does not decay.
-
-### E. A tool call that gets denied: the hard wall
+### D. A tool call that gets denied: the hard wall
 
 **What happens:** the main session calls `Write` while `.claude/brewtools/manager/state.json` has
 `hard: true`. `hardmode-guard.mjs:353` answers on `PreToolUse`:
@@ -794,29 +759,9 @@ denies (`:399-403`). The one deliberate hole is the documented exit: the state C
 classification and survives both `strict` and a broken state (`:359`), so you can always turn the wall
 off.
 
-### F. A subagent spawn
+### E. A subagent spawn
 
-**What happens:** the session calls `Task`. One moment fires for all three injectors below: `SubagentStart`,
-once the agent exists. That channel accumulates - every registered `SubagentStart` hook's
-`additionalContext` is appended and delivered into the subagent's own message list, so none of the three can
-clobber another. First, think-short delivers the same tone directive that opened the session
-(`think-short-subagent.mjs:64`):
-
-```json
-{
-  "hookSpecificOutput": {
-    "hookEventName": "SubagentStart",
-    "additionalContext": "Be terse. Results first, no preamble/filler/sycophancy. ASCII only.\n..."
-  }
-}
-```
-
-This replaced an earlier `PreToolUse` on `Task|Agent` design that rewrote the spawn prompt via
-`updatedInput.prompt` - the one hook in the suite that used `updatedInput` for injection. That channel is
-single-writer/last-wins (every `PreToolUse` hook on the event sees the same original input, and the runner
-keeps only the last hook's edit), so a second hook doing the same thing would have clobbered it; the retired
-design carried a self-suppression check for exactly that case. `SubagentStart` + `additionalContext` has no
-such conflict, so the check is gone.
+**What happens:** the session calls `Agent`. Agent-return and semantic-search instructions arrive on `SubagentStart`, after the agent exists. Each additionalContext block accumulates into that subagent's context.
 
 The return contract announces the numbers the agent will be judged by (`agent-return-budget.mjs:122`):
 
@@ -829,16 +774,16 @@ The return contract announces the numbers the agent will be judged by (`agent-re
 }
 ```
 
-**What the subagent sees:** the tone directive, then the return contract, then semble's one-liner
+**What the subagent sees:** the return contract, then semble's one-liner
 (`semble-subagent.mjs:133`):
 
 ```text
 semble: mcp__semble_code__search is already available to you — no ToolSearch needed. Start any "where/how/why does X work" question with ONE call: repo="/Users/you/proj", top_k=5, ...
 ```
 
-A subagent that inherits no conversation still arrives with output style, a return budget and a search rule.
+A subagent that inherits no conversation still arrives with a return budget and a search rule.
 
-### G. A subagent returns over budget
+### F. A subagent returns over budget
 
 **What happens:** the subagent finishes with a 6,000-character answer. `SubagentStop` fires and
 `agent-return-guard.mjs:97` sizes it: `ceil(6000 / 4)` = 1500 tokens. Above `passTokens` 1000, below
@@ -857,7 +802,7 @@ The agent rewrites once and returns. It is blocked at most once ever: `agent-ret
 docsync gate blocks on the same event style once per session and says so in its own text: `This is the only
 docsync block this session.` (`docsync-gate.mjs:150`).
 
-### H. A compaction lands
+### G. A compaction lands
 
 **What happens:** the context fills and Claude Code compacts it, on its own mid-turn or because you typed
 `/compact`. The conversation is replaced by a summary and the session continues. `SessionStart` fires with
@@ -949,25 +894,23 @@ claims only that the session ran in plan mode, and folds the intent fallback int
 
 ### What is injected at each moment
 
-Word counts are eyeballed from the source strings, not measured by a script.
+Most sizes below are rough historical estimates. REMINDER_TEXT is measured from the current source using whitespace word count and byte/character length; bytes/4 is a proxy, not measured tokens.
 
 | Moment | Hook event | Who injects | Roughly how many words | How often |
 |---|---|---|---|---|
 | Session opens, human line | `SessionStart` | brewcode `session-start.mjs`, `systemMessage` only | ~15 to the human, 0 to the model | once per session |
-| Session opens, tone | `SessionStart` | think-short | ~120 | once per session, only when installed |
 | Session opens, search rule | `SessionStart` | semble | ~35 | once per session, only when state is `ready` |
 | Session opens, wall notice | `SessionStart` | brewtools `session-start.mjs` | ~60 | once per session, only while the wall is armed |
-| After a compaction, role frame | `SessionStart` matcher `compact` | brewcode `role-recall.mjs` | 108 words / 636 chars - the same `REMINDER_TEXT` as every prompt | once per compaction, and compactions chain |
+| After a compaction, role frame | `SessionStart` matcher `compact` | brewcode `role-recall.mjs` | 74 words / 472 bytes/characters; bytes/4 proxy 118 - shared REMINDER_TEXT | once per compaction, and compactions chain |
 | After a compaction, plan and tasks | `SessionStart` matcher `compact` | brewcode `compact-recall.mjs` | exactly one plan fragment, 25-47 words: `plan-file` 29 / `plan-latest` 34 / `plan-missing` 25 / `plan-in-summary` 47 / `intent` 31 (146-257 chars, `plan-latest` 193, plus the plan path where one is quoted); plus 43 words / 251 chars of `[TASKS]` when the transcript holds a `TaskCreate` | once per compaction, and compactions chain. Always something on `source === 'compact'`, never `{}` |
-| Every prompt | `UserPromptSubmit` | brewcode `forced-eval.mjs` | 108 words / 636 chars, counted from `lib/reminder.mjs` | every turn, except one-word replies |
+| Eligible prompt | `UserPromptSubmit` | brewcode `forced-eval.mjs` | 74 words / 472 bytes/characters; bytes/4 proxy 118 | eligible counts 1,10,20,...; empty/meta replies and unavailable counters do not inject |
 | Codeword turn | `UserPromptSubmit` | brewtools `manager-prompt.mjs` | 300-700 per block | only on the turn you type `++m` / `++a` / `++rr` / `++r` |
 | Wall armed, no codeword | `UserPromptSubmit` | brewtools `manager-prompt.mjs` | ~400 | every turn while `state.hard === true` |
-| Tone refresh | `UserPromptSubmit` | think-short counter | ~120 | every 10th turn |
 | Ranked candidates | `UserPromptSubmit` | semble prefetch | ~60 plus 3 paths | only on a question-shaped prompt, 30 s throttle |
 | Main-session tool call | `PreToolUse` | hard wall | ~60, as a deny | only when armed, and only on a blocked tool |
 | Search-shaped shell call | `PreToolUse` | semble reminder | ~25 | only when the command looks like a behaviour question |
 | Subagent spawn | `PreToolUse` `Task\|Agent` | agent-router | ~40, only on a redirect | every spawn, when installed |
-| Subagent starts | `SubagentStart` | think-short subagent, agent-return contract, semble subagent | ~120 + ~50 + ~50 | every subagent, when installed |
+| Subagent starts | `SubagentStart` | agent-return contract, semble subagent | ~50 + ~50 | every subagent, when installed |
 | Subagent tool call | `PreToolUse` | agent-deadline | ~60 warn, ~80 deny | past 80% of the budget, re-stated at most once per 10% of it |
 | Subagent returns | `SubagentStop` | agent-return guard | ~60 | only over budget, at most once per agent |
 | End of turn | `Stop` | docsync gate | ~50 | at most once per session, only when a doc is stale |
@@ -986,7 +929,6 @@ Word counts are eyeballed from the source strings, not measured by a script.
 | `hardmode-guard.mjs` copy | `/brewtools:manager-setup install` | `<repo>/.claude/brewtools/manager/`, registered in `.claude/settings.local.json` as `PreToolUse "*"` | `/brewtools:manager-setup disable`, or `uninstall` to unwire |
 | `manager-state.mjs` + `state.json` | `/brewtools:manager-setup install` | `<repo>/.claude/brewtools/manager/` | `node <ABS>/.claude/brewtools/manager/manager-state.mjs set hard=false`; `purge` deletes it |
 | Codeword text overrides | `/brewtools:manager-setup edit` (mode `full` only) | `<repo>/.claude/brewtools/manager/prompts/` or `~/.claude/manager/prompts/` | `purge` restores plugin defaults |
-| think-short hooks: `think-short-session.mjs`, `-prompt-counter.mjs`, `-subagent.mjs`, `think-short-prompt.md` | `/brewtools:think-short-setup install` | project `<repo>/.claude/hooks/` or global `~/.claude/hooks/`, 3 entries in that scope's `settings.json` | `/brewtools:think-short-setup disable` renames the prompt file |
 | `semble_code` MCP entry | `/brewcode:semble-setup install` | `~/.claude.json`, user scope, pinned `semble[mcp]==0.5.5`, registered corpus `code docs config` | `/brewcode:semble-setup disable` (flag), `uninstall` to remove |
 | semble shared content-variant cache | searches through the MCP, prefetch hook or project warm/reindex scripts | macOS `~/Library/Caches/semble-code`, Linux `${XDG_CACHE_HOME:-$HOME/.cache}/semble-code`; each repo hash keeps `index-code-config-docs`, code-only `index`, and other exact content selections as siblings | `reindex` replaces only the selected variant; `/brewcode:semble-setup purge` removes the shared root after confirmation |
 | `.claude/rules/semble-first.md` + the CLAUDE.md marker block | `/brewcode:semble-setup install` | project | `uninstall` or `purge`; `disable` leaves the text and silences the hooks |
@@ -1016,8 +958,8 @@ Word counts are eyeballed from the source strings, not measured by a script.
 | `.claude/agents/ssh-admin.md` | `/brewtools:ssh` from `templates/ssh-admin-agent.md.template` (`SKILL.md:341`) | project | delete the file; any re-run regenerates and re-stamps it (`:499`) |
 | `.claude/agents/deploy-admin.md` | `/brewtools:deploy` from `templates/deploy-admin-agent.md.template` (`SKILL.md:234`) | project | delete the file; a re-run regenerates it |
 | `.claude/rules/avoid.md`, `best-practice.md` and their `*-avoid.md` families | `/brewcode:rules` | project `.claude/rules/` only, never `~/.claude/rules/` (`rules/SKILL.md:13`) | delete the rows, or the file |
-| `.claude/convention/*.md` and the rule rows derived from them | `/brewcode:convention` (`SKILL.md:116`) | project | run mode `conventions`, which leaves `.claude/rules/` untouched (`:350`); or delete the dir |
-| Regression harnesses, 17 suite dirs | hand-maintained in this repo, never shipped to a consumer | `brewcode/{agents,hooks}/tests/` and `brew*/skills/<skill>/tests/` - 9 added or hardened in v6 (see section 8), 8 older ones under `semble-setup`, `docsync-setup`, `agent-deadline-setup`, `agent-return-setup`, `agent-router-setup`, `manager-setup`, `provider-switch`, `think-short-setup` | nothing to turn off - they are `node <suite>.mjs`, run by hand or in CI |
+| Convention documents and loading rule | `/brewcode:convention-setup` | project `.claude/convention/` and `.claude/rules/convention.md` | Disable parks loader; uninstall removes loader; purge also removes the three owned docs; accepted rules and manual CLAUDE.md references stay |
+| Regression harnesses | hand-maintained in this repository | Creator, hook, and skill test directories; current validation evidence determines coverage | Run explicitly or through CI |
 | Provider alias block | `/brewtools:provider-switch` | `~/.zshrc` only - the skill writes secrets nowhere else (`SKILL.md:15`, `:54`) | delete the alias line |
 
 ## Keeping this page current

@@ -9,9 +9,9 @@ Convert a local Markdown file with `scripts/md_to_pdf.py`. Check dependencies wi
 
 ## Complete native workflow
 
-Follow every phase below. When a phase delegates work, use Codex collaboration with only `task_name` and `message`; treat each "Codex delegation brief" block as role and message content, not executable syntax. Use `request_user_input` for the documented user gates. Resolve `<skill-directory>`, `<plugin-root>`, `<project-root>`, and `<arguments>` before running commands.
+Follow every phase below. When a phase delegates work, use Codex collaboration with only `task_name` and `message`; treat each "Codex delegation brief" block as role and message content, not executable syntax. Required approval: main presents a concrete, reviewable proposal in chat and waits for an actual user reply before dependent action. Existing authorization for the same scope remains valid; do not ask again. Optional clarification: use `request_user_input_async` only if exposed, or `request_user_input` only if available in the current runtime/mode, for optional choices and never approval. Otherwise ask in main chat. Delegated agents return unresolved questions to main. Silence, elapsed time and tool errors are not approval. Resolve `<skill-directory>`, `<plugin-root>`, `<project-root>`, and `<arguments>` before running commands.
 
-<!-- brewcode-meta: version=6.2.0 content_version=6.0.0 generated_by=brewdoc:md-to-pdf -->
+<!-- brewcode-meta: version=6.3.0 content_version=6.0.0 generated_by=brewdoc:md-to-pdf -->
 
 # MD to PDF
 
@@ -29,8 +29,8 @@ resolve mode + file FROM the prompt.
 4. **Prose resolution (mandatory):** `<arguments>` may be a full sentence, not just tokens. Extract `md_file` from
    any path-shaped token or a filename explicitly named in prose (e.g. "convert my notes.md to pdf" ->
    `md_file = notes.md`, resolved against cwd). If the sentence implies CONVERT but no file is resolvable -> ONE
-   `request_user_input` for the file path. Never guess a file and never silently fall through to HELP.
-5. Outcome-changing ambiguity (missing engine deps, no saved engine preference) -> ONE `request_user_input`.
+   `main-chat user gate` for the file path. Never guess a file and never silently fall through to HELP.
+5. Outcome-changing ambiguity (missing engine deps, no saved engine preference) -> ONE `main-chat user gate`.
 
 Then print this block ONCE, before Step 1:
 
@@ -79,7 +79,7 @@ Replace `ENGINE_NAME` with the target engine.
 
 **If output contains `MISSING_PIP` or `MISSING_SYSTEM`:**
 
-Use `request_user_input` presenting the engine comparison table:
+Use `main-chat user gate` presenting the engine comparison table:
 
 | Feature | reportlab | weasyprint |
 |---------|-----------|------------|
@@ -112,7 +112,7 @@ Check for saved config in order:
 
 If `--engine` flag was provided -- use it (skip config lookup).
 
-If no saved preference and no `--engine` flag -- use `request_user_input` with the engine comparison table from Step 1. Save the choice to project config `.codex/md-to-pdf.config.json`:
+If no saved preference and no `--engine` flag -- use `main-chat user gate` with the engine comparison table from Step 1. Save the choice to project config `.codex/md-to-pdf.config.json`:
 
 ```json
 {
@@ -222,7 +222,7 @@ python3 "<skill-directory>/scripts/md_to_pdf.py" "$TMP" "OUTPUT_PATH" --engine E
 
 ### STYLES Mode
 
-Run interactive configuration via `request_user_input` dialogs:
+Run interactive configuration via `main-chat user gate` dialogs:
 
 **Question 1 -- Page size:**
 Options: `A4` (default), `Letter`, `Legal`

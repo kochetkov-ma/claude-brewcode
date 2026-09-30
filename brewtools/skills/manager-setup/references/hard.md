@@ -65,8 +65,8 @@ safety, and the canonical status explainer the `status` action renders.
 ## Tool buckets
 
 The ALWAYS-ALLOW set below is the literal `ALWAYS_ALLOW` constant in
-`hooks/hardmode-guard.mjs`. Keep the two in lockstep — every entry is here
-because it cannot mutate the workspace on its own.
+`hooks/hardmode-guard.mjs`. Keep the two in lockstep: these inspect/orchestrate;
+delegation and session schedules re-enter the wall for later main-session work.
 
 | Bucket | Tools | Main session while wall ON |
 |--------|-------|----------------------------|
@@ -75,6 +75,7 @@ because it cannot mutate the workspace on its own.
 | ALWAYS-ALLOW · plan mode | `EnterPlanMode`, `ExitPlanMode` | Allowed — without them an armed wall traps a plan-mode session forever, and `manager-prompt.mjs` actively steers the user into plan mode |
 | ALWAYS-ALLOW · discovery | `ToolSearch` | Allowed — with `ENABLE_TOOL_SEARCH=true` the `Task*` tools are DEFERRED, so denying it would make the tracking bucket unreachable |
 | ALWAYS-ALLOW · track | `TaskCreate`, `TaskUpdate`, `TaskList`, `TaskGet`, `TodoWrite`, `ReportFindings` | Allowed — tracking/reporting, no filesystem side effects |
+| ALWAYS-ALLOW · session schedules | `CronCreate`, `CronList`, `CronDelete` | Allowed — session timer lifecycle; work delivered later still passes through the wall. Task-board owns matching/cleanup; no external/OS scheduler exemption |
 | ALWAYS-ALLOW · shells | `BashOutput`, `KillShell`, `KillBash` | Allowed — read/stop a background shell started before arming; neither writes anything |
 | ALWAYS-ALLOW · MCP meta | `ListMcpResourcesTool`, `ReadMcpResourceTool` | Allowed — read-only by protocol |
 | ALWAYS-ALLOW · human | `AskUserQuestion` | Allowed |
@@ -241,7 +242,7 @@ Delivery: INSTALLED into this project (not a plugin hook). Registered once in
 When armed, the MAIN session physically cannot Write/Edit/NotebookEdit/WebFetch/Artifact
 or run mutating Bash — it can only delegate (Task/Agent/Skill/SlashCommand), read
 (Read/Grep/Glob/NotebookRead), plan (Enter/ExitPlanMode) and track
-(TaskCreate/TaskUpdate/TodoWrite). Subagents keep full tools (agent_id linchpin).
+(TaskCreate/TaskUpdate/TodoWrite), and manage session timers (CronCreate/CronList/CronDelete). Scheduled main-session work still passes through the wall; task-board verifies its own timer ownership/cleanup. Subagents keep full tools (agent_id linchpin).
 Allowlist summary: <see one-liners below for the active level>
 Install:   /brewtools:manager-setup install    (install+arm; /reload only on FIRST install)
 Upgrade:   /brewtools:manager-setup upgrade    (re-copy the guard; arm state preserved)

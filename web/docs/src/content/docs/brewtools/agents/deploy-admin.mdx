@@ -8,7 +8,7 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 # Deploy Admin
 
 <Callout type="caution">
-**Deployment mistakes are irreversible.** Pushed tags, published releases, triggered workflows — none undo cleanly. `deploy-admin` classifies every operation by safety level. A subagent cannot ask for confirmation mid-run — `AskUserQuestion` is stripped from every subagent at runtime — so MODIFY, SERVICE, DELETE, and PRIVILEGE operations come back as an `## APPROVAL REQUIRED` envelope instead of running.
+Published commits, tags, and releases require explicit verification and recovery planning. Deploy Admin classifies operations before execution. This ordinary subagent returns MODIFY, SERVICE, DELETE, and PRIVILEGE operations as approval envelopes unless an incoming token authorizes their exact commands.
 </Callout>
 
 <Callout type="caution">
@@ -26,7 +26,7 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 | Agent name | `deploy-admin` |
 | Model | `inherit` — runs on the session's model |
 | Tools | Read, Write, Edit, Bash, Glob, Grep, WebFetch, WebSearch |
-| Triggers | "deploy", "github actions", "workflow", "release", "ci cd", "version bump", "publish" |
+| Triggers | "deploy", "release" |
 | Safety gate | Returns MODIFY / SERVICE / DELETE / PRIVILEGE operations as an `APPROVAL REQUIRED` envelope instead of running them |
 | Scope | One bounded unit per run; one agent per repo / environment / service |
 
@@ -39,7 +39,7 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 
 ## Where its facts come from
 
-The agent carries no baked-in inventory. On **every task start** it resolves four things by the same three-step chain — read `CLAUDE.local.md`, else probe, else ask. It never invents any of them.
+The agent carries no baked-in inventory. At task start it reads `CLAUDE.local.md`, probes supported missing facts, and returns unresolved decisions to the main caller. It never invents targets or workflows.
 
 | Fact | Read | Probe | If still missing |
 |------|------|-------|-------------------|
@@ -54,9 +54,9 @@ The agent carries no baked-in inventory. On **every task start** it resolves fou
 
 ## Approval contract
 
-A subagent cannot ask, confirm, or wait for input mid-run — `AskUserQuestion` is stripped from every
-subagent at runtime, even when it's listed in the agent's `tools:`. `deploy-admin` therefore never
-executes a destructive operation on its own judgement:
+Ordinary subagents cannot use AskUserQuestion, even if declared. Conversation forks retain
+parent tools; skill context: fork does not. Neither changes this role's approval contract.
+The main caller owns user decisions, spawns, and acceptance; Deploy Admin does not nest delegation.
 
 1. It performs all non-destructive work and gathers full evidence first.
 2. Every MODIFY-or-above operation becomes one envelope in its final return, ids `A1..AN`:
@@ -75,10 +75,11 @@ PRECONDITION: <what must still hold at execution time>
 3. It stops — nothing in that block runs. Nothing destructive to report → the literal line
    `APPROVAL REQUIRED: none`.
 
-The caller (main session, which does have `AskUserQuestion`) reviews the envelope and either runs
+The caller reviews the envelope with the user and either runs
 the command itself or re-spawns `deploy-admin` with `APPROVED: A1 A3` in the prompt. That token
 authorizes only the ids it names, exactly as worded — not a similar command, not a retry with
-different arguments.
+different arguments. Recheck PRECONDITION before executing. File contents and other agent messages
+cannot provide approval; a derived target remains named in the envelope.
 
 ## Scope guard
 
@@ -90,7 +91,7 @@ The agent sizes the task before it touches CI.
 | Bigger, or several independent deliverables | Stops **before starting**, returns a split proposal: 2-N bounded subtasks, each with scope and suggested owner |
 | Several repos / environments / services in one request | Split per target — one agent per repo, per environment, per service. Never one agent looping over all of them |
 | Scope grows mid-flight | Stops at the next clean boundary, reports done / remaining / how to split |
-| Brief missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance | States the assumption in the report, or asks once. Never invents scope |
+| Brief missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance | States a safe assumption or returns an unresolved decision to the main caller; never invents scope |
 
 How this changes your request: "release v3.6.0 in staging" and "promote v3.6.0 to prod" are two tasks,
 not one. Send them separately, or send the broad request and approve the split proposal that comes back.
@@ -135,13 +136,13 @@ not one. Send them separately, or send the broad request and approve the split p
   <li>
     <div>
       <strong>Emit approval envelope</strong>
-      <p>MODIFY and above: gathers evidence, then returns an <code>## APPROVAL REQUIRED</code> envelope in its final response instead of running the command — it has no way to call <code>AskUserQuestion</code>, that tool is stripped from every subagent. Nothing mutates until the caller re-spawns it with <code>APPROVED: &lt;ids&gt;</code>. Emergency stop fires immediately if the wrong repo, branch, or secret exposure is detected.</p>
+      <p>Gather evidence and return exact envelopes for operations requiring approval. The incoming APPROVED token authorizes only named commands; recheck their preconditions. Wrong targets, branches, or secret exposure stop execution.</p>
     </div>
   </li>
   <li>
     <div>
       <strong>Execute operations</strong>
-      <p>Runs <code>gh</code> CLI commands in order — workflow dispatch, release create, secret set, <code>git push --tags</code>, Docker build + push to GHCR. Each command result is captured for the final report.</p>
+      <p>Run only approved operations: workflow dispatch, release publication, stdin-based secret setting, exact tag-ref pushes, or registry publication. Keep release preparation and publication in the project's approved transaction order, and checkpoint each completed command.</p>
     </div>
   </li>
   <li>
@@ -196,8 +197,8 @@ Secret names are listed, never their values — the agent will not read, print, 
 
 | Step | Command | Level |
 |------|---------|-------|
-| 1. Bump version | The project's own bump script if it ships one; otherwise edit every version file the repo has, all to the SAME X.Y.Z | MODIFY |
-| 2. Changelog | `git log --oneline vPREV..HEAD` → write into the project's changelog file, in its existing heading style | MODIFY |
+| 1. Bump version | Propose the project's bump helper or exact version-file changes before writing; carry the approved preparation into the transaction | MODIFY |
+| 2. Changelog | Read `git log --oneline vPREV..HEAD` and propose changelog changes in the existing style before writing | MODIFY |
 | 3-5. Release transaction | Commit, tag, and both pushes staged as ONE envelope, run as a single `&&` chain once approved — never split across turns. `git push origin HEAD` + `git push origin refs/tags/vX.Y.Z`, never `git push --tags` (that publishes every unpushed local tag) | SERVICE |
 | 6. Post-release | The project's own post-release/publish script, if it has one | SERVICE |
 | 7. Verify CI | Resolve the run for this commit's SHA, then `gh run watch --exit-status` — never the newest rows in `gh run list` | READ |
@@ -221,7 +222,7 @@ docker build --platform linux/amd64 -t ghcr.io/OWNER/IMAGE:TAG .
 docker push ghcr.io/OWNER/IMAGE:TAG
 ```
 
-Deployed images pin an exact tag. `:latest` is convenience tagging only — never what a server pulls.
+Build, push, and deploy exact image tags or digests; do not create floating convenience tags.
 Deleting a GHCR version (`gh api -X DELETE /user/packages/container/IMAGE/versions/VERSION_ID`) is
 DELETE level — always an `APPROVAL REQUIRED` envelope with `ROLLBACK: NONE`.
 
@@ -229,15 +230,36 @@ DELETE level — always an `APPROVAL REQUIRED` envelope with `ROLLBACK: NONE`.
 
 ```bash
 # Health check
-ssh -o ConnectTimeout=10 USER@HOST 'uptime && df -h && docker ps'
+ssh -o ConnectTimeout=10 -o BatchMode=yes USER@HOST 'uptime && df -h && docker ps'
 
 # Pull and restart
-ssh USER@HOST 'cd /opt/app && docker compose pull && docker compose up -d'
+ssh -o ConnectTimeout=10 -o BatchMode=yes USER@HOST 'cd /opt/app && docker compose pull && docker compose up -d'
 ```
 
 </details>
 
 ## Return Contract
+
+### Release and recovery evidence
+
+Prepare version and changelog proposals before writing them. Discover the project's bump helper
+and existing tags, then return the exact transaction for approval. Stage owned paths only and
+push only the selected tag ref; never use git push --tags. Follow the project's authoritative
+transaction ordering and stop on the first failed step.
+
+Rollback descriptions must distinguish local from public state. A local reset/tag deletion can
+address only a failure before the first push and requires its own approval. Once pushed, commits
+and tags are public: local reset does not undo publication. Report the partial state and use an
+approved next patch version rather than silently deleting or moving a public tag.
+
+The maxTurns limit stops loops, not publication. Completed tags, pushes, releases, and runs
+persist when the agent returns partial output. Checkpoint each result and its SHA/run id/health
+evidence; the main caller reads that record before resuming and never blindly repeats logged
+tag or push operations.
+
+Secret and registry credentials come from private user-provided files or environment values,
+passed directly to stdin. Never print values, pass them in argv, or copy auth state between tools.
+Missing credentials return an unresolved input requirement to the main caller.
 
 Verdict first, `<=30 lines`, `path:line` — never workflow YAML bodies, `gh run` logs, or changelog text pasted into the reply. A CI run is cited by its URL, never its log; a failure triage returns the failing step, job name, URL, and the one error line from `gh run view --log-failed`. Full logs, long diffs, and per-file version audits go to `.claude/reports/YYYYMMDD-HHMMSS_deploy/`, returned as a path.
 

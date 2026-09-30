@@ -11,7 +11,7 @@ Substitute `{{LANG}}`, `{{CLOSE_MARKER_SHORT}}`. Spec-layer placeholders (gated 
 
 ## Spec-layer placeholders (`SPEC_MODE` gate)
 
-When `SPEC_MODE=on`, substitute each placeholder with its expansion below. When `SPEC_MODE=off`, the emitted skill is byte-identical to the pre-spec-layer original (5 flows, `allowed-tools` unchanged either way) PLUS this file's UNGATED `PROGRESS.md` sites -- the 6th invariant bullet, the layout line, VIEW steps 1-2, MOVE step 4 -- which are baseline in BOTH modes and never removed. Off-mode Invariants = 6 bullets, on-mode = 7:
+When `SPEC_MODE=on`, substitute each placeholder with its expansion below. When `SPEC_MODE=off`, omit only spec-layer expansions (5 flows); methodology/graph/anti-drift and `PROGRESS.md` remain UNGATED baseline in BOTH modes. Off-mode Invariants = 6 bullets, on-mode = 7; scheduling tools are available to this skill in either mode:
 
 - **LINE kind** -- the placeholder owns its line: REMOVE the whole line, !=leave it blank.
 - **INLINE kind** -- the placeholder sits mid-line (`{{SPEC_DESC_TRIGGERS}}` inside `description:`, `{{SPEC_ADD_ROW_COL}}` inside the ADD-flow column list): delete the token itself and nothing else, no stray space. Both carry NO space before the token; the expansion supplies its own leading space.
@@ -84,7 +84,7 @@ Authoritative rules live in `TRACKER.md` section 10. These expansions mirror it;
 name: task-board
 description: "Views and updates this repo's file-based task board at .claude/features/. Triggers: show the board, task board, board status, what's in progress, add a task, create task, move task to progress, close task, dump to backlog, groom backlog.{{SPEC_DESC_TRIGGERS}}"
 argument-hint: "[prompt] [view | add | move | backlog | groom]"
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Agent
+allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, Agent, CronCreate, CronList, CronDelete]
 doc_type: llm
 version: "{PLUGIN_VERSION}"
 content_version: "{CONTENT_VERSION}"
@@ -138,33 +138,41 @@ Labels are literal ASCII; values follow {{LANG}}.
 - **Folder == status.** A task file lives in `todo/` | `progress/` | `closed/` (or `backlog/`); its `status:` frontmatter MUST equal the folder. On a move, change both.
 - **Board is canonical and never lags.** Edit `board.md` in the SAME change as any transition. A lagging board is a wrong board.
 - **Ids never change.** UPPER-KEBAB, short, stable -- the filename stem and the board key.
-- **A task in `progress/` MUST have a file** (from `TASK_TEMPLATE.md`). In `todo/`/`backlog/` a file is optional (a board row alone is enough).
+- **Every accepted todo/progress task MUST have a real file** with filled Methodology/base work and a unique COMPLETE saved cron prompt. Only raw unaccepted backlog ideas may remain table-only. A queued prompt is prepared intent, never a live schedule.
 - **{{LANG}} only.** Closing records {{CLOSE_MARKER_SHORT}} in `## Notes`.
 - **`PROGRESS.md` tracks the SESSION, not the tasks.** Refresh `.claude/features/PROGRESS.md` in the SAME change as any transition -- five fields: `Updated`, `In flight`, `Moved since last update`, `Blocked`, `Next`, overwritten in place. !=a second board; rules in `.claude/rules/tasks.md`.
 {{SPEC_INVARIANTS}}
 
-Layout: `board.md` (dashboard), `PROGRESS.md` (session progress), `TRACKER.md` (procedure), `TASK_TEMPLATE.md`, `backlog/` (ungated inbox), `todo/`, `progress/`, `closed/`, `specs/`.
+Layout: `board.md` (dashboard), `PROGRESS.md` (session progress), `TRACKER.md` (procedure), `METHODOLOGY.md`, `ANTI-DRIFT.md`, `task-graph.md` (derived active work), `TASK_TEMPLATE.md`, `backlog/` (ungated inbox), `todo/`, `progress/`, `closed/`, `specs/`.
+
+## Methodology and session timer
+
+Read `METHODOLOGY.md` + `ANTI-DRIFT.md` before ADD/GROOM promotion/MOVE or a tick; accepting a task requires its filled Methodology (goal/acceptance, domain review/tests or explicit gaps, base work units/dependencies/owners, parent id) and complete unique Anti-drift cron prompt, with every token resolved. Hourly default; user cadence overrides it. Queued tasks store state `prepared` and no live scheduler id; only active top-level claims start timers. The MAIN SESSION running this skill owns timer calls; `task-tracker` owns file reconciliation and returns `CRON:` actions. After delegated results, execute those actions here BEFORE any mandatory final `NEXT:` redirect. On direct ADD/MOVE, refresh derived graph/PROGRESS and reconcile timers after a successful transition; never stop a timer for a refused close.
+
+Before creating/resuming, list and match by task id + absolute project root; reuse one matching timer, reconcile only this task's duplicates, verify deletion before replacing. Create one recurring session timer per active top-level task, not child work unit; persist complete prompt/runtime state in its task file and announce effective cadence, timezone, verified id/state, known due time, session limits and stop/change controls. Completion/cancellation/parking stops this task's timers and verifies absence. Missing/denied cron tools -> save intent and report unavailable; never invent delivery or a durable fallback. Details and tick/report format: `ANTI-DRIFT.md`.
+
+VIEW remains read-only: show missing/stale timer/methodology/graph state without scheduling. In plan mode read/report only; include methodology, saved prompt, graph and timer reconciliation as execution steps, defer writes/timers. A delivered tick runs the saved plain prompt: reread/reconcile, force goal/acceptance drift checks and advance authorized work, then at most five compact lines with local time, tick number, elapsed, achievements, remaining/next, blockers/questions and drift verdict using only 🟢🔵🔴⚪. Preserve all unfinished graph nodes + latest 10 completed; archive completion evidence before pruning rows.
 
 ## Flows
 
 ### 1. VIEW
 
 1. Read `.claude/features/board.md` + `PROGRESS.md`.
-2. Summarize: overall status (release line), counts (backlog | todo | progress | closed), current focus (1-3 lines), then the Progress (WIP) and Todo tables. Do not enumerate backlog noise. Close with `PROGRESS.md`'s `Blocked` / `Next` only -- `In flight` / `Moved` are already in the tables above; if its `Updated` predates the newest task `updated:`, say it is stale and rewrite it.
+2. Summarize: overall status (release line), counts (backlog | todo | progress | closed), current focus (1-3 lines), then the Progress (WIP) and Todo tables. Do not enumerate backlog noise. Close with `PROGRESS.md`'s `Blocked` / `Next` only -- `In flight` / `Moved` are already in the tables above; if its `Updated` predates the newest task `updated:`, report it stale and recommend reconciliation (VIEW does not write).
 
 ### 2. ADD task
 
 1. Mint an UPPER-KEBAB id by prefix: `T-*` feature, `BUG-*` defect, `M-*` maintenance, `EPIC-*` umbrella. First kebab segment = a repo domain (see TRACKER.md id convention).
-2. Copy `TASK_TEMPLATE.md` into the target folder (usually `todo/`) as `<ID>.md`.
-3. Fill frontmatter: `id`, `title`, `status` (== folder), `priority` (P1/P2/P3), `owner` (empty in todo/backlog), `created`, `updated` (today), `tags`, `links`.
-4. Add a row to `board.md` in the matching table (`id | title | prio | owner | file{{SPEC_ADD_ROW_COL}}`). `file` links the file or `--` if table-only.
+2. ALWAYS create `<ID>.md` from `TASK_TEMPLATE.md` in the accepted target folder (usually `todo/`); table-only acceptance is prohibited.
+3. Fill frontmatter: `id`, `title`, `status` (== folder), `priority`, `owner`, dates, tags/links; fill Context/Acceptance, domain review/checks, bounded base units/owners/dependencies and COMPLETE unique saved prompt with actual id/root/paths/goal/base work/acceptance. No unresolved template guidance/tokens. Queued cron state `prepared`, scheduler id empty; scheduling starts only on active top-level claim.
+4. Add its actual file link to `board.md` (`id | title | prio | owner | file{{SPEC_ADD_ROW_COL}}`); sync graph/PROGRESS in the same change. A missing record/method/base work/prompt means acceptance is incomplete: finish preparation before reporting it accepted.
 {{SPEC_ADD_STEP}}
 
 ### 3. MOVE / TRANSITION
 
 `todo -> progress` (pick up) | `progress -> closed` (ship) | `progress -> todo` (re-queue/park).
 
-1. `git mv` the task file between folders. If moving `todo -> progress` and only a board row exists, author a file from `TASK_TEMPLATE.md` first (progress requires a file).
+1. Verify the accepted record is complete before moving; repair legacy row-only or incomplete tasks through ADD preparation requirements without discarding decisions. Refresh method/prompt for current corrections, then move its file between folders.
 2. Set `status:` to match the new folder; set `owner` (on pick-up); set `updated` to today.
 3. On `-> closed`: add a one-line outcome + {{CLOSE_MARKER_SHORT}} in `## Notes`.
 4. Update `board.md` in the SAME change: move the row between tables, refresh counts and current focus. Refresh `PROGRESS.md`'s five fields too. On `-> closed` with the `progress` count now `0` AND no `.claude/skills/task-spec/` in this repo, add ONE line: `NEXT: run /brewtools:task-board-setup upgrade <repo path>` (it retrofits the spec + design layer). Spec layer already present -> say nothing.
@@ -200,20 +208,21 @@ Every spawn prompt MUST carry:
 A bare one-line task is never enough. Simple single-task view/add/move: do it directly here. For non-trivial passes (bulk transitions, large groom, migrating many rows) delegate to the `task-tracker` agent rather than hand-editing:
 
 \`\`\`
-Task(subagent_type="task-tracker", prompt="
+Agent(subagent_type="task-tracker", prompt="
 GOAL: keep .claude/features/ truthful — a lagging board.md is a wrong board, and every reader
   (this skill's VIEW flow, any status report) trusts it over the files.
-ROLE: you own this groom pass. Promote / merge / trash each backlog item, then sync board.md.
+ROLE: you own this groom pass. Promote / merge / trash each backlog item, then sync board.md,
+  task-graph.md and PROGRESS.md from the task files and existing control contracts.
   Do NOT touch source dirs, do NOT invent tasks no backlog item supports, do NOT rename existing ids.
 SCOPE: in — .claude/features/backlog/*.md (skip README.md), the task files you promote into todo/,
-  and board.md. Out — progress/, closed/, specs/, source code, CLAUDE.md.
+  board.md, task-graph.md and PROGRESS.md. Out — progress/, closed/, specs/, source code, CLAUDE.md.
 CONTEXT: the authoritative procedure is .claude/features/TRACKER.md and the id convention is in
   TASK_TEMPLATE.md — read both first, do not reinvent them. Ids are UPPER-KEBAB and never change.
   Nothing else is editing the board right now; the current counts in board.md are the pre-groom ones.
 CONSUMER: the VIEW flow reads board.md counts + tables next, and folder == status: a file whose
   status: frontmatter disagrees with its folder, or a task missing from board.md, is invisible.
 DONE: every backlog file handled (promoted / merged / trashed — none left behind); board.md tables,
-  counts and backlog count refreshed in the SAME change. Report a table: promoted ids | merged-into
+  counts, backlog count, task-graph.md and PROGRESS.md refreshed in the SAME change. Report a table: promoted ids | merged-into
   ids | trashed slugs, plus the new counts.
 ")
 \`\`\`
@@ -231,5 +240,7 @@ DONE: every backlog file handled (promoted / merged / trashed — none left behi
 - Dashboard: `.claude/features/board.md`
 - Template: `.claude/features/TASK_TEMPLATE.md`
 - Rules: `.claude/rules/tasks.md`
+- Methodology/timer controls: `.claude/features/METHODOLOGY.md`, `.claude/features/ANTI-DRIFT.md`
+- Derived active work: `.claude/features/task-graph.md`
 - Control-file index: `.claude/features/INDEX.md`
 ```

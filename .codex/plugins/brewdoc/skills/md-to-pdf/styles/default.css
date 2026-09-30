@@ -92,7 +92,7 @@ ul ul ul, ol ol ol, ul ul ol, ol ol ul,
 ul ol ul, ol ul ol, ul ol ol, ol ul ul { padding-left: 12pt; }
 li { margin-bottom: 2pt; }
 
-/* === sub-agent task Lists === */
+/* === Task Lists === */
 li input[type="checkbox"] { margin-right: 4px; vertical-align: middle; }
 li.task-list-item { list-style-type: none; margin-left: -18pt; }
 

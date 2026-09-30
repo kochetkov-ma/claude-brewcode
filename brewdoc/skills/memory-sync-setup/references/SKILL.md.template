@@ -13,7 +13,7 @@ model: opus
 faster than CLAUDE.md / rules / conventions / agents / skills / memory stores; this skill diffs memory against reality for a scope
 and repairs it - facts FIRST, dedup second, compression third - and never lets the surface grow.
 
-**Bash-first:** native macOS builds ship no `Grep`/`Glob` tool - every discovery step here is a shell command (`find`, `grep -rn`, `git ls-files`, `ls`, `wc -l`); `Glob`/`Grep` stay in `allowed-tools` as optional fallbacks.
+**Discovery:** use available `Grep`/`Glob` tools; otherwise use the shell probes below (`find`, `grep -rn`, `git ls-files`, `ls`, `wc -l`). Tool availability, not the operating system, determines the fallback.
 
 **References** (paths relative to this skill's directory, `$CLAUDE_SKILL_DIR` = `.claude/skills/memory-sync/`;
 subagents get the repo-relative path, never pasted prose):
@@ -39,20 +39,10 @@ optional and may follow in any order. Nobody types keys: resolve scope + depth +
    run asks nothing.
 4. Outcome-changing ambiguity (e.g. an unresolvable batch split) -> ONE `AskUserQuestion` (max 4 questions)
    BEFORE any work.
-5. Prose that is not a scope/reach/id/path is still input: it becomes `{FOCUS}` - emphasis ordering only, never a filter.
+5. Prose outside scope/reach/id/path becomes `{FOCUS}` (emphasis); explicit restrictions such as "only rules" or "do not touch agents" instead narrow the authorized write set. Record them in `SCOPE:` and every dispatch.
 
-Then print this block ONCE, before the first action:
-
-```
-PLAN — memory-sync
-INPUT:  <arguments verbatim, or "(empty)">
-MODE:   <SCOPE> — <explicit | matched keyword: X | default>
-SCOPE:  depth=<DEPTH>; reach=<REACH>; focus=<FOCUS interpretation | "standing emphasis">; batches=<batch: N files, ...>
-DO:     <2-5 imperative bullets — gather -> sync -> verify -> self-sync -> report>
-RESULT: <what the user ends up holding>
-```
-
-Labels are literal; values follow the conversation language.
+Print the detailed PLAN under Input resolution ONCE before the first action. `DO:` uses 2-5 imperative bullets
+for gather -> sync -> verify -> self-sync -> report, with fan-out counts. Labels are literal; values follow the conversation language.
 
 ---
 
@@ -98,24 +88,24 @@ each outside file gets its own row in the report, and non-growth still binds.
 
 > **The axes are independent.** `all hard` re-verifies everything AND purges; `session` (no token) is the cheap
 > default. Depth never changes which files are swept; scope never changes how hard they are cut; reach changes
-> only the editable set, never which files are swept nor how hard they are cut.
+> only the editable set, never how hard they are cut. Explicit user restrictions override all three axes.
 
-**`{FOCUS}` is EMPHASIS ONLY - a hard rule.** Free-form focus text re-ORDERS effort inside the sweep; it NEVER
-narrows it, never drops a batch, never skips a file. "only rules" means *rules first and hardest*, not *rules
-alone*. A run that touched only one layer because the user named that layer is a DEFECTIVE run.
+**Emphasis versus restriction:** ordinary `{FOCUS}` reorders effort without dropping batches. An explicit
+"only rules" authorizes rules alone; "do not touch agents" excludes agent writes. Apply that write filter before
+dispatch, including REFS, salvage, cross-batch pointers and self-sync; report skipped layers. Read only the
+minimum non-secret evidence needed to verify selected files, even when that evidence is outside the write set.
 
 > **Standing emphasis:** {FOCUS_EMPHASIS}
 > Facts stay ahead of dedup, and dedup ahead of compression, whatever the emphasis. The order may be SHARPENED,
 > never inverted.
 
-Print the PLAN block from the Prompt contract section above, once, before any work. Fold the fan-out numbers into
-its `DO:` bullets:
+Print this PLAN once before work, with fan-out counts in `DO:` bullets:
 
 ```
 PLAN — memory-sync
 INPUT:  {ARGUMENTS verbatim, or "(empty)"}
-MODE:   {SCOPE} — {matched token | "default (no scope token)"}
-SCOPE:  depth={DEPTH} — {matched signal | "default NORMAL"}; reach={REACH} — {matched token | "default MEMORY"}; focus={FOCUS interpretation | "standing emphasis"} (emphasis only - full surface still swept); batches={batch: N files, ...} (re-enumerated this run)
+MODE:   {SCOPE} — {explicit | matched keyword: X | "default (no scope token)"}
+SCOPE:  depth={DEPTH} — {matched signal | "default NORMAL"}; reach={REACH} — {matched token | "default MEMORY"}; focus={FOCUS interpretation | "standing emphasis"}; write restrictions=<explicit limits | none>; batches={batch: N files, ...} (enumerated and filtered this run)
 DO:     gather ({N} Explore) -> sync ({M} agents, one per non-empty batch) -> verify ({K} Explore, one per EDITED batch) -> self-sync -> report
 RESULT: memory-sync report + edited files listed in Phase 6
 ```
@@ -128,17 +118,15 @@ spawned, files edited, lines delta, verdicts ok).
 
 ## The surface - everything AUTO-LOADED into an LLM context, nothing else
 
-In scope: root `CLAUDE.md`, EVERY nested `CLAUDE.md` at ANY depth, `CLAUDE.local.md`, `.claude/rules/*.md`
-(single level - CC loads rules non-recursively), convention files, the `AGENTS.md` family,
+Default surface, subject to explicit user restrictions: root `CLAUDE.md`, EVERY nested `CLAUDE.md` at ANY depth,
+`CLAUDE.local.md`, `.claude/rules/**/*.md` (rules load recursively), convention files, the `AGENTS.md` family,
 `.claude/agents/**` at ANY depth (CC scans subfolders such as `agents/review/`), `.claude/skills/**` (SKILL.md AND every
 `references/*.md`), and BOTH memory kinds: the session memory dir `{MEMORY_DIR}` and the PER-AGENT memory stores -
 a tree holding one store per agent, loaded only while that agent runs (which kind loads for whom:
 `references/memory-guide.md`). If a file can silently enter a model's context, it is memory; if it cannot, it is not.
 
-A tracked file OUTSIDE this tree that an always-loaded instruction file cites is not part of the surface: it
-enters the editable set only at `{REACH}` = `REFS`. Being git-tracked never removes an instruction file from the
-surface - most of the surface is tracked. Both memory kinds sit INSIDE the surface and are swept at BOTH reaches:
-reach widens the editable set OUTWARD to cited references, and its value `MEMORY` names that axis, never a batch.
+Tracked cited OUTSIDE files enter the write set only at `{REACH}` = `REFS`; tracking never excludes instructions.
+Both memory kinds remain in the default surface at BOTH reaches. `MEMORY` names a reach, never a batch.
 
 Batches are **DISJOINT BY CONSTRUCTION** - no file appears in two batches - so parallel edits can never collide.
 An overlapping batch table is a defect, not a style choice.
@@ -147,7 +135,8 @@ EVERY memory home is its OWN batch row - the memory dir one, each per-agent stor
 split a store tree further only when one batch is too big). A memory home is never folded into a CLAUDE.md, rules,
 agents or skills batch. ONE exception, so the rule-5 salvage stays inside one batch and never edits a foreign
 file: a store classified ORPHAN joins the batch owning the SAME agent's LIVE store. That agent has no live store
-anywhere -> the orphan keeps its own row and its survivors have no home: REPORT them, remove nothing.
+anywhere, or either store is outside the authorized write set -> REPORT survivors, remove nothing. Both stores
+must belong to that same owned batch; never use this exception to cross an explicit exclusion.
 
 <!-- BLOCK: one row per DISJOINT batch - | Batch | Files (concrete paths / globs) | VERIFY-ONLY members + reason | -->
 {BATCH_TABLE}
@@ -191,11 +180,11 @@ its owner is named in `{TRACKER_NOTE}`. Excluded.
 
 | Rule | Detail |
 |------|--------|
-| Budget | After the sweep EVERY file is **<= its original line count**, and the TOTAL delta is **<= 0**. A positive delta must be stated FIRST in the report with a per-line justification - never buried, never silent |
+| Budget | Each file <= baseline and TOTAL delta <= 0, except HARD PASS A `paths:` repair on a MISSING/TOO_NARROW verdict and verified rule-5 salvage into the SAME agent's authorized live store in the SAME owned batch. Salvage recipient growth <= removed-store lines; its TOTAL delta stays <= 0. State any positive delta FIRST, with per-line justification |
 | Order | **DELETE** (duplicate / obvious / stale / dead) -> **COMPRESS** -> **MOVE** to the right layer -> **ADD** last. Never add before cutting |
 | Longest first | Rank the surface by `wc -l` and compress the top files hardest. Report the top-5 before/after. **A long rules file is a bug**, not thoroughness |
 | Add gate | A new fact enters ONLY if ALL hold: non-obvious for a competent model, domain-specific to {PROJECT_NAME}, verified against a real source, and its absence costs a real failure. It must EARN its line by displacing another |
-| Traceable | Every surviving claim maps to a file, a command output or a commit. Unverifiable -> DELETE, not reword |
+| Traceable | Every surviving claim maps to a file, command output or commit. Verify uncertain claims; still uncertain -> leave and report. Delete only proven stale or disallowed claims |
 | Authority | On conflict: rules + CLAUDE.md beat memory; a nested CLAUDE.md beats the root one for its own subtree |
 | Edit only | Targeted `Edit` diffs, bottom-up by line number. Never `Write` a whole memory file |
 
@@ -217,11 +206,11 @@ repo today is worse than no row: it reports `not run` forever.
 
 ## Agents and skills are ALWAYS RE-AUDITED - non-negotiable
 
-Every run, at every `{SCOPE}` including `session`, and regardless of `{FOCUS}`: the agents batch and the skills
-batch run the full best-practice re-audit in `references/agent-audit.md`. They are NOT merely fact-checked.
-An agent roster drifts silently - a tool list that grew, a description whose triggers no longer match, an
-ownership glob pointing at a deleted directory, a handoff naming an agent that was renamed. None of that shows up
-in a diff, so nothing but a standing audit catches it.
+Every run, at every `{SCOPE}` including `session`: authorized agents and skills batches run the full best-practice
+re-audit in `references/agent-audit.md`, not just fact checks. Emphasis changes no audit; explicit write restrictions
+can exclude these batches, which are then reported as skipped.
+Audit drift even without a diff: tool lists, description triggers, ownership globs for deleted directories and
+handoffs naming renamed agents.
 
 <!-- BLOCK: | Check | What it asserts | - agent-batch extra checks specific to this project -->
 {AGENT_CHECKS_TABLE}
@@ -266,10 +255,8 @@ together BEFORE touching a seat's file; then:
 
 ## Delegation (binds every agent this skill spawns)
 
-A big task handed to one agent = an agent gone for an hour: unobservable, uncorrectable, and it drifts. One
-subagent = ONE bounded unit - one deliverable (here: ONE batch), ~<=5 files, ~<=10 steps. Bigger MUST be split
-into N tasks, ALL spawned in ONE message. That is exactly why the surface is split into disjoint batches instead
-of handed whole to one agent. A batch over ~10 files is split into N spawns of <=5 files each, all in one message; the split preserves the batch table's disjointness.
+One subagent = ONE observable bounded deliverable (ONE batch), ~<=5 files, ~<=10 steps. Split larger units into
+N tasks, ALL spawned in ONE message. A batch over ~10 files MUST split into spawns of <=5 files; preserve disjointness.
 
 Every spawn prompt MUST carry:
 
@@ -331,7 +318,7 @@ MUST be empty; a duplicate is a defect - fix the batch table before Phase 2.
 Phase 1 output: the change-fact list, the per-batch file list as `path:lines` pairs, the broken-ref list, the
 re-resolved seat call sites, each per-agent store as `index + rows` with its LIVE/ORPHAN/UNDECIDED verdict and the
 evidence for it, and at `REFS` the cited-outside-reference list ALREADY MERGED into those batch lists.
-`{FOCUS}` re-orders the batches; it removes none.
+`{FOCUS}` reorders batches; explicit write restrictions remove unauthorized members before dispatch.
 
 ---
 
@@ -340,7 +327,8 @@ evidence for it, and at `REFS` the cited-outside-reference list ALREADY MERGED i
 Spawn ONE subagent PER NON-EMPTY batch, ALL in a SINGLE message. Each gets its own file list, the change-fact
 list, and the prompt contract below VERBATIM - every placeholder substituted. Batch owners come from the roster
 table above; where no project agent owns the surface, use the built-in `general-purpose`. Resolve every owner
-against `ls .claude/agents/*.md` BEFORE spawning; a name that no longer resolves falls back to `general-purpose`.
+against recursive `find .claude/agents -type f -name '*.md'` BEFORE spawning, matching the actual agent `name:`;
+a name that no longer resolves falls back to `general-purpose`.
 
 ```
 ## memory-sync batch: {BATCH} (scope {SCOPE}, depth {DEPTH})
@@ -349,6 +337,8 @@ GOAL: this project's instruction memory has drifted from the code and bloated. M
 ROLE: you own exactly the files listed below. You touch nothing else - no source, no docs, no secrets, no task
       state, no hook file, no other batch's memory file. {M} sibling agents sync other batches in parallel.
 SCOPE - files you may EDIT (nothing else), as path:baseline-lines: {FILE_LIST}
+READ EVIDENCE: minimum actual code, call sites and non-secret configuration key names needed to verify this batch;
+      read-only outside EDIT scope. Never open secrets; docs remain resolution-only. Explicit user read exclusions bind.
 REACH: {REACH}. At MEMORY the editable set is the instruction surface only - a tracked reference OUTSIDE it is
       RESOLUTION-CHECKED only, and every compression or fact finding on it is REPORTED, never applied. At REFS each
       cited outside reference IS in the SCOPE list above (merged into the batch owning its citing file) and is
@@ -383,7 +373,8 @@ Per file, in THIS priority order:
    .claude/skills/memory-sync/references/memory-guide.md; they are not restated here. A DELETE on the
    DUPLICATION ground REQUIRES the quoted context line already carrying that fact, returned below - an unproven
    duplicate STAYS. Rewrite a store's INDEX last, over the surviving set only. Your store's rule-5 verdict comes
-   WITH your file list: LIVE or UNDECIDED -> sweep it and report it, never remove. ORPHAN -> SALVAGE THEN REMOVE -
+   WITH your file list: LIVE or UNDECIDED -> sweep it and report it, never remove. Proven ORPHAN -> SALVAGE THEN REMOVE,
+   only when both stores are authorized members of this SAME owned batch and neither is expressly excluded:
    judge every row by rules 1-4, MOVE each survivor into the SAME agent's LIVE store merged with any row on that
    subject, rewrite THAT store's index, then remove the store DIRECTORY only, never its parent, a sibling, or the
    workspace/report/archive containing it. A salvaged row is a MOVE, not an ADD: the receiving store may exceed its
@@ -431,8 +422,8 @@ At `{DEPTH}` = `HARD`, the batch prompt ADDITIONALLY carries, verbatim:
 DEPTH = HARD. Also run the two passes in .claude/skills/memory-sync/references/hard-sync.md, in this order:
   1. `paths:` PRECISION audit  - every rule's glob must match reality and cover exactly its subject.
   2. OBVIOUS-KNOWLEDGE PURGE   - delete what any competent model already knows; keep only domain facts.
-Both are DELETION passes. They may only shrink the file - the ONE authorized growth is the PASS A frontmatter
-`paths:` repair on a MISSING or TOO_NARROW verdict; nothing else may grow.
+These passes only shrink, except PASS A frontmatter `paths:` repair on MISSING/TOO_NARROW. The separate common
+rule-5 salvage exception still requires the same-agent, same-owned-batch, authorized-store gates and total budget.
 ```
 
 Cross-batch dedup (canonical home lives in another batch's file) is REPORTED, never edited by the batch owner;
@@ -452,7 +443,9 @@ every placeholder substituted:
 GOAL: a batch agent claims it made instruction memory truer and smaller. Prove or disprove every claim against
       the CODE - never against the doc that agent just wrote. This phase GATES the report.
 ROLE: independent read-only checker. You did NOT write these files and you EDIT nothing - you return verdicts.
-SCOPE - files you may READ and verify (nothing else): {FILE_LIST}
+VERIFY TARGETS: {FILE_LIST}. READ EVIDENCE: minimum actual code, call sites, non-secret configuration key names
+      and cited instruction context needed to verify these targets; read-only, not extra edit targets. Never open
+      secrets; docs remain resolution-only. Explicit user read exclusions bind; report unavailable evidence.
 CONTEXT (already resolved - do NOT re-derive): the batch's returned JSON, the per-file line baselines, this
       repo's git visibility. Sibling checkers verify the other batches in parallel.
 READ FIRST (paths, not pasted prose):
@@ -488,8 +481,9 @@ k. MEMORY batches: re-read every memory DELETE. A duplication delete stands only
    INDEX lists exactly the survivors - none missing, no dangling `[[link]]` (rules: references/memory-guide.md).
    STORE REMOVALS: a removal stands only when `store.evidence` PROVES the rule-5 orphan test on today's bytes - the
    removed path sat inside an EXCLUDED runtime/archived tree, or the directory was empty; a removal without that
-   proof is a VIOLATION. Confirm every `store.salvaged` row is PRESENT in the live store it names (merged, not
-   duplicated), that ONLY the store directory went - parent, siblings and the containing workspace/report/archive
+   proof is a VIOLATION. Confirm both stores belong to the SAME agent and owned batch, are authorized write targets
+   and are not expressly excluded. Every `store.salvaged` row must be PRESENT in its live store (merged, not
+   duplicated); ONLY the store directory went - parent, siblings and the containing workspace/report/archive
    all intact - and that NO store classified live or undecided was removed.
 
 CONSUMER: the coordinator - a non-ok verdict routes a targeted fix back to the agent that wrote the file.
@@ -516,9 +510,9 @@ Violations -> the coordinator sends targeted fixes back to the responsible batch
 
 ## Phase 4 - SELF-SYNC (the skill syncs ITSELF)
 
-This skill is part of the surface it sweeps. Every run, after Phase 3 - and spawn ONE additional read-only checker
-over the self-synced files (this SKILL.md plus ALL FOUR references), reported as its own row in the Phase-6 delta
-table:
+After Phase 3, self-sync only files allowed by the user's write restrictions; otherwise report it skipped. Spawn
+ONE independent read-only checker over the self-synced files (this SKILL.md and the authorized references),
+reported as its own row in the Phase-6 delta table:
 
 | Step | Action |
 |------|--------|
@@ -526,13 +520,11 @@ table:
 | Refresh | Update the batch rows, the counts, every fact-catalogue command that no longer matches reality, and the runtime-seat roster - its call-site line numbers rot fastest, so they are re-resolved every run |
 | Grow a batch | The project gained a memory layer this skill does not cover (a new nested `CLAUDE.md` tree, a new convention dir, a new skills tree) -> ADD the batch or the section - report it; self-sync lines are delta-exempt |
 | Drop a batch | A batch whose files are all gone -> remove the row and say so in the report |
-| Sibling refs | ALL FOUR references - `memory-guide.md`, `agent-audit.md`, `hard-sync.md`, `prompting-guide.md` - are self-synced the SAME way: their rosters, patterns and checks go stale exactly like this file's tables |
+| Sibling refs | Authorized members of the FOUR references (`memory-guide.md`, `agent-audit.md`, `hard-sync.md`, `prompting-guide.md`) follow the same self-sync; their rosters, patterns and checks also drift |
 
-> **CARVE-OUT - it binds BATCH AGENTS.** Facts inside this file may be CORRECTED. Its SCOPE DECISIONS may NOT be
-> rewritten without explicit user instruction: which surfaces are in scope, the EXCLUDED table, the docs
-> exclusion, the non-growth directive. A batch agent that "helpfully" widens the scope has broken the skill, not
-> improved it. The COORDINATOR's own Phase-4 batch add/drop above IS allowed - it must be REPORTED, and the lines
-> it costs are EXEMPT from the total delta budget.
+> **CARVE-OUT:** batch agents may correct facts, but may not change SCOPE DECISIONS without explicit user instruction:
+> the surface, EXCLUDED table, docs exclusion and non-growth directive. The coordinator may add/drop Phase-4 batches
+> within authorized scope; report these changes, whose lines are total-delta-exempt.
 
 ---
 
@@ -580,7 +572,8 @@ Proposal:      {new agent/skill + triggers + neighbours | none}
 Total delta MUST be `<= 0`. If it is positive, state it FIRST with a per-line justification - never bury it.
 
 **Nothing changed -> say exactly `memory already in sync for {SCOPE}` and stop.** A run that touched only the root
-CLAUDE.md is an INCOMPLETE run, not a clean one - say which batches returned empty and why.
+CLAUDE.md is incomplete unless the user explicitly restricted writes to it; say which batches were empty or
+excluded and why.
 
 ---
 

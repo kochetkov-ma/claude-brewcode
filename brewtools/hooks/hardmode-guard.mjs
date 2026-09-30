@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.2.0 content_version=6.1.1 generated_by=brewtools:manager-setup
+// brewcode-meta: version=6.3.0 content_version=6.3.0 generated_by=brewtools:manager-setup
 // brewtools:manager-setup — HARD wall guard (PreToolUse, matcher "*").
 //
 // SELF-CONTAINED — copied into <project>/.claude/brewtools/manager/ by
@@ -141,9 +141,8 @@ function readProjectState(hookCwd) {
 // ---- guard tables -----------------------------------------------------------
 
 // Tools always permitted in the main session under the hard wall.
-// Audited bucket-by-bucket: nothing here can mutate the workspace on its own. Tools that
-// merely SPAWN work (Task/Agent/Skill/SlashCommand/SendMessage) are safe because every tool
-// call they cause in the main session comes back through this same guard.
+// Inspect/orchestrate tools; delegate/session schedules may trigger later work, whose
+// main-session tool calls still pass through this guard.
 const ALWAYS_ALLOW = new Set([
   // read — inspect files, never write
   'Read', 'Grep', 'Glob', 'NotebookRead',
@@ -156,6 +155,8 @@ const ALWAYS_ALLOW = new Set([
   'ToolSearch',
   // track / report — task graph + findings, no filesystem side effects
   'TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet', 'TodoWrite', 'ReportFindings',
+  // session schedules — later main-session work still passes through this guard
+  'CronCreate', 'CronList', 'CronDelete',
   // background shells — read output of / stop a shell started before arming; neither writes
   'BashOutput', 'KillShell', 'KillBash',
   // MCP resource introspection — read-only by protocol definition
@@ -488,7 +489,7 @@ function isReadonlyCommand(cmd) {
     const tool = input.tool_name || '';
     const toolInput = input.tool_input || {};
 
-    // (c) Always-allow set (delegation, reading, tracking).
+    // (c) Always-allow set (delegation, reading, tracking, session scheduling).
     if (ALWAYS_ALLOW.has(tool)) { output({}); return; }
 
     // (d) Always-block tools.

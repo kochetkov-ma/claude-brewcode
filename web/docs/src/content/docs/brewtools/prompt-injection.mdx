@@ -1,196 +1,131 @@
 ---
 title: "Prompt Injection"
-description: "How ++m/++rr/++r/++a codewords inject full operating contracts -- you type a shortcut, the model silently receives a complete directive."
+description: "How manager, review, architecture, and Plan-only cron codewords add operating instructions through the plugin's UserPromptSubmit hook."
 order: 3100
 ---
-import { Badge, Callout, Card, CardGrid, Steps, Tabs, TabItem, UpdateNotice } from '../../../components/mdx';
+import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../components/mdx';
 
 # Prompt Injection
 
-<Badge variant="accent" text="hook" />
+<Badge variant="accent" text="UserPromptSubmit" /> <Badge variant="secondary" text="5 codewords · 6 prompt modes" />
 
-<Callout type="tip">
-Type a short codeword -- `++m`, `++rr`, `++r`, or `++a` -- anywhere in your message. A `UserPromptSubmit` hook intercepts the message before the model sees it and appends the matching operating contract as a hidden system-reminder. You see only what you typed; the model receives your text plus the full contract for that one turn.
-</Callout>
+Type a standalone codeword to add its operating instructions for that turn. The plugin's
+`manager-prompt.mjs` hook returns `additionalContext`; your original prompt, including
+the codeword, remains unchanged. The optional manager hard wall is installed separately.
 
-## The injection point
+## Quick reference
+
+| Trigger | Selected prompt mode | Behavior |
+|---------|----------------------|----------|
+| `++m` | `full`, or `planmode` in verified Plan mode | Delegate bounded work, track dependencies, integrate evidence; add task-graph planning in Plan mode |
+| `++a` | `architect` | Design against existing architecture, conventions, and reusable patterns |
+| `++rr` | `review-regression` | Regression-focused review and double-check |
+| `++r` | `review-double` | Review and independent double-check; skipped when ++rr is also present |
+| `+++` | `cron-plan`, only in verified Plan mode | Plan task-specific session anti-drift scheduling for execution |
+| Armed hard wall, no active codeword | `full` | Ambient Manager instructions |
+
+Alphabetic codewords are case-insensitive. Manager, architecture, and review are independent
+groups; `++rr` wins over `++r`. A standalone `+++` is independent of `++m` and requires
+the hook payload's `permission_mode` to equal `plan`. Embedded words and longer plus
+sequences do not activate the tokens.
+
+When combined, blocks are emitted in this order: cron planning, manager, architecture,
+then the selected review contract. Active codeword handling returns before the wall-state
+fallback; an armed wall does not add a second ambient block to that branch.
+
+## Example
 
 ```text
-+---------------------------+
-| You type:                 |
-| "++m fix the login bug"   |
-+---------------------------+
-            |
-            v
-+----------------------------------+
-| UserPromptSubmit hook fires      |
-| (manager-prompt.mjs)             |
-| - detects "++m" codeword         |
-| - resolves prompt text           |
-| - emits additionalContext        |
-+----------------------------------+
-            |
-            v
-+---------------------------------------------+
-| Model receives:                             |
-| [system-reminder header line]               |
-| [full Manager operating contract]           |
-| [your original text: fix the login bug]     |
-+---------------------------------------------+
+++m ++a fix the login flow
 ```
 
-## What you type vs what the model receives
-
-<Tabs>
-  <TabItem label="You type">
-```
-++m fix the login bug
-```
-  </TabItem>
-  <TabItem label="Model receives">
-```text
->> system-reminder (additionalContext) <<
-
-User typed ++m -- Manager mode is active for this turn:
-
-[ROLE: MANAGER]
-
-You are a Manager, not an executor. Your only actions: think, plan, build the
-TaskGraph, delegate, observe, integrate. You do not write/edit code, run
-builds/tests, or hands-on debug. Catch yourself editing a file or running an
-impl command -> STOP, spawn a subagent. "Faster to do it myself" is a symptom,
-not an argument - delegate anyway.
-
-Protocol, always:
-1. Decompose the TASK into a full TaskGraph BEFORE any work (TaskCreate for all).
-2. Dependencies via TaskUpdate addBlockedBy/addBlocks - real data-handoffs only.
-   No dependency = independent = parallel.
-3. Assign owner (TaskUpdate owner), then launch the agent.
-4. Status honestly: pending -> in_progress (BEFORE start) -> completed (only truly
-   done, green - never "partially").
-5. Observe: read reports, validate, integrate. Agent failed -> file a follow-up
-   task and re-delegate, never fix by hand.
-6. ALL code written (not per-piece) -> file one recommended final task: simplify
-   the whole written code, strip over-engineering. Delegate it like any other.
-
-Sizing before spawning: one subagent = ONE bounded unit - one deliverable,
-~<=5 files, ~<=10 steps. Bigger MUST be split into N tasks, fanned out in ONE
-message. A big task handed to one agent = an agent gone for an hour: you cannot
-observe it, cannot correct it, and it usually drifts off-target.
-
-Widest fan-out: a dependency must be a REAL data handoff, else parallel. Size a
-unit to ~<=20 min of agent work; longer -> split again.
-
-Branch: work in the current branch; none chosen -> main. Unless the user says
-branch/PR, stay on main and take over ALL workspace changes, incl. from other
-sessions.
-
-Every spawn prompt MUST carry, explicitly:
-  GOAL     - the overall task and why it exists; the point beyond the file edit.
-  ROLE     - what this agent owns; what it must NOT touch.
-  SCOPE    - exact paths/commands in bounds + explicit out-of-bounds.
-  CONTEXT  - what is already done, by whom, what runs in parallel. Adapt it per
-             agent, trimmed to what THIS one needs; never dump everything.
-  CONSUMER - who or what uses the result next, and the shape it must fit.
-  DONE     - acceptance criteria + the exact report shape you want back.
-A bare one-line task is never enough.
-Every code/test brief MUST make the agent find the closest well-built counterpart
-in the repo and follow its principles - IN ADDITION to conventions/rules/docs,
-never instead.
-
-Scan ALL available agents; summon only genuine experts - one best-match per task.
-Autonomy: finish the job, don't stop halfway, don't ask where you can decide.
-Minimize the critical path.
-
-fix the login bug
-```
-  </TabItem>
-</Tabs>
-
-The injected block is a system-reminder -- invisible in the user's transcript but fully part of the model's context for that turn.
+The model receives Manager and architecture context alongside the original message.
+Manager instructions require bounded delegated units, owners and real dependencies,
+evidence review, and a final simplification task after all implementation is written.
+Architecture instructions require following existing project patterns and the closest
+well-built counterpart.
 
 ## How it works
 
 <Steps>
-  <li>
-    <div>
-      <strong>You include a codeword anywhere in your message</strong>
-      <p>The codeword can appear at the start, middle, or end. Your surrounding text is preserved unchanged. No special formatting is required.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>The UserPromptSubmit hook fires before the model</strong>
-      <p><code>manager-prompt.mjs</code> runs on every user message. It matches <code>++m</code> as a standalone token, and tests the review group longest-prefix first: <code>++rr</code> → <code>++r</code>. When <code>++m</code> is used in plan mode (<code>permission_mode === 'plan'</code>) it also injects the Plan Mode addon. The review codewords (<code>++rr</code>, <code>++r</code>) are codeword-only -- there is no ambient HARD-wall equivalent for review mode. <code>++a</code> is a third, independent group detected alongside manager and review, injected in the order manager -> architect -> review when combined. If no codeword is found (and the HARD wall is off), the hook exits immediately -- zero file I/O, zero overhead.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>The hook resolves the prompt text</strong>
-      <p>Three-level fallback: project override (<code>.claude/brewtools/manager/prompts/&lt;mode&gt;.md</code>) -&gt; global override (<code>~/.claude/manager/prompts/&lt;mode&gt;.md</code>) -&gt; plugin default (<code>references/&lt;mode&gt;.md</code>). Project and global overrides survive plugin updates because they live outside the plugin cache.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>The resolved text is emitted via additionalContext</strong>
-      <p>The model receives a system-reminder containing a header line plus the full prompt block, followed by your original message. The contract applies for that turn only -- the next message starts clean unless you type a codeword again.</p>
-    </div>
-  </li>
+  <li><div><strong>Detect tokens and permission mode</strong><p>The hook runs on UserPromptSubmit. It finds standalone codewords and selects plan-aware Manager or Plan-only cron instructions using the permission-mode payload.</p></div></li>
+  <li><div><strong>Resolve each prompt block</strong><p>Project override, global override, then plugin default: the first available source wins independently for each of the six modes.</p></div></li>
+  <li><div><strong>Return additional context</strong><p>The hook emits selected text through additionalContext without rewriting your message. Combined blocks are bounded to 9,000 characters, with a truncation marker if needed. An error returns an empty hook result.</p></div></li>
+  <li><div><strong>Use wall-state fallback when no codeword is active</strong><p>The hook checks project wall state. If armed, it adds the full Manager block; otherwise it returns no additional context.</p></div></li>
 </Steps>
 
-## Codewords and injected prompts
+## Plan-only anti-drift instructions
 
-| Trigger | Means | When it fires | What gets injected |
-|---------|-------|--------------|-------------------|
-| `++m` | Manager | any message containing it | full Manager block -- delegate-everything orchestrator contract, bounded-unit sizing (one deliverable, ~5 files, ~10 steps), one final delegated task to simplify all written code, the six-field spawn brief GOAL / ROLE / SCOPE / CONTEXT / CONSUMER / DONE, and a rule that every code/test brief must send the agent to find the closest well-built counterpart in the repo and follow its principles (additive to conventions/rules/docs, never instead); in plan mode also injects the Plan Mode addon (TaskGraph in English, parallel indicators) |
-| `++rr` | Regression Review | any message containing it (checked after `++m`) | anti-regression review discipline -- review each significant phase for NO regression + project standard + correctness; simplification pass before the review proper; two-phase review->double-check->fix; final cross-review at task end |
-| `++r` | Review | any message containing it (checked last; `++rr` tested first) | two-phase review discipline -- simplification pass first, then multi-agent review after each significant change, review->double-check->fix; codeword-only, no ambient |
-| `++a` | Architecture | any message containing it | full `[DIRECTIVE: ARCHITECTURE-FIRST]` block -- fits the existing project architecture/patterns/rules, finds the closest well-built existing counterpart in the repo and reuses its patterns/classes (additive to conventions/rules/docs, never instead), adds a new pattern only when nothing fits; independent third group, combinable with `++m` and the review group (`++rr`/`++r`); same block in normal and plan mode |
-| HARD wall ON | (state) | every turn, no codeword required | full Manager block (ambient injection alongside any codeword) |
-
-## Not the only injection on the turn
-
-If brewcode is installed too, its `forced-eval.mjs` (UserPromptSubmit) adds three short lines to every prompt, independently of any codeword:
+While already in Plan mode, type:
 
 ```text
-[ROLE] Manager: scan agents (project .claude/agents/ first) - expert for this domain exists -> delegate regardless of size; no expert or trivial one-off -> self.
-[SPLIT] One agent for an hour = drift you cannot observe: split into bounded units (1 deliverable, ~5 files, ~20 min), fan out in ONE message; a dependency must be a REAL data handoff, else parallel; every spawn prompt carries goal + scope + what is already done + who consumes the result + acceptance.
-[BRANCH] Stay on the current branch; none chosen -> main. No explicit branch/PR instruction -> work on main and take over ALL workspace changes, incl. from other sessions.
++++ plan the migration and task tracking
 ```
 
-That reminder fires on slash commands as well, and is skipped only for empty prompts and meta-replies (`yes`, `ok`, a bare number, a single letter). It only fires on a prompt, so an auto-compaction mid-turn skips it -- brewcode covers that gap with a separate SessionStart pair that re-anchors the same role plus the plan and task graph. See [Brewcode hooks](/brewcode/hooks/) for detail.
+This works without `++m` and without installing the hard wall. It requires a read-only
+plan to include task methodology, base work units and graph reconciliation, a complete
+unique task-specific tick prompt, and a future execution step through task-board.
 
-The prompt text is editable and update-proof. Use `/brewtools:manager-setup edit` to copy the plugin default into a writable project or global override, and `/brewtools:manager-setup purge` to drop the override and revert to the plugin default.
+During authorized execution, the main session's task-board flow reconciles one session
+timer per active top-level task, hourly by default or at your requested cadence. Child
+work units use their parent's timer. Planning itself writes no files and creates or
+deletes no timers.
 
-## Where this is used
+The planned tick rereads the goal, shared/task methodology, anti-drift instructions,
+task/spec records, and user corrections. It collects concise active-agent evidence,
+reconciles statuses, dependencies, counts, and remaining work, and rebuilds the graph.
+Retain every unfinished node and the latest ten completed nodes; preserve older completion
+evidence in task records before pruning graph rows. Check drift against acceptance evidence,
+correct deviations within scope, and advance the next authorized unblocked step.
 
-The `/brewtools:manager-setup` skill is the control plane for the entire mechanism. It lets you inspect the current effective prompt source (`status`), customize the Manager text (`edit`/`purge`), install and arm the HARD delegation wall (`install`/`enable`/`disable`/`uninstall`), and run one-shot manager tasks (`inline-run`, `hard-one-shot`, `manager-run`).
+The report uses at most five short lines: local time/timezone, delivered tick number and
+elapsed time; 🟢 achievements; 🔵 remaining work and next action; 🔴 present problems,
+blockers, or questions; ⚪ drift verdict. Omit empty rows; keep full evidence in task records.
 
-The codeword hook itself (`manager-prompt.mjs`) is always on -- it cannot be toggled by the skill, and renaming the skill to `manager-setup` did not change that. The four codewords fire regardless of whether the wall is installed. The skill manages text and state; the hook fires unconditionally on every turn.
+Task-board records the prompt, scheduling state, and stop rule and verifies stopping on
+completion or cancellation. Missing tools are reported as a scheduling gap. Timers belong
+to the session; due time does not guarantee exact receipt or delivery after session closure.
+Outside verified Plan mode, `+++` adds no cron instruction; other codewords or an armed
+wall can still add their own context.
 
-## Subagents can no longer ask a question mid-task
-
-<Callout type="note">
-As of Claude Code 2.1.233, `AskUserQuestion` is removed from every subagent -- only the main session keeps it. A subagent a `++m` Manager delegates work to can no longer pause and ask for approval partway through; if it used to, it now has nothing to call. The affected brewtools agents (`ssh-admin`, `deploy-admin`) were rewritten to emit an `## APPROVAL REQUIRED` envelope in their final return and stop there instead, leaving the decision with whoever reads the result -- the main session, or you. This is unrelated to the codeword injection mechanism on this page, but it changes what a delegated subagent can do once it starts running.
+<Callout type="note" title="Planning instructions do not create a timer">
+  The codeword adds a requirement to the execution plan. Actual creation, reconciliation,
+  and verified cleanup belong to the main session's task-board flow.
 </Callout>
 
+## Prompt sources and customization
 
-<Callout type="note">
-The hook and helper filenames stayed as they are through the v5.0.0 rename: `manager-prompt.mjs`, `hardmode-guard.mjs`, `lib/manager-state.mjs`, `lib/manager-prompts.mjs`. The guard's self-exemption requires the script `node` actually executes to match `(.claude/brewtools/manager|hooks/lib)/manager-state.mjs$`, so renaming or relocating that helper would silently break the wall's off-switch.
-</Callout>
+| Priority | Source |
+|----------|--------|
+| Project | `.claude/brewtools/manager/prompts/<mode>.md` |
+| Global | `~/.claude/manager/prompts/<mode>.md` |
+| Plugin | `skills/manager-setup/references/<mode>.md` |
 
-The closest-counterpart rule injected by `++m` and `++a` is not unique to this hook -- `/brewcode:teams-setup` and `/brewcode:agents` inject the same rule into generated agents whose domain writes code, scripts, SQL, schemas, or infra. See [Teams](/brewcode/skills/teams-setup/) and [Agents](/brewcode/skills/agents/).
+The resolver supports `full`, `planmode`, `cron-plan`, `architect`, `review-double`,
+and `review-regression`. Fenced prompt blocks are extracted in order; an unfenced file
+uses its complete trimmed text. Overrides live outside the plugin cache and can therefore
+retain older wording after an update.
+
+Use `/brewtools:manager-setup status` to inspect effective sources and
+`/brewtools:manager-setup edit` to prepare an override. Purge removes owned overrides
+and wall state according to the skill's removal contract.
+
+## Other operating context
+
+Brewcode's prompt and session hooks can supply operating context independently of these
+codewords. See [Brewcode hooks](/brewcode/hooks/). Teams and agent generation also add
+the closest-counterpart rule for agents that write code, scripts, schemas, or infrastructure.
+
+These are Claude Code product contracts. Codex uses separate native instructions and
+tools; the plugin's Claude hooks do not configure Codex runtime state.
+
+## Related
 
 <CardGrid>
-  <Card title="Manager Setup" icon="settings" href="/brewtools/skills/manager-setup/">
-    The control plane for these prompts -- customize text, install and arm the HARD wall, check status, and run manager-mode tasks.
-  </Card>
-  <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">
-    All brewtools skills and agents in one place.
-  </Card>
-  <Card title="Hook source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/hooks/manager-prompt.mjs">
-    The UserPromptSubmit hook that performs the injection on every turn.
-  </Card>
+  <Card title="Manager Setup" icon="settings" href="/brewtools/skills/manager-setup/">Inspect prompt sources, customize text, and configure the optional hard wall.</Card>
+  <Card title="Task Board Setup" icon="graph" href="/brewtools/skills/task-board-setup/">Methodology, work units, graph reconciliation, and session timers.</Card>
+  <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">All brewtools skills and agents.</Card>
+  <Card title="Hook source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewtools/hooks/manager-prompt.mjs">Token detection, context order, payload gating, and wall fallback.</Card>
 </CardGrid>
 
 <UpdateNotice />

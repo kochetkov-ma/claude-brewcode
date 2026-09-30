@@ -2,6 +2,8 @@
 
 The 5 hook types and their config fields, plus where hooks.json/settings/frontmatter are read (precedence + plugin scoping). Env vars: `hooks-env.md`.
 
+Verified 2026-09-30 against [official configuration](https://code.claude.com/docs/en/hooks#configuration), [prompt hooks](https://code.claude.com/docs/en/hooks#prompt-based-hooks), and changelog 2.1.285.
+
 ## Hook Types
 
 | Type | Description | Timeout | Use case |
@@ -14,6 +16,18 @@ The 5 hook types and their config fields, plus where hooks.json/settings/frontma
 
 > `prompt`/`agent` = gates (allow/block only). `command`/`http`/`mcp_tool` = can both gate AND inject context.
 > `mcp_tool` hooks are skipped on `Setup` and on `SessionStart` at process start (MCP not yet connected); they work on `SessionStart` after `/clear`/compact.
+> Blocking MCP events wait for a connecting server within both `MCP_TIMEOUT` and hook timeout (fixed 2.1.281); observational events do not wait. `isError:true` is a non-blocking hook error; hooks never launch OAuth authentication.
+
+### Type support by event
+
+| Supported types | Events |
+|---|---|
+| all five | PermissionDenied, PostToolBatch, PostToolUse, PostToolUseFailure, PreToolUse, Stop, SubagentStop, TaskCompleted, TaskCreated, TeammateIdle, UserPromptExpansion, UserPromptSubmit |
+| command/http/mcp_tool/prompt | PermissionRequest; agent hooks are skipped |
+| command/mcp_tool | SessionStart, Setup; Setup always skips mcp_tool, so only command runs |
+| command/http/mcp_tool | all other events in `hooks-events.md` |
+
+`prompt`/`agent` output on PermissionDenied is discarded: use command/HTTP/MCP `hookSpecificOutput.retry`. PermissionRequest prompt `ok:false` has no effect: use its decision object through command/HTTP/MCP.
 
 ### `prompt`/`agent` output schema
 
@@ -22,7 +36,7 @@ Both return `{"ok": boolean, "reason": string}` -- `ok:false` triggers block/den
 | Field | Type | Only on | Effect |
 |-------|------|---------|--------|
 | `impossible` | boolean | `prompt`, Stop/SubagentStop only | `true` allows the stop instead of blocking, even though `ok` is false |
-| `continueOnBlock` | boolean | `prompt` only (PTU/POT) | default: `ok:false` ends the turn, `reason` shown as a warning. `true`: `reason` is returned to Claude as a tool error instead, turn continues. `agent`-type hooks behave as `continueOnBlock:true` always and have no such field |
+| `continueOnBlock` | boolean | `prompt` config only | PTU/POT/TeammateIdle and teammate-triggered TaskCompleted: default false ends the turn; true feeds the reason back and continues. PostToolBatch/UserPromptSubmit/UserPromptExpansion end the turn either way. PostToolUseFailure/TaskCreated/tool-triggered TaskCompleted continue either way. `agent` behaves as true and has no such field |
 
 ### mcp_tool config fields
 
@@ -39,9 +53,9 @@ Both return `{"ok": boolean, "reason": string}` -- `ok:false` triggers block/den
 |-------|:---:|-------------|
 | `type` | yes | `"command"`,`"http"`,`"mcp_tool"`,`"prompt"`,`"agent"` |
 | `if` | no | ONE permission rule (v2.1.85+): `"Bash(git *)"`,`"Edit(*.ts)"`. No `&&`/`\|\|`/list -- one rule per handler. Evaluated ONLY on PTU, POT, PostToolUseFailure, PR, PermissionDenied; on any other event a hook with `if` set NEVER runs. Best-effort/fails open -- !=a hard gate |
-| `timeout` | no | seconds before cancellation. DEF 600 (`command`/`http`/`mcp_tool`), 30 (`prompt`), 60 (`agent`). UserPromptSubmit/PreModelSwitch/PostModelSwitch lower the 600 to 30, MessageDisplay to 10; SessionEnd hooks share a 1.5 s budget (raised to your `timeout`, max 60 s, or via `$CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS`) |
+| `timeout` | no | seconds before cancellation. DEF 600 (`command`/`http`/`mcp_tool`), 30 (`prompt`), 60 (`agent`). UserPromptSubmit/PreModelSwitch/PostModelSwitch lower the 600 to 30, MessageDisplay to 10; SessionEnd hooks share a 1.5 s budget (raised to your `timeout`, max 60 s, or via `$CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS`). `async:true` timeout is unenforced; `asyncRewake` timeout is enforced |
 | `statusMessage` | no | spinner text while the hook runs |
-| `once` | no | `true` = run once per session then de-register. Honored ONLY in skill frontmatter; ignored in settings files and agent frontmatter |
+| `once` | no | de-register after first successful run only; failure, exit-2 block, or timeout retains it for the next event. Honored ONLY in skill frontmatter; ignored in settings files and agent frontmatter |
 
 ### `command`-only fields
 
@@ -115,13 +129,14 @@ subagent frontmatter.
 
 > A plugin that updates mid-session keeps serving hooks from the PREVIOUS version's `${CLAUDE_PLUGIN_ROOT}` until `/reload-plugins`.
 
-### Managed-only settings keys
+### Settings controls
 
 | Key | Effect |
 |-----|--------|
-| `disableAllHooks` | disables every hook regardless of source |
-| `allowManagedHooksOnly` | only managed-policy hooks run; all lower-scope hooks ignored |
-| `allowedHttpHookUrls` | allowlist of URLs `http`-type hooks may POST to; fixed fail-closed on an unreadable value (v2.1.267, was fail-open) |
+| `disableAllHooks` | disables hooks from controlled scopes; user/project settings cannot disable managed hooks; also available through `/hooks` |
+| `allowManagedHooksOnly` | managed-only: blocks user/project/local/plugin hooks except plugins force-enabled by managed `enabledPlugins`; command-source plugins remain subject to `disableCommandPluginSources` |
+| `allowedHttpHookUrls` | merged allowlist constrains HTTP hooks from every source, including managed; any settings level can define it |
+| `httpHookAllowedEnvVars` | settings-level constraint on HTTP header interpolation, in addition to handler `allowedEnvVars`; unreadable allowlists fail closed since 2.1.267 |
 
 ### settings.json format
 
@@ -132,7 +147,7 @@ subagent frontmatter.
 ### hooks.json format (plugin)
 
 ```json
-{"hooks":{"SessionStart":[{"matcher":"startup","hooks":[{"type":"command","command":"node $CLAUDE_PLUGIN_ROOT/hooks/session-start.mjs"}]}]}}
+{"hooks":{"SessionStart":[{"matcher":"startup","hooks":[{"type":"command","command":"node","args":["${CLAUDE_PLUGIN_ROOT}/hooks/session-start.mjs"]}]}]}}
 ```
 
 ### Agent/Skill frontmatter YAML
@@ -150,7 +165,7 @@ hooks:
 
 Reduces hook overhead -- fires only when condition matches (permission rule syntax):
 ```json
-{"hooks":{"PreToolUse":[{"matcher":"Bash","if":"Bash(git *)","hooks":[{"type":"command","command":"bash validate-git.sh"}]}]}}
+{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","if":"Bash(git *)","command":"bash validate-git.sh"}]}]}}
 ```
 Format: `ToolName(pattern)` -- same syntax as permission rules.
 > BREAKING (v2.1.214): single-segment `dir/**` now matches only `<cwd>/dir`, not any-depth. Use `**/dir/**` for any-depth matching.

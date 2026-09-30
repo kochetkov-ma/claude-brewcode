@@ -1,8 +1,8 @@
 #!/bin/sh
-# brewcode-meta: version=6.2.0 content_version=6.2.0 generated_by=brewcode:teams-setup
+# brewcode-meta: version=6.3.0 content_version=6.3.0 generated_by=brewcode:teams-setup
 set -eu
 
-USAGE="Usage: trace-ops.sh <add|read|cursor|migrate> <team_dir> [args...]"
+USAGE="Usage: trace-ops.sh <add|read|cursor|migrate|archive> <team_dir> [args...]"
 
 die() { printf '%s\n' "$*" >&2; exit 1; }
 
@@ -564,6 +564,140 @@ cmd_cursor() {
   trap - 0 HUP INT TERM
 }
 
+cmd_archive() {
+  [ $# -ge 2 ] || die "Usage: trace-ops.sh archive <team_dir> <all|keep-days N|keep-last N|keep-issues-insights>"
+  _dir="$1"; shift
+  command -v node >/dev/null 2>&1 || die "node is required for safe trace archival"
+  acquire_trace_lock "$_dir"
+  trap release_trace_lock 0
+  trap 'exit 1' HUP INT TERM
+  _archive_rc=0
+  node - "$_dir" "$@" <<'NODE' || _archive_rc=$?
+const fs = require('node:fs');
+const path = require('node:path');
+const [dir, mode, count, ...extra] = process.argv.slice(2);
+const pending = fs.readdirSync(dir).find(name => name.startsWith('.trace-archive-recovery.'));
+if (pending) {
+  process.stderr.write(`trace-ops: unresolved archive recovery: ${path.join(dir, pending)}; lock retained\n`);
+  process.exit(2);
+}
+const files = [];
+let recovery;
+let publicationStarted = false;
+const identity = stat => `${stat.dev}:${stat.ino}`;
+function samePath(file) {
+  try {
+    const stat = fs.lstatSync(file.path, { bigint: true });
+    return stat.isFile() && !stat.isSymbolicLink() && identity(stat) === file.identity;
+  } catch { return false; }
+}
+function open(name) {
+  const target = path.join(dir, name);
+  let created = false;
+  let fd;
+  try {
+    fd = fs.openSync(target, fs.constants.O_RDWR | fs.constants.O_NOFOLLOW);
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+    fd = fs.openSync(target, fs.constants.O_RDWR | fs.constants.O_NOFOLLOW |
+      fs.constants.O_CREAT | fs.constants.O_EXCL, 0o600);
+    created = true;
+  }
+  const stat = fs.fstatSync(fd, { bigint: true });
+  const file = { path: target, name, fd, created, identity: identity(stat), original: Buffer.alloc(0) };
+  files.push(file);
+  if (!stat.isFile() || !samePath(file)) throw new Error(`${name} identity is unsafe`);
+  file.original = fs.readFileSync(fd);
+  return file;
+}
+function replace(file, bytes) {
+  if (!samePath(file)) throw new Error(`${file.name} identity changed`);
+  let offset = 0;
+  while (offset < bytes.length) {
+    const written = fs.writeSync(file.fd, bytes, offset, bytes.length - offset, offset);
+    if (written <= 0) throw new Error(`short ${file.name} write`);
+    offset += written;
+  }
+  fs.ftruncateSync(file.fd, bytes.length);
+  fs.fsyncSync(file.fd);
+  if (!samePath(file)) throw new Error(`${file.name} identity changed during publication`);
+}
+try {
+  const numeric = mode === 'keep-days' || mode === 'keep-last';
+  if (!['all', 'keep-days', 'keep-last', 'keep-issues-insights'].includes(mode) ||
+      extra.length || (numeric ? !/^[1-9][0-9]*$/.test(count || '') ||
+        !Number.isSafeInteger(Number(count)) : count !== undefined)) throw new Error('invalid archive policy');
+  if (typeof fs.constants.O_NOFOLLOW !== 'number') throw new Error('O_NOFOLLOW is unavailable');
+  const live = open('trace.jsonl');
+  const text = new TextDecoder('utf-8', { fatal: true }).decode(live.original);
+  if (text && !text.endsWith('\n')) throw new Error('trace must end with a newline');
+  const lines = text ? text.slice(0, -1).split('\n') : [];
+  const records = lines.map(line => JSON.parse(line));
+  const cutoff = Date.now() - Number(count || 0) * 86400000;
+  const keep = records.map((record, index) => {
+    if (mode === 'keep-last') return index >= records.length - Number(count);
+    if (mode === 'keep-issues-insights') return record.k === 'issue' || record.k === 'insight';
+    if (mode === 'keep-days') {
+      const stamp = Date.parse(record.ts);
+      if (!Number.isFinite(stamp)) throw new Error('invalid trace timestamp');
+      return stamp >= cutoff;
+    }
+    return false;
+  });
+  const archived = lines.filter((_, index) => !keep[index]);
+  const retained = lines.filter((_, index) => keep[index]);
+  if (archived.length) {
+    const archive = open('trace-archive.jsonl');
+    const cursor = open('trace.cursor');
+    if (new Set(files.map(file => file.identity)).size !== files.length) throw new Error('trace files must have distinct identities');
+    if (archive.original.length && archive.original.at(-1) !== 0x0a) throw new Error('archive must end with a newline');
+    recovery = fs.mkdtempSync(path.join(dir, '.trace-archive-recovery.'));
+    fs.chmodSync(recovery, 0o700);
+    for (const file of files) fs.writeFileSync(path.join(recovery, file.name), file.original, { flag: 'wx', mode: 0o600 });
+    fs.writeFileSync(path.join(recovery, 'manifest.json'), JSON.stringify(files.map(({ name, created, identity }) =>
+      ({ name, created, identity }))), { flag: 'wx', mode: 0o600 });
+    for (const file of files) {
+      const bytes = Buffer.alloc(file.original.length);
+      if (!samePath(file) || fs.fstatSync(file.fd).size !== bytes.length ||
+          fs.readSync(file.fd, bytes, 0, bytes.length, 0) !== bytes.length ||
+          !bytes.equals(file.original)) throw new Error(`${file.name} changed before publication`);
+    }
+    publicationStarted = true;
+    replace(archive, Buffer.concat([archive.original, Buffer.from(`${archived.join('\n')}\n`)]));
+    replace(live, Buffer.from(retained.length ? `${retained.join('\n')}\n` : ''));
+    replace(cursor, Buffer.from('\n'));
+  }
+  process.stdout.write(`${JSON.stringify({ archived: archived.length, kept: retained.length })}\n`);
+} catch (error) {
+  let restored = true;
+  for (const file of files.slice().reverse()) {
+    try {
+      if ((publicationStarted || file.created) && !samePath(file)) throw new Error('foreign target preserved');
+      if (publicationStarted) replace(file, file.original);
+      if (file.created) fs.unlinkSync(file.path);
+    } catch { restored = false; }
+  }
+  process.stderr.write(`trace-ops: archive failed: ${error.message}\n`);
+  if (!restored) {
+    process.stderr.write(`trace-ops: rollback incomplete; lock retained; recovery: ${recovery || 'no publication started'}\n`);
+    process.exitCode = 2;
+  } else process.exitCode = 1;
+} finally {
+  for (const file of files) try { fs.closeSync(file.fd); } catch {}
+  if (recovery && process.exitCode !== 2) {
+    try { fs.rmSync(recovery, { recursive: true }); }
+    catch (error) { process.stderr.write(`trace-ops: recovery cleanup failed: ${error.message}\n`); }
+  }
+}
+NODE
+  if [ "$_archive_rc" -eq 2 ]; then
+    _trace_lock_held=0
+  fi
+  release_trace_lock
+  trap - 0 HUP INT TERM
+  return "$_archive_rc"
+}
+
 parse_md_rows() {
   _mdfile="$1"
   [ -f "$_mdfile" ] || return 0
@@ -808,5 +942,6 @@ case "$CMD" in
   read)    cmd_read "$TEAM_DIR" "$@" ;;
   cursor)  cmd_cursor "$TEAM_DIR" "$@" ;;
   migrate) cmd_migrate "$TEAM_DIR" "$@" ;;
+  archive) cmd_archive "$TEAM_DIR" "$@" ;;
   *)       die "$USAGE" ;;
 esac

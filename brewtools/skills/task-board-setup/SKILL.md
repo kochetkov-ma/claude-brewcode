@@ -1,13 +1,13 @@
 ---
 name: task-board-setup
-description: "Generator: deploys a file-based Kanban into any repo via multi-agent analysis, an optional spec + system-design layer (task-spec skill, per-task spec/design docs, domain-architect fan-out), and an optional gated CLAUDE.md-optimization pass. `upgrade` retrofits the spec layer onto an already-deployed board. Triggers: init task board, scaffold kanban, task tracker, upgrade task board, канбан-доска, спек-слой."
+description: "Deploys a file-based task board with domain/task methodology, derived task graph and unique session anti-drift timers; optional spec/design layer and CLAUDE.md optimization. Upgrade adds missing control layers without replacing task decisions. Triggers: scaffold task board, task tracker, upgrade task board, канбан-доска, спек-слой."
 user-invocable: true
 disable-model-invocation: true
 argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge] [target repo path | empty = cwd] [free-text directive, e.g. 'also dedupe rules', 'skip module split']"
-allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, Agent, AskUserQuestion]
+allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, Agent, AskUserQuestion, CronCreate, CronList, CronDelete]
 model: opus
 ---
-<!-- brewcode-meta: version=6.2.0 content_version=5.6.0 generated_by=brewtools:task-board-setup -->
+<!-- brewcode-meta: version=6.3.0 content_version=6.3.0 generated_by=brewtools:task-board-setup -->
 
 [DICT: TT=task-tracker agent (generated), TB=task-board skill (generated), BRD=board.md, FEAT=.claude/features, EXCL=source-path exclusions, REL=release style (vX.Y.Z tag | commit SHA | no tag), DOM=domain id segment, FM=frontmatter, TS=task-spec skill (generated), SPEC_MODE=spec+design layer opt-in, PS=status phase, PU=upgrade phase, PR=uninstall/purge phase]
 
@@ -20,18 +20,18 @@ Generator. Run from the MAIN conversation in (or pointed at) a TARGET repo. Depl
 | Curator agent | `.claude/agents/task-tracker.md` | brewpage `task-tracker.md` |
 | Dashboard skill | `.claude/skills/task-board/SKILL.md` | yasna `task-board` SKILL |
 | Paths-scoped rule | `.claude/rules/tasks.md` | brewpage `tasks.md` |
-| Board + control files | `.claude/features/{board,PROGRESS,TRACKER,TASK_TEMPLATE,INDEX}.md` + `{backlog,todo,progress,closed,specs}/` | brewpage `.claude/features/**` |
+| Board + control files | `.claude/features/{board,PROGRESS,TRACKER,TASK_TEMPLATE,INDEX,METHODOLOGY,ANTI-DRIFT,task-graph}.md` + `{backlog,todo,progress,closed,specs}/` | refs 05 + 11 |
 | Spec skill (SPEC_MODE only) | `.claude/skills/task-spec/SKILL.md` | `references/08-task-spec-skill.md` |
 | Spec template (SPEC_MODE only) | `.claude/features/specs/SPEC_TEMPLATE.md` | `references/09-spec-templates.md` |
 | Design template (SPEC_MODE only) | `.claude/features/specs/DESIGN_TEMPLATE.md` | `references/09-spec-templates.md` |
 
-> **SPEC_MODE** (confirmed in P1) gates the three rows above AND every spec-related addition inside the other emitted artifacts. `SPEC_MODE=off` -> nothing spec-related is emitted and every artifact is byte-identical to the pre-spec-layer generator.
+> **SPEC_MODE** (confirmed in P1) gates only spec/design artifacts and spec-related additions. `SPEC_MODE=off` emits no spec layer; methodology, graph, session progress and anti-drift contracts remain baseline.
 
-> **`PROGRESS.md` is UNGATED** -- the session-progress artifact and every site that references it belong to BOTH modes' baseline. `SPEC_MODE` never removes them; byte-identity above means identical to the pre-spec-layer generator *plus* those sites. Each reference's own header enumerates its ungated sites (`02`, `03`, `04`, `05`) -- read it there, !=count from here.
+> **`PROGRESS.md`, `METHODOLOGY.md`, `ANTI-DRIFT.md`, `task-graph.md` and task-local methodology/cron sections are UNGATED** in BOTH modes. Refs 02-05 + 11 own their runtime contracts. Setup prepares controls; main-session task-board creates timers when tasks are claimed, not for unclaimed queued tasks.
 
-This skill ORCHESTRATES. It does not hand-do the bulk analysis or the doc sweep -- it spawns subagents (Task) for those passes and integrates their output. All emitted artifacts are PARAMETRIZED from Step 1 findings; templates live in `references/`.
+This skill ORCHESTRATES: it spawns bounded subagents via Agent for bulk analysis/doc sweep and integrates their output. All emitted artifacts are PARAMETRIZED from Step 1 findings; templates live in `references/`.
 
-> **Spawn from MAIN only.** This skill is inline (no `context`), so its Task spawns are first-level. Do not nest.
+> **Spawn from MAIN only.** This skill is inline (no `context`), so its Agent spawns are first-level. Do not nest.
 
 > **Read reference templates** with the `Read` tool using `${CLAUDE_SKILL_DIR}/references/<file>` to load them into context.
 
@@ -95,7 +95,7 @@ Every spawn prompt MUST carry:
 
 A bare one-line task is never enough. Shape (P4c sweep agent):
 ```
-Task(subagent_type="general-purpose", prompt="
+Agent(subagent_type="general-purpose", prompt="
 GOAL: deploying a file-based Kanban into TARGET; the board skeleton exists and this pass
   fills it from the repo's pre-existing task docs. Sibling agents handle other doc groups.
 ROLE: you own <these DOCS>. Do NOT create tasks that no document supports, do NOT edit
@@ -206,6 +206,7 @@ C="$TARGET/.claude"; F="$C/features"
 # A `.disabled` twin is a PARKED artifact (see PE), not a missing one -- never report it as MISS.
 for p in agents/task-tracker.md skills/task-board/SKILL.md rules/tasks.md skills/task-spec/SKILL.md \
   features/board.md features/PROGRESS.md features/TRACKER.md features/TASK_TEMPLATE.md features/INDEX.md \
+  features/METHODOLOGY.md features/ANTI-DRIFT.md features/task-graph.md \
   features/specs/SPEC_TEMPLATE.md features/specs/DESIGN_TEMPLATE.md; do
   if test -f "$C/$p"; then echo "  ok   $p"
   elif test -f "$C/$p.disabled"; then echo "  off  $p (parked as $(basename "$p").disabled)"
@@ -254,7 +255,7 @@ Rules that bind the whole phase:
 
 - **Additive only.** New files (`task-spec` skill, `SPEC_TEMPLATE.md`, `DESIGN_TEMPLATE.md`) are written outright. No existing task file, board row, agent, skill or rule is rewritten wholesale.
 - **Every edit of an existing file is gated:** show the exact diff, then **AskUserQuestion** per file. Declined = no edit, continue cleanly.
-- **The metadata restamp (`10-upgrade.md` U5b) is UNGATED and always runs**, including when every content row is already SKIP. It rewrites `version` / `generated_by` / `last_updated` in the frontmatter of the nine stamped artifacts and nothing else -- that is the ONLY thing that clears the `stale` verdict `/brewcode:setup-status` reads off `board.md`. An `upgrade` that reports success without moving the stamp sends the user round the same loop next session.
+- **The metadata restamp (`10-upgrade.md` U5b) is UNGATED and always runs**, including when every content row is already SKIP. It rewrites only the metadata quartet in the twelve stamped control artifacts; task decisions, prompts, scheduler ids and tick counters are untouched. The board anchor stamp clears the `stale` verdict read by setup-status.
 - **Never renumber, never delete.** Existing task ids, scope ids and closed tasks are untouchable. `board.md` rows are never REORDERED and existing cell content is never CHANGED -- the one allowed row edit is APPENDING the new `spec` cell holding `--` to each existing Progress/Todo row, per `10-upgrade.md` U4 (header + separator cells patch with it; a 6-column header over 5-cell rows is corruption, not caution). `spec:` FM backfill is opt-in and !=run by default -- the default writes nothing to task files. When the user accepts it, the value is `pending` or `none` per the needs-spec heuristic -- never `full`.
 
 > `PU` is a thin handoff: `10-upgrade.md` owns detect, verify and report. Do NOT reuse P5 here.
@@ -264,6 +265,8 @@ Rules that bind the whole phase:
 ## PE: Enable / Disable  (park or restore the machinery, keep every task)
 
 Runs for `MODE=enable` / `MODE=disable` on a deployed board. Replaces P1-P5.5. Writes no content, deletes nothing, spawns nothing.
+
+Before `disable`, run the timer-stop gate below; parking discovery files alone does not stop live timers. `enable` restores discovery only: task-board reconciles timers on the next task claim/resume. Task data and stored prompt/state stay intact.
 
 Claude Code discovers a project agent only as `.claude/agents/<name>.md`, a project skill only as `<dir>/SKILL.md`, and auto-loads a rule only as `.claude/rules/*.md`. Withholding that one filename is therefore the whole switch:
 
@@ -323,6 +326,8 @@ Runs for `MODE=uninstall` (`KEEP_DATA=true`) and `MODE=purge` (`KEEP_DATA=false`
 
 The split is deliberate: the generated agent/skills/rule are MACHINERY, `.claude/features/**` is the user's DATA -- every task they ever wrote. `uninstall` unwires the machinery and leaves the data readable; only `purge` deletes the tasks.
 
+After removal confirmation and BEFORE deleting anything, run the timer-stop gate. A saved scheduler id or absent skill file never proves timer termination.
+
 **Confirm before deleting.** Print the exact file list from `PS` and `AskUserQuestion` once. For `purge` the question MUST state the task counts being destroyed (`closed=N` included) and offer `uninstall` (keep the data) as an alternative option. A declined confirmation ends the run cleanly -- delete nothing.
 
 **EXECUTE** using Bash tool (substitute `KEEP_DATA`):
@@ -346,13 +351,17 @@ Then run the `PS` block again and print its report -- it is the proof, not the `
 
 ---
 
+## Timer-stop gate (disable / uninstall / purge)
+
+In the MAIN SESSION, call `CronList`; identify only task-board timers whose COMPLETE prompt names this absolute TARGET and a task id from its board/task records. Call `CronDelete` for each matched timer and re-list to prove absence. Leave unrelated schedules untouched; preserve stored task prompts, runtime state and evidence. Tools unavailable/denied or deletion unverifiable -> report the cleanup gap and stop before parking/removing files; do not imply success or erase the records needed to recover it. An explicitly verified empty matching set passes. Other conversations' schedules cannot be inspected/stopped here: report that limitation when records indicate them. Source lifecycle: ref 11 / deployed ANTI-DRIFT.md.
+
 ## P1: Multi-agent repo analysis  (Step 1)
 
 Load the analysis contract and confirmation template:
 
 Read file: `${CLAUDE_SKILL_DIR}/references/01-analysis.md`
 
-Follow it to spawn analysis subagents IN PARALLEL (one message, multiple Task calls). Spawn the agents prescribed there (default: `Plan` for domains + release style, `Explore` for source-path exclusions + doc inventory, **Agent C** for the domain-agent inventory). Each returns a structured block. Integrate into a single FINDINGS object:
+Follow it to spawn analysis subagents IN PARALLEL (one message, multiple Agent calls). Spawn the agents prescribed there (default: `Plan` for domains + release style, `Explore` for source-path exclusions + doc inventory, **Agent C** for the domain-agent inventory). Each returns a structured block. Integrate into a single FINDINGS object:
 
 ```
 DOMAINS   = [ ... ]   # per-repo first-kebab id segments, derived from the repo
@@ -387,16 +396,16 @@ The reference templates carry these placeholders. Derive each from the confirmed
 
 | Placeholder | Owner refs | Derivation |
 |-------------|-----------|------------|
-| `{{DOMAINS}}` | 01,02,04,05,08,10 | confirmed domain id-segment list, comma-separated (e.g. `HTML, KV, SITE`) |
+| `{{DOMAINS}}` | 01,02,04,05,08,10,11 | confirmed domain id-segment list, comma-separated (e.g. `HTML, KV, SITE`) |
 | `{{FIRST_DOMAIN}}` | 02,04,05,08,09,10 | `DOMAINS[0]` |
 | `{{EXCLUSIONS}}` | 02,08,10 | confirmed source-dir exclusion list |
-| `{{REPO_NAME}}` | 05,08,09,10 | basename of `TARGET` |
-| `{{LANG}}` | 02,03,04,05,08,09,10 | confirmed doc language |
+| `{{REPO_NAME}}` | 05,08,09,10,11 | basename of `TARGET` |
+| `{{LANG}}` | 02,03,04,05,08,09,10,11 | confirmed doc language |
 | `{{TODAY}}` | 05,08,09,10 | today's date, ISO (`YYYY-MM-DD`) |
-| `{PLUGIN_VERSION}` | 02,03,04,05,08,10 | brewtools plugin version, `X.Y.Z`. Resolved by the bash block below -- NEVER hardcoded, never guessed |
-| `{CONTENT_VERSION}` | 02,03,04,05,08,10 | this SKILL.md's own `content_version`, read from its line-1 `brewcode-meta:` marker (below the frontmatter) -- self-located, same as `{PLUGIN_VERSION}`, never a copy of it |
-| `{GENERATED_BY}` | 02,03,04,05,08,10 | the literal `brewtools:task-board-setup` |
-| `{LAST_UPDATED}` | 02,03,04,05,08,10 | same value as `{{TODAY}}`, quoted in YAML frontmatter. Metadata spelling of the date; `{{TODAY}}` stays the prose/card spelling |
+| `{PLUGIN_VERSION}` | 02,03,04,05,08,10,11 | brewtools plugin version, `X.Y.Z`. Resolved by the bash block below -- NEVER hardcoded, never guessed |
+| `{CONTENT_VERSION}` | 02,03,04,05,08,10,11 | this SKILL.md's own `content_version`, read from its line-1 `brewcode-meta:` marker (below the frontmatter) -- self-located, same as `{PLUGIN_VERSION}`, never a copy of it |
+| `{GENERATED_BY}` | 02,03,04,05,08,10,11 | the literal `brewtools:task-board-setup` |
+| `{LAST_UPDATED}` | 02,03,04,05,08,10,11 | same value as `{{TODAY}}`, quoted in YAML frontmatter. Metadata spelling of the date; `{{TODAY}}` stays the prose/card spelling |
 | `{{CLOSE_MARKER}}` | 02,10 | derived from `RELEASE_STYLE`: `vtag` -> `"vX.Y.Z tag + commit SHA"`; `sha` -> `"commit SHA"`; `none` -> `"date / no tag / superseded / cancelled"`. Exact per-ref wording maps live in `02` and `03` |
 | `{{CLOSE_MARKER_SHORT}}` | 03,04,05,10 | same enum, short form: `vtag` -> `"vX.Y.Z tag"`; `sha` -> `"commit SHA"`; `none` -> `"no tag"`. `04` and `05` reuse `03`'s map |
 | `{{DOMAIN_AGENTS}}` | 08,10 | a COMPLETE markdown table from Agent C's inventory of TARGET `.claude/agents/**` -- header row + `\|---\|` separator + one row per agent, columns exactly `agent \| domains covered \| specialty`. Consumers paste it bare, so a bodiless expansion renders as literal pipe text. Exception: no agents found -> the non-table literal line `(none found -- fall back to the built-in Plan agent and say so in Evidence)` |
@@ -425,7 +434,7 @@ echo "LAST_UPDATED=$(date +%F)"
 > **Why the bare form.** `CLAUDE_SKILL_DIR` is a TEXT SUBSTITUTION on the skill prompt, not an env var: CC 2.1.226 rewrites only the EXACT dollar-brace literal `{CLAUDE_SKILL_DIR}` (`replace(/\$\{CLAUDE_SKILL_DIR\}/g, dirname(skillPath))` and a string-pattern `replaceAll`). A brace-modifier form such as `:-fallback` inside the braces is therefore NOT matched, reaches the shell verbatim, and its fallback ALWAYS wins. `CLAUDE_PLUGIN_ROOT` is a real env var but is exported only to hook processes and MCP servers -- never to a skill's Bash tool -- so it is ALWAYS empty here. The skill dir is correct in a cache install AND in a `--plugin-dir` dev run; the cache glob below it is a last-resort fallback only, and it would name the INSTALLED plugin.
 > If `PLUGIN_VERSION` comes back empty or non-`X.Y.Z`, STOP and report -- do not emit a file with a guessed or literal-placeholder version.
 
-These three feed the four-key metadata frontmatter (`doc_type: llm`, `version`, `generated_by`, `last_updated`) on every emitted artifact: the `task-tracker` agent (02), the `task-board` (03) and `task-spec` (08) skills, the `tasks.md` rule (04), and the five `.claude/features/**` control files (05). `doc_type` is the literal `llm` -- no placeholder. Per-task CARD frontmatter (`id/title/status/priority/owner/created/updated/tags/links/spec`) is domain data and never carries these keys.
+These values feed metadata on the agent (02), board/spec skills (03/08), rule (04), stamped controls (05) and shared methodology/anti-drift/graph (11). `doc_type` is literal `llm`. Task card FM and task-local methodology/cron runtime state are domain data, never generator provenance.
 
 ### Gated placeholders -- the convention
 
@@ -475,7 +484,7 @@ The spec layer adds gated blocks inside otherwise-unchanged templates, following
 Two `_ON`/`_OFF` pairs exist: `{{SPEC_BRD_FEATURES_*}}` (02, board section-6 line) and `{{SPEC_FEATURE_TABLE_HEAD_*}}` (05, `board.md` `## Feature specs` header + separator).
 
 > `{{SPEC_INVARIANTS}}` lives in `03` ONLY -- the `02` copy was cut. Names are FILE-SCOPED: resolve every gated token against its owner's header, never across files.
-> Refs 01, 06, 07, 08, 09, 10 declare NO gated placeholders. `08` and `09` are gated at WHOLE-FILE granularity (emitted only when `SPEC_MODE=on`); the file is the gate, not a token. A `{{TOKEN}}` in `10` is prose, not a placeholder.
+> Refs 01, 06, 07, 08, 09, 10, 11 declare NO gated placeholders. `08` and `09` are gated at WHOLE-FILE granularity (emitted only when `SPEC_MODE=on`); ref 11 is always emitted. A `{{TOKEN}}` in `10` is prose, not a placeholder.
 
 > Gated surfaces by reference: `02` spec triage + checklist + description triggers + board cols/section-6; `03` SPECS view + add/move steps + invariant + description triggers + add-row col; `04` spec rules 13-22 + `spec:` FM field; `05` TRACKER section 10 + `spec:` FM line + `## Scope` block + board `spec` column + Feature-specs header + INDEX rows + lifecycle close gate.
 
@@ -537,6 +546,8 @@ Load the file templates:
 
 Read file: `${CLAUDE_SKILL_DIR}/references/05-features-templates.md`
 
+Read file: `${CLAUDE_SKILL_DIR}/references/11-methodology-cron.md`
+
 Create the folder tree + control files. `git mv` is not needed (fresh files):
 
 **EXECUTE** using Bash tool:
@@ -548,6 +559,8 @@ mkdir -p "$F"/{backlog,todo,progress,closed,specs} && echo "OK scaffold" || echo
 ```
 
 Then `Write` each control file from `05-features-templates.md` (placeholders substituted): `board.md`, `PROGRESS.md`, `TRACKER.md`, `TASK_TEMPLATE.md`, `INDEX.md`, `backlog/README.md`. `PROGRESS.md` is UNGATED -- written in both `SPEC_MODE` states, at init, so the session has a progress surface before the first task exists.
+
+In BOTH modes, emit `METHODOLOGY.md`, `ANTI-DRIFT.md`, `task-graph.md` from ref 11. Populate domain methodology from actual domain instructions, review risks/owners and verified check commands; record explicit validation gaps rather than invent commands. The task template must include Methodology/base work and a complete task-specific cron prompt/state slot. After migration, derive the graph from the canonical board and accepted task records: retain all unfinished nodes + latest 10 done; preserve older completion evidence before pruning graph rows. No timers are created by a fresh empty setup; active tasks reconcile theirs through main-session task-board.
 
 **If `SPEC_MODE=on`**, additionally load:
 
@@ -584,6 +597,7 @@ TARGET="<absolute path resolved in P0>"
 test -n "$TARGET" && test -d "$TARGET" || { echo "MISS TARGET unresolved -- re-resolve per P0"; exit 1; }
 for p in .claude/agents/task-tracker.md .claude/skills/task-board/SKILL.md .claude/rules/tasks.md \
   .claude/features/board.md .claude/features/PROGRESS.md .claude/features/TRACKER.md \
+  .claude/features/METHODOLOGY.md .claude/features/ANTI-DRIFT.md .claude/features/task-graph.md \
   .claude/features/TASK_TEMPLATE.md .claude/features/INDEX.md .claude/features/backlog/README.md; do
   test -f "$TARGET/$p" && echo "OK  $p" || echo "MISS $p"
 done
@@ -633,7 +647,7 @@ test "$FAIL" -eq 0 && echo "OK prompt contract" || echo "FAIL prompt contract"
 > Any `MISS` (from any gate above -- existence, leftover-placeholder, prompt-contract) -> re-emit the missing artifact, re-substitute the leftover placeholder, or fix the offending hint/PLAN block, before finishing.
 
 Report to the user:
-- the 9 paths created (+ 5 folders); `SPEC_MODE=on` adds 3 more
+- the 12 baseline paths created (+ 5 folders); `SPEC_MODE=on` adds 3 more
 - DOMAINS, EXCLUSIONS, REL_STYLE, LANG used
 - **`SPEC_MODE`** (`on`/`off`) and, when `on`, the `{{DOMAIN_AGENTS}}` table actually baked into the emitted `task-spec` skill (agent | domains | specialty) plus `ARCHITECT_AGENT`
 - **`AGENT_GAPS`** -- every domain with NO owning agent, which therefore falls back to the built-in `Plan`. Always print this, even when empty (`AGENT_GAPS: none`). A hidden gap is a silently weaker design phase. Non-empty -> suggest `/brewcode:agents` to author the missing domain agents, then re-run `/brewtools:task-board-setup upgrade <path>`
@@ -672,12 +686,12 @@ Pass it `TARGET`, `DIR` (the directive parsed in P0), and `EXCLUSIONS`/`MODULES`
 | board.md `FRESH` but other primary artifacts present (partial prior run) | STOP -- report partial deployment; ask the user whether to clean and redo. Do NOT blindly overwrite. `upgrade` is not the fix (fresh-init path only; the upgrade path skips this guard) |
 | Reference template missing under `${CLAUDE_SKILL_DIR}/references` (incl. `08-task-spec-skill.md`, `09-spec-templates.md`, `10-upgrade.md` when `SPEC_MODE=on` or `upgrade`) | ERROR: reference not found -- reinstall brewtools. STOP. |
 | `SPEC_MODE=on` but `AGENT_GAPS` covers EVERY domain (no project agents at all) | ALLOWED -- proceed, `{{DOMAIN_AGENTS}}` becomes the literal `(none found ...)` line and every domain falls back to `Plan`. But SURFACE it loudly in the P5 report and suggest `/brewcode:agents` to author domain agents, then `upgrade` |
-| `SPEC_MODE=off` | Emit NOTHING spec-related: no `task-spec` skill, no spec templates. Every gated placeholder resolved against its OWN condition -- a false `line` -> line removed, a false `inline` -> token removed, and the `_OFF` arm of each pair EXPANDS (its condition is true when the mode is off). Every artifact byte-identical to the pre-spec-layer generator |
+| `SPEC_MODE=off` | Emit no spec-related skill/templates. Resolve each gated placeholder against its OWN condition: false line removed, false inline token removed, `_OFF` arm expands. Methodology/graph/session progress/anti-drift remain ungated baseline |
 | Design authored without a domain-architect fan-out | Defect -- the emitted `task-spec` skill must spawn >=1 agent per touched domain in ONE message; a lone generalist design is rejected |
 | Upgrade proposes rewriting an existing file | Show the diff and AskUserQuestion first; declined = no edit. Additive-only: never renumber ids, never delete tasks or board rows |
 | User does not confirm FINDINGS | Do NOT generate; re-ask or abort |
 | A subagent proposes editing source dirs (EXCLUSIONS) | Reject that edit; sweep writes ONLY `.claude/features/**` |
-| Nested spawn requested (Task from a subagent) | Forbidden -- orchestrate from main only |
+| Nested spawn requested (Agent from a subagent) | Forbidden -- orchestrate from main only |
 | `OPTIN` true but no root CLAUDE.md in target | report "no CLAUDE.md to optimize"; skip P5.5; do NOT create a root CLAUDE.md |
 | P5.5 proposal declined by user | make NO edit; continue/finish cleanly (never force) |
 | Secret detected in committed CLAUDE.md | mask value in output; on move, warn gitignore != history purge; never echo full secret |

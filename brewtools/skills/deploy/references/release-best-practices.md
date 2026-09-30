@@ -22,29 +22,33 @@
 ## EXAMPLE — Release Flow (claude-brewcode repo)
 
 ```
-1. bump-version.sh X.Y.Z     → Updates ALL 6 version files
-2. Update RELEASE-NOTES.md    → Add changelog section
-3. git add -- <owned paths>   → explicit paths only; `git add -A` would commit unrelated work
-4. git tag vX.Y.Z             → Create tag
-5. git push origin HEAD && git push origin refs/tags/vX.Y.Z
-                              → this tag only; `--tags` publishes every unpushed local tag
-6. update-plugin.sh           → Refresh local plugin cache
-7. Verify CI                  → gh run watch <run id for THIS sha> --exit-status
-8. Verify cache               → grep matcher in hooks.json
+1. Discover tags; select unused X.Y.Z and the exact owned paths/branch.
+2. bash .claude/scripts/bump-version.sh X.Y.Z → synchronize the current carriers.
+3. Update RELEASE-NOTES.md and affected docs; validate the owned change set.
+4. Execute the authorized release as one failure-stop chain:
+   git add -- <owned paths> && git commit -m "Release vX.Y.Z" &&
+   git push origin HEAD && git tag vX.Y.Z && git push origin refs/tags/vX.Y.Z
+   → explicit paths only; git add -A is banned; git push --tags is banned.
+5. Verify CI for the committed SHA, published release, and served docs provenance/content.
+6. Refresh local Claude plugin caches only with explicit authorization for those caches.
+   Native Codex plugins remain disabled; a release does not authorize local installation.
 ```
 
-## EXAMPLE — Version Files (claude-brewcode repo; CRITICAL — ALL must match)
+## EXAMPLE — Version Carriers (claude-brewcode repo)
 
 | File | Path |
 |------|------|
 | brewcode plugin.json | `brewcode/.claude-plugin/plugin.json` |
-| brewcode marketplace.json | `brewcode/.claude-plugin/marketplace.json` |
 | brewdoc plugin.json | `brewdoc/.claude-plugin/plugin.json` |
-| brewdoc marketplace.json | `brewdoc/.claude-plugin/marketplace.json` |
 | brewtools plugin.json | `brewtools/.claude-plugin/plugin.json` |
-| brewtools marketplace.json | `brewtools/.claude-plugin/marketplace.json` |
+| brewui plugin.json | `brewui/.claude-plugin/plugin.json` |
+| Marketplace product entries | `.claude-plugin/marketplace.json` |
+| brewcode package version | `brewcode/package.json` |
+| Derived stamps, versioned docs, compatibility mirror | Current coverage in `.claude/scripts/bump-version.sh` |
 
 > In THAT repo: never edit versions manually, always `bash .claude/scripts/bump-version.sh X.Y.Z`.
+> Product versions match; the native compatibility schema version is independent. Read the helper
+> for current generated coverage instead of hard-coding a carrier count.
 > In YOUR repo: use whatever P4 Step 0 discovered — the equivalent script, or every version file by hand.
 
 ## EXAMPLE — RELEASE-NOTES.md Format (claude-brewcode repo)
@@ -120,7 +124,7 @@ current repo from its top-level layout:
 | Event | Workflows triggered |
 |-------|-------------------|
 | Tag `v*.*.*` push | Docs (GHCR build), Release (GitHub Release) |
-| Release workflow completes | Deploy Docs (VPS deploy) via `workflow_run` |
+| Docs workflow completes successfully | Deploy Docs (VPS deploy) via `workflow_run` |
 | Branch push (non-main) | Docs (GHCR build, branch tag) |
 
 ## Post-Release Verification
@@ -134,8 +138,9 @@ check (the live thing reports X.Y.Z). Pick the checks that match what this repo 
 |-------|---------|----------|
 | CI runs | `gh run watch "$(gh run list -L 20 --json databaseId,headSha --jq "[.[] \| select(.headSha == \"$(git rev-parse HEAD)\")] \| .[0].databaseId")" --exit-status` | Exit 0 — correlated to this commit, !=whatever ran last |
 | Release created | `gh release view vX.Y.Z` | Exists, not draft |
-| Plugin cache | `grep '"matcher"' ~/.claude/plugins/cache/claude-brewcode/brewcode/X.Y.Z/hooks/hooks.json` | Matchers present |
-| Docs deployed | `curl -sf https://doc-claude.brewcode.app/getting-started/` | HTTP 200 |
+| Docs provenance | `curl -fsS https://doc-claude.brewcode.app/build-info.json` | Exact `{version,sha,buildRunId}` matches the successful Docs image/build |
+| Docs content | Fetch affected pages and compare the deployed getting-started HTML hash with the image | HTTP 200, correct version/content; health alone is insufficient |
+| Local caches (only if authorized) | Verify the explicitly named cache against the released source | Correct version and hooks; no implicit machine-local updates |
 
 ## Emergency Rollback
 
@@ -143,4 +148,6 @@ If release has critical issues:
 
 1. Do NOT delete the tag (breaks references)
 2. Fix forward: create patch release `vX.Y.(Z+1)`
-3. If CI broken: `gh workflow run "Deploy Docs" -f image_tag=PREVIOUS_VERSION`
+3. For an authorized docs rollback: `gh workflow run "Deploy Docs" -f image_tag=PREVIOUS_VERSION`.
+   The selected image must have verified SHA/run labels and build metadata; legacy images without
+   provenance fail closed. An attempted rollback is not verified recovery.

@@ -14,7 +14,7 @@ plus a shared `lib/` that holds the reminder text and I/O helpers they import.
 
 <Callout type="note" title="What's new in 6.2.0">
 `forced-eval.mjs` no longer fires on every prompt — it now fires on the 1st real prompt, then every
-10th, via a session-keyed counter (same pattern as `think-short-prompt-counter.mjs`). The injected
+10th, via its own session-keyed counter. The injected
 `REMINDER_TEXT` also shrank 636 → 472 chars. See the [detailed description](#1-forced-evalmjs) below.
 </Callout>
 
@@ -23,7 +23,7 @@ plus a shared `lib/` that holds the reminder text and I/O helpers they import.
 | # | Hook | Event | Matcher | Channel | Timeout | Purpose |
 |---|------|-------|---------|---------|---------|---------|
 | 1 | forced-eval | UserPromptSubmit | -- | additionalContext | 2s | Manager-role + split-discipline reminder |
-| 2 | session-start | SessionStart | -- | additionalContext | 3s | Session init, permission_mode tag |
+| 2 | session-start | SessionStart | -- | systemMessage | 3s | User-visible session/version info and permission_mode tag |
 | 3 | role-recall | SessionStart | compact | additionalContext | 2s | Re-inject [ROLE]/[SPLIT]/[BRANCH] after a compaction |
 | 4 | compact-recall | SessionStart | compact | additionalContext | 2s | Re-anchor plan, intent and task graph after a compaction |
 
@@ -55,7 +55,7 @@ brewcode/hooks/
     reminder.mjs                REMINDER_TEXT: [ROLE] + [SPLIT] + [BRANCH]
   tests/
     run.sh                      Runs every suite, reports pass/fail counts
-    suite-session-start.mjs     Covers session-start.mjs and compact-recall.mjs -- 68 checks, all passing
+    suite-session-start.mjs     Covers session-start.mjs and compact-recall.mjs
 ```
 
 ## I/O protocol
@@ -63,9 +63,13 @@ brewcode/hooks/
 All hooks follow a unified protocol:
 
 1. Read JSON from stdin (via `readStdin()`)
-2. Receive fields: `session_id`, `cwd`, `source` (SessionStart), `permission_mode` (all events), `transcript_path` (compact-recall only)
+2. Read event-specific input: common session/cwd fields, source for SessionStart, prompt for UserPromptSubmit, and transcript_path when needed. Treat optional permission_mode as a payload signal, not a value to infer.
 3. Output JSON to stdout (via `output()`)
 4. Write logs to stderr
+
+Output channels have different audiences: top-level `systemMessage` is user-visible, while
+`hookSpecificOutput.additionalContext` supplies model context on supported events. Input and
+decision schemas are event-specific; `updatedInput` is not a UserPromptSubmit rewrite channel.
 
 **Shared utilities:**
 - `hooks/lib/utils.mjs` -- I/O, configuration, logging, and `projectRoot()`: `CLAUDE_PROJECT_DIR` env var when it points at a real path, else walk upward from the hook's `cwd` for the nearest `.git` or `.claude` directory, else the starting `cwd` itself -- never throws, never guesses beyond that
@@ -102,9 +106,9 @@ There is no skill-activation nudge -- modern models pick skills on their own.
 **What it does:**
 - Receives the user prompt
 - Skips meta-replies first (see below) -- they never touch the counter
-- Bumps a session-keyed counter (private 0700 tmp dir, atomic write, lstat-only -- same pattern as `think-short-prompt-counter.mjs`) and injects only when the new count is 1 or a multiple of 10
-- Injects `REMINDER_TEXT` via `additionalContext` -- UserPromptSubmit cannot rewrite the prompt (`updatedInput` is silently dropped in CC 2.1.x)
-- Output is capped at 9000 chars (10K disk-spill safety, CC 2.1.174+)
+- Bumps its session-keyed counter (private 0700 tmp dir, atomic write, lstat-only) and injects only when the new count is 1 or a multiple of 10
+- Injects `REMINDER_TEXT` via `additionalContext` without rewriting the prompt
+- Output is capped at 9000 characters
 
 **When it fires:** On the 1st real user prompt of a session, then every 10th one after that
 (prompts 10, 20, 30, ...) -- not every prompt. Meta-replies that carry no task
@@ -117,30 +121,30 @@ every compaction, independent of this cadence.
 
 ### 2. session-start.mjs
 
-<Badge variant="primary" text="SessionStart" /> <Badge variant="secondary" text="additionalContext" />
+<Badge variant="primary" text="SessionStart" /> <Badge variant="secondary" text="systemMessage" />
 
 Initializes the session, checks for brewcode/Claude updates, manages Plan Mode symlinks, and reports the active `permission_mode` in the system message for audit.
 
 | Parameter | Value |
 |-----------|-------|
 | Event | SessionStart |
-| Channel | additionalContext |
+| Channel | systemMessage |
 | Timeout | 3000 ms |
 
-The hook reads `permission_mode` from the hook payload and appends it to `systemMessage` so every session records its trust level (default / plan / bypassPermissions). Output is capped at ~9000 chars (10K disk-spill safety, CC 2.1.174+).
+When present, `permission_mode` is appended to the user-visible `systemMessage`. This hook emits no additionalContext: version and session information do not become operating instructions for the model.
 
 **Logic by session source:**
 
 | Source | Behavior |
 |--------|----------|
-| `init` | Log session_id, append permission_mode tag |
+| `startup` | Log session_id, append permission_mode tag when present |
 | `resume` | Log session_id, append permission_mode tag |
 | `clear` | Create symlink LATEST.md -> newest plan |
 
 **LATEST.md symlink:**
-1. Checks `~/.claude/plans/` for `.md` files
+1. Resolves `plansDirectory` from local, project, then user settings; defaults to `~/.claude/plans/`
 2. Picks the newest one (by mtime)
-3. If the file is less than 60 seconds old -- creates `.claude/plans/LATEST.md` -> `~/.claude/plans/<newest>.md`
+3. If the file is less than 60 seconds old, creates `.claude/plans/LATEST.md` pointing to that plan; preserves unrelated existing files or foreign links
 
 If `<root>/.claude/plans` is itself a symlink out of the project, the hook detects it, logs a warning, and
 returns without creating anything -- it no longer follows that symlink to write `LATEST.md` somewhere outside
@@ -177,9 +181,8 @@ session quietly stops delegating after a few compactions.
 <Badge variant="primary" text="SessionStart / compact" /> <Badge variant="secondary" text="additionalContext" />
 
 Re-anchors plan, original intent and task graph after a compaction, so the session does not start a brand-new task
-graph on top of the one it already had. `additionalContext` on `SessionStart` is the only channel that reaches the
-model here -- PostCompact stdout is UI-only, and `UserPromptSubmit` never fires on an auto-compaction because there
-is no prompt.
+graph on top of the one it already had. It uses SessionStart additionalContext for model instructions.
+UserPromptSubmit does not fire on an auto-compaction because there is no user prompt.
 
 | Parameter | Value |
 |-----------|-------|
@@ -219,6 +222,9 @@ never to silence, and it never names a plan from outside this session's own tran
 ---
 
 <CardGrid>
+  <Card title="Semble Setup" icon="search" href="/brewcode/skills/semble-setup/">
+    Optional project search hooks installed separately from the four plugin registrations.
+  </Card>
   <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
     Download, changelog, and installation instructions.
   </Card>

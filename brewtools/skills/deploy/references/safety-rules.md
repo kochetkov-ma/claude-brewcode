@@ -31,7 +31,7 @@
 |----------|----------|
 | Workflows | Write new `.github/workflows/*.yml` file |
 | Releases | `gh release create --draft` (draft only) |
-| Git | `git branch`, `git stash` |
+| Git | `git branch` |
 | Directories | `mkdir -p .github/workflows` |
 
 ## MODIFY Commands (confirm)
@@ -42,6 +42,7 @@
 | Workflows | Edit existing `.github/workflows/*.yml` | CI behavior changes |
 | Release notes | Edit `RELEASE-NOTES.md` | Documentation changes |
 | Git | `git commit`, `git tag` | History changes |
+| Workspace | `git stash` | Mutates working files; require explicit scope and authorization, preserve concurrent edits |
 | Config | Edit `.github/dependabot.yml`, `CODEOWNERS` | Repo config |
 
 ## SERVICE Commands (confirm)
@@ -81,9 +82,13 @@
 | `git tag vX.Y.Z && git push origin refs/tags/vX.Y.Z` | SERVICE | Triggers CI pipelines |
 | `gh release create && gh workflow run` | SERVICE | Multiple side effects |
 | `git push --force` | PRIVILEGE (overrides SERVICE) | History rewrite |
-| `bump-version.sh && git commit && git tag && git push` | SERVICE | Release chain |
+| `git add -- <owned paths> && git commit && git push origin HEAD && git tag vX.Y.Z && git push origin refs/tags/vX.Y.Z` | SERVICE | Authorized release chain; any failure stops later effects |
 
 ## Confirmation Message Format
+
+Reuse an existing explicit approval envelope covering the exact repository, target, commands,
+payload, and time window. Ordinary subagents return missing decisions to the main caller;
+the caller asks the user once with a concrete preview. Never broaden approval implicitly.
 
 ### MODIFY/SERVICE
 
@@ -120,4 +125,5 @@ If any command returns unexpected output suggesting:
 - Deleting a non-draft release with downloads
 - Tag already exists on remote with different commit
 
-**STOP immediately.** Report findings. Ask user to confirm before continuing.
+**STOP immediately.** Report findings; the main caller resolves the invalid approval envelope
+before continuing. Ordinary subagents return the discrepancy and required decision to that caller.

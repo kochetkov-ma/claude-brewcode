@@ -2,6 +2,9 @@
 
 Update existing E2E scenarios and tests.
 
+Run coordination in the main session. Ordinary delegated agents cannot spawn Agent:
+return requests/blocked decisions to the main orchestrator rather than re-delegating.
+
 ## U0: Prerequisite Check
 
 Check `.claude/agents/e2e-*.md` count. If <3 → "Run `/brewcode:e2e install` first." STOP.
@@ -39,12 +42,11 @@ Based on update type:
 | Refactor steps/support | e2e-automation-tester | Refactor shared layers |
 | Architecture changes | e2e-architect | Update patterns, base classes |
 
-Spawn appropriate agent(s) via Task tool. One agent = ONE update target (one scenario group or one
-test domain, ~<=5 files); an update spanning more targets is split per target and all agents go out
-in ONE message.
+Via Agent, assign ONE scenario group/test domain (~<=5 files) per agent. Split multiple
+targets; fan out the independent units in ONE message.
 
 ```
-Task(subagent_type="{AGENT_FROM_TABLE}", prompt="
+Agent(subagent_type="{AGENT_FROM_TABLE}", prompt="
 GOAL: this project already has an E2E suite; the user asked for {PROMPT} and this task delivers
       that change for ONE target without disturbing the rest of the suite.
 ROLE: you own {TARGET_FILES} and the action '{ACTION_FROM_TABLE}'. Do NOT touch other domains'
@@ -71,7 +73,7 @@ Same pattern as CREATE mode C4/C7. Every spawn below carries the full six-field 
 ```
 cycle = 0
 while cycle < 3:
-  1. Task(e2e-reviewer): validate changes against rules.
+  1. Agent(e2e-reviewer): validate changes against rules.
      GOAL: an existing E2E suite is being changed in place; you gate the change before it lands.
      ROLE: review the U3 diff only. Read-only, no edits, no new scenarios or tests.
      SCOPE: the files U3 touched ({CHANGED_FILES}); out of bounds: the untouched rest of the suite.
@@ -82,7 +84,7 @@ while cycle < 3:
        agent that made the change -- so give file + line + rule broken + a fix proposal.
      DONE: findings table (file | rule | severity | fix proposal) or "no issues".
   2. If no issues → break
-  3. Task(different agent): re-check reviewer findings (cross-domain verification).
+  3. Agent(different agent): re-check reviewer findings (cross-domain verification).
      GOAL: do not send the author chasing a finding that is not real.
      ROLE: verify the reviewer's findings. Read-only -- do NOT fix, do NOT add findings.
      SCOPE: only the files named in the findings; out of bounds: everything else.
@@ -91,7 +93,7 @@ while cycle < 3:
        >=1 test) must survive any fix you endorse.
      CONSUMER: step 4 fixes only what you confirm; U5 reports the rest to the user.
      DONE: per finding: real / downgraded / false-positive + one-line reason.
-  4. Confirmed issues → Task(original agent): fix.
+  4. Confirmed issues → Agent(original agent): fix.
      GOAL: land the confirmed fixes so this update can close.
      ROLE: you own the files you already changed in U3; do NOT expand the change, do NOT refactor
        neighbouring code, do NOT edit scenarios you were not asked to touch.
