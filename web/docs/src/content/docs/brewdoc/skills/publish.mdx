@@ -1,6 +1,6 @@
 ---
 title: "Publish"
-description: "Publish text, markdown, JSON, files, or multi-file sites to brewpage.app — returns a public URL instantly, no sign-up required."
+description: "Publish text, markdown, JSON, files, or multi-file sites to brewpage.app with optional hosting mode and local owner-token history."
 order: 25
 ---
 import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
@@ -17,10 +17,12 @@ the password into chat. The skill reuses that file through private transport and
 its contents into model-visible output or generate and print a random password.
 </Callout>
 
-<Callout type="warning" title="Site publishing produced a fake success — fixed">
-Publishing a directory as a site built its archive with `mktemp`, which leaves a 0-byte placeholder file. Info-ZIP reads that as a corrupt target and exits with status 3 — an exit code the old block never checked. The empty archive was uploaded anyway and reported as a success.
+<Callout type="note" title="Verified site bundles">
+Directory uploads include only supported web assets; dotfiles, `.git/`, `node_modules/`, symlinks and unknown extensions are excluded. The archive is verified before upload. Supplied ZIPs are inspected without rewriting and may require confirmation for flagged entries.
+</Callout>
 
-`scripts/publish.mjs` now owns the whole archive path: it starts from no file at all, checks `zip`'s exit status, verifies the archive with `unzip -t`, and requires a non-zero size before anything is handed to `curl`. Any failure prints `FAILED:` and stops — nothing is uploaded. The same script also **stopped sweeping secrets into the bundle**: `.env` and `.git/config` used to ride along inside published sites; the archive is now built from an allowlist of web-asset extensions, so dotfiles, `.env`, `.git/`, `node_modules/` and unknown extensions never make it in.
+<Callout type="note" title="Hosting rollout">
+The hosting modes below apply to publications with the server's `new-v1` routing metadata and depend on the server rollout. Existing publications retain their current links and behavior. A new upload request can also return an existing publication; always use the server's returned link.
 </Callout>
 
 <Callout type="tip">
@@ -45,8 +47,9 @@ Publishing a directory as a site built its archive with `mktemp`, which leaves a
 
 | Field | Value |
 |-------|-------|
-| Command | `/brewdoc:publish <text\|file_path\|directory_path\|zip_path> [--ttl N] [--entry filename]` |
-| Arguments | Inline text, a file path, a directory, or a `.zip` archive. `--ttl N` = days (default 15), `--entry filename` = entry file for site uploads |
+| Command | `/brewdoc:publish [prompt] <text\|file_path\|directory_path\|zip_path> [--ttl N] [--entry filename] [--delivery-mode path\|subdomain]` |
+| Arguments | Inline text, a file path, a directory, or a `.zip` archive; prose naming a path resolves against the current directory |
+| Options | `--ttl N` = days (default 15); `--entry filename` = site entry; optional `--delivery-mode path\|subdomain` = creation mode |
 | Model | haiku |
 | Invocation | user-only (`disable-model-invocation: true`) |
 | Tools | Read, Write, Bash, AskUserQuestion, Glob |
@@ -54,11 +57,12 @@ Publishing a directory as a site built its archive with `mktemp`, which leaves a
 
 ## When to use
 
-- **Share a report instantly** — `/brewdoc:publish report.md` → public link in seconds
+- **Share a report instantly** — `/brewdoc:publish report.md` → shareable link
 - **Host a JSON dataset** — `/brewdoc:publish '{"status":"ok","count":42}'` → browseable JSON page
 - **Upload any file** — `/brewdoc:publish screenshot.png --ttl 1` → direct download link, expires in 1 day
 - **Deploy a static site** — `/brewdoc:publish ./dist/ --entry index.html` → full multi-file site with routing
 - **Password-protect a page** — choose an existing local password file without exposing its contents in chat
+- **Host public content on its own address** — use `--delivery-mode subdomain` and choose `public` at the namespace prompt
 
 ## Examples
 
@@ -66,6 +70,10 @@ Publishing a directory as a site built its archive with `mktemp`, which leaves a
 # Publish inline text or markdown
 /brewdoc:publish "Hello, world!"
 /brewdoc:publish report.md
+
+# Choose public at the namespace prompt for either public hosting mode
+/brewdoc:publish report.md --delivery-mode path
+/brewdoc:publish report.md --delivery-mode subdomain
 ```
 
 ```bash
@@ -98,13 +106,45 @@ SITE is checked first — directories and `.zip` files would otherwise match the
 
 Entry file detection for sites: `--entry` flag → `index.html` if present → first `.html` alphabetically.
 
+## Hosting modes
+
+`--delivery-mode` accepts only `path` or `subdomain`. When omitted, the skill sends no
+`X-Delivery-Mode` header and lets the server choose. The header stays outside the authored
+text, JSON and multipart fields.
+
+| Fresh publication with `new-v1` metadata | Default | Explicit choice |
+|-------|-------|-------|
+| Public HTML/Markdown, JSON or file | Promotion (`path`) | `path` or `subdomain`, including with a password |
+| Site in any namespace | Dedicated subdomain (`subdomain`) | `subdomain`; `path` is rejected |
+| Non-site outside `public` | Dedicated subdomain (`subdomain`) | `subdomain`; `path` is rejected |
+
+**Promotion** uses a `brewpage.app` address for branded sharing. Eligible public content can
+be discoverable; HTML has stricter script, cookie, embed and navigation restrictions.
+**Dedicated subdomain** gives the publication its own origin with fewer presentation
+restrictions. Choose it if Promotion prevents your HTML from working as intended.
+
+Neither mode guarantees search ranking or third-party widget compatibility. An unlisted
+namespace is not secret; its name may appear in its address and DNS/TLS metadata. Subdomains
+separate DOM and storage, but shared parent-domain cookie interference remains possible.
+Protected Promotion also retains the access risks of existing executable apex content.
+Passwords or revocation cannot recall downloaded or offline-cached copies.
+
+The response decides the effective mode. If the server reuses a publication, keep that
+publication's identity, cohort, mode and exact URL even when they differ from the requested
+mode. Missing or null legacy routing metadata means **Existing link**; do not infer a mode
+from its hostname. **Share the returned link exactly, including its trailing slash.**
+
+New password-protected links remain clean: do not append `?p=`. Browser readers unlock on
+the trusted `unlock.brewpage.app` gateway; programmatic password requests still use
+`X-Password` on the apex API. Existing password-link behavior remains unchanged.
+
 ## Flow
 
 <Steps>
   <li>
     <div>
       <strong>Parse arguments</strong>
-      <p>Extracts <code>--ttl N</code> (default: 15 days), <code>--entry filename</code> (site mode), and the content argument. For a directory, counts HTML files and detects the entry file.</p>
+      <p>Extracts <code>--ttl N</code> (default: 15 days), <code>--entry filename</code> and optional <code>--delivery-mode path|subdomain</code>. Resolves a path named in prose; asks what to publish if neither a path nor content can be resolved.</p>
     </div>
   </li>
   <li>
@@ -116,7 +156,7 @@ Entry file detection for sites: `--entry` flag → `index.html` if present → f
   <li>
     <div>
       <strong>Ask namespace</strong>
-      <p>Interactive prompt offers: <code>public</code> (gallery-visible), an auto-suggested meaningful slug, or a custom value (3–32 alphanumeric chars + hyphens). The slug becomes the URL prefix: <code>brewpage.app/&#123;namespace&#125;/&#123;id&#125;</code>.</p>
+      <p>Offers <code>public</code> for eligible gallery/search discovery, a suggested meaningful unlisted slug, or a custom value (1–32 lowercase letters, digits or hyphens). Namespace sets visibility and helps determine hosting defaults; the response supplies the actual address.</p>
     </div>
   </li>
   <li>
@@ -128,13 +168,13 @@ Entry file detection for sites: `--entry` flag → `index.html` if present → f
   <li>
     <div>
       <strong>Upload via API</strong>
-      <p>Every block first gates on <code>command -v jq</code> and aborts with <code>FAILED: jq required</code> rather than half-publishing. For a directory site, <code>scripts/publish.mjs pack</code> builds and verifies the archive before anything is POSTed; for a supplied <code>.zip</code>, <code>publish.mjs inspect</code> checks it and flags unexpected entries for one <code>AskUserQuestion</code> confirmation instead of uploading silently. The owner token returned by the API is never printed — only appended to <code>.claude/brewpage-history.md</code>.</p>
+      <p>Allocates a private run, validates inputs and requires <code>jq</code>. Directory sites pass archive verification; supplied ZIPs pass inspection or one confirmation for flagged entries. Adds <code>X-Delivery-Mode</code> only when requested. Saves the owner token, exact link, owner API and identity metadata in project-root <code>.claude/brewpage-history.md</code> without printing the token.</p>
     </div>
   </li>
   <li>
     <div>
       <strong>Return result</strong>
-      <p>Prints the public URL (and file count for sites). On error, prints <code>Publish failed.</code> and nothing else — the failure branch deliberately withholds the response body, which can carry an <code>ownerToken</code>.</p>
+      <p>Returns the exact server URL and file count for sites. Reports the safe <code>FAILED:</code> line on failure, withholding the response body because it may contain an owner token. Cleans only the current run's inputs on success, failure or confirmation.</p>
     </div>
   </li>
 </Steps>
@@ -154,40 +194,71 @@ random values. Invalid files or control characters stop publishing.
 a previous run or shared input directory. Content and target paths belong to that run; only the
 password source path is recorded, and its contents are not read through model-visible tools.
 
-**History file format** — each upload block creates `.claude/brewpage-history.md` with this header if it does not exist yet, then appends one row:
+**History file format:** the helper resolves the project root from `CLAUDE_PROJECT_DIR`, Git,
+an upward `.git`/`.claude` search, or the current directory. It creates
+`<project-root>/.claude/brewpage-history.md` with mode `600` and git-ignore protection, then
+appends the exact URL, token, TTL, type, returned `ownerLink` and identity metadata. Existing
+history rows remain unchanged.
 
 ```markdown
-| Date | URL | Owner Token | TTL | Type |
-|------|-----|-------------|-----|------|
-| 2026-04-17 12:00 | https://brewpage.app/my-ns/abc123 | `tok_...` | 5d | html |
+| Date | URL | Owner Token | TTL | Type | Owner API | Identity |
+|------|-----|-------------|-----|------|-----------|----------|
 ```
 
 **Delete a published page:**
 
+Use the returned `ownerLink` stored as **Owner API**, not the viewer's subdomain. In the
+examples below, `OWNER_API` is that apex API URL and `TOKEN` stands for the locally stored
+owner token. Existing rows without metadata keep their existing API identifiers; never
+derive a namespace or resource ID by splitting a hostname.
+
 ```bash
-curl -s -X DELETE "https://brewpage.app/api/{ns}/{id}" \
+curl -s -X DELETE "$OWNER_API" \
   -H "X-Owner-Token: TOKEN"
 ```
-
-For sites use `/api/sites/{ns}/{id}`.
 
 **Update a published site (keep the same URL):**
 
 ```bash
-curl -s -X PUT "https://brewpage.app/api/sites/{ns}/{id}" \
+curl -s -X PUT "$OWNER_API" \
   -H "X-Owner-Token: TOKEN" \
   -F "archive=@/absolute/path/to/new-bundle.zip"
 ```
 
-To update a published site, `PUT` the new bundle to the same site URL with your owner token — the uploaded bundle fully replaces the file set (adds new files, removes absent ones, overwrites matching). The link never changes; no DELETE-then-POST needed.
+For a site, `OWNER_API` is its returned apex `/api/sites/{ns}/{id}` URL. The bundle fully
+replaces the file set and retains the host. Ordinary PUT/settings updates preserve the
+mode; do not send `X-Delivery-Mode` to change it.
 
-**Namespace rules:** lowercase alphanumeric + hyphens, 3–32 chars. Auto-suggestion is content-derived (`api-docs`, `report-q2`) — never a random string or truncated filename.
+**Change hosting after publication:** only NEW public non-sites may change modes. Use
+stored identity metadata for the API segment (`html`, `files`, `json`, `kv`), namespace
+and ID. Owner-only `GET /api/{type}/{ns}/{id}/hosting` reads the current projection and
+version; `PATCH` that apex endpoint with `X-Owner-Token` and JSON:
+
+```json
+{"deliveryMode":"subdomain","expectedVersion":1}
+```
+
+Use the version returned by GET, not a guessed value. A successful change increments
+`hostingVersion`; requesting the current mode with the current version leaves it unchanged.
+The assigned host is retained through both directions of a change, and issued URLs become
+safe redirects. Use the returned link and version afterward.
+
+| Response | Meaning |
+|-------|-------|
+| `403` | Owner authorization failed |
+| `400` | Invalid mode/version or `HOSTING_MODE_LOCKED` for OLD or a forced-mode identity; sites have no PATCH endpoint |
+| `409 HOSTING_VERSION_CONFLICT` | Reload current settings before retrying |
+| `503` | Hosting changes temporarily unavailable; fresh creation can also fail with `HOST_ALLOCATION_FAILED` |
+
+**Namespace rules:** lowercase letters, digits and hyphens, 1–32 characters. Suggested names
+are lowercase and content-derived (`api-docs`, `report-q2`), never random or truncated.
 
 **Site uploads:** directory → `scripts/publish.mjs pack --dir <dir> --out <archive.zip>` builds the archive, removing any stale target first (a `mktemp`-created 0-byte file is what made `zip` exit 3 before this fix), then checks `zip`'s exit status, verifies the result with `unzip -t`, and requires a non-zero size — any failure deletes the archive and exits without touching `curl`. The archive is POSTed as `archive=@$TMPZIP` and the temp file removed after. `User-Agent: ClaudeCode/1.0` header included.
 
 **Archive contents — allowlist, not denylist:** only known web-asset extensions (`.html .css .js .json .svg .png .woff2 .pdf .md` …) are packed; dotfiles, `.env`, `.git/`, `node_modules/` and symlinks are dropped before `zip` ever runs. A supplied `.zip` is inspected rather than rewritten — an entry matching a sensitive pattern (`.env`, `id_rsa`, `secret`, `credential`, `password`, `token`, `.pem`/`.key`/`.p12`/`.crt`/`.map`) blocks the upload until you confirm.
 
-**Tests:** `bash brewdoc/skills/publish/tests/run.sh` — 108 checks across 3 suites (archive build, zip inspection, and the SKILL.md prompt itself), no network, no real upload.
+**Tests:** `bash brewdoc/skills/publish/tests/run.sh` — archive, helper and prompt checks;
+no network or real upload. Local tests do not prove server rollout or browser rendering.
 
 </details>
 

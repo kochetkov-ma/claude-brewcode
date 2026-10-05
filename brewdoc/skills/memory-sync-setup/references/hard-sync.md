@@ -1,4 +1,4 @@
-<!-- brewcode-meta: version=6.3.0 content_version=6.3.0 generated_by=brewdoc:memory-sync-setup -->
+<!-- brewcode-meta: version=6.4.0 content_version=6.3.0 generated_by=brewdoc:memory-sync-setup -->
 # Hard Sync
 
 Two DELETION passes of `/memory-sync`, cited by Phase 2 at `{DEPTH}` = `HARD`, Phase 3 checkers, References and Phase 4.

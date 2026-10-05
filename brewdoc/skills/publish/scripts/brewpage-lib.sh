@@ -47,8 +47,8 @@ bp_history_init() {
 > Delete a site: `curl -s -X DELETE "https://brewpage.app/api/sites/<ns>/<id>" -H "X-Owner-Token: TOKEN"`
 > Update a site (same URL): `PUT /api/sites/<ns>/<id>` with `X-Owner-Token: TOKEN` + the new bundle.
 
-| Date | URL | Owner Token | TTL | Type |
-|------|-----|-------------|-----|------|
+| Date | URL | Owner Token | TTL | Type | Owner API | Identity |
+|------|-----|-------------|-----|------|-----------|----------|
 HEADER
   fi
   chmod 600 "$HISTORY_FILE" 2>/dev/null || true
@@ -68,8 +68,13 @@ bp_gitignore_entry() {
 }
 
 bp_history_append() {
-  printf '| %s | [%s](%s) | `%s` | %sd | %s |\n' \
-    "$(date '+%Y-%m-%d %H:%M')" "$1" "$1" "$2" "$3" "$4" >> "$HISTORY_FILE"
+  if [ "$#" -ge 5 ]; then
+    printf '| %s | [%s](%s) | `%s` | %sd | %s | %s | `%s` |\n' \
+      "$(date '+%Y-%m-%d %H:%M')" "$1" "$1" "$2" "$3" "$4" "$5" "${6:-}" >> "$HISTORY_FILE"
+  else
+    printf '| %s | [%s](%s) | `%s` | %sd | %s |\n' \
+      "$(date '+%Y-%m-%d %H:%M')" "$1" "$1" "$2" "$3" "$4" >> "$HISTORY_FILE"
+  fi
 }
 
 # BD02: ns/ttl/entry reach the shell as literals inside single quotes, so they
@@ -77,9 +82,9 @@ bp_history_append() {
 bp_validate() {
   local ns="$1" days="$2" entry="$3"
   case "$ns" in
-    *[!A-Za-z0-9-]* | '') echo "FAILED: namespace must be 3-32 chars of A-Za-z0-9-"; return 1 ;;
+    *[!a-z0-9-]* | '') echo "FAILED: namespace must be 1-32 chars of a-z0-9-"; return 1 ;;
   esac
-  [ "${#ns}" -ge 3 ] && [ "${#ns}" -le 32 ] || { echo "FAILED: namespace must be 3-32 chars"; return 1; }
+  [ "${#ns}" -ge 1 ] && [ "${#ns}" -le 32 ] || { echo "FAILED: namespace must be 1-32 chars"; return 1; }
   case "$days" in
     '' | *[!0-9]*) echo "FAILED: ttl must be a positive integer"; return 1 ;;
   esac
@@ -125,6 +130,8 @@ bp_begin() {
   trap bp_cleanup EXIT
   trap 'exit 1' HUP INT TERM
   bp_validate "$NS" "$DAYS" "$ENTRY" || return 1
+  BP_DELIVERY_MODE="${6:-}"
+  case "$BP_DELIVERY_MODE" in ''|path|subdomain) : ;; *) echo "FAILED: delivery mode must be path or subdomain"; return 1 ;; esac
   case "${5:-}" in none|file) BP_PASSWORD_MODE="$5" ;; *) echo "FAILED: explicit password mode required"; return 1 ;; esac
   bp_history_init || { echo "FAILED: cannot initialize history file"; return 1; }
   command -v jq >/dev/null || { echo "FAILED: jq required"; return 1; }
@@ -151,6 +158,9 @@ bp_begin() {
 bp_post() {
   local url="$1"
   shift
+  if [ -n "${BP_DELIVERY_MODE:-}" ]; then
+    set -- -H "X-Delivery-Mode: $BP_DELIVERY_MODE" "$@"
+  fi
   if [ -n "$BP_HEADER_FILE" ]; then
     curl -s -X POST "$url" -H "@$BP_HEADER_FILE" "$@"
   else
@@ -161,17 +171,18 @@ bp_post() {
 # The tail every block shares: URL out, owner token to history, one OK/FAILED line.
 # `site` is the only type whose response carries .fileCount.
 bp_finish() {
-  local response="$1" days="$2" type="$3" url token fcount
+  local response="$1" days="$2" type="$3" url token fcount owner_api identity
   url=$(printf '%s' "$response" | jq -r '.link // empty')
-  url="${url%/}"  # /public/<id>/ routes to the brewpage landing page instead of the site
   [ -n "$url" ] || { echo "FAILED: publish rejected (no .link in response)"; return 1; }
   token=$(printf '%s' "$response" | jq -r '.ownerToken // empty')
+  owner_api=$(printf '%s' "$response" | jq -r '.ownerLink // empty')
+  identity=$(printf '%s' "$response" | jq -c '{id, namespace, type, routingCohort, deliveryMode, modeLocked, hostingVersion, managementLink}')
   if [ "$type" = site ]; then
     fcount=$(printf '%s' "$response" | jq -r '.fileCount // "?"')
-    [ -n "$token" ] && bp_history_append "$url" "$token" "$days" "site ($fcount files)"
+    [ -n "$token" ] && bp_history_append "$url" "$token" "$days" "site ($fcount files)" "$owner_api" "$identity"
     echo "OK $url | Files: $fcount"
   else
-    [ -n "$token" ] && bp_history_append "$url" "$token" "$days" "$type"
+    [ -n "$token" ] && bp_history_append "$url" "$token" "$days" "$type" "$owner_api" "$identity"
     echo "OK $url"
   fi
 }

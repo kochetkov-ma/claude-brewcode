@@ -54,7 +54,7 @@ Brewdoc contains 5 skills, each handling a separate documentation task.
   <Card title="Publish" icon="link" href="/brewdoc/skills/publish/">
     Publish text, markdown, JSON, files, or a whole multi-file site (directory or `.zip`) to brewpage.app.
     Choose no password or an existing local password file without pasting its contents.
-    Owner token saved locally for later delete. Needs `jq` (and `zip` for directory uploads).
+    Owner token saved locally for later delete. Needs `curl` and `jq`; site uploads also need `node` and `unzip`, plus `zip` for directories.
   </Card>
 </CardGrid>
 
@@ -75,7 +75,7 @@ requires the documented evidence and budget gates rather than widening the reque
 | [`/brewdoc:my-claude`](/brewdoc/skills/my-claude/) | Generate documentation about Claude Code installation | opus | `[ext [context]] \| [r <query>]` — no args = internal installation docs |
 | [`/brewdoc:memory-sync-setup`](/brewdoc/skills/memory-sync-setup/) | Generate a project-tailored `/memory-sync` skill into the target repo | opus | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [fine-tune-prompt]` |
 | [`/brewdoc:md-to-pdf`](/brewdoc/skills/md-to-pdf/) | Convert Markdown to PDF | sonnet | `<file.md> [--engine name] ["prompt"] \| styles \| test \| no args = help` |
-| [`/brewdoc:publish`](/brewdoc/skills/publish/) | Publish to brewpage.app — returns public URL | haiku | `<text\|file_path\|directory_path\|zip_path> [--ttl N] [--entry filename]` |
+| [`/brewdoc:publish`](/brewdoc/skills/publish/) | Publish to brewpage.app — returned canonical URL | haiku | `<text\|file_path\|directory_path\|zip_path> [--ttl N] [--entry filename] [--delivery-mode path\|subdomain]` |
 
 ## Architecture
 

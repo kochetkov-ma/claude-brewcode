@@ -5,7 +5,7 @@ description: "Installs project conventions and reversible loading guidance; extr
 
 # Convention setup
 
-<!-- brewcode-meta: version=6.3.0 content_version=6.3.0 generated_by=brewcode:convention-setup -->
+<!-- brewcode-meta: version=6.4.0 content_version=6.3.0 generated_by=brewcode:convention-setup -->
 
 Inspect representative production code and tests, identify repeated architectural and implementation patterns, and write concise convention documents to the user-selected Codex-owned path. Cite concrete repository files, distinguish enforced rules from observations, and avoid changing application code unless the user explicitly asks.
 

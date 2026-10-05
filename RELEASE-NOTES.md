@@ -2,6 +2,24 @@
 
 ---
 
+## v6.4.0 (2026-10-05)
+
+> Docs: [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/) | [brewdoc overview](https://doc-claude.brewcode.app/brewdoc/overview/)
+
+### brewdoc
+
+#### Changed
+
+- **Publishing** supports optional `--delivery-mode path|subdomain` across Brewdoc, the standalone skill and OpenClaw. Omitting it uses server defaults; each upload preserves the exact canonical link and effective delivery mode returned by the server.
+- **New sites** use one dedicated subdomain for the entry page and assets. Existing publications retain their links and behavior.
+- **New password-protected links** stay clean without password query parameters. Browser readers unlock through `unlock.brewpage.app`; API reads use `X-Password`.
+
+#### Fixed
+
+- **Directory packaging** stops before upload when ZIP creation fails or produces an empty or corrupt archive. Brewdoc also validates supplied ZIPs before upload.
+
+---
+
 ## v6.3.0 (2026-09-30)
 
 > Docs: [convention-setup](https://doc-claude.brewcode.app/brewcode/skills/convention-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) | [task-board-setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) | [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [prompt injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/) | [full setup](https://doc-claude.brewcode.app/full-setup/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [text-optimize](https://doc-claude.brewcode.app/brewtools/skills/text-optimize/)

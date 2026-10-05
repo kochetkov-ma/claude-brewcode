@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 6.3.0 |
+| Version | 6.4.0 |
 | Skills | 5 |
 | Agents | 0 |
 | Hooks | 0 |
@@ -89,7 +89,7 @@ claude --plugin-dir ./brewdoc
 | [`/brewdoc:my-claude`](skills/my-claude/README.md) | Document your Claude Code installation -- setup, architecture, web research | opus | `[ext [context]] \| [r <query>]` -- no args = internal installation docs |
 | [`/brewdoc:memory-sync-setup`](skills/memory-sync-setup/README.md) | Generator -- analyzes a target project and emits a project-tailored `.claude/skills/memory-sync/` (batches, fact catalogue, non-growth sync, independent verify) | opus | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [fine-tune-prompt]` |
 | [`/brewdoc:md-to-pdf`](skills/md-to-pdf/README.md) | Convert Markdown to PDF via reportlab or weasyprint engines | sonnet | `<file.md> [--engine name] ["prompt"] \| styles \| test` |
-| [`/brewdoc:publish`](skills/publish/README.md) | Publish text/markdown/file/site to brewpage.app, returns URL | haiku | `<text\|file_path\|directory_path\|zip_path> [--ttl N] [--entry filename]` |
+| [`/brewdoc:publish`](skills/publish/README.md) | Publish text/markdown/file/site to brewpage.app, returns canonical URL | haiku | `<text\|file_path\|directory_path\|zip_path> [--ttl N] [--entry filename] [--delivery-mode path\|subdomain]` |
 
 > Need a portable, plugin-free version? See the standalone [`brewpage-publish`](../skills/brewpage-publish/) (Claude Code) and [`openclaw/brewpage-publish`](../openclaw/brewpage-publish/) (OpenClaw / AgentSkills) skills.
 
@@ -101,7 +101,7 @@ that still match this run's writes; concurrent edits remain intact and any recov
 
 | Skill | Needs |
 |-------|-------|
-| `publish` | `jq` on `PATH`; `zip` as well when publishing a directory as a site. Each upload block gates on both and aborts rather than half-publishing |
+| `publish` | `curl` and `jq` on `PATH`; site directories and ZIPs also need `node` and `unzip`; site directories additionally need `zip` |
 | `md-to-pdf` | a Python engine -- `reportlab` or `weasyprint` |
 | `my-claude` | nothing extra; writes only to `.claude/brewdoc/my-claude/` in the current project |
 

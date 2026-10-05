@@ -4,7 +4,7 @@ description: Detailed description of all brewdoc plugin commands
 
 # Brewdoc Plugin Commands
 
-> **Version:** 6.3.0 | **Author:** Maksim Kochetkov | **License:** MIT
+> **Version:** 6.4.0 | **Author:** Maksim Kochetkov | **License:** MIT
 
 ## Quick Reference
 
@@ -16,7 +16,7 @@ All 5 brewdoc skills are documented below, one section each.
 | 2 | `/brewdoc:memory-sync-setup` | Generate a project-tailored `/memory-sync` skill into the target repo | opus | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [fine-tune-prompt]` |
 | 3 | `/brewdoc:docsync-setup` | Install project-local doc-staleness tracking hooks; report/force sync | sonnet | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [sync [--all]\|reread\|frontmatter] \| free-text` |
 | 4 | `/brewdoc:md-to-pdf` | Convert Markdown to PDF via reportlab or weasyprint | sonnet | `<file.md> [--engine name] ["prompt"] \| styles \| test` |
-| 5 | `/brewdoc:publish` | Publish text/markdown/file/site to brewpage.app, returns URL | haiku | `<text\|file_path\|directory_path\|zip_path> [--ttl N] [--entry filename]` |
+| 5 | `/brewdoc:publish` | Publish text/markdown/file/site to brewpage.app, returns URL | haiku | `<text\|file_path\|directory_path\|zip_path> [--ttl N] [--entry filename] [--delivery-mode path\|subdomain]` |
 
 ### Naming and modes
 
@@ -327,13 +327,13 @@ Staleness: `today - last_updated > threshold_days`, whole days in LOCAL time.
 
 ## 5. `/brewdoc:publish`
 
-**Purpose:** Publishes text, Markdown, a file, a directory, or a ZIP to brewpage.app, returning a URL. No sign-up required. Auto-detects content type, asks for namespace (public/private) and optional password, then publishes and saves the owner token to `.claude/brewpage-history.md`.
+**Purpose:** Publishes text, Markdown, a file, a directory, or a ZIP to brewpage.app, returning the server's shareable URL. No sign-up required. Auto-detects content type, asks for a namespace and optional local password-file path, then saves the owner token and returned owner API/identity metadata to project-root `.claude/brewpage-history.md`.
 
 | Parameter | Value |
 |-----------|-------|
-| **Arguments** | `<text\|file_path\|directory_path\|zip_path> [--ttl N] [--entry filename]` |
+| **Arguments** | `<text\|file_path\|directory_path\|zip_path> [--ttl N] [--entry filename] [--delivery-mode path\|subdomain]` |
 | **Model** | `haiku` |
-| **Dependencies** | None |
+| **Dependencies** | `curl` and `jq` for all uploads; Node.js and `unzip` for SITE; `zip` additionally for directory packaging |
 | **Allowed tools** | `Read`, `Write`, `Bash`, `AskUserQuestion`, `Glob` |
 
 ### Content Type Detection
@@ -352,15 +352,31 @@ Staleness: `today - last_updated > threshold_days`, whole days in LOCAL time.
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--ttl N` | `15` days | Time to live |
-| `--entry filename` | auto-detect | Entry file for SITE uploads: flag > `index.html` > first `.html` alphabetically |
+| `--entry filename` | auto-detect | Entry file for SITE uploads: flag > `index.html` > first `.html`/`.htm` alphabetically |
+| `--delivery-mode path\|subdomain` | server default | Optional creation choice sent only as `X-Delivery-Mode`; never inserted into content or multipart fields |
 
-Namespace: `public` (listed in gallery, indexed) or an auto-suggested/custom private slug (unlisted, link-only). Password protection is optional and hides the page from the gallery.
+### Delivery and Visibility
+
+Omit `--delivery-mode` to use the server default. For NEW publications (`routingCohort=new-v1`):
+
+| Publication | Default | Allowed choice |
+|-------------|---------|----------------|
+| SITE, any namespace or password | Dedicated subdomain (`subdomain`) | Locked; explicit `path` is rejected |
+| Non-site outside `public` | Dedicated subdomain (`subdomain`) | Locked; explicit `path` is rejected |
+| Public text/Markdown, JSON or file, including password-protected content | Promotion (`path`) | `path` or `subdomain` |
+
+OLD publications retain their existing links and behavior. The server may return an existing OLD or NEW publication: use its actual identity, cohort, mode and exact returned `link`, even if the mode differs from your request. Missing/null OLD routing metadata means **Existing link**; do not infer a mode from the address. Preserve the trailing `/` on a NEW subdomain root; never build a hostname from an ID.
+
+Namespace: `public` makes unprotected content eligible for gallery discovery; eligible Promotion publications may be indexed. An auto-suggested/custom private namespace is unlisted, not secret: anyone with the link can open it unless a password is set. Native subdomain hosts use `noindex`; password-protected content is excluded from the gallery.
 
 ```
 /brewdoc:publish report.md
+/brewdoc:publish report.md --delivery-mode subdomain
 /brewdoc:publish ./dist --entry index.html
 /brewdoc:publish "hello world" --ttl 30
 ```
+
+See the [publish README](../skills/publish/README.md) and [full workflow](https://doc-claude.brewcode.app/brewdoc/skills/publish/) for password access, owner operations and hosting changes.
 
 ---
 
@@ -374,7 +390,7 @@ Namespace: `public` (listed in gallery, indexed) or an auto-suggested/custom pri
 | `upgrade` but nothing installed | memory-sync-setup, docsync-setup | Stop; point at `install` |
 | File not found | my-claude | Skip, add to errors |
 | `settings.json` invalid JSON | docsync-setup | Abort merge/clean, restore `.bak`, report |
-| No `.md` in target directory (SITE) | publish | Fail with explicit error, never guess an entry file |
+| No `.html`/`.htm` in SITE bundle during entry auto-detection | publish | Fail with explicit error, never guess an entry file |
 | Dependency install fails | md-to-pdf | Report `INSTALL_FAILED` and stop |
 | Conversion fails | md-to-pdf | Read error, attempt one fix + retry, else report error |
 

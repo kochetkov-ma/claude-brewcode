@@ -1,4 +1,4 @@
-<!-- brewcode-meta: version=6.3.0 content_version=6.3.0 generated_by=brewdoc:memory-sync-setup -->
+<!-- brewcode-meta: version=6.4.0 content_version=6.3.0 generated_by=brewdoc:memory-sync-setup -->
 # Prompting Quality Guide
 
 Apply only to instruction files: CLAUDE.md at any depth, `.claude/rules/*.md`, the `AGENTS.md` family,

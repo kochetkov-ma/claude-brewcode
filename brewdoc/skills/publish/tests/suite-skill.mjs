@@ -122,7 +122,16 @@ const countLines = (re) => LINES.filter((l) => re.test(l)).length;
   check('history.append.shape',
     (rows[0] || '<missing>').replace(/^\| [0-9-]{10} [0-9:]{5} \|/, '| DATE |'),
     '| DATE | [https://brewpage.app/public/abc](https://brewpage.app/public/abc) | `tok-123` | 15d | html |',
-    'the row shape is unchanged from the format the header documents');
+    'legacy four-argument callers retain the exact history row shape');
+  // GIVEN routing metadata WHEN appending THEN retain exact owner API and identity privately.
+  const append = sh('bp_history_append "https://fixture123.brewpage.app/" "tok-new" 15 html "https://brewpage.app/api/html/public/Fixture123" \'{"id":"Fixture123","routingCohort":"new-v1","deliveryMode":"subdomain"}\'',
+    { cwd: proj, env: { CLAUDE_PROJECT_DIR: proj } });
+  check('history.append.metadata.exit', append.status, 0, 'metadata-aware append succeeds');
+  const metadataRows = readLines(hist).filter(line => line.includes('fixture123.brewpage.app/'));
+  check('history.append.metadata.rows', metadataRows.length, 1, 'metadata-aware append creates exactly one row');
+  check('history.append.metadata.shape', metadataRows[0].replace(/^\| [0-9-]{10} [0-9:]{5} \|/, '| DATE |'),
+    '| DATE | [https://fixture123.brewpage.app/](https://fixture123.brewpage.app/) | `tok-new` | 15d | html | https://brewpage.app/api/html/public/Fixture123 | `{"id":"Fixture123","routingCohort":"new-v1","deliveryMode":"subdomain"}` |',
+    'NEW root slash and identity metadata are preserved without changing legacy rows');
 }
 {
   const bare = join(BASE, 'bare');
@@ -135,11 +144,16 @@ const countLines = (re) => LINES.filter((l) => re.test(l)).length;
 }
 
 // ── BD02: ns / ttl / entry are validated as data ───────────────────────────
+// GIVEN namespace boundaries WHEN validating THEN accept only backend-compatible values.
 for (const [ns, days, entry, want, why] of [
   ['mysite', '15', '', 0, 'a plain namespace, ttl and empty entry pass'],
   ['my-site-2026', '1', 'index.html', 0, 'hyphens, digits and a bare entry pass'],
   ['abc', '365', 'sub/page.html', 0, 'a nested relative entry passes'],
-  ['ab', '15', '', 1, 'a 2-char namespace is rejected'],
+  ['a', '15', '', 0, 'a 1-char namespace passes'],
+  ['my', '15', '', 0, 'the 2-char my profile namespace passes'],
+  ['-notes-', '15', '', 0, 'leading and trailing namespace hyphens pass'],
+  ['a'.repeat(32), '15', '', 0, 'a 32-char namespace passes'],
+  ['My', '15', '', 1, 'uppercase namespace letters are rejected'],
   ['', '15', '', 1, 'an empty namespace is rejected'],
   ['a'.repeat(33), '15', '', 1, 'a 33-char namespace is rejected'],
   ['my site', '15', '', 1, 'a namespace with a space is rejected'],
@@ -170,14 +184,16 @@ check('skill.tools', LINES.filter((l) => l.startsWith('allowed-tools:'))[0],
   'Write is declared — the inputs travel as files now');
 check('skill.lib.sourced', countLines(/^\. "\$\{CLAUDE_SKILL_DIR\}\/scripts\/brewpage-lib\.sh" \|\| \{ echo "FAILED: publish helper library not found"; exit 1; \}$/), 5,
   'all five publish blocks source the lib');
-check('skill.validate.called', countLines(/^bp_begin '\{ns\}' '\{days\}' '(\{entry\})?' '\{run_id\}' '\{password_mode\}' \|\| exit 1$/), 5,
+check('skill.validate.called', countLines(/^bp_begin .* \|\| exit 1$/), 5,
   'all five blocks run the shared prelude, which validates before doing anything');
 check('skill.history.init', [
   sh("run=$(bp_prepare); bp_begin 'mysite' '15' '' \"${run##*/}\" none >/dev/null", { cwd: BASE, env: { CLAUDE_PROJECT_DIR: BASE } }).status,
   sh("run=$(bp_prepare); bp_begin 'my site' '15' '' \"${run##*/}\" none >/dev/null", { cwd: BASE, env: { CLAUDE_PROJECT_DIR: BASE } }).status,
 ], [0, 1], 'bp_begin validates and prepares the history file, and fails the block on a bad namespace');
-check('skill.ns.quoted', [countLines(/^bp_begin /), countLines(/^bp_begin '\{ns\}' '\{days\}' '(\{entry\})?' '\{run_id\}' '\{password_mode\}' \|\| exit 1$/)],
-  [5, 5], 'every substituted parameter sits inside single quotes');
+const beginLines = LINES.filter(line => line.startsWith('bp_begin '));
+check('skill.ns.quoted', beginLines.map(line => [...line.matchAll(/'([^']*)'/g)].map(match => match[1])),
+  ['', '', '', '{entry}', '{entry}'].map(entry => ['{ns}', '{days}', entry, '{run_id}', '{password_mode}', '{delivery_mode}']),
+  'every substituted parameter, including optional delivery mode, sits inside single quotes');
 check('skill.history.relative', countLines(/HISTORY_FILE="\.claude/), 0,
   'no block hardcodes a cwd-relative history path any more');
 check('skill.heredoc', SKILL.split('BREWPAGE_EOF').length - 1, 0,

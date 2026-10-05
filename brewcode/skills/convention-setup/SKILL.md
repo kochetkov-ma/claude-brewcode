@@ -8,7 +8,7 @@ allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion, Ski
 model: opus
 ---
 
-<!-- brewcode-meta: version=6.3.0 content_version=6.3.0 generated_by=brewcode:convention-setup -->
+<!-- brewcode-meta: version=6.4.0 content_version=6.3.0 generated_by=brewcode:convention-setup -->
 
 <instructions>
 
