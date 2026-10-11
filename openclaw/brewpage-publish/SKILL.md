@@ -28,7 +28,7 @@ Extract from the arguments string:
 | `content_arg` is a file path AND file exists (`test -f`) | FILE | `POST /api/files` (multipart) |
 | Anything else | HTML | `POST /api/html` (format=markdown) |
 
-Mode rule: directory/ZIP → SITE. Single file → FILE. Everything else → HTML (markdown). `POST /api/sites` accepts ONLY a multipart `archive=@file.zip` — there is no raw-folder upload, so a directory is auto-zipped on the fly (the robust default; archive sealing keeps relative paths intact). Stats per type — SITE (dir): HTML count, total size, entry file. SITE (ZIP): file size, entry override. FILE: size + MIME via `file --mime-type -b`. TEXT: char count.
+Mode rule: directory/ZIP → SITE. Single file → FILE. Everything else → HTML (markdown). `POST /api/sites` accepts a multipart `archive=@file.zip` or repeated `files` and matching `paths` fields. This skill auto-zips directories to preserve relative paths. Stats per type — SITE (dir): HTML count, total size, entry file. SITE (ZIP): file size, entry override. FILE: size + MIME via `file --mime-type -b`. TEXT: char count.
 
 ### Step 3: Show Pre-Publish Stats
 
@@ -54,7 +54,7 @@ TTL:      <N> days
 Ask the user:
 
 ```
-Namespace controls discovery and appears in publication addresses on brewpage.app. Eligible Promotion publications may be indexed; Dedicated subdomain hosts use noindex.
+Namespace controls discovery. Eligible public HTML, sites and files may permit indexing on either address; unlisted, protected or otherwise ineligible native responses retain `noindex, nofollow`. Indexing is not guaranteed.
 
 Options:
 1) public — eligible gallery discovery (default)
@@ -111,6 +111,11 @@ Set `DELIVERY_MODE` to the validated flag value or empty when omitted; send only
 Deduplication may return an OLD or NEW winner: retain its identity, cohort, mode and exact server `link`, even when the requested mode differs.
 Missing/null OLD routing metadata means Existing link; never infer mode from its URL.
 
+For SITE blocks, replace `{entry_shell_quoted}` with one single-quoted shell literal
+for the resolved entry path, including its surrounding quotes. Escape each apostrophe
+as `'\''` (for example, `'pages/A & B.html'`). Never insert it raw or inside double
+quotes: `jq @uri` encodes that literal before it enters the request query.
+
 > **SECURITY:** The ownerToken MUST NEVER appear in conversation output. The bash blocks below handle curl + token parsing + history save atomically; the model sees only the URL. Each block sets `PASS_H` first (empty array when no password) and uses `"${PASS_H[@]}"` quoted — passwords are never string-interpolated into the command. The site-dir zip excludes (`.git/`, `.env*`, etc.) are also a secret-leak safeguard — they keep credentials and VCS data out of the published archive.
 
 History file is workspace-relative: `./brewpage-history.md`.
@@ -160,7 +165,7 @@ RESPONSE=$(curl -s -X POST "https://brewpage.app/api/html?ns={ns}&ttl={days}&for
 URL=$(echo "$RESPONSE" | jq -r '.link // empty')
 TOKEN=$(echo "$RESPONSE" | jq -r '.ownerToken // empty')
 OWNER_API=$(echo "$RESPONSE" | jq -r '.ownerLink // empty')
-IDENTITY=$(echo "$RESPONSE" | jq -c '{id, namespace, type, routingCohort, deliveryMode, modeLocked, hostingVersion, managementLink}')
+IDENTITY=$(echo "$RESPONSE" | jq -c '{id, namespace, type, routingCohort, deliveryMode, modeLocked, hostingVersion, managementLink, createdAt, expiresAt}')
 
 if [ -n "$URL" ]; then
   [ -n "$TOKEN" ] && echo "| $(date '+%Y-%m-%d %H:%M') | [$URL]($URL) | \`$TOKEN\` | {ttl}d | html | $OWNER_API | \`$IDENTITY\` |" >> "$HISTORY_FILE"
@@ -188,7 +193,7 @@ RESPONSE=$(curl -s -X POST "https://brewpage.app/api/files?ns={ns}&ttl={days}" \
 URL=$(echo "$RESPONSE" | jq -r '.link // empty')
 TOKEN=$(echo "$RESPONSE" | jq -r '.ownerToken // empty')
 OWNER_API=$(echo "$RESPONSE" | jq -r '.ownerLink // empty')
-IDENTITY=$(echo "$RESPONSE" | jq -c '{id, namespace, type, routingCohort, deliveryMode, modeLocked, hostingVersion, managementLink}')
+IDENTITY=$(echo "$RESPONSE" | jq -c '{id, namespace, type, routingCohort, deliveryMode, modeLocked, hostingVersion, managementLink, createdAt, expiresAt}')
 
 if [ -n "$URL" ]; then
   [ -n "$TOKEN" ] && echo "| $(date '+%Y-%m-%d %H:%M') | [$URL]($URL) | \`$TOKEN\` | {ttl}d | file | $OWNER_API | \`$IDENTITY\` |" >> "$HISTORY_FILE"
@@ -218,7 +223,8 @@ if ! (cd "{directory_path}" && zip -r "$TMPZIP" . -x '.git/*' '*/.git/*' '.env' 
   echo "FAILED: site archive creation or verification failed"
   exit 1
 fi
-RESPONSE=$(curl -s -X POST "https://brewpage.app/api/sites?ns={ns}&ttl={days}&entry={entry}" \
+ENTRY_ENCODED=$(printf '%s' {entry_shell_quoted} | jq -sRr @uri)
+RESPONSE=$(curl -s -X POST "https://brewpage.app/api/sites?ns={ns}&ttl={days}&entry=$ENTRY_ENCODED" \
   -H "User-Agent: OpenClaw/1.0" \
   "${PASS_H[@]}" "${DELIVERY_H[@]}" \
   -F "archive=@$TMPZIP")
@@ -227,7 +233,7 @@ rm -f "$TMPZIP"
 URL=$(echo "$RESPONSE" | jq -r '.link // empty')
 TOKEN=$(echo "$RESPONSE" | jq -r '.ownerToken // empty')
 OWNER_API=$(echo "$RESPONSE" | jq -r '.ownerLink // empty')
-IDENTITY=$(echo "$RESPONSE" | jq -c '{id, namespace, type, routingCohort, deliveryMode, modeLocked, hostingVersion, managementLink}')
+IDENTITY=$(echo "$RESPONSE" | jq -c '{id, namespace, type, routingCohort, deliveryMode, modeLocked, hostingVersion, managementLink, createdAt, expiresAt}')
 FCOUNT=$(echo "$RESPONSE" | jq -r '.fileCount // "?"')
 
 if [ -n "$URL" ]; then
@@ -249,7 +255,8 @@ case "${DELIVERY_MODE:-}" in
 esac
 PASS_H=()
 [ -n "$PASSWORD" ] && PASS_H=(-H "X-Password: $PASSWORD")
-RESPONSE=$(curl -s -X POST "https://brewpage.app/api/sites?ns={ns}&ttl={days}&entry={entry}" \
+ENTRY_ENCODED=$(printf '%s' {entry_shell_quoted} | jq -sRr @uri)
+RESPONSE=$(curl -s -X POST "https://brewpage.app/api/sites?ns={ns}&ttl={days}&entry=$ENTRY_ENCODED" \
   -H "User-Agent: OpenClaw/1.0" \
   "${PASS_H[@]}" "${DELIVERY_H[@]}" \
   -F "archive=@{zip_file_path}")
@@ -257,7 +264,7 @@ RESPONSE=$(curl -s -X POST "https://brewpage.app/api/sites?ns={ns}&ttl={days}&en
 URL=$(echo "$RESPONSE" | jq -r '.link // empty')
 TOKEN=$(echo "$RESPONSE" | jq -r '.ownerToken // empty')
 OWNER_API=$(echo "$RESPONSE" | jq -r '.ownerLink // empty')
-IDENTITY=$(echo "$RESPONSE" | jq -c '{id, namespace, type, routingCohort, deliveryMode, modeLocked, hostingVersion, managementLink}')
+IDENTITY=$(echo "$RESPONSE" | jq -c '{id, namespace, type, routingCohort, deliveryMode, modeLocked, hostingVersion, managementLink, createdAt, expiresAt}')
 FCOUNT=$(echo "$RESPONSE" | jq -r '.fileCount // "?"')
 
 if [ -n "$URL" ]; then
@@ -302,7 +309,7 @@ Publish failed.
 - To **update a published site**, `PUT` the replacement bundle to its apex owner API with `X-Owner-Token`; retain the host and omit `X-Delivery-Mode` on ordinary PUT/update.
 - Only NEW public non-sites allow owner-only `PATCH /api/{type}/{ns}/{id}/hosting` with `{"deliveryMode":"subdomain","expectedVersion":1}` from current identity metadata. OLD, sites and non-public identities have no mode choice. Use the returned URL/version afterward.
 - NEW password-protected links stay clean: never generate or append `?p=`. API requests still use `X-Password`; OLD password behavior remains unchanged.
-- **Sites: directory is the primary input** — it is auto-zipped (the only thing `POST /api/sites` accepts), which seals relative paths. A pre-built `.zip` is the alternative input, uploaded as-is. Always publish BUILT output (`dist/`, `build/`, `out/`, `_site/`, `public/`), never project sources.
+- **Sites: directory is the primary input** — this skill auto-zips it to preserve relative paths. The API also accepts repeated `files`/`paths` fields. A pre-built `.zip` is the alternative input, uploaded as-is. Always publish BUILT output (`dist/`, `build/`, `out/`, `_site/`, `public/`), never project sources.
 - The auto-zip excludes `.git/`, `.env`/`.env.*`, `node_modules/`, editor/OS junk, sourcemaps and logs — a deliberate secret-leak safeguard so credentials and VCS history never reach the public archive.
 - Entry file detection: `--entry` override > `index.html` > first `.html` alphabetically.
 - Preserve `.link` exactly: NEW subdomain roots retain `/`; OLD links retain their existing form. Never reconstruct a host from IDs.

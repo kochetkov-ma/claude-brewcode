@@ -54,7 +54,7 @@ All uploads require `curl` and `jq` on the host shell. Publishing a directory al
 
 ## Sites
 
-`POST /api/sites` accepts **only a `.zip` archive** — there is no raw-folder upload.
+`POST /api/sites` accepts a **ZIP archive** or **repeated `files` with matching `paths` fields**. This skill uses ZIP transport for directory uploads.
 
 - **Directory (primary):** point at a **built** static directory; the skill auto-zips it and uploads. Archive sealing keeps relative paths intact.
 - **Pre-built `.zip` (alternative):** uploaded as-is.
@@ -82,7 +82,7 @@ See the [hosting API reference](https://brewpage.app/api#hosting) for mode chang
 
 ## TTL
 
-Default time-to-live is **15 days** (max 30). Override with `--ttl N` (days):
+Default requested time-to-live is **15 days** (normally 1..30, subject to owner limits). Override with `--ttl N` (days). Site PUT keeps the original expiry; use returned `expiresAt` for actual retention, including any eligible automatic extension.
 
 ```
 /brewpage-publish report.md --ttl 1

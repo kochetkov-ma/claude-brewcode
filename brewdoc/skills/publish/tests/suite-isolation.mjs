@@ -142,6 +142,25 @@ try {
   const history = readFileSync(join(root, '.claude/brewpage-history.md'), 'utf8');
   assert.equal(history.split('`fixture-owner`').length - 1, 1, 'THEN response owner token is consumed into history exactly once');
 
+  // GIVEN nested site entry with query metacharacters WHEN running shipped directory caller THEN encode it as one query value.
+  const siteSource = join(base, 'site-source');
+  const siteEntry = 'nested/hello & page.html';
+  mkdirSync(join(siteSource, 'nested'), { recursive: true });
+  writeFileSync(join(siteSource, siteEntry), '<h1>Fixture site</h1>');
+  const siteRun = prepare();
+  writeFileSync(join(siteRun, 'brewpage-target-path.txt'), siteSource + '\n');
+  const siteBlock = blocks.find(block => block.includes('publish.mjs" pack'));
+  assert.equal(typeof siteBlock, 'string', 'GIVEN shipped directory upload block is present');
+  const siteCode = siteBlock.replaceAll('{ns}', 'public').replaceAll('{days}', '15').replaceAll('{entry}', '')
+    .replaceAll('{run_id}', basename(siteRun)).replaceAll('{password_mode}', 'none').replaceAll('{delivery_mode}', '');
+  const siteOutcome = run(siteCode, 'encoded-entry');
+  assert.equal(siteOutcome.status, 0, 'THEN nested site archive verifies and reaches upload: ' + siteOutcome.stdout + siteOutcome.stderr);
+  const siteArgs = JSON.parse(readFileSync(join(base, 'args-encoded-entry'), 'utf8'));
+  assert.equal(siteArgs[3], 'https://brewpage.app/api/sites?ns=public&ttl=15&entry=' + encodeURIComponent(siteEntry),
+    'THEN spaces, slash and ampersand are encoded without additional query parameters');
+  assert.equal(readFileSync(join(siteSource, siteEntry), 'utf8'), '<h1>Fixture site</h1>', 'THEN authored site source stays unchanged');
+  assert.equal(existsSync(siteRun), false, 'THEN directory caller cleans its archive and transport inputs');
+
   // GIVEN shipped callers and OLD/NEW winners WHEN publishing THEN exact server identity wins.
   const variants = [
     { name: 'brewdoc', path: join(here, '../SKILL.md'), history: '.claude/brewpage-history.md' },
@@ -150,7 +169,8 @@ try {
   ];
   const responses = [
     { link: 'https://fixture123.brewpage.app/', ownerToken: 'private-new-owner', ownerLink: 'https://brewpage.app/api/html/public/Fixture123',
-      id: 'Fixture123', namespace: 'public', routingCohort: 'new-v1', deliveryMode: 'subdomain', modeLocked: false, hostingVersion: 1 },
+      id: 'Fixture123', namespace: 'public', routingCohort: 'new-v1', deliveryMode: 'subdomain', modeLocked: false, hostingVersion: 1,
+      createdAt: '2026-10-01T12:00:00Z', expiresAt: '2026-10-16T12:00:00Z' },
     { link: 'https://brewpage.app/public/Legacy1234', ownerToken: 'private-old-owner' },
     { link: 'https://brewpage.app/public/LegacyNull', ownerToken: 'private-null-owner', routingCohort: 'old', deliveryMode: null, hostingVersion: null },
   ];
@@ -187,10 +207,11 @@ try {
         'THEN history stores exact server winner URL');
       assert.equal(privateHistory.includes('`' + response.ownerToken + '`'), true, 'THEN owner token stays in per-tool history');
       assert.equal(outcome.stdout.includes(response.ownerToken), false, 'THEN no token enters output');
-      const projection = Object.fromEntries(['id', 'namespace', 'type', 'routingCohort', 'deliveryMode', 'modeLocked', 'hostingVersion', 'managementLink']
+      const identityFields = ['id', 'namespace', 'type', 'routingCohort', 'deliveryMode', 'modeLocked', 'hostingVersion', 'managementLink', 'createdAt', 'expiresAt'];
+      const projection = Object.fromEntries(identityFields
         .map(key => [key, response[key] ?? null]));
       assert.equal(privateHistory.includes('`' + JSON.stringify(projection) + '`'), true,
-        'THEN exact winner metadata, including OLD nulls, is retained');
+        'THEN exact winner metadata and available original expiry, including OLD nulls, are retained');
       const cleanup = run("[ ! -d '" + owned + "' ] || { bp_run_dir '" + basename(owned) + "'; bp_cleanup; }", suffix + '-cleanup');
       assert.equal(cleanup.status, 0, 'THEN fixture cleanup succeeds');
       assert.equal(existsSync(owned), false, 'THEN fixture allocation is cleaned without changing portable history location');
