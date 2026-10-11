@@ -29,11 +29,19 @@ The hosting modes below apply to publications with the server's `new-v1` routing
 **brewpage.app** is free instant hosting: HTML pages, JSON documents, files, and multi-file sites. Default TTL is 15 days — override with `--ttl N`. For the public gallery, visit [brewpage.app](https://brewpage.app).
 </Callout>
 
+## Visibility and indexing
+
+Eligible, unprotected HTML pages, sites and files in `public` can be listed in the gallery
+and indexed, including on native subdomain hosts. Non-public, password-protected and
+ineligible publications use `noindex`. Other namespaces are unlisted, not secret;
+passwords restrict access. Eligibility does not guarantee indexing or search ranking.
+Choose the namespace before uploading; this does not change the skill's hosting defaults.
+
 ## Companion tools
 
 <CardGrid>
   <Card title="brewpage-mcp" icon="package" href="https://www.npmjs.com/package/brewpage-mcp">
-    Official MCP server for BrewPage Sites API (v1.2.0, multi-file support). Install: `claude mcp add brewpage npx -- -y brewpage-mcp@1.2.0`
+    Official MCP server for BrewPage Sites API (v1.9.3, multi-file support). Install: `claude mcp add brewpage -- npx -y brewpage-mcp@1.9.3`
   </Card>
   <Card title="OpenAPI Spec" icon="document" href="https://kochetkov-ma.github.io/brewpage-openapi/">
     Full API contract, Scalar UI. Use when building custom integrations or calling the API directly.

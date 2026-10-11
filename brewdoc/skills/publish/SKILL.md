@@ -89,10 +89,10 @@ Use **AskUserQuestion**:
 ```
 Namespace controls discovery and appears in publication addresses on brewpage.app.
 By default publishing is PRIVATE (unlisted): not in the public gallery and not indexed by search engines. The link is not secret, though — anyone who has it can open it (use a password to restrict access).
-Choose `public` for eligible gallery discovery. Eligible Promotion publications may be indexed; Dedicated subdomain hosts use noindex.
+Choose `public` for eligible gallery discovery. Eligible public HTML, sites and files may permit indexing on either address; unlisted, protected or otherwise ineligible native responses retain `noindex, nofollow`. Indexing is not guaranteed.
 
 Options:
-1) public — eligible gallery discovery; eligible Promotion publications may be indexed
+1) public — eligible gallery discovery; eligible publications may permit indexing
 2) {auto-suggested 6-8 char slug} — private, link-only (default)
 3) Enter custom namespace
 4) Skip → use suggested slug (private)
@@ -239,7 +239,8 @@ MANIFEST=$(node "${CLAUDE_SKILL_DIR}/scripts/publish.mjs" pack --dir "$SRC" --ou
 printf '%s\n' "$MANIFEST"
 bp_archive_gate "$RC" "$MANIFEST" "$TMPZIP" || exit $?
 
-RESPONSE=$(bp_post "https://brewpage.app/api/sites?ns=$NS&ttl=$DAYS&entry=$ENTRY" \
+ENTRY_QUERY=$(jq -nr --arg entry "$ENTRY" '$entry | @uri')
+RESPONSE=$(bp_post "https://brewpage.app/api/sites?ns=$NS&ttl=$DAYS&entry=$ENTRY_QUERY" \
   -H "User-Agent: ClaudeCode/1.0" -F "archive=@$TMPZIP")
 bp_finish "$RESPONSE" "$DAYS" site
 ```
@@ -256,7 +257,8 @@ MANIFEST=$(node "${CLAUDE_SKILL_DIR}/scripts/publish.mjs" inspect --zip "$SRC" $
 printf '%s\n' "$MANIFEST"
 bp_archive_gate "$RC" "$MANIFEST" "" || exit $?
 
-RESPONSE=$(bp_post "https://brewpage.app/api/sites?ns=$NS&ttl=$DAYS&entry=$ENTRY" \
+ENTRY_QUERY=$(jq -nr --arg entry "$ENTRY" '$entry | @uri')
+RESPONSE=$(bp_post "https://brewpage.app/api/sites?ns=$NS&ttl=$DAYS&entry=$ENTRY_QUERY" \
   -H "User-Agent: ClaudeCode/1.0" -F "archive=@$SRC")
 bp_finish "$RESPONSE" "$DAYS" site
 ```
@@ -297,6 +299,7 @@ Publish failed: {the FAILED line, verbatim}
 - Use `jq -n --rawfile c <input-file> '{content: $c}'` to encode text into the run's payload file. **`format` is a query param**, not a body field — `/api/html` ignores any `format` key inside the JSON body and reads only `?format=` from the URL. Wrong location = server applies default `html` and stores markdown as raw text.
 - TTL default: `15` days. Namespace must match `^[a-z0-9-]{1,32}$`.
 - Owner-token history lives at `<project-root>/.claude/brewpage-history.md` — project root resolved by `scripts/brewpage-lib.sh` (`CLAUDE_PROJECT_DIR` → git toplevel → upward `.git`/`.claude` walk → `PWD`), created mode `600`, and added to the project `.gitignore`. To **delete** a published page, find its owner token there and use the delete command in that file's header.
+- The history TTL column records the requested days. Stored `createdAt` and `expiresAt` are authoritative: a deduplicated winner retains its original expiry, and ordinary PUT/update does not renew it.
 - Use the returned `ownerLink` and stored identity metadata for owner API operations, never parse a NEW root hostname for namespace/ID. OLD history without metadata retains its existing API identifiers.
 - To **update a published site**, `PUT` the new bundle to its apex owner API with `X-Owner-Token`; the bundle fully replaces the file set and retains the host. Do not send `X-Delivery-Mode` on ordinary PUT/update.
 - Hosting changes require owner-only `PATCH /api/{type}/{ns}/{id}/hosting` with `{"deliveryMode":"subdomain","expectedVersion":1}` from current identity metadata. Only NEW public non-sites are eligible; OLD, sites and non-public identities have no mode choice. Use the returned URL/version afterward.

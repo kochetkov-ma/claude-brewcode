@@ -74,7 +74,7 @@ A create request may return an existing publication. Keep the returned winner's 
 
 ## Sites
 
-`POST /api/sites` accepts **only a `.zip` archive** — there is no raw-folder upload.
+`POST /api/sites` accepts a **ZIP archive** or **repeated `files` with matching `paths` fields**. This skill uses ZIP transport for directory uploads.
 
 - **Directory (primary):** point at a **built** static directory; the skill auto-zips it and uploads. Archive sealing keeps relative paths intact.
 - **Pre-built `.zip` (alternative):** uploaded as-is.
@@ -89,7 +89,7 @@ New sites use the exact returned subdomain root URL, including `/`, with native 
 
 ## TTL
 
-Default time-to-live is **15 days** (max 30). Override with `--ttl N` (days).
+Default requested time-to-live is **15 days** (normally 1..30, subject to owner limits). Override with `--ttl N` (days). Site PUT keeps the original expiry; use returned `expiresAt` for actual retention, including any eligible automatic extension.
 
 ## Owner Token & Privacy
 

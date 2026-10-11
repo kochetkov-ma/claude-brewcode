@@ -59,6 +59,12 @@ function sh(code, { cwd, env = {} } = {}) {
 
 const countLines = (re) => LINES.filter((l) => re.test(l)).length;
 
+// GIVEN finalized discovery rules WHEN rendering namespace guidance THEN eligibility governs either address.
+check('skill.discovery.address', SKILL.includes('Eligible public HTML, sites and files may permit indexing on either address;'), true,
+  'public discovery eligibility is independent of Promotion or Dedicated address');
+check('skill.discovery.obsolete', SKILL.includes('Dedicated subdomain hosts use noindex'), false,
+  'the removed blanket subdomain noindex claim stays absent');
+
 // ── BD03: project root resolution ──────────────────────────────────────────
 {
   const explicit = join(BASE, 'explicit');

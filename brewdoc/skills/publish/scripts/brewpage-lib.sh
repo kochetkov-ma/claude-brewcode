@@ -176,7 +176,7 @@ bp_finish() {
   [ -n "$url" ] || { echo "FAILED: publish rejected (no .link in response)"; return 1; }
   token=$(printf '%s' "$response" | jq -r '.ownerToken // empty')
   owner_api=$(printf '%s' "$response" | jq -r '.ownerLink // empty')
-  identity=$(printf '%s' "$response" | jq -c '{id, namespace, type, routingCohort, deliveryMode, modeLocked, hostingVersion, managementLink}')
+  identity=$(printf '%s' "$response" | jq -c '{id, namespace, type, routingCohort, deliveryMode, modeLocked, hostingVersion, managementLink, createdAt, expiresAt}')
   if [ "$type" = site ]; then
     fcount=$(printf '%s' "$response" | jq -r '.fileCount // "?"')
     [ -n "$token" ] && bp_history_append "$url" "$token" "$days" "site ($fcount files)" "$owner_api" "$identity"

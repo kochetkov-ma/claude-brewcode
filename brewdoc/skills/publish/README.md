@@ -114,7 +114,7 @@ Find your owner token and API identifiers in project-root `.claude/brewpage-hist
 ## Tips
 
 - **TTL planning** -- default is 15 days. Use `--ttl 30` for content you need longer, or `--ttl 1` for quick one-off shares.
-- **Visibility** -- `public` makes unprotected content eligible for gallery listing and indexing. Other namespaces are unlisted, not secret. Native subdomain hosts use `noindex`.
+- **Visibility** -- eligible, unprotected HTML pages, sites and files in `public` can be listed in the gallery and indexed, including on native subdomain hosts. Other namespaces are unlisted, not secret. Non-public, password-protected and ineligible publications use `noindex`. Eligibility does not guarantee indexing or search ranking.
 - **Password protection** -- choose an existing local file containing at least four characters; supply its absolute path, not the password in chat. Private header-file transport sends `X-Password`, while no-password mode ignores stale password files. New protected share links stay clean: never append `?p=`. Browser access uses the trusted unlock page; programmatic reads use apex API requests with `X-Password`. Existing links retain their password behavior.
 - **Verify the result** -- open the exact returned link in a private browser window. Protected content must ask for its password before rendering; for sites, also check entry and asset paths.
 - **Republish in place** -- send the new bundle to the saved apex owner API with `X-Owner-Token` (`PUT /api/sites/{ns}/{id}` for sites). Site replacement preserves its host and replaces the file set. Ordinary PUT updates retain the delivery mode; do not send `X-Delivery-Mode` on them.
