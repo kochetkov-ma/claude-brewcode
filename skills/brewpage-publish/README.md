@@ -95,13 +95,12 @@ The owner token is **never printed in conversation** — the skill's bash blocks
 
 New password-protected links stay clean: do not append `?p=`. Readers unlock through the trusted `unlock.brewpage.app` page; programmatic reads use `X-Password` on the apex API. Existing password behavior remains unchanged.
 
-Use the saved `ownerLink` and identity for updates and deletion on `https://brewpage.app`, never the publication host. Existing history without metadata keeps its saved API identifiers. Delete examples:
+Use the saved `ownerLink` and identity for updates and deletion on `https://brewpage.app`, never the publication host. Existing history without metadata keeps its saved API identifiers. Delete:
 
 ```bash
-# html / json / kv
-curl -X DELETE "https://brewpage.app/api/{ns}/{id}" -H "X-Owner-Token: {token}"
-# site
-curl -X DELETE "https://brewpage.app/api/sites/{ns}/{id}" -H "X-Owner-Token: {token}"
+curl -X DELETE "{ownerLink}" -H "X-Owner-Token: {token}"
+# no ownerLink: {type} = html|json|files|kv|sites
+curl -X DELETE "https://brewpage.app/api/{type}/{ns}/{id}" -H "X-Owner-Token: {token}"
 ```
 
 Only new public non-sites support owner-only `PATCH /api/{type}/{ns}/{id}/hosting` with `deliveryMode` and the current `expectedVersion`. Read the version first; use the returned link and version afterward. Switching modes retains the same reserved host. Existing publications, sites and non-public namespaces have no mode choice. Ordinary content updates omit `X-Delivery-Mode`. See the [hosting API reference](https://brewpage.app/api#hosting).

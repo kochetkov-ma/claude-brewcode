@@ -1,47 +1,27 @@
-// brewtools:manager-setup — UserPromptSubmit hook.
-// Injects Manager/Architecture/Review mode block(s) via additionalContext. Triggers:
-//   +++ -> anti-drift cron planning, only when permission_mode === 'plan'.
-//   1. Codeword in prompt (always, regardless of state). FOUR codewords in THREE
-//      INDEPENDENT groups; a prompt may activate one from each:
-//        Manager group:
-//          ++m  -> Manager mode. PLAN-AWARE: when permission_mode === 'plan'
-//                  it injects the planmode block (full + plan addon); otherwise
-//                  the plain full block. There is NO separate ++mp codeword.
-//        Architecture group:
-//          ++a  -> Architecture-first directive. Mode-agnostic: the SAME block
-//                  injects in plan and normal mode (in plan mode the design is
-//                  written into the plan itself). Independent of manager/review;
-//                  freely combinable with either or both.
-//        Review group (mutually exclusive, ++rr wins over ++r):
-//          ++rr -> Anti-regression review discipline
-//          ++r  -> Two-phase review discipline
-//   2. HARD wall ON (state.hard === true): ambient auto-inject of the 'full'
-//        orchestrator block every turn (codeword absent).
-// Precedence: each group is detected INDEPENDENTLY. When groups co-occur we inject
-//   ALL matching blocks (manager first, then architect, then review), concatenated
-//   with a blank-line separator. When only one group is present, only that block
-//   is injected. The longer-prefix variant ++rr wins over ++r; the `(?![\w])`
-//   lookahead also keeps `++rr` from falsely matching ++r.
-//   The architect and review codewords are codeword-ONLY (no ambient/state injection).
-// Fail-safe: any error -> output({}) so the user's prompt is never broken.
+// brewtools:manager-setup — UserPromptSubmit: codewords `+++` (plan mode), `++m`, `++a`, `++rr`/`++r` -> block(s) via additionalContext.
+// Codeword-only: wall state injects nothing (the guard's deny reason explains itself). Any error -> {} (fail-open).
 
-import { readStdin, output } from './lib/utils.mjs';
-import { resolveState } from './lib/manager-state.mjs';
+import { readStdin, output, projectRoot } from './lib/utils.mjs';
 import { resolvePrompt } from './lib/manager-prompts.mjs';
 
-// E8: bound additionalContext under the 2.1.174 10K text-channel disk-spill threshold.
-// Override prompt files (project/global) are user-authored and unbounded; cap the final
-// injected string only. Does NOT affect which prompt is selected or codeword detection.
+// additionalContext cap is 10,000 chars; override prompt files are user-authored and unbounded.
 function capText(s, max = 9000) {
   return s.length > max ? s.slice(0, max) + '\n...[truncated]' : s;
 }
 
+// UserPromptSubmit also fires for subagent deliveries; only the leading tag marks them.
+// Synthetic-prompt detector: leading `<task-notification>` or `<agent-message from=` after whitespace.
+const SYNTHETIC_PROMPT = /^\s*<(?:task-notification>|agent-message\s+from=)/;
+
 (async () => {
   try {
     const input = await readStdin();
-    const { cwd, permission_mode } = input;
+    const { permission_mode } = input;
     const prompt = typeof input.prompt === 'string' ? input.prompt : '';
     const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT;
+
+    // A subagent's report quoting `++m` is not the user typing it.
+    if (SYNTHETIC_PROMPT.test(prompt)) { output({}); return; }
 
     const hasM  = /(?<![\w+])\+\+m(?![\w])/i.test(prompt);
     const hasRR = /(?<![\w+])\+\+rr(?![\w])/i.test(prompt);
@@ -50,9 +30,6 @@ function capText(s, max = 9000) {
     const cronMode = permission_mode === 'plan' && /(?<![\p{L}\p{N}\p{M}_+])\+\+\+(?![\p{L}\p{N}\p{M}_+])/u.test(prompt)
       ? 'cron-plan' : null;
 
-    // Manager (++m) is plan-aware: when the session is in
-    // plan mode (permission_mode === 'plan') it injects the planmode block (full +
-    // plan addon), otherwise the plain full block. Review: ++rr wins over ++r.
     let managerMode = null, managerHeader = null;
     if (hasM) {
       const planMode = permission_mode === 'plan';
@@ -77,43 +54,26 @@ function capText(s, max = 9000) {
       reviewHeader = 'User typed `++r` — Two-phase review discipline is active for this turn:';
     }
 
-    if (cronMode || managerMode || archMode || reviewMode) {
-      // Codeword(s) present -> inject matching block(s) ALWAYS (state-independent).
-      const blocks = [];
-      for (const [mode, head] of [
-        [cronMode, 'User typed `+++` in Plan mode — plan the task anti-drift cron:'],
-        [managerMode, managerHeader], [archMode, archHeader], [reviewMode, reviewHeader]
-      ]) {
-        if (!mode) continue;
-        const { text } = resolvePrompt(mode, cwd, pluginRoot);
-        if (text) blocks.push(`${head}\n\n${text}`);
+    if (!(cronMode || managerMode || archMode || reviewMode)) { output({}); return; }
+
+    // Project overrides live under the project root, not the drifting hook cwd.
+    const root = projectRoot(input.cwd);
+    const blocks = [];
+    for (const [mode, head] of [
+      [cronMode, 'User typed `+++` in Plan mode — plan the task anti-drift cron:'],
+      [managerMode, managerHeader], [archMode, archHeader], [reviewMode, reviewHeader]
+    ]) {
+      if (!mode) continue;
+      const { text } = resolvePrompt(mode, root, pluginRoot);
+      if (text) blocks.push(`${head}\n\n${text}`);
+    }
+    if (blocks.length === 0) { output({}); return; }
+    output({
+      hookSpecificOutput: {
+        hookEventName: 'UserPromptSubmit',
+        additionalContext: capText(blocks.join('\n\n---\n\n'), 9000)
       }
-      if (blocks.length === 0) { output({}); return; }
-      output({
-        hookSpecificOutput: {
-          hookEventName: 'UserPromptSubmit',
-          additionalContext: capText(blocks.join('\n\n---\n\n'), 9000)
-        }
-      });
-      return;
-    }
-
-    // No codeword -> ambient HARD wall injection if enabled.
-    const state = resolveState(cwd);
-    if (state.hard === true) {
-      const { text } = resolvePrompt('full', cwd, pluginRoot);
-      if (!text) { output({}); return; }
-      const header = 'Manager HARD wall is ON — operate as orchestrator (delegate everything):';
-      output({
-        hookSpecificOutput: {
-          hookEventName: 'UserPromptSubmit',
-          additionalContext: capText(`${header}\n\n${text}`, 9000)
-        }
-      });
-      return;
-    }
-
-    output({});
+    });
   } catch {
     output({});
   }

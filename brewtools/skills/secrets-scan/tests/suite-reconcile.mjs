@@ -1,17 +1,5 @@
 #!/usr/bin/env node
-/**
- * suite-reconcile.mjs (BT-F04) - scripts/reconcile.mjs.
- *
- * The invariant under test: `assigned == union(scanned, skipped)`. A chunk that
- * loses files, invents files, or returns unparsable JSON must be reported, not
- * merged - that is the difference between "no findings" and "never looked".
- *
- * Self-contained: every list and payload is written into one mkdtemp base and
- * removed at the end. No repo, HOME or network access.
- *
- * Assertion policy: unconditional exact-equality of the FULL parsed stdout
- * object (or an exact status code) with a description; no `if` gates.
- */
+// suite-reconcile.mjs (BT-F04) - scripts/reconcile.mjs: `assigned == union(scanned, skipped)`; lost/invented files or unparsable JSON -> reported, never merged ("no findings" != "never looked"). One mkdtemp base, removed at end, no repo/HOME/network; exact FULL parsed stdout object or exact status code, no `if` gates.
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';

@@ -11,6 +11,10 @@ import { fileURLToPath } from 'node:url';
 const HERE = join(fileURLToPath(import.meta.url), '..');
 const TRACE_OPS = join(HERE, '..', 'scripts', 'trace-ops.sh');
 const BASE = mkdtempSync(join(tmpdir(), 'trace-ops-test-'));
+// Exit hook: BASE is removed on every exit path, a thrown test included.
+process.on('exit', () => {
+  try { rmSync(BASE, { recursive: true, force: true }); } catch { /* best effort */ }
+});
 let passed = 0;
 let failed = 0;
 const results = [];

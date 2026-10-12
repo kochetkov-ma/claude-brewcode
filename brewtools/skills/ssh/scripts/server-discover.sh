@@ -1,18 +1,14 @@
 #!/bin/bash
 set -euo pipefail
-# Discover remote server: OS, disks, Docker, services, users
-# Usage: server-discover.sh "user@host|host|ssh-alias" [port]
-# Env:   SSH_DISCOVER_TIMEOUT - total wall-clock budget in seconds (default 30)
-# Output: structured key=value pairs
-# Exit:  0 ok | 1 unreachable | 2 invalid argument | 124 deadline exceeded
+# Usage: server-discover.sh "user@host|host|ssh-alias" [port] -> key=value pairs: OS, disks, Docker, services, users
+# Env SSH_DISCOVER_TIMEOUT = total wall-clock budget s (default 30); exit 0 ok | 1 unreachable | 2 invalid argument | 124 deadline exceeded
 
 CONNECTION="${1:?Usage: server-discover.sh user@host [port]}"
 PORT="${2:-22}"
 DEADLINE="${SSH_DISCOVER_TIMEOUT:-30}"
 
-# user@host, bare host or ssh_config alias. Anything else (whitespace, "-o ...",
-# a second "@") would word-split into extra ssh options -- ProxyCommand is executed
-# by the user's shell, so an unvalidated operand is local command execution.
+# user@host, bare host or ssh_config alias only: else (whitespace, "-o ...", second "@") word-splits into ssh options,
+# and ProxyCommand runs in user's shell -> unvalidated operand = local command execution.
 case "$CONNECTION" in
     ''|@*|*@|*@*@*|*[!A-Za-z0-9._@-]*)
         echo "ERROR: invalid connection '$CONNECTION' (expected user@host, host or ssh alias)" >&2
@@ -64,11 +60,12 @@ fi
 
 echo "=== Server Discovery: $CONNECTION ==="
 
-# Helper: run SSH command, return output or fallback
+# Helper: run SSH command ($cmd = remote command string, local expansion intended), return output or fallback
 ssh_cmd() {
     local cmd="$1"
     local fallback="${2:-n/a}"
     local result
+    # shellcheck disable=SC2029
     result=$(ssh "${SSH_OPTS[@]}" "$CONNECTION" "$cmd" 2>/dev/null) || result="$fallback"
     echo "$result"
 }

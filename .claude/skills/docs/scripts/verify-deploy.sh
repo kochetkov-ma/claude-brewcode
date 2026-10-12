@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
-# verify-deploy.sh — wait for docs.yml + deploy-docs.yml, report status
-# Usage: bash scripts/verify-deploy.sh
+# verify-deploy.sh — wait for one tag's docs.yml + deploy-docs.yml, then gate on the live build-info.json
+# Usage: bash scripts/verify-deploy.sh vX.Y.Z   (rc 0 = live site serves exactly that tag's build)
 set -euo pipefail
+
+TAG="${1:-}"
+if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "❌ usage: verify-deploy.sh vX.Y.Z (got '$TAG')"
+  exit 2
+fi
+BUILD_INFO_URL="https://doc-claude.brewcode.app/build-info.json"
 
 if ! command -v gh >/dev/null 2>&1; then
   echo "❌ gh CLI not installed"
@@ -13,42 +20,57 @@ if ! gh auth status >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "=== Latest docs.yml run ==="
-DOCS_RUN=$(gh run list --workflow=docs.yml -L 1 --json databaseId,status,conclusion -q '.[0]')
-DOCS_ID=$(echo "$DOCS_RUN" | sed -nE 's/.*"databaseId":([0-9]+).*/\1/p')
+echo "=== docs.yml run for $TAG ==="
+DOCS_ID=""
+for _ in 1 2 3 4 5 6 7 8 9 10 11 12; do
+  DOCS_ID=$(gh run list --workflow=docs.yml --branch "$TAG" --event push -L 1 --json databaseId \
+    -q '.[0].databaseId // empty' || true)
+  [[ -n "$DOCS_ID" ]] && break
+  sleep 10
+done
 if [[ -z "$DOCS_ID" ]]; then
-  echo "❌ no docs.yml runs found"
+  echo "❌ no docs.yml run for $TAG after 120s — was the tag pushed?"
   exit 1
 fi
-echo "$DOCS_RUN"
-
-echo "=== Watching docs.yml ==="
 if ! gh run watch "$DOCS_ID" --exit-status --interval 10; then
   echo "❌ docs.yml FAILED (run $DOCS_ID)"
   exit 1
 fi
-echo "✅ docs.yml green"
+DOCS_SHA=$(gh run view "$DOCS_ID" --json headSha -q .headSha)
+DOCS_DONE=$(gh run view "$DOCS_ID" --json updatedAt -q .updatedAt)
+echo "✅ docs.yml green (run $DOCS_ID, sha $DOCS_SHA)"
 
-echo "=== Latest deploy-docs.yml run ==="
-DEPLOY_RUN=$(gh run list --workflow=deploy-docs.yml -L 1 --json databaseId,status,conclusion -q '.[0]')
-DEPLOY_ID=$(echo "$DEPLOY_RUN" | sed -nE 's/.*"databaseId":([0-9]+).*/\1/p')
+echo "=== deploy-docs.yml run triggered by run $DOCS_ID ==="
+# Deploy runs carry headBranch main: creation time is the only link to the build that triggered them.
+DEPLOY_ID=""
+for _ in 1 2 3 4 5 6 7 8 9 10 11 12; do
+  DEPLOY_ID=$(gh run list --workflow=deploy-docs.yml --event workflow_run -L 20 --json databaseId,createdAt \
+    -q "[.[] | select(.createdAt >= \"$DOCS_DONE\")] | last | .databaseId // empty" || true)
+  [[ -n "$DEPLOY_ID" ]] && break
+  sleep 10
+done
 if [[ -z "$DEPLOY_ID" ]]; then
-  echo "⚠️  no deploy-docs.yml run yet — skip"
-  exit 0
-fi
-echo "$DEPLOY_RUN"
-
-echo "=== Watching deploy-docs.yml ==="
-if ! gh run watch "$DEPLOY_ID" --exit-status --interval 10; then
+  echo "⚠️  no deploy-docs.yml run created after $DOCS_DONE — the version gate decides"
+elif ! gh run watch "$DEPLOY_ID" --exit-status --interval 10; then
   echo "❌ deploy-docs.yml FAILED (run $DEPLOY_ID)"
   exit 1
-fi
-echo "✅ deploy-docs.yml green"
-
-echo "=== Health check ==="
-if curl -sf -o /dev/null -w "%{http_code}\n" https://doc-claude.brewcode.app/getting-started/ | grep -q 200; then
-  echo "✅ site reachable"
 else
-  echo "⚠️  site health check failed (may be CDN lag)"
-  exit 1
+  echo "✅ deploy-docs.yml green (run $DEPLOY_ID)"
 fi
+
+echo "=== Version gate ==="
+# Same byte-exact shape docs.yml writes to build-info.json: a 200 from an older build must fail.
+EXPECTED=$(printf '{"version":"%s","sha":"%s","buildRunId":"%s"}' "${TAG#v}" "$DOCS_SHA" "$DOCS_ID")
+LIVE=""
+for _ in 1 2 3 4 5 6; do
+  LIVE=$(curl -fsS -m 15 "${BUILD_INFO_URL}?build=${DOCS_ID}" || true)
+  if [[ "$LIVE" == "$EXPECTED" ]]; then
+    echo "✅ live build-info matches $TAG: $LIVE"
+    exit 0
+  fi
+  sleep 10
+done
+echo "❌ version gate FAILED for $TAG"
+echo "   live:     $LIVE"
+echo "   expected: $EXPECTED"
+exit 1

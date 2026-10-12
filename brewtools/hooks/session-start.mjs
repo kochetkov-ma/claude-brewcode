@@ -1,14 +1,15 @@
 #!/usr/bin/env node
-import { readStdin, output, log } from './lib/utils.mjs';
+import { readStdin, output, log, projectRoot } from './lib/utils.mjs';
 
 async function main() {
   let cwd = null;
   let session_id = null;
   try {
-    cwd = process.cwd();
+    cwd = projectRoot();
     const input = await readStdin();
     session_id = input.session_id;
-    cwd = input.cwd || cwd;
+    // State and logs are keyed on the project root: raw hook cwd may be a subdirectory.
+    cwd = projectRoot(input.cwd);
 
     let context = '';
     let systemMessage = '';
@@ -19,11 +20,12 @@ async function main() {
       const state = resolveState(cwd);
       if (state?.hard === true) {
         const level = state.level === 'strict' ? 'strict' : 'balanced';
+        const bash = level === 'strict' ? 'all Bash' : 'Bash that is not read-only';
         systemMessage = `⛔ MANAGER HARD wall ON (project, level=${level})`;
-        context = `Manager HARD wall active (project, level=${level}): main session is orchestration-only - delegate in bounded units (one deliverable, ~5 files) and split a big job across several agents instead of one agent running for an hour. Brief every agent with goal + scope + what is already done + who consumes the result + acceptance; /brewtools:manager-setup disable to exit.`;
+        context = `Manager HARD wall active (project, level=${level}): a PreToolUse guard denies Write/Edit and ${bash} in the main session; subagents are not restricted, so implementation goes through the Agent tool. /brewtools:manager-setup disable to exit.`;
       }
     } catch (err) {
-      log('info', '[session-start]', `manager hard-wall check error (${err.message}), skipping`, cwd, session_id);
+      log('warn', '[session-start]', `manager hard-wall check error (${err.message}), skipping`, cwd, session_id);
     }
 
     if (!context && !systemMessage) {

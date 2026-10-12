@@ -1,14 +1,12 @@
 # SSH Command Safety Classification
 
-> Reference for command classification and confirmation gates.
-
 ## Who Is Reading This (decide FIRST)
 
 The risk categories below are identical for both readers; the GATE is not.
 
 | Reader | Has `AskUserQuestion`? | Gate |
 |--------|------------------------|------|
-| Main session (the `/brewtools:ssh` skill) | yes | Confirm interactively before executing — see "Confirmation Message Format" |
+| Main session (the `/brewtools:ssh` skill) | yes | Confirm interactively before executing (SKILL.md Phase 5 Step 3) |
 | Ordinary SA (`ssh-admin`, including skill `context: fork`) | no — ordinary tool filters remove it even if declared | Run scoped non-destructive work only; return missing decisions and exact approval envelopes to main |
 | Conversation fork | inherits parent pool; question tool may be available | Same SSH role contract: user decisions/approval stay in main; no self-approval |
 
@@ -121,7 +119,7 @@ Free READ never permits raw credentials or environment dumps. `env`, bare `print
 | Firewall | `ufw allow`, `ufw deny`, `ufw delete`, `iptables`, `nftables` | Network exposure |
 | Users | `useradd`, `usermod`, `adduser`, `gpasswd` | Access control |
 | Mount | `mount`, `umount`, `fdisk`, `mkfs` | Disk operations |
-| SSH | `sshd` config changes, authorized_keys edits | Remote access |
+| SSH | `sshd` config changes, authorized_keys edits | Remote access; lockout gate: `ssh-best-practices.md` Port Change |
 
 ## Compound Command Rules
 
@@ -134,34 +132,6 @@ Free READ never permits raw credentials or environment dumps. `env`, bare `print
 | Redirect `>>` to new file | CREATE | Appends/creates |
 | `curl \| bash` | PRIVILEGE | Arbitrary code execution |
 | `wget && chmod +x && ./` | PRIVILEGE | Download and execute |
-
-## Confirmation Message Format (main session only)
-
-> A subagent uses the envelope block above instead — never these prompts.
-
-### MODIFY/SERVICE
-
-```
-About to execute on [SERVER]:
-
-  [command 1]
-  [command 2]
-
-Classification: MODIFY/SERVICE
-Proceed?
-```
-
-### DELETE/PRIVILEGE
-
-```
-WARNING: DESTRUCTIVE action on [SERVER]:
-
-  [command 1] -- [what it deletes/changes]
-
-Classification: DELETE/PRIVILEGE
-This cannot be undone.
-Proceed?
-```
 
 ## Emergency Stop
 

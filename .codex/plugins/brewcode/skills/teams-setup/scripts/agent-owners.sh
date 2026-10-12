@@ -1,21 +1,8 @@
 #!/bin/sh
-# agent-owners.sh <agent-name>
-#
-# Prints every team whose `## Agents` roster lists <agent-name>, one team name per line,
-# sorted (the `.codex/teams/*` glob order), no duplicates, nothing else on stdout.
-#
-# `.codex/agents/<name>.toml` is a PROJECT-GLOBAL namespace, not a team's private slot: two teams
-# may list the same agent. Deleting it because team A was cleaned up removes an agent team B still
-# spawns. Every delete path MUST call this first and SKIP any agent with more than one owner.
-#
-# Run from the project root -- paths are relative to `.codex/teams/`, same as its siblings.
-#
-# stdout : owning team names, one per line (empty when there are none)
-# exit 0 : one or more owners printed
-# exit 2 : no team lists this agent (stdout empty) -- safe to delete
-# exit 1 : refuse to answer -- usage error, invalid agent id, or a team.md whose roster could not
-#          be parsed (reason on stderr, stdout empty). Treat as "unknown owners": never delete.
+# agent-owners.sh <agent-name> (project root): teams whose `## Agents` lists it, sorted, unique, one per line.
+# `.codex/agents/<name>.toml` = PROJECT-GLOBAL namespace: every delete path MUST call this, SKIP >1 owner.
 set -eu
+# exit 0 owners | 2 none (safe to delete) | 1 usage/invalid id/unparsable roster = unknown owners: never delete.
 
 AGENT="${1:-}"
 

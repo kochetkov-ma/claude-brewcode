@@ -9,14 +9,13 @@ model: opus
 
 # Memory Sync ({PROJECT_NAME})
 
-**ROLE:** long-running multi-agent coordinator that keeps instruction memory TRUTHFUL and SMALL. Source code moves
-faster than CLAUDE.md / rules / conventions / agents / skills / memory stores; this skill diffs memory against reality for a scope
-and repairs it - facts FIRST, dedup second, compression third - and never lets the surface grow.
+**ROLE:** multi-agent coordinator keeping instruction memory TRUTHFUL and SMALL. Code moves faster than CLAUDE.md,
+rules, conventions, agents, skills and memory stores; this skill diffs memory against reality for a scope and repairs
+it - facts FIRST, dedup second, compression third - never growing the surface.
 
-**Discovery:** use available `Grep`/`Glob` tools; otherwise use the shell probes below (`find`, `grep -rn`, `git ls-files`, `ls`, `wc -l`). Tool availability, not the operating system, determines the fallback.
+**Discovery:** `Grep`/`Glob` when available, else the shell probes below (`find`, `grep -rn`, `git ls-files`, `ls`, `wc -l`).
 
-**References** (paths relative to this skill's directory, `$CLAUDE_SKILL_DIR` = `.claude/skills/memory-sync/`;
-subagents get the repo-relative path, never pasted prose):
+**References** (relative to `.claude/skills/memory-sync/`; subagents get the repo-relative path, never pasted prose):
 
 | Reference | Read it |
 |-----------|---------|
@@ -29,17 +28,15 @@ subagents get the repo-relative path, never pasted prose):
 
 ## Prompt contract
 
-Position 1 of `$ARGUMENTS` is a **free-form prompt** (RU/EN) - the scope token, `hard` and any focus text are
-optional and may follow in any order. Nobody types keys: resolve scope + depth + focus FROM the prompt.
+`$ARGUMENTS` is one free-form RU/EN prompt; the scope token, `hard`, flags and any focus text may sit
+anywhere in it. Resolve scope + depth + focus from it.
 
-1. Strip flags. An explicit scope token anywhere wins outright, no scoring.
-2. Else score scopes by distinct whole-word keyword hits (table below). Highest unique score wins. Tie -> the
-   keyword appearing first in the prompt.
-3. Empty arguments -> `session` (default scope), `NORMAL` (default depth), `MEMORY` (default reach); this
-   run asks nothing.
-4. Outcome-changing ambiguity (e.g. an unresolvable batch split) -> ONE `AskUserQuestion` (max 4 questions)
-   BEFORE any work.
-5. Prose outside scope/reach/id/path becomes `{FOCUS}` (emphasis); explicit restrictions such as "only rules" or "do not touch agents" instead narrow the authorized write set. Record them in `SCOPE:` and every dispatch.
+1. Scope token: an explicit one wins outright; else the most distinct whole-word keyword hits (table below);
+   tie -> the keyword that comes first in the prompt. Empty -> `session` (default scope), `NORMAL` (default
+   depth), `MEMORY` (default reach).
+2. Focus: prose outside scope/reach/id/path becomes `{FOCUS}` (emphasis); explicit restrictions such as "only rules" or "do not touch agents" instead narrow the authorized write set. Record them in `SCOPE:` and every dispatch.
+3. Ask: ONE `AskUserQuestion` (max 4 questions), before any work, only for outcome-changing ambiguity (e.g.
+   an unresolvable batch split). An empty run asks nothing.
 
 Print the detailed PLAN under Input resolution ONCE before the first action. `DO:` uses 2-5 imperative bullets
 for gather -> sync -> verify -> self-sync -> report, with fan-out counts. Labels are literal; values follow the conversation language.
@@ -48,9 +45,8 @@ for gather -> sync -> verify -> self-sync -> report, with fan-out counts. Labels
 
 ## Input resolution - THREE ORTHOGONAL AXES
 
-Parse `$ARGUMENTS`. The first token matching a scope keyword sets `{SCOPE}` (default `session`). The token `hard`
-anywhere - or the same intent in prose - sets `{DEPTH}` = `HARD`. A reach token anywhere - or the same intent
-in prose - sets `{REACH}` = `REFS` (default `MEMORY`). Everything else is free-form `{FOCUS}`.
+The scope resolved per the Prompt contract sets `{SCOPE}`. The token `hard`, or the same intent in prose, sets
+`{DEPTH}` = `HARD`; a reach token, or the same intent, sets `{REACH}` = `REFS` (default `MEMORY`). The rest is `{FOCUS}`.
 
 **`{SCOPE}` selects WHICH CHANGES drive the sync:**
 
@@ -76,19 +72,17 @@ in prose - sets `{REACH}` = `REFS` (default `MEMORY`). Everything else is free-f
 | `MEMORY` (DEFAULT) | the instruction surface below, wherever it lives, tracked or not | *(empty)* |
 | `REFS` | MEMORY plus each git-TRACKED reference file that an ALWAYS-LOADED instruction file cites and tells its reader to open, when that file sits OUTSIDE the instruction tree | `refs`, `reach refs`, референсы, со ссылками |
 
-ALWAYS-LOADED means the file reaches context with no gate: a rule with no `paths:` key, the CLAUDE.md family, an
-agent or skill body. A rule gated by `paths:` is LAZY - its outside references are REPORTED, never edited, at
-either reach.
+ALWAYS-LOADED = reaches context with no gate: a rule with no `paths:` key, the CLAUDE.md family, an agent or skill
+body. A `paths:`-gated rule is LAZY: its outside references are REPORTED, never edited, at either reach.
 
-At `MEMORY` a tracked outside reference is RESOLUTION-CHECKED only: every compression or fact finding on it is
-REPORTED, never applied. Blast radius is the reason - such a file has consumers this sweep cannot see (CI, tests,
-another tool, a human procedure), while the instruction surface has one consumer class. `REFS` never widens past
-the three NON-NEGOTIABLE exclusions: doc-flow paths, source code and secrets stay out at every reach. At `REFS`
-each outside file gets its own row in the report, and non-growth still binds.
+At `MEMORY` a tracked outside reference is RESOLUTION-CHECKED only; findings on it are REPORTED, never applied - it
+has consumers this sweep cannot see (CI, tests, another tool, a human procedure). `REFS` never widens past the three
+NON-NEGOTIABLE exclusions (doc-flow paths, source code, secrets); each outside file gets its own report row, and
+non-growth still binds.
 
-> **The axes are independent.** `all hard` re-verifies everything AND purges; `session` (no token) is the cheap
-> default. Depth never changes which files are swept; scope never changes how hard they are cut; reach changes
-> only the editable set, never how hard they are cut. Explicit user restrictions override all three axes.
+> **The axes are independent:** `all hard` re-verifies everything AND purges; `session` is the cheap default. Depth
+> never changes which files are swept, scope never how hard they are cut, reach only the editable set. Explicit user
+> restrictions override all three.
 
 **Emphasis versus restriction:** ordinary `{FOCUS}` reorders effort without dropping batches. An explicit
 "only rules" authorizes rules alone; "do not touch agents" excludes agent writes. Apply that write filter before
@@ -96,10 +90,9 @@ dispatch, including REFS, salvage, cross-batch pointers and self-sync; report sk
 minimum non-secret evidence needed to verify selected files, even when that evidence is outside the write set.
 
 > **Standing emphasis:** {FOCUS_EMPHASIS}
-> Facts stay ahead of dedup, and dedup ahead of compression, whatever the emphasis. The order may be SHARPENED,
-> never inverted.
+> Facts before dedup before compression, whatever the emphasis: the order may be SHARPENED, never inverted.
 
-Print this PLAN once before work, with fan-out counts in `DO:` bullets:
+The PLAN:
 
 ```
 PLAN — memory-sync
@@ -119,36 +112,33 @@ spawned, files edited, lines delta, verdicts ok).
 ## The surface - everything AUTO-LOADED into an LLM context, nothing else
 
 Default surface, subject to explicit user restrictions: root `CLAUDE.md`, EVERY nested `CLAUDE.md` at ANY depth,
-`CLAUDE.local.md`, `.claude/rules/**/*.md` (rules load recursively), convention files, the `AGENTS.md` family,
-`.claude/agents/**` at ANY depth (CC scans subfolders such as `agents/review/`), `.claude/skills/**` (SKILL.md AND every
-`references/*.md`), and BOTH memory kinds: the session memory dir `{MEMORY_DIR}` and the PER-AGENT memory stores -
-a tree holding one store per agent, loaded only while that agent runs (which kind loads for whom:
-`references/memory-guide.md`). If a file can silently enter a model's context, it is memory; if it cannot, it is not.
+`CLAUDE.local.md`, `.claude/rules/**/*.md` (recursive), convention files, the `AGENTS.md` family (Claude Code reads it
+only where no `CLAUDE.md`/`CLAUDE.local.md` exists, unless its Project instructions setting adds it; other agent tools
+read it too), `.claude/agents/**` at ANY depth (subfolders such as `agents/review/` are scanned), `.claude/skills/**`
+(SKILL.md AND every `references/*.md`), and BOTH memory kinds: the session memory dir `{MEMORY_DIR}` and the PER-AGENT
+stores, one per agent, loaded only while it runs (`references/memory-guide.md`). If a file can silently enter a
+model's context, it is memory; if not, it is not.
 
 Tracked cited OUTSIDE files enter the write set only at `{REACH}` = `REFS`; tracking never excludes instructions.
 Both memory kinds remain in the default surface at BOTH reaches. `MEMORY` names a reach, never a batch.
 
-Batches are **DISJOINT BY CONSTRUCTION** - no file appears in two batches - so parallel edits can never collide.
-An overlapping batch table is a defect, not a style choice.
+Batches are **DISJOINT BY CONSTRUCTION** - no file in two batches - so parallel edits never collide; an overlapping
+batch table is a defect.
 
-EVERY memory home is its OWN batch row - the memory dir one, each per-agent store one (Phase 1 enumerates them;
-split a store tree further only when one batch is too big). A memory home is never folded into a CLAUDE.md, rules,
-agents or skills batch. ONE exception, so the rule-5 salvage stays inside one batch and never edits a foreign
-file: a store classified ORPHAN joins the batch owning the SAME agent's LIVE store. That agent has no live store
-anywhere, or either store is outside the authorized write set -> REPORT survivors, remove nothing. Both stores
-must belong to that same owned batch; never use this exception to cross an explicit exclusion.
+EVERY memory home is its OWN batch row (the memory dir, each per-agent store; Phase 1 enumerates them; split a store
+tree only when one batch is too big), never folded into a CLAUDE.md, rules, agents or skills batch. ONE exception keeps
+rule-5 salvage inside one batch: a store classified ORPHAN joins the batch owning the SAME agent's LIVE store. No live
+store anywhere, or either store outside the authorized write set -> REPORT survivors, remove nothing. Never use this
+exception to cross an explicit exclusion.
 
 <!-- BLOCK: one row per DISJOINT batch - | Batch | Files (concrete paths / globs) | VERIFY-ONLY members + reason | -->
 {BATCH_TABLE}
 
-Surface at generation time: {SURFACE_COUNTS}.
+Surface at generation time: {SURFACE_COUNTS} - a snapshot that rots; the Phase 1 enumeration is the only authority
+on what exists today.
 
-> **Counts rot. RE-ENUMERATE every run; never trust the numbers above.** They are a snapshot for orientation, not
-> a file list. The enumeration commands in Phase 1 are the only authority on what exists today.
-
-> Memory dir: `{MEMORY_DIR}` (the literal `none` = THAT dir out of scope, ITS batch dropped, say so in the report).
-> The per-agent stores are a SEPARATE question: they may exist while it is `none`, so enumeration decides them, never
-> this scalar.
+> Memory dir: `{MEMORY_DIR}` (`none` = that dir out of scope, its batch dropped, say so in the report). Per-agent
+> stores may exist while it is `none`: enumeration decides them, never this scalar.
 > Task state: {TRACKER_NOTE}.
 
 ### EXCLUDED - hard, with reasons
@@ -164,8 +154,8 @@ Three exclusions are NON-NEGOTIABLE whatever the table says:
 | Source code | READ-ONLY EVIDENCE. It is what facts are verified AGAINST - never an edit target, never a place to "fix" a mismatch |
 | Secrets | Never read, never opened, and never write a secret VALUE anywhere. Names, paths and ids are fine |
 
-Operational task state (a task board, a tracker dir) is NOT instruction memory: it is state, it changes hourly, and
-its owner is named in `{TRACKER_NOTE}`. Excluded.
+Operational task state (a task board, a tracker dir) is state, not memory: it changes hourly and its owner is named
+in `{TRACKER_NOTE}`. Excluded.
 
 ---
 
@@ -188,9 +178,9 @@ its owner is named in `{TRACKER_NOTE}`. Excluded.
 | Authority | On conflict: rules + CLAUDE.md beat memory; a nested CLAUDE.md beats the root one for its own subtree |
 | Edit only | Targeted `Edit` diffs, bottom-up by line number. Never `Write` a whole memory file |
 
-Banned additions (obvious -> never written): "write good code", "follow SOLID", "add tests", "handle errors",
-"do not hardcode secrets", any restatement of tool or framework docs. Wanted instead: domain facts, environment
-quirks, mistakes actually hit and their cause. Decision tree and full list: `references/memory-guide.md`.
+Never add the obvious ("write good code", "follow SOLID", "add tests", "handle errors", "do not hardcode secrets",
+restated tool or framework docs); add domain facts, environment quirks, mistakes actually hit and their cause.
+Decision tree: `references/memory-guide.md`.
 
 ---
 
@@ -206,11 +196,10 @@ repo today is worse than no row: it reports `not run` forever.
 
 ## Agents and skills are ALWAYS RE-AUDITED - non-negotiable
 
-Every run, at every `{SCOPE}` including `session`: authorized agents and skills batches run the full best-practice
-re-audit in `references/agent-audit.md`, not just fact checks. Emphasis changes no audit; explicit write restrictions
-can exclude these batches, which are then reported as skipped.
-Audit drift even without a diff: tool lists, description triggers, ownership globs for deleted directories and
-handoffs naming renamed agents.
+Every run, at every `{SCOPE}` including `session`, authorized agents and skills batches run the full re-audit in
+`references/agent-audit.md`, diff or not (tool lists, description triggers, ownership globs of deleted directories,
+handoffs naming renamed agents). Emphasis changes no audit; explicit write restrictions can exclude these batches,
+reported as skipped.
 
 <!-- BLOCK: | Check | What it asserts | - agent-batch extra checks specific to this project -->
 {AGENT_CHECKS_TABLE}
@@ -227,9 +216,8 @@ The live owner map - who owns which surface, which agents are read-only recon an
 
 ## Runtime workflow seats - edited with the whole instruction set in view
 
-A runtime seat is an agent a PROGRAM spawns - a workflow file, an orchestrator script, a skill naming a
-`subagent_type` - as opposed to an agent a human routes to by keyword. Its effective prompt is the UNION of four
-sources, and only one of them is the agent file:
+A runtime seat is an agent a PROGRAM spawns (a workflow file, an orchestrator script, a skill naming a
+`subagent_type`), not one a human routes to. Its effective prompt is the UNION of four sources:
 
 | # | Source | Where it lives |
 |---|--------|----------------|
@@ -241,8 +229,7 @@ sources, and only one of them is the agent file:
 <!-- BLOCK: | Seat | Agent file | Call sites (file:line) | Constant blocks it receives | -->
 {RUNTIME_SEAT_ROSTER}
 
-Editing one source blind to the other three is how a contradiction enters. Enumerate all four and read them
-together BEFORE touching a seat's file; then:
+Read all four together BEFORE touching a seat's file - editing one blind to the others is how contradictions enter:
 
 | Rule | Detail |
 |------|--------|
@@ -255,20 +242,10 @@ together BEFORE touching a seat's file; then:
 
 ## Delegation (binds every agent this skill spawns)
 
-One subagent = ONE observable bounded deliverable (ONE batch), ~<=5 files, ~<=10 steps. Split larger units into
-N tasks, ALL spawned in ONE message. A batch over ~10 files MUST split into spawns of <=5 files; preserve disjointness.
+One subagent = ONE observable bounded deliverable (ONE batch), ~<=5 files, ~<=10 steps; larger units split into N
+tasks, ALL spawned in ONE message. A batch over ~10 files splits into spawns of <=5 files, disjointness preserved.
 
-Every spawn prompt MUST carry:
-
-| Field | Content |
-|-------|---------|
-| GOAL | the overall task and why it exists - the point beyond the file edit |
-| ROLE | what this agent owns; what it must NOT touch |
-| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
-| CONTEXT | what is already done, by whom, what runs in parallel - trimmed to what THIS agent needs |
-| CONSUMER | who or what uses the result next, and the shape it must fit |
-| DONE | acceptance criteria + the exact report shape you want back |
-
+Every spawn brief carries six labeled fields, since a subagent starts with an empty context: GOAL (task + why), ROLE (owns, must not touch), SCOPE (paths/commands in and out), CONTEXT (done, by whom, in parallel), CONSUMER (who uses the result + its shape), DONE (acceptance + return: verdict first, evidence, bounded; long output to a file, path returned).
 A bare one-line task is never enough.
 
 ---
@@ -287,48 +264,40 @@ Spawn read-only `Explore` agents IN ONE message:
 <!-- BLOCK: ONE fenced bash block re-deriving the per-batch file list (ls / find -name '*.md' | sort / git ls-files), ENDING with a `sort | uniq -d` disjointness assertion over the concatenated batch lists -->
 {ENUMERATION_BASH}
 
-That block is filled per project; no bash for the two requirements below is invented here, and they bind the
-enumeration whatever it contains:
-- RE-RESOLVE the runtime-seat roster's call sites: grep each caller file for the seat name and take the line
-  numbers from TODAY's bytes. A line number in the roster table is a snapshot that rots.
-- ENUMERATE the per-agent memory stores over the WHOLE tree (`find` / `ls`), never a hardcoded roster: a store is
-  born wherever a SESSION ran, so one exists in every directory a session was ever started in, and a store whose
-  agent is gone is still swept. CLASSIFY each LIVE / ORPHAN / UNDECIDED per `references/memory-guide.md` rule 5 and
-  record the EVIDENCE beside the verdict - the EXCLUDED runtime/archived path containing it, or the plausible
-  session root it is. Record each store's INDEX file SEPARATELY from its rows - the index is rewritten LAST,
-  after the sweep has decided what survives.
-- `{REACH}` = `REFS` ONLY: enumerate the cited outside references - for each ALWAYS-LOADED instruction file, the
-  paths it names AND tells its reader to open, keeping only the git-TRACKED ones that sit OUTSIDE the instruction
-  tree. Each one MERGES into the `{FILE_LIST}` of the batch owning its CITING file, with its own `wc -l` baseline,
-  exactly like any other file - so the disjointness assertion below runs over the MERGED lists and an outside
-  reference counts as a batch member. Cited by always-loaded files in TWO batches -> it joins ONLY the batch
-  owning the first citing file in path-sort order; for the other batch it is a foreign file - REPORT findings on
-  it, do not edit a foreign file. At `MEMORY` this list is not built and no outside file enters any `{FILE_LIST}`.
+Whatever that block contains, these bind the enumeration:
+- RE-RESOLVE the runtime-seat roster's call sites: grep each caller file for the seat name; roster line numbers rot,
+  today's bytes decide.
+- ENUMERATE the per-agent memory stores over the WHOLE tree (`find` / `ls`), never a roster: a store is born wherever
+  a SESSION ran, and one whose agent is gone is still swept. CLASSIFY each LIVE / ORPHAN / UNDECIDED per
+  `references/memory-guide.md` rule 5, with the EVIDENCE beside the verdict (the EXCLUDED runtime/archived path
+  containing it, or the session root it is). Record each store's INDEX SEPARATELY from its rows: it is rewritten LAST.
+- `{REACH}` = `REFS` ONLY: per ALWAYS-LOADED instruction file, list the paths it names AND tells its reader to open,
+  keeping the git-TRACKED ones OUTSIDE the instruction tree. Each MERGES into the `{FILE_LIST}` of the batch owning its
+  CITING file, with its own `wc -l` baseline, so the disjointness assertion runs over the MERGED lists. Cited from TWO
+  batches -> it joins ONLY the batch of the first citing file in path-sort order; the other batch REPORTS findings on
+  it, never edits it. At `MEMORY` no outside file enters any `{FILE_LIST}`.
 
-FILTER the result through the EXCLUDED table, with ONE narrow exception: discover and classify per-agent memory
-stores BEFORE applying runtime/archived PARENT exclusions, then retain only those stores' index + rows for the
-rule-5 sweep/salvage. Parent and sibling content stays excluded; no other repository file enters by this exception.
-An explicit exclusion of memory or the store itself, a user-narrowed scope, and every non-negotiable exclusion
-STILL WIN - do not read, sweep or salvage an expressly excluded store.
-Record `wc -l` per file (the non-growth baseline) and FLAG broken
-references - any memory file pointing at a path that no longer exists, INCLUDING refs into docs (resolution check
-only; contents untouched). Assert disjointness: the concatenated per-batch lists piped through `sort | uniq -d`
-MUST be empty; a duplicate is a defect - fix the batch table before Phase 2.
+FILTER the result through the EXCLUDED table, ONE narrow exception: discover and classify per-agent stores BEFORE
+applying runtime/archived PARENT exclusions, then keep only those stores' index + rows for the rule-5 sweep/salvage;
+parent, sibling and any other file stay excluded. An explicit exclusion of memory or the store, a user-narrowed scope and
+every non-negotiable exclusion STILL WIN - never read, sweep or salvage an expressly excluded store.
+Record `wc -l` per file (the non-growth baseline) and FLAG broken references - a memory file pointing at a path that
+no longer exists, INCLUDING refs into docs (resolution only). Assert disjointness: the concatenated per-batch lists
+through `sort | uniq -d` MUST be empty; a duplicate is a defect - fix the batch table before Phase 2.
 
-Phase 1 output: the change-fact list, the per-batch file list as `path:lines` pairs, the broken-ref list, the
-re-resolved seat call sites, each per-agent store as `index + rows` with its LIVE/ORPHAN/UNDECIDED verdict and the
-evidence for it, and at `REFS` the cited-outside-reference list ALREADY MERGED into those batch lists.
+Phase 1 output: the change-fact list, per-batch `path:lines` lists, broken refs, re-resolved seat call sites, each
+per-agent store as `index + rows` with its LIVE/ORPHAN/UNDECIDED verdict and evidence, and at `REFS` the outside
+references ALREADY MERGED into those lists.
 `{FOCUS}` reorders batches; explicit write restrictions remove unauthorized members before dispatch.
 
 ---
 
 ## Phase 2 - SYNC (one bounded agent per batch, ALL in one message)
 
-Spawn ONE subagent PER NON-EMPTY batch, ALL in a SINGLE message. Each gets its own file list, the change-fact
-list, and the prompt contract below VERBATIM - every placeholder substituted. Batch owners come from the roster
-table above; where no project agent owns the surface, use the built-in `general-purpose`. Resolve every owner
-against recursive `find .claude/agents -type f -name '*.md'` BEFORE spawning, matching the actual agent `name:`;
-a name that no longer resolves falls back to `general-purpose`.
+Spawn ONE subagent PER NON-EMPTY batch, ALL in a SINGLE message, each with its file list, the change-fact list and
+the prompt below VERBATIM, every placeholder substituted. Owners come from the roster table; resolve each against
+recursive `find .claude/agents -type f -name '*.md'` (actual `name:`) BEFORE spawning; no project owner, or a name
+that no longer resolves -> built-in `general-purpose`.
 
 ```
 ## memory-sync batch: {BATCH} (scope {SCOPE}, depth {DEPTH})
@@ -397,6 +366,9 @@ HARD constraints:
 - Read-only git only: diff/log/show/ls-files/status/merge-base/symbolic-ref. Never checkout/reset/restore/revert.
 - Never run a build, a test suite or a migration as a side effect.
 - VERIFY-ONLY members of your batch: check that refs RESOLVE; never edit their content.
+- A block delimited by another tool's begin/end markers (e.g. `<!-- BEGIN brewcode:semble -->` ..
+  `<!-- END brewcode:semble -->`) is owned by that setup, which re-creates it on upgrade: never compress, move,
+  dedup or delete it, both marker lines included. Dedup from the other copy; report it as `managed by <setup>`.
 - RUNTIME SEATS: a file of yours that the runtime-seat roster names is edited only after you have read all four
   instruction sources it lists. Quote and REPORT contradictions; never compress a contract line. Return them
   under "runtime_seats".
@@ -493,15 +465,15 @@ DONE - return JSON per file, empty list when clean: {"ok": bool, "violations": [
 <!-- BLOCK: project-specific VERIFY assertions - git-visibility assertion, id-sequence diff, allowed language hits, anything else -->
 {VERIFY_EXTRA}
 
-**Git-visibility caveat - derive it EVERY run: compare `git ls-files -- .claude '*CLAUDE.md' '*AGENTS.md'` against
-the same surface ON DISK as a SET DIFFERENCE ON PATHS, never a count delta (0 tracked rows = git-ignored; any
-on-disk PATH absent from the tracked list = MIXED - the two listings prune differently, so equal totals prove
-nothing); it changes when `.gitignore` does.** Visibility here: {GIT_VISIBILITY}. When the surface is git-IGNORED, `git status` / `git diff`
-can NEVER account for a memory edit: **never flag a memory file's absence from the diff**. Verification is then by
-DIRECT RE-READ of each edited file, and the diff check reduces to PROVING that no source, docs, task-state or
-secrets file changed. **MIXED is handled as IGNORED** - the untracked part is invisible to the diff, so re-read
-every edited file directly and never flag an absence. Only when the surface is fully git-TRACKED does `git diff`
-account for memory edits: assert every edited file appears in it and nothing else does.
+**Git visibility - derive it EVERY run** (it changes with `.gitignore`): compare
+`git ls-files -- .claude '*CLAUDE.md' '*AGENTS.md'` with the same surface ON DISK as a SET DIFFERENCE ON PATHS, never
+a count delta (0 tracked rows = git-ignored; any on-disk PATH absent from the tracked list = MIXED; equal totals
+prove nothing). Visibility at generation: {GIT_VISIBILITY}.
+
+| Visibility | Verification |
+|------------|--------------|
+| git-IGNORED or MIXED | `git status` / `git diff` cannot account for a memory edit: never flag a memory file's absence from the diff. DIRECT RE-READ of each edited file; the diff check only PROVES no source, docs, task-state or secrets file changed |
+| fully git-TRACKED | assert every edited file appears in `git diff` and nothing else does |
 
 Violations -> the coordinator sends targeted fixes back to the responsible batch agent (or fixes a trivial pointer itself), then re-verifies ONLY the fixed files.
 **The report may NOT be emitted until every verdict is ok, or the remaining violations are listed as unresolved.**
@@ -516,15 +488,15 @@ reported as its own row in the Phase-6 delta table:
 
 | Step | Action |
 |------|--------|
-| Re-enumerate | Run the Phase 1 enumeration again and compare it to the batch table and the surface counts above. SUBTRACT this skill's own files (`.claude/skills/memory-sync/**`) before comparing counts: the stamped snapshot was taken before this skill existed, so counting them reports a phantom `+N` drift on every run |
-| Refresh | Update the batch rows, the counts, every fact-catalogue command that no longer matches reality, and the runtime-seat roster - its call-site line numbers rot fastest, so they are re-resolved every run |
+| Re-enumerate | Re-run the Phase 1 enumeration and compare with the batch table and surface counts, after SUBTRACTING this skill's own files (`.claude/skills/memory-sync/**`): the snapshot predates this skill, so counting them reports a phantom `+N` drift every run |
+| Refresh | Update the batch rows, the counts, every fact-catalogue command that no longer matches reality, and the runtime-seat roster's call-site lines (they rot fastest) |
 | Grow a batch | The project gained a memory layer this skill does not cover (a new nested `CLAUDE.md` tree, a new convention dir, a new skills tree) -> ADD the batch or the section - report it; self-sync lines are delta-exempt |
 | Drop a batch | A batch whose files are all gone -> remove the row and say so in the report |
 | Sibling refs | Authorized members of the FOUR references (`memory-guide.md`, `agent-audit.md`, `hard-sync.md`, `prompting-guide.md`) follow the same self-sync; their rosters, patterns and checks also drift |
 
-> **CARVE-OUT:** batch agents may correct facts, but may not change SCOPE DECISIONS without explicit user instruction:
-> the surface, EXCLUDED table, docs exclusion and non-growth directive. The coordinator may add/drop Phase-4 batches
-> within authorized scope; report these changes, whose lines are total-delta-exempt.
+> **CARVE-OUT:** batch agents correct facts but never change SCOPE DECISIONS (surface, EXCLUDED table, docs exclusion,
+> non-growth directive) without explicit user instruction. The coordinator may add/drop Phase-4 batches within
+> authorized scope and reports them; those lines are total-delta-exempt.
 
 ---
 
@@ -569,7 +541,7 @@ Reach:         {REACH} - {N outside references edited | resolution-checked only}
 Proposal:      {new agent/skill + triggers + neighbours | none}
 ```
 
-Total delta MUST be `<= 0`. If it is positive, state it FIRST with a per-line justification - never bury it.
+Total delta MUST be `<= 0`; a positive one is stated FIRST, with per-line justification.
 
 **Nothing changed -> say exactly `memory already in sync for {SCOPE}` and stop.** A run that touched only the root
 CLAUDE.md is incomplete unless the user explicitly restricted writes to it; say which batches were empty or
@@ -579,10 +551,9 @@ excluded and why.
 
 ## Safety (baked into every phase)
 
-The Phase-2 HARD constraints ARE the safety contract - git read-only, secrets, edit surface, no side effects,
-frontmatter, stable ids, non-growth - and they bind the coordinator exactly as they bind a batch agent. Do not
-restate them here. One rule lives only at this level:
+The Phase-2 HARD constraints (git read-only, secrets, edit surface, no side effects, frontmatter, stable ids,
+non-growth) are the safety contract and bind the coordinator exactly as a batch agent. One rule lives only here:
 
 | Rule | Detail |
 |------|--------|
-| Default branch | DERIVE it: `git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null` returns `origin/<name>`, the `{DEFAULT_BRANCH}` fallback is a bare name - both are valid revisions. Never hardcode `main` |
+| Default branch | DERIVE it: `git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null` -> `origin/<name>`, else the bare `{DEFAULT_BRANCH}`; both are valid revisions. Never hardcode `main` |

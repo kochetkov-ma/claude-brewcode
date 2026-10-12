@@ -8,7 +8,7 @@ import { Card, CardGrid, Callout, Steps, UpdateNotice } from '../../../../compon
 # e2e — manage E2E tests
 
 <Callout type="caution">
-  Before using `create`, `update`, `review`, `rules`, or `status` — run `/brewcode:e2e install` first. The skill checks for at least 3 `e2e-*` agents and stops with a clear message if they are missing.
+  Before using `create`, `update`, `review`, or `rules` — run `/brewcode:e2e install` first. The skill checks for at least 3 `e2e-*` agents and stops with a clear message if they are missing. `status` never stops: it reports the gap instead.
 </Callout>
 
 <Callout type="tip">
@@ -20,11 +20,12 @@ import { Card, CardGrid, Callout, Steps, UpdateNotice } from '../../../../compon
 | Field | Value |
 |-------|-------|
 | Command | `/brewcode:e2e` |
-| Arguments | `status \| install \| create [prompt] \| update [prompt] \| review [prompt] \| rules [prompt]` |
-| No-arg default | `status` when 3 or more `e2e-*` agents exist, `install` otherwise |
+| Arguments | `[prompt] [status\|install\|create\|update\|review\|rules]` — one free-form EN/RU prompt; the mode word may sit anywhere in it |
+| No-arg default | `status` when 3 or more `e2e-*` agents exist, `install` otherwise (empty prompt or no mode word) |
 | Rejected verbs | `uninstall`, `purge`, `upgrade`, `enable`, `disable` — exit 1, no fallback to `install` |
+| Mode detection | Prompt goes to `detect-mode.sh -` on stdin; an explicit mode word wins, else EN/RU keywords (`set up`, `add tests`, `sync tests`, `статус`, `создай`, `обнови`, `ревью`, `правила`) are scored |
 | Model | opus |
-| Tools | Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion, Skill, WebSearch, WebFetch |
+| Tools | Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion, Skill, WebSearch, WebFetch |
 | Project rules file | `.claude/e2e/e2e-rules.md` (= `config.rulesPath`) |
 
 ## When to use
@@ -65,14 +66,14 @@ import { Card, CardGrid, Callout, Steps, UpdateNotice } from '../../../../compon
 
 | Mode | What happens |
 |------|-------------|
-| `install` | 3-5 Explore agents analyze the project; `agent-creator` spawns 5 specialized e2e agents in 2 batches; `e2e-architect` + WebSearch + `e2e-reviewer` generate rules; S6 writes `.claude/e2e/e2e-rules.md` and `.claude/e2e/config.json` |
+| `install` | 3-5 Explore agents analyze the project; `agent-creator` spawns 5 specialized e2e agents in 2 batches (after each batch you may opt in to a `text-optimizer` pass over that batch's agent files; it is skipped when `brewtools:text-optimizer` is unavailable); `e2e-architect` + WebSearch + `e2e-reviewer` generate rules; S6 writes `.claude/e2e/e2e-rules.md` and `.claude/e2e/config.json` |
 | `create` | Prerequisite check → define scope (from prompt or AskUser) → `scenario-analyst` writes BDD → 3-round review cycle → user approves → `automation-tester` writes tests → compile smoke check |
 | `update` | Locate existing artifacts → apply changes via the appropriate e2e agent → 3-round review cycle → summary with diff |
 | `review` | Split scope into parts → 3 parallel reviewers per part → quorum (2/3 consensus) → cross-agent re-check of confirmed findings → report with fix proposals |
 | `rules` | Load the live `.claude/e2e/e2e-rules.md` → WebSearch + `e2e-architect` analysis → `e2e-reviewer` validates the diff → rewrite that same file → optional condensed export to `.claude/rules/e2e-conventions.md` |
 | `status` | Read-only: count `e2e-*` agents, show config (stack, framework, paths), artifact counts, freshness — compares the stamped `content_version` against the running skill's `CONTENT_VERSION` (falls back to `version` vs `PLUGIN_VERSION` on a pre-`content_version` install) |
 
-Those six are the entire mode set. `detect-mode.sh` rejects `uninstall`, `purge`, `upgrade`, `enable` and `disable` with `ERROR:e2e has no <verb> mode` and exits 1; any other first word is taken as a free-form prompt for `install`. To remove the setup, delete `.claude/agents/e2e-*.md` and `.claude/e2e/` by hand.
+Those six are the entire mode set. `detect-mode.sh` rejects `uninstall`, `purge`, `upgrade`, `enable` and `disable` with `ERROR:e2e has no <verb> mode` and exits 1. With no mode word at all, the whole text stays the prompt and the mode defaults to `status` when 3 or more `e2e-*` agents exist, otherwise `install`. A tie between modes resolves to `status`, or between two mutating modes to the keyword that comes first. To remove the setup, delete `.claude/agents/e2e-*.md` and `.claude/e2e/` by hand.
 
 ## Rules live in your repo
 
@@ -88,7 +89,7 @@ A generated `.claude/agents/e2e-*.md` is not plugin-owned: `${CLAUDE_PLUGIN_ROOT
   <li>
     <div>
       <strong>Parse arguments</strong>
-      <p><code>detect-mode.sh</code> extracts MODE and optional PROMPT from <code>$ARGUMENTS</code>. An unsupported verb prints <code>ERROR:</code> and exits 1; the skill reports that line verbatim and stops, never falling back to <code>install</code>.</p>
+      <p>The prompt is piped to <code>detect-mode.sh -</code> on stdin through a quoted heredoc, so the shell never parses it. The script extracts MODE and optional PROMPT: an explicit mode word anywhere wins, else EN/RU keywords decide. The skill prints a <code>PLAN</code> block before the first action. An unsupported verb prints <code>ERROR:</code> and exits 1; the skill reports that line verbatim and stops, never falling back to <code>install</code>.</p>
     </div>
   </li>
   <li>
@@ -195,7 +196,7 @@ Every generated agent, plus `config.json` and `e2e-rules.md`, closes with a stan
 | Unsupported verb (`uninstall`, `purge`, `upgrade`, `enable`, `disable`) | `detect-mode.sh` exits 1; report the `ERROR:` line verbatim and stop |
 | `.claude/e2e/e2e-rules.md` missing | Stop — "Run `/brewcode:e2e install` first". Never falls back to the plugin's baseline copy |
 | Agents missing (non-install/status) | Stop — "Run `/brewcode:e2e install` first" |
-| Config missing (non-install) | Stop — "Run `/brewcode:e2e install` first" |
+| Config missing (non-install/status) | Stop — "Run `/brewcode:e2e install` first" |
 | Review cycle limit (3) reached | `AskUserQuestion` with remaining issues |
 | Compilation fails after fix | Report to user, suggest manual intervention |
 | Agent refuses task | Re-assign to colleague, max 2 retries |

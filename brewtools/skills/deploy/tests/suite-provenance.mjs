@@ -117,7 +117,7 @@ async function api(body, env, runPatch = {}, workflowPatch = {}) {
   const github = {
     request: async (route, params) => { requests.push({ route, params }); return { data: {
       status: 'completed', conclusion: 'success', head_sha: SHA, run_attempt: 1,
-      event: 'push', head_repository: { full_name: 'kochetkov-ma/claude-brewcode' }, workflow_id: 9,
+      event: 'push', head_branch: 'v1.2.3', head_repository: { full_name: 'kochetkov-ma/claude-brewcode' }, workflow_id: 9,
       ...runPatch,
     }}; },
     rest: {
@@ -186,7 +186,7 @@ try {
       }, cwd).status, status, label + ': manual tag ' + JSON.stringify(tag));
     }
     check(bash(step(consumer, 'Resolve image tag').run, {
-      EVENT_NAME: 'workflow_run', UPSTREAM_SHA: SHA, UPSTREAM_RUN_ID: '123', UPSTREAM_RUN_ATTEMPT: '1', GITHUB_OUTPUT: output,
+      EVENT_NAME: 'workflow_run', UPSTREAM_SHA: SHA, UPSTREAM_RUN_ID: '123', UPSTREAM_RUN_ATTEMPT: '1', UPSTREAM_REF: 'v1.2.3', GITHUB_OUTPUT: output,
     }, cwd).status, 0, label + ': upstream run selects SHA/run alias');
     // GIVEN producer-shaped labels/metadata WHEN verifying THEN any mismatch fails closed.
     const imageEnv = { REQUEST_TAG: '1.2.3', UPSTREAM_SHA: SHA, UPSTREAM_RUN_ID: '123', UPSTREAM_RUN_ATTEMPT: '1', GITHUB_OUTPUT: output, FIX_INFO: metadataPath };
@@ -209,11 +209,11 @@ try {
       ['other event', { event: 'pull_request' }, {}, 1], ['other workflow', {}, { path: '.github/workflows/release.yml' }, 1],
     ]) {
       check((await api(step(consumer, 'Verify successful source build').with.script,
-        { BUILD_SHA: SHA, BUILD_RUN_ID: '123', BUILD_ATTEMPT: '1' }, runPatch, workflowPatch)).status,
+        { BUILD_SHA: SHA, BUILD_RUN_ID: '123', BUILD_ATTEMPT: '1', BUILD_VERSION: '1.2.3' }, runPatch, workflowPatch)).status,
         expected, label + ': source build ' + name);
     }
     const correlated = await api(step(consumer, 'Verify successful source build').with.script,
-      { BUILD_SHA: SHA, BUILD_RUN_ID: '123', BUILD_ATTEMPT: '1' });
+      { BUILD_SHA: SHA, BUILD_RUN_ID: '123', BUILD_ATTEMPT: '1', BUILD_VERSION: '1.2.3' });
     check(correlated.requests, [{
       route: 'GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}',
       params: { owner: 'kochetkov-ma', repo: 'claude-brewcode', run_id: 123, attempt_number: 1 },
@@ -263,6 +263,29 @@ try {
       GITHUB_OUTPUT: output, GITHUB_REF: 'refs/heads/feature/one', GITHUB_REF_NAME: 'feature$(touch HACKED)', GITHUB_RUN_ID: '123',
     }, cwd).status, 0, label + ': untrusted branch text stays data during sanitization');
     check(existsSync(join(cwd, 'HACKED')), false, label + ': malicious ref/tag input never executes');
+  }
+  // GIVEN the shipped deploy workflow and template WHEN the producing build is not a release tag THEN nothing deploys.
+  for (const [label, , deploy] of pairs) {
+    const gateDir = join(temp, label + '-gate');
+    mkdirSync(gateDir);
+    for (const [ref, status] of [['v1.2.3', 0], ['v1.2.3-rc.1', 0], ['feature/one', 1], ['main', 1], ['', 1]]) {
+      check(bash(step(deploy, 'Resolve image tag').run, {
+        EVENT_NAME: 'workflow_run', UPSTREAM_SHA: SHA, UPSTREAM_RUN_ID: '123', UPSTREAM_RUN_ATTEMPT: '1', UPSTREAM_REF: ref,
+        GITHUB_OUTPUT: join(gateDir, 'output'),
+      }, gateDir).status, status, label + ': upstream ref ' + JSON.stringify(ref));
+    }
+    for (const [name, headBranch, version, expected] of [
+      ['release tag', 'v1.2.3', '1.2.3', 0], ['branch preview', 'feature/one', '1.2.3-feature-one-2', 1],
+      ['tag-named branch', 'v1.2.3', '1.2.3-v1.2.3-2', 1], ['other tag', 'v1.2.4', '1.2.3', 1],
+    ]) {
+      check((await api(step(deploy, 'Verify successful source build').with.script,
+        { BUILD_SHA: SHA, BUILD_RUN_ID: '123', BUILD_ATTEMPT: '1', BUILD_VERSION: version }, { head_branch: headBranch })).status,
+        expected, label + ': source build ' + name);
+    }
+    check(deploy.jobs.deploy.if.includes("startsWith(github.event.workflow_run.head_branch, 'v')"), true,
+      label + ': a branch-triggered upstream run skips the deploy job');
+    check(deploy.jobs.deploy.if.includes("github.event.workflow_run.event == 'push'"), true,
+      label + ': only a push-triggered upstream build deploys');
   }
   console.log('PASS provenance: ' + count + ' assertions; shipped producer/verifiers executed without network');
 } finally {

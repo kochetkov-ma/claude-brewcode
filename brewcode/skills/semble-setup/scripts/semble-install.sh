@@ -1,31 +1,5 @@
 #!/usr/bin/env bash
-# semble-install.sh - prerequisite installer for the brewcode:semble-setup skill.
-#
-# Usage: semble-install.sh <check|uv|coreutils|semble|all> [--yes] [--json] [--tool]
-#
-#   check     nothing mutating; prints the prereq object. Exit 3 if uv/uvx absent.
-#   uv        `brew install uv`. Needs --yes (else exit 4). No brew -> exit 3 and
-#             the manual instruction is PRINTED, never executed.
-#   coreutils `brew install coreutils` -> gtimeout, so sc_timeout bounds its
-#             shell-outs with a real binary instead of the bash watchdog. Soft:
-#             a missing brew or a failed install is a warning, never a failure,
-#             and never changes `all`'s exit code. Skipped when a timeout binary
-#             already exists. Needs --yes when invoked directly.
-#   semble    primes the pinned uvx environment with
-#             `uvx --from 'semble[mcp]==0.5.5' semble --version`.
-#             --tool additionally runs `uv tool install 'semble[mcp]==0.5.5'`.
-#   all       check -> uv -> coreutils -> semble.
-#
-# Default mode is uvx-ephemeral: no `uv tool install`, so no `semble` lands on
-# PATH (a bare `semble` invocation starts a blocking MCP server).
-# Safe probes are exactly those argv in semble's CLI dispatch set. `--version`
-# joined it in 0.5.4 (cli.py:25) and is preferred: same cost as `--help` but it
-# prints the resolved X.Y.Z, so the prime run also proves WHICH build uvx served.
-# The argv is picked from the pin by sc_semble_probe_arg, not tried and fallen
-# back from: on an older SEMBLE_PIN_VERSION override `--version` is unrecognised
-# argv and would start the blocking server, so those pins get `--help` instead.
-#
-# Exit: 0 ok | 1 failed | 2 bad usage | 3 precondition | 4 confirmation needed
+# semble-install.sh - prereq installer for brewcode:semble-setup (modes: usage()); exit 0 ok|1 failed|2 usage|3 precondition|4 confirm
 set -euo pipefail
 SC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/semble-common.sh
@@ -44,7 +18,7 @@ semble-install.sh <check|uv|coreutils|semble|all> [--yes] [--json] [--tool]
 
   --yes    confirm the mutating steps
   --json   emit a single JSON object (schema: DESIGN 9.2)
-  --tool   also `uv tool install 'semble[mcp]==0.5.5'` (requires --yes)
+  --tool   also `uv tool install 'semble[mcp]==0.6.2'` (requires --yes)
   -h/--help
 
 Honours SEMBLE_DRY_RUN=1 (print DRY <cmd>, change nothing) and
@@ -161,9 +135,8 @@ do_uv() {
 # `ok` never outranks anything, so this records a note without escalating.
 note() { raise ok "$1"; }
 
-# $1 = "soft" inside `all`: even the missing --yes stays a note there, because a
-# degraded bound is still a bound (sc_timeout falls back to its bash watchdog)
-# and must not cost `all` its exit 0.
+# $1 = "soft" inside `all`: missing --yes or brew stays a note (sc_timeout falls back to bash watchdog);
+# never costs `all` its exit 0.
 do_coreutils() {
   local soft="${1:-}" brew_path
   if [ "$(sc_timeout_backend)" != "none" ]; then
@@ -215,7 +188,8 @@ do_coreutils() {
   fi
 }
 
-# ── semble ──────────────────────────────────────────────────────────────────
+# ── semble ── uvx-ephemeral (bare `semble` on PATH = blocking MCP server): `uvx --from 'semble[mcp]==0.6.2' semble --version`;
+# --tool adds `uv tool install 'semble[mcp]==0.6.2'`. Probe argv per pin (sc_semble_probe_arg): `--version` >= 0.5.4, else `--help`.
 do_semble() {
   local before_tool
   before_tool="$(sc_semble_tool_version)"
@@ -242,11 +216,8 @@ do_semble() {
     raise precondition "SEMBLE_NO_NETWORK=1 - the pin was not resolved"
     return 0
   fi
-  # Deliberately UNBOUNDED, unlike sc_semble_probe: this is the priming run, and
-  # on a cold uv cache it downloads 52 packages (semble-grammars alone is 6.9 MiB).
-  # A 60 s bound would turn a slow but healthy first install into a hard failure.
-  # Safe to leave unbounded only because probe_arg is dispatch-set argv for THIS
-  # pin — see sc_semble_probe_arg; unrecognised argv would block forever here.
+  # UNBOUNDED priming run: cold cache = 52 packages (semble-grammars 6.9 MiB), a 60 s bound fails healthy installs.
+  # Safe only because probe_arg is dispatch-set argv for THIS pin; unrecognised argv would block forever.
   local got=""
   if got="$(uvx --from "$SEMBLE_PIN_SPEC" semble "$probe_arg" 2>/dev/null)"; then
     SEMBLE_RESOLVABLE="true"
@@ -256,10 +227,8 @@ do_semble() {
       sc_warn "uvx resolved '$SEMBLE_PIN_SPEC' but semble reports '$got', not $SEMBLE_PIN_VERSION" >&2
     fi
   else
-    # semble >=0.5.3 depends on semble-grammars, which ships WHEELS ONLY: macOS
-    # x86_64/arm64, manylinux2014 x86_64/aarch64, win amd64/arm64. No sdist and
-    # no musllinux wheel, so on Alpine there is nothing to install and nothing to
-    # build. Naming it here saves the user a hunt through a pip resolver dump.
+    # semble >=0.5.3 needs semble-grammars, WHEELS ONLY (macOS, manylinux2014, win; no sdist, no musllinux)
+    # -> on Alpine nothing installs; name it instead of a pip resolver dump.
     local musl="" f
     for f in /lib/ld-musl-*.so.1; do [ -e "$f" ] && musl=1 || true; done
     if [ -n "$musl" ]; then
@@ -296,12 +265,8 @@ case "$MODE" in
     ;;
 esac
 
-# `all` runs do_check against the pre-install PATH, and `raise` only escalates,
-# so the provisional "uv/uvx not on PATH" would outlive a successful install and
-# turn the happy path into exit 3. Clear it only once the end state is healthy.
-# Nothing else can leave STATUS=precondition with a resolvable pin: every other
-# precondition (no brew, SEMBLE_NO_NETWORK, uvx absent) returns before the pin
-# is resolved, so dropping the whole note here cannot swallow a second message.
+# `all` checks the pre-install PATH and `raise` only escalates -> clear stale "uv/uvx not on PATH" once healthy.
+# Safe: every other precondition returns before the pin resolves, so no second message is swallowed.
 if [ "$MODE" = "all" ] && [ "$CHECK_RAISED" = "1" ] && [ "$STATUS" = "precondition" ] \
    && [ -n "$(probe_uv)" ] && [ -n "$(probe_uvx)" ] && [ "$SEMBLE_RESOLVABLE" = "true" ]; then
   STATUS="ok"

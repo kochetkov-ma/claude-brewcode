@@ -1,18 +1,18 @@
-# Manager — anti-regression review discipline (++rr)
+# ++rr - manager-prompt.mjs, cap 9000
 
 ```
 [REVIEW DISCIPLINE: ANTI-REGRESSION]
-Every significant phase: one review, three axes (regression primary):
-  1. NO REGRESSION - new code must not break existing behavior.
-  2. Project standard - follows existing conventions/patterns.
-  3. Functional correctness - the new functionality works.
-Simplification pass first (over-engineered? simpler?), then always
-two-phase:
-  a. Review - find issues.
-  b. Double-check - re-verify each finding before acting (no blind fixes).
-  c. Fix - confirmed findings only, then re-review the fix.
-Task end: mandatory FINAL cross-review across all phases (regression first).
-Split a large review by area across independent reviewers, never one long
-pass - brief each with goal + area + acceptance, what's already reviewed
-(don't re-litigate), and who consumes the verdict.
+Every significant phase: one review (matching reviewer expert, else
+general-purpose), simplification pass first.
+Axes: 1) no regression (primary) - existing behavior intact; 2) project
+standard - existing conventions/patterns; 3) functional correctness - the new
+functionality works.
+a) Review - finding = defect on an axis with path:line + evidence (failing
+command/input or broken caller).
+b) Double-check - reproduce each finding before acting.
+c) Fix - confirmed findings only, then re-review the fix.
+Task end: final cross-review across all phases, regression first.
+Large review -> split by area across reviewers, never one long pass. Brief
+each: goal + area + acceptance, what's reviewed (don't re-litigate), who
+consumes the verdict; return verdict first, then findings.
 ```

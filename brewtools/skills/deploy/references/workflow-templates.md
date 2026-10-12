@@ -1,10 +1,8 @@
 # GitHub Actions Workflow Templates
 
-> Based on real workflows from this repository. Replace `{{PLACEHOLDERS}}` with project values.
+> Derived from the claude-brewcode docs pipeline (example values below are its own). Replace `{{PLACEHOLDERS}}` with project values.
 
-## Rules every template here obeys (copy them, not just the YAML)
-
-Consumers extend these files, so an unsafe idiom shipped once is re-typed for years.
+## Rules every template here obeys (copy them, not just the YAML: consumers extend these files)
 
 | # | Rule | Why |
 |---|------|-----|
@@ -13,17 +11,16 @@ Consumers extend these files, so an unsafe idiom shipped once is re-typed for ye
 | 3 | Validate image input syntax and require a bounded semver-derived or `sha-<40hex>-<run-id>-<attempt>` tag; reject aliases. Parse ids as integers | free text and mutable aliases cannot establish provenance |
 | 4 | `permissions:` is declared explicitly and minimally at the top of every workflow | default token scope is far wider than any of these jobs needs |
 | 5 | `pull_request` is allowed (T4 uses it). `pull_request_target` combined with a checkout of the PR head is **forbidden** — it runs fork code with a write token | that pair is the standard fork-PR escalation |
-| 6 | Templates retain their dated exact `@vX.Y.Z` pins; repository workflows may use bounded major action pins. `@main`/`@master`/an unpinned branch is **forbidden**; every image tag is exact, never `:latest` | `~/.claude/rules/avoid.md` #4 — a floating ref changes what runs without a diff |
+| 6 | Templates retain their dated exact `@vX.Y.Z` pins; repository workflows may use bounded major action pins. `@main`/`@master`/an unpinned branch is **forbidden**; every image tag and runner label is exact, never `:latest`/`ubuntu-latest` | a floating ref changes what runs without a diff |
 | 7 | A health/verification step that did not pass ends in `echo "::error::…"; exit 1` — never `::warning::` | a warning leaves the step green, so `if: success()` posts a *successful* deployment for a broken site |
+| 8 | Production deploys only images built from a release tag (`v*.*.*`), gated on served health + version metadata | a branch build that deploys replaces the release on the live site |
 
-> Action versions below were verified at the source repos on 2026-08-16. Re-verify before reuse:
+> Action versions below were verified at the source repos on 2026-10-12. Re-verify before reuse:
 > `curl -s https://api.github.com/repos/<owner>/<repo>/releases/latest | jq -r .tag_name`
 
 ## Template 1: Build + Push to GHCR
 
-> Based on: `docs.yml` -- builds Docker image, pushes to GitHub Container Registry.
-
-**Trigger:** Tag push `v*.*.*` + branch pushes (except main).
+**Trigger:** Tag push `v*.*.*` (release image) + branch pushes except main (preview image, never deployed by Template 2).
 **Key steps:** Checkout, compute tags, Docker Buildx, GHCR login, build+push, summary.
 
 ```yaml
@@ -49,7 +46,7 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository
@@ -83,7 +80,7 @@ jobs:
             "$VERSION" "$SHA" "$GITHUB_RUN_ID" > {{DOCKER_CONTEXT}}/public/build-info.json
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4.2.0
+        uses: docker/setup-buildx-action@v4.4.1
 
       - name: Log in to GHCR
         uses: docker/login-action@v4.6.0
@@ -93,7 +90,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push
-        uses: docker/build-push-action@v7.3.0
+        uses: docker/build-push-action@v7.4.0
         with:
           context: {{DOCKER_CONTEXT}}
           platforms: linux/amd64
@@ -127,11 +124,10 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 ```
 
-> Push the bounded version and SHA/run tags only. Generate `public/build-info.json` during CI,
-> copied unchanged into the static image as `{version,sha,buildRunId}`. Its three fields and OCI
-> labels must agree. SHA/run/attempt tags distinguish reruns; the downstream workflow verifies the successful source run and actual checkout.
-> No floating alias or default is published or deployed. This static-site template assumes the image
-> contains `cat` and `sha256sum`; adapt the artifact probe to the discovered runtime rather than skip it.
+> Push the bounded version and SHA/run/attempt tags only (attempts distinguish reruns); no floating
+> alias or default is published or deployed. CI writes `public/build-info.json` = `{version,sha,buildRunId}`,
+> copied unchanged into the image; its fields and the OCI labels must agree. The image must contain
+> `cat` and `sha256sum`; adapt the artifact probe to the discovered runtime rather than skip it.
 
 **Placeholders:**
 
@@ -147,11 +143,11 @@ jobs:
 
 ## Template 2: Deploy to VPS
 
-> Based on: `deploy-docs.yml` -- deploys via SSH after upstream build completes.
-
-**Trigger:** `workflow_run` (after build) + `workflow_dispatch` (manual).
+**Trigger:** `workflow_run` (after a successful Template 1 run) + `workflow_dispatch` (manual).
 **Key steps:** Validate tag, verify image/run provenance, checkout verified SHA, SCP, SSH deployment,
 verify running digest/labels and served metadata/content, rollback on failure. A healthy old site fails.
+Release-tag images only (rule 8): non-`v` upstream refs skip the job; the source-build check needs the
+producing run's `head_branch` == `v` + image version, so a branch image fails before any server copy.
 
 ```yaml
 name: {{WORKFLOW_NAME}}
@@ -178,10 +174,12 @@ permissions:
   deployments: write
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: >
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       startsWith(github.event.workflow_run.head_branch, 'v') &&
        github.event.workflow_run.head_repository.full_name == github.repository)
     steps:
       - name: Resolve image tag
@@ -192,6 +190,7 @@ jobs:
           UPSTREAM_SHA: ${{ github.event.workflow_run.head_sha }}
           UPSTREAM_RUN_ID: ${{ github.event.workflow_run.id }}
           UPSTREAM_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          UPSTREAM_REF: ${{ github.event.workflow_run.head_branch }}
         run: |
           set -euo pipefail
           if [[ "$EVENT_NAME" == workflow_dispatch ]]; then
@@ -201,6 +200,7 @@ jobs:
             TAG="$INPUT_TAG"
           else
             [[ "$UPSTREAM_SHA" =~ ^[0-9a-f]{40}$ && "$UPSTREAM_RUN_ID" =~ ^[1-9][0-9]*$ && "$UPSTREAM_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]] || { echo "::error::Build provenance validation failed"; exit 1; }
+            [[ "$UPSTREAM_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([._-][A-Za-z0-9._-]+)?$ ]] || { echo "::error::Only a release tag build deploys"; exit 1; }
             TAG="sha-${UPSTREAM_SHA}-${UPSTREAM_RUN_ID}-${UPSTREAM_RUN_ATTEMPT}"
           fi
           printf 'tag=%s\n' "$TAG" >> "$GITHUB_OUTPUT"
@@ -245,6 +245,7 @@ jobs:
           BUILD_SHA: ${{ steps.image.outputs.sha }}
           BUILD_RUN_ID: ${{ steps.image.outputs.build_run_id }}
           BUILD_ATTEMPT: ${{ steps.image.outputs.build_attempt }}
+          BUILD_VERSION: ${{ steps.image.outputs.version }}
         with:
           script: |
             const id = Number(process.env.BUILD_RUN_ID);
@@ -257,6 +258,7 @@ jobs:
             if (run.status !== 'completed' || run.conclusion !== 'success' ||
                 run.head_sha !== process.env.BUILD_SHA || run.run_attempt !== attempt || run.event !== 'push' ||
                 run.head_repository?.full_name !== context.repo.owner + '/' + context.repo.repo ||
+                run.head_branch !== 'v' + process.env.BUILD_VERSION ||
                 workflow.path !== '{{UPSTREAM_WORKFLOW_PATH}}') {
               throw new Error('Image does not match a successful same-repository Docs build');
             }
@@ -438,7 +440,6 @@ jobs:
 | `{{UPSTREAM_WORKFLOW}}` | Build workflow name | `Docs` |
 | `{{HEALTH_CHECK_URL}}` | External health check URL | `https://doc-claude.brewcode.app/getting-started/` |
 | `{{ENVIRONMENT}}` | GitHub environment name | `docs` |
-| `{{SERVICE}}` | Service display name | `docs` |
 | `{{DEPLOY_FILES_SOURCE}}` | Files to SCP | `web/docs/deploy/*` |
 | `{{DEPLOY_SYNC_DIR}}` | Temp dir on VPS | `brewcode-docs-sync` |
 | `{{STRIP_COMPONENTS}}` | SCP strip level | `3` |
@@ -459,8 +460,6 @@ jobs:
 
 ## Template 3: Release
 
-> Based on: `release.yml` -- creates GitHub Release from tag push, extracts changelog.
-
 **Trigger:** Tag push `v*.*.*`
 **Key steps:** Extract changelog from RELEASE-NOTES.md, create GitHub Release.
 
@@ -477,7 +476,7 @@ permissions:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository
@@ -524,7 +523,7 @@ jobs:
           printf '\n---\n\n## Quick Install\n\n```bash\n# Add marketplace\nclaude plugin marketplace add https://github.com/{{OWNER}}/{{REPO}}\n\n# Install plugins\n{{INSTALL_COMMANDS}}\n```\n\n## Already installed? Update\n\n```bash\nclaude plugin marketplace update {{REPO}}\n{{UPDATE_COMMANDS}}\n```\n' >> /tmp/release-body.md
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3.0.2
+        uses: softprops/action-gh-release@v3.0.3
         with:
           tag_name: ${{ steps.changelog.outputs.tag }}
           name: ${{ steps.changelog.outputs.tag }}
@@ -546,15 +545,12 @@ jobs:
 
 ## Template 4: Security Scan
 
-> Generic template for dependency/code scanning.
-
 **Trigger:** Push to main + PRs + weekly schedule.
 **Key steps:** Checkout, run scanner, upload SARIF, summary.
 
-> This is the one template with a **fork-reachable** trigger (`pull_request`), so it is also the one
-> that must never grow a `${{ }}`-in-`run:` sink. `pull_request` checks out the MERGE ref with a
-> read-only token — safe. Switching it to `pull_request_target` would run fork code with a write
-> token and is forbidden here. `permissions:` stays exactly `contents: read` + `security-events: write`.
+> The one fork-reachable template (`pull_request`: MERGE ref, read-only token), so it must never grow
+> a `${{ }}`-in-`run:` sink or switch to `pull_request_target` (rule 5). `permissions:` stays exactly
+> `contents: read` + `security-events: write`.
 
 ```yaml
 name: Security Scan
@@ -577,7 +573,7 @@ concurrency:
 
 jobs:
   scan:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository
@@ -590,7 +586,7 @@ jobs:
 
       - name: Upload SARIF
         if: always()
-        uses: github/codeql-action/upload-sarif@v3.37.7
+        uses: github/codeql-action/upload-sarif@v4.38.3
         with:
           sarif_file: {{SARIF_PATH}}
 

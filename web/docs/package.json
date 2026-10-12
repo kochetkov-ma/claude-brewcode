@@ -9,19 +9,19 @@
     "check": "astro check"
   },
   "dependencies": {
-    "@astrojs/mdx": "^4.0.0",
-    "@astrojs/sitemap": "^3.2.0",
-    "@astrojs/tailwind": "^6.0.0",
-    "@shikijs/transformers": "^3.0.0",
-    "@tailwindcss/typography": "^0.5.15",
-    "astro": "^5.1.0",
-    "astro-pagefind": "^1.8.5",
-    "daisyui": "^4.0.0",
-    "rehype-external-links": "^3.0.0",
-    "tailwindcss": "^3.4.0"
+    "@astrojs/mdx": "4.3.14",
+    "@astrojs/sitemap": "3.7.1",
+    "@astrojs/tailwind": "6.0.2",
+    "@shikijs/transformers": "3.23.0",
+    "@tailwindcss/typography": "0.5.19",
+    "astro": "5.18.1",
+    "astro-pagefind": "1.8.5",
+    "daisyui": "4.12.24",
+    "rehype-external-links": "3.0.0",
+    "tailwindcss": "3.4.19"
   },
   "devDependencies": {
-    "@astrojs/check": "^0.9.7",
-    "typescript": "^5.9.3"
+    "@astrojs/check": "0.9.7",
+    "typescript": "5.9.3"
   }
 }

@@ -1,18 +1,13 @@
 #!/usr/bin/env node
-/**
- * E2E suite for the manager HARD wall guard (brewtools/hooks/hardmode-guard.mjs).
- * Focus: main-session vs subagent discrimination.
- * State is driven through an isolated temp project passed as `cwd` on stdin —
- * this repo's .claude/ is never read or written and no real wall is ever armed.
- * Assertion policy: every check is an unconditional exact deep-equality
- * comparison with a description; no branching gates which asserts run.
- */
+// E2E: HARD wall guard (hooks/hardmode-guard.mjs), codeword hook (hooks/manager-prompt.mjs), armed-wall notice (hooks/session-start.mjs).
+// State lives in an isolated temp project passed as `cwd` on stdin; this repo's .claude/ never touched, no real wall armed.
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, chmodSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync, chmodSync, rmSync, realpathSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseCliArgs } from '../../../hooks/lib/manager-state.mjs';
+import { resolvePrompt, VALID_MODES } from '../../../hooks/lib/manager-prompts.mjs';
 
 const HERE = join(fileURLToPath(import.meta.url), '..');
 const GUARD_MJS = join(HERE, '..', '..', '..', 'hooks', 'hardmode-guard.mjs');
@@ -55,22 +50,22 @@ function safeParse(str) {
   }
 }
 
-/**
- * Runs the guard with CLAUDE_PROJECT_DIR scrubbed unless a test sets it explicitly —
- * otherwise the ambient value of whoever runs the suite would resolve the project root
- * away from the temp fixture.
- */
-function runGuard(stdinStr, projectDir) {
+// CLAUDE_PROJECT_DIR scrubbed unless a test sets it: ambient value would move project root off the temp fixture.
+function runGuardRaw(stdinStr, nodeArgs = [], projectDir) {
   const env = { ...process.env };
   delete env.CLAUDE_PROJECT_DIR;
   if (projectDir) env.CLAUDE_PROJECT_DIR = projectDir;
-  const r = spawnSync(process.execPath, [GUARD_MJS], {
+  const r = spawnSync(process.execPath, [...nodeArgs, GUARD_MJS], {
     input: stdinStr,
     encoding: 'utf8',
     timeout: 8000,
     env,
   });
-  return safeParse(r.stdout || '');
+  return { status: r.status, stdout: r.stdout, stderr: r.stderr };
+}
+
+function runGuard(stdinStr, projectDir) {
+  return safeParse(runGuardRaw(stdinStr, [], projectDir).stdout || '');
 }
 
 /** Isolated project whose state.json arms/disarms the wall for one scenario. */
@@ -82,7 +77,8 @@ function makeProject(name, state) {
 }
 
 const PASS_THROUGH = {};
-const EXIT_HINT = 'Manager HARD wall is ON — delegate via Task/Agent. To exit run `/brewtools:manager-setup disable`; the only Bash it needs — `node <project>/.claude/brewtools/manager/manager-state.mjs set hard=false` — is self-exempt at every level.';
+const EXIT_HINT = 'Manager mode keeps the main context for orchestration, so pass this step to a subagent with the Agent tool: subagents are not restricted, and reading, search and task tracking still work here. The wall comes off only when the user asks: `/brewtools:manager-setup disable`, whose bare `node <project>/.claude/brewtools/manager/manager-state.mjs set hard=false` is the one Bash command allowed at every level.';
+const READONLY_HINT = 'ls, cat, head, tail, rg, grep, find, jq, git status|log|diff|show, gh <group> view|list; no redirection, no $(...)';
 
 function denial(reason) {
   return {
@@ -94,16 +90,12 @@ function denial(reason) {
   };
 }
 
-const WRITE_DENIAL = denial('Hard wall: Write is blocked in the main session — delegate to a subagent.');
-const BASH_DENIAL = denial('Hard wall (balanced): only read-only Bash is allowed in the main session — delegate execution to a subagent.');
-const STRICT_BASH_DENIAL = denial('Hard wall (strict): Bash is blocked in the main session — delegate execution to a subagent.');
+const WRITE_DENIAL = denial('Hard wall: Write is blocked in the main session.');
+const BASH_DENIAL = denial(`Hard wall (balanced): the main session runs only read-only Bash commands (${READONLY_HINT}), and this one is not provably read-only.`);
+const STRICT_BASH_DENIAL = denial('Hard wall (strict): Bash is blocked in the main session.');
 const PARSE_DENIAL = denial('Hard wall: the guard could not parse its PreToolUse payload and denies by default.');
-/**
- * Reduce a guard response to its BEHAVIOUR: 'allow' | 'deny'. MCP checks assert this rather
- * than the deny TEXT — a reworded message must never look like a regression, and (worse)
- * must never be the only thing a "regression guard" was ever detecting. One dedicated check
- * (67) still asserts what the deny message tells the user.
- */
+// Guard response -> BEHAVIOUR 'allow' | 'deny': MCP checks assert this, not deny TEXT (rewording != regression);
+// check 67 alone asserts the deny message.
 function verdict(res) {
   if (deepEqual(res, PASS_THROUGH)) return 'allow';
   const d = res && res.hookSpecificOutput && res.hookSpecificOutput.permissionDecision;
@@ -161,9 +153,7 @@ check(
 );
 
 // GIVEN an armed wall, WHEN agent_type is present without agent_id, THEN the call is DENIED.
-// REGRESSION: CC 2.1.228 sets agent_type on the MAIN thread of a `claude --agent <name>`
-// session (no agent_id). Treating agent_type as a subagent discriminator silently
-// disarmed the wall for every such session — agent_id is the SOLE discriminator.
+// REGRESSION: CC 2.1.228 sets agent_type on MAIN thread of `claude --agent <name>`; agent_id is the SOLE discriminator.
 check(
   '02-regression-agent-type-only-main-session-is-walled',
   runGuard(stdin(ARMED, { agent_type: 'reviewer' })),
@@ -206,9 +196,8 @@ check(
   'hard=false must no-op regardless of agent keys',
 );
 
-// GIVEN no manager directory at all, WHEN a main session writes, THEN the wall is not
-// installed in that project and the guard no-ops. This is the ONE remaining pass-through
-// for an unreadable wall state — see 38/39 for the fail-closed case.
+// GIVEN no manager directory, WHEN a main session writes, THEN wall not installed and guard no-ops.
+// The ONE pass-through for an unreadable wall state; fail-closed case: 38/39.
 check(
   '07-manager-never-installed-is-unarmed',
   runGuard(stdin(join(BASE, 'no-such-project'), {})),
@@ -217,8 +206,7 @@ check(
 );
 
 // GIVEN malformed stdin, WHEN the guard runs, THEN it fails CLOSED.
-// REGRESSION (BT-F01): an unparseable payload leaves the agent_id discriminator unknown,
-// so allowing would open the wall on exactly the input the guard cannot reason about.
+// REGRESSION (BT-F01): unparseable payload -> agent_id unknown; allowing would open the wall on it.
 check(
   '08-malformed-stdin-fails-closed',
   runGuard('{not json'),
@@ -309,9 +297,7 @@ check(
 );
 
 // ---- vet-body coverage — the git/gh/find vetters, DENY side ---------------------------
-// REGRESSION: the vector-C cluster above tested the WRAPPER cases only and never entered a
-// vetter body, which is exactly how these three bypasses shipped. Each command line below was
-// reproduced as ALLOWED through the real hook before the fix.
+// REGRESSION: vector-C tested WRAPPER cases only; each line below was ALLOWED through the real hook pre-fix.
 
 function bash(cmd) {
   return runGuard(stdin(ARMED, { tool_name: 'Bash', tool_input: { command: cmd } }));
@@ -388,8 +374,7 @@ check(
 );
 
 // ---- vet-body coverage — the ALLOW side, equally load-bearing --------------------------
-// A guard that denies everything is not a guard. These are the legitimate reads that must
-// survive the tightened vetters.
+// Legitimate reads that must survive the tightened vetters.
 
 check(
   '29-git-branch-list-still-allowed',
@@ -482,8 +467,7 @@ check(
 );
 
 // ---- BT-F16 — uninstall ordering, run against the block SHIPPED in SKILL.md -------------
-// The step-2 node program is extracted verbatim from the skill, so a regression in the
-// documented block fails here instead of on a user's machine.
+// Step-2 node program extracted verbatim from the skill: a documented-block regression fails here.
 
 const SKILL_MD = join(HERE, '..', 'SKILL.md');
 const NODE_E = 'node --input-type=module -e "';
@@ -508,7 +492,7 @@ function makeInstalledProject(name) {
     hooks: {
       PreToolUse: [{
         matcher: '*',
-        hooks: [{ type: 'command', command: `node "${join(mdir, 'hardmode-guard.mjs')}" # brewtools-manager-guard`, timeout: 5 }],
+        hooks: [{ type: 'command', command: `node "${join(mdir, 'hardmode-guard.mjs')}" # brewtools-manager-guard`, timeout: 5, onFailure: 'block' }],
       }],
     },
   }, null, 2));
@@ -572,11 +556,226 @@ check(
   'a failed delete must roll the settings entry back — never leave a half-guarded project',
 );
 
+// REGRESSION: global purge deleted only full.md; the other modes' overrides kept changing the codewords.
+function runPurge(proj, scope, cfg) {
+  const md = readFileSync(SKILL_MD, 'utf8');
+  const from = md.indexOf(NODE_E, md.indexOf('### purge'));
+  const body = md.slice(from + NODE_E.length, md.indexOf('\n"', from))
+    .split('${BT_ROOT}').join(join(HERE, '..', '..', '..'))
+    .split("'${ROOT}'").join(JSON.stringify(proj)).split("'SCOPE'").join(JSON.stringify(scope));
+  const file = join(BASE, `purge-${scope}.mjs`);
+  writeFileSync(file, body);
+  const r = spawnSync(process.execPath, [file], { encoding: 'utf8', timeout: 8000, env: { ...process.env, CLAUDE_CONFIG_DIR: cfg } });
+  return { code: r.status, out: safeParse(r.stdout || '') };
+}
+const P_CFG = join(BASE, 'purge-cfg');
+const P_PDIR = join(P_CFG, 'manager', 'prompts');
+mkdirSync(P_PDIR, { recursive: true });
+for (const m of [...VALID_MODES, 'notes']) writeFileSync(join(P_PDIR, `${m}.md`), `OVERRIDE ${m}`);
+const pProject = runPurge(makeProject('purge-project', {}), 'project', P_CFG);
+const pGlobal = runPurge(makeProject('purge-global', {}), 'global', P_CFG);
+check(
+  '44a-purge-global-removes-every-mode-override-and-keeps-foreign-files',
+  { projectCode: pProject.code, projectGlobal: pProject.out.globalPrompts, code: pGlobal.code,
+    removed: pGlobal.out.globalPrompts, kept: pGlobal.out.globalKept, left: readdirSync(P_PDIR) },
+  { projectCode: 0, projectGlobal: [], code: 0,
+    removed: [...VALID_MODES].map(m => join(P_PDIR, `${m}.md`)), kept: ['notes.md'], left: ['notes.md'] },
+  'global purge deletes the override of each VALID_MODES mode, never an unknown file; project scope leaves global alone',
+);
+
+// REGRESSION: uninstall + purge left `.claude/settings.local.json` = {} and `.claude/` in a project that had neither.
+function onlyGuardSettings(proj, extra) {
+  const file = join(proj, '.claude', 'settings.local.json');
+  const { hooks } = JSON.parse(readFileSync(file, 'utf8'));
+  writeFileSync(file, JSON.stringify({ hooks, ...extra }));
+  return file;
+}
+const E1 = makeInstalledProject('empty-after-uninstall');
+onlyGuardSettings(E1, {});
+const e1 = runUninstall(E1, 'empty');
+const E2 = makeInstalledProject('empty-after-purge');
+writeFileSync(join(E2, '.claude', 'brewtools', 'manager', 'state.json'), JSON.stringify({ hard: false, level: 'balanced', todoToolsAdded: true }));
+const e2settings = onlyGuardSettings(E2, { env: { CLAUDE_CODE_ENABLE_TODO_TOOLS: '1' } });
+const e2u = runUninstall(E2, 'purge-prep');
+const e2prepLeft = existsSync(e2settings);
+const e2 = runPurge(E2, 'project', P_CFG);
+check(
+  '44b-uninstall-and-purge-delete-what-they-emptied',
+  { uninstallCode: e1.code, uninstallSettingsLeft: existsSync(join(E1, '.claude', 'settings.local.json')),
+    prepCode: e2u.code, prepSettingsLeft: e2prepLeft,
+    purgeCode: e2.code, settingsRemoved: e2.out.settingsRemoved, todoKeyRemoved: e2.out.todoKeyRemoved, claudeDirLeft: existsSync(join(E2, '.claude')) },
+  { uninstallCode: 0, uninstallSettingsLeft: false,
+    prepCode: 0, prepSettingsLeft: true,
+    purgeCode: 0, settingsRemoved: true, todoKeyRemoved: true, claudeDirLeft: false },
+  'a settings file left {} is deleted, not rewritten; purge then removes the empty .claude/',
+);
+
+// REGRESSION: the root recipe tried unbraced $CLAUDE_PROJECT_DIR (unset in the Bash tool) -> git
+// toplevel, so a session started in a subdirectory got its wall written where settings never load.
+const md45 = readFileSync(SKILL_MD, 'utf8');
+const RECIPE = 'ROOT="${CLAUDE_PROJECT_DIR}"\n[ -d "$ROOT" ] || ROOT=$(git rev-parse --show-toplevel 2>/dev/null)\n';
+const R_REPO = join(BASE, 'root-repo');
+mkdirSync(join(R_REPO, 'sub'), { recursive: true });
+spawnSync('git', ['init', '-q', R_REPO]);
+function runRecipe(text, cwd) {
+  const file = join(BASE, `recipe-${passed + failed}.sh`);
+  writeFileSync(file, `${text}printf %s "$ROOT"\n`);
+  const env = { ...process.env }; delete env.CLAUDE_PROJECT_DIR;
+  return spawnSync('bash', [file], { cwd, env, encoding: 'utf8' }).stdout;
+}
+check(
+  '44c-root-recipe-is-the-session-project-dir',
+  { recipes: md45.split(RECIPE).length - 1, rootLines: (md45.match(/^ROOT=/gm) || []).length, unbraced: md45.includes('$CLAUDE_PROJECT_DIR'),
+    substituted: runRecipe(RECIPE.split('${CLAUDE_PROJECT_DIR}').join(join(R_REPO, 'sub')), R_REPO),
+    literal: runRecipe(RECIPE, join(R_REPO, 'sub')) },
+  { recipes: 7, rootLines: 7, unbraced: false,
+    substituted: join(R_REPO, 'sub'),
+    literal: realpathSync(R_REPO) },
+  'every block resolves ROOT from the load-time session dir, git toplevel only when the token stays literal',
+);
+
+// REGRESSION: install/upgrade overwrote an explicit local "0" with "1"; status read "0" as on and
+// skipped a layer set to "". Rule = setup-status Phase 1c: highest layer carrying the key decides, by value.
+const BT_DIR = join(HERE, '..', '..', '..');
+function runShipped(heading, proj, { local, project, user, env, arm } = {}) {
+  const cfg = mkdtempSync(join(BASE, 'todo-cfg-'));
+  const put = (file, body) => { if (body !== undefined) { mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, JSON.stringify(body)); } };
+  put(join(proj, '.claude', 'settings.local.json'), local);
+  put(join(proj, '.claude', 'settings.json'), project);
+  put(join(cfg, 'settings.json'), user);
+  const md = readFileSync(SKILL_MD, 'utf8');
+  const from = md.indexOf(NODE_E, md.indexOf(heading));
+  const body = md.slice(from + NODE_E.length, md.indexOf('\n"', from))
+    .split('${BT_ROOT}').join(BT_DIR).split("'${ROOT}'").join(JSON.stringify(proj))
+    .split("'${CCVER}'").join("'2.1.296'").split("'${ARM}'").join(arm ? "'true'" : "'false'")
+    .replace(/\\([$`"\\])/g, '$1');
+  const file = join(BASE, `todo-${passed + failed}-${proj.split('/').pop()}.mjs`);
+  writeFileSync(file, body);
+  const runEnv = { ...process.env, CLAUDE_CONFIG_DIR: cfg };
+  delete runEnv.CLAUDE_CODE_ENABLE_TODO_TOOLS;
+  if (env !== undefined) runEnv.CLAUDE_CODE_ENABLE_TODO_TOOLS = env;
+  const r = spawnSync(process.execPath, [file], { encoding: 'utf8', timeout: 8000, env: runEnv });
+  const after = safeParse(existsSync(join(proj, '.claude', 'settings.local.json')) ? readFileSync(join(proj, '.claude', 'settings.local.json'), 'utf8') : '{}');
+  const stateFile = join(proj, '.claude', 'brewtools', 'manager', 'state.json');
+  const state = existsSync(stateFile) ? safeParse(readFileSync(stateFile, 'utf8')) : {};
+  return { code: r.status, out: safeParse(r.stdout || ''), localKey: after.env ? after.env.CLAUDE_CODE_ENABLE_TODO_TOOLS : undefined, added: state.todoToolsAdded,
+    stderr: r.stderr || '', lockLeft: existsSync(join(proj, '.claude', 'settings.local.json.lock')) };
+}
+const todoInstall = (name, layers) => {
+  const r = runShipped('### install', join(BASE, `todo-install-${name}`), layers);
+  return { code: r.code, todoTools: r.out.todoTools, localKey: r.localKey ?? 'absent', added: r.added ?? 'absent' };
+};
+check(
+  '44d-install-respects-an-explicit-off-and-adds-only-when-absent-everywhere',
+  { localZero: todoInstall('local-zero', { local: { env: { CLAUDE_CODE_ENABLE_TODO_TOOLS: '0' } }, user: { env: { CLAUDE_CODE_ENABLE_TODO_TOOLS: '1' } } }),
+    projectEmpty: todoInstall('project-empty', { project: { env: { CLAUDE_CODE_ENABLE_TODO_TOOLS: '' } } }),
+    userTrue: todoInstall('user-true', { user: { env: { CLAUDE_CODE_ENABLE_TODO_TOOLS: 'true' } } }),
+    nowhere: todoInstall('nowhere', { env: '0' }) },
+  { localZero: { code: 0, todoTools: 'kept off — .claude/settings.local.json sets CLAUDE_CODE_ENABLE_TODO_TOOLS="0", left as is', localKey: '0', added: 'absent' },
+    projectEmpty: { code: 0, todoTools: 'kept off — .claude/settings.json sets CLAUDE_CODE_ENABLE_TODO_TOOLS="", left as is', localKey: 'absent', added: 'absent' },
+    userTrue: { code: 0, todoTools: 'already on — user settings.json sets CLAUDE_CODE_ENABLE_TODO_TOOLS="true", left as is', localKey: 'absent', added: 'absent' },
+    nowhere: { code: 0, todoTools: 'enabled (CC 2.1.296)', localKey: '1', added: true } },
+  'a set key is never overwritten ("0" and "" are opt-outs); "1" + provenance only when no settings layer sets it (a shell export loses to settings)',
+);
+
+const todoUpgrade = (name, env) => {
+  const proj = makeInstalledProject(`todo-upgrade-${name}`);
+  const file = join(proj, '.claude', 'settings.local.json');
+  writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, 'utf8')), ...(env ? { env } : {}) }));
+  const r = runShipped('### upgrade', proj);
+  return { code: r.code, todoTools: r.out.todoTools, localKey: r.localKey ?? 'absent', added: r.added ?? 'absent' };
+};
+check(
+  '44e-upgrade-keeps-a-local-off-and-backfills-a-missing-key',
+  { localZero: todoUpgrade('local-zero', { CLAUDE_CODE_ENABLE_TODO_TOOLS: '0' }), missing: todoUpgrade('missing') },
+  { localZero: { code: 0, todoTools: 'kept off — .claude/settings.local.json sets CLAUDE_CODE_ENABLE_TODO_TOOLS="0", left as is', localKey: '0', added: 'absent' },
+    missing: { code: 0, todoTools: 'enabled (CC 2.1.296)', localKey: '1', added: true } },
+  'upgrade follows the install rule: explicit "0" stays, absent key gets "1" with todoToolsAdded',
+);
+
+const todoStatus = (name, layers) => {
+  const r = runShipped('### status', join(BASE, `todo-status-${name}`), layers);
+  return { code: r.code, layer: r.out.todoToolsLayer, value: r.out.todoToolsValue, on: r.out.todoToolsOn };
+};
+check(
+  '44f-status-highest-layer-decides-by-value',
+  { localEmpty: todoStatus('local-empty', { local: { env: { CLAUDE_CODE_ENABLE_TODO_TOOLS: '' } }, project: { env: { CLAUDE_CODE_ENABLE_TODO_TOOLS: '1' } } }),
+    localZero: todoStatus('local-zero', { local: { env: { CLAUDE_CODE_ENABLE_TODO_TOOLS: '0' } }, user: { env: { CLAUDE_CODE_ENABLE_TODO_TOOLS: '1' } } }),
+    projectTrue: todoStatus('project-true', { project: { env: { CLAUDE_CODE_ENABLE_TODO_TOOLS: 'TRUE' } } }),
+    userZeroOverEnv: todoStatus('user-zero', { user: { env: { CLAUDE_CODE_ENABLE_TODO_TOOLS: '0' } }, env: '1' }),
+    envOnly: todoStatus('env-only', { env: 'yes' }),
+    nowhere: todoStatus('nowhere', {}) },
+  { localEmpty: { code: 0, layer: '.claude/settings.local.json', value: '', on: false },
+    localZero: { code: 0, layer: '.claude/settings.local.json', value: '0', on: false },
+    projectTrue: { code: 0, layer: '.claude/settings.json', value: 'TRUE', on: true },
+    userZeroOverEnv: { code: 0, layer: 'user settings.json', value: '0', on: false },
+    envOnly: { code: 0, layer: null, value: 'yes', on: true },
+    nowhere: { code: 0, layer: null, value: null, on: false } },
+  'an "" layer stops the lookup, "0" is off, true/yes are on case-insensitively, settings beat the shell export',
+);
+
+// REGRESSION (M1): process.exit inside the locked try skips finally; the lock leaked and the next
+// manager command within 30 s aborted with a false "held by another setup skill".
+const LK_NONE = join(BASE, 'lock-upgrade-uninstalled');
+mkdirSync(LK_NONE, { recursive: true });
+const lkNone = runShipped('### upgrade', LK_NONE);
+const lkNext = runShipped('### install', LK_NONE);
+const LK_BAD = makeInstalledProject('lock-upgrade-invalid-json');
+const BAD_JSON = '{ not json';
+writeFileSync(join(LK_BAD, '.claude', 'settings.local.json'), BAD_JSON);
+let badJsonMsg = '';
+try { JSON.parse(BAD_JSON); } catch (e) { badJsonMsg = e.message; }
+const lkBad = runShipped('### upgrade', LK_BAD);
+const LK_THROW = makeInstalledProject('lock-upgrade-throws');
+chmodSync(join(LK_THROW, '.claude', 'brewtools', 'manager', 'hardmode-guard.mjs'), 0o400);
+const lkThrow = runShipped('### upgrade', LK_THROW);
+chmodSync(join(LK_THROW, '.claude', 'brewtools', 'manager', 'hardmode-guard.mjs'), 0o600);
+const lkThrowNext = runShipped('### upgrade', LK_THROW);
+check(
+  '44g-an-aborted-or-throwing-upgrade-releases-the-settings-lock',
+  { none: { code: lkNone.code, stderr: lkNone.stderr, lockLeft: lkNone.lockLeft },
+    next: { code: lkNext.code, stderr: lkNext.stderr, lockLeft: lkNext.lockLeft, armed: lkNext.out.armed },
+    bad: { code: lkBad.code, stderr: lkBad.stderr, lockLeft: lkBad.lockLeft },
+    thrown: { code: lkThrow.code, lockLeft: lkThrow.lockLeft },
+    thrownNext: { code: lkThrowNext.code, stderr: lkThrowNext.stderr, lockLeft: lkThrowNext.lockLeft } },
+  { none: { code: 1, stderr: 'ABORT: the wall is not installed in this project — run install instead\n', lockLeft: false },
+    next: { code: 0, stderr: '', lockLeft: false, armed: false },
+    bad: { code: 1, stderr: `ABORT: ${join(LK_BAD, '.claude', 'settings.local.json')} unreadable or invalid JSON (${badJsonMsg}) — fix it by hand; nothing was written\n`, lockLeft: false },
+    thrown: { code: 1, lockLeft: false },
+    thrownNext: { code: 0, stderr: '', lockLeft: false } },
+  'every exit path frees settings.local.json.lock, so the next command never reports "held by another setup skill"',
+);
+
+// REGRESSION (m1): install armed state.json and copied the guard BEFORE the steps that could abort.
+const fileSet = proj => ['state.json', 'hardmode-guard.mjs', 'manager-state.mjs']
+  .filter(f => existsSync(join(proj, '.claude', 'brewtools', 'manager', f)));
+const AR_BAD = join(BASE, 'arm-last-invalid-json');
+mkdirSync(join(AR_BAD, '.claude'), { recursive: true });
+writeFileSync(join(AR_BAD, '.claude', 'settings.local.json'), BAD_JSON);
+const arBad = runShipped('### install', AR_BAD, { arm: true });
+const AR_W = join(BASE, 'arm-last-write-fails');
+const arTmp = join(AR_W, '.claude', 'settings.local.json.tmp');
+mkdirSync(arTmp, { recursive: true });
+const arW = runShipped('### install', AR_W, { arm: true });
+const arWFiles = fileSet(AR_W);
+const arWDir = existsSync(join(AR_W, '.claude', 'brewtools'));
+rmSync(arTmp, { recursive: true });
+const arOk = runShipped('### install', AR_W, { arm: true });
+const arOkFile = join(AR_W, '.claude', 'brewtools', 'manager', 'state.json');
+const arOkState = existsSync(arOkFile) ? safeParse(readFileSync(arOkFile, 'utf8')) : {};
+check(
+  '44h-install-arms-last-and-leaves-nothing-behind-on-failure',
+  { bad: { code: arBad.code, stderr: arBad.stderr, lockLeft: arBad.lockLeft, files: fileSet(AR_BAD), managerDir: existsSync(join(AR_BAD, '.claude', 'brewtools')) },
+    write: { code: arW.code, stderr: arW.stderr, lockLeft: arW.lockLeft, files: arWFiles, managerDir: arWDir },
+    ok: { code: arOk.code, armed: arOk.out.armed, newlyRegistered: arOk.out.newlyRegistered, hard: arOkState.hard, files: fileSet(AR_W) } },
+  { bad: { code: 1, stderr: `ABORT: ${join(AR_BAD, '.claude', 'settings.local.json')} unreadable or invalid JSON (${badJsonMsg}) — fix it by hand; nothing was written\n`, lockLeft: false, files: [], managerDir: false },
+    write: { code: 1, stderr: `ABORT: install failed (EISDIR: illegal operation on a directory, open '${arTmp}') — removed the files this run created; the wall is not armed\n`, lockLeft: false, files: [], managerDir: false },
+    ok: { code: 0, armed: true, newlyRegistered: true, hard: true, files: ['state.json', 'hardmode-guard.mjs', 'manager-state.mjs'] } },
+  'a failed install writes no hard:true and no guard copies; the same install succeeds and arms once the fault is gone',
+);
+
 // ---- BT-V2-H01 — MCP token classification is default-deny ------------------------------
-// REGRESSION: classification was a read-verb regex minus a write-verb denylist, both
-// unanchored. `search_and_replace` matched `search`, hit no denylisted word and was ALLOWED
-// at balanced. Every name below was reproduced as a pass-through through the real hook
-// before the fix. The rule is now per-token: an unknown token denies on its own.
+// REGRESSION: unanchored read-regex minus write-denylist ALLOWED `search_and_replace` at balanced; now per-token, unknown denies.
 
 function mcp(tool, proj = ARMED) {
   return verdict(runGuard(stdin(proj, { tool_name: tool, tool_input: {} })));
@@ -605,7 +804,7 @@ check(
   '54-strict-denies-readonly-mcp',
   mcp('mcp__github__get_file', STRICT),
   'deny',
-  'strict means no MCP at all, however read-only the name looks',
+  'strict denies MCP however read-only the name looks (sole exception: check 73)',
 );
 
 check(
@@ -617,9 +816,8 @@ check(
 
 // ---- the mcpAllow escape hatch ---------------------------------------------------------
 
-// The list deliberately carries a THIRD, malformed entry: `mcp__*` is not a scoped name and
-// is rejected by manager-state.mjs, but the guard's runtime filter used to be a bare
-// `startsWith('mcp__')` (BT-V2-M03) and honoured it as a global wildcard.
+// THIRD entry `mcp__*` is malformed (rejected by manager-state.mjs); old bare `startsWith('mcp__')`
+// filter (BT-V2-M03) honoured it as a global wildcard.
 const MCP_ALLOW = makeProject('mcp-allow', {
   hard: true,
   level: 'balanced',
@@ -678,9 +876,7 @@ check(
 );
 
 // ---- BT-V2-M01/M02 — ordinary read tools vs ambiguous verbs ----------------------------
-// REGRESSION (M01): default-deny classification denied every read tool whose OBJECT noun was
-// not in the safe set — all seven below were allowed before the classifier landed and were
-// denied by it. Breaking ordinary reads is the one cost the design was meant to avoid.
+// REGRESSION (M01): default-deny denied read tools whose OBJECT noun was not in the safe set; all seven must stay allowed.
 for (const [n, tool, why] of [
   ['62a', 'mcp__github__list_issues', 'issue-tracker listing — read verb plus a domain noun'],
   ['62b', 'mcp__github__get_pull_request', 'multi-noun read name'],
@@ -704,9 +900,8 @@ for (const [n, tool, why] of [
   check(`${n}-ambiguous-verb-alone-is-denied`, mcp(tool), 'deny', why);
 }
 
-// REGRESSION (NEW-1): "qualified by ANY other safe token" was defeated by one ordinary noun —
-// all four below were reproduced as ALLOW against the pre-fix guard. Only a docs/reference
-// qualifier promotes an ambiguous verb now.
+// REGRESSION (NEW-1): "qualified by ANY other safe token" fell to one ordinary noun (all four ALLOWED pre-fix);
+// only a docs/reference qualifier promotes an ambiguous verb now.
 for (const [n, tool, why] of [
   ['63e', 'mcp__sqlite__query_table', '`table` is a neutral object noun, not a docs qualifier — this is arbitrary SQL'],
   ['63f', 'mcp__postgres__query_rows', 'same bypass through `rows`'],
@@ -716,10 +911,8 @@ for (const [n, tool, why] of [
   check(`${n}-ambiguous-verb-with-a-neutral-noun-is-denied`, mcp(tool), 'deny', why);
 }
 
-// REGRESSION (NEW-3): the docs-qualifier constraint used to be a FALLBACK branch, so any
-// unambiguous read verb in the name classified it as a read before the ambiguous verb was ever
-// examined. All eight below were reproduced as ALLOW against the pre-fix guard. The constraint
-// is now unconditional: one `query`/`resolve` token forces the docs-only remainder.
+// REGRESSION (NEW-3): docs-qualifier was a FALLBACK, so any read verb won first (all eight ALLOWED pre-fix);
+// now unconditional: one `query`/`resolve` token forces the docs-only remainder.
 for (const [n, tool, why] of [
   ['63i', 'mcp__linear__list_and_resolve', '`list` must not re-qualify `resolve` — this closes issues'],
   ['63j', 'mcp__linear__get_and_resolve_all', 'same bypass through `get`'],
@@ -733,9 +926,8 @@ for (const [n, tool, why] of [
   check(`${n}-read-verb-does-not-requalify-an-ambiguous-verb`, mcp(tool), 'deny', why);
 }
 
-// REGRESSION (NEW-4): the server-name subtraction ran BEFORE classification, so an
-// action-named server erased the write verb from its own tool segment and the residue read as
-// a clean read. All eight below were reproduced as ALLOW against the pre-fix guard.
+// REGRESSION (NEW-4): server-name subtraction ran BEFORE classification, so an action-named server erased
+// its own write verb and the residue read as clean (all eight ALLOWED pre-fix).
 for (const [n, tool, why] of [
   ['63q', 'mcp__email-send__send_and_get_status', '`send` survives being half of the server name'],
   ['63r', 'mcp__delete__list_and_delete', 'the server may not delete `delete` from its own tool name'],
@@ -810,9 +1002,8 @@ check(
   'the qualifier set only reads when it is the whole remainder of the name',
 );
 
-// REGRESSION (M03): the guard's runtime mcpAllow filter and the helper CLI must speak ONE
-// grammar. Pre-fix the guard accepted `mcpAllow=mcp__*` (self-exempt Bash) and honoured a
-// `mcp__*` state entry, while manager-state.mjs rejected both.
+// REGRESSION (M03): guard mcpAllow filter and helper CLI speak ONE grammar; pre-fix guard accepted
+// `mcpAllow=mcp__*` (self-exempt Bash) and a `mcp__*` state entry that manager-state.mjs rejected.
 const helperAccepts = (pair) => { try { parseCliArgs(['set', pair]); return true; } catch { return false; } };
 const guardAccepts = (pair) => verdict(
   runGuard(stdin(ARMED, { tool_name: 'Bash', tool_input: { command: `node ${ARMED_HELPER} set ${pair}` } }))
@@ -895,9 +1086,417 @@ for (const [level, project] of [['balanced', ARMED], ['strict', STRICT]]) {
   );
 }
 
+// ---- X8 — the allow-list against the Claude Code 2.1.296 tool table -----------------------
+
+// Removed tool names (NotebookRead, SlashCommand, BashOutput, KillShell, KillBash, MultiEdit)
+// fall to default-deny; Bash and Monitor carry no command here, so they deny as unclassifiable.
+const TOOL_TABLE = {
+  Read: 'allow', Grep: 'allow', Glob: 'allow', LSP: 'allow',
+  Task: 'allow', Agent: 'allow', Skill: 'allow', Workflow: 'allow',
+  ListAgents: 'allow', SendMessage: 'allow', SubagentHandback: 'allow',
+  EnterWorktree: 'allow', ExitWorktree: 'allow', EnterPlanMode: 'allow', ExitPlanMode: 'allow',
+  ToolSearch: 'allow', WaitForMcpServers: 'allow',
+  TaskCreate: 'allow', TaskUpdate: 'allow', TaskList: 'allow', TaskGet: 'allow',
+  TodoWrite: 'allow', ReportFindings: 'allow',
+  CronCreate: 'allow', CronList: 'allow', CronDelete: 'allow', ScheduleWakeup: 'allow',
+  TaskStop: 'allow', ListMcpResourcesTool: 'allow', ReadMcpResourceTool: 'allow',
+  AskUserQuestion: 'allow',
+  Write: 'deny', Edit: 'deny', NotebookEdit: 'deny', WebFetch: 'deny', Artifact: 'deny',
+  PowerShell: 'deny', Bash: 'deny', Monitor: 'deny',
+  NotebookRead: 'deny', SlashCommand: 'deny', BashOutput: 'deny', KillShell: 'deny',
+  KillBash: 'deny', MultiEdit: 'deny', TaskOutput: 'deny',
+};
+const toolTableAt = (proj) => Object.fromEntries(
+  Object.keys(TOOL_TABLE).map(t => [t, verdict(runGuard(stdin(proj, { tool_name: t, tool_input: {} })))]),
+);
+
+// GIVEN an armed wall at either level, WHEN the main session calls each built-in tool,
+// THEN the verdicts are exactly the table: current orchestration tools pass, removed names do not.
+check('68-tool-table-at-balanced', toolTableAt(ARMED), TOOL_TABLE, 'the balanced allow-list is exactly the 2.1.296 orchestration/read set');
+check('69-tool-table-at-strict', toolTableAt(STRICT), TOOL_TABLE, 'strict keeps the same always-allowed set; only Bash/WebSearch/MCP rules tighten');
+
+check(
+  '70-websearch-is-level-gated',
+  { balanced: verdict(runGuard(stdin(ARMED, { tool_name: 'WebSearch', tool_input: { query: 'x' } }))), strict: verdict(runGuard(stdin(STRICT, { tool_name: 'WebSearch', tool_input: { query: 'x' } }))) },
+  { balanced: 'allow', strict: 'deny' },
+  'WebSearch is the one built-in whose verdict differs by level',
+);
+
+// REGRESSION: Monitor sat in the always-allow set although its `command` is a shell command,
+// so `Monitor({command: "sh -c ..."})` ran anything in a walled main session.
+const monitor = (proj, tool_input) => verdict(runGuard(stdin(proj, { tool_name: 'Monitor', tool_input })));
+check(
+  '71-monitor-command-gets-the-bash-rule',
+  {
+    tail: monitor(ARMED, { command: 'tail -f /tmp/app.log' }),
+    redirect: monitor(ARMED, { command: 'sh -c "echo x > /tmp/pwned"' }),
+    loop: monitor(ARMED, { command: 'while true; do rm -rf /tmp/x; done' }),
+    websocket: monitor(ARMED, { ws: { url: 'wss://example.com/feed' } }),
+    strictTail: monitor(STRICT, { command: 'tail -f /tmp/app.log' }),
+  },
+  { tail: 'allow', redirect: 'deny', loop: 'deny', websocket: 'deny', strictTail: 'deny' },
+  'a Monitor watch is allowed only where the same Bash command would be',
+);
+
+check(
+  '72-monitor-deny-names-the-read-only-rule',
+  runGuard(stdin(ARMED, { tool_name: 'Monitor', tool_input: { command: 'make watch' } })),
+  denial(`Hard wall (balanced): the main session runs only read-only Monitor commands (${READONLY_HINT}), and this one is not provably read-only.`),
+  'the Monitor denial carries the same reason and remedy as the Bash one',
+);
+
+// GIVEN strict, WHEN the main session searches code through semble, THEN it reads; every
+// other MCP tool — a semble write, a look-alike server, an mcpAllow entry — stays denied.
+check(
+  '73-strict-keeps-read-only-semble-and-nothing-else',
+  {
+    search: mcp('mcp__semble_code__search', STRICT),
+    findRelated: mcp('mcp__semble_code__find_related', STRICT),
+    sembleWriteVerb: mcp('mcp__semble_code__delete_index', STRICT),
+    sembleUnknownToken: mcp('mcp__semble_code__reindex', STRICT),
+    lookAlikeServer: mcp('mcp__semble_code_x__search', STRICT),
+    otherServerRead: mcp('mcp__github__get_file', STRICT),
+    allowListed: mcp('mcp__trusted__get_file', MCP_ALLOW_STRICT),
+  },
+  {
+    search: 'allow', findRelated: 'allow', sembleWriteVerb: 'deny', sembleUnknownToken: 'deny',
+    lookAlikeServer: 'deny', otherServerRead: 'deny', allowListed: 'deny',
+  },
+  'code search is reading, so strict keeps it; the exception is one server, read-only tools only',
+);
+
+check(
+  '74-strict-mcp-deny-names-the-exception',
+  runGuard(stdin(STRICT, { tool_name: 'mcp__github__get_file', tool_input: {} })),
+  denial('Hard wall (strict): MCP tool mcp__github__get_file is blocked in the main session; strict keeps only the read-only mcp__semble_code__* search tools.'),
+  'at strict the reason must not advertise mcpAllow, which strict never consults',
+);
+
+// GIVEN an armed wall, WHEN agent_id is present but not a non-empty string, THEN the call is
+// still a main-session call. A hook-agent verifier id (recorded on 2.1.296) is a subagent.
+check(
+  '75-agent-id-must-be-a-non-empty-string',
+  {
+    hookAgentVerifier: verdict(runGuard(stdin(ARMED, { agent_id: 'hook-agent-5148e0ac-4381-4904-831c-94da713e34fc', tool_name: 'StructuredOutput', tool_input: { ok: true } }))),
+    nullId: verdict(runGuard(stdin(ARMED, { agent_id: null }))),
+    emptyId: verdict(runGuard(stdin(ARMED, { agent_id: '' }))),
+    numericId: verdict(runGuard(stdin(ARMED, { agent_id: 7 }))),
+  },
+  { hookAgentVerifier: 'allow', nullId: 'deny', emptyId: 'deny', numericId: 'deny' },
+  'only a real agent id opens the wall; a null or empty key must not disarm it',
+);
+
+// ---- onFailure:"block" — the guard may end only with exit 0 (decision JSON) or 2 ---------
+
+const exitOf = (stdinStr) => runGuardRaw(stdinStr).status;
+check(
+  '76-every-handled-path-exits-0',
+  {
+    malformedJson: exitOf('{not json'),
+    emptyStdin: exitOf(''),
+    jsonNull: exitOf('null'),
+    brokenState: exitOf(stdin(BROKEN, {})),
+    mainDenied: exitOf(stdin(ARMED, {})),
+    mainAllowed: exitOf(stdin(ARMED, { tool_name: 'Read', tool_input: { file_path: '/etc/hosts' } })),
+    subagent: exitOf(stdin(ARMED, { agent_id: 'sub-1' })),
+    disarmed: exitOf(stdin(DISARMED, {})),
+    notInstalled: exitOf(stdin(join(BASE, 'no-such-project'), {})),
+  },
+  {
+    malformedJson: 0, emptyStdin: 0, jsonNull: 0, brokenState: 0, mainDenied: 0,
+    mainAllowed: 0, subagent: 0, disarmed: 0, notInstalled: 0,
+  },
+  'with onFailure:"block" any other exit code would block every tool call, main and subagent',
+);
+
+check(
+  '77-unusable-payloads-deny',
+  { emptyStdin: verdict(runGuard('')), jsonNull: verdict(runGuard('null')) },
+  { emptyStdin: 'deny', jsonNull: 'deny' },
+  'a payload that carries no object cannot prove it is a subagent call',
+);
+
+// GIVEN stdout that throws on write, WHEN the guard tries to answer, THEN the fault escapes its
+// handler and the last-resort hook turns it into a blocking exit 2 with the reason on stderr.
+check(
+  '78-fault-outside-the-handler-exits-2',
+  runGuardRaw(stdin(ARMED, {}), ['--import', 'data:text/javascript,process.stdout.write=()=>{throw new Error("stdout gone")}']),
+  { status: 2, stdout: '', stderr: 'Hard wall: the guard failed outside its handler (stdout gone) and blocks by default.\n' },
+  'a crash must be a blocking error on every CLI version, not exit 1',
+);
+
+// ---- the off-switch CLI resolves its project from where it is installed, not from cwd -----
+
+// REGRESSION: `node <root>/.claude/brewtools/manager/manager-state.mjs set hard=false` wrote under raw cwd:
+// from a subdir/worktree it printed success, made a stray <cwd>/.claude and left the wall armed.
+const STATE_MJS = join(HERE, '..', '..', '..', 'hooks', 'lib', 'manager-state.mjs');
+const CLI_PROJ = makeProject('cli-root', { hard: true, level: 'strict' });
+const CLI_HELPER = join(CLI_PROJ, '.claude', 'brewtools', 'manager', 'manager-state.mjs');
+const CLI_NESTED = join(CLI_PROJ, 'nested', 'deep');
+mkdirSync(CLI_NESTED, { recursive: true });
+writeFileSync(CLI_HELPER, readFileSync(STATE_MJS, 'utf8'));
+
+function runStateCli(script, args, cwd, projectDir, envOver = {}) {
+  const env = { ...process.env };
+  delete env.CLAUDE_PROJECT_DIR;
+  if (projectDir) env.CLAUDE_PROJECT_DIR = projectDir;
+  for (const [k, v] of Object.entries(envOver)) v === undefined ? delete env[k] : (env[k] = v);
+  const r = spawnSync(process.execPath, [script, ...args], { cwd, encoding: 'utf8', timeout: 8000, env });
+  return { status: r.status, out: safeParse(r.stdout || '') };
+}
+
+const cliSet = runStateCli(CLI_HELPER, ['set', 'hard=false'], CLI_NESTED);
+const cliState = safeParse(readFileSync(join(CLI_PROJ, '.claude', 'brewtools', 'manager', 'state.json'), 'utf8'));
+check(
+  '78a-installed-cli-disarms-its-own-project-from-a-nested-cwd',
+  { status: cliSet.status, hard: cliState.hard, level: cliState.level, strayTree: existsSync(join(CLI_NESTED, '.claude')) },
+  { status: 0, hard: false, level: 'strict', strayTree: false },
+  'the documented exit must disarm the wall it sits next to, whatever the shell cwd is',
+);
+
+const cliGet = runStateCli(STATE_MJS, ['get'], tmpdir(), STRICT);
+check(
+  '78b-plugin-cli-falls-back-to-claude-project-dir',
+  { status: cliGet.status, hard: cliGet.out.hard, level: cliGet.out.level, source: cliGet.out.source },
+  { status: 0, hard: true, level: 'strict', source: 'project' },
+  'a copy that is not installed in a project resolves CLAUDE_PROJECT_DIR before cwd',
+);
+
+// REGRESSION: global state.json was hardcoded to ~/.claude/manager, so a CLAUDE_CONFIG_DIR
+// profile wrote and read the default profile's file.
+const GS_HOME = join(BASE, 'gs-home');
+const GS_CFG = join(BASE, 'gs-cfg');
+const GS_EMPTY = join(BASE, 'gs-empty');
+const GS_PROJ = join(BASE, 'gs-proj');
+for (const d of [join(GS_HOME, '.claude', 'manager'), GS_EMPTY, join(GS_PROJ, '.git')]) mkdirSync(d, { recursive: true });
+writeFileSync(join(GS_HOME, '.claude', 'manager', 'state.json'), JSON.stringify({ mode: 'full' }));
+const gsWrite = spawnSync(process.execPath, ['--input-type=module', '-e',
+  `import {writeState} from ${JSON.stringify(STATE_MJS)}; await writeState('global', {mode:'full'});`],
+  { encoding: 'utf8', timeout: 8000, env: { ...process.env, HOME: GS_HOME, CLAUDE_CONFIG_DIR: GS_CFG } });
+const gsGet = (cfg) => runStateCli(CLI_HELPER, ['get', '--cwd', GS_PROJ], tmpdir(), undefined, { HOME: GS_HOME, CLAUDE_CONFIG_DIR: cfg }).out.source;
+check(
+  '78c-global-state-follows-claude-config-dir',
+  { write: gsWrite.status, inConfigDir: existsSync(join(GS_CFG, 'manager', 'state.json')),
+    configDir: gsGet(GS_CFG), emptyConfigDir: gsGet(GS_EMPTY), unset: gsGet(undefined) },
+  { write: 0, inConfigDir: true, configDir: 'global', emptyConfigDir: 'default', unset: 'global' },
+  'global state is <CLAUDE_CONFIG_DIR>/manager/state.json for writer and installed CLI, ~/.claude only when unset',
+);
+
+// ---- manager-prompt.mjs (UserPromptSubmit) and session-start.mjs (SessionStart) ----------
+
+const PLUGIN_ROOT = join(HERE, '..', '..', '..');
+const PROMPT_MJS = join(PLUGIN_ROOT, 'hooks', 'manager-prompt.mjs');
+const SESSION_MJS = join(PLUGIN_ROOT, 'hooks', 'session-start.mjs');
+/** Empty HOME: a real ~/.claude/manager/prompts override must not leak into expectations. */
+const EMPTY_HOME = join(BASE, 'home');
+mkdirSync(EMPTY_HOME, { recursive: true });
+process.env.HOME = EMPTY_HOME;
+
+/** `envOver`: extra env for the hook; an `undefined` value removes that key. */
+function runHook(script, payload, projectDir, envOver = {}) {
+  const env = { ...process.env, CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT };
+  delete env.CLAUDE_PROJECT_DIR;
+  if (projectDir) env.CLAUDE_PROJECT_DIR = projectDir;
+  for (const [k, v] of Object.entries(envOver)) v === undefined ? delete env[k] : (env[k] = v);
+  const r = spawnSync(process.execPath, [script], {
+    input: typeof payload === 'string' ? payload : JSON.stringify(payload),
+    encoding: 'utf8',
+    timeout: 8000,
+    env,
+  });
+  return safeParse(r.stdout || '');
+}
+
+const ups = (cwd, prompt, extra) => ({
+  session_id: 'S1', cwd, hook_event_name: 'UserPromptSubmit', permission_mode: 'default', prompt, ...extra,
+});
+const injected = (text) => ({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: text } });
+/** The shipped default block for a mode, read the way the hook reads it. */
+const shipped = (mode) => resolvePrompt(mode, join(BASE, 'no-such-project'), PLUGIN_ROOT).text;
+
+const HEAD_M = 'User typed `++m` — Manager mode is active for this turn:';
+const HEAD_A = 'User typed `++a` — Architecture-first discipline is active for this turn:';
+const HEAD_RR = 'User typed `++rr` — Anti-regression review discipline is active for this turn:';
+const HEAD_R = 'User typed `++r` — Two-phase review discipline is active for this turn:';
+
+check(
+  '79-codeword-m-injects-the-manager-block',
+  runHook(PROMPT_MJS, ups(DISARMED, '++m ship the feature')),
+  injected(`${HEAD_M}\n\n${shipped('full')}`),
+  'a typed ++m gets the header plus the shipped full block, wall state irrelevant',
+);
+
+check(
+  '80-codeword-groups-combine-in-order',
+  runHook(PROMPT_MJS, ups(DISARMED, 'do it ++rr ++a ++m')),
+  injected([`${HEAD_M}\n\n${shipped('full')}`, `${HEAD_A}\n\n${shipped('architect')}`, `${HEAD_RR}\n\n${shipped('review-regression')}`].join('\n\n---\n\n')),
+  'manager, architect and review blocks are all injected, in that fixed order',
+);
+
+// REGRESSION: an armed wall injected the whole `full` block (1830 B) on EVERY prompt, on top
+// of the guard that already enforces the rule and explains itself in its deny reason.
+check(
+  '81-armed-wall-injects-nothing-without-a-codeword',
+  { balanced: runHook(PROMPT_MJS, ups(ARMED, 'refactor the parser')), strict: runHook(PROMPT_MJS, ups(STRICT, 'refactor the parser')) },
+  { balanced: {}, strict: {} },
+  'no ambient per-prompt block while the wall is armed',
+);
+
+// REGRESSION: UserPromptSubmit fires for subagent deliveries; a quoted codeword activated "User typed `++m`".
+// Fixtures recorded on 2.1.296 (home paths scrubbed; hand-back line replaced by one carrying codewords).
+const NOTIFICATION = JSON.parse(readFileSync(join(HERE, 'fixtures', 'ups-task-notification.json'), 'utf8'));
+const HANDBACK = JSON.parse(readFileSync(join(HERE, 'fixtures', 'ups-agent-message.json'), 'utf8'));
+check(
+  '82-synthetic-fixtures-carry-codewords',
+  { notification: /<result>\+\+m PROBE_REPORT_TOKEN \+\+rr<\/result>/.test(NOTIFICATION.prompt), handback: / {2}\+\+m \+\+a \+\+rr PROBE_REPORT_TOKEN\n/.test(HANDBACK.prompt) },
+  { notification: true, handback: true },
+  'precondition: both recorded deliveries contain codewords the scan would match',
+);
+check(
+  '83-synthetic-subagent-deliveries-inject-nothing',
+  {
+    taskNotification: runHook(PROMPT_MJS, NOTIFICATION),
+    agentMessage: runHook(PROMPT_MJS, HANDBACK),
+    leadingWhitespace: runHook(PROMPT_MJS, { ...NOTIFICATION, prompt: `\n  ${NOTIFICATION.prompt}` }),
+  },
+  { taskNotification: {}, agentMessage: {}, leadingWhitespace: {} },
+  'a prompt that starts with <task-notification> or <agent-message is not the user typing',
+);
+
+check(
+  '84-typed-prompt-quoting-the-tag-still-fires',
+  runHook(PROMPT_MJS, ups(DISARMED, 'explain what <task-notification> means ++r')),
+  injected(`${HEAD_R}\n\n${shipped('review-double')}`),
+  'only a LEADING delivery tag marks a synthetic prompt',
+);
+
+// REGRESSION: manager-prompt skipped a bare typed `<agent-message>`; a delivery is only
+// `<task-notification>` or `<agent-message from=`.
+check(
+  '84a-only-agent-message-from-marks-a-delivery',
+  {
+    bareTag: runHook(PROMPT_MJS, ups(DISARMED, '<agent-message> ++r')),
+    fromAttr: runHook(PROMPT_MJS, ups(DISARMED, '<agent-message from="a1"> ++r')),
+  },
+  { bareTag: injected(`${HEAD_R}\n\n${shipped('review-double')}`), fromAttr: {} },
+  'a typed <agent-message> fires the codeword; <agent-message from= is a subagent delivery',
+);
+
+// REGRESSION: project prompt overrides were looked up under the raw hook cwd, so they
+// vanished as soon as the session changed directory.
+const ROOTED = makeProject('rooted', { hard: false, level: 'balanced' });
+mkdirSync(join(ROOTED, '.claude', 'brewtools', 'manager', 'prompts'), { recursive: true });
+mkdirSync(join(ROOTED, 'nested', 'deep'), { recursive: true });
+writeFileSync(join(ROOTED, '.claude', 'brewtools', 'manager', 'prompts', 'review-double.md'), 'OVERRIDE-AT-ROOT');
+writeFileSync(join(ROOTED, '.claude', 'brewtools', 'manager', 'prompts', 'architect.md'), 'x'.repeat(10000));
+check(
+  '85-project-override-resolves-from-the-project-root',
+  {
+    nestedCwd: runHook(PROMPT_MJS, ups(join(ROOTED, 'nested', 'deep'), '++r check it')),
+    projectDirEnv: runHook(PROMPT_MJS, ups('/', '++r check it'), ROOTED),
+  },
+  { nestedCwd: injected(`${HEAD_R}\n\nOVERRIDE-AT-ROOT`), projectDirEnv: injected(`${HEAD_R}\n\nOVERRIDE-AT-ROOT`) },
+  'the override is found from a nested cwd and through CLAUDE_PROJECT_DIR',
+);
+
+check(
+  '86-injection-is-capped-at-9000-chars',
+  runHook(PROMPT_MJS, ups(ROOTED, '++a design it')),
+  injected(`${`${HEAD_A}\n\n${'x'.repeat(10000)}`.slice(0, 9000)}\n...[truncated]`),
+  'an oversized override is cut to 9000 chars plus the truncation marker',
+);
+
+check(
+  '87-prompt-hook-malformed-stdin-fails-open',
+  runHook(PROMPT_MJS, '{not json'),
+  {},
+  'an advisory hook must never break the prompt',
+);
+
+// REGRESSION: the global override was hardcoded to ~/.claude/manager/prompts, so a session on
+// another profile (CLAUDE_CONFIG_DIR) read the default profile's override or none.
+const PROFILE_HOME = join(BASE, 'profile-home');
+const PROFILE_CFG = join(BASE, 'profile-cfg');
+const PROFILE_EMPTY = join(BASE, 'profile-empty');
+for (const [dir, text] of [[join(PROFILE_HOME, '.claude'), 'OVERRIDE-IN-HOME'], [PROFILE_CFG, 'OVERRIDE-IN-CONFIG-DIR']]) {
+  mkdirSync(join(dir, 'manager', 'prompts'), { recursive: true });
+  writeFileSync(join(dir, 'manager', 'prompts', 'review-double.md'), text);
+}
+mkdirSync(PROFILE_EMPTY, { recursive: true });
+const asProfile = (cfg) => runHook(PROMPT_MJS, ups(DISARMED, '++r check it'), undefined, { HOME: PROFILE_HOME, CLAUDE_CONFIG_DIR: cfg });
+check(
+  '87a-global-override-follows-claude-config-dir',
+  { configDir: asProfile(PROFILE_CFG), unset: asProfile(undefined), emptyConfigDir: asProfile(PROFILE_EMPTY) },
+  {
+    configDir: injected(`${HEAD_R}\n\nOVERRIDE-IN-CONFIG-DIR`),
+    unset: injected(`${HEAD_R}\n\nOVERRIDE-IN-HOME`),
+    emptyConfigDir: injected(`${HEAD_R}\n\n${shipped('review-double')}`),
+  },
+  'the global scope is <CLAUDE_CONFIG_DIR>/manager/prompts, ~/.claude only when unset, never a fallback',
+);
+
+const sessionNotice = (level, bash) => ({
+  systemMessage: `⛔ MANAGER HARD wall ON (project, level=${level})`,
+  hookSpecificOutput: {
+    hookEventName: 'SessionStart',
+    additionalContext: `Manager HARD wall active (project, level=${level}): a PreToolUse guard denies Write/Edit and ${bash} in the main session; subagents are not restricted, so implementation goes through the Agent tool. /brewtools:manager-setup disable to exit.`,
+  },
+});
+const sessionStart = (cwd) => ({ session_id: 'S1', cwd, hook_event_name: 'SessionStart', source: 'startup' });
+
+// REGRESSION: the armed-wall notice was keyed on raw cwd, so a session started (or resumed)
+// in a subdirectory of an armed project got no notice at all.
+check(
+  '88-session-notice-from-a-nested-cwd',
+  runHook(SESSION_MJS, sessionStart(ARMED_NESTED)),
+  sessionNotice('balanced', 'Bash that is not read-only'),
+  'the notice states the mechanism and the exit, and resolves the state from the project root',
+);
+
+check(
+  '89-session-notice-at-strict-via-project-dir',
+  runHook(SESSION_MJS, sessionStart('/'), STRICT),
+  sessionNotice('strict', 'all Bash'),
+  'CLAUDE_PROJECT_DIR wins over cwd; strict names its own Bash rule',
+);
+
+check(
+  '90-session-start-is-silent-when-disarmed',
+  { disarmed: runHook(SESSION_MJS, sessionStart(DISARMED)), notInstalled: runHook(SESSION_MJS, sessionStart(join(BASE, 'no-such-project'))) },
+  { disarmed: {}, notInstalled: {} },
+  'no wall, no notice',
+);
+
+// REGRESSION: the log level was read from `.claude/tasks/cfg/brewcode.config.json`, a file of the
+// task system removed in v3.19.0 that nothing creates; only BREWCODE_LOG_LEVEL is honoured now.
+const UTILS_URL = pathToFileURL(join(PLUGIN_ROOT, 'hooks', 'lib', 'utils.mjs')).href;
+function logOnce(name, level, envLevel) {
+  const dir = join(BASE, name);
+  mkdirSync(join(dir, '.claude', 'tasks', 'cfg'), { recursive: true });
+  writeFileSync(join(dir, '.claude', 'tasks', 'cfg', 'brewcode.config.json'), '{"logging":{"level":"trace"}}');
+  const env = { ...process.env };
+  delete env.BREWCODE_LOG_LEVEL;
+  if (envLevel) env.BREWCODE_LOG_LEVEL = envLevel;
+  const code = `const u = await import(${JSON.stringify(UTILS_URL)}); u.log(${JSON.stringify(level)}, '[t]', 'msg', ${JSON.stringify(dir)});`;
+  spawnSync(process.execPath, ['--input-type=module', '-e', code], { encoding: 'utf8', timeout: 8000, env });
+  const file = join(dir, '.claude', 'logs', 'brewtools.log');
+  return existsSync(file) ? readFileSync(file, 'utf8').replace(/^\S+ /gm, '<ts> ') : null;
+}
+check(
+  '91-log-level-comes-from-env-not-the-removed-task-config',
+  {
+    configIgnored: logOnce('log-cfg', 'debug'),
+    envDebug: logOnce('log-env', 'debug', 'DEBUG'),
+    defaultWarn: logOnce('log-warn', 'warn'),
+    envError: logOnce('log-err', 'warn', 'error'),
+  },
+  { configIgnored: null, envDebug: '<ts> DEBUG [t] msg\n', defaultWarn: '<ts> WARN  [t] msg\n', envError: null },
+  'a trace level in brewcode.config.json is ignored; BREWCODE_LOG_LEVEL (case-insensitive) or default info decides',
+);
+
 try { rmSync(BASE, { recursive: true, force: true }); } catch { /* ignore */ }
 
-console.log('\n=== hardmode-guard E2E TEST REPORT ===');
+console.log('\n=== manager-setup E2E TEST REPORT ===');
 for (const line of results) console.log(line);
 console.log(`\nTOTAL: ${passed + failed} | PASS: ${passed} | FAIL: ${failed}`);
 process.exit(failed > 0 ? 1 : 0);

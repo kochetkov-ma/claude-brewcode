@@ -2,7 +2,7 @@
 
 Bash and JS/mjs hook skeletons, fail-safe design rules, common patterns, and the pre-ship validation checklist.
 
-Verified 2026-09-30 against [official hook I/O](https://code.claude.com/docs/en/hooks#hook-input-and-output) and [debugging guide](https://code.claude.com/docs/en/hooks-guide), changelog 2.1.285. Start from existing `hooks/lib/utils.mjs` for product hooks before adding utilities.
+Verified against Claude Code 2.1.296: [official hook I/O](https://code.claude.com/docs/en/hooks#hook-input-and-output), [debugging guide](https://code.claude.com/docs/en/hooks-guide). Start from existing `hooks/lib/utils.mjs` for product hooks before adding utilities.
 
 ## Templates
 
@@ -104,38 +104,28 @@ Other verdicts are a different `decide()` return, never a second `output()`:
 
 | Practice | Why |
 |----------|-----|
-| Always `output({})` on error | !=trap user in broken state (advisory hooks -- see the fail-open/fail-closed row below) |
 | Print exactly ONE JSON object to stdout, on every path | extra stdout lines corrupt parsing; CC reads a single JSON object. Decide into a variable, emit once |
 | All logging/diagnostics to stderr (`console.error`) | stdout reserved for the JSON contract |
 | `stop_hook_active` check in Stop/SubagentStop | prevents infinite block loop |
-| try/catch around all logic | graceful degradation |
-| validate stdin before parsing | handle missing/malformed input |
 | keep injected context under 10,000 chars per field | `AC`, `systemMessage`, `initialUserMessage`, and plain stdout spill to a file with preview; `decision.reason` is not listed in this cap |
-| choose fail-open vs fail-closed from the invariant | fail-open (`{}`) is right for advisory/context hooks -- a broken hook then has no effect. A hook enforcing a HARD invariant must instead emit the deny/block with the exception text as its `reason`, because `{}` on an enforcement hook is silent approval |
+| choose fail-open vs fail-closed from the invariant | fail-open (`output({})` on error) is right for advisory/context hooks -- a broken hook then has no effect, !=trap user in broken state. A hook enforcing a HARD invariant must instead emit the deny/block with the exception text as its `reason`, because `{}` on an enforcement hook is silent approval |
+| hard gate on `command`/`http`: also set `onFailure:"block"` | a hook that cannot start never emits its deny. `probe` (observed live on CLI 2.1.296, undocumented): a registered but missing script then blocks EVERY matching call, subagents included, also the Bash that would repair it -- install the script before the registration, uninstall the registration before the script. The `catch` must still print a valid deny (not-covered case: `hooks-io-contract.md`, Failed hook) |
 
 > Infinite loop protection (Stop/SubagentStop): check `stop_hook_active` and short-circuit to `{}` -- see both templates above. CC also force-ends the turn after 8 consecutive Stop-hook blocks (raise via `$CLAUDE_CODE_STOP_HOOK_BLOCK_CAP`); a broken loop-brake wastes turns, it doesn't hang the session.
-> `exit 1` is a non-blocking error nearly everywhere: the action proceeds. Enforce with `exit 2` or JSON, never `exit 1`. A mistyped script path exits 127 and leaves the gate silently disabled -- watch for the `<hook name> hook error` notice on a policy hook's first run.
+> `exit 1` is a non-blocking error nearly everywhere: the action proceeds. Enforce with `exit 2` or JSON, never `exit 1`. A mistyped script path exits 127 and, without `onFailure:"block"`, leaves the gate silently disabled -- watch for the `<hook name> hook error` notice on a policy hook's first run.
 
 ## Common Hook Patterns
 
 | Pattern | matcher | hooks[0] | Mechanism |
 |---------|---------|----------|-----------|
 | Inject context into all SAs | `SubagentStart` / none | `{"type":"command","command":"node inject-context.mjs"}` | returns `AC`, accumulates across hooks -- prefer over `UI` on PTU `Agent` (single-writer/last-wins) |
-| Gate dangerous tools | `PreToolUse` / `Bash` | `{"type":"command","command":"bash validate-bash.sh"}` | checks `tool_input.command`, `permissionDecision:"deny"` if dangerous |
-| Block stop until task complete | `Stop` / none | `{"type":"command","command":"node check-task.mjs"}` | `decision:"block"`+`reason` while incomplete |
 | Log all tool calls | `PostToolUse` / none | `{"type":"command","command":"node logger.mjs","async":true}` | fire-and-forget, no output needed |
-| Inject project context on SS | `SessionStart` / none | `{"type":"command","command":"bash session-init.sh"}` | returns `AC` with project state |
 
-## Hook Type Selection
+Gate, Stop-block and SS-context patterns are the two templates above with the payload from their tables.
 
-> Type decision: hook-creator.md Step 2, or the full type/field table in `hooks-types-config.md`.
-> Lifecycle: hooks load at session start. Config changes require `/clear` or new session.
+## Test
 
-## Workflow
-
-1. Clarify+Design: event, behavior, bash/JS, matcher, output schema, routing channel, config location
-2. Implement: use the closest existing hook/template, event-specific failure handling, and handler-scoped `if`; configure in settings/hooks.json
-3. Test: `CLAUDE_DEBUG=1`, check verbose (Ctrl+O). Isolate bugs: `claude --safe-mode`/`CLAUDE_CODE_SAFE_MODE=1` disables ALL customizations (CLAUDE.md, plugins, skills, hooks, MCP) to confirm hook is cause (v2.1.169+)
+`claude --debug` (log `~/.claude/debug/<session-id>.txt`) or `--debug-file <path>`: on v2.1.296+ every command hook leaves a `Hooks:` line with its command, plugin, outcome and duration -- the proof it fired. Isolate a suspected hook with `claude --safe-mode`/`CLAUDE_CODE_SAFE_MODE=1` (ALL customizations off: `hooks-env.md`). A hook that never fires: reload rules in `hooks-types-config.md`.
 
 ## Validation Checklist
 
@@ -151,11 +141,12 @@ Other verdicts are a different `decide()` return, never a second `output()`:
 | 8 | executable (`chmod +x` for bash, `#!/usr/bin/env node` for mjs) |
 | 9 | config location correct for scope |
 | 10 | performance <1s for blocking hooks |
-| 11 | check routing matrix for broken channels |
 | 12 | syntax check (`bash -n` or `node --check`) |
-| 13 | `if` field (v2.1.85+) to reduce overhead when applicable -- tool events only |
+| 13 | `if` field (v2.1.85+) to reduce overhead when applicable -- tool events only, one rule per tool |
 | 14 | hook type (`command` deterministic, `http` API/remote, `mcp_tool` MCP tool, `prompt`/`agent` allow-block gate) |
 | 15 | exactly ONE JSON object on structured paths; exit-2 gates may print stderr only; WorktreeCreate command prints absolute path only. Test each path |
-| 16 | fail-open vs fail-closed matches the invariant; an enforcement hook never returns `{}` on error |
+| 16 | hard gate on `command`/`http`: `onFailure:"block"` set, script installed before its registration |
 | 17 | injected context fields under 10,000 chars; verify routing and disk-spill behavior separately from gate reason |
 | 18 | `args` (exec form) whenever the command references a path placeholder |
+| 19 | UserPromptSubmit hook that matches user text: early return on synthetic prompts (`hooks-events.md`, Subagent report) |
+| 20 | PTU allow-list or `*` guard: lets `SubagentHandback` and the agent-hook verdict call through (`hooks-events.md`, `hooks-types-config.md`) |

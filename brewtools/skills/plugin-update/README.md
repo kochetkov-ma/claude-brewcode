@@ -1,6 +1,6 @@
 # Plugin Update
 
-Checks installed brewcode plugins (brewcode, brewdoc, brewtools, brewui) by reading the filesystem and settings.json, fetches the latest versions from the marketplace, installs any missing plugins, updates outdated ones, and always prints a reload notice at the end. All commands execute directly in the current Claude Code session — no "run this yourself" instructions.
+Checks the installed brewcode plugins (brewcode, brewdoc, brewtools, brewui) with `claude plugin list --json`, fetches the latest published versions, installs missing plugins, updates outdated ones at their installed scope, and always ends with a reload notice. Every `claude plugin` command runs in the current session; only `/plugin` UI actions and `/reload-plugins` are left to you.
 
 ## Quick Start
 
@@ -38,10 +38,6 @@ Checks installed brewcode plugins (brewcode, brewdoc, brewtools, brewui) by read
 ### Common Mistakes
 
 ```bash
-# Forgetting the unset prefix when running claude plugin list inside a session
-unset CLAUDECODE && claude plugin list --json   # correct
-claude plugin list --json                        # may fail inside a session
-
 # Using --plugin-dir for end users -- this is a dev-only flag
 claude --plugin-dir ./brewtools
 # End users should install via the marketplace, not --plugin-dir
@@ -55,25 +51,25 @@ claude --plugin-dir ./brewtools
 
 | Phase | Name | Description |
 |-------|------|-------------|
-| 0 | Discover | Primary: `unset CLAUDECODE && claude plugin list --json` (CC 2.1.163+). Fallback: `scripts/discover-plugins.sh` reads `settings.json` and the plugin cache |
+| 0 | Discover | `claude plugin list --json`, or `scripts/discover-plugins.sh` as fallback (see below) |
 | 1 | Fetch latest | Runs `scripts/fetch-latest-versions.sh` to get the current published versions from the marketplace |
 | 2 | Status table | Renders a markdown table: plugin name, installed version, latest version, and status (✅ current / ⬇️ update / ❌ missing / ❓ unknown) |
+| 2b | Token cost | Optional: per-plugin skills/agents/hooks counts and always-on tokens from `claude plugin details` |
 | 3 | Install missing | For each missing suite plugin, prompts (interactive) or auto-installs (`all`); runs `claude plugin marketplace add` then `claude plugin install <plugin>@claude-brewcode` |
 | 4 | Update outdated | Marketplace update, then one `claude plugin update <id> --scope <scope>` per plugin you selected, at its installed scope |
-| 5 | Auto-update toggle | Interactive and `all` modes only; instructs the user to toggle auto-update via `/plugin` UI — does NOT patch `settings.json` directly |
+| 5 | Auto-update toggle | Interactive and `all` modes only; auto-update is off by default for this marketplace, and the skill points you to `/plugin` → Marketplaces instead of editing settings files |
+| 5b | Prune | Previews orphaned auto-installed dependencies per scope and removes them only after confirmation (`all` removes them) |
 | 6 | Final report | Prints reload notice plus a summary of what was installed, updated, skipped, and any errors |
 
 ## Discovery Method
 
 Phase 0 uses two paths:
 
-**Primary (CC 2.1.163+):** `unset CLAUDECODE && claude plugin list --json` returns a JSON array. Each entry has `id`, `version` (may be `"unknown"`), `scope`, `enabled` (boolean), `installPath`, `installedAt`, `lastUpdated`, and optional `mcpServers`.
+**Primary (CC 2.1.163+):** `claude plugin list --json` returns one object per installation with `id`, `version`, `scope`, `enabled` and `installPath` always present.
 
 **Fallback (CC < 2.1.163 or command fails):** `scripts/discover-plugins.sh` reads two sources:
-1. `~/.claude/settings.json` (and `./.claude/settings.json` if present) — the `enabledPlugins` map where keys are `<plugin>@<marketplace>`.
-2. Plugin cache walk — `~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/` — the highest version directory per plugin is the installed version.
-
-The script outputs a JSON object with `marketplaces`, `installed` versions, and the `cache_dir` path.
+1. `settings.json` in the config directory (`CLAUDE_CONFIG_DIR`, default `~/.claude`) and `./.claude/settings.json` if present — the `enabledPlugins` map where keys are `<plugin>@<marketplace>`.
+2. Plugin cache walk — `<plugins root>/cache/<marketplace>/<plugin>/<version>/`, where the plugins root is `CLAUDE_CODE_PLUGIN_CACHE_DIR` or `<config dir>/plugins` — the highest version directory per plugin is taken as installed.
 
 ## Output
 
@@ -86,15 +82,12 @@ The status table rendered in Phase 2 looks like this:
 | brewtools | — | 3.4.51 | ❌ missing |
 | brewui | 3.4.51 | 3.4.51 | ✅ current |
 
-Non-suite plugins found in the cache are listed below the main table as informational entries. The final report lists everything installed or updated during the run plus any errors encountered.
+Other installed plugins are listed below the table for information.
 
 ## Tips
 
-- Run this skill after major Claude Code version updates — plugins sometimes need a fresh install after core upgrades.
-- Pair with `/reload-plugins` immediately after updates; skills do not activate until the session reloads plugin state.
-- Do NOT use `--plugin-dir` for end-user installations — that flag is for local plugin development only.
 - The `check` mode is safe to run at any time with no side effects; use it to audit the current state before a project session.
-- If `discover-plugins.sh` fails, the skill treats all suite plugins as missing and continues — it will not silently skip the install phase.
+- If both discovery paths fail, the skill reports the inventory as unknown, still shows versions and the reload notice, and skips install, update and prune rather than treating plugins as missing.
 
 ## Documentation
 

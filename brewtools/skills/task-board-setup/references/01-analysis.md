@@ -179,7 +179,3 @@ Apply edits, re-show if substantial, proceed only on explicit "generate". If the
 > confirmation: the whole design phase then runs on the built-in `Plan`, which is weaker than a domain
 > architect. Offer the user the choice to create domain agents first via `/brewcode:agents` and re-run, or
 > proceed on `Plan`. Do NOT silently downgrade.
-
-## Output contract handed to P2-P4
-
-A confirmed FINDINGS object with: `DOMAINS` (UPPER-KEBAB list), `EXCLUSIONS` (dir list), `REL_STYLE` (enum), `LANG` (string), `DOCS` (inventory for sweep), `DOMAIN_AGENTS` (table or the `(none found -- ...)` line), `ARCHITECT_AGENT` (agent name or `Plan`), `AGENT_GAPS` (uncovered domain list, may be empty), `SPEC_MODE` (`on` | `off`).

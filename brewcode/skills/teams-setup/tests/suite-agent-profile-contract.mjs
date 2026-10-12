@@ -1,8 +1,6 @@
 #!/usr/bin/env node
-/**
- * Compact team-agent profile contract. Validates the Claude authority, native Codex projection,
- * shared team contract, and the intent-guard/non-team exemptions without mutating the repository.
- */
+// Team-agent profile contract: Claude authority, native Codex projection, shared team contract,
+// intent-guard/non-team exemptions; never mutates the repository.
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
@@ -12,6 +10,14 @@ import {
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+
+// Every world dir this suite mkdtemps under tmpdir(); removed on exit even when a test throws.
+const tempDirs = [];
+process.on('exit', () => {
+  for (const d of tempDirs) {
+    try { rmSync(d, { recursive: true, force: true }); } catch { /* best effort */ }
+  }
+});
 
 const EXPECTED_HEADINGS = [
   'Mission',
@@ -36,6 +42,7 @@ const SOURCE_TEAM_REF = `${SOURCE_CLIENT_DIR}/teams/{TEAM_NAME}/team.md`;
 const NATIVE_TEAM_REF = '.codex/teams/{TEAM_NAME}/team.md';
 const SOURCE_PLUGIN_ROOT = `${['CL', 'AUDE'].join('')}_PLUGIN_ROOT`;
 const REQUIRED_GUARD_SENTENCE = '`intent-guard` is review-only, keeps its own output contract, and never implements.';
+const DUSK_PROJECT_ROOT = '/tmp/project-dusk';
 const DUSK_ROSTER = [
   ['game-designer', 'GDD', 'Fun'],
   ['combat-dev', 'Combat', 'Actors'],
@@ -926,7 +933,7 @@ check(
 );
 
 const fullDuskTeam = instantiateTeamTemplate(canonicalTeam, {
-  projectRoot: '/Users/maximus/IdeaProjects/project-dusk',
+  projectRoot: DUSK_PROJECT_ROOT,
   roster: DUSK_ROSTER,
   policy: 'legacy-absent',
   reportRoot: '.codex/reports',
@@ -1076,7 +1083,7 @@ check(
   'Codex path projection does not grow the shared contract',
 );
 const fullNativeDuskTeam = instantiateTeamTemplate(projectedTeam, {
-  projectRoot: '/Users/maximus/IdeaProjects/project-dusk',
+  projectRoot: DUSK_PROJECT_ROOT,
   roster: DUSK_ROSTER,
   policy: 'legacy-absent',
   reportRoot: '.codex/reports',
@@ -1301,12 +1308,12 @@ const contentVersion = (/content_version=([0-9]+\.[0-9]+\.[0-9]+)/.exec(canonica
 const today = '2026-08-27';
 const BUILD_ROSTER = [['build-eng', 'Build', 'deterministic builds']];
 
-function instantiateTeam(projectRoot, {
+function instantiateTeam({
   policy = 'required', roster = BUILD_ROSTER, reportRoot = `${SOURCE_CLIENT_DIR}/reports`,
   compactDefaults = false,
 } = {}) {
   return instantiateTeamTemplate(canonicalTeam, {
-    projectRoot: '/Users/maximus/IdeaProjects/project-dusk', roster, policy, reportRoot,
+    projectRoot: DUSK_PROJECT_ROOT, roster, policy, reportRoot,
     version: pluginVersion, contentVersion, compactDefaults,
   });
 }
@@ -1359,12 +1366,13 @@ function makeWorld({
   intent = policy === 'required',
 } = {}) {
   const world = mkdtempSync(join(tmpdir(), 'team-profile-contract-'));
+  tempDirs.push(world);
   const teamDir = join(world, SOURCE_CLIENT_DIR, 'teams', 'dusk');
   const agentsDir = join(world, SOURCE_CLIENT_DIR, 'agents');
   mkdirSync(teamDir, { recursive: true });
   mkdirSync(agentsDir, { recursive: true });
   writeFileSync(join(teamDir, 'team.md'), teamText ?? instantiateTeam(
-    world, { policy, roster, reportRoot, compactDefaults },
+    { policy, roster, reportRoot, compactDefaults },
   ));
   writeFileSync(join(teamDir, 'trace.jsonl'), '');
   writeFileSync(join(teamDir, 'trace-ops.sh'), '#!/bin/sh\nexit 0\n');
@@ -1382,7 +1390,8 @@ function runVerifier(world, env = process.env) {
     cwd: world,
     env,
     encoding: 'utf8',
-    timeout: 30000,
+    // Hang guard, not a readiness wait: 13-member Dusk verify exceeded 30 s under load.
+    timeout: 180000,
   });
   return { status: result.status, output: `${result.stdout || ''}${result.stderr || ''}` };
 }
@@ -1423,6 +1432,7 @@ function removeWorld(world) {
 {
   // GIVEN: a fresh shell has no preexisting SID and trace storage is absent.
   const world = mkdtempSync(join(tmpdir(), 'team-fresh-sid-'));
+  tempDirs.push(world);
   const teamDir = join(world, SOURCE_CLIENT_DIR, 'teams', 'dusk');
   mkdirSync(teamDir, { recursive: true });
 

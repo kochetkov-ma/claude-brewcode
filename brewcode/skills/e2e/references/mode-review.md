@@ -1,9 +1,7 @@
 # Mode: REVIEW
 
 Multi-agent quorum review of E2E scenarios and tests.
-
-Run this coordination in the main session. Ordinary delegated agents cannot spawn Agent:
-return the bounded review request to the main orchestrator; never assume nested delegation.
+Contents: R0 Prerequisites, R1 Scope, R2 Scan, R3 Splitting, R4 Quorum, R5 Re-check, R6 Report.
 
 ## R0: Prerequisite Check
 
@@ -24,8 +22,7 @@ If PROMPT is empty → AskUserQuestion: "What to review?"
 
 ## R3: Scope Splitting
 
-Split review scope into parts by test file or scenario group.
-Each part should be reviewable independently.
+Split the review scope into independently reviewable parts by test file or scenario group.
 
 | Part | Files | Type |
 |------|-------|------|
@@ -66,7 +63,6 @@ DONE: findings table with severity (critical/high/medium/low): file | rule id | 
 | Only 1 reviewer flags | **Unconfirmed** finding (marked for re-check) |
 | All 3 agree no issues in a file | **Clean** |
 
-Merge findings across all 3 reviewers per part.
 
 ## R5: Cross-Agent Re-check
 
@@ -92,9 +88,7 @@ DONE: verify each finding is real and actionable; you may downgrade severity or 
 ")
 ```
 
-For unconfirmed findings:
-- Include in report as "unconfirmed — single reviewer"
-- Do NOT auto-fix unconfirmed findings
+Unconfirmed findings go into the report as "unconfirmed — single reviewer" and are never auto-fixed.
 
 ## R6: Results Report
 

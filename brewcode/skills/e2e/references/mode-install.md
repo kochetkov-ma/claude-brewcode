@@ -1,6 +1,8 @@
 # Mode: INSTALL
 
 Install E2E testing infrastructure: analyze project, create agents, generate rules.
+Contents: S0 Prerequisites, S1 Existing Setup, S2 Analysis, S3 Confirmation, S4 Agents, S5 Rules,
+S6 Persistence, S7 Summary.
 
 ## S0: Prerequisites Check
 
@@ -71,6 +73,8 @@ CONTEXT: S2 already analysed the project and S3 already got the user to approve 
       models and tools -- do not re-analyse and do not renegotiate. Project analysis: {ANALYSIS}.
       Colleague table (who else exists and what each owns): {ROSTER}. The other agents of this
       batch are being written in parallel right now -- reference them by name, never define them.
+      Metadata keys: version "{PLUGIN_VERSION}", content_version "{CONTENT_VERSION}",
+      last_updated "{LAST_UPDATED}".
 CONSUMER: `/brewcode:e2e create|update|review` spawn this agent by name and feed it scenarios and
       rules; the file may be run through brewtools:text-optimize immediately after. So frontmatter
       must parse and `description` must be <= 100 chars (optimal ~80), single line, role + 2-3
@@ -83,24 +87,21 @@ DONE: file written and parses; report as: path | model | tools | description lin
 - e2e-manual-tester
 - e2e-reviewer (disallowedTools: Write, Edit, Bash)
 
-After each batch: AskUserQuestion "Optimize agent prompts with text-optimizer?"
-No -> preserve created agents and continue. `brewtools` absent -> skip, report it.
-Yes -> the main caller resolves and reads installed `brewtools/skills/text-optimize/SKILL.md`
-and its required references, then follows its canonical Phase 0-3 orchestration for only this
-batch's `.claude/agents/{agent-name}.md` files. Do not model-invoke the distributed skill through
-`Skill`: `disable-model-invocation: true` applies. Read/follow its workflow under this approval.
-
-Main snapshots before edits and builds original fact inventories; then dispatches one optimizer
-per file with the canonical GOAL/ROLE/SCOPE/CONTEXT/CONSUMER/DONE brief, resolved references,
-mode/depth, `<RUN_DIR>` and snapshot path, plus dedup decisions (none -> retain every cross-file fact).
-Writers never nest optimization or accept their own drafts. Each owned atomic edit/repair gets an
-immediate known-draft checkpoint; never capture others' changes or manufacture recovery proof.
-Main runs `verify --no-restore` and required independent semantic gates, repairs owned loss or
-refuses acceptance with safe recovery status. Missing snapshot/state/references -> stop optimization.
-After acceptance, recheck parsed frontmatter, roster model/tools, `description` <=100 chars
-(optimal ~80), single line, role + 2-3 triggers and no `<example>` blocks before S5.
-Failed optimization -> stop before S5 unless safe recovery restored valid created agents and
-the same roster/frontmatter checks pass; report the optimization refusal separately.
+After each batch: AskUserQuestion "Optimize agent prompts with text-optimizer?" No -> keep the
+agents as written and continue.
+Yes -> medium-optimize exactly this batch's `.claude/agents/{agent-name}.md` files, only when agent
+type `brewtools:text-optimizer` is available in this session. It stops on a brief without `RUN_DIR`,
+so follow the Medium workflow of the installed `/brewtools:text-optimize` `SKILL.md`: path =
+`installPath` of the enabled `brewtools` entry in `claude plugin list --json`, which also stands
+for `CLAUDE_PLUGIN_ROOT` in its commands; never via `Skill` (`disable-model-invocation: true`).
+Snapshot the files, capture `RUN_DIR`, spawn one optimizer per file with the six brief fields,
+that `RUN_DIR` and "preserve every frontmatter key, the roster model/tools, every heading, name,
+number, negation and scope", then run its verify gate and re-check each file: frontmatter parses,
+roster model/tools, `description` <=100 chars (optimal ~80), single line, role + 2-3 triggers, no
+`<example>` blocks. Delegates never spawn optimizers.
+> Agent type unavailable or that `SKILL.md` not resolvable -> skip the pass and report the skip,
+> not a blocker; the agents stay as written. A refused optimization continues to S5 only after its
+> safe recovery restored the agents and the same checks pass; report the refusal separately.
 
 ## S5: Rules Generation
 
@@ -145,10 +146,9 @@ the same roster/frontmatter checks pass; report the optimization refusal separat
 `${CLAUDE_SKILL_DIR}/references/e2e-rules.md` plus the accepted `[WEB]`/`[PROJECT]` additions from S5.
 This file — not the plugin copy — is what every e2e agent loads on every later run.
 
-**Project-local by design.** The generated `.claude/agents/e2e-*.md` are not plugin-owned, so no
-plugin path and no `*_PLUGIN_ROOT` variable resolves inside them; and an absolute cache path
-(`~/.claude/plugins/cache/claude-brewcode/brewcode/<version>/...`) dies at the next plugin update
-because the version is in the path. A repo-relative file survives updates, uninstall, clone and CI.
+**Project-local by design:** the generated `.claude/agents/e2e-*.md` are not plugin-owned, so no
+plugin path resolves inside them, and an absolute plugin-cache path embeds the plugin version and
+breaks at the next update. A repo-relative file survives updates, uninstall, clone and CI.
 
 ```bash
 mkdir -p .claude/e2e && test -s .claude/e2e/e2e-rules.md && echo "OK" || echo "FAILED"
@@ -185,18 +185,11 @@ Then create `.claude/e2e/config.json`:
 }
 ```
 
-> `version` / `content_version` / `generated_by` / `last_updated` replace the old `lastSetup` key,
-> whose format nothing ever bound. `{PLUGIN_VERSION}`, `{CONTENT_VERSION}` and `{LAST_UPDATED}` are the
-> `PLUGIN_VERSION:`, `CONTENT_VERSION:` and `LAST_UPDATED:` lines Phase 0's `detect-mode.sh` already
-> printed — the ONE command that produces them, so the date is always `date +%F` (`YYYY-MM-DD`), the
-> plugin version always comes from `.claude-plugin/plugin.json`, and `content_version` is self-located
-> from this SKILL.md's own `brewcode-meta:` marker (`bump-version.sh` stamps it at release). Never
-> hardcode any of them. Migrating an older install: drop `lastSetup`, write the four keys.
->
-> `{PLUGIN_VERSION}` and `{CONTENT_VERSION}` are always real `X.Y.Z` here: `detect-mode.sh` hard-fails
-> when it cannot read the manifest or the marker, so Phase 0 never hands this mode a placeholder. If
-> you are ever holding something that is not `X.Y.Z` — `unknown`, an empty string, an unsubstituted
-> `{PLUGIN_VERSION}`/`{CONTENT_VERSION}` — do NOT write the file. Stop and report it.
+> `{PLUGIN_VERSION}`, `{CONTENT_VERSION}` and `{LAST_UPDATED}` are the Phase 0 `detect-mode.sh` lines
+> (plugin version from `.claude-plugin/plugin.json`, `content_version` from the SKILL.md
+> `brewcode-meta:` marker, date `date +%F` = `YYYY-MM-DD`); never hardcode them. Migrating an older install: drop
+> `lastSetup`, write the four keys. Holding anything that is not `X.Y.Z` — `unknown`, an empty string,
+> an unsubstituted `{PLUGIN_VERSION}`/`{CONTENT_VERSION}` — do NOT write the file; stop and report it.
 
 Optionally generate `.claude/rules/e2e-conventions.md` (~20-30 lines) with key rules. It is a rule file
 Claude Code auto-loads, so it carries `paths:` and `description:` plus the same five standard keys:

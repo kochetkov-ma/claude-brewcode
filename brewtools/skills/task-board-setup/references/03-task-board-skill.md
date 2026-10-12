@@ -11,10 +11,10 @@ Substitute `{{LANG}}`, `{{CLOSE_MARKER_SHORT}}`. Spec-layer placeholders (gated 
 
 ## Spec-layer placeholders (`SPEC_MODE` gate)
 
-When `SPEC_MODE=on`, substitute each placeholder with its expansion below. When `SPEC_MODE=off`, omit only spec-layer expansions (5 flows); methodology/graph/anti-drift and `PROGRESS.md` remain UNGATED baseline in BOTH modes. Off-mode Invariants = 6 bullets, on-mode = 7; scheduling tools are available to this skill in either mode:
+`SPEC_MODE=on`: substitute each placeholder with its expansion below. `SPEC_MODE=off`: omit only spec-layer expansions (5 flows; Invariants 6 bullets, 7 on-mode); methodology/graph/anti-drift, `PROGRESS.md` and the scheduling tools stay UNGATED in BOTH modes:
 
 - **LINE kind** -- the placeholder owns its line: REMOVE the whole line, !=leave it blank.
-- **INLINE kind** -- the placeholder sits mid-line (`{{SPEC_DESC_TRIGGERS}}` inside `description:`, `{{SPEC_ADD_ROW_COL}}` inside the ADD-flow column list): delete the token itself and nothing else, no stray space. Both carry NO space before the token; the expansion supplies its own leading space.
+- **INLINE kind** -- mid-line (`{{SPEC_DESC_TRIGGERS}}` inside `description:`, `{{SPEC_ADD_ROW_COL}}` inside the ADD-flow column list): when off, delete only the token, no stray space. NO space precedes either token; the expansion supplies its own leading space.
 
 Authoritative rules live in `TRACKER.md` section 10. These expansions mirror it; !=invent extra rules here.
 
@@ -47,7 +47,7 @@ Authoritative rules live in `TRACKER.md` section 10. These expansions mirror it;
 
 ```markdown
 5. On `todo -> progress`: set `spec:` by the ADD-flow heuristic if missing or stale. `spec: pending` -> report `NEXT: run /task-spec <ID> (spec required: <reason>)`; the move still happens. The same value goes in the board row's `spec` cell.
-6. On `-> closed`: enforce gate G2 BEFORE moving. Read BOTH docs -- `specs/<ID>-spec.md` `## Open questions` (ids `Q1..Qn`) and `specs/<ID>-design.md` `## Open architectural questions` (ids `AQ1..AQn`); a missing doc contributes nothing, it never waives the gate. If ANY row in EITHER table is `blocking: yes`, REFUSE the move and report the blocking ids (e.g. `Q1, AQ3`) instead. Move anyway ONLY if `## Notes` carries `SPEC WAIVER: <reason>`. Non-blocking questions warn, never block. Independently of G2: flip each `in` scope id's `status` to `in-progress` / `done` as that part lands, and on `-> closed` report LOUDLY every `in` id not `done` (list the ids) -- G2 is the only thing that refuses a close, status never is, and there is no waiver marker for it. G5, on the SAME two reads G2 just did: spec FM `status:` still `draft`, or an `in` id just marked `done` that is `uncovered`/`partial` in `## Scope coverage` -> report `SPEC STALE: <ID> ...` + ONE `NEXT: run /task-spec <ID> refresh`. Report-only -- !=write either doc, !=touch `## Scope coverage`, !=block the close.
+6. On `-> closed`: enforce gate G2 BEFORE moving. Read BOTH docs -- `specs/<ID>-spec.md` `## Open questions` (ids `Q1..Qn`) and `specs/<ID>-design.md` `## Open architectural questions` (ids `AQ1..AQn`); a missing doc contributes nothing, it never waives the gate. If ANY row in EITHER table is `blocking: yes`, REFUSE the move and report the blocking ids (e.g. `Q1, AQ3`) instead. Move anyway ONLY if `## Notes` carries `SPEC WAIVER: <reason>`. Non-blocking questions warn, never block. Independently of G2: flip each `in` scope id's `status` to `in-progress` / `done` as that part lands, and on `-> closed` report LOUDLY every `in` id not `done` (list the ids) -- only G2 refuses a close; status never does and has no waiver marker. G5, on the SAME two reads G2 just did: spec FM `status:` still `draft`, or an `in` id just marked `done` that is `uncovered`/`partial` in `## Scope coverage` -> report `SPEC STALE: <ID> ...` + ONE `NEXT: run /task-spec <ID> refresh`. Report-only -- !=write either doc, !=touch `## Scope coverage`, !=block the close.
 ```
 
 `{{SPEC_VIEW_FLOW}}` expands to a whole flow section placed after GROOM:
@@ -55,7 +55,7 @@ Authoritative rules live in `TRACKER.md` section 10. These expansions mirror it;
 ```markdown
 ### 6. SPECS view
 
-1. `Glob` `.claude/features/{todo,progress,closed}/*.md` and `.claude/features/specs/*.md`.
+1. List task files and spec docs through Bash: `find .claude/features/todo .claude/features/progress .claude/features/closed .claude/features/specs -maxdepth 1 -name '*.md'`.
 2. One row per task: `id | spec: | spec.md | design.md | blocking Qs | uncovered scope | scope status`.
    - `spec.md` / `design.md`: `yes` | `--`, by existence of `specs/<ID>-spec.md`, `specs/<ID>-design.md`.
    - `blocking Qs`: count of `blocking: yes` rows across BOTH `<ID>-spec.md` `## Open questions` (`Q#`) and `<ID>-design.md` `## Open architectural questions` (`AQ#`).
@@ -99,9 +99,8 @@ Authoritative procedure: `.claude/features/TRACKER.md`. This skill mirrors it --
 
 ## Prompt contract
 
-Position 1 of `$ARGUMENTS` is a **free-form prompt** ({{LANG}}) -- `view`/`add`/`move`/`backlog`/
-`groom` and any flags are optional and may follow in any order. Nobody types keys: resolve the flow
-FROM the prompt.
+`$ARGUMENTS` is one free-form prompt ({{LANG}}); `view`/`add`/`move`/`backlog`/`groom` and any flags
+may sit anywhere in it.
 
 | Mode | EN keywords | RU keywords | Mutates? |
 |------|-------------|-------------|----------|
@@ -111,16 +110,15 @@ FROM the prompt.
 | `backlog` | dump to backlog, backlog it, look into later | закинь в бэклог, в бэклог | yes |
 | `groom` | groom backlog, groom the backlog, triage backlog | разбери бэклог, приведи бэклог в порядок | yes |
 
-1. Strip flags. An explicit mode token anywhere wins outright, no scoring.
-2. Else score modes by distinct whole-word keyword hits (table above). Highest unique score wins;
-   a tie against `view` picks `view` (read-only); a tie of two mutating modes falls to the keyword
-   appearing first in the prompt.
-3. Empty arguments -> `view` (the documented default); a read-only run asks nothing.
-4. Prose that is not a mode is still input: extract the task id, folder or row it names before
+1. Mode: an explicit mode token wins outright; else the most distinct whole-word keyword hits (table
+   above). Tie with `view` -> `view` (read-only); of two mutating modes -> the keyword that comes
+   first in the prompt. No hit or empty -> `view` (the documented default).
+2. Scope: prose that is not a mode is still input: take the task id, folder or row it names before
    entering the flow (VIEW/ADD/MOVE/BACKLOG/GROOM below) -- never guess the first word as a mode.
-5. Outcome-changing ambiguity (which task, which folder) -> ONE `AskUserQuestion` before any write.
+3. Ask: ONE `AskUserQuestion` before any write, only for outcome-changing ambiguity (which task,
+   which folder). A read-only run asks nothing.
 
-Then print this block once, before the first action:
+Print once, before the first action (labels literal ASCII, values in {{LANG}}):
 
 \`\`\`
 PLAN — task-board
@@ -130,8 +128,6 @@ SCOPE:  <task id / row / folder touched, or "read-only view">
 DO:     <2-5 imperative bullets>
 RESULT: <board.md row, task file, or the view/report the user ends up holding>
 \`\`\`
-
-Labels are literal ASCII; values follow {{LANG}}.
 
 ## Invariants (always hold)
 
@@ -143,7 +139,7 @@ Labels are literal ASCII; values follow {{LANG}}.
 - **`PROGRESS.md` tracks the SESSION, not the tasks.** Refresh `.claude/features/PROGRESS.md` in the SAME change as any transition -- five fields: `Updated`, `In flight`, `Moved since last update`, `Blocked`, `Next`, overwritten in place. !=a second board; rules in `.claude/rules/tasks.md`.
 {{SPEC_INVARIANTS}}
 
-Layout: `board.md` (dashboard), `PROGRESS.md` (session progress), `TRACKER.md` (procedure), `METHODOLOGY.md`, `ANTI-DRIFT.md`, `task-graph.md` (derived active work), `TASK_TEMPLATE.md`, `backlog/` (ungated inbox), `todo/`, `progress/`, `closed/`, `specs/`.
+Layout under `.claude/features/`: `board.md` (dashboard), `PROGRESS.md` (session progress), `TRACKER.md` (procedure), `METHODOLOGY.md`, `ANTI-DRIFT.md` (methodology/timer controls), `task-graph.md` (derived active work), `TASK_TEMPLATE.md`, `INDEX.md` (control-file index), `backlog/` (ungated inbox), `todo/`, `progress/`, `closed/`, `specs/`. Rules: `.claude/rules/tasks.md`.
 
 ## Methodology and session timer
 
@@ -184,7 +180,7 @@ Drop an unclear/raw item into `.claude/features/backlog/<slug>.md` -- raw idea, 
 
 ### 5. GROOM backlog
 
-1. `Glob` `.claude/features/backlog/*.md` (skip `README.md`).
+1. List items through Bash: `find .claude/features/backlog -maxdepth 1 -name '*.md' -not -name README.md` (an unmatched shell glob aborts under zsh).
 2. For each item decide its fate: **promote** -> real `todo` task (run flow 2), **merge** -> fold into an existing task's `## Notes`, or **trash** -> delete the file.
 3. Delete the backlog file once handled. Never leave a groomed item behind.
 4. Refresh the board backlog count.
@@ -192,18 +188,9 @@ Drop an unclear/raw item into `.claude/features/backlog/<slug>.md` -- raw idea, 
 
 ## Delegation
 
-A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct it, and it usually drifts off-target. One subagent = ONE bounded unit — ONE board pass (one groom run, or one status folder's transitions), ~<=5 files, ~<=10 steps. Bigger MUST be split into N tasks, all spawned in ONE message.
+A big task handed to one agent cannot be observed or corrected and usually drifts off-target, so one subagent = ONE bounded unit — ONE board pass (one groom run, or one status folder's transitions), ~<=5 files, ~<=10 steps. Bigger MUST be split into N tasks, all spawned in ONE message.
 
-Every spawn prompt MUST carry:
-
-| Field | Content |
-|-------|---------|
-| GOAL | the overall task and why it exists — the point beyond the file edit |
-| ROLE | what this agent owns; what it must NOT touch |
-| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
-| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what THIS agent needs |
-| CONSUMER | who or what uses the result next, and the shape it must fit |
-| DONE | acceptance criteria + the exact report shape you want back |
+Every spawn brief carries six labeled fields, since a subagent starts with an empty context: GOAL (task + why), ROLE (owns, must not touch), SCOPE (paths/commands in and out), CONTEXT (done, by whom, in parallel), CONSUMER (who uses the result + its shape), DONE (acceptance + return: verdict first, evidence, bounded; long output to a file, path returned).
 
 A bare one-line task is never enough. Simple single-task view/add/move: do it directly here. For non-trivial passes (bulk transitions, large groom, migrating many rows) delegate to the `task-tracker` agent rather than hand-editing:
 
@@ -233,14 +220,4 @@ DONE: every backlog file handled (promoted / merged / trashed — none left behi
 |-----------|----------|
 | an argument that matches no mode keyword and names no task/row/folder is still read as a mode | defect -- it is prose: extract the target from it or ask, never guess |
 | the `PLAN` block is missing, or is printed after the first file write | defect -- print it once, right after mode resolution, before entering the flow |
-
-## References
-
-- Procedure (authoritative): `.claude/features/TRACKER.md`
-- Dashboard: `.claude/features/board.md`
-- Template: `.claude/features/TASK_TEMPLATE.md`
-- Rules: `.claude/rules/tasks.md`
-- Methodology/timer controls: `.claude/features/METHODOLOGY.md`, `.claude/features/ANTI-DRIFT.md`
-- Derived active work: `.claude/features/task-graph.md`
-- Control-file index: `.claude/features/INDEX.md`
 ```

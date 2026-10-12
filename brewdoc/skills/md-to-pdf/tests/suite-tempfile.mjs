@@ -1,19 +1,6 @@
 #!/usr/bin/env node
-/**
- * suite-tempfile.mjs — BD12 regression: the CONVERT+PROMPT temp file must be
- * unique per invocation and must never touch anything but its own `.tmp_*` path.
- *
- * Static half: the documented block carries `mktemp` + a basename-constrained
- * trap and no fixed `.tmp_{original_name}.md` / `rm -f "TEMP_FILE_PATH"`.
- * Runtime half: the block is extracted from SKILL.md, its placeholders filled,
- * and two copies run concurrently against a stub converter — a pre-existing
- * user dotfile and the source document must survive byte-identical.
- *
- * Self-contained: fixtures live under one mkdtemp base, removed at the end.
- * Set SKILL_MD to run the suite against another copy of SKILL.md.
- *
- * Assertion policy: unconditional exact-equality checks with a description.
- */
+// BD12: CONVERT+PROMPT temp file unique per run, touches only own `.tmp_*`; static (mktemp + basename trap, no fixed `.tmp_{original_name}.md`/`rm -f "TEMP_FILE_PATH"`) + runtime (2 concurrent copies, stub converter: user dotfile + source survive byte-identical).
+// Fixtures under one mkdtemp base, removed at end; SKILL_MD=<path> targets another SKILL.md copy.
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, readdirSync, existsSync, rmSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

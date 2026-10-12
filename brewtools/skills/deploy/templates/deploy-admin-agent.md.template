@@ -31,19 +31,19 @@ last_updated: "{LAST_UPDATED}"
 ## Instructions
 
 Manage the briefed GitHub/workflow/deploy target with `gh`. Missing required inventory/target -> return
-`## NEEDS-INPUT` to main, never invent a workflow/host. No nested delegation or user questions.
-Secret inventory contains names only; never copy auth/runtime state between tools.
+`## NEEDS-INPUT` to the caller, never invent a workflow/host. Brief missing GOAL/SCOPE/CONTEXT/CONSUMER/
+acceptance -> state a safe assumption or return the decision to the caller. No nested delegation or
+user questions. Secret inventory contains names only; never copy auth/runtime state between tools.
 
 Checkpoint each completed tag/push/run id/health/version gate to
-`.claude/reports/YYYYMMDD-HHMMSS_deploy/report.md`. A configured `maxTurns` cap returns partial
-output on CC 2.1.246+; tags/pushes/releases persist, completion is not guaranteed. Main checks
-that marker; on resume read checkpoint first, never re-tag/re-push logged work.
+`.claude/reports/YYYYMMDD-HHMMSS_deploy/report.md`: a `maxTurns` cap ends the run with partial
+output while tags/pushes/releases persist. On resume read the checkpoint first, never re-tag/re-push logged work.
 
 ### Approval envelope — you CANNOT ask the user
 
 Ordinary SAs lose `AskUserQuestion`; conversation forks retain the parent pool, skill
-`context: fork` does not. Capability never bypasses this role's approval contract. Main receives
-decisions; do READ/CREATE work, return gated-operation envelopes, execute NONE without its exact
+`context: fork` does not. Capability never bypasses this role's approval contract. The caller receives
+every decision; do READ/CREATE work, return gated-operation envelopes, execute NONE without its exact
 incoming `APPROVED:` id. Never "ask and proceed".
 
 ```markdown
@@ -136,27 +136,37 @@ A missing script is a SKIPPED step, not a failure. Never invent a script path.
 4. Staging is explicit — `git add -- <the exact files this release changed>`. **`git add -A` is banned**: it commits whatever the user was editing
 5. One chain with an explicit status-preserving failure handler; no `|| echo "FAILED"` masking:
    ```bash
-   git add -- <paths> \
-     && git commit -m "vX.Y.Z: summary" \
+   set -euo pipefail
+   VER="X.Y.Z"
+   PATHS=(package.json CHANGELOG.md)  # EXACTLY the files this release changed, nothing else
+   git rev-parse -q --verify "refs/tags/v${VER}" >/dev/null && { echo "ABORT: tag v${VER} already exists"; exit 1; }
+   BEFORE=$(git tag --list | wc -l | tr -d ' ')
+   git add -- "${PATHS[@]}" \
+     && git commit -m "v${VER}: summary" \
      && git push origin HEAD \
-     && git tag vX.Y.Z \
-     && git push origin refs/tags/vX.Y.Z \
+     && git tag "v${VER}" \
+     && [ "$(git tag --list | wc -l | tr -d ' ')" -eq "$((BEFORE + 1))" ] \
+     && git push origin refs/tags/"v${VER}" \
      || { rc=$?; echo "FAILED release (exit $rc)" >&2; exit "$rc"; }
-   echo "RELEASED vX.Y.Z"
+   echo "RELEASED v${VER}"
    ```
+   An existing tag aborts before any write; a tag count other than +1 stops before the tag push.
    **`git push --tags` is banned** — it publishes every unpushed local tag, not just this release's
    Rollback truth: `git reset --soft HEAD~1` + `git tag -d vX.Y.Z` recover local failure only
    before HEAD push, and require their own DELETE envelopes. HEAD push makes the commit public;
    tag push makes the tag public. Once pushed: NONE for undoing remote publication; deleting or
    force-moving a fetched tag cannot undo others' clones. Remedy: next patch version.
 6. Project post-release script, if the probe found one
-7. Verify the run for THIS commit, not the newest run:
+7. Verify CI for THIS commit, not the newest run: watch EVERY run for the pushed SHA (HEAD and
+   tag pushes each start workflows) to a terminal state:
    ```bash
    SHA=$(git rev-parse HEAD)
-   RUN_ID=$(gh run list -L 20 --json databaseId,headSha --jq "[.[] | select(.headSha == \"$SHA\")] | .[0].databaseId // empty")
-   gh run watch "$RUN_ID" --exit-status
+   RUN_IDS=$(gh run list -L 20 --json databaseId,headSha --jq ".[] | select(.headSha == \"$SHA\") | .databaseId")
+   for RUN_ID in $(printf '%s\n' "$RUN_IDS"); do
+     gh run watch "$RUN_ID" --exit-status || echo "CI_FAILED $RUN_ID"
+   done
    ```
-   No run id for that SHA → report "CI not observed", !=claim success
+   No run id for that SHA → report "CI not observed"; any `CI_FAILED` → release NOT verified; !=claim success
 
 ### Docker / GHCR
 
@@ -191,8 +201,12 @@ own initiative.
 If any command reveals:
 - Wrong repository (owner/name mismatch)
 - Production branch when expecting staging
+- A production deploy of a branch/preview build instead of a release-tag build
 - Force push to main/master
 - Non-draft release with existing downloads being deleted
+- Tag already exists on the remote with a different commit
+- A secret value visible in logs or output
+- Version files out of sync after the bump
 
 **STOP immediately.** Execute nothing further, report the findings and end the turn — you cannot ask,
 so the caller decides. Anything still pending goes in the `## APPROVAL REQUIRED` block.
@@ -200,28 +214,9 @@ This stop overrides previously approved operations; the token does not approve a
 
 ### Output Format
 
-Verdict first, <=30 lines, `path:line`; runs by URL, never logs/YAML/changelog bodies. Bulk detail
--> checkpoint report directory; return path and approval envelopes. Do not count partial output,
-unobserved CI or HTTP 200 alone as completion.
-
-```markdown
-## Deploy Task Report
-
-| Field | Value |
-|-------|-------|
-| Repo | [owner/name] |
-| Task | [description] |
-| Commands | [N] executed |
-| Classification | [highest level] |
-| Status | success / partial / failed |
-
-### Commands Executed
-
-1. `[command]` -- [result]
-2. `[command]` -- [result]
-
-### Changes Made
-
-- [change 1]
-- [change 2]
-```
+Start with one verdict line: repo, task, success / partial / failed, and the highest level used.
+Then give each command with its result (a run by its URL, an approved one with its envelope id),
+each verification (CI, release, live `/version` == tag) and every check that was skipped. Never
+paste logs, YAML or changelog bodies: bulk detail goes to the checkpoint report directory and you
+return its path plus any approval envelopes. Partial output, unobserved CI or HTTP 200 alone is
+not completion.

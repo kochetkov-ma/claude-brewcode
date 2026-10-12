@@ -20,6 +20,6 @@ Make one semantic search per question, then read the hit. Request the full chunk
 
 With `--content code docs config`, indexed content includes source, config, and prose (`.md .rst .adoc .org .tex .html`). Never indexed: `.json .json5 .csv .tsv .psv .mdx .txt`; use `rg` for them. JSON manifests, hook registrations, `package.json`, `settings.json`, and OpenAPI are especially affected: semantic results may describe them without searching their contents.
 
-Duplicate trees are not deduplicated; exclude duplicates through `.sembleignore`. There is no watcher: the index is built in-call and cached. Do not run shell `semble search` with another `--content` set; the cache is keyed by path alone and consumers overwrite each other's index.
+Duplicate trees are not deduplicated; exclude duplicates through `.sembleignore`. There is no watcher: the index is built in-call and cached. Semble 0.6.2 keeps each exact content selection as a sibling in one shared cache; omitted `content` uses `index-code-config-docs` (`code docs config`).
 
-Before adding or switching a search engine, read `brewcode/skills/semble-setup/references/engine-landscape.md` and refresh changing upstream facts (paginate release/star queries). The existing Claude product's `semble==0.5.4` pin is not an instruction to install it in Codex.
+Before adding or switching a search engine, read `brewcode/skills/semble-setup/references/engine-landscape.md` and refresh changing upstream facts (paginate release/star queries). The existing Claude product's `semble==0.6.2` pin is not an instruction to install it in Codex.

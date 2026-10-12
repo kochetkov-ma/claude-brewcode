@@ -49,11 +49,11 @@ check_alias() {
   fi
 }
 
-echo "ALIAS_DEEPSEEK=$(check_alias deepseek)"
+echo "ALIAS_DEEPSEEK=$(check_alias '(deepseek|ds)')"  # default alias is claudeds
 echo "ALIAS_GLM=$(check_alias glm)"
 echo "ALIAS_QWEN=$(check_alias qwen)"
 echo "ALIAS_MINIMAX=$(check_alias minimax)"
-echo "ALIAS_OPENROUTER=$(check_alias openrouter)"
+echo "ALIAS_OPENROUTER=$(check_alias '(openrouter|or)')"  # default alias is claudeor
 # Also detect custom alias names containing provider keyword
 echo "ALIAS_OR=$(check_alias or)"
 echo "ALIAS_DS=$(check_alias ds)"

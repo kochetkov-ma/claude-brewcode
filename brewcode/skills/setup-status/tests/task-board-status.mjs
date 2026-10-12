@@ -12,7 +12,7 @@ const ROOT = resolve(STATUS_DIR, '../../..');
 const TOOLS = join(ROOT, 'brewtools');
 const source = readFileSync(join(STATUS_DIR, 'SKILL.md'), 'utf8');
 const blocks = [...source.matchAll(/```bash\n([\s\S]*?)\n```/g)].map(match => match[1]);
-const presence = blocks.find(block => block.startsWith('cd "$PWD"'));
+const presence = blocks.find(block => block.includes("<<'PATHS'"));
 const parking = blocks.find(block => block.includes('echo "CONFLICT $f"'));
 const stamps = blocks.find(block => block.includes("<<'STAMPS'"));
 const row = source.split('\n').find(line => line.startsWith('| 4 | `/brewtools:task-board-setup`'));
@@ -42,26 +42,26 @@ function fixture(t, mode) {
   return { root, deployed };
 }
 
-function probe(root) {
+function probe(root, cwd = root) {
   const command = presence.replace(/done <<'PATHS'\n[\s\S]*?\nPATHS/,
     `done <<'PATHS'\n${artifacts.join('\n')}\nPATHS`);
-  const result = run(root, command);
+  const result = run(root, command, 'unknown', cwd);
   return { text: result, mode: result.match(/^TASK_SPEC_MODE=(on|off|unknown)$/m)[1] };
 }
 
-function run(root, command, mode = 'unknown') {
+function run(root, command, mode = 'unknown', cwd = root) {
   const result = spawnSync('bash', ['-e', '-o', 'pipefail', '-c', command], {
-    cwd: root, encoding: 'utf8', env: { ...process.env, HOME: root, TASK_SPEC_MODE: mode }, timeout: 10000,
+    cwd, encoding: 'utf8', env: { ...process.env, HOME: root, CLAUDE_PROJECT_DIR: root, TASK_SPEC_MODE: mode }, timeout: 10000,
   });
   assert.equal(result.status, 0, `actual shipped read-only probe must succeed: ${result.stderr}`);
   return result.stdout;
 }
 
-function readStamps(root, mode) {
+function readStamps(root, mode, cwd = root) {
   const command = stamps.replace('PLUGIN_ROOT=/abs/root/printed/by/phase0', `PLUGIN_ROOT="${TOOLS}"`)
     .replace('PLUGIN=brewcode ', 'PLUGIN=brewtools ')
     .replaceAll('${CLAUDE_SKILL_DIR}', STATUS_DIR);
-  return run(root, command, mode);
+  return run(root, command, mode, cwd);
 }
 
 test('actual off/on task-template gate controls optional presence, parking and all canonical content-version probes', t => {
@@ -150,4 +150,14 @@ test('missing methodology controls and stale real carriers remain defects even w
     `${file} missing control must prevent a legacy board from appearing complete`);
   assert.match(source, /any required secondary MISS \(`OPTIONAL` is excluded\)/,
     'actual partial classification must apply to every required missing methodology control');
+});
+
+test('GIVEN the shell cwd moved into a project subdirectory WHEN the probes run THEN they read the session project dir', t => {
+  const { root } = fixture(t, 'on');
+  const sub = join(root, 'src');
+  mkdirSync(sub);
+  const fromRoot = probe(root);
+  assert.equal(fromRoot.mode, 'on', 'precondition: the root probe must see the deployed spec layer');
+  const read = cwd => ({ presence: probe(root, cwd).text, parking: run(root, parking, 'on', cwd), stamps: readStamps(root, 'on', cwd) });
+  assert.deepEqual(read(sub), read(root), 'every project probe must cd to CLAUDE_PROJECT_DIR, never trust the shell cwd');
 });

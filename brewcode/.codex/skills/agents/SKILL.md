@@ -9,7 +9,7 @@ Create, improve, review, sync, list or report on standalone Codex agent TOMLs. R
 
 ## Prompt contract
 
-Read the complete RU/EN prompt and prior answers. Explicit standalone mode tokens win; otherwise score distinct whole-word keywords below. Highest score wins; a tie involving status selects status, unresolved mutating choices return one bundled material decision to main. Empty/unknown -> status. A bare existing TOML name/path -> improve. Extract targets from prose, never the first word as a positional path. Plural/all/multiple targets -> one bounded owner per target in parallel.
+Read the complete RU/EN prompt and prior answers; mode tokens may sit anywhere in it.
 
 | Mode | EN keywords | RU keywords | Mutates? |
 |---|---|---|---|
@@ -20,7 +20,11 @@ Read the complete RU/EN prompt and prior answers. Explicit standalone mode token
 | `review` | review, validate | ревью, проверь корректность | no |
 | `sync` | sync, memory sync | синк, меморисинк, актуализируй, обнови знания | yes |
 
-After resolving mode and targets, print once before work:
+1. Mode: an explicit standalone mode token wins; else most distinct whole-word keyword hits (table above). Tie with status -> status. No hit or empty -> status. A bare existing TOML name/path -> improve.
+2. Scope: take targets from prose, never the first word as a positional path. Plural/all/multiple targets -> one bounded owner per target in parallel.
+3. Ask: reuse resolved answers/authorization; unresolved mutating choices return one bundled material decision to main, missing outcome-changing decisions only. Read-only modes ask nothing unless a menu was explicitly requested: one available main-chat input request with status, status-all, create, improve, review, sync, list and cancel choices. Cancel stops.
+
+Print once, after resolving mode and targets, before work (plan values English, INPUT verbatim):
 
 ```text
 PLAN — brewcode:agents
@@ -30,8 +34,6 @@ SCOPE:  <exact paths and requested scope>
 DO:     <2-5 imperative steps>
 RESULT: <requested artifact or report>
 ```
-
-Plan values are English; INPUT remains verbatim. An explicitly requested menu uses one available main-chat input request with status, status-all, create, improve, review, sync, list and cancel choices. Cancel stops. Reuse resolved answers/authorization; bundle only missing outcome-changing decisions. Read-only modes ask nothing unless that menu was requested.
 
 ## Scope and discovery
 

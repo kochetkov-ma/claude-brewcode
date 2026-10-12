@@ -23,7 +23,7 @@ import { Badge, Card, CardGrid, Steps, UpdateNotice } from '../../../../componen
 
 Create, debug, or validate a lifecycle hook against the actual event contract. Hook Creator
 selects the event, handler type, input schema, output channel, matcher, and failure policy.
-Its source references were refreshed through Claude Code 2.1.285.
+Its source references were refreshed through Claude Code 2.1.296.
 
 Give the main caller one bounded deliverable: behavior, owned files, target registration
 surface, and acceptance evidence. Ordinary subagent questions return to the caller; permission
@@ -125,6 +125,8 @@ a hard denial. Advisory hooks can return an empty result on failure; a policy ga
 an explicit supported denial or blocking failure. Never reuse an advisory fail-open template
 for a hard safety requirement without changing and testing its failure paths.
 
+For a hard gate on a `command` or `http` handler, set `onFailure: "block"` (Claude Code 2.1.295+; older versions ignore the field silently). Without it, a crash, timeout, or missing script lets the action through. Use one `if` rule per tool, and test-fire each path before reporting the gate as working.
+
 Async handlers do not synchronously block the action. AsyncRewake can report a later result,
 but it does not turn background work into a pre-action gate.
 
@@ -143,7 +145,7 @@ registration changes, tests actually run, and any remaining live verification.
 
 <CardGrid>
   <Card title="Brewcode overview" icon="document" href="/brewcode/overview/">Agents, skills, and project setup tools.</Card>
-  <Card title="Brewcode hooks" icon="settings" href="/brewcode/hooks/">The four registered plugin handlers and their actual channels.</Card>
+  <Card title="Brewcode hooks" icon="settings" href="/brewcode/hooks/">The two registered plugin handlers (both SessionStart) and their actual channels.</Card>
   <Card title="Skill Creator" icon="puzzle" href="/brewcode/agents/skill-creator/">Build skill workflows and resource contracts.</Card>
   <Card title="Agent source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/agents/hook-creator.md">Authoring policy, event selection, and verification requirements.</Card>
   <Card title="Hook references" icon="library" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/agents/references">Current event, type-support, and output matrices.</Card>

@@ -170,6 +170,7 @@ function transformText(value, { agent = false, shell = false } = {}) {
     .replaceAll('$CLAUDE_PLUGIN_ROOT', agent ? '{{PLUGIN_ROOT}}' : '<plugin-root>')
     .replaceAll('CLAUDE_CODE_SESSION_ID', 'CODEX_SESSION_ID')
     .replaceAll('CLAUDE_PROJECT_DIR', 'CODEX_PROJECT_DIR')
+    .replaceAll('CLAUDE_CONFIG_DIR', 'CODEX_HOME')
     .replaceAll('CLAUDE_SKILL_DIR', 'skill directory')
     .replaceAll('CLAUDE_PLUGIN_ROOT', agent ? '{{PLUGIN_ROOT}}' : 'plugin root')
     .replaceAll('CLAUDE.md', 'AGENTS.md')
@@ -199,9 +200,10 @@ function transformText(value, { agent = false, shell = false } = {}) {
     .replace(/\bWrite tool\b/gi, 'apply_patch')
     .replace(/\bEdit tool\b/gi, 'apply_patch')
     .replace(/\bopus-or-fable\b/gi, 'high-reasoning model')
-    .replace(/\bopus\b/gi, 'high-reasoning model')
-    .replace(/\bsonnet\b/gi, 'balanced model')
-    .replace(/\bhaiku\b/gi, 'fast model')
+    // Bare aliases only: a hyphen-attached id fragment (`claude-opus-5-5`, `-sonnet-5-5`) stays byte-exact.
+    .replace(/(?<!-)\bopus\b(?!-\d)/gi, 'high-reasoning model')
+    .replace(/(?<!-)\bsonnet\b(?!-\d)/gi, 'balanced model')
+    .replace(/(?<!-)\bhaiku\b(?!-\d)/gi, 'fast model')
     .replace(/\binherit model\b/gi, 'parent-session model')
     .replace(/\bClaude Code\b/g, 'Codex')
     .replace(/\bClaude 4\.x\b/g, 'current Codex models')
@@ -322,10 +324,12 @@ function nativeWorkflowText(value, options = {}) {
     .replaceAll('~/.codex/settings.json', '~/.codex/config.toml')
     .replace(/~\/\.codex\/plugins\/cache\/[\w*./{}-]+/g, '<codex-managed-plugin-state>')
     .replace(/\.codex\/plugins\/cache\/[\w*./{}-]+/g, '<codex-managed-plugin-state>')
-    .replace(/\bsubagent_type\s*=/g, 'task_role=')
-    .replace(/\bsubagent_type\s*:/g, 'task_role:')
-    .replace(/\bmodel\s*=/g, 'reasoning_tier=')
-    .replace(/\bprompt\s*=/g, 'message=')
+    // Keyword-argument form only (`name=`): a spaced `name = x` is code (JS default param, assignment).
+    // `(?<=\\[nrt])`: also after an escape inside a JS/shell string literal (`\nsubagent_type=`).
+    .replace(/(?:\b|(?<=\\[nrt]))subagent_type=(?!=)/g, 'task_role=')
+    .replace(/(?:\b|(?<=\\[nrt]))subagent_type\s*:/g, 'task_role:')
+    .replace(/\bmodel=(?!=)/g, 'reasoning_tier=')
+    .replace(/\bprompt=(?!=)/g, 'message=')
     .replace(/\brun_in_background\s*[:=]\s*(?:false|true)/g, 'execution=foreground')
     .replace(/Skill\s*\(\s*skill\s*=\s*["']([^"']+)["']\s*,\s*args\s*=\s*["']([^"']*)["']\s*\)/g, (_, name, args, offset, full) => `Invoke \`${skillSigil(shell, full, offset)}${name}\` with arguments \`${args}\``)
     .replace(/\bclaude\s+-p\b/g, 'codex exec')
@@ -418,6 +422,15 @@ const TEXT_OVERRIDES = {
       "so the generated agent knows the target's AGENTS.md is decomposed/lazy-loaded.",
       "so the generated agent knows the target's AGENTS.md is decomposed and requires explicit module-guidance reads outside the launch instruction chain."
     ]
+  ],
+  // Codex manifests carry semver build metadata (`4.0.6+codex.<stamp>`), which the X.Y.Z restamp gate rejected.
+  'brewcode/skills/superreview-setup/scripts/generate.sh': [
+    [
+      `grep -Eq '^version: "[0-9]+\\.[0-9]+\\.[0-9]+"$'`,
+      `grep -Eq '^version: "[0-9]+\\.[0-9]+\\.[0-9]+(\\+[0-9A-Za-z.-]+)?"$'`
+    ],
+    // The roster lists `.codex/agents/*.toml`; stripping `.md` left `expert.toml`, so every local agent was "unknown".
+    ['_an="$(basename "$_af" .md)"', '_an="$(basename "$_af" .toml)"']
   ]
 };
 
@@ -471,7 +484,7 @@ Create, improve, review, sync, list or report on standalone Codex agent TOMLs. R
 
 ## Prompt contract
 
-Read the complete RU/EN prompt and prior answers. Explicit standalone mode tokens win; otherwise score distinct whole-word keywords below. Highest score wins; a tie involving status selects status, unresolved mutating choices return one bundled material decision to main. Empty/unknown -> status. A bare existing TOML name/path -> improve. Extract targets from prose, never the first word as a positional path. Plural/all/multiple targets -> one bounded owner per target in parallel.
+Read the complete RU/EN prompt and prior answers; mode tokens may sit anywhere in it.
 
 | Mode | EN keywords | RU keywords | Mutates? |
 |---|---|---|---|
@@ -482,7 +495,11 @@ Read the complete RU/EN prompt and prior answers. Explicit standalone mode token
 | \`review\` | review, validate | ревью, проверь корректность | no |
 | \`sync\` | sync, memory sync | синк, меморисинк, актуализируй, обнови знания | yes |
 
-After resolving mode and targets, print once before work:
+1. Mode: an explicit standalone mode token wins; else most distinct whole-word keyword hits (table above). Tie with status -> status. No hit or empty -> status. A bare existing TOML name/path -> improve.
+2. Scope: take targets from prose, never the first word as a positional path. Plural/all/multiple targets -> one bounded owner per target in parallel.
+3. Ask: reuse resolved answers/authorization; unresolved mutating choices return one bundled material decision to main, missing outcome-changing decisions only. Read-only modes ask nothing unless a menu was explicitly requested: one available main-chat input request with status, status-all, create, improve, review, sync, list and cancel choices. Cancel stops.
+
+Print once, after resolving mode and targets, before work (plan values English, INPUT verbatim):
 
 \`\`\`text
 PLAN — brewcode:agents
@@ -492,8 +509,6 @@ SCOPE:  <exact paths and requested scope>
 DO:     <2-5 imperative steps>
 RESULT: <requested artifact or report>
 \`\`\`
-
-Plan values are English; INPUT remains verbatim. An explicitly requested menu uses one available main-chat input request with status, status-all, create, improve, review, sync, list and cancel choices. Cancel stops. Reuse resolved answers/authorization; bundle only missing outcome-changing decisions. Read-only modes ask nothing unless that menu was requested.
 
 ## Scope and discovery
 
@@ -1803,17 +1818,14 @@ REPORTLAB_VERSION=${pins.reportlab}
 WEASYPRINT_VERSION=${pins.weasyprint}
 MARKDOWN_VERSION=${pins.markdown}
 PYGMENTS_VERSION=${pins.pygments}
-PANGO_VERSION=1.57.1
-CAIRO_VERSION=1.18.4
-GDK_PIXBUF_VERSION=2.44.6
-LIBFFI_VERSION=3.6.0
+# Homebrew ships only the current formula, so system libs are presence-checked, never version-pinned.
+SYSTEM_FORMULAS="pango cairo gdk-pixbuf libffi"
 
 usage() { echo "usage: check_deps.sh <check|install|status> [reportlab|weasyprint]"; }
 python_version() { python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 8))'; }
 package_version() { python3 -c 'from importlib.metadata import version; print(version("'"$1"'"))' 2>/dev/null; }
 check_package() { test "$(package_version "$1")" = "$2"; }
-brew_version() { brew list --versions "$1" 2>/dev/null | awk '{print $NF}'; }
-check_formula() { test "$(brew_version "$1")" = "$2"; }
+check_formula() { brew list --versions "$1" >/dev/null 2>&1; }
 
 check_engine() {
   local engine="$1"
@@ -1827,10 +1839,9 @@ check_engine() {
       check_package markdown "$MARKDOWN_VERSION" || { echo "MISSING_OR_WRONG_PIP|markdown==$MARKDOWN_VERSION"; return 1; }
       check_package pygments "$PYGMENTS_VERSION" || { echo "MISSING_OR_WRONG_PIP|pygments==$PYGMENTS_VERSION"; return 1; }
       if test "$(uname -s)" = Darwin; then
-        check_formula pango "$PANGO_VERSION" || { echo "MISSING_OR_WRONG_SYSTEM|pango==$PANGO_VERSION"; return 1; }
-        check_formula cairo "$CAIRO_VERSION" || { echo "MISSING_OR_WRONG_SYSTEM|cairo==$CAIRO_VERSION"; return 1; }
-        check_formula gdk-pixbuf "$GDK_PIXBUF_VERSION" || { echo "MISSING_OR_WRONG_SYSTEM|gdk-pixbuf==$GDK_PIXBUF_VERSION"; return 1; }
-        check_formula libffi "$LIBFFI_VERSION" || { echo "MISSING_OR_WRONG_SYSTEM|libffi==$LIBFFI_VERSION"; return 1; }
+        for formula in $SYSTEM_FORMULAS; do
+          check_formula "$formula" || { echo "MISSING_SYSTEM|$formula"; return 1; }
+        done
       fi
       ;;
     *) usage >&2; return 2 ;;
@@ -1847,9 +1858,8 @@ install_engine() {
       ;;
     weasyprint)
       if test "$(uname -s)" = Darwin; then
-        for pin in "pango==$PANGO_VERSION" "cairo==$CAIRO_VERSION" "gdk-pixbuf==$GDK_PIXBUF_VERSION" "libffi==$LIBFFI_VERSION"; do
-          formula="\${pin%%==*}"; version="\${pin##*==}"
-          check_formula "$formula" "$version" || { echo "Install exact system dependency $pin through an approved pinned package source, then retry." >&2; return 1; }
+        for formula in $SYSTEM_FORMULAS; do
+          check_formula "$formula" || { echo "Missing system dependency $formula: after approval, add the current Homebrew formulas ($SYSTEM_FORMULAS), then retry." >&2; return 1; }
         done
       fi
       python3 -m pip install "weasyprint==$WEASYPRINT_VERSION" "markdown==$MARKDOWN_VERSION" "pygments==$PYGMENTS_VERSION"
@@ -1895,6 +1905,8 @@ esac
   if (plugin === 'brewtools' && skill === 'manager-setup') {
     fs.rmSync(path.join(targetDir, 'references', 'hard.md'), { force: true });
     fs.rmSync(path.join(targetDir, 'references', 'intent-routing.md'), { force: true });
+    // Source suite drives the Claude-only HARD-wall guard (hooks/hardmode-guard.mjs), absent from this variant.
+    fs.rmSync(path.join(targetDir, 'tests'), { recursive: true, force: true });
     writeFile(path.join(targetDir, 'README.md'), '# Manager for Codex\n\nAmbient manager, architecture, and review prompt guidance. This variant provides no hard security wall and no parent-only enforcement.\n');
     const managerFull = `# [ROLE: MANAGER]
 
@@ -1907,9 +1919,7 @@ The user's ++M codeword authorizes foreground delegation for this task. Orchestr
 5. Use spawn_agent, send_message, followup_task, and wait_agent for foreground collaboration. Give each agent the goal it serves, concrete scope with explicit out-of-bounds, the context it needs (what is already done and what runs in parallel, trimmed to that agent), who consumes its result and in what shape, expected evidence, allowed mutation surface, and validation duties. Every code or test brief must make the agent ${ETALON_BRIEF}.
 6. Review every delegated result before using it. Reconcile conflicts against authoritative project files and run validation proportional to risk.
 7. Once ALL code is written (not per-piece), file one recommended final task: simplify the whole written code and strip over-engineering. Delegate it like any other task.
-8. Lead the final handoff with the outcome, changed surfaces, exact validation, and any genuine remaining risk.
-
-Branch: work in the current branch; none chosen -> main. Unless the user says branch/PR, stay on main and take over ALL workspace changes, incl. from other sessions.`;
+8. Lead the final handoff with the outcome, changed surfaces, exact validation, and any genuine remaining risk.`;
     const managerPlan = `${managerFull}
 
 # [ADDON: PLAN MODE]
@@ -2518,6 +2528,17 @@ ${nativeWorkflowText(body)}
   writeFile(path.join(targetDir, 'agents', 'openai.yaml'), openAiYaml(plugin, skill, nativeDescription));
 }
 
+// Source agent rules carried verbatim (line breaks kept) into the hand-written native instructions.
+const NATIVE_AGENT_CARRIED_RULES = { 'text-optimizer': ["A block between another tool's begin/end markers"] };
+
+function sourceRuleLines(source, prefix, agentName) {
+  const lines = source.split('\n');
+  const start = lines.findIndex((line) => line.startsWith(prefix));
+  const end = lines.findIndex((line, index) => index >= start && line.trimEnd().endsWith('.'));
+  if (start < 0 || end < 0) throw new Error(`Carried rule for ${agentName} no longer in source: ${JSON.stringify(prefix)}`);
+  return lines.slice(start, end + 1).join('\n');
+}
+
 function generateAgent(plugin, agentName) {
   const sourceFile = path.join(REPO_ROOT, plugin, 'agents', `${agentName}.md`);
   const targetFile = path.join(REPO_ROOT, plugin, '.codex', 'agents', `${agentName}.toml`);
@@ -2534,7 +2555,8 @@ function generateAgent(plugin, agentName) {
     'text-optimizer': `Optimize text for clarity and token efficiency while preserving every load-bearing constraint, identifier, example, and safety rule. Match the artifact's language and house style, measure the result, and explain material removals. Write only to the requested path.`
   }[agentName];
   if (!nativeInstructions) throw new Error(`Missing native instructions for ${plugin}/${agentName}`);
-  const instructions = nativeInstructions.replaceAll("'''", "' ' '").trim();
+  const carried = (NATIVE_AGENT_CARRIED_RULES[agentName] || []).map((prefix) => sourceRuleLines(source, prefix, agentName));
+  const instructions = [nativeInstructions, ...carried].join('\n').replaceAll("'''", "' ' '").trim();
   writeFile(
     targetFile,
     `name = ${JSON.stringify(agentName)}\ndescription = ${JSON.stringify(description)}\ndeveloper_instructions = '''\n${instructions}\n'''\n`

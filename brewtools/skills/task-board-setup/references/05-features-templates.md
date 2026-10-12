@@ -2,7 +2,7 @@
 
 Write each block below to its path under `TARGET/.claude/features/`. Substitute `{{REPO_NAME}}`, `{{DOMAINS}}`, `{{FIRST_DOMAIN}}`, `{{LANG}}`, `{{CLOSE_MARKER_SHORT}}` (ref 03 map), `{{TODAY}}` (ISO date), the metadata quartet `{PLUGIN_VERSION}` / `{CONTENT_VERSION}` / `{GENERATED_BY}` / `{LAST_UPDATED}` (SKILL.md Placeholder map), plus the `{{SPEC_*}}` placeholders defined below (all gated by `SPEC_MODE`).
 
-> **Metadata stamp.** `board.md`, `PROGRESS.md`, `TRACKER.md`, `INDEX.md` and `backlog/README.md` each open with the five-key frontmatter block (`doc_type, version, content_version, generated_by, last_updated`). It is UNGATED -- identical in both `SPEC_MODE` states -- and records WHO GENERATED the file and WHEN, so a later plugin version can detect an old-shape scaffold. It is provenance, not live state: nothing rewrites it after generation except `upgrade` (ref 10). `TASK_TEMPLATE.md` gets NO stamp -- its frontmatter is copied into every task card, where those keys would become card data.
+> **Metadata stamp.** `board.md`, `PROGRESS.md`, `TRACKER.md`, `INDEX.md` and `backlog/README.md` each open with the five-key frontmatter block (`doc_type, version, content_version, generated_by, last_updated`), UNGATED (same in both `SPEC_MODE` states). It records who generated the file and when, so a later plugin version can detect an old-shape scaffold; only `upgrade` (ref 10) rewrites it. `TASK_TEMPLATE.md` gets NO stamp -- its frontmatter is copied into every task card, where those keys would become card data.
 
 The `board.md` here is the EMPTY skeleton (counts 0). The Step-4c doc sweep fills it from the migrated docs.
 
@@ -10,11 +10,11 @@ Shared `METHODOLOGY.md`, `ANTI-DRIFT.md` and derived `task-graph.md` templates l
 
 ## Spec-mode placeholders (gate: `SPEC_MODE=on`)
 
-Every placeholder below shares ONE gate: `SPEC_MODE`. Exactly TWO kinds -- `line` and `inline`. When `SPEC_MODE=off`, the emitted control files MUST be byte-identical to the pre-spec-layer originals PLUS this file's UNGATED session-progress sites (`PROGRESS.md` itself, `TRACKER.md` section 2's layout line, `TRACKER.md` section 8 step 4, the `INDEX.md` Control-files row) AND the four-key metadata frontmatter on the five control files -- baseline in BOTH modes, never removed:
+Every placeholder below shares ONE gate, `SPEC_MODE`, and is one of TWO kinds, `line` or `inline`. With `SPEC_MODE=off` the emitted control files MUST be byte-identical to the pre-spec-layer originals plus the baseline present in BOTH modes: this file's UNGATED session-progress sites (`PROGRESS.md` itself, `TRACKER.md` section 2's layout line, `TRACKER.md` section 8 step 4, the `INDEX.md` Control-files row) and the five-key metadata frontmatter on the five control files:
 
-- **Line placeholders** (`{{SPEC_FEATURE_TABLE_HEAD_ON}}`, `{{SPEC_FEATURE_TABLE_HEAD_OFF}}`, `{{SPEC_FM_LINE}}`, `{{SPEC_SCOPE_BLOCK}}`, `{{SPEC_BOARD_COL_NOTE}}`, `{{SPEC_TRACKER_SECTION}}`, `{{SPEC_INDEX_ROWS}}`) occupy a line of their own. When off, REMOVE the entire line -- !=leave it blank.
-- `{{SPEC_FEATURE_TABLE_HEAD_ON}}` / `{{SPEC_FEATURE_TABLE_HEAD_OFF}}` are the two ARMS of that same gate, both `line` kind: on -> expand `_ON`, remove the `_OFF` line; off -> expand `_OFF`, remove the `_ON` line. Exactly one arm survives every run. !=a third kind.
-- **Inline placeholders** (`{{SPEC_COL_H}}`, `{{SPEC_COL_S}}`, `{{SPEC_LC_CLOSE}}`) sit INSIDE an existing line, never on a line of their own: `{{SPEC_COL_H}}`/`{{SPEC_COL_S}}` at end of line, `{{SPEC_LC_CLOSE}}` MID-line, before the closing ` \|`. NO space before the token; each expansion carries whatever leading space its own text needs -- `{{SPEC_COL_H}}` and `{{SPEC_LC_CLOSE}}` start with one, `{{SPEC_COL_S}}` is a separator cell and starts with none. `{{SPEC_LC_CLOSE}}`'s expansion contains no `\|`, so the lifecycle table stays 2 columns. When off, DELETE the token in place -- the line then matches today byte-for-byte.
+- **Line placeholders** (`{{SPEC_FEATURE_TABLE_HEAD_ON}}`, `{{SPEC_FEATURE_TABLE_HEAD_OFF}}`, `{{SPEC_FM_LINE}}`, `{{SPEC_SCOPE_BLOCK}}`, `{{SPEC_BOARD_COL_NOTE}}`, `{{SPEC_TRACKER_SECTION}}`, `{{SPEC_INDEX_ROWS}}`) own their line. When off, REMOVE the entire line -- !=leave it blank.
+- `{{SPEC_FEATURE_TABLE_HEAD_ON}}` / `{{SPEC_FEATURE_TABLE_HEAD_OFF}}` are the two ARMS of that gate, both `line` kind: on -> expand `_ON`, remove the `_OFF` line; off -> the reverse. Exactly one arm survives every run. !=a third kind.
+- **Inline placeholders** (`{{SPEC_COL_H}}`, `{{SPEC_COL_S}}`, `{{SPEC_LC_CLOSE}}`) sit INSIDE an existing line: `{{SPEC_COL_H}}`/`{{SPEC_COL_S}}` at end of line, `{{SPEC_LC_CLOSE}}` MID-line, before the closing ` \|`. NO space before the token; `{{SPEC_COL_H}}` and `{{SPEC_LC_CLOSE}}` expansions start with one, `{{SPEC_COL_S}}` (a separator cell) with none. `{{SPEC_LC_CLOSE}}`'s expansion contains no `\|`, so the lifecycle table stays 2 columns. When off, DELETE the token in place -- the line then matches today byte-for-byte.
 
 | Placeholder | Site | Expands to (when its arm of the gate is active) |
 |-------------|------|--------------------------------------------------|
@@ -183,9 +183,8 @@ last_updated: "{LAST_UPDATED}"
 
 ## 1. What this is
 
-A lightweight, file-based Kanban for {{REPO_NAME}}. No external tool. Everything lives in
-`.claude/features/` and is versioned with the repo. It is the canonical task tracker for the
-project. There is NO root `TODO.md` -- never create one.
+A file-based Kanban for {{REPO_NAME}}, no external tool: everything lives in `.claude/features/`,
+versioned with the repo, and is the project's canonical task tracker. There is NO root `TODO.md` -- never create one.
 
 ## 2. Layout
 
@@ -233,7 +232,7 @@ Always update `board.md` in the SAME change as any transition. The board lags re
 
 ## 4. Task file format
 
-On ANY acceptance/promotion, copy `TASK_TEMPLATE.md` and fill Context/Acceptance, Methodology/base units and COMPLETE unique Anti-drift cron prompt; frontmatter and these sections are required in todo/progress. Template hints/tokens are not filled methodology. Queue state is prepared, no live scheduler id. {{LANG}} only.
+On ANY acceptance/promotion, copy `TASK_TEMPLATE.md` and fill every section (invariants below); template hints/tokens are not filled methodology. {{LANG}} only.
 
 \`\`\`markdown
 ---
@@ -300,7 +299,7 @@ Examples: `T-{{FIRST_DOMAIN}}-SLUG`, `BUG-{{FIRST_DOMAIN}}-SLUG`, `M-{{FIRST_DOM
 `board.md` is the canonical LIST. It holds:
 1. **Overall status** -- release line, headline counts (backlog/todo/progress/closed), current focus (1-3 lines).
 2. **Progress table** -- every WIP task.
-3. **Todo table** -- every queued task (incl. rows with no file yet).
+3. **Todo table** -- every accepted queued task, linked to its real task file.
 4. **Backlog** -- count + pointer to `backlog/` (do not enumerate noise here).
 5. **Closed (recent)** -- latest 10 closes; older outcomes/evidence live in task Notes/`closed/` records. Counts include archived closes, not just visible rows.
 
@@ -339,17 +338,14 @@ The `task-tracker` agent and the `task-board` skill both know this loop -- invok
 
 ## 11. Domain methodology and session anti-drift
 
-Read `METHODOLOGY.md` for the domain's review/test strategy; EACH accepted/promoted task requires its own REAL todo/progress file with filled `## Methodology` (goal/acceptance, domain reviews/checks or gaps, base units/owners/dependencies, parent id) and `## Anti-drift cron` with a COMPLETE unique task-specific prompt at acceptance, not merely at claim. Resolve every prompt token to actual id/root/paths/goal/base work/acceptance. Queued tasks have state prepared and no live scheduler id. Shared method is domain guidance; task method specializes it. Every active top-level task receives its own hourly session timer unless user-overridden/opted-out; children use their parent's timer. Main-session `task-board` alone owns CronCreate/List/Delete, announces confirmed scheduling and verifies stopping on completion/cancellation/parking; tracker owns evidence/graph reconciliation and redirects cron actions. Missing tools/permissions/capacity -> report unscheduled intent, never fabricate delivery. Full lifecycle/prompt/report contract: `ANTI-DRIFT.md`.
+`METHODOLOGY.md` holds the domain's review/test strategy; task method specializes it. At acceptance, not merely at claim, EACH accepted/promoted task needs its own REAL todo/progress file with filled `## Methodology` (goal/acceptance, domain reviews/checks or gaps, base units/owners/dependencies, parent id) and `## Anti-drift cron` with a COMPLETE unique task-specific prompt, every token resolved to actual id/root/paths/goal/base work/acceptance. Queued tasks: state prepared, no live scheduler id. Every active top-level task receives its own hourly session timer unless user-overridden/opted-out; children use their parent's timer. Main-session `task-board` alone owns CronCreate/List/Delete, announces confirmed scheduling and verifies stopping on completion/cancellation/parking; tracker owns evidence/graph reconciliation and redirects cron actions. Missing tools/permissions/capacity -> report unscheduled intent, never fabricate delivery. Full lifecycle/prompt/report contract: `ANTI-DRIFT.md`.
 
-Each delivered tick rereads task/shared methodology, anti-drift, current goal/scope/spec/user corrections; obtains owner evidence; reconciles statuses/dependencies/counts; rewrites derived `task-graph.md` preserving every unfinished node + latest 10 completed, archiving older evidence first. Force goal/acceptance drift checks/corrections, quantify remaining work and advance the next unblocked authorized step. Compact report: local time/timezone, tick number, elapsed, achievements, remaining/next and present problems/blockers/questions, at most five lines, circles 🟢🔵🔴⚪ only. Planning records methodology/graph/prompt/timer execution steps; read-only plan mode defers writes and timers.
+Each delivered tick rereads task/shared methodology, anti-drift, current goal/scope/spec/user corrections; obtains owner evidence; reconciles statuses/dependencies/counts; rewrites derived `task-graph.md` keeping every unfinished node + latest 10 completed, archiving older evidence first; forces goal/acceptance drift checks/corrections, quantifies remaining work and advances the next unblocked authorized step. Report in at most five lines, circles 🟢🔵🔴⚪ only: local time/timezone, tick number, elapsed, achievements, remaining/next, present problems/blockers/questions. Planning records methodology/graph/prompt/timer execution steps; read-only plan mode defers writes and timers.
 ```
 
 ### TRACKER section 10 -- `{{SPEC_TRACKER_SECTION}}` expansion (only when `SPEC_MODE=on`)
 
-Write ONE blank line, then the block below, in place of the placeholder line.
-
-This is the CANONICAL statement of the spec layer. The emitted `task-spec` skill, the `task-board` skill,
-the `task-tracker` agent and `.claude/rules/tasks.md` all mirror it. Restate a gate or the heuristic ONLY where a runtime reader of that file has no guaranteed TRACKER read -- the existing restatements are deliberate enforcement points, !=deduplicate them; elsewhere cross-reference. A restatement !=diverge from this section.
+Write ONE blank line, then the block below, in place of the placeholder line. It is the CANONICAL spec-layer statement; the emitted `task-spec` skill, `task-board` skill, `task-tracker` agent and `.claude/rules/tasks.md` mirror it. Their restatements are deliberate enforcement points for readers with no guaranteed TRACKER read: !=deduplicate them, add none elsewhere (cross-reference instead); a restatement !=diverge from this section.
 
 ```markdown
 ## 10. Spec layer

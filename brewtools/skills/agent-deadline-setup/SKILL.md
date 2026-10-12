@@ -10,24 +10,23 @@ model: sonnet
 
 # Agent Deadline
 
-> Installer/configurator skill. It wires two self-contained hooks (PreToolUse guard + SubagentStop cleanup) that put a SOFT wall-clock budget on every subagent — or configures/removes them. All runtime behavior lives in the hook files and in a JSON config; this skill only decides **mode**, **scope** and **budget**, then delegates the file work to the `brewcode:hook-creator` agent following the runbook.
+> Installs, configures or removes two self-contained hooks (PreToolUse guard + SubagentStop cleanup) that put a soft wall-clock budget on every subagent. This skill only decides mode, scope and budget; the `brewcode:hook-creator` agent does the file work from the runbook.
 
-Claude Code has no wall-clock timeout for subagents. `maxTurns` stops a run at its turn cap; since 2.1.246 the caller receives a partial-marked result with a continuation hint, while unwritten analysis remains unrecoverable. These hooks kill nothing: at 80% of the budget the agent gets one non-blocking "wrap up" directive; past 100% every tool except the finalization set is denied, directing the agent to finish its report while finalization tools remain available.
+Claude Code has no wall-clock timeout for subagents. `maxTurns` stops a run at its turn cap; since 2.1.246 the caller receives a partial-marked result with a continuation hint, while unwritten analysis remains unrecoverable. These hooks kill nothing: they narrow what an over-budget agent can still call, so it finishes its report.
 
 ## Prompt contract
 
-Treat `$ARGUMENTS` as a free-form RU/EN prompt. Modes/flags may appear anywhere; infer mode and scope from prose.
+`$ARGUMENTS` is one free-form RU/EN prompt; mode tokens and flags may sit anywhere in it.
 
-1. Strip flags. An explicit mode token anywhere wins outright, no scoring.
-2. Else score modes by distinct whole-word keyword hits (table in Step 2). Highest unique score
-   wins. Tie with a destructive mode (`purge`) -> `AskUserQuestion`; tie with `status` -> `status`;
-   tie of two mutating modes -> the keyword appearing first; all zero -> `status`.
-3. Empty arguments -> `status`; ask ONE scoping `AskUserQuestion` only when the answer changes
-   what gets written. A read-only run asks nothing.
-4. Outcome-changing ambiguity -> ONE `AskUserQuestion` (max 4 questions) BEFORE any work.
-5. Prose that is not a mode/id/path is still input: extract the id, path or target from it.
+1. Mode: an explicit mode token wins outright; else the most distinct whole-word keyword hits
+   (table in Step 2). Tie with a destructive mode (`purge`) or of `install` with a removal mode
+   (`uninstall`) -> `AskUserQuestion`; with `status` -> `status`; of two other mutating modes -> the
+   keyword that comes first. No hit or empty -> `status`.
+2. Scope: prose that is not a mode/id/path is still input: take the id, path or target from it.
+3. Ask: at most ONE `AskUserQuestion` (max 4 questions) to resolve mode and scope, before any work, only when the answer
+   changes what gets written. A read-only run asks nothing.
 
-Then print this block ONCE, before the first action:
+Print once, before the first action (labels literal, values in the conversation language):
 
 ```
 PLAN — brewtools:agent-deadline-setup
@@ -38,75 +37,75 @@ DO:     <2-5 imperative bullets>
 RESULT: <what the user ends up holding>
 ```
 
-Labels are literal; values follow the conversation language.
-
 ## What the hooks do (informational — skill does NOT implement)
 
 | Hook | Event | Behavior |
 |------|-------|----------|
-| `agent-deadline-guard.mjs` | PreToolUse (`.*`) | tracks elapsed per `agent_id`; 80% -> one `additionalContext` warning; 100% -> `permissionDecision:"deny"` for everything outside the finalization set; `hardStopRatio`x budget (default 2x) -> allowance shrinks to `Write, Edit` |
-| `agent-deadline-cleanup.mjs` | SubagentStop | deletes the finished agent's state file |
+| `agent-deadline-guard.mjs` | PreToolUse (`.*`) | tracks elapsed per `agent_id` and narrows the tools, table below |
+| `agent-deadline-cleanup.mjs` | SubagentStop | stamps `stopped` on the agent's state file, never deletes it; prunes state by age |
 
-Finalization set — advertised in the guard's directives: `Read, Write, Edit, MultiEdit, NotebookEdit, TodoWrite, TaskUpdate`.
+| Elapsed | Guard |
+|---------|-------|
+| 80% of budget | non-blocking `additionalContext` notice |
+| 100% | `permissionDecision:"deny"` outside the finalization set: `Read, Write, Edit, NotebookEdit, TodoWrite, TaskUpdate, SubagentHandback` (the 7 its messages advertise) plus `TaskCreate`, unlisted by design |
+| `hardStopRatio` x budget (config key, default `2`, must be `>1`) | hard stop: only `Write, Edit, SubagentHandback` pass, deny reason starts `Time budget far exceeded`. Stops an agent that loops inside the finalization set (re-reading files, rewriting todos) |
 
-Actually allowed past 100%: those 7 **plus** `TaskCreate`, `BashOutput`, `TaskOutput`. The 3 extras are deliberately NOT named in the directive text — naming `BashOutput` invites a poll loop, while an agent that genuinely needs to harvest an in-flight job still gets through. Declared list ⊂ real list is by design, not a bug.
+`SubagentHandback` is always allowed: in auto mode it is the tool a subagent reports through, so denying it would leave the caller with no report at all. `AskUserQuestion` is denied on purpose: a subagent parked on a human answer is unbounded wall-clock time, the failure this guard exists to stop. Agent types in config `readOnlyAgentTypes` (default `Explore`, `Plan`) are told to return what they have now, every other agent to save to a file if the task expects one, then report; the list is config because the payload has no tool inventory, so an unlisted custom read-only agent is still told to save.
 
-`AskUserQuestion` is DENIED on purpose: a subagent parked on a human answer is unbounded wall-clock time, exactly the failure this guard exists to stop.
+State: `<os.tmpdir()>/brewtools-agent-deadline/<session_id>/<agent_id>.json` = `{ start, warned, expired, config, stopped? }`, `config` = path of the governing config file (what uninstall/purge match on); pruned by age: stop stamps past the 5 minutes, files and session dirs untouched for 24 h. SubagentStop fires several times per agent, so cleanup keeps the state and the guard decides on the same `agent_id`'s next tool call (time-based: the payload does not tell a continued run from a resumed one):
 
-**Hard stop.** Past `hardStopRatio` x budget (config key, default `2`, must be `>1`) the allow-set shrinks from the finalize set to `Write, Edit` only, and the deny reason changes to `AGENT DEADLINE HARD STOP`. This catches the agent that loops *inside* the finalize set (re-reading files, rewriting todos) instead of finishing.
+| Stop stamp age | Clock | When |
+|----------------|-------|------|
+| under 5 minutes | original clock continues, the pause counts | stop blocked once by another guard (e.g. the agent-return size check), harness nudge, quick `SendMessage` resume: an over-budget agent can only finalize |
+| 5 minutes or more, or state already pruned | fresh window from that call | a later resume, or any pause that long |
 
-## Honest limits (verified on CC 2.1.223 — state these to the user, do not oversell)
+## Honest limits (verified on CC 2.1.220, stop/resume on 2.1.296 — state these to the user, do not oversell)
 
 | Fact | Consequence |
 |------|-------------|
-| Time is sampled ONLY at tool-call boundaries | An agent stuck inside one 25-min `Bash` call is not observed in between. This is a soft deadline, NOT a timeout — cap long commands with `BASH_MAX_TIMEOUT_MS`. |
-| Clock starts at the agent's FIRST tool call, not at spawn | Pre-tool thinking time is free. |
-| The subagent-spawn tool is named `Agent` in the payload, not `Task` | Matters when matching payloads / writing sibling hooks. |
+| Time is sampled only at tool-call boundaries | An agent stuck inside one 25-min `Bash` call is not observed in between: a soft deadline, not a timeout. Cap long commands with `BASH_MAX_TIMEOUT_MS`. |
+| Clock starts at the agent's first tool call, not at spawn | Pre-tool thinking time is free. |
+| Stop/resume is the table above | A quick resume inherits a spent budget; a 5-minute pause earns a fresh one. |
 | Main session vs subagent is discriminated by absence of `agent_id`/`agent_type` | Main session = no-op, always. |
-| `agent_type` for plugin agents (`brewtools:text-optimizer` vs `text-optimizer`) was NOT observed live | A `byAgentType` key that does not match the real payload value silently falls back to `defaultMinutes`. Verify against a real payload before relying on an override. |
+| `agent_type` for plugin agents (`brewtools:text-optimizer` vs `text-optimizer`) was not observed live | A `byAgentType` key that does not match the real payload value silently falls back to `defaultMinutes`. Verify against a real payload before relying on an override. |
 | Hook is fail-open | Any error = the call passes through; the session never breaks. |
-| Cost per tool call: median **58.3 ms**, p90 **62.5 ms** (measured: Apple M-series, Node v24.1.0, 30 runs) | Node startup dominates; on top of it the guard does up to 19 `readFileSync` — stdin payload, up to 16 project-config probes (walk from `cwd` to the filesystem root), global config, state file. |
-| The PreToolUse matcher is `.*` | The tax is paid by EVERY tool call, not only subagent ones. The main-session no-op path measured **61.5 ms**. A **global** install therefore charges ~60 ms to every tool call of every session in every repo, including sessions that never spawn a subagent. State this before installing globally, not after. |
+| Cost per tool call, paid by every call because the matcher is `.*` (it must see `SubagentHandback`): median **58.3 ms**, p90 **62.5 ms**, main-session no-op path **61.5 ms** (measured: Apple M-series, Node v24.1.0, 30 runs) | Node startup dominates; the guard adds up to 20 `readFileSync`: stdin payload, up to 16 project-config probes (walk from `cwd` to the filesystem root), up to 2 global configs, state file. A global install charges ~60 ms to every tool call of every session in every repo, including sessions that never spawn a subagent: state this before installing globally, not after. |
 
 <instructions>
 
 ## BT_ROOT Resolver (use in EVERY bash block)
 
-The plugin root is resolved from the skill's OWN directory (the `CLAUDE_SKILL_DIR` prompt substitution), never from `CLAUDE_PLUGIN_ROOT` -- that env var is not exported to a skill's Bash tool:
+> `CLAUDE_SKILL_DIR` and `CLAUDE_PLUGIN_ROOT` are text substitutions Claude Code applies to this file before the model reads it, in the dollar-brace form only; they are not Bash-tool env vars, and an unbraced or `:-fallback` spelling reaches the shell unsubstituted.
 
 ```bash
-SD="${CLAUDE_SKILL_DIR}"
-if [ -n "$SD" ] && [ -f "$SD/../../.claude-plugin/plugin.json" ]; then BT_ROOT=$(cd "$SD/../.." && pwd); else BT_ROOT=$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::'); fi
-[ -n "$BT_ROOT" ] || { echo "ERROR: cannot locate brewtools plugin root -- install/update brewtools first."; exit 1; }
+BT_ROOT="${CLAUDE_PLUGIN_ROOT}"
 test -d "$BT_ROOT/skills/agent-deadline-setup/assets" || { echo "❌ FAILED — BT_ROOT invalid: $BT_ROOT"; exit 1; }
 ```
 
 Asset paths (all under `$BT_ROOT/skills/agent-deadline-setup/assets/`):
-- `INSTALL.md` — the runbook: install project/global, config shape, disable/enable, uninstall, purge, verify. **Single source of truth — follow it, never re-derive its commands here.**
+- `INSTALL.md` — the runbook and single source of commands (install project/global, config shape, upgrade, disable/enable, uninstall, state removal, purge, verify): follow it, never re-derive them here.
 - `agent-deadline-guard.mjs`, `agent-deadline-cleanup.mjs` — the two hook files that travel together
 
-> Never use `Write`/`Edit` on `~/.claude/*` — protected path, blocked in ALL modes. Global operations run through the Bash tool only (`cp`/`node`/`rm`). The hook-creator agent handles this per the runbook.
+> Global scope = the config dir in use, `${CLAUDE_CONFIG_DIR:-$HOME/.claude}`. `Write`/`Edit` there hits a sensitive-path prompt and fails headless, so global operations go through the Bash tool only (`cp`/`node`/`rm`), per the runbook.
 
-> Opt-in by design: these hooks are NOT registered in `brewtools/hooks/hooks.json`, so installing the plugin does nothing until this skill runs.
+> Opt-in: the hooks are not registered in `brewtools/hooks/hooks.json`, so installing the plugin does nothing until this skill runs.
 
 ---
 
 ## Step 1 — STATUS FIRST, always
 
-After the initial PLAN, probe status in EVERY mode before installation, reinstallation, or removal.
+After the initial PLAN, probe status in every mode, before any install, reinstall or removal.
 
 **EXECUTE** using Bash tool:
 
 ```bash
-SD="${CLAUDE_SKILL_DIR}"
-if [ -n "$SD" ] && [ -f "$SD/../../.claude-plugin/plugin.json" ]; then BT_ROOT=$(cd "$SD/../.." && pwd); else BT_ROOT=$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::'); fi
-[ -n "$BT_ROOT" ] || { echo "ERROR: cannot locate brewtools plugin root -- install/update brewtools first."; exit 1; }
+BT_ROOT="${CLAUDE_PLUGIN_ROOT}"
 A="$BT_ROOT/skills/agent-deadline-setup/assets"
 test -f "$A/INSTALL.md" && test -f "$A/agent-deadline-guard.mjs" && test -f "$A/agent-deadline-cleanup.mjs" || { echo "❌ FAILED — assets incomplete under BT_ROOT=$BT_ROOT"; exit 1; }
 echo "ASSETS_DIR=$A"
 echo "RUNBOOK=$A/INSTALL.md"
 content_state() {
-  ASSETS="$A" TARGET="$1" node <<'NODE'
+  ASSETS="$A" TARGET="${1}" node <<'NODE'
 const fs=require("fs"), path=require("path");
 const assets=process.env.ASSETS, target=process.env.TARGET;
 const scripts=["agent-deadline-guard.mjs","agent-deadline-cleanup.mjs"];
@@ -129,8 +128,9 @@ console.log([configCV||"n/a",runbookCV||"n/a",state,findings.join(",")||"none"].
 NODE
 }
 claude_project_root() {
-  if [ -n "$CLAUDE_PROJECT_DIR" ] && [ -d "$CLAUDE_PROJECT_DIR" ]; then
-    printf '%s\n' "$CLAUDE_PROJECT_DIR"; return 0
+  PD="${CLAUDE_PROJECT_DIR}"   # substituted at load: the session start dir, as hooks get it
+  if [ -n "$PD" ] && [ -d "$PD" ]; then
+    printf '%s\n' "$PD"; return 0
   fi
   if r=$(git rev-parse --show-toplevel 2>/dev/null) && [ -n "$r" ]; then
     printf '%s\n' "$r"; return 0
@@ -144,7 +144,7 @@ claude_project_root() {
 }
 if ROOT=$(claude_project_root); then ROOT_OK=yes; else ROOT_OK=no; fi
 echo "project_root=$ROOT root_resolved=$ROOT_OK"
-for S in "$ROOT/.claude:project" "$HOME/.claude:global"; do
+for S in "$ROOT/.claude:project" "${CLAUDE_CONFIG_DIR:-$HOME/.claude}:global"; do
   D="${S%%:*}"; N="${S##*:}"
   G=no; [ -f "$D/hooks/agent-deadline-guard.mjs" ] && G=yes
   C=no; [ -f "$D/hooks/agent-deadline-cleanup.mjs" ] && C=yes
@@ -158,7 +158,8 @@ try{
   if(fs.existsSync(f)&&fs.readFileSync(f,"utf8").trim()) s=JSON.parse(fs.readFileSync(f,"utf8"));
   if(s===null||typeof s!=="object"||Array.isArray(s)) settingsValid=false;
 }catch{ settingsValid=false; s={}; }
-const expected=marks.map(m=>scope==="project"?"${CLAUDE_PROJECT_DIR}/.claude/hooks/"+m:path.join(dir,m));
+// token split on purpose: the dollar-brace spelling would be substituted when this skill loads
+const expected=marks.map(m=>scope==="project"?"$"+"{CLAUDE_PROJECT_DIR}/.claude/hooks/"+m:path.join(dir,m));
 const specs={
   "agent-deadline-guard.mjs":{event:"PreToolUse",matcher:".*",arg:expected[0],timeout:5},
   "agent-deadline-cleanup.mjs":{event:"SubagentStop",matcher:null,arg:expected[1],timeout:3},
@@ -207,19 +208,15 @@ Field meanings — do not paraphrase them into something stronger:
 
 | Field | Value |
 |-------|-------|
-| `project_root` / `root_resolved` | project status resolves `CLAUDE_PROJECT_DIR`, then git toplevel, then an owning `.git`/`.claude` ancestor; `root_resolved=no` means read-only fallback to `$PWD` |
-| `guard` / `cleanup` | `yes`/`no` — hook FILE present in that scope's `hooks/` |
-| `guard_refs` / `cleanup_refs` | separate exact desired handler counts. Guard = `PreToolUse` + `.*` + command/node/sole portable arg + timeout `5`; cleanup = `SubagentStop` + no matcher + command/node/sole portable arg + timeout `3`; global args use expanded `~/.claude/hooks/<script>`. Each must be exactly `1`; two guards never substitute for a missing cleanup |
-| `legacy_refs` | owned handlers that differ from a complete desired tuple, including absolute paths, swapped events, wrong matchers/types/commands/timeouts, extra args/keys, or malformed handler values; any nonzero value requires migration |
-| `settings_valid` | `yes` only when settings are absent/empty or parse as a JSON object; malformed JSON/shape is non-effective |
+| `project_root` / `root_resolved` | `CLAUDE_PROJECT_DIR` (substituted at load: the session start dir, the same value hooks get), then git toplevel, then an owning `.git`/`.claude` ancestor; `root_resolved=no` = read-only fallback to `$PWD` |
+| `guard_refs` / `cleanup_refs` | handlers matching the exact tuple, per script. Guard = `PreToolUse` + `.*` + timeout `5`, cleanup = `SubagentStop` + no matcher + timeout `3`, both command/node/sole portable arg; global args are the expanded `<global dir>/hooks/<script>` path. Each must be exactly `1`: more is a duplicate and non-effective, and two guards never substitute for a missing cleanup |
+| `legacy_refs` | owned handlers that differ from the exact tuple: absolute project paths, swapped events, wrong matchers/types/commands/timeouts, extra args/keys, malformed handler values; any nonzero value requires migration |
+| `settings_valid` | `yes` only when settings are absent/empty or parse as a JSON object; anything else is non-effective |
 | `enabled` | `true`/`false` parsed from the config; `n/a` = no config or no `enabled` key |
-| `config_version` | release provenance only; compare with `plugin_version` for display, never for staleness. A matching release cannot prove current hook/config content |
-| `config_content_version` / `runbook_content_version` | installed config CV versus the authoritative INSTALL.md header; each installed hook is also compared with its corresponding asset header |
-| `content_state` | `current`: all config/hook CV pairs match, regardless of release provenance; `stale`: at least one valid pair differs; `partial`: an installed component has missing/malformed CV or a required counterpart is absent; `missing`: no config or hook files in that scope. Never infer fresh CV from release version or a missing key |
-| `content_findings` | comma-separated `artifact:installed-CV->source-CV` evidence for every mismatched/missing pair, or `none`; `n/a` is explicit missing/malformed metadata, never a guessed fresh version |
-| `config` | whitespace-stripped config contents, or literal `none` |
-
-The status probe parses JSON and validates each script separately against the exact event, matcher, handler keys, type, command, sole arg, and timeout tuple. Duplicates remain visible as counts above `1` and are non-effective.
+| `config_version` | release provenance, shown beside `plugin_version`; never a staleness signal |
+| `config_content_version` / `runbook_content_version` | installed config CV versus the INSTALL.md header; each installed hook is compared with its asset header the same way |
+| `content_state` | `current`: all config/hook CV pairs match; `stale`: at least one valid pair differs; `partial`: an installed component has missing/malformed CV or a required counterpart is absent; `missing`: no config or hook files in that scope |
+| `content_findings` | comma-separated `artifact:installed-CV->source-CV` for every mismatched/missing pair, or `none`; `n/a` = missing/malformed metadata, never a guessed version |
 
 Print the status in this table:
 
@@ -228,7 +225,7 @@ Print the status in this table:
 
 ### Config metadata (the four standard JSON keys)
 
-Every mode that writes `agent-deadline.json` (`install`, `upgrade`, `enable`, `disable`) leaves these four keys alongside behavior keys. `doc_type` belongs only in `.md` frontmatter:
+Every mode that writes `agent-deadline.json` (`install`, `upgrade`, `enable`, `disable`) leaves these four keys beside the behavior keys; `doc_type` belongs only in `.md` frontmatter:
 
 ```json
 { "version": "{PLUGIN_VERSION}", "content_version": "<INSTALL.md header>", "generated_by": "brewtools:agent-deadline-setup", "last_updated": "{LAST_UPDATED}" }
@@ -237,33 +234,24 @@ Every mode that writes `agent-deadline.json` (`install`, `upgrade`, `enable`, `d
 The runbook resolves `content_version` from its own `brewcode-meta:` header via `$RUNBOOK` and aborts if missing; never pass or hardcode it. Resolve `version` and `last_updated` here. **EXECUTE** using Bash tool:
 
 ```bash
-SD="${CLAUDE_SKILL_DIR}"
-if [ -n "$SD" ] && [ -f "$SD/../../.claude-plugin/plugin.json" ]; then BT_ROOT=$(cd "$SD/../.." && pwd); else BT_ROOT=$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::'); fi
-[ -n "$BT_ROOT" ] || { echo "ERROR: cannot locate brewtools plugin root -- install/update brewtools first."; exit 1; }
+BT_ROOT="${CLAUDE_PLUGIN_ROOT}"
+[ -f "$BT_ROOT/.claude-plugin/plugin.json" ] || { echo "ERROR: brewtools plugin root not resolved: '$BT_ROOT'"; exit 1; }
 PV=$(jq -r '.version // empty' "$BT_ROOT/.claude-plugin/plugin.json" 2>/dev/null || true)
 PV=${PV:-$(basename "$BT_ROOT")}
 echo "PLUGIN_VERSION=$PV LAST_UPDATED=$(date +%F)"
 ```
 
-> **Bare substitution required.** CC 2.1.226 substitutes only the literal `${CLAUDE_SKILL_DIR}` in skill prompts (`replace(/\$\{CLAUDE_SKILL_DIR\}/g, dirname(skillPath))`/`replaceAll`), not env values or `:-fallback`; a modifier reaches Bash unchanged and ALWAYS selects its fallback. `${CLAUDE_PLUGIN_ROOT}` is exported to hooks/MCP, never skill Bash. The skill path works in cache and `--plugin-dir` installs; the cache glob is a last resort and selects the installed plugin.
+The four keys are inert at runtime: the guard's `loadConfig()` reads only `enabled` (gate `cfg.enabled !== true` -> off), `defaultMinutes`, `byAgentType`, `hardStopRatio`, `readOnlyAgentTypes`.
 
-| Guarantee | Why it holds |
-|-----------|--------------|
-| The hooks ignore them | `loadConfig()` accepts any non-array JSON object and reads only `enabled`, `defaultMinutes`, `byAgentType`, `hardStopRatio`; unknown keys are inert |
-| `enabled` semantics unchanged | The gate stays `cfg.enabled !== true` -> off. Adding sibling keys touches nothing |
-| Cannot make a valid file unparseable | Written by the runbook's node block that re-serializes the whole object with `JSON.stringify` — never appended as raw text. An invalid project config is skipped and the GLOBAL one takes over, which is a silent behavior change, so a hand-appended line is a defect |
+Content state and enabled/wiring are separate signals. Offer `upgrade` for `stale` or `partial`, naming the mismatched/missing metadata or artifact; never from a release-version difference alone. Status never edits files or settings.
 
-Content state and enabled/wiring are separate signals. Offer `upgrade` for `stale` or `partial`, naming the mismatched/missing metadata or artifact; do not offer it from a release-version difference alone. A deliberately disabled setup remains disabled, even if its content needs repair; upgrade must preserve that choice. Status never edits files or settings.
-
-Effective = `guard=yes cleanup=yes guard_refs=1 cleanup_refs=1 legacy_refs=0 settings_valid=yes enabled=true`. Anything else, including duplicate-one/missing-other registrations or a malformed owned handler, is NOT effective — say so plainly instead of reporting a half-state as installed. Project config wins over global; a broken project config is skipped and global is used.
+Effective = `guard=yes cleanup=yes guard_refs=1 cleanup_refs=1 legacy_refs=0 settings_valid=yes enabled=true`. Anything else, including duplicate-one/missing-other registrations or a malformed owned handler, is not effective: say so plainly instead of reporting a half-state as installed. Project config wins over global; a malformed project config is skipped and the guard silently falls back to the global one: report it and offer to rewrite.
 
 ### Early exit
 
-If everything the user could want is already installed and **the intent is not explicit** (no argument, or vague like "агент-дедлайн"), PRINT the status, list the operations available (`upgrade`, `enable`, `disable`, change budget, `uninstall`, `purge`, install for the other scope) and **STOP**. Do not re-install, do not ask a chain of questions.
+Everything the user could want is already installed and the intent is not explicit (no argument, or vague like "агент-дедлайн") -> print the status, list the available operations (`upgrade`, `enable`, `disable`, change budget, `uninstall`, `purge`, install for the other scope) and stop: no re-install, no chain of questions.
 
 ## Step 2 — Decide MODE
-
-Read `$ARGUMENTS`. Default when there are NO arguments at all = **status**.
 
 | Mode | EN keywords | RU keywords | Mutates? |
 |------|-------------|--------------|----------|
@@ -275,7 +263,7 @@ Read `$ARGUMENTS`. Default when there are NO arguments at all = **status**.
 | `uninstall` | `uninstall` | `убери`, `сними`, `удали хук` | yes |
 | `purge` | `purge`, `wipe`, `remove everything` | `вычисти всё`, `удали полностью`, `убери совсем`, `снеси` | yes, destructive |
 
-Ambiguous between install and a removal verb → `AskUserQuestion`. Never guess a destructive mode.
+Ties resolve per Prompt contract rule 1.
 
 ## Step 3 — Explain pending changes before questions
 
@@ -285,33 +273,33 @@ Add concrete state/action details to the initial PLAN without repeating its bloc
 
 ## Step 4 — Ask ONLY what is missing (`AskUserQuestion`)
 
-Skip any question already answered by `$ARGUMENTS` or settled by the status table.
+Skip any question already answered by the prompt or settled by the status table.
 
 | # | Question | Options | Default |
 |---|----------|---------|---------|
-| 1 | Scope — this project or all projects? | **Project** (`<repo>/.claude`) / **Global** (`~/.claude`) / **Both** | none — NEVER guess, always ask unless explicit |
+| 1 | Scope — this project or all projects? | **Project** (`<repo>/.claude`) / **Global** (the config dir in use, `~/.claude` by default) / **Both** | none — NEVER guess, always ask unless explicit |
 | 2 | Deadline budget per subagent? | **20 min (Recommended)** / 30 min / 45 min / 10 min | 20 |
 | 3 | Per-agent-type overrides? | **Uniform limit for all agents (Recommended)** / Define overrides | uniform, `byAgentType: {}` |
 
-When question 1 is asked, the **Global** option description MUST carry the cost: `.*` matcher = ~58 ms median added to every tool call of every session, main sessions included.
+Global scope, picked in question 1 or given in the arguments: state the per-call cost (last row of Honest limits) before writing anything, in the option description or the plan, never only in the final report.
 
-Question 3 is asked ONLY if the user brought up per-type limits themselves; otherwise install uniform and mention in the final report that overrides exist. If overrides ARE requested, warn verbatim: *`agent_type` for plugin agents (e.g. `brewtools:text-optimizer` vs `text-optimizer`) has not been observed live — a key that does not match the real payload silently falls back to `defaultMinutes`. Verify against a real payload first.*
+Ask question 3 only if the user raised per-type limits; otherwise install uniform and mention in the final report that overrides exist. If overrides are requested, first give the user the `agent_type` row of Honest limits.
 
 For `disable`/`enable`/`uninstall`/`purge` only question 1 applies, and only when the status table shows the feature present in more than one scope.
 
 ## Step 5 — Act on the resolved PLAN
 
-Use the PLAN already printed before Step 1; do not print it twice. Resolve MODE/SCOPE, exact paths, `defaultMinutes`, and settings.json entries before mutation. For `uninstall`/`purge`, list the exact deletions and confirm once. Status and early-exit modes report the table and stop; `DO:` is "read state, report".
+Use the PLAN already printed before Step 1. Resolve MODE/SCOPE, exact paths, `defaultMinutes` and the settings.json entries before any mutation. For `uninstall`/`purge`, list the exact deletions (this scope's state files included) and confirm once. Status and early exit report the table and stop; their `DO:` is "read state, report".
 
 ### Delegation
 
-One mode × one scope is ONE bounded unit (2 asset files + one settings.json + one config) — a single `hook-creator` spawn. "Both scopes" = TWO tasks, spawned in ONE message.
+One mode × one scope is one bounded unit (2 asset files + one settings.json + one config): a single `hook-creator` spawn. Both scopes = two spawns in one message.
 
-Every brief must retain GOAL, ROLE (ownership/exclusions), SCOPE (paths/commands), CONTEXT (completed/parallel work), CONSUMER (next use/output shape), and DONE (acceptance/report).
+Every spawn brief carries six labeled fields, since a subagent starts with an empty context: GOAL (task + why), ROLE (owns, must not touch), SCOPE (paths/commands in and out), CONTEXT (done, by whom, in parallel), CONSUMER (who uses the result + its shape), DONE (acceptance + return: verdict first, evidence, bounded; long output to a file, path returned).
 
-> **Export before every runbook Bash block.** `MINUTES`/`OVERRIDES`/`RUNBOOK` must reach `process.env`; missing `MINUTES` aborts (no built-in `20` fallback). Substitute chosen values into both CONTEXT and the literal export below; prose alone cannot set the environment.
+> Substitute the chosen values into both the CONTEXT block and the literal `export` line: the runbook reads `MINUTES`/`OVERRIDES`/`RUNBOOK` from `process.env`, and a missing `MINUTES` aborts (no built-in `20` fallback). Afterwards check that the reported config carries the chosen number.
 
-Spawn (substitute `MODE`, `SCOPE`, `MINUTES`, `OVERRIDES`, `HARD_STOP_RATIO`, `RUNBOOK`, `ASSETS_DIR`, `PLUGIN_VERSION`, `LAST_UPDATED` from Steps 1-4 and the Config-metadata block — into BOTH the CONTEXT block and the `export` line):
+Spawn (substitute `MODE`, `SCOPE`, `MINUTES`, `OVERRIDES`, `HARD_STOP_RATIO`, `RUNBOOK`, `ASSETS_DIR`, `PROJECT_ROOT`, `PLUGIN_VERSION`, `LAST_UPDATED` from Steps 1-4 and the Config-metadata block). `PROJECT_ROOT` = Step 1 `project_root`: the runbook's root block takes `CLAUDE_PROJECT_DIR` first, and the Bash tool does not have it, so the export line carries it; with `root_resolved=no`, drop it from that line:
 
 ```
 Agent(subagent_type="brewcode:hook-creator", prompt="
@@ -324,7 +312,8 @@ Do NOT edit hook logic, do NOT touch unrelated hooks or settings keys, do NOT ac
 other scope, do NOT register anything in the plugin's own hooks.json.
 SCOPE: in — the 2 assets under ASSETS_DIR, the target .claude/ dir, its settings.json,
 its agent-deadline.json. Out — everything else. Project scope: Write/Edit are fine.
-Global scope (~/.claude/*): BASH ONLY (cp + node + rm), never Write/Edit — protected path.
+Global scope (the config dir in use: ~/.claude unless CLAUDE_CONFIG_DIR is set): BASH ONLY
+(cp + node + rm), never Write/Edit — a sensitive path that prompts and fails headless.
 CONTEXT:
   Status was already collected and every path below resolved; nothing has been written yet.
   MODE = MODE (install|upgrade|enable|disable|uninstall|purge)
@@ -333,29 +322,35 @@ CONTEXT:
     is the number ALREADY in that scope's config, read back by the runbook — never a new one)
   OVERRIDES = OVERRIDES (byAgentType JSON object, {} unless the user asked otherwise)
   HARD_STOP_RATIO = HARD_STOP_RATIO (multiple of the budget after which the allowance
-    shrinks to Write/Edit; omit entirely to keep the hook default of 2, must be > 1)
+    shrinks to Write/Edit and the report call; omit entirely to keep the hook default of 2,
+    must be > 1)
   RUNBOOK = RUNBOOK (absolute path to assets/INSTALL.md)
   ASSETS_DIR = ASSETS_DIR (absolute path to the assets source dir — copy the 2 hook files FROM here)
   MANDATORY FIRST BASH COMMAND — the runbook's node blocks read these from the ENVIRONMENT,
   not from this prompt. Run this VERBATIM as the first line of EVERY Bash call that executes
   a runbook block (a new Bash call does NOT inherit exports from the previous one):
-    export RUNBOOK='RUNBOOK' MINUTES='MINUTES' OVERRIDES='OVERRIDES' HARD_STOP_RATIO='HARD_STOP_RATIO' PLUGIN_VERSION='PLUGIN_VERSION' LAST_UPDATED='LAST_UPDATED'
+    export RUNBOOK='RUNBOOK' MINUTES='MINUTES' OVERRIDES='OVERRIDES' HARD_STOP_RATIO='HARD_STOP_RATIO' PLUGIN_VERSION='PLUGIN_VERSION' LAST_UPDATED='LAST_UPDATED' CLAUDE_PROJECT_DIR='PROJECT_ROOT'
   Then verify before writing anything:
-    echo \"MINUTES=\$MINUTES OVERRIDES=\$OVERRIDES HARD_STOP_RATIO=\$HARD_STOP_RATIO RUNBOOK=\$RUNBOOK PV=\$PLUGIN_VERSION LU=\$LAST_UPDATED\"
+    echo \"MINUTES=\$MINUTES OVERRIDES=\$OVERRIDES HARD_STOP_RATIO=\$HARD_STOP_RATIO RUNBOOK=\$RUNBOOK PV=\$PLUGIN_VERSION LU=\$LAST_UPDATED PD=\$CLAUDE_PROJECT_DIR\"
   If MINUTES prints empty, STOP and report — the config block ABORTS on an empty MINUTES
   by design; re-export it rather than hardcoding a number.
   Drop HARD_STOP_RATIO from the export line when the user did not set it.
   Follow the runbook at RUNBOOK exactly and use ITS commands — it self-locates its source via
   SRC=\$(dirname \"\$RUNBOOK\"). Sections map 1:1
   to MODE: 'PROJECT target'/'GLOBAL target' for install, 'UPGRADE', 'DISABLE / ENABLE',
-  'UNINSTALL', 'PURGE'. Merge strips owned handlers individually while preserving foreign
-  co-handlers, then appends exactly one handler per script. Project args use the literal
-  `${CLAUDE_PROJECT_DIR}/.claude/hooks/<script>` and migrate legacy absolute checkout args;
-  global args stay expanded absolute paths. Both paths are idempotent.
-  Upgrade = the 'UPGRADE' section: read MINUTES/OVERRIDES/HARD_STOP_RATIO back out of the
-  existing config, export them, then replay the copy + config + merge blocks for SCOPE.
-  Uninstall = strip handlers by those two basenames, drop empty entries/event arrays, delete the 2
-  files, KEEP the config. Purge = uninstall + delete config + tmp state.
+  'UNINSTALL' (+ 'STATE REMOVAL'), 'PURGE'. Merge strips owned handlers individually while
+  preserving foreign co-handlers, then appends exactly one handler per script. Project args use
+  the runbook's portable literal (dollar-brace CLAUDE_PROJECT_DIR, then /.claude/hooks/<script>)
+  and migrate legacy absolute checkout args; global args stay expanded absolute paths. Both
+  paths are idempotent.
+  Upgrade = the 'UPGRADE' section: it reads MINUTES back out of the existing config (OVERRIDES
+  stays {} and HARD_STOP_RATIO unset: the config block keeps the stored byAgentType and
+  hardStopRatio), then replays the copy + config + merge blocks for SCOPE.
+  Uninstall = two steps: strip handlers by those two basenames, drop empty entries/event arrays and
+  delete the 2 files, then run 'STATE REMOVAL' with this scope's CFG; KEEP the config. Purge =
+  uninstall (both steps) + delete this scope's config + 'STATE REMOVAL' again. State removal
+  deletes only state files recorded for CFG (plus files untouched for 24 h); never remove the
+  shared brewtools-agent-deadline tmp root by hand.
   METADATA: every mode that WRITES the config (install, upgrade, enable, disable) must leave
   these four keys in agent-deadline.json: version=\$PLUGIN_VERSION,
   content_version=<read by the runbook from its own brewcode-meta header; never hardcoded>,
@@ -365,9 +360,9 @@ CONTEXT:
   appending text to the file. An invalid project config is SKIPPED and the global one silently
   takes over, so a hand-edited append is a defect, not a shortcut. Do NOT touch enabled while
   doing it: the hooks require it to be exactly true.
-CONSUMER: Step 6 reports your result to the user; the settings.json you write is loaded by
-  the NEXT Claude Code session, so a malformed merge breaks that session instead of failing
-  here — report the exact paths you touched so they can be checked.
+CONSUMER: Step 6 reports your result to the user; Claude Code watches settings.json and
+  applies your write to the running session, so a malformed merge breaks hooks there instead
+  of failing here — report the exact paths you touched so they can be checked.
 DONE: report the settings.json path, the hooks dir, the config path with its final contents,
   and the runbook 'Verify' output if you ran it. The reported config MUST show
   defaultMinutes = MINUTES — a 20 where the user asked for something else is a FAILURE,
@@ -379,10 +374,9 @@ DONE: report the settings.json path, the hooks dir, the config path with its fin
 
 Re-run the Step 1 status block and print the refreshed table, plus:
 
-- what changed (files, settings.json, config values),
-- **a NEW session is required for hook WIRING changes** (install/upgrade/uninstall/purge) — `/reload-plugins` is not needed, these are plain settings.json hooks;
-- **config VALUE changes** (`enabled`, `defaultMinutes`, `byAgentType`, `hardStopRatio`) are read live — no restart;
-- release `version` as provenance, config/runbook `content_version` and the hook comparisons; report `content_state`, never infer freshness from a release bump;
+- what changed (files, settings.json, config values, state files removed);
+- hook wiring changes (install/upgrade/uninstall/purge) apply to the running session, no restart: Claude Code watches settings files; `/hooks` confirms. `/reload-plugins` does not apply, these are plain settings.json hooks;
+- config value changes (`enabled`, `defaultMinutes`, `byAgentType`, `hardStopRatio`, `readOnlyAgentTypes`) are read live, no restart;
 - the soft-deadline caveat: time is sampled at tool-call boundaries only; pair with `BASH_MAX_TIMEOUT_MS` for long single commands.
 
 ---
@@ -396,39 +390,21 @@ Re-run the Step 1 status block and print the refreshed table, plus:
 | `upgrade` | re-emit from the current plugin version, budget preserved | re-copied | entries re-merged | values preserved | kept |
 | `enable` | `enabled:true` | kept | kept | edited | kept |
 | `disable` | `enabled:false` | kept | kept | edited | kept |
-| `uninstall` | unwire | deleted | entries stripped | **kept** | kept |
-| `purge` | full wipe | deleted | entries stripped | deleted | deleted |
+| `uninstall` | unwire (runbook UNINSTALL, 2 steps) | deleted | entries stripped | **kept** | this scope's removed |
+| `purge` | uninstall + config (runbook PURGE, 3 steps) | deleted | entries stripped | deleted | this scope's removed |
 
-`upgrade` asks nothing. It reads `defaultMinutes`, `byAgentType` and `hardStopRatio` back out of the existing config and replays the install for that scope, so a plugin update finally reaches the project with the SAME budget. A disabled setup stays disabled. Not installed in that scope -> it is an `install`, so ask scope and budget.
+State removal = the runbook's `## STATE REMOVAL` block (uninstall step 2, purge step 3): it deletes the state files whose `config` field equals this scope's config path, plus any file untouched for 24 h (pre-6.5 state has no `config` and ages out that way). The `brewtools-agent-deadline` root and a session dir go only when empty: the root is shared by every project and the global install, and wiping it resets every live agent's clock.
 
-## Guards
-
-| Condition | Response |
-|-----------|----------|
-| `BT_ROOT` resolves but `$BT_ROOT/skills/agent-deadline-setup/assets` missing | ERROR: `agent-deadline: assets not found under $BT_ROOT — plugin cache incomplete.` STOP. |
-| Neither the skill dir nor any cached plugin dir yields `.claude-plugin/plugin.json` | ERROR: `agent-deadline: cannot locate plugin root — install/update brewtools first.` STOP. |
-| Status shows fully installed + vague intent | Print status, list available operations, STOP. Do not re-install. |
-| Scope unspecified | AskUserQuestion: Project / Global / Both. Never guess. |
-| Global scope chosen (or asked about) | BEFORE writing anything, state the cost: matcher is `.*`, so ~58 ms median (p90 62.5 ms) is added to EVERY tool call of EVERY session in EVERY repo, main sessions included. Say it in the question or the plan, never only in the final report. |
-| Mode ambiguous between install and removal | AskUserQuestion. Never guess a destructive mode. |
-| Install delegated with a non-default budget | The spawn prompt MUST contain the literal `export MINUTES='<chosen>' OVERRIDES='<chosen>' RUNBOOK='<path>'` line. Values described only in prose never reach the runbook's `process.env`; the config block then ABORTS on an empty `MINUTES` instead of writing `20`. Check the agent's reported config for the chosen number. |
-| `uninstall`/`purge` requested | Restate exactly what gets deleted, confirm once, then delegate. |
-| Global scope | hook-creator MUST use Bash only — `~/.claude/*` is protected. |
-| Project config exists but is malformed JSON | Report it: the guard skips it and silently falls back to the GLOBAL config. Offer to rewrite. |
-| User asks for `byAgentType` overrides | Warn that plugin-scoped `agent_type` values are unverified and a mismatch falls back to `defaultMinutes`. |
+`upgrade` asks nothing and keeps `defaultMinutes`, `byAgentType`, `hardStopRatio` and a disabled state. Not installed in that scope -> it is an `install`: ask scope and budget.
 
 ---
 
 ## Smoke Test
 
-Verify the 3 assets exist and the hooks parse before delegating.
-
-**EXECUTE** using Bash tool:
+Before delegating, verify the 3 assets exist and the hooks parse. **EXECUTE** using Bash tool:
 
 ```bash
-SD="${CLAUDE_SKILL_DIR}"
-if [ -n "$SD" ] && [ -f "$SD/../../.claude-plugin/plugin.json" ]; then BT_ROOT=$(cd "$SD/../.." && pwd); else BT_ROOT=$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::'); fi
-[ -n "$BT_ROOT" ] || { echo "ERROR: cannot locate brewtools plugin root -- install/update brewtools first."; exit 1; }
+BT_ROOT="${CLAUDE_PLUGIN_ROOT}"
 A="$BT_ROOT/skills/agent-deadline-setup/assets"
 test -d "$A" || { echo "❌ smoke FAILED — assets dir missing: $A"; exit 1; }
 for f in agent-deadline-guard.mjs agent-deadline-cleanup.mjs INSTALL.md; do
@@ -439,8 +415,8 @@ node --check "$A/agent-deadline-cleanup.mjs" && \
 echo "✅ smoke" || echo "❌ smoke FAILED — syntax error in a hook file"
 ```
 
-> **STOP if ❌** — do NOT delegate; reinstall/update brewtools first.
+> **STOP if ❌** — do not delegate; reinstall/update brewtools first.
 
-`node --check` proves the files parse, nothing more. Behavioral verification (synthetic payloads, forced deadline) is in the runbook's **Verify** section and is NOT run here.
+`node --check` proves the files parse, nothing more. Behavioral verification (synthetic payloads, forced deadline) is the runbook's **Verify** section and is not run here.
 
 </instructions>

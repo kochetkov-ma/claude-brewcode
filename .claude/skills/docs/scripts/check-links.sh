@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# check-links.sh — validate internal /plugin/... cross-links in touched MDX files
-# Usage: bash scripts/check-links.sh [file1.mdx file2.mdx ...]
-#        (if no args, scans all .mdx under web/docs/src/content/docs/)
+# Validates internal /plugin/... cross-links in touched MDX files.
+# Usage: bash scripts/check-links.sh [file.mdx ...]; no args -> all .mdx under web/docs/src/content/docs/
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
@@ -38,22 +37,15 @@ fi
 FAIL=0
 for f in "${FILES[@]}"; do
   [[ -f "$f" ]] || { echo "⚠️  skip missing: $f"; continue; }
-  # Extract href="/...something.../" patterns (internal only, no http)
-  LINKS=$(grep -oE 'href="/[^"#]+/?"' "$f" | sed 's/href="\///;s/\/"$//;s/"$//' || true)
+  # Internal links only: href="/..." attributes and markdown ](/...) targets; a #anchor is dropped
+  LINKS=$({ grep -oE '(href="|\]\()/[^")# ]*' "$f" || true; } | sed -E 's/^(href="|\]\()\///')
   for link in $LINKS; do
     [[ -z "$link" ]] && continue
     # Strip trailing slash for comparison
     link_clean="${link%/}"
-    if echo "$KNOWN_SLUGS" | grep -qFx "$link_clean"; then
-      : # OK
-    else
-      # Check if it's a root-level page (getting-started, installation, etc)
-      if echo "$KNOWN_SLUGS" | grep -qFx "$link_clean"; then
-        :
-      else
-        echo "❌ $f: broken internal link → /$link"
-        FAIL=1
-      fi
+    if ! grep -qFx -- "$link_clean" <<< "$KNOWN_SLUGS"; then
+      echo "❌ $f: broken internal link → /$link"
+      FAIL=1
     fi
   done
 done

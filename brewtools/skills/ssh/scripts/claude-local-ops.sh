@@ -1,8 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 # Manage CLAUDE.local.md server entries
-# Usage: claude-local-ops.sh <subcommand> [args...]
-# Subcommands: read, add, update, list, set-default
+# Usage: claude-local-ops.sh <subcommand> [args...]; subcommands: read, add, update, list, set-default
 
 # Project root: CLAUDE_PROJECT_DIR -> git toplevel -> upward walk -> PWD.
 claude_project_root() {

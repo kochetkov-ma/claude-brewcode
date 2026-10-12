@@ -1,12 +1,8 @@
 # Release Best Practices
 
-> Semver rules below are **general** — they apply anywhere.
->
-> Everything from "Release Flow" down is a **WORKED EXAMPLE** taken from one specific repo
-> (`claude-brewcode`, a 4-plugin Claude Code marketplace). Its script names, file paths, URLs
-> and heading names are that repo's, **not yours**. Read it for the SHAPE — probe-then-run,
-> every version file in lockstep, verify the published artifact, gate on a version check —
-> and translate each step to whatever the current project actually has.
+> Sections without "EXAMPLE" in the title are general. Every "EXAMPLE" section is one repo's (`claude-brewcode`, a 4-plugin Claude Code marketplace): its script
+> names, paths, URLs and headings are not yours. Read it for the shape (probe-then-run, every version
+> file in lockstep, verify the published artifact, gate on a version check) and translate each step.
 >
 > **Do not execute any command from the example blocks in another repo.** `/brewtools:deploy`
 > P4 Step 0 probes for the real tooling first.
@@ -26,12 +22,12 @@
 2. bash .claude/scripts/bump-version.sh X.Y.Z → synchronize the current carriers.
 3. Update RELEASE-NOTES.md and affected docs; validate the owned change set.
 4. Execute the authorized release as one failure-stop chain:
-   git add -- <owned paths> && git commit -m "Release vX.Y.Z" &&
-   git push origin HEAD && git tag vX.Y.Z && git push origin refs/tags/vX.Y.Z
+   git add -- <owned paths> && git commit -m "feat(release): vX.Y.Z <summary>" &&
+   git tag vX.Y.Z && git push origin HEAD && git push origin refs/tags/vX.Y.Z
    → explicit paths only; git add -A is banned; git push --tags is banned.
 5. Verify CI for the committed SHA, published release, and served docs provenance/content.
-6. Refresh local Claude plugin caches only with explicit authorization for those caches.
-   Native Codex plugins remain disabled; a release does not authorize local installation.
+6. Refresh installed plugin caches: bash .claude/scripts/update-plugin.sh per profile;
+   whether this step runs unprompted is the project's release policy.
 ```
 
 ## EXAMPLE — Version Carriers (claude-brewcode repo)
@@ -123,9 +119,9 @@ current repo from its top-level layout:
 
 | Event | Workflows triggered |
 |-------|-------------------|
-| Tag `v*.*.*` push | Docs (GHCR build), Release (GitHub Release) |
-| Docs workflow completes successfully | Deploy Docs (VPS deploy) via `workflow_run` |
-| Branch push (non-main) | Docs (GHCR build, branch tag) |
+| Tag `v*.*.*` push | Docs (GHCR release image), Release (GitHub Release) |
+| Docs run for a release tag completes successfully | Deploy Docs (VPS deploy) via `workflow_run` |
+| Branch push (non-main) | Docs (GHCR preview image, never deployed: a branch build that deploys replaces the release on the live site) |
 
 ## Post-Release Verification
 
@@ -136,7 +132,7 @@ check (the live thing reports X.Y.Z). Pick the checks that match what this repo 
 
 | Check | Command | Expected |
 |-------|---------|----------|
-| CI runs | `gh run watch "$(gh run list -L 20 --json databaseId,headSha --jq "[.[] \| select(.headSha == \"$(git rev-parse HEAD)\")] \| .[0].databaseId")" --exit-status` | Exit 0 — correlated to this commit, !=whatever ran last |
+| CI runs | `gh run list -L 20 --json databaseId,headSha`, then `gh run watch <id> --exit-status` for EVERY run whose `headSha` is the release commit | Each exits 0 — correlated to this commit, !=whatever ran last |
 | Release created | `gh release view vX.Y.Z` | Exists, not draft |
 | Docs provenance | `curl -fsS https://doc-claude.brewcode.app/build-info.json` | Exact `{version,sha,buildRunId}` matches the successful Docs image/build |
 | Docs content | Fetch affected pages and compare the deployed getting-started HTML hash with the image | HTTP 200, correct version/content; health alone is insufficient |

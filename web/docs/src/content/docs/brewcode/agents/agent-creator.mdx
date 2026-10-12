@@ -17,7 +17,7 @@ Describe the role, allowed files and expected result. Agent Creator drafts front
 
 <Callout type="note" title="Current authoring contracts">
 The agent and its five on-demand references were checked against official Claude Code documentation
-and changelog through 2.1.285. They distinguish ordinary agents, conversation forks and skill forks;
+and changelog through 2.1.296. They distinguish ordinary agents, conversation forks and skill forks;
 document `omitClaudeMd`; and separate plugin field restrictions from repository delegation policy.
 </Callout>
 
@@ -27,7 +27,30 @@ document `omitClaudeMd`; and separate plugin field restrictions from repository 
 |-------|-------|
 | Triggers | "create agent", "improve agent", "scaffold agent" |
 | Model | `inherit` — runs on the session's model |
-| Tools | Read, Write, Edit, Glob, Grep, Bash, Agent, WebFetch, WebSearch |
+| Tools | Read, Write, Edit, Glob, Grep, Bash, WebFetch, WebSearch |
+
+## When to use
+
+- **New agent** — you need a specialized subagent (reviewer, code-generator, security-scanner, etc.)
+- **Agent not triggering** — the agent exists but Claude doesn't auto-select it reliably
+- **Trigger collisions** — two agents compete for the same request; need `<commentary>` disambiguation
+- **System prompt quality** — existing agent body is vague prose instead of dense tables + checklists
+- **Post-update drift** — agent worked before but a plugin update changed naming or available tools
+
+## Examples
+
+```text
+"Create an agent for code review — reads only, outputs severity table"
+"My reviewer agent doesn't trigger when I say 'check this PR'"
+"Improve the description of my tester agent, it keeps clashing with developer"
+```
+
+```text
+# Natural language triggers — all route to agent-creator
+"new agent for security scanning"
+"agent isn't picking up my requests"
+"fix agent description"
+```
 
 ## Scope guard
 
@@ -52,7 +75,7 @@ Two blocks land in the body of every agent Agent Creator writes. They are part o
 
 | Guardrail | Applies to | What it says |
 |-----------|-----------|--------------|
-| **Return Contract** | Every generated agent, unconditionally | Verdict first, `<=30 lines`, `path:line`. !=bodies/output/log/preamble. Unconditional — spend one step on what the MAIN SESSION needs and return only that. Bulk material — long logs, full diffs, dumps, long reports — goes into a file under `.claude/reports/<YYYYMMDD-HHMMSS>_<name>/`, and only the PATH comes back. Agents that dump everything burn the main session's context. If the agent-return guard is installed, a return over ~1000 est-tokens (chars/4) is blocked for compression; over `<=2500` it must file the detail and answer with path + verdict + `<=3 lines`. |
+| **Return Contract** | Every generated agent, unconditionally | Verdict first, `<=30 lines`, `path:line`. !=bodies/output/log/preamble. Unconditional — spend one step on what the MAIN SESSION needs and return only that. Bulk material — long logs, full diffs, dumps, long reports — goes into a file under `.claude/reports/<YYYYMMDD-HHMMSS>_<name>/`, and only the PATH comes back. Agents that dump everything burn the main session's context. If the agent-return guard is installed, a return over ~2500 est-tokens (chars/4) is blocked for compression; over ~6000 it must file the detail and answer with path + verdict + `<=3 lines`. |
 | **Scope Fit** | Only agents whose domain writes code, scripts, SQL, schemas, infra or config | Build for the actual scale and the problems that exist today, not imagined load or speculative abstraction — a 10-user app does not need hardening against DB lock contention. After finishing, one pass: can this be simpler — fewer files, less config, less indirection? |
 
 For generic agents, Scope Fit is omitted for research, docs and review-only work; Return Contract remains required. Team profiles use the explicit teams-setup exception: shared return and scope rules live in `team.md`, with only six domain sections in each profile. Agent Creator applies its own Return Contract: paths and validation verdicts, without full bodies.
@@ -60,8 +83,8 @@ For generic agents, Scope Fit is omitted for research, docs and review-only work
 ## Delegation
 
 Agent Creator completes bounded work itself and requests main-caller delegation for large independent
-Explore analysis or a final `brewtools:text-optimizer` pass. It does not nest or delegate its own
-verification. Claude Code supports nested delegation within its configured depth; Brewcode policy
+Explore analysis or a final `brewtools:text-optimizer` pass. Its definition carries no `Agent` tool,
+so it cannot spawn anything, including its own verification. Claude Code supports nested delegation within its configured depth; Brewcode policy
 keeps spawns in the main conversation so the caller can integrate each result.
 
 Ordinary subagents cannot use `AskUserQuestion`, even if it is listed in `tools:`. Conversation
@@ -103,29 +126,6 @@ main caller applies these additional acceptance requirements from Agent Creator:
 
 If Brewtools is unavailable, report optimization as skipped. The validated agent remains usable.
 
-## When to use
-
-- **New agent** — you need a specialized subagent (reviewer, code-generator, security-scanner, etc.)
-- **Agent not triggering** — the agent exists but Claude doesn't auto-select it reliably
-- **Trigger collisions** — two agents compete for the same request; need `<commentary>` disambiguation
-- **System prompt quality** — existing agent body is vague prose instead of dense tables + checklists
-- **Post-update drift** — agent worked before but a plugin update changed naming or available tools
-
-## Examples
-
-```text
-"Create an agent for code review — reads only, outputs severity table"
-"My reviewer agent doesn't trigger when I say 'check this PR'"
-"Improve the description of my tester agent, it keeps clashing with developer"
-```
-
-```text
-# Natural language triggers — all route to agent-creator
-"new agent for security scanning"
-"agent isn't picking up my requests"
-"fix agent description"
-```
-
 ## Flow
 
 <Steps>
@@ -137,7 +137,7 @@ If Brewtools is unavailable, report optimization as skipped. The validated agent
   </li>
   <li>
     <div>
-      <strong>Parallel analysis</strong>
+      <strong>Analysis</strong>
       <p>Reads the closest well-built existing agent and supplied research. If independent research exceeds the bounded unit, returns Explore assignments for the main caller to dispatch.</p>
     </div>
   </li>
@@ -174,7 +174,7 @@ If Brewtools is unavailable, report optimization as skipped. The validated agent
 ---
 name: agent-name              # REQ: lowercase-hyphens; no leading `-`, no `:` (reserved for plugin namespacing)
 description: "..."            # REQ: action verb + Triggers: keyword list
-model: sonnet                 # OPT: fable|opus|sonnet|haiku|inherit  (fable=claude-fable-5, Mythos-class, CC 2.1.170+)
+model: sonnet                 # OPT: fable|opus|sonnet|haiku|inherit  (or a full model ID such as claude-opus-5-5)
 effort: high                  # OPT: low|medium|high|xhigh|max (no auto, no bare integer)
 maxTurns: 20                  # OPT: integer, max turns before abort
 tools: Read, Glob, Grep       # OPT: omit = inherit all
@@ -193,14 +193,14 @@ experimental: {cacheTtl: "5m"} # OPT: file definitions only; ignored in --agents
 ---
 ```
 
-**Scope — current references checked through Claude Code 2.1.285:**
+**Scope — current references checked through Claude Code 2.1.296:**
 
 | Scope | Fields |
 |-------|--------|
 | Local + plugin | `model`, `effort`, `maxTurns`, `tools`, `disallowedTools`, `skills`, `memory`, `background`, `omitClaudeMd`, `isolation: worktree` — execution mode still affects behavior |
 | Local only — ignored for plugin agents | `permissionMode`, `hooks`, `mcpServers`, `initialPrompt` |
 | File definitions only | `color`, `experimental.cacheTtl`; ignored in `--agents` JSON |
-| Unconfirmed internal/older fields — do not emit | `observer`, `observerMessage`, `observeSubagents` |
+| Unconfirmed fields — do not emit | Any field the references do not list |
 
 `initialPrompt` auto-submits the first user turn only for a local definition running as the main
 session (`--agent` or the `agent` setting). Plugin agents and ordinary subagent spawns ignore it.
@@ -233,7 +233,7 @@ they are optional and do not guarantee activation.
 Claude Code allows depth-limited nested spawning. Brewcode policy requires main-conversation
 spawns. Plugin agent paths resolve through `${CLAUDE_PLUGIN_ROOT}`; keep runtime and credentials separate.
 
-The [known-issue reference](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/agent-known-issues.md) records dated reports and issue states. An issue closure alone does not prove runtime repair.
+The [known-issues reference](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/agent-known-issues.md) lists changes 2.1.234-2.1.296, architectural limits and debugging steps. An issue closure alone does not prove runtime repair.
 </details>
 
 <details>
@@ -285,7 +285,7 @@ The checks occur at tool boundaries and do not interrupt an already running call
 | Path / tool | Use |
 |-------------|-----|
 | `.claude/projects/{project}/{sessionId}/subagents/agent-{agentId}.jsonl` | Full subagent transcript (retention: `cleanupPeriodDays`) |
-| `run_in_background: true` + `Read` | Read the background task's output file; `TaskOutput` is deprecated and unavailable in the background pool |
+| `run_in_background: true` + `Read` | Read the background task's output file; `TaskOutput` was removed in 2.1.277 — read the output file instead |
 | `TaskStop` | Kill a running subagent |
 | `SendMessage` | Resume a stopped subagent with context intact |
 
@@ -293,7 +293,7 @@ The checks occur at tool boundaries and do not interrupt an already running call
 
 ## Reference files (read on demand)
 
-Agent Creator keeps its full frontmatter catalog, scope/tool rules, execution model, templates, and known-issue log out of this page's body — same on-demand pattern the source file itself uses. Read the one that matches what you're doing; skip the rest.
+Agent Creator keeps its full frontmatter catalog, scope/tool rules, execution model, templates, and known-issues reference out of this page's body — same on-demand pattern the source file itself uses. Read the one that matches what you're doing; skip the rest.
 
 | File | What it holds |
 |------|---------------|
@@ -301,13 +301,13 @@ Agent Creator keeps its full frontmatter catalog, scope/tool rules, execution mo
 | [`agent-scope-and-tools.md`](https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/agents/references/agent-scope-and-tools.md) | Deciding `tools:`, where a generated file should live, model precedence, delegation patterns |
 | [`agent-context-and-execution.md`](https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/agents/references/agent-context-and-execution.md) | What a subagent inherits from its parent, execution modes, turn/token/concurrency limits |
 | [`agent-template.md`](https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/agents/references/agent-template.md) | Description budget, system prompt structure, the Guardrails block, the Validation Checklist |
-| [`agent-known-issues.md`](https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/agents/references/agent-known-issues.md) | Dated issue evidence and changelog deltas through 2.1.285 |
+| [`agent-known-issues.md`](https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/agents/references/agent-known-issues.md) | Changes 2.1.234-2.1.296, architectural limits, debugging, common problems |
 
 ## Return Contract
 
 Verdict first, `<=30 lines`, `path:line`. No agent bodies, no pasted frontmatter, no analysis transcripts, no preamble. Per generated agent: file path, one-line role, <code>model</code>/<code>maxTurns</code>/<code>tools</code> on one line, validation verdict (pass, or the failing checklist item), text-optimizer run or skipped, and any assumption made about the brief. Longer material — analysis notes, generated bodies, full validation runs — goes to <code>.claude/reports/&lt;YYYYMMDD-HHMMSS&gt;_agent-creator/</code>; only the path comes back.
 
-This is the same discipline Agent Creator bakes into every generated agent — see the Return Contract row in the Guardrails table above, a separate contract from this one. [`/brewtools:agent-return-setup`](/brewtools/skills/agent-return-setup/) enforces this at ~1000 / ~2500 est-tokens when installed; the contract itself ships unconditionally.
+This is the same discipline Agent Creator bakes into every generated agent — see the Return Contract row in the Guardrails table above, a separate contract from this one. [`/brewtools:agent-return-setup`](/brewtools/skills/agent-return-setup/) enforces this at ~2500 / ~6000 est-tokens when installed; the contract itself ships unconditionally.
 
 <CardGrid>
   <Card title="Skill Creator" icon="puzzle" href="/brewcode/agents/skill-creator/">

@@ -1,24 +1,13 @@
 #!/bin/bash
-# deploy-common.sh -- shared helpers for the brewtools:deploy scripts.
-#
-# Source, never execute:
-#   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-#   . "$SCRIPT_DIR/lib/deploy-common.sh"
-#
-# Why this exists: GNU `timeout` is Homebrew-only on macOS, which is this
-# plugin's primary local platform. `timeout 30 gh ...` on a stock Mac exits 127
-# before gh ever runs, and every caller used to render that as "the GitHub API
-# is unavailable" or "FAILED trigger" -- a dispatch that was never attempted.
-# `ght` always enforces the bound (real binary when present, built-in watchdog
-# otherwise) and `ght_reason` keeps a missing tool distinguishable from a
-# genuine remote failure.
+# deploy-common.sh: shared brewtools:deploy helpers; source (`. "$SCRIPT_DIR/lib/deploy-common.sh"`), never execute.
+
+# Why: GNU `timeout` is Homebrew-only on macOS -> rc 127 before gh runs, misread as "API unavailable"/"FAILED trigger".
+# `ght` always enforces the bound (real binary or built-in watchdog); `ght_reason` keeps missing tool != remote failure.
 
 dc_have() { command -v "$1" >/dev/null 2>&1; }
 
-# ght_backend -- which watchdog backs `ght`: timeout | gtimeout | bash.
-# `bash` is the built-in watchdog below, NOT an unbounded run: on stock macOS it
-# is the normal answer, never a degraded one. DEPLOY_TIMEOUT_BIN overrides the
-# detection; `none` forces the built-in path (used by the test suite).
+# ght_backend -> timeout | gtimeout | bash (built-in watchdog below, still bounded; normal on stock macOS).
+# DEPLOY_TIMEOUT_BIN overrides detection; `none` forces the built-in path (test suite).
 ght_backend() {
     local ovr="${DEPLOY_TIMEOUT_BIN:-}"
     if [ -n "$ovr" ]; then
@@ -30,19 +19,16 @@ ght_backend() {
     else printf 'bash\n'; fi
 }
 
-# ght_watch SECONDS CMD [ARG...] -- dependency-free stand-in for GNU `timeout`.
-# `set -m` puts the child in its own process group so the whole tree dies, not
-# just the wrapper. The deadline is WALL CLOCK from bash's own $SECONDS (summing
-# requested sleeps is not the same number under load). `-gt` not `-ge`: $SECONDS
-# is captured inside a second, so `-ge` could fire almost a full second early.
-# 124 is reported only when the deadline passed AND the child died of a signal.
+# ght_watch SECONDS CMD [ARG...]: dependency-free GNU `timeout`; `set -m` -> own process group, whole tree dies.
+# WALL CLOCK deadline via $SECONDS (!= summed sleeps), `-gt` (`-ge` fires ~1s early); 124 only if deadline passed AND signalled.
 ght_watch() {
     local secs="${1:?ght needs seconds}"; shift
     local had_m=0; case "$-" in *m*) had_m=1 ;; esac
-    set -m
+    # zsh (the macOS Bash-tool shell) aborts on `set -m` when non-interactive: no group there.
+    [ -n "${ZSH_VERSION:-}" ] || set -m
     "$@" &
     local pid=$!
-    [ "$had_m" = "1" ] || set +m
+    [ "$had_m" = "1" ] || [ -n "${ZSH_VERSION:-}" ] || set +m
     local t0=$SECONDS slept=0 step=1 timedout=0 rc=0
     while kill -0 "$pid" 2>/dev/null; do
         if [ "$(( SECONDS - t0 ))" -gt "$secs" ]; then timedout=1; break; fi
@@ -64,9 +50,8 @@ ght_watch() {
     return "$rc"
 }
 
-# ght SECONDS CMD [ARG...] -- run CMD under an upper bound that is ALWAYS
-# enforced. Every argument stays its own argv element, so nothing is re-parsed
-# by a shell. Exit: 124 = timed out (GNU convention), else CMD's own status.
+# ght SECONDS CMD [ARG...]: CMD under an ALWAYS-enforced bound, argv kept intact (no shell re-parse).
+# Exit: 124 = timed out (GNU convention), else CMD's own status.
 ght() {
     local secs="${1:?ght needs seconds}"; shift
     local backend; backend="$(ght_backend)"
@@ -76,9 +61,7 @@ ght() {
     esac
 }
 
-# ght_reason RC -- classify a bounded run so callers never collapse four
-# distinct outcomes into one sentinel:
-#   ok | timeout | no_tool (the command itself is not installed) | failed.
+# ght_reason RC -> ok | timeout | no_tool (command itself not installed) | failed; never one sentinel for all four.
 ght_reason() {
     case "${1:-1}" in
         0)   printf 'ok\n' ;;

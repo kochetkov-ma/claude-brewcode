@@ -1,6 +1,6 @@
 # Publish (Brewpage)
 
-Publish text, markdown, JSON, files, or multi-file sites to [brewpage.app](https://brewpage.app) and get a shareable public URL instantly. No sign-up required. Content is auto-deleted after the TTL expires (default 15 days).
+Publish text, markdown, JSON, files, or multi-file sites to [brewpage.app](https://brewpage.app) and get a shareable URL instantly. No sign-up required. Content is deleted when its TTL expires (default 15 days).
 
 ## Quick Start
 
@@ -40,7 +40,7 @@ Omit `--delivery-mode` to use the server default. An explicit choice is sent as 
 | Non-site outside `public` | Dedicated subdomain (`subdomain`) | Locked; explicit `path` is rejected |
 | Public text/Markdown, JSON or file, including password-protected content | Promotion (`path`) | `path` or `subdomain` |
 
-New routing identities use `routingCohort=new-v1` (NEW); legacy publications (OLD) retain their links and behavior. Deduplication can return an OLD or NEW winner: use its actual identity, cohort, mode and exact URL, even when they differ from the requested mode. Missing or null OLD routing metadata means **Existing link**; do not infer a mode from the address.
+New routing identities use `routingCohort=new-v1` (NEW); legacy publications (OLD) keep their links and behavior. Deduplication can return an OLD or NEW winner: use its actual identity, cohort, mode and exact URL, even when they differ from the request. Missing or null OLD routing metadata means **Existing link**; never infer a mode from the address.
 
 ## Examples
 
@@ -56,16 +56,10 @@ New routing identities use `routingCohort=new-v1` (NEW); legacy publications (OL
 # Publish JSON data
 /brewdoc:publish '{"users": [{"name": "Alice"}, {"name": "Bob"}]}'
 
-# Publish with a 1-day TTL
-/brewdoc:publish changelog.md --ttl 1
-
-# Publish with a 30-day TTL for longer retention
+# Publish with a 30-day TTL
 /brewdoc:publish architecture.html --ttl 30
 
-# Publish a directory as a multi-file site
-/brewdoc:publish docs/mockups/v1/
-
-# Publish a directory with custom entry point
+# Publish a directory as a multi-file site with a custom entry point
 /brewdoc:publish docs/mockups/v1/ --entry hub.html
 
 # Publish a ZIP archive as a site
@@ -98,27 +92,27 @@ Published: {exact server URL}
 Owner token saved to <project-root>/.claude/brewpage-history.md
 ```
 
-- **URL** -- share the returned `link` exactly, including the trailing `/` on a new subdomain root. Mixed-case resource IDs and separate lowercase host UIDs are different identities; never construct a hostname from an ID.
-- **Owner access** -- the returned apex `ownerLink` and identity metadata are saved with the owner token in project-root history. Use them for API operations rather than parsing a subdomain URL. Older history entries retain their existing namespace/ID identifiers.
-- **Private history** -- mode `600`, git-ignored, and anchored to the project root even from a nested working directory. Each upload uses its own private run directory; concurrent runs do not share content or password inputs.
-- **Owner token** -- never printed to the conversation. Upload, response parsing and history saving happen in one Bash block; the model sees only `OK {url}` (plus file count for sites). Failure output excludes the response body.
+- **URL** -- share the returned `link` exactly, including the trailing `/` on a new subdomain root. Mixed-case resource IDs and lowercase host UIDs are different identities; never build a hostname from an ID.
+- **Owner access** -- the apex `ownerLink` and identity metadata are saved with the owner token in project-root history. Use them for API operations instead of parsing a subdomain URL. Older entries keep their namespace/ID identifiers.
+- **Private history** -- mode `600`, git-ignored, and anchored to the project root even from a nested working directory. Each upload uses its own private run directory, so concurrent runs never share content or password inputs.
+- **Owner token** -- never printed to the conversation. Upload, response parsing and history saving happen in one Bash block that prints only `OK {url}` (plus the file count for sites); failure output excludes the response body.
 
 ### Deleting a Published Page
 
 ```bash
-curl -X DELETE "https://brewpage.app/api/{ns}/{id}" -H "X-Owner-Token: {ownerToken}"
+curl -X DELETE "{ownerLink}" -H "X-Owner-Token: {ownerToken}"
 ```
 
-Find your owner token and API identifiers in project-root `.claude/brewpage-history.md`. Sites use `DELETE /api/sites/{ns}/{id}` instead.
+Find the owner token and owner API URL (`ownerLink`) in project-root `.claude/brewpage-history.md`. Older rows without one use `https://brewpage.app/api/{type}/{ns}/{id}`, where `{type}` is `html`, `json`, `files`, `kv` or `sites`.
 
 ## Tips
 
-- **TTL planning** -- default is 15 days. Use `--ttl 30` for content you need longer, or `--ttl 1` for quick one-off shares.
+- **TTL planning** -- the default is 15 days; use `--ttl 30` for longer-lived content or `--ttl 1` for one-off shares.
 - **Visibility** -- eligible, unprotected HTML pages, sites and files in `public` can be listed in the gallery and indexed, including on native subdomain hosts. Other namespaces are unlisted, not secret. Non-public, password-protected and ineligible publications use `noindex`. Eligibility does not guarantee indexing or search ranking.
-- **Password protection** -- choose an existing local file containing at least four characters; supply its absolute path, not the password in chat. Private header-file transport sends `X-Password`, while no-password mode ignores stale password files. New protected share links stay clean: never append `?p=`. Browser access uses the trusted unlock page; programmatic reads use apex API requests with `X-Password`. Existing links retain their password behavior.
+- **Password protection** -- give the absolute path of an existing local file holding at least four characters, never the password itself. It is sent as `X-Password` from a private header file; no-password mode ignores stale password files. New protected links stay clean (never append `?p=`): browsers use the unlock page, programmatic reads send `X-Password` to the apex API. Existing links keep their password behavior.
 - **Verify the result** -- open the exact returned link in a private browser window. Protected content must ask for its password before rendering; for sites, also check entry and asset paths.
 - **Republish in place** -- send the new bundle to the saved apex owner API with `X-Owner-Token` (`PUT /api/sites/{ns}/{id}` for sites). Site replacement preserves its host and replaces the file set. Ordinary PUT updates retain the delivery mode; do not send `X-Delivery-Mode` on them.
-- **Change hosting** -- only eligible NEW public non-sites support owner-authorized `PATCH /api/{type}/{ns}/{id}/hosting` with `deliveryMode` and the current `expectedVersion`. A mode change preserves the host; use the returned link and version afterward. OLD publications, sites and non-public namespaces have no mode choice. See the [full workflow and API details](https://doc-claude.brewcode.app/brewdoc/skills/publish/).
+- **Change hosting** -- only eligible NEW public non-sites support owner-authorized `PATCH /api/{type}/{ns}/{id}/hosting` with `deliveryMode` and the current `expectedVersion`. The host is preserved; use the returned link and version afterward. OLD publications, sites and non-public namespaces have no mode choice.
 
 ## Documentation
 
@@ -126,3 +120,4 @@ Find your owner token and API identifiers in project-root `.claude/brewpage-hist
 - [Skill source](SKILL.md) — upload blocks and input handling.
 - [Brewdoc](../../README.md) — installation and other documentation tools.
 - [MD to PDF](../md-to-pdf/README.md) — create a PDF before publishing it.
+- Tests: `bash brewdoc/skills/publish/tests/run.sh` (no network, no upload).

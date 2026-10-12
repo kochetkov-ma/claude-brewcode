@@ -6,7 +6,7 @@
 |-------|-------|
 | Command | `/brewcode:e2e` |
 | Model | opus |
-| Arguments | `install`, `create [prompt]`, `update [prompt]`, `review [prompt]`, `rules [prompt]`, `status` |
+| Arguments | `[prompt] [status\|install\|create\|update\|review\|rules]` |
 
 ## Overview
 
@@ -31,13 +31,11 @@ E2E orchestrates the full end-to-end testing lifecycle. Install analyzes your pr
 | rules | `/brewcode:e2e rules [prompt]` | Read and rewrite `.claude/e2e/e2e-rules.md` via architect + WebSearch |
 | status | `/brewcode:e2e status` | Read-only infrastructure status (agents, rules, config, artifacts) |
 
-Six modes, nothing else. `detect-mode.sh` rejects `uninstall`, `purge`, `upgrade`, `enable` and `disable` with an `ERROR:` line and exit 1 -- it never falls back to `install`. Any other first word is a free-form prompt for `install`. No arguments: `status` when 3+ `e2e-*` agents exist, `install` otherwise. To remove the setup, delete `.claude/agents/e2e-*.md` and `.claude/e2e/` by hand.
+Six modes, nothing else. The argument is a free-form English or Russian prompt: a mode name anywhere in it wins, otherwise mode keywords decide (`write tests` or `напиши тесты` -> `create`). With no mode word, or no arguments, the mode is `status` when 3+ `e2e-*` agents exist and `install` otherwise. `uninstall`, `purge`, `upgrade`, `enable` and `disable` are rejected with an `ERROR:` line and exit 1; to remove the setup, delete `.claude/agents/e2e-*.md` and `.claude/e2e/` by hand.
 
 ## Rules Live in Your Repo
 
-`install` step S6 merges the plugin's base rules with the accepted `[WEB]` + `[PROJECT]` findings into **`.claude/e2e/e2e-rules.md`**, and `config.rulesPath` points at that file. Every generated `e2e-*` agent loads it by repo-relative path before doing anything and stops if it is missing; `rules` mode reads and rewrites the same file, never the plugin copy.
-
-A generated `.claude/agents/*.md` is not plugin-owned, so `${CLAUDE_PLUGIN_ROOT}` is not substituted there and a plugin path resolves to nothing. An absolute cache path is no better -- it embeds the plugin version and breaks at the next update. A repo-relative file survives updates, uninstall, clone and CI.
+`install` step S6 merges the plugin's base rules with the accepted `[WEB]` + `[PROJECT]` findings into **`.claude/e2e/e2e-rules.md`**, and `config.rulesPath` points at that file. Every generated `e2e-*` agent loads it by repo-relative path before doing anything and stops if it is missing; `rules` mode reads and rewrites the same file, never the plugin copy. A generated agent is not plugin-owned, so a plugin path would not resolve there, and a repo-relative file survives updates, uninstall, clone and CI.
 
 ## Agents (created by install)
 

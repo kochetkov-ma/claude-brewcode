@@ -1,12 +1,6 @@
 #!/usr/bin/env node
-/**
- * Suite B — intent-guard provenance (superreview-setup/scripts/generate.sh emit-agent), the ONE writer
- * of .claude/agents/intent-guard.md that /brewcode:teams-setup Phase 3 calls.
- * Covers BCOP09: the runnability tests used to run before the provenance probes, so a hand-written
- * agent that merely mentioned a `{TOKEN}` was classified BROKEN and overwritten with no backup.
- * Runs entirely inside an isolated temp base; never touches the real ~/.claude or the repo tree.
- * Assertion policy: unconditional exact-equality checks with a description.
- */
+// Suite B — intent-guard provenance (superreview-setup/scripts/generate.sh emit-agent), sole writer of .claude/agents/intent-guard.md
+// (/brewcode:teams-setup Phase 3). BCOP09: hand-written agent naming `{TOKEN}` was overwritten unbacked. Never ~/.claude.
 import { spawnSync } from 'node:child_process';
 import {
   mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync, realpathSync,
@@ -69,10 +63,8 @@ const FOREIGN_WITH_TOKEN = [
   '',
 ].join('\n');
 
-// ────────────────────────────────────────────────────────────────────────────
 // B1 — BCOP09: an UNSTAMPED file carrying a {TOKEN} is the project's own agent.
 //      REUSE, byte-identical, no backup, tokens reported as a conflict.
-// ────────────────────────────────────────────────────────────────────────────
 {
   const root = makeProject('b1', FOREIGN_WITH_TOKEN);
   const r = emitAgent(root);
@@ -90,10 +82,8 @@ const FOREIGN_WITH_TOKEN = [
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
 // B2 — an unstamped file WITHOUT `name: intent-guard` frontmatter is still
 //      foreign: unrunnable by our rules, but not ours to overwrite.
-// ────────────────────────────────────────────────────────────────────────────
 {
   const body = '# somebody else\n\nnotes about {TICKET_ID}\n';
   const root = makeProject('b2', body);
@@ -104,10 +94,8 @@ const FOREIGN_WITH_TOKEN = [
   check('b2.backupCount', backups(root).length, 0, 'no backup, because no write');
 }
 
-// ────────────────────────────────────────────────────────────────────────────
 // B3 — control: the same foreign file with no token at all also REUSEs. This is
 //      the pre-fix behaviour and must not change.
-// ────────────────────────────────────────────────────────────────────────────
 {
   const body = FOREIGN_WITH_TOKEN.replace('{REQUEST_ID}', 'the ticket id');
   const root = makeProject('b3', body);
@@ -118,10 +106,8 @@ const FOREIGN_WITH_TOKEN = [
   check('b3.stderrEmpty', r.stderr, '', 'no conflict to report, so stderr stays silent');
 }
 
-// ────────────────────────────────────────────────────────────────────────────
 // B4 — OUR OWN stamped file with an unresolved token is BROKEN: recreated, but
 //      only after its bytes are copied to <path>.bak-<ts>.
-// ────────────────────────────────────────────────────────────────────────────
 {
   const body = ['---', 'name: intent-guard', '---', '', 'half-substituted {PROJECT_NAME}', '', STAMP, ''].join('\n');
   const root = makeProject('b4', body);
@@ -145,9 +131,7 @@ const FOREIGN_WITH_TOKEN = [
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
 // B5 — an EMPTY file is BROKEN with nothing to lose: recreated, no backup.
-// ────────────────────────────────────────────────────────────────────────────
 {
   const root = makeProject('b5', '');
   const r = emitAgent(root);
@@ -156,9 +140,7 @@ const FOREIGN_WITH_TOKEN = [
   check('b5.backupCount', backups(root).length, 0, 'an empty file has no bytes worth backing up');
 }
 
-// ────────────────────────────────────────────────────────────────────────────
 // B6 — a pre-standard file OF OURS still MIGRATEs: metadata only, body kept.
-// ────────────────────────────────────────────────────────────────────────────
 {
   const marker = 'TAILORED-LINE-KEEP-ME';
   const body = ['---', 'name: intent-guard', '---', '', `## 1. Scope`, '', marker, '', LEGACY_STAMP, ''].join('\n');
@@ -170,9 +152,7 @@ const FOREIGN_WITH_TOKEN = [
   check('b6.backupCount', backups(root).length, 0, 'a migration rewrites metadata only, so no backup is needed');
 }
 
-// ────────────────────────────────────────────────────────────────────────────
 // B7 — no file at all: CREATE, the ordinary first-run path.
-// ────────────────────────────────────────────────────────────────────────────
 {
   const root = makeProject('b7', null);
   const r = emitAgent(root);

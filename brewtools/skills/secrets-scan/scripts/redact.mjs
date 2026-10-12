@@ -1,15 +1,6 @@
 #!/usr/bin/env node
-/**
- * redact.mjs - turn one (file, line) hit into a report-safe finding record.
- *
- * Usage: node redact.mjs <file> <line-number-1-based>
- * Prints ONE JSON object on stdout and nothing else. The raw matched value is
- * never printed, never returned, and never written anywhere: a scanner agent
- * calls this instead of quoting the secret it found, so no model turn and no
- * durable report ever holds the credential.
- *
- * Fields: status, path, line, category, match_len, sha256_12, preview.
- */
+// Usage: node redact.mjs <file> <line-number-1-based> -> ONE JSON finding: status, path, line, category, match_len, sha256_12, preview.
+// Raw match never printed/returned/written: scanner agents call this instead of quoting the secret, so no turn/report holds it.
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';

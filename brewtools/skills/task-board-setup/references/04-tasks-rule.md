@@ -2,13 +2,13 @@
 
 Substitute `{{DOMAINS}}`, `{{LANG}}`, `{{CLOSE_MARKER_SHORT}}` (same map as ref 03), `{{FIRST_DOMAIN}}`. Spec-layer placeholders (gated by `{{SPEC_MODE}}`) -- LINE kind: `{{SPEC_RULES}}`; INLINE kind: `{{SPEC_FM_FIELD}}`. Write the body below to `TARGET/.claude/rules/tasks.md`.
 
-> This rule lives ONLY in `.claude/rules/tasks.md`. Do NOT add it to CLAUDE.md. The `paths:` frontmatter scopes it so it auto-loads when the agent touches `.claude/features/**` -- which is ALSO the prompt-injection channel for `## Session progress`: `PROGRESS.md` lives under that glob, and rule 8 makes every task open the board, so the section is in context (plan mode included) exactly when a task starts. That is why the session-progress contract is a rule section and NOT a new hook -- this generator installs no hooks.
+> This rule lives ONLY in `.claude/rules/tasks.md`. Do NOT add it to CLAUDE.md. `paths:` auto-loads it when the agent touches `.claude/features/**`; `PROGRESS.md` lives there and rule 8 makes every task open the board, so `## Session progress` is in context (plan mode included) exactly when a task starts. That is why it is a rule section and NOT a hook -- this generator installs no hooks.
 
 ## Spec-layer placeholders (`SPEC_MODE` gate)
 
-When `SPEC_MODE=on`, substitute both placeholders below. When `SPEC_MODE=off`, REMOVE the entire `{{SPEC_RULES}}` LINE -- do not leave it blank -- so the emitted rule TABLE keeps 12 rules and unchanged rule 6. Session progress and methodology/anti-drift sections are UNGATED baseline in both modes, never removed.
+`SPEC_MODE=on`: substitute both placeholders below. `SPEC_MODE=off`: REMOVE the entire `{{SPEC_RULES}}` LINE (not blank), so the table keeps 12 rules and rule 6 is unchanged. Session progress and methodology/anti-drift sections are UNGATED baseline in both modes.
 
-`{{SPEC_FM_FIELD}}` is INLINE inside rule 6. On `off`, delete the token itself and nothing else -- the rest of that line stays byte-identical, no stray space. On `on` it expands to:
+`{{SPEC_FM_FIELD}}` is INLINE inside rule 6. On `off`, delete only the token, no stray space. On `on` it expands to:
 
 ```
 , spec
@@ -54,7 +54,7 @@ Canonical task LIST: `.claude/features/board.md`. Task files: `.claude/features/
 |---|------|
 | 1 | `board.md` = canonical LIST + status. Update in SAME change as ANY transition -- a lagging board = wrong board |
 | 2 | Folder == `status:` FM. File lives in `backlog/`\|`todo/`\|`progress/`\|`closed/`; FM `status:` MUST match folder. On move -> change BOTH |
-| 3 | Lifecycle: `backlog -> todo -> progress -> closed` (trash/merge only from `backlog`). Task in `progress/` MUST have a file from `TASK_TEMPLATE.md` |
+| 3 | Lifecycle: `backlog -> todo -> progress -> closed` (trash/merge only from `backlog`). Accepted task in `todo/` or `progress/` MUST have a file from `TASK_TEMPLATE.md` |
 | 4 | IDs = UPPER-KEBAB, never change. Prefix: `T-` (feature) \| `BUG-` (defect) \| `M-` (maintenance/refactor) \| `EPIC-` (umbrella) |
 | 5 | First kebab segment = a repo domain { {{DOMAINS}} }. e.g. `T-{{FIRST_DOMAIN}}-SLUG`, `BUG-{{FIRST_DOMAIN}}-SLUG`, `M-{{FIRST_DOMAIN}}-SLUG` |
 | 6 | Required FM fields: `id, title, status, priority, owner, created, updated{{SPEC_FM_FIELD}}` |
@@ -68,22 +68,22 @@ Canonical task LIST: `.claude/features/board.md`. Task files: `.claude/features/
 
 ## Session progress (`.claude/features/PROGRESS.md`)
 
-`board.md` owns the task LIST + status. `PROGRESS.md` owns what THIS SESSION did about it -- !=a second board (no task table), !=per-task detail (that is the task's `## Notes`). Five fields, overwritten in place, never appended: `Updated`, `In flight`, `Moved since last update`, `Blocked`, `Next`.
+`board.md` owns the task LIST + status; `PROGRESS.md` owns what THIS SESSION did about it -- !=a second board (no task table), !=per-task detail (task's `## Notes`). Five fields, overwritten in place, never appended: `Updated`, `In flight`, `Moved since last update`, `Blocked`, `Next`.
 
 | # | Rule |
 |---|------|
 | P1 | It ALWAYS exists -- created at board init. Missing -> recreate it from `board.md` before anything else |
-| P2 | The MAIN SESSION keeps it current: refresh it in the SAME change as any transition, and before ending any turn that moved work. Stale `PROGRESS.md` = the session cannot say where it is |
-| P3 | **Plan mode:** a plan that touches any task MUST carry an explicit final step `update .claude/features/PROGRESS.md`. A plan without it is incomplete -- write the step into the plan, do not rely on remembering |
+| P2 | The MAIN SESSION refreshes it in the SAME change as any transition and before ending any turn that moved work -- else the session cannot say where it is |
+| P3 | Plan mode: a plan that touches any task MUST carry an explicit final step `update .claude/features/PROGRESS.md`; without it the plan is incomplete |
 | P4 | `task-tracker` WATCHES it: every run it rewrites the five fields from `board.md` + the task files and reports staleness in one line. It cannot run a skill for you -- act on its `NEXT:` line yourself |
 
 ## Methodology and anti-drift
 
-At EVERY task start, read `.claude/features/METHODOLOGY.md` + `ANTI-DRIFT.md`; derive task Methodology from the domain (review strategy, reliable checks, base work/owners/dependencies and parent id). The isolated tracker claims/reconciles files, then the main session runs `task-board` to create/reconcile one unique session timer per active top-level task, hourly unless the user overrides or opts out; announce the verified schedule. Save the task-specific COMPLETE tick prompt/runtime state in its task file before creation. Main session alone owns timer calls; missing tools are reported, never disguised as scheduling.
+At EVERY task start, read `.claude/features/METHODOLOGY.md` + `ANTI-DRIFT.md`; derive task Methodology from the domain (review strategy, reliable checks, base work/owners/dependencies, parent id). The isolated tracker claims/reconciles files; then the main session, which alone owns timer calls, runs `task-board` to create/reconcile one unique session timer per active top-level task (hourly unless the user overrides or opts out) and announces the verified schedule. Save the task's COMPLETE tick prompt/runtime state in its task file before creation. Missing tools are reported, never disguised as scheduling.
 
-Each delivered tick rereads methodology/anti-drift, task/spec/goal/user corrections; requests owner evidence; reconciles statuses/dependencies/counts and rebuilds derived `task-graph.md`; keeps ALL unfinished nodes + latest 10 done, archives older evidence first. Force a goal/acceptance drift check, correct deviations within scope, advance unblocked work; report local time, tick number, elapsed, achievements, remaining/next and present problems/blockers/questions in at most five compact lines with only 🟢🔵🔴⚪. Completion/cancellation/parking -> main-session task-board deletes the timer and verifies absence. Runtime contract: `ANTI-DRIFT.md`.
+Each delivered tick rereads methodology/anti-drift, task/spec/goal/user corrections; requests owner evidence; reconciles statuses/dependencies/counts and rebuilds derived `task-graph.md` (ALL unfinished nodes + latest 10 done, older evidence archived first); forces a goal/acceptance drift check, corrects deviations within scope, advances unblocked work; reports in at most five compact lines, only 🟢🔵🔴⚪: local time, tick number, elapsed, achievements, remaining/next, present problems/blockers/questions. Completion/cancellation/parking -> main-session task-board deletes the timer and verifies absence. Runtime contract: `ANTI-DRIFT.md`.
 
-Plan mode: include task methodology, graph/base work, saved prompt and an explicit execution step to reconcile/create its timer; include final PROGRESS refresh. Respect read-only planning: no file writes or timer creation/deletion until execution is allowed. Ticks delivered during planning report proposed changes only.
+Plan mode (with P3): include task methodology, graph/base work, saved prompt and an execution step to reconcile/create its timer; no file writes or timer creation/deletion until execution is allowed. Ticks delivered during planning report proposed changes only.
 ```
 
-> Note on rule 8: this is the EXTRA rule beyond the brewpage etalon -- it mandates running `task-tracker` as a spawned, isolated subagent at the start of any task (never inlined into the main session). Keep it phrased as a hard requirement.
+> Rule 8 mandates running `task-tracker` as a spawned, isolated subagent at the start of any task (never inlined into the main session). Keep it phrased as a hard requirement.

@@ -1,22 +1,26 @@
 #!/usr/bin/env bash
 # context-scan.sh - discover potential context inventory and byte-size proxies.
-#
-#   context-scan.sh [--root PATH] [--global] [--tier T] [--json] [--help]
-#
-#   --root PATH   project root to scan (default: CLAUDE_PROJECT_DIR, else git toplevel, else cwd)
-#   --global      also scan the global root $HOME/.claude
-#   --tier T      always-on | per-spawn | per-invocation | all   (default: all)
-#   --json        emit JSON on stdout (default, and the only output format)
-#
-# Tiers are inventory buckets, not observed loading: always-on includes conditional/imported
-# instructions and memory; per-spawn inventories agent files; per-invocation inventories skills
-# and lazy references. Loading conditions are reported separately; totals are potential sizes.
-#
-# Exit: 0 complete inventory | 2 usage/state/discovery error (partial JSON has scan_issues; no project writes).
 set -euo pipefail
 export LC_ALL=C
 
-usage() { sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() {
+  cat <<'USAGE'
+context-scan.sh - discover potential context inventory and byte-size proxies.
+
+  context-scan.sh [--root PATH] [--global] [--tier T] [--json] [--help]
+
+  --root PATH   project root to scan (default: CLAUDE_PROJECT_DIR, else git toplevel, else cwd)
+  --global      also scan the global root CLAUDE_CONFIG_DIR (unset = $HOME/.claude)
+  --tier T      always-on | per-spawn | per-invocation | all   (default: all)
+  --json        emit JSON on stdout (default, and the only output format)
+
+Tiers are inventory buckets, not observed loading: always-on includes conditional/imported
+instructions and memory; per-spawn inventories agent files; per-invocation inventories skills
+and lazy references. Loading conditions are reported separately; totals are potential sizes.
+
+Exit: 0 complete inventory | 2 usage/state/discovery error (partial JSON has scan_issues; no project writes).
+USAGE
+}
 die() { printf '%s\n' "$*" >&2; exit 2; }
 
 # CLAUDE_PROJECT_DIR -> git toplevel -> cwd (same contract as text-guard.sh).
@@ -44,11 +48,10 @@ done
 [ -n "$ROOT" ] || ROOT=$(resolve_root)
 [ -d "$ROOT" ] || die "❌ not a directory: $ROOT"
 ROOT=$(cd "$ROOT" && pwd)
-GLOBAL_ROOT="$HOME/.claude"
+GLOBAL_ROOT="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 
-# Vendored/mirrored/scratch trees are not context - they are copies of what is already counted.
-# `backups` and `reports` hold verbatim ORIGINALS (context-guard/text-guard snapshots): scanning them
-# both inflates the baseline and would hand a snapshot copy to a rewriting subagent.
+# Vendored/mirrored/scratch trees = copies of counted context. `backups` and `reports` hold verbatim ORIGINALS
+# (context-guard/text-guard snapshots): scanning inflates baseline, hands a snapshot copy to a rewriting subagent.
 PRUNE=( -name .git -o -name node_modules -o -name dist -o -name build -o -name .next -o -name vendor
         -o -name .codex -o -name tmp -o -name web -o -name plugins -o -name projects -o -name .template-baseline
         -o -name backups -o -name reports -o -name worktrees )
@@ -125,9 +128,8 @@ add_rule() { # label rule_file
   add_whole "$1" "$2" always-on "$loading"
 }
 
-# Agent description fields are discovery inventory; bodies belong to per-spawn inventory.
-# Handles both the inline form and the `description: |` / `>` block scalar (whose value is the
-# indented lines that follow, not the marker char).
+# Agent description fields = discovery inventory, bodies = per-spawn. Handles inline form and
+# `description: |` / `>` block scalar (value = following indented lines, !=marker char).
 add_desc() { # label agent_md
   local n
   [ -f "$2" ] || return 0
@@ -138,10 +140,8 @@ add_desc() { # label agent_md
   add_row "$1" always-on "$2" "field:description" false "$n"
 }
 
-# Hook-injected text is emitted by a script, not read as a file, so it cannot be measured exactly.
-# Heuristic (ESTIMATE): sum the RHS of top-level UPPER_SNAKE string constants - the shape every
-# injected block in brewcode/hooks/lib/reminder.mjs uses. Quote chars are counted, runtime
-# interpolation is not; expect a few percent either way.
+# Hook text is script-emitted, !=exactly measurable. ESTIMATE: sum RHS of top-level UPPER_SNAKE string constants;
+# quote chars counted, runtime interpolation not; unregistered hook files still count (upper bound).
 add_hook() { # label mjs
   local n
   [ -f "$2" ] || return 0
@@ -155,7 +155,7 @@ scan_root() { # label root
   [ -d "$root" ] || return 0
 
   # --- always-on -------------------------------------------------------------
-  for f in "$root/CLAUDE.md" "$root/CLAUDE.local.md"; do
+  for f in "$root/CLAUDE.md" "$root/.claude/CLAUDE.md" "$root/CLAUDE.local.md"; do
     add_whole "$label" "$f" always-on startup-instruction
   done
   for f in "$root/AGENTS.md" "$root/.claude/AGENTS.md"; do
@@ -168,6 +168,9 @@ scan_root() { # label root
   done
   while IFS= read -r f; do add_memory "$label" "$f"; done < <(
     find "$root/.claude/memory" -type f -name '*.md' 2>/dev/null | sort)
+  # Subdirectory CLAUDE.md files load once Claude reads, writes or edits a file there (rows already counted dedup).
+  [ "$label" = global ] || while IFS= read -r f; do add_whole "$label" "$f" always-on subdirectory-on-access; done < <(
+    find "$root" -type d \( "${PRUNE[@]}" \) -prune -o -type f \( -name CLAUDE.md -o -name CLAUDE.local.md \) -print 2>/dev/null | sort)
 
   while IFS= read -r f; do add_hook "$label" "$f"; done < <(
     find "$root" -type d \( "${PRUNE[@]}" \) -prune -o -type f -path '*/hooks/*' -name '*.mjs' -print 2>/dev/null | sort)
@@ -190,8 +193,10 @@ scan_root() { # label root
 }
 
 scan_root project "$ROOT"
-# Default auto-memory inventory; configured paths and actual loaded content are not observed.
-MEM="$HOME/.claude/projects/$(printf '%s' "$ROOT" | tr '/' '-')/memory"
+# Default auto-memory dir (CC sanitizes every non-alphanumeric to `-`); `autoMemoryDirectory` is not observed.
+PROJ_NAME=$(printf '%s' "$ROOT" | sed 's/[^A-Za-z0-9]/-/g')
+[ -z "${CLAUDE_CONFIG_DIR:-}" ] || PROJ_NAME="${CLAUDE_CODE_PROJECT_DIR_NAME:-$PROJ_NAME}"
+MEM="$GLOBAL_ROOT/projects/$PROJ_NAME/memory"
 while IFS= read -r f; do add_memory project "$f"; done < <(
   find "$MEM" -type f -name '*.md' 2>/dev/null | sort)
 

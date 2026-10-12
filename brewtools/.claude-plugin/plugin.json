@@ -1,7 +1,7 @@
 {
   "name": "brewtools",
-  "version": "6.4.0",
-  "description": "Brewtools - universal utilities for Claude Code: text optimization, humanization, secrets scanning",
+  "version": "6.5.0",
+  "description": "Brewtools - Claude Code utilities: text optimization and humanization, secrets scanning, SSH and GitHub Actions deploy, manager codewords, subagent deadline/return-size/routing guards, task board, context slimming, plugin updates, alternative API providers",
   "author": {
     "name": "Maksim Kochetkov",
     "email": "apmatypa88@gmail.com",
@@ -13,7 +13,11 @@
   "keywords": [
     "brewtools",
     "text-optimization",
+    "humanize",
     "secrets-scan",
+    "deploy",
+    "ssh",
+    "subagents",
     "developer-tools"
   ],
   "skills": "./skills/"

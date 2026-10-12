@@ -17,8 +17,6 @@
 
 ## 2. reference-patterns.md Template (~300 lines)
 
-Structure follows `.claude/convention/reference-patterns-example.md` if available in workspace (optional -- not included in plugin distribution).
-
 ```markdown
 # Reference Patterns & Etalon Classes
 
@@ -68,16 +66,6 @@ Structure follows `.claude/convention/reference-patterns-example.md` if availabl
 | Required | L10+L11 DTOs/Entities | Immutability, naming, evolution |
 | Optional | L4 Utilities | Helpers, converters (if significant) |
 | Optional | L7 Providers | Clients, resilience (if project uses) |
-
-### Quality Rules
-
-| Check | Requirement |
-|-------|-------------|
-| Etalon per layer | 1-2 primary etalons minimum |
-| Code snippets | Real code from etalon files, 5-15 lines |
-| Anti-patterns | At least 1 per major layer (L5, L6, L8) |
-| Quick reference | Complete table at end covering all layers |
-| Paths | Relative from project root |
 
 ## 3. testing-conventions.md Template (~150 lines)
 
@@ -213,10 +201,10 @@ src/main/java/{base}/
 
 | Check | Details |
 |-------|---------|
-| Etalon coverage | Every included layer has 1-2 etalons |
-| Code snippets | 5-15 lines each, real code, no boilerplate |
+| Etalon coverage | Every included layer has 1-2 primary etalons |
+| Code snippets | 5-15 lines each, real code from the etalon files, no boilerplate |
 | Anti-patterns | At least 1 per major layer (L5, L6, L8 in reference-patterns) |
-| Quick reference | "When writing... / Copy from..." table in each doc |
+| Quick reference | "When writing... / Copy from..." table at the end of each doc, covering all its layers |
 | Cross-refs | No broken references between docs |
 | No duplicates | Each pattern in exactly one doc |
 | Paths | All relative from project root |

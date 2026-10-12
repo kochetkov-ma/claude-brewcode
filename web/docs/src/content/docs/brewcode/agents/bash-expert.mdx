@@ -18,7 +18,7 @@ machine. Bash Expert follows repository patterns and checks syntax, ShellCheck f
 
 <Callout type="note" title="Current execution contract">
 Bash Expert writes and validates a bounded script itself. Missing decisions return to the main
-caller; it does not spawn nested agents. Its `maxTurns: 60` is an anti-loop stop, with partial
+caller; it does not spawn nested agents. Its `maxTurns: 80` is an anti-loop stop, with partial
 results and on-disk checkpoints for recovery.
 </Callout>
 
@@ -30,33 +30,6 @@ results and on-disk checkpoints for recovery.
 | Tools | Read, Write, Edit, Glob, Grep, Bash, WebFetch |
 | Triggers | "create script", "bash script", "shell script" |
 | Output | `.sh` file + `bash -n` + ShellCheck report |
-
-## Scope guard
-
-Bash Expert sizes the task before writing. One bounded unit = one deliverable, roughly 5 files, roughly 10 steps.
-
-| Situation | What the agent does |
-|-----------|---------------------|
-| Brief fits one bounded unit | Starts immediately |
-| Brief exceeds ~5 files / ~10 steps, or bundles several independent deliverables | Stops before starting, returns a split proposal: 2-N bounded subtasks, each with scope and a suggested owner |
-| Scope grows mid-flight | Stops at the next clean boundary, reports done / remaining / how to split |
-| Brief is missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance | States a safe assumption or returns the unresolved question to the main caller; never invents scope |
-
-"Write the whole CI toolchain" gets a split proposal. "Write the install script for brewtools" gets a script.
-
-Ordinary subagents cannot use `AskUserQuestion`; conversation forks retain the parent's tool
-pool. This ordinary delegated agent returns decision requests to its caller. Claude Code allows
-depth-limited nested delegation, but Brewcode dispatches through the main conversation using
-the `Agent` tool. Bash Expert's own tool list contains no `Agent`.
-
-On `maxTurns` exhaustion, Claude Code 2.1.246+ returns a partial result. The caller inspects it
-and resumes with `SendMessage` rather than marking the work complete. After ShellCheck and a
-smoke run, Bash Expert records each script's path and status in
-`.claude/reports/YYYYMMDD-HHMMSS_bash-expert/report.md`; it reads that checkpoint first on resume.
-
-<Callout type="tip">
-**Got a split proposal instead of a script?** That is the guard working. Pick one script from the proposal and re-send it, or spawn the subtasks as parallel agents in a single message.
-</Callout>
 
 ## When to use
 
@@ -84,6 +57,35 @@ smoke run, Bash Expert records each script's path and status in
 # Plugin-aware paths resolve via ${CLAUDE_PLUGIN_ROOT}
 "create a version-bump script for the plugin"
 ```
+
+## Scope guard
+
+Bash Expert sizes the task before writing. One bounded unit = one deliverable, roughly 5 files, roughly 10 steps.
+
+| Situation | What the agent does |
+|-----------|---------------------|
+| Brief fits one bounded unit | Starts immediately |
+| Brief exceeds ~5 files / ~10 steps, or bundles several independent deliverables | Stops before starting, returns a split proposal: 2-N bounded subtasks, each with scope and a suggested owner |
+| Scope grows mid-flight | Stops at the next clean boundary, reports done / remaining / how to split |
+| Brief is missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance | States a safe assumption or returns the unresolved question to the main caller; never invents scope |
+
+"Write the whole CI toolchain" gets a split proposal. "Write the install script for brewtools" gets a script.
+
+Ordinary subagents cannot use `AskUserQuestion`; conversation forks retain the parent's tool
+pool. This ordinary delegated agent returns decision requests to its caller. Claude Code allows
+depth-limited nested delegation, but Brewcode dispatches through the main conversation using
+the `Agent` tool. Bash Expert's own tool list contains no `Agent`.
+
+On `maxTurns` exhaustion, Claude Code 2.1.246+ returns a partial result. The caller inspects it
+and resumes with `SendMessage` rather than marking the work complete. After ShellCheck and a
+smoke run, Bash Expert records each script's path and status in
+`.claude/reports/YYYYMMDD-HHMMSS_bash-expert/report.md`; it reads that checkpoint first on resume.
+
+- **Scope fit:** builds for today's scale, starts from the closest well-built repo script, and makes one simplification pass.
+
+<Callout type="tip">
+**Got a split proposal instead of a script?** That is the guard working. Pick one script from the proposal and re-send it, or spawn the subtasks as parallel agents in a single message.
+</Callout>
 
 ## Flow
 
@@ -159,9 +161,10 @@ echo "✅ Done"
 | Feature | macOS | Linux |
 |---------|-------|-------|
 | Brew prefix | `/opt/homebrew` (ARM), `/usr/local` (Intel) | `/home/linuxbrew/.linuxbrew` |
-| timeout | `gtimeout` (coreutils) | `timeout` |
+| `/bin/bash` | 3.2: no `${v,,}`, `mapfile`, `declare -A` | 4+ |
+| timeout | absent in stock macOS; coreutils adds `gtimeout` and `timeout` | `timeout` |
 | sed in-place | `sed -i ''` | `sed -i` |
-| readlink | `greadlink -f` | `readlink -f` |
+| readlink | native `-f` on macOS 15; older: `greadlink -f` | `readlink -f` |
 
 Always derive prefix via `$(brew --prefix)` — never hardcode.
 
@@ -232,7 +235,7 @@ standalone scripts locate themselves with `SCRIPT_DIR` and derive or accept thei
 
 Verdict first, `<=30 lines`, `path:line`. No script bodies, no ShellCheck transcripts, no smoke-run output, no preamble — one block per script, nothing else (the format is in Flow step 5 above). Failures return the check that failed plus the offending <code>path:line</code>, never the full output; long logs and full ShellCheck runs go to <code>.claude/reports/&lt;YYYYMMDD-HHMMSS&gt;_bash-expert/</code>, path only.
 
-[`/brewtools:agent-return-setup`](/brewtools/skills/agent-return-setup/) enforces this at ~1000 / ~2500 est-tokens when installed; the contract itself ships unconditionally.
+[`/brewtools:agent-return-setup`](/brewtools/skills/agent-return-setup/) enforces this at ~2500 / ~6000 est-tokens when installed; the contract itself ships unconditionally.
 
 <CardGrid>
   <Card title="hook-creator agent" icon="link" href="/brewcode/agents/hook-creator/">

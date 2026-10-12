@@ -10,9 +10,8 @@ fi
 TEAM_DIR=".claude/teams/$TEAM_NAME"
 FAIL=0
 DISABLED=0
-# Per-member states are mutually exclusive and mirror toggle-team.sh's summary keys: DISABLED counts
-# members whose ONLY copy is parked, CONFLICT counts members carrying BOTH copies. A conflicted member
-# is in neither the healthy nor the parked state, so it is never folded into DISABLED.
+# Exclusive states, as toggle-team.sh keys: DISABLED = ONLY copy parked, CONFLICT = BOTH copies
+# (never folded into DISABLED).
 CONFLICT=0
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
@@ -36,11 +35,8 @@ if [ -f "$PLUGIN_JSON" ]; then
     PV=$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$PLUGIN_JSON" 2>/dev/null | head -1 || true)
   fi
 fi
-# HARD FAIL, never a placeholder value. The repair row this prints is meant to be pasted back into an
-# agent's frontmatter, so a documentation spelling like `X.Y.Z` reaches an artifact the moment anyone
-# follows the advice. It carries no `{}<>`, so setup-status's PLACEHLD test cannot catch it and
-# `sort -V` would print a confident `AHEAD X.Y.Z > 5.2.0`. The manifest ships with the plugin in the
-# dev checkout and in the cache alike, so an unreadable one is a broken install - stop here.
+# HARD FAIL, no placeholder: repair row is pasted into frontmatter; `X.Y.Z` evades setup-status PLACEHLD
+# (`sort -V` -> `AHEAD X.Y.Z > 5.2.0`). Manifest ships in dev checkout + cache: unreadable = broken install.
 case "$PV" in
   [0-9]*.[0-9]*.[0-9]*) : ;;
   *) printf 'ERROR:cannot resolve plugin version (X.Y.Z) from %s - refusing to emit a repair row with a fake version\n' "$PLUGIN_JSON"; exit 1 ;;
@@ -60,9 +56,7 @@ case "$CV" in
 esac
 
 # BEGIN CLIENT AGENT VALIDATION
-# Artifact-metadata frontmatter gate for ONE generated agent. Same four keys, same D2 order and the same
-# quoting `brewcode/skills/rules/scripts/rules.sh:140-146` enforces -- one dialect across the repo, not a
-# second one invented here. Returns: 0 conforming, 1 malformed, 2 no metadata at all (pre-standard agent).
+# Agent metadata gate = `brewcode/skills/rules/scripts/rules.sh:140-146` dialect; rc 0 ok | 1 malformed | 2 none.
 check_agent_meta() {
   _f="$1"
   _fm=$(awk 'NR == 1 && $0 == "---" { f = 1; next } f && $0 == "---" { exit } f { print }' "$_f")
@@ -87,9 +81,8 @@ check_agent_meta() {
   return "$_bad"
 }
 
-# Every roster domain member has exactly one strict inline YAML STRING scalar description. Decode the
-# supported quoted forms before counting Unicode code points; reject YAML's implicit non-string types
-# and ambiguous node syntax instead of guessing how a downstream parser will resolve them.
+# Exactly one strict inline YAML STRING description: decode quotes, count code points; reject implicit
+# non-string types and ambiguous node syntax, never guess.
 check_agent_description() {
   _f="$1"
   command -v node >/dev/null 2>&1 \
@@ -234,9 +227,8 @@ profile_body() {
   ' "$1"
 }
 
-# Current teams-setup domain profiles have one compact, machine-checkable body. A body with no
-# `## Mission` is legacy and stays runnable with an upgrade warning; a partial current profile is a
-# writer defect. intent-guard is exempt because superreview-setup owns its independent template.
+# Compact profile: no `## Mission` = legacy (runnable, upgrade WARN); partial = writer defect.
+# intent-guard exempt (superreview-setup owns its template).
 check_compact_profile() {
   _f="$1"
   profile_body "$_f" | grep -qF '## Mission' || return 2
@@ -273,10 +265,8 @@ check_compact_profile() {
 }
 # END CLIENT AGENT VALIDATION
 
-# Roster values reach `-f` probes here and `mv`/`rm -f` in toggle-team.sh and cleanup-flow.md, so a row
-# like `| ../../../outside/README |` is a path, not a name. An agent id is a bare `^[a-z0-9][a-z0-9-]*$`,
-# which keeps every derived path canonically inside `.claude/agents/`. Byte-identical rule in
-# toggle-team.sh -- one guard, mirrored, never a second dialect.
+# Roster ids reach `-f` here, `mv`/`rm -f` in toggle-team.sh + cleanup-flow.md (`| ../../../outside/README |`)
+# -> bare `^[a-z0-9][a-z0-9-]*$` keeps paths in `.claude/agents/`; byte-identical in toggle-team.sh.
 valid_agent_id() {
   case "$1" in
     ''|*[![:lower:][:digit:]-]*|[![:lower:][:digit:]]*) return 1 ;;
@@ -284,9 +274,8 @@ valid_agent_id() {
   return 0
 }
 
-# Markdown separator row of the `## Agents` table -- byte-identical rule to toggle-team.sh. Only
-# `|`, `-`, `:` and spaces, with a run of dashes: a padded `| ------ |` is as valid a separator as
-# `|---|`, and matching only the unpadded spelling made the whole roster invisible to the parser.
+# `## Agents` separator row, byte-identical to toggle-team.sh: padded `| ------ |` valid as `|---|`
+# (unpadded-only match hid whole roster).
 is_separator_row() {
   printf '%s\n' "$1" \
     | grep -Eq '^[[:space:]]*\|[[:space:]]*:?-{3,}:?[[:space:]]*(\|[[:space:]]*:?-{3,}:?[[:space:]]*)+\|[[:space:]]*$'
@@ -434,12 +423,8 @@ if [ -f "$TEAM_DIR/team.md" ]; then
     FAIL=1
   fi
 
-  # Artifact-metadata header rows -- all FOUR, adjacent, in the order Version / Content version /
-  # Generated by / Last update. ABSENT ALL FOUR = a team.md written before the standard existed: WARN
-  # with the fix, an old team must upgrade cleanly. Anything else -- a subset, a wrong order, a
-  # placeholder or malformed value -- is a WRITER defect on a team that already claims the standard, so
-  # it FAILS. A team written before content_version existed (Version/Generated by/Last update, no
-  # Content version) is the SAME legacy case, not a partial-subset FAIL -- WARN with the upgrade fix too.
+  # Metadata rows: all FOUR adjacent, Version/Content version/Generated by/Last update. ABSENT ALL FOUR, or
+  # the 3 without Content version = legacy -> WARN + fix; subset/order/placeholder/malformed -> FAILS.
   meta_lines=$(grep -nE '^\|[[:space:]]*(Version|Content version|Generated by|Last update)[[:space:]]*\|' "$TEAM_DIR/team.md" || true)
   meta_order=$(printf '%s\n' "$meta_lines" | sed -n 's/^[0-9]*:|[[:space:]]*\([^|]*[^|[:space:]]\)[[:space:]]*|.*/\1/p' | tr '\n' '/' || true)
   meta_nums=$(printf '%s\n' "$meta_lines" | cut -d: -f1 | tr '\n' ' ' || true)
@@ -484,9 +469,8 @@ if [ -f "$TEAM_DIR/team.md" ]; then
   team_version=$(sed -n 's/^|[[:space:]]*Version[[:space:]]*|[[:space:]]*\([^|]*[^|[:space:]]\)[[:space:]]*|.*/\1/p' "$TEAM_DIR/team.md")
   team_last_update=$(sed -n 's/^|[[:space:]]*Last update[[:space:]]*|[[:space:]]*\([^|]*[^|[:space:]]\)[[:space:]]*|.*/\1/p' "$TEAM_DIR/team.md")
 
-  # Current teams declare whether the shared review-only role is required or intentionally absent.
-  # An old team without the field remains migratable; once the shared contract is present the policy
-  # is mandatory and the roster must match it exactly.
+  # Intent guard policy: required | legacy-absent. Field-less old team migratable; with shared contract it is
+  # mandatory and roster must match exactly.
   intent_guard_policy=""
   intent_guard_policy_count=$(grep -cE '^\|[[:space:]]*Intent guard[[:space:]]*\|' "$TEAM_DIR/team.md" || true)
   if [ "$intent_guard_policy_count" -eq 1 ]; then
@@ -651,9 +635,8 @@ if [ -f "$TEAM_DIR/team.md" ]; then
           fi
         fi
         printf "CHECK: agent %s ... " "$agent"
-        # BOTH copies present is checked FIRST: a live-first if/parked-elif chain reads a dual copy
-        # as a healthy live agent and hides the collision. `.claude/agents/` is project-global, so the
-        # live file may belong to someone else entirely and `enable` must not resolve it by guessing.
+        # BOTH copies checked FIRST (live-first if/parked-elif hid collision); `.claude/agents/` is project-global,
+        # live file may be foreign -> `enable` never guesses.
         if [ -f ".claude/agents/${agent}.md" ] && [ -f ".claude/agents/${agent}.md.disabled" ]; then
           echo "CONFLICT"
           echo "  CONFLICT: both .claude/agents/${agent}.md and .claude/agents/${agent}.md.disabled exist."
@@ -663,9 +646,7 @@ if [ -f "$TEAM_DIR/team.md" ]; then
           FAIL=1
         elif [ -f ".claude/agents/${agent}.md" ]; then
           # BEGIN LIVE CLIENT AGENT CHECK
-          # The roster row proves the file exists; the frontmatter proves the generator stamped it.
-          # A generated agent with no metadata at all predates the standard -> WARN + the upgrade fix.
-          # Metadata that IS there but malformed is a generator defect -> FAIL.
+          # Frontmatter metadata: none = pre-standard -> WARN + upgrade fix; malformed = generator defect -> FAIL.
           set +e
           meta_out=$(check_agent_meta ".claude/agents/${agent}.md")
           meta_rc=$?

@@ -5,31 +5,30 @@
     "email": "apmatypa88@gmail.com"
   },
   "metadata": {
-    "description": "Claude Code plugin suite: brewcode for infinite task execution, brewdoc for documentation tools, brewtools for text utilities, brewui for UI/visual/creative tools",
-    "version": "6.4.0"
+    "description": "Claude Code plugin suite: brewcode for skill/agent/rule authoring and project setups, brewdoc for documentation tools, brewtools for text, ops and subagent-guard utilities, brewui placeholder for UI/visual/creative tools",
+    "version": "6.5.0"
   },
   "plugins": [
     {
       "name": "brewcode",
-      "description": "Brewcode - full-featured development platform for Claude Code: infinite focus tasks, prompt optimization, skill/agent creation, quorum reviews, rules management",
-      "version": "6.4.0",
+      "description": "Brewcode - Claude Code authoring toolkit: skill, agent and rule creation and sync, semantic code search (semble), project conventions, E2E tests, generated review and domain-team skills, setup dashboard, post-compact plan re-anchor",
+      "version": "6.5.0",
       "category": "productivity",
       "keywords": [
         "brewcode",
-        "task",
-        "automation",
+        "skills",
         "agents",
-        "handoff",
-        "infinite-context",
-        "prompt-optimization",
+        "rules",
+        "semantic-search",
+        "code-review",
+        "e2e",
         "developer-tools"
       ],
       "tags": [
         "brewcode",
-        "task-management",
-        "workflow",
+        "skill-authoring",
         "multi-agent",
-        "knowledge-persistence",
+        "semantic-search",
         "code-review",
         "rules-management"
       ],
@@ -45,19 +44,22 @@
     },
     {
       "name": "brewdoc",
-      "description": "Brewdoc - Claude Code documentation tools: my-claude installation docs, memory sync, md-to-pdf conversion",
-      "version": "6.4.0",
+      "description": "Brewdoc - Claude Code documentation tools: doc-staleness tracking, memory-sync generator, my-claude installation docs, Markdown to PDF, publishing to brewpage.app",
+      "version": "6.5.0",
       "category": "productivity",
       "keywords": [
         "brewdoc",
         "documentation",
         "memory",
+        "pdf",
+        "publishing",
         "claude-code"
       ],
       "tags": [
         "documentation",
         "memory-management",
-        "my-claude"
+        "my-claude",
+        "publishing"
       ],
       "author": {
         "name": "Maksim Kochetkov",
@@ -71,20 +73,25 @@
     },
     {
       "name": "brewtools",
-      "description": "Brewtools - universal utilities for Claude Code: text optimization, humanization, secrets scanning",
-      "version": "6.4.0",
+      "description": "Brewtools - Claude Code utilities: text optimization and humanization, secrets scanning, SSH and GitHub Actions deploy, manager codewords, subagent deadline/return-size/routing guards, task board, context slimming, plugin updates, alternative API providers",
+      "version": "6.5.0",
       "category": "productivity",
       "keywords": [
         "brewtools",
         "text-optimization",
-        "secrets-scan",
         "humanize",
+        "secrets-scan",
+        "deploy",
+        "ssh",
+        "subagents",
         "developer-tools"
       ],
       "tags": [
         "text-optimization",
         "secrets-scan",
         "humanize",
+        "devops",
+        "subagent-guards",
         "utilities"
       ],
       "author": {
@@ -100,9 +107,10 @@
     {
       "name": "brewui",
       "description": "Placeholder for future UI/visual/creative tools (currently empty, installable)",
-      "version": "6.4.0",
+      "version": "6.5.0",
       "category": "productivity",
       "keywords": [
+        "brewui",
         "ui",
         "visual",
         "creative",

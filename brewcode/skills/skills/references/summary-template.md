@@ -68,7 +68,7 @@ Phases completed:
 
 ## Next Steps
 
-- Run `/docs "обнови документацию для brewcode:{SKILL_NAME}"` for any created/changed skill
+- Update the project's docs for every created/changed skill
 - {SUGGESTION_1}
 - Not done: {SKIPPED_ITEM} -- Reason: {WHY}
 ```

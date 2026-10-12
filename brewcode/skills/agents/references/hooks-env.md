@@ -1,9 +1,8 @@
 # Hook Environment Variables Reference
 
-Every env var a hook child process sees, the sensitive-path write prompt, and the canonical project-root resolution recipe (JS + sh).
+Every env var a hook child process sees, protected-path writes, and the project-root resolution recipe (JS + sh).
 
-Verified 2026-09-30 against [official hook environment](https://code.claude.com/docs/en/hooks#common-input-fields), [path variables](https://code.claude.com/docs/en/hooks#reference-scripts-by-path), and changelog 2.1.285. The sensitive-path observation below is dated runtime evidence, not a universal permission contract.
-
+Verified against Claude Code 2.1.296: [official hook environment](https://code.claude.com/docs/en/hooks#common-input-fields), [path variables](https://code.claude.com/docs/en/hooks#reference-scripts-by-path).
 ## Environment Variables
 
 | Variable | Description | Available |
@@ -13,32 +12,33 @@ Verified 2026-09-30 against [official hook environment](https://code.claude.com/
 | `$CLAUDE_PLUGIN_DATA` | persistent per-plugin data dir, survives updates (v2.1.78+); `~/.claude/plugins/data/<plugin-id>/` | plugin hooks |
 | `$CLAUDE_CODE_REMOTE` | `"true"` in remote env | all hooks |
 | `$CLAUDE_ENV_FILE` | append shell `export` statements; persists into subsequent Bash commands | SS, Setup, CwdChanged, FileChanged |
-| `$CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS` | SessionEnd hooks timeout in ms (DEF 1500ms, v2.1.78+); actually extends hooks lacking their own per-hook `timeout` since v2.1.268 (previously a no-op) | SessionEnd hooks |
+| `$CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS` | SessionEnd hooks timeout in ms (DEF 1500ms, v2.1.78+); extends hooks lacking their own per-hook `timeout` only on v2.1.268+ | SessionEnd hooks |
 | `$CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` | `1` = scrub Anthropic/cloud credentials from subprocess env (v2.1.83+) | all hooks |
 | `$CLAUDE_PLUGIN_OPTION_<KEY>` | plugin `userConfig` values (v2.1.78+) | plugin hooks |
-| `CLAUDE_CODE_SAFE_MODE` | `1` = start CC with ALL customizations disabled (CLAUDE.md, plugins, skills, hooks, MCP); also `--safe-mode` flag; use for hook debug isolation (v2.1.169+) | startup |
+| `CLAUDE_CODE_SAFE_MODE` | `1` = start CC with ALL customizations disabled (CLAUDE.md, plugins, skills, hooks, MCP); also `--safe-mode` flag (v2.1.169+) | startup |
 | `CLAUDE_CODE_DISABLE_BUNDLED_SKILLS` | `1` = hide bundled skills/workflows/built-in cmds; also `disableBundledSkills` setting (v2.1.169+) | startup |
 | `CLAUDE_EFFORT` | reasoning-effort override propagated into hook env | v2.1.199+ |
 | `CLAUDE_CODE_BRIDGE_SESSION_ID` | bridge-session identifier | v2.1.199+ |
 | `$CLAUDE_CODE_STOP_HOOK_BLOCK_CAP` | raises the built-in cap on consecutive Stop-hook blocks before CC force-ends the turn regardless (DEF 8) | Stop, SubagentStop |
+| `CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS` | `1` = no structured outputs: for `prompt` hooks failing behind a gateway that rejects them (v2.1.288+) | startup |
 
 No `$CLAUDE_MODEL` variable exists; an inherited `ANTHROPIC_MODEL` reflects shell configuration and does not track `/model`. Read SS `model` when present and switch event `to_model`. `OTEL_*` exporter variables are stripped from subprocesses. Runtime path tokens in config and actual child env variables are separate: exec-form `${...}` substitution is performed by Claude Code, not a shell.
 
-> Sensitive-path prompt (2.1.233, verified in binary): a Write/Edit TOOL call under `~/.claude/**` is
-> classified sensitive and routed to a permission ASK -- not a block. Carve-outs under `.claude/`:
-> `skills`, `agents`, `commands`, `worktrees`, `scheduled_tasks.json`. `plugins/` is NOT carved out, so
-> `$CLAUDE_PLUGIN_DATA` writes ask. Mode behaviour: default/acceptEdits/plan -> prompt;
-> `bypassPermissions`/`--dangerously-skip-permissions` -> auto-approved (CHANGELOG 2.1.126); headless
-> `-p` without bypass -> FAILS ("tool requires user interaction; no prompt available in headless mode").
+> Protected paths (2.1.296, [permission-modes](https://code.claude.com/docs/en/permission-modes#protected-paths)):
+> a Write/Edit TOOL call into project `.claude/` or `~/.claude/` is never auto-approved:
+> `default`/`acceptEdits` -> prompt; `plan` -> allowed in an interactive terminal with bypass available,
+> else classifier (auto available) or prompt; `auto` -> classifier; `dontAsk` -> denied;
+> `bypassPermissions` -> allowed. `permissions.allow` never pre-approves. Exempt: `.claude/worktrees/`,
+> the session's plan files, `~/.claude/jobs/<id>/tmp/`, auto-memory and `.claude/agent-memory/` Markdown (not under `--restricted`).
+> `plugins/` is not exempt, so `$CLAUDE_PLUGIN_DATA` Write/Edit calls prompt. Bash `>`/`tee` targets
+> are checked the same; a hook or a script opening the file itself is not.
 > Consequence: `$CLAUDE_PLUGIN_DATA` is a fully supported persistent WRITE target (official
-> `project-artifact` skill Writes there), but only interactively or from a hook/Bash subprocess -- never
-> from a Write/Edit tool call in an unattended run. For unattended state prefer
-> `${CLAUDE_PROJECT_DIR}/.claude/<subdir>/`.
+> `project-artifact` skill Writes there), but only interactively or from a hook/script -- never
+> from a Write/Edit tool call in an unattended run.
 
 ### Canonical project-root resolution
 
-Every generated hook and installer uses this ONE recipe. Order is fixed and never silent:
-env var -> git toplevel -> upward walk for `.git`/`.claude` -> `PWD`.
+Every generated hook and installer uses this ONE recipe, order fixed and never silent.
 
 ```js
 import { existsSync } from 'node:fs';

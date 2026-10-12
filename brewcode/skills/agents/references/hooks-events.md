@@ -2,7 +2,7 @@
 
 Session lifecycle order, the full 33-event table, matcher pattern syntax, and sync/async behavior.
 
-Verified 2026-09-30 against [official hooks](https://code.claude.com/docs/en/hooks), [hooks guide](https://code.claude.com/docs/en/hooks-guide), and [2.1.285 changelog](https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md). Event-specific contracts take precedence over general defaults.
+Verified against Claude Code 2.1.296: [official hooks](https://code.claude.com/docs/en/hooks), [hooks guide](https://code.claude.com/docs/en/hooks-guide). `src`: `docs` (default) | `probe` = observed live on CLI 2.1.296 only, undocumented: re-check on a newer one.
 
 ## Session Lifecycle
 
@@ -22,26 +22,26 @@ Teams: exit 2 prevents idle/completion; exit 0 alone does not stop a teammate
 
 ## All 33 Hook Events
 
-> MD (v2.1.152): transforms/hides assistant message text at display layer only; non-blocking.
-> NOT a hooks.json event: post-session lifecycle hook (v2.1.169) = self-hosted runner hook, runs after session ends + before workspace deleted. Configure on runner, not in hooks.json.
-> `PreModelSwitch` gates user/client-requested changes; automatic fallback and resume restoration reach PostModelSwitch only. PreModelSwitch timeout blocks the switch. Unknown custom model targets run every matcher, so validate `to_model` inside the handler.
+> MD: transforms/hides assistant message text at display layer only.
+> NOT a hooks.json event: post-session lifecycle hook (v2.1.169) = self-hosted runner hook, runs after session ends + before workspace deleted. Configure on runner.
+> `PreModelSwitch` gates user/client-requested changes; automatic fallback and resume restoration reach PostModelSwitch only. Unknown custom model targets run every matcher, so validate `to_model` inside the handler.
 
 | # | Event | Blocking? | Matcher | Key stdin fields | Ver |
 |---|-------|:---------:|---------|-----------------|-----|
 | 1 | SS | No | source: `startup`,`resume`,`clear`,`compact`,`fork` | `source`,`model`,`agent_type`,`session_title` | `fork` 2.1.214 |
-| 2 | UserPromptSubmit | Yes (exit 2/decision:block) | No | `prompt` | -- |
+| 2 | UserPromptSubmit | Yes (exit 2/decision:block) | No | `prompt` (also synthetic: Subagent report below) | -- |
 | 3 | PTU | Yes (allow/deny/ask/defer) | tool name regex | `tool_name`,`tool_input`,`tool_use_id` | -- |
 | 4 | PR | Yes via `decision` object ONLY -- exit 2 NOT honored | tool name regex | `tool_name`,`tool_input`,`permission_suggestions` | -- |
-| 5 | POT | After the fact -- cannot prevent the call; `decision:"block"` adds `reason`, exit 2 does not block (`hooks:839`) | tool name regex | `tool_name`,`tool_input`,`tool_response`,`tool_use_id`,`duration_ms` | -- |
+| 5 | POT | After the fact -- cannot prevent the call; `decision:"block"` adds `reason`, exit 2 does not block | tool name regex | `tool_name`,`tool_input`,`tool_response`,`tool_use_id`,`duration_ms` | -- |
 | 6 | PostToolUseFailure | No | tool name regex | `tool_name`,`tool_input`,`tool_use_id`,`error`,`is_interrupt` | -- |
 | 7 | Notification | No | `notification_type` (12 values, Matcher Patterns below) | `message`,`title`,`notification_type` | `quota_auto_resume_*` 2.1.234 |
 | 8 | SubagentStart | No | agent type | `agent_id`,`agent_type` | -- |
-| 9 | SubagentStop | Yes (decision:block) | agent type | `stop_hook_active`,`agent_id`,`agent_type`,`agent_transcript_path`,`last_assistant_message`,`background_tasks[]`,`session_crons[]` | -- |
+| 9 | SubagentStop | Yes (decision:block) | agent type | `stop_hook_active`,`agent_id`,`agent_type`,`agent_transcript_path`,`last_assistant_message` (auto mode: Subagent report below),`background_tasks[]`,`session_crons[]` | hand-back 2.1.271 |
 | 10 | Stop | Yes (decision:block) | No | `stop_hook_active`,`last_assistant_message`,`background_tasks[]`,`session_crons[]` | -- |
 | 11 | PreCompact | **Yes** (exit 2 / `decision:"block"`) -- blocks compaction | trigger: `manual`,`auto` | `trigger`,`custom_instructions` (manual only), `transcript_path` | -- |
 | 12 | PCD | No | trigger: `manual`,`auto` | `trigger`,`compact_summary`,`transcript_path` | 2.1.76 |
-| 13 | SessionEnd | No | reason: `clear`,`resume`,`logout`,`prompt_input_exit`,`other` (`bypass_permissions_disabled` removed 2.1.234) | -- | -- |
-| 14 | TeammateIdle | Yes (exit 2 only) | No | `teammate_name`,`team_name` | -- |
+| 13 | SessionEnd | No | reason: `clear`,`resume`,`logout`,`prompt_input_exit`,`other` | -- | -- |
+| 14 | TeammateIdle | Yes (exit 2 only) | No | `teammate_name`,`team_name` | not from its subagents/forks 2.1.290 |
 | 15 | TaskCompleted | Yes (exit 2 only) | No | `task_id`,`task_subject`,`task_description`,`teammate_name`,`team_name` | -- |
 | 16 | ConfigChange | Yes | source: `user_settings`,`project_settings`,`local_settings`,`policy_settings`,`skills` | `source`,`file_path` | 2.1.49 |
 | 17 | WorktreeCreate | Yes | No | -- | 2.1.50 |
@@ -62,11 +62,11 @@ Teams: exit 2 prevents idle/completion; exit 0 alone does not stop a teammate
 | 32 | PreModelSwitch | **Yes** (`permissionDecision`: allow/deny/ask; timeout BLOCKS the switch) | canonical `to_model` (name, `\|`-list, or regex) | `from_model`,`to_model`,`requested_model`,`source`,`context_tokens`,`pricing` | 2.1.251 |
 | 33 | PostModelSwitch | No -- model already switched | canonical `to_model` | same fields, plus `source` also `auto`,`resume` | 2.1.251 |
 
-> Setup fires ONLY on `claude --init-only` / `-p --init` / `-p --maintenance`, never on normal startup -- use SS for per-session init. Only `command` executes; `mcp_tool` is accepted but always skipped before MCP connection. All JSON output fields are discarded on every exit code. `CLAUDE_ENV_FILE` writes persist.
-> `TaskCompleted` honors `continue:false` only when teammate completion triggered it, not `TaskUpdate`; exit 2 blocks completion in either case. `team_name` is deprecated in task event inputs.
+> Setup never fires on normal startup -- use SS for per-session init. Only `command` executes; all JSON output is discarded on every exit code; `CLAUDE_ENV_FILE` writes persist.
+> `TaskCompleted` honors `continue:false` only for teammate-triggered completion, not `TaskUpdate`; exit 2 blocks either way. `team_name` is deprecated in task event inputs.
 > UserPromptExpansion covers the path PTU cannot: a PTU hook on the `Skill` tool never fires when the user types `/skillname` directly.
 > PostToolBatch `tool_response` is the serialized `tool_result` content the model sees; POT's `tool_response` is the tool's structured `Output` object (`{filePath,success}` for `Write`). Do NOT reuse a POT parser here.
-> DirectoryAdded does not fire for `--add-dir` at startup (SS covers those). Its `systemMessage` reaches Claude on the next turn under `slash_command`, and the debug log only under `register_repo_root`.
+> DirectoryAdded does not fire for `--add-dir` at startup (SS covers those).
 
 ### Common input (fields may be absent by event)
 
@@ -76,34 +76,31 @@ Teams: exit 2 prevents idle/completion; exit 0 alone does not stop a teammate
 
 `permission_mode` is one of 6 confirmed values: `default`,`plan`,`acceptEdits`,`auto`,`dontAsk`,`bypassPermissions`.
 
-Optional shared fields: `prompt_id` (2.1.196+, absent before first prompt), `scratchpad_dir` (2.1.257+, absent when unavailable), `effort:{level}` (supported tool-use contexts: low/medium/high/xhigh/max). Not every event includes `permission_mode`. `model` appears only on SS and may be absent; switch events use `from_model`/`to_model`. Transcripts are written asynchronously and can lag: use Stop/SubagentStop `last_assistant_message` for final text.
+Optional shared fields: `prompt_id` (2.1.196+, absent before first prompt), `scratchpad_dir` (2.1.257+, absent when unavailable), `effort:{level}` (supported tool-use contexts: low/medium/high/xhigh/max). Not every event includes `permission_mode` (none on SubagentStart: probe). `model` appears only on SS and may be absent; switch events use `from_model`/`to_model`. Transcripts are written asynchronously and can lag: use Stop `last_assistant_message` for final text.
+
+### Subagent report and synthetic prompts
+
+| Fact | Hook consequence | src |
+|------|------------------|-----|
+| auto mode, non-fork subagent: the report is its `SubagentHandback` tool call, text in `tool_input.message` (PTU/POT). After it SubagentStop has no `last_assistant_message` and ignores `decision:"block"` | size or gate the report on PTU `SubagentHandback` | docs + probe |
+| a PTU `deny` on `SubagentHandback` gives one more turn; the parent gets the resend | deny at most once per `agent_id` (own state: PTU has no `stop_hook_active`) -- after repeated denies the harness withholds the report | probe |
+| default mode, and forks even in auto mode: classic path, report = SubagentStop `last_assistant_message` | guard both paths; never branch on `permission_mode` | probe |
+| `agent_id` is identical on SubagentStart, PTU/POT, every SubagentStop, after block-and-continue and after a `SendMessage` resume | safe key for per-agent state | probe |
+| `stop_hook_active` can be `true` after a harness nudge no hook caused | not proof that this hook already blocked | probe |
+| a PTU allow-list on matcher `.*` without `SubagentHandback` denies the report call | list it, or the subagent cannot report | probe |
+| UserPromptSubmit also fires for subagent deliveries: `prompt` starts with `<task-notification>` or `<agent-message from=`, nothing marks it synthetic | a hook that matches user text returns `{}` early on those prefixes | docs + probe |
 
 ## Async Hooks
 
-```json
-{"type":"command","command":"node /path/to/hook.mjs","async":true}
-```
-
 | Behavior | Details |
 |----------|---------|
-| execution | background, non-blocking. `command` type only |
+| execution | handler key `"async":true`: background, non-blocking. `command` type only |
 | `decision` fields | IGNORED |
-| `systemMessage` | delivered on NEXT turn |
-| `AC` | delivered alongside `systemMessage` on the next conversation turn; neither field is shown to the user |
+| `systemMessage`, `AC` | delivered together on the NEXT conversation turn; neither field is shown to the user |
 | `asyncRewake:true` | implies `async`; exit 2 wakes Claude with the hook's stderr (or stdout when stderr is empty) as a system reminder -- the only channel a background hook has for a late failure |
 | policy gates | keep synchronous; `async:true` cannot veto an action or rewrite its inputs/output |
 | timeout | unenforced after `async:true` starts; still enforced for `asyncRewake` |
 | teardown | `-p` kills unfinished async hooks at teardown; do not promise delivery after session end |
-| use case | logging, metrics, slow file ops |
-
-| Event | Sync/Async | Reason |
-|-------|-----------|--------|
-| SS | sync (waits) | context needed before first turn |
-| PTU | sync (blocks) | must decide allow/deny before exec |
-| POT | async OK when advisory | sync if it blocks or rewrites `updatedToolOutput` |
-| PreCompact | sync (blocks) | can veto compaction; must write any handoff first |
-| PreModelSwitch | sync (blocks) | must decide allow/deny/ask before the switch; timeout blocks too |
-| Notification | async OK | informational |
 
 ## Matcher Patterns
 
@@ -111,24 +108,17 @@ Optional shared fields: `prompt_id` (2.1.196+, absent before first prompt), `scr
 |-------|-------------|----------|
 | PTU, POT, PostToolUseFailure, PR, **PermissionDenied** | tool name | `Bash`, `Write\|Edit`, `Agent`, `mcp__.*` |
 | SS | source string | `startup`,`resume`,`clear`,`compact`,`fork` |
-| Setup | CLI flag | `init`,`maintenance` |
-| SessionEnd | reason string | `clear`,`resume`,`logout`,`prompt_input_exit`,`other` |
 | SubagentStart/SubagentStop | agent type | `Explore`,`Plan`,`general-purpose`,`my-agent`, plugin-scoped `^my-plugin:reviewer$` |
-| PreCompact/PCD | trigger | `manual`,`auto` |
 | Notification | type string (12) | `permission_prompt`,`idle_prompt`,`auth_success`,`elicitation_dialog`,`elicitation_url_dialog`,`elicitation_complete`,`elicitation_response`,`agent_needs_input`,`agent_completed`,`quota_auto_resume_fired`,`quota_auto_resume_stale`,`quota_auto_resume_disabled` |
-| ConfigChange | source string | `user_settings`,`project_settings`,`local_settings`,`policy_settings`,`skills` |
-| InstructionsLoaded | load reason | `session_start`,`nested_traversal`,`path_glob_match`,`include`,`compact` |
-| DirectoryAdded | how it was added | `slash_command`,`register_repo_root` |
-| UserPromptExpansion | command name | your skill or command names |
 | FileChanged | filename (basename) | `.envrc\|.env` |
 | StopFailure | error type (12) | `rate_limit`,`overloaded`,`authentication_failed`,`oauth_org_not_allowed`,`account_on_hold`,`billing_error`,`invalid_request`,`model_not_found`,`server_error`,`max_output_tokens`,`cloud_credential_error`,`unknown` |
-| Elicitation/ElicitationResult | MCP server name | server name string |
-| PreModelSwitch, PostModelSwitch | canonical `to_model` | model name, `\|`-list, or regex: `"claude-opus-5"`, `.*opus.*` |
+| PreModelSwitch, PostModelSwitch | canonical `to_model` | model name, `\|`-list, or regex: `"claude-opus-5-5"`, `.*opus.*` |
+| other matcher events | -- | event table, Matcher column |
 | Stop, UserPromptSubmit, **PostToolBatch**, TeammateIdle, TaskCompleted, TaskCreated, WorktreeCreate, WorktreeRemove, CwdChanged, MD | No matcher | always fires |
 
 > Omit `matcher` (or `"*"`/`""`) -> fires for ALL instances of that event.
-> Evaluation: only letters/digits/`_`/`-`/space/`,`/`|` -> exact string or `|`,`,`-separated list of exact strings. ANY other character -> unanchored JS regex, so `Edit.*` also matches `NotebookEdit`; anchor as `^Edit$` for whole-string.
+> Subagent spawns: matcher `Agent`, the payload `tool_name` (probe); the `Task` alias covers settings and agent definitions only.
+> Evaluation: only letters/digits/`_`/`-`/space/`,`/`|` -> exact string or `|`,`,`-separated list of exact strings (hyphenated identifiers v2.1.195+, `,` = `|` v2.1.191+). ANY other character -> unanchored JS regex, so `Edit.*` also matches `NotebookEdit`; anchor as `^Edit$` for whole-string.
 > `FileChanged` and `StopFailure` use a NARROWER exact set (letters, digits, `_`, `|`): a hyphen, space or comma there stays on the regex path and only `|` separates.
 > `FileChanged` builds its watch list from literal basenames split by `|`, not arbitrary regex or globs; runtime matcher evaluation is not a filename-discovery rule.
 > MCP tools: the trailing `.*` is MANDATORY -- `mcp__memory` is exact-match and matches nothing; use `mcp__memory__.*`. A PLUGIN-bundled server is scoped: `mcp__plugin_<plugin-name>_<server-name>__<tool>`, so `mcp__plugin_my-plugin_db__.*`. A matcher on the bare server key never fires. Same scoped name in `if`.
-> Hyphenated matcher identifiers exact-match since v2.1.195 (was accidental substring match). Comma- and pipe-separated matcher lists equivalent since v2.1.191.

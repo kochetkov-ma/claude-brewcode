@@ -1,11 +1,6 @@
 #!/usr/bin/env node
-/**
- * Suite: claude-local-ops.sh (BT-F11).
- * Contract: server rows are written to the "## SSH Servers" table and nowhere else;
- * the file is resolved from the project root, never from cwd.
- * Runs entirely inside an isolated temp dir; never touches the repo tree.
- * Assertion policy: unconditional exact-equality checks with a description.
- */
+// Suite claude-local-ops.sh (BT-F11): server rows go to "## SSH Servers" table and nowhere else; file resolved from project root, never from cwd.
+// Runs inside isolated temp dir, never touches repo tree; unconditional exact-equality checks with description.
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';

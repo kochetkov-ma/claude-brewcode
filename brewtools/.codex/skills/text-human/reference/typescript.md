@@ -1,7 +1,5 @@
 # TypeScript/JavaScript/React Reference
 
-> Language-specific rules for text-human skill
-
 ## File Classification
 
 ### fast model (Simple)
@@ -62,9 +60,6 @@ Strip prose that duplicates existing TypeScript types only when no tool consumes
  */
 function createUser(name: string, age: number): User { }
 
-// KEEP - only TS types:
-function createUser(name: string, age: number): User { }
-
 // KEEP - adds context beyond types:
 /** Creates user and sends welcome email. Throws if email fails. */
 function createUser(name: string, age: number): User { }
@@ -76,9 +71,6 @@ function createUser(name: string, age: number): User { }
 // REMOVE - obvious component:
 /** Button component that renders a button. */
 const Button: FC<ButtonProps> = ({ onClick, children }) => { }
-
-/** User profile card component. */
-const UserCard: FC<UserCardProps> = ({ user }) => { }
 
 // KEEP - non-obvious behavior:
 /** Debounces input by 300ms. Calls onChange only after user stops typing. */
@@ -99,15 +91,9 @@ const VirtualList: FC<ListProps> = ({ renderItem, onEndReached }) => { }
 /** Hook that manages loading state. */
 const useLoading = () => { }
 
-/** Hook for user data. */
-const useUser = (id: string) => { }
-
 // KEEP - non-obvious behavior:
 /** Fetches on mount + refetches every 30s. Pauses when tab inactive. */
 const usePolling = (url: string, interval = 30000) => { }
-
-/** Returns memoized callback. Deps auto-tracked via proxy. */
-const useAutoCallback = <T extends Function>(fn: T): T => { }
 ```
 
 ---
@@ -162,30 +148,6 @@ describe('UserService', () => {
 // REMOVE - test utilities:
 /** Creates mock user for tests. */
 export const createMockUser = () => { }
-
-// CORRECT:
-export const createMockUser = () => { }
-```
-
----
-
-## Pre-Completion Checklist
-
-| Check | Rule |
-|-------|------|
-| [ ] | internal/unexported docs retain useful contracts |
-| [ ] | `*.test.ts`/`*.spec.ts` docs retain fixture/test invariants |
-| [ ] | Redundant type prose removed only if no consumer; functional tags retained |
-| [ ] | No JSDoc on obvious React components |
-| [ ] | ESLint/TSLint/type/security/tool directives unchanged; missing reasons surfaced |
-| [ ] | No `@param`/`@returns` restating obvious info |
-
-### Scan Pattern
-
-```
-# grep patterns:
-grep -n "/\*\*" <file>              // Find JSDoc
-grep -n "^const.*=" <file>         // Find functions
 ```
 
 ---

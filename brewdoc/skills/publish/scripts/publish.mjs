@@ -1,19 +1,6 @@
 #!/usr/bin/env node
-/**
- * publish.mjs — build and verify the SITE bundle for brewdoc:publish.
- *
- * Never touches the network. It produces (or inspects) an archive and either
- * hands back a verified artifact or leaves nothing behind; the caller runs
- * `curl` only when this exits 0, so an unverified bundle can never be uploaded.
- *
- *   pack    --dir <abs-dir> --out <abs.zip> [--entry <name>]
- *   inspect --zip <abs.zip>                 [--entry <name>]
- *
- * Exit codes:
- *   0  archive verified, manifest printed, nothing sensitive  -> upload
- *   2  archive verified, but flagged entries remain           -> ask the user first
- *   1  failure; any partial archive produced here is removed  -> never upload
- */
+/** Offline SITE bundle build/verify: `pack --dir <abs-dir> --out <abs.zip> [--entry <name>]` | `inspect --zip <abs.zip> [--entry <name>]`; caller curls only on exit 0.
+ * Exit 0 verified, manifest printed -> upload | 2 verified, flagged entries -> ask user | 1 failure, partial archive removed -> never upload. */
 import { spawnSync } from 'node:child_process';
 import { readdirSync, statSync, lstatSync, existsSync, rmSync } from 'node:fs';
 import { join, relative, extname, basename } from 'node:path';

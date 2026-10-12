@@ -1,3 +1,4 @@
+# Deploys release-tag (v*.*.*) Docs builds only; branch images never reach production.
 name: Deploy Docs
 on:
   workflow_run:
@@ -6,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       image_tag:
-        description: "Exact version or SHA-run image tag"
+        description: "Release-tag Docs build only: X.Y.Z or sha-<sha>-<run>-<attempt> tag (branch previews are rejected)"
         required: true
 concurrency:
   group: deploy-docs
@@ -22,10 +23,12 @@ permissions:
   deployments: write
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: >
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       startsWith(github.event.workflow_run.head_branch, 'v') &&
        github.event.workflow_run.head_repository.full_name == github.repository)
     steps:
       - name: Resolve image tag
@@ -36,6 +39,7 @@ jobs:
           UPSTREAM_SHA: ${{ github.event.workflow_run.head_sha }}
           UPSTREAM_RUN_ID: ${{ github.event.workflow_run.id }}
           UPSTREAM_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          UPSTREAM_REF: ${{ github.event.workflow_run.head_branch }}
         run: |
           set -euo pipefail
           if [[ "$EVENT_NAME" == workflow_dispatch ]]; then
@@ -45,6 +49,7 @@ jobs:
             TAG="$INPUT_TAG"
           else
             [[ "$UPSTREAM_SHA" =~ ^[0-9a-f]{40}$ && "$UPSTREAM_RUN_ID" =~ ^[1-9][0-9]*$ && "$UPSTREAM_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]] || { echo "::error::Build provenance validation failed"; exit 1; }
+            [[ "$UPSTREAM_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([._-][A-Za-z0-9._-]+)?$ ]] || { echo "::error::Only a release tag build deploys"; exit 1; }
             TAG="sha-${UPSTREAM_SHA}-${UPSTREAM_RUN_ID}-${UPSTREAM_RUN_ATTEMPT}"
           fi
           printf 'tag=%s\n' "$TAG" >> "$GITHUB_OUTPUT"
@@ -84,11 +89,12 @@ jobs:
           printf 'sha=%s\nversion=%s\nbuild_run_id=%s\nbuild_attempt=%s\ntag=%s\ndigest=%s\npage_hash=%s\n' \
             "$SHA" "$VERSION" "$BUILD_RUN_ID" "$BUILD_ATTEMPT" "$TAG" "$DIGEST" "$PAGE_HASH" >> "$GITHUB_OUTPUT"
       - name: Verify successful source build
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           BUILD_SHA: ${{ steps.image.outputs.sha }}
           BUILD_RUN_ID: ${{ steps.image.outputs.build_run_id }}
           BUILD_ATTEMPT: ${{ steps.image.outputs.build_attempt }}
+          BUILD_VERSION: ${{ steps.image.outputs.version }}
         with:
           script: |
             const id = Number(process.env.BUILD_RUN_ID);
@@ -101,11 +107,12 @@ jobs:
             if (run.status !== 'completed' || run.conclusion !== 'success' ||
                 run.head_sha !== process.env.BUILD_SHA || run.run_attempt !== attempt || run.event !== 'push' ||
                 run.head_repository?.full_name !== context.repo.owner + '/' + context.repo.repo ||
+                run.head_branch !== 'v' + process.env.BUILD_VERSION ||
                 workflow.path !== '.github/workflows/docs.yml') {
               throw new Error('Image does not match a successful same-repository Docs build');
             }
       - name: Checkout verified source
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ steps.image.outputs.sha }}
           fetch-depth: 0
@@ -117,7 +124,7 @@ jobs:
           [[ "$(git rev-parse HEAD)" == "$BUILD_SHA" ]] || { echo "::error::Build provenance validation failed"; exit 1; }
       - name: Create deployment
         id: deployment
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           BUILD_SHA: ${{ steps.image.outputs.sha }}
           IMAGE_TAG: ${{ steps.image.outputs.tag }}
@@ -242,7 +249,7 @@ jobs:
           exit 1
       - name: Update deployment (success)
         if: success()
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           DEPLOYMENT_ID: ${{ steps.deployment.outputs.result }}
         with:
@@ -256,7 +263,7 @@ jobs:
             });
       - name: Update deployment (failure)
         if: failure()
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           DEPLOYMENT_ID: ${{ steps.deployment.outputs.result }}
         with:

@@ -41,7 +41,7 @@ GUARD: NO injected typos/grammar errors (loses authority). Burstiness + stance a
 ## JavaDoc / API docs -- CLEAN-ONLY (inject DISABLED)
 ADD (precision, not personality): third-person imperative ("Gets the foo", "Returns the bar" -- NOT "Get the foo"); explicit contract (null-handling, boundaries, ranges, corner cases); `@param`/`@return` lowercase, no trailing period; `@throws` conditional ("if the file could not be found"); lean, precise.
 AVOID: explaining common terms, restating trivial impl, marketing, narrative voice, opinion.
-GUARD (strongest): NEVER inject informality, contractions, stance, asides, burstiness-for-flavor, lowercase, typos. On API-doc context -> DISABLE inject, run strip-only.
+GUARD (strongest): NEVER inject informality, contractions, stance, asides, burstiness-for-flavor, lowercase, typos.
 
 ---
 

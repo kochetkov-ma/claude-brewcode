@@ -4,10 +4,8 @@ set -eu
 ARGS="${1:-}"
 TEAMS_DIR=".codex/teams"
 
-# Artifact-metadata standard. The plugin version that produces every artifact this run writes,
-# read from the manifest by SELF-LOCATION: scripts/ -> teams-setup/ -> skills/ -> <plugin root>.
-# Correct in the dev checkout AND in the installed cache. NEVER hardcoded, never a template version.
-# `|| true` on both branches: under `set -e` a failing command substitution aborts the script.
+# Plugin version by SELF-LOCATION (scripts/ -> <plugin root>): dev checkout + cache; NEVER hardcoded.
+# `|| true`: under `set -e` failing command substitution aborts script.
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 PLUGIN_JSON="$SCRIPT_DIR/../../../.codex-plugin/plugin.json"
 PLUGIN_VERSION=""
@@ -18,11 +16,8 @@ if [ -f "$PLUGIN_JSON" ]; then
     PLUGIN_VERSION=$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$PLUGIN_JSON" 2>/dev/null | head -1 || true)
   fi
 fi
-# HARD FAIL, never a placeholder value. A word like `unknown` carries no `{}<>`, so setup-status's
-# PLACEHLD test cannot catch it: `sort -V` would compare it against the real version and print a
-# confident `AHEAD unknown > X.Y.Z`. The manifest ships with the plugin, so an unreadable one is a
-# broken install - stop before the skill writes team.md or a single agent. The skill already treats
-# any `ERROR:` line as STOP.
+# HARD FAIL, no placeholder: `unknown` evades setup-status PLACEHLD -> `sort -V` says `AHEAD unknown > X.Y.Z`.
+# Unreadable manifest = broken install; skill treats `ERROR:` as STOP before writing team.md/agents.
 case "$PLUGIN_VERSION" in
   [0-9]*.[0-9]*.[0-9]*) : ;;
   *) printf 'ERROR:cannot resolve plugin version (X.Y.Z) from %s - refusing to stamp artifacts with a fake version\n' "$PLUGIN_JSON"; exit 1 ;;
@@ -47,10 +42,17 @@ esac
 
 validate_name() {
   case "$1" in
+    -*) printf 'ERROR:invalid team name (must not start with a dash)\n'; exit 1 ;;
     *[!a-zA-Z0-9_-]*) printf 'ERROR:invalid team name (alphanumeric, dash, underscore only)\n'; exit 1 ;;
     "") printf 'ERROR:empty team name\n'; exit 1 ;;
   esac
 }
+
+# Flags sit anywhere and the skill reads them itself: drop them before the positional parse,
+# else `--skip-review install x` named a team `--skip-review`. awk splits: no glob, any shell.
+ARGS=$(printf '%s' "$ARGS" | awk '
+  { for (i = 1; i <= NF; i++) if ($i != "--skip-review" && $i != "--review") out = out (out == "" ? "" : " ") $i }
+  END { print out }')
 
 # Parse first word (shell expansion, no sed regex injection)
 FIRST=""
@@ -102,7 +104,10 @@ elif is_keyword "$FIRST"; then
   fi
 else
   TEAM_NAME="$FIRST"
-  if [ -d "$TEAMS_DIR/$TEAM_NAME" ]; then
+  # Bare `<name> <mode>` pair: an explicit mode token wins, else `billing enable` ran `install`.
+  if [ -n "$REST" ] && [ -z "$(after_second)" ] && is_keyword "$(second_word)"; then
+    MODE=$(second_word)
+  elif [ -d "$TEAMS_DIR/$TEAM_NAME" ]; then
     MODE="status"
   else
     MODE="install"

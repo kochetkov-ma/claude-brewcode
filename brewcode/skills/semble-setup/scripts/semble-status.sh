@@ -1,16 +1,5 @@
 #!/usr/bin/env bash
-# semble-status.sh - read-only status/doctor for the brewcode:semble-setup skill.
-#
-# Usage: semble-status.sh [--json] [--section SECTION] [--strict]
-#                         [--section telemetry [--sid ID] [--last N]]
-#
-# STRICTLY READ-ONLY. It creates, modifies and deletes nothing, anywhere -
-# not the state file, not the reminder throttle marker, not the cache dir.
-# The report is composed from the sibling scripts; a missing or failing
-# sibling yields {"error":"..."} for that section and the run still exits 0.
-#
-# Never runs bare `semble` (any unknown argv starts a blocking MCP server),
-# never `semble install`, never `claude mcp add/remove`.
+# semble-status.sh - STRICTLY READ-ONLY doctor (--help); failing sibling -> {"error"} section, exit 0; !=bare `semble`, `semble install`, `claude mcp add/remove`
 set -euo pipefail
 SC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/semble-common.sh
@@ -22,10 +11,20 @@ usage() {
 semble-status.sh [--json] [--section SECTION] [--strict]
 
   --json             emit a single JSON object (schema: DESIGN 9.1)
-  --section SECTION  prereq|mcp|cache|guidance|agents|coverage|state|telemetry|all
+  --section SECTION  prereq|mcp|versions|cache|guidance|agents|coverage|state|telemetry|all
                      (default: all; `telemetry` is NOT part of `all`)
   --strict           exit 1 when verdict != ready
   -h, --help         this text
+
+  --versions [--all-profiles] [--json] [--strict]
+  Version check only: pin vs the user-scope registration vs upstream latest.
+  Text: one `# semble-versions ...` header, then one row per config dir:
+    <dir> | <registered spec|none> | <pin> | <verdict> | <config file>
+  verdict: ok | stale | ahead | drift | unpinned | not_registered | malformed
+  Default: the active config dir (CLAUDE_CONFIG_DIR, else ~/.claude -> ~/.claude.json).
+  --all-profiles adds ~/.claude and every ~/.claude-*/ holding a .claude.json.
+  Upstream is advisory: offline prints upstream=unknown and never fails.
+  --strict exits 1 when any listed row is not `ok`.
 
   --section telemetry reads .claude/semble/telemetry.jsonl and reports what the
   hooks actually did. Window flags, telemetry only:
@@ -40,6 +39,8 @@ EOF
 JSON_MODE=0
 SECTION="all"
 STRICT=0
+VERSIONS=0
+ALL_PROFILES=0
 SID=""
 LAST=""
 
@@ -47,6 +48,8 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --json)        JSON_MODE=1 ;;
     --strict)      STRICT=1 ;;
+    --versions)    VERSIONS=1 ;;
+    --all-profiles) ALL_PROFILES=1 ;;
     --section)     shift; SECTION="${1:-}" ;;
     --section=*)   SECTION="${1#--section=}" ;;
     --sid)         shift; SID="${1:-}" ;;
@@ -60,9 +63,12 @@ while [ $# -gt 0 ]; do
 done
 
 case "$SECTION" in
-  prereq|mcp|cache|guidance|agents|coverage|state|telemetry|all) ;;
+  prereq|mcp|versions|cache|guidance|agents|coverage|state|telemetry|all) ;;
   *) sc_err "unknown section: ${SECTION:-(empty)}" >&2; usage >&2; exit 2 ;;
 esac
+if [ "$ALL_PROFILES" = "1" ] && [ "$VERSIONS" != "1" ]; then
+  sc_err "--all-profiles is only valid with --versions" >&2; usage >&2; exit 2
+fi
 if [ "$SECTION" != "telemetry" ] && { [ -n "$SID" ] || [ -n "$LAST" ]; }; then
   sc_err "--sid/--last are only valid with --section telemetry" >&2; usage >&2; exit 2
 fi
@@ -74,10 +80,27 @@ sc_require_node
 
 want() { [ "$SECTION" = "all" ] || [ "$SECTION" = "$1" ]; }
 
-# ── telemetry (--section telemetry): the reader for semble-stats.mjs ─────────
-# Deliberately NOT part of `all`: it answers a different question (did the hooks
-# do anything) from a different source (.claude/semble/telemetry.jsonl), and the
-# `all` report is an install-health report. Read-only like everything here.
+# ── --versions: machine-readable pin/registration/upstream report ───────────
+# Never fails on a missing profile, a broken file or no network; rc 1 only with --strict.
+if [ "$VERSIONS" = "1" ]; then
+  ALL=""; [ "$ALL_PROFILES" = "1" ] && ALL="all"
+  VJSON="$(sc_versions_json "$ALL")"
+  SC_V="$VJSON" SC_JSONMODE="$JSON_MODE" SC_STRICT="$STRICT" node -e '
+const v=JSON.parse(process.env.SC_V),u=v.upstream;
+if(process.env.SC_JSONMODE==="1"){process.stdout.write(JSON.stringify(v)+"\n")}
+else{
+  const L=["# semble-versions schema="+v.schema+" pin="+v.pin+" upstream="+(u.latest||"unknown")
+    +" upstream_status="+u.status+" reason="+u.reason];
+  for(const r of v.profiles)L.push([r.dir,r.registered===null?"none":r.registered,r.pin,r.verdict,r.file].join(" | "));
+  process.stdout.write(L.join("\n")+"\n");
+}
+const bad=v.profiles.some(function(r){return r.verdict!=="ok"});
+process.exit(process.env.SC_STRICT==="1"&&bad?1:0);'
+  exit $?
+fi
+
+# ── telemetry (--section telemetry): read-only reader of semble-stats.mjs .claude/semble/telemetry.jsonl ──
+# NOT part of `all` (install health); answers "did the hooks do anything".
 TELEMETRY_READER="$(cat <<'NODEJS'
 "use strict";
 const fs = require("fs");
@@ -106,11 +129,8 @@ const rep = {
   call: { total: 0, main: 0, sub: 0, unknown: 0, failed: 0 },
   search: { total: 0, main: 0, sub: 0, unknown: 0 },
   open: { total: 0 },
-  // Records the main/sub split cannot be trusted on. Until the agent_id fix the
-  // stats hook decided main-vs-sub on `agent_type` too, which CC also sets on the
-  // MAIN thread of an `--agent` session — every such call was stamped `sub`. The
-  // fixed writer stores the deciding `agent_id` as `aid`, so a `sub` record with
-  // no `aid` is exactly a pre-fix record. Counted, never silently averaged in.
+  // Pre-agent_id-fix `sub` records (no `aid`; `--agent` main thread was stamped `sub`): untrusted split,
+  // counted, never averaged in.
   legacyAgent: 0,
   // The prefetch hook. `why` is the suppressing clause, so a low fire rate is
   // always attributable; `hits` and `ms` are the cost side.
@@ -118,27 +138,14 @@ const rep = {
     fired: 0, suppressed: 0, why: {}, hits: 0, injections: 0,
     msMedian: null, msMax: null,
   },
-  // Post-release conversion, computable from this JSONL alone:
-  //   injectedSessions  - sessions where prefetch injected at least one candidate
-  //   openedSessions    - of those, sessions where an injected path was later OPENED
-  //   pathsOpened/pathsInjected - the same question per candidate path
+  // Prefetch conversion from this JSONL: sessions with an injection -> of those, an injected path later OPENED;
+  // pathsOpened/pathsInjected = same per candidate path.
   prefetchConversion: {
     injectedSessions: 0, openedSessions: 0, sessionPct: null,
     pathsInjected: 0, pathsOpened: 0, pathPct: null,
   },
-  // `sessionsWithNudge`/`sessionsConverted`/`conversionPct` are the LUMPED figures:
-  // every nudge-emitting channel share one denominator. They are kept for schema
-  // compatibility and they are not a per-channel measurement — reading them as one
-  // is what produced the "0/18" claim that retired the reminder hook. The channel a
-  // number belongs to lives in `bySource`, keyed by the emitting hook's `src`.
-  //
-  // `converted` does NOT mean the same thing in every channel, so each entry names
-  // its own `measure`:
-  //   semble-call-after      a semble MCP call landed later in the same session
-  //   injected-path-opened   a path prefetch injected was later actually Read
-  // Attribution overlaps by design: one semble call can convert a session for the
-  // session channel AND the reminder channel. What must never happen is one
-  // channel's firings sitting in another channel's denominator.
+  // sessionsWithNudge/sessionsConverted/conversionPct = LUMPED (schema compat, !=per channel); per channel: `bySource[src]`
+  // with own `measure` (semble-call-after | injected-path-opened); overlap ok, never in another channel denominator.
   conversion: {
     sessionsWithNudge: 0, sessionsConverted: 0, conversionPct: null,
     callsAfterNudge: 0, callsWithoutNudge: 0,
@@ -146,10 +153,8 @@ const rep = {
   },
 };
 
-// Every channel that can emit a nudge, listed so a channel that fired zero times
-// still reports 0/0 instead of vanishing from the output. `explore` is the retired
-// SubagentStart/Explore hook: it is NOT listed, so it appears only in a JSONL that
-// actually holds its records, and disappears once those age out of the window.
+// Nudge channels listed so a zero-fire one still reports 0/0. Retired `explore` NOT listed:
+// shown only while its records stay in the window.
 const NUDGE_SOURCES = ["session", "reminder", "subagent", "prefetch"];
 const MEASURE = {
   session: "semble-call-after",
@@ -196,9 +201,7 @@ function agentOf(r) {
 const nudgeFirst = {};   // sid -> earliest nudge ts        (all channels lumped)
 const nudgeTs = {};      // sid -> sorted-enough list of nudge ts
 const callsBySid = {};   // sid -> [ts]
-// The same two joins kept PER CHANNEL. Without this split a channel that fires
-// often lends its sessions to a channel that never fired, and the quotient stops
-// describing either of them.
+// Same two joins PER CHANNEL, so a busy channel never lends sessions to a silent one.
 const srcFirst = {};     // src -> sid -> earliest nudge ts of THAT src
 const srcTs = {};        // src -> sid -> [ts]
 const reminderTuids = {};// tool_use_id -> 1, so a retried PreToolUse is not double counted
@@ -281,9 +284,7 @@ for (const r of recs) {
   }
 }
 
-// The metric that matters: a nudge only counts if a semble call came AFTER it,
-// in the same session. Equal timestamps do not count - same-millisecond means
-// the call cannot have been caused by the nudge.
+// Nudge counts only if a semble call came strictly AFTER it in the same session (equal ts != caused).
 const nudgedSids = Object.keys(nudgeFirst);
 rep.conversion.sessionsWithNudge = nudgedSids.length;
 rep.conversion.sessionsConverted = nudgedSids.filter(function (sid) {
@@ -301,11 +302,8 @@ for (const sid of Object.keys(callsBySid)) {
   }
 }
 
-// Prefetch conversion. An injected path converts when a LATER `open` in the SAME
-// session names it. semble reports repo-relative paths and Claude Code reads with
-// an absolute one, so a match is "either recorded form ends with the injected
-// path" - the stats hook records both forms precisely so this stays a suffix test
-// and never needs a cwd the reader does not have.
+// Prefetch conversion: injected path converts on a LATER same-session `open` naming it; suffix match on
+// either recorded form (repo-relative vs absolute), so no cwd needed.
 const hit = function (sid, rec) {
   return (opened[sid] || []).some(function (o) {
     if (!(o.ts > rec.ts)) return false;
@@ -328,11 +326,8 @@ const pc = rep.prefetchConversion;
 if (pc.injectedSessions) pc.sessionPct = Math.round((pc.openedSessions / pc.injectedSessions) * 1000) / 10;
 if (pc.pathsInjected) pc.pathPct = Math.round((pc.pathsOpened / pc.pathsInjected) * 1000) / 10;
 
-// Per-channel conversion. Each channel is joined against its OWN nudge timestamps,
-// so a channel that never fired reports 0/0 and contributes nothing to any other
-// channel's rate. The prefetch channel converts on a path being opened, not on a
-// later semble call - it already RAN the search, so "did they call semble after"
-// would answer a question nobody asked; its numbers come from prefetchConversion.
+// Per-channel conversion against its OWN nudge ts (never-fired = 0/0). Prefetch already RAN the search,
+// so it converts on a path opened (prefetchConversion), not a later semble call.
 for (const src of Object.keys(srcFirst)) {
   const slot = srcSlot(src);
   const sids = Object.keys(srcFirst[src]);
@@ -403,9 +398,7 @@ L.push("converted: " + c.sessionsConverted + "/" + c.sessionsWithNudge + " nudge
   + (c.conversionPct === null ? "" : " (" + c.conversionPct + "%)")
   + " | " + c.callsAfterNudge + " calls after a nudge, " + c.callsWithoutNudge + " unprompted"
   + "  [ALL channels lumped - per channel below]");
-// One line per channel. A channel that never fired prints 0/0, which is the
-// distinction the retirement decision missed: 0/0 is "never delivered", 0/N is
-// "delivered and ignored", and only the second is evidence about the advice.
+// One line per channel: 0/0 = never delivered, 0/N = delivered and ignored (only the latter is evidence).
 for (const src of Object.keys(c.bySource).sort()) {
   const s = c.bySource[src];
   L.push("  " + (src + "        ").slice(0, 9) + s.converted + "/" + s.sessions + " sessions"
@@ -487,6 +480,11 @@ fi
 # ── sibling sections ────────────────────────────────────────────────────────
 # mcp is always gathered: the verdict depends on it.
 MCP_JSON="$(sibling semble-mcp.sh detect --json)"
+VERSIONS_JSON=""
+# Never fatal: a failed check degrades to an error object for that section only.
+if want versions; then
+  VERSIONS_JSON="$(sc_versions_json 2>/dev/null)" || VERSIONS_JSON='{"error":"version check failed"}'
+fi
 CACHE_JSON=""
 GUIDANCE_JSON=""
 AGENTS_JSON=""
@@ -621,6 +619,28 @@ if (detect === null) {
   };
 }
 
+// ── versions (active config dir slice of sc_versions_json) ─────────────────
+const verRaw = parseSection(E.SC_VERSIONS_JSON, "version check");
+let versionsSec;
+if (verRaw === null || isErr(verRaw)) {
+  versionsSec = verRaw;
+} else {
+  const rows = Array.isArray(verRaw.profiles) ? verRaw.profiles : [];
+  const a = rows.filter(function (r) { return r && r.active === true; })[0] || {};
+  versionsSec = {
+    pin: verRaw.pin, pinSpec: verRaw.pinSpec,
+    configDir: a.dir || "", configFile: a.file || "",
+    registered: a.registered === undefined ? null : a.registered,
+    registeredVersion: a.registeredVersion === undefined ? null : a.registeredVersion,
+    verdict: a.verdict || "unknown", detail: a.detail || "", action: a.action || "none",
+    upstream: verRaw.upstream || { latest: null, status: "unknown", reason: "unparseable", advisory: "" },
+  };
+}
+// A pinned registration at another X.Y.Z is a pin transition: `upgrade` owns it.
+const pinMoved = !!mcpSec && !isErr(mcpSec) && mcpSec.state === "stale_args"
+  && !!versionsSec && !isErr(versionsSec)
+  && (versionsSec.verdict === "stale" || versionsSec.verdict === "ahead");
+
 // ── cache (pass-through of semble-cache.sh info --json) ─────────────────────
 const cacheSec = parseSection(E.SC_CACHE_JSON, "semble-cache.sh info");
 
@@ -632,9 +652,7 @@ if (guidRaw === null || isErr(guidRaw)) {
 } else {
   const h = (guidRaw.hooks && typeof guidRaw.hooks === "object") ? guidRaw.hooks : {};
   const ses = (h.session && typeof h.session === "object") ? h.session : {};
-  const pre = (h.prefetch && typeof h.prefetch === "object") ? h.prefetch : {};
   const sta = (h.stats && typeof h.stats === "object") ? h.stats : {};
-  const rem = (h.reminder && typeof h.reminder === "object") ? h.reminder : {};
   const sub = (h.subagent && typeof h.subagent === "object") ? h.subagent : {};
   const rule = (guidRaw.rule && typeof guidRaw.rule === "object") ? guidRaw.rule : {};
   const ign = (guidRaw.ignore && typeof guidRaw.ignore === "object") ? guidRaw.ignore : {};
@@ -647,30 +665,20 @@ if (guidRaw === null || isErr(guidRaw)) {
     settingsFile: typeof h.settingsFile === "string" ? h.settingsFile : "",
     hooks: {
       session: ses.file === "present" ? "present" : "missing",
-      prefetch: pre.file === "present" ? "present" : "missing",
       stats: sta.file === "present" ? "present" : "missing",
-      reminder: rem.file === "present" ? "present" : "missing",
       subagent: sub.file === "present" ? "present" : "missing",
     },
-    // Retired hook files still on disk (v1 installs). Non-empty means the
-    // migration has not run yet; `install`/`upgrade` deletes them.
+    // Retired hooks (explore, reminder, prefetch) on disk / still registered: `upgrade` removes both.
     retired: Array.isArray(h.retired) ? h.retired : [],
+    retiredWired: Array.isArray(h.retiredWired) ? h.retiredWired : [],
     permissionsWired: perm.wired === true,
-    // Read the authoritative sibling counts (SessionStart + UserPromptSubmit +
-    // PostToolUse + PostToolUseFailure + PreToolUse + SubagentStart). Never
-    // re-derive them from the `wired` booleans: stats spans two events, so a
-    // half-wired pair loses an entry.
+    // Authoritative sibling counts (SessionStart, PostToolUse, PostToolUseFailure, SubagentStart);
+    // never re-derived from `wired` booleans (stats spans two events).
     wiredCount: typeof h.wiredCount === "number" ? h.wiredCount : 0,
     wantCount: typeof h.wantCount === "number" ? h.wantCount : 0,
     staleEntries: typeof h.staleEntries === "number" ? h.staleEntries : 0,
-    // content_version is the PRIMARY staleness signal (last release that actually
-    // changed the rule content, per artifact-metadata.md section 6); `version` is
-    // secondary/informational - it names which plugin release last installed the
-    // file, and can bump on every release while content_version stays put.
-    // Staleness is otherwise visible only through /brewcode:setup-status, so a
-    // project running artifacts from an old release read `ready` in its own status
-    // with no prescription. One signal, one fix - the cross-plugin dashboard still
-    // owns the per-artifact breakdown.
+    // content_version = PRIMARY staleness signal (artifact-metadata.md section 6); `version` = informational
+    // install release. Surfaced here too so old artifacts !=`ready`; /brewcode:setup-status keeps the breakdown.
     content_version: typeof rule.content_version === "string" ? rule.content_version : "",
     templateContentVersion: typeof rule.templateContentVersion === "string" ? rule.templateContentVersion : "",
     version: typeof rule.version === "string" ? rule.version : "",
@@ -689,10 +697,8 @@ if (agRaw === null || isErr(agRaw)) {
   const num = function (v) { return typeof v === "number" ? v : 0; };
   agentsSec = {
     total: typeof agRaw.total === "number" ? agRaw.total : files.length,
-    // The buckets partition `total` by `action`, so they must be split on
-    // action first. `toolsStyle` alone is not a bucket: semble-agents.sh gives
-    // skipped entries - and a conflict with no `tools:` key - toolsStyle
-    // "absent" too, which double counted them as inherit.
+    // Buckets partition `total` by `action` first; `toolsStyle` "absent" alone also marks skipped/conflict
+    // entries (double-counted as inherit).
     inherit: files.filter(function (f) {
       return f && f.action === "unchanged" && f.reason === "inherits";
     }).length,
@@ -731,25 +737,24 @@ else if (mcpState === "absent" && (phase === "absent" || phase === "prereq_ready
 else if (mcpState === "correct" && phase === "ready") { verdict = "ready"; reason = "pinned server registered at user scope and verified"; }
 else { verdict = "partial"; reason = "mcp=" + mcpState + ", phase=" + phase; }
 
-// A v1-shaped repo satisfies mcp=correct + phase=ready and would report
-// `ready`/`none`, so nobody upgrading would ever be told to migrate, and an
-// install whose smoke query never ran reported the same. `ready` is therefore
-// every required check, not the phase alone: each unmet one is its own clause
-// and downgrades to `partial`. A section that could not be read never
-// downgrades anything - an absent measurement is not a defect (see want===0).
+// `ready` = every required check, not phase alone (v1 repo / unsmoked install): each unmet one -> own clause, `partial`.
+// Unreadable section never downgrades (absent measurement != defect, see want===0).
 const INSTALL_STEPS = ["prereq", "mcp", "permissions", "guidance", "agents"];
 // `verifyWhy` holds the warm/smoke clauses only: when they are the WHOLE reason,
 // `resume` closes the gap, otherwise `install` owns the repair.
 const why = [];
+// Retired hook leftovers (file or registration); `upgrade` removes them.
+const retiredLeft = (guidSec && !isErr(guidSec))
+  ? Array.from(new Set(guidSec.retired.concat(guidSec.retiredWired))) : [];
 const verifyWhy = [];
 if (verdict === "ready") {
   if (guidSec && !isErr(guidSec)) {
-    const retired = Array.isArray(guidSec.retired) ? guidSec.retired : [];
     const stale = typeof guidSec.staleEntries === "number" ? guidSec.staleEntries : 0;
     const wired = typeof guidSec.wiredCount === "number" ? guidSec.wiredCount : 0;
     const want = typeof guidSec.wantCount === "number" ? guidSec.wantCount : 0;
-    if (retired.length) { why.push("retired hooks on disk: " + retired.join(", ")); }
+    if (retiredLeft.length) { why.push("stale (remove via upgrade): " + retiredLeft.join(", ")); }
     if (stale > 0) { why.push(stale + " stale settings " + (stale === 1 ? "entry" : "entries")); }
+    if (guidSec.rule === "stale") { why.push("semble-first rule is a prior-release copy"); }
     // want===0 means the wiring counts were not reported at all - never treat an
     // absent count as a defect, or a trimmed report downgrades a healthy repo.
     if (want > 0 && wired !== want) { why.push("hooks wired " + wired + "/" + want); }
@@ -758,20 +763,12 @@ if (verdict === "ready") {
     if (guidSec.rule === "absent") { why.push("semble-first rule absent"); }
     if (guidSec.permissionsWired !== true) { why.push("MCP tool permissions not wired"); }
   } else if (isErr(guidSec)) {
-    // An unmeasurable half must never report as verified: the guidance probe is
-    // the only witness for the rule, the hooks and the permissions, so any
-    // errored answer leaves all three unproven - why it failed makes no
-    // difference to what is unknown. A NULL section is the one exception and
-    // needs no clause here: it means the section was not requested at all
-    // (--section mcp), an absent measurement like want===0. cacheSec/agentsSec
-    // stay lenient by design - each witnesses one optional fact, and the
-    // section itself carries its error for the reader (see test 55).
+    // Errored guidance probe = rule, hooks, permissions unproven -> clause; NULL = not requested (--section mcp).
+    // cacheSec/agentsSec stay lenient: one optional fact each, error kept in the section (test 55).
     why.push("guidance probe failed: " + guidSec.error);
   }
-  // The state file is always readable here (phase===ready proves it parsed), so
-  // the recorded steps are authoritative. warm/smoke are the verification pair:
-  // a skipped smoke verified nothing, which SKILL.md Step 4.3 records by leaving
-  // both out of `completed` - and this is the clause it promises the user.
+  // phase===ready proves state parsed -> recorded steps authoritative; warm/smoke missing from `completed`
+  // = skipped verification (SKILL.md Step 4.3).
   const done = stateSec.completed;
   const missVerify = ["warm", "smoke"].filter(function (s) { return done.indexOf(s) < 0; });
   if (missVerify.length) {
@@ -790,13 +787,8 @@ if (verdict === "ready") {
   if (why.length) { verdict = "partial"; reason = why.join("; "); }
 }
 
-// Stale artifacts: everything is wired and byte-managed, but the rule content
-// last changed in an earlier release than the plugin current template - per
-// artifact-metadata.md section 6, content_version drives this verdict; `version` rides
-// along informational-only and never decides it (a plain version bump with
-// unchanged content_version is NOT stale). Both content_version stamps must be
-// present and readable - an unstamped pre-5.5 rule reports "" and must never be
-// called stale on a missing value.
+// Stale = rule content_version older than template (artifact-metadata.md section 6); `version` bump alone !=stale.
+// Both stamps required: unstamped pre-5.5 rule reports "" and is never stale.
 let stampStale = false;
 if (verdict === "ready" && guidSec && !isErr(guidSec)
     && guidSec.content_version && guidSec.templateContentVersion
@@ -822,7 +814,7 @@ if (verdict === "ready") {
   nextStep = "Run /brewcode:semble-setup enable";
 } else if (verdict === "verifying") {
   nextStep = "Run /brewcode:semble-setup resume";
-} else if (stampStale) {
+} else if (stampStale || pinMoved || retiredLeft.length || (guidSec && guidSec.rule === "stale")) {
   nextStep = "Run /brewcode:semble-setup upgrade";
 } else if (verifyWhy.length && verifyWhy.length === why.length) {
   // Everything is installed and wired; only the warm/smoke pair is unproven.
@@ -846,6 +838,7 @@ function add(key, val) {
 }
 add("prereq", prereqSec);
 add("mcp", mcpSec);
+add("versions", versionsSec);
 add("cache", cacheSec);
 add("guidance", guidSec);
 add("agents", agentsSec);
@@ -879,6 +872,20 @@ if (jsonMode) {
       L.push("mcp:      " + report.mcp.state + " @ " + where + "  [" + report.mcp.connectivity + "]");
     }
   }
+  if (report.versions) {
+    if (isErr(report.versions)) {
+      L.push("version:  error: " + report.versions.error);
+    } else {
+      const v = report.versions;
+      const head = v.verdict === "ok" ? "ok (registered " + v.registered + " = pin " + v.pin + ")"
+        : (v.verdict === "not_registered" ? "not registered (pin " + v.pin + ")" : v.verdict + " (" + v.detail + ")");
+      L.push("version:  " + head + (v.action === "none" ? "" : " -> run: " + v.action) + "  [" + v.configFile + "]");
+      const u = v.upstream;
+      L.push("upstream: " + (u.latest
+        ? u.latest + " - " + (u.advisory || "pin current")
+        : "unknown (" + String(u.reason).replace(/_/g, " ") + ")"));
+    }
+  }
   if (report.cache) {
     if (isErr(report.cache)) {
       L.push("cache:    error: " + report.cache.error);
@@ -904,6 +911,7 @@ if (jsonMode) {
       L.push("guidance: rule " + g.rule + " | CLAUDE.md " + g.claudeMd +
         " | hooks " + g.wiredCount + "/" + (g.wantCount || 0) + " wired" +
         " | permissions " + (g.permissionsWired ? "yes" : "no") + ver);
+      if (retiredLeft.length) L.push("retired:  " + retiredLeft.join(", ") + " - stale (remove via upgrade)");
     }
   }
   if (report.agents) {
@@ -965,6 +973,7 @@ REPORT="$(
   SC_NODE_PATH="$NODE_PATH" SC_NODE_VER="$NODE_VER" \
   SC_SEMBLE_TOOLVER="$SEMBLE_TOOLVER" SC_SEMBLE_RESOLVABLE="$SEMBLE_RESOLVABLE" \
   SC_MCP_JSON="$MCP_JSON" \
+  SC_VERSIONS_JSON="$VERSIONS_JSON" \
   SC_CACHE_JSON="$CACHE_JSON" \
   SC_GUIDANCE_JSON="$GUIDANCE_JSON" \
   SC_AGENTS_JSON="$AGENTS_JSON" \

@@ -4,7 +4,7 @@ RU/EN handling for any doc entering the LLM context. Default: EN. RU survives on
 
 ## RU-drop rule
 
-RU text that duplicates an EN statement already present is redundant weight, not redundancy-as-safety -> drop the RU copy, keep EN. Applies to: parallel paragraphs, bilingual bullet pairs, RU footnote restating an EN rule, RU commit-message-style summary under an EN header.
+RU text that duplicates an EN statement already present is redundant weight -> drop the RU copy, keep EN (parallel paragraphs, bilingual bullet pairs, an RU footnote or summary restating EN).
 
 | Pattern | Action |
 |---------|--------|
@@ -27,10 +27,9 @@ RU is KEPT where it IS the content, not a translation of it:
 
 `brewcode/skills/skills/scripts/validate-skill.sh` check 10 REQUIRES at least 1 Cyrillic character in a skill's mode table. RU keyword columns in skill mode tables are NEVER stripped, at any compression depth.
 
-Grounding — exact check from the script:
+Grounding — check 10 in the script:
 
 ```sh
-# comment (validate-skill.sh:163-164):
 # 10. Mode keyword table: when the skill declares 2+ modes, the table needs a
 # Mutates? column and at least one Cyrillic (RU) keyword (contract section 2).
 CYR_LOCALE="${LC_ALL:-${LANG:-en_US.UTF-8}}"
@@ -40,7 +39,7 @@ echo "$MODE_TABLE" | LC_ALL="$CYR_LOCALE" grep -qE '[а-яёА-ЯЁ]' 2>/dev/nul
 check fail "Mode table ($DATA_ROWS modes): $MSG"
 ```
 
-A mode table with 2+ data rows and zero Cyrillic bytes fails validation (`CYR_OK` stays 0 -> `check fail`). This skill must never propose dropping the last RU cell in such a table, even under `--target=N%`.
+A mode table with 2+ data rows and zero Cyrillic bytes fails validation (`CYR_OK` stays 0 -> `check fail`), so never propose dropping the last RU cell in such a table, even under `--target=N%`.
 
 ## Translation-pair matcher
 

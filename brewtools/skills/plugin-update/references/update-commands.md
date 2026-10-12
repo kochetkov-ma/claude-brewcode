@@ -9,9 +9,8 @@ claude plugin marketplace update claude-brewcode
 claude plugin update <id> --scope <scope>      # repeat per selected plugin
 ```
 
-`<id>` and `<scope>` come from `claude plugin list --json` (Phase 0). `--scope` defaults to `user`,
-so it must be passed explicitly whenever the plugin is installed at `project`, `local` or `managed`.
-Full-suite example, all four at `user` scope:
+`<id>` and `<scope>` come from `claude plugin list --json` (Phase 0). Always pass `--scope`: older
+CLIs default it to `user`, newer ones auto-detect. Full-suite example, all four at `user` scope:
 
 ```
 claude plugin update brewcode@claude-brewcode --scope user
@@ -20,10 +19,7 @@ claude plugin update brewtools@claude-brewcode --scope user
 claude plugin update brewui@claude-brewcode --scope user
 ```
 
-## Reload (MANDATORY after updates)
-
-Preferred: `/reload-plugins` (in-session slash command)
-Fallback: type `exit`, then run `claude` again
+Reload after updates: [reload-notice.md](reload-notice.md).
 
 ## Valid CLI Subcommands
 
@@ -32,16 +28,15 @@ Fallback: type `exit`, then run `claude` again
 | `claude plugin list` | List installed plugins (CC 2.1.163+) |
 | `claude plugin list --json` | List installed plugins as JSON array (CC 2.1.163+) |
 | `claude plugin install <plugin>@<marketplace>` | Install |
-| `claude plugin update <plugin>@<marketplace> --scope <scope>` | Update one plugin at its installed scope (`user`, `project`, `local`, `managed`; default `user`) |
+| `claude plugin update <plugin>@<marketplace> --scope <scope>` | Update one plugin at its installed scope (`user`, `project`, `local`, `managed`; auto-detected when omitted on CC 2.1.281+) |
+| `claude plugin details <plugin>@<marketplace>` | Component inventory and projected token cost |
 | `claude plugin uninstall <plugin>@<marketplace>` | Remove |
 | `claude plugin prune --dry-run --scope <scope>` | List orphaned auto-installed dependencies |
 | `claude plugin prune --scope <scope> -y` | Remove them; `-y` required outside a TTY |
 | `claude plugin marketplace add <url>` | Add marketplace |
-| `claude plugin marketplace update <name>` | Refresh marketplace metadata |
+| `claude plugin marketplace update <name>` | Refresh marketplace metadata (no name: every listing, installed plugins untouched) |
 | `claude plugin marketplace list` | List marketplaces |
 | `claude plugin marketplace remove <name>` | Remove marketplace |
-
-When running inside a Claude session, prefix `claude plugin list` with `unset CLAUDECODE &&`.
 
 ## Verification After Update
 
@@ -51,13 +46,6 @@ unset CLAUDECODE && claude plugin list --json
 
 Confirm expected versions appear. If CC < 2.1.163, inspect cache directly or run `scripts/discover-plugins.sh`.
 
-## Environment Variables
+Auto-update env vars: [autoupdate-research.md](autoupdate-research.md).
 
-| Var | Effect |
-|-----|--------|
-| `DISABLE_AUTOUPDATER=1` | Disable Claude Code auto-updater entirely |
-| `FORCE_AUTOUPDATE_PLUGINS=1` | Force plugin auto-update on next start |
-
-## Notes
-
-- ❌ `--plugin-dir` for end users — dev-only flag
+❌ `--plugin-dir` for end users — dev-only flag.

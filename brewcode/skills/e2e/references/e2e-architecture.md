@@ -1,6 +1,7 @@
 # Layered E2E Test Architecture
 
 Stack-agnostic reference for e2e-architect and e2e-automation-tester agents.
+Contents: Architecture Diagram, Key Requirements, Layer Details, Stack Mapping, Dependency Rules.
 
 ## Architecture Diagram
 
@@ -172,7 +173,6 @@ class TestConfig:
     dbHost = env("DB_HOST", "localhost")
     kafkaServers = env("KAFKA_SERVERS", "localhost:9092")
     defaultTimeout = duration("30s")
-    retryAttempts = 3
 ```
 
 ## Stack Mapping
@@ -193,8 +193,7 @@ class TestConfig:
 
 ## Dependency Rules
 
-Diagram: primary flow. The table below defines every allowed direct edge, including fan-out
-and the separate base lifecycle preparation context.
+Diagram: primary flow; the table defines every allowed direct edge.
 
 ```
 Test Classes
@@ -239,9 +238,8 @@ Verification   Data Layer
 | Steps -> Test Classes | No upward dependencies; breaks reusability |
 | Support -> Steps | Support is generic; must not know about business logic |
 | Config -> anything | Config is passive; read-only, no side effects |
-| Any unlisted direct dependency | Only the edges in the allowed table are legal: Steps fan out to Verification/Data/Support; Verification and Data may also read Config; Support reads Config; Config is a leaf. No arbitrary bypass |
+| Any unlisted direct dependency | Only the edges in the allowed table are legal; no bypass |
 
-Base lifecycle setup retains its existing preparation responsibility: it may call Data/Support
-and read Config only during setup/cleanup, never expose those calls as test-method shortcuts.
-It does not let test methods call Verification directly. The D2 DB exception remains ONLY
-after explicit user confirmation through Data -> DatabaseSupport, including base-initiated setup.
+Base lifecycle setup may call Data/Support and read Config only during setup/cleanup, never as a
+test-method shortcut (test methods still never call Verification directly). The D2 DB exception
+applies there too: ONLY after explicit user confirmation, through Data -> DatabaseSupport.

@@ -1,9 +1,7 @@
 # Mode: UPDATE
 
 Update existing E2E scenarios and tests.
-
-Run coordination in the main session. Ordinary delegated agents cannot spawn Agent:
-return requests/blocked decisions to the main orchestrator rather than re-delegating.
+Contents: U0 Prerequisites, U1 Scope, U2 Find Artifacts, U3 Apply, U4 Review Cycle, U5 Summary.
 
 ## U0: Prerequisite Check
 
@@ -42,8 +40,7 @@ Based on update type:
 | Refactor steps/support | e2e-automation-tester | Refactor shared layers |
 | Architecture changes | e2e-architect | Update patterns, base classes |
 
-Via Agent, assign ONE scenario group/test domain (~<=5 files) per agent. Split multiple
-targets; fan out the independent units in ONE message.
+Assign ONE scenario group/test domain (~<=5 files) per agent; fan out independent targets in ONE message.
 
 ```
 Agent(subagent_type="{AGENT_FROM_TABLE}", prompt="
@@ -69,7 +66,7 @@ DONE: change applied and compiles; report as: files changed | added/modified/rem
 
 ## U4: Review Cycle (MAX_CYCLES=3)
 
-Same pattern as CREATE mode C4/C7. Every spawn below carries the full six-field brief:
+Same pattern as CREATE mode C4/C7:
 ```
 cycle = 0
 while cycle < 3:

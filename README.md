@@ -10,7 +10,7 @@
 
 **Claude Code plugin suite** -- four plugins for development, documentation, text utility, and visual workflows.
 
-A regular Claude Code session hands a big task to one agent and loses sight of it. Brewcode splits work into bounded units, gives every spawn a six-field brief, and re-states delegation on eligible prompts 1, 10, 20, and so on, with separate post-compaction recall. Four plugins. 27 skills. 8 agents. 6 registered hook commands.
+A regular Claude Code session hands a big task to one agent and loses sight of it. Brewcode splits work into bounded units, gives every spawn a six-field brief, and re-anchors the plan and task graph after a compaction. Four plugins. 27 skills. 8 agents. 4 registered hook commands.
 
 [**Full Documentation**](https://doc-claude.brewcode.app/getting-started/)
 
@@ -58,9 +58,9 @@ After all commands succeed, run `/reload-plugins`. If `/reload-plugins` is unava
 
 | Plugin | Purpose | Skills | Install |
 |--------|---------|--------|---------|
-| [brewcode](brewcode/README.md) | Infinite task execution, quorum reviews, skill/agent creation, semantic search | 9 | `claude plugin install brewcode@claude-brewcode` |
+| [brewcode](brewcode/README.md) | Authoring toolkit: skill, agent and rule creation and sync, semantic search (semble), conventions, E2E tests, generated review and team skills | 9 | `claude plugin install brewcode@claude-brewcode` |
 | [brewdoc](brewdoc/README.md) | Documentation tools: docsync, memory-sync generation, PDF conversion, publishing | 5 | `claude plugin install brewdoc@claude-brewcode` |
-| [brewtools](brewtools/README.md) | Universal text utilities: token optimization, humanization, secrets scanning, plugin updates | 13 | `claude plugin install brewtools@claude-brewcode` |
+| [brewtools](brewtools/README.md) | Text optimization and humanization, secrets scanning, SSH and GitHub Actions deploy, manager codewords, subagent deadline/return-size/routing guards, task board, context slimming, plugin updates, alternative API providers | 13 | `claude plugin install brewtools@claude-brewcode` |
 | [brewui](brewui/README.md) | UI/visual/creative tools (placeholder, currently empty) | 0 | `claude plugin install brewui@claude-brewcode` |
 
 ## Installation
@@ -120,7 +120,7 @@ claude --plugin-dir ./brewcode --plugin-dir ./brewdoc --plugin-dir ./brewtools -
 
 ## Quick Start
 
-### brewcode -- infinite task execution
+### brewcode -- authoring toolkit
 
 ```bash
 /brewcode:setup-status       # 1. Inspect setup state and the recommended installation order
@@ -133,7 +133,7 @@ claude --plugin-dir ./brewcode --plugin-dir ./brewdoc --plugin-dir ./brewtools -
 /brewcode:setup-status       # anytime: what is installed, stale or missing in this project
 ```
 
-Skills orchestrate, agents execute. Each spawn is a bounded unit with a six-field brief; the `forced-eval` hook adds its 472-byte role/split/branch reminder on eligible prompts 1, 10, 20, and so on, and a `role-recall`/`compact-recall` pair re-anchors the same role plus the plan and task graph after a compaction, so work stays observable across compaction cycles.
+Skills orchestrate, agents execute. Each spawn is a bounded unit with a six-field brief; the `compact-recall` hook (SessionStart, matcher `compact`) re-anchors the plan or intent plus the task graph after a compaction, so work stays observable across compaction cycles.
 
 The task board provides shared domain methodology for reviews and tests, plus a methodology and base work units for each task. When a top-level task becomes active, the main session's `/task-board` announces and creates its unique hourly anti-drift cron; the user can choose another cadence or opt out. Each delivered tick rereads the methodology and goal, collects agent updates, reconciles statuses and dependencies, and keeps all unfinished graph entries plus the latest 10 completed entries. Older completion evidence stays in task records. The compact report gives tick time and number, elapsed time, progress, remaining work, blockers or questions, and the drift verdict. Timers run only while the session is active, subject to runtime limits; unavailable scheduling tools are reported. Completion or cancellation stops the task's timer.
 
@@ -174,14 +174,8 @@ Placeholder plugin, currently empty. No commands yet -- coming soon.
         v
   /brewcode:superreview-setup --> project-tailored deep-review skill
 
-  eligible prompts 1,10,20,...: forced-eval (UserPromptSubmit) injects 3 lines --
-    [ROLE]   scan agents, project .claude/agents/ first; domain expert exists -> delegate
-    [SPLIT]  one agent for an hour = drift you cannot observe -> split and fan out
-    [BRANCH] no branch chosen -> main; no explicit branch/PR -> take over the whole workspace
-
-  after a compaction: role-recall + compact-recall (SessionStart, matcher compact) re-inject
-    the same 3 lines plus plan/intent and task graph -- forced-eval never fires there, since
-    an auto-compaction has no prompt to hook into
+  after a compaction: compact-recall (SessionStart, matcher compact) re-injects
+    the plan or intent and the task graph
 ```
 
 ### Delegation contract
@@ -236,7 +230,7 @@ Every spawn prompt carries six fields:
 | `/brewtools:text-optimize` | LLM token efficiency optimization (52 rules, smart dedup + aggressive lossy) |
 | `/brewtools:text-human` | Remove AI artifacts, humanize code |
 | `/brewtools:agent-deadline-setup` | Install/remove a soft wall-clock budget for subagents -- 80% warns "wrap up", 100% blocks all but finalization tools; project or global, opt-in |
-| `/brewtools:agent-return-setup` | Install/remove a size budget on every subagent's final return -- a SubagentStart hook states the budget, a SubagentStop hook sizes the return (`chars/4`) and blocks at most once, ordering a compress above `passTokens` (default 1000) or a write-to-file above `fileTokens` (default 2500); project or global, opt-in |
+| `/brewtools:agent-return-setup` | Install/remove a size budget on every subagent's final return -- a SubagentStart hook states the budget, a SubagentStop hook sizes the return (`chars/4`) and blocks at most once, ordering a compress above `passTokens` (default 2500) or a write-to-file above `fileTokens` (default 6000); project or global, opt-in |
 | `/brewtools:agent-router-setup` | EXPERIMENTAL -- install/remove a PreToolUse hook that denies a generic subagent spawn in favor of the real project/plugin expert, or nudges when the fit is only uncertain; project scope only, opt-in |
 | `/brewtools:secrets-scan` | Scan git-tracked files for leaked secrets |
 | `/brewtools:ssh` | SSH server management -- connect, configure, deploy |
@@ -268,7 +262,7 @@ Self-contained `SKILL.md` folders that ship outside the four plugins -- drop the
 | agent-creator | brewcode | inherit | Create and improve Claude Code agents |
 | hook-creator | brewcode | inherit | Create and debug Claude Code hooks |
 | bash-expert | brewcode | inherit | Create professional shell scripts |
-| bc-rules-organizer | brewcode | haiku | Internal: spawned by /brewcode:rules |
+| bc-rules-organizer | brewcode | haiku | Internal: spawned by /brewcode:rules and /brewcode:convention-setup |
 | text-optimizer | brewtools | sonnet | Optimize text and docs for LLM efficiency |
 | ssh-admin | brewtools | inherit | Linux server administration via SSH |
 | deploy-admin | brewtools | inherit | GitHub Actions deployment and CI/CD |
@@ -290,8 +284,8 @@ Self-contained `SKILL.md` folders that ship outside the four plugins -- drop the
 ## Development
 
 ```bash
-CLAUDE_DEBUG=1 claude --plugin-dir ./brewcode   # Debug mode
-bash .claude/scripts/update-plugin.sh           # Update all plugins
+claude --plugin-dir ./brewcode --debug   # Debug mode
+[CLAUDE_CONFIG_DIR=<profile dir>] bash .claude/scripts/update-plugin.sh [plugin|all] [--dry-run]   # Update plugins; --dry-run changes nothing
 bash .claude/scripts/bump-version.sh X.Y.Z      # Bump version everywhere
 ```
 

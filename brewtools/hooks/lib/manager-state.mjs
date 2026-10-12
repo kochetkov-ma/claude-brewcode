@@ -1,80 +1,33 @@
-// brewcode-meta: version=6.4.0 content_version=6.1.0 generated_by=brewtools:manager-setup
-// brewtools:manager-setup — Manager mode state resolver/writer.
-// State shape: { hard:boolean, level:'strict'|'balanced', mode:'full', mcpAllow?:string[] }
-//   + artifact metadata written by writeState: version/generated_by/last_updated.
-//   hard  — HARD wall toggle (PreToolUse guard physically denies main-session tools)
-//   level — HARD wall strictness: 'strict' (deny all non-read) | 'balanced' (allow read-only bash/search)
-//   mcpAllow — optional escape hatch for the guard's default-deny MCP classifier: scoped
-//           tool names (`mcp__server__tool`) or a `mcp__server__*` prefix, allowed at
-//           'balanced' only. Absent/empty = heuristic alone decides.
-//   metadata — stamped on WRITE only. DEFAULT_STATE deliberately carries no version:
-//           it is the answer for "no state file exists", and a version there would
-//           claim provenance for a file nothing ever stamped. Same reason a write that
-//           cannot resolve the version OMITS the key rather than stamping 'unknown' —
-//           see pluginVersion() and its call site in writeState.
-//   mode  — vestigial informational field, ALWAYS 'full'. No user action sets it;
-//           kept so status/readers of state.mode keep working. planmode is NOT a stored
-//           mode — ++m derives it at runtime from permission_mode === 'plan'; planmode
-//           stays resolvable in manager-prompts.mjs only.
-// project: <cwd>/.claude/brewtools/manager/state.json
-// global:  ~/.claude/manager/state.json  (protected for Write tool — only writable here)
-// resolveState: hard + level are PROJECT-ONLY (a global state.json must NOT enable the
-//   wall in projects lacking their own state.json); mode resolves project -> global -> default.
-// Atomic write: lockfile O_CREAT|O_EXCL + stale detection, tmp + rename.
+// brewcode-meta: version=6.5.0 content_version=6.5.0 generated_by=brewtools:manager-setup
+// brewtools:manager-setup — Manager state {hard, level, mode:'full', mcpAllow?} in <root>/.claude/brewtools/manager/state.json.
 
-// CLI (see bottom of file): `node manager-state.mjs get|set hard=false|level=strict [--cwd DIR]`.
-// This entrypoint is the ONLY Bash command the HARD wall guard self-exempts, so it must stay
-// argument-strict: unknown keys/values/flags exit non-zero without writing anything.
+// CLI `get|set` is the only Bash shape the HARD wall guard self-exempts: keep it argument-strict
+// (unknown key/value/flag -> non-zero exit, nothing written).
 
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const DEFAULT_STATE = { hard: false, level: 'balanced', mode: 'full' };
-// One scoped MCP tool name, or a whole-server `mcp__server__*` prefix. hardmode-guard.mjs
-// re-declares this same language (MCP_ALLOW_ENTRY_SRC) because it ships self-contained and
-// cannot import it; the two MUST stay in sync — the manager-setup suite asserts parity.
+// Scoped `mcp__server__tool` or `mcp__server__*`; hardmode-guard.mjs MCP_ALLOW_ENTRY_SRC must match
+// (it ships self-contained; the manager-setup suite asserts parity).
 const MCP_ALLOW_ENTRY = /^mcp__[A-Za-z0-9_.-]+__([A-Za-z0-9_.-]+|\*)$/;
 const VALID_SCOPES = new Set(['project', 'global']);
 
 const GENERATED_BY = 'brewtools:manager-setup';
 
-/**
- * Today's date in LOCAL time, `YYYY-MM-DD` — the spec mandates `date +%F`, which is local.
- * `toISOString()` is UTC and would stamp tomorrow's (or yesterday's) date depending on the
- * offset, and this value feeds staleness comparison.
- * @returns {string}
- */
+// LOCAL `YYYY-MM-DD` (= `date +%F`); toISOString() is UTC and skews the staleness date.
 function localDate() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-/**
- * Version of the manager-setup that owns THIS copy of the module, by self-location.
- * Plugin layout (hooks/lib/) -> ../../.claude-plugin/plugin.json.
- * A copy installed into a project has no plugin.json above it, so it falls back to
- * its own baked `brewcode-meta` stamp — which is the version it was copied at.
- * Never a literal: the state file must record the version that actually wrote it.
- *
- * Returns `null`, NEVER the string 'unknown', when both carriers are unreadable.
- * `unknown` is not a version — `sort -V` accepts it and the `PLACEHLD` character test
- * does not catch it, so a consumer would report a confident verdict on a resolver
- * failure. `null` is an internal sentinel that never leaves this module: `writeState`
- * OMITS the `version` key instead of stamping it (see the call site).
- *
- * It returns rather than throws on purpose. This module is the HARD wall's off-switch
- * (`set hard=false`) and the single Bash shape the guard self-exempts; a writer that
- * aborted here would leave the user behind an armed wall with no exit. The other four
- * writers in this repo abort because they are generators — nothing is armed when they
- * refuse. Both hooks (`session-start.mjs`, `manager-prompt.mjs`) import only
- * `resolveState`, so no hook path reaches this function at all.
- * @returns {string|null} semver, or null when unresolvable
- */
+// Writer version: ../../.claude-plugin/plugin.json, else own `brewcode-meta` stamp; null (never
+// 'unknown', never a throw: this is the wall's off-switch) when both are unreadable.
 function pluginVersion() {
-  const here = path.dirname(new URL(import.meta.url).pathname);
+  const here = path.dirname(fileURLToPath(import.meta.url));
   try {
     const pkg = JSON.parse(fs.readFileSync(path.join(here, '..', '..', '.claude-plugin', 'plugin.json'), 'utf8'));
     if (pkg && /^\d+\.\d+\.\d+/.test(pkg.version)) return pkg.version;
@@ -87,15 +40,7 @@ function pluginVersion() {
   return null;
 }
 
-/**
- * content_version of THIS module — the last release in which its generator/writer logic
- * actually changed, by self-location. Unlike pluginVersion(), there is no plugin.json
- * field for this: the own-header `brewcode-meta` stamp is the only carrier, so this
- * skips the plugin.json attempt entirely and reads straight from the file's own first line.
- * Returns `null`, NEVER 'unknown', when the header carries no `content_version=` token —
- * writeState OMITS the key on null, mirroring pluginVersion()'s call site.
- * @returns {string|null} semver, or null when unresolvable
- */
+// content_version from this file's own first-line stamp (sole carrier); null when absent.
 function resolveContentVersion() {
   try {
     const first = fs.readFileSync(new URL(import.meta.url), 'utf8').split('\n', 1)[0];
@@ -112,17 +57,16 @@ function resolveHome(p) {
   return p;
 }
 
-/**
- * Resolve state.json path for a scope.
- * @param {string} scope - 'project' | 'global'
- * @param {string} cwd - project root for project scope
- * @returns {string} absolute state file path
- */
+// One resolver for brewtools hooks: lives here because this file is copied ALONE into projects.
+export const configDir = () => (process.env.CLAUDE_CONFIG_DIR
+  ? path.resolve(process.env.CLAUDE_CONFIG_DIR) : path.join(process.env.HOME || os.homedir(), '.claude'));
+
+/** state.json path: 'project' (cwd = project root) | 'global' (config dir; Write-protected) */
 export function resolveStatePath(scope, cwd = process.cwd()) {
   if (!VALID_SCOPES.has(scope)) {
     throw new Error(`invalid scope '${scope}' — must be one of: ${[...VALID_SCOPES].join(', ')}`);
   }
-  if (scope === 'global') return resolveHome('~/.claude/manager/state.json');
+  if (scope === 'global') return path.join(configDir(), 'manager', 'state.json');
   return path.join(cwd, '.claude', 'brewtools', 'manager', 'state.json');
 }
 
@@ -157,14 +101,8 @@ function readJsonSafe(filePath) {
   }
 }
 
-/**
- * Resolve effective Manager state.
- * SECURITY: `hard` and `level` come ONLY from the PROJECT state.json — a global
- * state.json must never enable the HARD wall in projects without their own state.
- * `mode` resolves project -> global -> default.
- * @param {string} cwd
- * @returns {{hard:boolean, level:string, mode:string, source:'project'|'global'|'default'}}
- */
+// SECURITY: hard + level come ONLY from the PROJECT state.json (a global one never arms the wall);
+// mode resolves project -> global -> default.
 export function resolveState(cwd = process.cwd()) {
   try {
     const project = readJsonSafe(resolveStatePath('project', cwd));
@@ -173,9 +111,8 @@ export function resolveState(cwd = process.cwd()) {
     const level = (project && project.level) ? project.level : DEFAULT_STATE.level;
     const mode  = (project && project.mode) ?? (global && global.mode) ?? DEFAULT_STATE.mode;
     const source = project ? 'project' : (global ? 'global' : 'default');
-    // Unknown keys of the PROJECT file (version/generated_by/last_updated and anything
-    // a future release adds) pass through untouched. Nothing is invented: a file that
-    // carries no version resolves without one, so a stale state stays visibly stale.
+    // Other PROJECT keys (version/generated_by/last_updated, future ones) pass through; nothing
+    // is invented, so a stale state stays visibly stale.
     const resolved = clampMcpAllow(clampLevel(clampMode({ ...(project || {}), hard, level, mode, source })));
     // Legacy `doc_type` from a pre-spec write is dropped on READ too, not only on write:
     // otherwise every consumer sees it until the next write happens to occur.
@@ -247,13 +184,7 @@ function writeAtomic(filePath, obj) {
   }
 }
 
-/**
- * Write (merge) Manager state for a scope, atomically.
- * @param {string} scope - 'project' | 'global'
- * @param {object} partial - fields to merge (e.g. { hard:false } or { level:'strict' })
- * @param {string} cwd
- * @returns {{file:string, action:'written', state:object}}
- */
+/** Merge `partial` into the scope's state.json under a lockfile, tmp + rename -> {file, action, state} */
 export async function writeState(scope, partial, cwd = process.cwd()) {
   const filePath = resolveStatePath(scope, cwd);
   const lockPath = `${filePath}.lock`;
@@ -263,10 +194,8 @@ export async function writeState(scope, partial, cwd = process.cwd()) {
   if (!token) throw new Error('could not acquire lock');
   try {
     const existing = readJsonSafe(filePath) || {};
-    // Provenance is stamped by the WRITER, never by a reader/merge: the version is the
-    // one of the module doing this write, so setup-status reading the raw file sees the
-    // real age of the state. No `doc_type`: it is a frontmatter-only field, and JSON
-    // carriers never take it — state.json is machine state, not a doc, either way.
+    // Provenance is stamped by the WRITER only, so setup-status sees the state's real age.
+    // No `doc_type`: frontmatter-only field.
     const version = pluginVersion();
     const contentVersion = resolveContentVersion();
     const merged = {
@@ -277,21 +206,14 @@ export async function writeState(scope, partial, cwd = process.cwd()) {
     };
     if (version) merged.version = version;
     else {
-      // Unresolvable version: DROP the key rather than stamp a fake one. An absent
-      // `version` is a documented reader path — setup-status row 8 treats it as the
-      // `missing` signal and falls through to the copied guard's `brewcode-meta` line,
-      // and manager-setup `status` computes `stale: (stateVersion && pluginVersion) ?
-      // ... : null`, so it is never compared as if it were a real version. Deleting a
-      // stale inherited key matters: merging over an older state must not let this
-      // write keep claiming that older file's version as its own.
+      // Drop, never fake: absent `version` is a documented reader path (setup-status, status),
+      // and an inherited key would claim the older file's version.
       delete merged.version;
       process.stderr.write('[manager-state] plugin version unresolvable — wrote state without a version key\n');
     }
     if (contentVersion) merged.content_version = contentVersion;
     else {
-      // Same drop-not-fake rule as version above, for the same reason: the own-header
-      // stamp is the only carrier, and until a release run adds `content_version=` to
-      // this file's header, resolution legitimately fails — omit rather than invent.
+      // Same drop-not-fake rule as version.
       delete merged.content_version;
       process.stderr.write('[manager-state] content_version unresolvable — wrote state without a content_version key\n');
     }
@@ -303,9 +225,7 @@ export async function writeState(scope, partial, cwd = process.cwd()) {
   }
 }
 
-// ---- CLI ---------------------------------------------------------------------
-// `node <path>/manager-state.mjs set hard=false` is the documented off-switch for the
-// HARD wall and the single Bash shape the guard self-exempts. Keep parsing strict.
+// ---- CLI: `set hard=false` is the documented HARD wall off-switch; keep parsing strict ----
 
 const CLI_USAGE = 'usage: node manager-state.mjs get [--cwd DIR] | set hard=<true|false> level=<strict|balanced> mcpAllow=<mcp__srv__tool[,...]|> [--cwd DIR]';
 
@@ -321,17 +241,28 @@ const SETTABLE = {
   }
 };
 
-/**
- * Parse strict CLI argv (everything after the script path).
- * @param {string[]} argv
- * @returns {{command:'get'|'set', patch:object, cwd:string}}
- */
+// CLI root without --cwd: the project this copy is installed in -> CLAUDE_PROJECT_DIR -> nearest
+// .git/.claude above cwd -> cwd. Raw cwd drifts, and `set hard=false` there disarmed nothing.
+function defaultRoot() {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const installed = path.sep + path.join('.claude', 'brewtools', 'manager');
+  if (here.endsWith(installed)) return here.slice(0, -installed.length);
+  const env = process.env.CLAUDE_PROJECT_DIR;
+  if (env && fs.existsSync(env)) return path.resolve(env);
+  const start = process.cwd();
+  for (let dir = start; ; dir = path.dirname(dir)) {
+    if (fs.existsSync(path.join(dir, '.git')) || fs.existsSync(path.join(dir, '.claude'))) return dir;
+    if (path.dirname(dir) === dir) return start;
+  }
+}
+
+/** Strict argv parse (after the script path) -> {command: 'get'|'set', patch, cwd}; throws on anything unknown */
 export function parseCliArgs(argv) {
   const command = argv[0];
   if (command !== 'get' && command !== 'set') throw new Error(`unknown command '${command ?? ''}'`);
 
   const patch = {};
-  let cwd = process.cwd();
+  let cwd = defaultRoot();
 
   for (let i = 1; i < argv.length; i++) {
     const arg = argv[i];
@@ -381,10 +312,8 @@ async function runCli(argv) {
   }
 }
 
-// argv[1] must be realpath'd before comparing: Node resolves ESM specifiers through
-// symlinks, so on a path like /var/... -> /private/var/... the raw argv URL never matches
-// import.meta.url and the CLI silently no-ops with exit 0 — i.e. the documented HARD-wall
-// off-switch `set hard=false` would appear to succeed while writing nothing.
+// realpath argv[1]: ESM resolves symlinks (/var -> /private/var), else the CLI no-ops with exit 0
+// and `set hard=false` seems to succeed while writing nothing.
 function invokedDirectly() {
   if (!process.argv[1]) return false;
   try {

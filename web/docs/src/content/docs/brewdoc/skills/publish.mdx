@@ -8,48 +8,8 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 # publish — share content, get link
 
 <Callout type="caution">
-**Choose visibility before publishing.** The skill resolves the namespace and password policy before upload. Private means unlisted, not access-restricted: anyone with the link can open it unless a password is set. Owner tokens needed for deletion are stored locally and never printed to conversation.
+**Choose visibility before publishing.** The skill resolves the namespace and password policy before upload. Owner tokens needed for deletion are stored locally and never printed to conversation.
 </Callout>
-
-<Callout type="note" title="Use a local password file">
-Choose no password or provide the absolute path to an existing local password file. Do not paste
-the password into chat. The skill reuses that file through private transport and does not read
-its contents into model-visible output or generate and print a random password.
-</Callout>
-
-<Callout type="note" title="Verified site bundles">
-Directory uploads include only supported web assets; dotfiles, `.git/`, `node_modules/`, symlinks and unknown extensions are excluded. The archive is verified before upload. Supplied ZIPs are inspected without rewriting and may require confirmation for flagged entries.
-</Callout>
-
-<Callout type="note" title="Hosting rollout">
-The hosting modes below apply to publications with the server's `new-v1` routing metadata and depend on the server rollout. Existing publications retain their current links and behavior. A new upload request can also return an existing publication; always use the server's returned link.
-</Callout>
-
-<Callout type="tip">
-**brewpage.app** is free instant hosting: HTML pages, JSON documents, files, and multi-file sites. Default TTL is 15 days — override with `--ttl N`. For the public gallery, visit [brewpage.app](https://brewpage.app).
-</Callout>
-
-## Visibility and indexing
-
-Eligible, unprotected HTML pages, sites and files in `public` can be listed in the gallery
-and indexed, including on native subdomain hosts. Non-public, password-protected and
-ineligible publications use `noindex`. Other namespaces are unlisted, not secret;
-passwords restrict access. Eligibility does not guarantee indexing or search ranking.
-Choose the namespace before uploading; this does not change the skill's hosting defaults.
-
-## Companion tools
-
-<CardGrid>
-  <Card title="brewpage-mcp" icon="package" href="https://www.npmjs.com/package/brewpage-mcp">
-    Official MCP server for BrewPage Sites API (v1.9.3, multi-file support). Install: `claude mcp add brewpage -- npx -y brewpage-mcp@1.9.3`
-  </Card>
-  <Card title="OpenAPI Spec" icon="document" href="https://kochetkov-ma.github.io/brewpage-openapi/">
-    Full API contract, Scalar UI. Use when building custom integrations or calling the API directly.
-  </Card>
-  <Card title="REST API" icon="globe" href="https://brewpage.app/api">
-    Direct REST access — no client needed. Base URL: `https://brewpage.app/api`
-  </Card>
-</CardGrid>
 
 ## Quick reference
 
@@ -61,7 +21,7 @@ Choose the namespace before uploading; this does not change the skill's hosting 
 | Model | haiku |
 | Invocation | user-only (`disable-model-invocation: true`) |
 | Tools | Read, Write, Bash, AskUserQuestion, Glob |
-| Requires | `jq` on `PATH`; `zip`/`unzip`/`node` as well for directory or zip site uploads |
+| Requires | `jq` and `curl` on `PATH`; `zip`/`unzip`/`node` as well for directory or zip site uploads |
 
 ## When to use
 
@@ -100,6 +60,15 @@ Choose the namespace before uploading; this does not change the skill's hosting 
 /brewdoc:publish site.zip --ttl 14
 ```
 
+## Visibility and indexing
+
+**brewpage.app** is free instant hosting: HTML pages, JSON documents, files, and multi-file sites. Default TTL is 15 days; override with `--ttl N`. For the public gallery, visit [brewpage.app](https://brewpage.app).
+
+Private means unlisted, not access-restricted: anyone with the link can open it unless a password is set. Eligible, unprotected HTML pages, sites and files in `public` can be listed in the gallery
+and indexed, including on native subdomain hosts. Non-public, password-protected and
+ineligible publications use `noindex`. Eligibility does not guarantee indexing or search ranking.
+Choose the namespace before uploading; this does not change the skill's hosting defaults.
+
 ## Modes
 
 | Input | Detected type | Endpoint |
@@ -118,7 +87,8 @@ Entry file detection for sites: `--entry` flag → `index.html` if present → f
 
 `--delivery-mode` accepts only `path` or `subdomain`. When omitted, the skill sends no
 `X-Delivery-Mode` header and lets the server choose. The header stays outside the authored
-text, JSON and multipart fields.
+text, JSON and multipart fields. The modes apply to publications with the server's `new-v1` routing
+metadata and depend on the server rollout; existing publications retain their current links and behavior.
 
 | Fresh publication with `new-v1` metadata | Default | Explicit choice |
 |-------|-------|-------|
@@ -131,16 +101,16 @@ be discoverable; HTML has stricter script, cookie, embed and navigation restrict
 **Dedicated subdomain** gives the publication its own origin with fewer presentation
 restrictions. Choose it if Promotion prevents your HTML from working as intended.
 
-Neither mode guarantees search ranking or third-party widget compatibility. An unlisted
-namespace is not secret; its name may appear in its address and DNS/TLS metadata. Subdomains
+Neither mode guarantees search ranking or third-party widget compatibility. A namespace name
+may appear in the publication address and DNS/TLS metadata. Subdomains
 separate DOM and storage, but shared parent-domain cookie interference remains possible.
 Protected Promotion also retains the access risks of existing executable apex content.
 Passwords or revocation cannot recall downloaded or offline-cached copies.
 
-The response decides the effective mode. If the server reuses a publication, keep that
+The response decides the effective mode. A new upload request can also return an existing publication. If the server reuses a publication, keep that
 publication's identity, cohort, mode and exact URL even when they differ from the requested
 mode. Missing or null legacy routing metadata means **Existing link**; do not infer a mode
-from its hostname. **Share the returned link exactly, including its trailing slash.**
+from its hostname. **Always use the server's returned link, shared exactly, including its trailing slash.**
 
 New password-protected links remain clean: do not append `?p=`. Browser readers unlock on
 the trusted `unlock.brewpage.app` gateway; programmatic password requests still use
@@ -198,8 +168,10 @@ local source path; the helper copies its bytes into private transport and suppli
 file. Passwords never become shell literals, curl arguments, conversation output, or generated
 random values. Invalid files or control characters stop publishing.
 
-**Run isolation:** allocate a unique private run directory before preparing inputs. Do not reuse
-a previous run or shared input directory. Content and target paths belong to that run; only the
+**Run isolation:** allocate a unique private run directory (`brewpage.XXXXXX`, mode 700) under
+`$TMPDIR`, else `/tmp`, before preparing inputs. It lives outside `.claude/`, so writing inputs
+triggers no protected-path prompt; `dontAsk` and headless runs need a `Write` allow rule for
+`$TMPDIR`. Do not reuse a previous run or shared input directory. Content and target paths belong to that run; only the
 password source path is recorded, and its contents are not read through model-visible tools.
 
 **History file format:** the helper resolves the project root from `CLAUDE_PROJECT_DIR`, Git,
@@ -261,7 +233,7 @@ safe redirects. Use the returned link and version afterward.
 **Namespace rules:** lowercase letters, digits and hyphens, 1–32 characters. Suggested names
 are lowercase and content-derived (`api-docs`, `report-q2`), never random or truncated.
 
-**Site uploads:** directory → `scripts/publish.mjs pack --dir <dir> --out <archive.zip>` builds the archive, removing any stale target first (a `mktemp`-created 0-byte file is what made `zip` exit 3 before this fix), then checks `zip`'s exit status, verifies the result with `unzip -t`, and requires a non-zero size — any failure deletes the archive and exits without touching `curl`. The archive is POSTed as `archive=@$TMPZIP` and the temp file removed after. `User-Agent: ClaudeCode/1.0` header included.
+**Site uploads:** directory → `scripts/publish.mjs pack --dir <dir> --out <archive.zip>` builds the archive, removing any stale target first (a pre-created 0-byte file would make `zip` exit 3), then checks `zip`'s exit status, verifies the result with `unzip -t`, and requires a non-zero size — any failure deletes the archive and exits without touching `curl`. The archive is POSTed as `archive=@$TMPZIP` and the temp file removed after. `User-Agent: ClaudeCode/1.0` header included.
 
 **Archive contents — allowlist, not denylist:** only known web-asset extensions (`.html .css .js .json .svg .png .woff2 .pdf .md` …) are packed; dotfiles, `.env`, `.git/`, `node_modules/` and symlinks are dropped before `zip` ever runs. A supplied `.zip` is inspected rather than rewritten — an entry matching a sensitive pattern (`.env`, `id_rsa`, `secret`, `credential`, `password`, `token`, `.pem`/`.key`/`.p12`/`.crt`/`.map`) blocks the upload until you confirm.
 
@@ -271,6 +243,15 @@ no network or real upload. Local tests do not prove server rollout or browser re
 </details>
 
 <CardGrid>
+  <Card title="brewpage-mcp" icon="package" href="https://www.npmjs.com/package/brewpage-mcp">
+    Official MCP server for BrewPage Sites API (v1.9.3, multi-file support). Install: `claude mcp add brewpage -- npx -y brewpage-mcp@1.9.3`
+  </Card>
+  <Card title="OpenAPI Spec" icon="document" href="https://kochetkov-ma.github.io/brewpage-openapi/">
+    Full API contract, Scalar UI. Use when building custom integrations or calling the API directly.
+  </Card>
+  <Card title="REST API" icon="globe" href="https://brewpage.app/api">
+    Direct REST access — no client needed. Base URL: `https://brewpage.app/api`
+  </Card>
   <Card title="md-to-pdf" icon="document" href="/brewdoc/skills/md-to-pdf/">
     Convert markdown to PDF before publishing — combine with publish for shareable PDFs.
   </Card>

@@ -1,31 +1,22 @@
 # Agent Deadline
 
+Docs: https://doc-claude.brewcode.app/brewtools/skills/agent-deadline-setup/
+
 Installer/configurator skill for two self-contained hooks that put a **soft wall-clock budget** on every subagent.
 
-Claude Code has no wall-clock timeout for subagents, and `maxTurns` kills the agent and throws away its final report. These hooks kill nothing:
+Claude Code has no wall-clock timeout for subagents, and `maxTurns` stops a run at its turn cap with only a partial result. These hooks kill nothing:
 
 | Elapsed | Action |
 |---------|--------|
-| 80% of budget | one non-blocking directive: wrap up, persist, prepare the final report |
+| 80% of budget | a non-blocking notice: finish the step in flight, prepare the final report |
 | 100% of budget | every tool outside the finalization set is denied |
-| `hardStopRatio` x budget (default 2x) | hard stop: the allowance shrinks to `Write, Edit` |
+| `hardStopRatio` x budget (default 2x) | hard stop: only `Write, Edit, SubagentHandback` pass, deny reason starts `Time budget far exceeded`. Covers an agent looping inside the finalize set (re-reading files, rewriting todos, never answering) |
 
-Finalization set as advertised to the agent: `Read, Write, Edit, MultiEdit, NotebookEdit, TodoWrite, TaskUpdate`. The agent is not killed — it is forced to write its report.
+Finalization set as advertised to the agent: `Read, Write, Edit, NotebookEdit, TodoWrite, TaskUpdate, SubagentHandback`; `TaskCreate` is allowed too but not advertised (deliberate, not a bug).
 
-Really allowed past 100%: those 7 plus `TaskCreate`, `BashOutput`, `TaskOutput`. The extras are intentionally left out of the directive text — naming `BashOutput` invites a poll loop, but an agent that must harvest an already-running job is not walled off. Declared list narrower than the real one = deliberate, not a bug.
-
-`AskUserQuestion` is denied on purpose: a subagent waiting on a human is unbounded wall-clock time, which is the exact failure mode this guard exists to stop.
-
-The **hard stop** covers the agent that loops inside the finalize set instead of finishing — re-reading files, rewriting todos, never answering. Past `hardStopRatio` x budget only `Write` and `Edit` survive and the deny reason changes to `AGENT DEADLINE HARD STOP`.
-
-## Hooks
-
-| File | Event | Behavior |
-|------|-------|----------|
-| `agent-deadline-guard.mjs` | PreToolUse (`.*` — runs on EVERY tool call, main session included) | tracks elapsed per `agent_id`, warns at 80%, denies past 100% |
-| `agent-deadline-cleanup.mjs` | SubagentStop | deletes the finished agent's state file |
-
-Opt-in: not registered in `brewtools/hooks/hooks.json` — installing the plugin does nothing until you run the skill.
+- `SubagentHandback` stays allowed at every stage: in auto mode it is the tool a subagent reports through, so denying it would leave the caller with no report.
+- `AskUserQuestion` is denied on purpose: a subagent waiting on a human is unbounded wall-clock time, the exact failure this guard exists to stop.
+- Agent types in `readOnlyAgentTypes` (default `Explore`, `Plan`) are told to return what they have now instead of saving to a file; it is a config list, so an unlisted custom read-only agent is still told to save.
 
 ## Usage
 
@@ -36,14 +27,23 @@ Opt-in: not registered in `brewtools/hooks/hooks.json` — installing the plugin
 /brewtools:agent-deadline-setup upgrade               # re-emit hook files, budget kept
 /brewtools:agent-deadline-setup enable                # back on
 /brewtools:agent-deadline-setup disable               # enabled:false, files stay
-/brewtools:agent-deadline-setup uninstall             # unwire + delete hook files, keep config
-/brewtools:agent-deadline-setup purge                 # + delete config and state
-/brewtools:agent-deadline-setup вычисти всё           # free-text intent works (RU+EN) -> purge
+/brewtools:agent-deadline-setup uninstall             # unwire, delete hook files + this scope's state, keep config
+/brewtools:agent-deadline-setup purge                 # uninstall + delete config
+/brewtools:agent-deadline-setup purge everything      # free-text intent works -> purge
 ```
 
 The skill always reports status first, states its plan before asking anything, then delegates the file work to the `brewcode:hook-creator` agent.
 
-Project status resolves the owning root from `CLAUDE_PROJECT_DIR`, then git toplevel, then an ancestor carrying `.git` or `.claude`; a nested `cwd` never redirects the probe into a nested installation. Wiring is effective only with exactly one full guard tuple (PreToolUse / `.*` / command / `node` / sole portable arg / timeout `5`) and exactly one full cleanup tuple (SubagentStop / no matcher / command / `node` / sole portable arg / timeout `3`). Duplicates, malformed settings, or malformed owned handlers are reported as non-effective.
+Status resolves the project root from `CLAUDE_PROJECT_DIR`, then git toplevel, then an ancestor carrying `.git` or `.claude`. Wiring is effective only with exactly one full guard tuple (PreToolUse / `.*` / command / `node` / sole portable arg / timeout `5`) and exactly one full cleanup tuple (SubagentStop / no matcher / same handler / timeout `3`); duplicates and malformed settings or handlers are reported as non-effective.
+
+## Hooks
+
+| File | Event | Behavior |
+|------|-------|----------|
+| `agent-deadline-guard.mjs` | PreToolUse (`.*` — runs on EVERY tool call, main session included) | tracks elapsed per `agent_id`, warns at 80%, denies past 100% |
+| `agent-deadline-cleanup.mjs` | SubagentStop | stamps the stop on the agent's state file (never deletes it), prunes old state |
+
+Opt-in: not registered in `brewtools/hooks/hooks.json` — installing the plugin does nothing until you run the skill.
 
 ## Modes
 
@@ -54,10 +54,12 @@ Project status resolves the owning root from `CLAUDE_PROJECT_DIR`, then git topl
 | `upgrade` | re-copied | entries re-merged | behavior values preserved, metadata re-stamped | kept |
 | `enable` | kept | kept | `enabled:true` | kept |
 | `disable` | kept | kept | `enabled:false` | kept |
-| `uninstall` | deleted | entries stripped | **kept** | kept |
-| `purge` | deleted | entries stripped | deleted | deleted |
+| `uninstall` | deleted | entries stripped | **kept** | this scope's removed |
+| `purge` | deleted | entries stripped | deleted | this scope's removed |
 
-`upgrade` asks nothing: it reads `defaultMinutes` back out of the config and replays the install for that scope against the current assets, so a plugin update finally reaches an installed project. `byAgentType`, `hardStopRatio` and `enabled` are preserved — a disabled setup stays disabled. One scope per run.
+`upgrade` asks nothing: it replays the install for that scope against the current assets and keeps `defaultMinutes`, `byAgentType`, `hardStopRatio` and `enabled` (disabled stays disabled). One scope per run.
+
+`uninstall` and `purge` remove only the state recorded for this scope's config, plus files untouched for 24 h; the temp root shared by every project and the global install is never wiped.
 
 ## What it asks
 
@@ -74,11 +76,11 @@ Overrides are only offered if you raise them. If everything is already installed
 | Scope | Hooks dir | settings.json | Config |
 |-------|-----------|---------------|--------|
 | Project | `<repo>/.claude/hooks/` | `<repo>/.claude/settings.json` | `<repo>/.claude/agent-deadline.json` |
-| Global | `~/.claude/hooks/` | `~/.claude/settings.json` | `~/.claude/agent-deadline.json` |
+| Global | `<config dir>/hooks/` | `<config dir>/settings.json` | `<config dir>/agent-deadline.json` |
 
-Global install means the guard runs in every repo and every session — see the per-call cost under [Limits](#limits--read-before-trusting-it) before choosing it.
+`<config dir>` = `$CLAUDE_CONFIG_DIR` when set, else `~/.claude`. Global = every repo and every session pays the per-call cost, see [Limits](#limits--read-before-trusting-it).
 
-Project config wins over global; a malformed project config is skipped and the global one is used. Merge is append + dedupe by the `agent-deadline-*.mjs` script path (idempotent re-install). Global writes go through Bash only (`~/.claude/*` is a protected path). State lives in the OS temp dir and is never written under `~/.claude`.
+Project config wins over global; a malformed project config is skipped and the global one is used. Merge is append + dedupe by the `agent-deadline-*.mjs` script path (idempotent re-install). State lives in the OS temp dir, `<tmpdir>/brewtools-agent-deadline/<session_id>/<agent_id>.json`, never under `~/.claude`.
 
 ## Config
 
@@ -89,6 +91,7 @@ Project config wins over global; a malformed project config is skipped and the g
   "byAgentType": {},
   "hardStopRatio": 2,
   "version": "{PLUGIN_VERSION}",
+  "content_version": "<INSTALL.md header>",
   "generated_by": "brewtools:agent-deadline-setup",
   "last_updated": "{LAST_UPDATED}"
 }
@@ -97,33 +100,26 @@ Project config wins over global; a malformed project config is skipped and the g
 | Key | Meaning |
 |-----|---------|
 | `enabled` | must be exactly `true`; anything else = off |
-| `version` / `generated_by` / `last_updated` | provenance, written on every config write. No `doc_type` — that field is `.md` frontmatter only. `version` is the brewtools version that wrote the file; `status` compares it against the installed plugin so a shape change from a later version is visible. Inert at runtime — the hooks read only the four keys above |
 | `defaultMinutes` | budget for every agent type; default `20` |
 | `byAgentType` | per-type overrides, e.g. `{"Explore": 10}`; empty = one limit for all |
-| `hardStopRatio` | optional, default `2`, must be `>1` — multiple of the budget after which the allowance drops from the finalize set to `Write, Edit` |
+| `hardStopRatio` | optional, default `2`, must be `>1` — multiple of the budget after which only `Write, Edit, SubagentHandback` pass |
+| `readOnlyAgentTypes` | optional, default `["Explore", "Plan"]` — agent types without `Write`/`Edit`. A list replaces the default; add it by hand, install does not write it |
+| `version` / `content_version` / `generated_by` / `last_updated` | provenance, written on every config write, inert at runtime; `status` judges freshness by `content_version`, never by `version` |
 
-Budget = `byAgentType[agent_type] ?? defaultMinutes`. Config values are read on every hook call — changing `enabled`, the minutes or `hardStopRatio` takes effect immediately, no restart. Hook **wiring** changes (install/uninstall/purge) need a new session.
+Budget = `byAgentType[agent_type] ?? defaultMinutes`. Config values are read on every hook call, so a change takes effect immediately, no restart. Hook **wiring** changes (install/upgrade/uninstall/purge) apply to the running session too: Claude Code watches settings files (`/hooks` confirms).
 
 ## Limits — read before trusting it
 
-Behavioral points below were observed on Claude Code 2.1.220; the timing points were measured separately (machine and Node version stated inline).
+Behavior was observed on Claude Code 2.1.220, stop and resume on 2.1.296; timings come from one machine: re-measure before treating them as a budget.
 
-- **Not a timeout.** Time is sampled only at tool-call boundaries. An agent stuck inside a single 25-minute `Bash` call is never observed in between; its deadline only fires on the next call. Cap long commands separately with `BASH_MAX_TIMEOUT_MS`.
+- **Not a timeout.** Time is sampled only at tool-call boundaries. An agent stuck inside a single 25-minute `Bash` call is never observed in between; its deadline only fires on the next call. Cap long commands with `BASH_MAX_TIMEOUT_MS`.
 - **Clock starts at the first tool call**, not at spawn — pre-tool thinking time is free.
-- The subagent-spawn tool appears in payloads as **`Agent`**, not `Task`.
+- **A stop does not reset the clock.** The cleanup hook only stamps the stop: a tool call less than 5 minutes later continues the original clock, so an over-budget agent that was blocked once by another guard (for example the agent-return size check) or resumed quickly can only finalize. After 5 minutes or more it gets a fresh window.
 - Main session vs subagent is discriminated by the **absence of `agent_id`/`agent_type`** in the payload; the main session is always a no-op.
 - **`agent_type` for plugin agents** (`brewtools:text-optimizer` vs `text-optimizer`) has not been observed live. A `byAgentType` key that does not match the real payload value silently falls back to `defaultMinutes` — verify against a real payload before relying on an override.
 - **Fail-open:** any hook error passes the call through; the session never breaks.
-- **Cost: ~58 ms per tool call.** Measured on Apple M-series, Node v24.1.0, 30 runs: median **58.3 ms**, p90 **62.5 ms**. Node startup dominates; on top of it the guard does up to 19 `readFileSync` — stdin payload, up to 16 project-config probes while walking from `cwd` to the filesystem root, global config, state file.
-- **The matcher is `.*`, so every tool call pays it.** Not just subagent calls. The main-session no-op path — where the hook exits without doing anything — still measured **61.5 ms**. A **global** install therefore adds ~58 ms to every tool call in every repo and every session, including sessions that never spawn a subagent; a 200-call session pays roughly 12 s of wall clock for a feature it did not use. Install per-project unless you actually want that.
-
-Numbers above are from one machine and one Node version. Re-measure on yours before treating them as a budget.
+- **Cost: ~58 ms on every tool call**, main session included: the matcher is `.*` because the guard must see `SubagentHandback`. Measured on Apple M-series, Node v24.1.0, 30 runs: median **58.3 ms**, p90 **62.5 ms**, main-session no-op path **61.5 ms**. Node startup dominates; the guard adds up to 20 `readFileSync` (stdin payload, up to 16 project-config probes from `cwd` to the filesystem root, up to 2 global configs, state file). A **global** install charges this in every repo and every session, including sessions that never spawn a subagent: a 200-call session pays roughly 12 s of wall clock for a feature it did not use. Install per-project unless you actually want that.
 
 ## Files
 
-| File | Purpose |
-|------|---------|
-| `SKILL.md` | mode/scope/budget decisions + delegation |
-| `assets/INSTALL.md` | the runbook — install, config, disable/enable, uninstall, purge, verify |
-| `assets/agent-deadline-guard.mjs` | PreToolUse guard |
-| `assets/agent-deadline-cleanup.mjs` | SubagentStop cleanup |
+`SKILL.md` (mode/scope/budget decisions + delegation), `assets/INSTALL.md` (the runbook — install, config, upgrade, disable/enable, uninstall, state removal, purge, verify), `assets/agent-deadline-guard.mjs` and `assets/agent-deadline-cleanup.mjs` (the two hooks).

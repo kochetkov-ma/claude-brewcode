@@ -1,45 +1,6 @@
 #!/bin/bash
-# brewcode:superreview-setup generator script
-# Adapted from setup.sh copy_review_skill(): copies the emit templates into the TARGET project
-# (.claude/skills/superreview/) substituting SCALAR placeholders, then validates that NO setup-time
-# {PLACEHOLDER} remains. Multi-row BLOCK placeholders are filled by the AI via Edit (see SKILL.md Phase 3).
-#
-# Usage: generate.sh <mode>
-#   scan        - Report target tech stack, agents, rules, source/test dirs (Phase 1)
-#   emit        - Copy + scalar-substitute templates into <cwd>/.claude/skills/superreview/ (Phase 2)
-#                 AND create-or-reuse <cwd>/.claude/agents/intent-guard.md.
-#                 Also saves PRISTINE copies of the templates it emitted from under .template-baseline/ — that
-#                 baseline is what makes `upgrade` able to tell a TEMPLATE change apart from Phase 3 tailoring.
-#                 REFUSES to overwrite a live installation (the emitted skill SELF-SYNCS — Phase 4b — so its
-#                 SKILL.md and references/scope.md carry edits no template knows about). "Live" = ANY emitted
-#                 artifact on disk (see `_live_artifacts`), not SKILL.md alone: a PARTIAL install must not be
-#                 re-substituted with DEFAULT scalars. SUPERREVIEW_FORCE=1 overrides and DESTROYS those edits.
-#   upgrade     - Refresh a LIVE installation without touching hand-edits (Phase 2b): stages a fresh emit next
-#                 to it and reports, per file, the NEW TEMPLATE vs the .template-baseline/ copy — IDENTICAL |
-#                 DIFFERS (real template delta) | MISSING -> restored RAW (NEEDS PHASE 3) | NO BASELINE (pre-baseline
-#                 install: falls back to live-vs-template, tailoring included). Live file CONTENT is never
-#                 written; the AI applies the template delta with targeted Edit calls. The one live write is an
-#                 UNCONDITIONAL metadata restamp (version/generated_by/last_updated, one `RESTAMP:` line per
-#                 file, body compared byte-for-byte) — without it a version bump, which reports IDENTICAL on
-#                 every asset, could never clear the `stale` verdict setup-status reads off the emitted
-#                 SKILL.md frontmatter. The per-stack reference is RE-DERIVED from the installed tree
-#                 (see `_installed_stack_refs`), never re-defaulted — see `UPGRADE_STACK=` on stdout.
-#                 Runs on ANY live install, SKILL.md included in the restorable set — so it is also the remedy
-#                 for a partially damaged install, which `emit` refuses to touch. A DISABLED install (parked
-#                 SKILL.md.disabled) is refused with `enable` as its remedy, never silently resurrected.
-#   emit-agent  - Create-or-reuse <cwd>/.claude/agents/intent-guard.md ONLY. No superreview skill is
-#                 written, read or required. Used by /brewcode:teams-setup, which must not author its own copy.
-#                 Prints exactly one `INTENT_GUARD:` line on STDOUT: `INTENT_GUARD: CREATED <path>` |
-#                 `INTENT_GUARD: REUSE <path>` | `INTENT_GUARD: MIGRATED <path>` (a pre-standard agent of
-#                 ours, restamped in place — tailored body preserved). Diagnostics go to stderr and never
-#                 break that contract.
-#   validate    - Fail if any unresolved setup-time {PLACEHOLDER} remains (Phase 4)
-#
-# Env overrides (honored by BOTH emit and emit-agent; SUPERREVIEW_FORCE=1 lets emit overwrite a live install):
-#   PROJECT_NAME, TRACKER_LABEL, SPEC_LOCATION, PLAN_LOCATION, POLICY_LOCATION
-#   (emit also honors STACK_LABEL, STACK_REF, SOURCE_GLOB, PATHSPEC_GLOBS, ARBITER_AGENT,
-#    VALIDATOR_AGENT, SCOPE_AGENT_A, SCOPE_AGENT_B; upgrade honors STACK_REF as an override of the
-#    stack it derives from the installed tree, and ignores the rest — see upgrade_skill)
+# brewcode:superreview-setup generator (cwd = target repo -> <cwd>/.claude/skills/superreview/): scan|emit|emit-agent|upgrade|enable|disable|uninstall|purge|validate.
+# Env: PROJECT_NAME, TRACKER_LABEL, SPEC/PLAN/POLICY_LOCATION; emit +STACK_LABEL, STACK_REF, SOURCE_GLOB, PATHSPEC_GLOBS, *_AGENT*.
 
 set -euo pipefail
 
@@ -68,9 +29,8 @@ DISABLED_MARK="$TARGET/SKILL.md.disabled"
 # The one agent file this script owns, and the provenance stamp that proves a file came out of this pipeline.
 IG_PATH=".claude/agents/intent-guard.md"
 IG_STAMP_PREFIX="<!-- generated_by: brewcode:superreview-setup"   # tail anchor + provenance; survives the header strip
-# The RETIRED pre-5.0 tail stamp (`<!-- intent-guard template v2 - emitted <ts> - source: ... -->`). Its presence
-# without IG_STAMP_PREFIX is what proves a file came out of THIS pipeline before the artifact-metadata standard —
-# i.e. ours, migratable, and never to be confused with a hand-written agent that carries no stamp at all.
+# RETIRED pre-5.0 tail stamp (`<!-- intent-guard template v2 - emitted <ts> - source: ... -->`): without IG_STAMP_PREFIX
+# it marks a pre-standard file of THIS pipeline (ours, migratable) != a hand-written agent with no stamp.
 IG_LEGACY_STAMP_RE='<!--[[:space:]]*intent-guard template v[0-9]'
 IG_SEED_MARK="<!-- SEEDED-DEFAULT:"              # one per generic BLOCK default; removed by Phase 3 adaptation
 
@@ -89,10 +49,7 @@ validate_templates() {
 }
 
 # ── scan: report what the emitted skill must be wired to ────────────────────────
-# `find | sort` exits 0 on an empty result, so every listing goes through this helper:
-# a bare `find ... || echo "(none)"` would never print the fallback.
-# `|| true` is required: a missing dir makes find exit 1, and under `set -e` a failing command
-# substitution in an assignment aborts the whole script.
+# `find | sort` exits 0 on empty -> fallback lives here; `|| true`: missing dir + set -e aborts the assignment.
 _list() { _out=$(eval "$1" 2>/dev/null || true); if [ -n "$_out" ]; then printf '%s\n' "$_out"; else echo "${2:-(none)}"; fi; }
 
 scan_target() {
@@ -108,13 +65,17 @@ scan_target() {
   echo ""
   echo "--- Project agents (.claude/agents/) — DOMAIN EXPERT roster ---"
   if [ -d .claude/agents ]; then
-    for f in .claude/agents/*.md; do
+    # Claude Code scans .claude/agents/ recursively; -H + [ -f ] keep symlinked dir/files.
+    _n=0
+    while IFS= read -r f; do
       [ -f "$f" ] || continue
+      _n=$((_n+1))
       printf '%s :: %s :: %s\n' "$f" \
         "$(grep -m1 '^name:' "$f" | sed 's/^name:[[:space:]]*//')" \
         "$(grep -m1 '^description:' "$f" | sed 's/^description:[[:space:]]*//' | cut -c1-220)"
-    done
-    _n=$(find .claude/agents -maxdepth 1 -type f -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
+    done <<EOF
+$(find -H .claude/agents -name '*.md' 2>/dev/null | sort || true)
+EOF
     echo "agents=$_n"
     [ "$_n" -eq 0 ] && echo "⚠️ NO domain experts — superreview routed to generic agents is a DEGRADED review"
   else
@@ -175,9 +136,7 @@ scan_target() {
 }
 
 # ── shared: scalar resolution + substitution (used by emit AND emit-agent) ──────
-# Plugin version out of the manifest, never a literal. jq when present, a sed fallback otherwise so a
-# jq-less machine still stamps a real number. `|| true` everywhere: under `set -e` a failing command
-# substitution in an assignment aborts the script.
+# Plugin version from manifest (jq, else sed fallback), never a literal; `|| true`: set -e aborts failing assignments.
 _plugin_version() {
   _pv=""
   if [ -f "$PLUGIN_JSON" ]; then
@@ -187,12 +146,8 @@ _plugin_version() {
       _pv=$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$PLUGIN_JSON" 2>/dev/null | head -1 || true)
     fi
   fi
-  # HARD FAIL, never a placeholder value. A word like `unknown` carries no `{}<>`, so the reader's
-  # PLACEHLD test cannot catch it: `sort -V` would compare it against the real version and report a
-  # confident `AHEAD unknown > X.Y.Z`. Emitting the raw `{PLUGIN_VERSION}` token instead would only
-  # move the failure to `validate` AFTER the artifact was written. The manifest is part of the plugin
-  # in the dev checkout and in the cache alike, so an unreadable one is a broken install: stop before
-  # anything is written.
+  # HARD FAIL, never a placeholder: `unknown` has no `{}<>`, so `sort -V` reports `AHEAD unknown > X.Y.Z`; raw
+  # `{PLUGIN_VERSION}` fails only in `validate`, after the write. Unreadable manifest = broken install -> stop first.
   case "$_pv" in
     [0-9]*.[0-9]*.[0-9]*) printf '%s' "$_pv"; return 0 ;;
   esac
@@ -200,10 +155,8 @@ _plugin_version() {
   return 1
 }
 
-# content_version out of THIS generator skill's OWN `brewcode-meta:` marker — self-located the same way
-# _plugin_version() self-locates, but from a different file: plugin.json carries no content_version field,
-# so the source is superreview-setup/SKILL.md's own line-1 marker (stamped by bump-version.sh at release).
-# Same HARD-FAIL rule as _plugin_version(): never emit a placeholder-shaped value.
+# content_version from superreview-setup/SKILL.md line-1 `brewcode-meta:` marker (bump-version.sh stamps it; plugin.json
+# has none). Same HARD-FAIL rule as _plugin_version(): never a placeholder-shaped value.
 _content_version() {
   _cv=""
   _skill_md="$SKILL_DIR/SKILL.md"
@@ -223,10 +176,8 @@ resolve_scalars() {
   PROJECT_NAME="${PROJECT_NAME:-this project}"
   STACK_LABEL="${STACK_LABEL:-the project stack}"
   STACK_REF="${STACK_REF:-python.md}"
-  # The per-stack references to COPY/RESTAMP, as a list. `emit` has exactly one (the scalar above); `upgrade`
-  # derives it from the installed tree and may legitimately set it to MORE than one, or to NONE at all — hence
-  # `${VAR-...}` and not `${VAR:-...}`: an explicitly EMPTY list means "this install has no stack doc", which
-  # must never silently become the python.md default.
+  # Per-stack refs to COPY/RESTAMP: emit = one, upgrade derives 0..N from the install -> `${VAR-}` != `${VAR:-}`:
+  # explicit EMPTY = "no stack doc", never the python.md default.
   STACK_REFS="${STACK_REFS-$STACK_REF}"
   SOURCE_GLOB="${SOURCE_GLOB:-*}"
   PATHSPEC_GLOBS="${PATHSPEC_GLOBS:-'*' 'Dockerfile*' 'docker-compose.yml' '.github/workflows/*.yml'}"
@@ -239,9 +190,8 @@ resolve_scalars() {
   SPEC_LOCATION="${SPEC_LOCATION:-.claude/specs/**}"
   PLAN_LOCATION="${PLAN_LOCATION:-.claude/features/**}"
   POLICY_LOCATION="${POLICY_LOCATION:-\`CLAUDE.md\`, \`.claude/rules/**\`}"
-  # Artifact-metadata standard. NOT env-overridable: the writer of every artifact below is always THIS
-  # pipeline (teams-setup calls `emit-agent` rather than authoring its own copy), and the intent-guard tail
-  # anchor `IG_STAMP_PREFIX` is a literal that must keep matching what the template emits.
+  # Artifact metadata, NOT env-overridable: writer is always this pipeline (teams-setup calls `emit-agent`),
+  # and tail anchor IG_STAMP_PREFIX must keep matching the template.
   PLUGIN_VERSION="$(_plugin_version)" || exit 1
   CONTENT_VERSION="$(_content_version)" || exit 1
   GENERATED_BY="brewcode:superreview-setup"
@@ -284,11 +234,8 @@ _subst_raw() {
 
 _subst() { _subst_raw "$1" > "$2"; }
 
-# The stack-INdependent emit set, `<template under $REFS>|<path relative to the destination root>`.
-# ONE list for every writer: `emit` substitutes it into $TARGET, `upgrade` stages it, `copy_raw_templates`
-# freezes it raw, and upgrade's delta/restamp loops walk the same rel paths. Adding an artifact used to
-# mean editing four hand-kept copies of it in step, and a missed one silently drops the file from a mode.
-# The per-stack reference is NOT here: it is a per-install decision ($STACK_REFS), handled next to each caller.
+# Stack-independent emit set `<template under $REFS>|<dest rel path>`: ONE list for emit, upgrade staging,
+# copy_raw_templates and upgrade's delta/restamp loops. Per-stack ref excluded ($STACK_REFS, per caller).
 EMIT_SET='SKILL.md.template|SKILL.md
 agent-prompt.md|references/agent-prompt.md
 report-template.md|references/report-template.md
@@ -314,13 +261,8 @@ $EMIT_SET
 EOF
 }
 
-# Copy the RAW (unsubstituted) templates under $1, keyed by the path each one is EMITTED to. Raw on purpose:
-# comparing raw-vs-raw keeps per-run scalars ({LAST_UPDATED} and {PLUGIN_VERSION} above all) out of the delta —
-# a plain version bump therefore reports IDENTICAL, not a diff on every file — so an unchanged template
-# always compares byte-identical. `*` in .gitignore keeps the whole dir — itself included — out of `git add -A`.
-# INVARIANT: every template copied here carries the metadata TOKENS, never a baked literal version. A baked value
-# would make the frozen baseline differ from the plugin template on every release — a permanent phantom DIFFERS.
-# Consequence: none of these files may appear in bump-version.sh's STAMPED_FILES manifest.
+# RAW templates under $1 keyed by emitted path: raw-vs-raw keeps {LAST_UPDATED}/{PLUGIN_VERSION} out of the delta.
+# INVARIANT: tokens, never baked versions (phantom DIFFERS) -> never in bump-version.sh STAMPED_FILES. `*` .gitignore hides dir.
 copy_raw_templates() {
   _dst="$1"
   mkdir -p "$_dst/references"
@@ -332,13 +274,8 @@ copy_raw_templates() {
   done
 }
 
-# ── shared: which per-stack reference this install actually uses ────────────────
-# The stack was a real DECISION at emit time (SKILL.md Phase 1 detects it, exports STACK_REF). `upgrade` runs with
-# a bare environment, so it must READ that decision back rather than let `resolve_scalars` re-default it.
-#
-# The catalog is derived from the templates on disk, never a hardcoded list: everything in references/*.md that is
-# not one of the two stack-INdependent emits. (`SKILL.md.template` / `scope.md.template` / `intent-guard.md.template`
-# end in `.template`, so the `*.md` glob never sees them.)
+# ── shared: per-stack reference of this install (emit decided it; bare-env upgrade reads it back) ──
+# Catalog = references/*.md on disk minus agent-prompt/report-template (`*.template` never matches `*.md`).
 _stack_catalog() {
   for _f in "$REFS"/*.md; do
     [ -f "$_f" ] || continue
@@ -348,23 +285,16 @@ _stack_catalog() {
   done
 }
 
-# The recorded decision, read back from the only two places that survive an install: the emitted reference itself
-# and its pristine baseline copy. Detection beats persisting a new config key because it works RETROACTIVELY — every
-# install already made, including pre-baseline ones, answers the question. Prints 0..N names, one per line; N>1 is a
-# multi-stack install and every one of them is a live artifact that needs the restamp.
+# Recorded stack, read back from the emitted ref or its baseline copy: retroactive, pre-baseline installs too.
+# Prints 0..N names; N>1 = multi-stack install, each needs the restamp.
 _installed_stack_refs() {
   _stack_catalog | while IFS= read -r _b; do
     if [ -f "$TARGET_REFS/$_b" ] || [ -f "$BASELINE/references/$_b" ]; then printf '%s\n' "$_b"; fi
   done
 }
 
-# ── shared: "is something already installed here?" ──────────────────────────────
-# Every artifact of a live install that is present on disk, one rel path per line (empty output = nothing
-# installed). `emit` refuses when this is non-empty and `upgrade` requires it to be non-empty — ONE question,
-# asked once. Keying either gate on SKILL.md alone was the defect: with SKILL.md deleted and references/ still
-# tailored, `emit`'s guard did not fire and it re-substituted every surviving reference with DEFAULT scalars,
-# planting `python.md` and a generic scope over, say, a TypeScript install. The parked SKILL.md.disabled counts:
-# a disabled install is still an install.
+# ── shared: "is something already installed here?" (emit refuses if non-empty, upgrade requires it) ──
+# Any live artifact counts, SKILL.md.disabled included: keying on SKILL.md alone let emit re-default a partial install.
 _live_artifacts() {
   for _rel in SKILL.md SKILL.md.disabled references/agent-prompt.md references/report-template.md references/scope.md; do
     if [ -f "$TARGET/$_rel" ]; then printf '%s\n' "$_rel"; fi
@@ -377,63 +307,21 @@ _live_artifacts() {
 # The same set as one space-separated line, for messages and `[ -n ]` tests.
 _live_artifact_list() { _live_artifacts | tr '\n' ' ' | sed 's/[[:space:]]*$//'; }
 
-# ── shared: the ONE unresolved-placeholder scanner ──────────────────────────────
-# EVERY token check in this script goes through here. A placeholder is `{UPPER_SNAKE}`, but that is a SUBSTRING of
-# the shell expansion `${UPPER_SNAKE}` — and after Phase 3 the emitted artifacts hold real shell: the shipped
-# SKILL.md.template alone already carries `${MAIN}`, `${REPORT_DIR}`, `${ROOT}`, `${TOK}`, none of which ever
-# appears as a bare token. Those four sit in `validate`'s `_runtime` allowlist purely so the loose pattern would
-# not flag them, which masked the defect for exactly the names the template happened to use: a Phase 3 evidence
-# command adding `${BASE}` or `${HOME}` was reported as an unresolved placeholder and failed `validate`, and in
-# `_ig_kind` it was worse than a failed gate — it classified a correctly tailored agent as BROKEN and RECREATED
-# it, destroying the tailoring.
-#
-# So: strip the colliding shell form FIRST, then scan what is left. A leading-guard pattern like
-# `(^|[^$])\{[A-Z_]+\}` was rejected — with `-o` it consumes the guard character, so ADJACENT tokens
-# (`{A_B}{C_D}`) silently lose the second one and the reported name comes out as `x{TOKEN}` instead of the token
-# the user has to fix. Stripping first has neither problem and needs no `grep -P` lookbehind (absent on BSD grep,
-# i.e. on the user machines this generator runs on).
-#
-# Only `${UPPER_SNAKE}` is stripped, which is exactly the colliding set: `${lower}` and `${VAR:-default}` do not
-# match the token shape in the first place, so nothing else is weakened.
-#
-# TWO-or-more characters (was `+`, one-or-more): every setup-time token is a long name, and the 1-char runtime
-# tokens ({N}, {K}, {U}, {D}) are allowlisted away downstream regardless — so `{2,}` changes no verdict and
-# removes a false-positive surface. It also makes this scanner and `_ig_kind` agree, which they did not before.
+# ── shared: the ONE unresolved-placeholder scanner; every token check goes through here ──
+# Strip shell `${UPPER_SNAKE}` first (contains `{UPPER_SNAKE}`; no BSD `grep -P` lookbehind); {2,} skips 1-char runtime tokens.
 TOKEN_STRIP_SED='s/\${[A-Z_][A-Z_]*}//g'
 TOKEN_RE='\{[A-Z_]{2,}\}'
 # One BARE token per line — no guard character, so what `validate` prints is exactly what must be fixed.
 # `|| true`: zero matches is the happy path and rc=1 would abort the caller's assignment (repo rule avoid#7).
 _scan_tokens() { sed "$TOKEN_STRIP_SED" "$1" | grep -oE "$TOKEN_RE" || true; }
 
-# ── shared: the ONE writer of .claude/agents/intent-guard.md ────────────────────
-# Called by BOTH `emit` and `emit-agent`. Never a second implementation, never a hand-written copy.
-# CREATE-OR-REUSE-OR-MIGRATE. The whole decision is `_ig_kind`, which prints exactly one word:
-#
-#   ABSENT  no file                                                       -> CREATE from the template
-#   BROKEN  empty, or OURS (stamped) and unrunnable                       -> RECREATE, after a .bak-<ts> copy
-#   CURRENT OURS, current format: carries the tail anchor IG_STAMP_PREFIX  -> REUSE, byte-untouched
-#   LEGACY  OURS, pre-standard: carries a RETIRED `intent-guard template vN` stamp and no current anchor
-#                                                                         -> MIGRATE (restamp in place)
-#   FOREIGN no stamp of either generation                                 -> REUSE, byte-untouched
-#
-# PROVENANCE IS DECIDED FIRST, and that ordering is the whole point (BCOP09). The runnability tests
-# (`name:` frontmatter, unresolved {UPPER_SNAKE}) used to run BEFORE the stamp probes, which made FOREIGN
-# unreachable for any hand-written file that merely MENTIONED a `{TOKEN}`: such a file was classified
-# BROKEN and overwritten from the template, with no backup. A file we did not write is never judged by
-# template rules and never rewritten — its tokens are reported as a conflict and it is REUSED as-is.
-# Only an EMPTY file (nothing to lose) or one carrying our own stamp can be BROKEN.
-#
-# LEGACY is the case the reader (`setup-status`) reports as `stale (legacy stamp)` and promises "one
-# `upgrade` restamps it". Recreating it would destroy the project's Phase 3 tailoring, so the migration
-# moves METADATA ONLY: the four frontmatter keys and the tail anchor. Every tailored line survives.
-# FOREIGN is the reason REUSE exists and stays untouchable — a hand-written agent is never judged by, nor
-# rewritten to, template rules (see validate c2). The {UPPER_SNAKE} test is deliberately independent of the
-# stamp: raw tokens make a file broken whoever wrote it. It runs through `_scan_tokens`, so a Phase 3 evidence
-# command holding `${HOME}` is shell, not a placeholder — misreading it here RECREATES a tailored agent.
+# ── shared: the ONE writer of .claude/agents/intent-guard.md (emit + emit-agent) ────
+# _ig_kind: ABSENT->CREATE | BROKEN (empty, or ours + unrunnable)->RECREATE after .bak-<ts> | CURRENT/FOREIGN->REUSE | LEGACY->MIGRATE.
 _ig_kind() {
   [ -e "$IG_PATH" ] || { echo ABSENT; return 0; }
   [ -s "$IG_PATH" ] || { echo BROKEN; return 0; }
-  # Provenance BEFORE runnability. Unstamped = not ours = FOREIGN, whatever its contents.
+  # Provenance BEFORE runnability (BCOP09): unstamped = FOREIGN, never judged or rewritten by template rules.
+  # Token test is stamp-independent, via _scan_tokens: `${HOME}` = shell != placeholder (misread RECREATES tailoring).
   if grep -qF "$IG_STAMP_PREFIX" "$IG_PATH"; then
     _kind=CURRENT
   elif grep -qE "$IG_LEGACY_STAMP_RE" "$IG_PATH"; then
@@ -462,16 +350,12 @@ _ig_foreign_conflict() {
 # it is a live agent that still needs its restamp, and every caller must see that as work outstanding.
 _ig_usable() { case "$(_ig_kind)" in CURRENT|FOREIGN) return 0 ;; *) return 1 ;; esac; }
 
-# Restamp a LEGACY agent IN PLACE. Metadata only: the four frontmatter keys in D2 order and the current
-# tail anchor, both taken from the SUBSTITUTED template so there is exactly one source for their spelling.
-# The body — invariants, drift examples, evidence commands, every hand-tailored line — is copied through
-# untouched, which is what separates a migration from a re-emit.
+# Restamp a LEGACY agent IN PLACE: frontmatter keys (D2 order) + tail anchor from the substituted template;
+# body (every tailored line) copied through untouched: migration != re-emit.
 _ig_migrate() {
   _bd="$(mktemp -d)"
   _subst_raw "$REFS/intent-guard.md.template" > "$_bd/tpl"
-  # Scoped to the FRONTMATTER block, exactly as `_restamp_meta` does it — one dialect. Grepping the whole file
-  # would also collect any `version:` / `last_updated:` line the BODY happens to carry (a YAML example inside a
-  # fence is the obvious way that arrives) and inject it into the frontmatter as a duplicate key.
+  # Frontmatter-only like `_restamp_meta`: a body `version:`/`last_updated:` (YAML fence) would become a duplicate key.
   _fm_block "$_bd/tpl" | grep -E '^(doc_type|version|content_version|generated_by|last_updated):' > "$_bd/meta" || true
   awk -v anchor="$IG_STAMP_PREFIX" 'f || index($0, anchor) { f = 1; print }' "$_bd/tpl" > "$_bd/tail"
   if [ ! -s "$_bd/meta" ] || [ ! -s "$_bd/tail" ]; then
@@ -479,7 +363,7 @@ _ig_migrate() {
     return 1
   fi
 
-  # 1. frontmatter: drop any pre-existing copy of the four keys, re-insert them before the closing `---`.
+  # 1. frontmatter: drop any pre-existing copy of the five keys, re-insert them before the closing `---`.
   awk -v metaf="$_bd/meta" '
     NR == 1 && $0 == "---" { fm = 1; print; next }
     fm == 1 && $0 == "---" {
@@ -539,9 +423,8 @@ write_intent_guard() {
       return 0
       ;;
     BROKEN)
-      # Only ever OUR OWN stamped file or an empty one — see _ig_kind. Bytes still survive: a nonempty
-      # file is copied to <path>.bak-<ts> before the recreate, so no run of this script can lose content.
-      # Diagnostic only — STDERR, so stdout keeps carrying exactly one `INTENT_GUARD:` status line.
+      # Only ours-stamped or empty (see _ig_kind); a nonempty file is copied to <path>.bak-<ts> first.
+      # Diagnostics -> stderr: stdout carries exactly one `INTENT_GUARD:` line.
       if [ -s "$IG_PATH" ]; then
         _ig_bak="$IG_PATH.bak-$(date +%Y%m%d-%H%M%S)"
         cp "$IG_PATH" "$_ig_bak"
@@ -551,10 +434,8 @@ write_intent_guard() {
       ;;
   esac
 
-  # The agent must be RUNNABLE straight out of emit — the emitted skill spawns it at BOTH depths, so a
-  # half-filled agent file breaks a QUICK run entirely. The three BLOCKs therefore get stack-generic
-  # DEFAULTS here, each tagged with a SEEDED-DEFAULT marker; Phase 3 REPLACES block + marker with project
-  # specifics. A surviving marker is what makes a skipped adaptation visible to `validate`.
+  # Runnable straight out of emit (spawned at BOTH depths): BLOCKs get generic defaults + SEEDED-DEFAULT marker;
+  # Phase 3 replaces block + marker, a surviving marker makes skipped adaptation visible to `validate`.
   _bd="$(mktemp -d)"
   cat > "$_bd/evidence" <<IG_EVIDENCE
 \`\`\`bash
@@ -596,9 +477,8 @@ IG_EXAMPLES
     | sed '/^<!-- TEMPLATE HEADER/,/-->[[:space:]]*$/d' \
     | cat -s > "$_bd/agent.md"
 
-  # POST-STRIP POST-CONDITION. The strip is a sed RANGE: if its end pattern ever fails to match, sed deletes
-  # to EOF and the result is a plausible-looking file with no tokens and no header — i.e. it passes validate.
-  # Both anchors below sit OUTSIDE the header block, so their loss proves the strip ran away.
+  # POST-STRIP POST-CONDITION: a runaway sed range deletes to EOF yet passes validate;
+  # both anchors sit OUTSIDE the header, so losing either proves the runaway.
   if ! grep -q '^name:[[:space:]]*intent-guard[[:space:]]*$' "$_bd/agent.md"; then
     echo "❌ emit aborted: header strip removed the frontmatter of intent-guard.md.template"
     return 1
@@ -621,17 +501,8 @@ IG_EXAMPLES
   echo "INTENT_GUARD: CREATED $IG_PATH"
 }
 
-# ── emit: sweep per-stack references left by an EARLIER emit ────────────────────
-# Emit writes only the SELECTED $STACK_REF and never replaces $TARGET wholesale (uninstall reports foreign
-# files in there as KEPT), so switching stacks — python.md then go.md — used to leave BOTH refs installed
-# forever, with the abandoned one restamped by every later upgrade as though it were current.
-# Ownership is read off the file, never off a historical name list: every emitted reference carries the
-# QUOTED `generated_by: "$GENERATED_BY"` as its OWN key line inside the LEADING `---` frontmatter block
-# (validate_emit enforces that spelling). The match is anchored to that structural position, because a user
-# file that merely MENTIONS the marker in its body is a user file - matching the string anywhere in a head
-# window deleted it. A file without the key is a user file and is left alone. Scope is $TARGET_REFS only —
-# SKILL.md and the parked SKILL.md.disabled are top-level and stay outside this sweep.
-# The file is read by redirect, never through a pipeline: a pipe would risk a pipefail/SIGPIPE abort.
+# ── emit: sweep per-stack refs of an EARLIER emit (a stack switch left both installed) ──
+# Owned = QUOTED `generated_by:` key inside LEADING `---` frontmatter, never a body mention; $TARGET_REFS only; redirect, no pipe (pipefail/SIGPIPE).
 _ref_is_owned() {
   _fm=0
   while IFS= read -r _fl || [ -n "$_fl" ]; do
@@ -676,12 +547,8 @@ emit_skill() {
   echo "=== superreview: emit ==="
   validate_templates
 
-  # The emitted skill SELF-SYNCS (its Phase 4b corrects its own routing table, gates, baseline and shared
-  # surfaces). A blind re-emit would silently erase every one of those corrections, so a live installation is
-  # never overwritten: `upgrade` refreshes it, and SUPERREVIEW_FORCE=1 is the conscious destructive override.
-  # The guard keys on the WHOLE artifact set, not on SKILL.md alone: a PARTIALLY damaged install (SKILL.md
-  # deleted, every tailored reference still in place) used to slip past it, and emit then re-substituted those
-  # references with DEFAULT scalars — `this project`, the generic scope, `python.md` over a TypeScript install.
+  # Live install (whole artifact set, != SKILL.md alone) is never overwritten: it SELF-SYNCS (Phase 4b), a partial
+  # one would be re-defaulted. `upgrade` refreshes; SUPERREVIEW_FORCE=1 = conscious destructive override.
   _installed="$(_live_artifact_list)"
   if [ -n "$_installed" ] && [ "${SUPERREVIEW_FORCE:-0}" != "1" ]; then
     echo "❌ superreview is already installed at $TARGET/ — live artifact(s): $_installed"
@@ -724,18 +591,13 @@ emit_skill() {
 }
 
 # ── shared: in-place metadata restamp ──────────────────────────────────────────
-# First frontmatter block of a file -> stdout. One reader for every check below, so "the frontmatter" means
-# the same lines everywhere — `references/scope.md` carries a second `---` in its body and must not confuse it.
+# First frontmatter block -> stdout; one reader everywhere (`references/scope.md` has a second `---` in its body).
 _fm_block() { awk 'NR == 1 && $0 == "---" { f = 1; next } f && $0 == "---" { exit } f { print }' "$1"; }
 # Everything AFTER that block -> stdout. Used as the did-not-touch-the-body proof.
 _fm_body()  { awk 'NR == 1 && $0 == "---" { f = 1; next } f == 1 && $0 == "---" { f = 2; next } f == 2 { print }' "$1"; }
 
-# Refresh ONLY `version` / `content_version` / `generated_by` / `last_updated` in a LIVE file's own frontmatter,
-# in place. $1 = live file, $2 = its freshly substituted staging counterpart — the single source for the
-# spelling of the four values, exactly as `_ig_migrate` takes them from the substituted template. `doc_type` is
-# PRESERVED when present (§1 of the artifact-metadata spec: it is user-owned) and seeded as `llm` only when the
-# file has none. The body is copied through untouched and then compared byte-for-byte; a mismatch aborts rather
-# than shipping a file whose Phase 3 tailoring or Phase 4b self-sync edits were silently mangled.
+# Restamp $1 (live) from $2 (staging): version/content_version/generated_by/last_updated only; doc_type kept (§1), else `llm`.
+# Body copied through, compared byte-for-byte; a mismatch aborts (Phase 3 / 4b edits never mangled).
 _restamp_meta() {
   _live="$1"; _src="$2"
   if [ "$(head -1 "$_live")" != "---" ]; then
@@ -780,20 +642,12 @@ _restamp_meta() {
 }
 
 # ── upgrade: refresh a LIVE installation, hand-edits preserved ──────────────────
-# The emitted skill is EXPECTED to have self-modified (its Phase 4b SELF-SYNC) and to carry Phase 3 tailoring, so
-# no live file is ever written over AND no live file is ever the diff baseline: comparing a tailored install to a
-# raw template reports every tailored line as a "change". The real question is what the TEMPLATE changed, so the
-# comparison is NEW template vs the pristine .template-baseline/ copy saved at emit time. The live file is only
-# the place the delta gets ported INTO. Only an asset that is MISSING is restored in place — a file that does not
-# exist has no hand-edits to lose — and a restored file is RAW, so it still needs Phase 3.
+# Delta = NEW template vs pristine .template-baseline/ (never live: tailoring != change); only a MISSING asset is restored, RAW.
 upgrade_skill() {
   echo "=== superreview: upgrade ==="
   validate_templates
 
-  # A LIVE INSTALL is the requirement, not SKILL.md specifically. Gating on SKILL.md alone left the one state
-  # this mode exists for — SKILL.md deleted, every tailored reference intact — with `emit` as its only advertised
-  # remedy, and `emit` re-defaults every one of those references. The restore loop below already handles a
-  # missing artifact correctly (RAW, out of `.template/`, NEEDS PHASE 3), and SKILL.md is in that set.
+  # Gate = any live artifact, != SKILL.md: missing SKILL.md + tailored refs is exactly this mode's case (restored RAW below).
   _installed="$(_live_artifact_list)"
   if [ -z "$_installed" ]; then
     echo "❌ nothing to upgrade: no superreview artifact under $TARGET/ — run 'generate.sh emit' first"
@@ -811,11 +665,8 @@ upgrade_skill() {
     echo "   every other artifact keeps its tailoring untouched."
   fi
 
-  # STACK — re-derived from the INSTALLED tree BEFORE any scalar resolves. `resolve_scalars` would otherwise fall
-  # back to `python.md`, and every loop below iterates `references/$STACK_REF`: on a TypeScript/Go/Java-Kotlin
-  # install the project's REAL reference would never be staged, never be restamped, and stay behind at the old
-  # version forever — so `setup-status` keeps printing `stale` after a successful upgrade. An explicit STACK_REF in
-  # the environment still wins (documented override); nothing else re-defaults.
+  # STACK re-derived from the installed tree BEFORE scalars resolve: a python.md default leaves the real ref unstaged,
+  # unrestamped and `stale` forever. Explicit STACK_REF env still wins.
   if [ -n "${STACK_REF:-}" ]; then
     STACK_REFS="$STACK_REF"
     echo "UPGRADE_STACK=$STACK_REFS (STACK_REF override)"
@@ -827,9 +678,8 @@ upgrade_skill() {
       STACK_REF="${STACK_REFS%% *}"
       echo "UPGRADE_STACK=$STACK_REFS (derived from the installed tree)"
     else
-      # NOT determinable: emitted without a per-stack doc, or the reference was deleted by hand. Guessing is the
-      # bug this block exists to remove, so nothing is guessed and nothing per-stack is staged — but the run does
-      # NOT abort: the other four artifacts still need their restamp or `status` reads `stale` forever.
+      # Undeterminable (no stack doc, or deleted by hand): guess nothing, stage nothing per-stack,
+      # but never abort: the other four artifacts still need their restamp.
       STACK_REF="none"
       echo "UPGRADE_STACK=none — ❌ NO per-stack reference found in $TARGET_REFS/ or $BASELINE/references/"
       echo "   (candidates: $(_stack_catalog | tr '\n' ' ' | sed 's/[[:space:]]*$//')). No stack doc is staged or restamped; the other four"
@@ -860,11 +710,8 @@ upgrade_skill() {
   for _rel in $_rels; do
     [ -f "$STAGING/$_rel" ] || continue
     if [ ! -f "$TARGET/$_rel" ]; then
-      # RAW, from `.template/` — never the substituted staging copy. `upgrade` runs with a bare environment, so
-      # every scalar in that copy would be the DEFAULT ("this project", "the project stack", `general-purpose`,
-      # `Explore`), i.e. the install-time decision silently re-guessed and baked into a live file that `validate`
-      # then passes. Restoring RAW makes each one an unresolved {TOKEN} that `validate` lists by name, which is
-      # exactly the NEEDS PHASE 3 contract. The metadata trio is refreshed by the restamp loop below.
+      # RAW from `.template/`, never staging: bare-env defaults would silently re-guess install-time scalars.
+      # RAW leaves named {TOKEN}s for `validate` = NEEDS PHASE 3 contract; the restamp loop refreshes metadata.
       cp "$STAGING/.template/$_rel" "$TARGET/$_rel"
       _restored=$((_restored+1))
       echo "UPGRADE: $_rel MISSING -> restored RAW (NEEDS PHASE 3: scalar AND block placeholders)"
@@ -883,11 +730,8 @@ upgrade_skill() {
     fi
   done
 
-  # Restamp the LIVE files. Unconditional, and deliberately NOT gated on the IDENTICAL/DIFFERS verdict above:
-  # a plain version bump changes no template line, so every asset reports IDENTICAL — yet the emitted
-  # `SKILL.md` frontmatter `version:` is exactly what setup-status reads to decide `stale`. Without this an
-  # `upgrade` reported success and left the stamp untouched, so the next `status` printed `stale` forever.
-  # Same `$_rels` set as the delta report above — including the project's REAL per-stack reference, whatever it is.
+  # Restamp is UNCONDITIONAL (!=gated on IDENTICAL/DIFFERS): a version bump reports IDENTICAL, yet SKILL.md `version:`
+  # is what setup-status reads for `stale`. Same `$_rels` set as the delta report, real per-stack ref included.
   for _rel in $_rels; do
     [ -f "$TARGET/$_rel" ] || continue
     [ -f "$STAGING/$_rel" ] || continue
@@ -906,9 +750,7 @@ upgrade_skill() {
   echo "  rm -rf \"$BASELINE\" && mv \"$STAGING/.template\" \"$BASELINE\" && rm -rf \"$STAGING\" && generate.sh validate"
 }
 
-# Artifact-metadata frontmatter gate: the four keys, in D2 order, quoted exactly as
-# `brewcode/skills/rules/scripts/rules.sh:165-167` already requires — one dialect, not a second one.
-# Prints one line per defect, returns 1 when any fired.
+# Metadata frontmatter gate: 5 keys, D2 order, quoted like brewcode/skills/rules/scripts/rules.sh; one line per defect, rc 1.
 _check_meta_frontmatter() {
   _f="$1"; _bad=0
   _fm=$(awk 'NR == 1 && $0 == "---" { f = 1; next } f && $0 == "---" { exit } f { print }' "$_f")
@@ -940,11 +782,8 @@ validate_emit() {
     exit 1
   fi
 
-  # Runtime tokens the emitted skill legitimately keeps (resolved at REVIEW time, not GENERATION time).
-  # This list is NOT the shell-variable escape hatch — `_scan_tokens` handles `${VAR}` now. `MAIN`, `ROOT`, `TOK`
-  # and `REPORT_DIR` occur in SKILL.md.template ONLY as `${…}` expansions and never as bare tokens; they are kept
-  # here as harmless no-ops rather than removed, but do NOT add a name here to silence a shell variable — that is
-  # the workaround that hid the collision until an adapted artifact used a variable nobody had allowlisted.
+  # Runtime tokens resolved at REVIEW time; `_scan_tokens` handles `${VAR}`. MAIN/ROOT/TOK/REPORT_DIR = harmless no-ops:
+  # never add a name to silence a shell variable, that workaround hid the collision.
   _runtime='MODE|DEPTH|BRANCH|SCOPE|FILES|COUNT|TIMESTAMP|FOCUS|FILE_LIST|AGENT_LIST|CANDIDATES|MERGED|PATHSPEC|MAIN|SHA|FOLDER|GROUP|AGENT|N|OC|SC|K|U|D|ROOT|TOK|RANGE|REPORT_DIR|SCOPE_BASELINE|OWNERSHIP|GATE_RESULTS|PR_ISSUE_JSON|INTENT_VERDICT|USER_REQUEST'
 
   _errors=0
@@ -961,14 +800,16 @@ validate_emit() {
   done
 
   # Agent-reference allowlist: every agent named in the emitted SKILL.md must be a
-  # project-local agent (.claude/agents/*.md) or a real built-in (Explore|Plan|general-purpose).
+  # project-local agent (.claude/agents/**/*.md, nested included) or a real built-in (Explore|Plan|general-purpose).
   _builtins="Explore Plan general-purpose"
   _local_agents=""
-  for _af in .claude/agents/*.md; do
+  while IFS= read -r _af; do
     [ -f "$_af" ] || continue
     _an="$(basename "$_af" .md)"
     _local_agents="$_local_agents $_an"
-  done
+  done <<EOF
+$(find -H .claude/agents -name '*.md' 2>/dev/null | sort || true)
+EOF
 
   # (a) explicit subagent_type="NAME" / subagent_type=NAME references
   _referenced=$(grep -oE 'subagent_type=("?)[A-Za-z0-9_-]+' "$TARGET/SKILL.md" \
@@ -1027,9 +868,8 @@ EOF
       ;;
   esac
 
-  # (c2) TEMPLATE-DERIVED agents only. A file carrying the template stamp came out of this pipeline, so every
-  # {PLACEHOLDER} in it must be resolved (scalars by emit, the three BLOCKs by AI Edit in SKILL.md Phase 3).
-  # A REUSED hand-written intent-guard is byte-untouchable by contract — it is not judged by template rules.
+  # (c2) TEMPLATE-DERIVED agents only: every {PLACEHOLDER} must be resolved (emit scalars, Phase 3 BLOCKs);
+  # a REUSED hand-written intent-guard is byte-untouchable, never judged by template rules.
   if [ "$_ig_state" = "CURRENT" ]; then
     _ig_unresolved=$(_scan_tokens "$IG_PATH" | sort -u || true)
     if [ -n "$_ig_unresolved" ]; then
@@ -1042,18 +882,16 @@ EOF
       _errors=$((_errors+1))
     fi
     _check_meta_frontmatter "$IG_PATH" || _errors=$((_errors+1))
-    # (c3) TAILORING. Seeded BLOCK defaults are a runnable floor, not the target: a run that skipped the
-    # Phase 3 adaptation ships boilerplate and would otherwise pass every gate silently. WARN, not fail —
-    # `emit-agent` is a legitimate standalone path whose adaptation happens in the caller's own flow.
+    # (c3) TAILORING: seeded BLOCK defaults = runnable floor, not target -> WARN, not fail
+    # (`emit-agent` is a standalone path whose adaptation happens in the caller's flow).
     _ig_seeded=$(grep -cF "$IG_SEED_MARK" "$IG_PATH" || true)
     if [ "${_ig_seeded:-0}" -gt 0 ]; then
       echo "⚠️ UNTAILORED: $IG_PATH still carries $_ig_seeded seeded generic BLOCK default(s)"
       grep -nF "$IG_SEED_MARK" "$IG_PATH" || true
       echo "   INTENT_GUARD: UNTAILORED $IG_PATH ($_ig_seeded seeded block(s)) — run SKILL.md Phase 3 and replace each block + its marker"
     fi
-    # (c4) RETURN CONTRACT. The `## 5. Output` rule every freshly emitted intent-guard is born with. An
-    # install predating it keeps a CURRENT stamp and `upgrade` REUSEs it byte-untouched by contract, so the
-    # clause can only arrive by hand — WARN with the source line, never fail an otherwise working agent.
+    # (c4) RETURN CONTRACT `## 5. Output`: upgrade REUSEs a pre-rule CURRENT install byte-untouched,
+    # so the clause arrives only by hand -> WARN with the source line, never fail.
     if ! grep -qF 'Verdict first, <=30 lines' "$IG_PATH"; then
       echo "⚠️ $IG_PATH has no return-length rule in '## 5. Output' (agent predates it)."
       echo "   Fix: copy the three paragraphs after the cap line of references/intent-guard.md.template into"
@@ -1069,17 +907,8 @@ EOF
     fi
   fi
 
-  # (d) DOMAIN EXPERTS — a review routed only to generic agents is a degraded review.
-  # Override with SUPERREVIEW_ALLOW_NO_EXPERTS=1 when the target genuinely has no domain agents.
-  # intent-guard is wired into EVERY emitted skill and is NOT a domain expert — excluded, or this check
-  # would pass on a project that has no expert at all.
-  # The match must prove ROUTING, not mere mention. A substring grep over the whole file credits any agent
-  # whose name occurs in the emitted PROSE ("the guard SKIPS the gates" credits an unwired `guard.md`;
-  # `plan.md`, `scope.md` behave the same). Two wired forms count, nothing else:
-  #   - a whole CELL of a markdown table row ({DOMAIN_AGENTS_TABLE} / {FILE_GROUP_MAP} rows), backticks and
-  #     emphasis stripped, comma lists split;
-  #   - an explicit `subagent_type=NAME`.
-  # Matching is exact-line (`grep -xF`), so a name is either the routed value or it is not wired.
+  # (d) DOMAIN EXPERTS (intent-guard excluded; SUPERREVIEW_ALLOW_NO_EXPERTS=1 overrides). Routing != mention: a whole
+  # table CELL (backticks/emphasis stripped, comma lists split) or `subagent_type=NAME`, matched exact-line (`grep -xF`).
   _wired=$( { awk -F'|' '
       /^[[:space:]]*\|/ {
         for (i = 1; i <= NF; i++) {
@@ -1102,7 +931,7 @@ EOF
     if [ "${SUPERREVIEW_ALLOW_NO_EXPERTS:-0}" = "1" ]; then
       echo "⚠️ no project domain expert wired (allowed by SUPERREVIEW_ALLOW_NO_EXPERTS=1) — the emitted review is DEGRADED"
     else
-      echo "❌ no project domain expert (.claude/agents/*.md) is wired into SKILL.md — create the missing experts"
+      echo "❌ no project domain expert (.claude/agents/**/*.md) is wired into SKILL.md — create the missing experts"
       echo "   (see SKILL.md Phase 1.6) or re-run with SUPERREVIEW_ALLOW_NO_EXPERTS=1 to accept a degraded review"
       _errors=$((_errors+1))
     fi
@@ -1123,12 +952,8 @@ EOF
   exit "$_errors"
 }
 
-# --- enable / disable ------------------------------------------------------
-# Claude Code discovers a project skill only through <dir>/SKILL.md. Parking that ONE file as
-# SKILL.md.disabled makes /superreview vanish while references/, .template-baseline/ and every
-# Phase 3 tailoring stay exactly where they are, so the toggle is reversible and lossless.
-# intent-guard is NEVER parked: it is shared with /brewcode:teams-setup and belongs to whichever
-# install put it there. ($DISABLED_MARK is defined next to $TARGET, above.)
+# --- enable / disable: park <dir>/SKILL.md as SKILL.md.disabled; references/, .template-baseline/, tailoring stay ---
+# intent-guard is NEVER parked: shared with /brewcode:teams-setup. ($DISABLED_MARK is defined next to $TARGET.)
 
 toggle_skill() {
   _want="$1"   # enable | disable
@@ -1151,14 +976,11 @@ toggle_skill() {
   mv "$_from" "$_to"
   echo "MOVED: $_from -> $_to"
   echo "KEPT:  $TARGET_REFS/ $BASELINE/ $IG_PATH"
-  echo "✅ $_want (takes effect in the NEXT session — skills are discovered at session start)"
+  echo "✅ $_want (a running session picks it up without a restart; bare mode: new session)"
 }
 
-# --- uninstall / purge -----------------------------------------------------
-# uninstall removes the MACHINERY (the generated skill dir); purge additionally removes the DATA
-# (the review reports it produced). Same machinery/data split as /brewtools:task-board-setup.
-# intent-guard survives BOTH: shared with /brewcode:teams-setup, and deleting it would break a
-# team install that has nothing to do with superreview.
+# --- uninstall / purge: machinery/data split: uninstall removes the skill dir, purge also the review reports ---
+# intent-guard survives BOTH: shared with /brewcode:teams-setup (same split as /brewtools:task-board-setup).
 REPORT_GLOB=".claude/reports"
 
 remove_skill() {

@@ -40,8 +40,6 @@ multi-word keywords (`set up`, `turn off`, `удали полностью`) matc
    when listed. On exit `0`, only 3.1d's coreutils offer applies when `.timeout.coreutils.status ==
    "needs_confirmation"` and `.brew.present == true`; otherwise skip it. These offers remain mutually exclusive.
 
-> Check Step 2 **before** scoring: a checkpointed install awaiting a new session outranks a vague prompt.
-
 > Print one PLAN (`INPUT`/`MODE`/`SCOPE`/`DO`/`RESULT`) before Step 0 executes. Resolve against known
 > context first; unknown checkpoint state makes the initial mode provisional. Step 1's read-only status
 > supplies that state; Step 2 refines mode with a short update before Detection/Before or mutation, not a
@@ -49,37 +47,24 @@ multi-word keywords (`set up`, `turn off`, `удали полностью`) matc
 
 ---
 
-## Worked examples — EN (6)
+## Worked examples
 
-### E1 — `""` (empty; language-neutral)
+| # | Prompt | Resolution | Reason and follow-up |
+|---|--------|------------|----------------------|
+| E1 | `""` (empty) | step 1 -> `status` | `default`. Read-only `semble-status.sh --section all --json`; no `AskUserQuestion`, no write of any kind, not even the state file |
+| E2 | `"is semble working?"` | `working` is no keyword -> every mode scores 0 -> `status` (4d) | `no keyword matched (score 0) -> status`. Detection offers `install`/`resume` when absent/awaiting_reload, otherwise `reindex`/`optimize`; Next Step names the single applicable action. No question |
+| E3 | `"set up semantic search for this repo"` | `install`: `set up` = 1 (`search` is no keyword), unique | `matched keyword: set up`. Status first, then the `install` chain, then the reload checkpoint (PLAN below) |
+| E4 | `"rebuild the index"` | `reindex`: `rebuild` = 1 (phrase `reset index` absent), unique | `matched keyword: rebuild`. Rule 5d: one `AskUserQuestion` confirming staged replacement of the resolved `<shared root>/<64-hex>/index-code-config-docs` variant (printed with its size) before `semble-project.sh reindex --yes`; sibling content variants are preserved |
+| E5 | `"remove everything"` | `uninstall` (`remove`) 1 vs `purge` (`remove everything`) 1; the tie includes destructive modes -> `AskUserQuestion` (4a) | The question offers the four removal flavours `integration`, `mcp`, `cli`, `purge`, each with the exact list of what it deletes. `purge` additionally requires the typed confirmation `purge semble code cache` |
+| E6 | `"turn off code search"` | `disable`: `turn off` + `off` = 2 distinct, unique | `matched keywords: turn off, off`. Deletes nothing: `state.enabled=false`, phase -> `disabled`; MCP registration, rule, hooks and cache retained; the hooks read `enabled` and go silent |
+| R1 | `"снеси всё"` | `purge`: `снеси` = 1 (`сними` != `снеси`), unique, so no routing question | A unique winner != permission: `purge` still needs `--yes` and `--confirm-text "purge semble code cache"`, and the confirmation names every directory that will be deleted |
+| R2 | `"обнови"` | `upgrade`: `обнови` = 1; `обнови индекс` is a phrase and does not match a bare `обнови` | `matched keyword: обнови`. Compare with approved `0.6.2`; identical/correct -> MCP half unchanged, project guidance/hooks/permissions/agents still refreshed. State that upgrade refreshes both applicable halves, not the index; offer `reindex` in Detection; Next Step follows the actual post-write status |
+| R3 | `"настрой semble"` | `install`: `настрой` = 1; phrase `настрой лучше` does not match | `matched keyword: настрой` |
+| R4 | `"переиндексируй проект"` | `reindex`: `переиндексируй` = 1 | Same rule-5d confirmation as E4 |
+| R5 | `"удали"` | `uninstall`: `удали` = 1; `удали полностью` needs the full phrase | A unique win still asks one `AskUserQuestion` (5b): `integration` / `mcp` / `cli` / `purge` differ in what survives; each option lists exactly what is deleted and what is kept |
+| R6 | `"ну и что дальше"`, phase `awaiting_reload` | step 2 -> `resume`, scoring skipped | `checkpoint resume`. Had the prompt named a mode (`"статус"`, `"удали"`), step 2 would not fire and normal scoring would run |
 
-| Step | Outcome |
-|------|---------|
-| 1 | empty -> **`status`**, immediately |
-| — | reason: `default` |
-
-Read-only `semble-status.sh --section all --json`. No `AskUserQuestion`. No mutation of any kind — not even the state file. This is the single most common invocation.
-
-### E2 — `"is semble working?"`
-
-| Step | Outcome |
-|------|---------|
-| 1 | not empty |
-| 2 | phase != `awaiting_reload` |
-| 3 | `working` is not a keyword in any row -> **every mode scores 0** |
-| 4d | run **`status`**; **Detection** offers two plausible modes, **Next Step** one action |
-
-reason: `no keyword matched (score 0) -> status`. Detection offers `install`/`resume` when absent/awaiting_reload,
-otherwise `reindex`/`optimize`; Next Step names the single applicable action. Do **not** ask here.
-
-### E3 — `"set up semantic search for this repo"`
-
-| Step | Outcome |
-|------|---------|
-| 3 | `install`: `set up` = 1. No other row matches (`search` is not a keyword) |
-| — | winner **`install`**, unique |
-
-reason: `matched keyword: set up`. Mutating -> status first, then the `install` chain, then the reload checkpoint.
+E3 PLAN:
 
 ```
 PLAN — brewcode:semble-setup
@@ -88,97 +73,10 @@ MODE:   install — matched keyword: set up
 SCOPE:  required repo=this project root, optional content omitted -> registered code+docs+config corpus
 DO:     - probe prerequisites (uv, coreutils)
         - register semble_code MCP at user scope
-        - wire rule/hooks/agents; prefetch targets index-code-config-docs
+        - wire rule/hooks/agents; index variant index-code-config-docs
         - write reload checkpoint
 RESULT: registered MCP pending a new-session reload, plus the resume command
 ```
-
-### E4 — `"rebuild the index"`
-
-| Step | Outcome |
-|------|---------|
-| 3 | `reindex`: `rebuild` = 1. `reset index` does not match (phrase absent) |
-| — | winner **`reindex`**, unique |
-
-reason: `matched keyword: rebuild`. Rule 5d applies: one `AskUserQuestion` confirming staged replacement of the resolved `<shared root>/<64-hex>/index-code-config-docs` variant (printed with its size) before `semble-project.sh reindex --yes`. Sibling content variants are preserved.
-
-### E5 — `"remove everything"`
-
-| Step | Outcome |
-|------|---------|
-| 3 | `uninstall`: `remove` = 1. `purge`: `remove everything` = 1. Tie 1-1 |
-| 4a | the tie includes destructive modes -> **`AskUserQuestion`** |
-
-Never guess. The question offers the four removal flavours from the `uninstall` semantics (`integration`, `mcp`, `cli`) plus `purge`, each with the exact list of what it deletes. `purge` additionally requires the typed confirmation `purge semble code cache`.
-
-### E6 — `"turn off code search"`
-
-| Step | Outcome |
-|------|---------|
-| 3 | `disable`: `turn off` + `off` = 2 distinct. No other row matches |
-| — | winner **`disable`**, unique, score 2 |
-
-reason: `matched keywords: turn off, off`. `disable` deletes nothing: `state.enabled=false`, phase -> `disabled`, MCP registration / rule / hooks / cache all retained; the hooks read `enabled` and go silent.
-
----
-
-## Worked examples — RU (6)
-
-### R1 — `"снеси всё"`
-
-| Step | Outcome |
-|------|---------|
-| 3 | `purge`: `снеси` = 1. `remove` does not match (`сними` != `снеси`) |
-| — | winner **`purge`**, unique — no tie, so no routing question |
-
-Unique winner != permission to run. `purge` still needs `--yes` **and** `--confirm-text "purge semble code cache"`, and the confirmation prompt must name every directory that will be deleted.
-
-### R2 — `"обнови"`
-
-| Step | Outcome |
-|------|---------|
-| 3 | `upgrade`: `обнови` = 1. `reindex`'s `обнови индекс` is a **phrase** and does not match a bare `обнови` |
-| — | winner **`upgrade`**, unique |
-
-reason: `matched keyword: обнови`. Compare with approved `0.5.5`; identical/correct -> MCP half unchanged,
-then still refresh project guidance/hooks/permissions/agents. State that upgrade refreshes both applicable
-halves, not the index. Offer `reindex` in Detection; Next Step follows the actual post-write status.
-
-### R3 — `"настрой semble"`
-
-| Step | Outcome |
-|------|---------|
-| 3 | `install`: `настрой` = 1. `optimize`'s `настрой лучше` is a phrase and does not match |
-| — | winner **`install`**, unique |
-
-reason: `matched keyword: настрой`.
-
-### R4 — `"переиндексируй проект"`
-
-| Step | Outcome |
-|------|---------|
-| 3 | `reindex`: `переиндексируй` = 1 |
-| — | winner **`reindex`**, unique |
-
-Same rule-5d confirmation as E4.
-
-### R5 — `"удали"`
-
-| Step | Outcome |
-|------|---------|
-| 3 | `uninstall`: `удали` = 1. `purge`'s `удали полностью` needs the full phrase -> no match |
-| — | winner **`uninstall`**, unique |
-| 5b | the four removal flavours are distinguishable -> **one `AskUserQuestion`** |
-
-A unique `uninstall` win still asks *which* removal, because `integration` / `mcp` / `cli` / `purge` differ in what survives. The question lists, per option, exactly what is deleted and what is kept.
-
-### R6 — `"ну и что дальше"` with `state.json.phase == "awaiting_reload"`
-
-| Step | Outcome |
-|------|---------|
-| 2 | phase is `awaiting_reload` and no mode is named -> **`resume`**, scoring is skipped |
-
-reason: `checkpoint resume`. Had the prompt named a mode (`"статус"`, `"удали"`), step 2 would not fire and normal scoring would run.
 
 ---
 

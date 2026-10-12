@@ -1,4 +1,4 @@
-<!-- brewcode-meta: version=6.4.0 content_version=6.2.0 generated_by=brewtools:agent-deadline-setup -->
+<!-- brewcode-meta: version=6.5.0 content_version=6.5.0 generated_by=brewtools:agent-deadline-setup -->
 # agent-deadline hooks — install / configure / remove runbook
 
 Self-contained hook assets. The `/brewtools:agent-deadline-setup` skill copies these into a
@@ -8,18 +8,19 @@ target hooks dir and wires `settings.json`. Opt-in: NOT registered in
 | File | Event | Channel |
 |------|-------|---------|
 | `agent-deadline-guard.mjs` | PreToolUse (matcher `.*`) | `additionalContext` (soft warn) / `permissionDecision:"deny"` (hard block) |
-| `agent-deadline-cleanup.mjs` | SubagentStop | none — deletes the finished agent's state file |
+| `agent-deadline-cleanup.mjs` | SubagentStop | none — stamps the stopped agent's state, prunes by age |
 
 > Pure ESM, Node built-ins only, no plugin-root / npm deps. Each reads stdin,
 > never throws, always writes one JSON object and exits 0. The 2 files are
 > independent (no shared data file), but install both — without the cleanup hook
-> state files only disappear via the ~1 day prune.
+> no stop is ever stamped, so a resumed agent never gets a fresh window, and state
+> files only disappear via the ~1 day prune.
 
 ## What it does
 
 Claude Code has NO wall-clock timeout for subagents (verified against the
-v2.1.220 binary), and `maxTurns` kills the agent and throws away its final
-report. This hook does not kill anything — it FORCES finalization.
+v2.1.220 binary), and `maxTurns` stops the agent with only a partial, marked
+result (2.1.246+); unwritten analysis is lost. This hook does not kill anything — it FORCES finalization.
 
 | Condition | Action |
 |-----------|--------|
@@ -29,28 +30,34 @@ report. This hook does not kill anything — it FORCES finalization.
 | elapsed < 80% of budget | no-op |
 | elapsed >= 80%, not yet warned | ONE non-blocking `additionalContext`: wrap up, persist, prepare final report |
 | elapsed >= 100% | DENY every tool except the finalization set |
-| elapsed >= `hardStopRatio` x budget (default 2x) | HARD STOP: allowance shrinks to `Write, Edit` |
+| elapsed >= `hardStopRatio` x budget (default 2x) | HARD STOP: allowance shrinks to `Write, Edit, SubagentHandback` |
+| `SubagentStop`, then a tool call under 5 min later | same clock continues (see *State*) |
 
-Finalization set as ADVERTISED in the guard's directives:
-`Read, Write, Edit, MultiEdit, NotebookEdit, TodoWrite, TaskUpdate`.
+Finalization set as ADVERTISED in the guard's messages:
+`Read, Write, Edit, NotebookEdit, TodoWrite, TaskUpdate, SubagentHandback`.
 Past 100% the agent can therefore still only write its artifact and answer.
 
-Actually allowed = those 7 **plus** `TaskCreate`, `BashOutput`, `TaskOutput`. The 3
-extras are deliberately absent from the directive text: naming `BashOutput` in a
-"here is what you may still call" list invites a poll loop, while an agent that has
-to harvest an already-running background job is not walled off. The declared list
-being a subset of the real one is intentional — do not "fix" it by widening
-`FINALIZE_LIST` in the guard.
+Actually allowed = those 7 **plus** `TaskCreate`, deliberately absent from the
+message text. The declared list being a subset of the real one is intentional — do
+not "fix" it by widening `FINALIZE_LIST` in the guard. Output of a job that is
+already running is read with `Read` on its output file.
+
+`SubagentHandback` is in BOTH sets on purpose. In auto mode it is how a subagent
+delivers its report; a guard that denies it leaves the caller with no report at all
+(observed on CC 2.1.296: four denied attempts, then `handback: "withheld"`).
 
 `AskUserQuestion` is DENIED by design. A subagent parked on a human answer burns
 unbounded wall-clock time, which is precisely the failure this guard exists to stop.
 
 Hard stop: the 100% allow-list still lets a looping agent re-read files and rewrite
-todos forever. Past `hardStopRatio` x budget only `Write`/`Edit` remain and the deny
-reason becomes `AGENT DEADLINE HARD STOP`.
+todos forever. Past `hardStopRatio` x budget only `Write`/`Edit` and the report call
+remain and the deny reason starts `Time budget far exceeded`.
 
-All agent-facing messages are English and self-labelled as guard directives
-(a subagent otherwise reads a deny reason as ordinary tool output).
+Agent-facing messages are short English facts: the reason (time budget, minutes used
+of the budget, `agent-deadline hook`), what is blocked, what is still available, and
+one closing instruction. Agents listed in `readOnlyAgentTypes` get "Return what you
+have now as your final report"; every other agent gets "Save what you have to a file
+if the task expects one, then return your final report".
 
 ## Known limitation — read this before trusting it
 
@@ -64,12 +71,24 @@ Second limitation: the clock starts at the agent's FIRST tool call, not at
 spawn. An agent that thinks for 5 minutes before touching a tool gets those 5
 minutes for free.
 
+Third limitation: an agent resumed with `SendMessage` less than 5 minutes after it
+stopped continues its old clock; if it had already spent the budget it can only
+finalize. Resumed later, it gets a fresh window. An agent that stops and takes 5
+minutes or more before its next tool call also gets a fresh window.
+
+Fourth limitation: "read-only" is a config list of agent types
+(`readOnlyAgentTypes`), not a fact read from the agent — the hook payload carries no
+tool inventory. A custom read-only agent that is not listed is still told to save to
+a file.
+
 ---
 
 ## Config
 
 Project: `<repo>/.claude/agent-deadline.json` — wins.
-Global:  `~/.claude/agent-deadline.json` — fallback.
+Global:  `${CLAUDE_CONFIG_DIR:-~/.claude}/agent-deadline.json` — fallback. With
+`CLAUDE_CONFIG_DIR` set and no config in it, `~/.claude/agent-deadline.json` is read last:
+a profile whose `settings.json` registers the hooks keeps working from one shared config.
 
 ```json
 {
@@ -89,7 +108,8 @@ Global:  `~/.claude/agent-deadline.json` — fallback.
 | `enabled` | must be exactly `true`; anything else (or no file) = feature off |
 | `defaultMinutes` | budget for every agent type; default `20` if missing/invalid |
 | `byAgentType` | optional per-type overrides, e.g. `{"Explore": 10, "brewtools:text-optimizer": 45}`. Empty by default = one limit for all |
-| `hardStopRatio` | optional, default `2`, must be `> 1` — multiple of the budget past which the allow-list shrinks from the finalize set to `Write, Edit`. Anything `<= 1` or non-numeric falls back to `2`. Omit the key entirely to take the default |
+| `hardStopRatio` | optional, default `2`, must be `> 1` — multiple of the budget past which the allow-list shrinks from the finalize set to `Write, Edit, SubagentHandback`. Anything `<= 1` or non-numeric falls back to `2`. Omit the key entirely to take the default |
+| `readOnlyAgentTypes` | optional array of `agent_type` values that have no `Write`/`Edit`; default `["Explore", "Plan"]`. These agents are told "Return what you have now" instead of being told to save to a file. A list here REPLACES the default. Not written by the config block — add it by hand |
 | `version` / `content_version` / `generated_by` / `last_updated` | provenance, MANDATORY, re-stamped by every mode that writes this file (install, upgrade, enable, disable). `version` = the plugin release that produced THIS write; `content_version` = the release in which this INSTALL.md's generator logic last changed, read from this runbook's own header marker. Inert at runtime — `loadConfig()` reads only the budget keys above. Never `doc_type`: that is a `.md`-frontmatter field |
 
 Budget = `byAgentType[agent_type] ?? defaultMinutes`. `agent_type` is the value
@@ -110,8 +130,9 @@ before adding an override; a typo silently falls back to `defaultMinutes`.
 | `HARD_STOP_RATIO` | skill (optional) | `hardStopRatio` to write; leave UNSET to omit the key and take the hook default `2` |
 | `PLUGIN_VERSION` | skill (optional) | `X.Y.Z` for the metadata stamp. OPTIONAL: unset/malformed falls back to `<SRC>/../../../.claude-plugin/plugin.json`, resolved by the block itself. Never a literal |
 | `LAST_UPDATED` | skill (optional) | `YYYY-MM-DD` for the stamp; unset falls back to the LOCAL date the block computes |
+| `CLAUDE_PROJECT_DIR` | skill (status `project_root`) | the session start dir, the value hooks get; first choice of the *Project root* block. Not in the Bash tool env unless exported |
 | `ROOT` | the *Project root* block | absolute project root; every project-scope `.claude/...` path is built from it |
-| `CFG` / `SETTINGS` / `HOOKS_DIR` | scope | project = `$ROOT/.claude/...`, global = `$HOME/.claude/...` |
+| `CFG` / `SETTINGS` / `HOOKS_DIR` | scope | project = `$ROOT/.claude/...`, global = `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/...` |
 
 These are read from `process.env` by the node blocks below — they must be REAL shell
 variables, exported before the block runs:
@@ -157,8 +178,9 @@ if ROOT=$(claude_project_root); then export ROOT; echo "✅ ROOT=$ROOT"; else
 ```
 
 > **STOP if ❌** — an installer never writes into a guessed root. `CLAUDE_PROJECT_DIR`
-> is exported to hook child processes, not to this shell, so it is normally empty here
-> and the git toplevel does the work. The GLOBAL scope ignores `ROOT` entirely.
+> reaches hook child processes, not the Bash tool: the skill exports it from its status
+> `project_root`. Unset, the git toplevel decides; for a session started in a subdirectory
+> that is the wrong root: hooks resolve the portable arg against the start dir. The GLOBAL scope ignores `ROOT` entirely.
 
 Every write of the config also stamps the three mandatory JSON metadata keys —
 `version`, `generated_by`, `last_updated` (never `doc_type`: that is a `.md`
@@ -169,7 +191,7 @@ hardcoded; `last_updated` is the LOCAL date.
 
 ```
 # project: CFG="$ROOT/.claude/agent-deadline.json"
-# global:  CFG="$HOME/.claude/agent-deadline.json"   (Bash ONLY — protected path)
+# global:  CFG="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/agent-deadline.json"   (Bash ONLY — protected path)
 SRC="$(dirname "$RUNBOOK")"
 CFG="$ROOT/.claude/agent-deadline.json" PJSON="$SRC/../../../.claude-plugin/plugin.json" OVERRIDES="${OVERRIDES:-}" HARD_STOP_RATIO="${HARD_STOP_RATIO:-}" node -e '
 const fs=require("fs"), p=require("path");
@@ -246,12 +268,33 @@ if(back.enabled!==true) console.log("NOTE: enabled=false was preserved from the 
 
 ### State
 
-`<os.tmpdir()>/brewtools-agent-deadline/<session_id>/<agent_id>.json`,
-holding `{ "start": <epoch ms>, "warned": bool, "expired": bool }`.
+`<os.tmpdir()>/brewtools-agent-deadline/<session_id>/<agent_id>.json`, holding
+`{ "start": <epoch ms>, "warned": bool, "expired": bool, "config": "<path>", "stopped": <epoch ms> }`.
 Session/agent ids are sanitized to `[A-Za-z0-9._-]` before use as path
-segments. `SubagentStop` deletes the agent file and the session dir when it
-empties; on top of that both hooks prune session dirs older than ~1 day.
-Nothing is ever written under `~/.claude` (harness-protected path).
+segments. Nothing is ever written under `~/.claude` (harness-protected path).
+
+| Field | Meaning |
+|-------|---------|
+| `config` | symlink-free path of the config file that governs this agent — `<project root>/.claude/agent-deadline.json`, or the global one. Keyed on the project root, never on the raw `cwd`. **STATE REMOVAL** matches on it |
+| `stopped` | present only between a `SubagentStop` and the agent's next tool call |
+
+Stop and resume. `SubagentStop` fires several times per `agent_id` — after another
+hook blocks the stop, after each harness nudge, after each `SendMessage` resume — so
+the cleanup hook does NOT delete the state: it stamps `stopped`. On the agent's next
+tool call the guard reads the stamp:
+
+| Stamp age | Meaning | Clock |
+|-----------|---------|-------|
+| under 5 min | same piece of work (blocked once, nudged) | original `start` kept, time between stop and call counts |
+| 5 min or more, or state already pruned | a later resume | fresh window from that call |
+
+The tool-call payload does not tell a continued run from a resumed one (same
+`agent_id`, same session; stop -> next call measured 2.2-2.9 s for both on CC 2.1.296),
+so the rule is time-based.
+
+Pruning, at most 64 entries per directory per hook call: `SubagentStop` drops state
+files whose stamp is past the 5 min, files untouched for ~1 day, and the session dir
+once empty; both hooks drop session dirs untouched for ~1 day.
 
 ---
 
@@ -259,7 +302,7 @@ Nothing is ever written under `~/.claude` (harness-protected path).
 
 Project entries use the runtime-portable literal `${CLAUDE_PROJECT_DIR}/.claude/hooks/<script>`;
 Claude Code expands it for the active checkout or worktree. Global entries use the expanded absolute
-`~/.claude/hooks/<script>` path because they have no project root.
+`${CLAUDE_CONFIG_DIR:-~/.claude}/hooks/<script>` path because they have no project root.
 
 ```json
 {
@@ -293,6 +336,12 @@ Claude Code's 600 s default, so a hung `node` on a `.*` matcher would stall the 
 call for 10 minutes. 5 s for the guard, 3 s for the cleanup — both are
 ~80x the measured runtime.
 
+The matcher stays `.*`: in auto mode a subagent reports through the tool
+`SubagentHandback`, and the guard must see that call to let it through by name.
+No `onFailure` on either entry: the guard is fail-open by contract, and
+`onFailure: "block"` on a `.*` matcher would turn a missing script into every tool
+call of every session being blocked.
+
 > Coexistence: the guard NEVER returns `updatedInput`, so it cannot clobber
 > another `PreToolUse` hook's payload edits. It returns `permissionDecision`
 > only to DENY, and emits `additionalContext` WITHOUT a decision, so it never
@@ -301,9 +350,9 @@ call for 10 minutes. 5 s for the guard, 3 s for the cleanup — both are
 Cost, measured on Apple M-series / Node v24.1.0 / 30 runs — NOT a universal
 constant, re-measure on your machine: median **58.3 ms** per tool call, p90
 **62.5 ms**; the main-session no-op path (hook exits doing nothing) still cost
-**61.5 ms**. Node startup dominates; on top of it the guard does up to 19
+**61.5 ms**. Node startup dominates; on top of it the guard does up to 20
 `readFileSync` — 1 stdin payload, up to 16 project-config probes as it walks from
-`cwd` to the filesystem root, 1 global config, 1 state file — and at most 1
+`cwd` to the filesystem root, up to 2 global configs, 1 state file — and at most 1
 `writeFileSync`. The matcher is `.*`, so EVERY tool call pays this — a
 global install charges it to every session in every repo.
 
@@ -311,7 +360,10 @@ global install charges it to every session in every repo.
 
 ## PROJECT target  (`<repo>/.claude/`)
 
-Project paths are writable with normal tools (`Write`/`Edit`/`Bash` all fine).
+Project `.claude/` is a protected path too (only `.claude/worktrees/` and plan files are
+exempt): `Write`/`Edit`, and a Bash `>`/`tee` into it, are prompted in `default`/`acceptEdits`,
+denied headless and in `dontAsk`, allowed in `bypassPermissions`. Run the Bash blocks below
+as written; never a hand `Write`/`Edit`.
 
 1. Ensure dir `<repo>/.claude/hooks/`.
 2. Copy both asset files there. Source dir = this `assets/` dir; derive it from
@@ -385,7 +437,7 @@ for(const ev of Object.keys(s.hooks)){                 // remove owned handlers,
 for(const [ev,matcher,script,timeout] of want){
   s.hooks[ev]=s.hooks[ev]||[];
   const full=hookArg(script);
-  const entry={hooks:[{type:"command",command:"node",args:[full],timeout}]};   // no timeout = CC default 60s per tool call
+  const entry={hooks:[{type:"command",command:"node",args:[full],timeout}]};   // no timeout = CC default 600s per tool call
   if(matcher) entry.matcher=matcher;
   s.hooks[ev].push(entry);
 }
@@ -411,7 +463,12 @@ console.log("OK merged "+f);
 
 ## GLOBAL target  (`~/.claude/`)
 
-CRITICAL: `~/.claude/*` is a SENSITIVE path. `Write` / `Edit` / `MultiEdit` there is
+"Global" = the active profile dir: `$CLAUDE_CONFIG_DIR` when set, else `~/.claude`.
+Every global path below is built as `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/...`, and the
+guard reads its global config from the same dir first — writing to `~/.claude` while
+the session runs under another profile dir wires nothing that session ever loads.
+
+CRITICAL: `~/.claude/*` is a SENSITIVE path. `Write` / `Edit` there is
 an ASK — it prompts in `default`/`acceptEdits`, is auto-approved only under
 `bypassPermissions`, and FAILS outright headless without bypass. The global install
 MUST go entirely through the **Bash tool** (`cp`, `node`, `printf`), the only route
@@ -420,7 +477,7 @@ that works unattended.
 **EXECUTE** copy (global, Bash tool; `RUNBOOK` = absolute path to this INSTALL.md):
 ```
 SRC="$(dirname "$RUNBOOK")"
-DST="$HOME/.claude/hooks"
+DST="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks"
 mkdir -p "$DST" && \
 cp "$SRC/agent-deadline-guard.mjs" "$SRC/agent-deadline-cleanup.mjs" "$DST/" && \
 test -f "$DST/agent-deadline-guard.mjs" && test -f "$DST/agent-deadline-cleanup.mjs" && \
@@ -433,7 +490,8 @@ echo "✅ copied + verified in $DST" || echo "❌ FAILED"
 **EXECUTE** merge settings (global — the SAME node script as the project block,
 only `SETTINGS`/`HOOKS_DIR` change; `~/.claude` is Bash-only):
 ```
-SETTINGS="$HOME/.claude/settings.json" HOOKS_DIR="$HOME/.claude/hooks" HOOK_ARG_SCOPE=global node -e '
+G="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+SETTINGS="$G/settings.json" HOOKS_DIR="$G/hooks" HOOK_ARG_SCOPE=global node -e '
 const fs=require("fs"), path=require("path");
 const f=process.env.SETTINGS, dir=process.env.HOOKS_DIR, scope=process.env.HOOK_ARG_SCOPE;
 const hookArg=script=>scope==="project"?"${CLAUDE_PROJECT_DIR}/.claude/hooks/"+script:path.join(dir,script);
@@ -478,7 +536,7 @@ for(const ev of Object.keys(s.hooks)){
 for(const [ev,matcher,script,timeout] of want){
   s.hooks[ev]=s.hooks[ev]||[];
   const full=hookArg(script);
-  const entry={hooks:[{type:"command",command:"node",args:[full],timeout}]};   // no timeout = CC default 60s per tool call
+  const entry={hooks:[{type:"command",command:"node",args:[full],timeout}]};   // no timeout = CC default 600s per tool call
   if(matcher) entry.matcher=matcher;
   s.hooks[ev].push(entry);
 }
@@ -493,12 +551,12 @@ console.log("OK merged "+f);
 ' && echo "✅ settings" || echo "❌ FAILED"
 ```
 
-> **STOP if ❌** — fix before continuing. An ABORT means `~/.claude/settings.json`
+> **STOP if ❌** — fix before continuing. An ABORT means the global `settings.json`
 > was left EXACTLY as it was: `model`, `env`, `permissions.deny` and every foreign
 > hook are intact. Fix the JSON by hand, then re-run.
 
 > Bash file writes to `~/.claude/*` are currently allowed; only the
-> Write/Edit/MultiEdit TOOLS are blocked. Re-check this if a future CC release
+> Write/Edit TOOLS are blocked. Re-check this if a future CC release
 > tightens it — the copy block's `test -f` is what catches the regression.
 
 ---
@@ -517,7 +575,7 @@ ONE scope against the current assets, at the budget ALREADY configured.
 
 ```
 # project: CFG="$ROOT/.claude/agent-deadline.json"
-# global:  CFG="$HOME/.claude/agent-deadline.json"
+# global:  CFG="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/agent-deadline.json"
 MINUTES=$(CFG="$ROOT/.claude/agent-deadline.json" node -e '
 const fs=require("fs"); const f=process.env.CFG;
 if(!fs.existsSync(f)){ console.error("ABORT: not installed in this scope - no config at "+f+"; run INSTALL instead"); process.exit(1); }
@@ -543,7 +601,7 @@ process.stdout.write(String(m));
 
 Nothing is asked and nothing is deleted. Upgrade ONE scope per run; "both" is two runs.
 
-> Wiring changed -> a NEW session is required.
+> Wiring changed -> applies to the running session (settings are watched); `/hooks` confirms.
 
 ---
 
@@ -557,7 +615,7 @@ config on every call, so this takes effect immediately, no restart.
 metadata keys.
 ```
 # project: CFG="$ROOT/.claude/agent-deadline.json"
-# global:  CFG="$HOME/.claude/agent-deadline.json"
+# global:  CFG="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/agent-deadline.json"
 SRC="$(dirname "$RUNBOOK")"
 CFG="$ROOT/.claude/agent-deadline.json" PJSON="$SRC/../../../.claude-plugin/plugin.json" node -e '
 const fs=require("fs"), p=require("path"); const f=process.env.CFG;
@@ -617,15 +675,15 @@ Change the budget the same way — edit `defaultMinutes` / `byAgentType` /
 
 ---
 
-## UNINSTALL  (settings entries + hook files; config and state kept)
+## UNINSTALL  (settings entries + hook files + this scope's state; config kept)
 
 Marker = the 2 script basenames. ONE scope per run — uninstall the scope you were
 asked about and leave the other alone. Foreign hook entries are never touched.
 
-**EXECUTE** using Bash tool — pick ONE pair of paths:
+Step 1. **EXECUTE** using Bash tool — pick ONE pair of paths:
 ```
-# GLOBAL:  HOOKS_DIR="$HOME/.claude/hooks"; SETTINGS="$HOME/.claude/settings.json"
-# PROJECT: HOOKS_DIR="$ROOT/.claude/hooks";  SETTINGS="$ROOT/.claude/settings.json"
+# GLOBAL:  G="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"; export HOOKS_DIR="$G/hooks" SETTINGS="$G/settings.json"
+# PROJECT: export HOOKS_DIR="$ROOT/.claude/hooks" SETTINGS="$ROOT/.claude/settings.json"
 export HOOKS_DIR="$ROOT/.claude/hooks" SETTINGS="$ROOT/.claude/settings.json"
 node -e '
 const fs=require("fs");
@@ -643,6 +701,7 @@ function lock(f){                                      // O_EXCL dir lock; stale
   }
   console.error("ABORT: "+l+" is held by another installer; nothing was written"); process.exit(1);
 }
+if(!f){ console.error("ABORT: SETTINGS unset - export it (the GLOBAL/PROJECT line); nothing was removed"); process.exit(1); }
 if(!fs.existsSync(f)){ console.log("no settings to clean: "+f); process.exit(0); }
 process.on("exit",lock(f));                            // re-read under the lock - a concurrent installer must not lose its merge
 const raw=fs.readFileSync(f,"utf8");
@@ -653,17 +712,20 @@ catch(e){ console.error("ABORT: "+f+" is not valid JSON ("+e.message+") - fix or
 if(s===null||typeof s!=="object"||Array.isArray(s)){ console.error("ABORT: "+f+" is not a JSON object; nothing was written"); process.exit(1); }
 const argsOf=h=>Array.isArray(h&&h.args)?h.args.filter(a=>typeof a==="string"):[];
 const isAD=a=>marks.some(m=>a===m||a.endsWith("/"+m)||a.endsWith("\\"+m));
+let removed=0;
 if(s.hooks&&typeof s.hooks==="object"){
   for(const ev of Object.keys(s.hooks)){
     if(!Array.isArray(s.hooks[ev])) continue;
     s.hooks[ev]=s.hooks[ev].map(e=>{
       if(!e||typeof e!=="object"||!Array.isArray(e.hooks)) return e;
-      return {...e,hooks:e.hooks.filter(h=>!argsOf(h).some(isAD))};
+      const rest=e.hooks.filter(h=>!argsOf(h).some(isAD)); removed+=e.hooks.length-rest.length;
+      return {...e,hooks:rest};
     }).filter(e=>!e||typeof e!=="object"||!Array.isArray(e.hooks)||e.hooks.length>0);
     if(s.hooks[ev].length===0) delete s.hooks[ev];
   }
   if(Object.keys(s.hooks).length===0) delete s.hooks;
 }
+if(removed&&Object.keys(s).length===0){ fs.unlinkSync(f); console.log("OK removed "+f+" (agent-deadline was its only content)"); process.exit(0); }
 fs.writeFileSync(f,JSON.stringify(s,null,2)+"\n");
 const back=JSON.parse(fs.readFileSync(f,"utf8"));      // post-write verification
 const left=Object.values((back.hooks)||{}).flat().flatMap(e=>(e&&e.hooks)||[]).filter(h=>argsOf(h).some(isAD)).length;
@@ -671,49 +733,92 @@ if(left!==0){ console.error("ABORT: verification failed - "+left+" agent-deadlin
 console.log("OK cleaned "+f);
 ' && rm -f "$HOOKS_DIR/agent-deadline-guard.mjs" "$HOOKS_DIR/agent-deadline-cleanup.mjs" \
   && test ! -e "$HOOKS_DIR/agent-deadline-guard.mjs" && test ! -e "$HOOKS_DIR/agent-deadline-cleanup.mjs" \
+  && { rmdir "$HOOKS_DIR" 2>/dev/null || true; } \
   && echo "✅ uninstalled from $HOOKS_DIR" || echo "❌ FAILED"
 ```
 
-> **STOP if ❌** — fix before continuing.
+> **STOP if ❌** — fix before continuing. What install created goes when emptied: a
+> `settings.json` left as `{}` is deleted, an empty hooks dir removed.
 
 > Global uninstall: `Write`/`Edit` on `~/.claude/*` prompts and fails headless — use
 > the Bash `node`/`rm` form above. Project uninstall goes through the same block: it
 > is the only path that locks, verifies and keeps foreign hooks.
 
-## PURGE  (uninstall + config, and only then state)
+Step 2: run **STATE REMOVAL** below for the same scope. With the hooks gone nothing
+prunes this scope's state any more, so uninstall takes it along; the config stays.
 
-Run UNINSTALL for THIS scope first, then delete THIS scope's config. `CFG` is a
-single path — purging the project MUST NOT delete the global config, and vice
-versa.
+## STATE REMOVAL  (this scope only)
+
+Step 2 of UNINSTALL and step 3 of PURGE. Every state file names the config that
+governs it (`config`), so the block deletes exactly the files of ONE scope — the
+one whose config path is `CFG`, whether or not that file still exists. It never
+deletes the `brewtools-agent-deadline` root or a session dir unless that is empty:
+the root is shared by every project and by the global install, and wiping it
+would reset the clock of every live agent everywhere. Files untouched for a day
+go too (the hooks' own prune age, any scope).
+
+**EXECUTE** state removal (Bash tool) — `CFG` = this scope's config path:
+```
+# project: CFG="$ROOT/.claude/agent-deadline.json"
+# global:  CFG="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/agent-deadline.json"
+CFG="$ROOT/.claude/agent-deadline.json" node -e '
+const fs=require("fs"), os=require("os"), p=require("path");
+const root=p.join(os.tmpdir(),"brewtools-agent-deadline");
+const cfg=(process.env.CFG||"").trim();
+if(!cfg){ console.error("ABORT: CFG is empty - set the scope config path; nothing was removed"); process.exit(1); }
+let want=p.resolve(cfg);                               // spelled like the guard records it: realpath(dir)/basename
+try{ want=p.join(fs.realpathSync(p.dirname(want)),p.basename(want)); }catch{}
+let st; try{ st=fs.lstatSync(root); }catch{ console.log("OK no state root at "+root); process.exit(0); }
+const uid=typeof process.getuid==="function"?process.getuid():null;
+if(!st.isDirectory()||(uid!==null&&st.uid!==uid)){ console.error("ABORT: "+root+" is not a directory owned by this user; nothing was removed"); process.exit(1); }
+const stale=Date.now()-24*60*60*1000;
+let removed=0, kept=0;
+for(const s of fs.readdirSync(root)){
+  const d=p.join(root,s);
+  let ds; try{ ds=fs.lstatSync(d); }catch{ continue; }
+  if(!ds.isDirectory()){ kept++; continue; }
+  for(const n of fs.readdirSync(d)){
+    const f=p.join(d,n);
+    let mine=false;
+    try{
+      const fst=fs.lstatSync(f);
+      if(fst.isFile()){
+        let o=null; try{ o=JSON.parse(fs.readFileSync(f,"utf8")); }catch{}
+        mine=(o!==null&&typeof o==="object"&&o.config===want)||fst.mtimeMs<stale;
+      }
+    }catch{}
+    if(mine){ fs.rmSync(f,{force:true}); removed++; } else kept++;
+  }
+  try{ fs.rmdirSync(d); }catch{}                         // only an EMPTY session dir goes
+}
+try{ fs.rmdirSync(root); }catch{}                        // only an EMPTY root goes
+console.log("OK removed "+removed+" state file(s) of "+want+"; left "+kept+" of other scopes in "+root);
+' && echo "✅ state" || echo "❌ FAILED"
+```
+
+> **STOP if ❌** — fix before continuing. The block reads `os.tmpdir()`: run it with the
+> same `TMPDIR` Claude Code's hook processes have, or it looks at a different root (it
+> prints the root it used). State written by a pre-6.5 hook carries no `config` and is
+> left to age out.
+
+## PURGE  (uninstall + config + this scope's state)
+
+1. Run UNINSTALL for THIS scope (both of its steps).
+2. Delete THIS scope's config. `CFG` is a single path — purging the project
+   MUST NOT delete the global config, and vice versa.
+3. Re-run **STATE REMOVAL** with the same `CFG`: hooks wired in the other scope may
+   have written state for this config between steps 1 and 2.
 
 **EXECUTE** using Bash tool:
 ```
 # project: CFG="$ROOT/.claude/agent-deadline.json"
-# global:  CFG="$HOME/.claude/agent-deadline.json"
+# global:  CFG="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/agent-deadline.json"
 CFG="$ROOT/.claude/agent-deadline.json"
 rm -f "$CFG" && test ! -e "$CFG" && echo "✅ removed $CFG" || echo "❌ FAILED"
+rmdir "$ROOT/.claude" 2>/dev/null || true   # project only: a .claude/ the purge left empty
 ```
 
 > **STOP if ❌** — fix before continuing.
-
-State wipe is SEPARATE and OFF by default: the tmp state root is shared by every
-running Claude Code session, so deleting it resets the deadline of every live
-agent everywhere — including sessions this purge has nothing to do with. It runs
-only when no agent-deadline config is left in EITHER scope AND `PURGE_STATE=1`
-is set explicitly. Otherwise leftovers self-prune after ~1 day.
-
-**EXECUTE** using Bash tool (optional):
-```
-if [ -f "$ROOT/.claude/agent-deadline.json" ] || [ -f "$HOME/.claude/agent-deadline.json" ]; then
-  echo "SKIP state wipe: agent-deadline is still configured in the other scope"
-elif [ "$PURGE_STATE" = "1" ]; then
-  node -e 'const fs=require("fs"),os=require("os"),p=require("path");
-  const d=p.join(os.tmpdir(),"brewtools-agent-deadline");
-  fs.rmSync(d,{recursive:true,force:true});console.log("OK purged "+d);' && echo "✅ state" || echo "❌ FAILED"
-else
-  echo "SKIP state wipe: re-run with PURGE_STATE=1 to also drop live agent state (self-prunes in ~1 day)"
-fi
-```
 
 ---
 
@@ -738,14 +843,17 @@ const f=p.join(os.tmpdir(),"brewtools-agent-deadline","S","A1.json");
 const s=JSON.parse(fs.readFileSync(f,"utf8")); s.start=Date.now()-24*60000; s.warned=true;
 fs.writeFileSync(f,JSON.stringify(s));'
 
-# 4. same state, tool_name "Write" -> must NOT deny (finalization tool)
+# 4. same state, tool_name "Write" or "SubagentHandback" -> must NOT deny
+# 5. SubagentStop for A1 -> state file stays and gains "stopped"; replay call 2 -> still "deny"
+echo '{"session_id":"S","cwd":"<repo>","hook_event_name":"SubagentStop","agent_id":"A1","agent_type":"developer"}' \
+  | node <absdir>/agent-deadline-cleanup.mjs; echo " exit=$?"
 ```
 
 Live check: set `defaultMinutes` to `1`, spawn any subagent that makes several
-tool calls, and watch its Bash/Grep calls come back with `AGENT DEADLINE
-EXCEEDED` while `Read`/`Write` keep working.
+tool calls, and watch its Bash/Grep calls come back with `Time budget spent`
+while `Read`/`Write` and the report call keep working.
 
 > After install or removal `/reload-plugins` is NOT needed (plain settings.json
-> hooks, not plugin hooks), but Claude Code loads hook config at session start —
-> a NEW session is required for wiring changes. Config-value changes
+> hooks, not plugin hooks): Claude Code watches settings files and applies wiring
+> changes to the running session; `/hooks` confirms. Config-value changes
 > (`enabled`, minutes) are read live and need no restart.

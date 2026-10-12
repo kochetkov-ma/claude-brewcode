@@ -1,7 +1,5 @@
 # Python Reference
 
-> Language-specific rules for text-human skill
-
 ## File Classification
 
 ### Haiku (Simple)
@@ -84,13 +82,6 @@ def _validate_input(self, data: dict) -> bool:
 
 def __calculate_hash(self, value: str) -> int:
     """Calculate hash for value."""
-
-# CORRECT - only the redundant examples above lose docstrings:
-def _validate_input(self, data: dict) -> bool:
-    ...
-
-def __calculate_hash(self, value: str) -> int:
-    ...
 ```
 
 ### Classes
@@ -99,13 +90,6 @@ def __calculate_hash(self, value: str) -> int:
 # REMOVE - obvious class:
 class UserRepository:
     """Repository for user operations."""
-
-class OrderService:
-    """Service for order management."""
-
-# CORRECT - no docstring:
-class UserRepository:
-    ...
 
 # KEEP - non-obvious behavior:
 class RateLimiter:
@@ -121,9 +105,6 @@ def __init__(self, name: str):
 
 def __str__(self) -> str:
     """Return string representation."""
-
-def __len__(self) -> int:
-    """Return length."""
 
 # CORRECT - redundant dunder doc removed; meaningful contracts remain:
 def __init__(self, name: str):
@@ -195,32 +176,6 @@ class TestUserService:
 @pytest.fixture
 def mock_user():
     """Create mock user for tests."""
-
-# CORRECT:
-@pytest.fixture
-def mock_user():
-    ...
-```
-
----
-
-## Pre-Completion Checklist
-
-| Check | Rule |
-|-------|------|
-| [ ] | `_method` docs retain meaningful private contracts |
-| [ ] | Dunder docs lose only redundancy; non-standard contracts retained |
-| [ ] | Test/fixture docs retain useful assumptions and GIVEN/WHEN/THEN |
-| [ ] | No trivial Args/Returns in docstrings |
-| [ ] | Type comments and annotations unchanged; migrations proposal-only |
-| [ ] | `# noqa`/type/security/tool directives unchanged; missing explanations surfaced |
-
-### Scan Pattern
-
-```
-# grep patterns:
-grep -n '"""' <file>              # Find docstrings
-grep -n "def _" <file>            # Find private methods
 ```
 
 ---

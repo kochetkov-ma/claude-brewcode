@@ -1,5 +1,5 @@
-# Builds and pushes the docs Docker image to GHCR.
-# Triggers on version tags (v*.*.*) and branch pushes (except main).
+# Builds and pushes the docs image to GHCR on v*.*.* tags and non-main branch pushes.
+# Branch images are previews: deploy-docs.yml deploys release-tag builds only.
 
 name: Docs
 
@@ -23,11 +23,11 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 

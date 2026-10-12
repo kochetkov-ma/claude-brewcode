@@ -1,16 +1,6 @@
 #!/usr/bin/env node
-/**
- * Emit-ownership suite for brewcode:superreview-setup generate.sh.
- *
- * Cover for the stale-owned-artifact gap: emit writes only the SELECTED $STACK_REF
- * and never replaced the target wholesale, so switching stack A -> stack B left A's
- * reference installed forever and every later restamp treated it as current.
- *
- * Each case runs the real generator as a child process with cwd set to its own
- * mkdtemp root (the generator's target is cwd-relative), so nothing here depends on
- * the repo it is executed from. GENERATE_SH=<path> points the suite at another copy -
- * that is how the pre-fix falsification is run.
- */
+// Emit-ownership suite for superreview-setup generate.sh: a stack switch (A -> B) must not leave A's owned ref installed.
+// Each case runs the real generator, cwd = own mkdtemp root; GENERATE_SH=<path> targets another copy (pre-fix falsification).
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -169,8 +159,7 @@ const write = (p, body) => { mkdirSync(dirname(p), { recursive: true }); writeFi
 }
 
 // ── 7. the marker STRING is not ownership - only the anchored frontmatter key is ─
-// A user file that merely mentions `generated_by: "brewcode:superreview-setup"`, or carries it
-// outside the leading `---` block, used to be deleted by the sweep (substring match on head -10).
+// A body mention of `generated_by: "brewcode:superreview-setup"`, or one outside the leading `---` block, used to be swept (head -10 substring).
 {
   const root = project('marker-mention');
   run(root, 'emit', { STACK_REF: 'python.md' });
@@ -191,6 +180,100 @@ const write = (p, body) => { mkdirSync(dirname(p), { recursive: true }); writeFi
   check('sweep emit exits 0 with marker-mentioning files present', sw.code, 0);
   check('files merely MENTIONING the marker survive byte-identical', [hash(mention), hash(past), hash(unanchored)], before);
   check('the genuinely owned stale ref is still swept', existsSync(join(root, REFS, 'python.md')), false);
+}
+
+// ── 8. upgrade restamps every live artifact, on every stack ───────────────────
+// Cover for the gap that let `upgrade` abort on references shipped without content_version.
+const SKILL_SRC = join(dirname(GEN), '..');
+const TODAY = spawnSync('date', ['+%F'], { encoding: 'utf8' }).stdout.trim();
+const RELEASE_STAMP = {
+  version: JSON.parse(readFileSync(join(SKILL_SRC, '..', '..', '.codex-plugin', 'plugin.json'), 'utf8')).version,
+  content_version: /brewcode-meta:.*content_version=(\d+\.\d+\.\d+)/.exec(readFileSync(join(SKILL_SRC, 'SKILL.md'), 'utf8'))[1],
+  generated_by: 'brewcode:superreview-setup',
+  last_updated: TODAY,
+};
+const stamp = p => Object.fromEntries(
+  read(p).split('\n---\n')[0].split('\n')
+    .map(l => /^(version|content_version|generated_by|last_updated): "(.*)"$/.exec(l))
+    .filter(Boolean)
+    .map(m => [m[1], m[2]]));
+
+for (const stack of ['go.md', 'java-kotlin.md', 'python.md', 'typescript-react.md']) {
+  // GIVEN a fresh install on this stack
+  const root = project(`upgrade-${stack}`);
+  run(root, 'emit', { STACK_REF: stack });
+  const live = ['SKILL.md', 'references/agent-prompt.md', 'references/report-template.md', 'references/scope.md', `references/${stack}`];
+
+  // WHEN upgrade runs with a bare environment
+  const up = run(root, 'upgrade');
+
+  // THEN it exits 0, restamps each live artifact once, and all five carry one release stamp
+  check(`upgrade exits 0 (${stack})`, up.code, 0);
+  check(`upgrade restamps each live artifact once (${stack})`,
+    up.out.split('\n').filter(l => l.startsWith('RESTAMP: ')).map(l => l.split(' ')[1]),
+    live.map(rel => `${SKILL}/${rel}`));
+  check(`every live artifact carries the release stamp (${stack})`,
+    live.map(rel => stamp(join(root, SKILL, rel))), live.map(() => RELEASE_STAMP));
+}
+
+// ── 9. an install whose references predate content_version still upgrades ─────
+{
+  // GIVEN live and baseline references carrying the old three-key stamp
+  const root = project('upgrade-old-install');
+  run(root, 'emit', { STACK_REF: 'python.md' });
+  const refs = ['references/agent-prompt.md', 'references/report-template.md', 'references/python.md'];
+  const strip = p => write(p, read(p).replace(/^content_version: .*\n/m, ''));
+  refs.forEach(rel => { strip(join(root, SKILL, rel)); strip(join(root, SKILL, '.template-baseline', rel)); });
+  check('precondition: old references carry no content_version',
+    refs.map(rel => 'content_version' in stamp(join(root, SKILL, rel))), [false, false, false]);
+  const bodies = refs.map(rel => read(join(root, SKILL, rel)).split('\n---\n').slice(1).join('\n---\n'));
+
+  // WHEN upgrade runs
+  const up = run(root, 'upgrade');
+
+  // THEN it exits 0, the old references gain the full stamp, and their bodies are byte-identical
+  check('upgrade of an old install exits 0', up.code, 0);
+  check('old references gain the full release stamp',
+    refs.map(rel => stamp(join(root, SKILL, rel))), refs.map(() => RELEASE_STAMP));
+  check('old reference bodies are byte-identical after the restamp',
+    refs.map(rel => read(join(root, SKILL, rel)).split('\n---\n').slice(1).join('\n---\n')), bodies);
+}
+
+// ── 10. nested agents: Codex scans .codex/agents/ recursively ──────────
+{
+  // GIVEN one top-level and one nested agent
+  const root = project('nested-agents');
+  write(join(root, '.codex/agents/top.toml'), '---\nname: top\ndescription: top owner\n---\n');
+  write(join(root, '.codex/agents/review/expert.toml'), '---\nname: expert\ndescription: nested owner\n---\n');
+  const rows = out => out.split('\n').filter(l => l.startsWith('.codex/agents/')).map(l => l.split(' :: ')[0]);
+
+  // WHEN scan runs
+  const scan = run(root, 'scan');
+
+  // THEN the roster and its count include the nested agent
+  check('scan roster lists the nested agent', rows(scan.out), ['.codex/agents/review/expert.toml', '.codex/agents/top.toml']);
+  check('scan counts the nested agent', scan.out.split('\n').filter(l => l.startsWith('agents=')), ['agents=2']);
+
+  // WHEN the emitted runtime roster probe runs
+  run(root, 'emit', { STACK_REF: 'python.md' });
+  const prompt = read(join(root, REFS, 'agent-prompt.md')).split('\n');
+  const start = prompt.indexOf('# Live roster: name + description of every project agent');
+  write(join(root, 'roster.sh'), `${prompt.slice(start, prompt.indexOf('```', start)).join('\n')}\n`);
+  const probe = spawnSync('bash', [join(root, 'roster.sh')], { cwd: root, encoding: 'utf8' });
+
+  // THEN it lists the nested agent too (intent-guard is written by emit)
+  check('emitted roster probe lists the nested agent', rows(probe.stdout),
+    ['.codex/agents/intent-guard.toml', '.codex/agents/review/expert.toml', '.codex/agents/top.toml']);
+
+  // WHEN validate sees a nested agent and an unknown one referenced
+  const sk = join(root, SKILL, 'SKILL.md');
+  write(sk, `${read(sk)}\ntask_role="expert"\ntask_role="ghost"\n`);
+  const val = run(root, 'validate');
+
+  // THEN only the unknown one is rejected
+  check('validate allowlist accepts the nested agent only',
+    val.out.split('\n').filter(l => l.startsWith('❌ unknown agent referenced')),
+    ['❌ unknown agent referenced in SKILL.md: ghost (not in target .codex/agents/ nor built-in Explore|Plan|general-purpose)']);
 }
 
 rmSync(BASE, { recursive: true, force: true });

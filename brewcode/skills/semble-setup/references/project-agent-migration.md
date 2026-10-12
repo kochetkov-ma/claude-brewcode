@@ -1,6 +1,6 @@
 # Project agent migration
 
-> Owner script: `scripts/semble-agents.sh`. Contract: DESIGN §9.9 + §11.
+> Owner script: `scripts/semble-agents.sh`.
 > Goal: an agent with a `tools:` allowlist can call the two Semble MCP tools.
 > Non-goal: touching anything else in the file.
 
@@ -9,7 +9,7 @@
 | Scope | Directory | Automatic? |
 |-------|-----------|------------|
 | `project` (default) | `<projectRoot>/.claude/agents/**/*.md` (recursive) | yes |
-| `global` | `<home>/.claude/agents/**/*.md` | never — needs `--scope global` and, for `apply`, `--yes` |
+| `global` | `<config dir>/agents/**/*.md` (`CLAUDE_CONFIG_DIR`, default `<home>/.claude`) | never — needs `--scope global` and, for `apply`, `--yes` |
 
 `install` never implies global scope. `audit --scope global` is allowed without `--yes` because it writes nothing.
 
@@ -17,11 +17,9 @@
 
 `mcp__semble_code__search`, `mcp__semble_code__find_related` — exact, never a wildcard.
 
-## `mcpServers` — deliberate SPEC override
+## No `mcpServers`
 
-**No `mcpServers` is added by this helper.** The 2.1.223 absence rationale is withdrawn: CC 2.1.285 supports local/user fields, ignored for plugin agents. This migration extends only `tools:` for inherited MCP; SPEC line 222's conditional declaration ("when explicit self-contained MCP declaration is required by the final design") is unnecessary here.
-
-Existing `mcpServers` stays byte-identical; the suite asserts no file gains one.
+The helper never adds `mcpServers`: a subagent reaches the session's `semble_code` tools once its `tools:` allowlist names them, and plugin agents ignore `mcpServers` anyway. Existing `mcpServers` stays byte-identical; the suite asserts no file gains one.
 
 ## Transformation table
 
@@ -63,7 +61,7 @@ Frontmatter = the block between a line-1 `---` (BOM tolerated) and the next line
 | `action` | `reason` values | Meaning |
 |----------|-----------------|---------|
 | `changed` | `added`, `removed` (revert) | the `tools:` value was edited and verified |
-| `unchanged` | `inherits`, `already-present`, `already-allowed`, `not-present` (revert) | nothing needed doing |
+| `unchanged` | `inherits`, `already-present`, `already-allowed`, `not-present` / `not-owned` (revert) | nothing needed doing, or no ownership record (`not-owned`) |
 | `conflict` | `disallowed-tools` | a `disallowedTools` entry blocks the tools; nothing written |
 | `skipped` | `no-frontmatter`, `unterminated-frontmatter`, `duplicate-tools-key`, `malformed-tools-value`, `too-large`, `symlink`, `not-md` | not a file we may edit |
 | `failed` | `write-error`, `verify-mismatch`, `restore-failed`, `read-error` | read/write/verification failed; restoration is attempted when possible. `restore-failed` means it was not proven; retain/report the backup |
@@ -73,11 +71,11 @@ In `audit` the `action` is a **prediction** — nothing is written and `backup` 
 ## Byte preservation — how it is proven
 
 1. **Surgical splices.** The file is never re-emitted. The script computes absolute source offsets and splices only inside the `tools:` value; every other byte is the original byte, by construction.
-2. **Backup first, transient by design.** `cp <file> <file>.bak.<epoch>` before any write; `.bak.*` files are not `*.md`, so a later run never picks them up. The copy exists **only** across the write+verify window: once `verify()` is clean the backup is `unlink`ed and the entry reports `backup: ""`. Nothing is left next to a git-tracked agent file — `apply`, `apply`, `apply --revert` leaves `.claude/agents/` with exactly the entries it started with (asserted by the suite).
-   A backup **survives** exactly when it may still be needed: the write failed, the post-write verification failed (the original is copied back from it), or the process died before the verification. Then `backup` carries its absolute path, the run exits 1, and the file is the user's to inspect and delete. Backups are never written outside the file's own directory, so a read-only or exotic location fails loudly instead of silently relocating the user's data.
+2. **Transient backup.** `cp <file> <file>.bak.<epoch>` before any write (`.bak.*` is not `*.md`, so no later run picks it up); after a clean `verify()` it is `unlink`ed and the entry reports `backup: ""`. `apply`, `apply`, `apply --revert` leaves `.claude/agents/` with exactly its starting entries (suite-asserted).
+   A backup **survives** only when still needed: failed write, failed post-write verification (the original is copied back from it), or a process killed before verification. Then `backup` carries its absolute path, the run exits 1, and the user inspects and deletes it. Backups stay in the file's own directory: a read-only location fails loudly instead of relocating user data.
 3. **Skeleton check after the write.** The file is re-read and re-parsed from disk; the `tools:` declaration is collapsed to a sentinel in both the old and the new text and the two skeletons must be **string-equal**. That covers the body, all other frontmatter keys, comments, blank lines and permissions.
 4. **Line-array check.** Every frontmatter line outside the tools region must be byte-identical, in the same order.
-5. **Tool presence.** Both names must parse out of the new value (`apply`), or neither (`--revert`).
+5. **Tool presence.** Both names must parse out of the new value (`apply`), or only the kept user-authored ones (`--revert`).
 6. **EOL arithmetic.** `Δ"\n"` must equal the number of inserted lines and `Δ"\r\n"` must equal the same number on a CRLF file, `0` on an LF file.
 
 Any mismatch -> restore from the backup, report `failed`, exit 1.
@@ -110,19 +108,12 @@ Test injection: `SEMBLE_PROJECT_ROOT`, `SEMBLE_TEST_HOME`.
 ```
 
 - `path` is relative to `root` when inside it, otherwise absolute; `files` is sorted by `path`.
-- `toolsStyle` extends the four §9.9 values with `empty` and `wildcard`, which §11.3 requires as distinct forms.
 - `note` is additive and optional — present only for the empty-allowlist narrowing, a `conflict` (the offending line) and a `failed` (the underlying error).
 - Consumer: `semble-status.sh` maps `inherit = unchanged(inherits)`, `patched = unchanged(already-present|already-allowed)`, `needsPatch = changed` from `audit --json`.
 
 ## `--revert`
 
-Removes exactly the two Semble tool names and nothing else — the separator that came with them goes too, so a flow/CSV/block list returns to its pre-apply bytes.
-
-One documented deviation, unavoidable without persisted per-file provenance:
-
-| Case | Result |
-|------|--------|
-| the user had already listed one or both names before `apply` | they are removed as well — the script cannot tell who authored a name |
+Removes only the Semble tool names this skill added, with their separator, so a flow/CSV/block list returns to its pre-apply bytes. Authorship comes from the ownership record a write-mode `apply` leaves in `state.json` (`agentsPreExisting`, keyed by scope, then path; the first observation wins). A name the user listed before `apply` is kept (`note`: `kept … — authored before install`); a file with no record is left alone (`unchanged(not-owned)`). `remove`/`purge` delete the record with the state dir.
 
 Every `tools:` form round-trips byte-exactly, the two empty ones included, and the suite asserts it per file:
 

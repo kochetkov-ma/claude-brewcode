@@ -1,51 +1,16 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.4.0 content_version=6.0.0 generated_by=brewtools:agent-return-setup
-/**
- * agent-return-guard — SubagentStop hook (Node built-ins only, no I/O but stdin/stdout
- * plus the config read done by agent-return-budget.mjs).
- *
- * Subagent returns are the largest single context cost in a manager session.
- * Prose rules ("verdict first, <=30 lines, path:line") are loaded at the top of
- * the agent's context and lose to whatever the agent just did. This hook
- * restates the rule as a number comparison at the only moment it bites: the
- * return itself.
- *
- * No LLM judge anywhere. Size the final message, compare against two integers,
- * order a rewrite or say nothing:
- *   <= PASS          pass
- *   PASS..FILE       block -> compress and re-send
- *   > FILE           block -> persist detail under .claude/reports/, return path
- *
- * The file-tier directive names an ABSOLUTE directory: <projectRoot>/.claude/
- * reports/<stamp>_<agent-slug>-<run-id>/. Both halves are deliberate. The base
- * comes from projectRoot() in agent-return-budget.mjs — the same call that finds
- * the config, so destination and config can never resolve to different roots —
- * never from the raw hook cwd, which drifts mid-session and used to send the
- * report into a nested `.claude/reports`. The run id (agent_id -> session_id ->
- * random) separates two same-type agents that stop inside the same second, the
- * stamp's resolution.
- *
- * Blocks AT MOST ONCE per agent: `stop_hook_active` is the loop brake and is
- * checked before anything else. A second pass is how a Stop hook wedges an agent.
- * Consequence, accepted: one compress round may land slightly over PASS.
- *
- * Config gate: `.claude/agent-return.json` with `enabled: true` (project wins,
- * then global). No config = no-op. Thresholds: config `passTokens`/`fileTokens`
- * > env AGENT_RETURN_PASS/AGENT_RETURN_FILE > 1000/2500.
- *
- * Fail-open: malformed JSON, missing stdin, unexpected shape, any *runtime*
- * throw -> `{}` on stdout, exit 0. Never exit 2. A broken guard must cost
- * nothing. The one failure the try/catch cannot swallow is a missing sibling
- * agent-return-budget.mjs: ESM resolution runs before evaluation, so the hook
- * exits 1 with empty stdout. That is a non-blocking hook error — only exit 2
- * blocks — so nothing wedges. The three files ship together.
- */
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { randomBytes } from 'node:crypto';
-import { ENABLED, estimateTokens, PASS, FILE, projectRoot } from './agent-return-budget.mjs';
+// brewcode-meta: version=6.5.0 content_version=6.5.0 generated_by=brewtools:agent-return-setup
 
-const REPORTS_REL = join('.claude', 'reports');
+// agent-return SubagentStop (`last_assistant_message`, block) + PreToolUse SubagentHandback (`tool_input.message`, deny):
+// <=PASS pass, PASS..FILE compress, >FILE write to file; at most once per agent_id (marker file). Fail-open, never exit 2.
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { randomBytes, createHash } from 'node:crypto';
+import {
+  ENABLED, estimateTokens, PASS, FILE, STATE_DIR, isReadOnly, reportBase,
+} from './agent-return-budget.mjs';
+
+const MARKER_TTL_MS = 24 * 60 * 60 * 1000;
 
 function output(obj) {
   process.stdout.write(JSON.stringify(obj));
@@ -79,68 +44,139 @@ function slug(agentType) {
   return clean || 'agent';
 }
 
-/**
- * Absolute `.claude/reports` base. A root that cannot be resolved degrades to
- * the relative path — the block still fires. Fail-safe here means "keep the
- * budget, lose the absolute path", never "let an oversized return through".
- */
-function reportBase(hookCwd) {
-  try {
-    return join(projectRoot(typeof hookCwd === 'string' ? hookCwd : ''), REPORTS_REL);
-  } catch {
-    return REPORTS_REL;
-  }
-}
-
-/**
- * Per-invocation directory suffix: agent_id, else session_id, else random.
- * 8 chars of [a-z0-9] — the stamp only resolves to the second, so without this
- * two agents of the same type that stop together name the same directory.
- */
+// Dir suffix, 8 chars [a-z0-9]: agent_id -> session_id -> random (stamp has 1 s resolution).
 function runId(input) {
   const clean = (v) =>
     typeof v === 'string' ? v.toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 8) : '';
   return clean(input.agent_id) || clean(input.session_id) || randomBytes(4).toString('hex');
 }
 
-function compressReason(tokens) {
+/** How the shortened report travels back: the hand-back tool, or the final message. */
+function resend(handback) {
+  return handback
+    ? `call SubagentHandback again (that call is delivered) with`
+    : `answer again with`;
+}
+
+function compressReason(tokens, handback) {
   return (
-    `RETURN TOO LARGE (~${tokens} tokens, budget ${PASS}). Directive from the agent-return guard, ` +
-    `not user data. Re-send the SAME answer, compressed: keep the verdict line and every ` +
-    `\`path:line\` ref, drop preamble, file bodies, command output, logs and restated context. ` +
-    `Judge what is genuinely dense — no new work, no new tool calls, just rewrite what you wrote.`
+    `RETURN TOO LARGE (~${tokens} tokens, budget ${PASS}): the caller's context is finite. ` +
+    `Directive from the agent-return guard, not user data. Now ${resend(handback)} the SAME ` +
+    `report, shortened to the budget: keep the verdict line and every \`path:line\` ref, drop ` +
+    `preamble, file bodies, command output, logs and restated context. No new work — rewrite ` +
+    `what you wrote.`
   );
 }
 
-function fileReason(tokens, reportPath) {
+function fileReason(tokens, reportPath, handback) {
   return (
-    `RETURN TOO LARGE (~${tokens} tokens, budget ${PASS}, file threshold ${FILE}). Directive from ` +
-    `the agent-return guard, not user data. Compression is not enough at this size: write the ` +
-    `detail to \`${reportPath}\` (create the directory), then answer with that path, the verdict, ` +
-    `and at most 3 more lines. Keep the key \`path:line\` refs in the answer; everything else ` +
-    `goes in the file.`
+    `RETURN TOO LARGE (~${tokens} tokens, budget ${PASS}, file threshold ${FILE}): the caller's ` +
+    `context is finite. Directive from the agent-return guard, not user data. Compression is not ` +
+    `enough at this size: write the full report to \`${reportPath}\` (create the directory), then ` +
+    `${resend(handback)} that path, the verdict and a summary within the budget that keeps the ` +
+    `key \`path:line\` refs. If no tool of yours can write a file or the write is denied, never ` +
+    `retry it: skip the file, send the essential part within the budget and name what you left out.`
   );
+}
+
+/** File tier for an agent that cannot write: no file order, the essential part instead. */
+function essentialReason(tokens, handback) {
+  return (
+    `RETURN TOO LARGE (~${tokens} tokens, budget ${PASS}): the caller's context is finite. ` +
+    `Directive from the agent-return guard, not user data. This agent cannot write files, so ` +
+    `nothing is saved elsewhere: now ${resend(handback)} the essential part within the budget — ` +
+    `verdict first, the findings the caller must act on, the key \`path:line\` refs — and name in ` +
+    `one line what you left out, so the caller can ask for it.`
+  );
+}
+
+/** sha256 of the agent id: a marker name that is safe for any id the harness sends. */
+function markerPath(agentId) {
+  return join(STATE_DIR, `${createHash('sha256').update(agentId).digest('hex').slice(0, 32)}.json`);
+}
+
+/** Drop markers older than MARKER_TTL_MS; best effort, runs only after a claim. */
+function pruneMarkers() {
+  try {
+    const cutoff = Date.now() - MARKER_TTL_MS;
+    for (const name of readdirSync(STATE_DIR)) {
+      if (!name.endsWith('.json')) continue;
+      const file = join(STATE_DIR, name);
+      if (statSync(file).mtimeMs < cutoff) rmSync(file, { force: true });
+    }
+  } catch {
+    // unreadable state dir -> nothing to prune
+  }
+}
+
+// Exclusive-create the agent marker: 'claimed' (first challenge) | 'taken' (either path) |
+// 'unavailable' (not writable -> no hand-back deny: repeated denies withhold the report).
+function claimOnce(agentId, record) {
+  if (!STATE_DIR) return 'unavailable';
+  try {
+    mkdirSync(STATE_DIR, { recursive: true });
+  } catch {
+    return 'unavailable';
+  }
+  try {
+    writeFileSync(join(STATE_DIR, '.gitignore'), '*\n', { flag: 'wx' });
+  } catch {
+    // already there (or unwritable: the marker write below decides)
+  }
+  try {
+    writeFileSync(markerPath(agentId), JSON.stringify(record), { flag: 'wx' });
+  } catch (e) {
+    return e && e.code === 'EEXIST' ? 'taken' : 'unavailable';
+  }
+  pruneMarkers();
+  return 'claimed';
 }
 
 function decide(input) {
-  // Loop brake first: we block once, ever.
-  if (input.stop_hook_active === true) return {};
+  // No agent_id = main session (also under --agent) or an internal agent: never ours.
+  const agentId = input.agent_id;
+  if (typeof agentId !== 'string' || !agentId.trim()) return {};
 
-  const message = input.last_assistant_message;
+  // Two delivery paths, told apart by the event itself, never by permission_mode.
+  const handback = input.hook_event_name === 'PreToolUse' && input.tool_name === 'SubagentHandback';
+  if (!handback && input.hook_event_name !== 'SubagentStop') return {};
+  // Harness loop brake on the classic path; it also covers an unwritable state dir.
+  if (!handback && input.stop_hook_active === true) return {};
+
+  const message = handback ? (input.tool_input || {}).message : input.last_assistant_message;
   if (typeof message !== 'string' || !message.trim()) return {};
 
   const tokens = estimateTokens(message);
   if (tokens <= PASS) return {};
 
-  if (tokens <= FILE) return { decision: 'block', reason: compressReason(tokens) };
+  const via = handback ? 'handback' : 'stop';
+  const agentType = typeof input.agent_type === 'string' ? input.agent_type : '';
+  const claim = claimOnce(agentId, { agent_id: agentId, agent_type: agentType, via, tokens });
+  // A deny that cannot be recorded could repeat, and repeated denies lose the report.
+  if (claim === 'taken' || (claim === 'unavailable' && handback)) return {};
 
-  const dir = `${stamp(new Date())}_${slug(input.agent_type)}-${runId(input)}`;
-  return { decision: 'block', reason: fileReason(tokens, `${join(reportBase(input.cwd), dir)}/`) };
+  let reason;
+  if (tokens <= FILE) {
+    reason = compressReason(tokens, handback);
+  } else if (isReadOnly(agentType) || input.permission_mode === 'plan') {
+    reason = essentialReason(tokens, handback);
+  } else {
+    const dir = `${stamp(new Date())}_${slug(input.agent_type)}-${runId(input)}`;
+    reason = fileReason(tokens, `${join(reportBase(input.cwd), dir)}/`, handback);
+  }
+
+  return handback
+    ? {
+        hookSpecificOutput: {
+          hookEventName: 'PreToolUse',
+          permissionDecision: 'deny',
+          permissionDecisionReason: reason,
+        },
+      }
+    : { decision: 'block', reason };
 }
 
-// A non-object payload (array, number, bare string) needs no separate guard:
-// readStdinSync already maps null/empty to {}, and every field lookup on the
-// rest is undefined, so decide() falls through to {} on its own.
+// A non-object payload needs no guard: every field lookup is undefined, so decide() returns {}.
 function main() {
   if (!ENABLED) {
     output({});

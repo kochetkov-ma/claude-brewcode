@@ -60,6 +60,7 @@ function agentPlans() {
   for (const plugin of PLUGINS) {
     const pluginRoot = path.join(ROOT, plugin);
     const sourceRoot = path.join(pluginRoot, '.codex', 'agents');
+    if (!fs.existsSync(sourceRoot)) continue; // git drops an empty agents dir
     for (const name of fs.readdirSync(sourceRoot).filter(value => value.endsWith('.toml')).sort()) {
       plans.push({
         target: path.join(targetRoot, `${plugin}-${name}`),

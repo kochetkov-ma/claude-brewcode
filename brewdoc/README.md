@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 6.4.0 |
+| Version | 6.5.0 |
 | Skills | 5 |
 | Agents | 0 |
 | Hooks | 0 |
@@ -85,9 +85,9 @@ claude --plugin-dir ./brewdoc
 
 | Skill | Purpose | Model | Arguments |
 |-------|---------|-------|-----------|
-| [`/brewdoc:docsync-setup`](skills/docsync-setup/README.md) | Installs project-local doc-staleness tracking (hooks) and reports/forces doc sync | sonnet | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [sync [--all]\|reread\|frontmatter] \| free-text` |
+| [`/brewdoc:docsync-setup`](skills/docsync-setup/README.md) | Installs project-local doc-staleness tracking (track on `Write\|Edit`, a Stop gate that blocks on edited stale docs) and reports/forces doc sync | sonnet | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [sync [--all]\|reread\|frontmatter] \| free-text` |
 | [`/brewdoc:my-claude`](skills/my-claude/README.md) | Document your Claude Code installation -- setup, architecture, web research | opus | `[ext [context]] \| [r <query>]` -- no args = internal installation docs |
-| [`/brewdoc:memory-sync-setup`](skills/memory-sync-setup/README.md) | Generator -- analyzes a target project and emits a project-tailored `.claude/skills/memory-sync/` (batches, fact catalogue, non-growth sync, independent verify) | opus | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [fine-tune-prompt]` |
+| [`/brewdoc:memory-sync-setup`](skills/memory-sync-setup/README.md) | Generator -- analyzes a target project and emits the 5 files of a project-tailored `.claude/skills/memory-sync/` (batches, fact catalogue, non-growth sync, independent verify) | opus | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [fine-tune-prompt]` |
 | [`/brewdoc:md-to-pdf`](skills/md-to-pdf/README.md) | Convert Markdown to PDF via reportlab or weasyprint engines | sonnet | `<file.md> [--engine name] ["prompt"] \| styles \| test` |
 | [`/brewdoc:publish`](skills/publish/README.md) | Publish text/markdown/file/site to brewpage.app, returns canonical URL | haiku | `<text\|file_path\|directory_path\|zip_path> [--ttl N] [--entry filename] [--delivery-mode path\|subdomain]` |
 
@@ -101,9 +101,9 @@ that still match this run's writes; concurrent edits remain intact and any recov
 
 | Skill | Needs |
 |-------|-------|
-| `publish` | `curl` and `jq` on `PATH`; site directories and ZIPs also need `node` and `unzip`; site directories additionally need `zip` |
+| `publish` | `curl` and `jq` on `PATH`; each run uses a scratch run directory under `$TMPDIR`; site directories and ZIPs also need `node` and `unzip`; site directories additionally need `zip` |
 | `md-to-pdf` | a Python engine -- `reportlab` or `weasyprint` |
-| `my-claude` | nothing extra; writes only to `.claude/brewdoc/my-claude/` in the current project |
+| `my-claude` | nothing extra; reads the active Claude config dir (`CLAUDE_CONFIG_DIR`, else `~/.claude`) and writes only to `.claude/brewdoc/my-claude/` in the current project |
 
 ### Fixed in 6.0.0
 
@@ -135,27 +135,28 @@ brewdoc/
     +-- publish/                      # brewpage.app publishing
 ```
 
-> **Brewdoc vs Brewcode:** Brewdoc is a set of documentation utilities and each skill is self-contained. Brewcode covers the project's own engineering surface -- conventions, rules, agent teams, semantic search and deep review -- with 9 skills, 5 agents and 4 registered hook commands. Both install from the same `claude-brewcode` marketplace and operate independently.
+> **Brewdoc vs Brewcode:** Brewdoc is a set of documentation utilities and each skill is self-contained. Brewcode covers the project's own engineering surface -- conventions, rules, agent teams, semantic search and deep review -- with 9 skills, 5 agents and 2 registered hook commands (both SessionStart). Both install from the same `claude-brewcode` marketplace and operate independently.
 
 ## Artifact metadata
 
-Every artifact a `-setup` skill installs into your project carries the same four fields, so you can
-tell at a glance what wrote a file and which plugin version it was written at.
+Every artifact a `-setup` skill installs into your project carries the same five fields, so you can
+tell at a glance what wrote a file, which plugin version it was written at and when its content last changed.
 
 | Field | Values | Where |
 |-------|--------|-------|
 | `doc_type` | `llm` \| `user` \| `skip` -- unquoted | `.md` frontmatter only, never JSON |
 | `version` | `"X.Y.Z"` -- plugin version at install time | all carriers |
+| `content_version` | `"X.Y.Z"` -- last release that changed this artifact's content | all carriers |
 | `generated_by` | `"<plugin>:<skill>"` | all carriers |
 | `last_updated` | `"YYYY-MM-DD"` | all carriers except a byte-copied `.mjs`/`.sh`/`.md` |
 
 A byte-copied asset omits `last_updated`: the value would be the release date,
 identical in the plugin file and the copy, so rewriting it on every build would churn bytes and
-defeat the `cmp` drift check that mechanism exists for. The four keys always sit after the file's
-own keys, in that order. JSON artifacts carry the same three snake_case keys at top level (no
+defeat the `cmp` drift check that mechanism exists for. The five keys always sit after the file's
+own keys, in that order. JSON artifacts carry the same four snake_case keys at top level (no
 `doc_type`) in every writing mode. `docsync-setup` and `memory-sync-setup` each stamp their own
 emitted files this way; versions always come from `.claude-plugin/plugin.json`, never hardcoded. `/brewcode:setup-status` reads these back to tell you
-when a setup here is running on an older version than the installed plugin.
+when a setup here has a `content_version` behind the plugin's value for that artifact.
 
 ## Documentation
 

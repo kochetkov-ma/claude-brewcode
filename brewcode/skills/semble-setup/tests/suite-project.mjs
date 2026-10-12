@@ -1,9 +1,6 @@
 #!/usr/bin/env node
-// suite-project.mjs — brewcode:semble-setup unit C.
-// Covers semble-project.sh (audit/warm/smoke/enable/disable/reindex), semble-remove.sh
-// (integration/mcp/cli/purge) and the §12.3 full-lifecycle integration test.
-// Self-contained: inlines its own check()/run() helpers, builds every fixture in a temp
-// base, and never touches the real HOME, the real cache or the repo working tree.
+// suite-project.mjs — unit C: semble-project.sh (audit/warm/smoke/enable/disable/reindex), semble-remove.sh (integration/mcp/cli/purge), §12.3 lifecycle.
+// GIVEN own check()/run() + temp-base fixtures | WHEN scripts run | THEN exact checks; real HOME, cache, tree untouched.
 
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -24,13 +21,15 @@ const MCP_SH = join(SCRIPTS, 'semble-mcp.sh');
 const GUIDANCE_SH = join(SCRIPTS, 'semble-guidance.sh');
 const STATUS_SH = join(SCRIPTS, 'semble-status.sh');
 
-const PIN_SPEC = 'semble[mcp]==0.5.5';
+const PIN_SPEC = 'semble[mcp]==0.6.2';
 const SERVER = 'semble_code';
 
-// GIVEN: a fresh isolated temp base. realpathSync mirrors the `cd && pwd -P`
-// resolution every script does, so every expected path below is the resolved one.
-// The cache roots keep their production leaf names — the rm guards require them.
+// Fresh temp base; realpathSync mirrors scripts' `cd && pwd -P`, so expected paths are resolved ones.
+// Cache roots keep production leaf names — the rm guards require them.
 const BASE = realpathSync(mkdtempSync(join(tmpdir(), 'semble-c-')));
+process.on('exit', () => {
+  try { rmSync(BASE, { recursive: true, force: true }); } catch { /* best effort */ }
+});
 const HOME = join(BASE, 'home');
 const CACHE_CODE = join(BASE, 'semble-code');
 const CACHE_BASE = process.platform === 'darwin' ? join(HOME, 'Library', 'Caches') : join(HOME, '.cache');
@@ -154,11 +153,8 @@ function stateOf(projectRoot) {
   return existsSync(f) ? safeParse(readFileSync(f, 'utf8')) : { __ABSENT__: true };
 }
 
-// The §12.3 phase ladder every project fixture climbs: create the state file and
-// walk it to `upto` through the only legal chain. Each rung is returned so a
-// caller can still assert on the exact step it cares about. Same contract as
-// suite-integration.mjs's seedState, whose ladder starts from a real MCP
-// registration instead - move both to a shared test helper when one exists.
+// §12.3 ladder: create state, walk to `upto` via the only legal chain, return each rung for asserts.
+// Same contract as suite-integration.mjs seedState (starts from real MCP registration); share when a helper exists.
 function seedState(env, upto = 'ready') {
   const rungs = { init: run(STATE_SH, ['init'], env) };
   if (upto === 'init') return rungs;
@@ -209,15 +205,21 @@ exit 0
   chmodSync(CLAUDE_STUB, 0o755);
 }
 
+// A `uv` stub, first on PATH: `uv tool list` prints nothing, so no `cli` or `purge`
+// run of this suite can reach a real `uv tool uninstall semble` on the host.
+const UV_LOG = join(BASE, 'uv-calls.log');
+function installUvStub() {
+  write(join(BIN, 'uv'), `#!/usr/bin/env bash\nprintf '%s\\n' "$*" >> "${UV_LOG}"\nexit 0\n`);
+  chmodSync(join(BIN, 'uv'), 0o755);
+}
+
 function claudeCalls() {
   return existsSync(CLAUDE_LOG)
     ? readFileSync(CLAUDE_LOG, 'utf8').split('\n').filter((s) => s.length > 0)
     : [];
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 1. Coverage classification (§7)
-// ═══════════════════════════════════════════════════════════════════════════
+// ── 1. Coverage classification (§7) ──
 const COV = join(BASE, 'repo-cov');
 const PAD = 'x'.repeat(200); // keeps every fixture file over the 128-byte floor
 
@@ -272,14 +274,8 @@ check('audit disclosure mdx', auditFull.disclosure.includes('.mdx'), true,
 check('audit is read-only', existsSync(join(COV, '.claude')), false,
   'audit wrote nothing into the project');
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 1b. candidates — measured per-repo .sembleignore proposals
-//
-// The shipped template's per-repo section is empty because the two things that
-// actually waste result slots are layout-specific. This mode measures them.
-// Every assertion here is about what it must NOT propose as much as what it
-// must: a wrong exclusion fails silently, and silence is the worse error.
-// ═══════════════════════════════════════════════════════════════════════════
+// ── 1b. candidates — measured per-repo .sembleignore proposals ──
+// Slot wasters are layout-specific (template section empty); asserts cover what it must NOT propose: wrong exclusions fail silently.
 const CAND = join(BASE, 'repo-cand');
 for (let i = 0; i < 10; i++) {
   const body = `export function f${i}() {\n  return ${i};\n}\n${PAD}\n`;
@@ -330,9 +326,7 @@ check('candidates.humanExit', candHuman.status, 0, 'the human form exits 0 too')
 check('candidates.humanEmpty', candHuman.stdout.includes('none - nothing in this repo'), true,
   'and says so in words rather than printing an empty list');
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 2. warm / smoke honour SEMBLE_NO_NETWORK
-// ═══════════════════════════════════════════════════════════════════════════
+// ── 2. warm / smoke honour SEMBLE_NO_NETWORK ──
 const warm = run(PROJECT_SH, ['warm', '--json'], { SEMBLE_PROJECT_ROOT: COV });
 const warmJson = safeParse(warm.stdout);
 check('warm exit', warm.status, 3,
@@ -354,13 +348,8 @@ check('smoke shape', Object.keys(smokeJson).sort(),
   'smoke --json carries the §9.6 keys');
 check('smoke query override', smokeJson.query, 'auth handler', '--query is honoured');
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 2b. the real search path is bounded by sc_timeout, with or without a
-// timeout binary. uvx is stubbed in a dedicated bin dir prepended to PATH so
-// the rest of the suite still runs with no uvx at all; SP_SEARCH_TIMEOUT is
-// dialled down from its production 600 s and the backend is pinned, because
-// PATH cannot be trusted to have (macOS) or lack (Linux) `timeout`.
-// ═══════════════════════════════════════════════════════════════════════════
+// ── 2b. the real search path is bounded by sc_timeout, with or without a timeout binary ──
+// uvx stub in own PATH-prepended bin dir; SP_SEARCH_TIMEOUT cut from 600 s; backend pinned (macOS lacks, Linux has `timeout`).
 const UVX_BIN = join(BASE, 'uvxbin');
 const UVX_STUB = join(UVX_BIN, 'uvx');
 const UVX_ENV_LOG = join(BASE, 'uvx-env.log');
@@ -443,9 +432,7 @@ check('search.bin.cache-env', readFileSync(UVX_ENV_LOG, 'utf8'), `${CACHE_CODE}\
     'the wedged uvx was killed instead of outliving its bound');
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 3. reindex — guards, --yes, blast radius
-// ═══════════════════════════════════════════════════════════════════════════
+// ── 3. reindex — guards, --yes, blast radius ──
 const RIDX = join(BASE, 'repo-reindex');
 write(join(RIDX, 'src/main.py'), `def main():\n    return 1\n# ${PAD}\n`);
 const RIDX_HASH = repoHash(RIDX);
@@ -507,8 +494,7 @@ check('reindex left no staging dir',
   'the staging cache root is removed on the way out');
 
 // ── 3b. the staged rebuild really replaces the index ────────────────────────
-// A uvx that builds a cache under $SEMBLE_CACHE_LOCATION exactly as semble
-// does — repo dir named sha256(project root) — and then answers the query.
+// uvx stub builds the cache under $SEMBLE_CACHE_LOCATION like semble (dir = sha256(project root)), then answers.
 const BUILD_BIN = join(BASE, 'buildbin');
 writeExec(join(BUILD_BIN, 'uvx'), `#!/usr/bin/env bash
 root="$6"
@@ -564,9 +550,7 @@ check('reindex.built.no staging residue',
 check('reindex.built.completed', stateOf(RIDX2).completed, ['warm'],
   'only a real rebuild records the warm step');
 
-// A pre-0.5.5 combined corpus occupied bare `index`. Its metadata is the only
-// authority for migration: rebuild the exact 0.5.5 variant first, then remove
-// that verified legacy directory.
+// Pre-0.5.5 combined corpus in bare `index`: its metadata alone drives migration -> rebuild 0.5.5 variant, then drop it.
 const RIDX_LEGACY = join(BASE, 'repo-reindex-legacy');
 write(join(RIDX_LEGACY, 'src/main.py'), `def main():\n    return 1\n# ${PAD}\n`);
 const RIDX_LEGACY_DIR = join(CACHE_CODE, repoHash(RIDX_LEGACY));
@@ -619,9 +603,7 @@ check('reindex.noindex.no staging residue',
   readdirSync(CACHE_CODE).filter((n) => n.startsWith('.staging')), [],
   'the empty staging root is cleaned up too');
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 4. disable — state only, nothing else moves
-// ═══════════════════════════════════════════════════════════════════════════
+// ── 4. disable — state only, nothing else moves ──
 const DIS = join(BASE, 'repo-disable');
 write(join(DIS, 'src/main.py'), `def main():\n    return 1\n# ${PAD}\n`);
 const RULE = write(join(DIS, '.claude/rules/semble-first.md'), '# semble-first\nrule body\n');
@@ -646,10 +628,9 @@ check('disable kept guidance bytes', { rule: sha(RULE), hook: sha(HOOK), setting
   disGuidanceBefore, 'rule, hook and settings files are byte-identical');
 check('disable kept the cache', snapshot(DIS_CACHE), disCacheBefore, 'the index is untouched');
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 5. remove integration + purge guards
-// ═══════════════════════════════════════════════════════════════════════════
+// ── 5. remove integration + purge guards ──
 installClaudeStub();
+installUvStub();
 
 const REM = join(BASE, 'repo-remove');
 write(join(REM, 'src/main.py'), `def main():\n    return 1\n# ${PAD}\n`);
@@ -707,6 +688,10 @@ check('purge with the wrong confirm text deletes nothing', snapshot(CACHE_CODE),
 check('purge plan names the code root',
   safeParse(badText.stdout).wouldDelete.some((s) => s.startsWith(CACHE_CODE)), true,
   'the plan names the exact directories');
+check('purge plan names only this project cache entry',
+  safeParse(badText.stdout).wouldDelete.filter((s) => s.startsWith(CACHE_CODE)),
+  [`${REM_CACHE}  (this project's cache entry only — the shared root and other projects' indexes are kept)`],
+  'the plan names <shared root>/<hash of this project>, never the shared root itself');
 
 const noText = run(REMOVE_SH, ['purge', '--yes', '--json'], remEnv);
 check('purge without --confirm-text exit', noText.status, 4, 'exit 4 = confirmation required');
@@ -716,9 +701,7 @@ check('purge without --confirm-text deletes nothing', snapshot(CACHE_CODE), cach
 const badFlavour = run(REMOVE_SH, ['everything', '--yes'], remEnv);
 check('remove with an unknown flavour', badFlavour.status, 2, 'exit 2 = bad usage');
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 6. §12.3 full lifecycle: setup -> resume -> disable -> enable -> remove
-// ═══════════════════════════════════════════════════════════════════════════
+// ── 6. §12.3 full lifecycle: setup -> resume -> disable -> enable -> remove ──
 const LIFE = join(BASE, 'repo-life');
 write(join(LIFE, 'src/main.py'), `def main():\n    return 1\n# ${PAD}\n`);
 write(join(LIFE, 'CLAUDE.md'), '# CLAUDE.md\n\nlifecycle project\n');
@@ -800,12 +783,8 @@ check('lifecycle: no claude mcp remove was called',
   claudeCalls().filter((l) => l.startsWith('mcp remove')).length, 0,
   'integration never runs `claude mcp remove`');
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 6a. enable relays what guidance reported (SS08 half two)
-// The conflict scan preserves a conditional fallback line and reports it for
-// review. enable used to run guidance with >/dev/null 2>&1, so that report —
-// and every CLAUDE.md line guidance did cut — never reached the user.
-// ═══════════════════════════════════════════════════════════════════════════
+// ── 6a. enable relays what guidance reported (SS08 half two) ──
+// enable ran guidance with >/dev/null 2>&1, so preserved-fallback reports and CLAUDE.md cuts never reached the user.
 const REL = join(BASE, 'repo-relay');
 write(join(REL, 'src/main.py'), `def main():\n    return 1\n# ${PAD}\n`);
 write(join(REL, 'CLAUDE.md'),
@@ -827,9 +806,7 @@ check('relay: the CLAUDE.md prose', readFileSync(join(REL, 'CLAUDE.md'), 'utf8')
   .includes('When the semble MCP is offline or the index is cold'), true,
   'the preserved line is still in the file — enable relays, it does not re-decide');
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 6b. preconditions, dry run, cli flavour
-// ═══════════════════════════════════════════════════════════════════════════
+// ── 6b. preconditions, dry run, cli flavour ──
 const BARE = join(BASE, 'repo-bare');
 write(join(BARE, 'src/main.py'), `def main():\n    return 1\n# ${PAD}\n`);
 const bareEnv = { SEMBLE_PROJECT_ROOT: BARE };
@@ -860,11 +837,8 @@ check('remove cli kept everything else', cliJson.unchanged, [
   'rule, hooks, MCP registration, cache and state retained',
 ], 'the cli flavour keeps rule, hooks, MCP, cache and state');
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 6c. the §4.2 phase machine has exactly ONE implementation
-// semble-project.sh used to carry its own copy of the transition table and it
-// had drifted (it allowed ready -> error, which semble-state.sh refuses).
-// ═══════════════════════════════════════════════════════════════════════════
+// ── 6c. the §4.2 phase machine has exactly ONE implementation ──
+// semble-project.sh's own transition table had drifted (allowed ready -> error, semble-state.sh refuses).
 const PH_A = join(BASE, 'repo-phase-a');
 const PH_B = join(BASE, 'repo-phase-b');
 write(join(PH_A, 'src/main.py'), `def main():\n    return 1\n# ${PAD}\n`);
@@ -876,7 +850,7 @@ function forcePhase(root, phase) {
   if (phase === 'absent') return;
   write(join(dir, 'state.json'), `${JSON.stringify({
     schema: 1, profile: 'code', phase, enabled: true, scope: 'user',
-    projectRoot: root, approvedVersion: '0.5.5', completed: [],
+    projectRoot: root, approvedVersion: '0.6.2', completed: [],
   }, null, 2)}\n`);
 }
 
@@ -932,9 +906,7 @@ check('phase machine: absent -> disabled stays illegal',
 rmSync(join(PH_A, '.claude'), { recursive: true, force: true });
 rmSync(join(PH_B, '.claude'), { recursive: true, force: true });
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 7. legacy docs cleanup negatives + final purge
-// ═══════════════════════════════════════════════════════════════════════════
+// ── 7. legacy docs cleanup negatives + final purge ──
 function legacyRoot(testHome) {
   return join(process.platform === 'darwin' ? join(testHome, 'Library', 'Caches') : join(testHome, '.cache'),
     'semble-docs');
@@ -973,19 +945,122 @@ check('legacy docs symlink preserved', [existsSync(legacyRoot(LINK_HOME)), snaps
   'RESERVED-FOR-DOCS.txt': shaStr('reserved\n'),
 }], 'both the symlink and marker-only target survive because the legacy root itself is not a directory owned by Semble');
 
-// Final marker-only positive: full purge removes the shared current cache and
-// the one legacy root whose marker is its sole entry.
+// Final marker-only positive: full purge removes the legacy root whose marker is its sole entry.
+// GIVEN shared cache root with this project's entry beside others | WHEN purge runs | THEN only <root>/<hash of this project> goes
 mkdirSync(LEGACY_DOCS_ROOT, { recursive: true });
 write(join(LEGACY_DOCS_ROOT, 'RESERVED-FOR-DOCS.txt'), 'reserved\n');
+const NEIGHBOUR_CACHE = join(CACHE_CODE, 'b'.repeat(64));
+write(join(NEIGHBOUR_CACHE, 'index-code-config-docs/chunks.json'), '["neighbour"]\n');
+check('purge precondition: this project has a cache entry',
+  existsSync(join(REM_CACHE, 'index-code-config-docs/chunks.json')), true, 'the entry purge must remove exists');
+const sharedBefore = snapshot(CACHE_CODE);
+const REM_KEY = `${repoHash(REM)}/`;
+const baks = () => [...readdirSync(HOME).filter((n) => n.startsWith('.claude.json.bak.')),
+  ...readdirSync(REM).filter((n) => n.startsWith('.mcp.json.bak.'))].sort();
+const baksBefore = baks();
+const mcpConfigs = [join(HOME, '.claude.json'), join(REM, '.mcp.json')].filter((f) => existsSync(f)).length;
 const purge = run(REMOVE_SH,
   ['purge', '--yes', '--confirm-text', 'purge semble code cache', '--json'], remEnv);
 check('purge exit', purge.status, 0, 'purge succeeds with the exact typed confirmation');
-check('purge deleted the code root', existsSync(CACHE_CODE), false, 'the code cache root is gone');
+check('purge deleted this project cache entry', existsSync(REM_CACHE), false,
+  'the entry keyed by the hash of this project root is gone');
+check('purge kept every other entry of the shared root', snapshot(CACHE_CODE),
+  Object.fromEntries(Object.entries(sharedBefore).filter(([k]) => !k.startsWith(REM_KEY))),
+  'the neighbour and every other project index are byte-identical');
+check('purge kept the neighbour index', readFileSync(join(NEIGHBOUR_CACHE, 'index-code-config-docs/chunks.json'), 'utf8'),
+  '["neighbour"]\n', 'another project in the same root keeps its index');
+check('purge reports the kept shared root',
+  safeParse(purge.stdout).unchanged.filter((l) => l.startsWith('cache: ')),
+  [`cache: shared root ${CACHE_CODE} kept — it still holds other entries`],
+  'the report says the shared root stays and why');
 check('purge deleted the legacy marker-only root', existsSync(LEGACY_DOCS_ROOT), false,
   'the pre-0.5.5 docs root was under the test home cache base and held only its ownership marker');
 check('purge removed the MCP registration',
   Object.keys(safeParse(readFileSync(join(HOME, '.claude.json'), 'utf8')).mcpServers), [],
   'purge does run `claude mcp remove`');
+check('purge deleted its own MCP rollback backups',
+  [baks(), safeParse(purge.stdout).changed.filter((l) => l.startsWith('mcp: deleted rollback backup ')).length],
+  [baksBefore, mcpConfigs], 'no .claude.json.bak.<epoch> / .mcp.json.bak.<epoch> from this purge survives, and the report names each');
+
+// GIVEN a cache root whose only entry is this project's and no MCP registration
+// WHEN purge runs THEN the emptied root goes too and the absent registration is not reported as removed
+const SOLO = join(BASE, 'repo-solo');
+write(join(SOLO, 'src/main.py'), 'x = 1\n');
+const SOLO_ROOT = join(BASE, 'solo', 'semble-code');
+const SOLO_CACHE = join(SOLO_ROOT, repoHash(SOLO));
+write(join(SOLO_CACHE, 'index-code-config-docs/chunks.json'), '[]\n');
+const soloPurge = run(REMOVE_SH, ['purge', '--yes', '--confirm-text', 'purge semble code cache', '--json'],
+  { SEMBLE_PROJECT_ROOT: SOLO, SEMBLE_CACHE_ROOT_CODE: SOLO_ROOT });
+check('solo purge exit', soloPurge.status, 0, 'purge of a project that owns the whole root succeeds');
+check('solo purge removed the emptied root', existsSync(SOLO_ROOT), false,
+  'rmdir takes a root nothing else lives in');
+check('solo purge changed list', safeParse(soloPurge.stdout).changed,
+  [`cache: deleted ${SOLO_CACHE}`, `cache: removed empty shared root ${SOLO_ROOT}`],
+  'the two cache steps are the only changes — nothing else was installed here');
+// GIVEN every cli and purge run above WHEN the uv stub log is read THEN only read-only calls were made
+check('host uv is never mutated by this suite',
+  [...new Set(readFileSync(UV_LOG, 'utf8').split('\n').filter((l) => l.length > 0))].sort(), ['--version', 'tool list'],
+  'the stubbed uv saw only `--version` and `tool list` — no install, no uninstall');
+check('solo purge mcp line',
+  safeParse(soloPurge.stdout).unchanged.filter((l) => l.startsWith('mcp: ')), ['mcp: semble_code is not registered'],
+  'an absent registration is reported unchanged, not removed');
+
+// ── remove without semble-guidance.sh: unwire first, delete after ─────────────
+const LONE = join(BASE, 'lone-scripts');
+write(join(LONE, 'lib/semble-common.sh'), readFileSync(join(SCRIPTS, 'lib/semble-common.sh')));
+const LONE_REMOVE = write(join(LONE, 'semble-remove.sh'), readFileSync(REMOVE_SH));
+chmodSync(LONE_REMOVE, 0o755);
+const hookCmd = (name) => ({ type: 'command', command: 'node', args: [`\${CLAUDE_PROJECT_DIR}/.claude/hooks/${name}`] });
+const FOREIGN_HOOK = { type: 'command', command: 'echo foreign' };
+const WIRED = {
+  model: 'opus',
+  hooks: {
+    SessionStart: [{ hooks: [hookCmd('semble-session.mjs')] }],
+    PreToolUse: [{ matcher: 'Bash', hooks: [hookCmd('semble-reminder.mjs'), FOREIGN_HOOK] }],
+    PostToolUse: [{ hooks: [{ type: 'command', command: 'node .claude/hooks/semble-stats.mjs' }] }],
+  },
+  permissions: { allow: ['mcp__semble_code__search', 'mcp__semble_code__find_related', 'Bash(ls:*)'] },
+};
+function loneProject(name, settingsBody) {
+  const p = join(BASE, name);
+  write(join(p, '.claude/rules/semble-first.md'), '# semble-first\n');
+  write(join(p, '.claude/hooks/semble-session.mjs'), '// hook\n');
+  write(join(p, '.claude/hooks/semble-reminder.mjs'), '// hook\n');
+  write(join(p, '.claude/hooks/semble-stats.mjs'), '// hook\n');
+  write(join(p, '.claude/settings.json'), settingsBody);
+  write(join(p, '.claude/semble/state.json'), '{"schema":1,"phase":"ready"}\n');
+  return p;
+}
+
+// GIVEN no semble-guidance.sh and a settings.json wiring three semble hooks beside a foreign one
+// WHEN remove integration --yes runs THEN the entries are unwired, the foreign ones kept, the files deleted
+const LONE_OK = loneProject('repo-lone-ok', `${JSON.stringify(WIRED, null, 2)}\n`);
+const LONE_OK_SETTINGS = join(LONE_OK, '.claude/settings.json');
+const loneOk = run(LONE_REMOVE, ['integration', '--yes', '--json'], { SEMBLE_PROJECT_ROOT: LONE_OK });
+check('lone remove exit', loneOk.status, 0, 'the fallback removal succeeds');
+check('lone remove unwired settings', safeParse(readFileSync(LONE_OK_SETTINGS, 'utf8')), {
+  model: 'opus',
+  hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [FOREIGN_HOOK] }] },
+  permissions: { allow: ['Bash(ls:*)'] },
+}, 'every semble entry is gone (args form and command-string form); the foreign hook and permission survive');
+check('lone remove left no file behind', snapshot(join(LONE_OK, '.claude')),
+  { 'settings.json': sha(LONE_OK_SETTINGS) }, 'rule, hook files and state are deleted once nothing references them');
+check('lone remove unwired before deleting', safeParse(loneOk.stdout).changed[0],
+  `settings: semble hook and permission entries removed from ${LONE_OK_SETTINGS}`,
+  'the unwire is the first change, ahead of every file deletion');
+
+// GIVEN the same project with an unparseable settings.json WHEN remove integration --yes runs
+// THEN nothing is deleted and the run fails with the reason
+const LONE_BAD = loneProject('repo-lone-bad', '{ "hooks": \n');
+const loneBadBefore = snapshot(LONE_BAD);
+const loneBad = run(LONE_REMOVE, ['integration', '--yes', '--json'], { SEMBLE_PROJECT_ROOT: LONE_BAD });
+check('lone remove (bad settings) exit', loneBad.status, 1, 'an unwire that cannot happen is a hard failure');
+check('lone remove (bad settings) kept every file', snapshot(LONE_BAD), loneBadBefore,
+  'rule, hooks, settings and state are byte-identical — no hook file goes while its registration may be live');
+check('lone remove (bad settings) report', [safeParse(loneBad.stdout).failed, safeParse(loneBad.stdout).changed], [
+  [`settings: cannot unwire ${join(LONE_BAD, '.claude/settings.json')} (not valid JSON) — nothing was deleted, the hooks are still registered`],
+  [],
+], 'the failure names the file and the reason, and nothing is reported as changed');
 
 // ── usage / flag handling ────────────────────────────────────────────────────
 check('project: unknown subcommand', run(PROJECT_SH, ['frobnicate'], { SEMBLE_PROJECT_ROOT: COV }).status, 2,

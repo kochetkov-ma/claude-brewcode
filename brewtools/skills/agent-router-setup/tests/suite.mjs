@@ -1,22 +1,22 @@
 #!/usr/bin/env node
-/**
- * E2E suite for the agent-router PreToolUse hook (tier 1, deterministic).
- * Runs in an isolated TEMP HOME + TMPDIR per test (os.tmpdir()/os.homedir() both
- * respect these env vars). Never touches the real ~/.claude, real /tmp state, or
- * repo state.
- * Assertion policy: every check is an unconditional exact-equality comparison of
- * the FULL parsed stdout object (or the raw string) with a description; no
- * branching gates which asserts run.
- */
+// agent-router tier-1 E2E: isolated temp HOME+TMPDIR per test (never real ~/.claude, /tmp, repo); exact full-object asserts, no branching.
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, chmodSync } from 'node:fs';
+import {
+  mkdtempSync, mkdirSync, writeFileSync, rmSync, chmodSync, readFileSync, readdirSync, realpathSync,
+  utimesSync, symlinkSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const HERE = join(fileURLToPath(import.meta.url), '..'); // tests/
 const ASSETS = join(HERE, '..', 'assets'); // assets/
 const HOOK = join(ASSETS, 'agent-router.mjs');
+const PLUGIN_AGENTS = {
+  brewcode: ['skill-creator', 'agent-creator', 'hook-creator', 'bash-expert'],
+  proj: ['widget-expert', 'skill-expert'],
+};
 
 // GIVEN: a fresh isolated temp base
 const BASE = mkdtempSync(join(tmpdir(), 'ar-test-'));
@@ -65,6 +65,59 @@ function run(stdinStr, env) {
   return { stdout: r.stdout || '', stderr: r.stderr || '', status: r.status };
 }
 
+function runCli(args, env) {
+  const r = spawnSync(process.execPath, [HOOK, ...args], {
+    encoding: 'utf8',
+    env: { ...process.env, ...env },
+    timeout: 8000,
+  });
+  return { stdout: r.stdout || '', stderr: r.stderr || '', status: r.status };
+}
+
+function lineCount(file) {
+  return readFileSync(file, 'utf8').split('\n').filter(Boolean).length;
+}
+
+// Recorded on Claude Code 2.1.296 (probe LT9); only cwd and transcript_path are rewritten.
+function lt9AgentCall(cwd, toolInput) {
+  return {
+    session_id: '0bd4c1b3-6add-4d7f-b7ce-e26ecc2f4ffa',
+    transcript_path: join(cwd, 'transcript.jsonl'),
+    cwd,
+    prompt_id: '35642576-aa92-4ec4-b057-44412cebec7c',
+    permission_mode: 'bypassPermissions',
+    effort: { level: 'medium' },
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Agent',
+    tool_input: toolInput,
+    tool_use_id: 'toolu_01EDvFZ27QazGxp7jUU9W4sz',
+  };
+}
+
+// The tier-2 verifier's verdict call: agent_id `hook-agent-<uuid>`, no agent_type.
+function lt9VerifierVerdict(cwd) {
+  return {
+    session_id: '0bd4c1b3-6add-4d7f-b7ce-e26ecc2f4ffa',
+    transcript_path: join(cwd, 'transcript.jsonl'),
+    cwd,
+    prompt_id: '35642576-aa92-4ec4-b057-44412cebec7c',
+    permission_mode: 'dontAsk',
+    agent_id: 'hook-agent-5148e0ac-4381-4904-831c-94da713e34fc',
+    effort: { level: 'medium' },
+    hook_event_name: 'PreToolUse',
+    tool_name: 'StructuredOutput',
+    tool_input: { ok: true, reason: 'The deny rule does not apply, so the call is allowed.' },
+    tool_use_id: 'toolu_01WXb4h1RtgwGQf7y3ng1DGr',
+  };
+}
+
+const LT9_SESSION = '0bd4c1b3-6add-4d7f-b7ce-e26ecc2f4ffa';
+const LT9_BENIGN = {
+  description: 'benign probe',
+  prompt: 'Reply with the single word PONG. No tools.',
+  subagent_type: 'general-purpose',
+};
+
 function safeParse(str) {
   try {
     return JSON.parse(str);
@@ -79,10 +132,27 @@ function newRoot(tag) {
   const home = join(base, 'home');
   const tmp = join(base, 'tmp');
   const proj = join(base, 'proj');
-  mkdirSync(home, { recursive: true });
+  const cfgDir = join(home, '.claude');
   mkdirSync(tmp, { recursive: true });
   mkdirSync(join(proj, '.claude'), { recursive: true });
-  return { proj, tmp, env: { HOME: home, TMPDIR: tmp, TMP: tmp, TEMP: tmp } };
+  // Plugin cache fixture: the redirect targets must exist on disk before the router may deny.
+  for (const [plugin, agents] of Object.entries(PLUGIN_AGENTS)) {
+    const dir = join(cfgDir, 'plugins', 'cache', 'fixture-market', plugin, '1.0.0', 'agents');
+    mkdirSync(dir, { recursive: true });
+    for (const agent of agents) writeFileSync(join(dir, `${agent}.md`), `---\nname: ${agent}\n---\n`);
+  }
+  return {
+    proj,
+    tmp,
+    cfgDir,
+    env: { HOME: home, TMPDIR: tmp, TMP: tmp, TEMP: tmp, CLAUDE_CONFIG_DIR: cfgDir, CLAUDE_PROJECT_DIR: '' },
+  };
+}
+
+// Mirrors the hook's layout: <tmp>/brewtools-agent-router/p-<sha1(real root)[0..16]>/.
+function stateDir(tmp, proj) {
+  const key = createHash('sha1').update(realpathSync(proj)).digest('hex').slice(0, 16);
+  return join(tmp, 'brewtools-agent-router', `p-${key}`);
 }
 
 function writeAgent(proj, name, description) {
@@ -92,6 +162,11 @@ function writeAgent(proj, name, description) {
     join(dir, `${name}.md`),
     `---\nname: ${name}\ndescription: "${description}"\ntools: Read, Bash\nmodel: sonnet\n---\n\nBody.\n`,
   );
+}
+
+function writeUserAgent(cfgDir, name) {
+  mkdirSync(join(cfgDir, 'agents'), { recursive: true });
+  writeFileSync(join(cfgDir, 'agents', `${name}.md`), `---\nname: ${name}\ndescription: User agent\n---\n`);
 }
 
 function writeRawAgent(proj, file, text) {
@@ -152,8 +227,17 @@ const TAIL = '(Deliberate? retry as-is, or put "agent-router: override" in the p
 
 function rosterDeny(name, rel, picked) {
   return (
-    `agent-router: '${name}' (${rel}) matches this task better than ${picked}` +
+    `agent-router: '${name}' (${rel}) owns this kind of task in this project - its` +
+    ` Triggers/description match the task text and ${picked} lacks that domain context` +
     ` - retry with subagent_type: ${name}. ${TAIL}`
+  );
+}
+
+function unverifiedIntentCtx(label, expert, picked) {
+  return (
+    `agent-router: this looks like ${label} - '${expert}' is the expert for it, but it` +
+    ' was not found in this install (project agents, user agents, plugin cache), so this spawn' +
+    ` is not blocked; proceeding with ${picked}.`
   );
 }
 
@@ -237,12 +321,8 @@ const INTENT_AGENT = 'Create a new agent for the billing domain';
 const INTENT_HOOK = 'Add a PreToolUse hook that logs tool calls';
 const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 01 - non-Agent tool
-// GIVEN: a Bash PreToolUse payload whose text would fire the skill intent
-// WHEN: the hook runs
-// THEN: stdout is empty, exit 0 - only the Agent tool is policed
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN Bash payload w/ skill-intent text; WHEN hook runs; THEN empty stdout, exit 0: only Agent policed
 {
   const { proj, env } = newRoot('t01');
   standardRoster(proj);
@@ -251,12 +331,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   check('01-non-agent-tool-exit', r.status, 0, 'hook must exit 0');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 02 - subagent-issued spawn
-// GIVEN: agent_id present (a subagent spawned this) + skill-intent text
-// WHEN: the hook runs
-// THEN: stdout empty - only the main loop is policed
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN agent_id present + skill-intent text; WHEN hook runs; THEN empty stdout: only main loop policed
 {
   const { proj, env } = newRoot('t02');
   standardRoster(proj);
@@ -264,12 +340,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   check('02-subagent-issued', r.stdout, '', 'agent_id present must allow silently');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 03 - disabled by config
-// GIVEN: {"enabled": false} + skill-intent text
-// WHEN: the hook runs
-// THEN: stdout empty
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN {"enabled": false} + skill-intent text; WHEN hook runs; THEN empty stdout
 {
   const { proj, env } = newRoot('t03');
   standardRoster(proj);
@@ -278,12 +350,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   check('03-config-disabled', r.stdout, '', 'enabled:false must allow silently');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 04 - a project agent was already picked
-// GIVEN: subagent_type conductor-dev + text matching its own triggers
-// WHEN: the hook runs
-// THEN: stdout empty - the model already picked an expert
-// ─────────────────────────────────────────────────────────────────────────────
+// 04 - project agent already picked
+// GIVEN subagent_type conductor-dev + text matching its own triggers; WHEN hook runs; THEN empty stdout
 {
   const { proj, env } = newRoot('t04');
   standardRoster(proj);
@@ -294,12 +362,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   check('04-project-agent-pick', r.stdout, '', 'a project-agent pick must allow silently');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 05/06 - Explore and Plan are never flagged
-// GIVEN: subagent_type Explore (intent text) and Plan (strong roster-match text)
-// WHEN: the hook runs
-// THEN: stdout empty for both
-// ─────────────────────────────────────────────────────────────────────────────
+// 05/06 - Explore and Plan never flagged
+// GIVEN subagent_type Explore (intent text), Plan (strong roster-match text); WHEN hook runs; THEN empty stdout for both
 {
   const { proj, env } = newRoot('t05');
   standardRoster(proj);
@@ -316,12 +380,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   check('06-plan-never-flagged', rP.stdout, '', 'Plan is the correct planning tool');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 07 - a plugin specialist was already picked
-// GIVEN: subagent_type brewcode:hook-creator + hook-intent text
-// WHEN: the hook runs
-// THEN: stdout empty - not on the generic list
-// ─────────────────────────────────────────────────────────────────────────────
+// 07 - plugin specialist already picked
+// GIVEN subagent_type brewcode:hook-creator + hook-intent text; WHEN hook runs; THEN empty stdout: not on generic list
 {
   const { proj, env } = newRoot('t07');
   standardRoster(proj);
@@ -332,12 +392,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   check('07-plugin-specialist-pick', r.stdout, '', 'non-generic subagent_type must allow silently');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 08..11 - every intent rule fires and names its plugin expert
-// GIVEN: a generic pick + text squarely inside each intent domain
-// WHEN: the hook runs
-// THEN: deny naming the intent's expert, exact reason template, exit 0
-// ─────────────────────────────────────────────────────────────────────────────
+// 08..11 - every intent rule fires, names its plugin expert
+// GIVEN generic pick + text inside each intent domain; WHEN hook runs; THEN deny naming expert, exact reason template, exit 0
 {
   const cases = [
     ['08-intent-skill', INTENT_SKILL, 'skill authoring', 'brewcode:skill-creator'],
@@ -359,13 +415,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 12..15 - the same intents must NOT fire on near-miss wording
-// GIVEN: text mentioning skill/agent/hook/.sh without an authoring verb, or with
-//        the word glued into an identifier (agent-router, hook-router)
-// WHEN: the hook runs
-// THEN: stdout empty - no intent, no roster score
-// ─────────────────────────────────────────────────────────────────────────────
+// 12..15 - same intents must NOT fire on near-miss wording
+// GIVEN skill/agent/hook/.sh w/o authoring verb, or glued into identifier (agent-router, hook-router); WHEN hook runs; THEN empty stdout
 {
   const cases = [
     ['12-intent-skill-not-firing', 'Summarize what the skills directory contains'],
@@ -381,12 +432,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 16 - a project agent outranks the plugin specialist for the same intent
-// GIVEN: the skill intent fires AND a project agent covers skill authoring
-// WHEN: the hook runs
-// THEN: deny names the PROJECT agent with its path, not brewcode:skill-creator
-// ─────────────────────────────────────────────────────────────────────────────
+// 16 - project agent outranks plugin specialist for same intent
+// GIVEN skill intent fires + project agent covers skill authoring; WHEN hook runs; THEN deny names PROJECT agent + path, != brewcode:skill-creator
 {
   const { proj, env } = newRoot('t16');
   standardRoster(proj);
@@ -412,12 +459,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 17 - roster scoring, single clear winner
-// GIVEN: no intent match, one agent far above minScore and beyond margin
-// WHEN: the hook runs
-// THEN: deny naming that agent with its .claude/agents path
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN no intent match, one agent far above minScore, beyond margin; WHEN hook runs; THEN deny naming it with .claude/agents path
 {
   const { proj, env } = newRoot('t17');
   standardRoster(proj);
@@ -431,12 +474,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 18 - ambiguous roster, no deny
-// GIVEN: two agents with identical triggers, both scoring, margin not met
-// WHEN: the hook runs
-// THEN: additionalContext listing the candidates with paths, NO permissionDecision
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN two agents, identical triggers, margin not met; WHEN hook runs; THEN additionalContext listing candidates + paths, NO permissionDecision
 {
   const { proj, env } = newRoot('t18');
   writeAgent(proj, 'alpha-dev', 'Alpha owner. Triggers: caching, redis');
@@ -461,12 +500,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 19 - nothing scores
-// GIVEN: a generic pick and text unrelated to every agent
-// WHEN: the hook runs
-// THEN: stdout empty
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN generic pick, text unrelated to every agent; WHEN hook runs; THEN empty stdout
 {
   const { proj, env } = newRoot('t19');
   standardRoster(proj);
@@ -474,12 +509,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   check('19-no-match-silent', r.stdout, '', 'zero score must allow silently');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 20 - anti-loop guard
-// GIVEN: the identical (session, task) denied once already
-// WHEN: the hook runs a second and third time on the same TMPDIR
-// THEN: 1st = deny; 2nd/3rd = additionalContext repeat notice, never a deny
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN same (session, task) denied once; WHEN 2nd + 3rd run on same TMPDIR; THEN 1st deny, 2nd/3rd additionalContext repeat notice, never deny
 {
   const { proj, env } = newRoot('t20');
   standardRoster(proj);
@@ -515,13 +546,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 20b - anti-loop guard is keyed by project root too
-// GIVEN: two different project roots, same session, same task text, same TMPDIR
-// WHEN: the hook runs once per root
-// THEN: both deny - a repo B deny must not be downgraded because repo A already
-//       claimed a marker for the identical (session, task) pair
-// ─────────────────────────────────────────────────────────────────────────────
+// 20b - anti-loop guard keyed by project root too
+// GIVEN two roots, same session, task text, TMPDIR; WHEN one run per root; THEN both deny: repo A's marker != downgrade of repo B
 {
   const { proj: projA, env } = newRoot('t20b-a');
   const projB = join(BASE, 't20b-b', 'proj');
@@ -545,12 +571,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 21 - garbage and empty stdin
-// GIVEN: unparsable stdin, empty stdin, and a JSON array
-// WHEN: the hook runs
-// THEN: stdout empty, exit 0, nothing on stdout that could corrupt the contract
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN unparsable stdin, empty stdin, JSON array; WHEN hook runs; THEN empty stdout, exit 0: contract never corrupted
 {
   const { env } = newRoot('t21');
   const rGarbage = run('{not json at all', env);
@@ -562,12 +584,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   check('21-array-stdin', rArray.stdout, '', 'a JSON array payload must fail open');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 22 - missing .claude/agents
-// GIVEN: a project with no roster directory at all
-// WHEN: the hook runs on an intent task and on a plain task
-// THEN: intent still redirects to the plugin specialist; plain task stays silent
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN no roster dir; WHEN intent task + plain task; THEN intent redirects to plugin specialist, plain stays silent
 {
   const { proj, env } = newRoot('t22');
   const rIntent = run(payload({ cwd: proj, description: INTENT_HOOK }), env);
@@ -581,12 +599,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   check('22-missing-roster-plain', rPlain.stdout, '', 'no roster and no intent must be silent');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 23 - malformed agent files
-// GIVEN: one file with no frontmatter, one with frontmatter but no name, one valid
-// WHEN: the hook runs on a task matching the valid agent
-// THEN: the broken files are skipped and the valid agent is still named
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN files w/o frontmatter, w/o name, one valid; WHEN task matches valid agent; THEN broken skipped, valid named
 {
   const { proj, env } = newRoot('t23');
   writeRawAgent(proj, 'broken-1.md', 'no frontmatter here at all\n');
@@ -605,12 +619,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 24 - unparsable config
-// GIVEN: agent-router.json that is not valid JSON, plus strong intent text
-// WHEN: the hook runs
-// THEN: stdout empty - a config we cannot trust means hands off
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN invalid-JSON agent-router.json + strong intent text; WHEN hook runs; THEN empty stdout: untrusted config = hands off
 {
   const { proj, env } = newRoot('t24');
   standardRoster(proj);
@@ -624,12 +634,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   check('24-array-config', r2.stdout, '', 'an array config must fail open');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 25 - genericTypes override
-// GIVEN: genericTypes ["worker"]
-// WHEN: a worker and a general-purpose spawn both hit an intent
-// THEN: worker is denied; general-purpose is no longer generic and passes
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN genericTypes ["worker"]; WHEN worker + general-purpose spawns hit intent; THEN worker denied, general-purpose no longer generic, passes
 {
   const { proj, env } = newRoot('t25');
   standardRoster(proj);
@@ -648,12 +654,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   check('25-generic-types-excluded', rG.stdout, '', 'a type off the generic list is allowed');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 26 - neverFlag override
-// GIVEN: neverFlag ["general-purpose"] with the default generic list
-// WHEN: an intent task is spawned as general-purpose
-// THEN: stdout empty - neverFlag wins over genericTypes
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN neverFlag ["general-purpose"], default generic list; WHEN intent task as general-purpose; THEN empty stdout: neverFlag wins over genericTypes
 {
   const { proj, env } = newRoot('t26');
   standardRoster(proj);
@@ -662,12 +664,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   check('26-never-flag', r.stdout, '', 'neverFlag must short-circuit before the generic check');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 27 - intents override replaces the default table
-// GIVEN: a single custom intent rule
-// WHEN: the custom domain and a default (skill) domain are spawned
-// THEN: the custom rule denies; the default skill rule is gone
-// ─────────────────────────────────────────────────────────────────────────────
+// 27 - intents override replaces default table
+// GIVEN one custom intent rule; WHEN custom + default (skill) domains spawned; THEN custom denies, default skill rule gone
 {
   const { proj, env } = newRoot('t27');
   standardRoster(proj);
@@ -691,12 +689,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 28 - a broken regex in one rule does not disable the table
-// GIVEN: intents [ {bad regex}, {valid skill rule} ]
-// WHEN: a skill task is spawned
-// THEN: the valid rule still fires
-// ─────────────────────────────────────────────────────────────────────────────
+// 28 - broken regex in one rule != disabled table
+// GIVEN intents [ {bad regex}, {valid skill rule} ]; WHEN skill task spawned; THEN valid rule still fires
 {
   const { proj, env } = newRoot('t28');
   standardRoster(proj);
@@ -716,12 +710,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 29 - minScore/margin overrides
-// GIVEN: the ambiguous two-agent roster with margin 0
-// WHEN: the same tie task is spawned
-// THEN: the tie becomes a clear winner (name order) and denies
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN ambiguous two-agent roster, margin 0; WHEN same tie task; THEN tie -> clear winner (name order), denies
 {
   const { proj, env } = newRoot('t29');
   writeAgent(proj, 'alpha-dev', 'Alpha owner. Triggers: caching, redis');
@@ -739,12 +729,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 30 - prompt scan window
-// GIVEN: the intent keyword only past the 2000-char prompt scan window
-// WHEN: the hook runs
-// THEN: stdout empty - the scan is bounded, the hook stays cheap
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN intent keyword only past 2000-char prompt scan window; WHEN hook runs; THEN empty stdout: scan bounded, hook cheap
 {
   const { proj, env } = newRoot('t30');
   standardRoster(proj);
@@ -753,12 +739,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   check('30-prompt-scan-window', r.stdout, '', 'text past 2000 prompt chars is not scanned');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 31 - omitted subagent_type is a general-purpose spawn / empty task text
-// GIVEN: a payload with no subagent_type key at all, and one with a type but no text
-// WHEN: the hook runs
-// THEN: the omitted type is policed as general-purpose; no text stays silent
-// ─────────────────────────────────────────────────────────────────────────────
+// 31 - omitted subagent_type = general-purpose spawn / empty task text
+// GIVEN no subagent_type key; type but no text; WHEN hook runs; THEN omitted type policed as general-purpose; no text silent
 {
   const { proj, env } = newRoot('t31');
   standardRoster(proj);
@@ -773,12 +755,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   check('31-empty-task-text', rEmptyText.stdout, '', 'no task text must allow silently');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 31b - omitted subagent_type falls through to roster scoring
-// GIVEN: no subagent_type key and text squarely inside a project agent's triggers
-// WHEN: the hook runs
-// THEN: deny naming that project agent, reason built with 'general-purpose'
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN no subagent_type key, text inside project agent's triggers; WHEN hook runs; THEN deny naming it, reason built with 'general-purpose'
 {
   const { proj, env } = newRoot('t31b');
   standardRoster(proj);
@@ -792,14 +770,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 31c - omitted subagent_type with general-purpose off the generic list
-// GIVEN: genericTypes ["worker"] and no subagent_type key, on text that denies on
-//        BOTH deny paths when general-purpose IS generic (intent rule + roster win)
-// WHEN: the hook runs
-// THEN: stdout empty on both - the normalized type still has to clear the generic
-//       gate; hardcoding general-purpose past that gate makes this fail
-// ─────────────────────────────────────────────────────────────────────────────
+// 31c - omitted subagent_type, general-purpose off generic list
+// GIVEN genericTypes ["worker"], no subagent_type, text denying on BOTH paths (intent + roster win) when general-purpose IS generic; WHEN hook runs; THEN empty stdout on both: normalized type must clear generic gate
 {
   const { proj, env } = newRoot('t31c');
   standardRoster(proj);
@@ -821,13 +793,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 32 - the roster is re-read on every call
-// GIVEN: one agent that wins a task, then the SAME file rewritten so it no longer
-//        matches (rewriting in place leaves the directory mtime untouched)
-// WHEN: the same task is spawned again in a new session
-// THEN: the second run allows silently - no cached roster survives the edit
-// ─────────────────────────────────────────────────────────────────────────────
+// 32 - roster re-read on every call
+// GIVEN winning agent, then SAME file rewritten to no longer match (dir mtime untouched); WHEN same task, new session; THEN silent allow: no cached roster
 {
   const { proj, env } = newRoot('t32');
   const text = 'Tune the redis eviction policy for the caching layer';
@@ -849,12 +816,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 32b - description scan window
-// GIVEN: the intent keyword only past the 500-char description scan window
-// WHEN: the hook runs
-// THEN: stdout empty - a huge description cannot turn into a regex bill
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN intent keyword only past 500-char description scan window; WHEN hook runs; THEN empty stdout: huge description != regex bill
 {
   const { proj, env } = newRoot('t32b');
   standardRoster(proj);
@@ -863,12 +826,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   check('32b-desc-scan-window', r.stdout, '', 'text past 500 description chars is not scanned');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 32c - default neverFlag covers all four built-ins
-// GIVEN: no config neverFlag, and output-style-setup forced onto genericTypes
-// WHEN: an intent task is spawned with that type
-// THEN: stdout empty - the built-in neverFlag list still holds it back
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN no config neverFlag, output-style-setup forced onto genericTypes; WHEN intent task with that type; THEN empty stdout: built-in neverFlag holds
 {
   const { proj, env } = newRoot('t32c');
   standardRoster(proj);
@@ -880,12 +839,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   check('32c-never-flag-defaults', r.stdout, '', 'output-style-setup is never flagged by default');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 32d - an unusable state root degrades every deny to a notice
-// GIVEN: TMPDIR pointing at a read-only directory (no anti-loop marker can be written)
-// WHEN: a task that would normally be denied is spawned
-// THEN: additionalContext, never a deny - a deny we cannot record could loop forever
-// ─────────────────────────────────────────────────────────────────────────────
+// 32d - unusable state root degrades every deny to notice
+// GIVEN read-only TMPDIR (no anti-loop marker); WHEN deny-worthy task; THEN additionalContext, never deny: unrecorded deny could loop forever
 {
   const { proj, env } = newRoot('t32d');
   standardRoster(proj);
@@ -907,12 +862,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 33 - config resolved from a subdirectory cwd
-// GIVEN: cwd is a nested subdirectory of the project root
-// WHEN: the hook runs an intent task
-// THEN: the root config (disabled) is still found - stdout empty
-// ─────────────────────────────────────────────────────────────────────────────
+// 33 - config resolved from subdirectory cwd
+// GIVEN cwd nested under project root; WHEN intent task; THEN root config (disabled) found: empty stdout
 {
   const { proj, env } = newRoot('t33');
   standardRoster(proj);
@@ -923,13 +874,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   check('33-subdir-cwd', r.stdout, '', 'the project root is resolved by climbing from cwd');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 34 - the four intent experts, spawned directly on their own intent's task,
-//      are never flagged - a redirect target can never be a redirect victim
-// GIVEN: subagent_type is the very expert an intent rule would have named
-// WHEN: the hook runs with matching intent text
-// THEN: stdout empty - neverFlag pre-seeded with the built-in intent experts
-// ─────────────────────────────────────────────────────────────────────────────
+// 34 - four intent experts on own intent's task never flagged: redirect target != redirect victim
+// GIVEN subagent_type = expert the intent rule names; WHEN matching intent text; THEN empty stdout: neverFlag pre-seeded with built-in intent experts
 {
   const cases = [
     ['34-self-exempt-skill', 'brewcode:skill-creator', INTENT_SKILL],
@@ -946,13 +892,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 35 - a CUSTOM intents entry's expert is auto-exempt without being listed in
-//      neverFlag explicitly
-// GIVEN: intents [{ match: /widget/, expert: "my-db-guru" }], no neverFlag key
-// WHEN: subagent_type "my-db-guru" is spawned on a matching task
-// THEN: stdout empty - normalizeConfig() unions neverFlag with intents[].expert
-// ─────────────────────────────────────────────────────────────────────────────
+// 35 - CUSTOM intents expert auto-exempt w/o explicit neverFlag
+// GIVEN intents [{ match: /widget/, expert: "my-db-guru" }], no neverFlag key; WHEN "my-db-guru" on matching task; THEN empty stdout: normalizeConfig() unions neverFlag + intents[].expert
 {
   const { proj, env } = newRoot('t35');
   standardRoster(proj);
@@ -967,15 +908,12 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   check('35-custom-intent-expert-self-exempt', r.stdout, '', 'a custom intent expert is auto-exempt');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 36 - regression guard: the self-exemption must not weaken normal routing
-// GIVEN: the same custom-intents config as 35
-// WHEN: general-purpose is spawned on the same matching task
-// THEN: deny naming my-db-guru - the exemption only protects the expert itself
-// ─────────────────────────────────────────────────────────────────────────────
+// 36 - regression guard: self-exemption must not weaken normal routing
+// GIVEN config of 35, my-db-guru on disk as user agent; WHEN general-purpose on same task; THEN deny naming my-db-guru: exemption protects expert only
 {
-  const { proj, env } = newRoot('t36');
+  const { proj, env, cfgDir } = newRoot('t36');
   standardRoster(proj);
+  writeUserAgent(cfgDir, 'my-db-guru');
   writeConfig(proj, {
     enabled: true,
     intents: [{ match: '\\bwidget\\b', expert: 'my-db-guru', label: 'db work' }],
@@ -992,16 +930,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 37 - BT-F24: a nested bare `.claude` must not mask the owning project root
-// GIVEN: the real root carries the router config; a nested fixture dir carries an
-//        empty `.claude` and nothing else; the task text matches a DEFAULT intent
-//        (an intent prompt is mandatory here - the masked root yields an EMPTY
-//        roster, so roster scoring can never fire and would not reproduce)
-// WHEN:  the hook runs from the nested fixture cwd
-// THEN:  disabled at the real root -> silence; enabled at the real root -> the same
-//        deny the real root produces. Root ownership, not directory existence.
-// ─────────────────────────────────────────────────────────────────────────────
+// 37 - BT-F24: nested bare `.claude` must not mask owning project root
+// GIVEN config at real root, nested fixture w/ empty `.claude`, DEFAULT-intent text (masked root -> EMPTY roster); WHEN run from nested cwd; THEN root disabled -> silence, enabled -> root's deny
 {
   const { proj, env } = newRoot('t37a');
   standardRoster(proj);
@@ -1071,15 +1001,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 38 - BT-F25: the documented tier-1/tier-2 trade-off is what actually ships
-// GIVEN: strict level (tier 2 installed alongside tier 1) and a spawn tier 2 would
-//        exempt as skill-originated - tier 1 has no skill-origin signal at all
-// WHEN:  the hook runs twice on the identical (session, root, task)
-// THEN:  call 1 denies regardless of level - hooks run in parallel, an explicit deny
-//        wins, tier 1 cannot be gated by tier 2's {"ok": true}; call 2 passes as a
-//        non-blocking notice, so the model's retry always gets through
-// ─────────────────────────────────────────────────────────────────────────────
+// 38 - BT-F25: documented tier-1/tier-2 trade-off is what ships
+// GIVEN strict level, spawn tier 2 exempts as skill-originated (tier 1 lacks that signal); WHEN 2 runs, same (session, root, task); THEN 1st denies at any level (explicit deny wins over tier 2 {"ok": true}), 2nd = notice so retry passes
 {
   const { proj, env } = newRoot('t38');
   standardRoster(proj);
@@ -1107,13 +1030,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   check('38b-exit', second.status, 0, 'hook must exit 0');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 39 - the incident: the retry rewrote the prompt and was denied a second time
-// GIVEN: the same session, same description, a REWRITTEN prompt on the retry
-// WHEN:  the hook runs twice
-// THEN:  deny, then the repeat notice - the anti-loop key is the description, not
-//        the prompt body the model reformulates on every retry
-// ─────────────────────────────────────────────────────────────────────────────
+// 39 - incident: retry rewrote prompt, denied twice
+// GIVEN same session + description, REWRITTEN prompt on retry; WHEN 2 runs; THEN deny, then repeat notice: anti-loop key = description, != prompt body
 {
   const { proj, env } = newRoot('t39');
   standardRoster(proj);
@@ -1150,12 +1068,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 40 - explicit override escape hatch
-// GIVEN: strong intent text plus "agent-router: override" in the prompt
-// WHEN:  the hook runs
-// THEN:  stdout empty, exit 0 - the user out-ranks every rule, silently
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN strong intent + "agent-router: override" in prompt; WHEN hook runs; THEN empty stdout, exit 0: user outranks every rule
 {
   const { proj, env } = newRoot('t40');
   standardRoster(proj);
@@ -1171,13 +1085,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   check('40-override-exit', r.status, 0, 'hook must exit 0');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 41 - the plan-engine bug: the top-scored agent does NOT cover the intent
-// GIVEN: the skill intent fires; the only project agent scores solely because its
-//        name appears verbatim in the prompt as a config value
-// WHEN:  the hook runs
-// THEN:  deny names the PLUGIN specialist - a name in the prompt is not expertise
-// ─────────────────────────────────────────────────────────────────────────────
+// 41 - plan-engine bug: top-scored agent does NOT cover intent
+// GIVEN skill intent fires, sole project agent scores only via its name as config value in prompt; WHEN hook runs; THEN deny names PLUGIN specialist: name != expertise
 {
   const { proj, env } = newRoot('t41');
   writeAgent(
@@ -1201,12 +1110,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 42 - a lower-ranked project agent DOES cover the intent
-// GIVEN: the same fixture plus a skill-owning agent that scores less than plan-engine
-// WHEN:  the hook runs
-// THEN:  deny names the covering PROJECT agent, not the top-scored one
-// ─────────────────────────────────────────────────────────────────────────────
+// 42 - lower-ranked project agent DOES cover intent
+// GIVEN 41's fixture + skill-owning agent scoring below plan-engine; WHEN hook runs; THEN deny names covering PROJECT agent, != top-scored
 {
   const { proj, env } = newRoot('t42');
   writeAgent(
@@ -1242,12 +1147,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 43 - a bare artifact mention is a WEAK signal
-// GIVEN: a read-only grep over a generated SKILL.md, no authoring verb anywhere
-// WHEN:  the hook runs
-// THEN:  additionalContext naming the expert, never a deny
-// ─────────────────────────────────────────────────────────────────────────────
+// 43 - bare artifact mention = WEAK signal
+// GIVEN read-only grep over generated SKILL.md, no authoring verb; WHEN hook runs; THEN additionalContext naming expert, never deny
 {
   const { proj, env } = newRoot('t43');
   standardRoster(proj);
@@ -1268,15 +1169,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   check('43-weak-signal-exit', r.status, 0, 'hook must exit 0');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 44 - the real incident, replayed
-// GIVEN: the conductor roster verbatim and the "Emit superreview skill" spawn whose
-//        prompt is a vendor generator invocation (ARBITER_AGENT="plan-engine",
-//        a grep over SKILL.md, .claude/agents/intent-guard.md)
-// WHEN:  the hook runs
-// THEN:  exactly ONE merged nudge object - running a generator is not authoring,
-//        and plan-engine is only in the text as a config value
-// ─────────────────────────────────────────────────────────────────────────────
+// 44 - real incident, replayed
+// GIVEN conductor roster verbatim + "Emit superreview skill" spawn, prompt = vendor generator call (ARBITER_AGENT="plan-engine", grep over SKILL.md, .claude/agents/intent-guard.md); WHEN hook runs; THEN exactly ONE merged nudge: running generator != authoring
 {
   const { proj, env } = newRoot('t44');
   const conductor = [
@@ -1330,12 +1224,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   check('44-incident-exit', r.status, 0, 'hook must exit 0');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 45 - a config-supplied weakMatch is honored on both sides
-// GIVEN: a custom intents table whose single rule carries match + weakMatch
-// WHEN:  the strong wording runs, then the weak one
-// THEN:  deny for the strong hit, nudge for the bare artifact mention
-// ─────────────────────────────────────────────────────────────────────────────
+// 45 - config-supplied weakMatch honored on both sides
+// GIVEN custom intents rule with match + weakMatch; WHEN strong, then weak wording; THEN deny on strong hit, nudge on bare artifact mention
 {
   const { proj, env } = newRoot('t45');
   writeConfig(proj, {
@@ -1364,12 +1254,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 46 - the weak side of the agent, hook and bash rules
-// GIVEN: read-only tasks that merely mention .claude/agents/, hooks.json, a shebang
-// WHEN:  the hook runs (empty roster, so nothing else can speak)
-// THEN:  a nudge naming the expert - never a deny
-// ─────────────────────────────────────────────────────────────────────────────
+// 46 - weak side of agent, hook and bash rules
+// GIVEN read-only tasks mentioning .claude/agents/, hooks.json, shebang; WHEN hook runs (empty roster); THEN nudge naming expert, never deny
 {
   const weakCases = [
     ['t46a', 'agent-mention', 'Summarise what lives under .claude/agents/ today', '', 'agent authoring', 'brewcode:agent-creator'],
@@ -1388,13 +1274,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 47 - intentOwner stops at minScore
-// GIVEN: strong skill intent and ONE project agent that covers "skill" in its own
-//        words but scores below minScore
-// WHEN:  the hook runs
-// THEN:  the PLUGIN expert is named - a covering agent still has to earn the score
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN strong skill intent, ONE project agent covering "skill" but scoring below minScore; WHEN hook runs; THEN PLUGIN expert named: covering agent must earn score
 {
   const { proj, env } = newRoot('t47');
   writeAgent(proj, 'skill-scribe', 'Owns the skill catalogue.');
@@ -1407,13 +1288,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 48 - the override token past the prompt scan window
-// GIVEN: strong intent in the description and the override token at char ~2100 of
-//        the prompt, well past PROMPT_SCAN_CHARS
-// WHEN:  the hook runs
-// THEN:  still silent - the override is matched on the untruncated text
-// ─────────────────────────────────────────────────────────────────────────────
+// 48 - override token past prompt scan window
+// GIVEN strong intent in description, override token at char ~2100 of prompt (past PROMPT_SCAN_CHARS); WHEN hook runs; THEN silent: override matched on untruncated text
 {
   const { proj, env } = newRoot('t48');
   standardRoster(proj);
@@ -1429,13 +1305,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   check('48-override-past-window-exit', r.status, 0, 'hook must exit 0');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 49 - a roster deny must survive the winner's own name being struck out
-// GIVEN: (a) an agent whose ONLY score comes from its name quoted as a config value
-//        (b) an agent that scores on its trigger vocabulary alone
-// WHEN:  the hook runs
-// THEN:  (a) nudge - the score was coincidence; (b) deny - the score was earned
-// ─────────────────────────────────────────────────────────────────────────────
+// 49 - roster deny must survive winner's own name struck out
+// GIVEN (a) agent scoring ONLY via name quoted as config value, (b) agent scoring on trigger vocabulary; WHEN hook runs; THEN (a) nudge: coincidence; (b) deny: earned
 {
   const a = newRoot('t49a');
   writeAgent(
@@ -1481,12 +1352,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 50 - the strong phrasings the incident review named
-// GIVEN: authoring wordings with one or two words between the verb and the noun
-// WHEN:  the hook runs against an empty roster
-// THEN:  each names its plugin expert; `hooks.json` as a noun stays weak
-// ─────────────────────────────────────────────────────────────────────────────
+// 50 - strong phrasings named by incident review
+// GIVEN authoring wordings, 1-2 words between verb and noun; WHEN run on empty roster; THEN each names its plugin expert; `hooks.json` as noun stays weak
 {
   const phrasings = [
     ['t50a', 'sessionstart-hook', 'Write a SessionStart hook that injects the roster', 'hook authoring', 'brewcode:hook-creator'],
@@ -1519,12 +1386,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 51 - negation guard
-// GIVEN: text with one or more authoring matches, some or all negated
-// WHEN:  the hook runs against an empty roster
-// THEN:  every match is checked; only a later non-negated match may deny
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN text w/ authoring matches, some or all negated; WHEN run on empty roster; THEN every match checked, only later non-negated one may deny
 {
   const negations = [
     ['t51a', 'do-not-create', 'Do not create a new agent here; just summarise the roster.'],
@@ -1722,12 +1585,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 52 - an agent whose vocabulary IS its own name
-// GIVEN: `sentry`, which declares its own name among its Triggers
-// WHEN:  a sentry triage task runs
-// THEN:  deny - a published name is real evidence, not a coincidence
-// ─────────────────────────────────────────────────────────────────────────────
+// 52 - agent whose vocabulary IS its own name
+// GIVEN `sentry` lists own name among its Triggers; WHEN sentry triage task; THEN deny: published name = real evidence, != coincidence
 {
   const { proj, env } = newRoot('t52');
   writeAgent(proj, 'sentry', 'Error tracking owner. Triggers: sentry, sentry issue');
@@ -1746,14 +1605,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 53 - a stray agent name must not inflate the RUNNER-UP either
-// GIVEN: payments-ledger + plan-engine, a ledger task, with and without the
-//        `export ARBITER_AGENT="plan-engine"` line in the prompt
-// WHEN:  the hook runs both ways
-// THEN:  deny naming payments-ledger in both - the margin is computed on the same
-//        name-struck ranking, so a quoted name cannot suppress a real winner
-// ─────────────────────────────────────────────────────────────────────────────
+// 53 - stray agent name must not inflate RUNNER-UP either
+// GIVEN payments-ledger + plan-engine, ledger task, with/without `export ARBITER_AGENT="plan-engine"` in prompt; WHEN both ways; THEN deny naming payments-ledger both times: margin uses same name-struck ranking
 {
   const expected = denyOut(
     rosterDeny('payments-ledger', '.claude/agents/payments-ledger.md', 'general-purpose'),
@@ -1788,12 +1641,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 54 - the nudge list is ordered on the same name-struck ranking
-// GIVEN: the incident fixture from case 41
-// WHEN:  the hook runs
-// THEN:  the unearned agent does not head the nudge list
-// ─────────────────────────────────────────────────────────────────────────────
+// 54 - nudge list ordered on same name-struck ranking
+// GIVEN case 41 incident fixture; WHEN hook runs; THEN unearned agent != head of nudge list
 {
   const { proj, env } = newRoot('t54');
   writeAgent(
@@ -1827,12 +1676,8 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 55 - a weak intent and a scoring agent produce ONE merged message
-// GIVEN: a bare SKILL.md mention plus an agent that scores below minScore
-// WHEN:  the hook runs
-// THEN:  a single nudge naming both the specialist and the candidate
-// ─────────────────────────────────────────────────────────────────────────────
+// 55 - weak intent + scoring agent -> ONE merged message
+// GIVEN bare SKILL.md mention + agent scoring below minScore; WHEN hook runs; THEN single nudge naming specialist + candidate
 {
   const { proj, env } = newRoot('t55');
   writeAgent(proj, 'template-scout', 'Template audit owner. Triggers: placeholders');
@@ -1859,18 +1704,270 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// 56 - recorded 2.1.296 Agent payload, no matching expert
+// GIVEN LT9 `benign probe` general-purpose spawn + standard roster; WHEN hook runs; THEN empty stdout, exit 0: no expert, general-purpose is right pick
+{
+  const { proj, env } = newRoot('t56');
+  standardRoster(proj);
+  const r = run(JSON.stringify(lt9AgentCall(proj, LT9_BENIGN)), env);
+  check('56-recorded-agent-call', { stdout: r.stdout, status: r.status }, { stdout: '', status: 0 },
+    'a generic spawn with no matching expert must allow silently');
+}
+
+// 57 - tier-2 verifier's own calls never policed
+// GIVEN recorded verdict (StructuredOutput, agent_id hook-agent-*, no agent_type) + Agent call w/ same agent_id, skill-intent text; WHEN hook runs on each; THEN both silent allow, exit 0: missing agent_type != error
+{
+  const { proj, env } = newRoot('t57');
+  standardRoster(proj);
+  const verdict = run(JSON.stringify(lt9VerifierVerdict(proj)), env);
+  const spawn = run(
+    JSON.stringify({
+      ...lt9AgentCall(proj, { ...LT9_BENIGN, description: INTENT_SKILL }),
+      agent_id: 'hook-agent-5148e0ac-4381-4904-831c-94da713e34fc',
+    }),
+    env,
+  );
+  check('57-verifier-verdict-ignored',
+    { stdout: verdict.stdout, stderr: verdict.stderr, status: verdict.status },
+    { stdout: '', stderr: '', status: 0 },
+    'the verifier StructuredOutput call must pass untouched');
+  check('57-verifier-spawn-ignored',
+    { stdout: spawn.stdout, stderr: spawn.stderr, status: spawn.status },
+    { stdout: '', stderr: '', status: 0 },
+    'a hook-agent-* Agent call must allow silently');
+}
+
+// 58 - redirect target not on disk never denies
+// GIVEN strong skill intent, weak hook mention, empty plugin cache; WHEN general-purpose spawned on each; THEN strong = notice naming missing expert, no deny; weak = silent
+{
+  const { proj, env, cfgDir } = newRoot('t58');
+  standardRoster(proj);
+  rmSync(join(cfgDir, 'plugins'), { recursive: true, force: true });
+  const strong = run(payload({ cwd: proj, description: INTENT_SKILL }), env);
+  const weak = run(payload({ cwd: proj, description: 'Summarise what hooks.json contains' }), env);
+  check('58-missing-expert-strong-is-notice',
+    safeParse(strong.stdout),
+    ctxOut(unverifiedIntentCtx('skill authoring', 'brewcode:skill-creator', 'general-purpose')),
+    'an expert that cannot be found must not block general-purpose');
+  check('58-missing-expert-weak-is-silent', weak.stdout, '',
+    'a weak signal must not advertise an expert that cannot be found');
+}
+
+// 59 - tier-2 heartbeat: expected vs answered verdicts
+// GIVEN level strict; main-loop spawn, subagent spawn, one verifier verdict; WHEN --judge-health read fresh, then backdated past grace; THEN 2 expected / 1 answered; overdue 0 fresh, 1 settled
+{
+  const { proj, tmp, env } = newRoot('t59');
+  writeConfig(proj, { level: 'strict' });
+  run(JSON.stringify(lt9AgentCall(proj, LT9_BENIGN)), env);
+  run(JSON.stringify({ ...lt9AgentCall(proj, LT9_BENIGN), agent_id: 'a5f3', agent_type: 'general-purpose' }), env);
+  run(JSON.stringify(lt9VerifierVerdict(proj)), env);
+  const session = join(stateDir(tmp, proj), LT9_SESSION);
+  const recorded = {
+    expected: lineCount(join(session, 'judge-expected')),
+    answered: lineCount(join(session, 'judge-answered')),
+  };
+  const fresh = runCli(['--judge-health', proj], env);
+  writeFileSync(join(session, 'judge-expected'), '1000\n2000\n');
+  const settled = runCli(['--judge-health', proj], env);
+  check('59-heartbeat-recorded', recorded, { expected: 2, answered: 1 },
+    'every Agent call expects a verdict, every verifier verdict is counted');
+  check('59-heartbeat-fresh', { stdout: fresh.stdout, status: fresh.status },
+    { stdout: 'judge_expected=2 judge_answered=1 judge_overdue=0\n', status: 0 },
+    'a verdict still inside the grace window is not overdue');
+  check('59-heartbeat-settled', { stdout: settled.stdout, status: settled.status },
+    { stdout: 'judge_expected=2 judge_answered=1 judge_overdue=1\n', status: 0 },
+    'an expected verdict that never arrived is reported as overdue');
+}
+
+// 59b - level fast records no heartbeat
+// GIVEN default config (level fast) + main-loop spawn; WHEN --judge-health read; THEN all three counters 0
+{
+  const { proj, env } = newRoot('t59b');
+  run(JSON.stringify(lt9AgentCall(proj, LT9_BENIGN)), env);
+  const health = runCli(['--judge-health', proj], env);
+  check('59b-heartbeat-off-at-fast', { stdout: health.stdout, status: health.status },
+    { stdout: 'judge_expected=0 judge_answered=0 judge_overdue=0\n', status: 0 },
+    'tier 1 alone must not expect a judge verdict');
+}
+
+// 60 - purge removes this project's state only
+// GIVEN projects A + B on one TMPDIR, same task denied once each; WHEN --purge-state for A; THEN only B's project dir left; A denies afresh, B replays its notice
+{
+  const { proj: projA, tmp, env } = newRoot('t60-a');
+  const projB = join(BASE, 't60-b', 'proj');
+  mkdirSync(join(projB, '.claude'), { recursive: true });
+  standardRoster(projA);
+  standardRoster(projB);
+  const text = 'Wire pending approval into the plan lifecycle and the approval matrix';
+  run(payload({ cwd: projA, session: 'PURGE', description: text }), env);
+  run(payload({ cwd: projB, session: 'PURGE', description: text }), env);
+  const purge = runCli(['--purge-state', projA], env);
+  const left = readdirSync(join(tmp, 'brewtools-agent-router'));
+  const rA = run(payload({ cwd: projA, session: 'PURGE', description: text }), env);
+  const rB = run(payload({ cwd: projB, session: 'PURGE', description: text }), env);
+  check('60-purge-output', { stdout: purge.stdout, status: purge.status },
+    { stdout: `OK purged ${stateDir(tmp, projA)}\n`, status: 0 },
+    'purge must name the one directory it removed');
+  check('60-purge-keeps-other-project', left, [stateDir(tmp, projB).split('/').pop()],
+    'purge must leave another project state dir in place');
+  check('60-purged-project-denies-afresh', safeParse(rA.stdout),
+    denyOut(rosterDeny('conductor-dev', '.claude/agents/conductor-dev.md', 'general-purpose')),
+    'the purged project has no marker left');
+  check('60-other-project-marker-survives', safeParse(rB.stdout),
+    ctxOut(repeatCtx('conductor-dev', 'general-purpose')),
+    'the other project keeps its anti-loop marker');
+}
+
+// 61 - stale sweep: legacy session dirs go, another project's dir stays
+// GIVEN 2-day-old pre-6.5 top-level session dir + 2-day-old foreign project dir; WHEN this project records first deny; THEN state root = foreign project dir + this project's dir only
+{
+  const { proj, tmp, env } = newRoot('t61');
+  standardRoster(proj);
+  const stateRoot = join(tmp, 'brewtools-agent-router');
+  const old = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+  for (const name of ['legacy-session-id', 'p-0123456789abcdef']) {
+    mkdirSync(join(stateRoot, name), { recursive: true, mode: 0o700 });
+    utimesSync(join(stateRoot, name), old, old);
+  }
+  chmodSync(stateRoot, 0o700);
+  run(payload({ cwd: proj, description: INTENT_SKILL }), env);
+  check('61-stale-sweep', readdirSync(stateRoot).sort(),
+    ['p-0123456789abcdef', stateDir(tmp, proj).split('/').pop()].sort(),
+    'a stale legacy dir is pruned, a foreign project dir is never touched');
+}
+
+// ── 62-69: roster discovery mirrors live Claude Code 2.1.296 (recursive, identity = frontmatter `name`) ──
+const CACHE_DESC = 'Cache owner. Triggers: caching, redis, eviction policy';
+const CACHE_TASK = 'Investigate the caching and eviction policy in redis';
+
+function writeNestedAgent(agentsDir, relFile, name, description) {
+  const file = join(agentsDir, relFile);
+  mkdirSync(join(file, '..'), { recursive: true });
+  writeFileSync(file, `---\nname: ${name}\ndescription: "${description}"\n---\n\nBody.\n`);
+}
+
+// GIVEN: the only project agent lives two subfolders deep; WHEN: general-purpose is spawned on its task
+// THEN: deny naming it, with its nested path
+{
+  const { proj, env } = newRoot('t62');
+  writeNestedAgent(join(proj, '.claude', 'agents'), 'team/backend/cache-dev.md', 'cache-dev', CACHE_DESC);
+  const r = run(payload({ cwd: proj, description: CACHE_TASK }), env);
+  check('62-nested-agent-found', safeParse(r.stdout),
+    denyOut(rosterDeny('cache-dev', '.claude/agents/team/backend/cache-dev.md', 'general-purpose')),
+    'a nested project agent is on the roster');
+}
+
+// GIVEN: a top-level file whose name differs from its frontmatter `name`; WHEN: general-purpose is spawned on its task, and then the agent itself is picked
+// THEN: the deny names the frontmatter name; picking that name is allowed silently
+{
+  const { proj, env } = newRoot('t63');
+  writeNestedAgent(join(proj, '.claude', 'agents'), 'legacy-file.md', 'cache-dev', CACHE_DESC);
+  const r = run(payload({ cwd: proj, description: CACHE_TASK }), env);
+  check('63-name-not-filename-deny', safeParse(r.stdout),
+    denyOut(rosterDeny('cache-dev', '.claude/agents/legacy-file.md', 'general-purpose')),
+    'identity is the frontmatter name, not the file name');
+  const self = run(payload({ cwd: proj, type: 'cache-dev', description: CACHE_TASK, session: 'S2' }), env);
+  check('63-name-not-filename-picked', self.stdout, '', 'the frontmatter name counts as a picked project expert');
+}
+
+// GIVEN: a custom intent expert that exists only as a nested user agent under another file name; WHEN: general-purpose is spawned on the intent task
+// THEN: the expert is found on disk, so the intent denies
+{
+  const { proj, env, cfgDir } = newRoot('t64');
+  writeNestedAgent(join(cfgDir, 'agents'), 'db/guru-file.md', 'my-db-guru', 'Database guru');
+  writeConfig(proj, { enabled: true, intents: [{ match: '\\bwidget\\b', expert: 'my-db-guru', label: 'db work' }] });
+  const r = run(payload({ cwd: proj, description: 'Rebuild the widget renderer' }), env);
+  check('64-nested-user-agent-found', safeParse(r.stdout),
+    denyOut(intentPluginDeny('db work', 'my-db-guru', 'general-purpose')),
+    'a nested user agent keyed by frontmatter name is a real redirect target');
+}
+
+// GIVEN: one agent exactly at the depth cap (6 subfolders), one past it (7); WHEN: general-purpose is spawned on each agent's task
+// THEN: the capped agent denies, the deeper one is not seen (silent allow)
+{
+  const { proj, env } = newRoot('t65');
+  const agents = join(proj, '.claude', 'agents');
+  writeNestedAgent(agents, 'a/b/c/d/e/f/cache-dev.md', 'cache-dev', CACHE_DESC);
+  writeNestedAgent(agents, 'a/b/c/d/e/f/g/queue-dev.md', 'queue-dev', 'Queue owner. Triggers: rabbitmq, dead letter');
+  const atCap = run(payload({ cwd: proj, description: CACHE_TASK }), env);
+  check('65-depth-cap-inside', safeParse(atCap.stdout),
+    denyOut(rosterDeny('cache-dev', '.claude/agents/a/b/c/d/e/f/cache-dev.md', 'general-purpose')),
+    'an agent 6 subfolders deep is on the roster');
+  const past = run(payload({ cwd: proj, description: 'Tune the rabbitmq dead letter flow', session: 'S2' }), env);
+  check('65-depth-cap-past', past.stdout, '', 'an agent 7 subfolders deep is past the cap: silent allow');
+}
+
+// GIVEN: a symlinked dir to an outside agent plus a symlink cycle back to the agents dir; WHEN: general-purpose is spawned on the outside agent's task
+// THEN: the walk follows the link once, terminates, and denies naming the linked path
+{
+  const { proj, env } = newRoot('t66');
+  const agents = join(proj, '.claude', 'agents');
+  const outside = join(proj, 'shared-agents');
+  writeNestedAgent(outside, 'cache-dev.md', 'cache-dev', CACHE_DESC);
+  mkdirSync(agents, { recursive: true });
+  symlinkSync(outside, join(agents, 'shared'));
+  symlinkSync(agents, join(agents, 'loop'));
+  const r = run(payload({ cwd: proj, description: CACHE_TASK }), env);
+  check('66-symlink-dir-cycle-safe', { status: r.status, out: safeParse(r.stdout) },
+    { status: 0, out: denyOut(rosterDeny('cache-dev', '.claude/agents/shared/cache-dev.md', 'general-purpose')) },
+    'a symlinked dir is followed, a cycle is walked once');
+}
+
+// GIVEN: agents Claude Code skips (no description, `:` in name, nameless) and one in a dot-dir; WHEN: general-purpose is spawned on their shared task
+// THEN: none is on the roster: silent allow, never a deny naming an unloadable agent
+{
+  const { proj, env } = newRoot('t67');
+  const agents = join(proj, '.claude', 'agents');
+  writeRawAgent(proj, 'nodesc.md', '---\nname: cache-dev\n---\nBody.\n');
+  writeNestedAgent(agents, 'colon.md', 'team:cache-dev', CACHE_DESC);
+  writeRawAgent(proj, 'cache-dev.md', `---\ndescription: "${CACHE_DESC}"\n---\nBody.\n`);
+  writeNestedAgent(agents, '.drafts/cache-dev.md', 'cache-dev', CACHE_DESC);
+  const r = run(payload({ cwd: proj, description: CACHE_TASK }), env);
+  check('67-skipped-agent-files', r.stdout, '', 'unloadable and dot-dir agent files never score');
+}
+
+// GIVEN: the root is a subdir; the git root above it holds the only agent; a twin tree without `.git`; WHEN: general-purpose is spawned on the agent's task from each subdir root
+// THEN: inside git the ancestor agent denies; without git nothing above the root is read
+{
+  const { proj, env } = newRoot('t68');
+  mkdirSync(join(proj, '.git'));
+  writeAgent(proj, 'cache-dev', CACHE_DESC);
+  const sub = join(proj, 'pkg');
+  writeConfig(sub, { enabled: true });
+  const r = run(payload({ cwd: sub, description: CACHE_TASK }), env);
+  check('68-git-root-agent-found', safeParse(r.stdout),
+    denyOut(rosterDeny('cache-dev', '../.claude/agents/cache-dev.md', 'general-purpose')),
+    'every .claude/agents up to the git root is on the roster');
+  const twin = newRoot('t68b');
+  writeAgent(twin.proj, 'cache-dev', CACHE_DESC);
+  const twinSub = join(twin.proj, 'pkg');
+  writeConfig(twinSub, { enabled: true });
+  const rNoGit = run(payload({ cwd: twinSub, description: CACHE_TASK }), twin.env);
+  check('68-no-git-root-only', rNoGit.stdout, '', 'without a git root only the root dir is read');
+}
+
+// GIVEN: two nested agents, one top-level, one descriptionless file; WHEN: the status probe counts the roster
+// THEN: 3 loadable agents
+{
+  const { proj, env } = newRoot('t69');
+  const agents = join(proj, '.claude', 'agents');
+  writeAgent(proj, 'top-dev', 'Top owner');
+  writeNestedAgent(agents, 'x/one.md', 'one-dev', 'One owner');
+  writeNestedAgent(agents, 'x/y/two.md', 'two-dev', 'Two owner');
+  writeRawAgent(proj, 'nodesc.md', '---\nname: nodesc-dev\n---\n');
+  const r = runCli(['--roster', proj], env);
+  check('69-roster-count-cli', { status: r.status, out: r.stdout }, { status: 0, out: '3\n' },
+    '--roster counts loadable agents recursively');
+}
+
 // Cleanup
-// ─────────────────────────────────────────────────────────────────────────────
 try {
   rmSync(BASE, { recursive: true, force: true });
 } catch {
   /* ignore */
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Report
-// ─────────────────────────────────────────────────────────────────────────────
 console.log('\n=== agent-router E2E TEST REPORT ===');
 for (const line of results) console.log(line);
 console.log(`\nTOTAL: ${passed + failed} | PASS: ${passed} | FAIL: ${failed}`);

@@ -1,8 +1,8 @@
 # brewcode:superreview-setup
 
 A **HUMAN-invoked generator skill**. It analyzes a target project and writes a self-contained, project-local
-`.codex/skills/superreview/` into that repo — a deep code-review skill that merges the old `review` and
-`standards-review` into ONE pass.
+`.codex/skills/superreview/` into that repo — a deep code-review skill that covers intent, standards and scope
+in ONE pass.
 
 Like `skill-creator` and `task-board-setup`, this skill produces a working artifact (a skill) rather than doing the
 review itself. The **emitted** skill is the one that reviews code.
@@ -22,13 +22,13 @@ A project-tailored `superreview` skill:
 2. **Semantic DEPTH resolution** — `QUICK` (default) or `EXTENDED`, read out of the user's own words, not a flag.
    Orthogonal to mode: mode picks *what* is reviewed, depth picks *how hard*. See [Depth](#depth-quick-vs-extended).
 3. **An intent pass at BOTH depths** — a dedicated `intent-guard` agent compares what was ASKED (tracker task, spec,
-   plan, project policy, or the session transcript) against what was DELIVERED, and reports drift classes
+   plan, project policy, or the session transcript) against what was DELIVERED, and reports 12 drift classes
    (`intent#scope|scale|indirection|files|tests|deps|arch|policy|skip|artifacts|naming|conflict`). Every row carries a
    verbatim quote of the request, its source tier and concrete delivered evidence, so it is `CONFIRMED-BY-EVIDENCE`
    and skips the adversarial validator by design.
 4. **Mechanical gates first** — the project's real build/lint/type/test commands run before the fan-out (both depths).
    Their output is `CONFIRMED-BY-EXECUTION` and is passed to every agent so nobody re-runs or re-litigates it.
-5. **Domain experts selected at RUNTIME** (EXTENDED) — the live `.codex/agents/*.toml` roster is read each run,
+5. **Domain experts selected at RUNTIME** (EXTENDED) — the live `.codex/agents/**/*.toml` roster (subfolders included) is read each run,
    read-only recon agents are excluded, and any surface without an owner is marked DEGRADED instead of quietly
    downgraded.
 6. **Scope discipline** (EXTENDED) — the sanctioned baseline (task + issue + recorded decisions) is resolved
@@ -36,7 +36,7 @@ A project-tailored `superreview` skill:
    the baseline outward (delivery `D1-D5` with mandatory proof-of-absence, closeout `C1-C4`). No baseline ->
    `UNKNOWN` and a permanent P2 cap, never an invented yardstick.
 7. **Rule referencing** — points at the project's real `.codex/rules/*` + `.codex/convention/*` files; agents READ
-   and CITE them (never restated in the skill).
+   and CITE them (never restated in the skill). Reuse findings are search-first, ranked by a 90/70/50% reuse matrix.
 8. **ONE targeted parallel fan-out** — `QUICK` spawns `intent-guard` alone; `EXTENDED` adds the agents the changed
    files actually need, the two scope passes and `{0,1,2}` general cross-cutting agents by judgement.
 9. **Per-finding adversarial VALIDATION gate** (EXTENDED) — a NON-OWNING validator reverse-validates every verdictless
@@ -76,26 +76,13 @@ prose is the interface.
 `scripts/generate.sh` is the **only** writer of `.codex/agents/intent-guard.toml`, through one shared implementation
 with two entry points: `emit` (full generation) and `emit-agent` (the agent alone — no superreview skill needed, this
 is what `$brewcode:teams-setup` calls). It is never hand-written, never authored by `brewcode:agent-creator` (which may only
-ADAPT the seeded blocks), and never a domain expert. A usable existing file is **REUSED byte-untouched** — the writer
+ADAPT the seeded blocks), and never a domain expert. An existing file is **REUSED byte-untouched** — the writer
 prints one status line, `INTENT_GUARD: CREATED|REUSE|MIGRATED <path>` — so local edits survive every
-regeneration; an empty or frontmatter-less file counts as absent and is recreated. `MIGRATED` is the pre-5.0 case:
-a file carrying the retired `intent-guard template vN` stamp gets its metadata restamped in place (the four
-frontmatter keys + the tail anchor) with the tailored body preserved byte-for-byte. Its evidence tiers are baked in at
+regeneration; only an empty file, or a generated one that lost its frontmatter or still holds placeholders, is
+backed up to `.bak-<ts>` and recreated. `MIGRATED`: a file carrying the retired `intent-guard template vN` stamp
+gets its metadata restamped in place (the frontmatter metadata keys + the tail anchor) with the tailored body
+preserved byte-for-byte. Its evidence tiers are baked in at
 emit time: `T1` tracker, `T2` specs, `T3` plans, `T4` policy files, `T5` the live session transcript.
-
-## How review + standards-review are merged
-
-| From | Folded in as |
-|------|--------------|
-| `review` engine | Canonical structure: deterministic mode, two-phase find->validate, merged report, agent contract |
-| `standards-review` | Reuse/duplication focus (rank 3, 90/70/50% reuse matrix), stack detection, file-grouping, per-stack guidelines, `/simplify` hand-off |
-| `setup` Phase 3.5 | Tech-specific check tables (Java/Node/Python/Go) folded into the per-stack reference docs; the placeholder->concrete generation mechanism |
-| Scope discipline | `references/scope.md.template`: baseline + precedence, ownership map + shared surfaces, 6-shape taxonomy, delivery D1-D5, closeout C1-C4, Phase 3b gate |
-| Runtime expertise | `references/agent-prompt.md`: live-roster selection, recon exclusion, DEGRADED marking |
-| Intent / anti-drift | `references/intent-guard.md.template`: asked-vs-delivered, 5 evidence tiers, 12 drift classes, `CONFIRMED-BY-EVIDENCE` rows |
-
-The canonical shape is the structure; standards-review + the review template supply the per-stack checks, reuse
-matrix and report scaffolding baked into it; scope + expert selection make the emitted review project-specific.
 
 ## Usage
 
@@ -118,8 +105,7 @@ $brewcode:superreview-setup [status|install|upgrade|enable|disable|uninstall|pur
 No arguments at all: `status` when the skill is already emitted, `install` when it is not.
 
 `intent-guard.toml` survives all seven verbs — it is shared with `$brewcode:teams-setup`, and that skill
-may be the one that put it there. `enable`/`disable` take effect in the NEXT session, since Codex
-discovers skills at session start.
+may be the one that put it there.
 
 - `<fine-tune-prompt>` — what to emphasize in the emitted skill's focus ordering (e.g. "weight reuse highest",
   "always treat auth as P0"). Woven into the emitted Focus table + emphasis line. Scope discipline stays in rank 1
@@ -152,7 +138,7 @@ After generation, run the emitted skill in that project. Depth comes from how yo
 | 1.6 | **Domain experts (mandatory)** — classify the roster, find uncovered groups, create the missing experts via `brewcode:agent-creator`, re-scan |
 | 1.6b | **`intent-guard` (create-or-reuse)** — no gate, no question: the shared writer creates `.codex/agents/intent-guard.toml` when absent (or unusable), REUSES it untouched when present |
 | 2 | Export scalar placeholders -> `generate.sh emit` (sed substitution, copies templates + chosen stack ref + `scope.md` + the intent agent, and saves the pristine templates to `.template-baseline/`). **Refuses on a live installation** — see [Re-generation](#re-generation-upgrade-not-re-emit) |
-| 2b | Already installed -> `generate.sh upgrade` instead: no live file is written, the template delta is reported and ported by hand |
+| 2b | Already installed -> `generate.sh upgrade` instead: no live file's content is rewritten (only its metadata is restamped), the template delta is reported and ported by hand |
 | 3 | AI fills BLOCK placeholders (agent table, rule pointers, file-group map, gate commands, focus table; scope baseline block, precedence table, ownership probe, shared surfaces; the intent agent's project-specific blocks — skipped on REUSE) via Edit |
 | 4 | `generate.sh validate` — fails on a leftover setup-time `{PLACEHOLDER}` (including inside the emitted intent agent), an unresolved template header, an unknown agent name, a missing or unusable emitted asset, or **zero wired domain experts** (an agent counts only when it appears in a routing row). Warns `UNTAILORED` while the intent agent still carries seeded generic blocks |
 | 5 | Report what was written |
@@ -179,7 +165,7 @@ the expected path, not a failure: it writes nothing and prints no `INTENT_GUARD:
 
 | Command | Effect |
 |---------|--------|
-| `generate.sh upgrade` | The supported refresh. Writes NO live file. Stages a fresh emit under `.upgrade-staging/` and reports, per asset, the **new template vs the pristine `.template-baseline/` copy `emit` saved** — so `DIFFERS (<n> template line(s))` counts real template changes and never your tailoring. The per-stack reference is re-derived from the installed tree (`UPGRADE_STACK=`), never re-defaulted, so a TypeScript/Go/Java-Kotlin install gets its own reference restamped. A deleted asset is restored RAW — scalars included, deliberately unresolved — and labelled `MISSING -> restored RAW (NEEDS PHASE 3: scalar AND block placeholders)`. The generator ports each delta into the live file with targeted `Edit` calls, then promotes `.upgrade-staging/.template` to the new baseline |
+| `generate.sh upgrade` | The supported refresh. Rewrites no live file's content — it only restamps the frontmatter metadata. Stages a fresh emit under `.upgrade-staging/` and reports, per asset, the **new template vs the pristine `.template-baseline/` copy `emit` saved** — so `DIFFERS (<n> template line(s))` counts real template changes and never your tailoring. The per-stack reference is re-derived from the installed tree (`UPGRADE_STACK=`), never re-defaulted, so a TypeScript/Go/Java-Kotlin install gets its own reference restamped. A deleted asset is restored RAW — scalars included, deliberately unresolved — and labelled `MISSING -> restored RAW (NEEDS PHASE 3: scalar AND block placeholders)`. The generator ports each delta into the live file with targeted `Edit` calls, then promotes `.upgrade-staging/.template` to the new baseline |
 | `SUPERREVIEW_FORCE=1 generate.sh emit` | Conscious destructive override: overwrites the live installation and **loses** every tailored + self-synced edit. Only on an explicit request for a clean regeneration |
 
 `.template-baseline/` and `.upgrade-staging/` each carry a `.gitignore` of `*`, so neither shows up in your

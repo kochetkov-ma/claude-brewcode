@@ -10,29 +10,26 @@ model: opus
 
 # Context Slim
 
-Cuts the inventory size of potential context sources with three levers — cross-layer dedup,
+Cuts the size of potential context sources with three levers — cross-layer dedup,
 default-knowledge removal, deep per-file compression. Every exact value, key, path, pin and
-non-default instruction survives byte-exact or acceptance fails. Recover only recorded owned
-drafts; concurrent changes remain intact and recovery refusal is reported explicitly.
-Orchestration ONLY: every decision rule lives in `references/`, read at the phase that needs it.
+non-default instruction survives byte-exact or acceptance fails. Orchestration only: every
+decision rule lives in `references/`, read at the phase that needs it.
 
 ## Prompt contract
 
-Position 1 of `$ARGUMENTS` is a **free-form prompt** (RU/EN) — modes and flags are optional and may
-follow in any order. Nobody types keys: resolve mode + scope FROM the prompt.
+`$ARGUMENTS` is one free-form RU/EN prompt; mode tokens and flags (`--target=N%`, `--global`,
+`--memory`, `--noask`) may sit anywhere in it.
 
-1. Strip flags (`--target=N%`, `--global`, `--memory`, `--noask`). An explicit mode token anywhere
-   wins outright, no scoring.
-2. Else score modes by distinct whole-word keyword hits (table below). Highest unique score wins.
-   Tie with a destructive mode -> `AskUserQuestion`; tie with `measure` -> `measure`; tie of two
-   mutating modes -> the keyword appearing first; all zero -> `measure`.
-3. Empty arguments -> `measure`. A read-only run asks nothing.
-4. Outcome-changing ambiguity -> ONE `AskUserQuestion` (max 4 questions) BEFORE any work, and only
-   when the answer changes what gets written.
-5. Prose that is not a mode/path is still input: extract the target, the ratio and the layer from it
-   (`сожми контекст на 40%, глобальный тоже` -> mode `slim`, `--target=40%`, `--global`).
+1. Mode: an explicit mode token wins outright; else the most distinct whole-word keyword hits
+   (table below). Tie with a destructive mode -> `AskUserQuestion`; with `measure` -> `measure`; of
+   two mutating modes -> the keyword that comes first. No hit or empty -> `measure`.
+2. Scope: prose that is not a mode/path is still input: take the target, the ratio and the layer from
+   it (`сожми контекст на 40%, глобальный тоже` -> mode `slim`, `--target=40%`, `--global`).
+3. Ask: at most ONE `AskUserQuestion` (max 4 questions) to resolve mode and scope, before any work, only when the answer
+   changes what gets written. A read-only run asks nothing.
 
-Then print this block ONCE, before the first action:
+Print once, before the first action (labels literal, INPUT verbatim, authored values follow the
+active work-artifact language policy):
 
 ```
 PLAN — brewtools:context-slim
@@ -42,8 +39,6 @@ SCOPE:  <resolved roots / tiers / flags>
 DO:     <2-5 imperative bullets>
 RESULT: <what the user ends up holding>
 ```
-
-Labels are literal; INPUT stays verbatim; authored values follow the active work-artifact language policy.
 
 ## Modes
 
@@ -63,145 +58,126 @@ alone it means `bodies` + `slim`.
 
 | Tier | Content | In default scope |
 |------|---------|------------------|
-| ALWAYS-ON | Potential instruction inventory: startup files, recursive rules (path-scoped rules are conditional), imported/read conventions, client-dependent `AGENTS.md`, memory index/topics, agent descriptions, hook text | yes |
+| ALWAYS-ON | Startup `CLAUDE.md` files (subdirectory ones on access), recursive rules (path-scoped = conditional), imported/read conventions, `AGENTS.md`, memory, agent descriptions, hook text | yes |
 | PER-SPAWN | Agent `.md` files; only the selected agent loads at spawn | yes |
 | PER-INVOCATION | Invoked `SKILL.md` bodies + recursive references read on demand | opt-in via `bodies` only |
 
-Tier totals are potential inventory, not observed session context. `loading` reports conditions;
-`measurement.actual_loading_observed=false` requires checking runtime context before claiming actual
-cost. Legacy `token_model=chars/4` denotes the `bytes/4` proxy; Unicode/tokenizer error is corpus-dependent.
-Membership and historical measurements: `references/measurement.md`.
-`--memory` includes the memory directories; `--target=N%` is measured against THIS run's freshly
-scanned scope, never a prior run (measurement.md, "Target-ratio baseline rule").
+Totals are potential inventory, not observed context (`measurement.actual_loading_observed=false`;
+membership: `references/measurement.md`). `--memory` adds the memory directories; `--target=N%` uses
+THIS run's fresh scan (measurement.md, "Target-ratio baseline rule").
 
 ## Layer scope and what is never touched
 
 | Layer | Read | Written |
 |-------|------|---------|
 | Project (`L1`/`L2`) | always | in every mutating mode |
-| Global `~/.claude` (`L3`) | ALWAYS, as authority | ONLY when `--global` is granted |
-| MCP servers, plugin enablement, `settings.json`, `~/.claude/plugins/cache/**` | signals only | NEVER — advice rows in the final report per `references/mcp-advice.md` |
+| Global `~/.claude`, or `CLAUDE_CONFIG_DIR` when set (`L3`) | ALWAYS, as authority | only when `--global` is granted |
+| MCP servers, plugin enablement, `settings.json`, the plugin cache | signals only | NEVER — advice rows per `references/mcp-advice.md` |
 
-Deleting from — or REWRITING — the global layer to serve one project is a cross-project regression.
-The guard and its two branches live in `references/dedup-arbitration.md` section 5, binding on every
-mutation. Cite it, obey it, do not restate it.
+Rewriting the global layer to serve one project is a cross-project regression: `references/dedup-arbitration.md`
+section 5 binds every mutation.
 
 ## Phases
 
 | # | Phase | Mutates | Barrier |
 |---|-------|---------|---------|
-| 0 | Resolve mode + scope, one `AskUserQuestion` | no | — |
+| 0 | Resolve mode + scope | no | — |
 | 1 | Discover + measure, print PLAN | no | — |
 | 2 | Snapshot (fail-closed) | backups only | yes |
-| 3 | Cross-layer dedup analysis — orchestrator only | no | yes |
-| 4 | Fan out one optimizer subagent per file | yes | — |
-| 5 | Verify + independent checker | checkpoint-proven recovery on miss; unsafe recovery refused | yes |
+| 3 | Cross-layer dedup analysis | no | yes |
+| 4 | One optimizer subagent per file | yes | — |
+| 5 | Verify + independent checker | checkpoint-proven recovery on miss only | yes |
 | 6 | Re-measure, lossy escalation gate | conditional | — |
 | 7 | Ratchet state + report | state file only | — |
 
-`measure` stops after phase 1. `preview` stops after phase 3 and prints the plan it would execute.
-`restore` runs phase 2's restore path alone (see Restore below).
+`measure` stops after phase 1, `preview` after phase 3; `restore` runs alone (see Restore).
 
 ### Phase 0 — resolve
 
-Apply the Prompt contract. Then ONE `AskUserQuestion` (max 4 questions), only for answers that change
-what gets written:
+After the Prompt contract, one `AskUserQuestion` (max 4 questions), only for answers that change writes:
 
 1. Write to the global layer, or read it as authority only?
 2. Include the memory directories?
 3. Include agent bodies (PER-SPAWN)?
 4. Target ratio — only when the prompt implies one without naming it.
 
-SKIPPED ENTIRELY by `measure` and by `--noask`; record the literal `Skipped (--noask)` in the report.
-
-**`--noask` skips ONLY those four.** The three gates below and every ground-truth STOP always fire —
-`--noask` answering them is a defect, not a convenience:
+`measure` and `--noask` skip it (report the literal `Skipped (--noask)`). The gates below and every
+STOP still fire under `--noask`: each guards an irreversible write.
 
 | Gate | Fires on | Ask |
 |------|----------|-----|
-| Destructive mode | `hard`, `restore` | Name the mode, the scope and what is irreversible; require an explicit yes |
-| Global write | any `--global` run that will WRITE (all mutating modes) | `~/.claude` is read by EVERY project on this machine — confirm the machine-wide write |
+| Destructive mode | `hard`, `restore` | Name the mode, scope and what is irreversible; require an explicit yes |
+| Global write | any `--global` run that writes | Every project on this machine reads the global layer — confirm the machine-wide write |
 | Phase 6 escalation | an unmet `--target` in any mutating mode | see phase 6 |
 
 ### Phase 1 — discover + measure
 
-**EXECUTE** using Bash tool (add `--global` only when the global layer is in scope):
+**EXECUTE** using Bash tool (`--global` only when the global layer is in scope):
 
 ```bash
 bash "${CLAUDE_PLUGIN_ROOT}/skills/context-slim/scripts/context-scan.sh" --root . --global; rc=$?
 [ $rc -eq 0 ] && echo "✅ EXIT:$rc" || echo "❌ FAILED EXIT:$rc"
 ```
 
-> **STOP on nonzero, invalid JSON, or missing/malformed/nonempty `scan_issues`** — partial rows are diagnostics,
-> never a measurement baseline. Fix discovery and re-run; do not use partial totals in metrics, state or reports.
+> **STOP on nonzero, invalid JSON, or missing/malformed/nonempty `scan_issues`**: partial rows are
+> diagnostics, never a baseline. Fix discovery and re-run.
 
-The JSON carries `files[]` (path, tier, kind, bytes, tokens, estimated, loading), inventory `measurement`,
-`scan_issues` and `totals` per tier. Print
-the PLAN block NOW, with `SCOPE` naming real paths and real tier counts from this output. `measure`
-prints the per-tier table and the Advice section and stops here.
+Print the PLAN block now, `SCOPE` naming real paths and tier counts from the JSON. `measure` prints
+the per-tier table and the Advice section, then stops.
 
 ### Phase 2 — snapshot (fail-closed)
 
-**BOTH layers are snapshotted**, each with its own run dir under
-`~/.claude/backups/<YYYYMMDD-HHMMSS>-<layer>_context-slim/` — the one location outside both trees. The
-LAYER is in the name, so same-second project and global runs cannot collide; a further collision adds
-`-2`, `-3`. Git is an ADDITIONAL protection over TRACKED project files, never the only one — the
-snapshot is what covers the untracked and git-ignored ones. Both **EXECUTE** using Bash tool, project first:
+Each layer gets its own run dir `~/.claude/backups/<YYYYMMDD-HHMMSS>-<layer>_context-slim/`
+(collision -> `-2`, `-3`); the snapshot, not git, covers every target. **EXECUTE** using Bash tool,
+project first:
 
 ```bash
-bash "${CLAUDE_PLUGIN_ROOT}/skills/context-slim/scripts/context-guard.sh" snapshot --project <file>...; rc=$?
+bash "${CLAUDE_PLUGIN_ROOT}/skills/context-slim/scripts/context-guard.sh" snapshot --project "<file>"...; rc=$?
 [ $rc -eq 0 ] && echo "✅ EXIT:$rc" || echo "❌ FAILED EXIT:$rc"
 ```
 
-> STOP on nonzero. `EXIT:3`: dirty TRACKED paths; show them verbatim, require explicit named-edit
-> authorization before `--allow-dirty` (existing authorization suffices), otherwise ask user to
-> commit/stash those paths. `EXIT:2`: usage/state error, including existing snapshot directory;
-> use auto-named `<ts>-<layer>` dirs. Any other nonzero: snapshot failure, no edit follows.
+> STOP on nonzero. `EXIT:3`: dirty TRACKED paths — show them verbatim; `--allow-dirty` only with
+> explicit named-edit authorization (existing authorization suffices), else the user commits/stashes
+> them. `EXIT:2`: usage/state error, incl. an existing snapshot dir. Other nonzero: no edit follows.
 >
-> `SNAPSHOT-ONLY: <n> untracked/git-ignored target(s)` is NOT an error and never blocks the run. Git has no pre-state for those files — `.claude/` and `CLAUDE.md` are git-ignored in many repos, this one included — so the manifest is their ONLY recovery path, which is exactly what phase 2 exists for. Relay the line: it names the files `git checkout` cannot bring back. Git covers TRACKED targets; the snapshot covers all of them.
+> `SNAPSHOT-ONLY: <n> untracked/git-ignored target(s)` is not an error: the manifest is those files'
+> only recovery path, so relay the line — it names what `git checkout` cannot bring back.
 >
-> Documented side effect, tell the user once: the guard appends `.claude/reports/` to the repo's own `.gitignore` (creating it if absent). It is NOT snapshotted and NOT restored — the line survives a `restore` and shows up in the next `git status`; remove it by hand if unwanted.
+> Tell the user once: in a git root the guard appends `.claude/reports/` to `.gitignore` (creating
+> it); that line is never restored and shows in `git status`.
 
 ```bash
-bash "${CLAUDE_PLUGIN_ROOT}/skills/context-slim/scripts/context-guard.sh" snapshot --global <file>...; rc=$?
+bash "${CLAUDE_PLUGIN_ROOT}/skills/context-slim/scripts/context-guard.sh" snapshot --global "<file>"...; rc=$?
 [ $rc -eq 0 ] && echo "✅ EXIT:$rc" || echo "❌ FAILED EXIT:$rc"
 ```
 
-> STOP on nonzero: no global edit without manifest. Guard re-roots at `$HOME/.claude` via
-> `CLAUDE_PROJECT_DIR`; non-Git roots create no `.gitignore`.
+> STOP on nonzero: no global edit without a manifest.
 
-Capture the printed `MANIFEST:` path of EACH layer — phases 5-7 need both run dirs, and a project run
-dir can never verify or restore a global file. The guard JSON-validates each manifest with `jq`, else
-`python3`; with NEITHER it prints `⚠️ ... written UNVALIDATED` and still exits 0 — relay verbatim.
+Capture each layer's `MANIFEST:` path: phases 5-7 need both run dirs. With neither `jq` nor `python3`
+the guard prints `⚠️ ... written UNVALIDATED` and exits 0 — relay it verbatim.
 
 ### Phase 3 — cross-layer dedup analysis (BARRIER)
 
-ORCHESTRATOR ONLY. A per-file subagent sees one file, so it can never judge cross-layer duplication —
-two agents would each delete the same fact "because the other keeps it". Read
+Orchestrator only: per-file agents would each delete a fact "because the other keeps it". Read
 `references/dedup-arbitration.md` in full and execute it:
 
-1. Mechanical prefilter over the L0-L5 lattice only (3a exact file hashes, 3b normalized line hashes,
-   3c rare topic keys) — no LLM, no judgement. 3b and 3c are siblings; neither gates the other.
-2. LLM judge on the UNION of 3b and 3c candidate pairs, using the verbatim question in 3d.
-3. A differing exact value in any verdict is NOT a duplicate -> `references/contradiction-policy.md`.
-4. Arbitrate by the precedence lattice + cost weighting; apply the global-write branch of section 5.
-5. RU/EN spans resolve through `references/language-policy.md`. Its CARVE-OUT is absolute: a skill
-   mode table's last Cyrillic cell is never proposed for removal at any depth.
+1. Mechanical prefilters 3a-3c, then the 3d judge on the UNION of 3b and 3c candidates.
+2. A differing exact value is not a duplicate -> `references/contradiction-policy.md`.
+3. Arbitrate by the precedence lattice + cost weighting; apply the global-write branch of section 5.
+4. RU/EN spans resolve through `references/language-policy.md`; its CARVE-OUT is absolute: RU keyword
+   columns of a skill mode table are never stripped (`validate-skill.sh` check 10 fails without them).
 
 Output: one **per-file decision list** — drop rows (`path:line-range`, dropped text, survivor path,
-reason) and keep rows. A fact with no row means "keep it where it is". `preview` prints these lists
-and the projected token delta, then STOPS.
+reason) and keep rows; a fact with no row stays. Write the drops as the ledger TSV
+`path<TAB>line-range<TAB>survivor<TAB>reason` (snapshot line numbers, no header) for phases 5 and 7.
+`preview` prints the lists and the projected token delta, then stops.
 
 ### Phase 4 — per-file compression
 
-**SELF-EXCLUSION, unconditional.** `brewtools/skills/context-slim/**` is removed from the fan-out list
-at every depth, in every mode, `bodies` included. The scan still COUNTS these files (measurement.md,
-"The scan counts this skill"); phase 4 never writes them — rewriting the drop/keep catalogs mid-run
-changes the orchestrator's decision basis while siblings still execute rows derived from the old text.
-Compressing this skill is a separate, single-purpose run.
-
-Assert disjointness AND self-exclusion BEFORE spawning — one file must belong to exactly one agent.
-**EXECUTE** using Bash tool against the file list you are about to fan out:
+**SELF-EXCLUSION, unconditional.** `brewtools/skills/context-slim/**` leaves the fan-out at every depth
+and in every mode, `bodies` included, though the scan counts it (measurement.md, "The scan counts this
+skill"): rewriting the catalogs mid-run changes the decision basis siblings execute. **EXECUTE** using
+Bash tool on the fan-out list before spawning:
 
 ```bash
 dup=$(sort filelist.txt | uniq -d | wc -l | tr -d ' ')
@@ -210,102 +186,98 @@ rc=$(( (dup>0) + (self>0) ))
 [ $rc -eq 0 ] && echo "✅ EXIT:0" || echo "❌ FAILED EXIT:$rc dup=$dup self=$self"
 ```
 
-> **STOP if ❌** — two agents editing one file is a lost-update race; a `self_hits` above 0 is the skill about to rewrite itself. Repartition, or drop the self-paths, then re-run the gate.
+> **STOP if ❌** — two agents on one file lose updates; `self` above 0 is the skill rewriting itself.
+> Repartition or drop the self-paths, then re-run.
 
-Then spawn one `brewtools:text-optimizer` per file, ALL in ONE message. Each spawn brief carries the
-6 fields and THAT file's decision list:
+Then spawn one `brewtools:text-optimizer` per file, all in one message, each brief carrying:
 
 | Field | Content |
 |-------|---------|
-| GOAL | cut permanent context weight across N files; this agent owns one file, siblings own the rest |
-| ROLE | optimize `{file}` in place; do NOT touch any other path, do NOT judge cross-layer dedup |
-| SCOPE | edit `{file}` only; read snapshot for comparison; `{RUN_DIR}/orig/**` never written/deleted/re-snapshotted |
-| CONTEXT | depth = deep (LLM-only files) or standard (user-facing); the drop rows from phase 3, verbatim; the drop-catalog and keep-catalog paths; siblings run in parallel |
-| CONSUMER | the skill merges every report; the file itself is loaded as a permanent prompt, and sibling files still point at its headings |
-| DONE | apply listed rows; checkpoint each owned atomic edit/deletion immediately; mode verification; report before/after size (named tokenizer or chars/4 proxy), rules, losses, semantic match % |
+| GOAL | cut permanent context weight across N files; this agent owns one, siblings the rest |
+| ROLE | optimize `{file}` in place; touch no other path, never judge cross-layer dedup |
+| SCOPE | edit `{file}` only; `{RUN_DIR}` = its layer run dir; `{RUN_DIR}/orig/**` read-only, never deleted or re-snapshotted |
+| CONTEXT | depth = deep (LLM-only files) or standard (user-facing); that file's phase 3 drop rows, verbatim; the drop-catalog and keep-catalog paths |
+| CONSUMER | the skill merges every report; the file loads as a permanent prompt and siblings point at its headings |
+| DONE | apply listed rows; run the checkpoint command below after each owned atomic edit/deletion; mode verification; report before/after size (named tokenizer or chars/4 proxy), rules, losses, semantic match % |
 
-Decision authority per line: `references/drop-catalog.md` (52 default-knowledge patterns + the 14
-inverted near-twins that LOOK droppable and are KEEPS + the decision rule 0-5, unresolved = KEEP) and
-`references/keep-catalog.md` (invariant classes + `crit_tokens_ext()`). Ship the paths, not contents.
+Line decisions: `references/drop-catalog.md` (51 active default-knowledge patterns, 14 inverted near-twins
+that are KEEPS, decision rule 0-5, unresolved = KEEP) and `references/keep-catalog.md` (invariant
+classes + `crit_tokens_ext()`). Ship the paths, not contents.
 
-After each owned atomic write/deletion and before any later edit/check, record the known draft:
+Checkpoint command for the brief (the agent's default lacks the layer root a global file needs):
 
 ```bash
-CLAUDE_PROJECT_DIR="<LAYER_ROOT>" bash "${CLAUDE_PLUGIN_ROOT}/skills/text-optimize/scripts/text-guard.sh" checkpoint --run-dir <LAYER_RUN_DIR> <file>
+CLAUDE_PROJECT_DIR="<LAYER_ROOT>" bash "${CLAUDE_PLUGIN_ROOT}/skills/text-optimize/scripts/text-guard.sh" checkpoint --run-dir "<LAYER_RUN_DIR>" "<file>"
 ```
 
-Record only bytes just produced by this optimizer (or its completed deletion); another writer's
-intervening change -> preserve bytes and report uncertain recovery. Never manufacture proof at
-failure/rollback time. Refresh after owned repairs. Guard checks recorded hashes, cannot infer ownership.
+Only bytes that optimizer just produced; another writer's change -> preserve, report uncertain
+recovery. Never checkpoint at failure or rollback time.
 
 ### Phase 5 — verify (BARRIER)
 
-Step 1, mechanical. **ONE verify per LAYER** — verifying a global file against the project run dir
-returns "outside the project root", exit 2, indistinguishable from "no snapshot" unless the layers are
-kept apart. Project call always, global call only when that layer was in scope. **EXECUTE** using Bash tool:
+Step 1, mechanical: one verify per layer with its own run dir; global only when in scope. **EXECUTE**
+using Bash tool:
 
 ```bash
 G="${CLAUDE_PLUGIN_ROOT}/skills/context-slim/scripts/context-guard.sh"
-bash "$G" verify --run-dir <PROJECT_RUN_DIR> <project file>...; rc=$?
+bash "$G" verify --run-dir "<PROJECT_RUN_DIR>" --ledger "<ledger.tsv>" "<project file>"...; rc=$?
 [ $rc -eq 0 ] && echo "✅ project EXIT:$rc" || echo "❌ FAILED project EXIT:$rc"
 
-bash "$G" verify --global --run-dir <GLOBAL_RUN_DIR> <global file>...; rc=$?
+bash "$G" verify --global --run-dir "<GLOBAL_RUN_DIR>" --ledger "<ledger.tsv>" "<global file>"...; rc=$?
 [ $rc -eq 0 ] && echo "✅ global EXIT:$rc" || echo "❌ FAILED global EXIT:$rc"
 ```
 
-Read the number, both layers must reach `EXIT:0`:
+`--ledger` accepts a miss only when a row for that file covers a
+snapshot range holding the token and its survivor still carries it. Both layers must reach `EXIT:0`:
 
 | `EXIT:` | Meaning | Action |
 |---------|---------|--------|
-| 0 | every critical token survived | proceed to step 2 |
-| 1 | gate/checksum failure, missing snapshot or refused restoration | refuse acceptance; read recovery output, attempt only checkpoint-proven recovery for other layer, report FAILED and exact preserved/refused files |
-| 2 | usage/state error: no snapshot for these paths in this run dir (phase 2 skipped, or the wrong layer's run dir), or an unreadable/invalid manifest | STOP, do not accept the result. Re-check you paired each layer with its own run dir before concluding the snapshot is missing |
+| 0 | every critical token survived, or each miss is ledger-covered (`GATE: PASS (every miss ledgered)`) | step 2 |
+| 1 | gate/checksum failure (`UNCOVERED:` names each token), missing snapshot or refused restoration | refuse; the guard already tried recovering this layer — roll back the other (below), report FAILED with exact preserved/refused files |
+| 2 | usage/state error: no snapshot in this run dir (phase 2 skipped, or the wrong layer's dir), bad manifest, malformed ledger row | STOP, do not accept; check the layer/run-dir pairing first |
 | other | guard failure | STOP |
 
-A dedup row that DELETES a file is verified with `verify-deleted`, never plain `verify` (a deleted target exits 2, "target vanished"). It proves the deletion's own justification — every critical token of the deleted file present in the survivor that stays:
+A row that deletes a file is closed with `verify-deleted` (plain `verify` exits 2, "target vanished"):
+it proves every critical token of the deleted file is in the survivor:
 
 ```bash
-bash "$G" verify-deleted --project --run-dir <RUN_DIR> --survivor <survivor path> <deleted file>
+G="${CLAUDE_PLUGIN_ROOT}/skills/context-slim/scripts/context-guard.sh"
+bash "$G" verify-deleted --project --run-dir "<RUN_DIR>" --survivor "<survivor path>" "<deleted file>"
 ```
 
-`MERGED_VERIFIED` proves deletion. `EXIT:1` means unproven; recovery may be refused for missing
-ownership evidence/concurrent edits. Report actual restored/refused files, never assumed rollback.
+`MERGED_VERIFIED` proves the deletion; `EXIT:1` = unproven, handled like a gate failure.
 
-Step 2, semantic. Spawn ONE INDEPENDENT checker subagent (`general-purpose`, read-only, not an author
-of any rewrite) per file, all in one message. It re-reads every dropped item from the phase 3 ledger
-against the current file and the snapshot: is each dropped fact still present, or provably present in
-its named survivor?
+Step 2, semantic: one independent read-only checker per file (`general-purpose`, author of no
+rewrite), all in one message, re-reads every ledgered drop against the current file and the snapshot:
+is each fact still present, or in its named survivor?
 
-Any mechanical/semantic miss in either layer refuses acceptance for the whole run. Attempt recovery
-for every layer with existing ownership proof; preserve concurrent files, report FAILED and exact
-recovery/refusals. A partially recovered run is never accepted:
+Any mechanical or semantic miss in either layer refuses the whole run; a partially recovered run is
+never accepted. Recover every layer with ownership proof, preserve concurrent files, and report FAILED
+with the actual restored/refused files:
 
 ```bash
-bash "$G" rollback --run-dir <PROJECT_RUN_DIR> --run-dir <GLOBAL_RUN_DIR>   # omit the layer that did not run
+G="${CLAUDE_PLUGIN_ROOT}/skills/context-slim/scripts/context-guard.sh"
+bash "$G" rollback --run-dir "<PROJECT_RUN_DIR>" --run-dir "<GLOBAL_RUN_DIR>"   # omit the layer that did not run
 ```
 
-Require exit 0 before claiming every file restored. Exit 1/refusal leaves current bytes intact for
-that refused layer; inspect output and snapshot evidence, never overwrite or checkpoint to bypass it.
+Only exit 0 proves every file restored. Exit 1 leaves refused files' bytes intact; never overwrite or
+checkpoint to bypass it.
 
 ### Phase 6 — re-measure and the lossy escalation gate
 
-Re-run phase 1's `context-scan.sh` command with the same scope/flags and retain its actual exit code. Nonzero,
-invalid JSON, or missing/malformed/nonempty `scan_issues` -> **STOP**: report incomplete measurement, preserve
-verified edits/prior state, and fix/re-run discovery. Never compute savings, compare `--target`, escalate or
-enter phase 7 from partial rows. Only complete scans compare against phase 1; target met/absent -> phase 7.
+Re-run phase 1's scan with the same scope and flags; its STOP applies (no savings, target check,
+escalation or phase 7 from partial rows; verified edits stay). Target met or absent -> phase 7.
 
-Target unmet in ANY mutating mode (`slim`, `hard`, `bodies`) -> the gate fires; the mode decides only
-how far the lossy pass may go, never whether the user is asked. First test the surface — **EXECUTE**
-using Bash tool:
+An unmet target in any mutating mode (`slim`, `hard`, `bodies`) fires the gate; the mode decides only
+how far the lossy pass may go, never whether the user is asked. **EXECUTE** using Bash tool:
 
 ```bash
 bash "${CLAUDE_PLUGIN_ROOT}/skills/context-slim/scripts/context-guard.sh" state --check; rc=$?
 [ $rc -eq 0 ] && echo "✅ EXIT:$rc" || echo "❌ FAILED EXIT:$rc"
 ```
 
-`STATE: absent` = virgin surface, which has lossless headroom by definition: the unmet target is a
-PLAN defect, not a reason to cut meaning. Report the shortfall, ask nothing, go to phase 7.
-`STATE: present` -> ONE destructive `AskUserQuestion`, at most once per run:
+`STATE: absent` = virgin surface with lossless headroom left: the shortfall is a plan defect — report
+it, ask nothing, go to phase 7. `STATE: present` -> one destructive `AskUserQuestion`, once per run:
 
 > "The lossless passes reached X%, short of the Y% target. Going further means dropping items I judge
 > least valuable, possibly including domain content — lossy, ledgered item by item. The lossless
@@ -314,33 +286,25 @@ PLAN defect, not a reason to cut meaning. Report the shortfall, ask nothing, go 
 
 | Answer | What happens |
 |--------|--------------|
-| approve | re-enter phases 4-5 with the lossy list — every phase 5 gate still applies, every item ledgered |
-| decline | ZERO further writes: no edit, no rollback, no second question. Phase 7 records the shortfall and `escalation: declined` |
+| approve | re-enter phases 4-5 with the lossy list; ledger each item with survivor `-`, so phase 5 accepts exactly those losses |
+| decline | zero further writes: no edit, no rollback, no second question. Phase 7 records the shortfall and `escalation: declined` |
 
-**Decline preserves the LOSSLESS result, not the pre-run tree** — say so, never promise an untouched
-tree. Phases 4-5 are committed and verified before this gate can fire, by construction: it compares a
-re-measure that exists only after those writes. The pre-run tree stays one command away, named in the
-report: bare `rollback` (every layer of newest run), subject to matching draft ownership; later
-concurrent changes refuse recovery.
+**Decline preserves the lossless result, not the pre-run tree** — say so. The report names the way
+back: bare `rollback` (every layer of the newest run), subject to draft ownership.
 
 ### Phase 7 — ratchet state + report
 
-Write the ratchet from the two live scans plus the phase 3 ledger as a TSV
-(`path<TAB>line-range<TAB>survivor<TAB>reason`, one row per drop). **EXECUTE** using Bash tool:
+Write the ratchet from the two live scans and the ledger. **EXECUTE** using Bash tool:
 
 ```bash
 G="${CLAUDE_PLUGIN_ROOT}/skills/context-slim/scripts/context-guard.sh"
-bash "$G" state --mode <mode> --flags "<flags>" --before <phase1.json> --after <phase6.json> --ledger <ledger.tsv>; rc=$?
+bash "$G" state --mode "<mode>" --flags "<flags>" --before "<phase1.json>" --after "<phase6.json>" --ledger "<ledger.tsv>"; rc=$?
 [ $rc -eq 0 ] && echo "✅ EXIT:$rc" || echo "❌ FAILED EXIT:$rc"
 ```
 
-Nonzero -> **STOP**: no achieved/success report or state-publication claim. The guard rejects partial, missing
-or malformed discovery evidence before writes; preserve prior state and repair/re-run the failed scan.
-
-It writes `.claude/brewtools/context-slim/state.json` — run timestamp, mode, flags, per-file
-before/after tokens, achieved ratio, drop ledger — and JSON-validates it (schema: measurement.md,
-"Ratchet state file"). The next run reads it to know what is already banked, phase 6 reads its
-absence; a stale baseline would double-count savings.
+Nonzero -> **STOP**: no success or state claim (the guard rejects partial scan evidence before
+writing; prior state stays). It writes `.claude/brewtools/context-slim/state.json` (schema:
+measurement.md, "Ratchet state file").
 
 Report, in this order:
 
@@ -348,70 +312,56 @@ Report, in this order:
 2. Drop ledger — `kept <- dropped`, layer, `path:line`, bytes; deletions marked `MERGED_VERIFIED`.
 3. Contradictions found — one row each, per `contradiction-policy.md` section 4. Empty section means
    none were found, never that the check was skipped.
-4. Advice — render `references/mcp-advice.md`'s template, rows above threshold only; omit the whole
-   section when every signal is below threshold.
+4. Advice — render `references/mcp-advice.md`'s template, rows above threshold only.
 5. The escalation outcome when a `--target` was set (met | virgin-surface shortfall | approved |
    declined), and the verbatim rollback command with the real run dir(s).
 
 ## Restore
 
-`restore` is destructive: confirm at ENTRY, before touching anything, naming the run dir(s) and the
-files that will be overwritten. `--noask` does not skip this.
+Destructive: confirm at entry, naming the run dir(s) and files to be overwritten, even under `--noask`.
 
-`restore` takes `last`, a `<ts>` from `list`, or `--run-dir D`; omitted means the latest run.
-Selection is LAYER-AWARE: with `--global`/`--project`, `last` and a bare `<ts>` resolve inside THAT
-layer; with neither flag and no file arguments, both cover EVERY layer dir of the run in one call.
-Naming files pins one layer (default `--project`) — a global path passed to the project run dir exits
-2. `rollback` is `restore` for whole run dirs, used by phase 5. Both restore manifest-listed files
-only with matching recorded draft hashes (already-original files need no overwrite); neither
-removes run-created files. Missing proof/concurrent change -> refuse and preserve current bytes.
+Omitted run = latest. `--global`/`--project` resolve
+`last`/`<ts>` inside that layer; with neither and no files, every layer dir of the run. Naming files
+pins one layer (default `--project`). `rollback` = `restore` for whole run dirs. Both put back
+manifest-listed files only when current bytes match the recorded draft hash, never remove
+run-created files, and refuse (preserving bytes) on missing proof or a concurrent change.
 
 ```bash
 G="${CLAUDE_PLUGIN_ROOT}/skills/context-slim/scripts/context-guard.sh"
 bash "$G" list
 bash "$G" restore last                       # every layer of the newest run
 bash "$G" restore --global last              # the newest GLOBAL run, even if a project run shares its second
-bash "$G" restore <TS>                       # a ts from `list`, every layer of that run
-bash "$G" restore --run-dir <RUN_DIR>        # one exact run dir
-bash "$G" rollback --run-dir <A> --run-dir <B>   # whole run, all files, named layers
+bash "$G" restore "<TS>"                     # a ts from `list`, every layer of that run
+bash "$G" restore --run-dir "<RUN_DIR>"      # one exact run dir
+bash "$G" rollback --run-dir "<A>" --run-dir "<B>"   # whole run, all files, named layers
 ```
 
-The manifest, not the flag, decides where files go back. Every restored file is re-hashed against it;
-the last line per run dir is `RESTORE_VERIFIED:`/`ROLLBACK_VERIFIED: <N> mismatches, <M> missing from
-snapshot` — only `0, 0` with `EXIT:0` proves restoration. `EXIT:1` also covers checksum mismatch,
-missing manifest-listed snapshot, or `RESTORE_REFUSED` for unproven/changed draft ownership.
-Failed/refused recovery never proves all files restored. `EXIT:2` = usage/state error: missing, unreadable or
-invalid manifest, a named file NOT in the manifest, or a path outside the snapshot root.
+The manifest decides where files go back. The last line per run dir is
+`RESTORE_VERIFIED:`/`ROLLBACK_VERIFIED: <N> mismatches, <M> missing from snapshot` — only `0, 0` with
+`EXIT:0` proves restoration. `EXIT:1`: checksum mismatch, a listed file missing from the snapshot, or
+`RESTORE_REFUSED` (unproven/changed draft ownership). `EXIT:2`: bad manifest, a named file not in it,
+or a path outside the snapshot root.
 
 ## Iron rules
 
 | Rule | Detail |
 |------|--------|
-| Read-only default | A bare invocation measures and stops. No question, no write, no global touch |
-| Snapshot first | No edit before phase 2 prints a manifest. Fail-closed, both layers, one manifest + one run dir EACH |
-| Confirm destruction | `hard`, `restore` and any `--global` write need an explicit ENTRY confirmation. `--noask` suppresses clarifying questions ONLY, never these |
-| Never self-edit | `brewtools/skills/context-slim/**` is excluded from phase 4 in every mode — the run may not rewrite its own decision basis |
-| Print the exit code | Every gate prints `EXIT:$rc`; 1, 2 and 3 mean different things and the phases branch on the number |
-| Dirty TRACKED target refused | Exit 3 names paths. Explicit named-edit authorization permits `--allow-dirty`; otherwise commit/stash. Untracked/git-ignored targets are `SNAPSHOT-ONLY`, covered by manifest |
-| Global opt-in | `--global` to write `~/.claude`; read as authority always. A project-layer survivor NEVER justifies a global deletion |
-| Dedup is the skill's | Cross-layer judgement never leaves phase 3. Agents execute rows, they do not decide them |
-| Refuse, don't warn | Any miss refuses whole-run acceptance; recover checkpoint-proven drafts only, preserve concurrent files, report FAILED and actual recovery status |
-| Unsure -> keep | The drop-catalog decision rule's tiebreak, at every depth |
-| RU keyword columns | Never stripped — `validate-skill.sh` check 10 fails without them (`language-policy.md` CARVE-OUT) |
-| Live numbers only | Every number in the report comes from THIS run's `context-scan.sh` output, never baked |
+| Print the exit code | Every gate prints `EXIT:$rc`; phases branch on the number |
+| Global opt-in | A project-layer survivor NEVER justifies a global deletion |
+| Live numbers only | Every number in the report comes from THIS run's `context-scan.sh` output |
 
 ## References
 
 | File | Owns |
 |------|------|
-| `references/measurement.md` | Token proxy, tier membership globs, prune list, target-ratio baseline rule |
+| `references/measurement.md` | Token proxy, tier membership, prune list, target-ratio rule, ratchet schema |
 | `references/dedup-arbitration.md` | Precedence lattice, cost weighting, 4-grade detection, global-write branches |
-| `references/contradiction-policy.md` | Two statements, one differing exact value — classification + resolution ladder |
-| `references/drop-catalog.md` | 52 default-knowledge patterns, 14 inverted near-twins, decision rule |
+| `references/contradiction-policy.md` | One differing exact value — classification + resolution ladder |
+| `references/drop-catalog.md` | Default-knowledge patterns, inverted near-twins, decision rule |
 | `references/keep-catalog.md` | Invariant classes, `crit_tokens()` coverage gaps, `crit_tokens_ext()` matchers |
-| `references/language-policy.md` | RU/EN handling, RU-drop rule, RU-domain exceptions, the mode-table CARVE-OUT |
-| `references/mcp-advice.md` | Advisory-only thresholds for the untouched surface + the report template |
+| `references/language-policy.md` | RU-drop rule, RU-domain exceptions, the mode-table CARVE-OUT |
+| `references/mcp-advice.md` | Advisory thresholds for the untouched surface + report template |
 | `scripts/context-scan.sh` | Discovery + measurement, JSON, per tier |
-| `scripts/context-guard.sh` | snapshot / verify / verify-deleted / rollback / restore / state / list, two roots, manifest, retention |
+| `scripts/context-guard.sh` | snapshot / verify (`--ledger`) / verify-deleted / rollback / restore / state / list |
 
 A reference that fails to load is an ERROR + STOP, never a phase run from memory.

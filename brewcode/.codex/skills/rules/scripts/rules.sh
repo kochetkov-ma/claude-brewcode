@@ -1,15 +1,5 @@
 #!/bin/bash
-# Brewcode Rules Script
-# Multi-function script for $brewcode:rules skill
-# Usage: rules.sh <mode> [options]
-#
-# Modes:
-#   read <path>           - Read knowledge file (first 100 lines)
-#   check                 - Check existing rules files (main + specialized)
-#   create                - Create missing main rules from templates
-#   create-specialized <prefix> [paths] - Create specialized rules (e.g., test-avoid.md)
-#   list                  - List all rule files (*-avoid.md, *-best-practice.md)
-#   validate              - Validate frontmatter + table structure
+# rules.sh <read|check|create|create-specialized|list|validate> [options] - $brewcode:rules helper; usage: dispatch below.
 
 set -euo pipefail
 
@@ -38,10 +28,8 @@ plugin_version() {
   case "$v" in
     [0-9]*.[0-9]*.[0-9]*) printf '%s' "$v"; return 0 ;;
   esac
-  # HARD FAIL, never a placeholder value. A word like `unknown` carries no `{}<>`, so setup-status's
-  # PLACEHLD test cannot catch it: `sort -V` would compare it against the real version and print a
-  # confident `AHEAD unknown > X.Y.Z`. The manifest ships with the plugin in the dev checkout and in
-  # the cache alike, so an unreadable one is a broken install - stop before a rule file is written.
+  # Hard fail, never a placeholder: setup-status would `sort -V` a word like `unknown` as a real
+  # version. An unreadable manifest = broken install - stop before a rule file is written.
   echo "❌ cannot resolve the plugin version (X.Y.Z) from $PLUGIN_JSON - refusing to stamp an artifact with a fake version" >&2
   return 1
 }
@@ -98,20 +86,15 @@ check_rules() {
   fi
 }
 
-# Render a template: substitute the scope scalars + the four standard metadata keys.
-# `|` is the sed delimiter, so no substituted value may contain one -- all of them are
-# globs, titles and versions produced here, never user prose.
-# Empty paths: removes the `paths:` line entirely (for main files).
+# Render template: scope scalars + 4 standard metadata keys; `|` = sed delimiter, so values (globs/titles/versions, !=user prose) never hold one.
 render_template() {
-  local tpl="$1" out="$2" title="$3" paths="$4" desc="$5"
-  # The ONE frontmatter difference between a main and a specialized file: empty paths deletes the
-  # `paths:` line (repo-wide loading), a value substitutes it. Everything else is shared, so the
-  # scalar list exists once -- a key added to one branch and forgotten in the other was the risk.
+  local tpl="$1" out="$2" title="$3" paths="$4"
+  # Sole main-vs-specialized difference: empty paths deletes the `paths:` line (repo-wide, main files), a value substitutes it.
+  # Rest is shared so the scalar list exists once (a key added to one branch only was the risk).
   local paths_expr='/^paths: {PATHS}$/d'
   [ -n "$paths" ] && paths_expr="s|{PATHS}|$paths|g"
   sed -e "$paths_expr" \
       -e "s|{TITLE}|$title|g" \
-      -e "s|{DESCRIPTION}|$desc|g" \
       -e "s|{PLUGIN_VERSION}|$PLUGIN_VERSION|g" \
       -e "s|{GENERATED_BY}|$GENERATED_BY|g" \
       -e "s|{LAST_UPDATED}|$LAST_UPDATED|g" \
@@ -127,7 +110,7 @@ create_rules() {
 
   if [ ! -f .codex/rules/avoid.md ]; then
     render_template "$PLUGIN_TEMPLATES/rules/avoid.md.template" .codex/rules/avoid.md \
-      "Avoid" '' 'avoid - project-wide anti-patterns and the thing to do instead; one table row per rule'
+      "Avoid" ''
     echo "V Created: .codex/rules/avoid.md"
   else
     echo ">> Preserved: .codex/rules/avoid.md (exists)"
@@ -135,7 +118,7 @@ create_rules() {
 
   if [ ! -f .codex/rules/best-practice.md ]; then
     render_template "$PLUGIN_TEMPLATES/rules/best-practice.md.template" .codex/rules/best-practice.md \
-      "Best Practices" '' 'best-practice - project-wide practices worth repeating; one table row per rule'
+      "Best Practices" ''
     echo "V Created: .codex/rules/best-practice.md"
   else
     echo ">> Preserved: .codex/rules/best-practice.md (exists)"
@@ -151,7 +134,7 @@ validate_file() {
 
   head -1 "$f" | grep -q '^---$' || { echo "X $name no YAML frontmatter (line 1 must be ---)"; errs=$((errs+1)); }
 
-  for k in description doc_type version generated_by last_updated; do
+  for k in doc_type version generated_by last_updated; do
     grep -q "^${k}:" "$f" || { echo "X $name missing frontmatter key: $k"; errs=$((errs+1)); }
   done
 
@@ -159,7 +142,8 @@ validate_file() {
     grep -q "^paths:" "$f" && { echo "X $name is main but has paths -> remove paths for repo-wide loading"; errs=$((errs+1)); }
   else
     grep -q "^paths:" "$f" || { echo "X $name is specialized but missing paths"; errs=$((errs+1)); }
-    grep -q '"\*\*/\*"' "$f" && { echo "X $name is specialized but claims repo-wide paths -> it loads into every request"; errs=$((errs+1)); }
+    # frontmatter only: a table row may quote the repo-wide glob as an example
+    awk 'NR>1&&/^---$/{exit} index($0,"\"**/*\""){f=1} END{exit !f}' "$f" && { echo "X $name is specialized but claims repo-wide paths -> it loads into every request"; errs=$((errs+1)); }
   fi
 
   grep -q '^doc_type: llm$' "$f" || { echo "X $name doc_type must be exactly 'llm'"; errs=$((errs+1)); }
@@ -202,13 +186,13 @@ validate_rules() {
     validate_file "$f" specialized
   done
 
-  exit $ERRORS
+  # rc 1 on any error: a raw count would wrap to 0 at 256
+  [ "$ERRORS" -eq 0 ] || exit 1
 }
 
 # List all rule files
 list_rules() {
   echo "=== Rule Files in .codex/rules/ ==="
-  mkdir -p .codex/rules
 
   echo "--- Avoid Files ---"
   local avoid_count=0
@@ -247,10 +231,8 @@ capitalize() {
   printf '%s%s' "$(printf '%s' "${s%"${s#?}"}" | tr '[:lower:]' '[:upper:]')" "${s#?}"
 }
 
-# A specialized rule file applies to ONE slice of the repo, so it must never ship the
-# repo-wide `["**/*"]` -- that is what made every specialized rule load into every request.
-# Known prefixes get a curated glob set; anything else gets a prefix-derived guess that the
-# caller is told to confirm. An explicit `paths` argument always wins.
+# Specialized rule = ONE repo slice, never repo-wide `["**/*"]` (it loaded into every request).
+# Known prefix -> curated globs; else prefix-derived guess the caller must confirm; explicit `paths` arg always wins.
 default_paths_for_prefix() {
   case "$1" in
     test|tests|unit) printf '["**/test/**", "**/tests/**", "**/*_test.*", "**/*.test.*", "**/*Test.*"]' ;;
@@ -306,7 +288,7 @@ create_specialized() {
 
   if [ ! -f "$avoid_file" ]; then
     render_template "$PLUGIN_TEMPLATES/rules/avoid.md.template" "$avoid_file" \
-      "${cap} Avoid" "$paths" "${prefix}-avoid - ${prefix} anti-patterns and the thing to do instead; one table row per rule"
+      "${cap} Avoid" "$paths"
     echo "V Created: $avoid_file"
   else
     echo ">> Preserved: $avoid_file (exists)"
@@ -314,7 +296,7 @@ create_specialized() {
 
   if [ ! -f "$bp_file" ]; then
     render_template "$PLUGIN_TEMPLATES/rules/best-practice.md.template" "$bp_file" \
-      "${cap} Best Practices" "$paths" "${prefix}-best-practice - ${prefix} practices worth repeating; one table row per rule"
+      "${cap} Best Practices" "$paths"
     echo "V Created: $bp_file"
   else
     echo ">> Preserved: $bp_file (exists)"
@@ -350,8 +332,8 @@ case "$MODE" in
     echo "  create                - Create missing main rules from templates"
     echo "  create-specialized <prefix> [paths] - Create specialized rules (e.g., test-avoid.md);"
     echo "                          paths is a YAML flow list, e.g. '[\"src/payment/**\"]'"
-    echo "  list                  - List all rule files"
-    echo "  validate              - Validate frontmatter (standard metadata keys) + table structure"
+    echo "  list                  - List avoid.md, best-practice.md and <prefix>- rule files"
+    echo "  validate              - Validate the same files: frontmatter (standard metadata keys) + table structure"
     exit 1
     ;;
 esac

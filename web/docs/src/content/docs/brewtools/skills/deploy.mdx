@@ -20,7 +20,7 @@ import { Card, CardGrid, Callout, Steps, UpdateNotice } from '../../../../compon
 | Field | Value |
 |-------|-------|
 | Command | `/brewtools:deploy` |
-| Arguments | `<task description>` or mode keyword |
+| Arguments | `[prompt] [setup\|create\|release\|deploy\|monitor\|update-agent]` |
 | Modes | `setup` · `create` · `release` · `deploy` · `monitor` · `update-agent` |
 | Agent | [deploy-admin](/brewtools/agents/deploy-admin/) — auto-delegated for complex ops |
 | Config | `CLAUDE.local.md` (gitignored) |
@@ -171,9 +171,11 @@ APPROVED ids for exact commands only; execution rechecks preconditions.
 | Template | Trigger | Description |
 |----------|---------|-------------|
 | Build + Push GHCR | tag / branch | Multi-platform Docker build, push to `ghcr.io` |
-| Deploy to VPS | `workflow_dispatch` | SCP + SSH deploy, health check, rollback |
+| Deploy to VPS | `workflow_run` / `workflow_dispatch` | SCP + SSH deploy of release-tag images only, health check, rollback |
 | Release | tag `v*.*.*` | Extract changelog, create GitHub Release with assets |
 | Security Scan | push / PR | CodeQL / Gitleaks / Semgrep with SARIF upload |
+
+All templates pin `runs-on: ubuntu-24.04` (never `ubuntu-latest`). The Deploy template accepts only images built from a release tag (`v*.*.*`); a branch-built preview image is rejected before any server copy.
 
 ### Configuration storage
 
@@ -197,7 +199,7 @@ SHA/run/attempt tags and verify labels/digests; mutable aliases do not establish
 Report missing linkage or live health checks as unverified rather than treating an unrelated
 green run as deployment success.
 
-Every Bash call preserves its exit status when reporting OK or FAILED; failure reporting must not turn a failed call into success. Max 2 retries per operation, max 15 `gh` calls per invocation. Every bounded call runs through a shared watchdog (real `timeout`/`gtimeout` when installed, a bash fallback otherwise — GNU `timeout` is Homebrew-only on macOS): 30 s for `gh` commands, 15 min for `gh run watch`. CI runs are correlated by the pushed commit's `headSha`, not by reading the newest rows of `gh run list` — a bare "latest run" can belong to a concurrent push. A run that can't be matched or times out is reported as such, never silently treated as success.
+Every Bash call preserves its exit status when reporting OK or FAILED; failure reporting must not turn a failed call into success. Max 2 retries per operation, max 15 `gh` calls per invocation. Every bounded call runs through a shared watchdog (real `timeout`/`gtimeout` when installed, a bash fallback otherwise — GNU `timeout` is Homebrew-only on macOS): 30 s for `gh` commands, 15 min for `gh run watch`. The generated `deploy-admin` agent watches every CI run for the pushed SHA (HEAD and tag pushes each start workflows) to a terminal state. CI runs are correlated by the pushed commit's `headSha`, not by reading the newest rows of `gh run list` — a bare "latest run" can belong to a concurrent push. A run that can't be matched or times out is reported as such, never silently treated as success.
 
 ### Troubleshooting
 

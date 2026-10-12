@@ -24,6 +24,7 @@ repo-a/        py, ts, tsx, sh, java, kt, kts, gradle, groovy, css, yaml, toml,
 repo-b/        a second, different tree - proves two repos map to two hash dirs
 claude-json/   one ~/.claude.json per detection state (DESIGN 6.2)
 settings/      settings.json inputs for the hook-merge suite
+prior/         v6.4.0 rule + .sembleignore templates verbatim (R4 prior-release upgrade)
 ```
 
 ### `repo-a` coverage expectations (DESIGN 7)
@@ -52,7 +53,7 @@ config file and one shell script.
 | `malformed.json` | `malformed` (trailing comma - deliberately unparseable) |
 
 `correct.json`, `wrongscope.json` and `duplicate.json` hardcode the live pin
-`0.5.5` and shared `code docs config` corpus, so a suite using them must **not**
+`0.6.2` and shared `code docs config` corpus, so a suite using them must **not**
 set `SEMBLE_PIN_VERSION`.
 
 ### `settings/*.json`

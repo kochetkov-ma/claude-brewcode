@@ -1,39 +1,14 @@
 # Plugin Auto-Update Research
 
-## Current State (verified 2026-04-10)
+Per [When auto-update runs](https://code.claude.com/docs/en/plugins/loading#when-auto-update-runs) (CC 2.1.296):
 
-Per [Claude Code plugin docs](https://code.claude.com/docs/en/discover-plugins):
-
-- **Default:** Third-party marketplace auto-update is **OFF**.
-- **Toggle UI:** `/plugin` → Marketplaces → select marketplace → toggle auto-update.
-- **Scope:** Auto-update is per-marketplace, not per-plugin.
-- **Env vars:**
-  - `DISABLE_AUTOUPDATER=1` — disables Claude Code self-updater
-  - `FORCE_AUTOUPDATE_PLUGINS=1` — force plugin update on next start
-
-## Unknown
-
-The exact `settings.json` key that stores the per-marketplace auto-update flag is **NOT verified**. Candidates observed in the wild (all unconfirmed):
-
-- `marketplaces.<name>.autoUpdate`
-- `pluginMarketplaces.<name>.autoUpdate`
-- `enabledMarketplaces.<name>.autoUpdate`
-
-## Recommended Discovery Procedure
-
-To discover the real key:
-
-1. Snapshot `~/.claude/settings.json` before toggling.
-2. Open `/plugin` → Marketplaces → claude-brewcode → enable auto-update.
-3. Diff `~/.claude/settings.json` — the new/changed key is the answer.
-4. Document the key here and update the skill to patch settings.json directly.
+- **Scope:** per marketplace, not per plugin.
+- **Default:** OFF for third-party marketplaces, claude-brewcode included; ON for Anthropic's official ones (except `knowledge-work-plugins`, `first-party-plugins`) and marketplaces added from claude.ai.
+- **Toggle:** `/plugin` → Marketplaces → select marketplace → **Enable auto-update** / **Disable auto-update**. It writes `autoUpdate` on the marketplace's `known_marketplaces.json` entry (plugins root), and on its `extraKnownMarketplaces` entry when a settings file declares one.
+- **Precedence:** settings `extraKnownMarketplaces` `autoUpdate` > `known_marketplaces.json` `autoUpdate` > default.
+- **Timing:** after the first message of an interactive session, a random delay of up to ten minutes; the running session keeps the versions it loaded until `/reload-plugins`.
+- **Env vars:** `DISABLE_UPDATES=1`, `DISABLE_AUTOUPDATER=1` or `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` turn the whole pass off and hide the toggle, unless `FORCE_AUTOUPDATE_PLUGINS=1` is also set.
 
 ## Rule for This Skill
 
-**Do NOT patch settings.json blindly.** The skill instructs the user to use `/plugin` UI until the key is confirmed.
-
-## Links
-
-- https://code.claude.com/docs/en/discover-plugins
-- https://code.claude.com/docs/en/plugin-marketplaces
-- https://code.claude.com/docs/en/plugins-reference
+**Do NOT patch** `settings.json` or `known_marketplaces.json`: no CLI command sets the flag, and the UI keeps both stores consistent. Instruct the user to use the `/plugin` UI.

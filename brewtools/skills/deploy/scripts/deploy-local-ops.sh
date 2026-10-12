@@ -1,9 +1,7 @@
 #!/bin/bash
 set -euo pipefail
-# Manage CLAUDE.local.md GitHub/Workflow entries
-# Usage: deploy-local-ops.sh <subcommand> [args...]
-# Subcommands: read-github, add-github, add-workflows, update-workflows, list
-# IMPORTANT: Never touches SSH sections (## SSH Servers, ## Server:)
+# Manage CLAUDE.local.md GitHub/Workflow entries; IMPORTANT: never touches SSH sections (## SSH Servers, ## Server:)
+# Usage: deploy-local-ops.sh <read-github|add-github|add-workflows|update-workflows|list> [args...]
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/deploy-common.sh
@@ -127,9 +125,8 @@ HEREDOC
                 BASENAME=$(basename "$wf_file")
                 WF_NAME=$(grep -m1 '^name:' "$wf_file" 2>/dev/null | sed 's/^name:[[:space:]]*//' | tr -d '"'"'" || echo "$BASENAME")
                 WF_TRIGGER=$(grep -A5 '^on:' "$wf_file" 2>/dev/null | grep -oE '(push|pull_request|workflow_dispatch|workflow_run|schedule|release)' | sort -u | tr '\n' ',' | sed 's/,$//' || echo "unknown")
-                # Last run status. `ght` (lib/deploy-common.sh) enforces the
-                # bound with or without GNU coreutils; ght_reason names WHY a
-                # cell is empty instead of writing "unknown" for four causes.
+                # Last run status: `ght` (lib/deploy-common.sh) bounds with or without GNU coreutils;
+                # ght_reason names WHY a cell is empty (!= one "unknown" for four causes).
                 RUN_RC=0
                 LAST_RUN=$(ght 15 gh run list -w "$BASENAME" -L 1 --json conclusion,createdAt --jq '.[0] | "\(.conclusion // "pending") (\(.createdAt | split("T")[0]))"' 2>/dev/null) || RUN_RC=$?
                 if [[ "$RUN_RC" -ne 0 ]]; then LAST_RUN="$(ght_reason "$RUN_RC")"; elif [[ -z "$LAST_RUN" ]]; then LAST_RUN="none"; fi

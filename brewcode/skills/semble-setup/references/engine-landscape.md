@@ -1,12 +1,12 @@
 # Engine landscape: semantic / structural code search
 
-Назначение: зафиксировать проверенную фактуру по движкам поиска по коду, которые мы рассматривали, чтобы будущее решение (добавить что-то / сменить движок) не требовало повторного research.
+Purpose: verified facts on the code-search engines we evaluated, so a future decision (add or switch an engine) needs no repeat research.
 
-**Данные проверены: 2026-08-08** (GitHub REST API + чтение исходников + PyPI/npm registry).
+**Data verified: 2026-08-08** (GitHub REST API + source reading + PyPI/npm registry).
 
-> Звёзды, номера релизов и каденция протухают быстро. Перед любым решением о смене движка перепроверить: `curl -s https://api.github.com/repos/<owner>/<repo> | jq -r .stargazers_count` и `.../releases?per_page=30`. Числа ниже — снимок на 2026-08-08, не константы.
+> Stars, release numbers and cadence decay fast. Before any switch decision re-check: `curl -s https://api.github.com/repos/<owner>/<repo> | jq -r .stargazers_count` and `.../releases?per_page=30`. The numbers below are a 2026-08-08 snapshot, not constants.
 
-## Контекст: звёзды (GitHub API, 2026-08-08)
+## Context: stars (GitHub API, 2026-08-08)
 
 | Repo | Stars |
 |------|------:|
@@ -21,92 +21,89 @@
 | zilliztech/claude-context | 12,323 |
 | MinishLab/semble | 5,845 |
 
-> Звёзды != пригодность. graphify лидирует по звёздам и при этом не имеет эмбеддингов вообще; semble последний по звёздам и выигрывает по NDCG@10 в собственном бенчмарке.
+> Stars != fitness. graphify leads on stars and has no embeddings at all; semble is last on stars and wins NDCG@10 in its own benchmark.
 
 ---
 
-## 1. semble (наш текущий движок)
+## 1. semble (our current engine)
 
-### Источники
+### Sources
 
-| Что | Где |
+| What | Where |
 |-----|-----|
 | Repo | https://github.com/MinishLab/semble |
 | PyPI | https://pypi.org/pypi/semble/json |
-| Бенчмарки | `benchmarks/README.md`, `benchmarks/results/*.json` (19 файлов результатов + `.gitkeep`) |
-| Кэш-логика | `_MIN_REVALIDATE_FACTOR = 3` в источнике semble |
-| Наши хуки (current local producers, checked 2026-09-30) | `brewcode/skills/semble-setup/assets/semble-{session,prefetch,stats,reminder,subagent}.mjs` |
-| Наше правило | `.claude/rules/semble-first.md` |
+| Benchmarks | `benchmarks/README.md`, `benchmarks/results/*.json` (19 result files + `.gitkeep`) |
+| Cache logic | `_MIN_REVALIDATE_FACTOR = 3` in the semble source |
+| Our hooks | `brewcode/skills/semble-setup/assets/semble-{session,stats,subagent}.mjs` |
+| Our rule | `.claude/rules/semble-first.md` |
 
-### Тип
+### Type
 
-Embedding-based семантический поиск по коду. MCP-сервер `semble_code`. The active installation is pinned to exact `semble[mcp]==0.5.5`.
+Embedding-based semantic code search. MCP server `semble_code`, pinned to exact `semble[mcp]==0.6.2`.
 
-### Что делает
+### What it does
 
-| Tool | Аргументы | Отдаёт |
+| Tool | Arguments | Returns |
 |------|-----------|--------|
 | `search` | `query`, required `repo`, `top_k`, `max_snippet_lines`, optional `content=code\|docs\|config\|all` | `file_path`, `start_line`, `end_line`, `score`, `content` |
-| `find_related` | `file_path`, `line`, required `repo`, optional `content=code\|docs\|config\|all` | то же |
+| `find_related` | `file_path`, `line`, required `repo`, optional `content=code\|docs\|config\|all` | same |
 
 `repo` is an absolute project root or an explicit `http://`/`https://` git URL; it is never inferred. Omitting optional `content` uses the MCP server's configured corpus.
 
-### Как работает
+### How it works
 
-| Аспект | Реализация |
+| Aspect | Implementation |
 |--------|-----------|
-| Модель | static / distilled embeddings (класс model2vec), CPU-only |
-| Индекс | чанки кода + конфигов, косинусная близость |
-| Когда строится | лениво, ВНУТРИ вызова тула. Нет демона, нет watcher, нет фонового треда |
-| Ревалидация | pull-based, `_MIN_REVALIDATE_FACTOR = 3` — перестройка рассматривается только после 3x времени предыдущей сборки |
-| Кэш | Upstream defaults to macOS `$HOME/Library/Caches/semble` or Linux `${XDG_CACHE_HOME:-$HOME/.cache}/semble`. This skill sets one shared `SEMBLE_CACHE_LOCATION`: macOS `$HOME/Library/Caches/semble-code`, Linux `${XDG_CACHE_HOME:-$HOME/.cache}/semble-code` |
-| Корпус | `--content code docs config` — три бакета, 342 суффикса. `docs` обязателен: `markdown` лежит в `_DOC_LANGUAGES` (`index/files.py`), поэтому корпус `code config` индексировал НОЛЬ `.md` |
-| НЕ индексируется | `.json`, `.json5`, `.csv`, `.tsv`, `.psv` (бакет data не принадлежит ни одному content type); `.mdx`, `.txt` и любой суффикс, отсутствующий в `_EXTENSION_TO_LANGUAGE`. `.html`/`.htm` теперь индексируются вместе с docs |
+| Model | static / distilled embeddings (model2vec class), CPU-only |
+| Index | chunks of the selected buckets, cosine similarity |
+| When built | lazily, INSIDE the tool call. No daemon, no watcher, no background thread |
+| Revalidation | pull-based, `_MIN_REVALIDATE_FACTOR = 3`: a rebuild is considered only after 3x the previous build time |
+| Cache | Upstream defaults to macOS `$HOME/Library/Caches/semble` or Linux `${XDG_CACHE_HOME:-$HOME/.cache}/semble`. This skill sets one shared `SEMBLE_CACHE_LOCATION`: macOS `$HOME/Library/Caches/semble-code`, Linux `${XDG_CACHE_HOME:-$HOME/.cache}/semble-code` |
+| Corpus | `--content code docs config`: three buckets, 342 suffixes. `docs` is required: `markdown` is in `_DOC_LANGUAGES` (`index/files.py`), so a `code config` corpus indexed ZERO `.md` |
+| Not indexed | `.json`, `.json5`, `.csv`, `.tsv`, `.psv` (the data bucket belongs to no content type); `.mdx`, `.txt` and any suffix absent from `_EXTENSION_TO_LANGUAGE`. `.html`/`.htm` are indexed with docs |
 | Exact content variants | Since 0.5.5, one hashed repository directory holds independent exact-selection leaves: code-only is `index`; every other sorted selection is `index-<scope>`. The registered `code docs config` corpus is `index-code-config-docs`; sibling variants coexist without cross-content eviction |
-| Телеметрия | пишет `savings.jsonl` (flock, drop-on-contention) — считает ТОЛЬКО собственные вызовы, сравнения grep-vs-semantic там нет |
+| Telemetry | writes `savings.jsonl` (flock, drop-on-contention); counts ONLY its own calls, no grep-vs-semantic comparison |
 
-### Плюсы
+### Pros
 
-| # | Плюс |
+| # | Pro |
 |---|------|
-| 1 | Лучшее качество/скорость в собственном открытом бенчмарке: NDCG@10 0.854 при индексе 518 ms и p50 запроса 0.91 ms |
-| 2 | Настоящая natural-language семантика — запрос это предложение, а не список ключевых слов |
-| 3 | Полностью offline и CPU-only, без внешних API-ключей и без векторной БД |
-| 4 | Нет демона -> нет фонового процесса, который надо чистить. Exact content leaves в 0.5.5 устраняют cross-content eviction; параллельные вызовы, очистка и reindex всё ещё могут конкурировать за кэш |
-| 5 | Открытый воспроизводимый харнесс с сырыми JSON-результатами в репозитории |
+| 1 | Best quality/speed in its own open benchmark: NDCG@10 0.854, index 518 ms, query p50 0.91 ms |
+| 2 | Real natural-language semantics: the query is a sentence, not a keyword list |
+| 3 | Fully offline and CPU-only, no external API keys, no vector DB |
+| 4 | No daemon -> no background process to clean up. Exact content leaves (0.5.5+) remove cross-content eviction; parallel calls, cleanup and reindex can still contend for the cache |
+| 5 | Open reproducible harness with raw JSON results in the repo |
 
-### Минусы
+### Cons
 
-| # | Минус |
+| # | Con |
 |---|-------|
-| 1 | Нет watcher — индекс освежается лениво, и `_MIN_REVALIDATE_FACTOR = 3` может держать устаревший индекс на большом репозитории |
-| 2 | Первый вызов после изменений платит стоимостью пересборки внутри тула (видимая задержка агенту) |
-| 3 | `.json`/`.csv` and suffixes with no content bucket such as `.mdx`/`.txt` remain outside the corpus; `.html`/`.htm` are indexed in `docs` |
-| 4 | Нет структурного графа: нет call-path, нет referencing symbols, нет inheritance |
-| 5 | `savings.jsonl` не даёт сравнительной метрики — нельзя доказать выигрыш над grep из собственных данных |
-| 6 | Молодой проект (первый релиз 2026-04-26), самый низкий star-count в списке |
+| 1 | No watcher: the index refreshes lazily, and `_MIN_REVALIDATE_FACTOR = 3` can keep a stale index on a large repo |
+| 2 | The first call after changes pays the rebuild inside the tool (latency visible to the agent) |
+| 3 | `.json`/`.csv` and suffixes with no content bucket such as `.mdx`/`.txt` stay outside the corpus; `.html`/`.htm` are indexed in `docs` |
+| 4 | No structural graph: no call path, no referencing symbols, no inheritance |
+| 5 | `savings.jsonl` has no comparative metric: our own data cannot prove a win over grep |
+| 6 | Young project (first release 2026-04-26), lowest star count in the list |
 
-### Звёзды / релизы / каденция
+### Stars / releases / cadence
 
-| Метрика | Значение |
+| Metric | Value |
 |---------|----------|
-| Stars | 5,845 |
-| GitHub releases | 26 (`v0.1.0` 2026-04-26 ... `v0.5.5` 2026-08-12) |
-| Каденция | ~4.2 days per release (108 days / 26 releases) |
-| Последний GitHub release | `v0.5.5`, 2026-08-12 |
-| GitHub Release `v0.5.4` | now returned by the Releases API; the frozen 2026-08-08 observation is retained in the historical/superseded ledger below |
-| PyPI latest | `0.5.5`, upload 2026-08-12T05:40:19.935353Z |
-| Наш пин | exact `semble[mcp]==0.5.5` — no drift |
+| Stars | 5,845 (2026-08-08); 6,197 (2026-10-12) |
+| GitHub releases | 26 on 2026-08-27 (`v0.1.0` 2026-04-26 ... `v0.5.5` 2026-08-12), ~4.2 days per release (108 days / 26 releases); 30 on 2026-10-12, last `v0.6.2` 2026-10-05 |
+| PyPI latest | `0.6.2`, upload 2026-10-05T09:26:55.900894Z |
+| Our pin | exact `semble[mcp]==0.6.2` — no drift |
 
-### Current addendum — Semble 0.5.5 (verified 2026-08-27)
+### Semble 0.6.2 (verified 2026-10-12)
 
-- [PyPI 0.5.5](https://pypi.org/project/semble/0.5.5/) records the 2026-08-12 release, sdist SHA-256 `72cab788f01316c6e4559ccb55a3268eb39d8fa17cb862cb5cc6fdd3ecd93f79`, and attested source commit `921849164e2632dd4f0e1c1370f82cfe15ed6d6c`.
-- The upstream [v0.5.5 release](https://github.com/MinishLab/semble/releases/tag/v0.5.5) adds the MCP content filter. At the attested commit, [`mcp.py`](https://github.com/MinishLab/semble/blob/921849164e2632dd4f0e1c1370f82cfe15ed6d6c/src/semble/mcp.py#L27-L47) defines optional `code|docs|config|all` selection and uses the configured server corpus when omitted.
-- At the same commit, [`cache.py`](https://github.com/MinishLab/semble/blob/921849164e2632dd4f0e1c1370f82cfe15ed6d6c/src/semble/cache.py#L33-L37) derives an exact leaf from the sorted content set. The active combined corpus therefore uses `index-code-config-docs`; a bare pre-0.5.5 combined `index` is historical, while a 0.5.5 code-only `index` is current for that distinct selection.
+- [PyPI 0.6.2](https://pypi.org/project/semble/0.6.2/): wheel SHA-256 `94110c12da424a676cdec5a32adb1faee00ffcd3f494ea9fb88b4cd7efabac9a`, `Requires-Python >=3.10`. Releases since 0.5.5: `0.5.6`, `0.6.0`, `0.6.1`, `0.6.2`.
+- Drop-in for 0.5.5, checked on the unpacked wheels and live runs: same `index-code-config-docs` leaf, `cache_version` 1 and `chunk_size` 750 (a 0.5.5-built index is reused), same CLI argv, same MCP tool and parameter names. `repo` now also accepts a list; `SEMBLE_MCP_IDLE_TIMEOUT` and `SEMBLE_MAX_FILE_BYTES` are new optional knobs. Staleness moved from "any file newer than `metadata.time`" to a per-file `mtime_ns` comparison.
+- The MCP `content` filter and the exact content leaves date from 0.5.5 ([release](https://github.com/MinishLab/semble/releases/tag/v0.5.5)): `cache.py` derives the leaf from the sorted content set; a bare pre-0.5.5 combined `index` is legacy, a code-only `index` is current.
 
-### Бенчмарки
+### Benchmarks
 
-Публикуются, `benchmarks/README.md`. GAP закрыт: бенчмарки есть, с сырыми результатами.
+Published in `benchmarks/README.md`, with raw results.
 
 Main results (NDCG@10 / cold index / warm query p50):
 
@@ -123,319 +120,307 @@ Main results (NDCG@10 / cold index / warm query p50):
 | cs | 0.200 | - | 22 ms |
 | ripgrep | 0.126 | - | 14 ms |
 
-Token efficiency (1251 запросов, `cl100k_base`):
+Token efficiency (1251 queries, `cl100k_base`):
 
 | Method | Expected tokens per query | Savings |
 |--------|--------------------------:|--------:|
 | ripgrep + read file | 45,587 | baseline |
 | **semble** | **348** | **99% fewer** |
 
-Recall при фиксированном token-бюджете:
+Recall at a fixed token budget:
 
 | Method | 500 | 1k | 2k | 4k | 8k | 16k | 32k |
 |--------|----:|---:|---:|---:|---:|---:|----:|
 | **semble** | **0.842** | **0.923** | **0.967** | **0.988** | **0.995** | **0.995** | **0.995** |
 | ripgrep + read file | 0.001 | 0.008 | 0.037 | 0.086 | 0.207 | 0.374 | 0.583 |
 
-> Оговорка: это бенчмарк самого semble, на его собственном харнессе и датасете. Числа конкурентов взяты из ИХ харнесса, не из независимой третьей стороны.
+> Caveat: semble's own benchmark on its own harness and dataset. Competitor numbers come from ITS harness, not an independent third party.
 
-### Хуки для Claude Code
+### Claude Code hooks
 
-**Upstream не поставляет НИ ОДНОГО хука.** Всё, что есть вокруг semble — наше.
+**Upstream ships no hooks.** `semble install` (0.6.2 `installer/agents.py`) writes a floating `semble` MCP entry into `~/.claude.json`, instructions into `~/.claude/CLAUDE.md` and the subagent `~/.claude/agents/semble-search.md`. Everything below is ours; session and subagent skip (`no-mcp`) when the active profile has no `semble_code` registration.
 
-| Артефакт | Событие / matcher | Поведение |
+| Artifact | Event / matcher | Behaviour |
 |----------|-------------------|-----------|
-| `assets/semble-session.mjs` | `SessionStart`, без matcher | читает `<cwd>/.claude/semble/state.json`; при `phase === 'ready'` шлёт `systemMessage` + `additionalContext`. Никогда не блокирует |
-| `assets/semble-prefetch.mjs` | `UserPromptSubmit`, без matcher | gate v3 -> дистилляция промпта -> ОДИН `uvx … semble search` (жёсткий cap 3 s, SIGKILL) -> `additionalContext` с top-3 ПУТЯМИ без сниппетов. Троттл 30 s, cooldown 600 s по `<cwd>/.claude/semble/.prefetch-ts`. Fail-open: любая ошибка -> `{}` и exit 0 |
-| `assets/semble-stats.mjs` | `PostToolUse` + `PostToolUseFailure`, один pipe-matcher | чистый наблюдатель: JSONL в `<cwd>/.claude/semble/telemetry.jsonl`, всегда `{}` |
-| `assets/semble-reminder.mjs` | `PreToolUse`, matcher `Bash\|Grep` | advisory `additionalContext` перед текстовым поиском, счётчик в `<cwd>/.claude/semble/reminder.json`. Никогда не блокирует |
-| `assets/semble-subagent.mjs` | `SubagentStart`, БЕЗ matcher (= любой `agent_type`) | advisory `additionalContext` в контекст порождённого сабагента; пишет `agent_type`/`agent_id` в телеметрию |
-| ~~`assets/semble-explore.mjs`~~ | ретайрен окончательно | был прибит к одному `agent_type === 'Explore'`; заменён `semble-subagent.mjs`. `install`/`upgrade` удаляет файл и ЗАМЕНЯЕТ его строку |
-
-> Ретайр-обоснование 5.0.0 («0/18 и 0/11 при доказанной доставке») отозвано.
-> Канал доставки не был сломан; `0/18` считало сессии, а не доставки - reminder
-> не сработал ни разу (гейт подавил 74/113, 37 `disabled`, 2 throttled;
-> за всё время 14/2718 = 0.52%). `0/11` - реальное измерение, но по одному типу
-> агента и по самоподрывающему тексту. Поканальная конверсия: reminder 2/10
-> сессий, explore 1/7. Конверсия восстановленных хуков ещё не измерена.
-| `.claude/rules/semble-first.md` | - | правило «semantic-first» |
-| маркерный блок в `CLAUDE.md` | - | инструкция для сессии |
-| `semble-agents.sh` | - | патчит frontmatter агентов, добавляя 2 MCP-тула в `tools:` |
+| `assets/semble-session.mjs` | `SessionStart`, no matcher | reads `<root>/.claude/semble/state.json`; at `awaiting_reload`/`ready` sends `systemMessage` + `additionalContext`, or only a `not registered for this profile` notice when the active profile lacks `semble_code`. Never blocks |
+| `assets/semble-stats.mjs` | `PostToolUse` + `PostToolUseFailure`, one pipe matcher | pure observer: JSONL into `<cwd>/.claude/semble/telemetry.jsonl`, always `{}` |
+| `assets/semble-subagent.mjs` | `SubagentStart`, NO matcher (= every `agent_type`) | advisory `additionalContext` into the spawned subagent's context, skipped (`agent-no-tool`) when its `tools:` omits semble; writes `agent_type`/`agent_id` to telemetry |
+| `semble-explore.mjs` (retired for good) | - | was bound to the single `agent_type === 'Explore'`; replaced by `semble-subagent.mjs`. `install`/`upgrade` delete the file and REPLACE its entry |
+| `semble-reminder.mjs`, `semble-prefetch.mjs` (retired 6.5.0) | was `PreToolUse` `Bash\|Grep` / `UserPromptSubmit` | same-profile A/B, 36 sessions per run: pooled semble share 42% with the 6.4.0 hooks and 42% with the repaired 6.5.0 ones, `none` arm 38% / 54% (1 rep per cell, direction only); reminder fired 0 times, prefetch candidates never held the answering file. `install`/`upgrade`/uninstall delete files, markers and every settings row |
+| `.claude/rules/semble-first.md` | - | "semantic-first" rule |
+| marker block in `CLAUDE.md` | - | session instruction |
+| `semble-agents.sh` | - | patches agent frontmatter, adding the 2 MCP tools to `tools:` |
 | permissions | - | allow-only |
 
-В `state.json` нет агрегированных счётчиков вызовов, но текущие хуки пишут best-effort события использования в `.claude/semble/telemetry.jsonl` (`semble-stats.mjs` и остальные наблюдатели выше). Ошибки записи подавляются; это не гарантия полного учёта и не сравнительная метрика против grep. Upstream `savings.jsonl` — отдельный источник. Ключи state — `schema` (константа 1), `phase`, `enabled`, `scope`, `cacheRoot`, `repoHash`, `completed[]`, `notes[]`, `version`, `generated_by`, `last_updated` (дата последней записи, `YYYY-MM-DD`, `sc_state_patch` в `scripts/lib/semble-common.sh`).
+`state.json` holds no aggregate call counters; the hooks write best-effort usage events to `.claude/semble/telemetry.jsonl` (`semble-stats.mjs`; `nudge` records from `semble-session.mjs`, `gate`/`nudge` from `semble-subagent.mjs`). Write errors are swallowed: no complete accounting and no comparative metric against grep. Upstream `savings.jsonl` is a separate source. State keys: `schema` (constant 1), `phase`, `enabled`, `scope`, `cacheRoot`, `repoHash`, `completed[]`, `notes[]`, `version`, `generated_by`, `last_updated` (date of the last write, `YYYY-MM-DD`, `sc_state_patch` in `scripts/lib/semble-common.sh`), and `agentsPreExisting` (agent tool ownership record of `semble-agents.sh`).
 
 ---
 
 ## 2. codebase-memory-mcp (cbm)
 
-### Источники
+### Sources
 
-| Что | Где |
+| What | Where |
 |-----|-----|
 | Repo | https://github.com/DeusData/codebase-memory-mcp (default branch `main`) |
-| Претрейн-блоб + словарь | `vendored/nomic/{code_vectors.bin, code_vectors.h, code_vectors_blob.S, code_tokens.h, code_tokens.txt}` — верхний уровень репо, НЕ под `internal/cbm/` |
-| Единственный потребитель блоба | `src/semantic/semantic.c` (+ `.h`) |
-| Проход индексации, который его зовёт | `src/pipeline/pass_semantic_edges.c` |
-| Векторный поиск на стороне запроса | `src/store/store.c` (310 KB) |
-| Схема MCP-тула | `src/mcp/mcp.c:395-398` (режимы), `:434-439` (`query`), `:444-447` (`semantic_query`) |
-| Векторы в БД | `internal/cbm/sqlite_writer.c:2248-2254` (`node_vectors`, `token_vectors`) — путь перепроверён curl 2026-08-08, 200 OK, строки совпадают |
-| Пропуск векторного прохода | `src/pipeline/pipeline.c:951` |
-| Мёртвый флаг | `src/semantic/semantic.c:134` (`CBM_SEMANTIC_ENABLED`) |
-| Устаревшие комментарии | `src/pipeline/pipeline_internal.h:624` |
+| Pretrained blob + vocabulary | `vendored/nomic/{code_vectors.bin, code_vectors.h, code_vectors_blob.S, code_tokens.h, code_tokens.txt}` — repo top level, NOT under `internal/cbm/` |
+| Only consumer of the blob | `src/semantic/semantic.c` (+ `.h`) |
+| Indexing pass that calls it | `src/pipeline/pass_semantic_edges.c` |
+| Query-side vector search | `src/store/store.c` (310 KB) |
+| MCP tool schema | `src/mcp/mcp.c:395-398` (modes), `:434-439` (`query`), `:444-447` (`semantic_query`) |
+| Vectors in the DB | `internal/cbm/sqlite_writer.c:2248-2254` (`node_vectors`, `token_vectors`) — path re-checked by curl 2026-08-08, 200 OK, lines match |
+| Vector pass skipped | `src/pipeline/pipeline.c:951` |
+| Dead flag | `src/semantic/semantic.c:134` (`CBM_SEMANTIC_ENABLED`) |
+| Stale comments | `src/pipeline/pipeline_internal.h:624` |
 | Query path | `src/mcp/mcp.c:3105` (`run_semantic_query_core`) |
-| Ключевая слабость | `src/store/store.c:8250` (`vs_build_keyword_vectors`), `:8181` (`vs_load_enriched_vector`), `:8207` (`vs_fill_sparse_random`) |
-| Веса | `vendored/nomic/code_vectors.bin` (31 MB) |
-| Бенчмарк | `docs/BENCHMARK.md` |
-| Интеграции | `README.md:447` |
+| Key weakness | `src/store/store.c:8250` (`vs_build_keyword_vectors`), `:8181` (`vs_load_enriched_vector`), `:8207` (`vs_fill_sparse_random`) |
+| Weights | `vendored/nomic/code_vectors.bin` (31 MB) |
+| Benchmark | `docs/BENCHMARK.md` |
+| Integrations | `README.md:447` |
 
-> Раскладка репозитория ПОМЕНЯЛАСЬ: стора теперь `src/store/store.c`, а не `internal/cbm/store.c`. Каталог `internal/cbm/` жив, но держит только слой extractor/LSP/grammar плюс `sqlite_writer.c`. Все ссылки вида `internal/cbm/store.c` в более ранних записях — устаревшие.
+> The store lives in `src/store/store.c`; `internal/cbm/` holds only the extractor/LSP/grammar layer plus `sqlite_writer.c`. Any `internal/cbm/store.c` reference is stale.
 
-### Тип
+### Type
 
-Единый статический C-бинарник, MCP-сервер. Граф + FTS5 + НАСТОЯЩИЕ эмбеддинги.
+A single static C binary, MCP server. Graph + FTS5 + REAL embeddings.
 
-### Что делает
+### What it does
 
-Строит граф кода (nodes/edges/labels/rel types) + FTS5-индекс + векторный индекс. Тулы: `index_repository`, `search_graph`, `search_code`, `get_code_snippet`, `trace_path` (алиас `trace_call_path`), `query_graph` (Cypher), `get_graph_schema`, `check_index_coverage`. Всего 15 MCP-тулов (`TOOL_ANNOTATIONS`, `src/mcp/mcp.c:708-724`); `list_directory` в их числе НЕТ — он встречается только в `docs/BENCHMARK.md` (вопрос Q12 харнесса) и `src/cli/agent_profiles.c`.
+Builds a code graph (nodes/edges/labels/rel types) + an FTS5 index + a vector index. Tools: `index_repository`, `search_graph`, `search_code`, `get_code_snippet`, `trace_path` (alias `trace_call_path`), `query_graph` (Cypher), `get_graph_schema`, `check_index_coverage`. 15 MCP tools in total (`TOOL_ANNOTATIONS`, `src/mcp/mcp.c:708-724`); `list_directory` is NOT one of them — it appears only in `docs/BENCHMARK.md` (harness question Q12) and `src/cli/agent_profiles.c`.
 
-### Как работает
+### How it works
 
-| Аспект | Реализация (прочитано в исходниках, не маркетинг) |
+| Aspect | Implementation (read in source, not marketing) |
 |--------|--------------------------------------------------|
-| Эмбеддинги | ВКЛЮЧЕНЫ ПО УМОЛЧАНИЮ и полностью offline |
-| Веса | `vendored/nomic/code_vectors.bin`, 31,377,416 B = 8 байт заголовка + 40856*768: nomic-embed-code, дистиллировано до 40,856 токенов x 768 dims, int8 unit-vector quantization, вкомпилировано через `.incbin` |
-| Хранение | SQLite-таблицы `node_vectors` / `token_vectors` (`internal/cbm/sqlite_writer.c:2248-2254`), SQL-функция `cbm_cosine_i8` |
-| Режимы | `index_repository`: `"enum":["full","moderate","fast",...],"default":"full"` (`src/mcp/mcp.c:395-398`) |
-| Когда векторов нет | векторный проход пропускается ТОЛЬКО в режиме `fast` (`src/pipeline/pipeline.c:951`) |
-| `CBM_SEMANTIC_ENABLED` | МЁРТВАЯ функция (`src/semantic/semantic.c:134`), ноль вызывающих. Комментарии про «opt-in» в `src/pipeline/pipeline_internal.h:624` УСТАРЕЛИ |
+| Embeddings | ON BY DEFAULT and fully offline |
+| Weights | `vendored/nomic/code_vectors.bin`, 31,377,416 B = 8-byte header + 40856*768: nomic-embed-code distilled to 40,856 tokens x 768 dims, int8 unit-vector quantization, compiled in via `.incbin` |
+| Storage | SQLite tables `node_vectors` / `token_vectors` (`internal/cbm/sqlite_writer.c:2248-2254`), SQL function `cbm_cosine_i8` |
+| Modes | `index_repository`: `"enum":["full","moderate","fast",...],"default":"full"` (`src/mcp/mcp.c:395-398`) |
+| When there are no vectors | the vector pass is skipped ONLY in `fast` mode (`src/pipeline/pipeline.c:951`) |
+| `CBM_SEMANTIC_ENABLED` | a DEAD function (`src/semantic/semantic.c:134`), zero callers. The "opt-in" comments in `src/pipeline/pipeline_internal.h:624` are STALE |
 | Query path | `search_graph(semantic_query=[...])` -> `run_semantic_query_core` (`mcp.c:3105`) -> `cbm_store_vector_search` |
-| Watcher | есть, плюс общий per-account демон на все клиенты (`README.md:107`) |
+| Watcher | yes, plus a shared per-account daemon for all clients (`README.md:107`) |
 
-> Любое утверждение «семантика в cbm — opt-in» неверно. Она включена по умолчанию во всех режимах кроме `fast`.
+> Any claim that "cbm semantics are opt-in" is wrong: they are on by default in every mode except `fast`.
 
-### Блоб и символы (подтверждено curl 2026-08-08)
+### Blob and symbols (confirmed by curl 2026-08-08)
 
-| Что | Источник |
+| What | Source |
 |-----|----------|
-| Вкомпиляция блоба | `vendored/nomic/code_vectors_blob.S:10` `.incbin "vendored/nomic/code_vectors.bin"`; идентично на `:24` (COFF) и `:49` (ELF) |
-| Публичные символы | `vendored/nomic/code_vectors.h:23-33`: `PRETRAINED_TOKEN_COUNT 40856`, `PRETRAINED_DIM 768`, `PRETRAINED_VECTOR_BLOB[]`, `pretrained_vec_at(int i)` |
-| Словарь ПОСТАВЛЯЕТСЯ | `vendored/nomic/code_tokens.h:5` `static const char *PRETRAINED_TOKENS[40856]`; `code_tokens.txt` — ровно 40,856 строк |
-| Размер блоба | 31,377,416 B = 8 + 40856*768 |
+| Blob embedding | `vendored/nomic/code_vectors_blob.S:10` `.incbin "vendored/nomic/code_vectors.bin"`; identical at `:24` (COFF) and `:49` (ELF) |
+| Public symbols | `vendored/nomic/code_vectors.h:23-33`: `PRETRAINED_TOKEN_COUNT 40856`, `PRETRAINED_DIM 768`, `PRETRAINED_VECTOR_BLOB[]`, `pretrained_vec_at(int i)` |
+| The vocabulary SHIPS | `vendored/nomic/code_tokens.h:5` `static const char *PRETRAINED_TOKENS[40856]`; `code_tokens.txt` — exactly 40,856 lines |
+| Blob size | 31,377,416 B = 8 + 40856*768 |
 
-### КЛЮЧЕВАЯ СЛАБОСТЬ (перепроверено в исходниках 2026-08-08)
+### KEY WEAKNESS (re-checked in source 2026-08-08)
 
-Раньше здесь стояло «`store.c` никогда не обращается к `PRETRAINED_*`, значит запрос идёт по хеш-шуму». Первое верно, вывод был ПЕРЕОЦЕНЁН. Механика:
+`store.c` never touches `PRETRAINED_*`, but the pretrained table still reaches queries indirectly. Mechanics:
 
-| Факт | Источник |
+| Fact | Source |
 |------|----------|
-| `query=` — FTS5/BM25 со сплитом camelCase, сам себя описывает как "recommended for natural-language discovery"; это лексика, не эмбеддинг | `src/mcp/mcp.c:416`, схема `:434-439` |
-| Свободный текст не эмбеддится НИ НА ОДНОМ пути | grep по `mcp.c`: 0 совпадений `PRETRAINED_*` / `cbm_sem_*` |
-| `semantic_query=` принимает МАССИВ ключевых слов; строка отвергается уже на уровне схемы | `mcp.c:444-447`: `"MUST be an ARRAY of keyword strings (e.g. [\"send\",\"pubsub\",\"publish\"]) - NOT a single string.` |
-| И в рантайме | `mcp.c:3120-3122` `if (sq_val && !yyjson_is_arr(sq_val)) { type_error = true;` -> текст ошибки `mcp.c:3692` «semantic_query must be an array of keyword strings ... not a single string.» |
-| Токенизатора на пути запроса НЕТ: элементы массива копируются дословно, многословный элемент хешируется целиком через `XXH3_64bits(token, strlen(token))` | `extract_semantic_keywords`, `mcp.c:3060-3075` |
-| `PRETRAINED_*` встречается ТОЛЬКО на пути ИНДЕКСАЦИИ | `src/semantic/semantic.c:17,419,421-422,449-451,806,817,1097-1104` |
-| Реальные точки использования | `cbm_sem_random_index()` `semantic.c:437-457` — сначала претрейн, хеш только как fallback; `build_src_entry()` `semantic.c:1104` -> `out->dense_int8 = pretrained_vec_at((int)idx)` |
-| Вызывающие | только `src/pipeline/pass_semantic_edges.c:511,527,534,550` и `:1373` (`cbm_sem_ensure_ready()`), плюс `tests/test_semantic.c` |
-| `src/store/store.c` и `src/mcp/mcp.c` не содержат НИ ОДНОГО `PRETRAINED_*` / `cbm_sem_*`; в списке инклюдов `store.c:11-88` нет `semantic/semantic.h` | grep = 0 в обоих файлах |
-| Fallback на стороне запроса | `store.c:8259-8261`: `if (!vs_load_enriched_vector(s, project, keywords[k], kw_f)) { vs_fill_sparse_random(keywords[k], kw_f); }` |
+| `query=` is FTS5/BM25 with camelCase splitting, self-described as "recommended for natural-language discovery"; lexical, not an embedding | `src/mcp/mcp.c:416`, schema `:434-439` |
+| Free text is embedded on NO path | grep over `mcp.c`: 0 matches of `PRETRAINED_*` / `cbm_sem_*` |
+| `semantic_query=` takes an ARRAY of keywords; a string is rejected at the schema level | `mcp.c:444-447`: `"MUST be an ARRAY of keyword strings (e.g. [\"send\",\"pubsub\",\"publish\"]) - NOT a single string.` |
+| And at runtime | `mcp.c:3120-3122` `if (sq_val && !yyjson_is_arr(sq_val)) { type_error = true;` -> error text `mcp.c:3692` «semantic_query must be an array of keyword strings ... not a single string.» |
+| NO tokenizer on the query path: array items are copied verbatim, a multi-word item is hashed whole via `XXH3_64bits(token, strlen(token))` | `extract_semantic_keywords`, `mcp.c:3060-3075` |
+| `PRETRAINED_*` appears ONLY on the INDEXING path | `src/semantic/semantic.c:17,419,421-422,449-451,806,817,1097-1104` |
+| Real use sites | `cbm_sem_random_index()` `semantic.c:437-457` — pretrained first, hash only as fallback; `build_src_entry()` `semantic.c:1104` -> `out->dense_int8 = pretrained_vec_at((int)idx)` |
+| Callers | only `src/pipeline/pass_semantic_edges.c:511,527,534,550` and `:1373` (`cbm_sem_ensure_ready()`), plus `tests/test_semantic.c` |
+| `src/store/store.c` and `src/mcp/mcp.c` contain NO `PRETRAINED_*` / `cbm_sem_*`; the include list `store.c:11-88` has no `semantic/semantic.h` | grep = 0 in both files |
+| Query-side fallback | `store.c:8259-8261`: `if (!vs_load_enriched_vector(s, project, keywords[k], kw_f)) { vs_fill_sparse_random(keywords[k], kw_f); }` |
 | `vs_load_enriched_vector` | `store.c:8181` — `SELECT vector, idf FROM token_vectors WHERE project = ?1 AND token = ?2 LIMIT 1` |
-| `vs_fill_sparse_random` | `store.c:8207` — 8 позиций XXH3, `VS_RI_SEED = 0x52494E44` (`store.c:8173`) |
-| Сборка векторов запроса | `vs_build_keyword_vectors` `store.c:8250`, единственный вызов — из `cbm_store_vector_search` `store.c:8337` |
+| `vs_fill_sparse_random` | `store.c:8207` — 8 XXH3 positions, `VS_RI_SEED = 0x52494E44` (`store.c:8173`) |
+| Query vector assembly | `vs_build_keyword_vectors` `store.c:8250`, single call from `cbm_store_vector_search` `store.c:8337` |
 
-Поправка по существу: `phase3c_export_token_vectors()` (`pass_semantic_edges.c:1101`, вызов `:1292`) пишет per-project строки `token_vectors`, а они засеяны ИЗ претрейн-таблицы. Значит претрейн-эмбеддинги ДОХОДЯТ до результатов запроса — косвенно, для каждого токена, присутствующего в проиндексированном проекте. Теряется ровно одно: слово ВНЕ проекта. Оно не дотянется до претрейн-таблицы, даже когда входит в те самые 40,856 токенов, и падает в детерминированный хеш-шум без единого сигнала об ошибке.
+`phase3c_export_token_vectors()` (`pass_semantic_edges.c:1101`, called at `:1292`) writes per-project `token_vectors` rows seeded FROM the pretrained table. So pretrained embeddings DO reach query results — indirectly, for every token present in the indexed project. Exactly one thing is lost: a word OUTSIDE the project. It never reaches the pretrained table, even when it is among those 40,856 tokens, and falls into deterministic hash noise with no error signal.
 
-Спросить «как работает authentication», когда в проекте символы называются `Guardian`, по-прежнему даёт шум — но потому, что слова `authentication` нет в корпусе проекта, а не потому, что претрейн не используется вообще.
+Asking "how does authentication work" when the project's symbols are named `Guardian` still yields noise — because `authentication` is absent from the project corpus, not because the pretrained table is unused.
 
-Открытый issue #1112 показывает это на живом примере: запрос `"match comprobante bancario con lote de pagos"` (испаноязычный домен) возвращает цели Makefile со скорами 0.121-0.132.
+Open issue #1112 shows it live: the query `"match comprobante bancario con lote de pagos"` (Spanish-language domain) returns Makefile targets scoring 0.121-0.132.
 
-### Эмбеддятся только метаданные, не тела функций
+### Only metadata is embedded, not function bodies
 
-Источник — ОТКРЫТЫЙ issue #1462 «Feature: hybrid BM25+vector via RRF, and option to embed function bodies in semantic_query». Автор утверждает: векторы узлов строятся из name/signature/docstring, поэтому `semantic_query` матчит только то, КАК код назван, а не то, что он ДЕЛАЕТ; и что metadata-only embedding — «the single most common cause of "semantic search returned nothing relevant"».
+Source: OPEN issue #1462 "Feature: hybrid BM25+vector via RRF, and option to embed function bodies in semantic_query". The author states node vectors are built from name/signature/docstring, so `semantic_query` matches only HOW code is named, not what it DOES, and that metadata-only embedding is "the single most common cause of "semantic search returned nothing relevant"".
 
-> Это ЗАЯВЛЕНИЕ в пользовательском issue, а не вычитанное нами поведение кода. По исходникам мы его не подтверждали.
+> A CLAIM in a user issue, not behaviour we read in the code. We did not confirm it in source.
 
-### Плюсы
+### Pros
 
-| # | Плюс |
+| # | Pro |
 |---|------|
-| 1 | Ноль зависимостей, один статический бинарник, полностью offline |
-| 2 | 158 языков |
-| 3 | Миллисекундная индексация |
-| 4 | Явный контракт coverage / completeness |
-| 5 | File watcher + разделяемый демон между клиентами |
-| 6 | Структурные возможности, которых нет у semble: call trace, inheritance, Cypher |
-| 7 | Богатейшая интеграция с агентами из всех рассмотренных (см. хуки ниже) |
+| 1 | Zero dependencies, one static binary, fully offline |
+| 2 | 158 languages |
+| 3 | Millisecond indexing |
+| 4 | Explicit coverage / completeness contract |
+| 5 | File watcher + a daemon shared between clients |
+| 6 | Structural features semble lacks: call trace, inheritance, Cypher |
+| 7 | Richest agent integration of all evaluated (see hooks below) |
 
-### Минусы
+### Cons
 
-| # | Минус |
+| # | Con |
 |---|-------|
-| 1 | `semantic_query` — не natural language, а массив ключевых слов; предложение отвергается схемой (`mcp.c:444-447`) и рантаймом (`mcp.c:3120-3122`) |
-| 2 | Out-of-corpus слово -> детерминированный шум вместо ошибки (`vs_fill_sparse_random`, `store.c:8207`) |
-| 3 | Претрейн-словарь на 40,856 токенов недоступен на пути запроса НАПРЯМУЮ (`store.c` не инклюдит `semantic/semantic.h`); косвенно он всё же доходит через `token_vectors`, засеянные на индексации. Реально теряется только слово вне проекта |
-| 4 | Метаданные вместо тел функций — по заявлению открытого issue #1462, не по нашему чтению кода |
-| 5 | NDCG@10 0.630 против 0.854 у semble в бенчмарке semble. ВАЖНО: semble гоняет cbm в режиме `fast` (`benchmarks/README.md`, раздел Methods) — то есть ровно в том единственном режиме, где векторный проход выключен. Число меряет BM25-путь cbm, а не его семантику |
-| 6 | Общий демон = shared state между сессиями; конфликт версий/кэш-рута отвергается жёстко (`README.md:119`) |
-| 7 | Устаревшие комментарии в исходниках (`pipeline_internal.h:624`) — маркер расхождения кода и документации |
-| 8 | Последний стабильный релиз `v0.9.0` от 2026-07-08; свежее только pre-release |
+| 1 | `semantic_query` is not natural language but a keyword array; a sentence is rejected by the schema (`mcp.c:444-447`) and at runtime (`mcp.c:3120-3122`) |
+| 2 | Out-of-corpus word -> deterministic noise instead of an error (`vs_fill_sparse_random`, `store.c:8207`) |
+| 3 | The 40,856-token pretrained vocabulary is not reachable DIRECTLY on the query path (`store.c` does not include `semantic/semantic.h`); it arrives indirectly through `token_vectors` seeded at indexing. Only words outside the project are really lost |
+| 4 | Metadata instead of function bodies — per open issue #1462, not our reading of the code |
+| 5 | NDCG@10 0.630 vs semble's 0.854 in the semble benchmark. Note: semble runs cbm in `fast` mode (`benchmarks/README.md`, Methods) — exactly the one mode where the vector pass is off. The number measures cbm's BM25 path, not its semantics |
+| 6 | Shared daemon = shared state between sessions; a version/cache-root conflict is rejected hard (`README.md:119`) |
+| 7 | Stale comments in source (`pipeline_internal.h:624`) — a marker of code/doc drift |
+| 8 | Last stable release `v0.9.0` from 2026-07-08; newer ones are pre-releases only |
 
-### Что может измениться (главная причина держать cbm под наблюдением)
+### What could change (the main reason to keep cbm under watch)
 
-| Изменение | Объём | Что уже есть в репо |
+| Change | Size | Already in the repo |
 |-----------|-------|---------------------|
-| Пустить слова ВНЕ проекта через претрейн-таблицу | ~10 строк + одно ребро линковки | словарь поставляется (`code_tokens.h:5`, `code_tokens.txt` — 40,856 строк); `ensure_pretrained_map()` `semantic.c:399-431` уже строит token -> row-index; `semantic.h:112` уже экспортирует `cbm_sem_random_index()`. Работа = заинклюдить `semantic/semantic.h` в `store.c` и подменить fallback `vs_fill_sparse_random`. Оговорки: масштаб `CBM_SEM_INT8_MAX` против `CBM_STORE_INT8_MAX`, ранний `cbm_sem_ensure_ready()` до старта потоков. Размерности уже сходятся (768) |
-| Поддержка предложений | ОТДЕЛЬНАЯ задача и крупнее: ~50-150 строк плюс смена контракта | словарь — цельные слова в нижнем регистре (`aa`, `aaa`, `aalborg`, `aantal`), не BPE/subword, значит нужен настоящий токенизатор (lowercase, срезание пунктуации, сплит camelCase/snake) плюс правило пулинга (естественно — IDF-weighted mean, IDF уже лежит в `token_vectors`) плюс ослабление array-only схемы. Ничего, чего нет в репо, при этом не требуется |
+| Route words OUTSIDE the project through the pretrained table | ~10 lines + one link edge | the vocabulary ships (`code_tokens.h:5`, `code_tokens.txt` — 40,856 lines); `ensure_pretrained_map()` `semantic.c:399-431` already builds token -> row-index; `semantic.h:112` already exports `cbm_sem_random_index()`. Work = include `semantic/semantic.h` in `store.c` and replace the `vs_fill_sparse_random` fallback. Caveats: scale `CBM_SEM_INT8_MAX` vs `CBM_STORE_INT8_MAX`, an early `cbm_sem_ensure_ready()` before threads start. Dimensions already match (768) |
+| Sentence support | a SEPARATE, larger task: ~50-150 lines plus a contract change | the vocabulary is whole lowercase words (`aa`, `aaa`, `aalborg`, `aantal`), not BPE/subword, so it needs a real tokenizer (lowercase, punctuation strip, camelCase/snake split) plus a pooling rule (naturally an IDF-weighted mean; IDF is already in `token_vectors`) plus relaxing the array-only schema. Nothing outside the repo is needed |
 
-### Upstream: заявленных планов нет
+### Upstream: no stated plans
 
-Файла `CHANGELOG.md` в репо нет (contents API -> 404). Последние пять релизов (`v0.9.1-rc.1`, `v0.9.0`, `v0.8.1`, `0.8.0`, `0.7.0`) упоминают семантический поиск только в контексте языковой обвязки и фиксов Cypher-движка. Поиск `sentence OR "free text" OR "free-form" in:title` по репо -> 0 попаданий.
+No `CHANGELOG.md` in the repo (contents API -> 404). The last five releases (`v0.9.1-rc.1`, `v0.9.0`, `v0.8.1`, `0.8.0`, `0.7.0`) mention semantic search only for language bindings and Cypher-engine fixes. Search `sentence OR "free text" OR "free-form" in:title` in the repo -> 0 hits.
 
-Открытые issue по теме:
+Open issues on the topic:
 
-| # | Заголовок |
+| # | Title |
 |---|-----------|
-| 1462 | hybrid BM25+vector via RRF + опция эмбеддить тела функций |
-| 1402 | `semantic_query` — English-only: не-латиница даёт отрицательный скор против каждого узла. Автор независимо реверс-инженерил ту же механику и называет `vendored/nomic/` и `code_vectors_blob.S` |
+| 1462 | hybrid BM25+vector via RRF + option to embed function bodies |
+| 1402 | `semantic_query` is English-only: non-Latin text scores negative against every node. The author independently reverse-engineered the same mechanics and names `vendored/nomic/` and `code_vectors_blob.S` |
 | 1112 | pluggable / multilingual embedding model |
-| 1238 | TurboVec/TurboQuant как опциональный бэкенд векторного индекса |
-| 915, 1417, 1295, 938 | баги качества и ранжирования семантического поиска |
+| 1238 | TurboVec/TurboQuant as an optional vector-index backend |
+| 915, 1417, 1295, 938 | semantic-search quality and ranking bugs |
 
-### Звёзды / релизы / каденция
+### Stars / releases / cadence
 
-| Метрика | Значение |
+| Metric | Value |
 |---------|----------|
 | Stars | 38,149 |
-| Repo создан | 2026-02-24, последний push 2026-08-08 |
+| Repo created | 2026-02-24, last push 2026-08-08 |
 | GitHub releases | 37 (`v0.0.2` 2026-02-25 ... `v0.9.1-rc.1` 2026-07-30) |
-| Каденция | ~4.2 дня на релиз (155 дней / 37 релизов) |
-| Последний стабильный | `v0.9.0`, 2026-07-08 |
-| Последний вообще | `v0.9.1-rc.1`, 2026-07-30, `prerelease=true` |
-| Аномалия | теги `0.6.0` / `0.6.1` / `0.7.0` / `0.8.0` опубликованы одной датой 2026-06-12 — ретроспективное проставление релизов, реальные даты выхода этим не подтверждаются |
+| Cadence | ~4.2 days per release (155 days / 37 releases) |
+| Last stable | `v0.9.0`, 2026-07-08 |
+| Last overall | `v0.9.1-rc.1`, 2026-07-30, `prerelease=true` |
+| Anomaly | tags `0.6.0` / `0.6.1` / `0.7.0` / `0.8.0` published on one date, 2026-06-12 — retroactive release stamping; real ship dates are not confirmed by it |
 
-### Бенчмарки
+### Benchmarks
 
-GAP закрыт: `docs/BENCHMARK.md` существует. Плюс `docs/EVALUATION_PLAN.md`.
+`docs/BENCHMARK.md` exists, plus `docs/EVALUATION_PLAN.md`. The content is language coverage, **not** retrieval quality:
 
-Содержимое — **не** retrieval-качество, а language coverage:
-
-| Параметр | Значение |
+| Parameter | Value |
 |----------|----------|
-| Заголовок | "Codebase Memory MCP -- v0.3.0 Language Benchmark" |
-| Дата прогона | 2026-03-01 (версия v0.3.0 — бенчмарк УСТАРЕЛ относительно v0.9.x) |
-| Объём | заявлено «63 languages (27 programming + 8 config/markup)», 12 вопросов на язык (4 для config). Заголовок противоречит содержимому: 27+8=35, и сводная таблица содержит ровно 35 строк. Реально протестировано 35 языков |
-| Оценка | PASS 1.0 / PARTIAL 0.5 / FAIL 0.0, до 5 попыток на вопрос |
-| Платформа | Apple M3 Pro, macOS Darwin 25.3.0 |
-| Tier 1 (>=90%) | 17 языков: Lua, Kotlin, C++, Perl, Objective-C, Groovy, C, Bash, Zig, Swift, CSS, YAML, TOML, HTML, SCSS, HCL, Dockerfile |
+| Title | "Codebase Memory MCP -- v0.3.0 Language Benchmark" |
+| Run date | 2026-03-01 (v0.3.0 — the benchmark is STALE relative to v0.9.x) |
+| Scope | claims "63 languages (27 programming + 8 config/markup)", 12 questions per language (4 for config). The title contradicts the content: 27+8=35, and the summary table has exactly 35 rows. 35 languages were actually tested |
+| Scoring | PASS 1.0 / PARTIAL 0.5 / FAIL 0.0, up to 5 attempts per question |
+| Platform | Apple M3 Pro, macOS Darwin 25.3.0 |
+| Tier 1 (>=90%) | 17 languages: Lua, Kotlin, C++, Perl, Objective-C, Groovy, C, Bash, Zig, Swift, CSS, YAML, TOML, HTML, SCSS, HCL, Dockerfile |
 | Tier 2 (75-89%) | 16: Python, TypeScript, TSX, Go, Rust, Java, R, Dart, JavaScript, Erlang, Elixir, Scala, Ruby, PHP, C#, SQL |
 | Tier 3 (<75%) | 2: OCaml 72%, Haskell 62% |
 
-> Ни одного числа про качество семантического поиска в `docs/BENCHMARK.md` нет. Единственная сравнительная цифра по retrieval — NDCG@10 0.630 из бенчмарка semble, то есть из харнесса конкурента.
+> `docs/BENCHMARK.md` has no semantic-search quality number. The only comparative retrieval figure is NDCG@10 0.630 from the semble benchmark, i.e. a competitor's harness.
 
-### Хуки для Claude Code
+### Claude Code hooks
 
-GAP закрыт с поправкой к исходной фактуре.
+The repo has **no** `.claude/`, `hooks/`, `skills/`, `.claude-plugin/` (contents API returns `Not Found` for all four; a `filename:SKILL.md` search finds 0). The artifacts are **generated by `cbm install`**, which auto-detects installed agents (`README.md:103`).
 
-В самом репозитории `.claude/`, `hooks/`, `skills/`, `.claude-plugin/` — **отсутствуют** (contents API отдаёт `Not Found` на все четыре пути; поиск по `filename:SKILL.md` в репо даёт 0). Артефакты не лежат в дереве — они **генерируются командой `cbm install`**, которая автодетектит установленных агентов (`README.md:103`).
+What it installs into Claude Code (`README.md:447`):
 
-Что именно ставится в Claude Code (`README.md:447`):
-
-| Компонент | Детали |
+| Component | Details |
 |-----------|--------|
-| Конфиг | `~/.claude.json` |
-| Skill | один |
-| Агенты | три exact-tool graph-агента |
-| Хуки | `SessionStart`, `SubagentStart`, **non-blocking** `PreToolUse` для `Grep`/`Glob`, и post-`Read` coverage |
+| Config | `~/.claude.json` |
+| Skill | one |
+| Agents | three exact-tool graph agents |
+| Hooks | `SessionStart`, `SubagentStart`, **non-blocking** `PreToolUse` for `Grep`/`Glob`, and post-`Read` coverage |
 
-Плюс аналогичные интеграции для Codex CLI, Zed, OpenCode, VS Code, Cursor, Kiro, Junie, Hermes, OpenHands, Cline, Warp, Qwen Code, GitHub Copilot CLI. `cbm uninstall` снимает записи, скиллы, хуки, инструкции и бинарник (`README.md:184`).
+Similar integrations for Codex CLI, Zed, OpenCode, VS Code, Cursor, Kiro, Junie, Hermes, OpenHands, Cline, Warp, Qwen Code, GitHub Copilot CLI. `cbm uninstall` removes entries, skills, hooks, instructions and the binary (`README.md:184`).
 
-> Форма хуков совпадает с нашей: `PreToolUse` на `Grep`/`Glob` явно non-blocking, то есть advisory. Это независимое подтверждение, что nudge-модель — рабочий дизайн, а не наша самодеятельность.
+> The hook shape matched our retired `semble-reminder.mjs`: `PreToolUse` on `Grep`/`Glob` is explicitly non-blocking, i.e. advisory. That is a design match, not evidence: our own same-profile A/B found no gain from the nudge (row in the semble hooks table above), so 6.5.0 dropped it.
 
 ---
 
-## 3. Другие codebase MCP
+## 3. Other codebase MCPs
 
 ### 3.1 oraios/serena
 
-#### Источники
+#### Sources
 
-| Что | Где |
+| What | Where |
 |-----|-----|
 | Repo | https://github.com/oraios/serena |
-| Контекст для CC | `src/serena/resources/config/contexts/claude-code.yml` |
-| Хуки | `src/serena/hooks.py` |
-| Тесты хуков | `test/serena/test_hooks.py` |
+| CC context | `src/serena/resources/config/contexts/claude-code.yml` |
+| Hooks | `src/serena/hooks.py` |
+| Hook tests | `test/serena/test_hooks.py` |
 
-#### Тип
+#### Type
 
-LSP-based символьный retrieval + editing. **НЕ эмбеддинги.**
+LSP-based symbol retrieval + editing. **NOT embeddings.**
 
-#### Что делает
+#### What it does
 
-`find_symbol`, `find_referencing_symbols`, `get_symbols_overview`, `replace_symbol_body`, `insert_*_symbol`, `replace_content`. То есть это и поиск, и редактор.
+`find_symbol`, `find_referencing_symbols`, `get_symbols_overview`, `replace_symbol_body`, `insert_*_symbol`, `replace_content` — both search and editor.
 
-#### Как работает
+#### How it works
 
-Поднимает языковой сервер (LSP) на проект и запрашивает у него символьную структуру. Никакого векторного индекса. `excluded_tools` в `claude-code.yml` выключает у себя все шесть: `create_text_file`, `read_file`, `execute_shell_command`, `find_file`, `list_dir`, `search_for_pattern` — то есть намеренно отдаёт эти операции клиенту.
+Starts a language server (LSP) on the project and queries its symbol structure; no vector index. `excluded_tools` in `claude-code.yml` disables all six of its own: `create_text_file`, `read_file`, `execute_shell_command`, `find_file`, `list_dir`, `search_for_pattern` — deliberately leaving those operations to the client.
 
-#### Плюсы
+#### Pros
 
-| # | Плюс |
+| # | Pro |
 |---|------|
-| 1 | Точность LSP: referencing symbols — это реальные ссылки, а не похожие строки |
-| 2 | Умеет редактировать по символам, а не по строкам |
-| 3 | Самая агрессивная и самая проработанная enforcement-модель из всех (см. хуки) |
-| 4 | Зрелость: релизы с 2025-05-19 |
+| 1 | LSP precision: referencing symbols are real references, not similar strings |
+| 2 | Edits by symbol, not by line |
+| 3 | The most aggressive and most elaborate enforcement model of all (see hooks) |
+| 4 | Maturity: releases since 2025-05-19 |
 
-#### Минусы
+#### Cons
 
-| # | Минус |
+| # | Con |
 |---|-------|
-| 1 | Нулевая семантика: вопрос «где обрабатывается авторизация» без знания имени символа не решается |
-| 2 | Требует работающего language server на каждый язык проекта |
-| 3 | Хуки блокируют (`deny`) — но это rate-limit, а не запрет: deny срабатывает после серии подряд идущих несимвольных вызовов, счётчик тут же сбрасывается («You can continue using grep now if needed, the counter was reset»), следующий вызов проходит |
-| 4 | Per-session счётчики использования эфемерны: pickle-файлы в `${SERENA_HOME}/hook_data/<session_id>`, удаляются на SessionEnd -> накопленной метрики нет |
-| 5 | Медленная каденция релизов относительно остальных |
+| 1 | Zero semantics: "where is authorization handled" is unsolvable without knowing the symbol name |
+| 2 | Needs a working language server per project language |
+| 3 | Hooks `deny`, but as a rate limit, not a ban: deny fires after a run of consecutive non-symbolic calls, the counter resets immediately ("You can continue using grep now if needed, the counter was reset"), the next call passes |
+| 4 | Per-session usage counters are ephemeral: pickle files in `${SERENA_HOME}/hook_data/<session_id>`, deleted on SessionEnd -> no accumulated metric |
+| 5 | Slow release cadence relative to the rest |
 
-#### Звёзды / релизы / каденция
+#### Stars / releases / cadence
 
-| Метрика | Значение |
+| Metric | Value |
 |---------|----------|
 | Stars | 27,739 |
-| GitHub releases | 15 (первый `2025-05-19` от 2025-05-19) |
-| Последний | `v1.6.1`, 2026-07-21 |
-| Предыдущий | `v1.6.0`, 2026-07-16 |
-| Каденция | ~28 дней на релиз (~428 дней / 15 релизов) — самая медленная в подборке |
+| GitHub releases | 15 (first `2025-05-19`, dated 2025-05-19) |
+| Last | `v1.6.1`, 2026-07-21 |
+| Previous | `v1.6.0`, 2026-07-16 |
+| Cadence | ~28 days per release (~428 days / 15 releases) — slowest in the set |
 
-#### Бенчмарки
+#### Benchmarks
 
-Не удалось подтвердить: опубликованных retrieval-метрик у serena не найдено.
+Not confirmed: no published retrieval metrics found for serena.
 
-#### Хуки для Claude Code
+#### Claude Code hooks
 
-GAP закрыт — и это **существенная поправка** к исходной фактуре. Serena поставляет не только текстовый контекст, но и полноценные исполняемые хуки с **блокирующими** решениями.
+Serena ships executable hooks with **blocking** decisions, not just text context.
 
-`src/serena/hooks.py`, `HookClient` перечисляет `claude-code`, `codebuddy`, `vscode`, `codex`, `grok`. Хуки регистрируются как CLI-подкоманды (`HookCommands`, `hooks.py:594+`):
+`src/serena/hooks.py`, `HookClient` lists `claude-code`, `codebuddy`, `vscode`, `codex`, `grok`. Hooks are registered as CLI subcommands (`HookCommands`, `hooks.py:594+`):
 
-| Класс | Событие | Что делает |
+| Class | Event | What it does |
 |-------|---------|-----------|
-| `SessionStartActivateProjectHook` (`hooks.py:523`) | `SessionStart` | активирует проект |
-| `SessionEndCleanupHook` (`hooks.py:540`) | SessionEnd | удаляет hook-данные сессии |
-| `PreToolUseRemindAboutSymbolicToolsHook` (`hooks.py:115`) | `PreToolUse` | напоминает использовать символьные тулы вместо `read_file`/`grep` |
-| `PreToolUseAutoApproveSerenaHook` (`hooks.py:545`) | `PreToolUse` | авто-одобряет вызовы тулов Serena |
+| `SessionStartActivateProjectHook` (`hooks.py:523`) | `SessionStart` | activates the project |
+| `SessionEndCleanupHook` (`hooks.py:540`) | SessionEnd | deletes the session's hook data |
+| `PreToolUseRemindAboutSymbolicToolsHook` (`hooks.py:115`) | `PreToolUse` | reminds to use symbolic tools instead of `read_file`/`grep` |
+| `PreToolUseAutoApproveSerenaHook` (`hooks.py:545`) | `PreToolUse` | auto-approves Serena tool calls |
 
-Внутри reminder-хука — три отдельных **deny**-построителя: `_build_grep_deny` (`hooks.py:487`), `_build_code_read_deny` (`hooks.py:498`), `_build_non_symbolic_deny` (`hooks.py:509`); все три возвращают `permission_decision="deny"`. То есть хук реально блокирует `Grep` и `Read`, а не только советует — но как порог: deny выдаётся при превышении счётчика подряд идущих несимвольных вызовов, счётчик сразу сбрасывается, и повторный вызов проходит.
+The reminder hook has three **deny** builders: `_build_grep_deny` (`hooks.py:487`), `_build_code_read_deny` (`hooks.py:498`), `_build_non_symbolic_deny` (`hooks.py:509`); all three return `permission_decision="deny"`. So the hook really blocks `Grep` and `Read`, as a threshold: deny on exceeding the consecutive non-symbolic call counter, the counter resets at once, and the retry passes.
 
-Отдельно — текстовое давление в `contexts/claude-code.yml`:
+Text pressure in `contexts/claude-code.yml`:
 
-| Правило (verbatim) | |
+| Rule (verbatim) | |
 |---|---|
 | `Read           -> FORBIDDEN for discovery.` | |
 | `Glob (by name) -> Allowed for discovery only.` | |
 | `Grep (content) -> Allowed for discovery only; follow up reads or reference searches must be Serena.` | |
 | `Edit           -> FORBIDDEN.` | |
 
-Плюс блок `Disallowed reasoning`, перечисляющий отговорки, которыми модели оправдывают возврат к своим тулам:
+Plus a `Disallowed reasoning` block listing excuses models use to return to their own tools:
 
 > `Disallowed reasoning. Do NOT use any of the following to justify Read/Edit on a code file:`
 > `- "I already know the path"`
@@ -443,175 +428,175 @@ GAP закрыт — и это **существенная поправка** к 
 > `- "the built-in tool description says to use Read for known paths"`
 > `If you catch yourself reaching for one of these, that is the signal to switch to Serena.`
 
-> Существует ОТДЕЛЬНЫЙ `cc_system_prompt_override` с ДРУГИМИ формулировками. Это два разных источника; не цитировать их как один.
+> A SEPARATE `cc_system_prompt_override` exists with DIFFERENT wording. Two different sources; never quote them as one.
 
 ### 3.2 zilliztech/claude-context
 
-#### Источники
+#### Sources
 
-| Что | Где |
+| What | Where |
 |-----|-----|
 | Repo | https://github.com/zilliztech/claude-context |
 | npm | `@zilliz/claude-context-mcp` |
 
-#### Тип
+#### Type
 
-Эмбеддинги + векторная БД Milvus / Zilliz.
+Embeddings + Milvus / Zilliz vector DB.
 
-#### Как работает
+#### How it works
 
-Требует ВНЕШНЕГО провайдера эмбеддингов (OpenAI и т.п.) и внешнего векторного хранилища. Следствие — зависимость от сети и API-ключа на каждый запрос индексации.
+Requires an EXTERNAL embedding provider (OpenAI etc.) and an external vector store, so every indexing request depends on the network and an API key.
 
-#### Плюсы
+#### Pros
 
-| # | Плюс |
+| # | Pro |
 |---|------|
-| 1 | Настоящие natural-language эмбеддинги |
-| 2 | Масштабируется на очень большие корпуса за счёт Milvus |
+| 1 | Real natural-language embeddings |
+| 2 | Scales to very large corpora via Milvus |
 
-#### Минусы
+#### Cons
 
-| # | Минус |
+| # | Con |
 |---|-------|
-| 1 | Сеть + API-ключ обязательны: offline не работает |
-| 2 | Внешнее векторное хранилище — отдельная инфраструктура на сопровождении |
-| 3 | Стоимость эмбеддинга платная и растёт с размером репозитория |
-| 4 | Собственные метрики есть, но слабые: F1 не растёт (0.40 -> 0.40), выигрыш только в токенах и числе вызовов; n=30 задач SWE-bench_Verified, GPT-4o-mini, 3 прогона |
-| 5 | Мёртвая каденция GitHub-релизов (см. ниже) |
+| 1 | Network + API key mandatory: no offline mode |
+| 2 | External vector store = separate infrastructure to maintain |
+| 3 | Embedding is paid and grows with repository size |
+| 4 | Own metrics exist but are weak: F1 does not improve (0.40 -> 0.40), the win is only tokens and call count; n=30 SWE-bench_Verified tasks, GPT-4o-mini, 3 runs |
+| 5 | Dead GitHub release cadence (see below) |
 
-#### Звёзды / релизы / каденция
+#### Stars / releases / cadence
 
-| Метрика | Значение |
+| Metric | Value |
 |---------|----------|
 | Stars | 12,323 |
-| GitHub releases | **0** — releases API отдаёт пустой массив |
-| Последний git-тег | `v0.1.11`, commit date 2026-04-28 |
-| Дата тега `v0.1.10` | 2026-04-27 (lightweight-тег `005c90d`; дата берётся с коммита, не с tag-объекта) |
+| GitHub releases | **0** — the releases API returns an empty array |
+| Last git tag | `v0.1.11`, commit date 2026-04-28 |
+| Tag `v0.1.10` date | 2026-04-27 (lightweight tag `005c90d`; date from the commit, not a tag object) |
 | npm latest | `@zilliz/claude-context-mcp` `0.1.15`, published 2026-06-22 |
-| Каденция | не удалось подтвердить по GitHub-релизам (их нет). По npm: последняя публикация 2026-06-22, то есть ~47 дней без выпуска на 2026-08-08 |
+| Cadence | not confirmable from GitHub releases (none). On npm: last publish 2026-06-22, ~47 days without a release as of 2026-08-08 |
 
-#### Бенчмарки
+#### Benchmarks
 
-Публикует — `evaluation/README.md` (ветка `master`). Не NDCG, а эффективность агента: 30 инстансов SWE-bench_Verified (2 файла на правку, 15-60 мин), LangGraph ReAct, GPT-4o-mini, по 3 прогона на метод.
+Published in `evaluation/README.md` (branch `master`). Agent efficiency, not NDCG: 30 SWE-bench_Verified instances (2 files per edit, 15-60 min), LangGraph ReAct, GPT-4o-mini, 3 runs per method.
 
-| Метрика | Baseline (grep only) | + claude-context MCP | Дельта |
+| Metric | Baseline (grep only) | + claude-context MCP | Delta |
 |---------|---------------------:|---------------------:|-------:|
-| Average F1 | 0.40 | 0.40 | без изменений |
+| Average F1 | 0.40 | 0.40 | unchanged |
 | Average tokens | 73,373 | 44,449 | -39.4% |
 | Average tool calls | 8.3 | 5.3 | -36.3% |
 
-То есть качество retrieval не улучшается вовсе — заявлена только экономия контекста. Сопоставимости с NDCG@10 semble нет: другой датасет, другая метрика, другой харнесс.
+Retrieval quality does not improve at all; only context savings are claimed. Not comparable with semble's NDCG@10: different dataset, metric and harness.
 
-#### Хуки для Claude Code
+#### Claude Code hooks
 
-Не поставляет. В корне репозитория есть `CLAUDE.md` и `AGENTS.md` (инструкции), но каталогов `.claude/`, `hooks/`, `skills/` нет. Интеграция — только MCP-конфиг.
+None. The repo root has `CLAUDE.md` and `AGENTS.md` (instructions) but no `.claude/`, `hooks/`, `skills/` directories. Integration is MCP config only.
 
 ---
 
 ## 4. graphify
 
-### Источники
+### Sources
 
-| Что | Где |
+| What | Where |
 |-----|-----|
-| Repo | https://github.com/Graphify-Labs/graphify (default branch **`v8`**, не `main`) |
-| Токенизация запроса | `graphify/serve.py:253` (`_query_terms()`) |
-| Скоринг | `graphify/serve.py:439` (`_score_query()`) |
-| MinHash | `graphify/_minhash.py`, применяется в `graphify/dedup.py:533` |
-| Бенчмарки | `BENCHMARKS.md` (в корне, ветка `v8`) |
-| Skill для CC | `graphify/skill.md` + `graphify/skills/claude/references/` |
-| CC-хуки | `graphify/install.py:291` (`_claude_pretooluse_hooks`) |
-| Git-хуки | `graphify/hooks.py` |
-| Лог использования | `graphify/querylog.py` |
+| Repo | https://github.com/Graphify-Labs/graphify (default branch **`v8`**, not `main`) |
+| Query tokenization | `graphify/serve.py:253` (`_query_terms()`) |
+| Scoring | `graphify/serve.py:439` (`_score_query()`) |
+| MinHash | `graphify/_minhash.py`, used in `graphify/dedup.py:533` |
+| Benchmarks | `BENCHMARKS.md` (root, branch `v8`) |
+| CC skill | `graphify/skill.md` + `graphify/skills/claude/references/` |
+| CC hooks | `graphify/install.py:291` (`_claude_pretooluse_hooks`) |
+| Git hooks | `graphify/hooks.py` |
+| Usage log | `graphify/querylog.py` |
 
-### Тип
+### Type
 
-Чистый структурный граф кода. **ЭМБЕДДИНГОВ НЕТ ВООБЩЕ** — дисквалифицирующий фактор для нашего сценария.
+A pure structural code graph. **NO EMBEDDINGS AT ALL** — disqualifying for our use case.
 
-Собственная формулировка, `README.md:32` (ветка `v8`), verbatim:
+Their own wording, `README.md:32` (branch `v8`), verbatim:
 
 > **Not a vector index.** No embeddings, no vector store: a real graph you traverse.
 
-И из их же skill-референса `graphify/skills/claude/references/query.md:25`, verbatim:
+And from their skill reference `graphify/skills/claude/references/query.md:25`, verbatim:
 
 > graphify's `query` CLI matches nodes via case-folded substring + IDF - there is **no stemming, no synonyms, no cross-language match** inside the binary, and the inline fallback below matches the same way. If the user's question uses different language or different domain vocabulary than the graph's labels (user says "обработчик" / graph says "handler"; user says "authentication" / graph says "Guardian"), the literal matcher returns 0 hits and the answer collapses to noise.
 
-> Оговорка к «эмбеддингов нет вообще»: сами авторы себе противоречат. `BENCHMARKS.md` («Cost and token economics») пишет `graphify extracts with tree-sitter ... and a local embedder`. В OSS-коде на ветке `v8` подтверждения этому нет: `graphify/serve.py` (весь путь запроса) не содержит ни одного упоминания `embed`/`vector`. Считаем: в поставляемом CLI эмбеддингов на пути запроса нет; фраза в `BENCHMARKS.md` относится либо к хостед-продукту, либо к SurrealDB-адаптеру харнесса.
+> Caveat to "no embeddings at all": the authors contradict themselves. `BENCHMARKS.md` ("Cost and token economics") says `graphify extracts with tree-sitter ... and a local embedder`. The OSS code on branch `v8` does not confirm it: `graphify/serve.py` (the whole query path) never mentions `embed`/`vector`. Our reading: the shipped CLI has no embeddings on the query path; the `BENCHMARKS.md` phrase refers to the hosted product or the harness's SurrealDB adapter.
 
-### Что делает
+### What it does
 
-Превращает каталог файлов (код, документы, статьи, изображения, видео) в persistent knowledge graph: интерактивный HTML, GraphRAG-ready JSON, `GRAPH_REPORT.md`. Тулы query / path / explain, community detection, god nodes.
+Turns a directory of files (code, documents, papers, images, video) into a persistent knowledge graph: interactive HTML, GraphRAG-ready JSON, `GRAPH_REPORT.md`. Tools query / path / explain, community detection, god nodes.
 
-### Как работает
+### How it works
 
-| Аспект | Реализация |
+| Aspect | Implementation |
 |--------|-----------|
-| Токенизация запроса | `_query_terms()` (`serve.py:253`) — `re.findall(r"\w+")` |
-| Скоринг | `_score_query()` (`serve.py:439`), IDF-взвешенный |
-| Веса совпадений | `_EXACT_MATCH_BONUS = 1000.0`, `_PREFIX_MATCH_BONUS = 100.0`, `_SUBSTRING_MATCH_BONUS = 1.0`, `_SOURCE_MATCH_BONUS = 0.5` |
-| Предфильтр | триграммный |
-| Раскрытие | BFS/DFS обход графа после скоринга |
-| MinHash | `_minhash.py` -> используется для ДЕДУПА (`dedup.py:533`), не для retrieval |
-| Обновление индекса | git post-commit / post-checkout хуки (`graphify/hooks.py`), плюс `graphify/watch.py` |
+| Query tokenization | `_query_terms()` (`serve.py:253`) — `re.findall(r"\w+")` |
+| Scoring | `_score_query()` (`serve.py:439`), IDF-weighted |
+| Match weights | `_EXACT_MATCH_BONUS = 1000.0`, `_PREFIX_MATCH_BONUS = 100.0`, `_SUBSTRING_MATCH_BONUS = 1.0`, `_SOURCE_MATCH_BONUS = 0.5` |
+| Prefilter | trigram |
+| Expansion | BFS/DFS graph traversal after scoring |
+| MinHash | `_minhash.py` -> used for DEDUP (`dedup.py:533`), not retrieval |
+| Index refresh | git post-commit / post-checkout hooks (`graphify/hooks.py`), plus `graphify/watch.py` |
 
-### Плюсы
+### Pros
 
-| # | Плюс |
+| # | Pro |
 |---|------|
-| 1 | Детерминированность: одинаковый запрос — одинаковый результат, объяснимый скор |
-| 2 | Граф реально обходится: path / explain между сущностями |
-| 3 | Ноль LLM-кредитов на построение индекса |
-| 4 | Работает не только по коду: документы, изображения, видео (транскрипция) |
-| 5 | Самая широкая мультиклиентная поставка: 14 каталогов скиллов (claude, codex, amp, copilot, droid, kilo, kiro, opencode, pi, trae, vscode, claw, agents, windows) |
-| 6 | Экспорт в Neo4j / FalkorDB / GraphML / SVG |
+| 1 | Deterministic: same query, same result, explainable score |
+| 2 | The graph is really traversed: path / explain between entities |
+| 3 | Zero LLM credits to build the index |
+| 4 | Not only code: documents, images, video (transcription) |
+| 5 | Widest multi-client delivery: 14 skill directories (claude, codex, amp, copilot, droid, kilo, kiro, opencode, pi, trae, vscode, claw, agents, windows) |
+| 6 | Export to Neo4j / FalkorDB / GraphML / SVG |
 
-### Минусы
+### Cons
 
-| # | Минус |
+| # | Con |
 |---|-------|
-| 1 | Нет эмбеддингов -> нет семантики. Расхождение словаря убивает запрос молча, признано самими авторами (цитата выше) |
-| 2 | Их обходной путь — вручную расширять запрос по словарю графа перед traversal (`query.md:23`, «Step 0 — Constrained query expansion (REQUIRED before traversal)»); это перекладывает работу семантики на агента |
-| 3 | Бенчмарки меряют conversational memory (LOCOMO / LongMemEval), а не code retrieval — прямой сопоставимости с semble нет |
-| 4 | Каденция релизов ~1.5 в день (182 релиза за 124 дня): неустойчивый API, дорогой пин |
-| 5 | Версионирование непредсказуемо: `v1.0.0` — САМЫЙ СТАРЫЙ опубликованный релиз (2026-04-05), после него нумерация ушла назад на `v0.7.x` и растёт до `v0.9.36` |
-| 6 | Default branch `v8`, а не `main` — легко получить 404 при обращении к сырым файлам |
+| 1 | No embeddings -> no semantics. A vocabulary mismatch kills the query silently, admitted by the authors (quote above) |
+| 2 | Their workaround is manual query expansion over the graph vocabulary before traversal (`query.md:23`, "Step 0 — Constrained query expansion (REQUIRED before traversal)"), shifting the semantic work onto the agent |
+| 3 | Benchmarks measure conversational memory (LOCOMO / LongMemEval), not code retrieval — not directly comparable with semble |
+| 4 | Release cadence ~1.5 per day (182 releases in 124 days): unstable API, costly pin |
+| 5 | Unpredictable versioning: `v1.0.0` is the OLDEST published release (2026-04-05); numbering then went back to `v0.7.x` and grows to `v0.9.36` |
+| 6 | Default branch `v8`, not `main` — raw-file URLs on `main` give 404 |
 
-### Звёзды / релизы / каденция
+### Stars / releases / cadence
 
-| Метрика | Значение |
+| Metric | Value |
 |---------|----------|
 | Stars | 104,234 |
-| Repo создан | 2026-04-03 |
-| GitHub releases | 182 (две страницы по 100; `v1.0.0` 2026-04-05 ... `v0.9.36` 2026-08-07) |
-| Каденция | ~0.68 дня на релиз (124 дня / 182 релиза) — примерно 1.5 релиза в день |
-| Последний release | `v0.9.36`, 2026-08-07 |
-| `v1.0.0` | и тег, и опубликованный релиз (2026-04-05, `draft=false`, `prerelease=false`) — это первый релиз репозитория, дальше нумерация откатилась к `v0.7.x` |
+| Repo created | 2026-04-03 |
+| GitHub releases | 182 (two pages of 100; `v1.0.0` 2026-04-05 ... `v0.9.36` 2026-08-07) |
+| Cadence | ~0.68 days per release (124 days / 182 releases) — about 1.5 releases per day |
+| Last release | `v0.9.36`, 2026-08-07 |
+| `v1.0.0` | both a tag and a published release (2026-04-05, `draft=false`, `prerelease=false`) — the repo's first release; numbering then rolled back to `v0.7.x` |
 
-### Бенчмарки
+### Benchmarks
 
-GAP закрыт: `BENCHMARKS.md` в корне ветки `v8`, «Last updated: 2026-07-05».
+`BENCHMARKS.md` at the root of branch `v8`, "Last updated: 2026-07-05".
 
-| Suite | Dataset (n) | Metric | graphify | Поле сравнения |
+| Suite | Dataset (n) | Metric | graphify | Comparison field |
 |-------|-------------|--------|---------:|----------------|
-| Memory | LOCOMO (300) | QA accuracy | 45.3% | supermemory 49.7% (11x стоимость ingest), bm25 31.3%, mem0 27.3% |
+| Memory | LOCOMO (300) | QA accuracy | 45.3% | supermemory 49.7% (11x ingest cost), bm25 31.3%, mem0 27.3% |
 | Memory | LOCOMO (300) | recall@10 | 0.497 | bm25 0.362, mem0 0.048 |
 | Memory | LongMemEval-S (50) | QA accuracy | 76% | dense RAG 76%, hybrid 74%, mem0 70% |
 | Cost | LOCOMO ingest | USD | ~$1.40 | supermemory $15.67, mem0 $3.48 |
 | Cost | graph build | LLM credits | $0 | n/a |
 
-Харнесс: собственный, конкуренты (mem0, supermemory) запущены адаптерами внутри него, единая модель Kimi K2.6, единый бюджет, единый грейдер. Judge blind-validated против второго независимого судьи: 90.6% agreement, Cohen's kappa 0.81. Формула грейдинга: `coverage = (covered + 0.5 * partial) / total`.
+Harness: their own; competitors (mem0, supermemory) run through adapters inside it, one model Kimi K2.6, one budget, one grader. Judge blind-validated against a second independent judge: 90.6% agreement, Cohen's kappa 0.81. Grading formula: `coverage = (covered + 0.5 * partial) / total`.
 
-Code suite (`crosstool/`): фиксированный агент Claude Opus 4.8, максимум 14 ходов, floor из grep/read/list плюс один code-intelligence тул, на ERPNext (~1M LOC, `frappe/erpnext`), с temporal-подсьютом из 689 недельных AST-чекпоинтов 2011-2026. В сводной таблице этих чисел нет, но они есть в разделе «Results: code intelligence»: key-fact coverage 70.8% (grep+read baseline) -> 82.0% с одним тулом graphify, при ~140K токенов на запрос. Выборка — **n=6 вопросов**, то есть статистически ничего не значит.
+Code suite (`crosstool/`): fixed agent Claude Opus 4.8, at most 14 turns, a grep/read/list floor plus one code-intelligence tool, on ERPNext (~1M LOC, `frappe/erpnext`), with a temporal sub-suite of 689 weekly AST checkpoints 2011-2026. Not in the summary table, but in "Results: code intelligence": key-fact coverage 70.8% (grep+read baseline) -> 82.0% with one graphify tool, at ~140K tokens per query. Sample: **n=6 questions** — statistically meaningless.
 
-> Оговорка: все числа — самоотчёт на собственном харнессе. LOCOMO и LongMemEval — это память диалога, а не поиск по коду; переносить эти проценты на наш сценарий нельзя.
+> Caveat: all numbers are self-reported on their own harness. LOCOMO and LongMemEval are dialogue memory, not code search; these percentages do not transfer to our use case.
 
-### Хуки для Claude Code
+### Claude Code hooks
 
-GAP закрыт. Поставляется и skill, и настоящие блокирующие хуки.
+Ships both a skill and real blocking hooks.
 
-Skill: `graphify/skill.md` (frontmatter `name: graphify`), устанавливается в `.claude/skills/graphify/SKILL.md` (`graphify/install.py`, `_PLATFORM_CONFIG["claude"]`). Плюс восемь reference-файлов в `graphify/skills/claude/references/`:
+Skill: `graphify/skill.md` (frontmatter `name: graphify`), installed to `.claude/skills/graphify/SKILL.md` (`graphify/install.py`, `_PLATFORM_CONFIG["claude"]`), plus eight reference files in `graphify/skills/claude/references/`:
 
-| Файл | Размер |
+| File | Size |
 |------|-------:|
 | `add-watch.md` | 2,486 |
 | `exports.md` | 3,362 |
@@ -622,54 +607,19 @@ Skill: `graphify/skill.md` (frontmatter `name: graphify`), устанавлив�
 | `transcribe.md` | 3,173 |
 | `update.md` | 10,425 |
 
-CC-хуки, `graphify/install.py:291` (`_claude_pretooluse_hooks`):
+CC hooks, `graphify/install.py:291` (`_claude_pretooluse_hooks`):
 
-| Matcher | Команда | Режим |
+| Matcher | Command | Mode |
 |---------|---------|-------|
 | `Bash\|Grep` | `graphify hook-guard search` | advisory nudge, fail-open |
-| `Read\|Glob` | `graphify hook-guard read` (+`--strict`) | при `strict` **блокирует первое сырое чтение за сессию** (только Claude Code) |
+| `Read\|Glob` | `graphify hook-guard read` (+`--strict`) | with `strict` **blocks the first raw read per session** (Claude Code only) |
 
-Переключатель `GRAPHIFY_HOOK_STRICT` меняет строгость в рантайме без переустановки. Комментарий в исходнике фиксирует важное наблюдение (`install.py:299-301`):
+`GRAPHIFY_HOOK_STRICT` changes strictness at runtime without reinstalling. A source comment records an important observation (`install.py:299-301`):
 
 > `"Grep" is in the search matcher because current Claude Code routes content search through its dedicated Grep tool, not Bash (#1986) - a Bash-only matcher never fired on the agent's primary search path.`
 
-Git-хуки (отдельно от CC): `graphify hook install|uninstall|status` ставит post-commit и post-checkout, которые по `git diff HEAD~1` доиндексируют изменённые файлы и пересобирают `graph.json` + `GRAPH_REPORT.md`; если post-commit уже есть, graphify дописывается, а не затирает. Плюс `graphify claude install` пишет секцию H1 `# graphify` в `.claude/CLAUDE.md` (`install.py:317` `_skill_registration`; в исходнике специально оговорено, что это именно H1, чтобы не задеть пользовательский `## graphify`).
+> On macOS Claude Code 2.1.296 the `Grep`/`Glob` tools are absent by default, so search runs through `Bash`; keep both names in a search matcher.
 
-Телеметрия: opt-in `graphify/querylog.py`.
+Git hooks (separate from CC): `graphify hook install|uninstall|status` installs post-commit and post-checkout hooks that re-index changed files from `git diff HEAD~1` and rebuild `graph.json` + `GRAPH_REPORT.md`; an existing post-commit is appended to, not overwritten. `graphify claude install` writes an H1 `# graphify` section into `.claude/CLAUDE.md` (`install.py:317` `_skill_registration`; the source notes it is deliberately H1 so a user's `## graphify` is untouched).
 
----
-
-## Historical/superseded ledger — recorded 2026-08-08
-
-> **Superseded state — verified 2026-08-27.** These retained observations are not
-> current known defects: the active pin is exact `semble[mcp]==0.5.5`, GitHub now
-> returns the `v0.5.4` Release, and the inaccurate SKILL parenthetical has been
-> removed. The current 0.5.5 addendum above is authoritative.
-
-Retained original evidence:
-
-> **Важная поправка.** Upstream README НЕ заявляет ни watcher, ни демона (grep по README: 0 совпадений на `watch`/`daemon`/`background`). Наш `brewcode/skills/semble-setup/SKILL.md` говорит РОВНО ТО ЖЕ («There is no watcher and no daemon», строка 28) — расхождения нет. Неточна лишь ремарка в скобках там же: «Its own README claims otherwise» — README ничего такого не заявляет.
->
-> Поправка к исходной фактуре: `0.5.4` вышел на PyPI 2026-08-06, но GitHub Release на него отсутствует — тег есть, релиза нет. Формулировка «released 2026-08-06» верна только для PyPI.
-
-The tables below preserve the original dated evidence text, including the
-`0.5.2` -> `0.5.4` compatibility closure; their historical wording is not a
-statement of current package or repository state.
-
-| # | Дефект | Где | Что не так | Проверено |
-|---|--------|-----|-----------|-----------|
-| 1 | ~~Устаревший пин semble~~ ЗАКРЫТ 2026-08-08 | пин `0.5.4` | Пин поднят `0.5.2` -> `0.5.4`. `src/semble/index/` и `src/semble/mcp.py` побайтово идентичны между двумя sdist, `cache_version` остался `1`, совместимость кэша двусторонняя (замерено). GitHub Release для `0.5.4` по-прежнему не опубликован — есть только тег и пакет на PyPI | `diff -rq` по двум sdist; PyPI JSON API, GitHub releases/tags API |
-| 2 | Неточная ремарка про README | `brewcode/skills/semble-setup/SKILL.md:28` | SKILL.md правильно пишет «There is no watcher and no daemon», но добавляет «(Its own README claims otherwise; the code does not.)». Upstream README ничего подобного не заявляет — в нём нет ни одного вхождения `watch`/`daemon`/`background`. Скобку надо снять | grep по upstream README + `src/semble/mcp.py:29,212` |
-
-Дополнительно к учёту (не дефекты, но расхождения с ранее зафиксированной фактурой):
-
-| # | Расхождение | Было записано | Проверено 2026-08-08 |
-|---|-------------|---------------|----------------------|
-| 1 | serena и хуки | «только текстовый контекст + эфемерные pickle-счётчики» | serena поставляет исполняемые хуки `SessionStart` / SessionEnd / два `PreToolUse`, из них reminder-хук содержит три **deny**-построителя (`hooks.py:487,498,509`) и реально блокирует `Grep`/`Read` — но по счётчику подряд идущих вызовов, со сбросом счётчика при deny |
-| 2 | cbm и хуки | «искать `.claude/`, `hooks`, `skills` в дереве репозитория» | в дереве их нет; артефакты генерирует `cbm install`. Для Claude Code ставятся skill + 3 агента + `SessionStart`, `SubagentStart`, non-blocking `PreToolUse` на `Grep`/`Glob`, post-`Read` coverage (`README.md:447`) |
-| 3 | semble `0.5.4` | «released 2026-08-06» | верно для PyPI; GitHub Release отсутствует, есть только тег |
-| 4 | graphify default branch | не зафиксирован | `v8`, не `main` — `raw.githubusercontent.com/.../main/...` отдаёт 404 |
-| 5 | graphify и CC-хуки | «ships a Claude Code skill» | не только skill: два `PreToolUse`-хука с matcher `Bash\|Grep` и `Read\|Glob`, причём read-хук в `--strict` блокирует |
-| 6 | semble и бенчмарки | GAP | публикует полный харнесс, NDCG@10 0.854, 99% экономии токенов против `ripgrep + read` |
-| 7 | раскладка репо cbm | ссылки вида `internal/cbm/store.c` | стора переехала в `src/store/store.c` (310 KB); `internal/cbm/` остался под extractor/LSP/grammar плюс `sqlite_writer.c` (последний перепроверён curl — 200 OK, строки `2248-2254` совпадают). Претрейн лежит в `vendored/nomic/` на верхнем уровне, а не под `internal/cbm/vendored/` |
-| 8 | cbm и претрейн на пути запроса | «массив ключевых слов даёт хеш-шум, претрейн не используется» | утверждение ПЕРЕОЦЕНЕНО. `store.c`/`mcp.c` действительно не видят `PRETRAINED_*`, но `phase3c_export_token_vectors()` (`pass_semantic_edges.c:1101`) засевает per-project `token_vectors` ИЗ претрейн-таблицы, и через них претрейн доходит до результатов для каждого токена, присутствующего в проекте. Шум остаётся только для слова ВНЕ проекта (`store.c:8259-8261`) |
+Telemetry: opt-in `graphify/querylog.py`.

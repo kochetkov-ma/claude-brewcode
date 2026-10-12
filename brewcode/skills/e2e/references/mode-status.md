@@ -11,8 +11,8 @@ Scan `.claude/agents/e2e-*.md`:
 ## T2: Rules Scan
 
 Scan for E2E rules:
-- `.claude/e2e/e2e-rules.md` (`{config.rulesPath}`) — exists? rule count? **Absent = broken install:
-  every e2e agent stops on its Rules Loading Protocol. Report it as the top finding.**
+- `.claude/e2e/e2e-rules.md` (`{config.rulesPath}`) — exists? rule count? Absent = broken install
+  (every e2e agent stops on its Rules Loading Protocol): report it as the top finding.
 - `${CLAUDE_SKILL_DIR}/references/e2e-rules.md` — the plugin baseline; rule count, for comparison only
 - `.claude/rules/e2e-*.md` — condensed project export? count?
 
@@ -22,21 +22,18 @@ Read `.claude/e2e/config.json`:
 - If not found → report "Not configured. Run `/brewcode:e2e install`."
 - If found → extract: stack, testFramework, testSourceDir, scenarioDir, `content_version`, `version`,
   `generated_by`, `last_updated`
-- Compare the stamped `content_version` (headline) against the `CONTENT_VERSION:` line Phase 0's
-  `detect-mode.sh` printed — **never against `PLUGIN_VERSION:`**. The two counters move
-  independently: `PLUGIN_VERSION` bumps on every release, `CONTENT_VERSION` only when this skill's
-  own content changed, so comparing across them flags every current install as stale and `rules`
-  can never clear it. `version` rides along as provenance — display it, but it no longer decides
-  current/stale on its own
+- Compare the stamped `content_version` (headline) against the Phase 0 `CONTENT_VERSION:` line, never
+  against `PLUGIN_VERSION:`: that one bumps on every release, `CONTENT_VERSION` only when this skill's
+  content changed, so a cross comparison flags every current install as stale for good. `version` is
+  provenance: display it, it never decides current/stale on its own
 - No `content_version` key at all → a pre-`content_version` install: read `version` against
   `PLUGIN_VERSION:` as the fallback headline, and say the fallback is in use
 - No `version` key either → a pre-standard install (it carried `lastSetup`); report it as
   `stale (legacy, unstamped)`
 
-> **Never print `unknown` as a version.** It is not a reading, it is the absence of one, and it sorts
-> against real semver — a reader that accepts it turns a failed lookup into a confident verdict. A
-> missing stamp is `stale (legacy, unstamped)`; the running version can never be missing, because
-> Phase 0's `detect-mode.sh` hard-fails instead of emitting a placeholder.
+> Never print `unknown` as a version: it sorts against real semver and turns a failed lookup into a
+> confident verdict. A missing stamp is `stale (legacy, unstamped)`; the running version is never
+> missing (Phase 0 hard-fails instead).
 
 ## T4: Artifact Scan
 
@@ -85,13 +82,8 @@ Scan configured paths:
 - {if config.version missing too}: "Setup predates the artifact-metadata standard (no `version` key) — reported `stale (legacy, unstamped)`. Run `/brewcode:e2e rules` to refresh and stamp it."
 ```
 
-> **Staleness compares like with like: stamped `content_version` vs running `CONTENT_VERSION`.** The
-> old rule fired on `lastSetup > 30 days` — which flagged a perfectly current setup every month and
-> stayed silent on the case that matters, a release the day after install. Comparing the stamp to
-> `PLUGIN_VERSION` is just as wrong in the other direction: the two counters differ by design
-> whenever a release did not touch this skill, so the recommendation fires forever and `rules`
-> re-stamps the same value it just flagged. Only `version` — on a pre-`content_version` install
-> that has no other stamp — is compared to `PLUGIN_VERSION`. Dates stay in the table as
-> information; they never trigger a recommendation.
+> Staleness compares stamped `content_version` with running `CONTENT_VERSION`; only `version`, on a
+> pre-`content_version` install, is compared to `PLUGIN_VERSION`. Dates are information and never
+> trigger a recommendation.
 
 No AskUserQuestion — purely informational output.

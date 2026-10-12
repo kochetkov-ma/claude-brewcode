@@ -22,7 +22,7 @@ Fix mode options per finding:
 |--------|--------|
 | Fix | Delete or replace the secret inline |
 | Move to env var | Extract value into environment variable reference |
-| Add to .gitignore | Append the file path to `.gitignore` |
+| Add to .gitignore | Append the path to `.gitignore` and untrack it (`git rm --cached`) |
 | Mark false positive | Acknowledge and skip |
 | Skip | Leave as-is, move to next finding |
 
@@ -31,20 +31,11 @@ Fix mode options per finding:
 ### Good Usage
 
 ```bash
-# Pre-commit security check on the full repo
+# Pre-push check, periodic audit
 /brewtools:secrets-scan
 
-# Scan and fix all findings interactively
+# Before open-sourcing a private repo: scan, then fix interactively
 /brewtools:secrets-scan --fix
-
-# Run after onboarding a new contributor to verify no secrets leaked
-/brewtools:secrets-scan
-
-# Run before open-sourcing a private repo
-/brewtools:secrets-scan --fix
-
-# Periodic audit as part of a security review cycle
-/brewtools:secrets-scan
 ```
 
 ### Common Mistakes
@@ -108,14 +99,15 @@ findings of the same credential are still recognisable by their fingerprint.
 (`assigned == scanned + skipped`); a mismatched or malformed chunk is re-spawned once, and if it
 fails again the scan is reported `INCOMPLETE`, never clean.
 
-A console summary is also displayed at the end of the scan with the key metrics and the path to the full report.
+The scan ends with a console summary: key metrics and the report path.
 
 ## Tips
 
-- **Run early, run often.** The best time to catch a leaked secret is before it reaches a remote branch. Use this skill as a pre-push check.
-- **Expect false positives.** Pattern-based detection will flag test fixtures, example configs, and documentation snippets. Use `--fix` to mark them as false positives and move on.
-- **Combine with .gitignore.** After identifying sensitive files, add them to `.gitignore` immediately. The `--fix` mode offers this as a one-click option.
-- **Check the LOW findings too.** Placeholder values like `changeme` sometimes slip into production configs unchanged. A quick review of LOW findings can prevent configuration errors.
+- **Run before pushing.** A secret is cheapest to remove before it reaches a remote branch.
+- **Rotate what was committed.** Removing a secret from the worktree leaves it in git history; rotate the credential.
+- **Ignoring is not untracking.** `.gitignore` does not stop git tracking a file it already tracks; `--fix` adds the path and runs `git rm --cached`.
+- **Expect false positives.** Test fixtures, example configs and doc snippets get flagged; mark them in `--fix`.
+- **Check LOW findings too.** Placeholders like `changeme` sometimes reach production configs unchanged.
 
 ## Documentation
 

@@ -22,7 +22,7 @@ function blockAfter(source, marker, fence) {
 
 const base = mkdtempSync(join(tmpdir(), 'return-status-'));
 try {
-  // GIVEN: actual copied hook assets, two owned registrations, and an unrelated co-handler.
+  // GIVEN: actual copied hook assets, the three owned registrations, and an unrelated co-handler.
   const project = join(base, 'project');
   const hooksDir = join(project, '.claude', 'hooks');
   mkdirSync(hooksDir, { recursive: true });
@@ -34,17 +34,28 @@ try {
   writeFileSync(settingsPath, JSON.stringify({ env: { KEEP: 'yes' }, hooks: {
     SubagentStart: [{ hooks: [{ type: 'command', command: 'node', args: ['${CLAUDE_PROJECT_DIR}/.claude/hooks/agent-return-contract.mjs'], timeout: 5 }, foreign] }],
     SubagentStop: [{ hooks: [{ type: 'command', command: 'node', args: ['${CLAUDE_PROJECT_DIR}/.claude/hooks/agent-return-guard.mjs'], timeout: 5 }] }],
+    PreToolUse: [{ matcher: 'SubagentHandback', hooks: [{ type: 'command', command: 'node', args: ['${CLAUDE_PROJECT_DIR}/.claude/hooks/agent-return-guard.mjs'], timeout: 5 }] }],
   } }));
   const settingsBefore = readFileSync(settingsPath, 'utf8');
-  const env = { ...process.env, HOME: join(base, 'home'), CLAUDE_SKILL_DIR: SKILL_DIR, ROOT: project, RUNBOOK, PASS_TOKENS: '1000', FILE_TOKENS: '2500', PLUGIN_VERSION: '1.0.0' };
+  const env = { ...process.env, HOME: join(base, 'home'), CLAUDE_PLUGIN_ROOT: join(SKILL_DIR, '..', '..'), ROOT: project, RUNBOOK, PASS_TOKENS: '2500', FILE_TOKENS: '6000', PLUGIN_VERSION: '1.0.0' };
+  delete env.CLAUDE_CONFIG_DIR;
   const configBlock = blockAfter(readFileSync(RUNBOOK, 'utf8'), '**EXECUTE** config write', '```\n');
   const producer = spawnSync('bash', ['-c', configBlock], { cwd: project, env, encoding: 'utf8', timeout: 30000 });
   assert.equal(producer.status, 0, `authoritative return config producer succeeds: ${producer.stderr}`);
   const configPath = join(project, '.claude', 'agent-return.json');
   const currentConfig = JSON.parse(readFileSync(configPath, 'utf8'));
   assert.equal(currentConfig.version, '1.0.0', 'fixture retains deliberately older release provenance');
-  const statusBlock = blockAfter(readFileSync(join(SKILL_DIR, 'SKILL.md'), 'utf8'), '## Step 1 — STATUS FIRST, always', '```bash\n');
+  // Claude Code substitutes the braced session dir into SKILL.md at load; mirror that here.
+  const statusBlock = blockAfter(readFileSync(join(SKILL_DIR, 'SKILL.md'), 'utf8'), '## Step 1 — STATUS FIRST, always', '```bash\n')
+    .replaceAll('${CLAUDE_PROJECT_DIR}', project);
   const probe = () => spawnSync('bash', ['-c', statusBlock], { cwd: project, env, encoding: 'utf8', timeout: 30000 });
+
+  // GIVEN: the shell cwd drifted into a subdirectory. WHEN: status probes. THEN: the session dir is the project scope.
+  const drifted = join(project, 'sub');
+  mkdirSync(drifted, { recursive: true });
+  const fromSub = spawnSync('bash', ['-c', statusBlock], { cwd: drifted, env, encoding: 'utf8', timeout: 30000 });
+  assert.equal(fromSub.status, 0, `status from a subdirectory exits successfully: ${fromSub.stderr}`);
+  assert.match(fromSub.stdout, new RegExp(`PROJECT_ROOT=${project}\\n[^]*project: hook_files=3/3`), 'project scope keys on the session dir, not the shell cwd');
 
   // WHEN: the actual consumer probes producer-shaped current content with older provenance.
   const current = probe();

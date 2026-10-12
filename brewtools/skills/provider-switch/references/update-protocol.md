@@ -1,6 +1,6 @@
 # Update Protocol (maintainer-only, hidden mode)
 
-Refresh all five providers' dated models/prices/context/endpoints from official sources. Preserve selections/auth/runtime; use unauthenticated metadata and offline/mock checks, without paid inference or inferred billing.
+Refresh all five providers' dated models/prices/context/endpoints from official sources: Preserve selections/auth/runtime; use unauthenticated metadata and offline/mock checks, without paid inference or inferred billing.
 
 ## Official Sources
 
@@ -18,12 +18,10 @@ Keep region/product/input-tier/cache scope with each price. OpenRouter free mean
 
 ## Update Flow
 
-1. From MAIN only, spawn five bounded Explore agents in parallel: DeepSeek, Z.ai, Qwen/DashScope, MiniMax and OpenRouter. They do not re-delegate.
+1. From MAIN only, spawn the five per-provider research agents of SKILL.md P9 Step 2 in parallel; they do not re-delegate.
 2. Each fetches official sources and reports date/source, model id, context, direct-vs-aggregator prices, tiers/cache rules, endpoint/product/region compatibility and unavailable evidence. No keys/paid requests/runtime edits.
 3. Aggregate all five; preserve source disagreements and historical values as dated evidence, never treat absence/unverified metadata as model retirement.
-4. For each provider where data changed:
-   - Show diff to maintainer (current vs fetched)
-   - Update reference file via Edit tool
+4. Per provider with changed data: show the diff (current vs fetched), then Edit the reference
 5. If OpenRouter model recommendations changed — update openrouter-models.md
 6. Update SKILL.md status table default models if needed
 7. Run mocked provider suites and safe catalog/injection fixtures. `check-status.sh` reads configuration only; use an isolated HOME fixture for validation. Separate source edits, static checks, live metadata and untested authenticated runtime.
@@ -32,7 +30,7 @@ Keep region/product/input-tier/cache scope with each price. OpenRouter free mean
 
 | Field | File | Line pattern |
 |-------|------|-------------|
-| Model IDs | `{provider}.md` | `| opus | MODEL |` rows |
+| Model IDs | `{provider}.md` | `Model ID` / `Configured model` row + alias block |
 | Pricing | `{provider}.md` | `| $/1M |` columns |
 | Endpoint URL | `{provider}.md` | `| Endpoint |` row |
 | Context window | `{provider}.md` | Context column |

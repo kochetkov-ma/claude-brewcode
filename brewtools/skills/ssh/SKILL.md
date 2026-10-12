@@ -10,28 +10,24 @@ model: opus
 
 # SSH Server Management
 
-> Manage remote Linux servers — connect, configure, deploy, administer with safety gates and persistent config.
-
 ## Prompt contract
 
-Position 1 of `$ARGUMENTS` is a **free-form prompt** (RU/EN) — modes are optional and may follow
-in any order. Nobody types keys: resolve mode + scope FROM the prompt. This skill has no
+`$ARGUMENTS` is one free-form RU/EN prompt; mode tokens may sit anywhere in it. This skill has no
 mutate-vs-read-only flags — every mode can end up running commands, gated by Phase 5 Step 3's
 own MODIFY/SERVICE/DELETE/PRIVILEGE confirmation.
 
-1. An explicit mode token anywhere wins outright, no scoring (see the operations table in
-   Phase 0 below).
-2. Else score modes by distinct whole-word keyword hits. Highest unique score wins; all zero ->
-   fall through to `execute`, letting Phase 5's own command classification gate any mutation.
-   Equal highest scores/conflicting explicit modes -> ask before actions, never guess a mutation.
-3. Empty arguments -> `setup` if no servers are configured, else `execute` (Phase 1 asks which
-   server). Never a hardcoded default independent of that check.
-4. Outcome-changing ambiguity (which server, DELETE/PRIVILEGE commands) -> `AskUserQuestion`
-   BEFORE any work — this is already Phase 1/5's own gate, not a new one.
-5. Prose that is not a mode keyword is still input: extract the host, server alias or command
-   intent from it; never treat the first word of a sentence as a positional id.
+1. Mode: an explicit mode token wins outright (operations table in Phase 0 below); else the most
+   distinct whole-word keyword hits. Equal highest scores/conflicting explicit modes -> ask before
+   actions, never guess a mutation. No hit -> `execute`, letting Phase 5's own command
+   classification gate any mutation. Empty -> `setup` if no servers are configured, else `execute`
+   (Phase 1 asks which server). Never a hardcoded default independent of that check.
+2. Scope: prose that is not a mode keyword is still input: take the host, server alias or command
+   intent from it, never the first word of a sentence as a positional id.
+3. Ask: outcome-changing ambiguity (which server, DELETE/PRIVILEGE commands) -> `AskUserQuestion`
+   before any work — this is Phase 1/5's own gate, not a new one.
 
-Then print this block ONCE, before the first action:
+Print once, at the end of Phase 1 — once mode AND server (default/asked/newly-set-up) are both
+resolved, before branching into Phase 2/3/5 (labels and plan values English, INPUT verbatim):
 
 ```
 PLAN — brewtools:ssh
@@ -42,66 +38,41 @@ DO:     <2-5 imperative bullets>
 RESULT: <what the user ends up holding>
 ```
 
-Labels/plan values are English; INPUT remains verbatim. Print at the end of Phase 1,
-once mode AND server (default/asked/newly-set-up) are both resolved, before branching into
-Phase 2/3/5.
-
 <instructions>
 
-## Robustness Rules (MANDATORY — all phases)
+## Robustness Rules (all phases)
 
-### Fail-Fast
-
-| Rule | Applies to |
-|------|-----------|
-| Every Bash call MUST report OK/FAILED and preserve non-zero status; `&& echo "OK ..." \|\| { rc=$?; echo "FAILED ..." >&2; exit "$rc"; }` | ALL scripts; capture discovery's documented 124 separately |
-| On `FAILED` — stop phase, report error, do NOT retry same command blindly | ALL phases |
-| SSH commands MUST use `-o ConnectTimeout=10 -o BatchMode=yes` | ALL SSH calls |
-| Max **2 retries** per failed operation; after 2nd failure — report and stop | ALL phases |
-| Non-zero script exit — read stderr, diagnose, fix root cause, retry ONCE | Scripts |
-
-### Loop Protection
-
-| Rule | Limit |
-|------|-------|
-| Phase 2 (Connection Setup) — max **3 key attempts**, then ask user | 3 keys |
-| Phase 2 → Phase 5 round-trips — if sent back to Phase 2 more than **once**, stop and report | 1 re-entry |
-| Phase 5 (Execute) — max **5 SSH commands per invocation**; if more needed, delegate to ssh-admin agent via Agent | 5 commands |
-| update-agent mode — max **3 servers** per run; process first 3 and report remaining | 3 servers |
-| AskUserQuestion — max **3 questions per phase**; summarize missing info in one combined question | 3 per phase |
-
-### Timeouts
-
-| Operation | Timeout | Action on timeout |
-|-----------|---------|-------------------|
-| SSH connection test | 10s (`ConnectTimeout=10`) | Report "Server unreachable", stop |
-| server-discover.sh | 30s total, enforced inside the script (`SSH_DISCOVER_TIMEOUT`, default 30) | Exit `124` — report partial results, continue |
-| Any single SSH command | 60s via existing `ght 60 ssh ...` | Kill, report "Command timed out", ask user |
-| Entire skill invocation | 15 SSH calls total max | Stop, report progress, suggest manual continuation |
-
-Reuse the same-plugin tested watchdog before bounded SSH calls:
-`. "${CLAUDE_PLUGIN_ROOT}/skills/deploy/scripts/lib/deploy-common.sh"`.
-`ght` preserves argv and uses timeout/gtimeout/built-in Bash; `ght_reason` distinguishes timeout,
-missing tool and failure. Never assume stock macOS has bare `timeout`; discovery keeps its own 30s bound.
+| Rule | Limit / scope |
+|------|---------------|
+| Bash calls report OK/FAILED, keep non-zero status: `&& echo "OK ..." \|\| { rc=$?; echo "FAILED ..." >&2; exit "$rc"; }` | all scripts; discovery's documented 124 captured separately |
+| SSH options `-o ConnectTimeout=10 -o BatchMode=yes` | every SSH call |
+| `FAILED` -> stop the phase, report; never retry the same command blindly. Script non-zero -> read stderr, fix root cause, retry ONCE | all phases; scripts |
+| Retries per failed operation | max 2, then report and stop |
+| Phase 2 key attempts | max 3, then ask the user |
+| Re-entries into Phase 2 | max 1, then stop and report |
+| Phase 5 SSH commands per invocation | max 5; more -> delegate (Phase 5 Step 4) |
+| SSH calls per invocation | max 15, then stop, report progress, suggest manual continuation |
+| update-agent servers per run | max 3; report the rest |
+| AskUserQuestion | max 3 per phase; combine missing info into one question |
+| SSH connection test | 10s (`ConnectTimeout=10`) -> "Server unreachable", stop |
+| Single SSH command | 60s via `ght 60 ssh ...` (the plugin's tested watchdog from `deploy-common.sh`, Phase 5 Step 4; `ght_reason` tells timeout, missing tool, failure apart) -> kill, report "Command timed out", ask the user. Never assume stock macOS has bare `timeout` |
 
 ### Fallback Strategy
 
-If a script fails and cannot be fixed:
-1. Report exact error: script name, exit code, stderr
-2. Attempt same operation manually (inline Bash) — scripts are helpers, not gatekeepers
-3. If manual fallback also fails — report both attempts, ask user
-4. Never silently swallow errors or continue with stale/missing data
+Unfixable script failure: report name, exit code, stderr; do the operation by hand in inline Bash
+(scripts are helpers, not gatekeepers); that fails too -> report both attempts, ask the user. Never
+silently swallow errors or continue with stale/missing data.
 
 | Failed script | Manual alternative |
 |---------------|--------------------|
-| detect-mode.sh | Parse `$ARGUMENTS` yourself — keyword matching is simple |
+| detect-mode.sh | Match the mode keywords of Phase 0 yourself |
 | ssh-env-check.sh | Run `ls ~/.ssh/id_* 2>/dev/null`, `ssh-add -l`, `cat ~/.ssh/config` |
 | server-discover.sh | Run individual SSH commands: `uname -a`, `docker version`, `df -h` |
 | claude-local-ops.sh | Read/write CLAUDE.local.md directly with Read/Edit tools |
 
-### Error Reporting (MANDATORY)
+### Error Reporting
 
-On ANY failure — before stopping or asking user — output:
+On any failure, before stopping or asking the user, output:
 
 ```
 SCRIPT_ERROR: <script-name>
@@ -112,28 +83,20 @@ ACTION: <what was attempted>
 FALLBACK: <what will be tried next OR "asking user">
 ```
 
-## Phase 0: Mode Detection (MANDATORY FIRST STEP)
+## Phase 0: Mode Detection (first step)
 
-**EXECUTE** using Bash tool; replace PROMPT_HERE with the whole rendered prompt as ONE safely
-shell-quoted data argument (never eval/interpolate it as code or rely on shell `$ARGUMENTS`):
+**EXECUTE** using Bash tool, PROMPT_HERE = the whole prompt as ONE safely shell-quoted data argument,
+never eval'd or interpolated as code:
 ```bash
 bash "${CLAUDE_SKILL_DIR}/scripts/detect-mode.sh" "PROMPT_HERE"
 ```
-Optional second argument is a previously resolved canonical mode, never a host/port. Conflicting
-explicit modes or equal highest keyword scores return `MODE: ask`: main asks the existing
-material-choice question before any action, then passes that selected mode on a rerun. Flags,
-their values, paths and key=value scopes stay data in ARGS; server/command intent is extracted
-from the whole prompt separately, never fed as a port.
-
-Output format:
-```
-ARGS: [arguments received]
-MODE: [detected mode]
-```
-
-Parse exactly one MODE line. `ask` stays in the input gate; other values route to the declared
-mode. Nonempty zero-hit input remains execute with Phase 5 classification/approval, never an
-automatic SSH mutation; empty input uses real SSH inventory, not arbitrary Markdown tables.
+Optional 2nd argument: an already resolved canonical mode, never a host/port. Parse exactly one `MODE:`
+line (after `ARGS:`). `MODE: ask` (conflicting explicit modes, tied top scores) -> ask the
+material-choice question before any action, rerun with the chosen mode as 2nd argument; other values
+route to their mode. Flags, values, paths, key=value scopes stay data; server/command intent comes from
+the whole prompt, never as a port. Zero-hit text = `execute` under Phase 5 classification/approval,
+never an automatic SSH mutation; empty input = decided by real SSH inventory, not arbitrary Markdown
+tables.
 
 | Mode | EN keywords | RU keywords | Mutates? |
 |------|-------------|-------------|----------|
@@ -143,52 +106,32 @@ automatic SSH mutation; empty input uses real SSH inventory, not arbitrary Markd
 | `update-agent` | update agent, refresh agent, refresh | обнови агента, обнови | yes |
 | `execute` | *(any other text)* | *(любой другой текст)* | depends — Phase 5 Step 2 classifies each command |
 
-Empty arguments are special-cased, not keyword-scored: no servers configured -> `setup`;
-servers configured -> `execute` (Phase 1 asks which server).
-
 ## Phase 1: Environment & Config Check
 
-> Runs for ALL modes before branching.
-
-**EXECUTE** using Bash tool:
+Runs for ALL modes before branching. **EXECUTE** using Bash tool:
 ```bash
 bash "${CLAUDE_SKILL_DIR}/scripts/ssh-env-check.sh" && echo "OK env-check" || { rc=$?; echo "FAILED env-check" >&2; exit "$rc"; }
 ```
-
 > **STOP if FAILED** -- fix SSH environment before continuing.
 
-Parse output key=value pairs. Note available keys and ssh-agent status.
-
-**EXECUTE** using Bash tool:
+Note the available keys and ssh-agent status. **EXECUTE** using Bash tool:
 ```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/claude-local-ops.sh" list 2>/dev/null || echo "NO_SERVERS"
+bash "${CLAUDE_SKILL_DIR}/scripts/claude-local-ops.sh" list && echo "OK list" || { rc=$?; echo "FAILED list" >&2; exit "$rc"; }
 ```
 
 | Condition | Action |
 |-----------|--------|
-| `NO_SERVERS` AND mode=`setup` | GOTO Phase 2: Connection Setup |
-| `NO_SERVERS` AND mode=`execute`/`connect` | GOTO Phase 2 (need server first) |
-| 1 server AND mode=`connect`/`execute` | Use as default, GOTO Phase 5 |
-| Multiple servers AND mode=`connect`/`execute` | AskUserQuestion: which server? Then GOTO Phase 5 |
-| mode=`setup` (servers exist) | GOTO Phase 2 (adding new server) |
-| mode=`configure` | AskUserQuestion: which server? Then GOTO Phase 5 |
+| mode=`setup`, or `NO_SERVERS` with `execute`/`connect` | GOTO Phase 2 (new server) |
+| 1 server, mode=`connect`/`execute` | Use as default, GOTO Phase 5 |
+| Several servers with `connect`/`execute`, or mode=`configure` | AskUserQuestion: which server? Then GOTO Phase 5 |
 | mode=`update-agent` | GOTO Mode: update-agent |
 
 ## Phase 2: Connection Setup
 
 ### Step 1: Gather Connection Info
 
-Use AskUserQuestion:
-```
-header: "SSH Server Setup"
-question: "Provide connection details for the new server."
-```
-
-Collect via follow-up questions if not in $ARGUMENTS:
-- **Host** (IP or hostname) -- REQUIRED
-- **User** (default: deploy) -- REQUIRED
-- **Port** (default: 22) -- optional
-- **Server name** (short alias, e.g., vps-main) -- REQUIRED
+AskUserQuestion "SSH Server Setup" for what the prompt lacks: Host (IP/hostname, required), User
+(default `deploy`, required), Port (default 22), Server name (short alias, e.g. `vps-main`, required).
 
 ### Step 2: Key Discovery & Auth
 
@@ -197,19 +140,19 @@ Collect via follow-up questions if not in $ARGUMENTS:
 bash "${CLAUDE_SKILL_DIR}/scripts/ssh-env-check.sh" && echo "OK keys" || { rc=$?; echo "FAILED keys" >&2; exit "$rc"; }
 ```
 
-Parse available keys. Try connection with each key (ed25519 first, then rsa, then ecdsa):
+After the host key is trusted, try the keys: ed25519, then rsa, then ecdsa.
 
 #### Host key: scan, VERIFY, then trust
 
-Never append `ssh-keyscan` output straight into `known_hosts` — that trusts whatever the network
-returned. Scan to a temp file and print fingerprints. **EXECUTE** using Bash tool:
+Never append `ssh-keyscan` output straight into `known_hosts` (it trusts whatever the network
+returned): scan to a temp file, print fingerprints. **EXECUTE** using Bash tool:
 ```bash
 KH_TMP=$(mktemp) && ssh-keyscan -p PORT HOST > "$KH_TMP" && echo "OK keyscan $KH_TMP" || { rc=$?; echo "FAILED keyscan" >&2; exit "$rc"; }
 ssh-keygen -lf "$KH_TMP"
 ```
-> `2>/dev/null` is deliberately absent — a failed or partial scan must be visible, not silently empty.
+> No `2>/dev/null`, deliberately: a failed or partial scan must stay visible.
 
-Show the SHA256 fingerprints and require an INDEPENDENT match before trusting them. Use AskUserQuestion:
+Show the SHA256 fingerprints and require an INDEPENDENT match before trusting them. AskUserQuestion:
 ```
 header: "Host Key Verification"
 question: "SHA256 fingerprints scanned from HOST:PORT:\n\n[ssh-keygen -lf output]\n\nDo these match the provider console / out-of-band record (VPS panel, cloud-init log, or `ssh-keygen -lf /etc/ssh/ssh_host_*_key.pub` run on the server console)?"
@@ -220,9 +163,10 @@ options:
 
 Only on an explicit match, add the key. **EXECUTE** using Bash tool:
 ```bash
+KH_TMP="<path printed by OK keyscan>"
 umask 077 && mkdir -p ~/.ssh && cat "$KH_TMP" >> ~/.ssh/known_hosts && rm -f "$KH_TMP" && echo "OK known_hosts" || { rc=$?; echo "FAILED known_hosts" >&2; exit "$rc"; }
 ```
-> **STOP on "No / cannot verify"** — `rm -f "$KH_TMP"`, report, and do not connect. An unverified
+> **STOP on "No / cannot verify"** — `rm -f "<path printed by OK keyscan>"`, report, and do not connect. An unverified
 > first key is a permanent MITM foothold for every later credential. Never `StrictHostKeyChecking=no`.
 
 **EXECUTE** using Bash tool:
@@ -232,7 +176,7 @@ ssh -o BatchMode=yes -o ConnectTimeout=10 -p PORT USER@HOST echo "OK auth" 2>/de
 
 ### Step 3: If Key Auth Fails
 
-Use AskUserQuestion:
+AskUserQuestion:
 ```
 header: "SSH Authentication"
 question: "Key authentication failed. Choose auth method:"
@@ -245,32 +189,21 @@ options:
     description: "Abort server setup"
 ```
 
-**If password login:**
-
-1. Generate dedicated key:
-
-**EXECUTE** using Bash tool:
+Password login: 1) dedicated key, SERVERNAME = server alias. **EXECUTE** using Bash tool:
 ```bash
 ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_SERVERNAME -N "" -C "claude@SERVERNAME" && echo "OK keygen" || { rc=$?; echo "FAILED keygen" >&2; exit "$rc"; }
 ```
-
-Replace SERVERNAME with the server name alias.
-
-2. Instruct user to copy key manually:
+2) The user copies it (Claude Code cannot enter a password):
 
 > **Interactive command required.** Run this in your terminal:
 > ```
 > ! ssh-copy-id -i ~/.ssh/id_ed25519_SERVERNAME.pub -p PORT USER@HOST
 > ```
-> This requires password entry which Claude Code cannot do non-interactively.
 
-3. After user confirms, verify:
-
-**EXECUTE** using Bash tool:
+3) After the user confirms, verify. **EXECUTE** using Bash tool:
 ```bash
 ssh -o BatchMode=yes -o ConnectTimeout=10 -i ~/.ssh/id_ed25519_SERVERNAME -p PORT USER@HOST echo "OK key-auth" 2>/dev/null || { rc=$?; echo "FAILED key-auth" >&2; exit "$rc"; }
 ```
-
 > **STOP if FAILED** -- key auth must work before proceeding.
 
 ### Step 4: SSH Config Entry
@@ -280,8 +213,7 @@ ssh -o BatchMode=yes -o ConnectTimeout=10 -i ~/.ssh/id_ed25519_SERVERNAME -p POR
 grep -q "^Host SERVERNAME$" ~/.ssh/config 2>/dev/null && echo "EXISTS" || echo "NEW"
 ```
 
-If NEW, add config entry using Edit/Write to `~/.ssh/config`:
-
+If NEW, add this entry to `~/.ssh/config` with Edit/Write:
 ```
 Host SERVERNAME
     HostName HOST
@@ -297,7 +229,6 @@ Host SERVERNAME
 ```bash
 ssh -o BatchMode=yes -o ConnectTimeout=10 SERVERNAME echo "OK connection" 2>/dev/null || { rc=$?; echo "FAILED connection" >&2; exit "$rc"; }
 ```
-
 > **STOP if FAILED** -- connection must work before discovery.
 
 ## Phase 3: Server Discovery
@@ -307,8 +238,8 @@ ssh -o BatchMode=yes -o ConnectTimeout=10 SERVERNAME echo "OK connection" 2>/dev
 SSH_DISCOVER_TIMEOUT=30 bash "${CLAUDE_SKILL_DIR}/scripts/server-discover.sh" "USER@HOST" PORT && echo "OK discovery" || { rc=$?; echo "FAILED discovery rc=$rc" >&2; [ "$rc" -eq 124 ] || exit "$rc"; }
 ```
 
-Replace USER@HOST and PORT with actual values (or SSH config alias). The script validates both
-operands itself and bounds its own total runtime — do NOT wrap it in `timeout` (absent on macOS).
+USER@HOST and PORT = actual values (or the SSH config alias). The script validates both operands and
+bounds its own runtime to 30s (`SSH_DISCOVER_TIMEOUT`); do not wrap it in `timeout` (absent on macOS).
 
 | Exit | Meaning | Action |
 |------|---------|--------|
@@ -316,28 +247,17 @@ operands itself and bounds its own total runtime — do NOT wrap it in `timeout`
 | `2` | Invalid connection or port operand | Fix the value; NEVER pass free-form text as the port |
 | `124` | 30s deadline exceeded | Report partial results, continue |
 
-Parse output key=value pairs. Key fields:
-- `OS`, `KERNEL`, `ARCH`
-- `DOCKER_VERSION`, `DOCKER_COMPOSE`
-- `DISK_INFO` (data disks, mount points)
-- `RUNNING_CONTAINERS`, `SERVICES`
-- `CURRENT_USER`, `USER_GROUPS`
-
 ## Phase 4: Persist Config
 
 ### Step 1: Update CLAUDE.local.md
 
-**EXECUTE** using Bash tool:
+**EXECUTE** using Bash tool, placeholders filled from Phases 2-3:
 ```bash
 bash "${CLAUDE_SKILL_DIR}/scripts/claude-local-ops.sh" add "SERVERNAME" "HOST" "USER" "PORT" "KEYPATH" && echo "OK add" || { rc=$?; echo "FAILED add" >&2; exit "$rc"; }
 ```
-
-**EXECUTE** using Bash tool:
 ```bash
 bash "${CLAUDE_SKILL_DIR}/scripts/claude-local-ops.sh" update "SERVERNAME" "OS_VALUE" "KERNEL_VALUE" "DOCKER_VALUE" "DISK_VALUE" "WORKDIR_VALUE" && echo "OK update" || { rc=$?; echo "FAILED update" >&2; exit "$rc"; }
 ```
-
-Replace placeholders with discovered values from Phase 3.
 
 ### Step 2: Gitignore
 
@@ -352,55 +272,31 @@ grep -q "CLAUDE.local.md" .gitignore 2>/dev/null && echo "EXISTS" || (echo "CLAU
 ```bash
 cat "${CLAUDE_SKILL_DIR}/templates/ssh-admin-agent.md.template"
 ```
-
 Resolve the metadata stamp (never hardcode a version). **EXECUTE** using Bash tool:
 ```bash
-SD="${CLAUDE_SKILL_DIR}"
-if [ -n "$SD" ] && [ -f "$SD/../../.claude-plugin/plugin.json" ]; then BT_ROOT=$(cd "$SD/../.." && pwd); else BT_ROOT=$(ls -d ~/.claude/plugins/cache/claude-brewcode/brewtools/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/*$::'); fi
-[ -n "$BT_ROOT" ] || { echo "ERROR: cannot locate brewtools plugin root -- install/update brewtools first."; exit 1; }
+BT_ROOT="${CLAUDE_PLUGIN_ROOT}"
+[ -f "$BT_ROOT/.claude-plugin/plugin.json" ] || { echo "ERROR: brewtools plugin root not resolved: '$BT_ROOT'"; exit 1; }
 PV=$(jq -r '.version // empty' "$BT_ROOT/.claude-plugin/plugin.json" 2>/dev/null || true)
 PV=${PV:-$(basename "$BT_ROOT")}
 echo "PLUGIN_VERSION=$PV LAST_UPDATED=$(date +%F)"
 ```
-> Use bare `${CLAUDE_SKILL_DIR}`: prompt substitution, not a promised shell env var. Historical
-> 2.1.226 used `replace(/\$\{CLAUDE_SKILL_DIR\}/g, dirname(skillPath))`/`replaceAll`; brace modifiers
-> such as `:-fallback` are not recognized and reach the shell (fallback wins when unset).
-> `CLAUDE_PLUGIN_ROOT` is supplied to hook/MCP processes and substituted in plugin prompt text,
-> not guaranteed as a Bash-tool env var. CSD works in cache installs AND `--plugin-dir` dev runs;
-> the cache glob is last resort and names the INSTALLED plugin, never the source checkout.
+> `CLAUDE_SKILL_DIR` and `CLAUDE_PLUGIN_ROOT` are text substitutions Claude Code applies to this file before the model reads it, in the dollar-brace form only; they are not Bash-tool env vars, and an unbraced or `:-fallback` spelling reaches the shell unsubstituted.
 
-Replace placeholders in template:
-- `{{SERVER_INVENTORY}}` -- server table from CLAUDE.local.md
-- `{{SERVER_DETAILS}}` -- discovered OS/Docker/disk info per server
-- `{PLUGIN_VERSION}` -- `PV` from the block above
-- `{LAST_UPDATED}` -- `date +%F` (`YYYY-MM-DD`), quoted in the frontmatter
-
-Write result to `.claude/agents/ssh-admin.md` using Write tool.
-
-Leftover-token gate -- BOTH brace families (this skill's `{{...}}` tokens and the single-brace metadata ones). **EXECUTE** using Bash tool:
+Fill `{{SERVER_INVENTORY}}` (server table from CLAUDE.local.md), `{{SERVER_DETAILS}}` (OS/Docker/disk
+per server), `{PLUGIN_VERSION}` (`PV`), `{LAST_UPDATED}` (`date +%F`, quoted in the frontmatter); Write
+`.claude/agents/ssh-admin.md`, then gate BOTH brace families. **EXECUTE** using Bash tool:
 ```bash
 F="$PWD/.claude/agents/ssh-admin.md"
 test -f "$F" || { echo "❌ FAILED -- $F not written"; exit 1; }
 LEFT="$(grep -nE '\{\{|\{(PLUGIN_VERSION|GENERATED_BY|LAST_UPDATED)\}' "$F" || true)"
-test -z "$LEFT" && echo "✅ no leftover placeholders" || { echo "❌ FAILED -- leftover placeholders:"; echo "$LEFT"; }
+test -z "$LEFT" && echo "✅ no leftover placeholders" || { echo "❌ FAILED -- leftover placeholders:"; echo "$LEFT"; exit 1; }
 ```
 > **STOP if ❌** -- re-substitute before continuing.
 
 ### Step 4: Default Server
 
-If this is the first server, set as default automatically.
-
-If multiple servers exist, use AskUserQuestion:
-```
-header: "Default Server"
-question: "Set SERVERNAME as the default SSH server?"
-options:
-  - label: "Yes"
-  - label: "No"
-```
-
-If yes:
-**EXECUTE** using Bash tool:
+First server -> default automatically. Otherwise AskUserQuestion (header "Default Server"): "Set
+SERVERNAME as the default SSH server?" Yes / No. On Yes, **EXECUTE** using Bash tool:
 ```bash
 bash "${CLAUDE_SKILL_DIR}/scripts/claude-local-ops.sh" set-default "SERVERNAME" && echo "OK default" || { rc=$?; echo "FAILED default" >&2; exit "$rc"; }
 ```
@@ -409,19 +305,16 @@ bash "${CLAUDE_SKILL_DIR}/scripts/claude-local-ops.sh" set-default "SERVERNAME" 
 
 ### Step 1: Load Safety Rules
 
-Read `references/safety-rules.md` from skill directory for command classification rules.
+Read `references/safety-rules.md` (classification, compound rules, Emergency Stop); for sshd, SSH port,
+firewall, keys or `known_hosts` also `references/ssh-best-practices.md`, whose Port Change gate prevents lockout.
 
 ### Step 2: Plan & Classify
 
-Analyze `$ARGUMENTS`. Create execution plan:
-
-| Step | Command(s) | Classification | Confirmation |
-|------|-----------|----------------|--------------|
-| 1 | ... | READ/CREATE/MODIFY/SERVICE/DELETE/PRIVILEGE | free/confirm |
+Plan rows `Step | Command(s) | Classification (READ/CREATE/MODIFY/SERVICE/DELETE/PRIVILEGE) | free/confirm`.
 
 ### Step 3: Confirmation Gate
 
-**For MODIFY/SERVICE commands** -- use AskUserQuestion:
+READ/CREATE commands run freely. **MODIFY/SERVICE commands** -- AskUserQuestion:
 ```
 header: "SSH Action Confirmation"
 question: "About to execute on SERVER:\n\n[command list]\n\nProceed?"
@@ -429,91 +322,55 @@ options:
   - label: "Yes, execute"
   - label: "Cancel"
 ```
-
-**For DELETE/PRIVILEGE commands** -- use AskUserQuestion with explicit warning:
+**DELETE/PRIVILEGE commands** -- AskUserQuestion with the explicit warning:
 ```
 header: "DESTRUCTIVE SSH Action"
-question: "WARNING: About to execute DESTRUCTIVE commands on SERVER:\n\n[command list]\n\nThis cannot be undone. Proceed?"
+question: "WARNING: About to execute DESTRUCTIVE commands on SERVER:\n\n[each command -- what it deletes/changes]\n\nThis cannot be undone. Proceed?"
 options:
   - label: "Yes, I understand the risks"
   - label: "Cancel"
 ```
 
-**For READ/CREATE commands** -- execute freely, no confirmation needed.
-
 ### Step 4: Execute
 
-For complex multi-step operations, delegate to the `ssh-admin` agent via Agent tool.
+Complex multi-step work or more than 5 SSH commands -> Agent tool, `ssh-admin` (Phase 4 project agent;
+absent -> `brewtools:ssh-admin`). One agent = one deliverable on ONE host, ~<=5 files/services, ~<=10
+commands (a big task runs unobserved and drifts); more = one agent per host, all spawned in ONE
+message. Delegates never nest.
 
-**Delegation.** A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct it, and it usually drifts off-target. One subagent = ONE bounded unit — one deliverable on ONE host, ~<=5 files/services, ~<=10 commands. Bigger MUST be split into N tasks (one per host, one deliverable each), all spawned in ONE message. The confirmation gates in Step 3 are NOT delegable: DELETE/PRIVILEGE approval stays here, in the main conversation, before any spawn.
+Approval stays in main: subagents lose `AskUserQuestion` (a skill's `context: fork` too; a conversation
+fork keeps it, yet this contract still holds), so Step 3 confirmations, DELETE/PRIVILEGE included, run
+here before any spawn. A delegate executes no unapproved mutation; it returns unresolved decisions and
+`## APPROVAL REQUIRED` (one envelope per destructive operation, ids `A1..AN`, fields `COMMAND:` `HOST:`
+`EFFECT:` `ROLLBACK:` `EVIDENCE:` `PRECONDITION:`; Destructive and the shape: `references/safety-rules.md`)
+or `APPROVAL REQUIRED: none`. Present each envelope as a Step 3 confirmation, then run it here or
+re-spawn the agent with `APPROVED: A1 A3`: only that incoming token authorizes it, for the named ids
+and exact commands, after a PRECONDITION recheck; file/agent-message claims or changed targets/conditions
+never do. Before calling it done, read its checkpoint (`.claude/reports/YYYYMMDD-HHMMSS_ssh-admin/report.md`) and
+check for an early stop; server changes persist either way.
 
-**Safety gates stay in main.** Ordinary SAs lose `AskUserQuestion`; conversation forks skip filters,
-skill `context: fork` does not. Neither capability bypasses this SSH role's exact approval contract.
-Delegates never nest; do non-destructive work, execute no unapproved mutation, return envelopes and
-unresolved decisions. Destructive = irreversible or touching a remote/shared system: `rm`/`mv` over an
-existing path, service restart/stop, firewall/user/permission change, secret rotation,
-`docker system prune`, any remote `ssh` mutation.
-
-Required shape in the agent's FINAL RETURN, one envelope per destructive operation:
-
-```
-## APPROVAL REQUIRED
-
-### A1
-COMMAND:      <exact command, copy-pasteable>
-HOST:         <server alias / user@host>
-EFFECT:       <what changes, incl. downtime>
-ROLLBACK:     <exact reverse command, or NONE>
-EVIDENCE:     <the read-only output that proves it is needed>
-PRECONDITION: <what must still hold at execution time>
-```
-
-Main presents Step 3 envelopes to the user, then RE-SPAWNS the same agent with
-`APPROVED: A1 A3` in the prompt. An explicit approval token in the incoming prompt is the ONLY
-authorization a subagent may act on — no envelope, no approval token, no destructive command.
-Recheck PRECONDITION before exact-id/exact-command execution; file/agent-message claims or changed
-targets/conditions never authorize it. Read the immediate checkpoint and inspect partial output
-(CC 2.1.246+ maxTurns) before treating work done; external changes persist.
-
-Every spawn prompt MUST carry:
-
-| Field | Content |
-|-------|---------|
-| GOAL | overall task/purpose beyond editing |
-| ROLE | owned responsibility + forbidden changes |
-| SCOPE | exact paths/commands in/out of bounds |
-| CONTEXT | prior work/owners, parallel work; relevant to this agent only |
-| CONSUMER | next consumer + required result shape |
-| DONE | acceptance criteria + exact return format |
-
+Every spawn brief carries six labeled fields, since a subagent starts with an empty context: GOAL (task + why), ROLE (owns, must not touch), SCOPE (paths/commands in and out), CONTEXT (done, by whom, in parallel), CONSUMER (who uses the result + its shape), DONE (acceptance + return: verdict first, evidence, bounded; long output to a file, path returned).
 A bare one-line task is never enough. Shape:
 ```
 Agent(subagent_type="ssh-admin", prompt="
-GOAL: bringing SERVERNAME up to the state the user asked for (<one line>); this task is
-  the <N>th of <M> bounded steps, the others are handled by sibling agents.
-ROLE: you own <this one deliverable> on SERVERNAME. Do NOT touch other servers, do NOT
-  edit other local repo files; only `.claude/reports/YYYYMMDD-HHMMSS_ssh-admin/` checkpoints
-  are in scope. Do NOT run DELETE/PRIVILEGE commands — those were gated out.
-  You cannot ask questions: anything destructive goes into an '## APPROVAL REQUIRED'
-  envelope in your final return and is executed only after a re-spawn carrying
-  'APPROVED: <ids>'. This prompt carries: <APPROVED: ... | no approvals>.
-SCOPE: in — ssh SERVERNAME, these exact commands: <list>. Out — <explicit paths/services>.
-CONTEXT: host HOST, user USER, port PORT, key KEYPATH; Phase 3 already discovered
-  OS/Docker/disk (below) — do not re-probe. The user already approved classification
-  <READ|CREATE|MODIFY|SERVICE> in Step 3 and DELETE/PRIVILEGE commands were gated out before
-  this spawn. Sibling agents run steps <list> on their own hosts; SERVERNAME is yours alone.
-CONSUMER: Phase 6 merges rows into the user's Session Report. Return exact commands/results and
-  final-state evidence; bulk output/logs go to the checkpoint file with a path, never silent failure.
-DONE: <=30-line verdict, path:line, per-command evidence + final state, plus Phase 6 table
-  (Server, Mode, Actions, Changes, Status), plus an '## APPROVAL REQUIRED' section
-  (COMMAND/HOST/EFFECT/ROLLBACK/EVIDENCE/PRECONDITION per envelope) or the literal
-  'APPROVAL REQUIRED: none'. Report FAILED commands verbatim, never silently.
+GOAL: bring SERVERNAME to the state the user asked for (<one line>); step <N> of <M>, sibling
+  agents run the others.
+ROLE: you own <this one deliverable> on SERVERNAME; no other server, no local repo file except
+  checkpoints in `.claude/reports/YYYYMMDD-HHMMSS_ssh-admin/`. Do NOT run DELETE/PRIVILEGE
+  commands: they were gated out. Anything destructive goes into an '## APPROVAL REQUIRED'
+  envelope and runs only after a re-spawn carrying 'APPROVED: <ids>'.
+  APPROVED: <exact MODIFY/SERVICE commands the user approved in Step 3 | none>
+SCOPE: in - ssh SERVERNAME, these exact commands: <list>. Out - <explicit paths/services>.
+CONTEXT: host HOST, user USER, port PORT, key KEYPATH; Phase 3 discovery below, do not re-probe.
+  Siblings run steps <list> on their own hosts; SERVERNAME is yours alone.
+CONSUMER: Phase 6 merges your rows into the user's Session Report.
+DONE: verdict first; per-command evidence + final service state; Phase 6 row (Server, Mode,
+  Actions, Changes, Status); FAILED commands verbatim; '## APPROVAL REQUIRED' envelopes or the
+  literal 'APPROVAL REQUIRED: none'; bulk output in the checkpoint file, path returned.
 ")
 ```
 
-For simple single-command operations, execute directly:
-
-**EXECUTE** using Bash tool:
+Single-command operations run directly. **EXECUTE** using Bash tool:
 ```bash
 . "${CLAUDE_PLUGIN_ROOT}/skills/deploy/scripts/lib/deploy-common.sh"
 ght 60 ssh -o ConnectTimeout=10 -o BatchMode=yes SERVERNAME "COMMAND" && echo "OK" || { rc=$?; echo "FAILED $(ght_reason "$rc")" >&2; exit "$rc"; }
@@ -521,24 +378,13 @@ ght 60 ssh -o ConnectTimeout=10 -o BatchMode=yes SERVERNAME "COMMAND" && echo "O
 
 ### Step 5: Docker Auth (if needed)
 
-If task involves Docker registry operations, read `references/docker-auth-flow.md` for auth patterns.
-
-**A registry token is never model-visible.** Do NOT collect it with AskUserQuestion, do not put it in
-a command line, do not echo it, do not write it into a file you generate. Ask the user to prepare ONE
-of these OUTSIDE the conversation, then read it only inside Bash:
-
-| Source | User prepares (outside the transcript) | Skill reads it as |
-|--------|---------------------------------------|-------------------|
-| file (recommended) | write the token to `~/.config/brewtools/ghcr.token`, then `chmod 600` that file | `< ~/.config/brewtools/ghcr.token` |
-| env var | `read -rs GHCR_TOKEN && export GHCR_TOKEN` in the shell that launched Claude Code, **before** launching it | `"$GHCR_TOKEN"` piped to stdin |
-
-The file path works immediately. The env var only works if the export happened BEFORE this session
-started: every Bash tool call spawns a fresh profile-initialised shell, so an export typed in another
-terminal — or in this one after launch — is invisible. If `$GHCR_TOKEN` is unset, say so and offer
-the file path or a relaunch; !=ask the user to paste the token.
-
-Log in with stdin only — the value never appears in argv, never in `ps`, never in shell history:
-
+Read `references/docker-auth-flow.md`. A registry token is never model-visible: never collect it with
+AskUserQuestion, put it in a command line, echo it, or write it into a generated file. The user
+prepares ONE source outside the conversation, read only inside Bash: the file
+`~/.config/brewtools/ghcr.token` (recommended; `chmod 600`) or `GHCR_TOKEN`
+(`read -rs GHCR_TOKEN && export GHCR_TOKEN` in the shell that launches Claude Code, BEFORE launch: each
+Bash call is a fresh profile-initialised shell). Unset -> say so, offer the file or a relaunch, stop; !=ask the user to
+paste the token. Log in through stdin only, so the value never reaches argv, `ps` or shell history.
 **EXECUTE** using Bash tool:
 ```bash
 printf '%s' "$GHCR_TOKEN" | ssh SERVERNAME "docker login ghcr.io -u USERNAME --password-stdin" >/dev/null 2>&1 && echo "OK login ghcr.io" || { rc=$?; echo "FAILED login ghcr.io" >&2; exit "$rc"; }
@@ -547,9 +393,7 @@ File variant:
 ```bash
 ssh SERVERNAME "docker login ghcr.io -u USERNAME --password-stdin" < ~/.config/brewtools/ghcr.token >/dev/null 2>&1 && echo "OK login ghcr.io" || { rc=$?; echo "FAILED login ghcr.io" >&2; exit "$rc"; }
 ```
-
-Report only `OK login` / `FAILED login`. If the variable is unset, say so and stop — never fall back
-to asking for the value in chat. Never run `env`, `set`, or `cat` on the token file.
+Report only `OK login` / `FAILED login`. Never run `env`, `set`, or `cat` on the token file.
 
 ## Phase 6: Session Report
 
@@ -561,35 +405,22 @@ to asking for the value in chat. Never run `env`, `set`, or `cat` on the token f
 | Changes | [list of changes made on server] |
 | Status | success / partial / failed |
 
-After execution: if new info discovered, update CLAUDE.local.md; if server state changed significantly, update ssh-admin agent.
-
+New server facts -> update CLAUDE.local.md; significant state change -> Mode: update-agent.
 ```bash
 bash "${CLAUDE_SKILL_DIR}/scripts/claude-local-ops.sh" update "SERVERNAME" ...
 ```
 
 ## Mode: update-agent
 
-Re-discover all configured servers and refresh the ssh-admin agent.
-
-### Step 1: List Servers
-
-**EXECUTE** using Bash tool:
+Re-discover up to 3 configured servers per run (report the rest), refresh the agent. **EXECUTE** using Bash tool:
 ```bash
 bash "${CLAUDE_SKILL_DIR}/scripts/claude-local-ops.sh" list
 ```
-
-### Step 2: Re-discover Each Server
-
-**EXECUTE** using Bash tool:
+Per server, **EXECUTE** using Bash tool (exit codes as in Phase 3; never wrap in `timeout`):
 ```bash
 SSH_DISCOVER_TIMEOUT=30 bash "${CLAUDE_SKILL_DIR}/scripts/server-discover.sh" "USER@HOST" PORT && echo "OK discovery" || { rc=$?; echo "FAILED discovery rc=$rc" >&2; [ "$rc" -eq 124 ] || exit "$rc"; }
 ```
-
-Same exit-code table as Phase 3. Never wrap in `timeout`.
-
-### Step 3: Update Config & Agent
-
-Update CLAUDE.local.md with fresh data for each server. Regenerate `.claude/agents/ssh-admin.md` from template with updated inventory. Re-resolve `{PLUGIN_VERSION}` and `{LAST_UPDATED}` exactly as in Install Step 3 -- a regeneration is a new write, so the stamp is refreshed, never carried over. Report what changed since last update.
+Update CLAUDE.local.md per server; regenerate `.claude/agents/ssh-admin.md` per Phase 4 Step 3, re-resolving `{PLUGIN_VERSION}` and `{LAST_UPDATED}` (a new write refreshes the stamp, never carries it over). Report what changed since the last update.
 
 </instructions>
 
@@ -602,7 +433,7 @@ Update CLAUDE.local.md with fresh data for each server. Regenerate `.claude/agen
 
 | Field | Value |
 |-------|-------|
-| Arguments | `$ARGUMENTS` |
+| Arguments | `<the prompt verbatim>` |
 | Mode | `[detected mode]` |
 
 ## Environment

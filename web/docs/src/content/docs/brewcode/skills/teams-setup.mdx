@@ -20,12 +20,12 @@ import { Card, CardGrid, Callout, Steps, UpdateNotice } from '../../../../compon
 | Field | Value |
 |-------|-------|
 | Command | `/brewcode:teams-setup` |
-| Arguments | `[status [name] \| install [name] [prompt] \| upgrade [name] \| enable [name] \| disable [name] \| uninstall [name] \| purge [name]]` |
+| Arguments | `[prompt] [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [name]` — one free-form prompt; the mode, the `[name]` and the flags (`--skip-review`, `--review`) may sit anywhere in it. In a bare `mode [name]` pair the verb comes first, so `install enable` creates a team named `enable`; in a sentence the name comes from the text ("disable the payments team" names `payments`) |
 | No-arg default | `status` of the first existing team, `install` of a team named `default` when none exists |
 | `enable` / `disable` | Park/unpark the roster's agent files (renamed to/from `<agent>.md.disabled`) — `intent-guard` is exempt |
 | Version stamping | `team.md` header + agent frontmatter carry the plugin version; write is refused if the version cannot be resolved |
 | Model | opus |
-| Tools | Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion, Skill |
+| Tools | Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion, Skill |
 
 ## When to use
 
@@ -216,7 +216,7 @@ The agent template carries two blocks, so every DOMAIN member of the team inheri
 
 | Guardrail | Applies to | What it says |
 |-----------|-----------|--------------|
-| **Return Contract** | Every team agent, unconditionally | A named `## Return Contract` section: verdict first, &lt;=30 lines, <code>path:line</code>, no file bodies / command output / logs / preamble. Bulk material goes to `.claude/reports/<YYYYMMDD-HHMMSS>_<name>/` and only the path returns. When [`/brewtools:agent-return-setup`](/brewtools/skills/agent-return-setup/) is installed, the same guard enforces it at the token level (~1000 est-tokens blocks for compression, ~2500 routes the detail to a report). |
+| **Return Contract** | Every team agent, unconditionally | A named `## Return Contract` section: verdict first, &lt;=30 lines, <code>path:line</code>, no file bodies / command output / logs / preamble. Bulk material goes to `.claude/reports/<YYYYMMDD-HHMMSS>_<name>/` and only the path returns. When [`/brewtools:agent-return-setup`](/brewtools/skills/agent-return-setup/) is installed, the same guard enforces it at the token level (~2500 est-tokens blocks for compression, ~6000 routes the detail to a report). |
 | **Scope Fit** | Only agents whose domain writes code, scripts, SQL, schemas or infra | Build for the actual scale and the problems that exist today, not imagined load or speculative abstraction — a 10-user app does not need hardening against DB lock contention. After finishing, one pass: can this be simpler — fewer files, less config, less indirection? |
 | **Etalon-first** | Same gating as Scope Fit — code/script/SQL/schema/infra domains only | Before writing a class, module or test, find the closest well-built existing one in this repo (`.claude/convention/*` checked first) and take its principles — additive to conventions, rules and docs, never a replacement |
 | **Anti-drift review** | `intent-guard` only — not built from these two blocks | Compares ASKED vs DELIVERED at review time, explicit invocation only — see [Intent guard](#intent-guard) above |

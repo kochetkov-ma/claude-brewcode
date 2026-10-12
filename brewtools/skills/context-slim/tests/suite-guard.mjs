@@ -18,7 +18,7 @@ let count = 0;
 function run(script, args, root, extraEnv = {}) {
   const result = spawnSync('bash', [script, ...args], {
     cwd: root, encoding: 'utf8', timeout: 20000,
-    env: { ...process.env, HOME: homeFixture, CLAUDE_PROJECT_DIR: root, ...extraEnv },
+    env: { ...process.env, HOME: homeFixture, CLAUDE_CONFIG_DIR: '', CLAUDE_PROJECT_DIR: root, ...extraEnv },
   });
   return { status: result.status, stdout: result.stdout, output: `${result.stdout}${result.stderr}` };
 }
@@ -90,6 +90,65 @@ try {
     assert.equal(readFileSync(f.target, 'utf8'), current, 'corrupt evidence cannot overwrite draft');
     assert.equal(result.output.includes('SNAPSHOT CHECKSUM MISMATCH'), true,
       'consumer names damaged snapshot evidence');
+    count++;
+  }
+  // GIVEN the guard's token mirror WHEN compared with text-guard THEN both alphabets are identical.
+  {
+    const body = file => readFileSync(file, 'utf8').match(/\ncrit_tokens\(\) \{\n[\s\S]*?\n\}\n/)[0];
+    const lines = file => body(file).split('\n').filter(line => line.trim().startsWith('grep '));
+    assert.deepEqual(lines(contextGuard), lines(textGuard), 'context-guard crit_tokens mirrors text-guard byte for byte');
+    assert.equal(lines(contextGuard).length, 4, 'mirror carries all four token classes');
+    count++;
+  }
+  // GIVEN phase 3 ledger rows WHEN dropped tokens live in a survivor or an approved loss THEN verify passes.
+  {
+    const root = join(base, 'ledger');
+    mkdirSync(root);
+    const target = join(root, 'rules.md');
+    const original = 'keep 7\nruntime 22; NEVER drop scripts/rollback.sh\n';
+    writeFileSync(target, original);
+    const survivor = join(root, 'survivor.md');
+    writeFileSync(survivor, 'runtime 22; NEVER drop scripts/rollback.sh\n');
+    const runDir = join(base, 'ledger-snapshot');
+    assert.equal(run(contextGuard, ['snapshot', '--allow-dirty', '--run-dir', runDir, target], root).status, 0,
+      'GIVEN snapshot before the dedup drop');
+    const draft = 'keep 7\n';
+    writeFileSync(target, draft);
+    assert.equal(run(textGuard, ['checkpoint', '--run-dir', runDir, target], root).status, 0, 'GIVEN owned draft proof');
+    const ledger = (name, text) => { const path = join(base, name); writeFileSync(path, text); return path; };
+    const covered = run(contextGuard, ['verify', '--run-dir', runDir, '--ledger', ledger('ok.tsv', 'rules.md\t2\tsurvivor.md\tdedup\n'), target], root);
+    assert.equal(covered.status, 0, 'THEN a drop proven in its survivor passes the gate');
+    assert.equal(covered.output.includes('GATE: PASS (every miss ledgered)'), true, 'THEN the ledgered pass is named');
+    assert.equal(readFileSync(target, 'utf8'), draft, 'THEN the verified draft is kept');
+    const lossy = run(contextGuard, ['verify', '--run-dir', runDir, '--ledger', ledger('lossy.tsv', `${target}\t2-2\t-\tlossy approved\n`), target], root);
+    assert.equal(lossy.status, 0, 'THEN an approved lossy row covers exactly its own range');
+    writeFileSync(survivor, 'runtime; NEVER drop scripts/rollback.sh\n');
+    const partial = run(contextGuard, ['verify', '--run-dir', runDir, '--ledger', ledger('partial.tsv', 'rules.md\t2\tsurvivor.md\tdedup\n'), target], root);
+    assert.equal(partial.status, 1, 'THEN a token absent from the survivor fails the gate');
+    assert.equal(partial.output.includes('UNCOVERED: rules.md num:22'), true, 'THEN the uncovered token is named');
+    assert.equal(readFileSync(target, 'utf8'), original, 'THEN the whole run rolls back on an uncovered miss');
+    count++;
+  }
+  // GIVEN concurrent fresh runs and stale ones WHEN a snapshot prunes THEN only old runs beyond 5 go.
+  {
+    const home = join(base, 'prune-home');
+    const backups = join(home, '.claude/backups');
+    const root = join(base, 'prune-root');
+    mkdirSync(root);
+    const target = join(root, 'rules.md');
+    writeFileSync(target, 'runtime 22\n');
+    const day = new Date();
+    const today = `${day.getFullYear()}${String(day.getMonth() + 1).padStart(2, '0')}${String(day.getDate()).padStart(2, '0')}`;
+    const fresh = [1, 2, 3].flatMap(n => [`${today}-00000${n}-project`, `${today}-00000${n}-global`])
+      .concat([4, 5, 6].map(n => `${today}-00000${n}-project`));
+    const stale = ['20200101-000001-project', '20200101-000001-global', '20200102-000001-project', '20200103-000001-project'];
+    for (const name of [...fresh, ...stale]) mkdirSync(join(backups, `${name}_context-slim/orig`), { recursive: true });
+    const result = run(contextGuard, ['snapshot', '--allow-dirty', target], root, { HOME: home });
+    assert.equal(result.status, 0, 'WHEN a new run snapshots');
+    assert.deepEqual(fresh.filter(name => !existsSync(join(backups, `${name}_context-slim`))), [],
+      'THEN no run younger than 24 h is pruned, however many run in parallel');
+    assert.deepEqual(stale.filter(name => existsSync(join(backups, `${name}_context-slim`))), [],
+      'THEN old runs beyond the newest 5 runs are pruned with every layer dir');
     count++;
   }
   // GIVEN actual scanner failure WHEN partial JSON reaches state THEN no false savings or publication.

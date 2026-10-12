@@ -7,28 +7,26 @@ argument-hint: "[prompt] <file.md> [--engine name] [\"llm prompt\"] | styles | t
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion]
 model: sonnet
 ---
-<!-- brewcode-meta: version=6.4.0 content_version=6.0.0 generated_by=brewdoc:md-to-pdf -->
+<!-- brewcode-meta: version=6.5.0 content_version=6.5.0 generated_by=brewdoc:md-to-pdf -->
 
 # MD to PDF
 
-Converts Markdown files to professional PDF using one of two rendering engines.
+Converts Markdown to PDF with the `reportlab` or `weasyprint` engine.
 
 ## Prompt contract
 
-Position 1 of `$ARGUMENTS` is a **free-form prompt** (RU/EN) — the file path, `--engine` flag, `styles`/`test`
-tokens and the quoted LLM-preprocessing prompt are all optional and may follow in any order. Nobody types keys:
-resolve mode + file FROM the prompt.
+`$ARGUMENTS` is one free-form RU/EN prompt; the file path, the `--engine <name>` flag, the `styles`/`test`
+tokens and the quoted LLM-preprocessing prompt may sit anywhere in it.
 
-1. Strip `--engine <name>`. A literal mode token (`styles`, `config`, `test`, `help`) anywhere wins outright.
-2. Else score modes by distinct whole-word keyword hits (table below). Highest unique score wins.
-3. Empty arguments -> `help` (documented default). Read-only — asks nothing.
-4. **Prose resolution (mandatory):** `$ARGUMENTS` may be a full sentence, not just tokens. Extract `md_file` from
-   any path-shaped token or a filename explicitly named in prose (e.g. "convert my notes.md to pdf" ->
-   `md_file = notes.md`, resolved against cwd). If the sentence implies CONVERT but no file is resolvable -> ONE
-   `AskUserQuestion` for the file path. Never guess a file and never silently fall through to HELP.
-5. Outcome-changing ambiguity (missing engine deps, no saved engine preference) -> ONE `AskUserQuestion`.
+1. Mode: a literal mode token (`styles`, `config`, `test`, `help`) wins outright; else the most distinct
+   whole-word keyword hits (table below). Empty -> `help` (documented default, read-only, asks nothing).
+2. Scope: the prompt may be a full sentence, not just tokens. Take `md_file` from any path-shaped token or a
+   filename explicitly named in prose (e.g. "convert my notes.md to pdf" -> `md_file = notes.md`, resolved
+   against cwd). Never guess a file and never silently fall through to HELP.
+3. Ask: a sentence that implies CONVERT with no resolvable file -> ONE `AskUserQuestion` for the file path;
+   outcome-changing ambiguity (missing engine deps, no saved engine preference) -> ONE `AskUserQuestion`.
 
-Then print this block ONCE, before Step 1:
+Print once, before Step 1 (labels literal, values in the conversation language):
 
 ```
 PLAN — brewdoc:md-to-pdf
@@ -39,19 +37,13 @@ DO:     <2-5 imperative bullets>
 RESULT: <PDF path, or the help/styles/test output>
 ```
 
-Labels are literal; values follow the conversation language.
-
 ## Step 0: Parse Arguments
-
-Parse `$ARGUMENTS` to determine mode and components.
 
 | Component | Required | Description |
 |-----------|:--------:|-------------|
-| `md_file` | per mode | Path to `.md` file — literal token or extracted from prose (rule 4 above) |
-| `--engine` | No | `reportlab` or `weasyprint` (overrides saved config) |
+| `md_file` | per mode | Path to `.md` file — literal token or extracted from prose (Prompt contract rule 2) |
+| `--engine` | No | `reportlab` or `weasyprint`, anywhere; overrides saved config; strip before parsing |
 | `custom_prompt` | No | Last argument in double quotes = LLM preprocessing instructions |
-
-**Mode detection rules:**
 
 | Mode | Condition | EN keywords | RU keywords | Mutates? |
 |------|-----------|-------------|-------------|----------|
@@ -61,21 +53,13 @@ Parse `$ARGUMENTS` to determine mode and components.
 | CONVERT+PROMPT | Path to `.md` file + quoted string at end | convert with instructions, pdf and rewrite/strip section | сконвертируй с изменениями | yes |
 | CONVERT | Path to `.md` file (no quoted string) | convert, pdf, generate pdf, turn into pdf, `.md` file named in prose | конвертируй, сделай pdf, преврати в pdf | yes |
 
-Extract `--engine <name>` from anywhere in arguments if present. Remove it before further parsing.
+HELP and STYLES skip to Step 3.
 
-## Step 1: Dependency Check
+## Step 1: Engine Selection
 
-Determine the target engine (from `--engine` flag, saved config, or default `reportlab`).
-
-**EXECUTE** using Bash tool:
-```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/check_deps.sh" check ENGINE_NAME 2>&1; echo "EXIT_CODE=$?"
-```
-Replace `ENGINE_NAME` with the target engine.
-
-**If output contains `MISSING_PIP` or `MISSING_SYSTEM`:**
-
-Use `AskUserQuestion` presenting the engine comparison table:
+Config = project `.claude/md-to-pdf.config.json`, else global `~/.claude/md-to-pdf.config.json`. Engine = `--engine`,
+else config `engine`, else TEST takes `reportlab` and writes nothing, and CONVERT modes ask via `AskUserQuestion`
+with this table (default `reportlab`) and save with the block below, `NEW_JSON` = `{"engine": "<choice>"}`.
 
 | Feature | reportlab | weasyprint |
 |---------|-----------|------------|
@@ -86,29 +70,7 @@ Use `AskUserQuestion` presenting the engine comparison table:
 | CSS Styling | No | Yes |
 | Code highlight | No | Yes (Pygments) |
 
-Options:
-- "Install ENGINE_NAME dependencies"
-- "Switch to OTHER_ENGINE" (if the other engine is available)
-- "Cancel"
-
-If user chooses install, **EXECUTE** using Bash tool:
-```bash
-bash "${CLAUDE_SKILL_DIR}/scripts/check_deps.sh" install ENGINE_NAME 2>&1 && echo "---INSTALL_OK---" || echo "---INSTALL_FAILED---"
-```
-
-> **STOP if INSTALL_FAILED** -- report error and exit.
-
-If user cancels -- STOP.
-
-## Step 2: Engine Selection (first run only)
-
-Check for saved config in order:
-1. Project: `.claude/md-to-pdf.config.json`
-2. Global: `~/.claude/md-to-pdf.config.json`
-
-If `--engine` flag was provided -- use it (skip config lookup).
-
-If no saved preference and no `--engine` flag -- use `AskUserQuestion` with the engine comparison table from Step 1. Save the choice to project config `.claude/md-to-pdf.config.json`:
+Config shape:
 
 ```json
 {
@@ -121,38 +83,73 @@ If no saved preference and no `--engine` flag -- use `AskUserQuestion` with the 
 }
 ```
 
-The four provenance keys are mandatory on every write of this file and are RESOLVED, never hardcoded.
+The block merges `NEW_JSON`'s top-level keys into the project file, so engine and style saves keep each other,
+and resolves the four provenance keys on every write, never hardcoded.
 
-**EXECUTE** using Bash tool (replace `ENGINE_VALUE` and `THEME_VALUE` with the chosen values):
+**EXECUTE** using Bash tool (replace `NEW_JSON`; keep every other byte):
 ```bash
-ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")}"
-PJ="${CLAUDE_SKILL_DIR}/../../.claude-plugin/plugin.json"
-PV=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1])).get('version',''))" "$PJ" 2>/dev/null || true)
-[ -n "$PV" ] || { echo "❌ cannot read version from $PJ -- reinstall brewdoc"; exit 1; }
-SKILL_MD="${CLAUDE_SKILL_DIR}/SKILL.md"
-CV=$(python3 -c "
-import re,sys
-for line in open(sys.argv[1]):
-    if 'brewcode-meta:' in line:
-        m = re.search(r'content_version=(\d+\.\d+\.\d+)', line)
-        if m:
-            print(m.group(1))
-        break
-" "$SKILL_MD" 2>/dev/null || true)
-[ -n "$CV" ] || { echo "❌ cannot read content_version from $SKILL_MD -- reinstall brewdoc"; exit 1; }
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+NEW="$(mktemp)"
+cat > "$NEW" <<'BREWDOC_CFG_EOF'
+NEW_JSON
+BREWDOC_CFG_EOF
 mkdir -p "$ROOT/.claude"
-printf '{\n  "engine": "ENGINE_VALUE",\n  "pygments_theme": "THEME_VALUE",\n  "version": "%s",\n  "content_version": "%s",\n  "generated_by": "brewdoc:md-to-pdf",\n  "last_updated": "%s"\n}\n' "$PV" "$CV" "$(date +%F)" > "$ROOT/.claude/md-to-pdf.config.json" \
-  && python3 -c "import json,sys;json.load(open(sys.argv[1]))" "$ROOT/.claude/md-to-pdf.config.json" \
-  && echo "✅ config written (version $PV, content_version $CV)" || { echo "❌ config invalid JSON"; exit 1; }
+CFG="$ROOT/.claude/md-to-pdf.config.json" NEW="$NEW" PJ="${CLAUDE_SKILL_DIR}/../../.claude-plugin/plugin.json" SKILL_MD="${CLAUDE_SKILL_DIR}/SKILL.md" TODAY="$(date +%F)" python3 - <<'PY'
+import json, os, re
+cfg_p = os.environ["CFG"]
+pv = json.load(open(os.environ["PJ"])).get("version")
+if not pv:
+    raise SystemExit("no version in " + os.environ["PJ"])
+cv = None
+for line in open(os.environ["SKILL_MD"]):
+    if "brewcode-meta:" in line:
+        m = re.search(r"content_version=(\d+\.\d+\.\d+)", line)
+        if m:
+            cv = m.group(1)
+        break
+if not cv:
+    raise SystemExit("no content_version in " + os.environ["SKILL_MD"])
+data = json.load(open(cfg_p)) if os.path.exists(cfg_p) else {}
+data.update(json.load(open(os.environ["NEW"])))
+data["version"] = pv
+data["content_version"] = cv
+data["generated_by"] = "brewdoc:md-to-pdf"
+data["last_updated"] = os.environ["TODAY"]
+with open(cfg_p, "w") as fh:
+    json.dump(data, fh, indent=2)
+    fh.write("\n")
+print("OK version=%s content_version=%s engine=%s" % (pv, cv, data.get("engine", "(unset)")))
+PY
+rc=$?; rm -f "$NEW"
+[ "$rc" -eq 0 ] && echo "✅ config saved" || { echo "❌ config save FAILED"; exit 1; }
 ```
 
 > **STOP if ❌** -- fix before continuing.
+
+## Step 2: Dependency Check
+
+**EXECUTE** using Bash tool (replace `ENGINE_NAME` with the Step 1 engine):
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/check_deps.sh" check ENGINE_NAME 2>&1; echo "EXIT_CODE=$?"
+```
+
+Output contains `MISSING_PIP` or `MISSING_SYSTEM` -> `AskUserQuestion` with the comparison table and these options:
+- "Install ENGINE_NAME dependencies"
+- "Switch to OTHER_ENGINE" (if the other engine is available)
+- "Cancel"
+
+If user chooses install, **EXECUTE** using Bash tool:
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/check_deps.sh" install ENGINE_NAME 2>&1 && echo "---INSTALL_OK---" || echo "---INSTALL_FAILED---"
+```
+
+> **STOP if INSTALL_FAILED** -- report error and exit. Cancel -> STOP.
 
 ## Step 3: Mode Execution
 
 ### HELP Mode
 
-Print formatted usage:
+Print:
 
 ```
 MD to PDF Converter
@@ -174,27 +171,21 @@ EXIT after printing.
 
 ### CONVERT Mode
 
-1. Read the input MD file with Read tool. If not found -- STOP with error.
-2. Determine output path: same directory, same name, `.pdf` extension.
-3. Build the config path argument (if project or global config exists, add `--config CONFIG_PATH`).
+1. Read `md_file`; not found -> STOP with an error. Output: same directory and name, `.pdf` extension.
 
-**EXECUTE** using Bash tool:
+**EXECUTE** using Bash tool (substitute `INPUT_PATH`, `OUTPUT_PATH`, `ENGINE`; add `--config CONFIG_PATH` when a config from Step 1 exists; for weasyprint add `--pygments-theme THEME` when it sets `pygments_theme`):
 ```bash
 python3 "${CLAUDE_SKILL_DIR}/scripts/md_to_pdf.py" "INPUT_PATH" "OUTPUT_PATH" --engine ENGINE 2>&1 && echo "---CONVERT_OK---" || echo "---CONVERT_FAILED---"
 ```
-Replace `INPUT_PATH`, `OUTPUT_PATH`, `ENGINE` with actual values. Add `--config CONFIG_PATH` if a style config JSON exists. Add `--pygments-theme THEME` for weasyprint if configured.
 
 > **STOP if CONVERT_FAILED** -- read error output, attempt fix, retry once. If still failing -- report error.
 
-4. Parse structured output lines: `STATUS`, `OUTPUT`, `PAGES`, `SIZE`, `ENGINE`.
+2. Parse the result lines `STATUS`, `OUTPUT`, `PAGES`, `SIZE`, `ENGINE`.
 
 ### CONVERT+PROMPT Mode
 
-1. Read the input MD file with Read tool.
-2. Apply LLM transformations per the `custom_prompt` instructions (delete sections, rewrite headings, restructure, etc.).
-3. Write the transformed markdown, convert it and clean up in ONE Bash invocation. The temp name comes from
-   `mktemp` -- never composed from the source name -- and cleanup is trapped and constrained to a `.tmp_*`
-   basename, so a mis-substitution cannot name the source file.
+1. Read `md_file`; apply the `custom_prompt` transformations (delete sections, rewrite headings, restructure).
+2. Write, convert and clean up in ONE Bash call.
 
 **EXECUTE** using Bash tool (replace `ORIGINAL_DIR`, `TRANSFORMED_MARKDOWN`, `OUTPUT_PATH`, `ENGINE`; keep every other byte):
 ```bash
@@ -207,86 +198,32 @@ TRANSFORMED_MARKDOWN
 BREWDOC_MD_EOF
 python3 "${CLAUDE_SKILL_DIR}/scripts/md_to_pdf.py" "$TMP" "OUTPUT_PATH" --engine ENGINE 2>&1 && echo "---CONVERT_OK---" || echo "---CONVERT_FAILED---"
 ```
-`OUTPUT_PATH` is the ORIGINAL name with a `.pdf` extension. Add `--config` / `--pygments-theme` exactly as in CONVERT mode.
+`OUTPUT_PATH` is the ORIGINAL name with a `.pdf` extension; `--config` / `--pygments-theme` as in CONVERT. Never
+write the transformed markdown with `Write`/`Edit` or to a fixed `.tmp_<name>.md` path: a predictable name
+overwrites user files and collides with a concurrent conversion of the same source.
 
-> Never write the transformed markdown with `Write`/`Edit` and never reuse a fixed `.tmp_<name>.md` path -- a
-> predictable name overwrites user files and collides with a concurrent conversion of the same source.
+> **STOP if CONVERT_FAILED** -- as in CONVERT.
 
-> **STOP if CONVERT_FAILED** -- read error output, attempt fix, retry once. If still failing -- report error.
-
-4. Parse the structured result lines, then proceed to Step 4 with `preprocessing: true`.
+3. Parse the result lines, then Step 4 with `preprocessing: true`.
 
 ### STYLES Mode
 
-Run interactive configuration via `AskUserQuestion` dialogs:
+Ask the four questions in one `AskUserQuestion` call:
 
-**Question 1 -- Page size:**
-Options: `A4` (default), `Letter`, `Legal`
+| # | Question | Options |
+|---|----------|---------|
+| 1 | Page size | `A4` (default), `Letter`, `Legal` |
+| 2 | Color scheme | `Default blue` (primary #1a3a5c), `Dark` (primary #2d3748), `Custom` (ask for hex values) |
+| 3 | Code theme (weasyprint only) | `github` (default), `monokai`, `friendly`, `solarized-dark`, `solarized-light` |
+| 4 | Footer format | `Page {page} of {total}` (default), `{page}/{total}`, `Disabled` |
 
-**Question 2 -- Color scheme:**
-Options: `Default blue` (primary #1a3a5c), `Dark` (primary #2d3748), `Custom` (ask for hex values)
-
-**Question 3 -- Code theme (weasyprint only):**
-Options: `github` (default), `monokai`, `friendly`, `solarized-dark`, `solarized-light`
-
-**Question 4 -- Footer format:**
-Options: `Page {page} of {total}` (default), `{page}/{total}`, `Disabled`
-
-Build JSON config matching `styles/default.json` structure, overriding changed values, and Write it to a temp file (e.g. `/tmp/md-to-pdf-styles.json`). The merge below then lands it in `.claude/md-to-pdf.config.json` with the four mandatory provenance keys, carrying over any `engine` / `pygments_theme` the file already held -- this writer replaces the whole file, and dropping those would silently reset the saved engine choice.
-
-**EXECUTE** using Bash tool (replace `STYLE_JSON_PATH` with the temp file you wrote):
-```bash
-ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")}"
-CFG="$ROOT/.claude/md-to-pdf.config.json"
-NEW="STYLE_JSON_PATH"
-PJ="${CLAUDE_SKILL_DIR}/../../.claude-plugin/plugin.json"
-SKILL_MD="${CLAUDE_SKILL_DIR}/SKILL.md"
-mkdir -p "$ROOT/.claude"
-CFG="$CFG" NEW="$NEW" PJ="$PJ" SKILL_MD="$SKILL_MD" TODAY="$(date +%F)" python3 - <<'PY'
-import json, os, re
-cfg_p, new_p = os.environ["CFG"], os.environ["NEW"]
-pv = json.load(open(os.environ["PJ"])).get("version")
-if not pv:
-    raise SystemExit("no version in " + os.environ["PJ"])
-cv = None
-for line in open(os.environ["SKILL_MD"]):
-    if "brewcode-meta:" in line:
-        m = re.search(r"content_version=(\d+\.\d+\.\d+)", line)
-        if m:
-            cv = m.group(1)
-        break
-if not cv:
-    raise SystemExit("no content_version in " + os.environ["SKILL_MD"])
-old = json.load(open(cfg_p)) if os.path.exists(cfg_p) else {}
-data = json.load(open(new_p))
-for k in ("engine", "pygments_theme"):
-    if k in old and k not in data:
-        data[k] = old[k]
-data["version"] = pv
-data["content_version"] = cv
-data["generated_by"] = "brewdoc:md-to-pdf"
-data["last_updated"] = os.environ["TODAY"]
-with open(cfg_p, "w") as fh:
-    json.dump(data, fh, indent=2)
-    fh.write("\n")
-print("OK version=%s content_version=%s engine=%s" % (pv, cv, data.get("engine", "(unset)")))
-PY
-[ $? -eq 0 ] && echo "✅ styles saved" || { echo "❌ styles save FAILED"; exit 1; }
-rm -f "$NEW"
-```
-
-> **STOP if ❌** -- fix before continuing.
-
-The four keys sit at the top level beside the style sections; `md_to_pdf.py`'s `load_config` deep-merges the file over `styles/default.json` and then reads only the sections it owns (`page`, `colors`, `typography`, `code`, `footer`), so extra top-level keys are inert.
-
-Report saved settings table and EXIT.
+Save with the Step 1 block: `NEW_JSON` = `styles/default.json` structure with the changed values, plus answer 3 as
+top-level `pygments_theme` (passed as `--pygments-theme`; `md_to_pdf.py` never reads `code.theme` and reads only
+`page`, `colors`, `typography`, `code`, `footer`). Report the saved settings table and EXIT.
 
 ### TEST Mode
 
-1. Use bundled test file at `${CLAUDE_SKILL_DIR}/test/test-all-elements.md` as INPUT_PATH.
-2. Determine output path: `/tmp/md-to-pdf-test-ENGINE.pdf`
-3. Run converter (same command as CONVERT mode, using test file as input, `/tmp/` output).
-4. Proceed to Step 4.
+Run the CONVERT command with `INPUT_PATH` = `${CLAUDE_SKILL_DIR}/test/test-all-elements.md` and `OUTPUT_PATH` = `/tmp/md-to-pdf-test-ENGINE.pdf`, then Step 4.
 
 ## Step 4: Report Results
 
@@ -294,7 +231,7 @@ Report saved settings table and EXIT.
 |-----------|-------|
 | Source | absolute path to input MD |
 | Output | absolute path to output PDF |
-| Pages | from `PAGES=` in script output |
-| Size | from `SIZE=` in script output |
+| Pages | `PAGES=` line of the script output |
+| Size | `SIZE=` line |
 | Engine | `reportlab` or `weasyprint` |
 | Preprocessing | custom_prompt summary (if used) or `none` |

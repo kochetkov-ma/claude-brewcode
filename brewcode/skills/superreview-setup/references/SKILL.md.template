@@ -17,32 +17,34 @@ last_updated: "{LAST_UPDATED}"
 **ROLE:** Self-contained deep-review coordinator + final validator.
 **OUTPUT:** ONE merged, de-duplicated, severity-prioritized, validated report.
 
-Main-session coordination only. Ordinary delegated agents cannot spawn Agent; return the
-review request to the main orchestrator instead. Review workers never re-delegate or edit
+Main-session coordination only. Invoked inside a subagent whose `tools:` does not grant `Agent`,
+return the review request to the main orchestrator instead. Review workers never re-delegate or edit
 files; coordinator report writing and the explicitly scoped self-sync remain allowed.
 
 ---
 
 ## Prompt contract
 
-Position 1 of `$ARGUMENTS` is a **free-form prompt** (RU/EN). Two orthogonal axes resolve from it: `{MODE}`
-(WHAT is reviewed — deterministic, resolved by git state + explicit scope tokens, see Mode Detection below,
-never keyword-scored) and `{DEPTH}` (HOW THOROUGH — semantic, resolved from the keywords below).
+`$ARGUMENTS` is one free-form RU/EN prompt. Two orthogonal axes resolve from it: `{MODE}` (WHAT is
+reviewed — deterministic, by git state + explicit scope tokens, never keyword-scored) and `{DEPTH}`
+(HOW THOROUGH — semantic, from the keywords below).
 
 | Depth | EN keywords | RU keywords | Mutates? |
 |-------|-------------|-------------|----------|
 | `EXTENDED` | `deep`, `go deep`, `thorough`, `properly`, `full review`, `full audit`, `audit`, `expert review`, `review everything`, `all the experts`, `before release`, `before merge`, `pre-merge review`, `serious review` | `глубоко`, `глубокий`, `по полной`, `тщательно`, `полный ревью`, `аудит`, `перед релизом` | no (read-only review) |
 | `QUICK` | `quick`, `quick look`, `fast`, `just check`, `sanity check`, `did I do what was asked`, `am I on track` | `быстро`, `по-быстрому`, `просто проверь`, `то ли я сделал` | no (read-only review) |
 
-1. `{MODE}` resolves first, deterministically, per Mode Detection below — never from these keywords.
-2. `{DEPTH}` scores distinct whole-word/whole-phrase hits in the Depth keyword table;
-   highest unique score wins, tie/zero -> QUICK. Consume depth words before `{FOCUS}`.
-3. Neither axis is ever asked about via `AskUserQuestion` — both are computed per Mode/Depth Detection below;
-   this skill never guesses interactively.
-4. Empty arguments -> `{MODE}` per rule 3a/3b (git state) below, `{DEPTH} = QUICK`.
-5. Prose that is not a mode/scope token is still input: it becomes `{FOCUS}` after depth words are stripped.
+1. `{MODE}`: resolves first and deterministically, per Mode Detection below — never from these
+   keywords. Empty -> rule 3a/3b (git state) below.
+2. `{DEPTH}`: the most distinct whole-word/whole-phrase hits in the Depth keyword table; tie, zero or
+   empty -> `{DEPTH} = QUICK`. Consume depth words before `{FOCUS}`.
+3. Scope: prose that is not a mode/scope token is still input: it becomes `{FOCUS}` after depth words
+   are stripped.
+4. Ask: neither axis is ever asked about via `AskUserQuestion` — both are computed per Mode/Depth
+   Detection below; this skill never guesses interactively.
 
-Then print the PLAN block ONCE, before any review work (Phase 0 step 7, ANNOUNCE, below):
+Print once, before any review work — Phase 0 step 7, ANNOUNCE, below (labels literal, authored plan
+values English, INPUT verbatim):
 
 ```
 PLAN — {PROJECT_NAME} superreview
@@ -53,8 +55,6 @@ DO:     <gates, intent pass, and — EXTENDED only — expert fan-out, scope pas
 RESULT: <the merged report + chat summary>
 ```
 
-Labels are literal; authored plan values are English; INPUT remains verbatim.
-
 ---
 
 | # | Step | QUICK | EXTENDED |
@@ -62,7 +62,7 @@ Labels are literal; authored plan values are English; INPUT remains verbatim.
 | 0 | Deterministically resolve ONE review MODE **and one DEPTH**; ANNOUNCE both (mode + depth + branch + concrete scope) before any review work — no interactive guessing | yes | yes |
 | 1 | Run the MECHANICAL GATES (build/lint/test) — execution output is `CONFIRMED-BY-EXECUTION`, the ONE verdict needing no adversarial pass | yes | yes |
 | 2 | The INTENT pass — spawn `intent-guard`: what was ASKED vs what was DELIVERED. The anti-drift check | yes | yes |
-| 3 | SELECT domain experts at RUNTIME from the live agent roster (`.claude/agents/*.md`) and route each changed-file group to its best-matching owner — a newly added agent is picked up automatically | **skipped** | yes |
+| 3 | SELECT domain experts at RUNTIME from the live agent roster (`.claude/agents/**/*.md`, subfolders included) and route each changed-file group to its best-matching owner — a newly added agent is picked up automatically | **skipped** | yes |
 | 4 | Check the focus ordering below: principle/architecture conformance -> correctness -> reuse -> pins -> style | **skipped** | yes |
 | 5 | Resolve the SANCTIONED SCOPE baseline (task + issue + recorded decisions); audit scope creep / blast radius / under-delivery — an unsanctioned touch is a first-class finding, not a nitpick | **skipped** | yes |
 | 6 | Run ONE targeted parallel fan-out — only the agents the changed files actually need | **skipped** | yes |
@@ -85,11 +85,8 @@ built-in `general-purpose`.
 
 ## Mode Detection (deterministic — run FIRST, then ANNOUNCE)
 
-**Arguments:** `$ARGUMENTS`
-
-At launch, resolve EXACTLY ONE review `{MODE}` by the strict priority order below, then PRINT the resolved mode +
-current branch + concrete scope to the user BEFORE any review. The mode is COMPUTED, never guessed interactively;
-the same rule applies on `master`/`main` and on feature branches.
+Resolve EXACTLY ONE review `{MODE}` by the strict priority order below; the same rule applies on `master`/`main`
+and on feature branches.
 
 | # | Condition (checked in order) | Resolved `{MODE}` | Scope reviewed |
 |---|------------------------------|-------------------|----------------|
@@ -98,9 +95,8 @@ the same rule applies on `master`/`main` and on feature branches.
 | 3a | DEFAULT + working tree has UNCOMMITTED changes (`git status --porcelain` non-empty) | `UNCOMMITTED` | working-tree diff vs `HEAD` |
 | 3b | DEFAULT + clean tree (everything committed) | `LAST_COMMITS` | last 1-2 commits: `HEAD~2..HEAD` if it exists, else `HEAD~1..HEAD`, else the single root commit |
 
-> A text prompt that is NOT a whole-project request and NOT a scope token is treated as a `{FOCUS}` directive
-> (see Focus below) — after the DEPTH words are stripped from it (see Depth Detection); the mode still resolves
-> via rule 3.
+> A text prompt that is NOT a whole-project request and NOT a scope token is a `{FOCUS}` directive (depth words
+> stripped first); the mode still resolves via rule 3.
 > Scope-token test (deterministic, this order): `[ -d "$TOK" ]` -> EXPLICIT folder; `[ -f "$TOK" ]` -> EXPLICIT
 > single file; `git rev-parse -q --verify "$TOK^{commit}"` succeeds -> EXPLICIT commit/branch; else -> `{FOCUS}`.
 
@@ -110,13 +106,13 @@ the same rule applies on `master`/`main` and on feature branches.
 
 | | Rule |
 |---|------|
-| **OUT** | anything git does not track and never will — ignored by `.gitignore` OR by `.git/info/exclude`. Both matter equally, and `.git/info/exclude` is invisible in the tree, so it is the one people forget. Never enumerate either list from memory — ask git |
+| **OUT** | anything git does not track and never will — ignored by `.gitignore` OR by `.git/info/exclude` (invisible in the tree, so the one people forget). Never enumerate either list from memory — ask git |
 | **IN** | everything git tracks OR will track. Commit status is irrelevant: staged, modified and untracked-but-not-ignored files are all IN |
 | Instrument | `git ls-files --others --exclude-standard` honours `.gitignore` AND `.git/info/exclude` in one call — **never drop that flag** to reach an ignored path |
 
 Consequence: a git-ignored instruction file (`.claude/**`, `CLAUDE.md`, an ignored task board) is never a review
 TARGET — it is the AUTHORITY reviewers cite, and the board is the scope BASELINE input. Tracked docs are reviewed
-normally, and there is no separate ignored-path sweep anywhere.
+normally; there is no separate ignored-path sweep.
 
 **Mode-resolution commands** (runnable as-written; `PATHSPEC` = the file globs every mode reviews):
 
@@ -138,28 +134,24 @@ FILES=$(CORPUS)
 
 # EXPLICIT commit (rule 2), parentless-safe (root commit OK):
 # FILES=$(git show --name-only --pretty="" "${TOK}" -- "${PATHSPEC[@]}")
+
 # EXPLICIT branch (rule 2) — diff the NAMED branch $TOK, never HEAD; prefer the remote ref:
-# FILES=$(git diff --name-only "origin/${MAIN}...${TOK}" -- "${PATHSPEC[@]}" 2>/dev/null \
-#         || git diff --name-only "${MAIN}...${TOK}" -- "${PATHSPEC[@]}")
+# FILES=$(git diff --name-only "origin/${MAIN}...${TOK}" -- "${PATHSPEC[@]}" 2>/dev/null || git diff --name-only "${MAIN}...${TOK}" -- "${PATHSPEC[@]}")
+
 # EXPLICIT folder / single file (rule 2): the corpus, filtered — never raw find (build-output junk).
 # FILES=$(CORPUS | grep "^${TOK%/}/")                                   # single file: FILES="$TOK"
 
 # UNCOMMITTED (rule 3a): staged + unstaged + UNTRACKED-not-ignored (porcelain counts ?? files, so the scope must too)
 # FILES=$( { git diff --name-only HEAD -- "${PATHSPEC[@]}"; git ls-files --others --exclude-standard -- "${PATHSPEC[@]}"; } | sort -u )
+
 # Dirty tree but FILES empty (only ignored/out-of-scope files) -> fall through to LAST_COMMITS (rule 3b).
 
-# LAST_COMMITS (rule 3b): nested fallback so a single-commit repo never errors
-# if HEAD~2 exists -> HEAD~2..HEAD ; elif HEAD~1 exists -> HEAD~1..HEAD ; else the single root commit
-# if git rev-parse --verify -q HEAD~2 >/dev/null; then
-#   FILES=$(git diff --name-only "HEAD~2..HEAD" -- "${PATHSPEC[@]}")
-# elif git rev-parse --verify -q HEAD~1 >/dev/null; then
-#   FILES=$(git diff --name-only "HEAD~1..HEAD" -- "${PATHSPEC[@]}")
-# else
-#   FILES=$(git show --name-only --pretty="" HEAD -- "${PATHSPEC[@]}")   # root commit
-# fi
+# LAST_COMMITS (rule 3b), nested fallback so a single-commit repo never errors: HEAD~2..HEAD, else HEAD~1..HEAD, else root commit
+# if git rev-parse --verify -q HEAD~2 >/dev/null; then FILES=$(git diff --name-only "HEAD~2..HEAD" -- "${PATHSPEC[@]}"); elif git rev-parse --verify -q HEAD~1 >/dev/null; then FILES=$(git diff --name-only "HEAD~1..HEAD" -- "${PATHSPEC[@]}"); else FILES=$(git show --name-only --pretty="" HEAD -- "${PATHSPEC[@]}"); fi
 
-# RANGE = the commit range of the chosen mode. EXPORT it — references/scope.md step e reads commit intent from it
-# and reports "not read" rather than guessing when it is unset. FULL_PROJECT / UNCOMMITTED have no range: leave empty.
+# RANGE = commit range of the mode, EXPORTED: references/scope.md step e reads commit intent from it ("not read" if unset).
+# FULL_PROJECT / UNCOMMITTED have no range: leave empty.
+
 # export RANGE="HEAD~2..HEAD" | "$TOK^!" | "origin/${MAIN}...${TOK}" | ""
 
 # EXACT count for the mandatory announcement (count, never the displayed list, is truncated):
@@ -167,27 +159,19 @@ COUNT=$(printf '%s\n' "$FILES" | grep -c .)
 echo "$FILES" | head -50   # DISPLAY only — truncating the shown list is fine; COUNT above stays exact
 ```
 
-**MANDATORY announcement before reviewing — exact template in Phase 0 step 7 (single source).**
-
 ---
 
 ## Depth Detection (semantic — resolve IMMEDIATELY after `{MODE}`, then ANNOUNCE)
 
-`{DEPTH}` has EXACTLY TWO values, QUICK and EXTENDED, resolved from the Depth keyword table
-in Prompt contract: count distinct whole-word/whole-phrase hits; highest unique score wins,
-tie/zero -> documented QUICK default, without a question gate. **There is NO flag, NO `--fast`,
-NO CLI token for depth; never invent one or tell the user to pass one.** Depth is orthogonal
-to `{MODE}`: any scope mode can run at either depth.
-
-| # | Resolution | `{DEPTH}` |
-|---|---------------------------|-----------|
-| 1 | EXTENDED keyword score uniquely exceeds QUICK | `EXTENDED` |
-| 2 | QUICK keyword score uniquely exceeds EXTENDED | `QUICK` |
-| 3 | Tie, no hits, focus-only prose, bare scope token or empty prompt | `QUICK` (DEFAULT) |
+`{DEPTH}` has EXACTLY TWO values, QUICK and EXTENDED, resolved from the Depth keyword table in Prompt contract:
+the higher count of distinct whole-word/whole-phrase hits wins; a tie, no hits, focus-only prose, a bare scope
+token or an empty prompt -> `QUICK` (DEFAULT), without a question gate. **There is NO flag, NO `--fast`, NO CLI
+token for depth; never invent one or tell the user to pass one.** Depth is orthogonal to `{MODE}`: any scope mode
+can run at either depth.
 
 > **Depth words are CONSUMED here.** Strip them from the prompt before treating the remainder as a `{FOCUS}`
-> directive — "deep review, focus on auth" resolves to `{DEPTH}=EXTENDED` + `{FOCUS}=auth`, never to a focus of
-> "deep review, focus on auth". A prompt that is ONLY depth words leaves `{FOCUS}` = the default ordering.
+> directive — "deep review, focus on auth" resolves to `{DEPTH}=EXTENDED` + `{FOCUS}=auth`. A prompt that is ONLY
+> depth words leaves `{FOCUS}` = the default ordering.
 
 ## Focus (user directive, else default ordering)
 
@@ -200,10 +184,9 @@ order (highest first). Bake this exact ordering into BOTH the shared agent promp
 
 > **SCOPE DISCIPLINE / minimal blast radius is part of focus rank 1 — never optional.** Measure every change
 > against the SANCTIONED baseline (Phase 0 step 5: task + issue + recorded decisions). Beyond it = `scope-creep`,
-> up to **P0**: shared contract / schema / migration / registry / CI edit, another owner's surface, past-acceptance
-> feature, drive-by refactor, doc silently rewritten to match code. The INVERSE ranks equally: an undelivered
-> acceptance criterion or an unrecorded scope reduction is **P0**. Correctness-driven overlap into a neighbour's
-> task is legit if recorded. Taxonomy, delivery/closeout maps, exclusion list and the user gate: `references/scope.md`.
+> up to **P0**. The INVERSE ranks equally: an undelivered acceptance criterion or an unrecorded scope reduction is
+> **P0**. Correctness-driven overlap into a neighbour's task is legit if recorded. Taxonomy, delivery/closeout
+> maps, exclusion list and the user gate: `references/scope.md`.
 
 > **Security is explicitly NOT a priority.** Report a security finding ONLY when it is CRITICAL (P0) — e.g. logged
 > secret, missing auth on a public path, injection. Do NOT spend agent effort on low/medium security.
@@ -231,8 +214,8 @@ generation-time result; disagreement -> **live roster wins**, never a frozen con
 
 {DOMAIN_AGENTS_TABLE}
 
-PLUS up to two GENERAL cross-cutting agents — they are NOT auto-spawned every time; **the model DECIDES** whether
-(and which) to include, by JUDGEMENT of the scope. Each, if included, runs ONCE over the full changed set:
+PLUS up to two GENERAL cross-cutting agents, NOT auto-spawned: **the model DECIDES** whether (and which) to
+include. Each, if included, runs ONCE over the full changed set:
 
 {GENERAL_AGENTS_TABLE}
 
@@ -245,19 +228,18 @@ Following an approved plan faithfully can still accumulate drift from the origin
 
 | Rule | Detail |
 |------|--------|
-| Always spawned | at `QUICK` and at `EXTENDED`, in the Phase 2 message. It is NOT chosen by the runtime expert-selection procedure and is NOT a domain group owner — it is unconditional |
+| Always spawned | at `QUICK` and at `EXTENDED`, in the Phase 2 message — unconditional, NOT chosen by the runtime expert-selection procedure |
 | Not a domain expert | never assign it a file group, never count it as the group's owner, never use it as the Phase 3 validator |
-| Self-contained | its procedure, evidence budget (<=15 tool calls), tier model and output shape live in ITS OWN file. The spawn brief passes context only and NEVER restates them |
-| Read-only + cheap | file/dir NAMES, `git diff --stat`, manifest diffs, targeted 1-5 line peeks. It never reads a source file whole, never runs a build |
-| Missing agent | `.claude/agents/intent-guard.md` absent -> the intent pass is `not run`, said so in the ANNOUNCE, the report AND the chat summary. At `QUICK` that leaves gates only — never report a clean run |
+| Self-contained | its procedure, evidence budget (<=15 tool calls), tier model, drift classes and output shape live in ITS OWN file. The spawn brief passes context only and NEVER restates them |
+| Missing agent | `.claude/agents/intent-guard.md` absent -> the intent pass is `not run`, said so in the ANNOUNCE, the report AND the chat summary, with the advice to regenerate via `/brewcode:superreview-setup`. At `QUICK` that leaves gates only — never report a clean run |
 
 ---
 
 ## {PROJECT_NAME} rules — REFERENCE the canonical files, do NOT restate them
 
-The project rules are authoritative in their own files; this skill does NOT duplicate them. Every agent READS the
-files relevant to its area and CITES the rule number it enforces (`avoid#N`, `architecture#N`, `containers#N`, …).
-One-line gist per pointer only — the file is the authority. Phase 0 PREFLIGHT-validates that these exist (see below).
+The project rules are authoritative in their own files. Every agent READS the files relevant to its area and
+CITES the rule number it enforces (`avoid#N`, `architecture#N`, `containers#N`, …). One-line gist per pointer
+only. Phase 0 PREFLIGHT-validates that these exist.
 
 {RULE_POINTER_TABLE}
 
@@ -271,16 +253,7 @@ One-line gist per pointer only — the file is the authority. Phase 0 PREFLIGHT-
 One subagent = ONE file-group review, ~<=5 files, ~<=10 steps. Split larger groups into N
 tasks, all spawned in ONE message; an hour-long agent drifts beyond observation/correction.
 
-Every spawn prompt MUST carry:
-
-| Field | Content |
-|-------|---------|
-| GOAL | the overall task and why it exists — the point beyond the file edit |
-| ROLE | what this agent owns; what it must NOT touch |
-| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
-| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what THIS agent needs |
-| CONSUMER | who or what uses the result next, and the shape it must fit |
-| DONE | acceptance criteria + the exact report shape you want back |
+Every spawn brief carries six labeled fields, since a subagent starts with an empty context: GOAL (task + why), ROLE (owns, must not touch), SCOPE (paths/commands in and out), CONTEXT (done, by whom, in parallel), CONSUMER (who uses the result + its shape), DONE (acceptance + return: verdict first, evidence, bounded; long output to a file, path returned).
 
 A bare one-line task is never enough. Phase 2 fills these from `references/agent-prompt.md`; Phase 3 fills them
 for the validator.
@@ -301,9 +274,8 @@ for the validator.
 
 ### Phase 0 — Preflight, MODE, MECHANICAL GATES, SCOPE BASELINE, ANNOUNCE
 
-1. **PREFLIGHT — validate the files this run DEPENDS ON.** Two classes: the assets this skill EXECUTES against (a
-   missing one silently guts a whole phase) and the rule files reviewers cite. WARN per missing file; degrade
-   gracefully, do NOT hard-fail:
+1. **PREFLIGHT — validate the files this run DEPENDS ON**: the assets this skill EXECUTES against (a missing one
+   silently guts a whole phase) and the rule files reviewers cite. WARN per missing file; degrade, do NOT hard-fail:
 
 ```bash
 S=".claude/skills/superreview"
@@ -320,18 +292,16 @@ done
 ```
 
 2. **Resolve `{MODE}`, then `{DEPTH}`, then `{FOCUS}`** per the **Mode Detection**, **Depth Detection** and
-   **Focus** sections above (deterministic / semantic; never interactive). Run the mode-resolution commands to get
-   `{BRANCH}`, `{SCOPE}`, `FILES`, EXACT `COUNT`, and export `RANGE` (the resolved commit range) for
-   `references/scope.md` step `e`. Keep the user's prompt VERBATIM as `{USER_REQUEST}` — it is `intent-guard`'s
-   tier-1/tier-5 source and must reach it unparaphrased.
-   Capture `{DEPTH}` before anything else branches on it; every "skipped at QUICK" below reads it.
-3. **Derive the expert map** — `EXTENDED` ONLY (`QUICK` spawns no domain expert, so there is nothing to map; record
-   `Experts: none (QUICK)`). READ `references/agent-prompt.md`, run its roster command, build the group -> agent
-   map from the LIVE roster. Mark any group that fell back to a generic agent as DEGRADED. `intent-guard` is never
-   part of this map — it is spawned unconditionally, outside the group routing.
-4. **MECHANICAL GATES (ground truth).** Run the project's real gates BEFORE the fan-out; their output is FACT, not
-   opinion. The block is HARD-GUARDED with captured exit codes (a pipe into `tail` would report `tail`'s status)
-   and runs in a SUBSHELL (the Bash tool keeps cwd between calls, so a bare `cd` would re-root every later command):
+   **Focus** sections above. Run the mode-resolution commands to get `{BRANCH}`, `{SCOPE}`, `FILES`, EXACT
+   `COUNT`, and export `RANGE` (the resolved commit range) for `references/scope.md` step `e`. Keep the user's
+   prompt VERBATIM as `{USER_REQUEST}` — it is `intent-guard`'s tier-1/tier-5 source and must reach it
+   unparaphrased.
+3. **Derive the expert map** — `EXTENDED` ONLY (at `QUICK` record `Experts: none (QUICK)`): run the Domain
+   experts procedure above against the LIVE roster and mark any group that fell back to a generic agent as
+   DEGRADED. `intent-guard` is never part of this map.
+4. **MECHANICAL GATES (ground truth).** Run the project's real gates BEFORE the fan-out. The block captures exit
+   codes (a pipe into `tail` would report `tail`'s status) and runs in a SUBSHELL (the Bash tool keeps cwd between
+   calls, so a bare `cd` would re-root every later command):
 
 ```bash
 {GATE_COMMANDS}
@@ -339,36 +309,34 @@ done
 
    | Rule | Detail |
    |------|--------|
-   | Ground truth | a real gate error carries verdict **`CONFIRMED-BY-EXECUTION`**: the tool ran it and the output IS the proof. That verdict IS its validation — not an exemption from the invariant. Every such row MUST cite the command AND the output line |
    | Priority | a hard-rule / boundary error from the gate = **P0**; other build/lint/type/test failures = **P1** |
    | Missing deps | toolchain or dependencies absent -> the guard SKIPS the gates; record `Gates: not run (<reason>)`. **Never invent gate results** |
    | Exit code only | report a gate OK only on an explicit `GATE <g> OK`. Never infer success from quiet output |
    | Scope | gates run repo-wide; attribute a gate finding to a reviewed file only when the file appears in `FILES` — otherwise list it under "Pre-existing gate failures" and still report it (noticed -> owned) |
    | No re-run | pass `{GATE_RESULTS}` to every agent so nobody re-runs or re-litigates them |
 
-5. **SCOPE BASELINE (what this change was SANCTIONED to touch) — `EXTENDED` ONLY.** At `QUICK`, SKIP this step
-   entirely: set `{SCOPE_BASELINE}` = `not resolved (QUICK)`, `{OWNERSHIP}` = `not resolved (QUICK)`,
-   `{PR_ISSUE_JSON}` = `not fetched (QUICK)`, and go to step 6 — `intent-guard` resolves its own tier-1..tier-5
-   sources from its own file, so nothing here is needed to run the intent pass.
-   READ `references/scope.md` and run its section 1
-   resolution block. Output is `{SCOPE_BASELINE}` — task id + file, issue id + acceptance criteria, recorded
-   decisions, the sanctioned file surface — plus `{OWNERSHIP}` (section 2) for every file in `FILES` outside it,
-   and `{PR_ISSUE_JSON}` — the RAW issue/PR data fetched once here (or `none` / `not reached`). `{SCOPE_BASELINE}` +
-   `{OWNERSHIP}` go to Phase 2 and to the validator; `{PR_ISSUE_JSON}` goes to scope pass B so nothing re-fetches it.
+5. **SCOPE BASELINE (what this change was SANCTIONED to touch) — `EXTENDED` ONLY.** At `QUICK`, SKIP this step:
+   set `{SCOPE_BASELINE}` = `not resolved (QUICK)`, `{OWNERSHIP}` = `not resolved (QUICK)`, `{PR_ISSUE_JSON}` =
+   `not fetched (QUICK)`, and go to step 6 — `intent-guard` resolves its own tier-1..tier-5 sources.
+   READ `references/scope.md` and run its section 1 resolution block. Output is `{SCOPE_BASELINE}` — task id +
+   file, issue id + acceptance criteria, recorded decisions, the sanctioned file surface — plus `{OWNERSHIP}`
+   (section 2) for every file in `FILES` outside it, and `{PR_ISSUE_JSON}` — the RAW issue/PR data fetched once
+   here (or `none` / `not reached`). `{SCOPE_BASELINE}` + `{OWNERSHIP}` go to Phase 2 and to the validator;
+   `{PR_ISSUE_JSON}` goes to scope pass B so nothing re-fetches it.
 
    | Rule | Detail |
    |------|--------|
    | Board = INPUT, never a subject | task-board / planning files are read here as the BASELINE: never in `FILES`, never routed to an owner, never a finding target |
-   | Scope ids, when the task file has them | a `## Scope` table (`id \| block \| in/out \| status`) enters `{SCOPE_BASELINE}` as the delivery checklist pass B walks. **No such table, no task file, no `.claude/features/` board -> record nothing, silently.** No WARN, no cap, no report line — see `references/scope.md` section 1 |
+   | Scope ids | a task-file `## Scope` table enters `{SCOPE_BASELINE}` as pass B's delivery checklist; no table, no task file, no `.claude/features/` board -> record nothing, silently (`references/scope.md` section 1) |
    | Read-only on the tracker | view issues/PRs only. Never create, edit, comment on or close anything |
-   | Never invent | no task + no issue -> `{SCOPE_BASELINE} = UNKNOWN`; scope findings cap at P2 **permanently** — the Phase 3b gate may lower further but never restores a pre-cap priority |
+   | Never invent | no task + no issue -> `{SCOPE_BASELINE} = UNKNOWN`: BOTH scope passes still run, scope findings cap at P2 **permanently** — the Phase 3b gate is raised and may lower further but never restores a pre-cap priority. An unreached tracker (`issue: not reached`) sanctions nothing |
    | Precedence | `references/scope.md` section 1 table. A PR body / commit message sanctions NOTHING — it is the artefact under review |
-   | FULL_PROJECT | no single task exists -> scope axis is INFORMATIONAL: scope pass A only (shapes 3/4); pass B is SKIPPED. Say so in the report |
+   | FULL_PROJECT | no single task exists -> scope axis is INFORMATIONAL (Phase 2: pass A only). Say so in the report |
 
-6. Compute a single `TIMESTAMP` for the report dir:
+6. Compute a single `TIMESTAMP` for the report dir and print it — Phase 4 needs the literal:
 
 ```bash
-TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
+TIMESTAMP=$(date +"%Y%m%d-%H%M%S"); echo "TIMESTAMP=$TIMESTAMP"
 ```
 
 7. **ANNOUNCE to the user** (MANDATORY, before any review). `{COUNT}` is the EXACT count from Mode Detection (never
@@ -393,29 +361,27 @@ DO:     Gates: {gate name} {OK|FAIL|not run} / ...
 RESULT: one merged, validated report + chat summary
 ```
 
-8. **READ** `references/{STACK_REF}` — {STACK_LABEL} stack guidelines (`EXTENDED` only; `QUICK` spawns no agent
-   that uses it). Agents get its PATH via the prompt contract and read it themselves; never paste its content into
-   a prompt. Same for `references/agent-prompt.md` and `references/scope.md`.
-9. If `FILES` is empty (`COUNT == 0`) -> **exit** ("Nothing to deep-review for {MODE} / {SCOPE}.") — but still
-   report any gate failure from step 4. This applies at BOTH depths: an empty change set has no delivery to
-   compare against the request either.
+8. **READ** `references/{STACK_REF}` — {STACK_LABEL} stack guidelines (`EXTENDED` only). Agents get its PATH via
+   the prompt contract and read it themselves; never paste its content into a prompt. Same for
+   `references/agent-prompt.md` and `references/scope.md`.
+9. If `FILES` is empty (`COUNT == 0`) -> **exit** ("Nothing to deep-review for {MODE} / {SCOPE}.") at BOTH depths
+   — but still report any gate failure from step 4.
 10. If `COUNT > 50` (and `{MODE}` != `FULL_PROJECT`) -> AskUserQuestion: narrow the scope (per-folder / per-commit)
-    or proceed anyway. **`EXTENDED` only** — `QUICK` costs one agent that reads NAMES and counts, so file volume
-    does not scale it; never ask at `QUICK`. For `FULL_PROJECT`, proceed but warn it is a large, slower pass.
+    or proceed anyway. **`EXTENDED` only** — never ask at `QUICK`: its one agent reads NAMES and counts, so file
+    volume does not scale it. For `FULL_PROJECT`, proceed but warn it is a large, slower pass.
 11. Optionally study context with read-only `Explore` agents — `EXTENDED` only, at MOST 2, and only for
     `FULL_PROJECT` or an unfamiliar area. Context only, NOT findings.
 
 ### Phase 1 — Agent selection (route changed files to domain owners)
 
-> **`{DEPTH}` = `QUICK` -> SKIP this entire phase.** No domain expert, no scope pass, no general agent is selected
-> or spawned. The selected set is exactly `intent-guard`, and Phase 2 spawns that ONE agent. Record
-> `Experts: none (QUICK)`. Do NOT "just add one expert because the diff looks risky" — a risky diff is the reason
-> to tell the user to re-run deep, not to silently upgrade the depth they chose.
+> **`{DEPTH}` = `QUICK` -> SKIP this entire phase.** The selected set is exactly `intent-guard`; record
+> `Experts: none (QUICK)`. Do NOT add an expert because the diff looks risky — a risky diff is the reason to tell
+> the user to re-run deep, not to silently upgrade the depth they chose.
 
 **`EXTENDED` from here to the end of Phase 1.**
 
-Group the `{FILE_LIST}` by path. **Enable ONLY the groups whose files actually changed** — this is the key
-"fewer agents" constraint: ONE targeted spawn per relevant group, NOT a quorum × N + a separate full standards pass.
+Group the `{FILE_LIST}` by path. **Enable ONLY the groups whose files actually changed**: ONE targeted spawn per
+relevant group, never a quorum per group plus a separate full standards pass.
 
 {FILE_GROUP_MAP}
 
@@ -424,32 +390,24 @@ Group the `{FILE_LIST}` by path. **Enable ONLY the groups whose files actually c
 > `EXTENDED` = `intent-guard` (always) + (NON-EMPTY domain groups) + the TWO scope passes (A diff-side,
 > B baseline-side; A alone in `FULL_PROJECT`) + **{0, 1, or 2} general agents (model's call)**.
 > `intent-guard` is NOT one of the {0,1,2} general agents and is never traded against them.
-> Examples: a tiny single-file tweak = its domain owner + the scope passes; a change with non-trivial logic =
-> domain owner + `{VALIDATOR_AGENT}`; a change spanning multiple domains = both domain owners + `{ARBITER_AGENT}`.
-> A SMALL, single-domain, low-risk change MAY skip the general passes — **never a scope pass**: a small change is
-> exactly where an unnoticed foreign-surface edit hides, and a one-file diff is exactly where an undelivered
-> criterion hides. If a mapped domain agent is unavailable, fall back to built-in `Explore`; note it in the report.
+> Examples: a tiny single-file tweak = its domain owner + the scope passes; non-trivial logic = domain owner +
+> `{VALIDATOR_AGENT}`; multiple domains = both domain owners + `{ARBITER_AGENT}`. A SMALL, single-domain, low-risk
+> change MAY skip the general passes — **never a scope pass**: a small diff is exactly where an unnoticed
+> foreign-surface edit or an undelivered criterion hides.
 
-> **Test-bloat audit:** when the `tests` group is non-empty, its prompt MUST also audit for TEST OVER-PROLIFERATION
-> (LLMs over-write tests) — cite the project `testing` rule, do NOT restate it. Flag, as `category: test-quality`:
-> redundant tests to DELETE (duplicate coverage, trivial getters, internal-mock-only tests); tests to COLLAPSE/MERGE
-> or PARAMETRIZE via HELPER FUNCTIONS; over-granular micro-tests violating "FEW targeted scenario tests over BIG user
-> journeys". **NON-NEGOTIABLE:** reducing test COUNT must NOT cost quality — every remaining/merged test stays
-> ISOLATED + FAST + REAL (fakes-over-mocks). Also flag any slow or non-isolated test as its own finding; never
-> recommend a merge that makes a test slow or non-isolated. Full prompt text in `references/agent-prompt.md`.
+> **Test-bloat audit:** when the `tests` group is non-empty, its prompt MUST also carry the test over-proliferation
+> block of `references/agent-prompt.md` (`category: test-quality`): fewer tests, never at the cost of isolation,
+> speed or real dependencies.
 
 ### Phase 2 — ONE parallel fan-out (find candidates)
 
 Everything selected is spawned in **ONE message**. At `QUICK` that message contains exactly ONE `Agent` — the
-INTENT pass below — and nothing else in this phase applies. At `EXTENDED` the intent pass rides in the SAME
-message as the domain owners, the two scope passes and any general agent.
+INTENT pass below — and nothing else in this phase applies.
 
 #### The INTENT pass — `intent-guard` (BOTH depths, unconditional)
 
-Its own file holds the procedure, the evidence budget, the tier model, the drift classes and the output shape —
-the brief below passes CONTEXT ONLY and deliberately restates none of it. Skip this spawn only when
-`.claude/agents/intent-guard.md` is missing (Phase 0 preflight said so); then record the intent pass as
-`not run` everywhere and never let the run read as clean.
+The brief below passes CONTEXT ONLY (see the intent-pass rules above). Skip this spawn only when
+`.claude/agents/intent-guard.md` is missing (Phase 0 preflight said so).
 
 ```
 Agent(subagent_type="intent-guard", prompt="
@@ -491,31 +449,27 @@ and empty findings; invent no drift row.
 ")
 ```
 
-Its rows enter `{CANDIDATES}` with `source: intent-guard` and verdict `CONFIRMED-BY-EVIDENCE`.
-
 #### The rest of the fan-out — `EXTENDED` ONLY
 
 Spawn ALL selected agents (the non-empty domain owners + the two scope passes + whichever general agents the model
 chose in Phase 1) in the SAME message as the intent pass. Use the prompt contract in `references/agent-prompt.md`
-VERBATIM — it already carries the focus ordering, the security-only-if-P0 rule, the over-complexity dimension, the
-rule-citation requirement and the output JSON, so restate NONE of them here. Substitute EVERY placeholder it
-contains, or the literal brace text reaches the agent: `{FILE_LIST}` (scoped to that group for domain owners; full
-set for any general agent), the resolved `{FOCUS}`, `{GATE_RESULTS}`, `{SCOPE_BASELINE}` and `{OWNERSHIP}` (from
-Phase 0 step 5; `UNKNOWN` / `none` when unresolved), and the `references/{STACK_REF}` guidelines.
+VERBATIM — it carries the focus ordering, the security-only-if-P0 rule, the over-complexity dimension, the
+rule-citation requirement, the finding JSON ("Output JSON ONLY"), the severity guide and the RESERVED rule
+namespaces (`intent#<class>` for `intent-guard`, `scope#S<n>` for nobody); every agent, both scope passes
+included, returns exactly that shape, so restate NONE of it here. Substitute EVERY placeholder it contains, or
+the literal brace text reaches the agent: `{FILE_LIST}` (scoped to that group for domain owners; full set for
+any general agent), the resolved `{FOCUS}`, `{GATE_RESULTS}`, `{SCOPE_BASELINE}` and `{OWNERSHIP}` (from Phase 0
+step 5; `UNKNOWN` / `none` when unresolved), and the `references/{STACK_REF}` guidelines.
 
-> The finding JSON ("Output JSON ONLY"), the severity guide and the RESERVED rule namespaces (`intent#<class>`
-> for `intent-guard`, `scope#S<n>` for nobody) live ONCE in `references/agent-prompt.md` — every agent, including
-> both scope passes, returns exactly that shape. Never re-type it here.
-
-**PLUS TWO DEDICATED SCOPE passes** (spawn BOTH in the SAME message as the rest of the fan-out). They are split by
-EVIDENCE SOURCE, not by axis: **A walks the DIFF inward** against the sanctioned surface, **B reasons from the
-BASELINE outward** and must SEARCH the corpus to settle an absence. Their rule-id spaces are disjoint — A emits
-`scope#<shape>` only, B emits `scope#D*` / `scope#C*` only — so neither can produce the other's finding. Neither is
-one of the {0,1,2} general passes. `{MODE}` = `FULL_PROJECT` -> run **pass A only**, restricted to shapes 3/4 and
-reported as INFORMATIONAL; **skip pass B** (no single task, so no criteria and no PR to close out).
+**PLUS TWO DEDICATED SCOPE passes** (spawn BOTH in the SAME message as the rest of the fan-out), split by
+EVIDENCE SOURCE: **A walks the DIFF inward** against the sanctioned surface, **B reasons from the BASELINE
+outward** and must SEARCH the corpus to settle an absence. Their rule-id spaces are disjoint — A emits
+`scope#<shape>` only, B emits `scope#D*` / `scope#C*` only. Neither is one of the {0,1,2} general passes.
+`{MODE}` = `FULL_PROJECT` -> run **pass A only**, restricted to shapes 3/4 and reported as INFORMATIONAL; **skip
+pass B** (no single task, so no criteria and no PR to close out).
 
 **Pass A — diff side.** Owner: `{SCOPE_AGENT_A}` (the agent that owns the task board / tracker read path; fall back
-to `Explore`):
+to `Explore`, noting the downgrade):
 
 ```
 Agent(subagent_type="{SCOPE_AGENT_A}", prompt="
@@ -551,9 +505,9 @@ shape id, and the owner or shared surface impacted. \"suggestion\" = split it ou
 ")
 ```
 
-**Pass B — baseline side.** Owner: `{SCOPE_AGENT_B}`. Its core job is proving or disproving an ABSENCE across the
-whole corpus — a search problem, so a read-only searcher (built-in `Explore`) is a legitimate owner here. Delivery
-and closeout ride together: both reason from the baseline outward and share ONE tracker context, `{PR_ISSUE_JSON}`:
+**Pass B — baseline side.** Owner: `{SCOPE_AGENT_B}` — proving or disproving an ABSENCE across the whole corpus
+is a search problem, so a read-only searcher (built-in `Explore`) is a legitimate owner. Delivery and closeout
+share ONE tracker context, `{PR_ISSUE_JSON}`:
 
 ```
 Agent(subagent_type="{SCOPE_AGENT_B}", prompt="
@@ -607,34 +561,29 @@ closeout comment.
 ")
 ```
 
-Each agent MUST search-first (Bash `grep`/`rg` + verify imports) before flagging any
-reuse/duplicate, and read the ACTUAL code at every cited line. Collect every agent's findings into one pool
-`{CANDIDATES}` (tag each finding with its producing agent as `source`). Gate failures from Phase 0 step 4 enter the
-pool with `source: gate` and verdict `CONFIRMED-BY-EXECUTION`, citing the command + output line: they carry their
-verdict already, so Phase 3 only RANKS them. **Intent rows enter the same way** — `source: intent-guard`, verdict
-`CONFIRMED-BY-EVIDENCE`, carrying their own quoted ASKED + tier + DELIVERED evidence, so Phase 3 only RANKS them
-too and MAY NOT re-litigate or reject them. Every OTHER candidate enters verdictless and may reach the report only
-via Phase 3.
+Each agent MUST search-first (Bash `grep`/`rg` + verify imports) before flagging any reuse/duplicate, and read
+the ACTUAL code at every cited line. Collect every agent's findings into one pool `{CANDIDATES}`, each tagged with
+its producing agent as `source`. Gate failures from Phase 0 step 4 enter with `source: gate` and verdict
+`CONFIRMED-BY-EXECUTION`, citing the command + output line; intent rows enter with `source: intent-guard` and
+verdict `CONFIRMED-BY-EVIDENCE`. Both carry their verdict already: Phase 3 only RANKS them and MAY NOT
+re-litigate or reject them. Every OTHER candidate enters verdictless and may reach the report only via Phase 3.
 
 ### Phase 3 — VALIDATION (per-finding adversarial reverse-check, the GATE)
 
-> **`{DEPTH}` = `QUICK` -> SKIP this phase entirely.** The pool contains only rows that already carry their own
-> verdict — `CONFIRMED-BY-EXECUTION` (gates) and `CONFIRMED-BY-EVIDENCE` (intent) — so there is nothing to
-> adversarially validate and NO validator is spawned. Do the mechanical part yourself instead, in-session, over
-> the pool: step 2 (merge + de-duplicate), step 3 (map severity -> P0-P3 by the SAME priority map below) and
-> step 4 (consistency check). Record the result as `{MERGED}` and the run as validated — a QUICK run is NOT
-> `INCOMPLETE` on validation grounds, because nothing in it was left unvalidated. The one exception is the
-> intent pass being unavailable (missing agent, failure, timeout, or no readable governing intent baseline):
-> that run IS `INCOMPLETE`, even with green gates and no findings — see Error Handling. Baseline unavailability
-> applies at BOTH depths; the scope pass's UNKNOWN baseline is a separate assessment.
+> **`{DEPTH}` = `QUICK` -> SKIP this phase entirely.** Every row in the pool already carries its verdict —
+> `CONFIRMED-BY-EXECUTION` (gates) or `CONFIRMED-BY-EVIDENCE` (intent) — so NO validator is spawned. Do the
+> mechanical part in-session over the pool: step 2 (merge + de-duplicate), step 3 (map severity -> P0-P3 by the
+> SAME priority map below) and step 4 (consistency check). Record the result as `{MERGED}`; a QUICK run is NOT
+> `INCOMPLETE` on validation grounds. The one exception is the intent pass being unavailable (missing agent,
+> failure, timeout, or no readable governing intent baseline): that run IS `INCOMPLETE`, even with green gates
+> and no findings — see Error Handling.
 
 **`EXTENDED` from here to the end of Phase 3b.**
 
-If `{CANDIDATES}` is EMPTY, skip Phase 3 — nothing needs a verdict (a pool of gate + intent rows alone already
-carries its verdicts, so it skips straight to ranking); verdict APPROVED only under the Error-Handling
-conditions below. Otherwise spawn ONE validator that **independently RE-VERIFIES EVERY candidate finding in
-reverse** against the real code BEFORE anything reaches the user report, AND merges the survivors into one
-consistent, de-duplicated, prioritized list. Per-finding gate, NOT a sample.
+If `{CANDIDATES}` is EMPTY, skip Phase 3 (a pool of gate + intent rows alone goes straight to ranking); verdict
+APPROVED only under the Error-Handling conditions below. Otherwise spawn ONE validator that **independently
+RE-VERIFIES EVERY candidate finding in reverse** against the real code BEFORE anything reaches the user report,
+AND merges the survivors into one de-duplicated, prioritized list. Per-finding gate, NOT a sample.
 
 **Validator selection — walk this chain and take the FIRST agent that does NOT own a group the pool came from:**
 `{VALIDATOR_AGENT}` -> `{ARBITER_AGENT}` -> another domain expert with no findings in the pool -> built-in
@@ -643,15 +592,15 @@ its job is not code-reading validation.
 
 | Rule | Detail |
 |------|--------|
-| Disqualifier | ownership ONLY — an agent may not validate findings from the group IT reviewed in Phase 2. Merely having produced SOME candidate disqualifies nothing: on a multi-domain branch every expert has, which would drop every run to a generic agent exactly when the review is biggest |
-| Mixed pool | one validator whose own group is a MINORITY of the pool is fine — tell it, in the prompt, which findings are its own and to hold those to a stricter bar. Prefer a validator with zero findings in the pool when one exists |
-| Generic fallback | genuine LAST resort: a generic agent weakens the adversarial gate — use it only when every expert owns part of the pool, and note the downgrade in the report |
+| Disqualifier | ownership ONLY — an agent may not validate findings from the group IT reviewed in Phase 2. Having produced SOME candidate disqualifies nothing: on a multi-domain branch every expert has |
+| Mixed pool | one validator whose own group is a MINORITY of the pool is fine — tell it, in the prompt, which findings are its own and to hold those to a stricter bar. Prefer a validator with zero findings in the pool, else the smallest-share owner |
+| Generic fallback | LAST resort — a generic agent weakens the adversarial gate: use it only when every expert owns part of the pool, and note the downgrade in the report |
 
-**Batching (>~40 candidates):** split into batches of **<=40 candidates, max 4 spawns** — NOT per-group (a full
-sweep has many groups, and step 2's "merge and de-duplicate ACROSS agents" is impossible inside a single-group
-batch). Batch by descending severity so the worst findings are validated first. Each batch runs steps 1 and 3-4 on
-its own slice; **run step 2 (merge + de-duplicate) ONCE, in a final pass over the union of all batch outputs**.
-Sum `stats` from the final pass, never from the batches.
+**Batching (>~40 candidates):** split into batches of **<=40 candidates, max 4 spawns** — NOT per-group (step 2's
+"merge and de-duplicate ACROSS agents" is impossible inside a single-group batch). Batch by descending severity
+so the worst findings are validated first. Each batch runs steps 1 and 3-4 on its own slice; **run step 2 (merge
++ de-duplicate) ONCE, in a final pass over the union of all batch outputs**. Sum `stats` from the final pass,
+never from the batches.
 
 ```
 Agent(subagent_type="{VALIDATOR_AGENT}", prompt="
@@ -804,19 +753,17 @@ and the unvalidated COUNT carried into the report header, the Stats table and th
 
 ### Phase 3b — SCOPE GATE (AskUserQuestion; after validation, before the report)
 
-> **`{DEPTH}` = `QUICK` -> SKIP.** The gate only ever fires on `scope-creep` rows, and QUICK runs no scope pass,
-> so the pool contains none. Intent rows NEVER enter this gate at either depth: they are not scope-sanction
-> questions, they carry their own named source tier, and asking the user to sanction a drift they just reported
-> would be asking them to overrule their own request.
+> **`{DEPTH}` = `QUICK` -> SKIP.** The gate fires only on `scope-creep` rows, and QUICK runs no scope pass. Intent
+> rows NEVER enter this gate at either depth: they carry their own named source tier, and sanctioning a drift
+> would ask the user to overrule their own request.
 
 Scan `{MERGED}` for CONFIRMED `scope-creep` findings of shape **1, 2 or 5** carrying `sanctionUnknown: true` or no
 cited decision, PLUS any `scope#D1` / `scope#D4` row carrying `deliveryProofMissing: true`. None -> skip silently.
 
-Otherwise ask the user — the full rule (batching, option wording, non-interactive fallback, recording duty) is
-`references/scope.md` section 5; do not restate it, apply it. In short: ONE `AskUserQuestion` call, <=4 questions,
-each naming the files + the surface + who else is impacted + the baseline checked, recommended option first. The
-gate REWRITES existing validated rows only — it may never ADD a finding; an answer that reveals a new issue is
-material for the NEXT run. Then rewrite the affected rows in `{MERGED}`:
+Otherwise ask the user per `references/scope.md` section 5 (batching, option wording, non-interactive fallback,
+recording duty): ONE `AskUserQuestion` call, <=4 questions. The gate REWRITES existing validated rows only — it
+may never ADD a finding; an answer that reveals a new issue is material for the NEXT run. Then rewrite the
+affected rows in `{MERGED}`:
 
 | Answer | Effect on the finding |
 |--------|------------------------|
@@ -834,8 +781,8 @@ priorities, never validation status. Record every question + answer VERBATIM in 
 
 ### Phase 4 — Write the merged report
 
-Shell variables do NOT survive between Bash tool calls, so anchor the report at the repo root and echo the literal
-values you then substitute (never re-run `date` — two calls would disagree):
+Shell variables do NOT survive between Bash tool calls: substitute the `TIMESTAMP` literal that Phase 0 step 6
+printed (never re-run `date` — two calls would disagree) and anchor the report at the repo root:
 
 ```bash
 ROOT=$(git rev-parse --show-toplevel) || exit 1
@@ -844,49 +791,46 @@ if mkdir -p "${REPORT_DIR}"; then echo "REPORT_DIR=${REPORT_DIR}"; else echo "MK
 ```
 
 Write ONE consolidated report to `${REPORT_DIR}/REPORT.md` using the layout in `references/report-template.md`.
-Every table is a VIEW over `{MERGED}` — never a paste of raw Phase 2 candidates. Findings are MANDATORY-sorted by
-priority P0 -> P3, every row carries its verdict, and the Scope section records the Phase 3b questions + answers.
+Findings are MANDATORY-sorted by priority P0 -> P3, every row carries its verdict, and the Scope section records
+the Phase 3b questions + answers.
 
 The header carries `{DEPTH}`, and the **Intent / Drift** section carries `{INTENT_VERDICT}` VERBATIM as
 intent-guard wrote it (`ALIGNED` / `MINOR DRIFT` / `MAJOR DRIFT` + its one clause, or `not run` + why). At `QUICK`
 the sections that had no producer — Boundary & Architecture, Reuse, Over-Complexity, Scope Discipline, Dropped in
-Validation — are written as `not run (QUICK depth)` rather than as empty tables: an empty table reads as "checked,
-nothing found", which would be a lie.
-Copy `not run — intent baseline unavailable` exactly into DRIFT and mark the report INCOMPLETE at either depth,
-including zero-findings runs. Scope-baseline UNKNOWN alone does not imply this intent-baseline gap.
+Validation — read `not run (QUICK depth)`: an empty table would claim "checked, nothing found".
+An unavailable intent baseline is handled per Error Handling; scope-baseline UNKNOWN alone does not imply it.
 
 ### Phase 4b — SELF-SYNC (`EXTENDED` only, COORDINATOR only, BEFORE the Phase 5 summary)
 
-This skill was generated against a snapshot; this run already computed what that snapshot got wrong. Correct THIS
-file and `references/scope.md` from data ALREADY in context — no new spawn, no new read except the `wc -l` below.
-It runs AFTER Phase 4's report is written and BEFORE Phase 5 prints, so the summary's `Self-sync:` line reports a
-result that already happened.
+This run already computed what the generation-time snapshot got wrong: correct THIS file and
+`references/scope.md` from data ALREADY in context — no new spawn, no new read except the `wc -l` below —
+after Phase 4's report is written, so the Phase 5 `Self-sync:` line reports a result that already happened.
 
-**SKIP entirely at `QUICK`** — one agent, no live roster, no baseline: rewriting those tables from absence would
-replace real data with nothing. **Never inside a spawned agent** — parallel agents editing one SKILL.md collide.
-Code, tests, docs and the report stay READ-ONLY here as everywhere: the ONLY writable paths are these two files.
+**SKIP entirely at `QUICK`** — no live roster, no baseline: the tables would be rewritten from absence. **Never
+inside a spawned agent** — parallel agents editing one SKILL.md collide. These two files are the ONLY writable
+paths; code, tests, docs and the report stay READ-ONLY.
 
 | Step | Do it when | Edit |
 |------|-----------|------|
 | Roster refresh | the Phase 1 LIVE roster differs from the emitted tables | rewrite the group -> agent rows: add the new agent, mark a vanished one `MISSING -> Explore` |
-| **Gate repair** | a Phase 0 step 4 gate reported `not run` **AND** a `command -v <bin>` re-test proves the binary is ABSENT. `not run` with the binary present is a toolchain/deps failure, NOT a dead gate — leave that row untouched | fix that row of the gate block to the real command, else annotate it `not available in this project`. Nothing else ever clears a dead gate — it reports `not run` forever |
+| **Gate repair** | a Phase 0 step 4 gate reported `not run` **AND** a `command -v <bin>` re-test proves the binary is ABSENT. `not run` with the binary present is a toolchain/deps failure, NOT a dead gate — leave that row untouched | fix that row of the gate block to the real command, else annotate it `not available in this project` |
 | Scope baseline | step 5 resolved `UNKNOWN`, or the tracker actually found disagrees with `{TRACKER_LABEL}` | correct `references/scope.md` section 1 to what was really resolvable |
 | Shared surface | a scope pass A finding named a surface absent from `references/scope.md` section 2 | append that row — the finding IS the evidence |
 
 > **Non-growth — MEASURED, never asserted.** Run `wc -l` on BOTH files before the first Edit and again after the
 > last one, and print `before -> after (delta)` in the Phase 5 `Self-sync:` line. The total delta MUST be `<= 0`:
 > delete the stale line before adding the true one, correct in place, never append a second version. A measured
-> positive delta means REVERT the additions you cannot pay for and print them as proposals instead — an unmeasured
-> "delta <= 0" claim is not a measurement.
+> positive delta means REVERT the additions you cannot pay for and print them as proposals instead.
 
-> **CARVE-OUT.** FACTS may be corrected. DECISIONS may NOT be rewritten without explicit user instruction: depth
-> semantics, the corpus rule, the permanent UNKNOWN-baseline P2 cap, focus ordering, the read-only invariant.
+> **CARVE-OUT.** FACTS may be corrected. DECISIONS may NOT be rewritten without explicit user instruction — print
+> the change as a proposal line: depth semantics, the corpus rule, the permanent UNKNOWN-baseline P2 cap, focus
+> ordering, the read-only invariant.
 
 **Never auto-written — PROPOSE in the Phase 5 summary instead:**
-- **DEGRADED groups / missing experts** -> print `DEGRADED: {groups}` + "re-run `/brewcode:superreview-setup`". Creating
-  an expert is an `agent-creator` spawn that would change this review's own tooling mid-run.
-- **New drift examples for `.claude/agents/intent-guard.md`** -> print the proposed row only. That file is
-  byte-untouchable by contract, and an append per run grows it monotonically at every future review's expense.
+- **DEGRADED groups / missing experts** -> print `DEGRADED: {groups}` + "re-run `/brewcode:superreview-setup`":
+  creating an expert is an `agent-creator` spawn that would change this review's own tooling mid-run.
+- **New drift examples for `.claude/agents/intent-guard.md`** -> print the proposed row only: that file is
+  byte-untouchable by contract.
 
 ### Phase 5 — Chat summary
 
@@ -927,7 +871,7 @@ Report: .claude/reports/{TIMESTAMP}_superreview/REPORT.md
 Recommendations / next steps (superreview is READ-ONLY — it does not apply fixes):
 {if DEPTH == QUICK: - This was a QUICK run: intent + gates, no domain experts, no scope passes, no adversarial
   validation. For the full pass say "deep review" (e.g. /superreview "deep review of this branch").}
-- To fix: new session (English) in Manager mode (++m); delegate to the domain-owner agents ({SIMPLIFY_AGENTS});
+- To fix: new session in Manager mode (++m); delegate to the domain-owner agents ({SIMPLIFY_AGENTS});
   P0/P1 first, then P2/P3.
 - To reduce over-complexity: {OC} finding(s).{if >0: run the built-in /simplify skill (reviews + APPLIES
   reuse/simplification/efficiency cleanups), then re-run superreview.}{if 0: /simplify optional.}
@@ -938,62 +882,23 @@ superreview does NOT run /simplify or any skill and does NOT edit code — these
 
 ---
 
-## Configuration
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| Mode | deterministic | `FULL_PROJECT` \| `EXPLICIT` \| `UNCOMMITTED` \| `LAST_COMMITS`; computed + announced |
-| Depth | **`QUICK`** | `QUICK` \| `EXTENDED`, inferred SEMANTICALLY from the prompt (no flag, no CLI token); orthogonal to Mode; announced. `QUICK` = intent pass + gates, 1 spawn. `EXTENDED` = full fan-out + validation + scope gate, plus the intent pass |
-| Intent pass | ALWAYS, both depths | `intent-guard` (`.claude/agents/intent-guard.md`), 1 spawn, <=15 tool calls; rows carry `CONFIRMED-BY-EVIDENCE` and skip the adversarial validator; missing agent -> `not run`, said everywhere |
-| Focus | ordered | user directive (depth words stripped) wins; default table above; scope discipline is part of rank 1; security only if P0; unused at `QUICK` |
-| Review corpus | IGNORED = OUT, else IN | see "What the review corpus IS" |
-| Expert selection | RUNTIME from `.claude/agents/*.md` | live roster each run; the emitted table = expected result at generation time |
-| Mechanical gates | `{GATE_COMMANDS}` (Phase 0 step 4) | non-adversarial verdict `CONFIRMED-BY-EXECUTION`; intent evidence uses the distinct `CONFIRMED-BY-EVIDENCE` verdict |
-| Scope baseline | {TRACKER_LABEL} (read-only) | Phase 0 step 5 / `references/scope.md`; never invented — none -> `UNKNOWN`, findings cap P2 (permanent) |
-| Scope pass A / B | `{SCOPE_AGENT_A}` diff-side / `{SCOPE_AGENT_B}` baseline-side | always at `EXTENDED`, except B in `FULL_PROJECT`; not spawned at `QUICK`; A = shapes 1-6, B = delivery + closeout |
-| Scope gate | `AskUserQuestion`, Phase 3b | fires per the Phase 3b trigger; never lifts the UNKNOWN-baseline P2 cap |
-| Fan-out | targeted | `QUICK`: `intent-guard` only. `EXTENDED`: `intent-guard` + non-empty domain groups + 2 scope passes + {0,1,2} general agents, model's call |
-| Validation | `EXTENDED`, per-finding | Phase 3 reverse-checks EVERY verdictless candidate; unvalidatable -> `UNVALIDATED`, run INCOMPLETE, counted everywhere. Skipped at `QUICK` (nothing verdictless in the pool); unavailable intent or its governing baseline still makes the run INCOMPLETE |
-| Validator agent | first non-owning in the Phase 3 chain (`{VALIDATOR_AGENT}` -> `{ARBITER_AGENT}` -> generic) | batches <=40, max 4 spawns, merge/de-dup ONCE over all batches |
-| Report dir | `<repo-root>/.claude/reports/{TIMESTAMP}_superreview/` | Merged report, findings sorted P0 -> P3 |
-| Max files | 50 (except `FULL_PROJECT`) | `EXTENDED` only — AskUserQuestion: narrow or proceed. Never asked at `QUICK` |
-| Search tool | Bash `rg`/`grep`/`git ls-files` | reuse-first search; note which in report |
-| Self-sync | Phase 4b, `EXTENDED` only, coordinator only | corrects THIS file + `references/scope.md` in place from in-context data; line delta `<= 0`, PROVEN by a before/after `wc -l`; facts only — decisions, missing experts and `intent-guard.md` are PROPOSALS |
-
----
-
 ## Error Handling
 
 | Condition | Action |
 |-----------|--------|
-| Depth signal ambiguous / absent | Resolve `QUICK` (the default). Never ask, never invent a flag; the ANNOUNCE tells the user how to escalate |
-| Prompt mixes depth signals ("quick deep check") | Highest distinct keyword score wins; this example ties, so QUICK. Announce the score/default reason; no new question or depth flag |
-| `intent-guard` agent file missing | Intent pass `not run` + reason, in ANNOUNCE + report + chat summary. At `QUICK` the run reports GATES ONLY and MUST NOT read as clean; recommend re-generating with `/brewcode:superreview-setup` |
-| `intent-guard` fails or times out | Retry ONCE, then record `intent: not run (agent failed)`. At `QUICK` that makes the run `INCOMPLETE` — its only producer is gone; at `EXTENDED` the rest of the fan-out still stands, flagged |
+| `intent-guard` fails or times out | Retry ONCE, then record `intent: not run (agent failed)`. At `QUICK` that makes the run `INCOMPLETE`; at `EXTENDED` the rest of the fan-out still stands, flagged |
 | No readable governing intent baseline | Copy `not run — intent baseline unavailable` verbatim through merged `intentVerdict`, report and chat DRIFT. Empty findings; INCOMPLETE at BOTH depths even with green gates. No ALIGNED claim, fabricated finding, or new enum |
-| Intent finding without a quote / tier / evidence | It should never arrive (intent-guard drops it). If one does, DROP it with reason `not-actionable` — never upgrade it to `CONFIRM` and never ship it unevidenced |
-| No changed files for scope | **Exit** ("Nothing to deep-review for {SCOPE}") — still report any gate failure |
-| Gates cannot run (toolchain/deps missing) | Record `Gates: not run (<reason>)`; NEVER invent results; continue the fan-out |
+| Intent finding without a quote / tier / evidence | DROP it with reason `not-actionable` — never upgrade it to `CONFIRM` and never ship it unevidenced |
 | Gate command fails to start | Non-zero exit -> `GATE <g> FAIL`; mark `not run` + reason if the script is absent; continue |
-| >50 files (non-`FULL_PROJECT`) | `EXTENDED` only — AskUserQuestion: narrow (per-folder / per-commit) or proceed anyway. At `QUICK` proceed without asking (one agent reads names + counts, so volume does not scale it) |
 | Live roster empty/unreadable | Fall back to the emitted group->agent table; warn in the report |
 | A domain agent unavailable | Fall back to built-in `Explore` with the same prompt; mark the group DEGRADED in the report |
-| Only recon agents match a group | Do NOT use them — route to `Explore`, note it |
 | Empty candidate pool, gates green, >=1 agent RETURNED | Skip Phase 3 — verdict APPROVED only if intent was assessed against a readable governing baseline; otherwise retain the applicable INCOMPLETE reason |
-| Empty pool because agents FAILED | **Never APPROVED** — absence of evidence, not evidence of absence. Some returned -> verdict tagged `INCOMPLETE ({n}/{N} agents returned)`; NONE returned -> `INCOMPLETE — review did not run` |
-| Every validator-chain candidate owns part of the pool | Prefer the smallest-share owner, tell it which findings are its own; generic agent only if impossible, note the downgrade |
-| Validator unavailable / fails | Retry once, then the next agent in the chain; chain exhausted -> ship remaining as `UNVALIDATED`, verdict suffixed `- INCOMPLETE`, counted in header + Stats + chat |
+| Empty pool because agents FAILED | **Never APPROVED**. Some returned -> verdict tagged `INCOMPLETE ({n}/{N} agents returned)`; NONE returned -> `INCOMPLETE — review did not run` |
 | Candidate pool exceeds the batch budget | Raise batch size + de-dup first to fit 4 spawns; still too big -> validate the highest-severity batches, mark the remainder `UNVALIDATED` (named + counted). Never truncate silently |
-| No task + no issue resolvable | `{SCOPE_BASELINE} = UNKNOWN`; run BOTH scope passes anyway, cap findings at P2, raise the Phase 3b gate |
-| Tracker missing / unauthenticated | Local task + docs baseline only; report `issue: not reached`; never assume an issue sanctions anything |
-| `{SCOPE_AGENT_A}` unavailable | Run scope pass A's prompt on `Explore`, note the downgrade |
-| `{PR_ISSUE_JSON}` empty | Pass B still runs DELIVERY vs the local task; records `PR: none`, skips closeout `scope#C*` |
-| Scope gate cannot be asked (non-interactive) | Report at the priority the finding ENTERED with, tagged `unconfirmed-sanction`; never silently downgrade or upgrade past a cap |
 | Agent timeout | Retry once, then mark that source unavailable + warn; the verdict inherits INCOMPLETE — a timed-out group was NOT reviewed |
-| Validation rejects everything, gates green | Report "No issues survived validation" — verdict APPROVED only with an assessed intent baseline; otherwise retain INCOMPLETE |
-| All sources clean | Report "No issues found across standards, architecture, scope and correctness" — verdict APPROVED only with an assessed intent baseline; otherwise retain INCOMPLETE |
-| Phase 4b self-sync would GROW the file (measured `wc -l`) | Do NOT write. Report `Self-sync: skipped (would grow +{N})` and name what it wanted to add — a correction that cannot be paid for is a proposal |
-| Phase 4b correction touches a DECISION | Do NOT write it. Print it as a proposal line; only the user changes decisions |
+| Validation rejects everything, gates green | Report "No issues survived validation" — same APPROVED condition as the empty pool |
+| All sources clean | Report "No issues found across standards, architecture, scope and correctness" — same APPROVED condition |
+| Phase 4b self-sync would GROW the file (measured `wc -l`) | Do NOT write. Report `Self-sync: skipped (would grow +{N})` and name what it wanted to add |
 | Arguments are prose, not a scope token | Extract the commit/branch/folder/focus from the prose; never treat the first word as the scope |
 | PLAN block missing, or printed after Phase 0 started | Defect — reprint it before continuing |
 
@@ -1002,27 +907,12 @@ superreview does NOT run /simplify or any skill and does NOT edit code — these
 ## References
 
 - `references/{STACK_REF}` — {STACK_LABEL} stack guidelines (path passed to every agent).
-- `references/agent-prompt.md` — runtime expert-selection procedure + recon-exclusion list + the domain-owner
-  prompt contract (Phase 2) with the detailed focus ordering and the test-bloat block.
-- `references/scope.md` — sanctioned-scope baseline resolution + precedence, ownership map, 6-shape taxonomy +
-  severity map, delivery (D1-D5) + closeout (C1-C4) maps, NOT-creep exclusion list, Phase 3b gate.
+- `references/agent-prompt.md` — runtime expert selection, recon-exclusion list, the domain-owner prompt contract
+  (Phase 2) with the detailed focus ordering and the test-bloat block.
+- `references/scope.md` — baseline resolution + precedence, ownership map, 6-shape taxonomy + severity map,
+  delivery (D1-D5) + closeout (C1-C4) maps, NOT-creep exclusion list, Phase 3b gate.
 - `references/report-template.md` — merged-report layout (Phase 4).
-- `.claude/agents/intent-guard.md` — the intent pass's whole procedure, budget, drift classes and output shape
-  (spawned at BOTH depths; this skill passes it context only and restates nothing from it).
+- `.claude/agents/intent-guard.md` — the intent pass's whole procedure, budget, drift classes and output shape.
 
-<!--
-SKILL NOTES — provenance lives in the frontmatter above (`version` / `generated_by` / `last_updated`).
-
-Self-contained project-local deep-review skill for {PROJECT_NAME}. NO sibling-skill orchestration, never invokes
-another skill, NO plugin dependency. Two axes (MODE = scope, DEPTH = effort) and what each costs: see Configuration.
-
-Corpus rule: git-IGNORED is OUT, everything tracked-or-will-be-tracked is IN (commit status irrelevant). The
-instruction tree is AUTHORITY, never a subject; task-board files are the scope-baseline INPUT only.
-
-Re-adopt: Phase 4b SELF-SYNC corrects the routing table, dead gates, the scope baseline and shared surfaces in
-place on every EXTENDED run (facts only; decisions need you). Regenerate with /brewcode:superreview-setup on a
-structural change — new stack, new service group / PATHSPEC, rules or CLAUDE.md invariants rewritten, DEGRADED
-groups needing new experts, and a NEW or RENAMED agent in .claude/agents/ (the routing table refreshes itself only
-on an EXTENDED run — a QUICK-only user never gets it). .claude/agents/intent-guard.md sections 3-4 stay yours: the generator REUSES an
-existing one and never overwrites it. `generate.sh upgrade` refreshes an installation without losing these edits.
--->
+<!-- SKILL NOTES: re-run /brewcode:superreview-setup on new stack, service group / PATHSPEC, rewritten rules or CLAUDE.md invariants, DEGRADED groups, NEW or RENAMED agent in .claude/agents/ (routing refreshes only on EXTENDED runs).
+`generate.sh upgrade` keeps Phase 4b edits; .claude/agents/intent-guard.md sections 3-4 stay yours (REUSED, never overwritten). -->

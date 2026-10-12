@@ -1,17 +1,5 @@
 #!/usr/bin/env node
-/**
- * Emit-ownership suite for brewdoc:memory-sync-setup generate.sh.
- *
- * Regression cover for the whole-directory replace on emit (`rm -rf $TARGET && mv`):
- * it deleted a PARKED SKILL.md.disabled and every file `uninstall` had just reported
- * as KEPT. Emit owns exactly 5 paths (SKILL.md + 4 references) and must place them
- * individually; anything else in the skill dir belongs to the user.
- *
- * Each case runs the real generator as a child process against its own mkdtemp root
- * (MEMORY_SYNC_ROOT), so nothing here depends on the repo it is executed from.
- * GENERATE_SH=<path> points the suite at another copy - that is how the pre-fix
- * falsification is run.
- */
+// generate.sh emit owns exactly 5 paths (SKILL.md + 4 references); `rm -rf $TARGET && mv` deleted PARKED/KEPT user files.
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -20,6 +8,7 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+// GENERATE_SH=<path> runs another copy (pre-fix falsification); each case = real generator in own mkdtemp MEMORY_SYNC_ROOT.
 const GEN = process.env.GENERATE_SH || join(HERE, '..', 'scripts', 'generate.sh');
 const BASE = realpathSync(mkdtempSync(join(tmpdir(), 'memory-sync-emit-')));
 const SKILL = '.claude/skills/memory-sync';
@@ -62,6 +51,14 @@ const write = (p, body) => { mkdirSync(dirname(p), { recursive: true }); writeFi
     existsSync(join(root, SKILL, 'references/hard-sync.md')),
     existsSync(join(root, SKILL, 'references/prompting-guide.md')),
   ], [true, true, true, true, true]);
+  // THEN the emitted batch rules keep another setup's marker block whole (semble re-adds it on upgrade).
+  const body = read(join(root, SKILL, 'SKILL.md')).split('\n');
+  const at = body.findIndex(l => l.startsWith("- A block delimited by another tool's begin/end markers"));
+  check('emitted SKILL.md carries the foreign marker-block rule', body.slice(at, at + 3), [
+    "- A block delimited by another tool's begin/end markers (e.g. `<!-- BEGIN brewcode:semble -->` ..",
+    '  `<!-- END brewcode:semble -->`) is owned by that setup, which re-creates it on upgrade: never compress, move,',
+    '  dedup or delete it, both marker lines included. Dedup from the other copy; report it as `managed by <setup>`.',
+  ]);
 }
 
 // ── 2. uninstall KEEPS a user file, and the next emit must not undo that ───────
@@ -169,8 +166,7 @@ const write = (p, body) => { mkdirSync(dirname(p), { recursive: true }); writeFi
 }
 
 // ── 8. the marker STRING is not ownership - only the line-1 provenance comment is ─
-// A user file that merely mentions `generated_by=brewdoc:memory-sync-setup`, or carries the marker
-// somewhere other than line 1, used to be deleted by the sweep (substring match on head -5).
+// User file mentioning `generated_by=brewdoc:memory-sync-setup` or marker off line 1 was swept (substring match on head -5).
 {
   const root = project('marker-mention');
   run(root, 'emit');
@@ -223,6 +219,12 @@ const write = (p, body) => { mkdirSync(dirname(p), { recursive: true }); writeFi
   check('recursive-rule emit exits 0', emit.code, 0);
   check('emitted consumer stamps the same complete inventory',
     read(join(root, SKILL, 'SKILL.md')).split('\n').find(l => l.startsWith('surface_files:')), `surface_files: "${expected}"`);
+  // Agent check 9 reads "exists" from the emitted roster probe: a nested agent must be listed.
+  const probe = read(join(root, SKILL, 'references/agent-audit.md')).split('\n').find(l => l.endsWith('# roster'));
+  write(join(root, 'roster.sh'), `${probe}\n`);
+  const roster = spawnSync('bash', [join(root, 'roster.sh')], { cwd: root, encoding: 'utf8' });
+  check('emitted roster probe lists the nested agent', roster.stdout.split('\n').filter(l => l.startsWith('.claude/agents/')),
+    ['.claude/agents/review/expert.md']);
   const status = run(root, 'status');
   check('recursive-rule status exits 0', status.code, 0);
   check('status agrees on live and emitted counts without self-inventory drift',
@@ -235,6 +237,24 @@ const write = (p, body) => { mkdirSync(dirname(p), { recursive: true }); writeFi
   check('source rule bytes remain unchanged', rulePaths.map(p => hash(join(root, p))), before);
   check('single-level convention ownership remains unchanged', read(join(root, '.claude/convention/nested/out.md')),
     '# Outside single-level convention scope\n');
+}
+
+// ── 10. auto memory follows the active profile (CLAUDE_CONFIG_DIR) ─────────────
+{
+  // GIVEN a profile dir holding this project's memory and a HOME without one.
+  const root = project('profile-memory');
+  const home = join(BASE, 'profile-home');
+  const cfg = join(BASE, 'profile-cfg');
+  const mem = join(cfg, 'projects', root.replaceAll('/', '-'), 'memory');
+  mkdirSync(join(home, '.claude'), { recursive: true });
+  mkdirSync(mem, { recursive: true });
+  // WHEN scan runs under that profile, then with the profile unset.
+  const line = out => out.split('\n').find(l => l.startsWith('MEMORY_DIR='));
+  const profiled = run(root, 'scan', { HOME: home, CLAUDE_CONFIG_DIR: cfg });
+  const unset = run(root, 'scan', { HOME: home, CLAUDE_CONFIG_DIR: '' });
+  // THEN the profile's memory dir is reported, and only under that profile.
+  check('scan reports the active profile memory dir', [profiled.code, line(profiled.out), unset.code, line(unset.out)],
+    [0, `MEMORY_DIR=${mem}`, 0, 'MEMORY_DIR=none']);
 }
 
 rmSync(BASE, { recursive: true, force: true });

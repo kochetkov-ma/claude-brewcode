@@ -10,7 +10,7 @@ Emitted only when `{{SPEC_MODE}}` is `on`. Write each block below to its path un
 Rules for both templates:
 - Section list + headings are FIXED. !=add, !=rename, !=reorder. The coverage tables are read by the G1 gate, so their columns are a contract.
 - Every EXAMPLE row is illustrative filler -- the filling agent REPLACES it, !=leave it in a finished doc.
-- Scope ids `S1..Sn` come from the task's `## Scope` table (ref 05). !=mint new ones here, !=renumber. That table's `status` cell (`not-started` | `in-progress` | `done`) is the EXECUTION axis, owned by `task-tracker` / `/task-board`: both templates are read-only consumers of it and a `refresh` preserves it verbatim.
+- Scope ids `S1..Sn` come from the task's `## Scope` table (ref 05); !=mint, !=renumber them here. Its `status` cell (`not-started` | `in-progress` | `done`) is the EXECUTION axis owned by `task-tracker` / `/task-board`: read-only here, preserved verbatim by `refresh`.
 - Two question namespaces, never merged: `Q1..Qn` in the spec's `## Open questions`, `AQ1..AQn` in the design's `## Open architectural questions`. Gate G2 scans BOTH documents.
 - Prose in {{LANG}}. Ids, headings and table columns stay ASCII as written.
 - `status: agreed` is only legal when every `in` scope id reads `covered` in BOTH coverage tables (gate G1).
@@ -227,7 +227,7 @@ Status values: `covered` | `partial` | `uncovered`. Nothing else. This is the SP
 
 ## Evidence
 
-*Gate G4: the design !=authored by one generalist. One row per domain the task touches, naming the agent that covered it. A domain with no domain agent MUST still get a row saying so and naming the fallback -- silence is a defect. Fallback order: project domain agent -> project architecture-capable agent -> built-in `Plan`.*
+*Gate G4: the design !=authored by one generalist. One row per domain the task touches, naming the agent that covered it. A domain with no domain agent MUST still get a row saying so and naming the fallback -- silence is a defect. Fallback order: team agent (`.codex/teams/`) -> project domain agent -> project architecture-capable agent -> built-in `Plan`.*
 
 | domain | agent consulted | verdict |
 |--------|-----------------|---------|

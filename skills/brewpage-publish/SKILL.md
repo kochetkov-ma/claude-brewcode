@@ -62,8 +62,8 @@ By default publishing is PRIVATE (unlisted): not in the public gallery and not i
 Choose `public` for eligible gallery discovery. Eligible public HTML, sites and files may permit indexing on either address; unlisted, protected or otherwise ineligible native responses retain `noindex, nofollow`. Indexing is not guaranteed.
 
 Options:
-1) public — eligible gallery discovery; eligible Promotion publications may be indexed
-2) {auto-suggested 6-8 char slug} — private, link-only (default)
+1) public — eligible gallery discovery; eligible publications may permit indexing
+2) {suggested slug} — private, link-only (default)
 3) Enter custom namespace
 4) Skip → use suggested slug (private)
 
@@ -133,8 +133,7 @@ if [ ! -f "$HISTORY_FILE" ]; then
 
 > PRIVATE FILE — keep this out of version control and never share it.
 > Owner tokens allow delete and in-place republish (html/json/kv/sites all support PUT).
-> Delete html/json/kv: `curl -s -X DELETE "https://brewpage.app/api/{ns}/{id}" -H "X-Owner-Token: TOKEN"`
-> Delete site:         `curl -s -X DELETE "https://brewpage.app/api/sites/{ns}/{id}" -H "X-Owner-Token: TOKEN"`
+> Delete: `curl -s -X DELETE "<Owner API>" -H "X-Owner-Token: TOKEN"`; rows without one: `https://brewpage.app/api/{type}/{ns}/{id}`, type = html|json|files|kv|sites.
 > Update site (keep same URL): `PUT /api/sites/{ns}/{id}` with `X-Owner-Token: TOKEN` + the new bundle — the uploaded bundle fully replaces the file set (adds new files, removes absent ones, overwrites matching). The link never changes.
 
 | Date | URL | Owner Token | TTL | Type | Owner API | Identity |

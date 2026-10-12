@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
-# brewpage-lib.sh — sourced by every publish block in brewdoc:publish/SKILL.md.
-#
-# Owns the two things every block got wrong on its own: where the token-bearing
-# history file lives (BD03) and whether the prompt-derived query parameters are
-# safe to put in a URL (BD02). Sourced, not executed — it sets HISTORY_FILE and
-# defines helpers in the caller's shell.
+# Sourced (!=executed) by every brewdoc:publish/SKILL.md block: sets HISTORY_FILE + helpers in caller's shell.
+# Owns token-history location (BD03) and URL-safety of prompt-derived query params (BD02).
+
+# zsh (macOS Bash tool): global EXIT trap and ${x:+a "$y"} word splitting, as in bash.
+if [ -n "${ZSH_VERSION:-}" ]; then setopt POSIX_TRAPS SH_WORD_SPLIT; fi
 
 # Project root, canonical recipe: CLAUDE_PROJECT_DIR -> git toplevel -> upward
 # walk for .git/.claude -> PWD. The history file must not follow a nested cwd.
@@ -32,19 +31,20 @@ bp_project_root() {
 
 BP_ROOT="$(bp_project_root)"
 HISTORY_FILE="$BP_ROOT/.claude/brewpage-history.md"
-BP_TMPDIR="$BP_ROOT/.claude/tmp"
+# Run dirs stay outside .claude/: a protected path, where the model's Write prompts or is denied (dontAsk).
+BP_TMPDIR="${TMPDIR:-/tmp}"
+BP_TMPDIR="${BP_TMPDIR%/}"
 
 # Creates the history file if absent, keeps it mode 600, and makes sure git
 # never picks it up — the skill used to only *ask* the user to keep it private.
 bp_history_init() {
-  mkdir -p "$(dirname "$HISTORY_FILE")" "$BP_TMPDIR" || return 1
+  mkdir -p "$(dirname "$HISTORY_FILE")" || return 1
   if [ ! -f "$HISTORY_FILE" ]; then
     cat > "$HISTORY_FILE" <<'HEADER'
 # brewpage.app — Published Pages
 
 > Owner tokens allow delete and in-place republish (html/json/kv/sites all support PUT). Keep this file private.
-> Delete: `curl -s -X DELETE "https://brewpage.app/api/<ns>/<id>" -H "X-Owner-Token: TOKEN"`
-> Delete a site: `curl -s -X DELETE "https://brewpage.app/api/sites/<ns>/<id>" -H "X-Owner-Token: TOKEN"`
+> Delete: `curl -s -X DELETE "<Owner API>" -H "X-Owner-Token: TOKEN"`; rows without one: `https://brewpage.app/api/<type>/<ns>/<id>`, type = html|json|files|kv|sites.
 > Update a site (same URL): `PUT /api/sites/<ns>/<id>` with `X-Owner-Token: TOKEN` + the new bundle.
 
 | Date | URL | Owner Token | TTL | Type | Owner API | Identity |
@@ -53,7 +53,6 @@ HEADER
   fi
   chmod 600 "$HISTORY_FILE" 2>/dev/null || true
   bp_gitignore_entry '.claude/brewpage-history.md'
-  bp_gitignore_entry '.claude/tmp/'
 }
 
 bp_gitignore_entry() {
@@ -67,6 +66,7 @@ bp_gitignore_entry() {
   printf '%s\n' "$line" >> "$gi"
 }
 
+# shellcheck disable=SC2016 # backticks = literal markdown code spans
 bp_history_append() {
   if [ "$#" -ge 5 ]; then
     printf '| %s | [%s](%s) | `%s` | %sd | %s | %s | `%s` |\n' \
@@ -187,9 +187,8 @@ bp_finish() {
   fi
 }
 
-# Verdict on a publish.mjs run, shared by both site blocks. Sets ENTRY from the
-# manifest on success; returns 2 (needs a human OK) or 1 (nothing verified), and
-# in both cases removes the archive it was given, so curl is never reached.
+# publish.mjs verdict for both site blocks: success -> ENTRY from manifest; else rc 2 (needs human OK)
+# or 1 (nothing verified), archive removed either way so curl never runs.
 bp_archive_gate() {
   local rc="$1" manifest="$2" zip="$3"
   if [ "$rc" -eq 2 ] && [ "${BREWPAGE_CONFIRMED:-0}" != "1" ]; then

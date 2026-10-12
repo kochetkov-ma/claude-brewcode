@@ -1,20 +1,10 @@
 #!/usr/bin/env node
-/**
- * suite-core.mjs (unit B) — lib/semble-common.sh, semble-mcp.sh,
- * semble-cache.sh, semble-state.sh.
- *
- * Self-contained: no shared harness module, no dependency on tests/run.sh, and
- * no dependency on another unit's fixtures — every repo, cache root, HOME and
- * ~/.claude.json fixture is generated inside one mkdtemp base. The real
- * ~/.claude, the real cache and the repo working tree are never touched.
- *
- * Assertion policy: unconditional exact-equality / exact-size / exact-type
- * checks with a description; no `if` gates which asserts run.
- */
+// suite-core.mjs (unit B) — lib/semble-common.sh, semble-mcp.sh, semble-cache.sh, semble-state.sh.
+// GIVEN repos, cache root, HOME, ~/.claude.json in one mkdtemp base | WHEN real scripts run | THEN unconditional exact checks; no tests/run.sh dependency, real ~/.claude, cache, tree untouched.
 import { spawnSync } from 'node:child_process';
 import {
   mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync,
-  readdirSync, realpathSync, statSync, utimesSync,
+  readdirSync, realpathSync, statSync, utimesSync, chmodSync,
 } from 'node:fs';
 import { join, basename, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -28,7 +18,7 @@ const MCP_SH = join(SCRIPTS, 'semble-mcp.sh');
 const CACHE_SH = join(SCRIPTS, 'semble-cache.sh');
 const STATE_SH = join(SCRIPTS, 'semble-state.sh');
 
-const PIN = 'semble[mcp]==0.5.5';
+const PIN = 'semble[mcp]==0.6.2';
 
 // ── isolated base ───────────────────────────────────────────────────────────
 const BASE = realpathSync(mkdtempSync(join(tmpdir(), 'semble-b-')));
@@ -317,9 +307,17 @@ check('add.noyes.nocall', readFileSync(LOG, 'utf8'), '', 'nothing was registered
 check('add.noyes.nostate', existsSync(STATE_FILE), false, 'no state file was created');
 
 resetLog();
+dropBackups(HOME, '.claude.json.bak.');
 const addOk = run(MCP_SH, ['add', '--yes', '--json']);
 check('add.yes.exit', addOk.status, 0, 'add --yes exits 0');
 check('add.yes.status', json(addOk).status, 'ok', 'reports ok');
+// GIVEN an unregistered ~/.claude.json WHEN add --yes mutates it THEN it is backed up first, like repair and remove
+const addBaks = bakList(HOME, '.claude.json.bak.').map((n) => join(HOME, n));
+check('add.backup.count', addBaks.length, 1, 'add took exactly one backup of ~/.claude.json before registering');
+check('add.backup.bytes', onlyBackupBody(HOME, '.claude.json.bak.'), FIXTURES.absent,
+  'the backup is byte-identical to the pre-add file');
+check('add.backup.json', json(addOk).backups, addBaks, 'the --json result names the backup path');
+dropBackups(HOME, '.claude.json.bak.');
 // add-json is the primary form: it is the only one that can carry alwaysLoad.
 check('add.yes.call', readFileSync(LOG, 'utf8'),
   `mcp add-json semble_code -s user ${JSON.stringify(CORRECT_CFG)}|phase=awaiting_reload\n`,
@@ -359,6 +357,9 @@ check('add.retry.status', json(addFail).status, 'failed', 'reports failed');
 check('add.retry.calls', readFileSync(LOG, 'utf8').split('\n').filter(Boolean).map((l) => l.split(' ')[1]),
   ['add-json', 'add'], 'add-json runs first and is retried exactly once with the degraded add');
 check('add.retry.rollback', JSON.parse(readFileSync(STATE_FILE, 'utf8')).phase, 'prereq_ready', 'phase rolled back to prereq_ready');
+check('add.retry.backup', onlyBackupBody(HOME, '.claude.json.bak.'), FIXTURES.absent,
+  'the pre-add backup survives a failed registration, byte-identical');
+dropBackups(HOME, '.claude.json.bak.');
 
 // dry run
 writeClaudeJson(FIXTURES.absent);
@@ -368,6 +369,72 @@ const addDry = run(MCP_SH, ['add', '--yes', '--json'], { SEMBLE_DRY_RUN: '1' });
 check('add.dry.exit', addDry.status, 0, 'dry run exits 0');
 check('add.dry.nocall', readFileSync(LOG, 'utf8'), '', 'dry run never invokes claude');
 check('add.dry.nostate', existsSync(STATE_FILE), false, 'dry run writes no state');
+check('add.dry.nobackup', bakList(HOME, '.claude.json.bak.'), [], 'dry run takes no backup');
+check('add.dry.bytes', readFileSync(join(HOME, '.claude.json'), 'utf8'), FIXTURES.absent,
+  'dry run leaves ~/.claude.json byte-identical');
+
+// GIVEN a stale registration and a project .mcp.json WHEN repair and remove run with
+// SEMBLE_DRY_RUN=1 THEN no backup, no state and no config byte lands on disk
+const DRY_MCP_JSON = join(PROJ, '.mcp.json');
+writeClaudeJson(FIXTURES.stale);
+resetProject();
+writeFileSync(DRY_MCP_JSON, '{"mcpServers":{"unrelated":{"command":"other-bin"}}}\n');
+resetLog();
+const dryDisk = () => [tree(HOME), tree(PROJ), sha(join(HOME, '.claude.json')), sha(DRY_MCP_JSON)];
+const dryAnnounced = (r) => r.err.split('\n').filter((l) => l.startsWith('DRY backup '));
+const DRY_BACKUP_LINES = [`DRY backup ${join(HOME, '.claude.json')}`, `DRY backup ${DRY_MCP_JSON}`];
+const dryBefore = dryDisk();
+const repairDry = run(MCP_SH, ['repair', '--yes', '--json'], { SEMBLE_DRY_RUN: '1' });
+check('repair.dry.exit', repairDry.status, 0, 'dry repair exits 0');
+check('repair.dry.disk', dryDisk(), dryBefore, 'dry repair changes zero bytes: no .bak.*, no state, same configs');
+check('repair.dry.announce', dryAnnounced(repairDry), DRY_BACKUP_LINES,
+  'each backup is announced on stderr and never taken');
+const removeDry = run(MCP_SH, ['remove', '--yes', '--json'], { SEMBLE_DRY_RUN: '1' });
+check('remove.dry.exit', removeDry.status, 0, 'dry remove exits 0');
+check('remove.dry.disk', dryDisk(), dryBefore, 'dry remove changes zero bytes: no .bak.*, no state, same configs');
+check('remove.dry.announce', dryAnnounced(removeDry), DRY_BACKUP_LINES,
+  'each backup is announced on stderr and never taken');
+check('mutations.dry.nocall', readFileSync(LOG, 'utf8'), '', 'neither dry run invoked claude');
+rmSync(DRY_MCP_JSON, { force: true });
+
+// GIVEN ~/.claude.json sits in a directory that refuses new files WHEN add --yes runs
+// THEN it stops before the checkpoint and before claude: no backup, no mutation
+writeClaudeJson(FIXTURES.absent);
+resetProject();
+resetLog();
+chmodSync(HOME, 0o500);
+const addNoBak = run(MCP_SH, ['add', '--yes', '--json']);
+chmodSync(HOME, 0o700);
+check('add.nobackup.exit', addNoBak.status, 1, 'a backup that cannot be taken fails the add');
+check('add.nobackup.result', [json(addNoBak).status, json(addNoBak).note],
+  ['failed', `cannot back up ${join(HOME, '.claude.json')}; nothing was changed`],
+  'the result names the file that could not be backed up');
+check('add.nobackup.untouched',
+  [readFileSync(LOG, 'utf8'), existsSync(STATE_FILE), bakList(HOME, '.claude.json.bak.')], ['', false, []],
+  'claude was never invoked, no state checkpoint was written and no partial backup exists');
+
+// GIVEN a non-default config dir WHEN add --yes runs THEN the backup lands beside
+// <config dir>/.claude.json and the default ~/.claude.json gets none
+const CFG_DIR = join(BASE, 'cfg-a');
+mkdirSync(CFG_DIR, { recursive: true });
+writeFileSync(join(CFG_DIR, '.claude.json'), FIXTURES.absent);
+resetProject();
+resetLog();
+const addCfg = run(MCP_SH, ['add', '--yes', '--json'], { SEMBLE_TEST_CONFIG_DIR: CFG_DIR });
+const cfgBaks = bakList(CFG_DIR, '.claude.json.bak.').map((n) => join(CFG_DIR, n));
+check('add.configdir.count', cfgBaks.length, 1, 'exactly one backup inside the active config dir');
+check('add.configdir.backups', [json(addCfg).backups, bakList(HOME, '.claude.json.bak.')], [cfgBaks, []],
+  'the result names the config-dir backup and the default ~/.claude.json is not copied');
+
+// GIVEN human output WHEN add --yes runs THEN the backup path is the first line printed
+resetProject();
+resetLog();
+const addHuman = run(MCP_SH, ['add', '--yes']);
+check('add.backup.human', addHuman.out.split('\n')[0],
+  `✅ backup: ${bakList(HOME, '.claude.json.bak.').map((n) => join(HOME, n)).join('|')}`,
+  'human mode prints the backup path before anything is written');
+dropBackups(HOME, '.claude.json.bak.');
+resetProject();
 
 // ── 8. print-cmd mutates nothing ───────────────────────────────────────────
 resetLog();
@@ -402,7 +469,7 @@ check('state.unknownkey.exit', okPatch.status, 0, 'patch succeeds');
 check('state.unknownkey.preserved', afterPatch.customKey, { a: 1 }, 'unknown top-level keys survive verbatim');
 check('state.unknownkey.phase', afterPatch.phase, 'prereq_ready', 'the patched key is applied');
 check('state.unknownkey.projectRoot', afterPatch.projectRoot, PROJ, 'projectRoot is rewritten from sc_project_root');
-check('state.unknownkey.version', afterPatch.approvedVersion, '0.5.5', 'approvedVersion is the pin');
+check('state.unknownkey.version', afterPatch.approvedVersion, '0.6.2', 'approvedVersion is the pin');
 
 // `disabled` is not healable from absent: nothing was ever set up to disable.
 resetProject();
@@ -451,9 +518,7 @@ check('state.clear.gone', existsSync(join(PROJ, '.claude', 'semble')), false, '.
 check('state.clear.claude-kept', existsSync(join(PROJ, '.claude')), true, 'the surrounding .claude dir is untouched');
 
 // ── 10b. the field defect: close-out on a genuinely absent state file ──────
-// A project that inherits an already-correct USER-scope registration never gets
-// a checkpoint (semble-mcp.sh add short-circuits with "unchanged"), so `resume`
-// reaches Step 4.3 with phase=absent. `phase ready` must heal, not die.
+// Inherited correct USER registration -> add "unchanged", no checkpoint -> Step 4.3 sees phase=absent; `phase ready` heals.
 resetProject();
 const healed = run(STATE_SH, ['phase', 'ready', '--json']);
 const healedJson = json(healed);
@@ -541,11 +606,7 @@ check('state.closeout.readback', run(STATE_SH, ['get', 'completed']).out,
   '`get completed` is what SKILL.md prints as `recorded:`');
 
 // ── 10e. the phase machine vs the call sites that actually drive it ────────
-// D1: `resume` used to run `phase ready` straight from `awaiting_reload`, a
-// transition the machine refuses, so no install could ever reach `ready`. The
-// targets below are READ OUT of SKILL.md and the sibling scripts instead of
-// being restated here, so a call site added or renamed later is exercised
-// automatically rather than silently escaping this matrix.
+// D1: `resume` ran refused awaiting_reload -> ready; targets READ OUT of SKILL.md + scripts, so new call sites join the matrix.
 const SKILL_MD = readFileSync(join(HERE, '..', 'SKILL.md'), 'utf8');
 const MCP_SRC = readFileSync(MCP_SH, 'utf8');
 const PROJECT_SRC = readFileSync(join(SCRIPTS, 'semble-project.sh'), 'utf8');
@@ -560,12 +621,8 @@ const SCRIPT_TARGETS = [
 ];
 const CALLSITE_TARGETS = [...new Set([...SKILL_HOPS, ...SCRIPT_TARGETS])].sort();
 
-// Two hops in document order: the resume walk, and only that. The install-path
-// checkpoint on the `correct` branch used to be an EXECUTE block here, which
-// meant a project whose MCP an earlier project already registered kept no
-// state.json at all whenever the model skipped the block; semble-mcp.sh writes
-// it itself now (mcp_checkpoint / mcp_checkpoint_present), so the guarantee is
-// asserted against the SCRIPT below rather than against prose.
+// Two hops in document order = resume walk only. `correct`-branch checkpoint moved from a skippable EXECUTE block
+// into semble-mcp.sh (mcp_checkpoint / mcp_checkpoint_present), so it is asserted against the SCRIPT, not prose.
 const RESUME_HOPS = SKILL_HOPS;
 check('phase.callsites.skill', SKILL_HOPS, ['verifying', 'ready'],
   'SKILL.md drives resume through verifying and only then to ready; the checkpoint is the script job');
@@ -612,9 +669,8 @@ for (const to of CALLSITE_TARGETS) {
 check('phase.callsites.matrix.size', Object.keys(callsiteMatrix).length, 42,
   'every call-site target is probed from every source phase');
 check('phase.callsites.matrix', callsiteMatrix, {
-  // checkpoint (semble-mcp.sh, before EVERY add/repair): legal wherever a setup
-  // exists, healed from absent - `install`/`upgrade` must be able to re-register
-  // out of a crashed verify, a disabled project and a failed run alike.
+  // checkpoint (semble-mcp.sh, before EVERY add/repair): legal wherever setup exists, healed from absent;
+  // `install`/`upgrade` re-register out of crashed verify, disabled project, failed run.
   'absent->awaiting_reload': 'ok:awaiting_reload',
   'prereq_ready->awaiting_reload': 'ok:awaiting_reload',
   'awaiting_reload->awaiting_reload': 'ok:awaiting_reload',
@@ -648,8 +704,7 @@ check('phase.callsites.matrix', callsiteMatrix, {
   'disabled->prereq_ready': 'refused:disabled',
   'error->prereq_ready': 'ok:prereq_ready',
   // THE D1 INVARIANT: `ready` has exactly one legal source, `verifying`.
-  // awaiting_reload -> ready stays refused; the resume path buys `ready` by
-  // going through the verify hop, not by widening the machine.
+  // awaiting_reload -> ready stays refused; resume reaches `ready` via the verify hop, not a wider machine.
   'absent->ready': 'ok:ready',
   'prereq_ready->ready': 'refused:prereq_ready',
   'awaiting_reload->ready': 'refused:awaiting_reload',
@@ -685,9 +740,7 @@ check('resume.noshortcut.msg',
   'the refusal names the transition');
 
 // ── 10f. installer-owned fields are refreshed on EVERY run ────────────────
-// D5: st_init_file wrote resumePrompt/cacheRoot/repoHash only when the file did
-// not exist yet, so both real repos still advertised `/brewcode:semble resume` -
-// a command that stopped existing when the skill was renamed to semble-setup.
+// D5: st_init_file wrote resumePrompt/cacheRoot/repoHash only on create -> stale `/brewcode:semble resume` after rename.
 const DEAD_PROMPT = '/brewcode:semble resume';
 const LIVE_PROMPT = '/brewcode:semble-setup resume';
 const PROJ_HASH = sh(`sc_repo_hash "${PROJ}"`).out;
@@ -711,7 +764,7 @@ for (const [label, args] of [
   check(`refresh.${label}.prompt`, after.resumePrompt, LIVE_PROMPT, 'resumePrompt is rewritten from the constant');
   check(`refresh.${label}.cacheRoot`, after.cacheRoot, CODE_ROOT, 'cacheRoot is recomputed from the environment');
   check(`refresh.${label}.repoHash`, after.repoHash, PROJ_HASH, 'repoHash is recomputed from the project root');
-  check(`refresh.${label}.version`, after.approvedVersion, '0.5.5', 'approvedVersion stays the pin');
+  check(`refresh.${label}.version`, after.approvedVersion, '0.6.2', 'approvedVersion stays the pin');
   check(`refresh.${label}.enabled`, after.enabled, true, 'enabled is NOT reset as a side effect');
   check(`refresh.${label}.completed`, after.completed,
     label === 'complete' ? ['mcp', 'warm', 'smoke', 'guidance'] : ['mcp', 'warm', 'smoke'],
@@ -737,20 +790,10 @@ check('refresh.refused.bytes', sha(STATE_FILE), shaStale,
   'a refused transition leaves the file byte-identical, stale fields included');
 
 // ── 10g. the SD fallback resolves both plugin-cache layouts ───────────────
-// D6: the shipped fallback globbed only `skills/semble-setup`, but installed
-// caches still carry the pre-rename `skills/semble` (brewcode/4.10.1 on this
-// machine), so an unset CLAUDE_PLUGIN_ROOT resolved to nothing - silently in
-// bash, and as a hard `no matches found` in zsh.
-// D7: `${CLAUDE_SKILL_DIR}` is a text substitution on the skill prompt, not an
-// env var - getPromptForCommand does replace(/\$\{CLAUDE_SKILL_DIR\}/g, dir),
-// and that regex matches the BARE literal only. The old spelling
-// `SD="${CLAUDE_SKILL_DIR:-$(find ...)}"` was therefore never substituted: the
-// shell saw an unset name and the cache fallback won on every single run.
+// D6: fallback globbed only `skills/semble-setup`, missed pre-rename `skills/semble` (brewcode/4.10.1); D7: `${CLAUDE_SKILL_DIR}` substitutes BARE only, `SD="${CLAUDE_SKILL_DIR:-$(find ...)}"` never.
 const SD_LINES = [...SKILL_MD.matchAll(
   /^SD="\$\{CLAUDE_SKILL_DIR\}"\n\[ -n "\$SD" \] \|\| SD="\$\(find [^\n]*\)"$/gm)].map((m) => m[0]);
-// 20 since `upgrade` gained its second half (the Step 3.3b guidance+agents block): it is the only
-// writer of the rule file whose frontmatter carries this install's version stamp, so without it
-// `upgrade` could never clear a `stale` verdict.
+// Count includes Step 3.3b guidance+agents block: sole writer of the version-stamped rule file, so `upgrade` clears `stale`.
 check('sd.count', SD_LINES.length, 18, 'every EXECUTE block re-resolves the skill dir');
 check('sd.identical', new Set(SD_LINES).size, 1, 'all of them are the same block, character for character');
 // Prose may NAME the broken spelling (Step 0 explains why it is broken); no
@@ -759,6 +802,21 @@ check('sd.noBraceModifier', SKILL_MD.includes('="${CLAUDE_SKILL_DIR:-'), false,
   'no assignment uses the brace-modifier spelling - the substitution regex would not match it and the fallback would always win');
 check('sd.noglob', SD_LINES[0].includes('ls -d'), false,
   'the fallback uses find, not a shell glob that zsh turns into a hard error');
+// Row 45: the Bash tool has no CLAUDE_PROJECT_DIR; the braced token is substituted to the dir hooks get.
+const PD_LINE = 'export CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR}"';
+check('sd.projectDir', [...SKILL_MD.matchAll(
+  /^SD="\$\{CLAUDE_SKILL_DIR\}"\n\[ -n "\$SD" \] \|\| SD="\$\(find [^\n]*\)"\n(.*)$/gm)].map((m) => m[1]),
+Array(SD_LINES.length).fill(PD_LINE), 'every SD block exports the substituted project dir on its third line');
+{
+  const g = join(BASE, 'pd-git');
+  mkdirSync(join(g, 'sub'), { recursive: true });
+  spawnSync('git', ['init', '-q', g]);
+  const root = (pd) => spawnSync('bash', ['-c', `. "${LIB}"; ${PD_LINE.replace('${CLAUDE_PROJECT_DIR}', pd)}; sc_project_root`], {
+    cwd: join(g, 'sub'), encoding: 'utf8', env: { ...process.env, SEMBLE_PROJECT_ROOT: '', CLAUDE_PROJECT_DIR: '' },
+  }).stdout.trim();
+  check('sd.projectDir.resolve', [root(join(g, 'sub')), root('')], [join(g, 'sub'), g],
+    'substituted -> the session dir wins over the git toplevel; unsubstituted (empty) -> git toplevel');
+}
 
 function sdResolve(layouts) {
   const h = mkdtempSync(join(BASE, 'sdhome-'));
@@ -851,10 +909,8 @@ makeIndex(REPO_C);
 check('cache.info.nonet', json(run(CACHE_SH, ['info', '--repo', REPO_C, '--json'])).staleness, 'unknown', 'SEMBLE_NO_NETWORK=1 -> unknown');
 check('cache.info.fresh', json(run(CACHE_SH, ['info', '--repo', REPO_C, '--json'], { SEMBLE_NO_NETWORK: undefined })).staleness, 'fresh', 'complete + matching metadata -> fresh');
 
-// Regression (v5.2.0): both staleness readers hardcoded "code,config" while the
-// corpus was already `code docs config`, so every real cache reported mismatch
-// and the freshness loop behind it never ran. The expected set now comes from
-// SEMBLE_CONTENT_ARGS, so the literal below is the only place it is spelled out.
+// Regression (v5.2.0): staleness readers hardcoded "code,config" vs corpus `code docs config` -> every cache mismatched.
+// Expected set now derives from SEMBLE_CONTENT_ARGS; the literal below is its only spelling.
 check('content.csv.helper', sh('sc_content_set_csv').out, CONTENT_CSV,
   'sc_content_set_csv sorts SEMBLE_CONTENT_ARGS into the shape metadata.content_type carries');
 check('content.csv.source', sh('printf %s "$SEMBLE_CONTENT_ARGS"').out, 'code docs config',
@@ -1010,8 +1066,7 @@ writeClaudeJson(FIXTURES.absent);
 check('repair.absent.exit', run(MCP_SH, ['repair', '--yes', '--json']).status, 3, 'nothing to repair -> precondition exit 3');
 
 // ── 15. repair backs up <root>/.mcp.json before removing the project scope ──
-// M1: the backup used to key off $SCOPE (always "user" for repair) while the
-// scopes actually removed come from mcp_scopes.
+// M1: backup keyed off $SCOPE (always "user" for repair) while removed scopes come from mcp_scopes.
 const MCP_JSON = join(PROJ, '.mcp.json');
 const UNRELATED_CFG = { type: 'stdio', command: 'other-server-bin', args: ['--serve'], env: { X: '1' } };
 const MCP_JSON_BODY = `${JSON.stringify({ mcpServers: { semble_code: CORRECT_CFG, unrelated: UNRELATED_CFG } }, null, 2)}\n`;
@@ -1068,10 +1123,10 @@ check('add.upstream-absent.exit', addUpstream.status, 0, 'add registers semble_c
 check('add.upstream-absent.call', readFileSync(LOG, 'utf8').split('|')[0],
   `mcp add-json semble_code -s user ${JSON.stringify(CORRECT_CFG)}`,
   'the exact approved argv');
+dropBackups(HOME, '.claude.json.bak.');
 
 // ── 17. purge-repo asserts the cache-root leaf ─────────────────────────────
-// m5: without it, an overridden SEMBLE_CACHE_ROOT_CODE let purge-repo delete a
-// 64-hex directory under ANY parent.
+// m5: without it, an overridden SEMBLE_CACHE_ROOT_CODE let purge-repo delete a 64-hex dir under ANY parent.
 const EVIL_ROOT = join(BASE, 'not-semble-code');
 const evilHash = sh(`sc_repo_hash "${REPO_B}"`).out;
 mkdirSync(join(EVIL_ROOT, evilHash), { recursive: true });
@@ -1096,8 +1151,7 @@ check('deviation.precedence', sh('sc_mcp_state').out, 'wrong_scope',
   'local scope + floating pin reports wrong_scope: precedence wins over the §6.2 definition');
 
 // ── 19. sc_timeout: the bound is enforced with or without a timeout binary ──
-// PATH cannot be trusted to lack `timeout` (every Linux has it) or to have it
-// (stock macOS has neither), so the backend is pinned via SEMBLE_TIMEOUT_BIN.
+// PATH may or may not have `timeout` (Linux yes, stock macOS no) -> backend pinned via SEMBLE_TIMEOUT_BIN.
 const TBIN = join(BASE, 'tbin');
 mkdirSync(TBIN, { recursive: true });
 const TIMEOUT_STUB = join(TBIN, 'timeout');
@@ -1122,35 +1176,16 @@ check('timeout.path.stub', sh('sc_timeout_path', { SEMBLE_TIMEOUT_BIN: TIMEOUT_S
   'the backing binary is reported by absolute path');
 
 // Delegation to a real binary keeps every argument its own argv element.
-const delegated = sh(`sc_timeout 42 printf '%s|%s\\n' 'semble[mcp]==0.5.5' two`,
+const delegated = sh(`sc_timeout 42 printf '%s|%s\\n' 'semble[mcp]==0.6.2' two`,
   { SEMBLE_TIMEOUT_BIN: TIMEOUT_STUB });
-check('timeout.delegate.stdout', delegated.out, 'semble[mcp]==0.5.5|two',
+check('timeout.delegate.stdout', delegated.out, 'semble[mcp]==0.6.2|two',
   'the wrapped command runs with its argv intact');
 check('timeout.delegate.log', readFileSync(TIMEOUT_LOG, 'utf8'),
-  "42 printf %s|%s\\n semble[mcp]==0.5.5 two\n",
+  "42 printf %s|%s\\n semble[mcp]==0.6.2 two\n",
   'the binary was invoked with the seconds first and the pin as one word');
 
-// Elapsed IS the property under test here — "the watchdog waited out its bound"
-// has no deterministic proxy — so the bound is asserted as a tolerance window,
-// `Math.abs(elapsed - centre) <= tol`, never as a bare inequality.
-//
-// How the window is chosen, because a hand-picked one has been wrong here before
-// (an earlier ceiling sat ~50 ms over the observed value and flaked):
-//   floor — pinned to the CONTRACTED bound (1000 ms for `sc_timeout 1`), i.e.
-//           tol is always centre minus the bound. A tol >= centre would admit
-//           elapsed = 0 and turn the assertion into a wildcard, which is worse
-//           than the inequality it replaced.
-//   centre — the value the algorithm predicts, not a measurement. sc_timeout_watch
-//           breaks on `SECONDS - t0 -gt secs`, and SECONDS counts WHOLE seconds
-//           since shell start, so the kill lands one whole second past the bound,
-//           plus the 0.1 s TERM->KILL grace: centre = (secs + 1) * 1000.
-//   ceiling — centre + tol, ~1 s of headroom over the measured spread (12 runs:
-//           `sc_timeout 1` 1963-2038 ms, `sc_timeout 2` 2790-3178 ms). Only a
-//           load stall of nearly a second can trip it.
-// The upper side is also pinned deterministically and independently of the clock:
-// the watched command needs 600 s and drops a marker only if it runs to
-// completion, so the marker's ABSENCE proves the watchdog cut it off at any
-// machine speed, with no tolerance to tune.
+// Tolerance window `Math.abs(elapsed - centre) <= tol`: centre = (secs + 1) * 1000 (SECONDS whole-second tick + 0.1 s TERM->KILL),
+// floor = contracted bound (tol = centre - bound), ceiling ~1 s over 12-run spread; 600 s marker ABSENCE pins the upper side clock-free.
 {
   const marker = join(BASE, 'watch-ran-to-completion');
   const t0 = Date.now();
@@ -1174,11 +1209,8 @@ check('timeout.delegate.log', readFileSync(TIMEOUT_LOG, 'utf8'),
     'a 2 s bound lands in 2000-4000 ms — the deadline tracks SECONDS, not a hardcoded interval');
 }
 {
-  // Regression guard for the drift bug: the deadline is wall clock, not the sum
-  // of the requested sleeps. Each poll forks /bin/sleep, so a slow fork used to
-  // stretch a nominal bound without limit. A 1 s bound around a command that
-  // sleeps 3 s must return well inside 3 s even though the poll backoff would
-  // have accumulated only a fraction of that in "intended" sleep time.
+  // Drift-bug guard: deadline is wall clock, not summed poll sleeps (slow /bin/sleep forks stretched it unbounded).
+  // A 1 s bound around `sleep 3` must return well inside 3 s.
   const t0 = Date.now();
   const r = sh("sc_timeout 1 sleep 3", { SEMBLE_TIMEOUT_BIN: 'none' });
   const elapsed = Date.now() - t0;
@@ -1213,17 +1245,13 @@ check('timeout.watch.stderr',
 }
 
 // ── probe argv gate ────────────────────────────────────────────────────────
-// `--version` reached semble's _CLI_DISPATCH_ARGS in 0.5.4. On an older pin it
-// is unrecognised argv, which starts the blocking stdio server — so the argv is
-// picked from the pin up front. A hang cannot be undone by a fallback, only by
-// never issuing it. Exact strings on purpose: a wildcard here would accept the
-// hanging argv on an old pin, which is the whole failure this gate prevents.
-check('probearg.pin', sh('printf %s "$SEMBLE_PIN_VERSION"').out, '0.5.5',
-  'the shipped pin is 0.5.5');
+// `--version` joined semble's _CLI_DISPATCH_ARGS in 0.5.4 (older pins -> blocking stdio server): argv from pin, exact strings.
+check('probearg.pin', sh('printf %s "$SEMBLE_PIN_VERSION"').out, '0.6.2',
+  'the shipped pin is 0.6.2');
 check('probearg.default', sh('sc_semble_probe_arg').out, '--version',
   'the shipped pin dispatches --version');
 for (const [v, want] of [
-  ['0.5.4', '--version'], ['0.5.5', '--version'], ['0.6.0', '--version'], ['1.0.0', '--version'],
+  ['0.5.4', '--version'], ['0.5.5', '--version'], ['0.6.0', '--version'], ['0.6.2', '--version'], ['1.0.0', '--version'],
   ['0.5.3', '--help'], ['0.5.2', '--help'], ['0.4.9', '--help'], ['0.5.10', '--version'],
   ['', '--help'], ['0.5', '--help'], ['garbage', '--help'], ['0.5.x', '--help'],
 ]) {
@@ -1234,10 +1262,7 @@ check('probearg.override', sh('sc_semble_probe_arg', { SEMBLE_PIN_VERSION: '0.5.
   'a SEMBLE_PIN_VERSION override back to 0.5.2 must NOT issue the hanging --version');
 
 // ── 20-22 fixture: a `claude` stub that REALLY rewrites the config ─────────
-// The stub above records argv and changes nothing, which is enough for "was the
-// right command issued" but cannot express "the registration is gone" or "the
-// backup was put back". This one applies `mcp remove` / `mcp add-json` to the
-// same files sc_mcp_dump reads, and can be told to fail the add.
+// Applies `mcp remove` / `mcp add-json` to the files sc_mcp_dump reads (argv-only stub cannot); can fail the add.
 const MUT = join(BASE, 'claude-mutating-stub');
 writeFileSync(MUT, `#!/usr/bin/env bash
 p=$(node -e 'const fs=require("fs");let s={};try{s=JSON.parse(fs.readFileSync(process.env.SEMBLE_STATE_PROBE,"utf8"))}catch(e){};process.stdout.write(String(s.phase||"none"))')
@@ -1287,9 +1312,7 @@ function dropAllBackups() {
 }
 
 // ── 20. SS05: an unqualified remove clears EVERY scope holding semble_code ──
-// Before the fix `remove` removed only $SCOPE (default `user`) and re-verified
-// only that scope, so a project-scope registration survived while the caller was
-// told {"status":"ok"} with exit 0 and kept being served by the live server.
+// Pre-fix `remove` cleared only $SCOPE (default `user`): project-scope registration survived behind {"status":"ok"} exit 0.
 dropAllBackups();
 writeClaudeJson(FIXTURES.absent);
 projectMcp({ semble_code: CORRECT_CFG, unrelated: UNRELATED_CFG });
@@ -1346,9 +1369,7 @@ rmSync(PROJ_MCP, { force: true });
 dropAllBackups();
 
 // ── 21. SS06: a failed repair restores the configs instead of losing them ───
-// Before the fix a failing `add-json` exited 1 with the registration already
-// removed and no restore, and the backup path was printed in human mode only —
-// while every in-skill caller passes --json.
+// Pre-fix failing `add-json` exited 1: registration removed, no restore, backup path human-mode only (callers pass --json).
 const STALE_PLUS = `${JSON.stringify({
   mcpServers: { semble_code: STALE_CFG, other: UNRELATED_CFG }, someUserKey: 'keep-me',
 }, null, 2)}\n`;
@@ -1372,11 +1393,22 @@ check('repair.rollback.backup.json', json(repairFail).backups, rollbackBaks,
   'the --json result names the backup files, which used to be echoed in human mode only');
 dropAllBackups();
 
+// GIVEN a claude that half-writes ~/.claude.json and then fails both add forms WHEN add --yes runs
+// THEN the pre-add bytes are restored from the backup, like repair and remove
+const HALF = join(BASE, 'claude-halfwrite-stub');
+writeFileSync(HALF, `#!/usr/bin/env bash\nprintf '{"half":' > "\${SEMBLE_TEST_HOME}/.claude.json"\nexit 1\n`);
+chmodSync(HALF, 0o755);
+writeClaudeJson(FIXTURES.absent);
+resetProject();
+resetLog();
+const addHalf = run(MCP_SH, ['add', '--yes', '--json'], { SEMBLE_CLAUDE_BIN: HALF });
+check('add.rollback.result', [addHalf.status, json(addHalf).status], [1, 'failed'], 'a failed add exits 1 and says failed');
+check('add.rollback.bytes', readFileSync(userClaudeJson(), 'utf8'), FIXTURES.absent,
+  'the half-written ~/.claude.json is byte-restored from the pre-add backup');
+dropAllBackups();
+
 // ── 22. SS07: a successful repair writes completed:["mcp"] like `add` ───────
-// Before the fix `repair` wrote only the phase, so semble-reminder.mjs,
-// semble-prefetch.mjs and semble-subagent.mjs kept returning `{}` on a project
-// whose MCP had just been fixed — the three gates read `completed` and nothing
-// but `add` ever wrote it.
+// Before the fix `repair` wrote only the phase; status then reported the mcp step unrecorded.
 writeClaudeJson(FIXTURES.stale);
 resetProject();
 resetLog();

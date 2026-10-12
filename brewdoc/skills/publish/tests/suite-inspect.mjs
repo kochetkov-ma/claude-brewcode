@@ -1,14 +1,6 @@
 #!/usr/bin/env node
-/**
- * suite-inspect.mjs — `publish.mjs inspect`: the supplied-ZIP branch, which BD01
- * identified as the live disclosure route (it used to upload with no inspection
- * at all).
- *
- * Self-contained: fixtures are built with the real `zip` inside one mkdtemp
- * base and removed at the end. No network, no upload.
- *
- * Assertion policy: unconditional exact-equality checks with a description.
- */
+// `publish.mjs inspect`: supplied-ZIP branch, BD01 disclosure route (formerly uploaded uninspected).
+// Fixtures built with real `zip` under one mkdtemp base, removed at end; no network, no upload.
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, statSync, rmSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

@@ -1,20 +1,6 @@
 #!/usr/bin/env node
-/**
- * suite-watchdog.mjs — BT-F30 regression: the deploy scripts must work on a
- * PATH with no GNU coreutils `timeout`, which is the stock macOS shape.
- *
- * The sandbox PATH holds ONLY a curated bin dir (symlinks to the tools the
- * scripts genuinely call, plus a `gh` stub) — no `timeout`, no `gtimeout`, on
- * Linux as well as macOS. Pre-fix, `timeout 30 gh ...` exits 127 there and both
- * scripts report `WF_STATUS=api_unavailable` / `LAST_RUN=unknown` for a healthy
- * API. Post-fix they run under the built-in watchdog and report real data.
- *
- * Self-contained: one mkdtemp base, no network, no real `gh`, nothing outside
- * the base is read or written.
- *
- * Assertion policy: unconditional exact-equality / exact-size checks with a
- * description; no `if` gates which asserts run.
- */
+// BT-F30: deploy scripts work on a PATH without coreutils `timeout`/`gtimeout` (curated bin + `gh` stub, one mkdtemp, no network);
+// pre-fix `timeout 30 gh` exits 127 -> `WF_STATUS=api_unavailable`/`LAST_RUN=unknown`, post-fix built-in watchdog reports real data.
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, symlinkSync, rmSync, chmodSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -139,8 +125,7 @@ check('reason.no_tool', lib('ght_reason 127').out, 'no_tool', 'rc 127 classifies
 check('reason.failed', lib('ght_reason 1').out, 'failed', 'any other rc classifies as failed');
 
 // ── 3. BT-F30 regression: workflow-discover.sh on a coreutils-free PATH ────
-// Pre-fix this block prints WF_STATUS=api_unavailable and RUNS=api_unavailable
-// for a perfectly healthy API, because `timeout` itself was missing.
+// Pre-fix: both WF_STATUS and RUNS read api_unavailable on a healthy API (`timeout` missing).
 {
   const r = runScript(DISCOVER);
   const lines = r.out.split('\n');

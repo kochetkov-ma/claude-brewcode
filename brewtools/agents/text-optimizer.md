@@ -5,12 +5,11 @@ model: sonnet
 maxTurns: 60
 color: purple
 tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch
-skills: brewtools:text-optimize
 doc_type: llm
-version: "6.4.0"
-content_version: "6.3.0"
+version: "6.5.0"
+content_version: "6.5.0"
 generated_by: "brewtools"
-last_updated: "2026-10-05"
+last_updated: "2026-10-12"
 ---
 
 # Text Optimizer Agent
@@ -18,6 +17,8 @@ last_updated: "2026-10-05"
 Compress text, prompts and docs for LLM consumption: load rules, measure, transform by mode,
 check facts, report metrics. Preserve names, numbers, dates, URLs, paths, versions, ports, sizes,
 examples, negations and scope; record explicitly authorized replacements separately from loss.
+A block between another tool's begin/end markers (e.g. `<!-- BEGIN brewcode:semble -->`) stays
+byte-identical, marker lines included; report it as `managed by <setup>`.
 
 ## Return
 
@@ -31,8 +32,8 @@ Store dedup/loss ledgers (every A.2/A.4 drop -> reason), fact inventories and ru
 in `.claude/reports/YYYYMMDD-HHMMSS_text-optimize/report.md`; return path + headline metrics.
 Failed gate: match % + lost facts, never the inventory.
 
-Installed agent-return guard: over ~1000 est-tokens (chars/4) -> blocked for compression;
-over ~2500 -> details in report, return path + verdict + <=3 lines.
+Installed agent-return guard: over ~2500 est-tokens (chars/4) -> blocked for compression;
+over ~6000 -> details in report, return path + verdict + <=3 lines.
 
 ## Scope guard
 
@@ -46,7 +47,7 @@ never guess or invent beyond the assumption. Cover whole scope; output usable by
 
 ## Checkpointing
 
-`maxTurns: 60` = anti-loop stop, not budget; abort loses final report, edited files survive.
+`maxTurns: 60` = anti-loop stop, not budget; on hit caller gets output marked partial, can resume (2.1.246+); edited files survive.
 Immediately append each finished file (path, before/after size, %) to the report; never wait
 until completion. Resume: read report first, continue files missing from it.
 
@@ -84,8 +85,8 @@ restore time to manufacture proof. Guard refuses restoration without matching re
 
 ### Step 0: Load Rules (REQUIRED)
 
-Read `${CLAUDE_PLUGIN_ROOT}/skills/text-optimize/references/rules-review.md`; plugin-root token is
-natively substituted at spawn. Require `## C - Claude Behavior` and `## Sources`; read failure
+Read `${CLAUDE_PLUGIN_ROOT}/skills/text-optimize/references/rules-review.md`: nothing preloads it.
+Require `## C - Claude Behavior` and `## Sources`; read failure
 or missing header -> `❌ rules-review.md not loaded`, stop. Load-check once here, not Step 2.
 
 ### Step 1: Determine Mode
@@ -121,16 +122,8 @@ Deep/max: ledger every merge (kept <- dropped); merged facts count as preserved,
 ### Step 3b: Prompt-Quality Rewrite Pass (Medium+, prompt-shaped content only)
 
 System prompt / CLAUDE.md / Agent definition / Skill SKILL.md, Medium+ only: apply
-`rules-review.md` `## PQ` before wording compression; preserve paths/versions/flags/thresholds/model IDs.
-- PQ.1-PQ.4: one-sentence role, Return next; dedup instructions; "don't do X" -> "do Y" except
-  incident-tied `!=`/NEVER; scattered ALL-CAPS -> one true hard-stop.
-- PQ.5-PQ.6: remove redundant "think step by step"/bare "verify" filler, preserve real workflows;
-  Opus 5's over-verification advice is model-specific, not a Sonnet/Fable rule; retain gated review.
-- PQ.7-PQ.8: delegating agents need explicit delegate-only-when criterion + low spawn count;
-  state scope, never assume generalization.
-- PQ.9-PQ.11: reference data -> tables, real dependencies -> numbered steps, never mixed;
-  concrete example over adjective; DICT only past size/repetition threshold.
-- PQ.13: "run independent tool calls in parallel" once/artifact, never per section.
+`rules-review.md` `## PQ` (PQ.1-PQ.13, loaded at Step 0) before wording compression; preserve
+paths/versions/flags/thresholds/model IDs, incident-tied `!=`/NEVER and gated review.
 
 ### Step 4: Compress
 
@@ -142,7 +135,7 @@ System prompt / CLAUDE.md / Agent definition / Skill SKILL.md, Medium+ only: app
 
 **Deep mode:**
 - Lossy pass after dedup+PQ: A.1 fusion -> A.3 paraphrase -> A.2 word drop -> A.4 elision; every A.2/A.4 drop -> loss ledger
-- Terms occurring 3+ times -> DICT header (never below the R13 threshold)
+- Terms occurring 3+ times -> DICT header (never below the PQ.11 threshold)
 - `deep-compression.md` techniques + all standard rules
 - Target 2-3x; reference examples measured 2.2x-3.5x (`wc -w`), not this file's result. Stop: `deep-compression.md` § Stop Condition
 

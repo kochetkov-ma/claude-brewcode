@@ -16,7 +16,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | Command | `/brewcode:rules` |
 | Input | free-form prompt, or empty |
 | Model | sonnet |
-| Specialist | bc-rules-organizer (Task) |
+| Specialist | bc-rules-organizer (Agent) |
 | List source | `rules.sh list` (Bash) |
 | Target dir | `.claude/rules/` (project only) |
 
@@ -41,11 +41,11 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 ## How it works
 
 <Steps>
-  <li><div><strong>Input gate</strong><p>Treats the whole of `$ARGUMENTS` as ONE free-form sentence — no keyword grammar, no argument parser. A non-empty prompt goes to mode selection; an empty one goes to the menu.</p></div></li>
-  <li><div><strong>Auto-mode select</strong><p>Announces <code>Mode: &lt;mode&gt; (rules) — chosen because &lt;evidence quoted from the prompt&gt;</code>. Defaults to <code>status</code> for any "show me" intent; detects <code>create</code>, <code>improve</code>, or <code>review</code> from explicit cues; <code>list</code> only on an explicit "list" / "список" / "перечисли". A `.jsonl` path or inline prompt is treated as a knowledge source passed to the organizer, not a separate mode.</p></div></li>
-  <li><div><strong>No-prompt menu</strong><p>When no arguments are given and mode cannot be inferred, sends a single AskUserQuestion with options in this order: <strong>Status (rules)</strong> (recommended), <strong>Status (all: agents+rules+skills)</strong>, <strong>Create</strong>, <strong>Improve</strong>, <strong>Review</strong>, <strong>List (plain)</strong>, <strong>Cancel</strong>.</p></div></li>
-  <li><div><strong>Dispatch</strong><p>Routes to bc-rules-organizer via the Task tool, passing the prepared knowledge block and mode. For `list` mode, runs `rules.sh list` directly via Bash instead.</p></div></li>
-  <li><div><strong>Real status</strong><p>Reports which files were created or updated (`avoid.md`, `best-practice.md`, or prefix variants). If bc-rules-organizer is unavailable, outputs: `bc-rules-organizer not available — install brewcode plugin`.</p></div></li>
+  <li><div><strong>Input gate</strong><p>Treats the whole of `$ARGUMENTS` as ONE free-form sentence — no keyword grammar, no argument parser. An empty prompt resolves to `status`; a non-empty one goes to mode selection; the menu appears only on an explicit request.</p></div></li>
+  <li><div><strong>Auto-mode select</strong><p>Prints the <code>PLAN — brewcode:rules</code> block before the first action (<code>INPUT</code>, <code>MODE</code> with the reason, <code>SCOPE</code>, <code>DO</code>, <code>RESULT</code>). Defaults to <code>status</code> for any "show me" intent or when no keyword hits; detects <code>create</code>, <code>improve</code>, or <code>review</code> from explicit cues; <code>list</code> only on an explicit "list" / "список" / "перечисли". A `.jsonl` path or inline prompt is treated as a knowledge source passed to the organizer, not a separate mode.</p></div></li>
+  <li><div><strong>Menu (on request only)</strong><p>When the prompt explicitly asks for a menu, sends one AskUserQuestion with two questions. Q1 offers <strong>Status (rules)</strong> (recommended), <strong>Create new rules</strong>, <strong>Improve existing rules</strong> and <strong>Review rules</strong>. Q2 offers the variant: <strong>As chosen</strong> (recommended), <strong>Status (all: agents+rules+skills)</strong> or <strong>List (plain)</strong>. Cancel via Other stops the run.</p></div></li>
+  <li><div><strong>Dispatch</strong><p>Routes <code>create</code> and <code>improve</code> to bc-rules-organizer via the Agent tool, passing the prepared knowledge block and mode; <code>review</code> goes to the project's reviewer agent, else <code>general-purpose</code>. For `list` mode, runs `rules.sh list` directly via Bash instead. After a write, a medium text-optimize pass runs on the written rule files when `brewtools:text-optimizer` is available; otherwise the skip is reported.</p></div></li>
+  <li><div><strong>Real status</strong><p>For `status`, one Explore/Bash subagent collects and main assembles four blocks: <strong>Inventory</strong> (plugin / project / global counts, names, load path), <strong>State</strong> (enabled or disabled, legacy markers, model), <strong>Overlaps</strong> (same name across scopes, duplicate triggers) and <strong>Health</strong> (missing README or frontmatter, agents without a search tool, weak triggers, rules duplicated in CLAUDE.md). If bc-rules-organizer is unavailable, create and improve stop with: `brewcode:bc-rules-organizer not available — install brewcode plugin`.</p></div></li>
   <li><div><strong>Final output</strong><p>Prints a summary of rules added, merged, or skipped, grouped by target file. Skipped entries include the dedup reason (similarity %, cross-file antonym, or CLAUDE.md duplicate).</p></div></li>
 </Steps>
 
@@ -53,12 +53,12 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 
 | Mode | Trigger | Execution |
 |------|---------|-----------|
-| `status` (default) | Any "show me" / "состояние" / health intent | Reports current rule files and coverage; delegates to bc-rules-organizer |
+| `status` (default) | Empty prompt, no keyword hit, or any "show me" / "состояние" / health intent | One collector subagent gathers inventory, state, overlaps and health; main assembles the report |
 | `list` | Explicit "list" / "список" / "перечисли" only | Runs `rules.sh list` directly — no agent spawned, no status assembly |
 | `create` | Conversational cue or menu selection | Creates missing rule files from plugin templates; accepts KNOWLEDGE.jsonl or inline prompt as knowledge source |
 | `improve` | Conversational cue or menu selection | Rewrites weak or redundant entries for clarity; accepts KNOWLEDGE.jsonl or inline prompt as knowledge source |
-| `review` | Conversational cue or menu selection | Reads all rule files and reports coverage gaps |
-| `batch` | Auto fan-out flag | Processes multiple knowledge entries in one pass alongside the selected mode |
+| `review` | Conversational cue or menu selection | The project's reviewer agent (else `general-purpose`) reviews, double-checks findings and reports |
+| batch | Plural, "all" or several names/paths | Not a separate mode: one specialist spawn per item, all fired in one message |
 
 ## Delegation
 
@@ -98,7 +98,7 @@ For the organizer: ROLE is the target rule files only — never `CLAUDE.md`, nev
 2. Cross-file antonym check: if the same pattern appears in both avoid and best-practice → keep the avoid entry only
 3. CLAUDE.md duplicate: if the content already appears in `CLAUDE.md`, skip entirely. The string `"CLAUDE.md"` is forbidden as a Source value in rule entries
 
-**Specialist:** bc-rules-organizer — acts as organizer only (no separate creator agent). Spawned via the Task tool; the agent resolves paths via native `${CLAUDE_PLUGIN_ROOT}` (substituted in its .md at Task spawn).
+**Specialist:** bc-rules-organizer — acts as organizer only (no separate creator agent). Spawned via the Agent tool; the agent resolves paths via native `${CLAUDE_PLUGIN_ROOT}` (substituted in its .md at Agent spawn).
 
 </details>
 

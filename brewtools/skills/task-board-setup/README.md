@@ -125,6 +125,7 @@ task-specific methodology and saved prompts are not replaced.
 
 An optional, explicitly accepted CLAUDE.md optimization pass is separate from board generation.
 Removing the board does not reverse those accepted edits.
+That pass leaves blocks between another tool's begin/end markers (e.g. `<!-- BEGIN brewcode:semble -->`) untouched, marker lines included, and reports them as `managed by <setup>`.
 
 ## Related
 

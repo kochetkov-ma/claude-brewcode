@@ -1,22 +1,18 @@
 # Keep Catalog -- invariants that survive compression byte-exact
 
-Companion to `drop-catalog.md`. Missing invariant refuses acceptance; patch owned loss/review or
-recover only authorized checkpoint-proven drafts. Missing proof/concurrent change -> preserve
-current bytes, report `RESTORE_REFUSED`; never automatic discard or warning-only acceptance.
-Dedup collapses repeats with set semantics: the LAST occurrence must survive.
-
-Checkpoint each known owned atomic edit/deletion immediately, never during failure/recovery or
-after intervening other-writer changes. Examples/line labels below are historical evidence,
-not current counts, pins or installed-client claims; regex semantics still match the source helper.
+Companion to `drop-catalog.md`. A missing invariant refuses acceptance: patch the owned loss, or recover
+only authorized checkpoint-proven drafts; missing proof or a concurrent change -> keep current bytes,
+report `RESTORE_REFUSED`. Never discard automatically, never accept with a warning only. Dedup
+collapses repeats with set semantics: the LAST occurrence must survive.
 
 Sections: Invariant classes -> `crit_tokens()` evidence -> Coverage map -> Drop-in extension.
 
 ## Invariant classes
 
-| # | Class | Example from this repo | Loss mode if dropped |
-|---|-------|------------------------|----------------------|
-| 1 | Exact numbers / counts | `STAMPED_FILES` = **44**, `VERSIONED_DOCS` = **7** (`CLAUDE.md:65-66`) | Silent under-processing |
-| 2 | Versions, incl. suffixed | `4.0.6+codex.<cachebuster>`, `'semble[mcp]==0.5.5'` (`brewcode/skills/semble-setup/scripts/lib/semble-common.sh:6-7`), `CC >= 2.1.233` | Wrong pin, validation fails |
+| # | Class | Example | Loss mode if dropped |
+|---|-------|---------|----------------------|
+| 1 | Exact numbers / counts | "**45** stamped files", "**7** versioned docs" | Silent under-processing |
+| 2 | Versions, incl. suffixed | `4.0.6+codex.<cachebuster>`, `'pkg[extra]==1.4.2'`, `CC >= 2.1.233` | Wrong pin, validation fails |
 | 3 | File paths + globs | `brew*/skills/*-setup/SKILL.md`, `.claude/settings.local.json` | Command edits the wrong tree |
 | 4 | Bare filenames (no slash) | `settings.json`, `hooks.json`, `marketplace.json` | Ambiguous target |
 | 5 | Env-var keys | `CLAUDE_CODE_ENABLE_TODO_TOOLS`, `CLAUDE_PLUGIN_ROOT`, `CLAUDE_PROJECT_DIR` | Feature silently off |
@@ -26,28 +22,17 @@ Sections: Invariant classes -> `crit_tokens()` evidence -> Coverage map -> Drop-
 | 9 | URLs | `https://doc-claude.brewcode.app/{PLG}/{skills\|agents}/{name}/` | Dead reference |
 | 10 | Command lines | `claude plugin marketplace update claude-brewcode` | Unrunnable instruction |
 | 11 | Thresholds / ratios / comparisons | `>= 95%`, `<= 30 lines`, `2/3 consensus`, `~69ms`, `hardStopRatio` | Gate loosens invisibly |
-| 12 | Names / identities | **Maksim Kochetkov**, `kochetkov-ma`, `!=mkochetkov_tfin` | Wrong account, wrong spelling |
+| 12 | Names / identities | a full name with its spelling, a GitHub handle, `!=<the wrong account>` | Wrong account, wrong spelling |
 | 13 | Stated user preferences | "no co-author/AI attribution", "!=SQL comments", "run_in_background:false" | Preference regression |
 | 14 | Cyrillic in skill mode tables | `лёгкая`, `сожми`, `для контекста`, `максимально` (mode keyword columns) | RU prompts stop resolving a mode |
-| 15 | Scope qualifiers | "every section, not just the first", "ALL 6 JSON files", "all 27 SKs" | Partial application (rules-review L.8) |
+| 15 | Scope qualifiers | "every section, not just the first", "ALL 6 JSON files", "all 27 skills" | Partial application (rules-review L.8) |
 | 16 | Dates that anchor a verification | "verified 2026-08-10", "Verified 11/11" | Staleness undetectable |
 
 ## What `crit_tokens()` covers today
 
-Source: `brewtools/skills/text-optimize/scripts/text-guard.sh`, historical excerpt/line labels 50-62:
-
-```bash
-# The 100% sub-gate alphabet: numbers/versions, slash-bearing paths, `!=`
-# prohibitions, and ALL-CAPS modal keywords. Set semantics on purpose -
-crit_tokens() {                                                        # L53
-    grep -oE '[0-9]+(\.[0-9]+)*' "$f" | sed 's/^/num:/' || true        # L56
-    grep -oE '[A-Za-z0-9_@.-]*/[A-Za-z0-9_@./-]+' "$f" | sed -E 's/[.,;:]+$//; s/^/path:/' || true   # L58
-    grep -oE '!=[A-Za-z0-9_./-]*' "$f" | sed -E 's/[.,;:]+$//; s/^/neg:/' || true                    # L59
-    grep -oE 'NEVER|ALWAYS|MUST NOT|DO NOT|REQUIRED|MANDATORY' "$f" | sed 's/^/kw:/' || true         # L60
-  } | sort -u                                                          # L61
-```
-
-Four classes only. Probed against those exact expressions on this repo's own strings:
+Source: `crit_tokens()` in `brewtools/skills/text-optimize/scripts/text-guard.sh` (`grep -aoE`, `sort -u`).
+Four classes only - `num:`, `path:`, `neg:`, `kw:`, regexes in the Coverage map rows 1, 3, 8, 10.
+Probed against those exact expressions:
 
 | Probe input | `crit_tokens()` output | Gap |
 |-------------|------------------------|-----|
@@ -61,33 +46,33 @@ Four classes only. Probed against those exact expressions on this repo's own str
 
 ## Coverage map
 
-`crit_tokens()` column names the exact prefix that catches the class today; `L##` cites the line above.
+`crit_tokens()` column names the prefix that catches the class today.
 
 | # | Class | Matcher (ERE) | Covered by `crit_tokens()` | NEW? |
 |---|-------|---------------|----------------------------|------|
-| 1 | Exact numbers | `[0-9]+(\.[0-9]+)*` | `num:` L56 -- identical expression | no |
-| 2 | Versions with suffix | `[0-9]+(\.[0-9]+)+([+-][A-Za-z0-9][A-Za-z0-9.]*)?` | `num:` L56 truncates at the `+` | **YES** `ver:` |
-| 3 | Paths with `/` | `[A-Za-z0-9_@.-]*/[A-Za-z0-9_@./-]+` | `path:` L58 -- identical | no |
-| 4 | Globs | `[A-Za-z0-9_.{}/-]*\*+[A-Za-z0-9_.{}*/-]*` | `path:` L58 has no `*` in its class -> fragments only | **YES** `glob:` |
-| 5 | Bare filenames | `[A-Za-z0-9_.-]+\.(md\|mdx\|json\|mjs\|js\|ts\|sh\|ya?ml\|toml\|py\|txt)` | none -- L58 requires a `/` | **YES** `file:` |
-| 6 | Env-var keys | `[A-Z][A-Z0-9]*(_[A-Z0-9]+){2,}` | none -- no digits, no slash, not in L60's list | **YES** `env:` |
+| 1 | Exact numbers | `[0-9]+(\.[0-9]+)*` | `num:` -- identical expression | no |
+| 2 | Versions with suffix | `[0-9]+(\.[0-9]+)+([+-][A-Za-z0-9][A-Za-z0-9.]*)?` | `num:` truncates at the `+` | **YES** `ver:` |
+| 3 | Paths with `/` | `[A-Za-z0-9_@.-]*/[A-Za-z0-9_@./-]+` | `path:` -- identical | no |
+| 4 | Globs | `[A-Za-z0-9_.{}/-]*\*+[A-Za-z0-9_.{}*/-]*` | `path:` has no `*` in its class -> fragments only | **YES** `glob:` |
+| 5 | Bare filenames | `[A-Za-z0-9_.-]+\.(md\|mdx\|json\|mjs\|js\|ts\|sh\|ya?ml\|toml\|py\|txt)` | none -- `path:` requires a `/` | **YES** `file:` |
+| 6 | Env-var keys | `[A-Z][A-Z0-9]*(_[A-Z0-9]+){2,}` | none -- no digits, no slash, not in `kw:`'s list | **YES** `env:` |
 | 7 | Backtick literals | `` `[^`]+` `` | none | **YES** `tick:` |
-| 8 | `!=` operator | `!=[A-Za-z0-9_./-]*` | `neg:` L59 -- identical | no |
-| 9 | Lowercase negations | `(never\|do not\|don.t\|must not\|avoid\|refuse\|forbidden\|unless\|except\|only)` | none -- `kw:` L60 matches ALL-CAPS literals only | **YES** `lneg:` |
-| 10 | ALL-CAPS modals | `NEVER\|ALWAYS\|MUST NOT\|DO NOT\|REQUIRED\|MANDATORY` | `kw:` L60 -- identical | no |
-| 11 | URLs | `https?://[^ )>"'`]+` | `path:` L58 partially (scheme stripped) | **YES** `url:` |
-| 12 | Command lines | (no single matcher; covered transitively by `tick:` + `path:` + `file:`) | partial via `path:` L58 | no (derived) |
-| 13 | Thresholds / comparisons | `[<>]=?[[:space:]]*[0-9]+(\.[0-9]+)?%?` | `num:` L56 keeps the number, drops the operator | **YES** `cmp:` |
-| 14 | Ratios | `[0-9]+/[0-9]+` | `path:` L58 (a ratio is slash-bearing) | no |
+| 8 | `!=` operator | `!=[A-Za-z0-9_./-]*` | `neg:` -- identical | no |
+| 9 | Lowercase negations | `(never\|do not\|don.t\|must not\|avoid\|refuse\|forbidden\|unless\|except\|only)` | none -- `kw:` matches ALL-CAPS literals only | **YES** `lneg:` |
+| 10 | ALL-CAPS modals | `NEVER\|ALWAYS\|MUST NOT\|DO NOT\|REQUIRED\|MANDATORY` | `kw:` -- identical | no |
+| 11 | URLs | `https?://[^ )>"'`]+` | `path:` partially (scheme stripped) | **YES** `url:` |
+| 12 | Command lines | (no single matcher; covered transitively by `tick:` + `path:` + `file:`) | partial via `path:` | no (derived) |
+| 13 | Thresholds / comparisons | `[<>]=?[[:space:]]*[0-9]+(\.[0-9]+)?%?` | `num:` keeps the number, drops the operator | **YES** `cmp:` |
+| 14 | Ratios | `[0-9]+/[0-9]+` | `path:` (a ratio is slash-bearing) | no |
 | 15 | Names / slugs | `[a-z][a-z0-9]*(-[a-z0-9]+)+` | none for slugs; capitalised names never covered | **YES** `slug:` |
-| 16 | Cyrillic | `[А-Яа-яЁё]+`, run under a UTF-8 locale (see Locale hazard) | none -- `text-guard.sh:17` exports `LC_ALL=C` | **YES** `cyr:` |
+| 16 | Cyrillic | `[А-Яа-яЁё]+`, run under a UTF-8 locale (see Locale hazard) | none -- `text-guard.sh` exports `LC_ALL=C` | **YES** `cyr:` |
 | 17 | Scope qualifiers | judgement, not a matcher -- rules-review **L.8** owns it | no | no |
 
 ## Drop-in extension
 
 Ten NEW matchers. Same set semantics, same `sort -u`, same `comm -23` diff as `crit_tokens()`.
 `cyr:` overrides the locale for that one `grep` only; the outer `sort`/`comm` stay under `LC_ALL=C`,
-which `text-guard.sh:17` exports for `comm(1)` collation.
+which `text-guard.sh` exports for `comm(1)` collation.
 
 ### Locale hazard -- measured, not assumed
 
@@ -103,23 +88,19 @@ for L in C en_US.UTF-8; do LC_ALL=$L /usr/bin/grep -oE '[А-Яа-яЁё]+' /tmp/
 | Binary | `LC_ALL=C` | `LC_ALL=en_US.UTF-8` | Ground truth 9 |
 |--------|-----------|----------------------|----------------|
 | `/usr/bin/grep` (BSD) | **17** | 9 | ~1.9x over-match here; the class degrades to a byte range, so one multi-byte word yields several "matches". The factor scales with content -- a 38-run file read 137 |
-| Claude Code's Bash-tool `grep` (ugrep 7.5.0, injected as a zsh function) | 9 | 9 | locale-independent, correct |
+| Claude Code's Bash-tool `grep` (ugrep, a shell function of the macOS native build) | 9 | 9 | locale-independent, correct |
 | `rg` (`/opt/homebrew/bin/rg`) | 9 | 9 | locale-independent, correct |
 
-The over-count factor is a property of the text, not a constant -- never derive a count from it, only
-the conclusion that `LC_ALL=C` + BSD `grep` is unusable for `cyr:`.
-
-Two consequences that decide the `cyr:` guidance:
+The factor depends on the text -- never derive a count from it, only the conclusion that `LC_ALL=C` +
+BSD `grep` is unusable for `cyr:`. Two consequences:
 
 1. **The ugrep shadow does not reach a script.** It is a zsh function in the Bash tool's shell only --
-   a `bash foo.sh` child resolves the real `/usr/bin/grep`. `crit_tokens_ext()` runs inside such a
-   script, so it gets the BSD binary and the over-count is live. The `LC_ALL="${CYR_LOCALE:-en_US.UTF-8}"`
-   prefix below is REQUIRED, not defensive.
-2. **Over-count is not benign.** `crit_tokens()` uses set semantics + `comm -23`; a byte-split match
-   produces token members that exist in neither the original nor the rewrite as real words, so an
-   unchanged Cyrillic cell can appear on both sides while a genuinely deleted one hides among the
-   fragments. Never compare a `cyr:` set produced under `LC_ALL=C` against one produced under UTF-8 --
-   both sides of a `comm` must use the same locale, and it must be the UTF-8 one.
+   a `bash foo.sh` child resolves the real `/usr/bin/grep`, and `crit_tokens_ext()` runs in such a
+   script. The `LC_ALL="${CYR_LOCALE:-en_US.UTF-8}"` prefix below is REQUIRED, not defensive.
+2. **Over-count is not benign.** Under set semantics + `comm -23`, byte-split fragments exist in neither
+   text as real words, so a genuinely deleted Cyrillic cell hides among them. Never compare a `cyr:`
+   set produced under `LC_ALL=C` against one produced under UTF-8 -- both sides of a `comm` use the
+   UTF-8 locale.
 
 ```bash
 crit_tokens_ext() {

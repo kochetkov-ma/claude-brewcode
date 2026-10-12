@@ -1,17 +1,6 @@
 #!/usr/bin/env node
-/**
- * Placeholder-census suite for brewdoc:memory-sync-setup.
- *
- * The placeholder contract lives in three homes that nothing checked: the two template
- * files where the tokens occur, `scripts/generate.sh` (RUNTIME_ALLOW + the scalar names),
- * and this skill's own SKILL.md (SCALARS table, Phase 3 block table, runtime-token note).
- * Both drift directions ship silently: a BLOCK wrongly in RUNTIME_ALLOW is never reported
- * by `validate` again, and a runtime token MISSING from RUNTIME_ALLOW bricks `validate`
- * forever. Every set below is derived by regex from the real files - never hand-copied.
- *
- * MEMORY_SYNC_SKILL_DIR=<path> points the suite at another copy of the skill dir - that is
- * how a perturbed copy is used to prove each assertion can actually go red.
- */
+// Placeholder census: 2 templates, generate.sh (RUNTIME_ALLOW + scalars), SKILL.md tables must agree (BLOCK in RUNTIME_ALLOW -> never reported; runtime token missing -> `validate` bricked); sets regex-derived, never hand-copied.
+// MEMORY_SYNC_SKILL_DIR=<path> targets another skill copy (perturbed copy proves each check can go red).
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -64,7 +53,7 @@ const RUNTIME_GEN = words(capture(gen, /^RUNTIME_ALLOW="([^"]*)"/m, 'generate.sh
 const RUNTIME_SKILL = tokens(quoteBlock(skillMd, 'RUNTIME tokens', 'SKILL.md runtime-token note'));
 
 const SCALARS_GEN = words(capture(gen, /^SCALAR_KEYS="([^"]*)"/m, 'generate.sh SCALAR_KEYS'));
-const SCALARS_HDR = words(capture(gen, /^# SCALAR env overrides[^\n]*\n#([A-Z_ ]+)\n/m, 'generate.sh header comment scalar list'));
+const SCALARS_HDR = words(capture(gen, /^# SCALAR env overrides[^\n]*\n#([A-Z_ ]+)\n/m, 'generate.sh _scalar_default comment scalar list'));
 const SCALARS_CASE = set((capture(gen, /^_scalar_default\(\) \{\n([\s\S]*?)\n\}/m, 'generate.sh _scalar_default body')
   .match(/^ {4}([A-Z_]+)\)/gm) || []).map(r => r.trim().slice(0, -1)));
 const SCALARS_SKILL = tableTokens(capture(skillMd, /\*\*SCALARS\*\*([\s\S]*?)\*\*BLOCKS\*\*/, 'SKILL.md SCALARS table'));
@@ -88,7 +77,7 @@ check('b2 every RUNTIME_ALLOW name occurs in the templates', diff(RUNTIME_GEN, T
 
 // ── c. the SCALAR set, every home that declares it ─────────────────────────────
 check('c1 SCALAR_KEYS == the SKILL.md SCALARS table', SCALARS_GEN, SCALARS_SKILL);
-check('c2 SCALAR_KEYS == the generate.sh header comment list', SCALARS_GEN, SCALARS_HDR);
+check('c2 SCALAR_KEYS == the generate.sh _scalar_default comment list', SCALARS_GEN, SCALARS_HDR);
 check('c3 SCALAR_KEYS == the _scalar_default case labels', SCALARS_GEN, SCALARS_CASE);
 
 // ── d. the tripwire counts ─────────────────────────────────────────────────────

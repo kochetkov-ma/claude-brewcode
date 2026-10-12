@@ -1,6 +1,5 @@
-# Creates a GitHub Release when a version tag (v*.*.*) is pushed to main.
-# Extracts the matching changelog section from RELEASE-NOTES.md
-# and appends installation instructions to the release body.
+# Creates a GitHub Release on any pushed v*.*.* tag (branch-agnostic).
+# Body = the tag's RELEASE-NOTES.md section + install instructions.
 
 name: Release
 
@@ -14,11 +13,11 @@ permissions:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           sparse-checkout: RELEASE-NOTES.md
 
@@ -38,9 +37,8 @@ jobs:
             exit 1
           fi
 
-          # Extract the section for this version.
-          # Match: ## [VERSION] or ## vVERSION or ## VERSION
-          # Stop at the next version header or --- separator line.
+          # Section = header `## [VER]`, `## vVER` or `## VER` up to the next version header or `---`.
+          # Stop regex keeps `\[`: legacy `## [x.y.z]` headers follow the oldest `## v` section.
           BODY=$(awk -v ver="$VERSION" '
             BEGIN { found=0 }
             # Match header: ## [2.15.4], ## v2.15.4, or ## 2.15.4
@@ -63,7 +61,8 @@ jobs:
           # Write changelog to temp file
           echo "$BODY" > /tmp/release-body.md
 
-          # Append install instructions
+          # Append install instructions (backticks are literal Markdown fences)
+          # shellcheck disable=SC2016
           printf '\n---\n\n## Quick Install\n\n```bash\n# 1. Add marketplace (one-time)\nclaude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode\n\n# 2. Install plugins\nclaude plugin install brewcode@claude-brewcode\nclaude plugin install brewdoc@claude-brewcode\nclaude plugin install brewtools@claude-brewcode\n```\n\n## Already installed? Update\n\n```bash\nclaude plugin marketplace update claude-brewcode\nclaude plugin update brewcode@claude-brewcode\nclaude plugin update brewdoc@claude-brewcode\nclaude plugin update brewtools@claude-brewcode\n```\n' >> /tmp/release-body.md
 
           echo "Release body written to /tmp/release-body.md"
@@ -71,7 +70,7 @@ jobs:
           head -20 /tmp/release-body.md
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.changelog.outputs.tag }}
           name: ${{ steps.changelog.outputs.tag }}

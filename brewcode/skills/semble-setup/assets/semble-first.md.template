@@ -3,8 +3,8 @@ paths:
   - "**/*"
 description: semble-first — one semantic search, then read the exact line; rg stays for exact matching
 doc_type: llm
-version: "6.4.0"
-content_version: "6.2.0"
+version: "6.5.0"
+content_version: "6.5.0"
 generated_by: "brewcode:semble-setup"
 ---
 
@@ -16,7 +16,8 @@ Semantic search = the `semble_code` MCP. Code is authoritative.
 |-----|------|
 | behaviour/intent, or wording absent from the code | `mcp__semble_code__search` (8/9) |
 | neighbours of a KNOWN hit | `mcp__semble_code__find_related` |
-| "every/all/how many", identifier, literal, regex, path, verifying a hit | `rg -l`/`-c` (semble lost 2/5) |
+| symbol definitions, references, call graphs | LSP (no server -> `rg`) |
+| "every/all/how many", literal, regex, path, verifying a hit | `rg -l`/`-c` (semble lost 2/5) |
 
 top-k is a ranked sample, not a list: "every/all" is unanswerable in principle.
 
@@ -37,5 +38,5 @@ NEVER indexed: `.json .json5 .csv .tsv .psv .mdx .txt` -> `rg`. `.json` matters 
 manifests, `package.json`, `settings.json`, OpenAPI: semble returns prose *about* them, never them.
 
 Duplicate trees are not deduplicated (same text 3x -> `.sembleignore`); no watcher, index built in-call and cached.
-Semble 0.5.5 keeps each exact content selection as a sibling in one shared cache; omitted `content` uses
+Semble 0.6.2 keeps each exact content selection as a sibling in one shared cache; omitted `content` uses
 `index-code-config-docs` (`code docs config`).

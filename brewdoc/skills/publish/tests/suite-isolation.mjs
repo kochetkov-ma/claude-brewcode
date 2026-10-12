@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, chmodSync, statSync, existsSync, rmSync, realpathSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, chmodSync, statSync, existsSync, rmSync, realpathSync } from 'node:fs';
 import { dirname, join, basename } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -11,7 +11,8 @@ const lib = join(here, '../scripts/brewpage-lib.sh');
 const base = realpathSync(mkdtempSync(join(tmpdir(), 'publish-isolation-')));
 const root = join(base, 'project');
 const bin = join(base, 'bin');
-mkdirSync(root); mkdirSync(bin);
+const tmp = join(base, 'tmp');
+mkdirSync(root); mkdirSync(bin); mkdirSync(tmp);
 const mock = join(bin, 'curl');
 writeFileSync(mock, [
   '#!/usr/bin/env node',
@@ -29,7 +30,7 @@ chmodSync(mock, 0o755);
 function run(code, suffix, extraEnv = {}) {
   return spawnSync('bash', ['-c', 'set -euo pipefail\n. "$LIB"\n' + code], {
     cwd: root, encoding: 'utf8', timeout: 10000,
-    env: { ...process.env, LIB: lib, CLAUDE_SKILL_DIR: join(here, '..'), CLAUDE_PROJECT_DIR: root, PATH: bin + ':' + process.env.PATH,
+    env: { ...process.env, LIB: lib, CLAUDE_SKILL_DIR: join(here, '..'), CLAUDE_PROJECT_DIR: root, TMPDIR: tmp, PATH: bin + ':' + process.env.PATH,
       CURL_ARGS: join(base, 'args-' + suffix), CURL_HEADERS: join(base, 'headers-' + suffix),
       CURL_RESPONSE: JSON.stringify({ link: 'https://example.invalid/result', ownerToken: 'fixture-owner' }), ...extraEnv },
   });
@@ -39,6 +40,7 @@ function prepare() {
   assert.equal(result.status, 0, 'GIVEN private invocation allocation succeeds');
   const dir = result.stdout.trim();
   assert.equal(statSync(dir).mode & 0o777, 0o700, 'THEN invocation directory is private');
+  assert.equal(dirname(dir), tmp, 'THEN invocation directory sits under $TMPDIR, outside the protected .claude/');
   return dir;
 }
 function begin(dir, mode, delivery = '') {
@@ -46,8 +48,8 @@ function begin(dir, mode, delivery = '') {
 }
 try {
   // GIVEN stale shared password WHEN explicit mode is none THEN curl receives no password.
-  const stale = join(root, '.claude/tmp/brewpage-password.txt');
-  mkdirSync(dirname(stale), { recursive: true });
+  // The shared parent moved from .claude/tmp/ to $TMPDIR (protected-path fix); a stale file there stays inert.
+  const stale = join(tmp, 'brewpage-password.txt');
   writeFileSync(stale, 'stale-password');
   const noPassword = prepare();
   const result = run(begin(noPassword, 'none') + '\nbp_post https://example.invalid/upload > /dev/null', 'none');
@@ -100,7 +102,7 @@ try {
     'second=$!', 'wait "$first"', 'wait "$second"',
   ].join('\n'), 'parallel');
   assert.equal(parallel.status, 0, 'THEN simultaneous invocation preludes both succeed');
-  const paths = ['first-run', 'second-run'].map(name => readFileSync(join(root, '.claude/tmp', name), 'utf8').trim());
+  const paths = ['first-run', 'second-run'].map(name => readFileSync(join(tmp, name), 'utf8').trim());
   assert.equal(new Set(paths).size, 2, 'THEN concurrent runs own distinct directories');
   assert.deepEqual(paths.map(existsSync), [false, false], 'THEN both shells clean their own invocation directories');
 
@@ -117,6 +119,7 @@ try {
   assert.equal(failure.status, 1, 'THEN missing explicit password fails without upload');
   assert.equal(existsSync(failed), false, 'THEN failure cleans invocation inputs');
   assert.equal(readFileSync(join(other, 'source.txt'), 'utf8'), 'other owner', 'THEN failure preserves unrelated run');
+  assert.equal(run("bp_run_dir '" + basename(other) + "'; bp_cleanup", 'other-cleanup').status, 0, 'THEN other owner cleans its own run');
 
   const skill = readFileSync(join(here, '../SKILL.md'), 'utf8');
   assert.equal(skill.indexOf('before the first tool action') < skill.indexOf('### Step 1:'), true,
@@ -241,6 +244,9 @@ try {
     const rejectedCleanup = run("[ ! -d '" + rejectedOwned + "' ] || { bp_run_dir '" + basename(rejectedOwned) + "'; bp_cleanup; }", variant.name + '-rejected-cleanup');
     assert.equal(rejectedCleanup.status, 0, 'THEN rejected fixture cleanup succeeds');
   }
+  assert.equal(existsSync(join(root, '.claude/tmp')), false, 'THEN no run ever touched the protected project .claude/tmp');
+  assert.deepEqual(readdirSync(tmp).sort(), ['brewpage-password.txt', 'first-run', 'second-run'],
+    'THEN every run dir under $TMPDIR was removed; only fixture files remain');
   console.log('PASS publish isolation: credentials, concurrent ownership, mode headers, exact OLD/NEW winner URLs and shipped callers');
 } finally {
   rmSync(base, { recursive: true, force: true });

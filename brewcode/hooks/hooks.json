@@ -1,17 +1,5 @@
 {
   "hooks": {
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/forced-eval.mjs"],
-            "timeout": 2
-          }
-        ]
-      }
-    ],
     "SessionStart": [
       {
         "hooks": [
@@ -26,12 +14,6 @@
       {
         "matcher": "compact",
         "hooks": [
-          {
-            "type": "command",
-            "command": "node",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/role-recall.mjs"],
-            "timeout": 2
-          },
           {
             "type": "command",
             "command": "node",

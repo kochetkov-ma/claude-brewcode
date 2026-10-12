@@ -1,81 +1,30 @@
 #!/usr/bin/env bash
-# semble-guidance.sh — rule file, CLAUDE.md marker block, the five hooks,
-# settings.json wiring and permission entries for brewcode:semble-setup.
-# Contracts: DESIGN §9.8 and §10. All JSON goes through `node -e`, never jq.
+# semble-guidance.sh: rule, .sembleignore, CLAUDE.md block, hooks, settings wiring + permissions; DESIGN §9.8, §10; JSON via `node -e`, never jq.
 set -euo pipefail
 SC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source-path=SCRIPTDIR source=lib/semble-common.sh
 . "$SC_DIR/lib/semble-common.sh"
 
 SRC="$(cd "$SC_DIR/.." && pwd)/assets"
 TPL="$SRC/semble-first.md.template"
 IGNORE_TPL="$SRC/sembleignore.template"
-SESSION_MJS="semble-session.mjs"
-PREFETCH_MJS="semble-prefetch.mjs"
-STATS_MJS="semble-stats.mjs"
-REMINDER_MJS="semble-reminder.mjs"
-SUBAGENT_MJS="semble-subagent.mjs"
-HOOK_MJS="$SESSION_MJS $PREFETCH_MJS $STATS_MJS $REMINDER_MJS $SUBAGENT_MJS"
-# RESTORED after v5.1.0. Both advisory hooks are live again, redesigned.
-#
-# v5.1.0 deleted them citing "measured conversion 0/18 and 0/11 with delivery proven
-# independently". Two thirds of that is wrong:
-#   - The channel was never broken. `PreToolUse` and `SubagentStart` both accept and
-#     deliver `additionalContext` on this build - confirmed in the schema union, in the
-#     consumption path, and live.
-#   - `0/18` measured NOTHING. The reminder hook fired zero times across those 18
-#     sessions: its own gate suppressed 74 of 113 invocations, `disabled` 37, throttle 2
-#     (lifetime fire rate 14/2718 = 0.52%). 18 is a count of sessions, not deliveries.
-#   - `0/11` WAS a real measurement, but only of `SubagentStart` matcher `Explore` - one
-#     agent type - on text that ended by undercutting its own advice.
-# `semble-reminder.mjs` returns under its own name; the Explore hook is replaced by
-# `semble-subagent.mjs` on a matcher-less row, so it covers EVERY agent type
-# (Claude Code keys a `SubagentStart` matcher on `agent_type`, and an absent matcher
-# matches all of them).
-#
-# RETIRED for good: `semble-explore.mjs`. The name never comes back. It stays listed
-# here because an existing install has it wired into settings.json and copied into
-# .claude/hooks/ — the ownership predicate (`SG_MARKS`) must keep recognising it so the
-# merge's stale-purge strips its row, and `install`/`upgrade` must keep deleting the
-# file, which no longer ships.
-RETIRED_MJS="semble-explore.mjs"
+HOOK_MJS="semble-session.mjs semble-stats.mjs semble-subagent.mjs"
+# Retired: never shipped again, still owned -> install/upgrade/remove delete file + registration.
+RETIRED_MJS="semble-explore.mjs semble-reminder.mjs semble-prefetch.mjs"
 ALL_MJS="$HOOK_MJS $RETIRED_MJS"
-# Marker files a retired hook wrote. `.reminder-ts` was the v1 reminder's throttle
-# stamp; the restored hook keeps its counter in `.claude/semble/reminder.json`
-# instead, which the `.claude/semble/` .gitignore line already covers. Leaving the
-# old dotfile behind turns an invisible marker into an untracked file in the repo.
-RETIRED_MARKERS=".claude/semble/.reminder-ts"
-# JSON array of every basename this skill has ever owned, live and retired.
+# Throttle/counter files of retired hooks; .reminder-ts predates the .claude/semble/ gitignore line.
+RETIRED_MARKERS=".claude/semble/.reminder-ts .claude/semble/.prefetch-ts .claude/semble/reminder.json"
+# Ownership (every basename ever shipped) vs LIVE (built into the want table).
 SG_MARKS='["semble-session.mjs","semble-prefetch.mjs","semble-stats.mjs","semble-reminder.mjs","semble-subagent.mjs","semble-explore.mjs"]'
-# JSON array of the LIVE basenames only — what `wanted` is built from.
-SG_LIVE='["semble-session.mjs","semble-prefetch.mjs","semble-stats.mjs","semble-reminder.mjs","semble-subagent.mjs"]'
+SG_LIVE='["semble-session.mjs","semble-stats.mjs","semble-subagent.mjs"]'
+# sha256 of stamp-normalized prior shipped templates (v4.5.0..v6.4.0): pristine old copy -> upgrade, no --force.
+SG_PRIOR_RULE='6774b885f0ec16626539298c1bfb3c4cc55e06793c31c3d69876326f0b3641eb 2601375fc01a30f5a84e4c9d5dedcd70ea972afa1f9dbd66e0bc98b9f232c082 d218b55b788739d7ad31b09723dc60530f3d9c92b91fe869252a0a82e7c0a295 4be1e6db21e5c592577b085406697121031f6de30b63672ff6824abf242cefff 93b6576b3a8686e062fce2479dd7af3560b01fed2b17a02f378d103d2ddc51a5'
+SG_PRIOR_IGNORE='c82e8a101d35964fc08714fb168356e46e7c02342d631dd716f1d4041c4b3c96 3fe888246c92ccc3d17da45b86fb5524cf0dd3e0c0e5f6875349e5260a711ff5'
 
-# Canonical want-table: [event, matcher, script, timeout-in-SECONDS]. Single source
-# of truth for the merge AND for the status conformance check — mirrored verbatim in
-# assets/INSTALL.md §4. `timeout` is seconds; an entry without it inherits Claude
-# Code's 600 s default. Each row expands to the full desired hook entry
-# {matcher?, hooks:[{type:"command",command:"node",args:[<abs>],timeout}]}.
-#
-# The two stats rows share one pipe-separated matcher. Claude Code 2.1.226 treats a
-# matcher of only [A-Za-z0-9_|] (plus `, ` in some call sites) as an exact name list
-# split on `|`, and anything else as an unanchored regex — `|`-only is the form that
-# is an exact list under BOTH readings. PostToolUseFailure is a separate event, not a
-# flag: on this build a failed call does not fire PostToolUse at all, so one row
-# cannot cover both.
-#
-# `Read` is in the stats matcher for one reason: prefetch conversion. The only way
-# to know whether an injected candidate path was actually opened is to observe the
-# Read that opened it, and that observation is what turns "the hook fired" into a
-# conversion number computable from the JSONL alone, without a re-run.
-#
-# The reminder row shares the `|`-only exact-list form: `Bash|Grep` is the pair of
-# tools whose use is the moment a semantic search would have been the cheaper move.
-# The subagent row carries NO matcher on purpose. Claude Code resolves a
-# `SubagentStart` matcher against `agent_type`, and the filter is
-# `!matcher || matches(agent_type, matcher)` — so an absent matcher is the only form
-# that covers every agent type, present and future, including project-local ones this
-# skill has never heard of. `Explore` alone (the v1 row) covered exactly one.
+# Want table [event, matcher, script, timeout s], mirrored in assets/INSTALL.md §4; `|`-only matcher = exact list.
+# Stats needs PostToolUseFailure too (a failed call skips PostToolUse); no SubagentStart matcher = every agent type.
 SG_STATS_MATCHER='mcp__semble_code__search|mcp__semble_code__find_related|Bash|Grep|Glob|Read'
-SG_WANT_TABLE='[["SessionStart",null,"semble-session.mjs",5],["UserPromptSubmit",null,"semble-prefetch.mjs",5],["PostToolUse","'"$SG_STATS_MATCHER"'","semble-stats.mjs",5],["PostToolUseFailure","'"$SG_STATS_MATCHER"'","semble-stats.mjs",5],["PreToolUse","Bash|Grep","semble-reminder.mjs",5],["SubagentStart",null,"semble-subagent.mjs",5]]'
+SG_WANT_TABLE='[["SessionStart",null,"semble-session.mjs",5],["PostToolUse","'"$SG_STATS_MATCHER"'","semble-stats.mjs",5],["PostToolUseFailure","'"$SG_STATS_MATCHER"'","semble-stats.mjs",5],["SubagentStart",null,"semble-subagent.mjs",5]]'
 
 MODE=""
 PART="all"
@@ -126,17 +75,14 @@ HOOKS_DIR="$(sc_hooks_dir)"
 SETTINGS="$(sc_project_settings)"
 CLAUDEMD="$ROOT/CLAUDE.md"
 GITIGNORE="$ROOT/.gitignore"
-# semble reads ./.gitignore and ./.sembleignore per directory and nothing else —
-# not core.excludesFile, not ~/.gitignore_global. A repo-root .sembleignore is the
-# only way to keep globally-ignored trees (`.claude/`) out of the index.
+# semble reads only per-dir ./.gitignore + ./.sembleignore (no core.excludesFile, no global ignore):
+# a repo-root .sembleignore is the only way to keep globally-ignored trees (`.claude/`) out of the index.
 IGNOREFILE="$ROOT/.sembleignore"
 
 want_part() { [ "$PART" = "all" ] || [ "$PART" = "$1" ]; }
 
-# Preflight: settings.json must be a parseable JSON object BEFORE anything is
-# written or deleted. The merge/unmerge step runs last, so its own ABORT would
-# otherwise leave the rule, the CLAUDE.md block and the three .mjs files half
-# applied (install) or already gone (remove) — DESIGN §10 merge discipline.
+# Preflight: settings.json must parse as an object BEFORE any write; the merge runs last, and its
+# ABORT would leave rule, CLAUDE.md block and .mjs files half applied/removed (DESIGN §10).
 settings_is_object() {
   [ -f "$SETTINGS" ] || return 0
   SG_S="$SETTINGS" node -e '
@@ -170,13 +116,15 @@ add_failed()    { FAILED="${FAILED}${1}
 "; }
 
 # ── status ──────────────────────────────────────────────────────────────────
+# shellcheck disable=SC2016  # JavaScript source, not shell: $ is literal
 status_json() {
   SG_RULE="$RULE" SG_TPL="$TPL" SG_IGNORE="$IGNOREFILE" SG_IGNORE_TPL="$IGNORE_TPL" \
   SG_CLAUDEMD="$CLAUDEMD" SG_HOOKS="$HOOKS_DIR" \
   SG_SETTINGS="$SETTINGS" SG_SEARCH="$SEMBLE_TOOL_SEARCH" SG_RELATED="$SEMBLE_TOOL_RELATED" \
   SG_WANT="$SG_WANT_TABLE" SG_STATS_MATCHER="$SG_STATS_MATCHER" \
+  SG_PRIOR_RULE="$SG_PRIOR_RULE" SG_PRIOR_IGNORE="$SG_PRIOR_IGNORE" \
   SG_MARKS="$SG_MARKS" SG_LIVE="$SG_LIVE" node -e '
-const fs=require("fs"), path=require("path");
+const fs=require("fs"), path=require("path"), crypto=require("crypto");
 const rule=process.env.SG_RULE, tpl=process.env.SG_TPL, cmd=process.env.SG_CLAUDEMD;
 const dir=process.env.SG_HOOKS, sf=process.env.SG_SETTINGS;
 const BEGIN="<!-- BEGIN brewcode:semble -->", END="<!-- END brewcode:semble -->";
@@ -188,17 +136,12 @@ const out={schema:1,
   rule:{state:"absent",path:rule},
   ignore:{state:"absent",path:process.env.SG_IGNORE},
   claudeMd:{state:"absent",path:cmd,malformed:false},
-  hooks:{session:{file:"missing",wired:false},prefetch:{file:"missing",wired:false},
-         stats:{file:"missing",wired:false},reminder:{file:"missing",wired:false},
-         subagent:{file:"missing",wired:false},retired:[],
+  hooks:{session:{file:"missing",wired:false},stats:{file:"missing",wired:false},
+         subagent:{file:"missing",wired:false},retired:[],retiredWired:[],
          settingsFile:sf,settingsParsable:true,staleEntries:0,wiredCount:0,wantCount:0,
          driftedCount:0,missingCount:0,duplicateCount:0,entries:[],drift:[]},
   permissions:{allow:[],wired:false}};
-// The rule is copied byte for byte, stamp included, so a current install matches the template
-// exactly. The four standard metadata keys are still stripped from BOTH sides before the
-// verdict, because a pre-fix install carries an installer-written `last_updated:` and possibly
-// an older `version:` -- that is a stale stamp, not a user edit. `stamp` records whether the
-// installed rule carries the three baked keys at all; a pre-5.0 rule carries none of them.
+// Verdict ignores stamp keys (release bumps, old installer `last_updated`); `stamp` = the 3 baked keys exist.
 const OWNED=["doc_type","version","content_version","generated_by","last_updated"];
 const STAMPED=["doc_type","version","generated_by"];
 const stripMeta=t=>{
@@ -207,36 +150,28 @@ const stripMeta=t=>{
   return "---\n"+t.slice(4,end+1).split("\n").filter(l=>!OWNED.some(k=>l.startsWith(k+":"))).join("\n")
     +"---\n"+t.slice(end+5);
 };
-// The frontmatter `version:` VALUE, not just its presence. setup-status names this
-// rule the stamp source for the whole skill (references row 2), and semble-status
-// compares it against the running plugin to decide whether to prescribe `upgrade` -
-// a project on stale artifacts otherwise reads perfectly healthy in its own status.
+// Frontmatter value: semble-status prescribes `upgrade` on a stale content_version (primary) / version.
 const stampField=(t,key)=>{ if(t===null||!t.startsWith("---\n")) return "";
   const end=t.indexOf("\n---\n",3); if(end<0) return "";
   const m=t.slice(4,end+1).split("\n").find(l=>new RegExp("^"+key+":").test(l));
   return m?m.slice(key.length+1).trim().replace(/^"|"$/g,""):""; };
 const stampVer=t=>stampField(t,"version");
+// managed = current template; stale = byte-pristine copy of a prior release (upgrade replaces it).
+const sha=t=>crypto.createHash("sha256").update(t).digest("hex");
+const verdict=(a,b,strip,prior)=>strip(a)===strip(b)?"managed"
+  :(process.env[prior].split(" ").indexOf(sha(strip(a)))>=0?"stale":"user_modified");
 const rr=readSafe(rule), tt=readSafe(tpl);
 out.rule.version=stampVer(rr);
 out.rule.templateVersion=stampVer(tt);
-// content_version is the PRIMARY staleness signal (last release that actually changed the
-// rule content); `version` above is secondary/informational (last release that installed
-// it). Read from the same rr/tt already loaded for `version` -- no extra file I/O.
 out.rule.content_version=stampField(rr,"content_version");
 out.rule.templateContentVersion=stampField(tt,"content_version");
 if(rr!==null){
-  out.rule.state=(tt!==null&&stripMeta(rr)===stripMeta(tt))?"managed":"user_modified";
+  out.rule.state=tt!==null?verdict(rr,tt,stripMeta,"SG_PRIOR_RULE"):"user_modified";
   out.rule.stamp=STAMPED.every(k=>new RegExp("^"+k+":","m").test(rr.split("\n---\n")[0]||""));
 }
-// The `# brewcode-meta:` stamp line is dropped from BOTH sides for the same reason the
-// rule strips its frontmatter keys: .claude/scripts/bump-version.sh rewrites that line on
-// every release, and a byte compare would then mark every already-installed .sembleignore
-// user_modified and silently skip it without --force.
+// Same two strips as install (sg_strip_metaline): the `# brewcode-meta:` line + measured-candidates block.
 const CAND_B="# --- brewcode:semble measured candidates ---";
 const CAND_E="# --- end brewcode:semble measured candidates ---";
-// Same two strips install uses (sg_strip_metaline): the release stamp line and
-// the measured-candidates block. Miss either and every annotated .sembleignore
-// reports user_modified, which freezes it against every future template update.
 const stripLine=t=>{ if(t===null) return t;
   const L=t.split("\n").filter(l=>!/^#\s*brewcode-meta:/.test(l));
   const b=L.indexOf(CAND_B), e=L.indexOf(CAND_E);
@@ -244,11 +179,8 @@ const stripLine=t=>{ if(t===null) return t;
   while(k.length&&k[k.length-1].trim()==="") k.pop();
   return k.join("\n")+"\n"; };
 const ii=readSafe(process.env.SG_IGNORE), it=readSafe(process.env.SG_IGNORE_TPL);
-if(ii!==null) out.ignore.state=(it!==null&&stripLine(ii)===stripLine(it))?"managed":"user_modified";
-// `--force` over a hand-edited file, and removing one, copy it to <file>.bak.<epoch>.
-// That copy holds user content that exists nowhere else, so it is never deleted
-// automatically - but it is reported, or it sits in the repo unnoticed forever
-// and turns up as an unexplained untracked file weeks later.
+if(ii!==null) out.ignore.state=it!==null?verdict(ii,it,stripLine,"SG_PRIOR_IGNORE"):"user_modified";
+// <file>.bak.<epoch> from --force/remove holds user content: never auto-deleted, always reported.
 out.backups=[];
 for(const f of [rule,process.env.SG_IGNORE]){
   const d=path.dirname(f), b=path.basename(f);
@@ -257,13 +189,10 @@ for(const f of [rule,process.env.SG_IGNORE]){
 }
 const cc=readSafe(cmd);
 if(cc!==null){ const b=cc.indexOf(BEGIN), e=cc.indexOf(END);
-  if(b>=0&&e>b) out.claudeMd.state="present";
+  if(b>=0&&e>b&&cc.split(BEGIN).length===2&&cc.split(END).length===2) out.claudeMd.state="present";
   else if(b>=0||e>=0) out.claudeMd.malformed=true; }
-out.hooks.session.file=fs.existsSync(path.join(dir,"semble-session.mjs"))?"present":"missing";
-out.hooks.prefetch.file=fs.existsSync(path.join(dir,"semble-prefetch.mjs"))?"present":"missing";
-out.hooks.stats.file=fs.existsSync(path.join(dir,"semble-stats.mjs"))?"present":"missing";
-out.hooks.reminder.file=fs.existsSync(path.join(dir,"semble-reminder.mjs"))?"present":"missing";
-out.hooks.subagent.file=fs.existsSync(path.join(dir,"semble-subagent.mjs"))?"present":"missing";
+for(const k of ["session","stats","subagent"])
+  out.hooks[k].file=fs.existsSync(path.join(dir,"semble-"+k+".mjs"))?"present":"missing";
 // A retired .mjs still on disk is a half-migrated install: report it by name.
 out.hooks.retired=marks.filter(m=>live.indexOf(m)<0&&fs.existsSync(path.join(dir,m)));
 let s=null; const raw=readSafe(sf);
@@ -272,11 +201,11 @@ if(s!==null&&(typeof s!=="object"||Array.isArray(s))){ s=null; out.hooks.setting
 const argsOf=e=>((e&&e.hooks)||[]).flatMap(h=>(h&&h.args)||[]).filter(a=>typeof a==="string");
 const matcherOf=e=>(e&&typeof e.matcher==="string")?e.matcher:null;
 const isMine=a=>marks.some(m=>a===m||a.endsWith("/"+m)||a.endsWith("\\"+m));
-// "Wanted" is an (event, matcher, path) TRIPLE, not a path. A path-only test called a
-// retired REGISTRATION of a live script clean — e.g. semble-stats.mjs still wired on the
-// pre-5.0.0 PostToolUse matcher, which fires the hook a second time on every Bash. The
-// triple comes from the want table, which is built from the LIVE basenames only, so a
-// retired script at the CURRENT hooks dir is stale exactly like a stale-path one.
+// Shell-form command naming an owned script (quoted `$CLAUDE_PROJECT_DIR` path): never wanted -> stale.
+const cmdMark=c=>typeof c==="string"?marks.find(m=>new RegExp("(^|[\\\\/\"\x27\\s])"+m.replace(/\./g,"\\.")+"([\"\x27\\s]|$)").test(c)):undefined;
+const ownedOf=h=>{ const a=((h&&h.args)||[]).filter(x=>typeof x==="string"&&isMine(x));
+  const c=cmdMark(h&&h.command); return c?a.concat(["cmd:"+c]):a; };
+// Wanted = (event, matcher, path) TRIPLE from LIVE rows: a retired script or registration is stale.
 const want=JSON.parse(process.env.SG_WANT);
 const wkey=(ev,m,a)=>JSON.stringify([ev,m,a]);
 const wanted=new Set(want.map(w=>wkey(w[0],w[1],path.join(dir,w[2]))));
@@ -289,19 +218,21 @@ const deq=(a,b)=>{                                        // key-order-insensiti
   if(ak.length!==bk.length) return false;
   return ak.every(k=>Object.prototype.hasOwnProperty.call(b,k)&&deq(a[k],b[k]));
 };
-let stale=0;
+let stale=0; const rw=new Set();
 if(s&&s.hooks&&typeof s.hooks==="object"&&!Array.isArray(s.hooks)){
   for(const ev of Object.keys(s.hooks)){
     const arr=Array.isArray(s.hooks[ev])?s.hooks[ev]:[];
     for(const e of arr){
-      const mine=argsOf(e).filter(isMine);
+      const mine=((e&&e.hooks)||[]).flatMap(ownedOf);
       if(mine.length&&!mine.every(a=>wanted.has(wkey(ev,matcherOf(e),a)))) stale++;
+      for(const a of mine){ const b=a.startsWith("cmd:")?a.slice(4):path.basename(a.replace(/\\/g,"/"));
+        if(live.indexOf(b)<0) rw.add(b); }
     }
   }
 }
 out.hooks.staleEntries=stale;
-// Presence is not health: every row is compared field-by-field against the
-// desired entry, so a `timeout: 5000` survivor reports `drifted`, never `wired`.
+out.hooks.retiredWired=marks.filter(m=>rw.has(m));
+// Presence is not health: each row is compared field-by-field (`timeout: 5000` = drifted).
 const rowState={};
 for(const [ev,matcher,script,timeout] of want){
   const full=path.join(dir,script);
@@ -331,10 +262,8 @@ out.hooks.wantCount=want.length;
 const ok=k=>rowState[k]==="wired";
 const M=process.env.SG_STATS_MATCHER;
 out.hooks.session.wired=ok("SessionStart/*/semble-session.mjs");
-out.hooks.prefetch.wired=ok("UserPromptSubmit/*/semble-prefetch.mjs");
 // stats spans two events; a half-wired pair is not wired.
 out.hooks.stats.wired=ok("PostToolUse/"+M+"/semble-stats.mjs")&&ok("PostToolUseFailure/"+M+"/semble-stats.mjs");
-out.hooks.reminder.wired=ok("PreToolUse/Bash|Grep/semble-reminder.mjs");
 out.hooks.subagent.wired=ok("SubagentStart/*/semble-subagent.mjs");
 const allow=(s&&s.permissions&&Array.isArray(s.permissions.allow))?s.permissions.allow:[];
 out.permissions.allow=tools.filter(t=>allow.includes(t));
@@ -358,14 +287,13 @@ console.log("rule:      "+j.rule.path
 if(j.ignore) console.log("ignore:    "+j.ignore.path);
 for(const d of (j.hooks.drift||[])) console.log("drift:     "+d.event+"/"+(d.matcher||"*")+"/"+d.script
   +" "+d.field+"="+JSON.stringify(d.actual)+" want "+JSON.stringify(d.expected));
-console.log("hooks:     "+j.hooks.session.file+" session, "+j.hooks.prefetch.file+" prefetch, "
-  +j.hooks.stats.file+" stats, "+((j.hooks.reminder||{}).file||"missing")+" reminder, "
+console.log("hooks:     "+j.hooks.session.file+" session, "+j.hooks.stats.file+" stats, "
   +((j.hooks.subagent||{}).file||"missing")+" subagent"
   +(j.hooks.staleEntries?" | "+j.hooks.staleEntries+" stale settings entr"+(j.hooks.staleEntries===1?"y":"ies"):""));
 if((j.backups||[]).length) console.log("backups:   "+j.backups.length+" .bak file"+(j.backups.length===1?"":"s")
   +" left by --force/remove (your content, delete when you no longer need it): "+j.backups.join(", "));
-if((j.hooks.retired||[]).length) console.log("retired:   "+j.hooks.retired.join(", ")
-  +" still on disk - re-run install to finish the migration");
+const left=[...new Set([].concat(j.hooks.retired||[],j.hooks.retiredWired||[]))];
+if(left.length) console.log("retired:   "+left.join(", ")+" - stale (remove via upgrade)");
 console.log("settings:  "+j.hooks.settingsFile+(j.hooks.settingsParsable?"":"  (UNPARSEABLE - fix it, nothing can be merged)"));
 '
 }
@@ -390,29 +318,11 @@ process.stdout.write(JSON.stringify({schema:1,mode:process.env.SG_MODE,part:proc
   return 0
 }
 
-# ── managed files: the rule and .sembleignore ───────────────────────────────
-# One asset, one destination, copied byte for byte. `$1` is the report label, `$2` the
-# source asset, `$3` the destination, `$4` = `meta` when the destination is markdown
-# carrying the four standard artifact-metadata keys in its frontmatter (the rule does;
-# `.sembleignore` carries a `# brewcode-meta:` comment line instead).
-#
-# BOTH assets are mechanism (a) of setup-status/references/artifact-metadata.md: the stamp
-# is BAKED INTO the plugin's own file by .claude/scripts/bump-version.sh and copied verbatim.
-# Nothing is rewritten here. `setup-status` `cmp`s the installed file against the plugin
-# asset, and any stamp written at install time would make that comparison read DIFFERS on
-# every install forever. The installed rule must be byte-identical to the template.
-#
-# `meta` therefore changes only the managed/user_modified COMPARISON, never the bytes
-# written: a pre-fix install carries an installer-written `last_updated:` the plugin file
-# does not have, and older installs carry an older `version:`. That is a stale stamp, not a
-# user edit, so those four keys are stripped from both sides before the verdict and the file
-# is re-synced to the plugin bytes without --force and without a backup.
+# ── managed files: byte copies, stamp baked in (artifact-metadata.md (a)); never rewritten here ──
+# Stamp form `meta` (frontmatter keys) / `metaline` (`# brewcode-meta:`) only shapes the managed verdict.
 
-# Content equality with the four standard keys removed from BOTH sides. Without the strip a
-# release bump -- or a pre-fix install carrying an installer-written `last_updated` -- would
-# report every repo in the world as user_modified and demand a --force.
-# No top-level `return` here: node 24 rejects it in `-e` with "Illegal return statement", and a
-# crashing strip would make sg_same_content compare "" to "" and call every file identical.
+# Frontmatter stamp keys stripped (release bumps, old installer `last_updated`). No top-level `return`:
+# node 24 rejects it in `-e`, and a crashing strip would compare "" to "" and call every file identical.
 sg_strip_meta() {
   SG_F="$1" node -e '
 const fs=require("fs");const OWNED=["doc_type","version","content_version","generated_by","last_updated"];
@@ -423,16 +333,7 @@ process.stdout.write(end<0?t:
   +"---\n"+t.slice(end+5));'
 }
 
-# The `# brewcode-meta:` comment-line form of the same stamp, for assets with no YAML
-# frontmatter. `.sembleignore` carries it on line 1 and bump-version.sh rewrites it on
-# every release. Without this strip, `install` compared the two files byte for byte, so a
-# version bump alone marked every already-installed .sembleignore `user_modified` and
-# SILENTLY SKIPPED it without --force — no .sembleignore change could ever reach an
-# existing install. The rule file was immune only because it uses the frontmatter form.
-# Also drops the measured-candidates block: it is written by install AFTER the
-# template lands, so comparing it against the template would mark every annotated
-# .sembleignore user_modified and freeze the file - the same failure the stamp
-# line caused before it was stripped.
+# `# brewcode-meta:` line + measured-candidates block stripped (install appends it after the template).
 sg_strip_metaline() {
   SG_F="$1" node -e '
 const fs=require("fs");
@@ -445,10 +346,7 @@ while(keep.length&&keep[keep.length-1].trim()==="") keep.pop();
 process.stdout.write(keep.join("\n")+"\n");'
 }
 
-# $1 rendered/template, $2 destination, $3 stamp form (`meta` = YAML frontmatter,
-# `metaline` = `# brewcode-meta:` comment). A failed or empty strip is "different", never
-# "same": this verdict decides whether a user's file gets overwritten or deleted without
-# a backup.
+# $1 template, $2 destination, $3 stamp form. A failed or empty strip is "different", never "same".
 sg_same_content() {
   local a b strip=sg_strip_meta
   [ "${3:-meta}" != "metaline" ] || strip=sg_strip_metaline
@@ -458,6 +356,17 @@ sg_same_content() {
   [ -n "$a" ] && [ "$a" = "$b" ]
 }
 
+# 0 = $1 is a pristine copy of a prior release ($2 stamp form): normalized sha256 in SG_PRIOR_*.
+sg_prior_pristine() {
+  local strip=sg_strip_meta list="$SG_PRIOR_RULE" h
+  [ "$2" != "metaline" ] || { strip=sg_strip_metaline; list="$SG_PRIOR_IGNORE"; }
+  h="$("$strip" "$1" | node -e '
+const c=[];process.stdin.on("data",d=>c.push(d)).on("end",()=>
+  process.stdout.write(require("crypto").createHash("sha256").update(Buffer.concat(c)).digest("hex")));')" || return 1
+  case " $list " in *" $h "*) [ -n "$h" ] ;; *) return 1 ;; esac
+}
+
+# shellcheck disable=SC2015  # add_changed always returns 0: A && B || C is a true if/else
 install_managed() {
   local L="$1" T="$2" D="$3" S="${4:-copy}"
   [ -f "$T" ] || { add_failed "$L: template missing at $T"; return 0; }
@@ -477,6 +386,12 @@ install_managed() {
     mv "$tmp" "$D" && add_changed "$L: re-synced $D (metadata only)" || { rm -f "$tmp"; add_failed "$L: cannot write $D"; }
     return 0
   fi
+  if [ "$S" != "copy" ] && sg_prior_pristine "$D" "$S"; then
+    # Unedited copy of an earlier release: upgrade it. No --force and no backup needed.
+    if [ "${SEMBLE_DRY_RUN:-}" = "1" ]; then rm -f "$tmp"; sc_dry "upgrade $D" >/dev/null; add_changed "$L: would upgrade $D (pristine prior-release copy)"; return 0; fi
+    mv "$tmp" "$D" && add_changed "$L: upgraded $D (pristine prior-release copy)" || { rm -f "$tmp"; add_failed "$L: cannot write $D"; }
+    return 0
+  fi
   if [ "$FORCE" != "1" ]; then
     add_skipped "$L: user_modified, left as is (re-run with --force to overwrite; a backup is taken) $D"
     diff -u "$D" "$tmp" >&2 || true
@@ -488,12 +403,13 @@ install_managed() {
   mv "$tmp" "$D" && add_changed "$L: overwrote $D (backup $b)" || { rm -f "$tmp"; add_failed "$L: cannot write $D"; }
 }
 
+# shellcheck disable=SC2015  # add_changed always returns 0: A && B || C is a true if/else
 remove_managed() {
   local L="$1" T="$2" D="$3" S="${4:-copy}"
   [ -f "$D" ] || { add_unchanged "$L: already absent"; return 0; }
   local managed=1
   if [ -f "$T" ]; then
-    if [ "$S" != "copy" ]; then sg_same_content "$T" "$D" "$S" && managed=0
+    if [ "$S" != "copy" ]; then { sg_same_content "$T" "$D" "$S" || sg_prior_pristine "$D" "$S"; } && managed=0
     else cmp -s "$T" "$D" && managed=0; fi
   fi
   if [ "$managed" = "0" ]; then
@@ -508,16 +424,8 @@ remove_managed() {
 
 install_rule()   { install_managed rule   "$TPL"        "$RULE"       meta; }
 remove_rule()    { remove_managed  rule   "$TPL"        "$RULE"       meta; }
-# ── measured per-repo candidates ────────────────────────────────────────────
-# The shipped template's per-repo section is empty by design and no static
-# pattern can fill it, so install measures THIS repo and writes what it found
-# into a delimited block - commented out, every line. Excluding something the
-# user wanted indexed is the worse error: it fails silently and they would never
-# learn the answer was unreachable. So the block proposes and never decides.
-#
-# The block is stripped by sg_strip_metaline on both sides of the managed-file
-# comparison, so its presence never marks .sembleignore user_modified and a
-# template update still reaches an installed file.
+# ── measured per-repo candidates: proposals only, every line commented out ─────
+# A silent wrong exclusion is the worse error; sg_strip_metaline drops the block from the managed verdict.
 SG_CAND_BEGIN='# --- brewcode:semble measured candidates ---'
 SG_CAND_END='# --- end brewcode:semble measured candidates ---'
 
@@ -532,6 +440,7 @@ const b=L.indexOf(process.env.SG_B), e=L.indexOf(process.env.SG_E);
 process.stdout.write(b<0||e<b?"":L.slice(b+1,e).join("\n"));'
 }
 
+# shellcheck disable=SC2016  # JavaScript source, not shell: $ is literal
 install_candidates() {
   local sib keep cand
   # Silent no-ops: nothing here is user-actionable, and a skip line for every one
@@ -589,13 +498,8 @@ process.stdout.write(String(added));')" || { add_failed "candidates: cannot anno
   add_changed "candidates: $n measured proposal(s) written into $IGNOREFILE, commented out - nothing is excluded until you uncomment one"
 }
 
-# .sembleignore is written in two halves and the second half undoes what the first
-# one reports: install_managed compares the bare template against a file that
-# install_candidates has already annotated, `cmp` fails, the metaline strip finds
-# them equal, the re-sync branch fires - and then install_candidates re-appends a
-# byte-identical block. Net zero bytes, yet every `upgrade` reported a change to
-# .sembleignore, forever, which is exactly the idempotence a user checks after a
-# release. `changed` means the bytes moved; the verdict is taken from the bytes.
+# Template re-sync + candidate re-append can net zero bytes: `changed` is decided from a byte
+# snapshot, else every `upgrade` would report .sembleignore changed forever.
 install_ignore_apply() {
   # Capture the block BEFORE the template is written through: a re-sync replaces
   # the file wholesale, and the user's uncommented decisions live in that block.
@@ -619,10 +523,7 @@ install_ignore_apply() {
   fi
 }
 
-# The prediction is produced by RUNNING the real thing against a throwaway copy,
-# for the same reason: a verdict drawn from install_managed's comparison alone
-# announces a re-sync the same command then undoes. Everything written lands in a
-# temp dir, and the candidates scan behind it is read-only.
+# Dry run = the real apply on a temp copy (same reason); the candidates scan is read-only.
 install_ignore_dry() {
   local d real c0 u0 s0 skipped=0
   real="$IGNOREFILE"
@@ -656,6 +557,7 @@ install_ignore() {
 remove_ignore()  { remove_managed  ignore "$IGNORE_TPL" "$IGNOREFILE" metaline; }
 
 # ── CLAUDE.md marker block ──────────────────────────────────────────────────
+# shellcheck disable=SC2016  # JavaScript source, not shell: $ is literal
 claudemd_node() {
   SG_CLAUDEMD="$CLAUDEMD" SG_OP="$1" node -e '
 const fs=require("fs");
@@ -666,14 +568,15 @@ const BLOCK=[BEGIN,
 "",
 "> Semantic search first: ONE `mcp__semble_code__search` with `repo` = absolute project root,",
 "> `top_k=5`, `max_snippet_lines=10` — then open the hit at `start_line`.",
-"> `rg`/Grep stays for exact identifiers, regexes, paths and exhaustive enumeration.",
+"> Symbol definitions/references -> LSP; `rg`/Grep stays for literals, regexes, paths and exhaustive enumeration.",
 "> Not indexed: `.json`/`.csv`, `.mdx`/`.txt`. Details: `.claude/rules/semble-first.md`.",
 END].join("\n");
 const exists=fs.existsSync(f);
 let raw="";
 if(exists){ try{ raw=fs.readFileSync(f,"utf8"); }catch(e){ console.error("ABORT: cannot read "+f); process.exit(1); } }
 const b=raw.indexOf(BEGIN), e=raw.indexOf(END);
-if((b>=0)!==(e>=0)||(b>=0&&e>=0&&e<b)){ console.error("malformed marker block in "+f+" - nothing changed"); process.exit(3); }
+const dup=raw.split(BEGIN).length>2||raw.split(END).length>2;   // 2 blocks: never rewrite one and abort on the other
+if(dup||(b>=0)!==(e>=0)||(b>=0&&e>=0&&e<b)){ console.error("malformed marker block in "+f+" - nothing changed"); process.exit(3); }
 let next;
 if(op==="install"){
   if(!exists) raw="# CLAUDE.md\n";
@@ -714,43 +617,10 @@ do_claudemd() {
   esac
 }
 
-# ── competing search doctrine in CLAUDE.md ──────────────────────────────────
-# Writing the rule is not the same as it being followed. Measured on this
-# workspace: guidance reached the model on 100% of prompts and converted 2 of 7,
-# and in the one session where two channels fired at once the model still went to
-# grep. The confirmed cause is not delivery — it is that the project's OWN
-# CLAUDE.md carried a competing directive ("Search via the **Bash** tool"), which
-# outranks a `.claude/rules/` file by proximity and by the user's own authority.
-# Installing a rule into a project that contradicts it is a wasted install, so
-# install reconciles the doctrine instead of adding a second one.
-#
-# Two tiers, and the boundary is deliberate because a false positive silently
-# deletes a user's instructions:
-#   confident (removed) — the line PUTS grep/Bash/rg first ("search via the bash
-#     tool", "grep-first", "use rg for all searches", "grep before semble") or
-#     DENIES the other side ("Grep/Glob are no-ops", "semantic search is
-#     broken"). A line that also SCOPES the tool ("exact identifiers", "regexes",
-#     "paths", "exhaustive enumeration") is exempt from the primacy patterns —
-#     that sentence is in the skill's own rule and is correct.
-#   report-only (untouched) — the line merely mentions a search tool near the
-#     word "search". Named with its line number and left exactly as written.
-# Everything else is invisible to this pass. Recall is deliberately given up.
-#
-# Whole LINES only, never a clause. The confirmed instance mixes a TRUE fact
-# (`grep`->ugrep/`find`->bfs shadowing) with a FALSE one (`Grep`/`Glob` "no-ops"
-# — they are gated, not removed, and re-arm via `--allowedTools` or an agent's
-# `tools:`) inside one sentence, and splitting a sentence on a regex is exactly
-# the guess that constraint would forbid. The true half is not lost: the whole
-# pre-edit file goes to a timestamped `.bak` via sc_backup — the same recovery
-# the `--force` path of install_managed uses — and the removed text is echoed
-# verbatim in the report, so re-adding it without the directive is a paste.
-#
-# Root CLAUDE.md only. Nothing in this skill has ever walked nested CLAUDE.md
-# files (`CLAUDEMD="$ROOT/CLAUDE.md"`, one path), and inventing a tree walk here
-# would put deletions in files no other part of the installer reads.
-#
-# Idempotent by construction: the match is on the text, so run 2 finds nothing
-# and writes nothing. No annotation is appended, so there is nothing to stack.
+# ── competing search doctrine in root CLAUDE.md (outranks the rule): whole LINES only, .bak first ──
+# Removed: grep/Bash/rg-first or semble-denying lines (tool-scoping lines exempt); W = mention, report-only.
+
+# shellcheck disable=SC2016  # JavaScript source, not shell: $ is literal
 sg_conflict_scan() {
   SG_CLAUDEMD="$CLAUDEMD" SG_APPLY="$1" node -e '
 const fs=require("fs");
@@ -785,12 +655,8 @@ const FIRST=[
 // The complementary sentence. rg IS the right tool for these, the skill own rule
 // says so, and a line that scopes itself this way is not a competing doctrine.
 const KEEP=/\b(exact|literal|identifier|identifiers|regex|regexes|path|paths|filename|filenames|exhaustive|enumerat\w*|verify|verifying|count|counts)\b/;
-// A tool-first clause fenced behind a condition ("when semble is offline", "fallback:
-// if the index is cold, use rg for all code search") is a compatible offline fallback,
-// not a competing doctrine - and it is the only place that fallback is written down, so
-// deleting it loses unique guidance. The condition must stand BEFORE the matched clause:
-// a bare "semantic search is unavailable" still drops. Such a line goes to the existing
-// weak/W bucket - reported by line number, left exactly as written.
+// A condition BEFORE the match ("when semble is offline, use rg...") = offline fallback, not doctrine:
+// goes to the W bucket, left as written. A bare "semantic search is unavailable" still drops.
 const COND=new RegExp("\\b(when|whenever|if|unless|while|until|in case|in the absence of|fallback|falls? back|offline|cold|unavailable|unreachable|down|not (yet )?indexed|no index)\\b");
 const HEAD=/^(#{1,6})\s+(.*)$/;
 const ANYTOOL=new RegExp("\\b"+TOOL+"\\b");
@@ -848,9 +714,7 @@ const removed=[...drop].sort((a,b)=>a-b).filter(i=>lines[i].trim()!=="");
 if(apply&&drop.size){
   const next=lines.filter((_,i)=>!drop.has(i)).join("\n");
   fs.writeFileSync(f,next.endsWith("\n")?next:next+"\n");
-  // Re-read and prove the cut landed. The comparison is against the lines the
-  // skill does NOT own: the marker block legitimately repeats `## Code Search`,
-  // and matching that would abort every successful run on this exact file.
+  // Re-read and prove the cut landed, outside the marker block only (it repeats `## Code Search`).
   const back=fs.readFileSync(f,"utf8"), bl=back.split("\n");
   const outside=[]; let bIn=false;
   for(const l of bl){
@@ -919,6 +783,7 @@ EOF
 }
 
 # ── hook files ──────────────────────────────────────────────────────────────
+# shellcheck disable=SC2015  # add_changed always returns 0: A && B || C is a true if/else
 install_hook_files() {
   local f stage
   for f in $HOOK_MJS; do
@@ -937,10 +802,7 @@ install_hook_files() {
     return 0
   fi
   mkdir -p "$HOOKS_DIR"
-  # Migration: delete `semble-explore.mjs`, which no longer ships under that name. An
-  # install that merely stops WRITING it leaves the file on disk next to a settings entry
-  # the merge is about to strip, and any hand-restored entry would resurrect a hook whose
-  # replacement (semble-subagent.mjs, all agent types) is already wired.
+  # Migration: delete retired hooks; the merge below strips their settings entries.
   for f in $RETIRED_MJS; do
     [ -e "$HOOKS_DIR/$f" ] || continue
     rm -f "$HOOKS_DIR/$f" \
@@ -958,11 +820,8 @@ install_hook_files() {
       add_unchanged "hooks: $f already current"
       continue
     fi
-    # Staged, then moved into place only once `node --check` passes. Checking AFTER
-    # the copy left a broken asset installed and still wired: every prompt of the
-    # user's next session then ran a hook Claude Code cannot parse.
-    # The staged name still ends in .mjs: the assets are ESM, and `node --check` on a
-    # path with any other suffix parses them as CommonJS and rejects every `export`.
+    # Staged, moved in only after `node --check` passes (a broken wired hook fails every event).
+    # Staged name keeps .mjs: any other suffix is checked as CommonJS and rejects ESM.
     stage="$HOOKS_DIR/.semble-staging.$$.$f"
     if cp "$SRC/$f" "$stage" && node --check "$stage" 2>/dev/null && mv -f "$stage" "$HOOKS_DIR/$f"; then
       add_changed "hooks: installed $HOOKS_DIR/$f"
@@ -973,9 +832,8 @@ install_hook_files() {
   done
 }
 
-# A want row whose hook file is not on disk must not be wired: an entry pointing at a
-# missing file is a hook that fails on every prompt. A file that survived a failed
-# upgrade (the previous, valid copy) is still there and stays wired.
+# A want row whose file is missing is not wired (it would fail every event); a previous
+# valid copy that survived a failed upgrade stays wired.
 prune_want_table() {
   if [ "${SEMBLE_DRY_RUN:-}" = "1" ]; then return 0; fi
   SG_WANT_TABLE="$(SG_WANT="$SG_WANT_TABLE" SG_HOOKS="$HOOKS_DIR" node -e '
@@ -984,6 +842,7 @@ process.stdout.write(JSON.stringify(
   JSON.parse(process.env.SG_WANT).filter((r) => fs.existsSync(path.join(d, r[2])))));')"
 }
 
+# shellcheck disable=SC2015  # add_changed always returns 0: A && B || C is a true if/else
 remove_hook_files() {
   local f
   for f in $ALL_MJS; do   # retired files included: uninstall must leave nothing behind
@@ -994,17 +853,38 @@ remove_hook_files() {
       add_unchanged "hooks: $f already absent"
     fi
   done
-  # The throttle markers and counters are ours too, live and retired alike: removal drops
-  # their .gitignore line, so anything left behind surfaces as an untracked file.
-  for f in .claude/semble/.prefetch-ts .claude/semble/reminder.json $RETIRED_MARKERS; do
+  # Retired throttle/counter files: removal drops the .gitignore line, leftovers would surface untracked.
+  for f in $RETIRED_MARKERS; do
     [ -e "$ROOT/$f" ] || continue
     if [ "${SEMBLE_DRY_RUN:-}" = "1" ]; then sc_dry "rm $ROOT/$f" >/dev/null; add_changed "hooks: would remove marker $ROOT/$f"; continue; fi
     rm -f "$ROOT/$f" && add_changed "hooks: removed marker $ROOT/$f" || add_failed "hooks: cannot remove marker $ROOT/$f"
   done
 }
 
+# Files and dirs install may have created, deleted only when nothing but install's own stub is left:
+# CLAUDE.md == "# CLAUDE.md", blank .gitignore, empty hooks/rules dirs. settings.json stays.
+prune_install_leftovers() {
+  local f w d
+  for f in "$CLAUDEMD" "$ROOT/.gitignore"; do
+    [ -f "$f" ] || continue
+    w="$(SG_F="$f" node -e '
+const fs=require("fs"),f=process.env.SG_F,t=fs.readFileSync(f,"utf8").trim();
+process.stdout.write(t===""||t==="# CLAUDE.md"?"empty":"keep");' 2>/dev/null || printf 'keep')"
+    [ "$w" = "empty" ] || continue
+    if [ "${SEMBLE_DRY_RUN:-}" = "1" ]; then add_changed "prune: would delete $f (empty after removal)"; continue; fi
+    if rm -f "$f"; then add_changed "prune: deleted $f (empty after removal)"; else add_failed "prune: cannot delete $f"; fi
+  done
+  for d in "$HOOKS_DIR" "$(dirname "$RULE")"; do
+    [ -d "$d" ] || continue
+    [ -z "$(ls -A "$d" 2>/dev/null)" ] || continue
+    if [ "${SEMBLE_DRY_RUN:-}" = "1" ]; then add_changed "prune: would remove empty dir $d"; continue; fi
+    rmdir "$d" 2>/dev/null && add_changed "prune: removed empty dir $d" || true
+  done
+}
+
 # ── settings.json merge (canonical, see assets/INSTALL.md §merge) ───────────
 merge_settings() {
+  # shellcheck disable=SC2016  # JavaScript source, not shell: $ is literal
   SG_SETTINGS="$SETTINGS" SG_HOOKS="$HOOKS_DIR" SG_DO_HOOKS="$1" SG_DO_PERMS="$2" \
   SG_SEARCH="$SEMBLE_TOOL_SEARCH" SG_RELATED="$SEMBLE_TOOL_RELATED" \
   SG_WANT="$SG_WANT_TABLE" SG_MARKS="$SG_MARKS" node -e '
@@ -1014,6 +894,20 @@ const doHooks=process.env.SG_DO_HOOKS==="1", doPerms=process.env.SG_DO_PERMS==="
 const marks=JSON.parse(process.env.SG_MARKS);   // every basename ever owned, live + retired
 const want=JSON.parse(process.env.SG_WANT);
 const tools=[process.env.SG_SEARCH,process.env.SG_RELATED];
+function lock(f){                                         // shared <settings>.lock (agent-return INSTALL.md): 10 s wait, >30 s stale
+  const l=f+".lock", w=new Int32Array(new SharedArrayBuffer(4));
+  for(let i=0;i<100;i++){
+    try{ fs.mkdirSync(l); return ()=>{ try{ fs.rmdirSync(l); }catch{} }; }
+    catch(e){
+      if(e.code!=="EEXIST") throw e;
+      try{ if(Date.now()-fs.statSync(l).mtimeMs>30000) fs.rmdirSync(l); }catch{}
+      Atomics.wait(w,0,0,100);
+    }
+  }
+  console.error("ABORT: "+l+" is held by another installer; nothing was written"); process.exit(1);
+}
+fs.mkdirSync(path.dirname(f),{recursive:true});
+process.on("exit",lock(f));                               // read+merge+write = one critical section
 let s={};
 if(fs.existsSync(f)){
   const raw=fs.readFileSync(f,"utf8");
@@ -1026,21 +920,11 @@ if(fs.existsSync(f)){
 const argsOf=e=>((e&&e.hooks)||[]).flatMap(h=>(h&&h.args)||[]).filter(a=>typeof a==="string");
 const matcherOf=e=>(e&&typeof e.matcher==="string")?e.matcher:null;
 const isMine=a=>marks.some(m=>a===m||a.endsWith("/"+m)||a.endsWith("\\"+m));
-// MIGRATION, and the whole reason `live` exists separately from `marks`. `wanted` used to
-// be built from `marks`, which meant every basename this skill had ever owned survived the
-// purge below. It is now the want table itself, as (event, matcher, path) TRIPLES, and that
-// one change carries every shape migration this skill has:
-//   - a RETIRED script at the current hooks dir is stripped exactly like a stale-path one,
-//     so a v1 `SubagentStart`/`Explore` row pointing at semble-explore.mjs is REPLACED by
-//     the matcher-less semble-subagent.mjs row rather than left standing beside it;
-//   - a retired REGISTRATION of a LIVE script goes the same way — the v1 pair of
-//     `PreToolUse`/`Bash` + `PreToolUse`/`Grep` reminder rows collapses into the single
-//     `PreToolUse`/`Bash|Grep` row, and semble-stats.mjs wired on the pre-5.0.0 PostToolUse
-//     matcher would otherwise survive beside its replacement and fire the hook twice on
-//     every Bash call, silently doubling the telemetry denominator.
-// A v5.1.0-shaped file, where the reminder and subagent rows are simply absent, converges
-// through the same loop: nothing to purge, two rows appended. Both starting shapes and a
-// clean project therefore land on the identical six-row result.
+const cmdMark=c=>typeof c==="string"?marks.find(m=>new RegExp("(^|[\\\\/\"\x27\\s])"+m.replace(/\./g,"\\.")+"([\"\x27\\s]|$)").test(c)):undefined;
+const ownedOf=h=>{ const a=((h&&h.args)||[]).filter(x=>typeof x==="string"&&isMine(x));
+  const c=cmdMark(h&&h.command); return c?a.concat(["cmd:"+c]):a; };   // shell form: never wanted
+// MIGRATION: wanted = LIVE (event, matcher, path) triples, so retired scripts (explore, reminder,
+// prefetch), retired registrations of live scripts and stale paths are all purged below.
 const wkey=(ev,m,a)=>JSON.stringify([ev,m,a]);
 const wanted=new Set(want.map(w=>wkey(w[0],w[1],path.join(dir,w[2]))));
 const desiredHook=(full,timeout)=>({type:"command",command:"node",args:[full],timeout});
@@ -1088,16 +972,15 @@ if(doHooks){
       if(!e||!Array.isArray(e.hooks)) return e;           // may hold a foreign hook next to a stale one
       const m=matcherOf(e);
       const kept=e.hooks.filter(h=>{
-        const mine=((h&&h.args)||[]).filter(a=>typeof a==="string").filter(isMine);
+        const mine=ownedOf(h);
         return mine.length===0 || mine.every(a=>wanted.has(wkey(ev,m,a)));
       });
       if(kept.length===e.hooks.length) return e;
       return kept.length ? Object.assign({},e,{hooks:kept}) : null;   // entry dies only when empty
     }).filter(e=>e!==null);
   }
-  // An event emptied by the purge is an event we retired (PreToolUse, SubagentStart on a
-  // v1 install). Leave no `"PreToolUse": []` husk behind; events in the want table are
-  // repopulated immediately below and are never dropped.
+  // An event emptied by the purge (UserPromptSubmit, PreToolUse) is dropped, no `[]` husk;
+  // want-table events are repopulated below.
   const wantEvents=new Set(want.map(w=>w[0]));
   for(const ev of Object.keys(s.hooks))
     if(Array.isArray(s.hooks[ev])&&s.hooks[ev].length===0&&!wantEvents.has(ev)) delete s.hooks[ev];
@@ -1125,7 +1008,6 @@ if(doPerms){
 }
 const pre=verify(s);                                      // validate BEFORE writing: a failed
 if(pre){ console.error("ABORT: "+pre+"; nothing was written"); process.exit(1); }   // assert must not leave a bad file
-fs.mkdirSync(path.dirname(f),{recursive:true});
 fs.writeFileSync(f,JSON.stringify(s,null,2)+"\n");
 const post=verify(JSON.parse(fs.readFileSync(f,"utf8")));  // re-read what actually landed
 if(post){ console.error("ABORT: "+post); process.exit(1); }
@@ -1142,20 +1024,33 @@ const doHooks=process.env.SG_DO_HOOKS==="1", doPerms=process.env.SG_DO_PERMS==="
 const marks=JSON.parse(process.env.SG_MARKS);   // retired basenames included: uninstall must clean them too
 const tools=[process.env.SG_SEARCH,process.env.SG_RELATED];
 if(!fs.existsSync(f)){ console.log("no settings to clean: "+f); process.exit(0); }
+const l=f+".lock", w=new Int32Array(new SharedArrayBuffer(4));   // same <settings>.lock as merge_settings
+for(let i=0;;i++){
+  try{ fs.mkdirSync(l); process.on("exit",()=>{ try{ fs.rmdirSync(l); }catch{} }); break; }
+  catch(e){
+    if(e.code!=="EEXIST") throw e;
+    if(i>=99){ console.error("ABORT: "+l+" is held by another installer; nothing was written"); process.exit(1); }
+    try{ if(Date.now()-fs.statSync(l).mtimeMs>30000) fs.rmdirSync(l); }catch{}
+    Atomics.wait(w,0,0,100);
+  }
+}
 const raw=fs.readFileSync(f,"utf8");
 if(!raw.trim()){ console.log("empty settings, nothing to clean: "+f); process.exit(0); }
 let s;
 try{ s=JSON.parse(raw); }
 catch(e){ console.error("ABORT: "+f+" is not valid JSON ("+e.message+") - fix or delete it; nothing was written"); process.exit(1); }
 if(s===null||typeof s!=="object"||Array.isArray(s)){ console.error("ABORT: "+f+" is not a JSON object; nothing was written"); process.exit(1); }
+const orig=JSON.stringify(s);
 const argsOf=e=>((e&&e.hooks)||[]).flatMap(h=>(h&&h.args)||[]).filter(a=>typeof a==="string");
 const isMine=a=>marks.some(m=>a===m||a.endsWith("/"+m)||a.endsWith("\\"+m));
+const cmdMark=c=>typeof c==="string"?marks.find(m=>new RegExp("(^|[\\\\/\"\x27\\s])"+m.replace(/\./g,"\\.")+"([\"\x27\\s]|$)").test(c)):undefined;
+const ownedOf=h=>((h&&h.args)||[]).some(x=>typeof x==="string"&&isMine(x))||!!cmdMark(h&&h.command);
 if(doHooks&&s.hooks&&typeof s.hooks==="object"&&!Array.isArray(s.hooks)){
   for(const ev of Object.keys(s.hooks)){
     if(!Array.isArray(s.hooks[ev])) continue;
     s.hooks[ev]=s.hooks[ev].map(e=>{                     // same discipline as the merge: strip only the
       if(!e||!Array.isArray(e.hooks)) return e;          // semble hooks, drop the entry once it is empty
-      const kept=e.hooks.filter(h=>!((h&&h.args)||[]).filter(a=>typeof a==="string").some(isMine));
+      const kept=e.hooks.filter(h=>!ownedOf(h));
       if(kept.length===e.hooks.length) return e;
       return kept.length ? Object.assign({},e,{hooks:kept}) : null;
     }).filter(e=>e!==null);
@@ -1170,10 +1065,13 @@ if(doPerms&&s.permissions&&typeof s.permissions==="object"&&!Array.isArray(s.per
   }
   if(Object.keys(s.permissions).length===0) delete s.permissions;
 }
-fs.writeFileSync(f,JSON.stringify(s,null,2)+"\n");
-const back=JSON.parse(fs.readFileSync(f,"utf8"));         // re-read and assert
+if(JSON.stringify(s)===orig){ console.log("nothing to clean: "+f); process.exit(0); }   // foreign bytes stay as written
+const gone=Object.keys(s).length===0;                    // held only semble entries -> delete, never leave {}
+try{ if(gone){ fs.accessSync(f,fs.constants.W_OK); fs.unlinkSync(f); } else fs.writeFileSync(f,JSON.stringify(s,null,2)+"\n"); }
+catch(e){ console.error("ABORT: cannot write "+f+" ("+e.code+"); nothing was written"); process.exit(1); }
+const back=gone?{}:JSON.parse(fs.readFileSync(f,"utf8"));   // re-read and assert
 if(doHooks){
-  const left=Object.values(back.hooks||{}).flat().filter(e=>argsOf(e).some(isMine)).length;
+  const left=Object.values(back.hooks||{}).flat().filter(e=>((e&&e.hooks)||[]).some(ownedOf)).length;
   if(left!==0){ console.error("ABORT: verification failed - "+left+" semble hook entries still in "+f); process.exit(1); }
 }
 if(doPerms){
@@ -1206,18 +1104,9 @@ run_settings() {
   else add_changed "settings: $label ${op}d in $SETTINGS"; fi
 }
 
-# ── .gitignore line for the throttle marker ─────────────────────────────────
-# Outcome is VERIFIED by re-reading the file, never assumed from the exit status of
-# the write. When there is no .gitignore the line is created only inside a git repo;
-# outside one there is nothing to ignore, and that is reported as skipped, not "ok".
-# The whole directory, not one marker: the install also puts state.json there and all
-# five hooks append telemetry.jsonl, which carries verbatim shell commands and distilled
-# prompt text and is trimmed at 2 MB. A per-marker line left the rest permanently
-# untracked-and-committable in any repo that does not already ignore `.claude/`.
+# ── .gitignore: the whole .claude/semble/ dir (state.json, telemetry.jsonl with verbatim commands) ──
+# Outcome verified by re-read; no .gitignore + not a git repo = skipped. Retired per-marker lines stripped.
 GI_LINE='.claude/semble/'
-# Superseded by the directory line and stripped by install AND remove: `.reminder-ts`
-# retired with semble-reminder.mjs, `.prefetch-ts` is now covered by GI_LINE. A migrated
-# repo must not keep either beside the new line.
 GI_RETIRED='.claude/semble/.reminder-ts .claude/semble/.prefetch-ts'
 gitignore_has_line() { grep -Fqx "$GI_LINE" "$GITIGNORE" 2>/dev/null; }
 # Space-separated list of the retired lines actually present, so the report names what
@@ -1247,10 +1136,7 @@ for(let i=0;i<lines.length;i++){
 fs.writeFileSync(f,out.join("\n").replace(/\n+$/,"\n"));'
 }
 
-# Appends the block after collapsing whatever trailing blank lines are already
-# there, so install/remove/install is byte-idempotent. Without the collapse the
-# drop leaves a trailing blank, the append prepends its own, and .gitignore grows
-# one blank line per cycle - a diff in the user's repo for doing nothing.
+# Appends after collapsing trailing blanks: install/remove/install stays byte-idempotent.
 gitignore_append() {
   SG_GI="$GITIGNORE" SG_LINE="$GI_LINE" node -e '
 const fs=require("fs"); const f=process.env.SG_GI;
@@ -1337,6 +1223,7 @@ case "$MODE" in
     want_part rule     && remove_rule
     want_part ignore   && remove_ignore
     want_part claudemd && do_claudemd remove
+    sg_failed_before="$FAILED"
     if want_part hooks && want_part permissions; then
       run_settings unmerge 1 1 "hooks+permissions"
     elif want_part hooks; then
@@ -1344,10 +1231,14 @@ case "$MODE" in
     elif want_part permissions; then
       run_settings unmerge 0 1 "permissions"
     fi
-    if want_part hooks; then
+    # Still wired -> keep the files: a registration on a missing script fails every tool call.
+    if want_part hooks && [ "$FAILED" != "$sg_failed_before" ]; then
+      add_skipped "hooks: files kept in $HOOKS_DIR - $SETTINGS still registers them; fix it and re-run"
+    elif want_part hooks; then
       remove_hook_files
       remove_gitignore
     fi
+    [ "$PART" != "all" ] || [ -n "$FAILED" ] || prune_install_leftovers
     emit_report remove
     ;;
 esac

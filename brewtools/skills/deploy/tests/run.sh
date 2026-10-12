@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
-# run.sh - aggregate every brewtools:deploy test suite.
-#
-# Usage: run.sh [suite-name ...]      (bare names or file names, e.g. `watchdog`)
-#
-# Iterates tests/suite-*.mjs in sorted order and runs each one. Exits 1 if any
-# suite exited non-zero. No network, no `gh` on PATH is required: the suites
-# build their own sandbox and stub every external command they call.
+# run.sh [suite ...] - run every brewtools:deploy tests/suite-*.mjs (bare or file names), sorted; rc 1 on any failure.
+# No network, no `gh` needed: suites sandbox and stub every external command. Example suite: `watchdog`.
 set -euo pipefail
+# Suites never see the live profile: always an empty temp CLAUDE_CONFIG_DIR, set or unset.
+CLAUDE_CONFIG_DIR="$(mktemp -d)"; export CLAUDE_CONFIG_DIR
+# EXIT: delete only the temp profile made above (non-empty, under TMPDIR); runner rc kept.
+CFG_TMP_DIR="$CLAUDE_CONFIG_DIR"; CFG_TMP_ROOT="${TMPDIR:-/tmp}"; CFG_TMP_ROOT="${CFG_TMP_ROOT%/}"
+readonly CFG_TMP_DIR CFG_TMP_ROOT
+trap '[ -z "$CFG_TMP_ROOT" ] || case "$CFG_TMP_DIR" in "$CFG_TMP_ROOT"/?*) rm -rf -- "$CFG_TMP_DIR" || true ;; esac' EXIT
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
-  sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,3p' "$0" | sed 's/^# \{0,1\}//'
   exit 0
 fi
 

@@ -1,7 +1,5 @@
 # Java/Kotlin Reference
 
-> Language-specific rules for text-human skill
-
 ## File Classification
 
 ### fast model (Simple)
@@ -43,7 +41,7 @@ Remove only redundant JavaDoc, regardless of visibility or test location. Keep u
 |--------|------|
 | Redundant private/package-private docs | Useful contracts on any visibility, including protected methods |
 | Redundant test/helper docs (`*Test.java`, `*Spec.kt`) | Test invariants, fixture contracts, @DisplayName and GIVEN/WHEN/THEN/AND |
-| Obvious DTOs/Entities (name describes purpose) | Complex business logic explanation |
+| Obvious DTOs/Entities, Lombok `@Value`/`@Data`/`@Builder` classes (name describes purpose) | Complex business logic explanation |
 | All @param (restates param name) | `@throws` with specific conditions |
 | All @return (restates method name) | Non-obvious side effects |
 | Class doc when class name is self-explanatory | External API contracts |
@@ -81,9 +79,6 @@ BigDecimal convertCurrency(BigDecimal amount, CurrencyCode currency) { }
 /** Validates the filter. */
 private boolean isValidFilter(Filter f) { }
 
-/** Builds full condition. */
-private Condition buildFullCondition() { }
-
 /** Rounds value to scale. @param value the value @param scale the scale */
 private Double roundToScale(double value, int scale) { }
 ```
@@ -95,10 +90,6 @@ private Double roundToScale(double value, int scale) { }
 /** Filter DTO for rates history queries. */
 @Value @Builder
 public class RatesHistoryFilter { }
-
-/** Entity for rate history data. */
-@Value @Builder
-public class HistoryRateEntity { }
 
 // KEEP - adds non-obvious context:
 /** Cached for 1 hour. Thread-safe via copy-on-write. */
@@ -142,61 +133,7 @@ public class RatesStatsExpectedData {
 }
 ```
 
----
-
-## Comments
-
-| Remove | Keep |
-|--------|------|
-| `// Initialize the list` | `// Retry 3x due to flaky external API` |
-| `// Loop through items` | `// Uses UTC to match database timezone` |
-| `// Check if null` | `// Thread-safe: synchronized on class lock` |
-| Stale `// TODO: refactor this` | `// HACK: workaround for JDK-12345` |
-
-Preserve all BDD comments: `// GIVEN`, `// WHEN`, `// THEN`, `// AND`
-
----
-
-## Issue References
-
-```java
-// REMOVE ONLY after proof these IDs are invented and resolve to no real ticket:
-// BUG-001 fix: ...
-// FIX-123: ...
-// ISSUE-42: ...
-
-// KEEP - real ClickUp/Jira tickets:
-// INTELDEV-19207: ...
-// Workaround for JIRA-12345
-```
-
-Keep real tickets regardless of pattern, including BUG-001/FIX-123. Check the actual tracker/provenance; remove only IDs proved invented AND resolving to no real ticket. Missing access or uncertain resolution -> surface, never guess. INTELDEV-XXXXX/JIRA-XXXXX patterns alone do not prove existence.
-
----
-
-## Pre-Completion Checklist
-
-| Check | Rule |
-|-------|------|
-| [ ] | private/protected/package-private docs: redundant prose removed; meaningful contracts retained |
-| [ ] | `*Test.java`, `*Spec.kt`, `src/test/`: useful test docs and GIVEN/WHEN/THEN/AND retained |
-| [ ] | `*Data.java`, `*Requests.java`, `*Fixtures.java`: fixture assumptions retained |
-| [ ] | Obvious DTOs: no JavaDoc if class name is self-explanatory |
-| [ ] | Trivial @param: no `@param id the id` or similar restating param name |
-| [ ] | Trivial @return: no `@return` that restates method name |
-| [ ] | Lombok: no docs on `@Value`, `@Data`, `@Builder` classes unless non-obvious |
-
-### Scan Pattern
-
-```
-# grep patterns:
-grep -n "^\s*/\*\*" <file>           // Find all JavaDoc
-grep -n "private.*{" <file>          // Find private methods
-```
-
-### Files to Double-Check
-
-Repository classes (private helper methods), Service classes (internal methods), Test helper classes (not ending in `Test`), DTOs/Entities (redundant class-level JavaDoc).
+Comments, BDD markers and issue references: `flows/code.md`.
 
 ---
 

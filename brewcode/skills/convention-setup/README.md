@@ -12,11 +12,13 @@ before creating project agents.
 
 Run after semantic search and before `/brewcode:teams-setup`. There is no teams prerequisite.
 Use `/brewcode:setup-status` for the ordered run-list. A bare convention-setup invocation
-defaults to **install**; use explicit status for read-only inspection.
+defaults to **install**; use `status` for a read-only check.
 
 The skill checks current state, analyses applicable layers, selects reference implementations,
 generates and reviews documents, proposes additional rules for acceptance, then validates and
-installs loading guidance. Existing local wording and unrelated documents are preserved.
+installs loading guidance. Existing local wording and unrelated documents are preserved. With
+brewtools installed, its text optimizer compacts the documents with a meaning-loss check;
+otherwise that step is skipped and reported.
 
 ## Installed artifacts
 
@@ -27,7 +29,7 @@ installs loading guidance. Existing local wording and unrelated documents are pr
 | `.claude/convention/project-architecture.md` | Architecture, dependencies, and repository layout |
 | `.claude/rules/convention.md` | Guidance to read the relevant convention document before implementation or review |
 
-Generated documents and the loading rule carry provenance and content-version metadata used
+Generated documents and the loading rule carry provenance and content-version metadata read
 by setup-status. Accepted coding rules can be added separately under `.claude/rules/`.
 Manual CLAUDE.md references are added only when explicitly requested.
 
@@ -45,14 +47,12 @@ Prefix each mode with `/brewcode:convention-setup`.
 | `uninstall` | Remove the owned loader; keep convention documents |
 | `purge` | Remove the owned loader and the three owned generated documents |
 
-**Parking the loader preserves accepted project rules.** Documents and manual CLAUDE.md
-references also remain active or readable. Uninstall and purge preserve accepted rules,
-CLAUDE.md, and unrelated files. Purge confirms the three document paths unless their deletion
-was explicitly requested.
+Disable, uninstall and purge never touch accepted project rules, CLAUDE.md or unrelated files,
+and manual CLAUDE.md references stay active. Purge confirms the three document paths unless you
+explicitly asked for their deletion.
 
-The lifecycle helper stops on unowned artifacts or a live/disabled loader collision.
-Install and upgrade refresh owned loader metadata without replacing its wording or restoring
-a disabled loader.
+The lifecycle helper stops on unowned artifacts or a live/disabled loader collision. Install and
+upgrade refresh only an existing loader's metadata; a disabled loader stays disabled.
 
 ## Additional extraction modes
 
@@ -68,9 +68,8 @@ a disabled loader.
 - `rules`: extract rules from existing convention documents; generate documents first.
 - `paths`: refresh scoped evidence while retaining other layers; separate explicit paths with commas.
 
-A free-text brief can specify scope and intent. Large repositories can use paths to focus
-analysis. Applicable code and test layers depend on the detected stack; parallel agents own
-bounded layers or documents.
+A free-text brief can set scope and intent; large repositories can focus analysis with `paths`.
+The detected stack decides which code and test layers apply.
 
 ## Related
 

@@ -23,11 +23,11 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 ## What it does
 
 Inspect an unfamiliar repository or check copied artifacts after updating the plugins. The skill
-reports installed, disabled, missing, partial, or stale setups and gives the exact next command.
+reports current, disabled, missing, partial, stale, or modified setups and gives the exact next command.
 It compares artifact content versions, ownership, copied bytes, and required artifacts or wiring.
 
 The probes are read-only. The skill runs no setup and spawns no agents. Its only write is an
-optional one-key settings merge after you accept the task-tools offer. There is no `--run`,
+optional one-key settings merge after you accept the task-tools offer. The merge takes the shared `settings.json.lock` and aborts after 10 s if another setup holds it. There is no `--run`,
 `--fix`, or automatic setup mode.
 
 ## When to use
@@ -65,8 +65,8 @@ content version can produce stale even if the other convention files are current
   <li><div><strong>Resolve installed plugin roots</strong><p>Find the installed plugins and resolve their versions. Missing plugins produce n/a rows rather than missing project artifacts. An unresolved version is reported instead of guessed.</p></div></li>
   <li><div><strong>Probe artifacts and off-switches</strong><p>Check each roster row's anchor, secondary files, settings, and live or parked discovery entry. Disabled state is evaluated before incomplete or outdated artifacts.</p></div></li>
   <li><div><strong>Compare content, ownership, and bytes</strong><p>Compare each artifact's content version with its own plugin source, check generated_by, and compare copied files where appropriate. Generated project content is not compared byte-for-byte with raw templates.</p></div></li>
-  <li><div><strong>Print verdicts and the dependency-ordered run-list</strong><p>Within each stage, partial installs precede stale and missing ones. Disabled, installed, unavailable, and filtered-out rows stay out of the list.</p></div></li>
-  <li><div><strong>Check roster coverage and task-tool availability</strong><p>Compare the roster with installed setup directories and warn about unknown setups. A complete roster prints roster: 11/11 in sync. If task tools are off, offer the separate one-key settings change after the report.</p></div></li>
+  <li><div><strong>Print verdicts and the dependency-ordered run-list</strong><p>Within each stage, partial installs precede stale and modified ones, then missing ones. Disabled, current, unavailable, and filtered-out rows stay out of the list.</p></div></li>
+  <li><div><strong>Check roster coverage and task-tool availability</strong><p>Compare the roster with installed setup directories and warn about unknown setups. A complete roster prints roster: 11/11 in sync. The highest settings layer that sets the task-tools key decides. If no layer sets it and the session env does not turn it on, offer the separate one-key settings change after the report; a higher layer's `"0"` reports `off (<layer>)` with no offer.</p></div></li>
 </Steps>
 
 ## Run-list order
@@ -114,8 +114,9 @@ Evaluated in this order:
 | `disabled` | The setup's off-switch confirms deliberate disablement |
 | `missing` | Anchor and secondary artifacts are absent in live and disabled spellings |
 | `partial` | Incomplete installation, half-applied toggles, unresolved metadata, or wrong ownership |
-| `stale` | Content-version, copied-byte, absence, or wiring signals need refresh |
-| `installed` | Required artifacts and applicable checks agree |
+| `stale` | Content-version, copied-byte, absence, or wiring signals need refresh; the row reads `stale (installed X.Y.Z, plugin A.B.C)` when the versions differ |
+| `modified` | Reads `modified (stamp current, bytes differ)`: the stamp is current but a copied file was edited or never re-copied |
+| `current` | Required artifacts and applicable checks agree |
 
 The report distinguishes changed content, legacy stamps, unstamped artifacts, and byte drift.
 A missing plugin comparison source is an unknown validation result, never proof of stale content.

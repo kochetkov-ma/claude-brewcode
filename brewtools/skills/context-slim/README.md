@@ -31,7 +31,7 @@ weight per tier. No files are touched.
 | Flag | Applies to | Effect |
 |------|-----------|--------|
 | `--target=N%` | preview, slim, hard | Target reduction against THIS run's freshly measured scope, never a stale baseline |
-| `--global` | all mutating modes, measure | Include and write `$HOME/.claude` (default: project only, global read as authority) |
+| `--global` | all mutating modes, measure | Include and write the global layer, `$HOME/.claude` or `CLAUDE_CONFIG_DIR` when set (default: project only, global read as authority) |
 | `--memory` | all mutating modes, measure | Include the memory directory in scope |
 | `--noask` | preview, bodies, slim, hard | Skip the phase 0 clarifying questions ONLY. Never skips a destructive confirmation (`hard`, `restore`, any `--global` write, the escalation gate below) or a ground-truth STOP -- see Safety |
 
@@ -41,13 +41,12 @@ Default scope on every mode except `bodies`:
 
 | Tier | Included | Default |
 |------|----------|---------|
-| ALWAYS-ON | project+global CLAUDE.md/CLAUDE.local.md, rules, `.claude/convention/*`, AGENTS.md, memory, agent `description:` fields, hook-injected text | in scope |
+| ALWAYS-ON | project+global CLAUDE.md/CLAUDE.local.md (subdirectory ones load on access), rules, `.claude/convention/*`, AGENTS.md, memory, agent `description:` fields, hook-injected text | in scope |
 | PER-SPAWN | agent `.md` bodies | in scope |
 | PER-INVOCATION | skill `SKILL.md` + `references/*.md` bodies | opt-in via `bodies` |
 
-Current measured token totals per tier: run `measure`, or read the dated baseline table in
-[`references/measurement.md`](references/measurement.md). Not restated here on purpose -- the baseline
-moves with the repo, and only a live scan is valid for a `--target`.
+Token totals per tier: run `measure`. Only a live scan is valid for a `--target`; the baseline moves
+with the repo.
 
 ## Examples
 
@@ -111,26 +110,27 @@ moves with the repo, and only a live scan is valid for a `--target`.
 | Guarantee | Detail |
 |-----------|--------|
 | Global writes opt-in | `--global` required to write `$HOME/.claude`; global is always READ as authority regardless |
-| Backups | BOTH layers are snapshotted, each with its own manifest and run dir; all manifests live under `~/.claude/backups/<YYYYMMDD-HHMMSS>-<layer>_context-slim/` (`-2`, `-3` on a same-second collision). The newest 5 are kept. `restore last` with no layer flag covers EVERY layer of the newest run in one call; `restore --global last` reaches the global layer even when a project run shares its second |
+| Backups | Both layers are snapshotted, each with its own manifest and run dir under `~/.claude/backups/<YYYYMMDD-HHMMSS>-<layer>_context-slim/` (`-2`, `-3` on a same-second collision). The newest 5 runs are kept, and a run younger than 24 h is never pruned, so parallel runs cannot delete each other's snapshots. `restore last` with no layer flag covers every layer of the newest run; `restore --global last` reaches the global layer even when a project run shares its second |
 | Manifest integrity | Each `manifest.json` is JSON-validated with `jq`, else `python3`. With neither installed the guard prints `⚠️ ... written UNVALIDATED` and continues -- the run surfaces that warning rather than hiding it |
 | Project protection | The snapshot is the guarantee and it never depends on git. Git is an ADDITIONAL protection over TRACKED files only: a target that is tracked and dirty is refused (exit 3, paths named -- commit or stash). Targets git does not cover -- untracked, or ignored via `.gitignore`/`core.excludesFile`, which is the normal case for `.claude/**` and `CLAUDE.md` -- are reported `SNAPSHOT-ONLY` and proceed; that is not an error, and no `git add -f` is ever required to run this skill |
-| Known side effects | The guard appends `.claude/reports/` to the **project repo's** `.gitignore` (creating it if absent) and creates `~/.claude/.gitignore` with the same line if absent. Neither `.gitignore` is snapshotted or restored -- the project one shows up in `git status` after a run |
+| Known side effects | In a git root the guard appends `.claude/reports/` to `.gitignore` (creating it if absent); a non-git root such as the global layer gets none. The line is not snapshotted or restored and shows up in `git status` after a run |
 | Destructive confirmation | `hard`, `restore` and any `--global` write require an explicit confirmation at ENTRY. `--noask` skips the clarifying questions ONLY -- it never turns a destructive run into an unconfirmed one |
-| Restore scope | `restore` puts back the files the manifest lists; it does NOT delete files the run created. It ends with `RESTORE_VERIFIED: <N> mismatches, <M> missing from snapshot` -- only `0, 0` and exit 0 count as restored |
+| Restore scope | `restore` puts back the files the manifest lists when they still hold the run's own draft; it does NOT delete files the run created. It ends with `RESTORE_VERIFIED: <N> mismatches, <M> missing from snapshot` -- only `0, 0` and exit 0 count as restored |
 | Never self-edits | This skill's own `SKILL.md`/`references/*.md` are measured by the scan but excluded from every rewrite pass, `bodies` included |
-| Verification failure | One file failing the gate rolls back the WHOLE run -- every file, every layer -- and reports FAILED. A partial keep is never an outcome, and neither is a per-file restore |
-| Verified deletions | A dedup row that deletes a file is closed with `verify-deleted`, which proves the deleted file's critical tokens are present in the survivor that stays (`MERGED_VERIFIED`). If they are not, the file is put back and the whole run rolls back with it |
-| Never touched | MCP servers, plugin enablement, `settings.json`, `~/.claude/plugins/cache/**` -- advice only in the final report |
+| Verification failure | A critical token lost from a file fails the gate unless a ledgered dedup drop proves it in its survivor (or you approved that loss at the escalation gate). Any failure refuses the whole run: every layer is rolled back where the optimizer's recorded draft still matches; a file someone else changed meanwhile is preserved, not overwritten, and the report names it. A partial keep is never an outcome |
+| Verified deletions | A dedup row that deletes a file is closed with `verify-deleted`, which proves the deleted file's critical tokens are present in the survivor that stays (`MERGED_VERIFIED`). If they are not, the run fails and rolls back like any other failure |
+| Marker blocks | A block between another tool's begin/end markers (e.g. `<!-- BEGIN brewcode:semble -->`) is never compressed, moved or deleted, marker lines included; the report lists it as `managed by <setup>` |
+| Never touched | MCP servers, plugin enablement, `settings.json`, the plugin cache -- advice only in the final report |
 | Escalation gate | An unmet `--target` triggers ONE confirmation in ANY mutating mode (`slim`, `hard`, `bodies`) -- the mode decides how far the lossy pass may go, never whether you are asked. Declining writes nothing further and preserves the LOSSLESS result already verified on disk -- NOT the pre-run tree, which is one `rollback` away and named in the report |
 | Ratchet | `.claude/brewtools/context-slim/state.json`, written by `context-guard.sh state` (mode, flags, per-file before/after tokens, achieved ratio, drop ledger; schema in `references/measurement.md`). Its ABSENCE is checked mechanically: a virgin surface still has lossless headroom, so the escalation gate does not fire there -- the shortfall is reported instead |
 
 ## How It Works
 
-- [`scripts/context-scan.sh`](scripts/context-scan.sh) -- discovers and measures every file in scope, per tier, `--json` output
-- [`scripts/context-guard.sh`](scripts/context-guard.sh) -- `snapshot` / `verify` / `verify-deleted` / `rollback` / `restore` / `state` / `list` over both layers (wraps `text-optimize`'s guard, adds the second root, the JSON manifest, whole-run rollback and the ratchet)
+- [`scripts/context-scan.sh`](scripts/context-scan.sh) -- discovers and measures every file in scope, per tier, JSON output
+- [`scripts/context-guard.sh`](scripts/context-guard.sh) -- `snapshot` / `verify` (with the drop ledger) / `verify-deleted` / `rollback` / `restore` / `state` / `list` over both layers (wraps `text-optimize`'s guard, adds the second root, the JSON manifest, whole-run rollback and the ratchet)
 - [`references/dedup-arbitration.md`](references/dedup-arbitration.md) -- cross-layer duplicate resolution, precedence lattice
 - [`references/contradiction-policy.md`](references/contradiction-policy.md) -- resolves two near-identical statements with a differing exact value
-- [`references/drop-catalog.md`](references/drop-catalog.md) -- 52 patterns the model already follows by default, plus inverted near-twins that must stay
+- [`references/drop-catalog.md`](references/drop-catalog.md) -- 51 active patterns the model already follows by default, plus inverted near-twins that must stay
 - [`references/keep-catalog.md`](references/keep-catalog.md) -- invariant classes that survive byte-exact (numbers, versions, paths, negations, names, thresholds)
 - [`references/language-policy.md`](references/language-policy.md) -- RU/EN handling, RU-drop rule and RU-domain exceptions
 - [`references/measurement.md`](references/measurement.md) -- token proxy formula, per-tier measurement, target-ratio baseline rule
@@ -138,10 +138,9 @@ moves with the repo, and only a live scan is valid for a `--target`.
 
 ## Tips
 
-- **Run `measure` first, always.** It is read-only and gives the baseline every other mode needs.
-- **Use `preview` before `slim`.** Review the plan; nothing is written until you confirm or run `slim`/`hard`.
-- **Keep `bodies` opt-in.** Skill bodies are large and paid per-invocation, not per-request -- extend scope deliberately.
-- **`restore` is the safety net.** Every mutating run is snapshotted first, in both layers; `restore last` undoes every layer of the newest run in ONE command. It restores what the manifest listed -- it does not delete anything the run added.
+- **Run `measure` first.** It is read-only and gives the baseline every other mode needs.
+- **Use `preview` before `slim`.** Nothing is written until you run `slim`/`hard`.
+- **Keep `bodies` opt-in.** Skill bodies are large and paid per invocation, not per request.
 
 ## Documentation
 

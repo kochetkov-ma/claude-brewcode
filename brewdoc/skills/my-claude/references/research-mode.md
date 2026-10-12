@@ -11,12 +11,9 @@ Divide query into 2-5 orthogonal source groups:
 | "Bugs/issues with X" | GitHub issues, Reddit, CHANGELOG |
 | "Compare X vs Y" | official docs for each, community comparisons |
 
-## Parallel Agent Spawn
+## Agent Brief
 
-Send all agents in ONE message. Each agent receives:
-- Source group name and URLs to search
-- Specific aspects to focus on
-- Citation format requirement
+Each agent receives: source group name and URLs to search, aspects to focus on, the citation format below.
 
 ## Citation Format
 

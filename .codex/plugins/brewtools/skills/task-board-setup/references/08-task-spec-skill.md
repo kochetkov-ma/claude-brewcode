@@ -35,9 +35,8 @@ system design (components, data flow, contracts, reliability, complexity budget)
 
 ## Prompt contract
 
-Position 1 of `<arguments>` is a **free-form prompt** (RU/EN) -- `<TASK_ID>`, mode and `-n`/`--noask`
-are optional and may follow in any order. Nobody types keys: resolve the task id and the mode FROM
-the prompt (P0.1 below).
+`<arguments>` is one free-form RU/EN prompt; `<TASK_ID>`, the mode and `-n`/`--noask` may sit
+anywhere in it. P0.1 below resolves the task id.
 
 | Mode | EN keywords | RU keywords | Mutates? |
 |------|-------------|-------------|----------|
@@ -45,22 +44,20 @@ the prompt (P0.1 below).
 | `design` | system design, architect this, design doc, design document, architecture for, technical design, design review, with the architects | системный дизайн, архитектура задачи, продумай архитектуру, дизайн-документ, с помощью архитектора, привлеки архитекторов | yes |
 | `refresh` | stale, scope changed, out of date, re-sync the spec | устарела, скоуп поменялся, обнови спеку | yes |
 
-1. Strip `-n`/`--noask` first -- a flag, never a mode or an id. An explicit mode token anywhere in
-   the remaining arguments wins outright, no scoring.
-2. Else score modes by distinct whole-word keyword hits (table above); highest unique score wins. A
-   tie between two of these mutating modes falls to the keyword appearing first in the prompt --
-   none of the three is read-only, so a tie never needs `main-chat user gate` by itself.
-3. All zero, or empty arguments -> `full` (the documented default).
-4. Prose that does not parse as a mode is still input, never an error: P0.1 extracts `<TASK_ID>`
-   from it by id pattern or title/slug match -- the first word of a sentence is never guessed as
-   the id.
-5. Outcome-changing ambiguity (P0.4 missing `## Scope`, P0.7 architecture questions) still gets ONE
-   `main-chat user gate` before work starts, per the existing rules in P0 and P5/P6-C below. `-n`/
-   `--noask` suppresses those three asks only; P0.1's several-candidates STOP and P0.4's no-`## Scope`
-   STOP are ground truth and are never suppressed.
+1. Mode: `-n`/`--noask` is a flag, never a mode or an id. An explicit mode token wins outright; else
+   the most distinct whole-word keyword hits (table above); tie -> the keyword that comes first in
+   the prompt (none of the three is read-only, so a tie never needs `main-chat user gate` by itself).
+   No hit or empty -> `full` (the documented default).
+2. Scope: prose that does not parse as a mode is still input, never an error: P0.1 extracts
+   `<TASK_ID>` from it by id pattern or title/slug match -- the first word of a sentence is never
+   guessed as the id.
+3. Ask: outcome-changing ambiguity (P0.4 missing `## Scope`, P0.7 architecture questions) gets ONE
+   `main-chat user gate` before work starts, per the rules in P0 and P5/P6-C below. `-n`/`--noask`
+   suppresses those three asks only; P0.1's several-candidates STOP and P0.4's no-`## Scope` STOP
+   are ground truth and are never suppressed.
 
-Then print this block once, after P0 resolves the id, the mode and the touched domains (and any
-P0.7 clarify), before P1 starts:
+Print once, after P0 resolves the id, the mode and the touched domains (and any P0.7 clarify),
+before P1 starts (labels literal ASCII, values in {{LANG}}):
 
 \`\`\`
 PLAN — task-spec
@@ -70,8 +67,6 @@ SCOPE:  <ID> -- touched domains <d1, d2, ...>; architects: <domain -> agent, ...
 DO:     <2-5 imperative bullets>
 RESULT: specs/<ID>-spec.md, specs/<ID>-design.md (per mode)
 \`\`\`
-
-Labels are literal ASCII; values follow {{LANG}}.
 
 ## Invariants
 
@@ -91,12 +86,10 @@ Labels are literal ASCII; values follow {{LANG}}.
 | `design` | only `<ID>-design.md`; `spec: design-only` |
 | `refresh` | re-sync both against the task's current `## Scope`; preserve every `D#`, `Q#` and `AQ#` id, and every `## Scope` `status` cell verbatim |
 
-`-n` / `--noask` (any position, stripped before argument detection) is a FLAG, !=a mode: combines with
-all three, suppresses EXACTLY three asks -- P0.7 clarify, P5 open questions, P6-C escalation -- and
-those steps record the literal `Skipped (--noask mode)`; blocking questions stay `blocking: yes` and
-still block G2. The two GROUND-TRUTH asks are NOT suppressed and !=guessed around: P0.1 (several
-candidate ids) and P0.4 (no `## Scope`) STOP and report what is missing. There is no
-fourth "simple spec" mode -- `design` (architecture only) and a single-domain `full` (one architect,
+`-n` / `--noask` combines with all three modes and suppresses EXACTLY P0.7 clarify, P5 open questions
+and P6-C escalation; those steps record the literal `Skipped (--noask mode)`, and blocking questions
+stay `blocking: yes` and still block G2. P0.1 (several candidate ids) and P0.4 (no `## Scope`) still
+STOP and report what is missing. There is no fourth "simple spec" mode -- `design` (architecture only) and a single-domain `full` (one architect,
 one spec) ARE the light paths; weight comes from the touched-domain count, !=from a mode.
 
 ## Domain agents in {{REPO_NAME}}
@@ -136,18 +129,16 @@ Run this skill in the MAIN session; every native agent calls originates there. C
 
 ### P0 -- resolve the task, read the ground truth
 
-1. Strip `-n` / `--noask` first -- a flag, never a mode or an id. Resolve MODE per `## Prompt
-   contract` above (explicit token wins; else keyword score; else `full`). Resolve `<TASK_ID>`: an
+1. Strip `-n` / `--noask`; resolve MODE per `## Prompt contract` above. Resolve `<TASK_ID>`: an
    argument matching the id pattern (`[A-Z]+(-[A-Z]+)*-[A-Za-z0-9]+`, e.g. `T-HTML-SLUG`,
    `BUG-KV-42`) IS the id, taken literally. Anything else is PROSE, not a positional id: extract an
    id-shaped token from inside the sentence, else match a quoted or bare title/slug fragment against
    the `id`/`title` frontmatter of every `.codex/features/{backlog,todo,progress,closed}/*.md`
    (exact match on id, case-insensitive substring on title). No id recoverable (including empty
-   arguments): `Glob` `.codex/features/progress/*.md` then `todo/*.md`; one WIP task -> use it;
-   several -> `main-chat user gate` with the candidate ids; `--noask` -> this ask is NOT skipped: STOP
-   and report the candidates instead. Never guess -- treating the first word of a sentence as
-   `<TASK_ID>` is a defect.
-2. Locate the file: `Glob` `.codex/features/{backlog,todo,progress,closed}/<ID>.md`. Not found -> STOP, report "task <ID> not found".
+   arguments): `find .codex/features/progress/ -maxdepth 1 -name '*.md'`, then the same for `todo/`;
+   one WIP task -> use it; several -> `main-chat user gate` with the candidate ids; `--noask` -> this ask
+   is NOT skipped: STOP and report the candidates instead. Never guess the id.
+2. Locate the file: `find .codex/features -name '<ID>.md'`. Not found -> STOP, report "task <ID> not found".
 3. Read, in this order: the task file, `.codex/features/TRACKER.md` (section 10), `specs/SPEC_TEMPLATE.md`, `specs/DESIGN_TEMPLATE.md`, and any existing `specs/<ID>-spec.md` / `specs/<ID>-design.md`.
 4. Extract `## Scope` rows. No `## Scope` section -> derive `S1..Sn` from the task body, show the proposed table via `main-chat user gate`, and write it into the task file in P7. Never proceed on an unstated scope -- under `--noask` this ask is NOT skipped either: STOP and report the derived `S#` rows for confirmation.
 5. Derive TOUCHED DOMAINS: intersect the task text + scope blocks with {{DOMAINS}}. Record the list; it drives P1, P2 and P6 fan-out width.

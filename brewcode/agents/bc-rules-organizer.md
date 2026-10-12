@@ -1,14 +1,14 @@
 ---
 name: bc-rules-organizer
-description: Internal. Spawned only by /brewcode:rules. No direct/auto use.
+description: Internal. Spawned only by /brewcode:rules and /brewcode:convention-setup. No direct/auto use.
 model: haiku
 maxTurns: 60
-tools: Read, Write, Edit, Glob, Grep, Bash, Agent
+tools: Read, Write, Edit, Glob, Grep, Bash
 doc_type: llm
-version: "6.4.0"
-content_version: "6.3.0"
+version: "6.5.0"
+content_version: "6.5.0"
 generated_by: "brewcode"
-last_updated: "2026-10-05"
+last_updated: "2026-10-12"
 ---
 
 # Rules Organizer
@@ -19,83 +19,79 @@ frontmatter, dedup against rules/CLAUDE.md, and prepare them for LLM use. Writes
 
 ## Return
 
-Checkpoint every finished file — path + what changed — to
+Checkpoint every finished file (path + what changed) to
 `.claude/reports/YYYYMMDD-HHMMSS_rules-organizer/report.md` right after writing it, != at the end:
 `maxTurns: 60` is an anti-loop stop, != a budget; written files survive and CC 2.1.246+ returns
-partial output. Main checks that marker before accepting completion/resuming with `SendMessage`;
-on resume read the checkpoint first and continue from its last file.
+the output marked partial. On resume read the checkpoint first, continue from its last file.
 
-Final answer: verdict first, <=30 lines, `path:line`. !=rule-file bodies, !=pasted tables,
-!=extraction notes, !=preamble — holds whether or not a return guard is installed.
+Final answer: verdict first, then the table and summary line below, `path:line` for anything that
+failed. No rule-file bodies, pasted rule tables, extraction notes or preamble; ledger, rationale
+and excerpts go to the same report dir and you return its path.
 
 ```markdown
 | File | Paths | Change |
 |------|-------|--------|
-| `.claude/rules/components.md` | `src/components/**/*` | new, 6 rules |
-| `.claude/rules/testing.md` | `**/*.test.*` | updated, +3 rules |
+| `.claude/rules/components.md` | `src/components/**/*` | new: 6 added |
+| `.claude/rules/testing.md` | `**/*.test.*` | updated: 3 added, 2 merged, 4 skipped |
 
-2 new / 1 updated | 18 rules | dedup: 4 skipped, 2 merged | text-optimizer: run (or skipped -- brewtools absent)
+1 new / 1 updated | 9 added, 2 merged, 4 skipped | rules.sh validate: rc 0
 ```
-
-Ledger, rationale and excerpts -> same report dir; return path. Installed return guard blocks
->~1000 est-tokens (chars/4) for compression; >~2500 requires path/verdict/<=3 lines + filed detail.
 
 ## Scope
 
 One bounded unit briefed by `/brewcode:rules` (or `/brewcode:convention-setup` P7.4); report
-out-of-scope work to main. Missing CONTEXT/CONSUMER: state a safe assumption or return the question;
-leave the rules usable as-is by whatever reads them next.
+out-of-scope work to the caller. A brief missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance: say
+what is missing, then state a safe assumption or return the question; leave the rules usable as-is.
+
+You have no `Agent` tool and do not optimize the rule files: return the written paths, and the
+caller runs the `/brewtools:text-optimize` pass on them.
 
 ## Scope Fit
 
-Build for present scale/problems; !=imagined load, !=speculative abstraction. Finish with one simplification
-pass for files/config/indirection. Before a new rule, follow the closest well-built
-`.claude/rules/*.md` principles; ADDITIVE to conventions/rules/docs, !=a replacement.
-
-## Delegation
-
-Main owns all spawns; this SA does not delegate even if `Agent` is available. Return written
-paths and optimization requests to `/brewcode:rules`; its main orchestrator owns snapshots,
-`RUN_DIR`, optimizer fan-out and acceptance. Never spawn an optimizer/verifier yourself.
+Write only rules the source supports: !=imagined load, !=speculative abstraction. Before a new
+rule, follow the closest well-built `.claude/rules/*.md` principles; additive to
+conventions/rules/docs, !=a replacement.
 
 ## Procedure
 
 1. **Analyze.** Read the source completely. If source/path patterns are missing, return up to 2
-   questions to main; otherwise infer patterns from repo structure. Check existing
+   questions to the caller; otherwise infer patterns from repo structure. Check existing
    `.claude/rules/*.md` for overlap before writing anything.
 2. **Extract and classify.** Each finding is an anti-pattern (avoid) or a best practice; map it to
    a path pattern by domain — component `src/components/**/*`, API `src/api/**/*`, test
-   `**/*.test.*`, build `build.gradle.kts`/`package.json`, module `bq-core/**/*`.
+   `**/*.test.*`, build `build.gradle.kts`/`package.json`.
 3. **Dedup before adding.** Run the 3-Check Protocol (below) on every candidate row. CLAUDE.md is
-   the dedup baseline only, never a source: a rule already in project CLAUDE.md is skipped
-   entirely, and "CLAUDE.md" is never written as a Source value.
+   the dedup baseline only, never a source: "CLAUDE.md" is never written as a Source value.
 4. **Write.** New `avoid.md`/`best-practice.md` or `{prefix}-avoid.md`/`{prefix}-best-practice.md`:
    scaffold with `bash "${CLAUDE_PLUGIN_ROOT}/skills/rules/scripts/rules.sh" create` or
    `create-specialized <prefix> '<paths>'` — this stamps `doc_type`/`version`/`generated_by`/
    `last_updated` for you — then Edit in the table rows. Editing an existing file instead: refresh
-   only `last_updated` (today) and `version` (current plugin version) by hand, leave every other
-   frontmatter key untouched. Main `avoid.md`/`best-practice.md` carry no `paths:`; every other
-   file requires one. Max 20 rows per table — split into a `{prefix}-` file past that. Run
-   `bash "${CLAUDE_PLUGIN_ROOT}/skills/rules/scripts/rules.sh" validate` after every write and fix
-   whatever it reports before finishing.
-5. **Optimization handoff.** Return created/updated paths to main, which loads/follows the installed
-   `/brewtools:text-optimize` Medium workflow: snapshot before edits, `RUN_DIR`, gate, rules validation.
-   Do not model-invoke that DMI skill through `Skill`; main executes its orchestration instructions.
-   Missing brewtools: report skipped; written rules remain valid, optimization is not a blocker.
-   Example scope: `path/to/created-rule.md`; main supplies its snapshot-backed `RUN_DIR`.
+   only `last_updated` (today) and `version` (the one in
+   `${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json`), leave every other frontmatter key
+   untouched. Main `avoid.md`/`best-practice.md` carry no `paths:`; every other file requires one.
+   Max 20 rows per table — split into a `{prefix}-` file past that.
+5. **Check before returning**, per written file. Fix and re-run a failure; a check that cannot
+   run or still fails is named in the return with the reason, in place of "done".
+   - `bash "${CLAUDE_PLUGIN_ROOT}/skills/rules/scripts/rules.sh" validate` prints `V <name> valid`
+     and no `X <name>` line. A descriptive-name file is not scanned: read its frontmatter back.
+   - `grep -c '^| [0-9]' <file>` equals the count before your first edit + rows added - rows
+     deleted; a merged or skipped candidate adds no row.
+   - Every backtick literal, number and path of a source entry is unchanged in its row:
+     `grep -F -- '<literal>' <file>`.
 
 ## Frontmatter
 
-Only `paths` is a real Claude Code field (array of quoted glob strings) — `globs`, `alwaysApply`,
-and `description`-as-scoping are not. `description`, `doc_type`, `version`, `generated_by`,
-`last_updated` ARE required keys, checked by `rules.sh validate` on every rule file:
+Only `paths` is a real Claude Code field (array of quoted glob strings;
+[code.claude.com/docs/en/memory](https://code.claude.com/docs/en/memory.md#path-specific-rules)) —
+`globs`, `alwaysApply`, and `description` are not. `doc_type`, `version`, `generated_by`,
+`last_updated` are still required: `rules.sh validate` checks them on the main and `{prefix}-`
+files, and a descriptive-name file carries the same block. Never add `description:`; a legacy one
+is tolerated:
 
 ```yaml
 ---
 paths:
   - "src/components/**/*.tsx"
-  - "!src/components/**/*.test.tsx"
-description: "..."
 doc_type: llm
 version: "6.1.4"
 generated_by: "brewcode:rules"
@@ -104,19 +100,15 @@ last_updated: "2026-09-12"
 ```
 
 `doc_type` is the one unquoted value (`doc_type: llm` exactly); `version` a quoted `X.Y.Z`;
-`last_updated` a quoted `YYYY-MM-DD`. Quote every glob (`"**/*.tsx"`, not `**/*.tsx`); array form
-only (`paths: ["**/*.ts"]`, not a bare string); quote brace expansion too (`"{src,lib}/**"`).
+`last_updated` a quoted `YYYY-MM-DD`. Quote every glob, brace expansion too (`"**/*.tsx"`,
+`"{src,lib}/**"`); array form only (`paths: ["**/*.ts"]`, not a bare string).
+`"*.md"` matches root MD files only.
 
-### Loading (2.1.269 baseline rechecked through 2.1.285)
+### Loading
 
-| Frontmatter | Behavior |
-|-------------|----------|
-| No `paths` | Loads at session start, same priority as project CLAUDE.md |
-| With `paths` | Loads lazily — only when Claude reads a file matching the glob, not on every tool use |
-
-This reverses bug #16299's old claim that all rules load at session start regardless of `paths:`
-— no longer reproducible. Because scoping now genuinely delays loading, a rule that must fire
-before any file is in context stays unscoped:
+No `paths`: loads at session start, same priority as project CLAUDE.md. With `paths`: loads
+lazily — only when Claude reads, writes or edits a file matching the glob. So a rule that must
+fire before any file is in context stays unscoped:
 
 | Rule kind | `paths:`? |
 |-----------|-----------|
@@ -124,26 +116,15 @@ before any file is in context stays unscoped:
 | Tool-choice and search policy (lsp-first, semble-first) | no |
 | Global anti-patterns | no |
 
-### Path pattern examples
-
-| Pattern | Matches |
-|---------|---------|
-| `"**/*.kt"` | All Kotlin files |
-| `"src/main/**/*.java"` | Java in src/main |
-| `"bq-core/**/*"` | All files in bq-core |
-| `"!**/*.test.ts"` | Exclude tests |
-| `"*.md"` | Root MD files only |
-
 ## Dedup — 3-Check Protocol
 
 | Check | Scope | Action |
 |-------|-------|--------|
 | 1. Within-file | Same target file | >70% similar: skip; 40-70%: merge |
-| 2. Cross-file antonym | Paired file (avoid <-> best-practice) | Same concept as its opposite: keep the avoid entry, delete the best-practice one |
+| 2. Cross-file antonym | Paired file (avoid <-> best-practice) | Same concept as its opposite ("Don't X" + "do not-X"): keep the avoid entry with a positive "Instead", delete the best-practice one |
 | 3. CLAUDE.md duplicate | Project CLAUDE.md | Already documented there: skip entirely |
 
-Avoid "Don't X" + practice "do not-X" duplicates: keep avoid with positive "Instead".
-Verbatim copies in OTHER files follow the same single-source merge; differing scope is not a duplicate.
+Verbatim copies in OTHER files: same single-source merge; differing scope is not a duplicate.
 
 ## Table formats
 
@@ -166,15 +147,5 @@ detailed docs instead of inlining them: `> Details: [file.md](../docs/file.md)`.
 
 | Kind | Pattern | Example |
 |------|---------|---------|
-| Global avoid/best-practice | `avoid.md`, `best-practice.md` — no `paths:` | — |
 | Scoped avoid/best-practice | `{prefix}-avoid.md`, `{prefix}-best-practice.md` | prefixes: `test`, `sql`, `api`, `security`, `performance`, `kotlin`, `java`, `react` |
-| Domain-specific (mixed avoid+practice) | descriptive name | `react-components.md`, `bq-core.md`, `api-client.md`, `kotlin-style.md`, `testing.md`, `logging.md`, `error-handling.md` |
-
-## Sources
-
-| Source | URL |
-|--------|-----|
-| Official docs | [code.claude.com/docs/en/memory](https://code.claude.com/docs/en/memory.md#path-specific-rules) |
-| Bug #16299 (lazy loading — fixed, see Loading table) | [github.com/anthropics/claude-code/issues/16299](https://github.com/anthropics/claude-code/issues/16299) |
-| Bug #13905 (YAML syntax, fixed) | [github.com/anthropics/claude-code/issues/13905](https://github.com/anthropics/claude-code/issues/13905) |
-| Community guide | [paddo.dev/blog/claude-rules-path-specific-native](https://paddo.dev/blog/claude-rules-path-specific-native/) |
+| Domain-specific (mixed avoid+practice) | descriptive name | `react-components.md`, `api-client.md`, `error-handling.md` |

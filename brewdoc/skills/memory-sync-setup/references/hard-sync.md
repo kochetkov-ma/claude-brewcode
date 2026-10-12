@@ -1,4 +1,4 @@
-<!-- brewcode-meta: version=6.4.0 content_version=6.3.0 generated_by=brewdoc:memory-sync-setup -->
+<!-- brewcode-meta: version=6.5.0 content_version=6.5.0 generated_by=brewdoc:memory-sync-setup -->
 # Hard Sync
 
 Two DELETION passes of `/memory-sync`, cited by Phase 2 at `{DEPTH}` = `HARD`, Phase 3 checkers, References and Phase 4.
@@ -23,8 +23,8 @@ Run A before B: narrowing a glob changes which files a later reader even loads.
 
 ## PASS A - `paths:` PRECISION AUDIT (rule files only)
 
-A rule with a broad or missing `paths:` glob is loaded into EVERY context and paid for on every turn regardless of
-relevance. Precision is a TOKEN-BUDGET property, not a style preference.
+A rule with no `paths:` loads into EVERY context at launch; a broad glob on the first matching file access, so
+nearly every session. Both cost tokens regardless of relevance: precision is a TOKEN-BUDGET property.
 
 **The rule: a glob must be the NARROWEST pattern that still covers the rule's real subject.**
 
@@ -46,8 +46,8 @@ relevance. Precision is a TOKEN-BUDGET property, not a style preference.
 | 4 | RESOLVE the derived glob against the repo: it MUST match something real today. A glob pointing at a deleted or renamed directory is a silent no-op - the rule stopped loading and nobody noticed |
 | 5 | CHECK UNDER-COVERAGE: enumerate the subject's real files and confirm the glob matches all of them. A testing rule that never gained the new test suffix silently stopped governing it |
 
-Both failure directions are DEFECTS: over-broad burns tokens in every unrelated context, under-narrow silently
-stops applying. Neither is the safe side.
+Both failure directions are DEFECTS: over-broad burns tokens, under-narrow silently stops applying. Neither is
+the safe side.
 
 ### Verdict vocabulary
 

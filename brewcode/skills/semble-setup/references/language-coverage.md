@@ -1,12 +1,9 @@
 # Language coverage — what `--content code docs config` actually indexes
 
-> Current authority, verified 2026-08-27: semble 0.5.5 tag sources
-> `src/semble/index/files.py`, `src/semble/index/file_walker.py`, and
-> `src/semble/cache.py`, plus `tests/test_files.py`, `tests/test_file_walker.py`,
-> and `tests/test_cache.py`. The installed 0.5.5 wheel copies match the tagged
-> runtime files byte-for-byte. The suffix tables below were regenerated from
-> those constants: 281 code + 44 config + 17 docs = 342 indexed suffixes; the
-> five data suffixes remain excluded.
+> Authority: semble 0.6.2 wheel, `semble/index/files.py`, `semble/index/file_walker.py`, `semble/cache.py`
+> (2026-10-12; suffix map and walker unchanged since 0.5.5, whose tag tests were checked 2026-08-27).
+> Suffix tables generated from those constants: 281 code + 44 config + 17 docs = 342 indexed suffixes;
+> the five data suffixes are excluded.
 
 ## The one rule that explains everything
 
@@ -36,9 +33,7 @@ pattern text ends in a file extension, `found` is `True` and **the extension
 filter is skipped entirely**. The file is indexed no matter which bucket — if
 any — its suffix belongs to.
 
-Confirmed by the current 0.5.5 walker implementation and its explicit-negation
-test. The concrete output below is retained from the original 0.5.4 reproduction;
-it was not rerun for this documentation refresh:
+Present in the 0.6.2 walker; output below is from a 0.5.4 reproduction:
 
 ```text
 .gitignore:  package-lock.json / !sub/package-lock.json / *.png / !keep.png
@@ -94,12 +89,11 @@ against a negation they are the only lever.
 | **Data** | **`.json .json5 .csv .tsv .psv`** | **excluded from every bucket** | **NO — unreachable even with `--content all`** |
 | **Unmapped** | **`.mdx .txt`** (and every other suffix missing from `_EXTENSION_TO_LANGUAGE`) | **none** | **NO — no bucket claims them** |
 
-Two corrections worth stating out loud, because both were wrong in the original SPEC:
+Two easy misreadings (`_EXTENSION_TO_LANGUAGE` in `files.py`):
 
-1. **`.gradle` / `.groovy` / `.kts` are code, not config** (`files.py:66,140,143` -> `groovy`, `kotlin`).
-   Adding the `config` bucket is *not* what makes Gradle searchable — `code` alone already covers it.
-   The `config` bucket is in the corpus for YAML/TOML/XML/properties.
-2. **`.conf` is code** (`files.py:186`, mapped to `nginx`), not config.
+1. **`.gradle` / `.groovy` / `.kts` are code, not config** (-> `groovy`, `kotlin`): `code` alone makes
+   Gradle searchable; `config` is in the corpus for YAML/TOML/XML/properties.
+2. **`.conf` is code** (-> `nginx`), not config.
 
 ## What is NOT in this corpus
 
@@ -113,8 +107,8 @@ index-code-config-docs variant.
 ```
 
 That paragraph is printed verbatim by `semble-project.sh audit` and belongs in every
-status report. In 0.5.5, the per-repo directory remains
-`sha256(resolved repo path)`, but each exact sorted content selection has its own child:
+status report. The per-repo directory is `sha256(resolved repo path)`; each exact sorted
+content selection has its own child:
 code-only is `index`; every other selection is `index-<sorted-content>`. The registered
 `code docs config` corpus therefore uses `index-code-config-docs`, while `index-docs`,
 `index-config`, `index-code-config`, and other exact variants may coexist without eviction.
@@ -125,18 +119,11 @@ registered/default selection. MCP registration, `warm`, `smoke`, and `reindex` i
 it so they select `index-code-config-docs`; an explicit per-call `content` override selects
 its own sibling variant.
 
-Historical pre-0.5.5 cache measurement, retained as migration evidence and not rerun:
-alternating `code config` with a bare `semble search` rebuilt every time —
-1.99s / 1.78s / 1.91s / 1.95s; with both pinned to `code docs config` it was 5.43s cold,
-then 0.74s / 0.81s / 0.74s. That eviction behavior describes 0.5.4's single index leaf,
-not the current 0.5.5 layout.
-
 `package.json`, `tsconfig.json`, `composer.json`, every `*.csv` fixture, every OpenAPI
 `*.json` spec and every `*.mdx` page are therefore invisible to semantic search. That is a
 semble limitation, not a configuration mistake. Use `rg`.
 
-Historical sizing measured on `claude-brewcode` with an isolated pre-0.5.5 cache;
-the figures were not rerun for 0.5.5, while the suffix membership was reverified:
+Sizing on `claude-brewcode` (pre-0.5.5 cache, not rerun):
 
 | Corpus | Files indexed | `.md` | `.mdx` | Cache size |
 |--------|---------------|-------|--------|------------|
@@ -145,9 +132,8 @@ the figures were not rerun for 0.5.5, while the suffix membership was reverified
 
 ## Why `config` stays in the set
 
-`config` looks like the bucket to cut. In the retained pre-0.5.5 workspace
-measurement it was 40 files and **53 of 9307 chunks, 0.57%** of the corpus; those
-counts were not rerun for 0.5.5. It stays for the measured retrieval value:
+`config` looks like the bucket to cut. In the pre-0.5.5 workspace measurement (not rerun)
+it was 40 files and **53 of 9307 chunks, 0.57%** of the corpus. It stays for its retrieval value:
 
 | Question | Answer |
 |----------|--------|
@@ -155,10 +141,8 @@ counts were not rerun for 0.5.5. It stays for the measured retrieval value:
 | What breaks without it? | Q12 "what does the docs deploy workflow do" and Q15 "how does the docs site get deployed" — both answered from `deploy-docs.yml`, which is `.yml`, which is `config`. Drop the bucket and both questions have no reachable answer at all |
 | Was it buying the lockfile? | **No.** That was the premise for cutting it and it is wrong: `package-lock.json` entered through the `.gitignore` negation bypass above, which runs *before* the extension filter. `--content code` alone indexes it just the same |
 
-At the measured 0.57%, the whole CI surface was the cheapest bucket in the set.
-The decision remains: **keep `code docs config` as the registered default.** In
-0.5.5 that choice addresses `index-code-config-docs` and does not invalidate sibling
-content variants.
+At 0.57%, the whole CI surface was the cheapest bucket in the set: **keep `code docs config`
+as the registered default** (`index-code-config-docs`; sibling content variants unaffected).
 
 ## Known corpus limits, and what they cost
 
@@ -175,9 +159,9 @@ These are not cosmetic. Each one has a question shape it silently fails:
 
 | Rule | Threshold | Source |
 |------|-----------|--------|
-| Too large | `size > 1_000_000` bytes | `files.py:8,498` |
-| Tiny **and** blank | `size < 128` bytes **and** the text is empty after `.strip()` | `files.py:9,501` |
-| Modified after the index was built | `mtime > metadata.time` -> the index is stale, not the file skipped | `files.py:493-495` |
+| Too large | `size > MAX_FILE_BYTES` (env `SEMBLE_MAX_FILE_BYTES`, default `1_000_000`) | `files.get_file_status` |
+| Tiny **and** blank | `size < 128` bytes (`_EMPTY_FILE_BYTES`) **and** the text is empty after `.strip()` | `files.get_file_status` |
+| Modified after the index was built | a file's `mtime_ns` differs from the manifest, or the walked file set changed -> the index is stale, not the file skipped | `cache.get_validated_cache` |
 
 Note the second rule is an **and**, not an or: a 4-byte `x=1\n` file *is* indexed; a 60-byte
 file of only whitespace is not. `semble-project.sh audit` reports both counters separately
@@ -190,9 +174,9 @@ file of only whitespace is not. `semble-project.sh audit` reports both counters 
 .pytest_cache  .ruff_cache  .cache  .semble  .next  dist  build  .eggs
 ```
 
-Symlinks are never followed (`file_walker.py:118`). On top of that list, semble merges the
+Symlinks are never followed (`file_walker._walk`). On top of that list, semble merges the
 `.gitignore` **and** `.sembleignore` of *every* directory it walks, recursively
-(`file_walker.py:37-49`) — a single root-level ignore file is not the model.
+(`file_walker._load_ignore_for_dir`) — a single root-level ignore file is not the model.
 
 `semble-project.sh audit` applies the hard-coded directory list and the symlink rule, but it
 does **not** parse `.gitignore`/`.sembleignore`. Its per-bucket counts are therefore an
@@ -219,13 +203,13 @@ scripts/semble-project.sh audit --json
 }
 ```
 
-Producer arithmetic: `59 + 6 + 15 = 80` indexable (the old `65` omitted docs); `89` counted files
+Producer arithmetic: `59 + 6 + 15 = 80` indexable; `89` counted files
 plus `1` too-large and `2` tiny-blank = `92` classified. Size-skipped files are classified before exclusion.
 
 | Key | Meaning |
 |-----|---------|
 | `code`, `config` | in this corpus — searchable through `mcp__semble_code__search` |
-| `docsOnly` | the **docs** bucket. Also in this corpus since the set became `code docs config`; the key keeps its old name for wire compatibility, so read it as "docs", not "unreachable" |
+| `docsOnly` | the **docs** bucket, in this corpus; the name is kept for wire compatibility — read it as "docs", not "unreachable" |
 | `excluded` | a data suffix that no content type can reach |
 | `totals.indexable` | `code + config + docsOnly`, the upper bound of what the index contains |
 | `totals.unclassified` | a suffix semble does not know at all (e.g. `.log`, `.png`, `.mdx`, `.txt`) — also unreachable |

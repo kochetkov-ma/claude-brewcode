@@ -1,18 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-# read-secret.sh — move a provider API key from an out-of-band source into ~/.zshrc
-# without the value ever becoming model-visible text.
-#
-# Usage: read-secret.sh <env:VAR_NAME|file:PATH> <DEST_VAR_NAME>
-#   read-secret.sh env:DEEPSEEK_API_KEY DEEPSEEK_API_KEY
-#   read-secret.sh file:$HOME/.claude-deepseek.key DEEPSEEK_API_KEY
-#
-# Claude Code 2.1.233 has no masked runtime input: AskUserQuestion returns plain text into the
-# transcript and userConfig `sensitive: true` is enable-time only and deliberately not substituted
-# into skill content. So the user places the value out of band and this script is the only thing
-# that ever touches it. The value is NEVER echoed — not to stdout, not to stderr, not to a log.
-# Only a length and a truncated SHA-256 fingerprint are reported.
+# read-secret.sh <env:VAR_NAME|file:PATH> <DEST_VAR_NAME> -> out-of-band key into ~/.zshrc; value NEVER echoed (stdout/stderr/log).
+# CC 2.1.296: no masked input (AskUserQuestion -> transcript, `sensitive: true` !=substituted) -> only length + SHA-256 prefix reported.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -49,9 +39,11 @@ case "$SOURCE" in
 "Create it yourself, then re-run — do not paste the key into the conversation:
   umask 077; printf '%s' '<your-key>' > $FILE"
     [[ -r "$FILE" ]] || fail "file is not readable: $FILE"
-    # Anything group/world accessible is already leaked; refuse rather than launder it.
-    MODE="$(stat -f '%Lp' "$FILE" 2>/dev/null || stat -c '%a' "$FILE" 2>/dev/null || echo '')"
-    [[ -n "$MODE" ]] || fail "cannot stat $FILE"
+    # Group/world accessible = already leaked: refuse. GNU stat first (BSD rejects -c, no stdout);
+    # GNU `stat -f` is --file-system and prints junk, so an unreadable mode fails closed.
+    MODE="$(stat -c '%a' "$FILE" 2>/dev/null || stat -f '%Lp' "$FILE" 2>/dev/null || true)"
+    [[ "$MODE" =~ ^[0-7]{1,4}$ ]] || fail "cannot determine the permissions of $FILE — refusing to read it" \
+"Neither GNU 'stat -c %a' nor BSD 'stat -f %Lp' printed an octal mode."
     if (( 8#$MODE & 8#077 )); then
       fail "$FILE is mode $MODE — group/world accessible" "Run: chmod 600 $FILE"
     fi

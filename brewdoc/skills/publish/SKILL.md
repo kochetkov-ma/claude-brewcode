@@ -10,26 +10,24 @@ model: haiku
 
 # brewdoc:publish
 
-Publish content to **brewpage.app** — free instant hosting for HTML pages, JSON documents, files, and multi-file sites. No sign-up required.
+Publishes HTML/Markdown, JSON, files and multi-file sites to **brewpage.app** (free, no sign-up) and returns the URL.
 
 ## Prompt contract
 
-Position 1 of `$ARGUMENTS` is a **free-form prompt** (RU/EN) — the content (text, file/dir/zip path), `--ttl`
-and `--entry` are optional and may follow in any order. Nobody types keys: resolve WHAT to publish FROM the
-prompt.
+`$ARGUMENTS` is one free-form RU/EN prompt; the content (text, file/dir/zip path) and the flags `--ttl N`,
+`--entry <filename>`, `--delivery-mode path|subdomain` may sit anywhere in it.
 
-1. Strip `--ttl N`, `--entry <filename>` and `--delivery-mode path|subdomain` flags.
-2. Extract the content to publish (rule 3 below) — this doubles as the content-type detection in Step 2, scored
-   by the keyword table there.
-3. **Prose resolution (mandatory):** a sentence naming a file/dir resolves to that file/dir (e.g. "publish my
-   report.md" -> `content_arg = report.md`, resolved against cwd); a sentence with no path and no inline
-   text/JSON has nothing to publish -> ONE `AskUserQuestion` asking what to publish. Never guess, never
-   silently fall back to an empty HTML page.
-4. Outcome-changing ambiguity (namespace, password) -> the two dedicated `AskUserQuestion` calls in Steps 4-5;
-   nothing else asks.
+1. Mode: the content type of what is published — detected in Step 2, scored by the keyword table there.
+2. Scope: a sentence naming a file/dir resolves to that file/dir (e.g. "publish my report.md" ->
+   `content_arg = report.md`, resolved against cwd). Never guess, never silently fall back to an empty
+   HTML page.
+3. Ask: a sentence with no path and no inline text/JSON has nothing to publish -> ONE `AskUserQuestion`
+   asking what to publish. Namespace and password -> the two dedicated `AskUserQuestion` calls in Steps
+   4-5; nothing else asks.
 
-Print this block ONCE before the first tool action, including filesystem probes and questions.
-Use `unresolved` for type/namespace/password until determined; report resolved stats in Step 3.
+Print once, before the first tool action, including filesystem probes and questions (labels literal,
+values in the conversation language). Use `unresolved` for type/namespace/password until determined;
+report resolved stats in Step 3.
 
 ```
 PLAN — brewdoc:publish
@@ -40,17 +38,15 @@ DO:     <2-5 imperative bullets>
 RESULT: <published URL>
 ```
 
-Labels are literal; values follow the conversation language.
-
 ## Workflow
 
 ### Step 1: Parse Arguments
 
-Extract from `$ARGUMENTS`:
+Extract from the prompt:
 - `--ttl N` → TTL in days (default: `15`)
 - `--entry <filename>` → entry file for SITE uploads (default: auto-detect)
-- `--delivery-mode path|subdomain` → optional creation header; omit it for server defaults. Reject other values before upload.
-- Remaining text → `content_arg` — extract per the prose-resolution rule above; not resolvable -> `AskUserQuestion`
+- `--delivery-mode path|subdomain` → optional creation header; omitted = server default; reject other values before upload
+- Remaining text → `content_arg`, per Prompt contract rules 2-3
 
 ### Step 2: Detect Content Type
 
@@ -63,24 +59,24 @@ Extract from `$ARGUMENTS`:
 | `content_arg` starts with `{` or `[` | JSON | `POST /api/json` | publish json, share this json | опубликуй json | yes |
 | Anything else | HTML | `POST /api/html` (format=markdown) | publish text, share link, publish this | опубликуй текст, поделись ссылкой | yes |
 
-Stats per type — SITE (dir): HTML count, total size, entry file. SITE (ZIP): file size, entry override. FILE: size + MIME via `file --mime-type -b`. TEXT/JSON: char count.
-
 ### Step 3: Show Pre-Publish Stats
 
-For HTML/JSON/FILE:
+SITE (dir): HTML count, total size, entry. SITE (ZIP): file size, entry override. FILE: size + MIME (`file --mime-type -b`). Text/JSON: char count.
+
+For HTML/MARKDOWN/JSON/FILE:
 ```
 Content:  <type description> · <size> · <api endpoint>
 TTL:      <N> days
 ```
 
-For SITE: entry priority is 1) `--entry` flag, 2) `index.html`, 3) first `.html` alphabetically. No `.html` → fail with an explicit error, do not guess.
+For SITE (entry: `--entry` > `index.html` > first `.html` alphabetically; no `.html` → fail with an explicit error, never guess):
 ```
 Content:  site · <N> files · <total_size> · POST /api/sites
 Entry:    <entry_file>
 TTL:      <N> days
 ```
-These are estimates from the source tree. The authoritative file set is the ARCHIVE MANIFEST that Step 6
-prints from the built archive, before any upload — report that one to the user, not this count.
+These are source-tree estimates: report the ARCHIVE MANIFEST that Step 6 prints before upload; its
+`ENTRY:` line is the entry `scripts/publish.mjs` resolved in the built archive.
 
 ### Step 4: Ask Namespace
 
@@ -93,19 +89,15 @@ Choose `public` for eligible gallery discovery. Eligible public HTML, sites and 
 
 Options:
 1) public — eligible gallery discovery; eligible publications may permit indexing
-2) {auto-suggested 6-8 char slug} — private, link-only (default)
+2) {suggested slug} — private, link-only (default)
 3) Enter custom namespace
 4) Skip → use suggested slug (private)
 
 Reply with a number or your custom namespace (1-32 lowercase letters, digits or hyphens).
 ```
 
-Auto-suggest: generate a **meaningful short slug** (3-16 chars, lowercase alphanumeric + hyphens) from content context:
-- File → topic/purpose (e.g. `api-docs`, `login-page`, `report-q2`)
-- Text/HTML → main subject or title (e.g. `pricing`, `team-intro`, `changelog`)
-- JSON → data type or schema name (e.g. `user-config`, `metrics`)
-- Fallback → project name or directory name
-Never use random strings or truncated filenames — slug must be human-readable.
+Suggested slug: 3-16 chars of `a-z0-9-` named after the content (`api-docs`, `report-q2`,
+`pricing`, `user-config`), else the project or directory name; never random strings or truncated filenames.
 
 Resolution: `2`, `4`, or empty → suggested slug | `1` → `public` | `3` or any other string → use as-is.
 
@@ -124,69 +116,53 @@ Options:
 Reply with a number and, for option 2, the absolute local file path. Do not paste password contents.
 ```
 
-Resolution: `1`, `3`, or empty → `none`; `2` plus an existing local password-file path → `file`.
-Never Read the password file or generate/print its contents through model-visible tools.
-
-> Password contents travel only through the private run's input/header files, never shell literals or
-> curl argv. Choose explicit `password_mode=none|file`; `none` ignores every password file, including stale
-> shared files. For `file`, Write only its absolute source path into
-> `<run_dir>/brewpage-password-source.txt`; the helper copies its bytes into private transport files.
-> Never print contents in commands, logs or reports. It rejects control characters/header injection.
+Resolution: `1`, `3`, or empty → `password_mode=none` (ignores every password file, stale ones included);
+`2` + an existing local file path → `file`: Write only the path into `<run_dir>/brewpage-password-source.txt`;
+the helper moves the bytes via private header files (never shell literals or curl argv) and rejects control
+characters (header injection). Never Read, generate or print the password contents.
 
 ### Step 6: Publish and Save Token (secure)
 
-NEW sites and non-public namespaces require Dedicated subdomain (`subdomain`); explicit `path` is rejected.
-NEW public non-sites default to Promotion (`path`) and may select `subdomain`, including password-protected uploads.
-Send the choice only as `X-Delivery-Mode`, never as authored JSON, text or multipart fields.
-Deduplication may return an OLD or NEW winner with a different mode: preserve its identity, cohort, mode and exact `link`.
-Missing/null OLD routing metadata means Existing link; never infer mode from its address.
+Delivery mode: NEW sites and non-public namespaces require Dedicated subdomain (`subdomain`; explicit `path` is
+rejected); NEW public non-sites default to Promotion (`path`) and may select `subdomain`, password-protected
+included. Send it only as `X-Delivery-Mode`, never in authored JSON, text or multipart fields. A deduplicated
+OLD or NEW winner may differ: keep its identity, cohort, mode and exact `link`. Missing/null OLD routing
+metadata means Existing link; never infer mode from its address.
 
-> **SECURITY:** The ownerToken MUST NEVER appear in conversation output. Bash blocks handle curl + token parsing + history save atomically; LLM sees only the URL. The failure branch prints no response body, so a token in an error payload never reaches the transcript.
+> **SECURITY:** the ownerToken NEVER appears in conversation output: each block does curl, token parsing and history save in one run and prints only the URL; failures print no response body.
 
-**Nothing prompt-derived is pasted into shell source.** Content, JSON, the password and the target path all
-travel as FILES; only validated `{ns}`, `{days}`, `{entry}` and `{delivery_mode}` are substituted, inside SINGLE quotes, after you
-have validated them yourself:
+**Nothing prompt-derived is pasted into shell source**: content, JSON, the password and the target path travel
+as FILES. Only these placeholders, plus `{run_id}` and `{password_mode}` (`none|file`), are substituted, inside
+SINGLE quotes, after you validated them:
 
-| Placeholder | Must match before you substitute it | Re-checked in the block by |
-|-------------|-------------------------------------|----------------------------|
+| Placeholder | Must match | Re-checked by |
+|-------------|------------|---------------|
 | `{ns}` | `^[a-z0-9-]{1,32}$` | `bp_validate` |
 | `{days}` | positive integer | `bp_validate` |
 | `{entry}` | plain relative file name, no `..`; empty string when auto-detecting | `bp_validate` |
 | `{delivery_mode}` | empty string when omitted, otherwise `path` or `subdomain` | `bp_begin` |
 
-A value that fails its pattern is a hard stop — re-ask, never "clean it up" and never substitute it anyway.
+A value failing its pattern: re-ask; never clean it up or substitute it anyway.
 
-**Allocate one private run directory before writing any inputs**, after resolving the namespace/password
-choice. EXECUTE:
+**Allocate the private run directory** (after Steps 4-5, before any input) — **EXECUTE** using Bash tool:
 
 ```bash
 . "${CLAUDE_SKILL_DIR}/scripts/brewpage-lib.sh" || exit 1
 bp_prepare
 ```
 
-Use the printed absolute path as `run_dir`; its generated `brewpage.XXXXXX` basename is `run_id`.
-Never reuse a previous run, read shared `brewpage-*` inputs, or substitute a user-supplied run id.
-Then `Write` inputs inside this directory (mode 700):
+The printed absolute path (under `$TMPDIR`, else `/tmp`) is `run_dir`; its `brewpage.XXXXXX` basename is `run_id`.
+Never reuse a previous run, read shared `brewpage-*` inputs, or take a user-supplied run id. `Write` the inputs into it (mode 700):
 
 | File | Written for | Contents |
 |------|-------------|----------|
-| `brewpage-content.md` | HTML / MARKDOWN text | the text to publish, verbatim |
-| `brewpage-payload.json` | JSON | the JSON document, verbatim |
-| `brewpage-target-path.txt` | FILE / SITE(dir) / SITE(zip) | the absolute source path, one line |
-| `brewpage-password-source.txt` | any type, only for `file` password mode | absolute source password-file path, one line; never its contents |
+| `brewpage-content.md` | HTML text; MARKDOWN (`Read` the file first) | text, verbatim |
+| `brewpage-payload.json` | JSON | JSON, verbatim |
+| `brewpage-target-path.txt` | FILE / SITE(dir) / SITE(zip) | absolute source path, one line |
+| `brewpage-password-source.txt` | `file` password mode | absolute password-file path, one line; never its contents |
 
-For a MARKDOWN **file** (type MARKDOWN from Step 2), `Read` it and `Write` its text into
-`brewpage-content.md`, then run the HTML/Markdown block — the `?format=markdown` endpoint renders it styled
-instead of serving a raw download.
-
-Every block uses strict mode, sources `scripts/brewpage-lib.sh`, then calls `bp_begin` with the generated
-run id, explicit `none|file` policy and optional `{delivery_mode}` — it re-validates
-`{ns}`/`{days}`/`{entry}`, requires `jq`, resolves the PROJECT ROOT (`CLAUDE_PROJECT_DIR` →
-`git rev-parse --show-toplevel` → upward `.git`/`.claude` walk → `PWD`), creates `$HISTORY_FILE` there with
-mode `600`, and appends it plus `.claude/tmp/` to the project `.gitignore`. A nested cwd can no longer scatter
-a second token file below the project. The library also owns the parts every block used to repeat: `bp_post`
-(adds `X-Password` from a private header file only in `file` mode and optional `X-Delivery-Mode`), `bp_finish` (exact URL, owner API and identity metadata → private history, the single
-`OK`/`FAILED` line, `.fileCount` for `site`) and `bp_archive_gate` (the shared verdict on a `publish.mjs` run).
+Run exactly ONE block below, by type (MARKDOWN → the HTML/Markdown block); each re-validates its
+placeholders in `bp_begin` and prints one `OK`/`FAILED`/`CONFIRM:` line.
 
 **HTML/Markdown text** — **EXECUTE** using Bash tool:
 ```bash
@@ -280,14 +256,13 @@ Owner token saved to <project-root>/.claude/brewpage-history.md (mode 600, git-i
 Share the server URL exactly as printed, including any trailing slash.
 ```
 
-For a private (non-`public`) namespace, append one short line after the link (skip if reply must stay ultra-brief): *Unlisted link — anyone who has it can open it, but it's not in the gallery or search. Want it discoverable? Publish to `public`.*
+For a private (non-`public`) namespace, append one short line after the link (skip if the reply must stay brief): *Unlisted link — anyone who has it can open it, but it's not in the gallery or search. Want it discoverable? Publish to `public`.*
 
-**Needs confirmation** (bash printed `CONFIRM: ...`, exit 2): nothing was uploaded. Show the manifest lines
-the block printed, name the flagged entries, and use ONE `AskUserQuestion` — publish anyway / cancel. On
-"publish anyway", allocate a fresh run, rewrite its inputs and re-run with `BREWPAGE_CONFIRMED=1`.
-All five blocks clean their owned run on success/failure/confirmation exits. If cancelled before the
-block starts, source the helper, call `bp_run_dir '{run_id}' && bp_cleanup`, then stop. Preserve all
-other runs and user source files; never delete the shared tmp directory.
+**Needs confirmation** (bash printed `CONFIRM: ...`, exit 2; nothing uploaded): show the manifest lines, name
+the flagged entries, ask ONE `AskUserQuestion` (publish anyway / cancel). Publish anyway -> fresh run, rewrite
+inputs, re-run with `BREWPAGE_CONFIRMED=1`. Blocks clean their own run on any exit; cancelled before a block
+ran -> source the helper, `bp_run_dir '{run_id}' && bp_cleanup`, stop. Never delete other runs, user source
+files or the shared tmp directory.
 
 **Error** (bash printed `FAILED: ...`):
 ```
@@ -296,16 +271,13 @@ Publish failed: {the FAILED line, verbatim}
 
 ## Notes
 
-- Use `jq -n --rawfile c <input-file> '{content: $c}'` to encode text into the run's payload file. **`format` is a query param**, not a body field — `/api/html` ignores any `format` key inside the JSON body and reads only `?format=` from the URL. Wrong location = server applies default `html` and stores markdown as raw text.
-- TTL default: `15` days. Namespace must match `^[a-z0-9-]{1,32}$`.
-- Owner-token history lives at `<project-root>/.claude/brewpage-history.md` — project root resolved by `scripts/brewpage-lib.sh` (`CLAUDE_PROJECT_DIR` → git toplevel → upward `.git`/`.claude` walk → `PWD`), created mode `600`, and added to the project `.gitignore`. To **delete** a published page, find its owner token there and use the delete command in that file's header.
-- The history TTL column records the requested days. Stored `createdAt` and `expiresAt` are authoritative: a deduplicated winner retains its original expiry, and ordinary PUT/update does not renew it.
-- Use the returned `ownerLink` and stored identity metadata for owner API operations, never parse a NEW root hostname for namespace/ID. OLD history without metadata retains its existing API identifiers.
-- To **update a published site**, `PUT` the new bundle to its apex owner API with `X-Owner-Token`; the bundle fully replaces the file set and retains the host. Do not send `X-Delivery-Mode` on ordinary PUT/update.
-- Hosting changes require owner-only `PATCH /api/{type}/{ns}/{id}/hosting` with `{"deliveryMode":"subdomain","expectedVersion":1}` from current identity metadata. Only NEW public non-sites are eligible; OLD, sites and non-public identities have no mode choice. Use the returned URL/version afterward.
-- NEW password-protected publication links stay clean: never generate or append `?p=`. API password requests still use `X-Password`; OLD password behavior remains unchanged.
-- Entry file detection: `--entry` override > `index.html` > first `.html` alphabetically — resolved inside `scripts/publish.mjs` against the archive that was actually built, and echoed as the manifest's `ENTRY:` line.
-- **SITE bundles are allowlisted, never denylisted.** `scripts/publish.mjs pack` keeps only known web-asset extensions and drops every dot-entry (`.env`, `.git/`, `.DS_Store`), `node_modules/`, symlinks and unknown types. It removes any pre-existing output file first (a `mktemp`-created 0-byte file made Info-ZIP exit 3), checks `zip`'s exit status, verifies the archive with `unzip -t`, requires a non-zero size, and compares the archived name set against the selected one. Any mismatch deletes the archive and exits 1, so `curl` is never reached. A supplied ZIP is not rewritten — `inspect` lists it and exits 2 when anything unexpected or sensitive is inside.
-- Tests: `bash brewdoc/skills/publish/tests/run.sh` — standalone `node`, no network, no real upload.
-- Keep `.link` exact for all responses: NEW subdomain roots retain `/`; OLD links retain their existing form. Never reconstruct a host from IDs.
-- Verify NEW native sites at the exact returned URL and asset paths; a browser proves rendering. OLD sites may still use the existing landing-page redirect; verify those in a browser or fetch their explicit entry asset.
+- **`format` is a query param**: `/api/html` reads only `?format=` from the URL; a body `format` key is ignored and the default `html` stores markdown as raw text.
+- History: `<project-root>/.claude/brewpage-history.md` (root: `CLAUDE_PROJECT_DIR` → git toplevel → upward `.git`/`.claude` walk → `PWD`, via `scripts/brewpage-lib.sh`), mode `600`, added to the project `.gitignore`. Its header holds the **delete** command for the owner token.
+- Run dirs live outside `.claude/` (protected path: `Write` there is denied in `dontAsk`; allow rules never pre-approve it). `dontAsk`/headless runs need a `Write` allow rule for `$TMPDIR`.
+- History TTL = requested days; stored `createdAt`/`expiresAt` are authoritative: a deduplicated winner keeps its original expiry, and ordinary PUT/update does not renew it.
+- Owner API calls use the returned `ownerLink` and stored identity metadata, never a NEW root hostname parsed for namespace/ID; OLD rows without metadata keep their existing API identifiers.
+- **Update a site**: `PUT` the new bundle to its apex owner API with `X-Owner-Token`; it replaces the file set and keeps the host. No `X-Delivery-Mode` on ordinary PUT/update.
+- Hosting change, NEW public non-sites only (OLD, sites and non-public identities have no mode choice): owner-only `PATCH /api/{type}/{ns}/{id}/hosting` with `{"deliveryMode":"subdomain","expectedVersion":1}` from current identity metadata; then use the returned URL/version.
+- NEW password-protected links stay clean: never generate or append `?p=`. API password requests use `X-Password`; OLD password behavior is unchanged.
+- **SITE bundles are allowlisted**: `pack` drops dot-entries (`.env`, `.git/`, `.DS_Store`), `node_modules/`, symlinks and unknown types, and verifies the archive (`unzip -t`, name set) before `curl`, else deletes it and exits 1. `inspect` never rewrites a supplied ZIP; it exits 2 when anything unexpected or sensitive is inside.
+- Keep `.link` exact (NEW subdomain roots keep `/`, OLD links their form); never reconstruct a host from IDs. Verify NEW native sites at the exact URL and asset paths in a browser; OLD sites may redirect via a landing page: check in a browser or fetch the explicit entry asset.

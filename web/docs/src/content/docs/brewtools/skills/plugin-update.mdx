@@ -20,7 +20,7 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 | Field | Value |
 |-------|-------|
 | Command | `/brewtools:plugin-update` |
-| Arguments | `[check\|update\|all]` — no args = interactive |
+| Arguments | `[prompt] [check\|update\|all]` — free-form prompt first; no args = interactive |
 | Model | sonnet |
 | Context | session |
 | Tools | Read, Bash, Write, AskUserQuestion, WebFetch |
@@ -57,14 +57,14 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 /brewtools:plugin-update all
 ```
 
-After a run you will see a version table like this:
+After a run you will see a version table like this (versions are placeholders):
 
 | Plugin | Installed | Latest | Status |
 |--------|-----------|--------|--------|
-| brewcode | 3.4.51 | 3.4.52 | ⬇️ update available |
-| brewdoc | 3.4.51 | 3.4.51 | ✅ current |
-| brewtools | — | 3.4.51 | ❌ missing |
-| brewui | 3.4.51 | 3.4.51 | ✅ current |
+| brewcode | X.Y.0 | X.Y.1 | ⬇️ update available |
+| brewdoc | X.Y.1 | X.Y.1 | ✅ current |
+| brewtools | — | X.Y.1 | ❌ missing |
+| brewui | X.Y.1 | X.Y.1 | ✅ current |
 
 Status legend: ✅ current · ⬇️ update available · ❌ missing · ❓ unknown.
 
@@ -74,13 +74,13 @@ Status legend: ✅ current · ⬇️ update available · ❌ missing · ❓ unkn
   <li>
     <div>
       <strong>Discover installed plugins</strong>
-      <p>Primary path: runs <code>claude plugin list --json</code> (CC 2.1.163+, prefixed with <code>unset CLAUDECODE &&</code> inside a session). Returns an array of objects: <code>id</code>, <code>version</code>, <code>scope</code>, <code>enabled</code>, <code>installPath</code>, <code>installedAt</code>, <code>lastUpdated</code>, and optional <code>mcpServers</code>. The <code>version</code> field may read <code>"unknown"</code> for locally-loaded plugins. Fallback: if the command errors, returns empty output, or produces invalid JSON, the skill runs <code>discover-plugins.sh</code>, which reads <code>&#126;/.claude/settings.json</code> and walks <code>&#126;/.claude/plugins/cache/</code> directly.</p>
+      <p>Primary path: runs <code>claude plugin list --json</code> (CC 2.1.163+, prefixed with <code>unset CLAUDECODE &&</code> inside a session). Returns an array of objects: <code>id</code>, <code>version</code>, <code>scope</code>, <code>enabled</code>, <code>installPath</code>, <code>installedAt</code>, <code>lastUpdated</code>, and optional <code>mcpServers</code>. The <code>version</code> field may read <code>"unknown"</code> for locally-loaded plugins. Fallback: if the command errors, returns empty output, or produces invalid JSON, the skill runs <code>discover-plugins.sh</code>, which reads <code>settings.json</code> in the config directory (<code>CLAUDE_CONFIG_DIR</code>, default <code>&#126;/.claude</code>) and walks the plugin cache (<code>CLAUDE_CODE_PLUGIN_CACHE_DIR</code>, default <code>&lt;config dir&gt;/plugins/cache/</code>) directly.</p>
     </div>
   </li>
   <li>
     <div>
       <strong>Fetch latest versions</strong>
-      <p>Fetches release metadata from GitHub. If the network request fails, all latest versions are marked "unknown" and the run continues — you can still update without knowing the exact latest tag.</p>
+      <p>Fetches release metadata from GitHub. If the network request fails, all latest versions are marked "unknown" and the run stays read-only: the failure is reported and nothing is inferred as missing or outdated.</p>
     </div>
   </li>
   <li>
@@ -104,19 +104,19 @@ Status legend: ✅ current · ⬇️ update available · ❌ missing · ❓ unkn
   <li>
     <div>
       <strong>Auto-update toggle hint</strong>
-      <p>Only in interactive and <code>all</code> modes. Explains how to enable per-marketplace auto-update via the <code>/plugin</code> UI (Marketplaces → claude-brewcode). The skill never patches <code>settings.json</code> directly — the exact key is unverified.</p>
+      <p>Only in interactive and <code>all</code> modes. Auto-update is OFF by default for a third-party marketplace like claude-brewcode, and the only switch is the <code>/plugin</code> UI (Marketplaces → claude-brewcode → Enable auto-update); no CLI sets it. The skill never patches <code>settings.json</code> directly and only points you to the UI.</p>
     </div>
   </li>
   <li>
     <div>
-      <strong>Prune stale plugin caches</strong>
-      <p>Skipped entirely for <code>check</code> (which stops after the status table). Otherwise previews orphaned auto-installed dependencies with <code>claude plugin prune --dry-run --scope &lt;scope&gt;</code>, once per distinct scope seen during discovery — plugins installed directly are never touched. Empty preview → nothing to remove. Non-empty preview asks once on the exact list, except <code>update</code> mode auto-resolves it to "Skip" (preview shown, nothing removed) and <code>all</code> auto-picks "Prune listed"; on a "Prune listed" answer it runs <code>claude plugin prune --scope &lt;scope&gt; -y</code>. The <code>-y</code> flag is mandatory: the Bash tool is not a TTY, and a bare <code>prune</code> hangs on its confirmation prompt. Non-fatal if the CLI lacks <code>prune</code> — prints a skip notice and continues.</p>
+      <strong>Prune orphaned dependencies</strong>
+      <p>Interactive and <code>all</code> only; <code>check</code> and <code>update</code> skip it. Previews orphaned auto-installed dependencies with <code>claude plugin prune --dry-run --scope &lt;scope&gt;</code>, once per distinct scope seen during discovery — plugins installed directly are never touched. Empty preview → nothing to remove. Non-empty preview asks once on the exact list (<code>all</code> auto-picks "Prune listed"); on a "Prune listed" answer it runs <code>claude plugin prune --scope &lt;scope&gt; -y</code>. The <code>-y</code> flag is mandatory: the Bash tool is not a TTY, and a bare <code>prune</code> without a TTY removes nothing and still exits 0, so the run would look pruned when it was not. Non-fatal if the CLI lacks <code>prune</code> — prints a skip notice and continues.</p>
     </div>
   </li>
   <li>
     <div>
       <strong>Reload notice + final summary</strong>
-      <p>Always printed, even on no-op runs. Lists what was installed, updated, skipped, and any errors. Preferred reload: run <code>/reload-plugins</code> in this session. Fallback: <code>exit</code>, then <code>claude</code> again.</p>
+      <p>Always printed at the end of every run (<code>check</code> included), even on no-op runs. Lists what was installed, updated, skipped, and any errors. Preferred reload: run <code>/reload-plugins</code> in this session. Fallback: <code>exit</code>, then <code>claude</code> again.</p>
     </div>
   </li>
 </Steps>
@@ -128,7 +128,7 @@ Run `/reload-plugins` or restart the session after any install or update. Claude
 <details>
 <summary>Internals</summary>
 
-**Discovery** — primary: `claude plugin list --json` (available since CC 2.1.163). Returns objects with fields `id`, `version`, `scope`, `enabled`, `installPath`, `installedAt`, `lastUpdated`, and optionally `mcpServers`. The `version` field may be `"unknown"` for dev-mode plugins. When run inside a session, the Bash invocation is prefixed with `unset CLAUDECODE &&` to avoid the env-var conflict. Fallback: if the command errors, returns empty output, or returns invalid JSON (CC older than 2.1.163), the skill falls back to `discover-plugins.sh`, which parses `&#126;/.claude/settings.json` for marketplace registrations and walks `&#126;/.claude/plugins/cache/` for installed version directories.
+**Discovery** — primary: `claude plugin list --json` (available since CC 2.1.163). Returns objects with fields `id`, `version`, `scope`, `enabled`, `installPath`, `installedAt`, `lastUpdated`, and optionally `mcpServers`. The `version` field may be `"unknown"` for dev-mode plugins. When run inside a session, the Bash invocation is prefixed with `unset CLAUDECODE &&` to avoid the env-var conflict. Fallback: if the command errors, returns empty output, or returns invalid JSON (CC older than 2.1.163), the skill falls back to `discover-plugins.sh`, which parses `settings.json` in the config directory (`CLAUDE_CONFIG_DIR`, default `~/.claude`) for marketplace registrations and walks the plugin cache (`CLAUDE_CODE_PLUGIN_CACHE_DIR`, default `<config dir>/plugins/cache/`) for installed version directories.
 
 **Update chain** — marketplace refresh once, then one command per plugin actually selected, `--scope` mandatory and taken from that plugin's own discovery row:
 
@@ -150,7 +150,7 @@ Each command runs via the Bash tool with full output shown. Failures are reporte
 
 **No delegation** — this skill spawns nothing. `Task` is deliberately absent from its `allowed-tools`: discovery, the update chain, and the gates all run in the main conversation, where you can see every command and its output.
 
-**Interactive gates** — `AskUserQuestion` presents option lists only (no free-text). Four decision points: install missing, update outdated, enable auto-update, prune stale caches. `check` stops before any of them. `update` auto-resolves update ("Update all") and prune ("Skip", preview shown but nothing removed) without asking, and skips the auto-update step entirely. `all` auto-installs, auto-updates everything, and auto-picks "Prune listed" — only the auto-update toggle still runs its own question in `all` mode.
+**Interactive gates** — `AskUserQuestion` presents option lists only (no free-text). Four decision points: install missing, update outdated, enable auto-update, prune orphaned dependencies. `check` stops before any of them. `update` auto-resolves update ("Update all") without asking and skips both the auto-update step and the prune phase. `all` auto-installs, auto-updates everything, and auto-picks "Prune listed"; it asks nothing, and the auto-update step only prints the `/plugin` UI hint.
 
 **Claude refuses to execute?** — if Claude summarizes instead of running commands, paste this coercive prompt: _"Execute every `claude plugin ...` command shown above using the Bash tool. Do not describe — run each command and show full output."_
 </details>

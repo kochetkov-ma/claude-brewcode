@@ -1,17 +1,5 @@
 #!/usr/bin/env node
-/**
- * suite-redact.mjs (BT-F03) - scripts/redact.mjs.
- *
- * Self-contained: fixtures are written into one mkdtemp base and removed at the
- * end; the repo working tree, HOME and the real report dirs are never touched.
- *
- * Every fixture value is FAKE and assembled from fragments, so no line of this
- * source file matches the scanner's own patterns.
- *
- * Assertion policy: unconditional exact-equality of the FULL parsed stdout
- * object (or an exact string / exact boolean) with a description; no `if` gates
- * which asserts run.
- */
+// suite-redact.mjs (BT-F03) - scripts/redact.mjs: one mkdtemp base, removed at end; repo tree, HOME, real report dirs never touched. Fixture values FAKE, built from fragments -> no source line matches scanner patterns; exact FULL parsed stdout object/string/boolean, no `if` gates.
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';

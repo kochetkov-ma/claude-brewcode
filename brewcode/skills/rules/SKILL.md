@@ -16,19 +16,17 @@ model: sonnet
 
 ## Prompt contract
 
-Position 1 of `$ARGUMENTS` is a **free-form prompt** (RU/EN) — modes and flags are optional and may
-follow in any order. Nobody types keys: resolve mode + scope FROM the prompt.
+`$ARGUMENTS` is one free-form RU/EN prompt; mode tokens and flags may sit anywhere in it.
 
-1. Strip flags. An explicit mode token anywhere wins outright, no scoring.
-2. Else score modes by distinct whole-word keyword hits (table below). Highest unique score wins.
-   Tie with a destructive mode -> `AskUserQuestion`; tie with `status` -> `status`;
-   tie of two mutating modes -> the keyword appearing first; all zero -> `status`.
-3. Empty -> `status`. Bundle material unresolved write decisions in ONE `AskUserQuestion`
-   (max 4 questions), before work. Read-only asks nothing except an explicitly requested menu.
-4. Use prompt/history answers; never repeat resolved questions or routine approval calls.
-5. Prose that is not a mode/id/path is still input: extract the id, path or target from it.
+1. Mode: an explicit mode token wins outright; else the most distinct whole-word keyword hits
+   (table below). Tie with a destructive mode -> `AskUserQuestion`; with `status` -> `status`; of two
+   mutating modes -> the keyword that comes first. No hit or empty -> `status`.
+2. Scope: prose that is not a mode/id/path is still input: take the id, path or target from it.
+3. Ask: bundle material unresolved write decisions in ONE `AskUserQuestion` (max 4 questions), before
+   work. Use prompt/history answers; never repeat resolved questions or routine approval calls.
+   Read-only asks nothing except an explicitly requested menu.
 
-Then print this block ONCE, before the first action:
+Print once, before the first action (labels and plan values English, INPUT verbatim):
 
 ```
 PLAN — brewcode:rules
@@ -39,24 +37,20 @@ DO:     <2-5 imperative bullets>
 RESULT: <what the user ends up holding>
 ```
 
-Labels/plan values are English; INPUT preserves the user's verbatim text.
-
 ## Constants
 
 | Const | Value |
 |-------|-------|
-| ARTIFACT | `rules` |
 | SPECIALIST | `brewcode:bc-rules-organizer` |
 | LIST_CMD | `bash "${CLAUDE_SKILL_DIR}/scripts/rules.sh" list` |
 
 ## Step 1 — Input gate
 
-Treat all `$ARGUMENTS` as one RU/EN prompt; `argument-hint` is guidance, not positional grammar.
-Empty/whitespace -> `status`; otherwise Step 2. Explicit menu request -> Step 3.
+Empty -> `status`; explicit menu request -> Step 3; else Step 2.
 
 ## Step 2 — Auto-mode selection
 
-Classify the prompt + recent conversation context into exactly ONE mode:
+Classify the prompt + recent context into ONE mode:
 
 | Mode | EN keywords | RU keywords | Mutates? |
 |------|-------------|-------------|----------|
@@ -66,80 +60,62 @@ Classify the prompt + recent conversation context into exactly ONE mode:
 | `improve` | `improve`, `refactor`, `fix` | `улучши`, `почини` | yes |
 | `review` | `review`, `validate` | `ревью`, `проверь корректность` | no |
 
-`improve` also matches a bare existing rule name/path with no keyword at all — that is rule 3.5's
-prose-extraction case, not a keyword hit.
+`improve` also matches a bare existing rule name/path. Plural, "все"/"all" or several names/paths ->
+batch: one specialist spawn per item. Print the PLAN, then Step 4.
 
-**Batch flag:** plural form, "все" / "all", or multiple names/paths -> fan-out (one specialist spawn per item).
+## Step 3 — Menu (explicit request only)
 
-Print the canonical PLAN once after resolving scope/mode, before work; MODE includes explicit/default
-or the quoted matched keyword. SCOPE includes resolved targets/paths. Proceed to Step 4.
+One AskUserQuestion, two questions, 2-4 options each (tool cap; "Other" is automatic):
 
-## Step 3 — Explicitly requested menu (single AskUserQuestion, scoped + cross-link)
+- Q1 `What do you want to do with rules?`: `Status (rules)` **(Recommended)**, `Create new rules`,
+  `Improve existing rules`, `Review rules`
+- Q2 `Variant?`: `As chosen` **(Recommended)**, `Status (all: agents+rules+skills)`,
+  `List (plain)`; a non-default Q2 replaces Q1
 
-Ask ONE AskUserQuestion. Question: `What do you want to do with rules?`
-Options (in this order):
+Dismissed or `cancel` via Other -> stop. Else take target and params from the choice plus prompt/history, no follow-up: safe
+gap -> stated default; write-critical gap -> report the missing decision before writing. Print PLAN,
+then Step 4.
 
-- `Status (rules)` — **(Recommended)** rich status of this artifact
-- `Status (all: agents+rules+skills)` — cross-link: run the collector for all three
-- `Create new rules`
-- `Improve existing rules`
-- `Review rules`
-- `List (plain)`
-- `Nothing / cancel`
+## Delegation (every Agent spawn)
 
-Cancel -> stop. Otherwise use the choice plus prompt/history for target/description and artifact params;
-do not ask a follow-up after using the one-question allowance. Safe missing params -> stated defaults;
-write-critical unresolved params -> report the missing decision before writing. Print PLAN, then Step 4.
+Main owns every spawn; delegates return results, never nest or accept their own output. One
+subagent = one bounded unit: one knowledge source -> its avoid/best-practice pair (cross-file dedup
+needs both), ~<=5 files, ~<=10 steps; bigger work splits into N tasks spawned in one message.
 
-## Delegation (applies to EVERY Agent spawn in this skill)
-
-Main owns every spawn; delegates return decisions/results and never nest or accept their own output.
-One subagent = ONE bounded unit — one deliverable
-(here: ONE rule file), ~<=5 files, ~<=10 steps. Bigger MUST be split into N tasks, all spawned
-in ONE message.
-
-Every spawn prompt MUST carry:
-
-| Field | Content |
-|-------|---------|
-| GOAL | overall task/purpose beyond editing |
-| ROLE | owned responsibility + forbidden changes |
-| SCOPE | exact paths/commands in/out of bounds |
-| CONTEXT | prior work/owners, parallel work; relevant to this agent only |
-| CONSUMER | next consumer + required result shape |
-| DONE | acceptance criteria + exact return format |
+Every spawn brief carries six labeled fields, since a subagent starts with an empty context: GOAL (task + why), ROLE (owns, must not touch), SCOPE (paths/commands in and out), CONTEXT (done, by whom, in parallel), CONSUMER (who uses the result + its shape), DONE (acceptance + return: verdict first, evidence, bounded; long output to a file, path returned).
 
 A bare one-line task is never enough.
 
 ## Step 4 — Dispatch
 
-- `status` -> go to **Step 5**.
-- `status (all)` -> go to **Step 5**, running the collector for agents + rules + skills together.
-- `list` -> run `LIST_CMD`, print the plain inventory it produces, then STOP (no status assembly).
-- `create` -> resolve minimal artifact params; spawn `SPECIALIST` via Agent.
-  Batch -> spawn one `SPECIALIST` per item, ALL in ONE message (parallel).
-- `improve` -> resolve targets; spawn `SPECIALIST` via Agent per target (parallel for batch).
-- `review` -> spawn the project's reviewer agent from `.claude/agents/`, else `general-purpose`
-  (two-phase: review -> double-check findings -> report).
-- After organizer returns, main loads/follows the installed `/brewtools:text-optimize` Medium
-  workflow (do not model-invoke its DMI skill through `Skill`) on exactly the written paths:
-  snapshot before its edits, capture `RUN_DIR`, run mechanical/inventory gates, then
-  `rules.sh validate`. Delegates never spawn optimizers. Missing brewtools -> report skipped,
-  not blocked; preserve the written rules and their validation evidence.
+- `status` / `Status (all)` -> Step 5 (all: one collector for agents + rules + skills).
+- `list` -> run `LIST_CMD`, print its inventory, STOP.
+- `create` / `improve` -> resolve targets and params; spawn `SPECIALIST`, one per item, a batch in
+  one message.
+- `review` -> the project's reviewer agent from `.claude/agents/`, else `general-purpose`: review ->
+  double-check findings -> report.
+- Then medium-optimize exactly the written rule files, only when agent type
+  `brewtools:text-optimizer` is available in this session. It stops on a brief without `RUN_DIR`, so
+  follow the Medium workflow of the installed `/brewtools:text-optimize` `SKILL.md`: path =
+  `installPath` of the enabled `brewtools` entry in `claude plugin list --json`, which also stands
+  for `CLAUDE_PLUGIN_ROOT` in its commands; never via `Skill` (`disable-model-invocation: true`).
+  Snapshot the files, capture `RUN_DIR`, spawn one optimizer per file with the six brief fields,
+  that `RUN_DIR` and "preserve every table row, frontmatter key, name, number, negation and scope",
+  then run its verify gate and `rules.sh validate`. Delegates never spawn optimizers.
+  > Agent type unavailable or that `SKILL.md` not resolvable -> skip the pass and report the skip,
+  > not a blocker; the rules stay as written, with their validation evidence.
 
 ## Step 5 — Real status (NOT a flat list)
 
-Delegate collection to ONE Explore/Bash subagent, then assemble a rich status (never a bare list):
+One Explore/Bash subagent collects; main assembles:
 
-- **Inventory by scope:** plugin (BC) / project (`.claude/`) / global (`~/.claude/`) — counts + names + load path.
-- **State:** enabled/disabled via setup config or `<name>.disabled` parking; flag legacy `_SKILL.md`/`_<name>.md` markers; model.
-- **Overlaps / conflicts:** same-name across scopes (shadowing), duplicate triggers/descriptions, naming collisions.
-- **Health flags:** missing README/frontmatter; agents missing `Bash` in `tools:` (macOS search rule);
-  LLM-invocable skills with weak description triggers; rules duplicated in CLAUDE.md.
+- **Inventory:** plugin / project (`.claude/`) / global (`~/.claude/`): counts, names, load path.
+- **State:** enabled/disabled (setup config or `<name>.disabled` parking); legacy `_SKILL.md`/`_<name>.md` markers; model.
+- **Overlaps:** same name across scopes (shadowing), duplicate triggers/descriptions.
+- **Health:** missing README/frontmatter; agents with neither `Bash` nor `Glob`/`Grep` in `tools:`;
+  LLM-invocable skills with weak triggers; rules duplicated in CLAUDE.md.
 
-For the `Status (all)` menu option: run the SAME collector for agents + rules + skills together.
-
-## Step 6 — Final formatted output (MANDATORY for every run except `list`)
+## Step 6 — Final output (every run except `list`)
 
 ```
 # rules [<mode>]
@@ -153,58 +129,47 @@ For the `Status (all)` menu option: run the SAME collector for agents + rules + 
 ## Status
 (status mode: full table from Step 5; else short "what changed" for touched artifacts)
 ## Next Steps
-(recommendations; ALWAYS remind to run /docs for any created/changed artifact)
+(recommendations; always name the project docs a created/changed artifact made stale)
 ```
-
-For `status` mode the report **is** the Step 5 status table.
-
-## Edge cases
-
-| Situation | Resolution |
-|-----------|------------|
-| Prose that isn't a mode/id/path (e.g. "fix the payment-avoid rule") | extract the id/path/target from the prose — never treat the first word as a positional id |
-| PLAN block missing, or printed after work started | defect — file it, do not ship |
 
 ## Artifact-specific params (create / improve only)
 
-Rules has only an ORGANIZER, no separate creator. Infer source/slice from prompt/history; bundle
-material unresolved values in ONE AskUserQuestion (max 4). Knowledge source options:
-(a) KNOWLEDGE.jsonl path (parse t:"❌"->avoid, t:"✅"->practice), (b) inline prompt
-(<path> + text), (c) session learnings (extract 5 most impactful findings as ❌/✅).
-Spawn SPECIALIST (brewcode:bc-rules-organizer) with the Delegation shape — GOAL: the project needs a
-deduplicated, machine-usable rule set in `.claude/rules/`; ROLE: this agent owns ONLY the target
-rule files plus `.claude/reports/YYYYMMDD-HHMMSS_rules-organizer/`, never CLAUDE.md/global rules;
-CONTEXT: the knowledge source and its parsed
-entries are already chosen above (do NOT re-ask), the existing `.claude/rules/*.md` are the
-dedup baseline, and no sibling agent touches those files; CONSUMER: unscoped rules load at startup,
-`paths:` rules load lazily for matching files; entries are table rows, not prose. Step 6
-report needs the per-file added/merged/skipped counts; SCOPE + DONE per the template below:
-  - Update PROJECT .claude/rules/ — NEVER ~/.claude/rules/
-  - Plugin templates: ${CLAUDE_PLUGIN_ROOT}/templates/rules/
-  - Validate: bash "${CLAUDE_SKILL_DIR}/scripts/rules.sh" validate
-  - Create missing: bash "${CLAUDE_SKILL_DIR}/scripts/rules.sh" create
-  - Create specialized: bash "${CLAUDE_SKILL_DIR}/scripts/rules.sh" create-specialized <prefix> '<paths>'
-  - Targets: avoid.md, best-practice.md, {prefix}-avoid.md, {prefix}-best-practice.md
-  - DEDUP 3-Check: within-file (>70% skip, 40-70% merge); cross-file antonym
-    (avoid<->best-practice keep avoid only); CLAUDE.md duplicate (skip; "CLAUDE.md"
-    forbidden as Source).
-Fallback if agent unavailable: error "brewcode:bc-rules-organizer not available — install brewcode plugin".
+Take source and slice from prompt/history; material gaps go into the one question batch. Sources: (a) KNOWLEDGE.jsonl path (t:"❌"->avoid,
+t:"✅"->practice), (b) <path> + text in the prompt, (c) session learnings (the 5 most impactful
+findings as ❌/✅).
+
+Brief for `SPECIALIST`; it returns a question instead of rows when the source or a prefix's `paths`
+is missing, so pass both:
+
+- GOAL: a deduplicated, machine-usable rule set in `.claude/rules/`.
+- ROLE: owns only the target rule files + `.claude/reports/YYYYMMDD-HHMMSS_rules-organizer/`; never
+  CLAUDE.md.
+- SCOPE: PROJECT `.claude/rules/`, NEVER `~/.claude/rules/`. Targets `avoid.md`, `best-practice.md`,
+  `{prefix}-avoid.md`, `{prefix}-best-practice.md`. Commands:
+  `bash "${CLAUDE_SKILL_DIR}/scripts/rules.sh" create` | `create-specialized <prefix> '<paths>'` |
+  `validate`. Templates (read-only): `${CLAUDE_PLUGIN_ROOT}/templates/rules/`.
+- CONTEXT: source + parsed entries chosen (do not re-ask); existing `.claude/rules/*.md` = dedup
+  baseline; no sibling touches them.
+- CONSUMER: Step 6 (counts + validate rc); Claude Code loads the table rows: unscoped at session
+  start, `paths:` when Claude reads, writes or edits a matching file.
+- DONE: `validate` exits 0; return the `File | Paths | Change` table (per file `new: N added` or
+  `updated: N added, N merged, N skipped`) + the summary line ending `rules.sh validate: rc N`;
+  detail in the report dir, path returned.
+
+Agent unavailable -> error "brewcode:bc-rules-organizer not available — install brewcode plugin".
 
 ### Scope of a specialized rule file (resolve before creating)
 
-A `{prefix}-avoid.md` / `{prefix}-best-practice.md` applies to ONE slice of the repo. Before
-running `create-specialized`, resolve that slice from authorized context or the ONE question batch;
-if unresolved return the missing decision without writing. Pass it as the `paths` argument
-(a YAML flow list, e.g. `'["src/payment/**", "**/payment/**"]'`). Omitting the argument makes the
-script derive a glob from the prefix and print it with a confirm-me warning; passing `["**/*"]` is
-refused outright — a specialized rule that matches everything is auto-loaded into every request,
-which is exactly the drift `/brewdoc:memory-sync`'s HARD pass A had to keep cleaning up.
+A `{prefix}-` file covers one repo slice. Resolve it from authorized context or the one question
+batch before `create-specialized`; unresolved -> return the missing decision, write nothing. Pass it
+as `paths`, a YAML flow list, e.g. `'["src/payment/**", "**/payment/**"]'`. Omitted -> the script
+derives a glob from the prefix and prints it with a confirm-me warning. `["**/*"]` is refused: it
+would load into every request.
 
 ### Artifact metadata — every rule file this skill writes
 
-The templates under `templates/rules/` carry the three placeholder tokens raw, and `rules.sh`
-substitutes them at creation time, so a created file already carries, after its `paths:` and
-`description:`:
+`rules.sh` fills the `templates/rules/` tokens at creation; after `paths:` (specialized files only) a
+file carries:
 
 ```yaml
 doc_type: llm
@@ -213,12 +178,10 @@ generated_by: "{GENERATED_BY}"
 last_updated: "{LAST_UPDATED}"
 ```
 
-`{PLUGIN_VERSION}` resolves from `.claude-plugin/plugin.json` (script self-location),
-`{GENERATED_BY}` to `brewcode:rules`, `{LAST_UPDATED}` to `date +%F`. Never hardcode any of them.
-`doc_type` is the one UNQUOTED value — `validate` gates on `^doc_type: llm$` and hard-fails
-`doc_type: "llm"`; the other three must be quoted. When the organizer EDITS an existing rule file, it refreshes
-`last_updated` (and `version`, if the file was written by an older release) with those same two
-sources and leaves every other key alone. `rules.sh validate` fails the run when a key is missing,
-misspelled or misformatted, so run it after every write.
+`{PLUGIN_VERSION}` from `.claude-plugin/plugin.json` (script self-location), `{GENERATED_BY}` =
+`brewcode:rules`, `{LAST_UPDATED}` = `date +%F`; never hardcode them. `validate` gates on
+`^doc_type: llm$` (unquoted, `doc_type: "llm"` fails; the other three quoted), exits non-zero on a
+missing, misspelled or misformatted key, so run it after every write. It checks `avoid.md`,
+`best-practice.md` (both required) and `{prefix}-` files only.
 
 </instructions>

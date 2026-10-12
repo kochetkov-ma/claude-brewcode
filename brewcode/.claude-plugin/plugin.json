@@ -1,7 +1,7 @@
 {
   "name": "brewcode",
-  "version": "6.4.0",
-  "description": "Brewcode - full-featured development platform for Claude Code: infinite focus tasks, prompt optimization, skill/agent creation, quorum reviews, rules management",
+  "version": "6.5.0",
+  "description": "Brewcode - Claude Code authoring toolkit: skill, agent and rule creation and sync, semantic code search (semble), project conventions, E2E tests, generated review and domain-team skills, setup dashboard, post-compact plan re-anchor",
   "author": {
     "name": "Maksim Kochetkov",
     "email": "apmatypa88@gmail.com",
@@ -12,12 +12,12 @@
   "license": "MIT",
   "keywords": [
     "brewcode",
-    "task",
-    "automation",
+    "skills",
     "agents",
-    "handoff",
-    "infinite-context",
-    "prompt-optimization",
+    "rules",
+    "semantic-search",
+    "code-review",
+    "e2e",
     "developer-tools"
   ],
   "skills": "./skills/"

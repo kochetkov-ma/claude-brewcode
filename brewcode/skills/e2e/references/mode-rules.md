@@ -1,6 +1,7 @@
 # Mode: RULES
 
 Create, update, and improve E2E testing rules.
+Contents: L0 Prerequisites, L1 Load, L2 Research, L3 Update, L4 Approval, L5 Persist.
 
 ## L0: Prerequisite Check
 
@@ -9,15 +10,14 @@ Read `.claude/e2e/config.json`.
 
 ## L1: Load Current Rules
 
-1. Read the live rules: `{config.rulesPath}` (`.claude/e2e/e2e-rules.md`) — this is the file the
-   agents actually load; it is the one this mode updates
+1. Read the live rules `{config.rulesPath}` (`.claude/e2e/e2e-rules.md`): the file the agents load
+   and this mode updates
 2. Read base rules: `${CLAUDE_SKILL_DIR}/references/e2e-rules.md` (upstream reference, for diffing)
 3. Read the condensed export (if exists): `.claude/rules/e2e-conventions.md`
 4. Check freshness: compare the `content_version` stamped in `config.json` with the
    `CONTENT_VERSION:` line Phase 0's `detect-mode.sh` printed (fall back to `version` vs
    `PLUGIN_VERSION:` only on a pre-`content_version` config, which has no other stamp).
-   Different (or absent) -> report it below; approved L5 refreshes every artifact even without
-   rule-body changes. A cancelled run preserves the existing stamps and reported staleness
+   Different (or absent) -> report it below
 5. Present current state:
 
 | Source | Rules Count | Version | Last updated |
@@ -26,14 +26,10 @@ Read `.claude/e2e/config.json`.
 | Base (plugin `references/e2e-rules.md`) | {N} | `CONTENT_VERSION:` | -- (ships with the plugin) |
 | Conventions export (`.claude/rules/e2e-conventions.md`) | {N or "none"} | its frontmatter `content_version` | its frontmatter `last_updated` |
 
-> Every cell above has exactly one source, and every version cell is a `content_version` — the
-> baseline and the generated copies are then directly comparable. The plugin baseline carries no
-> per-file stamp and cannot: it ships INSIDE the plugin, so its content version IS `CONTENT_VERSION:`
-> by definition and a stamp would only be a second copy that can go stale. Its `Last updated` is
-> therefore `--`, not a guess.
-> A row whose file has no frontmatter at all is a pre-standard artifact -> print
-> `stale (legacy, unstamped)`, never `unknown`: a word that sorts against real semver turns a failed
-> read into a confident verdict. L5 re-stamps it.
+> Every version cell is a `content_version`, so the rows compare directly. The plugin baseline ships
+> inside the plugin: its content version is `CONTENT_VERSION:` and it carries no stamp. A file with no
+> frontmatter is pre-standard -> `stale (legacy, unstamped)`, never `unknown` (it sorts against real
+> semver); L5 re-stamps it.
 
 > `{config.rulesPath}` missing -> "Run `/brewcode:e2e install` first." STOP. Never fall back to the
 > plugin copy: the agents cannot read it.
@@ -107,9 +103,7 @@ DONE: check for contradictions, duplicates, and actionability (each rule must be
 
 ## L4: User Approval
 
-AskUserQuestion with diff of changes:
-
-Include proposed metadata refresh for existing artifacts even when there is no rule-body delta.
+AskUserQuestion with the diff, including the proposed metadata refresh even with no rule-body delta:
 
 ### Rules Diff
 | Action | Category | # | Rule | Source |
@@ -125,22 +119,21 @@ Options:
 
 ## L5: Persist
 
-Enter only after L4 approves all or selected changes. Cancellation exits without persistence.
+Enter only after L4 approves all or selected changes.
 
-Accepted changes are written to `{config.rulesPath}` (`.claude/e2e/e2e-rules.md`) — always, not
-optionally: that file IS the rule set the agents load, so an unwritten merge changes nothing.
+Always write accepted changes to `{config.rulesPath}` (`.claude/e2e/e2e-rules.md`): that file is the
+rule set the agents load.
 
 Then AskUserQuestion: "Also refresh the condensed export?"
 Options:
 - "Update .claude/rules/e2e-conventions.md" -> write/update with key rules (~20-30 lines)
 - "Skip"
 
-> Never write back into the plugin's `references/e2e-rules.md`. It is the upstream baseline, it is
-> read-only for this skill, and a plugin update overwrites it.
+> Never write back into the plugin's `references/e2e-rules.md`: it is the read-only upstream baseline
+> and a plugin update overwrites it.
 
-Re-stamp the artifact metadata on EVERY existing artifact below, from the Phase 0 `PLUGIN_VERSION:` /
-`CONTENT_VERSION:` / `GENERATED_BY:` / `LAST_UPDATED:` lines — one command, one date spelling
-(`date +%F`), no hardcoding:
+Re-stamp the artifact metadata on every existing artifact below from the Phase 0 `PLUGIN_VERSION:` /
+`CONTENT_VERSION:` / `GENERATED_BY:` / `LAST_UPDATED:` lines (no hardcoding):
 
 | File | Keys |
 |------|------|
@@ -149,19 +142,13 @@ Re-stamp the artifact metadata on EVERY existing artifact below, from the Phase 
 | `.claude/rules/e2e-conventions.md` (if it exists) | same five, after its own `paths:` / `description:` |
 | `.claude/agents/e2e-*.md` (each) | same five, after the agent's own frontmatter keys |
 
-> **`content_version` is on every row on purpose.** It is the key `status` compares, so a re-stamp
-> that writes `version` alone leaves the flagged value untouched and `status` reports stale again on
-> the next run. An artifact missing the key gets it added here.
+> `content_version` goes on every row (added where missing): it is the key `status` compares, so a
+> `version`-only re-stamp leaves `status` reporting stale. On the approved branch re-stamp even with
+> no rule-body change: `rules` is the remedy `status` prescribes for
+> `config.content_version != CONTENT_VERSION`, and gating it on a body change loops forever.
+> Cancellation at L4 skips this and every other write; report the stamps as unchanged.
 
-> On the approved branch, re-stamping is not gated on a rule-body change. `rules` is the remedy
-> `status` prescribes for `config.content_version != CONTENT_VERSION`, so a run that only re-stamps is a
-> legitimate and expected run. Gating it on "everything this run wrote" would make the loop
-> permanent: `status` says stale -> `rules` finds nothing to change -> `rules` reports success ->
-> `status` says stale again, forever. Cancellation at L4 skips this step and every other write;
-> report that stamps remain unchanged rather than claim a completed refresh.
-
-> Re-stamping is METADATA-ONLY. Touch just the five keys in the first frontmatter block (and the
-> four JSON keys); leave every other key, the agents' Immutable Traits and all prose byte-identical.
-> An artifact whose body you did not change must differ by exactly those keys.
+> Re-stamping is METADATA-ONLY: just the five keys in the first frontmatter block (and the four JSON
+> keys); every other key, the agents' Immutable Traits and all prose stay byte-identical.
 
 Summary: rules added/modified/removed, sources breakdown, artifacts re-stamped (count + version).

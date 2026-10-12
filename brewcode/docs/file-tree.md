@@ -4,7 +4,7 @@ description: Complete file tree of the brewcode plugin with descriptions
 
 # Brewcode Plugin - File Tree
 
-> Version: 6.4.0 | Reference tree of shipped source and generated project artifacts; excludes the generated `.codex/` mirror and build/cache files.
+> Version: 6.5.0 | Reference tree of shipped source and generated project artifacts; excludes the generated `.codex/` mirror and build/cache files.
 
 ## Plugin Structure
 
@@ -12,38 +12,33 @@ description: Complete file tree of the brewcode plugin with descriptions
 brewcode/                                    # Plugin root directory
 │
 ├── .claude-plugin/                            # Claude Code plugin configuration
-│   └── plugin.json                            # Manifest (name, version 6.4.0, skills/ reference)
+│   └── plugin.json                            # Manifest (name, version 6.5.0, skills/ reference)
 │
-├── hooks/                                     # Node.js scripts for Claude Code events (4 hooks)
-│   ├── hooks.json                             # Binds 2 events (UserPromptSubmit, SessionStart); SessionStart has 2 groups: unmatched + matcher "compact"
+├── hooks/                                     # Node.js scripts for Claude Code events (2 hooks)
+│   ├── hooks.json                             # Binds 1 event (SessionStart) in 2 groups: unmatched + matcher "compact"
 │   ├── lib/
-│   │   ├── reminder.mjs                       # [ROLE]/[SPLIT]/[BRANCH] text, one normative copy shared by forced-eval.mjs and role-recall.mjs
-│   │   └── utils.mjs                          # readStdin, output, capText, log, lock files, config, state, task parsing
+│   │   └── utils.mjs                          # readStdin, output, capText, log, state, project root, config dir, plans dir and LATEST.md symlink helpers
 │   ├── session-start.mjs                      # SessionStart: version-check, plan-symlink, permission_mode tag
-│   ├── role-recall.mjs                        # SessionStart (compact): re-injects the [ROLE]/[SPLIT]/[BRANCH] reminder after auto-compaction
 │   ├── compact-recall.mjs                     # SessionStart (compact): re-anchors plan/intent + task graph from this session's transcript
-│   ├── forced-eval.mjs                        # UserPromptSubmit: [ROLE]/[SPLIT]/[BRANCH] reminder (~9K additionalContext bound)
 │   └── tests/                                 # Core-hook regression suites - no network, no MCP, temp HOME + CLAUDE_PROJECT_DIR
-│       ├── run.sh                             # Aggregates tests/suite-*.mjs; optional bare-name filter (`run.sh session-start`); a MISSING suite != error, a failing one is
-│       ├── suite-session-start.mjs            # plan-link safety/containment, project-root recipe, post-compact recall and fail-open stdin
-│       └── suite-forced-eval.mjs              # Prompt reminder contract
+│       ├── run.sh                             # Aggregates tests/suite-*.mjs; optional bare-name filter (`run.sh session-start`); an unknown named suite or a failing one exits 1
+│       └── suite-session-start.mjs            # plan-link safety/containment, plans dir, project-root recipe, post-compact recall and fail-open stdin
 │
 ├── agents/                                    # Plugin agents (system prompts in Markdown, 5 total)
-│   ├── agent-creator.md                       # Agent creator (inherit): Agent Architect Process, System Prompt Patterns
-│   ├── bash-expert.md                         # Bash expert (inherit): professional sh/bash scripts
-│   ├── bc-rules-organizer.md                  # Rules organizer (haiku): internal, spawned only by /brewcode:rules
-│   ├── hook-creator.md                        # Hook creator (inherit): hook patterns, advanced techniques, multi-stage
-│   ├── skill-creator.md                       # Skill creator (inherit): current authoring contracts and on-demand references
+│   ├── agent-creator.md                       # Agent creator (inherit): creation process, Scope Fit, on-demand references
+│   ├── bash-expert.md                         # Bash expert (inherit): sh/bash scripts, numbered conventions and checklist, Scope Fit
+│   ├── bc-rules-organizer.md                  # Rules organizer (haiku): internal, spawned by /brewcode:rules and /brewcode:convention-setup
+│   ├── hook-creator.md                        # Hook creator (inherit): create or debug a hook, Scope Fit, on-demand references
+│   ├── skill-creator.md                       # Skill creator (inherit): create, improve, apply review fixes; on-demand references
 │   └── tests/
-│       └── suite-creator-contract.mjs         # Local contracts for creator guidance checked through Claude Code 2.1.285
-│
-├── modes/
-│   └── manager.md                             # Manager-mode system prompt fragment
+│       ├── run.sh                             # Runs the creator contract suite
+│       └── suite-creator-contract.mjs         # Local contracts for creator guidance checked through Claude Code 2.1.296
 │
 ├── skills/                                    # Skills - plugin commands (9 total; `-setup` = installs a mechanism)
 │   │
 │   ├── agents/                                # /brewcode:agents - Agent roster: status/list/create/improve/review/sync
-│   │   └── SKILL.md                           # Delegates to agent-creator + brewtools:text-optimize (opus, session)
+│   │   ├── SKILL.md                           # Delegates to agent-creator + brewtools:text-optimize (opus, session)
+│   │   └── references/                        # agent-context-and-execution, agent-frontmatter-fields, agent-known-issues, agent-scope-and-tools, agent-template, hooks-* (changes, env, events, io-contract, templates, types-config)
 │   │
 │   ├── convention-setup/                      # /brewcode:convention-setup - Early foundation before teams/review
 │   │   ├── SKILL.md                           # status/install/upgrade/enable/disable/uninstall/purge; install default; full/conventions/rules/paths extras
@@ -53,36 +48,38 @@ brewcode/                                    # Plugin root directory
 │   │   ├── scripts/
 │   │   │   └── convention.sh                 # Stack detection, extraction validation and ownership-safe lifecycle
 │   │   └── tests/
+│   │       ├── run.sh                         # Runs lifecycle.mjs
 │   │       └── lifecycle.mjs                  # Loading-rule parking, ownership and removal contracts
 │   │
 │   ├── e2e/                                   # /brewcode:e2e - E2E testing orchestration
 │   │   ├── SKILL.md                           # status/install/create/update/review/rules; uninstall/purge/upgrade/enable/disable rejected
-│   │   ├── PROMPT.md
 │   │   ├── references/                        # agent-template, e2e-architecture, e2e-rules (baseline, merged into the project copy), mode-* (6 modes)
 │   │   └── scripts/
 │   │       └── detect-mode.sh
 │   │
 │   ├── rules/                                 # /brewcode:rules - Extract rules from knowledge
-│   │   ├── SKILL.md                           # KNOWLEDGE.jsonl → avoid.md + best-practice.md, dedup, 20 line limit (sonnet, session)
+│   │   ├── SKILL.md                           # KNOWLEDGE.jsonl → avoid.md + best-practice.md, dedup, max 20 rows per table (sonnet, session)
 │   │   └── scripts/
 │   │       └── rules.sh                       # read/check/create/validate
 │   │
 │   ├── semble-setup/                          # /brewcode:semble-setup - Semantic code-search MCP setup
 │   │   ├── SKILL.md                           # status(default)/install/upgrade/enable/disable/uninstall/purge + reindex/optimize/resume (opus)
 │   │   ├── assets/                            # INSTALL.md, semble-first + sembleignore templates, session/prefetch/stats/reminder/subagent hooks
-│   │   ├── references/                        # engine-landscape, hooks-roadmap, intent-routing, language-coverage, mcp-and-cache, output-contract, project-agent-migration
+│   │   ├── references/                        # engine-landscape, intent-routing, language-coverage, mcp-and-cache, output-contract, project-agent-migration
 │   │   ├── scripts/                           # 9 semble-*.sh + lib/semble-common.sh
 │   │   └── tests/                             # run.sh + 7 mjs suites + fixtures
 │   │
 │   ├── setup-status/                          # /brewcode:setup-status - Read-only cross-plugin setup dashboard
 │   │   ├── SKILL.md                           # Roster table + probes + classification; no Write/Edit/Agent, runs no setup (sonnet)
 │   │   ├── README.md                          # States, staleness signals, roster self-check
-│   │   └── references/
-│   │       └── artifact-metadata.md           # doc_type/version/generated_by/last_updated contract for generated artifacts
+│   │   ├── references/
+│   │   │   ├── artifact-metadata.md           # doc_type/version/generated_by/last_updated contract for generated artifacts
+│   │   │   └── row-notes.md                   # Per-row probe notes for the roster
+│   │   └── tests/                             # run.sh + roster-lockstep, task-board-status, task-tools, team-md-content-version suites
 │   │
 │   ├── skills/                                # /brewcode:skills - Skill management
 │   │   ├── SKILL.md
-│   │   ├── references/                        # e2e-template, mode-sync, readme-template, review-prompt, summary-template
+│   │   ├── references/                        # activation-and-troubleshooting, design-patterns, e2e-template, execution-model, frontmatter-fields, mode-sync, prompt-contract, readme-template, review-prompt, summary-template
 │   │   └── scripts/
 │   │       ├── list-skills.sh
 │   │       └── validate-skill.sh
@@ -102,10 +99,16 @@ brewcode/                                    # Plugin root directory
 │       │   ├── agent-owners.sh                # Cross-team ownership checks
 │       │   ├── toggle-team.sh                 # enable/disable: parks/unparks agent .md files as .md.disabled, reversible, intent-guard excluded
 │       │   ├── trace-ops.sh                   # Copied into .claude/teams/{name}/ at install - agents call the project copy
-│       │   └── verify-team.sh                 # WARNs (with a cp line) when the project copy of trace-ops.sh is missing
+│       │   ├── verify-team.sh                 # WARNs (with a cp line) when the project copy of trace-ops.sh is missing
+│       │   ├── count-tokens.py                # Token counting for agent profiles
+│       │   └── prepare-tokenizer.py           # Tokenizer preparation for count-tokens.py
 │       └── tests/                             # Isolated temp base - never touches the real ~/.claude or the repo tree
 │           ├── run.sh                         # Aggregates tests/suite-*.mjs; optional bare-name filter (`run.sh lifecycle`); fails on any suite or error-level shellcheck finding
 │           ├── suite-lifecycle.mjs            # Suite A - roster safety in toggle-team.sh + verify-team.sh (BCOP08: a `## Agents` row like `../../../outside/README` moved a file OUTSIDE the project)
+│           ├── suite-agent-profile-contract.mjs # Agent profile contract
+│           ├── suite-multi-team.mjs           # Multiple teams side by side
+│           ├── suite-parked-conflict.mjs      # Parked (disabled) agent conflicts
+│           ├── suite-trace-ops.mjs            # trace-ops.sh behaviour
 │           └── suite-intent-guard.mjs         # Suite B - intent-guard provenance via superreview-setup/scripts/generate.sh emit-agent (BCOP09: a hand-written agent merely mentioning `{TOKEN}` was overwritten with no backup)
 │
 ├── templates/
@@ -119,8 +122,8 @@ brewcode/                                    # Plugin root directory
 │   └── commands.md                            # Command reference: all /brewcode:* skills, arguments, examples
 │
 ├── README.md                                  # Components, commands, agents, hooks, architecture, flow diagrams
-├── INSTALL.md                                 # Installation: plugin-dir, marketplace, embedding, troubleshooting
-└── package.json                               # npm: claude-plugin-brewcode@6.4.0, build/publish scripts
+├── INSTALL.md                                 # Installation: plugin-dir, local clone, project enabling, troubleshooting
+└── package.json                               # npm: claude-plugin-brewcode@6.5.0
 ```
 
 ## Target Project Structure
@@ -130,26 +133,15 @@ Files created by the plugin in the user's project:
 ```
 {PROJECT}/
 └── .claude/
-    ├── TASK.md                                # Quick reference: path to active task
+    ├── logs/
+    │   └── brewcode.log                       # Unified hook log: timestamp LEVEL [session] [hook] message
+    │
     ├── plans/
-    │   └── LATEST.md                          # Symlink → ~/.claude/plans/<newest>.md (session-start.mjs on Clear)
+    │   └── LATEST.md                          # Symlink → <config dir>/plans/<newest>.md (plans dir follows CLAUDE_CONFIG_DIR; session-start.mjs on Clear)
     │
     ├── tasks/
-    │   ├── cfg/
-    │   │   ├── brewcode.config.json           # User settings: logging, agents, constraints
-    │   │   └── brewcode.state.json            # Inter-session state: current task, last compaction
-    │   │
-    │   ├── sessions/
-    │   │   └── {session_id}.info              # Task path, creation time
-    │   │
-    │   ├── logs/
-    │   │   └── brewcode.log                   # Unified hook log: [info/warn/error] [hook] message
-    │   │
-    │   ├── reviews/
-    │   │   └── {TS}_{NAME}_report.md          # P0-P3 findings, quorum, statistics
-    │   │
-    │   └── {TS}_{NAME}_task/                  # e.g. 20260130_150000_auth_task/
-    │       └── SPEC.md                        # Goal, scope, requirements, analysis, risks (from the project /task-spec skill)
+    │   └── cfg/
+    │       └── brewcode.state.json            # Hook state: plan-symlink owner, update-check cache
     │
     ├── skills/
     │   └── superreview/                       # Emitted by /brewcode:superreview-setup, invoked as /superreview
@@ -186,13 +178,13 @@ Files created by the plugin in the user's project:
 | Category | Count | Items |
 |----------|-------|-------|
 | Plugin configuration | 2 | plugin.json, hooks.json |
-| Hooks | 4 | compact-recall, forced-eval, role-recall, session-start |
-| Hook libraries | 2 | reminder, utils |
+| Hooks | 2 | compact-recall, session-start |
+| Hook libraries | 1 | utils |
 | Agents | 5 | agent-creator, bash-expert, bc-rules-organizer, hook-creator, skill-creator |
 | Skills (SKILL.md) | 9 | agents, convention-setup, e2e, rules, semble-setup, setup-status, skills, superreview-setup, teams-setup |
 | Bash scripts | 21 | semble-setup(10), teams-setup(5), skills(2), convention-setup(1), e2e(1), rules(1), superreview-setup(1); excludes test runners and generated mirrors |
-| Test suites (`suite-*.mjs`) | 17 | semble-setup(7), teams-setup(6), hooks(2), agents(1), superreview-setup(1); convention-setup also ships `lifecycle.mjs` |
-| Test runners (`tests/run.sh`) | 4 | hooks, semble-setup, superreview-setup, teams-setup; excludes generated mirrors |
+| Test suites (`suite-*.mjs`) | 16 | semble-setup(7), teams-setup(6), hooks(1), agents(1), superreview-setup(1); convention-setup also ships `lifecycle.mjs` |
+| Test runners (`tests/run.sh`) | 7 | agents, convention-setup, hooks, semble-setup, setup-status, superreview-setup, teams-setup; excludes generated mirrors |
 | Test fixtures | 32 | semble-setup/tests/fixtures only: claude-json(7), repo-a(15 across src/conf/web), repo-b(5), settings(4), README(1) |
 | Templates | 2 | rules(2) |
 | Documentation | 4 | README, INSTALL, file-tree.md, commands.md |
@@ -202,10 +194,8 @@ Files created by the plugin in the user's project:
 
 | Event | Hooks | Timeout | Purpose |
 |-------|-------|---------|---------|
-| UserPromptSubmit | forced-eval.mjs | 2s | [ROLE] manager + [SPLIT] bounded units + [BRANCH] default-to-main (~9K additionalContext bound) |
 | SessionStart | session-start.mjs | 3s | Version-check, plan-symlink, permission_mode tag |
-| SessionStart (matcher `compact`) | role-recall.mjs | 2s | Re-injects the same [ROLE]/[SPLIT]/[BRANCH] reminder after auto-compaction, which has no prompt for forced-eval.mjs to fire on |
-| SessionStart (matcher `compact`) | compact-recall.mjs | 2s | Re-anchors plan/intent + task graph: scans this session's transcript only, ladder plan-file -> plan-missing -> plan-in-summary -> intent, appends [TASKS] when the transcript shows a TaskCreate |
+| SessionStart (matcher `compact`) | compact-recall.mjs | 2s | Re-anchors plan/intent + task graph: scans this session's transcript only, ladder plan-file -> plan-latest (only a LATEST.md symlink session-start made) -> plan-missing -> plan-in-summary -> intent, appends [TASKS] when the transcript shows a TaskCreate |
 
 ## Agent Models
 
@@ -213,6 +203,6 @@ Files created by the plugin in the user's project:
 |-------|-------|---------|
 | agent-creator | inherit | Creates and improves Claude Code agents |
 | bash-expert | inherit | Writes sh/bash scripts for Mac/Linux |
-| bc-rules-organizer | haiku | Internal: creates/optimizes `.claude/rules/*.md` for `/brewcode:rules` |
+| bc-rules-organizer | haiku | Internal: creates/optimizes `.claude/rules/*.md` for `/brewcode:rules` and `/brewcode:convention-setup` |
 | hook-creator | inherit | Creates and debugs Claude Code hooks |
 | skill-creator | inherit | Creates and improves Claude Code skills |

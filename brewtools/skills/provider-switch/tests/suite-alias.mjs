@@ -20,7 +20,7 @@ function world(label) {
   const root = join(BASE, label), home = join(root, 'home'), bin = join(root, 'bin');
   mkdirSync(home, { recursive: true }); mkdirSync(bin, { recursive: true });
   const stub = join(bin, 'claude');
-  writeFileSync(stub, '#!/bin/bash\nprintf "%s\\n" "$ANTHROPIC_DEFAULT_OPUS_MODEL" "$ANTHROPIC_DEFAULT_SONNET_MODEL" "$ANTHROPIC_DEFAULT_HAIKU_MODEL" "$ANTHROPIC_BASE_URL" "${CLAUDE_ENABLE_BYTE_WATCHDOG:-none}" "${CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS:-none}"\n');
+  writeFileSync(stub, '#!/bin/bash\nprintf "%s\\n" "$ANTHROPIC_DEFAULT_OPUS_MODEL" "$ANTHROPIC_DEFAULT_SONNET_MODEL" "$ANTHROPIC_DEFAULT_HAIKU_MODEL" "${ANTHROPIC_DEFAULT_FABLE_MODEL:-none}" "$ANTHROPIC_BASE_URL" "${CLAUDE_ENABLE_BYTE_WATCHDOG:-none}" "${CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS:-none}"\n');
   chmodSync(stub, 0o755);
   const childEnv = { ...env, HOME: home, PATH: `${bin}${delimiter}${process.env.PATH}` };
   const run = args => spawnSync('bash', [WRITER, ...args], { env: childEnv, encoding: 'utf8' });
@@ -44,7 +44,7 @@ for (const [provider, model, endpoint, watchdog, betas] of models) {
   const invoke = spawnSync('zsh', ['-f', '-c', '. "$1"; eval "$2"', 'zsh', w.rc, name], { env: w.childEnv, encoding: 'utf8' });
   // THEN all roles, endpoints and required compatibility flags reach only the harmless stub.
   check(`${provider}.invoke`, invoke.status, 0, 'serialized alias parses and invokes in actual zsh');
-  check(`${provider}.values`, invoke.stdout, [model, model, model, endpoint, watchdog, betas, ''].join('\n'), 'current models and compatibility flags survive startup and invocation');
+  check(`${provider}.values`, invoke.stdout, [model, model, model, model, endpoint, watchdog, betas, ''].join('\n'), 'current model reaches all four role vars incl. fable; flags survive startup and invocation');
   check(`${provider}.stderr`, invoke.stderr, '', 'quoted client suffix does not trigger shell glob errors');
   const refFile = { deepseek: 'deepseek', glm: 'zai-glm', qwen: 'qwen-dashscope', minimax: 'minimax', openrouter: 'openrouter' }[provider];
   const reference = readFileSync(join(HERE, '..', `references/${refFile}.md`), 'utf8');

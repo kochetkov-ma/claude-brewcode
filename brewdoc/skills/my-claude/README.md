@@ -1,6 +1,6 @@
 # My Claude
 
-Generates documentation about your Claude Code installation and environment. Supports four modes: document your local setup, analyze the external hook/context architecture, deep-dive the context injection schema, or research any Claude Code topic across the web.
+Generates documentation about your Claude Code installation and environment. It can document your local setup, analyze the external hook/context architecture, deep-dive the context injection schema, or research any Claude Code topic across the web.
 
 ## Quick Start
 
@@ -13,9 +13,11 @@ Generates documentation about your Claude Code installation and environment. Sup
 
 ## Modes
 
+The argument is one free-form prompt (RU or EN). An explicit prefix (`ext`, `external`, `r `, `research `) wins; otherwise the most distinct keyword picks the mode, a tie triggers one question, and no match falls back to Internal.
+
 | Mode | Trigger | What it does |
 |------|---------|--------------|
-| Internal | no arguments | Scans `~/.claude/` and project `.claude/` to document your CLAUDE.md files, rules, agents, skills, and memories |
+| Internal | no arguments | Scans the active config directory (`CLAUDE_CONFIG_DIR`, default `~/.claude/`) and the project to document instructions, settings, hooks, plugins, agents, skills, and memory. Secret values are never copied, only their names |
 | External | `ext` or `external` | Analyzes local hooks + searches official docs, GitHub releases, and community forums for Claude Code architecture docs |
 | External (context-schema) | `ext context` or `external context` | Focuses specifically on the context injection schema (additionalContext, updatedInput, decision) |
 | Research | `r <query>` or `research <query>` | Researches a specific query across official docs, GitHub, Reddit, forums, and marketplaces with citation tracking |
@@ -59,15 +61,11 @@ Generates documentation about your Claude Code installation and environment. Sup
 
 ## Validation
 
-Before the document is written, an independent agent re-checks it so that no file name or path in the output is invented. Internal mode uses `Explore` -- the check is read-only path existence. External and research modes use `general-purpose`, which has the `WebFetch` / `WebSearch` access needed to re-open the cited sources.
-
-Both are built-in agents that are always available. Earlier versions named a `reviewer` agent here, which exists in no plugin and in no built-in set, so the validation step silently failed to spawn -- the one step that guaranteed no invented file names.
+After the document is written, an independent built-in agent re-checks it so that no file name, path, or source in the output is invented. Internal mode uses `Explore`, which checks that paths exist and counts match. External and research modes use `general-purpose`, which re-opens the cited sources with `WebFetch` / `WebSearch`.
 
 ## Output Location
 
-All generated files are saved to `.claude/brewdoc/my-claude/` inside your current project. This is required because Claude Code's protected-path policy blocks writes to `~/.claude/*` in headless sessions (including `bypassPermissions` mode). There is no alternative output location.
-
-Earlier versions also offered a plugin-data directory. Nothing has set that variable since v4.0.0, so a run taking that branch created a directory named after the unexpanded variable and wrote into it. That branch is gone.
+All generated files are saved to `.claude/brewdoc/my-claude/` inside your current project; there is no other output location. Writes under `.claude/` are protected paths: Claude Code asks first in `default` and `acceptEdits` modes, allows them under `bypassPermissions`, never pre-approves them through allow rules, and a headless run without bypass fails.
 
 | Mode | Output path |
 |------|-------------|
@@ -78,13 +76,13 @@ Earlier versions also offered a plugin-data directory. Nothing has set that vari
 
 Every run appends an entry to `.claude/brewdoc/INDEX.jsonl` for tracking. If an entry for the same mode already exists, you will be asked whether to update it or create a new one.
 
-If a legacy `~/.claude/brewdoc/INDEX.jsonl` exists from an older install, its entries are merged into the project INDEX once (read-only) and the skill prints a one-line migration notice. The legacy file is never written to.
+If a legacy `~/.claude/brewdoc/INDEX.jsonl` exists from an older install and the project INDEX is empty, its entries are merged into the project INDEX once (read-only) and the skill prints a one-line migration notice. The legacy file is never written to.
 
 ## Tips
 
 - **Re-run internal mode after changing your setup.** Adding new rules, agents, or skills makes the previous internal doc stale. Re-running produces an up-to-date snapshot.
-- **Research mode is for documentation, not implementation.** It generates a cited research report. For code tasks, use brewcode skills instead.
 - **External context-schema mode is useful for hook development.** Before writing a new hook, run `ext context` to get a fresh reference on which channels (additionalContext, updatedInput, decision) work for which events.
+- **Need only a quick teammate handoff guide?** The built-in `/team-onboarding` (Claude Code 2.1.101+) builds one from your local usage history. Use this skill for web research, architecture docs, and the persistent INDEX with citations.
 - **Check INDEX.jsonl to find previous runs.** Each entry includes timestamp, mode, path, and version, so you can track what was documented and when.
 
 ## Documentation

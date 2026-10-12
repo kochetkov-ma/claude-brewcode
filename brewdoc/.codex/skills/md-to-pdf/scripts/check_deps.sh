@@ -1,21 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPORTLAB_VERSION=5.0.0
-WEASYPRINT_VERSION=69.0
-MARKDOWN_VERSION=3.10.3
-PYGMENTS_VERSION=2.20.0
-PANGO_VERSION=1.57.1
-CAIRO_VERSION=1.18.4
-GDK_PIXBUF_VERSION=2.44.6
-LIBFFI_VERSION=3.6.0
+REPORTLAB_VERSION=5.0.1
+WEASYPRINT_VERSION=70.0
+MARKDOWN_VERSION=3.11
+PYGMENTS_VERSION=2.21.0
+# Homebrew ships only the current formula, so system libs are presence-checked, never version-pinned.
+SYSTEM_FORMULAS="pango cairo gdk-pixbuf libffi"
 
 usage() { echo "usage: check_deps.sh <check|install|status> [reportlab|weasyprint]"; }
 python_version() { python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 8))'; }
 package_version() { python3 -c 'from importlib.metadata import version; print(version("'"$1"'"))' 2>/dev/null; }
 check_package() { test "$(package_version "$1")" = "$2"; }
-brew_version() { brew list --versions "$1" 2>/dev/null | awk '{print $NF}'; }
-check_formula() { test "$(brew_version "$1")" = "$2"; }
+check_formula() { brew list --versions "$1" >/dev/null 2>&1; }
 
 check_engine() {
   local engine="$1"
@@ -29,10 +26,9 @@ check_engine() {
       check_package markdown "$MARKDOWN_VERSION" || { echo "MISSING_OR_WRONG_PIP|markdown==$MARKDOWN_VERSION"; return 1; }
       check_package pygments "$PYGMENTS_VERSION" || { echo "MISSING_OR_WRONG_PIP|pygments==$PYGMENTS_VERSION"; return 1; }
       if test "$(uname -s)" = Darwin; then
-        check_formula pango "$PANGO_VERSION" || { echo "MISSING_OR_WRONG_SYSTEM|pango==$PANGO_VERSION"; return 1; }
-        check_formula cairo "$CAIRO_VERSION" || { echo "MISSING_OR_WRONG_SYSTEM|cairo==$CAIRO_VERSION"; return 1; }
-        check_formula gdk-pixbuf "$GDK_PIXBUF_VERSION" || { echo "MISSING_OR_WRONG_SYSTEM|gdk-pixbuf==$GDK_PIXBUF_VERSION"; return 1; }
-        check_formula libffi "$LIBFFI_VERSION" || { echo "MISSING_OR_WRONG_SYSTEM|libffi==$LIBFFI_VERSION"; return 1; }
+        for formula in $SYSTEM_FORMULAS; do
+          check_formula "$formula" || { echo "MISSING_SYSTEM|$formula"; return 1; }
+        done
       fi
       ;;
     *) usage >&2; return 2 ;;
@@ -49,9 +45,8 @@ install_engine() {
       ;;
     weasyprint)
       if test "$(uname -s)" = Darwin; then
-        for pin in "pango==$PANGO_VERSION" "cairo==$CAIRO_VERSION" "gdk-pixbuf==$GDK_PIXBUF_VERSION" "libffi==$LIBFFI_VERSION"; do
-          formula="${pin%%==*}"; version="${pin##*==}"
-          check_formula "$formula" "$version" || { echo "Install exact system dependency $pin through an approved pinned package source, then retry." >&2; return 1; }
+        for formula in $SYSTEM_FORMULAS; do
+          check_formula "$formula" || { echo "Missing system dependency $formula: after approval, add the current Homebrew formulas ($SYSTEM_FORMULAS), then retry." >&2; return 1; }
         done
       fi
       python3 -m pip install "weasyprint==$WEASYPRINT_VERSION" "markdown==$MARKDOWN_VERSION" "pygments==$PYGMENTS_VERSION"

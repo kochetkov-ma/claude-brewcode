@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-# semble-state.sh — read/write .claude/semble/state.json (DESIGN §4, §9.5).
-# Every write goes through sc_state_patch: unknown keys preserved, `completed`
-# union-merged, unparseable JSON ABORTs with exit 1 and writes nothing.
+# semble-state.sh — .claude/semble/state.json via sc_state_patch (DESIGN §4, §9.5): unknown keys kept, `completed` union, bad JSON -> exit 1
 set -euo pipefail
 SC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source-path=SCRIPTDIR source=lib/semble-common.sh
 . "$SC_DIR/lib/semble-common.sh"
 
 JSON=0
@@ -31,27 +30,8 @@ Exit: 0 ok | 1 abort/illegal | 2 usage | 4 confirmation required
 EOF
 }
 
-# ── phase machine (DESIGN §4.2) ─────────────────────────────────────────────
-# Legal targets per source phase. Additions to the §4.2 diagram, each required
-# by another section of the same DESIGN or by a mode SKILL.md actually runs:
-#   ready -> awaiting_reload            re-registration (§8.5 update, §9.3 repair)
-#   awaiting_reload -> prereq_ready     add-failed rollback (§9.3)
-#   error -> prereq_ready               repair restart (§9.3)
-#   {verifying,disabled,error} -> awaiting_reload
-#       semble-mcp.sh mcp_checkpoint runs before EVERY add/repair, so `install`
-#       and `upgrade` must be able to re-register from a crashed verify, a
-#       disabled project and a failed run alike. Re-registration was already
-#       legal from the BETTER state `ready`; refusing it from a worse one only
-#       made the repair path die at the checkpoint.
-#   {prereq_ready,awaiting_reload,verifying,error} -> disabled
-#       `disable` is offered in every mode table and must not depend on having
-#       reached `ready` first. `absent -> disabled` stays illegal: you cannot
-#       disable a setup that never happened.
-# NOT legal, deliberately: awaiting_reload -> ready. `verifying` is the only
-# gate in front of `ready`, and `ready` is what the five hooks read to decide
-# whether to advertise the MCP tools. The resume path therefore writes
-# `verifying` before it starts verifying and `ready` only after (SKILL.md §4).
-# Identity transitions are legal so a re-run is idempotent.
+# Phase machine (DESIGN §4.2) + {ready,verifying,disabled,error}->awaiting_reload (re-register, §9.3), awaiting_reload/error->prereq_ready, started->disabled.
+# Illegal on purpose: absent->disabled; awaiting_reload->ready (`verifying` gates `ready`, SKILL.md §4). Identity = idempotent re-run.
 st_legal() {
   local from="$1" to="$2"
   case "$from" in
@@ -84,10 +64,7 @@ st_assert_schema() {
 # Forward chain of the §4.2 machine, used only to heal an absent state file.
 ST_HEAL_CHAIN="awaiting_reload verifying ready"
 
-# A target `phase` may self-heal to when the file does not exist yet. Everything
-# reachable from a fresh init by walking ST_HEAL_CHAIN, nothing else: `disabled`
-# stays illegal from `absent` (you cannot disable a setup that never happened)
-# and `prereq_ready`/`error` need no heal — they are legal from `absent` already.
+# Targets an absent file may self-heal to = ST_HEAL_CHAIN; !=disabled, prereq_ready/error already legal from absent.
 st_heal_target() {
   case "$1" in awaiting_reload|verifying|ready) return 0 ;; esac
   return 1
@@ -102,22 +79,11 @@ st_write_phase() { # st_write_phase <phase>
   sc_state_patch "$(SC_P="$1" node -e 'process.stdout.write(JSON.stringify({phase:process.env.SC_P}))')" >/dev/null
 }
 
-# The resume command as the user actually types it: `<frontmatter name> resume`,
-# and the frontmatter `name:` of ../SKILL.md is `brewcode:semble-setup`. One copy
-# only — the skill was renamed once already and every state file written before
-# the rename still advertised the dead `/brewcode:semble resume`.
+# Resume command as typed by the user; single copy (pre-rename files advertised dead `/brewcode:semble resume`).
 ST_RESUME_PROMPT="/brewcode:semble-setup resume"
 
-# Fields the INSTALLER owns: derived from the environment and the shipped
-# constants, never from whatever an older run happened to leave behind. They are
-# recomputed on every write, not only at file birth — `approvedVersion`,
-# `projectRoot`, `schema` and the artifact-metadata trio `version` /
-# `generated_by` / `last_updated` already work that way inside sc_state_patch,
-# and these three were the ones that did not. No-op when the file does not exist yet
-# (creating it here would bypass the phase machine).
-# NEVER touched here: enabled, phase, completed, notes — user and progress
-# state. That is the whole distinction: a re-run refreshes what the installer
-# decides and preserves what the user and the previous run decided.
+# Recomputes installer-owned fields every write (rest done by sc_state_patch); no-op without file (phase machine).
+# NEVER touches enabled, phase, completed, notes (user/progress state).
 st_refresh_owned() {
   local f; f="$(st_file)"
   [ -f "$f" ] && [ -s "$f" ] || return 0
@@ -222,12 +188,8 @@ process.stdout.write(JSON.stringify(out));'
     esac
     st_assert_schema
     FROM="$(st_phase)"
-    # Self-heal: a close-out must not die because the file was never created.
-    # The state file is born only inside an MCP mutation (semble-mcp.sh
-    # mcp_checkpoint), so a project whose user-scope server was already
-    # registered by an earlier project reaches `resume` with phase=absent.
-    # The machine is not bypassed: init writes prereq_ready and every hop of
-    # ST_HEAL_CHAIN is checked by st_legal and written like any other patch.
+    # Self-heal: user-scope server registered by an earlier project -> `resume` sees phase=absent.
+    # Machine not bypassed: init writes prereq_ready, each ST_HEAL_CHAIN hop checked by st_legal.
     if [ "$FROM" = "absent" ] && st_heal_target "$ARG"; then
       st_init_file
       CUR="prereq_ready"
@@ -258,9 +220,7 @@ process.stdout.write(JSON.stringify(out));'
     ;;
 
   complete)
-    # Accepts `complete warm`, `complete warm smoke` and `complete "warm smoke"`
-    # alike: $POS is re-split on whitespace. Every token is validated BEFORE the
-    # first write, so an unknown one anywhere in the list writes nothing.
+    # `complete warm smoke` == `complete "warm smoke"` ($POS re-split); all tokens validated before any write.
     STEPS=""
     for S in $POS; do
       case "$S" in

@@ -1,10 +1,10 @@
 # Brewtools
 
-> Universal text utilities plugin for Claude Code -- token optimization, AI artifact removal, secrets scanning, SSH management, GitHub Actions deployment, and plugin updates.
+> Claude Code utilities -- text optimization and humanization, secrets scanning, SSH and GitHub Actions deploy, manager codewords, subagent deadline/return-size/routing guards, task board, context slimming, plugin updates, and alternative API providers.
 
 | Field | Value |
 |-------|-------|
-| Version | 6.4.0 |
+| Version | 6.5.0 |
 | Skills | 13 |
 | Agents | 3 |
 | Hooks | 2 |
@@ -42,7 +42,7 @@ Update anytime with `/brewtools:plugin-update`.
 
 ## Overview
 
-Brewtools provides standalone utilities: token-efficient optimization with 52 validated rules, universal AI-artifact removal with greedy flow detection across code/docs/articles/reddit/chat (five domain flows, two-pass strip+inject model), security scanning for leaked credentials, SSH server management, GitHub Actions deployment with safety gates, and plugin check/install/update. Each skill is self-contained and requires no prior setup.
+Brewtools provides utilities for text, ops and subagent control: token-efficient optimization with 52 validated rules, universal AI-artifact removal with greedy flow detection across code/docs/articles/reddit/chat (five domain flows, two-pass strip+inject model), security scanning for leaked credentials, SSH server management, GitHub Actions deployment with safety gates, and plugin check/install/update. The utility skills (text, secrets, SSH, deploy, plugin update) work without setup; the five `-setup` skills install a mechanism into a project or profile first.
 
 **v6 hardening.** The HARD delegation wall (`manager-setup`) moved from a denylist to a strict per-binary allowlist that fails closed on any unrecognized flag, and closed four further bypasses: `git diff --output=`, `git branch -D`, `gh issue comment --body`, `find -fprint0`. Ordinary subagents cannot use `AskUserQuestion`; destructive or privileged steps return a `## APPROVAL REQUIRED` envelope to the caller instead. Conversation forks retain the parent tool pool. `ssh-admin` no longer places secrets on `curl` argv.
 
@@ -64,7 +64,7 @@ claude --plugin-dir ./brewtools
 ## Quick Start
 
 ```bash
-/brewtools:text-optimize CLAUDE.md              # Medium mode (default)
+/brewtools:text-optimize CLAUDE.md              # Auto-detect: selects deep for CLAUDE.md
 /brewtools:text-optimize -l agents/reviewer.md  # Light mode -- safe, minimal changes
 /brewtools:text-optimize -d prompts/            # Deep mode -- aggressive compression
 /brewtools:text-optimize -s README.md           # Standard mode -- 30-50%, human-readable, verified
@@ -105,18 +105,18 @@ Setup skills all speak the same verbs:
 
 | Skill | Purpose | Model | Arguments |
 |-------|---------|-------|-----------|
-| [`/brewtools:text-optimize`](skills/text-optimize/README.md) | Optimize text for LLM token efficiency | sonnet | `[-l\|-s\|-d\|-x\|--max] [file\|folder\|path1,path2]` |
-| [`/brewtools:text-human`](skills/text-human/README.md) | Humanizes code, docs, articles, reddit/chat, javadoc -- strips AI artifacts, fixes unicode, fits register | sonnet | `[path\|commit\|folder\|text] [custom instructions]` |
-| [`/brewtools:secrets-scan`](skills/secrets-scan/README.md) | Scan for leaked secrets and credentials | sonnet | `[--fix]` |
-| [`/brewtools:ssh`](skills/ssh/SKILL.md) | SSH server management and configuration | opus | `<prompt describing what to do>` |
-| [`/brewtools:deploy`](skills/deploy/SKILL.md) | GitHub Actions deployment with safety gates | opus | `<prompt describing what to do>` |
-| [`/brewtools:manager-setup`](skills/manager-setup/README.md) | Manager mode: installs a hard delegation wall into this project and explains/customizes codewords `++m` (delegate-everything, plan-aware), `++a` (architecture-first), `++rr` (anti-regression review), `++r` (two-phase double-check). The codewords are hook-driven and fire whether or not the wall is installed; the wall itself is opt-in, per-project, and blocks main-session writes while subagents stay free | sonnet | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [level strict\|balanced] [edit] \| <task в хард режиме> \| <task от роли менеджера> \| <prompt>` |
-| [`/brewtools:plugin-update`](skills/plugin-update/README.md) | Check/install/update brewcode plugins | sonnet | `[check\|update\|all]` |
-| [`/brewtools:provider-switch`](skills/provider-switch/README.md) | Configure alt API providers: DeepSeek, Z.ai/GLM, Qwen, MiniMax, OpenRouter | opus | `[status\|install\|verify\|model-check\|help\|<provider-name>]` -- no args = interactive status check |
-| [`/brewtools:agent-deadline-setup`](skills/agent-deadline-setup/README.md) | Install/remove a soft wall-clock budget for subagents: 80% -- non-blocking "wrap up" warning, 100% -- deny all tools except the finalization set; project or global, opt-in | sonnet | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [project\|global] [minutes] \| free-text intent` |
-| [`/brewtools:agent-return-setup`](skills/agent-return-setup/README.md) | Install/remove a size budget on every subagent's final return message: a SubagentStart hook injects the contract, a SubagentStop hook sizes the return (`chars/4`) and blocks at most once -- above `passTokens` (default 1000) it orders a compress, above `fileTokens` (default 2500) a write-to-file plus the path. No LLM judge; project or global, opt-in | sonnet | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [project\|global] [pass] [file] \| free-text intent` |
-| [`/brewtools:agent-router-setup`](skills/agent-router-setup/README.md) | EXPERIMENTAL. Install/remove a PreToolUse hook that denies a generic subagent spawn in favor of the real project/plugin expert, or nudges when the fit is only uncertain; tier 1 free and deterministic, tier 2 opt-in LLM judge not yet behaviorally verified; project scope only | sonnet | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [level fast\|strict] \| free-text intent` |
-| [`/brewtools:task-board-setup`](skills/task-board-setup/README.md) | Deploy a file-based Kanban with shared domain/task methodology, a derived task graph and unique session anti-drift timers; optional spec + design layer (`task-spec`), existing-board upgrade and CLAUDE.md optimization | opus | `[prompt] [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [target repo path \| empty = cwd] [free-text directive]` |
+| [`/brewtools:text-optimize`](skills/text-optimize/README.md) | Optimize text for LLM token efficiency | sonnet | `[prompt] [-l\|-s\|-d\|-x\|--max] [file\|folder\|path1,path2]` |
+| [`/brewtools:text-human`](skills/text-human/README.md) | Humanizes code, docs, articles, reddit/chat, javadoc -- strips AI artifacts, fixes unicode, fits register | sonnet | `[prompt] [path\|commit\|folder\|text] [custom instructions]` |
+| [`/brewtools:secrets-scan`](skills/secrets-scan/README.md) | Scan for leaked secrets and credentials | sonnet | `[prompt] [--fix]` |
+| [`/brewtools:ssh`](skills/ssh/README.md) | SSH server management and configuration | opus | `[prompt] [setup\|connect\|configure\|update-agent]` |
+| [`/brewtools:deploy`](skills/deploy/README.md) | GitHub Actions deployment with safety gates | opus | `[prompt] [setup\|create\|release\|deploy\|monitor\|update-agent]` |
+| [`/brewtools:manager-setup`](skills/manager-setup/README.md) | Manager mode: installs a hard delegation wall into this project and explains/customizes codewords `++m` (delegate-everything, plan-aware), `++a` (architecture-first), `++rr` (anti-regression review), `++r` (two-phase double-check). The codewords are hook-driven and fire whether or not the wall is installed; the wall itself is opt-in, per-project, and blocks main-session writes while subagents stay free | sonnet | `[prompt] [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [level strict\|balanced] [edit]` |
+| [`/brewtools:plugin-update`](skills/plugin-update/README.md) | Check/install/update brewcode plugins | sonnet | `[prompt] [check\|update\|all]` |
+| [`/brewtools:provider-switch`](skills/provider-switch/README.md) | Configure alt API providers: DeepSeek, Z.ai/GLM, Qwen, MiniMax, OpenRouter | opus | `[prompt] [status\|install\|verify\|model-check\|help\|<provider-name>]` -- no args or empty prompt = read-only status, never an install |
+| [`/brewtools:agent-deadline-setup`](skills/agent-deadline-setup/README.md) | Install/remove a soft wall-clock budget for subagents: 80% -- non-blocking "wrap up" warning, 100% -- deny all tools except the finalization set; project or global, opt-in | sonnet | `[prompt] [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [project\|global] [minutes]` |
+| [`/brewtools:agent-return-setup`](skills/agent-return-setup/README.md) | Install/remove a size budget on every subagent's final return message: a SubagentStart hook injects the contract; the guard sizes the return (`chars/4`) on `SubagentStop` and on the PreToolUse `SubagentHandback` hand-back (auto mode) and blocks at most once -- above `passTokens` (default 2500) it orders a compress, above `fileTokens` (default 6000) a write-to-file plus the path. No LLM judge; project or global, opt-in | sonnet | `[prompt] [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [project\|global] [pass] [file]` |
+| [`/brewtools:agent-router-setup`](skills/agent-router-setup/README.md) | EXPERIMENTAL. Install/remove a PreToolUse hook that denies a generic subagent spawn in favor of the real project/plugin expert, or nudges when the fit is only uncertain; tier 1 free and deterministic, tier 2 opt-in LLM judge, verified live on Claude Code 2.1.296 (a judge timeout or model error is a silent allow); project scope only | sonnet | `[prompt] [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [level fast\|strict]` |
+| [`/brewtools:task-board-setup`](skills/task-board-setup/README.md) | Deploy a file-based Kanban with shared domain/task methodology, a derived task graph and unique session anti-drift timers; optional spec + design layer (`task-spec`), existing-board upgrade and CLAUDE.md optimization | opus | `[prompt] [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [target repo path \| empty = cwd] [free-text directive, e.g. 'also dedupe rules', 'skip module split']` |
 | [`/brewtools:context-slim`](skills/context-slim/README.md) | Compresses the permanent LLM-context surface (CLAUDE.md, rules, agent descriptions, hooks, memory) via cross-layer dedup, default-knowledge removal and per-file compression, lossless by default | opus | `[prompt] [measure\|preview\|slim\|hard\|bodies\|restore] [--target=N%] [--global] [--memory] [--noask] [ts]` |
 
 ## Task methodology and anti-drift
@@ -148,6 +148,8 @@ brewtools/
 |   +-- manager-prompt.mjs           # ++m / ++a / ++rr / ++r; +++ only in Plan mode
 |   +-- hardmode-guard.mjs            # HARD-wall guard template (not registered; copied per project by manager-setup)
 |   +-- lib/utils.mjs                 # I/O utilities
+|   +-- lib/manager-prompts.mjs       # Codeword prompt resolution (project -> global -> default)
+|   +-- lib/manager-state.mjs         # Wall state / off-switch CLI
 +-- skills/
 |   +-- text-optimize/                # Token optimization
 |   +-- text-human/                   # AI artifact removal
@@ -157,7 +159,7 @@ brewtools/
 |   +-- plugin-update/                # Plugin check / install / update
 |   +-- provider-switch/               # Alternative API provider management
 |   +-- agent-deadline-setup/          # Subagent soft wall-clock budget hooks install/remove
-|   +-- agent-return-setup/            # Size budget on subagent return messages (SubagentStart + SubagentStop)
+|   +-- agent-return-setup/            # Size budget on subagent return messages (SubagentStart + SubagentStop + PreToolUse SubagentHandback)
 |   +-- agent-router-setup/            # EXPERIMENTAL: route generic subagent spawns to the real expert
 |   +-- manager-setup/                 # Codeword-triggered Manager mode + HARD delegation wall
 |   +-- task-board-setup/              # Kanban, methodology, task graph and session anti-drift
@@ -168,24 +170,25 @@ brewtools/
     +-- deploy-admin.md               # Deployment and CI/CD
 ```
 
-> **Brewtools vs Brewcode:** Brewtools provides standalone text utilities with no lifecycle dependencies. Brewcode is a task execution engine with infinite context and session handoff. Both install from the same `claude-brewcode` marketplace but operate independently.
+> **Brewtools vs Brewcode:** Brewtools provides text, ops and subagent-control utilities, plus five `-setup` skills that install hooks or generated skills. Brewcode is an authoring toolkit for skills, agents and rules, with semantic code search, conventions, E2E tests and a setup dashboard. Both install from the same `claude-brewcode` marketplace but operate independently.
 
 ## Artifact metadata
 
-Every artifact a `-setup` skill installs into your project carries the same four fields, so you can
-tell at a glance what wrote a file and which plugin version it was written at.
+Every artifact a `-setup` skill installs into your project carries the same five fields, so you can
+tell at a glance what wrote a file, which plugin version it was written at and when its content last changed.
 
 | Field | Values | Where |
 |-------|--------|-------|
 | `doc_type` | `llm` \| `user` \| `skip` -- unquoted | `.md` frontmatter only, never JSON |
 | `version` | `"X.Y.Z"` -- plugin version at install time | all carriers |
+| `content_version` | `"X.Y.Z"` -- last release that changed this artifact's content | all carriers |
 | `generated_by` | `"<plugin>:<skill>"` | all carriers |
 | `last_updated` | `"YYYY-MM-DD"` | all carriers except a byte-copied `.mjs`/`.sh`/`.md` |
 
 A byte-copied asset omits `last_updated`: the value would be the release date,
 identical in the plugin file and the copy, so rewriting it on every build would churn bytes and
-defeat the `cmp` drift check that mechanism exists for. The four keys always sit after the file's
-own keys, in that order. JSON artifacts carry the same three snake_case keys at top level (no
+defeat the `cmp` drift check that mechanism exists for. The five keys always sit after the file's
+own keys, in that order. JSON artifacts carry the same four snake_case keys at top level (no
 `doc_type`) in every writing mode. Five carriers exist: JSON keys, `.md` frontmatter, a
 `// brewcode-meta:` / `# brewcode-meta:` one-liner on line 2 of a byte-copied `.mjs`/`.sh`, a header
 table in `team.md`, and `<!-- brewcode-meta: ... -->` on line 1 of a byte-copied `.md`. Versions
@@ -196,7 +199,7 @@ always come from `.claude-plugin/plugin.json`, never hardcoded.
 
 | Hook | Event | Purpose |
 |------|-------|---------|
-| `session-start.mjs` | SessionStart | Manager HARD-wall awareness -- injects guard tag plus the bounded-unit delegation brief (goal + scope + what is already done + who consumes the result + acceptance) into systemMessage and additionalContext |
+| `session-start.mjs` | SessionStart | Manager HARD-wall awareness -- when the wall is armed, a notice with the mechanism (level, what is denied) and the exit (`/brewtools:manager-setup disable`) in systemMessage and additionalContext; silent otherwise |
 | `manager-prompt.mjs` | UserPromptSubmit | Injects `++m` (manager, plan-aware), `++a` (architecture-first), `++rr` / `++r` review blocks; bare `+++` adds anti-drift cron planning only in Plan mode |
 
 ## Regression suites

@@ -10,25 +10,23 @@ model: opus
 
 # agents Skill
 
-> **Agent Management:** create, improve, review, and report on Claude Code agents from one free-form prompt.
+Manages Claude Code agents from one free-form prompt.
 
 <instructions>
 
 ## Prompt contract
 
-Position 1 of `$ARGUMENTS` is a **free-form prompt** (RU/EN) — modes and flags are optional and may
-follow in any order. Nobody types keys: resolve mode + scope FROM the prompt.
+`$ARGUMENTS` is one free-form RU/EN prompt; mode tokens and flags may sit anywhere in it.
 
-1. Strip flags. An explicit mode token anywhere wins outright, no scoring.
-2. Else score modes by distinct whole-word keyword hits (table below). Highest unique score wins.
-   Tie with a destructive mode -> `AskUserQuestion`; tie with `status` -> `status`;
-   tie of two mutating modes -> the keyword appearing first; all zero -> `status`.
-3. Empty -> `status`. Bundle material unresolved write decisions in ONE `AskUserQuestion`
-   (max 4 questions), before work. Read-only asks nothing except an explicitly requested menu.
-4. Use prompt/history answers; never repeat resolved questions or routine approval calls.
-5. Prose that is not a mode/id/path is still input: extract the id, path or target from it.
+1. Mode: an explicit mode token wins outright; else the most distinct whole-word keyword hits
+   (table below). Tie with a destructive mode -> `AskUserQuestion`; with `status` -> `status`; of two
+   mutating modes -> the keyword that comes first. No hit or empty -> `status`.
+2. Scope: prose that is not a mode/id/path is still input: take the id, path or target from it.
+3. Ask: bundle material unresolved write decisions in ONE `AskUserQuestion` (max 4 questions), before
+   work. Use prompt/history answers; never repeat resolved questions or routine approval calls.
+   Read-only asks nothing except an explicitly requested menu.
 
-Then print this block ONCE, before the first action:
+Print once, before the first action (labels and plan values English, INPUT verbatim):
 
 ```
 PLAN — brewcode:agents
@@ -39,25 +37,22 @@ DO:     <2-5 imperative bullets>
 RESULT: <what the user ends up holding>
 ```
 
-Labels/plan values are English; INPUT preserves the user's verbatim text.
-
 ## Constants
 
 | Const | Value |
 |-------|-------|
 | ARTIFACT | `agents` |
 | SPECIALIST | `brewcode:agent-creator` |
-| LIST_CMD | Glob `**/*.md` over `.claude/agents/`, `~/.claude/agents/`, `${CLAUDE_PLUGIN_ROOT}/agents/` (shipped, READ-ONLY), and `brewcode/agents/` ONLY when `test -d brewcode/.claude-plugin` (plugin workspace); include walk-up/managed/CLI/add-dir definitions when available |
+| LIST_CMD | Bash `find <dir> -name '*.md'` (no `Glob` on macOS/Linux) over `.claude/agents/`, `~/.claude/agents/`, `${CLAUDE_PLUGIN_ROOT}/agents/` (shipped, READ-ONLY), `brewcode/agents/` ONLY when `test -d brewcode/.claude-plugin`; plus walk-up/managed/CLI/add-dir definitions when available |
 | SYNC_REF | `${CLAUDE_SKILL_DIR}/../skills/references/mode-sync.md` (shared with `/brewcode:skills`) |
 
 ## Step 1 — Input gate
 
-Treat all `$ARGUMENTS` as one RU/EN prompt; `argument-hint` is guidance, not positional grammar.
-Empty/whitespace -> `status`; otherwise Step 2. Explicit menu request -> Step 3.
+Empty/whitespace -> `status`; explicit menu request -> Step 3; else Step 2.
 
 ## Step 2 — Auto-mode selection
 
-Classify the prompt + recent conversation context into exactly ONE mode:
+Classify the prompt + recent conversation into exactly ONE mode:
 
 | Mode | EN keywords | RU keywords | Mutates? |
 |------|-------------|-------------|----------|
@@ -68,85 +63,55 @@ Classify the prompt + recent conversation context into exactly ONE mode:
 | `review` | `review`, `validate` | `ревью`, `проверь корректность` | no |
 | `sync` | `sync`, `memory sync` | `синк`, `меморисинк`, `актуализируй`, `обнови знания`, `приведи в соответствие с кодом` | yes |
 
-`improve` also matches a bare existing agent name/path with no keyword at all — that is rule 3.5's
-prose-extraction case, not a keyword hit.
+A bare existing agent name/path with no keyword -> `improve` (Prompt contract rule 2); never read the
+first word as a positional id.
+Batch flag: plural form, "все" / "all", or multiple names/paths -> fan-out. Then Step 4.
 
-**Batch flag:** plural form, "все" / "all", or multiple names/paths -> fan-out (one specialist spawn per item).
+## Step 3 — Explicitly requested menu (one AskUserQuestion)
 
-Print the canonical PLAN once after resolving scope/mode, before work; MODE includes explicit/default
-or the quoted matched keyword. SCOPE includes resolved targets/paths. Proceed to Step 4.
+Two questions, 2-4 options each (tool cap; "Other" is automatic):
+Q1 `What do you want to do with agents?`: `Status (agents)` (Recommended), `Create new agents`,
+`Improve existing agents`, `Review agents`.
+Q2 `Variant?`: `As chosen` (Recommended), `Status (all: agents+rules+skills)`, `List (plain)`,
+`Sync agents (memory sync)` (re-verify all knowledge vs code, shrink not grow); a non-default Q2
+replaces Q1.
 
-## Step 3 — Explicitly requested menu (single AskUserQuestion, scoped + cross-link)
+Dismissed or `cancel` via Other -> stop; else no follow-up question: missing safe params -> stated defaults, a write-critical
+one -> report the missing decision before writing. Print PLAN, then Step 4.
 
-Ask ONE AskUserQuestion. Question: `What do you want to do with agents?`
-Options (in this order):
+## Delegation (every Agent spawn in this skill)
 
-- `Status (agents)` — **(Recommended)** rich status of this artifact
-- `Status (all: agents+rules+skills)` — cross-link: run the collector for all three
-- `Create new agents`
-- `Improve existing agents`
-- `Review agents`
-- `Sync agents (memory sync)` — re-verify all knowledge vs code, shrink not grow
-- `List (plain)`
-- `Nothing / cancel`
+One subagent = ONE bounded unit (here ONE agent definition, ~<=5 files, ~<=10 steps) that never
+nests a spawn or accepts its own output; split bigger work into N tasks spawned in ONE message.
 
-Cancel -> stop. Otherwise use the choice plus prompt/history for target/description and artifact params;
-do not ask a follow-up after using the one-question allowance. Safe missing params -> stated defaults;
-write-critical unresolved params -> report the missing decision before writing. Print PLAN, then Step 4.
-
-## Delegation (applies to EVERY Agent spawn in this skill)
-
-Main owns every spawn; delegates return decisions/results and never nest or accept their own output.
-One subagent = ONE bounded unit — one deliverable
-(here: ONE agent definition), ~<=5 files, ~<=10 steps. Bigger MUST be split into N tasks, all
-spawned in ONE message.
-
-Every spawn prompt MUST carry:
-
-| Field | Content |
-|-------|---------|
-| GOAL | overall task/purpose beyond editing |
-| ROLE | owned responsibility + forbidden changes |
-| SCOPE | exact paths/commands in/out of bounds |
-| CONTEXT | prior work/owners, parallel work; relevant to this agent only |
-| CONSUMER | next consumer + required result shape |
-| DONE | acceptance criteria + exact return format |
-
+Every spawn brief carries six labeled fields, since a subagent starts with an empty context: GOAL (task + why), ROLE (owns, must not touch), SCOPE (paths/commands in and out), CONTEXT (done, by whom, in parallel), CONSUMER (who uses the result + its shape), DONE (acceptance + return: verdict first, evidence, bounded; long output to a file, path returned).
 A bare one-line task is never enough.
 
 ## Step 4 — Dispatch
 
-- `status` -> go to **Step 5**.
-- `status (all)` -> go to **Step 5**, running the collector for agents + rules + skills together.
-- `list` -> run `LIST_CMD`, print the plain inventory it produces, then STOP (no status assembly).
-- `create` -> resolve minimal artifact params; spawn `SPECIALIST` via Agent.
-  Batch -> spawn one `SPECIALIST` per item, ALL in ONE message (parallel).
-- `improve` -> resolve targets; spawn `SPECIALIST` via Agent per target (parallel for batch).
-- `review` -> spawn the project's reviewer agent from `.claude/agents/`, else `general-purpose`
-  (two-phase: review -> double-check findings -> report).
-- `sync` -> read `SYNC_REF` and follow it end to end (S1 scope -> S6 report).
-  It replaces Steps 5-6 for this mode.
-- **After `create` / `improve` returns** -> run that same `SYNC_REF` SCOPED TO THE WRITTEN AGENT FILE ONLY:
-  S3 ground truth -> S5 verdicts -> S6 row folded into the Step 6 output. Never a full-roster sweep, never a
-  second `SPECIALIST` spawn — **YOU, the coordinator, apply every S5 verdict yourself with targeted `Edit` calls**
-  (S4's fan-out is the only step that edits, and it is skipped here, so without this nothing would be corrected).
-  Non-growth holds — the new file ends `<=` where the specialist left it.
-  Nothing to correct -> say `sync: no drift` in one line.
+- `status` -> Step 5; `status (all)` -> Step 5 over agents + rules + skills.
+- `list` -> run `LIST_CMD`, print its plain inventory, stop (no status assembly).
+- `create` / `improve` -> Artifact-specific params below; one `SPECIALIST` per item, a batch ALL in
+  ONE message.
+- `review` -> the project's reviewer agent from `.claude/agents/`, else `general-purpose`; two-phase:
+  review -> double-check findings -> report.
+- `sync` -> read `SYNC_REF`, follow it S1 scope -> S6 report; it replaces Steps 5-6.
+- After `create` / `improve` returns -> run `SYNC_REF` on the written file only: S3 ground truth -> S5
+  verdicts -> one S6 row in Step 6. No roster sweep, no second `SPECIALIST`: S4 (its only editing step)
+  is skipped, so apply every S5 verdict yourself with targeted `Edit` calls, ending `<=` the
+  specialist's size. Nothing to correct -> `sync: no drift` in one line.
 
-## Step 5 — Real status (NOT a flat list)
+## Step 5 — Real status, not a flat list
 
-Delegate collection to ONE Explore/Bash subagent, then assemble a rich status (never a bare list):
+One Explore/Bash subagent collects; you assemble:
 
-- **Inventory by scope:** shipped plugin (`${CLAUDE_PLUGIN_ROOT}/agents/`, read-only) / plugin source
-  (`brewcode/agents/`, only in this workspace) / project (`.claude/`) / global (`~/.claude/`) — counts + names + load path.
+- **Inventory** per `LIST_CMD` scope: counts + names + load path.
 - **State:** enabled/disabled via setup config or `<name>.disabled` parking; flag legacy `_SKILL.md`/`_<name>.md` markers; model.
-- **Overlaps / conflicts:** same-name across scopes (shadowing), duplicate triggers/descriptions, naming collisions.
-- **Health flags:** missing README/frontmatter; agents missing `Bash` in `tools:` (macOS search rule);
-  LLM-invocable skills with weak description triggers; rules duplicated in CLAUDE.md.
+- **Overlaps / conflicts:** same name across scopes (shadowing), duplicate triggers/descriptions, naming collisions.
+- **Health flags:** missing README/frontmatter; a `tools:` list naming none of `Bash`, `Glob`, `Grep`
+  (cannot search); LLM-invocable skills with weak description triggers; rules duplicated in CLAUDE.md.
 
-For the `Status (all)` menu option: run the SAME collector for agents + rules + skills together.
-
-## Step 6 — Final formatted output (MANDATORY for every run except `list`)
+## Step 6 — Final formatted output (mandatory for every mode except `list`)
 
 ```
 # agents [<mode>]
@@ -156,35 +121,25 @@ For the `Status (all)` menu option: run the SAME collector for agents + rules + 
 | Reason | <why this mode> |
 | Targets| <names/paths> |
 ## Result
-(create/improve/review: each output path + specialist agent + scope/model)
+(create/improve/review: each output path + specialist agent + scope/model + optimization status)
 ## Status
 (status mode: full table from Step 5; else short "what changed" for touched artifacts)
 ## Next Steps
-(recommendations; ALWAYS remind to run /docs for any created/changed artifact)
+(recommendations; remind to update the project's docs for every created/changed artifact)
 ```
 
-For `status` mode the report **is** the Step 5 status table.
-
-## Edge cases
-
-| Situation | Resolution |
-|-----------|------------|
-| Prose that isn't a mode/id/path (e.g. "fix the memory sync agent") | extract the id/path/target from the prose — never treat the first word as a positional id |
-| PLAN block missing, or printed after work started | defect — file it, do not ship |
+For `status` mode the report is the Step 5 table.
 
 ## Artifact-specific params (create / improve only)
 
-For `create`, infer answered fields first; include only material missing fields in the ONE batch
-(max 4 questions across this invocation): (Q1) scope: Project `.claude/agents/` /
-Global `~/.claude/agents/` / Plugin `brewcode/agents/` — offer Plugin ONLY when
-`test -d brewcode/.claude-plugin` succeeds; elsewhere it writes a junk `<cwd>/brewcode/agents/<name>.md`,
-so drop the option. Never write under `${CLAUDE_PLUGIN_ROOT}` — the installed plugin is read-only;
-(Q2) model: sonnet (Recommended) /
-opus-or-fable / haiku / inherit (`model: inherit`, not omission); (Q3) update CLAUDE.md agents table? yes/no.
-Description uses canonical `agent-template.md` Description Budget: <=150 tokens (~600 chars),
-lead <=160 chars, 3-7 triggers, EN; single line except its explicit example-block exception.
-Optional brevity target <=100 chars, never a second required cap.
-Spawn SPECIALIST (brewcode:agent-creator) using the Delegation shape, e.g.:
+`create`: the ONE batch (max 4 questions per invocation) asks only what the prompt leaves open:
+(Q1) scope: Project `.claude/agents/` / Global `~/.claude/agents/` / Plugin `brewcode/agents/` -
+Plugin only when `test -d brewcode/.claude-plugin` succeeds (elsewhere it writes a junk
+`<cwd>/brewcode/agents/<name>.md`); never under `${CLAUDE_PLUGIN_ROOT}` (installed, read-only);
+(Q2) model: sonnet (Recommended) / opus-or-fable / haiku / inherit (`model: inherit`, not omission);
+(Q3) update CLAUDE.md agents table? yes/no. Description: the Description Budget of
+`references/agent-template.md` (<=150 tokens, lead <=160 chars, 3-7 triggers); <=100 chars is an
+optional brevity target, never a required cap. Spawn SPECIALIST, e.g.:
 
 ```
 Agent(subagent_type="brewcode:agent-creator", prompt="
@@ -203,11 +158,11 @@ DONE: file exists, valid frontmatter, description satisfies the canonical Descri
 ")
 ```
 
-After creation, if user approved, update the CLAUDE.md agents table via Edit (add/replace row).
-For `improve`: resolve agent by name/path across the writable scopes (project / global / plugin
-workspace). A name that matches only under `${CLAUDE_PLUGIN_ROOT}/agents/` is read-only — report it and
-stop, do not copy or edit it. Bundle material unresolved fields in the remaining ONE allowance —
-(Q1) focus: triggers / system-prompt / both (Recommended) / full review; (Q2) update CLAUDE.md? yes/no.
-Spawn SPECIALIST to improve, then optional CLAUDE.md row update.
+`improve`: resolve by name/path across the writable scopes (project / global / plugin workspace); a
+name found only under `${CLAUDE_PLUGIN_ROOT}/agents/` is read-only: report and stop, never copy or
+edit it. The ONE allowance may ask (Q1) focus: triggers / system-prompt / both (Recommended) / full
+review; (Q2) update CLAUDE.md? yes/no.
+
+Approved CLAUDE.md update -> after the specialist returns, add/replace the agents table row via Edit.
 
 </instructions>

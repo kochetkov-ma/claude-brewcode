@@ -3,14 +3,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { readInput, respond } from './lib/io.mjs';
-import { PROMPT_CONTEXT, resetPromptCounter } from './lib/prompt-cadence.mjs';
 
 try {
   const input = await readInput();
   if (input.hook_event_name !== 'SessionStart') {
     respond({});
   } else {
-    resetPromptCounter(input.session_id);
     const pluginRoot = process.env.PLUGIN_ROOT || '';
     let version = 'unknown';
     try {
@@ -21,7 +19,7 @@ try {
       systemMessage: `Brewcode ${version} loaded for Codex`,
       hookSpecificOutput: {
         hookEventName: 'SessionStart',
-        additionalContext: `Brewcode skills use Codex-native paths, tools, hooks, and sub-agent conventions.\n${PROMPT_CONTEXT}`
+        additionalContext: 'Brewcode skills use Codex-native paths, tools, hooks, and sub-agent conventions.'
       }
     });
   }

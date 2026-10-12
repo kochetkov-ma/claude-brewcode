@@ -1,39 +1,20 @@
-// brewtools:manager-setup — resolve Manager mode prompt text.
-// Resolution chain (mode = 'full' | 'planmode' | 'cron-plan' | 'architect' | 'review-regression' | 'review-double'):
-//   project:  <cwd>/.claude/brewtools/manager/prompts/<mode>.md
-//   global:   ~/.claude/manager/prompts/<mode>.md
-//   default:  <pluginRoot>/skills/manager-setup/references/<mode>.md
-// Injected text = inside fenced ``` or ~~~ blocks if present (concatenated in order),
-// else the whole file (raw-text fallback). Lets unfenced overrides work too.
+// brewtools:manager-setup — Manager prompt text: `<project root>/.claude/brewtools/manager/prompts/<mode>.md`
+// -> `<config dir>/manager/prompts/<mode>.md` -> `<pluginRoot>/skills/manager-setup/references/<mode>.md`.
 
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
+import { configDir } from './manager-state.mjs';
 
 const VALID_SCOPES = new Set(['project', 'global']);
-// 'planmode' is now hook-INTERNAL (selected by ++m when permission_mode === 'plan'),
-// not a user-typed codeword. It stays resolvable here so the plan-aware ++m and the
-// status explainer can still load its block.
+// 'planmode' is hook-internal (++m when permission_mode === 'plan'), not a codeword;
+// it stays resolvable for the plan-aware ++m and the status explainer.
 export const VALID_MODES = new Set(['full', 'planmode', 'cron-plan', 'architect', 'review-regression', 'review-double']);
 
-function resolveHome(p) {
-  if (!p) return p;
-  if (p === '~') return process.env.HOME || os.homedir();
-  if (p.startsWith('~/')) return path.join(process.env.HOME || os.homedir(), p.slice(2));
-  return p;
-}
-
-/**
- * Resolve a prompt file path for a scope.
- * @param {string} scope - 'project' | 'global'
- * @param {string} mode - 'full' | 'planmode' | 'cron-plan' | 'architect' | 'review-regression' | 'review-double'
- * @param {string} cwd
- * @returns {string} absolute path
- */
+/** Absolute prompt path for scope 'project' (under cwd) | 'global' (config dir = CLAUDE_CONFIG_DIR, unset = ~/.claude) */
 export function resolvePromptPath(scope, mode, cwd = process.cwd()) {
   if (!VALID_SCOPES.has(scope)) throw new Error(`invalid scope '${scope}' — must be one of: ${[...VALID_SCOPES].join(', ')}`);
   if (!VALID_MODES.has(mode)) throw new Error(`invalid mode '${mode}' — must be one of: ${[...VALID_MODES].join(', ')}`);
-  if (scope === 'global') return resolveHome(`~/.claude/manager/prompts/${mode}.md`);
+  if (scope === 'global') return path.join(configDir(), 'manager', 'prompts', `${mode}.md`);
   return path.join(cwd, '.claude', 'brewtools', 'manager', 'prompts', `${mode}.md`);
 }
 
@@ -45,8 +26,8 @@ function readSafe(filePath) {
   }
 }
 
-// Extract text inside all fenced ``` or ~~~ blocks, concatenated in document order
-// (blank-line separated). If none found, return the raw text trimmed.
+// Text inside all ``` or ~~~ fences, in order, blank-line joined; no fence -> whole file trimmed
+// (unfenced overrides work too).
 function extractFenced(raw) {
   const blocks = [];
   const re = /(?:```|~~~)[^\n]*\n([\s\S]*?)\n?(?:```|~~~)/g;
@@ -58,13 +39,7 @@ function extractFenced(raw) {
   return blocks.join('\n\n').trim();
 }
 
-/**
- * Resolve the prompt text for a mode.
- * @param {string} mode - 'full' | 'planmode' | 'cron-plan' | 'architect' | 'review-regression' | 'review-double'
- * @param {string} cwd
- * @param {string} pluginRoot - CLAUDE_PLUGIN_ROOT
- * @returns {{text:string, source:'project'|'global'|'default'|'missing'}}
- */
+/** Prompt text for a mode -> {text, source: 'project'|'global'|'default'|'missing'}; cwd = project root */
 export function resolvePrompt(mode, cwd = process.cwd(), pluginRoot) {
   if (!VALID_MODES.has(mode)) return { text: '', source: 'missing' };
   try {

@@ -1,29 +1,12 @@
 #!/usr/bin/env node
-// suite-integration.mjs - cross-unit integration for brewcode:semble-setup.
-//
-// Every other suite stubs its siblings. This one runs the REAL scripts against
-// each other: semble-status.sh composes semble-mcp.sh / semble-cache.sh /
-// semble-guidance.sh / semble-agents.sh / semble-project.sh, and the DESIGN
-// §12.3 lifecycle is driven end to end. The only stub is the `claude` binary -
-// nothing may ever register an MCP server or touch the real machine.
-//
-// Isolation: one mkdtemp base. `world/` holds home, projects, cache and the
-// stub bin and is the read-only snapshot scope; stub logs and TMPDIR live in
-// the base OUTSIDE `world/`, so logging can never mask a write. PATH is
-// narrowed to `world/bin:/usr/bin:/bin`, which makes uv, uvx, semble and brew
-// provably absent (asserted below) - the prerequisite-missing path is the live
-// case here, exactly as on the target machine.
-//
-// Assertion policy: unconditional exact-equality / exact-size checks with a
-// description. Every cross-unit number is checked against BOTH the sibling's
-// own authoritative value and an independently computed expectation, so a
-// re-derivation drifting from its source fails here.
+// suite-integration.mjs - REAL siblings end to end: semble-status.sh composes semble-mcp.sh / semble-cache.sh / semble-guidance.sh / semble-agents.sh / semble-project.sh + DESIGN §12.3 lifecycle; only `claude` stubbed.
+// Isolation: mkdtemp `world/` = read-only snapshot scope (logs, TMPDIR outside); PATH `world/bin:/usr/bin:/bin` -> uv, uvx, semble, brew absent; cross-unit numbers checked vs sibling AND independent expectation.
 
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync,
-  readdirSync, realpathSync, symlinkSync, writeFileSync,
+  readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync,
 } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -47,7 +30,7 @@ const TPL_CONTENT_VERSION = (/^content_version: "([^"]+)"$/m.exec(RULE_TEMPLATE)
 const TPL_VERSION = (/^version: "([^"]+)"$/m.exec(RULE_TEMPLATE) || [])[1];
 
 const SERVER = 'semble_code';
-const PIN_SPEC = 'semble[mcp]==0.5.5';
+const PIN_SPEC = 'semble[mcp]==0.6.2';
 const TOOL_SEARCH = 'mcp__semble_code__search';
 const TOOL_RELATED = 'mcp__semble_code__find_related';
 
@@ -100,9 +83,11 @@ const keysOf = (o) => (o !== null && typeof o === 'object' ? Object.keys(o).sort
 const hasError = (o) => Object.prototype.hasOwnProperty.call(o || {}, 'error');
 
 // ── temp world ──────────────────────────────────────────────────────────────
-// realpath: every script resolves its roots with `cd && pwd -P`, and on macOS
-// /var is a symlink to /private/var - expectations must use the resolved form.
+// realpath: scripts resolve roots via `cd && pwd -P`; macOS /var -> /private/var.
 const BASE = realpathSync(mkdtempSync(join(tmpdir(), 'semble-int-')));
+process.on('exit', () => {
+  try { rmSync(BASE, { recursive: true, force: true }); } catch { /* best effort */ }
+});
 const WORLD = join(BASE, 'world');          // the snapshotted tree
 const LOGS = join(BASE, 'logs');            // stub logs - deliberately outside
 const BIN = join(WORLD, 'bin');
@@ -120,9 +105,8 @@ for (const d of [LOGS, BIN, HOME_DIR, join(HOME_DIR, '.claude'), HOME_BARE, HOME
 writeFileSync(CLAUDE_LOG, '');
 symlinkSync(process.execPath, join(BIN, 'node'));
 
-// The one and only stub: `claude`. It logs its exact argv, records the state
-// phase observed at `mcp add` time (proof that the checkpoint precedes the add)
-// and emulates add/add-json/remove against the injected HOME.
+// Sole stub `claude`: logs exact argv, records state phase at `mcp add` (proves checkpoint precedes add),
+// emulates add/add-json/remove against injected HOME.
 writeFileSync(CLAUDE_STUB, `#!/usr/bin/env bash
 printf '%s\\n' "$*" >> "${CLAUDE_LOG}"
 if [ "\${1:-}" = "--version" ]; then echo "2.1.223 (Claude Code)"; exit 0; fi
@@ -237,12 +221,8 @@ function runStatus(args, extraEnv = {}) {
   return r;
 }
 
-// The §12.3 setup ladder every project fixture climbs: register the server,
-// install guidance, then walk the phases with the real state machine. Each rung
-// is returned so a caller still asserts on the exact step it cares about, and
-// `upto` stops the climb where a caller needs to do its own work in between.
-// suite-project.mjs repeats the same ladder four more times - move this to a
-// shared test helper when that file is next touched.
+// §12.3 setup ladder: register server, install guidance, walk phases (real state machine); returns each rung, `upto` stops early.
+// suite-project.mjs repeats it 4 more times -> move to shared test helper when that file is next touched.
 function seedState(env, upto = 'ready') {
   const rungs = { add: run(MCP_SH, ['add', '--scope', 'user', '--yes', '--json'], env) };
   if (upto === 'add') return rungs;
@@ -254,9 +234,7 @@ function seedState(env, upto = 'ready') {
   return rungs;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 0. Isolation proofs - the tools the skill installs must be absent
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══ 0. Isolation proofs - the tools the skill installs must be absent ═══
 function whichUnderEnv(tool) {
   const r = spawnSync('bash', ['-c', `command -v ${tool} || true`], { encoding: 'utf8', env: ENV });
   return { out: (r.stdout || '').trim(), status: r.status };
@@ -275,10 +253,14 @@ check('isolation: node resolves to the stub bin', whichUnderEnv('node'),
 check('isolation: claude resolves to the stub', whichUnderEnv('claude'),
   { out: CLAUDE_STUB, status: 0 }, 'the only reachable `claude` is the logging stub');
 
+// sc_platform / sc_cache_base mirrors (lib/semble-common.sh).
+const PLATFORM = { darwin: 'darwin', linux: 'linux' }[process.platform] || 'other';
+const REAL_CACHE_BASE = PLATFORM === 'darwin' ? join(homedir(), 'Library', 'Caches')
+  : (process.env.XDG_CACHE_HOME || join(homedir(), '.cache'));
 // External-world guards: captured now, asserted at the end.
 const EXT = {
-  realCacheCode: join(homedir(), 'Library', 'Caches', 'semble-code'),
-  realCacheDocs: join(homedir(), 'Library', 'Caches', 'semble-docs'),
+  realCacheCode: join(REAL_CACHE_BASE, 'semble-code'),
+  realCacheDocs: join(REAL_CACHE_BASE, 'semble-docs'),
   repoSettings: join(SKILL, '..', '..', '.claude', 'settings.json'),
   repoAgents: join(SKILL, '..', '..', '.claude', 'agents'),
   userSettings: join(homedir(), '.claude', 'settings.json'),
@@ -294,9 +276,7 @@ const extProbe = () => ({
 });
 const EXT_BEFORE = extProbe();
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 1. A fully installed project: every status section from a real sibling
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══ 1. A fully installed project: every status section from a real sibling ═══
 const PAD = 'x'.repeat(200);
 const P1 = join(WORLD, 'p-wired');
 const p1Env = { SEMBLE_PROJECT_ROOT: P1 };
@@ -368,11 +348,18 @@ const R = safeParse(st.stdout);
 
 check('wired: report top-level keys', keysOf(R),
   ['agents', 'cache', 'coverage', 'generatedAt', 'guidance', 'mcp', 'nextStep', 'pin',
-    'platform', 'prereq', 'projectRoot', 'schema', 'state', 'verdict'],
+    'platform', 'prereq', 'projectRoot', 'schema', 'state', 'verdict', 'versions'],
   'every §9.1 section is present in --section all');
+check('wired: versions', R.versions, {
+  pin: '0.6.2', pinSpec: PIN_SPEC,
+  configDir: join(HOME_DIR, '.claude'), configFile: join(HOME_DIR, '.claude.json'),
+  registered: PIN_SPEC, registeredVersion: '0.6.2',
+  verdict: 'ok', detail: '', action: 'none',
+  upstream: { latest: null, status: 'unknown', reason: 'offline', advisory: '' },
+}, 'the entry written by the real `semble-mcp.sh add` reads back as ok at the pin; upstream skipped offline');
 check('wired: schema + platform + projectRoot', [R.schema, R.platform, R.projectRoot],
-  [1, 'darwin', P1], 'header fields carry the resolved project root');
-check('wired: pin', R.pin, { approved: '0.5.5', spec: PIN_SPEC }, 'the approved pin is reported verbatim');
+  [1, PLATFORM, P1], 'header fields carry the resolved project root');
+check('wired: pin', R.pin, { approved: '0.6.2', spec: PIN_SPEC }, 'the approved pin is reported verbatim');
 
 // §SCOPE 1 - not a single section may be an {"error": ...} placeholder.
 const SECTIONS = ['prereq', 'mcp', 'cache', 'guidance', 'agents', 'coverage', 'state'];
@@ -454,29 +441,25 @@ check('wired: state completed', R.state.completed, ['mcp'],
   'only `claude mcp add` recorded a step here: no install ran prereq/permissions/guidance/agents '
   + 'and no warm/smoke was possible offline - this is what keeps the verdict below at partial');
 
-// verdict: `ready` is every required check, not the phase alone. This project
-// is wired and phase=ready, yet its state records one step out of seven, so the
-// verdict downgrades and names the gap.
+// verdict `ready` = every required check, not phase alone: wired + phase=ready but 1/7 steps recorded
+// -> downgrades and names the gap.
 check('wired: verdict', [R.verdict, R.nextStep], ['partial', 'Run /brewcode:semble-setup install'],
   'mcp=correct + phase=ready with unrecorded install steps => partial, and because more than the '
   + 'warm/smoke pair is missing the prescription is a full install, not resume');
 const strict = runStatus(['--json', '--strict'], p1Env);
 check('wired: --strict exit', strict.status, 1, '--strict exits 1 on any verdict that is not ready');
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 2. Unit A transforms vs what units C/D/E actually emit
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══ 2. Unit A transforms vs what units C/D/E actually emit ═══
 
 // ── 2a. guidance ────────────────────────────────────────────────────────────
 check('guidance: keys', keysOf(R.guidance),
   ['claudeMd', 'content_version', 'hooks', 'ignore', 'permissionsWired', 'pluginVersion',
-    'retired', 'rule', 'settingsFile', 'staleEntries', 'templateContentVersion', 'version',
+    'retired', 'retiredWired', 'rule', 'settingsFile', 'staleEntries', 'templateContentVersion', 'version',
     'wantCount', 'wiredCount'],
   'the §9.1 guidance shape plus the derived wiredCount/wantCount, the migration list, and the '
   + 'installed-vs-plugin stamp pair that carries the stale-artifacts signal');
-// The stale-artifacts verdict is driven by content_version, with `version`
-// riding along informational-only. Both stamps are pinned to the shipped
-// template, so neither half of the pair can silently drop out of the report.
+// Stale-artifacts verdict keys on content_version (`version` informational-only); both pinned to shipped
+// template so neither half silently drops out of the report.
 check('guidance: stamp pair matches the shipped template',
   [R.guidance.content_version, R.guidance.templateContentVersion,
     R.guidance.version, R.guidance.pluginVersion],
@@ -490,21 +473,21 @@ check('guidance: stamp pair is the sibling value verbatim',
     rawGuid.rule.version, rawGuid.rule.templateVersion],
   'status re-publishes the four semble-guidance.sh rule stamps without reinterpreting them');
 check('guidance: hooks sub-keys', keysOf(R.guidance.hooks),
-  ['prefetch', 'reminder', 'session', 'stats', 'subagent'],
-  'hooks collapses to five file-presence strings, one per LIVE hook');
+  ['session', 'stats', 'subagent'],
+  'hooks collapses to three file-presence strings, one per LIVE hook');
 check('guidance: flattened states',
-  [R.guidance.rule, R.guidance.claudeMd, R.guidance.hooks.session, R.guidance.hooks.prefetch,
-    R.guidance.hooks.stats, R.guidance.hooks.reminder, R.guidance.hooks.subagent],
+  [R.guidance.rule, R.guidance.claudeMd, R.guidance.hooks.session,
+    R.guidance.hooks.stats, R.guidance.hooks.subagent],
   [rawGuid.rule.state, rawGuid.claudeMd.state,
-    rawGuid.hooks.session.file, rawGuid.hooks.prefetch.file, rawGuid.hooks.stats.file,
-    rawGuid.hooks.reminder.file, rawGuid.hooks.subagent.file],
+    rawGuid.hooks.session.file, rawGuid.hooks.stats.file, rawGuid.hooks.subagent.file],
   'each flattened field equals the sibling sub-object it was taken from');
 check('guidance: installed states', [R.guidance.rule, R.guidance.claudeMd,
-  R.guidance.hooks.session, R.guidance.hooks.prefetch, R.guidance.hooks.stats,
-  R.guidance.hooks.reminder, R.guidance.hooks.subagent],
-['managed', 'present', 'present', 'present', 'present', 'present', 'present'],
-'after a real install: managed rule, marker block in CLAUDE.md, all five hook files copied');
-check('guidance: nothing retired left over', [R.guidance.retired, rawGuid.hooks.retired], [[], []],
+  R.guidance.hooks.session, R.guidance.hooks.stats, R.guidance.hooks.subagent],
+['managed', 'present', 'present', 'present', 'present'],
+'after a real install: managed rule, marker block in CLAUDE.md, all three hook files copied');
+check('guidance: nothing retired left over',
+  [R.guidance.retired, R.guidance.retiredWired, rawGuid.hooks.retired, rawGuid.hooks.retiredWired],
+  [[], [], [], []],
   'a fresh install has no v1 hook file to migrate away');
 check('guidance: settingsFile + staleEntries + permissionsWired',
   [R.guidance.settingsFile, R.guidance.staleEntries, R.guidance.permissionsWired],
@@ -512,12 +495,11 @@ check('guidance: settingsFile + staleEntries + permissionsWired',
   'project settings path, no stale entries, both tool permissions wired');
 check('guidance: wiredCount fully wired',
   [R.guidance.wiredCount, R.guidance.wantCount, rawGuid.hooks.wiredCount, rawGuid.hooks.wantCount],
-  [6, 6, 6, 6],
-  'all six entries (SessionStart + UserPromptSubmit/prefetch + PostToolUse/stats'
-  + ' + PostToolUseFailure/stats + PreToolUse/reminder + SubagentStart/subagent) are registered');
+  [4, 4, 4, 4],
+  'all four entries (SessionStart + PostToolUse/stats + PostToolUseFailure/stats'
+  + ' + SubagentStart/subagent) are registered');
 
-// Partial wiring: strip the UserPromptSubmit entry only. Independent truth is
-// 5 of 6 registered entries, which is also what semble-guidance.sh reports.
+// Partial wiring: strip the SubagentStart entry only -> 3 of 4, as semble-guidance.sh reports.
 const P2 = join(WORLD, 'p-partial');
 const p2Env = { SEMBLE_PROJECT_ROOT: P2 };
 write(join(P2, 'src/app.py'), `def main():\n    return 1\n# ${PAD}\n`);
@@ -527,26 +509,23 @@ check('partial: guidance install exit',
 
 const P2_SETTINGS = join(P2, '.claude/settings.json');
 const p2Settings = readJson(P2_SETTINGS);
-const p2Ups = p2Settings.hooks.UserPromptSubmit;
-delete p2Settings.hooks.UserPromptSubmit;
+const p2Sub = p2Settings.hooks.SubagentStart;
+delete p2Settings.hooks.SubagentStart;
 writeFileSync(P2_SETTINGS, `${JSON.stringify(p2Settings, null, 2)}\n`);
-check('partial: exactly one prefetch entry existed to remove',
-  [p2Ups.length, p2Settings.hooks.UserPromptSubmit], [1, undefined],
-  'the prefetch hook is registered once, unmatched, and that single row is now gone');
+check('partial: exactly one subagent entry existed to remove',
+  [p2Sub.length, p2Settings.hooks.SubagentStart], [1, undefined],
+  'the subagent hook is registered once, unmatched, and that single row is now gone');
 
 const rawGuid2 = safeParse(run(GUIDANCE_SH, ['status', '--json'], p2Env).stdout);
 const R2 = safeParse(runStatus(['--section', 'guidance', '--json'], p2Env).stdout);
-check('partial: sibling counts 5 of 6 entries',
-  [rawGuid2.hooks.session.wired, rawGuid2.hooks.prefetch.wired,
-    rawGuid2.hooks.stats.wired, rawGuid2.hooks.reminder.wired, rawGuid2.hooks.subagent.wired,
+check('partial: sibling counts 3 of 4 entries',
+  [rawGuid2.hooks.session.wired, rawGuid2.hooks.stats.wired, rawGuid2.hooks.subagent.wired,
     rawGuid2.hooks.wiredCount, rawGuid2.hooks.wantCount],
-  [true, false, true, true, true, 5, 6],
-  'semble-guidance.sh counts registered entries: SessionStart + both stats rows + reminder'
-  + ' + subagent = 5, prefetch not wired');
+  [true, true, false, 3, 4],
+  'semble-guidance.sh counts registered entries: SessionStart + both stats rows = 3, subagent not wired');
 check('partial: guidance.wiredCount agrees with the sibling',
-  [R2.guidance.wiredCount, rawGuid2.hooks.wiredCount, R2.guidance.wantCount], [5, 5, 6],
-  'status reads guidance.hooks.wiredCount instead of re-deriving it, so a missing prefetch'
-  + ' row reports 5/6 on both sides');
+  [R2.guidance.wiredCount, rawGuid2.hooks.wiredCount, R2.guidance.wantCount], [3, 3, 4],
+  'status reads guidance.hooks.wiredCount instead of re-deriving it: 3/4 on both sides');
 check('partial: section filter emits guidance only', keysOf(R2),
   ['generatedAt', 'guidance', 'nextStep', 'pin', 'platform', 'projectRoot', 'schema', 'verdict'],
   '--section guidance adds exactly one section to the header + verdict');
@@ -569,12 +548,11 @@ write(join(P3, 'CLAUDE.md'), `# CLAUDE.md\n\n${PAD}\n`);
 const rawGuid3 = safeParse(run(GUIDANCE_SH, ['status', '--json'], p3Env).stdout);
 const R3 = safeParse(runStatus(['--section', 'all', '--json'], p3Env).stdout);
 check('bare: wiredCount zero both sides', [R3.guidance.wiredCount, rawGuid3.hooks.wiredCount], [0, 0],
-  'nothing installed => 0/6 on both sides');
+  'nothing installed => 0/4 on both sides');
 check('bare: guidance states', [R3.guidance.rule, R3.guidance.claudeMd,
-  R3.guidance.hooks.session, R3.guidance.hooks.prefetch, R3.guidance.hooks.stats,
-  R3.guidance.hooks.reminder, R3.guidance.hooks.subagent,
+  R3.guidance.hooks.session, R3.guidance.hooks.stats, R3.guidance.hooks.subagent,
   R3.guidance.permissionsWired],
-['absent', 'absent', 'missing', 'missing', 'missing', 'missing', 'missing', false],
+['absent', 'absent', 'missing', 'missing', 'missing', false],
 'an untouched project reports everything absent');
 check('bare: no section degraded to an error placeholder',
   SECTIONS.filter((k) => hasError(R3[k])), [],
@@ -586,6 +564,35 @@ check('bare: verdict', [R3.verdict, R3.nextStep], ['not_installed', 'Run /brewco
   'mcp absent + phase absent => not_installed');
 const bareStrict = runStatus(['--strict'], p3Env);
 check('bare: --strict exit', bareStrict.status, 1, '--strict exits 1 for any verdict other than ready');
+
+// GIVEN an installed project whose settings.json cannot be rewritten WHEN guidance remove --part all runs
+// THEN it fails and keeps every hook file the settings still register
+const PRO = join(WORLD, 'p-readonly-settings');
+const proEnv = { SEMBLE_PROJECT_ROOT: PRO };
+write(join(PRO, 'src/app.py'), `def main():\n    return 1\n# ${PAD}\n`);
+check('ro-settings: guidance install exit',
+  run(GUIDANCE_SH, ['install', '--part', 'all', '--json'], proEnv).status, 0, 'guidance installed');
+const PRO_SETTINGS = join(PRO, '.claude/settings.json');
+const PRO_HOOKS = join(PRO, '.claude/hooks');
+const proHookFiles = () => (existsSync(PRO_HOOKS) ? readdirSync(PRO_HOOKS).filter((n) => n.startsWith('semble-')).sort() : []);
+const proHooksBefore = proHookFiles();
+const proSettingsBefore = readFileSync(PRO_SETTINGS, 'utf8');
+chmodSync(PRO_SETTINGS, 0o444);
+const proRemove = run(GUIDANCE_SH, ['remove', '--part', 'all', '--json'], proEnv);
+chmodSync(PRO_SETTINGS, 0o644);
+check('ro-settings: remove exit', proRemove.status, 1, 'an unwire that cannot be written fails the remove');
+check('ro-settings: hook files kept', [proHooksBefore.length, proHookFiles()], [3, proHooksBefore],
+  'all three hook files stay on disk while settings.json still registers them');
+check('ro-settings: settings untouched', readFileSync(PRO_SETTINGS, 'utf8'), proSettingsBefore,
+  'settings.json keeps every registration byte for byte');
+check('ro-settings: skip line',
+  safeParse(proRemove.stdout).skipped.filter((l) => l.startsWith('hooks: ')),
+  [`hooks: files kept in ${PRO_HOOKS} - ${PRO_SETTINGS} still registers them; fix it and re-run`],
+  'the report says why the files were kept');
+// GIVEN the same project with a writable settings.json WHEN remove re-runs THEN unwire and delete both finish
+const proRetry = run(GUIDANCE_SH, ['remove', '--part', 'all', '--json'], proEnv);
+check('ro-settings: retry exit and files', [proRetry.status, proHookFiles()], [0, []],
+  'the re-run unwires settings.json and only then deletes the hook files');
 
 // ── 2b. agents ──────────────────────────────────────────────────────────────
 check('agents: keys', keysOf(R.agents),
@@ -634,9 +641,8 @@ check('agents: buckets partition total on the sibling summary too',
   [2, 2, 3, 3, 0],
   'inherit+patched split the sibling unchanged count; the other three are its counts verbatim');
 
-// The second shape that carries toolsStyle "absent" without inheriting: a
-// conflict on a file that has no `tools:` key at all (semble-agents.sh checks
-// disallowedTools before the absent-style branch). No fixture above covers it.
+// 2nd toolsStyle "absent" shape w/o inheriting: conflict on a file with no `tools:` key
+// (semble-agents.sh checks disallowedTools before absent-style branch); uncovered above.
 const P4 = join(WORLD, 'p-conflict-absent');
 const p4Env = { SEMBLE_PROJECT_ROOT: P4 };
 write(join(P4, 'src/app.py'), `def main():\n    return 1\n# ${PAD}\n`);
@@ -707,9 +713,7 @@ for (const [sec, extra] of [['mcp', []], ['cache', []], ['guidance', []], ['agen
 }
 
 // ── 2d-bis. the one state that verifies as ready ────────────────────────────
-// Runs LAST against p-wired, because it mutates it: agent frontmatter is
-// patched and the remaining install/verify steps are recorded. Without this the
-// suite would never exercise `ready`/`none` or a strict exit 0 at all.
+// Runs LAST on p-wired (mutates it: patches agent frontmatter, records remaining install/verify steps); sole `ready`/`none`/strict exit 0 path.
 const p1Apply = run(AGENTS_SH, ['apply', '--scope', 'project', '--yes', '--json'], p1Env);
 check('ready: agents apply exit', p1Apply.status, 3,
   'exit 3 is the conflict code, not a failure: c-needs is patched while d-conflict keeps its '
@@ -756,9 +760,7 @@ check('negative control: local sections survive',
   [hasError(RL.prereq), hasError(RL.state), RL.verdict], [false, false, 'partial'],
   'prereq and state are computed in-process, so they still answer');
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 3. DESIGN §12.3 lifecycle, real siblings end to end
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══ 3. DESIGN §12.3 lifecycle, real siblings end to end ═══
 const LIFE = join(WORLD, 'p-life');
 const lifeEnv = { SEMBLE_PROJECT_ROOT: LIFE, SEMBLE_TEST_HOME: HOME_LIFE };
 const LIFE_CJ = join(HOME_LIFE, '.claude.json');
@@ -790,20 +792,17 @@ check('lifecycle: guidance install exit', life.guid.status, 0, 'guidance install
 check('lifecycle: guidance artefacts on disk',
   [existsSync(join(LIFE, '.claude/rules/semble-first.md')),
     existsSync(join(LIFE, '.claude/hooks/semble-session.mjs')),
-    existsSync(join(LIFE, '.claude/hooks/semble-prefetch.mjs')),
     existsSync(join(LIFE, '.claude/hooks/semble-stats.mjs')),
-    existsSync(join(LIFE, '.claude/hooks/semble-reminder.mjs')),
     existsSync(join(LIFE, '.claude/hooks/semble-subagent.mjs'))],
-  [true, true, true, true, true, true], 'rule + all five hook assets landed in the project');
-check('lifecycle: hooks dir holds exactly the five current assets',
+  [true, true, true, true], 'rule + all three hook assets landed in the project');
+check('lifecycle: hooks dir holds exactly the three current assets',
   readdirSync(join(LIFE, '.claude/hooks')).sort(),
-  ['semble-prefetch.mjs', 'semble-reminder.mjs', 'semble-session.mjs',
-    'semble-stats.mjs', 'semble-subagent.mjs'],
+  ['semble-session.mjs', 'semble-stats.mjs', 'semble-subagent.mjs'],
   'install --part all writes the whole want-table file set and leaves no retired v1 hook behind');
 check('lifecycle: install wired the full want table',
   (() => { const h = safeParse(run(GUIDANCE_SH, ['status', '--json'], lifeEnv).stdout).hooks;
     return [h.wiredCount, h.wantCount]; })(),
-  [6, 6], 'six settings entries over five files: stats spans PostToolUse + PostToolUseFailure');
+  [4, 4], 'four settings entries over three files: stats spans PostToolUse + PostToolUseFailure');
 
 // resume: a new session observes the live server, verifies, goes ready
 run(STATE_SH, ['phase', 'verifying'], lifeEnv);
@@ -869,9 +868,9 @@ check('lifecycle: enable folded the guidance report in',
   [lifeEnJson.changed.filter((l) => l.startsWith('guidance: ')).length,
     lifeEnJson.unchanged.filter((l) => l.startsWith('guidance: ')).length,
     lifeEnJson.skipped.filter((l) => l.startsWith('guidance: ')).length],
-  [2, 9, 1],
-  'sp_report_lines routes every guidance bucket into the matching enable bucket: 2 changed '
-  + '(ignore re-sync + the install summary), 9 unchanged, 1 skipped');
+  [3, 7, 1],
+  'sp_report_lines routes every guidance bucket into the matching enable bucket: 3 changed '
+  + '(ignore re-sync, one new byte-share candidate, the install summary), 7 unchanged, 1 skipped');
 
 // remove integration
 const claudeJsonBefore = sha(LIFE_CJ);
@@ -881,15 +880,12 @@ check('lifecycle: guidance + state removed',
   [existsSync(join(LIFE, '.claude/semble')),
     existsSync(join(LIFE, '.claude/rules/semble-first.md')),
     existsSync(join(LIFE, '.claude/hooks/semble-session.mjs')),
-    existsSync(join(LIFE, '.claude/hooks/semble-prefetch.mjs')),
     existsSync(join(LIFE, '.claude/hooks/semble-stats.mjs')),
-    existsSync(join(LIFE, '.claude/hooks/semble-reminder.mjs')),
     existsSync(join(LIFE, '.claude/hooks/semble-subagent.mjs'))],
-  [false, false, false, false, false, false, false],
-  'state dir, rule and all five hooks are gone');
-check('lifecycle: no semble hook file survives the removal',
-  readdirSync(join(LIFE, '.claude/hooks')).filter((f) => f.startsWith('semble-')).sort(), [],
-  'remove integration sweeps the hooks dir by name, not by the three-file v1 list');
+  [false, false, false, false, false],
+  'state dir, rule and all three hooks are gone');
+check('lifecycle: the emptied hooks dir is pruned', existsSync(join(LIFE, '.claude/hooks')), false,
+  'remove integration sweeps the hooks dir by name and drops it once nothing else is left in it');
 check('lifecycle: ~/.claude.json byte-identical', sha(LIFE_CJ), claudeJsonBefore,
   'remove integration leaves the MCP registration untouched');
 check('lifecycle: claude mcp remove was never called',
@@ -900,19 +896,16 @@ check('lifecycle: post-removal verdict', [afterRem.verdict, afterRem.state.phase
   ['partial', 'absent', 'correct'],
   'the server is still registered while the project state is gone => partial');
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 4. Read-only + external-world guarantees
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══ 4. Read-only + external-world guarantees ═══
 check('read-only: wrapped status runs', roRuns, 16,
   'every semble-status.sh invocation in this suite was snapshot-wrapped');
 check('read-only: violations', roViolations, 0,
   'not one semble-status.sh run created, modified or deleted anything under the temp tree');
 check('external: nothing outside the temp tree changed', extProbe(), EXT_BEFORE,
-  'real ~/Library/Caches/semble*, ~/.claude/settings.json, ~/.claude.json mcpServers,'
+  `real ${REAL_CACHE_BASE}/semble*, ~/.claude/settings.json, ~/.claude.json mcpServers,`
   + ' repo .claude/settings.json and repo .claude/agents are all as they were');
-// A hardcoded [false,false] asserts the developer machine has never installed
-// semble, so it goes red forever after the first real run. The claim under test
-// is that THIS suite created nothing - compare against the pre-suite probe.
+// Compare vs pre-suite probe, not hardcoded [false,false] (red forever after first real semble install):
+// claim under test is THIS suite created nothing.
 check('external: no real semble cache was created',
   [existsSync(EXT.realCacheCode), existsSync(EXT.realCacheDocs)],
   [EXT_BEFORE.realCacheCode, EXT_BEFORE.realCacheDocs],

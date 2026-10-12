@@ -16,9 +16,9 @@ if [[ -z "$ARGS_LOWER" ]]; then
 elif [[ "$ARGS_LOWER" =~ (model-check|model.check|модель|identify|идентиф) ]]; then
   # MUST precede `status` — `status|check` matches as a substring of "model-check"
   MODE="model-check"
-elif [[ "$ARGS_LOWER" =~ (status|check|текущий) ]]; then
+elif [[ "$ARGS_LOWER" =~ (status|check|текущий|статус|проверь) ]]; then
   MODE="status"
-elif [[ "$ARGS_LOWER" =~ (install|configure|настрой|добавь) ]]; then
+elif [[ "$ARGS_LOWER" =~ (install|configure|настрой|добавь|установи|поставь) ]]; then
   MODE="install"
 elif [[ "$ARGS_LOWER" =~ (help|how|как|помощь) ]]; then
   MODE="help"
@@ -32,13 +32,13 @@ elif [[ "$ARGS_LOWER" =~ (minimax|mini) ]]; then
   MODE="provider-minimax"
 elif [[ "$ARGS_LOWER" =~ (openrouter|router|open-router) ]]; then
   MODE="provider-openrouter"
-elif [[ "$ARGS_LOWER" =~ (verify|test|проверь|тест|токен) ]]; then
+elif [[ "$ARGS_LOWER" =~ (verify|test|проверк|тест|токен) ]]; then
   MODE="verify"
 elif [[ "$ARGS_LOWER" =~ (update|refresh|обнови|sync) ]]; then
   MODE="update"
 else
   # Fuzzy matching for typos before final fallback
-  if [[ "$ARGS_LOWER" =~ (model.*check|check.*model|cehck|identif|модель|verif|провер) ]]; then
+  if [[ "$ARGS_LOWER" =~ (model.*check|check.*model|cehck|identif|модель) ]]; then
     MODE="model-check"
   elif [[ "$ARGS_LOWER" =~ (status|statu|stat|чек|текущ) ]]; then
     MODE="status"
@@ -56,7 +56,7 @@ else
     MODE="provider-minimax"
   elif [[ "$ARGS_LOWER" =~ (openrouter|open\.router|router) ]]; then
     MODE="provider-openrouter"
-  elif [[ "$ARGS_LOWER" =~ (verify|test|тест|токен|token) ]]; then
+  elif [[ "$ARGS_LOWER" =~ (verify|verif|test|тест|токен|token|провер) ]]; then
     MODE="verify"
   elif [[ "$ARGS_LOWER" =~ (update|updtae|refresh|sync) ]]; then
     MODE="update"

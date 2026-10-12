@@ -20,7 +20,7 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 | Field | Value |
 |-------|-------|
 | Command | `/brewdoc:md-to-pdf` |
-| Arguments | `<file.md> [--engine name] ["prompt"]` \| `styles` \| `test` \| no args = help |
+| Arguments | `[prompt] <file.md> [--engine name] ["llm prompt"]` \| `styles` \| `test` \| no args = help |
 | Model | sonnet |
 | Tools | Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion |
 
@@ -76,14 +76,14 @@ Engine is saved to `.claude/md-to-pdf.config.json` after first selection. Overri
   </li>
   <li>
     <div>
-      <strong>Dependency check</strong>
-      <p>Runs <code>check_deps.sh check ENGINE</code>. If packages are missing, offers three options: install the current engine, switch to the other engine, or cancel. Installation is automatic on user consent.</p>
+      <strong>Engine selection</strong>
+      <p>Reads saved config from project (<code>.claude/md-to-pdf.config.json</code>) or global (<code>&#126;/.claude/md-to-pdf.config.json</code>). With no saved engine, CONVERT modes ask via an interactive comparison prompt; TEST mode uses <code>reportlab</code> and writes nothing. Selection is merged into the project config, so saved engine and style keys survive.</p>
     </div>
   </li>
   <li>
     <div>
-      <strong>Engine selection</strong>
-      <p>Reads saved config from project (<code>.claude/md-to-pdf.config.json</code>) or global (<code>&#126;/.claude/md-to-pdf.config.json</code>). First run with no config triggers an interactive comparison prompt. Selection is written to project config.</p>
+      <strong>Dependency check</strong>
+      <p>Runs <code>check_deps.sh check ENGINE</code>. If packages are missing, offers three options: install the current engine, switch to the other engine, or cancel. Installation is automatic on user consent. HELP and STYLES modes skip this step.</p>
     </div>
   </li>
   <li>
@@ -95,7 +95,7 @@ Engine is saved to `.claude/md-to-pdf.config.json` after first selection. Overri
   <li>
     <div>
       <strong>Convert</strong>
-      <p>Runs <code>md_to_pdf.py INPUT OUTPUT --engine ENGINE</code>. On failure, reads error output, attempts one auto-fix, and retries. If still failing, reports the full error and stops.</p>
+      <p>Runs <code>md_to_pdf.py INPUT OUTPUT --engine ENGINE</code>, passing <code>--config</code> and, for weasyprint, the saved <code>pygments_theme</code> as <code>--pygments-theme</code>. On failure, reads error output, attempts one auto-fix, and retries. If still failing, reports the full error and stops.</p>
     </div>
   </li>
   <li>
@@ -120,11 +120,16 @@ Run `/brewdoc:md-to-pdf styles` for four interactive questions:
 | Code theme (weasyprint) | github, monokai, friendly, solarized-dark, solarized-light | github |
 | Footer | `Page {page} of {total}`, `{page}/{total}`, Disabled | `Page {page} of {total}` |
 
-Config is saved to `.claude/md-to-pdf.config.json`, always carrying `version` / `content_version` / `generated_by` / `last_updated` (resolved from the plugin's own `plugin.json` and `SKILL.md`, never hardcoded) alongside the two style keys. Example:
+Config is saved to `.claude/md-to-pdf.config.json`, always carrying `version` / `content_version` / `generated_by` / `last_updated` (resolved from the plugin's own `plugin.json` and `SKILL.md`, never hardcoded) alongside the style settings. Example (style groups abbreviated):
 
 ```json
 {
   "engine": "weasyprint",
+  "page": { "size": "Letter" },
+  "colors": { "primary": "#2d3748" },
+  "typography": { "body_size": 9 },
+  "code": { "theme": "monokai", "font_size": 8 },
+  "footer": { "enabled": true, "format": "{page}/{total}" },
   "pygments_theme": "monokai",
   "version": "X.Y.Z",
   "content_version": "X.Y.Z",
@@ -133,7 +138,7 @@ Config is saved to `.claude/md-to-pdf.config.json`, always carrying `version` / 
 }
 ```
 
-Styles mode carries over `engine` and `pygments_theme` from the existing config when writing — a fixed bug used to let the styles writer silently reset a saved engine choice.
+Styles mode saves the `styles/default.json` structure (`page`, `colors`, `typography`, `code`, `footer`) with the changed values, plus the code theme as top-level `pygments_theme`. The save merges into the existing file, so a saved `engine` is kept.
 
 ### Config lookup order
 
@@ -148,7 +153,7 @@ Styles mode carries over `engine` and `pygments_theme` from the existing config 
 
 ### CONVERT+PROMPT temp file lifecycle
 
-The temp file is created with `mktemp "{original_dir}/.tmp_XXXXXX"` — a random suffix, never composed from the source name. Two concurrent conversions of the same file used to collide on a fixed `.tmp_{name}.md` path and one run silently lost its data; `mktemp` makes each invocation's temp file unique. A trap constrained to the `.tmp_??????` basename removes it on exit regardless of success or failure. The original source file is never modified.
+The temp file is created with `mktemp "{original_dir}/.tmp_XXXXXX"` — a random suffix, never composed from the source name. Each invocation gets its own unique temp file, so concurrent conversions of the same source never collide. A trap constrained to the `.tmp_??????` basename removes it on exit regardless of success or failure. The original source file is never modified.
 
 Tests: `bash brewdoc/skills/md-to-pdf/tests/run.sh` — 14 checks covering concurrent conversions, temp-file uniqueness, and leftover cleanup.
 
@@ -158,14 +163,14 @@ Tests: `bash brewdoc/skills/md-to-pdf/tests/run.sh` — 14 checks covering concu
 
 | Package | Version | Engine |
 |---------|---------|--------|
-| `reportlab` | `5.0.0` | reportlab |
-| `weasyprint` | `69.0` | weasyprint |
-| `markdown` | `3.10.3` | weasyprint |
-| `pygments` | `2.20.0` | weasyprint |
+| `reportlab` | `5.0.1` | reportlab |
+| `weasyprint` | `70.0` | weasyprint |
+| `markdown` | `3.11` | weasyprint |
+| `pygments` | `2.21.0` | weasyprint |
 
 ### Missing images
 
-If a referenced image can't be resolved (remote URL, missing file, or a read error), conversion no longer fails silently — it emits a warning naming the file path and the image's alt text, then continues without it.
+If a referenced image can't be resolved (remote URL, missing file, or a read error), conversion emits a warning naming the file path and the image's alt text, then continues without it.
 
 </details>
 

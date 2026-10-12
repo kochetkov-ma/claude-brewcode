@@ -1,7 +1,5 @@
 # SSH Best Practices
 
-> Reference for key management, configuration, and hardening.
-
 All commands are scoped templates, not permission to change a host. Classify the exact command/target with `safety-rules.md`; remote/shared mutation, trust/config/permission changes and service actions require main-session approval or a delegate's exact incoming `APPROVED:` envelope ids. Recheck host/preconditions before execution; stop on drift. Use only explicitly named nonsensitive diagnostics; never dump env, private keys, auth files or credential-bearing logs.
 
 ## Key Types
@@ -59,34 +57,6 @@ Host internal-server
     IdentityFile ~/.ssh/id_ed25519_internal
 ```
 
-### Wildcard Patterns
-
-```
-Host *.prod.example.com
-    User deploy
-    IdentityFile ~/.ssh/id_ed25519_prod
-    LogLevel ERROR
-
-Host *.staging.example.com
-    User admin
-    IdentityFile ~/.ssh/id_ed25519_staging
-```
-
-### Connection Optimization
-
-```
-Host *
-    ServerAliveInterval 60
-    ServerAliveCountMax 3
-    ControlMaster auto
-    ControlPath ~/.ssh/sockets/%r@%h-%p
-    ControlPersist 600
-    AddKeysToAgent yes
-    IdentitiesOnly yes
-```
-
-> Create sockets dir: `mkdir -p ~/.ssh/sockets`
-
 ## Server Hardening (sshd_config)
 
 ### Essential Settings
@@ -110,15 +80,24 @@ AllowGroups ssh-users
 DenyUsers root
 ```
 
-### Port Change
+### Port Change - lockout gate
 
 ```
 Port 2222
 ```
 
-> Update firewall: `ufw allow 2222/tcp && ufw deny 22/tcp`
+Any sshd, port or firewall change is PRIVILEGE (exact approval per command) and passes this 5-step gate
+before the old access path closes; never chain the steps into one command:
 
-Both commands are PRIVILEGE actions: obtain exact approval and verify access on the new port before denying the old one; maintain a tested recovery path to avoid lockout.
+1. Allow the new path: `ufw allow 2222/tcp`.
+2. Validate the config: `sshd -t`.
+3. Reload sshd.
+4. Prove a **new**, independent login on the new config (`ssh -p 2222 ...`).
+5. Only then deny the old path: `ufw deny 22/tcp`.
+
+An established session is not proof: ufw permits ESTABLISHED connections, so the current shell survives
+`ufw deny 22/tcp` and the lockout surfaces at disconnect, when it is unrecoverable. Keep a tested
+recovery path (provider console).
 
 ## ssh-agent
 
@@ -136,13 +115,6 @@ Both commands are PRIVILEGE actions: obtain exact approval and verify access on 
 - Compromised intermediate host can use your agent
 - Any user with root on intermediate can hijack socket
 - Mitigation: `ssh -J bastion target` (ProxyJump) instead of ForwardAgent
-
-### Start Agent
-
-```bash
-eval "$(ssh-agent -s)"
-ssh-add ~/.ssh/id_ed25519_vps-main
-```
 
 ## known_hosts Management
 
@@ -216,8 +188,8 @@ umask 077 && cat "$KH_TMP" >> ~/.ssh/known_hosts && rm -f "$KH_TMP"
 
 ```bash
 chmod 700 ~/.ssh
-chmod 600 ~/.ssh/config ~/.ssh/id_* ~/.ssh/authorized_keys
-chmod 644 ~/.ssh/*.pub ~/.ssh/known_hosts
+find -H ~/.ssh -maxdepth 1 \( -name config -o -name 'id_*' -o -name authorized_keys \) -exec chmod 600 {} +
+find -H ~/.ssh -maxdepth 1 \( -name '*.pub' -o -name known_hosts \) -exec chmod 644 {} +
 ```
 
 ## Connection Troubleshooting

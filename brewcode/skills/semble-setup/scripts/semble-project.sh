@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-# semble-project.sh — brewcode:semble-setup unit C.
-# Project corpus audit, cache warm/smoke, enable/disable/reindex.
-# Contracts: DESIGN §9.6 (CLI), §8.1-8.6 (mode semantics), §7 (coverage), §6.5/§6.6 (cache).
+# semble-project.sh: corpus audit, cache warm/smoke, enable/disable/reindex; DESIGN §9.6 CLI, §8.1-8.6 modes, §7 coverage, §6.5/§6.6 cache.
 set -euo pipefail
 SC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source-path=SCRIPTDIR source=lib/semble-common.sh
 . "$SC_DIR/lib/semble-common.sh"
 
 SP_WARM_QUERY_DEFAULT="entry point main function"
@@ -12,9 +11,8 @@ SP_SEARCH_TIMEOUT="${SP_SEARCH_TIMEOUT:-600}"
 # Never-walked directory names (semble/index/file_walker.py:14-33).
 SP_SKIP_DIRS=".git .hg .svn __pycache__ node_modules .venv venv .tox .mypy_cache .pytest_cache .ruff_cache .cache .semble .next dist build .eggs"
 
-# Suffix -> bucket tables, generated from semble 0.5.5
-# src/semble/index/files.py (_EXTENSION_TO_LANGUAGE minus _DOC/_CONFIG/_DATA_LANGUAGES).
-# Classification is by lowercased LAST suffix only; extensionless files never match.
+# Suffix -> bucket tables from semble 0.5.5 (identical in 0.6.2) src/semble/index/files.py (_EXTENSION_TO_LANGUAGE minus
+# _DOC/_CONFIG/_DATA_LANGUAGES); lowercased LAST suffix only, extensionless files never match.
 SP_EXT_CODE=".4th .ada .adb .ads .agda .al .as .asm .astro .awk .axi .axs .bash .bat .bb .bbappend .bbclass .bicep .blade .bq .brs .bsl .bzl .c .c3 .c3i .c3t .caddyfile .cairo .cbl .cc .cedar .cel .cfc .chatito .circom .cjs .ck .cl .clar .clj .cljc .cljs .cls .cmake .cmd .cob .cobol .conf .corn .cpp .cr .cs .cshtml .css .cst .cts .cu .cuda .cue .cxx .cylc .d .dart .dhall .dl .dockerfile .dot .dsp .eds .eex .el .elm .elv .enforce .eps .erb .erl .ex .exs .f .f03 .f08 .f90 .f95 .fc .fidl .filter .fir .fish .fnl .fs .fsd .fsi .fsx .fth .fun .g .gd .gdshader .gi .gleam .glsl .gn .gni .gnuplot .go .gotmpl .gp .gql .gradle .graphql .gren .groovy .gv .h .hack .hare .hbs .hcl .heex .hlsl .hoon .hpp .hrl .hs .http .hurl .hx .hxx .idr .inc .ino .ispc .j2 .jai .janet .java .jinja2 .jl .jq .js .jsonnet .jsx .just .k .kt .kts .lc .lds .lean .leex .less .libsonnet .liquid .lisp .ll .lua .luau .m .magik .makefile .matlab .meson .mjs .mk .ml .mli .mlir .mll .mojo .move .mts .nasm .ncl .nginx .nim .nims .ninja .nix .nqc .nu .nut .odin .p .pas .php .pkl .pl .plt .pm .pony .pp .prisma .pro .promql .prql .ps .ps1 .psd1 .psm1 .pug .purs .py .pyi .pyw .ql .qml .r .rasi .razor .rb .rbs .re .rego .res .resi .rkt .robot .roc .rs .s .scad .scala .scm .scss .sh .shtml .sig .slang .smali .smk .sml .sol .sp .sparql .sql .squirrel .st .stan .star .sv .svelte .svh .sw .swift .tact .tal .tape .tcl .td .templ .tera .tf .tfvars .tl .tla .trigger .ts .tsconfig .tsx .twig .typoscript .typst .v .vb .verilog .vhd .vhdl .vim .vrl .vue .w .wast .wat .wgsl .wl .yuck .zig .ziggy .zsh"
 SP_EXT_CONFIG=".beancount .capnp .cedarschema .cfg .cook .cpon .desktop .diff .dtd .dts .dtsi .ebnf .gitattributes .gitignore .hjson .hocon .ini .journal .kdl .ldg .ledger .mod .patch .pbtxt .pem .pgn .properties .proto .ron .smithy .textproto .thrift .todotxt .toml .tres .tscn .tsp .ttl .wit .xml .xsl .xslt .yaml .yml"
 SP_EXT_DOCS=".adoc .asciidoc .bib .dj .htm .html .markdown .md .mermaid .mmd .norg .org .po .pot .rst .rtf .tex"
@@ -67,10 +65,10 @@ SP_JSON=0
 sp_dry_say() { if [ "$SP_JSON" = "1" ]; then sc_dry "$*" >&2; else sc_dry "$*"; fi; }
 
 # ── coverage (§7) ───────────────────────────────────────────────────────────
-# Suffix-only classification, skipped-dir list, symlinks not followed,
-# >1 MB skipped, <128 B skipped only when blank after strip (files.py:498-501).
+# Suffix-only, skipped dirs, symlinks not followed, >1 MB skipped, <128 B skipped only when blank after strip (files.py:498-501).
 sp_coverage() {
   sc_require_node
+  # shellcheck disable=SC2016  # JavaScript source, not shell: $ is literal
   SP_ROOT="$(sc_project_root)" SP_C="$SP_EXT_CODE" SP_G="$SP_EXT_CONFIG" \
   SP_D="$SP_EXT_DOCS" SP_X="$SP_EXT_EXCLUDED" SP_SKIPD="$SP_SKIP_DIRS" node -e '
 const fs=require("fs"),path=require("path");
@@ -109,9 +107,7 @@ function walk(dir,depth){
   }
 }
 walk(process.env.SP_ROOT,0);
-// docsOnly counts toward indexable now that the corpus includes `docs`. The
-// key keeps its name for wire compatibility; it means "docs bucket", not
-// "recognised but unreachable".
+// docsOnly counts toward indexable (corpus includes `docs`); key name kept for wire compat = "docs bucket".
 out.totals.indexable=out.totals.code+out.totals.config+out.totals.docsOnly;
 process.stdout.write(JSON.stringify(out));'
 }
@@ -205,10 +201,8 @@ if(fs.existsSync(f)){
 process.stdout.write(JSON.stringify(out));'
 }
 
-# The §4.2 phase machine has exactly ONE implementation, in semble-state.sh;
-# this shells out to it. A second copy here drifted (it allowed ready -> error,
-# which semble-state.sh refuses) and that class of drift already caused a bug.
-# On refusal the sibling's own message is relayed to stderr.
+# §4.2 phase machine lives ONLY in semble-state.sh (a local copy drifted: allowed ready -> error); shells out to it,
+# relaying the sibling's refusal message to stderr.
 sp_set_phase() {
   local to="$1" out rc
   set +e
@@ -226,8 +220,7 @@ sp_require_state() {
 }
 
 # ── warm / smoke (§8.6) ─────────────────────────────────────────────────────
-# $SEMBLE_CONTENT_ARGS must be byte-identical to the MCP registration's
-# --content so both consumers select the same 0.5.5 index variant.
+# $SEMBLE_CONTENT_ARGS == MCP registration --content byte for byte -> both select the same index variant.
 sp_search_cmd_str() {
   printf "SEMBLE_CACHE_LOCATION=%s uvx --from '%s' semble search %s %s --content %s -k 5 --max-snippet-lines 10" \
     "$(sc_cache_root_code)" "$SEMBLE_PIN_SPEC" "\"$1\"" "\"$(sc_project_root)\"" "$SEMBLE_CONTENT_ARGS"
@@ -319,15 +312,12 @@ let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{
   const f=j.firstResult;
   process.stdout.write(f?(f.file_path+":"+f.start_line+"-"+f.end_line+" score "+f.score):"none");});'; }
 
-# sp_status_ready STATUS — the ONE readiness predicate for a search result.
-# `ok` only: `skipped` (offline, dry run, no uvx) and `empty` prove nothing was
-# indexed, and accepting them is what let a reindex delete a live index and
-# still report `ready`.
+# sp_status_ready STATUS: the ONE readiness predicate, `ok` only; `skipped`/`empty` prove nothing indexed
+# (accepting them let a reindex delete a live index and still report `ready`).
 sp_status_ready() { [ "$1" = "ok" ]; }
 
 # ── reindex guards (§6.6) ───────────────────────────────────────────────────
-# Rebuild only the selected 0.5.5 variant. Deleting the hashed repo directory
-# would erase unrelated exact-content variants and is forbidden here.
+# Rebuild only the selected variant; deleting the hashed repo dir would erase other exact-content variants.
 sp_guarded_rm_index_dir() {
   local dir="$1" leaf repo repo_leaf root
   leaf="$(basename "$dir")"
@@ -347,7 +337,7 @@ sp_guarded_rm_index_dir() {
 }
 
 # True only for the pre-0.5.5 combined corpus: bare `index` carrying the exact
-# current content set. A code-only 0.5.5 `index` is a valid sibling and survives.
+# current content set. A code-only `index` is a valid sibling and survives.
 sp_is_legacy_combined_index() {
   local dir="$1"
   [ "$(sc_index_leaf)" != "index" ] || return 1
@@ -456,25 +446,12 @@ console.log(process.env.SP_DISC);'
 }
 
 # ── candidates (§ per-repo .sembleignore proposals) ─────────────────────────
-# The shipped .sembleignore ships its per-repo section EMPTY, and no static
-# pattern can fill it: the two things that actually waste result slots are
-# layout-specific. This measures them in THIS repo.
-#
-#   duplicate-tree - a directory whose files are, near enough all of them,
-#                    byte-identical copies of files living somewhere else.
-#                    Semble does not dedup, so N copies means N chances to
-#                    spend one of five result slots on the same text.
-#   heavy-dir/file - a path carrying a disproportionate share of the corpus.
-#                    Exact chunk counts when an index exists (read straight out
-#                    of chunks.json), byte share as the fallback when it does not.
-#
-# Output is a PROPOSAL, never an exclusion: install writes it commented out.
-# Excluding something the user wanted indexed is the worse error - it fails
-# silently, and they would have no way to know the answer was never reachable.
+# Measures THIS repo: duplicate-tree (near-all byte-identical copies, no dedup), heavy-dir/file (chunks.json, else bytes); PROPOSAL only, written commented out.
 sp_mode_candidates() {
   local json="$1" root indexdir out
   root="$(sc_project_root)"
   indexdir="$(sc_repo_index_dir "$root" 2>/dev/null || true)"
+  # shellcheck disable=SC2016  # JavaScript source, not shell: $ is literal
   out="$(SP_ROOT="$root" SP_CHUNKS="${indexdir:+$indexdir/chunks.json}" \
     SP_C="$SP_EXT_CODE" SP_G="$SP_EXT_CONFIG" SP_D="$SP_EXT_DOCS" \
     SP_SKIPD="$SP_SKIP_DIRS" node -e '
@@ -539,17 +516,14 @@ for(const f of files){
       for(const o of outside){ const td=path.dirname(o).split(path.sep)[0]||"."; e.twins.set(td,(e.twins.get(td)||0)+1); } }
   }
 }
-// The 1% floor keeps the proposal list worth reading: a duplicate tree that
-// costs nothing (often it is already excluded, so its chunk weight is zero) is
-// noise, and noise in a proposal list is how the list stops being read.
+// 1% floor: a zero-cost duplicate tree (often already excluded) is noise, and noise stops the list being read.
 const dupCand=[];
 for(const [d,e] of dirs){ if(e.n>=5&&e.dup/e.n>=0.9&&e.weight/total>=0.01) dupCand.push({dir:d,...e}); }
 dupCand.sort((a,b)=>a.dir.length-b.dir.length);
 const kept=[];
 for(const c of dupCand) if(!kept.some(k=>under(c.dir,k.dir))) kept.push(c);
-// A mirror pair qualifies from both ends. Propose the copy, not the original:
-// hidden directory first (a mirror for another runtime is nearly always dotted),
-// then the shallower-weighted side, then the later path so the choice is stable.
+// Mirror pair qualifies from both ends; propose the copy: hidden dir first (runtime mirrors are dotted),
+// then the lighter side, then the later path (stable choice).
 const isHidden=d=>d.split(path.sep).some(s=>s.startsWith("."));
 const dropped=new Set();
 for(const a of kept) for(const b of kept){
@@ -573,9 +547,7 @@ const covered=r=>out.some(o=>under(r,o.base));
 const tops=new Map();
 for(const f of files){ const d=f.rel.split(path.sep)[0];
   if(d===f.rel)continue; tops.set(d,(tops.get(d)||0)+weightOf(f)); }
-// Only ever propose a PROSE-dominated directory. A source directory carrying
-// 40% of the corpus is the repository, not noise, and proposing to exclude it
-// would be wrong in every repo that has one - which is all of them.
+// Only PROSE-dominated dirs: a source dir carrying 40% of the corpus is the repository, not noise.
 const proseShare=d=>{ const f=files.filter(x=>under(x.rel,d)); return f.length?f.filter(x=>x.docs).length/f.length:0; };
 for(let [d,w] of tops){
   if(w/total<0.15||covered(d)||proseShare(d)<0.8)continue;
@@ -592,9 +564,7 @@ for(let [d,w] of tops){
     d=best[0]; w=best[1];
   }
   if(covered(d)||proseShare(d)<0.8)continue;
-  // Name the biggest single child too. The whole directory is rarely the right
-  // exclusion; one subtree inside it usually is, and the user can only pick the
-  // narrower path if the measurement hands it to them.
+  // Also name the biggest child: one subtree is usually the right exclusion, only measurement offers it.
   const sub=new Map();
   for(const f of files){ if(!under(f.rel,d))continue;
     const rest=f.rel.slice(d.length+1).split(path.sep);
@@ -701,9 +671,8 @@ sp_mode_enable() {
     sp_command "$sib install --part all --json"
     local gout grc bucket line
     set +e; gout="$("$sib" install --part all --json 2>/dev/null)"; grc=$?; set -e
-    # Guidance's own report is the only place a CLAUDE.md line it cut — or kept
-    # as a possible conflict for review — is ever named. Discarding it here made
-    # the conflict scan's decisions invisible to the user running `enable`.
+    # Guidance report alone names CLAUDE.md lines it cut or kept as possible conflicts;
+    # discarding it hid the conflict-scan decisions from `enable`.
     while IFS=$'\t' read -r bucket line; do
       [ -n "$line" ] || continue
       case "$bucket" in
@@ -747,9 +716,8 @@ EOF
     *) sp_failed "warm: $(sp_search_field "$res" reason)" ;;
   esac
 
-  # Readiness is the whole run, not the warm alone: a guidance or agents failure
-  # kept `final=ok` before. A skipped warm verifies nothing either, so the phase
-  # stays at `verifying` — neither ready nor error — and the report says why.
+  # Readiness = whole run (guidance/agents failure used to keep `final=ok`); skipped warm verifies nothing,
+  # so phase stays `verifying` (neither ready nor error) and the report says why.
   local final
   if [ -n "$SP_FAILED" ]; then
     sp_set_phase error || true; final=failed
@@ -785,10 +753,8 @@ sp_mode_disable() {
   return 0
 }
 
-# §8.3 — resolve one exact content variant, build its replacement in a staging
-# cache root, and replace only that variant after a real query succeeds. Other
-# variants survive. A bare pre-0.5.5 combined `index` is removed only after its
-# metadata proves it represents this exact corpus and the replacement is live.
+# §8.3: build one exact variant in a staging cache root, swap only it after a real query succeeds (others survive);
+# bare pre-0.5.5 combined `index` removed only once metadata proves this exact corpus and the replacement is live.
 sp_mode_reindex() {
   local json="$1" yes="$2" root hash repo_dir live_index legacy_index legacy_present=0
   local size res status final stage staged_repo staged_index backup stagecmd

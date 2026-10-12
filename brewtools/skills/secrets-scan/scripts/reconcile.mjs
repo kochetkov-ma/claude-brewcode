@@ -1,12 +1,6 @@
 #!/usr/bin/env node
-/**
- * reconcile.mjs - enforce `assigned == union(scanned, skipped)` for one chunk.
- *
- * Usage: node reconcile.mjs <assigned-list-file> <agent-json-file>
- * Prints ONE JSON verdict on stdout. Exit 0 = OK, 1 = MISMATCH, 2 = MALFORMED.
- * A chunk that cannot be reconciled must never be counted as scanned - that is
- * the difference between "no findings" and "never looked".
- */
+// Usage: node reconcile.mjs <assigned-list-file> <agent-json-file> -> ONE JSON verdict: `assigned == union(scanned, skipped)` per chunk.
+// Exit 0 = OK, 1 = MISMATCH, 2 = MALFORMED; unreconciled chunk != scanned ("no findings" != "never looked").
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';

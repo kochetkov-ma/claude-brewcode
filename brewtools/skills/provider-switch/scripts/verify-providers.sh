@@ -81,9 +81,8 @@ verify_provider() {
 
   echo "KEY_SET=true"
 
-  # The Authorization header goes to curl through a -K config on STDIN, never on argv: argv is
-  # readable by any local process via `ps` for the whole request. Config values are double-quoted,
-  # so `\` and `"` inside the key must be escaped for curl's own parser.
+  # Authorization header -> curl -K config on STDIN, never argv (readable via `ps` all request long).
+  # Config values are double-quoted, so `\` and `"` in the key are escaped for curl's parser.
   local key_cfg
   key_cfg=$(printf '%s' "$key" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')
 
@@ -116,9 +115,8 @@ verify_provider() {
     return
   fi
 
-  # A 200 alone proves nothing: an HTML error page, `{}`, or a 200-wrapped provider error all
-  # return 200. Pass requires a real assistant text block saying OK. The echoed model id is only
-  # a WARNING — aggregators and providers that normalise the id would otherwise fail a working key.
+  # 200 alone proves nothing (HTML error page, `{}`, 200-wrapped error): pass needs an assistant text block saying OK.
+  # Echoed model id mismatch is only a WARNING: aggregators/providers normalise ids, a working key must not fail.
   local text resp_model reason
   text="$(printf '%s' "$BODY" | jq -er '[.content[]? | select(.type == "text") | .text] | join(" ")' 2>/dev/null || true)"
   resp_model="$(printf '%s' "$BODY" | jq -er '.model // empty' 2>/dev/null || true)"

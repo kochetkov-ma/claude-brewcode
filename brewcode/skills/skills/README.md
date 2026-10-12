@@ -2,7 +2,7 @@
 
 Manages Claude Code skills — check status, create new skills from a free-form prompt, improve, review, or sync existing ones with the codebase. Input is ONE free-form natural-language prompt; there is no keyword grammar. Skill operations are delegated to the `brewcode:skill-creator` specialist agent.
 
-**Default action:** status (rich inventory). List-by-default is removed — typing `/brewcode:skills` alone now opens the interactive menu.
+**Default action:** with no arguments, `/brewcode:skills` reports the rich status of your skills. Ask for the menu explicitly to choose an action instead.
 
 ## Quick Start
 
@@ -10,9 +10,7 @@ Manages Claude Code skills — check status, create new skills from a free-form 
 /brewcode:skills
 ```
 
-No arguments: presents the interactive menu with Status (skills) pre-selected as the recommended action.
-
-Pass a free-form prompt to skip the menu entirely:
+Pass a free-form prompt to name what you want:
 
 ```
 /brewcode:skills create a skill that scans for hardcoded secrets
@@ -20,22 +18,11 @@ Pass a free-form prompt to skip the menu entirely:
 
 ## How It Works — Unified 6-Step Flow
 
-Every invocation goes through the same flow:
-
-1. **Input gate** — reads `$ARGUMENTS`; if empty, goes to the interactive menu.
-2. **Auto-mode select** — infers mode from the prompt and announces:
-   `Mode: <mode> (skills) — chosen because <evidence>`
-3. **No-prompt menu** — when no arguments given, shows a single `AskUserQuestion`:
-   - Status (skills) [recommended]
-   - Status (all: agents + rules + skills)
-   - Create
-   - Improve
-   - Review
-   - Sync skills (memory sync)
-   - List (plain)
-   - Cancel
-4. **Dispatch** — routes create / improve / sync to `brewcode:skill-creator`, review to the project reviewer agent from `.claude/agents/` (else `general-purpose`, two-phase), or runs `list-skills.sh` directly (list mode).
-5. **Real status** — four blocks, never a flat list: inventory by scope (plugin / project / global, with counts, names, load path), state (enabled or disabled via the `_SKILL.md` marker, model), overlaps and conflicts (shadowing across scopes, duplicate triggers or descriptions), health flags (missing README or frontmatter, weak description triggers).
+1. **Input gate** — reads the prompt; empty means `status`.
+2. **Auto-mode select** — infers the mode from the prompt and prints a `PLAN — brewcode:skills` block (input, mode and why, scope, steps, result) before any work.
+3. **Menu** — only when you ask for it: one `AskUserQuestion` with two questions, 2-4 options each. Q1 (what to do): Status (skills, recommended), Create, Improve, Review. Q2 (variant): As chosen (recommended), Status (all: agents + rules + skills), List (plain), Sync skills; a non-default Q2 replaces Q1. Dismissing the menu (or `cancel` via Other) stops.
+4. **Dispatch** — routes create / improve to `brewcode:skill-creator`, sync to `references/mode-sync.md` (one `skill-creator` per target), review to the project reviewer agent from `.claude/agents/` (else `general-purpose`, two-phase), or runs `list-skills.sh` directly (list mode).
+5. **Real status** — four blocks, never a flat list: inventory by scope (plugin / project / global, with counts, names, load path), state (enabled or disabled via setup config or `<name>.disabled` parking, legacy `_SKILL.md` markers flagged, model), overlaps and conflicts (shadowing across scopes, duplicate triggers or descriptions), health flags (missing README or frontmatter, weak description triggers).
 6. **Mandatory final output** — structured summary of what was created, changed, or reviewed. Omitted only for `list` mode.
 
 ## Modes
@@ -79,14 +66,14 @@ Before spawning `skill-creator`, the orchestrating skill itself asks up to four 
 | Testing depth | Quick (recommended) / Standard / Deep | Drives the scope of Phase 5 E2E evaluation |
 | Review type | Simple / Quorum | Quorum available only at Standard or Deep testing depth |
 
-**Description budget:** the generated `description:` field must be ≤ 120 characters, single line, trigger keywords included. One number in both places -- the authoring rule in `SKILL.md` and the review checklist in `references/review-prompt.md` -- so a skill written to spec passes its own review. Empirical: 16 of the 27 shipped skills sit at or under 120 characters (95-118); the rest run long, up to 410.
+**Description budget:** the generated `description:` is a single line of at most about 100 tokens (~400 characters), written in the third person (what it does, then when to use it), with trigger keywords early. About 120 characters is an optional brevity target, not a second cap. The review checklist in `references/review-prompt.md` uses the same 400-character limit, so a skill written to spec passes its own review.
 
 The full creation pipeline includes Phase 0 Discovery (parallel Explore agents), Phase 4 Review (Simple or 3-reviewer Quorum with DoubleCheck + fix loop), and Phase 5 E2E. This machinery is only reachable via `create` or `improve` mode.
 
 ## Examples
 
 ```bash
-# Open the interactive menu
+# No arguments: rich status of all skills
 /brewcode:skills
 
 # Check the current state of all installed skills
@@ -99,7 +86,7 @@ The full creation pipeline includes Phase 0 Discovery (parallel Explore agents),
 /brewcode:skills improve the superreview skill
 
 # Improve a skill by explicit path
-/brewcode:skills update brewcode/skills/convention
+/brewcode:skills improve brewcode/skills/rules
 
 # Review all skills in a folder for quality
 /brewcode:skills review ~/.claude/skills/
@@ -119,18 +106,17 @@ The full creation pipeline includes Phase 0 Discovery (parallel Explore agents),
 Depends on mode:
 
 - **status** — rich inventory table of all skills grouped by location (global `~/.claude/skills/`, project `.claude/skills/`, plugins), with description and trigger keywords for each.
-- **list** — plain file listing from `list-skills.sh`. The script self-locates from its own path, so it enumerates plugin skills in both the dev checkout and the installed cache alongside global and project scopes. Every plugin that ships a `skills/` dir and a `.claude-plugin/plugin.json` is scanned, not just brewcode.
-- **create** — a new skill directory containing `SKILL.md` and `README.md`, placed in `.claude/skills/` (project) or `~/.claude/skills/` (global).
+- **list** — plain file listing from `list-skills.sh`. The script self-locates from its own path, so it enumerates plugin skills in both the dev checkout and the installed cache alongside global and project scopes. Every plugin that ships a `skills/` dir and a `.claude-plugin/plugin.json` is scanned, not just brewcode; plugin names come from `plugin.json`, and for each cached plugin only the highest version is listed. Global skills and the plugin cache follow `CLAUDE_CONFIG_DIR` and `CLAUDE_CODE_PLUGIN_CACHE_DIR` when set.
+- **create** — a new skill directory containing `SKILL.md` and `README.md`, placed in `.claude/skills/` (project), `~/.claude/skills/` (global) or `<plugin>/skills/` (plugin).
 - **improve** — the target `SKILL.md` rewritten with optimized description, trigger keywords, imperative voice, and best practices.
 - **review** — a structured audit report with issues found and recommended fixes applied.
 
-
 ## Tips
 
-- Run `/brewcode:skills` with no arguments to see the menu — `Status (skills)` is pre-selected and answers "what do I have installed?" in one step.
-- The `create` mode checks conversation history first. If the current conversation already contains a workflow worth capturing, it extracts context directly and skips web research.
+- Run `/brewcode:skills` with no arguments to answer "what do I have installed?" in one step.
+- If the current conversation already contains a workflow worth capturing, `create` extracts it directly.
 - Deep testing depth runs Phase 5 E2E in an isolated temp project (1 happy-path + 1 edge-case scenario per mode); Quick depth instead runs `validate-skill.sh` + 3-5 test prompts. Choose `Deep` for safety-critical or frequently-used skills.
-- `list` is the fastest mode for verifying file counts — use `status` when you need trigger keywords and descriptions alongside each entry.
+- `list` is the fastest way to check file counts; `status` adds state, overlaps and health flags.
 
 ## Documentation
 

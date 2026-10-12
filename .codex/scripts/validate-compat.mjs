@@ -197,7 +197,7 @@ const CLAUDE_ONLY_AGENT_REFERENCES = [
 
 function resourceTarget(plugin, skill, relative) {
   if (relative === 'SKILL.md' || relative.startsWith('.claude/') || relative.includes('/__pycache__/') || relative.endsWith('.pyc')) return null;
-  if (plugin === 'brewtools' && skill === 'manager-setup' && ['references/hard.md', 'references/intent-routing.md'].includes(relative)) return null;
+  if (plugin === 'brewtools' && skill === 'manager-setup' && (['references/hard.md', 'references/intent-routing.md'].includes(relative) || relative.startsWith('tests/'))) return null;
   if (plugin === 'brewcode' && skill === 'agents' && CLAUDE_ONLY_AGENT_REFERENCES.includes(relative)) return null;
   return relative.replaceAll('claude-md', 'agents-md').replaceAll('claude-local', 'codex-local');
 }
@@ -310,7 +310,8 @@ for (const [plugin, [skillCount, agentCount]] of Object.entries(EXPECTED)) {
   }
 
   const agentsRoot = path.join(pluginRoot, '.codex', 'agents');
-  const agents = fs.readdirSync(agentsRoot).filter(name => name.endsWith('.toml'));
+  // Git drops an empty agents dir, so a fresh clone may lack it: missing = no agents.
+  const agents = fs.existsSync(agentsRoot) ? fs.readdirSync(agentsRoot).filter(name => name.endsWith('.toml')) : [];
   if (agents.length !== agentCount) fail(`${plugin}: expected ${agentCount} agents, got ${agents.length}`);
   if (agents.length) {
     const command = [

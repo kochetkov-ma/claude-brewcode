@@ -18,7 +18,7 @@ function write(path, text) {
 }
 function scan(args = [], expectedStatus = 0, extraEnv = {}) {
   const result = spawnSync('bash', [scanner, '--root', root, ...args], {
-    cwd: root, env: { ...process.env, HOME: home, CLAUDE_PROJECT_DIR: root, ...extraEnv },
+    cwd: root, env: { ...process.env, HOME: home, CLAUDE_CONFIG_DIR: '', CLAUDE_PROJECT_DIR: root, ...extraEnv },
     encoding: 'utf8', timeout: 20000,
   });
   assert.equal(result.status, expectedStatus, 'WHEN scanner runs THEN exit distinguishes complete from partial JSON inventory');
@@ -30,8 +30,8 @@ try {
   const scoped = write(join(root, '.claude/rules/nested/scoped.md'), '---\npaths: ["src/**"]\n---\nScoped only\n');
   const unscoped = write(join(root, '.claude/rules/nested/general.md'), 'General rule\n');
   const convention = write(join(root, '.claude/convention/style.md'), 'Imported conventions\n');
-  const memory = write(join(home, '.claude/projects', root.replaceAll('/', '-'), 'memory/MEMORY.md'), 'Index\n');
-  const topic = write(join(home, '.claude/projects', root.replaceAll('/', '-'), 'memory/nested/topic.md'), 'Lazy topic\n');
+  const memory = write(join(home, '.claude/projects', root.replace(/[^A-Za-z0-9]/g, '-'), 'memory/MEMORY.md'), 'Index\n');
+  const topic = write(join(home, '.claude/projects', root.replace(/[^A-Za-z0-9]/g, '-'), 'memory/nested/topic.md'), 'Lazy topic\n');
   const skill = write(join(root, 'product/skills/example/SKILL.md'), 'Skill instructions\n');
   const reference = write(join(root, 'product/skills/example/references/nested/detail.md'), 'Привет 🌱\n');
   const privateFile = write(join(home, '.claude/rules/private.md'), 'Global private instruction\n');
@@ -139,6 +139,23 @@ try {
   assert.deepEqual(failedResult.scan_issues, [{
     root: 'project', path: failedPath, kind: 'discovery-incomplete', exit_status: 7, detail: 'fixture "discovery" failure\nsecond\tline',
   }], 'THEN discovery errors preserve escaped quotes, newline and tab without claiming success');
+  // GIVEN 2.1.296 startup and on-access sources WHEN scanning THEN each carries its own loading condition.
+  const dotClaude = write(join(root, '.claude/CLAUDE.md'), 'Project instructions in .claude\n');
+  const nested = write(join(root, 'pkg/CLAUDE.md'), 'Subdirectory instructions\n');
+  const nestedRows = Object.fromEntries(scan().files.map(row => [row.path, row.loading]));
+  assert.deepEqual([nestedRows[dotClaude], nestedRows[nested], nestedRows[startup]],
+    ['startup-instruction', 'subdirectory-on-access', 'startup-instruction'],
+    'THEN .claude/CLAUDE.md loads at startup and a subdirectory CLAUDE.md on access, startup rows not doubled');
+
+  // GIVEN a CLAUDE_CONFIG_DIR profile WHEN scanning globally THEN the profile replaces ~/.claude everywhere.
+  const profile = join(base, 'profile');
+  const profileRule = write(join(profile, 'rules/profile.md'), 'Profile rule\n');
+  const profileMemory = write(join(profile, 'projects/named/memory/MEMORY.md'), 'Profile index\n');
+  const profiled = scan(['--global'], 0, { CLAUDE_CONFIG_DIR: profile, CLAUDE_CODE_PROJECT_DIR_NAME: 'named' });
+  const profiledPaths = profiled.files.map(row => row.path);
+  assert.deepEqual([profiled.roots.global, profiledPaths.includes(profileRule), profiledPaths.includes(profileMemory),
+    profiledPaths.includes(privateFile), profiledPaths.includes(memory)], [profile, true, true, false, false],
+    'THEN global rules and auto memory come from the profile dir and its named project, never from ~/.claude');
   console.log('PASS context scanner: recursive inventory, loading conditions, exact bytes, filters and exclusions');
 } finally {
   rmSync(base, { recursive: true, force: true });

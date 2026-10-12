@@ -12,7 +12,7 @@
 | Add gate | a new fact enters only if ALL hold: non-obvious for a competent model + verified against a real source + its absence costs a real failure |
 | Traceable | verify surviving claims against files, command output, commits or current user decisions. Confirmed false/dead -> fix/delete; unavailable evidence -> retain, flag unverified, never infer false |
 | !=touch | frontmatter `name`/`description` contract, working instructions that are still true, the file's structure and voice |
-| Edit only | `Edit` with targeted diffs, bottom-up by line number. !=`Write` a whole file (repo rule avoid#4/#5) |
+| Edit only | `Edit` with targeted diffs, bottom-up by line number. !=`Write` a whole file (silently drops lines) |
 
 ## Step S1 — Scope
 
@@ -38,14 +38,14 @@ Default = artifacts **of this repository** only:
 | `skills` | `.claude/skills/*/SKILL.md` + `references/*.md`, `*/skills/*/SKILL.md` + `references/*.md` |
 
 `~/.claude/**` is **out of scope** unless the user explicitly names global. Disabled artifacts
-(`_name.md`, `_SKILL.md`) are skipped and listed as skipped.
+(`<name>.disabled` parking, legacy `_name.md` / `_SKILL.md` markers) are skipped and listed as skipped.
 
 For `session` / `commit` scope: narrow to artifacts whose subject was actually touched — an
 artifact nothing in the scope says anything about MUST NOT be edited.
 
 ## Step S3 — Ground truth (before any edit)
 
-Build the fact base ONCE, then reuse it for all targets:
+Build the fact base ONCE for all targets:
 
 1. `git status --short` + `git log --oneline -5` (and the scope's `git show`/`diff`).
 2. Real inventory: existing agent/skill/hook/script/reference paths, script flag names, tool names.
@@ -117,4 +117,4 @@ one line with cause, never a narrative.
 ```
 
 **Total delta MUST be <=0**; positive -> explicit justification per added line, never buried.
-Remind the user to run `/docs` when artifact behavior (not only wording) changed.
+Remind the user to update the project's docs when artifact behavior (not only wording) changed.

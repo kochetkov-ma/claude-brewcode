@@ -1,6 +1,6 @@
 # Text Optimizer
 
-Optimizes text files for LLM token efficiency with 5 compression modes — from light cleanup to deep dictionary-encoded compression for LLM-only documents. Applies 52 validated rules for current Codex models, supports smart auto-detection of optimal mode, and verifies content against per-mode loss budgets (lossless through standard; small explicit loss at deep/max). Works on single files, multiple files in parallel, or entire directories. Includes a smart deduplication pass: accidental repeats merged, intentional emphasis capped at 2 per document.
+Optimizes text files for LLM token efficiency with 5 compression modes — from light cleanup to deep dictionary-encoded compression for LLM-only documents. Applies 52 validated rules, supports smart auto-detection of optimal mode, and verifies content against per-mode loss budgets (lossless through standard; small explicit loss at deep/max). Works on single files, multiple files in parallel, or entire directories. Includes a smart deduplication pass: accidental repeats merged, intentional emphasis capped at 2 per document.
 
 ## Quick Start
 
@@ -25,7 +25,7 @@ Auto-detects optimal mode for the file (deep for AGENTS.md, standard for README.
 ### Good Usage
 
 ```bash
-# Single file, medium mode (default)
+# Single file, mode auto-detected (AGENTS.md -> deep)
 $brewtools:text-optimize AGENTS.md
 
 # Light mode on a production agent -- safe, minimal changes
@@ -78,7 +78,7 @@ $brewtools:text-optimize -d README.md
 
 # Expecting deep mode output to be human-readable
 # Deep mode is designed for LLM consumption only (AGENTS.md, system prompts).
-# The output uses DICT headers, symbols (→, !=, ∵), and abbreviations.
+# The output uses DICT headers, symbols (->, !=, bc), and abbreviations.
 ```
 
 ## Auto-Detection
@@ -121,6 +121,7 @@ The report includes a semantic match percentage and lists any facts that were lo
 - Verifies all file paths (R.1), URLs (R.2), and circular references (R.3)
 - Uses standard abbreviations in tables only (full words in prose)
 - Deep/max apply the A.1-A.4 lossy pass (see Modes); A.2/A.4 drops logged in loss ledger
+- Leaves blocks owned by another setup (delimited by its begin/end markers, e.g. the semble block in AGENTS.md) untouched and reports them as `managed by <setup>`
 
 ## Output
 

@@ -1,54 +1,20 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.4.0 content_version=6.0.0 generated_by=brewtools:agent-return-setup
-/**
- * agent-return-budget — shared config, thresholds and return contract
- * (Node built-ins only). Never invoked directly; imported by the pair.
- *
- * Single source of truth:
- *   agent-return-contract.mjs (SubagentStart) states the contract,
- *   agent-return-guard.mjs    (SubagentStop)  enforces the same numbers.
- * Both import from here so the announced budget and the enforced budget can
- * never drift apart.
- *
- * Sizing is a length heuristic, NOT a tokenizer: the measured distribution the
- * thresholds were derived from (80 real subagent returns) was computed with
- * chars/4, so anything more accurate would move the boundaries off the data.
- * Moving away from chars/4 means re-fitting PASS/FILE in the same change.
- *
- * ENABLE GATE: `enabled` must be exactly `true` in the config; a missing config
- * file means the feature is OFF. Same contract as agent-deadline.
- *
- * THRESHOLD PRECEDENCE, per threshold, first hit wins:
- *   1. config key   `passTokens` / `fileTokens`   (positive integer only)
- *   2. env var      AGENT_RETURN_PASS / AGENT_RETURN_FILE   (via intEnv)
- *   3. built-in     1000 / 2500
- *
- * Everything resolves ONCE at module load, not per call: a hook process lives
- * for exactly one invocation, so a per-call resolver would buy nothing and
- * would force RETURN_CONTRACT to become a builder that both hooks could call
- * with different inputs — the one drift this module exists to prevent.
- * Config discovery therefore keys on process.cwd() (the dir Claude Code spawns
- * the hook in) rather than the payload `cwd`, which the SubagentStart hook
- * never reads.
- */
+// brewcode-meta: version=6.5.0 content_version=6.5.0 generated_by=brewtools:agent-return-setup
+
+// agent-return shared config + thresholds, imported by contract and guard so announced == enforced budget.
+// Per threshold: config `passTokens`/`fileTokens` > AGENT_RETURN_PASS/_FILE > 2500/6000; resolved once at load.
 import { readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
 const MAX_CONFIG_CLIMB = 16;
 const CONFIG_NAME = 'agent-return.json';
+const STATE_NAME = 'agent-return-state';
+const READ_ONLY_DEFAULT = ['Explore', 'Plan'];
+const REPORT_DIR_DEFAULT = '.claude/reports';
 
-/**
- * Project root, canonical recipe (D1 Q5): CLAUDE_PROJECT_DIR -> upward walk for
- * a `.git`/`.claude` marker -> hook cwd. Never throws. Exported so the guard
- * resolves the report destination from the SAME root this module reads the
- * config from — a guard that finds the config and a budget module that does not
- * is worse than either being wrong consistently.
- * `hookCwd` is the payload cwd where one exists; this module has no payload and
- * calls it with nothing.
- * @param {string} [hookCwd]
- * @returns {string} absolute root
- */
+// Project root: CLAUDE_PROJECT_DIR -> upward walk for `.git`/`.claude` -> hook cwd; never throws.
+// Exported so the guard's report dir uses the same root as config discovery.
 export function projectRoot(hookCwd) {
   const env = process.env.CLAUDE_PROJECT_DIR;
   if (env && existsSync(env)) return path.resolve(env);
@@ -63,16 +29,12 @@ export function projectRoot(hookCwd) {
   return path.resolve(hookCwd || process.cwd());
 }
 
-/** ~4 chars per token. Deliberately crude; see the module note. */
+/** chars/4, not a tokenizer: thresholds were fitted on chars/4 (change both together) */
 export function estimateTokens(text) {
   return Math.ceil(text.length / 4);
 }
 
-/**
- * Positive integer from env, anything else -> fallback. Number(), not
- * parseInt(): parseInt("1.7") is 1 and parseInt("12abc") is 12, so a typo'd
- * threshold used to be accepted as a plausible number instead of ignored.
- */
+// Positive integer from env, else fallback; Number(), not parseInt() ("12abc" must not read as 12).
 function intEnv(name, fallback) {
   const raw = process.env[name];
   if (typeof raw !== 'string' || !raw.trim()) return fallback;
@@ -88,34 +50,42 @@ function readJson(file) {
   }
 }
 
-/**
- * Nearest project config wins over global; absent/invalid config = feature off.
- * Discovery STARTS at projectRoot(), not at the raw cwd: `claude` started from a
- * subdirectory reports that subdirectory as cwd, so a root-level config was
- * invisible past MAX_CONFIG_CLIMB levels — and `CLAUDE_PROJECT_DIR`, the only
- * route to a root with no marker, was unreachable behind an always-truthy
- * `process.cwd()`. The climb is kept for a root with neither `.git` nor
- * `.claude`, where projectRoot() falls back to cwd. A malformed project file is
- * not an object and is skipped, so the global config takes over.
- */
+// Climb from projectRoot() (never raw cwd); nearest object config wins, then $CLAUDE_CONFIG_DIR, then
+// ~/.claude; `enabled` must be exactly true, none = off.
 function loadConfig() {
+  const globals = globalDirs();
   let dir = projectRoot();
   for (let i = 0; i < MAX_CONFIG_CLIMB; i++) {
-    const cfg = readJson(path.join(dir, '.claude', CONFIG_NAME));
+    const home = path.join(dir, '.claude');
+    // ~/.claude met on the climb is the GLOBAL scope: leave it to globalDirs() order.
+    if (globals.includes(home)) break;
+    const cfg = readJson(path.join(home, CONFIG_NAME));
     // An array is a JSON object to typeof; accepting one froze the walk on a file
     // that can never carry `enabled`, silently disabling the feature.
-    if (cfg && typeof cfg === 'object' && !Array.isArray(cfg)) return cfg;
+    if (cfg && typeof cfg === 'object' && !Array.isArray(cfg)) return { cfg, home };
     const parent = path.dirname(dir);
     if (parent === dir) break;
     dir = parent;
   }
-  try {
-    const cfg = readJson(path.join(os.homedir(), '.claude', CONFIG_NAME));
-    if (cfg && typeof cfg === 'object' && !Array.isArray(cfg)) return cfg;
-  } catch {
-    // homedir unavailable -> project config only
+  for (const home of globals) {
+    const cfg = readJson(path.join(home, CONFIG_NAME));
+    if (cfg && typeof cfg === 'object' && !Array.isArray(cfg)) return { cfg, home };
   }
   return null;
+}
+
+/** Global config dirs, nearest first: $CLAUDE_CONFIG_DIR when set, then ~/.claude. */
+function globalDirs() {
+  const dirs = [];
+  const env = process.env.CLAUDE_CONFIG_DIR;
+  if (typeof env === 'string' && env.trim()) dirs.push(path.resolve(env));
+  try {
+    const legacy = path.join(os.homedir(), '.claude');
+    if (!dirs.includes(legacy)) dirs.push(legacy);
+  } catch {
+    // homedir unavailable -> project config and CLAUDE_CONFIG_DIR only
+  }
+  return dirs;
 }
 
 /** Config key > env var > built-in default. Validation lives here, not in intEnv. */
@@ -125,27 +95,70 @@ function threshold(cfg, key, envName, fallback) {
   return intEnv(envName, fallback);
 }
 
-let CONFIG = null;
+let LOADED = null;
 try {
-  CONFIG = loadConfig();
+  LOADED = loadConfig();
 } catch {
-  CONFIG = null; // unreadable filesystem -> feature off, never a throw at import
+  LOADED = null; // unreadable filesystem -> feature off, never a throw at import
 }
+const CONFIG = LOADED ? LOADED.cfg : null;
 
 /** Exactly `true` enables; no config file at all = disabled. */
 export const ENABLED = !!CONFIG && CONFIG.enabled === true;
-/** Grace line: p25 of real returns (761) already sits under it. */
-export const PASS = threshold(CONFIG, 'passTokens', 'AGENT_RETURN_PASS', 1000);
-/** Past this, compression is not enough — the detail belongs in a file (~p78). */
-export const FILE = threshold(CONFIG, 'fileTokens', 'AGENT_RETURN_FILE', 2500);
+/** Pass ceiling, ~p78 of the measured returns: a full structured report fits under it. */
+export const PASS = threshold(CONFIG, 'passTokens', 'AGENT_RETURN_PASS', 2500);
+/** Past this, compression loses content — the detail belongs in a file. */
+export const FILE = threshold(CONFIG, 'fileTokens', 'AGENT_RETURN_FILE', 6000);
+/** Once-per-agent markers live beside the config that enabled the feature. */
+export const STATE_DIR = LOADED ? path.join(LOADED.home, STATE_NAME) : '';
 
-/**
- * Injected verbatim into every subagent at SubagentStart. Mirrors the return
- * section of the project's agent protocol on purpose — one shape, stated at the
- * moment it applies instead of buried at the top of context.
- */
-export const RETURN_CONTRACT =
-  `RETURN CONTRACT (agent-return guard, mechanical): Verdict first, <=30 lines, \`path:line\`. ` +
-  `!=bodies/output/log/preamble. Over ~${PASS} tokens your return is blocked for compression; ` +
-  `over ~${FILE} write the detail to \`.claude/reports/YYYYMMDD-HHMMSS_<name>/\` and return ` +
-  `that path + verdict + <=3 lines.`;
+/** Config `readOnlyAgentTypes` (any array, `[]` = nobody) > built-in Explore/Plan. */
+const READ_ONLY = Array.isArray(CONFIG && CONFIG.readOnlyAgentTypes)
+  ? CONFIG.readOnlyAgentTypes.filter((v) => typeof v === 'string')
+  : READ_ONLY_DEFAULT;
+
+/** Config `reportDir`: absolute, `~/`-prefixed or project-root-relative; else `.claude/reports`. */
+function reportDir(cfg) {
+  const v = cfg ? cfg.reportDir : undefined;
+  if (typeof v !== 'string' || v.includes('\0')) return REPORT_DIR_DEFAULT;
+  let d = v.trim().replace(/[\\/]+$/, '');
+  try {
+    if (d === '~' || d.startsWith('~/')) d = path.join(os.homedir(), d.slice(1));
+  } catch {
+    d = '';
+  }
+  return d || REPORT_DIR_DEFAULT;
+}
+
+/** Long-report base as configured; the guard anchors a relative one at projectRoot(). */
+export const REPORT_DIR = reportDir(CONFIG);
+
+/** Absolute report base; a root that cannot be resolved keeps the configured text. */
+export function reportBase(hookCwd) {
+  if (path.isAbsolute(REPORT_DIR)) return REPORT_DIR;
+  try {
+    return path.join(projectRoot(typeof hookCwd === 'string' ? hookCwd : ''), REPORT_DIR);
+  } catch {
+    return REPORT_DIR;
+  }
+}
+
+/** True when `agentType` is listed as having no file-writing tool. Exact match. */
+export function isReadOnly(agentType) {
+  return typeof agentType === 'string' && READ_ONLY.includes(agentType);
+}
+
+/** SubagentStart text: budget, reason, overflow handling; never a file order to a read-only agent */
+export function returnContract(agentType) {
+  const overflow = isReadOnly(agentType)
+    ? `This agent cannot write files: return the essential part and name what you left out.`
+    : `Detail beyond ~${FILE} tokens: write it under \`${REPORT_DIR}/YYYYMMDD-HHMMSS_<name>/\` ` +
+      `and return the path plus a summary. No write tool, or the write is denied: never retry ` +
+      `it, return a compressed inline report with the essential part and name what you left out.`;
+  return (
+    `Return budget (agent-return guard): your report lands in the caller's finite context. ` +
+    `Keep it under ~${PASS} tokens (~${PASS * 4} chars): verdict first, \`path:line\` refs, ` +
+    `no file bodies, command output or logs. ${overflow} ` +
+    `An over-budget report is returned to you once to shorten.`
+  );
+}

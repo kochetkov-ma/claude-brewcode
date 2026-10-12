@@ -1,6 +1,7 @@
 ---
 doc_type: llm
 version: "{PLUGIN_VERSION}"
+content_version: "{CONTENT_VERSION}"
 generated_by: "{GENERATED_BY}"
 last_updated: "{LAST_UPDATED}"
 ---
@@ -14,13 +15,14 @@ are authoritative — where this guidance conflicts, the **project rule WINS**. 
 
 | Category | Checks |
 |----------|--------|
-| DI | Constructor injection only, no field `@Autowired`, `@RequiredArgsConstructor` + final fields |
+| DI | Constructor injection only (`@RequiredArgsConstructor` + final fields); field `@Autowired` = VIOLATION (harder to test, hidden deps) |
 | Transactions | `@Transactional` scope (service not repository), rollback rules, isolation |
 | Null-safety | `Optional` usage, `@NonNull`/`@Nullable`, `Objects.requireNonNull` |
 | N+1 | Eager vs lazy loading, batch fetching, entity graphs |
 | Reuse | JDK -> Apache Commons -> Guava before writing utility code |
 | Security | `@PreAuthorize`, input validation, SQL injection (report only if CRITICAL/P0) |
 | Lombok | `@Value`/`@Builder`/`@Slf4j`; `@Data` only on mutable entities |
+| Pins | exact `X.Y.Z`; no floating/`@latest` dependency |
 
 ## File Patterns
 
@@ -42,19 +44,6 @@ are authoritative — where this guidance conflicts, the **project rule WINS**. 
 | Service | `*Service` | `UserService` |
 | Controller | `*Controller` | `UserController` |
 
-## Dependency Injection
-
-```java
-@Service
-@RequiredArgsConstructor
-public class UserService {
-    private final UserRepository userRepository;   // final + constructor
-    private final EmailService emailService;
-}
-```
-
-Field injection (`@Autowired` on a field) = VIOLATION (harder to test, hidden deps).
-
 ## Stream API & Functional Style
 
 | Rule | Verdict |
@@ -68,14 +57,6 @@ Field injection (`@Autowired` on a field) = VIOLATION (harder to test, hidden de
 
 `final` fields by default; `List.of()`/`Set.of()`/`Map.of()` for immutable collections; Lombok `@Value` for
 immutable DTOs; `@Builder` for complex construction.
-
-## Library Usage Priority (reuse-first)
-
-| Priority | Library | Common APIs |
-|----------|---------|-------------|
-| 1 | JDK | `Objects`, `Optional`, `String`, `Math`, `Collections`, `Files`, `Path` |
-| 2 | Apache Commons | `StringUtils`, `CollectionUtils`, `Validate`, `IOUtils` |
-| 3 | Guava | `Preconditions`, `Strings`, `Iterables`, `Lists`, `Maps` |
 
 ## Logging
 
@@ -111,21 +92,6 @@ profile-specific `application-{profile}.yml`.
 
 `data class` for DTOs; extension functions for utilities; `?.let {}` over null checks; `when` over `if-else` chains;
 `Duration` conversions explicit.
-
-## Common Violations
-
-| # | Violation | Fix |
-|---|-----------|-----|
-| 1 | Missing Entity suffix | Add `Entity` to JPA entities |
-| 2 | Field injection | Constructor injection |
-| 3 | Loop instead of Stream | Convert to Stream API |
-| 4 | `System.out.println` | Use `@Slf4j` |
-| 5 | Missing `.as()` in test | Add description |
-| 6 | `isNotNull()` assertion | Specific value assertion |
-| 7 | `if` in test | Assert precondition first |
-| 8 | Writing utility that exists | Check JDK/Commons/Guava |
-| 9 | Logs in tests | Remove all logging |
-| 10 | Floating/`@latest` dependency | Pin exact `X.Y.Z` |
 
 ## Search Locations (reuse-first)
 

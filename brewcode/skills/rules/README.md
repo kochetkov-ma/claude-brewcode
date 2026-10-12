@@ -1,6 +1,6 @@
 # Rules
 
-Captures learnings, anti-patterns, and best practices — from KNOWLEDGE files, arbitrary files, or the current conversation — then organizes them into structured `.claude/rules/` files that Claude Code loads automatically on every session.
+Turns learnings, anti-patterns and best practices — from KNOWLEDGE files, other files or the current conversation — into structured `.claude/rules/` files. Claude Code loads a rule without `paths:` at session start and a path-scoped rule when it works with a matching file.
 
 **Target scope:** project `.claude/rules/` only. The skill never writes to `~/.claude/rules/`.
 
@@ -10,72 +10,57 @@ Captures learnings, anti-patterns, and best practices — from KNOWLEDGE files, 
 /brewcode:rules
 ```
 
-No arguments: presents the interactive menu with Status (rules) pre-selected as the recommended action.
+No arguments: reports the status of the rule files.
 
-Pass a free-form prompt to skip the menu entirely:
+Pass a free-form prompt, in English or Russian, and the mode is resolved from its keywords:
 
 ```
-/brewcode:rules capture what we learned fixing the N+1 query bug today
+/brewcode:rules add what we learned fixing the N+1 query bug today
 ```
 
-## How It Works — Unified 6-Step Flow
+## How It Works
 
-Every invocation goes through the same flow:
+1. **Mode** — an explicit mode word wins, otherwise the keywords below decide; no match means `status`. Before acting, the skill prints a `PLAN` block: input, mode, scope, actions, result.
+2. **Dispatch** — `create` and `improve` spawn the `bc-rules-organizer` agent, one per knowledge source. `review` spawns the project's reviewer agent, or `general-purpose`. `list` runs `rules.sh list`. `status` collects an inventory.
+3. **Optimize** — when the brewtools plugin is installed, the written files go through its text optimizer. Otherwise the step is skipped and the report says so.
+4. **Report** — detection, result (per file: added, merged and skipped rows, plus the `rules.sh validate` exit code), status and next steps. `list` prints the plain listing only.
 
-1. **Input gate** — reads `$ARGUMENTS`; if empty, goes to the interactive menu.
-2. **Auto-mode select** — infers mode from the prompt and announces:
-   `Mode: <mode> (rules) — chosen because <evidence>`
-3. **No-prompt menu** — when no arguments given, shows a single `AskUserQuestion`:
-   - Status (rules) [recommended]
-   - Status (all: agents + rules + skills)
-   - Create
-   - Improve
-   - Review
-   - List (plain)
-   - Cancel
-4. **Dispatch** — routes to `bc-rules-organizer` agent (create / improve / review / batch) or runs `rules.sh list` directly (list mode).
-5. **Real status** — rich output showing current rule files, entry counts, and a diff of changes applied.
-6. **Mandatory final output** — structured summary of what was written, merged, and skipped. Omitted only for `list` mode.
+Ask for the menu explicitly to get one `AskUserQuestion` call with two questions. Q1 (what to do): Status (rules), Create new rules, Improve existing rules, Review rules. Q2 (variant): As chosen, Status (all: agents + rules + skills), List (plain); a non-default Q2 answer replaces Q1. Dismiss the dialog or answer `cancel` via Other to stop.
 
 ## Modes
 
-| Mode | How it activates | What it does |
-|------|-----------------|--------------|
-| `status` | Default when no other mode is detected | Shows file counts, last-modified, coverage |
-| `list` | Explicit only — "list", "show rules", "what rules" | Runs `rules.sh list`, plain file listing |
-| `create` | "create", "add", "new rule" in prompt | bc-rules-organizer creates entries from knowledge source |
-| `improve` | "improve", "update", "refine" in prompt | bc-rules-organizer refines existing entries |
-| `review` | "review", "check", "audit" in prompt | bc-rules-organizer audits rule files for quality |
-| `batch` | Multiple sources detected | bc-rules-organizer processes all sources in one pass |
+| Mode | Keywords | What it does |
+|------|----------|--------------|
+| `status` | default; `status`, `show me`, `health`, `overview` | Inventory by scope, state, overlaps, health flags |
+| `list` | `list` | Runs `rules.sh list`: files and entry counts |
+| `create` | `create`, `new`, `scaffold`, `add` | The organizer adds rows from a knowledge source |
+| `improve` | `improve`, `refactor`, `fix`, or a bare rule name | The organizer refines existing entries |
+| `review` | `review`, `validate` | A reviewer agent audits the rule files; findings are double-checked |
+
+Russian keywords work as well (`статус`, `список`, `создай`, `улучши`, `ревью`). Several names or "all" fan out to one agent per item.
 
 ## Knowledge Sources for Create / Improve
 
 | Source | Example |
 |--------|---------|
-| KNOWLEDGE.jsonl path | `/brewcode:rules path/to/KNOWLEDGE.jsonl` — parses `t:"❌"` → avoid, `t:"✅"` → best-practice |
-| File path + inline prompt | `/brewcode:rules docs/retro.md "extract SQL anti-patterns"` |
-| Session learnings (no path) | `/brewcode:rules capture today's key findings` — extracts 5 most impactful findings as ❌/✅ |
+| KNOWLEDGE.jsonl path | `/brewcode:rules add path/to/KNOWLEDGE.jsonl` — parses `t:"❌"` → avoid, `t:"✅"` → best-practice |
+| File path + inline prompt | `/brewcode:rules add SQL anti-patterns from docs/retro.md` |
+| Session learnings (no path) | `/brewcode:rules add today's key findings` — extracts 5 most impactful findings as ❌/✅ |
 
 ## Examples
 
 ```bash
-# Open the interactive menu
+# Status of the rule files
 /brewcode:rules
 
-# Check the current state of rule files
-/brewcode:rules what is the current state of our rules
-
 # Capture session learnings after debugging
-/brewcode:rules capture what we learned fixing the auth bug
+/brewcode:rules add what we learned fixing the auth bug
 
 # Import from a KNOWLEDGE.jsonl file
 /brewcode:rules path/to/KNOWLEDGE.jsonl add new entries
 
 # Extract anti-patterns from a review document
-/brewcode:rules docs/sql-review.md "extract SQL anti-patterns and best practices"
-
-# Plain listing of all rule files and entry counts
-/brewcode:rules list
+/brewcode:rules add SQL anti-patterns and best practices from docs/sql-review.md
 ```
 
 ## Output Files
@@ -89,11 +74,11 @@ Rule files are created or updated in `.claude/rules/`:
 | `{prefix}-avoid.md` | Domain-specific anti-patterns, e.g. `sql-avoid.md`, `test-avoid.md` |
 | `{prefix}-best-practice.md` | Domain-specific best practices, e.g. `sql-best-practice.md` |
 
-All files use the markdown table format validated by `rules.sh validate`.
+`rules.sh validate` checks these four kinds (frontmatter metadata and table header); any other file in `.claude/rules/` is not checked.
 
 ## Deduplication — 3-Check Protocol
 
-New entries go through three checks before being written:
+New entries pass three checks before they are written:
 
 1. **Within-file similarity** — entries >70% similar are skipped; 40–70% are merged
 2. **Cross-file antonym** — item in both avoid and best-practice → keep the avoid entry only
@@ -103,10 +88,9 @@ No CLAUDE.md update step: the skill writes rule files only.
 
 ## Tips
 
-- Run `/brewcode:rules` at the end of any long debugging or implementation session to capture learnings before compaction.
-- Use file + prompt mode to bulk-import rules from code review docs or retrospective notes.
-- `list` is the fastest way to verify file counts and spot unbalanced rule files.
-- Domain-specific files (`test-avoid.md`, `sql-best-practice.md`) reduce noise for unrelated tasks.
+- Run `/brewcode:rules add session learnings` at the end of a long debugging or implementation session, before compaction.
+- Name a file in the prompt to bulk-import rules from code review docs or retrospective notes.
+- Domain-specific files (`test-avoid.md`, `sql-best-practice.md`) carry `paths:` globs, so they load only for matching files.
 
 ## Documentation
 

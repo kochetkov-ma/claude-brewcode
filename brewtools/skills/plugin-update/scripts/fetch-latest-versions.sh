@@ -1,11 +1,6 @@
 #!/usr/bin/env bash
-# fetch-latest-versions.sh
-# Fetches latest versions of brewcode plugin suite from GitHub.
-# Primary: raw plugin.json from main branch.
-# Fallback: gh api release tag_name.
-#
-# Output: JSON {"brewcode":"X.Y.Z","brewdoc":"X.Y.Z","brewtools":"X.Y.Z","brewui":"X.Y.Z"}
-# On failure for a plugin, value = "unknown".
+# fetch-latest-versions.sh -> {"brewcode":"X.Y.Z","brewdoc":"X.Y.Z","brewtools":"X.Y.Z","brewui":"X.Y.Z"}; failed plugin = "unknown".
+# Source: raw plugin.json from GitHub main branch; fallback `gh api` release tag_name.
 
 set -uo pipefail
 
