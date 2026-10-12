@@ -163,13 +163,19 @@ jobs:
           EXPECTED_ATTEMPT: ${{ steps.image.outputs.build_attempt }}
           EXPECTED_DIGEST: ${{ steps.image.outputs.digest }}
           EXPECTED_PAGE_HASH: ${{ steps.image.outputs.page_hash }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          envs: TAG,EXPECTED_SHA,EXPECTED_VERSION,EXPECTED_RUN,EXPECTED_ATTEMPT,EXPECTED_DIGEST,EXPECTED_PAGE_HASH
+          envs: TAG,EXPECTED_SHA,EXPECTED_VERSION,EXPECTED_RUN,EXPECTED_ATTEMPT,EXPECTED_DIGEST,EXPECTED_PAGE_HASH,GHCR_USER,GHCR_TOKEN
           script: |
             set -euo pipefail
+            # Job-scoped token (packages: read) overrides stale VPS creds; logout on every exit path.
+            trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
+            printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+            unset GHCR_TOKEN
             DOCS_PATH=/opt/brewcode-docs
             CADDY_SITES=/opt/caddy/sites
             cp /tmp/brewcode-docs-sync/docker-compose.yml "$DOCS_PATH/"
@@ -215,7 +221,7 @@ jobs:
             # localhost is in the Caddy admin origin allowlist; 0.0.0.0 is not.
             docker exec caddy caddy reload --config /etc/caddy/Caddyfile --address localhost:2019
             EXPECTED_INFO=$(printf '{"version":"%s","sha":"%s","buildRunId":"%s"}' "$EXPECTED_VERSION" "$EXPECTED_SHA" "$EXPECTED_RUN")
-            for i in $(seq 1 10); do
+            for _ in $(seq 1 10); do
               INFO=$(curl -fsS "https://doc-claude.brewcode.app/build-info.json?build=${EXPECTED_RUN}" || true)
               PAGE_HASH=$(curl -fsS "https://doc-claude.brewcode.app/getting-started/?build=${EXPECTED_RUN}" | sha256sum | awk '{print $1}') || PAGE_HASH=""
               if [ "$INFO" = "$EXPECTED_INFO" ] && [ "$PAGE_HASH" = "$EXPECTED_PAGE_HASH" ]; then
