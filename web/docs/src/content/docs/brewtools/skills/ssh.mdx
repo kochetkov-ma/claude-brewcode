@@ -14,7 +14,7 @@ import { Card, CardGrid, Callout, Steps, Badge, UpdateNotice } from '../../../..
 </Callout>
 
 <Callout type="tip">
-**No server configured yet?** Run `/brewtools:ssh setup` — the skill walks you through key auth, writes `&#126;/.ssh/config`, and generates the `ssh-admin` agent with full server context baked in. For complex multi-step operations (deploy, rollback, migration) the skill delegates to that agent automatically.
+**No server configured yet?** Run `/brewtools:ssh setup` — the skill walks you through key auth, writes `~/.ssh/config`, and generates the `ssh-admin` agent with full server context baked in. For complex multi-step operations (deploy, rollback, migration) the skill delegates to that agent automatically.
 </Callout>
 
 ## Quick reference
@@ -22,9 +22,9 @@ import { Card, CardGrid, Callout, Steps, Badge, UpdateNotice } from '../../../..
 | Field | Value |
 |-------|-------|
 | Command | `/brewtools:ssh` |
-| Arguments | `<task description>` or `setup` / `connect` / `configure` / `update-agent` |
+| Arguments | `[prompt] [setup\|connect\|configure\|update-agent]` — free-form prompt, mode token anywhere |
 | Model | opus |
-| Agent | [ssh-admin](/brewtools/agents/ssh-admin/) — auto-delegated for complex ops |
+| Agent | [ssh-admin](/brewtools/agents/ssh-admin/) — auto-delegated for complex ops; falls back to the plugin's `brewtools:ssh-admin` when the project has no generated agent |
 | Config storage | `CLAUDE.local.md` (gitignored, never committed) |
 
 ## When to use
@@ -172,8 +172,10 @@ missing tools, and command failure. Discovery keeps its separate 30 s total boun
 | File | Purpose |
 |------|---------|
 | `CLAUDE.local.md` | Server inventory table — alias, host, user, key, OS, Docker |
-| `&#126;/.ssh/config` | Host blocks — skill reads but does not overwrite existing blocks |
+| `~/.ssh/config` | Host blocks — skill reads but does not overwrite existing blocks |
 | `.claude/agents/ssh-admin.md` | Generated agent with server context; use `update-agent` to refresh |
+
+**Generated agent safety:** the generated `ssh-admin` carries a Lockout Guard. Any sshd, port, or firewall change is PRIVILEGE and passes a 5-step gate before the old access path is disabled: allow-new, `sshd -t`, reload, prove a new session, only then deny-old. An established session is not proof, because ufw keeps existing connections alive.
 
 **Fallback strategy:** if a helper script fails, the skill attempts the same operation inline (individual Bash calls). If both fail, it reports `SCRIPT_ERROR` / `EXIT_CODE` / `STDERR` / `PHASE` and stops — no silent swallowing.
 

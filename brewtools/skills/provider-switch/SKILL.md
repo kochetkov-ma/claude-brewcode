@@ -22,7 +22,7 @@ model: opus
    (mode table in P1 below). Tie with a destructive mode -> `AskUserQuestion`; with `status` ->
    `status`; of two mutating modes -> the keyword that comes first. No hit or empty -> `status`.
 2. Scope: prose that is not a mode/provider name is still input: take the provider or scope from it.
-3. Ask: at most ONE `AskUserQuestion` (max 4 questions), before any work, only when the answer
+3. Ask: at most ONE `AskUserQuestion` (max 4 questions) to resolve mode and scope, before any work, only when the answer
    changes what gets written. `status` itself is read-only and asks nothing.
 
 Print once, before the first action (labels literal, values in the conversation language):
@@ -70,10 +70,10 @@ Read-only modes: conversation language, no question. Mutating modes, language un
 
 EXEC (quoted heredoc: quotes, backticks and `$(` in the prompt stay inert text):
 ```bash
-ARGS="$(cat <<'__SKILL_ARGS__'
+IFS= read -r -d '' ARGS <<'__SKILL_ARGS__' || true
 $ARGUMENTS
 __SKILL_ARGS__
-)"
+ARGS=${ARGS%$'\n'}
 bash "${CLAUDE_SKILL_DIR}/scripts/detect-mode.sh" "$ARGS" && echo "OK detect" || echo "FAILED detect"
 ```
 > FAILED → report it and match the prompt against the table by hand; never retry blindly.

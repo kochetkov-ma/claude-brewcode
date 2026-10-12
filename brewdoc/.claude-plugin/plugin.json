@@ -1,7 +1,7 @@
 {
   "name": "brewdoc",
-  "version": "6.4.0",
-  "description": "Brewdoc - Claude Code documentation tools: my-claude installation docs, memory-sync generator",
+  "version": "6.5.0",
+  "description": "Brewdoc - Claude Code documentation tools: doc-staleness tracking, memory-sync generator, my-claude installation docs, Markdown to PDF, publishing to brewpage.app",
   "author": {
     "name": "Maksim Kochetkov",
     "email": "apmatypa88@gmail.com",
@@ -14,6 +14,8 @@
     "brewdoc",
     "documentation",
     "memory",
+    "pdf",
+    "publishing",
     "claude-code"
   ],
   "skills": "./skills/"

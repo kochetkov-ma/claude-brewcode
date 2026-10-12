@@ -1,13 +1,13 @@
 # AI Tells -- Strip / Surface (PASS 1)
 
-Condensed from validated catalog. Tiers:
+Tiers:
 - HIGH = mechanical artifact, ~zero human FP, single hit actionable.
 - MED = real LLM-skew but present in human writing, act ONLY on co-occurring density (cluster), never on one instance.
-- weak = high-FP folklore, tiebreaker inside an already-flagged passage only. Listed in section 6 as DROPPED -- do not flag standalone.
+- weak = >50% FP folklore that mislabels non-native writers; at most a tiebreaker inside an already-flagged passage. Section 6 (DROPPED): do not flag standalone.
 
 Action key: strip = remove safely. rewrite = reword to neutral/concrete. flag = surface to human, NEVER auto-edit (behavior-changing).
 
-Core rule: never act on a single MED/weak surface feature. Detectors hit 61% FP on non-native English and flag the US Constitution. Position as "removes AI surface artifacts", not "detects AI authorship".
+Never act on a single MED/weak surface feature: detectors hit 61% FP on non-native English and flag the US Constitution.
 
 ---
 
@@ -50,7 +50,7 @@ Core rule: never act on a single MED/weak surface feature. Detectors hit 61% FP 
 
 ## 4. Density-signals (MED -- act ONLY when several co-occur)
 
-Never flag one. Weight by count; act when cluster crosses threshold.
+Weight by count; act when the cluster crosses threshold.
 
 | Pattern | Action | Src |
 |---|---|---|
@@ -68,7 +68,7 @@ Never flag one. Weight by count; act when cluster crosses threshold.
 
 ## 5. Surface-for-review (behavior-changing -- NEVER auto-strip)
 
-Flag to human; silently editing changes meaning. Fabricated refs are BUGS, not cosmetics.
+Silently editing changes meaning: fabricated refs are bugs, not cosmetics.
 
 | Pattern | Tier | Src |
 |---|---|---|
@@ -85,11 +85,9 @@ Flag to human; silently editing changes meaning. Fabricated refs are BUGS, not c
 
 ## 6. DROPPED / weak-only (do NOT flag standalone)
 
->50% FP, mislabels non-native writers. At most a faint tiebreaker inside an already-flagged passage.
-
 | Pattern | Why dropped |
 |---|---|
-| Em-dash overuse | folklore; heavy in essayists; suppressed in GPT-5.1 |
+| Em-dash overuse | folklore; heavy in essayists |
 | Rule of three / tricolon | standard human device |
 | "Not only...but also" | common in humans, esp. listicles |
 | Smart/curly quotes | auto-inserted by Word/Docs/CMS -- tool artifact |

@@ -1,27 +1,24 @@
 #!/usr/bin/env bash
-# run.sh - aggregate every brewcode:semble-setup test suite.
-#
-# Usage: run.sh [suite-name ...]      (bare names or file names, e.g. `status`)
-#
-# Iterates tests/suite-*.mjs in sorted order and runs each one. Suites land in
-# parallel from six units, so a *missing* suite is not an error; a suite that
-# exists and fails is. Exits 1 if any suite exited non-zero.
-#
-# Also lints every shipped shell script with `shellcheck -S error` first; an
-# absent shellcheck is skipped, a finding fails the run.
+# run.sh [suite-name ...] - run every brewcode:semble-setup tests/suite-*.mjs (bare or file names, e.g. `status`), sorted; missing suite ok, rc 1 on any failure.
+# Lints every shipped shell script with `shellcheck -S error` first: absent shellcheck skipped, a finding fails the run.
 set -euo pipefail
+# Suites never see the live profile: always an empty temp CLAUDE_CONFIG_DIR, set or unset.
+CLAUDE_CONFIG_DIR="$(mktemp -d)"; export CLAUDE_CONFIG_DIR
+# EXIT: delete only the temp profile made above (non-empty, under TMPDIR); runner rc kept.
+CFG_TMP_DIR="$CLAUDE_CONFIG_DIR"; CFG_TMP_ROOT="${TMPDIR:-/tmp}"; CFG_TMP_ROOT="${CFG_TMP_ROOT%/}"
+readonly CFG_TMP_DIR CFG_TMP_ROOT
+trap '[ -z "$CFG_TMP_ROOT" ] || case "$CFG_TMP_DIR" in "$CFG_TMP_ROOT"/?*) rm -rf -- "$CFG_TMP_DIR" || true ;; esac' EXIT
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
-  sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,3p' "$0" | sed 's/^# \{0,1\}//'
   exit 0
 fi
 
 command -v node >/dev/null 2>&1 || { printf '❌ node is required to run the semble suites\n' >&2; exit 1; }
 
-# Hermetic gate: both variables outrank the cwd walk when a script or hook
-# resolves the project root, so an ambient one points the fixtures at whatever
-# repo the caller happens to sit in. Unset once, for every suite.
+# Hermetic gate: both vars outrank the cwd walk in script/hook project-root resolution, so an ambient one
+# points fixtures at the caller's repo. Unset once, for every suite.
 unset CLAUDE_PROJECT_DIR SEMBLE_PROJECT_ROOT
 
 # Optional filter: `run.sh status core` -> suite-status.mjs suite-core.mjs
@@ -50,10 +47,8 @@ if [ -z "$SUITES" ]; then
   exit 0
 fi
 
-# Shell lint gate: the shipped scripts are the other half of this skill and had
-# no lint step at all, which is how a malformed `# shellcheck disable=...` sat in
-# semble-mcp.sh unnoticed. -S error only: warnings stay advisory. shellcheck is
-# not a dependency of the suites, so an absent binary is skipped, never a failure.
+# Shell lint gate (a malformed `# shellcheck disable=...` once sat in semble-mcp.sh unnoticed): -S error only,
+# warnings advisory; shellcheck != suite dependency, so an absent binary is skipped, never a failure.
 SC_STATUS=skipped
 if command -v shellcheck >/dev/null 2>&1; then
   printf '\n=== shellcheck -S error ===\n'

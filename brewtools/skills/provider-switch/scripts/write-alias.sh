@@ -1,11 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-# write-alias.sh — Safely write provider configuration to ~/.zshrc
-# Usage: write-alias.sh <action> [args...]
-# Actions: init, set-key, set-alias, remove-key, remove-alias
-# set-alias --request FILE reads structured provider data; legacy NAME BODY is validated, never eval'd.
-# set-key reads the secret from stdin: printf '%s' "$KEY" | write-alias.sh set-key VAR_NAME
+# write-alias.sh <init|set-key|set-alias|remove-key|remove-alias> [args...] - safely writes provider config to ~/.zshrc.
+# set-key reads secret from stdin; set-alias --request FILE (structured) or legacy NAME BODY (validated, never eval'd).
 
 ZSHRC="$HOME/.zshrc"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -39,9 +36,8 @@ delete_lines() {
   chmod 600 "$ZSHRC"
 }
 
-# Insert a line immediately before the section end marker. Pure bash on purpose: `awk -v`
-# runs escape processing over the assigned value, which eats the backslash in '\'' quoting
-# and silently corrupts any key containing a single quote. It also keeps the value out of argv.
+# Insert line before section end marker. Pure bash: `awk -v` escape-processes the value (eats `\` of '\'',
+# silently corrupting keys with a single quote); also keeps value out of argv.
 insert_before_end() {
   local line="$1" tmp l
   tmp=$(mktemp)
@@ -89,9 +85,8 @@ case "$ACTION" in
       exit 1
     fi
     backup_zshrc
-    # Single quotes with each `'` rewritten as '\'' — double quotes would expand a `$` or
-    # backtick inside the key on every future shell start. The value goes to sed on stdin,
-    # so it never lands in argv. (Quoted ${v//p/r} is not portable to bash 3.2.)
+    # Single quotes, each `'` -> '\'' (double quotes would expand `$`/backtick in key on every shell start).
+    # Value -> sed on stdin, never argv; quoted ${v//p/r} is not portable to bash 3.2.
     ESCAPED=$(printf '%s' "$VALUE" | sed "s/'/'\\\\''/g")
     EXPORT_LINE="export ${VAR}='${ESCAPED}'"
     # Check if key already exists in section

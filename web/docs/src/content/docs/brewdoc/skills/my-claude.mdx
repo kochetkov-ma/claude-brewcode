@@ -12,7 +12,7 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 </Callout>
 
 <Callout type="tip">
-**`/brewdoc:my-claude` goes further.** Internal mode maps everything in `&#126;/.claude` and your project's `.claude`, then runs an independent `Explore` agent to validate every file path and count before writing. External mode synthesizes hook/context/agent architecture from official Anthropic docs, GitHub releases, and community forums. Research mode launches parallel agents across multiple live sources for any Claude Code query — with per-fact source citations and a reliability table.
+**`/brewdoc:my-claude` goes further.** Internal mode maps everything in the active config directory (`CLAUDE_CONFIG_DIR`, default `&#126;/.claude`) and your project's `.claude`, then writes the doc and has an independent `Explore` agent re-check every file path and count. External mode synthesizes hook/context/agent architecture from official Anthropic docs, GitHub releases, and community forums. Research mode launches parallel agents across multiple live sources for any Claude Code query — with per-fact source citations and a reliability table.
 </Callout>
 
 ## Quick reference
@@ -20,11 +20,11 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 | Field | Value |
 |-------|-------|
 | Command | `/brewdoc:my-claude` |
-| Arguments | `[ext [context]]` \| `[r <query>]` — no args = internal installation docs |
+| Arguments | `[prompt] [ext [context]]` \| `[r <query>]` — no args = internal installation docs |
 | Model | opus |
 | Invocation | user-only (`disable-model-invocation: true`) |
 | Context | main conversation |
-| Tools | Read, Write, Edit, Glob, Grep, Bash, Agent, Task, WebFetch, WebSearch, AskUserQuestion |
+| Tools | Read, Write, Edit, Glob, Grep, Bash, Agent, WebFetch, WebSearch, AskUserQuestion |
 
 ## When to use
 
@@ -37,7 +37,7 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 ## Examples
 
 ```bash
-# Internal mode — maps your full &#126;/.claude + project .claude
+# Internal mode — maps the active config dir (default &#126;/.claude) + project .claude
 /brewdoc:my-claude
 
 # External mode — official architecture docs (hooks, context, agents)
@@ -58,7 +58,7 @@ Built-in `/team-onboarding` (Claude Code 2.1.101+) is enough for a quick teammat
 
 | Argument | Mode | What it does |
 |----------|------|--------------|
-| *(none)* | INTERNAL | Analyzes `&#126;/.claude` + project `.claude` — rules, agents, skills, memories |
+| *(none)* | INTERNAL | Analyzes the active config dir (`CLAUDE_CONFIG_DIR`, default `&#126;/.claude`) + project `.claude` — rules, agents, skills, memories |
 | `ext` or `external` | EXTERNAL (default) | Official docs + local hook analysis + recent releases |
 | `ext context` | EXTERNAL (context-schema) | Focuses on context injection schema: `additionalContext`, `updatedInput` |
 | `r <query>` or `research <query>` | RESEARCH | Custom query across GitHub, Reddit, forums, marketplaces |
@@ -75,7 +75,7 @@ Built-in `/team-onboarding` (Claude Code 2.1.101+) is enough for a quick teammat
   <li>
     <div>
       <strong>Parallel discovery</strong>
-      <p>INTERNAL: spawns 3 parallel <code>Explore</code> agents — (1) global <code>&#126;/.claude</code> config, (2) project <code>.claude</code> config, (3) memory files. EXTERNAL/RESEARCH: spawns <code>general-purpose</code> agents per source group (official docs, GitHub, forums).</p>
+      <p>INTERNAL: spawns 3 parallel <code>Explore</code> agents — (1) global config (<code>CLAUDE_CONFIG_DIR</code>, default <code>&#126;/.claude</code>), (2) project <code>.claude</code> config, (3) memory files. EXTERNAL/RESEARCH: spawns <code>general-purpose</code> agents per source group (official docs, GitHub, forums).</p>
     </div>
   </li>
   <li>
@@ -86,14 +86,14 @@ Built-in `/team-onboarding` (Claude Code 2.1.101+) is enough for a quick teammat
   </li>
   <li>
     <div>
-      <strong>Validation pass</strong>
-      <p>Spawns an independent agent to validate facts — file paths exist, counts match, no invented file names. INTERNAL uses <code>Explore</code>, since the check is read-only path existence. EXTERNAL and RESEARCH use <code>general-purpose</code>, which has the <code>WebFetch</code> / <code>WebSearch</code> access needed to re-check sources. Fixes are applied before the final doc is written.</p>
+      <strong>Write output</strong>
+      <p>Writes the document to <code>.claude/brewdoc/my-claude/</code> (project-relative; writes under <code>.claude/</code> are prompted in <code>default</code>/<code>acceptEdits</code> and allowed under <code>bypassPermissions</code>). Internal and external modes write <code>YYYYMMDD_my-claude-internal.md</code> / <code>YYYYMMDD_my-claude-external.md</code>, research mode <code>YYYYMMDD_research-&#123;slug&#125;.md</code>, and the context-schema sub-mode <code>external/YYYYMMDD_context-schema.md</code>. Creates the directory if needed with <code>mkdir -p</code>.</p>
     </div>
   </li>
   <li>
     <div>
-      <strong>Write output</strong>
-      <p>Writes to <code>.claude/brewdoc/my-claude/YYYYMMDD_my-claude-&#123;mode&#125;.md</code> (project-relative — <code>&#126;/.claude/&#42;</code> is protected and blocked in headless <code>claude -p</code> sessions, even under <code>bypassPermissions</code>). Creates the directory if needed with <code>mkdir -p</code>.</p>
+      <strong>Validation pass</strong>
+      <p>Spawns an independent agent to re-check the written doc - file paths exist, counts match, no invented file names. INTERNAL uses <code>Explore</code>, since the check is read-only path existence. EXTERNAL and RESEARCH use <code>general-purpose</code>, which has the <code>WebFetch</code> / <code>WebSearch</code> access needed to re-open sources. Fixes are applied to the written doc.</p>
     </div>
   </li>
   <li>
@@ -126,7 +126,7 @@ A bare one-line task is never enough. INTERNAL mode uses this shape for its thre
 <details>
 <summary>Internals — output paths, INDEX schema, document structures</summary>
 
-**Output directory:** `.claude/brewdoc/my-claude/` (project-relative) — the only supported target. `&#126;/.claude/*` is blocked by Claude Code's protected-path policy in headless sessions, even under `bypassPermissions`. Earlier versions also offered a plugin-data path; nothing has set that variable since v4.0.0, so a run taking that branch wrote into a literal directory named after the unexpanded variable. That branch is gone.
+**Output directory:** `.claude/brewdoc/my-claude/` (project-relative) — the only supported target. Writes under `.claude/` are protected: prompted in `default`/`acceptEdits`, allowed under `bypassPermissions`, never pre-approved by allow rules; headless without bypass fails.
 
 **Every generated doc opens with provenance frontmatter**, before the `#` heading, in all three modes:
 ```yaml
@@ -139,13 +139,13 @@ last_updated: "{LAST_UPDATED}"
 ```
 `{PLUGIN_VERSION}` is read from the brewdoc plugin's own `plugin.json` by self-location, never hardcoded; `{LAST_UPDATED}` is `date +%F`. Re-generating an existing doc refreshes all three quoted values and leaves a hand-edited `doc_type` (`llm` / `skip`) as the user set it.
 
-**INTERNAL sources analyzed:**
-- `&#126;/.claude/CLAUDE.md` — global instructions
-- `&#126;/.claude/rules/*.md` — global rules
-- `&#126;/.claude/agents/*.md` — global agents
-- `&#126;/.claude/skills/` — global skills
+**INTERNAL sources analyzed** (`<config>` = active config dir, `CLAUDE_CONFIG_DIR`, default `&#126;/.claude`):
+- `<config>/CLAUDE.md` — global instructions
+- `<config>/rules/*.md` — global rules
+- `<config>/agents/*.md` — global agents
+- `<config>/skills/` — global skills
 - Project `CLAUDE.md` and `.claude/rules/*.md`
-- `&#126;/.claude/projects/**/memory/MEMORY.md` — memory files
+- `<config>/projects/*/memory/*.md` — memory files (`MEMORY.md` is the index), plus `agent-memory/*/` in `<config>` and `.claude/`
 
 **INDEX format:**
 ```jsonl
@@ -179,7 +179,7 @@ last_updated: "{LAST_UPDATED}"
 
 **EXTERNAL context-schema sub-mode** writes to `.claude/brewdoc/my-claude/external/YYYYMMDD_context-schema.md` instead of the default path.
 
-**RESEARCH agent count:** 2–5 `general-purpose` agents spawned in parallel, one per source group (official docs, GitHub issues, Reddit/forums, marketplaces, community Discord).
+**RESEARCH agent count:** 2–5 `general-purpose` agents spawned in parallel, one per source group (official docs, GitHub issues, Reddit/forums, marketplaces).
 
 </details>
 

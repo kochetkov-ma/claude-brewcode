@@ -10,13 +10,10 @@
 | Examples | at most 1, commentary <=15 words |
 | Language | EN only in frontmatter (RU/other in README only) |
 
-Tighter than the CC ceilings (upload/spec cap 1024 chars, listing cap 1536). Exceed the
-brewcode default only if the user explicitly asks. Often-invoked skills: up to ~200 tokens + 1-2
-examples.
+Tighter than the CC ceilings (upload/spec cap 1024 chars, listing cap 1536). Exceed it only if the
+user explicitly asks. Often-invoked skills: up to ~200 tokens + 1-2 examples.
 
 ## Activation reality
-
-Current contracts checked against live official docs + changelog through CC 2.1.296.
 
 Auto-activation is best-effort, never a contract. Upstream publishes no activation rate — rank
 methods, never quote a percentage. Known issue ([#10768](https://github.com/anthropics/claude-code/issues/10768), [#15136](https://github.com/anthropics/claude-code/issues/15136), both closed NOT PLANNED).
@@ -45,9 +42,6 @@ body loads with empty metadata and `/skill-name` still works, only description-m
 
 ## Description optimization
 
-Claude uses description/activation guidance, invocation settings, paths and listing availability;
-compare description variants against your eval set.
-
 | Invocation | Style |
 |---|---|
 | User-only (`disable-model-invocation: true`) | Simple one-liner, no triggers needed — the LLM never auto-invokes it |
@@ -66,9 +60,9 @@ description: "Creates presentations with company branding and animations. Trigge
 ```
 
 Rules beyond the Activation mistakes table: ONE line, no `|` multiline; front-load keywords;
-"proactively" has no effect; cap per the field reference (brewcode default <=400 chars). Listing budget is a dynamic **1% of the context window**
-(`skillListingBudgetFraction`, default `0.01`), not a fixed 2%/16K — exceeding it means some skills
-never appear in the listing.
+"proactively" has no effect; cap per the field reference (brewcode default <=400 chars). Listing
+budget is a dynamic **1% of the context window** (`skillListingBudgetFraction`, default `0.01`), not
+a fixed 2%/16K — beyond it some skills never appear in the listing.
 
 ### Trigger eval queries (optional but recommended)
 
@@ -111,8 +105,8 @@ of this loop (evals.json, per-case isolation, grading, A/B): `skill-creator@clau
 
 Debug: inspect `/skills`, discovery path, DMI/UI settings, overrides, description/paths and listing
 budget. Missing from a list does not prove budget overflow. Check observable Skill calls; test
-`/skill-name` and distinguish discovery/configuration errors from task failures. Naming an
-LLM-invocable skill is the strongest hint short of `/name`.
+`/skill-name`; separate discovery/configuration errors from task failures. Naming an LLM-invocable
+skill is the strongest hint short of `/name`.
 
 ## Validation tools
 
@@ -154,18 +148,17 @@ Re-check a state: `gh api repos/anthropics/claude-code/issues/<N> --jq '[.state,
 Structure, on top of what the validator enforces (YAML, `name` <=64 chars == dir name, FM key
 set, `argument-hint` prompt-first, Prompt Contract): `description` third-person, what+when+3-5
 triggers, no filler; body <500 lines, imperative form; `context: fork` if standalone; `agent` an appropriate type; `model` matched to complexity;
-`allowed-tools` pre-approval only, no bare `Bash`/`Write`/`Edit`/`Agent`; `disallowed-tools` present
+`allowed-tools` pre-approval only, bare `Bash`/`Write`/`Edit` only per `execution-model.md` Rules; `disallowed-tools` present
 when the invoking turn must exclude a tool (autonomous -> `AskUserQuestion`; reapply next invocation); examples actually work; no
 hardcoded secrets; Bash blocks carry the `EXECUTE` keyword + `&& OK || FAIL` + dynamic (CSD/BPR)
 paths, and pass the three spelling checks of `execution-model.md` String substitutions (no bare
 `$N` in a fence, no `$ARGUMENTS` spliced into shell, exact-brace path tokens).
 
-Activation (CRIT): description follows the Description optimization rules and hits no row of
-Activation mistakes; CRIT operations use `disable-model-invocation: true`.
+Activation (CRIT): description follows Description optimization and hits no Activation mistakes row; CRIT operations use `disable-model-invocation: true`.
 
-Test LLM-invocable skills: say the trigger phrase (should auto-load); say "Use [skill-name] skill to..." (higher
-activation odds); say `/skill-name` (works unless an Activation Reality caveat applies). Trigger
-test fails but `/name` works -> optimize the description or switch to `DMI: true`.
+Test LLM-invocable skills: say the trigger phrase (should auto-load); "Use [skill-name] skill to..."
+(higher odds); `/skill-name` (works unless an Activation Reality caveat applies). Trigger test fails
+but `/name` works -> optimize the description or switch to `DMI: true`.
 
 ## Sources
 

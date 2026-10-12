@@ -138,9 +138,10 @@ A missing script is a SKIPPED step, not a failure. Never invent a script path.
    ```bash
    set -euo pipefail
    VER="X.Y.Z"
+   PATHS=(package.json CHANGELOG.md)  # EXACTLY the files this release changed, nothing else
    git rev-parse -q --verify "refs/tags/v${VER}" >/dev/null && { echo "ABORT: tag v${VER} already exists"; exit 1; }
    BEFORE=$(git tag --list | wc -l | tr -d ' ')
-   git add -- <paths> \
+   git add -- "${PATHS[@]}" \
      && git commit -m "v${VER}: summary" \
      && git push origin HEAD \
      && git tag "v${VER}" \
@@ -156,13 +157,16 @@ A missing script is a SKIPPED step, not a failure. Never invent a script path.
    tag push makes the tag public. Once pushed: NONE for undoing remote publication; deleting or
    force-moving a fetched tag cannot undo others' clones. Remedy: next patch version.
 6. Project post-release script, if the probe found one
-7. Verify the run for THIS commit, not the newest run:
+7. Verify CI for THIS commit, not the newest run: watch EVERY run for the pushed SHA (HEAD and
+   tag pushes each start workflows) to a terminal state:
    ```bash
    SHA=$(git rev-parse HEAD)
-   RUN_ID=$(gh run list -L 20 --json databaseId,headSha --jq "[.[] | select(.headSha == \"$SHA\")] | .[0].databaseId // empty")
-   gh run watch "$RUN_ID" --exit-status
+   RUN_IDS=$(gh run list -L 20 --json databaseId,headSha --jq ".[] | select(.headSha == \"$SHA\") | .databaseId")
+   for RUN_ID in $(printf '%s\n' "$RUN_IDS"); do
+     gh run watch "$RUN_ID" --exit-status || echo "CI_FAILED $RUN_ID"
+   done
    ```
-   No run id for that SHA → report "CI not observed", !=claim success
+   No run id for that SHA → report "CI not observed"; any `CI_FAILED` → release NOT verified; !=claim success
 
 ### Docker / GHCR
 

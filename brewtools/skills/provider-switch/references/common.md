@@ -15,7 +15,7 @@ Claude Code 2.1.296 (`env-vars`, `model-config` docs):
 
 Every alias shares this auth/model core; the provider's compatibility flags (its reference) go before `claude`.
 
-```bash
+```text
 alias claude<name>='export ANTHROPIC_BASE_URL=<endpoint>; export ANTHROPIC_AUTH_TOKEN="$<KEY_VAR>"; export ANTHROPIC_API_KEY=""; export ANTHROPIC_DEFAULT_OPUS_MODEL=<model>; export ANTHROPIC_DEFAULT_SONNET_MODEL=<model>; export ANTHROPIC_DEFAULT_HAIKU_MODEL=<model>; export ANTHROPIC_DEFAULT_FABLE_MODEL=<model>; <provider flags if required>; claude'
 ```
 

@@ -1,8 +1,5 @@
 #!/usr/bin/env node
-/**
- * SessionStart hook: user-facing status line + brewcode update check; on source 'clear' (plan mode's
- * "clear and start work") links <root>/.claude/plans/LATEST.md -> the plan written < 60 s ago.
- */
+// SessionStart: status line + update check; source 'clear' links .claude/plans/LATEST.md -> plan < 60 s old.
 import {
   readStdin, output, log, getState, saveState, projectRoot, resolvePlansDir, latestPlanLink, ownsPlanTarget
 } from './lib/utils.mjs';
@@ -15,10 +12,8 @@ const PLAN_FRESHNESS_MS = 60_000;
 const RELEASES_URL = 'https://github.com/kochetkov-ma/claude-brewcode/releases/latest';
 const RELEASES_API = 'https://api.github.com/repos/kochetkov-ma/claude-brewcode/releases/latest';
 
-/**
- * Frees the LATEST.md path only when it holds a symlink this hook made (`ownsPlanTarget`); a regular
- * file, a directory or a foreign symlink is preserved and logged. True = free to symlink.
- */
+// Frees LATEST.md only when it is our symlink (`ownsPlanTarget`); file/dir/foreign symlink kept + logged.
+// True = free to symlink.
 function claimLatestLink(latestLink, plansDir, root, sessionId) {
   const preserve = (why) => {
     log('warn', '[session-start]', `Preserved ${latestLink}: ${why}`, root, sessionId);
@@ -54,10 +49,8 @@ function claimLatestLink(latestLink, plansDir, root, sessionId) {
   }
 }
 
-/**
- * Symlinks <root>/.claude/plans/LATEST.md -> the newest plan in the plans dir, only when that plan is
- * < 60 s old and the link path is free or ours. Returns the linked plan file name, else null.
- */
+// Links <root>/.claude/plans/LATEST.md -> newest plan if < 60 s old and the path is free or ours.
+// Returns linked plan file name, else null.
 export function linkLatestPlan(root, sessionId = null) {
   const plansDir = resolvePlansDir(root, sessionId);
   const latestLink = latestPlanLink(root);

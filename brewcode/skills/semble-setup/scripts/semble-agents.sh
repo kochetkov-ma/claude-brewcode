@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# semble-agents.sh — audit / migrate project agent frontmatter for the two
-# semble MCP tools. Contract: DESIGN §9.9 + §11. Never adds an `mcpServers`
-# key (§11.2). The only bytes it may change live inside a `tools:` value.
+# semble-agents.sh — audit / migrate project agent frontmatter for the two semble MCP tools (DESIGN §9.9 + §11).
+# Never adds an `mcpServers` key (§11.2); only bytes inside a `tools:` value may change.
 set -euo pipefail
 
 SC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -87,9 +86,8 @@ if [ "${SEMBLE_DRY_RUN:-}" = "1" ]; then DRY=1; fi
 WRITE=1
 if [ "$MODE" = "audit" ] || [ "$YES" -eq 0 ] || [ "$DRY" -eq 1 ]; then WRITE=0; fi
 
-# The ownership record lives in state.json, so `remove`/`purge` clean it up with
-# everything else. Only a write-mode `apply` produces one; node fills this file
-# and the shell hands it to sc_state_patch, the one sanctioned state writer.
+# Ownership record lives in state.json (`remove`/`purge` clean it); only write-mode `apply` makes one:
+# node fills this file, shell hands it to sc_state_patch, the one sanctioned state writer.
 LEDGER=""
 if [ "$WRITE" -eq 1 ] && [ "$REVERT" -eq 0 ]; then
   LEDGER="$(mktemp "${TMPDIR:-/tmp}/semble-agents.XXXXXX")"
@@ -641,9 +639,8 @@ node -e "$PROG" "$CFG"
 RC=$?
 set -e
 
-# Persist the ownership record. A failure here costs a future `--revert` its
-# authorship knowledge (it will decline rather than strip), so it warns on
-# stderr — stdout must stay one JSON object — and never changes the exit code.
+# Persist ownership record; failure costs future `--revert` its authorship (declines, never strips),
+# so warn on stderr (stdout stays one JSON object), never change the exit code.
 if [ -n "$LEDGER" ] && [ -s "$LEDGER" ]; then
   if ! ( sc_state_patch "$(cat "$LEDGER")" >/dev/null ); then
     sc_warn "could not record tool ownership in $(sc_state_file) — --revert will decline to strip" >&2

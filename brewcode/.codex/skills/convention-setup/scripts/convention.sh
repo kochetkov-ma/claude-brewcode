@@ -1,6 +1,5 @@
 #!/usr/bin/env sh
-# Brewcode Convention Setup — detection, generation metadata, lifecycle, validation
-# Usage: convention.sh <detect-stack|scan|setup|validate|status|install|upgrade|enable|disable|uninstall|purge>
+# convention.sh <detect-stack|scan|setup|validate|status|install|upgrade|enable|disable|uninstall|purge> - detection, metadata, lifecycle, validation.
 set -eu
 
 # Self-location: scripts/ -> convention-setup/ -> skills/ -> PLUGIN_ROOT. Correct in the dev checkout
@@ -123,9 +122,8 @@ scan_project() {
     [ -d "$d" ] && src_dirs="${src_dirs:+$src_dirs,}\"$d\""
   done
 
-  # One walk, two consumers: total_files counts the WHOLE stream, `head -10` truncates the
-  # histogram only. Summing the truncated histogram undercounts every extension past the tenth
-  # and can keep total_files under the scoped-mode threshold in a polyglot repo.
+  # One walk, two consumers: total_files counts the WHOLE stream, `head -10` truncates only the histogram
+  # (summing it undercounts past the tenth extension -> polyglot repo stays under the scoped-mode threshold).
   file_counts="" total_files=0
   scan_list=$(mktemp -t convention-scan.XXXXXX)
   trap 'rm -f "$scan_list"' EXIT INT TERM
@@ -178,10 +176,8 @@ plugin_version() {
   case "$v" in
     [0-9]*.[0-9]*.[0-9]*) printf '%s' "$v"; return 0 ;;
   esac
-  # HARD FAIL, never a placeholder value. A word like `unknown` carries no `{}<>`, so setup-status's
-  # PLACEHLD test cannot catch it: `sort -V` would compare it against the real version and print a
-  # confident `AHEAD unknown > X.Y.Z`. The manifest ships with the plugin in the dev checkout and in
-  # the cache alike, so an unreadable one is a broken install - stop before anything is stamped.
+  # HARD FAIL, never a placeholder: `unknown` evades setup-status PLACEHLD (no `{}<>`) -> `sort -V` prints `AHEAD unknown > X.Y.Z`.
+  # Manifest ships in dev checkout and cache alike: unreadable = broken install, stop before anything is stamped.
   err "❌ cannot resolve the plugin version (X.Y.Z) from $PLUGIN_JSON - refusing to stamp an artifact with a fake version"
   return 1
 }
@@ -245,10 +241,10 @@ install_loading_rule() {
   _cv=$(content_version) || return 1
   if [ -n "$_rule" ]; then
     owned_rule "$_rule" || return 1
-    # Refresh metadata without erasing local wording or re-enabling a disabled install.
-    sed -i.bak -e "s/^version: .*/version: \"$_pv\"/" \
-      -e "s/^content_version: .*/content_version: \"$_cv\"/" \
-      -e "s/^last_updated: .*/last_updated: \"$(date +%F)\"/" "$_rule"
+    # Frontmatter only: keeps body wording; a parked rule stays parked.
+    sed -i.bak -e "1,/^---\$/s/^version: .*/version: \"$_pv\"/" \
+      -e "1,/^---\$/s/^content_version: .*/content_version: \"$_cv\"/" \
+      -e "1,/^---\$/s/^last_updated: .*/last_updated: \"$(date +%F)\"/" "$_rule"
     rm -f "$_rule.bak"
   else
     mkdir -p .codex/rules

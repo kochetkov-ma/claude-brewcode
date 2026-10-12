@@ -1,13 +1,6 @@
 #!/usr/bin/env node
-/**
- * Suite B — parked/live collision on the project-global agent namespace
- * (scripts/toggle-team.sh enable, scripts/verify-team.sh).
- * Covers BC-V2-H01: `.codex/agents/<name>.toml` is shared by the whole project, so a live file may
- * appear while a team is parked. `enable` used to `mv` the parked copy straight over it, and the
- * live-first if/parked-elif verifier read the resulting dual copy as HEALTHY.
- * Runs entirely inside an isolated temp base; never touches the real ~/.codex or the repo tree.
- * Assertion policy: unconditional exact-equality checks with a description.
- */
+// Suite B — parked/live collision, project-global agent namespace (scripts/toggle-team.sh enable, scripts/verify-team.sh).
+// BC-V2-H01: `enable` mv'd parked over live `.codex/agents/<name>.toml`, if/parked-elif verify said HEALTHY. Never ~/.codex.
 import { spawnSync } from 'node:child_process';
 import {
   mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync, realpathSync, existsSync,
@@ -59,14 +52,12 @@ function check(name, actual, expected, message) {
 }
 
 function run(script, args, cwd) {
-  const r = spawnSync('bash', [script, ...args], { cwd, encoding: 'utf8', timeout: 20000 });
+  // Hang guard, not a readiness wait: verify-team.sh runs the tokenizer, slow under load.
+  const r = spawnSync('bash', [script, ...args], { cwd, encoding: 'utf8', timeout: 180000 });
   return { stdout: r.stdout || '', stderr: r.stderr || '', status: r.status };
 }
 
-/**
- * Trailing `KEY:VALUE` summary block of toggle-team.sh, as an object. Read from the LAST occurrence
- * of each key: per-file progress lines share the `MOVED:`/`CONFLICT:` prefix with the summary.
- */
+// Trailing `KEY:VALUE` summary of toggle-team.sh; LAST occurrence wins (progress lines share `MOVED:`/`CONFLICT:`).
 function summary(stdout) {
   const out = {};
   for (const key of ['ACTION', 'TEAM', 'MOVED', 'SKIPPED', 'MISSING', 'INVALID', 'CONFLICT']) {
@@ -141,9 +132,7 @@ function makeCollision(label) {
   return { root, off, live, parked: `${live}.disabled` };
 }
 
-// ────────────────────────────────────────────────────────────────────────────
 // B1 — BC-V2-H01: enable must refuse a live/parked collision and move NOTHING.
-// ────────────────────────────────────────────────────────────────────────────
 {
   const { root, off, live, parked } = makeCollision('b1');
   check('b1.disableStatus', off.status, 0, 'the fixture starts from a clean parked team');
@@ -175,9 +164,7 @@ function makeCollision(label) {
   check('b1.noVerdict', has(r.stdout, '✅ enable'), false, 'no success verdict is printed');
 }
 
-// ────────────────────────────────────────────────────────────────────────────
 // B2 — the dry run refuses the same collision instead of printing a WOULD plan.
-// ────────────────────────────────────────────────────────────────────────────
 {
   const { root, live, parked } = makeCollision('b2');
   const r = run(TOGGLE, ['t1', 'enable', '--dry-run'], root);
@@ -187,9 +174,7 @@ function makeCollision(label) {
   check('b2.parkedBytes', readOrGone(parked), AGENT_BODY('worker-one'), 'the dry run left the parked file byte-identical');
 }
 
-// ────────────────────────────────────────────────────────────────────────────
 // B3 — verify must report the dual copy as CONFLICT and FAIL, not as healthy.
-// ────────────────────────────────────────────────────────────────────────────
 {
   const { root } = makeCollision('b3');
   const r = run(VERIFY, ['t1'], root);
@@ -213,9 +198,7 @@ function makeCollision(label) {
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
 // B4 — regression: a clean park/unpack round trip still works end to end.
-// ────────────────────────────────────────────────────────────────────────────
 {
   const root = makeProject('b4', ['worker-one', 'worker-two', 'intent-guard']);
   const off = run(TOGGLE, ['t1', 'disable'], root);
@@ -247,11 +230,8 @@ function makeCollision(label) {
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// B5 — BC-V2-H01, opposite direction: disable must refuse the same collision.
-// `mv live -> parked` destroys the parked body exactly as `mv parked -> live`
-// destroys the live one; the refusal is symmetric and all-or-nothing.
-// ────────────────────────────────────────────────────────────────────────────
+// B5 — BC-V2-H01, opposite direction: disable refuses the same collision; `mv live -> parked` destroys
+//      the parked body as `mv parked -> live` destroys the live one, so refusal is symmetric, all-or-nothing.
 {
   const { root, live, parked } = makeCollision('b5');
   const r = run(TOGGLE, ['t1', 'disable'], root);
@@ -281,9 +261,7 @@ function makeCollision(label) {
   check('b5.noVerdict', has(r.stdout, '✅ disable'), false, 'no success verdict is printed');
 }
 
-// ────────────────────────────────────────────────────────────────────────────
 // B6 — the disable dry run refuses too, instead of printing a WOULD plan.
-// ────────────────────────────────────────────────────────────────────────────
 {
   const { root, live, parked } = makeCollision('b6');
   const r = run(TOGGLE, ['t1', 'disable', '--dry-run'], root);
@@ -293,9 +271,7 @@ function makeCollision(label) {
   check('b6.parkedBytes', readOrGone(parked), AGENT_BODY('worker-one'), 'the dry run left the parked file byte-identical');
 }
 
-// ────────────────────────────────────────────────────────────────────────────
 // B7 — regression: the ordinary single-copy disable path is untouched.
-// ────────────────────────────────────────────────────────────────────────────
 {
   const root = makeProject('b7', ['worker-one', 'worker-two', 'intent-guard']);
   const r = run(TOGGLE, ['t1', 'disable'], root);

@@ -1,64 +1,8 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.4.0 content_version=6.2.0 generated_by=brewtools:agent-router-setup
-/**
- * agent-router - PreToolUse hook for the `Agent` tool (Node built-ins only, ESM).
- *
- * The main loop habitually spawns a generic agent (`general-purpose`) when a real
- * expert exists: a project agent in `<root>/.claude/agents/*.md`, or a plugin
- * specialist. This hook catches that and redirects. Tier 1 = deterministic only:
- * no network, no LLM, single-digit milliseconds on the common path.
- *
- * Decision order (allow silently = exit 0, no stdout, as early as possible):
- *   1. tool_name !== 'Agent'                     -> allow  (payloads carry `Agent`, never `Task`)
- *   2. agent_id present (subagent-issued call, or a hook verifier `hook-agent-*`)
- *                                                -> allow  (only the main loop is policed)
- *   3. config enabled:false / config unparsable  -> allow
- *   4. subagent_type is a project agent          -> allow  (an expert was already picked)
- *      (an omitted subagent_type normalizes to general-purpose before steps 4-5)
- *   5. subagent_type not generic / in neverFlag  -> allow  (config owns the generic list)
- *   6. "agent-router: override|allow|skip" in the task text -> allow (escape hatch)
- *   7. STRONG intent rule fires + picked is generic -> DENY, naming the expert: the
- *      first ranked project agent that scores AND whose own frontmatter matches the
- *      same rule, else the plugin specialist - only if it is found on disk
- *      (expertExists); an unprovable expert is a nudge, never a deny. An agent that
- *      outranks everyone but does not cover the intent is not the expert - it just
- *      had its name in the prompt (the plan-engine incident).
- *   8. roster scoring: one clear winner          -> DENY, naming it. Every agent is
- *      scored on the text with its OWN NAME struck out, so a name quoted in the prompt
- *      (a config value: ARBITER_AGENT="plan-engine") earns nothing; an agent that
- *      declares its name among its `Triggers:` keeps those hits -> nudge
- *      several plausible / weak best             -> additionalContext nudge, allow
- *      nothing scores                            -> fall through
- *   9. WEAK intent signal (a bare artifact mention: SKILL.md, hooks.json, a shebang):
- *      never denies. If step 8 nudged, the two are MERGED into one message naming both
- *      the specialist and the candidates; otherwise it nudges alone.
- *  10. anti-loop: a given (session, root, task) is denied AT MOST ONCE; the retry is
- *      allowed with additionalContext instead. A deny returns to the model as a tool
- *      error; denying the retry too would loop forever.
- *  11. fail open, always: any throw / bad stdin / bad config / bad roster ->
- *      exit 0, no stdout. Never breaks the user's tool call.
- *
- * Channels:
- *   deny  : hookSpecificOutput.permissionDecision = "deny" + permissionDecisionReason
- *   nudge : hookSpecificOutput.additionalContext, NO permissionDecision (an `allow`
- *           here would bypass the user's own deny rules)
- *
- * State: <os.tmpdir()>/brewtools-agent-router/p-<sha1(real root)[0..16]>/<session_id>/
- *          <sha1(key)[0..32]>              one marker per (session, task) already denied once
- *          judge-expected, judge-answered  tier-2 heartbeat, `level strict` only
- *        One dir per PROJECT, so `--purge-state <root>` removes this project's state only.
- *        `key` is the DESCRIPTION (the prompt's first 300 normalized chars only when
- *        there is no description) and deliberately ignores both the prompt body and the
- *        expert named: the model rewrites the prompt when it retries and the second pass
- *        can land on a different expert, and either one minted a fresh key - so the
- *        retry was denied too. Accepted trade-off: two distinct descriptionless tasks
- *        behind the same boilerplate prompt header share one marker; anti-loop errs
- *        toward allowing. No roster cache, no logs, and nothing is written under
- *        ~/.claude (harness-protected
- *        path). If the state root is unusable (read-only, foreign-owned tmp) EVERY
- *        deny degrades to a nudge - without a marker we cannot guarantee the loop
- *        terminates.
- */
+// brewcode-meta: version=6.5.0 content_version=6.5.0 generated_by=brewtools:agent-router-setup
+
+// agent-router PreToolUse `Agent`, tier 1 (deterministic): deny a main-loop generic spawn when a project/plugin expert owns
+// the task, else nudge; each (session, root, task) denied at most once. Fail-open: exit 0, no stdout.
 import {
   readFileSync,
   writeFileSync,
@@ -88,20 +32,12 @@ const PROMPT_SCAN_CHARS = 2000;
 const DESC_SCAN_CHARS = 500;
 const KEY_PROMPT_CHARS = 600; // raw slice behind the 300-char anti-loop key
 const DESC_WORD_CAP = 3; // description-word overlap is noisy; bound its contribution
+const MAX_AGENT_DEPTH = 6; // subdir levels under an agents dir; deeper files are missed (fail-open)
+const MAX_AGENT_FILES = 500; // .md files read per agents dir
 const UID = typeof process.getuid === 'function' ? process.getuid() : null;
 
-/**
- * Intent rules: data, not control flow. `match` is a regex source string (compiled
- * case-insensitive, run over the RAW task text), `expert` the agent to redirect to,
- * `label` the human phrase used in the deny reason. First match wins. A config
- * `intents` array REPLACES this table wholesale.
- *
- * `match` carries only STRONG signals - an authoring verb aimed at the artifact.
- * `weakMatch` (optional) carries bare mentions: naming SKILL.md or hooks.json, or a
- * shebang inside a pasted command, says the task TOUCHES the artifact, not that it
- * authors one. A weak hit can only nudge; running a vendor generator must not be
- * blocked because its output path ends in SKILL.md.
- */
+// Intent rules (first match wins; config `intents` replaces the table): `match` = STRONG regex (may deny),
+// `weakMatch` = bare artifact mention (nudge only), both case-insensitive over the raw task text.
 const DEFAULT_INTENTS = [
   {
     label: 'skill authoring',
@@ -175,11 +111,8 @@ const DEFAULTS = {
   enabled: true,
   level: 'fast',
   genericTypes: ['general-purpose', 'worker'],
-  // Explore is the right tool for search, Plan for planning - never flagged by
-  // roster scoring. Only an explicit intent rule may override that. The four
-  // intent experts are also here explicitly, and normalizeConfig() below unions
-  // this list with every configured intent's `expert` - a router redirect target
-  // can never itself be flagged, built-in or user-defined.
+  // Never flagged by roster scoring (only an intent rule overrides); normalizeConfig() also adds
+  // every intent `expert`, so a redirect target is never itself flagged.
   neverFlag: [
     'Explore', 'Plan', 'statusline-setup', 'output-style-setup',
     'brewcode:agent-creator', 'brewcode:skill-creator', 'brewcode:hook-creator', 'brewcode:bash-expert',
@@ -257,16 +190,8 @@ function climb(from, hit) {
   return null;
 }
 
-/**
- * Project root, canonical recipe (D1 Q5) plus an ownership check:
- * `CLAUDE_PROJECT_DIR` -> nearest ancestor carrying THIS router's config ->
- * nearest ancestor with `.git` -> nearest ancestor with `.claude` -> cwd unchanged.
- *
- * Directory existence alone is not ownership. Stopping at the first `.claude` let any
- * nested package/fixture directory mask the real root: config and roster both went
- * missing, the built-in defaults applied, and a router the user had explicitly
- * DISABLED at the real root kept denying spawns from a nested cwd (BT-F24).
- */
+// Root: CLAUDE_PROJECT_DIR -> nearest ancestor with THIS router's config -> `.git` -> `.claude` -> cwd
+// (a nested `.claude` must not mask a root where the router is disabled).
 function findRoot(cwd) {
   const env = process.env.CLAUDE_PROJECT_DIR;
   if (env && isDir(env)) return path.resolve(env);
@@ -354,11 +279,8 @@ function taskText(toolInput) {
   return `${desc.slice(0, DESC_SCAN_CHARS)}\n${prompt.slice(0, PROMPT_SCAN_CHARS)}`;
 }
 
-/**
- * Frontmatter `name` + `description`; anything malformed yields null (file skipped).
- * `self` is the agent's own words (name + full description incl. its triggers) - an
- * intent rule is run against it to ask whether this agent actually covers the intent.
- */
+// Frontmatter `name` + `description`; null where Claude Code skips the file (no name/description, bad name).
+// `self` (name + description) is matched against an intent rule to check the agent covers it.
 function parseAgentFile(file, rel) {
   let raw;
   try {
@@ -372,9 +294,10 @@ function parseAgentFile(file, rel) {
   const nameM = /^name:\s*(.+)$/m.exec(fm);
   if (!nameM) return null;
   const name = nameM[1].trim().replace(/^["']|["']$/g, '').trim();
-  if (!name) return null;
+  if (!name || name.length > 256 || name.startsWith('-') || name.includes(':')) return null;
   const descM = /^description:\s*(.+)$/m.exec(fm);
   const description = descM ? descM[1].trim().replace(/^["']|["']$/g, '') : '';
+  if (!description.trim()) return null;
 
   const trigM = /triggers:\s*([\s\S]*)$/i.exec(description);
   const triggers = [];
@@ -393,25 +316,73 @@ function parseAgentFile(file, rel) {
   return { name, rel, triggers, words: [...words], self: `${name} ${description}` };
 }
 
-function readRoster(dir) {
-  let names;
+// Recursive *.md walk: follows symlinks as Claude Code does, each real dir once; skips dot-dirs.
+function agentFiles(dir, depth = 0, seen = new Set(), out = []) {
+  if (out.length >= MAX_AGENT_FILES) return out;
+  let real;
+  let entries;
   try {
-    names = readdirSync(dir);
+    real = realpathSync(dir);
+    if (seen.has(real)) return out;
+    seen.add(real);
+    entries = readdirSync(dir, { withFileTypes: true });
   } catch {
-    return []; // no roster dir: intents still apply, scoring simply finds nothing
+    return out; // missing or unreadable dir: nothing to add
   }
+  const subdirs = [];
+  for (const e of entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
+    const p = path.join(dir, e.name);
+    let isDirectory = e.isDirectory();
+    let isFile = e.isFile();
+    if (e.isSymbolicLink()) {
+      try {
+        const st = statSync(p);
+        isDirectory = st.isDirectory();
+        isFile = st.isFile();
+      } catch {
+        continue; // dangling link
+      }
+    }
+    if (isFile && e.name.endsWith('.md') && out.length < MAX_AGENT_FILES) out.push(p);
+    else if (isDirectory && !e.name.startsWith('.') && depth < MAX_AGENT_DEPTH) subdirs.push(p);
+  }
+  for (const d of subdirs) agentFiles(d, depth + 1, seen, out);
+  return out;
+}
+
+/** Identity = frontmatter `name`, never the path; on a duplicate name the first dir wins. */
+function readRoster(dirs, base) {
   const agents = [];
-  for (const n of names.sort()) {
-    if (!n.endsWith('.md')) continue;
-    const a = parseAgentFile(path.join(dir, n), `.claude/agents/${n}`);
-    if (a) agents.push(a);
+  const names = new Set();
+  for (const dir of dirs) {
+    for (const file of agentFiles(dir)) {
+      const a = parseAgentFile(file, path.relative(base, file).split(path.sep).join('/'));
+      if (a && !names.has(a.name)) {
+        names.add(a.name);
+        agents.push(a);
+      }
+    }
   }
   return agents;
 }
 
+// Claude Code loads every `.claude/agents/` from the session dir up to the git root, closest first.
+function projectAgentDirs(root) {
+  const dirs = [];
+  let cur = root;
+  for (let i = 0; i < MAX_ROOT_CLIMB; i++) {
+    dirs.push(path.join(cur, '.claude', 'agents'));
+    if (exists(path.join(cur, '.git'))) return dirs;
+    const parent = path.dirname(cur);
+    if (parent === cur) break;
+    cur = parent;
+  }
+  return dirs.slice(0, 1); // no git root above: the root's own dir only
+}
+
 /** A missing dir is an EMPTY roster, not an error: intent rules still fire. */
 function loadRoster(root) {
-  return readRoster(path.join(root, '.claude', 'agents'));
+  return readRoster(projectAgentDirs(root), root);
 }
 
 // ── scoring ──────────────────────────────────────────────────────────────────
@@ -436,11 +407,8 @@ function scoreAgent(agent, textNorm, tokens) {
   return score;
 }
 
-/**
- * Every agent is scored on the text with its OWN name struck out: a name quoted as a
- * config value is not expertise (the plan-engine incident). Exception - an agent that
- * publishes its name among its `Triggers:` has earned those hits as real evidence.
- */
+// Score with the agent's OWN name struck out (a quoted config value is not expertise),
+// unless the name is among its `Triggers:`.
 function scoreOn(agent, textNorm) {
   const nameNorm = normalizeText(agent.name);
   const t =
@@ -458,10 +426,7 @@ function rankRoster(roster, text) {
 
 // ── tmp state (anti-loop markers + roster cache) ─────────────────────────────
 
-/**
- * os.tmpdir() is world-writable, so the root can be pre-created by another user as
- * a symlink. Accept it only as a real directory we own with no group/world write.
- */
+// Shared tmp: accept the root only as a real dir we own with no group/world write (no symlink).
 function ensureStateRoot() {
   if (stateRootOk !== undefined) return stateRootOk;
   stateRootOk = false;
@@ -547,13 +512,8 @@ function safeSegment(s) {
   return clean && clean !== '.' && clean !== '..' ? clean : null;
 }
 
-/**
- * True the FIRST time this (session, root, keyText) is seen; false afterwards, and false
- * whenever the marker cannot be persisted - a deny we cannot record is a deny that could
- * loop, so it degrades to a nudge instead. `keyText` is the stable part of the decision
- * (see the header): neither the prompt body nor the named expert is hashed, since the
- * retry may reword the prompt and land on a different expert.
- */
+// True only the FIRST time (session, root, keyText) is seen and the marker persists (else nudge, no loop).
+// keyText = description (else prompt head), never body/expert: a retry may reword and pick another expert.
 function claimDeny(sessionId, root, keyText) {
   if (!ensureStateRoot()) return false;
   const project = projectStateDir(root);
@@ -616,16 +576,17 @@ function judgeHealth(root) {
 
 // ── redirect-target existence ────────────────────────────────────────────────
 
-/**
- * True only when the expert is on disk: project agent, user agent, or `<plugin>:<agent>` in
- * the plugin cache. Anything unprovable (a `--plugin-dir` dev plugin, a built-in) is false.
- */
+// True only when the expert is on disk (project/user agent, `<plugin>:<agent>` in the plugin cache);
+// unprovable (`--plugin-dir`, built-in) -> false.
 function expertExists(expert, roster) {
   if (roster.some((a) => a.name === expert)) return true;
   if (/[\\/]/.test(expert)) return false;
   const home = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
   const colon = expert.indexOf(':');
-  if (colon < 0) return exists(path.join(home, 'agents', `${expert}.md`));
+  if (colon < 0) {
+    const userDir = path.join(home, 'agents');
+    return readRoster([userDir], userDir).some((a) => a.name === expert);
+  }
   const plugin = expert.slice(0, colon);
   const file = `${expert.slice(colon + 1)}.md`;
   const cache = path.join(home, 'plugins', 'cache');
@@ -812,11 +773,8 @@ function strongHit(re, text) {
   }
 }
 
-/**
- * First STRONG match wins and may deny; a weak-only match is remembered and, if nothing
- * else speaks, becomes a nudge. The compiled strong regex travels with the result -
- * step 7 reuses it per roster agent instead of recompiling inside that loop.
- */
+// First STRONG match wins (may deny; its compiled regex is returned for reuse); a weak-only
+// match becomes a nudge if nothing else speaks.
 function matchIntent(intents, text) {
   let weak = null;
   for (const rule of intents) {
@@ -1037,6 +995,7 @@ function cli(mode, arg) {
     const h = judgeHealth(root);
     return `judge_expected=${h.expected} judge_answered=${h.answered} judge_overdue=${h.overdue}`;
   }
+  if (mode === '--roster') return String(loadRoster(root).length);
   if (mode === '--purge-state') {
     const dir = projectStateDir(root);
     rmSync(dir, { recursive: true, force: true });

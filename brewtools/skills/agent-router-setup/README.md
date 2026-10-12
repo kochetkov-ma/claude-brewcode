@@ -2,6 +2,8 @@
 
 > **EXPERIMENTAL.** Opt-in, project scope only.
 
+Docs: https://doc-claude.brewcode.app/brewtools/skills/agent-router-setup/
+
 Installer/configurator skill for one PreToolUse hook that checks whether the main loop picked the **right agent** for a spawn, and redirects it to the real expert — a project agent from `.claude/agents/`, or a brewcode specialist — when it reached for a generic one.
 
 The failure it catches: the repo carries a hand-written domain expert, and the main loop spawns `general-purpose` out of habit. The check is deterministic and costs nothing on the common path.
@@ -12,7 +14,7 @@ A deny is returned to the model as a tool error it can act on. **The human is ne
 
 | Tier | Default | Cost | What it does |
 |------|---------|------|--------------|
-| 1 | always on | single-digit ms, **zero tokens**, deterministic | `.claude/hooks/agent-router.mjs`, PreToolUse matcher `Agent` |
+| 1 | always on | under 100 ms including node startup, **zero tokens**, deterministic | `.claude/hooks/agent-router.mjs`, PreToolUse matcher `Agent` |
 | 2 | **off** (`level strict` only) | one small-model call per `Agent` spawn | a `type: "agent"` hook that judges a generic spawn against the project roster (+ a heartbeat entry) |
 
 ### Tier 1 decision order
@@ -27,7 +29,7 @@ It allows as early as it can:
 | 4 | the picked type IS a project agent | allow |
 | 5 | the picked type is not on `genericTypes` — a specialist/built-in | allow. An omitted `subagent_type` is normalized to `general-purpose` first and policed like one |
 | 6 | intent rules (regex over the task text) | deny, naming the expert — a plugin specialist only when it is installed, otherwise a notice |
-| 7 | score the task against the `.claude/agents/*.md` roster | clear winner -> deny naming it; several plausible -> nudge with the top 3, no deny; nothing -> silent allow |
+| 7 | score the task against the `.claude/agents/**/*.md` roster (recursive, by frontmatter `name`) | clear winner -> deny naming it; several plausible -> nudge with the top 3, no deny; nothing -> silent allow |
 | 8 | anti-loop guard | a task in a given project is denied at most once per session |
 | 9 | any error | fail open |
 
@@ -49,7 +51,7 @@ Intent routes (step 6): skill authoring -> `brewcode:skill-creator`, agent autho
 /brewtools:agent-router-setup purge            # + delete config and this project's tmp state
 /brewtools:agent-router-setup level strict     # add the LLM judge (read the cost first)
 /brewtools:agent-router-setup level fast       # drop it again
-/brewtools:agent-router-setup вычисти всё      # free-text intent works (RU+EN) -> purge
+/brewtools:agent-router-setup remove everything  # free-text intent works (any language) -> purge
 ```
 
 The skill always reports status first, states its plan before asking anything, then delegates the file work to the `brewcode:hook-creator` agent. It asks exactly one question — the level — and only when you did not already say.
@@ -124,7 +126,7 @@ The third entry repeats the first under matcher `StructuredOutput`: the heartbea
 
 There is no nudge-threshold key: the nudge floor is derived as `max(1, ceil(minScore / 2))`. Keys not in this table are ignored.
 
-Config values are read on every hook call — `enabled`, the lists and the thresholds take effect immediately. Hook **wiring** changes (install / level / uninstall / purge) need a new session.
+Config values are read on every hook call — `enabled`, the lists and the thresholds take effect immediately. Hook **wiring** changes (install / level / uninstall / purge) apply to the running session too: Claude Code watches settings files (`/hooks` confirms).
 
 ## Limits — read before trusting it
 

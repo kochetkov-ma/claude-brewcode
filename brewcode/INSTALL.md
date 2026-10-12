@@ -3,19 +3,21 @@
 ## Quick Installation
 
 ```bash
-claude plugin marketplace add /path/to/claude-brewcode/plugins
+claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
 claude plugin install brewcode@claude-brewcode
 ```
+
+In a running session: `/reload-plugins`.
 
 ## Quick Reference
 
 | Action | Command |
 |--------|---------|
 | **Install** | `claude plugin install brewcode@claude-brewcode` |
-| **Uninstall** | `claude plugin uninstall brewcode` |
-| **Update** | `claude plugin update brewcode` |
+| **Uninstall** | `claude plugin uninstall brewcode@claude-brewcode` |
+| **Update** | `claude plugin marketplace update claude-brewcode && claude plugin update brewcode@claude-brewcode` |
 | **Session only** | `claude --plugin-dir ./brewcode` |
-| Add marketplace | `claude plugin marketplace add <repo-path>` |
+| Add marketplace | `claude plugin marketplace add <GitHub URL or local clone root>` |
 | List plugins / verify install | `claude plugin list` (add `--json` for machine-readable output) |
 
 ---
@@ -32,128 +34,45 @@ claude --plugin-dir ./brewcode
 claude --plugin-dir /path/to/claude-brewcode/brewcode
 
 # Multiple plugins
-claude --plugin-dir ./brewcode --plugin-dir ./plugins/other
+claude --plugin-dir ./brewcode --plugin-dir ./brewtools
 ```
 
-**Pros:** changes apply instantly, no rebuild needed for skills/agents
+**Pros:** loads in place, no build step; edits apply on `/reload-plugins`
 **Cons:** path must be specified each time
 
 ---
 
-## 2. Runtime Build
+## 2. Installation from a Local Clone
 
-Required step before any installation.
-
-```bash
-cd brewcode/runtime
-npm install
-npm run build
-```
-
-**Verification:**
-```bash
-ls dist/
-# Should contain: index.js, config.js, context-monitor.js, etc.
-```
-
----
-
-## 3. Installation via Local Marketplace
-
-Claude Code requires plugin installation through a marketplace. Create a local marketplace for development.
-
-### 3.1 Marketplace Manifest
-
-Create `.claude-plugin/marketplace.json` in the repository root:
-
-```json
-{
-  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
-  "name": "my-local-plugins",
-  "description": "Local plugins for development",
-  "owner": {
-    "name": "Your Name"
-  },
-  "plugins": [
-    {
-      "name": "brewcode",
-      "description": "Infinite task execution with automatic handoff",
-      "author": { "name": "Your Name" },
-      "source": "./brewcode",
-      "category": "productivity"
-    }
-  ]
-}
-```
-
-### 3.2 Adding the Marketplace
+The repository root already holds `.claude-plugin/marketplace.json` (marketplace `claude-brewcode`, plugin source `./brewcode`). A marketplace added from a local path loads relative-path plugins in place, no cache copy.
 
 ```bash
-# Add local marketplace (absolute path)
-claude plugin marketplace add /path/to/your/repo
-
-# Verify
-claude plugin marketplace list
-```
-
-### 3.3 Installing the Plugin
-
-```bash
-# Install from marketplace
-claude plugin install brewcode@my-local-plugins
-
-# Verify
+claude plugin marketplace add /path/to/claude-brewcode
+claude plugin install brewcode@claude-brewcode
 claude plugin list
-```
 
-### 3.4 Updating After Changes
+# After a pull
+claude plugin marketplace update claude-brewcode
 
-```bash
-# Update marketplace index
-claude plugin marketplace update my-local-plugins
-
-# Update plugin
-claude plugin update brewcode@my-local-plugins
-```
-
-### 3.5 Uninstallation
-
-```bash
-claude plugin uninstall brewcode@my-local-plugins
-
-# Remove marketplace
-claude plugin marketplace remove my-local-plugins
+# Remove
+claude plugin uninstall brewcode@claude-brewcode
+claude plugin marketplace remove claude-brewcode
 ```
 
 ---
 
-## 4. Embedding in a Project
+## 3. Enabling for a Project
 
-Plugin inside a specific project.
-
-### 4.1 Structure
-
-```
-my-project/
-├── .claude/
-│   └── plugins/
-│       └── brewcode/    # Plugin here
-└── src/
-```
-
-### 4.2 settings.json
+Commit to the project's `.claude/settings.json` to register the marketplace and enable the plugin for everyone who clones the repository:
 
 ```json
 {
-  "plugins": [
-    { "type": "local", "path": "brewcode" }
-  ]
+  "extraKnownMarketplaces": {
+    "claude-brewcode": { "source": { "source": "github", "repo": "kochetkov-ma/claude-brewcode" } }
+  },
+  "enabledPlugins": { "brewcode@claude-brewcode": true }
 }
 ```
-
-### 4.3 Auto-loading
-
-The plugin loads automatically when opening the project in Claude Code.
 
 ---
 
@@ -162,10 +81,7 @@ The plugin loads automatically when opening the project in Claude Code.
 | Problem | Solution |
 |---------|----------|
 | Plugin not found | Check path and presence of `.claude-plugin/plugin.json` |
-| Skills not showing | Run `/help`, verify `user-invocable: true` |
-| Runtime error | Rebuild: `cd runtime && npm run build` |
-| Permission denied | Check permissions: `chmod -R 755 plugins/` |
-| SDK not found | Run `npm install` in runtime directory |
+| Skills not showing | Type `/brewcode:` to list them; run `/reload-plugins` after an install or update |
 | Invalid input | Run `claude plugin validate <path>` |
 
 **Validation before installation:**
@@ -175,12 +91,12 @@ claude plugin validate ./brewcode
 
 **Debug mode:**
 ```bash
-CLAUDE_DEBUG=1 claude --plugin-dir ./brewcode
+claude --debug --plugin-dir ./brewcode   # log: ~/.claude/debug/<session-id>.txt
 ```
 
 **Common plugin.json errors:**
 - `repository: Invalid input` — must be a string, not an object
-- `agents: Invalid input` — agents field not supported (use skills)
+- `agents: Invalid input` — list `.md` files, not a directory (`agents/` is auto-discovered)
 - `Unrecognized key` — remove unsupported fields
 
 ---

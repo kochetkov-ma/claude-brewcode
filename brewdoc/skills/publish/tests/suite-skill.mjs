@@ -1,15 +1,6 @@
 #!/usr/bin/env node
-/**
- * suite-skill.mjs — the shell contract the publish blocks depend on:
- * `scripts/brewpage-lib.sh` (BD03: where the token file lives, how it is
- * protected, parameter validation) and the SKILL.md blocks themselves
- * (BD02: nothing prompt-derived is pasted into shell source).
- *
- * Self-contained: every project fixture is generated inside one mkdtemp base,
- * which is removed at the end. No network, no upload, no real `.claude` touched.
- *
- * Assertion policy: unconditional exact-equality checks with a description.
- */
+// Shell contract of publish blocks: `scripts/brewpage-lib.sh` (BD03 token file location, protection, param validation) + SKILL.md blocks (BD02 nothing prompt-derived in shell source).
+// Fixtures under one mkdtemp base, removed at end; no network, no upload, no real `.claude` touched.
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, readFileSync, existsSync, statSync, rmSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -22,6 +13,8 @@ const SKILL = readFileSync(join(HERE, '..', 'SKILL.md'), 'utf8');
 const LINES = SKILL.split('\n');
 
 const BASE = realpathSync(mkdtempSync(join(tmpdir(), 'brewdoc-publish-s-')));
+const TMP = join(BASE, 'tmp');
+mkdirSync(TMP);
 
 let passed = 0;
 let failed = 0;
@@ -49,7 +42,7 @@ function check(name, actual, expected, message) {
 
 /** Run `code` with the lib sourced, in `cwd`, with a clean env. */
 function sh(code, { cwd, env = {} } = {}) {
-  const e = { ...process.env, ...env };
+  const e = { ...process.env, TMPDIR: TMP, ...env };
   for (const k of Object.keys(env)) if (env[k] === undefined) delete e[k];
   const r = spawnSync('bash', ['-c', `. "${LIB}"\n${code}`], {
     cwd, encoding: 'utf8', env: e, timeout: 20000,
@@ -110,13 +103,15 @@ check('skill.discovery.obsolete', SKILL.includes('Dedicated subdomain hosts use 
   check('history.init.mode', existsSync(hist) ? statSync(hist).mode & 0o777 : -1, 0o600,
     'the token-bearing file is owner-only — the skill used to only ask the user to keep it private');
   const readLines = (p) => (existsSync(p) ? readFileSync(p, 'utf8').split('\n').filter((l) => l !== '') : ['<missing>']);
-  check('history.init.gitignore', readLines(gi),
-    ['.claude/brewpage-history.md', '.claude/tmp/'],
-    'both the token file and the temp dir are ignored, not merely documented');
+  // Run dirs moved out of the protected .claude/ to $TMPDIR, so .claude/tmp/ is neither made nor ignored.
+  check('history.init.gitignore', readLines(gi), ['.claude/brewpage-history.md'],
+    'the token file is ignored, not merely documented');
+  check('history.init.notmp', existsSync(join(proj, '.claude', 'tmp')), false,
+    'no run-dir parent is created under the protected .claude/');
 
   sh('bp_history_init', { cwd: proj, env: { CLAUDE_PROJECT_DIR: proj } });
   check('history.init.idempotent', readLines(gi),
-    ['.claude/brewpage-history.md', '.claude/tmp/'], 're-running adds no duplicate ignore lines');
+    ['.claude/brewpage-history.md'], 're-running adds no duplicate ignore lines');
 
   check('history.header.token', readLines(hist).join('\n').includes('X-Owner-Token: TOKEN'), true,
     'the header carries the delete recipe');
@@ -147,6 +142,29 @@ check('skill.discovery.obsolete', SKILL.includes('Dedicated subdomain hosts use 
     'no .gitignore is invented in a directory that is not a git repo');
   check('history.nogit.file', existsSync(join(bare, '.claude', 'brewpage-history.md')), true,
     'the history file is still created there');
+}
+
+// ── Run dir: private mktemp under $TMPDIR, never under the protected .claude/ ──
+{
+  const proj = join(BASE, 'runproj');
+  mkdirSync(proj, { recursive: true });
+  const env = { CLAUDE_PROJECT_DIR: proj };
+  const shape = (out) => out.replace(/brewpage\.[A-Za-z0-9]{6}$/, 'brewpage.XXXXXX');
+  const plain = sh('r=$(bp_prepare) && printf %s "$r"', { cwd: proj, env });
+  check('rundir.location', [plain.status, shape(plain.out)], [0, join(TMP, 'brewpage.XXXXXX')],
+    'bp_prepare allocates directly under $TMPDIR with the brewpage.XXXXXX run-id shape');
+  check('rundir.mode', statSync(plain.out).mode & 0o777, 0o700, 'the run dir is private (umask 077)');
+  check('rundir.notmp', existsSync(join(proj, '.claude', 'tmp')), false,
+    'allocation creates nothing under the project .claude/');
+  const slash = sh('r=$(bp_prepare) && printf %s "$r"', { cwd: proj, env: { ...env, TMPDIR: TMP + '/' } });
+  check('rundir.slash', shape(slash.out), join(TMP, 'brewpage.XXXXXX'),
+    'a trailing slash in TMPDIR (macOS default) yields no double slash');
+  check('rundir.fallback', sh('printf %s "$BP_TMPDIR"', { cwd: proj, env: { ...env, TMPDIR: undefined } }).out, '/tmp',
+    'unset TMPDIR falls back to /tmp');
+  const cleaned = sh('bp_run_dir "${R1##*/}" && bp_cleanup && bp_run_dir "${R2##*/}" && bp_cleanup',
+    { cwd: proj, env: { ...env, R1: plain.out, R2: slash.out } });
+  check('rundir.cleanup', [cleaned.status, existsSync(plain.out), existsSync(slash.out)], [0, false, false],
+    'bp_cleanup removes exactly the named run dirs');
 }
 
 // ── BD02: ns / ttl / entry are validated as data ───────────────────────────

@@ -35,7 +35,7 @@ Purpose: verified facts on the code-search engines we evaluated, so a future dec
 | PyPI | https://pypi.org/pypi/semble/json |
 | Benchmarks | `benchmarks/README.md`, `benchmarks/results/*.json` (19 result files + `.gitkeep`) |
 | Cache logic | `_MIN_REVALIDATE_FACTOR = 3` in the semble source |
-| Our hooks | `brewcode/skills/semble-setup/assets/semble-{session,prefetch,stats,reminder,subagent}.mjs` |
+| Our hooks | `brewcode/skills/semble-setup/assets/semble-{session,stats,subagent}.mjs` |
 | Our rule | `.claude/rules/semble-first.md` |
 
 ### Type
@@ -138,22 +138,21 @@ Recall at a fixed token budget:
 
 ### Claude Code hooks
 
-**Upstream ships no hooks.** `semble install` (0.6.2 `installer/agents.py`) writes a floating `semble` MCP entry into `~/.claude.json`, instructions into `~/.claude/CLAUDE.md` and the subagent `~/.claude/agents/semble-search.md`. Everything below is ours; prefetch, reminder and subagent skip (`no-mcp`) when the active profile has no `semble_code` registration.
+**Upstream ships no hooks.** `semble install` (0.6.2 `installer/agents.py`) writes a floating `semble` MCP entry into `~/.claude.json`, instructions into `~/.claude/CLAUDE.md` and the subagent `~/.claude/agents/semble-search.md`. Everything below is ours; session and subagent skip (`no-mcp`) when the active profile has no `semble_code` registration.
 
 | Artifact | Event / matcher | Behaviour |
 |----------|-------------------|-----------|
 | `assets/semble-session.mjs` | `SessionStart`, no matcher | reads `<root>/.claude/semble/state.json`; at `awaiting_reload`/`ready` sends `systemMessage` + `additionalContext`, or only a `not registered for this profile` notice when the active profile lacks `semble_code`. Never blocks |
-| `assets/semble-prefetch.mjs` | `UserPromptSubmit`, no matcher | gate v3 (skips `synthetic` subagent deliveries, `too-long` > 8000 chars) -> prompt distillation -> ONE `uvx … semble search` (hard cap 3 s, SIGKILL) -> `additionalContext` with top-3 PATHS, no snippets. Throttle 30 s, cooldown 600 s via `<cwd>/.claude/semble/.prefetch-ts`. Fail-open: any error -> `{}` and exit 0 |
 | `assets/semble-stats.mjs` | `PostToolUse` + `PostToolUseFailure`, one pipe matcher | pure observer: JSONL into `<cwd>/.claude/semble/telemetry.jsonl`, always `{}` |
-| `assets/semble-reminder.mjs` | `PreToolUse`, matcher `Bash\|Grep` | advisory `additionalContext` before a text search, counter in `<cwd>/.claude/semble/reminder.json`. Never blocks |
 | `assets/semble-subagent.mjs` | `SubagentStart`, NO matcher (= every `agent_type`) | advisory `additionalContext` into the spawned subagent's context, skipped (`agent-no-tool`) when its `tools:` omits semble; writes `agent_type`/`agent_id` to telemetry |
 | `semble-explore.mjs` (retired for good) | - | was bound to the single `agent_type === 'Explore'`; replaced by `semble-subagent.mjs`. `install`/`upgrade` delete the file and REPLACE its entry |
+| `semble-reminder.mjs`, `semble-prefetch.mjs` (retired 6.5.0) | was `PreToolUse` `Bash\|Grep` / `UserPromptSubmit` | same-profile A/B, 36 sessions per run: pooled semble share 42% with the 6.4.0 hooks and 42% with the repaired 6.5.0 ones, `none` arm 38% / 54% (1 rep per cell, direction only); reminder fired 0 times, prefetch candidates never held the answering file. `install`/`upgrade`/uninstall delete files, markers and every settings row |
 | `.claude/rules/semble-first.md` | - | "semantic-first" rule |
 | marker block in `CLAUDE.md` | - | session instruction |
 | `semble-agents.sh` | - | patches agent frontmatter, adding the 2 MCP tools to `tools:` |
 | permissions | - | allow-only |
 
-`state.json` holds no aggregate call counters; the hooks write best-effort usage events to `.claude/semble/telemetry.jsonl` (`semble-stats.mjs` and the other observers above). Write errors are swallowed: no complete accounting and no comparative metric against grep. Upstream `savings.jsonl` is a separate source. State keys: `schema` (constant 1), `phase`, `enabled`, `scope`, `cacheRoot`, `repoHash`, `completed[]`, `notes[]`, `version`, `generated_by`, `last_updated` (date of the last write, `YYYY-MM-DD`, `sc_state_patch` in `scripts/lib/semble-common.sh`), and `agentsPreExisting` (agent tool ownership record of `semble-agents.sh`).
+`state.json` holds no aggregate call counters; the hooks write best-effort usage events to `.claude/semble/telemetry.jsonl` (`semble-stats.mjs`; `nudge` records from `semble-session.mjs`, `gate`/`nudge` from `semble-subagent.mjs`). Write errors are swallowed: no complete accounting and no comparative metric against grep. Upstream `savings.jsonl` is a separate source. State keys: `schema` (constant 1), `phase`, `enabled`, `scope`, `cacheRoot`, `repoHash`, `completed[]`, `notes[]`, `version`, `generated_by`, `last_updated` (date of the last write, `YYYY-MM-DD`, `sc_state_patch` in `scripts/lib/semble-common.sh`), and `agentsPreExisting` (agent tool ownership record of `semble-agents.sh`).
 
 ---
 
@@ -335,7 +334,7 @@ What it installs into Claude Code (`README.md:447`):
 
 Similar integrations for Codex CLI, Zed, OpenCode, VS Code, Cursor, Kiro, Junie, Hermes, OpenHands, Cline, Warp, Qwen Code, GitHub Copilot CLI. `cbm uninstall` removes entries, skills, hooks, instructions and the binary (`README.md:184`).
 
-> The hook shape matches ours: `PreToolUse` on `Grep`/`Glob` is explicitly non-blocking, i.e. advisory — independent confirmation that the nudge model is a working design.
+> The hook shape matched our retired `semble-reminder.mjs`: `PreToolUse` on `Grep`/`Glob` is explicitly non-blocking, i.e. advisory. That is a design match, not evidence: our own same-profile A/B found no gain from the nudge (row in the semble hooks table above), so 6.5.0 dropped it.
 
 ---
 

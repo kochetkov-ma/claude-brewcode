@@ -20,7 +20,7 @@ Pass a free-form prompt to name what you want:
 
 1. **Input gate** — reads the prompt; empty means `status`.
 2. **Auto-mode select** — infers the mode from the prompt and prints a `PLAN — brewcode:skills` block (input, mode and why, scope, steps, result) before any work.
-3. **Menu** — only when you ask for it: a single `AskUserQuestion` with Status (skills, recommended), Status (all: agents + rules + skills), Create, Improve, Review, Sync, List (plain) and Cancel.
+3. **Menu** — only when you ask for it: one `AskUserQuestion` with two questions, 2-4 options each. Q1 (what to do): Status (skills, recommended), Create, Improve, Review. Q2 (variant): As chosen (recommended), Status (all: agents + rules + skills), List (plain), Sync skills; a non-default Q2 replaces Q1. Dismissing the menu (or `cancel` via Other) stops.
 4. **Dispatch** — routes create / improve to `brewcode:skill-creator`, sync to `references/mode-sync.md` (one `skill-creator` per target), review to the project reviewer agent from `.claude/agents/` (else `general-purpose`, two-phase), or runs `list-skills.sh` directly (list mode).
 5. **Real status** — four blocks, never a flat list: inventory by scope (plugin / project / global, with counts, names, load path), state (enabled or disabled via setup config or `<name>.disabled` parking, legacy `_SKILL.md` markers flagged, model), overlaps and conflicts (shadowing across scopes, duplicate triggers or descriptions), health flags (missing README or frontmatter, weak description triggers).
 6. **Mandatory final output** — structured summary of what was created, changed, or reviewed. Omitted only for `list` mode.
@@ -73,7 +73,7 @@ The full creation pipeline includes Phase 0 Discovery (parallel Explore agents),
 ## Examples
 
 ```bash
-# Open the interactive menu
+# No arguments: rich status of all skills
 /brewcode:skills
 
 # Check the current state of all installed skills

@@ -1,8 +1,5 @@
 #!/usr/bin/env node
-/**
- * Core SessionStart hooks: plan link, plans dir, project root, post-compact re-anchor, fail-open stdin.
- * Standalone, no network; fixtures live under a temp base with HOME/CLAUDE_* injected.
- */
+// SessionStart hooks: plan link, plans dir, root, compact re-anchor, fail-open stdin, log level; no network.
 import { spawnSync } from 'node:child_process';
 import assert from 'node:assert/strict';
 import {
@@ -11,7 +8,7 @@ import {
 } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir, homedir } from 'node:os';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = join(fileURLToPath(import.meta.url), '..');   // tests/
 const HOOKS = join(HERE, '..');                            // brewcode/hooks/
@@ -586,6 +583,32 @@ const TASKS = [
         `${hook} on ${label} stdin exits 0 with exactly one well-formed JSON line`);
     }
   }
+}
+
+// ═══ H. log level — BREWCODE_LOG_LEVEL only; removed task-system config is ignored ═══
+{
+  const UTILS_URL = pathToFileURL(join(HOOKS, 'lib', 'utils.mjs')).href;
+  const logOnce = (name, level, envLevel) => {
+    const dir = join(BASE, name);
+    mkdirSync(join(dir, '.claude', 'tasks', 'cfg'), { recursive: true });
+    writeFileSync(join(dir, '.claude', 'tasks', 'cfg', 'brewcode.config.json'), '{"logging":{"level":"trace"}}');
+    const env = { ...process.env };
+    delete env.BREWCODE_LOG_LEVEL;
+    if (envLevel) env.BREWCODE_LOG_LEVEL = envLevel;
+    const code = `const u = await import(${JSON.stringify(UTILS_URL)}); u.log(${JSON.stringify(level)}, '[t]', 'msg', ${JSON.stringify(dir)});`;
+    spawnSync(process.execPath, ['--input-type=module', '-e', code], { encoding: 'utf8', timeout: 8000, env });
+    const file = join(dir, '.claude', 'logs', 'brewcode.log');
+    return existsSync(file) ? readFileSync(file, 'utf8').replace(/^\S+ /gm, '<ts> ') : null;
+  };
+  check('H1.levelFromEnvOnly',
+    {
+      configIgnored: logOnce('h1-cfg', 'debug'),
+      envDebug: logOnce('h1-env', 'debug', 'DEBUG'),
+      defaultWarn: logOnce('h1-warn', 'warn'),
+      envError: logOnce('h1-err', 'warn', 'error'),
+    },
+    { configIgnored: null, envDebug: '<ts> DEBUG [t] msg\n', defaultWarn: '<ts> WARN  [t] msg\n', envError: null },
+    'GIVEN trace in brewcode.config.json WHEN logging THEN only BREWCODE_LOG_LEVEL (case-insensitive) or default info decides');
 }
 
 process.env.HOME = REAL_HOME;

@@ -1,30 +1,6 @@
 #!/usr/bin/env bash
-# check-skill-fences.sh — syntax-check every shell fence in every skill's markdown, under bash AND zsh.
-#
-# A shell fence in a skill is an instruction the model may execute verbatim, so a block that does not
-# parse is a real defect. The Bash tool runs the user's shell (zsh on macOS); suites run bash -> both.
-#
-# Scanned: every *.md and *.template under brew*/skills/*/, .claude/skills/*/ and root skills/*/
-#          (references/, reference/, assets/, templates...), minus tests/, node_modules/, .template-baseline/.
-#
-# Extractor rules (both traps were live bugs):
-#   - a fence nested in a blockquote keeps its `> ` prefix on every body line — stripped
-#     using the prefix captured from the opening fence line, else the block fails spuriously
-#   - fences tagged anything other than bash/sh/shell/zsh are skipped; `zsh` fences get only zsh -n
-#   - indented (list-nested) fences: leading indent of the opening line is stripped
-#
-# --exec: also RUN each fence once under `zsh -f -c` in an empty scratch dir to catch zsh no-match glob
-# aborts (`no matches found`: zsh skips the command, bash runs it). Side-effect-free is enforced, not
-# guessed: macOS sandbox-exec denies network, mach IPC, signals to other processes and every write
-# outside the scratch dir; HOME/TMPDIR/CLAUDE_CONFIG_DIR point into it; 10 s per fence. SKILL.md
-# fences get the load-time substitutions first. Without sandbox-exec (Linux) nothing runs: --exec lists
-# candidate fences (an unquoted * or ? outside quotes/comments) and does not change the exit code.
-#
-# Usage:
-#   check-skill-fences.sh           # sweep, print per-file failures, exit 1 on any
-#   check-skill-fences.sh --verbose # also print every file/fence checked
-#   check-skill-fences.sh --exec    # parse sweep + zsh execution pass (see above)
-# Exit: 0 clean, 1 a fence failed, 2 zsh missing (install it: the Bash tool's shell must be checked).
+# Usage: check-skill-fences.sh [--verbose] [--exec]: bash -n + zsh -n every bash/sh/shell fence (zsh fences: zsh -n) in skill *.md/*.template. Exit 0 clean, 1 fence failed, 2 zsh missing.
+# --exec also runs each fence under zsh -f in a sandbox-exec scratch dir (no network/outside writes, 10 s); no sandbox (Linux) -> lists glob candidates, rc unchanged.
 
 set -euo pipefail
 

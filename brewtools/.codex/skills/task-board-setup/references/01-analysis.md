@@ -93,11 +93,6 @@ Apply edits, re-show if substantial, proceed only on explicit "generate". If the
 > architect. Offer the user the choice to create domain agents first via `$brewcode:agents` and re-run, or
 > proceed on `Plan`. Do NOT silently downgrade.
 
-## Output contract handed to P2-P4
-
-A confirmed FINDINGS object with: `DOMAINS` (UPPER-KEBAB list), `EXCLUSIONS` (dir list), `REL_STYLE` (enum), `LANG` (string), `DOCS` (inventory for sweep), `DOMAIN_AGENTS` (table or the `(none found -- ...)` line), `ARCHITECT_AGENT` (agent name or `Plan`), `AGENT_GAPS` (uncovered domain list, may be empty), `SPEC_MODE` (`on` | `off`).
-
-
 ## Native user gates
 
 Required approval: main presents a concrete, reviewable proposal in chat and waits for an actual user reply before dependent action. Existing authorization for the same scope remains valid; do not ask again. Optional clarification: use `request_user_input_async` only if exposed, or `request_user_input` only if available in the current runtime/mode, for optional choices and never approval. Otherwise ask in main chat. Delegated agents return unresolved questions to main. Silence, elapsed time and tool errors are not approval.

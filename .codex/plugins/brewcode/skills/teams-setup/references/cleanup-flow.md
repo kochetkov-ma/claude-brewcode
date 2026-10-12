@@ -1,15 +1,10 @@
 # Cleanup Flow
 
-## Overview
-
 Interactive cleanup of team trace data and agents. Every destructive action requires user confirmation via main-chat user gate.
 
-## Order of Operations
+## Contents
 
-1. Overview scan — show sizes
-2. Trace cleanup (if selected)
-3. Agents review (if selected)
-4. Summary report
+UNINSTALL runs Steps 1-4 in order: 1 Overview Scan (show sizes), 2 Trace Cleanup (if selected), 3 Agents Review (if selected), 4 Summary. PURGE runs only Step P. Last section: Archive File Format.
 
 ## Step 1: Overview Scan
 
@@ -55,14 +50,14 @@ main-chat user gate:
 
 **Archive logic:**
 
-Use the bundled `trace-ops.sh archive` for the whole operation after confirmation; never append or
+After confirmation use the bundled `trace-ops.sh archive` for the whole operation; never append or
 truncate trace files directly. Policies: `all`, `keep-days 30`, `keep-last 50`,
 `keep-issues-insights`. It holds the shared trace lock, binds regular-file identities, publishes
 archive/live/cursor together with rollback on error, and reports JSON counts. Concurrent supported
-operations can report locked: retry after the owner completes. Successive retries do not duplicate
-archived rows. Cursor resets only when rows move. Non-cooperative file edits are outside the lock
-contract; identity changes fail closed. Incomplete rollback retains the lock and recovery evidence:
-STOP and report its path; do not retry or remove that lock automatically.
+operations can report locked: retry after the owner completes; retries do not duplicate archived rows.
+Cursor resets only when rows move. Non-cooperative file edits are outside the lock contract; identity
+changes fail closed. Incomplete rollback retains the lock and recovery evidence: STOP and report its
+path; do not retry or remove that lock automatically.
 
 **EXECUTE** using shell:
 ```bash
@@ -74,10 +69,10 @@ echo "✅ Archived" || echo "❌ FAILED"
 ## Step 3: Agents Review
 
 Read logical `intent_guard_policy=required|legacy-absent` from the single `Intent guard` field in
-`team.md` before building the table. Under `required`,
-the roster has exactly one review-only `intent-guard`; exclude it from this step, never list/offer/delete
-it, and preserve its row. It writes no trace entries, so 0 tasks is normal. Under `legacy-absent`, the
-roster has zero such rows and cleanup must not create a profile or row. Upgrade never changes that policy.
+`team.md` before building the table. Under `required` the roster has exactly one review-only
+`intent-guard`: exclude it from this step, never list/offer/delete it, preserve its row (it writes no
+trace entries, so 0 tasks is normal). Under `legacy-absent` the roster has zero such rows and cleanup
+must not create a profile or row. Upgrade never changes that policy.
 
 Show inactive/problematic agents (domain agents only):
 
@@ -107,17 +102,15 @@ On delete:
 
 0. If `{name}` is `intent-guard` under `required` -> **STOP, do not delete.** Report it as protected and move on. Under `legacy-absent`, seeing that name is a policy violation: delete nothing and report the inconsistent roster.
 0b. **Validate `{name}` as an agent id BEFORE any `rm`.** Roster values are interpolated into the delete
-   path, so a row like `../../../outside/README` deletes a file outside the project. Same guard
-   `toggle-team.sh`/`verify-team.sh` apply — run it, and on a non-zero exit report the row as a corrupt
-   roster entry and delete NOTHING:
+   path (`../../../outside/README` would delete outside the project). Same guard `toggle-team.sh` /
+   `verify-team.sh` apply; on a non-zero exit report a corrupt roster entry and delete NOTHING:
 
 ```bash
 printf '%s' "{name}" | grep -qE '^[a-z0-9][a-z0-9-]*$' || { echo "SKIP:invalid agent id"; exit 1; }
 ```
 
-0c. **Check ownership BEFORE any `rm`.** Same shape as the `intent-guard` exemption above, generalised:
-   an agent listed by more than one team is SHARED, and this team's cleanup must not remove it.
-   Run from the project root:
+0c. **Check ownership BEFORE any `rm`.** Generalises the `intent-guard` exemption: an agent listed by
+   more than one team is SHARED, and this team's cleanup must not remove it. Run from the project root:
 
 ```bash
 bash "<skill-directory>/scripts/agent-owners.sh" "{name}"
@@ -131,8 +124,7 @@ bash "<skill-directory>/scripts/agent-owners.sh" "{name}"
    | 1 | empty, reason on stderr | owners UNKNOWN — **SKIP**, report the stderr reason, delete NOTHING |
 
 1. Remove `.codex/agents/{name}.toml` **and** `.codex/agents/{name}.toml.disabled` — a member parked by
-   `$brewcode:teams-setup disable` lives under the second name, and deleting only the first would
-   silently leave the agent behind:
+   `$brewcode:teams-setup disable` lives under the second name and would silently stay behind:
 
 ```bash
 rm -f ".codex/agents/{name}.toml" ".codex/agents/{name}.toml.disabled"
@@ -185,10 +177,9 @@ rm -f ".codex/agents/{name}.toml" ".codex/agents/{name}.toml.disabled"
 ```
 
 > A skipped member is reported in the purge summary as `kept: shared` / `kept: owners unknown`; the team
-> dir still goes in step 3. Purge is total for THIS team's data, never for another team's roster.
-
-> Both names, always. A team purged while DISABLED has every member sitting at `{name}.toml.disabled`;
-> removing only `{name}.toml` would report a successful purge and leave the whole roster on disk.
+> dir still goes in step 3. Purge is total for THIS team's data, never another team's roster.
+> Both names, always: a team purged while DISABLED has every member at `{name}.toml.disabled`, so removing
+> only `{name}.toml` would report success and leave the whole roster on disk.
 
 3. Remove the framework dir, trace, archive, cursor and the copied tracer in one go:
 
@@ -201,9 +192,7 @@ rm -rf ".codex/teams/{TEAM}" && echo "✅ Purged" || echo "❌ FAILED"
 
 ## Archive File Format
 
-Archive files live in `.codex/teams/{TEAM_NAME}/` alongside `trace.jsonl`.
-
-`trace-archive.jsonl` — same JSONL format as `trace.jsonl`. Entries appended on each cleanup. Multiple cleanups accumulate in the same archive file.
+`trace-archive.jsonl` lives in `.codex/teams/{TEAM_NAME}/` beside `trace.jsonl`, same JSONL format; every cleanup appends to it.
 
 
 ## Native user gates

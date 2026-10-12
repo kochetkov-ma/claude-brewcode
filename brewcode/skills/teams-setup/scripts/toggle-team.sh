@@ -1,15 +1,6 @@
 #!/bin/sh
-# toggle-team.sh <team-name> <enable|disable> [--dry-run]
-#
-# Parks or unparks a team's agent files. Claude Code discovers a project agent only
-# through `.claude/agents/<name>.md`, so renaming to `<name>.md.disabled` removes the
-# agent from the roster while preserving every byte of it. Nothing else is touched:
-# team.md, trace.jsonl, trace-archive.jsonl and the cursor survive both directions,
-# which is what makes this a reversible toggle and not an uninstall.
-#
-# `intent-guard` is NEVER parked -- it is shared with /brewcode:superreview-setup and
-# may belong to an install that has nothing to do with this team. Same exclusion as
-# cleanup-flow.md Step 3 and Step P.
+# toggle-team.sh <team-name> <enable|disable> [--dry-run]: park `.claude/agents/<name>.md` <-> `<name>.md.disabled`, bytes kept.
+# team.md, trace*.jsonl, cursor untouched; `intent-guard` NEVER parked (shared, /brewcode:superreview-setup; cleanup-flow.md Step 3/P).
 set -eu
 
 TEAM_NAME="${1:-}"
@@ -47,11 +38,8 @@ MISSING=0
 INVALID=0
 CONFLICT=0
 
-# Roster values are interpolated straight into move/probe/delete paths, so a row like
-# `| ../../../outside/README |` renamed a file OUTSIDE the project while the run printed a cheerful
-# `MOVED:`. An agent id is a bare `^[a-z0-9][a-z0-9-]*$` -- no slash, no dot, no traversal -- which is
-# also what keeps every path canonically inside `.claude/agents/`. Same guard in verify-team.sh and in
-# the cleanup-flow.md delete/purge steps: one rule, three consumers.
+# Roster ids feed move/probe/delete paths (`| ../../../outside/README |` escaped project) -> bare `^[a-z0-9][a-z0-9-]*$`.
+# Same guard: verify-team.sh, cleanup-flow.md delete/purge steps.
 valid_agent_id() {
   case "$1" in
     ''|*[![:lower:][:digit:]-]*|[![:lower:][:digit:]]*) return 1 ;;
@@ -59,21 +47,15 @@ valid_agent_id() {
   return 0
 }
 
-# Markdown separator row of the `## Agents` table. Only `|`, `-`, `:` and spaces, with a run of
-# dashes -- a formatter that pads the cells (`| ------ |`) writes a separator just as valid as
-# `|---|`, and matching only the unpadded spelling left past_header at 0, parsed zero rows, and
-# still printed `MOVED:0 ... ✅ disable` with every agent file live. Same rule in verify-team.sh.
+# `## Agents` separator row: padded `| ------ |` valid as `|---|` (unpadded-only match -> 0 rows, false `✅ disable`).
+# Same rule in verify-team.sh.
 is_separator_row() {
   printf '%s\n' "$1" \
     | grep -Eq '^[[:space:]]*\|[[:space:]]*:?-{3,}:?[[:space:]]*(\|[[:space:]]*:?-{3,}:?[[:space:]]*)+\|[[:space:]]*$'
 }
 
-# Roster parse: identical shape to verify-team.sh -- `Agent` is field 2 of each row
-# past the header separator of the `## Agents` table.
-#
-# One walk, two passes. `probe` decides only whether the roster is safe to move and prints nothing
-# but its refusals; `apply` is the real thing. Both directions probe first, so a collision on the
-# LAST member cannot leave the team half-moved -- the toggle is all-or-nothing either way.
+# Roster parse as verify-team.sh (`Agent` = field 2 past separator). Pass `probe` prints only refusals,
+# `apply` moves; probe runs first -> collision on LAST member !=half-moved team (all-or-nothing).
 walk() {
   _pass="$1"
   MOVED=0
@@ -110,13 +92,8 @@ walk() {
         PARKED="$AGENTS_DIR/${agent}.md.disabled"
         if [ "$ACTION" = "disable" ]; then FROM="$LIVE"; TO="$PARKED"; else FROM="$PARKED"; TO="$LIVE"; fi
 
-        # `.claude/agents/<name>.md` is a PROJECT-GLOBAL namespace, not this team's private slot.
-        # While the team was parked anyone -- another team, another skill, a hand edit -- may have
-        # written a live file under the same name, and `mv parked -> live` would clobber it with no
-        # trace. Disable is the mirror image: `mv live -> parked` clobbers the parked body just as
-        # silently. Both copies present is an unresolved collision either way: refuse, touch nothing,
-        # let a human pick which body survives.
-        # ANY destination entry counts: `mv` into a directory left a live `.md` under a `.disabled/` dir.
+        # PROJECT-GLOBAL namespace: both copies (ANY dest entry, `mv` into dir too) = collision -> refuse,
+        # touch nothing; `mv` either way would silently clobber the other body.
         if [ -f "$FROM" ] && { [ -e "$TO" ] || [ -L "$TO" ]; }; then
           echo "CONFLICT:$agent -- both $LIVE and $PARKED exist; $ACTION would overwrite the $VICTIM file. Nothing was touched."
           CONFLICT=$((CONFLICT + 1))
@@ -158,10 +135,7 @@ walk apply
 
 printf 'ACTION:%s\nTEAM:%s\nMOVED:%s\nSKIPPED:%s\nMISSING:%s\nINVALID:%s\nCONFLICT:%s\n' "$ACTION" "$TEAM_NAME" "$MOVED" "$SKIPPED" "$MISSING" "$INVALID" "$CONFLICT"
 
-# A roster the parser could not read is NOT an empty roster. Reaching no data row means the
-# `## Agents` section or its header separator never matched, and reporting `MOVED:0` + `✅ disable`
-# there leaves every agent file live while claiming the team is off -- the one failure mode that
-# must never exit 0.
+# Unparsed roster != empty: no `## Agents` separator matched -> `MOVED:0` + `✅ disable` would lie; never exit 0.
 if [ "$past_header" -eq 0 ]; then
   echo "❌ FAILED -- parsed no ## Agents rows from $TEAM_MD (missing '## Agents' section, or its header separator row is malformed); nothing was touched"
   exit 1

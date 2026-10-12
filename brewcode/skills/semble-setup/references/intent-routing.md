@@ -73,7 +73,7 @@ MODE:   install — matched keyword: set up
 SCOPE:  required repo=this project root, optional content omitted -> registered code+docs+config corpus
 DO:     - probe prerequisites (uv, coreutils)
         - register semble_code MCP at user scope
-        - wire rule/hooks/agents; prefetch targets index-code-config-docs
+        - wire rule/hooks/agents; index variant index-code-config-docs
         - write reload checkpoint
 RESULT: registered MCP pending a new-session reload, plus the resume command
 ```

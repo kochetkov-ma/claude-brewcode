@@ -11,7 +11,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 
 <Callout type="note" title="Current authoring contracts">
 The authoring references were checked against official Claude Code documentation and changelog
-through 2.1.285. Invocation flags, fork behavior and turn-scoped tool permissions are separate
+through 2.1.296. Invocation flags, fork behavior and turn-scoped tool permissions are separate
 from repository naming, prompt and validation requirements.
 </Callout>
 
@@ -52,7 +52,7 @@ from repository naming, prompt and validation requirements.
 <Steps>
   <li><div><strong>Input gate</strong><p>Treats arguments as one free-form prompt, with prompt-first guidance rather than positional grammar. Empty input means status. An explicit mode anywhere wins; otherwise distinct whole-word evidence selects the mode.</p></div></li>
   <li><div><strong>Resolve and announce</strong><p>Prints one canonical PLAN before work: INPUT, MODE with its reason, SCOPE, DO and RESULT. Uses existing answers and bundles material unresolved write decisions into one AskUserQuestion before writes, with at most four questions. Read-only work asks nothing.</p></div></li>
-  <li><div><strong>Optional menu</strong><p>Only an explicit menu request opens the choices: scoped status, combined agents/rules/skills status, create, improve, review, sync, list or cancel. Resolved questions are not repeated.</p></div></li>
+  <li><div><strong>Optional menu</strong><p>Only an explicit menu request opens it: one AskUserQuestion with two questions. Q1 picks the action (status, create, improve, review); Q2 picks the variant (as chosen, combined agents/rules/skills status, plain list, sync). A non-default Q2 replaces Q1; dismissing via Other cancels. Resolved questions are not repeated.</p></div></li>
   <li><div><strong>Dispatch</strong><p>Routes to the appropriate handler: `list-skills.sh` for list mode, `brewcode:skill-creator` agent for create/improve, parallel agents for batch, `references/mode-sync.md` for sync. Review mode spawns a single reviewer — the project's agent from `.claude/agents/`, else `general-purpose` — two-phase: review, then double-check findings, then report. After create/improve returns, the coordinator re-runs `mode-sync.md` itself, scoped to only the file just written — no second `skill-creator` spawn — and applies every verdict directly with targeted edits.</p></div></li>
   <li><div><strong>Real status</strong><p>Four blocks: inventory by scope and load path; state from setup configuration or parked files; overlaps/conflicts; and health flags. Old underscore markers are flagged. Weak trigger descriptions matter for model-invocable skills.</p></div></li>
   <li><div><strong>Final output</strong><p>Structured report: mode executed, skills affected, findings, paths written or changed, and suggested next invocation if follow-up is warranted.</p></div></li>

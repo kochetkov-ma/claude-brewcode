@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
-# run.sh - aggregate every brewdoc:docsync-setup test suite.
-#
-# Usage: run.sh [suite-name ...]      (bare names or file names, e.g. `archive`)
-#
-# Iterates tests/suite-*.mjs in sorted order and runs each one. Exits 1 if any
-# suite exited non-zero. No network, no real upload: every suite builds its own
-# fixtures under a mkdtemp base and removes them again.
+# run.sh [suite ...] - run every brewdoc:docsync-setup tests/suite-*.mjs (bare or file names), sorted; rc 1 on any failure.
+# No network, no real upload: mkdtemp fixtures, removed after. Example suite: `hooks`.
 set -euo pipefail
+# Suites never see the live profile: always an empty temp CLAUDE_CONFIG_DIR, set or unset.
+CLAUDE_CONFIG_DIR="$(mktemp -d)"; export CLAUDE_CONFIG_DIR
+# EXIT: delete only the temp profile made above (non-empty, under TMPDIR); runner rc kept.
+CFG_TMP_DIR="$CLAUDE_CONFIG_DIR"; CFG_TMP_ROOT="${TMPDIR:-/tmp}"; CFG_TMP_ROOT="${CFG_TMP_ROOT%/}"
+readonly CFG_TMP_DIR CFG_TMP_ROOT
+trap '[ -z "$CFG_TMP_ROOT" ] || case "$CFG_TMP_DIR" in "$CFG_TMP_ROOT"/?*) rm -rf -- "$CFG_TMP_DIR" || true ;; esac' EXIT
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
-  sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,3p' "$0" | sed 's/^# \{0,1\}//'
   exit 0
 fi
 

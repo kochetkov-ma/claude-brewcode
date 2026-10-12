@@ -1,18 +1,8 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.4.0 content_version=6.0.0 generated_by=brewdoc:docsync-setup
-/**
- * docsync-gate — Stop hook (self-contained, project-local)
- *
- * At end of turn: of the docs EDITED since the last ask (reads never count),
- * re-apply the current scope (exclude globs + doc_type: skip) and keep those whose
- * `last_updated` is missing, unusable (not a date / in the future) or more than
- * threshold_days behind the file's own modification day. Non-empty -> block once,
- * record the ask, and stay silent until a doc is edited again. Never blocks when
- * `stop_hook_active` is set or the ask cannot be recorded, so it cannot loop.
- *
- * SELF-CONTAINED: helpers inlined, Node built-ins only, pure ESM. Reads project
- * state from <projectRoot>/.claude/docsync/ at runtime. Never throws.
- */
+// brewcode-meta: version=6.5.0 content_version=6.5.0 generated_by=brewdoc:docsync-setup
+
+// Stop: docs EDITED since last ask, in scope, with `last_updated` missing/unusable/> threshold_days behind mtime
+// -> block once, record the ask; never with `stop_hook_active` or an unrecordable ask. Self-contained, never throws.
 import { readFileSync, appendFileSync, mkdirSync, existsSync, readdirSync, statSync, unlinkSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 
@@ -25,14 +15,8 @@ async function readStdin() {
 }
 function output(r) { try { console.log(JSON.stringify(r)); } catch { console.log('{}'); } }
 function readJson(p, fb) { try { return JSON.parse(readFileSync(p, 'utf8')); } catch { return fb; } }
-/**
- * Project root: CLAUDE_PROJECT_DIR -> upward walk for a root marker -> hook cwd. Never throws.
- * Hook `cwd` is "the working directory when the hook is invoked" and drifts mid-session
- * (docs/hooks.md:717, CwdChanged), so it is never the root for config/state/log placement;
- * keep it only for resolving relative paths out of `tool_input`.
- * @param {string|null} hookCwd - `input.cwd` from the hook payload
- * @returns {string} Absolute project root
- */
+// Project root: CLAUDE_PROJECT_DIR -> upward walk for a root marker -> hook cwd; never throws.
+// Hook `cwd` drifts mid-session (CwdChanged) -> only for relative `tool_input` paths, never for state.
 function projectRoot(hookCwd) {
   const env = process.env.CLAUDE_PROJECT_DIR;
   if (env && existsSync(env)) return resolve(env);
@@ -99,8 +83,10 @@ function globToRegex(g) {
   }
   return new RegExp('^' + re + '$');
 }
+// Auto-loaded instruction files (any depth) never take docsync frontmatter, whatever `exclude` says.
+const INSTRUCTION = /(^|\/)(CLAUDE|CLAUDE\.local|AGENTS)\.md$/;
 function isExcluded(rel, globs) {
-  return globs.some(g => { try { return globToRegex(g).test(rel); } catch { return false; } });
+  return INSTRUCTION.test(rel) || globs.some(g => { try { return globToRegex(g).test(rel); } catch { return false; } });
 }
 // doc_type default: absent or unrecognized => 'user'. Only 'skip' removes a file from scope.
 function docTypeOf(fields) {
@@ -223,7 +209,7 @@ async function main() {
     if (unusable.length) parts.push(`Unusable \`last_updated\`: ${list(unusable)}.`);
     output({
       decision: 'block',
-      reason: `docsync: docs edited this session need a look at their \`last_updated\`. ${parts.join(' ')} Where the date is missing or unusable, or your edit already brought the doc fully up to date, set \`last_updated: "${today()}"\` (quoted) and move on. Otherwise the doc needs a sync: re-check it against the code (its \`sync_procedure\`, when present, says where to look), then set the date. A sync rewrites content, so ask the user first — with the AskUserQuestion tool if it is available; if it is not, list the docs in your final message and finish without waiting for an answer. docsync raises a doc again this session only after it is edited again.`
+      reason: `docsync: docs edited this session need a look at their \`last_updated\`. ${parts.join(' ')} Where the date is missing or unusable, or your edit already brought the doc fully up to date, set \`last_updated: "${today()}"\` (quoted) and move on. Otherwise the doc needs a sync: re-check it against the code (its \`sync_procedure\`, when present, says where to look), fix what is wrong, then set the date; decide this yourself. Ask the user first only when the sync would delete or wholesale rewrite content — with the AskUserQuestion tool if it is available; if it is not, list those docs in your final message and finish without waiting for an answer. docsync raises a doc again this session only after it is edited again.`
     });
   } catch (err) {
     try { console.error(`[docsync-gate] ${err.message}`); } catch {}

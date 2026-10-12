@@ -1,18 +1,5 @@
 #!/usr/bin/env node
-/**
- * suite-contract.mjs - the prose half of BT-F03 / BT-F04.
- *
- * The scripts cannot enforce what the agent prompt asks for, so the prompt text
- * itself is the regression surface: the moment a `content` field or the false
- * "git-ignored paths already dropped" sentence comes back, the fixed behaviour
- * is gone even though every script still passes. Also re-checks the workspace
- * skill invariants (bare name, 7-key frontmatter order, invocation flags).
- *
- * Read-only: parses SKILL.md / README.md and lists scripts/. No temp files.
- *
- * Assertion policy: unconditional exact counts, exact strings and exact arrays
- * with a description; no `if` gates.
- */
+// suite-contract.mjs - prose half of BT-F03/BT-F04: prompt text = regression surface (`content` field or false "git-ignored paths already dropped" sentence back -> fix gone, scripts still pass) + skill invariants (bare name, 7-key frontmatter order, invocation flags); read-only: parses SKILL.md / README.md, lists scripts/. No temp files; exact counts/strings/arrays, no `if` gates.
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';

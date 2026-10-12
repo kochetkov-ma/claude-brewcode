@@ -1,6 +1,6 @@
 # Codex workspace
 
-This repository develops four Claude Code products: `brewcode/` (skill/agent/rule authoring, semantic search, setup skills), `brewdoc/` (documentation), `brewtools/` (text and ops utilities, manager and subagent-guard setups), and `brewui/` (placeholder, no skills). Codex works through native project instructions, skills, agents, and tools; Claude product files remain a separate compatibility surface.
+This repository develops four Claude Code products: `brewcode/` (skill/agent/rule authoring, semantic search, setup skills), `brewdoc/` (documentation), `brewtools/` (text and ops utilities, manager and subagent-guard setups), and `brewui/` (placeholder, no skills). Claude product files are a separate compatibility surface.
 
 - Use `gpt-6.1-sol` for this workspace. Codex plugins and remote plugins stay disabled; do not install or enable them.
 - Native instructions: this file and `.codex/rules/`; skills: `.codex/skills/` with discovery aliases in `.agents/skills/`; agents: `.codex/agents/*.toml`. `.codex/plugins/` is a generated compatibility mirror, not an active plugin dependency.

@@ -1,41 +1,8 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.4.0 content_version=5.6.0 generated_by=brewtools:agent-deadline-setup
-/**
- * agent-deadline — PreToolUse hook (self-contained, Node built-ins only).
- *
- * Soft wall-clock deadline for SUBAGENTS. Claude Code has no wall-clock timeout,
- * and `maxTurns` kills the agent and loses its final report. This hook instead
- * FORCES the agent to finalize: it warns at 80% of the budget, and past 100% it
- * denies every tool except the finalization set, so the only thing the agent can
- * still physically do is persist results and answer.
- *
- * Discriminator: a payload counts as a subagent ONLY when it carries BOTH
- * `agent_id` and a non-empty `agent_type` (verified on CC 2.1.220). Main session
- * -> no-op. Two fields, because a build that started stamping `agent_id` on the
- * main session would otherwise start blocking the user's own session.
- *
- * Channels (both verified reaching the SUBAGENT itself on 2.1.220):
- *   - soft warn : hookSpecificOutput.additionalContext, NO permissionDecision
- *                 (normal permission flow keeps applying; `allow` would bypass
- *                 the user's own deny rules)
- *   - hard block: hookSpecificOutput.permissionDecision = "deny"
- *                 + permissionDecisionReason
- *
- * State: <os.tmpdir()>/brewtools-agent-deadline/<session_id>/<agent_id>.json
- *        { start, warned, expired, config, stopped? }: `config` = the governing
- *        config file (what uninstall/purge match on), `stopped` = set by the
- *        SubagentStop hook, cleared on the next call.  Nothing is written under ~/.claude
- *        (harness-protected path). Writes go through a pid-suffixed temp file +
- *        rename, so a concurrent reader never sees a truncated file (a torn read
- *        used to look like "first call" and silently restarted the clock).
- *        The state root is refused unless it is a real directory owned by us and
- *        not group/world writable -- /tmp is shared on Linux/CI.
- *
- * LIMIT: time is only sampled AT tool calls. An agent stuck inside one 25-minute
- * Bash call is never observed in between; cap that with BASH_MAX_TIMEOUT_MS.
- *
- * Fail-open: any error -> `{}` on stdout, exit 0. Never breaks a session.
- */
+// brewcode-meta: version=6.5.0 content_version=6.5.0 generated_by=brewtools:agent-deadline-setup
+
+// agent-deadline PreToolUse: soft wall-clock budget per subagent (agent_id AND agent_type), warn 80%, finalize-only past 100%.
+// State <os.tmpdir()>/brewtools-agent-deadline/<session_id>/<agent_id>.json; sampled only at tool calls; fail-open `{}`.
 import {
   readFileSync,
   writeFileSync,
@@ -57,10 +24,8 @@ const DEFAULT_MINUTES = 20;
 // Past this multiple of the budget the allow-list shrinks to bare persistence:
 // a looping agent must not be able to burn unbounded time inside finalize tools.
 const DEFAULT_HARD_STOP_RATIO = 2;
-// Notices are re-emitted at most once per this fraction of the budget. A single
-// one-shot warning is lost whenever the carrying tool call is denied by another
-// hook or by a user permission rule, and the agent then jumps from silence to a
-// hard deny with no lead-up.
+// Re-notice at most once per this budget fraction: a one-shot warning is lost when another
+// hook or permission rule denies its carrying call.
 const RENOTICE_RATIO = 0.1;
 // Stop mark younger than this = same piece of work (clock keeps running); older = a later
 // resume (fresh window). Stop -> next call measured 2.2-2.9 s live, with margin for a long turn.
@@ -69,22 +34,8 @@ const PRUNE_MAX = 64; // entries examined per prune pass: bounded work per hook 
 const MAX_CONFIG_CLIMB = 16;
 const UID = typeof process.getuid === 'function' ? process.getuid() : null;
 
-/**
- * Tools an over-budget agent may still call. Per-tool decision:
- *   Read, Write, Edit, NotebookEdit  allow - re-read own notes (and the output
- *       file of a job already running) and persist the artifact the task expects;
- *       this is the whole point of the soft deadline (vs. maxTurns, which kills
- *       the agent and loses the report)
- *   TodoWrite   allow - close out the todo list, no external work
- *   TaskUpdate  allow - mark its task done/blocked
- *   TaskCreate  allow - the deny text orders the agent to hand over next steps;
- *       letting it close a task but not open the follow-up was incoherent
- *   SubagentHandback  allow, in BOTH sets - in auto mode it is the report itself;
- *       denying it leaves the caller with no report at all (handback "withheld")
- *   AskUserQuestion  DENY - a subagent parked on a human is unbounded wall-clock,
- *       exactly the failure this guard exists to stop
- *   Bash, Grep, Glob, WebFetch, WebSearch, Task/Agent, Skill  DENY - new work
- */
+// Over-budget allow-list: re-read notes, persist the artifact, close/hand over tasks, report
+// (SubagentHandback = the auto-mode report). AskUserQuestion and new work stay denied.
 const FINALIZE_TOOLS = new Set([
   'Read',
   'Write',
@@ -95,11 +46,8 @@ const FINALIZE_TOOLS = new Set([
   'TaskCreate',
   'SubagentHandback',
 ]);
-// Advertised in the messages: the core set the agent is supposed to reach for.
-// NOT a copy of FINALIZE_TOOLS and not a bug -- TaskCreate is allowed but
-// deliberately unlisted. The narrower advertised list is documented in README.md
-// and assets/INSTALL.md; widening it here also breaks the verbatim message
-// assertions in tests/suite.mjs.
+// Advertised core set: TaskCreate is allowed but deliberately unlisted (README.md, INSTALL.md,
+// verbatim in tests/suite.mjs).
 const FINALIZE_LIST = 'Read, Write, Edit, NotebookEdit, TodoWrite, TaskUpdate, SubagentHandback';
 
 // Second threshold: only raw persistence and the report call survive.
@@ -135,12 +83,8 @@ function readJson(file) {
   }
 }
 
-/**
- * Nearest project config wins over global; absent/invalid config = feature off.
- * The walk up matters: `claude` started from a subdirectory reports that
- * subdirectory as cwd, while Claude Code itself resolves settings from the repo
- * root, so a root-level config used to be invisible.
- */
+// Nearest project config (walked up from cwd: a subdir cwd hid the root config) wins over global;
+// absent/invalid config = feature off.
 function loadConfig(cwd) {
   if (configMemo !== undefined) return configMemo;
   const globals = globalDirs();
@@ -238,12 +182,8 @@ function safeSegment(s) {
   return clean && clean !== '.' && clean !== '..' ? clean : null;
 }
 
-/**
- * os.tmpdir() is world-writable on Linux/CI, so the root can be pre-created by
- * another local user as a symlink; mkdir -p would follow it and prune would then
- * rm -rf whatever is behind it. Accept the root only as a real directory we own,
- * with no group/world write bit. Memoized: at most one lstat per process.
- */
+// Shared tmp: accept the root only as a real dir we own, no group/world write (a planted symlink
+// would turn prune into rm -rf). Memoized per process.
 function ensureStateRoot() {
   if (stateRootOk !== undefined) return stateRootOk;
   stateRootOk = false;
@@ -360,11 +300,7 @@ function expiredContext(elapsedMin, budget, readOnly) {
   );
 }
 
-/**
- * Past the hard stop the allow-list is HARD_STOP_TOOLS, so the allowing branch must
- * not advertise FINALIZE_LIST: an agent told "Read is available" then hard-denied on
- * Read gets two contradictory directives at the exact moment it should be finalizing.
- */
+// Past the hard stop advertise HARD_STOP_LIST, never FINALIZE_LIST (no "Read available" then deny).
 function hardExpiredContext(elapsedMin, budget, readOnly) {
   return (
     `Time budget far exceeded (${elapsedMin} of ${budget} min; agent-deadline hook). ` +

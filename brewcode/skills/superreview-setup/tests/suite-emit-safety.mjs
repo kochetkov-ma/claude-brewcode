@@ -1,16 +1,6 @@
 #!/usr/bin/env node
-/**
- * Emit-ownership suite for brewcode:superreview-setup generate.sh.
- *
- * Cover for the stale-owned-artifact gap: emit writes only the SELECTED $STACK_REF
- * and never replaced the target wholesale, so switching stack A -> stack B left A's
- * reference installed forever and every later restamp treated it as current.
- *
- * Each case runs the real generator as a child process with cwd set to its own
- * mkdtemp root (the generator's target is cwd-relative), so nothing here depends on
- * the repo it is executed from. GENERATE_SH=<path> points the suite at another copy -
- * that is how the pre-fix falsification is run.
- */
+// Emit-ownership suite for superreview-setup generate.sh: a stack switch (A -> B) must not leave A's owned ref installed.
+// Each case runs the real generator, cwd = own mkdtemp root; GENERATE_SH=<path> targets another copy (pre-fix falsification).
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -169,8 +159,7 @@ const write = (p, body) => { mkdirSync(dirname(p), { recursive: true }); writeFi
 }
 
 // ── 7. the marker STRING is not ownership - only the anchored frontmatter key is ─
-// A user file that merely mentions `generated_by: "brewcode:superreview-setup"`, or carries it
-// outside the leading `---` block, used to be deleted by the sweep (substring match on head -10).
+// A body mention of `generated_by: "brewcode:superreview-setup"`, or one outside the leading `---` block, used to be swept (head -10 substring).
 {
   const root = project('marker-mention');
   run(root, 'emit', { STACK_REF: 'python.md' });
@@ -248,6 +237,43 @@ for (const stack of ['go.md', 'java-kotlin.md', 'python.md', 'typescript-react.m
     refs.map(rel => stamp(join(root, SKILL, rel))), refs.map(() => RELEASE_STAMP));
   check('old reference bodies are byte-identical after the restamp',
     refs.map(rel => read(join(root, SKILL, rel)).split('\n---\n').slice(1).join('\n---\n')), bodies);
+}
+
+// ── 10. nested agents: Claude Code scans .claude/agents/ recursively ──────────
+{
+  // GIVEN one top-level and one nested agent
+  const root = project('nested-agents');
+  write(join(root, '.claude/agents/top.md'), '---\nname: top\ndescription: top owner\n---\n');
+  write(join(root, '.claude/agents/review/expert.md'), '---\nname: expert\ndescription: nested owner\n---\n');
+  const rows = out => out.split('\n').filter(l => l.startsWith('.claude/agents/')).map(l => l.split(' :: ')[0]);
+
+  // WHEN scan runs
+  const scan = run(root, 'scan');
+
+  // THEN the roster and its count include the nested agent
+  check('scan roster lists the nested agent', rows(scan.out), ['.claude/agents/review/expert.md', '.claude/agents/top.md']);
+  check('scan counts the nested agent', scan.out.split('\n').filter(l => l.startsWith('agents=')), ['agents=2']);
+
+  // WHEN the emitted runtime roster probe runs
+  run(root, 'emit', { STACK_REF: 'python.md' });
+  const prompt = read(join(root, REFS, 'agent-prompt.md')).split('\n');
+  const start = prompt.indexOf('# Live roster: name + description of every project agent');
+  write(join(root, 'roster.sh'), `${prompt.slice(start, prompt.indexOf('```', start)).join('\n')}\n`);
+  const probe = spawnSync('bash', [join(root, 'roster.sh')], { cwd: root, encoding: 'utf8' });
+
+  // THEN it lists the nested agent too (intent-guard is written by emit)
+  check('emitted roster probe lists the nested agent', rows(probe.stdout),
+    ['.claude/agents/intent-guard.md', '.claude/agents/review/expert.md', '.claude/agents/top.md']);
+
+  // WHEN validate sees a nested agent and an unknown one referenced
+  const sk = join(root, SKILL, 'SKILL.md');
+  write(sk, `${read(sk)}\nsubagent_type="expert"\nsubagent_type="ghost"\n`);
+  const val = run(root, 'validate');
+
+  // THEN only the unknown one is rejected
+  check('validate allowlist accepts the nested agent only',
+    val.out.split('\n').filter(l => l.startsWith('❌ unknown agent referenced')),
+    ['❌ unknown agent referenced in SKILL.md: ghost (not in target .claude/agents/ nor built-in Explore|Plan|general-purpose)']);
 }
 
 rmSync(BASE, { recursive: true, force: true });

@@ -357,9 +357,10 @@ function runHookTemplate(source, stdin) {
   check('pluginData.writable', offenders, [],
     'no creator file or reference may claim ${CLAUDE_PLUGIN_DATA} writes are blocked; it is the official writable plugin data dir (D1 Q1/H16)');
 
-  const asked = hits('hooks-env.md', /Sensitive-path prompt \(2\.1\.233, verified in binary\)/);
+  // 2.1.233 binary note replaced by the 2.1.296 docs protected-paths table (w52-bc BC-7).
+  const asked = hits('hooks-env.md', /Protected paths \(2\.1\.296, \[permission-modes\]/);
   check('pluginData.sensitivePathBlock', asked.length, 1,
-    'hooks-env.md must carry D1\'s sensitive-path ASK text exactly once (H16)');
+    'hooks-env.md must carry the 2.1.296 protected-paths table exactly once (H16)');
 }
 
 // ---------------------------- 6. PostToolUse blockability, stated identically

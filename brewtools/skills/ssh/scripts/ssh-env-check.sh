@@ -1,7 +1,6 @@
 #!/bin/bash
 set -euo pipefail
-# Check SSH environment: keys, config, ssh-agent
-# No args needed
+# Check SSH environment: keys, config, ssh-agent. No args needed
 # Output: structured key=value pairs
 
 echo "=== SSH Environment Check ==="

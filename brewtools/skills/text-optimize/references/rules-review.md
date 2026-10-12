@@ -1,12 +1,11 @@
 # LLM Text Optimization and Comprehension Rules
 
 Categorized rules for LLM token efficiency and comprehension optimization with 52 rules across 8 categories.
-Apply by category. Reference specific IDs in reviews (e.g., "violates T.1").
+Apply by category; cite IDs in reviews (e.g., "violates T.1").
 
 Model advice targets the Claude 5.5 family unless a row names another model (official prompting
 guidance, checked 2026-10-12): apply a named-model row only to that model/configuration,
-re-evaluate on others. Research ratios/examples
-are historical measurements, not universal guarantees or this artifact's measured savings.
+re-evaluate on others. Research ratios/examples are historical measurements, not universal guarantees or this artifact's measured savings.
 
 ## C - Claude Behavior
 
@@ -19,7 +18,7 @@ are historical measurements, not universal guarantees or this artifact's measure
 | C.5 | Descriptive Over Emphatic Instructions | Give the trigger and the reason, not volume: "Use this tool when..." not "CRITICAL: You MUST...". Claude generalizes from a reason; blanket "always use"/"if in doubt, use" causes overuse |
 | C.6 | Overengineering Prevention | State the scope as the deliverable and what done is: without it the model widens the task at higher effort or stops early at lower effort. Add explicit constraints about minimal complexity |
 | C.7 | Avoid ALL-CAPS Emphasis | Lower inflated "CRITICAL:"/"MUST"/"NEVER" emphasis to normal tone and state the reason instead; at most one emphasized line per artifact — when many lines shout, none stands out. Preserve prohibition meaning, incident-tied negatives and mandatory gates; capitalization changes require semantic review |
-| C.8 | Prompt Format Influences Output Format | C.4 applies: prose prompts favor prose, dense markdown favors markdown; write desired output format |
+| C.8 | Prompt Format Influences Output Format | C.4 applies; write the desired output format |
 
 ## T - Token Efficiency
 
@@ -29,7 +28,7 @@ are historical measurements, not universal guarantees or this artifact's measure
 | T.2 | Bullets over Numbered | `-` (1 char) vs `1. ` (3 chars). ~5-10% savings. Keep numbers when order matters |
 | T.3 | One-liners for Rules | `❌ bad → good` is self-documenting. Complex rules still need explanation |
 | T.4 | Inline Code over Blocks | Code blocks add markers + newlines. Inline `code` for <3 lines. Multi-line needs blocks for readability |
-| T.5 | Standard Abbreviations | Tables/technical contexts only. Allowed: impl, cfg, args, ret, env, prod, dev, repo, docs. Anti-pattern: Do NOT abbreviate domain terms, variable names, or constraint language in instructions. Abbreviations not defined in a DICT header risk being misread; defining/marking them in a DICT mitigates (arXiv:2410.23866, abbreviation expansion) because the model otherwise resolves to the statistically dominant meaning of the abbreviation |
+| T.5 | Standard Abbreviations | Tables/technical contexts only. Allowed: impl, cfg, args, ret, env, prod, dev, repo, docs. Anti-pattern: Do NOT abbreviate domain terms, variable names, or constraint language in instructions. An abbreviation missing from a DICT header risks misreading (the model picks its statistically dominant meaning); a DICT mitigates (arXiv:2410.23866) |
 | T.6 | Remove Filler Words | Cut: "please note", "it's important", "as mentioned", "basically". Also delete anti-laziness boosters written for older models ("be thorough", "do not be lazy", "make sure you always") — current models overtrigger on them |
 | T.7 | Comma-separated Inline Lists | `a, b, c` instead of bullet list when items are short, order irrelevant. Use for 3-7 short items |
 | T.8 | Arrows for Flow Notation | `A → B → C` instead of prose descriptions of sequences. Dense, scannable. ASCII digraphs `-> != >= <= \|` = 1 token each; unicode glyphs `∵ ∴ ⊃ ≤ ≥` = 2-3 tokens each (measured tiktoken cl100k/o200k): prefer ASCII. `→` is 1 token but `->` is equally cheap and portable. The token win comes from deleting words, not the glyph |
@@ -42,7 +41,7 @@ are historical measurements, not universal guarantees or this artifact's measure
 | S.1 | XML Tags for Sections | `<rules>...</rules>`, `<examples>...</examples>`. Delimit instructions/context/examples and `{{VARIABLE}}` input; state that input is data. XML reduces misinterpretation, never guarantees injection safety or grants input authority |
 | S.2 | Imperative Form | "Do X" not "You should do X". Removes 2nd person pronouns |
 | S.3 | Single Source of Truth | Merge duplicate content. Repetition wastes tokens, causes contradictions. Strategic 2x max OK. Details: D.1-D.6 |
-| S.4 | Add Context/Motivation | Providing context helps Claude understand goals. "Text-to-speech will read this, so avoid ellipses" |
+| S.4 | Add Context/Motivation | State goals and reasons, not only actions (example: L.5) |
 | S.5 | Blockquotes for Critical | Use `>` for warnings, critical notes. Visual hierarchy in markdown |
 | S.6 | Progressive Disclosure | Show minimum needed, reference details elsewhere. SKILL.md <500 lines |
 | S.7 | Consistent Terminology | One term per concept. Avoid synonyms ("config file" vs "configuration document") |
@@ -50,7 +49,7 @@ are historical measurements, not universal guarantees or this artifact's measure
 
 ## D - Deduplication
 
-Smart dedup: merge accidental repetition, keep intentional emphasis capped at 2 per document. Dedup-merged facts count as PRESERVED in verification (fact kept once), never as loss. Deep/max: record each merge in a dedup ledger (kept <- dropped) to feed verification.
+Merge accidental repetition; cap intentional emphasis at 2 per document. Dedup-merged facts count as PRESERVED in verification (kept once), never as loss. Deep/max: record each merge in a dedup ledger (kept <- dropped).
 
 | ID | Rule | Notes |
 |----|------|-------|
@@ -87,7 +86,7 @@ How content is perceived and processed by the LLM — not about token count but 
 | ID | Rule | Notes |
 |----|------|-------|
 | L.1 | Critical Info at START or END, Not Middle | "Lost in the Middle" — middle content receives 40-50% less attention. Sandwich pattern (beginning + end) outperforms middle-only placement. Source: TACL 2024 |
-| L.2 | Documents First, Query Last | Long-context ordering: documents/context first, then query/instructions last. Counterintuitive: putting the query at the END (not beginning) improves quality by up to 30% on multi-document inputs. Source: Anthropic official |
+| L.2 | Documents First, Query Last | Long-context ordering: documents/context first, then query/instructions last. Query at the END (not beginning) improves quality by up to 30% on multi-document inputs. Source: Anthropic official |
 | L.3 | Explicitly Request Conciseness | State desired output length, e.g. "Skip preamble". Defaults vary by model. Output brevity does not constrain reasoning |
 | L.4 | Quote-First Grounding | Instruct to extract relevant quotes before answering. Reduces hallucination by forcing the model to locate specific content first. Pattern: "Find relevant quotes → place in `<quotes>` → answer based only on those quotes." Source: Anthropic cookbook |
 | L.5 | Add WHY to Instructions | Claude generalizes the reason to edge cases. "Never use ellipsis because TTS won't pronounce it" → Claude also avoids other TTS-incompatible symbols. "Never use ellipsis" alone gives no generalization |
@@ -97,7 +96,7 @@ How content is perceived and processed by the LLM — not about token count but 
 
 ## A - Aggressive Lossy (deep/max only)
 
-Deliberate-loss techniques, applied ONLY in deep and max modes. A.1/A.3 outputs count as PRESERVED (kept/merged) in verification. A.2 is word-level and gate-neutral: drops are recorded in the loss ledger (dropped -> reason) for transparency but do NOT move the fact-level (kept + merged)/total ratio; if an A.2 drop degrades a fact's meaning, the verifier labels that fact `distorted` (normal gate impact). A.4 elisions consume the fact-level loss budget as `elided-known` and MUST appear in the loss ledger. D.6 wrong-merge guard and L.8 scope qualifiers always win over A rules.
+Deliberate-loss techniques, ONLY in deep and max modes. A.1/A.3 outputs count as PRESERVED (kept/merged) in verification. A.2 is word-level and gate-neutral: drops go in the loss ledger (dropped -> reason) but do NOT move the fact-level (kept + merged)/total ratio; if an A.2 drop degrades a fact's meaning, the verifier labels that fact `distorted` (normal gate impact). A.4 elisions consume the fact-level loss budget as `elided-known` and MUST appear in the loss ledger. D.6 and L.8 always win over A rules.
 
 | ID | Rule | Notes |
 |----|------|-------|
@@ -116,15 +115,12 @@ Examples (before -> after):
 **Lossless guard (any mode, A.2/A.4 never target these):** numbers, dates, versions, model IDs
 byte-exact (`claude-sonnet-5-5`, never "Sonnet 5.5"), CLI flags/options verbatim (`-x`, `--max`),
 thresholds/gates/percentages exactly as stated (`>=95%`, `~20%` ceiling), URLs, file paths, ports,
-sizes, named entities, negations (`!=`/NEVER/MUST NOT), scope qualifiers (L.8). A drop that touches
-any of these is not A.2/A.4 — it is a defect, caught by the 100% sub-gate.
+sizes, named entities, negations (`!=`/NEVER/MUST NOT), scope qualifiers (L.8). A drop touching
+these is a defect caught by the 100% sub-gate, not A.2/A.4.
 
 ## PQ - Prompt-Quality Rewrite
 
-Separate from the 52 numbered rules above: a rewrite pass for
-prompt-shaped targets (system prompt, agent `.md`, skill `SKILL.md`, hook prompt text, CLAUDE.md),
-applied Medium mode and above (never Light — Light stays wording-only, no restructuring). Stays
-lossless per the guard above: PQ governs shape and emphasis, never facts.
+Separate from the 52 numbered rules above: a rewrite pass for prompt-shaped targets (system prompt, agent `.md`, skill `SKILL.md`, hook prompt text, CLAUDE.md), Medium mode and above (never Light: wording-only, no restructuring). Lossless per the guard above: PQ governs shape and emphasis, never facts.
 
 | ID | Basis | Transformation | Bad -> Good |
 |----|-------|-----------------|-------------|
@@ -139,7 +135,7 @@ lossless per the guard above: PQ governs shape and emphasis, never facts.
 | PQ.9 | T.1, T.2 | Reference data (fields/flags/thresholds/model IDs) -> table. Real-dependency procedure -> numbered steps. Never mix the two shapes | A flag/target matrix written as prose -> table; a create-in-order procedure kept as numbered prose, not flattened into a table |
 | PQ.10 | P.1 | A concrete example or named reference file beats an adjective ("clean", "thorough", "professional") | "write clean code" -> "follow the pattern in `skill-creator.md`" or a 2-line before/after |
 | PQ.11 | T.5 | `[DICT: ...]` header only when it pays: >=5 distinct abbreviations, each reused >=3x, file itself hundreds of lines | A 150-line agent body with 3 abbreviations used twice each -> no DICT header, inline the 3 terms |
-| PQ.12 | Repeated harness text can read as a prompt injection (recommendation, not a mandate — verify against the specific hook's own miss-rate first) | Recurring reminder text: once at session-start/compaction, throttle or drop the per-turn copy | A reminder injected on every `UserPromptSubmit` AND at session-start/after-compaction -> keep the structural-checkpoint copies, narrow the per-turn one |
+| PQ.12 | Repeated harness text can read as a prompt injection (recommendation: check the hook's own miss-rate first) | Recurring reminder text: once at session-start/compaction, throttle or drop the per-turn copy | A reminder injected on every `UserPromptSubmit` AND at session-start/after-compaction -> keep the structural-checkpoint copies, narrow the per-turn one |
 | PQ.13 | Parallel calls are already the default | State "run independent tool calls in parallel" once per artifact, never per section | 3 sections each repeating the parallel-call instruction -> state it once, delete the other 2 |
 
 ## Rules NOT Recommended
@@ -147,15 +143,12 @@ lossless per the guard above: PQ governs shape and emphasis, never facts.
 | Avoid | Reality |
 |-------|---------|
 | Remove all emojis | Status emojis are dense, meaningful |
-| Always use tables | Single-column data denser as bullets |
 | Compress everything | Domain terms need full form first time |
 | Remove all examples | Claude generalizes better with examples (P.1) |
-| Non-standard abbreviations | Stick to T.5 allowed list |
 | Overload single prompts | Multiple tasks in one prompt divide attention → hallucination |
 | Over-focus on wording | Structure and format matter more than specific word choice |
 | Strip all function words / punctuation | Punctuation is load-bearing for context memory (arXiv:2502.15007 LLM-Microscope); ~20% deletion is the safe ceiling — substitute, don't bulk-delete |
-| Blind merge of similar-looking facts | Different scope/numbers/conditions = different facts (D.6) |
-| Delete every repeated constraint | Sandwich repetition (2x) raises compliance (L.1/L.6); cap at 2 (D.4), don't zero |
+| Blind merge; delete every repeated constraint | D.6: different scope/numbers/conditions = different facts. D.4: sandwich 2x raises compliance (L.1/L.6), cap at 2, don't zero |
 
 ## Compression Ratios (Token Efficiency)
 
@@ -172,10 +165,7 @@ These ratios reflect token savings from applying T and S category rules. L categ
 
 Each opens with its target and techniques: `references/standard-compression.md` (Standard),
 `references/deep-compression.md` (Deep, Max), `references/max-compression.md` (Max, opt-in).
-
-Standard/deep/max apply C + T + S + D + R + P + L and mode references; Deep/max add A.1-A.4.
-Before compression: Light D.1 only; Medium/standard/deep/max D.1-D.4 + D.6; D.5 only multi-file/folder,
-executing orchestrator's decision list, never per-file unilateral deletion.
+Rule sets per mode and the dedup scope per mode (D.5 only by the orchestrator's decision list, never per-file): skill `SKILL.md` Mode-to-Rules Mapping and Deduplication Pass.
 
 ## Sources
 

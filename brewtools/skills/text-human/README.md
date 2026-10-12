@@ -4,7 +4,7 @@ Universal, context-aware humanizer. It removes AI surface artifacts (chat scaffo
 
 ## Quick Start
 
-```bash
+```text
 /brewtools:text-human [path|commit|folder|text] [custom instructions]
 ```
 
@@ -42,7 +42,7 @@ The first token is scope when it resolves to a path or a 7+ hex git hash; the re
 
 ## Examples
 
-```bash
+```text
 # Code -- strip AI tells, normalize unicode, inject OFF
 /brewtools:text-human src/main/java/com/example/OrderService.java
 

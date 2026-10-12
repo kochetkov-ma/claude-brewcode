@@ -22,8 +22,8 @@ the reasons and edge cases. Fill the `<slots>`, keep the wording:
    (<table>). Tie with a destructive mode -> `AskUserQuestion`; with `status` -> `status`; of two
    mutating modes -> the keyword that comes first. No hit or empty -> `<DEFAULT_MODE>`.
 2. Scope: prose that is not a mode/id/path is still input: take the id, path or target from it.
-3. Ask: at most ONE `AskUserQuestion` (max 4 questions), before any work, only when the answer
-   changes what gets written. A read-only run asks nothing.
+3. Ask: at most ONE `AskUserQuestion` (max 4 questions) to resolve mode and scope, before any
+   work, only when the answer changes what gets written. A read-only run asks nothing.
 
 Print once, before the first action (labels literal, values in the conversation language):
 
@@ -37,11 +37,25 @@ RESULT: <what the user ends up holding>
 ```
 ~~~
 
+Outside shell fences, the first line is the ONLY place a `SKILL.md` (or emitted template) names
+`$ARGUMENTS`: Claude Code replaces every occurrence, fences included, with the raw prompt at load.
+Elsewhere write "the prompt". In a shell fence `$ARGUMENTS` appears only as its own line inside a
+quoted `__SKILL_ARGS__` heredoc, never inside `$(...)` (`validate-skill.sh` checks 19-20): the
+canonical read form below, then `"$ARGS"`, or the same heredoc as a script's stdin
+(`script.sh - <<'__SKILL_ARGS__'`):
+
+```bash
+IFS= read -r -d '' ARGS <<'__SKILL_ARGS__' || true
+$ARGUMENTS
+__SKILL_ARGS__
+ARGS=${ARGS%$'\n'}
+```
+
 | Slot | Fill with |
 |------|-----------|
 | `<table>` | `table below`, `table in P0`, a `references/*.md` — or the table itself, placed under the first line |
 | `<DEFAULT_MODE>` | the documented default with its condition (`status` if installed, else `install`) |
-| rules 1-3 | the clause above plus only what this skill adds: named flags, own tie or default, what Scope extracts, its one question. Single-mode skill: rule 1 is `Mode: single — <mode>` |
+| rules 1-3 | the clause above plus only what this skill adds: named flags, own tie or default, what Scope extracts, its one question. An own tie rule (e.g. `install` vs a removal mode -> `AskUserQuestion`) goes in rule 1 and replaces the canonical clause it overrides; it is never stated a second time elsewhere in the file. Single-mode skill: rule 1 is `Mode: single — <mode>` |
 | print line | the skill's own moment (`before Phase 3`); its language rule if different |
 | `SCOPE:` / `RESULT:` | this skill's concrete parameters and artifacts |
 
@@ -88,7 +102,8 @@ rule 3 = steps 5-6.
 3. Otherwise score every mode by the count of **distinct whole-word** keyword hits in the prompt
    (multi-word keywords match as whole phrases). Highest unique score wins.
 4. Tie-break, in order:
-   - tie involving a destructive mode -> `AskUserQuestion`. Never guess destructive.
+   - tie involving a destructive mode (`Mutates?` = `yes, destructive`, or one the skill's rule 1
+     names) -> `AskUserQuestion`. Never guess destructive.
    - tie where one side is read-only (`status`) -> read-only wins.
    - tie of two mutating non-destructive modes -> the keyword appearing FIRST in the prompt.
    - every mode scores 0 -> the skill's documented default mode, and name the two most plausible
@@ -97,7 +112,9 @@ rule 3 = steps 5-6.
    `AskUserQuestion` only if the answer changes what gets written or where. A read-only default
    (`status`, a report, a lookup) asks nothing and just runs.
 6. Outcome-changing ambiguity is asked before the work starts: ONE `AskUserQuestion` call, max 4
-   questions. `--noask` / an explicit non-interactive flag suppresses steps 5-6 and the skill
+   questions. The limit covers mode and scope resolution only; a confirmation or decision a later
+   step of the skill defines (destructive confirm, per-phase review, interactive team design) is the
+   skill's own. `--noask` / an explicit non-interactive flag suppresses steps 5-6 and the skill
    records the literal `Skipped (--noask)`; it never suppresses a ground-truth STOP (missing
    target, several candidates, destructive confirmation).
 

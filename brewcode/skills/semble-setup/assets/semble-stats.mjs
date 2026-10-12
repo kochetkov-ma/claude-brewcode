@@ -1,26 +1,8 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.4.0 content_version=6.0.0 generated_by=brewcode:semble-setup
-/**
- * brewcode:semble-setup — PostToolUse / PostToolUseFailure hook (self-contained,
- * installed into a project). PURE OBSERVER.
- *
- * It answers one question the other three hooks cannot: did a real semble call
- * actually happen, and how does that compare to the ordinary search-shaped tool
- * uses it was supposed to displace. It appends JSONL to
- * `<cwd>/.claude/semble/telemetry.jsonl` and NOTHING else — no
- * `additionalContext`, no `permissionDecision`, no `systemMessage`. The reply is
- * always the neutral `{}` and the exit code is always 0, so wiring it can never
- * change what any tool call does.
- *
- * Registered on BOTH post-tool events, same matcher list:
- *   PostToolUse         -> a call that succeeded (`ok:true`)
- *   PostToolUseFailure  -> a call that errored or was interrupted (`ok:false`)
- * On 2.1.226 a failed call does NOT fire PostToolUse, so without the second
- * registration every failure would silently vanish from the denominator.
- *
- * Pure ESM, Node built-ins only. Helpers are inlined on purpose: this file
- * travels alone into a user's .claude/hooks/ and must have no imports.
- */
+// brewcode-meta: version=6.5.0 content_version=6.5.0 generated_by=brewcode:semble-setup
+
+// PostToolUse (`ok:true`) + PostToolUseFailure (`ok:false`, failures skip PostToolUse): PURE OBSERVER, semble
+// calls vs searches -> .claude/semble/telemetry.jsonl only; always `{}`, exit 0; Node built-ins, no imports.
 import { appendFileSync, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -47,13 +29,8 @@ const TELEMETRY_SRC = 'stats';
 const TELEMETRY_MAX_BYTES = 2_000_000;
 const TELEMETRY_KEEP_LINES = 1000;
 
-/**
- * Appends one JSONL record to .claude/semble/telemetry.jsonl. Single
- * appendFileSync, never read-modify-write. Every failure is swallowed: a hook
- * that cannot measure itself must still behave exactly as if it had.
- * Byte-identical in shape to the writer in semble-prefetch.mjs — the two files
- * append to the SAME log and must stay in sync.
- */
+// One JSONL record -> .claude/semble/telemetry.jsonl via a single appendFileSync; every failure swallowed.
+// Same record shape as the session/subagent writers (SAME log): keep in sync.
 function telemetry(cwd, sid, ev, extra) {
   try {
     const file = join(cwd, '.claude', 'semble', 'telemetry.jsonl');
@@ -85,41 +62,18 @@ const SEMBLE_TOOLS = ['mcp__semble_code__search', 'mcp__semble_code__find_relate
 /** The denominator: search-shaped tools that semble is meant to displace. */
 const SEARCH_TOOLS = ['Bash', 'Grep', 'Glob'];
 
-/**
- * Prefetch conversion, and the only reason this hook watches `Read`.
- * `semble-prefetch.mjs` logs the candidate paths it injected; a conversion is an
- * injected path being OPENED afterwards in the same session. Without an `open`
- * record there is no way to compute that from the log without replaying the
- * transcripts, so the number would only ever exist while someone was measuring.
- * `Read` is never counted as a search: it is not a tool semble displaces.
- */
+// `Read` -> `open` records (fed the retired prefetch conversion); never counted as a search.
 const OPEN_TOOLS = ['Read'];
 const PATHMAX = 200;
 
-// The definition of "search-shaped" for the denominator. It outlived the
-// retired advisory hook that first carried it; keep it in step with any other
-// copy that appears. A search binary at a command boundary
-// (start, |, ;, &, &&, ||, subshell); the `m` flag covers heredocs and
-// multi-line scripts, where `^` alone only ever matched offset 0.
+// "Search-shaped" denominator (keep in step with copies): a search binary at a command boundary
+// (start, |, ;, &, &&, ||, subshell); `m` flag covers heredocs and multi-line scripts.
 const SEARCH_RE = /(?:^|[|;&(]|&&|\|\|)\s*(?:command\s+)?(grep|egrep|fgrep|ugrep|rg|ag|ack|find|bfs)\b/m;
 
 const QMAX = 120;
 
-/**
- * `main` | `sub`, decided on `agent_id` ALONE. CC 2.1.226 documents the two
- * fields verbatim:
- *   agent_id   - "Present only when the hook fires from within a subagent.
- *                 Absent for the main thread, even in --agent sessions. Use
- *                 this field (not agent_type) to distinguish subagent calls
- *                 from main-thread calls."
- *   agent_type - "Present when the hook fires from within a subagent
- *                 (alongside agent_id), OR on the main thread of a session
- *                 started with --agent (without agent_id)."
- * The payload builder confirms it: `agent_type` falls back to the session-wide
- * `mainThreadAgentType`, so testing it labelled every main-thread call in an
- * `--agent` session as `sub`. Undefined values are dropped by the JSON
- * serialisation, so a plain key test on the parsed input is exact.
- */
+// `main` | `sub` on `agent_id` ALONE: documented subagent-only; `agent_type` is also set on the
+// main thread of an `--agent` session.
 function agentOf(input) {
   if (!input || typeof input !== 'object') return 'unknown';
   return typeof input.agent_id === 'string' && input.agent_id ? 'sub' : 'main';
@@ -128,13 +82,8 @@ function agentOf(input) {
 /** Max stored length of the raw agent_id. Real ones are 36-char UUIDs. */
 const AIDMAX = 64;
 
-/**
- * The evidence behind `agent:"sub"`, stored so the label is checkable rather
- * than trusted. A `sub` record WITHOUT `aid` can only have been written by the
- * pre-fix `agentOf`, which is what lets a reader quarantine mislabelled history
- * instead of silently averaging over it. It is also the join key to the
- * `agent_id` the SubagentStart hook already logs.
- */
+// Evidence for `agent:"sub"` (a `sub` record without `aid` predates the agentOf fix -> quarantine);
+// also the join key to the SubagentStart hook's `agent_id`.
 function aidOf(input) {
   const id = input && input.agent_id;
   return typeof id === 'string' && id ? { aid: id.slice(0, AIDMAX) } : {};
@@ -147,11 +96,8 @@ function msOf(input) {
   return Math.round(d);
 }
 
-/**
- * Did a PostToolUse response carry an error flag anyway? MCP results are
- * delivered as `{content, isError}`; only the explicit error booleans count, a
- * plain `error` key is too common a legitimate field name to trust.
- */
+// Error flag inside a PostToolUse response (MCP `{content, isError}`)? Explicit booleans only;
+// a plain `error` key is too common to trust.
 function responseFailed(resp) {
   if (!resp || typeof resp !== 'object' || Array.isArray(resp)) return false;
   return resp.isError === true || resp.is_error === true;
@@ -170,12 +116,7 @@ function queryOf(toolName, toolInput) {
   return pat.slice(0, QMAX);
 }
 
-/**
- * `{fail:true}` on a PostToolUseFailure, `{}` otherwise - spread into the extras
- * so a success record stays byte-identical to what earlier versions wrote. Without
- * it an `open` emitted for a Read that FAILED is indistinguishable from a real
- * open, and a failed Read of an injected path inflates prefetch conversion.
- */
+// `{fail:true}` on PostToolUseFailure, else `{}` (success records unchanged); a failed Read never opened.
 function failFlag(ev) {
   return ev === 'PostToolUseFailure' ? { fail: true } : {};
 }
@@ -201,9 +142,7 @@ function record(input, cwd) {
     const ti = input.tool_input && typeof input.tool_input === 'object' ? input.tool_input : {};
     const p = typeof ti.file_path === 'string' ? ti.file_path : '';
     if (!p) return;
-    // Both absolute and repo-relative forms are logged. The prefetch hook records
-    // semble's repo-relative `file_path`; Claude Code reads with an absolute path.
-    // Storing both spares the reader a cwd it does not have at read time.
+    // Log absolute (Claude Code reads) + repo-relative (prefetch `file_path`): the reader has no cwd later.
     const rel = p.indexOf(cwd + '/') === 0 ? p.slice(cwd.length + 1) : p;
     telemetry(cwd, sid, 'open', {
       f: rel.slice(0, PATHMAX), abs: p.slice(0, PATHMAX), ...failFlag(ev), agent, ...aid,
@@ -219,16 +158,8 @@ function record(input, cwd) {
   telemetry(cwd, sid, 'search', { tool, q, ...failFlag(ev), agent, ...aid });
 }
 
-// --- project root (canonical recipe, D1 Q5) --------------------------------
-// CLAUDE_PROJECT_DIR -> this file's own installed location -> upward walk for a
-// root marker -> hook cwd. Never throws, never exits nonzero.
-// `input.cwd` is the cwd at invocation time and drifts mid-session
-// (docs/hooks.md:717, CwdChanged), so it must key nothing but relative paths out
-// of tool_input: from a nested package it pointed every state lookup at a
-// directory with no .claude/semble, and all three gated hooks fell silent.
-// SELF_ROOT is exact rather than a guess — the installer wires this file at
-// <root>/.claude/hooks/<name>.mjs by absolute path, so its own location encodes
-// the root even when a nested package carries its own .claude.
+// --- project root: CLAUDE_PROJECT_DIR -> own <root>/.claude/hooks/ location -> upward walk -> hook cwd ---
+// Never throws; `input.cwd` drifts mid-session (CwdChanged) -> keys only tool_input relative paths.
 const SELF_ROOT = (() => {
   const d = dirname(fileURLToPath(import.meta.url));
   return basename(d) === 'hooks' && basename(dirname(d)) === '.claude' ? dirname(dirname(d)) : '';

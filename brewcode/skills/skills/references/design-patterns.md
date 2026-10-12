@@ -22,7 +22,7 @@ skill-name/
 | **REF Splitting** | Multi-mode: 2+ modes, >50 lines/mode, >300 lines total | Detect mode -> Read `references/{mode}.md`. Guard: "not found -> ERROR + STOP" |
 | **Agents-as-REFs** | SK-coordinator + multi-step workflow + 2+ roles needing context isolation | Prompt `.md` in SK `agents/`; coordinator passes path, SA reads body. Coordinator pays path/brief tokens, not the prompt body. `agents/` is convention, NOT native |
 | **Dynamic CTX** | Need live data before launch (git diff, PR info, env) | `` !`command` `` executes BEFORE content reaches Claude |
-| **Skill fork** | Standalone task, no conversation history; 1-4 phases is a BC heuristic | `context: fork` -> regular isolated SA, background by DEF since v2.1.218; `background: false` waits. CLAUDE.md follows AG inheritance/omit rules; !=a conversation fork. 5+ phases suggests durable state, !=a platform memory-loss threshold |
+| **Skill fork** | Standalone task, no conversation history; 1-4 phases is a BC heuristic | `context: fork` -> regular isolated SA, background by DEF since v2.1.218 (`execution-model.md` Context modes); !=a conversation fork. 5+ phases suggests durable state, !=a platform memory-loss threshold |
 | **Executable Bash** | Bash blocks must execute | Template under Executable Bash below. Without the `**EXECUTE**` keyword, bash is examples only |
 | **SK Chaining** | SK invokes another SK | `Skill(skill="name", args="...")`; no `allowed-tools` needed for availability. Runtime SA skills supported upstream; DMI SKs cannot be model-invoked. BC chains distributed SKs from main |
 | **Background Knowledge** | Claude needs context, user needs no slash cmd | `user-invocable: false`. Description stays in context |
@@ -138,8 +138,8 @@ echo "pass=$pass fail=$fail"; [ "$fail" -eq 0 ]
 Run all tests, fix failures, max 2 cycles:
 
 ```bash
-for t in "${SKILL_DIR}/tests"/test-*.sh; do
-  bash "$t" && echo "OK $(basename "$t")" || echo "FAIL $(basename "$t")"
+find "${SKILL_DIR}/tests" -maxdepth 1 -name 'test-*.sh' | sort | while IFS= read -r t; do
+  bash "$t" < /dev/null && echo "OK $(basename "$t")" || echo "FAIL $(basename "$t")"
 done
 ```
 
@@ -149,6 +149,5 @@ STOP after 2 fix cycles -- document failures, proceed to the next step.
 
 | Mistake | Fix |
 |---|---|
-| Missing `context: fork` for a standalone task | Add `context: fork` |
 | Hardcoded secrets/tokens in scripts or body | Use MCP / environment injection, never a literal |
 | Multipurpose skill trying to cover unrelated jobs | Split into focused, single-purpose skills |

@@ -69,12 +69,14 @@ Batch flag: plural form, "все" / "all", or multiple names/paths -> fan-out. T
 
 ## Step 3 — Explicitly requested menu (one AskUserQuestion)
 
-Question: `What do you want to do with agents?` Options, in this order: `Status (agents)`
-(Recommended), `Status (all: agents+rules+skills)`, `Create new agents`, `Improve existing agents`,
-`Review agents`, `Sync agents (memory sync)` (re-verify all knowledge vs code, shrink not grow),
-`List (plain)`, `Nothing / cancel`.
+Two questions, 2-4 options each (tool cap; "Other" is automatic):
+Q1 `What do you want to do with agents?`: `Status (agents)` (Recommended), `Create new agents`,
+`Improve existing agents`, `Review agents`.
+Q2 `Variant?`: `As chosen` (Recommended), `Status (all: agents+rules+skills)`, `List (plain)`,
+`Sync agents (memory sync)` (re-verify all knowledge vs code, shrink not grow); a non-default Q2
+replaces Q1.
 
-Cancel -> stop; else no follow-up question: missing safe params -> stated defaults, a write-critical
+Dismissed or `cancel` via Other -> stop; else no follow-up question: missing safe params -> stated defaults, a write-critical
 one -> report the missing decision before writing. Print PLAN, then Step 4.
 
 ## Delegation (every Agent spawn in this skill)

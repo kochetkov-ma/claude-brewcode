@@ -42,7 +42,7 @@ RESULT: <published URL>
 
 ### Step 1: Parse Arguments
 
-Extract from `$ARGUMENTS`:
+Extract from the prompt:
 - `--ttl N` → TTL in days (default: `15`)
 - `--entry <filename>` → entry file for SITE uploads (default: auto-detect)
 - `--delivery-mode path|subdomain` → optional creation header; omitted = server default; reject other values before upload
@@ -75,7 +75,7 @@ Content:  site · <N> files · <total_size> · POST /api/sites
 Entry:    <entry_file>
 TTL:      <N> days
 ```
-Source-tree estimates only: report to the user the ARCHIVE MANIFEST that Step 6 prints before upload; its
+These are source-tree estimates: report the ARCHIVE MANIFEST that Step 6 prints before upload; its
 `ENTRY:` line is the entry `scripts/publish.mjs` resolved in the built archive.
 
 ### Step 4: Ask Namespace
@@ -96,7 +96,7 @@ Options:
 Reply with a number or your custom namespace (1-32 lowercase letters, digits or hyphens).
 ```
 
-Suggested slug: readable, 3-16 chars of `a-z0-9-`, named after the content (`api-docs`, `report-q2`,
+Suggested slug: 3-16 chars of `a-z0-9-` named after the content (`api-docs`, `report-q2`,
 `pricing`, `user-config`), else the project or directory name; never random strings or truncated filenames.
 
 Resolution: `2`, `4`, or empty → suggested slug | `1` → `public` | `3` or any other string → use as-is.
@@ -151,8 +151,8 @@ A value failing its pattern: re-ask; never clean it up or substitute it anyway.
 bp_prepare
 ```
 
-The printed absolute path is `run_dir`; its `brewpage.XXXXXX` basename is `run_id`. Never reuse a previous
-run, read shared `brewpage-*` inputs, or take a user-supplied run id. `Write` the inputs into it (mode 700):
+The printed absolute path (under `$TMPDIR`, else `/tmp`) is `run_dir`; its `brewpage.XXXXXX` basename is `run_id`.
+Never reuse a previous run, read shared `brewpage-*` inputs, or take a user-supplied run id. `Write` the inputs into it (mode 700):
 
 | File | Written for | Contents |
 |------|-------------|----------|
@@ -161,8 +161,8 @@ run, read shared `brewpage-*` inputs, or take a user-supplied run id. `Write` th
 | `brewpage-target-path.txt` | FILE / SITE(dir) / SITE(zip) | absolute source path, one line |
 | `brewpage-password-source.txt` | `file` password mode | absolute password-file path, one line; never its contents |
 
-Run exactly ONE block below, by type (MARKDOWN → the HTML/Markdown block). Each re-validates its placeholders
-in `bp_begin` and prints one `OK`/`FAILED`/`CONFIRM:` line.
+Run exactly ONE block below, by type (MARKDOWN → the HTML/Markdown block); each re-validates its
+placeholders in `bp_begin` and prints one `OK`/`FAILED`/`CONFIRM:` line.
 
 **HTML/Markdown text** — **EXECUTE** using Bash tool:
 ```bash
@@ -256,7 +256,7 @@ Owner token saved to <project-root>/.claude/brewpage-history.md (mode 600, git-i
 Share the server URL exactly as printed, including any trailing slash.
 ```
 
-For a private (non-`public`) namespace, append one short line after the link (skip if reply must stay ultra-brief): *Unlisted link — anyone who has it can open it, but it's not in the gallery or search. Want it discoverable? Publish to `public`.*
+For a private (non-`public`) namespace, append one short line after the link (skip if the reply must stay brief): *Unlisted link — anyone who has it can open it, but it's not in the gallery or search. Want it discoverable? Publish to `public`.*
 
 **Needs confirmation** (bash printed `CONFIRM: ...`, exit 2; nothing uploaded): show the manifest lines, name
 the flagged entries, ask ONE `AskUserQuestion` (publish anyway / cancel). Publish anyway -> fresh run, rewrite
@@ -272,7 +272,8 @@ Publish failed: {the FAILED line, verbatim}
 ## Notes
 
 - **`format` is a query param**: `/api/html` reads only `?format=` from the URL; a body `format` key is ignored and the default `html` stores markdown as raw text.
-- History: `<project-root>/.claude/brewpage-history.md` (root: `CLAUDE_PROJECT_DIR` → git toplevel → upward `.git`/`.claude` walk → `PWD`, via `scripts/brewpage-lib.sh`), mode `600`; it and `.claude/tmp/` are added to the project `.gitignore`. Its header holds the **delete** command for the owner token.
+- History: `<project-root>/.claude/brewpage-history.md` (root: `CLAUDE_PROJECT_DIR` → git toplevel → upward `.git`/`.claude` walk → `PWD`, via `scripts/brewpage-lib.sh`), mode `600`, added to the project `.gitignore`. Its header holds the **delete** command for the owner token.
+- Run dirs live outside `.claude/` (protected path: `Write` there is denied in `dontAsk`; allow rules never pre-approve it). `dontAsk`/headless runs need a `Write` allow rule for `$TMPDIR`.
 - History TTL = requested days; stored `createdAt`/`expiresAt` are authoritative: a deduplicated winner keeps its original expiry, and ordinary PUT/update does not renew it.
 - Owner API calls use the returned `ownerLink` and stored identity metadata, never a NEW root hostname parsed for namespace/ID; OLD rows without metadata keep their existing API identifiers.
 - **Update a site**: `PUT` the new bundle to its apex owner API with `X-Owner-Token`; it replaces the file set and keeps the host. No `X-Delivery-Mode` on ordinary PUT/update.

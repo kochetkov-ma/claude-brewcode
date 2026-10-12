@@ -264,24 +264,29 @@ try {
     }, cwd).status, 0, label + ': untrusted branch text stays data during sanitization');
     check(existsSync(join(cwd, 'HACKED')), false, label + ': malicious ref/tag input never executes');
   }
-  // GIVEN the shipped deploy template WHEN the producing build is not a release tag THEN nothing deploys.
-  const deployTpl = pairs[1][2], tplDir = join(temp, 'template');
-  for (const [ref, status] of [['v1.2.3', 0], ['v1.2.3-rc.1', 0], ['feature/one', 1], ['main', 1], ['', 1]]) {
-    check(bash(step(deployTpl, 'Resolve image tag').run, {
-      EVENT_NAME: 'workflow_run', UPSTREAM_SHA: SHA, UPSTREAM_RUN_ID: '123', UPSTREAM_RUN_ATTEMPT: '1', UPSTREAM_REF: ref,
-      GITHUB_OUTPUT: join(tplDir, 'output'),
-    }, tplDir).status, status, 'template: upstream ref ' + JSON.stringify(ref));
+  // GIVEN the shipped deploy workflow and template WHEN the producing build is not a release tag THEN nothing deploys.
+  for (const [label, , deploy] of pairs) {
+    const gateDir = join(temp, label + '-gate');
+    mkdirSync(gateDir);
+    for (const [ref, status] of [['v1.2.3', 0], ['v1.2.3-rc.1', 0], ['feature/one', 1], ['main', 1], ['', 1]]) {
+      check(bash(step(deploy, 'Resolve image tag').run, {
+        EVENT_NAME: 'workflow_run', UPSTREAM_SHA: SHA, UPSTREAM_RUN_ID: '123', UPSTREAM_RUN_ATTEMPT: '1', UPSTREAM_REF: ref,
+        GITHUB_OUTPUT: join(gateDir, 'output'),
+      }, gateDir).status, status, label + ': upstream ref ' + JSON.stringify(ref));
+    }
+    for (const [name, headBranch, version, expected] of [
+      ['release tag', 'v1.2.3', '1.2.3', 0], ['branch preview', 'feature/one', '1.2.3-feature-one-2', 1],
+      ['tag-named branch', 'v1.2.3', '1.2.3-v1.2.3-2', 1], ['other tag', 'v1.2.4', '1.2.3', 1],
+    ]) {
+      check((await api(step(deploy, 'Verify successful source build').with.script,
+        { BUILD_SHA: SHA, BUILD_RUN_ID: '123', BUILD_ATTEMPT: '1', BUILD_VERSION: version }, { head_branch: headBranch })).status,
+        expected, label + ': source build ' + name);
+    }
+    check(deploy.jobs.deploy.if.includes("startsWith(github.event.workflow_run.head_branch, 'v')"), true,
+      label + ': a branch-triggered upstream run skips the deploy job');
+    check(deploy.jobs.deploy.if.includes("github.event.workflow_run.event == 'push'"), true,
+      label + ': only a push-triggered upstream build deploys');
   }
-  for (const [name, headBranch, version, expected] of [
-    ['release tag', 'v1.2.3', '1.2.3', 0], ['branch preview', 'feature/one', '1.2.3-feature-one-2', 1],
-    ['tag-named branch', 'v1.2.3', '1.2.3-v1.2.3-2', 1], ['other tag', 'v1.2.4', '1.2.3', 1],
-  ]) {
-    check((await api(step(deployTpl, 'Verify successful source build').with.script,
-      { BUILD_SHA: SHA, BUILD_RUN_ID: '123', BUILD_ATTEMPT: '1', BUILD_VERSION: version }, { head_branch: headBranch })).status,
-      expected, 'template: source build ' + name);
-  }
-  check(deployTpl.jobs.deploy.if.includes("startsWith(github.event.workflow_run.head_branch, 'v')"), true,
-    'template: a branch-triggered upstream run skips the deploy job');
   console.log('PASS provenance: ' + count + ' assertions; shipped producer/verifiers executed without network');
 } finally {
   rmSync(temp, { recursive: true, force: true });

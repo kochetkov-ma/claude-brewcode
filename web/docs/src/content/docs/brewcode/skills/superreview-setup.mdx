@@ -271,7 +271,7 @@ into reviewing it.
 - **Mechanical gates run first.** The project's real build/lint/type/test commands execute
   before the fan-out. Their output carries the verdict `CONFIRMED-BY-EXECUTION` — the only
   non-adversarial verdict — and is passed to every agent so nobody re-runs or re-litigates it.
-- **Experts selected at runtime.** The live `.claude/agents/*.md` roster is read each run,
+- **Experts selected at runtime.** The live `.claude/agents/**/*.md` roster (nested folders included) is read each run,
   recon-only agents are excluded, and any surface without an owner falls back to `Explore` and
   is marked DEGRADED.
 - **Scope baseline resolved read-only.** Task + issue + recorded decisions. No baseline ->
@@ -390,7 +390,7 @@ The only writable paths are `SKILL.md` itself and `references/scope.md`.
 
 | Action | Fires when | Edit |
 |--------|-----------|------|
-| Roster refresh | The live `.claude/agents/*.md` roster differs from the emitted routing tables | Add the new agent's row; mark a vanished agent `MISSING -> Explore` |
+| Roster refresh | The live `.claude/agents/**/*.md` roster differs from the emitted routing tables | Add the new agent's row; mark a vanished agent `MISSING -> Explore` |
 | Gate repair | A gate reported `not run` **and** a `command -v <bin>` re-test proves the binary is genuinely absent | Fix that gate row to the real command, or annotate `not available in this project`. A toolchain/deps failure with the binary present is left untouched — it is not a dead gate |
 | Scope baseline | The baseline resolved `UNKNOWN`, or the tracker found disagrees with the emitted `TRACKER_LABEL` | Correct `references/scope.md` section 1 to what was really resolvable |
 | Shared-surface append | A scope pass A finding named a surface absent from `references/scope.md` section 2 | Append that row — the finding is the evidence |
@@ -443,7 +443,7 @@ is not a finding; correctness-driven and unrecorded is shape 6.
 
 | Subcommand | Phase | Effect |
 |------------|-------|--------|
-| `scan` | 1 | Reports the target's tech stack, agent roster, rules/convention files, source/test dirs, gate candidates, tracker |
+| `scan` | 1 | Reports the target's tech stack, agent roster (recursive, nested folders included), rules/convention files, source/test dirs, gate candidates, tracker |
 | `emit` | 2 | Copies + scalar-substitutes templates into `.claude/skills/superreview/`, creates-or-reuses `intent-guard.md`, saves pristine templates to `.template-baseline/`. Refuses (exit 1, `already installed`) on a live install |
 | `upgrade` | 2b | Refreshes a live install without touching hand-edits: stages a fresh emit, diffs the new template against `.template-baseline/`, writes no live file |
 | `emit-agent` | — | Writes only `.claude/agents/intent-guard.md`; no superreview skill involved. Used by `/brewcode:teams-setup` |

@@ -1,16 +1,6 @@
 #!/usr/bin/env node
-/**
- * suite-telemetry.mjs - assets/semble-stats.mjs (the measurement hook) and
- * semble-status.sh --section telemetry (the reader), plus the guidance
- * merge/unmerge/status round trip with the two new want rows present.
- *
- * Everything runs inside one mkdtemp base. The real repo .claude/ is never
- * touched: every project root is a temp dir and the scripts are staged into it.
- *
- * Assertion policy: unconditional exact-equality checks with a description.
- * No `> 0`, no "contains something" - the conversion numbers are asserted
- * exactly, because a metric nobody can check is worse than no metric.
- */
+// suite-telemetry.mjs - assets/semble-stats.mjs (hook), semble-status.sh --section telemetry (reader), guidance merge/unmerge/status round trip.
+// GIVEN temp project roots with staged scripts in one mkdtemp base | WHEN hook/reader run | THEN exact conversion numbers; real .claude/ untouched.
 import { spawnSync } from 'node:child_process';
 import {
   mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync,
@@ -20,9 +10,8 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
-// Both variables outrank the cwd walk when a script or hook resolves the project
-// root, so an ambient one would point every fixture at the caller's own repo and
-// even install into it. Scrub once here: every spawn below inherits process.env.
+// Both vars outrank the cwd walk: an ambient one would aim fixtures (and installs) at the caller's repo.
+// Scrubbed once; every spawn below inherits process.env.
 delete process.env.CLAUDE_PROJECT_DIR;
 delete process.env.SEMBLE_PROJECT_ROOT;
 
@@ -87,7 +76,7 @@ function newProject(name) {
 }
 function telFile(p) { return join(p, '.claude', 'semble', 'telemetry.jsonl'); }
 
-/** Fire one payload at the hook. Returns {status, stdout, stderr}. */
+// Fire one payload at the hook. Returns {status, stdout, stderr}.
 function fire(payload, cwdForProc) {
   const r = spawnSync(process.execPath, [HOOK], {
     input: JSON.stringify(payload),
@@ -100,7 +89,7 @@ function lines(p) {
   if (!existsSync(telFile(p))) return [];
   return readFileSync(telFile(p), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
 }
-/** A record with ts+sid dropped, so shapes can be compared exactly. */
+// A record with ts+sid dropped, so shapes can be compared exactly.
 function shape(rec) {
   const { ts, sid, ...rest } = rec;
   return rest;
@@ -122,7 +111,7 @@ function post(over) {
   };
 }
 
-/** semble-status.sh --section telemetry, run from inside a project. */
+// semble-status.sh --section telemetry, run from inside a project.
 function reader(p, args) {
   const r = spawnSync('bash', [join(SCRIPTS, 'semble-status.sh'), ...args], {
     cwd: p, encoding: 'utf8',
@@ -134,9 +123,7 @@ function readerJson(p, args) {
   return { status: r.status, json: safeParse(r.stdout) };
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 1. Neutral output on every event the hook handles
-// ═══════════════════════════════════════════════════════════════════════════
+// ── 1. Neutral output on every event the hook handles ──
 {
   const p = newProject('neutral');
   const cases = [
@@ -165,9 +152,7 @@ function readerJson(p, args) {
     'a JSON array on stdin is not an object and is ignored');
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 2. Exact record shapes
-// ═══════════════════════════════════════════════════════════════════════════
+// ── 2. Exact record shapes ──
 {
   const p = newProject('shapes');
   fire(post({
@@ -218,9 +203,7 @@ function readerJson(p, args) {
     'a payload with no session_id still records, with sid ""');
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 2b. PostToolUseFailure is distinguishable on the open and search branches
-// ═══════════════════════════════════════════════════════════════════════════
+// ── 2b. PostToolUseFailure is distinguishable on the open and search branches ──
 {
   const p = newProject('failflag');
   const rd = { tool_name: 'Read', tool_input: { file_path: join(p, 'src/a.ts') } };
@@ -249,14 +232,8 @@ function readerJson(p, args) {
     'the fail key is present on exactly the two PostToolUseFailure records');
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 2c. main vs sub is decided on agent_id ALONE
-//
-// CC 2.1.226 sets `agent_type` on the main thread of an `--agent` session as
-// well as inside a subagent, and says so in its own schema: "Use this field
-// (not agent_type) to distinguish subagent calls from main-thread calls."
-// Testing agent_type stamped every main-thread call in such a session `sub`.
-// ═══════════════════════════════════════════════════════════════════════════
+// ── 2c. main vs sub is decided on agent_id ALONE ──
+// CC 2.1.226 sets `agent_type` on `--agent` main threads too (schema: use agent_id), so testing it stamped main calls `sub`.
 {
   const p = newProject('discriminator');
   const gr = { tool_name: 'Grep', tool_input: { pattern: 'foo' } };
@@ -298,9 +275,7 @@ function fireAndLast(p, over) {
   return L[L.length - 1];
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 3. The search-shaped filter: real commands, accepted and rejected
-// ═══════════════════════════════════════════════════════════════════════════
+// ── 3. The search-shaped filter: real commands, accepted and rejected ──
 {
   const accept = [
     'rg -n foo src/',
@@ -363,9 +338,7 @@ function fireAndLast(p, over) {
     'a Read with no usable file path writes nothing at all');
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 4. A telemetry write failure leaves tool behaviour untouched
-// ═══════════════════════════════════════════════════════════════════════════
+// ── 4. A telemetry write failure leaves tool behaviour untouched ──
 {
   // .claude/semble is a FILE, so join(...)/telemetry.jsonl cannot be created.
   const p = join(BASE, 'unwritable');
@@ -387,9 +360,7 @@ function fireAndLast(p, over) {
     'an unwritable telemetry dir is a lost sample, never a broken tool call');
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 5. The size guard
-// ═══════════════════════════════════════════════════════════════════════════
+// ── 5. The size guard ──
 {
   const p = newProject('sizeguard');
   const filler = JSON.stringify({
@@ -397,8 +368,7 @@ function fireAndLast(p, over) {
     tool: 'Bash', q: 'x'.repeat(400), agent: 'main',
   });
   // 6 x 510000 = 3060000 bytes of prior records, over the 2 MB guard threshold.
-  // The size is fixed by the fixture, so it is asserted exactly: 509-byte filler,
-  // 1000 per chunk plus one newline each, six chunks.
+  // Fixture-fixed size, asserted exactly: 509-byte filler, 1000 per chunk plus one newline each, six chunks.
   const chunk = new Array(1000).fill(filler).join('\n') + '\n';
   for (let i = 0; i < 6; i++) appendFileSync(telFile(p), chunk);
   const before = statSync(telFile(p)).size;
@@ -421,16 +391,8 @@ function fireAndLast(p, over) {
   })(), 2, 'a small file is never trimmed');
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 6. The reader against a hand-built fixture with a KNOWN answer
-// ═══════════════════════════════════════════════════════════════════════════
-//
-//   sA: nudge(main) @00 -> semble call @02  => converted
-//   sB: nudge(sub)  @00 -> no call ever     => NOT converted
-//   sC: no nudge         -> semble call @05 => unprompted
-//   plus 2 skipped gates and 4 search records.
-// Per-source conversion slots. Every live channel is reported even at zero, so a
-// channel that stopped firing reads as 0 instead of vanishing from the report.
+// ── 6. The reader against a hand-built fixture with a KNOWN answer; every live channel reported even at zero ──
+// sA nudge(main)@00 -> call@02 converted | sB nudge(sub)@00, no call | sC no nudge, call@05 unprompted; +2 skipped gates, 4 searches.
 const zeroSlot = (measure) => ({
   nudges: 0, sessions: 0, converted: 0, sessionPct: null, callsAfter: 0, measure,
 });
@@ -538,14 +500,8 @@ const FIXTURE = [
     '--last is applied after --sid');
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 6b. The reader quarantines pre-fix `sub` records instead of averaging them in
-//
-// A `sub` record written by the fixed stats hook always carries the `aid` that
-// decided it. One without `aid` can only come from the version that also tested
-// `agent_type`, so the split it contributes to is an upper bound on `sub`.
-// Records from other writers are never counted here: only stats stamps `aid`.
-// ═══════════════════════════════════════════════════════════════════════════
+// ── 6b. The reader quarantines pre-fix `sub` records instead of averaging them in ──
+// Fixed stats hook stamps `aid` on every `sub`; one without it came from the agent_type-testing version (upper bound).
 {
   const p = newProject('legacy-agent');
   const LEG = [
@@ -578,9 +534,7 @@ const FIXTURE = [
     'and prints no suspect: line at all - the caveat clears itself as history rolls off');
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 7. The reader on absent / truncated / unknown-ev input
-// ═══════════════════════════════════════════════════════════════════════════
+// ── 7. The reader on absent / truncated / unknown-ev input ──
 {
   const absent = newProject('reader-absent');
   const a = reader(absent, ['--section', 'telemetry']);
@@ -624,15 +578,11 @@ const FIXTURE = [
     '--sid outside --section telemetry is bad usage, not a silently ignored flag');
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 8. Guidance merge / unmerge / status round trip with the new rows
-// ═══════════════════════════════════════════════════════════════════════════
+// ── 8. Guidance merge / unmerge / status round trip with the new rows ──
 const GUIDANCE = join(SCRIPTS, 'semble-guidance.sh');
 const STATS_MATCHER = 'mcp__semble_code__search|mcp__semble_code__find_related|Bash|Grep|Glob|Read';
-// The 5.0.0 want table: SessionStart, UserPromptSubmit, and the stats pair.
-// PreToolUse/Bash, PreToolUse/Grep and SubagentStart/Explore were RETIRED with
-// the two advisory hooks; §10 proves a v1-shaped file loses them on install.
-const WANT_N = 6;
+// Want table: SessionStart, the stats pair, SubagentStart (reminder/prefetch/explore retired).
+const WANT_N = 4;
 
 // process.env is already scrubbed of CLAUDE_PROJECT_DIR/SEMBLE_PROJECT_ROOT at
 // the top of the file, so the inherited env resolves the root by the cwd walk.
@@ -673,22 +623,19 @@ function settingsOf(p) {
   check('8.status.counts',
     [st.json.hooks.wiredCount, st.json.hooks.wantCount, st.json.hooks.driftedCount,
       st.json.hooks.missingCount, st.json.hooks.duplicateCount, st.json.hooks.drift.length],
-    [WANT_N, WANT_N, 0, 0, 0, 0], 'all six want rows are wired, nothing drifted or duplicated');
+    [WANT_N, WANT_N, 0, 0, 0, 0], 'all four want rows are wired, nothing drifted or duplicated');
   check('8.status.stats-row', st.json.hooks.stats, { file: 'present', wired: true },
     'the stats hook reports its own file and wiring');
   check('8.status.rows',
     st.json.hooks.entries.map((e) => [e.event, e.matcher, e.script, e.state]),
     [['SessionStart', null, 'semble-session.mjs', 'wired'],
-      ['UserPromptSubmit', null, 'semble-prefetch.mjs', 'wired'],
       ['PostToolUse', STATS_MATCHER, 'semble-stats.mjs', 'wired'],
       ['PostToolUseFailure', STATS_MATCHER, 'semble-stats.mjs', 'wired'],
-      ['PreToolUse', 'Bash|Grep', 'semble-reminder.mjs', 'wired'],
       ['SubagentStart', null, 'semble-subagent.mjs', 'wired']],
     'the want table, in order, all wired');
   check('8.status.no-retired-rows',
-    st.json.hooks.entries.some((e) => /explore/.test(e.script)), false,
-    'semble-explore.mjs is retired for good - it is an ownership mark, never a want row;'
-    + ' the reminder is a live row again and semble-subagent.mjs supersedes it on all agent types');
+    st.json.hooks.entries.some((e) => /explore|reminder|prefetch/.test(e.script)), false,
+    'retired hooks (explore, reminder, prefetch) are ownership marks, never want rows');
   check('8.status.human-denominator',
     guidance(p, ['status']).stdout.includes('hooks ' + WANT_N + '/' + WANT_N + ' wired'), true,
     'the human line prints wiredCount/wantCount, never a hard-coded number');
@@ -772,9 +719,7 @@ function settingsOf(p) {
     'and status confirms the purge');
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 9. Hook + reader, end to end through the installed copy
-// ═══════════════════════════════════════════════════════════════════════════
+// ── 9. Hook + reader, end to end through the installed copy ──
 {
   const p = newProject('e2e');
   guidance(p, ['install', '--part', 'hooks']);

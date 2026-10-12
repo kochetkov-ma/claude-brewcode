@@ -7,7 +7,7 @@ argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge]
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion]
 model: sonnet
 ---
-<!-- brewcode-meta: version=6.4.0 content_version=6.3.0 generated_by=brewdoc:docsync-setup -->
+<!-- brewcode-meta: version=6.5.0 content_version=6.5.0 generated_by=brewdoc:docsync-setup -->
 
 # docsync-setup
 
@@ -26,7 +26,7 @@ model: sonnet
    mutating modes -> the keyword that comes first. No hit or empty -> `status` if installed, else
    `install`.
 2. Scope: prose that is not a mode/id/path is still input: take the id, path or target from it.
-3. Ask: at most ONE `AskUserQuestion` (max 4 questions), before any work, only when the answer
+3. Ask: at most ONE `AskUserQuestion` (max 4 questions) to resolve mode and scope, before any work, only when the answer
    changes what gets written. A read-only run asks nothing.
 
 Print once, before the first action (labels literal, values in the conversation language):
@@ -42,17 +42,14 @@ RESULT: <what the user ends up holding>
 
 ## Standard flow (every run)
 
-Resolve the mode and print the PLAN block (Prompt contract above), execute, print the
-summary (Output Format below), then run that mode's checks (Verification below).
-Verification is mandatory: report pass/fail per check, never unverified success.
+Resolve the mode, print the PLAN block, execute, print the summary (Output Format), then run
+that mode's checks (Verification). Verification is mandatory: report pass/fail per check, never
+unverified success. Run in the main conversation (uses `AskUserQuestion`); no `context: fork`.
 
-Run in the main conversation (uses `AskUserQuestion`). No `context: fork`.
-
-> **Project root.** Each **EXECUTE** block resolves it itself: `CLAUDE_PROJECT_DIR` ->
+> **Project root.** Each **EXECUTE** block resolves it: `CLAUDE_PROJECT_DIR` ->
 > `git rev-parse --show-toplevel` -> upward walk for `.git`/`.claude`. Keep the token
-> bare-braced: the `${VAR:-fallback}` form is never substituted and always loses to its
-> fallback. The hooks skip the `git rev-parse` rung and are the authority for config/state
-> placement under a nested `.claude`.
+> bare-braced (`${VAR:-fallback}` is never substituted). The hooks skip the `git rev-parse`
+> rung and are the authority for config/state placement under a nested `.claude`.
 
 ## Mode Resolution — prompt-driven
 
@@ -111,17 +108,16 @@ sync_procedure: "what to check / where to look when syncing"   # optional, prose
 ```
 
 - **Quote `last_updated` and `sync_procedure`; leave `doc_type` bare.** The hooks' `parseFm`
-  strips quotes and trailing comments, so docsync reads either form; but a real YAML
-  consumer types an unquoted `2026-07-19` as a Date, and other brewcode tooling matches
-  `^doc_type: llm$` literally.
+  reads either form, but a real YAML consumer types an unquoted `2026-07-19` as a Date, and
+  other brewcode tooling matches `^doc_type: llm$` literally.
 - `doc_type`: compress depth on sync, `llm` = deep, `user` = light; absent or unrecognized
   -> `user` (`docTypeOf()`, all three hooks). `doc_type: skip` = untracked by all three
   hooks, the Stop gate included, so a doc marked `skip` mid-session goes silent.
 - `sync_procedure`: model-only hint. No hook reads it; the gate's block message and `sync`
   tell Claude to follow it after reading the doc.
-- Dates: `YYYY-MM-DD`, the LOCAL calendar day everywhere (`date +%F`). No hash, no deps.
-  The gate compares `last_updated` with the file's modification day (next section);
-  `status` and `sync` age it against today: `today - last_updated > threshold_days`.
+- Dates: `YYYY-MM-DD`, the LOCAL calendar day everywhere (`date +%F`). The gate compares
+  `last_updated` with the file's modification day; `status` and `sync` age it against today:
+  `today - last_updated > threshold_days`.
 
 ## The three hooks — exact behavior
 
@@ -132,12 +128,13 @@ sync_procedure: "what to check / where to look when syncing"   # optional, prose
 | `docsync-gate.mjs` | Stop | no matcher; no `if` (on Stop it = the hook never runs); 10 s | Of the docs edited since its last ask, minus `exclude`, `doc_type: skip` and deleted files, blocks once for: no `last_updated`; unusable (not a real date, or after today); file's modification day minus `last_updated` > `threshold_days` |
 
 - Block message: date missing or unusable, or Claude's own edit already brought the doc up
-  to date -> set `last_updated` to today, no question. Otherwise the doc needs a sync, which
-  rewrites content -> ask first, via `AskUserQuestion` only if that tool is available, else
-  list the docs in the final message and finish.
+  to date -> set `last_updated` to today, no question. Otherwise the doc needs a sync:
+  Claude decides and syncs; it asks first only before deleting or wholesale rewriting
+  content, via `AskUserQuestion` if available, else lists those docs and finishes.
+- `CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md` (any depth, auto-loaded instruction files)
+  are never tracked, nudged or gated, whatever `exclude` says.
 - After a block the gate stays silent until one of those docs is edited again; it never
-  blocks when `stop_hook_active` is `true` or the ask cannot be recorded (either would
-  loop). Say so if a user asks why the nag stopped.
+  blocks when `stop_hook_active` is `true` or the ask cannot be recorded (either would loop). Say so if a user asks why the nag stopped.
 - Never raised: a doc only read, changed by Bash or outside Claude Code, or merely aged.
 - State: `.claude/docsync/state-<session_id>.jsonl` (no id: `state.jsonl`), append-only, one
   JSON line per event: `edit`, `read`, `nudge`, `ask` (+ `seen`). The gate prunes logs,
@@ -154,7 +151,7 @@ them (else this block and `rg`); never infer that from the operating system.
 ROOT="${CLAUDE_PROJECT_DIR}"
 [ -n "$ROOT" ] && [ -d "$ROOT" ] || ROOT=$(git rev-parse --show-toplevel 2>/dev/null || true)
 [ -n "$ROOT" ] || { d=$PWD; until [ -d "$d/.git" ] || [ -d "$d/.claude" ] || [ "$d" = / ]; do d=$(dirname "$d"); done; [ "$d" = / ] && ROOT=$PWD || ROOT=$d; }
-cd "$ROOT" && find . -type f -name '*.md' -not -path './.git/*' | sed 's#^\./##' | sort
+cd "$ROOT" && find . -type f -name '*.md' -not -path './.git/*' -not -name CLAUDE.md -not -name CLAUDE.local.md -not -name AGENTS.md | sed 's#^\./##' | sort
 ```
 
 ---
@@ -200,15 +197,14 @@ bash "$T"; rc=$?; rm -f "$T"
 
 > **STOP if ❌** — nothing is half-applied: install/upgrade validate before the first write
 > and roll a failed write back (a concurrent edit is kept); uninstall/purge abort on an
-> unparsable `settings.json` before removing anything. Never delete session logs
-> yourself: only `purge` does.
+> unparsable `settings.json` before removing anything. Only `purge` deletes session logs.
 
 ### Step 3: Report + tell the user
 
 Report: 3 hooks copied to `.claude/hooks/`, `config.json` written, four handlers merged
-into `settings.json`, no backup file (the transaction is its own rollback). The hooks take
-effect in the next session and need `node` on `PATH` in the shell that runs hooks. Suggest
-`frontmatter` next when the project's docs lack `last_updated`.
+into `settings.json`, no backup file (the transaction is its own rollback). Settings are
+watched, so the hooks normally apply in this session (restart it if they do not fire);
+they need `node` on `PATH`. Suggest `frontmatter` next when docs lack `last_updated`.
 
 ---
 
@@ -245,18 +241,14 @@ Report tracked docs and staleness. No changes.
 Flip docsync between live and inert without unwiring anything: one key, `"enabled"`
 (`true` | `false`), in `.claude/docsync/config.json`, provenance refreshed with it. Hooks
 in `settings.json`, hook files, session logs and doc frontmatter stay untouched; removing
-hooks is `uninstall`.
-
-The hooks read `enabled` on every invocation (`loadConfig`, absent = `true`), so the flip
-is immediate, no session restart (install/uninstall change `settings.json` and need one).
-Disabled = no event logging, no nudge, no Stop block.
+hooks is `uninstall`. The hooks read `enabled` on every invocation (`loadConfig`, absent =
+`true`), so the flip is immediate. Disabled = no event logging, no nudge, no Stop block.
 
 1. Require `INSTALLED` (either state); `NOT_INSTALLED` -> say so, offer `install`, and
    do not write a config for hooks that do not exist.
 2. The step 3 block writes nothing (`already enabled` / `already disabled`) only when the
    value matches and all four provenance keys are current (`version`, `content_version`,
-   `generated_by` == `brewdoc:docsync-setup`, `last_updated`); otherwise it rewrites the
-   config, which backfills an unstamped one.
+   `generated_by` == `brewdoc:docsync-setup`, `last_updated`); else it rewrites the config.
 3. **EXECUTE** using Bash tool (`WANT` = `true` for enable, `false` for disable):
    ```bash
    ROOT="${CLAUDE_PROJECT_DIR}"
@@ -267,7 +259,6 @@ Disabled = no event logging, no nudge, no Stop block.
    SKILL_MD="${CLAUDE_SKILL_DIR}/SKILL.md"
    WANT=true   # <- set to false for `disable`
    [ -f "$C" ] || { echo "❌ $C missing — docsync is not installed"; exit 1; }
-   cp "$C" "$C.bak"
    C="$C" WANT="$WANT" PJ="$PJ" SKILL_MD="$SKILL_MD" TODAY="$(date +%F)" node -e '
      const fs = require("fs");
      const c = process.env.C, want = process.env.WANT === "true";
@@ -290,7 +281,7 @@ Disabled = no event logging, no nudge, no Stop block.
    ```
    > **STOP if ❌** — fix before continuing.
 4. Report the new state and its reversal verb; after `disable`, that the hooks stay
-   registered and `enable` brings them back with zero re-analysis.
+   registered and `enable` restores them.
 
 ---
 
@@ -299,29 +290,27 @@ Disabled = no event logging, no nudge, no Stop block.
 Remove docsync from this project without touching anything foreign.
 
 1. Run the install Step 2 block with `SECTION='## Uninstall / purge'`, `MODE=uninstall`.
-   Registrations go first, hook files after, so none ever points at a deleted script; only
+   Registrations go first, hook files after, so none points at a deleted script; only
    docsync handlers go, and a `settings.json` that held nothing else is deleted. It also
    clears stray nested `.claude/docsync/` state dirs and an older docsync's
    `settings.json.bak` when that loses nothing, else prints `KEPT ...settings.json.bak`
-   (the file may be the user's own).
+   (maybe the user's own).
 2. Report its summary line, any `KEPT` line, and that `.claude/docsync/` (config + session
-   logs) stays until `purge`; doc frontmatter is untouched. Removal takes effect in the
-   next session.
+   logs) stays until `purge`; doc frontmatter is untouched. Removal normally applies in
+   this session (settings are watched).
 
 ## Mode: purge
 
 `uninstall` with no survivors: the same block with `MODE=purge` also deletes
-`.claude/docsync/` and an emptied `.claude/`. One transaction: an unparsable
-`settings.json` aborts it before anything is deleted, so config never vanishes while
-registrations still point at the hooks.
+`.claude/docsync/` and an emptied `.claude/`. An unparsable `settings.json` aborts it
+before anything is deleted, so config never vanishes while registrations still point at the hooks.
 
 ---
 
 ## Mode: sync `[--all]`
 
 1. Targets: stale docs (as in status); `--all` = every in-scope doc (the `find` block).
-2. **ASK** via `AskUserQuestion`: list the docs, confirm which to sync. A sync rewrites
-   content, so none runs without confirmation.
+2. **ASK** via `AskUserQuestion`: list the docs, confirm which to sync; none runs unconfirmed.
 3. Per confirmed doc: read it, follow its `sync_procedure` when present, compress by
    `doc_type` (`llm` = deep, `user` or absent = light), preserve author intent.
 4. Set `last_updated: "{LAST_UPDATED}"` (quoted; `date +%F`, LOCAL); a doc without one
@@ -408,7 +397,7 @@ node -e "const s=JSON.stringify(JSON.parse(require('fs').readFileSync('$S','utf8
 ## Detection
 | Field | Value |
 |-------|-------|
-| Arguments | `$ARGUMENTS` |
+| Arguments | `<the prompt verbatim>` |
 | Mode | `[mode]` (reason) |
 
 ## Plan

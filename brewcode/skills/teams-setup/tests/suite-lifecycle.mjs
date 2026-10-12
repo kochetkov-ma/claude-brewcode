@@ -1,11 +1,6 @@
 #!/usr/bin/env node
-/**
- * Suite A — teams lifecycle roster + argument safety (scripts/toggle-team.sh, verify-team.sh, detect-mode.sh).
- * Covers BCOP08: a `## Agents` roster value is interpolated into move/probe/delete paths, so a row
- * like `../../../outside/README` renamed a file OUTSIDE the project. Runs entirely inside an isolated
- * temp base; never touches the real ~/.claude or the repo tree.
- * Assertion policy: unconditional exact-equality checks with a description.
- */
+// Suite A — teams lifecycle roster + argument safety (scripts/toggle-team.sh, verify-team.sh, detect-mode.sh).
+// BCOP08: roster value in move/probe/delete paths, `../../../outside/README` renamed a file OUTSIDE; temp base, never ~/.claude.
 import { spawnSync } from 'node:child_process';
 import {
   mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync, realpathSync, existsSync,
@@ -60,14 +55,12 @@ function check(name, actual, expected, message) {
 }
 
 function run(script, args, cwd) {
-  const r = spawnSync('bash', [script, ...args], { cwd, encoding: 'utf8', timeout: 20000 });
+  // Hang guard, not a readiness wait: verify-team.sh runs the tokenizer, slow under load.
+  const r = spawnSync('bash', [script, ...args], { cwd, encoding: 'utf8', timeout: 180000 });
   return { stdout: r.stdout || '', stderr: r.stderr || '', status: r.status };
 }
 
-/**
- * Trailing `KEY:VALUE` summary block of toggle-team.sh, as an object. Read from the LAST occurrence
- * of each key: per-file progress lines share the `MOVED:` prefix with the summary.
- */
+// Trailing `KEY:VALUE` summary of toggle-team.sh; LAST occurrence wins (progress lines share `MOVED:`).
 function summary(stdout) {
   const out = {};
   for (const key of ['ACTION', 'TEAM', 'MOVED', 'SKIPPED', 'MISSING', 'INVALID']) {
@@ -110,10 +103,7 @@ Preserve fixture bytes.
 Run lifecycle checks.
 `;
 
-/**
- * The `## Agents` header separator, in the three spellings the parser must tell apart: the compact
- * one the shipped template writes, the space-padded one a markdown formatter produces, and none.
- */
+// `## Agents` header separator spellings: compact (shipped template), space-padded (markdown formatter), none.
 const SEPARATORS = {
   compact: '|-------|--------|---------|--------|---------|------|---------|',
   padded: '| ------- | -------- | --------- | -------- | --------- | ------ | --------- |',
@@ -121,10 +111,7 @@ const SEPARATORS = {
   none: null,
 };
 
-/**
- * A project root with one team. `rows` are `## Agents` Agent-column values, in table order;
- * `agentFiles` are the names actually written to .claude/agents/.
- */
+// Project root with one team: `rows` = `## Agents` Agent-column values in order, `agentFiles` = names in .claude/agents/.
 function makeProject(label, rows, agentFiles, separator = 'compact') {
   const root = join(BASE, label, 'proj');
   const teamDir = join(root, '.claude', 'teams', 't1');
@@ -178,9 +165,7 @@ const ls = (dir) => readdirSync(dir).sort();
 const readOrGone = (p) => (existsSync(p) ? readFileSync(p, 'utf8') : '<file gone>');
 const TRAVERSAL = '../../../outside/README';
 
-// ────────────────────────────────────────────────────────────────────────────
 // A1 — BCOP08: a traversal roster row must move nothing, inside or outside.
-// ────────────────────────────────────────────────────────────────────────────
 {
   const root = makeProject('a1', ['worker-one', TRAVERSAL, 'intent-guard'], ['worker-one', 'intent-guard']);
   const victim = makeVictim('a1', 'VICTIM\n');
@@ -217,9 +202,7 @@ const TRAVERSAL = '../../../outside/README';
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
 // A2 — the dry run refuses the same row: `WOULD:` never names a path outside.
-// ────────────────────────────────────────────────────────────────────────────
 {
   const root = makeProject('a2', ['worker-one', TRAVERSAL], ['worker-one']);
   const victim = makeVictim('a2', 'VICTIM\n');
@@ -241,10 +224,8 @@ const TRAVERSAL = '../../../outside/README';
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
 // A3 — the full rejected shape set: traversal, slash, leading dot, uppercase,
 //      underscore. An empty Agent cell is skipped silently, as before.
-// ────────────────────────────────────────────────────────────────────────────
 {
   const bad = [TRAVERSAL, 'sub/dir', '.hidden', '..', 'Upper-Case', 'snake_case'];
   const root = makeProject('a3', [...bad, '', 'worker-one'], ['worker-one']);
@@ -271,10 +252,8 @@ const TRAVERSAL = '../../../outside/README';
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
 // A4 — the parking contract still holds: disable/enable is a byte-preserving
 //      round trip and intent-guard is never parked.
-// ────────────────────────────────────────────────────────────────────────────
 {
   const root = makeProject('a4', ['alpha-agent', 'beta-agent', 'intent-guard'],
     ['alpha-agent', 'beta-agent', 'intent-guard']);
@@ -332,9 +311,7 @@ const TRAVERSAL = '../../../outside/README';
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
 // A5 — verify-team.sh fails the same row and probes nothing outside the tree.
-// ────────────────────────────────────────────────────────────────────────────
 {
   const root = makeProject('a5', ['worker-one', TRAVERSAL], ['worker-one']);
   const victim = makeVictim('a5', 'VICTIM\n');
@@ -356,9 +333,7 @@ const TRAVERSAL = '../../../outside/README';
   check('a5.victimBytes', readOrGone(victim), 'VICTIM\n', 'verification never touches the outside file');
 }
 
-// ────────────────────────────────────────────────────────────────────────────
 // A6 — verify-team.sh still passes a clean roster, parked or live.
-// ────────────────────────────────────────────────────────────────────────────
 {
   const root = makeProject('a6', ['alpha-agent', 'intent-guard'], ['alpha-agent', 'intent-guard']);
   const live = run(VERIFY, ['t1'], root);
@@ -387,12 +362,8 @@ const TRAVERSAL = '../../../outside/README';
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// A7 — a SPACE-PADDED header separator (`| ------ |`, what a markdown formatter
-//      leaves behind) must parse. Matching only the compact `---|` spelling set
-//      past_header to 0, parsed zero rows and still printed `MOVED:0` + `✅
-//      disable` while every agent file stayed LIVE.
-// ────────────────────────────────────────────────────────────────────────────
+// A7 — a SPACE-PADDED separator (`| ------ |`, markdown formatter output) must parse: compact-only `---|`
+//      matching set past_header to 0 and printed `MOVED:0` + `✅ disable` while every agent stayed LIVE.
 {
   const root = makeProject('a7', ['alpha-agent', 'beta-agent', 'intent-guard'],
     ['alpha-agent', 'beta-agent', 'intent-guard'], 'padded');
@@ -429,10 +400,8 @@ const TRAVERSAL = '../../../outside/README';
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
 // A8 — a roster whose separator row is absent parses nothing. `disable` must
 //      FAIL there: a success verdict over an unparsed table is the silent no-op.
-// ────────────────────────────────────────────────────────────────────────────
 {
   const root = makeProject('a8', ['alpha-agent'], ['alpha-agent'], 'none');
   const r = run(TOGGLE, ['t1', 'disable'], root);
@@ -464,11 +433,8 @@ const TRAVERSAL = '../../../outside/README';
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// A9 — valid_agent_id is a path-traversal guard, so its rejection set is pinned
-//      directly: the single-`case` form must reject every shape the three-block
-//      form did, and accept the ordinary ids.
-// ────────────────────────────────────────────────────────────────────────────
+// A9 — valid_agent_id is a path-traversal guard: the single-`case` form must reject every shape
+//      the three-block form did, and accept the ordinary ids.
 {
   // The guard is exercised as the shipped source, lifted verbatim from toggle-team.sh -- a copy
   // pasted into the test would pass while the real one drifted.
@@ -500,10 +466,8 @@ const TRAVERSAL = '../../../outside/README';
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
 // A10 — separator recognition is exact: triple hyphens inside a valid agent id
 //       are data, while near-separators containing foreign bytes are unreadable.
-// ────────────────────────────────────────────────────────────────────────────
 {
   const validRoot = makeProject('a10-valid', ['foo---bar'], ['foo---bar']);
   const toggled = run(TOGGLE, ['t1', 'disable'], validRoot);
@@ -551,10 +515,8 @@ const TRAVERSAL = '../../../outside/README';
   }
 }
 
-// ────────────────────────────────────────────────────────────────────────────
 // A11 — detect-mode.sh argument contract: a bare pair resolves in either order,
 //       flags are never the team name, a hostile name executes nothing.
-// ────────────────────────────────────────────────────────────────────────────
 {
   const root = makeProject('a11', ['worker-one'], ['worker-one']);
   mkdirSync(join(root, '.claude', 'teams', 'payments'), { recursive: true });
@@ -594,10 +556,8 @@ const TRAVERSAL = '../../../outside/README';
     'GIVEN hostile arguments WHEN detect-mode.sh ran THEN no command substitution was executed');
 }
 
-// ────────────────────────────────────────────────────────────────────────────
 // A12 — toggle-team.sh refuses a mistyped flag (it moved files for real) and
 //       a path as team name (it read a roster outside the teams dir).
-// ────────────────────────────────────────────────────────────────────────────
 {
   const root = makeProject('a12', ['worker-one', 'intent-guard'], ['worker-one', 'intent-guard']);
   const agentsDir = join(root, '.claude', 'agents');
@@ -620,10 +580,8 @@ const TRAVERSAL = '../../../outside/README';
     'GIVEN three refused runs WHEN the agents dir is listed THEN every member is still live');
 }
 
-// ────────────────────────────────────────────────────────────────────────────
 // A13 — a parked name taken by a DIRECTORY is a collision: `mv` moved the live
 //       file into it, printed MOVED and left the agent discoverable.
-// ────────────────────────────────────────────────────────────────────────────
 {
   const root = makeProject('a13', ['worker-one', 'worker-two'], ['worker-one', 'worker-two']);
   const agentsDir = join(root, '.claude', 'agents');

@@ -3,10 +3,8 @@ import { readFileSync, existsSync, writeFileSync, mkdirSync, renameSync, appendF
 import { dirname, join, resolve, sep } from 'path';
 import { homedir } from 'os';
 
-/**
- * Project root: CLAUDE_PROJECT_DIR -> upward walk for .git/.claude -> hook cwd. Never throws.
- * Hook `cwd` drifts mid-session (CwdChanged), so it is never the root for config/state/log paths.
- */
+// Project root: CLAUDE_PROJECT_DIR -> upward walk for .git/.claude -> hook cwd; never throws.
+// Hook `cwd` drifts mid-session (CwdChanged) -> never the root for config/state/log paths.
 export function projectRoot(hookCwd) {
   const env = process.env.CLAUDE_PROJECT_DIR;
   if (env && existsSync(env)) return resolve(env);
@@ -51,24 +49,12 @@ export function capText(s, max = TEXT_CHANNEL_CAP) {
 
 const LOG_LEVELS = { error: 0, warn: 1, info: 2, debug: 3, trace: 4 };
 const LOG_FILE = '.claude/logs/brewcode.log';
-const CONFIG_FILE = '.claude/tasks/cfg/brewcode.config.json';
+const DEFAULT_LEVEL = 'info';
 
-let cachedLevel = 'info';
-let cachedLevelCwd = null;
-
-/** Level: BREWCODE_LOG_LEVEL env > brewcode.config.json `logging.level` > 'info' (also on an unreadable config) */
-function getLogLevel(cwd) {
+// Level: BREWCODE_LOG_LEVEL env, else 'info'.
+function getLogLevel() {
   const env = (process.env.BREWCODE_LOG_LEVEL || '').toLowerCase();
-  if (Object.hasOwn(LOG_LEVELS, env)) return env;
-  if (cachedLevelCwd !== cwd) {
-    cachedLevelCwd = cwd;
-    cachedLevel = 'info';
-    try {
-      const lvl = JSON.parse(readFileSync(join(cwd, CONFIG_FILE), 'utf8')).logging?.level;
-      if (typeof lvl === 'string' && Object.hasOwn(LOG_LEVELS, lvl)) cachedLevel = lvl;
-    } catch { /* absent or unparsable config -> 'info' */ }
-  }
-  return cachedLevel;
+  return Object.hasOwn(LOG_LEVELS, env) ? env : DEFAULT_LEVEL;
 }
 
 /** Append to <cwd>/.claude/logs/brewcode.log and mirror to stderr (debug-only surface) when the level allows */
@@ -77,7 +63,7 @@ export function log(level, prefix, message, cwd, sessionId = null) {
     if (level === 'error') console.error(`${prefix} ${message}`);
     return;
   }
-  if (LOG_LEVELS[level] > LOG_LEVELS[getLogLevel(cwd)]) return;
+  if (LOG_LEVELS[level] > LOG_LEVELS[getLogLevel()]) return;
   console.error(`${prefix} ${message}`);
 
   const timestamp = new Date().toISOString();
@@ -137,10 +123,8 @@ export function configDir() {
   return env ? resolve(env) : join(homedir(), '.claude');
 }
 
-/**
- * Plan-file dir as Claude Code resolves it: effective `plansDirectory` (local > project > user)
- * when it stays inside the project root with no backslash off Windows, else `<configDir>/plans`.
- */
+// Plan dir as Claude Code resolves it: effective `plansDirectory` (local > project > user) when inside
+// project root with no backslash off Windows, else `<configDir>/plans`.
 export function resolvePlansDir(root, sessionId = null) {
   const fallback = join(configDir(), 'plans');
   const candidates = [

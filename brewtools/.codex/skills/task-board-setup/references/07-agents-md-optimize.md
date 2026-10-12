@@ -2,7 +2,9 @@
 
 [DICT: CMD=root AGENTS.md, LOCAL=AGENTS.local.md, MOD=module/subproject, MODCMD=module-level AGENTS.md, RULES=.codex/rules/**/*.md, BUDGET=line budget, TO=brewtools:text-optimize skill, DIR=free-text prompt directive]
 
-OPTIONAL, opt-in at P0; runs AFTER board scaffolding + verification (P5). PROPOSE-ONLY: every change needs main-chat user gate approval, including restructuring AGENTS.md.
+OPTIONAL, opt-in at P1; runs AFTER board scaffolding + verification (P5). PROPOSE-ONLY: every change needs main-chat user gate approval, including restructuring AGENTS.md.
+
+A block delimited by another tool's begin/end markers (e.g. `<!-- BEGIN brewcode:semble -->` .. `<!-- END brewcode:semble -->`) is owned by that setup, which re-creates it on upgrade: 5b-5g never compress, move, dedup or delete it, both marker lines included; 5h reports it as `managed by <setup>`.
 
 > **Native instruction discovery (source: https://learn.chatgpt.com/docs/agent-configuration/agents-md, verified 2026-09-30).** Bake this into every proposal rationale:
 > - Codex builds its instruction chain once per run: global guidance, then at most one non-empty instruction file per directory from project root to launch CWD. `AGENTS.override.md` precedes `AGENTS.md`, then configured fallback names. The combined project content is capped by `project_doc_max_bytes` (32 KiB default); later guidance takes precedence when included.
@@ -14,10 +16,10 @@ OPTIONAL, opt-in at P0; runs AFTER board scaffolding + verification (P5). PROPOS
 
 ## Inputs
 
-From P0:
-- `TARGET` (abs path).
+From P0/P1:
+- `TARGET` (abs path); `EXCLUSIONS` (from P1, used by module detection).
 - `DIR` = the free-text prompt directive parsed from `<arguments>` (may be empty). Tunes which sub-steps run / how aggressive they are. See "Directive influence" below.
-- `OPTIN` = whether the user opted into this phase (asked at P0).
+- `OPTIN` = whether the user opted into this phase (asked in P1).
 
 If `OPTIN` is false -> SKIP this entire file; do nothing.
 
@@ -34,7 +36,7 @@ Match DIR substrings case-insensitively; all sub-steps are offered by default. D
 | `skip dedup`, `no dedup`, `skip rules` | disable 5e (rules dedup/compress) |
 | `also dedupe rules`, `dedup rules` | force-enable 5e even if other hints narrow scope |
 | `budget N`, `max N lines`, `target N` | override BUDGET_OPTIMAL=N (and OVER=N*1.5 rounded) |
-| `aggressive`, `max compress`, `deep` | pass `-d` (or `-x` only if `max`/`extreme`/`atomic` present) to TO in 5e/5f |
+| `aggressive`, `max compress`, `deep` | add `-d` (or `-x` only if `max`/`extreme`/`atomic` present) to the 5f TO commands |
 | `report only`, `dry run`, `propose only` | run 5a detection + present a full plan, but make NO edits even if approved -- emit plan as the deliverable |
 | anything else | record as free-form intent; apply best-effort to phrasing of proposals, do NOT invent new behaviors |
 
@@ -44,10 +46,12 @@ Ambiguous/conflicting DIR (e.g. `skip rules` + `also dedupe rules`) -> user reso
 
 ## 5a. Detect (read-only scan, NO edits)
 
-Locate the root CMD: prefer `TARGET/AGENTS.md`, else `TARGET/.codex/AGENTS.md`. If neither exists -> there is nothing to optimize; report "no root AGENTS.md found" and SKIP the rest (do NOT create a root AGENTS.md -- out of scope for this phase).
+Root CMD = `TARGET/AGENTS.md`, else `TARGET/.codex/AGENTS.md`; neither -> report "no root AGENTS.md found" and SKIP the rest (do NOT create one).
 
-**EXECUTE** using shell (read-only):
+**EXECUTE** using shell (read-only; shell state does not survive between calls, so each block sets `TARGET`):
 ```bash
+TARGET="<absolute path resolved in P0>"
+test -n "$TARGET" && test -d "$TARGET" || { echo "MISS TARGET unset or not a dir -- detect did NOT run"; exit 1; }
 CMD=""
 for c in "$TARGET/AGENTS.md" "$TARGET/.codex/AGENTS.md"; do test -f "$c" && CMD="$c" && break; done
 test -n "$CMD" && wc -l < "$CMD" | tr -d ' ' && echo "CMD=$CMD" || echo "NO_CMD"
@@ -69,8 +73,6 @@ MODULES     = [ {dir, why, has_own_cmd} ... ] # see 5d detection
 RULES       = [ {path, lines} ... ]
 DUP_SPANS   = [ {a, b, overlap_summary} ... ] # cross-file dup/overlap, see 5e
 ```
-
-Report CMD_LINES vs BUDGET_OPTIMAL/BUDGET_OVER up front (current vs target), regardless of whether any proposal follows.
 
 ### Module detection (for MODULES)
 A repo subtree is a MOD candidate if it has its own manifest / build / package boundary. Signals (any): `package.json`, `pom.xml`/`build.gradle`, `pyproject.toml`/`setup.py`, `go.mod`, `Cargo.toml`, `Makefile`, a `src/` of its own, or a workspace member (npm/pnpm/yarn workspaces, gradle subproject, cargo workspace, go work). Skip dirs in EXCLUSIONS only if EXCLUSIONS means "don't WRITE" -- here writing a MODCMD inside a source module IS allowed (a MODCMD is doc, not source). Record `has_own_cmd` = whether `<dir>/AGENTS.md` already exists.
@@ -103,6 +105,7 @@ On approval:
 3. Remove approved preferences from CMD (Edit, bottom-up). Replace an existing credential only after explicit approval of its concrete non-secret lookup reference and a confirmed secure source outside LLM files; otherwise leave it unchanged and report the unresolved item. Never relocate credentials or rewrite history automatically.
 4. Ensure `AGENTS.local.md` is gitignored:
    ```bash
+   TARGET="<absolute path resolved in P0>"
    grep -qxF "AGENTS.local.md" "$TARGET/.gitignore" 2>/dev/null || echo "(needs .gitignore entry)"
    ```
    If missing, propose adding `AGENTS.local.md` to `.gitignore` (one more AskUser line, or include in the same approval). Do NOT silently edit .gitignore without the user's yes.
@@ -122,7 +125,7 @@ If OVER: assemble a concrete decomposition PLAN combining 5d (module split), 5e 
 > 1. Move module detail for `<M1, M2, ...>` into per-module AGENTS.md; root keeps a compact index requiring an explicit read before module work when outside the launch path. A module-launched run discovers its local guidance subject to the combined byte cap.  [est -X lines]
 > 2. Move topic blocks `<...>` into `.codex/rules/*.md`; add complete root rule-index entries with path, load condition and purpose, requiring explicit reads when the condition matches.  [est -Y lines]
 > 3. Dedup overlap with existing rules `<...>`; delete duplicated spans.  [est -Z lines]
-> 4. Deep-compress the remainder via brewtools:text-optimize.  [est -W lines]
+> 4. Deep-compress the remainder: you run `$brewtools:text-optimize` afterwards.  [est -W lines]
 > Projected: <CMD_LINES> -> ~<TARGET_LINES>.
 > - Apply the full plan
 > - Apply only steps I pick
@@ -162,39 +165,37 @@ For each approved MOD in MODULES:
 
 ## 5f. Delegate compression to brewtools:text-optimize
 
-After 5b/5d/5e, delegate compression of remaining CMD + touched MODCMD + RULES to TO; do not hand-compress.
+After 5b/5d/5e, compression of the remaining CMD + touched MODCMD + RULES belongs to TO; do not hand-compress or inline-reimplement it.
 
-- Recommend/invoke: `brewtools:text-optimize` auto-detects `AGENTS.md` and `.codex/rules/*.md` as LLM-only files and selects DEEP mode (DICT header + symbol substitution + verification rounds).
-- Default invocation (after this phase's edits are approved + applied):
+- TO is user-invoked only (`disable-model-invocation: true`), so this phase cannot run it: recommend these commands for the user to run after the approved edits:
   ```
   $brewtools:text-optimize AGENTS.md
   $brewtools:text-optimize .codex/rules/
   ```
   Multiple files in one call run in parallel: `$brewtools:text-optimize AGENTS.md, <MOD>/AGENTS.md`.
-- DIR `aggressive`/`deep` -> pass `-d`; DIR `max`/`extreme`/`atomic` -> pass `-x` (max mode, 2 mandatory verify rounds). Otherwise let auto-detect pick deep for these files.
-- TO owns its AskUser/verification; do not duplicate it. RECOMMEND/INVOKE on touched files, then re-count for the report.
-> Do NOT inline-reimplement compression. Single source of compression logic = text-optimize.
+- TO auto-detects `AGENTS.md` and `.codex/rules/*.md` as LLM-only files and selects DEEP mode. DIR `aggressive`/`deep` -> add `-d`; DIR `max`/`extreme`/`atomic` -> add `-x` (max mode, 2 mandatory verify rounds).
+- TO owns its AskUser/verification; do not duplicate it.
 
 ---
 
 ## 5g. Markup / structure pass (all touched docs)
 
-For CMD, MODCMD, LOCAL and RULES edited here: clean heading hierarchy, compact tables/bullets, valid fences and consistent terms. TO covers this structure; do not repeat it on files handled by 5f.
+For CMD, MODCMD, LOCAL and RULES edited here: clean heading hierarchy, compact tables/bullets, valid fences and consistent terms.
 
 ---
 
 ## 5h. Re-count + report (this phase's slice of P5 report)
 
-After all approved edits + any text-optimize run:
+After all approved edits:
 ```bash
-wc -l < "$CMD_PATH" | tr -d ' '
+wc -l < "<CMD_PATH from 5a>" | tr -d ' '
 ```
 Report:
 - CMD line count: BEFORE -> AFTER (vs optimal/over).
 - Non-secret preferences moved: count + LOCAL created/updated + gitignore status; credentials: references changed or unresolved, values never copied.
 - Modules split: list of MODCMD written + that root now indexes them.
 - Rules dedup: spans removed.
-- text-optimize: whether invoked, mode, resulting reduction.
+- text-optimize: the exact commands (with flags) recommended to the user.
 - A one-line flag if any secret was found that predates this run (rotate + history note).
 
 Set `CMD_DECOMPOSED = true` iff 5d wrote/updated at least one MODCMD -- this flag is consumed by the task-tracker agent template addition (ref 02) so the generated agent knows the target's AGENTS.md is decomposed and requires explicit module-guidance reads outside the launch instruction chain.

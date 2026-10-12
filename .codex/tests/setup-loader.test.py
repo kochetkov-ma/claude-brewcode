@@ -97,7 +97,7 @@ class LoaderRegressionTests(unittest.TestCase):
         started = time.monotonic()
         # WHEN: the real RPC reader reaches its deadline.
         with self.assertRaisesRegex(RuntimeError, 'initialize: timed out', msg='partial JSON must reach the deadline'):
-            loader.probe(self.root, self.root, timeout=0.2)
+            loader.probe(self.root, self.root, timeout=0.5)
         # THEN: bounded failure reaps the producer without waiting for its ten-second stall.
         self.assertLess(time.monotonic() - started, 2, 'partial stdout must not defeat the bounded deadline')
         self.assert_producer_stopped()

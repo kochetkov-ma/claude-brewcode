@@ -6,11 +6,9 @@ set -eu
 # `-` = read the prompt from stdin (SKILL.md passes it via a quoted heredoc: no shell parsing).
 if [ "${1:-}" = "-" ]; then ARGS=$(cat); else ARGS="${1:-}"; fi
 
-# Artifact-metadata standard. The plugin version that produces every artifact this run writes,
-# read from the manifest by SELF-LOCATION: scripts/ -> e2e/ -> skills/ -> <plugin root>.
-# Correct in the dev checkout AND in the installed cache. NEVER hardcoded, never a template version.
-# `|| true` on both branches: under `set -e` a failing command substitution aborts the script.
-SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+# Plugin version for every artifact stamp, self-located (scripts/ -> e2e/ -> skills/ -> <plugin root>): dev checkout AND cache.
+# NEVER hardcoded/template version; `|| true` on both branches: under `set -e` a failing substitution aborts.
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 PLUGIN_JSON="$SCRIPT_DIR/../../../.claude-plugin/plugin.json"
 PLUGIN_VERSION=""
 if [ -f "$PLUGIN_JSON" ]; then
@@ -20,22 +18,15 @@ if [ -f "$PLUGIN_JSON" ]; then
     PLUGIN_VERSION=$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$PLUGIN_JSON" 2>/dev/null | head -1 || true)
   fi
 fi
-# HARD FAIL, never a placeholder value. A word like `unknown` carries no `{}<>`, so setup-status's
-# PLACEHLD test cannot catch it: `sort -V` would compare it against the real version and print a
-# confident `AHEAD unknown > X.Y.Z`, and an artifact stamped that way can never clear its own
-# staleness. Emitting the raw `{PLUGIN_VERSION}` token instead would only defer the failure until
-# after the artifact is on disk. The manifest ships with the plugin, so an unreadable one is a broken
-# install - stop before install/rules writes config.json, the rules file or a single agent. Every
-# mode goes through this one script and the skill treats any `ERROR:` line as STOP, status included:
-# a status run that cannot name the running version has nothing to compare a stamp against.
+# HARD FAIL, never a placeholder: `unknown` evades setup-status PLACEHLD (no `{}<>`) -> `AHEAD unknown > X.Y.Z`, never clears; raw `{PLUGIN_VERSION}` only defers it.
+# Unreadable manifest = broken install: stop before install/rules writes config.json, rules file or agent; skill treats `ERROR:` as STOP, status included.
 case "$PLUGIN_VERSION" in
   [0-9]*.[0-9]*.[0-9]*) : ;;
   *) printf 'ERROR:cannot resolve plugin version (X.Y.Z) from %s - refusing to stamp artifacts with a fake version\n' "$PLUGIN_JSON"; exit 1 ;;
 esac
 
-# content_version - self-located from this skill's own SKILL.md brewcode-meta marker, the same
-# way docsync-setup and agent-deadline-setup resolve it. Stamped by bump-version.sh at release;
-# never the running PLUGIN_VERSION, which would defeat the whole point of a separate counter.
+# content_version: self-located from own SKILL.md brewcode-meta marker (as docsync-setup, agent-deadline-setup); stamped by bump-version.sh.
+# Never the running PLUGIN_VERSION: that defeats a separate counter.
 SKILL_MD="$SCRIPT_DIR/../SKILL.md"
 CONTENT_VERSION=""
 if [ -f "$SKILL_MD" ]; then

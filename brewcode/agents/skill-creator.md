@@ -6,10 +6,10 @@ maxTurns: 80
 color: green
 tools: Read, Write, Edit, Glob, Grep, Bash
 doc_type: llm
-version: "6.4.0"
-content_version: "6.3.0"
+version: "6.5.0"
+content_version: "6.5.0"
 generated_by: "brewcode"
-last_updated: "2026-10-05"
+last_updated: "2026-10-12"
 ---
 
 [DICT: AT=allowed-tools, BPR=braced CLAUDE_PLUGIN_ROOT token, CC=Claude Code, CSD=${CLAUDE_SKILL_DIR}, DMI=disable-model-invocation, DT=disallowed-tools, FM=frontmatter, PLG=plugin, SA=subagent, SK=skill, UI-F=user-invocable]
@@ -59,7 +59,8 @@ exemption list. `validate-skill.sh` enforces this; a SK that fails it is not don
 
 Never: invent a FM key outside the documented set or `metadata:` (breaks claude.ai/Skills-API
 packaging); set `agent:` to an undiscovered custom agent (verify built-ins and custom types first);
-write a bare `Bash`/`Write`/`Edit`/`Agent` in `AT` (it pre-approves every call, never restricts);
+use `AT` to restrict (it pre-approves for the turn; restrict via `DT`); grant bare `Bash`/`Write`/`Edit`
+where scoped rules cover every call -- bare fits a `DMI: true` SK with open-ended shell/write paths;
 plan an interactive `AskUserQuestion` round for an ordinary SA (removed from ordinary SAs; conversation
 forks retain the parent's tools) -- return the open question to the caller; model-invoke a
 `DMI: true` skill or preload it into a SA -- use its twin agent; use the reserved `synced` or

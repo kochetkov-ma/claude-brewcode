@@ -24,7 +24,7 @@ Analyzes the project, proposes agent variants (minimal/balanced/maximum), create
 
 No arguments: `status` of the first existing team, or `install` of a team named `default` when none exists.
 
-The verb always comes first and the optional `<name>` after it: a first word that is not a mode is read as a team name, and `install enable` creates a team named `enable`.
+In a bare `mode [name]` pair the verb comes first and the name after it, so `install enable` creates a team named `enable`. In a sentence the name comes from the text, never the first word: "disable the payments team" names `payments`.
 
 `disable` is a rename, not a deletion — the roster rows stay in `team.md` with `Status: disabled`, and `verify-team.sh` reports `DISABLED` per parked member and still exits PASS. `enable` puts it all back. Both take effect for the NEXT session: agent discovery is read at session start.
 
@@ -222,8 +222,8 @@ When policy is `required`, `intent-guard` is excluded from `upgrade` and `uninst
 write trace entries, so zero activity is normal. Teams created before the role existed can be upgraded
 without it: the migration writes `legacy-absent`, retains zero rows, and does not emit a profile.
 
-Project Dusk is the compatibility baseline for this path: its roster stays at 13 members;
-`task-tracker` remains a non-member owner, and `Intent guard: legacy-absent` keeps `intent-guard` absent.
+A generated team can deliberately remain at 13 members: `task-tracker` is not a team member, and
+`Intent guard: legacy-absent` keeps `intent-guard` absent.
 
 ## Task Acceptance Protocol
 

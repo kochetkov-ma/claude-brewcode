@@ -366,6 +366,9 @@ HARD constraints:
 - Read-only git only: diff/log/show/ls-files/status/merge-base/symbolic-ref. Never checkout/reset/restore/revert.
 - Never run a build, a test suite or a migration as a side effect.
 - VERIFY-ONLY members of your batch: check that refs RESOLVE; never edit their content.
+- A block delimited by another tool's begin/end markers (e.g. `<!-- BEGIN brewcode:semble -->` ..
+  `<!-- END brewcode:semble -->`) is owned by that setup, which re-creates it on upgrade: never compress, move,
+  dedup or delete it, both marker lines included. Dedup from the other copy; report it as `managed by <setup>`.
 - RUNTIME SEATS: a file of yours that the runtime-seat roster names is edited only after you have read all four
   instruction sources it lists. Quote and REPORT contradictions; never compress a contract line. Return them
   under "runtime_seats".

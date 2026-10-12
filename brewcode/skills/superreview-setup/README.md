@@ -28,7 +28,7 @@ A project-tailored `superreview` skill:
    and skips the adversarial validator by design.
 4. **Mechanical gates first** — the project's real build/lint/type/test commands run before the fan-out (both depths).
    Their output is `CONFIRMED-BY-EXECUTION` and is passed to every agent so nobody re-runs or re-litigates it.
-5. **Domain experts selected at RUNTIME** (EXTENDED) — the live `.claude/agents/*.md` roster is read each run,
+5. **Domain experts selected at RUNTIME** (EXTENDED) — the live `.claude/agents/**/*.md` roster (subfolders included) is read each run,
    read-only recon agents are excluded, and any surface without an owner is marked DEGRADED instead of quietly
    downgraded.
 6. **Scope discipline** (EXTENDED) — the sanctioned baseline (task + issue + recorded decisions) is resolved

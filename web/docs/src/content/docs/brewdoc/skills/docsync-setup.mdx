@@ -1,6 +1,6 @@
 ---
 title: "Docsync Setup"
-description: "Project-local doc-staleness tracker — installs 3 hooks that watch touched .md files and nag once when frontmatter last_updated goes stale."
+description: "Project-local doc-staleness tracker — installs 3 hooks that watch edited .md files and block when frontmatter last_updated goes stale."
 order: 21
 ---
 import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
@@ -12,7 +12,7 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 </Callout>
 
 <Callout type="tip">
-**Frontmatter is the source of truth — no separate ledger.** Docsync installs three project-local hooks that quietly record which `.md` files you read or edit. At the end of a turn, if any touched doc is stale by its own `last_updated` date, it nags once and asks whether to sync. The skill is user-invoked only (`disable-model-invocation: true`) — the model never fires it on its own; the installed hooks do the running afterwards.
+**Frontmatter is the source of truth — no separate ledger.** Docsync installs three project-local hooks that quietly record which `.md` files you read or edit. At the end of a turn, if any edited doc is stale by its own `last_updated` date, it blocks the turn and has Claude set the date or sync the doc. The skill is user-invoked only (`disable-model-invocation: true`) — the model never fires it on its own; the installed hooks do the running afterwards.
 </Callout>
 
 <Callout type="note">
@@ -63,7 +63,7 @@ runs it on its own — you always invoke it by hand.
 
 ```bash
 # Natural language also works, RU or EN
-"что устарело в документации"
+"what docs are stale"
 "track doc staleness in this project"
 "docsync status"
 ```
@@ -76,7 +76,7 @@ runs it on its own — you always invoke it by hand.
 |-----|----------|--------------|-----|-------|
 | README.md | user | 2026-07-01 | 18d | stale |
 | SKILL.md | llm | 2026-07-17 | 2d | fresh |
-| CHANGELOG.md | skip | — | — | excluded |
+| NOTES.md | user | — | — | no-date |
 ```
 
 ## Flow
@@ -85,31 +85,31 @@ runs it on its own — you always invoke it by hand.
   <li>
     <div>
       <strong>Resolve mode</strong>
-      <p>Free text in RU or EN resolves a canonical lifecycle verb or an extra mode. Empty input means install when absent, otherwise status. Explicit modes can appear anywhere in the prompt; material unresolved write decisions are bundled before work.</p>
+      <p>Free text in RU or EN resolves a canonical lifecycle verb or an extra mode. Empty input means install when absent, otherwise status. Explicit modes can appear anywhere in the prompt; the skill asks at most one question, only when the answer changes what gets written.</p>
     </div>
   </li>
   <li>
     <div>
       <strong>Install (once)</strong>
-      <p><code>install</code> asks for a threshold (default 7 days) and excludes, then validates inputs, settings and hook syntax before writes. It copies three hooks, writes configuration and idempotently merges settings. An existing <code>settings.json.bak</code> is retained; a backup is created only when absent. <code>upgrade</code> refreshes provenance and hooks while preserving enabled state, threshold, excludes and other config fields. Neither mode resets session state or adds document frontmatter.</p>
+      <p><code>install</code> asks for a threshold (default 7 days) and excludes, then validates inputs, settings and hook syntax before writes. It copies three hooks, writes configuration and idempotently merges settings. The settings merge runs under <code>settings.json.lock</code> and writes no <code>settings.json.bak</code>; the transaction is its own rollback. <code>upgrade</code> refreshes provenance and hooks while preserving enabled state, threshold, excludes and other config fields. Neither mode resets session state or adds document frontmatter.</p>
     </div>
   </li>
   <li>
     <div>
       <strong>Track silently</strong>
-      <p>From the next session on, <code>docsync-track.mjs</code> (PostToolUse on <code>Write|Edit|MultiEdit</code>) and <code>docsync-watch.mjs</code> (PostToolUse on <code>Read</code>) record every <code>.md</code> file touched during a session — no output, no interruption.</p>
+      <p>Settings are watched, so the hooks normally apply in the running session (restart it if they do not fire). <code>docsync-track.mjs</code> (PostToolUse on <code>Write|Edit</code>, one handler per tool) logs every <code>.md</code> file edited, and <code>docsync-watch.mjs</code> (PostToolUse on <code>Read</code>) logs every one read — no output, no interruption.</p>
     </div>
   </li>
   <li>
     <div>
-      <strong>Nag once</strong>
-      <p>At <code>Stop</code>, <code>docsync-gate.mjs</code> checks touched docs against their own <code>last_updated</code> frontmatter. If any is older than <code>threshold_days</code> — or carries no date at all — it blocks the turn once per session, listing every offender, and tells Claude to ask about syncing.</p>
+      <strong>Block on stale</strong>
+      <p>At <code>Stop</code>, <code>docsync-gate.mjs</code> checks the docs edited this session against their own <code>last_updated</code> frontmatter. If a doc was modified more than <code>threshold_days</code> after its <code>last_updated</code> day — or the date is missing or unusable — it blocks once for the docs edited since its last ask, listing every offender. After a block the gate stays silent until one of those docs is edited again.</p>
     </div>
   </li>
   <li>
     <div>
-      <strong>Sync on confirmation</strong>
-      <p><code>/brewdoc:docsync-setup sync</code> lists the stale set, asks via <code>AskUserQuestion</code>, then reads each confirmed doc, follows its <code>sync_procedure</code> (prose Claude acts on — no hook parses it) and bumps <code>last_updated</code> to today. Compression depth follows <code>doc_type</code>: <code>llm</code> = deep, <code>user</code> = light, absent = <code>user</code>.</p>
+      <strong>Sync</strong>
+      <p><code>/brewdoc:docsync-setup sync</code> lists the stale set and asks which docs to sync via <code>AskUserQuestion</code>; it syncs only the confirmed ones. For each, it reads the doc, follows its <code>sync_procedure</code> (prose Claude acts on — no hook parses it) and bumps <code>last_updated</code> to today. Compression depth follows <code>doc_type</code>: <code>llm</code> = deep, <code>user</code> = light, absent = <code>user</code>.</p>
     </div>
   </li>
 </Steps>
@@ -121,16 +121,16 @@ runs it on its own — you always invoke it by hand.
 
 ```yaml
 ---
-doc_type: "llm"                # optional; absent or unrecognized => user. values: llm | user | skip
+doc_type: llm                  # optional, unquoted; absent or unrecognized => user. values: llm | user | skip
 last_updated: "2026-07-19"     # sole staleness input (YYYY-MM-DD, LOCAL time)
 sync_procedure: "what to check / where to look when syncing"   # optional, prose
 ---
 ```
 
-Staleness is DATE ONLY: `today - last_updated > threshold_days`. No hashing, no `depends_on` graph.
+Staleness is DATE ONLY, no hashing, no `depends_on` graph. The Stop gate compares `last_updated` with the file's modification day (modification day minus `last_updated` > `threshold_days`) and also blocks on missing or unusable dates. `status` and `sync` age docs against today instead.
 
-- **Values are quoted.** The hooks' frontmatter parser strips surrounding quotes either way, so unquoted docs already in your repo keep working — but a real YAML consumer types an unquoted `2026-07-19` as a Date, so everything the skill emits is quoted.
-- `doc_type: "skip"` excludes a file entirely. Absent or unrecognized `doc_type` is normalized to `user` by a `docTypeOf()` helper present in all three hooks — the default is enforced in code, not only described here.
+- **Quote `last_updated` and `sync_procedure`; leave `doc_type` bare.** The hooks' frontmatter parser reads either form, so existing docs keep working — but a real YAML consumer types an unquoted `2026-07-19` as a Date, and other tooling matches `^doc_type: llm$` literally.
+- `doc_type: skip` excludes a file entirely. Absent or unrecognized `doc_type` is normalized to `user` by a `docTypeOf()` helper present in all three hooks — the default is enforced in code, not only described here.
 - `sync_procedure` is a **model-only hint**: no hook parses it. `sync` mode and the gate's block message tell Claude to read the doc and follow it.
 
 **Enable/disable polarity — the opposite of what you'd guess.** The flag lives in `config.json` under `"enabled"`, and an **absent key means ENABLED**: every hook's `loadConfig()` reads `enabled: c.enabled !== false`. So `"enabled": false` is installed-but-inert, not missing — a config with no `enabled` key at all is live. This is the reverse of `brewtools:agent-deadline-setup`, whose gate checks `cfg.enabled !== true`, so an absent key there is INERT. Do not assume the two setups share a polarity.
@@ -147,29 +147,28 @@ gaps are reported. This is per-file publication and recovery, not an all-files a
 
 | File | Event | Matcher | Action |
 |------|-------|---------|--------|
-| `docsync-track.mjs` | PostToolUse | `Write\|Edit\|MultiEdit` | Records touched `.md`; nudges to add `last_updated` when missing |
-| `docsync-watch.mjs` | PostToolUse | `Read` | Records touched `.md`. Silent by design — a `Read` fires constantly, so mid-turn context injection on every one would be noise |
-| `docsync-gate.mjs` | Stop | — | Re-applies scope (`exclude` globs + `doc_type: skip`) to the touched set, then blocks **at most once per session**, listing every stale **and** every undated touched doc, and tells Claude to ask about syncing |
+| `docsync-track.mjs` | PostToolUse | `Write\|Edit`; two handlers with `if` (`Write(**/*.md)`, `Edit(**/*.md)`), 5 s each | Records edited `.md`; nudges once per file to add `last_updated` when missing |
+| `docsync-watch.mjs` | PostToolUse | `Read`; `if` `Read(**/*.md)`, 5 s | Records read `.md`. Silent by design — a `Read` fires constantly, so mid-turn context injection on every one would be noise |
+| `docsync-gate.mjs` | Stop | — (10 s) | Re-applies scope (`exclude` globs + `doc_type: skip`) to the docs edited since its last ask, then blocks once, listing every stale, unusable **and** undated doc |
 
-The gate's `asked` flag is one boolean per session: after that single block, docs that go stale or get touched later in the same session produce no further signal until the next session. That is deliberate — a `Stop` hook that blocks repeatedly loops. A doc that is only ever **read** and carries no `last_updated` still produces a signal: the gate lists it under `no last_updated`.
+The gate records each ask in the session log. After a block it stays silent until one of the listed docs is edited again, and it never blocks when `stop_hook_active` is true or the ask cannot be recorded — a `Stop` hook that blocks repeatedly loops. The block message has Claude set a missing or unusable date itself; any other stale doc needs a sync, which Claude decides on, asking first only before deleting or wholesale rewriting content. A doc that was only read, changed by Bash or changed outside Claude Code is never raised.
 
 **Project root resolution — the hooks resolve it themselves, at runtime.** Each hook tries `CLAUDE_PROJECT_DIR` first, then walks upward from the hook's own `cwd` for the nearest `.git` or `.claude` marker, then falls back to that same `cwd` — there is no `git rev-parse` rung inside the hooks. The skill's own install/upgrade/status Bash snippets add one extra rung, `git rev-parse --show-toplevel`, between the env var and the walk; the two agree on every layout except a nested `.claude`, where the hooks — not the skill's shell snippet — decide where config and state actually land. `input.cwd` is never treated as the root: it drifts mid-session, so it is used only to resolve a relative `tool_input` path.
 
 Hooks are self-contained ESM (Node built-ins only), read state from `.claude/docsync/` at runtime,
-and take effect starting the next session. Their line-2 metadata supports installed-copy comparison.
+and normally apply in the running session (settings are watched; restart only if they do not fire). Their line-2 metadata supports installed-copy comparison.
 Local hook tests cover session isolation, excludes, enabled polarity, gate blocking and missing
-config. Suite output supplies the current pass/fail totals; this page does not claim a live runtime run.
+config.
 
 **State / config** — `.claude/docsync/`:
 
 - `config.json` — version/content-version provenance, enabled state, threshold and exclude globs; upgrade retains configuration values while refreshing metadata.
-- `state-<session_id>.json` — hook-owned touched set and asked flag for each session. A missing session id falls back to `state.json`. Install/upgrade preserves existing session files.
+- `state-<session_id>.jsonl` — append-only log per session (events `edit`, `read`, `nudge`, `ask`), hook-owned. A missing session id falls back to `state.jsonl`. Install/upgrade preserves existing session files.
 
-**Scope** — all `*.md` in the project minus `exclude` globs and any file marked `doc_type: "skip"`. All three hooks apply both filters, the Stop gate included, so marking a doc `skip` mid-session silences it immediately — even if it was already touched. Only docs actually read or edited in a session are candidates for the end-of-turn nag; untouched docs are never nagged.
+**Scope** — all `*.md` in the project minus `exclude` globs and any file marked `doc_type: skip`. All three hooks apply both filters, the Stop gate included, so marking a doc `skip` mid-session silences it immediately — even if it was already touched. `CLAUDE.md`, `CLAUDE.local.md` and `AGENTS.md` (any depth) are never tracked, nudged or gated, whatever `exclude` says. Only docs edited through `Write`/`Edit` in a session are raised at the end of a turn; untouched or merely read docs never are.
 
 **`uninstall`** removes only the three docsync hook entries and files, preserving foreign entries,
-then asks whether to remove `.claude/docsync/`. Keeping that directory retains configuration and
-session history. **`purge`** removes it as well; foreign settings and the settings backup remain.
+and keeps `.claude/docsync/`, so configuration and session history survive. **`purge`** removes it as well. Both take `settings.json.lock` for the settings merge; foreign settings remain.
 
 </details>
 

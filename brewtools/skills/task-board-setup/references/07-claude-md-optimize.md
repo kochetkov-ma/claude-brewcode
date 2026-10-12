@@ -4,6 +4,8 @@
 
 OPTIONAL, opt-in at P1; runs AFTER board scaffolding + verification (P5). PROPOSE-ONLY: every change needs AskUserQuestion approval, including restructuring CLAUDE.md.
 
+A block delimited by another tool's begin/end markers (e.g. `<!-- BEGIN brewcode:semble -->` .. `<!-- END brewcode:semble -->`) is owned by that setup, which re-creates it on upgrade: 5b-5g never compress, move, dedup or delete it, both marker lines included; 5h reports it as `managed by <setup>`.
+
 > **Verified lazy-loading mechanic (source: code.claude.com/docs/en/memory, fetched 2026-06-14).** Bake this into every proposal rationale:
 > - Root CMD + all ancestor CLAUDE.md/CLAUDE.local.md: **loaded in full AT LAUNCH**, every session, regardless of length.
 > - Subdirectory (nested) CLAUDE.md: **NOT loaded at launch -- loaded ON-DEMAND when Claude reads a file in that subtree.**

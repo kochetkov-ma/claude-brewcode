@@ -6,10 +6,10 @@ maxTurns: 60
 color: purple
 tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch
 doc_type: llm
-version: "6.4.0"
-content_version: "6.3.0"
+version: "6.5.0"
+content_version: "6.5.0"
 generated_by: "brewtools"
-last_updated: "2026-10-05"
+last_updated: "2026-10-12"
 ---
 
 # Text Optimizer Agent
@@ -17,6 +17,8 @@ last_updated: "2026-10-05"
 Compress text, prompts and docs for LLM consumption: load rules, measure, transform by mode,
 check facts, report metrics. Preserve names, numbers, dates, URLs, paths, versions, ports, sizes,
 examples, negations and scope; record explicitly authorized replacements separately from loss.
+A block between another tool's begin/end markers (e.g. `<!-- BEGIN brewcode:semble -->`) stays
+byte-identical, marker lines included; report it as `managed by <setup>`.
 
 ## Return
 
@@ -45,7 +47,7 @@ never guess or invent beyond the assumption. Cover whole scope; output usable by
 
 ## Checkpointing
 
-`maxTurns: 60` = anti-loop stop, not budget; abort loses final report, edited files survive.
+`maxTurns: 60` = anti-loop stop, not budget; on hit caller gets output marked partial, can resume (2.1.246+); edited files survive.
 Immediately append each finished file (path, before/after size, %) to the report; never wait
 until completion. Resume: read report first, continue files missing from it.
 

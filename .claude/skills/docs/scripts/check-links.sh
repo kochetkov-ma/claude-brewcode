@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# check-links.sh — validate internal /plugin/... cross-links in touched MDX files
-# Usage: bash scripts/check-links.sh [file1.mdx file2.mdx ...]
-#        (if no args, scans all .mdx under web/docs/src/content/docs/)
+# Validates internal /plugin/... cross-links in touched MDX files.
+# Usage: bash scripts/check-links.sh [file.mdx ...]; no args -> all .mdx under web/docs/src/content/docs/
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"

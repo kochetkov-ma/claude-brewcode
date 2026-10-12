@@ -1,24 +1,15 @@
 #!/usr/bin/env bash
-# semble-common.sh — shared library for the brewcode:semble-setup skill scripts.
-# Bash 3.2 compatible. No jq: all JSON goes through `node -e`.
-# Callers do:  . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/semble-common.sh"
+# semble-common.sh: shared lib for semble-setup scripts; Bash 3.2, no jq (JSON via `node -e`); sourced as `. "$SC_DIR/lib/semble-common.sh"`.
 
 SEMBLE_PIN_VERSION="${SEMBLE_PIN_VERSION:-0.6.2}"
 SEMBLE_PIN_SPEC="semble[mcp]==${SEMBLE_PIN_VERSION}"
 SEMBLE_SERVER_NAME="semble_code"
 SEMBLE_UPSTREAM_NAME="semble"
-# THE content set. Single source of truth — the MCP registration and EVERY CLI
-# invocation must pass exactly this, in this order. `docs` is required for `.md`:
-# files.py puts `markdown` in _DOC_LANGUAGES, so `code config` indexes zero
-# markdown. Since semble 0.5.5 each sorted content set has its own index variant
-# below the repo-key directory; this combined corpus is `index-code-config-docs`.
+# THE content set: single source for the MCP registration and EVERY CLI call, this order; `docs` needed for `.md` (files.py:
+# `markdown` in _DOC_LANGUAGES). Since semble 0.5.5 each sorted set has its own variant: this one = `index-code-config-docs`.
 SEMBLE_CONTENT_ARGS="code docs config"
-# All tools of this server are always in the prompt, never deferred behind
-# ToolSearch. Mandatory: with ENABLE_TOOL_SEARCH=true the model cannot call
-# mcp__semble_code__* until it discovers them, so every semble nudge points at
-# an invisible tool. Verified against Claude Code 2.1.226: `alwaysLoad` is a
-# top-level optional boolean on the stdio server object and isDeferredTool()
-# returns false for it. There is no `claude mcp add` flag — only add-json.
+# alwaysLoad: tools never deferred behind ToolSearch, else ENABLE_TOOL_SEARCH=true hides mcp__semble_code__* from every nudge.
+# Verified CC 2.1.226: top-level stdio boolean, isDeferredTool() -> false; no `claude mcp add` flag, only add-json.
 SEMBLE_ALWAYS_LOAD=true
 # The same set in the shapes semble persists and names it. Every cache reader
 # derives both forms from THIS value, never a second literal.
@@ -42,9 +33,8 @@ SEMBLE_TOOL_SEARCH="mcp__semble_code__search"
 # shellcheck disable=SC2034  # read by the sourcing scripts
 SEMBLE_TOOL_RELATED="mcp__semble_code__find_related"
 SEMBLE_STATE_SCHEMA=1
-# Bounds for the two shell-outs to foreign binaries. The uvx probe may do an
-# uncached network fetch on a cold uv cache; `claude mcp get` may block on a
-# stdio handshake. Both run inside `status`, which runs first in every mode.
+# Bounds for foreign shell-outs inside `status` (runs first in every mode): cold-cache uvx probe may fetch
+# from network; `claude mcp get` may block on a stdio handshake.
 SEMBLE_PROBE_TIMEOUT="${SEMBLE_PROBE_TIMEOUT:-60}"
 SEMBLE_MCP_GET_TIMEOUT="${SEMBLE_MCP_GET_TIMEOUT:-15}"
 
@@ -69,10 +59,8 @@ sc_platform() {
   esac
 }
 
-# Canonical root resolution (D1 Q5), same order as the five hook assets:
-# test override -> CLAUDE_PROJECT_DIR -> git toplevel -> upward walk for a
-# .git/.claude marker -> PWD. $PWD alone was the whole rule, so every script run
-# from a subdirectory wrote its state, cache and rule into that subdirectory.
+# Canonical root (D1 Q5), same order as hook assets: test override -> CLAUDE_PROJECT_DIR -> git toplevel ->
+# upward .git/.claude marker walk -> PWD (PWD alone wrote state, cache and rule into subdirectories).
 sc_root_candidate() {
   local d r
   if [ -n "${SEMBLE_PROJECT_ROOT:-}" ] && [ -d "$SEMBLE_PROJECT_ROOT" ]; then
@@ -93,13 +81,8 @@ sc_root_candidate() {
   return 1   # no marker anywhere: the caller decides whether that is fatal
 }
 
-# Resolved absolute project root. Mirrors Python Path(p).resolve() for an
-# existing directory: `cd` + `pwd -P` expands every symlink, drops any trailing
-# slash, and returns "/" unchanged — identical to pathlib on macOS and Linux.
-# Total on purpose: every caller reads it as `"$(sc_project_root)"` under errexit,
-# so a rootless run must still print PWD and exit 0 exactly as before. The
-# "no marker found" signal lives in sc_root_candidate's exit status, for a caller
-# that is about to WRITE and wants to refuse a guessed root.
+# Resolved abs root == Python Path(p).resolve(): `cd` + `pwd -P` expands symlinks, drops trailing slash, keeps "/".
+# Total: callers read it under errexit, so rootless -> PWD, rc 0; "no marker" signal = sc_root_candidate rc (for writers).
 sc_project_root() {
   local p
   p="$(sc_root_candidate || true)"
@@ -118,8 +101,7 @@ sc_cache_base() {
 sc_cache_root_code() { printf '%s\n' "${SEMBLE_CACHE_ROOT_CODE:-$(sc_cache_base)/semble-code}"; }
 
 # ── repo hash — must byte-match semble/cache.py:27-36 ────────────────────────
-# find_index_from_cache_folder(): sha256(str(Path(p).expanduser().resolve()))
-# Verified equal to `printf '%s' "$(cd P && pwd -P)" | shasum -a 256` on macOS.
+# find_index_from_cache_folder(): sha256(str(Path(p).expanduser().resolve())) == `printf '%s' "$(cd P && pwd -P)" | shasum -a 256` (macOS).
 sc_sha256() {
   if command -v shasum >/dev/null 2>&1; then
     shasum -a 256 | cut -d' ' -f1
@@ -143,9 +125,8 @@ sc_repo_cache_dir() {
   h="$(sc_repo_hash "$p")" || return 1
   printf '%s\n' "$root/$h"
 }
-# cache.py since 0.5.5: code-only keeps `index`; every other exact content set uses
-# `index-<sorted-scope>`. A combined cache left at bare `index` is a legacy
-# pre-0.5.5 entry and must not be accepted as the current variant.
+# cache.py since 0.5.5: code-only keeps `index`, other exact sets use `index-<sorted-scope>`;
+# a combined cache at bare `index` = legacy pre-0.5.5 entry, never accepted as current variant.
 sc_repo_index_dir() {
   local d
   d="$(sc_repo_cache_dir "$@")" || return 1
@@ -166,17 +147,8 @@ sc_uvx_version()    { sc_have uvx && { uvx --version 2>/dev/null | awk '{print $
 sc_claude_bin()     { printf '%s\n' "${SEMBLE_CLAUDE_BIN:-claude}"; }
 sc_claude_version() { "$(sc_claude_bin)" --version 2>/dev/null | awk '{print $1}' || true; }
 
-# Version of a `uv tool install`ed semble, if any. Empty = uvx-ephemeral mode.
-#
-# `uv tool list` stays PRIMARY on purpose, even though semble 0.5.4 finally has
-# `semble --version`. The binary on PATH is of UNKNOWN version by definition —
-# that is what this function is asking — and on 0.5.3 and older `--version` is
-# not in _CLI_DISPATCH_ARGS, so it falls through to argv-starts-the-server and
-# BLOCKS. Asking `uv tool list` first is free and cannot hang.
-# `--version` is used only as a FALLBACK, for a semble that is on PATH but not
-# under `uv tool` (pipx, a venv, a manual install), which `uv tool list` reports
-# as absent and which we would otherwise mislabel `uvx-ephemeral`. Bounded by
-# sc_timeout, so an old build on that path costs one timeout, never a hang.
+# `uv tool install`ed semble version; empty = uvx-ephemeral. `uv tool list` first: free, never hangs (<=0.5.3 lacks
+# `--version` in _CLI_DISPATCH_ARGS -> starts server, BLOCKS); `--version` = fallback for pipx/venv, bounded by sc_timeout.
 sc_semble_tool_version() {
   local v=""
   if sc_have uv; then
@@ -185,10 +157,8 @@ sc_semble_tool_version() {
   fi
   sc_have semble || return 0
   [ "$(sc_semble_probe_arg)" = "--version" ] || return 0
-  # 5 s, not SEMBLE_PROBE_TIMEOUT: no network is involved, a semble that answers
-  # `--version` answers in well under a second, and the binary on PATH may still
-  # be older than the pin — in which case this argv starts the server and the
-  # bound is the only thing that ends the call.
+  # 5 s, !=SEMBLE_PROBE_TIMEOUT: no network, `--version` answers <1 s; an older-than-pin binary
+  # starts the server on this argv, so the bound alone ends the call.
   v="$(sc_timeout 5 semble --version 2>/dev/null)" || return 0
   case "$v" in
     *[!0-9.]*|*' '*|'') return 0 ;;
@@ -196,10 +166,8 @@ sc_semble_tool_version() {
   esac
 }
 
-# Which binary backs sc_timeout: `timeout` (GNU/Linux) | `gtimeout` (coreutils
-# on macOS) | `none`. `none` is NOT unbounded — sc_timeout_watch takes over.
-# SEMBLE_TIMEOUT_BIN overrides detection: `none` forces the pure-bash watchdog,
-# any other value is used as the binary. Production leaves it unset.
+# sc_timeout backend: `timeout` (GNU/Linux) | `gtimeout` (macOS coreutils) | `none` (!=unbounded: sc_timeout_watch).
+# SEMBLE_TIMEOUT_BIN overrides: `none` forces the pure-bash watchdog, else used as binary; production leaves it unset.
 sc_timeout_backend() {
   local ovr="${SEMBLE_TIMEOUT_BIN:-}"
   if [ -n "$ovr" ]; then
@@ -218,32 +186,8 @@ sc_timeout_path() {
   sc_bin "${SEMBLE_TIMEOUT_BIN:-$b}"
 }
 
-# sc_timeout_watch SECONDS CMD [ARG...] — dependency-free stand-in for GNU
-# `timeout`, used on a stock macOS that has neither binary. `set -m` puts the
-# child in its own process group so the whole tree dies, not just the wrapper;
-# the poll starts at 10 ms and backs off to 250 ms, so a fast command pays ~10 ms
-# and a 60 s probe costs a few hundred sleeps. Job-control chatter ("Terminated")
-# is muted by swapping the SHELL's fd 2 — the child already holds the real one.
-# 124 is reported only when the deadline passed AND the child died of a signal,
-# so an unreaped child that finished on its own still yields its own status.
-#
-# The deadline is WALL CLOCK, read from bash's own $SECONDS. It used to be the
-# sum of the *requested* sleep durations, which is not the same number: every
-# poll forks /bin/sleep, and under load a fork costs far more than the interval
-# it was asked to wait. On a busy machine a nominal 1 s bound drifted to several
-# seconds — the bound silently stopped being a bound, and the suite's timing
-# assertion went red for the real reason rather than a fake one. $SECONDS has
-# 1 s granularity and `local t0=$SECONDS` needs no reset, so the enclosing
-# shell's own counter is left untouched.
-#
-# The test is `-gt`, not `-ge`, and that one character is the whole contract.
-# $SECONDS counts ticks since the SHELL started, so t0 is captured somewhere
-# inside a second, not on its edge: `SECONDS - t0 == secs` can come true as
-# little as a few ms after t0 and would kill a command that still had almost
-# its full budget left. `-gt` costs at most one extra second and buys the only
-# guarantee worth having — NEVER early. The bound therefore fires in
-# [secs, secs+1) plus one poll interval (<=250 ms) plus the 100 ms TERM->KILL
-# grace. Callers bound 15-60 s probes with it, where a second of slack is noise.
+# sc_timeout_watch SECONDS CMD [ARG...]: bash `timeout` stand-in; `set -m` kills whole group, poll 10->250 ms, fd 2 swap mutes
+# chatter, 124 only if deadline passed AND child signalled. Wall clock ($SECONDS), `-gt` !=`-ge`: NEVER early, fires in [secs, secs+1).
 sc_timeout_watch() {
   local secs="${1:?sc_timeout needs seconds}"; shift
   local had_m=0; case "$-" in *m*) had_m=1 ;; esac
@@ -272,11 +216,8 @@ sc_timeout_watch() {
   return "$rc"
 }
 
-# sc_timeout SECONDS CMD [ARG...] — run CMD with an upper bound. The bound is
-# always enforced: a real `timeout`/`gtimeout` when one exists, the pure-bash
-# watchdog otherwise. Every argument is passed through as its own argv element,
-# so 'semble[mcp]==X.Y.Z' stays one word and is never re-parsed by a shell.
-# Exit: 124 = timed out (GNU convention), else CMD's own status.
+# sc_timeout SECONDS CMD [ARG...]: always bounded (`timeout`/`gtimeout`, else bash watchdog); each arg stays its own argv
+# element, so 'semble[mcp]==X.Y.Z' is never re-parsed. Exit: 124 = timed out (GNU convention), else CMD's own status.
 sc_timeout() {
   local secs="${1:?sc_timeout needs seconds}"; shift
   local backend; backend="$(sc_timeout_backend)"
@@ -286,20 +227,15 @@ sc_timeout() {
   esac
 }
 
-# Why the probe failed, set by every sc_semble_probe call:
-# ok | no_network | no_uvx | timeout | failed. A timeout is NOT "the pin is
-# broken" — callers that report `resolvable: false` can name the real reason.
+# Probe failure reason, set by every sc_semble_probe call: ok | no_network | no_uvx | timeout | failed;
+# timeout != broken pin, so callers reporting `resolvable: false` can name the real reason.
 SEMBLE_PROBE_REASON=""
 # The X.Y.Z the probe read back off the resolved package, or empty when the
 # `--help` fallback answered instead. Informational; nothing gates on it.
 SEMBLE_PROBE_VERSION=""
 
-# Which argv to probe the pin with. Only argv in semble's _CLI_DISPATCH_ARGS is
-# safe: anything else falls through to "start the stdio server" and BLOCKS.
-# `--help` has always been in that set; `--version` joined it in 0.5.4
-# (`cli.py:25`, `:215`). So the argv is chosen FROM THE PIN, never tried and
-# fallen back from — a hang cannot be recovered by a fallback, only by a bound.
-# Anything unparseable degrades to `--help`, which is safe at every version.
+# Probe argv chosen FROM THE PIN: only _CLI_DISPATCH_ARGS is safe (else stdio server BLOCKS); `--help` always, `--version`
+# since 0.5.4 (`cli.py:25`, `:215`). No try-and-fallback (a hang needs a bound); unparseable pin -> `--help`.
 sc_semble_probe_arg() {
   local v="${1-$SEMBLE_PIN_VERSION}" maj min pat rest
   case "$v" in *.*.*) ;; *) printf -- '--help\n'; return 0 ;; esac
@@ -314,14 +250,7 @@ sc_semble_probe_arg() {
   fi
 }
 
-# Resolvability probe. Runs sc_semble_probe_arg's argv, so it prints and exits 0
-# and never starts the stdio server. On a >=0.5.4 pin that argv is `--version`:
-# measured 0.26 s warm (identical to `--help`) and 2.5 s cold including the
-# download, and it prints the resolved X.Y.Z — so the probe proves WHICH build
-# uvx handed us, not merely that something resolved. Unparseable stdout is not
-# treated as a broken pin: it retries `--help`, which is safe at every version.
-# Bounded: on a cold uv cache this is an uncached network fetch, and status runs
-# it in every mode. Exit: 0 resolvable | 124 timed out | 1 anything else.
+# Resolvability probe via sc_semble_probe_arg argv (never the server, bounded); `--version` proves WHICH build. Exit: 0 | 124 timeout | 1.
 # shellcheck disable=SC2034  # SEMBLE_PROBE_* are read by the caller after the call
 sc_semble_probe() {
   SEMBLE_PROBE_REASON=""
@@ -351,8 +280,7 @@ sc_semble_probe() {
 }
 
 # ── paths ───────────────────────────────────────────────────────────────────
-# Active config dir as CC resolves it: CLAUDE_CONFIG_DIR, empty = default profile.
-# Hermetic under SEMBLE_TEST_HOME: only SEMBLE_TEST_CONFIG_DIR counts there.
+# Active config dir as CC resolves it (CLAUDE_CONFIG_DIR, empty = default); under SEMBLE_TEST_HOME only SEMBLE_TEST_CONFIG_DIR.
 sc_config_dir() {
   local d
   if [ -n "${SEMBLE_TEST_HOME:-}" ]; then d="${SEMBLE_TEST_CONFIG_DIR:-}"; else d="${CLAUDE_CONFIG_DIR:-}"; fi
@@ -375,19 +303,13 @@ sc_rule_file()        { printf '%s\n' "$(sc_project_root)/.claude/rules/semble-f
 sc_hooks_dir()        { printf '%s\n' "$(sc_project_root)/.claude/hooks"; }
 
 # ── artifact metadata ───────────────────────────────────────────────────────
-# Manifest by SELF-LOCATION: scripts/lib -> scripts -> semble-setup -> skills -> <plugin root>.
-# Correct in the dev checkout AND in the installed cache. The version is NEVER hardcoded.
+# Manifest by SELF-LOCATION: scripts/lib -> scripts -> semble-setup -> skills -> <plugin root>, dev and cache alike; version NEVER hardcoded.
 SEMBLE_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SEMBLE_PLUGIN_JSON="$SEMBLE_LIB_DIR/../../../../.claude-plugin/plugin.json"
 SEMBLE_GENERATED_BY="brewcode:semble-setup"
 
-# HARD FAIL, never a placeholder value. The sole caller is sc_state_patch, which STAMPS
-# state.json - there is no soft-probe caller. A word like `unknown` carries none of `{}<>`, so
-# setup-status's PLACEHLD test cannot catch it: `sort -V` would compare it against the real
-# version and print a confident `AHEAD unknown > X.Y.Z`. The manifest ships with the plugin in
-# the dev checkout and in the cache alike, so an unreadable one is a broken install - stop
-# before anything is written. Same resolution as superreview-setup/scripts/generate.sh
-# `_plugin_version` and teams-setup/scripts/detect-mode.sh.
+# HARD FAIL, never a placeholder: sole caller sc_state_patch STAMPS state.json; `unknown` slips past setup-status PLACEHLD (`sort -V`
+# -> `AHEAD unknown > X.Y.Z`). Same as superreview-setup/scripts/generate.sh `_plugin_version`, teams-setup/scripts/detect-mode.sh.
 sc_plugin_version() {
   local v=""
   if [ -f "$SEMBLE_PLUGIN_JSON" ]; then
@@ -422,10 +344,7 @@ sc_backup() {
 }
 
 # ── MCP probing (read-only; truth comes from files, not `claude mcp list`) ────
-# Emits ONE JSON object:
-# {"user":<cfg|null>,"local":<cfg|null>,"project":<cfg|null>,
-#  "upstreamUser":<cfg|null>,"upstreamLocal":<cfg|null>,
-#  "malformed":["<file>"],"projectEnabled":<bool|null>}
+# ONE JSON: {"user","local","project","upstreamUser","upstreamLocal":<cfg|null>,"malformed":["<file>"],"projectEnabled":<bool|null>}
 sc_mcp_dump() {
   sc_require_node
   SC_CJ="$(sc_claude_json)" SC_ROOT="$(sc_project_root)" SC_NAME="$SEMBLE_SERVER_NAME" \
@@ -457,20 +376,8 @@ process.stdout.write(JSON.stringify(out));
 '
 }
 
-# One-word verdict. Precedence: malformed > duplicate > wrong_scope > stale_args
-#                              > upstream_unpinned > correct > absent
-# NOTE (deviation from DESIGN §6.2): the precedence line above is the frozen
-# contract and wins, so `wrong_scope` is decided BEFORE `stale_args` — a local-
-# or project-scope entry carrying a floating `--from semble[mcp]` reports
-# wrong_scope, not stale_args. That contradicts the §6.2 *definition* of
-# wrong_scope ("args correct but scope is local"), which would need a second
-# combined word to express. It costs nothing: `repair` handles wrong_scope and
-# stale_args identically (remove every scope, re-add at user scope with the
-# pinned argv), so the diagnosis differs but the fix is the same.
-# NOTE (deviation from DESIGN §6.2): `upstream_unpinned` is also emitted when
-# ZERO scopes hold semble_code and only the upstream `semble` server exists.
-# Callers that mutate must therefore test presence separately — semble-mcp.sh
-# `add` and `repair` both do.
+# Precedence (frozen): malformed > duplicate > wrong_scope > stale_args > upstream_unpinned > correct > absent.
+# NOTE (deviation from DESIGN §6.2): floating local/project -> wrong_scope (repair: same fix). NOTE (deviation from DESIGN §6.2): upstream_unpinned also with ZERO semble_code -> mutators test presence.
 sc_mcp_state() {
   sc_require_node
   # shellcheck disable=SC2016  # JavaScript source, not shell: $ is literal
@@ -489,9 +396,8 @@ const okCmd=c.command==="uvx";
 const okArgs=args.join(" ")==="--from "+spec+" semble --content "+content;
 const okEnv=env.SEMBLE_CACHE_LOCATION===want;
 const okType=(c.type===undefined||c.type==="stdio");
-// A registration without alwaysLoad is drift, not "correct": its tools stay
-// deferred behind ToolSearch and are effectively uncallable. Folding it into
-// stale_args routes it through `repair`, which re-adds via add-json.
+// No alwaysLoad = drift, not "correct": tools stay deferred behind ToolSearch, uncallable;
+// stale_args routes it to `repair`, which re-adds via add-json.
 const okAlways=c.alwaysLoad===true;
 if(s!=="user"){console.log("wrong_scope");process.exit(0)}
 if(!(okCmd&&okArgs&&okEnv&&okType&&okAlways)){console.log("stale_args");process.exit(0)}
@@ -499,9 +405,8 @@ console.log(d.upstreamUser||d.upstreamLocal?"upstream_unpinned":"correct");
 '
 }
 
-# Preview/fallback only. `claude mcp add` has NO flag for alwaysLoad (verified
-# against 2.1.226), so a registration written by this form is drift by design —
-# add-json is the only path that produces the approved entry.
+# Preview/fallback only: `claude mcp add` has NO alwaysLoad flag (verified 2.1.226), so this form is drift by design;
+# add-json alone produces the approved entry.
 sc_mcp_add_cmd() {
   printf '%s mcp add %s -s user -e SEMBLE_CACHE_LOCATION=%s -- uvx --from %s semble --content %s\n' \
     "$(sc_claude_bin)" "$SEMBLE_SERVER_NAME" "$(sc_cache_root_code)" "'$SEMBLE_PIN_SPEC'" "$SEMBLE_CONTENT_ARGS"
@@ -630,10 +535,8 @@ if(v===undefined||v===null)process.exit(0);
 process.stdout.write(typeof v==="object"?JSON.stringify(v):String(v));'
 }
 
-# sc_state_patch '<json object>' — read-modify-write, preserves unknown keys.
-# Installer-owned keys (schema, profile, projectRoot, approvedVersion, version, generated_by,
-# last_updated) are (re)written on every patch; `enabled`, `phase`, `completed` and `notes` are
-# only ever changed by an explicit patch, never by this preamble.
+# sc_state_patch '<json object>': read-modify-write, unknown keys kept; installer keys (schema, profile, projectRoot, approvedVersion,
+# version, generated_by, last_updated) rewritten every patch; `enabled`/`phase`/`completed`/`notes` only by explicit patch.
 sc_state_patch() {
   sc_require_node
   [ "${SEMBLE_DRY_RUN:-}" = "1" ] && { sc_dry "state patch $1"; return 0; }

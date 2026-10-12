@@ -19,10 +19,11 @@ Claude Code has no wall-clock timeout for subagents. `maxTurns` stops a run at i
 `$ARGUMENTS` is one free-form RU/EN prompt; mode tokens and flags may sit anywhere in it.
 
 1. Mode: an explicit mode token wins outright; else the most distinct whole-word keyword hits
-   (table in Step 2). Tie with a destructive mode (`purge`) -> `AskUserQuestion`; with `status` ->
-   `status`; of two mutating modes -> the keyword that comes first. No hit or empty -> `status`.
+   (table in Step 2). Tie with a destructive mode (`purge`) or of `install` with a removal mode
+   (`uninstall`) -> `AskUserQuestion`; with `status` -> `status`; of two other mutating modes -> the
+   keyword that comes first. No hit or empty -> `status`.
 2. Scope: prose that is not a mode/id/path is still input: take the id, path or target from it.
-3. Ask: at most ONE `AskUserQuestion` (max 4 questions), before any work, only when the answer
+3. Ask: at most ONE `AskUserQuestion` (max 4 questions) to resolve mode and scope, before any work, only when the answer
    changes what gets written. A read-only run asks nothing.
 
 Print once, before the first action (labels literal, values in the conversation language):
@@ -58,7 +59,7 @@ State: `<os.tmpdir()>/brewtools-agent-deadline/<session_id>/<agent_id>.json` = `
 | under 5 minutes | original clock continues, the pause counts | stop blocked once by another guard (e.g. the agent-return size check), harness nudge, quick `SendMessage` resume: an over-budget agent can only finalize |
 | 5 minutes or more, or state already pruned | fresh window from that call | a later resume, or any pause that long |
 
-## Honest limits (verified on CC 2.1.223, stop/resume on 2.1.296 — state these to the user, do not oversell)
+## Honest limits (verified on CC 2.1.220, stop/resume on 2.1.296 — state these to the user, do not oversell)
 
 | Fact | Consequence |
 |------|-------------|
@@ -127,8 +128,9 @@ console.log([configCV||"n/a",runbookCV||"n/a",state,findings.join(",")||"none"].
 NODE
 }
 claude_project_root() {
-  if [ -n "$CLAUDE_PROJECT_DIR" ] && [ -d "$CLAUDE_PROJECT_DIR" ]; then
-    printf '%s\n' "$CLAUDE_PROJECT_DIR"; return 0
+  PD="${CLAUDE_PROJECT_DIR}"   # substituted at load: the session start dir, as hooks get it
+  if [ -n "$PD" ] && [ -d "$PD" ]; then
+    printf '%s\n' "$PD"; return 0
   fi
   if r=$(git rev-parse --show-toplevel 2>/dev/null) && [ -n "$r" ]; then
     printf '%s\n' "$r"; return 0
@@ -206,7 +208,7 @@ Field meanings — do not paraphrase them into something stronger:
 
 | Field | Value |
 |-------|-------|
-| `project_root` / `root_resolved` | `CLAUDE_PROJECT_DIR`, then git toplevel, then an owning `.git`/`.claude` ancestor; `root_resolved=no` = read-only fallback to `$PWD` |
+| `project_root` / `root_resolved` | `CLAUDE_PROJECT_DIR` (substituted at load: the session start dir, the same value hooks get), then git toplevel, then an owning `.git`/`.claude` ancestor; `root_resolved=no` = read-only fallback to `$PWD` |
 | `guard_refs` / `cleanup_refs` | handlers matching the exact tuple, per script. Guard = `PreToolUse` + `.*` + timeout `5`, cleanup = `SubagentStop` + no matcher + timeout `3`, both command/node/sole portable arg; global args are the expanded `<global dir>/hooks/<script>` path. Each must be exactly `1`: more is a duplicate and non-effective, and two guards never substitute for a missing cleanup |
 | `legacy_refs` | owned handlers that differ from the exact tuple: absolute project paths, swapped events, wrong matchers/types/commands/timeouts, extra args/keys, malformed handler values; any nonzero value requires migration |
 | `settings_valid` | `yes` only when settings are absent/empty or parse as a JSON object; anything else is non-effective |
@@ -261,7 +263,7 @@ Everything the user could want is already installed and the intent is not explic
 | `uninstall` | `uninstall` | `убери`, `сними`, `удали хук` | yes |
 | `purge` | `purge`, `wipe`, `remove everything` | `вычисти всё`, `удали полностью`, `убери совсем`, `снеси` | yes, destructive |
 
-Ambiguous between install and a removal verb → `AskUserQuestion`. Never guess a destructive mode.
+Ties resolve per Prompt contract rule 1.
 
 ## Step 3 — Explain pending changes before questions
 
@@ -271,7 +273,7 @@ Add concrete state/action details to the initial PLAN without repeating its bloc
 
 ## Step 4 — Ask ONLY what is missing (`AskUserQuestion`)
 
-Skip any question already answered by `$ARGUMENTS` or settled by the status table.
+Skip any question already answered by the prompt or settled by the status table.
 
 | # | Question | Options | Default |
 |---|----------|---------|---------|
@@ -297,7 +299,7 @@ Every spawn brief carries six labeled fields, since a subagent starts with an em
 
 > Substitute the chosen values into both the CONTEXT block and the literal `export` line: the runbook reads `MINUTES`/`OVERRIDES`/`RUNBOOK` from `process.env`, and a missing `MINUTES` aborts (no built-in `20` fallback). Afterwards check that the reported config carries the chosen number.
 
-Spawn (substitute `MODE`, `SCOPE`, `MINUTES`, `OVERRIDES`, `HARD_STOP_RATIO`, `RUNBOOK`, `ASSETS_DIR`, `PLUGIN_VERSION`, `LAST_UPDATED` from Steps 1-4 and the Config-metadata block):
+Spawn (substitute `MODE`, `SCOPE`, `MINUTES`, `OVERRIDES`, `HARD_STOP_RATIO`, `RUNBOOK`, `ASSETS_DIR`, `PROJECT_ROOT`, `PLUGIN_VERSION`, `LAST_UPDATED` from Steps 1-4 and the Config-metadata block). `PROJECT_ROOT` = Step 1 `project_root`: the runbook's root block takes `CLAUDE_PROJECT_DIR` first, and the Bash tool does not have it, so the export line carries it; with `root_resolved=no`, drop it from that line:
 
 ```
 Agent(subagent_type="brewcode:hook-creator", prompt="
@@ -327,9 +329,9 @@ CONTEXT:
   MANDATORY FIRST BASH COMMAND — the runbook's node blocks read these from the ENVIRONMENT,
   not from this prompt. Run this VERBATIM as the first line of EVERY Bash call that executes
   a runbook block (a new Bash call does NOT inherit exports from the previous one):
-    export RUNBOOK='RUNBOOK' MINUTES='MINUTES' OVERRIDES='OVERRIDES' HARD_STOP_RATIO='HARD_STOP_RATIO' PLUGIN_VERSION='PLUGIN_VERSION' LAST_UPDATED='LAST_UPDATED'
+    export RUNBOOK='RUNBOOK' MINUTES='MINUTES' OVERRIDES='OVERRIDES' HARD_STOP_RATIO='HARD_STOP_RATIO' PLUGIN_VERSION='PLUGIN_VERSION' LAST_UPDATED='LAST_UPDATED' CLAUDE_PROJECT_DIR='PROJECT_ROOT'
   Then verify before writing anything:
-    echo \"MINUTES=\$MINUTES OVERRIDES=\$OVERRIDES HARD_STOP_RATIO=\$HARD_STOP_RATIO RUNBOOK=\$RUNBOOK PV=\$PLUGIN_VERSION LU=\$LAST_UPDATED\"
+    echo \"MINUTES=\$MINUTES OVERRIDES=\$OVERRIDES HARD_STOP_RATIO=\$HARD_STOP_RATIO RUNBOOK=\$RUNBOOK PV=\$PLUGIN_VERSION LU=\$LAST_UPDATED PD=\$CLAUDE_PROJECT_DIR\"
   If MINUTES prints empty, STOP and report — the config block ABORTS on an empty MINUTES
   by design; re-export it rather than hardcoding a number.
   Drop HARD_STOP_RATIO from the export line when the user did not set it.
@@ -358,9 +360,9 @@ CONTEXT:
   appending text to the file. An invalid project config is SKIPPED and the global one silently
   takes over, so a hand-edited append is a defect, not a shortcut. Do NOT touch enabled while
   doing it: the hooks require it to be exactly true.
-CONSUMER: Step 6 reports your result to the user; the settings.json you write is loaded by
-  the NEXT Claude Code session, so a malformed merge breaks that session instead of failing
-  here — report the exact paths you touched so they can be checked.
+CONSUMER: Step 6 reports your result to the user; Claude Code watches settings.json and
+  applies your write to the running session, so a malformed merge breaks hooks there instead
+  of failing here — report the exact paths you touched so they can be checked.
 DONE: report the settings.json path, the hooks dir, the config path with its final contents,
   and the runbook 'Verify' output if you ran it. The reported config MUST show
   defaultMinutes = MINUTES — a 20 where the user asked for something else is a FAILURE,
@@ -373,7 +375,7 @@ DONE: report the settings.json path, the hooks dir, the config path with its fin
 Re-run the Step 1 status block and print the refreshed table, plus:
 
 - what changed (files, settings.json, config values, state files removed);
-- hook wiring changes (install/upgrade/uninstall/purge) need a new session; `/reload-plugins` does not apply, these are plain settings.json hooks;
+- hook wiring changes (install/upgrade/uninstall/purge) apply to the running session, no restart: Claude Code watches settings files; `/hooks` confirms. `/reload-plugins` does not apply, these are plain settings.json hooks;
 - config value changes (`enabled`, `defaultMinutes`, `byAgentType`, `hardStopRatio`, `readOnlyAgentTypes`) are read live, no restart;
 - the soft-deadline caveat: time is sampled at tool-call boundaries only; pair with `BASH_MAX_TIMEOUT_MS` for long single commands.
 

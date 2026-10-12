@@ -114,7 +114,7 @@ Semble >= 0.5.5 names an exact variant:
 2. join them with `-`;
 3. use `index` only when the scope is exactly `code`; otherwise use `index-<scope>`.
 
-`SEMBLE_CONTENT_ARGS="code docs config"` is the default-corpus source of truth. `sc_content_scope`, `sc_index_leaf`, the MCP registration, CLI warm/smoke, prefetch hook, and staged reindex must agree. Do not hardcode a second default corpus.
+`SEMBLE_CONTENT_ARGS="code docs config"` is the default-corpus source of truth. `sc_content_scope`, `sc_index_leaf`, the MCP registration, CLI warm/smoke and staged reindex must agree. Do not hardcode a second default corpus.
 
 Every variant contains `chunks.json`, `metadata.json`, `bm25_index/`, and `semantic_index/`. Metadata includes `root_path`, `time`, `model_path`, `content_type`, `chunk_size`, `cache_version`, and the file manifest. Reuse requires matching model, content set, chunk size, cache version, and the same walked file set with unchanged `mtime_ns`.
 

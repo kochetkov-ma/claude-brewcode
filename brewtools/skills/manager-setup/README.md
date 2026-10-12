@@ -29,34 +29,55 @@ The Injects column names the prompt modes (`<mode>` in the paths below). The blo
 |---------|-------------|
 | `/brewtools:manager-setup` | No argument = `status`. |
 | `/brewtools:manager-setup status` | Print wall state, prompt sources, codeword behavior, and resolved prompt blocks |
-| `/brewtools:manager-setup install` | Install the HARD wall guard into this project. Asks to confirm before arming (`AskUserQuestion`) unless your prompt already said so explicitly (e.g. "enable the hard wall") — plain `install` or autonomy phrasing never counts; declining still installs and leaves `state.hard=false`. `/reload` only on FIRST install. On Claude Code >= 2.1.233 it also sets the task-tools key `env.CLAUDE_CODE_ENABLE_TODO_TOOLS="1"` in `.claude/settings.local.json`. |
-| `/brewtools:manager-setup upgrade` | Re-copy the guard and the off-switch CLI from the current plugin version, re-register if missing, add what an older install lacks (`onFailure: "block"`, the task-tools key), and restamp `state.json`'s `version`/`generated_by`/`last_updated`, which clears a `stale` verdict in `/brewcode:setup-status`. `hard`/`level` preserved; aborts if not installed. |
+| `/brewtools:manager-setup install` | Install the HARD wall guard into this project. Asks to confirm before arming (`AskUserQuestion`) unless your prompt already said so explicitly (e.g. "enable the hard wall") — plain `install` or autonomy phrasing never counts; declining still installs and leaves `state.hard=false`. Applies live (settings are watched). On Claude Code >= 2.1.233 it also sets the task-tools key `env.CLAUDE_CODE_ENABLE_TODO_TOOLS="1"` in `.claude/settings.local.json`, but only when no settings layer (local, project, user) already sets it; an explicit `0`/`false`/empty value is kept and reported `kept off`. |
+| `/brewtools:manager-setup upgrade` | Re-copy the guard and the off-switch CLI from the current plugin version, re-register if missing, add what an older install lacks (`onFailure: "block"`, the task-tools key under the same no-override rule), and restamp `state.json`'s `version`/`generated_by`/`last_updated`, which clears a `stale` verdict in `/brewcode:setup-status`. `hard`/`level` preserved; aborts if not installed. |
 | `/brewtools:manager-setup enable` | Arm an already-installed wall (state flip only) — same confirm gate as `install`; declining aborts with nothing changed. Not installed → routes you to `install`. |
 | `/brewtools:manager-setup disable` | Disarm the HARD wall (state flip only; registration stays in `settings.local.json`). Guard no-ops until re-armed. |
-| `/brewtools:manager-setup uninstall` | Deregister the wall from `settings.local.json` + delete the copied guard. Auto-disarms first. State, prompt overrides and the task-tools key are KEPT. Run `/reload` after. |
-| `/brewtools:manager-setup purge [--scope global\|project]` | `uninstall` + delete `state.json` and the prompt override(s), plus an emptied `.claude/brewtools/` and a leftover `settings.local.json.bak`. The task-tools key is removed only when this skill's install added it. The only destructive action. |
+| `/brewtools:manager-setup uninstall` | Deregister the wall from `settings.local.json` + delete the copied guard. Auto-disarms first. State, prompt overrides and the task-tools key are KEPT. Applies live; a settings file left `{}` is deleted. |
+| `/brewtools:manager-setup purge [--scope global\|project]` | `uninstall` + delete `state.json` and the prompt override(s), plus an emptied `.claude/brewtools/`, a leftover `settings.local.json.bak`, an emptied `settings.local.json`/`.claude/`. The task-tools key is removed only when this skill's install added it. The only destructive action. |
 | `/brewtools:manager-setup level <strict\|balanced>` | Set wall strictness (project only). `balanced` = read-only Bash allowed; `strict` = all Bash denied. |
 | `/brewtools:manager-setup edit [full] [--scope ...]` | Copy default block to an override and show the path for editing |
 | `/brewtools:manager-setup <any task>` | Inline Manager run — prepends the full block and delegates the task |
 
 The wall verbs are project-only — `--scope` applies to `edit`/`purge` (the prompt-text override files) and is ignored elsewhere. `on`, `off` and `reset` are not commands, only free-text synonyms routed to `enable` / `disable` / `purge`; `setup` and `remove` route nowhere.
 
-## NL prompts (RU+EN)
+## Examples
+
+```
+# Codewords (always work, no setup needed)
+++m implement the new caching layer
+++m ++a implement the new caching layer      # Manager + architecture-first
+# In plan mode, ++m auto-adds the plan supplement
+
+# Hard wall: install (arming asks for confirmation unless your prompt said so)
+/brewtools:manager-setup install
+/brewtools:manager-setup level strict        # no Bash at all in the main session
+/brewtools:manager-setup disable             # disarm, registration stays
+/brewtools:manager-setup uninstall           # state + prompt overrides kept
+/brewtools:manager-setup purge               # remove everything this skill wrote
+
+# Inline Manager run (no wall change)
+/brewtools:manager-setup refactor the auth module
+```
+
+## NL prompts
+
+Free-text phrases resolve to a command; Russian prompts are accepted too.
 
 | Phrase | Resolves to |
 |--------|-------------|
-| `установи стену`, `install manager`, `поставь стену` | `install` |
-| `обнови гард`, `update the guard`, `перекопируй хук` | `upgrade` |
-| `включи менеджера`, `enable manager`, `manager on`, `вкл стену`, `arm wall` | `enable` |
-| `выключи менеджера`, `turn off manager`, `manager off`, `выкл стену`, `стену выключи`, `disarm wall` | `disable` |
-| `снеси стену`, `удали хук`, `деинсталлируй`, `remove hook`, `uninstall` | `uninstall` |
-| `вычисти`, `снеси всё`, `сброс`, `верни дефолт`, `reset` | `purge` |
-| `уровень строгий`, `level strict`, `режим строгий`, `strict mode` | `level strict` |
-| `уровень сбалансированный`, `level balanced`, `режим сбалансированный` | `level balanced` |
-| `статус`, `что сейчас`, `manager status`, no argument | `status` |
-| `поправь промт`, `edit prompt`, `customize` | `edit` |
-| `<задача> в хард режиме`, `<task> in hard mode` | `hard-one-shot`: confirm, arm, run the task, disarm |
-| `<задача> от роли менеджера`, `<task> as manager` | `manager-run`: run the task as manager, wall untouched |
+| `install manager`, `install the wall` | `install` |
+| `update the guard` | `upgrade` |
+| `enable manager`, `manager on`, `arm wall` | `enable` |
+| `turn off manager`, `manager off`, `disarm wall` | `disable` |
+| `remove hook`, `uninstall` | `uninstall` |
+| `reset`, `restore defaults`, `remove everything` | `purge` |
+| `level strict`, `strict mode` | `level strict` |
+| `level balanced`, `balanced mode` | `level balanced` |
+| `manager status`, no argument | `status` |
+| `edit prompt`, `customize` | `edit` |
+| `<task> in hard mode` | `hard-one-shot`: confirm, arm, run the task, disarm |
+| `<task> as manager` | `manager-run`: run the task as manager, wall untouched |
 
 Ambiguous or conflicting input triggers `AskUserQuestion`.
 
@@ -65,14 +86,16 @@ Ambiguous or conflicting input triggers `AskUserQuestion`.
 | Scope | State file | Prompt overrides |
 |-------|-----------|------------------|
 | Project (default) | `.claude/brewtools/manager/state.json` | `.claude/brewtools/manager/prompts/<mode>.md` |
-| Global | `~/.claude/manager/state.json` | `~/.claude/manager/prompts/<mode>.md` |
+| Global | `<config dir>/manager/state.json` | `<config dir>/manager/prompts/<mode>.md` |
 
 Resolution order (first hit wins):
 - **Wall flags** `{hard, level}`: **project only** — global state never enables the wall
 - **State** `mode` (informational): project → global → default `full`
 - **Prompt** `<mode>`: project → global → plugin default (`skills/manager-setup/references/<mode>.md`)
 
-Global paths (`~/.claude/manager/*`) are protected for the Write/Edit tools, so the skill writes them through bundled Node helpers via Bash. Project paths are plain writes.
+`<config dir>` = `CLAUDE_CONFIG_DIR`, default `~/.claude`. Migration: a non-default profile's global overrides and state now live in that profile's dir, not `~/.claude/manager/`.
+
+Both scopes sit under protected `.claude/` paths: `<config dir>/manager/*` and the project `.claude/` (worktrees and agent-memory `.md` excepted). A Write/Edit there is prompted in `default`/`acceptEdits`, allowed in `bypassPermissions`, denied in headless/`dontAsk` runs, and allow rules never pre-approve it. The skill writes through bundled Node helpers via Bash instead.
 
 ## Hard wall
 
@@ -86,9 +109,9 @@ The HARD wall is an **installed-into-the-project** `PreToolUse` guard, not a plu
 | Registration | `<cwd>/.claude/settings.local.json` — `PreToolUse "*"` entry with `onFailure: "block"` | Personal, gitignored. Persistent plumbing; inert while the wall is off. |
 | Runtime kill-switch | `<cwd>/.claude/brewtools/manager/state.json` `{hard}` | `enable`/`disable` flip this only — never touch `settings.local.json` |
 
-`<cwd>` is the project root (`CLAUDE_PROJECT_DIR`, else the nearest `.git`/`.claude` above the working directory), so the wall also holds in a subdirectory. `uninstall` runs as two Bash calls: the bare exempt disarm, then deregister and delete the copies.
+`<cwd>` is the session's project dir (`CLAUDE_PROJECT_DIR`, else git toplevel), so the wall also holds in a subdirectory. `uninstall` runs as two Bash calls: the bare exempt disarm, then deregister and delete the copies.
 
-**The registration fails closed.** With `onFailure: "block"`, a guard that cannot start blocks the tool call instead of letting it through (Claude Code >= 2.1.295; older versions ignore the field and fail open). The price: when the registered script is missing — the `.claude/brewtools/` tree deleted by hand, the project moved or renamed — every tool call fails with `blocking because onFailure is "block"`, for the main session and subagents, `Read` included, even with the wall disabled. The only fix is outside the session: delete the `brewtools-manager-guard` entry from `.claude/settings.local.json` in an editor (or with the one-liner under "Recovery" in [SKILL.md](SKILL.md)), then run `/reload`. So remove the wall with `disable` or `uninstall`, never by deleting files; a session that shows the error right after `uninstall`/`purge` only needs `/reload`.
+**The registration fails closed.** With `onFailure: "block"`, a guard that cannot start blocks the tool call instead of letting it through (Claude Code >= 2.1.295; older versions ignore the field and fail open). The price: when the registered script is missing — the `.claude/brewtools/` tree deleted by hand, the project moved or renamed — every tool call fails with `blocking because onFailure is "block"`, for the main session and subagents, `Read` included, even with the wall disabled. The only fix is outside the session: delete the `brewtools-manager-guard` entry from `.claude/settings.local.json` in an editor (or with the one-liner under "Recovery" in [SKILL.md](SKILL.md)); watched settings reload live (`/hooks` to confirm). So remove the wall with `disable` or `uninstall`, never by deleting files; the error right after `uninstall`/`purge` means the reload is pending: retry once.
 
 ### Tool buckets (while wall is ON)
 
@@ -162,57 +185,6 @@ instructions and available tools; these files do not configure Codex runtime sta
 ```
 
 `edit` creates the override (seeded with the current effective text) if absent, then shows the path. The injected text is everything inside the fenced ``` or ~~~ blocks if present, else the whole file. All blocks injected for one prompt share a 9000-character cap; longer text is truncated.
-
-## Examples
-
-```
-# Codewords (always work, no setup needed)
-++m implement the new caching layer
-# In plan mode (permission_mode === 'plan'), ++m auto-adds the plan supplement:
-++m design the migration from v1 to v2 schema
-# Architecture-first, combine with Manager delegation:
-++m ++a implement the new caching layer
-
-# Hard wall — install for this project (arming requires confirmation)
-/brewtools:manager-setup install
-# → copies guard, registers in settings.local.json
-# → asks "Arm the HARD wall now?" unless your prompt already said so explicitly; Yes arms state.hard=true, No leaves it disarmed
-# → if newly registered: "run /reload to activate"
-
-# Tighten to strict (no Bash at all in main session)
-/brewtools:manager-setup level strict
-
-# Check current state (also what a bare invocation does)
-/brewtools:manager-setup status
-
-# Disarm wall (leave registration in place)
-/brewtools:manager-setup disable
-
-# Re-arm it later
-/brewtools:manager-setup enable
-
-# After a plugin update, refresh the project copy of the guard
-/brewtools:manager-setup upgrade
-
-# Remove wall from this project (state + prompt overrides kept)
-/brewtools:manager-setup uninstall
-# → deregisters from settings.local.json, run /reload after
-
-# Remove absolutely everything this skill wrote
-/brewtools:manager-setup purge
-
-# Prompt-text customization (independent of the wall)
-/brewtools:manager-setup edit full
-
-# NL equivalents
-включи менеджера глобально
-стену выключи
-уровень строгий
-удали хук
-
-# Inline Manager run (no wall change)
-/brewtools:manager-setup refactor the auth module
-```
 
 ## Related
 

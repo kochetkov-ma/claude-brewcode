@@ -12,7 +12,7 @@ The selected model serves every Claude Code role (opus/sonnet/haiku/fable). Pres
 |----------|---------|---------------------|-------|
 | qwen/qwen3.7-max | 1,000,000 | $1.475/$4.425 | User-selectable |
 | z-ai/glm-5.2 | 1,048,576 | $0.06/$7.00 | Provider-reported SWE-bench Pro 62.1%; not a route benchmark ([source](https://z.ai/blog/glm-5.2)) |
-| deepseek/deepseek-v4-pro | 1,048,576 | $0.422472/$0.844944 | User-selectable |
+| deepseek/deepseek-v4-pro | 1,048,576 | $0.41238/$0.82476 | User-selectable |
 | moonshotai/kimi-k2.7-code | 262,144 | $0.6712/$3.35 | Code variant |
 | qwen/qwen3.7-plus | 1,000,000 | $0.32/$1.28 | At >=256,000 prompt tokens: $0.96/$3.84 |
 | minimax/minimax-m3 | 1,048,576 | $0.30/$1.20 | User-selectable |
@@ -29,7 +29,7 @@ The selected model serves every Claude Code role (opus/sonnet/haiku/fable). Pres
 |----------|---------|---------------------|-------|
 | google/gemini-3.5-flash | 1,048,576 | $1.50/$9.00 | Text rates; modality/tool fees differ |
 | deepseek/deepseek-v4-flash | 1,048,576 | $0.03/$1.28 | Catalog route id; direct-provider aliases differ |
-| anthropic/claude-opus-4.8 | 1,000,000 | $5/$25 | Cache/tool charges additional |
+| anthropic/claude-opus-5.5 | 1,000,000 | $4/$20 | Cache/tool charges additional |
 
 ## Model Validation
 

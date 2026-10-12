@@ -79,7 +79,7 @@ from that probe with one short update, never a second PLAN.
 
 ```
 PLAN — brewcode:semble-setup
-INPUT:  <$ARGUMENTS verbatim, or "(empty)">
+INPUT:  <arguments verbatim, or "(empty)">
 MODE:   <resolved mode> — <matched keyword: X | default | checkpoint resume | no keyword matched>
 SCOPE:  <project root, cache dir, MCP scope, pinned semble version>
 DO:     <2-5 imperative bullets — the steps this mode actually runs>
@@ -90,13 +90,14 @@ RESULT: <what the user ends up holding: MCP registration, rule + hooks, warm ind
 
 ## Step 0 — Resolve the skill directory
 
-`CLAUDE_PLUGIN_ROOT` is unset in skill bash blocks. Line 1 is the `CLAUDE_SKILL_DIR` token in its exact dollar-brace spelling, a text substitution on the skill prompt (not an environment variable); any other spelling, such as a `:-<fallback>` modifier, is never substituted. Line 2 falls back to the newest plugin-cache copy (leaf `semble-setup` or pre-rename `semble`). Copy both lines unchanged to the top of every later block: a new Bash call inherits nothing.
+`CLAUDE_PLUGIN_ROOT` is unset in skill bash blocks. Line 1 is the `CLAUDE_SKILL_DIR` token in its exact dollar-brace spelling, a text substitution on the skill prompt (not an environment variable); any other spelling, such as a `:-<fallback>` modifier, is never substituted. Line 2 falls back to the newest plugin-cache copy (leaf `semble-setup` or pre-rename `semble`). Line 3 is substituted the same way, to the session's start dir that hooks also get; the variable is unset in the Bash tool, and without it the scripts fall back to the git toplevel, whose `settings.json` a session started in a subdirectory never loads. Copy all three lines unchanged to the top of every later block: a new Bash call inherits nothing.
 
 **EXECUTE** using Bash tool:
 
 ```bash
 SD="${CLAUDE_SKILL_DIR}"
 [ -n "$SD" ] || SD="$(find "$HOME/.claude/plugins/cache/claude-brewcode/brewcode" -maxdepth 3 -type d -path '*/skills/*' \( -name semble-setup -o -name semble \) 2>/dev/null | sort -V | tail -1)"
+export CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR}"
 case "$SD" in "$HOME"/.claude/plugins/cache/*) echo "⚠️  SD came from the plugin CACHE, not \$CLAUDE_SKILL_DIR — assets may be older than the marketplace HEAD" ;; esac
 test -d "$SD/scripts" && test -f "$SD/scripts/semble-status.sh" && echo "SD=$SD" && echo "✅" || echo "❌ FAILED — skill dir unresolved: SD='$SD'"
 ```
@@ -114,6 +115,7 @@ This block is read-only: `semble-status.sh` writes nothing under the project, th
 ```bash
 SD="${CLAUDE_SKILL_DIR}"
 [ -n "$SD" ] || SD="$(find "$HOME/.claude/plugins/cache/claude-brewcode/brewcode" -maxdepth 3 -type d -path '*/skills/*' \( -name semble-setup -o -name semble \) 2>/dev/null | sort -V | tail -1)"
+export CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR}"
 bash "$SD/scripts/semble-status.sh" --section all --json; RC=$?
 echo "RC=$RC"
 [ "$RC" -eq 0 ] && echo "✅" || echo "❌ FAILED"
@@ -130,6 +132,8 @@ Read `.verdict`, `.state.phase`, `.state.enabled`, `.mcp.state`, `.mcp.scopes`, 
 - `not_registered` beside a `ready` project: wired from another profile; `install` registers this one.
 - All profiles: `semble-status.sh --versions --all-profiles [--json]` prints `# semble-versions schema=1 pin=... upstream=... upstream_status=... reason=...`, then one `dir | registered spec or none | pin | verdict | config file` row per profile.
 
+> Leftover retired hooks (`.guidance.retired` files, `.guidance.retiredWired` registrations, e.g. 6.4.0 `semble-reminder.mjs`/`semble-prefetch.mjs`) print `retired: <names> - stale (remove via upgrade)` (verdict reason `stale (remove via upgrade): <names>`); a `.guidance.rule == "stale"` (pristine prior-release copy) gives reason `semble-first rule is a prior-release copy`. On an otherwise `ready` project both make the verdict `partial` and set `.nextStep` to `Run /brewcode:semble-setup upgrade`; never report them as missing hooks.
+>
 > An errored `guidance` probe ("unit not installed" included) makes the verdict `partial` (`guidance probe failed: <error>`), never `ready` or a passing `--strict`; an unrequested (null) section never downgrades; `cache`/`agents` carry their own error.
 
 Keep this JSON as the immutable **Before** snapshot; never refresh it after a mutation.
@@ -194,6 +198,7 @@ State exact commands and paths first, then run the blocks in order; stop at the 
 ```bash
 SD="${CLAUDE_SKILL_DIR}"
 [ -n "$SD" ] || SD="$(find "$HOME/.claude/plugins/cache/claude-brewcode/brewcode" -maxdepth 3 -type d -path '*/skills/*' \( -name semble-setup -o -name semble \) 2>/dev/null | sort -V | tail -1)"
+export CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR}"
 bash "$SD/scripts/semble-install.sh" all --json; RC=$?
 echo "RC=$RC   # 0 = uv already present | 3 = precondition | 4 = confirmation required, nothing installed"
 { [ "$RC" -eq 0 ] || [ "$RC" -eq 3 ] || [ "$RC" -eq 4 ]; } && echo "✅" || echo "❌ FAILED"
@@ -220,6 +225,7 @@ Then one `AskUserQuestion`, bundled with known MCP scope/repair choices: *"Run t
 ```bash
 SD="${CLAUDE_SKILL_DIR}"
 [ -n "$SD" ] || SD="$(find "$HOME/.claude/plugins/cache/claude-brewcode/brewcode" -maxdepth 3 -type d -path '*/skills/*' \( -name semble-setup -o -name semble \) 2>/dev/null | sort -V | tail -1)"
+export CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR}"
 bash "$SD/scripts/semble-install.sh" all --yes --json; RC=$?
 echo "RC=$RC"
 { [ "$RC" -eq 0 ] || [ "$RC" -eq 3 ]; } && echo "✅" || echo "❌ FAILED"
@@ -246,6 +252,7 @@ Row 2 prints the `brew install coreutils` line from `.commands` and asks: *"Inst
 ```bash
 SD="${CLAUDE_SKILL_DIR}"
 [ -n "$SD" ] || SD="$(find "$HOME/.claude/plugins/cache/claude-brewcode/brewcode" -maxdepth 3 -type d -path '*/skills/*' \( -name semble-setup -o -name semble \) 2>/dev/null | sort -V | tail -1)"
+export CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR}"
 bash "$SD/scripts/semble-install.sh" coreutils --yes --json; RC=$?
 echo "RC=$RC"
 [ "$RC" -eq 0 ] && echo "✅" || echo "❌ FAILED"
@@ -274,6 +281,7 @@ Precedence when several apply: `malformed` > `duplicate` > `wrong_scope` > `stal
 ```bash
 SD="${CLAUDE_SKILL_DIR}"
 [ -n "$SD" ] || SD="$(find "$HOME/.claude/plugins/cache/claude-brewcode/brewcode" -maxdepth 3 -type d -path '*/skills/*' \( -name semble-setup -o -name semble \) 2>/dev/null | sort -V | tail -1)"
+export CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR}"
 MCP_ACTION=skip   # add for absent/correct; repair only for the approved concrete transition
 if [ "$MCP_ACTION" = add ]; then
   bash "$SD/scripts/semble-mcp.sh" add --scope user --yes --json; RC=$?
@@ -298,13 +306,14 @@ echo "RC=$RC"
 
 All that needs no live server is wired now; the block equals Step 4.2's, so `resume` re-runs it idempotently and repairs drift. The smoke query (Step 4.1) and `phase ready` wait for the new session.
 
-The hooks read the project state file: `enabled:false` or phase `disabled`/`error`/`prereq_ready` silence them; from `awaiting_reload` on they nudge, warning that the first call rebuilds the index. They nudge only when `semble_code` is registered for the profile in use (its `.claude.json`, user or local scope, else the project `.mcp.json`; `disabledMcpServers` vetoes): otherwise SessionStart prints only `not registered for this profile` and the rest skip (`no-mcp`). An agent whose `tools:` omits semble, or whose `disallowedTools` names it, gets no SubagentStart line (`agent-no-tool`).
+The session and subagent hooks read the project state file (`semble-stats.mjs` measures regardless): `enabled:false` or phase `disabled`/`error`/`prereq_ready` silence them; from `awaiting_reload` on they nudge, warning that the first call rebuilds the index. They nudge only when `semble_code` is registered for the profile in use (its `.claude.json`, user or local scope, else the project `.mcp.json`; `disabledMcpServers` vetoes): otherwise SessionStart prints only `not registered for this profile` and the rest skip (`no-mcp`). An agent whose `tools:` omits semble, or whose `disallowedTools` names it, gets no SubagentStart line (`agent-no-tool`).
 
 **EXECUTE** using Bash tool:
 
 ```bash
 SD="${CLAUDE_SKILL_DIR}"
 [ -n "$SD" ] || SD="$(find "$HOME/.claude/plugins/cache/claude-brewcode/brewcode" -maxdepth 3 -type d -path '*/skills/*' \( -name semble-setup -o -name semble \) 2>/dev/null | sort -V | tail -1)"
+export CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR}"
 RC=0
 if bash "$SD/scripts/semble-guidance.sh" install --part all --json; then
   ARC=0; bash "$SD/scripts/semble-agents.sh" apply --scope project --yes --json || ARC=$?
@@ -327,6 +336,7 @@ else RC=1; fi
 ```bash
 SD="${CLAUDE_SKILL_DIR}"
 [ -n "$SD" ] || SD="$(find "$HOME/.claude/plugins/cache/claude-brewcode/brewcode" -maxdepth 3 -type d -path '*/skills/*' \( -name semble-setup -o -name semble \) 2>/dev/null | sort -V | tail -1)"
+export CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR}"
 APPROVED_REPLACEMENT=0   # set to 1 only for this exact approved full-file replacement
 if [ "$APPROVED_REPLACEMENT" = 1 ]; then
   bash "$SD/scripts/semble-guidance.sh" install --part rule --force --json
@@ -336,7 +346,7 @@ else echo "skipped: rule: user_modified, kept; replacement not approved"; fi
 > `--force` replaces the whole file with the template, frontmatter and local prose included; backup
 > `<rule>.bak.<epoch>`, which does not authorize data loss. Record `rule: overwritten (backup <path>)`. Same policy for `.sembleignore`.
 >
-> The rule is copied verbatim, never stamped at install. The managed/user_modified verdict ignores metadata keys, so a metadata-only delta (an older install's `last_updated`) is re-synced without `--force` or backup: record `rule: re-synced <path> (metadata only)` in **Actions**.
+> The rule is copied verbatim, never stamped at install. The managed/user_modified verdict ignores metadata keys, so a metadata-only delta (an older install's `last_updated`) is re-synced without `--force` or backup: record `rule: re-synced <path> (metadata only)` in **Actions**. A byte-pristine copy of any earlier release (status `stale`; normalized sha256 in `SG_PRIOR_RULE`/`SG_PRIOR_IGNORE`) is upgraded the same way: `rule: upgraded <path> (pristine prior-release copy)`. Only real edits stay `user_modified`.
 >
 > Rule budget (test J9): ≤ 45 lines and ≤ 2000 bytes incl. frontmatter; one `search` JSON example, no rationale (that goes to `references/engine-landscape.md`); a new fact displaces one, never raise the cap. Its `paths: ["**/*"]` makes Claude Code load it when Claude reads, writes or edits a matching file (or views one with a Bash read such as `cat`), not at launch.
 
@@ -357,13 +367,14 @@ Re-run Step 1 first; `.mcp.state` not `correct` -> back to Step 3, no verifying.
 
 ### 4.0 Enter `verifying` — before anything is verified
 
-`ready` is reachable only from `verifying` (no `awaiting_reload -> ready` edge): `semble-session.mjs` and `semble-prefetch.mjs` read `phase` to decide whether to advertise the tools, so a resume dying half-way must leave *verification started, never finished*. A missing state file is created at `prereq_ready` and walked through the legal chain to `verifying`.
+`ready` is reachable only from `verifying` (no `awaiting_reload -> ready` edge): `semble-session.mjs` reads `phase` to decide whether to advertise the tools, so a resume dying half-way must leave *verification started, never finished*. A missing state file is created at `prereq_ready` and walked through the legal chain to `verifying`.
 
 **EXECUTE** using Bash tool:
 
 ```bash
 SD="${CLAUDE_SKILL_DIR}"
 [ -n "$SD" ] || SD="$(find "$HOME/.claude/plugins/cache/claude-brewcode/brewcode" -maxdepth 3 -type d -path '*/skills/*' \( -name semble-setup -o -name semble \) 2>/dev/null | sort -V | tail -1)"
+export CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR}"
 bash "$SD/scripts/semble-state.sh" phase verifying --json; RC=$?
 echo "RC=$RC"
 [ "$RC" -eq 0 ] && echo "✅" || echo "❌ FAILED"
@@ -380,6 +391,7 @@ The first run downloads the embedding model: tell the user first, and raise the 
 ```bash
 SD="${CLAUDE_SKILL_DIR}"
 [ -n "$SD" ] || SD="$(find "$HOME/.claude/plugins/cache/claude-brewcode/brewcode" -maxdepth 3 -type d -path '*/skills/*' \( -name semble-setup -o -name semble \) 2>/dev/null | sort -V | tail -1)"
+export CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR}"
 OUT="$(bash "$SD/scripts/semble-project.sh" smoke --json)"; RC=$?
 printf '%s\n' "$OUT"
 STATUS="$(printf '%s' "$OUT" | grep -o '"status":"[a-z]*"' | head -1 | cut -d'"' -f4 || true)"
@@ -400,14 +412,13 @@ else echo "❌ FAILED"; fi
 |---|---|
 | rule | writes the `semble-first` rule; a user-edited file is never blind-overwritten (Step 3.2b `--force` policy) |
 | ignore (`--part ignore`) | writes `<repo>/.sembleignore` (same policy) excluding generated trees (`.claude/tmp/`, `.claude/reports/`); appends `semble-project.sh candidates` findings (duplicate trees, outsized paths) commented out, since a wrong exclusion silently drops code. Re-runs add only new paths; the file stays `managed` |
-| CLAUDE.md | refreshes the `<!-- BEGIN brewcode:semble -->` block, then reconciles the root CLAUDE.md search doctrine outside it, after a timestamped `.bak` |
-| hooks | copies `semble-session.mjs`, `semble-prefetch.mjs`, `semble-stats.mjs`, `semble-reminder.mjs`, `semble-subagent.mjs` into `.claude/hooks/`; deletes the retired `semble-explore.mjs` |
-| settings | merges six entries — SessionStart, UserPromptSubmit, PostToolUse and PostToolUseFailure on the stats matcher, PreToolUse on `Bash\|Grep`, unmatched SubagentStart (every agent type), each `"timeout": 5` (seconds) — plus the two exact permission entries. Reconcile, never append: v1 rows (two `PreToolUse`, `SubagentStart`/`Explore`) are replaced |
-| `.gitignore` | writes `.claude/semble/` (`state.json`, `reminder.json`, `telemetry.jsonl` with verbatim commands + distilled prompt text, trimmed at 2 MB); strips the superseded `.reminder-ts`/`.prefetch-ts` lines and the retired `.claude/semble/.reminder-ts` file |
+| CLAUDE.md | refreshes the `<!-- BEGIN brewcode:semble -->` block in place (one copy; other tools must keep the marked range, `assets/INSTALL.md` §2), then reconciles the root CLAUDE.md search doctrine outside it, after a timestamped `.bak` |
+| hooks | copies `semble-session.mjs`, `semble-stats.mjs`, `semble-subagent.mjs` into `.claude/hooks/`; deletes the retired `semble-explore.mjs`, `semble-reminder.mjs`, `semble-prefetch.mjs` and their `.reminder-ts`/`.prefetch-ts`/`reminder.json` markers |
+| settings | merges four entries — SessionStart, PostToolUse and PostToolUseFailure on the stats matcher, unmatched SubagentStart (every agent type), each `"timeout": 5` (seconds) — plus the two exact permission entries. Reconcile, never append: every retired row (explore, reminder, prefetch; any matcher, path or command form) is removed |
+| `.gitignore` | writes `.claude/semble/` (`state.json`, `telemetry.jsonl` with verbatim commands, trimmed at 2 MB); strips the superseded `.reminder-ts`/`.prefetch-ts` lines |
 
 CLAUDE.md reconcile, whole lines only, each removal echoed verbatim: a line denying semantic search goes even if it also scopes the tool; a line putting grep/Bash/rg first goes unless it scopes the tool to exact identifiers / regexes / paths / exhaustive enumeration (then untouched, unreported); a search heading left empty goes too; a mere mention is reported and kept. Idempotent. No measured effect on tool choice: a false line goes for being false.
 
-The reminder fires on every eligible search (`N = state.reminderEvery`, DEF 1; counter `.claude/semble/reminder.json`, project-global, kept across sessions).
 
 Then project agents are audited and patched; global agents never.
 
@@ -416,6 +427,7 @@ Then project agents are audited and patched; global agents never.
 ```bash
 SD="${CLAUDE_SKILL_DIR}"
 [ -n "$SD" ] || SD="$(find "$HOME/.claude/plugins/cache/claude-brewcode/brewcode" -maxdepth 3 -type d -path '*/skills/*' \( -name semble-setup -o -name semble \) 2>/dev/null | sort -V | tail -1)"
+export CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR}"
 RC=0
 if bash "$SD/scripts/semble-guidance.sh" install --part all --json \
     && bash "$SD/scripts/semble-agents.sh" audit --scope project --json; then
@@ -437,6 +449,7 @@ Mark complete only what ran: `warm` and `smoke` only when Step 4.1 exited `0`; a
 ```bash
 SD="${CLAUDE_SKILL_DIR}"
 [ -n "$SD" ] || SD="$(find "$HOME/.claude/plugins/cache/claude-brewcode/brewcode" -maxdepth 3 -type d -path '*/skills/*' \( -name semble-setup -o -name semble \) 2>/dev/null | sort -V | tail -1)"
+export CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR}"
 SMOKE_OK=1   # set to 0 when Step 4.1 reported "status":"skipped" — never guess
 STEPS="prereq mcp permissions guidance agents"
 [ "$SMOKE_OK" = "1" ] && STEPS="$STEPS warm smoke"
@@ -461,13 +474,14 @@ Run the selected block; do not reprint the PLAN.
 
 ### `enable` / `disable`
 
-`disable` deletes nothing: `state.enabled=false`, phase `disabled`; registration, rule, CLAUDE.md block, hooks and cache stay, and the hooks go silent.
+`disable` deletes nothing: `state.enabled=false`, phase `disabled`; registration, rule, CLAUDE.md block, hooks and cache stay; the session and subagent hooks go silent, `semble-stats.mjs` keeps measuring.
 
 **EXECUTE** using Bash tool:
 
 ```bash
 SD="${CLAUDE_SKILL_DIR}"
 [ -n "$SD" ] || SD="$(find "$HOME/.claude/plugins/cache/claude-brewcode/brewcode" -maxdepth 3 -type d -path '*/skills/*' \( -name semble-setup -o -name semble \) 2>/dev/null | sort -V | tail -1)"
+export CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR}"
 ACTION=disable   # or: enable
 OUT="$(bash "$SD/scripts/semble-project.sh" "$ACTION" --yes --json)"; RC=$?
 printf '%s\n' "$OUT"
@@ -490,6 +504,7 @@ Run it without `--yes` first: it exits `4`, changes nothing, and prints the `<sh
 ```bash
 SD="${CLAUDE_SKILL_DIR}"
 [ -n "$SD" ] || SD="$(find "$HOME/.claude/plugins/cache/claude-brewcode/brewcode" -maxdepth 3 -type d -path '*/skills/*' \( -name semble-setup -o -name semble \) 2>/dev/null | sort -V | tail -1)"
+export CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR}"
 bash "$SD/scripts/semble-project.sh" reindex --json; RC=$?
 echo "RC=$RC   # 4 = confirmation required, nothing deleted"
 [ "$RC" -eq 4 ] || [ "$RC" -eq 0 ] && echo "✅" || echo "❌ FAILED"
@@ -506,6 +521,7 @@ Fan out the four audits and report findings; each recommendation names the mode 
 ```bash
 SD="${CLAUDE_SKILL_DIR}"
 [ -n "$SD" ] || SD="$(find "$HOME/.claude/plugins/cache/claude-brewcode/brewcode" -maxdepth 3 -type d -path '*/skills/*' \( -name semble-setup -o -name semble \) 2>/dev/null | sort -V | tail -1)"
+export CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR}"
 RC=0
 bash "$SD/scripts/semble-project.sh"  audit --json                || RC=1
 bash "$SD/scripts/semble-cache.sh"    info  --json                || RC=1
@@ -529,6 +545,7 @@ after metadata match and verified replacement.
 ```bash
 SD="${CLAUDE_SKILL_DIR}"
 [ -n "$SD" ] || SD="$(find "$HOME/.claude/plugins/cache/claude-brewcode/brewcode" -maxdepth 3 -type d -path '*/skills/*' \( -name semble-setup -o -name semble \) 2>/dev/null | sort -V | tail -1)"
+export CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR}"
 IRC=0; bash "$SD/scripts/semble-install.sh" check --json || IRC=$?
 MRC=0; bash "$SD/scripts/semble-mcp.sh" detect --json || MRC=$?
 echo "prerequisites RC=$IRC | MCP detect RC=$MRC"
@@ -540,7 +557,7 @@ else echo "❌ FAILED"; exit 1; fi
 > **STOP if ❌** — neither probe may hide the other's error; malformed MCP state also stops. `IRC=3` -> report
 > prerequisites and use Step 3.1's machine gate before retrying. Run `semble-mcp.sh repair --yes --json` only for the approved transition.
 
-The project half runs always, pin drift or not: `semble-guidance.sh install` is the only writer of `.claude/rules/semble-first.md`, whose frontmatter stamp `setup-status` reads, so skipping it leaves `stale` forever. **EXECUTE** the Step 3.2b block verbatim, with its user-modified-file policy: it re-copies the rule, `.sembleignore` and the five hooks (identical -> `unchanged`, stamp-only delta -> metadata re-sync, hand-edited -> skipped and diffed to stderr), deletes the retired `semble-explore.mjs`, and re-merges settings entries and permissions. Then use Step 3.3 only if registration changed or state is still `awaiting_reload`; otherwise report the post-write status and any verification gap.
+The project half runs always, pin drift or not: `semble-guidance.sh install` is the only writer of `.claude/rules/semble-first.md`, whose frontmatter stamp `setup-status` reads, so skipping it leaves `stale` forever. **EXECUTE** the Step 3.2b block verbatim, with its user-modified-file policy: it re-copies the rule, `.sembleignore` and the three hooks (identical -> `unchanged`, stamp-only delta -> metadata re-sync, pristine prior-release copy -> `upgraded`, hand-edited -> skipped and diffed to stderr), deletes the retired `semble-explore.mjs`/`semble-reminder.mjs`/`semble-prefetch.mjs` with their settings rows, and re-merges settings entries and permissions. Then use Step 3.3 only if registration changed or state is still `awaiting_reload`; otherwise report the post-write status and any verification gap.
 
 > **STOP if ❌** — report which half failed and what it left behind; the MCP registration stands either way.
 > `skipped: rule: user_modified` leaves the stamp stale by design; generic upgrade approval never authorizes `--force` (Step 3.2b gate).
@@ -558,13 +575,14 @@ The project half runs always, pin drift or not: `semble-guidance.sh install` is 
 
 `state.json` and `.claude/semble/` are deleted by `integration` and `purge`, kept by `mcp` and `cli`. MCP removal covers the active profile only. Use the one `AskUserQuestion` here, listing per option what is deleted and what survives.
 
-Settings entries are unwired before any hook file is deleted (a wired entry on a missing file fails every event); if unwiring fails nothing is deleted and the flavour stops there. After `integration` or `purge`, a `settings:` or `guidance:` line in `.failed`/`.skipped` means the removal is incomplete: quote it, name what survived, never report it complete. A clean removal also deletes install's empty stubs (`CLAUDE.md` = `# CLAUDE.md`, blank `.gitignore`, empty `.claude/hooks`/`.claude/rules`); `settings.json` stays, possibly `{}`.
+Settings entries are unwired before any hook file is deleted (a wired entry on a missing file fails every event); if unwiring fails nothing is deleted and the flavour stops there. After `integration` or `purge`, a `settings:` or `guidance:` line in `.failed`/`.skipped` means the removal is incomplete: quote it, name what survived, never report it complete. A clean removal also deletes install's empty stubs (`CLAUDE.md` = `# CLAUDE.md`, blank `.gitignore`, empty `.claude/hooks`/`.claude/rules`, a `settings.json` that held only semble entries, an empty `.claude/`). `purge` also deletes the MCP rollback copies (`.claude.json.bak.<epoch>`, `.mcp.json.bak.<epoch>`) its verified removal took; `mcp` lists them under `unchanged`.
 
 **EXECUTE** using Bash tool:
 
 ```bash
 SD="${CLAUDE_SKILL_DIR}"
 [ -n "$SD" ] || SD="$(find "$HOME/.claude/plugins/cache/claude-brewcode/brewcode" -maxdepth 3 -type d -path '*/skills/*' \( -name semble-setup -o -name semble \) 2>/dev/null | sort -V | tail -1)"
+export CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR}"
 FLAVOUR=integration   # or: mcp | cli  — chosen by the user, never guessed
 bash "$SD/scripts/semble-remove.sh" "$FLAVOUR" --yes --json && echo "✅" || echo "❌ FAILED"
 ```
@@ -580,6 +598,7 @@ Requires `--yes` and the literal `--confirm-text "purge semble code cache"`. Run
 ```bash
 SD="${CLAUDE_SKILL_DIR}"
 [ -n "$SD" ] || SD="$(find "$HOME/.claude/plugins/cache/claude-brewcode/brewcode" -maxdepth 3 -type d -path '*/skills/*' \( -name semble-setup -o -name semble \) 2>/dev/null | sort -V | tail -1)"
+export CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR}"
 bash "$SD/scripts/semble-remove.sh" purge --yes --confirm-text "purge semble code cache" --json && echo "✅" || echo "❌ FAILED"
 ```
 

@@ -45,8 +45,17 @@ try {
   const configPath = join(project, '.claude', 'agent-return.json');
   const currentConfig = JSON.parse(readFileSync(configPath, 'utf8'));
   assert.equal(currentConfig.version, '1.0.0', 'fixture retains deliberately older release provenance');
-  const statusBlock = blockAfter(readFileSync(join(SKILL_DIR, 'SKILL.md'), 'utf8'), '## Step 1 — STATUS FIRST, always', '```bash\n');
+  // Claude Code substitutes the braced session dir into SKILL.md at load; mirror that here.
+  const statusBlock = blockAfter(readFileSync(join(SKILL_DIR, 'SKILL.md'), 'utf8'), '## Step 1 — STATUS FIRST, always', '```bash\n')
+    .replaceAll('${CLAUDE_PROJECT_DIR}', project);
   const probe = () => spawnSync('bash', ['-c', statusBlock], { cwd: project, env, encoding: 'utf8', timeout: 30000 });
+
+  // GIVEN: the shell cwd drifted into a subdirectory. WHEN: status probes. THEN: the session dir is the project scope.
+  const drifted = join(project, 'sub');
+  mkdirSync(drifted, { recursive: true });
+  const fromSub = spawnSync('bash', ['-c', statusBlock], { cwd: drifted, env, encoding: 'utf8', timeout: 30000 });
+  assert.equal(fromSub.status, 0, `status from a subdirectory exits successfully: ${fromSub.stderr}`);
+  assert.match(fromSub.stdout, new RegExp(`PROJECT_ROOT=${project}\\n[^]*project: hook_files=3/3`), 'project scope keys on the session dir, not the shell cwd');
 
   // WHEN: the actual consumer probes producer-shaped current content with older provenance.
   const current = probe();

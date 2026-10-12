@@ -17,7 +17,7 @@ there is only `name, description, license, compatibility, metadata, allowed-tool
 > **Command name.** Personal/project SK: `name` sets the command (unless another command already
 > uses it) and the DIR name invokes it too; a SK is found by `name` even when the folder differs
 > (2.1.290+). PLG SK: `name` sets only the last segment, the plugin prefix stays. Upstream permits
-> `name` != dir; brewcode does NOT — shipped SKs keep `name` == dir.
+> `name` != dir; brewcode does NOT.
 
 ## Invocation Control
 
@@ -36,7 +36,7 @@ user only, Claude never (0 budget). `UI-F: false` = Claude only, DESC still coun
 
 | Field | Type | Default | Meaning |
 |---|---|---|---|
-| `allowed-tools` (AT) | string \| list | none | **Pre-approval, NOT a sandbox.** Grant for the invoking turn; clears on the next user message. Other tools follow permission settings; deny/ask rules still win. Accepts space/comma string or YAML list. Never bare `Bash`/`Write`/`Edit`/`Agent` — narrowest pattern (`Bash(git status:*)`) or omit. Ignored in project/personal SKs under managed `allowManagedPermissionRulesOnly` (2.1.282+) |
+| `allowed-tools` (AT) | string \| list | none | **Pre-approval, NOT a sandbox.** Grant for the invoking turn; clears on the next user message. Other tools follow permission settings; deny/ask rules still win. Accepts space/comma string or YAML list. Scoped (`Bash(git status *)`) when calls are a fixed set; bare `Bash`/`Write`/`Edit` only in a `disable-model-invocation: true` SK with open-ended shell/write paths (`execution-model.md` Rules). Ignored in project/personal SKs under managed `allowManagedPermissionRulesOnly` (2.1.282+) |
 | `disallowed-tools` (DT) | string \| list | none | Removes tools for the invoking turn; clears on the next user message. Cannot fully remove `EndConversation` while any other tool remains |
 | `model` | string | session model | `/model` values including aliases (`opus`, `sonnet`, `haiku`, `fable` -> `claude-fable-5-1`), full IDs, or `inherit`. Inline override clears next user prompt; excluded `availableModels` values and models unsupported by auto/classifier mode keep the session model. With `context: fork`, selects the SA model; excluded values follow SA override rules |
 | `effort` | enum | inherit | `low, medium, high, xhigh, max` (available levels depend on the model) — no `auto` |
@@ -79,10 +79,10 @@ hooks:
           once: true   # suboption of a HOOK ENTRY — never a top-level sibling of name/description
 ```
 
-Same format as settings hooks. CC registers a SK's hooks when invoked and keeps them running for
-the REST OF THE SESSION, including turns after the SK's own. `once: true` removes the hook after
-its first SUCCESSFUL run (a failed, exit-2 or timed-out run leaves it registered) — honored only
-in SK frontmatter; ignored in settings.json and in agent frontmatter.
+Same format as settings hooks. CC registers a SK's hooks when invoked and keeps them for the REST
+OF THE SESSION, including turns after the SK's own. `once: true` removes the hook after its first
+SUCCESSFUL run (a failed, exit-2 or timed-out run leaves it registered) — honored only in SK
+frontmatter; ignored in settings.json and in agent frontmatter. Path: `hooks.<Event>[].hooks[].once`.
 
 `PostToolUse` runs AFTER the tool, so it cannot prevent the call — but
 `decision: "block"` still adds a `reason` next to the tool result, and `updatedToolOutput` replaces
@@ -111,14 +111,10 @@ Imperative form: "Do X" (not "You should do X").
 
 | Mistake | Fix |
 |---|---|
-| Colon in `description` unquoted | Quote the whole value — an em dash/colon breaks YAML silently |
 | Body >500 lines | Upstream recommendation ("Keep `SKILL.md` under 500 lines"), not a load limit: move detail to `references/` |
 | Invented FM key (`cli:` outside the house rule above, `version:` without the outside-dir rule, `updated:`) | Use a supported key or `metadata:` — claude.ai packaging hard-fails on the rest |
-| Bare `Bash`/`Write`/`Edit`/`Agent` in `allowed-tools` "to restrict" | `AT` only pre-approves, never restricts; narrowest Bash pattern or omit; restrict via `disallowed-tools` |
+| Tools listed in `allowed-tools` "to restrict" | `AT` only pre-approves, never restricts; restrict via `disallowed-tools` |
 | `argument-hint` starts with a mode token | Prompt is always position 1: `[prompt] [mode1\|mode2]`, never `<mode1\|mode2>` alone |
 | `skill.md` (lowercase) | Must be `SKILL.md` (uppercase) — lowercase silently ignored ([#17417](https://github.com/anthropics/claude-code/issues/17417)) |
 | Reserved names: folder `synced`; `anthropic-skills` or `anthropic-skills:*` | Kept for claude.ai-synced skills — won't load. The words `anthropic`/`claude` in `name` fail only claude.ai upload / Skills API |
-| `context:` other than `fork` (e.g. `session`) | Ignored silently, the SK runs inline — delete the key |
-| DESC over spec/listing caps | May be truncated — front-load keywords, cut filler |
 | `agent:` set to uninstalled `developer`/`tester`/`reviewer` | These are not standard built-in task agents — verify the custom definition is discoverable before naming it |
-| Bare top-level `once: true` | `once` is a suboption of a hook entry (`hooks.<Event>[].hooks[].once`), never a sibling of `name`/`description` |

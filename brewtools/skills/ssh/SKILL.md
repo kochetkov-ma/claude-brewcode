@@ -163,9 +163,10 @@ options:
 
 Only on an explicit match, add the key. **EXECUTE** using Bash tool:
 ```bash
+KH_TMP="<path printed by OK keyscan>"
 umask 077 && mkdir -p ~/.ssh && cat "$KH_TMP" >> ~/.ssh/known_hosts && rm -f "$KH_TMP" && echo "OK known_hosts" || { rc=$?; echo "FAILED known_hosts" >&2; exit "$rc"; }
 ```
-> **STOP on "No / cannot verify"** — `rm -f "$KH_TMP"`, report, and do not connect. An unverified
+> **STOP on "No / cannot verify"** — `rm -f "<path printed by OK keyscan>"`, report, and do not connect. An unverified
 > first key is a permanent MITM foothold for every later credential. Never `StrictHostKeyChecking=no`.
 
 **EXECUTE** using Bash tool:
@@ -432,7 +433,7 @@ Update CLAUDE.local.md per server; regenerate `.claude/agents/ssh-admin.md` per 
 
 | Field | Value |
 |-------|-------|
-| Arguments | `$ARGUMENTS` |
+| Arguments | `<the prompt verbatim>` |
 | Mode | `[detected mode]` |
 
 ## Environment

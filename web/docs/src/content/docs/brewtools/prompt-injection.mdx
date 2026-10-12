@@ -22,7 +22,6 @@ the codeword, remains unchanged. The optional manager hard wall is installed sep
 | `++rr` | `review-regression` | Regression-focused review and double-check |
 | `++r` | `review-double` | Review and independent double-check; skipped when ++rr is also present |
 | `+++` | `cron-plan`, only in verified Plan mode | Plan task-specific session anti-drift scheduling for execution |
-| Armed hard wall, no active codeword | `full` | Ambient Manager instructions |
 
 Alphabetic codewords are case-insensitive. Manager, architecture, and review are independent
 groups; `++rr` wins over `++r`. A standalone `+++` is independent of `++m` and requires
@@ -30,8 +29,8 @@ the hook payload's `permission_mode` to equal `plan`. Embedded words and longer 
 sequences do not activate the tokens.
 
 When combined, blocks are emitted in this order: cron planning, manager, architecture,
-then the selected review contract. Active codeword handling returns before the wall-state
-fallback; an armed wall does not add a second ambient block to that branch.
+then the selected review contract. The hook is codeword-only: an armed hard wall injects
+no prompt block; its deny messages explain themselves.
 
 ## Example
 
@@ -51,7 +50,7 @@ well-built counterpart.
   <li><div><strong>Detect tokens and permission mode</strong><p>The hook runs on UserPromptSubmit. It finds standalone codewords and selects plan-aware Manager or Plan-only cron instructions using the permission-mode payload.</p></div></li>
   <li><div><strong>Resolve each prompt block</strong><p>Project override, global override, then plugin default: the first available source wins independently for each of the six modes.</p></div></li>
   <li><div><strong>Return additional context</strong><p>The hook emits selected text through additionalContext without rewriting your message. Combined blocks are bounded to 9,000 characters, with a truncation marker if needed. An error returns an empty hook result.</p></div></li>
-  <li><div><strong>Use wall-state fallback when no codeword is active</strong><p>The hook checks project wall state. If armed, it adds the full Manager block; otherwise it returns no additional context.</p></div></li>
+  <li><div><strong>Return nothing without a codeword</strong><p>With no active codeword the hook returns an empty result, whether or not the hard wall is armed. Prompts that start with a subagent delivery tag (task-notification, or agent-message from=) are skipped.</p></div></li>
 </Steps>
 
 ## Plan-only anti-drift instructions
@@ -85,8 +84,8 @@ blockers, or questions; ⚪ drift verdict. Omit empty rows; keep full evidence i
 Task-board records the prompt, scheduling state, and stop rule and verifies stopping on
 completion or cancellation. Missing tools are reported as a scheduling gap. Timers belong
 to the session; due time does not guarantee exact receipt or delivery after session closure.
-Outside verified Plan mode, `+++` adds no cron instruction; other codewords or an armed
-wall can still add their own context.
+Outside verified Plan mode, `+++` adds no cron instruction; other codewords still add
+their own context.
 
 <Callout type="note" title="Planning instructions do not create a timer">
   The codeword adds a requirement to the execution plan. Actual creation, reconciliation,
@@ -98,7 +97,7 @@ wall can still add their own context.
 | Priority | Source |
 |----------|--------|
 | Project | `.claude/brewtools/manager/prompts/<mode>.md` |
-| Global | `~/.claude/manager/prompts/<mode>.md` |
+| Global | `<config dir>/manager/prompts/<mode>.md` (`CLAUDE_CONFIG_DIR`, default `~/.claude`) |
 | Plugin | `skills/manager-setup/references/<mode>.md` |
 
 The resolver supports `full`, `planmode`, `cron-plan`, `architect`, `review-double`,
@@ -125,7 +124,7 @@ tools; the plugin's Claude hooks do not configure Codex runtime state.
   <Card title="Manager Setup" icon="settings" href="/brewtools/skills/manager-setup/">Inspect prompt sources, customize text, and configure the optional hard wall.</Card>
   <Card title="Task Board Setup" icon="graph" href="/brewtools/skills/task-board-setup/">Methodology, work units, graph reconciliation, and session timers.</Card>
   <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">All brewtools skills and agents.</Card>
-  <Card title="Hook source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewtools/hooks/manager-prompt.mjs">Token detection, context order, payload gating, and wall fallback.</Card>
+  <Card title="Hook source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewtools/hooks/manager-prompt.mjs">Token detection, context order, and payload gating.</Card>
 </CardGrid>
 
 <UpdateNotice />

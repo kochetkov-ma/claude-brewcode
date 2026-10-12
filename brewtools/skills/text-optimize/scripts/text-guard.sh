@@ -1,24 +1,26 @@
 #!/usr/bin/env bash
 # text-guard.sh - preservation guard for in-place text optimization (BT-F15, BT-F29b).
-#
-# The optimizer rewrites files IN PLACE. This script puts both sides of the
-# quality gate on DISK so the gate survives a context compaction, and it undoes
-# a rewrite that loses a critical fact.
-#
-#   snapshot [--allow-dirty] [--run-dir D] <file>...   copy originals, print RUN_DIR
-#   verify   [--no-restore] --run-dir D <file>...      token gate; restore unless disabled
-#   restore  --run-dir D <file>...                     put the snapshot back
-#   checkpoint --run-dir D <file>...                  record owned draft hashes
-#   status   --run-dir D                               list what is snapshotted
-#
-# Exit: 0 ok | 1 gate failed (restored unless --no-restore) | 2 usage/state error | 3 precondition
-# (dirty tree, or no git recovery path) - nothing was written.
 set -euo pipefail
 # comm(1) demands both inputs collate identically to the sort that produced them.
 export LC_ALL=C
 
 usage() {
-  sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
+  cat <<'USAGE'
+text-guard.sh - preservation guard for in-place text optimization (BT-F15, BT-F29b).
+
+The optimizer rewrites files IN PLACE. This script puts both sides of the
+quality gate on DISK so the gate survives a context compaction, and it undoes
+a rewrite that loses a critical fact.
+
+  snapshot [--allow-dirty] [--run-dir D] <file>...   copy originals, print RUN_DIR
+  verify   [--no-restore] --run-dir D <file>...      token gate; restore unless disabled
+  restore  --run-dir D <file>...                     put the snapshot back
+  checkpoint --run-dir D <file>...                  record owned draft hashes
+  status   --run-dir D                               list what is snapshotted
+
+Exit: 0 ok | 1 gate failed (restored unless --no-restore) | 2 usage/state error | 3 precondition
+(dirty tree, or no git recovery path) - nothing was written.
+USAGE
 }
 
 die() { printf '%s\n' "$*" >&2; exit 2; }

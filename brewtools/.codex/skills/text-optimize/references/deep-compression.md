@@ -14,63 +14,31 @@ Current model-specific prompting advice belongs to `rules-review.md`; never gene
 | `!=` | must not, never, prohibited |
 | `>` | greater than, preferred over |
 | `=` | equals, is defined as |
-| `so` / `->` | therefore, consequently (was `∴`) |
-| `bc` / `because` | because, since (was `∵`) |
+| `so` / `->` | therefore, consequently |
+| `bc` / `because` | because, since |
 | `@` | at, located at |
 | `\|` | or, alternative |
 | `:` | has property, contains |
 | `~` | approximately |
-| `includes` | includes, contains (set) (was `⊃`) |
+| `includes` | includes, contains (set) |
 
-Token cost (measured, tiktoken cl100k/o200k): ASCII digraphs `-> != >= <= |` = 1 token each; unicode glyphs `∵ ∴ ⊃ ≤ ≥` = 2-3 tokens each. Prefer ASCII. The token win comes from deleting words, not the glyph.
+Operator token costs: `rules-review.md` T.8.
 
 Status emoji cost 2-4 tokens each (measured): `✅`/`❌` = 2-3 tok, `ℹ️` = 3 tok (variation-selector, worst). In token-sensitive deep output prefer ASCII `[x]`/`OK`/`FAIL`/`!`. Keep emoji only where priority-signaling value (e.g. KNOWLEDGE ❌/✅/ℹ️ ordering) outweighs token cost.
 
 ## Priority Labels
 
-| Label | Meaning |
-|-------|---------|
-| IMP | important |
-| CRIT | critical |
-| WARN | warning |
-| OPT | optional |
-| REC | recommended |
-| REQ | required |
-| DEF | default |
-| N/A | not applicable |
+IMP=important, CRIT=critical, WARN=warning, OPT=optional, REC=recommended, REQ=required, DEF=default, N/A=not applicable.
 
 ## Standard Abbreviations
 
-| Abbrev | Full | Abbrev | Full | Abbrev | Full |
-|--------|------|--------|------|--------|------|
-| func | function | cfg | configuration | impl | implementation |
-| deps | dependencies | auth | authentication | env | environment |
-| req | request | res | response | DB | database |
-| API | api | UI | user interface | UX | user experience |
-| repo | repository | PR | pull request | CI/CD | continuous integration/delivery |
-| pkg | package | dir | directory | cmd | command |
-| arg | argument | ret | return | doc | documentation |
-| spec | specification | ver | version | msg | message |
-| err | error | val | value | def | definition |
-| ref | reference | ctx | context | fmt | format |
-| lib | library | mod | module | obj | object |
-| str | string | int | integer | bool | boolean |
-| arr | array | dict | dictionary | async | asynchronous |
-| sync | synchronous | param | parameter | var | variable |
-| const | constant | exec | execute | init | initialize |
-| proc | process | svc | service | | |
-| ns | namespace | tpl | template | idx | index |
-| len | length | max | maximum | min | minimum |
-| avg | average | cnt | count | num | number |
-| tmp | temporary | prev | previous | next | next |
-| cur | current | orig | original | dest | destination |
-| src | source | | | | |
+func=function, cfg=configuration, impl=implementation, deps=dependencies, auth=authentication, env=environment, req=request, res=response, DB=database, UI=user interface, UX=user experience, repo=repository, PR=pull request, CI/CD=continuous integration/delivery, pkg=package, dir=directory, cmd=command, arg=argument, ret=return, doc=documentation, spec=specification, ver=version, msg=message, err=error, val=value, def=definition, ref=reference, ctx=context, fmt=format, lib=library, mod=module, obj=object, str=string, int=integer, bool=boolean, arr=array, dict=dictionary, async=asynchronous, sync=synchronous, param=parameter, var=variable, const=constant, exec=execute, init=initialize, proc=process, svc=service, ns=namespace, tpl=template, idx=index, len=length, max=maximum, min=minimum, avg=average, cnt=count, num=number, tmp=temporary, prev=previous, cur=current, orig=original, dest=destination, src=source.
 
 ## Dictionary Format
 
 Place `[DICT: CC=Claude Code, KB=knowledge base, SP=system prompt, ...]` at document start when
 terms appear 3+ times. Rules: max 20 entries, sort alphabetically, place before the first content
-line, use the abbreviation from DICT throughout — a term used <3x stays inline (rules-review.md R13:
+line, use the abbreviation from DICT throughout — a term used <3x stays inline (rules-review.md PQ.11:
 DICT pays only on a long, repetition-heavy file, not a short one).
 
 ## Filler Words & Phrases to Remove
@@ -108,24 +76,20 @@ Never drop negations or scope qualifiers (L.8; max-mode guardrail C2).
 
 ## Aggressive Lossy Techniques (A.1-A.4)
 
-Deep/max only. Full rule + ledger semantics live in `rules-review.md` category A (Step 0, always
-loaded) — do not restate here. Application order: dedup (D.1-D.6) -> A.1 fusion -> A.3 paraphrase ->
+Deep/max only. Rules and ledger semantics: `rules-review.md` category A. Order: dedup (D.1-D.6) -> A.1 fusion -> A.3 paraphrase ->
 A.2 word drop -> A.4 elision -> symbol substitution.
 
-### Example: A.1 fusion + A.3 paraphrase (loss-free)
+Example, A.1 fusion + A.3 paraphrase (loss-free):
 > "The deployment script should be executed from the project root directory. In the event that the script fails, you can check the log file which is located at `logs/deploy.log`." -> "run deploy script from project root | fail -> check `logs/deploy.log`"
 
-### Example: A.4 elision, project delta kept
-> "Always write unit tests for new code, since testing catches regressions early. Keep functions small and readable. The project coverage gate is 85% (jacoco); builds fail below it." -> "coverage gate 85% (jacoco), build fails below"
-
-Ledger: dropped "write unit tests / catches regressions" + "keep functions small" -> generic LLM knowledge. Kept: 85%, jacoco, build-fail behavior (project-specific).
+A.4 example: `rules-review.md` A.4.
 
 ## Iron Rules
 
 Preserve in ALL cases regardless of compression level — the lossless guard, never paraphrased,
 rounded, or dropped:
 - Names, numbers, dates, URLs, file paths, versions, ports, sizes
-- CLI flags/options verbatim (`-x`, `--max`); model IDs byte-exact (`claude-sonnet-5`, never "Sonnet 5")
+- CLI flags/options verbatim (`-x`, `--max`); model IDs byte-exact (`claude-sonnet-5-5`, never "Sonnet 5.5")
 - Thresholds, gates, percentages exactly as stated (`>=95%`, `~20%` ceiling) — never rounded
 - Negative rule semantics (use `!=` notation) | >=1 example per rule that originally had examples
 - DICT header at document start when Dictionary Format's repetition/size threshold is met
@@ -142,7 +106,7 @@ with `RESTORE_REFUSED`, exit 1, preserving current bytes. Originals remain read-
 ## Stop Condition
 
 Stop the A.1-A.4 pass the instant one of these trips — patch back, never push further:
-- A.2 would touch a noun, numeral, negation or named entity (Token-Class Heuristics above already forbid it — this is the enforcement trigger)
+- A.2 would touch a noun, numeral, negation or named entity (enforces Token-Class Heuristics)
 - An A.4 candidate is not clearly generic training-knowledge (unsure -> keep, per the A.4 rule itself)
 - DICT header would exceed 20 entries, or would cover a term used <3x
 - The dedup/loss ledger can no longer account for every merge and drop 1:1
@@ -208,5 +172,4 @@ Stop the A.1-A.4 pass the instant one of these trips — patch back, never push 
 | 4 — Negative Rules | 64 | 29 | -54.7% | 2.21x |
 | Total | 248 | 94 | -62.1% | 2.64x |
 
-Deep mode's "2-3x" target above is this file's own measured spread (2.2x-3.5x, combined 2.64x) on
-dense rule prose, not an invented number — re-measure with `wc -w` before claiming a new ratio.
+Deep's "2-3x" target = this file's measured spread (2.2x-3.5x, combined 2.64x) on dense rule prose; re-measure with `wc -w` before claiming a new ratio.

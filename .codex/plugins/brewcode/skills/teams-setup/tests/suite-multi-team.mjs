@@ -1,12 +1,6 @@
 #!/usr/bin/env node
-/**
- * Suite C — shared ownership of the project-global agent namespace (scripts/agent-owners.sh).
- * Covers BC-V2-H02: cleanup/purge deleted `.codex/agents/<member>.toml` for every row of the SELECTED
- * team, while multi-team is a supported state -- so team A's cleanup removed agents team B still
- * spawns. agent-owners.sh is the lookup every delete path must consult first.
- * Runs entirely inside an isolated temp base; never touches the real ~/.codex or the repo tree.
- * Assertion policy: unconditional exact-equality checks with a description.
- */
+// Suite C — shared agent-namespace ownership (scripts/agent-owners.sh). BC-V2-H02: team A cleanup/purge deleted
+// `.codex/agents/<member>.toml` team B still spawns; every delete path consults agent-owners.sh first. Never ~/.codex.
 import { spawnSync } from 'node:child_process';
 import {
   mkdtempSync, mkdirSync, writeFileSync, rmSync, realpathSync,
@@ -104,9 +98,7 @@ function makeRoot(label) {
   return root;
 }
 
-// ────────────────────────────────────────────────────────────────────────────
 // C1 — BC-V2-H02: an agent listed by two teams reports BOTH owners.
-// ────────────────────────────────────────────────────────────────────────────
 {
   const root = makeRoot('c1');
   addTeam(root, 'alpha', ['shared-worker', 'alpha-only', 'intent-guard']);
@@ -124,9 +116,7 @@ function makeRoot(label) {
   check('c1.single', [a.status, lines(a.stdout)], [0, ['alpha']], 'a single-owner agent lists exactly its own team -- safe to delete');
 }
 
-// ────────────────────────────────────────────────────────────────────────────
 // C2 — no owner: exit 2 with empty stdout, the only "safe to delete" answer.
-// ────────────────────────────────────────────────────────────────────────────
 {
   const root = makeRoot('c2');
   addTeam(root, 'alpha', ['alpha-only', 'intent-guard']);
@@ -138,9 +128,7 @@ function makeRoot(label) {
   check('c2.noTeamsDir', [bare.status, bare.stdout], [2, ''], 'a project with no .codex/teams/ answers "no owners", not an error');
 }
 
-// ────────────────────────────────────────────────────────────────────────────
 // C3 — refusal (exit 1): a caller must never read it as "no owners".
-// ────────────────────────────────────────────────────────────────────────────
 {
   const root = makeRoot('c3');
   addTeam(root, 'alpha', ['shared-worker']);

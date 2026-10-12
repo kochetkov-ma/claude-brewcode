@@ -1,4 +1,4 @@
-<!-- brewcode-meta: version=6.4.0 content_version=6.2.0 generated_by=brewtools:agent-deadline-setup -->
+<!-- brewcode-meta: version=6.5.0 content_version=6.5.0 generated_by=brewtools:agent-deadline-setup -->
 # agent-deadline hooks — install / configure / remove runbook
 
 Self-contained hook assets. The `/brewtools:agent-deadline-setup` skill copies these into a
@@ -19,8 +19,8 @@ target hooks dir and wires `settings.json`. Opt-in: NOT registered in
 ## What it does
 
 Claude Code has NO wall-clock timeout for subagents (verified against the
-v2.1.220 binary), and `maxTurns` kills the agent and throws away its final
-report. This hook does not kill anything — it FORCES finalization.
+v2.1.220 binary), and `maxTurns` stops the agent with only a partial, marked
+result (2.1.246+); unwritten analysis is lost. This hook does not kill anything — it FORCES finalization.
 
 | Condition | Action |
 |-----------|--------|
@@ -130,6 +130,7 @@ before adding an override; a typo silently falls back to `defaultMinutes`.
 | `HARD_STOP_RATIO` | skill (optional) | `hardStopRatio` to write; leave UNSET to omit the key and take the hook default `2` |
 | `PLUGIN_VERSION` | skill (optional) | `X.Y.Z` for the metadata stamp. OPTIONAL: unset/malformed falls back to `<SRC>/../../../.claude-plugin/plugin.json`, resolved by the block itself. Never a literal |
 | `LAST_UPDATED` | skill (optional) | `YYYY-MM-DD` for the stamp; unset falls back to the LOCAL date the block computes |
+| `CLAUDE_PROJECT_DIR` | skill (status `project_root`) | the session start dir, the value hooks get; first choice of the *Project root* block. Not in the Bash tool env unless exported |
 | `ROOT` | the *Project root* block | absolute project root; every project-scope `.claude/...` path is built from it |
 | `CFG` / `SETTINGS` / `HOOKS_DIR` | scope | project = `$ROOT/.claude/...`, global = `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/...` |
 
@@ -177,8 +178,9 @@ if ROOT=$(claude_project_root); then export ROOT; echo "✅ ROOT=$ROOT"; else
 ```
 
 > **STOP if ❌** — an installer never writes into a guessed root. `CLAUDE_PROJECT_DIR`
-> is exported to hook child processes, not to this shell, so it is normally empty here
-> and the git toplevel does the work. The GLOBAL scope ignores `ROOT` entirely.
+> reaches hook child processes, not the Bash tool: the skill exports it from its status
+> `project_root`. Unset, the git toplevel decides; for a session started in a subdirectory
+> that is the wrong root: hooks resolve the portable arg against the start dir. The GLOBAL scope ignores `ROOT` entirely.
 
 Every write of the config also stamps the three mandatory JSON metadata keys —
 `version`, `generated_by`, `last_updated` (never `doc_type`: that is a `.md`
@@ -358,7 +360,10 @@ global install charges it to every session in every repo.
 
 ## PROJECT target  (`<repo>/.claude/`)
 
-Project paths are writable with normal tools (`Write`/`Edit`/`Bash` all fine).
+Project `.claude/` is a protected path too (only `.claude/worktrees/` and plan files are
+exempt): `Write`/`Edit`, and a Bash `>`/`tee` into it, are prompted in `default`/`acceptEdits`,
+denied headless and in `dontAsk`, allowed in `bypassPermissions`. Run the Bash blocks below
+as written; never a hand `Write`/`Edit`.
 
 1. Ensure dir `<repo>/.claude/hooks/`.
 2. Copy both asset files there. Source dir = this `assets/` dir; derive it from
@@ -596,7 +601,7 @@ process.stdout.write(String(m));
 
 Nothing is asked and nothing is deleted. Upgrade ONE scope per run; "both" is two runs.
 
-> Wiring changed -> a NEW session is required.
+> Wiring changed -> applies to the running session (settings are watched); `/hooks` confirms.
 
 ---
 
@@ -677,8 +682,8 @@ asked about and leave the other alone. Foreign hook entries are never touched.
 
 Step 1. **EXECUTE** using Bash tool — pick ONE pair of paths:
 ```
-# GLOBAL:  G="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"; HOOKS_DIR="$G/hooks"; SETTINGS="$G/settings.json"
-# PROJECT: HOOKS_DIR="$ROOT/.claude/hooks";  SETTINGS="$ROOT/.claude/settings.json"
+# GLOBAL:  G="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"; export HOOKS_DIR="$G/hooks" SETTINGS="$G/settings.json"
+# PROJECT: export HOOKS_DIR="$ROOT/.claude/hooks" SETTINGS="$ROOT/.claude/settings.json"
 export HOOKS_DIR="$ROOT/.claude/hooks" SETTINGS="$ROOT/.claude/settings.json"
 node -e '
 const fs=require("fs");
@@ -696,6 +701,7 @@ function lock(f){                                      // O_EXCL dir lock; stale
   }
   console.error("ABORT: "+l+" is held by another installer; nothing was written"); process.exit(1);
 }
+if(!f){ console.error("ABORT: SETTINGS unset - export it (the GLOBAL/PROJECT line); nothing was removed"); process.exit(1); }
 if(!fs.existsSync(f)){ console.log("no settings to clean: "+f); process.exit(0); }
 process.on("exit",lock(f));                            // re-read under the lock - a concurrent installer must not lose its merge
 const raw=fs.readFileSync(f,"utf8");
@@ -706,17 +712,20 @@ catch(e){ console.error("ABORT: "+f+" is not valid JSON ("+e.message+") - fix or
 if(s===null||typeof s!=="object"||Array.isArray(s)){ console.error("ABORT: "+f+" is not a JSON object; nothing was written"); process.exit(1); }
 const argsOf=h=>Array.isArray(h&&h.args)?h.args.filter(a=>typeof a==="string"):[];
 const isAD=a=>marks.some(m=>a===m||a.endsWith("/"+m)||a.endsWith("\\"+m));
+let removed=0;
 if(s.hooks&&typeof s.hooks==="object"){
   for(const ev of Object.keys(s.hooks)){
     if(!Array.isArray(s.hooks[ev])) continue;
     s.hooks[ev]=s.hooks[ev].map(e=>{
       if(!e||typeof e!=="object"||!Array.isArray(e.hooks)) return e;
-      return {...e,hooks:e.hooks.filter(h=>!argsOf(h).some(isAD))};
+      const rest=e.hooks.filter(h=>!argsOf(h).some(isAD)); removed+=e.hooks.length-rest.length;
+      return {...e,hooks:rest};
     }).filter(e=>!e||typeof e!=="object"||!Array.isArray(e.hooks)||e.hooks.length>0);
     if(s.hooks[ev].length===0) delete s.hooks[ev];
   }
   if(Object.keys(s.hooks).length===0) delete s.hooks;
 }
+if(removed&&Object.keys(s).length===0){ fs.unlinkSync(f); console.log("OK removed "+f+" (agent-deadline was its only content)"); process.exit(0); }
 fs.writeFileSync(f,JSON.stringify(s,null,2)+"\n");
 const back=JSON.parse(fs.readFileSync(f,"utf8"));      // post-write verification
 const left=Object.values((back.hooks)||{}).flat().flatMap(e=>(e&&e.hooks)||[]).filter(h=>argsOf(h).some(isAD)).length;
@@ -724,10 +733,12 @@ if(left!==0){ console.error("ABORT: verification failed - "+left+" agent-deadlin
 console.log("OK cleaned "+f);
 ' && rm -f "$HOOKS_DIR/agent-deadline-guard.mjs" "$HOOKS_DIR/agent-deadline-cleanup.mjs" \
   && test ! -e "$HOOKS_DIR/agent-deadline-guard.mjs" && test ! -e "$HOOKS_DIR/agent-deadline-cleanup.mjs" \
+  && { rmdir "$HOOKS_DIR" 2>/dev/null || true; } \
   && echo "✅ uninstalled from $HOOKS_DIR" || echo "❌ FAILED"
 ```
 
-> **STOP if ❌** — fix before continuing.
+> **STOP if ❌** — fix before continuing. What install created goes when emptied: a
+> `settings.json` left as `{}` is deleted, an empty hooks dir removed.
 
 > Global uninstall: `Write`/`Edit` on `~/.claude/*` prompts and fails headless — use
 > the Bash `node`/`rm` form above. Project uninstall goes through the same block: it
@@ -804,6 +815,7 @@ console.log("OK removed "+removed+" state file(s) of "+want+"; left "+kept+" of 
 # global:  CFG="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/agent-deadline.json"
 CFG="$ROOT/.claude/agent-deadline.json"
 rm -f "$CFG" && test ! -e "$CFG" && echo "✅ removed $CFG" || echo "❌ FAILED"
+rmdir "$ROOT/.claude" 2>/dev/null || true   # project only: a .claude/ the purge left empty
 ```
 
 > **STOP if ❌** — fix before continuing.
@@ -842,6 +854,6 @@ tool calls, and watch its Bash/Grep calls come back with `Time budget spent`
 while `Read`/`Write` and the report call keep working.
 
 > After install or removal `/reload-plugins` is NOT needed (plain settings.json
-> hooks, not plugin hooks), but Claude Code loads hook config at session start —
-> a NEW session is required for wiring changes. Config-value changes
+> hooks, not plugin hooks): Claude Code watches settings files and applies wiring
+> changes to the running session; `/hooks` confirms. Config-value changes
 > (`enabled`, minutes) are read live and need no restart.

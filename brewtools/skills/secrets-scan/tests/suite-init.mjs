@@ -1,18 +1,5 @@
 #!/usr/bin/env node
-/**
- * suite-init.mjs (BT-F03 / BT-F04) - scripts/scan-init.sh.
- *
- * Covers the report-privacy half of BT-F03 (owner-only report dir, owner-only
- * file list, `.claude/reports/` ignored before anything is written) and the
- * file-list half of BT-F04 (a tracked-then-ignored file is still in the chunk).
- *
- * Self-contained: every git repo is created inside one mkdtemp base with
- * GIT_CONFIG_GLOBAL/GIT_CONFIG_SYSTEM pinned to /dev/null and HOME redirected,
- * so this machine's global excludes file cannot change the outcome. No network.
- *
- * Assertion policy: unconditional exact-equality of full strings, full arrays
- * and exact octal modes with a description; no `if` gates.
- */
+// suite-init.mjs (BT-F03/BT-F04) - scripts/scan-init.sh: owner-only report dir + file list, `.claude/reports/` ignored before any write; tracked-then-ignored file stays in chunk. One mkdtemp base, GIT_CONFIG_GLOBAL/GIT_CONFIG_SYSTEM=/dev/null, HOME redirected (global excludes cannot interfere), no network; exact full strings/arrays/octal modes, no `if` gates.
 import { spawnSync } from 'node:child_process';
 import {
   mkdtempSync, mkdirSync, writeFileSync, readFileSync, statSync, rmSync, realpathSync,

@@ -24,7 +24,7 @@ Verify API routes, status codes, auth header names, IP restrictions, and schemas
 
 Preserve separate DNS records, URL forwards, and mail forwards. Historical provider field notes, adapted 2026-09-30: DNS record `type`, `host`, `ttl`, `rdata`; URL-forward `forwardType`, `host`, `url` and optional FRAME metadata; mail-forward `source`, `destination`; read-only IDs/state; and validation severity. Confirm these fields, supported types, TTLs, read-only fields, and payload/response wrappers in the live schema before constructing payloads. Do not assume domain-specific URL-forward support from historical failures.
 
-During setup/migration do not read `.env` or credentials or call the API. During authorized operation resolve credentials locally through the user's configured secure mechanism; never print, copy, or persist secrets, enable shell tracing, or embed secrets in command text/reports. Use a non-executable credential-resolution placeholder until that mechanism is known; do not ship a hardcoded home path or `source .env` command. Keep temporary/runtime data outside `.claude/` and restrict secret-bearing local files.
+During setup/migration do not read credentials or call the API. Credentials: `EURODNS_APP_ID` -> header `X-APP-ID`, `EURODNS_API_KEY` -> `X-API-KEY`, `EURODNS_API_URL` = base URL. Source: shell env, else the repo-root `.env`, loaded only during authorized operation: `[ -n "$EURODNS_API_KEY" ] || { set -a; . "$(git rev-parse --show-toplevel)/.env"; set +a; }`. Never print, copy, or persist secrets, enable shell tracing, or embed secret values in command text/reports. Keep temporary/runtime data outside `.claude/` and restrict secret-bearing local files.
 
 ## Operation
 

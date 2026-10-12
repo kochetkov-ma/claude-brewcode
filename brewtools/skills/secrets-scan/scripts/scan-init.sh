@@ -1,12 +1,6 @@
 #!/usr/bin/env bash
-# scan-init.sh - Phase 1 of brewtools:secrets-scan.
-#
-# Resolves the repo root, creates an owner-only report directory, makes sure
-# .claude/reports/ is git-ignored (the report names credential locations, so it
-# must never become committable), and writes the git-tracked file list.
-#
-# Prints one machine-readable line: DIR=..|REPO=..|TS=..|TOTAL=..|GITIGNORE=..
-# GITIGNORE is one of: appended | already-ignored
+# secrets-scan Phase 1: repo root, owner-only report dir, git-ignore .claude/reports/ (names credential locations), tracked file list.
+# Prints one machine-readable line: DIR=..|REPO=..|TS=..|TOTAL=..|GITIGNORE=appended | already-ignored
 set -euo pipefail
 umask 077
 

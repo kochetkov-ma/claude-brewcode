@@ -7,7 +7,7 @@ argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge]
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion]
 model: opus
 ---
-<!-- brewcode-meta: version=6.4.0 content_version=6.3.0 generated_by=brewcode:superreview-setup -->
+<!-- brewcode-meta: version=6.5.0 content_version=6.5.0 generated_by=brewcode:superreview-setup -->
 
 # Super Review Generator (brewcode:superreview-setup)
 
@@ -32,7 +32,7 @@ pass, one spawn, no domain experts) or `EXTENDED` (the full fan-out + validation
 pass). Depth is inferred semantically from the user's prompt, exactly like the `{MODE}` whole-project rule: there
 is no `--fast`, no flag and no CLI token, and you must not add one.
 
-**Arguments:** `$ARGUMENTS` — `<fine-tune-prompt>` (free text, woven into the emitted skill's Focus ordering +
+**Arguments:** the prompt — `<fine-tune-prompt>` (free text, woven into the emitted skill's Focus ordering +
 emphasis) plus optional `[scope]` hint.
 
 ---
@@ -48,7 +48,7 @@ emphasis) plus optional `[scope]` hint.
    twin exists, else `install`.
 2. Scope: prose that names no verb is the fine-tune prompt, not an error — it is woven into the
    emitted skill's Focus ordering (Phase 1.5), never treated as the verb by its first word.
-3. Ask: at most ONE `AskUserQuestion` (max 4 questions), before any work, only when the answer
+3. Ask: at most ONE `AskUserQuestion` (max 4 questions) to resolve mode and scope, before any work, only when the answer
    changes what gets written. `status` asks nothing.
 
 Print once, before the resolved verb runs (labels literal, values in the conversation language):
@@ -68,7 +68,7 @@ RESULT: <what the user ends up holding>
 
 ### Verb routing — resolve FIRST, before anything else
 
-`$ARGUMENTS` may start with one of the seven canonical verbs, in this order:
+The prompt may start with one of the seven canonical verbs, in this order:
 `status | install | upgrade | enable | disable | uninstall | purge`. Strip the verb; the rest — or everything,
 when no verb is named — is the fine-tune prompt. Removed aliases, never accepted as a verb token or printed:
 `init`, `on`, `off`, `setup`, `remove`, `reset`, `create`, `update`, `cleanup` — recognize them in free text and
@@ -84,7 +84,7 @@ echo the canonical verb back.
 | `uninstall` | `uninstall`, `remove`, `delete skill` | `удали`, `убери` | `generate.sh uninstall` — deletes the generated skill dir, KEEPS the reports and `intent-guard.md`. Confirm once. **STOP** | deletes |
 | `purge` | `purge`, `wipe`, `remove everything`, `nuke` | `вычисти`, `удали полностью` | `generate.sh purge` — uninstall + deletes `.claude/reports/*_superreview/`. Still keeps `intent-guard.md`. Confirm once, naming the report count. **STOP** | deletes, destructive |
 | *(no args at all)* | — | — | `status` when `.claude/skills/superreview/` exists, otherwise `install` | status: no |
-| *(no verb, but a prompt)* | — | — | same as `install`; the whole `$ARGUMENTS` is the fine-tune prompt | yes |
+| *(no verb, but a prompt)* | — | — | same as `install`; the whole prompt is the fine-tune prompt | yes |
 
 Print the PLAN block (Prompt contract above) now, before running the resolved verb.
 
@@ -166,13 +166,13 @@ Gather the emitted skill's inputs with Bash `rg`/`find`, or native `Grep`/`Glob`
 bash "${CLAUDE_SKILL_DIR}/scripts/generate.sh" scan && echo "✅ scan" || echo "❌ scan FAILED"
 ```
 
-The scan reports: build files, `.claude/agents/*`, `.claude/rules/*` + `.claude/convention/*`, test dirs, source dirs.
+The scan reports: build files, `.claude/agents/**`, `.claude/rules/*` + `.claude/convention/*`, test dirs, source dirs.
 From it (plus your own reads) determine:
 
 | Aspect | How to detect | Drives placeholder |
 |--------|---------------|--------------------|
 | Tech stack | build files: `pom.xml`/`build.gradle*` -> Java/Kotlin; `package.json`+react/ts -> Node/TS; `pyproject.toml`/`requirements*.txt` -> Python; `go.mod` -> Go | `STACK_LABEL`, `STACK_REF`, `SOURCE_GLOB`, `PATHSPEC_GLOBS` |
-| Project agents | `.claude/agents/*.md` (name + description); map each to the path group it owns; flag READ-ONLY recon agents (cloud/SaaS/tracker consoles) as NON-reviewers | `DOMAIN_AGENTS_TABLE`, `FILE_GROUP_MAP`, `GENERAL_AGENTS_TABLE` |
+| Project agents | `.claude/agents/**/*.md` (recursive, name + description); map each to the path group it owns; flag READ-ONLY recon agents (cloud/SaaS/tracker consoles) as NON-reviewers | `DOMAIN_AGENTS_TABLE`, `FILE_GROUP_MAP`, `GENERAL_AGENTS_TABLE` |
 | Arbiter / validator | an architecture/reviewer agent in `.claude/agents/`, else built-in `general-purpose` | `ARBITER_AGENT`, `VALIDATOR_AGENT` |
 | Rule + convention files | `.claude/rules/*.md` + `.claude/convention/*.md` + `CLAUDE.md` | `RULE_POINTER_TABLE`, `RULE_PREFLIGHT_LIST` |
 | Source path groups | top-level source dirs / service dirs / module layout | `FILE_GROUP_MAP` |
@@ -209,7 +209,7 @@ Ask only for params you cannot reliably infer; never auto-guess a non-obvious ch
 
 Before emitting, prove that every source group in `FILE_GROUP_MAP` has a real owner:
 
-1. **Classify the live roster** from the Phase 1 scan: does each `.claude/agents/*.md` `description` claim a concrete path/responsibility in this repo? READ-ONLY recon agents inspect live external systems, never source files, so they never own a review group.
+1. **Classify the live roster** from the Phase 1 scan: does each `.claude/agents/**/*.md` `description` claim a concrete path/responsibility in this repo? READ-ONLY recon agents inspect live external systems, never source files, so they never own a review group.
 2. **Find the gaps** — every group with no confident owner. A gap makes the emitted skill fall back to `Explore` for that surface: a permanently DEGRADED axis.
 3. **Fill the gaps (default action).** AskUserQuestion listing the uncovered groups, recommending "create the missing domain experts". On approval, spawn `brewcode:agent-creator` — one agent per missing domain, all in one message — each with the group's paths, the project rules that bind it, and the responsibility it owns. Then re-run the roster scan so the new agents enter `DOMAIN_AGENTS_TABLE` / `FILE_GROUP_MAP`.
 4. **If the user declines**, emit anyway, mark each uncovered group DEGRADED in `DOMAIN_AGENTS_TABLE` and say so in the Phase 5 summary. `generate.sh validate` fails when no project expert is wired at all; `SUPERREVIEW_ALLOW_NO_EXPERTS=1` accepts that consciously.

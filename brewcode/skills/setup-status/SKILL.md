@@ -15,8 +15,8 @@ model: sonnet
 Read-only dashboard over every **setup skill** in the brewcode suite: what is set up in this
 project, at which version against the plugin in use, what drifted or was never installed, and the
 exact command to run for each row. Every probe is an existence check, a stamp read, a `cmp` or a
-JSON read; `allowed-tools` carries no `Write`, no `Edit`, no `Agent`. The single exception is Phase
-1c's opt-in one-key merge into a `settings.json`, which happens only after the user picks it.
+JSON read; `allowed-tools` carries no `Write`, no `Edit`, no `Agent`. The one exception is Phase
+1c's opt-in one-key merge into a `settings.json`, after the user picks it.
 
 ## Prompt contract
 
@@ -47,104 +47,107 @@ RESULT: <the report the user ends up holding; name the settings.json write when 
 ## Why it does not run the setups
 
 Each setup skill is an interactive generator: it fans out subagents, analyses the repo and asks the
-user real questions. Running two of them back-to-back in one session degrades both: the context
-fills with the first one's analysis, and the second one's questions get answered against stale
-findings. So this skill reports, and the user runs each setup by hand, ideally one per fresh
-session. There is no `--run`, no `--fix` and no auto mode; if the user asks for one, say this
-paragraph and print the run-list instead.
+user real questions. Two back-to-back in one session degrade both: the second one's questions get
+answered against the first one's stale findings. So this skill reports and the user runs each setup
+by hand, ideally one per fresh session. There is no `--run`, no `--fix` and no auto mode; if the user
+asks for one, say this paragraph and print the run-list instead.
 
 The one carve-out is not a setup: Phase 1c's `CLAUDE_CODE_ENABLE_TODO_TOOLS` offer merges one key
-into one `settings.json`. It spawns no subagent, analyses nothing, generates nothing and asks
-exactly one question. Outside that single env key, this skill creates, edits and deletes nothing.
+into one `settings.json`, spawns no subagent and asks one question. Outside that env key, this skill
+creates, edits and deletes nothing.
 
 ---
 
 ## Two questions, two signals
 
-Two kinds of version are checked for every row and reported apart: the version of the installed
-artifacts, and the version of an external dependency. The field contract (`version`,
-`content_version`, `generated_by`, `last_updated`, `doc_type`, and which carrier each file type
-uses) lives in [`references/artifact-metadata.md`](references/artifact-metadata.md); this skill
-consumes it and never restates it.
+Installed artifacts and an external dependency are versioned apart and reported apart. The field
+contract (`version`, `content_version`, `generated_by`, `last_updated`, `doc_type`, and each file
+type's carrier) lives in [`references/artifact-metadata.md`](references/artifact-metadata.md); this
+skill consumes it and never restates it.
 
 | Kind | Signal | The question it answers | Read by |
 |------|--------|-------------------------|---------|
 | artifact | **`content_version` stamp** — the headline | has this artifact's own content moved since it was installed here? | Phase 2a: the artifact's stamp vs the plugin's current `content_version` for that same artifact |
-| artifact | **`version` stamp** — provenance | which plugin release produced this install? It bumps on every release whether or not this artifact changed, so it is shown on every row and decides only for an artifact carrying no `content_version` | Phase 2a |
+| artifact | **`version` stamp** — provenance | which plugin release produced this install? It bumps on every release whether or not the artifact changed: shown on every row, decisive only for an artifact with no `content_version` | Phase 2a |
 | artifact | **owner stamp** | did the setup that owns this path actually write it? A file written by the wrong setup can be current and byte-perfect | Phase 2a: `generated_by` vs the roster row's `<plugin>:<skill>` |
 | artifact | **bytes** | does the installed copy still equal what the plugin in use would install? A hand-edited hook keeps the stamp it was copied with, so only bytes see the edit | Phase 2b: `cmp` against `$BC` / `$BT` / `$BD` |
 | dependency | **semble MCP pin** | is the registered `semble[mcp]==X.Y.Z` the pin this plugin ships, in each Claude Code profile? | Phase 2c |
 
-`last_updated` and `doc_type` are written but not read: a date defines no state (a stale date on a
-current stamp means only that the release did not change the file), and `doc_type` is user-owned
-and preserved across re-installs. Add no reader for them without an actionable verdict to attach.
+`last_updated` and `doc_type` are written but not read: a date defines no state, and `doc_type` is
+user-owned and preserved across re-installs. Add no reader without an actionable verdict to attach.
 
 | Artifact kind | Stamped | Signals that reach it |
 |---------------|---------|-----------------------|
 | byte-copied asset (`.mjs`, `.sh`, `semble-first.md`) | baked at release by `bump-version.sh` | stamp and bytes: the installed copy stays byte-identical to the plugin asset |
 | generated artifact (emitted `SKILL.md`, `team.md`, `config.json`) | substituted at install from `{PLUGIN_VERSION}` / `{CONTENT_VERSION}` | stamp only: it is authored per project and never byte-equal to any asset |
-| byte-copied asset the install then fills (`memory-sync`'s `references/hard-sync.md`, the repo-root `.sembleignore`) | baked at release | no bytes: a healthy copy differs by construction. `hard-sync.md` gets no stamp read either, its stamp is frozen at the release that emitted it |
-| pristine template baseline (`.template-baseline/`) | not stamped: it holds the raw template, tokens unresolved, on purpose | bytes only, raw template against raw template. Never read a version out of it |
+| byte-copied asset the install then fills (`memory-sync`'s `references/hard-sync.md`, the repo-root `.sembleignore`) | baked at release | no bytes: a healthy copy differs by construction. `hard-sync.md` gets no stamp read either (frozen at the release that emitted it) |
+| pristine template baseline (`.template-baseline/`) | not stamped: raw template, tokens unresolved, on purpose | bytes only, raw against raw. Never read a version out of it |
 
 ---
 
 ## The Roster — SINGLE SOURCE OF TRUTH
 
-Every fact this skill knows about a setup lives in this one table, plus its carrier lines in the
-Phase 2a `STAMPS` heredoc and its byte pairs in the Phase 2b `PAIRS` heredoc. Adding a setup = one
-row here + its lines there.
+Every fact about a setup lives in this table, plus its carrier lines in the Phase 2a `STAMPS`
+heredoc and its byte pairs in the Phase 2b `PAIRS` heredoc. Adding a setup = one row here + its
+lines there.
 
 | # | Skill (command) | Plugin | Anchor artifact | Secondary artifacts | Off-switch: the row is `disabled` when (Phase 1b) | Hook registrations: `<event>` `<matcher>` `<script>` (Phase 1) | Byte pairs (Phase 2b) |
 |---|-----------------|--------|-----------------|---------------------|-----------------------------------------------------|------------------------------------------------------------------|------------------------|
-| 1 | `/brewcode:teams-setup` | brewcode | `.claude/teams/*/team.md` | `.claude/teams/*/trace.jsonl`, `.claude/teams/*/trace-ops.sh` | parking: every roster member named in `team.md`'s `## Agents` table is `.claude/agents/<member>.md.disabled`. `intent-guard` is never parked (`toggle-team.sh` skips it: it is shared with `superreview-setup`), so exclude it before deciding. The filename is the authority, not the `Status` cell, which is a hand `Edit` step and can lag | none | `trace-ops.sh` vs `$BC/skills/teams-setup/scripts/trace-ops.sh` (byte-copied, meta line baked at release) |
-| 2 | `/brewcode:semble-setup` | brewcode | `.claude/rules/semble-first.md` | `.claude/hooks/semble-session.mjs`, `semble-prefetch.mjs`, `semble-stats.mjs`, `semble-reminder.mjs`, `semble-subagent.mjs`, `.claude/semble/state.json` | flag: `.enabled` is `false` in `.claude/semble/state.json` (phase `disabled`); every file stays in place | read from Phase 2c's `guidance` (`wiredCount`/`wantCount`, `retired`, `staleEntries`), not from the `REG` lines | all five live hooks vs `$BC/skills/semble-setup/assets/*.mjs`, plus the rule vs `assets/semble-first.md.template` (a pure byte-copy: the installer does not restamp on copy), and nothing else. The repo-root `.sembleignore` is byte-copied but never byte-stable: never compared |
-| 3 | `/brewcode:superreview-setup` | brewcode | `.claude/skills/superreview/SKILL.md` | `.claude/skills/superreview/references/agent-prompt.md`, `.../report-template.md`, `.../scope.md`, `.claude/skills/superreview/.template-baseline/` | parking: `.claude/skills/superreview/SKILL.md.disabled` present and `SKILL.md` absent; `references/` and `.template-baseline/` stay live and readable | none | the `.template-baseline/` copies vs the plugin templates, raw template on both sides: it answers "did the plugin's templates move since this project was tailored", which the emitted stamp cannot. Never read a version out of that dir |
-| 4 | `/brewtools:task-board-setup` | brewtools | `.claude/features/board.md` | `.claude/agents/task-tracker.md`, `.claude/skills/task-board/SKILL.md`, `.claude/skills/task-spec/SKILL.md` (required unless Phase 1 proves `TASK_SPEC_MODE=off`), `.claude/rules/tasks.md`, `.claude/features/PROGRESS.md`, `.claude/features/TRACKER.md`, `.claude/features/INDEX.md`, `.claude/features/backlog/README.md`, `.claude/features/METHODOLOGY.md`, `.claude/features/ANTI-DRIFT.md`, `.claude/features/task-graph.md` | parking: every deployed one of the four entry files (`.claude/agents/task-tracker.md`, `.claude/skills/task-board/SKILL.md`, `.claude/skills/task-spec/SKILL.md`, `.claude/rules/tasks.md`) is `<name>.disabled`. `.claude/features/**` is untouched, so the anchor stays present; a `task-spec` that never existed (spec layer off) is absent, not parked | none | none copied verbatim: every artifact is generated. Phase 2a expands this row from the anchor and secondary cells and checks each emitted carrier against the same source `content_version` |
+| 1 | `/brewcode:teams-setup` | brewcode | `.claude/teams/*/team.md` | `.claude/teams/*/trace.jsonl`, `.claude/teams/*/trace-ops.sh` | parking: every roster member named in `team.md`'s `## Agents` table is `.claude/agents/<member>.md.disabled`. `intent-guard` is never parked (`toggle-team.sh` skips it: shared with `superreview-setup`), so exclude it. The filename is the authority, not the `Status` cell (a hand `Edit` step that can lag) | none | `trace-ops.sh` vs `$BC/skills/teams-setup/scripts/trace-ops.sh` (byte-copied, meta line baked at release) |
+| 2 | `/brewcode:semble-setup` | brewcode | `.claude/rules/semble-first.md` | `.claude/hooks/semble-session.mjs`, `semble-stats.mjs`, `semble-subagent.mjs`, `.claude/semble/state.json` | flag: `.enabled` is `false` in `.claude/semble/state.json` (phase `disabled`); every file stays in place | read from Phase 2c's `guidance` (`wiredCount`/`wantCount`, `retired`, `retiredWired`, `staleEntries`), not from the `REG` lines | the three live hooks vs `$BC/skills/semble-setup/assets/*.mjs`, plus the rule vs `assets/semble-first.md.template` (a pure byte-copy, not restamped), and nothing else. The repo-root `.sembleignore` is never byte-stable: never compared. Retired hooks (`semble-explore.mjs`, `semble-reminder.mjs`, `semble-prefetch.mjs`) have no asset, so no pair: Phase 2c reports them |
+| 3 | `/brewcode:superreview-setup` | brewcode | `.claude/skills/superreview/SKILL.md` | `.claude/skills/superreview/references/agent-prompt.md`, `.../report-template.md`, `.../scope.md`, `.claude/skills/superreview/.template-baseline/` | parking: `.claude/skills/superreview/SKILL.md.disabled` present and `SKILL.md` absent; `references/` and `.template-baseline/` stay live and readable | none | the `.template-baseline/` copies vs the plugin templates, raw on both sides: answers "did the plugin's templates move since this project was tailored", which the emitted stamp cannot. Never read a version out of that dir |
+| 4 | `/brewtools:task-board-setup` | brewtools | `.claude/features/board.md` | `.claude/agents/task-tracker.md`, `.claude/skills/task-board/SKILL.md`, `.claude/skills/task-spec/SKILL.md` (required unless Phase 1 proves `TASK_SPEC_MODE=off`), `.claude/rules/tasks.md`, `.claude/features/PROGRESS.md`, `.claude/features/TRACKER.md`, `.claude/features/INDEX.md`, `.claude/features/backlog/README.md`, `.claude/features/METHODOLOGY.md`, `.claude/features/ANTI-DRIFT.md`, `.claude/features/task-graph.md` | parking: every deployed one of the four entry files (`.claude/agents/task-tracker.md`, `.claude/skills/task-board/SKILL.md`, `.claude/skills/task-spec/SKILL.md`, `.claude/rules/tasks.md`) is `<name>.disabled`. `.claude/features/**` stays, so the anchor stays present; a `task-spec` that never existed (spec layer off) is absent, not parked | none | none copied verbatim (every artifact is generated). Phase 2a expands this row from the anchor and secondary cells and checks each carrier against the same source `content_version` |
 | 6 | `/brewtools:agent-deadline-setup` | brewtools | `.claude/hooks/agent-deadline-guard.mjs` (or `GLOBAL/hooks/`) | `agent-deadline-cleanup.mjs` beside it, `.claude/agent-deadline.json` (or `GLOBAL/agent-deadline.json`) | flag, opt-in: live only on `"enabled": true`. `false`, no key, unparsable or no config = inert: the guard returns on `cfg.enabled !== true` and nothing is enforced | `PreToolUse` `.*` `agent-deadline-guard.mjs`; `SubagentStop` `-` `agent-deadline-cleanup.mjs`; in the scope's `settings.json` | both `.mjs` vs `$BT/skills/agent-deadline-setup/assets/`, per scope |
 | 7 | `/brewtools:agent-router-setup` | brewtools | `.claude/hooks/agent-router.mjs` | `.claude/brewtools/agent-router.json` | flag, opt-out: `"enabled": false`. No key = enabled: the hook defaults `enabled: true` and flips it only on a literal `raw.enabled === false` | read with the owner's `--probe` (Phase 1), not from the `REG` lines: `PreToolUse` `Agent` `agent-router.mjs`, plus at `level strict` the judge (`type: agent`, no `model` key) and `PreToolUse` `StructuredOutput` `agent-router.mjs`, all in `.claude/settings.json` | the hook vs `$BT/skills/agent-router-setup/assets/agent-router.mjs` |
-| 8 | `/brewtools:manager-setup` | brewtools | `.claude/brewtools/manager/state.json` | `.claude/brewtools/manager/hardmode-guard.mjs`, `manager-state.mjs` beside it | flag: `.hard` is not `true`. Registration stays and the guard no-ops: the disarmed wall, not a broken one | `PreToolUse` `*` `hardmode-guard.mjs` `onFailure=block`, in `.claude/settings.local.json` (scope `local`) | the copied guard vs `$BT/hooks/hardmode-guard.mjs` and the copied helper vs `$BT/hooks/lib/manager-state.mjs`: `install` and `upgrade` both overwrite them every run, so `DIFFERS` means neither was re-run since the plugin update |
-| 9 | `/brewdoc:memory-sync-setup` | brewdoc | `.claude/skills/memory-sync/SKILL.md` | `references/memory-guide.md`, `references/agent-audit.md`, `references/hard-sync.md`, `references/prompting-guide.md` under it (`EMITTED_REFS`) | parking: `.claude/skills/memory-sync/SKILL.md.disabled` present and `SKILL.md` absent; the references and every hand-edit stay byte-identical | none | `memory-guide.md`, `agent-audit.md` and `prompting-guide.md` vs `$BD/skills/memory-sync-setup/references/<same name>`. Never `hard-sync.md`: byte-copied but never byte-stable, so it is out of `PAIRS` and `STAMPS` alike. The anchor is generated and has no partner |
+| 8 | `/brewtools:manager-setup` | brewtools | `.claude/brewtools/manager/state.json` | `.claude/brewtools/manager/hardmode-guard.mjs`, `manager-state.mjs` beside it | flag: `.hard` is not `true`. Registration stays and the guard no-ops: the disarmed wall, not a broken one | `PreToolUse` `*` `hardmode-guard.mjs` `onFailure=block`, in `.claude/settings.local.json` (scope `local`) | the copied guard vs `$BT/hooks/hardmode-guard.mjs` and the copied helper vs `$BT/hooks/lib/manager-state.mjs`: `install` and `upgrade` overwrite both every run, so `DIFFERS` means neither ran since the plugin update |
+| 9 | `/brewdoc:memory-sync-setup` | brewdoc | `.claude/skills/memory-sync/SKILL.md` | `references/memory-guide.md`, `references/agent-audit.md`, `references/hard-sync.md`, `references/prompting-guide.md` under it (`EMITTED_REFS`) | parking: `.claude/skills/memory-sync/SKILL.md.disabled` present and `SKILL.md` absent; the references and every hand-edit stay byte-identical | none | `memory-guide.md`, `agent-audit.md` and `prompting-guide.md` vs `$BD/skills/memory-sync-setup/references/<same name>`. Never `hard-sync.md`: never byte-stable, out of `PAIRS` and `STAMPS` alike. The anchor is generated and has no partner |
 | 10 | `/brewdoc:docsync-setup` | brewdoc | `.claude/docsync/config.json` | `.claude/hooks/docsync-track.mjs`, `docsync-watch.mjs`, `docsync-gate.mjs` | flag, opt-out: `"enabled": false`. No key = enabled (`loadConfig` reads `c.enabled !== false`), so installs written before the key existed are live | `PostToolUse` `Write\|Edit` `docsync-track.mjs` twice (`if=Write(**/*.md)` and `if=Edit(**/*.md)`); `PostToolUse` `Read` `docsync-watch.mjs` `if=Read(**/*.md)`; `Stop` `-` `docsync-gate.mjs`; in `.claude/settings.json` | the 3 hooks vs `$BD/skills/docsync-setup/assets/` |
 | 11 | `/brewtools:agent-return-setup` | brewtools | `.claude/hooks/agent-return-guard.mjs` (or `GLOBAL/hooks/`) | `agent-return-contract.mjs` and `agent-return-budget.mjs` beside it, `.claude/agent-return.json` (or `GLOBAL/agent-return.json`) | flag, opt-in: live only on `"enabled": true` (the shared module gates on `CONFIG.enabled === true`); `false`, no key, unparsable or no config = inert: no contract is injected and no return is sized | `SubagentStart` `-` `agent-return-contract.mjs`; `SubagentStop` `-` `agent-return-guard.mjs`; `PreToolUse` `SubagentHandback` `agent-return-guard.mjs`; in the scope's `settings.json`. `agent-return-budget.mjs` is a shared module and is never registered | all three `.mjs`, per scope |
 | 12 | `/brewcode:convention-setup` | brewcode | `.claude/rules/convention.md` | `.claude/convention/reference-patterns.md`, `testing-conventions.md`, `project-architecture.md` | parking: `.claude/rules/convention.md.disabled` present and the live file absent; the documents stay readable | none | none: generated evidence and local wording legitimately vary |
 
 `$BC` / `$BT` / `$BD` = the resolved plugin roots from Phase 0; `GLOBAL` = the config dir it prints
 (`CLAUDE_CONFIG_DIR`, else `~/.claude`). Row ids are stable: a removed setup leaves a gap. Per-row
-exceptions and remedies live in [`references/row-notes.md`](references/row-notes.md), read on
-demand in Phase 3.
+exceptions and remedies: [`references/row-notes.md`](references/row-notes.md), read on demand in
+Phase 3.
 
-Runtime state is never an artifact, a stamp source or a defect, whether present or absent:
+Runtime state is never an artifact, a stamp source or a defect, present or absent:
 `.claude/semble/state.json` beyond its `enabled` flag (its `approvedVersion` is the semble package
 version, not ours), `.claude/docsync/state-<session_id>.jsonl` (one file per session), the
 `agent-return-state/` dir beside an `agent-return.json`, and agent-deadline's state under
 `<os.tmpdir()>/brewtools-agent-deadline/`.
 
-Every secondary must be exclusive to its row. A shared artifact — `.claude/agents/*.md`,
-`.claude/agents/intent-guard.md` (superreview and teams both emit it), any hand-written agent — is
-not evidence that this setup ran, and listing one makes Phase 3 rule 4 report a `partial` install
-in every project that merely has an agent file. If a setup owns no exclusive secondary, leave the
-cell empty and let the anchor decide.
+Every secondary must be exclusive to its row. A shared artifact (`.claude/agents/*.md`,
+`.claude/agents/intent-guard.md` which superreview and teams both emit, any hand-written agent)
+is no evidence that this setup ran, and listing one makes Phase 3 rule 4 report `partial` in every
+project that merely has an agent file. A setup with no exclusive secondary leaves the cell empty and
+lets the anchor decide.
 
 ### NOT setups — never appear in the report
 
-Recurring tools with no installed state to report: `brewcode:agents`, `skills`, `rules`;
+Recurring tools with no installed state: `brewcode:agents`, `skills`, `rules`;
 `brewtools:text-optimize`, `text-human`, `secrets-scan`, `ssh`, `deploy`, `plugin-update`,
 `provider-switch`, `context-slim`; `brewdoc:md-to-pdf`, `my-claude`, `publish`. `brewcode:e2e` writes
-`.claude/e2e/config.json` but is a recurring tool, not a setup: its own `status` mode reports it.
+`.claude/e2e/config.json` but is a recurring tool: its own `status` mode reports it.
 
 ---
 
 ## Phase 0 — Resolve plugin roots
 
-The plugin version is the number every stamp is compared against. brewcode's root is this skill's
-own plugin root (under `--plugin-dir` that is the checkout, which is then the plugin in use); the
-sibling plugins come from the plugin cache of the active config dir, newest version dir. Version =
-the root's basename when it is `X.Y.Z`, else `.claude-plugin/plugin.json` `.version`: the
-precedence of `parseVersion` in `brewcode/hooks/session-start.mjs`.
+The plugin version is what every stamp is compared against. brewcode's root is this skill's own
+plugin root (under `--plugin-dir`, the checkout); sibling plugins come from the active config dir's
+plugin cache, newest version dir. Version = the root's basename when it is `X.Y.Z`, else
+`.claude-plugin/plugin.json` `.version` (the precedence of `parseVersion` in
+`brewcode/hooks/session-start.mjs`).
+
+The project root is the session's project dir (`CLAUDE_PROJECT_DIR`, substituted at load: the path
+hooks get), never the shell's current dir: Bash cwd persists across calls, so after a `cd` the
+probes would read a subtree and Phase 4's project write would land where Claude Code never loads it.
+Every fence that reads or writes the project opens with that `cd`.
 
 **EXECUTE** using Bash tool:
 
 ```bash
+cd "${CLAUDE_PROJECT_DIR}" || exit 1
 BC="${CLAUDE_PLUGIN_ROOT}"
 PLUGINS_ROOT="${CLAUDE_CODE_PLUGIN_CACHE_DIR:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins}"
 for p in brewcode brewdoc brewtools brewui; do
@@ -169,21 +172,21 @@ echo "OK"
 > **STOP if FAILED** — report it and stop rather than calling everything `missing`.
 
 Bind `$BC`, `$BT`, `$BD` and their versions, `GLOBAL` and the `SETUP` lines (Phase 5) from the
-output. A plugin at `ROOT=none` makes every one of its rows `n/a`, never `missing`. `DOTCLAUDE=no`
-is a legitimate answer: every row is `missing`, print the table anyway. `VERSION=unknown` on a
-plugin that is installed means no comparison is possible for its rows: report
-`version unknown (plugin version unresolved)` and say why.
+output. A plugin at `ROOT=none` makes all its rows `n/a`, never `missing`. `DOTCLAUDE=no` is a
+legitimate answer: every row is `missing`, print the table anyway. `VERSION=unknown` on an installed
+plugin means no comparison is possible: report `version unknown (plugin version unresolved)` and
+say why.
 
 ## Phase 1 — Probe artifacts
 
 One generic block, fed from the roster. Paste the anchor + secondary paths of the rows in scope
-into the heredoc: relative to the project root, one per line, a trailing `/` for a directory, globs
-allowed. For rows 6 and 11 also paste the same files under the `GLOBAL=` dir, as absolute paths.
+into the heredoc: project-relative, one per line, trailing `/` for a directory, globs allowed. For
+rows 6 and 11 also paste the same files under `GLOBAL=` as absolute paths.
 
 **EXECUTE** using Bash tool:
 
 ```bash
-cd "$PWD" || exit 1
+cd "${CLAUDE_PROJECT_DIR}" || exit 1
 TASK_SPEC_MODE=unknown
 TASK_SPEC_ENTRY=.claude/skills/task-spec/SKILL.md
 if [ -f .claude/features/TASK_TEMPLATE.md ]; then
@@ -216,17 +219,17 @@ echo "OK"
 
 | Line | Reading |
 |------|---------|
-| `PARK` | present, not missing. A parked entry file (Phase 1b) is byte-identical to the live one, so it never feeds Phase 3's `missing` or `partial` rules and is still a readable version stamp |
-| `TASK_SPEC_MODE` | bind it for Phases 1b and 2a. `on` = the deployed `TASK_TEMPLATE.md` has a `^spec:` field, or a live/parked `task-spec` exists; `off` = the template is present without either; `unknown` = the template is missing, which is never proof of off |
-| `OPTIONAL` | outside the required set (only `task-spec`, only under `off`): no MISS/ABSENT, no parked member, no Phase 3 defect. All other row-4 artifacts and content-version checks remain required |
+| `PARK` | present, not missing. A parked entry file (Phase 1b) is byte-identical to the live one: it never feeds Phase 3's `missing` or `partial` rules and is still a readable version stamp |
+| `TASK_SPEC_MODE` | bind it for Phases 1b and 2a. `on` = the deployed `TASK_TEMPLATE.md` has a `^spec:` field, or a live/parked `task-spec` exists; `off` = the template is present without either; `unknown` = the template is missing, never proof of off |
+| `OPTIONAL` | outside the required set (only `task-spec`, only under `off`): no MISS/ABSENT, no parked member, no Phase 3 defect. All other row-4 artifacts and content-version checks stay required |
 
-Then the hook registrations, parsed from the three settings files (project, local, `GLOBAL`): one
-line per handler that names a roster script, as
-`REG <scope> <event> <matcher or -> <script> [if=...] [onFailure=...]`:
+Then the hook registrations from the three settings files (project, local, `GLOBAL`), one line per
+handler naming a roster script, as `REG <scope> <event> <matcher or -> <script> [if=...] [onFailure=...]`:
 
 **EXECUTE** using Bash tool:
 
 ```bash
+cd "${CLAUDE_PROJECT_DIR}" || exit 1
 node --input-type=module -e '
 import fs from "node:fs";
 import os from "node:os";
@@ -266,13 +269,14 @@ Compare with the roster's registration cell, in the scope where the hook files w
 | a line naming `agent-return-budget.mjs` | a defect to name in *Found*: that file is a shared module |
 | `UNPARSABLE` | say which file; that scope's wiring is unknown |
 
-Row 7 is read with its owner's probe instead, because its judge entry inlines a prompt that only
-the owner can validate. Run the plugin asset, never the installed copy: `--probe` reads
-`judge-prompt.md` from beside the script, and that file is not copied into a project.
+Row 7 is read with its owner's probe instead: its judge entry inlines a prompt only the owner can
+validate. Run the plugin asset, never the installed copy: `--probe` reads `judge-prompt.md` from
+beside the script, and that file is not copied into a project.
 
 **EXECUTE** using Bash tool:
 
 ```bash
+cd "${CLAUDE_PROJECT_DIR}" || exit 1
 BT=/abs/brewtools/root
 if [ -f .claude/hooks/agent-router.mjs ]; then
   node "$BT/skills/agent-router-setup/assets/agent-router.mjs" --probe "$PWD/.claude/settings.json" || echo "PROBE-FAILED"
@@ -288,8 +292,8 @@ echo "OK"
 
 ### Phase 1b — Disable switches
 
-A deliberately disabled setup is neither broken nor stale, and every row leaves a probeable
-off-switch (roster column), in one of two mechanisms:
+A deliberately disabled setup is neither broken nor stale; every row leaves a probeable off-switch
+(roster column), in one of two mechanisms:
 
 | Mechanism | What `disable` does | Why it is probeable | Rows |
 |-----------|---------------------|---------------------|------|
@@ -300,6 +304,7 @@ off-switch (roster column), in one of two mechanisms:
 stated, never implied; a key-less config prints `no-key` instead of guessing:
 
 ```bash
+cd "${CLAUDE_PROJECT_DIR}" || exit 1
 G="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 flag() {
   if [ -f "${2}" ]; then
@@ -335,18 +340,19 @@ echo "OK"
 | 7, 10 (opt-out) | live | `disabled` | live: never `disabled` on a missing key | a secondary (row 7) or anchor (row 10) MISS for Phase 3 |
 
 Row 2 is `disabled` on `"enabled":false`; row 8 is live only on `"hard":true`, anything else is the
-disarmed wall. An absent key means opposite things on rows 6/11 and 7/10, so read the row, never a
-house default: reporting a key-less row 6 or 11 as live claims a deadline is enforced, or a return
-budget applied, when the guard returns on its first line. Rows 6 and 11 read the project config
+disarmed wall. An absent key means opposite things on rows 6/11 and 7/10: read the row, never a
+house default (a key-less row 6 or 11 reported live claims a deadline is enforced, or a return
+budget applied, when the guard returns on its first line). Rows 6 and 11 read the project config
 first, then `$CLAUDE_CONFIG_DIR`, then `~/.claude`; a malformed project config is skipped and the
 global one governs, so read every scope before deciding. The `GOVERNING` file is the row's config
-secondary wherever it sits: with `CLAUDE_CONFIG_DIR` set it may be `~/.claude/<name>.json`, and
-then a Phase 1 MISS for it under `GLOBAL` is not a finding and the row is not `partial`.
+secondary wherever it sits (with `CLAUDE_CONFIG_DIR` set, maybe `~/.claude/<name>.json`): a Phase 1
+MISS for it under `GLOBAL` is then not a finding and the row is not `partial`.
 
 **EXECUTE** using Bash tool — entry-file parking. `LIVE` / `PARKED` / `ABSENT` are three distinct
 answers: `ABSENT` means never deployed, `PARKED` means deployed and switched off:
 
 ```bash
+cd "${CLAUDE_PROJECT_DIR}" || exit 1
 TASK_SPEC_MODE=${TASK_SPEC_MODE:-unknown} # bind the actual Phase 1 output before this probe
 for f in .claude/skills/superreview/SKILL.md .claude/skills/memory-sync/SKILL.md \
          .claude/agents/task-tracker.md .claude/skills/task-board/SKILL.md \
@@ -382,50 +388,57 @@ Reading the two multi-artifact rows (1 and 4), where a toggle can land halfway:
 |---------|-----------|
 | every deployed artifact `PARKED` | `disabled` — the intended state |
 | every deployed artifact `LIVE` | not disabled; fall through to the rest of Phase 3 |
-| some `LIVE`, some `PARKED` | `partial` — a `disable`/`enable` that did not finish. Name the halves; the fix is re-running the same verb, which is a documented no-op on the artifacts already in the requested state |
+| some `LIVE`, some `PARKED` | `partial` — a `disable`/`enable` that did not finish. Name the halves; the fix is re-running the same verb (a no-op on artifacts already in the requested state) |
 | Row 4's absent `task-spec`, everything else `LIVE` | Phase 1 proved off -> `OPTIONAL`, no defect. On/unknown -> `ABSENT`, the roster's required/legacy absence signal remains; never infer a disabled state |
-| any `CONFLICT team:<t> <agent>` | `partial`, and it outranks every other teams reading. Both `.md` and `.md.disabled` exist for that member: `teams-setup enable` REFUSES the whole team (`CONFLICT:` line, nothing moved) and `verify-team.sh` FAILS. Name each member; the fix is manual — keep the copy you want, delete or rename the other, then re-run `/brewcode:teams-setup <team> enable` |
-| `CONFLICT .claude/rules/convention.md` | `partial`, before any disabled verdict; live and parked guidance both exist. The installer refuses to choose a copy. Ask the user to retain the intended copy, then retry the requested mode |
+| any `CONFLICT team:<t> <agent>` | `partial`, outranking every other teams reading. Both `.md` and `.md.disabled` exist for that member: `teams-setup enable` REFUSES the whole team (`CONFLICT:` line, nothing moved) and `verify-team.sh` FAILS. Name each member; the fix is manual — keep the copy you want, delete or rename the other, then re-run `/brewcode:teams-setup <team> enable` |
+| `CONFLICT .claude/rules/convention.md` | `partial`, before any disabled verdict: live and parked guidance both exist and the installer refuses to choose. Ask the user to retain the intended copy, then retry the requested mode |
 
 ### Phase 1c — Environment prerequisites
 
-One prerequisite, not a roster row: the **task-graph tools**. Claude Code offers `TaskCreate` /
-`TaskGet` / `TaskUpdate` / `TaskList` and `TodoWrite` by a model allow-list: they are off by default
-on Opus 4.8 and every 5.x model, and `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`, a key Claude Code reads
-from 2.1.233, turns them on
+One prerequisite, not a roster row: the **task-graph tools**. Claude Code gates `TaskCreate` /
+`TaskGet` / `TaskUpdate` / `TaskList` and `TodoWrite` by a model allow-list: off by default on
+Opus 4.8 and every 5.x model, and `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`, a key Claude Code reads from
+2.1.233, turns them on
 ([tools reference](https://code.claude.com/docs/en/tools-reference#task-tool-availability),
 [env vars](https://code.claude.com/docs/en/env-vars)). While the key is unset every instruction
-that says *build the task graph first* is unexecutable, and nothing announces that: the tools are
+that says *build the task graph first* is unexecutable and nothing announces it: the tools are
 simply absent.
 
 One block. It compares the three version components as integers (a string compare puts `2.1.99`
-above `2.1.233` and inverts the answer), then reads the key from the session env and from all
-three settings layers as JSON, never grepped: `env` is a nested object and a grep hit proves
-nothing about which block the token sits in. A missing file is a normal answer, and the first
-carrier found is the one reported:
+above `2.1.233`), then reads the key from the session env and all three settings layers as JSON,
+never grepped: `env` is a nested object, and a grep hit does not show which block holds the token.
+A missing file is a normal answer. Claude Code takes an `env` key from the highest layer that sets
+it (local > project > global; managed settings and `--settings` rank above all three and are not
+read here), a settings value overrides a shell export, and the key is on only for
+`1`/`true`/`yes`/`on`, case-insensitive. So the highest carrier decides, and its `"0"` beats a
+lower layer's `"1"`:
 
 **EXECUTE** using Bash tool:
 
 ```bash
+cd "${CLAUDE_PROJECT_DIR}" || exit 1
 node --input-type=module -e '
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-const cur = (process.argv[1] || "").split(".").map(n => parseInt(n, 10) || 0);
+const raw = (process.argv[1] || "").trim();
+const cur = raw.split(".").map(n => parseInt(n, 10) || 0);
 const need = [2, 1, 233];
 let cmp = 0;
 for (let i = 0; i < 3; i++) { if ((cur[i] || 0) !== need[i]) { cmp = (cur[i] || 0) - need[i]; break; } }
-if (cmp < 0) { console.log(`CC ${cur.join(".")} < 2.1.233 — task tools on by default, check skipped`); process.exit(0); }
-console.log(`CC ${cur.join(".")} >= 2.1.233 — gate applies`);
+if (!/^[0-9]+\.[0-9]+\.[0-9]+/.test(raw)) console.log("CC version unknown — gate assumed");
+else if (cmp < 0) { console.log(`CC ${cur.join(".")} < 2.1.233 — task tools on by default, check skipped`); process.exit(0); }
+else console.log(`CC ${cur.join(".")} >= 2.1.233 — gate applies`);
 const G = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), ".claude");
 const layers = [
-  ["global",  path.join(G, "settings.json")],
-  ["project", path.join(process.cwd(), ".claude", "settings.json")],
   ["local",   path.join(process.cwd(), ".claude", "settings.local.json")],
+  ["project", path.join(process.cwd(), ".claude", "settings.json")],
+  ["global",  path.join(G, "settings.json")],
 ];
+const truthy = v => ["1", "true", "yes", "on"].includes(String(v).trim().toLowerCase());
 const env = process.env.CLAUDE_CODE_ENABLE_TODO_TOOLS;
 console.log(`session-env ${env === undefined ? "no-key" : JSON.stringify(env)}`);
-let on = env !== undefined && env !== "0" ? "session-env" : null;
+let win = null;
 for (const [name, f] of layers) {
   if (!fs.existsSync(f)) { console.log(`${name} ABSENT ${f}`); continue; }
   let j;
@@ -433,16 +446,19 @@ for (const [name, f] of layers) {
   catch { console.log(`${name} UNPARSABLE ${f}`); continue; }
   const v = j && j.env ? j.env.CLAUDE_CODE_ENABLE_TODO_TOOLS : undefined;
   console.log(`${name} ${v === undefined ? "no-key" : JSON.stringify(v)} ${f}`);
-  if (on === null && v !== undefined && String(v) !== "0") on = name;
+  if (win === null && v !== undefined) win = [name, v];
 }
-console.log(`TODO_TOOLS ${on ? `on (${on})` : "off"}`);
+if (win) console.log(`TODO_TOOLS ${truthy(win[1]) ? "on" : "off"} (${win[0]})`);
+else console.log(`TODO_TOOLS ${env !== undefined && truthy(env) ? "on (session-env)" : "off"}`);
 ' "$(claude --version 2>/dev/null | awk '{print $(1)}')" && echo "✅" || echo "❌ FAILED"
 ```
 
 | Last line | Meaning | Phase 4 |
 |-----------|---------|---------|
 | `CC <ver> < 2.1.233 — task tools on by default, check skipped` | this Claude Code predates the key | print that line, make no offer |
-| `TODO_TOOLS on (<layer>)` | the key is set in that layer; the tools are available | report the layer in one line, ask nothing |
+| `CC version unknown — gate assumed` (first line, not last) | `claude --version` gave no `X.Y.Z` (not on the Bash tool's PATH, or it failed), so the release is unknown: the check runs as if the gate applies, never reads as "on by default" | read the last line as below and say once the version was unknown; the offer stands |
+| `TODO_TOOLS on (<layer>)` | that layer decides; the tools are available | report the layer in one line, ask nothing |
+| `TODO_TOOLS off (<layer>)` | that layer sets an off value and outranks every lower layer and the shell | report the file and value, make no offer: a lower-layer write would lose to it |
 | `TODO_TOOLS off` | no layer carries it; the tools are absent on this model | report it, then make the one offer |
 
 `UNPARSABLE` on a layer is not `off` for that layer: it is a broken settings file. Say which file,
@@ -451,21 +467,20 @@ and never offer to write into it (the merge in Phase 4 refuses it too).
 ## Phase 2a — Read the content_version stamps (the headline)
 
 One block for every roster row; it dispatches on file extension. Paste into `PLUGIN_ROOT` the
-`ROOT=` Phase 0 printed for the plugin whose rows you are scanning, set `PLUGIN` to that plugin's
-name, and run it three times, once per plugin: brewcode / brewtools / brewdoc can sit at different
-versions. Nothing else changes between the runs, and no version is ever typed in: `PLUGIN_VER` is
-re-derived from `PLUGIN_ROOT` with Phase 0's precedence, so the comparison cannot be pinned to a
-number that was current when this file was written.
+`ROOT=` Phase 0 printed for the plugin being scanned, set `PLUGIN` to its name, and run it three
+times, once per plugin: brewcode / brewtools / brewdoc can sit at different versions. Nothing else
+changes between runs and no version is typed in: `PLUGIN_VER` is re-derived from `PLUGIN_ROOT` with
+Phase 0's precedence.
 
-The heredoc is the complete set, enumerated, never a sample to expand: all twenty-three carrier
-lines on every run, filtered by the `PLUGIN` tag. `TOTAL` must be 23 and `SEEN` must equal the
-group's `WANT` (7 / 13 / 3); either mismatch is `exit 1`. Adding a roster row means adding its
-carrier lines, each with its plugin-side `content_version` source in field 4, and raising both
-counts in the same edit.
+The heredoc is the complete set, never a sample to expand: all twenty-three carrier lines on every
+run, filtered by the `PLUGIN` tag. `TOTAL` must be 23 and `SEEN` must equal the group's `WANT`
+(7 / 13 / 3); either mismatch is `exit 1`. Adding a roster row means adding its carrier lines, each
+with its plugin-side `content_version` source in field 4, and raising both counts in the same edit.
 
 **EXECUTE** using Bash tool:
 
 ```bash
+cd "${CLAUDE_PROJECT_DIR}" || exit 1
 PLUGIN_ROOT=/abs/root/printed/by/phase0
 PLUGIN=brewcode          # brewcode | brewtools | brewdoc - selects which STAMPS lines run
 TASK_SPEC_MODE=${TASK_SPEC_MODE:-unknown} # bind the actual Phase 1 output
@@ -613,60 +628,60 @@ Each heredoc line is `plugin|path|expected-owner|content_version-source`:
 
 | Field | Rule |
 |-------|------|
-| path | project-relative. `GLOBAL/` = the active config dir: rows 6 and 11 are scanned in both scopes, and `MISSING` on the scope that is not installed is not a finding. A glob prints one verdict per match (row 1: one per team) and one `MISSING` when it matches nothing |
+| path | project-relative. `GLOBAL/` = the active config dir: rows 6 and 11 are scanned in both scopes, and `MISSING` on the scope that is not installed is no finding. A glob prints one verdict per match (row 1: one per team) and one `MISSING` when it matches nothing |
 | expected-owner | the row's own `<plugin>:<skill>`. Empty skips the owner check |
-| content_version-source | `$PLUGIN_ROOT`-relative, read with the same carrier dispatch as the artifact: the asset itself for a byte copy (`assets/<same name>`), the generator's `SKILL.md` for a generated artifact, whose `brewcode-meta:` marker every installer takes `{CONTENT_VERSION}` from. Empty = no per-artifact comparison, `$PLUGIN_VER` is the reference |
+| content_version-source | `$PLUGIN_ROOT`-relative, read with the same carrier dispatch as the artifact: the asset itself for a byte copy (`assets/<same name>`), the generator's `SKILL.md` for a generated artifact (every installer takes `{CONTENT_VERSION}` from its `brewcode-meta:` marker). Empty = no per-artifact comparison, `$PLUGIN_VER` is the reference |
 
 `content_version` is compared per artifact, never to the release-wide `$PLUGIN_VER`
-(`references/artifact-metadata.md` §6): an asset the plugin has not touched in three releases is
-three behind the release on both sides, and comparing it to the release reports a current install
-as `BEHIND`. `$PLUGIN_VER` (basis `plugin-ver`) is the reference only when the artifact carries no
+(`references/artifact-metadata.md` §6): an asset untouched for three releases is three behind the
+release on both sides, so comparing it to the release reports a current install as `BEHIND`.
+`$PLUGIN_VER` (basis `plugin-ver`) is the reference only when the artifact carries no
 `content_version`, the line names no source, or the source's value is absent or placeholder-shaped;
 otherwise the basis is `cv-src`. Every verdict line prints its basis.
 
-How the twenty-three lines map onto the eleven setups — the mapping the two assertions enforce:
+How the twenty-three lines map onto the eleven setups (the two assertions enforce it):
 
 | Rows | Lines | Carriers |
 |------|-------|----------|
-| 1, 2, 3, 12 (`PLUGIN=brewcode`, `WANT=7`) | 7 | `team.md` (glob), `semble-first.md`, emitted `superreview/SKILL.md`, convention loading rule and three convention documents |
-| 4 (`PLUGIN=brewtools`, `WANT=13`) | 1 | `board.md` logical line expands to the canonical row-4 anchor + secondaries (12 on / 11 off); no new STAMPS lines |
+| 1, 2, 3, 12 (`PLUGIN=brewcode`, `WANT=7`) | 7 | `team.md` (glob), `semble-first.md`, emitted `superreview/SKILL.md`, convention loading rule + three convention documents |
+| 4 (`PLUGIN=brewtools`, `WANT=13`) | 1 | `board.md` expands to the canonical row-4 anchor + secondaries (12 on / 11 off); no new STAMPS lines |
 | 6 | 4 | `agent-deadline-guard.mjs` + `agent-deadline.json`, in BOTH scopes |
 | 7 | 2 | `agent-router.mjs` + `agent-router.json` (project-only setup, one scope) |
 | 8 | 2 | `state.json` (primary) + the copied `hardmode-guard.mjs` (documented fallback) |
 | 11 | 4 | `agent-return-guard.mjs` + `agent-return.json`, in BOTH scopes |
 | 9, 10 (`PLUGIN=brewdoc`, `WANT=3`) | 3 | the emitted `memory-sync/SKILL.md`, `docsync/config.json`, `docsync-track.mjs` |
 
-Rows 6, 7, 8, 10 and 11 print two lines per installed scope, and the first is the headline: the
-JSON on rows 6, 7, 10 and 11; on row 8 `state.json`, with the guard's `brewcode-meta` line
-answering only when `state.json` carries no `version` key. The second line is the fallback, never a
-contradiction to reconcile.
+Rows 6, 7, 8, 10 and 11 print two lines per installed scope; the first is the headline: the JSON on
+rows 6, 7, 10 and 11; on row 8 `state.json`, with the guard's `brewcode-meta` line answering only
+when `state.json` carries no `version` key. The second line is the fallback, never a contradiction
+to reconcile.
 
 | Verdict | Means | Feeds Phase 3 as |
 |---------|-------|------------------|
 | `CURRENT` | headline stamp == the reference (`cv-src`, or `$PLUGIN_VER` on the fallback) | `current` (if the row's byte pairs agree) |
 | `BEHIND` | headline stamp < the reference | `stale (installed X.Y.Z, plugin A.B.C)` |
 | `AHEAD` | headline stamp > the reference: installed from a newer plugin than the one in use | `stale (installed X.Y.Z, plugin A.B.C)`. Say the plugin is behind; do not tell the user to upgrade the project |
-| `SRC-MISS` | the line's `content_version` source is absent from the plugin root, so no reference exists. It is the only line printed for that artifact, and it applies only to an artifact that itself carries a `content_version`; a `version`-only artifact is measured against `$PLUGIN_VER` as usual | `version unknown (plugin asset missing)`, exactly as `NOSRC` in Phase 2b. Never `stale`: falling back to `$PLUGIN_VER` here reports a byte-current artifact as `BEHIND` |
-| `LEGACY-FMT` | no headline stamp (neither `content_version` nor `version`), but a retired spelling is present (`memory-sync template vX.Y.Z`, `intent-guard template v2`, `SKILL METADATA - generated <ts>`, `<!-- last-updated: -->`, `updatedAt` / `lastUpdated` / `checkedAt` …) | `stale (legacy stamp)`: the migration case, one `upgrade` restamps it |
+| `SRC-MISS` | the line's `content_version` source is absent from the plugin root, so no reference exists. The only line printed for that artifact; applies only to an artifact that itself carries a `content_version` (a `version`-only artifact is measured against `$PLUGIN_VER` as usual) | `version unknown (plugin asset missing)`, as `NOSRC` in Phase 2b. Never `stale`: falling back to `$PLUGIN_VER` reports a byte-current artifact as `BEHIND` |
+| `LEGACY-FMT` | no headline stamp (neither `content_version` nor `version`), but a retired spelling is present (`memory-sync template vX.Y.Z`, `intent-guard template v2`, `SKILL METADATA - generated <ts>`, `<!-- last-updated: -->`, `updatedAt` / `lastUpdated` / `checkedAt` …) | `stale (legacy stamp)`: one `upgrade` restamps it |
 | `LEGACY-NONE` | file exists and carries neither `content_version` nor `version` in any carrier, and no retired spelling | `stale (legacy, unstamped)` |
-| `PLACEHLD` | the headline stamp is still an unresolved token | `partial`: substitution never finished. Read only from the emitted file, never from `.template-baseline/`, which holds raw tokens by design |
+| `PLACEHLD` | the headline stamp is still an unresolved token | `partial`: substitution never finished. Read only from the emitted file, never from `.template-baseline/` (raw tokens by design) |
 | `MISSING` | no such file and no `.disabled` twin | the row's anchor decides: `missing` or `partial` |
 
-The owner check prints an extra line beside the version verdict, never instead of it: a file can
-be `CURRENT` and owner-wrong at once, and no other signal sees that.
+The owner check prints an extra line beside the version verdict, never instead of it: a file can be
+`CURRENT` and owner-wrong at once.
 
 | Verdict | Means | Feeds Phase 3 as |
 |---------|-------|------------------|
-| `OWNER-WRONG` | `generated_by` names a different skill than the row that owns the artifact (two setups can write one path, a hand-copied artifact keeps its source's owner) | `partial`. Name both skills, offer the owning setup's `install`, and say the other generator may overwrite the path again |
-| `OWNER-NONE` | the headline stamp is present but `generated_by` is not | `stale (legacy stamp)`: `references/artifact-metadata.md` §1 requires the field in every artifact and every carrier, so this is an incomplete write. One `upgrade` restamps it |
+| `OWNER-WRONG` | `generated_by` names a different skill than the row that owns the artifact (two setups can write one path; a hand-copied artifact keeps its source's owner) | `partial`. Name both skills, offer the owning setup's `install`, and say the other generator may overwrite the path again |
+| `OWNER-NONE` | the headline stamp is present but `generated_by` is not | `stale (legacy stamp)`: `references/artifact-metadata.md` §1 requires the field in every artifact and carrier, so this is an incomplete write. One `upgrade` restamps it |
 | (no line) | `generated_by` equals the expected owner | nothing: silence is the pass |
 
 A parked entry file (Phase 1b) is byte-identical to the live one, stamp included, so the block
-retries `$f.disabled` and prints the path with the suffix: a disabled install has a real version
+retries `$f.disabled` and prints the path with the suffix: a disabled install keeps a real version
 and never reads as `MISSING`.
 
-The carriers are the ones in `references/artifact-metadata.md` §2, and all three fields are read
-from the same carrier on every branch:
+Carriers are those of `references/artifact-metadata.md` §2; all three fields come from the same
+carrier on every branch:
 
 | Carrier | `content_version` | `version` | `generated_by` |
 |---------|--------------------|-----------|----------------|
@@ -679,33 +694,34 @@ comment (`<!-- brewcode-meta: version=X.Y.Z generated_by=brewdoc:memory-sync-set
 stripped `-->`), and the plugin `SKILL.md` sources, whose marker sits below the frontmatter. Quotes
 (`version: "X.Y.Z"`) and header-table backticks are stripped.
 
-The `PLACEHLD` test is generic on purpose, never a list of known tokens: it matches any `{`, `}`,
-`<` or `>` in the value. That covers the sanctioned single-brace `{PLUGIN_VERSION}` and
-`{CONTENT_VERSION}` (`references/artifact-metadata.md` §4) and the retired forms older releases left
-behind (`{{PLUGIN_VERSION}}`, `<plugin X.Y.Z>`, `<date +%F>`, `<YYYY-MM-DD>`). A real `X.Y.Z` holds
-none of them, and an unsubstituted token never reaches `sort -V`, which would turn "substitution
-never ran" into a confident `BEHIND`/`AHEAD`.
+The `PLACEHLD` test is generic, never a list of known tokens: it matches any `{`, `}`, `<` or `>` in
+the value, covering the sanctioned single-brace `{PLUGIN_VERSION}` and `{CONTENT_VERSION}`
+(`references/artifact-metadata.md` §4) and the retired forms (`{{PLUGIN_VERSION}}`,
+`<plugin X.Y.Z>`, `<date +%F>`, `<YYYY-MM-DD>`). A real `X.Y.Z` holds none, and an unsubstituted
+token never reaches `sort -V`, which would turn "substitution never ran" into a confident
+`BEHIND`/`AHEAD`.
 
 The `LEGACY-FMT` grep names the exact retired strings of `references/artifact-metadata.md` §8;
 `SKILL METADATA` matches only when followed by `generated`, because live skills use the bare words.
 The `STAMPS` heredoc carries artifacts only: runtime state (§9: epoch-ms markers, TTL caches,
-`.claude/semble/state.json`, `.claude/docsync/state-<session_id>.jsonl`) is never added to it, even
-when a row lists it as a secondary, since a `checkedAt`-style key inside a runtime cache would read
-as a legacy stamp.
+`.claude/semble/state.json`, `.claude/docsync/state-<session_id>.jsonl`) is never added, even when
+a row lists it as a secondary: a `checkedAt`-style key in a runtime cache would read as a legacy
+stamp.
 
-`last_updated` is absent by design from `.mjs`/`.sh` stamps and from the byte-copied
-`semble-first.md`: a date there would churn the file on every release and break `cmp`. Its absence
-on a baked asset is never a legacy stamp.
+`last_updated` is absent by design from `.mjs`/`.sh` stamps and the byte-copied `semble-first.md`
+(a date would churn the file every release and break `cmp`): its absence on a baked asset is never a
+legacy stamp.
 
 ## Phase 2b — `cmp` the byte-copied files (corroboration)
 
 A stamp cannot see a hand edit: an edited hook keeps the stamp it was copied with. So every
-byte-stable copy of every row is compared with the asset the plugin in use would install. The
-heredoc is the complete set; paste the three `ROOT=` values from Phase 0 (`none` skips that plugin).
+byte-stable copy is compared with the asset the plugin in use would install. The heredoc is the
+complete set; paste the three `ROOT=` values from Phase 0 (`none` skips that plugin).
 
 **EXECUTE** using Bash tool:
 
 ```bash
+cd "${CLAUDE_PROJECT_DIR}" || exit 1
 BC=/abs/brewcode/root; BT=/abs/brewtools/root; BD=/abs/brewdoc/root
 G="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 pair() {
@@ -727,9 +743,7 @@ while IFS='|' read -r pl a b; do
 done <<'PAIRS'
 BC|.claude/rules/semble-first.md|skills/semble-setup/assets/semble-first.md.template
 BC|.claude/hooks/semble-session.mjs|skills/semble-setup/assets/semble-session.mjs
-BC|.claude/hooks/semble-prefetch.mjs|skills/semble-setup/assets/semble-prefetch.mjs
 BC|.claude/hooks/semble-stats.mjs|skills/semble-setup/assets/semble-stats.mjs
-BC|.claude/hooks/semble-reminder.mjs|skills/semble-setup/assets/semble-reminder.mjs
 BC|.claude/hooks/semble-subagent.mjs|skills/semble-setup/assets/semble-subagent.mjs
 BC|.claude/teams/*/trace-ops.sh|skills/teams-setup/scripts/trace-ops.sh
 BC|.claude/skills/superreview/.template-baseline/SKILL.md|skills/superreview-setup/references/SKILL.md.template
@@ -773,16 +787,15 @@ echo "OK"
 
 Only a byte-stable copy belongs in `PAIRS`. A file the install fills or appends to after copying it
 (`memory-sync`'s `references/hard-sync.md`, the repo-root `.sembleignore`) differs on every healthy
-project, and a generated artifact has no partner at all: feeding one in makes the dashboard
-prescribe a remedy that destroys what the installer put there. Before adding a pair, check that no
-mode writes the path after the `cp`, and that the loop prints `SAME` on a fresh install in a
-throwaway repo.
+project, and a generated artifact has no partner: feeding one in makes the dashboard prescribe a
+remedy that destroys what the installer put there. Before adding a pair, check that no mode writes
+the path after the `cp`, and that the loop prints `SAME` on a fresh install in a throwaway repo.
 
 ## Phase 2c — External dependency: the semble MCP pin
 
 The suite's one dependency version: the user-scope `semble_code` MCP registration, pinned as
-`semble[mcp]==X.Y.Z` per Claude Code profile. `semble-setup` owns the check and this skill prints
-its result. Both calls are read-only:
+`semble[mcp]==X.Y.Z` per Claude Code profile. `semble-setup` owns the check; this skill prints its
+result. Both calls are read-only:
 
 **EXECUTE** using Bash tool:
 
@@ -796,34 +809,32 @@ echo "OK"
 | Field | Use |
 |-------|-----|
 | `pin`, `upstream.status` | the declared pin. `behind` = a newer semble exists upstream: advisory, it never changes a row |
-| `profiles[]`: `dir`, `active`, `registered`, `verdict`, `action` | one dependency-table row per profile. `verdict` is `ok`, `stale`, `ahead`, `drift`, `unpinned`, `not_registered` or `malformed`. `action` is the ready command; it applies to that profile, so it runs in a session started with `CLAUDE_CONFIG_DIR=<dir>` (the default `~/.claude` profile: the variable unset) |
-| `guidance`: `wiredCount`, `wantCount`, `retired`, `staleEntries`, `rule` | row 2's wiring in this project. `retired` non-empty, `staleEntries` above 0, or `wiredCount < wantCount` = `stale`, prescribing `install`, however current the stamps. `wantCount: 0` = counts not reported, never a defect. `rule: user_modified` is a supported state |
+| `profiles[]`: `dir`, `active`, `registered`, `verdict`, `action` | one dependency-table row per profile. `verdict` is `ok`, `stale`, `ahead`, `drift`, `unpinned`, `not_registered` or `malformed`. `action` is the ready command for that profile: run it in a session started with `CLAUDE_CONFIG_DIR=<dir>` (default `~/.claude` profile: variable unset) |
+| `guidance`: `wiredCount`, `wantCount`, `retired`, `retiredWired`, `staleEntries`, `rule` | row 2's wiring in this project, read like `semble-setup status`, however current the stamps. `retired` (files) or `retiredWired` (registrations) non-empty = `partial`, *Found* `retired: <names> - stale (remove via upgrade)`, prescribing `upgrade`; otherwise `staleEntries` above 0 or `wiredCount < wantCount` = `partial`, prescribing `install`. `wantCount: 0` = counts not reported, never a defect. `rule: user_modified` is a supported state |
 
 ## Phase 3 — Classify
 
 For a row with any probe line other than `FILE`, `LIVE`, `CURRENT`, `SAME` and its listed `REG`
-lines, first read that row's section of [`references/row-notes.md`](references/row-notes.md): the
-per-row exceptions and what each mode can clear. Then exactly one state per row, first match wins:
+lines, first read that row's section of [`references/row-notes.md`](references/row-notes.md) (per-row
+exceptions, what each mode can clear). Then exactly one state per row, first match wins:
 
 | # | Condition | State |
 |---|-----------|-------|
 | 1 | The row's plugin has `ROOT=none` | `n/a` |
 | 2 | Phase 1b shows this row's off-switch thrown — a config flag reading off for that row's polarity, `.hard != true`, or every deployed entry file `PARKED`; a live/parked `CONFLICT` overrides this as `partial` | `disabled` |
 | 3 | Anchor MISS and every secondary MISS, in both spellings (no `<name>.disabled` twin anywhere on the row) and in both scopes | `missing` |
-| 4 | Anchor MISS but some secondary present, or anchor present with any required secondary MISS (`OPTIONAL` is excluded), or a row-1/row-4 toggle left half `LIVE` half `PARKED`, or hook files present with no `REG` line or no config (Phases 1, 1b), or the stamp reads `PLACEHLD`, or Phase 2a printed `OWNER-WRONG` | `partial` |
+| 4 | Anchor MISS but some secondary present, or anchor present with any required secondary MISS (`OPTIONAL` is excluded), or a row-1/row-4 toggle left half `LIVE` half `PARKED`, or hook files present with no `REG` line or no config (Phases 1, 1b), or the stamp reads `PLACEHLD`, or Phase 2a printed `OWNER-WRONG`, or row 2's wiring signal fires (Phase 2c: `retired`, `retiredWired`, `staleEntries`, or `wiredCount < wantCount`) | `partial` |
 | 5 | Stamp reads `BEHIND` or `AHEAD` | `stale (installed X.Y.Z, plugin A.B.C)` — print both versions |
 | 6 | Stamp reads `LEGACY-FMT`, or `OWNER-NONE` beside a real version | `stale (legacy stamp)` |
 | 7 | Stamp reads `LEGACY-NONE` | `stale (legacy, unstamped)` |
-| 8 | An absence signal fires (row 1 without `trace-ops.sh`; row 4, which excludes `task-spec` only when Phase 1 proved off; row 9 without `prompting-guide.md`), or the registrations are of an older shape (Phase 1), or row 2's wiring signal fires (Phase 2c: `retired`, `staleEntries`, or `wiredCount < wantCount`) | `stale` — name the artifact that is missing, or the wiring gap |
+| 8 | An absence signal fires (row 1 without `trace-ops.sh`; row 4, which excludes `task-spec` only when Phase 1 proved off; row 9 without `prompting-guide.md`), or the registrations are of an older shape (Phase 1) | `stale` — name the artifact that is missing, or the registration gap |
 | 9 | Stamp `CURRENT`, but any byte pair `DIFFERS` | `modified (stamp current, bytes differ)` — name the file |
 | 10 | Stamp `CURRENT`, every byte pair `SAME` (or the row defines none) | `current` |
 | 11 | `SRC-MISS`, or stamp `CURRENT` with a byte source `NOSRC` | `version unknown (plugin asset missing)` — the plugin root is incomplete, never `stale` |
 
 States: `n/a` · `missing` · `disabled` · `partial` · `stale` · `modified` · `current` ·
-`version unknown`. The version verdicts proper are `current`, `stale (installed X.Y.Z, plugin
-A.B.C)`, `modified (stamp current, bytes differ)` and `missing`; `stale` also takes
-`(legacy stamp)` and `(legacy, unstamped)`, and stays bare for rule 8, whose artifact or wiring gap
-goes in *Found*.
+`version unknown`. `stale` also takes `(legacy stamp)` and `(legacy, unstamped)`, and stays bare for
+rule 8, whose artifact or registration gap goes in *Found*.
 
 - `disabled` is evaluated before `missing`, `partial` and `stale`. Five setups `disable` by parking
   their entry file, so the anchor itself is renamed away and every later rule would misfire; a
@@ -833,18 +844,18 @@ goes in *Found*.
   owning setups refuse `upgrade` on a parked install (`task-board-setup` stops, `memory-sync`'s and
   `superreview`'s `validate` fail).
 - Anchor MISS is decisive: the anchor is the artifact only that setup writes, so no anchor in either
-  spelling means not installed, whatever else the project contains. A `.disabled` twin is not a
-  MISS, and a shared file never makes a row `partial`.
-- Read the stamp, never guess a version: none from a file's mtime, none from a directory name inside
-  the project, no signal this roster does not define.
+  spelling means not installed. A `.disabled` twin is not a MISS, and a shared file never makes a
+  row `partial`.
+- Read the stamp, never guess a version: none from a file's mtime or a directory name, no signal
+  this roster does not define.
 - A hook under `GLOBAL` while the project also has one is a scope answer, not a conflict: report the
   scope; rows 6 and 11 are legitimately global.
 
 ## Phase 4 — Output
 
 Print in this order: Phase 5 warnings, the PLAN block (Prompt contract above), the summary, the
-setups table, the dependency table, the run-list, the task-tools line. Answer in the language the
-user wrote in (RU or EN): translate the prose, never the paths or the commands.
+setups table, the dependency table, the run-list, the task-tools line. Answer in the user's language
+(RU or EN): translate the prose, never the paths or the commands.
 
 Summary, two lines:
 
@@ -853,21 +864,17 @@ Summary, two lines:
 Plugins in use: brewcode A.B.C, brewtools A.B.C, brewdoc A.B.C.
 ```
 
-Count `stale`, `modified` and `partial` rows. `missing`, `disabled` and `n/a` are not installed,
-switched off, or not applicable. With none to count, say that every installed setup is current, and
-still print both tables.
+Count `stale`, `modified` and `partial` rows; `missing`, `disabled` and `n/a` do not count. With
+none to count, say that every installed setup is current, and still print both tables.
 
 **Setups table**: every roster row, in roster order. The Prompt contract's filter narrows it, and a
 single-skill filter also prints that row's roster cells and row notes in full.
 
 | Setup | State | Installed | Plugin | Found | Command |
 |-------|-------|-----------|--------|-------|---------|
-| `/brewcode:semble-setup` | modified (stamp current, bytes differ) | A.B.C | A.B.C | `semble-prefetch.mjs` differs from the plugin asset: hand-edited, or never re-copied | `/brewcode:semble-setup upgrade "re-copy the hooks, semble-prefetch.mjs drifted from the plugin asset"` |
+| `/brewcode:semble-setup` | modified (stamp current, bytes differ) | A.B.C | A.B.C | `semble-stats.mjs` differs from the plugin asset: hand-edited, or never re-copied | `/brewcode:semble-setup upgrade "re-copy the hooks, semble-stats.mjs drifted from the plugin asset"` |
 | `/brewtools:task-board-setup` | partial | X.Y.Z | A.B.C | `board.md` + tracker present, spec enabled (`TASK_TEMPLATE.md` has `spec:`) but `.claude/skills/task-spec/` absent | `/brewtools:task-board-setup upgrade "retrofit the spec + design layer onto the deployed board, keep every task id"` |
-| `/brewdoc:memory-sync-setup` | stale (installed X.Y.Z, plugin A.B.C) | X.Y.Z | A.B.C | emitted skill is behind the plugin and `prompting-guide.md` is absent | `/brewdoc:memory-sync-setup upgrade "restamp the emitted skill and restore prompting-guide.md, hand-edits untouched"` |
-| `/brewcode:superreview-setup` | partial | `{PLUGIN_VERSION}` | A.B.C | emitted `SKILL.md` still holds an unresolved placeholder: substitution never finished | `/brewcode:superreview-setup install "re-emit, the previous run left {PLUGIN_VERSION} unsubstituted"` |
 | `/brewdoc:docsync-setup` | missing | -- | A.B.C | nothing under `.claude/docsync/` | `/brewdoc:docsync-setup install` |
-| `/brewcode:teams-setup` | current | A.B.C | A.B.C | `team.md` + `trace.jsonl` + `trace-ops.sh`, all bytes match | `/brewcode:teams-setup status` |
 | `/brewtools:manager-setup` | n/a | -- | -- | brewtools not installed | `claude plugin install brewtools@claude-brewcode` |
 
 | Column | Holds |
@@ -876,8 +883,7 @@ single-skill filter also prints that row's roster cells and row notes in full.
 | Plugin | the reference the verdict used: the plugin-side artifact's own `content_version` (basis `cv-src`), or the plugin release `$PLUGIN_VER` (basis `plugin-ver`) |
 | Command | a ready-to-paste line. `stale`, `modified` and `partial` carry a concrete prompt naming what to refresh (the drifted file, the missing artifact, the layer never retrofitted, the unresolved placeholder): a bare `upgrade` is not acceptable output. `disabled` -> `enable`, `current` -> `status` |
 
-`A.B.C` and `X.Y.Z` are placeholders: the report prints real numbers, and no literal version is
-carried in from this file.
+`A.B.C` and `X.Y.Z` are placeholders: the report prints real numbers, none carried in from this file.
 
 A remedy must be able to clear the verdict it follows, or `status` says `stale`, `upgrade` says
 success, and the next `status` says `stale` again. Prescribe a mode only when
@@ -887,44 +893,43 @@ never print `--force`.
 
 Use the canonical modes only: `status` · `install` · `upgrade` · `enable` · `disable` · `uninstall` ·
 `purge`. `teams-setup` parses any other word as a team name, so a non-canonical verb there would
-install a team of that name. Extra verbs live after the canonical set: `semble-setup` has
+install a team of that name. Extra verbs come after the canonical set: `semble-setup` has
 `reindex | optimize | resume`, `agent-router-setup` and `manager-setup` take `level <...>`. Use one
-only when the row's finding is exactly what it fixes; otherwise the canonical verb plus a free-text
-prompt.
+only when the finding is exactly what it fixes; otherwise the canonical verb plus a free-text prompt.
 
 **Dependency table**, from Phase 2c, one row per Claude Code profile:
 
 | Profile | Registered | Pin | Verdict | Command |
 |---------|------------|-----|---------|---------|
-| `~/.claude-work` | `semble[mcp]==X.Y.Z` | A.B.C | stale | `/brewcode:semble-setup upgrade`, in a session of that profile |
+| `~/.claude-alt` | `semble[mcp]==X.Y.Z` | A.B.C | stale | `/brewcode:semble-setup upgrade`, in a session of that profile |
 | `~/.claude` (active) | none | A.B.C | not_registered | `/brewcode:semble-setup install` |
 
-Below it, name every `not_registered` profile in one sentence: sessions of those profiles have no
+Below it, name every `not_registered` profile in one sentence: its sessions have no
 `mcp__semble_code__search` tool. Add one line when `upstream.status` is `behind`.
 
 ### The run-list — grouped by real dependency, not just tier
 
-Several rows consume what `teams-setup` creates (agent names for routing/`byAgentType`, or the
-shared `intent-guard` it emits) or run faster once `semble-setup`'s code index exists. Group the
-run-list into these seven stages, fixed order; a row not in scope (`n/a`, `current`, `disabled`, or
-filtered out) is skipped, never renumbered, and a stage with zero rows in scope prints no header:
+Several rows consume what `teams-setup` creates (agent names for routing/`byAgentType`, the shared
+`intent-guard`) or run faster once `semble-setup`'s code index exists. Group the run-list into these
+seven stages, fixed order; a row not in scope (`n/a`, `current`, `disabled`, filtered out) is
+skipped, never renumbered, and a stage with no rows in scope prints no header:
 
 | Stage | Rows (roster #) | Why this stage, in one clause |
 |-------|------------------|--------------------------------|
-| 1 🔧 Fix global drift | 11 agent-return | global-scope — a stale install here taxes EVERY session and EVERY subagent spawn in every stage below. Cheapest fix, biggest leverage |
-| 2 🔍 Search foundation | 2 semble-setup | every stage below fans out subagents that read this repo; they read it faster and more accurately with the index already built |
+| 1 🔧 Fix global drift | 11 agent-return | global scope: a stale install taxes every session and every subagent spawn in every stage below. Cheapest fix, biggest leverage |
+| 2 🔍 Search foundation | 2 semble-setup | every later stage fans out subagents that read this repo, faster and more accurately with the index built |
 | 3 📚 Convention foundation | 12 convention-setup | extracts architecture, coding and testing patterns before agents and review consume them; no teams prerequisite |
-| 4 👥 Agent root | 1 teams-setup | creates the project's own agents plus the shared `intent-guard`; stage 5's rows reference them by name and install into a vacuum without this |
-| 5 🔗 Agent consumers | 7 agent-router, 8 manager, 6 agent-deadline, 3 superreview | router dispatches `Agent` calls to real agent names; deadline's `byAgentType` needs those names; manager's delegate-to-specialist model assumes agents already exist; superreview reuses `intent-guard` instead of re-emitting it |
+| 4 👥 Agent root | 1 teams-setup | creates the project's own agents plus the shared `intent-guard`; stage 5 references them by name and installs into a vacuum without it |
+| 5 🔗 Agent consumers | 7 agent-router, 8 manager, 6 agent-deadline, 3 superreview | router dispatches `Agent` calls to real agent names; deadline's `byAgentType` needs those names; manager's delegate-to-specialist model assumes agents exist; superreview reuses `intent-guard` instead of re-emitting it |
 | 6 📋 Process layer | 4 task-board-setup | its board and `task-tracker` agent are what `manager-setup`'s hard wall and the TSK-graph instructions point at |
-| 7 📚 Final docs sync | 9 memory-sync, then 10 docsync | memory-sync snapshots the FINISHED config — run in stage 1 it would freeze an empty project as the baseline; docsync then tracks drift against docs that already exist |
+| 7 📚 Final docs sync | 9 memory-sync, then 10 docsync | memory-sync snapshots the FINISHED config (in stage 1 it would freeze an empty project as the baseline); docsync then tracks drift against docs that already exist |
 
 Within a stage: `partial` (broken install) before `stale` and `modified` before `missing`.
 `disabled`, `current` and `n/a` rows never appear in the run-list: a switched-off mechanism is a
 choice, not a defect. Mention a `disabled` row once, below the list, with its `enable` command and
-the stage it would occupy. Number rows continuously across stages, never restarting per stage, and
-keep every line copy-pasteable on its own. Print the closing paragraph every time, even for one
-entry: it is the one place the user sees why commands are handed back instead of run.
+the stage it would occupy. Number rows continuously across stages and keep every line
+copy-pasteable on its own. Print the closing paragraph every time, even for one entry: it is the
+one place the user sees why commands are handed back instead of run.
 
 ```
 Run in this order, ONE PER SESSION:
@@ -961,8 +966,8 @@ Run in this order, ONE PER SESSION:
     command, one row at a time.
 ```
 
-The sample lists every stage for illustration; a real run prints only the rows that need a command
-(not `current`, `disabled` or `n/a`), each under its own stage header.
+The sample lists every stage; a real run prints only rows that need a command, each under its stage
+header.
 
 ### The one offer — task-graph tools
 
@@ -970,12 +975,13 @@ Below the run-list, print Phase 1c's verdict as one line, always:
 
 ```
 Task tools: on (global <GLOBAL>/settings.json)      <- verdict `on`
+Task tools: OFF (local <ROOT>/.claude/settings.local.json sets "0")      <- verdict `off (<layer>)`
 Task tools: OFF — TaskCreate/TaskUpdate/TaskList/TaskGet and TodoWrite are not available on this
             model. CLAUDE_CODE_ENABLE_TODO_TOOLS is unset in the session env and all three settings layers.
 ```
 
-Only when the verdict is `off` and Phase 1c said the gate applies, ask exactly one
-`AskUserQuestion` — header `Task tools`, three options in this order:
+Only when the verdict is a bare `off` and Phase 1c said the gate applies or is assumed, ask exactly
+one `AskUserQuestion` — header `Task tools`, three options in this order:
 
 | Option | Effect |
 |--------|--------|
@@ -984,12 +990,13 @@ Only when the verdict is `off` and Phase 1c said the gate applies, ask exactly o
 | `Leave off` | report only, change nothing: print the manual line and stop |
 
 On `Global` or `This project only` run the merge with `node` via Bash, never `Write`/`Edit`: the
-config dir is a sensitive path for the editing tools, and the block read-merges where a whole-file
+config dir is a protected path for the editing tools, and the block read-merges where a whole-file
 write would overwrite. Pass `global` or `project` as the single argument:
 
 **EXECUTE** using Bash tool:
 
 ```bash
+cd "${CLAUDE_PROJECT_DIR}" || exit 1
 node --input-type=module -e '
 import fs from "node:fs";
 import os from "node:os";
@@ -1000,10 +1007,23 @@ const file = scope === "global"
   ? path.join(G, "settings.json")
   : path.join(process.cwd(), ".claude", "settings.json");
 fs.mkdirSync(path.dirname(file), { recursive: true });
+function lock(f) {
+  const l = `${f}.lock`, w = new Int32Array(new SharedArrayBuffer(4));
+  for (let i = 0; i < 100; i++) {
+    try { fs.mkdirSync(l); return () => { try { fs.rmdirSync(l); } catch {} }; }
+    catch (e) {
+      if (e.code !== "EEXIST") throw e;
+      try { if (Date.now() - fs.statSync(l).mtimeMs > 30000) fs.rmdirSync(l); } catch {}
+      Atomics.wait(w, 0, 0, 100);
+    }
+  }
+  console.error(`ABORT ${l} is held by another installer; nothing was written`); process.exit(1);
+}
+process.on("exit", lock(file));
 let cfg = {};
 if (fs.existsSync(file)) {
-  try { cfg = JSON.parse(fs.readFileSync(file, "utf8")) || {}; }
-  catch { console.error(`REFUSED ${file} is not valid JSON — fix it by hand`); process.exit(1); }
+  try { cfg = JSON.parse(fs.readFileSync(file, "utf8")) || {}; } catch { cfg = null; }
+  if (!cfg || typeof cfg !== "object" || Array.isArray(cfg)) { console.error(`REFUSED ${file} is not a JSON object — fix it by hand`); process.exit(1); }
 }
 cfg.env = { ...(cfg.env || {}), CLAUDE_CODE_ENABLE_TODO_TOOLS: "1" };
 const tmp = `${file}.tmp-${process.pid}`;
@@ -1013,9 +1033,11 @@ console.log(`WROTE ${file} env.CLAUDE_CODE_ENABLE_TODO_TOOLS=1`);
 ' global && echo "✅" || echo "❌ FAILED"
 ```
 
-Every other key in the file survives: the merge parses, adds one key under `env`, and renames a
-temp file over the original, so a crash mid-write leaves the old file intact. An unparsable
-settings file is refused, never rewritten: say so and hand the path back.
+Every other key survives: the merge parses, adds one key under `env`, and renames a temp file over
+the original, so a crash mid-write leaves the old file intact. It holds the `settings.json.lock` dir
+the other setup skills' merges take (`mkdir`; held 10 s -> abort with nothing written, older than
+30 s -> stale, broken) over the whole read-modify-write, so a concurrent setup merge is not erased.
+An unparsable settings file is refused, never rewritten: say so and hand the path back.
 
 Then report, in two lines and no more:
 
@@ -1044,15 +1066,15 @@ Print warnings above the table so they are not lost under it. Never edit the ros
 
 | Condition | Response |
 |-----------|----------|
-| User asks this skill to run a setup, "install everything", "fix them all", or for a `--fix` / auto flag | Refuse once, plainly: setups are interactive multi-agent generators and batching them degrades every one. Print the run-list. Offer no compromise mode: it does not exist by design. |
+| User asks this skill to run a setup, "install everything", "fix them all", or for a `--fix` / auto flag | Refuse once, plainly, with the reason from "Why it does not run the setups". Print the run-list. Offer no compromise mode: none exists. |
 | A sibling plugin is `ROOT=none` | Its rows are `n/a`, with `claude plugin install <p>@claude-brewcode` as the command. |
 | Running with `--plugin-dir` | brewcode's root is the checkout, and that is the plugin in use; sibling plugins still resolve from the cache. |
 | Project has no `.claude/` | Every row `missing`. Print the table and the install run-list. |
 | Two carriers on one row disagree | The first carrier is the headline (Phase 2a); mention the second value once. |
 | User asks "which of these should I install?" | Answer from the table only, and say when a row is legitimately skippable. |
 
-Maintaining the fences: tests run them under `bash -e -o pipefail`, the Bash tool runs them under
-zsh. Where no-match is normal, `x=$({ cmd || true; } | rest)` is mandatory (`grep -c` also needs
-`x=${x:-0}`), and a glob is expanded with `find`: zsh neither splits nor globs an unquoted variable.
+Maintaining the fences: tests run them under `bash -e -o pipefail`, the Bash tool under zsh. Where
+no-match is normal, `x=$({ cmd || true; } | rest)` is mandatory (`grep -c` also needs `x=${x:-0}`),
+and a glob is expanded with `find`: zsh neither splits nor globs an unquoted variable.
 
 </instructions>

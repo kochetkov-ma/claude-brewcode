@@ -55,8 +55,12 @@ Within a stage, partial installs come first, then stale and modified, then missi
 disabled and unavailable setups are left out. Run each command yourself, one per fresh session.
 
 Below the run-list the report says whether the task-graph tools (`CLAUDE_CODE_ENABLE_TODO_TOOLS`)
-are on. If they are off, it asks once whether to add that key to your global or project
-`settings.json`; `Leave off` changes nothing.
+are on. The highest settings layer that sets the key decides (local, then project, then global);
+the key is on only for `1`, `true`, `yes` or `on`. A higher layer's `"0"` reports
+`off (<layer>)` with no offer, because a lower-layer write would lose to it. When no layer sets
+the key and the session env does not turn it on, the report asks once whether to add it to your
+global or project `settings.json`; `Leave off` changes nothing. The merge holds
+`settings.json.lock` and aborts after 10 s if another setup holds it.
 
 ## Verdicts
 

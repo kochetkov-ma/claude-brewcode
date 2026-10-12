@@ -38,7 +38,7 @@ Default = artifacts **of this repository** only:
 | `skills` | `.claude/skills/*/SKILL.md` + `references/*.md`, `*/skills/*/SKILL.md` + `references/*.md` |
 
 `~/.claude/**` is **out of scope** unless the user explicitly names global. Disabled artifacts
-(`_name.md`, `_SKILL.md`) are skipped and listed as skipped.
+(`<name>.disabled` parking, legacy `_name.md` / `_SKILL.md` markers) are skipped and listed as skipped.
 
 For `session` / `commit` scope: narrow to artifacts whose subject was actually touched — an
 artifact nothing in the scope says anything about MUST NOT be edited.

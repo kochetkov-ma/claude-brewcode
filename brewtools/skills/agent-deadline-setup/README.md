@@ -1,5 +1,7 @@
 # Agent Deadline
 
+Docs: https://doc-claude.brewcode.app/brewtools/skills/agent-deadline-setup/
+
 Installer/configurator skill for two self-contained hooks that put a **soft wall-clock budget** on every subagent.
 
 Claude Code has no wall-clock timeout for subagents, and `maxTurns` stops a run at its turn cap with only a partial result. These hooks kill nothing:
@@ -16,15 +18,6 @@ Finalization set as advertised to the agent: `Read, Write, Edit, NotebookEdit, T
 - `AskUserQuestion` is denied on purpose: a subagent waiting on a human is unbounded wall-clock time, the exact failure this guard exists to stop.
 - Agent types in `readOnlyAgentTypes` (default `Explore`, `Plan`) are told to return what they have now instead of saving to a file; it is a config list, so an unlisted custom read-only agent is still told to save.
 
-## Hooks
-
-| File | Event | Behavior |
-|------|-------|----------|
-| `agent-deadline-guard.mjs` | PreToolUse (`.*` — runs on EVERY tool call, main session included) | tracks elapsed per `agent_id`, warns at 80%, denies past 100% |
-| `agent-deadline-cleanup.mjs` | SubagentStop | stamps the stop on the agent's state file (never deletes it), prunes old state |
-
-Opt-in: not registered in `brewtools/hooks/hooks.json` — installing the plugin does nothing until you run the skill.
-
 ## Usage
 
 ```
@@ -36,12 +29,21 @@ Opt-in: not registered in `brewtools/hooks/hooks.json` — installing the plugin
 /brewtools:agent-deadline-setup disable               # enabled:false, files stay
 /brewtools:agent-deadline-setup uninstall             # unwire, delete hook files + this scope's state, keep config
 /brewtools:agent-deadline-setup purge                 # uninstall + delete config
-/brewtools:agent-deadline-setup вычисти всё           # free-text intent works (RU+EN) -> purge
+/brewtools:agent-deadline-setup purge everything      # free-text intent works -> purge
 ```
 
 The skill always reports status first, states its plan before asking anything, then delegates the file work to the `brewcode:hook-creator` agent.
 
 Status resolves the project root from `CLAUDE_PROJECT_DIR`, then git toplevel, then an ancestor carrying `.git` or `.claude`. Wiring is effective only with exactly one full guard tuple (PreToolUse / `.*` / command / `node` / sole portable arg / timeout `5`) and exactly one full cleanup tuple (SubagentStop / no matcher / same handler / timeout `3`); duplicates and malformed settings or handlers are reported as non-effective.
+
+## Hooks
+
+| File | Event | Behavior |
+|------|-------|----------|
+| `agent-deadline-guard.mjs` | PreToolUse (`.*` — runs on EVERY tool call, main session included) | tracks elapsed per `agent_id`, warns at 80%, denies past 100% |
+| `agent-deadline-cleanup.mjs` | SubagentStop | stamps the stop on the agent's state file (never deletes it), prunes old state |
+
+Opt-in: not registered in `brewtools/hooks/hooks.json` — installing the plugin does nothing until you run the skill.
 
 ## Modes
 
@@ -104,7 +106,7 @@ Project config wins over global; a malformed project config is skipped and the g
 | `readOnlyAgentTypes` | optional, default `["Explore", "Plan"]` — agent types without `Write`/`Edit`. A list replaces the default; add it by hand, install does not write it |
 | `version` / `content_version` / `generated_by` / `last_updated` | provenance, written on every config write, inert at runtime; `status` judges freshness by `content_version`, never by `version` |
 
-Budget = `byAgentType[agent_type] ?? defaultMinutes`. Config values are read on every hook call, so a change takes effect immediately, no restart. Hook **wiring** changes (install/upgrade/uninstall/purge) need a new session.
+Budget = `byAgentType[agent_type] ?? defaultMinutes`. Config values are read on every hook call, so a change takes effect immediately, no restart. Hook **wiring** changes (install/upgrade/uninstall/purge) apply to the running session too: Claude Code watches settings files (`/hooks` confirms).
 
 ## Limits — read before trusting it
 

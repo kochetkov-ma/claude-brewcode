@@ -62,7 +62,7 @@ RESULT: <the merged report + chat summary>
 | 0 | Deterministically resolve ONE review MODE **and one DEPTH**; ANNOUNCE both (mode + depth + branch + concrete scope) before any review work — no interactive guessing | yes | yes |
 | 1 | Run the MECHANICAL GATES (build/lint/test) — execution output is `CONFIRMED-BY-EXECUTION`, the ONE verdict needing no adversarial pass | yes | yes |
 | 2 | The INTENT pass — spawn `intent-guard`: what was ASKED vs what was DELIVERED. The anti-drift check | yes | yes |
-| 3 | SELECT domain experts at RUNTIME from the live agent roster (`.claude/agents/*.md`) and route each changed-file group to its best-matching owner — a newly added agent is picked up automatically | **skipped** | yes |
+| 3 | SELECT domain experts at RUNTIME from the live agent roster (`.claude/agents/**/*.md`, subfolders included) and route each changed-file group to its best-matching owner — a newly added agent is picked up automatically | **skipped** | yes |
 | 4 | Check the focus ordering below: principle/architecture conformance -> correctness -> reuse -> pins -> style | **skipped** | yes |
 | 5 | Resolve the SANCTIONED SCOPE baseline (task + issue + recorded decisions); audit scope creep / blast radius / under-delivery — an unsanctioned touch is a first-class finding, not a nitpick | **skipped** | yes |
 | 6 | Run ONE targeted parallel fan-out — only the agents the changed files actually need | **skipped** | yes |
@@ -84,8 +84,6 @@ built-in `general-purpose`.
 ---
 
 ## Mode Detection (deterministic — run FIRST, then ANNOUNCE)
-
-**Arguments:** `$ARGUMENTS`
 
 Resolve EXACTLY ONE review `{MODE}` by the strict priority order below; the same rule applies on `master`/`main`
 and on feature branches.
@@ -136,28 +134,24 @@ FILES=$(CORPUS)
 
 # EXPLICIT commit (rule 2), parentless-safe (root commit OK):
 # FILES=$(git show --name-only --pretty="" "${TOK}" -- "${PATHSPEC[@]}")
+
 # EXPLICIT branch (rule 2) — diff the NAMED branch $TOK, never HEAD; prefer the remote ref:
-# FILES=$(git diff --name-only "origin/${MAIN}...${TOK}" -- "${PATHSPEC[@]}" 2>/dev/null \
-#         || git diff --name-only "${MAIN}...${TOK}" -- "${PATHSPEC[@]}")
+# FILES=$(git diff --name-only "origin/${MAIN}...${TOK}" -- "${PATHSPEC[@]}" 2>/dev/null || git diff --name-only "${MAIN}...${TOK}" -- "${PATHSPEC[@]}")
+
 # EXPLICIT folder / single file (rule 2): the corpus, filtered — never raw find (build-output junk).
 # FILES=$(CORPUS | grep "^${TOK%/}/")                                   # single file: FILES="$TOK"
 
 # UNCOMMITTED (rule 3a): staged + unstaged + UNTRACKED-not-ignored (porcelain counts ?? files, so the scope must too)
 # FILES=$( { git diff --name-only HEAD -- "${PATHSPEC[@]}"; git ls-files --others --exclude-standard -- "${PATHSPEC[@]}"; } | sort -u )
+
 # Dirty tree but FILES empty (only ignored/out-of-scope files) -> fall through to LAST_COMMITS (rule 3b).
 
-# LAST_COMMITS (rule 3b): nested fallback so a single-commit repo never errors
-# if HEAD~2 exists -> HEAD~2..HEAD ; elif HEAD~1 exists -> HEAD~1..HEAD ; else the single root commit
-# if git rev-parse --verify -q HEAD~2 >/dev/null; then
-#   FILES=$(git diff --name-only "HEAD~2..HEAD" -- "${PATHSPEC[@]}")
-# elif git rev-parse --verify -q HEAD~1 >/dev/null; then
-#   FILES=$(git diff --name-only "HEAD~1..HEAD" -- "${PATHSPEC[@]}")
-# else
-#   FILES=$(git show --name-only --pretty="" HEAD -- "${PATHSPEC[@]}")   # root commit
-# fi
+# LAST_COMMITS (rule 3b), nested fallback so a single-commit repo never errors: HEAD~2..HEAD, else HEAD~1..HEAD, else root commit
+# if git rev-parse --verify -q HEAD~2 >/dev/null; then FILES=$(git diff --name-only "HEAD~2..HEAD" -- "${PATHSPEC[@]}"); elif git rev-parse --verify -q HEAD~1 >/dev/null; then FILES=$(git diff --name-only "HEAD~1..HEAD" -- "${PATHSPEC[@]}"); else FILES=$(git show --name-only --pretty="" HEAD -- "${PATHSPEC[@]}"); fi
 
-# RANGE = the commit range of the chosen mode. EXPORT it — references/scope.md step e reads commit intent from it
-# and reports "not read" rather than guessing when it is unset. FULL_PROJECT / UNCOMMITTED have no range: leave empty.
+# RANGE = commit range of the mode, EXPORTED: references/scope.md step e reads commit intent from it ("not read" if unset).
+# FULL_PROJECT / UNCOMMITTED have no range: leave empty.
+
 # export RANGE="HEAD~2..HEAD" | "$TOK^!" | "origin/${MAIN}...${TOK}" | ""
 
 # EXACT count for the mandatory announcement (count, never the displayed list, is truncated):
@@ -920,10 +914,5 @@ superreview does NOT run /simplify or any skill and does NOT edit code — these
 - `references/report-template.md` — merged-report layout (Phase 4).
 - `.claude/agents/intent-guard.md` — the intent pass's whole procedure, budget, drift classes and output shape.
 
-<!--
-SKILL NOTES — regenerate with /brewcode:superreview-setup on a structural change — new stack, new service group / PATHSPEC,
-rules or CLAUDE.md invariants rewritten, DEGRADED groups needing new experts, and a NEW or RENAMED agent in
-.claude/agents/ (the routing table refreshes itself only on an EXTENDED run — a QUICK-only user never gets it).
-`generate.sh upgrade` refreshes an installation without losing Phase 4b edits. .claude/agents/intent-guard.md
-sections 3-4 stay yours: the generator REUSES an existing one and never overwrites it.
--->
+<!-- SKILL NOTES: re-run /brewcode:superreview-setup on new stack, service group / PATHSPEC, rewritten rules or CLAUDE.md invariants, DEGRADED groups, NEW or RENAMED agent in .claude/agents/ (routing refreshes only on EXTENDED runs).
+`generate.sh upgrade` keeps Phase 4b edits; .claude/agents/intent-guard.md sections 3-4 stay yours (REUSED, never overwritten). -->

@@ -1,11 +1,11 @@
-<!-- brewcode-meta: version=6.4.0 content_version=6.2.0 generated_by=brewtools:agent-router-setup -->
+<!-- brewcode-meta: version=6.5.0 content_version=6.5.0 generated_by=brewtools:agent-router-setup -->
 # agent-router hook — install / configure / remove runbook
 
 Self-contained hook asset. The `/brewtools:agent-router-setup` skill copies it into the
 project hooks dir and wires `settings.json`. Opt-in and EXPERIMENTAL: NOT registered
 in `brewtools/hooks/hooks.json`, installing the plugin does nothing on its own.
 
-**Project scope only.** The agent roster (`.claude/agents/*.md`) is inherently
+**Project scope only.** The agent roster (`.claude/agents/**/*.md`) is inherently
 per-project, so there is no global target here. Never write to `~/.claude/*` —
 harness-protected, and a global router would judge every repo against one repo's
 roster.
@@ -20,7 +20,7 @@ roster.
 
 ## What it does
 
-Tier 1 — always on, deterministic, single-digit ms, **zero tokens**. Decision order,
+Tier 1 — always on, deterministic, <100 ms incl. node startup, **zero tokens**. Decision order,
 allowing as early as possible:
 
 | # | Check | Result |
@@ -31,8 +31,8 @@ allowing as early as possible:
 | 4 | the picked type IS a project agent | allow |
 | 5 | the picked type is not listed in `genericTypes` — a specialist or built-in | allow. An OMITTED `subagent_type` is normalized to `general-purpose` first (the Agent-tool default) and policed like one; it escapes here only if `general-purpose` was removed from `genericTypes` |
 | 6 | `agent-router: override` (also `allow` / `skip`) in the description or prompt | allow, silently — the user's escape hatch, matched before any rule and on the UNTRUNCATED text |
-| 7 | STRONG intent rule — an authoring verb aimed at the artifact, not negated by `do not` / `never` / `how to` / `instead of` | deny, naming the expert: the first ranked project agent that scores AND **covers** the intent (its own frontmatter matches that rule's `domain` regex), else the plugin specialist — but only when that specialist is found on disk (a project agent, `<config dir>/agents/<name>.md`, or `<config dir>/plugins/cache/*/<plugin>/*/agents/<agent>.md`); an expert that cannot be found is a notice, never a deny. Coverage, not score: an agent that outranks everyone without covering the intent merely had its name in the prompt |
-| 8 | score the task against every `.claude/agents/*.md` frontmatter (`name` + `Triggers:`), each agent scored on the text with its OWN NAME struck out — kept only when the agent declares that name among its own `Triggers:` (a published keyword is earned evidence; a name quoted as a config value is not) | one clear winner (`minScore`, `margin` over the runner-up) -> deny naming it; several plausible -> `additionalContext` nudge with the top 3, NO deny; nothing -> silent allow. One ranking drives winner, margin and nudge list alike, so a quoted name can neither win nor pad the runner-up |
+| 7 | STRONG intent rule — an authoring verb aimed at the artifact, not negated by `do not` / `never` / `how to` / `instead of` | deny, naming the expert: the first ranked project agent that scores AND **covers** the intent (its own frontmatter matches that rule's `domain` regex), else the plugin specialist — but only when that specialist is found on disk (a project agent, a user agent named `<name>` under `<config dir>/agents/`, or `<config dir>/plugins/cache/*/<plugin>/*/agents/<agent>.md`); an expert that cannot be found is a notice, never a deny. Coverage, not score: an agent that outranks everyone without covering the intent merely had its name in the prompt |
+| 8 | score the task against every `.claude/agents/**/*.md` frontmatter (`name` + `Triggers:`), each agent scored on the text with its OWN NAME struck out — kept only when the agent declares that name among its own `Triggers:` (a published keyword is earned evidence; a name quoted as a config value is not) | one clear winner (`minScore`, `margin` over the runner-up) -> deny naming it; several plausible -> `additionalContext` nudge with the top 3, NO deny; nothing -> silent allow. One ranking drives winner, margin and nudge list alike, so a quoted name can neither win nor pad the runner-up |
 | 9 | WEAK intent signal — a bare artifact mention (`SKILL.md`, `.claude/agents/`, `hooks.json`, an event name, a shebang) | NEVER denies. If step 8 also nudged, the two are merged into ONE message naming both the specialist and the project candidates; otherwise it nudges alone |
 | 10 | anti-loop guard | a given (session, project, task) is denied at most ONCE (marker under `os.tmpdir()/brewtools-agent-router/p-<project>/`); the retry gets a nudge instead. `task` = the spawn's DESCRIPTION, or the prompt's first 300 normalized chars when there is none — so a retry that rewrites the prompt passes. Trade-off: two descriptionless tasks sharing a boilerplate prompt header share one marker, and the guard errs toward allowing |
 | 11 | any error | fail OPEN |
@@ -40,6 +40,14 @@ allowing as early as possible:
 Scanned text = the spawn's `description` (first 500 chars) + `prompt` (first 2000).
 Both are re-read from the roster on EVERY call; there is no cache, so editing an agent
 description takes effect on the very next spawn.
+
+**Roster = what Claude Code loads.** Every `.claude/agents/` from the root up to the git root
+(closest first; no `.git` above -> the root's own dir only), each walked recursively: symlinks
+followed, each real dir once, at most 6 subfolders deep and 500 `.md` files per dir, dot-dirs
+skipped. Identity = frontmatter `name`, never the path; a file Claude Code skips (no `name` or
+`description`, a `name` with `:`, a leading `-` or over 256 chars) never scores. User agents
+(`<config dir>/agents/`) resolve the same way; plugin agents by file name in the cache. Past a
+cap or in a dot-dir = not seen: fail open.
 
 **Where "the project" is.** The hook does NOT use `cwd` literally. It resolves the
 root in this fixed order: `CLAUDE_PROJECT_DIR` -> nearest ancestor of `cwd` holding
@@ -180,7 +188,8 @@ Add the key by hand only to change a route.
 
 Config values are read on every hook call, so `enabled`, `genericTypes`,
 `neverFlag`, `minScore`, `margin` and `intents` take effect immediately. Hook
-WIRING changes (install / level / uninstall / purge) need a new session.
+WIRING changes (install / level / uninstall / purge) apply to the running session too:
+Claude Code watches settings files (`/hooks` confirms).
 
 > A syntactically BROKEN config ABORTS every block below rather than being
 > overwritten blind, and makes the hook fail open (every spawn allowed) until it is
@@ -190,6 +199,7 @@ WIRING changes (install / level / uninstall / purge) need a new session.
 
 | Var | Set by | Meaning |
 |-----|--------|---------|
+| `CLAUDE_PROJECT_DIR` | skill (status `project_root`) | the session start dir, the value the hook gets; first rung of the block below. Not in the Bash tool env unless exported |
 | `ROOT` | the block below | absolute project root; every `.claude/...` path is built from it |
 | `RUNBOOK` | skill | absolute path to THIS file (source dir = its dirname) |
 | `LEVEL` | skill (user's answer) | `fast` or `strict`; REQUIRED for install/level — empty aborts |
@@ -243,9 +253,10 @@ if ROOT=$(claude_project_root); then export ROOT; echo "✅ ROOT=$ROOT"; else
 ```
 
 > **STOP if ❌** — an installer never writes into a guessed root. `CLAUDE_PROJECT_DIR`
-> is exported to hook child processes, not to this shell, so it is normally empty here;
-> on a first install the marker does not exist yet either, so the git toplevel does the
-> work, and on upgrade/uninstall the marker pins the root that already owns the router.
+> reaches hook child processes, not the Bash tool: the skill exports it from its status
+> `project_root`. Unset, a first install falls to the git toplevel (the wrong root for a
+> session started in a subdirectory: the hook resolves its portable arg against the start
+> dir), and on upgrade/uninstall the marker pins the root that already owns the router.
 
 Every write of the config also stamps the four mandatory JSON metadata keys —
 `version`, `content_version`, `generated_by`, `last_updated` (never `doc_type`: that
@@ -590,7 +601,7 @@ cannot) and a third entry, the heartbeat, appears. At `level fast` only the hook
 changes. Anti-loop markers written by the old hook are not migrated: one already-denied
 task per live session can be denied once more.
 
-> Wiring changed -> a NEW session is required.
+> Wiring changed -> applies to the running session (settings are watched); `/hooks` confirms.
 
 ---
 
@@ -603,7 +614,7 @@ and also refreshes the inlined judge prompt after a plugin update.
 
 Nothing is copied or deleted; the hook file stays put.
 
-> Wiring changed -> a NEW session is required before the level takes effect.
+> Wiring changed -> the level applies to the running session (settings are watched); `/hooks` confirms.
 
 ---
 
@@ -717,28 +728,33 @@ const hooksOf=e=>((e&&e.hooks)||[]);
 const argsOf=h=>Array.isArray(h&&h.args)?h.args.filter(a=>typeof a==="string"):[];
 const isT1=a=>a===MARK||a.endsWith("/"+MARK)||a.endsWith("\\"+MARK);
 const isOwn=h=>argsOf(h).some(isT1)||(h&&h.type==="agent"&&h.statusMessage===SM);
+let removed=0;
 if(s.hooks&&typeof s.hooks==="object"){
   for(const ev of Object.keys(s.hooks)){
     if(!Array.isArray(s.hooks[ev])) continue;
     s.hooks[ev]=s.hooks[ev].map(e=>{
       if(!e||typeof e!=="object"||!Array.isArray(e.hooks)) return e;
-      return {...e,hooks:e.hooks.filter(h=>!isOwn(h))};
+      const rest=e.hooks.filter(h=>!isOwn(h)); removed+=e.hooks.length-rest.length;
+      return {...e,hooks:rest};
     }).filter(e=>!e||typeof e!=="object"||!Array.isArray(e.hooks)||e.hooks.length>0);
     if(s.hooks[ev].length===0) delete s.hooks[ev];
   }
   if(Object.keys(s.hooks).length===0) delete s.hooks;
 }
+if(removed&&Object.keys(s).length===0){ fs.unlinkSync(f); console.log("OK removed "+f+" (agent-router was its only content)"); process.exit(0); }
 fs.writeFileSync(f,JSON.stringify(s,null,2)+"\n");
 const back=JSON.parse(fs.readFileSync(f,"utf8"));      // post-write verification
 const left=Object.values((back.hooks)||{}).flat().flatMap(hooksOf).filter(isOwn).length;
 if(left!==0){ console.error("ABORT: verification failed - "+left+" agent-router handlers still in "+f); process.exit(1); }
 console.log("OK cleaned "+f);
 ' && rm -f "$HOOKS_DIR/agent-router.mjs" && test ! -e "$HOOKS_DIR/agent-router.mjs" \
+  && { rmdir "$HOOKS_DIR" 2>/dev/null || true; } \
   && echo "✅ uninstalled from $HOOKS_DIR" || echo "❌ FAILED"
 ```
 
 > **STOP if ❌** — fix before continuing. Re-running is safe: it converges to "no own
-> entries, no hook file".
+> entries, no hook file". What install created goes when emptied: a `settings.json`
+> left as `{}` is deleted, an empty hooks dir removed.
 
 ## PURGE  (uninstall + config + this project's tmp state)
 
@@ -751,6 +767,7 @@ CFG="$ROOT/.claude/brewtools/agent-router.json"
 rm -f "$CFG" && test ! -e "$CFG" && echo "✅ removed $CFG" || echo "❌ FAILED"
 rmdir "$ROOT/.claude/brewtools" 2>/dev/null || true
 node "$(dirname "$RUNBOOK")/agent-router.mjs" --purge-state "$ROOT" && echo "✅ state" || echo "❌ FAILED"
+rmdir "$ROOT/.claude" 2>/dev/null || true   # a .claude/ the purge left empty
 ```
 
 > **STOP if ❌** — fix before continuing.
@@ -817,7 +834,7 @@ project's sessions of the last ~24 h.
 Full behavioral coverage lives in the skill's `tests/run.sh`.
 
 > After install / level / uninstall / purge, `/reload-plugins` is NOT needed (plain
-> settings.json hooks, not plugin hooks), but Claude Code loads hook config at
-> session start — a NEW session is required for wiring changes. Config-VALUE changes
+> settings.json hooks, not plugin hooks): Claude Code watches settings files and
+> applies wiring changes to the running session; `/hooks` confirms. Config-VALUE changes
 > (`enabled`, `genericTypes`, `neverFlag`, `minScore`, `margin`, `intents`) are read
 > live and need no restart.

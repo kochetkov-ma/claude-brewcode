@@ -1,25 +1,8 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.4.0 content_version=6.4.0 generated_by=brewcode:semble-setup
-/**
- * brewcode:semble-setup — SubagentStart hook (self-contained, installed into a project).
- *
- * Registered with NO matcher, so it covers EVERY agent type. `matchQuery` for
- * SubagentStart is the AGENT TYPE, not a tool name; an entry without a matcher
- * key matches all of them (verified live on CC 2.1.226 — a matcher-less
- * SubagentStart entry fired for agent_type "Explore"). Its predecessor,
- * semble-explore.mjs, was pinned to "Explore" alone and is retired for good.
- *
- * A spawned subagent inherits none of the parent's context: it has never seen
- * the semble rule, the session hook's line, or any earlier nudge. So this fires
- * on every spawn with no throttle and no counter — there is nothing to
- * de-duplicate against.
- *
- * ADVISORY ONLY: one `additionalContext` line, never a decision of any kind.
- * Never spawns a process, always prints exactly one JSON object, always exits 0.
- *
- * Pure ESM, Node built-ins only. readStdin/output are inlined on purpose: this
- * file travels alone into a user's .claude/hooks/ and must have no imports.
- */
+// brewcode-meta: version=6.5.0 content_version=6.5.0 generated_by=brewcode:semble-setup
+
+// SubagentStart, NO matcher = every agent type (predecessor semble-explore.mjs, was pinned to "Explore").
+// ADVISORY: one additionalContext line per spawn, no throttle; never spawns; one JSON object, exit 0; no imports.
 import { appendFileSync, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
@@ -54,11 +37,7 @@ const TELEMETRY_SRC = 'subagent';
 const TELEMETRY_MAX_BYTES = 2_000_000;
 const TELEMETRY_KEEP_LINES = 1000;
 
-/**
- * Appends one JSONL record to .claude/semble/telemetry.jsonl. Single
- * appendFileSync, never read-modify-write. Every failure is swallowed: a hook
- * that cannot measure itself must still behave exactly as if it had.
- */
+// One JSONL record -> .claude/semble/telemetry.jsonl via a single appendFileSync; every failure swallowed.
 function telemetry(cwd, sid, ev, extra) {
   try {
     const file = join(cwd, '.claude', 'semble', 'telemetry.jsonl');
@@ -85,8 +64,7 @@ function telemetry(cwd, sid, ev, extra) {
 // ---------------------------------------------------------------------------
 
 // --- MCP presence + search routing (identical in every steering semble hook) ---
-// No hook input reports MCP registration: read <CLAUDE_CONFIG_DIR or home>/.claude.json
-// (user + local scope), then <root>/.mcp.json (project scope). Never throws.
+// No hook input reports MCP: read <CLAUDE_CONFIG_DIR|home>/.claude.json (user+local), then <root>/.mcp.json; never throws.
 const MCP_NAME = 'semble_code';
 const ROUTE = 'Search routing: intent/behaviour -> semble; symbol definitions/references -> LSP; literals/paths/regex/counts -> rg.';
 
@@ -147,7 +125,7 @@ function readState(cwd) {
   }
 }
 
-/** Identical usability gate to the reminder hook — see its comment for why phase !== 'ready' still fires. */
+/** Usability gate; fires before `ready` too: semble builds its index inside the first call. */
 function gate(read, root) {
   if (read.kind === 'missing') return { ok: false, why: 'no-state', phase: '', enabled: false };
   if (read.kind !== 'ok') return { ok: false, why: 'corrupt', phase: '', enabled: false };
@@ -221,11 +199,8 @@ function agentHasSemble(agentType, root) {
   }
 }
 
-/**
- * Self-sufficient by design: the subagent cannot look anything up in the
- * parent's context, so the line has to carry availability, the exact call and
- * the routing on its own. "No ToolSearch needed" holds only for `alwaysLoad: true`.
- */
+// Self-sufficient: the subagent sees no parent context, so the line carries availability, call and routing.
+// "No ToolSearch needed" holds only for `alwaysLoad: true`.
 function message(cwd, loaded) {
   return (
     'semble: mcp__semble_code__search is ' +
@@ -241,9 +216,7 @@ function decide(input, cwd) {
   // agent_id is the join key: the spawned subagent's own transcript is named
   // after it, which is what makes "was this line actually delivered" auditable.
   const agentId = typeof input.agent_id === 'string' ? input.agent_id : '';
-  // A real SubagentStart payload always names the agent type. Its absence means
-  // malformed or empty stdin, and a hook that cannot tell what it is talking to
-  // says nothing — and writes nothing, since `cwd` is a guess at that point.
+  // No agent type = malformed/empty stdin: say nothing, write nothing (`cwd` is a guess then).
   if (!agentType) return {};
   const g = gate(readState(cwd), cwd);
   const record = (fired, why) =>
@@ -276,16 +249,8 @@ function decide(input, cwd) {
   };
 }
 
-// --- project root (canonical recipe, D1 Q5) --------------------------------
-// CLAUDE_PROJECT_DIR -> this file's own installed location -> upward walk for a
-// root marker -> hook cwd. Never throws, never exits nonzero.
-// `input.cwd` is the cwd at invocation time and drifts mid-session
-// (docs/hooks.md:717, CwdChanged), so it must key nothing but relative paths out
-// of tool_input: from a nested package it pointed every state lookup at a
-// directory with no .claude/semble, and all three gated hooks fell silent.
-// SELF_ROOT is exact rather than a guess — the installer wires this file at
-// <root>/.claude/hooks/<name>.mjs by absolute path, so its own location encodes
-// the root even when a nested package carries its own .claude.
+// --- project root: CLAUDE_PROJECT_DIR -> own <root>/.claude/hooks/ location -> upward walk -> hook cwd ---
+// Never throws; `input.cwd` drifts mid-session (CwdChanged) -> keys only tool_input relative paths.
 const SELF_ROOT = (() => {
   const d = dirname(fileURLToPath(import.meta.url));
   return basename(d) === 'hooks' && basename(dirname(d)) === '.claude' ? dirname(dirname(d)) : '';

@@ -124,3 +124,12 @@ test('setup-status reads current convention stamps and parked loading guidance f
   assert.match(result.stdout, /ROWS 7\/7 for brewcode \(23 carrier lines over 11 roster rows\)/, 'dashboard carrier counts include the new setup');
   assert.equal(result.stdout.match(/^CURRENT.*\.claude\/(?:rules\/convention\.md|convention\/)/gm)?.length, 4, 'parked loading rule and all three documents read current');
 });
+
+test('purge is marked destructive in the mode table so a keyword tie asks first', () => {
+  // GIVEN the shipped SKILL.md.
+  const skill = readFileSync(fileURLToPath(new URL('../SKILL.md', import.meta.url)), 'utf8');
+  // WHEN the purge mode row is read.
+  const rows = skill.split('\n').filter((line) => line.startsWith('| `purge` |'));
+  // THEN its Mutates? column is the destructive marker the prompt-contract tie-break keys on.
+  assert.deepEqual(rows.map((line) => line.split('|').at(-2).trim()), ['yes, destructive'], 'purge row Mutates? = yes, destructive');
+});

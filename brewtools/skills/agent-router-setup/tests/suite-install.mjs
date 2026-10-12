@@ -254,6 +254,38 @@ try {
     { config: false, state: [stateDirName(other)] },
     'router purge must remove only this project config and state dir',
   );
+
+  // GIVEN: a git repo whose session started in a subdirectory; the skill text is substituted
+  // at load, so the braced CLAUDE_PROJECT_DIR token carries that start dir into the fence.
+  const repo = join(base, 'git-repo');
+  const startDir = join(repo, 'sub');
+  mkdirSync(join(startDir, '.claude'), { recursive: true });
+  assert.equal(spawnSync('git', ['init', '-q', repo]).status, 0, 'fixture git init must succeed');
+  const loaded = statusBlock.replaceAll('${CLAUDE_PROJECT_DIR}', realpathSync(startDir));
+
+  // WHEN: status runs as loaded, and as raw text with the variable absent from the Bash env.
+  const loadedStatus = spawnSync('bash', ['-c', loaded], { cwd: startDir, encoding: 'utf8', env: statusEnv, timeout: 30000 });
+  const rawStatus = spawnSync('bash', ['-c', statusBlock], { cwd: startDir, encoding: 'utf8', env: statusEnv, timeout: 30000 });
+
+  // THEN: the substituted start dir wins over the git toplevel; unsubstituted, the toplevel is the fallback.
+  assert.equal(loadedStatus.status, 0, `loaded status must exit successfully: ${loadedStatus.stderr}`);
+  assert.equal(loadedStatus.stdout.includes(`project_root=${realpathSync(startDir)} root_resolved=yes`), true, 'substituted CLAUDE_PROJECT_DIR must be the project root, as the hook sees it');
+  assert.equal(rawStatus.stdout.includes(`project_root=${realpathSync(repo)} root_resolved=yes`), true, 'without substitution the git toplevel is the fallback root');
+
+  // GIVEN: a project with no .claude/ at all before install.
+  const fresh = join(base, 'fresh-project');
+  mkdirSync(fresh, { recursive: true });
+  const runbookText = readFileSync(RUNBOOK, 'utf8');
+  const freshEnv = { ...stateEnv, ROOT: fresh, RUNBOOK, LEVEL: 'fast', PLUGIN_VERSION: '1.0.0' };
+  const steps = ['**EXECUTE** copy (Bash tool', '**EXECUTE** config write', '**EXECUTE** merge settings.',
+    '## UNINSTALL  (settings entries + hook file; config and markers kept)', "## PURGE  (uninstall + config + this project's tmp state)"];
+
+  // WHEN: install, uninstall and purge run in runbook order.
+  const results = steps.map(marker => [marker, spawnSync('bash', ['-c', fencedBlockAfter(runbookText, marker)], { encoding: 'utf8', env: freshEnv, timeout: 30000 })]);
+
+  // THEN: every block succeeds and nothing install created is left behind.
+  assert.deepEqual(results.map(([marker, r]) => [marker, r.status, r.stdout.includes('❌')]), steps.map(marker => [marker, 0, false]), 'every lifecycle block must succeed');
+  assert.equal(existsSync(join(fresh, '.claude')), false, 'uninstall + purge must leave no .claude/ in a project that had none');
 } finally {
   rmSync(base, { recursive: true, force: true });
 }

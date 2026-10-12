@@ -1,18 +1,6 @@
 #!/usr/bin/env node
-/**
- * E2E suite for the agent-return hook pair (contract + guard).
- * Each case drives a hook as a REAL child process (JSON on stdin -> JSON on
- * stdout) and asserts exit code, empty stderr and exact stdout.
- *
- * Isolation: every workspace lives under os.tmpdir() with its own HOME, and the
- * child runs with cwd inside it. The real ~/.claude and the repo's .claude/ are
- * never read as config and never written. AGENT_RETURN_*, CLAUDE_PROJECT_DIR and
- * CLAUDE_CONFIG_DIR are scrubbed from the inherited env so an operator's shell
- * cannot change a result.
- *
- * Assertion policy: unconditional exact-equality comparisons with a description;
- * no branching decides which asserts run.
- */
+// E2E for agent-return hook pair (contract + guard): each case = REAL child (JSON stdin -> JSON stdout), exit/stderr/stdout exact.
+// Isolated: tmpdir workspace + own HOME; real ~/.claude, repo .claude/ untouched; AGENT_RETURN_*, CLAUDE_PROJECT_DIR, CLAUDE_CONFIG_DIR scrubbed.
 import { spawnSync } from 'node:child_process';
 import {
   mkdtempSync, mkdirSync, writeFileSync, rmSync, realpathSync, existsSync, readFileSync,
@@ -87,10 +75,7 @@ function safeParse(str) {
   }
 }
 
-/**
- * One case = one child process. Exit code and stderr are asserted here so no
- * case can forget them; `assert` owns the stdout comparison.
- */
+// One case = one child; exit code + stderr asserted here, `assert` owns stdout.
 function runCase(group, name, script, opts, assert) {
   const before = failed;
   const r = run(script, opts.stdin === undefined ? '' : opts.stdin, opts.env, opts.cwd);
@@ -156,15 +141,8 @@ function readMarker(claudeDir, agentId) {
     : '"NO MARKER"');
 }
 
-/**
- * An ENABLED config, optional threshold overrides merged in.
- *
- * Only ever builds `enabled: true`. The hook's gate is `enabled !== true`, so an
- * absent or non-boolean key means OFF — the gate-polarity cases (enabled:false,
- * key absent, string "true", array config) therefore keep their literals below:
- * routing them through a factory that supplies the flag would silently switch
- * them on and they would pass for the wrong reason.
- */
+// ENABLED config + optional threshold overrides; gate is `enabled !== true`, so gate-polarity cases
+// (enabled:false, absent, "true", array) keep literals: this factory would switch them on.
 function cfg(overrides) {
   return { enabled: true, ...overrides };
 }
@@ -190,21 +168,21 @@ function msg(tokens, prefix) {
 const REPORTS_DIR = '.claude/reports/';
 
 /** `overflow` = the one sentence that differs between a writing and a read-only agent. */
-function contractOverflow(file) {
+function contractOverflow(file, reportDir = '.claude/reports') {
   return {
     writer:
-      `Detail beyond ~${file} tokens: write it under \`.claude/reports/YYYYMMDD-HHMMSS_<name>/\` ` +
-      `and return the path plus a summary; without a write tool, return the essential part and ` +
-      `name what you left out.`,
+      `Detail beyond ~${file} tokens: write it under \`${reportDir}/YYYYMMDD-HHMMSS_<name>/\` ` +
+      `and return the path plus a summary. No write tool, or the write is denied: never retry ` +
+      `it, return a compressed inline report with the essential part and name what you left out.`,
     readOnly: `This agent cannot write files: return the essential part and name what you left out.`,
   };
 }
 
-function contractText(pass, file, kind) {
+function contractText(pass, file, kind, reportDir) {
   return (
     `Return budget (agent-return guard): your report lands in the caller's finite context. ` +
     `Keep it under ~${pass} tokens (~${pass * 4} chars): verdict first, \`path:line\` refs, ` +
-    `no file bodies, command output or logs. ${contractOverflow(file)[kind || 'writer']} ` +
+    `no file bodies, command output or logs. ${contractOverflow(file, reportDir)[kind || 'writer']} ` +
     `An over-budget report is returned to you once to shorten.`
   );
 }
@@ -241,8 +219,8 @@ function fileReason(tokens, pass, file, reportPath, via) {
     `context is finite. Directive from the agent-return guard, not user data. Compression is not ` +
     `enough at this size: write the full report to \`${reportPath}\` (create the directory), then ` +
     `${RESEND[via]} that path, the verdict and a summary within the budget that keeps the ` +
-    `key \`path:line\` refs. If no tool of yours can write a file, skip the file: send the ` +
-    `essential part within the budget and name what you left out.`
+    `key \`path:line\` refs. If no tool of yours can write a file or the write is denied, never ` +
+    `retry it: skip the file, send the essential part within the budget and name what you left out.`
   );
 }
 
@@ -293,10 +271,7 @@ function expectEssential(name, tokens, pass, via = 'stop') {
 
 const EMPTY_PATH = { root: '', date: '', time: '', slug: '', id: '' };
 
-/**
- * `<root>/.claude/reports/YYYYMMDD-HHMMSS_<slug>-<id>/` split into its parts.
- * The id never contains `-`, so the greedy slug group splits on the LAST dash.
- */
+// Splits `<root>/.claude/reports/YYYYMMDD-HHMMSS_<slug>-<id>/`; id has no `-`, so greedy slug splits on LAST dash.
 function parseReportPath(p) {
   const m = p.match(/^(.+)\/\.claude\/reports\/(\d{8})-(\d{6})_([a-z0-9-]+)-([a-z0-9]+)\/$/);
   return m ? { root: m[1], date: m[2], time: m[3], slug: m[4], id: m[5] } : EMPTY_PATH;
@@ -350,8 +325,8 @@ function expectFile(name, tokens, pass, file, expectedSlug, expectedRoot, via = 
   return expectFileId(name, tokens, pass, file, expectedSlug, expectedRoot, AUTO_PATH_ID, via);
 }
 
-function expectContract(name, pass, file, kind = 'writer') {
-  const text = contractText(pass, file, kind);
+function expectContract(name, pass, file, kind = 'writer', reportDir = undefined) {
+  const text = contractText(pass, file, kind, reportDir);
   return (out) => {
     check(`${name}-out`, out,
       { hookSpecificOutput: { hookEventName: 'SubagentStart', additionalContext: text } },
@@ -364,13 +339,8 @@ function expectContract(name, pass, file, kind = 'writer') {
   };
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Group 1 — tier boundaries (9 cases)
-// GIVEN: the feature enabled with default thresholds 2500/6000
-// WHEN:  a return of exactly N est-tokens reaches the guard
-// THEN:  <=2500 pass, 2501..6000 compress, >6000 file. Both boundaries are
-//        inclusive on the low side.
-// ═════════════════════════════════════════════════════════════════════════════
+// ═══ Group 1 — tier boundaries (9 cases) ═══
+// GIVEN enabled, defaults 2500/6000 WHEN return of exactly N est-tokens THEN <=2500 pass, 2501..6000 compress, >6000 file
 {
   const ws = newWs('tier', cfg());
   const shot = (tokens) => ({
@@ -390,14 +360,8 @@ function expectContract(name, pass, file, kind = 'writer') {
   runCase('tier', 'tier-50000', GUARD_MJS, shot(50000), expectFile('tier-50000', 50000, 2500, 6000, 'general-purpose', ws.proj));
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Group 2 — escape hatches (12 cases)
-// GIVEN: the feature enabled with default thresholds
-// WHEN:  the loop brake, an unusable message, or a report-path mention arrives
-// THEN:  boolean true brakes; the STRING "true" does not; every non-string or
-//        blank message is a no-op; a report-path mention is NOT a bypass — the
-//        substring hatch was deleted upstream (SPEC §8a) and must stay deleted.
-// ═════════════════════════════════════════════════════════════════════════════
+// ═══ Group 2 — escape hatches (12 cases) ═══
+// GIVEN defaults WHEN brake/unusable message/report-path mention THEN true brakes, "true" not; non-string/blank no-op; path mention != bypass (SPEC §8a)
 {
   const ws = newWs('hatch', cfg());
   const shot = (payload) => ({ stdin: stopPayload(payload), env: ws.env, cwd: ws.proj });
@@ -444,12 +408,8 @@ function expectContract(name, pass, file, kind = 'writer') {
     expectFile('hatch-reports-file', 7000, 2500, 6000, 'general-purpose', ws.proj));
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Group 3 — fail-open (15 cases)
-// GIVEN: the feature enabled, so the guard actually runs its decision path
-// WHEN:  stdin is garbage, empty, a bare scalar, binary, huge or wrongly typed
-// THEN:  always {} on stdout, exit 0, never exit 2
-// ═════════════════════════════════════════════════════════════════════════════
+// ═══ Group 3 — fail-open (15 cases) ═══
+// GIVEN enabled WHEN stdin garbage/empty/scalar/binary/huge/mistyped THEN always {} on stdout, exit 0, never exit 2
 {
   const ws = newWs('failopen', cfg());
   const shot = (raw) => ({ stdin: raw, env: ws.env, cwd: ws.proj });
@@ -482,12 +442,8 @@ function expectContract(name, pass, file, kind = 'writer') {
   }
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Group 4 — valid env overrides (5 cases)
-// GIVEN: enabled config with no threshold keys, AGENT_RETURN_PASS=500 FILE=800
-// WHEN:  returns at 500/501/800/801 tokens arrive, and a subagent spawns
-// THEN:  the tiers move to 500/800 and the announced contract moves with them
-// ═════════════════════════════════════════════════════════════════════════════
+// ═══ Group 4 — valid env overrides (5 cases) ═══
+// GIVEN no threshold keys, AGENT_RETURN_PASS=500 FILE=800 WHEN 500/501/800/801 + spawn THEN tiers and contract move to 500/800
 {
   const ws = newWs('envok', cfg());
   const env = envFor(ws.home, { AGENT_RETURN_PASS: '500', AGENT_RETURN_FILE: '800' });
@@ -504,13 +460,8 @@ function expectContract(name, pass, file, kind = 'writer') {
   runCase('env-valid', 'envok-contract', CONTRACT_MJS, { stdin: '', env, cwd: ws.proj }, expectContract('envok-contract', 500, 800));
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Group 5 — invalid env overrides (44 cases = 11 values x 4 probes)
-// GIVEN: enabled config, both env vars set to the same rejected literal
-// WHEN:  the guard sizes 2500 / 2501 / 6001 tokens and a subagent spawns
-// THEN:  every probe behaves exactly as the built-in 2500/6000 defaults, and
-//        the announced contract falls back in lockstep with the enforced tiers
-// ═════════════════════════════════════════════════════════════════════════════
+// ═══ Group 5 — invalid env overrides (44 cases = 11 values x 4 probes) ═══
+// GIVEN both env vars = same rejected literal WHEN 2500/2501/6001 + spawn THEN built-in 2500/6000, contract in lockstep
 {
   const ws = newWs('envbad', cfg());
   const BAD = ['1.7', 'abc', '12abc', '-5', '0', '', '   ', '1e400', 'NaN', 'Infinity', '2500.0000001'];
@@ -534,13 +485,8 @@ function expectContract(name, pass, file, kind = 'writer') {
   }
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Group 6 — agent_type slug (16 cases)
-// GIVEN: enabled config, a file-tier return (6001 tokens)
-// WHEN:  agent_type is absent, unusable, punctuation, non-latin or overlong
-// THEN:  the report path segment is lowercase [a-z0-9-], truncated at 48, never
-//        leading/trailing dashes, and falls back to "agent"
-// ═════════════════════════════════════════════════════════════════════════════
+// ═══ Group 6 — agent_type slug (16 cases) ═══
+// GIVEN 6001-token return WHEN agent_type absent/unusable/punctuation/non-latin/overlong THEN [a-z0-9-], max 48, no leading/trailing dashes, fallback "agent"
 {
   const ws = newWs('slug', cfg());
   const body = msg(6001);
@@ -572,14 +518,8 @@ function expectContract(name, pass, file, kind = 'writer') {
   }
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Group 7 — SubagentStart contract (3 cases)
-// GIVEN: enabled config, default thresholds
-// WHEN:  the hook runs with no stdin, garbage stdin, or a real spawn payload of
-//        an agent type that is not on the read-only list
-// THEN:  identical schema and the identical general text — unreadable stdin
-//        degrades to it, never to silence
-// ═════════════════════════════════════════════════════════════════════════════
+// ═══ Group 7 — SubagentStart contract (3 cases) ═══
+// GIVEN defaults WHEN no/garbage stdin or real non-read-only spawn THEN identical schema + general text, never silence
 {
   const ws = newWs('start', cfg());
   runCase('subagent-start', 'start-no-stdin', CONTRACT_MJS, { stdin: '', env: ws.env, cwd: ws.proj },
@@ -596,15 +536,8 @@ function expectContract(name, pass, file, kind = 'writer') {
   }, expectContract('start-payload', 2500, 6000));
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Group 8 — config layer (16 cases) — this port's addition, no upstream twin
-// GIVEN: .claude/agent-return.json discovered from cwd upward (16 dirs), then
-//        the global ~/.claude copy
-// WHEN:  the config is absent, disabled, malformed, nested, or carries keys
-// THEN:  absent/invalid = feature OFF for BOTH hooks; enabled:true with keys
-//        moves the tiers; the config key beats the env var; a malformed project
-//        file is skipped so the global one takes over; project beats global
-// ═════════════════════════════════════════════════════════════════════════════
+// ═══ Group 8 — config layer (16 cases) — this port's addition, no upstream twin ═══
+// GIVEN .claude/agent-return.json up 16 dirs, then ~/.claude THEN absent/invalid = OFF both hooks; keys move tiers, beat env; malformed project skipped; project > global
 {
   // 8.1 no config anywhere -> both hooks no-op (disabled by default)
   const none = newWs('cfg-none');
@@ -722,16 +655,8 @@ function expectContract(name, pass, file, kind = 'writer') {
   }, expectCompress('cfg-global-only', 501, 500));
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Group 9 — announced == enforced (16 cases = 4 sources x 4 probes)
-// GIVEN: every threshold source — built-in default, env override, config keys,
-//        rejected env falling back
-// WHEN:  the SubagentStart contract is read and its two numbers are PARSED out,
-//        then fed back as the guard's probe points
-// THEN:  the parsed numbers equal the expected pair AND the guard enforces
-//        exactly them: announcedPass passes, +1 compresses quoting announcedPass,
-//        announcedFile+1 files quoting both. Structural, not eyeballed.
-// ═════════════════════════════════════════════════════════════════════════════
+// ═══ Group 9 — announced == enforced (16 cases = 4 sources x 4 probes) ═══
+// GIVEN default/env/config/rejected env WHEN contract numbers PARSED, fed as probes THEN equal expected; announcedPass passes, +1 compresses, announcedFile+1 files
 {
   const SOURCES = [
     { id: 'default', cfg: cfg(), extra: {}, pass: 2500, file: 6000 },
@@ -773,15 +698,8 @@ function expectContract(name, pass, file, kind = 'writer') {
   }
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Group 10 — report destination (BT-F23) (13 cases)
-// GIVEN: enabled config and a file-tier return
-// WHEN:  the hook runs from a nested cwd, with a payload cwd, with
-//        CLAUDE_PROJECT_DIR set, or with agent_id / session_id present
-// THEN:  the directive names <projectRoot>/.claude/reports/<stamp>_<slug>-<id>/
-//        — an absolute base that ignores cwd drift, plus a per-invocation id so
-//        two same-type agents stopping in the same second cannot collide
-// ═════════════════════════════════════════════════════════════════════════════
+// ═══ Group 10 — report destination (BT-F23) (13 cases) ═══
+// GIVEN file-tier WHEN nested/payload cwd, CLAUDE_PROJECT_DIR, agent_id/session_id THEN <projectRoot>/.claude/reports/<stamp>_<slug>-<id>/, per-call id, no collision
 {
   const ws = newWs('dest', cfg());
   const nested = join(ws.proj, 'a', 'b', 'c');
@@ -852,19 +770,37 @@ function expectContract(name, pass, file, kind = 'writer') {
     'stop_hook_active brakes before any path is built — the file tier blocks at most once'));
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Group 11 — config root (BT-N02) (6 cases)
-// GIVEN: three candidate configs, each with a UNIQUE passTokens, so the enforced
-//        number names exactly one file on disk:
-//          <root>/.claude/agent-return.json   500/800
-//          <away>/.claude/agent-return.json   700/1400
-//          <home>/.claude/agent-return.json  2000/9000
-// WHEN:  CLAUDE_PROJECT_DIR names the root while the hook runs elsewhere, or the
-//        hook runs 16 levels below the root
-// THEN:  the root file is the one read — by both hooks — and the guard's report
-//        base is that same root. A CLAUDE_PROJECT_DIR that does not exist is
-//        ignored, exactly as projectRoot() specifies.
-// ═════════════════════════════════════════════════════════════════════════════
+// ═══ Group 10b — configurable report dir `reportDir` (14 cases) ═══
+// GIVEN `reportDir` relative/absolute/`~/`/trailing slash/invalid THEN both hooks same base: under root, as is, under HOME; unusable -> `.claude/reports`
+{
+  const fileShot = (id) => stopPayload({ agent_id: id, agent_type: 'general-purpose', last_assistant_message: msg(6001) });
+  const dirOf = (out) => reportPathOf(out).replace(/\/\d{8}-\d{6}_general-purpose-[a-z0-9]+\/$/, '');
+  const absDir = join(BASE, 'rdir-abs-target');
+  const cases = [
+    ['rdir-relative', 'out/agent-reports', (ws) => join(ws.proj, 'out', 'agent-reports'), () => 'out/agent-reports'],
+    ['rdir-absolute', absDir, () => absDir, () => absDir],
+    ['rdir-home', '~/agent-reports', (ws) => join(ws.home, 'agent-reports'), (ws) => join(ws.home, 'agent-reports')],
+    ['rdir-trailing-slash', 'tmp/reports//', (ws) => join(ws.proj, 'tmp', 'reports'), () => 'tmp/reports'],
+    ['rdir-not-string', 42, (ws) => join(ws.proj, '.claude', 'reports'), () => '.claude/reports'],
+    ['rdir-blank', '   ', (ws) => join(ws.proj, '.claude', 'reports'), () => '.claude/reports'],
+    ['rdir-root-only', '/', (ws) => join(ws.proj, '.claude', 'reports'), () => '.claude/reports'],
+  ];
+  for (const [name, value, expectedBase, announced] of cases) {
+    const ws = newWs(name, cfg({ reportDir: value }));
+    const id = name.replace(/[^a-z]/g, '').slice(0, 8);
+    runCase('report-dir', `${name}-guard`, GUARD_MJS, { stdin: fileShot(id), env: ws.env, cwd: ws.proj }, (out) => {
+      check(`${name}-guard-base`, dirOf(out), expectedBase(ws),
+        `reportDir ${JSON.stringify(value)} must resolve the file-tier base`);
+      check(`${name}-guard-out`, out, DECISION.stop(fileReason(6001, 2500, 6000, reportPathOf(out), 'stop')),
+        'the file order wording is unchanged apart from the base');
+    });
+    runCase('report-dir', `${name}-contract`, CONTRACT_MJS, { stdin: '', env: ws.env, cwd: ws.proj },
+      expectContract(`${name}-contract`, 2500, 6000, 'writer', announced(ws)));
+  }
+}
+
+// ═══ Group 11 — config root (BT-N02) (6 cases): unique passTokens in <root>|<away>|<home>/.claude/agent-return.json = 500/800, 700/1400, 2000/9000 ═══
+// WHEN CLAUDE_PROJECT_DIR = root, hook elsewhere or 16 levels below THEN both hooks + report base use root; missing CLAUDE_PROJECT_DIR ignored
 {
   const root = newWs('cfgroot', cfg({ passTokens: 500, fileTokens: 800 }),
     cfg({ passTokens: 2000, fileTokens: 9000 }));
@@ -911,8 +847,7 @@ function expectContract(name, pass, file, kind = 'writer') {
 }
 
 // ── captured payloads ───────────────────────────────────────────────────────
-// Real hook inputs logged on CC 2.1.296 (probe run of 2026-10-12): key sets and
-// ids as captured; transcript paths dropped, cwd and the report text supplied.
+// Real CC 2.1.296 inputs (probe 2026-10-12): keys/ids as captured; transcript paths dropped, cwd + report text supplied.
 const CAPTURED = {
   // auto mode, the hand-back call of a general-purpose subagent
   handback: (cwd, message, extra) => JSON.stringify({
@@ -992,15 +927,8 @@ function markerName(agentId) {
   return `${createHash('sha256').update(agentId).digest('hex').slice(0, 32)}.json`;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Group 12 — auto path: deny the hand-back once (13 cases)
-// GIVEN: default thresholds and the captured PreToolUse SubagentHandback payload
-// WHEN:  the report in tool_input.message is under, over and far over budget,
-//        the same agent hands back again, or a look-alike event arrives
-// THEN:  the first over-budget hand-back is denied with the order that names
-//        SubagentHandback, the marker records it, and every later hand-back of
-//        that agent passes; other tools and PostToolUse are never touched
-// ═════════════════════════════════════════════════════════════════════════════
+// ═══ Group 12 — auto path: deny the hand-back once (13 cases) ═══
+// GIVEN captured SubagentHandback WHEN under/over/far over, again, look-alike THEN first over denied naming SubagentHandback, marked, later pass; others untouched
 {
   const ws = newWs('hb', cfg());
   const claude = join(ws.proj, '.claude');
@@ -1049,14 +977,8 @@ function markerName(agentId) {
     'the state directory ignores itself so a project git status stays clean'));
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Group 13 — classic path: block once per agent_id (5 cases)
-// GIVEN: default thresholds and the captured default-mode SubagentStop payload
-// WHEN:  the report is over budget, then the same agent stops again — with the
-//        harness brake set, and without it as after a SendMessage resume
-// THEN:  one block, recorded; both later stops pass. A fork in auto mode takes
-//        this path too: the guard never branches on permission_mode
-// ═════════════════════════════════════════════════════════════════════════════
+// ═══ Group 13 — classic path: block once per agent_id (5 cases) ═══
+// GIVEN captured SubagentStop WHEN over budget, stops again with/without brake THEN one block recorded, later pass; no branch on permission_mode
 {
   const ws = newWs('classic', cfg());
   const claude = join(ws.proj, '.claude');
@@ -1078,14 +1000,8 @@ function markerName(agentId) {
     expectCompress('cl-fork-auto', 2501, 2500, 'stop'));
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Group 14 — once across BOTH paths (6 cases)
-// GIVEN: default thresholds, one agent_id seen on both events
-// WHEN:  (a) its hand-back is denied, it then stops in plain text with the
-//            undelivered report, and hands back again;
-//        (b) its plain-text stop is blocked first, and it hands back afterwards
-// THEN:  exactly one challenge per agent, whichever path saw it first
-// ═════════════════════════════════════════════════════════════════════════════
+// ═══ Group 14 — once across BOTH paths (6 cases) ═══
+// GIVEN one agent_id on both events WHEN (a) hand-back denied, text stop, hand-back; (b) stop blocked, hand-back THEN one challenge per agent
 {
   const ws = newWs('cross', cfg());
   const claude = join(ws.proj, '.claude');
@@ -1114,15 +1030,8 @@ function markerName(agentId) {
     expectEmpty('x-b-handback-after', 'a hand-back after a stop block must not be denied'));
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Group 15 — agents that cannot write (22 cases)
-// GIVEN: default thresholds; the built-in read-only list, a custom list, an empty
-//        list and two malformed lists
-// WHEN:  a listed agent, a plan-mode agent and an unlisted agent exceed
-//        fileTokens on either path, and each is announced the contract
-// THEN:  a listed or plan-mode agent is never told to write a file; the list is
-//        an exact match on agent_type and a config array replaces the built-in
-// ═════════════════════════════════════════════════════════════════════════════
+// ═══ Group 15 — agents that cannot write (22 cases) ═══
+// GIVEN built-in/custom/empty/malformed read-only lists WHEN agents exceed fileTokens THEN listed/plan-mode never told to write; exact agent_type; config replaces built-in
 {
   const ws = newWs('ro', cfg());
   const fire = (stdin) => ({ stdin, env: ws.env, cwd: ws.proj });
@@ -1204,14 +1113,8 @@ function markerName(agentId) {
     expectFile('ro-mixed-number-type', 6001, 2500, 6000, 'agent', mixed.proj));
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Group 16 — payload without agent_id (8 cases)
-// GIVEN: default thresholds and a 50000-token report
-// WHEN:  the payload has no usable agent_id: the captured main session under
-//        `--agent`, an internal agent with an empty agent_type, a blank, null or
-//        numeric id, on either event
-// THEN:  never challenged, and no state is written
-// ═════════════════════════════════════════════════════════════════════════════
+// ═══ Group 16 — payload without agent_id (8 cases) ═══
+// GIVEN 50000-token report WHEN no usable agent_id (`--agent` main, empty agent_type, blank/null/numeric) THEN never challenged, no state written
 {
   const ws = newWs('noid', cfg());
   const fire = (stdin) => ({ stdin, env: ws.env, cwd: ws.proj });
@@ -1239,17 +1142,8 @@ function markerName(agentId) {
     ['NO DIRECTORY'], 'payloads without agent_id must leave no state behind'));
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Group 17 — CLAUDE_CONFIG_DIR (12 cases)
-// GIVEN: three global candidates, each with a UNIQUE passTokens:
-//          $CLAUDE_CONFIG_DIR/agent-return.json   600/900
-//          ~/.claude/agent-return.json           2000/9000
-//          <project>/.claude/agent-return.json    500/800   (one workspace only)
-// WHEN:  the variable is set, unset, blank, or names a dir without a config
-// THEN:  set -> that dir's config and state; unset/blank -> ~/.claude; a set
-//        dir without a config falls back to ~/.claude; a project config beats
-//        both; ~/.claude met on the upward climb never outranks the set dir
-// ═════════════════════════════════════════════════════════════════════════════
+// ═══ Group 17 — CLAUDE_CONFIG_DIR (12 cases): $CLAUDE_CONFIG_DIR 600/900, ~/.claude 2000/9000, <project> 500/800 ═══
+// THEN set -> its config/state; unset/blank or no config -> ~/.claude; project beats both; ~/.claude on upward climb never outranks set dir
 {
   const ws = newWs('ccd', undefined, cfg({ passTokens: 2000, fileTokens: 9000 }));
   const profile = join(BASE, 'ccd-profile');
@@ -1312,13 +1206,8 @@ function markerName(agentId) {
   }, expectEmpty('ccd-profile-disabled', 'a disabled config in $CLAUDE_CONFIG_DIR is not overridden by ~/.claude'));
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Group 18 — config written before the new keys existed (7 cases)
-// GIVEN: the exact config an older install wrote: 1000/2500, no readOnlyAgentTypes
-// WHEN:  both hooks run against it
-// THEN:  its thresholds are honoured as written and the built-in read-only list
-//        applies — an old config keeps working without an upgrade
-// ═════════════════════════════════════════════════════════════════════════════
+// ═══ Group 18 — config written before the new keys existed (7 cases) ═══
+// GIVEN older config 1000/2500, no readOnlyAgentTypes WHEN both hooks run THEN thresholds honoured, built-in read-only list applies
 {
   const OLD = '{"enabled":true,"passTokens":1000,"fileTokens":2500,"version":"6.1.4","content_version":"6.0.0",'
     + '"generated_by":"brewtools:agent-return-setup","last_updated":"2026-08-31"}';
@@ -1343,16 +1232,8 @@ function markerName(agentId) {
     expectContract('old-contract-explore', 1000, 2500, 'readOnly'));
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Group 19 — state edge cases (5 cases)
-// GIVEN: (a) the state path occupied by a regular file, so no marker can be
-//            written; (b) a state dir holding a 25-hour-old marker, a fresh
-//            marker and a 25-hour-old foreign file
-// WHEN:  an over-budget report arrives on each path / a new agent is challenged
-// THEN:  (a) the hand-back is NOT denied (an unrecorded deny could repeat), the
-//            classic path still blocks behind stop_hook_active; (b) only the
-//            stale marker is pruned
-// ═════════════════════════════════════════════════════════════════════════════
+// ═══ Group 19 — state edge cases (5 cases) ═══
+// GIVEN (a) state path is a file; (b) 25h marker, fresh marker, 25h foreign file THEN (a) hand-back NOT denied, classic blocks behind stop_hook_active; (b) stale marker pruned
 {
   const blocked = newWs('st-blocked', cfg());
   const occupied = join(blocked.proj, '.claude', 'agent-return-state');
@@ -1383,15 +1264,8 @@ function markerName(agentId) {
     'a claim prunes markers older than 24 h and nothing else'));
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Group 20 — runbook lifecycle: the INSTALL.md blocks, executed (13 cases)
-// GIVEN: a project whose settings.json already holds a foreign PreToolUse hook
-// WHEN:  the runbook's own copy / config / merge / uninstall / purge / upgrade
-//        blocks run as written, with the documented parameters exported
-// THEN:  three registrations (one with matcher SubagentHandback), the installed
-//        guard works, a re-merge is byte-identical, and uninstall + purge leave
-//        only what was there before
-// ═════════════════════════════════════════════════════════════════════════════
+// ═══ Group 20 — runbook lifecycle: the INSTALL.md blocks, executed (18 cases) ═══
+// GIVEN foreign PreToolUse hook WHEN copy/config/merge/uninstall/purge/upgrade blocks run THEN 3 registrations (1 SubagentHandback), re-merge identical, purge restores
 {
   const runbook = readFileSync(RUNBOOK, 'utf8');
   const blockAfter = (marker) => {
@@ -1479,13 +1353,49 @@ function markerName(agentId) {
       removed.status, jsonFile(settingsPath), listing(hooksDir),
       listing(join(claude, 'agent-return-state')), existsSync(configPath),
     ], [
-      0, { env: { KEEP: 'yes' }, hooks: { PreToolUse: [foreign] } }, [], ['NO DIRECTORY'], true,
-    ], `uninstall drops all three registrations, the files and the state; the config stays (${removed.stderr})`);
+      0, { env: { KEEP: 'yes' }, hooks: { PreToolUse: [foreign] } }, ['NO DIRECTORY'], ['NO DIRECTORY'], true,
+    ], `uninstall drops all three registrations, the files, the emptied hooks dir and the state; the config stays (${removed.stderr})`);
   });
   plainCase('runbook', () => {
     const purged = bash(BLOCK.purge);
-    check('rb-purge', [purged.status, listing(claude)], [0, ['hooks', 'settings.json']],
-      `purge removes the config: only the pre-existing settings and the empty hooks dir remain (${purged.stderr})`);
+    check('rb-purge', [purged.status, listing(claude)], [0, ['settings.json']],
+      `purge removes the config: only the pre-existing settings remain (${purged.stderr})`);
+  });
+
+  // A project with no .claude/ before install: uninstall + purge leave none behind
+  plainCase('runbook', () => {
+    const bare = newWs('runbook-bare');
+    const run = (block) => spawnSync('bash', ['-c', block], {
+      cwd: bare.proj, env: { ...env, ROOT: bare.proj }, encoding: 'utf8', timeout: 30000,
+    });
+    const steps = ['copyProject', 'config', 'mergeProject', 'uninstall', 'purge'].map((k) => run(BLOCK[k]));
+    check('rb-bare-roundtrip', [steps.map((r) => r.status), listing(bare.proj)], [[0, 0, 0, 0, 0], []],
+      `install then uninstall + purge in a project without .claude/ leaves no .claude/, no {} settings.json (${steps.map((r) => r.stderr).join('')})`);
+  });
+  // Project root block: the skill's CLAUDE_PROJECT_DIR (session dir) beats the git toplevel
+  plainCase('runbook', () => {
+    const repo = newWs('runbook-root').proj;
+    const sub = join(repo, 'sub');
+    mkdirSync(sub, { recursive: true });
+    const git = spawnSync('git', ['init', '-q', repo], { encoding: 'utf8' });
+    const rootEnv = envFor(ws.home);
+    const shot = (extra) => spawnSync('bash', ['-c', `${blockAfter('### Project root')}\necho "GOT=$ROOT"`], {
+      cwd: sub, env: { ...rootEnv, ...extra }, encoding: 'utf8', timeout: 30000,
+    }).stdout.trim().split('\n').pop();
+    check('rb-root-ladder', [git.status, shot({ CLAUDE_PROJECT_DIR: sub }), shot({})],
+      [0, `GOT=${sub}`, `GOT=${realpathSync(repo)}`],
+      'session dir passed as CLAUDE_PROJECT_DIR wins; without it the git toplevel is the fallback');
+  });
+  plainCase('runbook', () => {
+    const kept = newWs('runbook-kept');
+    const keptSettings = join(kept.proj, '.claude', 'settings.json');
+    mkdirSync(join(kept.proj, '.claude'), { recursive: true });
+    writeFileSync(keptSettings, '{}\n');
+    const r = spawnSync('bash', ['-c', BLOCK.uninstall], {
+      cwd: kept.proj, env: { ...env, ROOT: kept.proj }, encoding: 'utf8', timeout: 30000,
+    });
+    check('rb-uninstall-foreign-empty', [r.status, textFile(keptSettings)], [0, '{}\n'],
+      `a settings.json that was {} without any agent-return entry is not ours to delete (${r.stderr})`);
   });
 
   // UPGRADE read-back: one migration of the pre-6.5 default pair, nothing else moves
@@ -1530,6 +1440,44 @@ function markerName(agentId) {
     const copied = bash(BLOCK.copyGlobal);
     check('rb-global-default-dir', [copied.status, listing(join(ws.home, '.claude', 'hooks'))], [0, ASSET_NAMES],
       `with CLAUDE_CONFIG_DIR unset the global scope is ~/.claude (${copied.stderr})`);
+  });
+
+  // UNINSTALL path line swapped for the GLOBAL comment line, or for its unexported form
+  const uninstallLines = BLOCK.uninstall.split('\n');
+  const globalLine = uninstallLines.find((l) => l.startsWith('# GLOBAL:')).replace(/^# GLOBAL:\s+/, '');
+  const withPaths = (pathLine) => uninstallLines.map((l) => (l.startsWith('export ') ? pathLine : l)).join('\n');
+  const arRegistrations = (file) => {
+    const s = jsonFile(file);
+    return Object.values((s && s.hooks) || {}).flat().flatMap((e) => (e && e.hooks) || [])
+      .filter((h) => (h.args || []).some((a) => /agent-return-(contract|guard)\.mjs$/.test(a))).length;
+  };
+  const installGlobal = (dir) => {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'settings.json'), JSON.stringify({ hooks: { PreToolUse: [foreign] } }));
+    return [bash(BLOCK.copyGlobal, { CLAUDE_CONFIG_DIR: dir }).status, bash(BLOCK.mergeGlobal, { CLAUDE_CONFIG_DIR: dir }).status,
+      arRegistrations(join(dir, 'settings.json'))];
+  };
+  plainCase('runbook', () => {
+    const dir = join(BASE, 'runbook-uninstall-global');
+    const installed = installGlobal(dir);
+    const r = bash(withPaths(globalLine), { CLAUDE_CONFIG_DIR: dir });
+    check('rb-uninstall-global-line', [
+      uninstallLines.filter((l) => l.startsWith('export ')).length, installed, r.status, r.stdout.trim().split('\n').pop(),
+      arRegistrations(join(dir, 'settings.json')), jsonFile(join(dir, 'settings.json')), listing(join(dir, 'hooks')),
+    ], [
+      1, [0, 0, 3], 0, `✅ uninstalled from ${join(dir, 'hooks')}`,
+      0, { hooks: { PreToolUse: [foreign] } }, ['NO DIRECTORY'],
+    ], `the GLOBAL line as written exports SETTINGS: zero registrations and no hook files remain (${r.stderr})`);
+  });
+  plainCase('runbook', () => {
+    const dir = join(BASE, 'runbook-uninstall-unexported');
+    const installed = installGlobal(dir);
+    const r = bash(withPaths(globalLine.replace('export ', '')), { CLAUDE_CONFIG_DIR: dir });
+    check('rb-uninstall-unexported-aborts', [
+      installed, r.status, r.stdout.trim(), r.stderr.trim(), arRegistrations(join(dir, 'settings.json')), listing(join(dir, 'hooks')),
+    ], [
+      [0, 0, 3], 0, '❌ FAILED', 'ABORT: SETTINGS unset - export it (the GLOBAL/PROJECT line); nothing was removed', 3, ASSET_NAMES,
+    ], 'SETTINGS assigned but not exported: the block aborts before deleting any hook file, registrations intact');
   });
 }
 

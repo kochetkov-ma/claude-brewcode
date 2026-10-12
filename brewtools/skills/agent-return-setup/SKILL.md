@@ -19,10 +19,11 @@ Subagent reports are the largest single context cost of a session that delegates
 `$ARGUMENTS` is one free-form RU/EN prompt; mode tokens and flags may sit anywhere in it.
 
 1. Mode: an explicit mode token wins outright; else the most distinct whole-word keyword hits
-   (table in Step 2). Tie with a destructive mode (`purge`) -> `AskUserQuestion`; with `status` ->
-   `status`; of two mutating modes -> the keyword that comes first. No hit or empty -> `status`.
+   (table in Step 2). Tie with a destructive mode (`purge`) or of `install` with a removal mode
+   (`uninstall`) -> `AskUserQuestion`; with `status` -> `status`; of two other mutating modes -> the
+   keyword that comes first. No hit or empty -> `status`.
 2. Scope: prose that is not a mode/id/path is still input: take the id, path or target from it.
-3. Ask: at most ONE `AskUserQuestion` (max 4 questions), before any work, only when the answer
+3. Ask: at most ONE `AskUserQuestion` (max 4 questions) to resolve mode and scope, before any work, only when the answer
    changes what gets written. A read-only run asks nothing.
 
 Print once, before the first action (labels literal, values in the conversation language):
@@ -53,7 +54,7 @@ Tiers, `t = Math.ceil(<report text>.length / 4)`, defaults `passTokens` `2500` a
 |-------|-----------|
 | `t <= passTokens` | none |
 | `passTokens < t <= fileTokens` | **compress** — re-send the same report shortened to the budget; no new work |
-| `t > fileTokens` | **file** — write the full report to `<project root>/.claude/reports/YYYYMMDD-HHMMSS_<agent-slug>-<run-id>/`, return that path + verdict + a summary within the budget |
+| `t > fileTokens` | **file** — write the full report to `<project root>/<reportDir>/YYYYMMDD-HHMMSS_<agent-slug>-<run-id>/` (config `reportDir`, default `.claude/reports`), return that path + verdict + a summary within the budget; a denied write is never retried: a compressed inline report instead |
 | `t > fileTokens`, agent cannot write | **essential part** — no file; one line names what was left out. Applies in plan mode and to `readOnlyAgentTypes`: default `["Explore","Plan"]`, exact `agent_type` (plugin agents as `plugin:name`), any array replaces the default |
 
 Exactly `passTokens` passes, exactly `fileTokens` still compresses. Every order quotes `passTokens` as `budget`. The budget is in tokens only: the shape of a report is whatever the caller's brief asks for.
@@ -71,6 +72,7 @@ Once per agent: before a challenge the guard exclusive-creates a marker for that
 | One challenge per `agent_id`; after it nothing is enforced | The second report is delivered at any size and may land slightly over `passTokens` (observed 1417 -> 1026 against a budget of 1000); a resumed agent is not challenged again while its marker exists. Deliberate: repeated hand-back denies make the harness withhold the report |
 | No hook payload exposes an agent's tool inventory | Write ability is known only from `readOnlyAgentTypes` and plan mode. An unlisted read-only agent gets the file order, whose last sentence tells it to send the essential part instead: add such types to the list |
 | State directory not writable | The auto path never denies (an unrecorded deny could repeat); the classic path keeps `stop_hook_active` as its only brake |
+| Default `reportDir` `.claude/reports` is a protected path | The file-tier `Write` prompts in `default`/`acceptEdits`, is denied in `dontAsk` and headless; the agent then returns a compressed inline report. Unattended: set `reportDir` outside `.claude/` (runbook *Report dir and protected paths*) |
 | Not verified live | The file tier for a writing agent, nested agents, agent-team teammates |
 | Claude Code older than 2.1.271 | No `SubagentHandback` tool, so only the classic path exists |
 | Only the final report is sized, by `chars/4` | It budgets the return, not the work: 40 tool calls and a 6-line report pass. Not a tokenizer on purpose: the thresholds are fitted to `chars/4` |
@@ -110,6 +112,10 @@ A="$BT_ROOT/skills/agent-return-setup/assets"
 test -f "$A/INSTALL.md" && test -f "$A/agent-return-budget.mjs" && test -f "$A/agent-return-contract.mjs" && test -f "$A/agent-return-guard.mjs" || { echo "❌ FAILED — assets incomplete under BT_ROOT=$BT_ROOT"; exit 1; }
 echo "ASSETS_DIR=$A"
 echo "RUNBOOK=$A/INSTALL.md"
+ROOT="${CLAUDE_PROJECT_DIR}"
+[ -d "$ROOT" ] || ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+[ -n "$ROOT" ] || { echo "❌ cannot resolve project root (session project dir, then git toplevel); nothing written"; exit 1; }
+echo "PROJECT_ROOT=$ROOT"
 content_state() {
   ASSETS="$A" TARGET="${1}" CFG_DIR="${2}" node <<'NODE'
 const fs=require("fs"), path=require("path");
@@ -145,7 +151,7 @@ try{
 console.log(n);
 NODE
 }
-for S in "$PWD/.claude:project" "${CLAUDE_CONFIG_DIR:-$HOME/.claude}:global"; do
+for S in "$ROOT/.claude:project" "${CLAUDE_CONFIG_DIR:-$HOME/.claude}:global"; do
   D="${S%%:*}"; N="${S##*:}"
   # config dir: the hook falls back to ~/.claude when the config dir in use holds no config
   C="$D"; if [ "$N" = global ] && [ ! -s "$D/agent-return.json" ] && [ -s "$HOME/.claude/agent-return.json" ]; then C="$HOME/.claude"; fi
@@ -168,7 +174,7 @@ echo "✅ status"
 
 > **STOP if ❌** — plugin cache incomplete; reinstall/update brewtools first.
 
-Global = the config dir in use (`$CLAUDE_CONFIG_DIR`, else `~/.claude`) for `settings.json` and `hooks/`; its config falls back to `~/.claude/agent-return.json`, as in the hook. Report the fields as defined, nothing stronger:
+Project = `PROJECT_ROOT/.claude`: the session's start dir (what hooks get as `CLAUDE_PROJECT_DIR`; from a repo subdirectory the git root's `settings.json` is not loaded), git toplevel only as fallback. Global = the config dir in use (`$CLAUDE_CONFIG_DIR`, else `~/.claude`) for `settings.json` and `hooks/`; its config falls back to `~/.claude/agent-return.json`, as in the hook. Report the fields as defined, nothing stronger:
 
 | Field | Value |
 |-------|-------|
@@ -206,7 +212,7 @@ PV=${PV:-$(basename "$BT_ROOT")}
 echo "PLUGIN_VERSION=$PV LAST_UPDATED=$(date +%F)"
 ```
 
-The four keys are inert at runtime: the module reads only `enabled` (on only when exactly `true`), `passTokens`, `fileTokens` and `readOnlyAgentTypes`. Only the runbook's node block writes them, re-serializing the whole object with `JSON.stringify`: a hand-appended line can break the file, and an invalid project config is silently skipped in favor of the global one.
+The four keys are inert at runtime: the module reads only `enabled` (on only when exactly `true`), `passTokens`, `fileTokens`, `readOnlyAgentTypes` and the optional `reportDir`. Only the runbook's node block writes them, re-serializing the whole object with `JSON.stringify`: a hand-appended line can break the file, and an invalid project config is silently skipped in favor of the global one.
 
 Content state and enabled/wiring are separate signals. Offer `upgrade` for `stale` or `partial`, naming the mismatched/missing artifact, never from a release-version difference alone. Status never edits files or settings.
 
@@ -218,7 +224,7 @@ Already installed and the intent is not explicit (no argument, or vague like "а
 
 ## Step 2 — Decide MODE
 
-Read `$ARGUMENTS`. Empty/no-match input resolves to **status**, also when nothing is installed; installation requires explicit install intent.
+Read the prompt. Empty/no-match input resolves to **status**, also when nothing is installed; installation requires explicit install intent.
 
 | Mode | EN keywords | RU keywords | Mutates? |
 |------|-------------|--------------|----------|
@@ -230,7 +236,7 @@ Read `$ARGUMENTS`. Empty/no-match input resolves to **status**, also when nothin
 | `uninstall` | `uninstall` | `убери`, `сними`, `удали хук` | yes |
 | `purge` | `purge`, `wipe`, `remove everything` | `вычисти всё`, `удали полностью`, `убери совсем`, `снеси` | yes, destructive |
 
-Ambiguous between install and a removal verb → `AskUserQuestion`. Never guess a destructive mode.
+Ties resolve per Prompt contract rule 1.
 
 ## Step 3 — Explain pending changes before questions
 
@@ -240,7 +246,7 @@ Add concrete state/action details to the initial PLAN without repeating its bloc
 
 ## Step 4 — Ask ONLY what is missing (`AskUserQuestion`)
 
-Skip any question already answered by `$ARGUMENTS` or settled by the status table.
+Skip any question already answered by the prompt or settled by the status table.
 
 | # | Question | Options | Default |
 |---|----------|---------|---------|
@@ -263,7 +269,7 @@ One mode × one scope is one bounded unit (3 asset files + one settings.json + o
 
 Every spawn brief carries six labeled fields, since a subagent starts with an empty context: GOAL (task + why), ROLE (owns, must not touch), SCOPE (paths/commands in and out), CONTEXT (done, by whom, in parallel), CONSUMER (who uses the result + its shape), DONE (acceptance + return: verdict first, evidence, bounded; long output to a file, path returned).
 
-Spawn with the brief below. Substitute `MODE`, `SCOPE`, `PASS_TOKENS`, `FILE_TOKENS`, `RUNBOOK`, `ASSETS_DIR`, `PLUGIN_VERSION`, `LAST_UPDATED` (Steps 1-4, Config-metadata block) into both its CONTEXT block and its literal `export` line: the runbook's node blocks read `process.env`, so a value given only in prose never arrives and the config block aborts on an empty `PASS_TOKENS`. For `upgrade` use the pair status printed; for the one migration (Modes) substitute `2500`/`6000` and say so in the PLAN.
+Spawn with the brief below. Substitute `MODE`, `SCOPE`, `PASS_TOKENS`, `FILE_TOKENS`, `RUNBOOK`, `ASSETS_DIR`, `PROJECT_ROOT`, `PLUGIN_VERSION`, `LAST_UPDATED` (Steps 1-4, Config-metadata block) into both its CONTEXT block and its literal `export` line: the runbook's node blocks read `process.env`, so a value given only in prose never arrives and the config block aborts on an empty `PASS_TOKENS`. For `upgrade` use the pair status printed; for the one migration (Modes) substitute `2500`/`6000` and say so in the PLAN.
 
 ```
 Agent(subagent_type="brewcode:hook-creator", prompt="
@@ -291,10 +297,12 @@ CONTEXT:
     ABORTS on an inversion)
   RUNBOOK = RUNBOOK (absolute path to assets/INSTALL.md)
   ASSETS_DIR = ASSETS_DIR (absolute path to the assets source dir — copy the 3 hook files FROM here)
+  PROJECT_ROOT = PROJECT_ROOT (the session's start dir; the runbook's Project root block takes it
+    from CLAUDE_PROJECT_DIR, which your Bash tool does not set on its own)
   MANDATORY FIRST BASH COMMAND — the runbook's node blocks read these from the ENVIRONMENT,
   not from this prompt. Run this VERBATIM as the first line of EVERY Bash call that executes
   a runbook block (a new Bash call does NOT inherit exports from the previous one):
-    export RUNBOOK='RUNBOOK' PASS_TOKENS='PASS_TOKENS' FILE_TOKENS='FILE_TOKENS' PLUGIN_VERSION='PLUGIN_VERSION' LAST_UPDATED='LAST_UPDATED'
+    export RUNBOOK='RUNBOOK' PASS_TOKENS='PASS_TOKENS' FILE_TOKENS='FILE_TOKENS' PLUGIN_VERSION='PLUGIN_VERSION' LAST_UPDATED='LAST_UPDATED' CLAUDE_PROJECT_DIR='PROJECT_ROOT'
   Then verify before writing anything:
     echo \"PASS=\$PASS_TOKENS FILE=\$FILE_TOKENS RUNBOOK=\$RUNBOOK PV=\$PLUGIN_VERSION LU=\$LAST_UPDATED\"
   If PASS_TOKENS or FILE_TOKENS prints empty, STOP and report — the config block ABORTS on an
@@ -316,8 +324,9 @@ CONTEXT:
   read-back prints.
   Uninstall = strip entries by the agent-return basenames (all three registrations), drop empty
   event arrays, delete all 3 files and THIS scope's agent-return-state/ directory (export
-  HOOKS_DIR, SETTINGS and STATE_DIR as the UNINSTALL block shows), KEEP the config.
-  Purge = uninstall + delete THIS scope's config.
+  HOOKS_DIR, SETTINGS and STATE_DIR as the UNINSTALL block shows), KEEP the config; the block
+  deletes a settings.json and hooks dir left empty. Purge = uninstall + delete THIS scope's
+  config (+ a project .claude/ left empty).
   METADATA: every mode that WRITES the config (install, upgrade, enable, disable) must leave
   these four keys in agent-return.json: version=\$PLUGIN_VERSION,
   content_version=<read by the runbook from its own brewcode-meta header; never hardcoded>,
@@ -327,9 +336,9 @@ CONTEXT:
   appending text to the file. An invalid project config is SKIPPED and the global one silently
   takes over, so a hand-edited append is a defect, not a shortcut. Do NOT touch enabled while
   doing it: the hooks require it to be exactly true.
-CONSUMER: Step 6 reports your result to the user; the settings.json you write is loaded by
-  the NEXT Claude Code session, so a malformed merge breaks that session instead of failing
-  here — report the exact paths you touched so they can be checked.
+CONSUMER: Step 6 reports your result to the user; Claude Code watches settings files and
+  applies the settings.json you write to the running session, so a malformed merge breaks it
+  at once — report the exact paths you touched so they can be checked.
 DONE: report the settings.json path, the hooks dir with all 3 files listed, the config path with
   its final contents, and the runbook 'Verify' output if you ran it. The reported config MUST show
   passTokens = PASS_TOKENS and fileTokens = FILE_TOKENS — a default 2500/6000 where the user asked for
@@ -343,8 +352,8 @@ DONE: report the settings.json path, the hooks dir with all 3 files listed, the 
 Re-run the Step 1 status block and print the refreshed table. Then tell the user, in full sentences:
 
 - what changed (files, settings.json, config values);
-- that wiring changes (install/upgrade/uninstall/purge) need a new session, not `/reload-plugins`: these are plain settings.json hooks;
-- that config values (`enabled`, `passTokens`, `fileTokens`, `readOnlyAgentTypes`) are read on every hook call, with no restart;
+- that wiring changes (install/upgrade/uninstall/purge) apply to the running session with no restart and no `/reload-plugins` (plain settings.json hooks, settings files are watched); `/hooks` confirms;
+- that config values (`enabled`, `passTokens`, `fileTokens`, `readOnlyAgentTypes`, `reportDir`) are read on every hook call, with no restart;
 - the `content_state`, with the release `version` as provenance only;
 - that each agent is challenged once, so a second report may still be over `passTokens`.
 
@@ -375,7 +384,7 @@ State = `agent-return-state/` beside the config that enabled the feature: a `.gi
 | `registrations` below `3/3`, or `settings_refs=1` | Partly wired. `2/3` with only the `SubagentHandback` entry missing is an install from before that entry existed: auto-mode reports pass unsized. Re-run the merge via `upgrade`. |
 | `agent-return-budget.mjs` registered in settings.json | Defect: it is a library. `upgrade`/`uninstall` strip that entry. |
 | Custom thresholds where `passTokens >= fileTokens` | Reject before delegating and re-ask: the runbook's config block ABORTS on the inversion; installed by hand, it silently kills the compress tier. |
-| `uninstall`/`purge` requested | Restate exactly what gets deleted (3 hook files, 3 settings entries, the `agent-return-state/` directory, and for purge the config), confirm once, then delegate. |
+| `uninstall`/`purge` requested | Restate exactly what gets deleted (3 hook files, 3 settings entries, the `agent-return-state/` directory, a `settings.json`/hooks dir left empty, and for purge the config and an empty project `.claude/`), confirm once, then delegate. |
 | Project config exists but is malformed JSON | Report it: the module skips it and silently uses the global config. Offer to rewrite. |
 | Global, `CLAUDE_CONFIG_DIR` set, status shows another `config_dir` | The config is shared from `~/.claude`, and the runbook's global blocks act on `$CLAUDE_CONFIG_DIR` only: `upgrade` there aborts with "not installed in this scope". Run `upgrade` with `CLAUDE_CONFIG_DIR` empty (files + config in `~/.claude`), then the global copy and merge-settings blocks once per other config dir that registers the hooks. |
 | `/brewtools:agent-deadline-setup` also installed | Both register `SubagentStop` and `PreToolUse` entries; hooks of one event run in parallel, and each skill's merge/strip touches only entries naming its own scripts. An agent challenged once here continues on its ORIGINAL deadline clock (the deadline cleanup stamps `stopped` and keeps the state; a stop stamp under 5 minutes old keeps the clock), and the deadline guard always allows `SubagentHandback`. An agent-deadline install from before 6.5 restarts the clock and, past its limit, also denies the hand-back: `upgrade` it too. |

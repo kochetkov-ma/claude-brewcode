@@ -65,17 +65,14 @@ batch: one specialist spawn per item. Print the PLAN, then Step 4.
 
 ## Step 3 — Menu (explicit request only)
 
-One AskUserQuestion, `What do you want to do with rules?`, options in this order:
+One AskUserQuestion, two questions, 2-4 options each (tool cap; "Other" is automatic):
 
-- `Status (rules)` — **(Recommended)**
-- `Status (all: agents+rules+skills)`
-- `Create new rules`
-- `Improve existing rules`
-- `Review rules`
-- `List (plain)`
-- `Nothing / cancel`
+- Q1 `What do you want to do with rules?`: `Status (rules)` **(Recommended)**, `Create new rules`,
+  `Improve existing rules`, `Review rules`
+- Q2 `Variant?`: `As chosen` **(Recommended)**, `Status (all: agents+rules+skills)`,
+  `List (plain)`; a non-default Q2 replaces Q1
 
-Cancel -> stop. Else take target and params from the choice plus prompt/history, no follow-up: safe
+Dismissed or `cancel` via Other -> stop. Else take target and params from the choice plus prompt/history, no follow-up: safe
 gap -> stated default; write-critical gap -> report the missing decision before writing. Print PLAN,
 then Step 4.
 

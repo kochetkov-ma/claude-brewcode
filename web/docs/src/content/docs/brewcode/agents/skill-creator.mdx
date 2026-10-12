@@ -16,7 +16,7 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | Agent | `brewcode:skill-creator` |
 | Triggers | create skill, improve skill, fix activation |
 | Model | inherit: uses the session model |
-| Tools | Read, Write, Edit, Glob, Grep, Bash, Agent |
+| Tools | Read, Write, Edit, Glob, Grep, Bash |
 | Output | Skill directory, artifact list, validator/evaluation results, and remaining questions |
 
 ## What it does
@@ -87,15 +87,15 @@ Claude Code publishes no automatic-activation percentage.
 use AskUserQuestion for an interactive user round. Conversation forks retain the parent's tools;
 do not apply ordinary-subagent limitations to that distinct mode.
 
-Upstream supports configurable nested-agent depth, but this project's authoring policy keeps
-delegation with the main caller. Skill Creator completes bounded work itself and returns split
-or optimization requests to the caller. Agent being listed as a tool does not authorize ignoring
-that policy.
+Upstream supports configurable nested-agent depth, but this agent carries no Agent tool and the
+project's authoring policy keeps delegation with the main caller. Skill Creator completes bounded
+work itself and returns split or optimization requests to the caller.
 
 `allowed-tools` preapproves supported calls; it is not a tool-access sandbox. Grants and
 `disallowed-tools` restrictions apply to the invoking turn and clear on the next user message,
-while skill instructions persist. Scope permissions to the required calls instead of
-preapproving every Bash, Write, Edit, or Agent action.
+while skill instructions persist. Scope permissions to the required calls when scoped rules
+cover every call. Bare Bash, Write, or Edit fits only a user-invoked skill
+(`disable-model-invocation: true`) with open-ended shell or write paths.
 
 Dynamic skill-text substitutions such as `${CLAUDE_SKILL_DIR}` are not ordinary environment
 variables available to hooks or agents. Use the documented substitution and resource path for
@@ -109,7 +109,7 @@ achieves its goal. Confirmed fixes require another validator run.
 
 Reference files under `brewcode/skills/skills/references/` provide the current frontmatter catalog,
 execution model, design patterns, activation troubleshooting, prompt contract, and review checklist.
-The source was refreshed against upstream contracts through Claude Code 2.1.285; historical line
+The source was refreshed against upstream contracts through Claude Code 2.1.296; historical line
 citations in references are context, not a permanent API guarantee.
 
 The agent checkpoints artifact paths and status in its report directory as it works.

@@ -55,10 +55,11 @@ try {
     true,
     'projected lifecycle must retain the Markdown framework authority path',
   );
-  const lifecycleResult = spawnSync(process.execPath, [LIFECYCLE], { encoding: 'utf8', timeout: 30000 });
+  // Hang guard only: the lifecycle suite needs ~15 s CPU and exceeded 30 s wall under load.
+  const lifecycleResult = spawnSync(process.execPath, [LIFECYCLE], { encoding: 'utf8', timeout: 120000 });
   assert.equal(lifecycleResult.status, 0,
     `projected lifecycle must remain executable: ${lifecycleResult.stdout}${lifecycleResult.stderr}`);
-  const parkedResult = spawnSync(process.execPath, [PARKED_CONFLICT], { encoding: 'utf8', timeout: 30000 });
+  const parkedResult = spawnSync(process.execPath, [PARKED_CONFLICT], { encoding: 'utf8', timeout: 120000 });
   assert.equal(parkedResult.status, 0,
     `projected parked-conflict suite must remain executable: ${parkedResult.stdout}${parkedResult.stderr}`);
   for (const mode of MODES) {

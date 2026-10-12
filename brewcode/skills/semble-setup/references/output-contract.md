@@ -17,7 +17,8 @@ mcp:      <state> @ <scope>  [<connectivity>]
 version:  <ok (registered <spec> = pin <pin>) | stale (registered X, pin Y) -> run: /brewcode:semble-setup upgrade | not registered (pin <pin>) -> run: /brewcode:semble-setup install>  [<active config file>]
 upstream: <latest> - <pin current | pin behind upstream (X < Y)>  | unknown (offline)
 cache:    <shared root> | repo <hash8|unknown> | variant <index leaf> | <repo cache size> | <staleness>
-guidance: rule <state> | CLAUDE.md <state> | hooks <n>/6 wired | permissions <yes|no>
+guidance: rule <state> | CLAUDE.md <state> | hooks <n>/4 wired | permissions <yes|no>
+retired:  <names> - stale (remove via upgrade)
 agents:   <total> total | <inherit> inherit | <patched> patched | <needs patch> need patch | <conflict> conflict | <skipped> skipped
 state:    phase=<phase> enabled=<bool> completed=[...]
 
@@ -78,7 +79,7 @@ Checkpoint: <abs>/.claude/semble/state.json
 | `scope` | Where `semble_code` is (or would be) registered; expected `user`. |
 | `<hash8>` | First 8 hex chars of the repo's sha256 cache-dir name; `unknown` when unresolvable. |
 | `variant <index leaf>` | The exact selected content variant: `index-code-config-docs` for the registered `code docs config` corpus, `index` for code-only. Sibling variants under the same repo hash are not folded in. |
-| `hooks <n>/6 wired` | 6 = SessionStart(`semble-session.mjs`) + UserPromptSubmit(`semble-prefetch.mjs`) + PostToolUse(`semble-stats.mjs`) + PostToolUseFailure(`semble-stats.mjs`) + PreToolUse(`semble-reminder.mjs`, matcher `Bash\|Grep`) + SubagentStart(`semble-subagent.mjs`, no matcher — matches every agent type). Below 6 is half-wired (see Honesty constraints). |
+| `hooks <n>/4 wired` | 4 = SessionStart(`semble-session.mjs`) + PostToolUse(`semble-stats.mjs`) + PostToolUseFailure(`semble-stats.mjs`) + SubagentStart(`semble-subagent.mjs`, no matcher — matches every agent type). Below 4 is half-wired (see Honesty constraints). Leftover retired hooks (`semble-reminder.mjs`, `semble-prefetch.mjs`, `semble-explore.mjs`: file or settings row) print the `retired:` line; omit it when none is left. |
 | `staleness` | One of `absent | incomplete | mismatch | stale | fresh | unknown | legacy`. `legacy` means the registered combined corpus exists only in a pre-0.5.5 bare `index`; it is not the selected current variant. `stale` is reported as **likely stale** (see Honesty constraints). |
 | `smoke` | `skipped (<reason>)` when `SEMBLE_NO_NETWORK=1`, `SEMBLE_DRY_RUN=1`, `uvx` is absent, or the mode never runs it; it uses the pinned CLI and shared root, so a pending MCP reload alone does not skip it. Reasons are concrete, never "n/a". |
 | `uncovered` | Printed verbatim on every invocation: a standing corpus limit, not a per-run finding. |
@@ -94,7 +95,7 @@ Checkpoint: <abs>/.claude/semble/state.json
 | Never write | Because |
 |-------------|---------|
 | anything about a watcher, daemon, background indexer, or service being "started"/"running"/"stopped" | semble 0.6.2 has none. Staleness is re-checked inside each tool call behind a `3x last-build-duration` cooldown. |
-| `installed` when `hooks` < 6, or when the MCP is registered but never verified | Half-wired is a distinct state; report `partial`. |
+| `installed` when `hooks` < 4, or when the MCP is registered but never verified | Half-wired is a distinct state; report `partial`. |
 | `connected` from config alone | `connectivity` comes only from the exit status of `claude mcp get semble_code`; no signal -> `unknown`. |
 | `stale` as a certainty | The check approximates `get_validated_cache`; say `likely stale` and offer `reindex` rather than acting. |
 | a result field named `line` | Results carry `file_path`, `start_line`, `end_line`, `score` and optional `content`. |
@@ -120,7 +121,7 @@ mcp:      absent @ user  [unknown]
 version:  not registered (pin 0.6.2) -> run: /brewcode:semble-setup install  [/Users/me/.claude.json]
 upstream: unknown (offline)
 cache:    /Users/me/Library/Caches/semble-code | repo unknown | variant index-code-config-docs | 0 B | absent
-guidance: rule absent | CLAUDE.md absent | hooks 0/6 wired | permissions no
+guidance: rule absent | CLAUDE.md absent | hooks 0/4 wired | permissions no
 agents:   7 total | 3 inherit | 0 patched | 0 need patch | 4 conflict | 0 skipped
 state:    phase=absent enabled=null completed=[]
 

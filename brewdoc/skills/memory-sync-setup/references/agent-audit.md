@@ -1,4 +1,4 @@
-<!-- brewcode-meta: version=6.4.0 content_version=6.3.0 generated_by=brewdoc:memory-sync-setup -->
+<!-- brewcode-meta: version=6.5.0 content_version=6.5.0 generated_by=brewdoc:memory-sync-setup -->
 # Agent and Skill Re-Audit
 
 Every `/memory-sync` run audits every agent and skill at every scope/depth. The emitted agents and skills
@@ -24,7 +24,7 @@ whose `.gitignore` carries `.claude/` it returns 0 rows and every agent reads as
 crosses `/` while a Claude Code glob does not - so a git probe cannot judge glob correctness either.
 
 ```bash
-ls .claude/agents/*.md .claude/skills/*/SKILL.md .claude/skills/*/references/*.md 2>/dev/null || true  # roster
+{ find -H .claude/agents -name '*.md'; find -H .claude/skills -mindepth 2 -maxdepth 2 -name SKILL.md; find -H .claude/skills -mindepth 3 -maxdepth 3 -path '*/references/*.md'; } 2>/dev/null || true  # roster
 grep -n '^tools:\|^allowed-tools:\|^name:\|^model:' "<file>"  # declared contract
 grep -oE 'mcp__[a-z0-9_]+__' "<file>" | sort -u               # MCP servers claimed
 ls -d "<owned glob>" 2>/dev/null | head -3                    # ownership glob resolves (filesystem, not git)

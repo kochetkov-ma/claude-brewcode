@@ -1,9 +1,8 @@
 # Hook Environment Variables Reference
 
-Every env var a hook child process sees, the sensitive-path write prompt, and the project-root resolution recipe (JS + sh).
+Every env var a hook child process sees, protected-path writes, and the project-root resolution recipe (JS + sh).
 
-Verified against Claude Code 2.1.296: [official hook environment](https://code.claude.com/docs/en/hooks#common-input-fields), [path variables](https://code.claude.com/docs/en/hooks#reference-scripts-by-path). The sensitive-path note is 2.1.233 runtime evidence, not a universal permission contract.
-
+Verified against Claude Code 2.1.296: [official hook environment](https://code.claude.com/docs/en/hooks#common-input-fields), [path variables](https://code.claude.com/docs/en/hooks#reference-scripts-by-path).
 ## Environment Variables
 
 | Variable | Description | Available |
@@ -25,16 +24,17 @@ Verified against Claude Code 2.1.296: [official hook environment](https://code.c
 
 No `$CLAUDE_MODEL` variable exists; an inherited `ANTHROPIC_MODEL` reflects shell configuration and does not track `/model`. Read SS `model` when present and switch event `to_model`. `OTEL_*` exporter variables are stripped from subprocesses. Runtime path tokens in config and actual child env variables are separate: exec-form `${...}` substitution is performed by Claude Code, not a shell.
 
-> Sensitive-path prompt (2.1.233, verified in binary): a Write/Edit TOOL call under `~/.claude/**` is
-> classified sensitive and routed to a permission ASK -- not a block. Carve-outs under `.claude/`:
-> `skills`, `agents`, `commands`, `worktrees`, `scheduled_tasks.json`. `plugins/` is NOT carved out, so
-> `$CLAUDE_PLUGIN_DATA` writes ask. Mode behaviour: default/acceptEdits/plan -> prompt;
-> `bypassPermissions`/`--dangerously-skip-permissions` -> auto-approved (CHANGELOG 2.1.126); headless
-> `-p` without bypass -> FAILS ("tool requires user interaction; no prompt available in headless mode").
+> Protected paths (2.1.296, [permission-modes](https://code.claude.com/docs/en/permission-modes#protected-paths)):
+> a Write/Edit TOOL call into project `.claude/` or `~/.claude/` is never auto-approved:
+> `default`/`acceptEdits` -> prompt; `plan` -> allowed in an interactive terminal with bypass available,
+> else classifier (auto available) or prompt; `auto` -> classifier; `dontAsk` -> denied;
+> `bypassPermissions` -> allowed. `permissions.allow` never pre-approves. Exempt: `.claude/worktrees/`,
+> the session's plan files, `~/.claude/jobs/<id>/tmp/`, auto-memory and `.claude/agent-memory/` Markdown (not under `--restricted`).
+> `plugins/` is not exempt, so `$CLAUDE_PLUGIN_DATA` Write/Edit calls prompt. Bash `>`/`tee` targets
+> are checked the same; a hook or a script opening the file itself is not.
 > Consequence: `$CLAUDE_PLUGIN_DATA` is a fully supported persistent WRITE target (official
-> `project-artifact` skill Writes there), but only interactively or from a hook/Bash subprocess -- never
-> from a Write/Edit tool call in an unattended run. For unattended state prefer
-> `${CLAUDE_PROJECT_DIR}/.claude/<subdir>/`.
+> `project-artifact` skill Writes there), but only interactively or from a hook/script -- never
+> from a Write/Edit tool call in an unattended run.
 
 ### Canonical project-root resolution
 

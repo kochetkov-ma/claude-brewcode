@@ -2,6 +2,90 @@
 
 ---
 
+## v6.5.0 (2026-10-12)
+
+> Docs: [agents](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [convention-setup](https://doc-claude.brewcode.app/brewcode/skills/convention-setup/) | [e2e](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [rules](https://doc-claude.brewcode.app/brewcode/skills/rules/) | [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [superreview-setup](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | [teams-setup](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) | [brewcode hooks](https://doc-claude.brewcode.app/brewcode/hooks/)
+
+> Docs: [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [bash-expert](https://doc-claude.brewcode.app/brewcode/agents/bash-expert/) | [bc-rules-organizer](https://doc-claude.brewcode.app/brewcode/agents/bc-rules-organizer/) | [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/)
+
+> Docs: [docsync-setup](https://doc-claude.brewcode.app/brewdoc/skills/docsync-setup/) | [md-to-pdf](https://doc-claude.brewcode.app/brewdoc/skills/md-to-pdf/) | [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/) | [my-claude](https://doc-claude.brewcode.app/brewdoc/skills/my-claude/) | [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
+
+> Docs: [agent-deadline-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline-setup/) | [agent-return-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-return-setup/) | [agent-router-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-router-setup/) | [context-slim](https://doc-claude.brewcode.app/brewtools/skills/context-slim/) | [deploy](https://doc-claude.brewcode.app/brewtools/skills/deploy/) | [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) | [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/) | [secrets-scan](https://doc-claude.brewcode.app/brewtools/skills/secrets-scan/) | [ssh](https://doc-claude.brewcode.app/brewtools/skills/ssh/) | [task-board-setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) | [text-human](https://doc-claude.brewcode.app/brewtools/skills/text-human/) | [text-optimize](https://doc-claude.brewcode.app/brewtools/skills/text-optimize/) | [prompt-injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/)
+
+> Docs: [deploy-admin](https://doc-claude.brewcode.app/brewtools/agents/deploy-admin/) | [ssh-admin](https://doc-claude.brewcode.app/brewtools/agents/ssh-admin/) | [text-optimizer](https://doc-claude.brewcode.app/brewtools/agents/text-optimizer/)
+
+Claude Code 2.1.296 / Claude 5.5 refresh across all four plugins.
+
+### brewcode
+
+#### Changed
+
+- **Hooks:** brewcode registers 2 SessionStart hooks (`session-start`, `compact-recall`). The forced-eval / role-recall prompt reminder and `lib/reminder.mjs` are removed, in the Codex mirror too. The plan lookup follows `CLAUDE_CONFIG_DIR` and the effective `plansDirectory`.
+- **compact-recall:** the `plan-latest` rung counts only a `LATEST.md` symlink the plugin made itself.
+- **agents / skills / rules:** an empty prompt runs `status`; the menu opens only on request, as 2 questions of 2-4 options.
+- **agent-creator / skill-creator / hook-creator:** no `Agent` tool; references checked through 2.1.296; plugin agents must pass `claude plugin validate`.
+- **hook-creator:** a `command` or `http` hard gate gets `onFailure: "block"` (Claude Code 2.1.295+).
+- **bash-expert:** `maxTurns: 80` and a Scope Fit section. **bc-rules-organizer:** spawned by `rules` and `convention-setup`; rule frontmatter uses `paths` only.
+- **setup-status:** artifact states `current`, `stale (installed X, plugin Y)` and `modified (stamp current, bytes differ)`; task-tools verdict follows the settings layers. The table gains `Installed` and `Plugin` columns, hook registrations are checked one by one, the semble MCP pin is reported per Claude Code profile, and the task-tools merge takes the shared `settings.json.lock`.
+- **semble-setup:** pin 0.6.2; the CLAUDE.md marker block is refreshed in place; the routing line sends symbols to LSP.
+- **semble-setup:** `semble-prefetch.mjs` (UserPromptSubmit) and `semble-reminder.mjs` (PreToolUse `Bash|Grep`) are retired: a same-profile A/B test measured no gain. `install`, `upgrade` and `uninstall` delete the files, markers and settings rows, no manual step; 3 live hooks, 4 settings rows (`hooks <n>/4`).
+- **semble-setup:** the upgrade is version-aware: a byte-pristine prior-release rule or `.sembleignore` is upgraded automatically, a user-modified copy is kept, `--force` backs it up first.
+- **semble-setup:** the session and subagent hooks check the `semble_code` registration of the active profile (without it the subagent hook stays quiet and the session hook points to `/brewcode:semble-setup status`); hook wiring applies live, no new session; install from a subdirectory targets the session start directory, not the git root; `uninstall` deletes a `settings.json` that held only semble entries, plus an empty `.claude/`, and `purge` deletes its own MCP rollback backups.
+- **convention-setup:** `purge` is marked destructive, so a keyword tie asks before acting.
+- **teams-setup / e2e:** prompt-first arguments; `e2e` can read the prompt from stdin.
+- **superreview-setup:** the agent roster scan is recursive, so nested agent folders are included (also in `validate`); `enable` / `disable` report that a running session picks the change up without a restart.
+
+#### Fixed
+
+- **semble-setup:** `purge` removes only this project's cache entry.
+- **teams-setup / provider-switch:** argument capture is safe under `/bin/bash` 3.2.
+
+### brewdoc
+
+#### Changed
+
+- **docsync-setup:** state is one append-only `state-<session_id>.jsonl` log per session; install and uninstall take the shared `settings.json.lock` and write no `.bak`; hooks apply in the running session; `uninstall` keeps `.claude/docsync/`, `purge` deletes it; the gate re-arms for a doc only after it is edited again, and blocks once per ask. The Stop gate lets Claude sync a stale doc on its own and asks first only before deleting or wholesale rewriting content. `/brewdoc:docsync-setup` `sync` still asks which listed docs to sync before it touches any. `CLAUDE.md`, `CLAUDE.local.md` and `AGENTS.md` are never tracked or gated.
+- **memory-sync-setup:** the agent audit reads nested agent folders; other setups' marker blocks are preserved.
+- **md-to-pdf:** the engine is chosen before the dependency check, and a config save merges into the project file, so engine and style saves keep each other. Pinned installs reportlab 5.0.1, markdown 3.11, pygments 2.21.0, weasyprint 70.0.
+- **my-claude:** counts the 33 current hook events.
+
+#### Fixed
+
+- **publish:** run directory lives under `$TMPDIR`, outside the protected `.claude/` path.
+- **md-to-pdf:** the reportlab engine resolves a relative image against the document's folder first, like weasyprint; the working directory is only a fallback.
+
+### brewtools
+
+#### Changed
+
+- **agent-return-setup:** defaults 2500 / 6000 tokens; configurable `reportDir` and `readOnlyAgentTypes`; a third registration, `PreToolUse` on `SubagentHandback`, covers auto mode.
+- **agent-deadline-setup:** `SubagentHandback` stays allowed in the finalization set; a `SubagentStop` mark restarts the clock when the agent resumes more than 5 minutes later.
+- **agent-router-setup:** tier 2 pins no model (Claude Code's default small model, `claude-haiku-5-5` on 2.1.296, verified live there); a heartbeat entry feeds `--judge-health`; installer CLI adds `--probe` and `--purge-state`.
+- **manager-setup:** codewords inject only on their keyword (an armed wall injects nothing per prompt); the wall registers with `onFailure: "block"` (needs Claude Code >= 2.1.295; older CLIs ignore the field and stay fail-open); the allow list adds LSP, Workflow, EnterWorktree / ExitWorktree, TaskStop, ScheduleWakeup and WaitForMcpServers; `Monitor` follows the Bash rule; changes apply live, no `/reload`; global prompt overrides live in `<config dir>/manager/prompts/<mode>.md`, and `purge` removes all six.
+- **deploy:** workflow templates pin `ubuntu-24.04`; production deploys accept release-tag builds only; deploy-admin watches every CI run for the pushed SHA.
+- **provider-switch:** supports `ANTHROPIC_DEFAULT_FABLE_MODEL`; the OpenRouter pick is `anthropic/claude-opus-5.5`.
+- **text-optimize:** blocks owned by another setup are kept and reported as `managed by <setup>`; rule C.2 now removes "think step by step" prompts instead of limiting the word "think".
+- **ssh:** a Lockout Guard gate (allow-new, `sshd -t`, reload, prove a new session, then deny-old) precedes any sshd, port or firewall change; delegation prefers the project `ssh-admin` agent and falls back to `brewtools:ssh-admin`.
+- **context-slim:** `verify` takes `--ledger`, which accepts a missing token only when a ledger row covers it and its survivor still carries it; a global copy of a git-tracked project file is kept and reported as a pair.
+- **task-board-setup:** the generated skill lists board files with `find` through Bash, not an unmatched glob that aborts under zsh.
+- **plugin-update:** `check` ends with a reload notice.
+
+#### Fixed
+
+- **agent-deadline-setup / agent-return-setup / agent-router-setup:** `uninstall` and `purge` delete a `settings.json` that held only their entry, remove an emptied hooks directory and, on `purge`, an emptied `.claude/`.
+- **manager-setup:** `uninstall` deletes a `settings.local.json` left empty; `purge` also removes an emptied `.claude/brewtools/` and `.claude/`.
+- **secrets-scan:** "Add to .gitignore" also runs `git rm --cached`, so a tracked file is untracked.
+- **provider-switch:** key files readable by group or world are refused.
+
+### repo
+
+#### Changed
+
+- **Docs site:** production deploys only `v*.*.*` tag builds; the test compose requires an exact `DOCS_TAG`; the image uses node 24.21.0 and caddy 2.11.7.
+- **CI:** workflows run on `ubuntu-24.04`; the validators workflow checks skills, fences and install blocks.
+
+---
+
 ## v6.4.0 (2026-10-05)
 
 > Docs: [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/) | [brewdoc overview](https://doc-claude.brewcode.app/brewdoc/overview/)

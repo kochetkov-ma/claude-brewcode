@@ -188,8 +188,8 @@ umask 077 && cat "$KH_TMP" >> ~/.ssh/known_hosts && rm -f "$KH_TMP"
 
 ```bash
 chmod 700 ~/.ssh
-chmod 600 ~/.ssh/config ~/.ssh/id_* ~/.ssh/authorized_keys
-chmod 644 ~/.ssh/*.pub ~/.ssh/known_hosts
+find -H ~/.ssh -maxdepth 1 \( -name config -o -name 'id_*' -o -name authorized_keys \) -exec chmod 600 {} +
+find -H ~/.ssh -maxdepth 1 \( -name '*.pub' -o -name known_hosts \) -exec chmod 644 {} +
 ```
 
 ## Connection Troubleshooting

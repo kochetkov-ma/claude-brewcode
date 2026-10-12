@@ -1,15 +1,6 @@
 #!/usr/bin/env node
-/**
- * Suite: credential and host-key contracts of the shipped skill text
- * (BT-F22 skill half, BT-F12, BT-F21 doc half).
- *
- * Static half: every token reference in SKILL.md / references / template is
- * rewritten to a distinctive sentinel and the resulting lines must all be
- * stdin-only shapes -- a sentinel on a command line or in an `echo` fails.
- * Runtime half: the canonical login line lifted verbatim from SKILL.md is run
- * against an argv+stdin capturing `ssh` stub. No network, no docker, no SSH.
- * Assertion policy: unconditional exact-equality checks with a description.
- */
+// Suite: credential + host-key contracts of shipped skill text (BT-F22 skill half, BT-F12, BT-F21 doc half); unconditional exact-equality checks.
+// Static: token refs in SKILL.md / references / template -> sentinel, stdin-only shapes (command line or `echo` fails); runtime: SKILL.md login line vs argv+stdin `ssh` stub, no network, no docker, no SSH.
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, chmodSync, rmSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
@@ -111,9 +102,7 @@ const ALLOWED = new RegExp(`^\\s*printf '%s' ${SENTINEL} \\| .*--password-stdin`
     0,
     'docker-auth-flow.md no longer lists AskUserQuestion as a token source',
   );
-  // GIVEN the independently generated ordinary SSH agent template.
-  // WHEN its runtime question policy is inspected.
-  // THEN preserve the fork boundary, return decisions to main, and never call the absent tool.
+  // GIVEN generated ordinary SSH agent template, WHEN runtime question policy inspected, THEN fork boundary kept, decisions -> main, absent tool never called.
   const tmplPolicy = FILES['templates/ssh-admin-agent.md.template'];
   check(
     'auq.template-ordinary-removal',

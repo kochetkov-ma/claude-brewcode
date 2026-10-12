@@ -25,7 +25,7 @@ Pass a free-form prompt, in English or Russian, and the mode is resolved from it
 3. **Optimize** — when the brewtools plugin is installed, the written files go through its text optimizer. Otherwise the step is skipped and the report says so.
 4. **Report** — detection, result (per file: added, merged and skipped rows, plus the `rules.sh validate` exit code), status and next steps. `list` prints the plain listing only.
 
-Ask for the menu to get one question with these options: Status (rules), Status (all: agents + rules + skills), Create, Improve, Review, List (plain), Cancel.
+Ask for the menu explicitly to get one `AskUserQuestion` call with two questions. Q1 (what to do): Status (rules), Create new rules, Improve existing rules, Review rules. Q2 (variant): As chosen, Status (all: agents + rules + skills), List (plain); a non-default Q2 answer replaces Q1. Dismiss the dialog or answer `cancel` via Other to stop.
 
 ## Modes
 

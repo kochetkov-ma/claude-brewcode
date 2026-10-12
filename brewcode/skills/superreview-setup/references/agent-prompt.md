@@ -13,7 +13,7 @@ prompt template with the detailed focus ordering, and the test-bloat block. `SKI
 restate any of it.
 
 Each changed-file group is routed to the domain expert selected at runtime from the live roster
-(`.claude/agents/*.md`); the group->agent map in `SKILL.md` is the expected result at generation time, not a frozen
+(`.claude/agents/**/*.md`); the group->agent map in `SKILL.md` is the expected result at generation time, not a frozen
 contract. The main-session coordinator spawns all non-empty groups in one message (parallel), each with the same
 finding contract so Phase 3 can validate and Phase 4 can merge. A worker returns findings/decisions to the
 coordinator and neither re-delegates nor edits files.
@@ -29,7 +29,7 @@ Derive the live mapping every run, so that a newly added agent is discovered ins
 
 ```bash
 # Live roster: name + description of every project agent
-for f in .claude/agents/*.md; do
+find -H .claude/agents -name '*.md' 2>/dev/null | sort | while IFS= read -r f; do
   printf '%s :: %s :: %s\n' "$f" \
     "$(grep -m1 '^name:' "$f" | sed 's/^name:[[:space:]]*//')" \
     "$(grep -m1 '^description:' "$f" | sed 's/^description:[[:space:]]*//' | cut -c1-220)"

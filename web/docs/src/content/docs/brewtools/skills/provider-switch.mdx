@@ -57,7 +57,7 @@ letters and digits only. Existing model and endpoint choices survive a reference
 
 Model catalogs and prices change. Check the direct provider's current terms for region,
 context tier, input/output, cache hits and your billing product before choosing a model.
-Provider references were refreshed on 2026-09-30. Use these primary catalogs and pricing pages
+Provider references were refreshed on 2026-10-12. Use these primary catalogs and pricing pages
 before setup, rather than assuming a fixed monthly cost or comparative quality ranking.
 
 | Provider | Alias | Primary reference |
@@ -89,7 +89,7 @@ an exact catalog match are required. Missing IDs prompt suggestions and at most 
 request/parser failures are reported as verification failures. No model is written on failure,
 and there is no automatic replacement of the user's configured model.
 
-The selected ID maps to Opus, Sonnet and Haiku slots together. OpenRouter IDs are not given an
+The selected ID maps to the Opus, Sonnet, Haiku and Fable slots together. OpenRouter IDs are picked from the live OpenRouter catalog; the bundled reference lists budget/free and general-purpose rows, and its prices are not a recommendation. Selected IDs are not given an
 automatic `[1m]` suffix. Context length and capabilities come from the selected catalog entry;
 provider routing suffixes have their own rules in the
 [OpenRouter variant reference](https://openrouter.ai/docs/guides/routing/model-variants/overview).
@@ -108,7 +108,7 @@ can use it or that a paid inference request succeeded.
 
 ## Credentials and compatibility
 
-Keys enter the writer on stdin rather than command arguments. Connectivity checks pass secrets
+Keys enter the writer on stdin rather than command arguments. A key file that is group- or world-accessible is refused (on Linux and macOS alike) until you run `chmod 600` on it. Connectivity checks pass secrets
 through curl configuration input; the model-list lookup needs no auth header. The shell backup
 is private and cleaned after a successful write. Do not paste a runtime secret into an
 `AskUserQuestion` answer or a report.
@@ -120,8 +120,7 @@ is private and cleaned after a successful write. Do not paste a runtime secret i
 | Qwen / DashScope | `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` |
 | OpenRouter | None |
 
-Aliases set `ANTHROPIC_AUTH_TOKEN` and an explicit empty `ANTHROPIC_API_KEY` along with the
-base URL and model mapping. This avoids unintended OAuth fallback. Supported context settings
+Each alias exports seven variables: `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, an explicit empty `ANTHROPIC_API_KEY`, and `ANTHROPIC_DEFAULT_OPUS_MODEL`, `ANTHROPIC_DEFAULT_SONNET_MODEL`, `ANTHROPIC_DEFAULT_HAIKU_MODEL` and `ANTHROPIC_DEFAULT_FABLE_MODEL`. This avoids unintended OAuth fallback. Supported context settings
 are provider-specific; a model-name hint cannot create context capacity a provider does not offer.
 
 ## Reference refresh

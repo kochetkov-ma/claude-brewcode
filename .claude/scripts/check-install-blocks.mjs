@@ -1,26 +1,6 @@
 #!/usr/bin/env node
-/**
- * Drift check for the blocks the opt-in-guard INSTALL.md runbooks share.
- *
- * Each runbook is EMITTED INTO A USER'S REPO and must stay fully self-contained,
- * so the shared blocks cannot be factored out into an include — every copy has to
- * stay inline and verbatim. What can be removed is the silent-divergence risk:
- * one file per block is declared canonical here, and every other copy is compared
- * against it byte for byte. Fix a block once, run this, and the check names every
- * copy that did not follow.
- *
- * Usage:  node .claude/scripts/check-install-blocks.mjs
- * Exit 0 = all copies match. Exit 1 = drift (or a block vanished), listed by path:line.
- *
- * Two kinds of block:
- *   code  — anchored on a signature line, ending at the first column-0 `}`. Only the
- *           BODY is compared; the signature carries a trailing `//` comment in some
- *           copies and not others, which is cosmetic and deliberately tolerated.
- *   prose — a SPAN from `start` through `stopAt`, whitespace-collapsed before the
- *           comparison. Prose is re-wrapped freely, so a line-window check would
- *           report a reflow as drift and, worse, would drag in the neighbouring
- *           sentence where each runbook legitimately names its own tools.
- */
+// Usage: node .claude/scripts/check-install-blocks.mjs -> every inline copy of a shared INSTALL.md block == its canonical copy.
+// code = body after the anchor up to column-0 `}`; prose = anchor..stopAt, whitespace-collapsed. Exit 0 match, 1 drift/missing (path:line).
 import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -53,9 +33,8 @@ const BLOCKS = [
     id: 'project-root',
     anchor: 'claude_project_root() {',
     canonical: 'agent-return',
-    // agent-router is EXCLUDED on purpose: its ladder inserts an ownership-marker probe
-    // (.claude/brewtools/agent-router.json) ahead of the git toplevel so the installer and
-    // the hook resolve the same root at runtime. Deliberate divergence, not drift.
+    // agent-router excluded on purpose: its ladder probes .claude/brewtools/agent-router.json
+    // before git toplevel so installer and hook resolve the same root.
     files: ['agent-return', 'agent-deadline'],
     why: 'CLAUDE_PROJECT_DIR -> git toplevel -> upward walk -> PWD. A divergent ladder installs '
        + 'into a nested .claude/ that the running Claude Code never reads.',

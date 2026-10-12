@@ -1,24 +1,8 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.4.0 content_version=5.6.0 generated_by=brewtools:agent-deadline-setup
-/**
- * agent-deadline — SubagentStop hook (self-contained, Node built-ins only).
- *
- * Stamps `stopped` on the state file of the subagent that just stopped; the
- * guard resumes the same clock if the agent calls a tool again within the
- * resume grace. Deleting here used to hand a blocked agent a fresh full budget.
- * Prunes by age, at most PRUNE_MAX entries per level: stop marks past the grace,
- * files untouched for ~1 day, empty session dirs, session dirs older than ~1 day.
- *
- * SubagentStop carries `agent_id` + `agent_type`; it fires several times per
- * `agent_id` (after a block, a harness nudge, a resume - verified on CC 2.1.296).
- *
- * os.tmpdir() is shared on Linux/CI, so nothing here follows a symlink: every
- * candidate is lstat-ed and skipped unless it is a real entry we own. Otherwise
- * a symlink planted at the state root turns this pruner into `rm -rf` on
- * whatever it points at.
- *
- * Fail-open: any error -> `{}` on stdout, exit 0. Never blocks a stop.
- */
+// brewcode-meta: version=6.5.0 content_version=6.5.0 generated_by=brewtools:agent-deadline-setup
+
+// agent-deadline SubagentStop (fires several times per agent_id): stamp `stopped` (never delete: a fresh budget), prune
+// stale entries by age, lstat-only (shared tmp, no symlink follow). Fail-open `{}`, never blocks a stop.
 import {
   readFileSync,
   writeFileSync,

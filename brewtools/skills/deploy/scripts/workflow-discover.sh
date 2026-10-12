@@ -1,7 +1,6 @@
 #!/bin/bash
 set -euo pipefail
-# Discover GitHub Actions workflows
-# No args needed — works from project root
+# Discover GitHub Actions workflows. No args needed — works from project root
 # Output: structured key=value pairs
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -44,10 +43,8 @@ for wf_file in "${WORKFLOW_FILES[@]}"; do
 done
 fi
 
-# Get workflow status from GitHub API.
-# One bounded call, not a probe plus a real call: the probe doubled the cost and
-# its exit code was thrown away. ght_reason keeps "gh is missing" separate from
-# "the API said no" -- collapsing them was the whole BT-F30 misreport.
+# Workflow status from GitHub API: one bounded call (old probe doubled cost, its rc was thrown away).
+# ght_reason keeps "gh is missing" != "the API said no"; collapsing them = BT-F30 misreport.
 echo "=== Workflow Status ==="
 WF_RC=0
 WF_JSON=$(ght 30 gh workflow list --json name,state 2>/dev/null) || WF_RC=$?

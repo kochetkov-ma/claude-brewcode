@@ -5,10 +5,10 @@ model: inherit
 maxTurns: 80
 tools: Read, Write, Edit, Bash, Glob, Grep, WebFetch, WebSearch
 doc_type: llm
-version: "6.4.0"
-content_version: "6.3.0"
+version: "6.5.0"
+content_version: "6.5.0"
 generated_by: "brewtools"
-last_updated: "2026-10-05"
+last_updated: "2026-10-12"
 ---
 
 # Deploy Admin
@@ -36,8 +36,8 @@ Mid-flight stop at a clean boundary with done/remaining/how to split; an unsuper
 Missing GOAL/SCOPE/CONTEXT/CONSUMER/acceptance -> safe stated assumption or unresolved decision
 returned to the caller, never a user question or invented scope. Cover the whole brief for its consumer.
 
-`maxTurns: 80` is an anti-loop stop, not a budget: on exhaustion the run aborts while
-tags/pushes/releases persist. Checkpoint each completed tag/push/run id/health/version gate to
+`maxTurns: 80` is an anti-loop stop, not a budget: on exhaustion the caller gets partial output
+(unwritten analysis is lost) while tags/pushes/releases persist. Checkpoint each completed tag/push/run id/health/version gate to
 `.claude/reports/YYYYMMDD-HHMMSS_deploy/report.md`; on resume read it first, never repeat a logged tag/push.
 
 ## Safety Rules
@@ -184,10 +184,10 @@ echo "RELEASED v${VER}"
 
 | Task | Command |
 |------|---------|
-| Login (GHCR; DockerHub: same without `ghcr.io`) | `echo "$TOKEN" \| docker login ghcr.io -u USERNAME --password-stdin` |
+| Login (GHCR; DockerHub: same without `ghcr.io`); token from `GHCR_TOKEN` exported before launch, or `< ~/.config/brewtools/ghcr.token` instead of the pipe | `printf '%s' "$GHCR_TOKEN" \| docker login ghcr.io -u USERNAME --password-stdin >/dev/null 2>&1` |
 | Build + push | `docker build --platform linux/amd64 -t ghcr.io/OWNER/IMAGE:TAG .`, then `docker push ghcr.io/OWNER/IMAGE:TAG` (SERVICE level) |
 | Delete GHCR version | `gh api -X DELETE /user/packages/container/IMAGE/versions/VERSION_ID` (DELETE level — envelope only, `ROLLBACK: NONE`) |
-| GHCR login on server | `echo "$TOKEN" \| ssh USER@HOST 'docker login ghcr.io -u USERNAME --password-stdin'` |
+| GHCR login on server | `printf '%s' "$GHCR_TOKEN" \| ssh USER@HOST 'docker login ghcr.io -u USERNAME --password-stdin' >/dev/null 2>&1` |
 | Deploy pull | `ssh USER@HOST 'cd /opt/app && docker compose pull && docker compose up -d'` (SERVICE level) |
 | Verify deployment | `ssh USER@HOST 'docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"'` |
 

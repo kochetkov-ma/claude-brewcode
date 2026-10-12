@@ -43,10 +43,10 @@ Density-signals (sec 4): act ONLY when several co-occur (e.g. banner overuse in 
 Preserve BDD comments: `// GIVEN`, `// WHEN`, `// THEN`, `// AND`, their `#` equivalents and Arrange/Act/Assert.
 
 ## Issue references
-Keep real tickets regardless of pattern (INTELDEV-XXXXX, JIRA-XXXXX, GH-XXX, BUG-001, FIX-123, ISSUE-42). Remove only IDs proved invented AND resolving to no real ticket after checking actual tracker/provenance; unavailable access or uncertainty -> SURFACE.
+Keep real tickets regardless of pattern (INTELDEV-XXXXX, JIRA-XXXXX, GH-XXX, BUG-001, FIX-123, ISSUE-42); a pattern alone proves neither. Remove only IDs proved invented AND resolving to no real ticket after checking actual tracker/provenance; unavailable access or uncertainty -> SURFACE.
 
-## Surface-for-review -- NEVER auto-edit (from ai-patterns sec 5)
-Report, do not change: hallucinated package/method/URL refs, fabricated tickets, try/except-everything, empty catch-all, placeholder TODO logic, duplicated abstractions, naming drift, happy-path-only tests, CI gaming, unicode inside a literal/regex/identifier, mixed indentation in an excluded file.
+## Surface-for-review -- NEVER auto-edit
+Report, do not change: every ai-patterns sec 5 item, plus unicode inside a literal/regex/identifier and mixed indentation in an excluded file.
 
 ## Formatting (safe cosmetic)
 Ordinary non-functional `/* single line */` -> `// single line`; never convert JavaDoc/JSDoc/KDoc `/** */` or directives. 3+ blank lines -> max 2; trim trailing whitespace only outside literals, tool-consumed docs/doctests and directives. Heredoc/raw-string trailing spaces are data.

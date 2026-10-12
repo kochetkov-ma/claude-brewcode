@@ -1,14 +1,5 @@
 #!/bin/bash
-# brewdoc:memory-sync-setup generator script
-# Resolves the TARGET repo ROOT (never a subdirectory) and emits a self-contained project-local
-# .claude/skills/memory-sync/ into it, substituting the 8 SCALAR placeholders. The 13 multi-row BLOCK
-# placeholders are filled by the AI via Edit (SKILL.md Phase 3); `validate` FAILS while any of them remain.
-# Modes are documented in the usage block at the bottom of this file.
-#
-# SCALAR env overrides (each has a fallback in _scalar_default, none is ever left empty, newlines flattened):
-#   PROJECT_NAME DEFAULT_BRANCH MEMORY_DIR GIT_VISIBILITY LANGUAGE_POLICY FOCUS_EMPHASIS SURFACE_COUNTS TRACKER_NOTE
-# Other env: MEMORY_SYNC_ROOT=<abs path> explicit target root | MEMORY_SYNC_FORCE=1 emit over a live install
-# (DESTROYS hand-edits).
+# brewdoc:memory-sync-setup generator: emits project-local .claude/skills/memory-sync/ into the repo ROOT; modes -> usage at bottom.
 
 set -euo pipefail
 
@@ -32,9 +23,8 @@ resolve_plugin_version() {
 }
 VERSION=$(resolve_plugin_version)
 
-# content_version has no plugin.json field - it is this GENERATOR's own last-changed release,
-# self-located from the brewcode-meta marker bump-version.sh stamps into this SKILL.md
-# (STAMPED_FILES, kind marker) - same pattern as docsync-setup's INSTALL.md config block.
+# content_version (no plugin.json field) = this generator's last-changed release, read from the brewcode-meta
+# marker bump-version.sh stamps into SKILL.md (STAMPED_FILES, kind marker; as docsync-setup INSTALL.md).
 resolve_content_version() {
   [ -f "$SKILL_DIR/SKILL.md" ] || { echo "unknown"; return 0; }
   _cv=$(grep -m1 'brewcode-meta:' "$SKILL_DIR/SKILL.md" 2>/dev/null | sed -n 's/.*content_version=\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*/\1/p')
@@ -52,10 +42,8 @@ EMITTED_N=4
 # because `emit`'s guard has to see it - a disabled install is still an install.
 DISABLED_MARK="$TARGET/SKILL.md.disabled"
 
-# Every artifact of an existing install that is present on disk, one rel path per line; empty output
-# means nothing is installed. This is the ONE question `emit` asks before writing. Keying that guard on
-# SKILL.md alone was the defect: a PARKED install (SKILL.md renamed to SKILL.md.disabled) looked absent,
-# so emit ran and its whole-dir replace destroyed the parked body with every SELF-SYNC hand-edit in it.
+# Installed artifacts on disk, one rel path per line (empty = not installed): the ONE pre-write check of `emit`.
+# Keyed on SKILL.md alone, a PARKED install looked absent and emit destroyed its body + SELF-SYNC hand-edits.
 _live_artifacts() {
   for _rel in SKILL.md SKILL.md.disabled; do
     [ -f "$TARGET/$_rel" ] && printf '%s\n' "$_rel"
@@ -84,9 +72,8 @@ trap '[ -n "$_bd" ] && rm -rf "$_bd" || true' EXIT
 # Shared find pruning - node_modules/.git/dist/build/.next/vendor are never memory.
 FIND_EXCL='-not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" -not -path "*/.next/*" -not -path "*/vendor/*"'
 
-# `find | sort` exits 0 on an empty result, so every listing goes through this helper: a bare
-# `find ... || echo "(none)"` would never print the fallback. `|| true` is required - a missing dir
-# makes find exit 1, and under `set -e` a failing command substitution in an assignment aborts.
+# `find | sort` exits 0 when empty, so a bare `find ... || echo "(none)"` never prints the fallback.
+# `|| true`: a missing dir makes find exit 1, and a failing substitution in an assignment aborts under `set -e`.
 _list() { _out=$(eval "$1" 2>/dev/null || true); if [ -n "$_out" ]; then printf '%s\n' "$_out"; else echo "${2:-(none)}"; fi; }
 
 # Count lines of an eval'd listing, 0 when empty. Same `|| true` contract.
@@ -105,9 +92,7 @@ validate_templates() {
 }
 
 # ── target root ─────────────────────────────────────────────────────────────────
-# TARGET is relative, so running from a subdirectory would scan/emit/report the WRONG tree.
-# Resolve the repo root explicitly and cd there; a non-git tree whose ancestor looks like the real
-# root is a hard error rather than a silent second install.
+# Relative TARGET: subdir would scan/emit/report WRONG tree -> cd to root (MEMORY_SYNC_ROOT=<abs path> wins); root-like ancestor = error.
 resolve_root() {
   ROOT="${MEMORY_SYNC_ROOT:-}"
   [ -n "$ROOT" ] || ROOT=$(git rev-parse --show-toplevel 2>/dev/null || true)
@@ -127,8 +112,7 @@ resolve_root() {
 }
 
 # ── derivations shared by scan / emit / status ──────────────────────────────────
-# NEVER silently return `main`: SKILL.md's Error Handling requires the AI to ASK when the default
-# branch cannot be derived, and it can only ask if it can tell derivation failed.
+# NEVER silently return `main`: SKILL.md Error Handling makes the AI ASK, which needs a visible failure.
 derive_branch() {
   _b=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || true)
   for _r in $( { [ -n "$_b" ] || git remote 2>/dev/null || true; } ); do
@@ -144,10 +128,8 @@ derive_branch() {
   fi
 }
 
-# A non-git dir and a commit-less repo are NOT `git-ignored` - reporting them as such bakes a false
-# house fact into the emitted skill and breaks its `branch` scope. Tracked rows are compared against
-# what is actually on disk: a SINGLE tracked row used to label the whole surface `git-tracked`, which
-# drops the "VERIFY must re-read files directly" guidance in exactly the mixed case that needs it.
+# Non-git dir / commit-less repo != `git-ignored` (false house fact, breaks `branch` scope). Tracked rows vs disk:
+# one tracked row must not label a mixed surface `git-tracked` (drops "VERIFY must re-read files directly").
 derive_git_visibility() {
   git rev-parse --git-dir >/dev/null 2>&1 || { echo "not-a-git-repo"; return 0; }
   _rows=$( { git ls-files -- .claude '*CLAUDE.md' '*AGENTS.md' 2>/dev/null || true; } | wc -l | tr -d ' ')
@@ -155,13 +137,8 @@ derive_git_visibility() {
     git rev-parse --verify HEAD >/dev/null 2>&1 || { echo "no-commits"; return 0; }
     echo "git-ignored"; return 0
   fi
-  # Same surface as the pathspec above (`*CLAUDE.md` matches at any depth in both git and find).
-  # SET DIFFERENCE on paths, never a count delta: the two enumerations differ (git pathspec vs a
-  # FIND_EXCL-pruned find), so subtracting the totals cancels a tracked-but-pruned row against a
-  # real untracked file and mislabels a mixed surface `git-tracked` - dropping the re-read guidance.
-  # Same `-not -path '*/memory-sync/*'` exclusion count_skills uses, for the same reason: counting the
-  # manifest emit just wrote made a fresh install flip `git-tracked` -> `mixed (N tracked, 5 untracked)`,
-  # so the stamped {GIT_VISIBILITY} scalar permanently disagreed with live `status`.
+  # Pathspec surface; SET DIFFERENCE, never a count delta (git != FIND_EXCL-pruned find: totals cancel -> mislabel).
+  # `-not -path '*/memory-sync/*'` as in count_skills, else fresh emit -> `mixed (N tracked, 5 untracked)` != {GIT_VISIBILITY}.
   _disk=$(eval "find . \\( -type f -o -type l \\) \\( -path './.claude/*' -o -name '*CLAUDE.md' -o -name '*AGENTS.md' \\) -not -path '*/memory-sync/*' $FIND_EXCL" 2>/dev/null || true)
   # `grep -c .` exits 1 on zero matches - a legitimate outcome that `pipefail` would turn into an abort.
   _untracked=$(printf '%s\n' "$_disk" | sed -e 's|^\./||' -e '/^$/d' | sort \
@@ -183,7 +160,8 @@ derive_memory_dir() {
     [ -z "$_m" ] || { printf '%s\n' "$_m"; return 0; }
   done
   _enc=$(printf '%s' "$ROOT" | tr '/' '-')
-  for _d in "$HOME/.claude/projects/$_enc/memory" "$HOME/.claude/projects/$(printf '%s' "$_enc" | tr '.' '-')/memory"; do
+  _cfg="${CLAUDE_CONFIG_DIR:-$HOME/.claude}" # active profile owns auto memory
+  for _d in "$_cfg/projects/$_enc/memory" "$_cfg/projects/$(printf '%s' "$_enc" | tr '.' '-')/memory"; do
     [ -d "$_d" ] || continue; printf '%s\n' "$_d"; return 0
   done
   echo "none"
@@ -195,9 +173,8 @@ derive_tracker_note() {
   else echo "none"; fi
 }
 
-# Per-batch counts. The emitted skill dir is excluded EVERYWHERE (scan, emit stamp, status) so all three
-# agree: it does not exist at analysis time, so counting it later would make every fresh install look
-# drifted. The emitted skill's Phase 4 subtracts its own files before comparing, for the same reason.
+# Per-batch counts; the emitted skill dir is excluded EVERYWHERE (scan, emit stamp, status), else a fresh install
+# looks drifted (absent at analysis time). The emitted skill's Phase 4 subtracts its own files likewise.
 count_root_md()   { _count "find . -maxdepth 1 -type f \\( -name 'CLAUDE.md' -o -name 'CLAUDE.local.md' -o -name 'CONVENTIONS.md' -o -name 'CONTRIBUTING.md' \\)"; }
 count_nested_md() { _count "find . -mindepth 2 -type f -name 'CLAUDE.md' $FIND_EXCL"; }
 count_agents_md() { _count "find . \\( -type f -o -type l \\) -name 'AGENTS.md' $FIND_EXCL"; }
@@ -214,10 +191,7 @@ derive_surface_counts() {
 surface_total() { derive_surface_counts | cut -d' ' -f1; }
 
 # ── provenance frontmatter (emit writes it, validate + status read it) ──────────
-# The standard keys go AFTER the template's own frontmatter keys - i.e. immediately before the
-# closing `---`. Every value is QUOTED except `doc_type`: surface_files contains `: ` and would
-# otherwise be invalid YAML, and a bare date is typed as a Date by real YAML consumers, while
-# `doc_type` is an enum matched literally as `^doc_type: llm$` by brewcode's rules validator.
+# Keys right before closing `---`, QUOTED (`: ` in surface_files, bare date -> Date) except enum `doc_type` (`^doc_type: llm$`).
 _stamp_frontmatter() {
   _sfile="$1"
   _sfv=$(printf '%s' "${SURFACE_COUNTS:-unknown}" | tr -d '"' | tr '\n\r' '  ')
@@ -250,11 +224,7 @@ _fm_meta() {
 _legacy_stamp() { grep -F "$LEGACY_STAMP_PREFIX" "$1" 2>/dev/null | tail -1 || true; }
 
 # ── unresolved-token scan (ONE implementation - validate and status MUST agree) ──
-# Matches \{[A-Z_]+\}, IGNORES a `$`-prefixed occurrence (${CLAUDE_SKILL_DIR} is a shell expansion,
-# not a placeholder) and allow-lists the runtime tokens the emitted skill resolves per run.
-# A PARKED install keeps its body (placeholders included) in SKILL.md.disabled, so `status` must scan
-# that file instead. `validate` never reaches here on a parked install - it exits on the missing
-# SKILL.md first, by design.
+# \{[A-Z_]+\} minus `$`-prefixed (${CLAUDE_SKILL_DIR}) and RUNTIME_ALLOW; PARKED -> scan SKILL.md.disabled (validate exits earlier).
 _emitted_files() {
   if [ ! -f "$TARGET/SKILL.md" ] && [ -f "$TARGET/SKILL.md.disabled" ]
   then echo "$TARGET/SKILL.md.disabled"
@@ -366,8 +336,11 @@ scan_target() {
 }
 
 # ── scalar resolution ───────────────────────────────────────────────────────────
+# emit substitutes these 8 scalars; the 13 BLOCK placeholders -> AI via Edit (SKILL.md Phase 3), validate FAILS while open.
 SCALAR_KEYS="PROJECT_NAME DEFAULT_BRANCH MEMORY_DIR GIT_VISIBILITY LANGUAGE_POLICY FOCUS_EMPHASIS SURFACE_COUNTS TRACKER_NOTE"
 
+# SCALAR env overrides (each has a fallback here, none is ever left empty, newlines flattened):
+#   PROJECT_NAME DEFAULT_BRANCH MEMORY_DIR GIT_VISIBILITY LANGUAGE_POLICY FOCUS_EMPHASIS SURFACE_COUNTS TRACKER_NOTE
 _scalar_default() {
   case "$1" in
     PROJECT_NAME)    basename "$ROOT" ;;
@@ -396,9 +369,8 @@ resolve_scalars() {
   done
 }
 
-# Literal (non-regex, non-sed) substitution: awk reads values from ENVIRON, so `/`, `&` and `\` inside a
-# value are inserted verbatim. SINGLE PASS - each line is scanned once and the substituted value lands in
-# an output buffer that is never re-scanned, so a value containing `{OTHER_KEY}` is not re-expanded.
+# Literal substitution: awk reads values from ENVIRON, so `/`, `&`, `\` land verbatim.
+# SINGLE PASS: output buffer is never re-scanned, so a value holding `{OTHER_KEY}` is not re-expanded.
 _subst() {
   awk -v keys="$SCALAR_KEYS" '
     BEGIN { nk = split(keys, k, " "); for (i = 1; i <= nk; i++) have[k[i]] = 1 }
@@ -416,28 +388,14 @@ _subst() {
 }
 
 # ── emit ────────────────────────────────────────────────────────────────────────
-# STAGED: the whole tree is built in a staging dir on the SAME filesystem, and only once every file is
-# generated does anything move into the target - as individual renames of the 5 OWNED paths. A failure
-# half-way therefore leaves NO half-generated install, which matters because a stray one would push the
-# user to MEMORY_SYNC_FORCE=1 (the flag that destroys edits). What emit must NEVER do is replace the
-# directory wholesale: `uninstall` explicitly reports foreign files in it as KEPT, and a `rm -rf $TARGET`
-# on the next emit deleted exactly those.
-# Every write on the emit path routes its failure here: under `set -e` a bare `mktemp`/`cp`/redirect
-# failure would abort BEFORE the guard below and the user would never see the friendly message.
+# Every emit-path write failure routes here: a bare `mktemp`/`cp`/redirect failure under `set -e` hides this message.
 _emit_abort() {
   echo "❌ FAILED: cannot install into $TARGET (permissions?) - NOTHING was written, no partial install to force past"
   exit 1
 }
 
-# Selective placement removes only the CURRENT $EMITTED_REFS, so a reference an OLDER version emitted
-# under a different name would linger forever - the whole-directory `rm -rf $TARGET` used to sweep it.
-# Ownership is read off the file itself, never off a historical name list: every emitted reference carries
-# `generated_by=$META_GENERATED_BY` in its brewcode-meta provenance comment, which is ALWAYS line 1. The match
-# is anchored to that position and to the `<!-- brewcode-meta:` opener, because a user file that merely MENTIONS
-# the marker in its prose is a user file - matching the string anywhere in a head window deleted it. The trailing
-# space keeps `...-setup-x` from passing as `...-setup`. Scope is $TARGET_REFS only - SKILL.md and the parked
-# SKILL.md.disabled are top-level and already guarded by the park refusal above.
-# `head` is read into a variable with no pipeline on purpose: a pipe would risk a pipefail/SIGPIPE abort.
+# Sweeps refs an OLDER version emitted under another name: owned = line 1 (ALWAYS) is `<!-- brewcode-meta:` .. `generated_by=$META_GENERATED_BY `
+# (space: not `-setup-x`); a user file MENTIONING the marker stays. $TARGET_REFS only; `head` into a var, no pipe (pipefail/SIGPIPE).
 _sweep_stale_refs() {
   [ -d "$TARGET_REFS" ] || return 0
   for _sf in "$TARGET_REFS"/*; do
@@ -458,9 +416,7 @@ emit_skill() {
   echo "=== memory-sync-setup: emit ==="
   validate_templates
 
-  # A PARKED install refuses UNCONDITIONALLY - MEMORY_SYNC_FORCE=1 means "overwrite the LIVE install",
-  # never "silently regenerate over a body the user deliberately took out of the roster". `enable` is one
-  # command away and makes the intent explicit.
+  # PARKED refuses UNCONDITIONALLY: MEMORY_SYNC_FORCE=1 overwrites a LIVE install, never a body taken out of the roster.
   if [ -f "$DISABLED_MARK" ]; then
     echo "❌ FAILED: memory-sync is PARKED at $DISABLED_MARK - it is installed, just disabled"
     echo "   $DISABLED_MARK holds the body and every SELF-SYNC hand-edit."
@@ -478,6 +434,7 @@ emit_skill() {
   fi
 
   resolve_scalars
+  # STAGED on the same FS, then renames of the 5 OWNED paths: a mid-way failure leaves no half install to FORCE past.
   _parent=$(dirname "$TARGET")
   mkdir -p "$_parent" || _emit_abort
   _bd=$(mktemp -d "$ROOT/$_parent/.memory-sync-emit.XXXXXX" 2>/dev/null) || _emit_abort
@@ -520,14 +477,7 @@ emit_skill() {
 }
 
 # ── restamp ─────────────────────────────────────────────────────────────────────
-# The FINAL step of `upgrade`, ALWAYS run and never conditional on the stamp format. It refreshes the
-# provenance keys of an ALREADY INSTALLED SKILL.md - version / last_updated / surface_files, plus
-# doc_type and generated_by when absent - and drops a surviving pre-5.0 tail stamp. Nothing else moves:
-# the body, every SELF-SYNC hand-edit and every foreign frontmatter key are copied through verbatim,
-# and the copy is PROVEN byte-identical below before the new file is kept. Without this, an install
-# already in the current format but on an older plugin version had no path to a fresh stamp at all:
-# `upgrade` refreshed the tables, `validate` then hard-failed on the stale version, and the only escape
-# was MEMORY_SYNC_FORCE=1 emit - which destroys exactly the hand-edits `upgrade` exists to preserve.
+# Last, unconditional step of `upgrade`: refreshes provenance keys only, drops a pre-5.0 tail stamp; body proven byte-identical.
 _meta_body() {
   awk -v legacy="$LEGACY_STAMP_PREFIX" '
     BEGIN { n = 0 }
@@ -538,6 +488,7 @@ _meta_body() {
   ' "$1"
 }
 
+# Without restamp an older-version install fails `validate`; only escape = FORCE=1 emit, destroying hand-edits.
 restamp_skill() {
   echo "=== memory-sync-setup: restamp ==="
   echo "TARGET=$ROOT"
@@ -611,12 +562,8 @@ restamp_skill() {
   echo "✅ restamp (metadata keys only - body and every hand-edit verified byte-identical)"
 }
 
-# The 4 references are mechanism-`a` byte copies: their version stamp is BAKED at release into the
-# plugin's own file, so an installed copy only becomes current by being copied again. `upgrade` never
-# re-copied them, which left `setup-status`'s `cmp` reporting DIFFERS forever with no mode that could
-# clear it. Re-copy only where that is PROVABLY lossless - the sole difference is the release stamp
-# line. Anything else (a SELF-SYNC hand-edit, hard-sync.md's two filled BLOCKs, prose that moved in a
-# newer release) is reported and left alone: a re-copy there would destroy content.
+# The 4 references are mechanism-`a` byte copies with a release-BAKED stamp: only a re-copy clears `setup-status` `cmp` DIFFERS.
+# Re-copy only when the stamp line is the sole diff; else (hand-edit, hard-sync.md filled BLOCKs, moved prose) report, untouched.
 refresh_refs() {
   for r in $EMITTED_REFS; do
     _src="$REFS/$r"; _dst="$TARGET_REFS/$r"
@@ -738,9 +685,7 @@ status_report() {
 
   echo "PLUGIN_VERSION=$VERSION"
 
-  # PARKED (SKILL.md renamed to SKILL.md.disabled by `disable`) is a THIRD state, never collapsed into
-  # absent: the body, the 4 references and every SELF-SYNC hand-edit are still on disk, so the stamp is
-  # read out of the parked file and reported at its real version. Only `enable` brings it back.
+  # PARKED (SKILL.md.disabled) is a THIRD state, never absent: body, refs, hand-edits on disk; stamp read from it.
   _skf="$TARGET/SKILL.md"; _parked=no
   if [ ! -f "$_skf" ] && [ -f "$DISABLED_MARK" ]; then _skf="$DISABLED_MARK"; _parked=yes; fi
 
@@ -839,11 +784,7 @@ status_report() {
 }
 
 # ── enable / disable ────────────────────────────────────────────────────────────
-# Claude Code discovers a project skill only through <dir>/SKILL.md. Parking that ONE file as
-# SKILL.md.disabled withdraws /memory-sync from the roster while the emitted references AND every
-# hand-edit the skill accumulated through its SELF-SYNC phase stay byte-identical on disk. Fully
-# reversible, nothing regenerated, no provenance stamp touched. ($DISABLED_MARK is declared at the top,
-# with the rest of the owned path set, because `emit`'s guard needs it too.)
+# CC discovers a skill only via <dir>/SKILL.md: parking it as SKILL.md.disabled hides /memory-sync; refs, hand-edits, stamp untouched.
 
 toggle_skill() {
   _want="$1"   # enable | disable
@@ -871,12 +812,7 @@ toggle_skill() {
 }
 
 # ── uninstall / purge ───────────────────────────────────────────────────────────
-# `emit` writes exactly SKILL.md + $EMITTED_REFS, so that manifest is also the removal manifest:
-#   uninstall  deletes precisely what this generator wrote, and NOTHING it did not. Anything else
-#              sitting in the dir came from the user, so it survives and is reported.
-#   purge      deletes the whole directory plus any crashed-emit staging left under .claude/skills/.
-# The generator has no hooks, no settings entries and no config file anywhere else in the target,
-# so these two paths are its entire footprint.
+# Emit manifest = removal manifest: uninstall deletes exactly it (user files kept, listed); purge = whole dir + staging.
 remove_skill() {
   _purge="$1"   # 0 = uninstall, 1 = purge
   _label=$([ "$_purge" = "1" ] && echo purge || echo uninstall)
@@ -888,6 +824,7 @@ remove_skill() {
     exit 0
   fi
 
+  # No hooks/settings/config elsewhere: the dir + .claude/skills/ staging leftovers are the whole footprint.
   if [ "$_purge" = "1" ]; then
     rm -rf "$TARGET"
     echo "REMOVED: $TARGET/ (whole directory, user-added files included)"

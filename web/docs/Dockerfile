@@ -1,4 +1,4 @@
-FROM node:24.14.0-alpine3.23 AS build
+FROM node:24.21.0-alpine3.23 AS build
 ARG VERSION
 WORKDIR /app
 COPY package.json package-lock.json ./
@@ -6,7 +6,7 @@ RUN npm ci
 COPY . .
 RUN PUBLIC_VERSION=${VERSION} npm run build
 
-FROM caddy:2.11.2-alpine
+FROM caddy:2.11.7-alpine
 RUN adduser -D -u 1000 caddy
 COPY --from=build /app/dist /srv
 COPY Caddyfile /etc/caddy/Caddyfile

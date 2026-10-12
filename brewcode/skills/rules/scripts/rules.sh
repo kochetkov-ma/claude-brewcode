@@ -1,15 +1,5 @@
 #!/bin/bash
-# Brewcode Rules Script
-# Multi-function script for /brewcode:rules skill
-# Usage: rules.sh <mode> [options]
-#
-# Modes:
-#   read <path>           - Read knowledge file (first 100 lines)
-#   check                 - Check existing rules files (main + specialized)
-#   create                - Create missing main rules from templates
-#   create-specialized <prefix> [paths] - Create specialized rules (e.g., test-avoid.md)
-#   list                  - List avoid.md, best-practice.md and <prefix>- rule files
-#   validate              - Validate the same files: frontmatter + table structure
+# rules.sh <read|check|create|create-specialized|list|validate> [options] - /brewcode:rules helper; usage: dispatch below.
 
 set -euo pipefail
 
@@ -96,15 +86,11 @@ check_rules() {
   fi
 }
 
-# Render a template: substitute the scope scalars + the four standard metadata keys.
-# `|` is the sed delimiter, so no substituted value may contain one -- all of them are
-# globs, titles and versions produced here, never user prose.
-# Empty paths: removes the `paths:` line entirely (for main files).
+# Render template: scope scalars + 4 standard metadata keys; `|` = sed delimiter, so values (globs/titles/versions, !=user prose) never hold one.
 render_template() {
   local tpl="$1" out="$2" title="$3" paths="$4"
-  # The ONE frontmatter difference between a main and a specialized file: empty paths deletes the
-  # `paths:` line (repo-wide loading), a value substitutes it. Everything else is shared, so the
-  # scalar list exists once -- a key added to one branch and forgotten in the other was the risk.
+  # Sole main-vs-specialized difference: empty paths deletes the `paths:` line (repo-wide, main files), a value substitutes it.
+  # Rest is shared so the scalar list exists once (a key added to one branch only was the risk).
   local paths_expr='/^paths: {PATHS}$/d'
   [ -n "$paths" ] && paths_expr="s|{PATHS}|$paths|g"
   sed -e "$paths_expr" \
@@ -245,10 +231,8 @@ capitalize() {
   printf '%s%s' "$(printf '%s' "${s%"${s#?}"}" | tr '[:lower:]' '[:upper:]')" "${s#?}"
 }
 
-# A specialized rule file applies to ONE slice of the repo, so it must never ship the
-# repo-wide `["**/*"]` -- that is what made every specialized rule load into every request.
-# Known prefixes get a curated glob set; anything else gets a prefix-derived guess that the
-# caller is told to confirm. An explicit `paths` argument always wins.
+# Specialized rule = ONE repo slice, never repo-wide `["**/*"]` (it loaded into every request).
+# Known prefix -> curated globs; else prefix-derived guess the caller must confirm; explicit `paths` arg always wins.
 default_paths_for_prefix() {
   case "$1" in
     test|tests|unit) printf '["**/test/**", "**/tests/**", "**/*_test.*", "**/*.test.*", "**/*Test.*"]' ;;

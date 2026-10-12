@@ -14,9 +14,9 @@ Install the entire suite:
 
 <InstallPrompt plugin="all" mode="install" />
 
-Brewcode is a plugin for Claude Code for spec authoring, multi-agent review, and a toolkit of
-skills and agents. The name is a nod to brewing: skills (recipes) define what to brew, agents
-(brewers) do the work, and hooks (processes) manage prompt-time injection.
+Brewcode is a Claude Code authoring toolkit: skill, agent and rule creation and sync, semantic code
+search, project conventions, E2E tests, generated review and team skills, and a setup dashboard. The name is a nod to brewing: skills (recipes) define what to brew, agents
+(brewers) do the work, and hooks (processes) handle session start and post-compaction recovery.
 
 ## Key Features
 
@@ -31,7 +31,7 @@ skills and agents. The name is a nod to brewing: skills (recipes) define what to
   </Card>
   <Card title="One dashboard for every setup" icon="clipboard">
     <a href="/brewcode/skills/setup-status/">/brewcode:setup-status</a> reports, read-only, which setup skills across
-    brewcode, brewtools and brewdoc are installed, stale, disabled, partial or missing here.
+    brewcode, brewtools and brewdoc are current, stale, modified, partial, disabled or missing here.
     It covers 11 setups and 23 stamp carriers, with dependency-aware next commands.
   </Card>
   <Card title="5 agents (brewers)" icon="users">
@@ -39,8 +39,8 @@ skills and agents. The name is a nod to brewing: skills (recipes) define what to
     [hook-creator](/brewcode/agents/hook-creator/), [bash-expert](/brewcode/agents/bash-expert/), and the internal bc-rules-organizer.
     Generic roles are generated per project into .claude/agents/.
   </Card>
-  <Card title="4 registered hook commands" icon="settings">
-    Prompt-time delegation reminder, session-start version-check, and post-compaction recovery of role, plan and task graph.
+  <Card title="2 registered hook commands" icon="settings">
+    Two SessionStart hooks: session-start (version-check, plan symlink, permission tag) and compact-recall (post-compaction recovery of plan, intent and task graph).
   </Card>
   <Card title="E2E testing" icon="check">
     BDD scenario authoring and Playwright autotest orchestration
@@ -62,8 +62,8 @@ skills and agents. The name is a nod to brewing: skills (recipes) define what to
 
 ## Architecture
 
-Brewcode works as a layer on top of Claude Code through the hook system. The plugin has no external runtime --
-all context is managed through built-in Claude Code events.
+Brewcode works as a layer on top of Claude Code. The plugin has no external runtime. Its two
+SessionStart hooks handle the version check, the plan symlink and post-compaction recovery.
 
 ```
                          Brewcode Plugin
@@ -77,12 +77,10 @@ all context is managed through built-in Claude Code events.
   │   └──────────────┘          └──────────────────┘         │
   │          │                          │                     │
   │          v                          v                     │
-  │   Hooks (processes)           Templates + Knowledge      │
+  │   Hooks (processes)           Rule templates             │
   │   ┌──────────────┐          ┌──────────────────┐         │
   │   │ session-start│          │ rules templates   │         │
-  │   │ forced-eval  │ <──────> │ artifacts/        │         │
-  │   │ role-recall  │          │                   │         │
-  │   │compact-recall│          │                   │         │
+  │   │compact-recall│ <──────> │ templates/        │         │
   │   └──────────────┘          └──────────────────┘         │
   │                                                          │
   └──────────────────────────────────────────────────────────┘
@@ -95,14 +93,11 @@ brewcode/
 ├── .claude-plugin/
 │   └── plugin.json                    # Plugin manifest
 ├── hooks/
-│   ├── hooks.json                     # 4 hooks (SessionStart x3, UserPromptSubmit)
+│   ├── hooks.json                     # 2 hooks (SessionStart x2)
 │   ├── session-start.mjs              # Version-check, plan-symlink, permission tag
-│   ├── forced-eval.mjs                # [ROLE] delegate + [SPLIT] bounded units + [BRANCH] default-to-main
-│   ├── role-recall.mjs                # SessionStart/compact: re-inject the same [ROLE]/[SPLIT]/[BRANCH]
 │   ├── compact-recall.mjs             # SessionStart/compact: re-anchor plan, intent, task graph
 │   └── lib/
-│       ├── utils.mjs                  # I/O, version cache, configuration
-│       └── reminder.mjs               # REMINDER_TEXT, shared by forced-eval.mjs and role-recall.mjs
+│       └── utils.mjs                  # I/O, version cache, configuration
 ├── agents/                            # 5 agents
 │   ├── skill-creator.md               # Skill creation (inherit)
 │   ├── agent-creator.md               # Agent creation (inherit)
@@ -119,8 +114,6 @@ brewcode/
 │   ├── agents/                        # Agent management
 │   ├── teams-setup/                   # Dynamic agent teams
 │   └── e2e/                           # E2E testing orchestration
-├── modes/
-│   └── manager.md                     # Manager-mode system prompt fragment
 └── templates/                         # Rule templates
 ```
 
@@ -136,8 +129,8 @@ keeps the generated documents readable.
 
 ## Artifact metadata
 
-v5.1.0 standardizes what every `-setup` skill stamps onto what it installs, across all four
-plugins. Version always comes from `.claude-plugin/plugin.json`, never hardcoded and never the
+v5.1.0 standardizes what every `-setup` skill stamps onto what it installs, across
+brewcode, brewtools and brewdoc. Version always comes from `.claude-plugin/plugin.json`, never hardcoded and never the
 literal `unknown` — a writer that cannot resolve it refuses to write rather than stamp a fake.
 
 | Field | Values | Where |
@@ -159,7 +152,7 @@ Five carriers, depending on the file type it is stamping:
 
 [`/brewcode:setup-status`](/brewcode/skills/setup-status/) is the
 payoff — it reads these stamps back and compares them against the installed plugin version across
-all eleven `-setup` skills to report installed, stale or partial. See
+all eleven `-setup` skills to report current, stale, modified, partial, disabled or missing. See
 [`superreview-setup`](/brewcode/skills/superreview-setup/#version-and-ownership) for one skill's
 full version of this contract.
 
@@ -178,7 +171,7 @@ full version of this contract.
     | Dynamic | teams-setup | Agent team creation and management |
     | Testing | e2e | E2E testing orchestration with BDD scenarios |
     | Meta | skills, agents | Skill and agent management |
-    | Dashboard | setup-status | Read-only: what is installed, stale or missing across all four plugins |
+    | Dashboard | setup-status | Read-only: what is current, stale or missing across brewcode, brewtools and brewdoc |
   </TabItem>
   <TabItem label="Agents">
     5 agents (brewers), all specialists. Generic implementation/review roles are generated per project
@@ -194,19 +187,17 @@ full version of this contract.
     + dynamic project agents created by [`/brewcode:teams-setup`](/brewcode/skills/teams-setup/)
 
     Creator agents and on-demand references follow official authoring contracts checked through
-    Claude Code 2.1.285. They distinguish ordinary agents, conversation forks and skill forks,
+    Claude Code 2.1.296. They distinguish ordinary agents, conversation forks and skill forks,
     honor current plugin field restrictions, and return unresolved decisions to the main caller.
     Main owns dispatch and review under repository policy; local validation is distinct from live evaluation.
   </TabItem>
   <TabItem label="Hooks">
-    4 hooks manage prompt-time injection, session start, and post-compaction recovery.
+    2 hooks manage session start and post-compaction recovery.
     See the [Hooks](/brewcode/hooks/) section for details.
 
     | Event | Hook | Purpose |
     |-------|------|---------|
-    | SessionStart | session-start | Initialization, version-check |
-    | UserPromptSubmit | forced-eval | Manager-role + split-discipline reminder |
-    | SessionStart (compact) | role-recall | Re-inject [ROLE]/[SPLIT]/[BRANCH] after a compaction |
+    | SessionStart | session-start | Initialization, version-check, plan symlink |
     | SessionStart (compact) | compact-recall | Re-anchor plan, intent and task graph after a compaction |
   </TabItem>
 </Tabs>
@@ -217,7 +208,7 @@ full version of this contract.
   <li class="step step-primary">
     <div>
       <strong>See what is already here</strong> <Badge variant="primary" text="/brewcode:setup-status" />
-      <p>Read-only. One table of every setup skill across brewcode, brewtools and brewdoc: installed, stale, partial, missing — plus the exact command for each row. Writes nothing.</p>
+      <p>One table of every setup skill across brewcode, brewtools and brewdoc: current, stale, partial, missing — plus the exact command for each row. Read-only except an opt-in task-tools key merge, applied only after you agree.</p>
     </div>
   </li>
   <li class="step step-primary">

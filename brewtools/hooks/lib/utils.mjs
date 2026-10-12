@@ -1,13 +1,9 @@
-/**
- * Shared utilities for brewtools hooks
- */
-import { existsSync, mkdirSync, appendFileSync, readFileSync } from 'fs';
+/** Shared utilities for brewtools hooks */
+import { existsSync, mkdirSync, appendFileSync } from 'fs';
 import { dirname, join, resolve } from 'path';
 
-/**
- * Project root: CLAUDE_PROJECT_DIR -> upward walk for .git/.claude -> hook cwd. Never throws.
- * Hook `cwd` drifts mid-session, so it is never the root for state/prompt/log paths.
- */
+// Project root: CLAUDE_PROJECT_DIR -> upward walk for .git/.claude -> hook cwd. Never throws.
+// Hook `cwd` drifts mid-session, so it is never the root for state/prompt/log paths.
 export function projectRoot(hookCwd) {
   const env = process.env.CLAUDE_PROJECT_DIR;
   if (env && existsSync(env)) return resolve(env);
@@ -23,10 +19,7 @@ export function projectRoot(hookCwd) {
   return start;
 }
 
-/**
- * Read JSON from stdin
- * @returns {Promise<Object>} Parsed JSON input
- */
+/** Read stdin as JSON; throws on invalid input */
 export async function readStdin() {
   const chunks = [];
   for await (const chunk of process.stdin) {
@@ -40,10 +33,7 @@ export async function readStdin() {
   }
 }
 
-/**
- * Output hook response as JSON to stdout
- * @param {Object} response - Hook response object
- */
+/** Print hook response as one JSON line to stdout */
 export function output(response) {
   try {
     console.log(JSON.stringify(response));
@@ -55,39 +45,21 @@ export function output(response) {
 
 const LOG_LEVELS = { error: 0, warn: 1, info: 2, debug: 3, trace: 4 };
 const LOG_FILE = '.claude/logs/brewtools.log';
-const LOG_CONFIG = '.claude/tasks/cfg/brewcode.config.json';
 const DEFAULT_LEVEL = 'info';
 
-let _cachedLevel = null;
-function getLevel(cwd) {
-  if (_cachedLevel) return _cachedLevel;
+// Level: BREWCODE_LOG_LEVEL env, else 'info'.
+function getLevel() {
   const env = (process.env.BREWCODE_LOG_LEVEL || '').toLowerCase();
-  if (env in LOG_LEVELS) { _cachedLevel = env; return env; }
-  if (cwd) {
-    try {
-      const cfg = JSON.parse(readFileSync(join(cwd, LOG_CONFIG), 'utf8'));
-      const lvl = cfg.logging?.level;
-      if (lvl && lvl in LOG_LEVELS) { _cachedLevel = lvl; return lvl; }
-    } catch {}
-  }
-  _cachedLevel = DEFAULT_LEVEL;
-  return DEFAULT_LEVEL;
+  return Object.hasOwn(LOG_LEVELS, env) ? env : DEFAULT_LEVEL;
 }
 
-/**
- * Log message to file and stderr
- * @param {string} level - Log level
- * @param {string} prefix - Log prefix
- * @param {string} message - Log message
- * @param {string} cwd - Current working directory
- * @param {string|null} sessionId - Optional session ID
- */
+/** Log to stderr + `<cwd>/.claude/logs/brewtools.log`; no cwd -> errors to stderr only */
 export function log(level, prefix, message, cwd, sessionId = null) {
   if (!cwd) {
     if (level === 'error') console.error(`${prefix} ${message}`);
     return;
   }
-  if (LOG_LEVELS[level] > LOG_LEVELS[getLevel(cwd)]) return;
+  if (LOG_LEVELS[level] > LOG_LEVELS[getLevel()]) return;
   console.error(`${prefix} ${message}`);
 
   const timestamp = new Date().toISOString();

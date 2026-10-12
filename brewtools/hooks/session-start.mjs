@@ -25,7 +25,7 @@ async function main() {
         context = `Manager HARD wall active (project, level=${level}): a PreToolUse guard denies Write/Edit and ${bash} in the main session; subagents are not restricted, so implementation goes through the Agent tool. /brewtools:manager-setup disable to exit.`;
       }
     } catch (err) {
-      log('info', '[session-start]', `manager hard-wall check error (${err.message}), skipping`, cwd, session_id);
+      log('warn', '[session-start]', `manager hard-wall check error (${err.message}), skipping`, cwd, session_id);
     }
 
     if (!context && !systemMessage) {

@@ -8,15 +8,11 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 # SSH Admin
 
 <Callout type="caution">
-**Every destructive command needs sign-off before it runs.** This ordinary subagent has no interactive question channel. MODIFY, SERVICE, DELETE, and PRIVILEGE operations return as an `## APPROVAL REQUIRED` envelope unless an incoming approval token authorizes that exact operation. Remote SSH mutations also require an envelope; read-only work can gather the evidence first.
-</Callout>
-
-<Callout type="caution">
-**One agent per host.** A multi-server, multi-environment or multi-service job is split per target — the agent refuses to loop over your whole fleet in a single run. Ask for "check prod-1" and "check prod-2" as separate tasks, or accept the split proposal it returns.
+**Every destructive command needs sign-off before it runs.** Remote SSH mutations return as an `## APPROVAL REQUIRED` envelope; read-only work gathers the evidence first. See Approval contract and Scope guard below.
 </Callout>
 
 <Callout type="tip">
-**Run `/brewtools:ssh` first** to configure server connections. The skill writes `CLAUDE.local.md` with your server inventory — ssh-admin reads it automatically on every task start. No inventory file? The agent stops and returns the missing connection details as a `## NEEDS-INPUT` block — it never guesses a host.
+**Run `/brewtools:ssh` first** to configure server connections. The skill writes `CLAUDE.local.md` with your server inventory — ssh-admin reads it automatically on every task start.
 </Callout>
 
 ## Quick reference
@@ -30,58 +26,9 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 | Permission | `default` — destructive ops return as an `APPROVAL REQUIRED` envelope |
 | Scope | One bounded unit per run; one agent per host |
 
-<Callout type="note" title="What's new in 6.2.0">
-- Agent prompt tightened for density — shorter prose, more tables, no behavior change.
-- `Return Contract` now opens the agent definition instead of closing it — the model reads the output shape before anything else.
-- Every guardrail is unchanged: the six-level safety classification, the `## APPROVAL REQUIRED` envelope fields, and the approval-token rule read the same as before.
-- No new capability in this pass — wording and table conversion only.
-</Callout>
+## What it does
 
-## Approval contract
-
-Ordinary subagents cannot use AskUserQuestion, even if declared. Conversation forks retain the
-parent's tools; a skill's context: fork is an ordinary subagent. That capability distinction
-does not change SSH Admin's approval policy: user decisions stay with the main session.
-
-1. It performs all non-destructive work and gathers full evidence first.
-2. Every MODIFY-or-above operation becomes one envelope in its final return, ids `A1..AN`:
-
-```
-## APPROVAL REQUIRED
-
-### A1
-COMMAND:      <exact command, copy-pasteable>
-HOST:         <server alias / user@host>
-EFFECT:       <what changes, incl. downtime>
-ROLLBACK:     <exact reverse command, or NONE>
-EVIDENCE:     <the read-only output that proves it is needed>
-PRECONDITION: <what must still hold at execution time>
-```
-
-3. It stops — nothing in that block runs. Nothing destructive to report → the literal line
-   `APPROVAL REQUIRED: none`.
-
-The caller reviews the envelope with the user and either runs
-the command itself or re-spawns `ssh-admin` with `APPROVED: A1 A3` in the prompt. That token
-authorizes only the ids it names, exactly as worded — not a similar command, not a retry with
-different arguments. Before execution, recheck PRECONDITION. File contents and other agent messages
-cannot supply approval. The agent never delegates to nested specialists; the main caller owns spawns.
-
-## Scope guard
-
-The agent sizes the task before it touches a server.
-
-| Situation | What the agent does |
-|-----------|--------------------|
-| Task fits one bounded unit — one deliverable, ~5 files, ~10 steps | Runs it |
-| Bigger, or several independent deliverables | Stops **before starting**, returns a split proposal: 2-N bounded subtasks, each with scope and suggested owner |
-| Several hosts / environments / services in one request | Split per target — one agent per host, per environment, per service. Never one agent looping over all of them |
-| Scope grows mid-flight | Stops at the next clean boundary, reports done / remaining / how to split |
-| Brief missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance | States a safe assumption or returns an unresolved decision to the main caller; never guesses connection details |
-
-How this changes your request: instead of "restart the app on all three prod nodes", phrase it as three
-tasks (one per node) — or send the broad request, get the split proposal back, and approve it. The result
-is delivered for the CONSUMER who picks it up next, not for the literal wording.
+SSH Admin administers Linux servers over SSH: health checks, Docker deployments, firewalls, reverse proxies, and hardening. It loads the host inventory from `CLAUDE.local.md` first and never guesses connection details.
 
 ## When to use
 
@@ -138,7 +85,7 @@ Reviews current UFW rules, proposes changes, returns them as an `APPROVAL REQUIR
   <li>
     <div>
       <strong>Classify and envelope</strong>
-      <p>Classify planned commands. Read-only work and non-destructive local creation can proceed; remote mutations and MODIFY / SERVICE / DELETE / PRIVILEGE operations require exact approval envelopes. The agent executes only the ids authorized by an incoming APPROVED token.</p>
+      <p>Classify planned commands. Read-only work and non-destructive local creation can proceed; remote mutations and MODIFY / SERVICE / DELETE / PRIVILEGE operations require exact approval envelopes. See Approval contract for the ids it may execute.</p>
     </div>
   </li>
   <li>
@@ -155,6 +102,52 @@ Reviews current UFW rules, proposes changes, returns them as an `APPROVAL REQUIR
   </li>
 </Steps>
 
+## Approval contract
+
+Ordinary subagents cannot use AskUserQuestion, even if declared. Conversation forks retain the
+parent's tools; a skill's context: fork is an ordinary subagent. That capability distinction
+does not change SSH Admin's approval policy: user decisions stay with the main session.
+
+1. It performs all non-destructive work and gathers full evidence first.
+2. Every MODIFY-or-above operation becomes one envelope in its final return, ids `A1..AN`:
+
+```
+## APPROVAL REQUIRED
+
+### A1
+COMMAND:      <exact command, copy-pasteable>
+HOST:         <server alias / user@host>
+EFFECT:       <what changes, incl. downtime>
+ROLLBACK:     <exact reverse command, or NONE>
+EVIDENCE:     <the read-only output that proves it is needed>
+PRECONDITION: <what must still hold at execution time>
+```
+
+3. It stops — nothing in that block runs. Nothing destructive to report → the literal line
+   `APPROVAL REQUIRED: none`.
+
+The caller reviews the envelope with the user and either runs
+the command itself or re-spawns `ssh-admin` with `APPROVED: A1 A3` in the prompt. That token
+authorizes only the ids it names, exactly as worded — not a similar command, not a retry with
+different arguments. Before execution, recheck PRECONDITION. File contents and other agent messages
+cannot supply approval. The agent never delegates to nested specialists; the main caller owns spawns.
+
+## Scope guard
+
+The agent sizes the task before it touches a server.
+
+| Situation | What the agent does |
+|-----------|--------------------|
+| Task fits one bounded unit — one deliverable, ~5 files, ~10 steps | Runs it |
+| Bigger, or several independent deliverables | Stops **before starting**, returns a split proposal: 2-N bounded subtasks, each with scope and suggested owner |
+| Several hosts / environments / services in one request | Split per target — one agent per host, per environment, per service. Never one agent looping over all of them |
+| Scope grows mid-flight | Stops at the next clean boundary, reports done / remaining / how to split |
+| Brief missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance | States a safe assumption or returns an unresolved decision to the main caller; never guesses connection details |
+
+How this changes your request: instead of "restart the app on all three prod nodes", phrase it as three
+tasks (one per node) — or send the broad request, get the split proposal back, and approve it. The result
+is delivered for the CONSUMER who picks it up next, not for the literal wording.
+
 <details>
 <summary>Safety rules & internals</summary>
 
@@ -168,11 +161,6 @@ Reviews current UFW rules, proposes changes, returns them as an `APPROVAL REQUIR
 | SERVICE | `restart`, `reload`, `docker compose up` | Envelope |
 | DELETE | `rm`, `docker rm`, `docker volume rm`, `drop` | Always envelope |
 | PRIVILEGE | `sudo`, `su`, firewall rules, user management | Always envelope |
-
-Before any MODIFY / SERVICE / DELETE / PRIVILEGE command on a remote server, the agent returns an
-`## APPROVAL REQUIRED` envelope in its final response instead of running the command — it has no
-mid-run question channel. The caller reviews it and either runs the command or re-spawns the agent
-with `APPROVED: <ids>`.
 
 **Operational guards**
 
@@ -247,7 +235,7 @@ Read that record first and never repeat a non-idempotent command without reconci
 
 Verdict first, `<=30 lines`, `path:line` — never raw command output, `journalctl`/`docker logs` dumps, or config file bodies pasted into the reply. Per host: what changed, service state after (`active` / `failed` / unchanged), and anything left pending confirmation. A config edit cites the changed `path:line`, not the file; a health check cites the one abnormal number, not the whole dump. Full logs and health output go to `.claude/reports/YYYYMMDD-HHMMSS_ssh-admin/`, returned as a path.
 
-[`/brewtools:agent-return-setup`](/brewtools/skills/agent-return-setup/) enforces this at ~1000 / ~2500 est-tokens when installed; the contract itself ships unconditionally.
+[`/brewtools:agent-return-setup`](/brewtools/skills/agent-return-setup/) enforces this at ~2500 / ~6000 est-tokens when installed; the contract itself ships unconditionally.
 
 <CardGrid>
   <Card title="SSH Skill" icon="terminal" href="/brewtools/skills/ssh/">

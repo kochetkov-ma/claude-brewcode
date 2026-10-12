@@ -1,17 +1,12 @@
 #!/usr/bin/env bash
-# semble-remove.sh — brewcode:semble-setup unit C.
-# The four removal flavours of DESIGN §8.4, CLI contract §9.7.
-#   integration  guidance + agent entries + .claude/semble/   (MCP, cache, uv tool kept)
-#   mcp          claude mcp remove semble_code                (everything else kept)
-#   cli          uv tool uninstall semble                     (everything else kept)
-#   purge        all of the above + THIS project's cache entry (typed confirmation required)
+# semble-remove.sh — unit C: removal flavours integration|mcp|cli|purge (DESIGN §8.4, CLI §9.7; see sr_usage)
 set -euo pipefail
 SC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source-path=SCRIPTDIR source=lib/semble-common.sh
 . "$SC_DIR/lib/semble-common.sh"
 
 SR_PURGE_TEXT="purge semble code cache"
-# Every hook file this skill ever shipped, retired names included.
+# Every hook file this skill ever shipped; explore, prefetch, reminder are retired.
 SR_HOOK_FILES="semble-session.mjs semble-prefetch.mjs semble-stats.mjs semble-reminder.mjs semble-subagent.mjs semble-explore.mjs"
 SR_CLAUDEMD_BEGIN="<!-- BEGIN brewcode:semble -->"
 SR_CLAUDEMD_END="<!-- END brewcode:semble -->"
@@ -111,6 +106,14 @@ sr_rm_state_dir() {
   sr_changed "state: deleted $dir"
 }
 
+# rmdir only: `.claude/` goes when the removal left it empty, never with content.
+sr_prune_claude_dir() {
+  local d; d="$(sc_project_root)/.claude"
+  [ -d "$d" ] && [ -z "$(ls -A "$d" 2>/dev/null)" ] || return 0
+  if sr_dry; then return 0; fi
+  if rmdir "$d" 2>/dev/null; then sr_changed "state: removed empty $d"; fi
+}
+
 # A single file under <projectRoot>, reported either way.
 sr_rm_file() {
   local f="$1" label="$2" root
@@ -163,6 +166,13 @@ const marks=process.env.SR_MARKS.split(" ").filter(Boolean),tools=process.env.SR
 const fail=m=>{process.stderr.write(m);process.exit(1);};
 const done=w=>{process.stdout.write(w);process.exit(0);};
 if(!fs.existsSync(f)) done("absent");
+const l=f+".lock",w=new Int32Array(new SharedArrayBuffer(4));   // shared <settings>.lock: 10 s wait, >30 s stale
+for(let i=0;;i++){
+  try{fs.mkdirSync(l);process.on("exit",()=>{try{fs.rmdirSync(l)}catch{}});break}
+  catch(e){if(e.code!=="EEXIST"||i>=99)fail(l+" is held by another installer");
+    try{if(Date.now()-fs.statSync(l).mtimeMs>30000)fs.rmdirSync(l)}catch{}
+    Atomics.wait(w,0,0,100);}
+}
 let raw;try{raw=fs.readFileSync(f,"utf8")}catch(e){fail("cannot read: "+e.code)}
 if(!raw.trim()) done("absent");
 let s;try{s=JSON.parse(raw)}catch(e){fail("not valid JSON")}
@@ -192,8 +202,10 @@ if(s.permissions&&typeof s.permissions==="object"&&Array.isArray(s.permissions.a
   if(Object.keys(s.permissions).length===0) delete s.permissions;
 }
 if(n===0) done("absent");
-try{fs.writeFileSync(f,JSON.stringify(s,null,2)+"\n")}catch(e){fail("cannot write: "+e.code)}
-const back=JSON.parse(fs.readFileSync(f,"utf8"));
+const gone=Object.keys(s).length===0;                 // only semble entries were in it -> delete, never leave {}
+try{if(gone){fs.accessSync(f,fs.constants.W_OK);fs.unlinkSync(f)}else fs.writeFileSync(f,JSON.stringify(s,null,2)+"\n")}
+catch(e){fail("cannot write: "+e.code)}
+const back=gone?{}:JSON.parse(fs.readFileSync(f,"utf8"));
 const left=Object.values(back.hooks||{}).flat().filter(e=>((e&&e.hooks)||[]).some(mine)).length;
 if(left!==0) fail(left+" semble hook entries still registered");
 done("removed");'
@@ -212,7 +224,7 @@ const fs=require("fs");const f=process.env.SR_F;
 const raw=fs.readFileSync(f,"utf8");
 const b=raw.indexOf(process.env.SR_B), e=raw.indexOf(process.env.SR_E);
 if(b<0&&e<0){process.stdout.write("absent");process.exit(0);}
-if(b<0||e<0||e<b){process.stdout.write("malformed");process.exit(0);}
+if(b<0||e<0||e<b||raw.split(process.env.SR_B).length>2||raw.split(process.env.SR_E).length>2){process.stdout.write("malformed");process.exit(0);}
 let end=e+process.env.SR_E.length;
 if(raw.slice(end,end+1)==="\n")end++;
 if(raw.slice(end,end+1)==="\n")end++;
@@ -225,9 +237,8 @@ process.stdout.write("removed");')"
   esac
 }
 
-# ── flavour steps ───────────────────────────────────────────────────────────
-# Guidance removal: prefer semble-guidance.sh (unit D). Fallback: unwire settings.json
-# FIRST, delete hook files only after — a wired entry on a missing file fails every tool call.
+# ── flavour steps ── guidance: prefer semble-guidance.sh (unit D); fallback unwires settings.json
+# BEFORE deleting hook files — a wired entry on a missing file fails every tool call.
 sr_remove_guidance() {
   local sib root settings res rc f
   sib="$(sr_sibling semble-guidance.sh)"
@@ -307,12 +318,10 @@ process.stdout.write(String((j.summary&&j.summary.changed)||0));')"
   fi
 }
 
-# $1 scope, $2 "1" when the caller typed --scope. Unqualified: hand the whole
-# decision to semble-mcp.sh, which enumerates every scope holding semble_code and
-# clears them all — passing the default `user` here made an unqualified purge
-# report success while a project- or local-scope registration kept serving.
+# $1 scope, $2 "1" when --scope typed. Unqualified -> semble-mcp.sh clears EVERY scope holding semble_code
+# (passing default `user` left project/local registrations live).
 sr_remove_mcp() {
-  local scope="$1" explicit="$2" sib scope_args="" where="every scope holding it"
+  local scope="$1" explicit="$2" drop="${3:-0}" sib scope_args="" where="every scope holding it" b
   sib="$(sr_sibling semble-mcp.sh)"
   if [ -z "$sib" ]; then
     sr_skipped "mcp: semble-mcp.sh unavailable — run: $(sc_claude_bin) mcp remove $SEMBLE_SERVER_NAME -s $scope"
@@ -331,6 +340,15 @@ sr_remove_mcp() {
       *'"status":"unchanged"'*) sr_unchanged "mcp: $SEMBLE_SERVER_NAME is not registered" ;;
       *) sr_changed "mcp: $SEMBLE_SERVER_NAME removed from $where" ;;
     esac
+    # Rollback copies outlive a verified removal: purge deletes them, the mcp flavour names them.
+    while IFS= read -r b; do
+      case "$b" in */.claude.json.bak.[0-9]*|*/.mcp.json.bak.[0-9]*) [ -f "$b" ] || continue ;; *) continue ;; esac
+      if [ "$drop" = "1" ] && rm -f "$b"; then sr_changed "mcp: deleted rollback backup $b"
+      else sr_unchanged "mcp: rollback backup kept at $b"; fi
+    done <<EOF
+$(SR_J="$out" node -e 'let j={};try{j=JSON.parse(process.env.SR_J||"{}")}catch(e){}
+process.stdout.write((Array.isArray(j.backups)?j.backups:[]).join("\n"));')
+EOF
   else
     sr_failed "mcp: semble-mcp.sh remove failed"
   fi
@@ -383,9 +401,8 @@ sr_purge_cache() {
   sr_cleanup_legacy_docs_root
 }
 
-# Pre-0.5.5 installs created this unused marker-only root. It is not a current
-# cache surface. Purge may remove it only when the marker proves ownership and
-# no second entry exists; an empty or repurposed directory is never ours to infer.
+# Pre-0.5.5 marker-only root: purge removes it only when the marker is the sole entry;
+# an empty or repurposed directory is never ours to infer.
 sr_cleanup_legacy_docs_root() {
   local dir marker kind verdict
   dir="$(sc_cache_base)/semble-docs"
@@ -428,9 +445,8 @@ process.stdout.write(marker&&names.length===1&&names[0]==="RESERVED-FOR-DOCS.txt
   sr_changed "legacy cache: deleted marker-only $dir"
 }
 
-# ── flavours ────────────────────────────────────────────────────────────────
-# A failed guidance step leaves the rule or hooks live: stop there instead of
-# stripping state, MCP and cache from under them. Re-running finishes the removal.
+# ── flavours ── failed guidance step (rule/hooks still live) -> stop before state, MCP, cache;
+# re-run finishes the removal.
 sr_guidance_blocked() {
   [ -n "$SR_FAILED" ] || return 1
   sr_skipped "remaining steps not run — the guidance step failed; fix it and re-run"
@@ -441,6 +457,7 @@ sr_flavour_integration() {
   if sr_guidance_blocked; then return 0; fi
   sr_remove_agent_entries
   sr_rm_state_dir
+  sr_prune_claude_dir
   sr_unchanged "mcp registration, cache and uv tool retained"
 }
 
@@ -460,10 +477,21 @@ sr_flavour_purge() {
   sr_remove_guidance
   if sr_guidance_blocked; then return 0; fi
   sr_remove_agent_entries
-  sr_remove_mcp "$scope" "$explicit"
+  sr_remove_mcp "$scope" "$explicit" 1
   sr_purge_cache
   sr_remove_cli
   sr_rm_state_dir
+  sr_prune_claude_dir
+}
+
+sr_plan_hooks() {
+  local f
+  for f in $SR_HOOK_FILES; do
+    case "$f" in
+      semble-session.mjs|semble-stats.mjs|semble-subagent.mjs) sr_would "$1/.claude/hooks/$f" ;;
+      *) sr_would "$1/.claude/hooks/$f   (retired)" ;;
+    esac
+  done
 }
 
 # Directory list printed when confirmation is missing.
@@ -476,12 +504,7 @@ sr_plan() {
     integration)
       sr_would "$root/.claude/rules/semble-first.md"
       sr_would "$root/.sembleignore"
-      sr_would "$root/.claude/hooks/semble-session.mjs"
-      sr_would "$root/.claude/hooks/semble-prefetch.mjs"
-      sr_would "$root/.claude/hooks/semble-stats.mjs"
-      sr_would "$root/.claude/hooks/semble-reminder.mjs"
-      sr_would "$root/.claude/hooks/semble-subagent.mjs"
-      sr_would "$root/.claude/hooks/semble-explore.mjs   (retired, superseded by semble-subagent.mjs)"
+      sr_plan_hooks "$root"
       sr_would "$root/CLAUDE.md marker block $SR_CLAUDEMD_BEGIN .. $SR_CLAUDEMD_END"
       sr_would "$root/.claude/semble/"
       ;;
@@ -490,12 +513,7 @@ sr_plan() {
     purge)
       sr_would "$root/.claude/rules/semble-first.md"
       sr_would "$root/.sembleignore"
-      sr_would "$root/.claude/hooks/semble-session.mjs"
-      sr_would "$root/.claude/hooks/semble-prefetch.mjs"
-      sr_would "$root/.claude/hooks/semble-stats.mjs"
-      sr_would "$root/.claude/hooks/semble-reminder.mjs"
-      sr_would "$root/.claude/hooks/semble-subagent.mjs"
-      sr_would "$root/.claude/hooks/semble-explore.mjs   (retired, superseded by semble-subagent.mjs)"
+      sr_plan_hooks "$root"
       sr_would "$root/CLAUDE.md marker block $SR_CLAUDEMD_BEGIN .. $SR_CLAUDEMD_END"
       sr_would "$root/.claude/semble/"
       sr_would "$(sc_cache_root_code)/$(sc_repo_hash "$root" 2>/dev/null || printf 'unresolved')  (this project's cache entry only — the shared root and other projects' indexes are kept)"

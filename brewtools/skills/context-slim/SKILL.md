@@ -25,7 +25,7 @@ decision rule lives in `references/`, read at the phase that needs it.
    two mutating modes -> the keyword that comes first. No hit or empty -> `measure`.
 2. Scope: prose that is not a mode/path is still input: take the target, the ratio and the layer from
    it (`сожми контекст на 40%, глобальный тоже` -> mode `slim`, `--target=40%`, `--global`).
-3. Ask: at most ONE `AskUserQuestion` (max 4 questions), before any work, only when the answer
+3. Ask: at most ONE `AskUserQuestion` (max 4 questions) to resolve mode and scope, before any work, only when the answer
    changes what gets written. A read-only run asks nothing.
 
 Print once, before the first action (labels literal, INPUT verbatim, authored values follow the
@@ -241,6 +241,7 @@ A row that deletes a file is closed with `verify-deleted` (plain `verify` exits 
 it proves every critical token of the deleted file is in the survivor:
 
 ```bash
+G="${CLAUDE_PLUGIN_ROOT}/skills/context-slim/scripts/context-guard.sh"
 bash "$G" verify-deleted --project --run-dir "<RUN_DIR>" --survivor "<survivor path>" "<deleted file>"
 ```
 
@@ -255,6 +256,7 @@ never accepted. Recover every layer with ownership proof, preserve concurrent fi
 with the actual restored/refused files:
 
 ```bash
+G="${CLAUDE_PLUGIN_ROOT}/skills/context-slim/scripts/context-guard.sh"
 bash "$G" rollback --run-dir "<PROJECT_RUN_DIR>" --run-dir "<GLOBAL_RUN_DIR>"   # omit the layer that did not run
 ```
 

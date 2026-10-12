@@ -1,19 +1,6 @@
 #!/usr/bin/env node
-/**
- * suite-status.mjs - unit A: semble-status.sh (read-only) + semble-install.sh.
- *
- * Everything runs inside one mkdtemp base with an injected HOME, project root,
- * cache roots, a stubbed `claude` and a deliberately narrow PATH (so uv, uvx
- * and brew are provably absent). The real ~/.claude, the real cache and the
- * repo working tree are never touched.
- *
- * The read-only guarantee is proved mechanically: every semble-status.sh run is
- * wrapped in a before/after snapshot (path + kind + size + mtime of every entry
- * under home/, project/, cache/ and the staged scripts/) and the two snapshots
- * must be deep-equal.
- *
- * Assertion policy: unconditional exact-equality checks with a description.
- */
+// suite-status.mjs - unit A: semble-status.sh (read-only) + semble-install.sh in one mkdtemp base, never the real ~/.claude.
+// Injected HOME/root/caches, stub `claude`, narrow PATH (no uv/uvx/brew); read-only = before/after snapshots deep-equal.
 import { spawnSync } from 'node:child_process';
 import {
   mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync,
@@ -76,8 +63,7 @@ function safeParse(str) {
 }
 
 // ── temp world ──────────────────────────────────────────────────────────────
-// realpath: sc_project_root resolves symlinks with `pwd -P`, and on macOS
-// /var is a symlink to /private/var - the fixtures must use the resolved form.
+// realpath: sc_project_root uses `pwd -P` and macOS /var -> /private/var, so fixtures use the resolved form.
 const BASE = realpathSync(mkdtempSync(join(tmpdir(), 'semble-a-')));
 const BIN = join(BASE, 'bin');
 const BIN2 = join(BASE, 'bin2');
@@ -212,16 +198,13 @@ function installClaudeJson(name) {
   writeFileSync(join(HOME_DIR, '.claude.json'), fixtureText(join('claude-json', name)));
 }
 
-/**
- * A guidance section that ERRORS is an unmeasurable half and downgrades `ready`
- * to `partial`, so every block that wants a genuine `ready` has to stage the
- * unit. Returns the env fragment that feeds the stub its payload.
- */
+// An ERRORING guidance section downgrades `ready` -> `partial`, so a genuine-`ready` block stages the unit;
+// stubGuidance() returns the env fragment that feeds the stub its payload.
 const GUID_HEALTHY = {
   rule: { state: 'managed' }, ignore: { state: 'managed' }, claudeMd: { state: 'managed' },
   permissions: { wired: true },
   hooks: {
-    retired: [], wiredCount: 6, wantCount: 6, staleEntries: 0,
+    retired: [], wiredCount: 4, wantCount: 4, staleEntries: 0,
   },
 };
 function stubGuidance(payload = GUID_HEALTHY) {
@@ -236,7 +219,7 @@ function unstubGuidance() {
   rmSync(join(STAGE, 'semble-guidance.sh'), { force: true });
 }
 
-/** Mirror of sc_mcp_dump (DESIGN 6.3) - test-side data prep for the detect stub. */
+// Mirror of sc_mcp_dump (DESIGN 6.3) - test-side data prep for the detect stub.
 function dumpFromClaudeJson(name) {
   const cj = join(HOME_DIR, '.claude.json');
   const out = {
@@ -278,9 +261,7 @@ function removeDetectStub() {
   rmSync(MCP_STUB, { force: true });
 }
 
-// Every step semble-state.sh accepts. `ready` is now the whole required set,
-// not the phase alone (SS02), so any fixture that means "healthy" must record
-// all seven - a short list is exactly the partial install the verdict now names.
+// Every step semble-state.sh accepts: `ready` = the whole required set (SS02), so a "healthy" fixture records all seven.
 const ALL_STEPS = ['prereq', 'mcp', 'permissions', 'guidance', 'agents', 'warm', 'smoke'];
 
 function writeState(obj) {
@@ -293,9 +274,7 @@ function clearState() {
   rmSync(join(PROJECT, '.claude', 'semble'), { recursive: true, force: true });
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 1. Usage and exit codes
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══ 1. Usage and exit codes ═══
 {
   const help = runStatus(['--help']);
   check('01-help-exit', help.status, 0, 'semble-status.sh --help must exit 0');
@@ -311,9 +290,7 @@ function clearState() {
   check('04-empty-section-exit', emptySection.status, 2, '--section without a value must exit exactly 2');
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 2. Every sibling missing -> per-section {"error":...}, still exit 0
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══ 2. Every sibling missing -> per-section {"error":...}, still exit 0 ═══
 {
   installClaudeJson('absent.json');
   clearState();
@@ -354,9 +331,7 @@ function clearState() {
     'no uv tool install and SEMBLE_NO_NETWORK=1 -> not present, not resolvable');
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 3. Per-fixture MCP state and verdict (detect stubbed - unit B owns detection)
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══ 3. Per-fixture MCP state and verdict (detect stubbed - unit B owns detection) ═══
 installDetectStub();
 
 const FIXTURE_STATES = [
@@ -413,9 +388,7 @@ for (const [file, state, verdict, nextStep] of FIXTURE_STATES) {
     'the next step must name the file to fix by hand');
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 4. Verdict x phase matrix
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══ 4. Verdict x phase matrix ═══
 {
   installClaudeJson('correct.json');
   const dump = dumpFromClaudeJson('correct.json');
@@ -470,13 +443,8 @@ for (const [file, state, verdict, nextStep] of FIXTURE_STATES) {
   unstubGuidance();
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 4b. A v1-shaped project half downgrades ready -> partial
-//
-// mcp=correct + phase=ready is not enough: the whole migration path is
-// unreachable if a repo still carrying the retired hooks, stale settings
-// entries or a half-wired hook set reports `ready`/`none`.
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══ 4b. A v1-shaped project half downgrades ready -> partial ═══
+// mcp=correct + phase=ready is not enough: retired hooks, stale entries or a half-wired set must not read `ready`/`none`.
 {
   const GUID_STUB = join(STAGE, 'semble-guidance.sh');
   const GUID_FILE = join(BIN, 'guidance.json');
@@ -496,9 +464,8 @@ cat "\${SEMBLE_STUB_GUIDANCE:?}"
     permissions: { wired: true },
     hooks: {
       settingsFile: join(PROJECT, '.claude', 'settings.json'),
-      session: { file: 'present' }, prefetch: { file: 'present' }, stats: { file: 'present' },
-      reminder: { file: 'present' }, subagent: { file: 'present' },
-      retired: [], wiredCount: 6, wantCount: 6, staleEntries: 0,
+      session: { file: 'present' }, stats: { file: 'present' }, subagent: { file: 'present' },
+      retired: [], retiredWired: [], wiredCount: 4, wantCount: 4, staleEntries: 0,
     },
   };
   const withHooks = (patch) => {
@@ -523,22 +490,37 @@ cat "\${SEMBLE_STUB_GUIDANCE:?}"
 
   // This is the exact platfrom shape that used to report ready/none.
   const v1 = guidRun(withHooks({
-    retired: ['semble-explore.mjs'],
-    prefetch: { file: 'missing' }, wiredCount: 1, wantCount: 6, staleEntries: 5,
+    retired: ['semble-explore.mjs'], wiredCount: 1, wantCount: 4, staleEntries: 5,
   }));
   check('34-v1-verdict', v1.verdict, 'partial',
-    'a v1-shaped repo (retired hook + stale entries + 1/6 wired) must never report ready');
-  check('34-v1-nextStep', v1.nextStep, 'Run /brewcode:semble-setup install',
+    'a v1-shaped repo (retired hook + stale entries + 1/4 wired) must never report ready');
+  check('34-v1-nextStep', v1.nextStep, 'Run /brewcode:semble-setup upgrade',
     'and it must name the command that performs the migration');
   check('34-v1-reason', v1.__reason,
-    'retired hooks on disk: semble-explore.mjs; 5 stale settings entries; hooks wired 1/6',
-    'the reason must name all three defects, so the user knows what install will repair');
+    'stale (remove via upgrade): semble-explore.mjs; 5 stale settings entries; hooks wired 1/4',
+    'the reason must name all three defects, so the user knows what upgrade will repair');
 
   const retiredOnly = guidRun(withHooks({ retired: ['semble-explore.mjs'] }));
   check('35-retired-verdict', retiredOnly.verdict, 'partial',
     'a retired hook file still on disk is enough on its own');
-  check('35-retired-reason', retiredOnly.__reason, 'retired hooks on disk: semble-explore.mjs',
+  check('35-retired-reason', retiredOnly.__reason, 'stale (remove via upgrade): semble-explore.mjs',
     'one retired file, one clause');
+
+  // A 6.4.0 install after a partial cleanup: files gone, both registrations still in settings.json.
+  const leftReg = guidRun(withHooks({
+    retiredWired: ['semble-prefetch.mjs', 'semble-reminder.mjs'], staleEntries: 2,
+  }));
+  check('35b-retired-wired', [leftReg.verdict, leftReg.nextStep, leftReg.__reason,
+    leftReg.guidance.hooks.prefetch, leftReg.guidance.hooks.reminder],
+  ['partial', 'Run /brewcode:semble-setup upgrade',
+    'stale (remove via upgrade): semble-prefetch.mjs, semble-reminder.mjs; 2 stale settings entries',
+    undefined, undefined],
+  'leftover reminder/prefetch registrations are stale (remove via upgrade), never reported as missing hooks');
+
+  const priorRule = guidRun({ ...healthy, rule: { state: 'stale' } });
+  check('35c-prior-rule', [priorRule.verdict, priorRule.nextStep, priorRule.__reason],
+    ['partial', 'Run /brewcode:semble-setup upgrade', 'semble-first rule is a prior-release copy'],
+    'a pristine prior-release rule is upgraded by `upgrade`, not left as user_modified');
 
   const staleOnly = guidRun(withHooks({ staleEntries: 1 }));
   check('36-stale-verdict', staleOnly.verdict, 'partial',
@@ -546,10 +528,10 @@ cat "\${SEMBLE_STUB_GUIDANCE:?}"
   check('36-stale-reason', staleOnly.__reason, '1 stale settings entry',
     'the singular clause is singular');
 
-  const halfWired = guidRun(withHooks({ wiredCount: 5, wantCount: 6 }));
+  const halfWired = guidRun(withHooks({ wiredCount: 3, wantCount: 4 }));
   check('37-wiring-verdict', halfWired.verdict, 'partial',
     'a missing sibling hook registration is enough on its own');
-  check('37-wiring-reason', halfWired.__reason, 'hooks wired 5/6', 'the reason carries the counts');
+  check('37-wiring-reason', halfWired.__reason, 'hooks wired 3/4', 'the reason carries the counts');
 
   // An absent count is not a defect: a report that never collected the wiring
   // numbers must not be read as a half-wired repo.
@@ -570,15 +552,8 @@ cat "\${SEMBLE_STUB_GUIDANCE:?}"
   writeState({ schema: 1, phase: 'ready', enabled: true, completed: ALL_STEPS, last_updated: '2026-08-02' });
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 4c. SS02 - `ready` is the whole required set, not mcp + phase
-//
-// The verdict used to read only mcp.state and state.phase, so an install whose
-// smoke query never ran, whose rule was never written, whose permissions were
-// never wired, whose index was never built or whose agents were never patched
-// reported `ready`/`none` and passed --strict. Each required check now owns one
-// clause; a section that could not be read still downgrades nothing.
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══ 4c. SS02 - `ready` is the whole required set, not mcp + phase ═══
+// Each required check (smoke, rule, permissions, index, agents) owns one clause; an unreadable section downgrades nothing.
 {
   const GUID_STUB = join(STAGE, 'semble-guidance.sh');
   const CACHE_STUB = join(STAGE, 'semble-cache.sh');
@@ -604,9 +579,8 @@ cat "\${${envVar}:?}"
     permissions: { wired: true },
     hooks: {
       settingsFile: join(PROJECT, '.claude', 'settings.json'),
-      session: { file: 'present' }, prefetch: { file: 'present' }, stats: { file: 'present' },
-      reminder: { file: 'present' }, subagent: { file: 'present' },
-      retired: [], wiredCount: 6, wantCount: 6, staleEntries: 0,
+      session: { file: 'present' }, stats: { file: 'present' }, subagent: { file: 'present' },
+      retired: [], retiredWired: [], wiredCount: 4, wantCount: 4, staleEntries: 0,
     },
   };
   const HEALTHY_CACHE = {
@@ -623,9 +597,8 @@ cat "\${${envVar}:?}"
     summary: { changed: 0, conflict: 0, skipped: 0 },
   };
 
-  // One run with everything overridable: state.completed plus the three
-  // sibling payloads. Returns the JSON envelope, the human `reason` clause and
-  // the exit code of the same inputs under --strict.
+  // One run, everything overridable (state.completed + three sibling payloads) -> JSON envelope,
+  // human `reason` clause, and the --strict exit code of the same inputs.
   const run = ({ completed = ALL_STEPS, guid = HEALTHY_GUID, cache = HEALTHY_CACHE, agents = HEALTHY_AGENTS }) => {
     writeState({ schema: 1, phase: 'ready', enabled: true, completed, last_updated: '2026-08-02' });
     writeFileSync(GUID_FILE, JSON.stringify(guid));
@@ -706,9 +679,7 @@ cat "\${${envVar}:?}"
   check('53-agents-conflict-verdict', conflicted.verdict, 'ready',
     'a reported conflict is an outcome, not a defect - apply exits 3 on it by design');
 
-  // Every clause at once, in the fixed display order: guidance-derived first
-  // (so the migration story reads the same as before SS02), then the recorded
-  // steps, then the index, then the agents.
+  // Every clause at once, fixed display order: guidance-derived (as before SS02), recorded steps, index, agents.
   const everything = run({
     completed: ['prereq', 'mcp'],
     guid: { ...HEALTHY_GUID, rule: { state: undefined }, permissions: { wired: false } },
@@ -745,9 +716,7 @@ cat "\${${envVar}:?}"
   writeState({ schema: 1, phase: 'ready', enabled: true, completed: ALL_STEPS, last_updated: '2026-08-02' });
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 5. --strict
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══ 5. --strict ═══
 {
   installClaudeJson('correct.json');
   const dump = dumpFromClaudeJson('correct.json');
@@ -767,16 +736,8 @@ cat "\${${envVar}:?}"
   unstubGuidance();
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 5b. An ERRORED guidance section is an unmeasurable half
-//
-// The guidance probe is the sole witness for the rule, the hooks and the
-// permissions. Whether the unit is missing from disk or exits non-zero, all
-// three are unproven, so `ready` is not claimable and --strict must fail - the
-// cause of the failure changes nothing about what is unknown. A NULL section is
-// the opposite case: --section narrows the report, guidance is never probed,
-// and an absent measurement is not a defect (same rule as wantCount===0).
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══ 5b. An ERRORED guidance section is an unmeasurable half ═══
+// Missing/failing unit -> rule, hooks, permissions unproven: no `ready`, --strict fails; NULL (--section) = not probed, no defect.
 {
   installClaudeJson('correct.json');
   const dump = dumpFromClaudeJson('correct.json');
@@ -813,9 +774,7 @@ cat "\${${envVar}:?}"
     '--section mcp --strict must stay green on a healthy repo');
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 6. Sibling that exists but fails / emits garbage
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══ 6. Sibling that exists but fails / emits garbage ═══
 {
   clearState();
   installClaudeJson('correct.json');
@@ -848,9 +807,7 @@ cat "\${${envVar}:?}"
   installDetectStub();
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 7. --section filtering and permissions read-through
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══ 7. --section filtering and permissions read-through ═══
 {
   clearState();
   installClaudeJson('correct.json');
@@ -889,9 +846,7 @@ cat "\${${envVar}:?}"
   rmSync(join(HOME_DIR, '.claude', 'settings.json'), { force: true });
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 8. Human (non --json) rendering
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══ 8. Human (non --json) rendering ═══
 {
   installClaudeJson('correct.json');
   const dump = dumpFromClaudeJson('correct.json');
@@ -920,9 +875,7 @@ removeDetectStub();
 check('71-detect-stub-removed', existsSync(MCP_STUB), false,
   'the detect stub installed for sections 3-8 must be gone before section 9 runs');
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 9. semble-install.sh
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══ 9. semble-install.sh ═══
 writeFileSync(CLAUDE_LOG, '');
 writeFileSync(BREW_LOG, '');
 {
@@ -1007,11 +960,8 @@ writeFileSync(BREW_LOG, '');
   check('91-human-json', human.stdout.trim().startsWith('{'), false, 'the human form must not emit JSON');
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 9b. the coreutils step and the timeout backend report
-// ═══════════════════════════════════════════════════════════════════════════
-// PATH decides nothing here: every Linux has `timeout` in /usr/bin and stock
-// macOS has neither binary, so the backend is pinned with SEMBLE_TIMEOUT_BIN.
+// ═══ 9b. the coreutils step and the timeout backend report ═══
+// PATH decides nothing (every Linux has `timeout` in /usr/bin, stock macOS neither binary): pinned via SEMBLE_TIMEOUT_BIN.
 {
   const NOTMO = { SEMBLE_TIMEOUT_BIN: 'none' };
   const HASTMO = { SEMBLE_TIMEOUT_BIN: TIMEOUT_STUB };
@@ -1102,9 +1052,8 @@ writeFileSync(BREW_LOG, '');
   writeFileSync(BREW_LOG, '');
   const allDry = runInstall(['all', '--yes', '--json'], { ...brewEnv, ...NOTMO, SEMBLE_DRY_RUN: '1' });
   const adj = safeParse(allDry.stdout);
-  // uv/uvx stay absent under this PATH and a dry run installs nothing, so the
-  // pin cannot resolve: exit 3 is the uv/uvx precondition, unchanged by the new
-  // step - the note must not mention coreutils at all.
+  // uv/uvx absent under this PATH + dry run -> pin cannot resolve: exit 3 is the uv/uvx precondition,
+  // unchanged by the new step; the note must not mention coreutils.
   check('94f-all-dry-exit', allDry.status, 3, '`all` keeps the pre-existing uv/uvx precondition');
   check('94f-all-dry-note', adj.note, 'uv/uvx not on PATH; uvx is not on PATH - install uv first',
     'the coreutils step adds nothing to the note when it is only skipped');
@@ -1122,9 +1071,7 @@ writeFileSync(BREW_LOG, '');
     'inside `all` the coreutils confirmation is a note, not an escalation');
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 10. Fixture tree integrity
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══ 10. Fixture tree integrity ═══
 {
   const repoA = [
     'src/auth_service.py', 'src/session.ts', 'web/LoginPanel.tsx', 'build.sh',
@@ -1165,9 +1112,7 @@ writeFileSync(BREW_LOG, '');
     'the correct fixture must carry alwaysLoad:true — without it the tools stay deferred');
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 11. Version check: registration vs pin vs upstream, per config dir
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══ 11. Version check: registration vs pin vs upstream, per config dir ═══
 {
   const PIN = '0.6.2';
   const SPEC = `semble[mcp]==${PIN}`;

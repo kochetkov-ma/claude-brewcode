@@ -31,12 +31,13 @@ skipped), with `last_updated` read as a LOCAL `YYYY-MM-DD`:
 The date is compared with the file's own modification day, not with the clock, so a
 doc is never called stale merely because time passed. The gate never blocks when
 `stop_hook_active` is `true`, and never blocks when it cannot record the ask (unwritable
-state dir) — both would otherwise repeat the block on every Stop. Its message asks the
-user through `AskUserQuestion` only when that tool is available; otherwise Claude lists
-the docs in its final message and finishes.
+state dir) — both would otherwise repeat the block on every Stop. Its message has Claude
+sync on its own judgment and ask the user only before deleting or wholesale rewriting
+content: through `AskUserQuestion` when that tool is available, else by listing those
+docs in its final message.
 
 > Line 2 of each file is a `// brewcode-meta: version=<plugin version>
-> generated_by=brewdoc:docsync-setup` stamp, baked at release. The files are copied
+> content_version=<content version> generated_by=brewdoc:docsync-setup` stamp, baked at release. The files are copied
 > BYTE-FOR-BYTE, so an installed copy that differs from the plugin's is out of date —
 > never edit an installed copy in place.
 
@@ -58,9 +59,9 @@ the docs in its final message and finishes.
 
 `<repo>/.claude/docsync/`:
 
-- `config.json` — `{ "version": "{PLUGIN_VERSION}", "generated_by": "brewdoc:docsync-setup", "last_updated": "{LAST_UPDATED}", "enabled": true, "threshold_days": 7, "exclude": ["node_modules/**", ...] }`.
+- `config.json` — `{ "version": "{PLUGIN_VERSION}", "content_version": "{CONTENT_VERSION}", "generated_by": "brewdoc:docsync-setup", "last_updated": "{LAST_UPDATED}", "enabled": true, "threshold_days": 7, "exclude": ["node_modules/**", ...] }`.
   The hooks parse it with `JSON.parse` and read only `enabled`, `threshold_days` and
-  `exclude`, so the three provenance keys (and any other key) are inert to them.
+  `exclude`, so the four provenance keys (and any other key) are inert to them.
   `enabled: false` (written by `disable`) makes all three hooks return an empty result
   immediately — registered, wired, inert. An absent `enabled` key counts as `true`, so
   a config written before this key existed keeps working. `threshold_days` defaults to
@@ -195,6 +196,19 @@ function atomic(file, state, expected) {
   if (!matches(file, expected)) throw new Error(`changed during setup: ${file}`);
   fs.renameSync(temp, file);
 }
+// `<settings>.lock` dir shared with other setup skills' merges; held 10 s -> abort, older than 30 s -> stale.
+function lock(file) {
+  const dir = `${file}.lock`, wait = new Int32Array(new SharedArrayBuffer(4));
+  for (let i = 0; i < 100; i++) {
+    try { fs.mkdirSync(dir); return () => { try { fs.rmdirSync(dir); } catch {} }; } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+      try { if (Date.now() - fs.statSync(dir).mtimeMs > 30000) fs.rmdirSync(dir); } catch {}
+      Atomics.wait(wait, 0, 0, 100);
+    }
+  }
+  throw new Error(`${dir} is held by another installer`);
+}
+let release = () => {};
 try {
   if (!['install', 'upgrade'].includes(mode)) throw new Error('MODE must be install or upgrade');
   const version = JSON.parse(fs.readFileSync(path.join(assets, '../../../.claude-plugin/plugin.json'), 'utf8')).version;
@@ -208,6 +222,8 @@ try {
   const previous = beforeConfig ? JSON.parse(beforeConfig.bytes.toString('utf8').replace(/^﻿/, '')) : {};
   if (!previous || typeof previous !== 'object' || Array.isArray(previous)) throw new Error('config must be an object');
   if (mode === 'upgrade' && !beforeConfig) throw new Error('not installed; run install');
+  mkdir(path.dirname(settings));
+  release = lock(settings);
   const beforeSettings = snapshot(settings);
   const raw = beforeSettings?.bytes.toString('utf8').replace(/^﻿/, '') ?? '';
   const data = raw.trim() ? JSON.parse(raw) : {};
@@ -273,6 +289,7 @@ try {
   }
   process.exitCode = 1;
 } finally {
+  release();
   for (const temp of temps) { try { fs.unlinkSync(temp); } catch (error) { if (error.code !== 'ENOENT') console.error(`cleanup ${temp}: ${error.message}`); } }
   for (const dir of createdDirs.reverse()) { try { fs.rmdirSync(dir); } catch (error) { if (!['ENOENT', 'ENOTEMPTY', 'EEXIST'].includes(error.code)) console.error(`cleanup ${dir}: ${error.message}`); } }
 }
@@ -288,7 +305,12 @@ NODE
   shape above whatever shape they had. Foreign hooks, `env` and permissions are untouched.
 - **No `settings.json.bak`** is written: the transaction is its own rollback, and a
   backup left in `.claude/` was never cleaned up. An existing `.bak` is not touched here.
-- Session logs are never deleted by install or upgrade. Takes effect on the next session.
+- Session logs are never deleted by install or upgrade.
+- **`settings.json.lock`** (a `mkdir` dir lock, the one other setup skills' settings
+  merges take) covers the read-modify-write: held -> retry 10 s, then abort with nothing
+  written; older than 30 s -> stale, broken.
+- Settings files are watched: the change normally applies in the running session; restart
+  it if the hooks do not fire.
 
 ---
 
@@ -315,10 +337,24 @@ const isDocsync = h => names.some(n => [h.command ?? '', ...(Array.isArray(h.arg
 const isState = name => /^state(-.*)?\.jsonl?$/.test(name) || name.endsWith('.tmp');
 const rmdirEmpty = dir => { try { fs.rmdirSync(dir); } catch (error) { if (!['ENOENT', 'ENOTEMPTY', 'EEXIST'].includes(error.code)) throw error; } };
 const read = file => { try { return fs.readFileSync(file, 'utf8'); } catch (error) { if (error.code === 'ENOENT') return null; throw error; } };
+// Same `<settings>.lock` dir as install: held 10 s -> abort, older than 30 s -> stale.
+function lock(file) {
+  const dir = `${file}.lock`, wait = new Int32Array(new SharedArrayBuffer(4));
+  for (let i = 0; i < 100; i++) {
+    try { fs.mkdirSync(dir); return () => { try { fs.rmdirSync(dir); } catch {} }; } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+      try { if (Date.now() - fs.statSync(dir).mtimeMs > 30000) fs.rmdirSync(dir); } catch {}
+      Atomics.wait(wait, 0, 0, 100);
+    }
+  }
+  throw new Error(`${dir} is held by another installer`);
+}
 const done = [];
+let release = () => {};
 try {
   if (!['uninstall', 'purge'].includes(mode)) throw new Error('MODE must be uninstall or purge');
   // 1. Registrations first: an entry that outlives its script starts a failing node on every call.
+  if (fs.existsSync(path.dirname(settings))) release = lock(settings);
   const raw = read(settings);
   let cleaned = {};
   if (raw !== null && raw.trim()) {
@@ -351,6 +387,7 @@ try {
       done.push(`${removed} registrations removed`);
     }
   }
+  const once = release; release = () => {}; once(); // catch must not free a lock another installer took since
   // 2. Hook files, only now that nothing points at them.
   const hooksDir = path.join(root, '.claude/hooks');
   let files = 0;
@@ -366,6 +403,8 @@ try {
     if (same || bak.trim() === '{}' || names.some(n => bak.includes(`${n}.mjs`))) { fs.unlinkSync(`${settings}.bak`); done.push('settings.json.bak removed'); }
     else done.push(`KEPT ${settings}.bak (differs from settings.json and holds no docsync entry: not provably ours)`);
   }
+  // `config.json.bak` an older `enable`/`disable` wrote: never read, inside docsync's own dir.
+  try { fs.unlinkSync(path.join(root, '.claude/docsync/config.json.bak')); done.push('config.json.bak removed'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
   // 4. State dirs that pre-6.0 hooks created under a drifted cwd: a nested
   //    `.claude/docsync/` holding nothing but session state. One with a config is an install.
   let strays = 0;
@@ -397,6 +436,7 @@ try {
   rmdirEmpty(path.join(root, '.claude'));
   console.log(`docsync ${mode}: ${done.join('; ')}`);
 } catch (error) {
+  release();
   console.error(`docsync ${mode} failed: ${error.message}${done.length ? ` (already done: ${done.join('; ')})` : ' (nothing was changed)'}`);
   process.exitCode = 1;
 }
@@ -413,8 +453,7 @@ NODE
 - A `KEPT ...settings.json.bak` line means the backup could be the user's own; delete
   it by hand if it is not wanted.
 - Doc frontmatter (`last_updated`, `doc_type`, `sync_procedure`) is never touched.
-
-Takes effect on the next session.
+- Takes the same `settings.json.lock` as install; applies in the running session (watched).
 
 ---
 
@@ -429,5 +468,8 @@ Takes effect on the next session.
   continuation, including one caused by another hook; pending docs are raised at the
   next ordinary Stop.
 - Nothing in the hook input says whether the user can be asked (headless run), so the
-  gate message leaves that choice to Claude: ask if `AskUserQuestion` exists, else report.
+  gate message leaves that choice to Claude: ask (only before a destructive sync) if
+  `AskUserQuestion` exists, else report.
+- `CLAUDE.md`, `CLAUDE.local.md` and `AGENTS.md` (any depth) are auto-loaded instruction
+  files, never tracked, nudged or gated, whatever `exclude` says.
 - Path keys are normalised to `/` on Windows; that path is not covered by the test suite.

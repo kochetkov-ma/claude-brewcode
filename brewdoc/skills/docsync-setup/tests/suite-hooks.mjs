@@ -1,18 +1,6 @@
 #!/usr/bin/env node
-/**
- * E2E suite for the three docsync hooks (track / watch / gate) and the runbook
- * transactions in assets/INSTALL.md (install / upgrade / uninstall / purge).
- * Each case drives a hook as a REAL child process (JSON on stdin -> JSON on
- * stdout) and asserts the exit code, stdout and the on-disk state it produced.
- *
- * Isolation: every workspace lives under os.tmpdir() with its own .claude tree.
- * CLAUDE_PROJECT_DIR is scrubbed from the inherited env unless a case sets it,
- * and the clock (DOCSYNC_NOW) and time zone (TZ) are pinned per child, so an
- * operator's shell or the calendar cannot change a result.
- *
- * Covers BD04 (nested cwd must not relocate config/state), BD05 (one log per
- * session) and the fifteen rough edges of the 2.1.296 audit (tagged `item N`).
- */
+// E2E: docsync hooks (track/watch/gate) as real child processes + INSTALL.md transactions; BD04 (nested cwd
+// !=relocate config/state), BD05, audit `item N`. Isolated: per-case tmpdir, CLAUDE_PROJECT_DIR scrubbed, DOCSYNC_NOW+TZ pinned.
 import { spawnSync, spawn } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync, utimesSync, statSync, existsSync, chmodSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
@@ -77,7 +65,7 @@ const doc = day => `---\nlast_updated: "${day}"\n---\n\n# doc\n`;
 const DATED = doc('2000-01-01');
 const UNDATED = '# no frontmatter\n';
 const NUDGE = (rel, day = TODAY) => ({ hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: `docsync: \`${rel}\` has no \`last_updated\` frontmatter. Add YAML frontmatter with \`last_updated: "${day}"\` (quoted — unquoted a real YAML parser types it as a Date), optionally \`doc_type: llm|user|skip\` (bare, unquoted; absent = user) and \`sync_procedure: "..."\`, so staleness tracking works.` } });
-const BLOCK = (findings, day = TODAY) => ({ decision: 'block', reason: `docsync: docs edited this session need a look at their \`last_updated\`. ${findings} Where the date is missing or unusable, or your edit already brought the doc fully up to date, set \`last_updated: "${day}"\` (quoted) and move on. Otherwise the doc needs a sync: re-check it against the code (its \`sync_procedure\`, when present, says where to look), then set the date. A sync rewrites content, so ask the user first — with the AskUserQuestion tool if it is available; if it is not, list the docs in your final message and finish without waiting for an answer. docsync raises a doc again this session only after it is edited again.` });
+const BLOCK = (findings, day = TODAY) => ({ decision: 'block', reason: `docsync: docs edited this session need a look at their \`last_updated\`. ${findings} Where the date is missing or unusable, or your edit already brought the doc fully up to date, set \`last_updated: "${day}"\` (quoted) and move on. Otherwise the doc needs a sync: re-check it against the code (its \`sync_procedure\`, when present, says where to look), fix what is wrong, then set the date; decide this yourself. Ask the user first only when the sync would delete or wholesale rewrite content — with the AskUserQuestion tool if it is available; if it is not, list those docs in your final message and finish without waiting for an answer. docsync raises a doc again this session only after it is edited again.` });
 
 // ── BD04: a nested cwd must not relocate config or state ─────────────────────
 console.log('BD04 — project root vs hook cwd');
@@ -103,9 +91,7 @@ console.log('BD04 — project root vs hook cwd');
   check('recorded key is root-relative', events(root, 'state-s1.jsonl'), [{ ev: 'edit', file: 'docs/a.md' }]);
 }
 {
-  // Pins that the RESOLVED root — not input.cwd — reaches loadConfig and statePath.
-  // A decoy .claude/docsync/config.json sits in the nested cwd; reading it would
-  // disable the hook and put the state file in the wrong place.
+  // RESOLVED root (!=input.cwd) must reach loadConfig/statePath; nested decoy config would disable hook + misplace state.
   const root = makeProject('bd04-decoy', { enabled: true, threshold_days: 7, exclude: [] }, { 'docs/a.md': UNDATED });
   const nested = join(root, 'pkg');
   mkdirSync(join(nested, '.claude', 'docsync'), { recursive: true });
@@ -193,10 +179,7 @@ console.log('gate — decision + prune');
 }
 
 // ── polarity: an ABSENT `enabled` key means ENABLED ──────────────────────────
-// Unlike its sibling setups, docsync reads `c.enabled !== false`, so a config written
-// before the toggle existed keeps working. Every other fixture passes `enabled`
-// explicitly and therefore survives an inverted `=== true`; these three do not, and an
-// inversion would silently disable every existing user's tracker.
+// `c.enabled !== false` keeps pre-toggle configs working; only these 3 omit `enabled`, catching an inverted `=== true`.
 console.log('polarity — absent `enabled` key');
 {
   const root = makeProject('polarity-track', { threshold_days: 7, exclude: [] }, { 'a.md': DATED });
@@ -390,6 +373,19 @@ console.log('item 9 — default excludes');
   // THEN it is tracked like any other doc.
   check('an explicit empty exclude list tracks .claude/ docs', parsed(edit(root, '.claude/rules/r.md')), [0, NUDGE('.claude/rules/r.md')]);
 }
+{
+  // GIVEN an empty exclude list, undated auto-loaded instruction files, and an older log naming one.
+  const files = ['CLAUDE.md', 'pkg/CLAUDE.local.md', 'pkg/AGENTS.md'];
+  const root = makeProject('i9-instruction', { enabled: true, threshold_days: 7, exclude: [] },
+    Object.fromEntries([...files, 'MY-CLAUDE.md'].map(f => [f, UNDATED])));
+  // WHEN each is edited and read, then the gate sees a pre-exemption edit event.
+  const hooked = files.flatMap(f => [edit(root, f, 'i'), run('watch', { session_id: 'i', cwd: root, tool_input: { file_path: join(root, f) } }, { cwd: root, projectDir: root })]);
+  writeFileSync(join(root, '.claude/docsync/state-s1.jsonl'), '{"ev":"edit","file":"CLAUDE.md"}\n');
+  // THEN none is nudged, logged or gated, while a lookalike name is still tracked.
+  check('instruction files are exempt whatever exclude says', [hooked.map(r => [r.code, r.out]), stateFiles(root), parsed(stop(root))],
+    [files.flatMap(() => [[0, '{}'], [0, '{}']]), ['state-s1.jsonl'], [0, {}]]);
+  check('a lookalike name is still tracked', parsed(edit(root, 'MY-CLAUDE.md')), [0, NUDGE('MY-CLAUDE.md')]);
+}
 
 // ── item 11: BOM handling without a literal U+FEFF in the source ─────────────
 console.log('item 11 — BOM');
@@ -507,6 +503,48 @@ function partialInstall(name, settings = '{"env":{"KEEP":"yes"},"hooks":{"Stop":
   check('the installer writes exactly the registration (items 7, 8, 14)', readJsonFile(join(root, '.claude/settings.json')), REGISTRATION);
   check('the runbook documents exactly the registration the installer writes', JSON.parse(fence('## settings.json hook entries', 'json')), REGISTRATION);
   check('install leaves no settings backup behind', readdirSync(join(root, '.claude')).sort(), ['docsync', 'hooks', 'settings.json']);
+}
+{
+  // GIVEN another setup skill holds a fresh settings.json.lock.
+  const root = partialInstall('install-lock-held');
+  mkdirSync(join(root, '.claude/settings.json.lock'));
+  const before = tree(root);
+  // WHEN install runs while the lock stays held.
+  const result = install(root);
+  // THEN it aborts after its wait, writes nothing and leaves the holder's lock alone.
+  check('a held settings lock aborts install untouched', [result.status, /settings\.json\.lock is held by another installer/.test(result.stderr), tree(root)], [1, true, before]);
+}
+{
+  // GIVEN an installed project and a stale settings.json.lock from a crashed installer.
+  const root = join(BASE, 'remove-lock-stale');
+  mkdirSync(root);
+  install(root);
+  const held = join(root, '.claude/settings.json.lock');
+  mkdirSync(held);
+  const old = new Date(Date.now() - 60000);
+  utimesSync(held, old, old);
+  // WHEN uninstall runs.
+  const result = remove(root);
+  // THEN the stale lock is broken, the registrations go, and no lock is left behind.
+  check('a stale settings lock is broken and released', [result.code, existsSync(join(root, '.claude/settings.json')), existsSync(held)], [0, false, false]);
+}
+{
+  // GIVEN an installed project where another installer takes the lock right after step 1 and step 2 then fails.
+  const root = join(BASE, 'remove-lock-once');
+  mkdirSync(root);
+  install(root);
+  const held = join(root, '.claude/settings.json.lock');
+  const shim = join(BASE, 'remove-fault.cjs');
+  writeFileSync(shim, `const fs = require('node:fs'); const unlink = fs.unlinkSync;
+    fs.unlinkSync = function(file) {
+      if (String(file).endsWith('docsync-track.mjs')) { fs.mkdirSync(${JSON.stringify(held)}); throw new Error('injected unlink failure'); }
+      return unlink.apply(this, arguments);
+    };`);
+  // WHEN uninstall runs.
+  const env = { ...childEnv({ projectDir: root }), MODE: 'uninstall', NODE_OPTIONS: `--require=${shim}` };
+  const r = spawnSync('bash', ['-c', removeBlock], { cwd: root, encoding: 'utf8', env });
+  // THEN it fails, and the catch path leaves the other installer's lock in place.
+  check('a failed uninstall never releases a lock it no longer holds', [r.status, /injected unlink failure/.test(r.stderr), existsSync(held)], [1, true, true]);
 }
 {
   // GIVEN a fresh project and a zone 14 hours ahead of UTC.
@@ -670,15 +708,17 @@ console.log('uninstall / purge — lifecycle');
   check('purge returns the project to its pre-install tree', tree(root), before);
 }
 {
-  // GIVEN a fresh install with one session log.
+  // GIVEN a fresh install with one session log and a config backup an older toggle left.
   const root = join(BASE, 'uninstall-fresh');
   mkdirSync(root);
   check('install before uninstall succeeds', install(root).status, 0);
   writeFileSync(join(root, '.claude/docsync/state-s1.jsonl'), '{"ev":"edit","file":"a.md"}\n');
+  writeFileSync(join(root, '.claude/docsync/config.json.bak'), '{"enabled":true}\n');
   // WHEN uninstall runs.
   const r = remove(root);
   // THEN only the config and the session log remain.
   check('uninstall succeeds', [r.code, r.err], [0, '']);
+  check('uninstall reports the legacy config backup removed', r.out.includes('; config.json.bak removed;'), true);
   check('uninstall keeps config and session logs and nothing else', readdirSync(root, { recursive: true, withFileTypes: true }).filter(e => e.isFile()).map(e => e.name).sort(),
     ['config.json', 'state-s1.jsonl']);
   check('the kept files sit in .claude/docsync', readdirSync(join(root, '.claude')), ['docsync']);

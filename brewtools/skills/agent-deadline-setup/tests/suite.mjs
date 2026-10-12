@@ -1,11 +1,6 @@
 #!/usr/bin/env node
-/**
- * E2E suite for agent-deadline hooks (guard + cleanup).
- * Runs in isolated TEMP HOME + TMPDIR (os.tmpdir()/os.homedir() both respect
- * these env vars). Never touches real ~/.claude, real /tmp state, or repo state.
- * Assertion policy: every check is an unconditional exact-equality/size/type
- * comparison with a description; no branching gates which asserts run.
- */
+// E2E suite for agent-deadline hooks (guard + cleanup) in isolated TEMP HOME + TMPDIR (os.tmpdir()/os.homedir() respect them),
+// never touches real ~/.claude, /tmp or repo. Every check: unconditional exact-equality/size/type with a description, no gating branches.
 import { spawnSync, spawn } from 'node:child_process';
 import {
   mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync,
@@ -171,9 +166,8 @@ function subagentStopPayload(cwd, sessionId, agentId, agentType, stopHookActive)
 // ── expected-text builders, copied verbatim from the source templates ──────
 const FINALIZE_LIST = 'Read, Write, Edit, NotebookEdit, TodoWrite, TaskUpdate, SubagentHandback';
 
-// Mirrors the source's FINALIZE_TOOLS Set verbatim -- the full allow-set, including
-// the member deliberately left off FINALIZE_LIST (advertised text). Test 46 pins
-// this against the source; test 47 exercises every member.
+// Mirrors source FINALIZE_TOOLS Set verbatim: full allow-set incl. the member left off FINALIZE_LIST (advertised text).
+// Test 46 pins it against the source; test 47 exercises every member.
 const FINALIZE_TOOLS = [
   'Read', 'Write', 'Edit', 'NotebookEdit', 'TodoWrite',
   'TaskUpdate', 'TaskCreate', 'SubagentHandback',
@@ -231,9 +225,8 @@ function hardDenyText(toolName, elapsedMin, budget, readOnly) {
   );
 }
 
-// Mirrors the source's hardExpiredContext verbatim. Function form (not a string
-// constant) so test 46 can diff its body against the source via regex, the same
-// way FINALIZE_LIST/HARD_STOP_TOOLS are pinned.
+// Mirrors source hardExpiredContext verbatim; function form so test 46 diffs its body vs the source by regex,
+// as FINALIZE_LIST/HARD_STOP_TOOLS are pinned.
 function hardExpiredContext(elapsedMin, budget, readOnly) {
   return (
     `Time budget far exceeded (${elapsedMin} of ${budget} min; agent-deadline hook). ` +
@@ -285,12 +278,8 @@ function newRoot(name) {
   return { home, tmp, proj, env: freshEnv(home, tmp) };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 01: main session (no agent_id) -> no-op
-// GIVEN: PreToolUse payload without agent_id/agent_type
-// WHEN: guard runs
-// THEN: output == {}, exit 0, no state dir ever created
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN PreToolUse without agent_id/agent_type | WHEN guard runs | THEN {}, exit 0, no state dir created
 {
   const { proj, env, tmp } = newRoot('t01');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
@@ -305,13 +294,8 @@ function newRoot(name) {
   check('01-no-state-dir', existsSync(stateRoot(tmp)), false, 'no state dir must be created for main session');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 02: first tool call of a subagent -> state created, silent pass
-// GIVEN: enabled config, fresh agent/session, no prior state file
-// WHEN: guard runs once
-// THEN: output == {}; state file is exactly {start: call clock, warned:false,
-//       expired:false, config: the governing project config}
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN enabled config, fresh agent/session, no state | WHEN guard runs once | THEN {}; state = {start: call clock, warned/expired false, config: governing project config}
 {
   const { proj, env, tmp } = newRoot('t02');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
@@ -329,12 +313,8 @@ function newRoot(name) {
     'fresh state starts at the call clock, unwarned/unexpired, and names its config');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 03: ~50% of budget -> silence, state untouched
-// GIVEN: state pre-seeded at elapsed=10min against a 20min budget (ratio 0.5)
-// WHEN: guard runs
-// THEN: output == {}; state file byte-identical to what was pre-seeded
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN elapsed=10min of 20min (ratio 0.5) | WHEN guard runs | THEN {}; state byte-identical to seed
 {
   const { proj, env, tmp } = newRoot('t03');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
@@ -353,13 +333,8 @@ function newRoot(name) {
   check('03-state-unchanged', state, seeded, 'state must not be rewritten below the warn threshold');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 04: >=80% budget, first time -> exactly one non-blocking warning
-// GIVEN: state pre-seeded at elapsed=16.5min against a 20min budget (ratio 0.825)
-// WHEN: guard runs
-// THEN: output == additionalContext warning (full object, exact template);
-//       state becomes warned:true, expired:false, start unchanged
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN elapsed=16.5min of 20min (ratio 0.825) | WHEN guard runs | THEN exact additionalContext warn; warned:true, expired:false, start unchanged
 {
   const { proj, env, tmp } = newRoot('t04');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
@@ -382,12 +357,8 @@ function newRoot(name) {
   check('04-state-after-warn', state, { start: seeded.start, warned: true, expired: false }, 'state flips warned=true, start/expired unchanged');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 05: >=80% budget, already warned -> silence, no duplicate warning
-// GIVEN: state pre-seeded at elapsed=17min/20min with warned already true
-// WHEN: guard runs
-// THEN: output == {}; state file byte-identical to what was pre-seeded
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN elapsed=17min/20min, warned:true | WHEN guard runs | THEN {}; state byte-identical to seed
 {
   const { proj, env, tmp } = newRoot('t05');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
@@ -406,13 +377,8 @@ function newRoot(name) {
   check('05-state-unchanged', state, seeded, 'state must stay exactly as pre-seeded');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 06: >=100% budget, Bash -> hard deny
-// GIVEN: state pre-seeded at elapsed=25min/20min (ratio 1.25), not yet expired
-// WHEN: guard runs with tool_name Bash
-// THEN: output == permissionDecision:"deny" (full object, exact template);
-//       state becomes expired:true, warned:true
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN elapsed=25min/20min (ratio 1.25), not expired | WHEN guard runs Bash | THEN exact permissionDecision:"deny"; expired:true, warned:true
 {
   const { proj, env, tmp } = newRoot('t06');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
@@ -439,13 +405,8 @@ function newRoot(name) {
   check('06-state-expired', state, { start: seeded.start, warned: true, expired: true }, 'state flips expired=true on first over-budget non-finalize call');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 07: >=100% budget, Read (finalize tool), first time -> expiry notice, no deny
-// GIVEN: state pre-seeded at elapsed=25min/20min, expired:false
-// WHEN: guard runs with tool_name Read
-// THEN: output == additionalContext expiry notice, no permissionDecision key;
-//       state becomes expired:true, warned:true
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN elapsed=25min/20min, expired:false | WHEN guard runs Read | THEN additionalContext expiry notice, no permissionDecision; expired:true, warned:true
 {
   const { proj, env, tmp } = newRoot('t07');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
@@ -469,12 +430,8 @@ function newRoot(name) {
   check('07-state-expired', state, { start: seeded.start, warned: true, expired: true }, 'state flips expired=true on the first finalize call past deadline');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 08: >=100% budget, Write/Edit (finalize tool), repeat -> fully silent pass
-// GIVEN: state already expired:true (past the first notice)
-// WHEN: guard runs with tool_name Write, then again with Edit
-// THEN: output == {} both times; state file untouched
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN state expired:true | WHEN guard runs Write, then Edit | THEN {} both times; state untouched
 {
   const { proj, env, tmp } = newRoot('t08');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
@@ -505,9 +462,7 @@ function newRoot(name) {
   check('08-edit-state-unchanged', stateAfterEdit, seeded, 'state must not be rewritten on repeat finalize pass');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 09: enabled:false -> no-op, no state ever created
-// ─────────────────────────────────────────────────────────────────────────────
 {
   const { proj, env, tmp } = newRoot('t09');
   writeConfig(proj, { enabled: false, defaultMinutes: 20, byAgentType: {} });
@@ -523,9 +478,7 @@ function newRoot(name) {
   check('09-no-state-file', existsSync(stateFilePath(tmp, 'S09', 'A1')), false, 'disabled config must never create state');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 10: no config file anywhere -> no-op, no state created
-// ─────────────────────────────────────────────────────────────────────────────
 {
   const { proj, env, tmp } = newRoot('t10');
   const stdin = JSON.stringify({
@@ -540,9 +493,7 @@ function newRoot(name) {
   check('10-no-state-file', existsSync(stateFilePath(tmp, 'S10', 'A1')), false, 'no config means no state');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 11: malformed project config JSON, no global config -> fail-open no-op
-// ─────────────────────────────────────────────────────────────────────────────
 {
   const { proj, env, tmp } = newRoot('t11');
   writeRawConfig(proj, '{not valid json');
@@ -558,12 +509,8 @@ function newRoot(name) {
   check('11-no-state-file', existsSync(stateFilePath(tmp, 'S11', 'A1')), false, 'fail-open path must not create state');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 12: byAgentType override takes priority over defaultMinutes
-// GIVEN: defaultMinutes=20, byAgentType.tester=5; elapsed=4.5min (90% of 5, 22.5% of 20)
-// WHEN: guard runs for agent_type "tester"
-// THEN: warning fires with budget=5 embedded (proves override, not default, was used)
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN defaultMinutes=20, byAgentType.tester=5, elapsed=4.5min (90% of 5, 22.5% of 20) | WHEN agent_type "tester" | THEN warning embeds budget=5
 {
   const { proj, env, tmp } = newRoot('t12');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: { tester: 5 } });
@@ -584,13 +531,8 @@ function newRoot(name) {
   check('12-output-warn-with-override-budget', out, expectedOut, `budget=5 (override) drives the warning at ${elapsedMin}/5 min`);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Test 13: byAgentType with a non-matching key -> silent fallback to defaultMinutes
-// GIVEN: byAgentType.other=5 (does not match agent_type "tester"), defaultMinutes=20
-//        elapsed=17min (85% of 20, but 340% of 5 -- would deny if 5 leaked in)
-// WHEN: guard runs for agent_type "tester"
-// THEN: warning fires with budget=20 embedded (proves default was used, not 5, not a crash)
-// ─────────────────────────────────────────────────────────────────────────────
+// Test 13: byAgentType non-matching key -> silent fallback to defaultMinutes
+// GIVEN byAgentType.other=5, defaultMinutes=20, elapsed=17min (85% of 20, 340% of 5: deny if 5 leaked) | WHEN "tester" | THEN warning embeds budget=20
 {
   const { proj, env, tmp } = newRoot('t13');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: { other: 5 } });
@@ -611,14 +553,8 @@ function newRoot(name) {
   check('13-output-warn-with-default-budget', out, expectedOut, `budget=20 (default) used; mismatched byAgentType key ignored`);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 14: path traversal in agent_id stays contained under the state root
-// GIVEN: agent_id="../../etc/passwd" on the first tool call
-// WHEN: guard runs
-// THEN: sanitized segment computed by the source's own regex is used verbatim
-//       as a single path component; resulting file path resolves exactly
-//       inside <root>/<session>/, never escaping it
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN agent_id="../../etc/passwd" | WHEN guard runs | THEN source-regex sanitized segment is one path component, file exactly in <root>/<session>/
 {
   const { proj, env, tmp } = newRoot('t14');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
@@ -639,9 +575,7 @@ function newRoot(name) {
   check('14-state-not-outside-root', existsSync(join(tmp, 'etc', 'passwd.json')), false, 'no file must be written outside the state root');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 15: path traversal in session_id stays contained under the state root
-// ─────────────────────────────────────────────────────────────────────────────
 {
   const { proj, env, tmp } = newRoot('t15');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
@@ -662,9 +596,7 @@ function newRoot(name) {
   check('15-state-not-outside-root', existsSync(join(tmp, 'tmp', 'evil', 'A1.json')), false, 'no file must be written outside the state root');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 16: agent_id that sanitizes to exactly ".." or "." is rejected -> no-op
-// ─────────────────────────────────────────────────────────────────────────────
 {
   const { proj, env, tmp } = newRoot('t16');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
@@ -690,12 +622,8 @@ function newRoot(name) {
   check('16-no-state-dir', existsSync(stateRoot(tmp)), false, 'neither call may create any state');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 17: project config wins over global config
-// GIVEN: project defaultMinutes=5, global defaultMinutes=100; elapsed=4.5min
-// WHEN: guard runs
-// THEN: warning fires with budget=5 (project value), proving project precedence
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN project defaultMinutes=5, global defaultMinutes=100, elapsed=4.5min | WHEN guard runs | THEN warning embeds budget=5 (project precedence)
 {
   const { home, proj, tmp } = newRoot('t17');
   writeConfig(proj, { enabled: true, defaultMinutes: 5, byAgentType: {} });
@@ -718,12 +646,8 @@ function newRoot(name) {
   check('17-project-config-wins', out, expectedOut, 'budget=5 (project) used over budget=100 (global)');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 18: cleanup hook stamps the stopped agent's state, creates nothing else
-// GIVEN: a state file for A1; no state for A2; a killed guard's temp file of A1
-// WHEN: SubagentStop fires for A1, then for A2
-// THEN: A1 keeps its clock and gains `stopped`; A2 gets no file; the temp is gone
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN state for A1, none for A2, killed guard's temp of A1 | WHEN SubagentStop for A1, then A2 | THEN A1 keeps clock + gains `stopped`; A2 no file; temp gone
 {
   const { tmp, env } = newRoot('t18');
   const seeded = { start: NOW - 60000, warned: false, expired: false };
@@ -740,12 +664,8 @@ function newRoot(name) {
   check('18-session-dir-entries', listDir(dir), ['A1.json'], 'no state is created for an agent without one, and the temp file is dropped');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 19: parallel subagents in the same session keep independent clocks
-// GIVEN: A1 rewritten to 85% elapsed, A2 fresh (0% elapsed), same session
-// WHEN: guard runs once per agent
-// THEN: A1 gets a warning, A2 (independent clock) stays silent and unwarned
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN A1 rewritten to 85% elapsed, A2 fresh (0%) | WHEN guard runs per agent | THEN A1 warns; A2 silent and unwarned
 {
   const { proj, env, tmp } = newRoot('t19');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
@@ -783,9 +703,7 @@ function newRoot(name) {
   check('19-a2-start-unchanged', stateA2After.start, a2SeededStart, 'A2 clock must not be reset/shared by A1 activity');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 20: empty / garbage stdin -> fail open, exit 0, no-op
-// ─────────────────────────────────────────────────────────────────────────────
 {
   const { env } = newRoot('t20');
   const cases = [
@@ -801,14 +719,8 @@ function newRoot(name) {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Test 21: hardStopRatio default (2x) not yet reached -> normal finalize set
-//          + normal soft deny
-// GIVEN: ratio=1.5 (elapsed=30min/20min budget), default hardStopRatio=2
-// WHEN: guard runs TodoWrite (finalize tool) on one agent, Bash (blocked) on another
-// THEN: TodoWrite gets the plain expiredContext notice (full finalize set intact);
-//       Bash gets the regular soft denyText, not hardDenyText
-// ─────────────────────────────────────────────────────────────────────────────
+// Test 21: hardStopRatio default (2x) not reached -> normal finalize set + normal soft deny
+// GIVEN ratio=1.5 (30min/20min) | WHEN TodoWrite on one agent, Bash on another | THEN TodoWrite: plain expiredContext; Bash: soft denyText, not hardDenyText
 {
   const { proj, env, tmp } = newRoot('t21');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
@@ -844,14 +756,8 @@ function newRoot(name) {
   check('21-bash-soft-deny', outBash, expectedBash, 'at ratio 1.5 a blocked tool gets the regular soft denyText, not hardDenyText');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 22: hardStopRatio default (2x) reached -> allow-list narrows to Write/Edit
-// GIVEN: ratio=2.0 (elapsed=40min/20min), state already expired:true/warned:true
-//        with a fresh notice mtime (deterministic silent-pass / hard-deny, no
-//        first-crossing notice branch in play)
-// WHEN: guard runs Read, TodoWrite (no longer allowed), Write, Edit (still allowed)
-// THEN: Read/TodoWrite hard-denied; Write/Edit pass silently, state untouched
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN ratio=2.0 (40min/20min), expired:true/warned:true, fresh notice mtime (no first-crossing branch) | THEN Read/TodoWrite hard-denied; Write/Edit silent, state untouched
 {
   const { proj, env, tmp } = newRoot('t22');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
@@ -908,14 +814,8 @@ function newRoot(name) {
   check('22-edit-state-unchanged', stateEdit, seededA4, 'Edit must not mutate an already-expired state');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 23: hard-stop deny text is a different template than the regular deny text
-// GIVEN: ratio=1.5 (soft) on one agent, ratio=2.25 (hard) on another, both
-//        first-crossing (expired:false), same blocked tool "Bash"
-// WHEN: guard runs both
-// THEN: soft case matches denyText() verbatim; hard case matches hardDenyText()
-//       verbatim -- two distinct exact templates, not the same message
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN Bash, first crossing (expired:false), ratio=1.5 (soft) vs 2.25 (hard) | THEN denyText() and hardDenyText() verbatim, two distinct templates
 {
   const { proj, env, tmp } = newRoot('t23');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
@@ -948,21 +848,8 @@ function newRoot(name) {
   check('23-hard-deny-text-exact', outHard, expectedHard, 'ratio 2.25 Bash deny uses the hardDenyText template verbatim, a different message body than denyText');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Test 24: custom hardStopRatio from config is honored, in both directions
-// GIVEN: config hardStopRatio=1.5; ratio=1.6 (elapsed=32min/20min) is already
-//        hard-stopped under the custom value though below the default 2x;
-//        ratio=1.2 (elapsed=24min/20min) is still in the soft band -- past
-//        100% but below the custom 1.5x threshold
-// WHEN: guard runs, at ratio 1.6: Read (not in HARD_STOP_TOOLS) and Write (in
-//       HARD_STOP_TOOLS); at ratio 1.2: Write again
-// THEN: at ratio 1.6, Read is hard-denied and Write -- though allowed -- gets
-//       the hardExpiredContext notice, not the plain expiredContext one: the
-//       allowing branch narrows its wording past the hard stop too, not just
-//       the deny branch; at ratio 1.2, Write still gets the plain
-//       expiredContext notice, pinning the soft/hard boundary from the
-//       allow side as well as the deny side
-// ─────────────────────────────────────────────────────────────────────────────
+// Test 24: config hardStopRatio=1.5 honored both ways: ratio 1.6 (32min/20min) hard-stopped below default 2x; 1.2 (24min/20min) soft band past 100%
+// THEN 1.6: Read (!HARD_STOP_TOOLS) hard-denied, Write gets hardExpiredContext; 1.2: Write plain expiredContext: allow branch pins soft/hard boundary too
 {
   const { proj, env, tmp } = newRoot('t24');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, hardStopRatio: 1.5, byAgentType: {} });
@@ -1007,14 +894,8 @@ function newRoot(name) {
   check('24-custom-ratio-soft-band-write-plain-notice', outSoftWrite, expectedSoftWrite, 'at ratio 1.2 (past 100% but below the custom 1.5x hard stop) Write still gets the plain expiredContext notice, proving the allow branch only narrows past the hard-stop threshold');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 25: invalid hardStopRatio (<=1) rolls back to the default (2)
-// GIVEN: two configs, hardStopRatio=1 and hardStopRatio=-3; ratio=1.5 in both
-//        (below the real default of 2)
-// WHEN: guard runs Bash (blocked) under each config
-// THEN: both deny with the regular soft denyText, proving neither invalid value
-//       was accepted as an early hard-stop threshold
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN hardStopRatio=1 and hardStopRatio=-3, ratio=1.5 | WHEN Bash under each | THEN both soft denyText: neither became an early hard stop
 {
   const { proj: proj1, env, tmp } = newRoot('t25');
   writeConfig(proj1, { enabled: true, defaultMinutes: 20, hardStopRatio: 1, byAgentType: {} });
@@ -1049,13 +930,8 @@ function newRoot(name) {
   check('25-hardstopratio-negative-rolls-back-to-default', out2, expected2, 'hardStopRatio=-3 must also roll back to default 2');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 26: renotice -- a fresh notice (younger than RENOTICE_RATIO) stays silent
-// GIVEN: warn-zone state (ratio 0.85), warned:true, notice backdated 1m50s
-//        (renoticeMs = 10% of 20min = 2min, so this is still fresh)
-// WHEN: guard runs
-// THEN: output == {}; state file byte-identical to what was pre-seeded
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN ratio 0.85, warned:true, notice backdated 1m50s (renoticeMs = 10% of 20min = 2min) | WHEN guard runs | THEN {}; state byte-identical
 {
   const { proj, env, tmp } = newRoot('t26');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
@@ -1074,12 +950,8 @@ function newRoot(name) {
   check('26-state-unchanged', state, seeded, 'state must not be rewritten while the notice is still fresh');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 27: renotice -- a stale notice (older than RENOTICE_RATIO) repeats the warning
-// GIVEN: warn-zone state (ratio 0.85), warned:true, notice backdated 2m10s (stale)
-// WHEN: guard runs
-// THEN: output == exact warnText object again; expired/start untouched
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN ratio 0.85, warned:true, notice backdated 2m10s | WHEN guard runs | THEN exact warnText again; expired/start untouched
 {
   const { proj, env, tmp } = newRoot('t27');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
@@ -1102,12 +974,8 @@ function newRoot(name) {
   check('27-state-warned-still-true', state, { start: seeded.start, warned: true, expired: false }, 'renotice must not touch expired, start, or flip warned away from true');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 28: renotice -- a stale expiry notice repeats past the deadline too
-// GIVEN: expired-zone state (ratio 1.25), expired:true, notice backdated 2m10s
-// WHEN: guard runs a finalize tool (Read)
-// THEN: output == exact expiredContext object again; state fields unchanged
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN ratio 1.25, expired:true, notice backdated 2m10s | WHEN finalize tool (Read) | THEN exact expiredContext again; state unchanged
 {
   const { proj, env, tmp } = newRoot('t28');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
@@ -1130,9 +998,7 @@ function newRoot(name) {
   check('28-state-still-expired', state, { start: seeded.start, warned: true, expired: true }, 'renotice in expired zone must not change any state field');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 29: config walk-up -- cwd nested repo/a/b/c finds the repo-root config
-// ─────────────────────────────────────────────────────────────────────────────
 {
   const { proj, env, tmp } = newRoot('t29');
   writeConfig(proj, { enabled: true, defaultMinutes: 7, byAgentType: {} });
@@ -1151,14 +1017,8 @@ function newRoot(name) {
   check('29-config-found-via-walkup', out, expectedOut, 'budget=7 (walked-up project config) drives the warning, proving the climb from a/b/c found the root .claude config');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 30: a broken intermediate config does not shadow a valid ancestor config
-// GIVEN: valid config at repo root, broken (invalid JSON) config at repo/mid,
-//        cwd = repo/mid/leaf (no config of its own)
-// WHEN: guard runs
-// THEN: the walk does not stop at the broken mid config; it continues to the
-//       root and uses its budget
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN valid root config, invalid JSON at repo/mid, cwd = repo/mid/leaf | WHEN guard runs | THEN walk passes mid, uses root budget
 {
   const { proj, env, tmp } = newRoot('t30');
   writeConfig(proj, { enabled: true, defaultMinutes: 9, byAgentType: {} });
@@ -1180,13 +1040,8 @@ function newRoot(name) {
   check('30-broken-config-does-not-shadow-parent', out, expectedOut, 'budget=9 (root config) used; broken mid-level config did not stop the climb or silently disable the feature');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Test 31: config walk-up depth limit -- cwd 15 levels below the config is
-//          still within climb range
-// GIVEN: config sits at depth 0 (project root); cwd is 15 directories below
-//        it; MAX_CONFIG_CLIMB=16 checks depths 0..15 (cwd itself plus 15
-//        ancestors), so the climb from cwd must still reach depth 0
-// ─────────────────────────────────────────────────────────────────────────────
+// Test 31: config walk-up depth limit -- cwd 15 levels below the config is within climb range
+// GIVEN config at depth 0; MAX_CONFIG_CLIMB=16 checks depths 0..15 (cwd + 15 ancestors), so the climb reaches depth 0
 {
   const { proj, env, tmp } = newRoot('t31');
   writeConfig(proj, { enabled: true, defaultMinutes: 11, byAgentType: {} });
@@ -1205,9 +1060,7 @@ function newRoot(name) {
   check('31-found-at-depth-15', out, expectedOut, 'MAX_CONFIG_CLIMB=16 checks depths 0..15 inclusive; a cwd 15 levels below the root config must still find it');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 32: config walk-up depth limit -- NOT found at depth 16
-// ─────────────────────────────────────────────────────────────────────────────
 {
   const { proj, env, tmp } = newRoot('t32');
   writeConfig(proj, { enabled: true, defaultMinutes: 11, byAgentType: {} });
@@ -1224,13 +1077,8 @@ function newRoot(name) {
   check('32-no-state-file', existsSync(stateFilePath(tmp, 'S32', 'A1')), false, 'undiscovered config means feature stays off, no state written');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 33: state root safety -- a symlinked state root is refused, victim intact
-// GIVEN: STATE_ROOT pre-created as a symlink to an unrelated "victim" directory
-// WHEN: guard runs (first call for a subagent)
-// THEN: output == {} (fail open); victim content untouched, no file written
-//       through the symlink; the symlink itself is left as-is (not replaced)
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN STATE_ROOT = symlink to a "victim" dir | WHEN first call | THEN {} (fail open); victim untouched, nothing written through, symlink kept
 {
   const { proj, env, tmp } = newRoot('t33');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
@@ -1253,9 +1101,7 @@ function newRoot(name) {
   check('33-root-still-symlink', linkIsStillSymlink, true, 'guard must not replace the symlink with a real directory');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 34: state root safety -- an over-permissive root (0755) is healed to 0700
-// ─────────────────────────────────────────────────────────────────────────────
 {
   const { proj, env, tmp } = newRoot('t34');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
@@ -1274,11 +1120,8 @@ function newRoot(name) {
   check('34-state-file-created', existsSync(stateFilePath(tmp, 'S34', 'A1')), true, 'after healing, state must actually be written (root accepted)');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 35: state root safety -- a root owned by a foreign uid is skipped
-// Requires root privileges to chown to a uid other than our own; skipped with
-// a labeled note when the suite is not running as root (the common case).
-// ─────────────────────────────────────────────────────────────────────────────
+// Needs root to chown to another uid; non-root run (common case) -> labeled SKIP
 {
   const isRoot = typeof process.getuid === 'function' && process.getuid() === 0;
   if (isRoot) {
@@ -1301,13 +1144,8 @@ function newRoot(name) {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 36: a start timestamp in the future is clamped to now
-// GIVEN: state.start = now + 10min (clock jump / hand-edited / restored snapshot)
-// WHEN: guard runs
-// THEN: output == {} (clamped elapsed 0, below warn threshold); state.start is
-//       rewritten to the call's clock; warned/expired untouched
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN start = now + 10min (clock jump, hand-edit, restored snapshot) | THEN {} (elapsed 0); start = call clock; warned/expired untouched
 {
   const { proj, env, tmp } = newRoot('t36');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
@@ -1324,10 +1162,7 @@ function newRoot(name) {
     'a future start is rewritten to the call clock; the clamp touches only start');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Test 37: the clamp persists forever -- a later call computes the deadline
-//          correctly from the corrected start, not the original future one
-// ─────────────────────────────────────────────────────────────────────────────
+// Test 37: clamp persists -- a later call computes the deadline from the corrected start, not the future one
 {
   const { proj, env, tmp } = newRoot('t37');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
@@ -1352,9 +1187,7 @@ function newRoot(name) {
   check('37-second-call-uses-clamped-start', out2, expected2, 'the clamped start persists permanently: a later call 17min after it computes the deadline correctly instead of re-detecting a future start');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 38: a numeric agent_id is coerced to a string, state is written
-// ─────────────────────────────────────────────────────────────────────────────
 {
   const { proj, env, tmp } = newRoot('t38');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
@@ -1371,9 +1204,7 @@ function newRoot(name) {
     'numeric agent_id 12345 is coerced to the path segment "12345" and gets a fresh state');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 39: a numeric agent_id enforces the deadline end-to-end (deny fires)
-// ─────────────────────────────────────────────────────────────────────────────
 {
   const { proj, env, tmp } = newRoot('t39');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
@@ -1397,9 +1228,7 @@ function newRoot(name) {
   check('39-state-expired', state, { start: seeded.start, warned: true, expired: true }, 'state for the numeric agent_id flips expired=true on first over-budget call');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 40: agent_type="" -> treated as main session (both fields required)
-// ─────────────────────────────────────────────────────────────────────────────
 {
   const { proj, env, tmp } = newRoot('t40');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
@@ -1414,9 +1243,7 @@ function newRoot(name) {
   check('40-no-state-file', existsSync(stateFilePath(tmp, 'S40', 'A1')), false, 'main-session treatment must never create state');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 41: agent_type="   " (whitespace only) -> treated as main session
-// ─────────────────────────────────────────────────────────────────────────────
 {
   const { proj, env, tmp } = newRoot('t41');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
@@ -1431,9 +1258,7 @@ function newRoot(name) {
   check('41-no-state-file', existsSync(stateFilePath(tmp, 'S41', 'A1')), false, 'main-session treatment must never create state');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 42: agent_type absent entirely -> treated as main session
-// ─────────────────────────────────────────────────────────────────────────────
 {
   const { proj, env, tmp } = newRoot('t42');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
@@ -1448,13 +1273,8 @@ function newRoot(name) {
   check('42-no-state-file', existsSync(stateFilePath(tmp, 'S42', 'A1')), false, 'main-session treatment must never create state');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 43: a present-but-unparsable state file is skipped, clock is NOT reset
-// GIVEN: a state file that exists but is not valid JSON
-// WHEN: guard runs
-// THEN: output == {}; the file on disk is byte-identical to the garbage that
-//       was there before (proves it was skipped, not rewritten as "first call")
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN state file with invalid JSON | WHEN guard runs | THEN {}; file byte-identical (skipped, not rewritten as "first call")
 {
   const { proj, env, tmp } = newRoot('t43');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
@@ -1475,9 +1295,7 @@ function newRoot(name) {
   check('43-file-untouched', raw, garbage, 'clock must not reset: the unparsable file must be left byte-identical, not overwritten with a fresh start');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 44: atomic write -- no *.tmp leftovers survive a normal run
-// ─────────────────────────────────────────────────────────────────────────────
 {
   const { proj, env, tmp } = newRoot('t44');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
@@ -1495,14 +1313,8 @@ function newRoot(name) {
   check('44-only-state-file-remains', entries, ['A1.json'], 'after two guard calls including a warn-transition write, only the state file may remain, no *.tmp leftovers');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 45: atomic write -- concurrent processes do not corrupt the state file
-// GIVEN: two guard processes launched truly concurrently (async spawn) against
-//        the same warn-zone state file
-// WHEN: both race to save via temp-file + rename
-// THEN: both exit 0; the final file always parses to a complete, well-shaped
-//       object (never a torn/partial write); no *.tmp file survives
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN 2 truly concurrent guards (async spawn), temp-file + rename | THEN both exit 0; final file well-shaped, never torn/partial; no *.tmp
 {
   const { proj, env, tmp } = newRoot('t45');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
@@ -1532,20 +1344,8 @@ function newRoot(name) {
   check('45-no-tmp-leftover', tmpLeftovers, [], 'no *.tmp file may survive two concurrent renames onto the same path');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Test 46: FINALIZE_LIST / FINALIZE_TOOLS / HARD_STOP_TOOLS / hardExpiredContext
-//          source-vs-test sync guard
-// GIVEN: the suite's own FINALIZE_LIST / FINALIZE_TOOLS / HARD_STOP_LIST mirrors
-//        and hardExpiredContext function, used to build every verbatim
-//        directive-text assertion above
-// WHEN: the source file's literal constants and hardExpiredContext function
-//       body are extracted by regex
-// THEN: they must equal the suite's mirrors exactly, or every directive-text
-//       assertion in this suite (including test 47's per-tool coverage) is
-//       silently checking stale text -- deleting any one of the 8
-//       FINALIZE_TOOLS entries in the source, or letting hardExpiredContext's
-//       wording drift from the allow-branch's actual reply, must fail here
-// ─────────────────────────────────────────────────────────────────────────────
+// Test 46: source-vs-test sync: regex-extracted FINALIZE_LIST, FINALIZE_TOOLS, HARD_STOP_TOOLS, hardExpiredContext body == suite mirrors
+// Else every directive-text assert (incl. test 47) checks stale text: dropping any of 8 FINALIZE_TOOLS or hardExpiredContext drift fails here
 {
   const guardSource = readFileSync(GUARD_MJS, 'utf8');
   const suiteSource = readFileSync(fileURLToPath(import.meta.url), 'utf8');
@@ -1570,22 +1370,8 @@ function newRoot(name) {
   check('46-hard-expired-context-in-sync', sourceHardExpiredFn, suiteHardExpiredFn, 'suite hardExpiredContext mirror must equal the source function body verbatim, or the hard-stop allow-branch text is silently checked against stale wording');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Test 47: every FINALIZE_TOOLS element is actually allowed past 100% budget
-//          (below the hard stop); a representative denied-tool sample is
-//          actually blocked
-// GIVEN: ratio=1.25 (elapsed=25min/20min budget), below the default
-//        hardStopRatio (2x), expired:false, one fresh agent per tool under test
-// WHEN: guard runs once for every FINALIZE_TOOLS member (source-synced mirror,
-//       see test 46), and once for each of a denied-tool sample
-//       (Bash, Grep, WebFetch, AskUserQuestion, Agent, Skill)
-// THEN: every FINALIZE_TOOLS member gets the plain expiredContext notice, no
-//       permissionDecision key; every denied-sample tool gets
-//       permissionDecision deny with the regular denyText -- this is the check
-//       that catches a regression in any of the 3 elements (NotebookEdit,
-//       TaskUpdate, TaskCreate) that no other test in this suite exercises,
-//       and confirms AskUserQuestion stays blocked
-// ─────────────────────────────────────────────────────────────────────────────
+// Test 47: past 100% below hard stop (ratio=1.25, 25min/20min, default 2x), one fresh agent per tool: every FINALIZE_TOOLS member allowed
+// THEN plain expiredContext, no permissionDecision; denied sample gets denyText; sole cover of 3 (NotebookEdit, TaskUpdate, TaskCreate), AskUserQuestion blocked
 {
   const { proj, env, tmp } = newRoot('t47');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
@@ -1623,14 +1409,8 @@ function newRoot(name) {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 48: the report call passes at every phase (warn / finalize / hard stop)
-// GIVEN: three agents at 85%, 125% and 225% of a 20min budget, first crossing,
-//        fixed clock, the live SubagentHandback payload shape
-// WHEN: guard runs the hand-back call for each
-// THEN: each gets the phase notice with no permissionDecision (never a deny),
-//       and the state records the phase
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN 85%, 125%, 225% of 20min, first crossing, fixed clock, live SubagentHandback payload | THEN phase notice, never a deny; state records phase
 {
   const { proj, env, tmp } = newRoot('t48');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
@@ -1652,14 +1432,8 @@ function newRoot(name) {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Test 49: state survives SubagentStop; the same agent_id resumes its budget
-// GIVEN: an agent 25min into a 20min budget, already expired
-// WHEN: SubagentStop fires (another hook blocks the stop), the agent calls Bash
-//       3 s later, then SubagentStop fires again with stop_hook_active:true
-// THEN: the first stop only stamps `stopped`; the Bash call is denied on the
-//       ORIGINAL clock and clears the mark; the second stop stamps it again
-// ─────────────────────────────────────────────────────────────────────────────
+// Test 49: state survives SubagentStop; same agent_id resumes its budget (25min of 20min, expired)
+// WHEN stop (blocked by another hook), Bash 3 s later, stop with stop_hook_active:true | THEN stamp `stopped`; Bash denied on ORIGINAL clock, clears it; re-stamp
 {
   const { proj, env, tmp } = newRoot('t49');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
@@ -1689,12 +1463,8 @@ function newRoot(name) {
   check('49-second-stop-stamps-again', afterStop2, { ...seeded, stopped: NOW + 4000 }, 'second SubagentStop of the same agent_id stamps the new stop time');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Test 50: resume grace boundary -- 1 ms inside continues, exactly at it restarts
-// GIVEN: two expired agents stopped 299999 ms and 300000 ms ago (grace = 5 min)
-// WHEN: guard runs Bash for each at the fixed clock
-// THEN: the first is denied on its original clock; the second gets a fresh window
-// ─────────────────────────────────────────────────────────────────────────────
+// GIVEN expired agents stopped 299999 ms and 300000 ms ago (grace = 5 min) | THEN first denied on original clock; second gets a fresh window
 {
   const { proj, env, tmp } = newRoot('t50');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
@@ -1718,14 +1488,8 @@ function newRoot(name) {
     { start: NOW, warned: false, expired: false, config: configPathOf(proj) }, 'a late resume restarts the clock at the resuming call');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Test 51: SubagentStop prunes by age
-// GIVEN: one session dir with a silent live agent, a stop mark inside the grace,
-//        a stop mark past it, an orphan untouched for a day; plus one session
-//        dir a day old and one younger
-// WHEN: cleanup runs for an agent of that session
-// THEN: only the dead mark, the orphan and the day-old session dir are removed
-// ─────────────────────────────────────────────────────────────────────────────
+// Test 51: SubagentStop prunes by age: silent live agent, stop mark inside grace, one past it, day-old orphan; day-old and younger session dirs
+// THEN only the dead mark, the orphan and the day-old session dir are removed
 {
   const { proj, env, tmp } = newRoot('t51');
   const day = 24 * 60 * 60 * 1000;
@@ -1753,12 +1517,8 @@ function newRoot(name) {
   check('51-session-dirs', listDir(stateRoot(tmp)), ['S-young', 'S51'], 'only the session dir older than a day is removed');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Test 52: pruning work is bounded per invocation
-// GIVEN: 70 dead stop marks in one session dir (PRUNE_MAX = 64)
-// WHEN: cleanup runs twice for an agent with no state of its own
-// THEN: the first run removes exactly 64, the second the remaining 6 and the dir
-// ─────────────────────────────────────────────────────────────────────────────
+// Test 52: pruning work is bounded per invocation: 70 dead stop marks (PRUNE_MAX = 64), cleanup twice for a stateless agent
+// THEN first run removes exactly 64, second the remaining 6 and the dir
 {
   const { proj, env, tmp } = newRoot('t52');
   const clock = { ...env, AGENT_DEADLINE_NOW: String(NOW) };
@@ -1775,13 +1535,8 @@ function newRoot(name) {
   check('52-second-run-finishes', existsSync(join(stateRoot(tmp), 'S52')), false, 'the next invocation removes the rest and the empty session dir');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Test 53: a read-only agent is never told to write a file
-// GIVEN: default config (read-only types Explore, Plan) and a config that lists
-//        only "tester"; agents at 85% and 125% of a 20min budget
-// WHEN: guard runs Bash for Explore and for tester under each config
-// THEN: the listed type gets "Return what you have now", the other the file text
-// ─────────────────────────────────────────────────────────────────────────────
+// Test 53: a read-only agent is never told to write a file: default (Explore, Plan) vs config listing only "tester"; 85% and 125% of 20min
+// WHEN Bash for Explore and tester per config | THEN listed type gets "Return what you have now", the other the file text
 {
   const { proj, env, tmp } = newRoot('t53');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
@@ -1814,16 +1569,8 @@ function newRoot(name) {
     'the read-only closing sentence, pinned literally');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Test 54: the global config follows CLAUDE_CONFIG_DIR
-// GIVEN: a project under $HOME with no config of its own; $HOME/.claude says
-//        100min, a profile dir says 5min, a second profile dir has no config
-// WHEN: guard runs with CLAUDE_CONFIG_DIR set to the profile, unset, and set to
-//       the empty profile
-// THEN: set -> 5min budget (the climb through $HOME does not outrank it);
-//       unset -> 100min; empty profile -> $HOME/.claude is read last (100min);
-//       a first call records the profile config as the governing one
-// ─────────────────────────────────────────────────────────────────────────────
+// Test 54: global config follows CLAUDE_CONFIG_DIR; project under $HOME without config, $HOME/.claude 100min, profile 5min, empty profile
+// THEN set -> 5min (climb through $HOME does not outrank it); unset -> 100min; empty -> $HOME/.claude read last; first call records profile config
 {
   const { home, env, tmp } = newRoot('t54');
   const cwd = join(home, 'work', 'repo');
@@ -1856,14 +1603,10 @@ function newRoot(name) {
     'fresh state names the governing config file, which uninstall/purge match on');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Cleanup
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Cleanup ────────────────────────────────────────────────────────────────────
 try { rmSync(BASE, { recursive: true, force: true }); } catch { /* ignore */ }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Report
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Report ─────────────────────────────────────────────────────────────────────
 console.log('\n=== agent-deadline E2E TEST REPORT ===');
 for (const line of results) console.log(line);
 console.log(`\nTOTAL: ${passed + failed} | PASS: ${passed} | FAIL: ${failed} | SKIP: ${skipped}`);

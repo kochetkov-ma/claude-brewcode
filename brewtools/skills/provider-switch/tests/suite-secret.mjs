@@ -1,17 +1,9 @@
 #!/usr/bin/env node
-/**
- * suite-secret.mjs - BT-F02: the API key never becomes model-visible text.
- *
- * Every scenario gets its own temp HOME; the real ~/.zshrc is never opened. A distinctive
- * sentinel stands in for the key, and the central check walks the WHOLE temp tree afterwards
- * and asserts that the exact set of files containing the sentinel is the allowlist (the
- * destination ~/.zshrc plus the user-created key file) - a leak into a backup, a temp file or
- * a log fails the check by set inequality. stdout and stderr are asserted secret-free too.
- */
+// suite-secret.mjs - BT-F02: API key never model-visible. Per-scenario temp HOME (real ~/.zshrc never opened), sentinel key; whole temp tree scanned -> files holding sentinel == allowlist (dest ~/.zshrc + user key file), so backup/temp/log leak fails; stdout/stderr secret-free.
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
-  mkdirSync, writeFileSync, readFileSync, readdirSync, statSync, chmodSync,
+  mkdirSync, writeFileSync, readFileSync, readdirSync, statSync, chmodSync, rmSync,
 } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -24,6 +16,9 @@ const WRITE_ALIAS = join(SCRIPTS, 'write-alias.sh');
 
 const { check, report } = createRunner('suite-secret');
 const BASE = makeBase('prv-secret-');
+process.on('exit', () => {
+  try { rmSync(BASE, { recursive: true, force: true }); } catch { /* best effort */ }
+});
 
 const SENTINEL = 'sk-BREWCODE-SENTINEL-9f3a2c1d7e-DO-NOT-LEAK';
 const NASTY = `sk-a'b$(whoami)\`id\`"c;d`;
@@ -120,6 +115,43 @@ const kv = (out, key) => {
   check('perm.leak', (r.stdout + r.stderr).includes(SENTINEL), false, 'the refusal is secret-free');
   check('perm.no-write', readFileSync(join(w.home, '.zshrc'), 'utf8').includes('DEEPSEEK_API_KEY'), false,
     'nothing is written to ~/.zshrc when the source is refused');
+}
+
+// Both stat dialects on any host via a PATH shim; the real key file stays 0600 throughout.
+{
+  const shimDir = join(BASE, 'stat-shim');
+  mkdirSync(shimDir, { recursive: true });
+  writeFileSync(join(shimDir, 'stat'), `#!/bin/sh
+case "$STAT_FLAVOR:$1" in
+  gnu:-c|bsd:-f) printf '%s\\n' "$FAKE_MODE" ;;
+  gnu:-f) printf '  File: "%s"\\n    ID: 0  Namelen: 255  Type: ext2/ext3\\n' "$3"; exit 1 ;;
+  bsd:-c) echo 'stat: illegal option -- c' >&2; exit 1 ;;
+  *) echo 'Blocks: 42' ;;
+esac
+`);
+  chmodSync(join(shimDir, 'stat'), 0o755);
+  const viaShim = (name, flavor, fakeMode) => {
+    const w = world(name);
+    const keyFile = join(w.home, 'deepseek.key');
+    writeFileSync(keyFile, SENTINEL);
+    chmodSync(keyFile, 0o600);
+    const r = w.run(READ_SECRET, [`file:${keyFile}`, 'DEEPSEEK_API_KEY'],
+      { PATH: `${shimDir}:${process.env.PATH}`, STAT_FLAVOR: flavor, FAKE_MODE: fakeMode });
+    const wrote = readFileSync(join(w.home, '.zshrc'), 'utf8').includes('DEEPSEEK_API_KEY');
+    return { r, wrote, leak: (r.stdout + r.stderr).includes(SENTINEL) };
+  };
+  for (const flavor of ['gnu', 'bsd']) {
+    const lax = viaShim(`stat-${flavor}-644`, flavor, '644');
+    check(`perm.${flavor}.lax`, [lax.r.status, lax.r.stdout.includes('mode 644 — group/world accessible'), lax.wrote, lax.leak],
+      [1, true, false, false], `${flavor} stat: mode 644 is refused, nothing written, secret-free`);
+    const tight = viaShim(`stat-${flavor}-600`, flavor, '600');
+    check(`perm.${flavor}.tight`, [tight.r.status, tight.wrote, tight.leak], [0, true, false],
+      `${flavor} stat: mode 600 is accepted and stored`);
+  }
+  const junk = viaShim('stat-junk', 'junk', '600');
+  check('perm.unknown.fail-closed',
+    [junk.r.status, junk.r.stdout.includes('cannot determine the permissions'), junk.wrote, junk.leak],
+    [1, true, false, false], 'an unreadable mode refuses the file instead of skipping the gate');
 }
 
 // ── 3. shell-metacharacter key survives the round trip ──────────────────────

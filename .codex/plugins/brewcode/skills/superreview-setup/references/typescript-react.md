@@ -1,6 +1,7 @@
 ---
 doc_type: llm
 version: "{PLUGIN_VERSION}"
+content_version: "{CONTENT_VERSION}"
 generated_by: "{GENERATED_BY}"
 last_updated: "{LAST_UPDATED}"
 ---
@@ -20,6 +21,7 @@ Standards for TypeScript, Node.js and React projects. The project's own rules in
 | Reuse | existing hooks/components/utils before new ones (check `common/`, `shared/`) |
 | Security | XSS prevention, CSRF, no injected HTML (report only if CRITICAL/P0) |
 | Imports | ESM vs CJS consistency, barrel exports, no circular deps |
+| Pins | exact `X.Y.Z`; no floating/`@1.0.0` dependency |
 
 ## File Patterns
 
@@ -35,12 +37,6 @@ Standards for TypeScript, Node.js and React projects. The project's own rules in
 
 Functional components only (no class components). Arrow functions for components. Structure order: types -> declaration
 -> hooks -> handlers -> render helpers -> JSX.
-
-```tsx
-const UserCard: React.FC<UserCardProps> = ({ user, onEdit }) => {
-  return <div>{user.name}</div>;
-};
-```
 
 ## Hooks
 
@@ -62,14 +58,6 @@ Custom hooks: `use*` prefix, extract reusable logic, return object for >2 values
 | No `any` | VIOLATION |
 | `unknown` over `any` + narrowing | PREF |
 | Interface for objects, type for unions | PREF |
-
-```tsx
-interface UserCardProps { user: User; onEdit?: (id: string) => void; }
-
-type ApiResponse<T> =
-  | { status: 'success'; data: T }
-  | { status: 'error'; error: string };
-```
 
 ## Styling (if styled-components / theme)
 
@@ -110,21 +98,6 @@ it('renders user name', () => {
 
 `React.memo` / `useMemo` / `useCallback` AS NEEDED — profile first, optimize second. `React.lazy()` + Suspense for
 route-level code splitting.
-
-## Common Violations
-
-| # | Violation | Fix |
-|---|-----------|-----|
-| 1 | `any` type | `unknown` or specific type |
-| 2 | Class component | Convert to functional |
-| 3 | Missing types | Add explicit types |
-| 4 | Hardcoded colors | Theme tokens |
-| 5 | Duplicate styled component | Check Common/, extend existing |
-| 6 | Missing useEffect cleanup | Return cleanup function |
-| 7 | Prop drilling >3 levels | Use Context |
-| 8 | Testing implementation | Test behavior/output |
-| 9 | Floating promise / unhandled rejection | await / `.catch` |
-| 10 | Floating/`@1.0.0` dependency | Pin exact `X.Y.Z` |
 
 ## Search Locations (reuse-first)
 

@@ -34,16 +34,16 @@ Brewdoc contains 5 skills, each handling a separate documentation task.
 <CardGrid>
   <Card title="docsync-setup" icon="sync" href="/brewdoc/skills/docsync-setup/">
     Track doc staleness by frontmatter date, not INDEX files.
-    Installs three project-local hooks that watch touched Markdown and nag once when a doc goes stale.
+    Installs three project-local hooks: one tracks Markdown touched by `Write` or `Edit`, and a Stop gate blocks once on edited docs that went stale. Wiring applies live.
     Modes: status, install, upgrade, enable, disable, uninstall, purge — plus the extras sync (`--all` forces every in-scope doc), reread, frontmatter.
   </Card>
   <Card title="My-Claude" icon="clipboard" href="/brewdoc/skills/my-claude/">
-    Generate documentation about your Claude Code installation.
+    Generate documentation about your Claude Code installation (reads the active config dir, writes to the project's `.claude/brewdoc/my-claude/`).
     Three modes: internal (local configuration), external (hooks and context architecture),
     research (search across forums, GitHub, marketplaces).
   </Card>
   <Card title="memory-sync-setup" icon="brain" href="/brewdoc/skills/memory-sync-setup/">
-    Generator: analyzes the target repo, then writes a project-local `/memory-sync` skill into it — repo-specific batches, checkable-fact catalogue, non-growth sync, independent verify.
+    Generator: analyzes the target repo, then writes the 5 files of a project-local `/memory-sync` skill into it — repo-specific batches, checkable-fact catalogue, non-growth sync, independent verify.
     Modes: status, install, upgrade, enable, disable, uninstall, purge.
   </Card>
   <Card title="md-to-pdf" icon="file" href="/brewdoc/skills/md-to-pdf/">
@@ -104,7 +104,7 @@ conversation use `${CLAUDE_SKILL_DIR}` to access their own files.
   Each skill is self-contained and independent of the others.
 
   **Brewcode** covers the project's own engineering surface: conventions, rules, domain
-  agent teams, semantic code search and deep review — 9 skills, 5 agents, 4 registered hook commands.
+  agent teams, semantic code search and deep review — 9 skills, 5 agents, 2 registered hook commands (both SessionStart).
 
   Both plugins install from the same `claude-brewcode` marketplace but operate independently.
 </Callout>

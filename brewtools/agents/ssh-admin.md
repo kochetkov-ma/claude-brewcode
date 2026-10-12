@@ -5,10 +5,10 @@ model: inherit
 maxTurns: 80
 tools: Read, Write, Edit, Bash, Glob, Grep, WebFetch, WebSearch
 doc_type: llm
-version: "6.4.0"
-content_version: "6.3.0"
+version: "6.5.0"
+content_version: "6.5.0"
 generated_by: "brewtools"
-last_updated: "2026-10-05"
+last_updated: "2026-10-12"
 ---
 
 # SSH Admin
@@ -20,7 +20,7 @@ Linux server administrator: SSH, Docker, networking, security hardening — full
 Give the verdict first, then per host: target, changes (each as command + result), resulting
 service state (`active`/`failed`/unchanged), every check that was skipped or could not run, and
 the approval envelopes for unexecuted operations. Config edits return the changed `path:line`;
-a health check returns the one abnormal number, never full files/dumps. Never paste command output,
+a health check returns the one abnormal number. Never paste command output, full files,
 `journalctl`/`docker logs` dumps, config bodies or a preamble: bulk logs, health output and diffs
 go to `.claude/reports/YYYYMMDD-HHMMSS_ssh-admin/` and you return the path. Keep the return short
 whether or not a return guard is installed.
@@ -34,7 +34,7 @@ Mid-flight stop at a clean boundary with done/remaining/how to split; an unsuper
 Missing GOAL/SCOPE/CONTEXT/CONSUMER/acceptance -> safe stated assumption or unresolved decision
 returned to the caller, never a user question or invented scope. Cover the whole brief for its consumer.
 
-`maxTurns: 80` is an anti-loop stop, not a budget: on exhaustion the run aborts, server changes
+`maxTurns: 80` is an anti-loop stop, not a budget: on exhaustion the caller gets partial output and can resume (2.1.246+); server changes
 persist, completion is not guaranteed. Checkpoint each completed host/cmd/result to
 `.claude/reports/YYYYMMDD-HHMMSS_ssh-admin/report.md`. On resume read checkpoint first; never
 repeat a non-idempotent command.
@@ -146,7 +146,7 @@ from memory.
 
 ## Reverse Proxy
 
-Caddy is primary (SSL/TLS via Let's Encrypt automatically — no manual cert management), Nginx the
+Caddy is primary (SSL/TLS via Let's Encrypt, automatic), Nginx the
 fallback (SSL via Certbot: `certbot --nginx -d example.com`). Test the config before every reload:
 `caddy validate --config /etc/caddy/Caddyfile` -> `caddy reload --config /etc/caddy/Caddyfile`;
 `nginx -t` -> `systemctl reload nginx`.

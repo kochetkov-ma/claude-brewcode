@@ -36,8 +36,10 @@ survivor reaches the same readers:
 | `**/*` (e.g. `.claude/rules/semble-first.md`) | 1 trigger/pointer unless same-audience loading is proven |
 | narrower (e.g. `src/api/**`) | exactly 1 line: trigger + rule filename |
 
-Marker-fenced blocks (`<!-- BEGIN brewcode:semble -->` .. `<!-- END -->`) are generator output. Delete
-the block, and record the generator (`brewcode:semble-setup`) in the ledger - a re-run rewrites it.
+A block delimited by another tool's begin/end markers (e.g. `<!-- BEGIN brewcode:semble -->` ..
+`<!-- END brewcode:semble -->`) is owned by that setup: never compress, move or delete it, both marker
+lines included - its upgrade re-creates a removed block. Dedup against it from the other copy; report it
+as `managed by <setup>` (here `brewcode:semble-setup`).
 
 ## 2. Cost weighting
 
@@ -204,5 +206,5 @@ Re-run the evidence and confirm audience, registration and loading before applyi
 | # | Duplication | Verified by | Resolution |
 |---|-------------|-------------|------------|
 | 1 | one rule file byte-identical in `.claude/rules/` and `~/.claude/rules/` | `sha256` equal, `diff` empty; then `verify-deleted --project --run-dir <D> --survivor ~/.claude/rules/<f>.md .claude/rules/<f>.md` -> `MERGED_VERIFIED` | The global copy dies in NO branch: only it sits at scope >= L3. The project copy goes per the 5(a) audience rows, closed with `verify-deleted` |
-| 2 | one policy 3x: a generator's marker block in CLAUDE.md (e.g. `brewcode:semble-setup`), a rule file (`.claude/rules/semble-first.md`, `paths: **/*`), a subagent hook line | `sed -n`, `wc -l`, grep | `paths: **/*` is conditional (section 1), so CLAUDE.md keeps 1 trigger line; delete the rest of the block, ledger the generator. Hook line: ordinary subagents load CLAUDE.md and rules, so it is a duplicate for them; it is unique audience only for Explore/Plan or `omitClaudeMd` agents |
+| 2 | one policy 3x: a generator's marker block in CLAUDE.md (e.g. `brewcode:semble-setup`), a rule file (`.claude/rules/semble-first.md`, `paths: **/*`), a subagent hook line | `sed -n`, `wc -l`, grep | `paths: **/*` is conditional (section 1), but the marker block stays whole (section 1, `managed by brewcode:semble-setup`); slim the other copies. Hook line: ordinary subagents load CLAUDE.md and rules, so it is a duplicate for them; it is unique audience only for Explore/Plan or `omitClaudeMd` agents |
 | 3 | one fact 2-3x: summary row + step table in one file; a CLAUDE.md section + a narrower-`paths:` rule; static global rows + a hook injecting the same rule | grep -n | **intra-file progressive disclosure**: legitimate, cap at 2 (D.4). **CLAUDE.md-vs-rule**: rule wins, CLAUDE.md keeps exactly 1 line. **static-vs-hook**: L5 survives compaction; global rows may shrink to their non-overlapping remainder only when the hook is registered at scope >= L3 (5(b) guard 1) |

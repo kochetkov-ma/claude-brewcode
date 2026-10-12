@@ -11,8 +11,6 @@ The user's ++M codeword authorizes foreground delegation for this task. Orchestr
 7. Once ALL code is written (not per-piece), file one recommended final task: simplify the whole written code and strip over-engineering. Delegate it like any other task.
 8. Lead the final handoff with the outcome, changed surfaces, exact validation, and any genuine remaining risk.
 
-Branch: work in the current branch; none chosen -> main. Unless the user says branch/PR, stay on main and take over ALL workspace changes, incl. from other sessions.
-
 # [ADDON: PLAN MODE]
 
 Stay read-only. Explore enough to remove implementation ambiguity, but do not edit files, install packages, change configuration, or trigger external side effects.

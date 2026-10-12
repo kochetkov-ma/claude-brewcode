@@ -82,10 +82,8 @@ const iconMap: Record<string, string> = {
 const { title, icon: rawIcon, href } = Astro.props;
 const isExternal = href ? /^https?:\/\//.test(href) : false;
 const targetProps = isExternal ? { target: '_blank', rel: 'noopener noreferrer' } : {};
-// Unknown icons fall back to a random whitelist icon + console.warn, so pages
-// never leak raw icon names as text. Add proper names to iconMap when you see
-// the warning in build logs or the browser console.
-// See .claude/rules/astro-avoid.md (icon whitelist).
+// Unknown icon -> deterministic (hashed) whitelist fallback + console.warn, never raw name text.
+// On the warning add the name to iconMap; see .claude/rules/astro-avoid.md (icon whitelist).
 const iconKeys = Object.keys(iconMap);
 let icon: string;
 if (!rawIcon) {
@@ -94,8 +92,6 @@ if (!rawIcon) {
   icon = iconMap[rawIcon];
 } else {
   console.warn(`[Card] Unknown icon "${rawIcon}" on card "${title}" — add it to iconMap in Card.astro. Rendering fallback icon.`);
-  // Deterministic fallback: hash the unknown name so the same bad name always
-  // gets the same fallback icon (less jarring than pure random across rebuilds).
   let hash = 0;
   for (const ch of rawIcon) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
   icon = iconMap[iconKeys[hash % iconKeys.length]];

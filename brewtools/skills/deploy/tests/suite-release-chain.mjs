@@ -83,8 +83,8 @@ try {
         label + ': failure stays visible instead of being reported as success');
     }
   }
-  // GIVEN the guarded source skill/agent WHEN tag count is wrong or the tag exists THEN tag publication is excluded.
-  for (const [label, text] of sources.slice(0, 2)) {
+  // GIVEN every guarded release surface WHEN tag count is wrong or the tag exists THEN tag publication is excluded.
+  for (const [label, text] of sources) {
     const body = release(text).replaceAll('X.Y.Z', '1.2.3').replaceAll('<summary>', 'summary');
     const countDir = join(temp, label + '-bad-count');
     mkdirSync(countDir);

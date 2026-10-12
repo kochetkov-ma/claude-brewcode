@@ -1,0 +1,171 @@
+# Repo validators, once per commit (main push, PR, manual): manifests, skill contracts, blocks, fences, Codex, suites.
+# teams-setup suites (~7 min each) run in the parallel `teams` job: prepared tokenizer cache + host tiktoken==0.13.0.
+
+name: Validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.21.0
+
+      - name: Set up Python
+        id: python
+        uses: actions/setup-python@v7
+        with:
+          python-version: 3.14.8
+
+      - name: Install test tools
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check pyyaml==6.0.3
+          npm install -g --no-fund --no-audit @anthropic-ai/claude-code@2.1.296
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends zsh
+          claude --version
+
+      - name: Restore teams-setup tokenizer cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/claude-brewcode/teams-setup/tokenizer
+          key: teams-tokenizer-${{ runner.os }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('brewcode/skills/teams-setup/scripts/prepare-tokenizer.py') }}
+
+      - name: Prepare teams-setup tokenizer
+        run: python3 -I -S brewcode/skills/teams-setup/scripts/prepare-tokenizer.py prepare
+
+      - name: Plugin manifests (claude plugin validate --strict)
+        if: ${{ !cancelled() }}
+        run: |
+          set -uo pipefail
+          CLAUDE_CONFIG_DIR="$(mktemp -d)"
+          export CLAUDE_CONFIG_DIR
+          fail=0
+          for target in . ./brewcode ./brewdoc ./brewtools ./brewui; do
+            claude plugin validate --strict "$target" || { echo "::error::claude plugin validate --strict $target failed"; fail=1; }
+          done
+          exit "$fail"
+
+      - name: Skill contracts (validate-skill.sh)
+        if: ${{ !cancelled() }}
+        run: |
+          set -uo pipefail
+          fail=0
+          for skill in brewcode/skills/*/ brewdoc/skills/*/ brewtools/skills/*/ brewui/skills/*/ skills/*/ .claude/skills/*/; do
+            [ -f "${skill}SKILL.md" ] || continue
+            sh brewcode/skills/skills/scripts/validate-skill.sh "${skill%/}" || { echo "::error file=${skill}SKILL.md::validate-skill.sh failed"; fail=1; }
+          done
+          exit "$fail"
+
+      - name: Shared INSTALL.md blocks
+        if: ${{ !cancelled() }}
+        run: node .claude/scripts/check-install-blocks.mjs
+
+      - name: Skill bash fences
+        if: ${{ !cancelled() }}
+        run: bash .claude/scripts/check-skill-fences.sh
+
+      - name: Codex mirror and setup
+        if: ${{ !cancelled() }}
+        run: |
+          set -uo pipefail
+          fail=0
+          node .codex/scripts/validate-compat.mjs || fail=1
+          node .codex/scripts/validate-setup.mjs || fail=1
+          exit "$fail"
+
+      - name: Codex tests
+        if: ${{ !cancelled() }}
+        run: |
+          set -uo pipefail
+          fail=0
+          for test in .codex/tests/*.test.mjs; do
+            node "$test" || { echo "::error file=${test}::failed"; fail=1; }
+          done
+          for test in .codex/tests/*.test.py; do
+            python -B "$test" || { echo "::error file=${test}::failed"; fail=1; }
+          done
+          exit "$fail"
+
+      - name: Offline suites (tests/run.sh)
+        if: ${{ !cancelled() }}
+        run: |
+          set -uo pipefail
+          fail=0
+          while IFS= read -r runner; do
+            case "$runner" in */teams-setup/tests/run.sh) echo "skip (teams job): $runner"; continue ;; esac
+            echo "::group::$runner"
+            bash "$runner" < /dev/null || { echo "::error file=${runner}::suite failed"; fail=1; }
+            echo "::endgroup::"
+          done < <(find brewcode brewdoc brewtools .codex/plugins -path '*/fixtures/*' -prune -o -path '*/tests/run.sh' -print | LC_ALL=C sort)
+          exit "$fail"
+
+  teams:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    strategy:
+      fail-fast: false
+      matrix:
+        runner:
+          - brewcode/skills/teams-setup/tests/run.sh
+          - brewcode/.codex/skills/teams-setup/tests/run.sh
+          - .codex/plugins/brewcode/skills/teams-setup/tests/run.sh
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.21.0
+
+      - name: Set up Python
+        id: python
+        uses: actions/setup-python@v7
+        with:
+          python-version: 3.14.8
+
+      - name: Install test tools
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check \
+            tiktoken==0.13.0 regex==2026.9.29 requests==2.34.2 charset-normalizer==3.5.2 idna==3.20 urllib3==2.8.0 certifi==2026.7.22
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends zsh
+
+      - name: Restore teams-setup tokenizer cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/claude-brewcode/teams-setup/tokenizer
+          key: teams-tokenizer-${{ runner.os }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('brewcode/skills/teams-setup/scripts/prepare-tokenizer.py') }}
+
+      - name: Prepare teams-setup tokenizer
+        run: python3 -I -S brewcode/skills/teams-setup/scripts/prepare-tokenizer.py prepare
+
+      - name: Suite ${{ matrix.runner }}
+        env:
+          SUITE_RUNNER: ${{ matrix.runner }}
+        run: bash "$SUITE_RUNNER" < /dev/null

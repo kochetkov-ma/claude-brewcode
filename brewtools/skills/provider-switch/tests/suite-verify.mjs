@@ -1,12 +1,7 @@
 #!/usr/bin/env node
-/**
- * suite-verify.mjs - BT-F20 (response validation) + BT-F02 (no `eval` on ~/.zshrc).
- *
- * `curl` is shadowed by a stub on PATH that replays a canned body and HTTP code, so the suite
- * is fully offline. HOME is a temp dir; the real ~/.zshrc is never read.
- */
+// suite-verify.mjs - BT-F20 (response validation) + BT-F02 (no `eval` on ~/.zshrc); offline via PATH `curl` stub replaying canned body + HTTP code; temp HOME, real ~/.zshrc never read.
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, writeFileSync, readFileSync, chmodSync, existsSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, chmodSync, existsSync, rmSync } from 'node:fs';
 import { join, delimiter } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRunner, makeBase } from './harness.mjs';
@@ -17,15 +12,17 @@ const VERIFY = join(SCRIPTS, 'verify-providers.sh');
 
 const { check, report } = createRunner('suite-verify');
 const BASE = makeBase('prv-verify-');
+process.on('exit', () => {
+  try { rmSync(BASE, { recursive: true, force: true }); } catch { /* best effort */ }
+});
 
 const BIN = join(BASE, 'bin');
 const HOME_DIR = join(BASE, 'home');
 mkdirSync(BIN, { recursive: true });
 mkdirSync(HOME_DIR, { recursive: true });
 
-// Stub curl: replays $STUB_BODY then "\n$STUB_CODE" (matching -w "\n%{http_code}"), and records
-// both argv and the -K config it reads from stdin, so the argv leak and the actually-sent
-// Authorization header can each be asserted exactly.
+// Stub curl: replays $STUB_BODY then "\n$STUB_CODE" (matches -w "\n%{http_code}"); logs argv + -K stdin config
+// -> argv leak and actually-sent Authorization header each asserted exactly.
 const STUB = join(BIN, 'curl');
 writeFileSync(STUB, `#!/bin/bash
 [[ -n "\${STUB_ARGV_LOG:-}" ]] && printf '%s' "\$*" > "\$STUB_ARGV_LOG"
@@ -190,8 +187,7 @@ const withKey = { DEEPSEEK_API_KEY: KEY };
 }
 
 // ── 6b. the DOCUMENTED curl snippets keep the key off argv too ──────────────
-// The scripts are not the only thing that runs: SKILL.md and the references hand the model curl
-// lines it is told to EXEC verbatim. Same sentinel idiom as section 5, applied to the docs.
+// SKILL.md + references hand model curl lines to EXEC verbatim; section 5 sentinel idiom applied to docs.
 {
   const SKILL_DIR = join(HERE, '..');
   const docs = ['SKILL.md', 'references/update-protocol.md', 'references/openrouter-models.md'];

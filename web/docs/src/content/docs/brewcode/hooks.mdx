@@ -1,43 +1,31 @@
 ---
 title: "Hooks"
-description: "Brewcode's four hooks: session start, prompt-submit delegation reminder, and the two post-compaction recall hooks for role and plan/task state."
+description: "Brewcode's two SessionStart hooks: session-start (status line, update check, plan link) and compact-recall (plan, intent and task re-anchor after compaction)."
 order: 13
 ---
 
-import { Card, CardGrid, Badge, Callout, UpdateNotice } from '../../../components/mdx';
+import { Card, CardGrid, Badge, UpdateNotice } from '../../../components/mdx';
 
 # Hooks
 
 Hooks are Node.js scripts attached to Claude Code lifecycle events.
-They inject context and manage session state. Brewcode registers 4 hooks in `hooks.json`,
-plus a shared `lib/` that holds the reminder text and I/O helpers they import.
-
-<Callout type="note" title="What's new in 6.2.0">
-`forced-eval.mjs` no longer fires on every prompt — it now fires on the 1st real prompt, then every
-10th, via its own session-keyed counter. The injected
-`REMINDER_TEXT` also shrank 636 → 472 chars. See the [detailed description](#1-forced-evalmjs) below.
-</Callout>
+They inject context and manage session state. Brewcode registers 2 hook commands in `hooks.json`,
+both on SessionStart, plus a shared `lib/utils.mjs` with the I/O helpers they import.
 
 ## Summary table
 
 | # | Hook | Event | Matcher | Channel | Timeout | Purpose |
 |---|------|-------|---------|---------|---------|---------|
-| 1 | forced-eval | UserPromptSubmit | -- | additionalContext | 2s | Manager-role + split-discipline reminder |
-| 2 | session-start | SessionStart | -- | systemMessage | 3s | User-visible session/version info and permission_mode tag |
-| 3 | role-recall | SessionStart | compact | additionalContext | 2s | Re-inject [ROLE]/[SPLIT]/[BRANCH] after a compaction |
-| 4 | compact-recall | SessionStart | compact | additionalContext | 2s | Re-anchor plan, intent and task graph after a compaction |
+| 1 | session-start | SessionStart | -- | systemMessage | 3s | User-visible session/version info and permission_mode tag |
+| 2 | compact-recall | SessionStart | compact | additionalContext | 2s | Re-anchor plan, intent and task graph after a compaction |
 
 ## Execution flow
 
 ```
-UserPromptSubmit
-  └── forced-eval.mjs          [ROLE] delegate-to-expert + [SPLIT] bounded units + [BRANCH] default-to-main
-
 SessionStart
   └── session-start.mjs        Version check, plan-symlink, permission_mode tag
 
 SessionStart (matcher: compact)
-  ├── role-recall.mjs          Same [ROLE]/[SPLIT]/[BRANCH] text, unconditional
   └── compact-recall.mjs       [PLAN] or [INTENT], plus [TASKS] when a task graph exists
 ```
 
@@ -45,14 +33,11 @@ SessionStart (matcher: compact)
 
 ```
 brewcode/hooks/
-  forced-eval.mjs              UserPromptSubmit handler
   session-start.mjs            SessionStart handler
-  role-recall.mjs              SessionStart handler, matcher "compact"
   compact-recall.mjs           SessionStart handler, matcher "compact"
   hooks.json                   Hook registry (event bindings)
   lib/
     utils.mjs                  Shared I/O, configuration, logging
-    reminder.mjs                REMINDER_TEXT: [ROLE] + [SPLIT] + [BRANCH]
   tests/
     run.sh                      Runs every suite, reports pass/fail counts
     suite-session-start.mjs     Covers session-start.mjs and compact-recall.mjs
@@ -63,67 +48,26 @@ brewcode/hooks/
 All hooks follow a unified protocol:
 
 1. Read JSON from stdin (via `readStdin()`)
-2. Read event-specific input: common session/cwd fields, source for SessionStart, prompt for UserPromptSubmit, and transcript_path when needed. Treat optional permission_mode as a payload signal, not a value to infer.
+2. Read event-specific input: common session/cwd fields, source for SessionStart, and transcript_path when needed. Treat optional permission_mode as a payload signal, not a value to infer.
 3. Output JSON to stdout (via `output()`)
 4. Write logs to stderr
 
 Output channels have different audiences: top-level `systemMessage` is user-visible, while
 `hookSpecificOutput.additionalContext` supplies model context on supported events. Input and
-decision schemas are event-specific; `updatedInput` is not a UserPromptSubmit rewrite channel.
+decision schemas are event-specific.
 
 **Shared utilities:**
 - `hooks/lib/utils.mjs` -- I/O, configuration, logging, and `projectRoot()`: `CLAUDE_PROJECT_DIR` env var when it points at a real path, else walk upward from the hook's `cwd` for the nearest `.git` or `.claude` directory, else the starting `cwd` itself -- never throws, never guesses beyond that
-- `hooks/lib/reminder.mjs` -- the one normative copy of `[ROLE]`/`[SPLIT]`/`[BRANCH]`, imported by `forced-eval.mjs` and `role-recall.mjs` so the two hooks cannot drift apart
 
 ---
 
 ## Detailed description
 
-### 1. forced-eval.mjs
-
-<Badge variant="primary" text="UserPromptSubmit" /> <Badge variant="secondary" text="additionalContext" />
-
-Keeps delegation discipline in front of the model without taxing every single turn. Fires on the
-1st real prompt of a session, then every 10th prompt after that (10, 20, 30, ...), and appends three
-short lines: the Manager role rule, the split rule, and the branch-default rule.
-There is no skill-activation nudge -- modern models pick skills on their own.
-
-| Parameter | Value |
-|-----------|-------|
-| Event | UserPromptSubmit |
-| Channel | additionalContext |
-| Timeout | 2000 ms |
-| Cadence | 1st real prompt, then every 10th (`INTERVAL = 10`) |
-
-**Exact injected text** (`REMINDER_TEXT`, from `hooks/lib/reminder.mjs` -- the same text `role-recall.mjs` re-injects after a compaction; 472 chars):
-
-```text
-[ROLE] Manager: check .claude/agents/ (project first); domain expert -> delegate regardless of size, else self.
-[SPLIT] One agent for an hour = drift you cannot observe: bounded units (1 deliverable, ~5 files, ~20 min), fan out in ONE message; real data handoff = dependency, else parallel; spawn prompt: goal + scope + done-so-far + consumer + acceptance.
-[BRANCH] No branch/PR instruction -> stay current, else main; take over ALL workspace changes incl. other sessions.
-```
-
-**What it does:**
-- Receives the user prompt
-- Skips meta-replies first (see below) -- they never touch the counter
-- Bumps its session-keyed counter (private 0700 tmp dir, atomic write, lstat-only) and injects only when the new count is 1 or a multiple of 10
-- Injects `REMINDER_TEXT` via `additionalContext` without rewriting the prompt
-- Output is capped at 9000 characters
-
-**When it fires:** On the 1st real user prompt of a session, then every 10th one after that
-(prompts 10, 20, 30, ...) -- not every prompt. Meta-replies that carry no task
-(`yes`/`no`/`ok`/`thanks`/`continue`/`confirm`-style answers, a bare number, or a single letter) are
-skipped before the counter is touched, so they never consume or land on an inject slot. Coverage
-after a compaction is unaffected -- `role-recall.mjs` re-injects the same text unconditionally on
-every compaction, independent of this cadence.
-
----
-
-### 2. session-start.mjs
+### 1. session-start.mjs
 
 <Badge variant="primary" text="SessionStart" /> <Badge variant="secondary" text="systemMessage" />
 
-Initializes the session, checks for brewcode/Claude updates, manages Plan Mode symlinks, and reports the active `permission_mode` in the system message for audit.
+Initializes the session, checks for a newer brewcode release (24 h cache), manages Plan Mode symlinks, and reports the active `permission_mode` in the system message for audit.
 
 | Parameter | Value |
 |-----------|-------|
@@ -142,7 +86,7 @@ When present, `permission_mode` is appended to the user-visible `systemMessage`.
 | `clear` | Create symlink LATEST.md -> newest plan |
 
 **LATEST.md symlink:**
-1. Resolves `plansDirectory` from local, project, then user settings; defaults to `~/.claude/plans/`
+1. Resolves `plansDirectory` from local, project, then user settings; a value outside the project root falls back to `<config dir>/plans` (`CLAUDE_CONFIG_DIR`, else `~/.claude`), which is also the default when none is set
 2. Picks the newest one (by mtime)
 3. If the file is less than 60 seconds old, creates `.claude/plans/LATEST.md` pointing to that plan; preserves unrelated existing files or foreign links
 
@@ -152,31 +96,7 @@ the project root.
 
 ---
 
-### 3. role-recall.mjs
-
-<Badge variant="primary" text="SessionStart / compact" /> <Badge variant="secondary" text="additionalContext" />
-
-Re-injects the same `[ROLE]`/`[SPLIT]`/`[BRANCH]` frame as `forced-eval.mjs`, unconditionally, the moment a session starts
-back up after a compaction -- the one point where the summary has just collapsed every earlier copy of it.
-
-| Parameter | Value |
-|-----------|-------|
-| Event | SessionStart |
-| Matcher | compact |
-| Channel | additionalContext |
-| Timeout | 2000 ms |
-
-**Why it exists:** an auto-compaction has no prompt, so `forced-eval.mjs` never fires for it. Without this hook the
-session quietly stops delegating after a few compactions.
-
-**What it does:**
-- Fires only when `input.source === 'compact'`; any other source (`startup`, `resume`, `clear`, `fork`) returns `{}` -- those already carry the frame
-- Injects `REMINDER_TEXT` from `hooks/lib/reminder.mjs`, capped at 9000 chars -- the same import `forced-eval.mjs` uses, so the two cannot drift
-- Stateless: compactions can chain, and it fires again on every one
-
----
-
-### 4. compact-recall.mjs
+### 2. compact-recall.mjs
 
 <Badge variant="primary" text="SessionStart / compact" /> <Badge variant="secondary" text="additionalContext" />
 
@@ -201,21 +121,21 @@ wall clock is ~30 ms standalone and ~55 ms spawned from a node parent, where nod
 | Branch | Condition | Injects |
 |--------|-----------|---------|
 | `plan-file` | last recorded plan path still exists on disk | `[PLAN]` -- read that file before any other action |
-| `plan-latest` | no usable `planFilePath` in the transcript, but `<project-root>/.claude/plans/LATEST.md` exists | `[PLAN]` -- read that project-local link before any other action |
-| `plan-missing` | plan path recorded, but the file is gone (`~/.claude/plans` gets pruned) | `[PLAN]` -- rebuild from the compact summary plus TaskList |
+| `plan-latest` | no usable `planFilePath` in the transcript, but `<project-root>/.claude/plans/LATEST.md` is a symlink this plugin created, pointing at an existing plan | `[PLAN]` -- read that project-local link before any other action |
+| `plan-missing` | plan path recorded, but the file is gone (`<config dir>/plans` gets pruned) | `[PLAN]` -- rebuild from the compact summary plus TaskList |
 | `plan-in-summary` | plan mode ran, no plan file was ever recorded | `[PLAN]` -- follow a plan if the summary holds one, else fall back to intent |
 | `intent` | none of the above | `[INTENT]` -- re-read the user's original task from the compact summary |
 
 `plan-latest` exists because the hook's only signal, `"planFilePath":"`, is written INTO the transcript --
 a plan that predates the transcript (after `--resume` or `/clear`) leaves no such marker to scan for. The
-project-local `LATEST.md` symlink is the same one `session-start.mjs` maintains on `source === 'clear'`, so
-this rung can only ever point at this project's own most recent plan, never a foreign one.
+project-local `LATEST.md` symlink is the same one `session-start.mjs` maintains on `source === 'clear'`. A plain file or a foreign symlink never qualifies (its target must match the recorded `_planLink` or sit inside the plans directory), so
+this rung can only ever point at this project's own most recent plan.
 
 `[TASKS]` is appended whenever the transcript contains a `TaskCreate` call, and is ordered before the plan is acted
 on -- the built-in task reminder can lag several turns and show empty, so `TaskList` is the authority.
 
 **Guarantee:** on `source === 'compact'` it always injects something -- every failure path degrades to `[INTENT]`,
-never to silence, and it never names a plan from outside this session's own transcript.
+never to silence, and it never names a foreign plan: only this session's transcript or this project's plugin-owned `LATEST.md` link.
 
 **Trade-off:** two plans in one session -- the LAST recorded plan path wins.
 
@@ -223,7 +143,7 @@ never to silence, and it never names a plan from outside this session's own tran
 
 <CardGrid>
   <Card title="Semble Setup" icon="search" href="/brewcode/skills/semble-setup/">
-    Optional project search hooks installed separately from the four plugin registrations.
+    Optional project search hooks installed separately from the two plugin registrations.
   </Card>
   <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
     Download, changelog, and installation instructions.

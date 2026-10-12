@@ -13,6 +13,8 @@ Generates documentation about your Claude Code installation and environment. It 
 
 ## Modes
 
+The argument is one free-form prompt (RU or EN). An explicit prefix (`ext`, `external`, `r `, `research `) wins; otherwise the most distinct keyword picks the mode, a tie triggers one question, and no match falls back to Internal.
+
 | Mode | Trigger | What it does |
 |------|---------|--------------|
 | Internal | no arguments | Scans the active config directory (`CLAUDE_CONFIG_DIR`, default `~/.claude/`) and the project to document instructions, settings, hooks, plugins, agents, skills, and memory. Secret values are never copied, only their names |
@@ -63,7 +65,7 @@ After the document is written, an independent built-in agent re-checks it so tha
 
 ## Output Location
 
-All generated files are saved to `.claude/brewdoc/my-claude/` inside your current project; there is no other output location. Writes under `.claude/` are protected paths, so Claude Code asks before writing unless you run in `bypassPermissions` mode, and a headless run without it fails.
+All generated files are saved to `.claude/brewdoc/my-claude/` inside your current project; there is no other output location. Writes under `.claude/` are protected paths: Claude Code asks first in `default` and `acceptEdits` modes, allows them under `bypassPermissions`, never pre-approves them through allow rules, and a headless run without bypass fails.
 
 | Mode | Output path |
 |------|-------------|
@@ -74,7 +76,7 @@ All generated files are saved to `.claude/brewdoc/my-claude/` inside your curren
 
 Every run appends an entry to `.claude/brewdoc/INDEX.jsonl` for tracking. If an entry for the same mode already exists, you will be asked whether to update it or create a new one.
 
-If a legacy `~/.claude/brewdoc/INDEX.jsonl` exists from an older install, its entries are merged into the project INDEX once (read-only) and the skill prints a one-line migration notice. The legacy file is never written to.
+If a legacy `~/.claude/brewdoc/INDEX.jsonl` exists from an older install and the project INDEX is empty, its entries are merged into the project INDEX once (read-only) and the skill prints a one-line migration notice. The legacy file is never written to.
 
 ## Tips
 

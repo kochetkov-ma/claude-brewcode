@@ -1,4 +1,4 @@
-<!-- brewcode-meta: version=6.4.0 content_version=6.0.0 generated_by=brewtools:agent-return-setup -->
+<!-- brewcode-meta: version=6.5.0 content_version=6.5.0 generated_by=brewtools:agent-return-setup -->
 # agent-return hooks — install / configure / remove runbook
 
 Self-contained hook assets. The `/brewtools:agent-return-setup` skill copies these into a
@@ -53,7 +53,7 @@ already delivered. That is why the second registration exists.
 | `t <= passTokens` | pass |
 | this `agent_id` was already challenged, on either path | pass — at most once per agent |
 | `passTokens < t <= fileTokens` | CHALLENGE — **compress**: re-send the same report, keep the verdict and every `path:line`, drop preamble/bodies/output/logs/restated context, no new work |
-| `t > fileTokens`, agent can write | CHALLENGE — **file**: write the full report to `<project-root>/.claude/reports/YYYYMMDD-HHMMSS_<agent-slug>-<run-id>/`, then return that path + verdict + a summary within the budget. The order itself says what to do when no tool can write: skip the file, send the essential part. The base is the resolved project root (`CLAUDE_PROJECT_DIR` -> `.git`/`.claude` walk -> cwd), never the drifting hook cwd; `<run-id>` is 8 chars from `agent_id`, else `session_id`, else random, so two same-type agents stopping in the same second get different directories |
+| `t > fileTokens`, agent can write | CHALLENGE — **file**: write the full report to `<project-root>/<reportDir>/YYYYMMDD-HHMMSS_<agent-slug>-<run-id>/` (`reportDir` default `.claude/reports`; an absolute one as is), then return that path + verdict + a summary within the budget. The order itself says what to do when no tool can write or the write is denied: never retry it, skip the file, send the essential part. The base is the resolved project root (`CLAUDE_PROJECT_DIR` -> `.git`/`.claude` walk -> cwd), never the drifting hook cwd; `<run-id>` is 8 chars from `agent_id`, else `session_id`, else random, so two same-type agents stopping in the same second get different directories |
 | `t > fileTokens`, agent cannot write (`agent_type` in `readOnlyAgentTypes`, or `permission_mode` is `plan`) | CHALLENGE — **essential part**: no file is asked for; return verdict, the findings the caller must act on, key `path:line` refs, and one line naming what was left out |
 
 `t = Math.ceil(<report text>.length / 4)`. Both boundaries are inclusive on the low
@@ -138,6 +138,7 @@ a profile whose `settings.json` registers the hooks keeps working from one share
 | `passTokens` | pass ceiling, the number quoted as `budget` in every order; positive integer; default `2500` |
 | `fileTokens` | compress/file tier boundary; positive integer; default `6000` |
 | `readOnlyAgentTypes` | agent types (exact `agent_type`, e.g. `Explore`, `myplugin:reviewer`) that have no file-writing tool: over `fileTokens` they are asked for the essential part instead of a file, and their SubagentStart text carries no file step. Any array replaces the built-in list, `[]` = nobody; key absent or not an array = built-in `["Explore","Plan"]`. Written by the config block only when absent |
+| `reportDir` | optional; where the file tier sends long reports, also quoted in the SubagentStart text. Relative = under the resolved project root, absolute as is, `~/` = under `$HOME`; trailing slashes dropped; absent, blank or not a string = `.claude/reports`. Never written by a block: add it by hand, read on every hook call. See *Report dir and protected paths* |
 | `version` / `content_version` / `generated_by` / `last_updated` | provenance, MANDATORY, re-stamped by every mode that writes this file (install, upgrade, enable, disable). `version` = the plugin release that produced THIS write; `content_version` = the release in which this INSTALL.md's generator logic last changed, read from this runbook's own header marker. Inert at runtime — the module reads only the threshold keys above. Never `doc_type`: that is a `.md`-frontmatter field |
 
 A config written by an older version (no `readOnlyAgentTypes`, any thresholds) keeps
@@ -182,6 +183,26 @@ against at return cannot drift.
 > started from a subdirectory reports that subdirectory as cwd, which is exactly
 > what the root resolution absorbs.
 
+### Report dir and protected paths
+
+`.claude/` is a Claude Code protected path (only `.claude/worktrees/` and plan files are
+exempt), so the default `reportDir` costs the file tier a permission check on the
+subagent's `Write`:
+
+| Permission mode | `Write` under `<project>/.claude/reports/` |
+|---|---|
+| `default`, `acceptEdits` | prompted; with no one to answer (`claude -p`) the write is denied |
+| `auto` | routed to the classifier |
+| `dontAsk` | denied |
+| `bypassPermissions` | allowed |
+
+`permissions.allow` rules (e.g. `Write(.claude/**)`) do not pre-approve it. Both orders
+already cover a denial: the agent must not retry the write and returns a compressed
+inline report (the essential part, naming what it left out); the one challenge is spent,
+so that report is delivered. To keep the file tier working unattended, point `reportDir`
+outside `.claude/`, e.g. `"reportDir": "reports/agents"` (gitignore it): in `acceptEdits`
+headless that write lands where `.claude/reports/` is denied (probed on 2.1.296).
+
 ### Parameters — export these before running any block below
 
 | Var | Set by | Meaning |
@@ -191,6 +212,7 @@ against at return cannot drift.
 | `FILE_TOKENS` | skill (user's answer) | `fileTokens` to write; REQUIRED, no default — empty aborts the config block |
 | `PLUGIN_VERSION` | skill (optional) | `X.Y.Z` for the metadata stamp. OPTIONAL: unset/malformed falls back to `<SRC>/../../../.claude-plugin/plugin.json`, resolved by the block itself. Never a literal |
 | `LAST_UPDATED` | skill (optional) | `YYYY-MM-DD` for the stamp; unset falls back to the LOCAL date the block computes |
+| `CLAUDE_PROJECT_DIR` | skill (project scope) | the session's start dir, from the skill's load-time substitution; first choice of the *Project root* block |
 | `ROOT` | the *Project root* block | absolute project root; every project-scope `.claude/...` path is built from it |
 | `CFG` / `SETTINGS` / `HOOKS_DIR` / `STATE_DIR` | scope | project = `$ROOT/.claude/...`, global = `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/...` |
 
@@ -237,9 +259,13 @@ if ROOT=$(claude_project_root); then export ROOT; echo "✅ ROOT=$ROOT"; else
   echo "❌ ABORT: no project root — CLAUDE_PROJECT_DIR unset, no git toplevel, no .git/.claude above $PWD; run no project block below"; fi
 ```
 
-> **STOP if ❌** — an installer never writes into a guessed root. `CLAUDE_PROJECT_DIR`
-> is exported to hook child processes, not to this shell, so it is normally empty here
-> and the git toplevel does the work. The GLOBAL scope ignores `ROOT` entirely.
+> **STOP if ❌** — an installer never writes into a guessed root. The root must be the
+> directory the session started in: hooks get it as `CLAUDE_PROJECT_DIR`, and a session
+> started in a subdirectory of a repo does not load `<git root>/.claude/settings.json`,
+> so a git-toplevel install there never fires. The Bash tool does not set
+> `CLAUDE_PROJECT_DIR`: the skill resolves it from its load-time `${CLAUDE_PROJECT_DIR}`
+> substitution and passes it in the export line; the git toplevel is only the fallback.
+> The GLOBAL scope ignores `ROOT` entirely.
 
 Every write of the config also stamps the three mandatory JSON metadata keys —
 `version`, `generated_by`, `last_updated` (never `doc_type`: that is a `.md`
@@ -431,7 +457,10 @@ numbers as facts.
 
 ## PROJECT target  (`<repo>/.claude/`)
 
-Project paths are writable with normal tools (`Write`/`Edit`/`Bash` all fine).
+Project `.claude/` is a protected path too (only `.claude/worktrees/` and plan files are
+exempt): `Write`/`Edit`, and a Bash `>`/`tee` into it, are prompted in `default`/`acceptEdits`,
+denied headless and in `dontAsk`, allowed in `bypassPermissions`. Run the Bash blocks below
+as written; never a hand `Write`/`Edit`.
 
 1. Ensure dir `<repo>/.claude/hooks/`.
 2. Copy all THREE asset files there. Source dir = this `assets/` dir; derive it from
@@ -670,7 +699,7 @@ process.stdout.write(p+" "+q);
 
 Nothing is asked and nothing is deleted. Upgrade ONE scope per run; "both" is two runs.
 
-> Wiring changed -> a NEW session is required.
+> Wiring changed -> it applies to the running session (settings files are watched); `/hooks` confirms. No restart.
 
 ---
 
@@ -752,11 +781,13 @@ Marker = the 2 registered script basenames, which covers all THREE registrations
 scope's `agent-return-state/` directory. ONE scope per run — uninstall the scope you
 were asked about and leave the other alone. Foreign hook entries, including the
 agent-deadline hooks in the same `SubagentStop` and `PreToolUse` events, are never touched.
+What install created goes too when nothing else is left in it: a `settings.json` that
+only held agent-return entries is deleted (never left as `{}`), an empty hooks dir removed.
 
 **EXECUTE** using Bash tool — pick ONE set of paths:
 ```
-# GLOBAL:  G="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"; HOOKS_DIR="$G/hooks"; SETTINGS="$G/settings.json"; STATE_DIR="$G/agent-return-state"
-# PROJECT: HOOKS_DIR="$ROOT/.claude/hooks";  SETTINGS="$ROOT/.claude/settings.json";  STATE_DIR="$ROOT/.claude/agent-return-state"
+# GLOBAL:  G="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"; export HOOKS_DIR="$G/hooks" SETTINGS="$G/settings.json" STATE_DIR="$G/agent-return-state"
+# PROJECT: export HOOKS_DIR="$ROOT/.claude/hooks" SETTINGS="$ROOT/.claude/settings.json" STATE_DIR="$ROOT/.claude/agent-return-state"
 export HOOKS_DIR="$ROOT/.claude/hooks" SETTINGS="$ROOT/.claude/settings.json" STATE_DIR="$ROOT/.claude/agent-return-state"
 node -e '
 const fs=require("fs");
@@ -774,6 +805,7 @@ function lock(f){                                      // O_EXCL dir lock; stale
   }
   console.error("ABORT: "+l+" is held by another installer; nothing was written"); process.exit(1);
 }
+if(!f){ console.error("ABORT: SETTINGS unset - export it (the GLOBAL/PROJECT line); nothing was removed"); process.exit(1); }
 if(!fs.existsSync(f)){ console.log("no settings to clean: "+f); process.exit(0); }
 process.on("exit",lock(f));                            // re-read under the lock - a concurrent installer must not lose its merge
 const raw=fs.readFileSync(f,"utf8");
@@ -784,14 +816,18 @@ catch(e){ console.error("ABORT: "+f+" is not valid JSON ("+e.message+") - fix or
 if(s===null||typeof s!=="object"||Array.isArray(s)){ console.error("ABORT: "+f+" is not a JSON object; nothing was written"); process.exit(1); }
 const argsOf=e=>((e&&e.hooks)||[]).flatMap(h=>(h&&h.args)||[]).filter(a=>typeof a==="string");
 const isAR=a=>marks.some(m=>a===m||a.endsWith("/"+m)||a.endsWith("\\"+m));
+let removed=0;
 if(s.hooks&&typeof s.hooks==="object"){
   for(const ev of Object.keys(s.hooks)){
     if(!Array.isArray(s.hooks[ev])) continue;
+    const n=s.hooks[ev].length;
     s.hooks[ev]=s.hooks[ev].filter(e=>!argsOf(e).some(isAR));
+    removed+=n-s.hooks[ev].length;
     if(s.hooks[ev].length===0) delete s.hooks[ev];
   }
   if(Object.keys(s.hooks).length===0) delete s.hooks;
 }
+if(removed&&Object.keys(s).length===0){ fs.unlinkSync(f); console.log("OK cleaned "+f+" (agent-return was its only content: deleted)"); process.exit(0); }
 fs.writeFileSync(f,JSON.stringify(s,null,2)+"\n");
 const back=JSON.parse(fs.readFileSync(f,"utf8"));      // post-write verification
 const left=Object.values((back.hooks)||{}).flat().filter(e=>argsOf(e).some(isAR)).length;
@@ -799,7 +835,8 @@ if(left!==0){ console.error("ABORT: verification failed - "+left+" agent-return 
 console.log("OK cleaned "+f);
 ' && rm -f "$HOOKS_DIR/agent-return-contract.mjs" "$HOOKS_DIR/agent-return-guard.mjs" "$HOOKS_DIR/agent-return-budget.mjs" \
   && test ! -e "$HOOKS_DIR/agent-return-contract.mjs" && test ! -e "$HOOKS_DIR/agent-return-guard.mjs" && test ! -e "$HOOKS_DIR/agent-return-budget.mjs" \
-  && { case "$STATE_DIR" in */agent-return-state) rm -rf "$STATE_DIR";; *) echo "STATE_DIR must end in /agent-return-state, got: '$STATE_DIR'"; false;; esac; } \
+  && { rmdir "$HOOKS_DIR" 2>/dev/null || true; } \
+  && { case "$STATE_DIR" in */agent-return-state) node -e 'require("fs").rmSync(process.env.STATE_DIR,{recursive:true,force:true})';; *) echo "STATE_DIR must end in /agent-return-state, got: '$STATE_DIR'"; false;; esac; } \
   && test ! -e "$STATE_DIR" \
   && echo "✅ uninstalled from $HOOKS_DIR" || echo "❌ FAILED"
 ```
@@ -811,7 +848,9 @@ console.log("OK cleaned "+f);
 > repeated challenge for that agent, never a lost report.
 
 > Global uninstall: `Write`/`Edit` on `~/.claude/*` prompts and fails headless — use the
-> Bash `node`/`rm` form above, never Edit/Write. Project uninstall may use Edit.
+> Bash `node`/`rm` form above, never Edit/Write. Project uninstall goes through the same
+> block: project `.claude/` is protected too, and the block is the only path that locks,
+> verifies and keeps foreign hooks.
 
 ## PURGE  (uninstall + config)
 
@@ -824,8 +863,12 @@ versa. The state directory is already gone: UNINSTALL removed it.
 # project: CFG="$ROOT/.claude/agent-return.json"
 # global:  CFG="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/agent-return.json"
 CFG="$ROOT/.claude/agent-return.json"
-rm -f "$CFG" && test ! -e "$CFG" && echo "✅ removed $CFG" || echo "❌ FAILED"
+rm -f "$CFG" && test ! -e "$CFG" \
+  && { [ "$CFG" != "$ROOT/.claude/agent-return.json" ] || rmdir "$ROOT/.claude" 2>/dev/null || true; } \
+  && echo "✅ removed $CFG" || echo "❌ FAILED"
 ```
+
+Project purge also removes `<repo>/.claude/` when it is left empty; the global dir is never removed.
 
 > **STOP if ❌** — fix before continuing.
 
@@ -835,8 +878,9 @@ rm -f "$CFG" && test ! -e "$CFG" && echo "✅ removed $CFG" || echo "❌ FAILED"
 
 Synthetic payloads, no session needed. `<absdir>` = installed hooks dir. Run these from
 a dir whose `.claude/agent-return.json` has `enabled:true` and the default thresholds
-`2500`/`6000` — the hooks resolve their config from the process cwd, so `cd` to that repo
-first. Every case that blocks writes one marker into that scope's `agent-return-state/`,
+`2500`/`6000` — the hooks resolve their config from `CLAUDE_PROJECT_DIR`, else the
+nearest ancestor of the process cwd holding `.git`/`.claude`, so `cd` to that repo first.
+Every case that blocks writes one marker into that scope's `agent-return-state/`,
 so each case carries its own `agent_id`; before a second pass over the list, delete the
 `verify-*` markers' directory (`rm -rf .claude/agent-return-state`) or every blocking
 case prints `{}`.
@@ -857,7 +901,7 @@ node -e 'process.stdout.write(JSON.stringify({hook_event_name:"SubagentStop",age
 
 # 3. classic path, file tier (24004 chars = 6001 tok) -> block, reason names
 #    `<project-root>/.claude/reports/YYYYMMDD-HHMMSS_general-purpose-verify3/`
-#    — absolute, today's date, run id from agent_id
+#    — absolute, today's date, run id from agent_id (no `reportDir` in the config)
 node -e 'process.stdout.write(JSON.stringify({hook_event_name:"SubagentStop",agent_id:"verify-3",agent_type:"general-purpose",last_assistant_message:"x".repeat(24004)}))' \
   | node <absdir>/agent-return-guard.mjs; echo " exit=$?"
 
@@ -894,7 +938,11 @@ node <absdir>/agent-return-contract.mjs </dev/null; echo " exit=$?"
 echo '{"agent_type":"Explore"}' | node <absdir>/agent-return-contract.mjs; echo " exit=$?"
 
 # 10. config-absent no-op: run from a dir with no agent-return.json in any ancestor, none in
-#     $CLAUDE_CONFIG_DIR and none in ~/.claude -> BOTH hooks print {}
+#     $CLAUDE_CONFIG_DIR and none in ~/.claude -> BOTH hooks print {}; `env -u` drops the
+#     skill's exported CLAUDE_PROJECT_DIR, else the hooks read that project's config
+env -u CLAUDE_PROJECT_DIR node <absdir>/agent-return-contract.mjs </dev/null; echo " exit=$?"
+node -e 'process.stdout.write(JSON.stringify({hook_event_name:"SubagentStop",agent_id:"verify-10",agent_type:"general-purpose",last_assistant_message:"x".repeat(24004)}))' \
+  | env -u CLAUDE_PROJECT_DIR node <absdir>/agent-return-guard.mjs; echo " exit=$?"
 ```
 
 Every case must exit `0`. **No case may ever exit 2** — exit 2 on a `SubagentStop` hook
@@ -914,6 +962,7 @@ transcript silence is not evidence of non-firing; the observables are the feedba
 shrunken return and the marker.
 
 > After install or removal `/reload-plugins` is NOT needed (plain settings.json
-> hooks, not plugin hooks), but Claude Code loads hook config at session start —
-> a NEW session is required for wiring changes. Config-value changes (`enabled`,
-> thresholds) are read live and need no restart.
+> hooks, not plugin hooks): Claude Code watches its settings files and applies hook
+> edits to the running session, so wiring changes take effect from the next subagent
+> event; `/hooks` confirms. Config-value changes (`enabled`, thresholds, `reportDir`)
+> are read on every hook call.

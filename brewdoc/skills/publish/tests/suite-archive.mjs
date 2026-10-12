@@ -1,15 +1,6 @@
 #!/usr/bin/env node
-/**
- * suite-archive.mjs — `publish.mjs pack`: the BD01 allowlist and the BD-N03
- * produce-and-verify contract.
- *
- * Self-contained: every fixture tree, stub binary and output path is generated
- * inside one mkdtemp base, which is removed at the end. No network, no upload —
- * `pack` only builds and verifies an archive.
- *
- * Assertion policy: unconditional exact-equality / exact-size checks with a
- * description; no `if` gates which asserts run.
- */
+// `publish.mjs pack`: BD01 allowlist + BD-N03 produce-and-verify; all fixtures in one mkdtemp base, removed at end.
+// No network/upload; unconditional exact-equality/size checks with descriptions, no `if` gating asserts.
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, statSync, rmSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -210,8 +201,7 @@ function archived(zipPath) {
 }
 
 // ── pre-fix baseline: what the shipped two lines actually did ───────────────
-// These assert the DEFECT against real `zip`, so the suite documents (and keeps
-// documenting) why the fix is shaped the way it is.
+// Asserts the DEFECT against real `zip`: keeps documenting why the fix is shaped this way.
 {
   const legacy = join(BASE, 'legacy.zip');
   writeFileSync(legacy, ''); // what `mktemp /tmp/brewpage-site-XXXXXX.zip` leaves behind

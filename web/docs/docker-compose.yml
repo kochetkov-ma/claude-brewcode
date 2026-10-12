@@ -1,6 +1,7 @@
 services:
   docs:
-    image: ghcr.io/kochetkov-ma/claude-brewcode-docs:${DOCS_VERSION:-latest}
+    # DOCS_VERSION = exact release tag; unset -> pull fails (no floating default).
+    image: ghcr.io/kochetkov-ma/claude-brewcode-docs:${DOCS_VERSION}
     ports:
       - "80:80"
       - "443:443"

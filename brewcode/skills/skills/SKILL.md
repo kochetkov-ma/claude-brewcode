@@ -10,8 +10,6 @@ model: opus
 
 # skills Skill
 
-> **Skill Management:** status, list, create, improve, review skills via one free-form prompt.
-
 <instructions>
 
 ## Prompt contract
@@ -71,18 +69,15 @@ Print the PLAN, then Step 4.
 
 ## Step 3 — Explicitly requested menu
 
-One AskUserQuestion, question `What do you want to do with skills?`, options in this order:
+One AskUserQuestion, two questions, 2-4 options each (tool cap; "Other" is automatic):
 
-- `Status (skills)` — **(Recommended)** rich status of this artifact
-- `Status (all: agents+rules+skills)` — cross-link: run the collector for all three
-- `Create new skills`
-- `Improve existing skills`
-- `Review skills`
-- `Sync skills (memory sync)` — re-verify all knowledge vs code, shrink not grow
-- `List (plain)`
-- `Nothing / cancel`
+- Q1 `What do you want to do with skills?`: `Status (skills)` **(Recommended)** — rich status of
+  this artifact; `Create new skills`; `Improve existing skills`; `Review skills`
+- Q2 `Variant?`: `As chosen` **(Recommended)**; `Status (all: agents+rules+skills)` — cross-link:
+  run the collector for all three; `List (plain)`; `Sync skills (memory sync)` — re-verify all
+  knowledge vs code, shrink not grow. A non-default Q2 replaces Q1
 
-Cancel -> stop. Else take target and params from the choice plus prompt/history, no follow-up
+Dismissed or `cancel` via Other -> stop. Else take target and params from the choice plus prompt/history, no follow-up
 question: safe gaps -> stated defaults, an unresolved write-critical param -> report it before
 writing. Print PLAN, then Step 4.
 
@@ -92,8 +87,8 @@ Main owns every spawn; delegates return decisions/results and never nest or acce
 One subagent = one bounded unit, one deliverable (here: one skill directory), ~<=5 files, ~<=10 steps;
 bigger is split into N tasks, all spawned in one message.
 
-Every spawn brief carries six labeled fields, since a subagent starts with an empty context: GOAL (task + why), ROLE (owns, must not touch), SCOPE (paths/commands in and out), CONTEXT (done, by whom, in parallel), CONSUMER (who uses the result + its shape), DONE (acceptance + return: verdict first, evidence, bounded; long output to a file, path returned).
-A bare one-line task is never enough. See Phase 2 for the canonical spawn shape.
+Every spawn brief carries six labeled fields (a subagent starts with an empty context): GOAL (task + why), ROLE (owns, must not touch), SCOPE (paths/commands in and out), CONTEXT (done, by whom, in parallel), CONSUMER (who uses the result + its shape), DONE (acceptance + return: verdict first, evidence, bounded; long output to a file, path returned).
+A bare one-line task is never enough; canonical shape: Phase 2.
 
 ## Step 4 — Dispatch
 
@@ -149,9 +144,9 @@ For `status` mode the report is the Step 5 status table.
 
 ## Artifact-specific params (create / improve only)
 
-Phase 0 through Phase 5 below run only in `create` / `improve`, never by default: params resolved
-in Phase 1, then SPECIALIST (brewcode:skill-creator) spawned with discovery results + chosen params.
-Main reads `${CLAUDE_SKILL_DIR}/references/review-prompt.md` (Phase 4), `e2e-template.md` (Phase 5),
+Phase 0-5 below run only in `create` / `improve`: params resolved in Phase 1, then SPECIALIST
+(brewcode:skill-creator) spawned with discovery results + chosen params. Main reads
+`${CLAUDE_SKILL_DIR}/references/review-prompt.md` (Phase 4), `e2e-template.md` (Phase 5),
 `summary-template.md` (final output); the specialist reads its own references.
 
 ---
@@ -175,8 +170,8 @@ Optional does not mean skippable. Type, token regex and the `cli` denylist (gene
   command equals the skill name (`budget` invoked as `budget` omits it; `fitness-nutrition` invoked as
   `fit` declares `cli: fit`). Never inferred from `allowed-tools`: a publishing skill legitimately
   declares `Bash(curl:*), Bash(ls:*), Bash(cat:*)` while owning none of those commands.
-- `version`: free-form, not semver; only contract: changing it changes the skill directory's content
-  hash; nothing compares it, so decreasing is as valid as increasing. Mandatory when the behaviour lives outside the
+- `version`: free-form, not semver; changing it changes the skill directory's content hash, nothing
+  compares it (decreasing is as valid as increasing). Mandatory when the behaviour lives outside the
   directory (a binary on PATH, a wrapper shipped in an image, a remote service): editing it leaves
   the directory byte-identical, so consumers watching it see nothing. `last_updated:` (human-facing
   date) is no substitute; never spell it `updated`, `updatedAt` or `lastUpdated`
@@ -185,8 +180,8 @@ Optional does not mean skippable. Type, token regex and the `cli` denylist (gene
 ### Prompt contract (mandatory, create + improve + review)
 
 Every SK this skill creates, improves or reviews satisfies `references/prompt-contract.md` (items in
-the Phase 2 DONE; sole exemption: its section 5 table, pure reference/lookup SKs), enforced by
-`${CLAUDE_PLUGIN_ROOT}/skills/skills/scripts/validate-skill.sh`: a SK failing it is not done, review or create.
+Phase 2 DONE; sole exemption: its section 5 table, pure reference/lookup SKs), enforced by
+`${CLAUDE_PLUGIN_ROOT}/skills/skills/scripts/validate-skill.sh`: a failing SK is not done.
 
 ### Prerequisite (improve only): Resolve Target
 
@@ -302,7 +297,7 @@ Skip if `TESTING_DEPTH` is Quick. Read `${CLAUDE_SKILL_DIR}/references/review-pr
 Expand these calls with the full Delegation fields; all spawns/fixes run from main, reviewers are
 read-only and return evidence, never self-acceptance or nested delegation. The fix spawn is
 skill-creator Step 9 (apply fixes, re-run `validate-skill.sh`). Collect confirmed findings (source,
-severity, issue, fix applied, verified status) for the Step 6 output block.
+severity, issue, fix applied, verified status) for Step 6.
 
 ### Phase 5: E2E Testing (Optional)
 
@@ -323,7 +318,7 @@ severity, issue, fix applied, verified status) for the Step 6 output block.
   # Add scenario assertions here, before EXIT cleanup.
 )
 ```
-Replace `SKILL_DIR_HERE` / `PROMPT_HERE` and add assertions before the subshell closes; needs
+Replace `SKILL_DIR_HERE` / `PROMPT_HERE`; add assertions before the subshell closes; needs
 `timeout` or macOS `gtimeout`.
 
 4. Iteration: scenario failure = fix (max 2 retries). Small issues = fix + re-run. Major issues = back to Phase 2.

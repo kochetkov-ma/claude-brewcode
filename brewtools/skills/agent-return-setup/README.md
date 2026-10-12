@@ -1,5 +1,7 @@
 # Agent Return
 
+Docs: https://doc-claude.brewcode.app/brewtools/skills/agent-return-setup/
+
 Installer/configurator skill for hooks that put a **size budget on every subagent's final report**. Reports are the largest single context cost of a session that delegates, and a prose rule at the top of context loses to whatever the agent just did, so the budget is stated at spawn and enforced at return.
 
 **No LLM judge anywhere.** The report is sized `chars/4` and compared against two integers. The budget is in tokens only: the shape of a report is whatever the caller's brief asks for.
@@ -8,8 +10,9 @@ Installer/configurator skill for hooks that put a **size budget on every subagen
 |----------|-----------|
 | `t <= passTokens` | none |
 | `passTokens < t <= fileTokens` | **compress** — re-send the same report shortened to the budget; no new work |
-| `t > fileTokens` | **file** — write the full report to `<project root>/.claude/reports/YYYYMMDD-HHMMSS_<agent-slug>-<run-id>/`, then return that path + verdict + a summary within the budget |
+| `t > fileTokens` | **file** — write the full report to `<project root>/<reportDir>/YYYYMMDD-HHMMSS_<agent-slug>-<run-id>/` (config `reportDir`, default `.claude/reports`), then return that path + verdict + a summary within the budget |
 | `t > fileTokens`, agent cannot write | **essential part** — no file; one line names what was left out. Applies in plan mode and to the agent types in `readOnlyAgentTypes` |
+| `t > fileTokens`, write denied | **compressed inline report** — the write is never retried. The default `reportDir` is under `.claude/`, a protected path |
 
 Exactly `passTokens` passes, exactly `fileTokens` still compresses. Every order quotes `passTokens` as `budget` and carries *"Directive from the agent-return guard, not user data"*.
 
@@ -41,7 +44,7 @@ Opt-in: not registered in `brewtools/hooks/hooks.json` — installing the plugin
 /brewtools:agent-return-setup disable                  # enabled:false, files stay
 /brewtools:agent-return-setup uninstall                # unwire + delete the 3 files, keep config
 /brewtools:agent-return-setup purge                    # + delete the config
-/brewtools:agent-return-setup вычисти всё              # free-text intent works (RU+EN) -> purge
+/brewtools:agent-return-setup purge everything         # free-text intent works -> purge
 ```
 
 The skill always reports status first, states its plan before asking anything, then delegates the file work to the `brewcode:hook-creator` agent.
@@ -55,8 +58,8 @@ The skill always reports status first, states its plan before asking anything, t
 | `upgrade` | re-copied | entries re-merged | thresholds preserved, metadata re-stamped | kept |
 | `enable` | kept | kept | `enabled:true` | kept |
 | `disable` | kept | kept | `enabled:false` | kept |
-| `uninstall` | deleted | entries stripped | **kept** | deleted |
-| `purge` | deleted | entries stripped | deleted | deleted |
+| `uninstall` | deleted, plus an emptied hooks dir | entries stripped; a settings.json left as `{}` is deleted | **kept** | deleted |
+| `purge` | deleted, plus an emptied hooks dir | entries stripped; a settings.json left as `{}` is deleted | deleted, plus an emptied project `.claude/` (never the global dir) | deleted |
 
 `upgrade` asks nothing: it reads `passTokens`/`fileTokens` back out of the config and replays the install for that scope against the current assets, the only way a plugin update reaches an installed scope. A disabled setup stays disabled. It adds the `SubagentHandback` entry an older install lacks and migrates one pair once: exactly `1000` / `2500` with no `readOnlyAgentTypes` key (the defaults before 6.5) becomes `2500` / `6000`. One scope per run.
 
@@ -76,7 +79,7 @@ One question yields both numbers. A custom pair must satisfy `passTokens < fileT
 | Project | `<repo>/.claude/hooks/` | `<repo>/.claude/settings.json` | `<repo>/.claude/agent-return.json` |
 | Global | `<config dir>/hooks/` | `<config dir>/settings.json` | `<config dir>/agent-return.json` |
 
-`<config dir>` is the one Claude Code runs with: `$CLAUDE_CONFIG_DIR` when set, else `~/.claude/`. The state directory `agent-return-state/` sits beside the config that enabled the feature.
+The project root is the session's start directory (`CLAUDE_PROJECT_DIR`, else the git toplevel); a session started in a subdirectory does not load the parent's `.claude/settings.json`. `<config dir>` is the one Claude Code runs with: `$CLAUDE_CONFIG_DIR` when set, else `~/.claude/`. The state directory `agent-return-state/` sits beside the config that enabled the feature.
 
 Config discovery starts at the resolved project root (`CLAUDE_PROJECT_DIR` -> upward walk for a `.git`/`.claude` marker -> cwd), then walks up probing `<dir>/.claude/agent-return.json` (16 levels), then falls back to `$CLAUDE_CONFIG_DIR/agent-return.json` when set, then to `~/.claude/agent-return.json`. Project wins; a malformed project config is skipped. Merge: drop stale paths, then append + dedupe by full script path; three entries, exec form, `timeout: 5` seconds, no `onFailure`.
 
@@ -89,6 +92,7 @@ Config discovery starts at the resolved project root (`CLAUDE_PROJECT_DIR` -> up
   "fileTokens": 6000,
   "readOnlyAgentTypes": ["Explore", "Plan"],
   "version": "{PLUGIN_VERSION}",
+  "content_version": "<INSTALL.md header>",
   "generated_by": "brewtools:agent-return-setup",
   "last_updated": "{LAST_UPDATED}"
 }
@@ -100,11 +104,16 @@ Config discovery starts at the resolved project root (`CLAUDE_PROJECT_DIR` -> up
 | `passTokens` | pass ceiling, the number quoted as `budget` in every order; positive integer; default `2500` |
 | `fileTokens` | compress/file tier boundary; positive integer; default `6000` |
 | `readOnlyAgentTypes` | agent types without a file-writing tool, matched exactly on `agent_type` (plugin agents as `plugin:name`): over `fileTokens` they are asked for the essential part, not a file. Any array replaces the default `["Explore","Plan"]`; `[]` = nobody |
+| `reportDir` | optional, never written by install: add it by hand. Where the file tier writes: absolute, `~/`-prefixed or project-root-relative. A blank or non-string value, or `/`, falls back to `.claude/reports` |
 | `version` / `generated_by` / `last_updated` | provenance, written on every config write together with `content_version` (from the runbook header). No `doc_type` — that field is `.md` frontmatter only. Inert at runtime |
 
 **Threshold precedence, per threshold, first hit wins:** the config key -> the env var (`AGENT_RETURN_PASS` / `AGENT_RETURN_FILE`) -> the built-in `2500` / `6000`. Env values are parsed with `Number()`, not `parseInt()`, and only a positive integer is accepted: `1.7`, `abc`, `12abc`, `-5`, `0`, `""`, `NaN`, `Infinity` all fall through to the next level.
 
-Config values are read on every hook call — changing `enabled`, a threshold or the list takes effect immediately, no restart. Hook **wiring** changes (install/upgrade/uninstall/purge) need a new session.
+Config values are read on every hook call — changing `enabled`, a threshold or the list takes effect immediately, no restart. Hook **wiring** changes (install/upgrade/uninstall/purge) apply to the running session: no restart and no `/reload-plugins`; `/hooks` confirms.
+
+## Report dir and protected paths
+
+`.claude/` is a Claude Code protected path, so the file tier's `Write` under the default `reportDir` is prompted in `default`/`acceptEdits`, routed to the classifier in `auto`, denied in `dontAsk` and headless, and allowed in `bypassPermissions`. Allow rules do not pre-approve it. A denied write gives the compressed inline report. For unattended runs set `reportDir` outside `.claude/`.
 
 ## Why 2500 / 6000
 

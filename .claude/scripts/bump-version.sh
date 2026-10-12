@@ -1,12 +1,6 @@
 #!/usr/bin/env sh
-# Bump version in ALL 6 JSON files (must always be in sync)
-#
-# Usage:
-#   bash .claude/scripts/bump-version.sh <new-version>
-#   bash .claude/scripts/bump-version.sh 3.3.0
-#   bash .claude/scripts/bump-version.sh          # show current version
-#
-# Exit codes: 0 success, 1 error, 2 bad args
+# Usage: bash .claude/scripts/bump-version.sh [X.Y.Z] -> 6 version JSONs + stamps + versioned docs + .codex mirror; no arg = show.
+# Idempotent (same version re-applies + re-verifies). Exit: 0 ok, 1 error or verify failed, 2 bad args.
 
 set -eu
 
@@ -18,45 +12,10 @@ BREWUI_PLUGIN="brewui/.claude-plugin/plugin.json"
 MARKETPLACE=".claude-plugin/marketplace.json"
 PACKAGE="brewcode/package.json"
 
-# --- Baked artifact stamps ---------------------------------------------------
-# Every asset a setup skill copies byte-for-byte into a consumer project carries
-#   brewcode-meta: version=<X.Y.Z> content_version=<X.Y.Z> generated_by=<plugin>:<skill>
-# baked at RELEASE time, never at install time: `setup-status` compares the
-# installed file against the plugin asset with `cmp -s`, so an install-time
-# stamp would make every install report DIFFERS forever.
-#
-# `version` = the plugin release that produced this file (bumped every run).
-# `content_version` = the release in which this file's BODY last actually
-# changed (computed below in content_version_for/strip_meta_for_diff) — lets
-# `setup-status` tell real drift apart from a version-only churn.
-#
-# A file that instead carries {PLUGIN_VERSION}/{GENERATED_BY}/{LAST_UPDATED} tokens is
-# substituted at INSTALL time and MUST NOT be listed here: a baked literal would make its
-# raw baseline copy differ on every release (the superreview references were exactly that
-# bug). The two mechanisms are mutually exclusive per file.
-#
-# Columns: path|kind|generated_by
-# `mjs`/`sh`/`md`/`marker` all share ONE position-independent global substitution on the
-# `brewcode-meta: version=... generated_by=...` fragment — the kind only records which
-# comment syntax wraps it, never where the line sits:
-#   mjs    -> `// brewcode-meta: ...`  (line 2 after the shebang)
-#   sh     -> `# brewcode-meta: ...`   (line 2 after a shebang, line 1 when there is none)
-#   md     -> `<!-- brewcode-meta: ... -->` (line 1)
-#   marker -> the asset's own line-1 HTML marker carries the stamp inline
-#   fm     -> YAML frontmatter keys `version:` / `generated_by:`
-#   fmd    -> `fm` plus `last_updated:` set to the release date. Only for
-#             hand-maintained SHIPPED artifacts (the 8 plugin agents + the
-#             artifact-metadata spec doc), where the date legitimately means
-#             "shipped in the release of that day".
-#             `generated_by` is the BARE plugin name there — no skill produces them.
-#             Never for byte-copied assets: a date there would churn every build.
-# Frontmatter rewrites are scoped to the leading `---` block, so YAML examples
-# inside fenced code further down a file can never be touched.
-# A file listed here and missing on disk FAILS the run.
+# path|kind|generated_by; baked at RELEASE (setup-status `cmp -s`), never for install-time {PLUGIN_VERSION} files; missing = FAIL.
+# kind = wrapper only: mjs `//`, sh `#`, md `<!-- -->`, marker line-1 HTML marker, fm leading frontmatter, fmd fm + last_updated (hand-maintained shipped files).
 STAMPED_FILES='brewcode/skills/semble-setup/assets/semble-session.mjs|mjs|brewcode:semble-setup
-brewcode/skills/semble-setup/assets/semble-prefetch.mjs|mjs|brewcode:semble-setup
 brewcode/skills/semble-setup/assets/semble-stats.mjs|mjs|brewcode:semble-setup
-brewcode/skills/semble-setup/assets/semble-reminder.mjs|mjs|brewcode:semble-setup
 brewcode/skills/semble-setup/assets/semble-subagent.mjs|mjs|brewcode:semble-setup
 brewcode/skills/semble-setup/assets/semble-first.md.template|fm|brewcode:semble-setup
 brewcode/skills/semble-setup/assets/sembleignore.template|sh|brewcode:semble-setup
@@ -98,12 +57,7 @@ brewdoc/skills/memory-sync-setup/SKILL.md|marker|brewdoc:memory-sync-setup
 brewcode/skills/superreview-setup/SKILL.md|marker|brewcode:superreview-setup
 brewcode/skills/e2e/SKILL.md|marker|brewcode:e2e'
 
-# --- Shipped docs carrying a bare version literal ----------------------------
-# Not byte-copied assets, so they get no `brewcode-meta` stamp — they are human-facing
-# pages shipped inside the plugin whose header states the plugin version. They were
-# hand-maintained, which is how brewui/README.md drifted to 3.18.0 against a 5.0.0
-# manifest. Same loop as the README table row rather than a third mechanism: every
-# carrier here is a one-line header literal, so one anchored rewrite covers all of them.
+# --- Shipped docs whose header states the plugin version (no stamp; one anchored rewrite each) ---
 VERSIONED_DOCS='brewcode/README.md
 brewdoc/README.md
 brewtools/README.md
@@ -225,11 +179,8 @@ done <<DOCS
 $VERSIONED_DOCS
 DOCS
 
-# --- Content-version helpers --------------------------------------------------
-# content_version stays put across a release that never touched this file's body,
-# and only advances to $NEW when the body genuinely changed since the release
-# that last moved it. Comparison strips the meta line/fields (which always change)
-# before diffing, so a version-only bump never looks like a content change.
+# --- Content-version helpers ---
+# content_version advances to $NEW only when the meta-stripped body changed since tag v<content_version>.
 strip_meta_for_diff() {
     _kind="$1"
     if [ "$_kind" = "fm" ] || [ "$_kind" = "fmd" ]; then
@@ -239,10 +190,7 @@ strip_meta_for_diff() {
     fi
 }
 
-# Reads the file's CURRENT on-disk content_version, compares its stripped body
-# against the copy at that same content_version's git tag. Identical -> preserve
-# the old value. Anything else (no old value, no matching tag, no historical
-# copy, or a real content diff) is treated as CHANGED -> $NEW (safe default).
+# Body identical to tag v<old> -> keep old; no old value/tag/copy or any diff -> $NEW.
 content_version_for() {
     _f="$1"; _kind="$2"
     _old_cv=""
@@ -299,22 +247,8 @@ done <<STAMPS
 $STAMPED_FILES
 STAMPS
 
-# --- Regenerate the Codex compatibility mirror ---
-# .codex/plugins/** duplicates a dozen of the stamped assets, so the mirror MUST be
-# rebuilt from source in the same transaction that moves the version. Wired into the
-# script rather than left as a documented manual step: the documented step is exactly
-# what let the mirror rot a full major version behind (4.0.6 vs 5.0.0).
-# The mirror's OWN compat version is deliberately independent of the plugin version and is
-# NOT touched here — not by this script, not by hand. It is `VERSION = '4.0.6'` in
-# .codex/scripts/validate-compat.mjs:9, enforced at validate-compat.mjs:86 against NINE
-# manifests that must all read `4.0.6` or `4.0.6+codex.<date>`:
-#   brewcode/.codex/.codex-plugin/plugin.json   brewcode/.codex/package/plugin.json
-#   brewdoc/.codex/.codex-plugin/plugin.json    brewdoc/.codex/package/plugin.json
-#   brewtools/.codex/.codex-plugin/plugin.json  brewtools/.codex/package/plugin.json
-#   .codex/plugins/brewcode/.codex-plugin/plugin.json
-#   .codex/plugins/brewdoc/.codex-plugin/plugin.json
-#   .codex/plugins/brewtools/.codex-plugin/plugin.json
-# Raising any of them to the plugin version is NOT a fix — it breaks the Codex contract.
+# --- Regenerate the Codex mirror (it duplicates stamped assets) in the same run ---
+# Its 9 `codex*/plugin.json` manifests stay 4.0.6[+codex.*] (`VERSION` in validate-compat.mjs), != plugin version; never raise them.
 [ -f "$CODEX_GENERATE" ] || die "Not found: $CODEX_GENERATE"
 command -v node >/dev/null 2>&1 || die "node required to regenerate $CODEX_GENERATE"
 node "$CODEX_GENERATE" || die "Codex mirror regeneration failed: $CODEX_GENERATE"
@@ -375,9 +309,7 @@ stamp_verify() {
             fi
         fi
     else
-        # grep -c prints 0 AND exits 1 on zero matches -> || true, then default.
-        # -a: agent-router.mjs holds a raw NUL byte (line 429), so grep classifies it as
-        # binary and some implementations (ugrep) then print nothing at all for -c.
+        # grep -c exits 1 on zero matches -> || true; -a: a binary-classified file makes ugrep -c print nothing.
         _n=$(grep -acF "brewcode-meta: version=$NEW content_version=$_cv generated_by=$_by" "$_f" || true)
         _n=${_n:-0}
         if [ "$_n" -lt 1 ]; then

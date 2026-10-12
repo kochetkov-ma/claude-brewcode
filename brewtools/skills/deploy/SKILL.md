@@ -20,7 +20,7 @@ model: opus
    (table in P0). Scored tie with monitor -> read-only monitor; other ties -> ask before actions.
    No hit or empty -> `setup` (no GH CFG) or `monitor` (GH CFG exists).
 2. Scope: prose that is not a mode/id/path is still input: take the id, path or target from it.
-3. Ask: at most ONE `AskUserQuestion` (max 4 questions), before any work, only when the answer
+3. Ask: at most ONE `AskUserQuestion` (max 4 questions) to resolve mode and scope, before any work, only when the answer
    changes what gets written (e.g. `release` vs `deploy`). `monitor`/`check` ask nothing. P4/P5
    confirmation gates cover the destructive cases separately.
 
@@ -392,6 +392,7 @@ echo "RUN_ID=$RUN_ID"
 EXEC:
 ```bash
 . "${CLAUDE_SKILL_DIR}/scripts/lib/deploy-common.sh"
+RUN_ID="<RUN_ID printed by Step 5>"
 ght 900 gh run watch "$RUN_ID" --exit-status
 echo "RUN_RESULT=$(ght_reason $?)"
 ```

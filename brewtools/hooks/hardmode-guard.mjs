@@ -1,53 +1,8 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.4.0 content_version=6.3.0 generated_by=brewtools:manager-setup
-// brewtools:manager-setup — HARD wall guard (PreToolUse, matcher "*").
-//
-// SELF-CONTAINED — copied into <project>/.claude/brewtools/manager/ by
-// `/brewtools:manager-setup install` and registered in .claude/settings.local.json
-// (PreToolUse "*"). No external imports. Project-only state.
-//
-// When state.hard === true, physically DENIES tool calls in the MAIN session,
-// leaving only delegation (Agent/Skill/Workflow), reading, and task tracking.
-// Subagents stay fully free.
-//
-// LINCHPIN: this PreToolUse hook fires inside subagents too, and subagent
-// tool-call stdin carries `agent_id`; the MAIN session stdin does NOT.
-// session_id is identical for both. => Discriminator is `agent_id` ALONE: DENY
-// whenever it is ABSENT (main session), pass through when it is a non-empty string
-// (re-checked on 2.1.296 payloads; an agent hook's verifier is `hook-agent-<uuid>`).
-// `agent_type` is NOT a discriminator — CC 2.1.228 sets it on the MAIN thread of
-// a `claude --agent <name>` session too (without `agent_id`), so treating it as
-// one disarms the wall for every such session. A `--agent` main session IS walled.
-//
-// Strictness levels:
-//   strict   — deny all non-read tools: no Bash, no Monitor, no WebSearch, no MCP except the
-//              read-only tools of the `semble_code` server (state.mcpAllow is NOT consulted here).
-//   balanced — additionally allow read-only Bash/Monitor commands (strict binary allowlist +
-//              per-binary flag vetting), WebSearch, and MCP tools whose tool segment tokenizes entirely into
-//              known-safe tokens with a read verb among them — an AMBIGUOUS verb (`query`,
-//              `resolve`) counting only when another safe token accompanies it (default-deny;
-//              see isReadOnlyMcpTool). state.mcpAllow lists names allowed regardless.
-//
-// FAIL-CLOSED (changed in v6 — BT-F01). This is a security guard: an unparseable
-// payload, an unreadable/corrupt state.json next to an installed manager dir, or any
-// unexpected internal error DENIES instead of passing through. The only pass-through
-// left is "the manager was never installed in this project" (no manager directory at
-// any candidate root) and the subagent discriminator. Recovery from a broken state is
-// always available because the self-exempt state CLI survives every level.
-// A guard that cannot START (missing script, crash, timeout) is closed by the registration's
-// `"onFailure": "block"` (CLI >= 2.1.295; older CLIs ignore the field and fail open there).
-//
-// PreToolUse stdin fields used: tool_name, tool_input.command, cwd, agent_id.
-//
-// Provenance: NOT-IN-DOC (HOOKS-REFERENCE.md lists only subagent_type/subagent_id),
-// but the CC 2.1.228 binary's own schema text states it outright — agent_id is
-// "Present only when the hook fires from within a subagent... Absent for the main
-// thread, even in --agent sessions. Use this field (not agent_type) to distinguish
-// subagent calls from main-thread calls." Established 2026-08-11 by reading the
-// 2.1.228 binary, NOT by a live probe; earlier live checks (2.1.177, 2.1.195)
-// covered agent_id only. Re-verify live if PreToolUse stdin shape ever looks off.
-// The undocumented `effort` payload key (used by other brewtools hooks) is
-// irrelevant here and intentionally NOT read by this guard.
+// brewcode-meta: version=6.5.0 content_version=6.5.0 generated_by=brewtools:manager-setup
+
+// brewtools:manager-setup — HARD wall guard (PreToolUse "*"), self-contained copy in <project>/.claude/brewtools/manager/:
+// state.hard -> deny main-session tools except delegate/read/track; subagents free. Fail-closed once installed.
 
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
@@ -65,11 +20,8 @@ function output(obj) {
   process.stdout.write(JSON.stringify(obj));
 }
 
-// ---- project root (canonical recipe, D1 Q5) ---------------------------------
-// CLAUDE_PROJECT_DIR -> upward walk for a root marker -> hook cwd. Never throws.
-// `input.cwd` keeps exactly one job downstream: resolving relative tool_input paths.
-// BT-F01 vector A was precisely a raw-`cwd` state lookup: from <proj>/nested/deep the
-// state file was never found and the guard emitted {} for every tool, at every level.
+// ---- project root: CLAUDE_PROJECT_DIR -> upward walk for a root marker -> hook cwd; never throws ----
+// Raw `cwd` missed state from a nested dir (BT-F01 A); it only resolves relative tool_input paths.
 function projectRoot(hookCwd) {
   const env = process.env.CLAUDE_PROJECT_DIR;
   if (env && existsSync(env)) return resolve(env);
@@ -87,9 +39,8 @@ function projectRoot(hookCwd) {
 const SELF_DIR = dirname(fileURLToPath(import.meta.url));
 const MANAGER_REL = join('.claude', 'brewtools', 'manager');
 
-// Directories where an installed manager may live, most trustworthy first:
-// 1. the guard's own directory when it sits at the installed location — immune to cwd;
-// 2. <projectRoot>/.claude/brewtools/manager.
+// Installed manager dirs, most trustworthy first: own dir at the installed location (immune to cwd),
+// then <projectRoot>/.claude/brewtools/manager.
 function managerDirs(hookCwd) {
   const dirs = [];
   if (SELF_DIR.endsWith(MANAGER_REL)) dirs.push(SELF_DIR);
@@ -98,24 +49,13 @@ function managerDirs(hookCwd) {
   return dirs;
 }
 
-// ---- mcpAllow grammar (single source of truth inside this file) --------------
-// One scoped MCP tool name, or a whole-server `mcp__server__*` prefix. Byte-for-byte the
-// same language as MCP_ALLOW_ENTRY in lib/manager-state.mjs — this guard is SELF-CONTAINED
-// (it is copied standalone into <project>/.claude/brewtools/manager/), so it cannot import
-// it. The duplication is deliberate and the suite asserts both sides accept/reject the same
-// values. BT-V2-M03: the runtime filter used to be a bare `startsWith('mcp__')`, so a
-// hand-written `{"mcpAllow":["mcp__*"]}` — which the helper CLI rejects — allowed EVERY MCP
-// tool. Both the state filter and the self-exempt CLI grammar now derive from this source.
+// ---- mcpAllow grammar: `mcp__server__tool` | `mcp__server__*`; state filter + CLI grammar derive from it ----
+// Deliberate copy of MCP_ALLOW_ENTRY in lib/manager-state.mjs (self-contained; suite asserts parity).
 const MCP_ALLOW_ENTRY_SRC = 'mcp__[A-Za-z0-9_.-]+__(?:[A-Za-z0-9_.-]+|\\*)';
 const MCP_ALLOW_ENTRY = new RegExp(`^${MCP_ALLOW_ENTRY_SRC}$`);
 
-// ---- state read (fail-closed) -----------------------------------------------
-// No manager directory anywhere      -> not installed -> { hard:false } (pure no-op).
-// Directory present, state unreadable/corrupt -> { hard:true, level:'strict', broken }.
-// Global ~/.claude state is NEVER consulted: the wall is strictly project-scoped.
-// Unknown/optional keys never make a state "broken": only an unreadable or non-object file
-// does. `mcpAllow` is read leniently — a malformed value degrades to [] (deny), never to a
-// broken state that would black-hole every tool.
+// ---- state read, project-only: no manager dir -> {hard:false}; unreadable/non-object -> strict + broken ----
+// Unknown keys never break a state; a malformed `mcpAllow` degrades to [] (deny).
 function readProjectState(hookCwd) {
   for (const dir of managerDirs(hookCwd)) {
     if (!existsSync(dir)) continue;
@@ -143,9 +83,8 @@ function readProjectState(hookCwd) {
 
 // ---- guard tables -----------------------------------------------------------
 
-// Tools always permitted in the main session under the hard wall.
-// Inspect/orchestrate tools; delegate/session schedules may trigger later work, whose
-// main-session tool calls still pass through this guard.
+// Tools always permitted in the main session under the hard wall; later work they schedule
+// still passes through this guard.
 const ALWAYS_ALLOW = new Set([
   // read — inspect files and symbols, never write
   'Read', 'Grep', 'Glob', 'LSP',
@@ -178,47 +117,18 @@ const ALWAYS_BLOCK = new Set(['Write', 'Edit', 'NotebookEdit', 'WebFetch']);
 // The one MCP server `strict` still reads through: semantic code search (read-only tools only).
 const STRICT_MCP_SERVER = 'semble_code';
 
-// MCP classification applies to the TOOL segment only (everything after the second `__`
-// in mcp__<server>__<tool>). Matching the whole name let a server called `search` or
-// `getops` launder any operation: `mcp__search__destroy_all` read as "read-only".
-//
-// BT-V2-H01: the rule used to be an unanchored read-verb regex minus a write-verb DENYLIST,
-// so `search_and_replace` matched `search`, missed every denylisted word, and was ALLOWED.
-// A denylist can only ever enumerate the verbs someone already thought of. The rule is now
-// inverted to default-deny: EVERY token of the tool segment must be individually known-safe
-// and at least one must be a read verb, so an unknown token (`replace`, `rename`, `apply`)
-// denies without being enumerated anywhere.
-//
-// A token goes in only when it cannot name a mutation on its own.
-//
-// BT-V2-M01/M02: verbs are split by ambiguity. An UNAMBIGUOUS verb reads on every server
-// it can appear on. An AMBIGUOUS one reads on a docs server and WRITES on a database or
-// issue tracker (`mcp__sqlite__query` runs arbitrary SQL, `mcp__linear__resolve` closes an
-// issue), so it reads ONLY inside a documentation/reference name.
+// MCP default-deny on the TOOL segment (after the 2nd `__`): every token known-safe, one a read verb.
+// A token goes in only when it cannot name a mutation on its own; ambiguous verbs read only in docs names.
 const MCP_READ_VERB = new Set([
   'search', 'find', 'get', 'list', 'read', 'fetch',
   'view', 'show', 'describe', 'inspect', 'status',
 ]);
 const MCP_AMBIGUOUS_VERB = new Set(['query', 'resolve']);
-// NEW-1: "qualified by any other safe token" was far too weak — the object nouns that make an
-// ambiguous verb dangerous are ordinary nouns, so `query_table`, `query_rows`, `resolve_issue`
-// and `resolve_all` all passed as reads. Only these docs/reference words may qualify an
-// ambiguous verb, and they must be the name's ONLY other tokens. Distinct from
-// MCP_NEUTRAL_TOKEN on purpose: that set stays wide for objects of an unambiguous read verb
-// (`list_issues`), this one stays tiny. The motivating real tools are `query-docs` and
-// `resolve-library-id`; the FULL residual allow surface is every name whose tokens are drawn
-// only from MCP_AMBIGUOUS_VERB + MCP_DOCS_QUALIFIER with at least one of each — e.g.
-// `docs_resolve`, `query_doc_library_id`. Nothing else with an ambiguous verb allows.
-//
-// NEW-3: that constraint is UNCONDITIONAL — an unambiguous read verb elsewhere in the name
-// does NOT exempt it. It used to be a fallback branch, so `list_and_resolve` classified as a
-// read on the read-verb branch and never reached it. Any `query`/`resolve` present now forces
-// the docs-only remainder, whatever else the name carries.
+// The ONLY tokens that may accompany an ambiguous verb (`query-docs`, `resolve-library-id`); kept tiny,
+// unlike MCP_NEUTRAL_TOKEN (`query_table`, `list_and_resolve` deny).
 const MCP_DOCS_QUALIFIER = new Set(['docs', 'doc', 'documentation', 'library', 'id']);
-// Neutral tokens: connectors and the OBJECT nouns read tools name. Safe by construction —
-// a mutation still needs a write VERB, and every write verb stays unknown to both sets, so
-// `list_and_rename` / `get_and_apply_patch` keep denying. Widen this set (never the verbs)
-// when an ordinary read tool is falsely denied.
+// Connectors + object nouns of read tools; a mutation still needs a write verb, unknown here.
+// Widen this set (never the verbs) when an ordinary read tool is falsely denied.
 const MCP_NEUTRAL_TOKEN = new Set([
   'and', 'related', 'docs', 'doc', 'library', 'id', 'file', 'files', 'info',
   'snapshot', 'console', 'messages', 'message', 'content', 'contents', 'metadata',
@@ -246,10 +156,8 @@ function mcpTokens(name) {
     .filter(Boolean);
 }
 
-// NEW-4: named write verbs. Every one of these was ALREADY denied as an unknown token — the set
-// exists so the server-name subtraction below cannot erase one. Enumerated, never a denylist the
-// classifier falls back on: an unknown token still denies on its own. Deliberately excludes nouns
-// that read tools carry (`pull`, `commit`, `tag`, `comment`, `deployment`, `state`).
+// Named write verbs, so server-name subtraction cannot erase one (unknown tokens deny anyway).
+// Excludes nouns read tools carry (`pull`, `commit`, `tag`, `comment`, `deployment`, `state`).
 const MCP_WRITE_VERB = new Set([
   'send', 'delete', 'remove', 'destroy', 'drop', 'purge', 'truncate', 'clear', 'reset',
   'create', 'add', 'insert', 'write', 'put', 'post', 'update', 'upsert', 'modify', 'edit',
@@ -260,15 +168,8 @@ const MCP_WRITE_VERB = new Set([
   'disable', 'archive', 'restore', 'import', 'transfer',
 ]);
 
-// NEW-4: ORDER IS THE CONTRACT. Servers repeat their own name inside the tool segment
-// (`mcp__notion__notion-search` -> [search]), and subtracting those tokens is the only reason
-// this filter exists. Subtraction used to run FIRST, and it removed the DENY evidence with
-// everything else: `mcp__delete__list_and_delete` and `mcp__deploy__deploy_status` subtracted
-// their own write verb and the residue read as a clean `list`/`status`. So the write-verb and
-// safe gates now run on the UNFILTERED tool segment: a write verb anywhere in the tool name
-// denies whatever the server happens to be called, and an unknown token denies unless it is a
-// verbatim repeat of a server token — an exception that can no longer smuggle a write verb past
-// a gate. Only then does subtraction run, over tokens that have already been judged.
+// ORDER IS THE CONTRACT: write-verb + safe gates run on the UNFILTERED segment, then server-name
+// tokens are subtracted (`mcp__deploy__deploy_status` must not read as `status`).
 function isReadOnlyMcpTool(server, toolSegment) {
   const raw = mcpTokens(toolSegment);
   // `mcp____get` — empty server — is a malformed name, not a read.
@@ -280,10 +181,8 @@ function isReadOnlyMcpTool(server, toolSegment) {
   if (!raw.every(t => safe(t) || fromServer.has(t))) return false;
   const tokens = raw.filter(t => !fromServer.has(t));
   if (tokens.length === 0) return false;
-  // Ambiguous verb present -> this is the ONLY gate that decides, checked before the read-verb
-  // branch so a read verb can never re-qualify it. Reads solely when every remaining token is a
-  // docs qualifier, and at least one is. Any other token — an ordinary noun (table, rows, all),
-  // a connector (`and`) or a read verb (`list`) — leaves the verb unqualified -> deny.
+  // Ambiguous verb -> sole gate, before the read-verb branch: read only when every other token is
+  // a docs qualifier (at least one); any noun, connector or read verb -> deny.
   if (tokens.some(t => MCP_AMBIGUOUS_VERB.has(t))) {
     return tokens.some(t => MCP_DOCS_QUALIFIER.has(t))
       && tokens.every(t => MCP_AMBIGUOUS_VERB.has(t) || MCP_DOCS_QUALIFIER.has(t));
@@ -291,9 +190,8 @@ function isReadOnlyMcpTool(server, toolSegment) {
   return tokens.some(t => MCP_READ_VERB.has(t));
 }
 
-// Escape hatch for a false denial: exact `mcp__server__tool` or a `mcp__server__*` prefix
-// from state.mcpAllow. Consulted BEFORE the heuristic and at `balanced` ONLY — `strict`
-// ignores the list and keeps only the read-only tools of STRICT_MCP_SERVER.
+// state.mcpAllow escape hatch (exact name or `mcp__server__*` prefix): `balanced` only, before
+// the heuristic; `strict` keeps only STRICT_MCP_SERVER read tools.
 function isMcpAllowListed(list, tool) {
   return list.some(e => (e.endsWith('*') ? tool.startsWith(e.slice(0, -1)) : e === tool));
 }
@@ -317,9 +215,8 @@ function deny(reason) {
 // any redirection are unclassifiable, so they are refused before tokenizing.
 const FORBIDDEN_META = /\$\(|`|>|</;
 
-// Split a command into segments of argv tokens, honouring quotes and chaining operators
-// (&&, ||, ;, |, &, newline). null when quoting is unbalanced or a forbidden metachar
-// appears — both mean "cannot classify" and therefore "deny".
+// Command -> argv segments split on &&, ||, ;, |, &, newline (quote-aware); null = unbalanced
+// quotes or forbidden metachar -> cannot classify -> deny.
 function splitCommand(cmd) {
   if (typeof cmd !== 'string' || !cmd.trim()) return null;
   if (FORBIDDEN_META.test(cmd)) return null;
@@ -348,16 +245,8 @@ function splitCommand(cmd) {
   return segments;
 }
 
-// ---- self-exempt: the genuine manager-state CLI -----------------------------
-// ONLY `node <ABSOLUTE installed helper> get|set ...`, so that `/brewtools:manager-setup
-// disable` / `level` can still run under the wall.
-//
-// BT-F01 vector B: the anchor used to be a tail REGEX (`(hooks/lib|…)/manager-state.mjs$`),
-// so a planted /tmp/evil/hooks/lib/manager-state.mjs was exempt — and because the check ran
-// before the level branch it also ran at `strict`, i.e. arbitrary code could set hard=false
-// and disarm the wall permanently. The anchor is now the RESOLVED ABSOLUTE PATH of the
-// helper actually shipped next to this guard; an unresolvable path is not exempt.
-// The check now lives INSIDE the Bash branch, after tool classification.
+// ---- self-exempt: ONLY `node <helper> get|set ...`, so `disable`/`level` run under the wall ----
+// Anchor = realpath of the helper shipped beside this guard (a tail regex let a planted copy disarm it).
 function installedHelpers(hookCwd) {
   const paths = [join(SELF_DIR, 'manager-state.mjs'), join(SELF_DIR, 'lib', 'manager-state.mjs')];
   for (const dir of managerDirs(hookCwd)) paths.push(join(dir, 'manager-state.mjs'));
@@ -371,11 +260,8 @@ function installedHelpers(hookCwd) {
 // Any flag that turns `node` into an evaluator. Rejected outright.
 const NODE_EVAL_FLAG = /^(-e|--eval|-p|--print|--input-type|--experimental-loader|--import|--require|-r|--loader)(=|$)/;
 
-// The helper's own CLI grammar: get|set [key=value ...] [--cwd DIR]. Mirrors parseCliArgs
-// in lib/manager-state.mjs — the guard must never allow a shape the helper would not.
-// `mcpAllow` is a comma-separated list of MCP_ALLOW_ENTRY_SRC entries (empty value clears),
-// i.e. the SAME grammar the state filter and the helper's SETTABLE.mcpAllow use. It used to
-// be a looser `mcp__[\w.*-]+`, which accepted `mcpAllow=mcp__*` that the helper rejects.
+// Helper grammar `get|set [key=value ...] [--cwd DIR]`, mirrors parseCliArgs in lib/manager-state.mjs:
+// never allow a shape the helper rejects (mcpAllow = comma list of MCP_ALLOW_ENTRY_SRC, empty clears).
 const STATE_CLI_PAIR = new RegExp(
   `^(?:hard=(?:true|false)|level=(?:strict|balanced)`
   + `|mcpAllow=(?:|${MCP_ALLOW_ENTRY_SRC}(?:,${MCP_ALLOW_ENTRY_SRC})*))$`
@@ -407,12 +293,8 @@ function isStateWriteCommand(cmd, hookCwd) {
   return isStateCliArgs(argv.slice(2));
 }
 
-// ---- balanced Bash classifier: strict allowlist + per-binary flag vetting ----
-// BT-F01 vector C. A wrapper DENYLIST is explicitly rejected: `timeout`/`xargs`/`nice`
-// were denied only incidentally (absent from the old READONLY_BASE), so any future
-// "read-only" addition re-opened the hole. Default-deny is the invariant; a binary is
-// listed only if it cannot exec, and if it can be made to exec by a flag, that flag is
-// vetted here. `env` is gone: it is a whitelisted binary AND a universal wrapper.
+// ---- balanced Bash classifier: default-deny allowlist + per-binary exec-flag vetting ----
+// A binary is listed only if it cannot exec; never a wrapper (`env`, `timeout`, `xargs`).
 
 // `--output`/`--textconv` write files or run an arbitrary filter, so they are exec-class
 // even though `git diff`/`git show` are otherwise reads.
@@ -441,10 +323,8 @@ function vetGh(args) {
   return args.length > 0 && !args[0].startsWith('-') && (GH_READ.has(args[1]) || GH_READ.has(args[0]));
 }
 
-// THE allowlist: one row per binary, name -> flag vetter (null = no exec-capable flag known,
-// args unrestricted). Deliberately a single table — a split allowlist/vetter pair made
-// "added to one, forgotten in the other" possible. Bare names only, so `/bin/ls`, `VAR=x ls`
-// and `env ls` never match. A vetter returns true when the argument vector is exec-free.
+// THE allowlist, one table: bare binary name -> vetter (true = argv exec-free; null = args unrestricted).
+// Bare names only, so `/bin/ls`, `VAR=x ls` and `env ls` never match.
 const READONLY = {
   ls: null, cat: null, pwd: null, which: null, head: null, tail: null, wc: null,
   date: null, whoami: null, basename: null, dirname: null, realpath: null,
@@ -504,9 +384,8 @@ process.on('unhandledRejection', lastResort);
     const state = readProjectState(cwd);
     if (state.broken === null && state.hard !== true) { output({}); return; }
 
-    // (b) LINCHPIN: only agent_id marks a subagent -> pass through. agent_type is NOT a
-    // discriminator: CC 2.1.228 sets it on the MAIN thread of a `claude --agent <name>`
-    // session too (without agent_id), so an OR here disarms the wall for those sessions.
+    // (b) LINCHPIN: only agent_id marks a subagent. agent_type is NOT one: a `claude --agent`
+    // main thread carries it too (no agent_id), so an OR here disarms the wall there.
     if (isSubagent(input)) {
       output({});
       return;

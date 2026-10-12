@@ -1,20 +1,6 @@
 #!/usr/bin/env node
-/**
- * suite-templates.mjs — static gates on everything this skill SHIPS into a
- * consumer repo: the four workflow templates, the deploy-admin agent template,
- * SKILL.md and the reference docs.
- *
- * Covers BT-F09 (no `${{ }}` interpolation into shell/JS source, validated
- * inputs, no floating refs), BT-F18 (a failed health check exits non-zero),
- * BT-F08 (`git add -A` / `git push --tags` banned at every site) and the skill
- * frontmatter invariants from CLAUDE.md.
- *
- * Standalone: no network, no `gh`. YAML validity is proven by parsing every
- * fenced block with python3 + PyYAML (run.sh checks that prerequisite).
- *
- * Assertion policy: unconditional exact-equality / exact-set checks with a
- * description; no `if` gates which asserts run.
- */
+// Static gates on shipped templates, agent template, SKILL.md, refs: BT-F09 (no `${{ }}` in shell/JS, validated inputs, no floating refs),
+// BT-F18 (failed health check exits non-zero), BT-F08 (`git add -A`/`git push --tags` banned), frontmatter; YAML via python3 + PyYAML, no network/`gh`.
 import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -74,10 +60,7 @@ function yamlBlocks(text) {
   return out;
 }
 
-/**
- * Bodies of every `run: |` and `script: |` literal block — the two places where
- * a `${{ }}` expression becomes source code before any parser sees it.
- */
+// Bodies of every `run: |`/`script: |` block: where `${{ }}` becomes source before any parser sees it.
 function sourceBodies(block) {
   const lines = block.split('\n');
   const bodies = [];
@@ -153,10 +136,12 @@ check('f09.no-pr-target', blocks.flatMap((b) => b.split('\n').filter((l) => l.in
   check('pin.floating-refs', uses.filter((u) => /@(main|master|latest)$/.test(u) || /@v\d+$/.test(u)), [],
     'no @main, @master or bare major ref survives in a shipped template');
   const latestInYaml = blocks.flatMap((b, i) => b.split('\n')
-    .filter((l) => l.includes('latest') && !l.includes('runs-on'))
+    .filter((l) => l.includes('latest'))
     .map((l) => `T${i + 1}:${l.trim()}`));
   check('pin.no-latest-tag', latestInYaml, [],
-    'BT-F09 bonus: neither the pushed image tags nor a workflow input default is floating `latest`');
+    'BT-F09 bonus: no pushed image tag, workflow input default or runner label is floating `latest`');
+  check('pin.runs-on', blocks.flatMap((b) => b.split('\n').filter((l) => l.includes('runs-on:')).map((l) => l.trim())),
+    Array(4).fill('runs-on: ubuntu-24.04'), 'every template job pins the runner image, as the Codex mirror does');
   check('pin.scanner-example', (tplText.match(/aquasecurity\/trivy-action@v0\.36\.0/g) || []).length, 1,
     'the scanner example names an exact tag instead of @master');
 }
@@ -190,11 +175,8 @@ check('f09.no-pr-target', blocks.flatMap((b) => b.split('\n').filter((l) => l.in
 
 // ── 4. BT-F08: banned git idioms at every shipped site ────────────────────
 {
-  // A banned idiom may only appear on a line that also carries ITS OWN correct
-  // replacement or the word "banned" — i.e. as documentation of the ban, never
-  // as an instruction to run it. The pairing is per idiom: a shared allowlist
-  // let `git push --tags && git push origin HEAD` clear the check on the
-  // strength of the unrelated second half.
+  // Banned idiom allowed only beside ITS OWN replacement or "banned" (documenting the ban); per-idiom pairing,
+  // since a shared allowlist let `git push --tags && git push origin HEAD` pass on the unrelated second half.
   const banned = [
     { re: /git add -A/, paired: /banned|git add -- / },
     { re: /git push --tags/, paired: /banned|git push origin refs\/tags\// },

@@ -1,11 +1,6 @@
 #!/usr/bin/env node
-/**
- * Suite: server-discover.sh (BT-F21).
- * Contract: the port and connection operands cannot word-split into ssh options,
- * and the whole discovery is bounded by a portable in-process deadline.
- * Uses an argv-capturing `ssh` stub on PATH; no network, no real SSH.
- * Assertion policy: unconditional exact-equality checks with a description.
- */
+// Suite server-discover.sh (BT-F21): port/connection operands never word-split into ssh options; discovery bounded by portable in-process deadline.
+// argv-capturing `ssh` stub on PATH, no network, no real SSH; unconditional exact-equality checks with description.
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, chmodSync, rmSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';

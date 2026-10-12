@@ -7,7 +7,7 @@ argument-hint: "[prompt] [status|install|create|update|review|rules]"
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion, Skill, WebSearch, WebFetch]
 model: opus
 ---
-<!-- brewcode-meta: version=6.4.0 content_version=6.3.0 generated_by=brewcode:e2e -->
+<!-- brewcode-meta: version=6.5.0 content_version=6.5.0 generated_by=brewcode:e2e -->
 
 <instructions>
 
@@ -35,7 +35,7 @@ Full-cycle E2E testing orchestration: install agents, create BDD scenarios, writ
    mutating modes -> the keyword that comes first. No hit or empty -> `status` if the e2e agent
    roster is installed (`.claude/agents/e2e-*.md` count >= 3), else `install`.
 2. Scope: prose that is not a mode/id/path is still input: take the id, path or target from it.
-3. Ask: at most ONE `AskUserQuestion` (max 4 questions), before any work, only when the answer
+3. Ask: at most ONE `AskUserQuestion` (max 4 questions) to resolve mode and scope, before any work, only when the answer
    changes what gets written. A read-only run asks nothing.
 
 Print once, before the first action (labels literal, values in the conversation language):

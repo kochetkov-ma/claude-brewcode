@@ -22,12 +22,12 @@
 2. bash .claude/scripts/bump-version.sh X.Y.Z → synchronize the current carriers.
 3. Update RELEASE-NOTES.md and affected docs; validate the owned change set.
 4. Execute the authorized release as one failure-stop chain:
-   git add -- <owned paths> && git commit -m "Release vX.Y.Z" &&
-   git push origin HEAD && git tag vX.Y.Z && git push origin refs/tags/vX.Y.Z
+   git add -- <owned paths> && git commit -m "feat(release): vX.Y.Z <summary>" &&
+   git tag vX.Y.Z && git push origin HEAD && git push origin refs/tags/vX.Y.Z
    → explicit paths only; git add -A is banned; git push --tags is banned.
 5. Verify CI for the committed SHA, published release, and served docs provenance/content.
-6. Refresh local Claude plugin caches only with explicit authorization for those caches.
-   Native Codex plugins remain disabled; a release does not authorize local installation.
+6. Refresh installed plugin caches: bash .claude/scripts/update-plugin.sh per profile;
+   whether this step runs unprompted is the project's release policy.
 ```
 
 ## EXAMPLE — Version Carriers (claude-brewcode repo)

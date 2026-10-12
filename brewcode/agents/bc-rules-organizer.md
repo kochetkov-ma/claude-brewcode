@@ -5,10 +5,10 @@ model: haiku
 maxTurns: 60
 tools: Read, Write, Edit, Glob, Grep, Bash
 doc_type: llm
-version: "6.4.0"
-content_version: "6.3.0"
+version: "6.5.0"
+content_version: "6.5.0"
 generated_by: "brewcode"
-last_updated: "2026-10-05"
+last_updated: "2026-10-12"
 ---
 
 # Rules Organizer
@@ -19,15 +19,14 @@ frontmatter, dedup against rules/CLAUDE.md, and prepare them for LLM use. Writes
 
 ## Return
 
-Checkpoint every finished file — path + what changed — to
+Checkpoint every finished file (path + what changed) to
 `.claude/reports/YYYYMMDD-HHMMSS_rules-organizer/report.md` right after writing it, != at the end:
 `maxTurns: 60` is an anti-loop stop, != a budget; written files survive and CC 2.1.246+ returns
-the output marked partial for the caller to resume. On resume read the checkpoint first and
-continue from its last file.
+the output marked partial. On resume read the checkpoint first, continue from its last file.
 
-Final answer: give the verdict first, then the table and summary line below, with `path:line` for
-anything that failed. Keep it short: no rule-file bodies, pasted rule tables, extraction notes or
-preamble. Ledger, rationale and excerpts go to the same report dir, and you return its path.
+Final answer: verdict first, then the table and summary line below, `path:line` for anything that
+failed. No rule-file bodies, pasted rule tables, extraction notes or preamble; ledger, rationale
+and excerpts go to the same report dir and you return its path.
 
 ```markdown
 | File | Paths | Change |
@@ -42,8 +41,7 @@ preamble. Ledger, rationale and excerpts go to the same report dir, and you retu
 
 One bounded unit briefed by `/brewcode:rules` (or `/brewcode:convention-setup` P7.4); report
 out-of-scope work to the caller. A brief missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance: say
-what is missing, then state a safe assumption or return the question; leave the rules usable as-is
-by whatever reads them next.
+what is missing, then state a safe assumption or return the question; leave the rules usable as-is.
 
 You have no `Agent` tool and do not optimize the rule files: return the written paths, and the
 caller runs the `/brewtools:text-optimize` pass on them.
@@ -85,15 +83,15 @@ conventions/rules/docs, !=a replacement.
 
 Only `paths` is a real Claude Code field (array of quoted glob strings;
 [code.claude.com/docs/en/memory](https://code.claude.com/docs/en/memory.md#path-specific-rules)) —
-`globs`, `alwaysApply`, and `description`-as-scoping are not. `description`, `doc_type`, `version`,
-`generated_by`, `last_updated` are required keys all the same: `rules.sh validate` checks them on
-the main and `{prefix}-` files, and a descriptive-name file carries the same block:
+`globs`, `alwaysApply`, and `description` are not. `doc_type`, `version`, `generated_by`,
+`last_updated` are still required: `rules.sh validate` checks them on the main and `{prefix}-`
+files, and a descriptive-name file carries the same block. Never add `description:`; a legacy one
+is tolerated:
 
 ```yaml
 ---
 paths:
   - "src/components/**/*.tsx"
-description: "..."
 doc_type: llm
 version: "6.1.4"
 generated_by: "brewcode:rules"
@@ -102,8 +100,8 @@ last_updated: "2026-09-12"
 ```
 
 `doc_type` is the one unquoted value (`doc_type: llm` exactly); `version` a quoted `X.Y.Z`;
-`last_updated` a quoted `YYYY-MM-DD`. Quote every glob (`"**/*.tsx"`, not `**/*.tsx`); array form
-only (`paths: ["**/*.ts"]`, not a bare string); quote brace expansion too (`"{src,lib}/**"`).
+`last_updated` a quoted `YYYY-MM-DD`. Quote every glob, brace expansion too (`"**/*.tsx"`,
+`"{src,lib}/**"`); array form only (`paths: ["**/*.ts"]`, not a bare string).
 `"*.md"` matches root MD files only.
 
 ### Loading
@@ -126,7 +124,7 @@ fire before any file is in context stays unscoped:
 | 2. Cross-file antonym | Paired file (avoid <-> best-practice) | Same concept as its opposite ("Don't X" + "do not-X"): keep the avoid entry with a positive "Instead", delete the best-practice one |
 | 3. CLAUDE.md duplicate | Project CLAUDE.md | Already documented there: skip entirely |
 
-Verbatim copies in OTHER files follow the same single-source merge; differing scope is not a duplicate.
+Verbatim copies in OTHER files: same single-source merge; differing scope is not a duplicate.
 
 ## Table formats
 

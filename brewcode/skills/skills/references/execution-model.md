@@ -32,11 +32,11 @@ Research $ARGUMENTS:
 ```
 
 House decision matrix (heuristics; no platform contract guarantees the phase thresholds): needs
-conversation history -> inline, subject to normal context limits/compaction. Standalone bounded
-task (1-4 phases) -> `context: fork`; simple research/analysis -> `context: fork` +
-`agent: Explore`. Longer orchestration (5+ phases may lose structure or skip steps) -> inline +
-hooks/external state (TASK.md, a progress log). Fork needs a tool outside the background pool,
-or writes files and `/rewind` must work -> `background: false`.
+conversation history -> inline (normal context limits/compaction apply). Standalone bounded task
+(1-4 phases) -> `context: fork`; simple research/analysis -> `context: fork` + `agent: Explore`.
+Longer orchestration (5+ phases may lose structure or skip steps) -> inline + hooks/external state
+(TASK.md, a progress log). Fork needs a tool outside the background pool, or writes files and
+`/rewind` must work -> `background: false`.
 
 ## SA spawning constraints
 
@@ -50,8 +50,7 @@ is removed from regular SAs, even when listed in `tools:`** — a SK must put op
 SA's return. A background SA keeps the reduced built-in set, including `Skill`, `LSP` (2.1.280+),
 and `Agent` below the depth limit; see `agents/references/agent-scope-and-tools.md` for the full pool.
 
-brewcode workflow prefers spawns from the main conversation — a house preference, not a platform
-limit.
+House preference (not a platform limit): spawn from the main conversation.
 
 | Scenario | brewcode workflow | Why |
 |---|---|---|
@@ -69,9 +68,9 @@ With `context: fork`, `agent` selects the SA type.
 | `Plan` | Inherit | Read-only | Planning, structured research |
 | `general-purpose` | Inherit | All | Multi-step tasks (default), code changes |
 
-> The usual built-in task choices, !=the entire roster: upstream also supplies `claude` and
-> specialized helpers. `developer`/`tester`/`reviewer` require custom discoverable definitions
-> (`.claude/agents/` / `~/.claude/agents/`, named as `agent: my-custom-agent`).
+> Usual choices, !=the entire roster: upstream also supplies `claude` and specialized helpers.
+> `developer`/`tester`/`reviewer` need custom discoverable definitions (`.claude/agents/` /
+> `~/.claude/agents/`, named as `agent: my-custom-agent`).
 
 ## Model selection
 
@@ -96,11 +95,15 @@ never trusted — "a skill can grant itself broad tool access".
 | Remove a tool for this invoking turn | `disallowed-tools`; restriction clears on next user message |
 | Restrict for the whole session, or across all SKs | permission settings: allow rules for a session-wide grant, deny rules to block |
 
-Rules: never a bare `Bash`/`Write`/`Edit`/`Agent` in `allowed-tools` — it pre-approves every
-invocation, the opposite of narrowing; write the narrowest Bash pattern or omit the key.
-Autonomous SK that must never stall on input -> `disallowed-tools: AskUserQuestion` (reapply
-next invocation). Pre-approve exact injected `` !`cmd` `` commands with `allowed-tools`;
-permission deny/ask rules still override the grant.
+Rules: only prompting tools gain from a grant (`Bash`, `Write`/`Edit`, `Skill`, `WebFetch`/`WebSearch`);
+`Read`/`Glob`/`Grep`/`Agent`/`AskUserQuestion` never prompt in the working dir. Fixed call set ->
+scoped rules (table above; `Edit(/docs/**)` also covers `Write`). Bare `Bash`/`Write`/`Edit`
+pre-approves every call that turn, destructive ones included: only for a `disable-model-invocation: true`
+SK with open-ended shell/write paths (orchestrators, generators); a model-invocable SK stays scoped.
+Protected-path writes (`.claude/`, `.git/`) are never auto-approved outside `bypassPermissions`.
+Autonomous SK that must never stall on input -> `disallowed-tools: AskUserQuestion` (reapply next
+invocation). Pre-approve exact injected `` !`cmd` `` commands with `allowed-tools`; permission
+deny/ask rules still override the grant.
 
 ## Dynamic context injection
 
@@ -120,8 +123,8 @@ FORK body. Multi-line -> a fenced block opened with ` ```! `.
 
 ## String substitutions
 
-Complete set; nothing else is substituted. Each is TEXT spliced into the whole SKILL.md at load —
-prose, inline code, every fence — never a variable the Bash tool can read: all are unset there.
+Complete set; nothing else is substituted. Each is TEXT spliced into the whole SKILL.md at load
+(prose, inline code, every fence), never a variable the Bash tool can read: all are unset there.
 Hooks and agents have no CSD; use `${CLAUDE_PLUGIN_ROOT}` there.
 
 | Variable | Description | Since |
@@ -146,10 +149,10 @@ Spelling decides what reaches the shell (observed on CC 2.1.296):
 | A braced token named in prose | Rewritten to the path; a backslash does not stop it | Name it without the dollar-brace: `CLAUDE_SKILL_DIR` |
 
 ```bash
-ARGS="$(cat <<'__SKILL_ARGS__'
+IFS= read -r -d '' ARGS <<'__SKILL_ARGS__' || true
 $ARGUMENTS
 __SKILL_ARGS__
-)"
+ARGS=${ARGS%$'\n'}
 bash "${CLAUDE_SKILL_DIR}/scripts/run.sh" "$ARGS"
 ```
 
@@ -166,8 +169,8 @@ not `agent`), `model`, `effort` (2.1.292+, non-fork SAs; overrides the agent's o
 `isolation`. Continue a resumable SA with `SendMessage(to: <agent ID/name>, message: ...)`.
 
 Listing `Agent` in a SA's `tools:` lets it spawn; only a type list inside the parentheses is
-ignored. A read-only SA should also omit `Agent` from its `tools:` or deny it with
-`disallowedTools`, so a delegate cannot bypass that role's tool restrictions. This alone does not
-make Bash/MCP read-only; do NOT assume nesting is off by default.
+ignored. A read-only SA omits `Agent` from `tools:` or denies it with `disallowedTools`, so a
+delegate cannot bypass its tool restrictions. This alone does not make Bash/MCP read-only; do NOT
+assume nesting is off by default.
 
 > Sources: [skills](https://code.claude.com/docs/en/skills), [subagents](https://code.claude.com/docs/en/sub-agents), [tools](https://code.claude.com/docs/en/tools-reference); checked through CC 2.1.296.

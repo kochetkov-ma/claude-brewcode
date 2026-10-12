@@ -20,7 +20,7 @@ Pass a prompt to go straight to a mode:
 
 1. **Input gate**: an empty prompt runs `status`; an explicit request for the menu opens it; anything else goes to mode selection.
 2. **Mode selection**: an explicit mode token wins, otherwise English and Russian keywords are scored. Before acting, the skill prints a `PLAN — brewcode:agents` block with the input, mode, scope, planned actions and expected result.
-3. **Menu** (on request only): one question listing the modes, plus Status (all: agents + rules + skills) and Cancel.
+3. **Menu** (on request only): ONE `AskUserQuestion` with two questions of 2-4 options each. Q1 picks the action (Status, Create, Improve, Review); Q2 picks the variant (As chosen, Status of agents + rules + skills, plain List, Sync). A non-default Q2 answer replaces Q1. Cancel via Other stops; no further questions follow.
 4. **Dispatch**: each mode runs as described under Modes (create, improve and sync use `brewcode:agent-creator`); a created or improved agent file then gets a scoped sync check.
 5. **Real status**: inventory per scope (counts, names, load path); state (setup config or `<name>.disabled` parking, legacy `_<name>.md` markers, model); same-name shadowing and duplicate triggers; health flags (missing README or frontmatter, a `tools:` list naming none of `Bash`, `Glob`, `Grep`, weak triggers, rules duplicated in CLAUDE.md).
 6. **Final output**: a structured report with detection, result, status and next steps, for every mode except `list`.
@@ -54,7 +54,7 @@ Verdicts: `STALE`, `DEAD`, `DUPLICATE`, `OBVIOUS`, `DRIFT`, `MISSING`.
 
 Report table: `File | Lines before -> after | Fixed | Deleted | Added | Key change`, plus corrected facts, additions with source, skipped files, and total delta.
 
-Targets: `.claude/agents/*.md`, `*/agents/*.md` (repo-local only). Disabled files (`_name.md`) are skipped and reported. `/brewdoc:memory-sync-setup` emits a project-local `/memory-sync` skill that applies the same non-growth sync to CLAUDE.md, rules, conventions, agents and skills together — use this skill when you want a roster on its own.
+Targets: `.claude/agents/*.md`, `*/agents/*.md` (repo-local only). Disabled files (`<name>.disabled` parking, legacy `_name.md` markers) are skipped and reported. `/brewdoc:memory-sync-setup` emits a project-local `/memory-sync` skill that applies the same non-growth sync to CLAUDE.md, rules, conventions, agents and skills together — use this skill when you want a roster on its own.
 
 ## Parameters for Create / Improve
 
@@ -68,7 +68,7 @@ Targets: `.claude/agents/*.md`, `*/agents/*.md` (repo-local only). Disabled file
 
 ## Examples
 
-```bash
+```text
 # Status of agents in every scope (default)
 /brewcode:agents
 

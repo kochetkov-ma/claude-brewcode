@@ -11,7 +11,7 @@
 | 3 | Validate image input syntax and require a bounded semver-derived or `sha-<40hex>-<run-id>-<attempt>` tag; reject aliases. Parse ids as integers | free text and mutable aliases cannot establish provenance |
 | 4 | `permissions:` is declared explicitly and minimally at the top of every workflow | default token scope is far wider than any of these jobs needs |
 | 5 | `pull_request` is allowed (T4 uses it). `pull_request_target` combined with a checkout of the PR head is **forbidden** — it runs fork code with a write token | that pair is the standard fork-PR escalation |
-| 6 | Templates retain their dated exact `@vX.Y.Z` pins; repository workflows may use bounded major action pins. `@main`/`@master`/an unpinned branch is **forbidden**; every image tag is exact, never `:latest` | a floating ref changes what runs without a diff |
+| 6 | Templates retain their dated exact `@vX.Y.Z` pins; repository workflows may use bounded major action pins. `@main`/`@master`/an unpinned branch is **forbidden**; every image tag and runner label is exact, never `:latest`/`ubuntu-latest` | a floating ref changes what runs without a diff |
 | 7 | A health/verification step that did not pass ends in `echo "::error::…"; exit 1` — never `::warning::` | a warning leaves the step green, so `if: success()` posts a *successful* deployment for a broken site |
 | 8 | Production deploys only images built from a release tag (`v*.*.*`), gated on served health + version metadata | a branch build that deploys replaces the release on the live site |
 
@@ -46,7 +46,7 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository
@@ -174,7 +174,7 @@ permissions:
   deployments: write
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: >
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' &&
@@ -476,7 +476,7 @@ permissions:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository
@@ -573,7 +573,7 @@ concurrency:
 
 jobs:
   scan:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository

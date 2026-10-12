@@ -1,8 +1,5 @@
 #!/usr/bin/env node
-/**
- * SessionStart (matcher "compact") hook: re-anchors plan, original intent and task graph via
- * additionalContext. ALWAYS injects on source "compact"; every failure degrades to [INTENT].
- */
+// SessionStart "compact": re-anchor plan/intent/tasks; ALWAYS injects, any failure -> [INTENT].
 
 import { statSync, readFileSync } from 'fs';
 import {
@@ -16,10 +13,8 @@ const TASK_KEY = '"name":"TaskCreate"';
 // NAMES a key arrives escaped (\"), so the transcript's own text about itself cannot match.
 const PLAN_MODE_KEYS = ['"type":"plan_mode"', '"type":"plan_mode_reentry"', '"permissionMode":"plan"'];
 
-/**
- * Plan + task signals `{planPath, planMode, hadTasks}` from this session's transcript (append-only, so
- * the LAST planFilePath is current; a later re-plan outside plan mode still yields the older one).
- */
+// `{planPath, planMode, hadTasks}` from this session's append-only transcript: LAST planFilePath wins
+// (a re-plan outside plan mode still yields the older one).
 function scanTranscript(path, root, sessionId) {
   const signals = { planPath: null, planMode: false, hadTasks: false };
   if (typeof path !== 'string' || path === '') return signals; // non-string fs args warn on stderr
@@ -44,10 +39,8 @@ function scanTranscript(path, root, sessionId) {
   return signals;
 }
 
-/**
- * Last plan path in the raw transcript, or null. Buffer.lastIndexOf skips parsing megabytes of JSONL;
- * the closing quote is searched on the record's own line only (a half-flushed last record).
- */
+// Last plan path in raw transcript or null; Buffer.lastIndexOf skips JSONL parsing, closing quote
+// searched on the record's own line only (half-flushed last record).
 function extractPlanPath(buf) {
   let at = buf.lastIndexOf(PLAN_KEY);
   while (at >= 0) {

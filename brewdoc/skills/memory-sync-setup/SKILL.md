@@ -7,7 +7,7 @@ argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge]
 allowed-tools: [Read, Edit, Glob, Grep, Bash, Agent, AskUserQuestion]
 model: opus
 ---
-<!-- brewcode-meta: version=6.4.0 content_version=6.3.0 generated_by=brewdoc:memory-sync-setup -->
+<!-- brewcode-meta: version=6.5.0 content_version=6.5.0 generated_by=brewdoc:memory-sync-setup -->
 
 # Memory Sync Generator (brewdoc:memory-sync-setup)
 
@@ -30,7 +30,7 @@ rule or hook). `<target>` = the git toplevel, or `MEMORY_SYNC_ROOT=<abs path>`.
 2. Scope: prose that is not a mode/id/path is still input: take the id, path or target from it -- never
    the first word of a sentence as a positional id. The remainder becomes the fine-tune prompt /
    `{FOCUS_EMPHASIS}`.
-3. Ask: at most ONE `AskUserQuestion` (max 4 questions), before any work, only when the answer changes
+3. Ask: at most ONE `AskUserQuestion` (max 4 questions) to resolve mode and scope, before any work, only when the answer changes
    what gets written. A read-only run asks nothing.
 
 Print once, before the first action (labels literal, values in the conversation language):
@@ -226,7 +226,7 @@ your reads, determine:
 |--------|---------------|--------------------|
 | **Memory surface** | files in the user-authorized scope: root `CLAUDE.md`, EVERY nested `**/CLAUDE.md` at ANY depth, `CLAUDE.local.md`, `.claude/rules/**/*.md` (recursive; unscoped rules load at launch, `paths:` rules when Claude reads, writes or edits a matching file, incl. a single-file `cat`/`head` in Bash), conventions (`.claude/convention/**`, `CONVENTIONS.md`, `CONTRIBUTING.md`), the `AGENTS.md` family (loaded by Claude Code only per the **Project instructions** setting: default `claude-md-or-agents-md` reads it only where no `CLAUDE.md`/`CLAUDE.local.md` exists), `.claude/agents/**`, `.claude/skills/**`, and BOTH memory kinds (next two rows). Inventoried does not mean always loaded; honor explicit scope narrowing | `{BATCH_TABLE}`, `{SURFACE_COUNTS}`, `{ENUMERATION_BASH}` |
 | **VERIFY-ONLY surfaces** | `AGENTS.md` that is a SYMLINK into a projection dir (`.codex/**`) or sits inside vendor markers (`<!-- BEGIN:... -->`); any file another tool owns. Refs checked for RESOLUTION, content NEVER edited | `{BATCH_TABLE}` (VERIFY-ONLY column) |
-| **Memory dir** | `autoMemoryDirectory` in `.claude/settings*.json`, else `~/.claude/projects/<hash>/memory/`; in scope only on user confirmation (Phase 1.5) | `{MEMORY_DIR}` |
+| **Memory dir** | `autoMemoryDirectory` in `.claude/settings*.json`, else `${CLAUDE_CONFIG_DIR:-~/.claude}/projects/<hash>/memory/` (active profile); in scope only on user confirmation (Phase 1.5) | `{MEMORY_DIR}` |
 | **Per-agent memory stores** | one store per agent, loaded only while its agent runs. ENUMERATE them (`find` / `ls` over the memory root and any configured per-agent store dir), never a hardcoded roster; note each store's INDEX file apart from its rows. Per-agent memory resolves against the session CWD, so a store is born wherever a session ran: RECORD the plausible session roots (task workspaces, module roots, anything a session would `cd` into) against the runtime/archived trees of the EXCLUDED table -- the emitted live/orphan call depends on it (`references/memory-guide.md` rule 5). Stores can exist while `{MEMORY_DIR}` is `none` | `{BATCH_TABLE}`, `{ENUMERATION_BASH}` |
 | **Exclusions** | `docs/**` (separate doc flow -- refs INTO it resolution-checked, contents never edited), ALL source code (read-only evidence), secrets dirs, task-board / operational state (`.claude/features/**`), build output, git-ignored scratch | `{EXCLUDED_TABLE}` |
 | **Cited outside references** | git-TRACKED paths OUTSIDE the instruction tree that an ALWAYS-LOADED instruction file (no `paths:` gate) names and tells its reader to open. REACH-GATED, never excluded: editable only at `{REACH}` = `REFS`, resolution-checked at the `MEMORY` default; the emitted skill re-enumerates them per run | `{ENUMERATION_BASH}`, `{VERIFY_EXTRA}` |

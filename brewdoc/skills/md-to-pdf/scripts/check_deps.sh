@@ -1,25 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# check_deps.sh — Dependency checker for md-to-pdf skill
-# Usage: check_deps.sh <command> [engine]
-#
-# Commands:
-#   check   <engine>   Check if engine dependencies are satisfied
-#   install <engine>   Install missing dependencies for engine
-#   status             Show dependency status for all engines
-#
-# Engines: reportlab, weasyprint
-#
+# md-to-pdf dependency checker: check_deps.sh <check|install> <reportlab|weasyprint> | status | help.
 # Exit codes: 0 = OK, 1 = MISSING_*, 2 = bad usage
 
 SCRIPT_NAME="$(basename "$0")"
 MIN_PYTHON_MAJOR=3
 MIN_PYTHON_MINOR=8
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+# --- Helpers ---
 
 usage() {
     cat <<EOF
@@ -49,9 +38,7 @@ die_usage() {
 
 is_macos() { [[ "$(uname -s)" == "Darwin" ]]; }
 
-# ---------------------------------------------------------------------------
-# Python version check (common to both engines)
-# ---------------------------------------------------------------------------
+# --- Python version check (common to both engines) ---
 
 check_python() {
     if ! command -v python3 &>/dev/null; then
@@ -72,25 +59,22 @@ check_python() {
     return 0
 }
 
-# ---------------------------------------------------------------------------
-# Pip package checks
-# ---------------------------------------------------------------------------
+# --- Pip package checks ---
 
 # pip_spec <import-name>
-# Pinned install spec per package. Versions verified at PyPI 2026-08-16.
+# Pinned install spec per package. Versions verified at PyPI 2026-10-12.
 pip_spec() {
     case "$1" in
-        reportlab)  echo "reportlab==5.0.0" ;;
-        weasyprint) echo "weasyprint==69.0" ;;
-        markdown)   echo "markdown==3.10.3" ;;
-        pygments)   echo "pygments==2.20.0" ;;
+        reportlab)  echo "reportlab==5.0.1" ;;
+        weasyprint) echo "weasyprint==70.0" ;;
+        markdown)   echo "markdown==3.11" ;;
+        pygments)   echo "pygments==2.21.0" ;;
         *)          echo "$1" ;;
     esac
 }
 
-# install_pip_packages <missing-csv> <pkg1> <pkg2> ...
-# Installs through the SAME interpreter conversion uses, then re-imports:
-# a bare `pip3` can succeed into a different interpreter and leave conversion broken.
+# install_pip_packages <missing-csv> <pkg1> <pkg2> ...: install via SAME interpreter as conversion, re-import;
+# bare `pip3` can succeed into a different interpreter and leave conversion broken.
 install_pip_packages() {
     local missing="$1"
     shift
@@ -132,15 +116,12 @@ check_pip_packages() {
     fi
 }
 
-# ---------------------------------------------------------------------------
-# Brew / system package checks (weasyprint only)
-# ---------------------------------------------------------------------------
+# --- Brew / system package checks (weasyprint only) ---
 
 WEASYPRINT_BREW_PKGS=(pango cairo gdk-pixbuf libffi)
 
-# On Linux, the equivalent apt packages differ:
-#   libpango1.0-dev libcairo2-dev libgdk-pixbuf2.0-dev libffi-dev
-# This script checks brew on macOS; on Linux it falls back to pkg-config.
+# macOS checks brew; Linux falls back to pkg-config (apt equivalents differ:
+# libpango1.0-dev libcairo2-dev libgdk-pixbuf2.0-dev libffi-dev).
 
 check_system_packages() {
     local missing=()
@@ -173,9 +154,7 @@ check_system_packages() {
     fi
 }
 
-# ---------------------------------------------------------------------------
-# check command
-# ---------------------------------------------------------------------------
+# --- check command ---
 
 cmd_check() {
     local engine="${1:-}"
@@ -216,9 +195,7 @@ cmd_check() {
     esac
 }
 
-# ---------------------------------------------------------------------------
-# install command
-# ---------------------------------------------------------------------------
+# --- install command ---
 
 cmd_install() {
     local engine="${1:-}"
@@ -269,9 +246,7 @@ cmd_install() {
     esac
 }
 
-# ---------------------------------------------------------------------------
-# status command
-# ---------------------------------------------------------------------------
+# --- status command ---
 
 label_status() {
     # $1 = check result (OK or MISSING_*)
@@ -349,9 +324,7 @@ cmd_status() {
     printf "| %-15s | %-9s | %-26s |\n" "weasy-pip" "$wp_status" "$wp_detail"
 }
 
-# ---------------------------------------------------------------------------
-# Main dispatch
-# ---------------------------------------------------------------------------
+# --- Main dispatch ---
 
 CMD="${1:-help}"
 shift 2>/dev/null || true

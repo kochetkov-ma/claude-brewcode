@@ -1,20 +1,6 @@
 #!/usr/bin/env python3
-"""
-Universal Markdown to PDF converter with dual engine support.
-
-Engines:
-  - reportlab  (default) -- pure Python, no system deps
-  - weasyprint           -- HTML/CSS pipeline, better fidelity
-
-Usage:
-    python3 md_to_pdf.py <input.md> [output.pdf] [options]
-    python3 md_to_pdf.py input.md --engine weasyprint --style custom.css
-    python3 md_to_pdf.py input.md output.pdf --config my_config.json
-
-Dependencies (installed at pinned versions by scripts/check_deps.sh):
-    reportlab engine:   check_deps.sh install reportlab
-    weasyprint engine:  check_deps.sh install weasyprint
-"""
+"""Markdown -> PDF: reportlab (default, pure Python) | weasyprint (HTML/CSS, better fidelity); usage: --help.
+Pinned deps: scripts/check_deps.sh install <reportlab|weasyprint>."""
 
 import json
 import os
@@ -31,9 +17,7 @@ DEFAULT_CONFIG_PATH = SCRIPT_DIR / ".." / "styles" / "default.json"
 DEFAULT_CSS_PATH = SCRIPT_DIR / ".." / "styles" / "default.css"
 
 
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
+# --- CLI ---
 
 def parse_args(argv=None):
     p = argparse.ArgumentParser(
@@ -52,9 +36,7 @@ def parse_args(argv=None):
     return args
 
 
-# ---------------------------------------------------------------------------
-# Config loading (deep merge)
-# ---------------------------------------------------------------------------
+# --- Config loading (deep merge) ---
 
 def _deep_merge(base: dict, override: dict) -> dict:
     result = deepcopy(base)
@@ -77,9 +59,7 @@ def load_config(config_path=None) -> dict:
     return defaults
 
 
-# ---------------------------------------------------------------------------
-# Cross-platform font detection (reportlab)
-# ---------------------------------------------------------------------------
+# --- Cross-platform font detection (reportlab) ---
 
 _FONT_SEARCH = {
     "Darwin": [
@@ -109,14 +89,8 @@ _LINUX_COMPANIONS = {
 
 
 def detect_fonts() -> dict:
-    """Detect available fonts, return name mapping dict.
-
-    Returns:
-        {"body": "FontName", "bold": "FontName-Bold",
-         "italic": "FontName-Italic", "boldItalic": "FontName-BoldItalic",
-         "family": "FontName", "_source": "path_or_builtin",
-         "_entries": [(name, path, subfontIndex|None), ...]}
-    """
+    """Detect fonts -> {body, bold, italic, boldItalic, family: name; _source: path|"builtin";
+    _entries: [(name, path, subfontIndex|None)]}."""
     system = platform.system()
     candidates = _FONT_SEARCH.get(system, []) + _FONT_SEARCH.get("Linux", [])
 
@@ -168,9 +142,7 @@ def register_detected_fonts(font_info: dict):
         )
 
 
-# ---------------------------------------------------------------------------
-# Structured output
-# ---------------------------------------------------------------------------
+# --- Structured output ---
 
 def print_status(output_path: str, page_count: int, engine: str):
     """Emit the five result lines the skill parses. Never suppressed -- they are the contract."""
@@ -196,9 +168,7 @@ def warn(message: str):
     print(f"WARN={message}", file=sys.stderr)
 
 
-# ---------------------------------------------------------------------------
-# WeasyPrint engine
-# ---------------------------------------------------------------------------
+# --- WeasyPrint engine ---
 
 PAGE_SIZES = {"a4": "A4", "letter": "Letter", "legal": "Legal"}
 
@@ -297,9 +267,7 @@ def convert_weasyprint(input_path: str, output_path: str, config: dict,
     print_status(output_path, page_count, "weasyprint")
 
 
-# ---------------------------------------------------------------------------
-# Reportlab engine -- helpers
-# ---------------------------------------------------------------------------
+# --- Reportlab engine -- helpers ---
 
 def _rl_colors(config: dict):
     """Build reportlab color objects from config."""
@@ -320,12 +288,8 @@ def _rl_colors(config: dict):
 
 
 def safe_xml(text: str, code_font: str = "Courier-Bold") -> str:
-    """Escape XML-unsafe chars, apply inline Markdown markup.
-
-    Handles: **bold**, *italic*, ***bold italic***, `inline code`, [links](url).
-    Args:
-        code_font: font face for inline `code` spans (default: Courier-Bold).
-    """
+    """Escape XML-unsafe chars, apply inline MD: **bold**, *italic*, ***both***, `code`, [links](url).
+    code_font: face for inline `code` spans."""
     text = text.replace("&", "&amp;")
     text = text.replace("<", "&lt;").replace(">", "&gt;")
 
@@ -368,9 +332,7 @@ def parse_md_table(lines: list) -> list:
     return rows
 
 
-# ---------------------------------------------------------------------------
-# Reportlab engine -- styles
-# ---------------------------------------------------------------------------
+# --- Reportlab engine -- styles ---
 
 def build_styles(font_info: dict, config: dict):
     from reportlab.lib.enums import TA_CENTER, TA_LEFT
@@ -449,9 +411,7 @@ def build_styles(font_info: dict, config: dict):
     return ss
 
 
-# ---------------------------------------------------------------------------
-# Reportlab engine -- table builder
-# ---------------------------------------------------------------------------
+# --- Reportlab engine -- table builder ---
 
 def build_table(rows: list, styles, font_info: dict, clr: dict, available_width: float):
     """Build a reportlab Table from parsed MD rows with auto column widths."""
@@ -506,9 +466,7 @@ def build_table(rows: list, styles, font_info: dict, clr: dict, available_width:
     return table
 
 
-# ---------------------------------------------------------------------------
-# Reportlab engine -- blockquote builder
-# ---------------------------------------------------------------------------
+# --- Reportlab engine -- blockquote builder ---
 
 def build_blockquote(text: str, styles, clr: dict, available_width: float):
     """Build a blockquote as a table with a left blue border."""
@@ -533,9 +491,7 @@ def build_blockquote(text: str, styles, clr: dict, available_width: float):
     return t
 
 
-# ---------------------------------------------------------------------------
-# Reportlab engine -- code block builder
-# ---------------------------------------------------------------------------
+# --- Reportlab engine -- code block builder ---
 
 def build_code_block(text: str, styles, clr: dict, available_width: float):
     """Build a code block with gray background."""
@@ -560,17 +516,11 @@ def build_code_block(text: str, styles, clr: dict, available_width: float):
     return t
 
 
-# ---------------------------------------------------------------------------
-# Reportlab engine -- image support
-# ---------------------------------------------------------------------------
+# --- Reportlab engine -- image support ---
 
 def _try_build_image(alt: str, src: str, available_width: float, base_dir: Path):
-    """Attempt to build a reportlab Image flowable. Returns None if not possible.
-
-    Relative sources resolve against the document's directory (as weasyprint does),
-    falling back to the process cwd. A miss warns here rather than at the call site:
-    the alt text plus the reason is what tells the user WHICH image is missing.
-    """
+    """Reportlab Image flowable or None; relative src: document dir first, else cwd (as weasyprint).
+    Warns here, not at call site: alt + reason tell user WHICH image is missing."""
     from reportlab.platypus import Image
 
     label = f"{src} (alt: {alt})" if alt else src
@@ -578,7 +528,7 @@ def _try_build_image(alt: str, src: str, available_width: float, base_dir: Path)
         warn(f"image not rendered: {label} -- remote sources are not fetched")
         return None
     img_path = Path(src)
-    if not img_path.is_absolute() and not img_path.exists():
+    if not img_path.is_absolute() and (base_dir / src).exists():
         img_path = base_dir / src
     if not img_path.exists():
         warn(f"image not rendered: {label} -- file not found")
@@ -596,9 +546,7 @@ def _try_build_image(alt: str, src: str, available_width: float, base_dir: Path)
         return None
 
 
-# ---------------------------------------------------------------------------
-# Reportlab engine -- numbered canvas
-# ---------------------------------------------------------------------------
+# --- Reportlab engine -- numbered canvas ---
 
 def _make_numbered_canvas_class(font_name: str, footer_fmt: str, page_width: float):
     """Create a NumberedCanvas class bound to the given font, format string and page width."""
@@ -638,9 +586,7 @@ def _make_numbered_canvas_class(font_name: str, footer_fmt: str, page_width: flo
     return NumberedCanvas
 
 
-# ---------------------------------------------------------------------------
-# Reportlab engine -- markdown to story (flowables)
-# ---------------------------------------------------------------------------
+# --- Reportlab engine -- markdown to story (flowables) ---
 
 def md_to_story(md_text: str, styles, font_info: dict, clr: dict,
                 available_width: float, base_dir: Path) -> list:
@@ -801,9 +747,7 @@ def md_to_story(md_text: str, styles, font_info: dict, clr: dict,
     return story
 
 
-# ---------------------------------------------------------------------------
-# Reportlab engine -- document builder
-# ---------------------------------------------------------------------------
+# --- Reportlab engine -- document builder ---
 
 def build_document(output_path: str, config: dict):
     from reportlab.lib import pagesizes
@@ -842,9 +786,7 @@ def build_document(output_path: str, config: dict):
     return doc, available_width, page_width
 
 
-# ---------------------------------------------------------------------------
-# Reportlab engine -- main conversion
-# ---------------------------------------------------------------------------
+# --- Reportlab engine -- main conversion ---
 
 def convert_reportlab(input_path: str, output_path: str, config: dict):
     """Convert MD -> PDF via reportlab."""
@@ -886,9 +828,7 @@ def convert_reportlab(input_path: str, output_path: str, config: dict):
     print_status(output_path, page_count, "reportlab")
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
+# --- Main ---
 
 def main():
     args = parse_args()

@@ -21,14 +21,14 @@ is each doc's own YAML frontmatter — no separate ledger.
 /brewdoc:docsync-setup disable         # pause tracking, keep everything wired
 /brewdoc:docsync-setup uninstall       # remove hooks + settings entries (non-destructive)
 /brewdoc:docsync-setup purge           # uninstall + delete .claude/docsync/
-/brewdoc:docsync-setup sync            # sync stale docs (with confirmation)
+/brewdoc:docsync-setup sync            # sync stale docs (asks which docs to sync first)
 /brewdoc:docsync-setup sync --all      # sync every in-scope doc
 /brewdoc:docsync-setup reread          # re-read tracked docs to refresh context
 /brewdoc:docsync-setup frontmatter     # retro-add frontmatter to in-scope docs (opt-in)
 ```
 
-The skill is prompt-driven: free text in RU or EN works too (e.g. "что устарело",
-"настрой отслеживание документации"). It resolves the mode, prints a plan, executes
+The skill is prompt-driven: free text works too (e.g. "which docs are stale",
+"set up doc tracking"). It resolves the mode, prints a plan, executes
 and verifies the outcome.
 
 ## Modes
@@ -38,11 +38,11 @@ and verifies the outcome.
 | status | `status` / installed + no args | Lists in-scope docs with `last_updated`, age, and stale/fresh/no-date state. No changes. |
 | install | `install` / not installed + no args | Asks threshold (default 7d) + exclude globs (`.claude/**` is always added); copies 3 hooks into `.claude/hooks/`; writes `.claude/docsync/config.json`; merges `.claude/settings.json` in one transaction (rolled back on failure, foreign entries untouched, no backup file). Never adds frontmatter to docs. |
 | upgrade | `upgrade` | Re-copies the 3 hooks, rewrites the docsync registrations into the current shape and refreshes the four provenance keys in `config.json`; `enabled`, `threshold_days`, `exclude` and the session logs stay. The first upgrade of a registration without `timeout` also adds `.claude/**` to `exclude`, once. |
-| enable | `enable` / включи | Sets `enabled: true` in `config.json`. Nothing else moves. |
-| disable | `disable` / выключи | Sets `enabled: false`. The hooks stay registered and on disk, the session logs and every `last_updated` survive, and all three hooks no-op from their next invocation, with no session restart. The reversible pause; `uninstall` is the removal. |
+| enable | `enable` | Sets `enabled: true` in `config.json` and refreshes the four provenance keys. Nothing else moves. |
+| disable | `disable` | Sets `enabled: false` and refreshes the four provenance keys. The hooks stay registered and on disk, the session logs and every `last_updated` survive, and all three hooks no-op from their next invocation, with no session restart. The reversible pause; `uninstall` is the removal. |
 | uninstall | `uninstall` | Removes only docsync hook entries from `settings.json` (foreign entries preserved), the 3 hook files, stray nested state dirs and an older docsync's `settings.json.bak` when that loses nothing. Keeps `.claude/docsync/`. |
 | purge | `purge` | `uninstall` plus removal of `.claude/docsync/`. |
-| sync | `sync [--all]` | Syncs stale docs (or all) after confirmation, per each doc's `sync_procedure`, then bumps `last_updated` to today. |
+| sync | `sync [--all]` | Syncs stale docs (or all) per each doc's `sync_procedure`, then bumps `last_updated` to today. It asks via `AskUserQuestion` which listed docs to sync and syncs only the confirmed ones. |
 | reread | `reread` | Force re-read of tracked docs to refresh in-context understanding. |
 | frontmatter | `frontmatter` | Opt-in retro-add of docsync frontmatter to in-scope docs. Never automatic at install. |
 
@@ -77,7 +77,9 @@ sync_procedure: "what to check / where to look when syncing"   # optional, prose
 ## Scope
 
 All `*.md` in the project, minus the `exclude` globs (chosen at install, plus
-`.claude/**`) and any file with `doc_type: skip`. All three hooks apply both filters,
+`.claude/**`), any file with `doc_type: skip`, and the auto-loaded instruction files
+`CLAUDE.md`, `CLAUDE.local.md` and `AGENTS.md` (any depth), which are never tracked,
+nudged or gated, whatever `exclude` says. All three hooks apply these filters,
 the Stop gate included — marking a doc `skip` mid-session silences it immediately. Only
 docs edited through `Write`/`Edit` in the session are raised at the end of a turn; a doc
 that was merely read, or changed by Bash or outside Claude Code, never is.
@@ -86,17 +88,18 @@ that was merely read, or changed by Bash or outside Claude Code, never is.
 
 | File | Event | Matcher | Action |
 |------|-------|---------|--------|
-| `docsync-track.mjs` | PostToolUse | `Write\|Edit`, filtered to `.md` | Logs the edit; nudges to add `last_updated` when it is missing, once per file per session |
-| `docsync-watch.mjs` | PostToolUse | `Read`, filtered to `.md` | Logs reads by the main session. Silent and informational only |
-| `docsync-gate.mjs` | Stop | — | Blocks once for the docs edited since its last ask whose `last_updated` is missing, unusable (not a real date, or in the future) or more than `threshold_days` behind the file's modification day |
+| `docsync-track.mjs` | PostToolUse | `Write\|Edit` (two handlers, `Write(**/*.md)` and `Edit(**/*.md)`), 5 s | Logs the edit; nudges to add `last_updated` when it is missing, once per file per session |
+| `docsync-watch.mjs` | PostToolUse | `Read(**/*.md)`, 5 s | Logs reads by the main session. Silent and informational only |
+| `docsync-gate.mjs` | Stop | none, 10 s | Blocks once for the docs edited since its last ask whose `last_updated` is missing, unusable (not a real date, or in the future) or more than `threshold_days` behind the file's modification day |
 
 After a block the gate stays silent until one of those docs is edited again. Its message
 has Claude set a missing or unusable date itself, and also the date of a doc its own
-edit already brought up to date. Any other doc needs a sync, which rewrites content, so
-Claude asks first: through `AskUserQuestion` when that tool is available, otherwise it
-lists the docs in its final message and finishes.
+edit already brought up to date. Any other doc needs a sync: Claude decides and syncs it
+on its own, and asks first only before deleting or wholesale rewriting content (through
+`AskUserQuestion` when that tool is available, otherwise it lists those docs in its
+final message and finishes).
 
-Hooks are self-contained ESM (Node built-ins only) and take effect on the next session.
+Hooks are self-contained ESM (Node built-ins only) and apply in the running session: Claude Code watches the settings files. Restart the session only if they do not fire.
 Each carries a
 `// brewcode-meta: version=… generated_by=brewdoc:docsync-setup` line on line 2, so
 an installed copy can be compared byte-for-byte with the plugin's.

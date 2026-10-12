@@ -8,7 +8,7 @@ allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion, Ski
 model: opus
 ---
 
-<!-- brewcode-meta: version=6.4.0 content_version=6.3.0 generated_by=brewcode:convention-setup -->
+<!-- brewcode-meta: version=6.5.0 content_version=6.5.0 generated_by=brewcode:convention-setup -->
 
 <instructions>
 
@@ -20,7 +20,7 @@ model: opus
    (table below). Tie with a destructive mode -> `AskUserQuestion`; with `status` -> `status`; of two
    mutating modes -> the keyword that comes first. No hit or empty -> `install`.
 2. Scope: prose that is not a mode/id/path is still input: take the id, path or target from it.
-3. Ask: at most ONE `AskUserQuestion` (max 4 questions), before any work, only when the answer
+3. Ask: at most ONE `AskUserQuestion` (max 4 questions) to resolve mode and scope, before any work, only when the answer
    changes what gets written. A read-only run asks nothing.
 
 Print once, before the first action (labels literal, values in the conversation language):
@@ -44,7 +44,7 @@ RESULT: <what the user ends up holding>
 | `enable` | `/brewcode:convention-setup enable` | Lifecycle | Loading rule exists | `enable`, `activate` | `включи`, `активируй` | yes |
 | `disable` | `/brewcode:convention-setup disable` | Lifecycle | Loading rule exists | `disable`, `deactivate` | `выключи`, `отключи` | yes |
 | `uninstall` | `/brewcode:convention-setup uninstall` | Lifecycle | None | `uninstall` | `удали установку` | yes |
-| `purge` | `/brewcode:convention-setup purge` | Lifecycle | None | `purge`, `erase` | `очисти полностью`, `сотри` | yes |
+| `purge` | `/brewcode:convention-setup purge` | Lifecycle | None | `purge`, `erase` | `очисти полностью`, `сотри` | yes, destructive |
 | `full` | `/brewcode:convention-setup full` | P0-P8 | None | `full`, `all`, `everything`, `complete` | `полностью`, `всё`, `весь` | yes |
 | `conventions` | `/brewcode:convention-setup conventions` | P0-P6 | None | `conventions`, `patterns`, `etalons`, `extract` | `конвенции`, `паттерны`, `эталоны`, `извлеки` | yes |
 | `rules` | `/brewcode:convention-setup rules` | P0, P7, P7.5, P8 | `.claude/convention/` exists | `rules`, `extract rules` | `правила`, `извлеки правила` | yes |
@@ -358,8 +358,8 @@ AskUserQuestion options:
 Skipped in `conventions` mode (leaves `.claude/rules/` untouched): go to P8. Otherwise follow
 `references/rules-guide.md` §1-§4: extract rule candidates (7.1), detect duplicates against existing
 `.claude/rules/*.md` (7.2), batch 5-7 rules per `AskUserQuestion` (7.3), spawn bc-rules-organizer
-with `{ACCEPTED_RULES_JSON}` (7.4), its plugin-root token replaced by `${CLAUDE_PLUGIN_ROOT}` (the
-brewcode root). The organizer never optimizes or delegates: main runs P5 on its written paths.
+with `{ACCEPTED_RULES_JSON}` (7.4), its plugin-root token replaced by the absolute brewcode root,
+`${CLAUDE_PLUGIN_ROOT}/` minus the trailing slash. The organizer never optimizes or delegates: main runs P5 on its written paths.
 
 ## P7.5: Update Project CLAUDE.md
 

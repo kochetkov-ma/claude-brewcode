@@ -1,7 +1,6 @@
 #!/bin/bash
 set -euo pipefail
-# Check GitHub environment: gh CLI, auth, repo
-# No args needed
+# Check GitHub environment: gh CLI, auth, repo. No args needed
 # Output: structured key=value pairs
 
 echo "=== GitHub Environment Check ==="

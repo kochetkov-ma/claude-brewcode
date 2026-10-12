@@ -1,15 +1,6 @@
 #!/usr/bin/env node
-/**
- * suite-guard.mjs - scripts/text-guard.sh: the BT-F15 snapshot + BT-F29b
- * refusal-to-write sub-gate.
- *
- * Self-contained: every git repo, target file and snapshot dir is generated
- * inside one mkdtemp base. The repo working tree is never touched - fixtures
- * are COPIED out of tests/ and only the copies are rewritten.
- *
- * Assertion policy: unconditional exact-equality / exact-size / exact-set
- * checks with a description; no `if` gates which asserts run.
- */
+// suite-guard.mjs - scripts/text-guard.sh: BT-F15 snapshot + BT-F29b refusal-to-write sub-gate; every git repo/target/snapshot dir in one mkdtemp base.
+// Repo working tree never touched (fixtures COPIED out of tests/, only copies rewritten); exact-equality/size/set checks, no `if` gates which asserts run.
 import { spawnSync } from 'node:child_process';
 import {
   mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, statSync, realpathSync, symlinkSync,
@@ -186,9 +177,7 @@ function makeRepo({ commit = true, nested = false } = {}) {
 }
 
 // ── 5. BT-F15 REGRESSION: a lossy rewrite is caught and undone ─────────────
-// Pre-fix there is no snapshot and no skill-owned gate at all: the rewrite is
-// final and the original exists only in the agent's context. These asserts are
-// the proof that both halves are now on disk.
+// Pre-fix: no snapshot, no skill-owned gate, rewrite final, original only in agent's context; asserts prove both halves on disk.
 {
   const { repo, rel, abs } = makeRepo();
   const origSha = sha(abs);
@@ -230,7 +219,6 @@ function makeRepo({ commit = true, nested = false } = {}) {
     'verification preserves original snapshot bytes');
 }
 
-// GIVEN symlink targets or snapshot destinations, WHEN snapshotting, THEN reject before writing.
 // GIVEN a checkpoint followed by another writer, WHEN restoring, THEN refuse without erasing that writer.
 {
   const { repo, rel, abs } = makeRepo();

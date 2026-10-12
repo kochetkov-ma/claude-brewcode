@@ -46,7 +46,7 @@ RESULT: <what the user ends up holding>
 
 ## Loss Budget per Mode
 
-Content essence is untouchable at light/medium/standard; small deliberate loss is allowed only at deep/max — explicitly reported. Dedup-merged facts count as preserved, never as loss. Every mode mutates in place, so every mode goes through Phase 0 snapshot and the Phase 3 sub-gate.
+Content essence is untouchable at light/medium/standard; small deliberate loss is allowed only at deep/max, explicitly reported. Dedup-merged facts count as preserved, never as loss. Every mode mutates in place: Phase 0 snapshot and Phase 3 sub-gate apply to all.
 
 | Mode | Semantic match target | Allowed loss |
 |------|----------------------|--------------|
@@ -56,7 +56,7 @@ Content essence is untouchable at light/medium/standard; small deliberate loss i
 | Deep | >= 95% + 100% sub-gate (numbers/names/negations/scope) | Word-level drops (A.2, ledgered, gate-neutral) + generic known-facts (A.4, `elided-known`, consumes gate), listed in report |
 | Max | >= 95% + 100% sub-gate (numbers/names/negations/scope) | Small, explicit, user-reviewed loss list |
 
-> The 100% semantic sub-gate is a REFUSAL, not a warning: patch confirmed loss or refuse acceptance under Safe recovery below. The `>= 95%` budget never permits losing a number, path, version, name, negation or scope qualifier. Explicitly authorized replacements are reported as requested changes, not compression loss.
+> The 100% semantic sub-gate is a REFUSAL, not a warning: patch confirmed loss or refuse acceptance under Safe recovery. The `>= 95%` budget never permits losing a number, path, version, name, negation or scope qualifier. Explicitly authorized replacements are reported as requested changes, not compression loss.
 
 ## Smart Auto-Detection
 
@@ -66,11 +66,9 @@ When no flag provided AND input suggests compression (not just optimization):
 2. Classify:
    - LLM-only files (`CLAUDE.md`, `.claude/rules/*.md`, `.claude/agents/*.md`, `.claude/skills/**/SKILL.md`, `KNOWLEDGE.*`, system prompts) → deep candidate
    - `README.md`, `docs/`, API references, user-facing docs → standard candidate
-   - Unknown / mixed → ask user via AskUserQuestion
-3. If confident → tell user: "Selected mode: {mode} for {file} because {reason}"
-4. If ambiguous → AskUserQuestion with mode options
-5. User can override via flags regardless of auto-detection
-6. Apply the Max opt-in rule in Prompt contract.
+   - Unknown / mixed → ask user via AskUserQuestion with mode options
+3. Confident → tell user: "Selected mode: {mode} for {file} because {reason}"
+4. Flags override auto-detection; the Max opt-in rule in Prompt contract applies.
 
 ### Context Hints from Prompt Text
 
@@ -83,7 +81,7 @@ Beyond the Modes keyword columns:
 
 ## Rule ID Quick Reference
 
-Defined per ID in `references/rules-review.md` (loaded at Step 0), never restated here: C.1-C.8 Claude behavior, T.1-T.8 + T.10 token efficiency, S.1-S.8 structure, D.1-D.6 deduplication, R.1-R.3 reference integrity, P.1-P.6 perception, L.1-L.8 LLM comprehension, A.1-A.4 aggressive lossy (deep/max), PQ.1-PQ.13 prompt quality.
+Defined in `references/rules-review.md` (Step 0): C.1-C.8 Claude behavior, T.1-T.8 + T.10 token efficiency, S.1-S.8 structure, D.1-D.6 deduplication, R.1-R.3 reference integrity, P.1-P.6 perception, L.1-L.8 LLM comprehension, A.1-A.4 aggressive lossy (deep/max), PQ.1-PQ.13 prompt quality.
 
 ## Mode-to-Rules Mapping
 
@@ -91,9 +89,9 @@ Defined per ID in `references/rules-review.md` (loaded at Step 0), never restate
 |------|---------|-------|
 | Light | C.1-C.8, T.6, D.1, R.1-R.3, P.1-P.4, L.1-L.8 | Text cleanup + exact-dup removal — no restructuring |
 | Medium | All rules (C + T + S + D + R + P + L) + PQ (prompt-shaped content) | Balanced transformations |
-| Standard | Medium set + `references/standard-compression.md` | 30-50% compression, human-readable, 1 verification round |
-| Deep | Medium set + A.1-A.4 + `references/deep-compression.md` | DICT header, symbol substitutions, aggressive lossy pass, 1-2 verification rounds (conditional) |
-| Max | Deep set + `references/max-compression.md` | Atomic fact-lines, ASCII operators, format-aware tables, 4 mandatory guardrails, 2 verification rounds |
+| Standard | Medium set + `references/standard-compression.md` | Human-readable, 1 verification round |
+| Deep | Medium set + A.1-A.4 + `references/deep-compression.md` | DICT header, symbol substitutions, aggressive lossy pass, 1-2 rounds (second conditional) |
+| Max | Deep set + `references/max-compression.md` | Atomic fact-lines, ASCII operators, format-aware tables, 4 mandatory guardrails, 2 rounds |
 
 > D.5 (cross-file dedup) applies in ANY mode when processing multiple files or a folder. D.6 wrong-merge guard is mandatory wherever D.2/D.3/D.5 run.
 > PQ (prompt-quality rewrite) applies at Medium mode and above, only when content type is a prompt-shaped target (system prompt/CLAUDE.md/agent def/skill doc) — never Light, never generic docs/README.
@@ -104,8 +102,7 @@ A per-file gate cannot catch two writers deleting a fact because each expects th
 
 1. From Phase 1 Explore findings, list repeats in 2+ targets with ONE owning file and pointer text for each other file.
 2. Send this dedup decision list in every Phase 2 brief; writers execute only their assigned rows.
-3. Absent row -> keep the fact. Report additional cross-file suggestions without editing them.
-4. Apply D.6: differing scope/numbers/conditions are distinct facts.
+3. Absent row -> keep the fact; report additional cross-file suggestions without editing. D.6 applies: differing scope/numbers/conditions are distinct facts.
 
 ## Deduplication Pass (All Modes)
 
@@ -121,12 +118,12 @@ Before compression: Light runs D.1 only; Medium/Standard/Deep/Max run D.1-D.4 an
 |---------|-------------|
 | `/brewtools:text-optimize` | Optimize ALL: `CLAUDE.md`, `.claude/agents/*.md`, `.claude/skills/**/SKILL.md` |
 | `/brewtools:text-optimize file.md` | Single file (medium mode) |
-| `/brewtools:text-optimize -l file.md` | Light mode — text cleanup only, structure untouched |
+| `/brewtools:text-optimize -l file.md` | Light mode — text cleanup only |
 | `/brewtools:text-optimize path1.md, path2.md` | Multiple files — parallel processing |
 | `/brewtools:text-optimize -d agents/` | Directory — all `.md` files with specified mode |
-| `/brewtools:text-optimize -s README.md` | Standard mode — 30-50% compression, human-readable |
-| `/brewtools:text-optimize -d CLAUDE.md` | Deep mode — dictionary compression, LLM-only output; review diff after |
-| `/brewtools:text-optimize -x CLAUDE.md` | Max mode — atomic fact-lines + ASCII operators, LLM-only, 2-round verify |
+| `/brewtools:text-optimize -s README.md` | Standard mode |
+| `/brewtools:text-optimize -d CLAUDE.md` | Deep mode — LLM-only output; review diff after |
+| `/brewtools:text-optimize -x CLAUDE.md` | Max mode — LLM-only, 2-round verify |
 | `/brewtools:text-optimize CLAUDE.md` | Auto-detect → selects deep for CLAUDE.md (standard for `README.md`) |
 | `/brewtools:text-optimize "super compress" file.md` | Prompt hint → deep mode |
 
@@ -158,15 +155,15 @@ bash "${CLAUDE_PLUGIN_ROOT}/skills/text-optimize/scripts/text-guard.sh" snapshot
 Capture `RUN_DIR:` for Phase 3 and agent checkpoint reports. Exits: `0` ok, `2` usage/state error, `3` precondition refused (nothing written).
 
 Immediately after each optimizer-owned atomic write/deletion, record that known draft before
-another edit or verification. A checkpoint is ownership evidence, not a backup or inferred ownership:
+another edit or verification. A checkpoint is ownership evidence, not a backup:
 
 ```bash
 bash "${CLAUDE_PLUGIN_ROOT}/skills/text-optimize/scripts/text-guard.sh" checkpoint --run-dir "<RUN_DIR>" "<file>"
 ```
 
 Checkpoint only bytes just written by this optimizer (or its just-completed deletion); if another
-writer changed them before recording, preserve the file and report uncertain recovery. Never
-manufacture a checkpoint at failure/restore time. Refresh it immediately after each owned repair.
+writer changed them first, preserve the file and report uncertain recovery. Never checkpoint at
+failure/restore time. Refresh it immediately after each owned repair.
 
 ### Delegation
 
@@ -259,20 +256,16 @@ Keep `<RUN_DIR>/orig/`; name it in the final report for user diff/deletion. Safe
 - Load `references/deep-compression.md` for symbol/abbreviation tables
 - Dedup pass (D.1-D.6) + dedup ledger before symbol substitution (see deep-compression.md Redundancy Factoring + Token-Class Keep/Drop Heuristics)
 - Aggressive lossy pass (A.1-A.4) after dedup: line fusion (A.1) -> paraphrase (A.3) -> word drop (A.2) -> knowledge elision (A.4); record every A.2/A.4 drop in loss ledger (dropped -> reason)
-- Scan text for terms occurring 3+ times → build DICT header
-- Apply symbol substitutions, filler removal, structural compression
-- Apply existing rules (C, T, S, R, P) in addition to deep techniques
+- Terms occurring 3+ times → DICT header; apply symbol substitutions, filler removal, structural compression, plus existing rules (C, T, S, R, P)
 
 ### Phase 2: Verify Round 1
 - Writer self-check, without subagent delegation; independent acceptance is the skill's Phase 3
 - Extract a numbered atomic-fact inventory from ORIGINAL, check each in COMPRESSED, label kept/merged/lost/distorted; match % = (kept + merged) / total; verify no two distinct facts merged into one (D.6)
 - A.1 fused / A.3 paraphrased facts count as kept/merged; A.4 elisions labeled `elided-known` in loss list and count as loss against the 95% gate
-- If >= 95% → done
-- If < 95% → return loss list for patching
+- >= 95% → done; < 95% → return loss list for patching
 
 ### Phase 3: Patch + Verify Round 2
-- Apply patches for missing facts
-- Re-verify, including the 100% sub-gate on numbers/names/negations/scope qualifiers
+- Apply patches for missing facts; re-verify, including the 100% sub-gate on numbers/names/negations/scope qualifiers
 - Still < 95% or sub-gate FAIL -> refuse acceptance and report losses; apply Safe recovery without discarding concurrent edits
 - Output final result + statistics
 - Optional reconstruction probe: expand compressed back to prose, diff entities/numbers vs original (entities are lost first)
@@ -288,8 +281,7 @@ Keep `<RUN_DIR>/orig/`; name it in the final report for user diff/deletion. Safe
 
 ### Phase 2: Verify Round 1 — Claim Inventory
 - Self-check inside the optimizing agent (the INDEPENDENT gate is the skill's Phase 3)
-- Decompose original into numbered atomic claims (one predicate per claim), label each kept/merged/lost/distorted
-- Semantic match % = (kept + merged) / total; merged (deduplicated) facts = preserved; A.1 fused / A.3 paraphrased facts = kept/merged; A.4 elisions labeled `elided-known` = loss against the 95% gate
+- Decompose original into numbered atomic claims (one predicate per claim), label each kept/merged/lost/distorted; match % and labels as in Deep Round 1
 - Gate >= 95% -> proceed; < 95% -> return loss list
 
 ### Phase 3: Patch + Verify Round 2 — Self-QA Probe (MANDATORY)
@@ -321,19 +313,14 @@ Keep `<RUN_DIR>/orig/`; name it in the final report for user diff/deletion. Safe
 |------|--------|
 | Snapshot first | No edit without disk Phase 0 snapshot and clean targets or explicit named-edit authorization. `!=` editing straight from the prompt |
 | Refuse, don't warn | Patch confirmed loss or refuse acceptance under Safe recovery; never accept a lossy file with a warning |
-| Preserve | Names, numbers, dates, URLs, file paths, versions, ports, sizes |
-| Preserve | CLI flags/options verbatim; model IDs byte-exact; thresholds/gates/percentages exactly as stated |
-| Preserve | Negative rule semantics (`!=` notation in deep mode) |
-| Preserve | At least one example per rule with examples |
-| Preserve | Scope qualifiers ("every section, not just the first") in every mode |
-| Deep/Max | DICT header at document start |
-| Deep/Max | A.2/A.4 drops recorded in loss ledger; never elide project-specific facts (names, numbers, paths, versions, prohibitions) |
+| Preserve | Names, numbers, dates, URLs, file paths, versions, ports, sizes; CLI flags/options verbatim; model IDs byte-exact; thresholds/gates/percentages exactly as stated; negative rule semantics (`!=` notation in deep mode); at least one example per rule with examples; scope qualifiers ("every section, not just the first") in every mode |
+| Owned blocks | A block delimited by another tool's begin/end markers (e.g. `<!-- BEGIN brewcode:semble -->` .. `<!-- END brewcode:semble -->`) is owned by that setup, whose upgrade re-creates it: never compress, move, dedup or delete it, both marker lines included; report it as `managed by <setup>` |
+| Deep/Max | DICT header at document start; A.2/A.4 drops recorded in loss ledger, never eliding project-specific facts (names, numbers, paths, versions, prohibitions) |
 | Max only | Atomic fact-lines, ASCII operators over unicode glyphs, 2 mandatory verification rounds |
 | Dedup | Accidental dups merged; intentional emphasis <= 2/doc, 2nd occurrence short @ END (D.4); merged facts = preserved, never counted as loss |
 | Output | Original/compressed lines, words, characters, bytes, ratio and semantic match %. Tokens require named tokenizer; chars/4 is rough proxy |
 
-Count words/bytes/characters with `wc -w`/`wc -c`/`wc -m`; name the method/encoding.
-Compression targets are guides, never achieved results without measurement. Preserve facts over ratio.
+Count words/bytes/characters with `wc -w`/`wc -c`/`wc -m`; name the method/encoding. Targets are guides, never results without measurement. Preserve facts over ratio.
 
 ## Output Format
 
@@ -359,4 +346,4 @@ Compression targets are guides, never achieved results without measurement. Pres
 
 ## Anti-Patterns
 
-`references/rules-review.md` § Rules NOT Recommended (loaded at Step 0) is the list.
+`references/rules-review.md` § Rules NOT Recommended.

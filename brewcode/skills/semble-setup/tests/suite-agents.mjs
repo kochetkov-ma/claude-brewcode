@@ -1,10 +1,6 @@
 #!/usr/bin/env node
-/**
- * Suite E — project agent migration (scripts/semble-agents.sh).
- * Contract: DESIGN §9.9 + §11. Runs entirely inside an isolated temp base;
- * never touches the real ~/.claude, the repo tree or any cache.
- * Assertion policy: unconditional exact-equality checks with a description.
- */
+// Suite E — project agent migration (scripts/semble-agents.sh), DESIGN §9.9 + §11.
+// Isolated temp base only, never real ~/.claude, repo tree or any cache; unconditional exact-equality checks.
 import { spawnSync } from 'node:child_process';
 import {
   mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync,
@@ -124,10 +120,7 @@ const ADD2 = [SEARCH, RELATED];
 const crlf = (s) => s.replace(/\n/g, '\r\n');
 const nCR = (s) => s.split('\r').length - 1;
 
-// ────────────────────────────────────────────────────────────────────────────
-// MAIN project: one fixture per `tools:` form. No conflicts here, so a full
-// `apply --yes` must exit 0.
-// ────────────────────────────────────────────────────────────────────────────
+// ── MAIN project: one fixture per `tools:` form; no conflicts, so full `apply --yes` must exit 0 ──
 const P = join(BASE, 'main');
 const ENV = { SEMBLE_PROJECT_ROOT: P, SEMBLE_TEST_HOME: join(BASE, 'home') };
 mkdirSync(join(BASE, 'home'), { recursive: true });
@@ -378,8 +371,7 @@ check(
 );
 
 // ── ownership record (SS04) ─────────────────────────────────────────────────
-// Whatever `apply` did NOT insert must survive `--revert`; the record is what
-// makes that decidable.
+// Whatever `apply` did NOT insert must survive `--revert`; the record makes that decidable.
 const LEDGER1 = ledgerOf(P);
 const LEDGER_EXPECTED = {
   '.claude/agents/b-flow.md': [],
@@ -551,10 +543,7 @@ for (const c of CASES.filter((x) => x.action !== 'changed')) {
   check(`revert.untouched[${c.file}]`, revTree[c.file], c.before, 'revert leaves non-migrated files alone');
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// No record at all (revert without a preceding apply, or a state.json from an
-// older version): authorship is unknown, so nothing may be stripped.
-// ────────────────────────────────────────────────────────────────────────────
+// ── No record (revert w/o prior apply, or older state.json): authorship unknown -> nothing stripped ──
 const PN = join(BASE, 'norecord');
 const ENVN = { SEMBLE_PROJECT_ROOT: PN, SEMBLE_TEST_HOME: join(BASE, 'home') };
 writeAgent(PN, 'n1.md', `---\nname: n1\ntools: [Read, ${SEARCH}, ${RELATED}]\n---\nBody\n`);
@@ -583,9 +572,7 @@ check(
 check('noRecord.bytes', snapshotMd(PN), nBefore, 'a revert with no record leaves every byte in place');
 check('noRecord.noState', existsSync(statePath(PN)), false, 'revert never writes state.json');
 
-// ────────────────────────────────────────────────────────────────────────────
-// CONFLICT project: disallowedTools must never be silently overridden.
-// ────────────────────────────────────────────────────────────────────────────
+// ── CONFLICT project: disallowedTools must never be silently overridden ──
 const PC = join(BASE, 'conflict');
 const ENVC = { SEMBLE_PROJECT_ROOT: PC, SEMBLE_TEST_HOME: join(BASE, 'home') };
 const CONFLICTS = {
@@ -620,9 +607,7 @@ const cApply = run(['apply', '--yes'], ENVC);
 check('conflict.applyExit', cApply.status, 3, 'apply with conflicts exits 3');
 check('conflict.noWrite', snapshotMd(PC), cBefore, 'a conflicting file is never written');
 
-// ────────────────────────────────────────────────────────────────────────────
-// Scope, usage and empty-tree behaviour
-// ────────────────────────────────────────────────────────────────────────────
+// ── Scope, usage and empty-tree behaviour ──
 const HOME = join(BASE, 'globalhome');
 writeAgent(HOME, 'g-global.md', '---\nname: g\ntools: [Read]\n---\nBody\n');
 const gBefore = snapshotMd(HOME);
@@ -705,10 +690,7 @@ check(
   '--json prints one parseable JSON object and nothing else',
 );
 
-// ────────────────────────────────────────────────────────────────────────────
-// Failure path: a write that cannot happen must report `failed` and damage
-// nothing (read-only agents dir -> the backup copy itself fails).
-// ────────────────────────────────────────────────────────────────────────────
+// ── Failure path: impossible write reports `failed`, damages nothing (read-only agents dir -> backup copy fails) ──
 const PF = join(BASE, 'readonly');
 writeAgent(PF, 'w-locked.md', '---\nname: w\ntools: [Read]\n---\nBody\n');
 const fBefore = snapshotMd(PF);
@@ -726,10 +708,8 @@ check(
 check('failed.reason', fJson.files[0].reason, 'write-error', 'the failure reason is write-error');
 check('failed.bytes', snapshotMd(PF), fBefore, 'a failed write leaves the file byte-identical');
 
-// ────────────────────────────────────────────────────────────────────────────
-// Backup lifecycle: a mixed-EOL file (CRLF header, LF tools block) makes the
-// inserted LF lines fail the EOL arithmetic — the one moment a backup matters.
-// ────────────────────────────────────────────────────────────────────────────
+// ── Backup lifecycle: mixed-EOL file (CRLF header, LF tools block) -> inserted LF lines fail EOL arithmetic ──
+// The one moment a backup matters.
 const PV = join(BASE, 'verifyfail');
 const V_BEFORE = '---\r\nname: v\r\ndescription: mixed eol\r\ntools:\n  - Read\n---\r\nBody\r\n';
 writeAgent(PV, 'v-broken.md', V_BEFORE);
@@ -763,9 +743,7 @@ check(
   'exactly one backup remains, for the one file that failed',
 );
 
-// ────────────────────────────────────────────────────────────────────────────
-// Byte-preservation proof: everything outside the `tools:` line is identical.
-// ────────────────────────────────────────────────────────────────────────────
+// ── Byte-preservation proof: everything outside the `tools:` line is identical ──
 const stripToolsRegion = (s) => {
   const lines = s.split(/(?<=\n)/);
   const out = [];

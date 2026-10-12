@@ -1,6 +1,7 @@
 ---
 doc_type: llm
 version: "{PLUGIN_VERSION}"
+content_version: "{CONTENT_VERSION}"
 generated_by: "{GENERATED_BY}"
 last_updated: "{LAST_UPDATED}"
 ---
@@ -33,71 +34,17 @@ project rule, the **project rule WINS**. Cite the project rule # when enforcing.
 
 ## Type Hints
 
-| Location | Requirement |
-|----------|-------------|
-| Function parameters | All params typed |
-| Function returns | Return type annotated |
-| Class attributes | Typed in `__init__` or class body |
+All params typed, return type annotated; class attributes typed in `__init__` or class body.
 
 > **Python 3.10+:** `X | Y` over `Union[X, Y]`, `list[X]` over `List[X]`.
-
-```python
-# Fully typed
-def process_user(user_id: int, options: dict[str, Any] | None = None) -> User:
-    ...
-```
 
 ## Docstrings (Google style)
 
 Module + public class + public function docstrings required; private (`_*`) optional.
 
-```python
-def fetch_user(user_id: int, include_profile: bool = False) -> User | None:
-    """Fetch user by ID.
-
-    Args:
-        user_id: Unique identifier.
-        include_profile: Whether to include full profile data.
-
-    Returns:
-        User if found, None otherwise.
-
-    Raises:
-        DatabaseError: If the database connection fails.
-    """
-```
-
-## Naming
-
-| Type | Convention | Example |
-|------|------------|---------|
-| Modules | snake_case | `user_service.py` |
-| Classes | PascalCase | `UserService` |
-| Functions | snake_case | `get_user_by_id` |
-| Constants | UPPER_SNAKE | `MAX_RETRIES` |
-| Private | `_prefix` | `_internal_method` |
-
 ## Imports (isort order)
 
 1. Standard library  2. Third-party  3. Local. Absolute imports, one per line, no wildcards.
-
-```python
-from collections.abc import Callable
-from pathlib import Path
-
-import httpx
-from pydantic import BaseModel
-
-from app.models import User
-```
-
-## Classes
-
-| Pattern | When |
-|---------|------|
-| `@dataclass` | Simple data containers |
-| `@dataclass(frozen=True)` | Immutable values |
-| `pydantic.BaseModel` | Validation needed (API inputs) |
 
 ## Error Handling
 
@@ -106,16 +53,6 @@ from app.models import User
 | Specific catch (no bare `except:`) | REQ |
 | Chain exceptions `raise X from e` | REQ |
 | Context managers for resources | REQ |
-
-```python
-try:
-    user = fetch_user(user_id)
-except UserNotFoundError:
-    logger.warning("User %s not found", user_id)
-    raise
-except DatabaseError as e:
-    raise ServiceError("Database unavailable") from e
-```
 
 ## Testing (pytest)
 
@@ -153,22 +90,6 @@ def test_get_user_returns_user_when_exists(self, user_service, sample_user):
 
 Black (format), Ruff (lint), isort (imports), mypy (types). Prefer comprehensions for simple transforms;
 generator expressions for large/lazy iteration.
-
-## Common Violations
-
-| # | Violation | Fix |
-|---|-----------|-----|
-| 1 | Missing type hints | Add param + return types |
-| 2 | No docstring on public API | Add Google-style docstring |
-| 3 | Bare `except:` | Catch specific exceptions |
-| 4 | `print()` in prod | Use logging |
-| 5 | Wildcard import | Import specific names |
-| 6 | Missing `from e` in reraise | Chain exceptions |
-| 7 | Mutable default arg | Use `None` + conditional |
-| 8 | `Union[X, Y]` on 3.10+ | Use `X | Y` |
-| 9 | Logged/committed secret | Env + validation only (P0) |
-| 10 | Floating/`@1.0.0` dependency | Pin exact `X.Y.Z` |
-| 11 | Reinventing stdlib/existing module | Reuse-first: grep + import |
 
 ## Search Locations (reuse-first)
 

@@ -1,9 +1,5 @@
-/**
- * Shared assertion + reporting primitives for the provider-switch suites.
- *
- * Assertion policy (CLAUDE.md): unconditional exact-equality checks, each with a description.
- * No inequalities, no truthiness, no branching inside a check.
- */
+// Shared assertion + reporting primitives for provider-switch suites.
+// Policy (CLAUDE.md): unconditional exact-equality checks, each described; no inequalities, truthiness or branching.
 import { mkdtempSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';

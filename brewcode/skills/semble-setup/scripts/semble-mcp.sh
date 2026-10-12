@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
-# semble-mcp.sh — detect/register/repair/remove the `semble_code` MCP server
-# (DESIGN §6, §9.3). Configuration truth is read from the active config dir's
-# .claude.json (sc_claude_json) and <root>/.mcp.json; `claude mcp get` is used only as a connectivity signal.
+# semble-mcp.sh — detect/register/repair/remove `semble_code` MCP (DESIGN §6, §9.3); truth: config-dir .claude.json + <root>/.mcp.json, `claude mcp get` = connectivity only
 set -euo pipefail
 SC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source-path=SCRIPTDIR source=lib/semble-common.sh
@@ -152,18 +150,8 @@ mcp_checkpoint() { # phase -> awaiting_reload, ALWAYS before an add (DESIGN §9.
   "$STATE_SH" phase awaiting_reload >/dev/null
 }
 
-# The MCP server is USER-scoped, so on the second project of the same machine
-# `add` finds it already registered and returns without ever creating that
-# project's state.json - and the state file is born only inside an MCP mutation.
-# SKILL.md prescribed the checkpoint as a follow-up block the model had to
-# remember to run; a skipped block left the project with no state file at all.
-# The script guarantees it instead.
-#
-# Absent, prereq_ready or error -> the honest awaiting_reload checkpoint: the
-# server exists but this session still cannot see it. verifying, ready and
-# disabled -> an IDENTITY transition, which runs st_refresh_owned (cacheRoot,
-# repoHash, resumePrompt) without walking a verified project backwards out of
-# `ready` or silently re-enabling one the user disabled.
+# USER-scoped server: 2nd project's `add` finds it registered -> script still creates state.json.
+# absent/prereq_ready/error -> awaiting_reload; verifying/ready/disabled -> identity refresh, never regress/re-enable.
 mcp_checkpoint_present() {
   local p
   if [ "${SEMBLE_DRY_RUN:-}" = "1" ]; then
@@ -177,14 +165,8 @@ mcp_checkpoint_present() {
   esac
 }
 
-# Backs up every file an MCP mutation can rewrite (DESIGN §9.3). `.mcp.json` is
-# backed up whenever it exists, NOT when $SCOPE = project: `repair` forces
-# SCOPE=user yet removes every scope in `mcp_scopes`, so keying the backup off
-# $SCOPE left an un-backed-up project file holding unrelated servers.
-# Every taken backup is also RECORDED, as a "<original>\t<backup>" pair, so a
-# failed mutation can put the file back (mcp_rollback) and so the path reaches
-# the caller in --json mode too — every in-skill caller passes --json, and the
-# human-only echo used to hide the only recovery handle there is.
+# Backs up every MCP-mutable file (DESIGN §9.3); `.mcp.json` whenever it exists (repair clears all scopes, !=$SCOPE).
+# Records "<original>\t<backup>" pairs -> mcp_rollback + path reported in --json mode too.
 mcp_backup_configs() {
   local f b
   MCP_BACKUPS=""
@@ -212,10 +194,7 @@ mcp_backup_abort() { # $1 state
   exit 1
 }
 
-# Restores every file mcp_backup_configs copied. Called on EVERY non-success exit
-# of a mutation: `remove` clears several scopes and `repair` is remove-then-add,
-# so a step that fails midway would otherwise leave a half-removed registration
-# behind while the caller is told the operation failed and nothing else.
+# Restores mcp_backup_configs copies on EVERY non-success mutation exit -> no half-removed registration.
 mcp_rollback() {
   [ -n "$MCP_BACKUP_PAIRS" ] || return 0
   if [ "${SEMBLE_DRY_RUN:-}" = "1" ]; then
@@ -236,9 +215,7 @@ EOF
   return 0
 }
 
-# Degraded fallback: `claude mcp add` has no alwaysLoad flag, so an entry it
-# writes is missing the key and detect will report stale_args. Only used when
-# add-json itself fails.
+# Fallback only when add-json fails: `claude mcp add` has no alwaysLoad flag -> detect reports stale_args.
 run_add() { # returns 0 on success
   if [ "${SEMBLE_DRY_RUN:-}" = "1" ]; then
     sc_dry "$(sc_mcp_add_cmd)"
@@ -280,10 +257,8 @@ process.stdout.write(JSON.stringify({schema:1,status:process.env.SC_S,
   note:process.env.SC_N}));'
 }
 
-# The ONLY writer of completed:["mcp"]. semble-reminder.mjs, semble-prefetch.mjs
-# and semble-subagent.mjs each refuse to emit anything until that entry exists,
-# so a `repair` that restores a working registration has to write it exactly the
-# way `add` does — otherwise the MCP works and three hooks stay silent forever.
+# The ONLY writer of completed:["mcp"]: `repair` writes it like `add`, else status
+# reports the mcp install step unrecorded on a working registration.
 mcp_patch_completed() {
   "$STATE_SH" patch "$(SC_C="$CACHE_ROOT" SC_SC="$SCOPE" node -e '
 process.stdout.write(JSON.stringify({scope:process.env.SC_SC,cacheRoot:process.env.SC_C,
@@ -390,10 +365,8 @@ process.stdout.write(JSON.stringify({schema:1,add:process.env.SC_A,addJson:proce
     DUMP="$(sc_mcp_dump)"
     STATE="$(sc_mcp_state)"
     [ "$STATE" = "malformed" ] && sc_die "ABORT: unparseable MCP config; fix the file by hand, nothing was written"
-    # `upstream_unpinned` is also reported when zero scopes hold semble_code
-    # (only the upstream `semble` server is present), so presence is checked
-    # before the "nothing to do" exit — repair only fixes stale_args /
-    # wrong_scope / duplicate (DESIGN §9.3).
+    # `upstream_unpinned` also fires with zero semble_code scopes -> check presence before "nothing to do".
+    # repair fixes only stale_args / wrong_scope / duplicate (DESIGN §9.3).
     PRESENT="$(mcp_present "$DUMP")"
     case "$STATE" in
       correct|upstream_unpinned)
@@ -447,10 +420,7 @@ process.stdout.write(JSON.stringify({schema:1,add:process.env.SC_A,addJson:proce
       emit_result unchanged absent "$SEMBLE_SERVER_NAME is not registered in any scope"
       exit 0
     fi
-    # Unqualified removal is a lifecycle operation: it clears EVERY scope holding
-    # semble_code, because removing only the default scope while another one keeps
-    # serving reports `ok` + exit 0 over a registration that is still live.
-    # An explicit `--scope X` is a targeted request and stays single-scope.
+    # Unqualified remove clears EVERY semble_code scope (else `ok` over a live one); `--scope X` stays single-scope.
     if [ "$SCOPE_EXPLICIT" = "1" ]; then
       MCP_TARGET_SCOPES="$SCOPE"
     else

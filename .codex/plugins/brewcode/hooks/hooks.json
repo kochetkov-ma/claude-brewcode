@@ -12,18 +12,6 @@
           }
         ]
       }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${PLUGIN_ROOT}/hooks/forced-eval.mjs\"",
-            "timeout": 2,
-            "statusMessage": "Checking Brewcode skills"
-          }
-        ]
-      }
     ]
   }
 }

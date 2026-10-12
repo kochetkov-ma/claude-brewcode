@@ -8,7 +8,7 @@ it prescribes a mode. `$BC` / `$BT` / `$BD` = the plugin roots from Phase 0.
 | Row | `upgrade` rewrites | Left as it was |
 |-----|--------------------|----------------|
 | 1 teams | the three header rows of `team.md` (version, content version, last update); re-copies `trace-ops.sh` | per-agent `Version` cells of agents the run did not touch |
-| 2 semble | re-runs `semble-guidance.sh install --part all`: the rule's stamp, all five hooks (no user-modified guard), the settings entries | a prose hand-edit of `semble-first.md` |
+| 2 semble | re-runs `semble-guidance.sh install --part all`: the rule's stamp, the three live hooks (no user-modified guard), the settings entries; deletes retired hooks, their markers and registrations | a prose hand-edit of `semble-first.md` |
 | 3 superreview | restamps `SKILL.md`, `references/{agent-prompt,report-template,scope}.md` and the per-stack ref, printing `RESTAMP:` per file even when the delta report says `IDENTICAL` | `.template-baseline/`: `upgrade` only stages the new templates and prints the promote command (`rm -rf <baseline> && mv <staging>/.template <baseline> && rm -rf <staging>`) |
 | 4 task-board | step `U5b` restamps every emitted carrier, also when every content row is `SKIP` | - |
 | 6 agent-deadline | replays the install at the same budget (`defaultMinutes` / `byAgentType` / `hardStopRatio` read back from the config): both hooks, registrations, JSON stamps | the `enabled` value: a disabled setup stays disabled |
@@ -41,7 +41,7 @@ Report each as a finding with what to diff and port by hand, never dressed in a 
 
 ## Row 2 semble
 
-- `semble-explore.mjs` is retired for good (superseded by `semble-subagent.mjs`). Still in `.claude/hooks/`, it appears in `guidance.retired`: the install predates the migration.
+- Retired for good: `semble-explore.mjs` (superseded by `semble-subagent.mjs`), `semble-reminder.mjs`, `semble-prefetch.mjs`. No plugin asset, no byte pair: never `modified` or `version unknown`. A leftover file is in `guidance.retired`, a leftover registration in `guidance.retiredWired`: `partial`, *Found* `retired: <names> - stale (remove via upgrade)`, Command `upgrade`, matching `semble-setup status` (`partial`, `nextStep` `upgrade`).
 - The repo-root `.sembleignore` is absent from installs predating it: report presence in *Found*. `install_candidates` appends a `# --- brewcode:semble measured candidates ---` block measured from this repo after the template copy, so a healthy file differs from `assets/sembleignore.template` by construction, and the installer's `ignore: up to date` does not mean byte-equal.
 - `semble-setup status` compares the same stamp pair (`guidance.content_version` vs `guidance.templateContentVersion`) and on a mismatch drops `ready` to `partial` with `nextStep: Run /brewcode:semble-setup upgrade`; a disagreement with this dashboard is a finding to name. A `partial` there whose `nextStep` is `resume` means warm/smoke unproven (an offline `install`/`enable` exits 3 with `"status":"skipped"`), not a version signal.
 - A rule with no stamp at all (pre-5.0) reads `LEGACY-NONE` here.

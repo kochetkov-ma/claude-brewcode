@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# semble-cache.sh — inspect and (guardedly) delete semble cache directories
-# (DESIGN §6.5, §6.6, §9.4). Semble >=0.5.5 stores exact content variants as
-# `index` (code only) or `index-<sorted-content-set>` below the hashed repo dir.
+# semble-cache.sh — inspect and (guardedly) delete semble cache directories (DESIGN §6.5, §6.6, §9.4).
+# Semble >=0.5.5 stores exact content variants as `index` (code only) or `index-<sorted-content-set>` below the hashed repo dir.
 set -euo pipefail
 SC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source-path=SCRIPTDIR source=lib/semble-common.sh
@@ -150,9 +149,8 @@ process.stdout.write(JSON.stringify({
 guard_repo_dir() { # $1 target — must be <code root>/<64-hex>
   local t="$1" leaf parent
   [ -n "$t" ] || { sc_err "refusing to delete '': the repo cache directory could not be resolved (repo path missing?)"; exit 1; }
-  # The parent check below is only worth anything if the code root itself is the
-  # real one: SEMBLE_CACHE_ROOT_CODE can point anywhere, so assert its leaf too
-  # (same contract guard_root enforces for purge-root).
+  # Parent check below only counts if code root is real: SEMBLE_CACHE_ROOT_CODE can point anywhere,
+  # so assert its leaf too (same contract guard_root enforces for purge-root).
   guard_root "$CODE_ROOT" semble-code
   leaf="$(basename "$t")"
   parent="$(dirname "$t")"

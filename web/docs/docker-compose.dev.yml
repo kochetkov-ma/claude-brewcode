@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
     image: brewcode-docs:dev
-    ports:
+    ports: !override
       - "8080:80"
     volumes:
       - ./Caddyfile.dev:/etc/caddy/Caddyfile:ro

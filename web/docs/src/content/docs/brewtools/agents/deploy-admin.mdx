@@ -8,11 +8,7 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 # Deploy Admin
 
 <Callout type="caution">
-Published commits, tags, and releases require explicit verification and recovery planning. Deploy Admin classifies operations before execution. This ordinary subagent returns MODIFY, SERVICE, DELETE, and PRIVILEGE operations as approval envelopes unless an incoming token authorizes their exact commands.
-</Callout>
-
-<Callout type="caution">
-**One agent per target.** A multi-repo, multi-environment or multi-service deployment is split per target — the agent will not loop one run over staging and prod, or over several repos. Send them as separate tasks, or take the split proposal it returns.
+Published commits, tags, and releases require explicit verification and recovery planning. Deploy Admin classifies every operation before execution; see Approval contract and Scope guard below for how approvals and task size are handled.
 </Callout>
 
 <Callout type="tip">
@@ -30,16 +26,9 @@ Published commits, tags, and releases require explicit verification and recovery
 | Safety gate | Returns MODIFY / SERVICE / DELETE / PRIVILEGE operations as an `APPROVAL REQUIRED` envelope instead of running them |
 | Scope | One bounded unit per run; one agent per repo / environment / service |
 
-<Callout type="note" title="What's new in 6.2.0">
-- Agent prompt tightened for density — shorter prose, `Return Contract` now opens the agent definition, worked example kept.
-- `## GitHub Config`, `## Workflow Inventory`, `## Server Targets`, and `## Secrets` merged into one `## Project Config` table — same facts, same probe/`NEEDS-INPUT` fallbacks, easier to scan.
-- The rule that a derived GitHub target still carries into every envelope's `HOST:` field, and is never self-approved for a MODIFY+ operation, is kept in the merged table.
-- Safety Rules, Compound Rules, the Release Flow, and the Approval Contract mechanics are all unchanged.
-</Callout>
+## What it does
 
-## Where its facts come from
-
-The agent carries no baked-in inventory. At task start it reads `CLAUDE.local.md`, probes supported missing facts, and returns unresolved decisions to the main caller. It never invents targets or workflows.
+Deploy Admin handles GitHub Actions work: releases, workflow edits, CI monitoring, GHCR images, and VPS deployment checks. The agent carries no baked-in inventory. At task start it reads `CLAUDE.local.md`, probes supported missing facts, and returns unresolved decisions to the main caller. It never invents targets or workflows.
 
 | Fact | Read | Probe | If still missing |
 |------|------|-------|-------------------|
@@ -51,6 +40,69 @@ The agent carries no baked-in inventory. At task start it reads `CLAUDE.local.md
 <Callout type="caution">
 **Names only.** The agent never reads, prints, or logs a secret value.
 </Callout>
+
+## When to use
+
+- **Release a new version** — bump semver, generate changelog, commit, tag, push, verify CI green
+- **Create or update a workflow** — write workflow YAML, add matrix, configure caching, set up GHCR push
+- **Monitor CI** — check why a run failed, fetch step logs, rerun failed jobs
+- **Publish a draft release** — review notes, attach assets, flip draft to published
+- **Deploy to VPS** — dispatch workflow, watch run live, SSH health-check the server after deploy
+- **Manage secrets** — list names (never values), set from file, clean up stale entries
+
+## Examples
+
+```
+# Release a new version with full pipeline
+"Release v3.6.0 with changelog from recent commits"
+
+# Investigate a failed run
+"Check why the last docs workflow failed and suggest a fix"
+
+# Trigger a deploy and verify it landed
+"Trigger deploy-docs workflow and verify health on the VPS"
+```
+
+## Flow
+
+<Steps>
+  <li>
+    <div>
+      <strong>Read context</strong>
+      <p>Reads <code>CLAUDE.local.md</code> for GitHub config, workflow inventory, server targets, and secret names. Verifies <code>gh auth status</code> — wrong user stops everything before touching any resource.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Classify operations</strong>
+      <p>Every planned command is assigned a safety level: READ (free), CREATE (free), MODIFY (confirm), SERVICE (confirm), DELETE (always confirm), PRIVILEGE (always confirm). Compound pipelines inherit the highest level of any constituent command.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Emit approval envelope</strong>
+      <p>Gather evidence and return exact envelopes for operations requiring approval (see Approval contract). Wrong targets, branches, or secret exposure stop execution.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Execute operations</strong>
+      <p>Run only approved operations: workflow dispatch, release publication, stdin-based secret setting, exact tag-ref pushes, or registry publication. Keep release preparation and publication in the project's approved transaction order, and checkpoint each completed command.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Verify</strong>
+      <p>Resolves the CI run for the exact pushed SHA and watches it with <code>gh run watch --exit-status</code> — never the newest rows in <code>gh run list</code>, which can show an unrelated run as green. Also checks release state and deployment health via SSH. For plugin releases, also verifies the plugin cache updated correctly.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Report</strong>
+      <p>Outputs a structured table: repository, task, operations executed, highest safety level reached, and per-check verification results. No silent failures.</p>
+    </div>
+  </li>
+</Steps>
 
 ## Approval contract
 
@@ -96,69 +148,6 @@ The agent sizes the task before it touches CI.
 How this changes your request: "release v3.6.0 in staging" and "promote v3.6.0 to prod" are two tasks,
 not one. Send them separately, or send the broad request and approve the split proposal that comes back.
 
-## When to use
-
-- **Release a new version** — bump semver, generate changelog, commit, tag, push, verify CI green
-- **Create or update a workflow** — write workflow YAML, add matrix, configure caching, set up GHCR push
-- **Monitor CI** — check why a run failed, fetch step logs, rerun failed jobs
-- **Publish a draft release** — review notes, attach assets, flip draft to published
-- **Deploy to VPS** — dispatch workflow, watch run live, SSH health-check the server after deploy
-- **Manage secrets** — list names (never values), set from file, clean up stale entries
-
-## Examples
-
-```
-# Release a new version with full pipeline
-"Release v3.6.0 with changelog from recent commits"
-
-# Investigate a failed run
-"Check why the last docs workflow failed and suggest a fix"
-
-# Trigger a deploy and verify it landed
-"Trigger deploy-docs workflow and verify health on the VPS"
-```
-
-## Flow
-
-<Steps>
-  <li>
-    <div>
-      <strong>Read context</strong>
-      <p>Reads <code>CLAUDE.local.md</code> for GitHub config, workflow inventory, server targets, and secret names. Verifies <code>gh auth status</code> — wrong user stops everything before touching any resource.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Classify operations</strong>
-      <p>Every planned command is assigned a safety level: READ (free), CREATE (free), MODIFY (confirm), SERVICE (confirm), DELETE (always confirm), PRIVILEGE (always confirm). Compound pipelines inherit the highest level of any constituent command.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Emit approval envelope</strong>
-      <p>Gather evidence and return exact envelopes for operations requiring approval. The incoming APPROVED token authorizes only named commands; recheck their preconditions. Wrong targets, branches, or secret exposure stop execution.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Execute operations</strong>
-      <p>Run only approved operations: workflow dispatch, release publication, stdin-based secret setting, exact tag-ref pushes, or registry publication. Keep release preparation and publication in the project's approved transaction order, and checkpoint each completed command.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Verify</strong>
-      <p>Resolves the CI run for the exact pushed SHA and watches it with <code>gh run watch --exit-status</code> — never the newest rows in <code>gh run list</code>, which can show an unrelated run as green. Also checks release state and deployment health via SSH. For plugin releases, also verifies the plugin cache updated correctly.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Report</strong>
-      <p>Outputs a structured table: repository, task, operations executed, highest safety level reached, and per-check verification results. No silent failures.</p>
-    </div>
-  </li>
-</Steps>
-
 <details>
 <summary>Internals — safety levels and release pipeline</summary>
 
@@ -182,8 +171,6 @@ Compound rules:
 | `curl \| bash`, `wget && chmod +x` | PRIVILEGE (arbitrary execution) |
 | Multiple operations in one script | Highest level among all operations |
 | Draft release + undraft (`gh release edit --draft=false`) | SERVICE (publishes the release) |
-
-Secret names are listed, never their values — the agent will not read, print, or log a secret value.
 
 ### gh CLI conventions
 
@@ -263,7 +250,7 @@ Missing credentials return an unresolved input requirement to the main caller.
 
 Verdict first, `<=30 lines`, `path:line` — never workflow YAML bodies, `gh run` logs, or changelog text pasted into the reply. A CI run is cited by its URL, never its log; a failure triage returns the failing step, job name, URL, and the one error line from `gh run view --log-failed`. Full logs, long diffs, and per-file version audits go to `.claude/reports/YYYYMMDD-HHMMSS_deploy/`, returned as a path.
 
-[`/brewtools:agent-return-setup`](/brewtools/skills/agent-return-setup/) enforces this at ~1000 / ~2500 est-tokens when installed; the contract itself ships unconditionally.
+[`/brewtools:agent-return-setup`](/brewtools/skills/agent-return-setup/) enforces this at ~2500 / ~6000 est-tokens when installed; the contract itself ships unconditionally.
 
 <CardGrid>
   <Card title="Deploy skill" icon="rocket" href="/brewtools/skills/deploy/">

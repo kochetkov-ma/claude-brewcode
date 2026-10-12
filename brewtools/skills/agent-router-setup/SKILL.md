@@ -17,10 +17,11 @@ model: sonnet
 `$ARGUMENTS` is one free-form RU/EN prompt; mode tokens and flags may sit anywhere in it.
 
 1. Mode: an explicit mode token wins outright; else the most distinct whole-word keyword hits
-   (table in Step 2). Tie with a destructive mode (`purge`) -> `AskUserQuestion`; with `status` ->
-   `status`; of two mutating modes -> the keyword that comes first. No hit or empty -> `status`.
+   (table in Step 2). Tie with a destructive mode (`purge`) or of `install` with a removal mode
+   (`uninstall`) -> `AskUserQuestion`; with `status` -> `status`; of two other mutating modes -> the
+   keyword that comes first. No hit or empty -> `status`.
 2. Scope: prose that is not a mode/id/path is still input: take the id, path or target from it.
-3. Ask: at most ONE `AskUserQuestion` (max 4 questions), before any work, only when the answer
+3. Ask: at most ONE `AskUserQuestion` (max 4 questions) to resolve mode and scope, before any work, only when the answer
    changes what gets written. A read-only run asks nothing.
 
 Print once, before the first action (labels literal, values in the conversation language):
@@ -49,29 +50,29 @@ Tier 1 decision order — it allows as early as it can:
 | 1 | tool is not `Agent` | allow |
 | 2 | `agent_id` present: a subagent's spawn, or a hook verifier (`hook-agent-*`) | allow; only the main loop is policed |
 | 3 | `enabled:false`, or a config file that exists but does not parse | allow |
-| 4 | the picked type is a project agent (`.claude/agents/*.md`) | allow |
+| 4 | the picked type is a project agent (`.claude/agents/**/*.md`, by frontmatter `name`) | allow |
 | 5 | the picked type is not on `genericTypes` | allow. An omitted `subagent_type` counts as `general-purpose` (the Agent-tool default) and is policed |
 | 6 | `agent-router: override` (also `allow` / `skip`) in the description or prompt | allow, silently: the escape hatch, matched on the untruncated text before any rule and named in every deny message |
 | 7 | STRONG intent: an authoring verb aimed at the artifact (skill -> `brewcode:skill-creator`, agent -> `brewcode:agent-creator`, hooks -> `brewcode:hook-creator`, bash/sh -> `brewcode:bash-expert`), not behind `do not` / `never` / `how to` / `instead of` | deny naming the expert: the first ranked project agent that scores and covers the intent (its frontmatter matches the rule's `domain` regex), else the plugin specialist, and that one only when found on disk (project agents, user agents, plugin cache). Not found -> a notice, never a deny |
-| 8 | roster scoring: every `.claude/agents/*.md` frontmatter (`name` + `Triggers:`), each agent's own name struck from the text unless it lists that name in `Triggers:` | one clear winner (`minScore` + `margin` over the runner-up) -> deny naming it; several plausible -> `additionalContext` nudge with the top 3; nothing -> silent allow |
+| 8 | roster scoring: every `.claude/agents/**/*.md` frontmatter (`name` + `Triggers:`), each agent's own name struck from the text unless it lists that name in `Triggers:` | one clear winner (`minScore` + `margin` over the runner-up) -> deny naming it; several plausible -> `additionalContext` nudge with the top 3; nothing -> silent allow |
 | 9 | WEAK intent: a bare artifact mention (`SKILL.md`, `.claude/agents/`, `hooks.json`, an event name, a shebang) | never denies; nudges, merged with a step-8 nudge into one message |
 | 10 | anti-loop guard | a (session, project root, task) is denied at most once; the retry passes with a nudge. `task` = the description, or the prompt's first 300 normalized chars when there is none |
 | 11 | any error | fail open |
 
-`neverFlag` (types never flagged) defaults to eight entries: `Explore`, `Plan`, `statusline-setup`, `output-style-setup` and the four step-7 experts; `normalizeConfig()` adds every configured `intents[].expert` at load. There is no nudge-threshold key: the nudge floor is `max(1, ceil(minScore/2))`. Every condition, trade-off and config key is spelled out in the runbook (`## What it does`, `## Config`): read those sections before explaining a specific deny.
+`neverFlag` (types never flagged) defaults to eight entries: `Explore`, `Plan`, `statusline-setup`, `output-style-setup` and the four step-7 experts; `normalizeConfig()` adds every configured `intents[].expert` at load. There is no nudge-threshold key: the nudge floor is `max(1, ceil(minScore/2))`. Every condition and config key is in the runbook (`## What it does`, `## Config`): read them before explaining a specific deny.
 
 ## Honest limits (state these to the user, do not oversell)
 
 | Fact | Consequence |
 |------|-------------|
-| Claude Code runs all hooks matching an event in parallel; no hook can skip another | Tier 2 makes a model call on every `Agent` spawn; its own step-1 fast exit is the only cost control, tier 1 cannot gate it. That is why `level fast` is the default and the recommendation. |
-| Tier 2 cannot be made fail-closed | A judge that times out or hits a model error silently allows the spawn. Tier 1 still decides every spawn independently. `--judge-health` (printed by status at `strict`) is how a user sees that the judge stopped answering. |
+| Claude Code runs all hooks matching an event in parallel; no hook can skip another | Tier 2 makes a model call on every `Agent` spawn; its own step-1 fast exit is the only cost control, tier 1 cannot gate it. Hence `level fast` is the default and recommendation. |
+| Tier 2 cannot be made fail-closed | A judge that times out or hits a model error silently allows the spawn; tier 1 still decides every spawn independently. `--judge-health` (printed by status at `strict`) shows that the judge stopped answering. |
 | Tier 2 is narrower than tier 1 | It judges `general-purpose` and `worker` only, redirects to project agents only, keeps no state, reads neither `genericTypes` nor `neverFlag`. It honors the escape hatch and `enabled:false`, and does not read the transcript. |
 | No supported signal for "this tool call came from inside a Skill" | Neither tier attempts it. |
 | Tier 1 matches English trigger words, not meaning | It errs toward allowing: an ambiguous case becomes a nudge, never a block. |
 | Tier 1 denies for an expert only when it is found on disk | A `--plugin-dir` plugin is not in the plugin cache, so its specialists get a notice; a cached but disabled plugin still gets the deny. |
 | Every failure mode — bad config, unreadable roster, timeout, malformed output | Fails open. A config that exists but does not parse turns the feature fully off, not back to defaults. |
-| State (anti-loop markers; at `strict` the heartbeat) lives in `<os.tmpdir()>/brewtools-agent-router/p-<sha1(real root)[0..16]>/` | Tmp unusable (read-only, foreign-owned `brewtools-agent-router/`, sandbox) -> every deny degrades to a notice, since an unrecorded deny could repeat forever. Say this when a user reports "it never blocks anything". |
+| State (anti-loop markers; at `strict` the heartbeat) lives in `<os.tmpdir()>/brewtools-agent-router/p-<sha1(real root)[0..16]>/` | Tmp unusable (read-only, foreign-owned `brewtools-agent-router/`, sandbox) -> every deny degrades to a notice (an unrecorded deny could repeat forever). Say so when a user reports "it never blocks anything". |
 | A deny is not a wall | It is a tool error the model can act on: the human is never prompted, the retry passes, and every deny text ends with the escape hatch `agent-router: override`. |
 | EXPERIMENTAL | Opt-in (not registered in `brewtools/hooks/hooks.json`, so installing the plugin does nothing until this skill runs) and project scope only: the roster is per-project, so there is no global install and no scope question. |
 
@@ -108,8 +109,9 @@ test -f "$A/INSTALL.md" && test -f "$A/agent-router.mjs" && test -f "$A/judge-pr
 echo "ASSETS_DIR=$A"
 echo "RUNBOOK=$A/INSTALL.md"
 claude_project_root() {
-  if [ -n "$CLAUDE_PROJECT_DIR" ] && [ -d "$CLAUDE_PROJECT_DIR" ]; then
-    printf '%s\n' "$CLAUDE_PROJECT_DIR"; return 0
+  PD="${CLAUDE_PROJECT_DIR}"   # substituted at load: the session start dir, as hooks get it
+  if [ -n "$PD" ] && [ -d "$PD" ]; then
+    printf '%s\n' "$PD"; return 0
   fi
   d=$PWD
   while [ "$d" != "/" ]; do
@@ -145,7 +147,7 @@ RCV=$(cv_of "$A/INSTALL.md"); RCV=${RCV:-n/a}                      # generator l
 STALE=n/a
 if [ "$HCV" != n/a ] && [ "$TCV" != n/a ]; then [ "$HCV" = "$TCV" ] && STALE=no || STALE=yes; fi
 if [ "$STALE" != yes ] && [ "$GCV" != n/a ] && [ "$RCV" != n/a ] && [ "$GCV" != "$RCV" ]; then STALE=yes; fi
-R=$({ ls "$D/agents/"*.md 2>/dev/null || true; } | wc -l | tr -d ' ')
+R=$(node "$A/agent-router.mjs" --roster "$ROOT" 2>/dev/null) || R=n/a
 echo "project: hook_file=$H tier1_refs=$T1 legacy_refs=$LEGACY_T1 tier2_refs=$T2 settings_valid=$VALID heartbeat_refs=$HB enabled=$EN level_recorded=$LV roster=$R"
 echo "content_version: hook=$HCV template=$TCV config=$GCV runbook=$RCV stale=$STALE"
 echo "version: config=$CV plugin=$PV"
@@ -160,7 +162,7 @@ echo "✅ status"
 
 | Field | Value |
 |-------|-------|
-| `project_root` / `root_resolved` | the hook's own ladder (16 levels per step there): `CLAUDE_PROJECT_DIR`, else the nearest ancestor holding `.claude/brewtools/agent-router.json`, else git toplevel, else the nearest holding a `.claude` dir, so a nested bare `.claude` cannot mask the owning root. `root_resolved=no` = read-only fallback to `$PWD` |
+| `project_root` / `root_resolved` | the hook's own ladder (16 levels per step there): `CLAUDE_PROJECT_DIR` (substituted at load: the session start dir, the same value the hook gets), else the nearest ancestor holding `.claude/brewtools/agent-router.json`, else git toplevel, else the nearest holding a `.claude` dir, so a nested bare `.claude` cannot mask the owning root. `root_resolved=no` = read-only fallback to `$PWD` |
 | `hook_file` | `yes`/`no` — `agent-router.mjs` present in `<repo>/.claude/hooks/` |
 | `tier1_refs` | handlers exactly matching the tier-1 entry above; `1` = wired |
 | `tier2_refs` | handlers exactly matching the tier-2 entry above, prompt byte-equal to the current `judge-prompt.md`, no `model` key; `0` = tier 2 off, `1` = wired |
@@ -169,10 +171,10 @@ echo "✅ status"
 | `settings_valid` | `yes` only when settings are absent/empty or parse as a JSON object |
 | `judge_expected` / `judge_answered` / `judge_overdue` | printed when `tier2_refs` is not `0`: `Agent` calls seen at `level strict` / verdicts returned / verdicts expected over 90 s ago that never came (silent allows). `judge_overdue>0`, or `judge_answered=0` with `judge_expected>0` = registered but not answering. Counters cover ~24 h and include every `type:"agent"` hook verdict in the project |
 | `enabled` | from the config; `n/a` = no config or no such key |
-| `level_recorded` | the config's `level`: a record of an install-time choice, not proof of wiring; `tier2_refs` is the authority |
+| `level_recorded` | the config's `level`: an install-time record, not proof of wiring; `tier2_refs` is the authority |
 | `content_version` (`hook` / `template` / `config` / `runbook`) | the staleness signal: `hook` = the `brewcode-meta:` header of the installed `.claude/hooks/agent-router.mjs`, `template` = that header in the plugin's asset copy, `config` = the config's `content_version` key, `runbook` = the header of `assets/INSTALL.md`. A difference on either pair -> `stale=yes` -> offer `upgrade`. `n/a` on a side (pre-5.6 artifact, or not installed) = unknown, not "current" |
 | `version` / `plugin` | the config's `version` key vs the installed brewtools version. Informational: every config write (`enable`/`disable` included) re-stamps it while the hook file stays old, so never decide staleness from it |
-| `roster` | number of `.claude/agents/*.md` files; `0` = roster scoring has no candidates, the four intent routes still work |
+| `roster` | number of project agents the hook loads (its own walk via `--roster`: recursive, up to the git root, files Claude Code skips excluded); `0` = roster scoring has no candidates, the four intent routes still work |
 
 Print the status in this table; when `tier2_refs` is not `0`, add one sentence giving the three judge counters and what they mean:
 
@@ -181,7 +183,7 @@ Print the status in this table; when `tier2_refs` is not `0`, add one sentence g
 
 Effective = `hook_file=yes tier1_refs=1 legacy_refs=0 settings_valid=yes`, tier 2 either off (`tier2_refs=0 heartbeat_refs=0`) or complete (`tier2_refs=1 heartbeat_refs=1`), and `enabled` anything but `false`: a missing config leaves tier 1 on with the built-in defaults, so `enabled=n/a` is effective. Not effective: a count above `1`, any `legacy_refs`, invalid settings, or a judge without its heartbeat (its silent failures cannot be seen). `stale=yes` is effective but runs old logic: say "installed, stale — run `upgrade`".
 
-`level_recorded=strict` with `tier2_refs=0` means the judge is not wired: report the mismatch and offer `level strict` or `level fast`. Editing the config value adds and removes nothing.
+`level_recorded=strict` with `tier2_refs=0` = judge not wired: report the mismatch, offer `level strict` or `level fast`. Editing the config value wires nothing.
 
 ### Config metadata (the four standard JSON keys)
 
@@ -191,7 +193,7 @@ Every mode that writes `agent-router.json` (`install`, `upgrade`, `enable`, `dis
 { "version": "{PLUGIN_VERSION}", "content_version": "<INSTALL.md header>", "generated_by": "brewtools:agent-router-setup", "last_updated": "{LAST_UPDATED}" }
 ```
 
-`content_version` is not passed in: the runbook's node blocks read it from the `brewcode-meta:` header of `INSTALL.md` (via `$RUNBOOK`) and abort if it is unreadable. Resolve only `version` and `last_updated` here, never hardcode either. **EXECUTE** using Bash tool:
+`content_version` is not passed in: the runbook's node blocks read it from the `brewcode-meta:` header of `INSTALL.md` (via `$RUNBOOK`) and abort if unreadable. Resolve only `version` and `last_updated` here, never hardcode. **EXECUTE** using Bash tool:
 
 ```bash
 BT_ROOT="${CLAUDE_PLUGIN_ROOT}"
@@ -205,7 +207,7 @@ The hook reads only the config keys it names, so these four cannot change routin
 
 ### Early exit
 
-Already installed and the intent is not explicit (no argument, or vague like "роутер агентов"): print the status, list the operations (`upgrade`, `enable`, `disable`, `uninstall`, `purge`, `level fast|strict`) and stop. No re-install, no chain of questions.
+Already installed and the intent is not explicit (no argument, or vague like "роутер агентов"): print the status, list the operations (`upgrade`, `enable`, `disable`, `uninstall`, `purge`, `level fast|strict`) and stop: no re-install, no questions.
 
 ## Step 2 — Decide MODE
 
@@ -220,7 +222,7 @@ Already installed and the intent is not explicit (no argument, or vague like "р
 | `purge` | `purge`, `wipe`, `remove everything` | `вычисти всё`, `удали полностью`, `снеси` | yes, destructive |
 | `level fast` \| `level strict` (extra) | `level`, `fast`, `strict` | `дешёвый`, `строгий`, `с LLM`, `без LLM` | yes |
 
-A tie between `install` and a removal mode -> `AskUserQuestion`: never guess a destructive mode. Never ask scope (project only). Step 4 asks a missing level.
+Ties resolve per Prompt contract rule 1. Never ask scope (project only). Step 4 asks a missing level.
 
 ## Step 3 — Explain pending changes before questions
 
@@ -228,17 +230,17 @@ Add concrete state/action details to the initial PLAN without repeating its bloc
 
 > Current state: agent-router not installed; `.claude/agents/` holds 4 project agents. Plan: copy `agent-router.mjs` into `<repo>/.claude/hooks/`, write `<repo>/.claude/brewtools/agent-router.json` with `level: "fast"`, merge one PreToolUse (`Agent`) entry into `<repo>/.claude/settings.json`. Project scope only. One question first: level.
 
-If `roster=0`, say it before anything else: with no `.claude/agents/*.md` only the 4 intent rules can fire, and step 8 has nothing to score. Offer to stop.
+If `roster=0`, say so first: only the 4 intent rules can fire, step 8 has nothing to score. Offer to stop.
 
 ## Step 4 — Ask ONLY what is missing (`AskUserQuestion`)
 
-Skip any question already answered by `$ARGUMENTS` or settled by the status table.
+Skip any question already answered by the prompt or settled by the status table.
 
 | # | Question | Options | Default |
 |---|----------|---------|---------|
 | 1 | Level? | **fast — tier 1 only, deterministic, zero tokens (Recommended)** / strict — adds an LLM judge on every Agent spawn | `fast` |
 
-When `strict` is requested or asked about, state its cost and limit before writing anything, in the question's option description or in the plan, not only in the final report: *Claude Code runs all matching hooks in parallel, so tier 1 cannot gate tier 2. Strict makes a model call on every `Agent` spawn, and the judge's own fast exit is the only cost control. A judge that times out or hits a model error allows the spawn silently.*
+When `strict` is requested or asked about, state its cost and limit before writing anything (option description or plan, not only the final report): *Claude Code runs all matching hooks in parallel, so tier 1 cannot gate tier 2. Strict makes a model call on every `Agent` spawn, and the judge's own fast exit is the only cost control. A judge that times out or hits a model error allows the spawn silently.*
 
 Nothing else is asked: `disable`/`enable` ask nothing, `uninstall`/`purge` only the deletion confirmation of Step 5.
 
@@ -252,7 +254,7 @@ One mode is one bounded unit (1 asset file + one settings.json + one config): on
 
 Every spawn brief carries six labeled fields, since a subagent starts with an empty context: GOAL (task + why), ROLE (owns, must not touch), SCOPE (paths/commands in and out), CONTEXT (done, by whom, in parallel), CONSUMER (who uses the result + its shape), DONE (acceptance + return: verdict first, evidence, bounded; long output to a file, path returned).
 
-Spawn: substitute `MODE`, `LEVEL`, `RUNBOOK`, `ASSETS_DIR`, `PLUGIN_VERSION`, `LAST_UPDATED` from Steps 1-4 and the Config-metadata block into both the CONTEXT block and the literal `export` line. The runbook reads `LEVEL`/`RUNBOOK` from `process.env`, which prose cannot set, and an empty `LEVEL` aborts config and merge (no silent `fast` fallback). Afterwards check the agent's reported config for the chosen level.
+Spawn: substitute `MODE`, `LEVEL`, `RUNBOOK`, `ASSETS_DIR`, `PROJECT_ROOT`, `PLUGIN_VERSION`, `LAST_UPDATED` from Steps 1-4 and the Config-metadata block into both the CONTEXT block and the literal `export` line. The runbook reads `LEVEL`/`RUNBOOK` from `process.env`, which prose cannot set; an empty `LEVEL` aborts config and merge (no silent `fast` fallback). `PROJECT_ROOT` = Step 1 `project_root`: the runbook's root block takes `CLAUDE_PROJECT_DIR` first and the Bash tool does not have it; with `root_resolved=no`, drop it from the export line. Afterwards check the reported config for the chosen level.
 
 ```
 Agent(subagent_type="brewcode:hook-creator", prompt="
@@ -280,9 +282,9 @@ CONTEXT:
   a runbook block (a new Bash call does NOT inherit exports from the previous one).
   MODE=upgrade runs the 'UPGRADE' section, which is the INSTALL blocks replayed with the
   level read back from the existing config — never a level the user did not pick:
-    export RUNBOOK='RUNBOOK' LEVEL='LEVEL' PLUGIN_VERSION='PLUGIN_VERSION' LAST_UPDATED='LAST_UPDATED'
+    export RUNBOOK='RUNBOOK' LEVEL='LEVEL' PLUGIN_VERSION='PLUGIN_VERSION' LAST_UPDATED='LAST_UPDATED' CLAUDE_PROJECT_DIR='PROJECT_ROOT'
   Then verify before writing anything:
-    echo \"LEVEL=\$LEVEL RUNBOOK=\$RUNBOOK PV=\$PLUGIN_VERSION LU=\$LAST_UPDATED\"
+    echo \"LEVEL=\$LEVEL RUNBOOK=\$RUNBOOK PV=\$PLUGIN_VERSION LU=\$LAST_UPDATED PD=\$CLAUDE_PROJECT_DIR\"
   If LEVEL prints empty, STOP and report — the config and merge blocks ABORT on an empty
   LEVEL by design; re-export it rather than hardcoding a value.
   Follow the runbook at RUNBOOK exactly and use ITS commands — it self-locates its source via
@@ -306,9 +308,9 @@ CONTEXT:
   silently disables the whole feature, so a hand-edited append is a defect, not a shortcut.
   Do NOT touch enabled or level while doing it: enabled is off only when exactly false, and
   level is a record of what is wired.
-CONSUMER: Step 6 reports your result to the user; the settings.json you write is loaded by
-  the NEXT Claude Code session, so a malformed merge breaks that session instead of failing
-  here — report the exact paths you touched so they can be checked.
+CONSUMER: Step 6 reports your result to the user; Claude Code watches settings.json and
+  applies your write to the running session, so a malformed merge breaks hooks there instead
+  of failing here — report the exact paths you touched so they can be checked.
 DONE: report the settings.json path, the hooks dir, the config path with its final contents,
   and the runbook 'Verify' output if you ran it. The reported config MUST show
   level = LEVEL — a 'fast' where the user asked for 'strict' is a FAILURE, not a detail —
@@ -324,10 +326,10 @@ DONE: report the settings.json path, the hooks dir, the config path with its fin
 Re-run the Step 1 status block and print the refreshed table, plus:
 
 - what changed (file, settings.json, config values);
-- hook wiring changes (install / upgrade / level / uninstall / purge; the tier-2 and heartbeat entries are wiring) need a new session. `/reload-plugins` does not apply: this is a plain settings.json hook;
+- hook wiring changes (install / upgrade / level / uninstall / purge; the tier-2 and heartbeat entries are wiring) apply to the running session, no restart: Claude Code watches settings files; `/hooks` confirms. `/reload-plugins` does not apply: this is a plain settings.json hook;
 - config value changes (`enabled`, `genericTypes`, `neverFlag`, `minScore`, `margin`, `intents`) are read live, no restart. `level` is the exception: it is only the record Step 1 describes;
 - whether `stale` flipped to `no`: only a re-copied hook file clears it, a `version` bump proves nothing;
-- the honest limits, at minimum: tier 2 costs a model call on every `Agent` spawn and allows silently when its judge times out or errors, tier 1 matches words not meaning, everything fails open.
+- the honest limits, at minimum: tier 2 costs a model call per `Agent` spawn and allows silently on judge timeout/error, tier 1 matches words not meaning, everything fails open.
 
 ---
 
@@ -347,9 +349,9 @@ Re-run the Step 1 status block and print the refreshed table, plus:
 
 `upgrade` asks nothing: it reads `level` from the existing config and replays the install (fresh `agent-router.mjs`, freshly inlined judge prompt). Not installed -> it is an `install`, so ask the level question.
 
-Upgrading an install written by brewtools 6.4.0 or older changes `settings.json` at `level strict`: the tier-2 handler loses its `model` key (a pinned model ID ages out, an omitted one cannot) and the heartbeat entry appears. At `level fast` only the hook file changes. Old anti-loop markers are not migrated: one already-denied task per live session can be denied once more.
+Upgrading an install from brewtools 6.4.0 or older changes `settings.json` at `level strict`: the tier-2 handler loses its `model` key (a pinned ID ages out, an omitted one cannot) and the heartbeat entry appears. At `level fast` only the hook file changes. Old anti-loop markers are not migrated: one already-denied task per live session can be denied once more.
 
-Re-install is idempotent, not inert: the merge converges to the same entries, but the copy always overwrites `agent-router.mjs` with the current asset. That copy repairs a `stale=yes` install, so never talk a user out of it.
+Re-install is idempotent, not inert: the merge converges to the same entries, but the copy always overwrites `agent-router.mjs` with the current asset, which repairs a `stale=yes` install. Never talk a user out of it.
 
 ## Guards
 
@@ -361,8 +363,8 @@ Re-install is idempotent, not inert: the merge converges to the same entries, bu
 | User asks for a global install | Refuse and explain: the roster is per-project, `~/.claude/*` is protected, and a global hook would route every repo against one repo's agents. Offer the project install. |
 | User wants to add or change an intent route | Warn first: a config `intents` array replaces the built-in four wholesale (no merge, no warning when three routes vanish), so copy `DEFAULT_INTENTS` out of `agent-router.mjs` and append. An entry needs `label` + `expert` + `match` (STRONG, may deny) and may carry `weakMatch` (nudge only) and `domain` (noun-only regex deciding which project agent covers the intent; falls back to `match`\|`weakMatch`). An entry whose `match` does not compile is skipped entirely, weak side included. Install never writes the key. |
 | Existing config is malformed JSON | Report it: the runbook aborts rather than overwriting it blind, and the hook fails open (every spawn allowed) until it is fixed. Offer to rewrite. |
-| User reports a spawn being blocked repeatedly | Tier 1 denies a (session, project, task description) at most once, even when the retry rewrites the prompt — so a repeat means a different description each time, or tier 2, which keeps no state and can deny the same task again. Collect the deny text and check `tier2_refs`. Immediate unblock: `agent-router: override` (or `allow` / `skip`) in the description or prompt; both tiers honor it. |
-| User says a wrong expert was named | Both deny rules fire on coverage, not score (steps 7-8), so a wrong name means that agent really describes the domain: fix its `description`/`Triggers:`, or add `domain` to a custom `intents` entry. `agent-router: override` unblocks the spawn meanwhile. |
+| User reports a spawn being blocked repeatedly | Tier 1 denies a (session, project, task description) at most once, even when the retry rewrites the prompt — so a repeat means a different description each time, or tier 2 (no state, can deny the same task again). Collect the deny text, check `tier2_refs`. Immediate unblock: `agent-router: override` (or `allow` / `skip`); both tiers honor it. |
+| User says a wrong expert was named | Both deny rules fire on coverage, not score (steps 7-8): that agent really describes the domain. Fix its `description`/`Triggers:`, or add `domain` to a custom `intents` entry; `agent-router: override` unblocks meanwhile. |
 
 ---
 
@@ -385,6 +387,6 @@ node --check "$A/agent-router.mjs" && echo "✅ smoke" || echo "❌ smoke FAILED
 
 > **STOP if ❌** — do NOT delegate; reinstall/update brewtools first.
 
-`node --check` proves only that the file parses. Behavioral verification (synthetic payloads) is the runbook's **Verify** section; the full suite, `tests/run.sh` in the skill dir, is not run here.
+`node --check` proves only that the file parses. Behavioral verification is the runbook's **Verify** section; `tests/run.sh` is not run here.
 
 </instructions>

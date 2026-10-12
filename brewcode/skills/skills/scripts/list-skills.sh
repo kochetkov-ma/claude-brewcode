@@ -1,7 +1,5 @@
 #!/bin/bash
-# list-skills.sh — Scan and list all available Claude Code skills
-# Usage: list-skills.sh
-# Output: Markdown table of skills with scope, name, description, invocation
+# list-skills.sh (no args) - list all Claude Code skills as a Markdown table: scope, name, description, invocation.
 set -euo pipefail
 
 # --- Configuration ---
@@ -51,10 +49,8 @@ truncate() {
     fi
 }
 
-# Coerce a frontmatter value the way Claude Code does: an absent key falls back to that key's
-# documented default, otherwise only `1|true|yes|on` (case-insensitive, trimmed) is true — every
-# other spelling, recognised-falsy or not, is false.
-# Usage: yaml_bool "<raw value>" "<default when absent>"
+# yaml_bool "<raw value>" "<default when absent>": CC coercion; absent -> default, only `1|true|yes|on`
+# (case-insensitive, trimmed) is true, every other spelling false.
 yaml_bool() {
     local value="$1"
     local default="$2"

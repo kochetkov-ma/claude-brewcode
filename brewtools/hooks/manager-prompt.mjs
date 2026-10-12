@@ -9,8 +9,9 @@ function capText(s, max = 9000) {
   return s.length > max ? s.slice(0, max) + '\n...[truncated]' : s;
 }
 
-// UserPromptSubmit also fires for subagent deliveries; nothing marks them but the leading tag.
-const SYNTHETIC_PROMPT = /^\s*<(?:task-notification>|agent-message[\s>])/;
+// UserPromptSubmit also fires for subagent deliveries; only the leading tag marks them.
+// Synthetic-prompt detector: leading `<task-notification>` or `<agent-message from=` after whitespace.
+const SYNTHETIC_PROMPT = /^\s*<(?:task-notification>|agent-message\s+from=)/;
 
 (async () => {
   try {

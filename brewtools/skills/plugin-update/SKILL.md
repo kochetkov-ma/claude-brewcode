@@ -38,8 +38,6 @@ RESULT: <what the user ends up holding>
 
 ## Argument Handling
 
-**Skill arguments received:** `$ARGUMENTS`
-
 | Mode | EN keywords | RU keywords | Mutates? | Behavior |
 |------|-------------|--------------|----------|----------|
 | `interactive` | *(empty)* | *(empty)* | yes (asks first) | all 6 phases with AskUserQuestion gates |
@@ -169,6 +167,8 @@ Question: "Enable auto-update for claude-brewcode marketplace?"
 Options: "Enable via /plugin UI" / "Skip"
 
 ## Phase 5b — Prune Orphaned Plugin Dependencies
+
+Interactive and `all` only; `check` and `update` skip it (mode table).
 
 Prune removes only auto-installed dependencies nothing still requires. Preview once per distinct
 Phase 0 scope in `user|project|local`; report managed/session/synced as unsupported.

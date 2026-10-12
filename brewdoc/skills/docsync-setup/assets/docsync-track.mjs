@@ -1,14 +1,8 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.4.0 content_version=6.0.0 generated_by=brewdoc:docsync-setup
-/**
- * docsync-track — PostToolUse:Write|Edit hook (self-contained, project-local)
- *
- * When a tracked .md file is written/edited: append an `edit` event to the session
- * log and, if it lacks `last_updated`, nudge Claude to add it — once per file per session.
- *
- * SELF-CONTAINED: helpers inlined, Node built-ins only, pure ESM. Reads project
- * state from <projectRoot>/.claude/docsync/ at runtime. Never throws, always exits 0.
- */
+// brewcode-meta: version=6.5.0 content_version=6.5.0 generated_by=brewdoc:docsync-setup
+
+// PostToolUse Write|Edit on a tracked .md: log an `edit` event; no `last_updated` -> nudge once per file per session.
+// Self-contained (Node built-ins), state in <projectRoot>/.claude/docsync/; never throws, exit 0.
 import { readFileSync, appendFileSync, mkdirSync, existsSync } from 'fs';
 import { join, relative, isAbsolute, dirname, resolve, sep } from 'path';
 
@@ -21,14 +15,8 @@ async function readStdin() {
 }
 function output(r) { try { console.log(JSON.stringify(r)); } catch { console.log('{}'); } }
 function readJson(p, fb) { try { return JSON.parse(readFileSync(p, 'utf8')); } catch { return fb; } }
-/**
- * Project root: CLAUDE_PROJECT_DIR -> upward walk for a root marker -> hook cwd. Never throws.
- * Hook `cwd` is "the working directory when the hook is invoked" and drifts mid-session
- * (docs/hooks.md:717, CwdChanged), so it is never the root for config/state/log placement;
- * keep it only for resolving relative paths out of `tool_input`.
- * @param {string|null} hookCwd - `input.cwd` from the hook payload
- * @returns {string} Absolute project root
- */
+// Project root: CLAUDE_PROJECT_DIR -> upward walk for a root marker -> hook cwd; never throws.
+// Hook `cwd` drifts mid-session (CwdChanged) -> only for relative `tool_input` paths, never for state.
 function projectRoot(hookCwd) {
   const env = process.env.CLAUDE_PROJECT_DIR;
   if (env && existsSync(env)) return resolve(env);
@@ -102,8 +90,10 @@ function globToRegex(g) {
   }
   return new RegExp('^' + re + '$');
 }
+// Auto-loaded instruction files (any depth) never take docsync frontmatter, whatever `exclude` says.
+const INSTRUCTION = /(^|\/)(CLAUDE|CLAUDE\.local|AGENTS)\.md$/;
 function isExcluded(rel, globs) {
-  return globs.some(g => { try { return globToRegex(g).test(rel); } catch { return false; } });
+  return INSTRUCTION.test(rel) || globs.some(g => { try { return globToRegex(g).test(rel); } catch { return false; } });
 }
 function parseFm(abs) {
   try {

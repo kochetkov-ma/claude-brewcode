@@ -16,7 +16,7 @@ A `PreToolUse:Task` hook previously handled plugin root injection for subagents 
 
 ## Comparison with brewcode
 
-| Feature | brewcode (4 hooks) | brewdoc (0 hooks) |
+| Feature | brewcode (2 hooks) | brewdoc (0 hooks) |
 |---------|-------------------|-------------------|
 | Plugin root injection (subagents) | not used -- named `BC_PLUGIN_ROOT` injection was removed in v4 | not needed -- native `${CLAUDE_PLUGIN_ROOT}` |
-| Session init / prompt-submit reminder | `session-start.mjs` (session init, permission_mode tag), `forced-eval.mjs` (delegation reminder on every prompt, no skill-activation nudge), plus a compact-matcher SessionStart pair (`role-recall.mjs`, `compact-recall.mjs`) that re-anchors role, plan and task graph after a compaction | not needed |
+| Session init / compaction recall | `session-start.mjs` (session init, permission_mode tag) and a compact-matcher SessionStart command, `compact-recall.mjs`, that re-anchors plan and task graph after a compaction; no per-prompt reminder | not needed |

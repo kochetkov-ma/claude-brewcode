@@ -1,16 +1,8 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.4.0 content_version=6.0.0 generated_by=brewcode:semble-setup
-/**
- * brewcode:semble-setup — SessionStart hook (self-contained, installed into a project).
- *
- * Reports the project's semble state and, when the integration is ready, injects
- * one short usage directive. It reads .claude/semble/state.json and, before any
- * usability claim, the active profile's MCP registration; it never spawns a process, never probes for a daemon (semble has none), never
- * blocks, always prints exactly one JSON object and always exits 0.
- *
- * Pure ESM, Node built-ins only. readStdin/output are inlined on purpose: this
- * file travels alone into a user's .claude/hooks/ and must have no imports.
- */
+// brewcode-meta: version=6.5.0 content_version=6.5.0 generated_by=brewcode:semble-setup
+
+// SessionStart: reports .claude/semble/state.json + active-profile MCP registration; ready -> one usage directive.
+// Never spawns or blocks; one JSON object, exit 0; Node built-ins, no imports (travels alone).
 import { appendFileSync, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
@@ -45,11 +37,7 @@ const TELEMETRY_SRC = 'session';
 const TELEMETRY_MAX_BYTES = 2_000_000;
 const TELEMETRY_KEEP_LINES = 1000;
 
-/**
- * Appends one JSONL record to .claude/semble/telemetry.jsonl. Single
- * appendFileSync, never read-modify-write. Every failure is swallowed: a hook
- * that cannot measure itself must still behave exactly as if it had.
- */
+// One JSONL record -> .claude/semble/telemetry.jsonl via a single appendFileSync; every failure swallowed.
 function telemetry(cwd, sid, ev, extra) {
   try {
     const file = join(cwd, '.claude', 'semble', 'telemetry.jsonl');
@@ -76,8 +64,7 @@ function telemetry(cwd, sid, ev, extra) {
 // ---------------------------------------------------------------------------
 
 // --- MCP presence + search routing (identical in every steering semble hook) ---
-// No hook input reports MCP registration: read <CLAUDE_CONFIG_DIR or home>/.claude.json
-// (user + local scope), then <root>/.mcp.json (project scope). Never throws.
+// No hook input reports MCP: read <CLAUDE_CONFIG_DIR|home>/.claude.json (user+local), then <root>/.mcp.json; never throws.
 const MCP_NAME = 'semble_code';
 const ROUTE = 'Search routing: intent/behaviour -> semble; symbol definitions/references -> LSP; literals/paths/regex/counts -> rg.';
 
@@ -157,9 +144,7 @@ function decide(cwd) {
   // No usability claim without a registration in the ACTIVE profile; the user still sees why.
   if ((phase === 'awaiting_reload' || phase === 'ready') && !mcpRegistration(cwd)) return NO_MCP;
   if (phase === 'awaiting_reload') {
-    // The index is built lazily INSIDE a tool call, so telling the model to wait
-    // for `resume` is what kept verification from ever happening. Use it, and
-    // close the state out afterwards.
+    // Index builds lazily INSIDE a tool call: waiting for `resume` blocks verification -> use it, close out after.
     return {
       systemMessage: 'semble: awaiting reload — run /brewcode:semble-setup resume',
       hookSpecificOutput: {
@@ -191,16 +176,8 @@ function decide(cwd) {
   return {};
 }
 
-// --- project root (canonical recipe, D1 Q5) --------------------------------
-// CLAUDE_PROJECT_DIR -> this file's own installed location -> upward walk for a
-// root marker -> hook cwd. Never throws, never exits nonzero.
-// `input.cwd` is the cwd at invocation time and drifts mid-session
-// (docs/hooks.md:717, CwdChanged), so it must key nothing but relative paths out
-// of tool_input: from a nested package it pointed every state lookup at a
-// directory with no .claude/semble, and all three gated hooks fell silent.
-// SELF_ROOT is exact rather than a guess — the installer wires this file at
-// <root>/.claude/hooks/<name>.mjs by absolute path, so its own location encodes
-// the root even when a nested package carries its own .claude.
+// --- project root: CLAUDE_PROJECT_DIR -> own <root>/.claude/hooks/ location -> upward walk -> hook cwd ---
+// Never throws; `input.cwd` drifts mid-session (CwdChanged) -> keys only tool_input relative paths.
 const SELF_ROOT = (() => {
   const d = dirname(fileURLToPath(import.meta.url));
   return basename(d) === 'hooks' && basename(dirname(d)) === '.claude' ? dirname(dirname(d)) : '';
