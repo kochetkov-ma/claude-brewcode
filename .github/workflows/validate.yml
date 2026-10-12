@@ -40,7 +40,8 @@ jobs:
       - name: Install test tools
         run: |
           set -euo pipefail
-          python -m pip install --disable-pip-version-check pyyaml==6.0.3
+          python -m pip install --disable-pip-version-check pyyaml==6.0.3 \
+            reportlab==5.0.1 pillow==12.3.0 charset-normalizer==3.5.2
           npm install -g --no-fund --no-audit @anthropic-ai/claude-code@2.1.296
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends zsh

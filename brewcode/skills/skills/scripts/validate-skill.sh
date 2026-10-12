@@ -214,11 +214,14 @@ else
         else
             MUTATES_OK=0
             echo "$HEADER_LINE" | grep -qi 'mutates' && MUTATES_OK=1
-            CYR_OK=0
-            # Cyrillic bracket range needs a UTF-8 locale; fall back to LANG, then en_US.UTF-8
-            CYR_LOCALE="${LC_ALL:-${LANG:-en_US.UTF-8}}"
-            echo "$MODE_TABLE" | LC_ALL="$CYR_LOCALE" grep -qE '[а-яёА-ЯЁ]' 2>/dev/null && CYR_OK=1
-            if [ "$MUTATES_OK" -eq 1 ] && [ "$CYR_OK" -eq 1 ]; then
+            CYR_OK=0; CYR_RC=0
+            # Cyrillic U+0400-04FF as raw UTF-8 bytes under LC_ALL=C: GNU grep in C.UTF-8 rejects `[а-я]` (rc 2)
+            CYR_RE=$(printf '[\320-\323][\200-\277]')
+            printf '%s\n' "$MODE_TABLE" | LC_ALL=C grep -qE "$CYR_RE" || CYR_RC=$?
+            [ "$CYR_RC" -eq 0 ] && CYR_OK=1
+            if [ "$CYR_RC" -gt 1 ]; then
+                check fail "Mode table: Cyrillic check could not run (grep rc=$CYR_RC)"
+            elif [ "$MUTATES_OK" -eq 1 ] && [ "$CYR_OK" -eq 1 ]; then
                 check ok "Mode table ($DATA_ROWS modes) has Mutates? column + RU keyword"
             else
                 MSG=""
