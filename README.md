@@ -280,6 +280,8 @@ Self-contained `SKILL.md` folders that ship outside the four plugins -- drop the
 | Brewtools overview | [Brewtools](https://doc-claude.brewcode.app/brewtools/overview/) |
 | Brewui overview | [Brewui](https://doc-claude.brewcode.app/brewui/overview/) |
 | Release Notes | [RELEASE-NOTES.md](RELEASE-NOTES.md) |
+| Brewcode site | [brewcode.app](https://brewcode.app) |
+| brewdoc CLI -- standalone document-to-Markdown tool on PyPI, a separate product from the brewdoc plugin | [pypi.org/project/brewdoc](https://pypi.org/project/brewdoc/) |
 
 ## Development
 
