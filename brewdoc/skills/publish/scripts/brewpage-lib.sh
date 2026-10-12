@@ -6,6 +6,9 @@
 # safe to put in a URL (BD02). Sourced, not executed — it sets HISTORY_FILE and
 # defines helpers in the caller's shell.
 
+# zsh (macOS Bash tool): global EXIT trap and ${x:+a "$y"} word splitting, as in bash.
+if [ -n "${ZSH_VERSION:-}" ]; then setopt POSIX_TRAPS SH_WORD_SPLIT; fi
+
 # Project root, canonical recipe: CLAUDE_PROJECT_DIR -> git toplevel -> upward
 # walk for .git/.claude -> PWD. The history file must not follow a nested cwd.
 bp_project_root() {
@@ -43,8 +46,7 @@ bp_history_init() {
 # brewpage.app — Published Pages
 
 > Owner tokens allow delete and in-place republish (html/json/kv/sites all support PUT). Keep this file private.
-> Delete: `curl -s -X DELETE "https://brewpage.app/api/<ns>/<id>" -H "X-Owner-Token: TOKEN"`
-> Delete a site: `curl -s -X DELETE "https://brewpage.app/api/sites/<ns>/<id>" -H "X-Owner-Token: TOKEN"`
+> Delete: `curl -s -X DELETE "<Owner API>" -H "X-Owner-Token: TOKEN"`; rows without one: `https://brewpage.app/api/<type>/<ns>/<id>`, type = html|json|files|kv|sites.
 > Update a site (same URL): `PUT /api/sites/<ns>/<id>` with `X-Owner-Token: TOKEN` + the new bundle.
 
 | Date | URL | Owner Token | TTL | Type | Owner API | Identity |

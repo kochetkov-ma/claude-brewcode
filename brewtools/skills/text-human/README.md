@@ -29,7 +29,7 @@ Detection priority: explicit intent keywords (RU+EN) -> path/extension -> conten
 
 ## Arguments
 
-The first token is parsed as scope when it resolves to a path or a 7+ hex git hash; the rest is a custom prompt. Otherwise the whole input is treated as a prompt (the text to humanize may be inline). The custom prompt both selects/overrides the flow and adds rules. No args -> it asks what to humanize.
+The first token is scope when it resolves to a path or a 7+ hex git hash; the rest, or the whole input otherwise, is a custom prompt that selects/overrides the flow and adds rules.
 
 | Input shape | Result |
 |-------------|--------|
@@ -91,13 +91,7 @@ WHY comments, public API docs, real project tickets (INTELDEV-12345, JIRA-456), 
 
 ## Injection (PASS 2, per flow)
 
-| Signal | reddit | chat | docs | commit/PR | article | code/API |
-|--------|--------|------|------|-----------|---------|----------|
-| Burstiness | high | high | med | low | high | OFF |
-| Contractions | high | high | OK | low | high | FORBIDDEN |
-| Stance | high | med | none | grounded-why | high | FORBIDDEN |
-| Emoji | rare | incidental | no | no | no | no |
-| Inject stage | ON | ON | ON | ON terse | ON | OFF |
+Per-domain weights (burstiness, contractions, stance, emoji): [reference/human-patterns.md](reference/human-patterns.md#per-domain-weight-matrix).
 
 ## Output
 

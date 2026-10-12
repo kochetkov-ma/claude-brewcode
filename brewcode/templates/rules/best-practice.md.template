@@ -1,6 +1,5 @@
 ---
 paths: {PATHS}
-description: {DESCRIPTION}
 doc_type: llm
 version: "{PLUGIN_VERSION}"
 generated_by: "{GENERATED_BY}"

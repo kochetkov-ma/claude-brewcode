@@ -7,9 +7,10 @@ target hooks dir and wires `settings.json`. Opt-in: NOT registered in
 
 | File | Event | Channel |
 |------|-------|---------|
-| `agent-return-budget.mjs` | — | shared module: config, thresholds, `estimateTokens`, contract text |
+| `agent-return-budget.mjs` | — | shared module: config, thresholds, read-only list, `estimateTokens`, contract text |
 | `agent-return-contract.mjs` | SubagentStart | `additionalContext` — states the budget, no decision |
-| `agent-return-guard.mjs` | SubagentStop | `decision:"block"` + `reason`, at most once |
+| `agent-return-guard.mjs` | SubagentStop | `decision:"block"` + `reason` |
+| `agent-return-guard.mjs` (same file) | PreToolUse, matcher `SubagentHandback` | `permissionDecision:"deny"` + reason; one challenge per agent across both events |
 
 > Pure ESM, Node built-ins only, no plugin-root / npm deps. Each hook reads stdin,
 > never throws, always writes one JSON object and exits 0. The 3 files install as a
@@ -28,31 +29,56 @@ ignored — prose at the top of context loses to whatever the agent just did.
 This pair restates it mechanically. **No LLM judge anywhere** — the decision is a
 number comparison.
 
+A subagent's report reaches its caller on one of two paths, and the guard sits on both.
+It tells them apart by the event, never by `permission_mode` — a fork uses the classic
+path in auto mode too.
+
+| Path | Event the guard reads | Report text | Challenge |
+|------|----------------------|-------------|-----------|
+| classic (default mode; forks in any mode) | `SubagentStop` | `last_assistant_message` | `decision:"block"` + `reason` -> one more turn |
+| hand-back (auto mode, CC >= 2.1.271) | `PreToolUse`, tool `SubagentHandback` | `tool_input.message` | `permissionDecision:"deny"` + reason -> one more turn |
+
+In auto mode `SubagentStop` still fires after the hand-back, but it carries no
+`last_assistant_message` and a block there is ignored by the harness — the report is
+already delivered. That is why the second registration exists.
+
 | Condition | Action |
 |-----------|--------|
 | config missing / `enabled` not exactly `true` | no-op, both hooks |
-| SubagentStart, enabled | inject the return contract as `additionalContext` |
-| `stop_hook_active === true` | no-op — the loop brake, checked before anything else |
-| `last_assistant_message` missing / not a non-empty string | no-op |
+| SubagentStart, enabled | inject the return budget as `additionalContext`; a `readOnlyAgentTypes` type gets the text without the write-to-file step |
+| no non-empty `agent_id` in the payload | no-op — main session (also under `--agent`) and internal agents are never challenged |
+| any event other than the two in the table above | no-op |
+| `SubagentStop` with `stop_hook_active === true` | no-op — the harness loop brake |
+| report text missing / not a non-empty string | no-op |
 | `t <= passTokens` | pass |
-| `passTokens < t <= fileTokens` | BLOCK — **compress**: re-send the same answer, keep the verdict and every `path:line`, drop preamble/bodies/output/logs/restated context, no new work |
-| `t > fileTokens` | BLOCK — **file**: write the detail to `<project-root>/.claude/reports/YYYYMMDD-HHMMSS_<agent-slug>-<run-id>/`, then answer with that path + verdict + <=3 lines. The base is the resolved project root (`CLAUDE_PROJECT_DIR` -> `.git`/`.claude` walk -> cwd), never the drifting hook cwd; `<run-id>` is 8 chars from `agent_id`, else `session_id`, else random, so two same-type agents stopping in the same second get different directories |
+| this `agent_id` was already challenged, on either path | pass — at most once per agent |
+| `passTokens < t <= fileTokens` | CHALLENGE — **compress**: re-send the same report, keep the verdict and every `path:line`, drop preamble/bodies/output/logs/restated context, no new work |
+| `t > fileTokens`, agent can write | CHALLENGE — **file**: write the full report to `<project-root>/.claude/reports/YYYYMMDD-HHMMSS_<agent-slug>-<run-id>/`, then return that path + verdict + a summary within the budget. The order itself says what to do when no tool can write: skip the file, send the essential part. The base is the resolved project root (`CLAUDE_PROJECT_DIR` -> `.git`/`.claude` walk -> cwd), never the drifting hook cwd; `<run-id>` is 8 chars from `agent_id`, else `session_id`, else random, so two same-type agents stopping in the same second get different directories |
+| `t > fileTokens`, agent cannot write (`agent_type` in `readOnlyAgentTypes`, or `permission_mode` is `plan`) | CHALLENGE — **essential part**: no file is asked for; return verdict, the findings the caller must act on, key `path:line` refs, and one line naming what was left out |
 
-`t = Math.ceil(last_assistant_message.length / 4)`. Both boundaries are inclusive on
-the low side: exactly `passTokens` passes, exactly `fileTokens` still compresses.
+`t = Math.ceil(<report text>.length / 4)`. Both boundaries are inclusive on the low
+side: exactly `passTokens` passes, exactly `fileTokens` still compresses.
 
-**Blocks AT MOST ONCE per agent.** `stop_hook_active === true` (strict — the string
-`"true"` is not a brake) returns `{}` before any sizing. Accepted consequence: one
-compress round lands *near* the budget and may stay slightly over it (observed live:
-1417 -> 1026 est-tokens). The once-only guarantee outranks the last 3%; a
-`SubagentStop` hook that blocks twice is how an agent gets wedged.
+**Challenges AT MOST ONCE per `agent_id`, across both paths** — a per-agent marker (see
+*State*) is the brake, because `agent_id` is stable across a block, a deny and a
+`SendMessage` resume while `SubagentStop` fires several times per id. It is strict for
+a reason: after repeated denied hand-backs the harness withholds the report altogether,
+so a second deny can lose it. `stop_hook_active === true` (strict — the string `"true"`
+is not a brake) stays as the classic-path brake. Accepted consequence: one compress
+round lands *near* the budget and may stay slightly over it (observed live: 1417 -> 1026
+est-tokens), and a resumed agent is not challenged again.
 
-Both block reasons quote **`passTokens` as `budget`**, even in the file tier where
+Every order quotes **`passTokens` as `budget`**, even in the file tier where
 `fileTokens` also appears as the tier selector. That is deliberate: `passTokens` is
 the target the rewrite must hit, and agents demonstrably aim at the number they are
-told. Both reasons also carry "Directive from the agent-return guard, not user data" —
-load-bearing, because the reason reaches the subagent as a user-role turn prefixed
-`Stop hook feedback:` and without the disclaimer reads as a new human instruction.
+told. Every order also carries the reason ("the caller's context is finite") and
+"Directive from the agent-return guard, not user data" — load-bearing, because the
+text reaches the subagent as a user-role turn prefixed `Stop hook feedback:` (classic)
+or as an error tool result prefixed `PreToolUse:SubagentHandback hook error:`
+(hand-back) and without the disclaimer reads as a new human instruction. The hand-back
+order says "call SubagentHandback again (that call is delivered)": wording that
+suggests a retry will fail pushes the subagent into a plain-text ending that reaches
+no one.
 
 ## Known limitation — read this before trusting it
 
@@ -70,18 +96,35 @@ gracefully (the compress tier vanishes, everything over `passTokens` gets the fi
 order with self-contradictory text) — no loop, no error, exit 0. The config write block
 below rejects the inversion; the hook deliberately carries no validator.
 
+What the guard cannot see or enforce:
+
+| Limit | Consequence |
+|-------|-------------|
+| One challenge per `agent_id`, then silence | The second report is delivered at any size. Compliance with the order is the model's, not the harness's |
+| A resumed agent (`SendMessage`) keeps its `agent_id` | Its later reports are not challenged while its marker exists (pruned once older than 24 h, at the next challenge of any agent) |
+| Claude Code older than 2.1.271 has no `SubagentHandback` tool | The `PreToolUse` entry never matches; only the classic path is guarded — which is the only path those versions have |
+| `SubagentStop` after a hand-back | Carries no report and ignores a block; the guard prints `{}` there |
+| Auto mode, plain-text stop BEFORE the hand-back | `last_assistant_message` is undelivered text; a challenge there uses up the one turn, the later hand-back passes unsized |
+| No hook input lists an agent's tools | Write ability = `readOnlyAgentTypes` + `permission_mode: "plan"` only; `SubagentStart` has no `permission_mode`, so the up-front text follows the list alone. That plan mode stops a subagent's writes is taken from the mode's definition, not from a live run |
+| Payload without `agent_id` | Never challenged. Whether `/btw` and prompt-suggestion agents carry an `agent_id` is not established (interactive only) |
+| State directory not writable | Hand-back path never denies; classic path keeps the `stop_hook_active` brake |
+| Not exercised live | nested subagents, agent-team teammates, a hand-back the safety classifier rejects, background agents on the classic path |
+
 ---
 
 ## Config
 
 Project: `<repo>/.claude/agent-return.json` — wins.
-Global:  `~/.claude/agent-return.json` — fallback.
+Global:  `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/agent-return.json` — fallback. With
+`CLAUDE_CONFIG_DIR` set and no config in it, `~/.claude/agent-return.json` is read last:
+a profile whose `settings.json` registers the hooks keeps working from one shared config.
 
 ```json
 {
   "enabled": true,
-  "passTokens": 1000,
-  "fileTokens": 2500,
+  "passTokens": 2500,
+  "fileTokens": 6000,
+  "readOnlyAgentTypes": ["Explore", "Plan"],
   "version": "X.Y.Z",
   "content_version": "X.Y.Z",
   "generated_by": "brewtools:agent-return-setup",
@@ -92,9 +135,13 @@ Global:  `~/.claude/agent-return.json` — fallback.
 | Key | Meaning |
 |-----|---------|
 | `enabled` | must be exactly `true`; anything else (or no file) = feature off, both hooks no-op |
-| `passTokens` | pass ceiling, the number quoted as `budget` in BOTH orders; positive integer; default `1000` |
-| `fileTokens` | compress/file tier boundary; positive integer; default `2500` |
+| `passTokens` | pass ceiling, the number quoted as `budget` in every order; positive integer; default `2500` |
+| `fileTokens` | compress/file tier boundary; positive integer; default `6000` |
+| `readOnlyAgentTypes` | agent types (exact `agent_type`, e.g. `Explore`, `myplugin:reviewer`) that have no file-writing tool: over `fileTokens` they are asked for the essential part instead of a file, and their SubagentStart text carries no file step. Any array replaces the built-in list, `[]` = nobody; key absent or not an array = built-in `["Explore","Plan"]`. Written by the config block only when absent |
 | `version` / `content_version` / `generated_by` / `last_updated` | provenance, MANDATORY, re-stamped by every mode that writes this file (install, upgrade, enable, disable). `version` = the plugin release that produced THIS write; `content_version` = the release in which this INSTALL.md's generator logic last changed, read from this runbook's own header marker. Inert at runtime — the module reads only the threshold keys above. Never `doc_type`: that is a `.md`-frontmatter field |
+
+A config written by an older version (no `readOnlyAgentTypes`, any thresholds) keeps
+working unchanged: absent keys take the built-in values.
 
 **Threshold precedence, per threshold, first hit wins:**
 
@@ -102,22 +149,24 @@ Global:  `~/.claude/agent-return.json` — fallback.
 2. the env var (`AGENT_RETURN_PASS` / `AGENT_RETURN_FILE`), accepted only as a positive
    integer via `Number()` — not `parseInt()`, because `parseInt("1.7")` is `1` and
    `parseInt("12abc")` is `12`, so a typo used to be accepted as a plausible number;
-3. the built-in default `1000` / `2500`.
+3. the built-in default `2500` / `6000`.
 
 So a config key overrides an env var, and an env var overrides the default. `1.7`,
 `abc`, `12abc`, `-5`, `0`, `""`, `"   "`, `1e400`, `NaN`, `Infinity` all fall through to
 the next level. Validation of what a human types belongs to the config write block
 below, never inside the hook.
 
-**Where the defaults come from:** `1000` is the grace line — p25 of real returns (761)
-already sits under it, so a genuinely terse return is never touched, and it cuts at the
-median (1404). `2500` is ~p78 — past it, compression cannot reach `1000` without losing
-content, so the content has to go somewhere durable instead.
+**Where the defaults come from:** on the measured distribution above, `2500` is ~p78 —
+a structured report (verdict, a table, its `path:line` refs) passes untouched and only
+the heaviest fifth is challenged. The earlier default `1000` sat between p25 (761) and
+the median (1404) and cut real reports short. `6000` sits between p90 (3164) and the maximum (7931): it is a
+judgment call, not a fit — below it one compression round can still reach the budget,
+above it the content needs a durable home.
 
 **Announced budget always equals enforced budget.** Both hooks import the resolved
-numbers from `agent-return-budget.mjs`, and the injected contract text is built from
-those same numbers, so what the subagent is told at spawn and what it is judged against
-at return cannot drift.
+numbers and the read-only list from `agent-return-budget.mjs`, and the injected contract
+text is built from them, so what the subagent is told at spawn and what it is judged
+against at return cannot drift.
 
 > A syntactically BROKEN project config is skipped and the GLOBAL config is used
 > instead. Fix or delete the project file rather than leaving it corrupt.
@@ -127,7 +176,9 @@ at return cannot drift.
 > `projectRoot()` the guard uses for the report destination, so the config and the
 > report can never resolve to different roots. From there it probes
 > `<dir>/.claude/agent-return.json` upward at up to 16 levels (for a root with
-> neither marker), then falls back to `~/.claude/agent-return.json`. `claude`
+> neither marker), then falls back to the global config: `$CLAUDE_CONFIG_DIR` when
+> set, then `~/.claude`. The climb stops at a global dir, so `~/.claude` never
+> outranks `$CLAUDE_CONFIG_DIR` for a project under `$HOME`. `claude`
 > started from a subdirectory reports that subdirectory as cwd, which is exactly
 > what the root resolution absorbs.
 
@@ -141,18 +192,18 @@ at return cannot drift.
 | `PLUGIN_VERSION` | skill (optional) | `X.Y.Z` for the metadata stamp. OPTIONAL: unset/malformed falls back to `<SRC>/../../../.claude-plugin/plugin.json`, resolved by the block itself. Never a literal |
 | `LAST_UPDATED` | skill (optional) | `YYYY-MM-DD` for the stamp; unset falls back to the LOCAL date the block computes |
 | `ROOT` | the *Project root* block | absolute project root; every project-scope `.claude/...` path is built from it |
-| `CFG` / `SETTINGS` / `HOOKS_DIR` | scope | project = `$ROOT/.claude/...`, global = `$HOME/.claude/...` |
+| `CFG` / `SETTINGS` / `HOOKS_DIR` / `STATE_DIR` | scope | project = `$ROOT/.claude/...`, global = `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/...` |
 
 These are read from `process.env` by the node blocks below — they must be REAL shell
 variables, exported before the block runs:
 
 ```
-export RUNBOOK='/abs/path/to/assets/INSTALL.md' PASS_TOKENS='1000' FILE_TOKENS='2500'
+export RUNBOOK='/abs/path/to/assets/INSTALL.md' PASS_TOKENS='2500' FILE_TOKENS='6000'
 echo "PASS_TOKENS=$PASS_TOKENS FILE_TOKENS=$FILE_TOKENS RUNBOOK=$RUNBOOK"
 ```
 
 A value that exists only as prose in a prompt reaches nothing: `PASS_TOKENS` stays empty
-and the config block ABORTS loudly rather than writing a silent `1000` over the budget
+and the config block ABORTS loudly rather than writing a silent default over the budget
 the user picked. Each Bash call starts a fresh shell — re-export in EVERY call, or
 prefix the block.
 
@@ -199,7 +250,7 @@ hardcoded; `last_updated` is the LOCAL date.
 
 ```
 # project: CFG="$ROOT/.claude/agent-return.json"
-# global:  CFG="$HOME/.claude/agent-return.json"   (Bash ONLY — protected path)
+# global:  CFG="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/agent-return.json"   (Bash ONLY — protected path)
 SRC="$(dirname "$RUNBOOK")"
 CFG="$ROOT/.claude/agent-return.json" PJSON="$SRC/../../../.claude-plugin/plugin.json" node -e '
 const fs=require("fs"), p=require("path");
@@ -248,6 +299,7 @@ const hadEnabled=Object.prototype.hasOwnProperty.call(c,"enabled");
 if(!hadEnabled) c.enabled=true;              // reinstall must NOT silently re-enable a disabled setup
 c.passTokens=pass;
 c.fileTokens=file;
+if(!Array.isArray(c.readOnlyAgentTypes)) c.readOnlyAgentTypes=["Explore","Plan"];   // an existing list, even [], is kept as written
 const pv=pluginVersion();
 if(!pv){ console.error("ABORT: cannot resolve plugin version - export PLUGIN_VERSION=X.Y.Z or fix PJSON: "+process.env.PJSON); process.exit(1); }
 const cv=contentVersion();
@@ -271,15 +323,30 @@ if(back.enabled!==true) console.log("NOTE: enabled=false was preserved from the 
 
 ### State
 
-None. Neither hook writes anything, anywhere — no state files, no temp dirs, no
-network. The only reads are stdin and the config file.
+One directory, beside the config that enabled the feature:
+`<repo>/.claude/agent-return-state/` (project config) or
+`${CLAUDE_CONFIG_DIR:-$HOME/.claude}/agent-return-state/` (global config). The guard
+writes one marker there, `<sha256(agent_id), 32 hex>.json` =
+`{"agent_id","agent_type","via":"stop"|"handback","tokens"}`, at the moment it blocks or
+denies — exclusive create, so a second challenge for the same `agent_id` finds it and
+stays silent. This is the whole once-per-agent mechanism across both delivery paths.
+
+- The directory carries its own `.gitignore` (`*`), so nothing shows up in `git status`.
+- Markers older than 24 h are deleted the next time any report is challenged.
+- A directory that cannot be written: the hand-back path does not deny at all (an
+  unrecorded deny could repeat), the `SubagentStop` path falls back to
+  `stop_hook_active` alone.
+- UNINSTALL removes the directory; DISABLE leaves it.
+
+The contract hook writes nothing. No temp dirs, no network.
 
 ---
 
 ## settings.json hook entry shape
 
 `<absdir>` = absolute path of the hooks dir the 3 files were copied into
-(`<repo>/.claude/hooks` for project, `~/.claude/hooks` expanded for global).
+(`<repo>/.claude/hooks` for project, `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks` expanded
+for global).
 
 ```json
 {
@@ -289,13 +356,23 @@ network. The only reads are stdin and the config file.
     ],
     "SubagentStop": [
       { "hooks": [ { "type": "command", "command": "node", "args": ["<absdir>/agent-return-guard.mjs"], "timeout": 5 } ] }
+    ],
+    "PreToolUse": [
+      { "matcher": "SubagentHandback", "hooks": [ { "type": "command", "command": "node", "args": ["<absdir>/agent-return-guard.mjs"], "timeout": 5 } ] }
     ]
   }
 }
 ```
 
-Both entries are **matcher-less on purpose** — the contract has to reach every agent
-type, and the budget applies to every agent type.
+The two `Subagent*` entries are **matcher-less on purpose** — the contract has to reach
+every agent type, and the budget applies to every agent type. The `PreToolUse` entry is
+scoped to the one tool that carries an auto-mode report, so it costs nothing on any
+other tool call. The same guard script serves both events and tells them apart by
+`hook_event_name`. Exec form (`command` + `args`): no shell, no quoting of the path.
+
+No `onFailure` on any entry: it has no effect on `SubagentStop`, and on the `PreToolUse`
+entry `"block"` would turn a missing or crashed script into a denied hand-back, i.e. a
+lost report. A size guard fails open.
 
 Merge rule, in order:
 
@@ -305,41 +382,49 @@ Merge rule, in order:
    earlier install into another directory — Claude Code logs a hook failure for each
    of them). Match on the FULL path, not the basename. Entries with no agent-return
    arg are foreign: never touched.
-3. APPEND into `SubagentStart` / `SubagentStop` — never overwrite — only if the exact
-   `<absdir>/<script>` path is not already there (idempotent re-install).
-4. Re-read the written file and assert exactly one entry per script.
+3. APPEND into `SubagentStart` / `SubagentStop` / `PreToolUse` — never overwrite — only
+   if the exact `<absdir>/<script>` path is not already in that event (idempotent
+   re-install).
+4. Re-read the written file and assert exactly one entry per event.
 
 Marker for all agent-return entries = any hook whose `args` contain a path ending in
 one of those two basenames. `agent-return-budget.mjs` is NEVER registered — it is a
 library, imported by both hooks.
 
 `timeout` is in SECONDS and is not optional here: an entry without it inherits Claude
-Code's 600 s default, so a hung `node` would stall the subagent's stop. **5 s for both**
-— deliberately wider than the 3 s the neighbouring `agent-deadline-cleanup.mjs` uses,
-because the guard reads and sizes a message that can be hundreds of KB. Measured worst
-case is 56 ms against 5000 ms.
+Code's 600 s default, so a hung `node` would stall the subagent's stop or its hand-back.
+**5 s for all three** — deliberately wider than the 3 s the neighbouring
+`agent-deadline-cleanup.mjs` uses, because the guard reads and sizes a message that can
+be hundreds of KB. Measured worst case is 53 ms against 5000 ms.
 
-> Coexistence with `/brewtools:agent-deadline-setup`: both skills register a
-> `SubagentStop` entry and both may be installed side by side. All hooks in a matched
-> group run together; `agent-deadline-cleanup.mjs` always returns `{}`, so there is no
-> competing `decision` in the group. The merge blocks below only ever touch entries
-> whose `args` name an agent-return script, so installing or uninstalling one skill
-> never disturbs the other.
+> Coexistence with `/brewtools:agent-deadline-setup`: both skills register `SubagentStop`
+> and `PreToolUse` entries and both may be installed side by side. Hooks matched by one
+> event run in parallel and cannot see each other's decision. agent-return never reads,
+> writes or deletes the deadline state, and its own markers live in a different
+> directory. What a challenge costs the deadline: the extra turn it grants runs on the
+> agent's ORIGINAL clock only when the installed agent-deadline keeps its state across
+> `SubagentStop`; an older one deletes the state there and restarts the clock. The
+> deadline guard must allow `SubagentHandback` past its limit — otherwise two guards
+> deny the same call, and repeated denies make the harness withhold the report. The
+> merge blocks below only ever touch entries whose `args` name an agent-return script,
+> so installing or uninstalling one skill never disturbs the other.
 
-Cost, from the SPEC's measured runtime table (Node v24.1.0, 15 invocations each, wall
-clock including node startup):
+Cost, measured (Node v24.19.0, 15 invocations each, wall clock including node startup,
+default thresholds; a challenged row includes the marker write and the prune listing):
 
 | Scenario | min ms | p50 ms | max ms |
 |---|---|---|---|
-| guard, 4000-char pass | 30 | 33 | 56 |
-| guard, 10004-char file order | 32 | 36 | 54 |
-| guard, 200000-char message | 30 | 32 | 34 |
-| contract | 29 | 31 | 33 |
+| guard, 4000-char pass (`SubagentStop`) | 28 | 31 | 33 |
+| guard, 10004-char compress order, challenged (`SubagentStop`) | 30 | 32 | 36 |
+| guard, 24004-char file order, challenged (`SubagentHandback`) | 32 | 36 | 53 |
+| guard, 200000-char message, challenged | 31 | 32 | 34 |
+| contract | 26 | 28 | 30 |
 
-Node startup dominates; message size barely registers. Unlike `agent-deadline`, whose
-guard sits on a `.*` PreToolUse matcher and charges ~58 ms to EVERY tool call, these two
-fire only at subagent spawn and subagent stop — about 30-56 ms, twice per subagent. A
-global install is cheap here. Re-measure on your own machine before quoting these
+Node startup dominates; message size and the marker write barely register. Unlike
+`agent-deadline`, whose guard sits on a `.*` PreToolUse matcher and charges ~58 ms to
+EVERY tool call, these fire only at subagent spawn, at each subagent stop and — in auto
+mode — at the `SubagentHandback` call: about 30-53 ms, two or three times per subagent.
+A global install is cheap here. Re-measure on your own machine before quoting these
 numbers as facts.
 
 ---
@@ -356,7 +441,7 @@ Project paths are writable with normal tools (`Write`/`Edit`/`Bash` all fine).
    expands to empty in Bash.)
 3. Write `<repo>/.claude/agent-return.json` — the **Config** block above with
    `CFG="$ROOT/.claude/agent-return.json"`, honouring `PASS_TOKENS`/`FILE_TOKENS`.
-4. Merge the 2 hook entries into `<repo>/.claude/settings.json`
+4. Merge the 3 hook entries into `<repo>/.claude/settings.json`
    (create `{}` if absent), `<absdir>` = `<repo>/.claude/hooks`.
 
 **EXECUTE** copy (project, Bash tool; `RUNBOOK` = absolute path to this INSTALL.md):
@@ -404,7 +489,7 @@ if(fs.existsSync(f)){
   }
 }
 s.hooks=s.hooks||{};
-const want=[["SubagentStart",null,"agent-return-contract.mjs",5],["SubagentStop",null,"agent-return-guard.mjs",5]];
+const want=[["SubagentStart",null,"agent-return-contract.mjs",5],["SubagentStop",null,"agent-return-guard.mjs",5],["PreToolUse","SubagentHandback","agent-return-guard.mjs",5]];
 const argsOf=e=>((e&&e.hooks)||[]).flatMap(h=>(h&&h.args)||[]).filter(a=>typeof a==="string");
 const isAR=a=>marks.some(m=>a===m||a.endsWith("/"+m)||a.endsWith("\\"+m));
 const wanted=new Set(marks.map(m=>path.join(dir,m)));
@@ -444,16 +529,21 @@ console.log("OK merged "+f);
 
 ## GLOBAL target  (`~/.claude/`)
 
-CRITICAL: `~/.claude/*` is a SENSITIVE path. `Write` / `Edit` / `MultiEdit` there is
+CRITICAL: `~/.claude/*` is a SENSITIVE path. `Write` / `Edit` there is
 an ASK — it prompts in `default`/`acceptEdits`, is auto-approved only under
 `bypassPermissions`, and FAILS outright headless without bypass. The global install
 MUST go entirely through the **Bash tool** (`cp`, `node`, `printf`), the only route
 that works unattended.
 
+The global scope is the directory the running Claude Code uses as its config dir:
+`${CLAUDE_CONFIG_DIR:-$HOME/.claude}`. With `CLAUDE_CONFIG_DIR` set, `~/.claude/settings.json`
+is not read at all, so an install written there would never fire. Every global block
+below resolves that directory itself; the same permission rules apply to it.
+
 **EXECUTE** copy (global, Bash tool; `RUNBOOK` = absolute path to this INSTALL.md):
 ```
 SRC="$(dirname "$RUNBOOK")"
-DST="$HOME/.claude/hooks"
+DST="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks"
 mkdir -p "$DST" && \
 cp "$SRC/agent-return-budget.mjs" "$SRC/agent-return-contract.mjs" "$SRC/agent-return-guard.mjs" "$DST/" && \
 test -f "$DST/agent-return-budget.mjs" && test -f "$DST/agent-return-contract.mjs" && test -f "$DST/agent-return-guard.mjs" && \
@@ -466,7 +556,8 @@ echo "✅ copied + verified in $DST" || echo "❌ FAILED"
 **EXECUTE** merge settings (global — the SAME node script as the project block,
 only `SETTINGS`/`HOOKS_DIR` change; `~/.claude` is Bash-only):
 ```
-SETTINGS="$HOME/.claude/settings.json" HOOKS_DIR="$HOME/.claude/hooks" node -e '
+G="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+SETTINGS="$G/settings.json" HOOKS_DIR="$G/hooks" node -e '
 const fs=require("fs"), path=require("path");
 const f=process.env.SETTINGS, dir=process.env.HOOKS_DIR;
 const marks=["agent-return-contract.mjs","agent-return-guard.mjs"];
@@ -494,7 +585,7 @@ if(fs.existsSync(f)){
   }
 }
 s.hooks=s.hooks||{};
-const want=[["SubagentStart",null,"agent-return-contract.mjs",5],["SubagentStop",null,"agent-return-guard.mjs",5]];
+const want=[["SubagentStart",null,"agent-return-contract.mjs",5],["SubagentStop",null,"agent-return-guard.mjs",5],["PreToolUse","SubagentHandback","agent-return-guard.mjs",5]];
 const argsOf=e=>((e&&e.hooks)||[]).flatMap(h=>(h&&h.args)||[]).filter(a=>typeof a==="string");
 const isAR=a=>marks.some(m=>a===m||a.endsWith("/"+m)||a.endsWith("\\"+m));
 const wanted=new Set(marks.map(m=>path.join(dir,m)));
@@ -523,12 +614,12 @@ console.log("OK merged "+f);
 ' && echo "✅ settings" || echo "❌ FAILED"
 ```
 
-> **STOP if ❌** — fix before continuing. An ABORT means `~/.claude/settings.json`
+> **STOP if ❌** — fix before continuing. An ABORT means the global `settings.json`
 > was left EXACTLY as it was: `model`, `env`, `permissions.deny` and every foreign
 > hook are intact. Fix the JSON by hand, then re-run.
 
 > Bash file writes to `~/.claude/*` are currently allowed; only the
-> Write/Edit/MultiEdit TOOLS are blocked. Re-check this if a future CC release
+> Write/Edit TOOLS are blocked. Re-check this if a future CC release
 > tightens it — the copy block's `test -f` is what catches the regression.
 
 ---
@@ -544,29 +635,38 @@ ONE scope against the current assets, at the thresholds ALREADY configured.
 
 ```
 # project: CFG="$ROOT/.claude/agent-return.json"
-# global:  CFG="$HOME/.claude/agent-return.json"
+# global:  CFG="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/agent-return.json"
 PAIR=$(CFG="$ROOT/.claude/agent-return.json" node -e '
 const fs=require("fs"); const f=process.env.CFG;
 if(!fs.existsSync(f)){ console.error("ABORT: not installed in this scope - no config at "+f+"; run INSTALL instead"); process.exit(1); }
 let c; try{ c=JSON.parse(fs.readFileSync(f,"utf8")||"{}"); }
 catch(e){ console.error("ABORT: "+f+" is not valid JSON ("+e.message+") - fix it; nothing was written"); process.exit(1); }
-const p=Number(c&&c.passTokens), q=Number(c&&c.fileTokens);
+let p=Number(c&&c.passTokens), q=Number(c&&c.fileTokens);
 if(!Number.isInteger(p)||p<=0||!Number.isInteger(q)||q<=0){ console.error("ABORT: config has no usable passTokens/fileTokens ("+JSON.stringify([c&&c.passTokens,c&&c.fileTokens])+") - run INSTALL and pick them"); process.exit(1); }
+if(p===1000&&q===2500&&!Object.prototype.hasOwnProperty.call(c,"readOnlyAgentTypes")){ p=2500; q=6000; console.error("NOTE: pre-6.5 default pair 1000/2500 found - migrating to the current defaults 2500/6000"); }
 process.stdout.write(p+" "+q);
 ') && export PASS_TOKENS="${PAIR% *}" FILE_TOKENS="${PAIR#* }" && echo "✅ PASS_TOKENS=$PASS_TOKENS FILE_TOKENS=$FILE_TOKENS" || echo "❌ FAILED"
 ```
 
 > **STOP if ❌** — no config, a broken config or missing thresholds means this is an
-> INSTALL (ask the user for scope and thresholds), not an upgrade. Never default to
-> `1000`/`2500` here.
+> INSTALL (ask the user for scope and thresholds), not an upgrade. Never invent a
+> threshold here.
+
+> One migration, once: a config holding exactly `1000`/`2500` AND no `readOnlyAgentTypes`
+> key is an install from before the defaults were raised — that pair truncated real
+> reports — so it moves to `2500`/`6000` and the block prints a `NOTE:`. The Config
+> block then writes `readOnlyAgentTypes`, so a user who sets `1000`/`2500` back by hand
+> keeps it on every later upgrade. Any other pair is preserved as is.
 
 2. Re-run the **EXECUTE copy** block for that scope (*PROJECT target* or *GLOBAL target*)
    — it overwrites all three files with the current ones and `node --check`s them.
 3. Re-run the **Config** block for that scope with the two vars exported above —
    `enabled` is preserved, so a disabled setup stays disabled, only keys a newer version
-   introduced are added, and `version` / `generated_by` / `last_updated` are re-stamped.
+   introduced are added (`readOnlyAgentTypes`, when absent), and `version` / `generated_by` /
+   `last_updated` are re-stamped.
 4. Re-run the **merge settings** block for that scope — it drops its own stale-path
-   entries first, so a moved hooks dir converges.
+   entries first, so a moved hooks dir converges, and adds the `PreToolUse`
+   `SubagentHandback` registration an older install lacks.
 
 Nothing is asked and nothing is deleted. Upgrade ONE scope per run; "both" is two runs.
 
@@ -584,7 +684,7 @@ config on every call, so this takes effect immediately, no restart.
 metadata keys.
 ```
 # project: CFG="$ROOT/.claude/agent-return.json"
-# global:  CFG="$HOME/.claude/agent-return.json"
+# global:  CFG="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/agent-return.json"
 SRC="$(dirname "$RUNBOOK")"
 CFG="$ROOT/.claude/agent-return.json" PJSON="$SRC/../../../.claude-plugin/plugin.json" node -e '
 const fs=require("fs"), p=require("path"); const f=process.env.CFG;
@@ -609,7 +709,7 @@ function contentVersion(){                      // own-header only; no plugin.js
   }catch{}
   return "";
 }
-let c={passTokens:1000,fileTokens:2500};
+let c={passTokens:2500,fileTokens:6000};
 if(fs.existsSync(f)){
   const raw=fs.readFileSync(f,"utf8");
   if(raw.trim()){
@@ -646,16 +746,18 @@ no reinstall, no restart.
 
 ## UNINSTALL  (settings entries + hook files; config kept)
 
-Marker = the 2 registered script basenames; the shared `agent-return-budget.mjs` is
-never registered but IS removed with them. ONE scope per run — uninstall the scope you
-were asked about and leave the other alone. Foreign hook entries, including
-`agent-deadline-cleanup.mjs` in the same `SubagentStop` group, are never touched.
+Marker = the 2 registered script basenames, which covers all THREE registrations
+(`SubagentStart`, `SubagentStop`, `PreToolUse` `SubagentHandback`); the shared
+`agent-return-budget.mjs` is never registered but IS removed with them, and so is this
+scope's `agent-return-state/` directory. ONE scope per run — uninstall the scope you
+were asked about and leave the other alone. Foreign hook entries, including the
+agent-deadline hooks in the same `SubagentStop` and `PreToolUse` events, are never touched.
 
-**EXECUTE** using Bash tool — pick ONE pair of paths:
+**EXECUTE** using Bash tool — pick ONE set of paths:
 ```
-# GLOBAL:  HOOKS_DIR="$HOME/.claude/hooks"; SETTINGS="$HOME/.claude/settings.json"
-# PROJECT: HOOKS_DIR="$ROOT/.claude/hooks";  SETTINGS="$ROOT/.claude/settings.json"
-export HOOKS_DIR="$ROOT/.claude/hooks" SETTINGS="$ROOT/.claude/settings.json"
+# GLOBAL:  G="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"; HOOKS_DIR="$G/hooks"; SETTINGS="$G/settings.json"; STATE_DIR="$G/agent-return-state"
+# PROJECT: HOOKS_DIR="$ROOT/.claude/hooks";  SETTINGS="$ROOT/.claude/settings.json";  STATE_DIR="$ROOT/.claude/agent-return-state"
+export HOOKS_DIR="$ROOT/.claude/hooks" SETTINGS="$ROOT/.claude/settings.json" STATE_DIR="$ROOT/.claude/agent-return-state"
 node -e '
 const fs=require("fs");
 const f=process.env.SETTINGS;
@@ -697,10 +799,16 @@ if(left!==0){ console.error("ABORT: verification failed - "+left+" agent-return 
 console.log("OK cleaned "+f);
 ' && rm -f "$HOOKS_DIR/agent-return-contract.mjs" "$HOOKS_DIR/agent-return-guard.mjs" "$HOOKS_DIR/agent-return-budget.mjs" \
   && test ! -e "$HOOKS_DIR/agent-return-contract.mjs" && test ! -e "$HOOKS_DIR/agent-return-guard.mjs" && test ! -e "$HOOKS_DIR/agent-return-budget.mjs" \
+  && { case "$STATE_DIR" in */agent-return-state) rm -rf "$STATE_DIR";; *) echo "STATE_DIR must end in /agent-return-state, got: '$STATE_DIR'"; false;; esac; } \
+  && test ! -e "$STATE_DIR" \
   && echo "✅ uninstalled from $HOOKS_DIR" || echo "❌ FAILED"
 ```
 
 > **STOP if ❌** — fix before continuing.
+
+> `STATE_DIR` holds only the once-per-agent markers (a `.gitignore` plus one small JSON
+> per challenged agent). Removing it while a subagent is running costs at most one
+> repeated challenge for that agent, never a lost report.
 
 > Global uninstall: `Write`/`Edit` on `~/.claude/*` prompts and fails headless — use the
 > Bash `node`/`rm` form above, never Edit/Write. Project uninstall may use Edit.
@@ -709,12 +817,12 @@ console.log("OK cleaned "+f);
 
 Run UNINSTALL for THIS scope first, then delete THIS scope's config. `CFG` is a
 single path — purging the project MUST NOT delete the global config, and vice
-versa. There is no state to wipe: neither hook ever writes one.
+versa. The state directory is already gone: UNINSTALL removed it.
 
 **EXECUTE** using Bash tool:
 ```
 # project: CFG="$ROOT/.claude/agent-return.json"
-# global:  CFG="$HOME/.claude/agent-return.json"
+# global:  CFG="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/agent-return.json"
 CFG="$ROOT/.claude/agent-return.json"
 rm -f "$CFG" && test ! -e "$CFG" && echo "✅ removed $CFG" || echo "❌ FAILED"
 ```
@@ -725,59 +833,85 @@ rm -f "$CFG" && test ! -e "$CFG" && echo "✅ removed $CFG" || echo "❌ FAILED"
 
 ## Verify
 
-Synthetic payloads, no session needed. Read-only: nothing below writes a file.
-`<absdir>` = installed hooks dir. Run these from a dir whose
-`.claude/agent-return.json` has `enabled:true` — the hooks resolve their config from
-the process cwd, so `cd` to that repo first.
+Synthetic payloads, no session needed. `<absdir>` = installed hooks dir. Run these from
+a dir whose `.claude/agent-return.json` has `enabled:true` and the default thresholds
+`2500`/`6000` — the hooks resolve their config from the process cwd, so `cd` to that repo
+first. Every case that blocks writes one marker into that scope's `agent-return-state/`,
+so each case carries its own `agent_id`; before a second pass over the list, delete the
+`verify-*` markers' directory (`rm -rf .claude/agent-return-state`) or every blocking
+case prints `{}`.
 
 ```
 # 1. under budget (400 chars = 100 tok) -> must print {}
-node -e 'process.stdout.write(JSON.stringify({hook_event_name:"SubagentStop",agent_type:"general-purpose",last_assistant_message:"x".repeat(400)}))' \
+node -e 'process.stdout.write(JSON.stringify({hook_event_name:"SubagentStop",agent_id:"verify-1",agent_type:"general-purpose",last_assistant_message:"x".repeat(400)}))' \
   | node <absdir>/agent-return-guard.mjs; echo " exit=$?"
 
-# 2. compress tier (4004 chars = 1001 tok) -> {"decision":"block","reason":"RETURN TOO LARGE (~1001 tokens, budget 1000)...
+# 2. classic path, compress tier (10004 chars = 2501 tok)
+#    -> {"decision":"block","reason":"RETURN TOO LARGE (~2501 tokens, budget 2500)...
 #    the reason must NOT contain a .claude/reports/ path
-node -e 'process.stdout.write(JSON.stringify({hook_event_name:"SubagentStop",agent_type:"general-purpose",last_assistant_message:"x".repeat(4004)}))' \
+node -e 'process.stdout.write(JSON.stringify({hook_event_name:"SubagentStop",agent_id:"verify-2",agent_type:"general-purpose",last_assistant_message:"x".repeat(10004)}))' \
+  | node <absdir>/agent-return-guard.mjs; echo " exit=$?"
+#    once per agent: the SAME payload again -> must print {}
+node -e 'process.stdout.write(JSON.stringify({hook_event_name:"SubagentStop",agent_id:"verify-2",agent_type:"general-purpose",last_assistant_message:"x".repeat(10004)}))' \
   | node <absdir>/agent-return-guard.mjs; echo " exit=$?"
 
-# 3. file tier (10004 chars = 2501 tok) -> block, reason names
-#    `<project-root>/.claude/reports/YYYYMMDD-HHMMSS_general-purpose-<run-id>/`
-#    — absolute, today's date, 8-char run id (random here, no agent_id supplied)
-node -e 'process.stdout.write(JSON.stringify({hook_event_name:"SubagentStop",agent_type:"general-purpose",last_assistant_message:"x".repeat(10004)}))' \
+# 3. classic path, file tier (24004 chars = 6001 tok) -> block, reason names
+#    `<project-root>/.claude/reports/YYYYMMDD-HHMMSS_general-purpose-verify3/`
+#    — absolute, today's date, run id from agent_id
+node -e 'process.stdout.write(JSON.stringify({hook_event_name:"SubagentStop",agent_id:"verify-3",agent_type:"general-purpose",last_assistant_message:"x".repeat(24004)}))' \
   | node <absdir>/agent-return-guard.mjs; echo " exit=$?"
 
-# 4. loop brake: same oversized payload + stop_hook_active -> must print {}
-node -e 'process.stdout.write(JSON.stringify({hook_event_name:"SubagentStop",stop_hook_active:true,agent_type:"general-purpose",last_assistant_message:"x".repeat(10004)}))' \
+# 4. auto path (hand-back), compress tier -> {"hookSpecificOutput":{"hookEventName":"PreToolUse",
+#    "permissionDecision":"deny","permissionDecisionReason":"RETURN TOO LARGE (~2501 tokens, budget 2500)...
+node -e 'process.stdout.write(JSON.stringify({hook_event_name:"PreToolUse",tool_name:"SubagentHandback",agent_id:"verify-4",agent_type:"general-purpose",tool_input:{message:"x".repeat(10004)}}))' \
   | node <absdir>/agent-return-guard.mjs; echo " exit=$?"
-#    and the STRING "true" is NOT a brake -> must block
-node -e 'process.stdout.write(JSON.stringify({hook_event_name:"SubagentStop",stop_hook_active:"true",agent_type:"general-purpose",last_assistant_message:"x".repeat(4004)}))' \
+#    once across BOTH paths: a SubagentStop for the same agent -> must print {}
+node -e 'process.stdout.write(JSON.stringify({hook_event_name:"SubagentStop",agent_id:"verify-4",agent_type:"general-purpose",last_assistant_message:"x".repeat(10004)}))' \
   | node <absdir>/agent-return-guard.mjs; echo " exit=$?"
 
-# 5. fail-open: malformed stdin, empty stdin, a bare array -> {} and exit 0 each time
+# 5. read-only agent over the file threshold -> deny, reason says "This agent cannot write
+#    files" and must NOT contain a .claude/reports/ path
+node -e 'process.stdout.write(JSON.stringify({hook_event_name:"PreToolUse",tool_name:"SubagentHandback",agent_id:"verify-5",agent_type:"Explore",tool_input:{message:"x".repeat(24004)}}))' \
+  | node <absdir>/agent-return-guard.mjs; echo " exit=$?"
+
+# 6. loop brake: oversized payload + stop_hook_active -> must print {}
+node -e 'process.stdout.write(JSON.stringify({hook_event_name:"SubagentStop",agent_id:"verify-6",stop_hook_active:true,agent_type:"general-purpose",last_assistant_message:"x".repeat(24004)}))' \
+  | node <absdir>/agent-return-guard.mjs; echo " exit=$?"
+
+# 7. no agent_id (main session, internal agent) -> must print {} at any size
+node -e 'process.stdout.write(JSON.stringify({hook_event_name:"SubagentStop",agent_type:"general-purpose",last_assistant_message:"x".repeat(24004)}))' \
+  | node <absdir>/agent-return-guard.mjs; echo " exit=$?"
+
+# 8. fail-open: malformed stdin, empty stdin, a bare array -> {} and exit 0 each time
 printf 'not json at all' | node <absdir>/agent-return-guard.mjs; echo " exit=$?"
 printf ''                | node <absdir>/agent-return-guard.mjs; echo " exit=$?"
 echo '[1,2,3]'           | node <absdir>/agent-return-guard.mjs; echo " exit=$?"
 
-# 6. contract schema: no stdin at all -> hookSpecificOutput.hookEventName == "SubagentStart"
-#    and a non-empty additionalContext quoting the two configured numbers
+# 9. contract schema: no stdin at all -> hookSpecificOutput.hookEventName == "SubagentStart"
+#    and an additionalContext quoting the two configured numbers; with
+#    {"agent_type":"Explore"} on stdin the text has no .claude/reports/ path
 node <absdir>/agent-return-contract.mjs </dev/null; echo " exit=$?"
+echo '{"agent_type":"Explore"}' | node <absdir>/agent-return-contract.mjs; echo " exit=$?"
 
-# 7. config-absent no-op: run from a dir with no agent-return.json in any ancestor
-#    and no ~/.claude/agent-return.json -> BOTH hooks print {}
+# 10. config-absent no-op: run from a dir with no agent-return.json in any ancestor, none in
+#     $CLAUDE_CONFIG_DIR and none in ~/.claude -> BOTH hooks print {}
 ```
 
 Every case must exit `0`. **No case may ever exit 2** — exit 2 on a `SubagentStop` hook
 is the only way to wedge an agent.
 
 Announced == enforced: with `passTokens: 500`, `fileTokens: 800` the contract from case
-6 must announce `~500` / `~800` and case 2's threshold must move with it. If the two
+9 must announce `~500` / `~800` and case 2's threshold must move with it. If the two
 disagree, the shared module was bypassed.
 
-Live check: spawn any subagent and ask for a deliberately long report. Its own
-transcript gets a user turn prefixed `Stop hook feedback:` carrying the compress or file
-order, and its second return is smaller. Note that `SubagentStop` hook attachments are
-NOT transcript-recorded — transcript silence is not evidence of non-firing; the
-observables are that feedback turn and the shrunken return.
+Live check: spawn any subagent and ask for a deliberately long report. In the default
+permission mode its own transcript gets a user turn prefixed `Stop hook feedback:`
+carrying the order; in auto mode its `SubagentHandback` call comes back as an error tool
+result prefixed `PreToolUse:SubagentHandback hook error:`. Either way the report the
+caller receives is the second, smaller one, and `agent-return-state/` holds one marker
+for that agent. Note that `SubagentStop` hook attachments are NOT transcript-recorded —
+transcript silence is not evidence of non-firing; the observables are the feedback, the
+shrunken return and the marker.
 
 > After install or removal `/reload-plugins` is NOT needed (plain settings.json
 > hooks, not plugin hooks), but Claude Code loads hook config at session start —

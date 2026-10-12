@@ -1,6 +1,7 @@
 ---
 doc_type: llm
 version: "{PLUGIN_VERSION}"
+content_version: "{CONTENT_VERSION}"
 generated_by: "{GENERATED_BY}"
 last_updated: "{LAST_UPDATED}"
 ---
@@ -19,7 +20,7 @@ where this guidance conflicts, the **project rule WINS**. Cite the project rule 
 | Memory | Slice capacity/aliasing, pointer vs value semantics, `defer` for cleanup |
 | Reuse | stdlib (`strings`, `slices`, `maps`, `errors`, `io`) + existing internal packages before new code |
 | Security | SQL parameterization, input validation, no command injection (report only if CRITICAL/P0) |
-| Interfaces | Small interfaces, accept interfaces / return structs, composition over inheritance |
+| Interfaces | Small interfaces (1-3 methods) defined at the consumer, accept interfaces / return structs, composition (embedding) over large interfaces |
 
 ## File Patterns
 
@@ -29,29 +30,7 @@ where this guidance conflicts, the **project rule WINS**. Cite the project rule 
 | Tests | `*_test.go` |
 | Build/Config | `go.mod`, `go.sum`, `Dockerfile*`, `docker-compose.yml`, `.github/workflows/*.yml` |
 
-## Naming
-
-| Type | Convention | Example |
-|------|------------|---------|
-| Packages | short, lowercase, no underscores | `httpclient` |
-| Exported | PascalCase | `NewUserService` |
-| Unexported | camelCase | `parseConfig` |
-| Interfaces | `-er` suffix where natural | `Reader`, `Validator` |
-| Errors | `Err*` sentinel / `*Error` type | `ErrNotFound` |
-
 ## Error Handling
-
-```go
-// Wrap with context, preserve the chain
-if err != nil {
-    return fmt.Errorf("fetch user %d: %w", id, err)
-}
-
-// Sentinel comparison
-if errors.Is(err, ErrNotFound) {
-    ...
-}
-```
 
 | Rule | Verdict |
 |------|---------|
@@ -69,11 +48,6 @@ if errors.Is(err, ErrNotFound) {
 | Guard shared state (`sync.Mutex` / channels) — no data races | REQ |
 | No goroutine leaks (every goroutine has a clear exit) | REQ |
 | `errgroup` / `sync.WaitGroup` for fan-out | PREF |
-
-## Interfaces & Structure
-
-Accept interfaces, return concrete structs. Keep interfaces small (1-3 methods). Define interfaces at the consumer,
-not the producer. Prefer composition (embedding) over large interfaces.
 
 ## Logging
 
@@ -103,21 +77,6 @@ func TestGetUser(t *testing.T) {
     require.Equal(t, want, got)
 }
 ```
-
-## Common Violations
-
-| # | Violation | Fix |
-|---|-----------|-----|
-| 1 | Ignored `err` | Handle or wrap with `%w` |
-| 2 | `panic` for ordinary error | Return an error |
-| 3 | Missing `context.Context` propagation | Pass `ctx` as first arg |
-| 4 | Goroutine leak | Ensure a clear exit / `ctx` cancel |
-| 5 | Data race on shared state | Mutex / channel |
-| 6 | Large interface | Split into small interfaces |
-| 7 | `fmt.Println` in prod | Project structured logger |
-| 8 | Reinventing stdlib (`slices`/`maps`) | Reuse stdlib |
-| 9 | Logged secret | Redact (P0) |
-| 10 | Floating dependency / `replace` to a branch | Pin exact module version |
 
 ## Search Locations (reuse-first)
 

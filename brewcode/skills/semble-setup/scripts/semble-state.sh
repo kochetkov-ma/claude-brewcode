@@ -4,6 +4,7 @@
 # union-merged, unparseable JSON ABORTs with exit 1 and writes nothing.
 set -euo pipefail
 SC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source-path=SCRIPTDIR source=lib/semble-common.sh
 . "$SC_DIR/lib/semble-common.sh"
 
 JSON=0

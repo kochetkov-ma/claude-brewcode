@@ -1,7 +1,5 @@
 # GitHub Command Safety Classification
 
-> Reference for command classification and confirmation gates.
-
 ## Classification Levels
 
 | Level | Gate | Description |
@@ -87,8 +85,8 @@
 ## Confirmation Message Format
 
 Reuse an existing explicit approval envelope covering the exact repository, target, commands,
-payload, and time window. Ordinary subagents return missing decisions to the main caller;
-the caller asks the user once with a concrete preview. Never broaden approval implicitly.
+payload, and time window. Ordinary subagents return missing decisions to the caller, which asks
+the user once with a concrete preview. Never broaden approval implicitly.
 
 ### MODIFY/SERVICE
 
@@ -121,9 +119,10 @@ Proceed?
 If any command returns unexpected output suggesting:
 - Wrong repository (owner/name mismatch)
 - Production branch when expecting staging/dev
+- A production deploy of a branch/preview build instead of a release-tag build
 - Force push to main/master
 - Deleting a non-draft release with downloads
 - Tag already exists on remote with different commit
 
-**STOP immediately.** Report findings; the main caller resolves the invalid approval envelope
-before continuing. Ordinary subagents return the discrepancy and required decision to that caller.
+**STOP immediately.** Report findings; the caller resolves the invalid approval envelope before
+continuing (an ordinary subagent returns the discrepancy and the required decision to it).

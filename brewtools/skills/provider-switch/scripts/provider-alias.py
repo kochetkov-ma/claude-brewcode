@@ -16,7 +16,7 @@ PROVIDERS = {
         'CLAUDE_ENABLE_BYTE_WATCHDOG': '0', 'CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS': '1'}),
     'openrouter': ('https://openrouter.ai/api', 'OPENROUTER_API_KEY', {}),
 }
-ROLES = ('OPUS', 'SONNET', 'HAIKU')
+ROLES = ('OPUS', 'SONNET', 'HAIKU', 'FABLE')
 MODEL_PATTERN = r'[A-Za-z0-9][A-Za-z0-9._-]*(?:/[A-Za-z0-9][A-Za-z0-9._-]*)*(?::[A-Za-z0-9][A-Za-z0-9._-]*)?(?:\[1m\])?'
 
 
@@ -54,6 +54,8 @@ def legacy_request(name, body):
         expected = {'ANTHROPIC_BASE_URL': values.get('ANTHROPIC_BASE_URL', ''),
                     'ANTHROPIC_AUTH_TOKEN': '$' + key, 'ANTHROPIC_API_KEY': '', **flags}
         expected.update({'ANTHROPIC_DEFAULT_' + role + '_MODEL': model for role in ROLES})
+        if 'ANTHROPIC_DEFAULT_FABLE_MODEL' not in values:  # pre-FABLE alias: three roles stay valid
+            del expected['ANTHROPIC_DEFAULT_FABLE_MODEL']
         if values != expected:
             fail()
         return {'alias_name': name, 'provider': provider, 'model_id': model,

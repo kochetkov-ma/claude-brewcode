@@ -6,65 +6,70 @@ ORCHESTRATOR-ONLY - a per-file subagent cannot see another layer, so it may neve
 
 ## 1. Precedence lattice
 
-Nearest scope wins on CONFLICT; widest scope wins on COST (a byte in L5 is paid many times, see 3).
+Loading resolves no conflict: every layer is concatenated (managed and user before project, nearer
+directories later) and Claude may follow either side of a contradiction - that goes to
+`contradiction-policy.md`. On duplicates the widest scope wins on COST (a byte in L5 is paid many times, see 2).
 
 | L | Layer | Files | Loads | Delete allowed |
 |---|-------|-------|-------|----------------|
-| L0 | enterprise/managed | `/Library/Application Support/ClaudeCode/*` | every session, org policy | NEVER (read as authority; ABSENT on this machine) |
-| L1 | project CLAUDE.md + `.claude/rules/**/*.md` + `.claude/convention/*` + `AGENTS.md` | repo | unscoped instructions at launch; path rules on matching reads; conventions only if imported/read; AGENTS depends on client/settings | yes |
+| L0 | enterprise/managed | managed `CLAUDE.md`: macOS `/Library/Application Support/ClaudeCode/*`, Linux/WSL `/etc/claude-code/`; managed-settings `claudeMd` | every session, cannot be excluded | NEVER (read as authority) |
+| L1 | project CLAUDE.md + `.claude/rules/**/*.md` + `.claude/convention/*` + `AGENTS.md` | repo | CLAUDE.md + unscoped rules at launch; path rules on first matching file access; conventions only if imported/read; `AGENTS.md` only when no CLAUDE.md/`CLAUDE.local.md` sits at or above the cwd, or when imported | yes |
 | L2 | project-personal `CLAUDE.local.md`, memory dir | repo, git-ignored | local instructions at launch; memory index bounded, topic files on demand | yes, identity/preferences EXEMPT |
 | L3 | global `~/.claude/CLAUDE.md`, `~/.claude/rules/*.md` | machine | EVERY project | only under `--global` (see 5) |
 | L4 | agent `description:` frontmatter / agent `.md` body | plugin or project | roster listing (desc) / spawn (body) | yes |
 | L5 | hook-injected text | `hooks/lib/*.mjs`, hook `additionalContext` | registered events, matcher/cadence dependent | yes, code change |
 
-Project canonical ownership favors `.claude/rules/<topic>.md`; Claude gives unscoped project rules
-the same priority as `.claude/CLAUDE.md`, not a universal rules-win override. Delete a duplicate only
-when the survivor reaches the same audience. Scoped rules are conditional, including `paths: **/*`.
+Project canonical ownership favors `.claude/rules/<topic>.md`; unscoped project rules load with the same
+priority as `.claude/CLAUDE.md`, not as an override. **Audience test** - delete a duplicate only when the
+survivor reaches the same readers:
+
+| Reader | Loads |
+|--------|-------|
+| teammates, CI | git-tracked L1 only; never this machine's L2/L3 |
+| ordinary subagents | the same CLAUDE.md hierarchy and rules as the main session; never auto memory |
+| Explore, Plan, agents with `omitClaudeMd: true` | no user/project/local CLAUDE.md or rules (`omitClaudeMd` keeps managed policy) |
+| a rule with `paths:`, however broad (`**/*` included) | conditional: first matching file access, not launch |
 
 | Rule `paths:` | CLAUDE.md keeps |
 |---------------|-----------------|
 | no `paths` and confirmed loaded | nothing |
 | `**/*` (e.g. `.claude/rules/semble-first.md`) | 1 trigger/pointer unless same-audience loading is proven |
-| narrower (e.g. `docs-workflow.md` -> `brewcode/**`, `web/docs/**`, ...) | exactly 1 line: trigger + rule filename |
+| narrower (e.g. `src/api/**`) | exactly 1 line: trigger + rule filename |
 
-Marker-fenced blocks (`<!-- BEGIN brewcode:semble -->` .. `<!-- END -->`, CLAUDE.md:244-251) are generator
-output. Delete the block, and record the generator (`brewcode:semble-setup`) in the ledger - a re-run rewrites it.
+Marker-fenced blocks (`<!-- BEGIN brewcode:semble -->` .. `<!-- END -->`) are generator output. Delete
+the block, and record the generator (`brewcode:semble-setup`) in the ledger - a re-run rewrites it.
 
 ## 2. Cost weighting
 
-`cost = bytes x actual injections_per_session`; measure registration, matcher and cadence.
-Current source (2026-09-30): reminder payload 472 B (ROLE111 + SPLIT244 + BRANCH115 + 2 newlines),
-`bytes/4` proxy118. Forced-eval emits on eligible prompts 1,10,20,...; skips meta replies and unsafe
-counters. Role-recall emits only `SessionStart` source `compact`. 100 eligible prompts -> 11 emissions,
-5,192 B/proxy1,298, plus compact emissions. Table below retains historical evidence, not current cost.
+`cost = bytes x actual injections_per_session`. Count injections from the registration (event, matcher,
+cadence, skip filters), never from the file's existence; a hook file that is not registered costs 0.
 
-| Rank | Artifact | Bytes | Injections / 100-prompt session | Verified |
-|------|----------|-------|--------------------------------|----------|
-| 1 | `brewcode/hooks/lib/reminder.mjs` `REMINDER_TEXT` (ROLE 161 + SPLIT 302 + BRANCH 171) | 636 (~159 tok) | 100 (UserPromptSubmit) + 1/compaction | `node -e` on the module, file 1526 B |
-| 2 | `.claude/hooks/semble-subagent.mjs:133` message | ~330 | 1 per SUBAGENT spawn | read |
-| 3 | agent `description:` | ~100 ea | 1 per roster render | - |
-| 4 | project CLAUDE.md | 23462 (~5.9k tok) | 1 | `wc -c` |
-| 5 | global `~/.claude/CLAUDE.md` | 7499 | 1, in EVERY project | `wc -c` |
+| Artifact | Injections per session |
+|----------|------------------------|
+| hook text on `UserPromptSubmit` | 1 per eligible prompt, divided by the hook's cadence |
+| hook text on subagent spawn (`SubagentStart`) | 1 per SUBAGENT spawn |
+| hook text on `SessionStart` | 1, +1 per compaction when its matcher includes `compact` |
+| agent `description:` | 1 per roster render |
+| project CLAUDE.md, unscoped rules | 1 at launch; project-root CLAUDE.md is re-injected after `/compact` |
+| global `~/.claude/CLAUDE.md` | 1, in EVERY project |
 
-Historical 159 x100 = ~15.9k proxy tokens/~2.7x old CLAUDE.md, not today's throttle. **Duplication that reaches L5
-dies first, in L5's favour only if L5's registration scope >= the loser's scope** (a project-scoped hook may
-not delete global text; plugin shipping alone proves no registration scope — verify global activation).
+A short per-prompt hook easily outweighs a whole CLAUDE.md. **Duplication that reaches L5 dies first, in
+L5's favour only if L5's registration scope >= the loser's scope** (a project-scoped hook may not delete
+global text; plugin shipping alone proves no registration scope — verify global activation).
 
 ## 3. Detection - 4 grades
 
 **Corpus** = the L0-L5 lattice of section 1 ONLY: the ALWAYS-ON files plus agent `.md` bodies
-(`context-scan.sh` rows with `kind=file` and tier `always-on` or `per-spawn` - 48 files / 1128 pairs in
-this repo). PER-INVOCATION skill bodies and `references/*.md` are NOT cross-layer material: they are not in
-the lattice, and duplication inside one skill's file set is `text-optimize` D.x. `bodies` widens the
-SLIMMING scope, never this corpus.
+(`context-scan.sh` rows with `kind=file` and tier `always-on` or `per-spawn`). PER-INVOCATION skill bodies
+and `references/*.md` are NOT cross-layer material: they are not in the lattice, and duplication inside
+one skill's file set is `text-optimize` D.x. `bodies` widens the SLIMMING scope, never this corpus.
 
 Grades 3a -> 3b -> 3c are mechanical (bash/node, no LLM, no dependency). 3a gates the rest: a file pair
 already IDENTICAL skips straight to arbitration. **3b and 3c are siblings, not a chain** - the judge (3d)
 runs on their UNION. 3b finds copied lines, 3c finds paraphrase; neither subsumes the other.
 
 ### 3a. Exact
-1. `sha256` of whole file -> equal = IDENTICAL, skip to arbitration. Verified defect: `md5 -q` on
-   `.claude/rules/lsp-first.md` and `~/.claude/rules/lsp-first.md` both `864902e833bd831336ca84c2765ee229`, `diff` empty, 15 lines.
+1. `sha256` of whole file -> equal = IDENTICAL, skip to arbitration.
 2. `sha256` per normalized line (3b) -> exact line-level overlap set.
 
 ### 3b. Normalized prefilter (mechanical, bash/node, no LLM)
@@ -83,14 +88,11 @@ Floor rationale: `---`, `| --- |`, `> `, `# avoid`, `| ID | Rule | Notes |` all 
 tokens and would otherwise match every markdown file in the repo.
 
 **Candidate pair** = any two files sharing `N >= 3` normalized-line hashes, OR `>= 1` shared hash when either
-file has fewer than 6 surviving lines (short rule files - lsp-first survives at 8 lines). N=3 chosen because
-2 shared hashes are routinely hit by shared house idioms (a `!=` one-liner plus a `->use` header row); 3
-distinct >=24-char lines is not reachable by idiom alone in this corpus.
+file has fewer than 6 surviving lines (short rule files). N=3: two shared hashes are routinely hit by house
+idioms (a `!=` one-liner plus a `->use` header row); three distinct >=24-char lines are not.
 
-**3b alone is blind to paraphrase, by construction.** Exact line hashing cannot match the same fact written
-twice in different shapes. Measured on this corpus: CLAUDE.md:244-251 (a `>`-quoted marker block) vs all 39
-lines of `.claude/rules/semble-first.md` (a table) share **0** hashes; the Grep/Glob statements in
-CLAUDE.md:101-103 vs `~/.claude/CLAUDE.md:9` share **0**. Both are real defects (section 6). Hence 3c.
+**3b alone is blind to paraphrase, by construction**: a `>`-quoted marker block vs the same policy as a
+rule-file table, and two prose statements of one tool fact, each shared **0** hashes (section 6). Hence 3c.
 
 ### 3c. Topic-key prefilter (mechanical, bash/node, no LLM)
 
@@ -103,32 +105,23 @@ word order and line boundaries entirely.
 2. **Rare**: keep only keys whose corpus document frequency `df <= 3`. A key in <= 3 of the 48 files is
    topic-bearing; anything wider (`file`, `the`, `skill`, `hook`) is house vocabulary and is dropped.
 
-   **Minimum-corpus floor: 3c is DISABLED when the corpus has fewer than 12 files.** `df <= 3` is a
-   relative-rarity filter that only works when 3 is a small fraction of the corpus. At `N <= 3` files
-   the threshold filters NOTHING -- every key present anywhere has `df <= 3`, so `with`, `that` and
-   `file` all qualify as "rare", and the `>= 15 shared rare keys` clause is cleared by any two files
-   that are both prose. Every pair then reaches the judge. 12 is the floor at which `df <= 3` still
-   excludes a key appearing in a quarter of the corpus.
-
-   Below the floor: skip 3c entirely, run 3a + 3b only, and record `3c: skipped (corpus N < 12)` in
-   the run report so the judge input is not silently narrower than it looks. Do NOT compensate by
-   scaling the threshold -- `df <= ceil(N/4)` collapses to `df <= 1` on a 4-file corpus, which is
-   rarity-by-uniqueness and finds nothing.
+   **Minimum-corpus floor: 3c is DISABLED when the corpus has fewer than 12 files.** `df <= 3` is
+   relative rarity: at `N <= 3` files every key qualifies (`with`, `that`, `file`), any two prose files
+   clear `>= 15 shared rare keys`, and every pair reaches the judge. At 12, `df <= 3` still excludes a
+   key in a quarter of the corpus. Below the floor: run 3a + 3b only and record
+   `3c: skipped (corpus N < 12)` in the run report. Do NOT scale the threshold instead -- `df <= ceil(N/4)`
+   collapses to `df <= 1` on a 4-file corpus and finds nothing.
 3. **Class**: a rare key is a CODE key when it contains `_`, a digit, or an inner lowercase->uppercase
    transition (`[a-z][A-Z]`) - `mcp__semble_code__search`, `top_k`, `CLAUDE_CODE_USE_NATIVE_FILE_SEARCH`,
    `goToDefinition`, `2.1.226`. Every other rare key is a WORD key (`Grep`, `Glob`, `ugrep`, `bfs`).
 4. **Candidate pair** = shared CODE keys `>= 5` **OR** total shared rare keys `>= 15`.
 
-Why two clauses: a CODE key is near-conclusive evidence of a shared subject, so 5 suffice - that is what
-catches the semble pair (5 code / 4 word). The Grep/Glob pair carries ZERO code keys, because its subject is
-spelled in plain words; only bulk word overlap (4 code / 16 word = 20) reaches it. Either clause alone misses
-one of the two known defects.
+Why two clauses: a CODE key is near-conclusive evidence of a shared subject, so 5 suffice (calibration
+pair: 5 code / 4 word). A subject spelled in plain words carries no code keys and is reached only by bulk
+word overlap (calibration pair: 4 code / 16 word = 20). Either clause alone missed one of the two.
 
-**False-positive cost, measured on this repo's 48-file / 1128-pair corpus:** 3a = 1 pair, 3b = 19 pairs,
-3c = 31 pairs, judge input `3b U 3c` = **40 pairs (3.5%)**, up from 19. The 21 added pairs are dominated by
-same-plugin agent bodies (`agent-creator` x `hook-creator` x `skill-creator`, `deploy-admin` x `ssh-admin`) -
-genuinely related files a judge should see. Loosening to `df <= 4` doubles the set to 117+ pairs for no new
-defect; tightening to `CODE >= 6` drops the semble pair. Do not retune without re-running the count.
+Calibration (48-file / 1128-pair corpus): judge input `3b U 3c` = 40 pairs (3.5%); `df <= 4` doubled it
+to 117+ for no new defect, `CODE >= 6` lost a known pair. Do not retune without re-running the count.
 
 ### 3d. Semantic judge (LLM) - on the UNION of 3b and 3c candidates
 
@@ -158,17 +151,17 @@ byte count.
 closed with:
 
 ```bash
-bash scripts/context-guard.sh verify-deleted --project --run-dir <RUN_DIR> \
-  --survivor <survivor path> [--survivor <second survivor>] <deleted file>
+bash scripts/context-guard.sh verify-deleted --project --run-dir "<RUN_DIR>" \
+  --survivor "<survivor path>" "<deleted file>"   # one --survivor per extra survivor
 ```
 
-It reconstructs the deleted file's critical tokens from the concatenated survivors and runs the same
-gate against the snapshot. `MERGED_VERIFIED: <path> -> <survivors>` (exit 0) = the justification held
-and deletion stands; exit1 means failed proof/recovery. Checkpoint each known owned atomic edit/deletion
-immediately, before later edits/checks; never capture others' changes or manufacture proof at failure.
-Recovery requires authorization plus matching existing draft proof; concurrent/unproven bytes survive
-`RESTORE_REFUSED`. An unverified deletion or any miss refuses whole-run acceptance. Attempt safe
-recovery across layers, report restored/refused files, never assume every file rolled back.
+It rebuilds the deleted file's critical tokens from the concatenated survivors and runs the same gate
+against the snapshot. `MERGED_VERIFIED: <path> -> <survivors>` (exit 0) = deletion stands; exit 1 =
+failed proof/recovery. Checkpoint each owned atomic edit/deletion immediately; never capture others'
+changes or manufacture proof at failure. Recovery needs authorization plus matching draft proof;
+concurrent/unproven bytes survive `RESTORE_REFUSED`. An unverified deletion or any miss refuses
+whole-run acceptance: attempt safe recovery across layers, report restored/refused files, never assume
+every file rolled back.
 
 ## 5. Global-write branches
 
@@ -178,7 +171,8 @@ L3 is read as AUTHORITY only, never written.
 
 | Situation | Action |
 |-----------|--------|
-| global copy covers project copy | delete the PROJECT copy, ledger it |
+| global copy covers project copy; project copy is L2 or untracked | delete the PROJECT copy, ledger it |
+| global copy covers a git-tracked project copy | keep BOTH, report the pair: teammates and CI never load this machine's L3 |
 | project copy has anything the global copy lacks | keep BOTH, report the pair, no edit |
 | global-only duplication (two global files) | report only |
 
@@ -186,36 +180,29 @@ L3 is read as AUTHORITY only, never written.
 
 Full arbitration; the loser is deleted wherever it lives, after snapshot.
 
-**Cross-project regression trap:** L3 applies to EVERY project on the machine. A global line that is
-redundant HERE may be the only statement of that fact in ten other repos. Guard, both branches:
+**Cross-project regression trap:** L3 applies to EVERY project on the machine; a global line redundant
+HERE may be the only statement of that fact in other repos. The guard covers any MUTATION of L3 -
+deletion, rewrite, narrowing, re-scoping, "correction". A rewrite is worse than a deletion: a deleted
+line is visibly absent, a rewritten one silently asserts a repo-local conclusion machine-wide.
 
-> **The guard covers any MUTATION of L3, not only deletion.** A rewrite, a narrowing, a re-scoping and
-> a "correction" all change what every other project on this machine reads, and a rewrite is strictly
-> worse than a deletion: a deleted line is visibly absent, a rewritten one silently asserts a
-> repo-local conclusion machine-wide.
->
 > 1. **Delete** from L3 only when the surviving copy is at a scope >= L3 (another global file, a
 >    globally registered hook, or L0). A project-layer (L1/L2) survivor NEVER justifies a global
->    deletion - in that case the project copy dies instead, or both stay.
-> 2. **Rewrite** an L3 statement only when its replacement is true for EVERY project, not merely for
->    this repo. Evidence gathered in one repo (a `grep` count here, a tool call observed here, one
->    repo's `tools:` frontmatter) establishes a fact about THIS repo. Machine-wide claims need
->    machine-wide evidence, or the rewrite must carry its own scope qualifier verbatim -- "in repos
->    that declare X", "verified in `<repo>` on `<date>`" - so no other project inherits an unearned
->    generalisation.
-> 3. Cannot satisfy 2 -> do not write. Report the proposed replacement text and the evidence, exactly
->    as the `--global` NOT granted branch already does.
+>    deletion - the project copy dies instead, or both stay.
+> 2. **Rewrite** an L3 statement only when the replacement is true for EVERY project. Evidence from one
+>    repo (a `grep` count, an observed tool call, one repo's `tools:` frontmatter) proves a fact about
+>    THIS repo: machine-wide claims need machine-wide evidence, or the rewrite carries its own scope
+>    qualifier verbatim ("in repos that declare X", "verified in `<repo>` on `<date>`").
+> 3. Cannot satisfy 2 -> do not write. Report the proposed replacement text and the evidence, as the
+>    `--global` NOT granted branch does.
 
-Applies to `contradiction-policy.md`'s ladder as well: its step 1 "keep the TRUE statement, delete the
-FALSE one" and its `--global granted` rewrite row are both L3 mutations and both pass through this guard.
+`contradiction-policy.md` step 1 deletions and L3 rewrites pass through this guard too.
 
-## 6. Worked defects
+## 6. Worked patterns
 
-Historical examples: rerun evidence and verify actual audience/registration/loading before applying
-their edits. `paths: **/*` alone does not prove unconditional launch loading.
+Re-run the evidence and confirm audience, registration and loading before applying a row.
 
 | # | Duplication | Verified by | Resolution |
 |---|-------------|-------------|------------|
-| 1 | `lsp-first.md` byte-identical in `.claude/rules/` and `~/.claude/rules/` | `md5 -q` equal, `diff` empty; then `verify-deleted --project --run-dir <D> --survivor ~/.claude/rules/lsp-first.md .claude/rules/lsp-first.md` -> `MERGED_VERIFIED` | (a): global is superset-or-equal -> delete the PROJECT copy, ledger, close the row with `verify-deleted`. (b): same outcome - the survivor must be at scope >= L3, and only the global copy qualifies. The global copy dies in NO branch |
-| 2 | semble policy 3x: CLAUDE.md:244-251 (marker block), all 39 lines of `.claude/rules/semble-first.md`, `.claude/hooks/semble-subagent.mjs:133` | `sed -n`, `wc -l`, grep | Rule file is canonical (`paths: **/*` -> always loaded) -> delete the CLAUDE.md marker block, ledger the generator `brewcode:semble-setup`. Hook line STAYS: it is not a duplicate for its audience - a subagent does not inherit the parent context and reads neither CLAUDE.md nor the rule. Class: same-fact-different-audience |
-| 3 | Version Sync 3x (CLAUDE.md:36, :45-49, :58+); docs workflow 2x (CLAUDE.md:190-201 + `.claude/rules/docs-workflow.md`); parallel-spawn 3x (`~/.claude/CLAUDE.md:42`, `:49`, `reminder.mjs:14` SPLIT) | grep -n | Three distinct classes: **intra-file progressive disclosure** (Version Sync - legitimate, cap at 2 per D.4, collapse the row at :36 into the step table), **CLAUDE.md-vs-rule** (docs workflow - rule wins; `paths:` is narrower than `**/*` -> CLAUDE.md keeps exactly 1 line), **static-vs-hook** (parallel spawn - L5 wins on cost and survives compaction; the two `~/.claude/CLAUDE.md` rows are L3, so 5's guard applies: the brewcode hook is globally registered -> scope >= L3 -> the global rows may be trimmed to the non-overlapping remainder) |
+| 1 | one rule file byte-identical in `.claude/rules/` and `~/.claude/rules/` | `sha256` equal, `diff` empty; then `verify-deleted --project --run-dir <D> --survivor ~/.claude/rules/<f>.md .claude/rules/<f>.md` -> `MERGED_VERIFIED` | The global copy dies in NO branch: only it sits at scope >= L3. The project copy goes per the 5(a) audience rows, closed with `verify-deleted` |
+| 2 | one policy 3x: a generator's marker block in CLAUDE.md (e.g. `brewcode:semble-setup`), a rule file (`.claude/rules/semble-first.md`, `paths: **/*`), a subagent hook line | `sed -n`, `wc -l`, grep | `paths: **/*` is conditional (section 1), so CLAUDE.md keeps 1 trigger line; delete the rest of the block, ledger the generator. Hook line: ordinary subagents load CLAUDE.md and rules, so it is a duplicate for them; it is unique audience only for Explore/Plan or `omitClaudeMd` agents |
+| 3 | one fact 2-3x: summary row + step table in one file; a CLAUDE.md section + a narrower-`paths:` rule; static global rows + a hook injecting the same rule | grep -n | **intra-file progressive disclosure**: legitimate, cap at 2 (D.4). **CLAUDE.md-vs-rule**: rule wins, CLAUDE.md keeps exactly 1 line. **static-vs-hook**: L5 survives compaction; global rows may shrink to their non-overlapping remainder only when the hook is registered at scope >= L3 (5(b) guard 1) |

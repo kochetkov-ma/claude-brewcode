@@ -1,21 +1,14 @@
 #!/usr/bin/env bash
-# discover-plugins.sh
-# Emits JSON describing installed Claude Code plugins.
-# Discovery sources:
-#   1. ~/.claude/settings.json -> enabledPlugins
-#   2. ./.claude/settings.json -> enabledPlugins (if present)
-#   3. ~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/.claude-plugin/plugin.json
-#   4. `claude plugin marketplace list` (best-effort)
-#
-# NEVER uses `claude plugin list` — that subcommand does not exist.
-# Requires: jq. Falls back to python3 only for enabledPlugins/version reads.
+# Emits installed-plugin JSON from <config dir>/settings.json + ./.claude/settings.json enabledPlugins
+# and the plugin cache walk. Fallback for CC < 2.1.163 (no `claude plugin list --json`). Requires jq.
 
 set -uo pipefail
 
 log() { printf '%s\n' "$*" >&2; }
 
-CACHE_DIR="${HOME}/.claude/plugins/cache"
-GLOBAL_SETTINGS="${HOME}/.claude/settings.json"
+PLUGINS_ROOT="${CLAUDE_CODE_PLUGIN_CACHE_DIR:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins}"
+CACHE_DIR="$PLUGINS_ROOT/cache"
+GLOBAL_SETTINGS="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
 PROJECT_SETTINGS="./.claude/settings.json"
 
 if ! command -v jq >/dev/null 2>&1; then
@@ -82,8 +75,8 @@ fi
 # Reduce to highest version per plugin
 : > "$TMP_ROWS.final"
 if [ -s "$TMP_ROWS" ]; then
-  plugins_uniq=$(awk -F'\t' '{print $1}' "$TMP_ROWS" | sort -u)
-  for p in $plugins_uniq; do
+  # while-read: zsh does not word-split an unquoted list
+  awk -F'\t' '{print $1}' "$TMP_ROWS" | sort -u | while IFS= read -r p; do
     # pick highest version for this plugin
     best_line=$(awk -F'\t' -v p="$p" '$1==p' "$TMP_ROWS" \
       | sort -t $'\t' -k2,2V \
@@ -96,7 +89,7 @@ fi
 
 marketplaces_json="[]"
 if command -v claude >/dev/null 2>&1; then
-  # Derive marketplace names from cache dirs (reliable) and also try CLI output.
+  # Marketplace names = top-level cache dirs.
   if [ -d "$CACHE_DIR" ]; then
     cache_markets=$(find "$CACHE_DIR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null \
       | awk -F/ '{print $NF}' \

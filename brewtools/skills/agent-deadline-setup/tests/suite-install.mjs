@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -32,6 +32,8 @@ function fencedBashBlockAfter(source, marker) {
 }
 
 const base = mkdtempSync(join(tmpdir(), 'deadline-install-'));
+// Global blocks resolve ${CLAUDE_CONFIG_DIR:-$HOME/.claude}: never let the runner's own profile leak in.
+const noProfileEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== 'CLAUDE_CONFIG_DIR'));
 try {
   // GIVEN: project settings with a legacy deadline handler sharing an entry with a foreign handler.
   const project = join(base, 'moved-checkout');
@@ -74,7 +76,7 @@ try {
   // GIVEN: the installed project has only the two desired portable entries.
   const skill = readFileSync(SKILL, 'utf8');
   const statusBlock = fencedBashBlockAfter(skill, '## Step 1 — STATUS FIRST, always');
-  const statusEnv = { ...process.env, HOME: join(base, 'home'), CLAUDE_PROJECT_DIR: '', CLAUDE_SKILL_DIR: join(HERE, '..') };
+  const statusEnv = { ...noProfileEnv, HOME: join(base, 'home'), CLAUDE_PROJECT_DIR: '', CLAUDE_SKILL_DIR: join(HERE, '..'), CLAUDE_PLUGIN_ROOT: join(HERE, '..', '..', '..') };
   const nested = join(project, 'packages', 'fixture', 'deep');
   mkdirSync(nested, { recursive: true });
 
@@ -223,7 +225,7 @@ try {
     ] }],
     SubagentStop: [{ hooks: [{ type: 'command', command: 'node', args: [`${PORTABLE}agent-deadline-cleanup.mjs`], timeout: 3 }] }],
   } }, null, 2));
-  const uninstallBlock = fencedBlockAfter(readFileSync(RUNBOOK, 'utf8'), '## UNINSTALL  (settings entries + hook files; config and state kept)');
+  const uninstallBlock = fencedBlockAfter(readFileSync(RUNBOOK, 'utf8'), "## UNINSTALL  (settings entries + hook files + this scope's state; config kept)");
 
   // WHEN: the canonical uninstall block runs.
   const uninstall = spawnSync('bash', ['-c', uninstallBlock], { encoding: 'utf8', env: { ...process.env, ROOT: project }, timeout: 30000 });
@@ -243,8 +245,8 @@ try {
   ] }] } }, null, 2));
   const globalBlock = fencedBlockAfter(readFileSync(RUNBOOK, 'utf8'), '**EXECUTE** merge settings (global');
 
-  // WHEN: the canonical global merge runs.
-  const globalInstall = spawnSync('bash', ['-c', globalBlock], { encoding: 'utf8', env: { ...process.env, HOME: globalHome }, timeout: 30000 });
+  // WHEN: the canonical global merge runs with CLAUDE_CONFIG_DIR unset.
+  const globalInstall = spawnSync('bash', ['-c', globalBlock], { encoding: 'utf8', env: { ...noProfileEnv, HOME: globalHome }, timeout: 30000 });
   const globalParsed = JSON.parse(readFileSync(globalSettings, 'utf8'));
   const globalArgs = Object.values(globalParsed.hooks).flat().flatMap(entry => entry.hooks || []).flatMap(handler => handler.args || []);
 
@@ -257,6 +259,64 @@ try {
     [foreignHandler],
     'global install must preserve the foreign co-handler inside a mixed matcher entry',
   );
+
+  // GIVEN: a session running under a profile dir (CLAUDE_CONFIG_DIR) with no settings yet.
+  const profileDir = join(base, 'profile-a');
+  const homeSettingsBefore = readFileSync(globalSettings, 'utf8');
+
+  // WHEN: the canonical global merge runs with CLAUDE_CONFIG_DIR set.
+  const profileInstall = spawnSync('bash', ['-c', globalBlock], { encoding: 'utf8', env: { ...noProfileEnv, HOME: globalHome, CLAUDE_CONFIG_DIR: profileDir }, timeout: 30000 });
+
+  // THEN: the profile dir is the global scope and $HOME/.claude is not touched.
+  assert.equal(profileInstall.status, 0, 'global deadline merge under CLAUDE_CONFIG_DIR must exit successfully');
+  assert.deepEqual(JSON.parse(readFileSync(join(profileDir, 'settings.json'), 'utf8')), { hooks: {
+    PreToolUse: [{ hooks: [{ type: 'command', command: 'node', args: [join(profileDir, 'hooks', 'agent-deadline-guard.mjs')], timeout: 5 }], matcher: '.*' }],
+    SubagentStop: [{ hooks: [{ type: 'command', command: 'node', args: [join(profileDir, 'hooks', 'agent-deadline-cleanup.mjs')], timeout: 3 }] }],
+  } }, 'global install under CLAUDE_CONFIG_DIR must wire the profile settings with profile hook paths');
+  assert.equal(readFileSync(globalSettings, 'utf8'), homeSettingsBefore, 'global install under CLAUDE_CONFIG_DIR must leave $HOME/.claude/settings.json untouched');
+
+  // GIVEN: state of project A, project B and the profile's global config in one shared tmp root,
+  // plus one pre-6.5 state file that names no config.
+  const stateTmp = join(base, 'state-tmp');
+  const stateRoot = join(stateTmp, 'brewtools-agent-deadline');
+  const projectA = join(base, 'project-a');
+  const projectB = join(base, 'project-b');
+  for (const dir of [join(projectA, '.claude'), join(projectB, '.claude'), join(stateRoot, 'S1'), join(stateRoot, 'S2'), join(stateRoot, 'S3')]) {
+    mkdirSync(dir, { recursive: true });
+  }
+  const configOf = dir => join(realpathSync(dir), 'agent-deadline.json');
+  const stateOf = config => JSON.stringify({ start: 1700000000000, warned: false, expired: false, config });
+  writeFileSync(join(stateRoot, 'S1', 'a1.json'), stateOf(configOf(join(projectA, '.claude'))));
+  writeFileSync(join(stateRoot, 'S1', 'b1.json'), stateOf(configOf(join(projectB, '.claude'))));
+  writeFileSync(join(stateRoot, 'S2', 'a2.json'), stateOf(configOf(join(projectA, '.claude'))));
+  writeFileSync(join(stateRoot, 'S3', 'g1.json'), stateOf(configOf(profileDir)));
+  writeFileSync(join(stateRoot, 'S3', 'legacy.json'), JSON.stringify({ start: 1700000000000, warned: false, expired: false }));
+  const stateBlock = fencedBlockAfter(readFileSync(RUNBOOK, 'utf8'), '**EXECUTE** state removal');
+  const stateTree = () => Object.fromEntries(readdirSync(stateRoot).sort().map(session => [session, readdirSync(join(stateRoot, session)).sort()]));
+
+  // WHEN: state removal runs for project A (its config file does not even exist any more).
+  const removeA = spawnSync('bash', ['-c', stateBlock], { encoding: 'utf8', env: { ...noProfileEnv, TMPDIR: stateTmp, ROOT: projectA }, timeout: 30000 });
+
+  // THEN: only project A's files and its emptied session dir go; B, global and legacy state stay.
+  assert.equal(removeA.status, 0, `project state removal must exit successfully: ${removeA.stderr}`);
+  assert.deepEqual(stateTree(), { S1: ['b1.json'], S3: ['g1.json', 'legacy.json'] }, 'project A state removal must leave project B, global and unowned state intact');
+
+  // WHEN: the same block text runs for the global scope under CLAUDE_CONFIG_DIR.
+  const globalStateBlock = stateBlock.replace('CFG="$ROOT/.claude/agent-deadline.json" node', 'CFG="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/agent-deadline.json" node');
+  const removeGlobal = spawnSync('bash', ['-c', globalStateBlock], { encoding: 'utf8', env: { ...noProfileEnv, TMPDIR: stateTmp, HOME: globalHome, CLAUDE_CONFIG_DIR: profileDir }, timeout: 30000 });
+
+  // THEN: only the profile's global state goes.
+  assert.equal(removeGlobal.status, 0, `global state removal must exit successfully: ${removeGlobal.stderr}`);
+  assert.deepEqual(stateTree(), { S1: ['b1.json'], S3: ['legacy.json'] }, 'global state removal must take only the state governed by the profile config');
+
+  // WHEN: project B and then the day-old leftover are removed too.
+  const dayOld = new Date(Date.now() - 25 * 60 * 60 * 1000);
+  utimesSync(join(stateRoot, 'S3', 'legacy.json'), dayOld, dayOld);
+  const removeB = spawnSync('bash', ['-c', stateBlock], { encoding: 'utf8', env: { ...noProfileEnv, TMPDIR: stateTmp, ROOT: projectB }, timeout: 30000 });
+
+  // THEN: nothing is left behind, the shared root included.
+  assert.equal(removeB.status, 0, `last state removal must exit successfully: ${removeB.stderr}`);
+  assert.equal(existsSync(stateRoot), false, 'the shared state root is removed once the last scope leaves it empty');
 } finally {
   rmSync(base, { recursive: true, force: true });
 }

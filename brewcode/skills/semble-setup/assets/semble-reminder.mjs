@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// brewcode-meta: version=6.4.0 content_version=6.4.0 generated_by=brewcode:semble-setup
 /**
  * brewcode:semble-setup — PreToolUse hook (self-contained, installed into a project).
  * Registered once: PreToolUse, matcher "Bash|Grep".
@@ -26,8 +27,10 @@
  *     under 8 characters, regex metacharacters, a path or filename-shaped token,
  *     markup punctuation (`:` `=` backtick), an ALL-CAPS banner, a pattern made
  *     ENTIRELY of identifiers, and the enumeration words. What survives is a
- *     multi-word plain-language description of behaviour - the one thing semble
- *     is better at. Identifier shapes (snake_case, camelCase, intra-word hyphen)
+ *     multi-word plain-language description of behaviour, or an alternation of
+ *     >= 3 plain words (`'secret|credential|token'`) - the one thing semble
+ *     is better at. Flags and pipes are read from the search command's own
+ *     segment, never from the rest of a compound line. Identifier shapes (snake_case, camelCase, intra-word hyphen)
  *     are deliberately NOT blanket suppressors: "rateLimit config" is a real
  *     question, and killing it silenced the hook on every TS/Java/Python repo.
  *
@@ -37,6 +40,7 @@
  * file travels alone into a user's .claude/hooks/ and must have no imports.
  */
 import { appendFileSync, existsSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -99,6 +103,43 @@ function telemetry(cwd, sid, ev, extra) {
 }
 // ---------------------------------------------------------------------------
 
+// --- MCP presence + search routing (identical in every steering semble hook) ---
+// No hook input reports MCP registration: read <CLAUDE_CONFIG_DIR or home>/.claude.json
+// (user + local scope), then <root>/.mcp.json (project scope). Never throws.
+const MCP_NAME = 'semble_code';
+const ROUTE = 'Search routing: intent/behaviour -> semble; symbol definitions/references -> LSP; literals/paths/regex/counts -> rg.';
+
+function mcpEntry(obj) {
+  const m = obj && typeof obj === 'object' ? obj.mcpServers : null;
+  const e = m && typeof m === 'object' && !Array.isArray(m) ? m[MCP_NAME] : null;
+  return e && typeof e === 'object' && !Array.isArray(e) ? e : null;
+}
+
+const listsMcp = (a) => Array.isArray(a) && a.indexOf(MCP_NAME) >= 0;
+
+/** The `semble_code` entry Claude Code loads for `root` in the active profile, or null. */
+function mcpRegistration(root) {
+  let cfg = null;
+  try {
+    const raw = readFileSync(join(process.env.CLAUDE_CONFIG_DIR || homedir(), '.claude.json'), 'utf8');
+    if (raw.indexOf('"' + MCP_NAME + '"') >= 0) cfg = JSON.parse(raw); // name absent: skip the parse
+  } catch {
+    cfg = null;
+  }
+  const proj = cfg && cfg.projects && typeof cfg.projects === 'object' ? cfg.projects[root] : null;
+  if (proj && listsMcp(proj.disabledMcpServers)) return null;
+  const found = mcpEntry(proj) || mcpEntry(cfg);
+  if (found) return found;
+  if (proj && listsMcp(proj.disabledMcpjsonServers)) return null;
+  try {
+    const raw = readFileSync(join(root, '.mcp.json'), 'utf8');
+    return raw.indexOf('"' + MCP_NAME + '"') >= 0 ? mcpEntry(JSON.parse(raw)) : null;
+  } catch {
+    return null;
+  }
+}
+// ---------------------------------------------------------------------------
+
 /** Injection cadence: one nudge per N eligible searches. Overridable per project. */
 const DEFAULT_EVERY = 1;
 const COUNTER_NAME = 'reminder.json';
@@ -112,11 +153,15 @@ const SEARCH_RE = /(?:^|[|;&(]|&&|\|\|)\s*(?:command\s+)?(grep|egrep|fgrep|ugrep
 // Enumeration or literal-match flags: the caller wants a file list, a count or a
 // verbatim string. semble answers none of the three — a top-k result set is a
 // ranked sample, never a complete list, so nudging here is wrong advice.
-const FLAG_RE = /(^|\s)-{1,2}(F|fixed-strings|w|word-regexp|l|files-with-matches|L|files-without-match|c|count|o|only-matching|files)(=|\s|$)/;
+// Tested on the search command's own arguments only; a short cluster (`-il`) counts too.
+const FLAG_RE = /(?:^|\s)(?:-[A-Za-z0-9]*[FwlLco][A-Za-z0-9]*|--(?:fixed-strings|word-regexp|files-with-matches|files-without-match|count|count-matches|only-matching|files))(?:=|\s|$)/;
 // Piped into an aggregator: counting or de-duplicating, i.e. enumeration again.
-// head/tail are deliberately absent — capping the output of an ordinary search
-// says nothing about intent.
-const PIPE_RE = /\|\s*(?:command\s+)?(wc|sort|uniq|cut|awk)\b/;
+// head/tail and `cut -c` (line truncation) only cap display; tested on the search's own pipeline.
+const PIPE_RE = /\|\s*(?:command\s+)?(?:wc|sort|uniq|awk)\b|\|\s*(?:command\s+)?cut\s+(?!-c)/;
+// semble itself run as a command word; a path such as `.claude/semble/` is not a semble call.
+const SEMBLE_CMD_RE = /(?:^|[\s|;&(])semble(?=\s|$)/m;
+// `'secret|credential|token'`: >= 3 alternated plain words is a vocabulary guess for one concept.
+const ALT_WORD_RE = /^[a-z]{3,}(?: [a-z]{3,})*$/;
 // Looks like a filename. Applied per token, so `generate.sh emit` is caught too.
 const FILEISH_RE = /\.[A-Za-z0-9]{1,6}$/;
 // Regex metacharacters: the pattern is a machine expression, not a description.
@@ -191,40 +236,58 @@ function extract(command) {
   if (!m) return null;
   const bin = m[1];
   const piped = m[0].indexOf('||') < 0 && m[0].indexOf('|') >= 0;
-  const tokens = tokenize(command.slice(m.index + m[0].length));
+  const rest = command.slice(m.index + m[0].length);
+  const tokens = tokenize(rest);
+  // `seg`: this command's own args; `tail`: its own pipeline, up to the next ; && || or newline.
+  const seg = tokens.map((t) => t.raw).join(' ');
+  const tail = rest.split(/;|&&|\|\||\n/)[0];
   for (const t of tokens) {
     if (t.raw.startsWith('-')) continue;
-    return { bin, pattern: t.value, piped };
+    return { bin, pattern: t.value, piped, seg, tail };
   }
-  return { bin, pattern: null, piped };
+  return { bin, pattern: null, piped, seg, tail };
+}
+
+/** `'a|b|c'` of >= 3 plain lowercase words -> `'a b c'`, else null. */
+function keywordAlternation(p) {
+  const parts = p.split('|');
+  return parts.length >= 3 && parts.every((x) => ALT_WORD_RE.test(x)) ? parts.join(' ') : null;
 }
 
 /**
- * True when the call is an enumeration, a literal lookup or an identifier
- * lookup — every shape where semble has nothing to add. What is left is a
- * multi-word plain-language description of behaviour, and that is the only
- * thing the nudge fires on: at the default cadence of 1 the gate is the sole
- * volume control, so a false positive costs a wrong instruction on every hit.
+ * The clause that marks the call as an enumeration, a literal lookup or an
+ * identifier lookup — every shape where semble has nothing to add — or '' when
+ * none does. What is left is a multi-word plain-language description of
+ * behaviour (or a keyword alternation), and that is the only thing the nudge
+ * fires on: at the default cadence of 1 the gate is the sole volume control.
  */
-function isExactIntent(command, pattern, bin, piped) {
-  if (typeof pattern !== 'string') return true;      // no argument to judge
-  if (bin === 'find' || bin === 'bfs') return true;  // filename enumeration
-  if (piped) return true;                            // filtering a stream, not the repo
-  if (FLAG_RE.test(command)) return true;            // -l / -c / -o / -F / -w
-  if (PIPE_RE.test(command)) return true;            // | wc / sort / uniq
-  const p = pattern.trim();
-  if (p.indexOf(' ') < 0 && p.indexOf('\t') < 0) return true;  // one word = an identifier
-  if (p.length < MIN_CHARS) return true;             // too short to describe behaviour
-  for (const ch of p) if (META.indexOf(ch) >= 0) return true;  // a regex
-  if (p.indexOf('/') >= 0) return true;              // a path, not a concept
+function exactClause(found) {
+  const { bin, pattern, piped } = found;
+  if (typeof pattern !== 'string') return 'no-pattern-arg';
+  if (bin === 'find' || bin === 'bfs') return 'find';
+  if (piped) return 'reads-a-pipe';                  // filtering a stream, not the repo
+  if (FLAG_RE.test(found.seg || '')) return 'enum-or-literal-flag';
+  if (PIPE_RE.test(found.tail || '')) return 'aggregator-pipe';
+  let p = pattern.trim();
+  p = keywordAlternation(p) || p;
+  if (p.indexOf(' ') < 0 && p.indexOf('\t') < 0) return 'single-word';  // an identifier
+  if (p.length < MIN_CHARS) return 'too-short';
+  for (const ch of p) if (META.indexOf(ch) >= 0) return 'regex-metachar';
+  if (p.indexOf('/') >= 0) return 'path';
   const tokens = p.split(/\s+/);
-  for (const t of tokens) if (FILEISH_RE.test(t)) return true;  // a filename
-  if (STRONG_LITERAL_RE.test(p)) return true;        // a verbatim code/markup string
+  for (const t of tokens) if (FILEISH_RE.test(t)) return 'filename-token';
+  if (STRONG_LITERAL_RE.test(p)) return 'markup-punctuation';
   // Identifier shapes suppress only when the pattern is ALL identifiers.
-  if (SOFT_LITERAL_RE.test(p) && !tokens.some((t) => PLAIN_WORD_RE.test(t))) return true;
-  if (SHOUT_RE.test(p)) return true;                 // an ALL-CAPS banner string
-  if (ENUM_WORD_RE.test(p)) return true;             // every / all / how many / list the
-  return false;
+  if (SOFT_LITERAL_RE.test(p) && !tokens.some((t) => PLAIN_WORD_RE.test(t))) return 'all-identifiers';
+  if (SHOUT_RE.test(p)) return 'all-caps';
+  if (ENUM_WORD_RE.test(p)) return 'enum-word';
+  return '';
+}
+
+/** Boolean form of `exactClause`, kept for analysis scripts that import it. */
+function isExactIntent(command, pattern, bin, piped) {
+  const found = extract(command) || {};
+  return exactClause({ ...found, bin, pattern, piped }) !== '';
 }
 
 /** {kind:'missing'|'corrupt'|'ok', state} — same reader as the session hook. */
@@ -295,13 +358,10 @@ function bumpCounter(cwd) {
  * the phase never advances. Phase only suppresses the three states where there
  * is provably nothing to nudge toward.
  *
- * `completed` containing "mcp" is the registration proxy: semble-mcp.sh writes
- * it in the same checkpoint patch that registers the server. Reading
- * ~/.claude.json on every Bash call to check for real would cost megabytes of
- * parse per search. `prereq_ready` is denied because the add-failed rollback
- * lands there with `completed` still holding "mcp".
+ * `no-mcp`: the server is not registered for the ACTIVE profile (`mcpRegistration`).
+ * State is per project, registration per config dir, so `state.completed` cannot answer it.
  */
-function gate(read) {
+function gate(read, root) {
   if (read.kind === 'missing') return { ok: false, why: 'no-state', phase: '', enabled: false };
   if (read.kind !== 'ok') return { ok: false, why: 'corrupt', phase: '', enabled: false };
   const state = read.state;
@@ -311,24 +371,18 @@ function gate(read) {
   if (phase === 'disabled') return { ok: false, why: 'disabled', phase, enabled };
   if (phase === 'error') return { ok: false, why: 'error', phase, enabled };
   if (phase === 'prereq_ready') return { ok: false, why: 'not-registered', phase, enabled };
-  const completed = Array.isArray(state.completed) ? state.completed : [];
-  if (completed.indexOf('mcp') < 0) return { ok: false, why: 'no-mcp', phase, enabled };
-  return { ok: true, why: 'ok', phase, enabled, state };
+  const mcp = mcpRegistration(root);
+  if (!mcp) return { ok: false, why: 'no-mcp', phase, enabled };
+  return { ok: true, why: 'ok', phase, enabled, state, mcp };
 }
 
 /**
- * A correction, not an explanation: "wrong tool" plus the call to make instead.
- * PreToolUse context is NOT deduplicated, so every injection is paid in full,
- * and at a cadence of 1 the length is multiplied by every eligible search — the
- * old 65-token line became 36 (cl100k_base) by dropping the params the
- * semble-first rule and the subagent brief already carry. What is kept is a
- * four-word escape hatch: the gate is a heuristic, and on an unfamiliar corpus
- * a bare "wrong tool" would push the model off grep where grep was right.
- * Both clauses share ONE parenthetical — two adjacent ones read as a stutter.
+ * A routing fact plus the call to make, not a verdict: the gate is a heuristic.
+ * PreToolUse context is NOT deduplicated, so every injection is paid in full.
  */
 function message(cwd, phase) {
-  const cold = phase === 'ready' ? '' : 'first call builds the index; ';
-  return 'semble: wrong tool. mcp__semble_code__search repo="' + cwd + '" first. (' + cold + 'exact/-l stays rg)';
+  const cold = phase === 'ready' ? '' : ' (first call builds the index)';
+  return 'semble: this search reads as intent/behaviour; mcp__semble_code__search repo="' + cwd + '" answers that' + cold + '. ' + ROUTE;
 }
 
 /**
@@ -374,7 +428,7 @@ function decide(input, cwd) {
   // it is what makes "delivered and ignored" distinguishable from "never
   // delivered" after the fact.
   const tuid = typeof input.tool_use_id === 'string' ? input.tool_use_id : '';
-  const g = gate(readState(cwd));
+  const g = gate(readState(cwd), cwd);
   const record = (fired, why, extra) =>
     telemetry(cwd, sid, 'gate', { fired, why, phase: g.phase, enabled: g.enabled, tool_use_id: tuid, ...(extra || {}) });
   if (!g.ok) {
@@ -383,41 +437,31 @@ function decide(input, cwd) {
   }
 
   const toolInput = input.tool_input && typeof input.tool_input === 'object' ? input.tool_input : {};
+  // `clause` names the rule behind every `no-match`, so a skip sample is attributable.
+  const noMatch = (clause) => {
+    record(false, 'no-match', { clause });
+    return {};
+  };
 
   let command;
-  let bin;
-  let pattern;
-  let piped = false;
+  let found;
   if (toolName === 'Bash') {
     command = typeof toolInput.command === 'string' ? toolInput.command : '';
-    if (!command) {
-      record(false, 'no-match');
-      return {};
-    }
-    const found = extract(command);
-    if (!found) {
-      record(false, 'no-match'); // no search binary at a command boundary
-      return {};
-    }
-    bin = found.bin;
-    pattern = found.pattern;
-    piped = found.piped;
+    if (!command) return noMatch('no-command');
+    if (SEMBLE_CMD_RE.test(command)) return noMatch('semble-cmd');
+    found = extract(command);
+    if (!found) return noMatch('no-search-binary');
   } else {
-    // Native Grep tool: the pattern IS the whole "command" for heuristic purposes.
-    pattern = typeof toolInput.pattern === 'string' ? toolInput.pattern : null;
+    // Native Grep tool: the pattern is the whole query; it has no shell flags or pipes.
+    const pattern = typeof toolInput.pattern === 'string' ? toolInput.pattern : null;
     command = pattern || '';
-    bin = 'rg';
     const mode = toolInput.output_mode;
-    if (mode === 'files_with_matches' || mode === 'count') {
-      record(false, 'no-match'); // enumeration
-      return {};
-    }
+    if (mode === 'files_with_matches' || mode === 'count') return noMatch('enum-output-mode');
+    found = { bin: 'rg', pattern, piped: false, seg: '', tail: '' };
   }
 
-  if (command.toLowerCase().indexOf('semble') >= 0 || isExactIntent(command, pattern, bin, piped)) {
-    record(false, 'no-match');
-    return {};
-  }
+  const clause = exactClause(found);
+  if (clause) return noMatch(clause);
 
   // Eligible. Only eligible calls advance the counter, so N really means
   // "one nudge per N searches semble could have answered".

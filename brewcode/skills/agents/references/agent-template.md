@@ -2,7 +2,7 @@
 
 ## Description Budget (NORMATIVE)
 
-The single description policy. The `description` row in FM Reference (`agent-frontmatter-fields.md`), the Description Patterns section below, and the Validation Checklist below all defer here -- no other numbers apply.
+The single description policy: the `description` row in FM Reference (`agent-frontmatter-fields.md`), Description Patterns and the Validation Checklist below all defer here -- no other numbers apply.
 
 | Constraint | Value |
 |------------|-------|
@@ -17,7 +17,7 @@ The single description policy. The `description` row in FM Reference (`agent-fro
 
 ## Description Patterns
 
-**Format:** Action verb phrase -> `Triggers:` keyword list -> optional inline EXs, inside the **Description Budget** ceilings above. Front-load keywords.
+**Format:** Action verb phrase -> `Triggers:` keyword list -> optional inline EXs. Front-load keywords.
 
 | AG clarity | Format | EXs |
 |------------|--------|-----|
@@ -25,7 +25,7 @@ The single description policy. The `description` row in FM Reference (`agent-fro
 | Some overlap with other AGs | Single-line + detailed `Triggers:` list | 0-1 |
 | Ambiguous (creator AGs) | Block scalar (`description: \|`) + `<example>` with `<commentary>` -- the example-block exception | 1-2 |
 
-EX (ambiguous case -- clear-domain and some-overlap cases use the same one-line lead, without `<example>` blocks):
+EX (ambiguous case; the other two use the same one-line lead without `<example>` blocks):
 
 ```yaml
 description: |
@@ -36,7 +36,6 @@ description: |
   <commentary>Explicit AG creation request TRGs this AG</commentary>
   </example>
 ```
-(A 2nd `<example>` requires the Description Budget exception; vary phrasing per Rule 6, e.g. "My reviewer agent doesn't trigger reliably".)
 
 ### Rules
 
@@ -47,24 +46,17 @@ description: |
 | 3 | Dash-separated capabilities beat prose | `"SDET/QA - runs tests, debugs flaky"` > sentence |
 | 4 | `<commentary>` explains WHY this TRGs | Helps Claude distinguish similar AGs |
 | 5 | 1 `<example>` block by DEF, 2 at most (Description Budget) | More = token waste, diminishing returns |
-| 6 | Vary phrasing across EXs | Claude generalizes rather than matching one phrase |
+| 6 | Vary phrasing across EXs (2nd EX: "My reviewer agent doesn't trigger reliably") | Claude generalizes rather than matching one phrase |
 | 7 | No "proactively" or "MUST" language | No special weight -- write clear descriptions |
 | 8 | Quote description if contains YAML special chars | Prevents parse failures |
 
 ## EX Format (minimal)
 
-```yaml
-<example>
-user: "exact phrase user would say"
-<commentary>Why THIS AG, not another</commentary>
-</example>
-```
-
-No `Context:` line, no `assistant:` response -- `<commentary>` is the selection signal (phrasing/commentary rules: see Description Patterns > Rules above).
+Shape = the `<example>` block under Description Patterns: `user:` carries the exact phrase a user would say, `<commentary>` says why THIS AG, not another. No `Context:` line, no `assistant:` response -- `<commentary>` is the selection signal.
 
 ## SP Structure
 
-Order: role -> Return Contract -> Scope/Never (Scope Fit, Delegation) -> Ctx/Patterns/Cmds -> Checklist. Concrete EX already shipping this order: `brewcode/agents/bash-expert.md` (`# Bash Expert` -> `## Return Contract` -> `## Scope & Checkpoints` -> numbered body -> `## Checklist`).
+Order: role -> Return Contract -> Scope/Never (Scope Fit, Delegation) -> Ctx/Patterns/Cmds -> Checklist. Concrete EX already shipping this order: `brewcode/agents/bash-expert.md`.
 
 > Target SP body (excluding FM): ~800-1,500 words for a generic AG; teams-setup profiles instead cap at <=3200 bytes body-only (see the compact exception below).
 
@@ -84,7 +76,7 @@ A brief citing `brewcode/skills/teams-setup/references/agent-template.md` overri
 
 ### 6. Guardrails (non-team AGs; emit verbatim)
 
-For AGs outside `teams-setup`, `Return Contract` = unconditional. `Scope Fit` = only when the domain writes code/scripts/SQL/schemas/infra/config; drop it for pure-research/docs/review-only AGs. `Delegation` = only when `tools:` includes `Agent`; drop it for AGs that never spawn subagents.
+For AGs outside `teams-setup`, `Return Contract` = unconditional. `Scope Fit` = only when the domain writes code/scripts/SQL/schemas/infra/config; drop it for pure-research/docs/review-only AGs. `Delegation` = only when `tools:` includes `Agent`.
 
 ```markdown
 ## Scope Fit   <!-- code-writing AGs only -->
@@ -97,10 +89,8 @@ Delegate only large, independent, parallelizable work; finish anything doable in
 ## Return Contract
 Verdict first, <=30 lines, `path:line`. !=bodies/output/log/preamble. Unconditional -- spend one step on what the MAIN SESSION needs and return only that.
 Bulk material (long logs, full diffs, dumps, long reports) -> file under `.claude/reports/<YYYYMMDD-HHMMSS>_<name>/`; return the PATH, !=the content. AGs that dump everything burn the main session's context.
-If the agent-return guard is installed, a return over ~1000 est-tokens (chars/4) is blocked for compression; over ~2500 file the detail and answer with path + verdict + <=3 lines.
+If the agent-return guard is installed, a return over ~2500 est-tokens (chars/4) is blocked for compression; over ~6000 file the detail and answer with path + verdict + <=3 lines.
 ```
-
-> agent-creator obeys this same contract for its own report -- see `agent-creator.md`'s own `## Return Contract`.
 
 ## LLM Text Rules
 
@@ -108,19 +98,17 @@ If the agent-return guard is installed, a return over ~1000 est-tokens (chars/4)
 |------|---------|
 | Tables over prose, bullets over numbered | Multi-column ~66% savings, bullets when order irrelevant |
 | `code` over text, inline over blocks | Identifiers, paths, short vals; blocks only if >3 lines |
-| Comma-separated inline lists | `a, b, c` not bullet per item when saving space |
 | One-liner rules, arrows for flow | `old` -> `new`, conditions with `->` (~40% savings) |
 | No filler | Cut courtesy/repetition; preserve load-bearing `only`, `exactly`, negations, conditions and scopes |
-| Positive framing, no aggressive lang | "Do Y" not "Don't X"; "Use when..." not "CRITICAL: MUST..." |
-| Imperative form | "Do X" not "You should do X"; 3rd person for descriptions |
-| Bold for key terms, no extra formatting | `**term**` for emphasis; no decorative lines, headers, dividers |
+| Positive framing, no aggressive lang | "Do Y" not "Don't X"; "Use when..." not "CRITICAL: MUST..." -- give the reason, emphasize one line at most |
+| No reasoning dumps, no forced thinking | !="show your reasoning" (may be declined, ending the turn), !="think step by step"/"double-check your work" -- set depth with `effort:`; a `haiku` AG gets ONE concrete check (command + pass/fail) |
+| No extra formatting | `**term**` for a term being defined; no decorative lines, headers, dividers |
 | Minimal status markers | Prefer 🟢 🔵 🔴 ⚪; PASS/FAIL or check/cross optional; no decorative emojis |
 | Merge duplicates, abbreviate in tables | Single source of truth; REQ, impl, cfg, args, ret, err |
 
 ## Color Semantics
 
-8 valid values (`magenta` is NOT one -- drop it if seen in old AGs). No official semantic
-mapping beyond these repo conventions; the other 4 are free to assign per team.
+8 valid values (`magenta` is NOT one -- drop it if seen in old AGs). Semantics below are repo conventions, not official.
 
 | Color | Use for | EXs |
 |-------|---------|-----|
@@ -134,7 +122,7 @@ mapping beyond these repo conventions; the other 4 are free to assign per team.
 
 | Type | MDL | TLs | Focus |
 |------|-----|-----|-------|
-| `developer-*` | opus | Read, Write, Edit, Bash, Agent | Implementation |
+| `developer-*` | opus | Read, Write, Edit, Bash | Implementation |
 | `reviewer` | opus | Read, Glob, Grep | Code review |
 | `tester` | sonnet | Read, Bash | Test exec |
 | `arch-*` | opus | Read, Glob, Grep, WebFetch | Architecture (read-only) |
@@ -143,16 +131,18 @@ mapping beyond these repo conventions; the other 4 are free to assign per team.
 
 ## Validation Checklist
 
-- [ ] `name`: lowercase-hyphens only (`[a-z0-9-]+`), no `:`
-- [ ] `description`: within the **Description Budget** above -- single line + role + `Triggers:` keywords by DEF; `<example>` blocks only for an ambiguous AG, under the example-block exception
+- [ ] `name`: lowercase-hyphens only (`[a-z0-9-]+`), <=256 chars, no `:`, no leading `-`
+- [ ] `description`: within the **Description Budget** above -- single line + role + `Triggers:` keywords by DEF; `<example>` blocks only under the example-block exception
 - [ ] Placement: file sits in a `.claude/agents/` dir on the walk-up path from the intended launch cwd -- warn if placed under a module subfolder while sessions launch from repo root
+- [ ] PLG AG: `claude plugin validate <plugin-dir>` exits 0 (unparseable FM still loads -- with ALL tools); no `permissionMode`/`hooks`/`mcpServers`/`initialPrompt`
 - [ ] `tools`: least privilege for the actual foreground/background pool; no unconditionally filtered TLs; `Agent` only below depth cap, `ExitPlanMode` only in plan permission mode, `Skill` only for runtime SKs
+- [ ] Searching AG: `Bash`, or `Glob`/`Grep` WITHOUT `Bash` (next to `Bash` both are dropped on macOS/Linux/WSL)
+- [ ] `skills:` <=32 names, none `disable-model-invocation: true` (never preloaded)
 - [ ] Regular SA returns user questions to caller; conversation forks are the exception, skill forks are not
 - [ ] Body's task-graph steps have a no-Task-TL fallback, or the AG is documented as foreground/teammate-only
 - [ ] `isolation`: `worktree` or absent -- `remote` is invocation-level, never FM
 - [ ] `disallowedTools`: no conflict with `tools` if both specified
-- [ ] `model`: matches task complexity (fable=mythos/hardest, opus=complex, sonnet=standard, haiku=light)
-- [ ] SP: tables over prose, code over text
+- [ ] `model`: matches task complexity (fable=hardest/longest-running, opus=complex, sonnet=standard, haiku=light); `effort:` only when the role needs other than the session level
 - [ ] Project-specific knowledge included (stack, conventions, cmds)
 - [ ] SP contract: generic AG -> Checklist at end + one `## Return Contract`; teams-setup domain AG -> exact six ordered headings, <=3200 bytes (~800 est-tokens), shared `team.md` loaded first, no duplicated shared-contract section
 - [ ] Generic code-writing AG -> `## Scope Fit` incl. etalon-first; teams-setup keeps both only in `team.md`

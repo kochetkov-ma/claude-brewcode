@@ -1,15 +1,10 @@
 # Cleanup Flow
 
-## Overview
-
 Interactive cleanup of team trace data and agents. Every destructive action requires user confirmation via AskUserQuestion.
 
-## Order of Operations
+## Contents
 
-1. Overview scan — show sizes
-2. Trace cleanup (if selected)
-3. Agents review (if selected)
-4. Summary report
+UNINSTALL runs Steps 1-4 in order: 1 Overview Scan (show sizes), 2 Trace Cleanup (if selected), 3 Agents Review (if selected), 4 Summary. PURGE runs only Step P. Last section: Archive File Format.
 
 ## Step 1: Overview Scan
 
@@ -201,6 +196,4 @@ rm -rf ".claude/teams/{TEAM}" && echo "✅ Purged" || echo "❌ FAILED"
 
 ## Archive File Format
 
-Archive files live in `.claude/teams/{TEAM_NAME}/` alongside `trace.jsonl`.
-
-`trace-archive.jsonl` — same JSONL format as `trace.jsonl`. Entries appended on each cleanup. Multiple cleanups accumulate in the same archive file.
+`trace-archive.jsonl` lives in `.claude/teams/{TEAM_NAME}/` alongside `trace.jsonl`, in the same JSONL format. Every cleanup appends to the same archive file.

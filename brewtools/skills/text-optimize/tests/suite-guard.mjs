@@ -295,6 +295,22 @@ function makeRepo({ commit = true, nested = false } = {}) {
     'original pre-state survives snapshot reuse attempt');
 }
 
+// GIVEN a target holding a NUL byte, WHEN verifying, THEN tokens are extracted, never "Binary file".
+{
+  const { repo, abs } = makeRepo();
+  writeFileSync(abs, 'port 8443 \u0000 NEVER edit docs/a.md !=stable\n');
+  const runDir = field(guard(['snapshot', '--allow-dirty', abs], repo).out, 'RUN_DIR');
+  writeFileSync(abs, 'port 8443 \u0000 NEVER edit docs/a.md\n');
+  const lossy = guard(['verify', '--no-restore', '--run-dir', runDir, abs], repo);
+  check('nul.loss-exit', lossy.status, 1, 'a dropped token in a NUL-bearing file fails the gate');
+  check('nul.loss-set', missingTokens(lossy.out), ['neg:!=stable'],
+    'exactly the dropped token is reported for a NUL-bearing file');
+  writeFileSync(abs, '8443 \u0000 NEVER docs/a.md !=stable\n');
+  const kept = guard(['verify', '--no-restore', '--run-dir', runDir, abs], repo);
+  check('nul.pass-exit', kept.status, 0, 'a lossless rewrite of a NUL-bearing file passes');
+  check('nul.pass-missing', field(kept.out, 'MISSING'), '0', 'no token of a NUL-bearing file is missing');
+}
+
 // ── 6. nested path, explicit --run-dir, restore and status ─────────────────
 {
   const { repo, rel, abs } = makeRepo({ nested: true });

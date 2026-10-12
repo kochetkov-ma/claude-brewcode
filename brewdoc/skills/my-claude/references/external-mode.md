@@ -2,8 +2,8 @@
 
 ## Hook Event Model
 
-When analyzing local hook files, document:
-- Event types (SessionStart, PreToolUse, PostToolUse, Stop, PreCompact)
+From local hook registrations, document:
+- Events used, of the 33 current ones; handler types (`command`, `http`, `mcp_tool`, `prompt`, `agent`)
 - Input schema per event
 - Output schema (additionalContext, updatedInput, decision)
 - permissionDecision values
@@ -38,9 +38,7 @@ When analyzing local hook files, document:
 
 Focus on:
 - `additionalContext` — what it does, when delivered, format
-- `updatedInput` — mutation of tool input
+- `updatedInput` — mutation of tool input; `updatedToolOutput` — PostToolUse result replacement
 - `systemMessage` — display in UI
 - `permissionDecision` — PreToolUse: allow/deny/ask/defer (defer is headless-only); PreModelSwitch: allow/deny/ask.
   Other events have their own output contracts; top-level `decision: block` is a separate field.
-
-Output to: `${CLAUDE_PROJECT_DIR}/.claude/brewdoc/my-claude/external/YYYYMMDD_context-schema.md`

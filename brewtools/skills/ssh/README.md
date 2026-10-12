@@ -69,7 +69,7 @@ No server configured yet → setup. Server(s) configured, no args → execute (a
 | Phase 2 | Connection setup | Gather host/user/port/name, try key auth, fall back to password + generated key, write `~/.ssh/config` entry, final connection test |
 | Phase 3 | Server discovery | OS, kernel, arch, Docker version, disk, running containers, services, current user/groups |
 | Phase 4 | Persist config | Update `CLAUDE.local.md`, gitignore it, generate `ssh-admin` agent, optionally set as default server |
-| Phase 5 | Execute | Classify requested commands (READ/CREATE/MODIFY/SERVICE/DELETE/PRIVILEGE), confirmation gate for MODIFY+, execute directly or delegate to `ssh-admin` for multi-step work |
+| Phase 5 | Execute | Classify requested commands (READ/CREATE/MODIFY/SERVICE/DELETE/PRIVILEGE), confirmation gate for MODIFY+, execute directly or delegate to `ssh-admin` for multi-step work; sshd/port/firewall changes follow a 5-step lockout gate (new login proven before the old port closes) |
 | Phase 6 | Session report | Server, mode, actions, changes, status; refreshes config/agent if server state changed |
 | Mode: update-agent | Re-discover up to 3 configured servers, refresh `ssh-admin` agent |
 
@@ -77,7 +77,7 @@ Confirmation gates for MODIFY/SERVICE/DELETE/PRIVILEGE commands run in the main 
 
 ## Companion Agent
 
-The skill generates `.claude/agents/ssh-admin.md` during Phase 4 setup, parametrized from the discovered server inventory. The skill drives connection setup and small execute requests directly in-session; for a bounded multi-command job on one host it delegates to `ssh-admin` via `Task` (one agent per host — a multi-server job is split into one spawn per server, never one agent looping over all of them). Both share the same command-classification table (READ/CREATE free, MODIFY/SERVICE/DELETE/PRIVILEGE gated) and both read `CLAUDE.local.md` for server inventory.
+The skill generates `.claude/agents/ssh-admin.md` during Phase 4 setup from the discovered server inventory. It runs connection setup and small requests in-session; a bounded multi-command job on one host goes to `ssh-admin` through the `Agent` tool (the plugin's `brewtools:ssh-admin` when the project agent is absent), one agent per host, never one agent looping over all servers. The agent returns destructive operations as approval envelopes; you approve them in the main conversation. Both use the same command classification (READ/CREATE free, MODIFY/SERVICE/DELETE/PRIVILEGE gated).
 
 ## Output
 
@@ -100,8 +100,6 @@ The skill generates `.claude/agents/ssh-admin.md` during Phase 4 setup, parametr
 
 - Run `/brewtools:ssh` with no arguments first — it tells you whether setup or execute is about to run before you commit to a mode.
 - READ/CREATE commands execute freely; MODIFY/SERVICE ask once, DELETE/PRIVILEGE ask with an explicit destructive-action warning.
-- If key auth fails during setup, expect a manual `ssh-copy-id` step — Claude Code cannot enter an interactive password.
-- Delegate a multi-server task to several `ssh-admin` spawns, one per host, rather than one agent looping over all of them.
 
 ## Documentation
 

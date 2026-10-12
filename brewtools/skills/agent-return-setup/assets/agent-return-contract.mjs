@@ -5,13 +5,14 @@
  *
  * States the return budget to the subagent at spawn, so the rule arrives with
  * the work instead of being inherited from a parent context the subagent never
- * sees. Enforcement is agent-return-guard.mjs (SubagentStop); both read the same
- * numbers from agent-return-budget.mjs, so the announced budget always equals
- * the enforced one.
+ * sees. Enforcement is agent-return-guard.mjs (SubagentStop + PreToolUse
+ * SubagentHandback); both read the same numbers from agent-return-budget.mjs,
+ * so the announced budget always equals the enforced one.
  *
  * Advisory only: one `additionalContext`, no decision, no matcher assumptions —
- * registered without a matcher it fires for every agent type. stdin is not read;
- * the text is identical for every agent.
+ * registered without a matcher it fires for every agent type. stdin is read for
+ * `agent_type` alone: a listed read-only agent (config `readOnlyAgentTypes`) gets
+ * the text without the write-to-file step. Unreadable stdin -> the general text.
  *
  * Config gate: `.claude/agent-return.json` with `enabled: true` (project wins,
  * then global). No config = no-op. See agent-return-budget.mjs for the full
@@ -22,10 +23,21 @@
  * evaluation): the hook exits 1 with empty stdout, a non-blocking hook error.
  * The three files ship together.
  */
-import { ENABLED, RETURN_CONTRACT } from './agent-return-budget.mjs';
+import { readFileSync } from 'node:fs';
+import { ENABLED, returnContract } from './agent-return-budget.mjs';
 
 function output(obj) {
   process.stdout.write(JSON.stringify(obj));
+}
+
+/** `agent_type` from the SubagentStart payload; anything unreadable -> ''. */
+function agentType() {
+  try {
+    const input = JSON.parse(readFileSync(0, 'utf8'));
+    return input && typeof input.agent_type === 'string' ? input.agent_type : '';
+  } catch {
+    return '';
+  }
 }
 
 try {
@@ -34,7 +46,7 @@ try {
       ? {
           hookSpecificOutput: {
             hookEventName: 'SubagentStart',
-            additionalContext: RETURN_CONTRACT,
+            additionalContext: returnContract(agentType()),
           },
         }
       : {},

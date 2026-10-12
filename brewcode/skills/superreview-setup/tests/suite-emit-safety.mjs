@@ -193,6 +193,63 @@ const write = (p, body) => { mkdirSync(dirname(p), { recursive: true }); writeFi
   check('the genuinely owned stale ref is still swept', existsSync(join(root, REFS, 'python.md')), false);
 }
 
+// ── 8. upgrade restamps every live artifact, on every stack ───────────────────
+// Cover for the gap that let `upgrade` abort on references shipped without content_version.
+const SKILL_SRC = join(dirname(GEN), '..');
+const TODAY = spawnSync('date', ['+%F'], { encoding: 'utf8' }).stdout.trim();
+const RELEASE_STAMP = {
+  version: JSON.parse(readFileSync(join(SKILL_SRC, '..', '..', '.claude-plugin', 'plugin.json'), 'utf8')).version,
+  content_version: /brewcode-meta:.*content_version=(\d+\.\d+\.\d+)/.exec(readFileSync(join(SKILL_SRC, 'SKILL.md'), 'utf8'))[1],
+  generated_by: 'brewcode:superreview-setup',
+  last_updated: TODAY,
+};
+const stamp = p => Object.fromEntries(
+  read(p).split('\n---\n')[0].split('\n')
+    .map(l => /^(version|content_version|generated_by|last_updated): "(.*)"$/.exec(l))
+    .filter(Boolean)
+    .map(m => [m[1], m[2]]));
+
+for (const stack of ['go.md', 'java-kotlin.md', 'python.md', 'typescript-react.md']) {
+  // GIVEN a fresh install on this stack
+  const root = project(`upgrade-${stack}`);
+  run(root, 'emit', { STACK_REF: stack });
+  const live = ['SKILL.md', 'references/agent-prompt.md', 'references/report-template.md', 'references/scope.md', `references/${stack}`];
+
+  // WHEN upgrade runs with a bare environment
+  const up = run(root, 'upgrade');
+
+  // THEN it exits 0, restamps each live artifact once, and all five carry one release stamp
+  check(`upgrade exits 0 (${stack})`, up.code, 0);
+  check(`upgrade restamps each live artifact once (${stack})`,
+    up.out.split('\n').filter(l => l.startsWith('RESTAMP: ')).map(l => l.split(' ')[1]),
+    live.map(rel => `${SKILL}/${rel}`));
+  check(`every live artifact carries the release stamp (${stack})`,
+    live.map(rel => stamp(join(root, SKILL, rel))), live.map(() => RELEASE_STAMP));
+}
+
+// ── 9. an install whose references predate content_version still upgrades ─────
+{
+  // GIVEN live and baseline references carrying the old three-key stamp
+  const root = project('upgrade-old-install');
+  run(root, 'emit', { STACK_REF: 'python.md' });
+  const refs = ['references/agent-prompt.md', 'references/report-template.md', 'references/python.md'];
+  const strip = p => write(p, read(p).replace(/^content_version: .*\n/m, ''));
+  refs.forEach(rel => { strip(join(root, SKILL, rel)); strip(join(root, SKILL, '.template-baseline', rel)); });
+  check('precondition: old references carry no content_version',
+    refs.map(rel => 'content_version' in stamp(join(root, SKILL, rel))), [false, false, false]);
+  const bodies = refs.map(rel => read(join(root, SKILL, rel)).split('\n---\n').slice(1).join('\n---\n'));
+
+  // WHEN upgrade runs
+  const up = run(root, 'upgrade');
+
+  // THEN it exits 0, the old references gain the full stamp, and their bodies are byte-identical
+  check('upgrade of an old install exits 0', up.code, 0);
+  check('old references gain the full release stamp',
+    refs.map(rel => stamp(join(root, SKILL, rel))), refs.map(() => RELEASE_STAMP));
+  check('old reference bodies are byte-identical after the restamp',
+    refs.map(rel => read(join(root, SKILL, rel)).split('\n---\n').slice(1).join('\n---\n')), bodies);
+}
+
 rmSync(BASE, { recursive: true, force: true });
 console.log(`\n${failed === 0 ? 'PASS' : 'FAIL'}  passed=${passed} failed=${failed}`);
 process.exit(failed === 0 ? 0 : 1);

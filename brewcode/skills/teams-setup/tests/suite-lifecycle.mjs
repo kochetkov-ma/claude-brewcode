@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Suite A — teams lifecycle roster safety (scripts/toggle-team.sh, scripts/verify-team.sh).
+ * Suite A — teams lifecycle roster + argument safety (scripts/toggle-team.sh, verify-team.sh, detect-mode.sh).
  * Covers BCOP08: a `## Agents` roster value is interpolated into move/probe/delete paths, so a row
  * like `../../../outside/README` renamed a file OUTSIDE the project. Runs entirely inside an isolated
  * temp base; never touches the real ~/.claude or the repo tree.
@@ -18,6 +18,7 @@ const HERE = join(fileURLToPath(import.meta.url), '..');
 const TOGGLE = join(HERE, '..', 'scripts', 'toggle-team.sh');
 const VERIFY = join(HERE, '..', 'scripts', 'verify-team.sh');
 const OWNERS = join(HERE, '..', 'scripts', 'agent-owners.sh');
+const DETECT = join(HERE, '..', 'scripts', 'detect-mode.sh');
 const FRAMEWORK = join(HERE, '..', 'references', 'framework-files.md');
 
 // realpath: macOS /var is a symlink to /private/var
@@ -548,6 +549,99 @@ const TRAVERSAL = '../../../outside/README';
     check(`a10.shell.${shell}`, [result.status, result.stdout], [0, 'SEP\nSEP\nDATA\nDATA\n'],
       'the supported shell classifies exact separators and hostile/data rows identically');
   }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// A11 — detect-mode.sh argument contract: a bare pair resolves in either order,
+//       flags are never the team name, a hostile name executes nothing.
+// ────────────────────────────────────────────────────────────────────────────
+{
+  const root = makeProject('a11', ['worker-one'], ['worker-one']);
+  mkdirSync(join(root, '.claude', 'teams', 'payments'), { recursive: true });
+  rmSync(join(root, '.claude', 'teams', 't1'), { recursive: true });
+  const marker = join(BASE, 'a11', 'EXECUTED');
+  const detect = (args) => {
+    const r = run(DETECT, [args], root);
+    const pick = (key) => linesStartingWith(r.stdout, `${key}:`).map((l) => l.slice(key.length + 1));
+    return [r.status, pick('MODE'), pick('TEAM_NAME'), pick('PROMPT'), pick('ERROR')];
+  };
+  const ok = (mode, team, prompt = []) => [0, [mode], [team], prompt, []];
+  const refused = (reason) => [1, [], [], [], [reason]];
+  const NAME_CHARS = 'invalid team name (alphanumeric, dash, underscore only)';
+  const cases = [
+    ['', ok('status', 'payments'), 'GIVEN one team WHEN no argument THEN status of that team'],
+    ['payments', ok('status', 'payments'), 'GIVEN an existing team WHEN only its name THEN status'],
+    ['billing', ok('install', 'billing'), 'GIVEN no such team WHEN only a name THEN install'],
+    ['enable payments', ok('enable', 'payments'), 'GIVEN mode then name WHEN parsed THEN that mode'],
+    ['payments enable', ok('enable', 'payments'), 'GIVEN name then mode WHEN parsed THEN the mode token wins'],
+    ['payments purge', ok('purge', 'payments'), 'GIVEN name then a destructive mode WHEN parsed THEN that mode'],
+    ['billing enable', ok('enable', 'billing'),
+      'GIVEN no such team WHEN name then mode THEN the mode token wins and install is never chosen'],
+    ['install enable', ok('install', 'enable'), 'GIVEN two mode tokens WHEN parsed THEN the first is the mode'],
+    ['--skip-review install pay', ok('install', 'pay'), 'GIVEN a leading flag WHEN parsed THEN it is not the team'],
+    ['install --skip-review pay fast api', ok('install', 'pay', ['fast api']),
+      'GIVEN a flag after the mode WHEN parsed THEN it is neither the team nor the prompt'],
+    ['upgrade payments --review', ok('upgrade', 'payments'), 'GIVEN a trailing flag WHEN parsed THEN it is dropped'],
+    ['-rf', refused('invalid team name (must not start with a dash)'),
+      'GIVEN a dash-led name WHEN parsed THEN it is refused'],
+    [`install a"$(touch ${marker})`, refused(NAME_CHARS),
+      'GIVEN a name with a quote and a command substitution WHEN parsed THEN it is refused'],
+    [`my team" $(touch ${marker})`, ok('install', 'my'),
+      'GIVEN prose with a command substitution WHEN parsed THEN only the first word is the name'],
+  ];
+  for (const [args, expected, message] of cases) check(`a11.detect[${args}]`, detect(args), expected, message);
+  check('a11.nothingExecuted', existsSync(marker), false,
+    'GIVEN hostile arguments WHEN detect-mode.sh ran THEN no command substitution was executed');
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// A12 — toggle-team.sh refuses a mistyped flag (it moved files for real) and
+//       a path as team name (it read a roster outside the teams dir).
+// ────────────────────────────────────────────────────────────────────────────
+{
+  const root = makeProject('a12', ['worker-one', 'intent-guard'], ['worker-one', 'intent-guard']);
+  const agentsDir = join(root, '.claude', 'agents');
+  const marker = join(BASE, 'a12', 'EXECUTED');
+  mkdirSync(join(root, 'elsewhere'), { recursive: true });
+  writeFileSync(join(root, 'elsewhere', 'team.md'), readFileSync(join(root, '.claude', 'teams', 't1', 'team.md')));
+  const NAME_ERROR = 'ERROR:invalid team name (alphanumeric, dash, underscore only; no leading dash)\n';
+
+  const typo = run(TOGGLE, ['t1', 'disable', '--dryrun'], root);
+  check('a12.typoFlag', [typo.status, typo.stdout],
+    [1, "ERROR:unknown argument '--dryrun' (only --dry-run is accepted); nothing was touched\n"],
+    'GIVEN a mistyped dry-run flag WHEN disable runs THEN it exits 1 before any move');
+  const traversal = run(TOGGLE, ['../../elsewhere', 'disable'], root);
+  check('a12.traversalTeam', [traversal.status, traversal.stdout], [1, NAME_ERROR],
+    'GIVEN a team name that is a path WHEN disable runs THEN the foreign roster is never read');
+  const hostile = run(TOGGLE, [`my te"am $(touch ${marker})`, 'disable'], root);
+  check('a12.hostileTeam', [hostile.status, hostile.stdout, existsSync(marker)], [1, NAME_ERROR, false],
+    'GIVEN a team name with a space, a quote and a command substitution WHEN disable runs THEN nothing executes');
+  check('a12.tree', ls(agentsDir), ['intent-guard.md', 'worker-one.md'],
+    'GIVEN three refused runs WHEN the agents dir is listed THEN every member is still live');
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// A13 — a parked name taken by a DIRECTORY is a collision: `mv` moved the live
+//       file into it, printed MOVED and left the agent discoverable.
+// ────────────────────────────────────────────────────────────────────────────
+{
+  const root = makeProject('a13', ['worker-one', 'worker-two'], ['worker-one', 'worker-two']);
+  const agentsDir = join(root, '.claude', 'agents');
+  mkdirSync(join(agentsDir, 'worker-two.md.disabled'));
+  const r = run(TOGGLE, ['t1', 'disable'], root);
+
+  check('a13.status', r.status, 1,
+    'GIVEN a directory at the parked name WHEN disable runs THEN it exits 1');
+  check('a13.conflictLines', linesStartingWith(r.stdout, 'CONFLICT:'),
+    [
+      'CONFLICT:worker-two -- both .claude/agents/worker-two.md and .claude/agents/worker-two.md.disabled exist; '
+        + 'disable would overwrite the parked file. Nothing was touched.',
+      'CONFLICT:1',
+    ],
+    'GIVEN a directory at the parked name WHEN disable runs THEN that member is the one reported collision');
+  check('a13.tree', [ls(agentsDir), ls(join(agentsDir, 'worker-two.md.disabled'))],
+    [['worker-one.md', 'worker-two.md', 'worker-two.md.disabled'], []],
+    'GIVEN the collision WHEN disable refused THEN no member moved and the directory is still empty');
 }
 
 // ── report ──────────────────────────────────────────────────────────────────

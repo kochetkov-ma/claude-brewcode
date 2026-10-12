@@ -1,0 +1,4 @@
+# generic-api-key FP: `tokenizerSha` = public SHA-256 of OpenAI o200k_base.tiktoken, not a credential
+c1a529025e11d73a969a21803b073970e6f3134e:brewcode/skills/teams-setup/tests/suite-agent-profile-contract.mjs:generic-api-key:204
+c1a529025e11d73a969a21803b073970e6f3134e:brewcode/.codex/skills/teams-setup/tests/suite-agent-profile-contract.mjs:generic-api-key:204
+c1a529025e11d73a969a21803b073970e6f3134e:.codex/plugins/brewcode/skills/teams-setup/tests/suite-agent-profile-contract.mjs:generic-api-key:204

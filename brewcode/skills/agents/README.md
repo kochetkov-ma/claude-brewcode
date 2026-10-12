@@ -1,6 +1,6 @@
 # Agents
 
-Manages Claude Code subagents across all scopes — create new agents, improve existing ones, audit quality, sync agent knowledge with the codebase, or inspect what is installed. Input is ONE free-form natural-language prompt; there are no keyword subcommands.
+Manages Claude Code subagents across all scopes: create new agents, improve existing ones, review quality, sync agent knowledge with the codebase, or inspect what is installed. Input is one free-form prompt in English or Russian; an explicit mode word in it wins, otherwise the mode is inferred from keywords.
 
 ## Quick Start
 
@@ -8,56 +8,45 @@ Manages Claude Code subagents across all scopes — create new agents, improve e
 /brewcode:agents
 ```
 
-No arguments: presents the interactive menu with Status (agents) pre-selected as the recommended action.
+With no arguments the skill reports the status of agents in every scope. Ask for the menu explicitly to get the interactive choice instead.
 
-Pass a free-form prompt to skip the menu entirely:
+Pass a prompt to go straight to a mode:
 
 ```
 /brewcode:agents create a backend validator agent for Java Spring projects
 ```
 
-## How It Works — Unified 6-Step Flow
+## How It Works
 
-Every invocation goes through the same flow:
-
-1. **Input gate** — reads `$ARGUMENTS`; if empty, goes to the interactive menu.
-2. **Auto-mode select** — infers mode from the prompt and announces:
-   `Mode: <mode> (agents) — chosen because <evidence>`
-3. **No-prompt menu** — when no arguments given, shows a single `AskUserQuestion`:
-   - Status (agents) [recommended]
-   - Status (all: agents + rules + skills)
-   - Create
-   - Improve
-   - Review
-   - Sync agents (memory sync)
-   - List (plain)
-   - Cancel
-4. **Dispatch** — routes create / improve / sync to `brewcode:agent-creator`, review to the project reviewer agent from `.claude/agents/` (else `general-purpose`, two-phase), or runs Glob `*.md` over agent scopes directly (list mode).
-5. **Real status** — inventory by scope (counts, names, load path); state (enabled/disabled via `_name.md`, model); overlaps/conflicts (same-name shadowing, duplicate triggers/descriptions); health flags (missing README/frontmatter, agents missing `Bash` in `tools:`, weak triggers, rules duplicated in CLAUDE.md) — not a flat file listing.
-6. **Mandatory final output** — structured summary of what was created, modified, or reviewed. Omitted only for `list` mode.
+1. **Input gate**: an empty prompt runs `status`; an explicit request for the menu opens it; anything else goes to mode selection.
+2. **Mode selection**: an explicit mode token wins, otherwise English and Russian keywords are scored. Before acting, the skill prints a `PLAN — brewcode:agents` block with the input, mode, scope, planned actions and expected result.
+3. **Menu** (on request only): one question listing the modes, plus Status (all: agents + rules + skills) and Cancel.
+4. **Dispatch**: each mode runs as described under Modes (create, improve and sync use `brewcode:agent-creator`); a created or improved agent file then gets a scoped sync check.
+5. **Real status**: inventory per scope (counts, names, load path); state (setup config or `<name>.disabled` parking, legacy `_<name>.md` markers, model); same-name shadowing and duplicate triggers; health flags (missing README or frontmatter, a `tools:` list naming none of `Bash`, `Glob`, `Grep`, weak triggers, rules duplicated in CLAUDE.md).
+6. **Final output**: a structured report with detection, result, status and next steps, for every mode except `list`.
 
 ## Modes
 
 | Mode | How it activates | What it does |
 |------|-----------------|--------------|
-| `status` | Default for any "show me" intent — "статус" / "что есть" / "состояние" | Inventory per scope, state and model, overlaps, health flags |
-| `list` | Explicit only — "list" / "список" / "перечисли" | Globs `*.md` over all agent scopes, plain file listing |
+| `status` | Empty prompt, "status", "show me", "статус" / "что есть" / "состояние" | Real status, see step 5 |
+| `list` | "list" / "список" / "перечисли" | Plain listing of `*.md` files over all agent scopes |
 | `create` | "создай" / "create" / "new" / "добавь" / "scaffold" | agent-creator builds frontmatter + system prompt from description |
 | `improve` | "улучши" / "improve" / "refactor" / "fix" / "почини", or a bare existing name/path | agent-creator enhances an existing agent file per chosen focus |
 | `review` | "ревью" / "review" / "validate" / "проверь корректность" | the project reviewer agent from `.claude/agents/` (else `general-purpose`) audits agent files, two-phase (review -> double-check findings -> report) |
-| `sync` | "sync", "синк", "memory sync", "актуализируй", "обнови знания", "приведи в соответствие с кодом" | agent-creator re-verifies agent claims against the codebase and corrects stale knowledge |
+| `sync` | "sync", "синк", "memory sync", "актуализируй", "обнови знания", "приведи в соответствие с кодом" | one agent-creator per agent re-verifies its claims against the codebase and corrects stale knowledge |
 
-Batch flag (not a mode): plural form, "все" / "all", or multiple names/paths — fan-out, one specialist spawn per item.
+Batch flag (not a mode): a plural form, "все" / "all", or several names or paths fan out to one specialist spawn per item.
 
 ## Sync mode
 
-Re-verifies every claim in agent files against the current codebase and corrects drift. Shared implementation with `/brewcode:skills sync`: `references/mode-sync.md` (path `${CLAUDE_SKILL_DIR}/../skills/references/mode-sync.md`).
+Re-verifies every claim in agent files against the current codebase and corrects drift. Shared implementation with `/brewcode:skills sync`: [`../skills/references/mode-sync.md`](../skills/references/mode-sync.md).
 
 | Scope | Trigger | Evidence |
 |-------|---------|----------|
 | `repo` (default) | no scope given | whole working tree |
-| `session` | "session", "this conversation" | decisions, user corrections, bugs hit in the current conversation |
-| `commit` | "commit", "last commit" | `git show`/`git diff <ref>`, default `HEAD` |
+| `session` | "this session", "по текущей сессии" | decisions, user corrections, bugs hit in the current conversation |
+| `commit` | "last commit", "по коммиту", a SHA, range or tag | `git show`/`git diff <ref>`, default `HEAD` |
 
 Announces `Sync scope: <scope> — <evidence> | targets: <N>` before editing. Non-growth: every edited file ends at or below its original line count, total delta <= 0. Order: DELETE stale/dead/duplicate/obvious content first, then FIX, then ADD (non-obvious, source-verified only).
 
@@ -71,20 +60,20 @@ Targets: `.claude/agents/*.md`, `*/agents/*.md` (repo-local only). Disabled file
 
 | Parameter | Options | Notes |
 |-----------|---------|-------|
-| Scope | Project (`.claude/agents/`), Global (`~/.claude/agents/`), Plugin (`brewcode/agents/`) | Asked via single AskUserQuestion |
-| Model | `sonnet` (recommended), `opus` / `fable`, `haiku`, `inherit` | `inherit` omits the `model:` field entirely |
+| Scope | Project (`.claude/agents/`), Global (`~/.claude/agents/`), Plugin (`brewcode/agents/`) | Plugin is offered only inside the brewcode plugin workspace; all open questions come in one batch |
+| Model | `sonnet` (recommended), `opus` / `fable`, `haiku`, `inherit` | `inherit` writes `model: inherit`, so the agent runs on the session model |
 | CLAUDE.md update | Yes / No | Adds or updates the agents table row in CLAUDE.md |
 | Improve focus | `triggers`, `system-prompt`, `both`, `full review` | Improve mode only |
-| Description budget | <=100 characters | Create mode — used as the agent's frontmatter `description` seed |
+| Description | at most 150 tokens, lead sentence at most 160 characters, 3-7 triggers | Description Budget in `references/agent-template.md`; 100 characters is an optional brevity target |
 
 ## Examples
 
 ```bash
-# Open the interactive menu
+# Status of agents in every scope (default)
 /brewcode:agents
 
-# Check the current state of all installed agents
-/brewcode:agents what agents do we have
+# Open the interactive menu
+/brewcode:agents show the menu
 
 # Create a new agent with a plain-English description
 /brewcode:agents create a SQL migration reviewer for PostgreSQL
@@ -107,23 +96,20 @@ Targets: `.claude/agents/*.md`, `*/agents/*.md` (repo-local only). Disabled file
 
 ## Output — Agent Scopes
 
-Agent files are located in or written to the directory matching the chosen scope:
+| Scope | Directory | Writable |
+|-------|-----------|----------|
+| Project | `.claude/agents/` | yes |
+| Global | `~/.claude/agents/` | yes |
+| Plugin source | `brewcode/agents/` | only inside the brewcode plugin workspace |
+| Installed plugin | the plugin's own `agents/` | no, reported only |
 
-| Scope | Directory |
-|-------|-----------|
-| Project | `.claude/agents/` |
-| Global | `~/.claude/agents/` |
-| Plugin | `brewcode/agents/` |
-
-Status and list modes report agents from all three scopes simultaneously. Create and improve modes write to whichever scope the user selects during the guided prompt.
+Status and list cover every scope. Create and improve write only to the scope chosen.
 
 ## Tips
 
-- Run `/brewcode:agents` with no arguments to get the menu — the guided flow is faster than remembering free-form phrases.
-- The **"inherit" model** option omits the `model:` field entirely, so the agent uses whatever model the calling session runs on.
-- After creation, verify the generated triggers in the agent's `description` frontmatter — trigger quality is the primary driver of automatic agent selection.
-- Use `improve` with focus `triggers` periodically on high-use agents to incorporate new project vocabulary and updated invocation patterns.
-- `list` is the fastest way to count agents and spot scope imbalance before a review session.
+- After creation, check the triggers in the agent's `description`: they decide automatic agent selection.
+- Run `improve` with focus `triggers` on high-use agents to pick up new project vocabulary.
+- `list` is the fastest way to count agents and spot scope imbalance before a review.
 
 ## Documentation
 

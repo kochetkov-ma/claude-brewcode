@@ -22,7 +22,7 @@ Current model-specific prompting advice belongs to `rules-review.md`; never gene
 | `~` | approximately |
 | `includes` | includes, contains (set) (was `⊃`) |
 
-Token cost (measured, tiktoken cl100k/o200k): ASCII digraphs `-> != >= <= |` = 1 token each; unicode glyphs `∵ ∴ ⊃ ≤ ≥` = 2-3 tokens each. Prefer ASCII. The token win comes from deleting words, not the glyph.
+Operator token costs: `rules-review.md` T.8.
 
 Status emoji cost 2-4 tokens each (measured): `✅`/`❌` = 2-3 tok, `ℹ️` = 3 tok (variation-selector, worst). In token-sensitive deep output prefer ASCII `[x]`/`OK`/`FAIL`/`!`. Keep emoji only where priority-signaling value (e.g. KNOWLEDGE ❌/✅/ℹ️ ordering) outweighs token cost.
 
@@ -70,7 +70,7 @@ Status emoji cost 2-4 tokens each (measured): `✅`/`❌` = 2-3 tok, `ℹ️` = 
 
 Place `[DICT: CC=Claude Code, KB=knowledge base, SP=system prompt, ...]` at document start when
 terms appear 3+ times. Rules: max 20 entries, sort alphabetically, place before the first content
-line, use the abbreviation from DICT throughout — a term used <3x stays inline (rules-review.md R13:
+line, use the abbreviation from DICT throughout — a term used <3x stays inline (rules-review.md PQ.11:
 DICT pays only on a long, repetition-heavy file, not a short one).
 
 ## Filler Words & Phrases to Remove
@@ -125,7 +125,7 @@ Ledger: dropped "write unit tests / catches regressions" + "keep functions small
 Preserve in ALL cases regardless of compression level — the lossless guard, never paraphrased,
 rounded, or dropped:
 - Names, numbers, dates, URLs, file paths, versions, ports, sizes
-- CLI flags/options verbatim (`-x`, `--max`); model IDs byte-exact (`claude-sonnet-5`, never "Sonnet 5")
+- CLI flags/options verbatim (`-x`, `--max`); model IDs byte-exact (`claude-sonnet-5-5`, never "Sonnet 5.5")
 - Thresholds, gates, percentages exactly as stated (`>=95%`, `~20%` ceiling) — never rounded
 - Negative rule semantics (use `!=` notation) | >=1 example per rule that originally had examples
 - DICT header at document start when Dictionary Format's repetition/size threshold is met

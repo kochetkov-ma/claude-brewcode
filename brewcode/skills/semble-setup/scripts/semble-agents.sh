@@ -27,7 +27,8 @@ semble-agents.sh apply  [--scope project|global] [--yes] [--revert] [--json]
            left in .claude/semble/state.json. A name the user authored before
            install is kept; with no record for a file, nothing is removed.
   --scope  project (default) = <projectRoot>/.claude/agents/**/*.md
-           global            = <home>/.claude/agents/**/*.md; apply --scope
+           global            = <config dir>/agents/**/*.md (CLAUDE_CONFIG_DIR,
+                               default <home>/.claude); apply --scope
                                global additionally requires --yes.
 
 Exit: 0 ok | 1 failure/abort | 2 bad usage | 3 conflicts need a user decision
@@ -70,11 +71,14 @@ done
 sc_require_node
 
 if [ "$SCOPE" = "global" ]; then
-  ROOT="$(sc_home)"
+  # User agents live in the active config dir; ROOT is its parent, so ledger keys name the profile.
+  CFG_DIR="$(sc_config_dir)"; CFG_DIR="${CFG_DIR:-$(sc_home)/.claude}"
+  ROOT="$(dirname "$CFG_DIR")"
+  AGENTS_DIR="$CFG_DIR/agents"
 else
   ROOT="$(sc_project_root)"
+  AGENTS_DIR="$ROOT/.claude/agents"
 fi
-AGENTS_DIR="$ROOT/.claude/agents"
 
 DRY=0
 if [ "${SEMBLE_DRY_RUN:-}" = "1" ]; then DRY=1; fi

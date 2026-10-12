@@ -14,7 +14,7 @@
 import { spawnSync } from 'node:child_process';
 import {
   mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync,
-  readdirSync, realpathSync, statSync, utimesSync,
+  readdirSync, realpathSync, statSync, utimesSync, chmodSync,
 } from 'node:fs';
 import { join, basename, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -28,7 +28,7 @@ const MCP_SH = join(SCRIPTS, 'semble-mcp.sh');
 const CACHE_SH = join(SCRIPTS, 'semble-cache.sh');
 const STATE_SH = join(SCRIPTS, 'semble-state.sh');
 
-const PIN = 'semble[mcp]==0.5.5';
+const PIN = 'semble[mcp]==0.6.2';
 
 // ── isolated base ───────────────────────────────────────────────────────────
 const BASE = realpathSync(mkdtempSync(join(tmpdir(), 'semble-b-')));
@@ -317,9 +317,17 @@ check('add.noyes.nocall', readFileSync(LOG, 'utf8'), '', 'nothing was registered
 check('add.noyes.nostate', existsSync(STATE_FILE), false, 'no state file was created');
 
 resetLog();
+dropBackups(HOME, '.claude.json.bak.');
 const addOk = run(MCP_SH, ['add', '--yes', '--json']);
 check('add.yes.exit', addOk.status, 0, 'add --yes exits 0');
 check('add.yes.status', json(addOk).status, 'ok', 'reports ok');
+// GIVEN an unregistered ~/.claude.json WHEN add --yes mutates it THEN it is backed up first, like repair and remove
+const addBaks = bakList(HOME, '.claude.json.bak.').map((n) => join(HOME, n));
+check('add.backup.count', addBaks.length, 1, 'add took exactly one backup of ~/.claude.json before registering');
+check('add.backup.bytes', onlyBackupBody(HOME, '.claude.json.bak.'), FIXTURES.absent,
+  'the backup is byte-identical to the pre-add file');
+check('add.backup.json', json(addOk).backups, addBaks, 'the --json result names the backup path');
+dropBackups(HOME, '.claude.json.bak.');
 // add-json is the primary form: it is the only one that can carry alwaysLoad.
 check('add.yes.call', readFileSync(LOG, 'utf8'),
   `mcp add-json semble_code -s user ${JSON.stringify(CORRECT_CFG)}|phase=awaiting_reload\n`,
@@ -359,6 +367,9 @@ check('add.retry.status', json(addFail).status, 'failed', 'reports failed');
 check('add.retry.calls', readFileSync(LOG, 'utf8').split('\n').filter(Boolean).map((l) => l.split(' ')[1]),
   ['add-json', 'add'], 'add-json runs first and is retried exactly once with the degraded add');
 check('add.retry.rollback', JSON.parse(readFileSync(STATE_FILE, 'utf8')).phase, 'prereq_ready', 'phase rolled back to prereq_ready');
+check('add.retry.backup', onlyBackupBody(HOME, '.claude.json.bak.'), FIXTURES.absent,
+  'the pre-add backup survives a failed registration, byte-identical');
+dropBackups(HOME, '.claude.json.bak.');
 
 // dry run
 writeClaudeJson(FIXTURES.absent);
@@ -368,6 +379,72 @@ const addDry = run(MCP_SH, ['add', '--yes', '--json'], { SEMBLE_DRY_RUN: '1' });
 check('add.dry.exit', addDry.status, 0, 'dry run exits 0');
 check('add.dry.nocall', readFileSync(LOG, 'utf8'), '', 'dry run never invokes claude');
 check('add.dry.nostate', existsSync(STATE_FILE), false, 'dry run writes no state');
+check('add.dry.nobackup', bakList(HOME, '.claude.json.bak.'), [], 'dry run takes no backup');
+check('add.dry.bytes', readFileSync(join(HOME, '.claude.json'), 'utf8'), FIXTURES.absent,
+  'dry run leaves ~/.claude.json byte-identical');
+
+// GIVEN a stale registration and a project .mcp.json WHEN repair and remove run with
+// SEMBLE_DRY_RUN=1 THEN no backup, no state and no config byte lands on disk
+const DRY_MCP_JSON = join(PROJ, '.mcp.json');
+writeClaudeJson(FIXTURES.stale);
+resetProject();
+writeFileSync(DRY_MCP_JSON, '{"mcpServers":{"unrelated":{"command":"other-bin"}}}\n');
+resetLog();
+const dryDisk = () => [tree(HOME), tree(PROJ), sha(join(HOME, '.claude.json')), sha(DRY_MCP_JSON)];
+const dryAnnounced = (r) => r.err.split('\n').filter((l) => l.startsWith('DRY backup '));
+const DRY_BACKUP_LINES = [`DRY backup ${join(HOME, '.claude.json')}`, `DRY backup ${DRY_MCP_JSON}`];
+const dryBefore = dryDisk();
+const repairDry = run(MCP_SH, ['repair', '--yes', '--json'], { SEMBLE_DRY_RUN: '1' });
+check('repair.dry.exit', repairDry.status, 0, 'dry repair exits 0');
+check('repair.dry.disk', dryDisk(), dryBefore, 'dry repair changes zero bytes: no .bak.*, no state, same configs');
+check('repair.dry.announce', dryAnnounced(repairDry), DRY_BACKUP_LINES,
+  'each backup is announced on stderr and never taken');
+const removeDry = run(MCP_SH, ['remove', '--yes', '--json'], { SEMBLE_DRY_RUN: '1' });
+check('remove.dry.exit', removeDry.status, 0, 'dry remove exits 0');
+check('remove.dry.disk', dryDisk(), dryBefore, 'dry remove changes zero bytes: no .bak.*, no state, same configs');
+check('remove.dry.announce', dryAnnounced(removeDry), DRY_BACKUP_LINES,
+  'each backup is announced on stderr and never taken');
+check('mutations.dry.nocall', readFileSync(LOG, 'utf8'), '', 'neither dry run invoked claude');
+rmSync(DRY_MCP_JSON, { force: true });
+
+// GIVEN ~/.claude.json sits in a directory that refuses new files WHEN add --yes runs
+// THEN it stops before the checkpoint and before claude: no backup, no mutation
+writeClaudeJson(FIXTURES.absent);
+resetProject();
+resetLog();
+chmodSync(HOME, 0o500);
+const addNoBak = run(MCP_SH, ['add', '--yes', '--json']);
+chmodSync(HOME, 0o700);
+check('add.nobackup.exit', addNoBak.status, 1, 'a backup that cannot be taken fails the add');
+check('add.nobackup.result', [json(addNoBak).status, json(addNoBak).note],
+  ['failed', `cannot back up ${join(HOME, '.claude.json')}; nothing was changed`],
+  'the result names the file that could not be backed up');
+check('add.nobackup.untouched',
+  [readFileSync(LOG, 'utf8'), existsSync(STATE_FILE), bakList(HOME, '.claude.json.bak.')], ['', false, []],
+  'claude was never invoked, no state checkpoint was written and no partial backup exists');
+
+// GIVEN a non-default config dir WHEN add --yes runs THEN the backup lands beside
+// <config dir>/.claude.json and the default ~/.claude.json gets none
+const CFG_DIR = join(BASE, 'cfg-a');
+mkdirSync(CFG_DIR, { recursive: true });
+writeFileSync(join(CFG_DIR, '.claude.json'), FIXTURES.absent);
+resetProject();
+resetLog();
+const addCfg = run(MCP_SH, ['add', '--yes', '--json'], { SEMBLE_TEST_CONFIG_DIR: CFG_DIR });
+const cfgBaks = bakList(CFG_DIR, '.claude.json.bak.').map((n) => join(CFG_DIR, n));
+check('add.configdir.count', cfgBaks.length, 1, 'exactly one backup inside the active config dir');
+check('add.configdir.backups', [json(addCfg).backups, bakList(HOME, '.claude.json.bak.')], [cfgBaks, []],
+  'the result names the config-dir backup and the default ~/.claude.json is not copied');
+
+// GIVEN human output WHEN add --yes runs THEN the backup path is the first line printed
+resetProject();
+resetLog();
+const addHuman = run(MCP_SH, ['add', '--yes']);
+check('add.backup.human', addHuman.out.split('\n')[0],
+  `✅ backup: ${bakList(HOME, '.claude.json.bak.').map((n) => join(HOME, n)).join('|')}`,
+  'human mode prints the backup path before anything is written');
+dropBackups(HOME, '.claude.json.bak.');
+resetProject();
 
 // ── 8. print-cmd mutates nothing ───────────────────────────────────────────
 resetLog();
@@ -402,7 +479,7 @@ check('state.unknownkey.exit', okPatch.status, 0, 'patch succeeds');
 check('state.unknownkey.preserved', afterPatch.customKey, { a: 1 }, 'unknown top-level keys survive verbatim');
 check('state.unknownkey.phase', afterPatch.phase, 'prereq_ready', 'the patched key is applied');
 check('state.unknownkey.projectRoot', afterPatch.projectRoot, PROJ, 'projectRoot is rewritten from sc_project_root');
-check('state.unknownkey.version', afterPatch.approvedVersion, '0.5.5', 'approvedVersion is the pin');
+check('state.unknownkey.version', afterPatch.approvedVersion, '0.6.2', 'approvedVersion is the pin');
 
 // `disabled` is not healable from absent: nothing was ever set up to disable.
 resetProject();
@@ -711,7 +788,7 @@ for (const [label, args] of [
   check(`refresh.${label}.prompt`, after.resumePrompt, LIVE_PROMPT, 'resumePrompt is rewritten from the constant');
   check(`refresh.${label}.cacheRoot`, after.cacheRoot, CODE_ROOT, 'cacheRoot is recomputed from the environment');
   check(`refresh.${label}.repoHash`, after.repoHash, PROJ_HASH, 'repoHash is recomputed from the project root');
-  check(`refresh.${label}.version`, after.approvedVersion, '0.5.5', 'approvedVersion stays the pin');
+  check(`refresh.${label}.version`, after.approvedVersion, '0.6.2', 'approvedVersion stays the pin');
   check(`refresh.${label}.enabled`, after.enabled, true, 'enabled is NOT reset as a side effect');
   check(`refresh.${label}.completed`, after.completed,
     label === 'complete' ? ['mcp', 'warm', 'smoke', 'guidance'] : ['mcp', 'warm', 'smoke'],
@@ -1068,6 +1145,7 @@ check('add.upstream-absent.exit', addUpstream.status, 0, 'add registers semble_c
 check('add.upstream-absent.call', readFileSync(LOG, 'utf8').split('|')[0],
   `mcp add-json semble_code -s user ${JSON.stringify(CORRECT_CFG)}`,
   'the exact approved argv');
+dropBackups(HOME, '.claude.json.bak.');
 
 // ── 17. purge-repo asserts the cache-root leaf ─────────────────────────────
 // m5: without it, an overridden SEMBLE_CACHE_ROOT_CODE let purge-repo delete a
@@ -1122,12 +1200,12 @@ check('timeout.path.stub', sh('sc_timeout_path', { SEMBLE_TIMEOUT_BIN: TIMEOUT_S
   'the backing binary is reported by absolute path');
 
 // Delegation to a real binary keeps every argument its own argv element.
-const delegated = sh(`sc_timeout 42 printf '%s|%s\\n' 'semble[mcp]==0.5.5' two`,
+const delegated = sh(`sc_timeout 42 printf '%s|%s\\n' 'semble[mcp]==0.6.2' two`,
   { SEMBLE_TIMEOUT_BIN: TIMEOUT_STUB });
-check('timeout.delegate.stdout', delegated.out, 'semble[mcp]==0.5.5|two',
+check('timeout.delegate.stdout', delegated.out, 'semble[mcp]==0.6.2|two',
   'the wrapped command runs with its argv intact');
 check('timeout.delegate.log', readFileSync(TIMEOUT_LOG, 'utf8'),
-  "42 printf %s|%s\\n semble[mcp]==0.5.5 two\n",
+  "42 printf %s|%s\\n semble[mcp]==0.6.2 two\n",
   'the binary was invoked with the seconds first and the pin as one word');
 
 // Elapsed IS the property under test here — "the watchdog waited out its bound"
@@ -1218,12 +1296,12 @@ check('timeout.watch.stderr',
 // picked from the pin up front. A hang cannot be undone by a fallback, only by
 // never issuing it. Exact strings on purpose: a wildcard here would accept the
 // hanging argv on an old pin, which is the whole failure this gate prevents.
-check('probearg.pin', sh('printf %s "$SEMBLE_PIN_VERSION"').out, '0.5.5',
-  'the shipped pin is 0.5.5');
+check('probearg.pin', sh('printf %s "$SEMBLE_PIN_VERSION"').out, '0.6.2',
+  'the shipped pin is 0.6.2');
 check('probearg.default', sh('sc_semble_probe_arg').out, '--version',
   'the shipped pin dispatches --version');
 for (const [v, want] of [
-  ['0.5.4', '--version'], ['0.5.5', '--version'], ['0.6.0', '--version'], ['1.0.0', '--version'],
+  ['0.5.4', '--version'], ['0.5.5', '--version'], ['0.6.0', '--version'], ['0.6.2', '--version'], ['1.0.0', '--version'],
   ['0.5.3', '--help'], ['0.5.2', '--help'], ['0.4.9', '--help'], ['0.5.10', '--version'],
   ['', '--help'], ['0.5', '--help'], ['garbage', '--help'], ['0.5.x', '--help'],
 ]) {
@@ -1370,6 +1448,20 @@ const rollbackBaks = bakList(HOME, '.claude.json.bak.').map((n) => join(HOME, n)
 check('repair.rollback.backup.count', rollbackBaks.length, 1, 'exactly one backup was taken');
 check('repair.rollback.backup.json', json(repairFail).backups, rollbackBaks,
   'the --json result names the backup files, which used to be echoed in human mode only');
+dropAllBackups();
+
+// GIVEN a claude that half-writes ~/.claude.json and then fails both add forms WHEN add --yes runs
+// THEN the pre-add bytes are restored from the backup, like repair and remove
+const HALF = join(BASE, 'claude-halfwrite-stub');
+writeFileSync(HALF, `#!/usr/bin/env bash\nprintf '{"half":' > "\${SEMBLE_TEST_HOME}/.claude.json"\nexit 1\n`);
+chmodSync(HALF, 0o755);
+writeClaudeJson(FIXTURES.absent);
+resetProject();
+resetLog();
+const addHalf = run(MCP_SH, ['add', '--yes', '--json'], { SEMBLE_CLAUDE_BIN: HALF });
+check('add.rollback.result', [addHalf.status, json(addHalf).status], [1, 'failed'], 'a failed add exits 1 and says failed');
+check('add.rollback.bytes', readFileSync(userClaudeJson(), 'utf8'), FIXTURES.absent,
+  'the half-written ~/.claude.json is byte-restored from the pre-add backup');
 dropAllBackups();
 
 // ── 22. SS07: a successful repair writes completed:["mcp"] like `add` ───────

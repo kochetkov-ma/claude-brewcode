@@ -7,22 +7,23 @@
 // (PreToolUse "*"). No external imports. Project-only state.
 //
 // When state.hard === true, physically DENIES tool calls in the MAIN session,
-// leaving only delegation (Task/Agent/Skill), reading, and task tracking.
+// leaving only delegation (Agent/Skill/Workflow), reading, and task tracking.
 // Subagents stay fully free.
 //
 // LINCHPIN: this PreToolUse hook fires inside subagents too, and subagent
 // tool-call stdin carries `agent_id`; the MAIN session stdin does NOT.
 // session_id is identical for both. => Discriminator is `agent_id` ALONE: DENY
-// whenever it is ABSENT (main session), pass through when present.
+// whenever it is ABSENT (main session), pass through when it is a non-empty string
+// (re-checked on 2.1.296 payloads; an agent hook's verifier is `hook-agent-<uuid>`).
 // `agent_type` is NOT a discriminator — CC 2.1.228 sets it on the MAIN thread of
 // a `claude --agent <name>` session too (without `agent_id`), so treating it as
 // one disarms the wall for every such session. A `--agent` main session IS walled.
 //
 // Strictness levels:
-//   strict   — deny all non-read tools: no Bash, no WebSearch, no MCP at all (state.mcpAllow
-//              is NOT consulted here).
-//   balanced — additionally allow read-only Bash (strict binary allowlist + per-binary flag
-//              vetting), WebSearch, and MCP tools whose tool segment tokenizes entirely into
+//   strict   — deny all non-read tools: no Bash, no Monitor, no WebSearch, no MCP except the
+//              read-only tools of the `semble_code` server (state.mcpAllow is NOT consulted here).
+//   balanced — additionally allow read-only Bash/Monitor commands (strict binary allowlist +
+//              per-binary flag vetting), WebSearch, and MCP tools whose tool segment tokenizes entirely into
 //              known-safe tokens with a read verb among them — an AMBIGUOUS verb (`query`,
 //              `resolve`) counting only when another safe token accompanies it (default-deny;
 //              see isReadOnlyMcpTool). state.mcpAllow lists names allowed regardless.
@@ -33,6 +34,8 @@
 // left is "the manager was never installed in this project" (no manager directory at
 // any candidate root) and the subagent discriminator. Recovery from a broken state is
 // always available because the self-exempt state CLI survives every level.
+// A guard that cannot START (missing script, crash, timeout) is closed by the registration's
+// `"onFailure": "block"` (CLI >= 2.1.295; older CLIs ignore the field and fail open there).
 //
 // PreToolUse stdin fields used: tool_name, tool_input.command, cwd, agent_id.
 //
@@ -144,30 +147,36 @@ function readProjectState(hookCwd) {
 // Inspect/orchestrate tools; delegate/session schedules may trigger later work, whose
 // main-session tool calls still pass through this guard.
 const ALWAYS_ALLOW = new Set([
-  // read — inspect files, never write
-  'Read', 'Grep', 'Glob', 'NotebookRead',
+  // read — inspect files and symbols, never write
+  'Read', 'Grep', 'Glob', 'LSP',
   // delegate / orchestrate — hands the work to a subagent, which is where mutation belongs
-  'Task', 'Agent', 'Skill', 'SlashCommand', 'ListAgents', 'SendMessage', 'Monitor',
+  'Task', 'Agent', 'Skill', 'Workflow', 'ListAgents', 'SendMessage', 'SubagentHandback',
+  // worktrees — where delegated work is isolated; entering one writes no project file
+  'EnterWorktree', 'ExitWorktree',
   // plan mode — without these an armed wall traps a plan-mode session forever
   'EnterPlanMode', 'ExitPlanMode',
   // tool discovery — with ENABLE_TOOL_SEARCH the Task* tools below are DEFERRED, so
   // denying ToolSearch would make the tracking bucket unreachable
-  'ToolSearch',
+  'ToolSearch', 'WaitForMcpServers',
   // track / report — task graph + findings, no filesystem side effects
   'TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet', 'TodoWrite', 'ReportFindings',
   // session schedules — later main-session work still passes through this guard
-  'CronCreate', 'CronList', 'CronDelete',
-  // background shells — read output of / stop a shell started before arming; neither writes
-  'BashOutput', 'KillShell', 'KillBash',
+  'CronCreate', 'CronList', 'CronDelete', 'ScheduleWakeup',
+  // background tasks — stop a shell, monitor or agent; output is read with Read
+  'TaskStop',
   // MCP resource introspection — read-only by protocol definition
   'ListMcpResourcesTool', 'ReadMcpResourceTool',
   // ask the human
   'AskUserQuestion'
 ]);
 // Deliberately NOT allowed: Artifact (publishes a page), WebFetch, Write/Edit/NotebookEdit.
+// Monitor runs a shell command, so it is classified with Bash below, never listed here.
 
 // Tools never permitted in the main session under the hard wall (any level).
 const ALWAYS_BLOCK = new Set(['Write', 'Edit', 'NotebookEdit', 'WebFetch']);
+
+// The one MCP server `strict` still reads through: semantic code search (read-only tools only).
+const STRICT_MCP_SERVER = 'semble_code';
 
 // MCP classification applies to the TOOL segment only (everything after the second `__`
 // in mcp__<server>__<tool>). Matching the whole name let a server called `search` or
@@ -284,12 +293,13 @@ function isReadOnlyMcpTool(server, toolSegment) {
 
 // Escape hatch for a false denial: exact `mcp__server__tool` or a `mcp__server__*` prefix
 // from state.mcpAllow. Consulted BEFORE the heuristic and at `balanced` ONLY — `strict`
-// means no MCP at all, listed or not.
+// ignores the list and keeps only the read-only tools of STRICT_MCP_SERVER.
 function isMcpAllowListed(list, tool) {
   return list.some(e => (e.endsWith('*') ? tool.startsWith(e.slice(0, -1)) : e === tool));
 }
 
-const EXIT_HINT = 'Manager HARD wall is ON — delegate via Task/Agent. To exit run `/brewtools:manager-setup disable`; the only Bash it needs — `node <project>/.claude/brewtools/manager/manager-state.mjs set hard=false` — is self-exempt at every level.';
+// The deny reason is the model's only explanation of the wall: what to do instead, why, and the exit.
+const EXIT_HINT = 'Manager mode keeps the main context for orchestration, so pass this step to a subagent with the Agent tool: subagents are not restricted, and reading, search and task tracking still work here. The wall comes off only when the user asks: `/brewtools:manager-setup disable`, whose bare `node <project>/.claude/brewtools/manager/manager-state.mjs set hard=false` is the one Bash command allowed at every level.';
 
 function deny(reason) {
   output({
@@ -461,6 +471,23 @@ function isReadonlyCommand(cmd) {
   return segments.every(isReadonlySegment);
 }
 
+// Shown in the balanced Bash/Monitor deny so the model can rephrase instead of retrying blind.
+const READONLY_HINT = 'ls, cat, head, tail, rg, grep, find, jq, git status|log|diff|show, gh <group> view|list; no redirection, no $(...)';
+
+// A subagent call carries a non-empty string agent_id (hook-agent verifiers: `hook-agent-<uuid>`).
+function isSubagent(input) {
+  return !!input && typeof input.agent_id === 'string' && input.agent_id !== '';
+}
+
+// Registered with onFailure:"block": any exit other than 0/2 blocks main AND subagent calls,
+// so a fault outside the try below ends as a plain blocking error (exit 2), never a crash.
+function lastResort(err) {
+  process.stderr.write(`Hard wall: the guard failed outside its handler (${err && err.message}) and blocks by default.\n`);
+  process.exit(2);
+}
+process.on('uncaughtException', lastResort);
+process.on('unhandledRejection', lastResort);
+
 (async () => {
   let input = null;
   try {
@@ -480,7 +507,7 @@ function isReadonlyCommand(cmd) {
     // (b) LINCHPIN: only agent_id marks a subagent -> pass through. agent_type is NOT a
     // discriminator: CC 2.1.228 sets it on the MAIN thread of a `claude --agent <name>`
     // session too (without agent_id), so an OR here disarms the wall for those sessions.
-    if (Object.prototype.hasOwnProperty.call(input, 'agent_id')) {
+    if (isSubagent(input)) {
       output({});
       return;
     }
@@ -494,7 +521,7 @@ function isReadonlyCommand(cmd) {
 
     // (d) Always-block tools.
     if (ALWAYS_BLOCK.has(tool)) {
-      deny(`Hard wall: ${tool} is blocked in the main session — delegate to a subagent.`);
+      deny(`Hard wall: ${tool} is blocked in the main session.`);
       return;
     }
 
@@ -509,21 +536,22 @@ function isReadonlyCommand(cmd) {
       return;
     }
 
-    // (g) Bash.
-    if (tool === 'Bash') {
+    // (g) Bash, and Monitor: its `command` is a shell command, so it gets the Bash rule. A
+    // Monitor call without one (the `ws` source) has nothing to classify and is denied.
+    if (tool === 'Bash' || tool === 'Monitor') {
       if (level === 'strict') {
-        deny('Hard wall (strict): Bash is blocked in the main session — delegate execution to a subagent.');
+        deny(`Hard wall (strict): ${tool} is blocked in the main session.`);
         return;
       }
       if (isReadonlyCommand(toolInput.command)) { output({}); return; }
-      deny('Hard wall (balanced): only read-only Bash is allowed in the main session — delegate execution to a subagent.');
+      deny(`Hard wall (balanced): the main session runs only read-only ${tool} commands (${READONLY_HINT}), and this one is not provably read-only.`);
       return;
     }
 
     // (h) WebSearch.
     if (tool === 'WebSearch') {
       if (level === 'balanced') { output({}); return; }
-      deny('Hard wall (strict): WebSearch is blocked in the main session — delegate to a subagent.');
+      deny('Hard wall (strict): WebSearch is blocked in the main session.');
       return;
     }
 
@@ -533,21 +561,24 @@ function isReadonlyCommand(cmd) {
       const parts = tool.split('__');
       const server = parts[1] || '';
       const segment = parts.length >= 3 ? parts.slice(2).join('__') : '';
-      if (level === 'balanced'
-        && (isMcpAllowListed(state.mcpAllow, tool) || isReadOnlyMcpTool(server, segment))) {
-        output({});
+      const readOnly = isReadOnlyMcpTool(server, segment);
+      if (level === 'strict') {
+        // Code search is reading: strict keeps the read-only tools of the semble server only.
+        if (server === STRICT_MCP_SERVER && readOnly) { output({}); return; }
+        deny(`Hard wall (strict): MCP tool ${tool} is blocked in the main session; strict keeps only the read-only mcp__${STRICT_MCP_SERVER}__* search tools.`);
         return;
       }
-      deny(`Hard wall: MCP tool ${tool} is blocked in the main session — its name carries a token the read-only classifier does not recognise (a write verb, OR simply a domain noun it has never seen). Delegate to a subagent, or, if it is genuinely read-only, list it in "mcpAllow" in .claude/brewtools/manager/state.json (exact "mcp__server__tool" or "mcp__server__*").`);
+      if (isMcpAllowListed(state.mcpAllow, tool) || readOnly) { output({}); return; }
+      deny(`Hard wall: MCP tool ${tool} is blocked in the main session: its name carries a token the read-only classifier does not recognise (a write verb, or simply a domain noun it has never seen). If it is genuinely read-only, list it in "mcpAllow" in .claude/brewtools/manager/state.json (exact "mcp__server__tool" or "mcp__server__*").`);
       return;
     }
 
     // (j) Default-deny everything else.
-    deny(`Hard wall: ${tool || 'this tool'} is blocked in the main session — delegate to a subagent.`);
+    deny(`Hard wall: ${tool || 'this tool'} is blocked in the main session.`);
   } catch {
     // Fail-closed: a guard bug must not silently open the wall. Subagents stay free —
     // their pass-through is decided before any classification can throw.
-    if (input && Object.prototype.hasOwnProperty.call(input, 'agent_id')) { output({}); return; }
+    if (isSubagent(input)) { output({}); return; }
     deny('Hard wall: the guard hit an internal error and denies by default.');
   }
 })();

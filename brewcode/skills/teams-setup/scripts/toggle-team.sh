@@ -21,6 +21,16 @@ case "$ACTION" in
   *) echo "Usage: toggle-team.sh <team-name> <enable|disable> [--dry-run]"; exit 1 ;;
 esac
 [ -n "$TEAM_NAME" ] || { echo "ERROR:empty team name"; exit 1; }
+# Same name rule as detect-mode.sh: a `/` or `..` here reads a roster outside `.claude/teams/`.
+case "$TEAM_NAME" in
+  -*|*[!a-zA-Z0-9_-]*) echo "ERROR:invalid team name (alphanumeric, dash, underscore only; no leading dash)"; exit 1 ;;
+esac
+# A mistyped flag (`--dryrun`) must not fall through to a real move.
+case "$DRY" in
+  ''|--dry-run) ;;
+  *) echo "ERROR:unknown argument '$DRY' (only --dry-run is accepted); nothing was touched"; exit 1 ;;
+esac
+[ "$#" -le 3 ] || { echo "ERROR:too many arguments; nothing was touched"; exit 1; }
 
 TEAM_DIR=".claude/teams/$TEAM_NAME"
 AGENTS_DIR=".claude/agents"
@@ -106,7 +116,8 @@ walk() {
         # trace. Disable is the mirror image: `mv live -> parked` clobbers the parked body just as
         # silently. Both copies present is an unresolved collision either way: refuse, touch nothing,
         # let a human pick which body survives.
-        if [ -f "$LIVE" ] && [ -f "$PARKED" ]; then
+        # ANY destination entry counts: `mv` into a directory left a live `.md` under a `.disabled/` dir.
+        if [ -f "$FROM" ] && { [ -e "$TO" ] || [ -L "$TO" ]; }; then
           echo "CONFLICT:$agent -- both $LIVE and $PARKED exist; $ACTION would overwrite the $VICTIM file. Nothing was touched."
           CONFLICT=$((CONFLICT + 1))
           continue

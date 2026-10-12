@@ -1,9 +1,7 @@
 ---
 paths:
   - "web/**/*.astro"
-  - "web/**/*.html"
   - "web/**/*.ts"
-  - "web/**/*.tsx"
 ---
 
 # Web Accessibility & SEO

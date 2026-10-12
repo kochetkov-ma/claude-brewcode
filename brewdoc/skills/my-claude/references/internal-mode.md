@@ -1,19 +1,14 @@
 # Internal Mode Reference
 
+`<config>` = `CONFIG_DIR` (`CLAUDE_CONFIG_DIR`, unset = `~/.claude`). Report symlinks as `path -> target`.
+
 ## Sources to Analyze
 
 | Source Group | Paths | Explore Agent Focus |
 |---|---|---|
-| Global config | `~/.claude/CLAUDE.md`, `~/.claude/rules/*.md`, `~/.claude/agents/*.md`, `~/.claude/skills/` | Count components, extract key rules |
-| Project config | `${CLAUDE_PROJECT_DIR}/CLAUDE.md`, `${CLAUDE_PROJECT_DIR}/.claude/rules/*.md`, `${CLAUDE_PROJECT_DIR}/.claude/agents/*.md` | Project-specific instructions |
-| Memory | `~/.claude/projects/**/memory/MEMORY.md`, `~/.claude/projects/**/memory/*.md` | Active memories, topic files |
-
-## Parallel Agent Split
-
-Spawn 3 Explore agents in ONE message:
-1. Agent 1: global ~/.claude/ directory (rules, agents, skills counts + key content)
-2. Agent 2: project .claude/ directory (project-specific config)
-3. Agent 3: memory files (active entries, topic files)
+| Global config | `<config>/`: `CLAUDE.md`, `rules/*.md`, `settings.json` (`permissions`, `hooks`, `env`, `model`, `enabledPlugins`), `agents/*.md`, `skills/*/SKILL.md`, `commands/*.md`, `output-styles/*.md`, `workflows/*.js`, `plugins/installed_plugins.json`, `.claude.json` (`mcpServers`; `~/.claude.json` when unset) | Counts, key rules, hook event + type per handler, enabled plugins |
+| Project config | `${CLAUDE_PROJECT_DIR}/`: `CLAUDE.md` or `.claude/CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md` (loads only without them), `.mcp.json`, `.claude/settings{,.local}.json`, `.claude/{rules,agents,skills,commands,output-styles,workflows}/` | Project-specific instructions |
+| Memory | `<config>/projects/*/memory/*.md` (`MEMORY.md` = index; setting `autoMemoryDirectory` moves it), `agent-memory/*/` in `<config>` and `.claude/` | Active memories, topic files |
 
 ## Document Template
 
@@ -21,46 +16,33 @@ Spawn 3 Explore agents in ONE message:
 # Claude Code Internal Setup — {YYYY-MM-DD}
 
 ## Global Configuration
+**Config dir:** `<config>` — {CLAUDE.md key rules; settings: permissions, env names, model, plugins}
 
-### Instructions
-**File:** `~/.claude/CLAUDE.md`
-{summary of key rules/frameworks}
+### Hooks ({N})
+| Event | Type | Handler | Source |
+|-------|------|---------|--------|
 
 ### Rules ({N} files)
 | Rule File | Purpose |
 |-----------|---------|
-{table of rule files}
 
 ### Agents ({N} files)
 | Agent | Model | Purpose |
 |-------|-------|---------|
 
-### Skills ({N} files)
+### Skills ({N})
 | Skill | Trigger | Purpose |
 |-------|---------|---------|
 
 ## Project Configuration
-**File:** `${CLAUDE_PROJECT_DIR}/CLAUDE.md`
-{project-specific instructions summary}
-
-### Project Rules ({N} files)
-{table}
+{instructions summary; rules, settings, MCP, agents, skills}
 
 ## Memory
-### Active Memories
-{summary of MEMORY.md content}
-
-### Topic Files
-{list of additional memory files}
+{MEMORY.md summary; topic files}
 
 ## Summary
 | Component | Count | Location |
 |-----------|-------|----------|
-| Global rules | {N} | ~/.claude/rules/ |
-| Global agents | {N} | ~/.claude/agents/ |
-| Global skills | {N} | ~/.claude/skills/ |
-| Project rules | {N} | .claude/rules/ |
-| Memory files | {N} | ~/.claude/projects/.../ |
 ```
 
 ## Reviewer Checklist

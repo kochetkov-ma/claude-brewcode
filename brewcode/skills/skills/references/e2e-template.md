@@ -68,18 +68,8 @@ TEE_EXIT_CODE=${PIPE_CODES[1]}
 exit "$TEE_EXIT_CODE"
 ```
 
-**Capture and timeout:**
-
-```bash
-set -euo pipefail
-timeout 120 claude -p "..." 2>&1 | tee output.log \
-  && PIPE_CODES=("${PIPESTATUS[@]}") || PIPE_CODES=("${PIPESTATUS[@]}")
-EXIT_CODE=${PIPE_CODES[0]}
-TEE_EXIT_CODE=${PIPE_CODES[1]}
-echo "EXIT: $EXIT_CODE | LOG: $TEE_EXIT_CODE"
-[ "$EXIT_CODE" -eq 0 ] || exit "$EXIT_CODE"
-exit "$TEE_EXIT_CODE"
-```
+`timeout` is GNU coreutils: on stock macOS it is absent, use `gtimeout`
+(`command -v timeout || command -v gtimeout`).
 
 ---
 

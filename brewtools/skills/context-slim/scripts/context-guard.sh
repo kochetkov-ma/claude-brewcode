@@ -6,7 +6,7 @@
 # manifest, backup retention, WHOLE-RUN rollback, deletion verification and the ratchet state file.
 #
 #   snapshot      [--project|--global] [--run-dir D] [--allow-dirty] <file>...
-#   verify        [--project|--global] [--run-dir D | last | <ts>] <file>...
+#   verify        [--project|--global] [--run-dir D | last | <ts>] [--ledger F] <file>...
 #   verify-deleted [--project|--global] [--run-dir D] --survivor S [--survivor S]... <deleted-file>
 #   rollback      [--run-dir D]...                        whole run, every layer, every file
 #   restore       [--project|--global] [--run-dir D | last | <ts>] [<file>...]
@@ -24,7 +24,7 @@
 # git-ignored (this repo's ~/.gitignore_global ignores `.claude/` and `CLAUDE.md`) has no git
 # pre-state at all: it is reported SNAPSHOT-ONLY and covered by the manifest, never refused. A dirty
 # TRACKED target still exits 3, naming the paths to commit or stash. --allow-dirty waives that check.
-# --global re-roots at $HOME/.claude and skips the git gate entirely (no git tree there).
+# --global re-roots at CLAUDE_CONFIG_DIR (unset = $HOME/.claude) and skips the git gate (no git tree there).
 # Git roots gain `.claude/reports/` in .gitignore; non-Git roots create no ignore file.
 #
 # Whole-run rollback requires matching optimizer draft checkpoints for every changed target.
@@ -35,7 +35,10 @@
 # restore drives off manifest.json (the authority), not off what happens to sit in orig/:
 # a manifest-listed file missing from orig/ is its own error, never a checksum mismatch.
 # Restore needs matching draft ownership; it never deletes files created after the snapshot.
-# Retention keeps the newest 5 backups; the run's own dir is never a prune candidate.
+# Retention keeps the newest 5 RUNS (all layer dirs of one timestamp) and never prunes a run under 24 h old.
+#
+# verify --ledger F (path<TAB>line-range<TAB>survivor<TAB>reason): a miss passes only if a row's orig range held it
+# and its survivor still carries it (survivor `-` = loss approved at phase 6); any other miss rolls the run back.
 #
 # Exit: 0 ok | 1 gate/checksum failed, or a manifest-listed file missing from orig/
 #     | 2 usage/state error (incl. unreadable or invalid manifest) | 3 dirty TRACKED target (nothing written)
@@ -100,21 +103,24 @@ run_dirs_of_newest() {
   backups | { grep -F -- "$BACKUP_ROOT/$ts-" || true; }
 }
 
-# Never rm outside BACKUP_ROOT, never the run that just created a snapshot ($1, excluded and
-# counted against KEEP so the retention total stays KEEP).
+# Never rm outside BACKUP_ROOT or the run that just snapshotted ($1). Counts RUNS, not dirs, and spares
+# runs younger than 24 h: concurrent runs must never delete each other's live snapshots.
 prune() {
-  local keep="$KEEP" exclude="${1:-}" d
-  [ -z "$exclude" ] || keep=$((KEEP - 1))
+  local exclude="${1:-}" cutoff d ts n=0 prev=""
+  cutoff=$(date -v-1d +%Y%m%d-%H%M%S 2>/dev/null || date -d '1 day ago' +%Y%m%d-%H%M%S 2>/dev/null) || return 0
+  [ -n "$cutoff" ] || return 0
   while IFS= read -r d; do
     [ -n "$d" ] || continue
-    [ "$d" != "$exclude" ] || continue
+    ts=$(basename "$d" | cut -c1-15)
+    [ "$ts" = "$prev" ] || { n=$((n + 1)); prev="$ts"; }
+    [ "$n" -gt "$KEEP" ] && [[ "$ts" < "$cutoff" ]] && [ "$d" != "$exclude" ] || continue
     case "$d" in "$BACKUP_ROOT"/*_context-slim) ;; *) die "❌ refusing to prune outside $BACKUP_ROOT: $d" ;; esac
     rm -rf -- "$d" && printf 'PRUNED: %s\n' "$d"
-  done < <(backups | { if [ -n "$exclude" ]; then grep -vxF -- "$exclude" || true; else cat; fi; } | tail -n +$((keep + 1)))
+  done < <(backups)
 }
 
 layer_root() {
-  if [ "$1" = global ]; then printf '%s/.claude\n' "$HOME"
+  if [ "$1" = global ]; then printf '%s\n' "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
   elif [ -n "${CLAUDE_PROJECT_DIR:-}" ]; then printf '%s\n' "$CLAUDE_PROJECT_DIR"
   else pwd; fi
 }
@@ -298,13 +304,55 @@ EOF
   [ "$bad" -eq 0 ] && [ "$gone" -eq 0 ]
 }
 
+# Byte-identical mirror of text-guard.sh crit_tokens(); suite-guard.mjs pins the parity.
+crit_tokens() {
+  local f="$1"
+  {
+    grep -aoE '[0-9]+(\.[0-9]+)*' "$f" | sed 's/^/num:/' || true
+    grep -aoE '[A-Za-z0-9_@.-]*/[A-Za-z0-9_@./-]+' "$f" | sed -E 's/[.,;:]+$//; s/^/path:/' || true
+    grep -aoE '!=[A-Za-z0-9_./-]*' "$f" | sed -E 's/[.,;:]+$//; s/^/neg:/' || true
+    grep -aoE 'NEVER|ALWAYS|MUST NOT|DO NOT|REQUIRED|MANDATORY' "$f" | sed 's/^/kw:/' || true
+  } | sort -u
+}
+
+# Ledger path/survivor -> absolute (`~/` expands, relative = under the layer root).
+ledger_abs() {
+  case "$2" in "~/"*) printf '%s/%s\n' "$HOME" "${2#"~/"}" ;; /*) printf '%s\n' "$2" ;; *) printf '%s/%s\n' "$1" "$2" ;; esac
+}
+
+# Accept text-guard misses (OUT) covered by ledger rows; prints each verdict, returns 1 on any uncovered.
+ledger_check() {
+  local run_dir="$1" root="$2" ledger="$3" out="$4" rel tok p range surv reason a b sp bad=0
+  local proot covered cut
+  proot=$(cd "$root" && pwd -P); covered=$(mktemp); cut=$(mktemp)
+  while IFS=$'\t' read -r p range surv reason; do
+    case "$p" in ''|'#'*) continue ;; esac
+    p=$(ledger_abs "$root" "$p"); p="${p#"$root"/}"; p="${p#"$proot"/}"
+    a=${range%%-*}; b=${range##*-}
+    case "$a.$b" in *[!0-9.]*|.*|*.) die "❌ ledger row needs a numeric line-range: $p $range" ;; esac
+    [ -f "$run_dir/orig/$p" ] || continue
+    sed -n "${a},${b}p" "$run_dir/orig/$p" > "$cut"
+    sp=-
+    [ "$surv" = - ] || { sp=$(ledger_abs "$root" "$surv"); [ -f "$sp" ] || die "❌ ledger survivor is not a file: $surv"; }
+    if [ "$sp" = - ]; then crit_tokens "$cut"; else comm -12 <(crit_tokens "$cut") <(crit_tokens "$sp"); fi \
+      | awk -v p="$p" '{print p "\t" $0}' >> "$covered"
+  done < "$ledger"
+  while IFS=$'\t' read -r rel tok; do
+    if grep -qxF -- "$rel	$tok" "$covered"; then printf 'LEDGER-COVERED: %s %s\n' "$rel" "$tok"
+    else printf 'UNCOVERED: %s %s\n' "$rel" "$tok"; bad=$((bad + 1)); fi
+  done < <(awk '/^FILE: / {f=substr($0, 7)} /^  - / {print f "\t" substr($0, 5)}' "$out")
+  rm -f "$covered" "$cut"
+  [ "$bad" -eq 0 ] && printf 'GATE: PASS (every miss ledgered)\n'
+}
+
 cmd_verify() {
-  local layer="" spec="" run_dir="" root rc=0
+  local layer="" spec="" run_dir="" root rc=0 ledger="" out
   local -a files=()
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --global) layer=global; shift ;;
       --project) layer=project; shift ;;
+      --ledger) ledger="${2:-}"; [ -f "$ledger" ] || die "❌ --ledger needs an existing TSV file"; shift 2 ;;
       --run-dir) run_dir="${2:-}"; [ -n "$run_dir" ] || die "❌ --run-dir needs a value"; shift 2 ;;
       -*) die "❌ unknown option: $1" ;;
       *) if [ -z "$run_dir" ] && [ -z "$spec" ] && [ ! -e "$1" ]; then spec="$1"; else files[${#files[@]}]="$1"; fi; shift ;;
@@ -315,7 +363,11 @@ cmd_verify() {
   [ -d "$run_dir/orig" ] || die "❌ no snapshot dir: $run_dir/orig"
   [ "${#files[@]}" -gt 0 ] || die "❌ verify needs at least one file"
   root=$(layer_root "${layer:-project}")
-  CLAUDE_PROJECT_DIR="$root" bash "$TEXT_GUARD" verify --no-restore --run-dir "$run_dir" "${files[@]}" || rc=$?
+  out=$(mktemp)
+  CLAUDE_PROJECT_DIR="$root" bash "$TEXT_GUARD" verify --no-restore --run-dir "$run_dir" "${files[@]}" > "$out" || rc=$?
+  cat "$out"
+  if [ "$rc" -eq 1 ] && [ -n "$ledger" ] && ledger_check "$run_dir" "$root" "$ledger" "$out"; then rc=0; fi
+  rm -f "$out"
   [ "$rc" -eq 0 ] && return 0
   # text-guard restores only the file that failed. A partial keep is never an outcome: put the WHOLE
   # run back. The caller still has to roll the OTHER layer back - `rollback --run-dir A --run-dir B`.

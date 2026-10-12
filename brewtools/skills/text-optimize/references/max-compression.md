@@ -32,25 +32,8 @@ count diverge here — judge B1 by an actual token estimate, not `wc -w`, whenev
 
 ## ASCII Operator Dialect (A1 — CRITICAL)
 
-Prefer ASCII digraphs over unicode glyphs. Recorded token cost (tiktoken cl100k/o200k):
-
-| Glyph | Tokens | ASCII | Tokens |
-|-------|--------|-------|--------|
-| `∵` `∴` `⊃` `≤` `≥` | 2-3 each | `->` `!=` `>=` `<=` `\|` | 1 each |
-| `→` | 1 | `->` | 1 (equally cheap + portable) |
-
-Mapping:
-
-| Meaning | Use |
-|---------|-----|
-| leads-to | `->` |
-| not / never | `!=` |
-| greater | `>=` |
-| less | `<=` |
-| or | `\|` |
-| because | `bc` or `because` |
-| therefore | `so` |
-| includes | `includes` |
+Prefer ASCII digraphs over unicode glyphs; recorded token costs: `rules-review.md` T.8.
+Mapping: `deep-compression.md` Symbol Substitution, plus `>=` greater, `<=` less.
 
 > The win is DELETING WORDS, not swapping the glyph. `->` and `→` cost the same; prefer ASCII for portability. Replacing "because" (1 tok) with `∵` (2-3 tok) LOSES tokens.
 
@@ -86,12 +69,12 @@ Source: arXiv:2309.04269. After all compression passes, run 1-3 rewrite iteratio
 
 ## Guardrails (MANDATORY)
 
-These CAP the aggression. Sources: Anthropic context-engineering blog; Anthropic Opus 4.8 prompting guide; arXiv:2502.15007 LLM-Microscope. Dotless IDs C1-C4 are max-mode guardrails — distinct from Claude-behavior rules C.1-C.8 (dotted).
+These CAP the aggression. Sources: Anthropic context-engineering blog; Anthropic model prompting guides; arXiv:2502.15007 LLM-Microscope. Dotless IDs C1-C4 are max-mode guardrails — distinct from Claude-behavior rules C.1-C.8 (dotted).
 
 | ID | Rule |
 |----|------|
 | C1 | Minimal != short. Optimize signal/token, !=raw token count. Recall-first, precision-second. |
-| C2 | Preserve scope qualifiers VERBATIM ("every section, not just the first"). Opus 4.8 follows literally; stripping scope words BREAKS behavior. |
+| C2 | Preserve scope qualifiers VERBATIM ("every section, not just the first"). The model follows them literally (L.8); stripping scope words BREAKS behavior. |
 | C3 | ~20% safe-deletion ceiling on function words. !=bulk-strip punctuation (punctuation is load-bearing for context memory). Substitute, !=delete. |
 | C4 | Consistent terminology. !=paraphrase a term for variety. |
 
@@ -123,12 +106,8 @@ Never silently ship lossy max output. Two rounds use DIFFERENT methods — they 
 | 2 — Self-QA probe | Generate 10-20 questions from ORIGINAL targeting entities, numbers, conditions, negations. Answer each from COMPRESSED ONLY. Mismatch = loss. Patch, recompute both scores |
 | Gates | Overall >= 95% AND 100% sub-gate: every number, name, negation, and scope qualifier answerable/verbatim (CompactPrompt arXiv:2510.18043). Failure -> patch owned loss via B4, checkpoint repair immediately, repeat required review. Still failing -> refuse acceptance + full loss list; never ship with caveat |
 
-Immediately checkpoint each known owned atomic write/deletion/repair with
-`text-guard.sh checkpoint --run-dir <RUN_DIR> <file>` before further edits/checks; never record
-others' intervening changes or manufacture proof during failure/recovery. Mechanical verification
-uses `--no-restore`. Full snapshot recovery needs authorization and matching existing draft proof;
-missing/mismatched proof -> `RESTORE_REFUSED`, exit 1, current bytes preserved. Writer self-checks
-never replace the skill's independent acceptance gate.
+Checkpoint, `--no-restore` verification and restore follow `deep-compression.md` Iron Rules
+(inherited). Writer self-checks never replace the skill's independent acceptance gate.
 
 Dedup audit: dedup-merged facts count as PRESERVED (kept once). Loss list fmt (1 fact/line, atomic):
 > lost: artifact retention policy (30d) dropped

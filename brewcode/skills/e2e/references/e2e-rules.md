@@ -1,12 +1,10 @@
 # E2E Testing Rules
 
-Reference rules for E2E test development. Each category contains actionable rules with review questions for validation.
+Reference rules for E2E test development; the Review Question column is the reviewers' checklist.
 
 ---
 
 ## Scenarios
-
-Rules governing what constitutes a valid E2E scenario.
 
 | # | Rule | Detail | Review Question |
 |---|------|--------|-----------------|
@@ -21,8 +19,6 @@ Rules governing what constitutes a valid E2E scenario.
 
 ## Test Data
 
-Rules for test data creation and management.
-
 | # | Rule | Detail | Review Question |
 |---|------|--------|-----------------|
 | D1 | Maximum test data coverage | Not minimal "2 records" — cover main cases with margin | Does test data cover all main cases including edge cases? |
@@ -34,8 +30,6 @@ Rules for test data creation and management.
 
 ## Integration
 
-Rules for system integration within E2E tests.
-
 | # | Rule | Detail | Review Question |
 |---|------|--------|-----------------|
 | I1 | Full integration, no mocks | Mocks only if integration technically impossible, with user confirmation | Are all integrations real (no mocks without justification)? |
@@ -45,8 +39,6 @@ Rules for system integration within E2E tests.
 ---
 
 ## Assertions
-
-Rules for assertion quality and strictness.
 
 | # | Rule | Detail | Review Question |
 |---|------|--------|-----------------|
@@ -62,8 +54,6 @@ Rules for assertion quality and strictness.
 
 ## Architecture
 
-Rules for test code organization and layering.
-
 | # | Rule | Detail | Review Question |
 |---|------|--------|-----------------|
 | R1 | Steps layer separates business from tech | Tests use business steps, no direct API/UI calls | Are tests written in business language via Steps layer? |
@@ -74,8 +64,6 @@ Rules for test code organization and layering.
 ---
 
 ## Process
-
-Rules for the development and review workflow.
 
 | # | Rule | Detail | Review Question |
 |---|------|--------|-----------------|

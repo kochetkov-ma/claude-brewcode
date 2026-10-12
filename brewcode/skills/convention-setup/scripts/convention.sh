@@ -244,10 +244,10 @@ install_loading_rule() {
   _cv=$(content_version) || return 1
   if [ -n "$_rule" ]; then
     owned_rule "$_rule" || return 1
-    # Refresh metadata without erasing local wording or re-enabling a disabled install.
-    sed -i.bak -e "s/^version: .*/version: \"$_pv\"/" \
-      -e "s/^content_version: .*/content_version: \"$_cv\"/" \
-      -e "s/^last_updated: .*/last_updated: \"$(date +%F)\"/" "$_rule"
+    # Frontmatter only: keeps body wording; a parked rule stays parked.
+    sed -i.bak -e "1,/^---\$/s/^version: .*/version: \"$_pv\"/" \
+      -e "1,/^---\$/s/^content_version: .*/content_version: \"$_cv\"/" \
+      -e "1,/^---\$/s/^last_updated: .*/last_updated: \"$(date +%F)\"/" "$_rule"
     rm -f "$_rule.bak"
   else
     mkdir -p .claude/rules

@@ -1,6 +1,6 @@
 #!/bin/bash
 # brewcode:superreview-setup generator script
-# Adapted from setup.sh copy_review_skill(): copies the emit templates into the TARGET project
+# Copies the emit templates into the TARGET project
 # (.claude/skills/superreview/) substituting SCALAR placeholders, then validates that NO setup-time
 # {PLACEHOLDER} remains. Multi-row BLOCK placeholders are filled by the AI via Edit (see SKILL.md Phase 3).
 #
@@ -19,7 +19,7 @@
 #                 DIFFERS (real template delta) | MISSING -> restored RAW (NEEDS PHASE 3) | NO BASELINE (pre-baseline
 #                 install: falls back to live-vs-template, tailoring included). Live file CONTENT is never
 #                 written; the AI applies the template delta with targeted Edit calls. The one live write is an
-#                 UNCONDITIONAL metadata restamp (version/generated_by/last_updated, one `RESTAMP:` line per
+#                 UNCONDITIONAL metadata restamp (version/content_version/generated_by/last_updated, one `RESTAMP:` line per
 #                 file, body compared byte-for-byte) — without it a version bump, which reports IDENTICAL on
 #                 every asset, could never clear the `stale` verdict setup-status reads off the emitted
 #                 SKILL.md frontmatter. The per-stack reference is RE-DERIVED from the installed tree
@@ -479,7 +479,7 @@ _ig_migrate() {
     return 1
   fi
 
-  # 1. frontmatter: drop any pre-existing copy of the four keys, re-insert them before the closing `---`.
+  # 1. frontmatter: drop any pre-existing copy of the five keys, re-insert them before the closing `---`.
   awk -v metaf="$_bd/meta" '
     NR == 1 && $0 == "---" { fm = 1; print; next }
     fm == 1 && $0 == "---" {
@@ -906,8 +906,8 @@ upgrade_skill() {
   echo "  rm -rf \"$BASELINE\" && mv \"$STAGING/.template\" \"$BASELINE\" && rm -rf \"$STAGING\" && generate.sh validate"
 }
 
-# Artifact-metadata frontmatter gate: the four keys, in D2 order, quoted exactly as
-# `brewcode/skills/rules/scripts/rules.sh:165-167` already requires — one dialect, not a second one.
+# Artifact-metadata frontmatter gate: the five keys, in D2 order, quoted as the metadata check in
+# `brewcode/skills/rules/scripts/rules.sh` requires — one dialect, not a second one.
 # Prints one line per defect, returns 1 when any fired.
 _check_meta_frontmatter() {
   _f="$1"; _bad=0
@@ -1151,7 +1151,7 @@ toggle_skill() {
   mv "$_from" "$_to"
   echo "MOVED: $_from -> $_to"
   echo "KEPT:  $TARGET_REFS/ $BASELINE/ $IG_PATH"
-  echo "✅ $_want (takes effect in the NEXT session — skills are discovered at session start)"
+  echo "✅ $_want (a running session picks it up without a restart; bare mode: new session)"
 }
 
 # --- uninstall / purge -----------------------------------------------------

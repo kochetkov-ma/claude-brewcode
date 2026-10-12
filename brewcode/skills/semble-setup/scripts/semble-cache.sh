@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # semble-cache.sh — inspect and (guardedly) delete semble cache directories
-# (DESIGN §6.5, §6.6, §9.4). Semble 0.5.5 stores exact content variants as
+# (DESIGN §6.5, §6.6, §9.4). Semble >=0.5.5 stores exact content variants as
 # `index` (code only) or `index-<sorted-content-set>` below the hashed repo dir.
 set -euo pipefail
 SC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source-path=SCRIPTDIR source=lib/semble-common.sh
 . "$SC_DIR/lib/semble-common.sh"
 
 JSON=0

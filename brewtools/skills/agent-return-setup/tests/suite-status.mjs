@@ -22,7 +22,7 @@ function blockAfter(source, marker, fence) {
 
 const base = mkdtempSync(join(tmpdir(), 'return-status-'));
 try {
-  // GIVEN: actual copied hook assets, two owned registrations, and an unrelated co-handler.
+  // GIVEN: actual copied hook assets, the three owned registrations, and an unrelated co-handler.
   const project = join(base, 'project');
   const hooksDir = join(project, '.claude', 'hooks');
   mkdirSync(hooksDir, { recursive: true });
@@ -34,9 +34,11 @@ try {
   writeFileSync(settingsPath, JSON.stringify({ env: { KEEP: 'yes' }, hooks: {
     SubagentStart: [{ hooks: [{ type: 'command', command: 'node', args: ['${CLAUDE_PROJECT_DIR}/.claude/hooks/agent-return-contract.mjs'], timeout: 5 }, foreign] }],
     SubagentStop: [{ hooks: [{ type: 'command', command: 'node', args: ['${CLAUDE_PROJECT_DIR}/.claude/hooks/agent-return-guard.mjs'], timeout: 5 }] }],
+    PreToolUse: [{ matcher: 'SubagentHandback', hooks: [{ type: 'command', command: 'node', args: ['${CLAUDE_PROJECT_DIR}/.claude/hooks/agent-return-guard.mjs'], timeout: 5 }] }],
   } }));
   const settingsBefore = readFileSync(settingsPath, 'utf8');
-  const env = { ...process.env, HOME: join(base, 'home'), CLAUDE_SKILL_DIR: SKILL_DIR, ROOT: project, RUNBOOK, PASS_TOKENS: '1000', FILE_TOKENS: '2500', PLUGIN_VERSION: '1.0.0' };
+  const env = { ...process.env, HOME: join(base, 'home'), CLAUDE_PLUGIN_ROOT: join(SKILL_DIR, '..', '..'), ROOT: project, RUNBOOK, PASS_TOKENS: '2500', FILE_TOKENS: '6000', PLUGIN_VERSION: '1.0.0' };
+  delete env.CLAUDE_CONFIG_DIR;
   const configBlock = blockAfter(readFileSync(RUNBOOK, 'utf8'), '**EXECUTE** config write', '```\n');
   const producer = spawnSync('bash', ['-c', configBlock], { cwd: project, env, encoding: 'utf8', timeout: 30000 });
   assert.equal(producer.status, 0, `authoritative return config producer succeeds: ${producer.stderr}`);

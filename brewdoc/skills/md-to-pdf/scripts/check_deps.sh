@@ -101,7 +101,10 @@ install_pip_packages() {
         specs+=("$(pip_spec "$pkg")")
     done
     echo "Installing pip packages: ${specs[*]}" >&2
-    python3 -m pip install "${specs[@]}"
+    if ! python3 -m pip install "${specs[@]}"; then
+        echo "INSTALL_FAILED|pip refused; on an externally managed Python (PEP 668) activate a venv or set PIP_BREAK_SYSTEM_PACKAGES=1, then retry" >&2
+        return 1
+    fi
 
     local still
     still="$(check_pip_packages "$@")"

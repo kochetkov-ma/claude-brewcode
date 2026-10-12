@@ -4,12 +4,15 @@
 #   integration  guidance + agent entries + .claude/semble/   (MCP, cache, uv tool kept)
 #   mcp          claude mcp remove semble_code                (everything else kept)
 #   cli          uv tool uninstall semble                     (everything else kept)
-#   purge        all of the above + the shared cache root     (typed confirmation required)
+#   purge        all of the above + THIS project's cache entry (typed confirmation required)
 set -euo pipefail
 SC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source-path=SCRIPTDIR source=lib/semble-common.sh
 . "$SC_DIR/lib/semble-common.sh"
 
 SR_PURGE_TEXT="purge semble code cache"
+# Every hook file this skill ever shipped, retired names included.
+SR_HOOK_FILES="semble-session.mjs semble-prefetch.mjs semble-stats.mjs semble-reminder.mjs semble-subagent.mjs semble-explore.mjs"
 SR_CLAUDEMD_BEGIN="<!-- BEGIN brewcode:semble -->"
 SR_CLAUDEMD_END="<!-- END brewcode:semble -->"
 
@@ -27,9 +30,11 @@ Flavours (DESIGN §8.4):
                entries + .claude/semble/.  Keeps the MCP registration, the cache and uv.
   mcp          removes only the semble_code MCP registration.  Keeps everything else.
   cli          uv tool uninstall semble (only when a uv-tool install exists).
-  purge        integration + mcp + cli + the shared semble-code cache root. A legacy
-               pre-0.5.5 semble-docs root is removed only when its RESERVED marker is
-               the sole entry; any other content is preserved.
+  purge        integration + mcp + cli + THIS project's entry in the semble-code cache
+               root (<root>/<sha256 of the project path>). The root is shared by every
+               project and config dir: other entries are kept, the root goes only when
+               empty. A legacy pre-0.5.5 semble-docs root is removed only when its
+               RESERVED marker is the sole entry; any other content is preserved.
 
 Exit codes: 0 ok | 1 hard failure (nothing written) | 2 bad usage
             3 precondition unmet | 4 confirmation required — nothing was deleted
@@ -120,18 +125,78 @@ sr_rm_file() {
   sr_changed "$label: deleted $f"
 }
 
-# The current shared cache root: absolute, leaf must be exactly semble-code.
-sr_rm_cache_root() {
-  local dir="$1" leaf
+# This project's cache entry only: $2 must be <$1>/<64-hex>, $1 an absolute
+# semble-code root. The root itself is shared and is never rm -rf'ed here.
+sr_rm_repo_cache() {
+  local root="$1" dir="$2" leaf
   leaf="$(basename "$dir")"
-  case "$dir" in /*) : ;; *) sc_die "refusing to delete $dir — not absolute" ;; esac
-  [ "$leaf" = "semble-code" ] || sc_die "refusing to delete $dir — leaf is not semble-code"
-  [ "$dir" != "/" ] || sc_die "refusing to delete /"
-  [ "$dir" != "$(sc_home)" ] || sc_die "refusing to delete the home directory"
+  case "$root" in /*) : ;; *) sc_die "refusing to delete under $root — not absolute" ;; esac
+  [ "$(basename "$root")" = "semble-code" ] || sc_die "refusing to delete under $root — leaf is not semble-code"
+  [ "$(dirname "$dir")" = "$root" ] || sc_die "refusing to delete $dir — not directly under $root"
+  case "$leaf" in *[!0-9a-f]*|"") sc_die "refusing to delete $dir — leaf is not a 64-hex repo hash" ;; esac
+  [ "${#leaf}" -eq 64 ] || sc_die "refusing to delete $dir — leaf is not a 64-hex repo hash"
   if [ ! -d "$dir" ]; then sr_unchanged "cache: $dir absent"; return 0; fi
   if sr_dry; then sr_dry_say "rm -rf $dir"; return 0; fi
   rm -rf "$dir"
   sr_changed "cache: deleted $dir"
+}
+
+# rmdir, never rm -rf: it succeeds on an empty root only, so no other project's index can go.
+sr_prune_empty_cache_root() {
+  local root="$1"
+  [ -d "$root" ] || return 0
+  [ "$(basename "$root")" = "semble-code" ] || return 0
+  if sr_dry; then return 0; fi
+  if rmdir "$root" 2>/dev/null; then
+    sr_changed "cache: removed empty shared root $root"
+  else
+    sr_unchanged "cache: shared root $root kept — it still holds other entries"
+  fi
+}
+
+# Strips the semble hook + permission entries from one settings.json and re-reads it.
+# stdout: removed|absent. Exit 1 (reason on stderr) = still wired, nothing may be deleted.
+sr_unwire_settings() {
+  SR_F="$1" SR_MARKS="$SR_HOOK_FILES" SR_TOOLS="$SEMBLE_TOOL_SEARCH $SEMBLE_TOOL_RELATED" node -e '
+const fs=require("fs"),f=process.env.SR_F;
+const marks=process.env.SR_MARKS.split(" ").filter(Boolean),tools=process.env.SR_TOOLS.split(" ");
+const fail=m=>{process.stderr.write(m);process.exit(1);};
+const done=w=>{process.stdout.write(w);process.exit(0);};
+if(!fs.existsSync(f)) done("absent");
+let raw;try{raw=fs.readFileSync(f,"utf8")}catch(e){fail("cannot read: "+e.code)}
+if(!raw.trim()) done("absent");
+let s;try{s=JSON.parse(raw)}catch(e){fail("not valid JSON")}
+if(s===null||typeof s!=="object"||Array.isArray(s)) fail("not a JSON object");
+const hit=v=>typeof v==="string"&&marks.some(m=>v===m||v.endsWith("/"+m)||v.endsWith("\\"+m));
+const mine=h=>!!h&&((Array.isArray(h.args)&&h.args.some(hit))||
+  (typeof h.command==="string"&&marks.some(m=>h.command.includes(m))));
+let n=0;
+if(s.hooks&&typeof s.hooks==="object"&&!Array.isArray(s.hooks)){
+  for(const ev of Object.keys(s.hooks)){
+    if(!Array.isArray(s.hooks[ev])) continue;
+    s.hooks[ev]=s.hooks[ev].map(e=>{
+      if(!e||!Array.isArray(e.hooks)) return e;
+      const kept=e.hooks.filter(h=>!mine(h));
+      if(kept.length===e.hooks.length) return e;
+      n+=e.hooks.length-kept.length;
+      return kept.length?Object.assign({},e,{hooks:kept}):null;
+    }).filter(e=>e!==null);
+    if(s.hooks[ev].length===0) delete s.hooks[ev];
+  }
+  if(Object.keys(s.hooks).length===0) delete s.hooks;
+}
+if(s.permissions&&typeof s.permissions==="object"&&Array.isArray(s.permissions.allow)){
+  const kept=s.permissions.allow.filter(x=>!tools.includes(x));
+  n+=s.permissions.allow.length-kept.length;
+  if(kept.length) s.permissions.allow=kept; else delete s.permissions.allow;
+  if(Object.keys(s.permissions).length===0) delete s.permissions;
+}
+if(n===0) done("absent");
+try{fs.writeFileSync(f,JSON.stringify(s,null,2)+"\n")}catch(e){fail("cannot write: "+e.code)}
+const back=JSON.parse(fs.readFileSync(f,"utf8"));
+const left=Object.values(back.hooks||{}).flat().filter(e=>((e&&e.hooks)||[]).some(mine)).length;
+if(left!==0) fail(left+" semble hook entries still registered");
+done("removed");'
 }
 
 # Remove the marker block from CLAUDE.md via the literal markers only (§10.2).
@@ -161,10 +226,10 @@ process.stdout.write("removed");')"
 }
 
 # ── flavour steps ───────────────────────────────────────────────────────────
-# Guidance removal: prefer semble-guidance.sh (unit D); fall back to deleting the
-# files this skill owns. Settings entries can only be unwired by unit D.
+# Guidance removal: prefer semble-guidance.sh (unit D). Fallback: unwire settings.json
+# FIRST, delete hook files only after — a wired entry on a missing file fails every tool call.
 sr_remove_guidance() {
-  local sib root
+  local sib root settings res rc f
   sib="$(sr_sibling semble-guidance.sh)"
   root="$(sc_project_root)"
   if [ -n "$sib" ]; then
@@ -189,19 +254,30 @@ process.stdout.write(((j.changed||[]).length)+" "+((j.skipped||[]).length));')"
     esac
     return 0
   fi
+  settings="$(sc_project_settings)"
+  if sr_dry; then
+    sr_dry_say "unwire semble hooks and permissions in $settings"
+  else
+    set +e
+    res="$(sr_unwire_settings "$settings" 2>&1)"; rc=$?
+    set -e
+    if [ "$rc" != "0" ]; then
+      sr_failed "settings: cannot unwire $settings ($res) — nothing was deleted, the hooks are still registered"
+      return 0
+    fi
+    case "$res" in
+      removed) sr_changed "settings: semble hook and permission entries removed from $settings" ;;
+      *)       sr_unchanged "settings: no semble entries in $settings" ;;
+    esac
+  fi
   sr_rm_file "$root/.claude/rules/semble-first.md" "rule"
   sr_rm_file "$root/.sembleignore" "ignore"
-  sr_rm_file "$root/.claude/hooks/semble-session.mjs" "hook"
-  sr_rm_file "$root/.claude/hooks/semble-prefetch.mjs" "hook"
-  sr_rm_file "$root/.claude/hooks/semble-stats.mjs" "hook"
-  sr_rm_file "$root/.claude/hooks/semble-reminder.mjs" "hook"
-  sr_rm_file "$root/.claude/hooks/semble-subagent.mjs" "hook"
-  # Retired for good: replaced by semble-subagent.mjs. Still removed here — a repo
-  # that never ran the migrating install/upgrade still has it on disk, and uninstall
-  # must leave nothing behind.
-  sr_rm_file "$root/.claude/hooks/semble-explore.mjs" "hook"
+  # Retired names included: a repo that never ran the migrating upgrade still has them.
+  for f in $SR_HOOK_FILES; do sr_rm_file "$root/.claude/hooks/$f" "hook"; done
   sr_strip_claudemd
-  sr_skipped "settings: semble-guidance.sh unavailable — .claude/settings.json entries not unwired"
+  if grep -Fqx '.claude/semble/' "$root/.gitignore" 2>/dev/null; then
+    sr_skipped "gitignore: semble-guidance.sh unavailable — the .claude/semble/ line stays in $root/.gitignore"
+  fi
 }
 
 sr_remove_agent_entries() {
@@ -248,9 +324,13 @@ sr_remove_mcp() {
   fi
   sr_command "$sib remove ${scope_args:+$scope_args }--yes --json"
   if sr_dry; then sr_dry_say "$sib remove ${scope_args:+$scope_args }--yes"; return 0; fi
-  # shellcheck disable=SC2086
-  if "$sib" remove $scope_args --yes --json >/dev/null 2>&1; then
-    sr_changed "mcp: $SEMBLE_SERVER_NAME removed from $where"
+  local out
+  # shellcheck disable=SC2086  # $scope_args is empty or two words, split on purpose
+  if out="$("$sib" remove $scope_args --yes --json 2>/dev/null)"; then
+    case "$out" in
+      *'"status":"unchanged"'*) sr_unchanged "mcp: $SEMBLE_SERVER_NAME is not registered" ;;
+      *) sr_changed "mcp: $SEMBLE_SERVER_NAME removed from $where" ;;
+    esac
   else
     sr_failed "mcp: semble-mcp.sh remove failed"
   fi
@@ -273,20 +353,31 @@ sr_remove_cli() {
   fi
 }
 
+# The cache root is keyed <root>/<sha256(resolved project path)> and shared by every
+# project and config dir, so purge takes this project's entry and nothing else.
 sr_purge_cache() {
-  local code sib
+  local code hash dir sib
   code="$(sc_cache_root_code)"
-  sib="$(sr_sibling semble-cache.sh)"
-  if [ -n "$sib" ] && ! sr_dry; then
-    sr_command "$sib purge-root --yes --json"
-    if "$sib" purge-root --yes --json >/dev/null 2>&1; then
-      sr_changed "cache: deleted $code"
-    else
-      sr_rm_cache_root "$code"
-    fi
+  hash="$(sc_repo_hash "$(sc_project_root)" 2>/dev/null || true)"
+  if [ -z "$hash" ]; then
+    sr_failed "cache: cannot resolve this project's entry under $code — nothing was deleted there"
   else
-    sr_command "rm -rf $code"
-    sr_rm_cache_root "$code"
+    dir="$code/$hash"
+    sib="$(sr_sibling semble-cache.sh)"
+    if [ ! -d "$dir" ]; then
+      sr_unchanged "cache: $dir absent"
+    elif [ -n "$sib" ] && ! sr_dry; then
+      sr_command "$sib purge-repo --yes --json"
+      if "$sib" purge-repo --yes --json >/dev/null 2>&1; then
+        sr_changed "cache: deleted $dir"
+      else
+        sr_rm_repo_cache "$code" "$dir"
+      fi
+    else
+      sr_command "rm -rf $dir"
+      sr_rm_repo_cache "$code" "$dir"
+    fi
+    sr_prune_empty_cache_root "$code"
   fi
 
   sr_cleanup_legacy_docs_root
@@ -338,8 +429,16 @@ process.stdout.write(marker&&names.length===1&&names[0]==="RESERVED-FOR-DOCS.txt
 }
 
 # ── flavours ────────────────────────────────────────────────────────────────
+# A failed guidance step leaves the rule or hooks live: stop there instead of
+# stripping state, MCP and cache from under them. Re-running finishes the removal.
+sr_guidance_blocked() {
+  [ -n "$SR_FAILED" ] || return 1
+  sr_skipped "remaining steps not run — the guidance step failed; fix it and re-run"
+}
+
 sr_flavour_integration() {
   sr_remove_guidance
+  if sr_guidance_blocked; then return 0; fi
   sr_remove_agent_entries
   sr_rm_state_dir
   sr_unchanged "mcp registration, cache and uv tool retained"
@@ -359,6 +458,7 @@ sr_flavour_cli() {
 sr_flavour_purge() {
   local scope="$1" explicit="$2"
   sr_remove_guidance
+  if sr_guidance_blocked; then return 0; fi
   sr_remove_agent_entries
   sr_remove_mcp "$scope" "$explicit"
   sr_purge_cache
@@ -398,7 +498,7 @@ sr_plan() {
       sr_would "$root/.claude/hooks/semble-explore.mjs   (retired, superseded by semble-subagent.mjs)"
       sr_would "$root/CLAUDE.md marker block $SR_CLAUDEMD_BEGIN .. $SR_CLAUDEMD_END"
       sr_would "$root/.claude/semble/"
-      sr_would "$(sc_cache_root_code)  (ENTIRE shared cache root — every repo and content variant under it)"
+      sr_would "$(sc_cache_root_code)/$(sc_repo_hash "$root" 2>/dev/null || printf 'unresolved')  (this project's cache entry only — the shared root and other projects' indexes are kept)"
       [ -f "$(sc_cache_base)/semble-docs/RESERVED-FOR-DOCS.txt" ] && \
         sr_would "$(sc_cache_base)/semble-docs  (legacy marker-only root, only when that marker is the sole entry)"
       sr_would "MCP server $SEMBLE_SERVER_NAME — $where"

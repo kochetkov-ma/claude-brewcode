@@ -20,19 +20,18 @@ skill-name/
 |---|---|---|
 | **Progressive Disclosure** | Always | 3 levels: L1 listing metadata (~100 words when offered; DMI SKs excluded), L2 SKILL.md (<500 lines, on invocation), L3 refs/scripts/agents (on demand, bounded by context) |
 | **REF Splitting** | Multi-mode: 2+ modes, >50 lines/mode, >300 lines total | Detect mode -> Read `references/{mode}.md`. Guard: "not found -> ERROR + STOP" |
-| **Agents-as-REFs** | SK-coordinator + multi-step workflow + multiple roles | Prompt `.md` in SK `agents/`; coordinator passes path, SA reads body. Coordinator pays path/brief tokens, not the prompt body. `agents/` is convention, NOT native |
+| **Agents-as-REFs** | SK-coordinator + multi-step workflow + 2+ roles needing context isolation | Prompt `.md` in SK `agents/`; coordinator passes path, SA reads body. Coordinator pays path/brief tokens, not the prompt body. `agents/` is convention, NOT native |
 | **Dynamic CTX** | Need live data before launch (git diff, PR info, env) | `` !`command` `` executes BEFORE content reaches Claude |
-| **Skill fork** | Standalone task, no conversation history; <4 phases is a BC heuristic | `context: fork` -> regular isolated SA, background by DEF since v2.1.218; `background: false` waits. CLAUDE.md follows AG inheritance/omit rules; !=a conversation fork. >5 phases suggests durable state, !=a platform memory-loss threshold |
-| **Executable Bash** | Bash blocks must execute | `**EXECUTE**` keyword + `&& echo OK \|\| echo FAIL` + `> STOP if FAIL`. Without the keyword, bash is examples only |
+| **Skill fork** | Standalone task, no conversation history; 1-4 phases is a BC heuristic | `context: fork` -> regular isolated SA, background by DEF since v2.1.218; `background: false` waits. CLAUDE.md follows AG inheritance/omit rules; !=a conversation fork. 5+ phases suggests durable state, !=a platform memory-loss threshold |
+| **Executable Bash** | Bash blocks must execute | Template under Executable Bash below. Without the `**EXECUTE**` keyword, bash is examples only |
 | **SK Chaining** | SK invokes another SK | `Skill(skill="name", args="...")`; no `allowed-tools` needed for availability. Runtime SA skills supported upstream; DMI SKs cannot be model-invoked. BC chains distributed SKs from main |
 | **Background Knowledge** | Claude needs context, user needs no slash cmd | `user-invocable: false`. Description stays in context |
 | **Pushy Description** | LLM-invocable skills | Action verb + `Triggers: "phrase1", "phrase2"`. Best odds of auto-load; no published rate |
-| **Preloaded Skills** | SA must follow conventions/patterns | `skills: [name]` in agent frontmatter. Full SK injected at startup |
+| **Preloaded Skills** | SA must follow conventions/patterns | `skills: [name]` in agent frontmatter: full SK injected at startup, first 32 names. Only `disable-model-invocation: false` SKs — a DMI SK (every distributed brewcode SK) is skipped with a debug-log warning, nothing else |
 
 ## Agents-as-REFs detail
 
-Pattern from the official Anthropic skill-creator plugin. `agents/` inside an SK dir is NOT
-auto-discovered. The coordinator passes a **file path**, not content; the SA reads the `.md` itself.
+Pattern from the official Anthropic skill-creator plugin.
 
 | Native agents `.claude/agents/` | "Agents" in SK `agents/` |
 |---|---|
@@ -40,8 +39,6 @@ auto-discovered. The coordinator passes a **file path**, not content; the SA rea
 | Definition controls model/tools/memory; PLG hooks ignored | Prompt file alone sets no runtime config; caller selects the spawned AG's definition |
 | YAML frontmatter + Markdown | Plain Markdown (prompt) |
 | Public API | SK implementation detail |
-
-Use when: SK-coordinator + 2+ roles + context isolation needed + prompts are implementation detail.
 
 ## REF splitting strategy
 
@@ -63,24 +60,23 @@ e.g. `superreview-setup`); unconditional single Read for one reference <200 line
 `${CLAUDE_SKILL_DIR}/references/{mode}.md` -> VALIDATE: not found -> ERROR "Missing REF for
 {mode}", STOP.
 
-Anti-patterns: loading ALL refs regardless of mode (fix: detect then load only the match);
-inlining mode-specific content >50 lines in SKILL.md (fix: split to `references/{mode}.md`);
-Read with no not-found guard (fix: add the STOP guard); generic ref names like `ref1.md` (fix:
-name by mode, `references/jvm.md`).
+Anti-patterns: loading ALL refs regardless of mode; mode-specific content >50 lines inlined in
+SKILL.md; Read with no not-found guard; generic ref names like `ref1.md` (name by mode:
+`references/jvm.md`).
 
 ## Resource path resolution — one rule, three cases
 
 | Case | Form | Why |
 |---|---|---|
-| Prose pointer to a bundled doc ("see X for details") | Markdown link, relative: `[reference.md](reference.md)` | Upstream's own shape (`skills:451-457`) |
-| Anything EXECUTED or Read at runtime — scripts, templates, refs the SK opens | `${CLAUDE_SKILL_DIR}` (CSD) | CWD is the session shell's and moves with `cd` (`skills:643`); CSD resolves identically every time and is substituted in `allowed-tools` Bash rules too (`skills:403`) |
-| Resource in the plugin but OUTSIDE this SK's dir, or a path handed to an agent | `${CLAUDE_PLUGIN_ROOT}` (BPR) | CSD is the SK subdir, not the plugin root (`skills:398`); an agent gets no CSD at all |
+| Prose pointer to a bundled doc ("see X for details") | Markdown link, relative: `[reference.md](reference.md)` | Upstream's own shape |
+| Anything EXECUTED or Read at runtime — scripts, templates, refs the SK opens | `${CLAUDE_SKILL_DIR}` (CSD) | CWD is the session shell's and moves with `cd`; CSD resolves identically every time and is substituted in `allowed-tools` Bash rules too |
+| Resource in the plugin but OUTSIDE this SK's dir, or a path handed to an agent | `${CLAUDE_PLUGIN_ROOT}` (BPR) — plugin SKs only, stays literal in a project/personal SK | CSD is the SK subdir, not the plugin root; an agent gets no CSD at all |
 
 Never a hardcoded absolute path — it breaks on every other install.
 
 ```yaml
-# Executed -> CSD
-bash "${CLAUDE_SKILL_DIR}/scripts/validate.sh" $ARGUMENTS
+# Executed -> CSD; "$ARGS" = quoted-heredoc copy of the prompt (execution-model.md)
+bash "${CLAUDE_SKILL_DIR}/scripts/validate.sh" "$ARGS"
 # Read at runtime -> CSD
 Read `${CLAUDE_SKILL_DIR}/references/api-spec.md` before generating the client.
 # Prose pointer -> markdown link
@@ -92,14 +88,13 @@ ${CLAUDE_PLUGIN_ROOT}/skills/my-skill/references/rules.md then...")`.
 
 ## Executable Bash
 
-Bash blocks are examples unless marked. Template: `**EXECUTE** using Bash tool:` label, a fenced
-bash block ending `&& echo "OK" || echo "FAIL"`, then `> **STOP if FAIL**` with recovery steps.
+Template: `**EXECUTE** using Bash tool:` label, a fenced bash block ending
+`&& echo "OK" || echo "FAIL"`, then `> **STOP if FAIL**` with recovery steps.
 
 | Rule | Bad | Good |
 |---|---|---|
-| Label | ` ```bash` | `**EXECUTE**:` ` ```bash` |
-| Validate | `command` | `command && echo "OK" \|\| echo "FAIL"` |
 | Paths | `${CLAUDE_PLUGIN_ROOT}/skills/x/scripts/y.sh`, or a bare relative `scripts/y.sh` | `${CLAUDE_SKILL_DIR}/scripts/y.sh` — it's executed, so CSD |
+| Substituted text | A bare `$1`, a spliced `$ARGUMENTS` or an unbraced path token in the fence — CC rewrites the fence as text before the shell sees it | The safe spellings in `execution-model.md` String substitutions |
 
 ## Location priority
 
@@ -121,8 +116,7 @@ bundled skills via `disableBundledSkills` setting or `CLAUDE_CODE_DISABLE_BUNDLE
 ## Unit test skeleton (Step 8)
 
 For each script in `scripts/`, generate `tests/test-{script-name}.sh` from this skeleton
-(replace `SKILL_DIR` with the actual skill dir path) covering: script exists, script executable,
-runs without error (`--help`), plus script-specific assertions.
+(replace `SKILL_DIR` with the actual skill dir path), plus script-specific assertions.
 
 ```bash
 #!/bin/bash
@@ -158,4 +152,3 @@ STOP after 2 fix cycles -- document failures, proceed to the next step.
 | Missing `context: fork` for a standalone task | Add `context: fork` |
 | Hardcoded secrets/tokens in scripts or body | Use MCP / environment injection, never a literal |
 | Multipurpose skill trying to cover unrelated jobs | Split into focused, single-purpose skills |
-| All refs loaded unconditionally in a multi-mode skill | Detect mode -> load only the matching `references/{mode}.md` |

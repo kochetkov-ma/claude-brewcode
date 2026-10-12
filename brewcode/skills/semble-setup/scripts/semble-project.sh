@@ -4,6 +4,7 @@
 # Contracts: DESIGN §9.6 (CLI), §8.1-8.6 (mode semantics), §7 (coverage), §6.5/§6.6 (cache).
 set -euo pipefail
 SC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source-path=SCRIPTDIR source=lib/semble-common.sh
 . "$SC_DIR/lib/semble-common.sh"
 
 SP_WARM_QUERY_DEFAULT="entry point main function"
@@ -12,7 +13,7 @@ SP_SEARCH_TIMEOUT="${SP_SEARCH_TIMEOUT:-600}"
 # Never-walked directory names (semble/index/file_walker.py:14-33).
 SP_SKIP_DIRS=".git .hg .svn __pycache__ node_modules .venv venv .tox .mypy_cache .pytest_cache .ruff_cache .cache .semble .next dist build .eggs"
 
-# Suffix -> bucket tables, generated from semble 0.5.5
+# Suffix -> bucket tables, generated from semble 0.5.5, identical in 0.6.2
 # src/semble/index/files.py (_EXTENSION_TO_LANGUAGE minus _DOC/_CONFIG/_DATA_LANGUAGES).
 # Classification is by lowercased LAST suffix only; extensionless files never match.
 SP_EXT_CODE=".4th .ada .adb .ads .agda .al .as .asm .astro .awk .axi .axs .bash .bat .bb .bbappend .bbclass .bicep .blade .bq .brs .bsl .bzl .c .c3 .c3i .c3t .caddyfile .cairo .cbl .cc .cedar .cel .cfc .chatito .circom .cjs .ck .cl .clar .clj .cljc .cljs .cls .cmake .cmd .cob .cobol .conf .corn .cpp .cr .cs .cshtml .css .cst .cts .cu .cuda .cue .cxx .cylc .d .dart .dhall .dl .dockerfile .dot .dsp .eds .eex .el .elm .elv .enforce .eps .erb .erl .ex .exs .f .f03 .f08 .f90 .f95 .fc .fidl .filter .fir .fish .fnl .fs .fsd .fsi .fsx .fth .fun .g .gd .gdshader .gi .gleam .glsl .gn .gni .gnuplot .go .gotmpl .gp .gql .gradle .graphql .gren .groovy .gv .h .hack .hare .hbs .hcl .heex .hlsl .hoon .hpp .hrl .hs .http .hurl .hx .hxx .idr .inc .ino .ispc .j2 .jai .janet .java .jinja2 .jl .jq .js .jsonnet .jsx .just .k .kt .kts .lc .lds .lean .leex .less .libsonnet .liquid .lisp .ll .lua .luau .m .magik .makefile .matlab .meson .mjs .mk .ml .mli .mlir .mll .mojo .move .mts .nasm .ncl .nginx .nim .nims .ninja .nix .nqc .nu .nut .odin .p .pas .php .pkl .pl .plt .pm .pony .pp .prisma .pro .promql .prql .ps .ps1 .psd1 .psm1 .pug .purs .py .pyi .pyw .ql .qml .r .rasi .razor .rb .rbs .re .rego .res .resi .rkt .robot .roc .rs .s .scad .scala .scm .scss .sh .shtml .sig .slang .smali .smk .sml .sol .sp .sparql .sql .squirrel .st .stan .star .sv .svelte .svh .sw .swift .tact .tal .tape .tcl .td .templ .tera .tf .tfvars .tl .tla .trigger .ts .tsconfig .tsx .twig .typoscript .typst .v .vb .verilog .vhd .vhdl .vim .vrl .vue .w .wast .wat .wgsl .wl .yuck .zig .ziggy .zsh"
@@ -71,6 +72,7 @@ sp_dry_say() { if [ "$SP_JSON" = "1" ]; then sc_dry "$*" >&2; else sc_dry "$*"; 
 # >1 MB skipped, <128 B skipped only when blank after strip (files.py:498-501).
 sp_coverage() {
   sc_require_node
+  # shellcheck disable=SC2016  # JavaScript source, not shell: $ is literal
   SP_ROOT="$(sc_project_root)" SP_C="$SP_EXT_CODE" SP_G="$SP_EXT_CONFIG" \
   SP_D="$SP_EXT_DOCS" SP_X="$SP_EXT_EXCLUDED" SP_SKIPD="$SP_SKIP_DIRS" node -e '
 const fs=require("fs"),path=require("path");
@@ -227,7 +229,7 @@ sp_require_state() {
 
 # ── warm / smoke (§8.6) ─────────────────────────────────────────────────────
 # $SEMBLE_CONTENT_ARGS must be byte-identical to the MCP registration's
-# --content so both consumers select the same 0.5.5 index variant.
+# --content so both consumers select the same index variant.
 sp_search_cmd_str() {
   printf "SEMBLE_CACHE_LOCATION=%s uvx --from '%s' semble search %s %s --content %s -k 5 --max-snippet-lines 10" \
     "$(sc_cache_root_code)" "$SEMBLE_PIN_SPEC" "\"$1\"" "\"$(sc_project_root)\"" "$SEMBLE_CONTENT_ARGS"
@@ -326,7 +328,7 @@ let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{
 sp_status_ready() { [ "$1" = "ok" ]; }
 
 # ── reindex guards (§6.6) ───────────────────────────────────────────────────
-# Rebuild only the selected 0.5.5 variant. Deleting the hashed repo directory
+# Rebuild only the selected variant. Deleting the hashed repo directory
 # would erase unrelated exact-content variants and is forbidden here.
 sp_guarded_rm_index_dir() {
   local dir="$1" leaf repo repo_leaf root
@@ -347,7 +349,7 @@ sp_guarded_rm_index_dir() {
 }
 
 # True only for the pre-0.5.5 combined corpus: bare `index` carrying the exact
-# current content set. A code-only 0.5.5 `index` is a valid sibling and survives.
+# current content set. A code-only `index` is a valid sibling and survives.
 sp_is_legacy_combined_index() {
   local dir="$1"
   [ "$(sc_index_leaf)" != "index" ] || return 1
@@ -475,6 +477,7 @@ sp_mode_candidates() {
   local json="$1" root indexdir out
   root="$(sc_project_root)"
   indexdir="$(sc_repo_index_dir "$root" 2>/dev/null || true)"
+  # shellcheck disable=SC2016  # JavaScript source, not shell: $ is literal
   out="$(SP_ROOT="$root" SP_CHUNKS="${indexdir:+$indexdir/chunks.json}" \
     SP_C="$SP_EXT_CODE" SP_G="$SP_EXT_CONFIG" SP_D="$SP_EXT_DOCS" \
     SP_SKIPD="$SP_SKIP_DIRS" node -e '

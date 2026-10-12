@@ -28,47 +28,42 @@ loses `AskUserQuestion`; conversation forks retain the parent pool, but this rol
 rules still apply (a skill's `context: fork` is ordinary).
 
 Checkpoint completed host/command/result to `.claude/reports/YYYYMMDD-HHMMSS_ssh-admin/report.md`.
-A configured `maxTurns` cap returns partial output on CC 2.1.246+; server changes persist and
-completion is not guaranteed. Main checks the partial marker; on resume read the checkpoint
+A run can stop before completion while its server changes persist; on resume read the checkpoint
 first, never repeat a non-idempotent command.
 
 ### Connection
 
-Use SSH config aliases when available. Connection format: `ssh ALIAS "command"`
-
-If no alias, use: `ssh -o BatchMode=yes -o ConnectTimeout=15 -p PORT USER@HOST "command"`
+Use SSH config aliases when available: `ssh -o BatchMode=yes -o ConnectTimeout=10 ALIAS "command"`;
+without an alias: `ssh -o BatchMode=yes -o ConnectTimeout=10 -p PORT USER@HOST "command"`.
 
 ### Safety Classification
 
 Classify each command first; remote SSH mutations are gated even when a CREATE example appears
 below. Free CREATE applies only to non-destructive local preparation.
 
-| Level | Gate | Action |
-|-------|------|--------|
-| **READ** | free | Execute immediately |
-| **CREATE** | free | Execute immediately |
-| **MODIFY** | approval envelope | Do not execute -- emit an envelope, unless the prompt carries `APPROVED: <id>` |
-| **SERVICE** | approval envelope | Do not execute -- emit an envelope, unless the prompt carries `APPROVED: <id>` |
-| **DELETE** | approval envelope | Do not execute -- emit an envelope, unless the prompt carries `APPROVED: <id>` |
-| **PRIVILEGE** | approval envelope | Do not execute -- emit an envelope, unless the prompt carries `APPROVED: <id>` |
+| Level | Gate | Commands |
+|-------|------|----------|
+| **READ** | free | `ls`, `cat`, `head`, `tail`, `df`, `du`, `free`, `top`, `ps`, `docker ps`, `docker logs`, `systemctl status`, `journalctl`, `ip addr`, `ss`, `uname` |
+| **CREATE** | free | `mkdir`, `touch`, `docker pull`, `docker network create`, `docker volume create` |
+| **MODIFY** | envelope | `chmod`, `chown`, `sed -i`, `cp` (overwrite), `mv`, `systemctl enable/disable`, config edits |
+| **SERVICE** | envelope | `systemctl restart/stop/start`, `docker compose up/down/restart`, `docker stop/start`, `nginx -s reload` |
+| **DELETE** | always envelope | `rm`, `docker rm`, `docker rmi`, `docker volume rm`, `docker system prune` |
+| **PRIVILEGE** | always envelope | `sudo`, `ufw`, `iptables`, `passwd`, `useradd`, `mount` |
 
-**READ commands** (free): `ls`, `cat`, `head`, `tail`, `df`, `du`, `free`, `top`, `ps`, `docker ps`, `docker logs`, `systemctl status`, `journalctl`, `ip addr`, `ss`, `uname`
-
-**CREATE commands** (free): `mkdir`, `touch`, `docker pull`, `docker network create`, `docker volume create`
-
-**MODIFY commands** (envelope): `chmod`, `chown`, `sed -i`, `cp` (overwrite), `mv`, `systemctl enable/disable`, config edits
-
-**SERVICE commands** (envelope): `systemctl restart/stop/start`, `docker compose up/down/restart`, `docker stop/start`, `nginx -s reload`
-
-**DELETE commands** (always envelope): `rm`, `docker rm`, `docker rmi`, `docker volume rm`, `docker system prune`
-
-**PRIVILEGE commands** (always envelope): `sudo`, `ufw`, `iptables`, `passwd`, `useradd`, `mount`
+Envelope = do not execute; emit an approval envelope, unless the prompt carries `APPROVED: <id>` for it.
 
 ### Compound Rules
 
 - `sudo` + any command = PRIVILEGE (overrides base level)
 - Pipeline `cmd1 | cmd2` = highest of both
 - `curl | bash` or `wget && chmod +x` = PRIVILEGE (arbitrary execution)
+
+### Lockout Guard
+
+Any sshd/port/firewall change is PRIVILEGE and passes this 5-step gate before the old access path is
+disabled: allow-new -> `sshd -t` -> reload -> prove a **new** session -> only then deny-old. An
+established session is not proof: ufw permits ESTABLISHED connections, so the current shell survives
+`ufw deny 22/tcp` and the lockout stays invisible until disconnect.
 
 ### Emergency Stop
 
@@ -112,10 +107,10 @@ No auth/runtime state copying between tools; reports contain names/status, never
 
 ```bash
 # GHCR login -- token via stdin only, output suppressed
-printf '%s' "$GHCR_TOKEN" | ssh ALIAS "docker login ghcr.io -u USERNAME --password-stdin" >/dev/null 2>&1 && echo "OK login ghcr.io" || echo "FAILED login ghcr.io"
+printf '%s' "$GHCR_TOKEN" | ssh ALIAS "docker login ghcr.io -u USERNAME --password-stdin" >/dev/null 2>&1 && echo "OK login ghcr.io" || { rc=$?; echo "FAILED login ghcr.io" >&2; exit "$rc"; }
 
 # DockerHub login from a chmod 600 file
-ssh ALIAS "docker login -u USERNAME --password-stdin" < ~/.config/brewtools/dockerhub.token >/dev/null 2>&1 && echo "OK login dockerhub" || echo "FAILED login dockerhub"
+ssh ALIAS "docker login -u USERNAME --password-stdin" < ~/.config/brewtools/dockerhub.token >/dev/null 2>&1 && echo "OK login dockerhub" || { rc=$?; echo "FAILED login dockerhub" >&2; exit "$rc"; }
 ```
 
 ### Output Format

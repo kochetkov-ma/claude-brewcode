@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * E2E suite for the manager HARD wall guard (brewtools/hooks/hardmode-guard.mjs).
- * Focus: main-session vs subagent discrimination.
+ * E2E suite for manager mode: the HARD wall guard (hooks/hardmode-guard.mjs), the codeword
+ * hook (hooks/manager-prompt.mjs) and the armed-wall notice (hooks/session-start.mjs).
  * State is driven through an isolated temp project passed as `cwd` on stdin —
  * this repo's .claude/ is never read or written and no real wall is ever armed.
  * Assertion policy: every check is an unconditional exact deep-equality
@@ -13,6 +13,7 @@ import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { parseCliArgs } from '../../../hooks/lib/manager-state.mjs';
+import { resolvePrompt } from '../../../hooks/lib/manager-prompts.mjs';
 
 const HERE = join(fileURLToPath(import.meta.url), '..');
 const GUARD_MJS = join(HERE, '..', '..', '..', 'hooks', 'hardmode-guard.mjs');
@@ -60,17 +61,21 @@ function safeParse(str) {
  * otherwise the ambient value of whoever runs the suite would resolve the project root
  * away from the temp fixture.
  */
-function runGuard(stdinStr, projectDir) {
+function runGuardRaw(stdinStr, nodeArgs = [], projectDir) {
   const env = { ...process.env };
   delete env.CLAUDE_PROJECT_DIR;
   if (projectDir) env.CLAUDE_PROJECT_DIR = projectDir;
-  const r = spawnSync(process.execPath, [GUARD_MJS], {
+  const r = spawnSync(process.execPath, [...nodeArgs, GUARD_MJS], {
     input: stdinStr,
     encoding: 'utf8',
     timeout: 8000,
     env,
   });
-  return safeParse(r.stdout || '');
+  return { status: r.status, stdout: r.stdout, stderr: r.stderr };
+}
+
+function runGuard(stdinStr, projectDir) {
+  return safeParse(runGuardRaw(stdinStr, [], projectDir).stdout || '');
 }
 
 /** Isolated project whose state.json arms/disarms the wall for one scenario. */
@@ -82,7 +87,8 @@ function makeProject(name, state) {
 }
 
 const PASS_THROUGH = {};
-const EXIT_HINT = 'Manager HARD wall is ON — delegate via Task/Agent. To exit run `/brewtools:manager-setup disable`; the only Bash it needs — `node <project>/.claude/brewtools/manager/manager-state.mjs set hard=false` — is self-exempt at every level.';
+const EXIT_HINT = 'Manager mode keeps the main context for orchestration, so pass this step to a subagent with the Agent tool: subagents are not restricted, and reading, search and task tracking still work here. The wall comes off only when the user asks: `/brewtools:manager-setup disable`, whose bare `node <project>/.claude/brewtools/manager/manager-state.mjs set hard=false` is the one Bash command allowed at every level.';
+const READONLY_HINT = 'ls, cat, head, tail, rg, grep, find, jq, git status|log|diff|show, gh <group> view|list; no redirection, no $(...)';
 
 function denial(reason) {
   return {
@@ -94,9 +100,9 @@ function denial(reason) {
   };
 }
 
-const WRITE_DENIAL = denial('Hard wall: Write is blocked in the main session — delegate to a subagent.');
-const BASH_DENIAL = denial('Hard wall (balanced): only read-only Bash is allowed in the main session — delegate execution to a subagent.');
-const STRICT_BASH_DENIAL = denial('Hard wall (strict): Bash is blocked in the main session — delegate execution to a subagent.');
+const WRITE_DENIAL = denial('Hard wall: Write is blocked in the main session.');
+const BASH_DENIAL = denial(`Hard wall (balanced): the main session runs only read-only Bash commands (${READONLY_HINT}), and this one is not provably read-only.`);
+const STRICT_BASH_DENIAL = denial('Hard wall (strict): Bash is blocked in the main session.');
 const PARSE_DENIAL = denial('Hard wall: the guard could not parse its PreToolUse payload and denies by default.');
 /**
  * Reduce a guard response to its BEHAVIOUR: 'allow' | 'deny'. MCP checks assert this rather
@@ -508,7 +514,7 @@ function makeInstalledProject(name) {
     hooks: {
       PreToolUse: [{
         matcher: '*',
-        hooks: [{ type: 'command', command: `node "${join(mdir, 'hardmode-guard.mjs')}" # brewtools-manager-guard`, timeout: 5 }],
+        hooks: [{ type: 'command', command: `node "${join(mdir, 'hardmode-guard.mjs')}" # brewtools-manager-guard`, timeout: 5, onFailure: 'block' }],
       }],
     },
   }, null, 2));
@@ -605,7 +611,7 @@ check(
   '54-strict-denies-readonly-mcp',
   mcp('mcp__github__get_file', STRICT),
   'deny',
-  'strict means no MCP at all, however read-only the name looks',
+  'strict denies MCP however read-only the name looks (sole exception: check 73)',
 );
 
 check(
@@ -895,9 +901,335 @@ for (const [level, project] of [['balanced', ARMED], ['strict', STRICT]]) {
   );
 }
 
+// ---- X8 — the allow-list against the Claude Code 2.1.296 tool table -----------------------
+
+// Removed tool names (NotebookRead, SlashCommand, BashOutput, KillShell, KillBash, MultiEdit)
+// fall to default-deny; Bash and Monitor carry no command here, so they deny as unclassifiable.
+const TOOL_TABLE = {
+  Read: 'allow', Grep: 'allow', Glob: 'allow', LSP: 'allow',
+  Task: 'allow', Agent: 'allow', Skill: 'allow', Workflow: 'allow',
+  ListAgents: 'allow', SendMessage: 'allow', SubagentHandback: 'allow',
+  EnterWorktree: 'allow', ExitWorktree: 'allow', EnterPlanMode: 'allow', ExitPlanMode: 'allow',
+  ToolSearch: 'allow', WaitForMcpServers: 'allow',
+  TaskCreate: 'allow', TaskUpdate: 'allow', TaskList: 'allow', TaskGet: 'allow',
+  TodoWrite: 'allow', ReportFindings: 'allow',
+  CronCreate: 'allow', CronList: 'allow', CronDelete: 'allow', ScheduleWakeup: 'allow',
+  TaskStop: 'allow', ListMcpResourcesTool: 'allow', ReadMcpResourceTool: 'allow',
+  AskUserQuestion: 'allow',
+  Write: 'deny', Edit: 'deny', NotebookEdit: 'deny', WebFetch: 'deny', Artifact: 'deny',
+  PowerShell: 'deny', Bash: 'deny', Monitor: 'deny',
+  NotebookRead: 'deny', SlashCommand: 'deny', BashOutput: 'deny', KillShell: 'deny',
+  KillBash: 'deny', MultiEdit: 'deny', TaskOutput: 'deny',
+};
+const toolTableAt = (proj) => Object.fromEntries(
+  Object.keys(TOOL_TABLE).map(t => [t, verdict(runGuard(stdin(proj, { tool_name: t, tool_input: {} })))]),
+);
+
+// GIVEN an armed wall at either level, WHEN the main session calls each built-in tool,
+// THEN the verdicts are exactly the table: current orchestration tools pass, removed names do not.
+check('68-tool-table-at-balanced', toolTableAt(ARMED), TOOL_TABLE, 'the balanced allow-list is exactly the 2.1.296 orchestration/read set');
+check('69-tool-table-at-strict', toolTableAt(STRICT), TOOL_TABLE, 'strict keeps the same always-allowed set; only Bash/WebSearch/MCP rules tighten');
+
+check(
+  '70-websearch-is-level-gated',
+  { balanced: verdict(runGuard(stdin(ARMED, { tool_name: 'WebSearch', tool_input: { query: 'x' } }))), strict: verdict(runGuard(stdin(STRICT, { tool_name: 'WebSearch', tool_input: { query: 'x' } }))) },
+  { balanced: 'allow', strict: 'deny' },
+  'WebSearch is the one built-in whose verdict differs by level',
+);
+
+// REGRESSION: Monitor sat in the always-allow set although its `command` is a shell command,
+// so `Monitor({command: "sh -c ..."})` ran anything in a walled main session.
+const monitor = (proj, tool_input) => verdict(runGuard(stdin(proj, { tool_name: 'Monitor', tool_input })));
+check(
+  '71-monitor-command-gets-the-bash-rule',
+  {
+    tail: monitor(ARMED, { command: 'tail -f /tmp/app.log' }),
+    redirect: monitor(ARMED, { command: 'sh -c "echo x > /tmp/pwned"' }),
+    loop: monitor(ARMED, { command: 'while true; do rm -rf /tmp/x; done' }),
+    websocket: monitor(ARMED, { ws: { url: 'wss://example.com/feed' } }),
+    strictTail: monitor(STRICT, { command: 'tail -f /tmp/app.log' }),
+  },
+  { tail: 'allow', redirect: 'deny', loop: 'deny', websocket: 'deny', strictTail: 'deny' },
+  'a Monitor watch is allowed only where the same Bash command would be',
+);
+
+check(
+  '72-monitor-deny-names-the-read-only-rule',
+  runGuard(stdin(ARMED, { tool_name: 'Monitor', tool_input: { command: 'make watch' } })),
+  denial(`Hard wall (balanced): the main session runs only read-only Monitor commands (${READONLY_HINT}), and this one is not provably read-only.`),
+  'the Monitor denial carries the same reason and remedy as the Bash one',
+);
+
+// GIVEN strict, WHEN the main session searches code through semble, THEN it reads; every
+// other MCP tool — a semble write, a look-alike server, an mcpAllow entry — stays denied.
+check(
+  '73-strict-keeps-read-only-semble-and-nothing-else',
+  {
+    search: mcp('mcp__semble_code__search', STRICT),
+    findRelated: mcp('mcp__semble_code__find_related', STRICT),
+    sembleWriteVerb: mcp('mcp__semble_code__delete_index', STRICT),
+    sembleUnknownToken: mcp('mcp__semble_code__reindex', STRICT),
+    lookAlikeServer: mcp('mcp__semble_code_x__search', STRICT),
+    otherServerRead: mcp('mcp__github__get_file', STRICT),
+    allowListed: mcp('mcp__trusted__get_file', MCP_ALLOW_STRICT),
+  },
+  {
+    search: 'allow', findRelated: 'allow', sembleWriteVerb: 'deny', sembleUnknownToken: 'deny',
+    lookAlikeServer: 'deny', otherServerRead: 'deny', allowListed: 'deny',
+  },
+  'code search is reading, so strict keeps it; the exception is one server, read-only tools only',
+);
+
+check(
+  '74-strict-mcp-deny-names-the-exception',
+  runGuard(stdin(STRICT, { tool_name: 'mcp__github__get_file', tool_input: {} })),
+  denial('Hard wall (strict): MCP tool mcp__github__get_file is blocked in the main session; strict keeps only the read-only mcp__semble_code__* search tools.'),
+  'at strict the reason must not advertise mcpAllow, which strict never consults',
+);
+
+// GIVEN an armed wall, WHEN agent_id is present but not a non-empty string, THEN the call is
+// still a main-session call. A hook-agent verifier id (recorded on 2.1.296) is a subagent.
+check(
+  '75-agent-id-must-be-a-non-empty-string',
+  {
+    hookAgentVerifier: verdict(runGuard(stdin(ARMED, { agent_id: 'hook-agent-5148e0ac-4381-4904-831c-94da713e34fc', tool_name: 'StructuredOutput', tool_input: { ok: true } }))),
+    nullId: verdict(runGuard(stdin(ARMED, { agent_id: null }))),
+    emptyId: verdict(runGuard(stdin(ARMED, { agent_id: '' }))),
+    numericId: verdict(runGuard(stdin(ARMED, { agent_id: 7 }))),
+  },
+  { hookAgentVerifier: 'allow', nullId: 'deny', emptyId: 'deny', numericId: 'deny' },
+  'only a real agent id opens the wall; a null or empty key must not disarm it',
+);
+
+// ---- onFailure:"block" — the guard may end only with exit 0 (decision JSON) or 2 ---------
+
+const exitOf = (stdinStr) => runGuardRaw(stdinStr).status;
+check(
+  '76-every-handled-path-exits-0',
+  {
+    malformedJson: exitOf('{not json'),
+    emptyStdin: exitOf(''),
+    jsonNull: exitOf('null'),
+    brokenState: exitOf(stdin(BROKEN, {})),
+    mainDenied: exitOf(stdin(ARMED, {})),
+    mainAllowed: exitOf(stdin(ARMED, { tool_name: 'Read', tool_input: { file_path: '/etc/hosts' } })),
+    subagent: exitOf(stdin(ARMED, { agent_id: 'sub-1' })),
+    disarmed: exitOf(stdin(DISARMED, {})),
+    notInstalled: exitOf(stdin(join(BASE, 'no-such-project'), {})),
+  },
+  {
+    malformedJson: 0, emptyStdin: 0, jsonNull: 0, brokenState: 0, mainDenied: 0,
+    mainAllowed: 0, subagent: 0, disarmed: 0, notInstalled: 0,
+  },
+  'with onFailure:"block" any other exit code would block every tool call, main and subagent',
+);
+
+check(
+  '77-unusable-payloads-deny',
+  { emptyStdin: verdict(runGuard('')), jsonNull: verdict(runGuard('null')) },
+  { emptyStdin: 'deny', jsonNull: 'deny' },
+  'a payload that carries no object cannot prove it is a subagent call',
+);
+
+// GIVEN stdout that throws on write, WHEN the guard tries to answer, THEN the fault escapes its
+// handler and the last-resort hook turns it into a blocking exit 2 with the reason on stderr.
+check(
+  '78-fault-outside-the-handler-exits-2',
+  runGuardRaw(stdin(ARMED, {}), ['--import', 'data:text/javascript,process.stdout.write=()=>{throw new Error("stdout gone")}']),
+  { status: 2, stdout: '', stderr: 'Hard wall: the guard failed outside its handler (stdout gone) and blocks by default.\n' },
+  'a crash must be a blocking error on every CLI version, not exit 1',
+);
+
+// ---- the off-switch CLI resolves its project from where it is installed, not from cwd -----
+
+// REGRESSION: `node <root>/.claude/brewtools/manager/manager-state.mjs set hard=false` wrote
+// under the Bash tool's raw cwd. From a subdirectory (or a worktree) it printed success,
+// created a stray <cwd>/.claude tree and left the real wall armed.
+const STATE_MJS = join(HERE, '..', '..', '..', 'hooks', 'lib', 'manager-state.mjs');
+const CLI_PROJ = makeProject('cli-root', { hard: true, level: 'strict' });
+const CLI_HELPER = join(CLI_PROJ, '.claude', 'brewtools', 'manager', 'manager-state.mjs');
+const CLI_NESTED = join(CLI_PROJ, 'nested', 'deep');
+mkdirSync(CLI_NESTED, { recursive: true });
+writeFileSync(CLI_HELPER, readFileSync(STATE_MJS, 'utf8'));
+
+function runStateCli(script, args, cwd, projectDir) {
+  const env = { ...process.env };
+  delete env.CLAUDE_PROJECT_DIR;
+  if (projectDir) env.CLAUDE_PROJECT_DIR = projectDir;
+  const r = spawnSync(process.execPath, [script, ...args], { cwd, encoding: 'utf8', timeout: 8000, env });
+  return { status: r.status, out: safeParse(r.stdout || '') };
+}
+
+const cliSet = runStateCli(CLI_HELPER, ['set', 'hard=false'], CLI_NESTED);
+const cliState = safeParse(readFileSync(join(CLI_PROJ, '.claude', 'brewtools', 'manager', 'state.json'), 'utf8'));
+check(
+  '78a-installed-cli-disarms-its-own-project-from-a-nested-cwd',
+  { status: cliSet.status, hard: cliState.hard, level: cliState.level, strayTree: existsSync(join(CLI_NESTED, '.claude')) },
+  { status: 0, hard: false, level: 'strict', strayTree: false },
+  'the documented exit must disarm the wall it sits next to, whatever the shell cwd is',
+);
+
+const cliGet = runStateCli(STATE_MJS, ['get'], tmpdir(), STRICT);
+check(
+  '78b-plugin-cli-falls-back-to-claude-project-dir',
+  { status: cliGet.status, hard: cliGet.out.hard, level: cliGet.out.level, source: cliGet.out.source },
+  { status: 0, hard: true, level: 'strict', source: 'project' },
+  'a copy that is not installed in a project resolves CLAUDE_PROJECT_DIR before cwd',
+);
+
+// ---- manager-prompt.mjs (UserPromptSubmit) and session-start.mjs (SessionStart) ----------
+
+const PLUGIN_ROOT = join(HERE, '..', '..', '..');
+const PROMPT_MJS = join(PLUGIN_ROOT, 'hooks', 'manager-prompt.mjs');
+const SESSION_MJS = join(PLUGIN_ROOT, 'hooks', 'session-start.mjs');
+/** Empty HOME: a real ~/.claude/manager/prompts override must not leak into expectations. */
+const EMPTY_HOME = join(BASE, 'home');
+mkdirSync(EMPTY_HOME, { recursive: true });
+process.env.HOME = EMPTY_HOME;
+
+function runHook(script, payload, projectDir) {
+  const env = { ...process.env, CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT };
+  delete env.CLAUDE_PROJECT_DIR;
+  if (projectDir) env.CLAUDE_PROJECT_DIR = projectDir;
+  const r = spawnSync(process.execPath, [script], {
+    input: typeof payload === 'string' ? payload : JSON.stringify(payload),
+    encoding: 'utf8',
+    timeout: 8000,
+    env,
+  });
+  return safeParse(r.stdout || '');
+}
+
+const ups = (cwd, prompt, extra) => ({
+  session_id: 'S1', cwd, hook_event_name: 'UserPromptSubmit', permission_mode: 'default', prompt, ...extra,
+});
+const injected = (text) => ({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: text } });
+/** The shipped default block for a mode, read the way the hook reads it. */
+const shipped = (mode) => resolvePrompt(mode, join(BASE, 'no-such-project'), PLUGIN_ROOT).text;
+
+const HEAD_M = 'User typed `++m` — Manager mode is active for this turn:';
+const HEAD_A = 'User typed `++a` — Architecture-first discipline is active for this turn:';
+const HEAD_RR = 'User typed `++rr` — Anti-regression review discipline is active for this turn:';
+const HEAD_R = 'User typed `++r` — Two-phase review discipline is active for this turn:';
+
+check(
+  '79-codeword-m-injects-the-manager-block',
+  runHook(PROMPT_MJS, ups(DISARMED, '++m ship the feature')),
+  injected(`${HEAD_M}\n\n${shipped('full')}`),
+  'a typed ++m gets the header plus the shipped full block, wall state irrelevant',
+);
+
+check(
+  '80-codeword-groups-combine-in-order',
+  runHook(PROMPT_MJS, ups(DISARMED, 'do it ++rr ++a ++m')),
+  injected([`${HEAD_M}\n\n${shipped('full')}`, `${HEAD_A}\n\n${shipped('architect')}`, `${HEAD_RR}\n\n${shipped('review-regression')}`].join('\n\n---\n\n')),
+  'manager, architect and review blocks are all injected, in that fixed order',
+);
+
+// REGRESSION: an armed wall injected the whole `full` block (1830 B) on EVERY prompt, on top
+// of the guard that already enforces the rule and explains itself in its deny reason.
+check(
+  '81-armed-wall-injects-nothing-without-a-codeword',
+  { balanced: runHook(PROMPT_MJS, ups(ARMED, 'refactor the parser')), strict: runHook(PROMPT_MJS, ups(STRICT, 'refactor the parser')) },
+  { balanced: {}, strict: {} },
+  'no ambient per-prompt block while the wall is armed',
+);
+
+// REGRESSION: UserPromptSubmit also fires for subagent deliveries, and a report that quotes a
+// codeword activated the mode as "User typed `++m`". Fixtures are payloads recorded on 2.1.296
+// (home paths scrubbed; the hand-back report line replaced by one that carries codewords).
+const NOTIFICATION = JSON.parse(readFileSync(join(HERE, 'fixtures', 'ups-task-notification.json'), 'utf8'));
+const HANDBACK = JSON.parse(readFileSync(join(HERE, 'fixtures', 'ups-agent-message.json'), 'utf8'));
+check(
+  '82-synthetic-fixtures-carry-codewords',
+  { notification: /<result>\+\+m PROBE_REPORT_TOKEN \+\+rr<\/result>/.test(NOTIFICATION.prompt), handback: / {2}\+\+m \+\+a \+\+rr PROBE_REPORT_TOKEN\n/.test(HANDBACK.prompt) },
+  { notification: true, handback: true },
+  'precondition: both recorded deliveries contain codewords the scan would match',
+);
+check(
+  '83-synthetic-subagent-deliveries-inject-nothing',
+  {
+    taskNotification: runHook(PROMPT_MJS, NOTIFICATION),
+    agentMessage: runHook(PROMPT_MJS, HANDBACK),
+    leadingWhitespace: runHook(PROMPT_MJS, { ...NOTIFICATION, prompt: `\n  ${NOTIFICATION.prompt}` }),
+  },
+  { taskNotification: {}, agentMessage: {}, leadingWhitespace: {} },
+  'a prompt that starts with <task-notification> or <agent-message is not the user typing',
+);
+
+check(
+  '84-typed-prompt-quoting-the-tag-still-fires',
+  runHook(PROMPT_MJS, ups(DISARMED, 'explain what <task-notification> means ++r')),
+  injected(`${HEAD_R}\n\n${shipped('review-double')}`),
+  'only a LEADING delivery tag marks a synthetic prompt',
+);
+
+// REGRESSION: project prompt overrides were looked up under the raw hook cwd, so they
+// vanished as soon as the session changed directory.
+const ROOTED = makeProject('rooted', { hard: false, level: 'balanced' });
+mkdirSync(join(ROOTED, '.claude', 'brewtools', 'manager', 'prompts'), { recursive: true });
+mkdirSync(join(ROOTED, 'nested', 'deep'), { recursive: true });
+writeFileSync(join(ROOTED, '.claude', 'brewtools', 'manager', 'prompts', 'review-double.md'), 'OVERRIDE-AT-ROOT');
+writeFileSync(join(ROOTED, '.claude', 'brewtools', 'manager', 'prompts', 'architect.md'), 'x'.repeat(10000));
+check(
+  '85-project-override-resolves-from-the-project-root',
+  {
+    nestedCwd: runHook(PROMPT_MJS, ups(join(ROOTED, 'nested', 'deep'), '++r check it')),
+    projectDirEnv: runHook(PROMPT_MJS, ups('/', '++r check it'), ROOTED),
+  },
+  { nestedCwd: injected(`${HEAD_R}\n\nOVERRIDE-AT-ROOT`), projectDirEnv: injected(`${HEAD_R}\n\nOVERRIDE-AT-ROOT`) },
+  'the override is found from a nested cwd and through CLAUDE_PROJECT_DIR',
+);
+
+check(
+  '86-injection-is-capped-at-9000-chars',
+  runHook(PROMPT_MJS, ups(ROOTED, '++a design it')),
+  injected(`${`${HEAD_A}\n\n${'x'.repeat(10000)}`.slice(0, 9000)}\n...[truncated]`),
+  'an oversized override is cut to 9000 chars plus the truncation marker',
+);
+
+check(
+  '87-prompt-hook-malformed-stdin-fails-open',
+  runHook(PROMPT_MJS, '{not json'),
+  {},
+  'an advisory hook must never break the prompt',
+);
+
+const sessionNotice = (level, bash) => ({
+  systemMessage: `⛔ MANAGER HARD wall ON (project, level=${level})`,
+  hookSpecificOutput: {
+    hookEventName: 'SessionStart',
+    additionalContext: `Manager HARD wall active (project, level=${level}): a PreToolUse guard denies Write/Edit and ${bash} in the main session; subagents are not restricted, so implementation goes through the Agent tool. /brewtools:manager-setup disable to exit.`,
+  },
+});
+const sessionStart = (cwd) => ({ session_id: 'S1', cwd, hook_event_name: 'SessionStart', source: 'startup' });
+
+// REGRESSION: the armed-wall notice was keyed on raw cwd, so a session started (or resumed)
+// in a subdirectory of an armed project got no notice at all.
+check(
+  '88-session-notice-from-a-nested-cwd',
+  runHook(SESSION_MJS, sessionStart(ARMED_NESTED)),
+  sessionNotice('balanced', 'Bash that is not read-only'),
+  'the notice states the mechanism and the exit, and resolves the state from the project root',
+);
+
+check(
+  '89-session-notice-at-strict-via-project-dir',
+  runHook(SESSION_MJS, sessionStart('/'), STRICT),
+  sessionNotice('strict', 'all Bash'),
+  'CLAUDE_PROJECT_DIR wins over cwd; strict names its own Bash rule',
+);
+
+check(
+  '90-session-start-is-silent-when-disarmed',
+  { disarmed: runHook(SESSION_MJS, sessionStart(DISARMED)), notInstalled: runHook(SESSION_MJS, sessionStart(join(BASE, 'no-such-project'))) },
+  { disarmed: {}, notInstalled: {} },
+  'no wall, no notice',
+);
+
 try { rmSync(BASE, { recursive: true, force: true }); } catch { /* ignore */ }
 
-console.log('\n=== hardmode-guard E2E TEST REPORT ===');
+console.log('\n=== manager-setup E2E TEST REPORT ===');
 for (const line of results) console.log(line);
 console.log(`\nTOTAL: ${passed + failed} | PASS: ${passed} | FAIL: ${failed}`);
 process.exit(failed > 0 ? 1 : 0);

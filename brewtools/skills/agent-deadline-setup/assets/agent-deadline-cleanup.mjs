@@ -3,11 +3,14 @@
 /**
  * agent-deadline — SubagentStop hook (self-contained, Node built-ins only).
  *
- * Drops the state file of the subagent that just finished, and the session dir
- * once it is empty. Also prunes session dirs older than ~1 day, so the tmp tree
- * stays self-cleaning even if a session dies without firing SubagentStop.
+ * Stamps `stopped` on the state file of the subagent that just stopped; the
+ * guard resumes the same clock if the agent calls a tool again within the
+ * resume grace. Deleting here used to hand a blocked agent a fresh full budget.
+ * Prunes by age, at most PRUNE_MAX entries per level: stop marks past the grace,
+ * files untouched for ~1 day, empty session dirs, session dirs older than ~1 day.
  *
- * SubagentStop carries `agent_id` + `agent_type` (verified on CC 2.1.220).
+ * SubagentStop carries `agent_id` + `agent_type`; it fires several times per
+ * `agent_id` (after a block, a harness nudge, a resume - verified on CC 2.1.296).
  *
  * os.tmpdir() is shared on Linux/CI, so nothing here follows a symlink: every
  * candidate is lstat-ed and skipped unless it is a real entry we own. Otherwise
@@ -16,12 +19,22 @@
  *
  * Fail-open: any error -> `{}` on stdout, exit 0. Never blocks a stop.
  */
-import { readFileSync, readdirSync, lstatSync, rmSync } from 'node:fs';
+import {
+  readFileSync,
+  writeFileSync,
+  renameSync,
+  readdirSync,
+  lstatSync,
+  rmSync,
+  rmdirSync,
+} from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
 const STATE_ROOT = path.join(os.tmpdir(), 'brewtools-agent-deadline');
 const STALE_MS = 24 * 60 * 60 * 1000;
+const RESUME_GRACE_MS = 5 * 60 * 1000; // must equal the guard's RESUME_GRACE_MS
+const PRUNE_MAX = 64; // entries examined per prune pass: bounded work per hook call
 const UID = typeof process.getuid === 'function' ? process.getuid() : null;
 
 function output(obj) {
@@ -45,18 +58,69 @@ function ownedDir(p) {
   }
 }
 
-function pruneStale() {
+// Test seam: AGENT_DEADLINE_NOW (epoch ms) pins the clock so suites assert exact values.
+function clockNow() {
+  const v = Number(process.env.AGENT_DEADLINE_NOW);
+  return Number.isFinite(v) && v > 0 ? v : Date.now();
+}
+
+function readState(file) {
+  try {
+    const parsed = JSON.parse(readFileSync(file, 'utf8'));
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+// SubagentStop fires several times per agent_id (block, harness nudge, resume): keep
+// the clock, only stamp the stop. Missing/unreadable state -> nothing to mark.
+function markStopped(file, now) {
+  const state = readState(file);
+  if (!state) return;
+  const temp = `${file}.${process.pid}.tmp`;
+  try {
+    writeFileSync(temp, JSON.stringify({ ...state, stopped: now }), { mode: 0o600 });
+    renameSync(temp, file);
+  } catch {
+    rmSync(temp, { force: true });
+  }
+}
+
+// Drops state the guard would ignore anyway: a stop mark past the resume grace,
+// and anything untouched for STALE_MS (agent died without a SubagentStop).
+function pruneSession(dir, now) {
+  for (const name of readdirSync(dir).slice(0, PRUNE_MAX)) {
+    const p = path.join(dir, name);
+    try {
+      const age = now - lstatSync(p).mtimeMs;
+      if (age < RESUME_GRACE_MS) continue;
+      const state = age < STALE_MS ? readState(p) : null;
+      const dead = age >= STALE_MS || (state && Number.isFinite(state.stopped) && now - state.stopped >= RESUME_GRACE_MS);
+      if (dead) rmSync(p, { force: true });
+    } catch {
+      // ignore individual entries
+    }
+  }
+  try {
+    rmdirSync(dir); // succeeds only when the session dir is empty
+  } catch {
+    // still holds live state
+  }
+}
+
+function pruneStale(now) {
   // readdir would happily follow a symlinked root and we would then prune the
   // victim's entries; refuse anything that is not a real directory we own.
   if (!ownedDir(STATE_ROOT)) return;
-  const cutoff = Date.now() - STALE_MS;
+  const cutoff = now - STALE_MS;
   let names;
   try {
     names = readdirSync(STATE_ROOT);
   } catch {
     return;
   }
-  for (const name of names) {
+  for (const name of names.slice(0, PRUNE_MAX)) {
     const p = path.join(STATE_ROOT, name);
     try {
       const st = lstatSync(p); // lstat, never stat: a symlink must not be followed
@@ -83,24 +147,27 @@ function main() {
 
   const agentId = safeSegment(input.agent_id);
   const sessionId = safeSegment(input.session_id) || 'nosession';
+  const now = clockNow();
 
   const dir = path.join(STATE_ROOT, sessionId);
-  if (agentId && ownedDir(dir)) {
+  if (ownedDir(STATE_ROOT) && ownedDir(dir)) {
     try {
-      rmSync(path.join(dir, `${agentId}.json`), { force: true });
-      // guard writes are temp-file + rename; drop any temp left by a killed hook
-      for (const name of readdirSync(dir)) {
-        if (name.startsWith(`${agentId}.json.`) && name.endsWith('.tmp')) {
-          rmSync(path.join(dir, name), { force: true });
+      if (agentId) {
+        // guard writes are temp-file + rename; drop any temp left by a killed hook
+        for (const name of readdirSync(dir).slice(0, PRUNE_MAX)) {
+          if (name.startsWith(`${agentId}.json.`) && name.endsWith('.tmp')) {
+            rmSync(path.join(dir, name), { force: true });
+          }
         }
+        markStopped(path.join(dir, `${agentId}.json`), now);
       }
-      if (readdirSync(dir).length === 0) rmSync(dir, { recursive: true, force: true });
+      pruneSession(dir, now);
     } catch {
       // ignore
     }
   }
 
-  pruneStale();
+  pruneStale(now);
   output({});
 }
 

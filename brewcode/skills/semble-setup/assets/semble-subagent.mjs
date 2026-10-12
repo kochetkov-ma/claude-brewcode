@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// brewcode-meta: version=6.4.0 content_version=6.4.0 generated_by=brewcode:semble-setup
 /**
  * brewcode:semble-setup — SubagentStart hook (self-contained, installed into a project).
  *
@@ -20,6 +21,7 @@
  * file travels alone into a user's .claude/hooks/ and must have no imports.
  */
 import { appendFileSync, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -82,6 +84,43 @@ function telemetry(cwd, sid, ev, extra) {
 }
 // ---------------------------------------------------------------------------
 
+// --- MCP presence + search routing (identical in every steering semble hook) ---
+// No hook input reports MCP registration: read <CLAUDE_CONFIG_DIR or home>/.claude.json
+// (user + local scope), then <root>/.mcp.json (project scope). Never throws.
+const MCP_NAME = 'semble_code';
+const ROUTE = 'Search routing: intent/behaviour -> semble; symbol definitions/references -> LSP; literals/paths/regex/counts -> rg.';
+
+function mcpEntry(obj) {
+  const m = obj && typeof obj === 'object' ? obj.mcpServers : null;
+  const e = m && typeof m === 'object' && !Array.isArray(m) ? m[MCP_NAME] : null;
+  return e && typeof e === 'object' && !Array.isArray(e) ? e : null;
+}
+
+const listsMcp = (a) => Array.isArray(a) && a.indexOf(MCP_NAME) >= 0;
+
+/** The `semble_code` entry Claude Code loads for `root` in the active profile, or null. */
+function mcpRegistration(root) {
+  let cfg = null;
+  try {
+    const raw = readFileSync(join(process.env.CLAUDE_CONFIG_DIR || homedir(), '.claude.json'), 'utf8');
+    if (raw.indexOf('"' + MCP_NAME + '"') >= 0) cfg = JSON.parse(raw); // name absent: skip the parse
+  } catch {
+    cfg = null;
+  }
+  const proj = cfg && cfg.projects && typeof cfg.projects === 'object' ? cfg.projects[root] : null;
+  if (proj && listsMcp(proj.disabledMcpServers)) return null;
+  const found = mcpEntry(proj) || mcpEntry(cfg);
+  if (found) return found;
+  if (proj && listsMcp(proj.disabledMcpjsonServers)) return null;
+  try {
+    const raw = readFileSync(join(root, '.mcp.json'), 'utf8');
+    return raw.indexOf('"' + MCP_NAME + '"') >= 0 ? mcpEntry(JSON.parse(raw)) : null;
+  } catch {
+    return null;
+  }
+}
+// ---------------------------------------------------------------------------
+
 /** {kind:'missing'|'corrupt'|'ok', state} — same reader as the other semble hooks. */
 function readState(cwd) {
   const file = join(cwd, '.claude', 'semble', 'state.json');
@@ -109,7 +148,7 @@ function readState(cwd) {
 }
 
 /** Identical usability gate to the reminder hook — see its comment for why phase !== 'ready' still fires. */
-function gate(read) {
+function gate(read, root) {
   if (read.kind === 'missing') return { ok: false, why: 'no-state', phase: '', enabled: false };
   if (read.kind !== 'ok') return { ok: false, why: 'corrupt', phase: '', enabled: false };
   const state = read.state;
@@ -119,22 +158,80 @@ function gate(read) {
   if (phase === 'disabled') return { ok: false, why: 'disabled', phase, enabled };
   if (phase === 'error') return { ok: false, why: 'error', phase, enabled };
   if (phase === 'prereq_ready') return { ok: false, why: 'not-registered', phase, enabled };
-  const completed = Array.isArray(state.completed) ? state.completed : [];
-  if (completed.indexOf('mcp') < 0) return { ok: false, why: 'no-mcp', phase, enabled };
-  return { ok: true, why: 'ok', phase, enabled };
+  const mcp = mcpRegistration(root);
+  if (!mcp) return { ok: false, why: 'no-mcp', phase, enabled };
+  return { ok: true, why: 'ok', phase, enabled, mcp };
+}
+
+// --- agent definition: does this agent type get the semble tool? ----------
+// Project, then profile agents dir; `plugin:name` via installed_plugins.json. Unknown -> ''.
+function agentFile(agentType, root) {
+  const cfgDir = process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude');
+  const i = agentType.indexOf(':');
+  if (i < 0) {
+    for (const d of [join(root, '.claude', 'agents'), join(cfgDir, 'agents')]) {
+      if (existsSync(join(d, agentType + '.md'))) return join(d, agentType + '.md');
+    }
+    return '';
+  }
+  try {
+    const j = JSON.parse(readFileSync(join(cfgDir, 'plugins', 'installed_plugins.json'), 'utf8'));
+    const plugins = j && j.plugins && typeof j.plugins === 'object' ? j.plugins : {};
+    const rel = join('agents', agentType.slice(i + 1).split(':').join('/') + '.md');
+    for (const k of Object.keys(plugins)) {
+      if (k.split('@')[0] !== agentType.slice(0, i) || !Array.isArray(plugins[k])) continue;
+      for (const inst of plugins[k]) {
+        const f = inst && typeof inst.installPath === 'string' ? join(inst.installPath, rel) : '';
+        if (f && existsSync(f)) return f;
+      }
+    }
+  } catch { /* no or unreadable plugin registry: unknown */ }
+  return '';
+}
+
+/** Frontmatter list (`a, b`, `[a, b]` or a YAML `- a` block), or null when the key is absent. */
+function fmList(fm, key) {
+  const lines = fm.split(/\r?\n/);
+  const at = lines.findIndex((l) => l.startsWith(key + ':'));
+  if (at < 0) return null;
+  let v = lines[at].slice(key.length + 1).trim();
+  if (!v) {
+    const items = [];
+    for (let k = at + 1; k < lines.length && /^\s*-\s/.test(lines[k]); k++) items.push(lines[k].replace(/^\s*-\s*/, ''));
+    v = items.join(',');
+  }
+  return v.replace(/^\[|\]$/g, '').split(',').map((t) => t.trim().replace(/^["']|["']$/g, '')).filter(Boolean);
+}
+
+const SEMBLE_TOOL_RE = /^mcp__semble_code(?:__(?:search|\*))?$/;
+
+/** False only when the definition provably withholds the tool: `tools:` omits it or `disallowedTools` names it. */
+function agentHasSemble(agentType, root) {
+  const file = agentFile(agentType, root);
+  if (!file) return true; // built-in or undiscoverable type: no evidence against
+  try {
+    const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(readFileSync(file, 'utf8'));
+    if (!m) return true;
+    const deny = fmList(m[1], 'disallowedTools');
+    if (deny && deny.some((t) => SEMBLE_TOOL_RE.test(t))) return false;
+    const allow = fmList(m[1], 'tools');
+    return !allow || allow.some((t) => SEMBLE_TOOL_RE.test(t));
+  } catch {
+    return true;
+  }
 }
 
 /**
  * Self-sufficient by design: the subagent cannot look anything up in the
  * parent's context, so the line has to carry availability, the exact call and
- * the exact fallback on its own.
+ * the routing on its own. "No ToolSearch needed" holds only for `alwaysLoad: true`.
  */
-function message(cwd) {
+function message(cwd, loaded) {
   return (
-    'semble: mcp__semble_code__search is already available to you — no ToolSearch needed. ' +
+    'semble: mcp__semble_code__search is ' +
+    (loaded ? 'already available to you — no ToolSearch needed. ' : 'available to you (load it via ToolSearch if deferred). ') +
     'Start any "where/how/why does X work" question with ONE call: repo="' + cwd +
-    '", top_k=5, max_snippet_lines=10, then open the hit at start_line. ' +
-    'Use rg only for exact identifiers, literal strings and exhaustive enumeration.'
+    '", top_k=5, max_snippet_lines=10, then open the hit at start_line. ' + ROUTE
   );
 }
 
@@ -148,7 +245,7 @@ function decide(input, cwd) {
   // malformed or empty stdin, and a hook that cannot tell what it is talking to
   // says nothing — and writes nothing, since `cwd` is a guess at that point.
   if (!agentType) return {};
-  const g = gate(readState(cwd));
+  const g = gate(readState(cwd), cwd);
   const record = (fired, why) =>
     telemetry(cwd, sid, 'gate', {
       fired, why, phase: g.phase, enabled: g.enabled, agent_type: agentType, agent_id: agentId,
@@ -156,6 +253,10 @@ function decide(input, cwd) {
 
   if (!g.ok) {
     record(false, g.why);
+    return {};
+  }
+  if (!agentHasSemble(agentType, cwd)) {
+    record(false, 'agent-no-tool');
     return {};
   }
 
@@ -170,7 +271,7 @@ function decide(input, cwd) {
   return {
     hookSpecificOutput: {
       hookEventName: 'SubagentStart',
-      additionalContext: message(cwd),
+      additionalContext: message(cwd, g.mcp.alwaysLoad === true),
     },
   };
 }

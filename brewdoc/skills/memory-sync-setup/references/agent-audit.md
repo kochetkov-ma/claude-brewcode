@@ -7,10 +7,6 @@ batches cite this standing best-practice audit; fact-checking alone is insuffici
 **Project-specific checks live in the emitted SKILL.md's own check tables.** This file carries only what holds in
 any repo; do not restate the project tables here, and do not weaken them with a generic equivalent.
 
-Agent bodies are ALSO checked against `references/prompting-guide.md`'s rule table (role-first framing, duplicate
-reminders, scattered CAPS, vague adjectives, ...) - see AGENT check 13 below; the rule table itself is not
-restated here.
-
 ---
 
 ## Procedure - per file, before any edit
@@ -54,11 +50,11 @@ Which seats THIS project has is not listed here - the emitted SKILL.md's runtime
 | 2 | `description:` shape | ROLE FIRST in the opening clause, then a concrete trigger list a router can match on | Rewrite role-first; add the real triggers used at the agent's call-sites (skills, CLAUDE.md, other agents) |
 | 3 | Trigger concreteness | Triggers are phrases a user would actually type, not a restatement of the role | Replace vague triggers with the phrases the skill/agent is really called by |
 | 4 | `tools:` minimality | Exactly the tools the BODY uses - nothing aspirational | Remove a tool used NOWHERE in the body; a read-only recon agent carrying `Write` / `Edit` is a defect, not a convenience. Use IMPLIED by the prose but never named (`Agent`, `Skill`, `WebFetch`) -> REPORT, never strip |
-| 5 | Search capability | Search tools the body names are declared and available; native `Grep`/`Glob` availability is runtime-specific, not OS-wide | Keep available native tools; add `Bash` only when the body needs a shell fallback (`rg`/`find`, or installed `ugrep`/`bfs`) |
+| 5 | Search capability | Search tools the body names are declared. Native `Grep`/`Glob` are absent by default on macOS; a subagent gets them only when `tools:` names them and omits `Bash` | Never strip a declared `Grep`/`Glob`; add `Bash` when the body needs a shell fallback (`rg`/`find`) |
 | 6 | `model:` | Present only when a non-default model is justified by the work (deep reasoning vs mechanical edits) | Drop an unjustified override; state the justification in one clause where it stays |
 | 7 | Ownership globs | Every path or glob the body claims to own resolves to something real today | Repoint at the moved path; the owned surface is gone -> the agent may be dead, REPORT it |
 | 8 | MCP tool prefixes | Every `mcp__<server>__*` names a CONFIGURED server in this project's MCP inventory | Remove or repoint the prefix. Tool names WITHIN a live server are not checkable offline - never claim they are |
-| 9 | Handoff pointers | Every "hand off to X" / "not mine, see X" names an agent that EXISTS | Repoint at the real owner, or delete the pointer |
+| 9 | Handoff pointers | Every "hand off to X" / "not mine, see X" names an agent that EXISTS; every `skills:` entry is a skill without `disable-model-invocation: true` (never preloaded) | Repoint at the real owner, or delete the pointer |
 | 10 | Scope fit | The body states what the agent does NOT own, and the boundary matches the neighbouring agents' claims | Add the exclusion; overlapping claims between two agents -> REPORT, do not arbitrate silently |
 | 11 | Output discipline | The body specifies the shape the agent returns to its caller | Add the return shape; an agent whose output shape is unstated produces unusable results |
 | 12 | No rule restatement | The body does not repeat what a rule or convention file already says | DEDUP finding: delete the copy, leave a pointer naming the canonical file and section |

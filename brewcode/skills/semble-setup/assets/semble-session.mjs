@@ -4,14 +4,15 @@
  * brewcode:semble-setup — SessionStart hook (self-contained, installed into a project).
  *
  * Reports the project's semble state and, when the integration is ready, injects
- * one short usage directive. It reads exactly ONE file (.claude/semble/state.json),
- * never spawns a process, never probes for a daemon (semble has none), never
+ * one short usage directive. It reads .claude/semble/state.json and, before any
+ * usability claim, the active profile's MCP registration; it never spawns a process, never probes for a daemon (semble has none), never
  * blocks, always prints exactly one JSON object and always exits 0.
  *
  * Pure ESM, Node built-ins only. readStdin/output are inlined on purpose: this
  * file travels alone into a user's .claude/hooks/ and must have no imports.
  */
 import { appendFileSync, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -74,7 +75,45 @@ function telemetry(cwd, sid, ev, extra) {
 }
 // ---------------------------------------------------------------------------
 
+// --- MCP presence + search routing (identical in every steering semble hook) ---
+// No hook input reports MCP registration: read <CLAUDE_CONFIG_DIR or home>/.claude.json
+// (user + local scope), then <root>/.mcp.json (project scope). Never throws.
+const MCP_NAME = 'semble_code';
+const ROUTE = 'Search routing: intent/behaviour -> semble; symbol definitions/references -> LSP; literals/paths/regex/counts -> rg.';
+
+function mcpEntry(obj) {
+  const m = obj && typeof obj === 'object' ? obj.mcpServers : null;
+  const e = m && typeof m === 'object' && !Array.isArray(m) ? m[MCP_NAME] : null;
+  return e && typeof e === 'object' && !Array.isArray(e) ? e : null;
+}
+
+const listsMcp = (a) => Array.isArray(a) && a.indexOf(MCP_NAME) >= 0;
+
+/** The `semble_code` entry Claude Code loads for `root` in the active profile, or null. */
+function mcpRegistration(root) {
+  let cfg = null;
+  try {
+    const raw = readFileSync(join(process.env.CLAUDE_CONFIG_DIR || homedir(), '.claude.json'), 'utf8');
+    if (raw.indexOf('"' + MCP_NAME + '"') >= 0) cfg = JSON.parse(raw); // name absent: skip the parse
+  } catch {
+    cfg = null;
+  }
+  const proj = cfg && cfg.projects && typeof cfg.projects === 'object' ? cfg.projects[root] : null;
+  if (proj && listsMcp(proj.disabledMcpServers)) return null;
+  const found = mcpEntry(proj) || mcpEntry(cfg);
+  if (found) return found;
+  if (proj && listsMcp(proj.disabledMcpjsonServers)) return null;
+  try {
+    const raw = readFileSync(join(root, '.mcp.json'), 'utf8');
+    return raw.indexOf('"' + MCP_NAME + '"') >= 0 ? mcpEntry(JSON.parse(raw)) : null;
+  } catch {
+    return null;
+  }
+}
+// ---------------------------------------------------------------------------
+
 const CORRUPT = { systemMessage: 'semble: state file is corrupt — run /brewcode:semble-setup status' };
+const NO_MCP = { systemMessage: 'semble: semble_code MCP is not registered for this profile — run /brewcode:semble-setup status' };
 
 /** Reads state.json. Returns {kind:'missing'|'corrupt'|'ok', state}. */
 function readState(cwd) {
@@ -115,6 +154,8 @@ function decide(cwd) {
   if (state.enabled === false || phase === 'disabled') {
     return { systemMessage: 'semble: disabled for this project' };
   }
+  // No usability claim without a registration in the ACTIVE profile; the user still sees why.
+  if ((phase === 'awaiting_reload' || phase === 'ready') && !mcpRegistration(cwd)) return NO_MCP;
   if (phase === 'awaiting_reload') {
     // The index is built lazily INSIDE a tool call, so telling the model to wait
     // for `resume` is what kept verification from ever happening. Use it, and
@@ -127,7 +168,7 @@ function decide(cwd) {
           'semble_code MCP is registered but not verified yet. It is usable now — ' +
           'mcp__semble_code__search (repo=' + cwd + ', top_k=5, max_snippet_lines=10); ' +
           'the first call rebuilds the index and may take minutes. ' +
-          'Run /brewcode:semble-setup resume to close the state out.',
+          'Run /brewcode:semble-setup resume to close the state out. ' + ROUTE,
       },
     };
   }
@@ -142,8 +183,7 @@ function decide(cwd) {
         hookEventName: 'SessionStart',
         additionalContext:
           'semble: use ONE mcp__semble_code__search first (repo=' + cwd +
-          ', top_k=5, max_snippet_lines=10), then open the hit at start_line. ' +
-          'rg stays for exact/exhaustive matching.',
+          ', top_k=5, max_snippet_lines=10), then open the hit at start_line. ' + ROUTE,
       },
     };
   }

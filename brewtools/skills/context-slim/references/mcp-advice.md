@@ -4,38 +4,27 @@ Advice only. This skill NEVER mutates MCP config, plugin enablement, or `setting
 
 ## Tool-count threshold
 
-Measured sample (this session, 2026-08-16): the `Read` tool's own schema (verbose, multi-paragraph description) = 464 tok. A typical thinner MCP tool schema (short one-line description, few params) runs ~120-200 tok; no live full schema dump was available to average further, so the working constant below is a documented midpoint, not a fleet average.
+Working schema cost: ~200 tok per MCP tool (midpoint: a thin one-line schema runs ~120-200 tok, the
+verbose `Read` schema measured 464 tok). Loaded-schema estimate = `live_tool_count * 200`, a context
+proxy; definitions can be prompt-cached, so billed uncached input differs.
 
-| Constant | Value |
-|----------|-------|
-| Working schema cost | ~200 tok/tool (mid-point estimate) |
-| Loaded-schema estimate | `live_tool_count * 200` potential context proxy; definitions can be prompt-cached, so context size differs from billed uncached input |
-
-The following 2026-08-16 recommendations are historical heuristics, not current default-setting commands.
+With `ENABLE_TOOL_SEARCH` unset, Claude Code defers all MCP tools. They load upfront when
+`ENABLE_TOOL_SEARCH=false`, on a non-first-party `ANTHROPIC_BASE_URL`, on Microsoft Foundry, and on
+Agent Platform models older than Claude 4.5; `auto` loads upfront while definitions fit in 10% of
+context. Advise only when tools load upfront:
 
 | Live tool count | Fixed tax/turn | Advice |
 |------------------|-----------------|--------|
-| < 15 | < 3.0k tok | Leave `ENABLE_TOOL_SEARCH` off -- deferral's downsides (extra round trip, degraded non-native discovery) outweigh a sub-3k tax |
-| 15-24 | 3.0k-4.8k tok | Borderline -- enable only if 2+ MCP servers ship heavy (multi-tool, verbose) schemas |
-| >= 25 | >= 5.0k tok | Enable `ENABLE_TOOL_SEARCH` -- fixed tax exceeds the deferral's own overhead |
+| < 25 | < 5.0k tok | None |
+| >= 25 | >= 5.0k tok | Evaluate `ENABLE_TOOL_SEARCH=auto` or `true` where the backend forwards `tool_reference` blocks |
 
 ## ToolSearch trade-off
 
-Current Claude tool search is on by default subject to model/backend/policy support; do not override
-that default solely from the historical 15/25-tool heuristic above. Tool definitions are cacheable;
-measure active loading/cache counters and discovery reliability before recommending changes.
-
-Historical local evidence: `~/.claude/CLAUDE.md`, verified 2026-07-26; not current universal gains.
-
-| Fact | Number |
-|------|--------|
-| `ENABLE_TOOL_SEARCH=true` | Defers schemas, loads on demand -- saves ~80k tok in a heavy multi-MCP setup |
-| Cost | Custom non-native MCP tool discovery drops to ~56-88% hit rate |
-| Fix | `alwaysLoad: true` per affected server -- exempts it from deferral |
-
-Server configuration example for project `.mcp.json` (user scope: `~/.claude.json`), not `settings.json`.
-Only suggest `alwaysLoad` for measured under-discovery; blanket loading defeats deferral. This skill
-never applies the example or promises the historical 80k saving:
+Deferral costs discovery: a custom MCP server's tools can be missed (local sample: ~56-88% hit rate).
+Fix per affected server with `alwaysLoad: true`, which exempts it from deferral; suggest it only for
+measured under-discovery, since blanket loading defeats deferral. Server config lives in project
+`.mcp.json` (user scope: `~/.claude.json`), not `settings.json`. This skill never applies it or
+promises a fixed saving:
 
 ```json
 {
@@ -51,15 +40,15 @@ never applies the example or promises the historical 80k saving:
 
 ## Plugin-count advice
 
-Count actual registered hook emissions, not installed plugins. Current source (2026-09-30):
-`REMINDER_TEXT`472 B/proxy118; forced-eval fires at eligible prompts1,10,20,..., skips meta replies
-and unavailable counters; role-recall fires only on compaction. Old636 B/proxy159 per-prompt sample
-is historical. Codeword-gated `manager-prompt.mjs` adds text only when triggered.
+Count registered hook emissions (payload x firing cadence), not installed plugins: a codeword-gated
+hook (brewtools `manager-prompt.mjs`) adds text only when triggered, a `compact`-matcher hook only
+after compaction.
 
 | Signal | Arithmetic | Threshold | Advice |
 |--------|------------|-----------|--------|
-| Active plugins w/ always-fire hooks (P) | Historical heuristic `P * 150` proxy/prompt, `* 50` session estimate; replace with actual payload x emissions | P >= 6 (old proxy >=900/prompt, >=45k/session) | Audit actual registered/cadenced emissions before suggesting redundant-hook cleanup |
+| Active plugins w/ always-fire hooks (P) | Rough `P * 150` proxy/prompt; replace with actual payload x emissions | P >= 6 | Audit actual registered/cadenced emissions before suggesting redundant-hook cleanup |
 | | | P < 6 | Not worth the audit |
+| Synced claude.ai skills (`anthropic-skills:<name>` in the skill list) | one listing entry each | >= 1 the user does not use in the terminal | `syncClaudeAiSkills: false` in user or local settings (ignored in `.claude/settings.json`) |
 
 ## Auto-memory advice
 
@@ -80,12 +69,13 @@ Exact rendering template for the final run report's Advice section:
 ## Advice (informational, not applied)
 | Signal | Measured | Threshold | Recommendation |
 |--------|----------|-----------|-----------------|
-| Live tool count | <N>, active search/cache state | >=25 historical heuristic | Evaluate tool search/discovery; suggest alwaysLoad:true only for measured missed <servers>, no fixed savings promise |
+| Live tool count | <N>, loaded upfront | >=25 | Evaluate tool search; suggest alwaysLoad:true only for measured missed <servers>, no fixed savings promise |
 | Active plugins w/ hooks | <P> | >=6 | Audit/disable: <list> |
+| Synced claude.ai skills | <S> unused | >=1 | Set syncClaudeAiSkills: false |
 | Memory dir staleness | <pct>% | >=60% | Set CLAUDE_CODE_DISABLE_AUTO_MEMORY=1 |
 ```
 
 Render only rows whose measured value crosses its threshold. All rows below threshold -> omit the whole Advice section, do not print an empty/all-clear table.
 
-Current authorities (checked 2026-09-30): https://code.claude.com/docs/en/mcp and
+Authorities: https://code.claude.com/docs/en/mcp and
 https://platform.claude.com/docs/en/build-with-claude/prompt-caching.

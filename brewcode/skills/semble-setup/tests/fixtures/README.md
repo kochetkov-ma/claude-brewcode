@@ -52,7 +52,7 @@ config file and one shell script.
 | `malformed.json` | `malformed` (trailing comma - deliberately unparseable) |
 
 `correct.json`, `wrongscope.json` and `duplicate.json` hardcode the live pin
-`0.5.5` and shared `code docs config` corpus, so a suite using them must **not**
+`0.6.2` and shared `code docs config` corpus, so a suite using them must **not**
 set `SEMBLE_PIN_VERSION`.
 
 ### `settings/*.json`

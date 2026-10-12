@@ -4,6 +4,7 @@
 # Contracts: DESIGN §9.8 and §10. All JSON goes through `node -e`, never jq.
 set -euo pipefail
 SC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source-path=SCRIPTDIR source=lib/semble-common.sh
 . "$SC_DIR/lib/semble-common.sh"
 
 SRC="$(cd "$SC_DIR/.." && pwd)/assets"
@@ -170,6 +171,7 @@ add_failed()    { FAILED="${FAILED}${1}
 "; }
 
 # ── status ──────────────────────────────────────────────────────────────────
+# shellcheck disable=SC2016  # JavaScript source, not shell: $ is literal
 status_json() {
   SG_RULE="$RULE" SG_TPL="$TPL" SG_IGNORE="$IGNOREFILE" SG_IGNORE_TPL="$IGNORE_TPL" \
   SG_CLAUDEMD="$CLAUDEMD" SG_HOOKS="$HOOKS_DIR" \
@@ -458,6 +460,7 @@ sg_same_content() {
   [ -n "$a" ] && [ "$a" = "$b" ]
 }
 
+# shellcheck disable=SC2015  # add_changed always returns 0: A && B || C is a true if/else
 install_managed() {
   local L="$1" T="$2" D="$3" S="${4:-copy}"
   [ -f "$T" ] || { add_failed "$L: template missing at $T"; return 0; }
@@ -488,6 +491,7 @@ install_managed() {
   mv "$tmp" "$D" && add_changed "$L: overwrote $D (backup $b)" || { rm -f "$tmp"; add_failed "$L: cannot write $D"; }
 }
 
+# shellcheck disable=SC2015  # add_changed always returns 0: A && B || C is a true if/else
 remove_managed() {
   local L="$1" T="$2" D="$3" S="${4:-copy}"
   [ -f "$D" ] || { add_unchanged "$L: already absent"; return 0; }
@@ -532,6 +536,7 @@ const b=L.indexOf(process.env.SG_B), e=L.indexOf(process.env.SG_E);
 process.stdout.write(b<0||e<b?"":L.slice(b+1,e).join("\n"));'
 }
 
+# shellcheck disable=SC2016  # JavaScript source, not shell: $ is literal
 install_candidates() {
   local sib keep cand
   # Silent no-ops: nothing here is user-actionable, and a skip line for every one
@@ -656,6 +661,7 @@ install_ignore() {
 remove_ignore()  { remove_managed  ignore "$IGNORE_TPL" "$IGNOREFILE" metaline; }
 
 # ── CLAUDE.md marker block ──────────────────────────────────────────────────
+# shellcheck disable=SC2016  # JavaScript source, not shell: $ is literal
 claudemd_node() {
   SG_CLAUDEMD="$CLAUDEMD" SG_OP="$1" node -e '
 const fs=require("fs");
@@ -666,7 +672,7 @@ const BLOCK=[BEGIN,
 "",
 "> Semantic search first: ONE `mcp__semble_code__search` with `repo` = absolute project root,",
 "> `top_k=5`, `max_snippet_lines=10` — then open the hit at `start_line`.",
-"> `rg`/Grep stays for exact identifiers, regexes, paths and exhaustive enumeration.",
+"> Symbol definitions/references -> LSP; `rg`/Grep stays for literals, regexes, paths and exhaustive enumeration.",
 "> Not indexed: `.json`/`.csv`, `.mdx`/`.txt`. Details: `.claude/rules/semble-first.md`.",
 END].join("\n");
 const exists=fs.existsSync(f);
@@ -751,6 +757,7 @@ do_claudemd() {
 #
 # Idempotent by construction: the match is on the text, so run 2 finds nothing
 # and writes nothing. No annotation is appended, so there is nothing to stack.
+# shellcheck disable=SC2016  # JavaScript source, not shell: $ is literal
 sg_conflict_scan() {
   SG_CLAUDEMD="$CLAUDEMD" SG_APPLY="$1" node -e '
 const fs=require("fs");
@@ -919,6 +926,7 @@ EOF
 }
 
 # ── hook files ──────────────────────────────────────────────────────────────
+# shellcheck disable=SC2015  # add_changed always returns 0: A && B || C is a true if/else
 install_hook_files() {
   local f stage
   for f in $HOOK_MJS; do
@@ -984,6 +992,7 @@ process.stdout.write(JSON.stringify(
   JSON.parse(process.env.SG_WANT).filter((r) => fs.existsSync(path.join(d, r[2])))));')"
 }
 
+# shellcheck disable=SC2015  # add_changed always returns 0: A && B || C is a true if/else
 remove_hook_files() {
   local f
   for f in $ALL_MJS; do   # retired files included: uninstall must leave nothing behind
@@ -1003,8 +1012,30 @@ remove_hook_files() {
   done
 }
 
+# Files and dirs install may have created, deleted only when nothing but install's own stub is left:
+# CLAUDE.md == "# CLAUDE.md", blank .gitignore, empty hooks/rules dirs. settings.json stays.
+prune_install_leftovers() {
+  local f w d
+  for f in "$CLAUDEMD" "$ROOT/.gitignore"; do
+    [ -f "$f" ] || continue
+    w="$(SG_F="$f" node -e '
+const fs=require("fs"),f=process.env.SG_F,t=fs.readFileSync(f,"utf8").trim();
+process.stdout.write(t===""||t==="# CLAUDE.md"?"empty":"keep");' 2>/dev/null || printf 'keep')"
+    [ "$w" = "empty" ] || continue
+    if [ "${SEMBLE_DRY_RUN:-}" = "1" ]; then add_changed "prune: would delete $f (empty after removal)"; continue; fi
+    if rm -f "$f"; then add_changed "prune: deleted $f (empty after removal)"; else add_failed "prune: cannot delete $f"; fi
+  done
+  for d in "$HOOKS_DIR" "$(dirname "$RULE")"; do
+    [ -d "$d" ] || continue
+    [ -z "$(ls -A "$d" 2>/dev/null)" ] || continue
+    if [ "${SEMBLE_DRY_RUN:-}" = "1" ]; then add_changed "prune: would remove empty dir $d"; continue; fi
+    rmdir "$d" 2>/dev/null && add_changed "prune: removed empty dir $d" || true
+  done
+}
+
 # ── settings.json merge (canonical, see assets/INSTALL.md §merge) ───────────
 merge_settings() {
+  # shellcheck disable=SC2016  # JavaScript source, not shell: $ is literal
   SG_SETTINGS="$SETTINGS" SG_HOOKS="$HOOKS_DIR" SG_DO_HOOKS="$1" SG_DO_PERMS="$2" \
   SG_SEARCH="$SEMBLE_TOOL_SEARCH" SG_RELATED="$SEMBLE_TOOL_RELATED" \
   SG_WANT="$SG_WANT_TABLE" SG_MARKS="$SG_MARKS" node -e '
@@ -1337,6 +1368,7 @@ case "$MODE" in
     want_part rule     && remove_rule
     want_part ignore   && remove_ignore
     want_part claudemd && do_claudemd remove
+    sg_failed_before="$FAILED"
     if want_part hooks && want_part permissions; then
       run_settings unmerge 1 1 "hooks+permissions"
     elif want_part hooks; then
@@ -1344,10 +1376,14 @@ case "$MODE" in
     elif want_part permissions; then
       run_settings unmerge 0 1 "permissions"
     fi
-    if want_part hooks; then
+    # Still wired -> keep the files: a registration on a missing script fails every tool call.
+    if want_part hooks && [ "$FAILED" != "$sg_failed_before" ]; then
+      add_skipped "hooks: files kept in $HOOKS_DIR - $SETTINGS still registers them; fix it and re-run"
+    elif want_part hooks; then
       remove_hook_files
       remove_gitignore
     fi
+    [ "$PART" != "all" ] || [ -n "$FAILED" ] || prune_install_leftovers
     emit_report remove
     ;;
 esac

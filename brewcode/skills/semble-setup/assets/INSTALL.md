@@ -14,8 +14,8 @@ wires nothing on its own.
 | `semble-session.mjs` | `<repo>/.claude/hooks/` | SessionStart | `systemMessage` + `additionalContext` |
 | `semble-prefetch.mjs` | `<repo>/.claude/hooks/` | UserPromptSubmit | `additionalContext` — top-3 candidate PATHS from a real search |
 | `semble-stats.mjs` | `<repo>/.claude/hooks/` | PostToolUse + PostToolUseFailure | **nothing** — appends JSONL telemetry, replies `{}` |
-| `semble-reminder.mjs` | `<repo>/.claude/hooks/` | PreToolUse `Bash\|Grep` | `additionalContext` — fires on every eligible search (`reminderEvery` default 1, counter in `.claude/semble/reminder.json`), 36 tokens (down from 65; 42 while the index is cold) |
-| `semble-subagent.mjs` | `<repo>/.claude/hooks/` | SubagentStart (no matcher — every agent type) | `additionalContext` — the semble-first brief inside the subagent's own context |
+| `semble-reminder.mjs` | `<repo>/.claude/hooks/` | PreToolUse `Bash\|Grep` | `additionalContext` — fires on every eligible search (`reminderEvery` default 1, counter in `.claude/semble/reminder.json`): the call plus the routing line |
+| `semble-subagent.mjs` | `<repo>/.claude/hooks/` | SubagentStart (no matcher — every agent type) | `additionalContext` — the semble-first brief inside the subagent's own context; skipped (`agent-no-tool`) when the agent definition's `tools:` omits semble or `disallowedTools` names it |
 
 > Retired for good: `semble-explore.mjs` (SubagentStart `Explore` only).
 > `semble-subagent.mjs` supersedes it and covers every agent type. `install` and
@@ -170,7 +170,7 @@ Appended to `<repo>/CLAUDE.md` (created as `# CLAUDE.md` when absent):
 
 > Semantic search first: ONE `mcp__semble_code__search` with `repo` = absolute project root,
 > `top_k=5`, `max_snippet_lines=10` — then open the hit at `start_line`.
-> `rg`/Grep stays for exact identifiers, regexes, paths and exhaustive enumeration.
+> Symbol definitions/references -> LSP; `rg`/Grep stays for literals, regexes, paths and exhaustive enumeration.
 > Not indexed: `.json`/`.csv`, `.mdx`/`.txt`. Details: `.claude/rules/semble-first.md`.
 <!-- END brewcode:semble -->
 ```
@@ -217,13 +217,20 @@ wording or not.
 
 ### `semble-session.mjs` — SessionStart, no matcher
 
-Reads exactly one file, `<cwd>/.claude/semble/state.json`.
+Reads `<root>/.claude/semble/state.json`; before any usability claim, the MCP registration below.
+
+**MCP presence (session, prefetch, reminder, subagent; one identical block).** No hook input reports MCP
+registration, so each hook reads the ACTIVE profile: `<CLAUDE_CONFIG_DIR or $HOME>/.claude.json`
+`mcpServers.semble_code` (user) or `projects[<root>].mcpServers` (local), else `<root>/.mcp.json` (project);
+`projects[<root>].disabledMcpServers` / `disabledMcpjsonServers` veto. Absent -> skip `no-mcp`.
+Every steering text ends with the one routing line: `Search routing: intent/behaviour -> semble; symbol definitions/references -> LSP; literals/paths/regex/counts -> rg.`
 
 | Condition | Output |
 |-----------|--------|
 | state file missing or empty | `{}` — total silence. Semble is not configured here; never nag |
 | unparseable / not a regular file | `{"systemMessage":"semble: state file is corrupt — run /brewcode:semble-setup status"}` |
 | `enabled === false` or `phase === "disabled"` | `semble: disabled for this project` |
+| `awaiting_reload` or `ready`, server not registered for the active profile | `semble: semble_code MCP is not registered for this profile — run /brewcode:semble-setup status`, no `additionalContext` |
 | `phase === "awaiting_reload"` | resume nudge + `additionalContext` that verification is pending |
 | `phase === "error"` | `semble: error — run /brewcode:semble-setup status` |
 | `phase === "ready"` | `semble: ready \| cache <repoHash[0:8]>` + the one-search-then-read directive with `repo=<abs cwd>` |
@@ -309,7 +316,8 @@ failure mode in the skill, so every path ends in `{}` on stdout and exit 0:
 | stdin empty / not JSON / not an object | `{}` |
 | state file missing, empty, corrupt, a directory | `{}` (skip `no-state` / `corrupt`) |
 | `enabled === false`, `phase` `disabled` / `error` / `prereq_ready` | `{}` |
-| MCP never registered (`completed` lacks `"mcp"`) | `{}` (skip `no-mcp`) |
+| server not registered for the active profile | `{}` (skip `no-mcp`) |
+| prompt starts `<task-notification>` / `<agent-message from=` (a subagent delivery) | `{}` (skip `synthetic`) |
 | marker file unreadable / malformed JSON | read as `{}` — a corrupt throttle fails **open** |
 | marker file unwritable | warn on stderr, continue |
 | `uvx` absent (ENOENT) | `{}` + cooldown |
@@ -351,7 +359,7 @@ token, so every silent prompt is attributable to the clause that silenced it.
 | S4 `task-reference` | a numbered task or section from the tracker, not code |
 
 Plus the cheap pre-filters `empty`, `slash-command`, `codeword-only`,
-`meta-reply`, `too-short` (<30 chars), `too-long` (>2000), `bare-url`,
+`meta-reply`, `too-short` (<30 chars), `too-long` (>8000; typed prompts p99 7,763), `bare-url`,
 `bare-path`.
 
 `REPOREF` is the whole of v3. v1 required a code-domain noun, which a
@@ -389,7 +397,7 @@ prompt: **hit@3 11/16 vs 9/16, MRR 0.674 vs 0.398, paired 8 wins / 3 losses /
 #### The search, and why its flags are frozen
 
 ```
-uvx --from 'semble[mcp]==0.5.5' semble search \
+uvx --from 'semble[mcp]==0.6.2' semble search \
     --content code docs config -k 3 --max-snippet-lines 0 -- <query> <cwd>
 ```
 
@@ -420,6 +428,7 @@ These candidate locations were ranked for the question above before you started:
 Open the candidates that look right BEFORE running any search of your own; they are already ranked.
 If none of them answers the question, say so and search normally.
 Name the file you actually used in your answer.
+Search routing: intent/behaviour -> semble; symbol definitions/references -> LSP; literals/paths/regex/counts -> rg.
 ```
 
 Three parts, all load-bearing: named **provenance** (what produced this and from
@@ -869,7 +878,7 @@ everywhere. Install per project. If a global
 install is nevertheless wanted, the same block runs with
 `SETTINGS="$HOME/.claude/settings.json" HOOKS_DIR="$HOME/.claude/hooks"` and
 **must go through the Bash tool only**: `~/.claude/*` is harness-protected, so
-`Write`/`Edit`/`MultiEdit` are blocked there in every permission mode, including
+`Write`/`Edit` are blocked there in every permission mode, including
 `bypassPermissions` and headless. The check runs before hooks; nothing can
 override it.
 
@@ -935,7 +944,10 @@ once its `hooks[]` is empty — deletes an event array that empties, the
 `permissions` if they empty), then deletes all six `.mjs` files (the five live
 ones and any retired leftover), the managed rule file and the CLAUDE.md marker
 range. Foreign hooks and every other
-settings key are never touched.
+settings key are never touched. A failure-free `--part all` then deletes install's
+leftover stubs: `CLAUDE.md` holding only `# CLAUDE.md`, a blank `.gitignore`, empty
+`.claude/hooks`/`.claude/rules`. `settings.json` stays, possibly `{}`: nothing records
+whether install created it.
 
 > Removing the files without removing the registration is the one failure that
 > hurts: Claude Code then runs `node <deleted path>` on every SessionStart and

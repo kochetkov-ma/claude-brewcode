@@ -50,17 +50,17 @@ rel_path() {
   esac
 }
 
-# The 100% sub-gate alphabet: numbers/versions, slash-bearing paths, `!=`
-# prohibitions, and ALL-CAPS modal keywords. Set semantics on purpose -
-# legitimate dedup collapses repeats, it never removes the last occurrence.
+# 100% sub-gate alphabet: numbers/versions, slash paths, `!=` prohibitions, ALL-CAPS modals.
+# Set semantics: dedup collapses repeats, never removes the last occurrence.
 crit_tokens() {
   local f="$1"
   {
-    grep -oE '[0-9]+(\.[0-9]+)*' "$f" | sed 's/^/num:/' || true
-    # trailing sentence punctuation is stripped: `!=stable,` and `!=stable.` are one fact.
-    grep -oE '[A-Za-z0-9_@.-]*/[A-Za-z0-9_@./-]+' "$f" | sed -E 's/[.,;:]+$//; s/^/path:/' || true
-    grep -oE '!=[A-Za-z0-9_./-]*' "$f" | sed -E 's/[.,;:]+$//; s/^/neg:/' || true
-    grep -oE 'NEVER|ALWAYS|MUST NOT|DO NOT|REQUIRED|MANDATORY' "$f" | sed 's/^/kw:/' || true
+    # -a: a NUL byte must not yield "Binary file ... matches" instead of tokens.
+    grep -aoE '[0-9]+(\.[0-9]+)*' "$f" | sed 's/^/num:/' || true
+    # trailing punctuation stripped: `!=stable,` and `!=stable.` are one fact.
+    grep -aoE '[A-Za-z0-9_@.-]*/[A-Za-z0-9_@./-]+' "$f" | sed -E 's/[.,;:]+$//; s/^/path:/' || true
+    grep -aoE '!=[A-Za-z0-9_./-]*' "$f" | sed -E 's/[.,;:]+$//; s/^/neg:/' || true
+    grep -aoE 'NEVER|ALWAYS|MUST NOT|DO NOT|REQUIRED|MANDATORY' "$f" | sed 's/^/kw:/' || true
   } | sort -u
 }
 
@@ -154,7 +154,7 @@ can_restore() {
   [ "$current" = "$(cat "$run_dir/draft/$rel.sha256")" ]
 }
 
-# Restore only bytes still matching explicitly recorded optimizer ownership.
+# Restore only bytes still matching recorded optimizer ownership.
 restore_one() {
   local run_dir="$1" rel="$2" root="$3"
   local snap="$run_dir/orig/$rel"
@@ -211,8 +211,8 @@ cmd_verify() {
 
   local failed=0 f rel snap missing count
 
-  # Pre-flight EVERY file before restoring ANY of them: a state error found halfway through the
-  # main loop would exit 2 ("nothing happened") after files 1..N-1 had already been rolled back.
+  # Pre-flight EVERY file before restoring ANY: a state error halfway through the main loop
+  # would exit 2 ("nothing happened") after files 1..N-1 were already rolled back.
   for f in "${files[@]}"; do
     rel=$(rel_path "$root" "$f")
     [ -f "$run_dir/orig/$rel" ] || die "❌ no snapshot for $rel in $run_dir - run 'snapshot' before editing"

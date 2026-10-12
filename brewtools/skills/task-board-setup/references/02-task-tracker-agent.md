@@ -11,7 +11,7 @@ For the closing-marker wording, expand `{{RELEASE_STYLE}}` per this map when sub
 - `sha`  -> `a bare commit SHA, ELSE no tag / superseded / cancelled`
 - `none` -> `a date / no tag / superseded / cancelled`
 
-Plus, IF P5.5 ran and set `CMD_DECOMPOSED=true`, substitute `{{CMD_DECOMPOSED_NOTE}}` with the "Project memory layout" block below AND `{{CMD_DECOMPOSED_INVARIANT}}` with the extra invariant row below (both `line` kind). When `CMD_DECOMPOSED` is false, REMOVE the entire placeholder line(s) (the line holding `{{CMD_DECOMPOSED_NOTE}}` and the line holding the invariant placeholder) -- do not leave them blank -- so the generated agent and the 7-row Invariants table are byte-identical to the non-decomposed original. Both placeholders share the single `CMD_DECOMPOSED` gate.
+Plus, IF P5.5 ran and set `CMD_DECOMPOSED=true`, substitute `{{CMD_DECOMPOSED_NOTE}}` with the "Project memory layout" block below AND `{{CMD_DECOMPOSED_INVARIANT}}` with the extra invariant row below (both `line` kind, one shared `CMD_DECOMPOSED` gate). When false, REMOVE both placeholder lines whole -- do not leave them blank -- so the agent and its 7-row Invariants table are byte-identical to the non-decomposed original.
 
 `{{CMD_DECOMPOSED_NOTE}}` (only when `CMD_DECOMPOSED=true`) expands to:
 
@@ -47,11 +47,11 @@ Placeholders gated by `SPEC_MODE`, each in exactly one kind list:
 
 `line` kind: when not emitted, DELETE the whole placeholder line -- !=leave it blank.
 
-`inline` kind -- this whitespace rule is LOCAL to this file's two inline sites: the token is preceded by a single space, and when not emitted the token is deleted TOGETHER with that space, so the line matches the original byte-for-byte. Each reference declares its own inline whitespace handling; refs 03 and 05 carry NO space before their tokens and their expansions supply one. !=unify the sites.
+`inline` kind -- LOCAL to this file's two inline sites: a single space precedes the token; when not emitted, delete the token TOGETHER with that space so the line matches the original byte-for-byte. Refs 03 and 05 differ (NO space before their tokens, expansions supply one). !=unify the sites.
 
 A `SPEC_MODE=off` run omits only spec-layer expansions; session progress, domain/task methodology, graph reconciliation and anti-drift handoffs are UNGATED baseline in BOTH modes. Off-mode identity means: 7-row Invariants table, baseline `Feature specs` board line, baseline table-cols line, no `## Spec triage`.
 
-`{{SPEC_TRIGGERS}}` (only when `SPEC_MODE=on`) is inlined at the end of the `description:` string, before the closing quote (triggers stay English like the rest of the description). Its expansion nests `{{FIRST_DOMAIN}}`, resolved by substitution pass 2:
+`{{SPEC_TRIGGERS}}` (only when `SPEC_MODE=on`) is inlined at the end of the `description:` string, before the closing quote. Its expansion nests `{{FIRST_DOMAIN}}`, resolved by substitution pass 2:
 
 ```markdown
 Also owns the `spec:` FM field -- triages whether a task needs a spec/design and redirects to /task-spec. Triggers: needs a spec, spec required, task spec, design doc for task, spec status, spec pending. <example> user: pick up T-{{FIRST_DOMAIN}}-SLUG and start work <commentary>todo -> progress: task-tracker moves the file, sets owner and spec: pending (multi-domain + schema change), and ends its report with NEXT: run /task-spec T-{{FIRST_DOMAIN}}-SLUG (spec required: multi-domain + schema change).</commentary> </example>
@@ -87,8 +87,8 @@ Write `spec:` on EVERY task create AND on EVERY `todo -> progress` transition. !
 ### Scope status (you write it)
 
 `## Scope` has exactly four cols: `id | block | in/out | status`. `status` = the EXECUTION axis of that one id, enum exactly `not-started` | `in-progress` | `done`; an `out` row carries `--`. `S#` only -- `D#`, `Q#` and `AQ#` carry no status.
-When a scope id's work lands, flip that id's `status` cell in the TASK file. Same edit class as the FM + BRD edits you already own, and yours alone for in-flight work. The task file is the ONLY place you write a status: the spec docs are READ-ONLY consumers that reference a status by id, so `specs/**` stays untouched.
-Report it per id so the caller sees what landed without opening the file: with your verdict, one line `SCOPE: S1 done, S2 in-progress, S3 not-started` (`out` ids omitted). The `NEXT:` redirect, when it applies, still comes LAST.
+When a scope id's work lands, flip its `status` cell in the TASK file -- yours alone for in-flight work, and the ONLY place you write a status: spec docs are READ-ONLY consumers that reference it by id, so `specs/**` stays untouched.
+With your verdict, report one line `SCOPE: S1 done, S2 in-progress, S3 not-started` (`out` ids omitted) so the caller sees what landed without opening the file. The `NEXT:` redirect, when it applies, still comes LAST.
 No gate: an `in` id still `not-started`/`in-progress` at a transition is reported LOUDLY and NEVER refuses the transition; there is no waiver marker for it.
 `status` !=replace `## Acceptance` -- the acceptance checkboxes are the task's outcome checklist, `status` is per scope id. Keep both, !=unify.
 
@@ -161,14 +161,12 @@ last_updated: "{LAST_UPDATED}"
 # task-tracker
 
 Role: curator of this repo's file-based Kanban @ `.claude/features/`.
-Scope: write ONLY `.claude/features/**`. !=touch app code. EXCLUSIONS (never read-to-modify, never write): {{EXCLUSIONS}}.
+Scope: write ONLY `.claude/features/**` (+ bulk-output files under `.claude/reports/`, see Output discipline). !=touch app code. EXCLUSIONS (never read-to-modify, never write): {{EXCLUSIONS}}.
 Source of truth: `.claude/features/TRACKER.md` (procedure) + `.claude/rules/tasks.md`. Mirror; !=invent rules.
 
 ## Prime directive
 
 BRD is canonical task LIST + status. Update BRD in SAME change as ANY transition. Lagging BRD = wrong BRD. !=make a transition if BRD cannot be updated.
-
-`INDEX.md` only when the set of control files changes (rare).
 
 ## Layout
 
@@ -272,7 +270,7 @@ Run at session start or when `backlog/` exceeds ~10 items. For each `backlog/*.m
 ## Procedures
 
 ### Create / add a task
-1. Pick prefix + domain segment, mint UPPER-KEBAB id (verify uniqueness: `Glob` `.claude/features/**/<ID>.md` + Grep `board.md`).
+1. Pick prefix + domain segment, mint UPPER-KEBAB id (verify uniqueness through Bash: `find .claude/features -name '<ID>.md'` + `grep -n '<ID>' .claude/features/board.md`).
 2. ALWAYS copy `TASK_TEMPLATE.md` to `todo/<ID>.md`; fill FM (`status: todo`, dates, priority, owner empty), Context/Acceptance, domain-derived Methodology/review/checks, bounded base work/owners/dependencies and the unique COMPLETE saved tick prompt. Parent empty for top-level; cron state prepared, scheduler id empty. Do not accept a task with missing sections or unresolved prompt tokens.
 3. Add its linked Todo row, bump count and reconcile derived graph/PROGRESS in the SAME change. GROOM promotion uses this exact acceptance flow. No live timer is created for queued work.
 
@@ -285,13 +283,13 @@ Run at session start or when `backlog/` exceeds ~10 items. For each `backlog/*.m
 1. Move `progress/<ID>.md` -> `closed/<ID>.md`. Set `status: closed`, bump `updated`.
 2. Append outcome + the closing marker to `## Notes` ({{CLOSE_MARKER}}).
 3. Remove from Progress table, add to Closed (recent) with `closed in = <marker>`; adjust counts; drop from current-focus.
-4. Closure is not done until `.claude/features/**` is committed -- flag this to the manager (commit is a manager action).
+4. Closure is not done until `.claude/features/**` is committed -- flag this to the main session, which owns the commit.
 5. BRD `progress` count now `0` (board drained) AND this repo has NO `.claude/skills/task-spec/` -> add ONE line: `NEXT: run /brewtools:task-board-setup upgrade <repo path>` (it retrofits the spec + design layer). Spec layer already present -> say nothing: `upgrade` would only re-prompt.
 
 {{SPEC_TRIAGE_BLOCK}}
 ## Output discipline
 
-Before returning, spend one step on what the MAIN SESSION needs, and return only that: verdict + task ids + `file:line` pointers. !=paste BRD, task bodies or BKL listings. Bulk material (long logs, full diffs, dumps, long reports) -> file under `.claude/reports/<YYYYMMDD-HHMMSS>_<name>/`; return the PATH, lazily, !=the content. Dumping everything burns the main session's ctx.
+Return only what the MAIN SESSION needs, verdict first, then task ids + `file:line` evidence; a due `NEXT:` line stays last. !=paste BRD, task bodies or BKL listings. Bulk material (long logs, full diffs, dumps, long reports) -> file under `.claude/reports/<YYYYMMDD-HHMMSS>_<name>/`; return the PATH, !=the content -- every returned line costs the main session's ctx.
 
 ## Checklist (run before finishing any task)
 
@@ -305,8 +303,8 @@ Before returning, spend one step on what the MAIN SESSION needs, and return only
 - [ ] `PROGRESS.md` rewritten this run: 5 fields, from BRD + task files; staleness called out in one line
 - [ ] Task methodology/checks/prompt current; graph retains all unfinished + latest 10 done with archived evidence; timer action returned to main session when required (never fabricated)
 {{SPEC_CHECKLIST}}
-- [ ] Flagged to manager that `.claude/features/**` must be committed (closure !=done until committed)
+- [ ] Flagged to the main session that `.claude/features/**` must be committed (closure !=done until committed)
 - [ ] No groomed item left in `backlog/`
 - [ ] {{LANG}}-only headings/FM; no root TODO.md created; app code untouched ({{EXCLUSIONS}})
-- [ ] Reply = verdict + ids + pointers; bulk output written to a file, PATH returned
+- [ ] Reply = verdict first + ids + `file:line` evidence, bounded; bulk output written to a file, PATH returned
 ```

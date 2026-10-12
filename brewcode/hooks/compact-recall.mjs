@@ -1,45 +1,24 @@
 #!/usr/bin/env node
 /**
- * Compact Recall Hook - re-anchor plan, original intent and task graph after compaction.
- *
- * Event:   SessionStart, matcher "compact"
- * Channel: hookSpecificOutput.additionalContext — the ONLY channel that reaches
- *          the model after a compact. PostCompact stdout lands in the UI only.
- * Why:     compaction drops the plan reference entirely and the built-in
- *          task_reminder returns empty for several turns, so the session drifts
- *          off the user's original task and starts a NEW task graph.
- * Cost:    measured on an 8.13 MB transcript - scan (one buffer read + five
- *          substring scans) ~6 ms, full process wall clock ~30 ms standalone and
- *          ~55 ms spawned from a node parent, i.e. node startup dominates.
- *          Compaction awaits this hook, so it stays cheap and stateless —
- *          auto-compaction can chain and fire it repeatedly.
- * Contract: on source "compact" it ALWAYS injects something; every failure path
- *          degrades to the INTENT fragment, never to silence and never to a guess.
+ * SessionStart (matcher "compact") hook: re-anchors plan, original intent and task graph via
+ * additionalContext. ALWAYS injects on source "compact"; every failure degrades to [INTENT].
  */
 
 import { statSync, readFileSync } from 'fs';
-import { join } from 'path';
-import { readStdin, output, capText, log, projectRoot } from './lib/utils.mjs';
+import {
+  readStdin, output, capText, log, projectRoot, resolvePlansDir, latestPlanLink, symlinkTarget, ownsPlanTarget
+} from './lib/utils.mjs';
 
 const MAX_TRANSCRIPT_BYTES = 64 * 1024 * 1024;
 const PLAN_KEY = '"planFilePath":"';
 const TASK_KEY = '"name":"TaskCreate"';
-// Plan mode leaves these even when no plan file was ever recorded. Every key
-// carries its JSON quotes: prose that merely NAMES a key arrives with escaped
-// quotes (\"), so a quoted key cannot match a transcript's own text about itself.
-// A bare 'plan_mode_reentry' matched this repo's design discussion and claimed a
-// plan that never existed.
+// Plan-mode traces, present even with no plan file. Keys carry their JSON quotes: prose that only
+// NAMES a key arrives escaped (\"), so the transcript's own text about itself cannot match.
 const PLAN_MODE_KEYS = ['"type":"plan_mode"', '"type":"plan_mode_reentry"', '"permissionMode":"plan"'];
-// Project-local plan link maintained by session-start.mjs (must stay in sync).
-const LATEST_PLAN_NAME = 'LATEST.md';
 
 /**
- * Scan this session's transcript for plan + task signals.
- * Transcripts are append-only and compaction does not truncate them, so the LAST
- * planFilePath is the current plan. Trade-off accepted: a session that plans once
- * and later re-plans outside plan mode still gets pointed at the older plan.
- * @param {string} path - transcript_path from stdin
- * @returns {{planPath: string|null, planMode: boolean, hadTasks: boolean}}
+ * Plan + task signals `{planPath, planMode, hadTasks}` from this session's transcript (append-only, so
+ * the LAST planFilePath is current; a later re-plan outside plan mode still yields the older one).
  */
 function scanTranscript(path, root, sessionId) {
   const signals = { planPath: null, planMode: false, hadTasks: false };
@@ -66,12 +45,8 @@ function scanTranscript(path, root, sessionId) {
 }
 
 /**
- * Extract the last plan path from a raw transcript buffer.
- * lastIndexOf on the Buffer avoids parsing 3 MB of JSONL. The closing quote is
- * searched within the record's own line only: a partially flushed final record
- * would otherwise run across \n and yield a nonsense path.
- * @param {Buffer} buf - raw transcript
- * @returns {string|null} decoded absolute path, or null
+ * Last plan path in the raw transcript, or null. Buffer.lastIndexOf skips parsing megabytes of JSONL;
+ * the closing quote is searched on the record's own line only (a half-flushed last record).
  */
 function extractPlanPath(buf) {
   let at = buf.lastIndexOf(PLAN_KEY);
@@ -84,9 +59,8 @@ function extractPlanPath(buf) {
       const decoded = decodeJsonString(buf.toString('utf8', from, end));
       if (isSanePath(decoded)) return decoded;
     }
-    // Truncated, undecodable or insane record: fall back to an earlier one.
-    // Stop at offset 0 - lastIndexOf(key, -1) resolves to buf.length and would
-    // re-find the same hit forever.
+    // Truncated/undecodable/insane record -> try an earlier one. Stop at offset 0:
+    // lastIndexOf(key, -1) resolves to buf.length and would re-find the same hit forever.
     if (at === 0) break;
     at = buf.lastIndexOf(PLAN_KEY, at - 1);
   }
@@ -132,33 +106,27 @@ const INTENT_FRAGMENT = [
   'Do not continue from the most recently remembered fragment, and do not re-scope the work.'
 ].join('\n');
 
-/**
- * @param {{planPath: string|null, planMode: boolean}} signals
- * @param {string} root - project root, for the LATEST.md rung
- * @returns {{text: string, branch: string}} plan fragment; first match in the ladder wins
- */
-function planFragment({ planPath, planMode }, root) {
+/** Plan fragment `{text, branch}`; first match in the ladder wins. `root` serves the LATEST.md rung. */
+function planFragment({ planPath, planMode }, root, sessionId) {
   if (planPath && isFile(planPath)) {
     return {
       branch: 'plan-file',
       text: [
         `[PLAN] Read ${planPath} with the Read tool before doing any work.`,
-        'It holds the role model and the delegation split for this session: follow it, do not re-derive it.'
+        'It is the plan for this session: follow it, do not re-derive it.'
       ].join('\n')
     };
   }
-  // A plan that PREDATES the transcript (--resume, post-/clear) leaves no
-  // planFilePath to scan for - the first occurrence is the compaction attachment
-  // this hook is reacting to. The project-local LATEST.md is hook-owned (BC-H02:
-  // symlink plus target containment) and project-scoped, so it can never be
-  // another repo's plan. Sits above plan-missing: a real file beats a dead path.
-  const latestPlan = join(root, '.claude', 'plans', LATEST_PLAN_NAME);
-  if (isFile(latestPlan)) {
+  // A plan that PREDATES the transcript (post-/clear) leaves no planFilePath to scan. LATEST.md counts
+  // only as the symlink session-start made; its age is unknown here, so the text makes the model check.
+  const latestPlan = latestPlanLink(root);
+  const target = symlinkTarget(latestPlan);
+  if (target && ownsPlanTarget(root, target, resolvePlansDir(root, sessionId)) && isFile(target)) {
     return {
       branch: 'plan-latest',
       text: [
         `[PLAN] Read ${latestPlan} with the Read tool before doing any work.`,
-        'It is this project\'s latest plan, carried over from before the compact: follow its role model and delegation split, do not re-derive them.'
+        'It is the last plan linked in this project: if it covers the task in the compact summary, follow it, do not re-derive it; if it does not, ignore it.'
       ].join('\n')
     };
   }
@@ -178,7 +146,7 @@ function planFragment({ planPath, planMode }, root) {
       branch: 'plan-in-summary',
       text: [
         '[PLAN] This session ran in plan mode; no plan file is available.',
-        'A plan in the compact summary -> follow it and its delegation split, do not re-derive them.',
+        'A plan in the compact summary -> follow it, do not re-derive it.',
         'No plan there -> re-read the user ORIGINAL task and intent from the summary and keep executing THAT.'
       ].join('\n')
     };
@@ -186,10 +154,8 @@ function planFragment({ planPath, planMode }, root) {
   return { branch: 'intent', text: INTENT_FRAGMENT };
 }
 
-// Claims only what one TaskCreate hit proves: a graph exists. Count, status and
-// recency are unknown here, so the model is told to read it, not what it holds.
-// "Then" keeps the order aligned with the injection order (plan fragment first) -
-// two fragments each claiming "first" is a contradiction the model has to guess at.
+// Claims only what one TaskCreate hit proves: a graph exists (count/status unknown -> "read it").
+// "Then" = injection order, plan fragment first: two fragments both claiming "first" contradict.
 const TASK_FRAGMENT = [
   '[TASKS] Then call TaskList: a task graph created before the compact ALREADY EXISTS in this session.',
   'Re-read it, do NOT create a new graph. The built-in reminder lags several turns and may show empty, so TaskList is the authority. Then resume the work.'
@@ -213,7 +179,7 @@ async function main() {
     }
 
     const signals = scanTranscript(input.transcript_path, root, sessionId);
-    const plan = planFragment(signals, root);
+    const plan = planFragment(signals, root, sessionId);
     const fragments = [plan.text];
     if (signals.hadTasks) fragments.push(TASK_FRAGMENT);
 

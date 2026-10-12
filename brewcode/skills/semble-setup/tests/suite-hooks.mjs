@@ -40,6 +40,20 @@ const BASE = realpathSync(mkdtempSync(join(tmpdir(), 'semble-d-')));
 const HOME = join(BASE, 'home');
 mkdirSync(join(HOME, '.claude'), { recursive: true });
 
+// Hooks read the ACTIVE profile's MCP registration; every spawn inherits this fixture
+// profile (server registered, user scope), never the developer's own ~/.claude.json.
+const CFG = join(BASE, 'cfg');
+const MCP_ENTRY = { type: 'stdio', command: 'uvx', args: ['--from', 'semble[mcp]==0.6.2', 'semble'], alwaysLoad: true };
+mkdirSync(CFG, { recursive: true });
+writeFileSync(join(CFG, '.claude.json'), JSON.stringify({ mcpServers: { semble_code: MCP_ENTRY } }));
+process.env.CLAUDE_CONFIG_DIR = CFG;
+// A profile without the server, and the one routing line (X9) every steering hook must carry verbatim.
+const CFG_NONE = join(BASE, 'cfg-none');
+mkdirSync(CFG_NONE, { recursive: true });
+writeFileSync(join(CFG_NONE, '.claude.json'), JSON.stringify({ mcpServers: { other: { command: 'x' } } }));
+const ROUTE_TEXT = 'Search routing: intent/behaviour -> semble; symbol definitions/references -> LSP; '
+  + 'literals/paths/regex/counts -> rg.';
+
 // The registered cache root every fixture state points at, and the four files
 // Semble 0.5.5 writes the combined corpus into the exact content variant below
 // `<root>/<repoHash>`. The prefetch hook refuses to
@@ -313,7 +327,7 @@ const READY_STATE = (extra) =>
     schema: 1,
     profile: 'code',
     projectRoot: '/x',
-    approvedVersion: '0.5.5',
+    approvedVersion: '0.6.2',
     phase: 'ready',
     enabled: true,
     scope: 'user',
@@ -1104,10 +1118,10 @@ const TAIL_PRE = `## Conventions\n\n${KEEP_LINE}\n`;
 // ═══════════════════════════════════════════════════════════════════════════
 // D. SessionStart hook — all 7 rows of the decision table
 // ═══════════════════════════════════════════════════════════════════════════
-function session(proj, extra) {
+function session(proj, extra, env) {
   return runNode(SESSION_SRC, JSON.stringify({
     session_id: 'S1', cwd: proj, hook_event_name: 'SessionStart', source: 'startup', ...(extra || {}),
-  }));
+  }), BASE, env || {});
 }
 {
   const p = freshProject({});
@@ -1142,9 +1156,9 @@ function session(proj, extra) {
       additionalContext:
         'semble_code MCP is registered but not verified yet. It is usable now — mcp__semble_code__search (repo=' +
         p + ', top_k=5, max_snippet_lines=10); the first call rebuilds the index and may take minutes. ' +
-        'Run /brewcode:semble-setup resume to close the state out.',
+        'Run /brewcode:semble-setup resume to close the state out. ' + ROUTE_TEXT,
     },
-  }, 'awaiting_reload -> the tool is advertised as usable now, plus the resume close-out');
+  }, 'awaiting_reload -> the tool is advertised as usable now, plus the resume close-out and the routing line');
 }
 {
   const p = freshProject({ state: READY_STATE({ phase: 'error' }) });
@@ -1159,9 +1173,50 @@ function session(proj, extra) {
       hookEventName: 'SessionStart',
       additionalContext:
         'semble: use ONE mcp__semble_code__search first (repo=' + p +
-        ', top_k=5, max_snippet_lines=10), then open the hit at start_line. rg stays for exact/exhaustive matching.',
+        ', top_k=5, max_snippet_lines=10), then open the hit at start_line. ' + ROUTE_TEXT,
     },
-  }, 'ready -> cache hash prefix 8 plus the usage directive with the absolute repo path');
+  }, 'ready -> cache hash prefix 8 plus the usage directive with the absolute repo path and the routing line');
+}
+// D10 — MCP presence per ACTIVE profile: user, local and project scope, the two disable lists,
+// and the CLAUDE_CONFIG_DIR-unset default (<home>/.claude.json).
+{
+  const ctxD = (o) => ((o || {}).hookSpecificOutput || {}).additionalContext || '';
+  const NO_MCP = { systemMessage: 'semble: semble_code MCP is not registered for this profile — run /brewcode:semble-setup status' };
+  const brief = (p) => ctxD(safeParse(session(p).stdout)).startsWith('semble: use ONE mcp__semble_code__search first');
+  const cfgWith = (name, json) => {
+    const d = join(BASE, name);
+    mkdirSync(d, { recursive: true });
+    writeFileSync(join(d, '.claude.json'), JSON.stringify(json));
+    return { CLAUDE_CONFIG_DIR: d };
+  };
+  const pReady = freshProject({ state: READY_STATE() });
+  const pReload = freshProject({ state: READY_STATE({ phase: 'awaiting_reload' }) });
+  check('D10.none', [safeParse(session(pReady, undefined, { CLAUDE_CONFIG_DIR: CFG_NONE }).stdout),
+    safeParse(session(pReload, undefined, { CLAUDE_CONFIG_DIR: CFG_NONE }).stdout)], [NO_MCP, NO_MCP],
+  'ready and awaiting_reload in a profile without the server: a user-facing notice, no usability claim to the model');
+  const pLocal = freshProject({ state: READY_STATE() });
+  const local = cfgWith('cfg-local', { projects: { [pLocal]: { mcpServers: { semble_code: MCP_ENTRY } } } });
+  const offUser = cfgWith('cfg-off', { mcpServers: { semble_code: MCP_ENTRY },
+    projects: { [pLocal]: { disabledMcpServers: ['semble_code'] } } });
+  check('D10.scopes', [ctxD(safeParse(session(pLocal, undefined, local).stdout)) !== '',
+    safeParse(session(pLocal, undefined, offUser).stdout)], [true, NO_MCP],
+  'a local-scope entry counts; a server the user disabled for this project does not');
+  const pProj = freshProject({ state: READY_STATE() });
+  writeFileSync(join(pProj, '.mcp.json'), JSON.stringify({ mcpServers: { semble_code: MCP_ENTRY } }));
+  const offJson = cfgWith('cfg-offjson', { projects: { [pProj]: { disabledMcpjsonServers: ['semble_code'] } } });
+  check('D10.projectScope', [ctxD(safeParse(session(pProj, undefined, { CLAUDE_CONFIG_DIR: CFG_NONE }).stdout)) !== '',
+    safeParse(session(pProj, undefined, offJson).stdout)], [true, NO_MCP],
+  'a project .mcp.json entry counts unless the project rejected it (disabledMcpjsonServers)');
+  const home = join(BASE, 'home-default');
+  mkdirSync(home, { recursive: true });
+  writeFileSync(join(home, '.claude.json'), JSON.stringify({ mcpServers: { semble_code: MCP_ENTRY } }));
+  const envUnset = { ...process.env, HOME: home };
+  delete envUnset.CLAUDE_CONFIG_DIR;
+  delete envUnset.CLAUDE_PROJECT_DIR;
+  const r = spawnSync(process.execPath, [SESSION_SRC], { input: JSON.stringify({ session_id: 'S1', cwd: pReady,
+    hook_event_name: 'SessionStart', source: 'startup' }), encoding: 'utf8', env: envUnset, cwd: BASE });
+  check('D10.defaultProfile', [brief(pReady), ctxD(safeParse(r.stdout)) !== ''], [true, true],
+    'with CLAUDE_CONFIG_DIR unset the hook reads <home>/.claude.json, as Claude Code does');
 }
 {
   const p = freshProject({ state: READY_STATE({ phase: 'verifying' }) });
@@ -1266,6 +1321,7 @@ const RENDERED = [
   'Open the candidates that look right BEFORE running any search of your own; they are already ranked.',
   'If none of them answers the question, say so and search normally.',
   'Name the file you actually used in your answer.',
+  ROUTE_TEXT,
 ].join('\n');
 const PREFETCH_OK = {
   hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: RENDERED },
@@ -1308,6 +1364,7 @@ function prefetch(proj, prompt, opts) {
       SEMBLE_STUB_OUT: Object.prototype.hasOwnProperty.call(o, 'out') ? o.out : STUB_HITS,
       SEMBLE_STUB_RC: String(o.rc === undefined ? 0 : o.rc),
       SEMBLE_STUB_SLEEP: o.sleep === undefined ? '' : String(o.sleep),
+      ...(o.cfg ? { CLAUDE_CONFIG_DIR: o.cfg } : {}),
     },
   });
   const out = {
@@ -1330,6 +1387,14 @@ const {
   gateV3, distill, PIN_SPEC, CONTENT_ARGS, THROTTLE_MS, COOLDOWN_MS, TIMEOUT_COOLDOWN_MS,
   INDEX_FILES, INDEX_LEAF, cacheRootOf, defaultCacheRoot, indexReady, repoHashOf,
 } = await import(pathToFileURL(PREFETCH_SRC).href);
+
+// P1d — two chunks of one file are one candidate (the A/B listed SKILL.md twice).
+{
+  const p = freshProject({ state: READY_STATE() });
+  const dup = JSON.stringify({ query: 'q', results: [HIT('a/SKILL.md', 5), HIT('a/SKILL.md', 90), HIT('a/run.mjs', 1)] });
+  check('P1d.dedup', ((safeParse(prefetch(p, Q, { out: dup }).stdout).hookSpecificOutput || {}).additionalContext || '').split('\n').filter((l) => /^ {2}\d\. /.test(l)),
+    ['  1. a/SKILL.md:5', '  2. a/run.mjs:1'], 'duplicate file paths collapse to the first-ranked chunk');
+}
 
 // P1 — the whole point of the release: a ranked list of paths, and nothing else.
 {
@@ -1361,7 +1426,7 @@ const {
   const p = freshProject({ state: READY_STATE() });
   const r = prefetch(p, Q);
   check('P2.argv', r.argv, [
-    `--from semble[mcp]==0.5.5 semble search --content code docs config -k 3 --max-snippet-lines 0 -- ${Q_DISTILLED} ${p}`,
+    `--from semble[mcp]==0.6.2 semble search --content code docs config -k 3 --max-snippet-lines 0 -- ${Q_DISTILLED} ${p}`,
   ], 'the child is spawned exactly once, with the pinned spec, the frozen flags, then `--` and the'
     + ' distilled query — options before the separator, because argparse stops reading flags at it');
   const lib = readFileSync(REAL_LIB, 'utf8');
@@ -1381,7 +1446,7 @@ const {
 // text at the front of the query, so ``what does `-k` do…`` distils to exactly `-k`;
 // semble's argparse reads a lone leading-dash argv as an option, the child exits
 // non-zero, and a well-formed question buys a ten-minute cooldown. Verified against the
-// pinned 0.5.5 CLI: `-- <query> <path>` parses, `--` before the flags does not.
+// pinned 0.6.2 CLI: `-- <query> <path>` parses, `--` before the flags does not.
 {
   const DASH_PROMPT = 'what does `-k` do to all of it and why so then';
   check('P2c.distill', distill(DASH_PROMPT), '-k',
@@ -1391,7 +1456,7 @@ const {
   const p = freshProject({ state: READY_STATE() });
   const r = prefetch(p, DASH_PROMPT);
   check('P2c.argv', r.argv, [
-    `--from semble[mcp]==0.5.5 semble search --content code docs config -k 3 --max-snippet-lines 0 -- -k ${p}`,
+    `--from semble[mcp]==0.6.2 semble search --content code docs config -k 3 --max-snippet-lines 0 -- -k ${p}`,
   ], 'the `-k` query sits AFTER the `--` separator, the one position argparse can only read as a positional');
   check('P2c.fires', safeParse(r.stdout), PREFETCH_OK, 'the search runs and its hits are injected as normal');
   check('P2c.noCooldown', Object.prototype.hasOwnProperty.call(markerOf(p) || {}, 'cool'), false,
@@ -1506,7 +1571,14 @@ const GATE_ROWS = [
   ['P4.meta', 'ok', false, 'meta-reply', 'a meta-reply continues a turn, it does not open one'],
   ['P4.metaRu', 'да', false, 'meta-reply', 'the Russian half of the same list'],
   ['P4.short', 'how does auth work', false, 'too-short', 'under 30 characters there is not enough to distill'],
-  ['P4.long', 'x'.repeat(2001), false, 'too-long', 'over 2000 characters is a pasted document, not a question'],
+  ['P4.long', 'x'.repeat(8001), false, 'too-long', 'over 8000 characters is a pasted document, not a question'],
+  ['P4.longReal', 'how does the session hook decide what to emit? '
+    + 'Keep the answer grounded in the code and explain the reasoning step by step. '.repeat(28), true,
+    'behaviour-or-vocab', 'a 2,300-char real-style request is inside the 8000 limit (p99 of typed prompts 7,763)'],
+  ['P4.synthetic', '<task-notification>\n<task-id>a1</task-id>\nwhere does the session hook decide what to emit\n'
+    + '</task-notification>', false, 'synthetic', 'a subagent result delivered as a prompt is not a user question'],
+  ['P4.agentMessage', '<agent-message from="worker-1">where is the session hook decision made in this repo</agent-message>',
+    false, 'synthetic', 'a teammate message delivered as a prompt is not a user question'],
   ['P4.url', 'https://example.com/some/quite/long/path/page', false, 'bare-url', 'a bare URL is a reference, not a query'],
   ['P4.path', './scripts/lib/semble-common.sh', false, 'bare-path', 'a bare path is already the answer'],
   ['P4.noIntent', 'the installer rewrites the managed rule file in place, byte for byte', false, 'no-intent',
@@ -1574,21 +1646,27 @@ const STATE_ROWS = [
   ['P6.phaseError', READY_STATE({ phase: 'error' }), 'error', 'error', true, 'phase error'],
   ['P6.prereqReady', READY_STATE({ phase: 'prereq_ready' }), 'not-registered', 'prereq_ready', true,
     'the add-failed rollback state, which still carries completed[mcp]'],
-  ['P6.noMcp', READY_STATE({ completed: ['prereq'] }), 'no-mcp', 'ready', true, 'the MCP server was never registered'],
-  ['P6.completedMissing', JSON.stringify({ phase: 'ready', enabled: true }), 'no-mcp', 'ready', true,
-    'a state file with no completed array at all'],
+  ['P6.noMcp', READY_STATE(), 'no-mcp', 'ready', true,
+    'the active profile has no semble_code server although state says completed[mcp]', CFG_NONE],
 ];
-for (const [name, state, why, phase, enabled, msg] of STATE_ROWS) {
+for (const [name, state, why, phase, enabled, msg, cfg] of STATE_ROWS) {
   const p = freshProject(state === undefined ? {} : { state });
   // The state dir is the installer's, never the hook's. Seeding it for the
   // no-state row is what makes the refusal RECORDABLE; the never-installed
   // variant, where there is nowhere to write at all, is P6.noLitter below.
   mkdirSync(join(p, '.claude', 'semble'), { recursive: true });
-  const r = prefetch(p, Q);
+  const r = prefetch(p, Q, cfg ? { cfg } : undefined);
   check(name, [r.status, safeParse(r.stdout), r.argv.length], [0, {}, 0], `silent, exit 0, no search spawned: ${msg}`);
   check(`${name}.why`, telemetry(p).map(dropTs),
     [{ ev: 'prefetch', src: 'prefetch', sid: 'S1', fired: false, why, phase, enabled }],
     `and the refusal is recorded as why=${why}`);
+}
+{
+  // The registration, not the state checkpoint, decides: a state without completed[mcp] still fires.
+  const p = freshProject({ state: READY_STATE({ completed: ['prereq'] }) });
+  const r = prefetch(p, Q);
+  check('P6.completedProxyGone', [r.status, safeParse(r.stdout), r.argv.length], [0, PREFETCH_OK, 1],
+    'a registered server with no completed[mcp] checkpoint fires: state.completed is no longer the proxy');
 }
 {
   const p = freshProject({ stateDir: true });
@@ -1823,7 +1901,7 @@ const counterFile = (p) => join(p, '.claude', 'semble', 'reminder.json');
 const counterOf = (p) => safeParse(existsSync(counterFile(p)) ? readFileSync(counterFile(p), 'utf8') : 'null');
 
 /** One PreToolUse call. `tool_input` is passed through verbatim so Grep cases work too. */
-function reminder(proj, toolInput, extra) {
+function reminder(proj, toolInput, extra, env) {
   return runNode(REMINDER_SRC, JSON.stringify({
     session_id: 'R1',
     cwd: proj,
@@ -1832,7 +1910,7 @@ function reminder(proj, toolInput, extra) {
     tool_use_id: 'toolu_R1',
     tool_input: toolInput,
     ...(extra || {}),
-  }));
+  }), BASE, env || {});
 }
 const remindOut = (p, command, extra) => safeParse(reminder(p, { command }, extra).stdout);
 const ctxOf = (out) => ((out || {}).hookSpecificOutput || {}).additionalContext || '';
@@ -1840,11 +1918,12 @@ const ctxOf = (out) => ((out || {}).hookSpecificOutput || {}).additionalContext 
 const burst = (p, commands) => commands.map((c) => ctxOf(remindOut(p, c)) !== '');
 /** N distinct eligible searches: an intent question, no flag, no path, no filename. */
 const eligibleRun = (n) => Array.from({ length: n }, (_, i) => `rg "retry backoff policy ${i + 1}"`);
-/** phase === 'ready': the correction plus the four-word grep escape hatch. */
-const REMIND_TEXT = (p) => 'semble: wrong tool. mcp__semble_code__search repo="' + p + '" first. (exact/-l stays rg)';
-/** Any other phase: the cold-index clause shares the SAME parenthetical. */
-const REMIND_COLD = (p) =>
-  'semble: wrong tool. mcp__semble_code__search repo="' + p + '" first. (first call builds the index; exact/-l stays rg)';
+/** phase === 'ready': a routing fact plus the call, then the shared routing line (X9). */
+const REMIND_TEXT = (p) => 'semble: this search reads as intent/behaviour; mcp__semble_code__search repo="' + p
+  + '" answers that. ' + ROUTE_TEXT;
+/** Any other phase: the cold-index clause precedes the routing line. */
+const REMIND_COLD = (p) => 'semble: this search reads as intent/behaviour; mcp__semble_code__search repo="' + p
+  + '" answers that (first call builds the index). ' + ROUTE_TEXT;
 const REMIND_OK = (p) => ({
   hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: REMIND_TEXT(p) },
 });
@@ -2000,14 +2079,15 @@ const REMIND_OK = (p) => ({
     ['disabledPhase', READY_STATE({ phase: 'disabled' })],
     ['error', READY_STATE({ phase: 'error' })],
     ['prereq', READY_STATE({ phase: 'prereq_ready' })],
-    ['noMcp', READY_STATE({ completed: [] })],
+    ['noMcp', READY_STATE(), { CLAUDE_CONFIG_DIR: CFG_NONE }],
   ];
-  const seen = rows.map(([, state]) => {
+  const seen = rows.map(([, state, env]) => {
     const p = freshProject(state === undefined ? {} : { state });
-    return [ctxOf(remindOut(p, 'rg "session expiry"')), existsSync(counterFile(p))];
+    return [ctxOf(safeParse(reminder(p, { command: 'rg "session expiry"' }, undefined, env).stdout)),
+      existsSync(counterFile(p))];
   });
   check('R8.silent', seen, rows.map(() => ['', false]),
-    'no state, corrupt state, either disabled form, error, prereq_ready and a missing mcp checkpoint all inject nothing and count nothing');
+    'no state, corrupt state, either disabled form, error, prereq_ready and a profile without the server all inject nothing and count nothing');
 }
 {
   // phase !== 'ready' still fires on purpose: semble builds its index lazily
@@ -2050,6 +2130,41 @@ const REMIND_OK = (p) => ({
   const modes = ['files_with_matches', 'count'].map((output_mode) =>
     safeParse(reminder(p, { pattern: 'how sessions persist', output_mode }, { tool_name: 'Grep' }).stdout));
   check('R10.grepEnumeration', modes, [{}, {}], 'Grep in files_with_matches or count mode is enumeration and stays silent');
+}
+
+// R12 — the gate reads the search command's own segment (measured on 118 real Bash calls:
+// whole-line flags/pipes and a `semble` path substring muted searches semble could answer).
+{
+  const p = freshProject({ state: READY_STATE({ reminderEvery: 1 }) });
+  const widened = [
+    'rg "session expiry policy" .claude/semble/',          // `semble` in a path is not a semble call
+    'wc -l README.md; rg "session expiry policy"',          // -l belongs to wc, not to rg
+    'echo x | sort; rg "session expiry policy"',            // an aggregator pipe of another command
+    'rg -n "session expiry policy" | cut -c1-200',          // cut -c truncates display lines
+    "rg -n -i 'secret|credential|token' src",               // >= 3 alternated plain words: a concept hunt
+  ];
+  check('R12.widened', burst(p, widened), widened.map(() => true),
+    'path-scoped, compound, display-capped and keyword-alternation searches now reach the nudge');
+  const narrowed = [
+    'rg -il "session expiry policy"',                       // a short-flag cluster carrying -l
+    'rg "session expiry" | cut -d: -f1 | sort -u',          // field cut + sort: enumeration
+    "rg -n 'secret|credential' src",                        // two words: not enough to call it a concept
+    "rg -n 'inspectLine|redactValue|ENV_REF' src",          // an identifier alternation stays rg
+    "uvx --from 'semble[mcp]==0.6.2' semble search \"session expiry\" .", // semble itself
+  ];
+  check('R12.stillSilent', burst(p, narrowed), narrowed.map(() => false),
+    'flag clusters, field-cut enumeration, short or identifier alternations and semble itself stay silent');
+}
+{
+  const p = freshProject({ state: READY_STATE({ reminderEvery: 1 }) });
+  reminder(p, { command: 'rg -l "session store"' });
+  reminder(p, { command: 'npm run build' });
+  reminder(p, { pattern: 'how sessions persist', output_mode: 'count' }, { tool_name: 'Grep' });
+  check('R12.clause', telemetry(p).map(dropTs), [
+    { ev: 'gate', src: 'reminder', sid: 'R1', fired: false, why: 'no-match', phase: 'ready', enabled: true, tool_use_id: 'toolu_R1', clause: 'enum-or-literal-flag' },
+    { ev: 'gate', src: 'reminder', sid: 'R1', fired: false, why: 'no-match', phase: 'ready', enabled: true, tool_use_id: 'toolu_R1', clause: 'no-search-binary' },
+    { ev: 'gate', src: 'reminder', sid: 'R1', fired: false, why: 'no-match', phase: 'ready', enabled: true, tool_use_id: 'toolu_R1', clause: 'enum-output-mode' },
+  ], 'every no-match record names the deciding clause, so the skip sample is attributable');
 }
 
 // R11 — telemetry: the join key that makes delivery auditable, plus the cadence
@@ -2143,7 +2258,7 @@ const REMIND_OK = (p) => ({
 // (verified live: a matcher-less SubagentStart entry fired for "Explore").
 // No throttle and no counter: a fresh subagent remembers no earlier injection.
 // ═══════════════════════════════════════════════════════════════════════════
-function subagent(proj, agentType, extra) {
+function subagent(proj, agentType, extra, env) {
   return runNode(SUBAGENT_SRC, JSON.stringify({
     session_id: 'S1',
     cwd: proj,
@@ -2152,13 +2267,12 @@ function subagent(proj, agentType, extra) {
     agent_id: 'a1c5a0755e38bab4a',
     agent_type: agentType,
     ...(extra || {}),
-  }));
+  }), BASE, env || {});
 }
 const SUB_TEXT = (p) =>
   'semble: mcp__semble_code__search is already available to you — no ToolSearch needed. ' +
   'Start any "where/how/why does X work" question with ONE call: repo="' + p +
-  '", top_k=5, max_snippet_lines=10, then open the hit at start_line. ' +
-  'Use rg only for exact identifiers, literal strings and exhaustive enumeration.';
+  '", top_k=5, max_snippet_lines=10, then open the hit at start_line. ' + ROUTE_TEXT;
 const SUB_OK = (p) => ({
   hookSpecificOutput: { hookEventName: 'SubagentStart', additionalContext: SUB_TEXT(p) },
 });
@@ -2201,15 +2315,62 @@ const SUB_OK = (p) => ({
     ['disabledPhase', READY_STATE({ phase: 'disabled' })],
     ['error', READY_STATE({ phase: 'error' })],
     ['prereq', READY_STATE({ phase: 'prereq_ready' })],
-    ['noMcp', READY_STATE({ completed: [] })],
+    ['noMcp', READY_STATE(), { CLAUDE_CONFIG_DIR: CFG_NONE }],
   ];
-  const seen = rows.map(([, state]) => {
+  const seen = rows.map(([, state, env]) => {
     const p = freshProject(state === undefined ? {} : { state });
-    const r = subagent(p, 'Explore');
+    const r = subagent(p, 'Explore', undefined, env);
     return [r.status, safeParse(r.stdout)];
   });
   check('S4.silent', seen, rows.map(() => [0, {}]),
-    'no state, corrupt state, either disabled form, error, prereq_ready and a missing mcp checkpoint all inject nothing');
+    'no state, corrupt state, either disabled form, error, prereq_ready and a profile without the server all inject nothing');
+}
+
+// S6 — no "available to you" claim to an agent whose definition withholds the tool.
+{
+  const p = freshProject({ state: READY_STATE() });
+  mkdirSync(join(p, '.claude', 'agents'), { recursive: true });
+  writeFileSync(join(p, '.claude', 'agents', 'narrow.md'), '---\nname: narrow\ntools: Read, Bash\n---\nbody\n');
+  writeFileSync(join(p, '.claude', 'agents', 'yaml-list.md'), '---\nname: yaml-list\ntools:\n  - Read\n  - Bash\n---\n');
+  writeFileSync(join(p, '.claude', 'agents', 'denied.md'),
+    '---\nname: denied\ndisallowedTools: mcp__semble_code__search\n---\n');
+  writeFileSync(join(p, '.claude', 'agents', 'granted.md'),
+    '---\nname: granted\ntools: Read, Bash, mcp__semble_code__search, mcp__semble_code__find_related\n---\n');
+  writeFileSync(join(p, '.claude', 'agents', 'inherits.md'), '---\nname: inherits\nmodel: sonnet\n---\n');
+  const outs = ['narrow', 'yaml-list', 'denied', 'granted', 'inherits'].map((t) => safeParse(subagent(p, t).stdout));
+  check('S6.agentTools', outs, [{}, {}, {}, SUB_OK(p), SUB_OK(p)],
+    'a tools: list without semble (comma or YAML form) or a disallowedTools entry is silent; a grant or no tools: key fires');
+  check('S6.why', telemetry(p).filter((r) => r.ev === 'gate').map((r) => r.why),
+    ['agent-no-tool', 'agent-no-tool', 'agent-no-tool', 'ok', 'ok'], 'each withheld agent is recorded as why=agent-no-tool');
+}
+{
+  // A plugin agent resolves through the active profile's installed_plugins.json.
+  const p = freshProject({ state: READY_STATE() });
+  const cfg = join(BASE, 'cfg-plugin');
+  const install = join(BASE, 'plugin-install', 'brewcode', '9.9.9');
+  mkdirSync(join(install, 'agents'), { recursive: true });
+  mkdirSync(join(cfg, 'plugins'), { recursive: true });
+  writeFileSync(join(cfg, '.claude.json'), JSON.stringify({ mcpServers: { semble_code: MCP_ENTRY } }));
+  writeFileSync(join(cfg, 'plugins', 'installed_plugins.json'), JSON.stringify({
+    version: 2, plugins: { 'brewcode@claude-brewcode': [{ scope: 'user', installPath: install, version: '9.9.9' }] },
+  }));
+  writeFileSync(join(install, 'agents', 'hook-creator.md'), '---\nname: hook-creator\ntools: Read, Write, Edit, Bash\n---\n');
+  const env = { CLAUDE_CONFIG_DIR: cfg };
+  check('S6.pluginAgent', [safeParse(subagent(p, 'brewcode:hook-creator', undefined, env).stdout),
+    safeParse(subagent(p, 'brewcode:unknown-agent', undefined, env).stdout)], [{}, SUB_OK(p)],
+    'a plugin agent whose tools: list lacks semble is silent; an undiscoverable plugin agent keeps the line');
+}
+{
+  // `alwaysLoad` is what makes "no ToolSearch needed" true; without it the line says how to load the tool.
+  const p = freshProject({ state: READY_STATE() });
+  const cfg = join(BASE, 'cfg-deferred');
+  mkdirSync(cfg, { recursive: true });
+  writeFileSync(join(cfg, '.claude.json'), JSON.stringify({ mcpServers: { semble_code: { command: 'uvx' } } }));
+  check('S6.deferred', ctxOf(safeParse(subagent(p, 'Explore', undefined, { CLAUDE_CONFIG_DIR: cfg }).stdout)),
+    'semble: mcp__semble_code__search is available to you (load it via ToolSearch if deferred). ' +
+    'Start any "where/how/why does X work" question with ONE call: repo="' + p +
+    '", top_k=5, max_snippet_lines=10, then open the hit at start_line. ' + ROUTE_TEXT,
+    'a registration without alwaysLoad:true never claims "no ToolSearch needed"');
 }
 {
   const p = freshProject({ state: READY_STATE({ phase: 'verifying' }) });
@@ -3217,7 +3378,7 @@ const SESSION_OK = (p) => ({
     hookEventName: 'SessionStart',
     additionalContext:
       'semble: use ONE mcp__semble_code__search first (repo=' + p +
-      ', top_k=5, max_snippet_lines=10), then open the hit at start_line. rg stays for exact/exhaustive matching.',
+      ', top_k=5, max_snippet_lines=10), then open the hit at start_line. ' + ROUTE_TEXT,
   },
 });
 
@@ -3307,6 +3468,37 @@ const SESSION_OK = (p) => ({
     'sc_root_candidate signals "no marker found" with rc 1 while still printing $PWD, so a caller can refuse');
   check('SS01.5rootTotal', shRoot(BASE), [BASE, 0],
     'sc_project_root itself stays total: an errexit caller in "$(sc_project_root)" must never abort');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// H. Cross-hook invariants: one presence check, one routing line, a stamp on every asset
+// ═══════════════════════════════════════════════════════════════════════════
+{
+  const steering = [SESSION_SRC, SUBAGENT_SRC, REMINDER_SRC, PREFETCH_SRC].map((f) => readFileSync(f, 'utf8'));
+  const blockOf = (src) => {
+    const a = src.indexOf('// --- MCP presence + search routing');
+    const b = src.indexOf('\n// ----', a + 1);
+    return a < 0 || b < 0 ? '' : src.slice(a, b);
+  };
+  const blocks = steering.map(blockOf);
+  check('H1.blockIdentical', [blocks[0].length > 0, blocks.every((x) => x === blocks[0])], [true, true],
+    'session, subagent, reminder and prefetch carry the byte-identical MCP-presence + routing block');
+  check('H1.route', steering.map((src) => src.includes("const ROUTE = '" + ROUTE_TEXT + "';")), [true, true, true, true],
+    'and that block defines exactly the X9 routing line the hooks inject');
+  check('H1.noProxy', steering.map((src) => src.includes("completed.indexOf('mcp')")), [false, false, false, false],
+    'no hook gates on the state.completed proxy any more');
+  const stamps = [SESSION_SRC, PREFETCH_SRC, STATS_SRC, REMINDER_SRC, SUBAGENT_SRC]
+    .map((f) => /^\/\/ brewcode-meta: version=\d+\.\d+\.\d+ content_version=\d+\.\d+\.\d+ generated_by=brewcode:semble-setup$/
+      .test(readFileSync(f, 'utf8').split('\n')[1]));
+  check('H2.stamps', stamps, [true, true, true, true, true],
+    'all five hook assets carry the brewcode-meta stamp on line 2, so installed-copy drift is detectable');
+}
+{
+  // K1: current tool names only; `Task`, `MultiEdit` and friends never appear as compared names.
+  const dead = /'(Task|MultiEdit|TaskOutput|BashOutput|KillShell|KillBash|SlashCommand|NotebookRead)'/;
+  check('H3.toolNames', [SESSION_SRC, PREFETCH_SRC, STATS_SRC, REMINDER_SRC, SUBAGENT_SRC]
+    .map((f) => dead.test(readFileSync(f, 'utf8'))), [false, false, false, false, false],
+  'no hook compares against a retired tool name');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

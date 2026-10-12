@@ -3,19 +3,17 @@
 /**
  * docsync-gate — Stop hook (self-contained, project-local)
  *
- * At end of turn: of the docs touched this session, re-apply the current scope
- * (exclude globs + doc_type: skip), then split the survivors into stale-by-date
- * (today - last_updated > threshold_days) and undated (no last_updated at all).
- * If either set is non-empty AND not already asked this session, block once and
- * instruct Claude to ask the user. The `asked` flag prevents an infinite Stop
- * loop, so this is at most ONE block per session — the block lists every stale
- * and undated doc known at that moment; docs that go stale later in the same
- * session are not re-nagged. touched/asked reset per session.
+ * At end of turn: of the docs EDITED since the last ask (reads never count),
+ * re-apply the current scope (exclude globs + doc_type: skip) and keep those whose
+ * `last_updated` is missing, unusable (not a date / in the future) or more than
+ * threshold_days behind the file's own modification day. Non-empty -> block once,
+ * record the ask, and stay silent until a doc is edited again. Never blocks when
+ * `stop_hook_active` is set or the ask cannot be recorded, so it cannot loop.
  *
  * SELF-CONTAINED: helpers inlined, Node built-ins only, pure ESM. Reads project
  * state from <projectRoot>/.claude/docsync/ at runtime. Never throws.
  */
-import { readFileSync, writeFileSync, mkdirSync, renameSync, existsSync, readdirSync, statSync, unlinkSync } from 'fs';
+import { readFileSync, appendFileSync, mkdirSync, existsSync, readdirSync, statSync, unlinkSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 
 // --- inlined helpers -------------------------------------------------------
@@ -48,26 +46,32 @@ function projectRoot(hookCwd) {
   }
   return resolve(hookCwd || process.cwd()); // last resort: never guess, never throw in a hook
 }
-// Atomic write: temp file + rename, so a crash never leaves a half-written state.
-// The temp name carries the pid — hooks run in parallel and used to share one `.tmp`.
-function writeJsonAtomic(p, o) {
+// Session log: one JSON event per line, one O_APPEND write each (see docsync-track).
+function appendEvent(p, ev) {
   try {
     mkdirSync(dirname(p), { recursive: true });
-    const tmp = `${p}.${process.pid}.tmp`;
-    writeFileSync(tmp, JSON.stringify(o, null, 2));
-    renameSync(tmp, p);
-  } catch {}
+    appendFileSync(p, JSON.stringify(ev) + '\n');
+    return true;
+  } catch (err) {
+    try { console.error(`[docsync-gate] state not writable, not blocking: ${err.message}`); } catch {}
+    return false;
+  }
+}
+// Clock: DOCSYNC_NOW (ISO instant) pins it for the test suite; unset = real time.
+function now() {
+  const t = Date.parse(process.env.DOCSYNC_NOW || '');
+  return Number.isNaN(t) ? new Date() : new Date(t);
 }
 // Local-time YYYY-MM-DD (matches `date +%F` used by the sync flow).
 function today() {
-  const d = new Date(), p = n => String(n).padStart(2, '0');
+  const d = now(), p = n => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
-// One state file per session — a shared state.json let two concurrent sessions
-// reset each other's touched-set. No session id (rare) falls back to state.json.
+// One log per session — a shared file let two concurrent sessions reset each
+// other's touched-set. No session id (rare) falls back to state.jsonl.
 function statePath(root, sessionId) {
   const id = String(sessionId || '').replace(/[^A-Za-z0-9._-]/g, '_');
-  return join(root, '.claude', 'docsync', id ? `state-${id}.json` : 'state.json');
+  return join(root, '.claude', 'docsync', id ? `state-${id}.jsonl` : 'state.jsonl');
 }
 
 function loadConfig(root) {
@@ -77,7 +81,8 @@ function loadConfig(root) {
     // so a config written before the toggle existed keeps working.
     enabled: c.enabled !== false,
     threshold_days: Number.isInteger(c.threshold_days) && c.threshold_days > 0 ? c.threshold_days : 7,
-    exclude: Array.isArray(c.exclude) ? c.exclude : []
+    // No list in the config: `.claude/**` (reports, plans, agent files) is not project docs.
+    exclude: Array.isArray(c.exclude) ? c.exclude : ['.claude/**']
   };
 }
 // Minimal glob -> RegExp: supports **/ (any dir prefix), **, *, ?. Same as track/watch.
@@ -102,23 +107,15 @@ function docTypeOf(fields) {
   const v = String(fields.doc_type || '').trim().toLowerCase();
   return (v === 'llm' || v === 'user' || v === 'skip') ? v : 'user';
 }
-// Load state, resetting touched/asked when the session id changes.
-function loadState(root, sessionId) {
-  const s = readJson(statePath(root, sessionId), null);
-  if (!s || s.session_id !== sessionId) return { session_id: sessionId, touched: [], asked: false };
-  if (!Array.isArray(s.touched)) s.touched = [];
-  return s;
-}
-function saveState(root, s) { writeJsonAtomic(statePath(root, s.session_id), s); }
 // One file per session accumulates; the gate is the only once-per-turn hook, so it
-// sweeps. Anything older than PRUNE_DAYS goes, including stray `.tmp` leftovers.
+// sweeps. Older than PRUNE_DAYS goes: logs, earlier-version `state*.json`, stray `.tmp`.
 const PRUNE_DAYS = 14;
 function pruneOldSessions(root, keepPath) {
   try {
     const dir = join(root, '.claude', 'docsync');
-    const cutoff = Date.now() - PRUNE_DAYS * 86400000;
+    const cutoff = now().getTime() - PRUNE_DAYS * 86400000;
     for (const name of readdirSync(dir)) {
-      if (!/^state(-.*)?\.json$/.test(name) && !name.endsWith('.tmp')) continue;
+      if (!/^state(-.*)?\.jsonl?$/.test(name) && !name.endsWith('.tmp')) continue;
       const p = join(dir, name);
       if (p === keepPath) continue;
       try { if (statSync(p).mtimeMs < cutoff) unlinkSync(p); } catch {}
@@ -127,7 +124,7 @@ function pruneOldSessions(root, keepPath) {
 }
 function parseFm(abs) {
   try {
-    const txt = readFileSync(abs, 'utf8').replace(/^﻿/, ''); // strip UTF-8 BOM
+    const txt = readFileSync(abs, 'utf8').replace(/^\uFEFF/, ''); // strip UTF-8 BOM
     if (!txt.startsWith('---')) return { present: false, fields: {} };
     const m = txt.match(/^---\r?\n([\s\S]*?)\r?\n---/);
     if (!m) return { present: false, fields: {} };
@@ -143,55 +140,90 @@ function parseFm(abs) {
     return { present: true, fields };
   } catch { return { present: false, fields: {} }; }
 }
-// Whole-day delta in LOCAL time: parse YYYY-MM-DD to local midnight on both sides.
-function ageDays(dateStr) {
+// YYYY-MM-DD -> LOCAL midnight; null for a non-date, including a rolled-over one (2026-13-45).
+function parseDay(dateStr) {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateStr).trim());
   if (!m) return null;
-  const then = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-  const now = new Date();
-  const todayMid = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  return Math.floor((todayMid - then) / 86400000);
+  const [y, mo, d] = [Number(m[1]), Number(m[2]) - 1, Number(m[3])];
+  const day = new Date(y, mo, d);
+  return day.getFullYear() === y && day.getMonth() === mo && day.getDate() === d ? day : null;
+}
+// LOCAL midnight of an instant.
+function dayOf(ms) {
+  const d = new Date(ms);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+// Complete lines of the session log; a half-written tail waits for the next Stop.
+function readLines(p) {
+  let txt;
+  try { txt = readFileSync(p, 'utf8'); } catch { return []; }
+  return txt.split('\n').slice(0, -1);
+}
+// Docs edited since the last ask. `ask.seen` = log lines the gate had read when it asked,
+// so an edit appended while it was deciding stays pending instead of being swallowed.
+function pendingEdits(lines) {
+  const evs = lines.map(l => { try { return JSON.parse(l); } catch { return null; } });
+  let seen = 0;
+  for (const e of evs) if (e && e.ev === 'ask' && Number.isInteger(e.seen) && e.seen > seen) seen = e.seen;
+  const files = [];
+  evs.forEach((e, i) => {
+    if (i >= seen && e && e.ev === 'edit' && typeof e.file === 'string' && !files.includes(e.file)) files.push(e.file);
+  });
+  return files;
+}
+// Keeps the block reason short when a session edited many docs.
+const LIST_MAX = 20;
+function list(items) {
+  return items.length > LIST_MAX ? `${items.slice(0, LIST_MAX).join(', ')} and ${items.length - LIST_MAX} more` : items.join(', ');
 }
 // ---------------------------------------------------------------------------
 
 async function main() {
   try {
     const input = await readStdin();
+    // Brake: this Stop already follows a forced continuation, so never block it again.
+    if (input.stop_hook_active === true) { output({}); return; }
     const root = projectRoot(input.cwd); // config + state live here, never raw cwd
     const sessionId = input.session_id;
 
     const cfg = loadConfig(root);
     if (!cfg.enabled) { output({}); return; } // `disable`: never block a Stop while off
-    const st = loadState(root, sessionId); // resets touched/asked on session change
-    pruneOldSessions(root, statePath(root, sessionId));
+    const log = statePath(root, sessionId);
+    pruneOldSessions(root, log);
 
-    // Already nagged this session -> allow stop (persist current session id).
-    if (st.asked) { saveState(root, st); output({}); return; }
-
-    const stale = [], undated = [];
-    for (const rel of st.touched) {
+    const lines = readLines(log);
+    const todayMid = dayOf(now().getTime());
+    const stale = [], undated = [], unusable = [];
+    for (const rel of pendingEdits(lines)) {
       // Re-apply scope at gate time: exclude globs and doc_type may have changed
       // AFTER the file was recorded (e.g. the doc was marked `skip` mid-session).
       if (isExcluded(rel, cfg.exclude)) continue;
+      let mtimeMs;
+      try { mtimeMs = statSync(join(root, rel)).mtimeMs; } catch { continue; } // deleted since the edit
       const fm = parseFm(join(root, rel));
       if (docTypeOf(fm.fields) === 'skip') continue;
       const lu = fm.fields.last_updated;
       if (!lu) { undated.push(rel); continue; }
-      const days = ageDays(lu);
-      if (days === null) { undated.push(`${rel} (unparsable last_updated)`); continue; }
-      if (days > cfg.threshold_days) stale.push(`${rel} (${days}d)`);
+      const stamp = parseDay(lu);
+      if (!stamp) { unusable.push(`${rel} ("${lu.slice(0, 20)}" is not a YYYY-MM-DD date)`); continue; }
+      if (stamp > todayMid) { unusable.push(`${rel} (${lu} is in the future)`); continue; }
+      // The date is judged against the file's own modification day, not against the clock.
+      const lag = Math.round((dayOf(mtimeMs) - stamp) / 86400000);
+      if (lag > cfg.threshold_days) stale.push(`${rel} (${lag}d)`);
     }
 
-    if (stale.length === 0 && undated.length === 0) { saveState(root, st); output({}); return; }
+    if (stale.length + undated.length + unusable.length === 0) { output({}); return; }
 
-    st.asked = true;
-    saveState(root, st);
+    // Record the ask before blocking: an ask that cannot be recorded would repeat on
+    // every Stop, so an unwritable state dir means no block at all.
+    if (!appendEvent(log, { ev: 'ask', seen: lines.length })) { output({}); return; }
     const parts = [];
-    if (stale.length) parts.push(`stale (>${cfg.threshold_days}d): ${stale.join(', ')}`);
-    if (undated.length) parts.push(`no last_updated: ${undated.join(', ')}`);
+    if (stale.length) parts.push(`Edited more than ${cfg.threshold_days} days after their \`last_updated\`: ${list(stale)}.`);
+    if (undated.length) parts.push(`No \`last_updated\`: ${list(undated)}.`);
+    if (unusable.length) parts.push(`Unusable \`last_updated\`: ${list(unusable)}.`);
     output({
       decision: 'block',
-      reason: `docsync: ${parts.join(' | ')}. Ask the user via AskUserQuestion whether to sync now; if yes, sync each stale doc per its \`sync_procedure\` (a prose hint for you — no hook reads it) and set \`last_updated: "${today()}"\` in every listed doc, adding the frontmatter key to the undated ones; do NOT sync without confirmation. This is the only docsync block this session.`
+      reason: `docsync: docs edited this session need a look at their \`last_updated\`. ${parts.join(' ')} Where the date is missing or unusable, or your edit already brought the doc fully up to date, set \`last_updated: "${today()}"\` (quoted) and move on. Otherwise the doc needs a sync: re-check it against the code (its \`sync_procedure\`, when present, says where to look), then set the date. A sync rewrites content, so ask the user first — with the AskUserQuestion tool if it is available; if it is not, list the docs in your final message and finish without waiting for an answer. docsync raises a doc again this session only after it is edited again.`
     });
   } catch (err) {
     try { console.error(`[docsync-gate] ${err.message}`); } catch {}

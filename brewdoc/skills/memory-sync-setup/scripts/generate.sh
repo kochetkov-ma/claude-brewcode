@@ -867,7 +867,7 @@ toggle_skill() {
   mv "$_from" "$_to" || { echo "❌ FAILED: could not rename $_from"; exit 1; }
   echo "MOVED: $_from -> $_to"
   for r in $EMITTED_REFS; do [ -f "$TARGET_REFS/$r" ] && echo "KEPT:  $TARGET_REFS/$r"; done
-  echo "✅ $_want (takes effect in the NEXT session - skills are discovered at session start)"
+  echo "✅ $_want (a running session picks it up without a restart; bare mode: new session)"
 }
 
 # ── uninstall / purge ───────────────────────────────────────────────────────────

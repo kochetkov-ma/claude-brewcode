@@ -95,7 +95,7 @@ Default requested time-to-live is **15 days** (normally 1..30, subject to owner 
 
 The owner token is **never printed in conversation** — the skill's shell blocks curl the API, parse the token, and append it to `./brewpage-history.md` directly. Only the public URL is shown.
 
-`./brewpage-history.md` is a **private file** (keep it out of version control). Each new history row stores the returned `ownerLink` and identity metadata: `id`, `namespace`, `type`, `routingCohort`, `deliveryMode`, `modeLocked`, `hostingVersion` and `managementLink`.
+`./brewpage-history.md` is a **private file** (keep it out of version control). Each new row stores `ownerLink` and identity: `id`, `namespace`, `type`, `routingCohort`, `deliveryMode`, `modeLocked`, `hostingVersion`, `managementLink`, `createdAt` and `expiresAt`.
 
 Owner API and management links remain on `brewpage.app`, even when content uses a subdomain. Use the stored `ownerLink` and metadata; old history without metadata keeps its existing API identifiers. To delete a publication, read its owner API URL and token from history:
 

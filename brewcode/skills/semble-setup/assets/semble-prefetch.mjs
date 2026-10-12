@@ -112,6 +112,43 @@ function telemetry(cwd, sid, ev, extra) {
 }
 // ---------------------------------------------------------------------------
 
+// --- MCP presence + search routing (identical in every steering semble hook) ---
+// No hook input reports MCP registration: read <CLAUDE_CONFIG_DIR or home>/.claude.json
+// (user + local scope), then <root>/.mcp.json (project scope). Never throws.
+const MCP_NAME = 'semble_code';
+const ROUTE = 'Search routing: intent/behaviour -> semble; symbol definitions/references -> LSP; literals/paths/regex/counts -> rg.';
+
+function mcpEntry(obj) {
+  const m = obj && typeof obj === 'object' ? obj.mcpServers : null;
+  const e = m && typeof m === 'object' && !Array.isArray(m) ? m[MCP_NAME] : null;
+  return e && typeof e === 'object' && !Array.isArray(e) ? e : null;
+}
+
+const listsMcp = (a) => Array.isArray(a) && a.indexOf(MCP_NAME) >= 0;
+
+/** The `semble_code` entry Claude Code loads for `root` in the active profile, or null. */
+function mcpRegistration(root) {
+  let cfg = null;
+  try {
+    const raw = readFileSync(join(process.env.CLAUDE_CONFIG_DIR || homedir(), '.claude.json'), 'utf8');
+    if (raw.indexOf('"' + MCP_NAME + '"') >= 0) cfg = JSON.parse(raw); // name absent: skip the parse
+  } catch {
+    cfg = null;
+  }
+  const proj = cfg && cfg.projects && typeof cfg.projects === 'object' ? cfg.projects[root] : null;
+  if (proj && listsMcp(proj.disabledMcpServers)) return null;
+  const found = mcpEntry(proj) || mcpEntry(cfg);
+  if (found) return found;
+  if (proj && listsMcp(proj.disabledMcpjsonServers)) return null;
+  try {
+    const raw = readFileSync(join(root, '.mcp.json'), 'utf8');
+    return raw.indexOf('"' + MCP_NAME + '"') >= 0 ? mcpEntry(JSON.parse(raw)) : null;
+  } catch {
+    return null;
+  }
+}
+// ---------------------------------------------------------------------------
+
 /** Anti-storm guard, not a rate limiter: gate v3 already suppresses ~64% of prompts. */
 const THROTTLE_MS = 30_000;
 /**
@@ -139,7 +176,7 @@ const TOP_K = 3;
  * scripts/lib/semble-common.sh). Since 0.5.5 the content set selects an exact
  * cache variant, so this hook must probe the same variant it will search.
  */
-const PIN_SPEC = 'semble[mcp]==0.5.5';
+const PIN_SPEC = 'semble[mcp]==0.6.2';
 const CONTENT_ARGS = ['code', 'docs', 'config'];
 const CONTENT_SCOPE = [...new Set(CONTENT_ARGS)].sort().join('-');
 const INDEX_LEAF = CONTENT_SCOPE === 'code' ? 'index' : `index-${CONTENT_SCOPE}`;
@@ -154,6 +191,10 @@ const INDEX_LEAF = CONTENT_SCOPE === 'code' ? 'index' : `index-${CONTENT_SCOPE}`
 // one 0.6 s search and ~90 tokens.
 
 const META = /^(да|нет|ок|окей|ага|угу|yes|no|ok|okay|sure|thanks|спасибо|go|next|стоп|stop|y|n|\d+)[\s.!?)]*$/i;
+// A subagent result delivered as a prompt: UserPromptSubmit fires for it, nothing else marks it.
+const SYNTHETIC = /^<(?:task-notification>|agent-message\s+from=)/;
+// Real typed prompts, 8 profiles: p99 7,763 chars, 8 of 978 above 8,000 (pasted documents).
+const MAX_PROMPT_CHARS = 8000;
 const CODEWORD_ONLY = /^(\+\+[a-z]{1,3}\s*)+$/i;
 
 const INTENT = new RegExp([
@@ -205,13 +246,14 @@ function suppressor(p) {
 function gateV3(prompt) {
   const p = String(prompt || '').trim();
   if (!p) return { fire: false, why: 'empty' };
+  if (SYNTHETIC.test(p)) return { fire: false, why: 'synthetic' };
   if (p.startsWith('/')) return { fire: false, why: 'slash-command' };
   if (CODEWORD_ONLY.test(p)) return { fire: false, why: 'codeword-only' };
   if (META.test(p)) return { fire: false, why: 'meta-reply' };
 
   const body = p.replace(/^(\s*\+\+[a-z]{1,3}\s*)+/i, '').trim();
   if (body.length < 30) return { fire: false, why: 'too-short' };
-  if (body.length > 2000) return { fire: false, why: 'too-long' };
+  if (body.length > MAX_PROMPT_CHARS) return { fire: false, why: 'too-long' };
   if (/^https?:\/\/\S+$/.test(body)) return { fire: false, why: 'bare-url' };
   if (/^[~./][\w./-]+$/.test(body)) return { fire: false, why: 'bare-path' };
 
@@ -315,13 +357,10 @@ function readState(cwd) {
  *
  * `phase === 'ready'` would deadlock: semble builds its index lazily inside a
  * tool call, so nothing advances the phase until something calls semble.
- * `completed` containing "mcp" is the registration proxy — semble-mcp.sh writes
- * it in the same checkpoint patch that registers the server. Reading
- * ~/.claude.json on every prompt to check for real would cost megabytes of
- * parse per keystroke. `prereq_ready` is denied because the add-failed rollback
- * lands there with `completed` still holding "mcp".
+ * `no-mcp`: the server is not registered for the ACTIVE profile (`mcpRegistration`);
+ * a hit list pointing at a tool the session lacks would be advice it cannot follow.
  */
-function stateGate(read) {
+function stateGate(read, root) {
   if (read.kind === 'missing') return { ok: false, why: 'no-state', phase: '', enabled: false };
   if (read.kind !== 'ok') return { ok: false, why: 'corrupt', phase: '', enabled: false };
   const state = read.state;
@@ -331,8 +370,7 @@ function stateGate(read) {
   if (phase === 'disabled') return { ok: false, why: 'disabled', phase, enabled };
   if (phase === 'error') return { ok: false, why: 'error', phase, enabled };
   if (phase === 'prereq_ready') return { ok: false, why: 'not-registered', phase, enabled };
-  const completed = Array.isArray(state.completed) ? state.completed : [];
-  if (completed.indexOf('mcp') < 0) return { ok: false, why: 'no-mcp', phase, enabled };
+  if (!mcpRegistration(root)) return { ok: false, why: 'no-mcp', phase, enabled };
   return { ok: true, why: 'ok', phase, enabled, state };
 }
 
@@ -489,6 +527,7 @@ function search(cwd, cacheRoot, query) {
     return {
       hits: results
         .filter((h) => h && typeof h.file_path === 'string' && h.file_path)
+        .filter((h, i, a) => a.findIndex((x) => x.file_path === h.file_path) === i) // two chunks, one file
         .slice(0, TOP_K),
       why: 'ok',
     };
@@ -513,6 +552,7 @@ function render(hits) {
     'Open the candidates that look right BEFORE running any search of your own; they are already ranked.',
     'If none of them answers the question, say so and search normally.',
     'Name the file you actually used in your answer.',
+    ROUTE,
   ].join('\n');
 }
 
@@ -525,7 +565,7 @@ function decide(input, cwd) {
     return {};
   };
 
-  const g = stateGate(readState(cwd));
+  const g = stateGate(readState(cwd), cwd);
   if (!g.ok) return skip(g.why, { phase: g.phase, enabled: g.enabled });
 
   const marker = readMarker(cwd);
@@ -634,6 +674,7 @@ async function main() {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
 
 export {
-  COOLDOWN_MS, CONTENT_ARGS, INDEX_FILES, INDEX_LEAF, PIN_SPEC, THROTTLE_MS, TIMEOUT_COOLDOWN_MS,
-  cacheRootOf, defaultCacheRoot, distill, gateV3, indexReady, render, repoHashOf,
+  COOLDOWN_MS, CONTENT_ARGS, INDEX_FILES, INDEX_LEAF, MAX_PROMPT_CHARS, PIN_SPEC, ROUTE, THROTTLE_MS,
+  TIMEOUT_COOLDOWN_MS, cacheRootOf, defaultCacheRoot, distill, gateV3, indexReady, mcpRegistration, render,
+  repoHashOf,
 };

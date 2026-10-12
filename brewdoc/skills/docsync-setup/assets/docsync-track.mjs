@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 // brewcode-meta: version=6.4.0 content_version=6.0.0 generated_by=brewdoc:docsync-setup
 /**
- * docsync-track — PostToolUse:Write|Edit|MultiEdit hook (self-contained, project-local)
+ * docsync-track — PostToolUse:Write|Edit hook (self-contained, project-local)
  *
- * When a tracked .md file is written/edited: record it in the session touched-set
- * and, if it lacks docsync frontmatter (`last_updated`), nudge Claude to add it.
+ * When a tracked .md file is written/edited: append an `edit` event to the session
+ * log and, if it lacks `last_updated`, nudge Claude to add it — once per file per session.
  *
  * SELF-CONTAINED: helpers inlined, Node built-ins only, pure ESM. Reads project
  * state from <projectRoot>/.claude/docsync/ at runtime. Never throws, always exits 0.
  */
-import { readFileSync, writeFileSync, mkdirSync, renameSync, existsSync } from 'fs';
-import { join, relative, isAbsolute, dirname, resolve } from 'path';
+import { readFileSync, appendFileSync, mkdirSync, existsSync } from 'fs';
+import { join, relative, isAbsolute, dirname, resolve, sep } from 'path';
 
 // --- inlined helpers -------------------------------------------------------
 async function readStdin() {
@@ -42,26 +42,38 @@ function projectRoot(hookCwd) {
   }
   return resolve(hookCwd || process.cwd()); // last resort: never guess, never throw in a hook
 }
-// Atomic write: temp file + rename, so a crash never leaves a half-written state.
-// The temp name carries the pid — hooks run in parallel and used to share one `.tmp`.
-function writeJsonAtomic(p, o) {
+// Session log: one JSON event per line, one O_APPEND write each, so parallel hooks
+// never overwrite each other (the old read-modify-write of a JSON file lost entries).
+function appendEvent(p, ev) {
   try {
     mkdirSync(dirname(p), { recursive: true });
-    const tmp = `${p}.${process.pid}.tmp`;
-    writeFileSync(tmp, JSON.stringify(o, null, 2));
-    renameSync(tmp, p);
-  } catch {}
+    appendFileSync(p, JSON.stringify(ev) + '\n');
+    return true;
+  } catch (err) {
+    try { console.error(`[docsync-track] state not writable: ${err.message}`); } catch {}
+    return false;
+  }
+}
+function readEvents(p) {
+  let txt;
+  try { txt = readFileSync(p, 'utf8'); } catch { return []; }
+  return txt.split('\n').filter(Boolean).map(l => { try { return JSON.parse(l); } catch { return null; } });
+}
+// Clock: DOCSYNC_NOW (ISO instant) pins it for the test suite; unset = real time.
+function now() {
+  const t = Date.parse(process.env.DOCSYNC_NOW || '');
+  return Number.isNaN(t) ? new Date() : new Date(t);
 }
 // Local-time YYYY-MM-DD (matches `date +%F` used by the sync flow).
 function today() {
-  const d = new Date(), p = n => String(n).padStart(2, '0');
+  const d = now(), p = n => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
-// One state file per session — a shared state.json let two concurrent sessions
-// reset each other's touched-set. No session id (rare) falls back to state.json.
+// One log per session — a shared file let two concurrent sessions reset each
+// other's touched-set. No session id (rare) falls back to state.jsonl.
 function statePath(root, sessionId) {
   const id = String(sessionId || '').replace(/[^A-Za-z0-9._-]/g, '_');
-  return join(root, '.claude', 'docsync', id ? `state-${id}.json` : 'state.json');
+  return join(root, '.claude', 'docsync', id ? `state-${id}.jsonl` : 'state.jsonl');
 }
 
 function loadConfig(root) {
@@ -71,19 +83,9 @@ function loadConfig(root) {
     // so a config written before the toggle existed keeps working.
     enabled: c.enabled !== false,
     threshold_days: Number.isInteger(c.threshold_days) && c.threshold_days > 0 ? c.threshold_days : 7,
-    exclude: Array.isArray(c.exclude) ? c.exclude : []
+    // No list in the config: `.claude/**` (reports, plans, agent files) is not project docs.
+    exclude: Array.isArray(c.exclude) ? c.exclude : ['.claude/**']
   };
-}
-// Re-read from disk at write time and union, so concurrent track/watch calls never
-// drop each other's entries. Reset touched/asked when the session id changes.
-function recordTouched(root, sessionId, rel) {
-  const p = statePath(root, sessionId);
-  const disk = readJson(p, null);
-  const st = (!disk || disk.session_id !== sessionId) ? { session_id: sessionId, touched: [], asked: false } : disk;
-  if (!Array.isArray(st.touched)) st.touched = [];
-  if (st.touched.includes(rel)) return; // already recorded, skip write
-  st.touched.push(rel);
-  writeJsonAtomic(p, st);
 }
 
 // Minimal glob -> RegExp: supports **/ (any dir prefix), **, *, ?.
@@ -105,7 +107,7 @@ function isExcluded(rel, globs) {
 }
 function parseFm(abs) {
   try {
-    const txt = readFileSync(abs, 'utf8').replace(/^﻿/, ''); // strip UTF-8 BOM
+    const txt = readFileSync(abs, 'utf8').replace(/^\uFEFF/, ''); // strip UTF-8 BOM
     if (!txt.startsWith('---')) return { present: false, fields: {} };
     const m = txt.match(/^---\r?\n([\s\S]*?)\r?\n---/);
     if (!m) return { present: false, fields: {} };
@@ -125,7 +127,8 @@ function parseFm(abs) {
 // the Stop gate resolves it the same way no matter where the session wandered.
 function relOf(cwd, root, fp) {
   const abs = isAbsolute(fp) ? fp : join(cwd, fp);
-  return relative(root, abs);
+  const rel = relative(root, abs);
+  return sep === '\\' ? rel.replace(/\\/g, '/') : rel; // exclude globs are written with `/`
 }
 // doc_type default: absent or unrecognized => 'user'. Only 'skip' removes a file from scope.
 function docTypeOf(fields) {
@@ -136,7 +139,7 @@ function docTypeOf(fields) {
 function isTracked(cwd, root, fp, cfg) {
   if (!fp || !fp.endsWith('.md')) return false;
   const rel = relOf(cwd, root, fp);
-  if (!rel || rel.startsWith('..') || isAbsolute(rel)) return false;
+  if (!rel || /^\.\.(\/|$)/.test(rel) || isAbsolute(rel)) return false;
   if (isExcluded(rel, cfg.exclude)) return false;
   if (docTypeOf(parseFm(join(root, rel)).fields) === 'skip') return false;
   return true;
@@ -156,10 +159,13 @@ async function main() {
     if (!isTracked(cwd, root, fp, cfg)) { output({}); return; }
 
     const rel = relOf(cwd, root, fp);
-    recordTouched(root, sessionId, rel);
+    const log = statePath(root, sessionId);
+    const nudged = readEvents(log).some(e => e && e.ev === 'nudge' && e.file === rel);
+    const recorded = appendEvent(log, { ev: 'edit', file: rel });
 
     const fm = parseFm(join(root, rel));
-    if (!fm.present || !fm.fields.last_updated) {
+    // Once per file per session. A nudge that cannot be recorded would repeat, so it is skipped.
+    if (!fm.fields.last_updated && !nudged && recorded && appendEvent(log, { ev: 'nudge', file: rel })) {
       output({
         hookSpecificOutput: {
           hookEventName: 'PostToolUse',

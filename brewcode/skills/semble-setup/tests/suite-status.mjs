@@ -324,7 +324,7 @@ function clearState() {
   check('10-platform', j.platform, process.platform === 'darwin' ? 'darwin' : 'linux',
     'platform must be the resolved uname family');
   check('10-projectRoot', j.projectRoot, PROJECT, 'projectRoot must be the injected SEMBLE_PROJECT_ROOT');
-  check('10-pin', j.pin, { approved: '0.5.5', spec: 'semble[mcp]==0.5.5' }, 'pin must be the approved 0.5.5 spec');
+  check('10-pin', j.pin, { approved: '0.6.2', spec: 'semble[mcp]==0.6.2' }, 'pin must be the approved 0.6.2 spec');
 
   for (const sec of ['mcp', 'cache', 'guidance', 'agents', 'coverage']) {
     check(`11-${sec}-error-type`, typeof (j[sec] || {}).error, 'string',
@@ -941,8 +941,8 @@ writeFileSync(BREW_LOG, '');
   check('83-check-status', cj.status, 'precondition', 'the status field must be precondition');
   check('83-check-schema', cj.schema, 1, 'install schema is exactly 1');
   check('83-check-uvx', cj.uvx, { present: false, version: '' }, 'uvx must be reported absent');
-  check('83-check-spec', cj.semble.spec, 'semble[mcp]==0.5.5', 'the pinned spec is never floating');
-  check('83-check-pin', cj.semble.pin, '0.5.5', 'the approved pin');
+  check('83-check-spec', cj.semble.spec, 'semble[mcp]==0.6.2', 'the pinned spec is never floating');
+  check('83-check-pin', cj.semble.pin, '0.6.2', 'the approved pin');
   check('83-check-commands', cj.commands, [], 'check runs nothing, so it records no commands');
   check('83-check-brewlog', readFileSync(BREW_LOG, 'utf8'), '', 'check must not invoke brew');
 
@@ -967,15 +967,15 @@ writeFileSync(BREW_LOG, '');
   const sj = safeParse(semNoUvx.stdout);
   check('86-semble-nouvx-exit', semNoUvx.status, 3, '`semble` without uvx must exit 3');
   check('86-semble-nouvx-commands', sj.commands,
-    ["uvx --from 'semble[mcp]==0.5.5' semble --version"],
-    'the probe command is single-quoted (zsh globs the brackets) and uses --version on the 0.5.5 pin, never bare semble');
+    ["uvx --from 'semble[mcp]==0.6.2' semble --version"],
+    'the probe command is single-quoted (zsh globs the brackets) and uses --version on the 0.6.2 pin, never bare semble');
   check('86-semble-resolvable', sj.semble.resolvable, false, 'nothing was resolved');
   check('86-semble-toolInstalled', sj.semble.toolInstalled, false, 'default mode is uvx-ephemeral');
 
   const semTool = runInstall(['semble', '--tool', '--json']);
   const stj = safeParse(semTool.stdout);
   check('87-tool-commands', stj.commands,
-    ["uvx --from 'semble[mcp]==0.5.5' semble --version", "uv tool install 'semble[mcp]==0.5.5'"],
+    ["uvx --from 'semble[mcp]==0.6.2' semble --version", "uv tool install 'semble[mcp]==0.6.2'"],
     '--tool adds exactly one extra command, still pinned and quoted');
 
   const all = runInstall(['all', '--json']);
@@ -1109,7 +1109,7 @@ writeFileSync(BREW_LOG, '');
   check('94f-all-dry-note', adj.note, 'uv/uvx not on PATH; uvx is not on PATH - install uv first',
     'the coreutils step adds nothing to the note when it is only skipped');
   check('94f-all-dry-order', adj.commands,
-    ['brew install uv', 'brew install coreutils', "uvx --from 'semble[mcp]==0.5.5' semble --version"],
+    ['brew install uv', 'brew install coreutils', "uvx --from 'semble[mcp]==0.6.2' semble --version"],
     'all runs check -> uv -> coreutils -> semble, in that order');
   check('94f-all-dry-step', adj.timeout.coreutils.status, 'skipped', 'the coreutils step is reported in `all`');
   check('94f-all-dry-brewlog', readFileSync(BREW_LOG, 'utf8'), '', 'a dry `all` installs nothing');
@@ -1157,12 +1157,165 @@ writeFileSync(BREW_LOG, '');
 
   const correctCfg = JSON.parse(fixtureText(join('claude-json', 'correct.json'))).mcpServers.semble_code;
   check('99-correct-args', correctCfg.args,
-    ['--from', 'semble[mcp]==0.5.5', 'semble', '--content', 'code', 'docs', 'config'],
+    ['--from', 'semble[mcp]==0.6.2', 'semble', '--content', 'code', 'docs', 'config'],
     'the correct fixture must carry the exact frozen argv');
   check('99-correct-env', correctCfg.env, { SEMBLE_CACHE_LOCATION: CACHE_CODE },
     'placeholder substitution must yield an absolute cache root');
   check('99-correct-alwaysload', correctCfg.alwaysLoad, true,
     'the correct fixture must carry alwaysLoad:true — without it the tools stay deferred');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 11. Version check: registration vs pin vs upstream, per config dir
+// ═══════════════════════════════════════════════════════════════════════════
+{
+  const PIN = '0.6.2';
+  const SPEC = `semble[mcp]==${PIN}`;
+  const OFFLINE = { latest: null, status: 'unknown', reason: 'offline', advisory: '' };
+  const entry = (spec, extra = {}) => ({
+    type: 'stdio', command: 'uvx',
+    args: ['--from', spec, 'semble', '--content', 'code', 'docs', 'config'],
+    env: { SEMBLE_CACHE_LOCATION: CACHE_CODE }, alwaysLoad: true, ...extra,
+  });
+  const profile = (name, body) => {
+    const dir = join(HOME_DIR, name);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, '.claude.json'), typeof body === 'string' ? body : JSON.stringify(body));
+    return dir;
+  };
+  const defDir = join(HOME_DIR, '.claude');
+  const defFile = join(HOME_DIR, '.claude.json');
+
+  // GIVEN the approved registration WHEN --versions --json runs offline THEN one ok row
+  installClaudeJson('correct.json');
+  const ok = runStatus(['--versions', '--json']);
+  check('100-versions-ok-exit', ok.status, 0, 'a produced version report exits 0');
+  check('100-versions-ok-json', safeParse(ok.stdout), {
+    schema: 1, setup: 'brewcode:semble-setup', package: 'semble', pin: PIN, pinSpec: SPEC,
+    upstream: OFFLINE,
+    active: { dir: defDir, file: defFile },
+    profiles: [{
+      dir: defDir, file: defFile, active: true, registered: SPEC, registeredVersion: PIN, pin: PIN,
+      verdict: 'ok', detail: '', action: 'none',
+    }],
+  }, 'the default profile is ~/.claude backed by ~/.claude.json; SEMBLE_NO_NETWORK=1 reads as offline');
+  check('100-versions-ok-strict', runStatus(['--versions', '--strict']).status, 0,
+    '--strict exits 0 when every listed row is ok');
+
+  // GIVEN a registration pinned at an older X.Y.Z THEN stale, naming both versions
+  writeFileSync(defFile, JSON.stringify({ mcpServers: { semble_code: entry('semble[mcp]==0.5.4') } }));
+  const stale = runStatus(['--versions']);
+  check('101-versions-stale-text', stale.stdout.split('\n'), [
+    `# semble-versions schema=1 pin=${PIN} upstream=unknown upstream_status=unknown reason=offline`,
+    `${defDir} | semble[mcp]==0.5.4 | ${PIN} | stale | ${defFile}`,
+    '',
+  ], 'text form: one header, then <dir> | <registered> | <pin> | <verdict> | <file>');
+  check('101-versions-stale-strict', runStatus(['--versions', '--strict']).status, 1,
+    '--strict exits 1 when a listed row is not ok');
+
+  // GIVEN one profile per verdict WHEN --all-profiles THEN every config dir is listed once
+  const dA = profile('.claude-a', { mcpServers: {} });
+  const dB = profile('.claude-b', { mcpServers: { semble_code: entry(SPEC) } });
+  const dC = profile('.claude-c', { mcpServers: { semble_code: entry(SPEC, { alwaysLoad: false }) } });
+  const dD = profile('.claude-d', { mcpServers: { semble_code: entry('semble[mcp]') } });
+  const dE = profile('.claude-e', '{ broken');
+  const dF = profile('.claude-f', { mcpServers: { semble_code: entry('semble[mcp]==9.9.9') } });
+  mkdirSync(join(HOME_DIR, '.claude-nojson'), { recursive: true });
+  writeFileSync(join(HOME_DIR, '.claude-file'), 'not a directory');
+  const all = runStatus(['--versions', '--all-profiles', '--json'], { SEMBLE_TEST_CONFIG_DIR: dA });
+  const aj = safeParse(all.stdout);
+  check('102-all-active', aj.active, { dir: dA, file: join(dA, '.claude.json') },
+    'the active config dir is the configured one, its file is <dir>/.claude.json');
+  check('102-all-rows', aj.profiles.map((r) => [r.dir, r.registered, r.verdict, r.detail, r.action, r.active]), [
+    [defDir, 'semble[mcp]==0.5.4', 'stale', `registered 0.5.4, pin ${PIN}`, '/brewcode:semble-setup upgrade', false],
+    [dA, null, 'not_registered', '', '/brewcode:semble-setup install', true],
+    [dB, SPEC, 'ok', '', 'none', false],
+    [dC, SPEC, 'drift', 'pin matches, differs: alwaysLoad', '/brewcode:semble-setup upgrade', false],
+    [dD, 'semble[mcp]', 'unpinned', 'registered spec carries no exact X.Y.Z', '/brewcode:semble-setup upgrade', false],
+    [dE, null, 'malformed', 'config file is not valid JSON', 'fix the file by hand', false],
+    [dF, 'semble[mcp]==9.9.9', 'ahead', `registered 9.9.9, pin ${PIN}`, '/brewcode:semble-setup upgrade', false],
+  ], 'one row per profile holding a .claude.json; a dir without one and a plain file are skipped');
+  check('102-all-files', aj.profiles.map((r) => r.file),
+    [defFile, ...[dA, dB, dC, dD, dE, dF].map((d) => join(d, '.claude.json'))],
+    'the default profile reads ~/.claude.json, every other profile its own <dir>/.claude.json');
+
+  // GIVEN an ambient CLAUDE_CONFIG_DIR WHEN SEMBLE_TEST_HOME is set THEN it is ignored (hermetic)
+  const ambient = safeParse(runStatus(['--versions', '--json'], { CLAUDE_CONFIG_DIR: dB }).stdout);
+  check('103-hermetic', ambient.active, { dir: defDir, file: defFile },
+    'under SEMBLE_TEST_HOME only SEMBLE_TEST_CONFIG_DIR selects a config dir');
+
+  // GIVEN no test home WHEN the library resolves paths THEN it mirrors Claude Code
+  const lib = (fn, env) => spawnSync('bash', ['-c', `. "${join(STAGE, 'lib', 'semble-common.sh')}"; ${fn}`], {
+    encoding: 'utf8', env: { PATH: ENV.PATH, HOME: HOME_DIR, ...env },
+  }).stdout.trim();
+  check('104-paths', [
+    lib('sc_claude_json', {}), lib('sc_user_settings', {}),
+    lib('sc_claude_json', { CLAUDE_CONFIG_DIR: `${dB}/` }), lib('sc_user_settings', { CLAUDE_CONFIG_DIR: dB }),
+    lib('sc_claude_json', { CLAUDE_CONFIG_DIR: defDir }),
+  ], [
+    defFile, join(defDir, 'settings.json'),
+    join(dB, '.claude.json'), join(dB, 'settings.json'),
+    join(defDir, '.claude.json'),
+  ], 'unset = ~/.claude.json + ~/.claude/settings.json; set = both inside that dir, even for ~/.claude');
+
+  // GIVEN an explicit CLAUDE_CONFIG_DIR=~/.claude THEN the row explains which file is read
+  const explicit = safeParse(runStatus(['--versions', '--json'], { SEMBLE_TEST_CONFIG_DIR: defDir }).stdout);
+  check('105-explicit-default', explicit.profiles, [{
+    dir: defDir, file: join(defDir, '.claude.json'), active: true, registered: null, registeredVersion: null,
+    pin: PIN, verdict: 'not_registered',
+    detail: `no config file; CLAUDE_CONFIG_DIR is set explicitly: Claude Code reads this file, not ${defFile}`,
+    action: '/brewcode:semble-setup install',
+  }], 'an explicit ~/.claude does not read ~/.claude.json, and the report says so');
+
+  // GIVEN a reachable upstream WHEN it is newer/equal/older/garbage/missing THEN advisory only
+  const upstream = (name, body) => {
+    const f = join(BIN, name);
+    writeFileSync(f, body);
+    return safeParse(runStatus(['--versions', '--json'],
+      { SEMBLE_NO_NETWORK: '0', SEMBLE_UPSTREAM_URL: `file://${f}` }).stdout).upstream;
+  };
+  check('106-upstream', [
+    upstream('up-newer.json', JSON.stringify({ info: { version: '0.6.3' } })),
+    upstream('up-same.json', JSON.stringify({ info: { version: PIN } })),
+    upstream('up-older.json', JSON.stringify({ info: { version: '0.6.1' } })),
+    upstream('up-garbage.json', '<html>not json</html>'),
+  ], [
+    { latest: '0.6.3', status: 'behind', reason: 'ok', advisory: `pin behind upstream (${PIN} < 0.6.3)` },
+    { latest: PIN, status: 'current', reason: 'ok', advisory: '' },
+    { latest: '0.6.1', status: 'ahead', reason: 'ok', advisory: `pin ahead of upstream (${PIN} > 0.6.1)` },
+    { latest: null, status: 'unknown', reason: 'unparseable', advisory: '' },
+  ], 'pin vs upstream is numeric per component and never changes a row verdict');
+  const unreachable = runStatus(['--versions', '--json'],
+    { SEMBLE_NO_NETWORK: '0', SEMBLE_UPSTREAM_URL: `file://${join(BIN, 'no-such-file.json')}` });
+  check('107-upstream-unreachable', [unreachable.status, safeParse(unreachable.stdout).upstream],
+    [0, OFFLINE], 'a failed fetch is offline, and the report still exits 0');
+
+  // GIVEN a stale pinned registration WHEN the full report runs THEN it names the transition
+  installDetectStub();
+  setDetect({ schema: 1, state: 'stale_args', dump: dumpFromClaudeJson('absent.json'), expected: {}, diff: [], connectivity: 'unknown' });
+  clearState();
+  const full = runStatus(['--json'], { SEMBLE_STUB_DETECT: DETECT_FILE });
+  const fj = safeParse(full.stdout);
+  check('108-status-versions', fj.versions, {
+    pin: PIN, pinSpec: SPEC, configDir: defDir, configFile: defFile,
+    registered: 'semble[mcp]==0.5.4', registeredVersion: '0.5.4',
+    verdict: 'stale', detail: `registered 0.5.4, pin ${PIN}`, action: '/brewcode:semble-setup upgrade',
+    upstream: OFFLINE,
+  }, 'status carries the active config dir slice of the version check');
+  check('108-status-next', fj.nextStep, 'Run /brewcode:semble-setup upgrade',
+    'a pinned registration at another X.Y.Z is a pin transition, so upgrade owns the repair');
+  const human = runStatus([], { SEMBLE_STUB_DETECT: DETECT_FILE }).stdout.split('\n');
+  check('109-human-version', human.filter((l) => /^(version|upstream): /.test(l)), [
+    `version:  stale (registered 0.5.4, pin ${PIN}) -> run: /brewcode:semble-setup upgrade  [${defFile}]`,
+    'upstream: unknown (offline)',
+  ], 'the human report prints the version verdict and the offline upstream line');
+  removeDetectStub();
+
+  check('110-section-keys', Object.keys(safeParse(runStatus(['--json', '--section', 'versions']).stdout)),
+    ['schema', 'generatedAt', 'platform', 'projectRoot', 'pin', 'versions', 'verdict', 'nextStep'],
+    '--section versions emits the envelope + versions');
+  check('111-all-profiles-alone', runStatus(['--all-profiles']).status, 2,
+    '--all-profiles without --versions is bad usage');
 }
 
 // ── cleanup ─────────────────────────────────────────────────────────────────

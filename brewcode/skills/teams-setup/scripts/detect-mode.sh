@@ -42,10 +42,17 @@ esac
 
 validate_name() {
   case "$1" in
+    -*) printf 'ERROR:invalid team name (must not start with a dash)\n'; exit 1 ;;
     *[!a-zA-Z0-9_-]*) printf 'ERROR:invalid team name (alphanumeric, dash, underscore only)\n'; exit 1 ;;
     "") printf 'ERROR:empty team name\n'; exit 1 ;;
   esac
 }
+
+# Flags sit anywhere and the skill reads them itself: drop them before the positional parse,
+# else `--skip-review install x` named a team `--skip-review`. awk splits: no glob, any shell.
+ARGS=$(printf '%s' "$ARGS" | awk '
+  { for (i = 1; i <= NF; i++) if ($i != "--skip-review" && $i != "--review") out = out (out == "" ? "" : " ") $i }
+  END { print out }')
 
 # Parse first word (shell expansion, no sed regex injection)
 FIRST=""
@@ -97,7 +104,10 @@ elif is_keyword "$FIRST"; then
   fi
 else
   TEAM_NAME="$FIRST"
-  if [ -d "$TEAMS_DIR/$TEAM_NAME" ]; then
+  # Bare `<name> <mode>` pair: an explicit mode token wins, else `billing enable` ran `install`.
+  if [ -n "$REST" ] && [ -z "$(after_second)" ] && is_keyword "$(second_word)"; then
+    MODE=$(second_word)
+  elif [ -d "$TEAMS_DIR/$TEAM_NAME" ]; then
     MODE="status"
   else
     MODE="install"

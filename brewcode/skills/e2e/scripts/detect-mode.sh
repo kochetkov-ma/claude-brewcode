@@ -1,7 +1,10 @@
 #!/bin/sh
 set -eu
+# zsh does not word-split unquoted expansions: run it as sh.
+[ -z "${ZSH_VERSION:-}" ] || emulate sh
 
-ARGS="${1:-}"
+# `-` = read the prompt from stdin (SKILL.md passes it via a quoted heredoc: no shell parsing).
+if [ "${1:-}" = "-" ]; then ARGS=$(cat); else ARGS="${1:-}"; fi
 
 # Artifact-metadata standard. The plugin version that produces every artifact this run writes,
 # read from the manifest by SELF-LOCATION: scripts/ -> e2e/ -> skills/ -> <plugin root>.
@@ -43,15 +46,38 @@ case "$CONTENT_VERSION" in
   *) printf 'ERROR:cannot resolve content_version (X.Y.Z) from %s - refusing to stamp artifacts with a fake version\n' "$SKILL_MD"; exit 1 ;;
 esac
 
-# Parse first word and remainder
-FIRST=""
+# Mode per SKILL.md Prompt contract: explicit mode token anywhere wins, else EN/RU keyword score,
+# else the roster default. Words are lowercased (ASCII; RU keywords listed in both cases), flags skipped.
+TRIMMED="${ARGS#"${ARGS%%[![:space:]]*}"}"
+WORDS=$(printf '%s' "$TRIMMED" | LC_ALL=C tr 'A-Z\n\t,.;:!?()"' 'a-z         ')
+set -f
+# shellcheck disable=SC2086
+set -- $WORDS
+set +f
+FIRST="${1:-}"
 REST=""
-if [ -n "$ARGS" ]; then
-  TRIMMED=$(printf '%s' "$ARGS" | sed 's/^[[:space:]]*//')
-  FIRST=$(printf '%s' "$TRIMMED" | cut -d' ' -f1)
-  REST="${TRIMMED#"$FIRST"}"
-  REST=$(printf '%s' "$REST" | sed 's/^[[:space:]]*//')
+if [ -n "$TRIMMED" ]; then
+  RAW_FIRST="${TRIMMED%%[[:space:]]*}"
+  REST="${TRIMMED#"$RAW_FIRST"}"
+  REST="${REST#"${REST%%[![:space:]]*}"}"
 fi
+
+# Prints the mode a keyword (or the phrase "PREV WORD") scores for; nothing when none.
+keyword_mode() {
+  case "$2 $1" in
+    "set up") echo install; return ;;
+    "add tests"|"new scenario"|"добавь тесты"|"Добавь тесты") echo create; return ;;
+    "sync tests") echo update; return ;;
+  esac
+  case "$1" in
+    status|check|show|статус|Статус|проверь|Проверь|покажи|Покажи) echo status ;;
+    install|setup|init|настрой|Настрой|установи|Установи|поставь|Поставь) echo install ;;
+    create|write|создай|Создай|напиши|Напиши) echo create ;;
+    update|refresh|обнови|Обнови|актуализируй|Актуализируй) echo update ;;
+    review|quorum|validate|ревью|Ревью|провалидируй|Провалидируй) echo review ;;
+    rules|conventions|правила|Правила|конвенции|Конвенции) echo rules ;;
+  esac
+}
 
 is_keyword() {
   case "$1" in
@@ -71,25 +97,58 @@ is_unsupported_keyword() {
 
 MODE=""
 PROMPT=""
+EXPLICIT=""
+UNSUPPORTED=""
+SEEN=" "
+PREV=""
+POS=0
+BEST=""
+BEST_SCORE=0
+BEST_POS=0
+for W in "$@"; do
+  POS=$((POS + 1))
+  case "$W" in -*) PREV=""; continue ;; esac
+  [ -z "$EXPLICIT" ] && is_keyword "$W" && EXPLICIT="$W"
+  [ -z "$UNSUPPORTED" ] && is_unsupported_keyword "$W" && UNSUPPORTED="$W"
+  K=$(keyword_mode "$W" "$PREV")
+  PREV="$W"
+  [ -n "$K" ] || continue
+  case "$SEEN" in *" $K:$W "*) continue ;; esac
+  SEEN="$SEEN$K:$W "
+  eval "SC_$K=\$((\${SC_$K:-0} + 1)); FP_$K=\${FP_$K:-$POS}"
+done
+for M in status install create update review rules; do
+  eval "S=\${SC_$M:-0}; P=\${FP_$M:-0}"
+  [ "$S" -gt 0 ] || continue
+  if [ "$S" -gt "$BEST_SCORE" ]; then
+    BEST="$M" BEST_SCORE="$S" BEST_POS="$P"
+  elif [ "$S" -eq "$BEST_SCORE" ]; then
+    # Tie: status wins (read-only); of two mutating modes the keyword that comes first.
+    if [ "$BEST" != status ] && { [ "$M" = status ] || [ "$P" -lt "$BEST_POS" ]; }; then
+      BEST="$M" BEST_POS="$P"
+    fi
+  fi
+done
 
-if [ -z "$FIRST" ]; then
-  # No args: detect mode from agent file count
-  AGENT_COUNT=$(ls .claude/agents/e2e-*.md 2>/dev/null | wc -l | tr -d ' ')
+if is_unsupported_keyword "$FIRST" || { [ -z "$EXPLICIT" ] && [ -z "$BEST" ] && [ -n "$UNSUPPORTED" ]; }; then
+  [ -n "$UNSUPPORTED" ] || UNSUPPORTED="$FIRST"
+  printf 'ERROR:e2e has no %s mode. Use: install | create | update | review | rules | status. To remove the setup, delete .claude/agents/e2e-*.md and .claude/e2e/ by hand.\n' "$UNSUPPORTED"
+  exit 1
+elif [ -n "$EXPLICIT" ]; then
+  MODE="$EXPLICIT"
+  if [ "$FIRST" = "$EXPLICIT" ]; then PROMPT="$REST"; else PROMPT="$TRIMMED"; fi
+elif [ -n "$BEST" ]; then
+  MODE="$BEST"
+  PROMPT="$TRIMMED"
+else
+  # No mode word: roster installed (>= 3 e2e agents) -> status, else install; prose stays the prompt.
+  AGENT_COUNT=$(find .claude/agents -maxdepth 1 -type f -name 'e2e-*.md' 2>/dev/null | wc -l | tr -d ' ')
   if [ "$AGENT_COUNT" -ge 3 ]; then
     MODE="status"
   else
     MODE="install"
   fi
-elif is_unsupported_keyword "$FIRST"; then
-  printf 'ERROR:e2e has no %s mode. Use: install | create | update | review | rules | status. To remove the setup, delete .claude/agents/e2e-*.md and .claude/e2e/ by hand.\n' "$FIRST"
-  exit 1
-elif is_keyword "$FIRST"; then
-  MODE="$FIRST"
-  PROMPT="$REST"
-else
-  # Non-keyword first word: install with full args as prompt
-  MODE="install"
-  PROMPT="$ARGS"
+  PROMPT="$TRIMMED"
 fi
 
 printf 'MODE:%s\n' "$MODE"

@@ -1,27 +1,6 @@
 #!/usr/bin/env node
-/**
- * suite-creator-contract.mjs - pins the Claude Code 2.1.285 facts that the three
- * creator agents (hook-creator, skill-creator, agent-creator) teach, so a future
- * drift fails a test instead of shipping silently.
- *
- * The 2026-09-12 restructure split each agent into a short body + on-demand
- * `references/*.md` files. Most facts this suite pins now live in a reference,
- * not the agent body -- every such check is TWO asserts: (1) the reference still
- * states the fact, (2) the agent body still cites that reference's path. A check
- * that only verified "agent body contains X" before must never collapse back to
- * one assert just because the text moved.
- *
- * Evidence: `.codex/reports/20260930-141456_plugin-refresh/creator-upstream.md`
- * (official docs fetched 2026-09-30, changelog through CC 2.1.285); historical fixtures:
- * `.claude/reports/20260912-173000_agents-refresh/delta-{hooks,agents,skills}.md`. Fixtures are the
- * transcription of it, hardcoded so the suite runs standalone (no network, no MCP).
- *
- * Assertion policy: unconditional exact-equality / exact-set checks with a
- * description. No branching decides which asserts run. Every failure names the
- * file, the expected value and the actual value.
- *
- * Usage: node brewcode/agents/tests/suite-creator-contract.mjs
- */
+// Pins the Claude Code 2.1.296 facts the three creator agents teach. A fact that lives in a reference
+// is TWO asserts: the reference states it, the body cites that reference. Run: node <this file>.
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -37,9 +16,8 @@ const text = Object.fromEntries(
   FILES.map((f) => [f, readFileSync(join(AGENTS, f), 'utf8')]),
 );
 
-// Every `${CLAUDE_PLUGIN_ROOT}/.../*.md` reference token the three bodies cite
-// (their "Read on demand" tables) -- loaded once, keyed by basename. A missing
-// file is NOT skipped: it is recorded and reported as a defect (refs.exist below).
+// Every `${CLAUDE_PLUGIN_ROOT}/.../*.md` token the three bodies cite, loaded once, keyed by
+// basename. A missing file is not skipped: refs.exist below reports it.
 const CITED = [...new Set(FILES.flatMap((f) =>
   [...text[f].matchAll(/\$\{CLAUDE_PLUGIN_ROOT\}\/[^\s`|]+\.md/g)].map((m) => m[0]),
 ))];
@@ -91,11 +69,11 @@ const NOTIFICATION_TYPES = [
   'quota_auto_resume_stale',
 ];
 
-const REF_VER = '2.1.285';
+const REF_VER = '2.1.296';
 
 /** Claims that were true once and are now wrong; a hit, in any casing, is a regression. */
 const BANNED = [
-  ['non-blockable', 'PostToolUse does carry decision:"block" + updatedToolOutput (hooks:1923)'],
+  ['non-blockable', 'PostToolUse does carry decision:"block" + updatedToolOutput (docs: PostToolUse decision control)'],
   ['no decision field', 'PostToolUse does carry a decision field'],
   ['user_prompt', 'the UserPromptSubmit stdin field is `prompt`'],
   ['denial_reason', 'the PermissionDenied stdin field is `reason`'],
@@ -163,11 +141,7 @@ function lineAt(file, index) {
   return text[file].slice(0, index).split('\n').length;
 }
 
-/**
- * Text windows in which `file` talks about PostToolUse: every `PostToolUse` mention
- * (never the distinct PostToolUseFailure event) plus a `| POT |` row start. A claim
- * about POT counts only if it lives inside one of these.
- */
+/** 260-char windows where `file` talks about PostToolUse (never PostToolUseFailure) or starts a `| POT |` row. */
 function potWindows(file) {
   const t = text[file];
   return [...t.matchAll(/PostToolUse(?!Failure)|^\| POT \|/gm)]
@@ -283,7 +257,7 @@ function runHookTemplate(source, stdin) {
 // ---------------------------------------------------------------- 1. roster
 
 {
-  const rows = section('hooks-events.md', '## All 33 Hook Events', '### Common stdin')
+  const rows = section('hooks-events.md', '## All 33 Hook Events', '### Common input')
     .filter((l) => /^\| \d+ \|/.test(l))
     .map((l) => l.split('|')[2].trim());
   const expanded = rows.map((e) => ABBREV[e] || e).sort();
@@ -337,7 +311,7 @@ function runHookTemplate(source, stdin) {
     'hooks-events.md Notification must carry all 12 notification types (N3, 2.1.234)');
 
   // N2/N1 second location: the events-table row for StopFailure/SessionStart, same file.
-  const eventsSec = section('hooks-events.md', '## All 33 Hook Events', '### Common stdin');
+  const eventsSec = section('hooks-events.md', '## All 33 Hook Events', '### Common input');
   const sec2Row = eventsSec.find((l) => /^\| 22 \| StopFailure \|/.test(l)) || '';
   check('matcher.StopFailure.types.sec2',
     tokens(sec2Row.split('|')[4] || ''), STOPFAILURE_TYPES,
@@ -421,9 +395,8 @@ function runHookTemplate(source, stdin) {
 // ------------------------------------------------------ 7. reference version
 
 {
-  // Convention change from the restructure: only hook-creator.md still carries a
-  // "Ref ver:" header; skill-creator.md/agent-creator.md cite the verified baseline in
-  // prose instead (their own intro sentence). Guard both forms so neither can drift.
+  // Only hook-creator.md carries a "Ref ver:" header; the other two name the baseline in
+  // their intro sentence. Both forms are guarded so neither can drift.
   const refVerFiles = FILES.filter((f) => /Ref ver:/.test(text[f])).sort();
   check('refver.files', refVerFiles, ['hook-creator.md'],
     'only hook-creator.md carries the "Ref ver:" header post-restructure');
@@ -490,8 +463,7 @@ function runHookTemplate(source, stdin) {
 }
 
 // ------------------------- 10. agent-creator 2.1.234-2.1.269 delta fixtures
-// The facts moved to agent-{frontmatter-fields,scope-and-tools,template}.md;
-// citation back to agent-creator.md is asserted once, up front, in cite.agent-creator.md.
+// Facts live in agent-{frontmatter-fields,scope-and-tools,template}.md; cite.agent-creator.md asserts the citation.
 
 {
   check('experimentalCacheTtl.fieldTable',
@@ -519,9 +491,8 @@ function runHookTemplate(source, stdin) {
 // ------------------------------------------------------ 11. current authoring boundaries
 
 {
-  // GIVEN distributed skills and ordinary creator delegation
-  // WHEN inspecting their authoring instructions
-  // THEN policy remains explicit and current capabilities are not suppressed.
+  // GIVEN distributed skills and ordinary creator delegation WHEN their authoring instructions
+  // are inspected THEN policy remains explicit and current capabilities are not suppressed.
   check('skill.permissions.turnScoped',
     /AT` grants and `DT` restrictions last only the invoking turn and clear on the next user message/.test(text['skill-creator.md']), true,
     'skill creator must distinguish persistent instructions from turn-scoped tool permissions');
@@ -549,6 +520,99 @@ function runHookTemplate(source, stdin) {
   check('hook.async.advisoryOnly',
     /Async hooks cannot block or rewrite inputs/.test(text['hook-creator.md']), true,
     'hook creator must keep decisions out of async hook designs');
+}
+
+// ------------------------- 12. 2.1.296 facts: reference states, body points
+
+{
+  // GIVEN creator bodies that return every delegation to their caller
+  // WHEN their `tools:` grant is read THEN none can spawn and each body says so.
+  const toolsLine = (f) => (text[f].split(/^---$/m)[1] || '').split('\n')
+    .find((l) => l.startsWith('tools:')) || '';
+  check('fm.noAgentTool', FILES.filter((f) => /\bAgent\b/.test(toolsLine(f))), [],
+    'no creator may declare `Agent` in `tools:` while its body returns delegation to the caller');
+  check('body.noAgentTool.stated',
+    FILES.filter((f) => /This definition carries no\s+`Agent` tool/.test(text[f])).sort(),
+    ['agent-creator.md', 'skill-creator.md'],
+    'both creators that once declared `Agent` must state where over-sized work goes instead');
+
+  // A braced plugin-root token named in prose is rewritten to the install path at load.
+  check('pluginRoot.onlyInPaths',
+    FILES.flatMap((f) => hits(f, /\$\{CLAUDE_PLUGIN_ROOT\}(?!\/)/).map((n) => `${f}:${n}`)), [],
+    'a creator body may write ${CLAUDE_PLUGIN_ROOT} only as a path prefix, never to name the token');
+
+  check('debug.noClaudeDebugEnv',
+    ALL_KEYS.flatMap((f) => hits(f, /\bCLAUDE_DEBUG\b/).map((n) => `${f}:${n}`)), [],
+    '`CLAUDE_DEBUG` is not a debug switch; creator files and references teach `claude --debug`');
+  check('debug.hookCreatorSwitch', /`claude --debug` logs a `Hooks:` line/.test(text['hook-creator.md']), true,
+    'hook-creator.md Test step must name the documented switch and the 2.1.296 `Hooks:` proof line');
+
+  // Every section a body names as its pointer must exist under that heading in the reference.
+  const NAMED = [
+    ['agent-template.md', /^## Validation Checklist$/m],
+    ['agent-template.md', /^### 6\. Guardrails/m],
+    ['agent-template.md', /^### teams-setup compact exception$/m],
+    ['agent-scope-and-tools.md', /^### Discovery: walk-up scan/m],
+    ['agent-context-and-execution.md', /^## SA Resource Limits$/m],
+    ['hooks-events.md', /^### Subagent report and synthetic prompts$/m],
+    ['hooks-types-config.md', /^## Hook Types$/m],
+    ['hooks-types-config.md', /^### Conditional `if` field/m],
+    ['hooks-templates.md', /^## Test$/m],
+    ['hooks-templates.md', /^## Validation Checklist$/m],
+    ['execution-model.md', /^## String substitutions$/m],
+    ['activation-and-troubleshooting.md', /^## Validation tools$/m],
+    ['activation-and-troubleshooting.md', /^## Validation checklist/m],
+    ['design-patterns.md', /^## Location priority$/m],
+  ];
+  check('sections.named',
+    NAMED.filter(([f, re]) => !re.test(text[f])).map(([f, re]) => `${f} ${re.source}`), [],
+    'a heading a creator body points at was renamed or removed in its reference');
+
+  // Each fact below: [reference that must state it, its wording there, body, its pointer there].
+  const FACTS = [
+    ['agent.pluginValidate', 'agent-frontmatter-fields.md',
+      /fails to parse still loads[^\n]*with ALL tools[^\n]*`claude plugin validate <plugin-dir>`/,
+      'agent-creator.md', /`claude plugin validate <plugin-dir>` exits 0/],
+    ['agent.skillsPreload', 'agent-context-and-execution.md',
+      /`disable-model-invocation: true` SK is never preloaded/,
+      'agent-creator.md', /`skills:` preloads model-invocable skills only/],
+    ['agent.globGrep', 'agent-scope-and-tools.md', /`Glob, Grep, Bash` == `Bash`/,
+      'agent-creator.md', /`Glob, Grep` without `Bash`/],
+    ['agent.teammateBackground', 'agent-frontmatter-fields.md',
+      /in-process teammate that spawns a SA whose definition carries `background: true` gets an error/,
+      'agent-creator.md', /`background: true` on a definition an in-process teammate may spawn/],
+    ['skill.argumentsHeredoc', 'execution-model.md', /<<'__SKILL_ARGS__'/,
+      'skill-creator.md', /`\$ARGUMENTS` spliced into shell/],
+    ['skill.positionalSpelling', 'execution-model.md', /awk `\$\(1\)`, shell `\$\{1\}`/,
+      'skill-creator.md', /a bare `\$1` in a fence/],
+    ['skill.braceSpelling', 'execution-model.md', /Name it without the dollar-brace/,
+      'skill-creator.md', /a path token without exact\s+braces/],
+    ['skill.promptAudit', 'activation-and-troubleshooting.md', /`\/doctor prompt-audit \[path\]`/,
+      'skill-creator.md', /`\/doctor prompt-audit \[path\]`/],
+    ['hook.handback', 'hooks-events.md', /`SubagentHandback` tool call, text in `tool_input\.message`/,
+      'hook-creator.md', /`SubagentHandback`/],
+    ['hook.syntheticPrompts', 'hooks-events.md', /`<task-notification>` or `<agent-message from=`/,
+      'hook-creator.md', /matching user text on UserPromptSubmit \(subagent deliveries fire it/],
+    ['hook.onFailure', 'hooks-types-config.md', /`onFailure` \(`command` \+ `http` only, v2\.1\.295\+\)/,
+      'hook-creator.md', /hard gate set `onFailure: "block"` \(2\.1\.295\+/],
+    ['hook.ifOneTool', 'hooks-types-config.md', /\| one rule = one tool \|/,
+      'hook-creator.md', /`if` = one rule, one tool, tool events only/],
+  ];
+  for (const [name, ref, refRe, body, bodyRe] of FACTS) {
+    check(`${name}.reference`, refRe.test(text[ref]), true, `${ref} must state the fact ${body} points at`);
+    check(`${name}.body`, bodyRe.test(text[body]), true, `${body} must carry its one-line pointer to ${ref}`);
+  }
+}
+
+// ------------------------------- 13. shipped next steps name no repo-private /docs skill
+{
+  for (const ref of ['mode-sync.md', 'summary-template.md']) {
+    const body = readFileSync(join(PLUGIN_ROOT, 'skills/skills/references', ref), 'utf8');
+    check(`skill.noPrivateDocs.${ref}`, /`\/docs\b|\/docs "/.test(body), false,
+      `${ref} ships to third-party users and must not name this repo's /docs skill`);
+    check(`skill.projectDocs.${ref}`, /update the project's docs/i.test(body), true,
+      `${ref} must keep the generic project-docs reminder`);
+  }
 }
 
 // ---------------------------------------------------------------- report

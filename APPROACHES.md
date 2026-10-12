@@ -1,8 +1,8 @@
 # Approaches
 
-This page is the index of every engineering approach the brewcode plugin suite applies, and of the links
-between them: which setup skill installs which hook, which skill writes which agent, which text is injected
-at which moment. It is for the maintainer who forgot where a file comes from, and for the user who wants to
+This page indexes every engineering approach the brewcode plugin suite applies, and the links between
+them: which setup skill installs which hook, which skill writes which agent, which text is injected at
+which moment. It is for the maintainer who forgot where a file comes from, and for the user who wants to
 know what a plugin actually does to a session.
 
 Rule: every new hook, agent, generated skill or injection gets a row here - in its domain table and in
@@ -14,142 +14,48 @@ Column meanings are the same in every table below.
 
 | Column | Meaning |
 |---|---|
-| Scope | `plugin-shipped` = live as soon as the plugin is installed. `global` = written into `~/.claude/`. `project` = written into `<repo>/.claude/`. `choice` = the skill asks you which of the two, and never guesses. |
-| Trigger | The Claude Code hook event, or "context auto-load" for always-loaded text, or "user runs the skill". |
-| Fires when | Plain English. The real condition, not the event name. |
-| Excerpt | Real quoted text from the file. `...` marks cut middles. Never the whole prompt. |
+| Scope | `plugin-shipped` = live as soon as the plugin is installed. `global` = written into the Claude Code config dir (`CLAUDE_CONFIG_DIR`, else `~/.claude/`). `project` = written into `<repo>/.claude/`. `choice` = the skill asks you which, and never guesses. |
+| Trigger | The Claude Code hook event, "context auto-load" for always-loaded text, or "user runs the skill". |
+| Fires when | The real condition, not the event name. |
+| Excerpt | Real quoted text from the file; `...` marks a cut. Never the whole prompt. |
 | Project-specific | `yes` = the content differs per repository. `no` = the same bytes everywhere. |
 
-Two more conventions used across the suite:
+Two conventions across the suite:
 
-- **Fail-open, with one deliberate exception.** A discipline hook returns `{}` when anything goes wrong,
-  which means "do nothing, carry on". So a broken discipline layer costs you a good habit, never the
-  ability to keep working. Only five hooks ever block on purpose: the hard wall, the agent router, the
-  deadline guard, the return guard and the docsync gate. Two of those five depart from the rule.
-  `compact-recall.mjs` fails open *loudly* rather than silently: every error path, including its outer
-  `catch`, degrades to its `[INTENT]` fragment, because after a compaction saying nothing is itself the
-  failure. `hardmode-guard.mjs` fails **closed** (v6, BT-F01): it is a security guard, so an unparseable
-  payload, a corrupt `state.json` next to an installed manager dir, or any internal error DENIES
-  (`hardmode-guard.mjs:26-31`, `:326`, `:399-403`). The only pass-throughs left are "the manager was never
-  installed here" and the subagent discriminator, and the self-exempt exit CLI survives both.
-- **Say it at the moment it applies.** Contracts are injected at session open, at prompt submit, at subagent
-  spawn or at tool call - never left to be remembered from earlier in the context.
+- **Fail-open, with deliberate exceptions.** A discipline hook returns `{}` when anything goes wrong, so a
+  broken layer costs a good habit, never the ability to work. Five hooks block on purpose: the hard wall,
+  the agent router, the deadline guard, the return guard and the docsync gate. Two depart from the rule.
+  `compact-recall.mjs` fails open *loudly*: every error path, its outer `catch` included, degrades to the
+  `[INTENT]` fragment, because after a compaction silence is itself the failure. `hardmode-guard.mjs` fails
+  **closed**: an unparseable payload, a missing or corrupt `state.json` next to an installed manager dir, or
+  an internal error denies; it exits only 0 or 2, and its registration carries `onFailure: "block"`
+  (Claude Code >= 2.1.295) so a guard that cannot start blocks too. Its only pass-throughs are "no manager
+  installed here" and a real subagent; the self-exempt exit CLI survives both.
+- **Say it at the moment it applies.** Contracts are injected at session open, prompt submit, subagent
+  spawn or tool call - never left to be remembered from earlier in the context.
 
 ## Map
 
-Two pictures. The first is the structure: the blocks this page is made of, what lives inside each, and how
-they act on one another. The second is one turn in time: when each mechanism speaks, and which ones can stop
-you.
-
-**The blocks and what connects them.** One box per numbered section below; each row names the kind of
-artefact and then the artefact. Blue = live the moment the plugin is installed. Amber = the one file two
-generators contend over. Every other box is opt-in, or a convention that is text rather than code. A solid
-arrow acts on its target; a dotted arrow means conforms to or reuses, never a second write.
+Two pictures: how the sections act on one another, then one turn in time. Blue = live the moment the plugin
+is installed. Amber = the one file two generators contend over. Every other box is opt-in, or a convention
+that is text rather than code. A solid arrow acts on its target; a dotted arrow means conforms to or
+reuses, never a second write.
 
 ```mermaid
 classDiagram
   direction TB
 
-  class S1["1 - Always-on hooks"] {
-    hook forced-eval.mjs - ROLE SPLIT BRANCH
-    hook brewcode session-start.mjs - banner and plan link
-    hook role-recall.mjs - same frame after a compaction
-    hook compact-recall.mjs - plan intent and task graph
-    lib reminder.mjs - the one copy of that text
-    hook brewtools session-start.mjs - wall notice
-    hook manager-prompt.mjs - codewords ++m ++a ++rr ++r
-    hook hardmode-guard.mjs - ships inert and fails closed
-    config brewdoc hooks.json - empty on purpose
-    recipe project root - env then git then walk then PWD
-  }
+  class S1["1 - Always-on hooks"]
+  class S2["2 - Delegation and manager discipline"]
+  class S3["3 - Subagent control"]
+  class S4["4 - Context economy"]
+  class S5["5 - Review and anti-drift"]
+  class S6["6 - Project generators"]
+  class S7["7 - Agent authoring conventions"]
+  class S8["8 - Skill contract"]
+  class IG["intent-guard - one file two writers"]
 
-  class S2["2 - Delegation and manager discipline"] {
-    text ++m manager role and 6-field spawn brief
-    text ++a architecture first
-    text ++rr anti-regression review
-    text ++r two-phase double check
-    guard hard wall - balanced or strict
-    state manager-state.json - self-exempt exit
-  }
-
-  class S3["3 - Subagent control"] {
-    hook agent-return-contract.mjs - at spawn
-    hook agent-return-guard.mjs - at stop
-    lib agent-return-budget.mjs - 1000 and 2500 est-tokens
-    hook agent-deadline-guard.mjs - warn at 80 percent
-    hook agent-deadline-cleanup.mjs - silent
-    hook agent-router.mjs - tier 1 deterministic
-    agent haiku judge - tier 2 strict only
-    config agent-return agent-deadline agent-router json
-    text APPROVAL REQUIRED envelope - no AskUserQuestion in a subagent
-  }
-
-  class S4["4 - Context economy"] {
-    mcp semble-code pinned 0.5.5
-    rule semble-first.md - always loaded
-    hook semble-session and semble-reminder.mjs
-    hook semble-prefetch.mjs - 3 ranked paths
-    hook semble-stats.mjs - telemetry only
-    script semble-agents.sh - tools migration
-  }
-
-  class S5["5 - Review and anti-drift"] {
-    skill superreview - MODE by DEPTH
-    gate mechanical gates run first
-    ladder CONFIRMED then EVIDENCE then UNVALIDATED
-    doc references scope.md - sanctioned baseline
-    team team.md and trace.jsonl
-    vote quorum 2 of 3
-    skill brewcode-review - this repo only
-    report reports TIMESTAMP superreview
-  }
-
-  class S6["6 - Project generators"] {
-    skill superreview-setup and teams-setup
-    skill task-board-setup - agent skills rule board
-    skill docsync-setup - 3 hooks and config
-    skill memory-sync-setup - 1 skill
-    skill manager-setup and convention-setup
-    skill semble-setup - MCP at user scope
-    skill agent-return agent-deadline agent-router setup
-    skill setup-status - reports and writes nothing
-    template ssh and deploy admin - carry the approval envelope
-    rule generated hooks inline their own project root
-  }
-
-  class S7["7 - Agent authoring conventions"] {
-    section Return Contract - 8 of 8
-    section Scope guard - 7 of 8
-    section Checkpointing - 8 of 8
-    frontmatter maxTurns sized to the role
-    frontmatter Bash declared in tools - 8 of 8
-    path CLAUDE_PLUGIN_ROOT - 6 of 8
-    section Approval Contract - 2 of 8
-    stamp four provenance keys
-    suite suite-creator-contract.mjs - 27 checks on the 2.1.233 facts
-  }
-
-  class S8["8 - Skill contract"] {
-    script validate-skill.sh - exits non-zero
-    doc prompt-contract.md and mode-sync.md
-    contract prompt-first argument-hint
-    contract PLAN block - 5 fields
-    table mode keywords EN and RU
-    modes canonical 7 - enable and disable 11 of 11
-    rule invocation invariant 27 of 27
-    suites 9 regression harnesses - 565 checks
-  }
-
-  class IG["intent-guard - one file two writers"] {
-    agent project agents intent-guard.md
-    rule tiered sources of truth
-    budget 15 tool calls and 10 minutes
-    verdict ALIGNED or MINOR or MAJOR DRIFT
-    rule REUSE leaves it byte-untouched
-    rule never the code reviewer
-  }
-
-  S1 --> S2 : injects the codeword blocks every turn
+  S1 --> S2 : injects the codeword blocks on a codeword turn
   S6 --> S2 : arms the inert hard wall
   S6 --> S3 : installs the router deadline and return hooks
   S6 --> S4 : installs search hooks and convention loading
@@ -160,18 +66,17 @@ classDiagram
   S5 --> S7 : the member agents it spawns carry these sections
   S2 --> S3 : the 6-field brief opens every spawn
   S4 --> S3 : injects search guidance at each spawn
-  S3 --> S7 : its budget is quoted in every Return Contract
-  S8 ..> S7 : shares the four provenance stamp keys
+  S3 --> S7 : Return sections name its budget
+  S8 ..> S7 : shares the provenance stamp keys
 
   style S1 fill:#1f6feb,stroke:#0b3d91,color:#ffffff
   style IG fill:#bf8700,stroke:#7d5300,color:#ffffff
 ```
 
-**One turn in time.** A blue band is a moment in the main session, a violet band a moment inside a subagent;
-the band note names the hook event. A solid arrow injects text or passes control. A crossed arrow marks a
-mechanism that can deny the call or block the return - everything else fails open and stays silent. One band
-is not part of the turn sequence: the compaction band fires whenever the context is squeezed, mid-turn
-included, and it can fire several times in one session.
+**One turn in time.** Blue band = main session, violet = inside a subagent; the band note names the hook
+event. A crossed arrow marks a mechanism that can deny the call or block the return - everything else fails
+open and stays silent. The compaction band fires whenever the context is squeezed, mid-turn included, and
+can fire several times per session.
 
 ```mermaid
 sequenceDiagram
@@ -185,7 +90,7 @@ sequenceDiagram
 
   rect rgba(31,111,235,0.14)
     Note over BC,PH: SessionStart
-    BC->>MS: banner, update check
+    BC->>MS: banner, update check - human only
     BC->>MS: plan symlink on clear
     BT->>MS: hard wall notice, only if armed
     PH->>MS: semble repo directive
@@ -194,23 +99,20 @@ sequenceDiagram
 
   rect rgba(31,111,235,0.14)
     Note over BC,MS: SessionStart matcher compact, after each compaction
-    BC->>MS: role-recall, same ROLE SPLIT BRANCH text
     BC->>MS: compact-recall, PLAN from this transcript or LATEST.md
     BC->>MS: compact-recall, TASKS call TaskList first
   end
 
   rect rgba(31,111,235,0.14)
-    Note over U,PH: UserPromptSubmit, every turn
+    Note over U,PH: UserPromptSubmit, every typed prompt
     U->>MS: prompt
-    BC->>MS: ROLE, SPLIT, BRANCH only eligible prompts 1,10,20,...
-    BT->>MS: codewords ++m ++a ++rr ++r
-    BT->>MS: auto manager block while wall is on
+    BT->>MS: codewords +++ ++m ++a ++rr ++r
     PH->>MS: semble prefetch, 3 ranked paths
   end
 
   rect rgba(31,111,235,0.14)
     Note over MS,PH: PreToolUse, main session
-    MS->>PH: Write, Edit or Bash
+    MS->>PH: Write, Edit, Bash or Monitor
     PH--xMS: hard wall denies, delegate instead
     PH->>MS: semble wrong-tool nudge
   end
@@ -218,8 +120,8 @@ sequenceDiagram
   rect rgba(130,80,223,0.16)
     Note over MS,SA: Subagent spawn
     PH--xMS: router names the real expert
-    PH->>MS: haiku judge, strict level only
-    MS->>SA: Task spawn
+    PH->>MS: agent judge, strict level only
+    MS->>SA: Agent spawn
     PH->>SA: return contract announced
     PH->>SA: semble subagent nudge
     Note over SA: no AskUserQuestion here - approvals leave as envelopes
@@ -233,16 +135,16 @@ sequenceDiagram
   end
 
   rect rgba(130,80,223,0.16)
-    Note over MS,SA: SubagentStop
+    Note over MS,SA: SubagentStop or SubagentHandback
     SA->>MS: final answer
-    PH--xSA: over budget, compress once
-    PH->>PH: deadline state cleanup, silent
+    PH--xSA: over budget, challenged once
+    PH->>PH: deadline stop stamp, silent
   end
 
   rect rgba(31,111,235,0.14)
     Note over MS,PH: PostToolUse and Stop
     PH->>PH: docsync track, semble telemetry
-    PH--xMS: docsync gate, stale docs, once
+    PH--xMS: docsync gate, edited docs, once per edit
     MS->>U: answer
   end
 ```
@@ -253,191 +155,156 @@ These run the moment the plugin is installed. No setup skill, no config file, no
 
 | Approach | File | Scope | Trigger | Fires when | Excerpt | Purpose | Problem solved | Project-specific |
 |---|---|---|---|---|---|---|---|---|
-| Delegation reminder on eligible prompts | `brewcode/hooks/forced-eval.mjs` | plugin-shipped | `UserPromptSubmit`, timeout 2 s | Eligible prompts 1, 10, 20, ...; slash commands included. Skip empty/meta replies and unavailable counters: `yes`, `no`, `ok`, `continue`, a bare number, a single letter | `[ROLE] Manager: scan agents ... expert for this domain exists -> delegate regardless of size; ... [SPLIT] One agent for an hour = drift you cannot observe ... [BRANCH] Stay on the current branch; none chosen -> main.` - the text itself is not in this file: it is `REMINDER_TEXT` from `brewcode/hooks/lib/reminder.mjs`, shared with `role-recall.mjs` | Re-state role, sizing and branch defaults at eligible cadence | The model does domain work itself while a project expert agent exists; one giant agent runs for an hour; a feature branch nobody asked for | no |
-| Session banner, update check, plan symlink | `brewcode/hooks/session-start.mjs` | plugin-shipped | `SessionStart`, timeout 3 s | Every session start. The symlink part runs only when `source === 'clear'`, and only if the newest `.md` in `~/.claude/plans/` is under 60 s old (`PLAN_FRESHNESS_MS`, `:35`); it then points `<repo>/.claude/plans/LATEST.md` at that global file. Two containment checks, both refusals: `<repo>/.claude/plans` that is itself a **symlink** is left alone and nothing is linked - `mkdirSync`/`symlinkSync` follow it and would write `LATEST.md` outside the project root (`:140-148`); and an existing `LATEST.md` is replaced only when it is a symlink whose target resolves inside the plans dir, so a hand-written file, a directory or a foreign symlink is preserved and logged as a conflict (`claimLatestLink`, `:74-107`). The whole output is a `systemMessage` for the human - the model is sent nothing | `brewcode: <root> \| session: <id> \| perm: <mode>` and, when out of date, `UPDATE brewcode <installed> -> <released>: <link to the releases page>`; the link step logs `Linked: .claude/plans/LATEST.md -> <plan name>` | Show the live build and permission mode; keep the just-written plan reachable from the project | Running an old build silently; losing the plan file when Plan Mode clears the session | no |
-| Role frame re-injected after a compaction | `brewcode/hooks/role-recall.mjs` | plugin-shipped | `SessionStart` with `"matcher": "compact"`, timeout 2 s | Only after a compaction, auto or `/compact`. Belt-and-braces on top of the matcher: anything but `input.source === 'compact'` returns `{}`, so `startup`, `resume`, `clear` and `fork` are silent - they still carry the frame. Unconditional otherwise, and compactions chain | The same three lines as `forced-eval.mjs`, byte-for-byte: both import `REMINDER_TEXT` from `brewcode/hooks/lib/reminder.mjs`, which exists so `[ROLE]` / `[SPLIT]` / `[BRANCH]` cannot drift between two hooks on two different events | Put the manager role back in front of the model at the one moment the summary has just collapsed every earlier copy of it | An auto-compaction has no prompt, so `forced-eval.mjs` never fires; after a few compactions the session quietly stops delegating | no |
-| Plan, intent and task graph re-anchored after a compaction | `brewcode/hooks/compact-recall.mjs` | plugin-shipped | `SessionStart` with `"matcher": "compact"`, timeout 2 s | Same moment, same `source === 'compact'` guard, and it ALWAYS injects there. It scans this session's `transcript_path` only - `statSync` must report a regular file (a FIFO reports size 0 and then blocks `readFileSync` forever) of at most `MAX_TRANSCRIPT_BYTES`, `64 * 1024 * 1024`; then `Buffer.lastIndexOf` / `includes`, no JSONL parsing, ~6 ms scan (one buffer read plus five substring scans) on an 8.13 MB transcript, ~30 ms full process wall clock standalone / ~55 ms spawned from a node parent (node startup dominates). Ladder, first match wins, five rungs since v6: `plan-file` -> `plan-latest` -> `plan-missing` -> `plan-in-summary` -> `intent`. `plan-latest` reads `<root>/.claude/plans/LATEST.md` (`compact-recall.mjs:150-164`) and exists because a plan that PREDATES the transcript - `--resume`, or a session resumed after `/clear` - leaves no `planFilePath` to scan for; that link is hook-owned and project-scoped, so it can never be another repo's plan, and it sits above `plan-missing` because a real file beats a dead path. `[TASKS]` is appended only when the transcript contains `"name":"TaskCreate"` | `[PLAN] Read <path> with the Read tool before doing any work. It holds the role model and the delegation split for this session ...`, or `[PLAN] Read <root>/.claude/plans/LATEST.md ... It is this project's latest plan, carried over from before the compact ...`, or `[PLAN] The plan file for this session is gone or unreadable at <path>. Rebuild the frame from the compact summary plus TaskList, not from scratch.`, or `[PLAN] This session ran in plan mode; no plan file is available. ...`, or `[INTENT] Re-read the user ORIGINAL task and intent from the compact summary and keep executing THAT. Do not continue from the most recently remembered fragment, and do not re-scope the work.` Plus, when a graph exists: `[TASKS] Then call TaskList: a task graph created before the compact ALREADY EXISTS in this session. ... The built-in reminder lags several turns and may show empty, so TaskList is the authority. Then resume the work.` | Say what we were doing, from this session's own record, before the model decides for itself | The session loses the user's original task and starts a brand-new task graph on top of the old one | no |
-| Hard-wall awareness at session open | `brewtools/hooks/session-start.mjs` | plugin-shipped, reads project state | `SessionStart`, timeout 2 s | Every session start, but speaks only when `.claude/brewtools/manager/state.json` has `hard: true` in this project | `Manager HARD wall active (project, level=...): main session is orchestration-only - delegate in bounded units ... /brewtools:manager-setup disable to exit.` | Tell the model at turn zero that its own tools are blocked, and how to leave | A whole session of denied tool calls with no explanation | yes |
-| Codeword injection, plus an automatic block while the wall is on | `brewtools/hooks/manager-prompt.mjs` | plugin-shipped; text resolves project -> global -> plugin default | `UserPromptSubmit`, timeout 3 s | Every prompt. Matches `++m`, `++a`, `++rr`, `++r` as standalone tokens, so `++rr` never matches as `++r`. With no codeword it still injects the manager block when `state.hard === true` | `User typed \`++m\` - Manager mode is active for this turn:` then the block resolved from `manager-setup/references/full.md`, which opens `[ROLE: MANAGER] ... You are a Manager, not an executor. Your only actions: think, plan, build the TaskGraph, delegate, observe, integrate.` Several blocks join with `---`. The five block texts are quoted row by row in section 2 | Switch on a heavy behaviour rule for one turn by typing two characters | Standing instructions cost tokens every turn; typed by hand they drift out of use | yes, text is overridable |
-| Physical main-session tool wall, shipped but not registered | `brewtools/hooks/hardmode-guard.mjs` | project, and only after install. The file ships inert: it is **not** listed in `brewtools/hooks/hooks.json` | `PreToolUse` matcher `*` | Before every tool call, but three conditions must all hold. (1) `/brewtools:manager-setup install` has copied the file into the project and registered it in `.claude/settings.local.json` - the shipped copy is never registered. (2) The project `state.json` has `hard: true`; a project with **no** manager dir at any candidate root returns `{}`, but a manager dir whose `state.json` is missing, unparseable or not an object resolves to `{ hard: true, level: 'strict' }` and denies (`readProjectState`, `:98-121`). (3) The stdin payload carries `agent_id` (`:339-342`) - that key is present only inside a real subagent, which always passes through. `agent_type` alone is not enough: a main session started with `claude --agent <name>` carries it too, so it stays walled. Neither key present also means walled | `Hard wall: Write is blocked in the main session - delegate to a subagent. ... To exit run \`/brewtools:manager-setup disable\`` | Make the manager role a machine rule, not advice | The model reads "delegate everything" and edits a file anyway | yes |
+| Session banner, update check, plan symlink | `brewcode/hooks/session-start.mjs` | plugin-shipped | `SessionStart`, timeout 3 s | Every session start; the whole output is a `systemMessage` for the human, the model gets nothing. The plan link runs only on `source === 'clear'`: the newest `.md` in the plans dir (Claude Code's `plansDirectory` when it resolves inside the project root, else `<CLAUDE_CONFIG_DIR or ~/.claude>/plans`) under 60 s old (`PLAN_FRESHNESS_MS`) becomes `<repo>/.claude/plans/LATEST.md`, and the target is recorded as `_planLink` in `.claude/tasks/cfg/brewcode.state.json`. A symlinked `.claude/plans` is refused (the link would land outside the project); an existing `LATEST.md` is replaced only when it is a link this hook made (`claimLatestLink`) | `brewcode: <plugin root> \| session: <id>`, plus ` \| perm: <mode>` when the payload has one, and when out of date `UPDATE brewcode <installed> → <released>: <releases URL>` (remote checked at most once per 24 h) | Show the live build; keep the just-written plan reachable from the project | Running an old build silently; losing the plan when Plan Mode clears the session | no |
+| Plan, intent and task graph re-anchored after a compaction | `brewcode/hooks/compact-recall.mjs` | plugin-shipped | `SessionStart` matcher `compact`, timeout 2 s | After every compaction, auto or `/compact`; anything but `source === 'compact'` returns `{}`, and on `compact` it always injects. Scans only this session's `transcript_path` - a regular file of at most `MAX_TRANSCRIPT_BYTES` (64 MB) - with `Buffer.lastIndexOf`/`includes`, no JSONL parsing. Ladder, first match wins: `plan-file` -> `plan-latest` -> `plan-missing` -> `plan-in-summary` -> `intent`. `plan-latest` accepts `LATEST.md` only as a symlink session-start made, and tells the model to check it against the summary. `[TASKS]` is added only when the transcript holds `"name":"TaskCreate"` | `[PLAN] Read <path> with the Read tool before doing any work.` / `It is the plan for this session: follow it, do not re-derive it.`; last rung `[INTENT] Re-read the user ORIGINAL task and intent from the compact summary and keep executing THAT.`; plus `[TASKS] Then call TaskList: a task graph created before the compact ALREADY EXISTS in this session.` | Say what we were doing, from this session's own record | The session loses the original task and starts a second task graph on top of the first | no |
+| Hard-wall awareness at session open | `brewtools/hooks/session-start.mjs` | plugin-shipped, reads project state | `SessionStart`, timeout 2 s | Every session start; speaks only when the project root's `.claude/brewtools/manager/state.json` has `hard: true` | `Manager HARD wall active (project, level=...): a PreToolUse guard denies Write/Edit and ... in the main session; subagents are not restricted, so implementation goes through the Agent tool. /brewtools:manager-setup disable to exit.` | Tell the model at turn zero that its tools are walled, and how to leave | A session of unexplained denials | yes |
+| Codeword injection | `brewtools/hooks/manager-prompt.mjs` | plugin-shipped; text resolves project -> global -> plugin default | `UserPromptSubmit`, timeout 3 s | A typed prompt carrying `++m`, `++a`, `++rr` or `++r` as a standalone token (`++rr` beats `++r`), or `+++` in plan mode. Subagent deliveries (`<task-notification>`, `<agent-message`) return `{}`, and so does a prompt with no codeword: the wall state injects nothing | `` User typed `++m` — Manager mode is active for this turn: `` then the resolved block; several blocks join with `---`, capped at 9000 chars. Block texts: section 2 | Switch on a heavy behaviour rule for one turn with a few characters | Standing instructions cost tokens every turn; typed by hand they drift out of use | yes, text is overridable |
+| Main-session tool wall, shipped but not registered | `brewtools/hooks/hardmode-guard.mjs` | project, only after install; **not** in `brewtools/hooks/hooks.json` | `PreToolUse` matcher `*`, `onFailure: "block"` | Before every tool call when all hold: (1) `/brewtools:manager-setup install` copied it to `<repo>/.claude/brewtools/manager/` and registered it in `.claude/settings.local.json`; (2) the project `state.json` has `hard: true` - no manager dir at any candidate root returns `{}`, but a manager dir whose `state.json` is missing or unreadable resolves to `{ hard: true, level: 'strict' }` and denies; (3) the payload has no non-empty `agent_id` (`isSubagent`). A real subagent passes; a `claude --agent <name>` main session carries only `agent_type` and stays walled | `Hard wall: Write is blocked in the main session. Manager mode keeps the main context for orchestration, so pass this step to a subagent with the Agent tool: ...` | Make the manager role a machine rule, not advice | The model reads "delegate" and edits a file anyway | yes |
 | No hooks at all | `brewdoc/hooks/hooks.json` | plugin-shipped | none | Never. The file is `{"hooks":{}}` | - | brewdoc is a pure skill plugin, zero runtime cost | A hook process on every prompt for a plugin with nothing to inject | no |
-| No hooks and no `hooks.json` | `brewui/` | plugin-shipped | none | Never. There is no `brewui/hooks/` directory at all, and `brewui/skills/` holds only `.gitkeep` | - | A registered placeholder plugin that costs a session nothing | Assuming from the three tables above that every plugin in the suite has a hook layer | no |
-| One shared stdin/stdout/logging helper per plugin | `brewcode/hooks/lib/utils.mjs` (227 lines), `brewtools/hooks/lib/utils.mjs` and `brewdoc/hooks/lib/utils.mjs` (91 lines each) | plugin-shipped | none | Never on its own. Imported by the entry hooks for `readStdin`, `output`, `capText`, `log`, `loadConfig`, `getState`, `saveState`. `capText` and `TEXT_CHANNEL_CAP` live here rather than in one hook for the same reason `lib/reminder.mjs` exists: three brewcode hooks cap the same way and a copy would drift. The three copies are not identical, and brewdoc's is an orphan - brewdoc registers no hooks, so nothing imports it | `export async function readStdin()` ... `export function output(response)` | One place per plugin for the fail-open stdin/stdout shape every hook repeats | Each hook re-implementing stdin parsing and the empty-`{}` reply, each with its own bug | no |
+| No hooks and no `hooks.json` | `brewui/` | plugin-shipped | none | Never. There is no `brewui/hooks/`, and `brewui/skills/` holds only `.gitkeep` | - | A registered placeholder that costs a session nothing | Assuming every plugin in the suite has a hook layer | no |
+| One stdin/stdout/logging helper per hook plugin | `brewcode/hooks/lib/utils.mjs`, `brewtools/hooks/lib/utils.mjs` | plugin-shipped | none | Never on its own; imported by the entry hooks for `readStdin`, `output`, `log`, `projectRoot`. The brewcode copy also holds `capText`/`TEXT_CHANNEL_CAP`, the state helpers and the plans-dir resolver shared by its two hooks. The two copies differ | `export function projectRoot(hookCwd)` ... `export function output(response)` | One place per plugin for the fail-open stdin/stdout shape | Each hook re-implementing stdin parsing and the empty-`{}` reply, each with its own bug | no |
 
 Notes for this section:
 
-- All four text-injecting hooks in this section use `hookSpecificOutput.additionalContext`, never
-  `updatedInput`, which is silently dropped on `UserPromptSubmit` in CC 2.1.x: the two on that event
-  (`forced-eval.mjs`, `manager-prompt.mjs`) and the two on `SessionStart` matcher `compact`
-  (`role-recall.mjs`, `compact-recall.mjs`). All four cap injected text at 9000 chars, below a 10K
-  disk-spill threshold noted for CC 2.1.174 - the three brewcode ones through the shared
-  `capText` / `TEXT_CHANNEL_CAP` in `brewcode/hooks/lib/utils.mjs:40`, `:48`, brewtools' through its own
-  local `capText(s, max = 9000)` (`manager-prompt.mjs:34`).
-- Channel semantics, verified against the CC 2.1.232 bundle: `updatedInput` (`PreToolUse`) and
-  `updatedToolOutput` (`PostToolUse`) are single-writer/last-wins - every hook on the event receives the
-  same original value and the runner keeps only the last hook's edit, so two hooks writing either one
-  clobber each other; both are schema-validated, and a malformed value denies the tool call rather than
-  being ignored. `additionalContext` accumulates across every hook registered on the same event - no
-  clobbering, any number of hooks compose. `PreToolUse` `additionalContext` reaches only the parent
-  session, never a subagent; `SubagentStart` `additionalContext` reaches the subagent and supports an
-  `agent_type` matcher. Use the channel belonging to the intended recipient.
-- brewcode registers three hooks on `SessionStart`, and they split cleanly. `session-start.mjs` runs on every
-  start and sends the model nothing - its whole output is a `systemMessage` for the human. The other two,
-  `role-recall.mjs` and `compact-recall.mjs`, sit in a `"matcher": "compact"` group, run only after a
-  compaction, and speak *only* to the model through `additionalContext`, with no `systemMessage` at all.
-  So "brewcode's SessionStart is human-only" holds for the unmatched hook and is false for the compact pair.
-- **One project-root recipe, copied on purpose.** Every hook and installer in the suite resolves the root
-  in this fixed order: `CLAUDE_PROJECT_DIR` -> git toplevel -> upward walk for `.git`/`.claude` -> `PWD`
-  (`brewcode/agents/hook-creator.md:373-423`, the JS form omitting the git step). `CLAUDE_PROJECT_DIR` is
-  exported unconditionally into every hook child process, both exec and shell form - it is empty in an
-  interactive or Bash-tool shell, and that is expected, not evidence it is unset for hooks - and it is
-  substituted inside skill markdown since 2.1.196. `input.cwd` has exactly one job, resolving relative
-  paths out of `tool_input`; it drifts mid-session (see `CwdChanged`) so it never keys config, state or
-  log placement. Plugin-shipped hooks import `projectRoot` from their plugin's `lib/utils.mjs`
-  (`brewcode/hooks/lib/utils.mjs:15`); every **generated** hook inlines a byte-identical copy instead, and
-  that duplication is deliberate, not debt - a generated hook lands alone in someone else's repo with no
-  plugin lib to import (`docsync-track.mjs:9`, `-watch.mjs:11`, `-gate.mjs:15`, all "SELF-CONTAINED:
-  helpers inlined, Node built-ins only"). Same reason `hardmode-guard.mjs:5-7` carries no imports at all.
-  A hook never exits non-zero because the root was ambiguous; an installer about to write does abort.
-- **`${CLAUDE_PLUGIN_DATA}` is official, persistent and writable.** `~/.claude/plugins/data/<plugin-id>/`,
-  survives plugin updates (2.1.78+). `~/.claude/**` is a sensitive path, so a `Write`/`Edit` **tool** call
-  there is routed to a permission ASK - not a block - and `plugins/` is not one of the carve-outs; a hook
-  or Bash subprocess writes there freely. So it is a fully supported persistent write target, just not
-  from a `Write`/`Edit` tool call in an unattended run, where `${CLAUDE_PROJECT_DIR}/.claude/<subdir>/` is
-  the right home (`hook-creator.md:351`, `:364-371`). Write the token bare: `${VAR:-fallback}` is never matched by
-  the substitution regex, reaches the shell verbatim, and the fallback then always wins silently.
+- Text reaches the model through `hookSpecificOutput.additionalContext`, never `updatedInput`, which
+  `UserPromptSubmit` ignores. Both injecting hooks cap at 9000 chars, under the 10,000-char
+  `additionalContext` cap: brewcode through `capText`/`TEXT_CHANNEL_CAP` in `brewcode/hooks/lib/utils.mjs`,
+  brewtools through a local `capText(s, max = 9000)`.
+- `additionalContext` accumulates across hooks on one event; `updatedInput`/`updatedToolOutput` are
+  single-writer/last-wins. `SubagentStart` context reaches the subagent, `PreToolUse` context only the
+  calling session (`brewcode/skills/agents/references/hooks-io-contract.md`).
+- brewcode registers two hooks, both on `SessionStart`: `session-start.mjs` unmatched (human-only
+  `systemMessage`), `compact-recall.mjs` in a `"matcher": "compact"` group (model-only `additionalContext`).
+- **One project-root recipe, copied on purpose.** Every hook and installer resolves the root in this order:
+  `CLAUDE_PROJECT_DIR` -> git toplevel -> upward walk for `.git`/`.claude` -> `PWD`
+  (`brewcode/skills/agents/references/hooks-env.md`; the plugin JS form skips the git step). Hook processes
+  always get `CLAUDE_PROJECT_DIR`; an interactive or Bash-tool shell does not, which is expected. `input.cwd`
+  only resolves relative paths in `tool_input`: it drifts mid-session (`CwdChanged`), so it never keys
+  config, state or logs. Plugin hooks import `projectRoot` from `lib/utils.mjs`; every **generated** hook
+  and `hardmode-guard.mjs` inline a copy (Node built-ins only), because they land alone in someone else's
+  repo. A hook never exits non-zero over an ambiguous root; an installer about to write aborts.
+- **`${CLAUDE_PLUGIN_DATA}`** (`~/.claude/plugins/data/<plugin-id>/`) survives plugin updates; a hook writes
+  there freely, a `Write`/`Edit` tool call gets a permission ask, so unattended runs use
+  `${CLAUDE_PROJECT_DIR}/.claude/<subdir>/` (`hooks-env.md`).
 - Installing brewtools does **not** arm the wall. Only `/brewtools:manager-setup install` does.
-- Nothing in the suite registers `SessionEnd`, `PreCompact` or `PostCompact`. Zero hits across all three
-  `hooks.json`, every generated `assets/INSTALL.md` and this repo's own `.claude/settings.json`. It still has
-  nothing to say once a session is over. Compaction is a different case: the suite does speak there, but it
-  speaks *after* the squeeze, on `SessionStart` matcher `compact`, because that is the only channel that
-  reaches the model - `PostCompact` output lands in the UI as `userDisplayMessage`, which the model never
-  sees (`compact-recall.mjs:6-7`), and anything injected before a compaction is exactly what the compaction
-  then collapses.
+- Nothing in the suite registers `SessionEnd`, `PreCompact` or `PostCompact` (zero hits across the three
+  `hooks.json`, every generated `assets/INSTALL.md` and this repo's `.claude/settings.json`). The suite speaks
+  *after* a compaction, on `SessionStart` matcher `compact`: `PostCompact` cannot inject context, and
+  anything injected before a compaction is what the compaction collapses.
 
 ## 2. Delegation and manager discipline
 
-The forced-eval role/split/branch reminder is plugin-registered and emits on eligible prompts 1,10,20,...; post-compaction recall is separate.
-Everything below is optional and sits on top of that base. Codewords ship with the plugin and always work; the
-wall has to be installed first.
+Codewords ship with brewtools and always work; the wall must be installed first. Nothing here is injected
+unless you type a codeword.
 
 | Approach | Installed by | Scope | Trigger | Fires when | Excerpt | Purpose | Problem solved | Project-specific |
 |---|---|---|---|---|---|---|---|---|
-| `++m` manager role | text in `brewtools/skills/manager-setup/references/full.md`; `manager-setup` only re-texts it | plugin-shipped | `UserPromptSubmit` | You type `++m` and the session is not in plan mode. One turn only | `You are a Manager, not an executor. Your only actions: think, plan, build the TaskGraph, delegate, observe, integrate. ... "Faster to do it myself" is a symptom, not an argument - delegate anyway.` | Put the session in orchestrator mode for one turn | The model works instead of fanning out | no |
-| 6-field spawn brief, part of the `++m` block | same file, `references/full.md` | plugin-shipped | `UserPromptSubmit` | Same turn as `++m` | `GOAL ... ROLE - what this agent owns; what it must NOT touch. SCOPE - exact paths ... CONTEXT ... CONSUMER ... DONE - acceptance criteria + the exact report shape. A bare one-line task is never enough.` | Every subagent brief carries six named fields | The agent invents its own scope and returns an unusable report shape | no |
-| `++m` in plan mode | `references/planmode.md`, appended to the `full.md` block | plugin-shipped | `UserPromptSubmit` with `permission_mode === 'plan'` | You type `++m` in plan mode. Adds a plan addon to the full block | `This instruction dies when you exit plan mode - the PLAN does not. So the role must live INSIDE the plan ... STEP 0 ... "Re-assume MANAGER role. Create the ENTIRE TaskGraph now"` | Carry the manager role across the plan-mode boundary | The role evaporates on exit and implementation starts hand-coding | no |
-| `++a` architecture first | `references/architect.md` | plugin-shipped | `UserPromptSubmit` | You type `++a`; combines with the other groups | `Before implementation, delegate an architecture pass ... do not design it inline. ... As SIMPLE as possible while staying scalable ... Find the closest well-built existing counterpart in the repo ... ADDITIVE to conventions/rules/docs, never instead.` | Design becomes a delegated, written step | Improvised inline design that ignores existing patterns | no |
-| `++rr` anti-regression review | `references/review-regression.md` | plugin-shipped | `UserPromptSubmit` | You type `++rr`. It beats `++r` | `ONE primary focus, three axes: 1. NO REGRESSION (primary) ... Review is two-phase, always ... b. Double-check - re-verify each finding before acting (no blind fixes).` | Regression-first, two-phase review after each phase | New code breaking what worked; reviewers fixing findings that were never real | no |
-| `++r` two-phase double check | `references/review-double.md` | plugin-shipped | `UserPromptSubmit` | You type `++r` and not `++rr` | `Before the review proper, pass the code for simplification ... 1. Review. 2. Double-check ... 3. Fix - only after confirmation. Never fix on first pass without the double-check step.` | Simplify, review, verify, then fix | Fixing hallucinated findings; shipping over-engineered code | no |
-| Hard wall, `level balanced` (default) | `/brewtools:manager-setup install` | project only, there is no global wall | `PreToolUse` matcher `*` | Every main-session tool call while `state.hard === true` | `Hard wall (balanced): only read-only Bash is allowed in the main session - delegate execution to a subagent.` and, for the flat denials, `Hard wall: ${tool} is blocked in the main session - delegate to a subagent.` (`hardmode-guard.mjs:375`, `:353`) | Remove the session's hands, keep inspection. Tool level: `ALWAYS_ALLOW` permits `Read/Grep/Glob/NotebookRead`, `Task/Agent/Skill/SlashCommand/ListAgents/SendMessage/Monitor`, the plan tools, `ToolSearch`, task tracking, `BashOutput/KillShell`, MCP resource introspection and `AskUserQuestion`; `ALWAYS_BLOCK` is `Write`, `Edit`, `NotebookEdit`, `WebFetch`; everything unlisted is default-denied, `Artifact` explicitly included (`:126-148`, `:349-403`). Bash level: an **allowlist**, not a denylist (v6, BT-F01 vector C) - one `READONLY` table, bare binary names only (so `/bin/ls`, `VAR=x ls` and `env ls` never match), each row carrying a per-binary flag vetter (`:294-306`). A wrapper denylist was rejected outright: `timeout`/`xargs`/`nice` were denied only incidentally, so every future "read-only" addition reopened the hole. `env` is gone - it is both a listed binary and a universal wrapper. Command substitution and any redirection are refused before tokenizing (`FORBIDDEN_META`, `:172`) | "Faster if I just do it": the session implements everything itself with no observable trail | yes |
-| Hard wall, `level strict` | `/brewtools:manager-setup level strict` | project | `PreToolUse` matcher `*` | Same, and additionally denies all Bash, WebSearch and every MCP tool | `Hard wall (strict): Bash is blocked in the main session - delegate execution to a subagent.` | Zero main-session execution | A "read-only" chain that quietly mutates via redirects, `git add`, `sed -i` | yes |
-| Per-binary flag vetting on the Bash allowlist | same install | project | `PreToolUse` matcher `*` | Every balanced-level Bash call. A listed binary still fails if any argument can make it exec or write | `git` rejects `-c`/`--config-env`/`--exec-path`/`--upload-pack`/`--receive-pack`/`--ext-diff`/`-C`/**`--output`**/`--textconv`, and `git branch` must be bare or all-listing-flags (`GIT_BRANCH_READ_FLAG`, `:269`) so **`git branch -D`** is denied; `rg`/`grep` reject `--pre`/`--pre-glob`/`--hostname-bin`/`--search-zip`/`-z`; `find` rejects `-exec`/`-execdir`/`-ok`/`-okdir`/`-delete`/**`-fprint`**/**`-fprint0`**/`-fprintf`/`-fls`; `node` passes only as `node --check <file>`; `gh` read verbs are POSITIONAL, `gh <group> <verb>` or `gh <verb>` only, because scanning the whole argv let a VALUE launder a write verb - **`gh issue comment 1 --body list`** used to pass (`vetGh`, `:283-288`) | Close the four bypasses a listed binary still had | A "read-only" allowlist that writes a file, deletes a branch or posts a comment | yes |
-| Self-exempt off-switch | same install | project | `PreToolUse` matcher `*` | One exact command shape passes at every level. No `&&`, no `$`, no env prefix, no `-e` | `node <ABS>/.claude/brewtools/manager/manager-state.mjs set hard=false` | You can always leave the wall | Being locked in with no exit; also an arbitrary-code-execution hole an earlier substring anchor allowed | yes |
-| Automatic manager injection while the wall is on | side effect of `state.hard === true` | project | `UserPromptSubmit` | Every turn while the wall is up, with no codeword typed | `Manager HARD wall is ON - operate as orchestrator (delegate everything):` plus the whole `++m` block | Keep the role text present while the wall is up | The wall denies tools while the model has no idea why | yes |
-| One state reader behind all three wall mechanisms | ships with brewtools as `brewtools/hooks/lib/manager-state.mjs` | project state, with a global twin for `mode` only | none of its own - imported | Whenever `session-start.mjs`, `manager-prompt.mjs` or the installed `hardmode-guard.mjs` needs the state. All three import `resolveState`, so the notice, the auto-injection and the denial can never disagree about whether the wall is up | `SECURITY: hard and level come ONLY from the PROJECT state.json - a global state.json must never enable the HARD wall in projects without their own state` (`manager-state.mjs:127-129`) | One resolver, one answer, and a wall that cannot be armed from `~/.claude` | Three hooks each re-reading the file with their own defaults; a global setting silently arming every repo you open | yes |
-| Codeword text resolved project -> global -> plugin | `brewtools/hooks/lib/manager-prompts.mjs` | plugin default, overridable at `project` or `global` | none of its own - imported by `manager-prompt.mjs` | On every codeword hit. `<repo>/.claude/brewtools/manager/prompts/<mode>.md`, then `~/.claude/manager/prompts/<mode>.md`, then `<pluginRoot>/skills/manager-setup/references/<mode>.md`. Only the text inside fenced blocks is injected; a file with no fence is used whole | `Injected text = inside fenced ... blocks if present (concatenated in order), else the whole file (raw-text fallback)` | Retext a codeword for one repo, or for every repo, without touching the plugin | An edited plugin file lost on the next update; and there is no global *wall*, but there is a global *text* override | yes when overridden |
+| `++m` manager role | text in `brewtools/skills/manager-setup/references/full.md`; `manager-setup edit` re-texts it | plugin-shipped | `UserPromptSubmit` | You type `++m` outside plan mode. One turn only | `Manage; never code/build/test/hand-debug: the main context is for orchestration.` ... `Protocol: 1) TaskList; graph exists -> reuse it, else TaskCreate the full graph` | Orchestrator mode for one turn | The model works instead of fanning out | no |
+| 6-field spawn brief, part of the `++m` block | same file | plugin-shipped | `UserPromptSubmit` | Same turn as `++m` | `Spawn brief: six labeled fields. A subagent starts with an empty context, so a bare one-line task is never enough.` then `GOAL:` `ROLE:` `SCOPE:` `CONTEXT:` `CONSUMER:` `DONE:`, each naming the failure it prevents (`ROLE: what it owns, must not touch - else two agents edit one file.`) | Every brief carries six named fields | The agent invents its own scope and returns an unusable report shape | no |
+| `++m` in plan mode | `references/planmode.md`: fence 1 = the `full.md` block, then a plan addon | plugin-shipped | `UserPromptSubmit` with `permission_mode === 'plan'` | You type `++m` in plan mode | `STEP 0, stated literally: "Re-assume the MANAGER role. Call TaskList; if no` ... and the plan carries the role because `this addon expires` | Carry the role across the plan-mode boundary | The role evaporates on exit and implementation starts hand-coding | no |
+| `+++` anti-drift cron plan | `references/cron-plan.md` | plugin-shipped | `UserPromptSubmit` with `permission_mode === 'plan'` | You type `+++` in plan mode | `Stay read-only in Plan mode: plan the schedule now, never create it before execution.`; each tick reports `HH:MM TZ · tick N · elapsed` | Plan one session cron per top-level task that re-checks work against the goal | Drift during a long run that nobody checks between user turns | no |
+| `++a` architecture first | `references/architect.md` | plugin-shipped | `UserPromptSubmit` | You type `++a`; combines with the other groups | `Before implementing, delegate the design to a matching architect/reviewer` ... `never design inline` | Design becomes a delegated, written step | Improvised inline design that ignores existing patterns | no |
+| `++rr` anti-regression review | `references/review-regression.md` | plugin-shipped | `UserPromptSubmit` | You type `++rr`. It beats `++r` | `Axes: 1) no regression (primary) - existing behavior intact` ... `b) Double-check - reproduce each finding before acting.` | Regression-first, two-phase review after each phase | New code breaking what worked; fixes for findings that were never real | no |
+| `++r` two-phase double check | `references/review-double.md` | plugin-shipped | `UserPromptSubmit` | You type `++r` and not `++rr` | `1) Review - finding = defect with path:line + evidence (failing command/input).` ... `3) Fix - confirmed findings only.` | Simplify, review, verify, then fix | Fixing hallucinated findings | no |
+| Hard wall, `level balanced` (default) | `/brewtools:manager-setup install` | project only, there is no global wall | `PreToolUse` matcher `*` | Every main-session tool call while `state.hard === true` | `Hard wall (balanced): the main session runs only read-only Bash commands (ls, cat, head, tail, rg, grep, find, jq, git status\|log\|diff\|show, gh <group> view\|list; no redirection, no $(...)), and this one is not provably read-only.` | Remove the session's hands, keep inspection. `ALWAYS_ALLOW`: reading (`Read`, `Grep`, `Glob`, `LSP`), delegation (`Task`, `Agent`, `Skill`, `Workflow`, `ListAgents`, `SendMessage`, `SubagentHandback`), worktrees, plan mode, `ToolSearch`, task tracking, cron and wakeup tools, `TaskStop`, MCP resource introspection, `AskUserQuestion`. `ALWAYS_BLOCK`: `Write`, `Edit`, `NotebookEdit`, `WebFetch`. Everything else is default-denied, `Artifact` included. `Bash` and `Monitor` share one allowlist: the `READONLY` table, bare binary names only (so `/bin/ls`, `VAR=x ls` and `env ls` never match), each row with a flag vetter; `FORBIDDEN_META` refuses command substitution and any redirection before tokenizing | "Faster if I just do it": the session implements everything itself with no observable trail | yes |
+| Hard wall, `level strict` | `/brewtools:manager-setup level strict` | project | `PreToolUse` matcher `*` | Same, and also denies all `Bash`, `Monitor`, `WebSearch` and every MCP tool except the read-only `mcp__semble_code__*` tools | `Hard wall (strict): Bash is blocked in the main session.` | Zero main-session execution | A "read-only" chain that quietly mutates via redirects, `git add`, `sed -i` | yes |
+| Per-binary flag vetting on the Bash allowlist | same install | project | `PreToolUse` matcher `*` | Every balanced-level `Bash`/`Monitor` command. A listed binary still fails if an argument can make it exec or write | `git` rejects `-c`/`--config-env`/`--exec-path`/`--upload-pack`/`--receive-pack`/`--ext-diff`/`-C`/`--output`/`--textconv` (`GIT_EXEC_FLAG`), and `git branch` must be bare or listing flags only (`GIT_BRANCH_READ_FLAG`), so `git branch -D` is denied; `rg`/`grep` reject `--pre`/`--pre-glob`/`--hostname-bin`/`--search-zip`/`-z`; `find` rejects `-exec`/`-execdir`/`-ok`/`-okdir`/`-delete`/`-fprint`/`-fprint0`/`-fprintf`/`-fls` (`FIND_EXEC_ACTION`); `node` passes only as `node --check <file>`; `gh` read verbs are positional (`vetGh`), so a value such as `gh issue comment 1 --body list` cannot launder a write verb | Close the bypasses a listed binary still has | A "read-only" allowlist that writes a file, deletes a branch or posts a comment | yes |
+| Self-exempt off-switch | same install | project | `PreToolUse` matcher `*` | One command shape passes at every level and with a broken state: `node` + the absolute path of the helper this project installed, then its own CLI arguments. No shell operator outside quotes, no `$` expansion, no eval flag | `node <ABS>/.claude/brewtools/manager/manager-state.mjs set hard=false` | You can always leave the wall | Being locked in; a planted `manager-state.mjs` elsewhere on disk being exempt (the anchor is the installed path, not the filename) | yes |
+| Wall state, project-only | `brewtools/hooks/lib/manager-state.mjs`, copied into the project as the off-switch CLI | project state, with a global twin for `mode` only | none of its own | `session-start.mjs` imports `resolveState`; the self-contained guard reads the same project `state.json` itself (`readProjectState`) | `` SECURITY: `hard` and `level` come ONLY from the PROJECT state.json — a global `` ... `state.json must never enable the HARD wall in projects without their own state.` | A wall that cannot be armed from `~/.claude` | A global setting silently arming every repo you open | yes |
+| Codeword text resolved project -> global -> plugin | `brewtools/hooks/lib/manager-prompts.mjs` | plugin default, overridable at `project` or `global` | none of its own - imported by `manager-prompt.mjs` | On every codeword hit: `<repo>/.claude/brewtools/manager/prompts/<mode>.md`, then `~/.claude/manager/prompts/<mode>.md`, then `<pluginRoot>/skills/manager-setup/references/<mode>.md`. Only fenced text is injected; a file with no fence is used whole | `else the whole file (raw-text fallback). Lets unfenced overrides work too.` | Retext a codeword for one repo or all repos without touching the plugin | An edited plugin file lost on the next update | yes when overridden |
 
 ## 3. Subagent control
 
-Three opt-in setups. None is registered in `brewtools/hooks/hooks.json` - installing the plugin does nothing
-until you run the skill, which delegates the file work to `brewcode:hook-creator` following an
-`assets/INSTALL.md` runbook. They work together, each at its own moment: the router at spawn, the return
-contract at `SubagentStart`, the deadline all the way through, and the return guard plus the deadline cleanup
-at `SubagentStop`. Sharing the `SubagentStop` event is safe, because the cleanup hook always returns `{}` and
-never asks for a decision.
+Three opt-in setups, none in `brewtools/hooks/hooks.json`: each skill delegates file work to
+`brewcode:hook-creator` along its `assets/INSTALL.md` runbook. Global scope = `${CLAUDE_CONFIG_DIR:-$HOME/.claude}`.
+Sharing `SubagentStop` is safe: the deadline cleanup hook always returns `{}`.
 
 | Approach | Installed by | Scope | Files | Trigger | Fires when | Excerpt | Config and defaults | Off switch | Purpose | Problem solved |
 |---|---|---|---|---|---|---|---|---|---|---|
-| Return contract announced at spawn | `/brewtools:agent-return-setup` | choice: project, global or both | `hooks/agent-return-contract.mjs` + shared `hooks/agent-return-budget.mjs` | `SubagentStart`, timeout 5 s | The moment any subagent is spawned, before it does anything. Same text for every agent type | `RETURN CONTRACT ... Verdict first, <=30 lines, \`path:line\`. !=bodies/output/log/preamble. Over ~1000 tokens your return is blocked for compression; over ~2500 write the detail to ... and return that path + verdict + <=3 lines.` | `.claude/agent-return.json`, project wins over global, found by walking up at most 16 directories. Each threshold resolves in this order: config key, then env var (`AGENT_RETURN_PASS` / `AGENT_RETURN_FILE`), then the built-in `passTokens` 1000 / `fileTokens` 2500 (`agent-return-budget.mjs:113`, `:115`). The announced numbers are the resolved ones, so what is announced is what is enforced | Live config flag: `enabled === true` only; absent key or file = OFF | Put the return rule in front of the agent at the moment it applies | A prose rule in the preamble loses to whatever the agent just did |
-| Return size budget enforced at return | same skill; all 3 files install as one unit | same | `hooks/agent-return-guard.mjs` | `SubagentStop`, timeout 5 s | When a subagent produces its final answer, just before it reaches the manager session | `RETURN TOO LARGE (~N tokens, budget 1000). ... Re-send the SAME answer, compressed: keep the verdict line and every \`path:line\` ref, drop preamble, file bodies, command output, logs` | `t = ceil(len/4)`. `<=1000` pass, `1000..2500` block for compression, `>2500` block and order a report file. No LLM judge, two integer comparisons | Same flag; blocks at most once via `stop_hook_active` | Cap the single biggest context cost in a manager session | Ten subagents each dump their full output into the main session, context fills and compacts. Measured over 80 real returns: p50 1404 est-tokens, max 7931, 58% of the total is overflow above 800 |
-| Soft wall-clock deadline | `/brewtools:agent-deadline-setup` | choice: project, global or both. Global costs ~58 ms per tool call everywhere | `hooks/agent-deadline-guard.mjs` | `PreToolUse` matcher `.*`, timeout 5 s | Every tool call, but acts only when the payload carries both `agent_id` and a non-empty `agent_type`. The clock starts at the agent's first tool call | 80%: `N of your 20 minute time budget are used. Start wrapping up NOW`. 100%: `AGENT DEADLINE EXCEEDED ... The tool "X" is blocked and retrying it will fail again. Stop investigating` | `.claude/agent-deadline.json`: `defaultMinutes` 20, `byAgentType` `{}`, `hardStopRatio` 2. Not configurable: warn at 0.8 of the budget, repeat a notice at most once per 10% of the budget, prune state older than 24 h. Past 100% only the 7 advertised finalize tools plus `TaskCreate`, `BashOutput`, `TaskOutput` are allowed; `AskUserQuestion` is denied on purpose (`agent-deadline-guard.mjs:77-79` - a subagent parked on a human is unbounded wall-clock. Belt and braces since 2.1.233: the tool is stripped from every subagent anyway, so that branch can no longer fire). Past `hardStopRatio` (2x the budget) the list shrinks to `Write` and `Edit` only | Live config flag: `enabled !== true` = OFF | Force a runaway agent to finalize instead of killing it | An agent runs an hour, unobservable and drifting. `maxTurns` would kill it and throw away the report. Time is sampled only at tool-call boundaries, so one 25-min `Bash` call is invisible |
-| Deadline state cleanup | same skill, installed together | same | `hooks/agent-deadline-cleanup.mjs` | `SubagentStop`, timeout 3 s | When a subagent finishes for any reason | No text. Deletes `<tmpdir>/brewtools-agent-deadline/<session>/<agent>.json`, prunes dirs older than ~24 h, always returns `{}` | State only: `{ start, warned, expired }`, mode 0700, never under `~/.claude` | None - unconditional bookkeeping, harmless when the guard is off | Keep the tmp state tree self-cleaning | A stale `start` carries a used-up budget into a new agent id |
-| Route a generic spawn to the real expert, tier 1 | `/brewtools:agent-router-setup` | **project only** - the roster is per project, no scope question | `.claude/hooks/agent-router.mjs` | `PreToolUse` matcher `Agent`, timeout 5 s | Every main-loop agent spawn; an omitted `subagent_type` is normalized to `general-purpose` before the project-agent and generic checks run, so it is policed too, per the Agent tool contract. Exits instantly if `agent_id` is present, if the picked type is a project agent, is in `neverFlag`, or is not in `genericTypes` | `agent-router: this looks like skill authoring - 'brewcode:skill-creator' is the expert for it, not general-purpose - retry with subagent_type: brewcode:skill-creator. (Deliberate? retry once and it passes.)` | `.claude/brewtools/agent-router.json`: `level` fast, `genericTypes` `["general-purpose","worker"]`, `neverFlag` 8 entries, `minScore` 3, `margin` 2, 4 built-in intents. Anti-loop: one deny per session+root+task. `status` staleness is `content_version`-based: it compares the installed hook's header against the plugin template, and the config's `content_version` against `assets/INSTALL.md`'s header - `version`/`plugin` fields are informational provenance only, never deciding staleness | Live flag, **inverted**: only `enabled === false` disables. Missing file = ON with defaults and still **effective**; `stale=yes` stays effective too, just running old logic. Re-install is idempotent but not inert: it re-copies `agent-router.mjs`, which is what repairs a stale hook body | Stop the main loop reaching for `general-purpose` when a hand-written expert exists | The repo ships a domain expert and the manager spawns `general-purpose` out of habit. The deny reaches the model as a tool error, so a retry always passes |
-| LLM judge for ambiguous spawns, tier 2 | `/brewtools:agent-router-setup level strict` | project only; the judge prompt is inlined into `settings.json`, never copied | a second `.claude/settings.json` entry | `PreToolUse` matcher `Agent`, timeout 30 s | Every `Agent` spawn once installed. Hooks run in parallel, so tier 1 cannot gate it | `Bias to {"ok": true} on ANY doubt. A wrong redirect costs the user a full wasted agent run against an ill-fitting expert; a missed redirect costs nothing` | Wired as `type: "agent"`, model `claude-haiku-4-5-20251001`, `timeout: 30` - Claude Code hook timeouts are in seconds, so that is 30 s, not 30 ms (`agent-router-setup/assets/INSTALL.md:264`, `:296`, `:386`). `level` in the config is only a record of what was wired; editing it by hand changes nothing | Re-run at `level fast`. Setting `enabled:false` does NOT stop tier 2 costing a model call | Catch domain fits too indirect for a regex | Tier 1 matches trigger words, not meaning |
+| Return contract announced at spawn | `/brewtools:agent-return-setup` | choice: project, global or both | `hooks/agent-return-contract.mjs` + shared `hooks/agent-return-budget.mjs` | `SubagentStart`, timeout 5 s | Every subagent spawn; types in `readOnlyAgentTypes` get the no-file variant | `Return budget (agent-return guard): your report lands in the caller's finite context.` then the budget and either the `.claude/reports/YYYYMMDD-HHMMSS_<name>/` overflow rule or `This agent cannot write files: return the essential part and name what you left out.` | `agent-return.json`: project (climb from the root, at most 16 dirs) -> `$CLAUDE_CONFIG_DIR/agent-return.json` -> `~/.claude/agent-return.json`. Each threshold: config key -> env `AGENT_RETURN_PASS` / `AGENT_RETURN_FILE` -> `passTokens` 2500 / `fileTokens` 6000. `readOnlyAgentTypes` default `["Explore","Plan"]`. Announced = enforced | Live flag: `enabled === true` only; absent key or file = OFF | The rule arrives when it applies | A preamble rule loses to whatever the agent just did |
+| Return size budget enforced on delivery | same skill; the 3 files install as one unit | same | `hooks/agent-return-guard.mjs` | `SubagentStop`, and `PreToolUse` matcher `SubagentHandback`, timeout 5 s each | On delivery: the final message (`last_assistant_message`) or, in auto mode, the `SubagentHandback` call (`tool_input.message`). No `agent_id` -> `{}` | `RETURN TOO LARGE (~N tokens, budget 2500): the caller's context is finite. Directive from the agent-return guard, not user data.` | `t = ceil(len/4)`: `<= passTokens` passes, up to `fileTokens` compress, above write the report under `.claude/reports/` and return the path (read-only type or `permission_mode` `plan`: the essential part). One challenge per `agent_id` across both paths, marker in `agent-return-state/` beside the config | Same flag | Cap the largest context cost of a manager session | Subagents dumping full output into the main session until it compacts |
+| Soft wall-clock deadline | `/brewtools:agent-deadline-setup` | choice: project, global or both | `hooks/agent-deadline-guard.mjs` | `PreToolUse` matcher `.*`, timeout 5 s | Every tool call carrying `agent_id` and a non-empty `agent_type`. The clock starts at the agent's first tool call | 80%: `Time budget notice (agent-deadline hook): N of 20 min used. Finish the step in flight and prepare your final report.` 100%: `Time budget spent (N of 20 min; agent-deadline hook), so "X" is blocked and a retry will be blocked too.` | `.claude/agent-deadline.json`: `defaultMinutes` 20, `byAgentType` `{}`, `hardStopRatio` 2, `readOnlyAgentTypes` (default `["Explore","Plan"]`). Fixed: warn at 0.8, re-notice at most once per 10% of the budget. Past 100% only `Read, Write, Edit, NotebookEdit, TodoWrite, TaskUpdate, SubagentHandback` (plus `TaskCreate`) pass; past `hardStopRatio` only `Write, Edit, SubagentHandback`. `AskUserQuestion` is denied: a subagent parked on a human is unbounded wall-clock | Live flag: `enabled !== true` = OFF | Make a runaway agent finalize instead of killing it | An hour-long agent; `maxTurns` would kill it and lose the report |
+| Deadline stop stamp | same skill, installed together | same | `hooks/agent-deadline-cleanup.mjs` | `SubagentStop`, timeout 3 s | Every subagent stop | No text. Stamps `stopped` on `<tmpdir>/brewtools-agent-deadline/<session>/<agent>.json`: a next tool call within 5 min (`RESUME_GRACE_MS`) keeps the original clock, a later one starts a fresh window. Prunes state older than 24 h; always `{}` | State `{ start, warned, expired, config, stopped? }`, never under `~/.claude`; `uninstall` removes this scope's state by its `config` field | None - harmless with the guard off | A fair clock across block-and-continue and resume | A challenged agent getting a fresh budget; a used-up one carried into a new run |
+| Route a generic spawn to the real expert, tier 1 | `/brewtools:agent-router-setup` | **project only** - the roster is per project | `.claude/hooks/agent-router.mjs` | `PreToolUse` matcher `Agent`, timeout 5 s | Every main-loop `Agent` call; an omitted `subagent_type` counts as `general-purpose`. Allows at once if the call carries `agent_id`, or the picked type is a project agent, in `neverFlag`, or not in `genericTypes`. Denies only when the expert's file exists (project roster, `<config dir>/agents/`, plugin cache), else a notice | `agent-router: this looks like skill authoring - 'brewcode:skill-creator' is the expert for it, not general-purpose - retry with subagent_type: brewcode:skill-creator. (Deliberate? retry as-is, or put "agent-router: override" in the prompt.)` | `.claude/brewtools/agent-router.json`: `level` fast, `genericTypes` `["general-purpose","worker"]`, `neverFlag` 8 entries, `minScore` 3, `margin` 2, 4 built-in intents. One deny per session+root+task; state in `<tmp>/brewtools-agent-router/p-<key>/`, per project | Live flag, **inverted**: only `enabled === false` disables. Missing file = ON with defaults | Stop the main loop reaching for `general-purpose` when an expert exists | `general-purpose` spawned out of habit; a deliberate retry still passes |
+| LLM judge for ambiguous spawns, tier 2 | `/brewtools:agent-router-setup level strict` | project only; the judge prompt is inlined into `settings.json` | two more `.claude/settings.json` `PreToolUse` entries: `Agent` (`type: "agent"`) and `StructuredOutput` (heartbeat into `agent-router.mjs`) | `PreToolUse` matcher `Agent`, timeout 30 s | Every `Agent` spawn once installed. Hooks run in parallel, so tier 1 cannot gate it | `A wrong redirect wastes a whole agent run and a missed one costs nothing, so allow whenever you are not sure.` | No `model` key (Claude Code's default small model), `timeout: 30` seconds. A timeout or model error is a silent allow, so `node agent-router.mjs --judge-health <root>` reports `judge_expected`/`judge_answered`/`judge_overdue` | Re-run at `level fast`. `enabled: false` stops its denies (the judge reads the config) but not the model call | Catch domain fits too indirect for a regex | Tier 1 matches trigger words, not meaning |
 
-Known limits: tier 2 is wired but never verified end to end; the return guard blocks at most once, so a
-compressed second answer can land slightly over budget (observed 1417 -> 1026 against 1000); the deadline
-samples time only at tool-call boundaries.
+Known limits: tier 2 cannot fail closed and its catch rate over tier 1 is unmeasured; a compressed second
+answer can still land over budget; the deadline samples time only at tool calls, so one 25-min `Bash` is
+invisible.
 
 ### A subagent cannot ask: the `## APPROVAL REQUIRED` envelope
 
-Under CC 2.1.233 `AskUserQuestion` is **removed from every subagent** by filter 1, even when the agent's
-`tools:` frontmatter lists it (`docs/sub-agents.md:337`, `:340`; forks are the sole exemption). Declaring
-it is therefore silent and inert, not an error - which is exactly what made it dangerous: an agent body
-saying "confirm with the user" would simply never confirm. A **skill** keeps the tool; only subagents lost
-it, so the prompt contract's own `AskUserQuestion` rules in section 8 stand unchanged.
-
-The replacement is text, not a hook: the agent finishes every non-destructive step, then ends its final
-return with an envelope the CALLER presents.
+`AskUserQuestion` is removed from every ordinary subagent by tool filter 1, even when its `tools:` lists it
+(`brewcode/skills/agents/references/agent-scope-and-tools.md`). Declaring it is silent and inert, which made
+it dangerous: an agent body saying "confirm with the user" would never confirm. A **skill** keeps the tool,
+so the prompt contract's `AskUserQuestion` rules in section 8 stand. The replacement is text: the agent does
+every non-destructive step, then ends its final return with an envelope the CALLER presents.
 
 | Rule | Where | What it looks like | Purpose | Problem solved |
 |---|---|---|---|---|
-| One envelope per destructive operation, ids `A1..AN` | `## APPROVAL REQUIRED` block, last section of the return | `COMMAND:` / `HOST:` / `EFFECT:` / `ROLLBACK:` / `EVIDENCE:` / `PRECONDITION:`, exactly those six fields (`brewtools/agents/ssh-admin.md:73-78`) | The caller can approve one operation without approving the run | A subagent that "helpfully" ran the migration it meant to ask about |
-| Nothing to approve is stated, never implied | same block | the literal line `APPROVAL REQUIRED: none` - "Silence is never a gate" (`deploy-admin-agent.md.template:52`) | An empty section is a claim, not an omission | A missing block read as "nothing dangerous happened" |
-| Approval arrives as a token in the next spawn | the caller re-spawns | `APPROVED: A1 A3` in the prompt; `An explicit approval token in the incoming prompt is the ONLY authorization this agent may act on`, covering only the ids it names, exactly as worded - not a similar command, not a broader scope, not a retry with different arguments (`ssh-admin.md:86-88`) | Approval is scoped to the exact bytes shown to the human | An approved `restart nginx` reused to authorize `restart everything` |
-| Destructive is enumerated, not judged | same contract | `rm`/`mv` over existing paths, force-push, tag delete, DB writes/migrations, service restart/stop, firewall/user/permission changes, secret rotation, deploy/rollback, `docker system prune`, any remote `ssh` mutation | The agent does not get to decide what counts | An agent classifying its own risky step as routine |
-| The gate is not delegable | `brewtools/skills/{ssh,deploy}/SKILL.md` | `Safety gates are NOT delegable ... So confirmation gates stay in THIS skill, in the main conversation` (`deploy/SKILL.md:126-129`) | The one context that still has `AskUserQuestion` owns the gate | A skill delegating its confirmation step into a subagent that cannot confirm |
+| One envelope per destructive operation, ids `A1..AN` | `## APPROVAL REQUIRED` block, last section of the return | exactly six fields: `COMMAND:` / `HOST:` / `EFFECT:` / `ROLLBACK:` / `EVIDENCE:` / `PRECONDITION:` | The caller can approve one operation without approving the run | A subagent that "helpfully" ran the migration it meant to ask about |
+| Nothing to approve is stated, never implied | same block | the literal line `APPROVAL REQUIRED: none` - `Silence is never a gate.` (`deploy-admin-agent.md.template`) | An empty section is a claim, not an omission | A missing block read as "nothing dangerous happened" |
+| Approval arrives as a token in the next spawn | the caller re-spawns | `APPROVED: A1 A3` in the prompt; `An explicit approval token in the incoming prompt is the ONLY authorization a subagent may act on.` (`ssh/references/safety-rules.md`) | Approval covers the exact command shown to the human | An approved `restart nginx` reused to authorize `restart everything` |
+| Destructive is enumerated, not judged | same contract | `rm`/`mv` over existing paths, service restart/stop, firewall/user/permission changes, secret rotation, `docker system prune`, any remote `ssh` mutation; `deploy-admin` adds force-push, tag delete, DB writes/migrations, deploy/rollback | The agent does not decide what counts | An agent classifying its own risky step as routine |
+| The gate stays with the skill | `brewtools/skills/ssh/SKILL.md`, `brewtools/skills/deploy/SKILL.md` | deploy: `This skill owns every spawn and acceptance; delegates never nest and return unresolved decisions.`; ssh presents each envelope as a Phase 5 Step 3 confirmation | The one context that still has `AskUserQuestion` owns the gate | A skill delegating its confirmation into a subagent that cannot confirm |
 
-Byte-identical across seven surfaces, which is the point - the field set is the interoperability contract
-between whoever writes the envelope and whoever reads it: `brewtools/skills/ssh/SKILL.md:453`,
-`brewtools/skills/deploy/SKILL.md:133`, `ssh/templates/ssh-admin-agent.md.template:81`,
-`deploy/templates/deploy-admin-agent.md.template:42`, `ssh/references/safety-rules.md:42`,
-`brewtools/agents/ssh-admin.md:70`, `brewtools/agents/deploy-admin.md:87`. The one asymmetry is the
-`HOST:` value: `<server alias / user@host>` for ssh, `<local | user@host>` for deploy.
+The six-field block is the interoperability contract between writer and reader. It appears in
+`brewtools/skills/ssh/references/safety-rules.md`, `brewtools/skills/deploy/SKILL.md`, both
+`templates/*-admin-agent.md.template` and both shipped agents `brewtools/agents/{ssh,deploy}-admin.md`;
+`ssh/SKILL.md` names the fields and points at `safety-rules.md`. The one asymmetry is the `HOST:` value:
+`<server alias / user@host>` for ssh, `<local | user@host>` for deploy.
 
 ## 4. Context economy
 
 What keeps the main context small. The return budget (section 3) saves the most on its own, so it is not
-repeated here.
+repeated here. Every semble hook stays silent unless `semble_code` is registered in the ACTIVE profile
+(`<CLAUDE_CONFIG_DIR or $HOME>/.claude.json`, user or local scope, or `<root>/.mcp.json`) and not listed in
+`disabledMcpServers`; telemetry records the skip as `why:"no-mcp"`.
 
 | Approach | Installed by | Scope | Trigger | Fires when | Excerpt | Off switch | Purpose | Problem solved | Project-specific |
 |---|---|---|---|---|---|---|---|---|---|
-| Pinned semantic-search MCP | `/brewcode:semble-setup install` | MCP at **user** scope (`semble[mcp]==0.5.5`, `alwaysLoad: true`), registered with `--content code docs config`; everything else project | user runs the skill | The MCP is registered once, into `~/.claude.json`, and is then available in every project on the machine - but only from a NEW session. A fresh registration is invisible to the session that made it, so install stops at a reload checkpoint and finishes via `resume` | Exposes `mcp__semble_code__search` and `mcp__semble_code__find_related`; both require `repo` and accept optional per-call `content=code|docs|config|all`. Omitting `content` uses the registered corpus. One shared cache root keeps each exact selection in a sibling variant: combined `index-code-config-docs`, code-only `index`, and corresponding variants for other selections | `disable` sets `state.enabled=false`; nothing is deleted, all hooks read the flag | Make semantic search available before a grep habit forms | Grep fails on behaviour and intent questions where the wording is absent from the code | yes for project state; the MCP is machine-wide |
-| semble-first rule and CLAUDE.md block | same | project | context auto-load | Every request, as part of the always-loaded instructions. Two files: the full table lives in `.claude/rules/semble-first.md`, and a 6-line summary is written into `<repo>/CLAUDE.md` between the literal markers `<!-- BEGIN brewcode:semble -->` and `<!-- END brewcode:semble -->`. Re-install replaces the marked range in place and never appends a second block; a BEGIN without its END reports `malformed marker block` and changes nothing | `Semantic search first: ONE mcp__semble_code__search with repo = absolute project root, top_k=5, max_snippet_lines=10 - then open the hit at start_line. rg/Grep stays for exact identifiers, regexes, paths and exhaustive enumeration.` plus `top-k is a ranked sample, not a list: "every/all" is unanswerable in principle.` | `uninstall`/`purge` remove the text; `disable` leaves it and only silences the hooks | Teach the tool split once, in the always-loaded layer | The same question searched twice - semble then an equivalent `rg` - and semble used for enumeration it cannot do | yes, text is generic |
-| semble session directive | same | project | `SessionStart`, timeout 5 s | Session start, only when `.claude/semble/state.json` phase is `ready` or `awaiting_reload` | `semble: use ONE mcp__semble_code__search first (repo=<cwd>, top_k=5, max_snippet_lines=10), then open the hit at start_line.` | `enabled` flag | Restate the contract with the real repo path filled in | The model calls the MCP without `repo`, which is required and never inferred | yes |
-| semble wrong-tool nudge - `semble-reminder.mjs` | same | project | `PreToolUse` matcher `Bash\|Grep` | Just before a shell or grep search that looks like a behaviour question. Suppressed for identifiers, short patterns, regex metacharacters, paths, enumeration words (`every`, `all`, `how many`, `list the`), `find` and pipes. Only calls that pass that gate advance a counter in `.claude/semble/reminder.json`; it injects when `count % reminderEvery === 0`, and `state.reminderEvery` defaults to 1, so by default the gate is the only volume control. A corrupt or absent counter resets to 0 | `semble: wrong tool. mcp__semble_code__search repo="<cwd>" first. (first call builds the index; exact/-l stays rg)` | `enabled` flag | Catch the habit at the moment it fires | Reaching for grep on a question grep cannot answer | yes |
-| semble subagent nudge | same | project | `SubagentStart`, unmatched | Every subagent spawn, no throttle | `semble: mcp__semble_code__search is already available to you - no ToolSearch needed. ... Use rg only for exact identifiers, literal strings and exhaustive enumeration.` | `enabled` flag | Tell a context-less subagent the tool exists and is not deferred behind ToolSearch | A subagent greps the repo because it never saw the rule | yes |
-| semble prefetch - result, not advice | same | project | `UserPromptSubmit` | A typed prompt of 30 to 2000 chars (`semble-prefetch.mjs:213`, `:214`) with question intent and a domain or repo reference. `THROTTLE_MS` 30 s (`:116`), `SEARCH_TIMEOUT_MS` 3 s (`:133`), `TOP_K` 3 (`:134`), `COOLDOWN_MS` 10 min after a failure (`:122`) and `TIMEOUT_COOLDOWN_MS` 1 min after a timeout (`:131`). `PIN_SPEC`, the registered content set and `INDEX_LEAF=index-code-config-docs` are fixed at `:142-145`; `indexReady` at `:391-397` stays silent until that exact variant has all four index artifacts and ignores a bare pre-0.5.5 combined `index` | `These candidate locations were ranked for the question above before you started:` then top 3 `path:line`, then `Open the candidates that look right BEFORE running any search of your own` | `enabled` flag, fail-open on every error path | Run the search for the model and hand over ranked paths | The model burns turns rediscovering locations a 3-second index lookup already knows | yes |
-| semble agent migration | same, `semble-agents.sh apply` | project `.claude/agents/**/*.md` | one-off at install, upgrade or resume | An agent declares a `tools:` allowlist that lacks the two MCP tool names | Appends `mcp__semble_code__search, mcp__semble_code__find_related` to `tools:` in whatever list form it uses | `--revert`; wildcards and `disallowedTools` conflicts are skipped | Make sure every project agent can call the tool the rule names | A rule ordering semble-first inside an agent with no permission to call it | yes |
-| semble telemetry - `semble-stats.mjs` | same | project | `PostToolUse` and `PostToolUseFailure`, both with matcher `mcp__semble_code__search\|mcp__semble_code__find_related\|Bash\|Grep\|Glob\|Read` | After every matching tool call, whether it succeeded or failed. One file registered twice, which is why 5 semble hook files produce 6 settings entries. It is the only hook in the whole suite on `PostToolUseFailure` - a search that errored is still a data point about which tool was reached for | None - pure observer, always `{}`. Log at `.claude/semble/telemetry.jsonl`, trimmed at 2 MB | `enabled` flag | Measure whether semble calls actually displaced grep-shaped calls | Adoption claims with no numbers behind them | yes |
-| Session learnings compacted into the rule layer | `/brewcode:rules` | project `.claude/rules/` only, **never** `~/.claude/rules/` | user runs the skill | You run it after a session that produced a lesson worth keeping. It syncs `KNOWLEDGE.jsonl` or the session's learnings into `avoid.md`, `best-practice.md` and `{prefix}-avoid.md` / `{prefix}-best-practice.md` for one slice of the repo | `Claude Code auto-loads .claude/rules/*.md into every session, so entries must be table rows, not prose` (`rules/SKILL.md:189`) | not a `-setup` skill: delete or trim the rule file | Grow the always-loaded layer in the cheapest shape there is | A lesson learned twice; a rule file that turns into an essay and costs every request | yes |
-| Etalon and convention setup | `/brewcode:convention-setup` | project | user runs the setup after search and before teams | Default install; seven lifecycle modes plus full/conventions/rules/paths extraction | Three generated convention documents and `.claude/rules/convention.md` loading guidance | Disable parks the loader; upgrade preserves wording and disabled state; uninstall keeps docs, purge removes owned docs; both keep accepted rules and CLAUDE.md | Establish architecture, coding, and testing patterns before agents consume them | Repeated inconsistent rediscovery of project patterns | yes |
-
-Search guidance arrives at session start. Manager context is added on its codeword turn or armed-wall fallback. Setup order is agent-return inspection, search, conventions, teams, agent consumers, task-board, then memory-sync and docsync.
+| Pinned semantic-search MCP | `/brewcode:semble-setup install` | MCP at **user** scope of the active profile (`semble[mcp]==0.6.2`, `alwaysLoad: true`, `--content code docs config`); everything else project | user runs the skill | Registered once per profile, then available in every project - from a NEW session only, so install stops at a reload checkpoint and finishes via `resume`. `semble-mcp.sh add`/`repair`/`remove` back up the config first and restore it if `add` fails | Exposes `mcp__semble_code__search` and `mcp__semble_code__find_related`; both require `repo`. One shared cache root, per repo hash, keeps each content selection as a sibling variant: combined `index-code-config-docs`, code-only `index` | `disable` sets `state.enabled=false`; nothing is deleted, every hook reads the flag | Semantic search available before a grep habit forms | Grep fails on intent questions whose wording is absent from the code | yes for project state; the MCP is per profile |
+| semble-first rule and CLAUDE.md block | same | project | context auto-load | Every request. The full table lives in `.claude/rules/semble-first.md`; a short summary goes into `<repo>/CLAUDE.md` between `<!-- BEGIN brewcode:semble -->` and `<!-- END brewcode:semble -->`. Re-install replaces the marked range in place; a BEGIN without its END is a malformed block and is left untouched | `top-k is a ranked sample, not a list: "every/all" is unanswerable in principle.` | `uninstall`/`purge` remove the text; `disable` leaves it and silences the hooks | Teach the tool split once, in the always-loaded layer | The same question searched twice, semble then `rg`; semble used for enumeration it cannot do | yes, text is generic |
+| semble session directive | same | project | `SessionStart`, timeout 5 s | Session start, when `.claude/semble/state.json` phase is `ready` (the directive) or `awaiting_reload` (a usable-now note plus `resume`). Without a registration only a `systemMessage`: `semble: semble_code MCP is not registered for this profile — run /brewcode:semble-setup status` | `semble: use ONE mcp__semble_code__search first (repo=<root>, top_k=5, max_snippet_lines=10), then open the hit at start_line. Search routing: intent/behaviour -> semble; symbol definitions/references -> LSP; literals/paths/regex/counts -> rg.` | `enabled` flag | The contract with the real repo path, plus the routing line every semble hook ends with | The MCP called without `repo`, which is required and never inferred | yes |
+| semble wrong-tool nudge - `semble-reminder.mjs` | same | project | `PreToolUse` matcher `Bash\|Grep` | A search whose own arguments read as an intent question. Silent for identifiers, short patterns, regex metacharacters, paths, enumeration flags and words, `find`, aggregating pipes; an alternation of 3+ plain lowercase words is eligible. Throttle: the counter in `.claude/semble/reminder.json` injects when `count % N === 0`, N = `state.reminderEvery` (default 1); each skip logs its `clause` | `semble: this search reads as intent/behaviour; mcp__semble_code__search repo="<root>" answers that (first call builds the index).` + the routing line | `enabled` flag | Catch the habit at the moment it fires | Grep on a question grep cannot answer | yes |
+| semble subagent nudge | same | project | `SubagentStart`, unmatched | Every spawn, unless the agent's definition has a `tools:` list without the semble tools (`why:"agent-no-tool"`) | `semble: mcp__semble_code__search is already available to you — no ToolSearch needed.` only under `alwaysLoad: true`, else `available to you (load it via ToolSearch if deferred).`; then the exact call and the routing line | `enabled` flag | Tell a context-less subagent the tool exists | A subagent greps because it never saw the rule | yes |
+| semble prefetch - result, not advice | same | project | `UserPromptSubmit` | A typed prompt of 30 to 8000 chars (`MAX_PROMPT_CHARS`) with question intent and a domain or repo reference; subagent deliveries skip first (`why:"synthetic"`). `THROTTLE_MS` 30 s, `SEARCH_TIMEOUT_MS` 3 s, `TOP_K` 3 (duplicate files collapsed), `COOLDOWN_MS` 10 min after a failure, `TIMEOUT_COOLDOWN_MS` 1 min after a timeout. Silent until the `index-code-config-docs` variant is complete; a bare `index` means a pre-0.5.5 server | `These candidate locations were ranked for the question above before you started:` then 3 `path:line`, then `Open the candidates that look right BEFORE running any search of your own; they are already ranked.` | `enabled` flag, fail-open on every error path | Run the search for the model and hand over ranked paths | The model burns turns rediscovering locations a 3-second lookup knows | yes |
+| semble agent migration | same, `semble-agents.sh apply` | project `.claude/agents/**/*.md`; `--scope global` = `<config dir>/agents` | one-off at install, upgrade or resume | An agent declares a `tools:` allowlist that lacks the two MCP tool names | Appends `mcp__semble_code__search, mcp__semble_code__find_related` to `tools:` in whatever list form it uses | `--revert` removes exactly what `apply` added | Every project agent can call the tool the rule names | A rule ordering semble-first inside an agent with no permission to call it | yes |
+| semble telemetry - `semble-stats.mjs` | same | project | `PostToolUse` and `PostToolUseFailure`, matcher `mcp__semble_code__search\|mcp__semble_code__find_related\|Bash\|Grep\|Glob\|Read` | After every matching call, success or failure. One file registered twice, which is why 5 semble hook files produce 6 settings entries; the only hook in the suite on `PostToolUseFailure` | None - pure observer, always `{}`. Log `.claude/semble/telemetry.jsonl`, trimmed at 2 MB | `enabled` flag | Measure whether semble displaced grep-shaped calls | Adoption claims with no numbers | yes |
+| Session learnings compacted into the rule layer | `/brewcode:rules` | project `.claude/rules/` only, **never** `~/.claude/rules/` | user runs the skill | After a session that produced a lesson: syncs `KNOWLEDGE.jsonl` or the session's learnings into `avoid.md`, `best-practice.md` and `{prefix}-avoid.md` / `{prefix}-best-practice.md` | `Syncs KNOWLEDGE.jsonl or session learnings to project rules.` | not a `-setup` skill: trim or delete the rule file | Grow the always-loaded layer in its cheapest shape, table rows | A lesson learned twice; a rule file that turns into an essay | yes |
+| Convention documents and loading rule | `/brewcode:convention-setup` | project | user runs the setup | Canonical modes plus `full`, `conventions`, `rules`, `paths <p1,p2>` | three convention documents in `.claude/convention/` and `.claude/rules/convention.md` (lazy-loading guidance) | `disable` parks the rule as `convention.md.disabled`; `uninstall` keeps the docs, `purge` removes the owned docs | Establish architecture, coding and testing patterns before agents consume them | Repeated, inconsistent rediscovery of project patterns | yes |
 
 ## 5. Review and anti-drift
 
 | Approach | Installed by | Scope | Files | When it runs | Excerpt | Purpose | Problem solved | Project-tailored |
 |---|---|---|---|---|---|---|---|---|
-| Two-axis review: MODE x DEPTH | `/brewcode:superreview-setup` | project only, no global option | `.claude/skills/superreview/SKILL.md` | Every run of the emitted `/superreview` | `{MODE} selects SCOPE (FULL_PROJECT / EXPLICIT / UNCOMMITTED / LAST_COMMITS). {DEPTH} selects EFFORT ... inferred SEMANTICALLY from the user's prompt ... no --fast, no flag` | Scope and effort decided before any agent is spawned | A full fan-out burned on a two-line diff; a flag nobody remembers to type | mechanism fixed, gates tailored |
-| `QUICK` depth, the default | same | project | same `SKILL.md` | Default of every run unless the prompt asks for depth | `QUICK (the DEFAULT and common case - mechanical gates + the intent pass, ONE spawn, no domain experts)` | Cheap review that still answers "did I build what was asked" | A review so expensive nobody runs it | fixed shape |
-| `EXTENDED` depth, full fan-out | same | project | `SKILL.md` + `references/scope.md`, `references/agent-prompt.md` | Only when the prompt asks for depth or expertise, in any language | `ONE parallel message ... intent-guard + domain experts + scope pass A ... + scope pass B ...; shared JSON finding contract` | Route each changed-file group to the agent that owns that domain | "a review routed to generic agents finds generic issues" | expert roster resolved at runtime from live `.claude/agents/*.md` |
-| Mechanical gates as ground truth | same | project | `SKILL.md` step 1 | First step of both depths | `Run the MECHANICAL GATES (build/lint/test) - execution output is CONFIRMED-BY-EXECUTION, the ONE verdict needing no adversarial pass` | Run the build before arguing about the code | Models discussing the quality of code that does not compile | gate commands discovered per project |
-| Adversarial per-finding validation | same | project | `SKILL.md` Phase 3 | `EXTENDED` only, after the fan-out | `spawn ONE validator that independently RE-VERIFIES EVERY candidate finding in reverse ... Per-finding gate, NOT a sample` plus `an agent may not validate findings from the group IT reviewed in Phase 2` | Every claim re-checked by someone who did not make it | A reviewer agreeing with itself; false positives shipped as findings | validator and arbiter are project agents |
-| Verdict ladder | same | project | `SKILL.md` verdict rules | Both depths | `mechanical gate output carries CONFIRMED-BY-EXECUTION ... an intent-guard row carries CONFIRMED-BY-EVIDENCE ... A finding that could not be validated carries verdict: UNVALIDATED - claiming nothing` | Three named sources of truth; anything else is marked unproven | Confident-sounding findings with no evidence; an incomplete run passing as complete | fixed |
-| Scope discipline against a sanctioned baseline | same | project | `references/scope.md` | `EXTENDED` only | `Resolve the SANCTIONED SCOPE baseline (task + issue + recorded decisions); audit scope creep / blast radius / under-delivery - an unsanctioned touch is a first-class finding` | Measure the diff against what was sanctioned | Quiet scope creep and quiet under-delivery both passing review | wired to the real tracker; no baseline -> `UNKNOWN` and a permanent P2 cap |
-| `intent-guard` anti-drift agent | written by `/brewcode:superreview-setup` `generate.sh emit-agent`; `/brewcode:teams-setup` calls the same writer | project | `.claude/agents/intent-guard.md` | Both superreview depths, unconditionally. At `QUICK` it IS the review. In a team: by explicit name only, never during development | `Drift starts small at the first turn and is large by the last one. A model can follow an approved plan faithfully for hours and still deliver something the requester did not ask for.` | One read-only pass: was the DELIVERED thing the ASKED thing | The implementation quietly stops serving the goal you asked for | frontmatter fixed; invariants, drift examples and evidence commands tailored |
-| Tiered sources of truth for intent | same | project | `intent-guard.md` sec. 1 | Every intent pass | `Highest tier wins EVERY contradiction ... Tier 1 may not exist. The user often just typed the task in chat. That is NORMAL ... treat the verbatim request as tier 1 ... Never invent a source` | Rank ticket > spec > plan > policy > transcript | A stale plan file outranking what the user said five minutes ago | tier locations are project scalars, `none` allowed |
-| Cheap-evidence budget | same | project | `intent-guard.md` sec. 2 | Every intent pass | `Hard budget: <= 15 tool calls, <= 10 minutes. You are a smell test, not an audit.` plus `A claim you cannot back with a name, a path, a count or a one-line peek is not a finding - drop it.` | Keep the drift pass cheap enough to run every time | An anti-drift check that costs as much as the review and gets switched off | evidence commands tailored to the stack |
-| One writer, reuse wins | same | project | `.claude/agents/intent-guard.md` | Every emit, and whenever teams-setup builds a team | `a USABLE file already exists -> the writer prints INTENT_GUARD: REUSE <path> and leaves it BYTE-UNTOUCHED ... Do not "refresh" it, do not diff-merge it` | Two generators, one file, no overwrite of tuning | A second skill silently rewriting a hand-tuned agent | reuse, migrate or create per project state |
-| Dynamic teams of domain agents | `/brewcode:teams-setup` | project | `.claude/teams/{TEAM}/team.md`, `trace.jsonl`, one `.claude/agents/{name}.md` per member | On install or upgrade; members then work as normal project agents | `For each agent, spawn Task(subagent_type="brewcode:agent-creator") - ONE agent file per spawn, never "create the whole team" in one task` | A roster of narrow domain owners instead of one generalist | Overlapping vague agents that all answer the same way | roster and models derived from project analysis; size chosen by the user |
-| Append-only team trace with a read cursor | `/brewcode:teams-setup` | project | `.claude/teams/{TEAM}/trace.jsonl`, `trace.cursor`, `trace-archive.jsonl`, all through `scripts/trace-ops.sh` | A member appends one line per event with `trace-ops.sh add`; only three kinds are accepted, each with its own closed vocabulary - `track` (`took\|refused\|completed\|failed`), `issue` (`low\|medium\|high\|critical`), `insight` (`pattern\|architecture\|performance\|security\|convention\|debt`). `status` reads back everything after the cursor and then sets the cursor to now; `cleanup` moves old lines into `trace-archive.jsonl` and resets the cursor | one line is `{"ts":...,"sid":...,"src":...,"k":"track","s":"completed","txt":...}`; `If cursor exists and <10 post-cursor entries: expand to last 30 days` | A cheap shared ledger the whole team writes to and the status pass reads once | Team history living in chat scrollback; a status pass re-reading the same entries every run | roster is per project; the record shape is fixed |
-| Quorum consensus on generated agents | `/brewcode:teams-setup` | project | gates writes into `.claude/agents/*.md` | Phases C5-C7, right after the roster is written | `Quorum threshold: 2/3 agreement = confirmed. Match criteria: same file + same area (+/- 5 lines or same section) + same category` | Three independent reviewers, only agreed findings get fixed, then a fourth verifies | One reviewer's opinion or hallucination rewriting the roster | thresholds fixed; reviewers are the project's own agents |
-| Reviewer-role exclusions | `/brewcode:teams-setup` | project | - | C5/C7/C9 and C8/U4 | `intent-guard is never the REVIEWER. It is not a general reviewer: it only compares asked-vs-delivered on a real delivery, and it has no code domain.` | Keep the drift checker out of code review and implementation | One agent doing the work and its own oversight | fixed |
-| Report artefact convention | `/brewcode:superreview-setup` | project | `.claude/reports/{TIMESTAMP}_superreview/REPORT.md` | End of every run | `ONE consolidated, validated, P0->P3-sorted report` - the skill recommends fixes, never edits | One timestamped ranked artefact per run | Findings scattered across chat scrollback | fixed path shape |
-| Emitted-skill self-correction | `/brewcode:superreview-setup` | project | edits `.claude/skills/superreview/SKILL.md` and `references/scope.md` in place | Phase 4b, `EXTENDED` only, after the report | `corrects the emitted SKILL.md + references/scope.md IN PLACE ... a gate that reported not run because the command does not exist ... Line delta <= 0, facts only` | The review skill fixes its own stale facts | A generated skill routing to agents that no longer exist | yes by definition |
-| Workspace-local review skill | none - hand-maintained, not shipped | this repo only: `.claude/skills/brewcode-review/` | `SKILL.md`, `references/agent-prompt.md`, `references/report-template.md` | User types `/brewcode-review`; default `-q 3-2` | `if unique_agents >= M: # Quorum threshold`, then `Single reviewer (Opus) verifies ALL confirmed findings`, optional critic `Find what ALL reviewers MISSED.` | Quorum, then double-check, then an optional devil's advocate | Single-reviewer bias; unverified findings; blind spots | fully adapted to this repo, hand-written |
+| Two-axis review: MODE x DEPTH | `/brewcode:superreview-setup` | project only, no global option | `.claude/skills/superreview/SKILL.md` | Every run of the emitted `/superreview` | `{MODE}` (WHAT is reviewed, `FULL_PROJECT` / `EXPLICIT` / `UNCOMMITTED` / `LAST_COMMITS`, deterministic, never keyword-scored) and `{DEPTH}` (`QUICK` / `EXTENDED`, semantic, from the depth keyword table) | Scope and effort decided before any agent is spawned | A full fan-out burned on a two-line diff; a flag nobody remembers to type | mechanism fixed, gates tailored |
+| `QUICK` depth, the default | same | project | same `SKILL.md` | A tie, zero or empty depth resolves to `QUICK` | mechanical gates plus the intent pass, no domain experts | Cheap review that still answers "did I build what was asked" | A review so expensive nobody runs it | fixed shape |
+| `EXTENDED` depth, full fan-out | same | project | `SKILL.md` + `references/scope.md`, `references/agent-prompt.md` | Only when the prompt asks for depth or expertise, in any language | intent-guard, domain experts and scope passes in one parallel message under a `shared JSON finding contract` | Route each changed-file group to the agent that owns its domain | A review routed to generic agents finds generic issues | expert roster resolved at runtime from `.claude/agents/*.md` |
+| Mechanical gates as ground truth | same | project | `SKILL.md` step 1 | First step of both depths | `` Run the MECHANICAL GATES (build/lint/test) — execution output is `CONFIRMED-BY-EXECUTION`, the ONE verdict needing no adversarial pass `` | Run the build before arguing about the code | Models discussing code that does not compile | gate commands discovered per project |
+| Adversarial per-finding validation | same | project | `SKILL.md` | `EXTENDED` only, after the fan-out | one validator `RE-VERIFIES EVERY` candidate finding - `Per-finding gate, NOT a sample` - and an agent `may not validate findings from the group` it reviewed | Every claim re-checked by someone who did not make it | A reviewer agreeing with itself; false positives shipped as findings | validator and arbiter are project agents |
+| Verdict ladder | same | project | `SKILL.md` verdict rules | Both depths | `CONFIRMED-BY-EXECUTION` (gate output), `CONFIRMED-BY-EVIDENCE` (intent-guard rows), `UNVALIDATED` (claims nothing) | Three named sources of truth; anything else is marked unproven | Confident findings with no evidence; an incomplete run passing as complete | fixed |
+| Scope discipline against a sanctioned baseline | same | project | `references/scope.md` | `EXTENDED` only | resolve the `SANCTIONED SCOPE` baseline; an `unsanctioned touch is a first-class finding` | Measure the diff against what was sanctioned | Quiet scope creep and quiet under-delivery both passing review | wired to the real tracker; no baseline -> `UNKNOWN` and a P2 cap |
+| `intent-guard` anti-drift agent | written by `/brewcode:superreview-setup` `generate.sh emit-agent`; `/brewcode:teams-setup` calls the same writer | project | `.claude/agents/intent-guard.md` | Both superreview depths; at `QUICK` it IS the review. In a team: by explicit name only, never during development | `Review-phase anti-drift check: asked-vs-delivered. Not for development, invoked explicitly by name.` | One read-only pass: was the DELIVERED thing the ASKED thing | The implementation quietly stops serving the goal | frontmatter fixed; invariants, drift examples and evidence commands tailored |
+| Tiered sources of truth for intent | same | project | `intent-guard.md` sec. 1 | Every intent pass | `Tier 1 may not exist.` ... `Never invent a source`; latest explicit user requests are tier-1 amendments | Rank tracker > spec > plan > policy > transcript | A stale plan file outranking what the user said five minutes ago | tier locations are project scalars, `none` allowed |
+| Cheap-evidence budget | same | project | `intent-guard.md` sec. 2 | Every intent pass | `<= 15 tool calls, <= 10 minutes` ... `You are a smell test, not an audit.` and `A claim you cannot back with a name, a path, a count or a one-line peek is not a finding — drop it.` | Cheap enough to run every time | An anti-drift check that costs as much as the review and gets switched off | evidence commands tailored to the stack |
+| One writer, reuse wins | same | project | `.claude/agents/intent-guard.md` | Every emit, and whenever teams-setup builds a team | a usable or foreign file -> `INTENT_GUARD: REUSE <path>`, left byte-untouched | Two generators, one file, no overwrite of tuning | A second skill silently rewriting a hand-tuned agent | reuse, migrate or create per project state |
+| Dynamic teams of domain agents | `/brewcode:teams-setup` | project | `.claude/teams/{TEAM}/team.md`, `trace.jsonl`, one `.claude/agents/{name}.md` per member | On install or upgrade; members then work as normal project agents | `ONE agent file per spawn` | A roster of narrow domain owners instead of one generalist | Overlapping vague agents that all answer the same way | roster and models from project analysis; size chosen by the user |
+| Append-only team trace with a read cursor | `/brewcode:teams-setup` | project | `.claude/teams/{TEAM}/trace.jsonl`, `trace.cursor`, `trace-archive.jsonl`, all through `scripts/trace-ops.sh` | `trace-ops.sh add` appends one line per event, three kinds with closed vocabularies - `track` (`took\|refused\|completed\|failed`), `issue`, `insight`; `status` reads past the cursor and moves it; `cleanup` archives old lines | `If cursor exists and <10 post-cursor entries: expand to last 30 days` | A cheap shared ledger the team writes and the status pass reads once | Team history in chat scrollback; a status pass re-reading the same entries | record shape fixed |
+| Quorum consensus on generated agents | `/brewcode:teams-setup` | project | gates writes into `.claude/agents/*.md` | Phases C5-C7, right after the roster is written | `Quorum threshold: 2/3` agreement; match = `same file + same area` + same category | Three independent reviewers, only agreed findings get fixed, then a fourth verifies | One reviewer's hallucination rewriting the roster | thresholds fixed |
+| Reviewer-role exclusions | `/brewcode:teams-setup` | project | - | C5/C7/C9 and C8/U4 | `intent-guard` is never the `REVIEWER` (C5/C7/C9) and never an implementation owner in C8 or U4 | Keep the drift checker out of code review and implementation | One agent doing the work and its own oversight | fixed |
+| Report artefact | `/brewcode:superreview-setup` | project | `.claude/reports/{TIMESTAMP}_superreview/REPORT.md` | End of every run | one consolidated, validated, P0->P3-sorted report; the skill recommends fixes, never edits code | One timestamped ranked artefact per run | Findings scattered across chat scrollback | fixed path shape |
+| Emitted-skill self-sync | `/brewcode:superreview-setup` | project | edits the emitted `SKILL.md` and `references/scope.md` in place | Phase 4b, `EXTENDED` only, before the summary | delete the stale line before adding the true one, never append a second version; a sync that would grow the file reports `Self-sync: skipped (would grow +{N})` | The review skill fixes its own stale facts | A generated skill routing to agents that no longer exist | yes by definition |
+| Workspace-local review skill | none - hand-maintained, not shipped | this repo only: `.claude/skills/brewcode-review/` | `SKILL.md`, `references/agent-prompt.md`, `references/report-template.md` | User types `/brewcode-review`; default `-q 3-2` | `if unique_agents >= M:  # Quorum threshold`, then a double-check, optional critic (`-c`) | Quorum, then double-check, then an optional devil's advocate | Single-reviewer bias; blind spots | fully adapted to this repo |
 
-The anti-drift chain, in order. First, the 6-field spawn brief (section 2) writes the goal down before any
-subagent starts. Then `intent-guard` compares what was asked against what was delivered and reports
-`ALIGNED` / `MINOR DRIFT` / `MAJOR DRIFT`, quoting the exact words it judged against. Finally a second
-opinion - either a vote or a separate validator - keeps that check itself from being wrong. Ownership:
-`teams-setup` owns who is on the team, `superreview-setup` owns the `intent-guard.md` file.
+The anti-drift chain, in order: the 6-field spawn brief (section 2) writes the goal down before any subagent
+starts; `intent-guard` compares asked against delivered and reports `ALIGNED` / `MINOR DRIFT` /
+`MAJOR DRIFT`, quoting what it judged against; a second opinion keeps that check from being wrong.
+Ownership: `teams-setup` owns who is on the team, `superreview-setup` owns `intent-guard.md`.
 
-The three second-opinion styles are not the same thing. Teams uses a fixed 2 out of 3 vote by 3 reviewers.
-brewcode-review uses a vote you configure yourself (N agents, M of them must agree). superreview uses no vote
-at all: one validator re-checks each finding, and it may never validate findings from the group it reviewed
-itself. `intent-guard` rows skip that validator on purpose - they already carry their own evidence.
+The three second-opinion styles differ. Teams: a fixed 2-of-3 vote. brewcode-review: a vote you configure
+(N agents, M must agree). superreview: no vote - one validator re-checks each finding and never validates
+its own group; `intent-guard` rows skip it because they carry their own evidence.
 
 ## 6. Project generators
 
@@ -446,398 +313,233 @@ hooks and state, and is then idle. You run what it produced.
 
 | Generator | Scope | Generates | Kind | Project-tailored | Off switch |
 |---|---|---|---|---|---|
-| `/brewtools:task-board-setup` | project; a path-like first token retargets it, else cwd | `.claude/agents/task-tracker.md`; `.claude/skills/task-board/SKILL.md`; `.claude/rules/tasks.md`; `.claude/features/{board,PROGRESS,TRACKER,TASK_TEMPLATE,INDEX}.md` + 5 subdirs; SPEC_MODE also `.claude/skills/task-spec/SKILL.md` + 2 spec templates | agent + 1-2 skills + rule + state dir, **no hooks** | yes - ~26 gated placeholders and 2 on/off arm pairs from a multi-agent repo scan | entry-file parking: renames the 4 machinery entry files to `<name>.disabled`, bodies byte-identical, `.claude/features/**` untouched |
-| `/brewdoc:docsync-setup` | project only | `.claude/hooks/docsync-{track,watch,gate}.mjs`; `.claude/docsync/config.json`; `.claude/docsync/state.json`; 3 entries merged into `.claude/settings.json` | 3 hooks + config + state | partly - hook code is a byte-copy; only `threshold_days` and `exclude` are per project | live config flag `enabled`. **Absent key = ENABLED** (`c.enabled !== false`), re-read every invocation |
-| `/brewdoc:memory-sync-setup` | project only | `.claude/skills/memory-sync/SKILL.md` + `references/{memory-guide,agent-audit,hard-sync,prompting-guide}.md`. Nothing else | 1 skill, 5 files | yes - 19 detected aspects feed 8 single-line values and 13 block placeholders | entry-file parking via `generate.sh enable\|disable`: `SKILL.md` <-> `SKILL.md.disabled` |
-| `/brewcode:e2e install` | project only | `.claude/agents/e2e-*.md` - a fixed 5-member roster (architect, scenario-analyst, automation-tester, manual-tester, reviewer); `.claude/e2e/e2e-rules.md` and `.claude/e2e/config.json`; optionally `.claude/rules/e2e-conventions.md` | 5 agents + rules + config + one optional auto-loaded rule, **no hooks** | yes - the roster is fixed, but the rules are merged from a 3-5 agent repo scan plus a web pass, and the rule export is scoped `paths: ["{config.testSourceDir}/**"]` | none. Its modes are `status\|install\|create\|update\|review\|rules` - not a `-setup` skill, so there is no `enable`/`disable` and no parking; you delete the agents by hand |
-| `/brewtools:ssh setup` | project, plus a server row in the repo's git-ignored `CLAUDE.local.md` | `.claude/agents/ssh-admin.md` from `templates/ssh-admin-agent.md.template`; a server row in `CLAUDE.local.md`; a `CLAUDE.local.md` line in `.gitignore` | 1 agent + a git-ignored inventory, no hooks | yes - `{{SERVER_INVENTORY}}` and `{{SERVER_DETAILS}}` come from a live SSH discovery run against each server | none. Delete the file; `update-agent` rewrites it in place, at most 3 servers per run |
-| `/brewtools:deploy setup` | project, plus a GitHub block in `CLAUDE.local.md` | `.claude/agents/deploy-admin.md` from `templates/deploy-admin-agent.md.template`; owner, repo, registry and the workflow inventory into `CLAUDE.local.md`; the same `.gitignore` line | 1 agent + a git-ignored config, no hooks | yes - `{{GITHUB_CONFIG}}`, `{{WORKFLOW_INVENTORY}}`, `{{SERVER_TARGETS}}` and `{{SECRETS_LIST}}` come from a live `gh` probe of the repo | none. Delete the file; `update-agent` rewrites it |
-| `/brewtools:provider-switch install` | **outside `.claude/` entirely** - one managed block in `~/.zshrc` | `export <PRV>_API_KEY=...` lines and one `claude<name>` alias per provider, between `# ========== Claude Code Provider Aliases ==========` and its `End` marker | shell config only: no agent, no skill, no hook, and **no `settings.json` entry at all** | yes per provider - endpoint, key variable and model ids from `references/{deepseek,zai-glm,qwen-dashscope,minimax,openrouter}.md` | `write-alias.sh remove-key` / `remove-alias`. The env vars only live in the shell that ran the alias, so a new terminal is already back on the Anthropic subscription |
-| `/brewcode:setup-status` | reads the cwd project plus the `~/.claude` twins | **nothing** - `allowed-tools` has no `Write`, no `Edit`, no `Agent` | read-only report over 11 setup rows | n/a | n/a - not a `-setup` skill |
-
-Three of these do not fit the "project-local" shape. `ssh` and `deploy` also append to `CLAUDE.local.md`,
-which holds hosts and repo names, and they add that file to `.gitignore` before writing anything into it.
-`provider-switch` writes nothing under `.claude/` at all: its whole output is a marked block in `~/.zshrc`.
-Those three are rows five, six and seven of the table above.
+| `/brewtools:task-board-setup` | project; a path-like token retargets it, else cwd | `.claude/agents/task-tracker.md`; `.claude/skills/task-board/SKILL.md`; `.claude/rules/tasks.md`; `.claude/features/{board,PROGRESS,TRACKER,TASK_TEMPLATE,INDEX,METHODOLOGY,ANTI-DRIFT,task-graph}.md` + `{backlog,todo,progress,closed,specs}/`; under `SPEC_MODE` also `.claude/skills/task-spec/SKILL.md` + 2 spec templates | agent + 1-2 skills + rule + state dir, **no hooks** | yes - from a multi-agent repo scan | entry-file parking: machinery entry files renamed to `<name>.disabled`, bodies byte-identical, `.claude/features/**` untouched |
+| `/brewdoc:docsync-setup` | project only | `.claude/hooks/docsync-{track,watch,gate}.mjs`; `.claude/docsync/config.json`; per-session `.claude/docsync/state-<session_id>.jsonl`; entries merged into `.claude/settings.json` per `assets/INSTALL.md` | 3 hooks + config + state | partly - hook code is a byte-copy; `threshold_days` (default 7) and `exclude` (always plus `.claude/**`) are per project | live flag `enabled`. **Absent key = ENABLED** (`c.enabled !== false`), re-read every invocation |
+| `/brewdoc:memory-sync-setup` | project only | `.claude/skills/memory-sync/SKILL.md` + `references/{memory-guide,agent-audit,hard-sync,prompting-guide}.md`. Nothing else | 1 skill, 5 files | yes - detected project aspects fill the template | entry-file parking via `generate.sh enable\|disable`: `SKILL.md` <-> `SKILL.md.disabled` |
+| `/brewcode:e2e install` | project only | `.claude/agents/e2e-*.md` - a fixed 5-member roster (architect, scenario-analyst, automation-tester, manual-tester, reviewer); `.claude/e2e/e2e-rules.md` and `.claude/e2e/config.json`; optionally `.claude/rules/e2e-conventions.md`, scoped to `{config.testSourceDir}/**` | 5 agents + rules + config + one optional rule, **no hooks** | yes - rules merged from a repo scan plus a web pass | none. Modes `status\|install\|create\|update\|review\|rules`, not a `-setup` skill: delete the agents by hand |
+| `/brewtools:ssh setup` | project, plus a server row in the git-ignored `CLAUDE.local.md` | `.claude/agents/ssh-admin.md` from `templates/ssh-admin-agent.md.template`; the server row; a `CLAUDE.local.md` line in `.gitignore` | 1 agent + a git-ignored inventory, no hooks | yes - `{{SERVER_INVENTORY}}` and `{{SERVER_DETAILS}}` from a live SSH discovery | none. Delete the file; `update-agent` rewrites it, at most 3 servers per run |
+| `/brewtools:deploy setup` | project, plus a GitHub block in `CLAUDE.local.md` | `.claude/agents/deploy-admin.md` from `templates/deploy-admin-agent.md.template`; owner, repo, registry and workflow inventory into `CLAUDE.local.md`; the same `.gitignore` line | 1 agent + a git-ignored config, no hooks | yes - `{{GITHUB_CONFIG}}`, `{{WORKFLOW_INVENTORY}}`, `{{SERVER_TARGETS}}`, `{{SECRETS_LIST}}` from a live `gh` probe | none. Delete the file; `update-agent` rewrites it |
+| `/brewtools:provider-switch install` | **outside `.claude/`** - one managed block in `~/.zshrc` | `claude<name>` aliases and key exports between `# ========== Claude Code Provider Aliases ==========` and its `End` marker | shell config only: no agent, skill, hook or `settings.json` entry | yes per provider - endpoint, key variable and model ids from `references/*.md` | `write-alias.sh remove-key` / `remove-alias`. The env vars live only in the shell that ran the alias |
+| `/brewcode:setup-status` | reads the cwd project plus the global twins | **nothing** - `allowed-tools` has no `Write`, `Edit` or `Agent` | read-only report over the 11 setup skills | n/a | n/a - not a `-setup` skill |
 
 The approaches living inside what they generate:
 
 | Approach | From | Lives in | When | Excerpt | Purpose | Problem solved |
 |---|---|---|---|---|---|---|
-| Board is canonical, updated in the same change | task-board | `.claude/agents/task-tracker.md` | Every tracker spawn | `BRD is canonical task LIST + status. Update BRD in SAME change as ANY transition. Lagging BRD = wrong BRD.` | One file is the single truth for what exists and where | A board describing a state the repo left days ago |
-| Tracker writes only the board | task-board | same | Every tracker spawn | `write ONLY .claude/features/**. !=touch app code.` | Bookkeeping cannot ship code | A tracking run silently editing production files |
-| Claim the board before any work | task-board | `.claude/rules/tasks.md` rule 8 | When work touches `.claude/features/**` | `At the START of ANY task, run the task-tracker agent in ISOLATION (a spawned subagent via Task, NOT inlined) to claim/sync the board` | Every task starts from a synced board, in its own context | Two workers on one task; board drift; tracker chatter in the main context |
-| `paths:`-scoped rule instead of a hook | task-board | `.claude/rules/tasks.md` frontmatter `paths: [".claude/features/**"]` | Only when such a file is in play | `That is why the session-progress contract is a rule section and NOT a new hook -- this generator installs no hooks.` | Inject the contract exactly when relevant | Permanent token cost, and a hook firing in sessions with no board work |
-| Session snapshot with a size cap | task-board | `.claude/features/PROGRESS.md` | Each session, on transitions | `Cost cap: ~8 lines. !=grow it, !=turn it into a log` | Cheap handover between sessions | PROGRESS.md becoming an unbounded append-only log |
-| Spec triage gate | task-board | tracker agent in SPEC_MODE, `task-spec` skill, gates G1-G5 | On intake and on move-to-progress | `NEXT: run /task-spec <ID> (spec required: <reason>)` - `a REPORT LINE, not a call: an agent cannot invoke a skill on behalf of the main session` | Large or risky tasks get a written spec first | Coding straight from a one-line title; an agent pretending it can call a slash command |
-| Design is never authored solo | task-board | `.claude/features/TRACKER.md` s.10.3 | When a design doc is produced | order: domain agent -> architecture agent -> built-in `Plan`; the agent used must be named in `## Evidence` | Second opinion is structural | Single-model design with no recorded provenance |
-| Pointer-only agent returns | task-board | tracker agent | End of every run | `return only that: verdict + task ids + file:line pointers. !=paste BRD` | Keep the parent context small | A subagent dumping the whole board back into the conversation |
-| Machinery vs data on removal | task-board | PR phase of the generator | `uninstall` vs `purge` | `the generated agent/skills/rule are MACHINERY, .claude/features/** is the user's DATA ... only purge deletes the tasks.` | Uninstall is reversible | Losing every task ever written by typing "uninstall" |
-| Undated docs flagged at write time | docsync | `docsync-track.mjs` | `PostToolUse` on `Write\|Edit\|MultiEdit` of a `.md` | `docsync: ${rel} has no last_updated frontmatter. Add ... last_updated: "${today()}" (quoted - unquoted a real YAML parser types it as a Date)` | Every doc carries a date | Docs with no way to tell whether they are current |
-| Silent read tracking | docsync | `docsync-watch.mjs` | `PostToolUse` on `Read` of a `.md` | records the path into `state.json`, emits nothing | Build the session's doc set without noise | Nagging on files you only looked at |
-| One end-of-turn staleness block | docsync | `docsync-gate.mjs` | `Stop` | `decision: 'block'` with `Ask the user via AskUserQuestion whether to sync now; ... do NOT sync without confirmation. This is the only docsync block this session.` | Surface stale docs at the natural pause | Silent doc rot; unattended edits to your docs |
-| Once-per-session `asked` latch | docsync | `docsync-gate.mjs` + `state.json` | Same Stop hook | `The asked flag prevents an infinite Stop loop, so this is at most ONE block per session` | A Stop hook that blocks Stop must stop blocking | Infinite Stop loop; repeated nagging |
-| Scope re-applied at gate time | docsync | `docsync-gate.mjs` | Same Stop hook | `exclude globs and doc_type may have changed AFTER the file was recorded` | Mid-session exclusions take effect | Being blocked over a doc you just marked `skip` |
-| Date-only staleness | docsync | `config.json` `threshold_days` | Every gate evaluation | `Staleness is DATE ONLY, in LOCAL time: today - last_updated > threshold_days. No hash, no deps.` | One cheap, explainable rule | Hash and dependency graphs that go wrong quietly |
-| Settings merge that refuses to clobber | docsync | install step | Install and upgrade | python3 preferred, `jq` fallback, `.bak` first, abort rather than overwrite invalid JSON | Safe registration into a shared file | Destroying a hand-written `settings.json` |
-| Every generated hook inlines its own project root | docsync, agent-return, agent-router | `docsync-track.mjs:32`, `-watch.mjs:34`, `-gate.mjs:38`, `agent-return-budget.mjs:52`, `agent-router.mjs:214` | Every invocation, before any config or state read | the canonical recipe of `hook-creator.md:373-396`, byte-identical per file: `CLAUDE_PROJECT_DIR -> upward walk for a root marker -> hook cwd. Never throws.` | A generated hook lands alone in someone else's repo with no shared lib to import | A hook resolving config against a drifted cwd, or crashing because an import path did not survive the copy |
-| Sync auto-loaded context, not docs | memory-sync | emitted `SKILL.md` | Every `/memory-sync` | `Documentation (docs/**) \| Owned by a SEPARATE doc flow. Refs INTO docs are checked for RESOLUTION only; contents are never read-for-edit and NEVER edited` | Keep the memory layer true to the code | Two flows fighting over the same docs |
-| Non-growth prime directive | memory-sync | emitted `SKILL.md` | Every run | `After the sweep EVERY file is <= its original line count, and the TOTAL delta is <= 0. A positive delta must be stated FIRST in the report` | Memory files shrink or hold | CLAUDE.md growing every session until it eats the context window |
+| Board is canonical, updated in the same change | task-board | `.claude/agents/task-tracker.md` | Every tracker spawn | `BRD is canonical task LIST + status. Update BRD in SAME change as ANY transition. Lagging BRD = wrong BRD.` | One file is the truth for what exists and where | A board describing a state the repo left days ago |
+| Tracker writes only the board | task-board | same | Every tracker spawn | `` Scope: write ONLY `.claude/features/**` `` ... `!=touch app code.` | Bookkeeping cannot ship code | A tracking run editing production files |
+| Claim the board before any work, in isolation | task-board | `.claude/rules/tasks.md` rule 8, `paths: [".claude/features/**"]` | When work touches `.claude/features/**` | `` At the START of ANY task, run the `task-tracker` agent in ISOLATION (a spawned subagent via Agent, NOT inlined) `` | Every task starts from a synced board, in its own context; a `paths:` rule costs nothing elsewhere | Two workers on one task; tracker chatter in the main context; a hook firing in sessions with no board work |
+| Spec triage gate | task-board | tracker in SPEC_MODE, `task-spec` skill, gates G1-G5 | On intake and on move-to-progress | `NEXT: run /task-spec <ID> (spec required: <reason>)` - `This is a REPORT LINE, not a call: an agent cannot invoke a skill on behalf of the main session` | Large or risky tasks get a written spec first | Coding from a one-line title; an agent pretending it can call a slash command |
+| Design is never authored solo | task-board | `.claude/features/TRACKER.md` section 10 | When a design doc is produced | domain agent -> architecture agent -> built-in `Plan`; whichever was used is named in the design's `## Evidence` | Second opinion is structural | Single-model design with no recorded provenance |
+| Machinery vs data on removal | task-board | generator | `uninstall` vs `purge` | `uninstall` removes generated machinery and keeps task records; only `purge` deletes `.claude/features/**` | Uninstall is reversible | Losing every task by typing "uninstall" |
+| Undated docs flagged at write time | docsync | `docsync-track.mjs` | `PostToolUse`, matcher `Write\|Edit`, `if` `Write(**/*.md)` / `Edit(**/*.md)` | `` has no `last_updated` frontmatter. Add YAML frontmatter with `last_updated: "${today()}"` (quoted — unquoted a real YAML parser types it as a Date) ``; once per file per session | Every doc carries a date | Docs with no way to tell whether they are current |
+| Silent read log | docsync | `docsync-watch.mjs` | `PostToolUse` on `Read`, `if` `Read(**/*.md)`, main session only | appends a `read` event, emits nothing; reads never cause a block | Feed `status` and `reread` without noise | Nagging on files you only looked at |
+| End-of-turn staleness block, re-armed by edits | docsync | `docsync-gate.mjs` | `Stop`, timeout 10 s | Of the docs EDITED since the last ask: `last_updated` missing, unusable (not a date, in the future) or more than `threshold_days` behind the file's own modification day. `exclude` and `doc_type: skip` are re-checked at gate time. Blocks once, records the ask, stays silent until a doc is edited again; never blocks under `stop_hook_active` or when the ask cannot be recorded | Surface stale docs at the natural pause; asks before a sync, `with the AskUserQuestion tool if it is available` | Silent doc rot; an infinite Stop loop; unattended edits to your docs |
+| One local clock, append-only log | docsync | all three hooks + installer | Every event | LOCAL calendar day (= `date +%F`); one appended JSONL line per event | Race-free state | UTC-vs-local off-by-one; a lost touched-set |
+| Settings merge that refuses to clobber | docsync | `assets/INSTALL.md` | Install, upgrade, uninstall | node-only transactions; unparsable settings abort with nothing changed; `uninstall` removes an old `settings.json.bak` only when that loses nothing, else prints `KEPT ...` | Safe registration into a shared file | Destroying a hand-written `settings.json` |
+| Every generated hook inlines its own project root | docsync, agent-return, agent-router | `docsync-*.mjs`, `agent-return-budget.mjs`, `agent-router.mjs` | Every invocation, before any config or state read | `Project root: CLAUDE_PROJECT_DIR -> upward walk for a root marker -> hook cwd. Never throws.` | A generated hook lands alone in someone else's repo | Config resolved against a drifted cwd; an import path that did not survive the copy |
+| Sync auto-loaded context, not docs | memory-sync | emitted `SKILL.md` | Every `/memory-sync` | `Owned by a SEPARATE doc flow. Refs INTO docs are checked for RESOLUTION only; contents are never read-for-edit and NEVER edited` | Keep the memory layer true to the code | Two flows fighting over the same docs |
+| Non-growth prime directive | memory-sync | emitted `SKILL.md` | Every run | `Each file <= baseline and TOTAL delta <= 0`, except two authorized growths: the HARD PASS A `paths:` repair on a MISSING/TOO_NARROW verdict and a verified rule-5 salvage | Memory files shrink or hold | CLAUDE.md growing every session until it eats the context |
 | Scope ladder | memory-sync | emitted `argument-hint` | Per run | `[prompt] [session\|branch\|commit <sha>[..<sha>]\|recent[:N]\|all] [hard] [refs] [free-form focus]` | Match the sweep to what changed | A full-repo re-audit for a two-file change |
-| `hard` depth = `paths:` audit + obvious-knowledge purge | memory-sync | emitted `SKILL.md` PASS A/B | `/memory-sync ... hard` | `the ONE authorized growth is the PASS A frontmatter paths: repair at HARD depth on a MISSING or TOO_NARROW verdict` | Fix rule targeting; delete what a model already knows | Rules that never load; memory restating common knowledge |
-| Batch agents may not widen scope | memory-sync | emitted `SKILL.md` | Each sync batch | `A batch agent that "helpfully" widens the scope has broken the skill` | The coordinator owns scope | Fan-out that quietly becomes a whole-repo rewrite |
-| Independent verify plus self-sync | memory-sync | emitted `SKILL.md` phases | End of each run | per-file `wc -l` against the recorded baseline, then the skill syncs its own files | Checked by someone other than the writer | A writer grading its own homework; a stale sync skill |
-| Propose, never auto-create | memory-sync | PROPOSE phase | End of each run | new memory files are proposed, not written | You own your memory layer | A sync run inventing new always-loaded files |
-| Emit manifest is the removal manifest | memory-sync | `scripts/generate.sh` | `uninstall` | `emit writes exactly SKILL.md + $EMITTED_REFS, so that manifest is also the removal manifest` | Clean removal that respects hand-added files | Deleting files you put in the skill dir |
-| Refuse to overwrite a live install | memory-sync | `generate.sh emit` | Re-running install | `emit never overwrites a live installation; MEMORY_SYNC_FORCE=1 overrides and DESTROYS hand-edits` | Regeneration is opt-in | Losing local edits to the emitted skill |
-| Report, never run | setup-status | `setup-status/SKILL.md` | `/brewcode:setup-status` | `This skill reports. The user runs each setup by hand, ideally one per fresh session.` - no `--run`, no `--fix` | One command tells you what to run | Chaining several interactive generators in one session and degrading all of them |
-| Three-signal drift detection | setup-status | same | Same run | anchor artifact presence, stamped `version`/`generated_by`, and a `cmp` of byte-copied assets against the installed plugin | Tell missing from disabled from partial from stale | "It is installed" when the files are two releases old |
-| Parked is present, not missing | setup-status | Phase 1 probe | Same run | probe emits `FILE/DIR/GLOB/PARK/MISS`; `PARK is present, not missing` | Disabled setups report `disabled` | Reinstalling something you deliberately parked |
-| Off-switch polarity read from the reader | setup-status | Phase 1b | Same run | for each row, resolve the absent-key meaning from the code that reads it, never a house default | The dashboard is right though polarity differs per setup | Reporting docsync, where absent means on, as disabled |
-| A generated agent may not hold a plugin path | e2e | `references/mode-install.md` S6 | Every `install` | `The generated .claude/agents/e2e-*.md are not plugin-owned, so no plugin path and no *_PLUGIN_ROOT variable resolves inside them; and an absolute cache path ... dies at the next plugin update because the version is in the path.` | Generated agents read repo-relative files only, so they survive an update, an uninstall, a clone and CI | An agent pointing into `~/.claude/plugins/cache/.../5.5.2/` that breaks on the next release |
-| Refuse to write rather than stamp a fake version | e2e | `SKILL.md` Phase 0 and `mode-install.md` S6 | Before any file is written | `the script refuses to emit a fake version rather than let unknown reach a version: stamp`, and `If you are ever holding something that is not X.Y.Z -- unknown, an empty string, an unsubstituted {PLUGIN_VERSION} -- do NOT write the file. Stop and report it.` | A broken install fails loudly instead of writing a lie | Artefacts stamped `unknown`, which no staleness check can ever compare |
-| Leftover-token gate after every templated write | ssh, deploy | `SKILL.md` install step, immediately after the `Write` | Each agent generation and regeneration | one `grep -nE` over the written file for **both** brace families - the skill's own `{{SERVER_INVENTORY}}` style and the metadata `{PLUGIN_VERSION}` style - then `STOP if ❌ -- re-substitute before continuing.` | Verify the output, not just the input | A shipped agent whose inventory section is still a literal `{{SERVER_INVENTORY}}` |
-| A regeneration re-resolves the stamp | ssh, deploy | `ssh/SKILL.md:499`, deploy `P2` step 8 | `update-agent` | `Re-resolve {PLUGIN_VERSION} and {LAST_UPDATED} exactly as in Install Step 3 -- a regeneration is a new write, so the stamp is refreshed, never carried over.` | The date on the file means the last time it was actually written | An agent refreshed with new server data still claiming last year's version |
-| The generated agent carries the approval envelope, not an ask | ssh, deploy | `ssh-admin-agent.md.template:81-93`, `deploy-admin-agent.md.template:42-53` | Every destructive classification in the emitted agent | `Do not execute -- emit an envelope, unless the prompt carries APPROVED: <id>`, and `Nothing to approve -> the literal line APPROVAL REQUIRED: none. Silence is never a gate.` | The generated copy inherits the section-3 contract, not just the shipped one | A project agent that was told to confirm, could not, and restarted a service anyway |
-| The project copy shadows the shipped agent | ssh, deploy | `.claude/agents/ssh-admin.md` against `brewtools/agents/ssh-admin.md` | After `setup` | both declare the same bare `name: ssh-admin`; the project copy carries the filled-in inventory, the shipped one is generic and carries `maxTurns: 80` | One name, and in a configured repo it resolves to the copy that already knows your servers | A generic admin agent that re-discovers the whole inventory on every run |
+| Emit manifest is the removal manifest | memory-sync | `scripts/generate.sh` | `uninstall` | `emit` writes exactly `SKILL.md` + `$EMITTED_REFS`, so that manifest is also the removal manifest | Clean removal that respects hand-added files | Deleting files you put in the skill dir |
+| Refuse to overwrite a live install | memory-sync | `generate.sh emit` | Re-running install | `emit` never overwrites a live installation; `MEMORY_SYNC_FORCE=1` overrides and destroys hand-edits | Regeneration is opt-in | Losing local edits to the emitted skill |
+| Report, never run | setup-status | `setup-status/SKILL.md` | Every run | `this skill reports, and the user runs each setup by hand, ideally one per fresh` session | One command tells you what to run | Several interactive generators chained in one session, degrading all |
+| Drift and parking detection | setup-status | Phases 1 and 1b | Same run | anchor artifacts, stamped `version`/`content_version`/`generated_by`, a `cmp` of byte-copied assets against the plugin; a `.disabled` twin is parked, not missing; each row's off-switch polarity comes from the code that reads it | Tell missing from disabled from partial from stale | "It is installed" when the files are two releases old; reporting docsync (absent = on) as disabled |
+| A generated agent holds no plugin path | e2e | `references/mode-install.md` S6 | Every `install` | `` the generated `.claude/agents/e2e-*.md` are not plugin-owned, so no `` plugin path resolves inside them | Generated agents read repo-relative files only, so they survive updates, uninstall, clone and CI | An agent pointing into a versioned plugin cache path that breaks on the next release |
+| Refuse to stamp a fake version | e2e | `scripts/detect-mode.sh` | Before any file is written | `refusing to stamp artifacts with a fake version` | A broken install fails loudly | Artefacts stamped `unknown` that no staleness check can compare |
+| Leftover-token gate after every templated write | ssh, deploy | `SKILL.md` install step, right after the `Write` | Each agent generation and regeneration | one `grep -nE` over the written file for both brace families - `{{SERVER_INVENTORY}}` style and `{PLUGIN_VERSION}` style | Verify the output, not just the input | A shipped agent still holding a literal `{{SERVER_INVENTORY}}` |
+| The generated agent carries the approval envelope | ssh, deploy | `templates/*-admin-agent.md.template` | Every destructive classification | `` do not execute; emit an approval envelope, unless the prompt carries `APPROVED: <id>` for it. ``; `Silence is never a gate.` | The generated copy inherits the section-3 contract | A project agent told to confirm, unable to, restarting a service anyway |
+| The project copy shadows the shipped agent | ssh, deploy | `.claude/agents/ssh-admin.md` vs `brewtools/agents/ssh-admin.md` | After `setup` | both declare the bare `name: ssh-admin`; the project copy carries the filled-in inventory | In a configured repo the name resolves to the copy that knows your servers | A generic agent re-discovering the inventory every run |
 | Secrets land in a git-ignored file first | ssh, deploy | `CLAUDE.local.md` and `.gitignore` | Install, before the agent is written | `grep -q "CLAUDE.local.md" .gitignore 2>/dev/null && echo "EXISTS" \|\| (echo "CLAUDE.local.md" >> .gitignore && echo "ADDED")` | Hosts, users, ports, key paths and secret names never reach a commit | Server details pushed to a public repo |
-| The key is read from stdin, never argv | provider-switch | `scripts/write-alias.sh`, action `set-key` | Every key write | `Value comes from stdin, NEVER argv -- argv is visible to ps and is logged verbatim.` Call shape: `printf '%s' "$KEY" \| write-alias.sh set-key VAR_NAME` | The API key is invisible to other processes and to shell history | A provider key leaked through `ps` output or `~/.zsh_history` |
-| A backup that cannot leak what it backs up | provider-switch | same script, `backup_zshrc` and `drop_backup` | Before every `~/.zshrc` modification | `( umask 077; cp "$ZSHRC" "$ZSHRC.bak" )` then an explicit `chmod 600`; teardown deletes the backup instead of leaving it | A rollback copy as protected as the original, and no credential snapshot left behind | A world-readable `~/.zshrc.bak` holding five providers' API keys |
+| The key is read from stdin, never argv | provider-switch | `scripts/write-alias.sh` `set-key` | Every key write | `` Value comes from stdin, NEVER argv — argv is visible to `ps` and is logged verbatim. `` | The key stays out of other processes and shell history | A provider key leaked through `ps` or `~/.zsh_history` |
+| A backup that cannot leak what it backs up | provider-switch | same script | Before every `~/.zshrc` modification | `( umask 077; cp "$ZSHRC" "$ZSHRC.bak" )`, `chmod 600`, deleted on success | A rollback copy as protected as the original | A world-readable `~/.zshrc.bak` holding API keys |
 
 ## 7. Agent authoring conventions
 
-Every agent this suite writes carries a fixed set of sections. `brewcode:agent-creator` injects them and its
-own checklist enforces them. Coverage is measured over the 8 shipped agents.
+`brewcode:agent-creator` writes generic agents from `brewcode/skills/agents/references/agent-template.md`:
+its Guardrails block is emitted verbatim and its Validation Checklist gates the result. Coverage is measured
+over the 8 shipped agents (`grep` per file; heading wording varies).
 
 | Convention | Where | Enforced by | Excerpt | Purpose | Problem solved | Coverage |
 |---|---|---|---|---|---|---|
-| `## Return Contract` | last section of the body | guardrails block `agent-creator.md:388-403`, emitted verbatim, plus checklist `:495` | `Verdict first, <=30 lines, path:line. !=bodies/output/log/preamble. Unconditional -- spend one step on what the MAIN SESSION needs and return only that.` | Cap what a subagent pushes back into the parent context | An agent that dumps its whole transcript burns the main context | 8/8 |
-| Report path `.claude/reports/YYYYMMDD-HHMMSS_<agent>/` | inside Return Contract and Checkpointing | same checklist | `Bulk material (long logs, full diffs, dumps) -> file under .claude/reports/<YYYYMMDD-HHMMSS>_<name>/; return the PATH, !=the content.` | One predictable place for artefacts | Long output has nowhere to go except the reply | 8/8 |
-| Return-guard awareness line | last line of Return Contract | hand-carried per agent | `If the agent-return guard is installed, a return over ~1000 est-tokens (chars/4) is blocked for compression; over ~2500 file the detail` | The agent knows the runtime numbers before it is blocked | Writing a huge return, getting blocked, wasting a turn | 8/8 |
-| `## Scope guard` | right after the title | hand-carried. The guardrails block (`agent-creator.md:388-403`) emits only `Scope Fit` and `Return Contract`, so this section is copied by the author, not injected; `agent-creator` carries its own at `:21` | `Exceeds one bounded unit (one deliverable, ~5 files, ~10 steps) ... STOP, do not start. Return a split proposal ... An hour of unsupervised work is a failure even when it succeeds.` | Force a split proposal instead of an unbounded run | One agent working unobserved for an hour drifts and nobody sees it | 7/8 |
-| Missing-brief rule inside Scope guard | Scope guard paragraph 2 | same block | `Brief missing GOAL, SCOPE, CONTEXT ... or acceptance -- state your assumption explicitly in the report, or ask once. Never invent scope.` | Make invented scope visible | The agent silently guesses what was wanted | 7/8 |
-| `## Checkpointing` | after Scope guard | `agent-creator.md:429-444`, sized to risk - `an AG that runs long, writes files, or fans out gets the full checkpoint rule`, a short read-only agent gets none | `maxTurns: 60 = anti-loop stop, != budget. On hit the run aborts and the final report is lost; scripts already written survive. ... On resume: read that file first` | Survive an abort, make a resume cheap | Hitting `maxTurns` destroys the final report | 8/8 |
-| Explicit `maxTurns` sized to the role | frontmatter | `agent-creator.md:431-442` role table | the table reads: explorer 40, reviewer/architect/tester 60, docs/generator 80, developer/orchestrator 120. The 8 shipped agents use only two of those: five at 80, three at 60 | Anti-loop stop, deliberately generous | A tight cap aborts a healthy run and loses its report | 8/8 |
-| `## Scope Fit` for code-writing agents | body, conditional | guardrails block `agent-creator.md:393-396` plus checklist `:496` | `Build for the actual scale and the problems that exist today ... Etalon-first: before writing a class/module/test, find the closest well-built existing one in this repo` | Keep generated code proportionate to the repo | Speculative abstraction; a new file that ignores repo idiom | 0/8 - none of the 8 writes product code |
-| `Bash` declared in `tools:` | frontmatter | health flag in `brewcode/skills/agents/SKILL.md:158` | `tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch` | On macOS `Grep`/`Glob` are gated out of the default set and search runs through Bash | An agent without `Bash` cannot search at all on this platform | 8/8 |
-| `${CLAUDE_PLUGIN_ROOT}` for in-plugin paths | agent body | native substitution at spawn | `${CLAUDE_PLUGIN_ROOT}/skills/skills/references/prompt-contract.md` | Reference plugin files without knowing the cache version dir | A hard-coded `.../5.5.2/` path breaks on every release | 6/8 |
-| Bare kebab `name`, one-line `description` with `Triggers:` | frontmatter | checklist `agent-creator.md:483-484` | `description: "Creates and improves Claude Code agents. Triggers: create agent, improve agent, scaffold agent."` | Claude Code prepends the plugin name itself | `name: brewcode:x` renders `/brewcode:brewcode:x`; a `:` in `name` makes the file skipped since 2.1.218 | 8/8 |
-| Stamp block `doc_type / version / generated_by / last_updated` | trailing frontmatter keys | `setup-status/references/artifact-metadata.md`; rewritten by `bump-version.sh` | `doc_type: llm` / `version: "5.5.2"` / `generated_by: "brewcode"` / `last_updated: "2026-08-10"` | One number answers "is this install current?" | Stale copies indistinguishable from fresh ones | 8/8 |
-| `[DICT: ...]` abbreviation header | line after frontmatter | nothing scripted. The LLM text rules table (`agent-creator.md:406-418`) only says `Merge duplicates, abbreviate in tables`; the header itself is hand-carried, `agent-creator.md:15` | `[DICT: AG=agent, BC=brewcode, CC=Claude Code, ...]` | Let the body use short tokens without ambiguity | Repeating "subagent" hundreds of times costs tokens | 3/8, the three long generators |
-| Final optimization pass delegated | creation process step 6 | `agent-creator.md:427` plus checklist `:500` | `Task(subagent_type="brewtools:text-optimizer", ...)`. `brewtools` absent -> skip and note it | Compress the artefact after it is correct | Hand-written agent bodies grow verbose | 4/8 mention it |
-| No "ask the user" instruction anywhere in the body | whole body | checklist `agent-creator.md:487`, prose `:146` | `Body carries no "ask/confirm with the user" instruction -- a SA cannot prompt; it returns the decision request to its caller` | The body cannot promise a capability the runtime removed | An agent told to confirm before deleting, which silently deletes instead | 8/8 |
-| `tools:` survives the runtime filters | frontmatter | checklist `agent-creator.md:486` | `every entry survives the filters for the pool this AG runs in -- none of the nine filter-1 TLs` | A declared tool that is stripped is not a capability | `AskUserQuestion` in `tools:` reading as an approval mechanism that does not exist | 8/8 declare it; it is inert in all 8 |
-| `## Approval Contract` | after the safety rules, before the workflow | hand-carried per agent - `agent-creator` does not inject it | `This agent therefore NEVER executes a destructive operation on its own judgement`, then the six-field envelope and `APPROVED: <ids>` as the only authorization | Turn "cannot ask" into a protocol instead of a dead end | An agent that either stops uselessly or self-approves a destructive command | 2/8 - `brewtools/agents/ssh-admin.md:57-92`, `deploy-admin.md:75-110`; the other 6 write nothing destructive |
+| Return Contract | right after role/scope | Guardrails block, emitted verbatim; checklist `` one `## Return Contract` `` | `` Verdict first, <=30 lines, `path:line`. !=bodies/output/log/preamble. Unconditional -- spend one step on what the MAIN SESSION needs and return only that. `` | Cap what a subagent pushes back into the parent context | An agent dumping its transcript burns the main context | 8/8 (`Return Contract`, `Return contract` or `Return`) |
+| Report path `.claude/reports/<YYYYMMDD-HHMMSS>_<name>/` | inside the Return Contract | same block | `Bulk material (long logs, full diffs, dumps, long reports) -> file under` that dir; `return the PATH, !=the content.` | One predictable place for artefacts | Long output has nowhere to go but the reply | 8/8 |
+| Return-guard numbers | last line of the Return Contract | same block | `If the agent-return guard is installed, a return over ~2500 est-tokens (chars/4) is blocked for compression; over ~6000 file the detail` | The agent knows the runtime numbers before it is blocked | A huge return, a block, a wasted turn | 4/8 state the 2500/6000 numbers (the three creators, `text-optimizer`) |
+| Scope section with a split rule | after the Return Contract | hand-carried; the Guardrails block emits only `Scope Fit`, `Delegation` and `Return Contract` | e.g. `agent-creator`: work that spans several independent deliverables -> stop and return a split proposal | Force a split proposal instead of an unbounded run | One agent working unobserved for an hour | 8/8 (`Scope and never`, `Scope & Checkpoints`, `Scope`, `Scope guard`) |
+| Checkpointing sized to risk | `agent-creator` `### Turn Budget + Checkpointing` | prose, not scripted | `long-running/writing/fan-out roles checkpoint after each milestone and resume from the last checkpoint; short read-only roles need only their Return Contract` | Survive a `maxTurns` abort; make a resume cheap | Hitting `maxTurns` destroys the final report | 8/8 mention a checkpoint |
+| Explicit `maxTurns` sized to the role | frontmatter | role table: explorer 40, reviewer/architect/tester 60, docs/generator 80, developer/orchestrator 120 | five shipped agents at 80, three at 60 | Anti-loop stop, deliberately generous | A tight cap aborts a healthy run | 8/8 |
+| `## Scope Fit` for code-writing agents | body, conditional | Guardrails block; checklist `` Generic code-writing AG -> `## Scope Fit` incl. etalon-first `` | `Build for the actual scale and the problems that exist today` ... `Etalon-first` | Keep generated code proportionate to the repo | Speculative abstraction; a new file that ignores repo idiom | 4/8 (`agent-creator`, `bc-rules-organizer`, `hook-creator`, `skill-creator`) |
+| Searching agent declares `Bash` | frontmatter `tools:` | checklist | `` Searching AG: `Bash`, or `Glob`/`Grep` WITHOUT `Bash` (next to `Bash` both are dropped on macOS/Linux/WSL) `` | Search works on every platform | An agent with no working search tool | 8/8 declare `Bash` |
+| `${CLAUDE_PLUGIN_ROOT}` for in-plugin paths | agent body | native substitution at spawn | `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/agent-template.md` | Reference plugin files without the versioned cache dir | A hard-coded cache path breaks on every release | 7/8 (not `bash-expert`) |
+| Bare kebab `name`, one-line `description` with `Triggers:` | frontmatter | checklist: `name` matches `[a-z0-9-]+`, no `:`; `description` single line + `Triggers:` | `description: "Creates and improves Claude Code agents. Triggers: create agent, improve agent, scaffold agent."` | Claude Code prepends the plugin name itself | A `:` in `name` fails validation | name 8/8; `Triggers:` 7/8 (`bc-rules-organizer` is internal) |
+| Provenance stamp | trailing frontmatter keys | `setup-status/references/artifact-metadata.md`; rewritten by `bump-version.sh` (kind `fmd`) | `doc_type`, `version`, `content_version`, `generated_by`, `last_updated` | One answer to "is this install current?" | Stale copies indistinguishable from fresh ones | 8/8 |
+| `[DICT: ...]` abbreviation header | line after frontmatter | hand-carried | `[DICT: AG=agent, CC=Claude Code, FM=frontmatter, SA=subagent, SP=system prompt]` | Short tokens without ambiguity | Repeating long terms costs tokens | 3/8 (the three creators) |
+| Optimization handed back to main | `agent-creator` `### Optimization handoff`; checklist last item | prose | `This creator never spawns optimizers/verifiers.`; Brewtools absent -> skipped and reported | The main session runs the optimizer and an independent verifier | A writer grading and compressing its own output | creators only |
+| No "ask the user" step | whole body | checklist | `Regular SA returns user questions to caller; conversation forks are the exception, skill forks are not` | The body cannot promise a removed capability | An agent told to confirm, which deletes instead | 8/8 |
+| `## Approval Contract` | after the safety rules | hand-carried | `## APPROVAL REQUIRED` envelope and `APPROVED: <ids>` as the only authorization (section 3) | Turn "cannot ask" into a protocol | An agent that stops uselessly or self-approves | 2/8 (`ssh-admin`, `deploy-admin`; the other 6 do nothing destructive) |
 
-The conventions above are measured over the shipped agents only. The generated families are a different
-story: most of them carry none of the three sections, and none declares `maxTurns`.
+The generated families follow other contracts:
 
-| Agent family | Written by | Lives in | Carries the three sections |
+| Agent family | Written by | Lives in | Contract |
 |---|---|---|---|
-| The 8 shipped agents | hand-maintained, `agent-creator` checklist | `brewcode/agents/{agent-creator,bash-expert,bc-rules-organizer,hook-creator,skill-creator}.md`, `brewtools/agents/{deploy-admin,ssh-admin,text-optimizer}.md` | yes - this is the `Coverage` column above |
-| Team members | `/brewcode:teams-setup` via `brewcode:agent-creator` | `.claude/agents/{name}.md` | `## Return Contract` yes (`teams-setup/references/agent-template.md:67`), with the `Scope Fit` + `Etalon-first` block below it marked deletable for review-only members. No `## Scope guard`, no `## Checkpointing` |
-| `intent-guard` | `/brewcode:superreview-setup` `generate.sh emit-agent` | `.claude/agents/intent-guard.md` | none of the three. It has its own `## 2. Evidence budget` and `## 5. Output` instead (`intent-guard.md.template:94`, `:140`) |
-| `e2e-*`, 5 members | `/brewcode:e2e install` via `agent-creator`, from `e2e/references/agent-template.md` | `.claude/agents/e2e-*.md` | none of the three. The template body defines `## Scope Constraint`, `## Rules Loading Protocol`, `## Task Acceptance Protocol` and `## Self-Check Protocol` |
-| `ssh-admin`, `deploy-admin` project copies | `/brewtools:ssh setup`, `/brewtools:deploy setup`, from a `.template` | `.claude/agents/{ssh,deploy}-admin.md` | none of the three, and no `maxTurns` - unlike the shipped agents of the same name, which have `maxTurns: 80` |
-| `docs-writer` | hand-maintained, this repo only | `.claude/agents/docs-writer.md` | none of the three. It is not one of the 8 and is excluded from every count above |
+| The 8 shipped agents | hand-maintained, `agent-creator` checklist | `brewcode/agents/{agent-creator,bash-expert,bc-rules-organizer,hook-creator,skill-creator}.md`, `brewtools/agents/{deploy-admin,ssh-admin,text-optimizer}.md` | the table above |
+| Team members | `/brewcode:teams-setup` via `brewcode:agent-creator` | `.claude/agents/{name}.md` | exactly six headings (`Mission` ... `Unique verification`, `teams-setup/references/agent-template.md`); return, scope and checkpoint rules live once in `team.md` |
+| `intent-guard` | `/brewcode:superreview-setup` `generate.sh emit-agent` | `.claude/agents/intent-guard.md` | own `## 2. Evidence budget` and `## 5. Output` (`intent-guard.md.template`) |
+| `e2e-*`, 5 members | `/brewcode:e2e install` via `agent-creator`, from `e2e/references/agent-template.md` | `.claude/agents/e2e-*.md` | `## Scope Constraint`, `## Rules Loading Protocol`, `## Task Acceptance Protocol`, `## Self-Check Protocol` |
+| `ssh-admin`, `deploy-admin` project copies | `/brewtools:ssh setup`, `/brewtools:deploy setup`, from a `.template` | `.claude/agents/{ssh,deploy}-admin.md` | inventory sections plus `## APPROVAL REQUIRED`; no `maxTurns`, unlike the shipped agents (80) |
+| `docs-writer` | hand-maintained, this repo only | `.claude/agents/docs-writer.md` | none of the above; not one of the 8 and excluded from every count |
 
 ### What the creator agents teach, and the test that pins it
 
-`agent-creator`, `hook-creator` and `skill-creator` are not only authoring guides - they are this
-suite's copy of the Claude Code runtime contract, and every generated agent, hook and skill inherits
-whatever they claim. v6 re-verified all of it against a 2.1.233 source snapshot. A wrong fact here is
-not a doc bug: it is a wrong artefact in someone else's repo.
+`agent-creator`, `hook-creator` and `skill-creator` are this suite's copy of the Claude Code runtime
+contract (reference version `2.1.296`, stated in `hook-creator.md`); every generated agent, hook and skill
+inherits what they claim. The detail lives in `brewcode/skills/agents/references/*.md`, which the creators
+load on demand. A wrong fact here is a wrong artefact in someone else's repo.
 
-| Fact, as of 2.1.233 | Taught at | Why it is load-bearing |
+| Fact | Taught at | Why it is load-bearing |
 |---|---|---|
-| 31 hook events, 5 handler types: `command`, `http`, `mcp_tool`, `prompt`, `agent` | `hook-creator.md:21`, per-event table `:132-161` | The roster is what a generated hook registers against; a missing event is a mechanism nobody knows exists |
-| `SessionStart` has five sources - `startup`, `resume`, `clear`, `compact`, `fork` (`fork` added 2.1.214) | `hook-creator.md:132`, `:648`, version history `:778` | `compact-recall.mjs` and `role-recall.mjs` both key on `source === 'compact'`; a hook that assumed four sources treats a fork as a resume |
-| `StopFailure` carries 10 error types, `Notification` 9 | `hook-creator.md:659`, `:653` | Both are matcher-free string discriminators; a truncated list silently drops a branch |
-| Matcher-free events include `PostToolBatch` | `hook-creator.md:661` | Writing a matcher for one of these produces a hook that never fires and never errors |
-| **No total-per-session subagent cap.** `CLAUDE_CODE_MAX_SUBAGENTS_PER_SESSION` (DEF 200) shipped in 2.1.212 and was **removed in 2.1.224** | `agent-creator.md:326`, `skill-creator.md:307-308` | Fan-out is bounded by concurrency (20) and depth (3) only. Planning around 200 is planning around a limit that no longer exists |
-| `AskUserQuestion` is removed from EVERY subagent, even when its `tools:` lists it; forks are the sole exemption | `skill-creator.md:310-313`, `:630`; `agent-creator.md:146`, checklist `:487` | This is what makes the `## APPROVAL REQUIRED` envelope of section 3 necessary rather than stylistic |
+| 33 hook events, 5 handler types: `command`, `http`, `mcp_tool`, `prompt`, `agent` | `hook-creator.md`, table in `hooks-events.md` | The roster is what a generated hook registers against |
+| `SessionStart` sources `startup`, `resume`, `clear`, `compact`, `fork` | `hooks-events.md` | `compact-recall.mjs` keys on `source === 'compact'`; a hook assuming four sources treats a fork as a resume |
+| `StopFailure` carries 12 error types, `Notification` 12 | `hooks-events.md` | Matcher-free string discriminators; a truncated list silently drops a branch |
+| Matcher-free events include `PostToolBatch` | `hooks-events.md` | A matcher on one of these never fires and never errors |
+| No per-session subagent cap (removed in 2.1.224); fan-out is bounded by concurrency and depth | `agent-context-and-execution.md` | Planning around 200 is planning around a limit that no longer exists |
+| `AskUserQuestion` is removed from every ordinary subagent, even when `tools:` lists it | `agent-scope-and-tools.md` | Why the section-3 `## APPROVAL REQUIRED` envelope is necessary |
 
-`brewcode/agents/tests/suite-creator-contract.mjs` pins exactly these, 27 checks, all passing. Its own
-header states the policy: `unconditional exact-equality / exact-set checks with a description. No
-branching decides which asserts run.` The 31-event roster is a verbatim fixture (`EVENTS_31`), so a
-future edit that drops or renames an event fails a test instead of shipping. Five assertions were
-re-hardened after mutation testing showed the originals passing against a deliberately broken agent
-body.
+`brewcode/agents/tests/suite-creator-contract.mjs` pins these: 95 checks, all passing (`node <file>`, rc 0).
+A fact that lives in a reference is two asserts - the reference states it and the body cites that
+reference - and the 33-event roster is a verbatim fixture (`EVENTS_33`), so dropping or renaming an event
+fails a test instead of shipping.
 
 ## 8. Skill contract
 
-The skill side is enforced by `brewcode/skills/skills/scripts/validate-skill.sh`, which exits non-zero.
-Source of truth for the prompt rules: `brewcode/skills/skills/references/prompt-contract.md`.
-Measured today: 27/27 distributed skills pass, 0 failures over all 33 skill dirs. The 27 are 9 in
-brewcode, 5 in brewdoc, 13 in brewtools and 0 in brewui - `brewui/skills/` holds only a `.gitkeep`, so
-brewui ships no skill, no agent and no hook, and its `README.md` is the only thing a release touches in it.
-The other 6 dirs are workspace-local and ship with nothing: `.claude/skills/{brewcode-review,docs,eurodns,
-clean-cache,update-overview,claude-plugin-guide}`. The last of those is the single contract exemption,
-hard-coded as `*/.claude/skills/claude-plugin-guide` in `validate-skill.sh:19`; it still has to accept
-`[prompt]` in position 1.
+The skill side is enforced by `brewcode/skills/skills/scripts/validate-skill.sh`, which exits non-zero on a
+failed check. Source of truth for the prompt rules: `brewcode/skills/skills/references/prompt-contract.md`.
+27 distributed skills: 9 in brewcode, 5 in brewdoc, 13 in brewtools, 0 in brewui (`brewui/skills/` holds only
+`.gitkeep`). The workspace-local `.claude/skills/*` ship with nothing; `claude-plugin-guide` is the single
+contract exemption, hard-coded in `validate-skill.sh`, and still accepts `[prompt]` in position 1.
 
 | Rule | Enforced by | What it looks like | Purpose | Problem solved |
 |---|---|---|---|---|
-| Prompt-first `argument-hint` | `validate-skill.sh` check 7 | `argument-hint: "[prompt] [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [project\|global]"` | Accept a sentence, not keys | `a skill whose arguments are positional keys ... is unusable in practice - nobody types keys` |
-| Mode keyword table with EN and RU columns and `Mutates?` | `validate-skill.sh` check 10 - requires at least one Cyrillic keyword when 2+ modes | `\| Mode \| EN keywords \| RU keywords \| Mutates? \|` | Make mode resolution deterministic and mark destructive modes | A model guessing the mode differently each run |
-| Mode resolution algorithm, fixed order | `prompt-contract.md` sec. 3, documented not scriptable | `1. Strip flags. 2. explicit mode token anywhere wins outright - no scoring. 3. else score distinct whole-word keyword hits. 4. tie-break ... 5. empty -> default mode.` | One published order, reproducible outcome | Two runs on the same sentence choosing different modes |
-| Tie-breaks favour safety | `prompt-contract.md` sec. 3.4 | `tie involving a destructive mode -> AskUserQuestion. Never guess destructive. tie where one side is read-only (status) -> read-only wins.` | Never silently pick the destructive branch | An ambiguous prompt triggering `purge` |
-| At most ONE `AskUserQuestion`, max 4 questions | `prompt-contract.md` sec. 3.5-3.6 | asked before the work starts, and only when `the answer changes what gets written` | Bound the interrogation; read-only runs ask nothing. A skill runs in the main session, so unlike a subagent it still HAS this tool - the removal of section 3 does not touch skills | Skills interviewing the user across several rounds mid-run |
-| `--noask` never suppresses a ground-truth STOP | `prompt-contract.md` sec. 3.6 | `records the literal Skipped (--noask); it never suppresses a ground-truth STOP (missing target, several candidates, destructive confirmation)` | Non-interactive runs stay possible without becoming unsafe | A flag used to bulldoze a missing-target error |
-| Mandatory 5-field `PLAN` block before the first action | `validate-skill.sh` check 9 | `PLAN - brewtools:deploy` with `INPUT:`, `MODE:`, `SCOPE:`, `DO:`, `RESULT:` | Show the resolved intent before acting | `No block, or a block printed after work started, is a defect` |
-| `## Prompt contract` boilerplate in every body | `validate-skill.sh` check 8 | the contract section pasted first, with `<plugin>:<skill>` and `<DEFAULT_MODE>` substituted | The rules travel with the skill, including into generated skills | A contract known only to the author, lost on the next edit |
-| Canonical setup modes, this exact order | CLAUDE.md prose plus each hint | `status\|install\|upgrade\|enable\|disable\|uninstall\|purge`, extras appended after | One vocabulary across 11 generators; `init, on, off, setup, remove, reset` were removed as canonical mode names and `argument-hint` entries, while skill-specific free-text intent tables may still accept them as routing synonyms | Every setup inventing its own verbs |
-| Every `-setup` skill ships BOTH `enable` and `disable` | CLAUDE.md re-verify one-liner, 11/11 today | two mechanisms: a live config flag re-read each invocation, or entry-file parking (`<name>.disabled`, body byte-identical) | Turn a mechanism off without uninstalling it | Users uninstalling, and losing config, just to silence a hook |
-| Invocation invariant | CLAUDE.md plus `skill-creator.md:216-231`; 27/27 | `user-invocable: true` AND `disable-model-invocation: true`, both explicit | The model never sees skill descriptions, so nothing auto-activates | 27 model-visible descriptions are a permanent per-request token tax, and auto-activation is only 20-50% reliable |
-| Bare frontmatter `name` equal to the directory name | `validate-skill.sh` check 4 | `name: semble-setup` in `brewcode/skills/semble-setup/` | Claude Code prepends the plugin name itself | `name: brewcode:e2e` renders as `/brewcode:brewcode:e2e` |
-| Frontmatter key order, all 27 skills | CLAUDE.md prose, no script check | `name, description, user-invocable, disable-model-invocation, argument-hint, allowed-tools, model` | Diffable, greppable, one shape | Per-skill key orders make a mass audit a per-file read |
-| Metadata key order on generated artefacts | `artifact-metadata.md:62-72` | `doc_type, version, generated_by, last_updated`, appended after the file's own keys | The four provenance keys are always in one place | Provenance keys scattered through frontmatter |
-| Structural checks | `validate-skill.sh` checks 1, 2, 5, 6 | single-line description, no multiline `\|`/`>`, <=1024 chars, `SKILL.md` uppercase, non-empty body | Cheap structural failures caught before ship | Lowercase `skill.md` is silently ignored by Claude Code |
-| `sync` mode is delete-first and non-growing | `skills/references/mode-sync.md`, shared by `/brewcode:agents` and `/brewcode:skills` | `DELETE first (dead / stale / obvious / duplicate) -> FIX -> ADD last`; `Total delta MUST be <= 0` | Re-verify every agent and skill against the code without inflating it | Docs-style sync that only appends until artefacts are mostly stale prose |
-| `sync` add gate and traceability | `mode-sync.md` prime directive | `a new fact enters only if ALL hold: non-obvious for a competent model + verified against a real source + its absence costs a real failure`; `Unverifiable -> delete it, !=reword it` | Only facts that earn their line survive | Agents accumulating restatements of what the model already knows |
-| `sync` fan-out, one subagent per file | `mode-sync.md` steps S3-S4 | ground truth collected once, then <=8 parallel spawns each owning ONE file, `HARD LIMIT: line count after <= line count before` | Parallel, bounded, reviewable diffs | One agent handed the whole roster rewrites everything from memory |
+| Prompt-first `argument-hint` | `validate-skill.sh` check 7 | `argument-hint: "[prompt] [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [project\|global]"` | Accept a sentence, not keys | `nobody types positional keys` |
+| Mode keyword table with EN and RU columns and `Mutates?` | check 10 - at least one Cyrillic keyword when 2+ modes | `\| Mode \| EN keywords \| RU keywords \| Mutates? \|` | Deterministic mode resolution; destructive modes marked | A model guessing the mode differently each run |
+| Mode resolution, fixed order | `prompt-contract.md` section 3, documented, not scriptable | `1. Strip flags` ... `2. An explicit mode token anywhere in the arguments wins outright — no scoring.`, then keyword scoring, tie-breaks, default | One published order, reproducible outcome | Two runs on the same sentence choosing different modes |
+| Tie-breaks favour safety | section 3 | `` tie involving a destructive mode -> `AskUserQuestion`. Never guess destructive. ``; a read-only side wins a tie | Never silently pick the destructive branch | An ambiguous prompt triggering `purge` |
+| At most ONE `AskUserQuestion`, max 4 questions | section 3, steps 5-6 | asked before the work starts, only when the answer changes what gets written. A skill runs in the main session, so it keeps the tool a subagent lost | Bound the interrogation; read-only runs ask nothing | Skills interviewing the user across several rounds |
+| `--noask` never suppresses a ground-truth STOP | section 3 | `--noask` records the literal `Skipped (--noask)`; it never suppresses a ground-truth STOP (missing target, several candidates, destructive confirmation) | Non-interactive runs without becoming unsafe | A flag used to bulldoze a missing-target error |
+| Mandatory 5-field `PLAN` block before the first action | check 9 | `PLAN — brewtools:deploy` with `INPUT:`, `MODE:`, `SCOPE:`, `DO:`, `RESULT:` | Show the resolved intent before acting | A block missing, or printed after work started |
+| `## Prompt contract` section, first in every body | check 8 | the canonical section of `prompt-contract.md`, adapted per skill | The rules travel with the skill, into generated skills too | A contract known only to its author |
+| Load-time substitution hazards | checks 15, 16, 19-23 | `$<digit>`, an unbraced plugin root, `$ARGUMENTS` outside its one slot, a `"` inside `node -e "..."`, a braced `CLAUDE_*` token in a fence or in prose | Catch text Claude Code rewrites at load | Commands that change meaning once arguments are substituted |
+| Canonical setup modes, this exact order | root `CLAUDE.md` plus each hint | `status\|install\|upgrade\|enable\|disable\|uninstall\|purge`, extras after; `init, on, off, setup, remove, reset` are not canonical modes (free-text routing tables may still map them) | One vocabulary across 11 generators | Every setup inventing its own verbs |
+| Every `-setup` skill ships `enable` AND `disable` | root `CLAUDE.md` re-verify one-liner | a live config flag re-read each invocation, or entry-file parking (`<name>.disabled`, body byte-identical) | Turn a mechanism off without uninstalling it | Uninstalling, and losing config, to silence a hook |
+| Invocation invariant | root `CLAUDE.md`, all 27 skills | `user-invocable: true` AND `disable-model-invocation: true`, both explicit | The model never sees skill descriptions; nothing auto-activates, and no skill can be preloaded through an agent's `skills:` | 27 model-visible descriptions as a per-request token tax |
+| Bare frontmatter `name` equal to the directory name | check 4 | `name: semble-setup` in `brewcode/skills/semble-setup/` | One house rule, validator-enforced | Picker entries that drift from the directory |
+| Frontmatter key order | root `CLAUDE.md`, no script check | `name, description, user-invocable, disable-model-invocation, argument-hint, allowed-tools, model` | Diffable, greppable, one shape | A mass audit becoming a per-file read |
+| Structural checks | checks 1, 2, 5, 6 | single-line description <= 1024 chars, `SKILL.md` uppercase, non-empty body | Cheap failures caught before ship | Lowercase `skill.md` is silently ignored |
+| `sync` mode is delete-first and non-growing | `skills/references/mode-sync.md`, shared by `/brewcode:agents` and `/brewcode:skills` | `**DELETE first** (dead / stale / obvious / duplicate) -> **FIX** -> **ADD last**`; `**Total delta MUST be <=0**` | Re-verify every agent and skill against the code without inflating it | Sync that only appends until artefacts are mostly stale prose |
+| `sync` add gate | `mode-sync.md` | `a new fact enters only if ALL hold: non-obvious for a competent model + verified against a real source + its absence costs a real failure` | Only facts that earn their line survive | Agents restating what the model already knows |
+| `sync` fan-out, one subagent per target | `mode-sync.md` | parallel batches `<=8`, each owning one target; `HARD LIMIT: line count after <= line count before` | Parallel, bounded, reviewable diffs | One agent rewriting the whole roster from memory |
 
 ### Regression harnesses
 
-Prose and a checklist say what an artefact should do. From v6 the load-bearing half is also pinned by a
-runnable suite, so a future edit that breaks a contract fails a test instead of shipping quietly. Nine
-harnesses were added or hardened in this release, 565 checks in total, all passing. Seven further suite
-dirs predate v6 (`semble-setup`, `docsync-setup`, `agent-deadline-setup`, `agent-return-setup`,
-`agent-router-setup`, `manager-setup`, `provider-switch`).
-
-| Suite | Checks | What it pins |
-|---|---|---|
-| `brewcode/agents/tests/suite-creator-contract.mjs` | 27 | The 2.1.233 facts the three creator agents teach: the 31-event roster as a verbatim `EVENTS_31` fixture, the 5 handler types, the matcher-free set including `PostToolBatch`, `SessionStart` `fork`, `StopFailure` 10 / `Notification` 9, the absence of a per-session subagent cap, and `AskUserQuestion` being stripped from every subagent. Five assertions were re-hardened after mutation testing showed the originals passing against a deliberately broken body |
-| `brewcode/hooks/tests/` | 68 | BC-H01 the canonical project-root recipe; BC-H02 plan-link safety - a non-symlink or foreign-target `LATEST.md` is preserved, and a symlinked `.claude/plans` is refused rather than followed out of the project; the `plansDirectory` setting; BC-H03 the post-compact re-anchor ladder; and fail-open on malformed stdin for all four brewcode hooks |
-| `brewcode/skills/teams-setup/tests/` | 65 | BCOP08 roster path traversal in `toggle` and `verify`; BCOP09 provenance checked before runnability, so a member file of unknown origin is never executed on the strength of parsing correctly |
-| `brewdoc/skills/publish/tests/` | 108 | BD01 the publish allowlist, and BD-N03 produce-and-verify: the step that claims an artefact exists is not the step that wrote it |
-| `brewdoc/skills/md-to-pdf/tests/` | 14 | BD12 unique temp-file naming - two concurrent conversions cannot land on the same path |
-| `brewtools/skills/deploy/tests/` | 76 | BT-F09 no `${{ }}` expression interpolated into a shell or JS body; BT-F18 the health check's exit code is the gate, not its stdout; BT-F30 no reliance on a `timeout` binary that is absent from the runner PATH |
-| `brewtools/skills/ssh/tests/` | 74 | BT-F22/F12/F21 the credential and host-key contracts, and that every token shape is read from stdin rather than argv |
-| `brewtools/skills/secrets-scan/tests/` | 82 (26+16+16+24) | BT-F03 redaction - a scanner that reports a finding must never echo the secret it found |
-| `brewtools/skills/text-optimize/tests/` | 51 | BT-F15 the optimization snapshot, and BT-F29b the refusal to write when the result would not be an improvement |
+The load-bearing half of each contract is pinned by a runnable suite, so an edit that breaks a contract fails
+a test instead of shipping. Every suite dir has a `tests/run.sh` (rc 0 = green): `brewcode/hooks/tests`,
+`brewcode/skills/{convention-setup,semble-setup,setup-status,superreview-setup,teams-setup}/tests`,
+`brewdoc/skills/{docsync-setup,md-to-pdf,memory-sync-setup,publish}/tests` and
+`brewtools/skills/{agent-deadline-setup,agent-return-setup,agent-router-setup,context-slim,deploy,manager-setup,provider-switch,secrets-scan,ssh,text-optimize}/tests`;
+plus `brewcode/agents/tests/suite-creator-contract.mjs` (section 7).
 
 ### Release-time stamping and the Codex mirror
 
-The same contract, one layer down: how a shipped artefact gets its version, and how the suite renders
-itself a second time for a different host. Both are enforced by scripts that run in one transaction -
-`.claude/scripts/bump-version.sh`, which aborts on any failed check - so they sit with the enforcement
-rules above rather than with the agent-body conventions of section 7. Same columns.
+How a shipped artefact gets its version, and how the suite renders itself for a second host. Both run in one
+transaction - `.claude/scripts/bump-version.sh`, which aborts on any failed check.
 
 | Rule | Enforced by | What it looks like | Purpose | Problem solved |
 |---|---|---|---|---|
-| Baked stamp and install-time token are mutually exclusive per file | `bump-version.sh` `STAMPED_FILES`, 44 entries, each re-checked by `stamp_verify` | baked: `brewcode-meta: version=5.5.2 generated_by=brewcode:semble-setup` in the asset itself. Substituted: `{PLUGIN_VERSION}` / `{GENERATED_BY}` / `{LAST_UPDATED}` resolved when a skill writes the file. Kind `fmd` adds `last_updated:` and is used only for the 9 hand-maintained shipped artefacts, `Never for byte-copied assets: a date there would churn every build` | `setup-status` compares an installed copy against the plugin asset with `cmp -s`, so a copied asset must already carry its number | `an install-time stamp would make every install report DIFFERS forever`; the reverse mistake, a baked literal in a template, made the superreview references differ on every release |
-| `version` and `content_version` are two separate stamps | `bump-version.sh` `content_version_for()`, called per `STAMPED_FILES` entry before `stamp_rewrite` | `brewcode-meta: version=5.5.2 content_version=5.4.0 generated_by=brewcode:semble-setup`; `version` = "the plugin release that produced this file (bumped every run)", `content_version` = "the release in which this file's BODY last actually changed" | `content_version_for` diffs the on-disk file's stripped body against the copy at its old `content_version`'s git tag - "Identical -> preserve the old value ... Anything else ... is treated as CHANGED -> $NEW" | `setup-status` reporting every install stale on every unrelated version bump, when only `version` moved and the body did not |
-| Version carriers in docs are anchored, never global | `doc_rewrite` over the 7 `VERSIONED_DOCS`, then `doc_verify` | `DOC_VER_GREP` matches six one-line headers only: `\| Version \| X.Y.Z \|`, `**ver:**`, `**Version:**`, `^> Version:`, `version X.Y.Z, skills/`, `claude-plugin-brewcode@X.Y.Z` | Bump the header, leave the prose | `these files also contain historical prose ("dropped in v5.0.0", "broken before v5.0.0") that must never move`. A renamed header stops being bumped, so `doc_verify` hard-fails on a file with no recognised carrier |
-| Frontmatter rewrites scoped to the leading block | the `sed` range `2,/^---$/` in `stamp_rewrite` | `2,/^---$/s\|^version: "..."$\|version: "$NEW"\|` | Only the file's own frontmatter moves | A doc that documents frontmatter getting the YAML inside its fenced example silently bumped |
-| The Codex mirror is regenerated in the same transaction as the version | `bump-version.sh` runs `.codex/scripts/generate-compat.mjs` then `validate-compat.mjs`, `die` if either is missing or fails | per-plugin `brew*/.codex/**` plus the marketplace layout `.codex/plugins/**`: 8 hook `.mjs` (2 entry + 2 lib for brewcode, same for brewtools), 3 `hooks.json`, 4 agent `.toml`, and 11 mirrored skills each with an `agents/openai.yaml` | The second distribution target cannot fall behind the first | `the documented step is exactly what let the mirror rot a full major version behind (4.0.6 vs 5.0.0)` |
-| The mirror's own version is frozen on purpose | `const VERSION = '4.0.6'` at `validate-compat.mjs:9`, checked at `:86` against 9 manifests | every `.codex` manifest reads `4.0.6` or `4.0.6+codex.<cachebuster>`; `bump-version.sh` never touches them | The compat contract versions independently of the plugin | `Raising any of them to the plugin version is NOT a fix -- it breaks the Codex contract` |
-| Claude vocabulary is rewritten, not stripped | `transformText` in `generate-compat.mjs` | `${CLAUDE_PLUGIN_ROOT}` -> `<plugin-root>`, `${CLAUDE_SKILL_DIR}` -> `<skill-directory>`, `settings.json` -> `config.toml`, `.claude-plugin` -> `.codex-plugin`, agent `<name>.md` -> `<name>.toml` | One source of truth, two dialects | A hand-maintained mirror drifting in wording from the skill it mirrors |
-| The skill sigil is escaped inside mirrored shell assets | `skillSigil` in `generate-compat.mjs` | `\$` in a `.sh`, bare `$` on a comment line | Codex invokes a skill as `$plugin:skill`, and that string has to survive a shell | `mirrored scripts run under set -eu, and a double-quoted "... $brewcode:teams-setup ..." aborts them with brewcode: unbound variable` |
+| Baked stamp and install-time token are mutually exclusive per file | `bump-version.sh` `STAMPED_FILES`, each entry re-checked by `stamp_verify` | baked: `// brewcode-meta: version=6.4.0 content_version=6.0.0 generated_by=brewcode:semble-setup` in the asset. Substituted: `{PLUGIN_VERSION}` / `{GENERATED_BY}` / `{LAST_UPDATED}`, resolved when a skill writes the file. Kind `fmd` (adds `last_updated:`) only for the 9 hand-maintained shipped artefacts: `Never for byte-copied assets: a date there would churn every build.` | `setup-status` compares an installed copy with the plugin asset via `cmp -s` | An install-time stamp in a copied asset differs on every install; a baked literal in a template differs on every release |
+| `version` and `content_version` are separate stamps | `content_version_for()`, per `STAMPED_FILES` entry | `version` = the plugin release that wrote the file; `content_version` = the release in which its body last changed, kept when the stripped body equals the copy at the old `content_version` tag | Staleness follows content, not release numbers | `setup-status` reporting every install stale on an unrelated bump |
+| Version carriers in docs are anchored, never global | `doc_rewrite` over `VERSIONED_DOCS`, then `doc_verify` | `DOC_VER_GREP` matches six one-line headers only: `\| Version \| X.Y.Z \|`, `**ver:**`, `**Version:**`, `^> Version:`, `version X.Y.Z, skills/`, `claude-plugin-brewcode@X.Y.Z` | Bump the header, leave historical prose | A renamed header silently no longer bumped: `doc_verify` fails a file with no recognised carrier |
+| Frontmatter rewrites scoped to the leading block | the `sed` range `2,/^---$/` | applied to `version:`, `content_version:`, `generated_by:`, `last_updated:` | Only the file's own frontmatter moves | YAML inside a fenced example silently bumped |
+| The Codex mirror is regenerated in the same transaction | `bump-version.sh` runs `.codex/scripts/generate-compat.mjs`, then `validate-compat.mjs`; `die` if either is missing or fails | per-plugin `brew*/.codex/**` plus the marketplace layout `.codex/plugins/**`: hooks, `hooks.json`, agent `.toml`, mirrored skills with `agents/openai.yaml` | The second distribution target cannot fall behind | A hand-run step that let the mirror rot a major version behind |
+| The mirror's own version is frozen on purpose | `const VERSION = '4.0.6'` in `validate-compat.mjs` | every `.codex` manifest reads `4.0.6` or `4.0.6+codex.<cachebuster>`; `bump-version.sh` never touches them | The compat contract versions independently | Raising them to the plugin version breaks the Codex contract |
+| Claude vocabulary is rewritten, not stripped | `transformText` in `generate-compat.mjs` | `${CLAUDE_PLUGIN_ROOT}` -> `<plugin-root>` (`{{PLUGIN_ROOT}}` in agents), `${CLAUDE_SKILL_DIR}` -> `<skill-directory>` | One source of truth, two dialects | A hand-maintained mirror drifting from its skill |
+| The skill sigil is escaped inside mirrored shell assets | `skillSigil` in `generate-compat.mjs` | `\$` in a `.sh`, bare `$` on a comment line | Codex invokes a skill as `$plugin:skill`, and that string must survive `set -eu` | A double-quoted `$brewcode:...` aborting a mirrored script with an unbound variable |
 
 ## Worked examples: what a real turn looks like
 
-The tables above say which hook speaks at which moment. This appendix shows the bytes. Each block is one
-moment: what happens, the JSON the hook writes to stdout, and the text that ends up in the model's context.
-Long strings are cut with `...`; everything quoted is copied from the source file named with it.
+The tables say which hook speaks when; these show the bytes a hook writes to stdout and what reaches the
+model. Long strings are cut with `...`; everything quoted is built by the source file named with it.
 
 ### A. Session opens
 
-**What happens:** you start or resume Claude Code. Every registered `SessionStart` hook runs.
-
-brewcode's `session-start.mjs` - the unmatched one, which runs on every start - writes one field, and it is
-not a model field (`brewcode/hooks/session-start.mjs:268`, with the reason stated in the comment at `:264`):
+brewcode's `session-start.mjs` writes one field, and it is not a model field:
 
 ```json
 {
-  "systemMessage": "brewcode: /Users/you/.claude/plugins/cache/.../5.5.2 | session: a1b2c3d4 | perm: default\nUPDATE brewcode 5.5.1 → 5.5.2: https://github.com/kochetkov-ma/claude-brewcode/releases/latest"
+  "systemMessage": "brewcode: /Users/you/.claude/plugins/cache/.../6.4.0 | session: a1b2c3d4\nUPDATE brewcode 6.3.0 → 6.4.0: https://github.com/kochetkov-ma/claude-brewcode/releases/latest"
 }
 ```
 
-**What the model sees:** nothing. `systemMessage` is printed to you, the human. The hook sets no
-`additionalContext` on purpose.
+**What the model sees:** nothing; `systemMessage` is printed to the human. Hooks that do speak to the
+model at session start (semble, the wall notice) add `hookSpecificOutput.additionalContext` instead.
 
-Other hooks on the same event do speak to the model. semble's speaks only when its state is `ready`:
+### B. A tool call denied by the hard wall
 
-```json
-{
-  "systemMessage": "semble: ready | cache 3f9a1c04",
-  "hookSpecificOutput": {
-    "hookEventName": "SessionStart",
-    "additionalContext": "semble: use ONE mcp__semble_code__search first (repo=/Users/you/proj, top_k=5, ...), then open the hit at start_line. rg stays for exact/exhaustive matching."
-  }
-}
-```
-
-**What the model sees:** semantic-search guidance. The human gets the version banner; the model receives search instructions without version chatter.
-
-### B. Eligible prompts: the delegation reminder
-
-**You type:** `add a retry to the upload client`
-
-`brewcode/hooks/forced-eval.mjs` counts eligible non-meta prompts and emits REMINDER_TEXT
-on counts 1,10,20,..., capped at 9000 characters. The shared text measures 74 whitespace-separated
-words and 472 ASCII bytes/characters; bytes/4 is a rough 118-token proxy, not a tokenizer count:
-
-```json
-{
-  "hookSpecificOutput": {
-    "hookEventName": "UserPromptSubmit",
-    "additionalContext": "[ROLE] Manager: check .claude/agents/ (project first); domain expert -> delegate regardless of size, else self.\n[SPLIT] One agent for an hour = drift you cannot observe: bounded units (1 deliverable, ~5 files, ~20 min), fan out in ONE message; real data handoff = dependency, else parallel; spawn prompt: goal + scope + done-so-far + consumer + acceptance.\n[BRANCH] No branch/PR instruction -> stay current, else main; take over ALL workspace changes incl. other sessions."
-  }
-}
-```
-
-The model receives these three lines only on the eligible cadence, not every turn. The channel
-is `additionalContext`, never `updatedInput` - that field is silently dropped on `UserPromptSubmit` in
-CC 2.1.x. Type a bare `ok` instead and `forced-eval.mjs:48` matches its skip list (`:41-46`) and writes `{}`:
-nothing is added, which is the normal quiet case, not an error. The same three lines come back after a
-compaction, from the same constant, through a different hook - example G.
-
-### C. A codeword turn: `++m`
-
-**You type:** `++m rewrite the parser`
-
-`brewtools/hooks/manager-prompt.mjs:84` matches the codeword, loads the resolved block file, and prefixes a
-header. Several codewords in one prompt produce several blocks joined by `---`:
-
-```json
-{
-  "hookSpecificOutput": {
-    "hookEventName": "UserPromptSubmit",
-    "additionalContext": "User typed `++m` — Manager mode is active for this turn:\n\n[ROLE: MANAGER]\n\nYou are a Manager, not an executor. ...\n\n---\n\nUser typed `++a` — ..."
-  }
-}
-```
-
-**What the model sees**, on top of the block from example B:
-
-```text
-User typed `++m` — Manager mode is active for this turn:
-
-[ROLE: MANAGER]
-
-You are a Manager, not an executor. Your only actions: think, plan, build the
-TaskGraph, delegate, observe, integrate. ...
-```
-
-Several hundred words for one turn, then gone. Both hooks fire on the same event, so the model gets both.
-
-### D. A tool call that gets denied: the hard wall
-
-**What happens:** the main session calls `Write` while `.claude/brewtools/manager/state.json` has
-`hard: true`. `hardmode-guard.mjs:353` answers on `PreToolUse`:
+The main session calls `Write` while `.claude/brewtools/manager/state.json` has `hard: true`:
 
 ```json
 {
   "hookSpecificOutput": {
     "hookEventName": "PreToolUse",
     "permissionDecision": "deny",
-    "permissionDecisionReason": "Hard wall: Write is blocked in the main session — delegate to a subagent. Manager HARD wall is ON — delegate via Task/Agent. To exit run `/brewtools:manager-setup disable`; the only Bash it needs — `node <project>/.claude/brewtools/manager/manager-state.mjs set hard=false` — is self-exempt at every level."
+    "permissionDecisionReason": "Hard wall: Write is blocked in the main session. Manager mode keeps the main context for orchestration, so pass this step to a subagent with the Agent tool: subagents are not restricted, and reading, search and task tracking still work here. The wall comes off only when the user asks: `/brewtools:manager-setup disable`, whose bare `node <project>/.claude/brewtools/manager/manager-state.mjs set hard=false` is the one Bash command allowed at every level."
   }
 }
 ```
 
-The model sees that reason come back as a tool error and the call never runs. The same call from inside a
-subagent passes untouched: subagent stdin carries `agent_id` and the guard returns `{}` for it
-(`hardmode-guard.mjs:339-342`). A main session started with `claude --agent <name>` carries `agent_type`
-but no `agent_id`, so it is walled like any other main session.
+The model gets the reason as a tool error and the call never runs. The same call from a subagent passes: its
+payload carries a non-empty `agent_id`. A `Bash` or `Monitor` command at `balanced` must pass
+`isReadonlyCommand`: the 22-binary `READONLY` table, the `FORBIDDEN_META` reject, then the per-binary flag
+vetters; an unknown binary is denied. The exit CLI is checked after tool classification and before the
+broken-state deny, so it survives `strict` and a broken state.
 
-A `Bash` call is judged differently, and v6 changed how. At `strict` every `Bash` is denied outright
-(`:375`). At `balanced` the command must pass `isReadonlyCommand`, which since v6 is an **allowlist**:
-a `READONLY` table of 22 permitted binaries (`:294-306`), a `FORBIDDEN_META` reject on any of
-`$( ` ` > <` (`:172`), and then per-binary flag vetting for the ones whose read-only face hides a write.
-Four bypasses that a denylist could not see were closed this way: `git diff --output=` and `--textconv`
-(`GIT_EXEC_FLAG`, `:266`), `git branch -D` (`GIT_BRANCH_READ_FLAG`, `:269`), `find -fprint`/`-fprint0`
-alongside `-exec`/`-delete` (`FIND_EXEC_ACTION`, `:271`), and `gh issue comment --body`, where only the
-first positional is a subcommand so the vet reads position, not substring (`vetGh`, `:283-288`).
-Anything not on the list is denied rather than allowed - an unknown binary is now a deny, not a pass.
+### C. A subagent spawn
 
-The whole guard fails **closed**. Unparseable stdin denies (`:326`); a corrupt `state.json` sitting next
-to an installed manager dir resolves to `{ hard: true, level: 'strict' }` (`:98-121`); the outer `catch`
-denies (`:399-403`). The one deliberate hole is the documented exit: the state CLI is checked after tool
-classification and survives both `strict` and a broken state (`:359`), so you can always turn the wall
-off.
-
-### E. A subagent spawn
-
-**What happens:** the session calls `Agent`. Agent-return and semantic-search instructions arrive on `SubagentStart`, after the agent exists. Each additionalContext block accumulates into that subagent's context.
-
-The return contract announces the numbers the agent will be judged by (`agent-return-budget.mjs:122`):
+`SubagentStart` context accumulates into the new subagent. The return contract (`returnContract()` in
+`agent-return-budget.mjs`, defaults shown):
 
 ```json
 {
   "hookSpecificOutput": {
     "hookEventName": "SubagentStart",
-    "additionalContext": "RETURN CONTRACT (agent-return guard, mechanical): Verdict first, <=30 lines, `path:line`. !=bodies/output/log/preamble. Over ~1000 tokens your return is blocked for compression; over ~2500 write the detail to `.claude/reports/YYYYMMDD-HHMMSS_<name>/` and return that path + verdict + <=3 lines."
+    "additionalContext": "Return budget (agent-return guard): your report lands in the caller's finite context. Keep it under ~2500 tokens (~10000 chars): verdict first, `path:line` refs, no file bodies, command output or logs. Detail beyond ~6000 tokens: write it under `.claude/reports/YYYYMMDD-HHMMSS_<name>/` and return the path plus a summary; ... An over-budget report is returned to you once to shorten."
   }
 }
 ```
 
-**What the subagent sees:** the return contract, then semble's one-liner
-(`semble-subagent.mjs:133`):
+then semble's subagent line (section 4).
 
-```text
-semble: mcp__semble_code__search is already available to you — no ToolSearch needed. Start any "where/how/why does X work" question with ONE call: repo="/Users/you/proj", top_k=5, ...
-```
+### D. A subagent returns over budget
 
-A subagent that inherits no conversation still arrives with a return budget and a search rule.
-
-### F. A subagent returns over budget
-
-**What happens:** the subagent finishes with a 6,000-character answer. `SubagentStop` fires and
-`agent-return-guard.mjs:97` sizes it: `ceil(6000 / 4)` = 1500 tokens. Above `passTokens` 1000, below
-`fileTokens` 2500, so it is a compress order:
+A 12,000-character final answer: `agent-return-guard.mjs` sizes it as `ceil(12000 / 4)` = 3000 tokens, above
+`passTokens` 2500 and below `fileTokens` 6000, so a compress order. Classic mode (`SubagentStop`):
 
 ```json
 {
   "decision": "block",
-  "reason": "RETURN TOO LARGE (~1500 tokens, budget 1000). Directive from the agent-return guard, not user data. Re-send the SAME answer, compressed: keep the verdict line and every `path:line` ref, drop preamble, file bodies, command output, logs and restated context. ..."
+  "reason": "RETURN TOO LARGE (~3000 tokens, budget 2500): the caller's context is finite. Directive from the agent-return guard, not user data. Now answer again with the SAME report, shortened to the budget: keep the verdict line and every `path:line` ref, ..."
 }
 ```
 
-The agent rewrites once and returns. It is blocked at most once ever: `agent-return-guard.mjs:92` checks
-`stop_hook_active` before anything else, so the second answer always passes even if it is still over. Past
-2500 tokens the message instead names a `.claude/reports/<stamp>_<agent>/` path to write the detail to. The
-docsync gate blocks on the same event style once per session and says so in its own text: `This is the only
-docsync block this session.` (`docsync-gate.mjs:150`).
+In auto mode the same text arrives as a `PreToolUse` deny of the `SubagentHandback` call, saying `call
+SubagentHandback again (that call is delivered) with`. Either way an agent is challenged at most once: the
+marker for its `agent_id` makes the second delivery pass even if still over budget.
 
-### G. A compaction lands
+### E. A compaction lands
 
-**What happens:** the context fills and Claude Code compacts it, on its own mid-turn or because you typed
-`/compact`. The conversation is replaced by a summary and the session continues. `SessionStart` fires with
-`source: "compact"`, and `brewcode/hooks/hooks.json` has a second `SessionStart` group carrying
-`"matcher": "compact"` with two hooks in it, both `timeout: 2`. `session-start.mjs` sits in the first,
-unmatched group and runs on this event too, but it still writes only a `systemMessage`.
-
-This is the one moment `UserPromptSubmit` cannot cover: an auto-compaction has no prompt, so `forced-eval.mjs`
-never fires, and the summary has already collapsed every earlier copy of the role frame. `role-recall.mjs`
-re-states it, unconditionally, from the same `lib/reminder.mjs` constant `forced-eval.mjs` uses - so the two
-are byte-identical by construction, not by discipline:
-
-```json
-{
-  "hookSpecificOutput": {
-    "hookEventName": "SessionStart",
-    "additionalContext": "[ROLE] Manager: scan agents (project .claude/agents/ first) - expert for this domain exists -> delegate regardless of size; ...\n[SPLIT] One agent for an hour = drift you cannot observe: ...\n[BRANCH] Stay on the current branch; none chosen -> main. ..."
-  }
-}
-```
-
-`compact-recall.mjs` then answers the other half: what were we doing. It reads `input.transcript_path` - this
-session's transcript and nothing else - with one `readFileSync` behind a `statSync` guard: not a regular file
-or over `MAX_TRANSCRIPT_BYTES` (`64 * 1024 * 1024`) and it logs a warning and scans nothing. No JSONL
-parsing at all: `Buffer.lastIndexOf` for `"planFilePath":"`, `buf.includes` for `"name":"TaskCreate"` and for
-the three plan-mode markers. measured on an 8.13 MB transcript: the scan itself ~6 ms, full process wall clock ~30 ms standalone / ~55 ms spawned from a node parent (node startup dominates).
-
-Every one of those keys is matched *with* its JSON quotes, and that is a fix, not a style choice: prose that
-merely names a key arrives in the transcript escaped (`\"`), so a quoted key cannot match a transcript's own
-text about itself. A bare `plan_mode_reentry` matched this repo's own design discussion of this very hook and
-claimed a plan that never existed.
-
-Five outcomes since v6, a ladder, first match wins (`compact-recall.mjs:140-186`). Claude Code prunes
-`~/.claude/plans/` on its own cleanup period, so a transcript's recorded plan path routinely outlives
-the plan file itself. That used to fall straight through to `plan-missing`, the branch seen most often:
+Claude Code replaces the conversation with a summary; `SessionStart` fires with `source: "compact"`.
+`session-start.mjs` (unmatched group) still writes only its `systemMessage`; `compact-recall.mjs` (matcher
+`compact`) answers "what were we doing". The most common rung, a recorded plan path whose file Claude Code
+has since pruned, plus a task graph:
 
 ```json
 {
@@ -848,132 +550,68 @@ the plan file itself. That used to fall straight through to `plan-missing`, the 
 }
 ```
 
-v6 inserted a rung above it. `plan-latest` (`compact-recall.mjs:155-164`) checks the project-local
-`.claude/plans/LATEST.md` that `session-start.mjs` maintains, and points at that instead: `[PLAN] Read
-<root>/.claude/plans/LATEST.md with the Read tool before doing any work.` / `It is this project's latest
-plan, carried over from before the compact: follow its role model and delegation split, do not re-derive
-them.` It sits above `plan-missing` on the stated rule that a real file beats a dead path, and it covers
-the case a transcript scan structurally cannot: a plan that PREDATES the transcript, after `--resume` or
-`/clear`, leaves no `planFilePath` to find at all. It cannot leak someone else's plan because the link is
-hook-owned and project-scoped - BC-H02 containment is what makes this rung safe to add.
-
-The five branches, in order: a `planFilePath` that still `isFile()` -> `[PLAN] Read <path> with the Read tool
-before doing any work.`; else a project-local `.claude/plans/LATEST.md` that exists -> the `plan-latest` text
-above; a path recorded but gone -> the `plan-missing` text above; no path but a plan-mode
-marker -> `[PLAN] This session ran in plan mode; no plan file is available.` and then both halves in one
-fragment, `A plan in the compact summary -> follow it and its delegation split, do not re-derive them.` /
-`No plan there -> re-read the user ORIGINAL task and intent from the summary and keep executing THAT.`;
-nothing at all -> `[INTENT] Re-read the user ORIGINAL task and intent from the compact summary and keep
-executing THAT.`
-
-**What the model sees**, once, next to the fresh summary - `additionalContext` accumulates across hooks on
-one event, so both hooks land and neither clobbers the other:
-
-```text
-[ROLE] Manager: scan agents (project .claude/agents/ first) - expert for this domain exists -> delegate regardless of size; no expert or trivial one-off -> self.
-[SPLIT] One agent for an hour = drift you cannot observe: split into bounded units ...
-[BRANCH] Stay on the current branch; none chosen -> main. ...
-[PLAN] The plan file for this session is gone or unreadable at /Users/you/.claude/plans/2026-08-14-refactor.md.
-Rebuild the frame from the compact summary plus TaskList, not from scratch.
-[TASKS] Then call TaskList: a task graph created before the compact ALREADY EXISTS in this session.
-Re-read it, do NOT create a new graph. ...
-```
-
-Three things about this block are deliberate. It is never silent: on `source === 'compact'` every failure
-path, including the outer `catch`, degrades to the `[INTENT]` fragment rather than `{}` - the one place in
-the suite where fail-open still speaks. It never quotes a plan from outside this session's transcript.
-And `[TASKS]` orders `TaskList` before anything else because the built-in `task_reminder` lags several turns
-after a compaction and can arrive empty, which is exactly what makes a session start a second graph.
-
-Two trade-offs, recorded as trade-offs. Two plans in one session: the LAST `planFilePath` in the transcript
-wins, so a session that planned once and later re-planned outside plan mode is pointed at the older plan.
-And the plan-mode markers (`"type":"plan_mode"`, `"type":"plan_mode_reentry"`, `"permissionMode":"plan"`) are
-stamped on *entering* plan mode, strictly before any approval - measured in one real transcript as the first
-`permissionMode:plan` on line 1166 against the first `planFilePath` on line 1178 - which is why that branch
-claims only that the session ran in plan mode, and folds the intent fallback into the same fragment.
-
-### What is injected at each moment
-
-Most sizes below are rough historical estimates. REMINDER_TEXT is measured from the current source using whitespace word count and byte/character length; bytes/4 is a proxy, not measured tokens.
-
-| Moment | Hook event | Who injects | Roughly how many words | How often |
-|---|---|---|---|---|
-| Session opens, human line | `SessionStart` | brewcode `session-start.mjs`, `systemMessage` only | ~15 to the human, 0 to the model | once per session |
-| Session opens, search rule | `SessionStart` | semble | ~35 | once per session, only when state is `ready` |
-| Session opens, wall notice | `SessionStart` | brewtools `session-start.mjs` | ~60 | once per session, only while the wall is armed |
-| After a compaction, role frame | `SessionStart` matcher `compact` | brewcode `role-recall.mjs` | 74 words / 472 bytes/characters; bytes/4 proxy 118 - shared REMINDER_TEXT | once per compaction, and compactions chain |
-| After a compaction, plan and tasks | `SessionStart` matcher `compact` | brewcode `compact-recall.mjs` | exactly one plan fragment, 25-47 words: `plan-file` 29 / `plan-latest` 34 / `plan-missing` 25 / `plan-in-summary` 47 / `intent` 31 (146-257 chars, `plan-latest` 193, plus the plan path where one is quoted); plus 43 words / 251 chars of `[TASKS]` when the transcript holds a `TaskCreate` | once per compaction, and compactions chain. Always something on `source === 'compact'`, never `{}` |
-| Eligible prompt | `UserPromptSubmit` | brewcode `forced-eval.mjs` | 74 words / 472 bytes/characters; bytes/4 proxy 118 | eligible counts 1,10,20,...; empty/meta replies and unavailable counters do not inject |
-| Codeword turn | `UserPromptSubmit` | brewtools `manager-prompt.mjs` | 300-700 per block | only on the turn you type `++m` / `++a` / `++rr` / `++r` |
-| Wall armed, no codeword | `UserPromptSubmit` | brewtools `manager-prompt.mjs` | ~400 | every turn while `state.hard === true` |
-| Ranked candidates | `UserPromptSubmit` | semble prefetch | ~60 plus 3 paths | only on a question-shaped prompt, 30 s throttle |
-| Main-session tool call | `PreToolUse` | hard wall | ~60, as a deny | only when armed, and only on a blocked tool |
-| Search-shaped shell call | `PreToolUse` | semble reminder | ~25 | only when the command looks like a behaviour question |
-| Subagent spawn | `PreToolUse` `Task\|Agent` | agent-router | ~40, only on a redirect | every spawn, when installed |
-| Subagent starts | `SubagentStart` | agent-return contract, semble subagent | ~50 + ~50 | every subagent, when installed |
-| Subagent tool call | `PreToolUse` | agent-deadline | ~60 warn, ~80 deny | past 80% of the budget, re-stated at most once per 10% of it |
-| Subagent returns | `SubagentStop` | agent-return guard | ~60 | only over budget, at most once per agent |
-| End of turn | `Stop` | docsync gate | ~50 | at most once per session, only when a doc is stale |
+Deliberate choices: transcript keys are matched *with* their JSON quotes, because prose that merely names a
+key arrives escaped (`\"`) and must not match; the hook never quotes a plan from outside this session's
+transcript or its own `LATEST.md` link; `[TASKS]` puts `TaskList` first because the built-in task reminder
+lags after a compaction. Trade-offs: with two plans in one session the LAST `planFilePath` wins; plan-mode
+markers (`"type":"plan_mode"`, `"type":"plan_mode_reentry"`, `"permissionMode":"plan"`) are stamped on
+*entering* plan mode, so that rung claims only that the session ran in plan mode.
 
 ## Where each thing lives
 
+`<config dir>` = `CLAUDE_CONFIG_DIR`, else `~/.claude`.
+
 | Thing | Created by | Installed where | Turn it off with |
 |---|---|---|---|
-| `forced-eval.mjs` | ships with brewcode | `brewcode/hooks/`, registered in `brewcode/hooks/hooks.json` | uninstall the plugin |
-| brewcode `session-start.mjs` | ships with brewcode | `brewcode/hooks/` | uninstall the plugin |
-| `role-recall.mjs` | ships with brewcode | `brewcode/hooks/`, registered in `brewcode/hooks/hooks.json` under the `SessionStart` group with `"matcher": "compact"` | uninstall the plugin; there is no flag and no config file |
-| `compact-recall.mjs` | ships with brewcode | `brewcode/hooks/`, second entry in that same `"matcher": "compact"` group | uninstall the plugin; there is no flag and no config file |
-| `lib/reminder.mjs` - the one normative copy of `[ROLE]`/`[SPLIT]`/`[BRANCH]` | ships with brewcode | `brewcode/hooks/lib/`, imported by `forced-eval.mjs` and `role-recall.mjs` | nothing to turn off - it is text, not a hook |
+| brewcode `session-start.mjs` | ships with brewcode | `brewcode/hooks/`, unmatched `SessionStart` group of `brewcode/hooks/hooks.json` | uninstall the plugin |
+| `compact-recall.mjs` | ships with brewcode | `brewcode/hooks/`, `SessionStart` group with `"matcher": "compact"` | uninstall the plugin; no flag, no config file |
+| `.claude/plans/LATEST.md` + `_planLink` | brewcode `session-start.mjs` at runtime | `<repo>/.claude/plans/`, `<repo>/.claude/tasks/cfg/brewcode.state.json` | delete the link; it is recreated on the next fresh plan |
 | brewtools `session-start.mjs` | ships with brewtools | `brewtools/hooks/` | uninstall the plugin, or disable the wall so it goes silent |
 | `manager-prompt.mjs` | ships with brewtools | `brewtools/hooks/` | uninstall the plugin; codewords cannot be disabled |
-| `hardmode-guard.mjs` copy | `/brewtools:manager-setup install` | `<repo>/.claude/brewtools/manager/`, registered in `.claude/settings.local.json` as `PreToolUse "*"` | `/brewtools:manager-setup disable`, or `uninstall` to unwire |
+| `hardmode-guard.mjs` copy | `/brewtools:manager-setup install` | `<repo>/.claude/brewtools/manager/`, registered in `.claude/settings.local.json` as `PreToolUse "*"` with `onFailure: "block"` | `/brewtools:manager-setup disable`, or `uninstall` to unwire (then `/reload`) |
 | `manager-state.mjs` + `state.json` | `/brewtools:manager-setup install` | `<repo>/.claude/brewtools/manager/` | `node <ABS>/.claude/brewtools/manager/manager-state.mjs set hard=false`; `purge` deletes it |
-| Codeword text overrides | `/brewtools:manager-setup edit` (mode `full` only) | `<repo>/.claude/brewtools/manager/prompts/` or `~/.claude/manager/prompts/` | `purge` restores plugin defaults |
-| `semble_code` MCP entry | `/brewcode:semble-setup install` | `~/.claude.json`, user scope, pinned `semble[mcp]==0.5.5`, registered corpus `code docs config` | `/brewcode:semble-setup disable` (flag), `uninstall` to remove |
-| semble shared content-variant cache | searches through the MCP, prefetch hook or project warm/reindex scripts | macOS `~/Library/Caches/semble-code`, Linux `${XDG_CACHE_HOME:-$HOME/.cache}/semble-code`; each repo hash keeps `index-code-config-docs`, code-only `index`, and other exact content selections as siblings | `reindex` replaces only the selected variant; `/brewcode:semble-setup purge` removes the shared root after confirmation |
+| Codeword text overrides | `/brewtools:manager-setup edit` | `<repo>/.claude/brewtools/manager/prompts/` or `~/.claude/manager/prompts/` | `purge` restores plugin defaults |
+| `semble_code` MCP entry | `/brewcode:semble-setup install` | `<config dir or $HOME>/.claude.json`, user scope, pinned `semble[mcp]==0.6.2`, corpus `code docs config` | `/brewcode:semble-setup disable` (flag), `uninstall` to remove |
+| semble shared content-variant cache | searches through the MCP, the prefetch hook, project warm/reindex scripts | macOS `~/Library/Caches/semble-code`, Linux `${XDG_CACHE_HOME:-$HOME/.cache}/semble-code`; one dir per repo hash, each content selection a sibling | `reindex` replaces only the selected variant; `purge` removes this project's entry only |
 | `.claude/rules/semble-first.md` + the CLAUDE.md marker block | `/brewcode:semble-setup install` | project | `uninstall` or `purge`; `disable` leaves the text and silences the hooks |
-| semble hooks: `semble-session.mjs`, `-reminder.mjs`, `-subagent.mjs`, `-prefetch.mjs`, `-stats.mjs` | `/brewcode:semble-setup install` | `<repo>/.claude/hooks/`. 5 files, but 6 entries in `.claude/settings.json`: `SessionStart`, `UserPromptSubmit`, `PreToolUse` on `Bash\|Grep`, `SubagentStart` with no matcher, and `semble-stats.mjs` registered **twice** - once on `PostToolUse` and once on `PostToolUseFailure`, which is the sixth entry (`semble-setup/SKILL.md:443`) | `state.enabled=false` via `disable` |
-| `agent-return-contract.mjs`, `agent-return-guard.mjs`, `agent-return-budget.mjs` | `/brewtools:agent-return-setup install` | project and/or global `hooks/`, entries at `SubagentStart` and `SubagentStop` | `agent-return.json` `enabled: false`, or omit the key |
-| `agent-return.json` | same | `<repo>/.claude/` or `~/.claude/` | delete it - absent file means OFF |
-| `agent-deadline-guard.mjs`, `agent-deadline-cleanup.mjs` | `/brewtools:agent-deadline-setup install` | project and/or global `hooks/`, `PreToolUse .*` and `SubagentStop` | `agent-deadline.json` `enabled: false` |
-| `agent-deadline.json` | same | `<repo>/.claude/` or `~/.claude/` | delete it - absent file means OFF |
-| `agent-router.mjs` | `/brewtools:agent-router-setup install` | `<repo>/.claude/hooks/`, `PreToolUse` matcher `Agent` | `agent-router.json` `enabled: false` - **absent file means ON and effective**; re-install is idempotent but not inert - it re-copies the hook file, which repairs a stale install |
+| semble hooks: `semble-session.mjs`, `-reminder.mjs`, `-subagent.mjs`, `-prefetch.mjs`, `-stats.mjs` | `/brewcode:semble-setup install` | `<repo>/.claude/hooks/`; 6 entries in `.claude/settings.json`: `SessionStart`, `UserPromptSubmit`, `PreToolUse` `Bash\|Grep`, `SubagentStart` with no matcher, and `semble-stats.mjs` on both `PostToolUse` and `PostToolUseFailure` | `state.enabled=false` via `disable` |
+| `.claude/semble/state.json`, `reminder.json`, `telemetry.jsonl` | `/brewcode:semble-setup install`, then the hooks at runtime | `<repo>/.claude/semble/` | `disable` sets `state.enabled=false`; `purge` deletes the dir |
+| `agent-return-contract.mjs`, `agent-return-guard.mjs`, `agent-return-budget.mjs` | `/brewtools:agent-return-setup install` | project and/or `<config dir>` `hooks/`; entries at `SubagentStart`, `SubagentStop`, `PreToolUse` `SubagentHandback` | `agent-return.json` `enabled: false`, or omit the key |
+| `agent-return.json` + `agent-return-state/` | same | `<repo>/.claude/` or `<config dir>/` | delete the config - absent means OFF; `uninstall` removes the state dir |
+| `agent-deadline-guard.mjs`, `agent-deadline-cleanup.mjs` | `/brewtools:agent-deadline-setup install` | project and/or `<config dir>` `hooks/`, `PreToolUse .*` and `SubagentStop` | `agent-deadline.json` `enabled: false` |
+| `agent-deadline.json` | same | `<repo>/.claude/` or `<config dir>/` | delete it - absent means OFF |
+| Per-agent deadline state | the deadline hooks at runtime | `<os.tmpdir()>/brewtools-agent-deadline/<session_id>/<agent_id>.json` | pruned by age; `uninstall` removes this scope's files |
+| `agent-router.mjs` | `/brewtools:agent-router-setup install` | `<repo>/.claude/hooks/`, `PreToolUse` matcher `Agent` (plus `StructuredOutput` at `strict`) | `agent-router.json` `enabled: false` - **absent file means ON**; re-install re-copies the hook, which repairs a stale one |
 | `agent-router.json` | same | `<repo>/.claude/brewtools/` | set `enabled: false`; deleting the file re-enables defaults |
-| Tier-2 judge entry | `/brewtools:agent-router-setup level strict` | inlined into `<repo>/.claude/settings.json`, `type: "agent"`, haiku | re-run at `level fast`; the config flag does not stop it |
-| `/superreview` skill | `/brewcode:superreview-setup` | `<repo>/.claude/skills/superreview/` + `references/` | delete the skill dir; there is no global variant |
-| `intent-guard.md` | `/brewcode:superreview-setup` `generate.sh emit-agent` - the only writer. `/brewcode:teams-setup` calls that same writer | `<repo>/.claude/agents/intent-guard.md` | delete the file; teams never parks it |
-| Team dir and member agents | `/brewcode:teams-setup` | `<repo>/.claude/teams/{name}/` and `<repo>/.claude/agents/*.md` | `/brewcode:teams-setup disable` parks entry files |
-| `task-tracker.md`, `task-board` skill, `tasks.md` rule, `task-spec` skill | `/brewtools:task-board-setup` | `<repo>/.claude/agents/`, `.claude/skills/`, `.claude/rules/` | `disable` renames the 4 entry files to `.disabled` |
+| Tier-2 judge entry | `/brewtools:agent-router-setup level strict` | inlined into `<repo>/.claude/settings.json`, `type: "agent"`, no `model` | re-run at `level fast` |
+| `/superreview` skill | `/brewcode:superreview-setup` | `<repo>/.claude/skills/superreview/` + `references/` | `disable` parks it; no global variant |
+| `intent-guard.md` | `/brewcode:superreview-setup` `generate.sh emit-agent`, the only writer; `/brewcode:teams-setup` calls it | `<repo>/.claude/agents/intent-guard.md` | delete the file |
+| Team dir and member agents | `/brewcode:teams-setup` | `<repo>/.claude/teams/{name}/` and `<repo>/.claude/agents/*.md` | `disable` parks members as `<name>.md.disabled` |
+| `trace.jsonl`, `trace-archive.jsonl`, `trace.cursor` | `/brewcode:teams-setup`, appended by `scripts/trace-ops.sh` | `<repo>/.claude/teams/{TEAM}/` | `disable` leaves them; delete by hand |
+| `task-tracker.md`, `task-board` skill, `tasks.md` rule, `task-spec` skill | `/brewtools:task-board-setup` | `<repo>/.claude/agents/`, `.claude/skills/`, `.claude/rules/` | `disable` parks them as `.disabled` |
 | `.claude/features/**` board data | `/brewtools:task-board-setup` | `<repo>/.claude/features/` | only `purge` deletes it; `uninstall` keeps your tasks |
-| `docsync-track.mjs`, `docsync-watch.mjs`, `docsync-gate.mjs` | `/brewdoc:docsync-setup` | `<repo>/.claude/hooks/`, 3 entries in `.claude/settings.json` | `config.json` `enabled: false` - **absent key means ON** |
-| `.claude/docsync/config.json` + `state.json` | `/brewdoc:docsync-setup` | project | `uninstall` unwires, `purge` deletes |
+| `docsync-track.mjs`, `docsync-watch.mjs`, `docsync-gate.mjs` | `/brewdoc:docsync-setup` | `<repo>/.claude/hooks/`, entries in `.claude/settings.json` | `config.json` `enabled: false` - **absent key means ON** |
+| `.claude/docsync/config.json` + `state-<session_id>.jsonl` | `/brewdoc:docsync-setup`, then the hooks | project | `uninstall` unwires and keeps `.claude/docsync/`, `purge` deletes it |
 | `memory-sync` skill | `/brewdoc:memory-sync-setup` | `<repo>/.claude/skills/memory-sync/` | `generate.sh disable` renames `SKILL.md` to `SKILL.md.disabled` |
-| `brewcode-review` skill | hand-maintained, not shipped by any plugin | `<repo>/.claude/skills/brewcode-review/` in this workspace only | delete the dir |
-| `.claude/semble/state.json`, `reminder.json`, `telemetry.jsonl` | `/brewcode:semble-setup install`, then written by the hooks at runtime | `<repo>/.claude/semble/` | `disable` sets `state.enabled=false`; `purge` deletes the dir |
-| Per-agent deadline state | the deadline hooks at runtime | `<os.tmpdir()>/brewtools-agent-deadline/<session_id>/<agent_id>.json` (`agent-deadline-guard.mjs:50`) | `agent-deadline-cleanup.mjs` removes it on `SubagentStop`; deleting the dir is safe |
-| `.claude/teams/{TEAM}/trace.jsonl`, `trace-archive.jsonl`, `trace.cursor` | `/brewcode:teams-setup`, appended by `scripts/trace-ops.sh` | project | `disable` leaves all three untouched (`teams-setup/SKILL.md:91`); delete by hand |
-| `.claude/brewdoc/INDEX.jsonl` | `/brewdoc:my-claude` (`SKILL.md:116`) | project. A legacy `~/.claude/brewdoc/INDEX.jsonl` is merged in once, read-only, never written back (`:121`) | delete the file |
-| `.claude/md-to-pdf.config.json` | `/brewdoc:md-to-pdf` (`SKILL.md:105-110`) | project, or `~/.claude/md-to-pdf.config.json` at global scope | delete it - the skill asks for the engine again |
-| `.claude/e2e/config.json`, `.claude/e2e/e2e-rules.md`, `.claude/agents/e2e-*.md`, optional `.claude/rules/e2e-conventions.md` | `/brewcode:e2e install` (`e2e/SKILL.md:70-71`) | project | delete the agents and the dir; this generator has no `disable` verb |
-| `.claude/agents/ssh-admin.md` | `/brewtools:ssh` from `templates/ssh-admin-agent.md.template` (`SKILL.md:341`) | project | delete the file; any re-run regenerates and re-stamps it (`:499`) |
-| `.claude/agents/deploy-admin.md` | `/brewtools:deploy` from `templates/deploy-admin-agent.md.template` (`SKILL.md:234`) | project | delete the file; a re-run regenerates it |
-| `.claude/rules/avoid.md`, `best-practice.md` and their `*-avoid.md` families | `/brewcode:rules` | project `.claude/rules/` only, never `~/.claude/rules/` (`rules/SKILL.md:13`) | delete the rows, or the file |
-| Convention documents and loading rule | `/brewcode:convention-setup` | project `.claude/convention/` and `.claude/rules/convention.md` | Disable parks loader; uninstall removes loader; purge also removes the three owned docs; accepted rules and manual CLAUDE.md references stay |
-| Regression harnesses | hand-maintained in this repository | Creator, hook, and skill test directories; current validation evidence determines coverage | Run explicitly or through CI |
-| Provider alias block | `/brewtools:provider-switch` | `~/.zshrc` only - the skill writes secrets nowhere else (`SKILL.md:15`, `:54`) | delete the alias line |
+| Convention documents and loading rule | `/brewcode:convention-setup` | `.claude/convention/` and `.claude/rules/convention.md` | `disable` parks the rule; `uninstall` removes it; `purge` also removes the three owned docs |
+| `.claude/rules/avoid.md`, `best-practice.md` and their `*-avoid.md` families | `/brewcode:rules` | project `.claude/rules/` only, never `~/.claude/rules/` | delete the rows, or the file |
+| `.claude/brewdoc/INDEX.jsonl` | `/brewdoc:my-claude` | project; a legacy `~/.claude/brewdoc/INDEX.jsonl` is merged in once, read-only | delete the file |
+| `.claude/md-to-pdf.config.json` | `/brewdoc:md-to-pdf` | project, or `~/.claude/md-to-pdf.config.json` | delete it - the skill asks for the engine again |
+| `.claude/e2e/config.json`, `.claude/e2e/e2e-rules.md`, `.claude/agents/e2e-*.md`, optional `.claude/rules/e2e-conventions.md` | `/brewcode:e2e install` | project | delete them; no `disable` verb |
+| `.claude/agents/ssh-admin.md` | `/brewtools:ssh` from `templates/ssh-admin-agent.md.template` | project | delete the file; a re-run regenerates and re-stamps it |
+| `.claude/agents/deploy-admin.md` | `/brewtools:deploy` from `templates/deploy-admin-agent.md.template` | project | delete the file; a re-run regenerates it |
+| Provider alias block | `/brewtools:provider-switch` | `~/.zshrc` only | `write-alias.sh remove-alias` |
+| `brewcode-review` skill | hand-maintained, not shipped | `<repo>/.claude/skills/brewcode-review/` in this workspace only | delete the dir |
 
 ## Keeping this page current
 
 When you add a hook, an agent, a generated skill or an injection, add two rows: one in the matching domain
-table above, one in "Where each thing lives". Quote real text only, cut the middle with `...` to keep it
-short, and always name a concrete file. If a claim here stops matching the code, correct it in place - the
-page states current behaviour, nothing else. If the thing you added is a new injection point - a new
-hook event, or an old event answered at a new moment - also add a worked example: what happens, the JSON the
-hook writes, the text the model ends up seeing. Give it a row in "What is injected at each moment" too. When
-CLAUDE.md and the code disagree, the code wins and this page follows the code.
+table, one in "Where each thing lives". Quote real text only, cut the middle with `...`, name a concrete file,
+and skip line numbers - they decay. A new injection point also gets a worked example. When this page,
+`CLAUDE.md` and the code disagree, the code wins.
 
 Runtime facts - the hook-event roster, the subagent tool filters, the spawn limits - are not this page's to
-invent. They live in `brewcode/agents/{agent-creator,hook-creator,skill-creator}.md`, are pinned by
-`brewcode/agents/tests/suite-creator-contract.mjs`, and are stated here against a verified Claude Code
-version (2.1.233 as of v6.0.0). Change one of them here without changing it there and the test still passes
-while the page lies. Change it there and the version pin moves too.
+invent. They live in `brewcode/agents/{agent-creator,hook-creator,skill-creator}.md` and
+`brewcode/skills/agents/references/`, are pinned by `brewcode/agents/tests/suite-creator-contract.mjs`, and
+are stated here against the reference version those files name (`2.1.296`). Change one here without changing
+it there and the test still passes while the page lies.

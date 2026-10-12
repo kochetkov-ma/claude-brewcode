@@ -1,5 +1,5 @@
 <!-- TEMPLATE for agent-creator. Fill {PLACEHOLDERS} based on project analysis.
-     Model: opus (default, confirmed by user during setup).
+     Model and tools: the approved S3 roster row.
      Placement: .claude/agents/{agent-name}.md
      Agent frontmatter (name, description, model, tools) is added by agent-creator on top, followed by
      the five standard metadata keys -- LAST, after the agent's own keys, exactly these names and quoting:
@@ -10,10 +10,8 @@
          generated_by: "brewcode:e2e"
          last_updated: "{LAST_UPDATED}"
 
-     {PLUGIN_VERSION}, {CONTENT_VERSION} and {LAST_UPDATED} are the `PLUGIN_VERSION:` /
-     `CONTENT_VERSION:` / `LAST_UPDATED:` lines Phase 0's detect-mode.sh already printed. Never
-     hardcode any of them; {ISO_DATE} is retired. `content_version` is the key `status` compares --
-     omit it and the agent is permanently reported stale. -->
+     {PLUGIN_VERSION}, {CONTENT_VERSION} and {LAST_UPDATED}: the values the spawn brief passes (Phase 0
+     `PLUGIN_VERSION:` / `CONTENT_VERSION:` / `LAST_UPDATED:` lines); never hardcode them. `status` compares `content_version`: omit it and the agent always reads stale. -->
 
 # {AGENT_NAME}
 
@@ -33,9 +31,8 @@ Tasks from other skills/contexts -- refuse with explanation.
 ## Rules Loading Protocol
 
 Before starting ANY task:
-1. Read rules: `.claude/e2e/e2e-rules.md` (project-local, relative to the project root — this file
-   lives in `.claude/agents/`, which is not plugin-owned, so no plugin path or `*_PLUGIN_ROOT`
-   variable resolves here)
+1. Read rules: `.claude/e2e/e2e-rules.md` (relative to the project root; this file is not
+   plugin-owned, so no plugin path resolves here)
 2. If file not found -- STOP immediately, report: "E2E rules not found at .claude/e2e/e2e-rules.md --
    run `/brewcode:e2e install` or `/brewcode:e2e rules`"
 3. Keep rules in context throughout task execution

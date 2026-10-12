@@ -1,7 +1,5 @@
 # Docker Registry Authentication Patterns
 
-> Reference for authenticating to container registries on remote servers.
-
 ## Token sourcing (read this first)
 
 A registry token must never become model-visible text. There is no model-invisible input channel:
@@ -39,12 +37,6 @@ printf '%s' "$GITHUB_TOKEN" | docker login ghcr.io -u USERNAME --password-stdin 
 | `USERNAME` | GitHub username | Case-sensitive |
 
 [Official GHCR authentication](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry), checked 2026-09-30: Packages supports PAT **classic**, not fine-grained PAT. In Actions, prefer the scoped workflow `GITHUB_TOKEN` where supported. Public images can be read anonymously. Choose least privilege; do not silently create tokens or change login/account state.
-
-### Pull Pattern
-
-```bash
-docker pull ghcr.io/OWNER/IMAGE:TAG
-```
 
 ### Token Creation
 
@@ -86,8 +78,6 @@ printf '%s' "$DOCKER_TOKEN" | docker login -u USERNAME --password-stdin >/dev/nu
 [Official Docker Hub usage](https://docs.docker.com/docker-hub/usage/), checked 2026-09-30. Fair use can impose throttling/restrictions/charges; a separate abuse limit applies to all tiers/requests. Do not infer a user's account tier or promise unrestricted traffic.
 
 ## Multi-Registry Setup
-
-When server needs access to multiple registries:
 
 ```bash
 set -o pipefail

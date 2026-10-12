@@ -1,16 +1,11 @@
 #!/usr/bin/env bash
-# run.sh - aggregate every brewcode core-hook test suite.
-#
-# Usage: run.sh [suite-name ...]      (bare names or file names, e.g. `session-start`)
-#
-# Iterates tests/suite-*.mjs in sorted order and runs each one. Suites land from
-# several units, so a *missing* suite is not an error; a suite that exists and
-# fails is. Exits 1 if any suite exited non-zero. No network, no MCP.
+# run.sh [suite-name ...] - runs tests/suite-*.mjs (all, or the named ones, e.g. `session-start`).
+# Exits 1 when a suite fails; no suite found = nothing to run, exit 0. No network, no MCP.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
-  sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,3p' "$0" | sed 's/^# \{0,1\}//'
   exit 0
 fi
 

@@ -5,8 +5,11 @@
 set -euo pipefail
 
 # --- Configuration ---
-GLOBAL_SKILLS="$HOME/.claude/skills"
-PROJECT_SKILLS=".claude/skills"
+CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+GLOBAL_SKILLS="$CONFIG_DIR/skills"
+PROJECT_SKILLS="${CLAUDE_PROJECT_DIR:-.}/.claude/skills"
+# Plugins root: CLAUDE_CODE_PLUGIN_CACHE_DIR names it (not the cache), else <config dir>/plugins
+PLUGINS_ROOT="${CLAUDE_CODE_PLUGIN_CACHE_DIR:-$CONFIG_DIR/plugins}"
 # Self-location: scripts/ -> skills/skills/ -> skills/ -> plugin root
 PLUGIN_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 
@@ -17,17 +20,24 @@ PLUGIN_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 extract_frontmatter() {
     local field="$1"
     local file="$2"
-    # Match field in frontmatter (between --- markers)
-    # Use grep with || true to avoid exit on no match
-    sed -n '/^---$/,/^---$/p' "$file" 2>/dev/null | grep -E "^${field}:" | head -1 | sed "s/^${field}:[[:space:]]*//" | tr -d '"' | tr -d "'" || true
+    # First --- block at line 1 only; a body `---` never reopens it. Strips one pair of wrapping quotes
+    awk 'NR==1 && /^---$/ {f=1; next} f && /^---$/ {exit} f' "$file" 2>/dev/null | grep -E "^${field}:" | head -1 \
+        | sed -E "s/^${field}:[[:space:]]*//; s/^\"(.*)\"[[:space:]]*$/\\1/; s/^'(.*)'[[:space:]]*$/\\1/" || true
 }
 
-# Get first non-empty line after frontmatter for description fallback
+# Get first non-empty, non-heading line after the frontmatter for description fallback
 get_first_content_line() {
     local file="$1"
-    # Skip frontmatter, get first non-empty line
-    # Use || true to avoid exit on no match
-    sed -n '/^---$/,/^---$/!p' "$file" 2>/dev/null | grep -v '^#' | grep -v '^$' | head -1 | sed 's/^[[:space:]]*//' || true
+    awk 'NR==1 && /^---$/ {f=1; next} f && /^---$/ {f=0; next} !f' "$file" 2>/dev/null \
+        | grep -v '^#' | grep -v '^[[:space:]]*$' | head -1 | sed 's/^[[:space:]]*//' || true
+}
+
+# Plugin name from .claude-plugin/plugin.json (top-level "name" comes first), else $2 or the dir name
+plugin_name_of() {
+    local dir="$1" name=""
+    name=$(sed -n 's/^[[:space:]]*"name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$dir/.claude-plugin/plugin.json" 2>/dev/null | head -1 || true)
+    [[ -n "$name" ]] || name="${2:-$(basename "$dir")}"
+    echo "$name"
 }
 
 # Truncate string to max length with ellipsis
@@ -114,6 +124,8 @@ process_skill() {
         if [[ -z "$description" ]]; then
             description=$(get_first_content_line "$skill_file")
         fi
+        # Never empty: `read` with IFS=tab merges an empty field and shifts the columns
+        [[ -n "$description" ]] || description="(no description)"
 
         # Get invocation flags
         user_invocable=$(extract_frontmatter "user-invocable" "$skill_file")
@@ -134,8 +146,8 @@ process_skill() {
     # Determine invocation type
     invocation=$(get_invocation_type "$user_invocable" "$disable_model")
 
-    # Output row (tab-separated for sorting)
-    echo -e "${scope}\t${skill_name}\t${description}\t${invocation}"
+    # Output row (tab-separated for sorting); printf keeps backslashes in descriptions literal
+    printf '%s\t%s\t%s\t%s\n' "$scope" "$skill_name" "$description" "$invocation"
 }
 
 # Scan skills in a directory
@@ -153,32 +165,38 @@ scan_skills() {
     done
 }
 
-# Scan plugin skills — installed cache first, then the dev/local-marketplace workspace.
-# Both roots are derived from this script's own location; no env var is involved.
+# Scan plugin skills: this script's own copy (cache) or workspace (dev / local marketplace) first,
+# then every other plugin in the installed cache.
 scan_plugin_skills() {
     local seen=" "
     local cache_root=""
     local plugin_name
 
-    # Installed layout: <cache>/<repo>/<plugin>/<version>/skills/skills/scripts
-    case "$PLUGIN_ROOT" in
-        */plugins/cache/*) cache_root="${PLUGIN_ROOT%%/plugins/cache/*}/plugins/cache" ;;
-        *) cache_root="$HOME/.claude/plugins/cache" ;;
-    esac
-
-    # Dev / local-marketplace layout: <workspace>/<plugin>/skills.
-    # Scanned first so the copy this script actually ships in wins over a stale cached one.
-    local workspace
-    workspace=$(dirname "$PLUGIN_ROOT")
-    for plugin_dir in "$workspace"/*/; do
-        [[ -d "$plugin_dir/skills" ]] || continue
-        [[ -f "$plugin_dir/.claude-plugin/plugin.json" ]] || continue
-        plugin_name=$(basename "$plugin_dir")
-
-        case "$seen" in *" $plugin_name "*) continue ;; esac
+    # Installed layout: <plugins root>/cache/<marketplace>/<plugin>/<version>/skills/skills/scripts.
+    # Running from it: siblings of PLUGIN_ROOT are other versions, so only this copy is scanned first.
+    local up3
+    up3="$(cd "$PLUGIN_ROOT/../../.." 2>/dev/null && pwd)"
+    if [[ "$(basename "$up3")" == "cache" ]]; then
+        cache_root="$up3"
+        plugin_name=$(plugin_name_of "$PLUGIN_ROOT" "$(basename "$(dirname "$PLUGIN_ROOT")")")
         seen="$seen$plugin_name "
-        scan_skills "plugin" "$plugin_dir/skills" "$plugin_name"
-    done
+        scan_skills "plugin" "$PLUGIN_ROOT/skills" "$plugin_name"
+    else
+        cache_root="$PLUGINS_ROOT/cache"
+        # Dev / local-marketplace layout: <workspace>/<plugin>/skills.
+        # Scanned first so the copy this script actually ships in wins over a stale cached one.
+        local workspace
+        workspace=$(dirname "$PLUGIN_ROOT")
+        for plugin_dir in "$workspace"/*/; do
+            [[ -d "$plugin_dir/skills" ]] || continue
+            [[ -f "$plugin_dir/.claude-plugin/plugin.json" ]] || continue
+            plugin_name=$(plugin_name_of "${plugin_dir%/}")
+
+            case "$seen" in *" $plugin_name "*) continue ;; esac
+            seen="$seen$plugin_name "
+            scan_skills "plugin" "$plugin_dir/skills" "$plugin_name"
+        done
+    fi
 
     if [[ -d "$cache_root" ]]; then
         for repo_dir in "$cache_root"/*/; do
@@ -186,15 +204,15 @@ scan_plugin_skills() {
 
             for plugin_dir in "$repo_dir"*/; do
                 [[ -d "$plugin_dir" ]] || continue
-                plugin_name=$(basename "$plugin_dir")
 
-                # Last version dir that actually ships skills/ wins
-                local latest_version=""
-                for version_dir in "$plugin_dir"*/; do
-                    [[ -d "$version_dir/skills" ]] || continue
+                # Highest version (sort -V, not glob order: 6.10.0 > 6.9.0) that ships skills/ wins
+                local latest_version="" version_dir
+                while IFS= read -r version_dir; do
+                    [[ -n "$version_dir" && -d "$version_dir/skills" ]] || continue
                     latest_version="$version_dir"
-                done
+                done < <(find "${plugin_dir%/}" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort -V || true)
                 [[ -n "$latest_version" ]] || continue
+                plugin_name=$(plugin_name_of "$latest_version" "$(basename "${plugin_dir%/}")")
 
                 case "$seen" in *" $plugin_name "*) continue ;; esac
                 seen="$seen$plugin_name "
@@ -238,7 +256,7 @@ echo "|-------|-------|-------------|------------|"
 
 while IFS=$'\t' read -r scope skill desc invocation; do
     [[ -z "$scope" ]] && continue
-    echo "| $scope | $skill | $desc | $invocation |"
+    echo "| $scope | $skill | ${desc//|/\\|} | $invocation |"
 done <<< "$SORTED_SKILLS"
 
 echo ""

@@ -24,7 +24,7 @@ Analyzes the project, proposes agent variants (minimal/balanced/maximum), create
 
 No arguments: `status` of the first existing team, or `install` of a team named `default` when none exists.
 
-The verb always comes first and the optional `<name>` after it. That parser guard is why `purge` is a mode instead of a team name: in earlier versions any unrecognised first word became a team name, so `/brewcode:teams-setup purge` installed a team called `purge`.
+The verb always comes first and the optional `<name>` after it: a first word that is not a mode is read as a team name, and `install enable` creates a team named `enable`.
 
 `disable` is a rename, not a deletion — the roster rows stay in `team.md` with `Status: disabled`, and `verify-team.sh` reports `DISABLED` per parked member and still exits PASS. `enable` puts it all back. Both take effect for the NEXT session: agent discovery is read at session start.
 
@@ -114,7 +114,7 @@ bash ".claude/teams/my-team/trace-ops.sh" add ".claude/teams/my-team" "$SID" "<a
 
 Repo-relative on purpose: a file in `.claude/agents/` is not plugin-owned, so `${CLAUDE_PLUGIN_ROOT}` is not substituted inside it and a plugin path there resolves to nothing. Install step C4 copies the script and stops if the copy fails.
 
-> **Teams created by an earlier version never traced anything.** Their agents pointed at a plugin path dead since 4.0.0, so `trace.jsonl` stayed empty, `status` reported 0 tasks, and `upgrade` classified the whole roster as Inactive. Run `/brewcode:teams-setup upgrade <name>` once -- the copy is part of the flow and idempotent. `verify-team.sh` also WARNs with the exact `cp` line when the file is missing.
+> **A team whose directory has no `trace-ops.sh` traces nothing** (teams created by an older version): `trace.jsonl` stays empty, `status` reports 0 tasks, and `upgrade` classifies the whole roster as Inactive. Run `/brewcode:teams-setup upgrade <name>` once -- the copy is part of the flow and idempotent. `verify-team.sh` also warns with the fix when the file is missing.
 
 | Health | Criteria |
 |--------|----------|
@@ -124,7 +124,7 @@ Repo-relative on purpose: a file in `.claude/agents/` is not plugin-owned, so `$
 
 The `upgrade` mode uses this data to tune agent instructions, replace underperformers, or remove inactive agents.
 
-## CREATE Flow
+## Install Flow
 
 ```
 /brewcode:teams-setup install my-project
@@ -140,13 +140,16 @@ The `upgrade` mode uses this data to tune agent instructions, replace underperfo
 [C2.5] Model Selection -- opus / sonnet / haiku / mixed (domain agents only)
     |
     v
+[C2.6] Shared Contract -- team.md + trace.jsonl + trace-ops.sh, before any agent
+    |
+    v
 [C3] Agent Creation ----- agent-creator x N (batches of 3-4)
     |
     v
 [C3-IG] intent-guard ---- required: emit/reuse; legacy-absent: do nothing
     |
     v
-[C4] Framework Setup ---- team.md + trace.jsonl + trace-ops.sh + verification
+[C4] Roster + Verify ---- final team.md roster + verify-team.sh
     |
     v
 [C5] Quorum Review ------ 3 domain expert reviewers in parallel

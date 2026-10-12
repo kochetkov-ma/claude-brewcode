@@ -30,7 +30,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const DEFAULT_STATE = { hard: false, level: 'balanced', mode: 'full' };
 // One scoped MCP tool name, or a whole-server `mcp__server__*` prefix. hardmode-guard.mjs
@@ -321,6 +321,21 @@ const SETTABLE = {
   }
 };
 
+// CLI root without --cwd: the project this copy is installed in -> CLAUDE_PROJECT_DIR -> nearest
+// .git/.claude above cwd -> cwd. Raw cwd drifts, and `set hard=false` there disarmed nothing.
+function defaultRoot() {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const installed = path.sep + path.join('.claude', 'brewtools', 'manager');
+  if (here.endsWith(installed)) return here.slice(0, -installed.length);
+  const env = process.env.CLAUDE_PROJECT_DIR;
+  if (env && fs.existsSync(env)) return path.resolve(env);
+  const start = process.cwd();
+  for (let dir = start; ; dir = path.dirname(dir)) {
+    if (fs.existsSync(path.join(dir, '.git')) || fs.existsSync(path.join(dir, '.claude'))) return dir;
+    if (path.dirname(dir) === dir) return start;
+  }
+}
+
 /**
  * Parse strict CLI argv (everything after the script path).
  * @param {string[]} argv
@@ -331,7 +346,7 @@ export function parseCliArgs(argv) {
   if (command !== 'get' && command !== 'set') throw new Error(`unknown command '${command ?? ''}'`);
 
   const patch = {};
-  let cwd = process.cwd();
+  let cwd = defaultRoot();
 
   for (let i = 1; i < argv.length; i++) {
     const arg = argv[i];

@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# Bump version in ALL 4 JSON files (must always be in sync)
+# Bump version in ALL 6 JSON files (must always be in sync)
 #
 # Usage:
 #   bash .claude/scripts/bump-version.sh <new-version>
@@ -22,13 +22,13 @@ PACKAGE="brewcode/package.json"
 # Every asset a setup skill copies byte-for-byte into a consumer project carries
 #   brewcode-meta: version=<X.Y.Z> content_version=<X.Y.Z> generated_by=<plugin>:<skill>
 # baked at RELEASE time, never at install time: `setup-status` compares the
+# installed file against the plugin asset with `cmp -s`, so an install-time
+# stamp would make every install report DIFFERS forever.
 #
 # `version` = the plugin release that produced this file (bumped every run).
 # `content_version` = the release in which this file's BODY last actually
 # changed (computed below in content_version_for/strip_meta_for_diff) — lets
 # `setup-status` tell real drift apart from a version-only churn.
-# installed file against the plugin asset with `cmp -s`, so an install-time
-# stamp would make every install report DIFFERS forever.
 #
 # A file that instead carries {PLUGIN_VERSION}/{GENERATED_BY}/{LAST_UPDATED} tokens is
 # substituted at INSTALL time and MUST NOT be listed here: a baked literal would make its
@@ -56,6 +56,8 @@ PACKAGE="brewcode/package.json"
 STAMPED_FILES='brewcode/skills/semble-setup/assets/semble-session.mjs|mjs|brewcode:semble-setup
 brewcode/skills/semble-setup/assets/semble-prefetch.mjs|mjs|brewcode:semble-setup
 brewcode/skills/semble-setup/assets/semble-stats.mjs|mjs|brewcode:semble-setup
+brewcode/skills/semble-setup/assets/semble-reminder.mjs|mjs|brewcode:semble-setup
+brewcode/skills/semble-setup/assets/semble-subagent.mjs|mjs|brewcode:semble-setup
 brewcode/skills/semble-setup/assets/semble-first.md.template|fm|brewcode:semble-setup
 brewcode/skills/semble-setup/assets/sembleignore.template|sh|brewcode:semble-setup
 brewcode/skills/teams-setup/scripts/trace-ops.sh|sh|brewcode:teams-setup
@@ -205,7 +207,7 @@ jq_update() {
     jq "$_filter" "$_file" > "$_tmp" && mv "$_tmp" "$_file"
 }
 
-# --- Update all 4 files ---
+# --- Update all 6 files ---
 jq_update ".version = \"$NEW\"" "$BREWCODE_PLUGIN"
 jq_update ".version = \"$NEW\"" "$BREWDOC_PLUGIN"
 jq_update ".version = \"$NEW\"" "$BREWTOOLS_PLUGIN"

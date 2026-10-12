@@ -1,7 +1,7 @@
 # contradiction-policy
 
-Entered from `dedup-arbitration.md` 3d whenever two near-identical statements carry a DIFFERING exact value.
-A contradiction is never resolved by dedup: one side is FALSE and must die, or both are true at different scopes.
+Entered from `dedup-arbitration.md` 3d when two near-identical statements carry a DIFFERING exact value.
+Dedup never resolves a contradiction: one side is FALSE and dies, or both are true at different scopes.
 
 ## 1. Classification
 
@@ -10,10 +10,10 @@ A contradiction is never resolved by dedup: one side is FALSE and must die, or b
 | CONTRADICTION | same subject, same scope, incompatible exact values (version, count, flag, path, yes/no) | ladder, section 2 |
 | OVERLAP | same subject, values compatible, one merely wider | `dedup-arbitration.md` verdict SUPERSET/SUBSET |
 | STALE-BUT-CONSISTENT | both true when written; one carries an older `verified <date>` / CC version and no live claim conflicts | keep the newer, delete the older, ledger. !=escalate |
-| SCOPED-DIFFERENT | subjects differ by an unstated qualifier (build, OS, plugin, env flag) | NOT a contradiction: add the missing qualifier to the vaguer statement, keep both |
+| SCOPED-DIFFERENT | subjects differ by an unstated qualifier (build, CC version, OS, plugin, env flag) | NOT a contradiction: add the missing qualifier to the vaguer statement, keep both |
 
-Same-fact-different-audience (a hook line a subagent needs vs a CLAUDE.md line it never sees) is NOT a
-contradiction and NOT a duplicate. Keep both.
+Same fact, different audience (`dedup-arbitration.md` 1, audience test) is NOT a contradiction and NOT
+a duplicate. Keep both.
 
 ## 2. Resolution ladder
 
@@ -27,9 +27,8 @@ contradiction and NOT a duplicate. Keep both.
 
 ### What "unverifiable" means -- operational definition
 
-A statement is UNVERIFIABLE only when **every** applicable check below was attempted in THIS run and
-none of them could decide it. Not-attempted != unverifiable. Not-reachable != unverifiable (that is
-step 2b). "I did not think of a check" != unverifiable.
+UNVERIFIABLE = **every** applicable check below was attempted in THIS run and none decided it.
+Not attempted, not reachable (step 2b) or not thought of != unverifiable.
 
 | # | Check | Applies when the claim mentions | Evidence recorded |
 |---|-------|--------------------------------|-------------------|
@@ -40,63 +39,48 @@ step 2b). "I did not think of a check" != unverifiable.
 | 5 | Registry / upstream lookup | an external release, a published package | URL + response, or -> step 2b if offline |
 | 6 | Date arithmetic against the stamped `verified <date>` | a staleness claim | the two dates |
 
-**Budget:** at most **3 tool calls per contradiction row**, and at most **20 tool calls** across the
-whole run's contradiction set. The budget bounds effort, it does not convert an unspent budget into a
-verdict: a row that still has budget left and an unrun applicable check is `deferred`, not
-`unverifiable`. A row that exhausts the budget mid-check is also `deferred` -- record which check was
-cut off.
+**Budget:** at most **3 tool calls per contradiction row**, at most **20 tool calls** across the run's
+contradiction set. Budget bounds effort, it is no verdict: a row with budget left and an unrun
+applicable check is `deferred`, not `unverifiable`; a row that exhausts the budget mid-check is
+`deferred` too, naming the cut-off check.
 
-Reaching step 3 therefore requires writing down, per row, which of checks 1-6 applied and what each
-returned. A step-3 deletion with no such record is invalid and the row stays.
+Step 3 requires a per-row record of which checks 1-6 applied and what each returned; a step-3
+deletion without it is invalid and the row stays.
 
 Guards on every step:
-1. **Preference/identity EXEMPT.** Anything stating who the user is or what they prefer (name, spelling,
-   accounts, tone, workflow choice) is never deleted or "corrected" - e.g. `~/.claude/CLAUDE.md` "Spell
-   **Maksim**: !=Maxim". A preference cannot be false.
-2. Every deletion is ledgered with recoverable snapshot evidence. Snapshot before the first edit
-   (`brewtools/skills/text-optimize/scripts/text-guard.sh snapshot`); ledger row = path, line range, layer,
-   dropped text, survivor path, evidence command. Immediately after each owned atomic edit/deletion,
-   run `text-guard.sh checkpoint --run-dir D <file>` for that known draft/deletion before later
-   edits/checks; never checkpoint during failure/recovery or capture another writer's changes.
-   `restore --run-dir D` requires authorization plus matching existing ownership proof; mismatch or
-   absent proof -> `RESTORE_REFUSED`, exit 1, current bytes preserved. Report actual recovery status.
-3. **No global write without `--global`** (`dedup-arbitration.md` 5) - the losing GLOBAL statement is only
-   reported. With `--global` granted the cross-project guard still binds, and it binds on **rewrites as
-   well as deletions**: an L3 statement may only be rewritten when the replacement holds for EVERY
-   project on the machine, or when it carries its own scope qualifier naming the repo and date the
-   evidence came from. Evidence collected inside one repo proves a fact about that repo. Cannot meet
-   that bar -> report the proposed text, write nothing.
+1. **Preference/identity EXEMPT.** Who the user is or what they prefer (name, spelling, accounts, tone,
+   workflow choice) is never deleted or "corrected" - e.g. "Spell my name Anna, !=Ana". A preference
+   cannot be false.
+2. Snapshot before the first edit (`scripts/context-guard.sh snapshot`, phase 2). Ledger every deletion:
+   path, line range, layer, dropped text, survivor path, evidence command. Checkpoint each owned atomic
+   edit/deletion immediately (`text-guard.sh checkpoint --run-dir D <file>`, the phase 4 command), never
+   during failure/recovery and never over another writer's change. `restore` without authorization and
+   matching ownership proof -> `RESTORE_REFUSED`, exit 1, current bytes kept; report actual recovery status.
+3. **No global write without `--global`**: the losing GLOBAL statement is only reported. With `--global`,
+   rewrites and deletions of L3 both pass the cross-project guard of `dedup-arbitration.md` 5(b).
 
-## 3. Worked case: Grep/Glob availability
-
-Historical case, observed 2026-08-08 on the named build/repository. Preserve its evidence and
-scope; it does not establish current binary behavior, declarations or machine-wide facts today.
-
-Read both sides:
+## 3. Worked case: tool availability across CC versions
 
 | Side | Text |
 |------|------|
-| `~/.claude/CLAUDE.md:9` (L3) | "Native macOS build has NO `Grep`/`Glob` (embedded `bfs`+`ugrep` via Bash since CC 2.1.117, by design !=bug); npm build keeps them." |
-| `CLAUDE.md:101-103` (L1) | "**Grep/Glob are gated, NOT removed (macOS, verified CC 2.1.226).** ... naming `Glob`/`Grep` in `--allowedTools`, `--tools`, permission rules, or an AG's `tools:` frontmatter re-arms them ... a `Glob` call fired 2026-08-08 ... So a PreToolUse matcher on `Grep`/`Glob` is live, not dead config." |
+| global `~/.claude/CLAUDE.md` (L3) | "Native macOS build has NO `Grep`/`Glob` (embedded `bfs`+`ugrep` via Bash since CC 2.1.117); npm build keeps them." |
+| project `CLAUDE.md` (L1) | "Grep/Glob are gated, NOT removed (verified CC 2.1.226): naming them in an agent's `tools:` re-arms them; 9 agents declare them; a `Glob` call fired." |
 
-Class: CONTRADICTION (same subject, same scope = this machine's macOS build; "NO Grep/Glob" vs "gated, re-armable").
-Step 1 applies - it is verifiable. `CLAUDE.md:101-103` WINS on three pieces of stamped evidence:
+Each side stamps a different CC version, so test SCOPED-DIFFERENT first: did the behaviour change
+between builds? Run step 1 against the INSTALLED binary (`claude --version`) and its tools reference,
+not against the stamps:
 
-| Evidence | Check | Result |
-|----------|-------|--------|
-| Newer verified CC version | 2.1.226 (L1) vs 2.1.117 (L3) | L1 is 109 patch builds newer and carries an explicit "verified" stamp |
-| Live declarations | `grep -l '^tools:.*Glob' brew*/agents/*.md .claude/agents/*.md \| wc -l` | `9` = the 8 plugin agents + `.claude/agents/docs-writer.md`, exactly as CLAUDE.md:101 states |
-| Dated observation | "a `Glob` call fired 2026-08-08" | a tool that does not exist cannot be called; one successful call falsifies "NO Grep/Glob" |
+| Evidence offered | What it proves |
+|------------------|----------------|
+| Newer "verified" CC version | the claim on that build only; a later build may change it |
+| `grep -l '^tools:.*Glob' <agent files> \| wc -l` | declarations, not availability: on CC 2.1.296 a subagent gets `Glob`/`Grep` only when its `tools` lists them AND leaves out `Bash` |
+| One observed call | that session's configuration (`--tools`, `--allowedTools`, its `tools:` list), not the default |
 
-Edits:
-
-| Branch | File | Edit |
-|--------|------|------|
-| both | `CLAUDE.md:101-103` | unchanged - it is the survivor |
-| `--global` granted | `~/.claude/CLAUDE.md:9` | Guard-3 check FIRST: the replacement claim is about the CC binary's gating behaviour, which holds on this machine for every project, so it clears the machine-wide bar - but the supporting `9 agents declare tools: Glob` count is repo-local and must NOT travel. Replacement, scope qualifier included verbatim: "Native macOS build ships `Grep`/`Glob` GATED OFF by default (embedded `bfs`+`ugrep` via Bash since CC 2.1.117); naming them in `tools:`/`--allowedTools` re-arms them (verified CC 2.1.226 in `claude-brewcode`, 2026-08-08). npm build keeps them ungated." Keep the rest of line 9 (`ENABLE_TOOL_SEARCH`) untouched - it is a different fact |
-| `--global` NOT granted | `~/.claude/CLAUDE.md:9` | NO write. Report the pair + the evidence table + the exact replacement text, so the user can apply it. The project statement already overrides for this repo; the global line stays wrong in other repos, which is the user's call, !=the skill's |
-
-Both branches: ledger the row, since the global-branch edit is a deletion of a factual claim.
+On CC 2.1.296 neither line holds as written: the global one is right about the default, the project
+one about re-arming only without `Bash`. Rewrite both with their scope (build, condition) instead of
+deleting either. The L3 rewrite passes guard 3: binary behaviour is machine-wide evidence, a repo's
+declaration count is not and never travels into global text. Without `--global`: report the pair, the
+evidence and the replacement text; no L3 write. Ledger both rows.
 
 ## 4. Output
 

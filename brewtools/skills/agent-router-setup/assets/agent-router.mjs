@@ -9,8 +9,9 @@
  * no network, no LLM, single-digit milliseconds on the common path.
  *
  * Decision order (allow silently = exit 0, no stdout, as early as possible):
- *   1. tool_name !== 'Agent'                     -> allow  (`Task` normalizes to `Agent`)
- *   2. agent_id present (subagent-issued call)   -> allow  (only the main loop is policed)
+ *   1. tool_name !== 'Agent'                     -> allow  (payloads carry `Agent`, never `Task`)
+ *   2. agent_id present (subagent-issued call, or a hook verifier `hook-agent-*`)
+ *                                                -> allow  (only the main loop is policed)
  *   3. config enabled:false / config unparsable  -> allow
  *   4. subagent_type is a project agent          -> allow  (an expert was already picked)
  *      (an omitted subagent_type normalizes to general-purpose before steps 4-5)
@@ -18,9 +19,10 @@
  *   6. "agent-router: override|allow|skip" in the task text -> allow (escape hatch)
  *   7. STRONG intent rule fires + picked is generic -> DENY, naming the expert: the
  *      first ranked project agent that scores AND whose own frontmatter matches the
- *      same rule, else the plugin specialist. An agent that outranks everyone but
- *      does not cover the intent is not the expert - it just had its name in the
- *      prompt (the plan-engine incident).
+ *      same rule, else the plugin specialist - only if it is found on disk
+ *      (expertExists); an unprovable expert is a nudge, never a deny. An agent that
+ *      outranks everyone but does not cover the intent is not the expert - it just
+ *      had its name in the prompt (the plan-engine incident).
  *   8. roster scoring: one clear winner          -> DENY, naming it. Every agent is
  *      scored on the text with its OWN NAME struck out, so a name quoted in the prompt
  *      (a config value: ARBITER_AGENT="plan-engine") earns nothing; an agent that
@@ -41,15 +43,17 @@
  *   nudge : hookSpecificOutput.additionalContext, NO permissionDecision (an `allow`
  *           here would bypass the user's own deny rules)
  *
- * State: <os.tmpdir()>/brewtools-agent-router/<session_id>/<sha1(root+key)[0..32]>
- *        one empty-ish marker file per (session, root, task) already denied once.
+ * State: <os.tmpdir()>/brewtools-agent-router/p-<sha1(real root)[0..16]>/<session_id>/
+ *          <sha1(key)[0..32]>              one marker per (session, task) already denied once
+ *          judge-expected, judge-answered  tier-2 heartbeat, `level strict` only
+ *        One dir per PROJECT, so `--purge-state <root>` removes this project's state only.
  *        `key` is the DESCRIPTION (the prompt's first 300 normalized chars only when
  *        there is no description) and deliberately ignores both the prompt body and the
  *        expert named: the model rewrites the prompt when it retries and the second pass
  *        can land on a different expert, and either one minted a fresh key - so the
  *        retry was denied too. Accepted trade-off: two distinct descriptionless tasks
  *        behind the same boilerplate prompt header share one marker; anti-loop errs
- *        toward allowing. Nothing else lives there, and nothing is written under
+ *        toward allowing. No roster cache, no logs, and nothing is written under
  *        ~/.claude (harness-protected
  *        path). If the state root is unusable (read-only, foreign-owned tmp) EVERY
  *        deny degrades to a nudge - without a marker we cannot guarantee the loop
@@ -65,13 +69,19 @@ import {
   statSync,
   chmodSync,
   rmSync,
+  realpathSync,
+  appendFileSync,
 } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { createHash } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 
 const EVENT = 'PreToolUse';
 const STATE_ROOT = path.join(os.tmpdir(), 'brewtools-agent-router');
+const PROJECT_PREFIX = 'p-'; // <STATE_ROOT>/p-<sha1(real root)[0..16]>/
+const VERIFIER_PREFIX = 'hook-agent-'; // agent_id of a `type: "agent"` hook's verifier
+const JUDGE_GRACE_MS = 90 * 1000; // 3x the tier-2 timeout: an older unanswered verdict is lost
 const STALE_MS = 24 * 60 * 60 * 1000; // prune markers older than ~1 day
 const MAX_ROOT_CLIMB = 16;
 const PROMPT_SCAN_CHARS = 2000;
@@ -490,16 +500,31 @@ function writeAtomic(file, data) {
   }
 }
 
-function pruneStale() {
-  const cutoff = Date.now() - STALE_MS;
-  let names;
+function listDir(dir) {
   try {
-    names = readdirSync(STATE_ROOT);
+    return readdirSync(dir);
   } catch {
-    return;
+    return [];
   }
-  for (const name of names) {
-    const p = path.join(STATE_ROOT, name);
+}
+
+/** Per-project state dir, keyed on the real root: purge and prune never reach another project. */
+function projectStateDir(root) {
+  let real = root;
+  try {
+    real = realpathSync(root);
+  } catch {
+    // keep the unresolved path
+  }
+  return path.join(STATE_ROOT, PROJECT_PREFIX + sha1(real).slice(0, 16));
+}
+
+/** Entries of `dir` idle for ~1 day; `keep(name)` exempts some (other projects' dirs). */
+function pruneStale(dir, keep) {
+  const cutoff = Date.now() - STALE_MS;
+  for (const name of listDir(dir)) {
+    if (keep && keep(name)) continue;
+    const p = path.join(dir, name);
     try {
       const st = lstatSync(p); // lstat, never stat: do not follow a planted symlink
       if (!st.isDirectory()) {
@@ -531,16 +556,18 @@ function safeSegment(s) {
  */
 function claimDeny(sessionId, root, keyText) {
   if (!ensureStateRoot()) return false;
-  const session = safeSegment(sessionId) || 'nosession';
-  const dir = path.join(STATE_ROOT, session);
-  const marker = path.join(dir, sha1(`${root}\0${keyText}`).slice(0, 32));
+  const project = projectStateDir(root);
+  const dir = path.join(project, safeSegment(sessionId) || 'nosession');
+  const marker = path.join(dir, sha1(keyText).slice(0, 32));
   try {
     lstatSync(marker);
     return false; // already denied once
   } catch {
     // not yet marked
   }
-  pruneStale();
+  pruneStale(project);
+  // pre-6.5 layout kept session dirs at the top level, shared by every project.
+  pruneStale(STATE_ROOT, (name) => name.startsWith(PROJECT_PREFIX));
   try {
     mkdirSync(dir, { recursive: true, mode: 0o700 });
   } catch {
@@ -549,12 +576,83 @@ function claimDeny(sessionId, root, keyText) {
   return writeAtomic(marker, `${Date.now()}`);
 }
 
+// ── tier-2 health (the judge cannot fail closed: count what it was asked and what it answered) ──
+
+/** Appends one timestamp line; telemetry only, a failure here never changes a decision. */
+function recordJudge(root, sessionId, kind) {
+  if (!ensureStateRoot()) return;
+  const dir = path.join(projectStateDir(root), safeSegment(sessionId) || 'nosession');
+  try {
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
+    appendFileSync(path.join(dir, `judge-${kind}`), `${Date.now()}\n`, { mode: 0o600 });
+  } catch {
+    // ignore
+  }
+}
+
+function stamps(file) {
+  try {
+    return readFileSync(file, 'utf8').split('\n').filter(Boolean).map(Number);
+  } catch {
+    return [];
+  }
+}
+
+/** overdue = verdicts expected more than JUDGE_GRACE_MS ago that never arrived (silent allows). */
+function judgeHealth(root) {
+  const project = projectStateDir(root);
+  const settled = Date.now() - JUDGE_GRACE_MS;
+  let expected = 0;
+  let due = 0;
+  let answered = 0;
+  for (const session of listDir(project)) {
+    const asked = stamps(path.join(project, session, 'judge-expected'));
+    expected += asked.length;
+    due += asked.filter((t) => t < settled).length;
+    answered += stamps(path.join(project, session, 'judge-answered')).length;
+  }
+  return { expected, answered, overdue: Math.max(0, due - answered) };
+}
+
+// ── redirect-target existence ────────────────────────────────────────────────
+
+/**
+ * True only when the expert is on disk: project agent, user agent, or `<plugin>:<agent>` in
+ * the plugin cache. Anything unprovable (a `--plugin-dir` dev plugin, a built-in) is false.
+ */
+function expertExists(expert, roster) {
+  if (roster.some((a) => a.name === expert)) return true;
+  if (/[\\/]/.test(expert)) return false;
+  const home = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
+  const colon = expert.indexOf(':');
+  if (colon < 0) return exists(path.join(home, 'agents', `${expert}.md`));
+  const plugin = expert.slice(0, colon);
+  const file = `${expert.slice(colon + 1)}.md`;
+  const cache = path.join(home, 'plugins', 'cache');
+  for (const market of listDir(cache)) {
+    for (const version of listDir(path.join(cache, market, plugin))) {
+      if (exists(path.join(cache, market, plugin, version, 'agents', file))) return true;
+    }
+  }
+  return false;
+}
+
 // ── message builders ─────────────────────────────────────────────────────────
 
 function rosterDenyReason(agent, picked) {
   return (
-    `agent-router: '${agent.name}' (${agent.rel}) matches this task better than ${picked}` +
+    `agent-router: '${agent.name}' (${agent.rel}) owns this kind of task in this project - its` +
+    ` Triggers/description match the task text and ${picked} lacks that domain context` +
     ` - retry with subagent_type: ${agent.name}. ${TAIL}`
+  );
+}
+
+/** Strong intent, but the named expert is not on disk: say so, block nothing. */
+function unverifiedIntentContext(intent, picked) {
+  return (
+    `agent-router: this looks like ${intent.label} - '${intent.expert}' is the expert for it, but it` +
+    ' was not found in this install (project agents, user agents, plugin cache), so this spawn' +
+    ` is not blocked; proceeding with ${picked}.`
   );
 }
 
@@ -752,20 +850,33 @@ function intentOwner(ranked, intent, minScore) {
   return null;
 }
 
+/** Tier-2 verdict heartbeat: the judge's verifier answers through `StructuredOutput`. */
+function recordVerdict(input) {
+  if (typeof input.agent_id !== 'string' || !input.agent_id.startsWith(VERIFIER_PREFIX)) return;
+  const root = findRoot(input.cwd);
+  if (root) recordJudge(root, input.session_id, 'answered');
+}
+
 function main() {
   const input = readStdinSync();
 
-  // 1 - not an Agent spawn (`Task` is an alias that normalizes to `Agent`).
+  // 0 - a hook verifier's verdict (heartbeat entry, `level strict` only): count it, decide nothing.
+  if (input.tool_name === 'StructuredOutput') return recordVerdict(input);
+  // 1 - not an Agent spawn. Hook payloads carry `Agent`; a `Task` matcher never fires.
   if (input.tool_name !== 'Agent') return;
-  // 2 - a subagent issued this call; only the main loop is policed.
-  if (nonEmpty(input.agent_id)) return;
 
   const root = findRoot(input.cwd);
   if (!root) return;
 
-  // 3 - disabled, or a config file that exists but cannot be trusted.
+  // 3a - a config file that exists but cannot be trusted.
   const cfg = loadConfig(root);
-  if (cfg === CONFIG_BROKEN || cfg.enabled === false) return;
+  if (cfg === CONFIG_BROKEN) return;
+  // Tier 2 fires on EVERY Agent call, subagent-issued and disabled ones too: expect a verdict.
+  if (cfg.level === 'strict') recordJudge(root, input.session_id, 'expected');
+  // 2 - a subagent (or a hook verifier, `hook-agent-*`) issued this call; `agent_type` is optional.
+  if (nonEmpty(input.agent_id)) return;
+  // 3b - disabled.
+  if (cfg.enabled === false) return;
 
   const ti = input.tool_input && typeof input.tool_input === 'object' ? input.tool_input : {};
   // an omitted subagent_type IS general-purpose per the Agent tool contract.
@@ -795,7 +906,9 @@ function main() {
   const best = ranked[0];
   const runnerUp = ranked[1];
   const intent = matchIntent(cfg.intents, text);
-  const weakSignal = !!intent && !intent.strong && intent.expert !== picked;
+  // An expert that cannot be found is never advertised: no deny, no "re-spawn with it".
+  const expertReal = !!intent && expertExists(intent.expert, roster);
+  const weakSignal = expertReal && !intent.strong && intent.expert !== picked;
 
   // 7 - strong intent signal; only an agent that COVERS it may outrank the specialist.
   if (intent && intent.strong && intent.expert !== picked) {
@@ -809,6 +922,10 @@ function main() {
         root,
         keyText,
       );
+      return;
+    }
+    if (!expertReal) {
+      emitContext(unverifiedIntentContext(intent, picked));
       return;
     }
     emitDeny(
@@ -853,8 +970,92 @@ function main() {
   if (weakSignal) emitContext(weakIntentContext(intent, picked));
 }
 
-try {
-  main();
-} catch {
-  // 11 - fail open: no stdout, no stack trace, exit 0.
+// ── installer CLI (run from the plugin's assets dir; a hook call passes no flag) ──
+
+const SM = 'agent-router: checking agent fit';
+const PORTABLE = '${CLAUDE_PROJECT_DIR}/.claude/hooks/agent-router.mjs';
+
+function keysAre(h, keys) {
+  return !!h && typeof h === 'object' && !Array.isArray(h) && Object.keys(h).sort().join(',') === keys;
+}
+
+/** The one command tuple both the tier-1 and the heartbeat entry carry. */
+function exactCommand(h) {
+  return (
+    keysAre(h, 'args,command,timeout,type') && h.type === 'command' && h.command === 'node' &&
+    Array.isArray(h.args) && h.args.length === 1 && h.args[0] === PORTABLE && h.timeout === 5
+  );
+}
+
+/** `tier1|legacy|tier2|heartbeat|valid`: exact registrations vs owned handlers that drifted. */
+function probeSettings(file) {
+  const judge = readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'judge-prompt.md'), 'utf8');
+  let s = {};
+  let valid = true;
+  try {
+    const raw = exists(file) ? readFileSync(file, 'utf8') : '';
+    if (raw.trim()) s = JSON.parse(raw);
+    if (s === null || typeof s !== 'object' || Array.isArray(s)) valid = false;
+  } catch {
+    valid = false;
+  }
+  const ownsCommand = (h) => JSON.stringify((h && h.args) || '').includes('agent-router.mjs');
+  const ownsJudge = (h) =>
+    !!h && typeof h === 'object' &&
+    (h.statusMessage === SM || h.prompt === judge ||
+      (h.type === 'agent' && typeof h.statusMessage === 'string' && h.statusMessage.startsWith('agent-router:')));
+  const n = { tier1: 0, legacy: 0, tier2: 0, heartbeat: 0 };
+  for (const [event, entries] of Object.entries((valid && s.hooks) || {})) {
+    if (!Array.isArray(entries)) continue;
+    for (const entry of entries) {
+      if (!entry || typeof entry !== 'object' || !Array.isArray(entry.hooks)) continue;
+      const pre = event === 'PreToolUse';
+      for (const h of entry.hooks) {
+        if (ownsCommand(h)) {
+          if (pre && entry.matcher === 'Agent' && exactCommand(h)) n.tier1 += 1;
+          else if (pre && entry.matcher === 'StructuredOutput' && exactCommand(h)) n.heartbeat += 1;
+          else n.legacy += 1;
+        } else if (ownsJudge(h)) {
+          // any explicit `model` is drift: an omitted model cannot age out.
+          const exact =
+            pre && entry.matcher === 'Agent' && keysAre(h, 'prompt,statusMessage,timeout,type') &&
+            h.type === 'agent' && h.prompt === judge && h.timeout === 30 && h.statusMessage === SM;
+          if (exact) n.tier2 += 1;
+          else n.legacy += 1;
+        }
+      }
+    }
+  }
+  return `${n.tier1}|${n.legacy}|${n.tier2}|${n.heartbeat}|${valid ? 'yes' : 'no'}`;
+}
+
+function cli(mode, arg) {
+  if (!nonEmpty(arg)) throw new Error(`${mode} needs a path argument`);
+  if (mode === '--probe') return probeSettings(path.resolve(arg));
+  const root = path.resolve(arg);
+  if (mode === '--judge-health') {
+    const h = judgeHealth(root);
+    return `judge_expected=${h.expected} judge_answered=${h.answered} judge_overdue=${h.overdue}`;
+  }
+  if (mode === '--purge-state') {
+    const dir = projectStateDir(root);
+    rmSync(dir, { recursive: true, force: true });
+    return `OK purged ${dir}`;
+  }
+  throw new Error(`unknown mode ${mode}`);
+}
+
+if (typeof process.argv[2] === 'string' && process.argv[2].startsWith('--')) {
+  try {
+    process.stdout.write(`${cli(process.argv[2], process.argv[3])}\n`);
+  } catch (e) {
+    process.stderr.write(`agent-router: ${e.message}\n`);
+    process.exitCode = 1;
+  }
+} else {
+  try {
+    main();
+  } catch {
+    // 11 - fail open: no stdout, no stack trace, exit 0.
+  }
 }

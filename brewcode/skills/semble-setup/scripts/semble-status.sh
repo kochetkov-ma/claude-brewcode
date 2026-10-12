@@ -3,6 +3,7 @@
 #
 # Usage: semble-status.sh [--json] [--section SECTION] [--strict]
 #                         [--section telemetry [--sid ID] [--last N]]
+#        semble-status.sh --versions [--all-profiles] [--json] [--strict]
 #
 # STRICTLY READ-ONLY. It creates, modifies and deletes nothing, anywhere -
 # not the state file, not the reminder throttle marker, not the cache dir.
@@ -22,10 +23,20 @@ usage() {
 semble-status.sh [--json] [--section SECTION] [--strict]
 
   --json             emit a single JSON object (schema: DESIGN 9.1)
-  --section SECTION  prereq|mcp|cache|guidance|agents|coverage|state|telemetry|all
+  --section SECTION  prereq|mcp|versions|cache|guidance|agents|coverage|state|telemetry|all
                      (default: all; `telemetry` is NOT part of `all`)
   --strict           exit 1 when verdict != ready
   -h, --help         this text
+
+  --versions [--all-profiles] [--json] [--strict]
+  Version check only: pin vs the user-scope registration vs upstream latest.
+  Text: one `# semble-versions ...` header, then one row per config dir:
+    <dir> | <registered spec|none> | <pin> | <verdict> | <config file>
+  verdict: ok | stale | ahead | drift | unpinned | not_registered | malformed
+  Default: the active config dir (CLAUDE_CONFIG_DIR, else ~/.claude -> ~/.claude.json).
+  --all-profiles adds ~/.claude and every ~/.claude-*/ holding a .claude.json.
+  Upstream is advisory: offline prints upstream=unknown and never fails.
+  --strict exits 1 when any listed row is not `ok`.
 
   --section telemetry reads .claude/semble/telemetry.jsonl and reports what the
   hooks actually did. Window flags, telemetry only:
@@ -40,6 +51,8 @@ EOF
 JSON_MODE=0
 SECTION="all"
 STRICT=0
+VERSIONS=0
+ALL_PROFILES=0
 SID=""
 LAST=""
 
@@ -47,6 +60,8 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --json)        JSON_MODE=1 ;;
     --strict)      STRICT=1 ;;
+    --versions)    VERSIONS=1 ;;
+    --all-profiles) ALL_PROFILES=1 ;;
     --section)     shift; SECTION="${1:-}" ;;
     --section=*)   SECTION="${1#--section=}" ;;
     --sid)         shift; SID="${1:-}" ;;
@@ -60,9 +75,12 @@ while [ $# -gt 0 ]; do
 done
 
 case "$SECTION" in
-  prereq|mcp|cache|guidance|agents|coverage|state|telemetry|all) ;;
+  prereq|mcp|versions|cache|guidance|agents|coverage|state|telemetry|all) ;;
   *) sc_err "unknown section: ${SECTION:-(empty)}" >&2; usage >&2; exit 2 ;;
 esac
+if [ "$ALL_PROFILES" = "1" ] && [ "$VERSIONS" != "1" ]; then
+  sc_err "--all-profiles is only valid with --versions" >&2; usage >&2; exit 2
+fi
 if [ "$SECTION" != "telemetry" ] && { [ -n "$SID" ] || [ -n "$LAST" ]; }; then
   sc_err "--sid/--last are only valid with --section telemetry" >&2; usage >&2; exit 2
 fi
@@ -73,6 +91,25 @@ esac
 sc_require_node
 
 want() { [ "$SECTION" = "all" ] || [ "$SECTION" = "$1" ]; }
+
+# ── --versions: machine-readable pin/registration/upstream report ───────────
+# Never fails on a missing profile, a broken file or no network; rc 1 only with --strict.
+if [ "$VERSIONS" = "1" ]; then
+  ALL=""; [ "$ALL_PROFILES" = "1" ] && ALL="all"
+  VJSON="$(sc_versions_json "$ALL")"
+  SC_V="$VJSON" SC_JSONMODE="$JSON_MODE" SC_STRICT="$STRICT" node -e '
+const v=JSON.parse(process.env.SC_V),u=v.upstream;
+if(process.env.SC_JSONMODE==="1"){process.stdout.write(JSON.stringify(v)+"\n")}
+else{
+  const L=["# semble-versions schema="+v.schema+" pin="+v.pin+" upstream="+(u.latest||"unknown")
+    +" upstream_status="+u.status+" reason="+u.reason];
+  for(const r of v.profiles)L.push([r.dir,r.registered===null?"none":r.registered,r.pin,r.verdict,r.file].join(" | "));
+  process.stdout.write(L.join("\n")+"\n");
+}
+const bad=v.profiles.some(function(r){return r.verdict!=="ok"});
+process.exit(process.env.SC_STRICT==="1"&&bad?1:0);'
+  exit $?
+fi
 
 # ── telemetry (--section telemetry): the reader for semble-stats.mjs ─────────
 # Deliberately NOT part of `all`: it answers a different question (did the hooks
@@ -487,6 +524,11 @@ fi
 # ── sibling sections ────────────────────────────────────────────────────────
 # mcp is always gathered: the verdict depends on it.
 MCP_JSON="$(sibling semble-mcp.sh detect --json)"
+VERSIONS_JSON=""
+# Never fatal: a failed check degrades to an error object for that section only.
+if want versions; then
+  VERSIONS_JSON="$(sc_versions_json 2>/dev/null)" || VERSIONS_JSON='{"error":"version check failed"}'
+fi
 CACHE_JSON=""
 GUIDANCE_JSON=""
 AGENTS_JSON=""
@@ -620,6 +662,28 @@ if (detect === null) {
     connectivity: typeof detect.connectivity === "string" ? detect.connectivity : "unknown",
   };
 }
+
+// ── versions (active config dir slice of sc_versions_json) ─────────────────
+const verRaw = parseSection(E.SC_VERSIONS_JSON, "version check");
+let versionsSec;
+if (verRaw === null || isErr(verRaw)) {
+  versionsSec = verRaw;
+} else {
+  const rows = Array.isArray(verRaw.profiles) ? verRaw.profiles : [];
+  const a = rows.filter(function (r) { return r && r.active === true; })[0] || {};
+  versionsSec = {
+    pin: verRaw.pin, pinSpec: verRaw.pinSpec,
+    configDir: a.dir || "", configFile: a.file || "",
+    registered: a.registered === undefined ? null : a.registered,
+    registeredVersion: a.registeredVersion === undefined ? null : a.registeredVersion,
+    verdict: a.verdict || "unknown", detail: a.detail || "", action: a.action || "none",
+    upstream: verRaw.upstream || { latest: null, status: "unknown", reason: "unparseable", advisory: "" },
+  };
+}
+// A pinned registration at another X.Y.Z is a pin transition: `upgrade` owns it.
+const pinMoved = !!mcpSec && !isErr(mcpSec) && mcpSec.state === "stale_args"
+  && !!versionsSec && !isErr(versionsSec)
+  && (versionsSec.verdict === "stale" || versionsSec.verdict === "ahead");
 
 // ── cache (pass-through of semble-cache.sh info --json) ─────────────────────
 const cacheSec = parseSection(E.SC_CACHE_JSON, "semble-cache.sh info");
@@ -822,7 +886,7 @@ if (verdict === "ready") {
   nextStep = "Run /brewcode:semble-setup enable";
 } else if (verdict === "verifying") {
   nextStep = "Run /brewcode:semble-setup resume";
-} else if (stampStale) {
+} else if (stampStale || pinMoved) {
   nextStep = "Run /brewcode:semble-setup upgrade";
 } else if (verifyWhy.length && verifyWhy.length === why.length) {
   // Everything is installed and wired; only the warm/smoke pair is unproven.
@@ -846,6 +910,7 @@ function add(key, val) {
 }
 add("prereq", prereqSec);
 add("mcp", mcpSec);
+add("versions", versionsSec);
 add("cache", cacheSec);
 add("guidance", guidSec);
 add("agents", agentsSec);
@@ -877,6 +942,20 @@ if (jsonMode) {
       const sc = report.mcp.scopes;
       const where = sc.user ? "user" : (sc.local ? "local" : (sc.project ? "project" : "-"));
       L.push("mcp:      " + report.mcp.state + " @ " + where + "  [" + report.mcp.connectivity + "]");
+    }
+  }
+  if (report.versions) {
+    if (isErr(report.versions)) {
+      L.push("version:  error: " + report.versions.error);
+    } else {
+      const v = report.versions;
+      const head = v.verdict === "ok" ? "ok (registered " + v.registered + " = pin " + v.pin + ")"
+        : (v.verdict === "not_registered" ? "not registered (pin " + v.pin + ")" : v.verdict + " (" + v.detail + ")");
+      L.push("version:  " + head + (v.action === "none" ? "" : " -> run: " + v.action) + "  [" + v.configFile + "]");
+      const u = v.upstream;
+      L.push("upstream: " + (u.latest
+        ? u.latest + " - " + (u.advisory || "pin current")
+        : "unknown (" + String(u.reason).replace(/_/g, " ") + ")"));
     }
   }
   if (report.cache) {
@@ -965,6 +1044,7 @@ REPORT="$(
   SC_NODE_PATH="$NODE_PATH" SC_NODE_VER="$NODE_VER" \
   SC_SEMBLE_TOOLVER="$SEMBLE_TOOLVER" SC_SEMBLE_RESOLVABLE="$SEMBLE_RESOLVABLE" \
   SC_MCP_JSON="$MCP_JSON" \
+  SC_VERSIONS_JSON="$VERSIONS_JSON" \
   SC_CACHE_JSON="$CACHE_JSON" \
   SC_GUIDANCE_JSON="$GUIDANCE_JSON" \
   SC_AGENTS_JSON="$AGENTS_JSON" \

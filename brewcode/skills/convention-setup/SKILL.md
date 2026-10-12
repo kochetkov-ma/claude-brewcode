@@ -14,18 +14,16 @@ model: opus
 
 ## Prompt contract
 
-Treat `$ARGUMENTS` as a free-form RU/EN prompt. Modes/flags may appear anywhere; infer mode and scope from prose.
+`$ARGUMENTS` is one free-form RU/EN prompt; mode tokens and flags may sit anywhere in it.
 
-1. Strip flags. An explicit mode token anywhere wins outright, no scoring.
-2. Else score modes by distinct whole-word keyword hits (table below). Highest unique score wins.
-   Tie with a destructive mode -> `AskUserQuestion`; tie with `status` -> `status`;
-   tie of two mutating modes -> the keyword appearing first; all zero -> `install`.
-3. Empty arguments -> `install`; ask ONE scoping `AskUserQuestion` only when the answer
+1. Mode: an explicit mode token wins outright; else the most distinct whole-word keyword hits
+   (table below). Tie with a destructive mode -> `AskUserQuestion`; with `status` -> `status`; of two
+   mutating modes -> the keyword that comes first. No hit or empty -> `install`.
+2. Scope: prose that is not a mode/id/path is still input: take the id, path or target from it.
+3. Ask: at most ONE `AskUserQuestion` (max 4 questions), before any work, only when the answer
    changes what gets written. A read-only run asks nothing.
-4. Outcome-changing ambiguity -> ONE `AskUserQuestion` (max 4 questions) BEFORE any work.
-5. Prose that is not a mode/id/path is still input: extract the id, path or target from it.
 
-Then print this block ONCE, before the first action:
+Print once, before the first action (labels literal, values in the conversation language):
 
 ```
 PLAN — brewcode:convention-setup
@@ -36,11 +34,7 @@ DO:     <2-5 imperative bullets>
 RESULT: <what the user ends up holding>
 ```
 
-Labels are literal; values follow the conversation language.
-
 ## Mode Detection
-
-**Arguments:** `$ARGUMENTS`
 
 | Mode | Invocation | Phases | Prerequisites | EN keywords | RU keywords | Mutates? |
 |------|-----------|--------|---------------|--------------|--------------|----------|
@@ -56,40 +50,29 @@ Labels are literal; values follow the conversation language.
 | `rules` | `/brewcode:convention-setup rules` | P0, P7, P7.5, P8 | `.claude/convention/` exists | `rules`, `extract rules` | `правила`, `извлеки правила` | yes |
 | `paths` | `/brewcode:convention-setup paths src/a,src/b` | P0-P7 scoped | None | `paths`, `scope`, `subset` | `пути`, `путям`, `часть проекта` | yes |
 
-`paths` also needs its comma-separated path list extracted from the prose whenever the
-user names files/dirs instead of typing the literal `paths` token.
-
----
+`paths` also takes its comma-separated path list from prose naming files or dirs.
 
 ## Lifecycle — status first
 
-After the PLAN, run `bash "${CLAUDE_SKILL_DIR}/scripts/convention.sh" status` in the project root.
-Stop on any script failure; report the ownership/collision error without changing files.
-For `status`, report the JSON and stop. For `enable`, `disable`, `uninstall`, or `purge`, run the
-same script with that exact mode, report its result, and stop; no analysis or regeneration.
-Before `purge`, confirm the exact three generated document paths once unless the user explicitly
-requested their deletion. `uninstall` removes only the loading rule. `purge` also deletes the
-three owned generated documents. Both preserve accepted rules, other files, and CLAUDE.md.
+After the PLAN, run `bash "${CLAUDE_SKILL_DIR}/scripts/convention.sh" status` in the project root;
+on any script failure report the ownership/collision error and change no file. `status`: report the
+JSON, stop. `enable`, `disable`, `uninstall`, `purge`: run the script with that exact mode, report its
+result, stop; no analysis or regeneration.
 
-`install` and `full` run the original full extraction; `upgrade` repeats it with current evidence.
-Preserve existing local wording, cite proposed changes, and never overwrite unrelated documents.
-At P8, validate all three docs, then run the script's `install` (or `upgrade`) command. It creates
-`.claude/rules/convention.md` with lazy-loading guidance, or refreshes its metadata without
-changing local wording. A parked rule stays parked on install/upgrade.
-`conventions` runs P0-P6 then validates and activates loading, leaving other rules untouched;
-`rules` consumes existing docs; `paths` refreshes scoped evidence without deleting other layers.
-
-`disable` parks only the generated loading rule as `.claude/rules/convention.md.disabled`;
-`enable` restores its byte-identical body. Accepted coding rules and existing manual CLAUDE.md
-references are user-owned and remain active; explain this boundary when disabling/removing.
-For new installs, the loading rule is the convention discovery mechanism: do not also add the
-optional P7.5 CLAUDE.md references unless the user explicitly requests them.
-
----
+- `disable` parks only the generated loading rule as `.claude/rules/convention.md.disabled`; `enable`
+  restores its byte-identical body. `uninstall` removes only the loading rule; `purge` also deletes the
+  three owned generated documents after confirming their paths once, unless the user explicitly asked
+  for that deletion. Both keep accepted rules, other files and CLAUDE.md: accepted coding rules and manual
+  CLAUDE.md references are user-owned and stay active; say so when disabling or removing.
+- Extraction (phases in the table above): `upgrade` repeats it on current evidence; `conventions` also
+  validates and activates loading, other rules untouched; `paths` keeps the other layers. Keep local
+  wording, cite proposed changes, never overwrite unrelated documents. At P8 validate all three docs,
+  then the script's `install` (or `upgrade`) creates `.claude/rules/convention.md` (lazy-loading
+  guidance) or refreshes only its metadata; a parked rule stays parked.
+- The loading rule is the discovery mechanism: add the optional P7.5 CLAUDE.md references only on the
+  user's explicit request.
 
 ## P0: Mode + Stack Detection
-
-Parse `$ARGUMENTS` for mode keyword. Default = `install`. For `paths` mode: split comma-separated paths after keyword.
 
 ### Step 0.1: Detect Stack
 
@@ -117,10 +100,8 @@ Output: JSON `{"stacks":[...],"primary":"...","build_file":"...","modules":[...]
 bash "${CLAUDE_SKILL_DIR}/scripts/convention.sh" scan && echo "---SCAN-OK---" || echo "---SCAN-FAILED---"
 ```
 
-Output: JSON with `source_dirs`, `file_counts`, `modules`, `total_files`.
-`total_files` = every scanned file; `file_counts` = the top ten extensions only, so its values do not sum to `total_files`.
-
-> If `total_files` > 1000: warn user, suggest `paths` mode.
+Output: JSON with `source_dirs`, `file_counts` (top ten extensions only, so it does not sum to
+`total_files`), `modules`, `total_files`. `total_files` > 1000: warn the user, suggest `paths` mode.
 
 ### Step 0.3: Setup Convention Directory
 
@@ -132,29 +113,11 @@ bash "${CLAUDE_SKILL_DIR}/scripts/convention.sh" setup && echo "---SETUP-OK---" 
 > **STOP if FAILED** -- cannot proceed without output directory.
 
 Output: JSON `{"path":".claude/convention/","version":"...","content_version":"...","generated_by":"brewcode:convention-setup","last_updated":"YYYY-MM-DD"}`.
-Store `version` / `content_version` / `generated_by` / `last_updated` — P4 stamps them into every generated doc.
-
-> **Artifact metadata — the three docs this skill writes.** `.claude/convention/reference-patterns.md`,
-> `testing-conventions.md` and `project-architecture.md` each open with this frontmatter, filled from
-> the JSON above and from nowhere else — the script resolves the version from the plugin manifest by
-> self-location and the date from `date +%F`, so never hardcode either and never invent a second date
-> spelling:
->
-> ```yaml
-> ---
-> doc_type: llm
-> version: "{PLUGIN_VERSION}"
-> content_version: "{CONTENT_VERSION}"
-> generated_by: "brewcode:convention-setup"
-> last_updated: "{LAST_UPDATED}"
-> ---
-> ```
->
-> `{CONTENT_VERSION}` is the JSON's `content_version`; `{PLUGIN_VERSION}` is its `version`, `{LAST_UPDATED}` its `last_updated`. Substitute all three
-> before writing — a token that reaches the file literally is reported `partial` by `setup-status`.
-> `doc_type` stays UNQUOTED; the other four are quoted.
->
-> Re-running the skill over existing docs refreshes all three values in place.
+Store `version` / `content_version` / `generated_by` / `last_updated`: the only source for the
+frontmatter P4 stamps into the three docs (template in the P4 prompt); never hardcode the version
+(plugin manifest) or the date (`date +%F`), never respell the date. A `{PLUGIN_VERSION}`,
+`{CONTENT_VERSION}` or `{LAST_UPDATED}` token left literal reads `partial` in `setup-status`.
+`doc_type` unquoted, the other four quoted. Re-running refreshes all three values in existing docs.
 
 ### Step 0.4: Validate (rules mode only)
 
@@ -163,47 +126,30 @@ Store `version` / `content_version` / `generated_by` / `last_updated` — P4 sta
 bash "${CLAUDE_SKILL_DIR}/scripts/convention.sh" validate && echo "---VALID---" || echo "---INVALID---"
 ```
 
-> If `rules` mode + `INVALID` -- exit: "Run `/brewcode:convention-setup conventions` first."
-> `validate` fails a doc that exists but carries no standard frontmatter (a pre-5.0 run wrote it):
-> the named key is printed on stderr. Re-run `/brewcode:convention-setup conventions` to regenerate and
-> stamp it.
-
----
+> `rules` mode + `INVALID` (a doc missing or without the standard frontmatter) -> exit: "Run
+> `/brewcode:convention-setup conventions` first."
 
 ## P1: Load Layer Definitions
 
-Read `references/analysis-layers.md`. Filter layers by detected stack from P0. For `paths` mode: further filter by specified paths — match layer file patterns against provided paths. Build `ACTIVE_LAYERS` for P2.
+Read `references/analysis-layers.md`; keep the layers active for the P0 stack and, in `paths` mode,
+only those whose file patterns match the given paths, as `ACTIVE_LAYERS` for P2.
 
----
+## P2: Parallel Layer Analysis (10 agents, one message)
 
-## P2: Parallel Layer Analysis (10 agents, ONE message)
+### Delegation (every Agent spawn: P2, P3, P4, P5, P7.4)
 
-### Delegation (applies to EVERY Agent spawn — P2, P3, P4, P5, P7.4)
-
-One agent owns ONE layer analysis or ONE document, ~<=5 files, ~<=10 steps. Bigger MUST be split into N tasks, spawned in ONE message; analysis runs as 10 layer agents.
-
-Every spawn prompt MUST carry:
-
-| Field | Content |
-|-------|---------|
-| GOAL | the overall task and why it exists — the point beyond the file edit |
-| ROLE | what this agent owns; what it must NOT touch |
-| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
-| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what THIS agent needs |
-| CONSUMER | who or what uses the result next, and the shape it must fit |
-| DONE | acceptance criteria + the exact report shape you want back |
-
+One agent owns one layer analysis or one document (about 5 files, 10 steps); split anything bigger
+and spawn the parts in one message.
+Every spawn brief carries six labeled fields, since a subagent starts with an empty context: GOAL (task + why), ROLE (owns, must not touch), SCOPE (paths/commands in and out), CONTEXT (done, by whom, in parallel), CONSUMER (who uses the result + its shape), DONE (acceptance + return: verdict first, evidence, bounded; long output to a file, path returned).
 A bare one-line task is never enough. The per-agent template below is the canonical shape.
 
 ### Dynamic Agent Resolution
 
-Before spawning agents, check for project team agents:
-1. If `.claude/teams/` exists — read `team.md` for agent roster with domains
-2. If team has architecture/testing domain agents — prefer them over generic agents
-3. Priority: **team agent > project agent > plugin agent > system agent**
-4. If agent refuses (Task Acceptance Protocol) — re-delegate to suggested colleague (max 2 retries)
+If `.claude/teams/` exists, prefer the architecture/testing domain agents of its `team.md` roster.
+Priority: team agent > project agent > plugin agent > system agent. An agent that refuses (Task
+Acceptance Protocol) is re-delegated to its suggested colleague, max 2 retries.
 
-Spawn ALL agents in a SINGLE message. Skip agents for inactive layers (filtered in P1).
+Skip agents whose layers P1 filtered out.
 
 | # | Agent | Layers | Focus |
 |---|-------|--------|-------|
@@ -218,7 +164,7 @@ Spawn ALL agents in a SINGLE message. Skip agents for inactive layers (filtered 
 | 9 | Explore | T1-T4 | Test data, base classes, helpers, ExpectedData |
 | 10 | Explore | T5-T6 | BDD style, assertion patterns, @ParameterizedTest |
 
-**Per-agent prompt template — every spawn carries all six Delegation fields:**
+**Per-agent prompt template:**
 
 ```
 GOAL: we are extracting this project's coding conventions into .claude/convention/ docs.
@@ -261,11 +207,9 @@ Why: explanation
 | Class | Problem | Fix |
 ```
 
----
-
 ## P3: Etalon Selection (1 `Plan` agent)
 
-After all P2 agents complete, spawn 1 `Plan` agent (or the project architecture agent from `.claude/agents/`) with combined results.
+After all P2 agents return, one `Plan` agent (or the project architecture agent from `.claude/agents/`) gets their combined results.
 
 **Prompt:**
 ```
@@ -290,17 +234,15 @@ Output:
 | Layer | Issue | Recommendation |
 ```
 
----
+## P4: Document Generation (3 writer agents, parallel)
 
-## P4: Document Generation (3 writer agents, PARALLEL)
-
-Read `references/conventions-guide.md` for templates. Spawn 3 writer agents in ONE message — the project doc/dev agent from `.claude/agents/`, else `general-purpose`.
+Read `references/conventions-guide.md` (templates). Spawn 3 writers in one message: the project doc/dev agent from `.claude/agents/`, else `general-purpose`.
 
 | # | Document | Target |
 |---|----------|--------|
-| 1 | `.claude/convention/reference-patterns.md` | ~300 lines -- main code layers (L4-L11, L14): etalons, patterns, anti-patterns, quick reference |
-| 2 | `.claude/convention/testing-conventions.md` | ~150 lines -- test layers (T1-T6): test etalons, patterns, assertion conventions |
-| 3 | `.claude/convention/project-architecture.md` | ~200 lines -- build layers (L1-L3, L12-L13): build, deps, codegen, migrations, structure |
+| 1 | `.claude/convention/reference-patterns.md` | ~300 lines, main code layers (L4-L11, L14) |
+| 2 | `.claude/convention/testing-conventions.md` | ~150 lines, test layers (T1-T6) |
+| 3 | `.claude/convention/project-architecture.md` | ~200 lines, build layers (L1-L3, L12-L13) |
 
 **Per-agent prompt:**
 ```
@@ -324,36 +266,28 @@ Structure: organized by layer -- each with Etalon Classes table, Patterns (5-15 
 Target: ~{LINE_COUNT} lines.
 ```
 
----
-
 ## P5: Text Optimization
 
-The main conversation owns P5: all snapshots, fan-out, acceptance, and repairs. Wait for P4 writers
-before optimizing the three documents below. Never model-invoke the DMI `/brewtools:text-optimize`
-through `Skill`; read/follow its installed SKILL.md orchestration instead. Never have a writer,
-organizer, or optimizer spawn another optimizer/verifier.
+Runs only when the `brewtools:text-optimizer` agent is available; otherwise (`brewtools` not
+installed, or its `text-optimize/SKILL.md` not resolvable) skip P5, report the skip, and hand P6 the
+P4 documents unchanged (`references/text-optimize-fallback.md`).
 
-| Target | Mode |
-|---|---|
-| `.claude/convention/reference-patterns.md` | medium, 100% meaning preservation |
-| `.claude/convention/testing-conventions.md` | medium, 100% meaning preservation |
-| `.claude/convention/project-architecture.md` | medium, 100% meaning preservation |
-
-If brewtools is available, resolve its installed `text-optimize/SKILL.md` and absolute
-`TEXT_GUARD` (`scripts/text-guard.sh`); the convention skill's `${CLAUDE_PLUGIN_ROOT}` is brewcode,
-not brewtools. Read the canonical workflow/references; print its resolved PLAN. Snapshot all named
-targets before any optimization edit, capture `RUN_DIR`, and require exit 0. Use `--allow-dirty`
-only under existing authorization for these named documents; preserve unrelated work.
-Replace TEXT_GUARD, RUN_DIR, FILE, REL, ANALYSIS, and TEXT_OPTIMIZE_SKILL_DIR in commands/briefs
-with concrete values before execution; these are placeholders, not inherited shell variables.
+Targets, after every P4 writer returns: the three `.claude/convention/*.md` docs, medium mode, 100%
+meaning preservation. Main owns snapshots, fan-out, acceptance and repairs; no writer, organizer or
+optimizer spawns another optimizer or verifier. That agent refuses a brief without a `RUN_DIR`, so
+read the installed `/brewtools:text-optimize` `SKILL.md` (brewtools root, not this skill's plugin
+root) and follow its workflow; never invoke it through `Skill` (`disable-model-invocation: true`).
+TEXT_GUARD (absolute path of its `scripts/text-guard.sh`), RUN_DIR, FILE, REL, ANALYSIS and
+TEXT_OPTIMIZE_SKILL_DIR below are placeholders, not shell variables: substitute concrete values first. Snapshot before any optimization edit; require exit 0 and a printed `RUN_DIR`.
+`--allow-dirty` only under existing authorization for these documents, preserving unrelated work.
 
 ```bash
-bash "TEXT_GUARD" snapshot <three target paths>
+bash "TEXT_GUARD" snapshot .claude/convention/reference-patterns.md .claude/convention/testing-conventions.md .claude/convention/project-architecture.md
 ```
 
-Perform the canonical Phase 1 analysis/fact inventory; main owns the cross-file dedup decision list
-(default EMPTY: keep every cross-file fact). Then spawn 3 one-file optimizers in ONE message using
-this complete brief per target; substitute every path/RUN_DIR and the actual analysis before spawn:
+Run its Phase 1 fact inventory; main owns the cross-file dedup list (default EMPTY: keep every
+cross-file fact). Spawn 3 one-file optimizers in one message, every placeholder and the actual
+analysis substituted:
 
 ```
 Agent(subagent_type="brewtools:text-optimizer", description="Optimize one convention document", prompt="
@@ -375,15 +309,14 @@ DONE: return metrics with the counting method, numbered facts labelled kept/merg
   dedup ledger, reference checks, checkpoint/report path, and unresolved conflicts. No silent loss.")
 ```
 
-Main runs the canonical mechanical sub-gate after all returns:
+After all returns, main runs the mechanical sub-gate:
 
 ```bash
-bash "TEXT_GUARD" verify --no-restore --run-dir "RUN_DIR" <three target paths>
+bash "TEXT_GUARD" verify --no-restore --run-dir "RUN_DIR" .claude/convention/reference-patterns.md .claude/convention/testing-conventions.md .claude/convention/project-architecture.md
 ```
 
-Classify every missing token as preserved meaning, an authorized change, or actual loss; a
-mechanical PASS alone cannot prove semantics. For this installer, require a fresh read-only
-`Agent` per document (main spawns them together) even in medium mode:
+A mechanical pass cannot prove semantics, so this installer adds, even in medium mode, one fresh
+read-only verifier per document, spawned together:
 
 ```
 Agent(subagent_type="general-purpose", description="Verify convention meaning", prompt="
@@ -397,17 +330,9 @@ DONE: numbered original facts labelled kept/merged/lost/distorted; protected-fac
   concrete omissions/conflicts and verdict PASS|FAIL. No invented equivalence percentage.")
 ```
 
-Main repairs confirmed owned loss, checkpoints each owned repair immediately, and repeats required
-checks. If ownership is uncertain or preservation fails, preserve concurrent bytes and refuse
-optimization acceptance; never use default verify/restore as an automatic rollback. P6 receives
+Repair only confirmed owned loss (checkpoint each repair, repeat the checks); otherwise keep the
+current bytes and refuse acceptance, never rolling back with a default verify/restore. P6 receives
 only accepted documents, or an explicit pending/partial result with the reason.
-
-If brewtools or its optimizer is unavailable, read
-`${CLAUDE_SKILL_DIR}/references/text-optimize-fallback.md`; main performs the same zero-loss
-snapshot/inventory/checkpoint/protected-token/independent-verification contract. Missing equivalent
-safeguards means leave optimization pending and report it, never silently weaken the gate.
-
----
 
 ## P6: User Review
 
@@ -428,87 +353,22 @@ AskUserQuestion options:
 - **B:** Revise -- provide feedback (max 2 iterations, re-run P5 after edits)
 - **C:** Skip to rules -- jump to P7
 
----
-
 ## P7: Rules Organization
 
-> SKIP in `conventions` mode — it exists to leave `.claude/rules/` untouched. Go straight to P8.
-
-Read `references/rules-guide.md` for interactive flow.
-
-### Step 7.1: Extract Rule Candidates
-
-| Source Section | Rule Type |
-|---------------|-----------|
-| Anti-Patterns tables | avoid |
-| Patterns sections | best-practice |
-| Naming Conventions | best-practice |
-| Constraints | avoid |
-
-### Step 7.2: Duplicate Detection
-
-Read existing `.claude/rules/*.md` files.
-
-| Similarity | Action |
-|------------|--------|
-| >70% | Skip (already covered) |
-| 40-70% | Merge into existing entry |
-| <40% | New rule candidate |
-
-### Step 7.3: Interactive Batching
-
-Present 5-7 rules per batch via AskUserQuestion:
-
-```markdown
-## Rules Batch {N}/{TOTAL}
-
-| # | Type | Rule | Target File |
-|---|------|------|-------------|
-| 1 | avoid | ... | {prefix}-avoid.md |
-| 2 | bp | ... | {prefix}-best-practice.md |
-
-Options: Accept all | Select by number | Skip batch | Stop
-```
-
-### Step 7.4: Spawn bc-rules-organizer
-
-Spawn bc-rules-organizer per `references/rules-guide.md` Section 4 with `{ACCEPTED_RULES_JSON}`. Main collects written paths/checkpoints and runs their requested optimization through the P5 preservation contract; the organizer never delegates optimization.
-
----
+Skipped in `conventions` mode (leaves `.claude/rules/` untouched): go to P8. Otherwise follow
+`references/rules-guide.md` §1-§4: extract rule candidates (7.1), detect duplicates against existing
+`.claude/rules/*.md` (7.2), batch 5-7 rules per `AskUserQuestion` (7.3), spawn bc-rules-organizer
+with `{ACCEPTED_RULES_JSON}` (7.4), its plugin-root token replaced by `${CLAUDE_PLUGIN_ROOT}` (the
+brewcode root). The organizer never optimizes or delegates: main runs P5 on its written paths.
 
 ## P7.5: Update Project CLAUDE.md
 
-Skip unless the user explicitly requested CLAUDE.md references. Then ask once:
-"Update project CLAUDE.md with etalon summary table + convention references?"
-- **A:** Yes -- add etalon table + lazy-load refs
-- **B:** No -- skip
-
-If yes:
-1. Read project `CLAUDE.md`
-2. Find or create `## Reference Patterns & Etalon Classes` section
-3. Add/update:
-
-```markdown
-## Reference Patterns & Etalon Classes
-> **Full doc**: `.claude/convention/reference-patterns.md` (lazy-load when writing new code)
-
-| When writing... | Copy from (etalon) |
-|-----------------|---------------------|
-| {role} | `{ClassName}` -- {key traits} |
-
-### DTO Evolution (prefer top)
-1. **{preferred}** -- PREFER for new code
-2. **{established}** -- OK for complex entities
-3. **{legacy}** -- AVOID
-```
-
-4. Use Edit tool -- preserve all existing CLAUDE.md content.
-
----
+Skip unless the user explicitly requested CLAUDE.md references; then follow `references/rules-guide.md`
+§5 (one confirmation question; Edit, preserving all existing content).
 
 ## P8: Output Summary
 
-Finish the loading-rule lifecycle as specified above before reporting success.
+Finish the loading-rule lifecycle before reporting success.
 
 ```markdown
 ## Convention Analysis Complete
@@ -532,19 +392,9 @@ Finish the loading-rule lifecycle as specified above before reporting success.
 Next Steps: Review `.claude/convention/` | `/brewcode:convention-setup rules` to re-extract later | `/brewcode:convention-setup paths src/new-module` for new modules
 ```
 
----
-
 ## Error Handling
 
-| Condition | Action |
-|-----------|--------|
-| No source files found | Exit: "No source files found for {STACK}" |
-| `rules` mode without `.claude/convention/` | Exit: "Run `/brewcode:convention-setup conventions` first" |
-| >1000 source files | Warn user, suggest `paths` mode |
-| Unknown stack | Continue with generic analysis (no stack-specific layers) |
-| Agent timeout | Log warning, continue with available results |
-| Convention doc generation fails | Retry once, then present partial results |
-| Prose argument not matching a mode keyword (e.g. "extract testing patterns") | score against the EN/RU keywords in the Mode Detection table; extract paths/target from the prose — never treat the first word as a positional mode |
-| PLAN block missing, or printed after Step 0.3 already ran | defect — file it, do not ship |
+No source files found -> exit: "No source files found for {STACK}". Agent timeout -> log a warning,
+continue with available results. Doc generation fails -> retry once, then present partial results.
 
 </instructions>

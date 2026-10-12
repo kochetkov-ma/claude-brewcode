@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # semble-mcp.sh — detect/register/repair/remove the `semble_code` MCP server
-# (DESIGN §6, §9.3). Configuration truth is read from ~/.claude.json and
-# <root>/.mcp.json; `claude mcp get` is used only as a connectivity signal.
+# (DESIGN §6, §9.3). Configuration truth is read from the active config dir's
+# .claude.json (sc_claude_json) and <root>/.mcp.json; `claude mcp get` is used only as a connectivity signal.
 set -euo pipefail
 SC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source-path=SCRIPTDIR source=lib/semble-common.sh
 . "$SC_DIR/lib/semble-common.sh"
 
 JSON=0
@@ -31,6 +32,8 @@ semble-mcp.sh — MCP registration for brewcode:semble-setup
 
 Exit: 0 ok | 1 abort/failed | 2 usage | 3 precondition | 4 confirmation required
 Env : SEMBLE_DRY_RUN=1 prints every mutating command and changes nothing.
+Backup: add, repair and remove first copy every config file they can rewrite to
+        <file>.bak.<epoch> and print the path (--json: "backups").
 EOF
 }
 
@@ -186,14 +189,27 @@ mcp_backup_configs() {
   local f b
   MCP_BACKUPS=""
   MCP_BACKUP_PAIRS=""
+  MCP_BACKUP_FAILED=""
   for f in "$(sc_claude_json)" "$(sc_project_root)/.mcp.json"; do
-    b="$(sc_backup "$f")" || true
-    [ -n "${b:-}" ] || continue
+    [ -f "$f" ] || continue
+    # A dry run announces the backup and copies nothing.
+    if [ "${SEMBLE_DRY_RUN:-}" = "1" ]; then
+      if [ "$JSON" = "1" ]; then sc_dry "backup $f" >&2; else sc_dry "backup $f"; fi
+      continue
+    fi
+    b="$(sc_backup "$f" 2>/dev/null)" || b=""
+    # No backup, no mutation: the caller aborts before anything is rewritten.
+    if [ -z "$b" ] || [ ! -f "$b" ]; then MCP_BACKUP_FAILED="$f"; return 1; fi
     MCP_BACKUPS="${MCP_BACKUPS}${b}"$'\n'
     MCP_BACKUP_PAIRS="${MCP_BACKUP_PAIRS}${f}"$'\t'"${b}"$'\n'
     if [ "$JSON" = "0" ]; then sc_ok "backup: $b"; fi
   done
   return 0
+}
+
+mcp_backup_abort() { # $1 state
+  emit_result failed "$1" "cannot back up $MCP_BACKUP_FAILED; nothing was changed"
+  exit 1
 }
 
 # Restores every file mcp_backup_configs copied. Called on EVERY non-success exit
@@ -345,6 +361,8 @@ process.stdout.write(JSON.stringify({schema:1,add:process.env.SC_A,addJson:proce
       exit 4
     fi
     [ "$SCOPE" = "user" ] || sc_warn "scope '$SCOPE' requested; the main workflow expects user scope"
+    # Before the checkpoint: a backup that cannot be taken must leave no state behind either.
+    mcp_backup_configs || mcp_backup_abort "$STATE"
     mcp_checkpoint
     # add-json FIRST: it is the only form that can carry alwaysLoad.
     if run_add_json; then
@@ -353,6 +371,7 @@ process.stdout.write(JSON.stringify({schema:1,add:process.env.SC_A,addJson:proce
       ADDED=add
       sc_warn "fell back to 'claude mcp add' — it cannot set alwaysLoad; run: semble-mcp.sh repair --yes"
     else
+      mcp_rollback
       "$STATE_SH" phase prereq_ready >/dev/null || true
       "$STATE_SH" patch '{"notes":["claude mcp add and add-json both failed; semble_code was not registered"]}' >/dev/null || true
       emit_result failed "$(sc_mcp_state)" "claude mcp add and add-json both failed; state left at prereq_ready"
@@ -393,7 +412,7 @@ process.stdout.write(JSON.stringify({schema:1,add:process.env.SC_A,addJson:proce
       exit 4
     fi
     MCP_TARGET_SCOPES="$(mcp_scopes "$DUMP")"
-    mcp_backup_configs
+    mcp_backup_configs || mcp_backup_abort "$STATE"
     for s in $MCP_TARGET_SCOPES; do
       run_remove "$s" || sc_warn "claude mcp remove -s $s reported a failure; continuing"
     done
@@ -441,7 +460,7 @@ process.stdout.write(JSON.stringify({schema:1,add:process.env.SC_A,addJson:proce
       emit_result needs_confirmation "$STATE" "would remove $SEMBLE_SERVER_NAME from scope(s) [$MCP_TARGET_SCOPES]"
       exit 4
     fi
-    mcp_backup_configs
+    mcp_backup_configs || mcp_backup_abort "$STATE"
     for s in $MCP_TARGET_SCOPES; do
       if ! run_remove "$s"; then
         mcp_rollback

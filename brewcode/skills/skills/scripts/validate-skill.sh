@@ -1,7 +1,6 @@
 #!/bin/sh
-# validate-skill.sh — Validate a Claude Code skill directory structure
-# Usage: validate-skill.sh <skill-dir>
-# Exit:  0 = all checks pass, 1 = any check fails
+# validate-skill.sh <skill-dir> — validate a Claude Code skill directory.
+# Exit: 0 = all checks pass (warnings allowed), 1 = any check fails.
 set -eu
 
 SKILL_DIR="${1:-}"
@@ -10,15 +9,19 @@ if [ -z "$SKILL_DIR" ]; then
     exit 1
 fi
 
-# Section 5 exemption list (prompt-contract.md) — pure reference/lookup skills with no
-# modes and no writes skip the prompt-contract body checks (8-10) but still need
-# argument-hint (check 7). Match on the resolved absolute skill dir path; add one
-# `*/path/suffix)` arm per new exemption.
+# Exemptions (prompt-contract.md section 5). EXEMPT_KIND=reference: pure reference skill, skips 8-10.
+# EXEMPT_KIND=standalone: marketplace-root skills/<name> outside any plugin, skips 7-10.
+EXEMPT_KIND=""
 is_exempt_skill() {
     case "$1" in
-        */.claude/skills/claude-plugin-guide) return 0 ;;
-        *) return 1 ;;
+        */.claude/skills/claude-plugin-guide) EXEMPT_KIND=reference; return 0 ;;
     esac
+    _gp=$(dirname "$(dirname "$1")")
+    if [ "$(basename "$(dirname "$1")")" = "skills" ] && [ -f "$_gp/.claude-plugin/marketplace.json" ] \
+        && [ ! -f "$_gp/.claude-plugin/plugin.json" ]; then
+        EXEMPT_KIND=standalone; return 0
+    fi
+    return 1
 }
 
 PASS=0
@@ -35,15 +38,18 @@ check() {
     fi
 }
 
-# Additive, non-fatal: a row here never fails the check — it flags something worth a human
-# glance without breaking any of the 28 skills shipping today.
+# Additive, non-fatal: a row here never fails the check — it flags something worth a human glance.
 warn() {
     WARN=$((WARN + 1))
     echo "⚠️  $1"
 }
 
-# 1. No lowercase skill.md (ls -1 for exact case on case-insensitive FS)
-if ls -1 "$SKILL_DIR" 2>/dev/null | grep -q '^skill\.md$'; then
+# 1. No lowercase skill.md (glob yields the on-disk name: exact case on a case-insensitive FS)
+LOWER_SKILL=0
+for ENTRY in "$SKILL_DIR"/*; do
+    if [ "${ENTRY##*/}" = "skill.md" ]; then LOWER_SKILL=1; fi
+done
+if [ "$LOWER_SKILL" -eq 1 ]; then
     check fail "skill.md found — must be SKILL.md (uppercase)"
 else
     check ok "No lowercase skill.md"
@@ -68,10 +74,8 @@ else
     check fail "Frontmatter missing --- delimiters (found $FM_COUNT, need 2+)"
 fi
 
-# Extract frontmatter block: strictly the lines between the FIRST two --- delimiters, by line
-# number. A naive sed range (`/^---$/,/^---$/`) restarts every time it closes, so a `---`
-# horizontal rule anywhere in the body reopens it and appends body text into $FRONTMATTER —
-# several skills use `---` as a divider, which silently poisoned frontmatter-keyed checks.
+# Frontmatter = the lines between the FIRST two --- delimiters, by line number: a sed range
+# (`/^---$/,/^---$/`) reopens on every `---` divider in the body and pulls body text in.
 FM_CLOSE=$(grep -n '^---$' "$SKILL_FILE" 2>/dev/null | sed -n '2s/:.*//p')
 if [ -n "${FM_CLOSE:-}" ] && [ "$FM_CLOSE" -gt 1 ] 2>/dev/null; then
     FRONTMATTER=$(sed -n "2,$((FM_CLOSE - 1))p" "$SKILL_FILE" 2>/dev/null || true)
@@ -79,9 +83,8 @@ else
     FRONTMATTER=""
 fi
 
-# 4. name field: present, bare kebab-case, max 64 chars, equal to the directory name.
-# A `plugin:` prefix here is a defect: Claude Code prepends the plugin name itself, so
-# `name: brewcode:e2e` in brewcode/skills/e2e renders as `/brewcode:brewcode:e2e`.
+# 4. name: present, bare kebab-case, max 64 chars, equal to the directory name. House rule: one
+# spelling, no `plugin:` prefix (Claude Code adds it; 2.1.216-2.1.245 rendered a baked one doubled).
 NAME=$(echo "$FRONTMATTER" | grep -E '^name:' | head -1 | sed 's/^name:[[:space:]]*//' | tr -d '"' | tr -d "'" || true)
 DIR_NAME=$(basename "$(cd "$SKILL_DIR" 2>/dev/null && pwd || echo "$SKILL_DIR")")
 if [ -z "$NAME" ]; then
@@ -136,10 +139,12 @@ else
     EXEMPT=0
 fi
 
-# 7. argument-hint present and prompt-first (contract section 1). Applies even to
-# exempt skills — a reference skill still accepts [prompt] in position 1.
+# 7. argument-hint present and prompt-first (contract section 1). Applies even to reference-
+# exempt skills: a reference skill still accepts [prompt] in position 1.
 ARG_HINT=$(echo "$FRONTMATTER" | grep -E '^argument-hint:' | head -1 | sed 's/^argument-hint:[[:space:]]*//' | tr -d '"' | tr -d "'" || true)
-if [ -z "$ARG_HINT" ]; then
+if [ "$EXEMPT_KIND" = "standalone" ]; then
+    check ok "argument-hint exempt (standalone root skill): $ABS_SKILL_DIR"
+elif [ -z "$ARG_HINT" ]; then
     check fail "argument-hint missing in frontmatter — prompt contract requires a prompt-first hint (section 1)"
 else
     case "$ARG_HINT" in
@@ -148,18 +153,18 @@ else
     esac
 fi
 
-# 8. body contains the "## Prompt contract" section (contract section 6 boilerplate)
+# 8. body contains the "## Prompt contract" section (prompt-contract.md, Canonical section)
 if [ "$EXEMPT" -eq 1 ]; then
-    check ok "## Prompt contract section exempt (section 5 list): $ABS_SKILL_DIR"
+    check ok "## Prompt contract section exempt ($EXEMPT_KIND): $ABS_SKILL_DIR"
 elif echo "$BODY" | grep -q '^## Prompt contract'; then
     check ok "## Prompt contract section present"
 else
-    check fail "## Prompt contract section missing (prompt-contract.md section 6 boilerplate)"
+    check fail "## Prompt contract section missing (prompt-contract.md, Canonical section)"
 fi
 
 # 9. PLAN block with all five labels (contract section 4)
 if [ "$EXEMPT" -eq 1 ]; then
-    check ok "PLAN block exempt (section 5 list): $ABS_SKILL_DIR"
+    check ok "PLAN block exempt ($EXEMPT_KIND): $ABS_SKILL_DIR"
 else
     MISSING_LABELS=""
     for LABEL in "INPUT:" "MODE:" "SCOPE:" "DO:" "RESULT:"; do
@@ -176,21 +181,20 @@ fi
 # 10. Mode keyword table: when the skill declares 2+ modes, the table needs a
 # Mutates? column and at least one Cyrillic (RU) keyword (contract section 2).
 if [ "$EXEMPT" -eq 1 ]; then
-    check ok "Mode table exempt (section 5 list): $ABS_SKILL_DIR"
+    check ok "Mode table exempt ($EXEMPT_KIND): $ABS_SKILL_DIR"
 else
-    # Anchor on a header row carrying BOTH "keyword" and "mutates". Anchoring on
-    # mode+keyword instead false-positives on ordinary prose rows (ssh's "keyword matching is
-    # simple" row) and then audits the wrong table; requiring the literal word "mode" in the
-    # header rejects the legitimate `Verb|Action|Flow|Input` first columns already in use.
-    # The table may live in SKILL.md or in one of the skill's own references/*.md (semble-setup
-    # keeps its routing table in references/intent-routing.md by design).
+    # Anchor: a header row carrying BOTH "keyword" and "mutates" (mode+keyword hits prose rows, a literal
+    # "mode" rejects Verb|Action|Flow|Input). Searched in SKILL.md and the skill's own references/*.md.
+    set -- "$SKILL_FILE"
+    for REF in "$SKILL_DIR"/references/*.md; do
+        if [ -f "$REF" ]; then set -- "$@" "$REF"; fi
+    done
     MODE_TABLE=$(awk '
         s==1 { if ($0 !~ /^\|/) { s=0; next }; print; next }
         /^\|/ && tolower($0) ~ /keyword/ && tolower($0) ~ /mutates/ { s=1; print }
-    ' "$SKILL_FILE" $(ls "$SKILL_DIR"/references/*.md 2>/dev/null) 2>/dev/null)
-    # Modes declared in the hint make the table mandatory — a skill that simply omits it must not
-    # pass by being undetectable. Only real mode alternation counts: `<...>` groups are targets
-    # and `[-x|--yy]` groups are flags, neither is a mode (contract section 3.1).
+    ' "$@" 2>/dev/null)
+    # Modes declared in the hint make the table mandatory. Only real mode alternation counts:
+    # `<...>` groups are targets and `[-x|--yy]` groups are flags (contract section 3.1).
     HINT_MODES=0
     # Two flag-strip passes: `[-q|--quorum [G-]N-M]` nests, and the inner group must go first.
     # The last pass drops bracket groups left holding no alphanumerics (`[<a>|<b>]` -> `[|]`).
@@ -226,10 +230,8 @@ else
     fi
 fi
 
-# 11. Unknown top-level frontmatter key -> warning, never fail. Allow-list = the 20 native
-# SKILL.md fields (brewcode/skills/skills/references/frontmatter-fields.md) plus the house
-# custom keys actually in use or documented for future use (grepped across all 28 shipped
-# SKILL.md frontmatters, plus `cli`/`version` from skills/SKILL.md's own contract).
+# 11. Unknown top-level frontmatter key -> warning, never fail. Allow-list = the 20 native fields
+# (brewcode/skills/skills/references/frontmatter-fields.md) + house keys (`cli`/`version`: skills/SKILL.md).
 ALLOWED_KEYS="name description when_to_use disable-model-invocation user-invocable arguments \
 argument-hint allowed-tools disallowed-tools model effort context background agent hooks paths \
 shell metadata license compatibility cli version content_version generated_by last_updated \
@@ -248,19 +250,16 @@ else
     check ok "All frontmatter keys recognized"
 fi
 
-# 12. Bare top-level 'once:' — it is a suboption of a hook entry
-# (hooks.<Event>[].hooks[].once), never a sibling of name/description. Fatal: this shape
-# never worked, so flagging it can never break a previously-passing skill.
+# 12. Bare top-level 'once:' — a suboption of a hook entry (hooks.<Event>[].hooks[].once), never a
+# sibling of name/description. Fatal: this shape never worked.
 if echo "$FRONTMATTER" | grep -qE '^once:'; then
     check fail "'once' found as a top-level frontmatter field -- it is a suboption of a hook entry (hooks.<Event>[].hooks[].once), not a sibling of name/description"
 else
     check ok "No top-level 'once' field"
 fi
 
-# 13. agent: value outside the confirmed built-in set -> warning, not fail. A real custom
-# agent under .claude/agents/ or ~/.claude/agents/ is legitimate; only devs naming a
-# nonexistent built-in (developer/tester/reviewer) are actually broken, and this script has
-# no way to tell the two apart from the frontmatter alone.
+# 13. agent: value outside the confirmed built-ins -> warning, not fail: a custom agent is legitimate
+# and the frontmatter alone cannot tell it from a nonexistent built-in (developer/tester/reviewer).
 AGENT_VAL=$(echo "$FRONTMATTER" | grep -E '^agent:' | head -1 | sed 's/^agent:[[:space:]]*//' | tr -d '"' | tr -d "'" || true)
 if [ -n "$AGENT_VAL" ]; then
     case "$AGENT_VAL" in
@@ -276,6 +275,161 @@ if [ "$BOM" = "efbbbf" ]; then
     check fail "UTF-8 BOM detected at file start -- strip it (files starting with a BOM were silently ignored by CC before 2.1.239; keep authoring clean regardless)"
 else
     check ok "No UTF-8 BOM"
+fi
+
+# 15. `$<digit>` in the body is replaced at load (0-based, fences included) once enough arguments
+# are passed. Skipped as safe: `\$1`, `${1}`, `$(1)`, and `$1x` (a word character follows).
+DOLLAR_N=$(awk -v s="${FM_CLOSE:-0}" 'NR > s && /(^|[^\\])\$[0-9]+([^A-Za-z0-9_]|$)/ { printf "%s%d", (n++ ? "," : ""), NR }' "$SKILL_FILE" 2>/dev/null || true)
+if [ -n "$DOLLAR_N" ]; then
+    check fail "Positional \$N at line(s) $DOLLAR_N is substituted at load -- write shell \${1}, awk \$(1), prose \\\$1"
+else
+    check ok "No bare positional \$N in the body"
+fi
+
+# 16. Plugin root: only the exact `${CLAUDE_PLUGIN_ROOT}` is substituted at load. The unbraced and
+# `${CLAUDE_PLUGIN_ROOT:-x}` forms reach the shell verbatim, where the variable is unset.
+ROOT_FORM=$(awk -v s="${FM_CLOSE:-0}" 'NR > s && /\$CLAUDE_PLUGIN_ROOT|\$\{CLAUDE_PLUGIN_ROOT[^}]/ { printf "%s%d", (n++ ? "," : ""), NR }' "$SKILL_FILE" 2>/dev/null || true)
+if [ -n "$ROOT_FORM" ]; then
+    check fail "Plugin root at line(s) $ROOT_FORM is not the exact \${CLAUDE_PLUGIN_ROOT} -- never substituted, unset in the Bash tool"
+else
+    check ok "Plugin root spelled \${CLAUDE_PLUGIN_ROOT} or absent"
+fi
+
+# 17. context: `fork` is the only documented value.
+CONTEXT_VAL=$(echo "$FRONTMATTER" | grep -E '^context:' | head -1 | sed 's/^context:[[:space:]]*//' | tr -d '"' | tr -d "'" || true)
+if [ -n "$CONTEXT_VAL" ] && [ "$CONTEXT_VAL" != "fork" ]; then
+    check fail "context: '$CONTEXT_VAL' is not a documented value -- only 'fork' is"
+fi
+
+# 18. Length: upstream recommends SKILL.md under 500 lines, detail in references/.
+TOTAL_LINES=$(wc -l < "$SKILL_FILE" | tr -d ' ')
+if [ "$TOTAL_LINES" -gt 500 ]; then
+    warn "SKILL.md is $TOTAL_LINES lines (recommended: under 500) -- move on-demand detail to references/"
+fi
+
+# 19-23: one fence-aware body scan; emits "<id> <line>". Load-time substitution hits fences and prose
+# alike: `$ARGUMENTS` (any suffix; `\$ARGUMENTS` renders literal) and the exact braced CLAUDE_* tokens.
+PLUGIN_SKILL=0
+[ -f "$(dirname "$(dirname "$ABS_SKILL_DIR")")/.claude-plugin/plugin.json" ] && PLUGIN_SKILL=1
+SCAN=$(awk -v s="${FM_CLOSE:-0}" -v q="'" -v ex="$EXEMPT_KIND" -v plug="$PLUGIN_SKILL" '
+function hit(id) { print id, NR }
+function quotescan(str,   i, c, n) {
+    n = length(str)
+    for (i = 1; i <= n; i++) {
+        c = substr(str, i, 1)
+        if (sq) { if (c == q) sq = 0; else if (substr(str, i, 21) == "${CLAUDE_PROJECT_DIR}") hit("22"); continue }
+        if (c == "\\") { i++; continue }
+        if (c == "\"") dq = !dq
+        else if (c == q && !dq) sq = 1
+        else if (c == "#" && !dq && (i == 1 || substr(str, i - 1, 1) ~ /[ \t]/)) return
+    }
+}
+function nodescan(str, i,   c, n) {
+    while (i <= length(str)) {
+        c = substr(str, i, 1)
+        if (c == "\\") { i += 2; continue }
+        if (c == "`") { hit("21"); return 0 }
+        if (c == "\"") { n = substr(str, i + 1, 1); if (n != "" && n !~ /[ \t;|&)<>]/) hit("21"); return 0 }
+        i++
+    }
+    return 1
+}
+NR <= s { next }
+{
+    line = $0; t = line; sub(/^[ \t]*(> ?)*/, "", t)
+    if (!inf && match(t, /^(```+|~~~+)/)) {
+        inf = 1; fl = RLENGTH; fc = substr(t, 1, 1); lang = substr(t, fl + 1); sub(/[ \t].*$/, "", lang)
+        sh = (lang == "bash" || lang == "sh" || lang == "shell" || lang == "zsh")
+        lit = (lang ~ /^(json|jsonc|js|javascript|mjs|ts|yaml|yml|toml)$/)
+        innode = 0; prev = ""; sq = 0; dq = 0; hd = ""; next
+    }
+    if (inf && match(t, /^(```+|~~~+)[ \t]*$/) && substr(t, 1, 1) == fc && RLENGTH >= fl) { inf = 0; next }
+    args = (line ~ /(^|[^\\])\$ARGUMENTS/)
+    if (inf) {
+        if (lit && index(line, "${CLAUDE_PROJECT_DIR}")) hit("22")
+        if (sh) {
+            if (hd != "") {
+                tt = t; sub(/[ \t]+$/, "", tt); if (tt == hd) hd = ""
+                else if (hdq && index(line, "${CLAUDE_PROJECT_DIR}")) hit("22")
+            } else {
+                quotescan(line)
+                if (match(line, /<<-?[ \t]*["\\\047]?[A-Za-z_][A-Za-z0-9_]*/) && substr(line, RSTART - 1, 1) != "<") {
+                    hd = substr(line, RSTART, RLENGTH); hdq = (hd ~ /["\\\047]/)
+                    sub(/^<<-?[ \t]*["\\\047]?/, "", hd)
+                }
+            }
+            if (want_term) { if (t !~ /^__SKILL_ARGS__[ \t]*$/) hit("19"); want_term = 0 }
+            if (args) {
+                op = "<<" q "__SKILL_ARGS__" q
+                if (t ~ /^\$ARGUMENTS[ \t]*$/ && index(prev, op) && prev !~ /\$\(|`/) want_term = 1
+                else hit("19")
+            }
+            if (innode) innode = nodescan(line, 1)
+            else if (match(line, /(^|[^A-Za-z0-9_.\/-])node[ \t]+(-[-A-Za-z0-9=]+[ \t]+)*(-e|-p|--eval|--print)[ \t]+"/))
+                innode = nodescan(line, RSTART + RLENGTH)
+            prev = line
+        } else if (args) hit("20")
+        next
+    }
+    if (line ~ /^## Prompt contract/) { want_slot = 1; next }
+    if (args) {
+        if (want_slot && line ~ /[^ \t]/ && !slot_used) slot_used = 1
+        else if (ex != "" && !free_used) free_used = 1
+        else hit("20")
+    }
+    if (want_slot && line ~ /[^ \t]/) want_slot = 0
+    r = line
+    while (match(r, /\$\{CLAUDE_(PLUGIN_ROOT|PLUGIN_DATA|SKILL_DIR|PROJECT_DIR|SESSION_ID)\}/)) {
+        tok = substr(r, RSTART, RLENGTH)
+        if (substr(r, RSTART + RLENGTH, 1) != "/" && (plug || tok !~ /PLUGIN/)) { hit("23"); break }
+        r = substr(r, RSTART + RLENGTH)
+    }
+}' "$SKILL_FILE" 2>/dev/null || true)
+scan_lines() { echo "$SCAN" | awk -v id="$1" '$1 == id { printf "%s%s", (n++ ? "," : ""), $2 }'; }
+
+# 19. `$ARGUMENTS` in a shell fence: only a line of its own inside a quoted `__SKILL_ARGS__` heredoc
+# that is not inside `$(...)` (bash 3.2 mis-parses a quote or paren of the prompt there).
+L=$(scan_lines 19)
+if [ -n "$L" ]; then
+    check fail "\$ARGUMENTS in a shell fence at line(s) $L outside the canonical form -- IFS= read -r -d '' ARGS <<'__SKILL_ARGS__' || true / \$ARGUMENTS / __SKILL_ARGS__ (prompt-contract.md)"
+else
+    check ok "\$ARGUMENTS in shell fences only via the canonical heredoc (or absent)"
+fi
+
+# 20. `$ARGUMENTS` elsewhere: each occurrence pastes the raw prompt at load. One slot only: the first
+# line under `## Prompt contract` (exempt skills: their first occurrence). Elsewhere say "the prompt".
+L=$(scan_lines 20)
+if [ -n "$L" ]; then
+    check fail "\$ARGUMENTS at line(s) $L outside the one canonical slot -- substituted with the raw prompt at load; write 'the prompt', or \\\$ARGUMENTS to name it"
+else
+    check ok "\$ARGUMENTS in prose only at the canonical slot"
+fi
+
+# 21. `node -e "..."`: a `"` inside the program ends the shell string (`bash -n` still passes);
+# a backtick runs as command substitution. Use single quotes inside the program, or a script file.
+L=$(scan_lines 21)
+if [ -n "$L" ]; then
+    check fail "node -e \"...\" program cut by a double quote or backtick at line(s) $L"
+else
+    check ok "No node -e \"...\" program cut by a quote"
+fi
+
+# 22. Braced project-dir token where a literal is meant (shell single quotes, quoted heredoc, JSON/JS/
+# YAML fence) is baked to an absolute path at load. Use \$CLAUDE_PROJECT_DIR or split the literal.
+L=$(scan_lines 22)
+if [ -n "$L" ]; then
+    check fail "\${CLAUDE_PROJECT_DIR} meant as a literal at line(s) $L is baked to a path at load"
+else
+    check ok "No braced CLAUDE_PROJECT_DIR token meant as a literal"
+fi
+
+# 23. Warning: a braced CLAUDE_* token in prose with no `/` after it renders as a path at load; fine
+# for a location, wrong when it names the variable or a literal to write (drop the dollar-brace).
+L=$(scan_lines 23)
+if [ -n "$L" ]; then
+    warn "Braced CLAUDE_* token in prose at line(s) $L renders as a path at load -- if it names the variable or a literal to write, drop the dollar-brace"
+else
+    check ok "No braced CLAUDE_* token named in prose"
 fi
 
 # Summary

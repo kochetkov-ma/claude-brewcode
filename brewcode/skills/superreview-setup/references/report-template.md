@@ -1,6 +1,7 @@
 ---
 doc_type: llm
 version: "{PLUGIN_VERSION}"
+content_version: "{CONTENT_VERSION}"
 generated_by: "{GENERATED_BY}"
 last_updated: "{LAST_UPDATED}"
 ---
@@ -143,7 +144,7 @@ command; `CONFIRMED-BY-EVIDENCE` = intent-guard row, cite the ASKED quote + tier
 
 ## Recommendations / Next steps
 
-> **superreview is READ-ONLY — it does not apply fixes.** It only reports. Act on the findings as below.
+> **superreview is READ-ONLY — it does not apply fixes.** Act on the findings as below.
 
 - **Drift first:** {if MAJOR DRIFT: **the deliverable is not the thing that was asked for** — settle that before
   any other finding; fixing quality inside the wrong deliverable is wasted work. | if MINOR DRIFT: {N} small
@@ -152,7 +153,7 @@ command; `CONFIRMED-BY-EVIDENCE` = intent-guard row, cite the ASKED quote + tier
   and amendments, then rerun the intent pass; delivery alignment remains unassessed.}
 - {if DEPTH == QUICK: **This was a QUICK run** — intent + gates only. No domain expert, scope pass or adversarial
   validation ran, so nothing below claims the code is good. For the full pass, re-run saying "deep review".}
-- **To FIX the findings:** start a NEW session (English), turn on **Manager mode (`++m`)**, and DELEGATE the fixes
+- **To FIX the findings:** start a NEW session, turn on **Manager mode (`++m`)**, and DELEGATE the fixes
   to the domain-expert agents the routing map named. Address **P0/P1 first, then P2/P3**.
 - **Scope:** {SC} scope finding(s). {if any P0/P1: split the unsanctioned work into its own task + PR, or get the
   decision recorded in the task notes and as a comment on the issue — superreview does NOT touch the board or the
@@ -165,8 +166,8 @@ command; `CONFIRMED-BY-EVIDENCE` = intent-guard row, cite the ASKED quote + tier
   `/simplify` is a BUILT-IN Claude Code skill (NOT this skill, NOT a plugin); if it is unavailable, skip it.
 - **Optional:** `/code-review` (built-in) for a focused correctness diff pass.
 
-> These are RECOMMENDATIONS only. superreview does NOT invoke `/simplify`, does NOT call any other skill, and does
-> NOT edit code — acting on them is the user's next session.
+> These are RECOMMENDATIONS only. superreview invokes no skill (`/simplify` included) and does not edit code —
+> acting on them is the user's next session.
 ```
 
 ## Severity / reuse legend

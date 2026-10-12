@@ -12,8 +12,8 @@
 #             and never changes `all`'s exit code. Skipped when a timeout binary
 #             already exists. Needs --yes when invoked directly.
 #   semble    primes the pinned uvx environment with
-#             `uvx --from 'semble[mcp]==0.5.5' semble --version`.
-#             --tool additionally runs `uv tool install 'semble[mcp]==0.5.5'`.
+#             `uvx --from 'semble[mcp]==0.6.2' semble --version`.
+#             --tool additionally runs `uv tool install 'semble[mcp]==0.6.2'`.
 #   all       check -> uv -> coreutils -> semble.
 #
 # Default mode is uvx-ephemeral: no `uv tool install`, so no `semble` lands on
@@ -44,7 +44,7 @@ semble-install.sh <check|uv|coreutils|semble|all> [--yes] [--json] [--tool]
 
   --yes    confirm the mutating steps
   --json   emit a single JSON object (schema: DESIGN 9.2)
-  --tool   also `uv tool install 'semble[mcp]==0.5.5'` (requires --yes)
+  --tool   also `uv tool install 'semble[mcp]==0.6.2'` (requires --yes)
   -h/--help
 
 Honours SEMBLE_DRY_RUN=1 (print DRY <cmd>, change nothing) and

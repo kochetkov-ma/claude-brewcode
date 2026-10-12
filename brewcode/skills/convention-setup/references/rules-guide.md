@@ -4,8 +4,6 @@
 
 ## 1. Rule Extraction Flow
 
-Convention docs → scan sections → identify patterns/anti-patterns → classify → format
-
 | Source Section | Rule Type | Example |
 |----------------|-----------|---------|
 | Anti-Patterns table | avoid | "Avoid @Data on entities -- Use @Value @Builder" |
@@ -32,9 +30,7 @@ Convention docs → scan sections → identify patterns/anti-patterns → classi
 | 40-70% | Merge into existing entry (enhance description) |
 | <40% | New rule candidate |
 
-Comparison process: read all `.claude/rules/*.md` → compare each candidate against ALL existing entries semantically (same intent = duplicate) → consider: same class, same pattern, same "Instead" suggestion.
-
-When merging (40-70% similar): keep existing rule number, expand "Instead" if new info available, add "Why" if missing, do NOT create duplicate entry.
+Compare each candidate semantically against every entry of every `.claude/rules/*.md` (same intent = duplicate: same class, pattern or "Instead"). Merging keeps the existing rule number, expands "Instead" with new info and adds a missing "Why"; it never creates a second entry.
 
 ## 3. Interactive Batching (AskUserQuestion)
 
@@ -65,29 +61,20 @@ Options: Accept all | Select by number (e.g., "1,3,5") | Skip batch | Stop
 
 ### Target File Selection
 
-| Rule Type | Stack | Target File |
-|-----------|-------|-------------|
-| avoid | Java | `java-avoid.md` |
-| avoid | TypeScript | `typescript-avoid.md` |
-| avoid | Python | `python-avoid.md` |
-| avoid | Generic | `avoid.md` |
-| best-practice | Java | `java-best-practice.md` |
-| best-practice | TypeScript | `typescript-best-practice.md` |
-| best-practice | Python | `python-best-practice.md` |
-| best-practice | Generic | `best-practice.md` |
+`java-avoid.md`, `java-best-practice.md`, `typescript-avoid.md`, `typescript-best-practice.md`,
+`python-avoid.md`, `python-best-practice.md`; generic stack: `avoid.md`, `best-practice.md`.
 
 ## 4. bc-rules-organizer Spawn
 
-After all batches processed, spawn with accepted rules:
+After all batches, spawn one organizer per target file (its accepted rules = one bounded unit,
+about 5 files / 10 steps), all in one message. Main prepares the scaffolds first:
+`rules.sh create`/`create-specialized` create pairs, so never run them inside a one-file organizer. Preserve
+existing files; a briefed target still absent goes back to main as a path, never an out-of-scope
+sibling. Rule files are written into the project's `.claude/rules/`, copied, never symlinked from
+outside the project: such a link needs the external-imports approval, and a path-scoped one never loads.
 
-One organizer = ONE bounded unit: the accepted rules for ONE target file. Split an accepted set spanning several target files per target file; each unit stays within
-~5 files / ~10 steps. Spawn all organizers in ONE message.
-Main prepares required scaffolds before fan-out; `rules.sh create`/`create-specialized` create
-pairs, so never run them inside a one-file organizer. Preserve existing files; if the briefed
-target is still absent, return its path to main instead of creating an out-of-scope sibling.
-
-> `${CLAUDE_PLUGIN_ROOT}` below is the brewcode plugin root. Expand it to the absolute path
-> before spawning — bc-rules-organizer receives the prompt as plain text and cannot resolve it.
+> `${CLAUDE_PLUGIN_ROOT}` below is the brewcode plugin root: replace it with the absolute path
+> `SKILL.md` P7 gives before spawning; the organizer receives the prompt as plain text.
 
 ```
 Agent(subagent_type="brewcode:bc-rules-organizer", prompt="
@@ -110,21 +97,19 @@ CONTEXT: these rules already passed extraction from the convention docs, similar
       40-70% similar means merge into the existing numbered entry, not a new row.
       Accepted rules:
       {ACCEPTED_RULES_JSON}
-CONSUMER: unscoped .claude/rules/*.md loads at session start; path-scoped rules load when Read
-      matches their glob. Rows must parse; do not promise every rule loads in every session.
-      Format each rule in table row:
-      avoid.md: | # | Avoid | Instead | Why |
-      best-practice.md: | # | Practice | Context | Source |
-      Source column: 'convention' for all extracted rules.
-DONE: validate script passes; report as: file | rules added | rules merged | rules skipped, plus
-      CHECKPOINT_REPORT and created/updated paths requesting optimization. Main owns P5 snapshots,
+CONSUMER: unscoped .claude/rules/*.md loads at session start; a path-scoped rule loads when Claude
+      reads, writes or edits a matching file (incl. single-file cat/head in Bash). Rows must parse;
+      do not promise every rule loads in every session. Source column: 'convention' for all
+      extracted rules.
+DONE: validate script passes; return your File | Paths | Change table and summary line, plus
+      CHECKPOINT_REPORT and the written paths for optimization. Main owns P5 snapshots,
       RUN_DIR, optimizer fan-out and acceptance; never model-invoke a DMI skill or spawn optimizers.
 ")
 ```
 
 ## 5. CLAUDE.md Update Flow
 
-Skip unless the user explicitly requested CLAUDE.md references, as convention-setup P7.5 requires.
+Run only from convention-setup P7.5, when the user explicitly requested CLAUDE.md references.
 
 1. AskUserQuestion: "Add etalon quick-reference table to project CLAUDE.md?"
    - **A:** "Yes -- add etalon table + lazy-load refs"
@@ -148,4 +133,4 @@ Skip unless the user explicitly requested CLAUDE.md references, as convention-se
 3. **{legacy style}** -- AVOID
 ```
 
-3. Use Edit tool -- preserve ALL existing CLAUDE.md content. Keep concise: summary table + lazy-load ref only, no full patterns.
+3. Edit only, preserving all existing CLAUDE.md content: summary table + lazy-load ref, no full patterns.

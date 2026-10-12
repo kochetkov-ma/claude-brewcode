@@ -47,7 +47,7 @@ const TPL_CONTENT_VERSION = (/^content_version: "([^"]+)"$/m.exec(RULE_TEMPLATE)
 const TPL_VERSION = (/^version: "([^"]+)"$/m.exec(RULE_TEMPLATE) || [])[1];
 
 const SERVER = 'semble_code';
-const PIN_SPEC = 'semble[mcp]==0.5.5';
+const PIN_SPEC = 'semble[mcp]==0.6.2';
 const TOOL_SEARCH = 'mcp__semble_code__search';
 const TOOL_RELATED = 'mcp__semble_code__find_related';
 
@@ -368,11 +368,18 @@ const R = safeParse(st.stdout);
 
 check('wired: report top-level keys', keysOf(R),
   ['agents', 'cache', 'coverage', 'generatedAt', 'guidance', 'mcp', 'nextStep', 'pin',
-    'platform', 'prereq', 'projectRoot', 'schema', 'state', 'verdict'],
+    'platform', 'prereq', 'projectRoot', 'schema', 'state', 'verdict', 'versions'],
   'every §9.1 section is present in --section all');
+check('wired: versions', R.versions, {
+  pin: '0.6.2', pinSpec: PIN_SPEC,
+  configDir: join(HOME_DIR, '.claude'), configFile: join(HOME_DIR, '.claude.json'),
+  registered: PIN_SPEC, registeredVersion: '0.6.2',
+  verdict: 'ok', detail: '', action: 'none',
+  upstream: { latest: null, status: 'unknown', reason: 'offline', advisory: '' },
+}, 'the entry written by the real `semble-mcp.sh add` reads back as ok at the pin; upstream skipped offline');
 check('wired: schema + platform + projectRoot', [R.schema, R.platform, R.projectRoot],
   [1, 'darwin', P1], 'header fields carry the resolved project root');
-check('wired: pin', R.pin, { approved: '0.5.5', spec: PIN_SPEC }, 'the approved pin is reported verbatim');
+check('wired: pin', R.pin, { approved: '0.6.2', spec: PIN_SPEC }, 'the approved pin is reported verbatim');
 
 // §SCOPE 1 - not a single section may be an {"error": ...} placeholder.
 const SECTIONS = ['prereq', 'mcp', 'cache', 'guidance', 'agents', 'coverage', 'state'];
@@ -586,6 +593,35 @@ check('bare: verdict', [R3.verdict, R3.nextStep], ['not_installed', 'Run /brewco
   'mcp absent + phase absent => not_installed');
 const bareStrict = runStatus(['--strict'], p3Env);
 check('bare: --strict exit', bareStrict.status, 1, '--strict exits 1 for any verdict other than ready');
+
+// GIVEN an installed project whose settings.json cannot be rewritten WHEN guidance remove --part all runs
+// THEN it fails and keeps every hook file the settings still register
+const PRO = join(WORLD, 'p-readonly-settings');
+const proEnv = { SEMBLE_PROJECT_ROOT: PRO };
+write(join(PRO, 'src/app.py'), `def main():\n    return 1\n# ${PAD}\n`);
+check('ro-settings: guidance install exit',
+  run(GUIDANCE_SH, ['install', '--part', 'all', '--json'], proEnv).status, 0, 'guidance installed');
+const PRO_SETTINGS = join(PRO, '.claude/settings.json');
+const PRO_HOOKS = join(PRO, '.claude/hooks');
+const proHookFiles = () => (existsSync(PRO_HOOKS) ? readdirSync(PRO_HOOKS).filter((n) => n.startsWith('semble-')).sort() : []);
+const proHooksBefore = proHookFiles();
+const proSettingsBefore = readFileSync(PRO_SETTINGS, 'utf8');
+chmodSync(PRO_SETTINGS, 0o444);
+const proRemove = run(GUIDANCE_SH, ['remove', '--part', 'all', '--json'], proEnv);
+chmodSync(PRO_SETTINGS, 0o644);
+check('ro-settings: remove exit', proRemove.status, 1, 'an unwire that cannot be written fails the remove');
+check('ro-settings: hook files kept', [proHooksBefore.length, proHookFiles()], [5, proHooksBefore],
+  'all five hook files stay on disk while settings.json still registers them');
+check('ro-settings: settings untouched', readFileSync(PRO_SETTINGS, 'utf8'), proSettingsBefore,
+  'settings.json keeps every registration byte for byte');
+check('ro-settings: skip line',
+  safeParse(proRemove.stdout).skipped.filter((l) => l.startsWith('hooks: ')),
+  [`hooks: files kept in ${PRO_HOOKS} - ${PRO_SETTINGS} still registers them; fix it and re-run`],
+  'the report says why the files were kept');
+// GIVEN the same project with a writable settings.json WHEN remove re-runs THEN unwire and delete both finish
+const proRetry = run(GUIDANCE_SH, ['remove', '--part', 'all', '--json'], proEnv);
+check('ro-settings: retry exit and files', [proRetry.status, proHookFiles()], [0, []],
+  'the re-run unwires settings.json and only then deletes the hook files');
 
 // ── 2b. agents ──────────────────────────────────────────────────────────────
 check('agents: keys', keysOf(R.agents),
@@ -887,9 +923,8 @@ check('lifecycle: guidance + state removed',
     existsSync(join(LIFE, '.claude/hooks/semble-subagent.mjs'))],
   [false, false, false, false, false, false, false],
   'state dir, rule and all five hooks are gone');
-check('lifecycle: no semble hook file survives the removal',
-  readdirSync(join(LIFE, '.claude/hooks')).filter((f) => f.startsWith('semble-')).sort(), [],
-  'remove integration sweeps the hooks dir by name, not by the three-file v1 list');
+check('lifecycle: the emptied hooks dir is pruned', existsSync(join(LIFE, '.claude/hooks')), false,
+  'remove integration sweeps the hooks dir by name and drops it once nothing else is left in it');
 check('lifecycle: ~/.claude.json byte-identical', sha(LIFE_CJ), claudeJsonBefore,
   'remove integration leaves the MCP registration untouched');
 check('lifecycle: claude mcp remove was never called',

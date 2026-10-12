@@ -1,6 +1,8 @@
 # Mode: CREATE
 
 Create BDD scenarios and E2E autotests for a target area.
+Contents: C0 Prerequisites, C1 Scope, C2 Analysis, C3 Scenarios, C4 Scenario Review, C5 Approval,
+C6 Automation, C7 Test Review, C8 Smoke, C9 Summary.
 
 ## C0: Prerequisite Check
 
@@ -9,9 +11,8 @@ Read `.claude/e2e/config.json` for stack, framework, paths.
 
 ## C1: Scope Definition
 
-If PROMPT is non-empty → use as initial context, skip to C2 with brief confirmation.
-If PROMPT is empty → AskUserQuestion: "What flow/area to create E2E tests for?"
-  Provide examples: "checkout flow with 3D Secure", "user registration and email verification"
+PROMPT non-empty → initial context; skip to C2 with brief confirmation.
+Empty → AskUserQuestion: "What flow/area to create E2E tests for?" Examples: "checkout flow with 3D Secure", "user registration and email verification"
 
 ## C2: Target Analysis
 
@@ -51,8 +52,6 @@ DONE: BDD scenarios in the markdown format below, one file per scenario group; r
 ")
 ```
 
-**Output:** BDD scenarios in markdown format.
-
 **Scenario format:**
 ```yaml
 ---
@@ -68,8 +67,6 @@ When: {action with specific parameters}
 Then: {expected outcome with concrete checks}
 And: {additional verifications}
 ```
-
-Location: `{config.scenarioDir}/{domain}/` (e.g., `.claude/e2e/scenarios/checkout/`)
 
 ## C4: Scenario Review Cycle (MAX_CYCLES=3)
 
@@ -113,7 +110,7 @@ if cycle == 3 and issues remain:
 
 ## C5: User Approval
 
-AskUserQuestion: present all scenarios in table format.
+AskUserQuestion with every scenario:
 
 | # | Scenario | Priority | Steps | Status |
 |---|----------|----------|-------|--------|

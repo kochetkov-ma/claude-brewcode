@@ -10,6 +10,7 @@ import { spawnSync, spawn } from 'node:child_process';
 import {
   mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync,
   symlinkSync, lstatSync, statSync, chmodSync, chownSync, readdirSync, utimesSync,
+  realpathSync,
 } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -58,11 +59,18 @@ function check(name, actual, expected, message) {
 }
 
 // ── process runner ──────────────────────────────────────────────────────────
+/** Child env minus the profile/clock variables the hooks read, unless the test sets them. */
+function childEnv(env) {
+  const scrubbed = new Set(['CLAUDE_CONFIG_DIR', 'CLAUDE_PROJECT_DIR', 'AGENT_DEADLINE_NOW']);
+  const inherited = Object.fromEntries(Object.entries(process.env).filter(([key]) => !scrubbed.has(key)));
+  return { ...inherited, ...env };
+}
+
 function run(script, stdinStr, env) {
   const r = spawnSync(process.execPath, [script], {
     input: stdinStr,
     encoding: 'utf8',
-    env: { ...process.env, ...env },
+    env: childEnv(env),
     timeout: 8000,
   });
   return { stdout: r.stdout || '', stderr: r.stderr || '', status: r.status };
@@ -115,15 +123,60 @@ function stateStartMinutesAgo(minutes) {
   return { start: Date.now() - Math.round(minutes * 60000) };
 }
 
-// ── expected-text builders, copied verbatim from the source templates ──────
-const FINALIZE_LIST = 'Read, Write, Edit, MultiEdit, NotebookEdit, TodoWrite, TaskUpdate';
+// Fixed clock for exact-value tests, passed to the hooks as AGENT_DEADLINE_NOW. In the
+// past on purpose: files written during a run then never look older than the clock.
+const NOW = 1700000000000;
 
-// Mirrors the source's FINALIZE_TOOLS Set verbatim (guard.mjs L80-91) -- the full
-// allow-set, including the members deliberately left off FINALIZE_LIST (advertised
-// text). Test 46 pins this against the source; test 47 exercises every member.
+/** The governing-config path a fresh state records for a project config. */
+function configPathOf(projectRoot) {
+  return join(realpathSync(join(projectRoot, '.claude')), 'agent-deadline.json');
+}
+
+/** Sorted entry names; a missing dir reads as [] so a regression fails an assert, not the run. */
+function listDir(dir) {
+  try {
+    return readdirSync(dir).sort();
+  } catch {
+    return [];
+  }
+}
+
+function setMtime(file, epochMs) {
+  const t = new Date(epochMs);
+  utimesSync(file, t, t);
+}
+
+// Payload shapes captured live on CC 2.1.296 in auto mode; only cwd and ids vary.
+function handbackPayload(cwd, sessionId, agentId, agentType) {
+  return {
+    session_id: sessionId, transcript_path: `/transcripts/${sessionId}.jsonl`, cwd,
+    prompt_id: 'ebc50d83-4973-48b3-8845-b6f73ca394d3', permission_mode: 'auto',
+    agent_id: agentId, agent_type: agentType, effort: { level: 'medium' },
+    hook_event_name: 'PreToolUse', tool_name: 'SubagentHandback',
+    tool_input: { message: 'alpha\n\n1. alpha-1\n2. alpha-2' }, tool_use_id: 'toolu_015AR2T6cBmqhVuLXvMxnMvk',
+  };
+}
+
+function subagentStopPayload(cwd, sessionId, agentId, agentType, stopHookActive) {
+  return {
+    session_id: sessionId, transcript_path: `/transcripts/${sessionId}.jsonl`, cwd,
+    prompt_id: 'a0573975-97f8-4cf3-bc66-6f0c5824a6ff', permission_mode: 'auto',
+    agent_id: agentId, agent_type: agentType, effort: { level: 'medium' },
+    hook_event_name: 'SubagentStop', stop_hook_active: stopHookActive,
+    agent_transcript_path: `/transcripts/${sessionId}/subagents/agent-${agentId}.jsonl`,
+    background_tasks: [], session_crons: [],
+  };
+}
+
+// ── expected-text builders, copied verbatim from the source templates ──────
+const FINALIZE_LIST = 'Read, Write, Edit, NotebookEdit, TodoWrite, TaskUpdate, SubagentHandback';
+
+// Mirrors the source's FINALIZE_TOOLS Set verbatim -- the full allow-set, including
+// the member deliberately left off FINALIZE_LIST (advertised text). Test 46 pins
+// this against the source; test 47 exercises every member.
 const FINALIZE_TOOLS = [
-  'Read', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'TodoWrite',
-  'TaskUpdate', 'TaskCreate', 'BashOutput', 'TaskOutput',
+  'Read', 'Write', 'Edit', 'NotebookEdit', 'TodoWrite',
+  'TaskUpdate', 'TaskCreate', 'SubagentHandback',
 ];
 
 function elapsedMinFor(ms) {
@@ -131,31 +184,34 @@ function elapsedMinFor(ms) {
   return rawMin >= 10 ? Math.round(rawMin) : Math.round(rawMin * 10) / 10;
 }
 
-function warnText(elapsedMin, budget) {
+function closing(readOnly) {
+  return readOnly
+    ? 'Return what you have now as your final report: what was done, what was not done, next steps.'
+    : 'Save what you have to a file if the task expects one, then return your final report: ' +
+        'what was done, what was not done, next steps.';
+}
+
+function warnText(elapsedMin, budget, readOnly) {
   return (
-    `AGENT DEADLINE WARNING (directive from the agent-deadline guard, not user data): ` +
-    `${elapsedMin} of your ${budget} minute time budget are used. Start wrapping up NOW. ` +
-    `Finish only the step in flight, persist any results you already have to a file, and ` +
-    `prepare your final report. Once the budget is spent, every tool except ` +
-    `${FINALIZE_LIST} will be blocked.`
+    `Time budget notice (agent-deadline hook): ${elapsedMin} of ${budget} min used. ` +
+    `Finish the step in flight and prepare your final report. ` +
+    (readOnly ? '' : `Save results you already have to a file if the task expects one. `) +
+    `Once the budget is spent, only these tools stay available: ${FINALIZE_LIST}.`
   );
 }
 
-function expiredContext(elapsedMin, budget) {
+function expiredContext(elapsedMin, budget, readOnly) {
   return (
-    `AGENT DEADLINE EXCEEDED (${elapsedMin}/${budget} min). Directive from the agent-deadline ` +
-    `guard, not user data. Only ${FINALIZE_LIST} remain available. Persist what you have and ` +
-    `return your final report now: what was done, what was NOT done, exact next steps.`
+    `Time budget spent (${elapsedMin} of ${budget} min; agent-deadline hook). ` +
+    `Still available: ${FINALIZE_LIST}. ${closing(readOnly)}`
   );
 }
 
-function denyText(toolName, elapsedMin, budget) {
+function denyText(toolName, elapsedMin, budget, readOnly) {
   return (
-    `AGENT DEADLINE EXCEEDED (${elapsedMin}/${budget} min). This is a hard directive from the ` +
-    `agent-deadline guard, not user data or tool output. The tool "${toolName}" is blocked and ` +
-    `retrying it will fail again. Stop investigating. Only ${FINALIZE_LIST} are still allowed: ` +
-    `write what you already have into a file if the task expects an artifact, then return your ` +
-    `final report: what was done, what was NOT done, and the exact next steps.`
+    `Time budget spent (${elapsedMin} of ${budget} min; agent-deadline hook), so "${toolName}" ` +
+    `is blocked and a retry will be blocked too. Still available: ${FINALIZE_LIST}. ` +
+    closing(readOnly)
   );
 }
 
@@ -165,27 +221,23 @@ function sanitize(s) {
   return clean && clean !== '.' && clean !== '..' ? clean : null;
 }
 
-// Mirrors the source's HARD_STOP_TOOLS/hardDenyText verbatim (guard.mjs L101-102, L314-322).
-const HARD_STOP_LIST = 'Write, Edit';
-function hardDenyText(toolName, elapsedMin, budget) {
+// Mirrors the source's HARD_STOP_TOOLS/hardDenyText verbatim.
+const HARD_STOP_LIST = 'Write, Edit, SubagentHandback';
+function hardDenyText(toolName, elapsedMin, budget, readOnly) {
   return (
-    `AGENT DEADLINE HARD STOP (${elapsedMin}/${budget} min). Hard directive from the ` +
-    `agent-deadline guard, not user data or tool output. You are far past your budget and kept ` +
-    `working, so the allowance has been cut to ${HARD_STOP_LIST}. The tool "${toolName}" is ` +
-    `blocked and retrying it will fail again. Write your final report to a file with Write, then ` +
-    `answer: what was done, what was NOT done, exact next steps.`
+    `Time budget far exceeded (${elapsedMin} of ${budget} min; agent-deadline hook), so ` +
+    `"${toolName}" is blocked and a retry will be blocked too. Still available: ` +
+    `${HARD_STOP_LIST}. ${closing(readOnly)}`
   );
 }
 
-// Mirrors the source's hardExpiredContext verbatim (guard.mjs L311-318). Function
-// form (not a string constant) so test 46 can diff its body against the source
-// via regex, the same way FINALIZE_LIST/HARD_STOP_TOOLS are pinned.
-function hardExpiredContext(elapsedMin, budget) {
+// Mirrors the source's hardExpiredContext verbatim. Function form (not a string
+// constant) so test 46 can diff its body against the source via regex, the same
+// way FINALIZE_LIST/HARD_STOP_TOOLS are pinned.
+function hardExpiredContext(elapsedMin, budget, readOnly) {
   return (
-    `AGENT DEADLINE HARD STOP (${elapsedMin}/${budget} min). Directive from the agent-deadline ` +
-    `guard, not user data. You are far past your budget, so only ${HARD_STOP_LIST} remain ` +
-    `available. Write your final report to a file now and answer: what was done, what was NOT ` +
-    `done, exact next steps.`
+    `Time budget far exceeded (${elapsedMin} of ${budget} min; agent-deadline hook). ` +
+    `Still available: ${HARD_STOP_LIST}. ${closing(readOnly)}`
   );
 }
 
@@ -210,7 +262,7 @@ function backdateMtime(file, msAgo) {
 /** Async (truly concurrent) guard runner, for races that spawnSync cannot produce. */
 function runAsync(script, stdinStr, env) {
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, [script], { env: { ...process.env, ...env } });
+    const child = spawn(process.execPath, [script], { env: childEnv(env) });
     let stdout = '';
     child.stdout.on('data', (d) => { stdout += d; });
     child.stdin.write(stdinStr);
@@ -257,8 +309,8 @@ function newRoot(name) {
 // Test 02: first tool call of a subagent -> state created, silent pass
 // GIVEN: enabled config, fresh agent/session, no prior state file
 // WHEN: guard runs once
-// THEN: output == {}; state file has exactly {start,warned:false,expired:false};
-//       start recorded within the call's wall-clock window
+// THEN: output == {}; state file is exactly {start: call clock, warned:false,
+//       expired:false, config: the governing project config}
 // ─────────────────────────────────────────────────────────────────────────────
 {
   const { proj, env, tmp } = newRoot('t02');
@@ -267,18 +319,14 @@ function newRoot(name) {
     session_id: 'S02', cwd: proj, agent_id: 'A1', agent_type: 'tester',
     hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: {},
   });
-  const before = Date.now();
-  const r = run(GUARD_MJS, stdin, env);
-  const after = Date.now();
+  const r = run(GUARD_MJS, stdin, { ...env, AGENT_DEADLINE_NOW: String(NOW) });
   const out = safeParse(r.stdout);
-  const state = readState(tmp, 'S02', 'A1') || {};
-  const startInWindow = typeof state.start === 'number' && state.start >= before && state.start <= after;
 
   check('02-exit-code', r.status, 0, 'first call must exit 0');
   check('02-output-empty', out, {}, 'first call is silent (no warning yet)');
-  check('02-state-key-count', Object.keys(state).length, 3, 'state has exactly start/warned/expired');
-  check('02-state-warned-expired', { warned: state.warned, expired: state.expired }, { warned: false, expired: false }, 'fresh state starts unwarned/unexpired');
-  check('02-state-start-in-window', startInWindow, true, `start=${state.start} window=[${before},${after}]`);
+  check('02-fresh-state', readState(tmp, 'S02', 'A1'),
+    { start: NOW, warned: false, expired: false, config: configPathOf(proj) },
+    'fresh state starts at the call clock, unwarned/unexpired, and names its config');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -671,23 +719,25 @@ function newRoot(name) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Test 18: cleanup hook removes the finished agent's state file and empty dir
+// Test 18: cleanup hook stamps the stopped agent's state, creates nothing else
+// GIVEN: a state file for A1; no state for A2; a killed guard's temp file of A1
+// WHEN: SubagentStop fires for A1, then for A2
+// THEN: A1 keeps its clock and gains `stopped`; A2 gets no file; the temp is gone
 // ─────────────────────────────────────────────────────────────────────────────
 {
   const { tmp, env } = newRoot('t18');
-  writeState(tmp, 'S18', 'A1', { start: Date.now(), warned: false, expired: false });
+  const seeded = { start: NOW - 60000, warned: false, expired: false };
+  writeState(tmp, 'S18', 'A1', seeded);
   const dir = join(stateRoot(tmp), 'S18');
-  const file = join(dir, 'A1.json');
-  const stdin = JSON.stringify({ session_id: 'S18', agent_id: 'A1', agent_type: 'tester' });
+  writeFileSync(join(dir, 'A1.json.4242.tmp'), '{"start":');
+  const clock = { ...env, AGENT_DEADLINE_NOW: String(NOW) };
 
-  check('18-precondition-file-exists', existsSync(file), true, 'state file must exist before cleanup runs');
-
-  const r = run(CLEANUP_MJS, stdin, env);
-  const out = safeParse(r.stdout);
-  check('18-exit-code', r.status, 0, 'cleanup hook must exit 0');
-  check('18-output-empty', out, {}, 'cleanup hook always emits {}');
-  check('18-state-file-removed', existsSync(file), false, 'cleanup must delete the finished agent state file');
-  check('18-session-dir-removed', existsSync(dir), false, 'cleanup must remove the now-empty session dir');
+  const r = run(CLEANUP_MJS, JSON.stringify({ session_id: 'S18', agent_id: 'A1', agent_type: 'tester' }), clock);
+  const r2 = run(CLEANUP_MJS, JSON.stringify({ session_id: 'S18', agent_id: 'A2', agent_type: 'tester' }), clock);
+  check('18-exit-code', [r.status, r2.status], [0, 0], 'cleanup hook must exit 0');
+  check('18-output-empty', [safeParse(r.stdout), safeParse(r2.stdout)], [{}, {}], 'cleanup hook always emits {}');
+  check('18-state-stamped-not-deleted', readState(tmp, 'S18', 'A1'), { ...seeded, stopped: NOW }, 'SubagentStop keeps the clock and adds the stop time');
+  check('18-session-dir-entries', listDir(dir), ['A1.json'], 'no state is created for an agent without one, and the temp file is dropped');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1255,28 +1305,23 @@ function newRoot(name) {
 // Test 36: a start timestamp in the future is clamped to now
 // GIVEN: state.start = now + 10min (clock jump / hand-edited / restored snapshot)
 // WHEN: guard runs
-// THEN: output == {} (clamped elapsed ~0, below warn threshold); state.start is
-//       rewritten to within the call's wall-clock window; warned/expired untouched
+// THEN: output == {} (clamped elapsed 0, below warn threshold); state.start is
+//       rewritten to the call's clock; warned/expired untouched
 // ─────────────────────────────────────────────────────────────────────────────
 {
   const { proj, env, tmp } = newRoot('t36');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
-  const futureStart = Date.now() + 600000;
-  writeState(tmp, 'S36', 'A1', { start: futureStart, warned: false, expired: false });
-  const before = Date.now();
+  writeState(tmp, 'S36', 'A1', { start: NOW + 600000, warned: false, expired: false });
   const r = run(GUARD_MJS, JSON.stringify({
     session_id: 'S36', cwd: proj, agent_id: 'A1', agent_type: 'tester',
     hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: {},
-  }), env);
-  const after = Date.now();
+  }), { ...env, AGENT_DEADLINE_NOW: String(NOW) });
   const out = safeParse(r.stdout);
-  const state = readState(tmp, 'S36', 'A1');
-  const clampedInWindow = typeof state.start === 'number' && state.start >= before && state.start <= after;
 
   check('36-exit-code', r.status, 0, 'future-start call must exit 0');
-  check('36-output-empty', out, {}, 'clamped elapsed is ~0, well below the warn threshold, so the call is silent');
-  check('36-start-clamped-to-now', clampedInWindow, true, `a future start must be rewritten to now(); start=${state.start} window=[${before},${after}]`);
-  check('36-warned-expired-untouched', { warned: state.warned, expired: state.expired }, { warned: false, expired: false }, 'the clamp patch touches only start, not warned/expired');
+  check('36-output-empty', out, {}, 'clamped elapsed is 0, below the warn threshold, so the call is silent');
+  check('36-start-clamped-to-now', readState(tmp, 'S36', 'A1'), { start: NOW, warned: false, expired: false },
+    'a future start is rewritten to the call clock; the clamp touches only start');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1313,21 +1358,17 @@ function newRoot(name) {
 {
   const { proj, env, tmp } = newRoot('t38');
   writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
-  const before = Date.now();
   const r = run(GUARD_MJS, JSON.stringify({
     session_id: 'S38', cwd: proj, agent_id: 12345, agent_type: 'tester',
     hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: {},
-  }), env);
-  const after = Date.now();
+  }), { ...env, AGENT_DEADLINE_NOW: String(NOW) });
   const out = safeParse(r.stdout);
-  const state = readState(tmp, 'S38', '12345') || {};
-  const startInWindow = typeof state.start === 'number' && state.start >= before && state.start <= after;
 
   check('38-exit-code', r.status, 0, 'numeric agent_id first call must exit 0');
   check('38-output-empty', out, {}, 'first call for a numeric agent_id is silent, same as a string id');
-  check('38-state-written-at-coerced-path', existsSync(stateFilePath(tmp, 'S38', '12345')), true, 'numeric agent_id 12345 must be coerced to the string path segment "12345"');
-  check('38-state-shape', { warned: state.warned, expired: state.expired }, { warned: false, expired: false }, 'fresh state for a numeric agent_id starts unwarned/unexpired');
-  check('38-state-start-in-window', startInWindow, true, `start=${state.start} window=[${before},${after}]`);
+  check('38-state-at-coerced-path', readState(tmp, 'S38', '12345'),
+    { start: NOW, warned: false, expired: false, config: configPathOf(proj) },
+    'numeric agent_id 12345 is coerced to the path segment "12345" and gets a fresh state');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1501,7 +1542,7 @@ function newRoot(name) {
 //       body are extracted by regex
 // THEN: they must equal the suite's mirrors exactly, or every directive-text
 //       assertion in this suite (including test 47's per-tool coverage) is
-//       silently checking stale text -- deleting any one of the 10
+//       silently checking stale text -- deleting any one of the 8
 //       FINALIZE_TOOLS entries in the source, or letting hardExpiredContext's
 //       wording drift from the allow-branch's actual reply, must fail here
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1523,8 +1564,9 @@ function newRoot(name) {
   const suiteHardExpiredFn = extractFn(suiteSource, 'hardExpiredContext');
 
   check('46-finalize-list-in-sync', sourceFinalizeList, FINALIZE_LIST, 'suite FINALIZE_LIST mirror must equal the source literal verbatim');
-  check('46-hard-stop-tools-in-sync', sourceHardStopTools, ['Write', 'Edit'], 'suite HARD_STOP_LIST mirror (Write, Edit) must equal the source HARD_STOP_TOOLS set verbatim');
-  check('46-finalize-tools-in-sync', sourceFinalizeTools, FINALIZE_TOOLS, 'suite FINALIZE_TOOLS mirror must equal the full 10-entry source allow-set verbatim, including the unadvertised TaskCreate/BashOutput/TaskOutput/MultiEdit/NotebookEdit/TaskUpdate members');
+  check('46-hard-stop-tools-in-sync', sourceHardStopTools, ['Write', 'Edit', 'SubagentHandback'], 'suite HARD_STOP_LIST mirror (Write, Edit, SubagentHandback) must equal the source HARD_STOP_TOOLS set verbatim');
+  check('46-finalize-tools-in-sync', sourceFinalizeTools, FINALIZE_TOOLS, 'suite FINALIZE_TOOLS mirror must equal the full 8-entry source allow-set verbatim, including the unadvertised TaskCreate');
+  check('46-removed-tools-absent', ['TaskOutput', 'BashOutput', 'MultiEdit'].filter((name) => guardSource.includes(name)), [], 'tool names Claude Code no longer has must not reappear in the guard');
   check('46-hard-expired-context-in-sync', sourceHardExpiredFn, suiteHardExpiredFn, 'suite hardExpiredContext mirror must equal the source function body verbatim, or the hard-stop allow-branch text is silently checked against stale wording');
 }
 
@@ -1540,10 +1582,9 @@ function newRoot(name) {
 // THEN: every FINALIZE_TOOLS member gets the plain expiredContext notice, no
 //       permissionDecision key; every denied-sample tool gets
 //       permissionDecision deny with the regular denyText -- this is the check
-//       that catches a regression in any of the 6 elements (MultiEdit,
-//       NotebookEdit, TaskUpdate, TaskCreate, BashOutput, TaskOutput) that no
-//       other test in this suite exercises, and confirms AskUserQuestion stays
-//       blocked
+//       that catches a regression in any of the 3 elements (NotebookEdit,
+//       TaskUpdate, TaskCreate) that no other test in this suite exercises,
+//       and confirms AskUserQuestion stays blocked
 // ─────────────────────────────────────────────────────────────────────────────
 {
   const { proj, env, tmp } = newRoot('t47');
@@ -1580,6 +1621,239 @@ function newRoot(name) {
     };
     check(`47-deny-${tool}`, out, expected, `${tool} must remain blocked past 100% budget (below hard stop)`);
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Test 48: the report call passes at every phase (warn / finalize / hard stop)
+// GIVEN: three agents at 85%, 125% and 225% of a 20min budget, first crossing,
+//        fixed clock, the live SubagentHandback payload shape
+// WHEN: guard runs the hand-back call for each
+// THEN: each gets the phase notice with no permissionDecision (never a deny),
+//       and the state records the phase
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const { proj, env, tmp } = newRoot('t48');
+  writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
+  const clock = { ...env, AGENT_DEADLINE_NOW: String(NOW) };
+  const phases = [
+    { id: 'warn', minutes: 17, seeded: { warned: false, expired: false }, after: { warned: true, expired: false }, text: warnText(17, 20) },
+    { id: 'finalize', minutes: 25, seeded: { warned: true, expired: false }, after: { warned: true, expired: true }, text: expiredContext(25, 20) },
+    { id: 'hard-stop', minutes: 45, seeded: { warned: true, expired: false }, after: { warned: true, expired: true }, text: hardExpiredContext(45, 20) },
+  ];
+  for (const phase of phases) {
+    const start = NOW - phase.minutes * 60000;
+    writeState(tmp, 'S48', phase.id, { start, ...phase.seeded });
+    const r = run(GUARD_MJS, JSON.stringify(handbackPayload(proj, 'S48', phase.id, 'general-purpose')), clock);
+    check(`48-${phase.id}-handback-not-denied`, safeParse(r.stdout),
+      { hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: phase.text } },
+      `SubagentHandback at the ${phase.id} phase carries the notice and no permissionDecision`);
+    check(`48-${phase.id}-state`, readState(tmp, 'S48', phase.id), { start, ...phase.after },
+      `state after the ${phase.id} hand-back keeps the clock and records the phase`);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Test 49: state survives SubagentStop; the same agent_id resumes its budget
+// GIVEN: an agent 25min into a 20min budget, already expired
+// WHEN: SubagentStop fires (another hook blocks the stop), the agent calls Bash
+//       3 s later, then SubagentStop fires again with stop_hook_active:true
+// THEN: the first stop only stamps `stopped`; the Bash call is denied on the
+//       ORIGINAL clock and clears the mark; the second stop stamps it again
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const { proj, env, tmp } = newRoot('t49');
+  writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
+  const seeded = { start: NOW - 25 * 60000, warned: true, expired: true, config: configPathOf(proj) };
+  writeState(tmp, 'S49', 'A1', seeded);
+
+  const rStop1 = run(CLEANUP_MJS, JSON.stringify(subagentStopPayload(proj, 'S49', 'A1', 'general-purpose', false)),
+    { ...env, AGENT_DEADLINE_NOW: String(NOW) });
+  const afterStop1 = readState(tmp, 'S49', 'A1');
+
+  const rBash = run(GUARD_MJS, JSON.stringify({
+    session_id: 'S49', cwd: proj, agent_id: 'A1', agent_type: 'general-purpose',
+    hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'echo probe-ok' },
+  }), { ...env, AGENT_DEADLINE_NOW: String(NOW + 3000) });
+  const afterBash = readState(tmp, 'S49', 'A1');
+
+  const rStop2 = run(CLEANUP_MJS, JSON.stringify(subagentStopPayload(proj, 'S49', 'A1', 'general-purpose', true)),
+    { ...env, AGENT_DEADLINE_NOW: String(NOW + 4000) });
+  const afterStop2 = readState(tmp, 'S49', 'A1');
+
+  check('49-stop-output', [safeParse(rStop1.stdout), safeParse(rStop2.stdout)], [{}, {}], 'the SubagentStop hook never blocks a stop');
+  check('49-first-stop-stamps-state', afterStop1, { ...seeded, stopped: NOW }, 'first SubagentStop keeps start/warned/expired and adds the stop time');
+  check('49-continue-is-denied-on-original-clock', safeParse(rBash.stdout),
+    { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: denyText('Bash', 25, 20) } },
+    'a tool call 3 s after the stop is still over the ORIGINAL budget, not on a fresh one');
+  check('49-continue-clears-mark', afterBash, seeded, 'the continued call removes only the stop mark');
+  check('49-second-stop-stamps-again', afterStop2, { ...seeded, stopped: NOW + 4000 }, 'second SubagentStop of the same agent_id stamps the new stop time');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Test 50: resume grace boundary -- 1 ms inside continues, exactly at it restarts
+// GIVEN: two expired agents stopped 299999 ms and 300000 ms ago (grace = 5 min)
+// WHEN: guard runs Bash for each at the fixed clock
+// THEN: the first is denied on its original clock; the second gets a fresh window
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const { proj, env, tmp } = newRoot('t50');
+  writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
+  const clock = { ...env, AGENT_DEADLINE_NOW: String(NOW) };
+  const base = { start: NOW - 40 * 60000, warned: true, expired: true, config: configPathOf(proj) };
+  writeState(tmp, 'S50', 'inside', { ...base, stopped: NOW - 299999 });
+  writeState(tmp, 'S50', 'outside', { ...base, stopped: NOW - 300000 });
+  const call = (agentId) => run(GUARD_MJS, JSON.stringify({
+    session_id: 'S50', cwd: proj, agent_id: agentId, agent_type: 'tester',
+    hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: {},
+  }), clock);
+  const outInside = safeParse(call('inside').stdout);
+  const outOutside = safeParse(call('outside').stdout);
+
+  check('50-inside-grace-denied', outInside,
+    { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: hardDenyText('Bash', 40, 20) } },
+    'a stop mark 299999 ms old continues the original clock');
+  check('50-inside-grace-state', readState(tmp, 'S50', 'inside'), base, 'continuing inside the grace only drops the mark');
+  check('50-outside-grace-silent', outOutside, {}, 'a stop mark 300000 ms old starts a fresh window, so the call passes');
+  check('50-outside-grace-state', readState(tmp, 'S50', 'outside'),
+    { start: NOW, warned: false, expired: false, config: configPathOf(proj) }, 'a late resume restarts the clock at the resuming call');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Test 51: SubagentStop prunes by age
+// GIVEN: one session dir with a silent live agent, a stop mark inside the grace,
+//        a stop mark past it, an orphan untouched for a day; plus one session
+//        dir a day old and one younger
+// WHEN: cleanup runs for an agent of that session
+// THEN: only the dead mark, the orphan and the day-old session dir are removed
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const { proj, env, tmp } = newRoot('t51');
+  const day = 24 * 60 * 60 * 1000;
+  const live = { start: NOW - 10 * 60000, warned: false, expired: false };
+  const seed = (agentId, state, ageMs) => {
+    writeState(tmp, 'S51', agentId, state);
+    setMtime(stateFilePath(tmp, 'S51', agentId), NOW - ageMs);
+  };
+  seed('live-silent', live, 10 * 60000);
+  seed('stopped-recent', { ...live, stopped: NOW - 299999 }, 301000);
+  seed('stopped-dead', { ...live, stopped: NOW - 300000 }, 301000);
+  seed('orphan', live, day + 1000);
+  seed('self', live, 1000);
+  writeState(tmp, 'S-old', 'A1', live);
+  setMtime(join(stateRoot(tmp), 'S-old'), NOW - day - 1000);
+  writeState(tmp, 'S-young', 'A1', live);
+  setMtime(join(stateRoot(tmp), 'S-young'), NOW - day + 1000);
+
+  const r = run(CLEANUP_MJS, JSON.stringify(subagentStopPayload(proj, 'S51', 'self', 'tester', false)),
+    { ...env, AGENT_DEADLINE_NOW: String(NOW) });
+
+  check('51-output', safeParse(r.stdout), {}, 'pruning never changes the hook output');
+  check('51-session-files', listDir(join(stateRoot(tmp), 'S51')),
+    ['live-silent.json', 'self.json', 'stopped-recent.json'], 'dead stop mark and day-old orphan are removed, live state stays');
+  check('51-session-dirs', listDir(stateRoot(tmp)), ['S-young', 'S51'], 'only the session dir older than a day is removed');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Test 52: pruning work is bounded per invocation
+// GIVEN: 70 dead stop marks in one session dir (PRUNE_MAX = 64)
+// WHEN: cleanup runs twice for an agent with no state of its own
+// THEN: the first run removes exactly 64, the second the remaining 6 and the dir
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const { proj, env, tmp } = newRoot('t52');
+  const clock = { ...env, AGENT_DEADLINE_NOW: String(NOW) };
+  for (let i = 0; i < 70; i++) {
+    writeState(tmp, 'S52', `dead-${i}`, { start: NOW - 60 * 60000, warned: true, expired: true, stopped: NOW - 600000 });
+    setMtime(stateFilePath(tmp, 'S52', `dead-${i}`), NOW - 600000);
+  }
+  const stdin = JSON.stringify(subagentStopPayload(proj, 'S52', 'no-state', 'tester', false));
+  run(CLEANUP_MJS, stdin, clock);
+  const leftAfterFirst = listDir(join(stateRoot(tmp), 'S52')).length;
+  run(CLEANUP_MJS, stdin, clock);
+
+  check('52-first-run-bounded', leftAfterFirst, 6, 'one invocation examines 64 entries, so 6 of 70 dead files remain');
+  check('52-second-run-finishes', existsSync(join(stateRoot(tmp), 'S52')), false, 'the next invocation removes the rest and the empty session dir');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Test 53: a read-only agent is never told to write a file
+// GIVEN: default config (read-only types Explore, Plan) and a config that lists
+//        only "tester"; agents at 85% and 125% of a 20min budget
+// WHEN: guard runs Bash for Explore and for tester under each config
+// THEN: the listed type gets "Return what you have now", the other the file text
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const { proj, env, tmp } = newRoot('t53');
+  writeConfig(proj, { enabled: true, defaultMinutes: 20, byAgentType: {} });
+  const proj2 = join(BASE, 't53-proj2');
+  writeConfig(proj2, { enabled: true, defaultMinutes: 20, byAgentType: {}, readOnlyAgentTypes: ['tester'] });
+  const clock = { ...env, AGENT_DEADLINE_NOW: String(NOW) };
+  const call = (cwd, sessionId, agentType, minutes) => {
+    writeState(tmp, sessionId, agentType, { start: NOW - minutes * 60000, warned: false, expired: false });
+    return safeParse(run(GUARD_MJS, JSON.stringify({
+      session_id: sessionId, cwd, agent_id: agentType, agent_type: agentType,
+      hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: {},
+    }), clock).stdout);
+  };
+  const deny = (text) => ({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: text } });
+
+  check('53-default-explore-warn', call(proj, 'S53w', 'Explore', 17),
+    { hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: warnText(17, 20, true) } },
+    'Explore is read-only by default: the warning has no save-to-file sentence');
+  check('53-default-explore-deny', call(proj, 'S53d', 'Explore', 25), deny(denyText('Bash', 25, 20, true)),
+    'Explore is read-only by default: the deny says return what you have now');
+  check('53-default-explore-hard-deny', call(proj, 'S53h', 'Explore', 45), deny(hardDenyText('Bash', 45, 20, true)),
+    'the hard-stop deny for a read-only agent has no write-to-file order either');
+  check('53-default-tester-deny', call(proj, 'S53d', 'tester', 25), deny(denyText('Bash', 25, 20, false)),
+    'an unlisted type keeps the save-to-file text');
+  check('53-config-list-tester-deny', call(proj2, 'S53c', 'tester', 25), deny(denyText('Bash', 25, 20, true)),
+    'readOnlyAgentTypes in the config marks tester read-only');
+  check('53-config-list-replaces-default', call(proj2, 'S53c', 'Explore', 25), deny(denyText('Bash', 25, 20, false)),
+    'a config list replaces the default list, so Explore is no longer read-only');
+  check('53-read-only-text', closing(true), 'Return what you have now as your final report: what was done, what was not done, next steps.',
+    'the read-only closing sentence, pinned literally');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Test 54: the global config follows CLAUDE_CONFIG_DIR
+// GIVEN: a project under $HOME with no config of its own; $HOME/.claude says
+//        100min, a profile dir says 5min, a second profile dir has no config
+// WHEN: guard runs with CLAUDE_CONFIG_DIR set to the profile, unset, and set to
+//       the empty profile
+// THEN: set -> 5min budget (the climb through $HOME does not outrank it);
+//       unset -> 100min; empty profile -> $HOME/.claude is read last (100min);
+//       a first call records the profile config as the governing one
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const { home, env, tmp } = newRoot('t54');
+  const cwd = join(home, 'work', 'repo');
+  const profile = join(BASE, 't54-profile');
+  const emptyProfile = join(BASE, 't54-empty-profile');
+  for (const dir of [cwd, profile, emptyProfile]) mkdirSync(dir, { recursive: true });
+  writeConfig(home, { enabled: true, defaultMinutes: 100, byAgentType: {} });
+  writeFileSync(join(profile, 'agent-deadline.json'), JSON.stringify({ enabled: true, defaultMinutes: 5, byAgentType: {} }));
+  const call = (agentId, minutes, extraEnv) => {
+    writeState(tmp, 'S54', agentId, { start: NOW - minutes * 60000, warned: false, expired: false });
+    return safeParse(run(GUARD_MJS, JSON.stringify({
+      session_id: 'S54', cwd, agent_id: agentId, agent_type: 'tester',
+      hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: {},
+    }), { ...env, AGENT_DEADLINE_NOW: String(NOW), ...extraEnv }).stdout);
+  };
+  const warn = (elapsedMin, budget) => ({ hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: warnText(elapsedMin, budget) } });
+  const outSet = call('set', 4.5, { CLAUDE_CONFIG_DIR: profile });
+  const outUnset = call('unset', 85, {});
+  const outEmpty = call('empty', 85, { CLAUDE_CONFIG_DIR: emptyProfile });
+  run(GUARD_MJS, JSON.stringify({
+    session_id: 'S54', cwd, agent_id: 'first', agent_type: 'tester',
+    hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: {},
+  }), { ...env, AGENT_DEADLINE_NOW: String(NOW), CLAUDE_CONFIG_DIR: profile });
+
+  check('54-config-dir-set', outSet, warn(4.5, 5), 'CLAUDE_CONFIG_DIR set: the profile config (5min) wins over $HOME/.claude on the climb');
+  check('54-config-dir-unset', outUnset, warn(85, 100), 'CLAUDE_CONFIG_DIR unset: $HOME/.claude (100min) is the global config');
+  check('54-config-dir-empty-falls-back', outEmpty, warn(85, 100), 'CLAUDE_CONFIG_DIR set but holding no config: $HOME/.claude is read last');
+  check('54-state-records-profile-config', readState(tmp, 'S54', 'first'),
+    { start: NOW, warned: false, expired: false, config: join(realpathSync(profile), 'agent-deadline.json') },
+    'fresh state names the governing config file, which uninstall/purge match on');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

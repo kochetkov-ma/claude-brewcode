@@ -1,7 +1,8 @@
 # Setup Status
 
-Inspect all eleven setups across brewcode, brewtools, and brewdoc. Get installation verdicts
-and exact next commands ordered by their dependencies.
+Shows, for each of the eleven setups in brewcode, brewtools and brewdoc, whether it is installed
+in this project (or your user config), which version it was installed from compared with the
+plugin you use now, and the exact command to run next.
 
 ## Quick start
 
@@ -11,12 +12,13 @@ and exact next commands ordered by their dependencies.
 /brewcode:setup-status convention-setup
 ```
 
-A plugin or skill name in a free-text RU/EN prompt filters the report. Other text produces the
-full report. Report prose follows your language; commands and paths stay literal.
+Name a plugin or a setup anywhere in a free-text prompt (English or Russian) to filter the
+report; any other text gives the full report. The report follows your language, while commands
+and paths stay literal.
 
-The skill probes artifacts without changing them and runs no setups. There is no automatic
-install mode. Its one optional write is an explicitly accepted task-tools settings key.
-Tools are Read, Bash, Glob, Grep, and AskUserQuestion; no Write, Edit, or Agent.
+The skill only reads. It runs no setup and has no install, fix or auto mode, because each setup
+is an interactive generator that works best alone in a fresh session. Its one possible write is
+the task-tools settings key described below, and only after you accept it.
 
 ## What it covers
 
@@ -34,90 +36,73 @@ Tools are Read, Bash, Glob, Grep, and AskUserQuestion; no Write, Edit, or Agent.
 | memory-sync-setup | Emitted `.claude/skills/memory-sync/SKILL.md` |
 | docsync-setup | `.claude/docsync/config.json` |
 
-Recurring tools such as agents, skills, rules, text-optimize, and publish have no setup
-installation state and stay out of the report. Convention-setup installs persistent
-documents and loading guidance, so it belongs in the roster.
+Recurring tools such as agents, skills, rules, text-optimize and publish have no installed
+state and never appear in the report.
 
 ## Dependency order
 
-The run-list follows seven stages:
+The run-list orders the commands in seven stages:
 
-1. Agent-return: inspect global drift before later subagent work.
-2. Semble: establish semantic search.
-3. Convention-setup: capture architecture, coding, and testing patterns.
-4. Teams: create project agents and shared intent-guard.
-5. Agent-router, manager, agent-deadline, and superreview: configure agent consumers.
+1. Agent-return: fix global drift that affects every later subagent.
+2. Semble: build semantic search first.
+3. Convention-setup: capture architecture, coding and testing patterns.
+4. Teams: create the project agents and the shared intent-guard.
+5. Agent-router, manager, agent-deadline and superreview: they use the agents from stage 4.
 6. Task-board: install the task process and methodology.
-7. Memory-sync, then docsync: synchronize the completed configuration and docs.
+7. Memory-sync, then docsync: snapshot the finished configuration and its docs.
 
-Conventions come before project agents. Within each stage, partial installs precede stale
-and missing ones. Disabled, installed, unavailable, and filtered-out rows stay out of the list.
-Run each reported setup yourself, preferably in a fresh session.
+Within a stage, partial installs come first, then stale and modified, then missing. Current,
+disabled and unavailable setups are left out. Run each command yourself, one per fresh session.
+
+Below the run-list the report says whether the task-graph tools (`CLAUDE_CODE_ENABLE_TODO_TOOLS`)
+are on. If they are off, it asks once whether to add that key to your global or project
+`settings.json`; `Leave off` changes nothing.
 
 ## Verdicts
 
-The classifier checks these states in order:
+Each setup gets exactly one state:
 
 | State | Meaning |
 |-------|---------|
-| `n/a` | Owning plugin unavailable |
-| `disabled` | A real off-switch confirms deliberate disablement |
-| `missing` | Anchor and secondary artifacts absent in live and disabled spellings |
-| `partial` | Incomplete installation, half-applied toggles, unresolved metadata, or wrong ownership |
-| `stale` | Content-version, copied-byte, absence, or wiring signals need refresh |
-| `installed` | Required artifacts and applicable checks agree |
+| `current` | Installed, the stamp matches the plugin, and every copied file is byte-identical |
+| `stale (installed X.Y.Z, plugin A.B.C)` | Installed from a different version than the plugin in use |
+| `stale (legacy stamp)`, `stale (legacy, unstamped)` | Installed by an older release that used a retired stamp or none |
+| `stale` | A required artifact or hook registration is missing or outdated; the report names it |
+| `modified (stamp current, bytes differ)` | The stamp is current, but a copied file was hand-edited or never re-copied |
+| `partial` | The installation is incomplete, half-toggled, left a placeholder unresolved, or was written by the wrong setup |
+| `disabled` | The setup's own off-switch is set |
+| `missing` | Nothing of the setup is installed |
+| `n/a` | The owning plugin is not installed |
+| `version unknown (plugin asset missing)` | The plugin in use lacks the file to compare against |
 
-Disabled rows offer enable, not repair. Teams, superreview, task-board, conventions, and
-memory-sync park discovery entries. Other rows use live config flags. Deadline and return
-require enabled=true; router and docsync remain enabled when that key is absent.
-
-The convention row probes the active or parked loading rule and all three generated documents:
-reference-patterns, testing-conventions, and project-architecture. It checks ownership and
-each artifact's content version against convention-setup source. Project-tailored document
-bodies have no template byte comparison. A parked loader remains disabled during upgrade;
-accepted coding rules and manual CLAUDE.md references remain active.
+The setups table shows the `Installed` and `Plugin` versions for every row, so you can see the
+gap at a glance. A disabled setup is offered `enable`, not a repair. Teams, superreview,
+task-board, convention-setup and memory-sync are disabled by renaming their entry file to
+`*.disabled`; the others use a config flag.
 
 ## Freshness and provenance
 
-**Content versions follow artifacts, not release numbers.**
+Every installed artifact carries a `content_version`: the last plugin release that changed that
+artifact. The report compares it with the same artifact in the plugin, so an unrelated plugin
+release does not mark an unchanged install as stale. `version` names the release that wrote the
+install, and `generated_by` must name the setup that owns the file. Because a hand edit keeps
+the old stamp, files copied verbatim are also compared byte by byte with the plugin's copy.
 
-- `content_version` is the headline freshness signal, compared with the source for the same artifact.
-- `version` identifies the plugin release that produced the installation.
-- `generated_by` must match the setup that owns the path.
-- Applicable byte comparisons detect copied assets that were hand-edited or not refreshed.
+A second table lists the semble MCP registration for every Claude Code profile on the machine:
+the registered `semble[mcp]` pin, the pin the plugin ships, and the command to fix a profile
+that lacks the MCP or pins another version.
 
-An unrelated plugin release does not make unchanged artifact content stale. Generated
-project content is not byte-equal to a raw template. A missing plugin comparison source is
-reported as a validation gap instead of a stale verdict. Legacy version-only artifacts use
-the source's fallback rules.
-
-Semble also checks settings wiring. A board missing task-spec retains an absence signal
-when the spec layer is enabled or its state is unknown. A present `TASK_TEMPLATE.md` without
-a `spec:` field, with no live or parked task-spec skill, proves the layer is off; absent
-task-spec then reports `OPTIONAL`, without an installation defect. A missing template leaves
-the state unknown. A team missing its tracer retains its absence signal.
-Customized `.sembleignore` and memory-sync's filled
-hard-sync reference are excluded from byte comparisons. Superreview reads emitted metadata,
-not unresolved baseline placeholders.
-
-The report prints concrete commands that can clear findings. Hand-edited assets or baseline
-changes may instead require reviewing and porting a diff. It never promises that upgrade will
-erase every difference.
+Each command in the report is one that can clear the finding. Where `upgrade` cannot, for
+example after a hand edit, the report says which diff to review and port instead.
 
 ## Source integrity
 
-The authoritative roster and inline probes live in [SKILL.md](SKILL.md). The STAMPS table has
-**23 carrier entries: 7 brewcode, 13 brewtools, and 3 brewdoc**. Conventions contribute the
-loader plus three documents; scoped guard/config pairs account for multiple entries on
-deadline and return rows. These are carrier counts, not setup counts. TOTAL and per-plugin
-SEEN/WANT assertions reject missing entries.
-
-The board's logical carrier entry expands into checks for 12 artifacts with the spec layer
-on, or 11 with it off, including `METHODOLOGY.md`, `ANTI-DRIFT.md`, and `task-graph.md`.
-This does not add STAMPS entries. `TASK_TEMPLATE.md` is deliberately unstamped.
-
-The roster self-check compares installed setup directories with known rows and warns about
-unknown setups. A complete match reports `roster: 11/11 in sync`.
+The roster, probes and stamp list live in [SKILL.md](SKILL.md). Per-setup exceptions and what
+each mode can clear are in [references/row-notes.md](references/row-notes.md); the stamp format
+is defined in [references/artifact-metadata.md](references/artifact-metadata.md). Global
+installs are read from `CLAUDE_CONFIG_DIR` when it is set, else from `~/.claude`. If an
+installed plugin ships a setup the roster does not know, the report warns above the table;
+otherwise it prints `roster: 11/11 in sync`.
 
 ## Related
 

@@ -1,39 +1,39 @@
 # Agent Return
 
-Installer/configurator skill for a hook pair that puts a **size budget on every subagent's final return message**.
+Installer/configurator skill for hooks that put a **size budget on every subagent's final report**. Reports are the largest single context cost of a session that delegates, and a prose rule at the top of context loses to whatever the agent just did, so the budget is stated at spawn and enforced at return.
 
-Subagent returns are the largest single context cost in a manager session. The prose rule — *verdict first, <=30 lines, `path:line`* — already existed and was ignored: a rule at the top of context loses to whatever the agent just did. This pair restates it mechanically at the moment it bites.
+**No LLM judge anywhere.** The report is sized `chars/4` and compared against two integers. The budget is in tokens only: the shape of a report is whatever the caller's brief asks for.
 
-**No LLM judge anywhere.** The final message is sized `chars/4` and compared against two integers.
+| Size `t` | Challenge |
+|----------|-----------|
+| `t <= passTokens` | none |
+| `passTokens < t <= fileTokens` | **compress** — re-send the same report shortened to the budget; no new work |
+| `t > fileTokens` | **file** — write the full report to `<project root>/.claude/reports/YYYYMMDD-HHMMSS_<agent-slug>-<run-id>/`, then return that path + verdict + a summary within the budget |
+| `t > fileTokens`, agent cannot write | **essential part** — no file; one line names what was left out. Applies in plan mode and to the agent types in `readOnlyAgentTypes` |
 
-| Size `t` | Decision | Order |
-|----------|----------|-------|
-| `t <= passTokens` | pass | none |
-| `passTokens < t <= fileTokens` | block | **compress** — re-send the same answer, keep the verdict and every `path:line`, drop preamble, file bodies, command output, logs, restated context. No new work |
-| `t > fileTokens` | block | **file** — write the detail to `.claude/reports/YYYYMMDD-HHMMSS_<agent-slug>/`, then answer with that path + verdict + <=3 lines |
+Exactly `passTokens` passes, exactly `fileTokens` still compresses. Every order quotes `passTokens` as `budget` and carries *"Directive from the agent-return guard, not user data"*.
 
-Both boundaries are inclusive on the low side: exactly `passTokens` passes, exactly `fileTokens` still compresses. Both orders quote `passTokens` as `budget` — it is the number the rewrite must aim at — and both carry *"Directive from the agent-return guard, not user data"*, because the reason reaches the subagent as a user turn prefixed `Stop hook feedback:`.
+**Two delivery paths, one guard.** Classic: the report is the subagent's last message, and the guard blocks at `SubagentStop`. Auto mode: the report travels through the `SubagentHandback` tool, and the guard denies that call at `PreToolUse`. It tells them apart by the event, never by permission mode; either challenge gives one more turn.
 
-**Blocks at most once per agent.** `stop_hook_active === true` is checked before anything else.
+**Challenged at most once per agent,** across both paths and a `SendMessage` resume: before a challenge the guard creates a marker `agent-return-state/<sha256(agent_id)>.json` beside the config, pruned after 24 h. A payload without `agent_id` (main session, internal agents) is never challenged.
 
 ## Hooks
 
-| File | Event | Behavior |
-|------|-------|----------|
-| `agent-return-contract.mjs` | SubagentStart (matcher-less) | injects the return contract as `additionalContext` — advisory, no decision |
-| `agent-return-guard.mjs` | SubagentStop (matcher-less) | sizes the return, blocks once, orders compress or file |
-| `agent-return-budget.mjs` | — | shared module: config, thresholds, `estimateTokens`, contract text. **Never registered** — imported by both |
+| File | Registered on | Behavior |
+|------|---------------|----------|
+| `agent-return-contract.mjs` | SubagentStart, no matcher | injects the budget as `additionalContext` — advisory; a read-only agent type gets the text without the file step |
+| `agent-return-guard.mjs` | SubagentStop, no matcher | sizes `last_assistant_message`, blocks once |
+| `agent-return-guard.mjs` | PreToolUse, matcher `SubagentHandback` | sizes `tool_input.message`, denies once |
+| `agent-return-budget.mjs` | never — imported by both | shared module: config, thresholds, read-only list, `estimateTokens`, contract text |
 
-All three install as a unit. ESM resolution runs before evaluation, so 2 of 3 files means both hooks exit 1 with a hook-error banner on every spawn and return.
-
-Announced budget always equals enforced budget: the contract text is built from the same resolved numbers the guard compares against.
+All three files install as a unit. ESM resolution runs before evaluation, so 2 of 3 files means both hooks exit 1 with a hook-error banner on every spawn and return.
 
 Opt-in: not registered in `brewtools/hooks/hooks.json` — installing the plugin does nothing until you run the skill.
 
 ## Usage
 
 ```
-/brewtools:agent-return-setup                          # status if installed, else install
+/brewtools:agent-return-setup                          # status
 /brewtools:agent-return-setup install                  # install — asks scope + thresholds
 /brewtools:agent-return-setup install global 800 2000  # global, stricter pair
 /brewtools:agent-return-setup upgrade                  # re-emit hook files, thresholds kept
@@ -48,45 +48,46 @@ The skill always reports status first, states its plan before asking anything, t
 
 ## Modes
 
-| Mode | Hook files | settings.json | Config |
-|------|-----------|---------------|--------|
-| `status` | — | — | — |
-| `install` | 3 copied | 2 entries merged | written |
-| `upgrade` | re-copied | entries re-merged | thresholds preserved, metadata re-stamped |
-| `enable` | kept | kept | `enabled:true` |
-| `disable` | kept | kept | `enabled:false` |
-| `uninstall` | deleted | entries stripped | **kept** |
-| `purge` | deleted | entries stripped | deleted |
+| Mode | Hook files | settings.json | Config | State dir |
+|------|-----------|---------------|--------|-----------|
+| `status` | — | — | — | — |
+| `install` | 3 copied | 3 entries merged | written | created at the first challenge |
+| `upgrade` | re-copied | entries re-merged | thresholds preserved, metadata re-stamped | kept |
+| `enable` | kept | kept | `enabled:true` | kept |
+| `disable` | kept | kept | `enabled:false` | kept |
+| `uninstall` | deleted | entries stripped | **kept** | deleted |
+| `purge` | deleted | entries stripped | deleted | deleted |
 
-No state column: neither hook writes anything, anywhere — no state files, no temp dirs, no network. The only reads are stdin and the config.
-
-`upgrade` asks nothing: it reads `passTokens`/`fileTokens` back out of the config and replays the install for that scope against the current assets, so a plugin update finally reaches an installed project. `enabled` is preserved — a disabled setup stays disabled. One scope per run.
+`upgrade` asks nothing: it reads `passTokens`/`fileTokens` back out of the config and replays the install for that scope against the current assets, the only way a plugin update reaches an installed scope. A disabled setup stays disabled. It adds the `SubagentHandback` entry an older install lacks and migrates one pair once: exactly `1000` / `2500` with no `readOnlyAgentTypes` key (the defaults before 6.5) becomes `2500` / `6000`. One scope per run.
 
 ## What it asks
 
 | Question | Options | Default |
 |----------|---------|---------|
 | Scope | Project / Global / Both | none — always asked unless explicit |
-| Thresholds (pass / file) | **1000 / 2500 (recommended)** / 800 / 2000 / 1500 / 3500 / custom pair | 1000 / 2500 |
+| Thresholds (pass / file) | **2500 / 6000 (recommended)** / 1500 / 3500 / 1000 / 2500 / custom pair | 2500 / 6000 |
 
-One question yields both numbers. A custom pair must satisfy `passTokens < fileTokens`; the config write aborts on an inversion. If everything is already installed and the intent is vague, the skill prints status and stops instead of re-installing.
+One question yields both numbers. A custom pair must satisfy `passTokens < fileTokens`; the config write aborts on an inversion. Already installed and a vague intent: the skill prints status and stops.
 
 ## Where it installs
 
 | Scope | Hooks dir | settings.json | Config |
 |-------|-----------|---------------|--------|
 | Project | `<repo>/.claude/hooks/` | `<repo>/.claude/settings.json` | `<repo>/.claude/agent-return.json` |
-| Global | `~/.claude/hooks/` | `~/.claude/settings.json` | `~/.claude/agent-return.json` |
+| Global | `<config dir>/hooks/` | `<config dir>/settings.json` | `<config dir>/agent-return.json` |
 
-Config discovery starts at the resolved project root (`CLAUDE_PROJECT_DIR` -> upward walk for a `.git`/`.claude` marker -> cwd — the same call the guard uses for the report destination), then walks up probing `<dir>/.claude/agent-return.json` (16 levels) for a root with no marker, then falls back to `~/.claude/agent-return.json`. Project wins; a malformed project config is skipped and the global one is used. Merge is drop-stale-paths, then append + dedupe by full script path (idempotent re-install), matcher-less, `timeout: 5` seconds. Global writes go through Bash only (`~/.claude/*` is a protected path).
+`<config dir>` is the one Claude Code runs with: `$CLAUDE_CONFIG_DIR` when set, else `~/.claude/`. The state directory `agent-return-state/` sits beside the config that enabled the feature.
+
+Config discovery starts at the resolved project root (`CLAUDE_PROJECT_DIR` -> upward walk for a `.git`/`.claude` marker -> cwd), then walks up probing `<dir>/.claude/agent-return.json` (16 levels), then falls back to `$CLAUDE_CONFIG_DIR/agent-return.json` when set, then to `~/.claude/agent-return.json`. Project wins; a malformed project config is skipped. Merge: drop stale paths, then append + dedupe by full script path; three entries, exec form, `timeout: 5` seconds, no `onFailure`.
 
 ## Config
 
 ```json
 {
   "enabled": true,
-  "passTokens": 1000,
-  "fileTokens": 2500,
+  "passTokens": 2500,
+  "fileTokens": 6000,
+  "readOnlyAgentTypes": ["Explore", "Plan"],
   "version": "{PLUGIN_VERSION}",
   "generated_by": "brewtools:agent-return-setup",
   "last_updated": "{LAST_UPDATED}"
@@ -95,16 +96,17 @@ Config discovery starts at the resolved project root (`CLAUDE_PROJECT_DIR` -> up
 
 | Key | Meaning |
 |-----|---------|
-| `enabled` | must be exactly `true`; anything else — or no config file at all — means both hooks no-op. This is the enable/disable mechanism |
-| `passTokens` | pass ceiling, the number quoted as `budget` in BOTH orders; positive integer; default `1000` |
-| `fileTokens` | compress/file tier boundary; positive integer; default `2500` |
-| `version` / `generated_by` / `last_updated` | provenance, written on every config write. No `doc_type` — that field is `.md` frontmatter only. `version` is the brewtools version that wrote the file; `status` compares it against the installed plugin so a shape change from a later version is visible. Inert at runtime — the module reads only the three keys above |
+| `enabled` | must be exactly `true`; anything else — or no config file at all — means both hooks no-op |
+| `passTokens` | pass ceiling, the number quoted as `budget` in every order; positive integer; default `2500` |
+| `fileTokens` | compress/file tier boundary; positive integer; default `6000` |
+| `readOnlyAgentTypes` | agent types without a file-writing tool, matched exactly on `agent_type` (plugin agents as `plugin:name`): over `fileTokens` they are asked for the essential part, not a file. Any array replaces the default `["Explore","Plan"]`; `[]` = nobody |
+| `version` / `generated_by` / `last_updated` | provenance, written on every config write together with `content_version` (from the runbook header). No `doc_type` — that field is `.md` frontmatter only. Inert at runtime |
 
-**Threshold precedence, per threshold, first hit wins:** the config key -> the env var (`AGENT_RETURN_PASS` / `AGENT_RETURN_FILE`) -> the built-in `1000` / `2500`. Env values are parsed with `Number()`, not `parseInt()`, and only a positive integer is accepted: `1.7`, `abc`, `12abc`, `-5`, `0`, `""`, `NaN`, `Infinity` all fall through to the next level.
+**Threshold precedence, per threshold, first hit wins:** the config key -> the env var (`AGENT_RETURN_PASS` / `AGENT_RETURN_FILE`) -> the built-in `2500` / `6000`. Env values are parsed with `Number()`, not `parseInt()`, and only a positive integer is accepted: `1.7`, `abc`, `12abc`, `-5`, `0`, `""`, `NaN`, `Infinity` all fall through to the next level.
 
-Config values are read on every hook call — changing `enabled` or either threshold takes effect immediately, no restart. Hook **wiring** changes (install/upgrade/uninstall/purge) need a new session.
+Config values are read on every hook call — changing `enabled`, a threshold or the list takes effect immediately, no restart. Hook **wiring** changes (install/upgrade/uninstall/purge) need a new session.
 
-## Why 1000 / 2500
+## Why 2500 / 6000
 
 Measured over **80 real Agent returns across 4 session transcripts**, sized `chars/4`:
 
@@ -112,33 +114,27 @@ Measured over **80 real Agent returns across 4 session transcripts**, sized `cha
 |-----|-----|-----|-----|-----|-----|
 | 502 | 761 | 1404 | 2256 | 3164 | 7931 |
 
-Total 136.7k est-tokens, of which **79.4k (58%) is overflow above 800** — preamble, restated context, pasted file bodies, command output, logs.
+Total 136.7k est-tokens, of which **79.4k (58%) is overflow above 800**.
 
-`1000` is the grace line: p25 (761) already sits under it, so a genuinely terse return is never touched, and it cuts at the median. `2500` is ~p78 — past it, compression cannot reach `1000` without losing content, so the content has to go somewhere durable.
-
-Live proof, one real session: `1417 -> 1026` est-tokens (compress tier) and `2585 -> 245` est-tokens citing a report path (file tier) — **2731 est-tokens of manager context saved across two returns**, each blocked exactly once.
+`2500` is ~p78: only the heaviest fifth is challenged. `6000` sits between p90 and the maximum and is a judgement call, not a fit: below it one compression round can still reach the budget, above it the detail needs a durable home.
 
 ## Limits — read before trusting it
 
-- **One compress round may land slightly over `passTokens`** and is not blocked again — the live compress case went 1417 -> 1026 against a budget of 1000. Deliberate: a `SubagentStop` hook that blocks twice is how an agent gets wedged, and the once-only guarantee outranks the last 3%.
-- **`chars/4` is not a tokenizer, on purpose.** The thresholds were fitted to a distribution measured with `chars/4`. Swapping the heuristic moves the boundaries off their data — re-measure and re-fit both in the same change.
-- **Only the final assistant message is sized.** A subagent that burned context on 40 tool calls and returns 6 lines is invisible. This budgets the *return*, not the work.
-- **`passTokens < fileTokens` is not enforced by the hook.** Inverting them degrades gracefully — the compress tier vanishes and everything over `passTokens` gets a self-contradictory file order; no loop, no error, exit 0. The config write rejects the inversion; the hook deliberately carries no validator.
-- **Fail-open, never exit 2 except to block.** Malformed JSON, missing stdin, wrong shapes, any runtime throw -> `{}` and exit 0.
-- **A missing `agent-return-budget.mjs` is not catchable** — ESM resolution precedes evaluation, so the hook exits 1 with empty stdout: a non-blocking hook-error banner. Ship all three files.
-- **`SubagentStop` hook attachments are not transcript-recorded.** Transcript silence is not evidence of non-firing; the observables are the subagent's `Stop hook feedback:` turn and the shrunken second return.
-- **Cost: two hooks per subagent, not a per-tool-call tax.** Node v24.1.0, 15 invocations each, wall clock including node startup: guard p50 33 ms / max 56 ms; contract p50 31 ms / max 33 ms; a 200000-char message still p50 32 ms — node startup dominates, message size barely registers. Registered timeout is 5 s. Unlike `agent-deadline-setup`, whose guard sits on a `.*` PreToolUse matcher and charges ~58 ms to *every* tool call, this pair fires only at subagent spawn and stop, so a **global install is cheap**. Re-measure on your own machine before quoting these numbers as facts.
+- **One challenge per agent; after it nothing is enforced.** The second report is delivered at any size and may land slightly over `passTokens` (observed 1417 -> 1026 against a budget of 1000). A resumed agent is not challenged again while its marker exists. Deliberate: repeated hand-back denies make the harness withhold the report.
+- **No hook payload exposes an agent's tool inventory.** Write ability is known only from `readOnlyAgentTypes` and plan mode. An unlisted read-only agent gets the file order, whose last sentence tells it to send the essential part instead; add such types to the list.
+- **State directory not writable:** the auto path never denies (an unrecorded deny could repeat); the classic path keeps `stop_hook_active` as its only brake.
+- **Not verified live:** the file tier for a writing agent, nested agents, agent-team teammates.
+- **Claude Code older than 2.1.271** has no `SubagentHandback` tool, so only the classic path exists there.
+- **Only the final report is sized, by `chars/4`.** A subagent that burned context on 40 tool calls and returns 6 lines is invisible: this budgets the *return*, not the work. Not a tokenizer on purpose: the thresholds are fitted to `chars/4`.
+- **Fail-open, never exit 2.** Malformed JSON, missing stdin, wrong shapes, any runtime throw -> `{}` and exit 0.
+- **Cost: no per-tool-call tax.** About 30-53 ms per fire (Node v24.19.0, 15 invocations each), at subagent spawn, at each stop and, in auto mode, at the hand-back. `agent-deadline-setup`'s guard sits on a `.*` PreToolUse matcher and charges ~58 ms to *every* tool call, so here a **global install is cheap**. Re-measure before quoting.
+
+The runbook's *Known limitation* section lists the rest.
 
 ## Coexistence with `agent-deadline-setup`
 
-Both skills can be installed side by side. Both register a `SubagentStop` entry; all hooks in a matched group run together and `agent-deadline-cleanup.mjs` always returns `{}`, so there is no competing `decision`. Each skill's merge and strip only touch entries whose `args` name its own scripts.
+Both skills register `SubagentStop` and `PreToolUse` entries; hooks of one event run in parallel, and each skill's merge and strip only touch entries whose `args` name its own scripts. An agent challenged once by this guard continues on its original deadline clock: the deadline cleanup stamps `stopped` and keeps its state (a stop stamp under 5 minutes old keeps the clock), and the deadline guard always allows `SubagentHandback`. An agent-deadline install from before 6.5 restarts the clock and, past its limit, also denies the hand-back, so upgrade it too.
 
 ## Files
 
-| File | Purpose |
-|------|---------|
-| `SKILL.md` | mode/scope/threshold decisions + delegation |
-| `assets/INSTALL.md` | the runbook — install, config, upgrade, disable/enable, uninstall, purge, verify |
-| `assets/agent-return-budget.mjs` | shared module: config, thresholds, contract text |
-| `assets/agent-return-contract.mjs` | SubagentStart contract |
-| `assets/agent-return-guard.mjs` | SubagentStop guard |
+`SKILL.md` (mode/scope/threshold decisions + delegation), `assets/INSTALL.md` (the runbook) and the three hook files `assets/agent-return-{budget,contract,guard}.mjs`.

@@ -2,7 +2,7 @@
 
 [DICT: CMD=root CLAUDE.md, LOCAL=CLAUDE.local.md, MOD=module/subproject, MODCMD=module-level CLAUDE.md, RULES=.claude/rules/**/*.md, BUDGET=line budget, TO=brewtools:text-optimize skill, DIR=free-text prompt directive]
 
-OPTIONAL, opt-in at P0; runs AFTER board scaffolding + verification (P5). PROPOSE-ONLY: every change needs AskUserQuestion approval, including restructuring CLAUDE.md.
+OPTIONAL, opt-in at P1; runs AFTER board scaffolding + verification (P5). PROPOSE-ONLY: every change needs AskUserQuestion approval, including restructuring CLAUDE.md.
 
 > **Verified lazy-loading mechanic (source: code.claude.com/docs/en/memory, fetched 2026-06-14).** Bake this into every proposal rationale:
 > - Root CMD + all ancestor CLAUDE.md/CLAUDE.local.md: **loaded in full AT LAUNCH**, every session, regardless of length.
@@ -15,10 +15,10 @@ OPTIONAL, opt-in at P0; runs AFTER board scaffolding + verification (P5). PROPOS
 
 ## Inputs
 
-From P0:
-- `TARGET` (abs path).
+From P0/P1:
+- `TARGET` (abs path); `EXCLUSIONS` (from P1, used by module detection).
 - `DIR` = the free-text prompt directive parsed from `$ARGUMENTS` (may be empty). Tunes which sub-steps run / how aggressive they are. See "Directive influence" below.
-- `OPTIN` = whether the user opted into this phase (asked at P0).
+- `OPTIN` = whether the user opted into this phase (asked in P1).
 
 If `OPTIN` is false -> SKIP this entire file; do nothing.
 
@@ -35,7 +35,7 @@ Match DIR substrings case-insensitively; all sub-steps are offered by default. D
 | `skip dedup`, `no dedup`, `skip rules` | disable 5e (rules dedup/compress) |
 | `also dedupe rules`, `dedup rules` | force-enable 5e even if other hints narrow scope |
 | `budget N`, `max N lines`, `target N` | override BUDGET_OPTIMAL=N (and OVER=N*1.5 rounded) |
-| `aggressive`, `max compress`, `deep` | pass `-d` (or `-x` only if `max`/`extreme`/`atomic` present) to TO in 5e/5f |
+| `aggressive`, `max compress`, `deep` | add `-d` (or `-x` only if `max`/`extreme`/`atomic` present) to the 5f TO commands |
 | `report only`, `dry run`, `propose only` | run 5a detection + present a full plan, but make NO edits even if approved -- emit plan as the deliverable |
 | anything else | record as free-form intent; apply best-effort to phrasing of proposals, do NOT invent new behaviors |
 
@@ -45,10 +45,12 @@ Ambiguous/conflicting DIR (e.g. `skip rules` + `also dedupe rules`) -> user reso
 
 ## 5a. Detect (read-only scan, NO edits)
 
-Locate the root CMD: prefer `TARGET/CLAUDE.md`, else `TARGET/.claude/CLAUDE.md`. If neither exists -> there is nothing to optimize; report "no root CLAUDE.md found" and SKIP the rest (do NOT create a root CLAUDE.md -- out of scope for this phase).
+Root CMD = `TARGET/CLAUDE.md`, else `TARGET/.claude/CLAUDE.md`; neither -> report "no root CLAUDE.md found" and SKIP the rest (do NOT create one).
 
-**EXECUTE** using Bash tool (read-only):
+**EXECUTE** using Bash tool (read-only; shell state does not survive between calls, so each block sets `TARGET`):
 ```bash
+TARGET="<absolute path resolved in P0>"
+test -n "$TARGET" && test -d "$TARGET" || { echo "MISS TARGET unset or not a dir -- detect did NOT run"; exit 1; }
 CMD=""
 for c in "$TARGET/CLAUDE.md" "$TARGET/.claude/CLAUDE.md"; do test -f "$c" && CMD="$c" && break; done
 test -n "$CMD" && wc -l < "$CMD" | tr -d ' ' && echo "CMD=$CMD" || echo "NO_CMD"
@@ -70,8 +72,6 @@ MODULES     = [ {dir, why, has_own_cmd} ... ] # see 5d detection
 RULES       = [ {path, lines} ... ]
 DUP_SPANS   = [ {a, b, overlap_summary} ... ] # cross-file dup/overlap, see 5e
 ```
-
-Report CMD_LINES vs BUDGET_OPTIMAL/BUDGET_OVER up front (current vs target), regardless of whether any proposal follows.
 
 ### Module detection (for MODULES)
 A repo subtree is a MOD candidate if it has its own manifest / build / package boundary. Signals (any): `package.json`, `pom.xml`/`build.gradle`, `pyproject.toml`/`setup.py`, `go.mod`, `Cargo.toml`, `Makefile`, a `src/` of its own, or a workspace member (npm/pnpm/yarn workspaces, gradle subproject, cargo workspace, go work). Skip dirs in EXCLUSIONS only if EXCLUSIONS means "don't WRITE" -- here writing a MODCMD inside a source module IS allowed (a MODCMD is doc, not source). Record `has_own_cmd` = whether `<dir>/CLAUDE.md` already exists.
@@ -104,6 +104,7 @@ On approval:
 3. Remove approved preferences from CMD (Edit, bottom-up). Replace an existing credential only after explicit approval of its concrete non-secret lookup reference and a confirmed secure source outside LLM files; otherwise leave it unchanged and report the unresolved item. Never relocate credentials or rewrite history automatically.
 4. Ensure `CLAUDE.local.md` is gitignored:
    ```bash
+   TARGET="<absolute path resolved in P0>"
    grep -qxF "CLAUDE.local.md" "$TARGET/.gitignore" 2>/dev/null || echo "(needs .gitignore entry)"
    ```
    If missing, propose adding `CLAUDE.local.md` to `.gitignore` (one more AskUser line, or include in the same approval). Do NOT silently edit .gitignore without the user's yes.
@@ -123,7 +124,7 @@ If OVER: assemble a concrete decomposition PLAN combining 5d (module split), 5e 
 > 1. Move detail for modules `<M1, M2, ...>` into per-module CLAUDE.md (loaded on-demand, shrinks always-on context). Root keeps a 2-line module index.  [est -X lines]
 > 2. Move topic blocks `<...>` into path-scoped `.claude/rules/*.md` (load only when matching files are touched).  [est -Y lines]
 > 3. Dedup overlap with existing rules `<...>`; delete duplicated spans.  [est -Z lines]
-> 4. Deep-compress the remainder via brewtools:text-optimize.  [est -W lines]
+> 4. Deep-compress the remainder: you run `/brewtools:text-optimize` afterwards.  [est -W lines]
 > Projected: <CMD_LINES> -> ~<TARGET_LINES>.
 > - Apply the full plan
 > - Apply only steps I pick
@@ -163,39 +164,37 @@ For each approved MOD in MODULES:
 
 ## 5f. Delegate compression to brewtools:text-optimize
 
-After 5b/5d/5e, delegate compression of remaining CMD + touched MODCMD + RULES to TO; do not hand-compress.
+After 5b/5d/5e, compression of the remaining CMD + touched MODCMD + RULES belongs to TO; do not hand-compress or inline-reimplement it.
 
-- Recommend/invoke: `brewtools:text-optimize` auto-detects `CLAUDE.md` and `.claude/rules/*.md` as LLM-only files and selects DEEP mode (DICT header + symbol substitution + verification rounds).
-- Default invocation (after this phase's edits are approved + applied):
+- TO is user-invoked only (`disable-model-invocation: true`), so this phase cannot run it: recommend these commands for the user to run after the approved edits:
   ```
   /brewtools:text-optimize CLAUDE.md
   /brewtools:text-optimize .claude/rules/
   ```
   Multiple files in one call run in parallel: `/brewtools:text-optimize CLAUDE.md, <MOD>/CLAUDE.md`.
-- DIR `aggressive`/`deep` -> pass `-d`; DIR `max`/`extreme`/`atomic` -> pass `-x` (max mode, 2 mandatory verify rounds). Otherwise let auto-detect pick deep for these files.
-- TO owns its AskUser/verification; do not duplicate it. RECOMMEND/INVOKE on touched files, then re-count for the report.
-> Do NOT inline-reimplement compression. Single source of compression logic = text-optimize.
+- TO auto-detects `CLAUDE.md` and `.claude/rules/*.md` as LLM-only files and selects DEEP mode. DIR `aggressive`/`deep` -> add `-d`; DIR `max`/`extreme`/`atomic` -> add `-x` (max mode, 2 mandatory verify rounds).
+- TO owns its AskUser/verification; do not duplicate it.
 
 ---
 
 ## 5g. Markup / structure pass (all touched docs)
 
-For CMD, MODCMD, LOCAL and RULES edited here: clean heading hierarchy, compact tables/bullets, valid fences and consistent terms. TO covers this structure; do not repeat it on files handled by 5f.
+For CMD, MODCMD, LOCAL and RULES edited here: clean heading hierarchy, compact tables/bullets, valid fences and consistent terms.
 
 ---
 
 ## 5h. Re-count + report (this phase's slice of P5 report)
 
-After all approved edits + any text-optimize run:
+After all approved edits:
 ```bash
-wc -l < "$CMD_PATH" | tr -d ' '
+wc -l < "<CMD_PATH from 5a>" | tr -d ' '
 ```
 Report:
 - CMD line count: BEFORE -> AFTER (vs optimal/over).
 - Non-secret preferences moved: count + LOCAL created/updated + gitignore status; credentials: references changed or unresolved, values never copied.
 - Modules split: list of MODCMD written + that root now indexes them.
 - Rules dedup: spans removed.
-- text-optimize: whether invoked, mode, resulting reduction.
+- text-optimize: the exact commands (with flags) recommended to the user.
 - A one-line flag if any secret was found that predates this run (rotate + history note).
 
 Set `CMD_DECOMPOSED = true` iff 5d wrote/updated at least one MODCMD -- this flag is consumed by the task-tracker agent template addition (ref 02) so the generated agent knows the target's CLAUDE.md is decomposed/lazy-loaded.

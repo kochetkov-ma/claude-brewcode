@@ -2,15 +2,13 @@
 
 [DICT: DOCS=migration inventory from Step 1, FEAT=TARGET/.claude/features, EXCL=source-path exclusions]
 
-Goal: consolidate every Step 1 backlog/feature/task doc (`DOCS`) into the new board: dedup, skip cruft, route ready/done items to `todo/`/`closed/` respectively, format `backlog/`, then fill the 4b `board.md` skeleton.
+Goal: consolidate every Step 1 backlog/feature/task doc (`DOCS`) into the new board: dedup, skip cruft, route ready/done items to `todo/`/`closed/`, format `backlog/`, then fill the 4b `board.md` skeleton.
 
-> Sweep subagents write ONLY under `TARGET/.claude/features/**`. They must NOT edit any EXCLUSIONS dir. Reading source docs to extract tasks is fine; modifying source is not.
+> Sweep subagents write ONLY under `TARGET/.claude/features/**` and must NOT edit any EXCLUSIONS dir; reading source docs is fine.
 
 ## Spawn (parallel -- one message, multiple Agent calls)
 
-Partition the `DOCS` inventory across N subagents (1 if small, 2-3 if many docs / large). Each gets a slice, a one-letter slice tag (`A`, `B`, `C` ...) and the same contract. Use `general-purpose` (it must Read source docs and Write under `.claude/features/`).
-
-> Sizing: one agent = ONE doc slice — ~<=5 docs, ~<=10 steps; a bigger slice is split into more slices, all fanned out in the SAME message.
+Partition `DOCS` across N `general-purpose` subagents (they Read source docs and Write under `.claude/features/`), each with a slice, a one-letter slice tag (`A`, `B`, `C` ...) and the same contract. One agent = ONE doc slice — ~<=5 docs, ~<=10 steps; a bigger inventory gets more slices, all fanned out in the SAME message.
 
 ```
 Agent(subagent_type="general-purpose", prompt="
@@ -28,7 +26,7 @@ CONTEXT: Step 1 already confirmed with the user — id domains allowed: <DOMAINS
   skeleton and TASK_TEMPLATE.md. Procedure + format: read TARGET/.claude/features/TRACKER.md and
   TARGET/.claude/rules/tasks.md FIRST and follow them exactly — do not reinvent either. Sibling agents sweep
   the OTHER doc slices into the same tree right now, so touch only your slice.
-CONSUMER: the orchestrator globs the status folders, reads each file's frontmatter and authors the real
+CONSUMER: the orchestrator lists the status folders, reads each file's frontmatter and authors the real
   board.md from what is on disk (your manifest is cross-checked against disk, not trusted); the installed
   task-tracker agent reads the same files from then on. An id or status folder that deviates from
   TASK_TEMPLATE.md makes the task invisible to both.
@@ -38,7 +36,7 @@ DONE: return ONLY a manifest: a table of every file you created (path | id | sta
 
 Procedure — for each legacy item:
 1. Classify: open/ready task | in-progress | done/shipped | duplicate | noise/obsolete.
-2. open + scoped       -> create TARGET/.claude/features/todo/<ID>.md from TASK_TEMPLATE.md (or a board row if thin).
+2. open + scoped       -> create TARGET/.claude/features/todo/<ID>.md from TASK_TEMPLATE.md (too thin for a task file -> backlog, step 5).
 3. clearly in-progress -> create under progress/<ID>.md (progress REQUIRES a file).
 4. done/shipped        -> create under closed/<ID>.md, record the closing marker in ## Notes.
 5. raw/unclear idea    -> drop a TARGET/.claude/features/backlog/<slug>.md (ungated, no id yet).
@@ -46,7 +44,8 @@ Procedure — for each legacy item:
 7. noise/obsolete      -> skip (do NOT create anything).
 Mint UPPER-KEBAB ids: <PREFIX>-<DOMAIN>-<SLUG>, domain from the allowed list, slug starting with your slice tag
 (<PREFIX>-<DOMAIN>-<SLICE>-<rest>). The tag makes your id namespace disjoint from every sibling's -- no
-cross-agent uniqueness check is possible mid-flight. Glob .claude/features/**/<ID>.md only against what 4a-b wrote.
+cross-agent uniqueness check is possible mid-flight. Check uniqueness only against what 4a-b wrote, through Bash:
+find TARGET/.claude/features -name '<ID>.md'
 ")
 ```
 
@@ -54,9 +53,9 @@ cross-agent uniqueness check is possible mid-flight. Glob .claude/features/**/<I
 
 After all sweep subagents return their manifests:
 
-1. `Glob` `TARGET/.claude/features/{todo,progress,closed,specs}/*.md` to get the true file set (do not trust manifests blindly -- verify on disk).
-2. Fold the DUPLICATES reported by every slice: append the note to the existing task's `## Notes` yourself (you are the only writer at this point). A duplicate across two slices means both files exist -- keep the earlier id, fold the other into its `## Notes` and delete the loser file.
-3. Read each file's FM (`id`, `title`, `priority`, `owner`, `status`, `spec`) -- delegate this read to a single `Explore` subagent if there are many files. `spec` is absent in off-mode; when it is absent the cell that consumes it is the literal `--`.
+1. List the true file set on disk, never from manifests: `find TARGET/.claude/features/todo TARGET/.claude/features/progress TARGET/.claude/features/closed TARGET/.claude/features/specs -maxdepth 1 -name '*.md'` (Bash; `Glob` is absent on some platforms, and an unmatched shell glob aborts under zsh).
+2. Fold the DUPLICATES reported by every slice into the existing task's `## Notes` yourself (you are the only writer now). A duplicate across two slices means both files exist -- keep the earlier id, fold the other into its `## Notes`, delete the loser file.
+3. Read each file's FM (`id`, `title`, `priority`, `owner`, `status`, `spec`) -- one `Explore` subagent if there are many files. `spec` is absent in off-mode; its cell is then the literal `--`.
 4. Rewrite `TARGET/.claude/features/board.md` (Edit/Write) from the 4b skeleton:
    - Counts: real `backlog | todo | progress | closed | specs`.
    - Progress / Todo tables: one row per file (`id | title | prio | owner | file`, + a 6th `spec` cell when `SPEC_MODE=on`, holding the file's `spec:` FM value or `--` when absent).
@@ -67,7 +66,7 @@ After all sweep subagents return their manifests:
 
 ## Legacy-source disposition
 
-Do NOT delete or rewrite the original legacy docs (e.g. a root `TODO.md`) in this skill -- that risks touching EXCLUSIONS or losing history. Instead, in the P5 report, LIST the legacy docs that were migrated and recommend the user remove/redirect them (or delegate that cleanup to the new `task-tracker` agent in a follow-up). The new board is now canonical; the rule (`tasks.md` rule 9) forbids a root `TODO.md` going forward.
+Do NOT delete or rewrite the original legacy docs (e.g. a root `TODO.md`): that risks touching EXCLUSIONS or losing history. In the P5 report LIST the migrated legacy docs and recommend the user remove/redirect them (or hand that cleanup to `task-tracker` later). `tasks.md` rule 9 forbids a root `TODO.md` from now on.
 
 ## Output contract handed to P5
 

@@ -668,6 +668,17 @@ check(
 );
 check('ledger.projectIntact', LEDGER2.project, LEDGER1.project, 'the project map survives a global apply byte-for-byte');
 
+// GIVEN a non-default config dir beside a default ~/.claude/agents WHEN audit --scope global runs
+// THEN only the active config dir's agents are read, keyed by the profile dir name
+const CFG_HOME = join(BASE, 'cfghome');
+writeAgent(CFG_HOME, 'decoy.md', '---\nname: decoy\ntools: [Read]\n---\nBody\n');
+mkdirSync(join(CFG_HOME, '.claude-x', 'agents'), { recursive: true });
+writeFileSync(join(CFG_HOME, '.claude-x', 'agents', 'x-agent.md'), '---\nname: x\ntools: [Read]\n---\nBody\n');
+const cfgAudit = safeParse(run(['audit', '--scope', 'global', '--json'],
+  { SEMBLE_PROJECT_ROOT: P, SEMBLE_TEST_HOME: CFG_HOME, SEMBLE_TEST_CONFIG_DIR: join(CFG_HOME, '.claude-x') }).stdout);
+check('global.configDir', [cfgAudit.root, cfgAudit.files.map((f) => f.path)], [CFG_HOME, ['.claude-x/agents/x-agent.md']],
+  'global scope reads <CLAUDE_CONFIG_DIR>/agents, never the default profile\'s agents');
+
 const empty = join(BASE, 'emptyproj');
 mkdirSync(empty, { recursive: true });
 const emptyAudit = run(['audit', '--json'], { SEMBLE_PROJECT_ROOT: empty, SEMBLE_TEST_HOME: HOME });

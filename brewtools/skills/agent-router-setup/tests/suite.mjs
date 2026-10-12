@@ -9,14 +9,22 @@
  * branching gates which asserts run.
  */
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, chmodSync } from 'node:fs';
+import {
+  mkdtempSync, mkdirSync, writeFileSync, rmSync, chmodSync, readFileSync, readdirSync, realpathSync,
+  utimesSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const HERE = join(fileURLToPath(import.meta.url), '..'); // tests/
 const ASSETS = join(HERE, '..', 'assets'); // assets/
 const HOOK = join(ASSETS, 'agent-router.mjs');
+const PLUGIN_AGENTS = {
+  brewcode: ['skill-creator', 'agent-creator', 'hook-creator', 'bash-expert'],
+  proj: ['widget-expert', 'skill-expert'],
+};
 
 // GIVEN: a fresh isolated temp base
 const BASE = mkdtempSync(join(tmpdir(), 'ar-test-'));
@@ -65,6 +73,59 @@ function run(stdinStr, env) {
   return { stdout: r.stdout || '', stderr: r.stderr || '', status: r.status };
 }
 
+function runCli(args, env) {
+  const r = spawnSync(process.execPath, [HOOK, ...args], {
+    encoding: 'utf8',
+    env: { ...process.env, ...env },
+    timeout: 8000,
+  });
+  return { stdout: r.stdout || '', stderr: r.stderr || '', status: r.status };
+}
+
+function lineCount(file) {
+  return readFileSync(file, 'utf8').split('\n').filter(Boolean).length;
+}
+
+// Recorded on Claude Code 2.1.296 (probe LT9); only cwd and transcript_path are rewritten.
+function lt9AgentCall(cwd, toolInput) {
+  return {
+    session_id: '0bd4c1b3-6add-4d7f-b7ce-e26ecc2f4ffa',
+    transcript_path: join(cwd, 'transcript.jsonl'),
+    cwd,
+    prompt_id: '35642576-aa92-4ec4-b057-44412cebec7c',
+    permission_mode: 'bypassPermissions',
+    effort: { level: 'medium' },
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Agent',
+    tool_input: toolInput,
+    tool_use_id: 'toolu_01EDvFZ27QazGxp7jUU9W4sz',
+  };
+}
+
+// The tier-2 verifier's verdict call: agent_id `hook-agent-<uuid>`, no agent_type.
+function lt9VerifierVerdict(cwd) {
+  return {
+    session_id: '0bd4c1b3-6add-4d7f-b7ce-e26ecc2f4ffa',
+    transcript_path: join(cwd, 'transcript.jsonl'),
+    cwd,
+    prompt_id: '35642576-aa92-4ec4-b057-44412cebec7c',
+    permission_mode: 'dontAsk',
+    agent_id: 'hook-agent-5148e0ac-4381-4904-831c-94da713e34fc',
+    effort: { level: 'medium' },
+    hook_event_name: 'PreToolUse',
+    tool_name: 'StructuredOutput',
+    tool_input: { ok: true, reason: 'The deny rule does not apply, so the call is allowed.' },
+    tool_use_id: 'toolu_01WXb4h1RtgwGQf7y3ng1DGr',
+  };
+}
+
+const LT9_SESSION = '0bd4c1b3-6add-4d7f-b7ce-e26ecc2f4ffa';
+const LT9_BENIGN = {
+  description: 'benign probe',
+  prompt: 'Reply with the single word PONG. No tools.',
+  subagent_type: 'general-purpose',
+};
+
 function safeParse(str) {
   try {
     return JSON.parse(str);
@@ -79,10 +140,27 @@ function newRoot(tag) {
   const home = join(base, 'home');
   const tmp = join(base, 'tmp');
   const proj = join(base, 'proj');
-  mkdirSync(home, { recursive: true });
+  const cfgDir = join(home, '.claude');
   mkdirSync(tmp, { recursive: true });
   mkdirSync(join(proj, '.claude'), { recursive: true });
-  return { proj, tmp, env: { HOME: home, TMPDIR: tmp, TMP: tmp, TEMP: tmp } };
+  // Plugin cache fixture: the redirect targets must exist on disk before the router may deny.
+  for (const [plugin, agents] of Object.entries(PLUGIN_AGENTS)) {
+    const dir = join(cfgDir, 'plugins', 'cache', 'fixture-market', plugin, '1.0.0', 'agents');
+    mkdirSync(dir, { recursive: true });
+    for (const agent of agents) writeFileSync(join(dir, `${agent}.md`), `---\nname: ${agent}\n---\n`);
+  }
+  return {
+    proj,
+    tmp,
+    cfgDir,
+    env: { HOME: home, TMPDIR: tmp, TMP: tmp, TEMP: tmp, CLAUDE_CONFIG_DIR: cfgDir, CLAUDE_PROJECT_DIR: '' },
+  };
+}
+
+// Mirrors the hook's layout: <tmp>/brewtools-agent-router/p-<sha1(real root)[0..16]>/.
+function stateDir(tmp, proj) {
+  const key = createHash('sha1').update(realpathSync(proj)).digest('hex').slice(0, 16);
+  return join(tmp, 'brewtools-agent-router', `p-${key}`);
 }
 
 function writeAgent(proj, name, description) {
@@ -92,6 +170,11 @@ function writeAgent(proj, name, description) {
     join(dir, `${name}.md`),
     `---\nname: ${name}\ndescription: "${description}"\ntools: Read, Bash\nmodel: sonnet\n---\n\nBody.\n`,
   );
+}
+
+function writeUserAgent(cfgDir, name) {
+  mkdirSync(join(cfgDir, 'agents'), { recursive: true });
+  writeFileSync(join(cfgDir, 'agents', `${name}.md`), `---\nname: ${name}\n---\n`);
 }
 
 function writeRawAgent(proj, file, text) {
@@ -152,8 +235,17 @@ const TAIL = '(Deliberate? retry as-is, or put "agent-router: override" in the p
 
 function rosterDeny(name, rel, picked) {
   return (
-    `agent-router: '${name}' (${rel}) matches this task better than ${picked}` +
+    `agent-router: '${name}' (${rel}) owns this kind of task in this project - its` +
+    ` Triggers/description match the task text and ${picked} lacks that domain context` +
     ` - retry with subagent_type: ${name}. ${TAIL}`
+  );
+}
+
+function unverifiedIntentCtx(label, expert, picked) {
+  return (
+    `agent-router: this looks like ${label} - '${expert}' is the expert for it, but it` +
+    ' was not found in this install (project agents, user agents, plugin cache), so this spawn' +
+    ` is not blocked; proceeding with ${picked}.`
   );
 }
 
@@ -971,11 +1063,13 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
 // 36 - regression guard: the self-exemption must not weaken normal routing
 // GIVEN: the same custom-intents config as 35
 // WHEN: general-purpose is spawned on the same matching task
+// GIVEN: my-db-guru exists as a user agent (a redirect target must be on disk)
 // THEN: deny naming my-db-guru - the exemption only protects the expert itself
 // ─────────────────────────────────────────────────────────────────────────────
 {
-  const { proj, env } = newRoot('t36');
+  const { proj, env, cfgDir } = newRoot('t36');
   standardRoster(proj);
+  writeUserAgent(cfgDir, 'my-db-guru');
   writeConfig(proj, {
     enabled: true,
     intents: [{ match: '\\bwidget\\b', expert: 'my-db-guru', label: 'db work' }],
@@ -1857,6 +1951,167 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
     ),
     'the weak signal and the roster nudge must never be two messages',
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 56 - recorded 2.1.296 Agent payload with no matching expert
+// GIVEN: the LT9 `benign probe` general-purpose spawn and the standard roster
+// WHEN: the hook runs
+// THEN: stdout empty, exit 0 - no expert exists, so general-purpose is the right pick
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const { proj, env } = newRoot('t56');
+  standardRoster(proj);
+  const r = run(JSON.stringify(lt9AgentCall(proj, LT9_BENIGN)), env);
+  check('56-recorded-agent-call', { stdout: r.stdout, status: r.status }, { stdout: '', status: 0 },
+    'a generic spawn with no matching expert must allow silently');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 57 - the tier-2 verifier's own calls are never policed
+// GIVEN: the recorded verifier verdict (StructuredOutput, agent_id hook-agent-*, no
+//        agent_type), and an Agent call carrying the same agent_id with skill-intent text
+// WHEN: the hook runs on each
+// THEN: both allow silently, exit 0 - a missing agent_type is not an error
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const { proj, env } = newRoot('t57');
+  standardRoster(proj);
+  const verdict = run(JSON.stringify(lt9VerifierVerdict(proj)), env);
+  const spawn = run(
+    JSON.stringify({
+      ...lt9AgentCall(proj, { ...LT9_BENIGN, description: INTENT_SKILL }),
+      agent_id: 'hook-agent-5148e0ac-4381-4904-831c-94da713e34fc',
+    }),
+    env,
+  );
+  check('57-verifier-verdict-ignored',
+    { stdout: verdict.stdout, stderr: verdict.stderr, status: verdict.status },
+    { stdout: '', stderr: '', status: 0 },
+    'the verifier StructuredOutput call must pass untouched');
+  check('57-verifier-spawn-ignored',
+    { stdout: spawn.stdout, stderr: spawn.stderr, status: spawn.status },
+    { stdout: '', stderr: '', status: 0 },
+    'a hook-agent-* Agent call must allow silently');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 58 - a redirect target that is not on disk is never a deny
+// GIVEN: strong skill-authoring intent, a weak hook mention, and an empty plugin cache
+// WHEN: general-purpose is spawned on each
+// THEN: strong = notice naming the missing expert, no deny; weak = silent
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const { proj, env, cfgDir } = newRoot('t58');
+  standardRoster(proj);
+  rmSync(join(cfgDir, 'plugins'), { recursive: true, force: true });
+  const strong = run(payload({ cwd: proj, description: INTENT_SKILL }), env);
+  const weak = run(payload({ cwd: proj, description: 'Summarise what hooks.json contains' }), env);
+  check('58-missing-expert-strong-is-notice',
+    safeParse(strong.stdout),
+    ctxOut(unverifiedIntentCtx('skill authoring', 'brewcode:skill-creator', 'general-purpose')),
+    'an expert that cannot be found must not block general-purpose');
+  check('58-missing-expert-weak-is-silent', weak.stdout, '',
+    'a weak signal must not advertise an expert that cannot be found');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 59 - tier-2 heartbeat: expected vs answered verdicts
+// GIVEN: level strict; a main-loop spawn, a subagent-issued spawn, then one verifier verdict
+// WHEN: --judge-health is read with the expected stamps fresh, then backdated past the grace
+// THEN: 2 expected / 1 answered; overdue 0 while fresh, 1 once settled
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const { proj, tmp, env } = newRoot('t59');
+  writeConfig(proj, { level: 'strict' });
+  run(JSON.stringify(lt9AgentCall(proj, LT9_BENIGN)), env);
+  run(JSON.stringify({ ...lt9AgentCall(proj, LT9_BENIGN), agent_id: 'a5f3', agent_type: 'general-purpose' }), env);
+  run(JSON.stringify(lt9VerifierVerdict(proj)), env);
+  const session = join(stateDir(tmp, proj), LT9_SESSION);
+  const recorded = {
+    expected: lineCount(join(session, 'judge-expected')),
+    answered: lineCount(join(session, 'judge-answered')),
+  };
+  const fresh = runCli(['--judge-health', proj], env);
+  writeFileSync(join(session, 'judge-expected'), '1000\n2000\n');
+  const settled = runCli(['--judge-health', proj], env);
+  check('59-heartbeat-recorded', recorded, { expected: 2, answered: 1 },
+    'every Agent call expects a verdict, every verifier verdict is counted');
+  check('59-heartbeat-fresh', { stdout: fresh.stdout, status: fresh.status },
+    { stdout: 'judge_expected=2 judge_answered=1 judge_overdue=0\n', status: 0 },
+    'a verdict still inside the grace window is not overdue');
+  check('59-heartbeat-settled', { stdout: settled.stdout, status: settled.status },
+    { stdout: 'judge_expected=2 judge_answered=1 judge_overdue=1\n', status: 0 },
+    'an expected verdict that never arrived is reported as overdue');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 59b - level fast records no heartbeat
+// GIVEN: default config (level fast) and a main-loop spawn
+// WHEN: --judge-health is read
+// THEN: all three counters are 0
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const { proj, env } = newRoot('t59b');
+  run(JSON.stringify(lt9AgentCall(proj, LT9_BENIGN)), env);
+  const health = runCli(['--judge-health', proj], env);
+  check('59b-heartbeat-off-at-fast', { stdout: health.stdout, status: health.status },
+    { stdout: 'judge_expected=0 judge_answered=0 judge_overdue=0\n', status: 0 },
+    'tier 1 alone must not expect a judge verdict');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 60 - purge removes this project's state only
+// GIVEN: projects A and B sharing one TMPDIR, the same task denied once in each
+// WHEN: --purge-state runs for A
+// THEN: only B's project dir is left; A denies afresh, B still replays its notice
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const { proj: projA, tmp, env } = newRoot('t60-a');
+  const projB = join(BASE, 't60-b', 'proj');
+  mkdirSync(join(projB, '.claude'), { recursive: true });
+  standardRoster(projA);
+  standardRoster(projB);
+  const text = 'Wire pending approval into the plan lifecycle and the approval matrix';
+  run(payload({ cwd: projA, session: 'PURGE', description: text }), env);
+  run(payload({ cwd: projB, session: 'PURGE', description: text }), env);
+  const purge = runCli(['--purge-state', projA], env);
+  const left = readdirSync(join(tmp, 'brewtools-agent-router'));
+  const rA = run(payload({ cwd: projA, session: 'PURGE', description: text }), env);
+  const rB = run(payload({ cwd: projB, session: 'PURGE', description: text }), env);
+  check('60-purge-output', { stdout: purge.stdout, status: purge.status },
+    { stdout: `OK purged ${stateDir(tmp, projA)}\n`, status: 0 },
+    'purge must name the one directory it removed');
+  check('60-purge-keeps-other-project', left, [stateDir(tmp, projB).split('/').pop()],
+    'purge must leave another project state dir in place');
+  check('60-purged-project-denies-afresh', safeParse(rA.stdout),
+    denyOut(rosterDeny('conductor-dev', '.claude/agents/conductor-dev.md', 'general-purpose')),
+    'the purged project has no marker left');
+  check('60-other-project-marker-survives', safeParse(rB.stdout),
+    ctxOut(repeatCtx('conductor-dev', 'general-purpose')),
+    'the other project keeps its anti-loop marker');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 61 - stale sweep: legacy session dirs go, another project's dir stays
+// GIVEN: a 2-day-old pre-6.5 top-level session dir and a 2-day-old foreign project dir
+// WHEN: this project records its first deny
+// THEN: the state root holds the foreign project dir and this project's dir only
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const { proj, tmp, env } = newRoot('t61');
+  standardRoster(proj);
+  const stateRoot = join(tmp, 'brewtools-agent-router');
+  const old = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+  for (const name of ['legacy-session-id', 'p-0123456789abcdef']) {
+    mkdirSync(join(stateRoot, name), { recursive: true, mode: 0o700 });
+    utimesSync(join(stateRoot, name), old, old);
+  }
+  chmodSync(stateRoot, 0o700);
+  run(payload({ cwd: proj, description: INTENT_SKILL }), env);
+  check('61-stale-sweep', readdirSync(stateRoot).sort(),
+    ['p-0123456789abcdef', stateDir(tmp, proj).split('/').pop()].sort(),
+    'a stale legacy dir is pruned, a foreign project dir is never touched');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

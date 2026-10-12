@@ -39,10 +39,11 @@ ght_backend() {
 ght_watch() {
     local secs="${1:?ght needs seconds}"; shift
     local had_m=0; case "$-" in *m*) had_m=1 ;; esac
-    set -m
+    # zsh (the macOS Bash-tool shell) aborts on `set -m` when non-interactive: no group there.
+    [ -n "${ZSH_VERSION:-}" ] || set -m
     "$@" &
     local pid=$!
-    [ "$had_m" = "1" ] || set +m
+    [ "$had_m" = "1" ] || [ -n "${ZSH_VERSION:-}" ] || set +m
     local t0=$SECONDS slept=0 step=1 timedout=0 rc=0
     while kill -0 "$pid" 2>/dev/null; do
         if [ "$(( SECONDS - t0 ))" -gt "$secs" ]; then timedout=1; break; fi

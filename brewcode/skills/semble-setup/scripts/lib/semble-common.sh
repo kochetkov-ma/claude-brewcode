@@ -3,7 +3,7 @@
 # Bash 3.2 compatible. No jq: all JSON goes through `node -e`.
 # Callers do:  . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/semble-common.sh"
 
-SEMBLE_PIN_VERSION="${SEMBLE_PIN_VERSION:-0.5.5}"
+SEMBLE_PIN_VERSION="${SEMBLE_PIN_VERSION:-0.6.2}"
 SEMBLE_PIN_SPEC="semble[mcp]==${SEMBLE_PIN_VERSION}"
 SEMBLE_SERVER_NAME="semble_code"
 SEMBLE_UPSTREAM_NAME="semble"
@@ -29,7 +29,7 @@ sc_content_set_csv() {
 }
 sc_content_scope() {
   local content="${1:-$SEMBLE_CONTENT_ARGS}"
-  # Deliberate word split: normalize like semble 0.5.5's sorted set.
+  # Deliberate word split: normalize like semble's sorted set.
   # shellcheck disable=SC2086
   printf '%s\n' $content | sort -u | paste -s -d '-' -
 }
@@ -37,7 +37,9 @@ sc_index_leaf() {
   local scope; scope="$(sc_content_scope "${1:-$SEMBLE_CONTENT_ARGS}")"
   [ "$scope" = "code" ] && printf 'index\n' || printf 'index-%s\n' "$scope"
 }
+# shellcheck disable=SC2034  # read by the sourcing scripts
 SEMBLE_TOOL_SEARCH="mcp__semble_code__search"
+# shellcheck disable=SC2034  # read by the sourcing scripts
 SEMBLE_TOOL_RELATED="mcp__semble_code__find_related"
 SEMBLE_STATE_SCHEMA=1
 # Bounds for the two shell-outs to foreign binaries. The uvx probe may do an
@@ -112,7 +114,7 @@ sc_cache_base() {
   esac
 }
 # Historical name retained for callers and user configuration. It is the one
-# shared cache root for every 0.5.5 content variant.
+# shared cache root for every content variant.
 sc_cache_root_code() { printf '%s\n' "${SEMBLE_CACHE_ROOT_CODE:-$(sc_cache_base)/semble-code}"; }
 
 # ── repo hash — must byte-match semble/cache.py:27-36 ────────────────────────
@@ -130,6 +132,7 @@ sc_sha256() {
 
 sc_repo_hash() {
   local p="${1:?sc_repo_hash needs a path}" r
+  # shellcheck disable=SC2088  # a literal ~ is matched on purpose and expanded by hand
   case "$p" in "~") p="$(sc_home)" ;; "~/"*) p="$(sc_home)/${p#\~/}" ;; esac
   r="$( cd "$p" 2>/dev/null && pwd -P )" || return 1
   printf '%s' "$r" | sc_sha256
@@ -140,7 +143,7 @@ sc_repo_cache_dir() {
   h="$(sc_repo_hash "$p")" || return 1
   printf '%s\n' "$root/$h"
 }
-# 0.5.5 cache.py: code-only keeps `index`; every other exact content set uses
+# cache.py since 0.5.5: code-only keeps `index`; every other exact content set uses
 # `index-<sorted-scope>`. A combined cache left at bare `index` is a legacy
 # pre-0.5.5 entry and must not be accepted as the current variant.
 sc_repo_index_dir() {
@@ -319,6 +322,7 @@ sc_semble_probe_arg() {
 # treated as a broken pin: it retries `--help`, which is safe at every version.
 # Bounded: on a cold uv cache this is an uncached network fetch, and status runs
 # it in every mode. Exit: 0 resolvable | 124 timed out | 1 anything else.
+# shellcheck disable=SC2034  # SEMBLE_PROBE_* are read by the caller after the call
 sc_semble_probe() {
   SEMBLE_PROBE_REASON=""
   SEMBLE_PROBE_VERSION=""
@@ -347,8 +351,24 @@ sc_semble_probe() {
 }
 
 # ── paths ───────────────────────────────────────────────────────────────────
-sc_claude_json()      { printf '%s\n' "$(sc_home)/.claude.json"; }
-sc_user_settings()    { printf '%s\n' "$(sc_home)/.claude/settings.json"; }
+# Active config dir as CC resolves it: CLAUDE_CONFIG_DIR, empty = default profile.
+# Hermetic under SEMBLE_TEST_HOME: only SEMBLE_TEST_CONFIG_DIR counts there.
+sc_config_dir() {
+  local d
+  if [ -n "${SEMBLE_TEST_HOME:-}" ]; then d="${SEMBLE_TEST_CONFIG_DIR:-}"; else d="${CLAUDE_CONFIG_DIR:-}"; fi
+  [ "$d" = "/" ] || d="${d%/}"
+  printf '%s\n' "$d"
+}
+# CC 2.1.296: join(CLAUDE_CONFIG_DIR || homedir, ".claude.json"). An explicit
+# CLAUDE_CONFIG_DIR=~/.claude therefore reads ~/.claude/.claude.json, not ~/.claude.json.
+sc_claude_json() {
+  local d; d="$(sc_config_dir)"
+  printf '%s\n' "${d:-$(sc_home)}/.claude.json"
+}
+sc_user_settings() {
+  local d; d="$(sc_config_dir)"
+  printf '%s\n' "${d:-$(sc_home)/.claude}/settings.json"
+}
 sc_project_settings() { printf '%s\n' "$(sc_project_root)/.claude/settings.json"; }
 sc_state_file()       { printf '%s\n' "$(sc_project_root)/.claude/semble/state.json"; }
 sc_rule_file()        { printf '%s\n' "$(sc_project_root)/.claude/rules/semble-first.md"; }
@@ -396,7 +416,8 @@ sc_jstr() { node -e 'process.stdout.write(JSON.stringify(process.argv[1]||""))' 
 
 sc_backup() {
   [ -f "$1" ] || return 0
-  local b="$1.bak.$(date +%s)"
+  local b
+  b="$1.bak.$(date +%s)"
   cp "$1" "$b" && printf '%s\n' "$b"
 }
 
@@ -452,6 +473,7 @@ process.stdout.write(JSON.stringify(out));
 # `add` and `repair` both do.
 sc_mcp_state() {
   sc_require_node
+  # shellcheck disable=SC2016  # JavaScript source, not shell: $ is literal
   SC_DUMP="$(sc_mcp_dump)" SC_SPEC="$SEMBLE_PIN_SPEC" SC_ROOTCACHE="$(sc_cache_root_code)" \
   SC_CONTENT="$SEMBLE_CONTENT_ARGS" node -e '
 const d=JSON.parse(process.env.SC_DUMP), spec=process.env.SC_SPEC, want=process.env.SC_ROOTCACHE;
@@ -495,6 +517,106 @@ process.stdout.write(JSON.stringify({type:"stdio",command:"uvx",
  alwaysLoad:process.env.SC_ALWAYS==="true"}));'
 }
 
+# ── version check: registration vs pin vs upstream ──────────────────────────
+SEMBLE_UPSTREAM_URL="${SEMBLE_UPSTREAM_URL:-https://pypi.org/pypi/semble/json}"
+SEMBLE_UPSTREAM_TIMEOUT="${SEMBLE_UPSTREAM_TIMEOUT:-4}"
+
+# {"latest":"X.Y.Z"|null,"reason":"ok|offline|no_curl|unparseable"}; never fails.
+# Bounded by SEMBLE_UPSTREAM_TIMEOUT; SEMBLE_NO_NETWORK=1 skips the call.
+sc_upstream_json() {
+  sc_require_node
+  local body="" reason="ok"
+  if [ "${SEMBLE_NO_NETWORK:-}" = "1" ]; then
+    reason="offline"
+  elif ! sc_have curl; then
+    reason="no_curl"
+  else
+    body="$(curl -fsSL --connect-timeout "$SEMBLE_UPSTREAM_TIMEOUT" --max-time "$SEMBLE_UPSTREAM_TIMEOUT" \
+      "$SEMBLE_UPSTREAM_URL" 2>/dev/null)" || reason="offline"
+  fi
+  printf '%s' "$body" | SC_REASON="$reason" node -e '
+let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{
+  const o={latest:null,reason:process.env.SC_REASON};
+  if(o.reason==="ok"){
+    let v="";try{v=String(JSON.parse(d).info.version)}catch(e){}
+    if(/^\d+\.\d+\.\d+$/.test(v))o.latest=v;else o.reason="unparseable";
+  }
+  process.stdout.write(JSON.stringify(o));});'
+}
+
+# sc_versions_json [all] -> pin, upstream and one verdict row per config dir.
+# Reads ONLY mcpServers.<server> from each profile file. Verdict words: see usage.
+sc_versions_json() {
+  sc_require_node
+  SC_ALL="${1:-}" SC_UP="$(sc_upstream_json)" SC_HOME="$(sc_home)" SC_CFG="$(sc_config_dir)" \
+  SC_NAME="$SEMBLE_SERVER_NAME" SC_PIN="$SEMBLE_PIN_VERSION" SC_SPEC="$SEMBLE_PIN_SPEC" \
+  SC_CACHE="$(sc_cache_root_code)" SC_CONTENT="$SEMBLE_CONTENT_ARGS" SC_ALWAYS="$SEMBLE_ALWAYS_LOAD" \
+  SC_GENBY="$SEMBLE_GENERATED_BY" node -e '
+const fs=require("fs"),path=require("path"),E=process.env;
+const home=E.SC_HOME,pin=E.SC_PIN,spec=E.SC_SPEC,cfg=E.SC_CFG;
+const cmp=(a,b)=>{const x=a.split(".").map(Number),y=b.split(".").map(Number);
+  for(let i=0;i<3;i++){if(x[i]!==y[i])return x[i]<y[i]?-1:1}return 0};
+let up;try{up=JSON.parse(E.SC_UP)}catch(e){up={latest:null,reason:"unparseable"}}
+let status="unknown",advisory="";
+if(up.latest){const c=cmp(pin,up.latest);status=c===0?"current":(c<0?"behind":"ahead");
+  if(c<0)advisory="pin behind upstream ("+pin+" < "+up.latest+")";
+  if(c>0)advisory="pin ahead of upstream ("+pin+" > "+up.latest+")";}
+const want=["--from",spec,"semble","--content"].concat(E.SC_CONTENT.split(" ")).join(" ");
+function row(dir,file,active){
+  const r={dir,file,active,registered:null,registeredVersion:null,pin,
+    verdict:"not_registered",detail:"",action:"/brewcode:semble-setup install"};
+  let raw;try{raw=fs.readFileSync(file,"utf8")}catch(e){r.detail="no config file";return r}
+  let j={};
+  if(raw.trim()){try{j=JSON.parse(raw)}catch(e){
+    r.verdict="malformed";r.detail="config file is not valid JSON";r.action="fix the file by hand";return r}}
+  const c=j&&typeof j==="object"&&j.mcpServers&&j.mcpServers[E.SC_NAME];
+  if(!c||typeof c!=="object")return r;
+  const args=Array.isArray(c.args)?c.args.map(String):[];
+  const i=args.indexOf("--from");
+  r.registered=(i>=0&&args[i+1])?args[i+1]:"unparsed";
+  r.action="/brewcode:semble-setup upgrade";
+  const m=/^semble(?:\[mcp\])?==(\d+\.\d+\.\d+)$/.exec(r.registered);
+  if(!m){r.verdict="unpinned";r.detail="registered spec carries no exact X.Y.Z";return r}
+  r.registeredVersion=m[1];
+  const c2=cmp(m[1],pin);
+  if(c2!==0){r.verdict=c2<0?"stale":"ahead";r.detail="registered "+m[1]+", pin "+pin;return r}
+  const bad=[];
+  if(c.command!=="uvx")bad.push("command");
+  if(args.join(" ")!==want)bad.push("args");
+  if((c.env||{}).SEMBLE_CACHE_LOCATION!==E.SC_CACHE)bad.push("env.SEMBLE_CACHE_LOCATION");
+  if(!(c.type===undefined||c.type==="stdio"))bad.push("type");
+  if(c.alwaysLoad!==(E.SC_ALWAYS==="true"))bad.push("alwaysLoad");
+  if(bad.length){r.verdict="drift";r.detail="pin matches, differs: "+bad.join(", ");return r}
+  r.verdict="ok";r.action="none";return r;
+}
+const rows=[],seen={};
+const keyOf=(f)=>{try{return fs.realpathSync(f)}catch(e){return f}};
+function add(dir,file,active){
+  const k=keyOf(file);
+  if(seen[k]){if(active)seen[k].active=true;return}
+  seen[k]=row(dir,file,active);rows.push(seen[k]);
+}
+const isDir=(p)=>{try{return fs.statSync(p).isDirectory()}catch(e){return false}};
+if(E.SC_ALL==="all"){
+  const def=path.join(home,".claude.json");
+  if(fs.existsSync(def)||isDir(path.join(home,".claude")))add(path.join(home,".claude"),def,false);
+  let names=[];try{names=fs.readdirSync(home).sort()}catch(e){}
+  for(const n of names){
+    if(n.indexOf(".claude-")!==0)continue;
+    const d=path.join(home,n),f=path.join(d,".claude.json");
+    if(isDir(d)&&fs.existsSync(f))add(d,f,false);
+  }
+}
+const actDir=cfg||path.join(home,".claude"),actFile=path.join(cfg||home,".claude.json");
+add(actDir,actFile,true);
+const def0=path.join(home,".claude.json"),act=seen[keyOf(actFile)];
+if(cfg&&path.resolve(cfg)===path.join(home,".claude")&&fs.existsSync(def0)&&act.verdict==="not_registered")
+  act.detail=(act.detail?act.detail+"; ":"")+"CLAUDE_CONFIG_DIR is set explicitly: Claude Code reads this file, not "+def0;
+process.stdout.write(JSON.stringify({schema:1,setup:E.SC_GENBY,package:"semble",pin,pinSpec:spec,
+  upstream:{latest:up.latest,status,reason:up.reason,advisory},
+  active:{dir:actDir,file:actFile},profiles:rows}));'
+}
+
 # ── state ───────────────────────────────────────────────────────────────────
 sc_state_get() {
   sc_require_node
@@ -519,6 +641,7 @@ sc_state_patch() {
   # would only kill the substitution subshell and hand node an EMPTY version.
   local _pv
   _pv="$(sc_plugin_version)" || sc_die "ABORT: nothing was written to $(sc_state_file)"
+  # shellcheck disable=SC2016  # JavaScript source, not shell: $ is literal
   SC_F="$(sc_state_file)" SC_PATCH="${1:?}" SC_SCHEMA="$SEMBLE_STATE_SCHEMA" \
   SC_ROOT="$(sc_project_root)" SC_VER="$SEMBLE_PIN_VERSION" \
   SC_PLUGIN_VER="$_pv" SC_GENBY="$SEMBLE_GENERATED_BY" SC_TODAY="$(sc_today)" node -e '
