@@ -86,6 +86,11 @@ switch(args[0]) {
     process.stdout.write(args.includes('cat') ? fs.readFileSync(process.env.FIX_INFO, 'utf8') : process.env.FIX_HASH+'  /srv/getting-started/index.html\\n'); break;
   case 'compose':
     process.stdout.write(args[1]==='ps' ? 'fixture-container\\n' : ''); break;
+  case 'login': {
+    const secret = fs.readFileSync(0, 'utf8');
+    fs.appendFileSync(process.env.FIX_STDIN_LOG, JSON.stringify(secret)+'\\n');
+    process.exitCode = secret ? 0 : 1; break;
+  }
 }
 `);
 stub('curl', `
@@ -107,8 +112,17 @@ const base = {
   ...process.env, PATH: bin + ':' + process.env.PATH, IMAGE,
   FIX_SHA: SHA, FIX_IMAGE_SHA: SHA, FIX_VERSION: '1.2.3', FIX_RUN: '123', FIX_ATTEMPT: '1', GITHUB_RUN_ATTEMPT: '1',
   FIX_DIGEST: DIGEST, FIX_INFO: join(temp, 'info'), FIX_PAGE: join(temp, 'page'),
-  FIX_HASH: HASH, FIX_LOG: join(temp, 'commands.log'),
+  FIX_HASH: HASH, FIX_LOG: join(temp, 'commands.log'), FIX_STDIN_LOG: join(temp, 'login-stdin.log'),
 };
+const GHCR_USER = 'fixture-actor', GHCR_TOKEN = 'fixture-ghcr-token-value';
+const LOGIN = 'login ghcr.io -u ' + GHCR_USER + ' --password-stdin', PULL = 'compose pull docs', LOGOUT = 'logout ghcr.io';
+// Only the source workflow logs in to GHCR; the template step has no login.
+const registry = { source: { login: [LOGIN], logout: [LOGOUT], stdin: [GHCR_TOKEN] }, template: { login: [], logout: [], stdin: [] } };
+const reset = () => { writeFileSync(base.FIX_LOG, ''); writeFileSync(base.FIX_STDIN_LOG, ''); };
+const lines = (path) => readFileSync(path, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line));
+const registryEvents = () => lines(base.FIX_LOG)
+  .filter((args) => ['login', 'logout'].includes(args[0]) || (args[0] === 'compose' && args[1] === 'pull'))
+  .map((args) => args.join(' '));
 const bash = (body, env, cwd) => spawnSync('/bin/bash', ['-c', body], { cwd, env: { ...base, ...env }, encoding: 'utf8' });
 const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
 async function api(body, env, runPatch = {}, workflowPatch = {}) {
@@ -241,18 +255,36 @@ try {
     // GIVEN a started service WHEN verification fails THEN rollback is attempted and failure stays nonzero.
     const remoteStep = consumer.jobs.deploy.steps.find((item) => item.uses?.startsWith('appleboy/ssh-action'));
     const remote = remoteStep.with.script.replace('DOCS_PATH=/opt/brewcode-docs', 'DOCS_PATH="' + cwd + '"');
-    const remoteEnv = { ...verifierEnv, TAG: 'sha-' + SHA + '-123-1', EXPECTED_DIGEST: DIGEST, EXPECTED_ATTEMPT: '1' };
-    for (const [name, changes, expected, restoredTag] of [
-      ['valid', {}, 0, 'DOCS_TAG=sha-' + SHA + '-123-1\n'],
-      ['metadata mismatch', { FIX_INFO: join(temp, 'bad-info') }, 1, 'DOCS_TAG=1.2.2\n'],
-      ['runtime label mismatch', { FIX_IMAGE_SHA: OTHER_SHA }, 1, 'DOCS_TAG=1.2.2\n'],
-      ['runtime attempt mismatch', { FIX_ATTEMPT: '2' }, 1, 'DOCS_TAG=1.2.2\n'],
+    const remoteEnv = { ...verifierEnv, TAG: 'sha-' + SHA + '-123-1', EXPECTED_DIGEST: DIGEST, EXPECTED_ATTEMPT: '1', GHCR_USER, GHCR_TOKEN };
+    const { login, logout, stdin } = registry[label];
+    for (const [name, changes, expected, restoredTag, pulls] of [
+      ['valid', {}, 0, 'DOCS_TAG=sha-' + SHA + '-123-1\n', [PULL]],
+      ['metadata mismatch', { FIX_INFO: join(temp, 'bad-info') }, 1, 'DOCS_TAG=1.2.2\n', [PULL, PULL]],
+      ['runtime label mismatch', { FIX_IMAGE_SHA: OTHER_SHA }, 1, 'DOCS_TAG=1.2.2\n', [PULL, PULL]],
+      ['runtime attempt mismatch', { FIX_ATTEMPT: '2' }, 1, 'DOCS_TAG=1.2.2\n', [PULL, PULL]],
     ]) {
       writeFileSync(join(cwd, '.env'), 'DOCS_TAG=1.2.2\n');
+      reset();
       const result = bash(remote, { ...remoteEnv, ...changes }, cwd);
       check(result.status, expected, label + ': remote ' + name + ' ' + result.stderr);
       check(readFileSync(join(cwd, '.env'), 'utf8'), restoredTag, label + ': remote ' + name + ' version selection');
+      // Exact order: login before the first pull; logout last on success and rollback alike.
+      check(registryEvents(), [...login, ...pulls, ...logout], label + ': remote ' + name + ' GHCR login/pull/logout order');
+      check(lines(base.FIX_STDIN_LOG), stdin, label + ': remote ' + name + ' token reaches docker login via stdin');
+      check(readFileSync(base.FIX_LOG, 'utf8').includes(GHCR_TOKEN), false, label + ': remote ' + name + ' token never in docker argv');
     }
+    // GIVEN no job token WHEN the remote script starts THEN the source fails before any pull or .env edit.
+    writeFileSync(join(cwd, '.env'), 'DOCS_TAG=1.2.2\n');
+    reset();
+    const tokenless = bash(remote, { ...remoteEnv, GHCR_TOKEN: undefined }, cwd);
+    check(tokenless.status, { source: 1, template: 0 }[label], label + ': remote without GHCR_TOKEN ' + tokenless.stderr);
+    // Unbound GHCR_TOKEN kills the printf subshell; its inherited EXIT trap races docker login, so compare sorted.
+    const tokenlessEvents = registryEvents();
+    check(tokenlessEvents.toSorted(), { source: [LOGIN, LOGOUT, LOGOUT], template: [PULL] }[label], label + ': remote without GHCR_TOKEN pulls nothing after a failed login');
+    check(tokenlessEvents.at(-1), { source: LOGOUT, template: PULL }[label], label + ': remote without GHCR_TOKEN ends with the EXIT-trap logout');
+    check(lines(base.FIX_STDIN_LOG), { source: [''], template: [] }[label], label + ': remote without GHCR_TOKEN sends an empty stdin');
+    check(readFileSync(join(cwd, '.env'), 'utf8'), { source: 'DOCS_TAG=1.2.2\n', template: 'DOCS_TAG=sha-' + SHA + '-123-1\n' }[label],
+      label + ': remote without GHCR_TOKEN version selection');
     // GIVEN a branch ref WHEN deriving its version THEN routing keeps the original bounded branch policy.
     check(bash(step(producer, 'Compute image tags').run, {
       GITHUB_OUTPUT: output, GITHUB_REF: 'refs/heads/feature/one', GITHUB_REF_NAME: 'feature/one', GITHUB_RUN_ID: '123',
