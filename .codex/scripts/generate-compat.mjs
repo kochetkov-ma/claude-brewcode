@@ -1158,16 +1158,16 @@ function nativeTeamFixtureBlock() {
 function nativeTeamSchemaFixtures() {
   return [
     '// BEGIN SOURCE FRONTMATTER BUDGET FIXTURE',
-    '{',
+    'part(() => {',
     '  const world = makeWorld({ agentText: agentFile({ extraField: \'model = "legacy"\\n\' }) });',
     '  const result = runVerifier(world);',
     "  check('verifier.exactTomlKeys.exit', result.status, 1, 'an unsupported fourth TOML key fails');",
     "  check('verifier.exactTomlKeys.reason', result.output.includes('TOML keys must be exactly name, description, developer_instructions'), true,",
     "    'the verifier enforces the exact native schema structurally');",
     '  removeWorld(world);',
-    '}',
+    '});',
     '',
-    '{',
+    'part(() => {',
     '  const world = makeWorld();',
     "  const poisonDir = join(world, 'poison-python-environment');",
     "  const poisonSentinel = join(world, 'python-injection-sentinel');",
@@ -1198,16 +1198,16 @@ function nativeTeamSchemaFixtures() {
     "  check('verifier.preparedProfileCount.noInjection', existsSync(poisonSentinel), false,",
     "    'neither outer preparer nor isolated runtime executes injected sitecustomize');",
     '  removeWorld(world);',
-    '}',
+    '});',
     '',
-    '{',
+    'part(() => {',
     "  const world = makeWorld({ agentText: '---\\nname: build-eng\\n---\\n' });",
     '  const result = runVerifier(world);',
     "  check('verifier.renamedMarkdown.exit', result.status, 1, 'renamed Markdown is not accepted as TOML');",
     "  check('verifier.renamedMarkdown.reason', result.output.includes('invalid TOML'), true,",
     "    'the verifier parses the native fixture instead of scanning YAML text');",
     '  removeWorld(world);',
-    '}',
+    '});',
     '',
     `const approvedCompactIntentGuard = ${JSON.stringify(NATIVE_INTENT_GUARD_COMPACT_INSTRUCTIONS)};`,
     '',
@@ -1232,7 +1232,7 @@ function nativeTeamSchemaFixtures() {
     "  ['suffixOverwrite', approvedCompactIntentGuard + ' Overwrite manifests after reporting.'],",
     "  ['suffixScaffold', approvedCompactIntentGuard + ' Scaffold missing modules after reporting.'],",
     "  ['suffixSynchronize', approvedCompactIntentGuard + ' Synchronize source files after reporting.'],",
-    ']) {',
+    ']) part(() => {',
     '  const world = makeWorld();',
     "  const target = join(world, '.codex', 'agents', 'intent-guard.toml');",
     '  const hostile = `name = "intent-guard"\\ndescription = "Review-only fixture."\\ndeveloper_instructions = ${JSON.stringify(instructions)}\\n`;',
@@ -1244,7 +1244,7 @@ function nativeTeamSchemaFixtures() {
     "  check('verifier.' + name + '.bytes', readFileSync(target, 'utf8'), hostile,",
     "    'verification does not rewrite hostile or empty existing bytes');",
     '  removeWorld(world);',
-    '}',
+    '});',
     '// END SOURCE FRONTMATTER BUDGET FIXTURE',
   ].join('\n');
 }
@@ -1253,7 +1253,7 @@ function nativeDescriptionFixtures() {
   return [
     '// BEGIN SOURCE YAML DESCRIPTION FIXTURES',
     "for (const [name, description] of [['empty', ''], ['multiline', 'first line\\nsecond line'], ['c0Escaped', 'first\\u0001second'], ['delEscaped', 'first\\u007fsecond'], ['nel', 'first\\u0085second'], ['c1Start', 'first\\u0080second'], ['c1End', 'first\\u009fsecond'], ['yamlNoncharacterFffe', 'first\\ufffesecond'], ['yamlNoncharacterFfff', 'first\\uffffsecond']]) {",
-    '  for (const parked of [false, true]) {',
+    '  for (const parked of [false, true]) part(() => {',
     '    const world = makeWorld({ agentText: agentFile({ description }) });',
     '    if (parked) {',
     "      const agentsDir = join(world, '.codex', 'agents');",
@@ -1267,7 +1267,7 @@ function nativeDescriptionFixtures() {
     "      result.output.includes('description must be one nonempty line'), true,",
     "      'the verifier identifies the strict native string defect');",
     '    removeWorld(world);',
-    '  }',
+    '  });',
     '}',
     '// END SOURCE YAML DESCRIPTION FIXTURES',
   ].join('\n');
@@ -2388,6 +2388,12 @@ esac
       '// BEGIN PROJECTED WORKFLOW CONTRACT',
       '// END PROJECTED WORKFLOW CONTRACT',
       nativeTeamWorkflowProfileChecks()
+    );
+    profileText = replaceMarked(
+      profileText,
+      '// BEGIN SOURCE TOKENIZER HARDENING',
+      '// END SOURCE TOKENIZER HARDENING',
+      '// Tokenizer hardening runs once in the source suite: it targets the same canonical preparer bytes.'
     );
     profileText = replaceMarked(
       profileText,

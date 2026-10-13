@@ -54,7 +54,7 @@ jobs:
           fi
           printf 'tag=%s\n' "$TAG" >> "$GITHUB_OUTPUT"
       - name: Log in to GHCR
-        uses: docker/login-action@v4
+        uses: docker/login-action@v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -89,7 +89,7 @@ jobs:
           printf 'sha=%s\nversion=%s\nbuild_run_id=%s\nbuild_attempt=%s\ntag=%s\ndigest=%s\npage_hash=%s\n' \
             "$SHA" "$VERSION" "$BUILD_RUN_ID" "$BUILD_ATTEMPT" "$TAG" "$DIGEST" "$PAGE_HASH" >> "$GITHUB_OUTPUT"
       - name: Verify successful source build
-        uses: actions/github-script@v9
+        uses: actions/github-script@v9.0.0
         env:
           BUILD_SHA: ${{ steps.image.outputs.sha }}
           BUILD_RUN_ID: ${{ steps.image.outputs.build_run_id }}
@@ -112,7 +112,7 @@ jobs:
               throw new Error('Image does not match a successful same-repository Docs build');
             }
       - name: Checkout verified source
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
         with:
           ref: ${{ steps.image.outputs.sha }}
           fetch-depth: 0
@@ -124,7 +124,7 @@ jobs:
           [[ "$(git rev-parse HEAD)" == "$BUILD_SHA" ]] || { echo "::error::Build provenance validation failed"; exit 1; }
       - name: Create deployment
         id: deployment
-        uses: actions/github-script@v9
+        uses: actions/github-script@v9.0.0
         env:
           BUILD_SHA: ${{ steps.image.outputs.sha }}
           IMAGE_TAG: ${{ steps.image.outputs.tag }}
@@ -145,7 +145,7 @@ jobs:
             });
             return deployment.data.id;
       - name: Copy deploy files to VPS
-        uses: appleboy/scp-action@v1
+        uses: appleboy/scp-action@v1.0.0
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
@@ -154,7 +154,7 @@ jobs:
           target: /tmp/brewcode-docs-sync
           strip_components: 3
       - name: Deploy docs service
-        uses: appleboy/ssh-action@v1
+        uses: appleboy/ssh-action@v1.2.5
         env:
           TAG: ${{ steps.image.outputs.tag }}
           EXPECTED_SHA: ${{ steps.image.outputs.sha }}
@@ -262,7 +262,7 @@ jobs:
           exit 1
       - name: Update deployment (success)
         if: success()
-        uses: actions/github-script@v9
+        uses: actions/github-script@v9.0.0
         env:
           DEPLOYMENT_ID: ${{ steps.deployment.outputs.result }}
         with:
@@ -276,7 +276,7 @@ jobs:
             });
       - name: Update deployment (failure)
         if: failure()
-        uses: actions/github-script@v9
+        uses: actions/github-script@v9.0.0
         env:
           DEPLOYMENT_ID: ${{ steps.deployment.outputs.result }}
         with:
