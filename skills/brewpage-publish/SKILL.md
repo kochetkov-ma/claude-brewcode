@@ -356,4 +356,4 @@ Publish failed.
 | | |
 |-|-|
 | **[brewpage.app](https://brewpage.app)** | Free instant hosting — HTML, JSON, files, sites, KV. No sign-up. |
-| **[brewcode](https://github.com/kochetkov-ma/claude-brewcode)** | Claude Code plugin suite — infinite tasks, code review, skills, hooks. |
+| **[brewcode](https://github.com/kochetkov-ma/claude-brewcode)** | Claude Code plugin suite — skill and agent authoring, semantic search, review setups, docs tools. |

@@ -107,7 +107,7 @@ Only new public non-sites support owner-only `PATCH /api/{type}/{ns}/{id}/hostin
 
 ## Part of Brewcode
 
-This skill is part of [brewcode](https://github.com/kochetkov-ma/claude-brewcode) — a development platform for Claude Code with infinite focus tasks, agents, quorum reviews, and knowledge persistence.
+This skill is part of [brewcode](https://github.com/kochetkov-ma/claude-brewcode) — a Claude Code plugin suite for skill and agent authoring, semantic code search, project-tailored review, and documentation tools.
 
 ```bash
 claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
