@@ -889,6 +889,7 @@ Use native Codex plugin CLI only; never edit caches or configuration files direc
 2. Snapshot plugin id, version, enabled state, managed agent files, and whether the marketplace is configured.
 3. Use \`codex plugin marketplace add <repository-root>\`, \`codex plugin remove <plugin-id>\`, and \`codex plugin add <plugin>@<marketplace>\` only.
 4. For this repository run \`node .codex/scripts/install-update.mjs migrate\`; it moves known remote 4.0.5 installs to the exact local manifests in one rollback-protected transaction.
+   For an existing install run \`node .codex/scripts/install-update.mjs update\`: it updates each plugin in place in its own marketplace, keeps every enabled/disabled flag and user-only agent TOML keys, and removes retired agents, rollback-protected.
 5. On any failure, restore every prior plugin id and verify version/enabled state, restore managed agents, and remove a newly added marketplace.
 6. Re-run \`codex plugin list --json\`, validators, and hook fixtures; tell the user to review hook definitions and start a fresh session.
 

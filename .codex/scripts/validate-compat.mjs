@@ -405,7 +405,8 @@ for (const root of [
   path.join(ROOT, 'brewtools', '.codex', 'skills', 'task-board-setup'),
   path.join(ROOT, '.codex', 'plugins', 'brewtools', 'skills', 'task-board-setup')
 ]) {
-  if (walk(root).some(file => file.includes(`${path.sep}.claude${path.sep}`) || file.endsWith(`${path.sep}.claude`))) {
+  // Relative to ROOT: a checkout under a `.claude/` parent (agent worktrees) is not an in-repo artifact.
+  if (walk(root).some(file => path.relative(ROOT, file).split(path.sep).includes('.claude'))) {
     fail('task-board-setup Codex variant contains a stale foreign-assistant artifact');
   }
 }
