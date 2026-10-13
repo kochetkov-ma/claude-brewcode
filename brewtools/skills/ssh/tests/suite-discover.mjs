@@ -2,7 +2,9 @@
 // Suite server-discover.sh (BT-F21): port/connection operands never word-split into ssh options; discovery bounded by portable in-process deadline.
 // argv-capturing `ssh` stub on PATH, no network, no real SSH; unconditional exact-equality checks with description.
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, chmodSync, rmSync, realpathSync } from 'node:fs';
+import {
+  mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, chmodSync, rmSync, realpathSync, openSync, closeSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -37,13 +39,20 @@ function sandbox(body) {
     `#!/bin/bash\nfor a in "$@"; do printf '%s\\n' "$a" >> "${log}"; done\nprintf -- '---\\n' >> "${log}"\n[ -n "\${STUB_SLEEP:-}" ] && sleep "$STUB_SLEEP"\nexit "\${STUB_EXIT:-0}"\n`,
   );
   chmodSync(join(bin, 'ssh'), 0o755);
+  // File stdio: the script's orphaned watchdog `sleep` holds inherited pipes for the whole budget.
   const run = (args, env = {}) => {
+    const outPath = join(base, 'stdout.txt');
+    const errPath = join(base, 'stderr.txt');
+    const out = openSync(outPath, 'w');
+    const err = openSync(errPath, 'w');
     const r = spawnSync('bash', [SCRIPT, ...args], {
-      encoding: 'utf8',
+      stdio: ['ignore', out, err],
       env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, ...env },
       timeout: 30000,
     });
-    return { stdout: r.stdout || '', stderr: r.stderr || '', status: r.status };
+    closeSync(out);
+    closeSync(err);
+    return { stdout: readFileSync(outPath, 'utf8'), stderr: readFileSync(errPath, 'utf8'), status: r.status };
   };
   const argv = () => (existsSync(log) ? readFileSync(log, 'utf8') : '');
   try {

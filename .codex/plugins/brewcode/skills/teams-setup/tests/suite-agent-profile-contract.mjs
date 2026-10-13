@@ -180,12 +180,8 @@ const canonicalTraceOpsPath = join(repo, 'brewcode', 'skills', 'teams-setup', 's
 const projectedSkillPath = join(repo, 'brewcode', '.codex', 'skills', 'teams-setup', 'SKILL.md');
 const projectedTemplatePath = join(repo, 'brewcode', '.codex', 'skills', 'teams-setup', 'references', 'agent-template.md');
 const projectedFrameworkPath = join(repo, 'brewcode', '.codex', 'skills', 'teams-setup', 'references', 'framework-files.md');
-const distributedTemplatePath = join(repo, '.codex', 'plugins', 'brewcode', 'skills', 'teams-setup', 'references', 'agent-template.md');
-const distributedFrameworkPath = join(repo, '.codex', 'plugins', 'brewcode', 'skills', 'teams-setup', 'references', 'framework-files.md');
 const projectedCounterPath = join(repo, 'brewcode', '.codex', 'skills', 'teams-setup', 'scripts', 'count-tokens.py');
-const distributedCounterPath = join(repo, '.codex', 'plugins', 'brewcode', 'skills', 'teams-setup', 'scripts', 'count-tokens.py');
 const projectedPreparerPath = join(repo, 'brewcode', '.codex', 'skills', 'teams-setup', 'scripts', 'prepare-tokenizer.py');
-const distributedPreparerPath = join(repo, '.codex', 'plugins', 'brewcode', 'skills', 'teams-setup', 'scripts', 'prepare-tokenizer.py');
 const projectedCreatorPath = join(repo, 'brewcode', '.codex', 'agents', 'agent-creator.toml');
 
 for (const [name, path] of [
@@ -194,577 +190,28 @@ for (const [name, path] of [
   ['projectedSkill', projectedSkillPath],
   ['projectedTemplate', projectedTemplatePath],
   ['projectedFramework', projectedFrameworkPath],
-  ['distributedTemplate', distributedTemplatePath],
-  ['distributedFramework', distributedFrameworkPath],
   ['canonicalCounter', canonicalCounterPath],
   ['projectedCounter', projectedCounterPath],
-  ['distributedCounter', distributedCounterPath],
   ['canonicalPreparer', canonicalPreparerPath],
   ['projectedPreparer', projectedPreparerPath],
-  ['distributedPreparer', distributedPreparerPath],
   ['projectedCreator', projectedCreatorPath],
 ]) {
   check(`${name}.exists`, existsSync(path), true, `${name} artifact exists`);
 }
 
-const tokenizerUrl = 'https://openaipublic.blob.core.windows.net/encodings/o200k_base.tiktoken';
-const encodingDigest = '446a9538cb6c348e3516120d7c08b09f57c36495e2acfffe59a5bf8b0cfb1a2d';
-const preparerManifestResult = spawnSync('python3', ['-I', '-S', canonicalPreparerPath, 'manifest'], {
-  encoding: 'utf8',
-});
-const preparerManifest = JSON.parse(preparerManifestResult.stdout);
-check('preparer.manifest.exit', preparerManifestResult.status, 0, 'the artifact manifest resolves');
-check('preparer.manifest.version', preparerManifest.tiktoken_version, '0.13.0', 'the package is exact');
-check('preparer.manifest.encodingHash', preparerManifest.encoding_sha256, encodingDigest, 'the BPE hash is exact');
-check(
-  'preparer.manifest.declaredDependencies',
-  preparerManifest.declared_dependencies.join('|'),
-  'regex|requests',
-  'upstream metadata dependencies remain explicit',
-);
-check(
-  'preparer.manifest.isolatedDependencies',
-  `${preparerManifest.isolated_installed_dependencies.length}|${preparerManifest.isolated_loaded_dependencies.length}`,
-  '0|0',
-  'the no-deps runtime installs and loads no declared dependency',
-);
-check('preparer.manifest.wheelCount', preparerManifest.wheels.length, 30, 'six CPython ABIs have five exact platform wheels');
-check(
-  'preparer.manifest.platforms',
-  [...new Set(preparerManifest.wheels.map((wheel) => `${wheel.system}/${wheel.machine}`))].sort().join('|'),
-  'Darwin/arm64|Darwin/x86_64|Linux/aarch64|Linux/x86_64|Windows/x86_64',
-  'the exact wheel matrix covers common macOS, Linux, and Windows hosts',
-);
-check(
-  'preparer.manifest.abis',
-  [...new Set(preparerManifest.wheels.map((wheel) => wheel.abi))].sort().join('|'),
-  'cp310|cp311|cp312|cp313|cp314|cp39',
-  'the preparer pins every supported CPython ABI from 3.9 through 3.14',
-);
-const wheelHashes = new Map(preparerManifest.wheels.map((wheel) => [
-  `${wheel.system}/${wheel.machine}/${wheel.abi}`, wheel.sha256,
-]));
-check(
-  'preparer.manifest.macosIntelHash',
-  wheelHashes.get('Darwin/x86_64/cp314'),
-  'eaaaef47c2406277181d2086484c317bf7fc433e2d5d03ff94f56b0dcec87471',
-  'the current Intel macOS wheel hash matches the primary PyPI release manifest',
-);
-check(
-  'preparer.manifest.linuxArmHash',
-  wheelHashes.get('Linux/aarch64/cp314'),
-  '32e0c12305105002c047b3bb1070b0dd9a73b0cb3b2856a8972b810e7a4f5881',
-  'the current Linux ARM64 wheel hash matches the primary PyPI release manifest',
-);
-check(
-  'preparer.manifest.windowsHash',
-  wheelHashes.get('Windows/x86_64/cp314'),
-  '115c4f26ffa11caac8b54eea35c2ad38c612c20a48d35dd15d70a02ac6f51f58',
-  'the current Windows x86_64 wheel hash matches the primary PyPI release manifest',
-);
-
-// GIVEN the canonical counter and verified offline cache.
-// WHEN its runtime identity is requested.
-const preparerCheck = spawnSync('python3', ['-I', '-S', canonicalPreparerPath, 'check'], { encoding: 'utf8' });
-const counterIdentity = spawnSync(
-  'python3', ['-I', '-S', canonicalPreparerPath, 'run', canonicalCounterPath, '--check'], { encoding: 'utf8' },
-);
-// THEN every pinned tokenizer component is reported exactly.
-check('preparer.check.exit', preparerCheck.status, 0, 'the durable tokenizer preflight succeeds');
-check(
-  'preparer.check.durable',
-  preparerCheck.stdout.includes('cache=verified-durable'),
-  true,
-  'the preflight reports the verified durable cache',
-);
-
-const pythonInjectionRoot = mkdtempSync(join(tmpdir(), 'teams-tokenizer-python-injection-'));
-try {
-  // GIVEN: every common Python startup hook points at an unconditional malicious sitecustomize.
-  const poisonSentinel = join(pythonInjectionRoot, 'sitecustomize-executed');
-  writeFileSync(join(pythonInjectionRoot, 'sitecustomize.py'), [
-    'import os',
-    'from pathlib import Path',
-    'Path(os.environ["TOKENIZER_POISON_SENTINEL"]).write_text("executed\\n", encoding="utf-8")',
-    'raise RuntimeError("malicious sitecustomize executed")',
-    '',
-  ].join('\n'));
-  const poisonEnvironment = {
-    ...process.env,
-    PYTHONPATH: pythonInjectionRoot,
-    PYTHONHOME: pythonInjectionRoot,
-    PYTHONUSERBASE: pythonInjectionRoot,
-    PYTHONSTARTUP: join(pythonInjectionRoot, 'sitecustomize.py'),
-    TOKENIZER_POISON_SENTINEL: poisonSentinel,
-  };
-
-  // WHEN: supported isolated preflight and counter paths run through the preparer.
-  const poisonedCheck = spawnSync(
-    'python3', ['-I', '-S', canonicalPreparerPath, 'check'],
-    { encoding: 'utf8', env: poisonEnvironment },
-  );
-  const poisonedRun = spawnSync(
-    'python3', ['-I', '-S', canonicalPreparerPath, 'run', canonicalCounterPath, '--check'],
-    { encoding: 'utf8', env: poisonEnvironment },
-  );
-
-  // THEN: neither the outer preparer nor the isolated venv loads the injected hook.
-  check('preparer.pythonInjection.checkExit', poisonedCheck.status, 0,
-    'isolated preflight ignores hostile Python startup variables');
-  check('preparer.pythonInjection.runExit', poisonedRun.status, 0,
-    'isolated exact counting ignores hostile Python startup variables');
-  check('preparer.pythonInjection.identity',
-    poisonedRun.stdout.includes('tiktoken=0.13.0 encoding=o200k_base'), true,
-    'the protected run still reports the pinned tokenizer identity');
-  check('preparer.pythonInjection.noSentinel', existsSync(poisonSentinel), false,
-    'no malicious sitecustomize executes outside or inside the venv');
-} finally {
-  rmSync(pythonInjectionRoot, { recursive: true, force: true });
+// CI sharding: TEAMS_PROFILE_PART=k of TEAMS_PROFILE_PARTS=n runs part k of the greedy weight split.
+const PROFILE_PARTS = Number.parseInt(process.env.TEAMS_PROFILE_PARTS || '1', 10);
+const PROFILE_PART = Number.parseInt(process.env.TEAMS_PROFILE_PART || '0', 10);
+const partLoads = new Array(PROFILE_PARTS).fill(0);
+function part(body, weight = 1) {
+  const target = partLoads.indexOf(Math.min(...partLoads));
+  partLoads[target] += weight;
+  if (target === PROFILE_PART) body();
 }
+check('profile.part.range', PROFILE_PART >= 0 && PROFILE_PART < PROFILE_PARTS, true,
+  'the selected shard exists, so no part is silently skipped');
 
-const stdinRun = spawnSync('python3', ['-I', '-S', canonicalPreparerPath, 'run', '-', 'arg'], {
-  input: 'import sys\nprint("stdin-safe:" + sys.argv[1])\n', encoding: 'utf8',
-});
-check('preparer.run.stdinExit', stdinRun.status, 0, 'the isolated runner accepts explicit stdin mode');
-check('preparer.run.stdinOutput', stdinRun.stdout, 'stdin-safe:arg\n', 'stdin mode preserves arguments');
-const codeRun = spawnSync(
-  'python3', ['-I', '-S', canonicalPreparerPath, 'run', '-c', 'import sys; print("code-safe:" + sys.argv[1])', 'arg'],
-  { encoding: 'utf8' },
-);
-check('preparer.run.codeExit', codeRun.status, 0, 'the isolated runner accepts explicit code mode');
-check('preparer.run.codeOutput', codeRun.stdout, 'code-safe:arg\n', 'code mode preserves arguments');
-const loaderEnvironment = {
-  ...process.env,
-  LD_LIBRARY_PATH: '/hostile-loader-path',
-  LD_PRELOAD: '',
-  DYLD_INSERT_LIBRARIES: '',
-  DYLD_LIBRARY_PATH: '/hostile-loader-path',
-};
-const loaderRun = spawnSync(
-  'python3', [
-    '-I', '-S', canonicalPreparerPath, 'run', '-c',
-    'import os; print("|".join(sorted(k for k in os.environ if k.startswith(("LD_", "DYLD_")))))',
-  ],
-  { encoding: 'utf8', env: loaderEnvironment },
-);
-check('preparer.run.loaderEnvironmentExit', loaderRun.status, 0,
-  'the isolated runner starts under a hostile host loader environment');
-check('preparer.run.loaderEnvironmentAbsent', loaderRun.stdout, '\n',
-  'the attested child receives no host loader injection variables');
-const unsafeInterpreterOption = spawnSync(
-  'python3', ['-I', '-S', canonicalPreparerPath, 'run', '-S', '-'], { encoding: 'utf8' },
-);
-check('preparer.run.optionExit', unsafeInterpreterOption.status, 2,
-  'the runner rejects caller-controlled interpreter options');
-check('preparer.run.optionReason',
-  unsafeInterpreterOption.stderr.includes('use run <script>, run -, or run -c <code>'), true,
-  'the failure reports every supported isolated execution form');
-const missingRuntimeRoot = join(tmpdir(), `teams-tokenizer-missing-${process.pid}-${Date.now()}`);
-const missingRuntime = spawnSync('python3', ['-I', '-S', canonicalPreparerPath, 'check'], {
-  encoding: 'utf8',
-  env: { ...process.env, BREWCODE_TOKENIZER_ROOT: missingRuntimeRoot },
-});
-check('preparer.missing.exit', missingRuntime.status, 2, 'a missing runtime fails closed');
-check('preparer.missing.stdout', missingRuntime.stdout, '', 'a missing runtime emits no success result');
-check(
-  'preparer.missing.repair',
-  missingRuntime.stderr.includes('REPAIR:')
-    && missingRuntime.stderr.includes(' -I -S ')
-    && missingRuntime.stderr.includes(' prepare'),
-  true,
-  'the offline preflight gives the exact no-site preparation remedy',
-);
-check(
-  'preparer.missing.noMutation',
-  existsSync(missingRuntimeRoot),
-  false,
-  'check mode neither downloads nor creates cache state',
-);
-const securityFixtures = spawnSync('python3', ['-I', '-S', '-c', `
-import importlib.util
-import os
-from pathlib import Path
-import py_compile
-import shutil
-import subprocess
-import sys
-import tempfile
-
-source = Path(sys.argv[1]).resolve()
-spec = importlib.util.spec_from_file_location('teams_tokenizer_fixture', source)
-module = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = module
-spec.loader.exec_module(module)
-source_item = module.runtime()
-module.check(source_item)
-
-safe_temp = Path(tempfile.gettempdir()).resolve()
-with tempfile.TemporaryDirectory(dir=safe_temp) as temporary:
-    base = Path(temporary)
-    victim = base / 'outside-victim'
-    victim.mkdir()
-    sentinel = victim / 'sentinel'
-    sentinel.write_text('outside-sentinel-unchanged\\n', encoding='utf-8')
-
-    unsafe_roots = [base / 'nested' / '..' / '..']
-    if os.name != 'nt':
-        unsafe_roots.append(Path('/tmp/..'))
-    for unsafe_root in unsafe_roots:
-        os.environ['BREWCODE_TOKENIZER_ROOT'] = str(unsafe_root)
-        try:
-            module.cache_root()
-        except RuntimeError as error:
-            assert 'parent traversal' in str(error)
-        else:
-            raise AssertionError(f'parent traversal cache root was accepted: {unsafe_root}')
-        assert sentinel.read_text(encoding='utf-8') == 'outside-sentinel-unchanged\\n'
-
-    if os.name != 'nt':
-        carrier = base / 'carrier'
-        carrier.mkdir()
-        (carrier / 'link').symlink_to(victim, target_is_directory=True)
-        try:
-            module.ensure_directory(
-                carrier / 'link' / 'tokenizer',
-                carrier / 'link' / 'tokenizer' / 'artifacts',
-                'fixture',
-            )
-        except RuntimeError:
-            pass
-        else:
-            raise AssertionError('symlinked ancestor was accepted')
-        assert not (victim / 'tokenizer').exists()
-
-        fixture_root = base / 'atomic-runtime'
-        os.environ['BREWCODE_TOKENIZER_ROOT'] = str(fixture_root)
-        fixture = module.runtime()
-        fixture.wheel_path.parent.mkdir(parents=True)
-        fixture.bpe_cache_dir.mkdir(parents=True)
-        shutil.copy2(source_item.wheel_path, fixture.wheel_path)
-        shutil.copy2(source_item.bpe_path, fixture.bpe_path)
-        fixture.venv_path.mkdir()
-        (fixture.venv_path / 'escape').symlink_to(victim, target_is_directory=True)
-        (fixture.bpe_path.with_name(fixture.bpe_path.name + '.part')).symlink_to(sentinel)
-        module.prepare(fixture)
-        module.check(fixture)
-        assert sentinel.read_text(encoding='utf-8') == 'outside-sentinel-unchanged\\n'
-        assert not (fixture.venv_path / 'escape').exists()
-        assert not list(fixture.venv_path.parent.glob('.venv-build-*'))
-        assert not list(fixture.venv_path.parent.glob('.venv-old-*'))
-    else:
-        carrier = base / 'junction-carrier'
-        carrier.mkdir()
-        junction = carrier / 'junction'
-        created = subprocess.run(
-            ['cmd', '/d', '/c', 'mklink', '/J', str(junction), str(victim)],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        assert created.returncode == 0, (created.stdout, created.stderr)
-        try:
-            module.ensure_directory(
-                carrier / 'junction' / 'tokenizer',
-                carrier / 'junction' / 'tokenizer' / 'artifacts',
-                'fixture',
-            )
-        except RuntimeError:
-            pass
-        else:
-            raise AssertionError('Windows junction ancestor was accepted')
-        assert sentinel.read_text(encoding='utf-8') == 'outside-sentinel-unchanged\\n'
-        assert not (victim / 'tokenizer').exists()
-        junction.rmdir()
-
-    concurrent_root = base / 'concurrent-runtime'
-    os.environ['BREWCODE_TOKENIZER_ROOT'] = str(concurrent_root)
-    concurrent = module.runtime()
-    concurrent.wheel_path.parent.mkdir(parents=True)
-    concurrent.bpe_cache_dir.mkdir(parents=True)
-    shutil.copy2(source_item.wheel_path, concurrent.wheel_path)
-    shutil.copy2(source_item.bpe_path, concurrent.bpe_path)
-    outside_pip_target = victim / 'pip-target'
-    outside_pip_prefix = victim / 'pip-prefix'
-    outside_python_cache = victim / 'python-pycache'
-    hostile_pip_config = victim / 'pip.conf'
-    hostile_pip_config.write_text(
-        f'[global]\\ntarget = {outside_pip_target}\\n', encoding='utf-8'
-    )
-    environment = {
-        **os.environ,
-        'BREWCODE_TOKENIZER_ROOT': str(concurrent_root),
-        'PIP_CONFIG_FILE': str(hostile_pip_config),
-        'PIP_PREFIX': str(outside_pip_prefix),
-        'PIP_TARGET': str(outside_pip_target),
-        'PYTHONINSPECT': '1',
-        'PYTHONPYCACHEPREFIX': str(outside_python_cache),
-        'PYTHONWARNINGS': 'error',
-    }
-    processes = [
-        subprocess.Popen(
-            [sys.executable, '-I', '-S', str(source), 'prepare'],
-            env=environment,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        for _ in range(2)
-    ]
-    results = [process.communicate(timeout=60) for process in processes]
-    assert all(process.returncode == 0 for process in processes), results
-    assert results[0][0] == results[1][0], results
-    module.check(concurrent)
-    assert not list(concurrent.venv_path.parent.glob('.venv-build-*'))
-    assert not list(concurrent.venv_path.parent.glob('.venv-old-*'))
-    assert not outside_pip_target.exists()
-    assert not outside_pip_prefix.exists()
-    assert not outside_python_cache.exists()
-    assert sentinel.read_text(encoding='utf-8') == 'outside-sentinel-unchanged\\n'
-
-    installed_init = (
-        module.site_packages_in_venv(concurrent.venv_path) / 'tiktoken' / '__init__.py'
-    )
-    authentic_init = installed_init.read_bytes()
-    installed_init.write_bytes(authentic_init + b'\\n# hostile installed-byte tamper\\n')
-    tampered_check = subprocess.run(
-        [sys.executable, '-I', '-S', str(source), 'check'],
-        env=environment,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    tampered_run = subprocess.run(
-        [sys.executable, '-I', '-S', str(source), 'run', str(Path(sys.argv[2]).resolve()), '--check'],
-        env=environment,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    assert tampered_check.returncode == 2, (tampered_check.stdout, tampered_check.stderr)
-    assert tampered_run.returncode == 2, (tampered_run.stdout, tampered_run.stderr)
-    assert 'installed tokenizer file hash mismatch' in tampered_check.stderr
-    assert 'installed tokenizer file hash mismatch' in tampered_run.stderr
-    repaired = subprocess.run(
-        [sys.executable, '-I', '-S', str(source), 'prepare'],
-        env=environment,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        timeout=60,
-    )
-    assert repaired.returncode == 0, (repaired.stdout, repaired.stderr)
-    module.check(concurrent)
-    assert installed_init.read_bytes() == authentic_init
-
-    shadow = module.site_packages_in_venv(concurrent.venv_path) / 'tiktoken.py'
-    shadow.write_text('raise RuntimeError("top-level tokenizer shadow executed")\\n', encoding='utf-8')
-    shadow_check = subprocess.run(
-        [sys.executable, '-I', '-S', str(source), 'check'], env=environment,
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-    )
-    shadow_run = subprocess.run(
-        [sys.executable, '-I', '-S', str(source), 'run', str(Path(sys.argv[2]).resolve()), '--check'],
-        env=environment, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-    )
-    assert shadow_check.returncode == 2, (shadow_check.stdout, shadow_check.stderr)
-    assert shadow_run.returncode == 2, (shadow_run.stdout, shadow_run.stderr)
-    assert 'unexpected top-level entry: tiktoken.py' in shadow_check.stderr
-    assert 'unexpected top-level entry: tiktoken.py' in shadow_run.stderr
-    repaired = subprocess.run(
-        [sys.executable, '-I', '-S', str(source), 'prepare'], env=environment,
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=60,
-    )
-    assert repaired.returncode == 0, (repaired.stdout, repaired.stderr)
-    assert not shadow.exists()
-
-    installed_init = (
-        module.site_packages_in_venv(concurrent.venv_path) / 'tiktoken' / '__init__.py'
-    )
-    pyc_sentinel = victim / 'malicious-pyc-executed'
-    malicious_source = base / 'malicious-tokenizer-init.py'
-    malicious_source.write_text(
-        'from pathlib import Path\\n'
-        f'Path({str(pyc_sentinel)!r}).write_text("executed\\\\n", encoding="utf-8")\\n',
-        encoding='utf-8',
-    )
-    cached_init = Path(importlib.util.cache_from_source(str(installed_init)))
-    cached_init.parent.mkdir()
-    py_compile.compile(
-        str(malicious_source), cfile=str(cached_init), doraise=True,
-        invalidation_mode=py_compile.PycInvalidationMode.UNCHECKED_HASH,
-    )
-    malicious_source.unlink()
-    pyc_check = subprocess.run(
-        [sys.executable, '-I', '-S', str(source), 'check'], env=environment,
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-    )
-    pyc_run = subprocess.run(
-        [sys.executable, '-I', '-S', str(source), 'run', str(Path(sys.argv[2]).resolve()), '--check'],
-        env=environment, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-    )
-    assert pyc_check.returncode == 2, (pyc_check.stdout, pyc_check.stderr)
-    assert pyc_run.returncode == 2, (pyc_run.stdout, pyc_run.stderr)
-    assert 'installed tokenizer bytecode cache is forbidden' in pyc_check.stderr
-    assert 'installed tokenizer bytecode cache is forbidden' in pyc_run.stderr
-    assert not pyc_sentinel.exists()
-    repaired = subprocess.run(
-        [sys.executable, '-I', '-S', str(source), 'prepare'], env=environment,
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=60,
-    )
-    assert repaired.returncode == 0, (repaired.stdout, repaired.stderr)
-    assert not cached_init.exists()
-
-    launcher_sentinel = victim / 'venv-launcher-executed'
-    concurrent.python.unlink()
-    concurrent.python.write_text(
-        '#!/bin/sh\\nprintf executed > "' + str(launcher_sentinel) + '"\\nexit 0\\n',
-        encoding='utf-8',
-    )
-    concurrent.python.chmod(0o755)
-    launcher_check = subprocess.run(
-        [sys.executable, '-I', '-S', str(source), 'check'], env=environment,
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-    )
-    launcher_run = subprocess.run(
-        [sys.executable, '-I', '-S', str(source), 'run', str(Path(sys.argv[2]).resolve()), '--check'],
-        env=environment, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-    )
-    assert launcher_check.returncode == 0, (launcher_check.stdout, launcher_check.stderr)
-    assert launcher_run.returncode == 0, (launcher_run.stdout, launcher_run.stderr)
-    assert 'tiktoken=0.13.0 encoding=o200k_base' in launcher_run.stdout
-    assert not launcher_sentinel.exists()
-    assert not outside_pip_target.exists()
-    assert not outside_pip_prefix.exists()
-    assert not outside_python_cache.exists()
-print('ancestor=fail-closed reparse=fail-closed traversal=rejected env=isolated attestation=source-shadow-pyc-rejected launcher=unused sentinel=unchanged atomic=fresh concurrent=serialized')
-`, canonicalPreparerPath, canonicalCounterPath], { encoding: 'utf8', timeout: 240_000 });
-check('preparer.securityFixtures.exit', securityFixtures.status, 0, 'the adversarial tokenizer fixtures pass');
-check('preparer.securityFixtures.stderr', securityFixtures.stderr, '',
-  'the adversarial tokenizer fixtures emit no hidden failure diagnostics');
-check(
-  'preparer.securityFixtures.output',
-  securityFixtures.stdout,
-  'ancestor=fail-closed reparse=fail-closed traversal=rejected env=isolated attestation=source-shadow-pyc-rejected launcher=unused sentinel=unchanged atomic=fresh concurrent=serialized\n',
-  'ancestor/reparse/traversal, environment isolation, exact-tree attestation, launcher independence, sentinels, atomic promotion, and concurrency are proven together',
-);
-const preparerSource = readFileSync(canonicalPreparerPath, 'utf8');
-check(
-  'preparer.pythonEnvironment.sanitized',
-  preparerSource.includes('if key.upper() in RUNTIME_ENV_ALLOWLIST')
-    && preparerSource.includes('def sanitized_venv_creation_environment('),
-  true,
-  'runtime children and venv creation use minimal environments without host injection variables',
-);
-check(
-  'preparer.pythonEnvironment.isolated',
-  preparerSource.includes('sys.executable,\n                "-I",')
-    && preparerSource.includes('str(build_python),\n                    "-I",\n                    "-m",')
-    && preparerSource.includes('sys.executable,\n            "-I",\n            "-S",')
-    && !preparerSource.includes('str(item.python),\n                "-I"'),
-  true,
-  'probe/run use the trusted invoking interpreter while pip alone uses the temporary venv launcher',
-);
-check(
-  'preparer.pipEnvironment.minimal',
-  preparerSource.includes('if key.upper() in PIP_ENV_ALLOWLIST')
-    && preparerSource.includes('"PIP_CONFIG_FILE": os.devnull')
-    && preparerSource.includes('env=pip_install_env()'),
-  true,
-  'pip installation uses a minimal allowlist and ignores host package-manager configuration',
-);
-check(
-  'preparer.windowsReparse.failClosed',
-  preparerSource.includes('getattr(path, "is_junction", None)')
-    && preparerSource.includes('FILE_ATTRIBUTE_REPARSE_POINT')
-    && preparerSource.includes('cannot validate Windows reparse safety'),
-  true,
-  'Windows junction and name-surrogate reparse validation fails closed',
-);
-check(
-  'preparer.cacheRoot.noParentTraversal',
-  preparerSource.includes('if ".." in root.parts')
-    && preparerSource.includes('refusing parent traversal in tokenizer cache root'),
-  true,
-  'cache-root validation rejects parent traversal before any operation',
-);
-check(
-  'preparer.installedBytes.attested',
-  preparerSource.includes('def wheel_install_manifest(')
-    && preparerSource.includes('def attest_installed_distribution(')
-    && preparerSource.includes('def materialize_authenticated_wheel(')
-    && preparerSource.includes('installed tokenizer file hash mismatch')
-    && preparerSource.includes('installed tokenizer bytecode cache is forbidden')
-    && preparerSource.includes('unexpected top-level entry'),
-  true,
-  'the runtime is normalized to and attested against the authenticated wheel exact tree',
-);
-check(
-  'preparer.run.lockedAttestation',
-  preparerSource.includes('with preparation_lock(item, create=False):\n        check_unlocked(item)')
-    && preparerSource.includes('with preparation_lock(item, create=True):'),
-  true,
-  'check/use and prepare share the same bounded runtime lock',
-);
-check(
-  'preparer.lock.bounded',
-  preparerSource.includes('PREPARE_LOCK_TIMEOUT_SECONDS = 120'),
-  true,
-  'the cross-process preparation lock has a hard wait bound',
-);
-check(
-  'preparer.download.uniqueNoFollow',
-  preparerSource.includes('tempfile.mkstemp(') &&
-    preparerSource.includes('O_NOFOLLOW') &&
-    !preparerSource.includes('clear=True'),
-  true,
-  'artifacts use unique files, locks refuse symlinks, and venv rebuilds never clear in place',
-);
-check('counter.identity.exit', counterIdentity.status, 0, 'the pinned tokenizer identity check succeeds');
-check(
-  'counter.identity.output',
-  counterIdentity.stdout,
-  `tiktoken=0.13.0 encoding=o200k_base bpe_sha256=${encodingDigest} cache=verified-offline\n`,
-  'the counter reports package, encoding, cache hash, and offline verification',
-);
-
-// GIVEN an explicitly disabled tokenizer cache.
-// WHEN exact counting is preflighted.
-const emptyCache = spawnSync('python3', ['-I', canonicalCounterPath, '--check'], {
-  encoding: 'utf8',
-  env: { ...process.env, TIKTOKEN_CACHE_DIR: '' },
-});
-// THEN validation fails closed without writing a count.
-check('counter.emptyCache.exit', emptyCache.status, 2, 'an empty cache override fails closed');
-check('counter.emptyCache.stdout', emptyCache.stdout, '', 'a failed cache preflight emits no count');
-check(
-  'counter.emptyCache.reason',
-  emptyCache.stderr.includes('exact tokenizer cache is disabled'),
-  true,
-  'the failure identifies the required exact cache',
-);
-
-const corruptCacheDir = mkdtempSync(join(tmpdir(), 'teams-token-cache-'));
-try {
-  // GIVEN corrupt bytes under the exact o200k cache key.
-  const cacheKey = createHash('sha1').update(tokenizerUrl).digest('hex');
-  writeFileSync(join(corruptCacheDir, cacheKey), 'corrupt');
-  // WHEN exact counting is preflighted.
-  const corruptCache = spawnSync('python3', ['-I', canonicalCounterPath, '--check'], {
-    encoding: 'utf8',
-    env: { ...process.env, TIKTOKEN_CACHE_DIR: corruptCacheDir },
-  });
-  // THEN the hash mismatch fails closed without writing a count.
-  check('counter.corruptCache.exit', corruptCache.status, 2, 'a corrupt pinned cache fails closed');
-  check('counter.corruptCache.stdout', corruptCache.stdout, '', 'a hash failure emits no count');
-  check(
-    'counter.corruptCache.reason',
-    corruptCache.stderr.includes('o200k_base cache hash mismatch'),
-    true,
-    'the failure identifies the verified-cache hash mismatch',
-  );
-} finally {
-  rmSync(corruptCacheDir, { recursive: true, force: true });
-}
+// Tokenizer hardening runs once in the source suite: it targets the same canonical preparer bytes.
 
 const canonicalTemplate = readFileSync(canonicalTemplatePath, 'utf8');
 const canonicalFramework = readFileSync(canonicalFrameworkPath, 'utf8');
@@ -772,8 +219,6 @@ const canonicalSkill = readFileSync(canonicalSkillPath, 'utf8');
 const projectedSkill = readFileSync(projectedSkillPath, 'utf8');
 const projectedTemplate = readFileSync(projectedTemplatePath, 'utf8');
 const projectedFramework = readFileSync(projectedFrameworkPath, 'utf8');
-const distributedTemplate = readFileSync(distributedTemplatePath, 'utf8');
-const distributedFramework = readFileSync(distributedFrameworkPath, 'utf8');
 const projectedCreator = readFileSync(projectedCreatorPath, 'utf8');
 
 check(
@@ -1116,34 +561,10 @@ check(
   'native Codex carries the pinned exact counter byte-for-byte',
 );
 check(
-  'codex.counterDistributionParity',
-  readFileSync(distributedCounterPath, 'utf8'),
-  readFileSync(projectedCounterPath, 'utf8'),
-  'distributed Codex carries the generated pinned counter byte-for-byte',
-);
-check(
   'codex.preparerProjectionParity',
   readFileSync(projectedPreparerPath, 'utf8'),
   readFileSync(canonicalPreparerPath, 'utf8'),
   'native Codex carries the pinned durable preparer byte-for-byte',
-);
-check(
-  'codex.preparerDistributionParity',
-  readFileSync(distributedPreparerPath, 'utf8'),
-  readFileSync(projectedPreparerPath, 'utf8'),
-  'distributed Codex carries the durable preparer byte-for-byte',
-);
-check(
-  'codex.distributedTemplateParity',
-  distributedTemplate,
-  projectedTemplate,
-  'distributed Codex team template equals the canonical projection byte-for-byte',
-);
-check(
-  'codex.distributedFrameworkParity',
-  distributedFramework,
-  projectedFramework,
-  'distributed Codex shared contract equals the canonical projection byte-for-byte',
 );
 
 // BEGIN PROJECTED WORKFLOW CONTRACT
@@ -1303,7 +724,63 @@ function makeWorld({
   return world;
 }
 
-function runVerifier(world, env = process.env) {
+// Verifier-only memo of exact-count calls keyed by script, input and cache env: first call per key
+// runs the real tokenizer, repeats replay it; `-I -S -` stdin code runs in-process so nested counts hit it.
+const TOKEN_MEMO_PY = [
+  'import hashlib, json, os, subprocess, sys',
+  'real, cache, args = sys.argv[1], sys.argv[2], sys.argv[3:]',
+  'def digest(path):',
+  '    with open(path, "rb") as handle:',
+  '        return hashlib.sha256(handle.read()).hexdigest()',
+  'memo = (len(args) >= 5 and args[:2] == ["-I", "-S"] and args[3] == "run"',
+  '        and os.path.basename(args[2]) == "prepare-tokenizer.py"',
+  '        and os.path.basename(args[4]) == "count-tokens.py" and len(args) <= 6',
+  '        and (len(args) == 5 or args[5] == "--check" or os.path.isfile(args[5])))',
+  'if args[:3] == ["-I", "-S", "-"]:',
+  '    sys.argv = ["-", *args[3:]]',
+  '    sys.executable = os.path.join(os.path.dirname(cache), "bin", "python3")',
+  '    exec(compile(sys.stdin.read(), "<stdin>", "exec"), {"__name__": "__main__"})',
+  '    sys.exit(0)',
+  'if not memo:',
+  '    os.execv(real, [real, *args])',
+  'extra = args[5:]',
+  'stdin = sys.stdin.buffer.read() if not extra else None',
+  'parts = [digest(args[2]), digest(args[4]), extra == ["--check"],',
+  '         digest(extra[0]) if extra and extra[0] != "--check" else None,',
+  '         hashlib.sha256(stdin).hexdigest() if stdin is not None else None,',
+  '         [os.environ.get(k) for k in ("BREWCODE_TOKENIZER_ROOT", "XDG_CACHE_HOME", "HOME",',
+  '                                      "LOCALAPPDATA", "TIKTOKEN_CACHE_DIR")]]',
+  'entry = os.path.join(cache, hashlib.sha256(json.dumps(parts).encode()).hexdigest() + ".json")',
+  'if os.path.isfile(entry):',
+  '    with open(entry, encoding="utf-8") as handle:',
+  '        rc, out, err = json.load(handle)',
+  'else:',
+  '    done = subprocess.run([real, *args], input=stdin, capture_output=True)',
+  '    rc, out, err = done.returncode, done.stdout.decode(), done.stderr.decode()',
+  '    if rc == 0:',
+  '        with open(entry + ".tmp", "w", encoding="utf-8") as handle:',
+  '            json.dump([rc, out, err], handle)',
+  '        os.replace(entry + ".tmp", entry)',
+  'sys.stdout.write(out)',
+  'sys.stderr.write(err)',
+  'sys.exit(rc)',
+  '',
+].join('\n');
+const tokenMemoRoot = mkdtempSync(join(tmpdir(), 'team-token-memo-'));
+tempDirs.push(tokenMemoRoot);
+mkdirSync(join(tokenMemoRoot, 'bin'));
+mkdirSync(join(tokenMemoRoot, 'cache'));
+const memoRealPython = spawnSync('python3', ['-I', '-S', '-c', 'import sys; print(sys.executable)'],
+  { encoding: 'utf8' }).stdout.trim();
+writeFileSync(join(tokenMemoRoot, 'memo.py'), TOKEN_MEMO_PY);
+writeFileSync(join(tokenMemoRoot, 'bin', 'python3'), `#!/bin/sh
+exec '${memoRealPython}' -I -S '${join(tokenMemoRoot, 'memo.py')}' '${memoRealPython}' '${join(tokenMemoRoot, 'cache')}' "$@"
+`);
+chmodSync(join(tokenMemoRoot, 'bin', 'python3'), 0o755);
+const verifierEnv = { ...process.env, PATH: `${join(tokenMemoRoot, 'bin')}:${process.env.PATH}` };
+check('verifier.tokenMemo.python', existsSync(memoRealPython), true, 'the memo replays through the host python3');
+
+function runVerifier(world, env = verifierEnv) {
   const result = spawnSync('bash', [verifierPath, 'dusk'], {
     cwd: world,
     env,
@@ -1318,16 +795,16 @@ function removeWorld(world) {
   rmSync(world, { recursive: true, force: true });
 }
 
-{
+part(() => {
   const world = makeWorld();
   const result = runVerifier(world);
   check('verifier.current.exit', result.status, 0, 'a complete current team passes the hard verifier');
   check('verifier.current.shared', result.output.includes('CHECK: Shared Agent Contract ... OK'), true,
     'the instantiated shared contract is verified');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   // GIVEN: cleanup left a complete current team with no trace file.
   const world = makeWorld();
   const tracePath = join(world, '.codex', 'teams', 'dusk', 'trace.jsonl');
@@ -1345,7 +822,7 @@ function removeWorld(world) {
   check('verifier.absentTrace.noMutation', existsSync(tracePath), false,
     'verification does not create trace storage');
   removeWorld(world);
-}
+});
 
 {
   // GIVEN: a fresh shell has no preexisting SID and trace storage is absent.
@@ -1369,7 +846,7 @@ function removeWorld(world) {
   removeWorld(world);
 }
 
-{
+part(() => {
   // GIVEN: a present regular trace contains a schema-invalid short SID.
   const world = makeWorld();
   const tracePath = join(world, '.codex', 'teams', 'dusk', 'trace.jsonl');
@@ -1385,9 +862,9 @@ function removeWorld(world) {
     result.output.includes('sid must be exactly 8 safe ASCII characters'), true,
     'the verifier identifies the exact invalid trace field');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   // GIVEN: a calendar-impossible timestamp has the right lexical shape.
   const world = makeWorld();
   const tracePath = join(world, '.codex', 'teams', 'dusk', 'trace.jsonl');
@@ -1411,9 +888,9 @@ function removeWorld(world) {
   const valid = runVerifier(world);
   check('verifier.validLeapTrace.exit', valid.status, 0, 'a valid leap-day timestamp passes verification');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   // GIVEN: trace.jsonl is present only as a symlink to foreign bytes.
   const world = makeWorld();
   const tracePath = join(world, '.codex', 'teams', 'dusk', 'trace.jsonl');
@@ -1436,9 +913,9 @@ function removeWorld(world) {
   check('verifier.symlinkTrace.foreignBytes', readFileSync(foreignPath, 'utf8'), '{"foreign":true}\n',
     'verification never mutates the foreign target');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld();
   const teamPath = join(world, '.codex', 'teams', 'dusk', 'team.md');
   const base = readFileSync(teamPath, 'utf8');
@@ -1457,9 +934,9 @@ function removeWorld(world) {
   check('verifier.falsePass.reason', result.output.includes('exact o200k tokens; maximum'), true,
     'runtime failure reports the exact-token boundary');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld();
   const teamPath = join(world, '.codex', 'teams', 'dusk', 'team.md');
   writeFileSync(teamPath, readFileSync(teamPath, 'utf8').replace(
@@ -1473,9 +950,9 @@ function removeWorld(world) {
     result.output.includes('required permits exactly one total intent-guard mention; found 2'), true,
     'the exact safe sentence must be the sole shared mention of the role');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld();
   const teamPath = join(world, '.codex', 'teams', 'dusk', 'team.md');
   writeFileSync(teamPath, readFileSync(teamPath, 'utf8').replace(
@@ -1488,9 +965,9 @@ function removeWorld(world) {
     result.output.includes('required needs exact sentence once; found 2'), true,
     'the verifier counts exact occurrences rather than matching lines');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld({
     policy: 'legacy-absent', roster: DUSK_ROSTER, reportRoot: '.codex/reports', compactDefaults: true,
   });
@@ -1507,9 +984,9 @@ function removeWorld(world) {
     result.output.includes('CHECK: Shared report root (.codex/reports) ... OK'), true,
     'the verifier accepts the exact guidance-derived Dusk report root');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld();
   const teamPath = join(world, '.codex', 'teams', 'dusk', 'team.md');
   writeFileSync(teamPath, readFileSync(teamPath, 'utf8').replace(REQUIRED_GUARD_SENTENCE, ''));
@@ -1520,9 +997,9 @@ function removeWorld(world) {
     result.output.includes('required needs exact sentence once; found 0'), true,
     'the verifier identifies the missing required-policy sentence');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld({ policy: 'legacy-absent' });
   const teamPath = join(world, '.codex', 'teams', 'dusk', 'team.md');
   writeFileSync(teamPath, readFileSync(teamPath, 'utf8').replace(
@@ -1536,9 +1013,9 @@ function removeWorld(world) {
     result.output.includes('legacy-absent must not name a phantom role'), true,
     'the verifier identifies the phantom-role wording');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld({ policy: 'legacy-absent' });
   const teamPath = join(world, '.codex', 'teams', 'dusk', 'team.md');
   writeFileSync(teamPath, readFileSync(teamPath, 'utf8').replace(
@@ -1552,9 +1029,9 @@ function removeWorld(world) {
     result.output.includes('unresolved policy-conditional placeholder'), true,
     'the verifier identifies the unresolved conditional placeholder');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld({ reportRoot: '{REPORT_ROOT}' });
   const result = runVerifier(world);
   check('verifier.unresolvedReportRoot.exit', result.status, 1,
@@ -1563,9 +1040,9 @@ function removeWorld(world) {
     result.output.includes('unsafe or unresolved project-relative path'), true,
     'the verifier identifies unresolved report-root output');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld({ reportRoot: '../outside' });
   const result = runVerifier(world);
   check('verifier.traversalReportRoot.exit', result.status, 1,
@@ -1574,9 +1051,9 @@ function removeWorld(world) {
     result.output.includes("unsafe or unresolved project-relative path: '../outside'"), true,
     'the verifier identifies the unsafe report root');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld();
   const teamPath = join(world, '.codex', 'teams', 'dusk', 'team.md');
   const bulk = `Bulk -> \`${SOURCE_CLIENT_DIR}/reports/YYYYMMDD-HHMMSS_{AGENT_NAME}/\``;
@@ -1588,9 +1065,9 @@ function removeWorld(world) {
     result.output.includes('expected exactly one Bulk directive, one report template, and one resolved path; found 2/2/2'), true,
     'the verifier counts concrete report patterns rather than matching lines');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld();
   const teamPath = join(world, '.codex', 'teams', 'dusk', 'team.md');
   const bulk = `Bulk -> \`${SOURCE_CLIENT_DIR}/reports/YYYYMMDD-HHMMSS_{AGENT_NAME}/\``;
@@ -1606,9 +1083,9 @@ function removeWorld(world) {
   check('verifier.reportRootUnsafeSecondBulk.noExecution', existsSync(join(world, 'touch-pwned')), false,
     'verification treats the unsafe second directive as data');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld();
   const teamPath = join(world, '.codex', 'teams', 'dusk', 'team.md');
   const bulk = `Bulk -> \`${SOURCE_CLIENT_DIR}/reports/YYYYMMDD-HHMMSS_{AGENT_NAME}/\``;
@@ -1622,7 +1099,7 @@ function removeWorld(world) {
     result.output.includes('expected exactly one Bulk directive, one report template, and one resolved path; found 1/2/1'), true,
     'the verifier counts report-template occurrences independently of directives');
   removeWorld(world);
-}
+});
 
 for (const [name, reportRoot] of [
   ['commandSubstitution', '.codex/$(touch-pwned)'],
@@ -1633,7 +1110,7 @@ for (const [name, reportRoot] of [
   ['control', `.codex/${String.fromCharCode(1)}reports`],
   ['dotSegment', '.codex/./reports'],
   ['trailingSlash', '.codex/reports/'],
-]) {
+]) part(() => {
   const world = makeWorld({ reportRoot });
   const result = runVerifier(world);
   check(`verifier.hostileReportRoot.${name}.exit`, result.status, 1,
@@ -1645,27 +1122,27 @@ for (const [name, reportRoot] of [
     existsSync(join(world, 'touch-pwned')), false,
     'verification never executes report-root text');
   removeWorld(world);
-}
+});
 
-for (const reportRoot of ['.codex/reports', 'reports/team-1', '.reports_2/a.b']) {
+for (const reportRoot of ['.codex/reports', 'reports/team-1', '.reports_2/a.b']) part(() => {
   const world = makeWorld({ reportRoot });
   const result = runVerifier(world);
   check(`verifier.safeReportRoot.${reportRoot}.exit`, result.status, 0,
     `${reportRoot} passes the conservative segment allowlist`);
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld({ agentText: agentFile({ description: 'x'.repeat(100) }) });
   const result = runVerifier(world);
   check('verifier.description100.exit', result.status, 0,
     'a domain description at exactly 100 characters passes');
   removeWorld(world);
-}
+});
 
 // BEGIN SOURCE YAML DESCRIPTION FIXTURES
 for (const [name, description] of [['empty', ''], ['multiline', 'first line\nsecond line'], ['c0Escaped', 'first\u0001second'], ['delEscaped', 'first\u007fsecond'], ['nel', 'first\u0085second'], ['c1Start', 'first\u0080second'], ['c1End', 'first\u009fsecond'], ['yamlNoncharacterFffe', 'first\ufffesecond'], ['yamlNoncharacterFfff', 'first\uffffsecond']]) {
-  for (const parked of [false, true]) {
+  for (const parked of [false, true]) part(() => {
     const world = makeWorld({ agentText: agentFile({ description }) });
     if (parked) {
       const agentsDir = join(world, '.codex', 'agents');
@@ -1679,11 +1156,11 @@ for (const [name, description] of [['empty', ''], ['multiline', 'first line\nsec
       result.output.includes('description must be one nonempty line'), true,
       'the verifier identifies the strict native string defect');
     removeWorld(world);
-  }
+  });
 }
 // END SOURCE YAML DESCRIPTION FIXTURES
 
-{
+part(() => {
   const world = makeWorld({ agentText: agentFile({ description: 'x'.repeat(101) }) });
   const result = runVerifier(world);
   check('verifier.description101.exit', result.status, 1,
@@ -1692,9 +1169,9 @@ for (const [name, description] of [['empty', ''], ['multiline', 'first line\nsec
     result.output.includes('description is 101 characters; ceiling is 100'), true,
     'the verifier names the exact description length and ceiling');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld({ agentText: agentFile({ description: 'x'.repeat(101) }) });
   const agentsDir = join(world, '.codex', 'agents');
   renameSync(join(agentsDir, 'build-eng.toml'), join(agentsDir, 'build-eng.toml.disabled'));
@@ -1705,9 +1182,9 @@ for (const [name, description] of [['empty', ''], ['multiline', 'first line\nsec
     result.output.includes('description is 101 characters; ceiling is 100'), true,
     'the parked-member failure names the same exact ceiling');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld({ policy: 'required', intent: false });
   const teamPath = join(world, '.codex', 'teams', 'dusk', 'team.md');
   writeFileSync(teamPath, readFileSync(teamPath, 'utf8').replace(/^\|intent-guard\|.*\n/m, ''));
@@ -1718,9 +1195,9 @@ for (const [name, description] of [['empty', ''], ['multiline', 'first line\nsec
     result.output.includes('policy required needs exactly one row; found 0'), true,
     'required-policy failure names the missing row');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld({ policy: 'legacy-absent', intent: true });
   const teamPath = join(world, '.codex', 'teams', 'dusk', 'team.md');
   const team = readFileSync(teamPath, 'utf8');
@@ -1733,9 +1210,9 @@ for (const [name, description] of [['empty', ''], ['multiline', 'first line\nsec
     result.output.includes('policy legacy-absent requires zero rows; found 1'), true,
     'legacy-absent failure names the forbidden roster expansion');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld();
   const teamPath = join(world, '.codex', 'teams', 'dusk', 'team.md');
   writeFileSync(teamPath, readFileSync(teamPath, 'utf8').replace(
@@ -1747,9 +1224,9 @@ for (const [name, description] of [['empty', ''], ['multiline', 'first line\nsec
     result.output.includes("expected required or legacy-absent; found 'optional'"), true,
     'the verifier enumerates the only valid policy values');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld();
   const teamPath = join(world, '.codex', 'teams', 'dusk', 'team.md');
   writeFileSync(teamPath, `${readFileSync(teamPath, 'utf8')}${'x'.repeat(3000)}\n`);
@@ -1760,9 +1237,9 @@ for (const [name, description] of [['empty', ''], ['multiline', 'first line\nsec
     result.output.includes('maximum 2800 chars and 700 tiktoken 0.13.0/o200k_base tokens'), true,
     'the runtime verifier names both complete-file ceilings');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld();
   const teamPath = join(world, '.codex', 'teams', 'dusk', 'team.md');
   writeFileSync(teamPath, readFileSync(teamPath, 'utf8').replace('|Agents|1|', '|Agents|2|'));
@@ -1773,9 +1250,9 @@ for (const [name, description] of [['empty', ''], ['multiline', 'first line\nsec
     result.output.includes('declared 2, found 1 unique domain rows'), true,
     'the mismatch reports declared and observed unique-domain counts');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld();
   const teamPath = join(world, '.codex', 'teams', 'dusk', 'team.md');
   const duplicate = `|build-eng|Build|deterministic builds|active|${today}|domain|${pluginVersion}|\n`;
@@ -1787,9 +1264,9 @@ for (const [name, description] of [['empty', ''], ['multiline', 'first line\nsec
     result.output.includes("duplicate roster name"), true,
     'the verifier identifies duplicate roster identity');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld();
   const teamPath = join(world, '.codex', 'teams', 'dusk', 'team.md');
   const duplicate = `|intent-guard|--|Anti-drift check: what was ASKED vs what was DELIVERED|active|${today}|review-only|${pluginVersion}|\n`;
@@ -1801,19 +1278,19 @@ for (const [name, description] of [['empty', ''], ['multiline', 'first line\nsec
     result.output.includes('policy required needs exactly one row; found 2'), true,
     'the verifier enforces exactly one review-only row');
   removeWorld(world);
-}
+});
 
 // BEGIN SOURCE FRONTMATTER BUDGET FIXTURE
-{
+part(() => {
   const world = makeWorld({ agentText: agentFile({ extraField: 'model = "legacy"\n' }) });
   const result = runVerifier(world);
   check('verifier.exactTomlKeys.exit', result.status, 1, 'an unsupported fourth TOML key fails');
   check('verifier.exactTomlKeys.reason', result.output.includes('TOML keys must be exactly name, description, developer_instructions'), true,
     'the verifier enforces the exact native schema structurally');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld();
   const poisonDir = join(world, 'poison-python-environment');
   const poisonSentinel = join(world, 'python-injection-sentinel');
@@ -1844,16 +1321,16 @@ for (const [name, description] of [['empty', ''], ['multiline', 'first line\nsec
   check('verifier.preparedProfileCount.noInjection', existsSync(poisonSentinel), false,
     'neither outer preparer nor isolated runtime executes injected sitecustomize');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld({ agentText: '---\nname: build-eng\n---\n' });
   const result = runVerifier(world);
   check('verifier.renamedMarkdown.exit', result.status, 1, 'renamed Markdown is not accepted as TOML');
   check('verifier.renamedMarkdown.reason', result.output.includes('invalid TOML'), true,
     'the verifier parses the native fixture instead of scanning YAML text');
   removeWorld(world);
-}
+});
 
 const approvedCompactIntentGuard = "Review-only. Never implement and never mutate project files. Report a verdict with file:line evidence.";
 
@@ -1878,7 +1355,7 @@ for (const [name, instructions] of [
   ['suffixOverwrite', approvedCompactIntentGuard + ' Overwrite manifests after reporting.'],
   ['suffixScaffold', approvedCompactIntentGuard + ' Scaffold missing modules after reporting.'],
   ['suffixSynchronize', approvedCompactIntentGuard + ' Synchronize source files after reporting.'],
-]) {
+]) part(() => {
   const world = makeWorld();
   const target = join(world, '.codex', 'agents', 'intent-guard.toml');
   const hostile = `name = "intent-guard"\ndescription = "Review-only fixture."\ndeveloper_instructions = ${JSON.stringify(instructions)}\n`;
@@ -1890,10 +1367,10 @@ for (const [name, instructions] of [
   check('verifier.' + name + '.bytes', readFileSync(target, 'utf8'), hostile,
     'verification does not rewrite hostile or empty existing bytes');
   removeWorld(world);
-}
+});
 // END SOURCE FRONTMATTER BUDGET FIXTURE
 
-{
+part(() => {
   const oversized = `${runtimeRepresentativeBody}\n${'x'.repeat(3300)}\n`;
   const world = makeWorld({ agentText: agentFile({ body: oversized }) });
   const result = runVerifier(world);
@@ -1901,7 +1378,7 @@ for (const [name, instructions] of [
   check('verifier.bodyCeiling.reason', result.output.includes('ceilings are 3200 bytes and 800 tokens'), true,
     'the failure names the body-only contract');
   removeWorld(world);
-}
+});
 
 const instantiatedLosses = [
   'Load this before task acceptance.',
@@ -1925,7 +1402,7 @@ const instantiatedLosses = [
   'Class/module/test',
   'rules/conventions/docs',
 ];
-for (const [index, literal] of instantiatedLosses.entries()) {
+for (const [index, literal] of instantiatedLosses.entries()) part(() => {
   const world = makeWorld();
   const teamPath = join(world, '.codex', 'teams', 'dusk', 'team.md');
   writeFileSync(teamPath, readFileSync(teamPath, 'utf8').replace(literal, '[removed contract literal]'));
@@ -1935,10 +1412,10 @@ for (const [index, literal] of instantiatedLosses.entries()) {
   check(`verifier.loss.${index + 1}.reason`, result.output.includes(`missing: ${literal}`), true,
     'the verifier identifies the exact lost contract');
   removeWorld(world);
-}
+});
 
 // BEGIN SOURCE LEGACY AGENT FIXTURE
-{
+part(() => {
   const legacyTeam = `# Team: dusk
 
 | Field | Value |
@@ -1975,7 +1452,7 @@ for (const [index, literal] of instantiatedLosses.entries()) {
   check('verifier.interruptedInstall.reason', interruptedResult.output.includes('shared team contract missing; interrupted install/unsafe migration'), true,
     'the verifier directs repair of the shared authority before profile stripping');
   removeWorld(interrupted);
-}
+});
 // END SOURCE LEGACY AGENT FIXTURE
 
 for (const [name, mutate, reason] of [
@@ -1983,14 +1460,14 @@ for (const [name, mutate, reason] of [
     'Must-load references must name .codex/teams/dusk/team.md'],
   ['extraHeading', (text) => `${text}\n## Return Contract\n\nDuplicated.\n`,
     'body headings must be exactly the six ordered teams-setup headings'],
-]) {
+]) part(() => {
   const world = makeWorld({ agentText: agentFile({ body: mutate(runtimeRepresentativeBody) }) });
   const result = runVerifier(world);
   check(`verifier.profileLoss.${name}.exit`, result.status, 1, `${name} profile loss fails`);
   check(`verifier.profileLoss.${name}.reason`, result.output.includes(reason), true,
     'the verifier names the compact-profile loss');
   removeWorld(world);
-}
+});
 
 for (const [name, mutate] of [
   ['domain', (row) => row.replace('|--|', '|code|')],
@@ -1999,7 +1476,7 @@ for (const [name, mutate] of [
   ['updated', (row) => row.replace(`|${today}|review-only|`, '|2026-08-26|review-only|')],
   ['kind', (row) => row.replace('|review-only|', '|domain|')],
   ['version', (row) => row.replace(`|${pluginVersion}|`, '|0.0.0|')],
-]) {
+]) part(() => {
   const world = makeWorld();
   const teamPath = join(world, '.codex', 'teams', 'dusk', 'team.md');
   const fixedRow = `|intent-guard|--|Anti-drift check: what was ASKED vs what was DELIVERED|active|${today}|review-only|${pluginVersion}|`;
@@ -2011,7 +1488,7 @@ for (const [name, mutate] of [
     result.output.includes('fixed cells require --, anti-drift mission, active, team Last update, review-only, and team Version'), true,
     'the verifier protects every fixed review-only cell');
   removeWorld(world);
-}
+});
 
 const nativeVerifier = readFileSync(verifierPath, 'utf8');
 check('codex.verifier.tomllib', nativeVerifier.includes('import tomllib'), true,

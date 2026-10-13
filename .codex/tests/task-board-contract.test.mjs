@@ -18,7 +18,7 @@ function emitNativeReferences() {
   const functionsStart = GENERATOR.indexOf('function skillSigil(');
   const functionsEnd = GENERATOR.indexOf('// Per-file, exact-text overrides');
   const emitStart = GENERATOR.indexOf("  if (plugin === 'brewtools' && skill === 'task-board-setup') {");
-  const emitEnd = GENERATOR.indexOf("  if (plugin === 'brewdoc' && skill === 'publish') {", emitStart);
+  const emitEnd = GENERATOR.indexOf("  if (plugin === 'brewcode' && skill === 'teams-setup') {", emitStart);
   assert.equal(functionsStart >= 0 && functionsEnd > functionsStart, true,
     'actual generator transformation/helper functions must be available');
   assert.equal(emitStart >= 0 && emitEnd > emitStart, true,

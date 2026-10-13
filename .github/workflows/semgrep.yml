@@ -10,6 +10,10 @@ on:
   schedule:
     - cron: '0 6 * * 1'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   sast:
     name: SAST
@@ -17,18 +21,18 @@ jobs:
     permissions:
       security-events: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       # Official CLI image (semgrep-action is archived); scan never fails on findings, they go to code scanning
       - name: Semgrep scan
         run: >-
           docker run --rm -v "${GITHUB_WORKSPACE}:/src" semgrep/semgrep:1.180.0
           semgrep scan --config p/javascript --config p/secrets --metrics=off
           --sarif --output semgrep.sarif
-      - uses: github/codeql-action/upload-sarif@v4
+      - uses: github/codeql-action/upload-sarif@v4.38.3
         if: always()
         with:
           sarif_file: semgrep.sarif
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
           name: semgrep-sarif

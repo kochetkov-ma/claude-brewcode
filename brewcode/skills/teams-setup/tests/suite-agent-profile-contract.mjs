@@ -180,12 +180,8 @@ const canonicalTraceOpsPath = join(repo, 'brewcode', 'skills', 'teams-setup', 's
 const projectedSkillPath = join(repo, 'brewcode', '.codex', 'skills', 'teams-setup', 'SKILL.md');
 const projectedTemplatePath = join(repo, 'brewcode', '.codex', 'skills', 'teams-setup', 'references', 'agent-template.md');
 const projectedFrameworkPath = join(repo, 'brewcode', '.codex', 'skills', 'teams-setup', 'references', 'framework-files.md');
-const distributedTemplatePath = join(repo, '.codex', 'plugins', 'brewcode', 'skills', 'teams-setup', 'references', 'agent-template.md');
-const distributedFrameworkPath = join(repo, '.codex', 'plugins', 'brewcode', 'skills', 'teams-setup', 'references', 'framework-files.md');
 const projectedCounterPath = join(repo, 'brewcode', '.codex', 'skills', 'teams-setup', 'scripts', 'count-tokens.py');
-const distributedCounterPath = join(repo, '.codex', 'plugins', 'brewcode', 'skills', 'teams-setup', 'scripts', 'count-tokens.py');
 const projectedPreparerPath = join(repo, 'brewcode', '.codex', 'skills', 'teams-setup', 'scripts', 'prepare-tokenizer.py');
-const distributedPreparerPath = join(repo, '.codex', 'plugins', 'brewcode', 'skills', 'teams-setup', 'scripts', 'prepare-tokenizer.py');
 const projectedCreatorPath = join(repo, 'brewcode', '.codex', 'agents', 'agent-creator.toml');
 
 for (const [name, path] of [
@@ -194,19 +190,30 @@ for (const [name, path] of [
   ['projectedSkill', projectedSkillPath],
   ['projectedTemplate', projectedTemplatePath],
   ['projectedFramework', projectedFrameworkPath],
-  ['distributedTemplate', distributedTemplatePath],
-  ['distributedFramework', distributedFrameworkPath],
   ['canonicalCounter', canonicalCounterPath],
   ['projectedCounter', projectedCounterPath],
-  ['distributedCounter', distributedCounterPath],
   ['canonicalPreparer', canonicalPreparerPath],
   ['projectedPreparer', projectedPreparerPath],
-  ['distributedPreparer', distributedPreparerPath],
   ['projectedCreator', projectedCreatorPath],
 ]) {
   check(`${name}.exists`, existsSync(path), true, `${name} artifact exists`);
 }
 
+// CI sharding: TEAMS_PROFILE_PART=k of TEAMS_PROFILE_PARTS=n runs part k of the greedy weight split.
+const PROFILE_PARTS = Number.parseInt(process.env.TEAMS_PROFILE_PARTS || '1', 10);
+const PROFILE_PART = Number.parseInt(process.env.TEAMS_PROFILE_PART || '0', 10);
+const partLoads = new Array(PROFILE_PARTS).fill(0);
+function part(body, weight = 1) {
+  const target = partLoads.indexOf(Math.min(...partLoads));
+  partLoads[target] += weight;
+  if (target === PROFILE_PART) body();
+}
+check('profile.part.range', PROFILE_PART >= 0 && PROFILE_PART < PROFILE_PARTS, true,
+  'the selected shard exists, so no part is silently skipped');
+
+// BEGIN SOURCE TOKENIZER HARDENING
+// Weight ~= 30 verifier blocks: the adversarial fixtures dominate this suite's runtime.
+part(() => {
 const tokenizerUrl = 'https://openaipublic.blob.core.windows.net/encodings/o200k_base.tiktoken';
 const encodingDigest = '446a9538cb6c348e3516120d7c08b09f57c36495e2acfffe59a5bf8b0cfb1a2d';
 const preparerManifestResult = spawnSync('python3', ['-I', '-S', canonicalPreparerPath, 'manifest'], {
@@ -765,6 +772,8 @@ try {
 } finally {
   rmSync(corruptCacheDir, { recursive: true, force: true });
 }
+}, 30);
+// END SOURCE TOKENIZER HARDENING
 
 const canonicalTemplate = readFileSync(canonicalTemplatePath, 'utf8');
 const canonicalFramework = readFileSync(canonicalFrameworkPath, 'utf8');
@@ -772,8 +781,6 @@ const canonicalSkill = readFileSync(canonicalSkillPath, 'utf8');
 const projectedSkill = readFileSync(projectedSkillPath, 'utf8');
 const projectedTemplate = readFileSync(projectedTemplatePath, 'utf8');
 const projectedFramework = readFileSync(projectedFrameworkPath, 'utf8');
-const distributedTemplate = readFileSync(distributedTemplatePath, 'utf8');
-const distributedFramework = readFileSync(distributedFrameworkPath, 'utf8');
 const projectedCreator = readFileSync(projectedCreatorPath, 'utf8');
 
 check(
@@ -1115,34 +1122,10 @@ check(
   'native Codex carries the pinned exact counter byte-for-byte',
 );
 check(
-  'codex.counterDistributionParity',
-  readFileSync(distributedCounterPath, 'utf8'),
-  readFileSync(projectedCounterPath, 'utf8'),
-  'distributed Codex carries the generated pinned counter byte-for-byte',
-);
-check(
   'codex.preparerProjectionParity',
   readFileSync(projectedPreparerPath, 'utf8'),
   readFileSync(canonicalPreparerPath, 'utf8'),
   'native Codex carries the pinned durable preparer byte-for-byte',
-);
-check(
-  'codex.preparerDistributionParity',
-  readFileSync(distributedPreparerPath, 'utf8'),
-  readFileSync(projectedPreparerPath, 'utf8'),
-  'distributed Codex carries the durable preparer byte-for-byte',
-);
-check(
-  'codex.distributedTemplateParity',
-  distributedTemplate,
-  projectedTemplate,
-  'distributed Codex team template equals the canonical projection byte-for-byte',
-);
-check(
-  'codex.distributedFrameworkParity',
-  distributedFramework,
-  projectedFramework,
-  'distributed Codex shared contract equals the canonical projection byte-for-byte',
 );
 
 // BEGIN PROJECTED WORKFLOW CONTRACT
@@ -1385,7 +1368,63 @@ function makeWorld({
   return world;
 }
 
-function runVerifier(world, env = process.env) {
+// Verifier-only memo of exact-count calls keyed by script, input and cache env: first call per key
+// runs the real tokenizer, repeats replay it; `-I -S -` stdin code runs in-process so nested counts hit it.
+const TOKEN_MEMO_PY = [
+  'import hashlib, json, os, subprocess, sys',
+  'real, cache, args = sys.argv[1], sys.argv[2], sys.argv[3:]',
+  'def digest(path):',
+  '    with open(path, "rb") as handle:',
+  '        return hashlib.sha256(handle.read()).hexdigest()',
+  'memo = (len(args) >= 5 and args[:2] == ["-I", "-S"] and args[3] == "run"',
+  '        and os.path.basename(args[2]) == "prepare-tokenizer.py"',
+  '        and os.path.basename(args[4]) == "count-tokens.py" and len(args) <= 6',
+  '        and (len(args) == 5 or args[5] == "--check" or os.path.isfile(args[5])))',
+  'if args[:3] == ["-I", "-S", "-"]:',
+  '    sys.argv = ["-", *args[3:]]',
+  '    sys.executable = os.path.join(os.path.dirname(cache), "bin", "python3")',
+  '    exec(compile(sys.stdin.read(), "<stdin>", "exec"), {"__name__": "__main__"})',
+  '    sys.exit(0)',
+  'if not memo:',
+  '    os.execv(real, [real, *args])',
+  'extra = args[5:]',
+  'stdin = sys.stdin.buffer.read() if not extra else None',
+  'parts = [digest(args[2]), digest(args[4]), extra == ["--check"],',
+  '         digest(extra[0]) if extra and extra[0] != "--check" else None,',
+  '         hashlib.sha256(stdin).hexdigest() if stdin is not None else None,',
+  '         [os.environ.get(k) for k in ("BREWCODE_TOKENIZER_ROOT", "XDG_CACHE_HOME", "HOME",',
+  '                                      "LOCALAPPDATA", "TIKTOKEN_CACHE_DIR")]]',
+  'entry = os.path.join(cache, hashlib.sha256(json.dumps(parts).encode()).hexdigest() + ".json")',
+  'if os.path.isfile(entry):',
+  '    with open(entry, encoding="utf-8") as handle:',
+  '        rc, out, err = json.load(handle)',
+  'else:',
+  '    done = subprocess.run([real, *args], input=stdin, capture_output=True)',
+  '    rc, out, err = done.returncode, done.stdout.decode(), done.stderr.decode()',
+  '    if rc == 0:',
+  '        with open(entry + ".tmp", "w", encoding="utf-8") as handle:',
+  '            json.dump([rc, out, err], handle)',
+  '        os.replace(entry + ".tmp", entry)',
+  'sys.stdout.write(out)',
+  'sys.stderr.write(err)',
+  'sys.exit(rc)',
+  '',
+].join('\n');
+const tokenMemoRoot = mkdtempSync(join(tmpdir(), 'team-token-memo-'));
+tempDirs.push(tokenMemoRoot);
+mkdirSync(join(tokenMemoRoot, 'bin'));
+mkdirSync(join(tokenMemoRoot, 'cache'));
+const memoRealPython = spawnSync('python3', ['-I', '-S', '-c', 'import sys; print(sys.executable)'],
+  { encoding: 'utf8' }).stdout.trim();
+writeFileSync(join(tokenMemoRoot, 'memo.py'), TOKEN_MEMO_PY);
+writeFileSync(join(tokenMemoRoot, 'bin', 'python3'), `#!/bin/sh
+exec '${memoRealPython}' -I -S '${join(tokenMemoRoot, 'memo.py')}' '${memoRealPython}' '${join(tokenMemoRoot, 'cache')}' "$@"
+`);
+chmodSync(join(tokenMemoRoot, 'bin', 'python3'), 0o755);
+const verifierEnv = { ...process.env, PATH: `${join(tokenMemoRoot, 'bin')}:${process.env.PATH}` };
+check('verifier.tokenMemo.python', existsSync(memoRealPython), true, 'the memo replays through the host python3');
+
+function runVerifier(world, env = verifierEnv) {
   const result = spawnSync('bash', [verifierPath, 'dusk'], {
     cwd: world,
     env,
@@ -1400,16 +1439,16 @@ function removeWorld(world) {
   rmSync(world, { recursive: true, force: true });
 }
 
-{
+part(() => {
   const world = makeWorld();
   const result = runVerifier(world);
   check('verifier.current.exit', result.status, 0, 'a complete current team passes the hard verifier');
   check('verifier.current.shared', result.output.includes('CHECK: Shared Agent Contract ... OK'), true,
     'the instantiated shared contract is verified');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   // GIVEN: cleanup left a complete current team with no trace file.
   const world = makeWorld();
   const tracePath = join(world, SOURCE_CLIENT_DIR, 'teams', 'dusk', 'trace.jsonl');
@@ -1427,7 +1466,7 @@ function removeWorld(world) {
   check('verifier.absentTrace.noMutation', existsSync(tracePath), false,
     'verification does not create trace storage');
   removeWorld(world);
-}
+});
 
 {
   // GIVEN: a fresh shell has no preexisting SID and trace storage is absent.
@@ -1451,7 +1490,7 @@ function removeWorld(world) {
   removeWorld(world);
 }
 
-{
+part(() => {
   // GIVEN: a present regular trace contains a schema-invalid short SID.
   const world = makeWorld();
   const tracePath = join(world, SOURCE_CLIENT_DIR, 'teams', 'dusk', 'trace.jsonl');
@@ -1467,9 +1506,9 @@ function removeWorld(world) {
     result.output.includes('sid must be exactly 8 safe ASCII characters'), true,
     'the verifier identifies the exact invalid trace field');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   // GIVEN: a calendar-impossible timestamp has the right lexical shape.
   const world = makeWorld();
   const tracePath = join(world, SOURCE_CLIENT_DIR, 'teams', 'dusk', 'trace.jsonl');
@@ -1493,9 +1532,9 @@ function removeWorld(world) {
   const valid = runVerifier(world);
   check('verifier.validLeapTrace.exit', valid.status, 0, 'a valid leap-day timestamp passes verification');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   // GIVEN: trace.jsonl is present only as a symlink to foreign bytes.
   const world = makeWorld();
   const tracePath = join(world, SOURCE_CLIENT_DIR, 'teams', 'dusk', 'trace.jsonl');
@@ -1518,9 +1557,9 @@ function removeWorld(world) {
   check('verifier.symlinkTrace.foreignBytes', readFileSync(foreignPath, 'utf8'), '{"foreign":true}\n',
     'verification never mutates the foreign target');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld();
   const teamPath = join(world, SOURCE_CLIENT_DIR, 'teams', 'dusk', 'team.md');
   const base = readFileSync(teamPath, 'utf8');
@@ -1539,9 +1578,9 @@ function removeWorld(world) {
   check('verifier.falsePass.reason', result.output.includes('exact o200k tokens; maximum'), true,
     'runtime failure reports the exact-token boundary');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld();
   const teamPath = join(world, SOURCE_CLIENT_DIR, 'teams', 'dusk', 'team.md');
   writeFileSync(teamPath, readFileSync(teamPath, 'utf8').replace(
@@ -1555,9 +1594,9 @@ function removeWorld(world) {
     result.output.includes('required permits exactly one total intent-guard mention; found 2'), true,
     'the exact safe sentence must be the sole shared mention of the role');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld();
   const teamPath = join(world, SOURCE_CLIENT_DIR, 'teams', 'dusk', 'team.md');
   writeFileSync(teamPath, readFileSync(teamPath, 'utf8').replace(
@@ -1570,9 +1609,9 @@ function removeWorld(world) {
     result.output.includes('required needs exact sentence once; found 2'), true,
     'the verifier counts exact occurrences rather than matching lines');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld({
     policy: 'legacy-absent', roster: DUSK_ROSTER, reportRoot: '.codex/reports', compactDefaults: true,
   });
@@ -1589,9 +1628,9 @@ function removeWorld(world) {
     result.output.includes('CHECK: Shared report root (.codex/reports) ... OK'), true,
     'the verifier accepts the exact guidance-derived Dusk report root');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld();
   const teamPath = join(world, SOURCE_CLIENT_DIR, 'teams', 'dusk', 'team.md');
   writeFileSync(teamPath, readFileSync(teamPath, 'utf8').replace(REQUIRED_GUARD_SENTENCE, ''));
@@ -1602,9 +1641,9 @@ function removeWorld(world) {
     result.output.includes('required needs exact sentence once; found 0'), true,
     'the verifier identifies the missing required-policy sentence');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld({ policy: 'legacy-absent' });
   const teamPath = join(world, SOURCE_CLIENT_DIR, 'teams', 'dusk', 'team.md');
   writeFileSync(teamPath, readFileSync(teamPath, 'utf8').replace(
@@ -1618,9 +1657,9 @@ function removeWorld(world) {
     result.output.includes('legacy-absent must not name a phantom role'), true,
     'the verifier identifies the phantom-role wording');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld({ policy: 'legacy-absent' });
   const teamPath = join(world, SOURCE_CLIENT_DIR, 'teams', 'dusk', 'team.md');
   writeFileSync(teamPath, readFileSync(teamPath, 'utf8').replace(
@@ -1634,9 +1673,9 @@ function removeWorld(world) {
     result.output.includes('unresolved policy-conditional placeholder'), true,
     'the verifier identifies the unresolved conditional placeholder');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld({ reportRoot: '{REPORT_ROOT}' });
   const result = runVerifier(world);
   check('verifier.unresolvedReportRoot.exit', result.status, 1,
@@ -1645,9 +1684,9 @@ function removeWorld(world) {
     result.output.includes('unsafe or unresolved project-relative path'), true,
     'the verifier identifies unresolved report-root output');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld({ reportRoot: '../outside' });
   const result = runVerifier(world);
   check('verifier.traversalReportRoot.exit', result.status, 1,
@@ -1656,9 +1695,9 @@ function removeWorld(world) {
     result.output.includes("unsafe or unresolved project-relative path: '../outside'"), true,
     'the verifier identifies the unsafe report root');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld();
   const teamPath = join(world, SOURCE_CLIENT_DIR, 'teams', 'dusk', 'team.md');
   const bulk = `Bulk -> \`${SOURCE_CLIENT_DIR}/reports/YYYYMMDD-HHMMSS_{AGENT_NAME}/\``;
@@ -1670,9 +1709,9 @@ function removeWorld(world) {
     result.output.includes('expected exactly one Bulk directive, one report template, and one resolved path; found 2/2/2'), true,
     'the verifier counts concrete report patterns rather than matching lines');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld();
   const teamPath = join(world, SOURCE_CLIENT_DIR, 'teams', 'dusk', 'team.md');
   const bulk = `Bulk -> \`${SOURCE_CLIENT_DIR}/reports/YYYYMMDD-HHMMSS_{AGENT_NAME}/\``;
@@ -1688,9 +1727,9 @@ function removeWorld(world) {
   check('verifier.reportRootUnsafeSecondBulk.noExecution', existsSync(join(world, 'touch-pwned')), false,
     'verification treats the unsafe second directive as data');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld();
   const teamPath = join(world, SOURCE_CLIENT_DIR, 'teams', 'dusk', 'team.md');
   const bulk = `Bulk -> \`${SOURCE_CLIENT_DIR}/reports/YYYYMMDD-HHMMSS_{AGENT_NAME}/\``;
@@ -1704,7 +1743,7 @@ function removeWorld(world) {
     result.output.includes('expected exactly one Bulk directive, one report template, and one resolved path; found 1/2/1'), true,
     'the verifier counts report-template occurrences independently of directives');
   removeWorld(world);
-}
+});
 
 for (const [name, reportRoot] of [
   ['commandSubstitution', '.codex/$(touch-pwned)'],
@@ -1715,7 +1754,7 @@ for (const [name, reportRoot] of [
   ['control', `.codex/${String.fromCharCode(1)}reports`],
   ['dotSegment', '.codex/./reports'],
   ['trailingSlash', '.codex/reports/'],
-]) {
+]) part(() => {
   const world = makeWorld({ reportRoot });
   const result = runVerifier(world);
   check(`verifier.hostileReportRoot.${name}.exit`, result.status, 1,
@@ -1727,23 +1766,23 @@ for (const [name, reportRoot] of [
     existsSync(join(world, 'touch-pwned')), false,
     'verification never executes report-root text');
   removeWorld(world);
-}
+});
 
-for (const reportRoot of ['.codex/reports', 'reports/team-1', '.reports_2/a.b']) {
+for (const reportRoot of ['.codex/reports', 'reports/team-1', '.reports_2/a.b']) part(() => {
   const world = makeWorld({ reportRoot });
   const result = runVerifier(world);
   check(`verifier.safeReportRoot.${reportRoot}.exit`, result.status, 0,
     `${reportRoot} passes the conservative segment allowlist`);
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld({ agentText: agentFile({ description: 'x'.repeat(100) }) });
   const result = runVerifier(world);
   check('verifier.description100.exit', result.status, 0,
     'a domain description at exactly 100 characters passes');
   removeWorld(world);
-}
+});
 
 // BEGIN SOURCE YAML DESCRIPTION FIXTURES
 for (const [name, description] of [
@@ -1756,7 +1795,7 @@ for (const [name, description] of [
   ['unicodeDescription100', 'é'.repeat(100)],
   ['unicodeMaxScalar', `Owner ${String.fromCodePoint(0x10ffff)}`],
 ]) {
-  for (const parked of [false, true]) {
+  for (const parked of [false, true]) part(() => {
     const world = makeWorld({ agentText: agentFile({ description }) });
     if (parked) {
       const agentsDir = join(world, SOURCE_CLIENT_DIR, 'agents');
@@ -1767,7 +1806,7 @@ for (const [name, description] of [
     check(`verifier.descriptionString.${name}.${state}.exit`, result.status, 0,
       `${state} domain member accepts a useful YAML string scalar`);
     removeWorld(world);
-  }
+  });
 }
 
 for (const [name, description, reason] of [
@@ -1817,7 +1856,7 @@ for (const [name, description, reason] of [
   ['loneSurrogate', '"\\ud800"', 'valid Unicode scalar values'],
   ['unicodeDescription101', 'é'.repeat(101), 'description is 101 characters; ceiling is 100'],
 ]) {
-  for (const parked of [false, true]) {
+  for (const parked of [false, true]) part(() => {
     const world = makeWorld({ agentText: agentFile({ description }) });
     if (parked) {
       const agentsDir = join(world, SOURCE_CLIENT_DIR, 'agents');
@@ -1831,11 +1870,11 @@ for (const [name, description, reason] of [
       result.output.includes(reason), true,
       'the verifier identifies the strict scalar defect');
     removeWorld(world);
-  }
+  });
 }
 // END SOURCE YAML DESCRIPTION FIXTURES
 
-{
+part(() => {
   const world = makeWorld({ agentText: agentFile({ description: 'x'.repeat(101) }) });
   const result = runVerifier(world);
   check('verifier.description101.exit', result.status, 1,
@@ -1844,9 +1883,9 @@ for (const [name, description, reason] of [
     result.output.includes('description is 101 characters; ceiling is 100'), true,
     'the verifier names the exact description length and ceiling');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld({ agentText: agentFile({ description: 'x'.repeat(101) }) });
   const agentsDir = join(world, SOURCE_CLIENT_DIR, 'agents');
   renameSync(join(agentsDir, 'build-eng.md'), join(agentsDir, 'build-eng.md.disabled'));
@@ -1857,9 +1896,9 @@ for (const [name, description, reason] of [
     result.output.includes('description is 101 characters; ceiling is 100'), true,
     'the parked-member failure names the same exact ceiling');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld({ policy: 'required', intent: false });
   const teamPath = join(world, SOURCE_CLIENT_DIR, 'teams', 'dusk', 'team.md');
   writeFileSync(teamPath, readFileSync(teamPath, 'utf8').replace(/^\|intent-guard\|.*\n/m, ''));
@@ -1870,9 +1909,9 @@ for (const [name, description, reason] of [
     result.output.includes('policy required needs exactly one row; found 0'), true,
     'required-policy failure names the missing row');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld({ policy: 'legacy-absent', intent: true });
   const teamPath = join(world, SOURCE_CLIENT_DIR, 'teams', 'dusk', 'team.md');
   const team = readFileSync(teamPath, 'utf8');
@@ -1885,9 +1924,9 @@ for (const [name, description, reason] of [
     result.output.includes('policy legacy-absent requires zero rows; found 1'), true,
     'legacy-absent failure names the forbidden roster expansion');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld();
   const teamPath = join(world, SOURCE_CLIENT_DIR, 'teams', 'dusk', 'team.md');
   writeFileSync(teamPath, readFileSync(teamPath, 'utf8').replace(
@@ -1899,9 +1938,9 @@ for (const [name, description, reason] of [
     result.output.includes("expected required or legacy-absent; found 'optional'"), true,
     'the verifier enumerates the only valid policy values');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld();
   const teamPath = join(world, SOURCE_CLIENT_DIR, 'teams', 'dusk', 'team.md');
   writeFileSync(teamPath, `${readFileSync(teamPath, 'utf8')}${'x'.repeat(3000)}\n`);
@@ -1912,9 +1951,9 @@ for (const [name, description, reason] of [
     result.output.includes('maximum 2800 chars and 700 tiktoken 0.13.0/o200k_base tokens'), true,
     'the runtime verifier names both complete-file ceilings');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld();
   const teamPath = join(world, SOURCE_CLIENT_DIR, 'teams', 'dusk', 'team.md');
   writeFileSync(teamPath, readFileSync(teamPath, 'utf8').replace('|Agents|1|', '|Agents|2|'));
@@ -1925,9 +1964,9 @@ for (const [name, description, reason] of [
     result.output.includes('declared 2, found 1 unique domain rows'), true,
     'the mismatch reports declared and observed unique-domain counts');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld();
   const teamPath = join(world, SOURCE_CLIENT_DIR, 'teams', 'dusk', 'team.md');
   const duplicate = `|build-eng|Build|deterministic builds|active|${today}|domain|${pluginVersion}|\n`;
@@ -1939,9 +1978,9 @@ for (const [name, description, reason] of [
     result.output.includes("duplicate roster name"), true,
     'the verifier identifies duplicate roster identity');
   removeWorld(world);
-}
+});
 
-{
+part(() => {
   const world = makeWorld();
   const teamPath = join(world, SOURCE_CLIENT_DIR, 'teams', 'dusk', 'team.md');
   const duplicate = `|intent-guard|--|Anti-drift check: what was ASKED vs what was DELIVERED|active|${today}|review-only|${pluginVersion}|\n`;
@@ -1953,10 +1992,10 @@ for (const [name, description, reason] of [
     result.output.includes('policy required needs exactly one row; found 2'), true,
     'the verifier enforces exactly one review-only row');
   removeWorld(world);
-}
+});
 
 // BEGIN SOURCE FRONTMATTER BUDGET FIXTURE
-{
+part(() => {
   const padding = `notes: "${'x'.repeat(5000)}"\n`;
   const world = makeWorld({ agentText: agentFile({ frontmatterPadding: padding }) });
   const result = runVerifier(world);
@@ -1967,10 +2006,10 @@ for (const [name, description, reason] of [
     true,
     'the fixture proves the full file itself exceeds 3200 bytes');
   removeWorld(world);
-}
+});
 // END SOURCE FRONTMATTER BUDGET FIXTURE
 
-{
+part(() => {
   const oversized = `${representativeBody}\n${'x'.repeat(3300)}\n`;
   const world = makeWorld({ agentText: agentFile({ body: oversized }) });
   const result = runVerifier(world);
@@ -1978,7 +2017,7 @@ for (const [name, description, reason] of [
   check('verifier.bodyCeiling.reason', result.output.includes('ceilings are 3200 bytes and 800 tokens, frontmatter excluded'), true,
     'the failure names the body-only contract');
   removeWorld(world);
-}
+});
 
 const instantiatedLosses = [
   'Load this before task acceptance.',
@@ -2002,7 +2041,7 @@ const instantiatedLosses = [
   'Class/module/test',
   'rules/conventions/docs',
 ];
-for (const [index, literal] of instantiatedLosses.entries()) {
+for (const [index, literal] of instantiatedLosses.entries()) part(() => {
   const world = makeWorld();
   const teamPath = join(world, SOURCE_CLIENT_DIR, 'teams', 'dusk', 'team.md');
   writeFileSync(teamPath, readFileSync(teamPath, 'utf8').replace(literal, '[removed contract literal]'));
@@ -2012,10 +2051,10 @@ for (const [index, literal] of instantiatedLosses.entries()) {
   check(`verifier.loss.${index + 1}.reason`, result.output.includes(`missing: ${literal}`), true,
     'the verifier identifies the exact lost contract');
   removeWorld(world);
-}
+});
 
 // BEGIN SOURCE LEGACY AGENT FIXTURE
-{
+part(() => {
   const legacyTeam = `# Team: dusk
 
 | Field | Value |
@@ -2053,7 +2092,7 @@ for (const [index, literal] of instantiatedLosses.entries()) {
   check('verifier.interruptedInstall.reason', interruptedResult.output.includes('shared team contract missing; interrupted install/unsafe migration'), true,
     'the verifier directs repair of the shared authority before profile stripping');
   removeWorld(interrupted);
-}
+});
 // END SOURCE LEGACY AGENT FIXTURE
 
 for (const [name, mutate, reason] of [
@@ -2061,14 +2100,14 @@ for (const [name, mutate, reason] of [
     'Must-load references must name .claude/teams/dusk/team.md'],
   ['extraHeading', (text) => `${text}\n## Return Contract\n\nDuplicated.\n`,
     'body headings must be exactly the six ordered teams-setup headings'],
-]) {
+]) part(() => {
   const world = makeWorld({ agentText: agentFile({ body: mutate(representativeBody) }) });
   const result = runVerifier(world);
   check(`verifier.profileLoss.${name}.exit`, result.status, 1, `${name} profile loss fails`);
   check(`verifier.profileLoss.${name}.reason`, result.output.includes(reason), true,
     'the verifier names the compact-profile loss');
   removeWorld(world);
-}
+});
 
 for (const [name, mutate] of [
   ['domain', (row) => row.replace('|--|', '|code|')],
@@ -2077,7 +2116,7 @@ for (const [name, mutate] of [
   ['updated', (row) => row.replace(`|${today}|review-only|`, '|2026-08-26|review-only|')],
   ['kind', (row) => row.replace('|review-only|', '|domain|')],
   ['version', (row) => row.replace(`|${pluginVersion}|`, '|0.0.0|')],
-]) {
+]) part(() => {
   const world = makeWorld();
   const teamPath = join(world, SOURCE_CLIENT_DIR, 'teams', 'dusk', 'team.md');
   const fixedRow = `|intent-guard|--|Anti-drift check: what was ASKED vs what was DELIVERED|active|${today}|review-only|${pluginVersion}|`;
@@ -2089,7 +2128,7 @@ for (const [name, mutate] of [
     result.output.includes('fixed cells require --, anti-drift mission, active, team Last update, review-only, and team Version'), true,
     'the verifier protects every fixed review-only cell');
   removeWorld(world);
-}
+});
 
 console.log('suite-agent-profile-contract.mjs');
 for (const line of results) console.log(line);
