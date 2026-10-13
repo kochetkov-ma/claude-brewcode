@@ -111,7 +111,7 @@ This skill is part of [brewcode](https://github.com/kochetkov-ma/claude-brewcode
 
 ```bash
 claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
-claude plugin install brewcode@claude-brewcode
+claude plugin install brewdoc@claude-brewcode
 ```
 
 ## License
