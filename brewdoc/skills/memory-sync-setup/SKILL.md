@@ -7,7 +7,7 @@ argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge]
 allowed-tools: [Read, Edit, Glob, Grep, Bash, Agent, AskUserQuestion]
 model: opus
 ---
-<!-- brewcode-meta: version=6.5.3 content_version=6.5.0 generated_by=brewdoc:memory-sync-setup -->
+<!-- brewcode-meta: version=6.5.4 content_version=6.5.4 generated_by=brewdoc:memory-sync-setup -->
 
 # Memory Sync Generator (brewdoc:memory-sync-setup)
 
@@ -340,7 +340,7 @@ bash "${CLAUDE_SKILL_DIR}/scripts/generate.sh" validate && echo "✅ validate" |
 > then re-run.
 
 Then assert by hand, since `validate` cannot resolve agent names: every agent the emitted skill spawns resolves to a
-real `<target>/.claude/agents/*.md` or a built-in (`Explore` / `Plan` / `general-purpose`); an invented
+real `<target>/.claude/agents/**/*.md` or a built-in (`Explore` / `Plan` / `general-purpose`); an invented
 `subagent_type` breaks the emitted skill at its first run.
 
 ### Phase 5 -- Report

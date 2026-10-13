@@ -29,11 +29,8 @@
 |-----------|-----------|--------|
 | py | Contains `def test_`, `@pytest`, `class Test` | COMPLEX |
 | py | <30 lines, only imports/constants | SIMPLE |
-| py | Has classes with methods | COMPLEX |
 | py | Otherwise | COMPLEX |
 | pyi | Type stubs | SIMPLE |
-
----
 
 ## Docstring Cleanup
 
@@ -115,8 +112,6 @@ def __eq__(self, other) -> bool:
     """Compares by ID only, ignores other fields."""
 ```
 
----
-
 ## Comments
 
 | Remove | Keep |
@@ -146,15 +141,12 @@ y: str | None = None
 | Action | Example |
 |--------|---------|
 | KEEP | `# noqa: E501 - long URL` (with reason) |
-| KEEP | `# type: ignore[override]` (mypy) |
 | KEEP + SURFACE | `# noqa` without code/reason; it suppresses checks, never remove during styling |
 | KEEP + REVIEW | Multiple noqa in one file; report narrowing/removal proposals only |
 
----
-
 ## Test Files
 
-Remove only redundant docs in tests, fixtures and conftest.py. Keep fixture lifetime/side effects, test invariants, doctests and tool-consumed docs. Preserve GIVEN/WHEN/THEN/AND and Arrange/Act/Assert.
+Docstring Cleanup applies to tests, fixtures and conftest.py; also keep fixture lifetime/side effects and test invariants, and preserve Arrange/Act/Assert.
 
 ```python
 # REMOVE - test file:
@@ -177,8 +169,6 @@ class TestUserService:
 def mock_user():
     """Create mock user for tests."""
 ```
-
----
 
 ## File Inclusion
 

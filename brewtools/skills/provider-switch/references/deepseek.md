@@ -1,6 +1,6 @@
 # DeepSeek (V4)
 
-Priority default: `deepseek-v4-pro` (model version DeepSeek-V4-Pro-0813); retain configured selections. [Model/pricing page](https://api-docs.deepseek.com/quick_start/pricing/), checked 2026-10-12: 1M context, max output 384K; `deepseek-flash` = V4.1-Flash. No quality rank implied.
+Priority default: `deepseek-v4-pro` (model version DeepSeek-V4-Pro-0813); retain configured selections. [Model/pricing page](https://api-docs.deepseek.com/quick_start/pricing/), checked 2026-10-12. No quality rank implied.
 
 ## Connection
 | Field | Value |
@@ -11,15 +11,15 @@ Priority default: `deepseek-v4-pro` (model version DeepSeek-V4-Pro-0813); retain
 | Pay model | Pay-per-token |
 
 ## Auth Note
-Alias: Bearer `ANTHROPIC_AUTH_TOKEN` + empty `ANTHROPIC_API_KEY`; the [Anthropic API guide](https://api-docs.deepseek.com/guides/anthropic_api/) also accepts `x-api-key`. Never print/copy keys into arguments or reports.
+Alias: Bearer `ANTHROPIC_AUTH_TOKEN` + empty `ANTHROPIC_API_KEY` ([Anthropic API guide](https://api-docs.deepseek.com/guides/anthropic_api/)). Never print/copy keys into arguments or reports.
 
 ## Model
 | Field | Value |
 |-------|-------|
 | Configured model | `deepseek-v4-pro` |
-| Unknown-id server fallback | `deepseek-flash` (V4.1); `claude-opus*` ids map to `deepseek-v4-pro`, `claude-sonnet*`/`claude-haiku*` to `deepseek-flash`. Report an echoed model mismatch, never claim the requested model ran |
-| Context | 1M tokens |
-| Modes | non-thinking / thinking; consult current effort controls in the provider guide |
+| Unknown-id server fallback | `deepseek-flash` (V4.1-Flash); `claude-opus*` ids map to `deepseek-v4-pro`, `claude-sonnet*`/`claude-haiku*` to `deepseek-flash`. Report an echoed model mismatch, never claim the requested model ran |
+| Context | 1M tokens, max output 384K |
+| Modes | non-thinking / thinking; effort controls: see the provider guide |
 | Release lineage | V4 preview 2026-04-24; V4 Pro GA 2026-08-13 ([announcement](https://api-docs.deepseek.com/news/news260813/)) |
 
 Direct Pro USD per 1M, 2026-10-12: input cache miss $1.32 peak / $0.66 off-peak; output $3.96 / $1.98; cache hit $0.044 / $0.022. Peak hours: 01:00-04:00 and 06:00-10:00 UTC on weekdays except Chinese public holidays; other times off-peak. These differ from OpenRouter route prices.

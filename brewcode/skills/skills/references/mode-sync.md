@@ -7,10 +7,10 @@
 
 | Rule | Detail |
 |------|--------|
-| Budget | after sync each file MUST be **<= its original line count**. Growth needs an explicit user OK in the report, never silently. |
-| Order | **DELETE first** (dead / stale / obvious / duplicate) -> **FIX** -> **ADD last**. Never add before cutting. |
+| Budget | after sync each file MUST be <= its original line count. Growth needs an explicit user OK in the report, never silently. |
+| Order | DELETE first (dead / stale / obvious / duplicate) -> FIX -> ADD last. Never add before cutting. |
 | Add gate | a new fact enters only if ALL hold: non-obvious for a competent model + verified against a real source + its absence costs a real failure |
-| Traceable | verify surviving claims against files, command output, commits or current user decisions. Confirmed false/dead -> fix/delete; unavailable evidence -> retain, flag unverified, never infer false |
+| Traceable | verify surviving claims against files, command output, commits or current user decisions (verdicts: Step S5) |
 | !=touch | frontmatter `name`/`description` contract, working instructions that are still true, the file's structure and voice |
 | Edit only | `Edit` with targeted diffs, bottom-up by line number. !=`Write` a whole file (silently drops lines) |
 
@@ -18,8 +18,8 @@
 
 | Scope | Chosen when the prompt says | Ground truth |
 |-------|-----------------------------|--------------|
-| `repo` (**DEFAULT**) | nothing about session/commit | whole repository @ current working tree |
-| `session` | "по текущей сессии", "this session", "что мы сегодня делали", "что мы нашли" | THIS conversation — decisions taken, user corrections, bugs hit, dead ends — **plus** the working tree for verification |
+| `repo` (default) | nothing about session/commit | whole repository @ current working tree |
+| `session` | "по текущей сессии", "this session", "что мы сегодня делали", "что мы нашли" | THIS conversation — decisions taken, user corrections, bugs hit, dead ends — plus the working tree for verification |
 | `commit` | "по коммиту", "последний коммит", "diff", an explicit SHA / range / tag | `git show <ref>` or `git diff <range>` (default `HEAD`) + working tree |
 
 ANNOUNCE before any work:
@@ -30,15 +30,15 @@ Sync scope: <scope> — <evidence quoted from the prompt> | targets: <N> <ARTIFA
 
 ## Step S2 — Targets
 
-Default = artifacts **of this repository** only:
+Default = artifacts of this repository only:
 
 | ARTIFACT | Roots |
 |----------|-------|
 | `agents` | `.claude/agents/*.md`, `*/agents/*.md` (plugin dirs) |
 | `skills` | `.claude/skills/*/SKILL.md` + `references/*.md`, `*/skills/*/SKILL.md` + `references/*.md` |
 
-`~/.claude/**` is **out of scope** unless the user explicitly names global. Disabled artifacts
-(`<name>.disabled` parking, legacy `_name.md` / `_SKILL.md` markers) are skipped and listed as skipped.
+`~/.claude/**` is out of scope unless the user explicitly names global. Disabled artifacts
+(`<name>.disabled` parking, legacy `_name.md` / `_SKILL.md` markers) are skipped and listed.
 
 For `session` / `commit` scope: narrow to artifacts whose subject was actually touched — an
 artifact nothing in the scope says anything about MUST NOT be edited.
@@ -85,15 +85,15 @@ DONE: report back: path | lines before -> after | STALE fixed (claim -> truth) |
 
 | Verdict | Trigger | Action |
 |---------|---------|--------|
-| `STALE` | claim contradicts the source: renamed path/flag, changed count, old version, moved file | rewrite to the **minimal** true form (usually shorter) |
-| `DEAD` | source confirms referenced file / command / tool / mode no longer exists | delete the line **and** explanations solely for it; failed/unavailable lookup is not absence |
-| `DUPLICATE` | same fact repeated in one file, or canonical-owner decision supplied for cross-file repeat | retain most-specific same-file statement; cross-file merges only follow the orchestrator's owner + pointer decision; scope/numbers/conditions differences are distinct facts |
+| `STALE` | claim contradicts the source: renamed path/flag, changed count, old version, moved file | rewrite to the minimal true form (usually shorter) |
+| `DEAD` | source confirms referenced file / command / tool / mode no longer exists | delete the line and explanations solely for it; failed/unavailable lookup is not absence |
+| `DUPLICATE` | same fact repeated in one file, or canonical-owner decision supplied for cross-file repeat | retain most-specific same-file statement; scope/numbers/conditions differences are distinct facts |
 | `OBVIOUS` | restates what any competent model already knows, or narrates self-evident steps | delete |
 | `DRIFT` | prose grown around one fact | compress to a table row or one line |
 | `MISSING` | ground truth holds a fact the artifact must know and does not | add <= 1 line — only if the **Add gate** passes |
 | `UNVERIFIED` | source unavailable or evidence insufficient | retain text, report uncertainty and required proof; do not manufacture a verdict or remove an independently loaded constraint |
 
-Session additions are highest-risk: only reproducible, non-obvious, recurring problems;
+Session additions are highest-risk: only reproducible, recurring problems;
 one line with cause, never a narrative.
 
 ## Step S6 — Report (replaces the caller's `## Result` / `## Status` blocks)

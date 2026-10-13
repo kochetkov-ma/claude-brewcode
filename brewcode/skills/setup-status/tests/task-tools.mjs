@@ -7,7 +7,8 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 
-const source = readFileSync(join(resolve(dirname(fileURLToPath(import.meta.url)), '..'), 'SKILL.md'), 'utf8');
+const source = ['SKILL.md', 'references/phase1-probes.md', 'references/phase2-stamps.md', 'references/task-tools-offer.md']
+  .map(f => readFileSync(join(resolve(dirname(fileURLToPath(import.meta.url)), '..'), f), 'utf8')).join('\n');
 const fence = marker => [...source.matchAll(/```bash\n([\s\S]*?)\n```/g)].map(m => m[1]).find(b => b.includes(marker));
 const code = marker => /node --input-type=module -e '([\s\S]*?)' /.exec(fence(marker))[1];
 const probe = code('TODO_TOOLS ${');

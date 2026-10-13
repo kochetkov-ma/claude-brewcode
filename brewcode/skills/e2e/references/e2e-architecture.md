@@ -53,8 +53,6 @@ Contents: Architecture Diagram, Key Requirements, Layer Details, Stack Mapping, 
 
 **Naming:** `{Domain}{Feature}E2ETest` (e.g. `PaymentRefundE2ETest`)
 
-**Depends on:** Steps, base classes only.
-
 ```pseudo
 class OrderCreationE2ETest extends BaseOrderE2E:
 
@@ -76,8 +74,6 @@ class OrderCreationE2ETest extends BaseOrderE2E:
 
 **Naming:** `{Domain}Steps` (e.g. `OrderSteps`, `PaymentSteps`)
 
-**Depends on:** Verification, Data, Support layers.
-
 ```pseudo
 class OrderSteps:
 
@@ -97,8 +93,6 @@ class OrderSteps:
 **Purpose:** Assertion logic isolated from test flow. Strict checks with full object comparison.
 
 **Naming:** `{Domain}Verification` (e.g. `OrderVerification`)
-
-**Depends on:** Support layer (to fetch actual state), Config (timeouts).
 
 ```pseudo
 class OrderVerification:
@@ -120,8 +114,6 @@ encapsulated as Data -> DatabaseSupport -> Config; tests never write DB directly
 
 **Naming:** `{Domain}Data` (e.g. `OrderData`, `UserData`)
 
-**Depends on:** Support and Config (generation/settings) only; no upward dependencies.
-
 ```pseudo
 class OrderData:
 
@@ -142,8 +134,6 @@ class OrderData:
 
 **Naming:** `{Technology}Support` (e.g. `HttpSupport`, `KafkaSupport`, `DatabaseSupport`)
 
-**Depends on:** Config layer only.
-
 ```pseudo
 class KafkaSupport:
 
@@ -163,8 +153,6 @@ class KafkaSupport:
 **Purpose:** Environment-specific settings. Single source of truth for endpoints, credentials, timeouts.
 
 **Naming:** `TestConfig`, `E2EConfig`, or framework-specific config file.
-
-**Depends on:** Nothing. This is the bottom layer.
 
 ```pseudo
 class TestConfig:
@@ -193,28 +181,6 @@ class TestConfig:
 
 ## Dependency Rules
 
-Diagram: primary flow; the table defines every allowed direct edge.
-
-```
-Test Classes
-    |
-    v
-Steps Layer
-    |
-    +------+------+
-    |             |
-    v             v
-Verification   Data Layer
-    |             |
-    +------+------+
-           |
-           v
-    Support Layer
-           |
-           v
-    Config Layer
-```
-
 **Allowed direct dependencies (only these top-down edges):**
 
 | Source Layer | Can Access |
@@ -222,7 +188,7 @@ Verification   Data Layer
 | Test Classes | Steps, base classes |
 | Base-class lifecycle setup only | Data, Support, Config for environment/data preparation; scenario actions remain in Steps |
 | Steps | Verification, Data, Support |
-| Verification | Support, Config |
+| Verification | Support (actual state), Config (timeouts) |
 | Data | Support, Config |
 | Support | Config |
 | Config | Nothing (leaf layer) |

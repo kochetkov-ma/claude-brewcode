@@ -2,14 +2,14 @@
 
 ## 1. Scope
 
-Standard mode compresses text while keeping it human-readable. Target: **30-50% reduction**. Unlike deep mode, output must remain clear to humans, not just LLMs. Use for README files, documentation, API references, and user-facing docs.
+Human-readable compression. Target: **30-50% reduction**. Unlike deep mode, output must stay clear to humans, not just LLMs. Use for READMEs, documentation, API references and user-facing docs.
 
 Research ratios below describe cited studies/examples, not universal gains. Measure this artifact;
 preserve names/numbers/negations/scope over a target ratio.
 
 ## 2. Filler Removal Patterns
 
-Apply filler removal from `rules-review.md` rule T.6 as baseline. Standard mode additional patterns:
+Baseline: filler removal from `rules-review.md` rule T.6. Standard mode adds:
 
 | Pattern | Replace With |
 |---------|-------------|
@@ -41,13 +41,7 @@ Apply filler removal from `rules-review.md` rule T.6 as baseline. Standard mode 
 
 ## 4. Abbreviation Rules (Conservative)
 
-Only abbreviate in:
-
-- Tables (space-constrained)
-- Inline code references
-- Well-known acronyms (API, URL, CLI, etc.)
-
-Keep full words in prose for readability.
+Only abbreviate in tables (space-constrained), inline code references and well-known acronyms (API, URL, CLI, etc.). Keep full words in prose for readability.
 
 ## 5. Verification Checklist
 
@@ -59,7 +53,6 @@ After compression, verify:
 - [ ] Examples still present (at least one per concept)
 - [ ] Document still readable by a human unfamiliar with the topic
 - [ ] Actual ratio measured; 30-50% is a guide, never a reason to lose facts
-- [ ] No information merged incorrectly (two different concepts collapsed into one)
 - [ ] Headers and structure still logical
 - [ ] Terminology kept consistent — same concept uses the SAME term throughout (no paraphrase-for-variety; synonym variation hurts LLM retrieval)
 - [ ] Fact-inventory gate: extract atomic facts from original, check each in compressed; (kept + dedup-merged) / total >= 98% — patch any slip, one round
@@ -96,7 +89,7 @@ Full restore requires authorization plus matching pre-existing draft proof; abse
 > CLI tool that automates application deployment. Supports many cloud providers. Simplifies complex deployments to reduce errors and save time.
 
 Measured (`wc -w`): 59 -> 19 = -67.8%, above the 30-50% default target — short, filler-heavy prose
-can legitimately land higher. Treat 30-50% as the safe default for typical docs, not a ceiling.
+can legitimately land higher.
 
 ### Example 2: Installation Instructions
 

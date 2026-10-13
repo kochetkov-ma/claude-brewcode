@@ -14,10 +14,9 @@ Semble uses **only the suffix** (`Path(name).suffix.lower()`), not content/sheba
 | Extensionless files are never indexed | `Dockerfile`, `Makefile`, `LICENSE`, `Jenkinsfile`, `.gitignore`, `.env` — a name with no suffix (or only a leading dot) has no suffix at all, so it matches nothing |
 | Only the LAST suffix counts | `settings.gradle.kts` -> `.kts` (code). `schema.sql.j2` -> `.j2` (code). `data.tar.gz` -> `.gz` (nothing) |
 | The bucket is fixed per suffix | You cannot move `.html` into the code bucket. `--content` selects buckets, never suffixes |
-| An unmapped suffix is unreachable | `.mdx` and `.txt` are absent from `_EXTENSION_TO_LANGUAGE` altogether, so no content type — not even `all` — indexes them. `.mdx` is **not** an alias of `.md` |
+| An unmapped suffix is unreachable | `.mdx` and `.txt` are absent from `_EXTENSION_TO_LANGUAGE`, so no content type — not even `all` — indexes them. `.mdx` is not an alias of `.md` |
 
-…with exactly one hole, which is big enough to have cost this workspace 7.5% of
-its index. See the next section before trusting "unreachable".
+One hole (it cost this workspace 7.5% of its index): the next section.
 
 ## The negation bypass — the one way an unreachable suffix gets in
 
@@ -27,11 +26,9 @@ its index. See the next section before trusting "unreachable".
 found = not ignored and isinstance(pat, str) and bool(Path(pat.rstrip("/")).suffix)
 ```
 
-and `_walk` yields on `found or item.suffix.lower() in extensions`. So when a
-`.gitignore` or `.sembleignore` pattern **un-ignores** a path (`!…`) and the
-pattern text ends in a file extension, `found` is `True` and **the extension
-filter is skipped entirely**. The file is indexed no matter which bucket — if
-any — its suffix belongs to.
+and `_walk` yields on `found or item.suffix.lower() in extensions`. A `.gitignore` or
+`.sembleignore` pattern that un-ignores a path (`!…`) and ends in a file extension sets
+`found` to `True`, so the extension filter is skipped: the file is indexed whatever its suffix's bucket, if any.
 
 Present in the 0.6.2 walker; output below is from a 0.5.4 reproduction:
 
@@ -42,34 +39,27 @@ walk_files(root, get_extensions([CODE])) ->
 plain.json (never negated)                            # correctly absent
 ```
 
-Three consequences worth stating plainly:
-
-1. **The content set cannot fix it.** The bypass runs before the extension test,
-   so `--content code` pulls the same files in as `--content code docs config`.
-   Dropping a bucket to shed a lockfile does nothing.
-2. **It is how binaries enter the corpus.** `read_file_text` decodes with
-   `errors="replace"`, so a negated `.png` is indexed as mojibake. Measured on
-   `claude-brewcode`: `!web/docs/package-lock.json` -> **552 chunks, 5.9% of the
-   whole index, the only `.json` in it**; two negated `.png` -> **143 chunks**.
-3. **`.sembleignore` is the cure.** `_load_ignore_for_dir` concatenates the
-   directory's `.gitignore` lines first and its `.sembleignore` lines second into
-   one `GitIgnoreSpec`, and `_is_ignored` keeps the **last** matching pattern.
-   A re-ignore in `.sembleignore` therefore beats the `.gitignore` negation:
+1. **The content set cannot fix it.** The bypass runs before the extension test, so
+   `--content code` pulls in the same files as `--content code docs config`; dropping a bucket sheds no lockfile.
+2. **It is how binaries enter the corpus.** `read_file_text` decodes with `errors="replace"`, so a
+   negated `.png` is indexed as mojibake. Measured on `claude-brewcode`: `!web/docs/package-lock.json`
+   -> 552 chunks, 5.9% of the whole index, the only `.json` in it; two negated `.png` -> 143 chunks.
+3. **`.sembleignore` is the cure.** `_load_ignore_for_dir` concatenates the directory's `.gitignore`
+   lines, then its `.sembleignore` lines, into one `GitIgnoreSpec`; `_is_ignored` keeps the last
+   matching pattern, so a re-ignore in `.sembleignore` beats the `.gitignore` negation:
 
 ```text
 + .sembleignore:  *.png / package-lock.json
 walk_files(...) -> ['a.py', 'w.yml']                  # both bypassers gone
 ```
 
-That is why the shipped `sembleignore.template` carries a binary-suffix block and
-a lockfile block that look like no-ops. Against a plain `.gitignore` they are;
-against a negation they are the only lever.
+Hence the binary-suffix and lockfile blocks of the shipped `sembleignore.template`: no-ops
+against a plain `.gitignore`, the only lever against a negation.
 
 ## Buckets in this corpus
 
-`semble_code` runs with `--content code docs config` — all three buckets, **342 suffixes**
-(`code config` was 325; adding `docs` contributes 17: `.adoc .asciidoc .bib .dj .htm .html
-.markdown .md .mermaid .mmd .norg .org .po .pot .rst .rtf .tex`).
+`semble_code` runs with `--content code docs config` — all three buckets, 342 suffixes
+(`code config` = 325, `docs` adds the 17 of the HTML and Markdown rows).
 
 | Requested by SPEC | Suffixes | Bucket | Indexed here? |
 |-------------------|----------|--------|----------------|
@@ -78,16 +68,16 @@ against a negation they are the only lever.
 | TypeScript | `.ts .mts .cts .tsx` | code | yes |
 | Shell | `.sh .bash .zsh .fish` | code | yes |
 | Java / Kotlin | `.java .kt .kts` | code | yes |
-| **Gradle / Groovy** | `.gradle .groovy` | **code** | yes |
+| Gradle / Groovy | `.gradle .groovy` | code | yes |
 | CSS | `.css .scss .less` | code | yes |
 | Components | `.vue .svelte .astro` | code | yes |
 | Other code | `.sql .tf .tfvars .conf .bat .cmd .ps1 .dockerfile .go .rs .rb .php .c .cpp .h .hpp .cs .swift .scala .lua .r .pl .ex .exs .erl .hs .dart .zig .nix .hcl .graphql .prisma` | code | yes |
 | Markup / config | `.xml .xsl .xslt .yaml .yml .toml .ini .cfg .properties .proto` | config | yes |
 | Repo metadata | `.gitignore .gitattributes .patch .diff .pem` (only as a *suffix*, e.g. `base.gitignore`) | config | yes |
-| **HTML** | **`.html .htm`** | **docs** | **yes** |
-| **Markdown / docs** | **`.md .markdown .rst .adoc .asciidoc .tex .org .mmd .mermaid .po .rtf .bib .dj .norg .pot`** | **docs** | **yes** |
-| **Data** | **`.json .json5 .csv .tsv .psv`** | **excluded from every bucket** | **NO — unreachable even with `--content all`** |
-| **Unmapped** | **`.mdx .txt`** (and every other suffix missing from `_EXTENSION_TO_LANGUAGE`) | **none** | **NO — no bucket claims them** |
+| HTML | `.html .htm` | docs | yes |
+| Markdown / docs | `.md .markdown .rst .adoc .asciidoc .tex .org .mmd .mermaid .po .rtf .bib .dj .norg .pot` | docs | yes |
+| Data | `.json .json5 .csv .tsv .psv` | excluded from every bucket | NO — unreachable even with `--content all` |
+| Unmapped | `.mdx .txt` (and every other suffix missing from `_EXTENSION_TO_LANGUAGE`) | none | NO — no bucket claims them |
 
 Two easy misreadings (`_EXTENSION_TO_LANGUAGE` in `files.py`):
 
@@ -106,22 +96,20 @@ consumer must pass the same --content set so it selects the shared
 index-code-config-docs variant.
 ```
 
-That paragraph is printed verbatim by `semble-project.sh audit` and belongs in every
-status report. The per-repo directory is `sha256(resolved repo path)`; each exact sorted
-content selection has its own child:
-code-only is `index`; every other selection is `index-<sorted-content>`. The registered
-`code docs config` corpus therefore uses `index-code-config-docs`, while `index-docs`,
-`index-config`, `index-code-config`, and other exact variants may coexist without eviction.
-Metadata still has to match the requested content set inside the selected variant.
+`semble-project.sh audit` prints that paragraph verbatim; it belongs in every status report.
+Per-repo directory = `sha256(resolved repo path)`, one child per exact sorted content selection:
+code-only is `index`, every other selection `index-<sorted-content>`. The registered
+`code docs config` corpus uses `index-code-config-docs`; `index-docs`, `index-config`,
+`index-code-config` and other exact variants coexist without eviction. Metadata must still
+match the requested content set inside the selected variant.
 
-`SEMBLE_CONTENT_ARGS` in `lib/semble-common.sh` remains the single source for the
-registered/default selection. MCP registration, `warm`, `smoke`, and `reindex` interpolate
-it so they select `index-code-config-docs`; an explicit per-call `content` override selects
-its own sibling variant.
+`SEMBLE_CONTENT_ARGS` in `lib/semble-common.sh` is the single source of the registered/default
+selection: MCP registration, `warm`, `smoke` and `reindex` interpolate it (-> `index-code-config-docs`);
+a per-call `content` override selects its own sibling variant.
 
-`package.json`, `tsconfig.json`, `composer.json`, every `*.csv` fixture, every OpenAPI
-`*.json` spec and every `*.mdx` page are therefore invisible to semantic search. That is a
-semble limitation, not a configuration mistake. Use `rg`.
+`package.json`, `tsconfig.json`, `composer.json`, every `*.csv` fixture, every OpenAPI `*.json`
+spec and every `*.mdx` page are invisible to semantic search — a semble limitation, not a
+configuration mistake. Use `rg`.
 
 Sizing on `claude-brewcode` (pre-0.5.5 cache, not rerun):
 
@@ -132,21 +120,21 @@ Sizing on `claude-brewcode` (pre-0.5.5 cache, not rerun):
 
 ## Why `config` stays in the set
 
-`config` looks like the bucket to cut. In the pre-0.5.5 workspace measurement (not rerun)
-it was 40 files and **53 of 9307 chunks, 0.57%** of the corpus. It stays for its retrieval value:
+`config` looks like the bucket to cut: in the pre-0.5.5 workspace measurement (not rerun) it was
+40 files, 53 of 9307 chunks, 0.57% of the corpus. It stays for its retrieval value:
 
 | Question | Answer |
 |----------|--------|
 | What is in it here? | All six `.github/workflows/*.yml` (19 chunks) and four `docker-compose*.yml`. That is the entire CI/CD and deployment surface of the repo |
-| What breaks without it? | Q12 "what does the docs deploy workflow do" and Q15 "how does the docs site get deployed" — both answered from `deploy-docs.yml`, which is `.yml`, which is `config`. Drop the bucket and both questions have no reachable answer at all |
-| Was it buying the lockfile? | **No.** That was the premise for cutting it and it is wrong: `package-lock.json` entered through the `.gitignore` negation bypass above, which runs *before* the extension filter. `--content code` alone indexes it just the same |
+| What breaks without it? | Q12 "what does the docs deploy workflow do" and Q15 "how does the docs site get deployed" — both answered from `deploy-docs.yml` (`.yml` = `config`); without the bucket neither has a reachable answer |
+| Was it buying the lockfile? | No: `package-lock.json` entered through the negation bypass above, which runs before the extension filter; `--content code` alone indexes it just the same |
 
-At 0.57%, the whole CI surface was the cheapest bucket in the set: **keep `code docs config`
-as the registered default** (`index-code-config-docs`; sibling content variants unaffected).
+Keep `code docs config` as the registered default (`index-code-config-docs`; sibling content
+variants unaffected): at 0.57% the whole CI surface is the cheapest bucket in the set.
 
 ## Known corpus limits, and what they cost
 
-These are not cosmetic. Each one has a question shape it silently fails:
+Each limit silently fails one question shape:
 
 | Limit | The question it kills |
 |-------|-----------------------|
@@ -163,9 +151,8 @@ These are not cosmetic. Each one has a question shape it silently fails:
 | Tiny **and** blank | `size < 128` bytes (`_EMPTY_FILE_BYTES`) **and** the text is empty after `.strip()` | `files.get_file_status` |
 | Modified after the index was built | a file's `mtime_ns` differs from the manifest, or the walked file set changed -> the index is stale, not the file skipped | `cache.get_validated_cache` |
 
-Note the second rule is an **and**, not an or: a 4-byte `x=1\n` file *is* indexed; a 60-byte
-file of only whitespace is not. `semble-project.sh audit` reports both counters separately
-(`skipped.tooLarge`, `skipped.tinyBlank`).
+The second rule is an and: a 4-byte `x=1\n` file is indexed, a 60-byte whitespace-only file is
+not. `semble-project.sh audit` reports both counters (`skipped.tooLarge`, `skipped.tinyBlank`).
 
 ## Directories that are never walked
 
@@ -174,14 +161,13 @@ file of only whitespace is not. `semble-project.sh audit` reports both counters 
 .pytest_cache  .ruff_cache  .cache  .semble  .next  dist  build  .eggs
 ```
 
-Symlinks are never followed (`file_walker._walk`). On top of that list, semble merges the
-`.gitignore` **and** `.sembleignore` of *every* directory it walks, recursively
-(`file_walker._load_ignore_for_dir`) — a single root-level ignore file is not the model.
+Symlinks are never followed (`file_walker._walk`). Semble also merges the `.gitignore` and
+`.sembleignore` of every directory it walks, recursively (`file_walker._load_ignore_for_dir`),
+not one root-level ignore file.
 
-`semble-project.sh audit` applies the hard-coded directory list and the symlink rule, but it
-does **not** parse `.gitignore`/`.sembleignore`. Its per-bucket counts are therefore an
-**upper bound** on what semble will index. Report them as such; never present them as the
-exact chunk count of the index.
+`semble-project.sh audit` applies the directory list and the symlink rule but does not parse
+`.gitignore`/`.sembleignore`: its per-bucket counts are an upper bound on what semble indexes,
+never present them as the exact chunk count of the index.
 
 ## Reading the audit output
 
@@ -209,7 +195,7 @@ plus `1` too-large and `2` tiny-blank = `92` classified. Size-skipped files are 
 | Key | Meaning |
 |-----|---------|
 | `code`, `config` | in this corpus — searchable through `mcp__semble_code__search` |
-| `docsOnly` | the **docs** bucket, in this corpus; the name is kept for wire compatibility — read it as "docs", not "unreachable" |
+| `docsOnly` | the docs bucket, in this corpus; name kept for wire compatibility — read it as "docs", not "unreachable" |
 | `excluded` | a data suffix that no content type can reach |
 | `totals.indexable` | `code + config + docsOnly`, the upper bound of what the index contains |
 | `totals.unclassified` | a suffix semble does not know at all (e.g. `.log`, `.png`, `.mdx`, `.txt`) — also unreachable |

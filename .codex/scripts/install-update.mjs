@@ -12,7 +12,9 @@ const REMOTE_MARKETPLACE = 'claude-brewcode';
 const REMOTE_VERSION = '4.0.5';
 const LOCAL_VERSION = '4.0.6';
 const PLUGINS = ['brewcode', 'brewdoc', 'brewtools'];
-const RETIRED_AGENTS = ['brewcode-bc-rules-organizer.toml'];
+// Installed by earlier releases, no longer shipped: removed on every install/migrate.
+const RETIRED_AGENTS = ['brewcode-bc-rules-organizer.toml', 'brewcode-architect.toml', 'brewcode-developer.toml',
+  'brewcode-reviewer.toml', 'brewcode-tester.toml', 'brewdoc-bd-auto-sync-processor.toml'];
 const action = process.argv[2] || 'check';
 let injected = false;
 

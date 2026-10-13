@@ -7,7 +7,7 @@ argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge]
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion]
 model: opus
 ---
-<!-- brewcode-meta: version=6.5.3 content_version=6.5.3 generated_by=brewcode:superreview-setup -->
+<!-- brewcode-meta: version=6.5.4 content_version=6.5.4 generated_by=brewcode:superreview-setup -->
 
 # Super Review Generator (brewcode:superreview-setup)
 
@@ -16,24 +16,22 @@ into it. It does not review code itself; the emitted skill does.
 
 **Output:** `<target>/.claude/skills/superreview/` (SKILL.md + references) plus the project agent
 `<target>/.claude/agents/intent-guard.md`. The emitted skill references (never restates) the project's
-`.claude/rules` + convention files, is read-only, stack-generic (Java/Kotlin, Node/TS, Python, Go) and
-self-contained — no plugin dependency, no sibling-skill orchestration once generated. Its flow is the table under
-"How the emitted skill behaves".
+`.claude/rules` + convention files, is read-only, stack-generic (Java/Kotlin, Node/TS, Python, Go), with no plugin
+dependency and no sibling-skill orchestration once generated.
 
 Three things make or break the emitted skill:
 
-1. **Domain experts** — a review routed to generic agents finds generic issues. Phase 1.6 below is mandatory: discover the experts and create the missing ones before emitting.
-2. **Scope discipline** — the emitted skill measures every change against the sanctioned baseline (task + issue + recorded decisions): creep, blast radius, under-delivery, closeout. Phase 1.5 wires it to the target's tracker.
-3. **The intent pass** — `intent-guard` answers "was the DELIVERED thing the ASKED thing?". It runs at both depths and is the whole review at `QUICK`. Phase 1.6 + Phase 3 wire it to this project's real invariants.
+1. **Domain experts** — a review routed to generic agents finds generic issues; Phase 1.6 creates the missing ones before emitting.
+2. **Scope discipline** — every change measured against the sanctioned baseline (task + issue + recorded decisions): creep, blast radius, under-delivery, closeout. Phase 1.5 wires it to the target's tracker.
+3. **The intent pass** — `intent-guard` answers "was the DELIVERED thing the ASKED thing?" at both depths, and is the whole review at `QUICK`. Phase 1.6 + Phase 3 wire it to this project's real invariants.
 
 The emitted skill has two orthogonal axes. `{MODE}` selects scope (`FULL_PROJECT` / `EXPLICIT` / `UNCOMMITTED` /
-`LAST_COMMITS`). `{DEPTH}` selects effort: `QUICK` (the default and common case — mechanical gates + the intent
-pass, one spawn, no domain experts) or `EXTENDED` (the full fan-out + validation + scope gate, plus the intent
-pass). Depth is inferred semantically from the user's prompt, exactly like the `{MODE}` whole-project rule: there
-is no `--fast`, no flag and no CLI token, and you must not add one.
+`LAST_COMMITS`). `{DEPTH}` selects effort: `QUICK` (default — mechanical gates + the intent pass, one spawn, no
+domain experts) or `EXTENDED` (the full fan-out + validation + scope gate, plus the intent pass). Depth is inferred
+semantically from the user's prompt: there is no `--fast`, no flag and no CLI token, and you must not add one.
 
-**Arguments:** the prompt — `<fine-tune-prompt>` (free text, woven into the emitted skill's Focus ordering +
-emphasis) plus optional `[scope]` hint.
+**Arguments:** the prompt — `<fine-tune-prompt>` (free text woven into the emitted Focus ordering, Phase 1.5) plus
+optional `[scope]` hint.
 
 ---
 
@@ -86,7 +84,9 @@ echo the canonical verb back.
 | *(no args at all)* | — | — | `status` when `.claude/skills/superreview/` exists, otherwise `install` | status: no |
 | *(no verb, but a prompt)* | — | — | same as `install`; the whole prompt is the fine-tune prompt | yes |
 
-Print the PLAN block (Prompt contract above) now, before running the resolved verb.
+**Scratch rule.** Anything a run saves outside the target tree (logs, diffs, notes) goes into ONE private
+`mktemp -d` dir made once per run; reuse its printed path for every later write. Never write to `/tmp` directly,
+never pick a temp dir by glob (`rm -rf` on the newest `tmp.*`): it may belong to another run.
 
 **EXECUTE** using Bash tool (`status` only):
 ```bash
@@ -100,7 +100,7 @@ echo "reports: $({ find .claude/reports -maxdepth 1 -type d -name '*_superreview
 bash "${CLAUDE_SKILL_DIR}/scripts/generate.sh" validate && echo "✅ validate" || echo "❌ validate FAILED"
 ```
 
-> `status` never writes and never asks. `not_installed` -> report it and offer `install`; nothing else.
+> `not_installed` -> report it and offer `install`; nothing else.
 > `installed: DISABLED` is a state, not a fault — report it and offer `enable`. `validate` fails on a
 > disabled install (it looks for `SKILL.md`); say so rather than presenting it as a broken installation.
 
@@ -113,27 +113,18 @@ bash "${CLAUDE_SKILL_DIR}/scripts/generate.sh" validate && echo "✅ validate" |
 | `uninstall` | deleted | deleted with it | lost | kept | kept |
 | `purge` | deleted | deleted with it | lost | deleted | kept |
 
-**Toggle.** Claude Code discovers a project skill only through `<dir>/SKILL.md`, so `disable` renames that one
-file to `SKILL.md.disabled` (`/superreview` stops being offered) and `enable` renames it back. Nothing is
-regenerated in either direction, so no `version` is bumped and no self-synced edit is at risk. `disable` parks a
-review setup that is temporarily noisy; `uninstall` is for one that should really go.
+**Toggle.** Claude Code discovers a project skill only through `<dir>/SKILL.md`, so the rename hides `/superreview`. Nothing is regenerated, so no `version` is bumped and no self-synced edit is at risk. `disable` parks a temporarily noisy setup; `uninstall` is for one that should really go.
 
-**`intent-guard.md` is touched by none of the four** — each prints it as `KEPT`. It is shared with
-`/brewcode:teams-setup`, which may have put it there, so deleting or parking it would silently break an unrelated
-team install.
+**`intent-guard.md` is touched by none of the four** — each prints it as `KEPT`. It is shared with `/brewcode:teams-setup`, which may have put it there, so deleting or parking it would silently break an unrelated team install.
 
-**Confirm before deleting.** `uninstall` and `purge` each `AskUserQuestion` exactly once, listing the
-real paths (`find .claude/skills/superreview -type f | sort`) and, for `purge`, the number of review
-reports being destroyed, with `uninstall` offered as the keep-the-reports alternative. A declined
-confirmation ends the run cleanly — delete nothing.
+**Confirm before deleting.** `uninstall` and `purge` each `AskUserQuestion` exactly once, listing the real paths (`find .claude/skills/superreview -type f | sort`) and, for `purge`, the number of review reports being destroyed, with `uninstall` offered as the keep-the-reports alternative. A declined confirmation ends the run cleanly — delete nothing.
 
 **EXECUTE** using Bash tool (the chosen verb, after confirmation where required):
 ```bash
 bash "${CLAUDE_SKILL_DIR}/scripts/generate.sh" MODE_HERE && echo "✅ MODE_HERE" || echo "❌ MODE_HERE FAILED"
 ```
 
-Then report the script's `MOVED:` / `REMOVED:` / `KEPT:` lines verbatim. Not installed at all ->
-say so and **STOP**; never "disable" or "purge" something that was never emitted.
+Then report the script's `MOVED:` / `REMOVED:` / `KEPT:` lines verbatim (nothing installed: Error Handling).
 
 ### Delegation (applies to every Agent this generator spawns AND to the fan-out it emits)
 
@@ -142,9 +133,8 @@ Split larger groups into N disjoint tasks, all spawned in one message, so progre
 
 Every spawn brief carries six labeled fields, since a subagent starts with an empty context: GOAL (task + why), ROLE (owns, must not touch), SCOPE (paths/commands in and out), CONTEXT (done, by whom, in parallel), CONSUMER (who uses the result + its shape), DONE (acceptance + return: verdict first, evidence, bounded; long output to a file, path returned).
 
-A bare one-line task is never enough. When filling `{FILE_GROUP_MAP}` in Phase 3, keep every group
-small enough to be one bounded unit — split an oversized group into two rows rather than emitting a
-single agent that owns half the repo.
+A bare one-line task is never enough. In Phase 3, split an oversized `{FILE_GROUP_MAP}` group into two rows
+rather than emit one agent that owns half the repo.
 
 ### Phase 0 — Pre-analysis (read THIS skill's emit material)
 
@@ -155,7 +145,7 @@ single agent that owns half the repo.
    - `references/intent-guard.md.template` — the anti-drift agent (emitted as `<target>/.claude/agents/intent-guard.md`); you fill three BLOCKs in it in Phase 3. Its header comment documents every placeholder; `generate.sh` strips that header on emit
    - `references/report-template.md` — emitted report layout
    - `references/{python,java-kotlin,typescript-react,go}.md` — per-stack reference docs (one is emitted)
-2. Confirm the TARGET project is the current working directory (the repo to be reviewed); all emitted paths are relative to that repo root.
+2. Confirm the TARGET project (the repo to be reviewed) is the current working directory; emitted paths are relative to its root.
 
 ### Phase 1 — Analyze the TARGET project
 
@@ -191,7 +181,7 @@ From it (plus your own reads) determine:
 
 ### Phase 1.5 — Clarify genuinely ambiguous params (AskUserQuestion)
 
-Ask only for params you cannot reliably infer; never auto-guess a non-obvious choice. Typical questions:
+Ask only for params you cannot reliably infer; never auto-guess a non-obvious choice:
 
 - **Scope baseline** — which tracker sanctions work (file board / GitHub issues / Jira / none), and the branch -> issue convention. Without it the emitted skill caps every scope finding at P2, so ask when unsure.
 - **Always-shared surfaces** — the list whose edit widens blast radius across the whole team.
@@ -200,9 +190,8 @@ Ask only for params you cannot reliably infer; never auto-guess a non-obvious ch
 - **Dominant stack** — when the repo is genuinely multi-stack.
 - **Mechanical gate commands** — when several plausible ones exist (CI is the tie-break: use what CI runs).
 
-> Weave the `<fine-tune-prompt>` argument into the emitted Focus ordering: if the user said "focus on X / weight Y
-> higher", reorder/emphasize the emitted `FOCUS_TABLE` accordingly (e.g. push security to P0-always, or raise reuse to
-> rank 1). Record the emphasis in `FOCUS_EMPHASIS`. Scope discipline stays inside rank 1 whatever the emphasis —
+> Weave the `<fine-tune-prompt>` into the order and emphasis of the emitted `FOCUS_TABLE` (e.g. push security to
+> P0-always) and record it in `FOCUS_EMPHASIS`. Scope discipline stays inside rank 1 whatever the emphasis —
 > it may be raised, never dropped.
 
 ### Phase 1.6 — DOMAIN EXPERTS (mandatory — the review is only as good as these)
@@ -221,8 +210,8 @@ Before emitting, prove that every source group in `FILE_GROUP_MAP` has a real ow
 
 #### 1.6b — `intent-guard` (create-or-reuse; ONE writer, no gate)
 
-`intent-guard` is not a domain expert and not part of the roster-gap procedure above. The emitted skill spawns it
-unconditionally at both depths, so it is broken without it.
+Not part of the roster-gap procedure above: the emitted skill spawns `intent-guard` unconditionally at both depths,
+so it is broken without it.
 
 | Rule | Detail |
 |------|--------|
@@ -235,8 +224,7 @@ unconditionally at both depths, so it is broken without it.
 
 ### Phase 2 — Resolve placeholders + emit (scalar substitution)
 
-Export the scalar placeholder values, then run the emit step (sed with a control-char separator, so every value
-is single-line):
+Export the scalar placeholder values (each single-line: emit substitutes with sed), then run emit:
 
 ```bash
 export PROJECT_NAME="<repo name>"
@@ -287,8 +275,7 @@ because nothing was written):
 | `INTENT_GUARD: REUSE .claude/agents/intent-guard.md` | the file is the project's own — touch nothing in it, skip its Phase 3 table |
 | `INTENT_GUARD: MIGRATED .claude/agents/intent-guard.md` | a pre-standard file of ours was restamped in place (metadata only, tailored body preserved) — treat it like REUSE: skip its Phase 3 table, edit nothing |
 
-> `generate.sh emit-agent` is the same writer standalone (agent only, no superreview skill required, same env
-> overrides `PROJECT_NAME` / `TRACKER_LABEL` / `SPEC_LOCATION` / `PLAN_LOCATION` / `POLICY_LOCATION`, same three
+> `generate.sh emit-agent` is the same writer standalone (same env overrides `PROJECT_NAME` / `TRACKER_LABEL` / `SPEC_LOCATION` / `PLAN_LOCATION` / `POLICY_LOCATION`, same three
 > status lines); this generator does not need it, `emit` covers it.
 
 ### Phase 2b — Already installed? `upgrade`, never re-emit
@@ -318,9 +305,8 @@ carries Phase 3 tailoring and Phase 4b self-sync edits that no template knows. O
 **Stack.** `upgrade` first prints `UPGRADE_STACK=<name>.md (derived from the installed tree)`: it runs with a
 bare environment, so it reads the Phase 1 `STACK_REF` decision back from whichever of `python.md` /
 `typescript-react.md` / `go.md` / `java-kotlin.md` is present in `references/` or in
-`.template-baseline/references/` instead of defaulting — a wrong name would restamp a file the project lacks and
-leave its real reference at the old version, so `/brewcode:setup-status` would report `stale` after every
-upgrade. More than one present = a multi-stack install, all restamped. None determinable prints
+`.template-baseline/references/` instead of defaulting — a wrong name leaves the real reference unrestamped, so
+`/brewcode:setup-status` would report `stale` after every upgrade. More than one present = a multi-stack install, all restamped. None determinable prints
 `UPGRADE_STACK=none — ❌ NO per-stack reference found` and skips the stack doc only; the other four artifacts are
 still restamped. `STACK_REF=<name>.md` in the environment overrides the derivation.
 
@@ -331,8 +317,7 @@ still restamped. `STACK_REF=<name>.md` in the environment overrides the derivati
 RESTAMP: .claude/skills/superreview/SKILL.md version "A.B.C" -> "X.Y.Z", content_version -> "P.Q.R", generated_by/last_updated refreshed (body untouched)
 ```
 
-It is unconditional, not gated on the verdict above: a plain version bump moves no template line (every asset
-reports `IDENTICAL`), yet the emitted `SKILL.md` frontmatter `version:` is what `/brewcode:setup-status` reads to
+It is unconditional, not gated on the verdict above: the emitted `SKILL.md` frontmatter `version:` is what `/brewcode:setup-status` reads to
 decide `stale`. Nothing else in the file is touched: `doc_type` is preserved when present (it is user-owned), the
 body is compared byte-for-byte afterwards, and any mismatch aborts the run before anything is written. A second
 `upgrade` on the same version changes only `last_updated`. `.claude/agents/intent-guard.md` gets the same
@@ -349,8 +334,8 @@ directories carry a `.gitignore` of `*`, so they never enter the user's commits.
 
 ### Phase 3 — Adapt the BLOCK placeholders (AI Edit)
 
-Multi-row tables and multi-line bash cannot go through sed (newlines). Using the **Edit** tool, replace each block
-placeholder in the EMITTED files with content you build from Phase 1 analysis.
+Multi-row tables and multi-line bash cannot go through sed (newlines): with **Edit**, replace each block
+placeholder in the EMITTED files with content built from Phase 1.
 
 **In `<target>/.claude/skills/superreview/SKILL.md`:**
 
@@ -376,8 +361,7 @@ placeholder in the EMITTED files with content you build from Phase 1 analysis.
 | `{OWNERSHIP_SIGNALS_BASH}` | the runtime ownership probe: recent authors (`git log -5 --format='%an' -- "$f"`) + any other task claiming the file, with a declared truncation bound |
 | `{SHARED_SURFACES_TABLE}` | the concrete always-shared surfaces of THIS repo (public API/contract dirs, migrations, schema/registry files, CI workflows, dependency manifests, design tokens) |
 
-**In `<target>/.claude/agents/intent-guard.md` — only when the writer printed `INTENT_GUARD: CREATED`; on
-`REUSE` or `MIGRATED` skip this table and edit nothing in that file.**
+**In `<target>/.claude/agents/intent-guard.md` — only after `INTENT_GUARD: CREATED`:**
 
 Emit already replaced each of the three BLOCK placeholders with a runnable generic default block ending in its
 own marker line, so key every Edit on the marker, not on the old `{TOKEN}`: `old_string` = the seeded block plus
@@ -390,9 +374,8 @@ its marker line, `new_string` = the project-specific replacement without a marke
 | `<!-- SEEDED-DEFAULT: drift-examples ... -->` | 3-6 rows, `\| Rule \| Looks like HERE \|`, each mapping one `intent#<class>` onto this repo's real vocabulary and paths (e.g. `intent#deps \| a new HTTP client when the project already ships <the one it uses>`), built from the Phase 1 drift instances. Concrete paths and real library names only — a generic row teaches nothing |
 | `<!-- SEEDED-DEFAULT: evidence-commands ... -->` | one fenced bash block of this repo's cheap evidence commands, runnable as-written: `git diff --stat` over the resolved range, `git log --oneline`, the manifest diff for this project's real manifest, the new-file listing, the test-file count under the real test dirs. Read-only, no build, no test run, each a single line. Never emit a command for a manifest or a directory this repo does not have |
 
-> Every emitted row points at a real agent (`.claude/agents/` or built-in `Explore`/`Plan`/`general-purpose`), a
-> real rule file, a real path and a real command; invent no agent, rule or gate script. Built-in `Explore` is the
-> only allowed fallback for an unavailable domain agent.
+> Every emitted row points at a real agent (Phase 1.6 item 5), rule file, path and command; invent no agent, rule or
+> gate script. Built-in `Explore` is the only allowed fallback for an unavailable domain agent.
 
 ### Phase 4 — Validate (NO `{PLACEHOLDER}` may remain)
 
@@ -412,7 +395,7 @@ bash "${CLAUDE_SKILL_DIR}/scripts/generate.sh" validate && echo "✅ validate" |
 | no project domain expert wired at all | `intent-guard` is excluded (not an expert); only an agent in a routing row — the group/agent tables or a `subagent_type=` — counts |
 
 - Shell expansions are not placeholders: the scan strips every `${UPPER_SNAKE}` first, so Phase 3 evidence commands may use `${BASE}`, `${HOME}` or any other variable. Only a bare `{TOKEN}` is reported, by name; do not silence a false positive by adding the variable's name to the runtime allow-list.
-- `⚠️ UNTAILORED` is a warning (exit code unaffected): the agent still carries seeded generic BLOCK defaults, so the Phase 3 adaptation was skipped or incomplete. Replace each named block and its marker, then re-run — an UNTAILORED agent gives generic drift verdicts.
+- `⚠️ UNTAILORED` is a warning (exit code unaffected): seeded generic BLOCK defaults remain, so Phase 3 was skipped or incomplete and drift verdicts stay generic. Replace each named block and its marker, then re-run.
 - Order: `emit` writes `.claude/agents/intent-guard.md` before `validate` runs, which is what lets the `subagent_type` allowlist accept `intent-guard`. Never run `validate` on a target that was never emitted.
 
 ### Phase 5 — Report
@@ -449,7 +432,7 @@ Run it:  /superreview "<focus>" [scope]              -> QUICK: intent + gates, 1
 ```
 
 > Name the depth axis in the summary: a plain `/superreview` is the cheap intent run and a depth word escalates
-> it. There is no flag to mention.
+> it.
 
 ## How the emitted skill behaves (what you are generating)
 
@@ -474,7 +457,7 @@ Recap of the shape the emitted SKILL.md implements (full text in `references/SKI
 | Setting | Default | Description |
 |---------|---------|-------------|
 | Emit target | `<cwd>/.claude/skills/superreview/` | Where the generated skill is written |
-| Generation script | `${CLAUDE_SKILL_DIR}/scripts/generate.sh` | `scan` \| `emit` \| `emit-agent` \| `upgrade` \| `enable` \| `disable` \| `uninstall` \| `purge` \| `validate`. `emit-agent` writes only `.claude/agents/intent-guard.md` (shared writer, no superreview skill required) — the entry point `/brewcode:teams-setup` calls |
+| Generation script | `${CLAUDE_SKILL_DIR}/scripts/generate.sh` | `scan` \| `emit` \| `emit-agent` (Phase 1.6b) \| `upgrade` \| `enable` \| `disable` \| `uninstall` \| `purge` \| `validate` |
 | Disabled marker | `<target>/.claude/skills/superreview/SKILL.md.disabled` | Its presence is the disabled state — there is no config file |
 | Intent tier sources | `TRACKER_LABEL` / `SPEC_LOCATION` / `PLAN_LOCATION` / `POLICY_LOCATION` | T1/T2/T3/T4 scalars baked into the agent; T5 (session transcript) is runtime-only. Defaults `.claude/specs/**`, `.claude/features/**`, `` `CLAUDE.md`, `.claude/rules/**` `` |
 | Re-run triggers | `upgrade`, never a re-emit | new rule/convention file, stack change, new source group (pointers, PATHSPEC, group map); tracker / branch convention changed, task files gain or lose the `## Scope` id+status (baseline block); this generator's templates changed (ports the delta, keeps self-synced edits) |
@@ -495,7 +478,7 @@ Recap of the shape the emitted SKILL.md implements (full text in `references/SKI
 | `.claude/skills/superreview/` present with neither `SKILL.md` nor `SKILL.md.disabled` | A half-deleted install. Report the dir contents, offer `uninstall` then a fresh `install`. Do not guess which file to recreate |
 | No tracker AND no spec/plan/policy dirs | Emit anyway with the defaults; the agent falls back to T5 (the session transcript) and reports its tier in every finding. Invent no paths and do not skip the agent |
 | Asked to add a `--fast`/`--deep` flag | Refuse — depth is inferred from the prompt by design; a flag would freeze the axis the emitted skill must read semantically |
-| `upgrade` says `DIFFERS` on a file the user hand-edited | `DIFFERS` counts template lines (new template vs `.template-baseline/`), never the user's tailoring. Port that template change onto the live file with Edit; never replace the file with the staged copy. Conflicting section -> ask before replacing it |
+| `upgrade` says `DIFFERS` on a file the user hand-edited | `DIFFERS` counts template lines (new template vs `.template-baseline/`), never the user's tailoring: port it with Edit (Phase 2b), never replace the file with the staged copy. Conflicting section -> ask before replacing it |
 | `upgrade` prints `UPGRADE_STACK=none — ❌ NO per-stack reference found` | The install carries no per-stack reference (emitted without one, or it was deleted); nothing is guessed. Re-run as `STACK_REF=<name>.md generate.sh upgrade` to restore the right one — it then reports `MISSING -> restored RAW` |
 | Target `.claude/` not writable | STOP — ask the user to run from the repo root. `emit` does `mkdir -p .claude/agents` first; a failure there is the same STOP |
 | PLAN block missing, or printed after Phase 0 started | Defect — reprint it before continuing |

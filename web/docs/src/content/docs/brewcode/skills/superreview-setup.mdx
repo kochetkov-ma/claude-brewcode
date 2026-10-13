@@ -51,6 +51,10 @@ two-phase find-then-validate, one merged P0-P3 report) and `standards-review` (r
 focus, 90/70/50 percent reuse matrix, per-stack guidelines). The `<fine-tune-prompt>` argument
 reorders the emitted Focus table — scope discipline can be raised, never dropped below rank 1.
 
+Each run saves anything outside the target tree (logs, diffs, notes) into one private `mktemp -d`
+scratch dir, created once and reused for every later write. The skill never writes to `/tmp`
+directly and never picks a temp dir by glob, because the newest `tmp.*` may belong to another run.
+
 ## Modes
 
 An explicit lifecycle verb anywhere in the prompt wins. Otherwise prompt evidence resolves the

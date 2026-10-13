@@ -93,8 +93,8 @@ tokens and would otherwise match every markdown file in the repo.
 file has fewer than 6 surviving lines (short rule files). N=3: two shared hashes are routinely hit by house
 idioms (a `!=` one-liner plus a `->use` header row); three distinct >=24-char lines are not.
 
-**3b alone is blind to paraphrase, by construction**: a `>`-quoted marker block vs the same policy as a
-rule-file table, and two prose statements of one tool fact, each shared **0** hashes (section 6). Hence 3c.
+**3b alone is blind to paraphrase**: a `>`-quoted marker block vs the same policy as a rule-file
+table, and two prose statements of one tool fact, each shared **0** hashes (section 6).
 
 ### 3c. Topic-key prefilter (mechanical, bash/node, no LLM)
 
@@ -148,22 +148,12 @@ emphasis pair (D.4 - cap at 2, never zero). Every removal is snapshotted first
 (`scripts/context-guard.sh snapshot`) and ledgered `kept <- dropped` with layer, path, line range and
 byte count.
 
-**A row that DELETES a whole file is verified in the SURVIVOR, never in the hole it left.** Plain
-`verify` on a vanished target exits 2 ("target vanished") and proves nothing, so a deletion row is
-closed with:
-
-```bash
-bash scripts/context-guard.sh verify-deleted --project --run-dir "<RUN_DIR>" \
-  --survivor "<survivor path>" "<deleted file>"   # one --survivor per extra survivor
-```
-
-It rebuilds the deleted file's critical tokens from the concatenated survivors and runs the same gate
+**A row that DELETES a whole file is verified in the SURVIVOR, never in the hole it left** (plain
+`verify` exits 2, "target vanished"): `verify-deleted`, one `--survivor` per survivor (`SKILL.md`
+phase 5, shape in section 6 row 1). It rebuilds the deleted file's critical tokens from the concatenated survivors and runs the same gate
 against the snapshot. `MERGED_VERIFIED: <path> -> <survivors>` (exit 0) = deletion stands; exit 1 =
-failed proof/recovery. Checkpoint each owned atomic edit/deletion immediately; never capture others'
-changes or manufacture proof at failure. Recovery needs authorization plus matching draft proof;
-concurrent/unproven bytes survive `RESTORE_REFUSED`. An unverified deletion or any miss refuses
-whole-run acceptance: attempt safe recovery across layers, report restored/refused files, never assume
-every file rolled back.
+failed proof/recovery. An unverified deletion or any miss refuses the whole run: checkpoint, recovery
+and acceptance per `SKILL.md` phases 4-5.
 
 ## 5. Global-write branches
 
@@ -205,6 +195,6 @@ Re-run the evidence and confirm audience, registration and loading before applyi
 
 | # | Duplication | Verified by | Resolution |
 |---|-------------|-------------|------------|
-| 1 | one rule file byte-identical in `.claude/rules/` and `~/.claude/rules/` | `sha256` equal, `diff` empty; then `verify-deleted --project --run-dir <D> --survivor ~/.claude/rules/<f>.md .claude/rules/<f>.md` -> `MERGED_VERIFIED` | The global copy dies in NO branch: only it sits at scope >= L3. The project copy goes per the 5(a) audience rows, closed with `verify-deleted` |
+| 1 | one rule file byte-identical in `.claude/rules/` and `~/.claude/rules/` | `sha256` equal, `diff` empty; then `verify-deleted --project --run-dir <D> --survivor ~/.claude/rules/<f>.md .claude/rules/<f>.md` -> `MERGED_VERIFIED` | The global copy dies in NO branch: only it sits at scope >= L3. The project copy goes per the 5(a) audience rows |
 | 2 | one policy 3x: a generator's marker block in CLAUDE.md (e.g. `brewcode:semble-setup`), a rule file (`.claude/rules/semble-first.md`, `paths: **/*`), a subagent hook line | `sed -n`, `wc -l`, grep | `paths: **/*` is conditional (section 1), but the marker block stays whole (section 1, `managed by brewcode:semble-setup`); slim the other copies. Hook line: ordinary subagents load CLAUDE.md and rules, so it is a duplicate for them; it is unique audience only for Explore/Plan or `omitClaudeMd` agents |
 | 3 | one fact 2-3x: summary row + step table in one file; a CLAUDE.md section + a narrower-`paths:` rule; static global rows + a hook injecting the same rule | grep -n | **intra-file progressive disclosure**: legitimate, cap at 2 (D.4). **CLAUDE.md-vs-rule**: rule wins, CLAUDE.md keeps exactly 1 line. **static-vs-hook**: L5 survives compaction; global rows may shrink to their non-overlapping remainder only when the hook is registered at scope >= L3 (5(b) guard 1) |

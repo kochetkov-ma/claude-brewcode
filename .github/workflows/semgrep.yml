@@ -18,12 +18,12 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@v7
-      - uses: semgrep/semgrep-action@v1
-        with:
-          config: p/javascript p/secrets
-          generateSarif: "1"
-        env:
-          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+      # Official CLI image (semgrep-action is archived); scan never fails on findings, they go to code scanning
+      - name: Semgrep scan
+        run: >-
+          docker run --rm -v "${GITHUB_WORKSPACE}:/src" semgrep/semgrep:1.180.0
+          semgrep scan --config p/javascript --config p/secrets --metrics=off
+          --sarif --output semgrep.sarif
       - uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:

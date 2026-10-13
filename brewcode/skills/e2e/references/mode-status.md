@@ -82,8 +82,6 @@ Scan configured paths:
 - {if config.version missing too}: "Setup predates the artifact-metadata standard (no `version` key) — reported `stale (legacy, unstamped)`. Run `/brewcode:e2e rules` to refresh and stamp it."
 ```
 
-> Staleness compares stamped `content_version` with running `CONTENT_VERSION`; only `version`, on a
-> pre-`content_version` install, is compared to `PLUGIN_VERSION`. Dates are information and never
-> trigger a recommendation.
+> Dates are information and never trigger a recommendation.
 
 No AskUserQuestion — purely informational output.

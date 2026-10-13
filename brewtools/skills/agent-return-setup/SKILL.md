@@ -10,9 +10,9 @@ model: sonnet
 
 # Agent Return
 
-> Installer/configurator skill for a size budget on every subagent's final report. Three hook files (SubagentStart contract, return guard, shared module) and a JSON config hold all runtime behavior; this skill only decides **mode**, **scope** and the **two thresholds**, then delegates the file work to the `brewcode:hook-creator` agent, which follows the runbook.
+> Installer for a size budget on every subagent's final report. Three hook files (SubagentStart contract, return guard, shared module) and a JSON config hold all runtime behavior; this skill only decides mode, scope and the two thresholds, then a `brewcode:hook-creator` agent does the file work by the runbook.
 
-Subagent reports are the largest single context cost of a session that delegates, and a prose rule at the top of context loses to whatever the agent just did. So the budget is stated at spawn and enforced at return: the report is sized (`chars/4`) and compared against two integers, with no LLM judge.
+Subagent reports are the largest context cost of a delegating session, and a prose rule loses to whatever the agent just did. So the budget is stated at spawn and enforced at return: the report is sized (`chars/4`) against two integers, no LLM judge.
 
 ## Prompt contract
 
@@ -69,7 +69,7 @@ Once per agent: before a challenge the guard exclusive-creates a marker for that
 
 | Fact | Consequence |
 |------|-------------|
-| One challenge per `agent_id`; after it nothing is enforced | The second report is delivered at any size and may land slightly over `passTokens` (observed 1417 -> 1026 against a budget of 1000); a resumed agent is not challenged again while its marker exists. Deliberate: repeated hand-back denies make the harness withhold the report |
+| One challenge per `agent_id`; after it nothing is enforced | The second report is delivered at any size and may land slightly over `passTokens` (observed 1417 -> 1026 against a budget of 1000). Deliberate: repeated hand-back denies make the harness withhold the report |
 | No hook payload exposes an agent's tool inventory | Write ability is known only from `readOnlyAgentTypes` and plan mode. An unlisted read-only agent gets the file order, whose last sentence tells it to send the essential part instead: add such types to the list |
 | State directory not writable | The auto path never denies (an unrecorded deny could repeat); the classic path keeps `stop_hook_active` as its only brake |
 | Default `reportDir` `.claude/reports` is a protected path | The file-tier `Write` prompts in `default`/`acceptEdits`, is denied in `dontAsk` and headless; the agent then returns a compressed inline report. Unattended: set `reportDir` outside `.claude/` (runbook *Report dir and protected paths*) |
@@ -79,7 +79,7 @@ Once per agent: before a challenge the guard exclusive-creates a marker for that
 | Fail-open, never exit 2 | Malformed input or any runtime throw -> `{}` and exit 0 |
 | Cost | About 30-53 ms per fire (Node v24.19.0, 15 invocations each), at spawn, at each stop and, in auto mode, at the hand-back; no per-tool-call tax, unlike `agent-deadline`'s `.*` PreToolUse matcher, so a global install is cheap. Re-measure before quoting |
 
-On demand, in the runbook's *What it does*, *Config*, *Known limitation* and *Verify* sections: order texts, config discovery, how to observe a firing, the cost table, the remaining limits.
+More in the runbook (*What it does*, *Config*, *Known limitation*, *Verify*): order texts, config discovery, how to observe a firing, the cost table, the remaining limits.
 
 <instructions>
 
@@ -92,7 +92,7 @@ BT_ROOT="${CLAUDE_PLUGIN_ROOT}"
 test -d "$BT_ROOT/skills/agent-return-setup/assets" || { echo "❌ FAILED — BT_ROOT invalid: $BT_ROOT"; exit 1; }
 ```
 
-Assets live in `$BT_ROOT/skills/agent-return-setup/assets/`: the three hook files and the runbook `INSTALL.md` (install project/global, config, upgrade, disable/enable, uninstall, purge, verify). The runbook is the single source of truth: follow its commands, never re-derive them here.
+Assets live in `$BT_ROOT/skills/agent-return-setup/assets/`: the three hook files and the runbook `INSTALL.md`. The runbook is the single source of truth: follow its commands, never re-derive them here.
 
 > Global scope goes through the Bash tool only (`cp`/`node`/`rm`): `Write`/`Edit` on `~/.claude/*` prompt for permission and fail headless.
 
@@ -102,7 +102,7 @@ Assets live in `$BT_ROOT/skills/agent-return-setup/assets/`: the three hook file
 
 ## Step 1 — STATUS FIRST, always
 
-After the initial PLAN, probe status in EVERY mode before installation, reinstallation, or removal.
+After the PLAN, probe status in every mode, before anything is written.
 
 **EXECUTE** using Bash tool:
 
@@ -208,17 +208,17 @@ Project = `PROJECT_ROOT/.claude`: the session's start dir (what hooks get as `CL
 | Field | Value |
 |-------|-------|
 | `hook_files` | how many of the three files are in that scope's `hooks/`; `1/3`-`2/3` = broken install |
-| `registrations` | how many of the three expected `settings.json` entries exist (SubagentStart -> contract, SubagentStop -> guard, PreToolUse matcher `SubagentHandback` -> guard), parsed from the JSON; an unreadable file counts `0/3` |
+| `registrations` | how many of the three expected `settings.json` entries (table above) exist, parsed from the JSON; an unreadable file counts `0/3` |
 | `settings_refs` | textual count of distinct registered script names (`0`-`2`); blind to a missing event, so judge wiring by `registrations` |
 | `enabled` | `true`/`false` from the config; `n/a` = no config or no `enabled` key |
 | `pass` / `file` | configured `passTokens` / `fileTokens`; `n/a` = the hook falls through to env vars, then `2500` / `6000` |
 | `config_version` | release provenance; shown beside `plugin_version`, never a staleness signal |
-| `config_content_version` / `contract_content_version` | installed config CV versus the header CV of `agent-return-budget.mjs`, the one module that parses the config (the config contract); each installed hook is compared with its asset header too |
+| `config_content_version` / `contract_content_version` | installed config CV versus the header CV of `agent-return-budget.mjs`, the one module that parses the config (the config contract) |
 | `runbook_content_version` | the INSTALL.md header CV; informational only: a runbook-only change never stales an installed config |
 | `content_state` | `current`: all CV pairs match (config vs contract, each hook vs its asset); `stale`: a valid pair differs; `partial`: a CV is missing/malformed or a counterpart is absent; `missing`: no config or hook files in that scope |
 | `content_findings` | `artifact:installed-CV->source-CV` per bad pair, or `none`; `n/a` = missing/malformed, never a guessed version |
 | `config_dir` / `config` | where the config was read from; its whitespace-stripped contents, or `none` |
-| `governing_config` / `governing_scope` | the one config every wired hook reads, resolved like `loadConfig`: nearest valid (JSON object) `.claude/agent-return.json` climbing from the hooks' `projectRoot()` (the session dir `CLAUDE_PROJECT_DIR` when it exists, else the nearest `.git`/`.claude` ancestor of `$PWD`, never the git toplevel fallback of `PROJECT_ROOT`), at most 16 levels, stopping at a global dir; then `$CLAUDE_CONFIG_DIR`, then `~/.claude`; `none` = no valid config anywhere. The hooks never read the payload `cwd` for this |
+| `governing_config` / `governing_scope` | the one config every wired hook reads, resolved like `loadConfig` (the block's comment): nearest valid (JSON object) `.claude/agent-return.json` climbing from the hooks' `projectRoot()`, never from the git toplevel fallback of `PROJECT_ROOT`, at most 16 levels, stopping at a global dir; then `$CLAUDE_CONFIG_DIR`, then `~/.claude`; `none` = no valid config anywhere. The hooks never read the payload `cwd` for this |
 | `orphan_config` | `yes` = the governing config is project-side, the project has `0/3` registrations and the global scope has at least one: the global hooks obey the project file (typically left by `uninstall project`) |
 
 Print the status in this table:
@@ -234,7 +234,7 @@ Every mode that writes `agent-return.json` (`install`, `upgrade`, `enable`, `dis
 { "version": "{PLUGIN_VERSION}", "content_version": "<agent-return-budget.mjs header>", "generated_by": "brewtools:agent-return-setup", "last_updated": "{LAST_UPDATED}" }
 ```
 
-The runbook resolves `content_version` from the `brewcode-meta:` header of `agent-return-budget.mjs` beside `$RUNBOOK` (the config contract, so a runbook-only change never stales a config) and aborts if missing; never pass or hardcode it. Resolve `version` and `last_updated` here. **EXECUTE** using Bash tool:
+The runbook resolves `content_version` from the `brewcode-meta:` header of `agent-return-budget.mjs` beside `$RUNBOOK` and aborts if missing; never pass or hardcode it. Resolve `version` and `last_updated` here. **EXECUTE** using Bash tool:
 
 ```bash
 BT_ROOT="${CLAUDE_PLUGIN_ROOT}"
@@ -244,13 +244,13 @@ PV=${PV:-$(basename "$BT_ROOT")}
 echo "PLUGIN_VERSION=$PV LAST_UPDATED=$(date +%F)"
 ```
 
-The four keys are inert at runtime: the module reads only `enabled` (on only when exactly `true`), `passTokens`, `fileTokens`, `readOnlyAgentTypes` and the optional `reportDir`. Only the runbook's node block writes them, re-serializing the whole object with `JSON.stringify`: a hand-appended line can break the file, and an invalid project config is silently skipped in favor of the global one.
+The four keys are inert at runtime: the module reads only `enabled` (on only when exactly `true`), `passTokens`, `fileTokens`, `readOnlyAgentTypes` and the optional `reportDir`. Only the runbook's node block writes them, re-serializing the whole object with `JSON.stringify`: a hand-appended line can break the file, and an invalid project config is silently skipped for the global one.
 
 Content state and enabled/wiring are separate signals. Offer `upgrade` for `stale` or `partial`, naming the mismatched/missing artifact, never from a release-version difference alone, and never for a scope with `orphan_config=yes` (below). Status never edits files or settings.
 
-Effective = `hook_files=3/3 registrations=3/3 enabled=true`. Anything else is not effective: say so plainly instead of reporting a half-state as installed. Project config wins over global: the `governing_config` thresholds and `enabled` are the ones in force, whichever scope's hooks fire.
+Effective = `hook_files=3/3 registrations=3/3 enabled=true`. Anything else is not effective: say so, never report a half-state as installed. The `governing_config` thresholds and `enabled` are in force, whichever scope's hooks fire.
 
-`orphan_config=yes` is a finding, printed under the table: *`<governing_config>` is GOVERNING: the global hooks read the nearest project config first, so its `pass`/`file`/`enabled` override the global config.* Fix: `/brewtools:agent-return-setup purge project` (deletes it; the global config then governs). Keeping it on purpose is valid: `uninstall project` keeps it and now warns so. Never offer `upgrade` for it: upgrade re-wires the project hooks and undoes the uninstall.
+`orphan_config=yes` is a finding, printed under the table: *`<governing_config>` is GOVERNING: the global hooks read the nearest project config first, so its `pass`/`file`/`enabled` override the global config.* Fix: `/brewtools:agent-return-setup purge project` (deletes it; the global config then governs). Keeping it on purpose is valid (`uninstall project` keeps it, with a warning). Never offer `upgrade` for it: upgrade re-wires the project hooks and undoes the uninstall.
 
 ### Early exit
 
@@ -258,7 +258,7 @@ Already installed and the intent is not explicit (no argument, or vague like "а
 
 ## Step 2 — Decide MODE
 
-Read the prompt. Empty/no-match input resolves to **status**, also when nothing is installed; installation requires explicit install intent.
+Empty/no-match input resolves to **status**, also when nothing is installed: install needs explicit intent.
 
 | Mode | EN keywords | RU keywords | Mutates? |
 |------|-------------|--------------|----------|
@@ -274,7 +274,7 @@ Ties resolve per Prompt contract rule 1.
 
 ## Step 3 — Explain pending changes before questions
 
-Add concrete state/action details to the initial PLAN without repeating its block. Example:
+Add concrete state/action details to the PLAN. Example:
 
 > Current state: agent-return is not installed anywhere. Plan: copy the 3 hook files into `<repo>/.claude/hooks/`, write `<repo>/.claude/agent-return.json`, and merge three entries into `<repo>/.claude/settings.json` (SubagentStart, SubagentStop, and PreToolUse for the `SubagentHandback` tool, each with `timeout: 5`). I need 2 answers first: scope and thresholds.
 
@@ -287,15 +287,15 @@ Skip any question already answered by the prompt or settled by the status table.
 | 1 | Scope — this project or all projects? | **Project** (`<repo>/.claude`) / **Global** (the config dir in use) / **Both** | none — NEVER guess, always ask unless explicit |
 | 2 | Thresholds (pass / file), est-tokens? | **2500 / 6000 (Recommended)** / 1500 / 3500 (stricter) / 1000 / 2500 (strictest: the defaults before 6.5, below the median report) / custom pair | 2500 / 6000 |
 
-The **Global** option description states the real cost, which is low (Honest limits, Cost).
+The **Global** option's description states its real, low cost (Honest limits, Cost).
 
-Question 2 is one question yielding both numbers, two positive integers with `passTokens < fileTokens`. For a non-default pair, say that the defaults come from measured reports (Evidence) and that moving them is a judgement call.
+Question 2 is one question yielding both numbers, two positive integers with `passTokens < fileTokens`. For a non-default pair, say the defaults are measured (Evidence) and moving them is a judgement call.
 
 For `disable`/`enable`/`uninstall`/`purge` only question 1 applies, and only when the status table shows the feature present in more than one scope.
 
 ## Step 5 — Act on the resolved PLAN
 
-Use the PLAN already printed before Step 1; do not print it twice. Resolve MODE/SCOPE, exact paths, `passTokens`/`fileTokens`, and settings.json entries before mutation. Status and early-exit modes report the table and stop; `DO:` is "read state, report".
+Resolve MODE/SCOPE, exact paths, `passTokens`/`fileTokens`, and settings.json entries before mutation. Status and early-exit modes report the table and stop; `DO:` is "read state, report".
 
 ### Delegation
 
@@ -408,7 +408,7 @@ Re-run the Step 1 status block and print the refreshed table. Then tell the user
 
 State = `agent-return-state/` beside the config that enabled the feature: a `.gitignore` plus one `<sha256(agent_id)>.json` marker per challenged agent, pruned after 24 h at the next challenge. The contract hook writes nothing.
 
-`upgrade` asks nothing and is the only way a plugin update reaches an installed scope: it reads `passTokens`/`fileTokens` back from that scope's config and replays copy + config + merge, one scope per run. One migration, once: exactly `1000`/`2500` with no `readOnlyAgentTypes` key (the defaults before 6.5) becomes `2500`/`6000`, and the runbook prints `NOTE:`; any other pair is preserved. Not installed in that scope -> an `install`: ask scope and thresholds.
+`upgrade` asks nothing and is the only way a plugin update reaches an installed scope, one scope per run. One migration, once: exactly `1000`/`2500` with no `readOnlyAgentTypes` key (the defaults before 6.5) becomes `2500`/`6000`, and the runbook prints `NOTE:`; any other pair is preserved. Not installed in that scope -> an `install`: ask scope and thresholds.
 
 ## Guards
 
@@ -420,7 +420,6 @@ State = `agent-return-state/` beside the config that enabled the feature: a `.gi
 | `agent-return-budget.mjs` registered in settings.json | Defect: it is a library. `upgrade`/`uninstall` strip that entry. |
 | Custom thresholds where `passTokens >= fileTokens` | Reject before delegating and re-ask: the runbook's config block ABORTS on the inversion; installed by hand, it silently kills the compress tier. |
 | `uninstall`/`purge` requested | Restate exactly what gets deleted (3 hook files, 3 settings entries, the `agent-return-state/` directory, a `settings.json`/hooks dir left empty, and for purge the config and an empty project `.claude/`), confirm once, then delegate. `uninstall project` while the global scope has registrations: say the kept project config will keep GOVERNING the global hooks, and offer `purge project` in the same confirmation. |
-| UNINSTALL prints `WARNING: kept ... still GOVERNS` | Relay it verbatim in Step 6: the kept project config overrides the global one. Fix = `purge project`; keeping it on purpose is valid. |
 | Project config exists but is malformed JSON | Report it: the module skips it and silently uses the global config. Offer to rewrite. |
 | Global, `CLAUDE_CONFIG_DIR` set, status shows another `config_dir` | The config is shared from `~/.claude`, and the runbook's global blocks act on `$CLAUDE_CONFIG_DIR` only: `upgrade` there aborts with "not installed in this scope". Run `upgrade` with `CLAUDE_CONFIG_DIR` empty (files + config in `~/.claude`), then the global copy and merge-settings blocks once per other config dir that registers the hooks. |
 | `/brewtools:agent-deadline-setup` also installed | Both register `SubagentStop` and `PreToolUse` entries; hooks of one event run in parallel, and each skill's merge/strip touches only entries naming its own scripts. An agent challenged once here continues on its ORIGINAL deadline clock (the deadline cleanup stamps `stopped` and keeps the state; a stop stamp under 5 minutes old keeps the clock), and the deadline guard always allows `SubagentHandback`. An agent-deadline install from before 6.5 restarts the clock and, past its limit, also denies the hand-back: `upgrade` it too. |
@@ -429,9 +428,7 @@ State = `agent-return-state/` beside the config that enabled the feature: a `.gi
 
 ## Smoke Test
 
-Before delegating, verify that the 4 assets exist and the hooks parse.
-
-**EXECUTE** using Bash tool:
+Run before delegating. **EXECUTE** using Bash tool:
 
 ```bash
 BT_ROOT="${CLAUDE_PLUGIN_ROOT}"
@@ -448,6 +445,6 @@ echo "✅ smoke" || echo "❌ smoke FAILED — syntax error in a hook file"
 
 > **STOP if ❌** — do not delegate; reinstall/update brewtools first.
 
-`node --check` proves only that the files parse; behavioral checks are the runbook's **Verify** section and are not run here.
+`node --check` proves only that the files parse; behavioral checks are the runbook's **Verify** section, not run here.
 
 </instructions>

@@ -2,6 +2,51 @@
 
 ---
 
+## v6.5.4 (2026-10-13)
+
+> Docs: [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) | [superreview-setup](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [e2e](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/)
+
+> Docs: [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/)
+
+> Docs: [agent-deadline-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline-setup/) | [agent-return-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-return-setup/) | [context-slim](https://doc-claude.brewcode.app/brewtools/skills/context-slim/) | [deploy](https://doc-claude.brewcode.app/brewtools/skills/deploy/) | [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) | [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/) | [ssh](https://doc-claude.brewcode.app/brewtools/skills/ssh/) | [task-board-setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) | [text-human](https://doc-claude.brewcode.app/brewtools/skills/text-human/) | [text-optimize](https://doc-claude.brewcode.app/brewtools/skills/text-optimize/)
+
+Compression pass 2 of model-loaded skill text, plus a setup-status split and a CI scan fix.
+
+### brewcode
+
+#### Changed
+
+- **setup-status:** `SKILL.md` split into 3 on-demand references (`phase1-probes.md`, `phase2-stamps.md`, `task-tools-offer.md`), 1146 -> 483 lines; behaviour unchanged.
+- **superreview-setup:** new scratch rule: one private `mktemp -d` per run, never `/tmp` directly, never a glob-picked temp dir.
+- **semble-setup:** Step 0 no longer claims `CLAUDE_PLUGIN_ROOT` is unset in skill bash blocks.
+
+### brewdoc
+
+#### Fixed
+
+- **memory-sync-setup:** the Phase 4 check accepts nested agents (`.claude/agents/**/*.md`), not only top-level files.
+
+### brewtools
+
+#### Fixed
+
+- **task-board-setup:** a P5.5 paragraph followed by `---` rendered as a setext heading; a blank line now separates them.
+
+### All plugins
+
+#### Changed
+
+- **compression pass 2:** lossless trim of model-loaded `SKILL.md` and reference text in 17 skills; typical cut is 4% of bytes per changed file, up to 16%.
+
+### repo
+
+#### Fixed
+
+- **semgrep.yml:** CI runs the pinned `semgrep/semgrep:1.180.0` image with `p/javascript` and `p/secrets`; the archived `semgrep-action@v1` ran no scan and was a silent no-op.
+- **Codex:** `install-update.mjs` retires 5 more obsolete agent files (`brewcode-architect`, `-developer`, `-reviewer`, `-tester`, `brewdoc-bd-auto-sync-processor`).
+
+---
+
 ## v6.5.3 (2026-10-13)
 
 > Docs: [superreview-setup](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/)

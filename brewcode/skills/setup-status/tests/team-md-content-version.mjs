@@ -9,7 +9,8 @@ import { test } from 'node:test';
 
 const STATUS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const BREWCODE = resolve(STATUS_DIR, '../..');
-const source = readFileSync(join(STATUS_DIR, 'SKILL.md'), 'utf8');
+const source = ['SKILL.md', 'references/phase1-probes.md', 'references/phase2-stamps.md', 'references/task-tools-offer.md']
+  .map(f => readFileSync(join(STATUS_DIR, f), 'utf8')).join('\n');
 const stamps = [...source.matchAll(/```bash\n([\s\S]*?)\n```/g)].map(match => match[1])
   .find(block => block.includes("<<'STAMPS'"));
 const producer = readFileSync(join(BREWCODE, 'skills/teams-setup/SKILL.md'), 'utf8');

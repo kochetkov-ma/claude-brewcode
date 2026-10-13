@@ -137,6 +137,9 @@ otherwise it prints `roster: 11/11 in sync`.
 
 - [Brewcode overview](../../README.md)
 - [Artifact metadata contract](references/artifact-metadata.md)
+- [Phase 1 probes](references/phase1-probes.md): artifact probe fences (Phases 1, 1b, 1c)
+- [Phase 2 stamps](references/phase2-stamps.md): `content_version` stamp reader and byte-pair checks (Phases 2a, 2b)
+- [Task-tools offer](references/task-tools-offer.md): the single `Task tools` question asked in Phase 4 on a bare `off` verdict
 - [Convention Setup](../convention-setup/README.md)
 - [Full documentation](https://doc-claude.brewcode.app/brewcode/skills/setup-status/)
 - [Full setup order](https://doc-claude.brewcode.app/full-setup/)

@@ -1,6 +1,5 @@
 # Mode: INSTALL
 
-Install E2E testing infrastructure: analyze project, create agents, generate rules.
 Contents: S0 Prerequisites, S1 Existing Setup, S2 Analysis, S3 Confirmation, S4 Agents, S5 Rules,
 S6 Persistence, S7 Summary.
 
@@ -51,14 +50,12 @@ Options: "Approve roster" / "Modify agents" / "Cancel"
 
 ## S4: Agent Creation
 
-Create agents via agent-creator in 2 batches:
+One agent-creator per definition, 2 batches, each batch's spawns in ONE message.
 
 **Batch 1 (3 agents, parallel):**
 - e2e-architect
 - e2e-scenario-analyst
 - e2e-automation-tester
-
-One creator owns ONE definition; roster splits into 3 + 2 parallel spawns, each batch in ONE message.
 
 ```
 Agent(subagent_type="brewcode:agent-creator", prompt="
@@ -97,8 +94,7 @@ for `CLAUDE_PLUGIN_ROOT` in its commands; never via `Skill` (`disable-model-invo
 Snapshot the files, capture `RUN_DIR`, spawn one optimizer per file with the six brief fields,
 that `RUN_DIR` and "preserve every frontmatter key, the roster model/tools, every heading, name,
 number, negation and scope", then run its verify gate and re-check each file: frontmatter parses,
-roster model/tools, `description` <=100 chars (optimal ~80), single line, role + 2-3 triggers, no
-`<example>` blocks. Delegates never spawn optimizers.
+roster model/tools, the CONSUMER `description` limits above. Delegates never spawn optimizers.
 > Agent type unavailable or that `SKILL.md` not resolvable -> skip the pass and report the skip,
 > not a blocker; the agents stay as written. A refused optimization continues to S5 only after its
 > safe recovery restored the agents and the same checks pass; report the refusal separately.
@@ -155,8 +151,7 @@ mkdir -p .claude/e2e && test -s .claude/e2e/e2e-rules.md && echo "OK" || echo "F
 ```
 > **STOP if FAILED** — every agent halts on a missing rules file by its own Rules Loading Protocol.
 
-The rules file gets the standard frontmatter, ABOVE its `# E2E Testing Rules` heading — fill the four
-values from the Phase 0 `PLUGIN_VERSION:` / `CONTENT_VERSION:` / `GENERATED_BY:` / `LAST_UPDATED:` lines:
+The rules file gets the standard frontmatter, ABOVE its `# E2E Testing Rules` heading:
 
 ```yaml
 ---

@@ -192,6 +192,7 @@ always-shared surface appears. It re-wires the emitted skill to the current proj
   `EXTENDED`; nothing is regenerated to switch.
 - Stack-generic: Java/Kotlin, Node/TypeScript, Python, Go.
 - READ-ONLY by design: it reports, it does not fix.
+- Scratch: anything a run saves outside the target tree goes into ONE private `mktemp -d` dir; it never writes to `/tmp` directly and never picks a temp dir by glob (another run may own it).
 
 ## Documentation
 

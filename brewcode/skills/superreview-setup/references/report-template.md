@@ -8,7 +8,7 @@ last_updated: "{LAST_UPDATED}"
 
 # Merged Report Layout (superreview Phase 4 — {PROJECT_NAME})
 
-Output: `.claude/reports/{TIMESTAMP}_superreview/REPORT.md`. ONE consolidated, validated, P0->P3-sorted report.
+Output: `.claude/reports/{TIMESTAMP}_superreview/REPORT.md`. ONE consolidated, validated report.
 
 ```markdown
 # Super Review Report — {PROJECT_NAME}
@@ -172,21 +172,17 @@ command; `CONFIRMED-BY-EVIDENCE` = intent-guard row, cite the ASKED quote + tier
 
 ## Severity / reuse legend
 
-- **Priority:** P0 (blocker — fix first) -> P3 (nice-to-have).
 - **Severity:** blocker (outage/breach/data-loss) > critical (significant bug/perf/boundary) > major (maintainability) > minor (style).
 - **Reuse:** REUSE (import existing 90-100%) | EXTEND (add params to existing 70-89%) | CONSIDER (evaluate 50-69%) | KEEP_NEW (<50%, justified).
 - **Run verdict:** REWORK if any P0; CONDITIONAL if any P1/P2 (no P0); APPROVED if only P3 / none; suffix
   `- INCOMPLETE` whenever any row is UNVALIDATED or the intent baseline is unavailable, including zero-findings runs.
-- **Row verdict:** CONFIRM (adversarially validated) | CONFIRMED-BY-EXECUTION (gate output, command + line cited) |
-  CONFIRMED-BY-EVIDENCE (intent-guard row: ASKED quote + source tier + delivered evidence cited) |
-  UNVALIDATED (validation could not run). No row ships without one.
+- **Row verdict:** the four values defined above the Merged Prioritized Findings table; no row ships without one.
 - **Drift verdict:** ALIGNED (nothing beyond implied work) | MINOR DRIFT (extra/missing work a reviewer waves
   through after one sentence) | MAJOR DRIFT (the deliverable is not the thing that was asked for). `not run — intent
   baseline unavailable` records an assessment gap, never ALIGNED or a fabricated drift row.
-- **Intent classes:** intent#scope | scale | indirection | files | tests | deps | arch | policy | skip |
-  artifacts | naming | conflict — full definitions in `.claude/agents/intent-guard.md`.
-- **Depth:** QUICK (default — intent pass + gates, 1 agent) | EXTENDED (full fan-out + validation + scope gate,
-  plus the intent pass). Resolved semantically from the prompt; there is no flag.
+- **Intent classes:** the Intent table's Rule column; definitions in `.claude/agents/intent-guard.md`.
+- **Depth:** QUICK (default) | EXTENDED, as in the `**Depth:**` header line; resolved semantically from the prompt,
+  there is no flag.
 - **Scope shapes:** 1 foreign-surface (P0) | 2 unsanctioned-feature (P1) | 3 drive-by (P2) | 4 opportunistic-dep
   (P2) | 5 silent-doc-mutation (P1) | 6 sanctioned-but-unrecorded (P2); delivery D1/D4 (P0, proof required),
   D2 (P1), D3 (P2), D5 stale scope-id status (P3 — P2 only when that row is the task's only delivery record);

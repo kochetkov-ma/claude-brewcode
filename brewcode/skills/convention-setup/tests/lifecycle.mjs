@@ -113,7 +113,7 @@ test('setup-status reads current convention stamps and parked loading guidance f
   const root = fixture(t);
   assert.equal(invoke(root, 'install').status, 0, 'install precondition succeeds');
   assert.equal(invoke(root, 'disable').status, 0, 'disabled precondition succeeds');
-  const dashboard = readFileSync(resolve(pluginRoot, 'skills/setup-status/SKILL.md'), 'utf8');
+  const dashboard = readFileSync(resolve(pluginRoot, 'skills/setup-status/references/phase2-stamps.md'), 'utf8');
   const stampBlock = [...dashboard.matchAll(/```bash\n([\s\S]*?)\n```/g)].map((match) => match[1]).find((block) => block.includes("<<'STAMPS'"));
   assert.equal(typeof stampBlock, 'string', 'dashboard exposes its integrated stamp probe');
   // WHEN the actual dashboard stamp probe runs against producer-shaped artifacts.
