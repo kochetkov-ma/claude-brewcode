@@ -18,6 +18,69 @@ SP_EXT_CONFIG=".beancount .capnp .cedarschema .cfg .cook .cpon .desktop .diff .d
 SP_EXT_DOCS=".adoc .asciidoc .bib .dj .htm .html .markdown .md .mermaid .mmd .norg .org .po .pot .rst .rtf .tex"
 SP_EXT_EXCLUDED=".csv .json .json5 .psv .tsv"
 
+# "Would semble index it" (node -e prefix): port of pathspec 1.1.1 GitIgnoreSpecPattern + semble 0.6.2 file_walker, per-dir .gitignore then .sembleignore, last match wins.
+# shellcheck disable=SC2016  # JavaScript source, not shell: $ is literal
+SP_IGNORE_JS='
+const spFs=require("fs"),spPath=require("path");
+const spReEsc=c=>c.replace(/[.*+?^${}()|[\]\\\/-]/g,"\\$&");
+function spSegGlob(p){
+  let r="",i=0;const n=p.length;
+  while(i<n){
+    const ch=p[i++];
+    if(ch==="\\"){ if(i>=n)throw new Error("dangling escape"); r+=spReEsc(p[i++]); }
+    else if(ch==="*")r+="[^/]*";
+    else if(ch==="?")r+="[^/]";
+    else if(ch==="["){
+      let j=i; if(j<n&&(p[j]==="!"||p[j]==="^"))j++; if(j<n&&p[j]==="]")j++;
+      while(j<n&&p[j]!=="]")j++;
+      if(j>=n)throw new Error("bad range");
+      j++; let e="["; if(p[i]==="!"||p[i]==="^"){e+="^";i++;}
+      r+=e+p.slice(i,j).replace(/\\/g,"\\\\"); i=j;
+    } else r+=spReEsc(ch);
+  }
+  return r;
+}
+function spPySuffix(s){const nm=s.replace(/\/+$/,"").split("/").pop()||"";const i=nm.lastIndexOf(".");return i>0&&i<nm.length-1;}
+function spCompile(line){
+  let s=line.endsWith("\\ ")?line:line.replace(/\s+$/,"");
+  if(!s||s[0]==="#"||s==="/")return null;
+  const inc=s[0]!=="!"; if(!inc)s=s.slice(1);
+  const g=s.split("/"); const isDir=g[g.length-1]==="";
+  if(!g[0])g.shift(); else if(g.length===1||(g.length===2&&!g[1])){ if(g[0]!=="**")g.unshift("**"); }
+  if(!g.length)return null;
+  if(!g[g.length-1])g[g.length-1]="**";
+  for(let i=g.length-1;i>0;i--) if(g[i-1]==="**"&&g[i]==="**")g.splice(i,1);
+  const n=g.length,end=n-1;let re="";
+  if(n===1&&g[0]==="**")re=isDir?"/":".";
+  else if(n===2&&g[0]==="**"&&g[1]==="*")re=".";
+  else if(n===3&&g[0]==="**"&&g[1]==="*"&&g[2]==="**")re="/";
+  else{ let need=false;
+    try{ g.forEach((x,i)=>{
+      if(x==="**"){ if(i===0)re+="^(?:.+/)?"; else if(i<end){re+="(?:/.+)?";need=true;} else re+="/"; }
+      else{ if(i===0)re+="^"; if(need)re+="/"; re+=x==="*"?"[^/]+":spSegGlob(x); if(i===end)re+="(?:/|$)"; need=true; }
+    }); }catch(e){ return null; }
+  }
+  return {re:new RegExp(re),inc,sfx:spPySuffix(line)};
+}
+const spSpecOf=(base,lines)=>({base,pats:lines.map(spCompile).filter(Boolean)});
+function spDirSpec(dir){
+  const lines=[];
+  for(const f of [".gitignore",".sembleignore"]){
+    try{ const p=spPath.join(dir,f); if(spFs.statSync(p).isFile()) lines.push(...spFs.readFileSync(p,"utf8").split(/\r\n|\r|\n/)); }catch(e){}
+  }
+  return lines.length?spSpecOf(dir,lines):null;
+}
+function spIgnored(abs,isDir,specs){
+  let ig=false,found=false;
+  for(const s of specs){
+    let rel=spPath.relative(s.base,abs).split(spPath.sep).join("/"); if(isDir)rel+="/";
+    for(const p of s.pats) if(p.re.test(rel)){ ig=p.inc; found=!ig&&p.sfx; }
+  }
+  return [ig,found];
+}
+const spBaseSpec=root=>spSpecOf(root,String(process.env.SP_SKIPD||"").split(" ").filter(Boolean).map(d=>d+"/"));
+'
+
 SP_DISCLOSURE="This corpus is code+docs+config, so .md/.markdown, .rst, .adoc and .html/.htm ARE indexed. Still unreachable at any content setting: .json/.json5/.csv/.tsv/.psv (semble's data bucket belongs to no content type) and any suffix absent from _EXTENSION_TO_LANGUAGE — notably .mdx and .txt. Use rg/Grep for those. Every consumer must pass the same --content set so it selects the shared index-code-config-docs variant."
 
 sp_usage() {
@@ -65,36 +128,39 @@ SP_JSON=0
 sp_dry_say() { if [ "$SP_JSON" = "1" ]; then sc_dry "$*" >&2; else sc_dry "$*"; fi; }
 
 # ── coverage (§7) ───────────────────────────────────────────────────────────
-# Suffix-only, skipped dirs, symlinks not followed, >1 MB skipped, <128 B skipped only when blank after strip (files.py:498-501).
+# Suffix buckets over what semble walks (SP_IGNORE_JS; ignored dirs -> skipped.dirs), >1 MB skipped, <128 B only when blank (files.py:498-501).
 sp_coverage() {
   sc_require_node
   # shellcheck disable=SC2016  # JavaScript source, not shell: $ is literal
   SP_ROOT="$(sc_project_root)" SP_C="$SP_EXT_CODE" SP_G="$SP_EXT_CONFIG" \
-  SP_D="$SP_EXT_DOCS" SP_X="$SP_EXT_EXCLUDED" SP_SKIPD="$SP_SKIP_DIRS" node -e '
+  SP_D="$SP_EXT_DOCS" SP_X="$SP_EXT_EXCLUDED" SP_SKIPD="$SP_SKIP_DIRS" node -e "$SP_IGNORE_JS"'
 const fs=require("fs"),path=require("path");
 const set=s=>new Set(String(s||"").split(" ").filter(Boolean));
 const code=set(process.env.SP_C),cfg=set(process.env.SP_G),docs=set(process.env.SP_D),exc=set(process.env.SP_X);
-const skipDirs=set(process.env.SP_SKIPD);
 const out={code:{},config:{},docsOnly:{},excluded:{},
   totals:{code:0,config:0,docsOnly:0,excluded:0,indexable:0,classified:0,unclassified:0},
   skipped:{tooLarge:0,tinyBlank:0,symlinks:0,dirs:0}};
 function bump(b,e){out[b][e]=(out[b][e]||0)+1;out.totals[b]++;}
 function suffix(n){const i=n.lastIndexOf(".");return i<=0?"":n.slice(i).toLowerCase();}
-function walk(dir,depth){
+function walk(dir,depth,inherited){
+  const own=spDirSpec(dir); const specs=own?[...inherited,own]:inherited;
   let ents;try{ents=fs.readdirSync(dir,{withFileTypes:true});}catch(e){return;}
   ents.sort((a,b)=>a.name<b.name?-1:1);
   for(const en of ents){
     const p=path.join(dir,en.name);
     if(en.isSymbolicLink()){out.skipped.symlinks++;continue;}
+    const [ig,found]=spIgnored(p,en.isDirectory(),specs);
     if(en.isDirectory()){
-      if(skipDirs.has(en.name)){out.skipped.dirs++;continue;}
-      if(depth<64)walk(p,depth+1);
+      if(ig){out.skipped.dirs++;continue;}
+      if(depth<64)walk(p,depth+1,specs);
       continue;
     }
+    if(ig)continue;
     if(!en.isFile())continue;
     const e=suffix(en.name);
     if(!e)continue;
-    const b=code.has(e)?"code":cfg.has(e)?"config":docs.has(e)?"docsOnly":exc.has(e)?"excluded":null;
+    // A `!x.json`-style negation makes semble index any suffix (found): count it indexable, in config.
+    const b=code.has(e)?"code":cfg.has(e)?"config":docs.has(e)?"docsOnly":found?"config":exc.has(e)?"excluded":null;
     if(b===null){out.totals.unclassified++;continue;}
     out.totals.classified++;
     let st;try{st=fs.statSync(p);}catch(err){continue;}
@@ -106,7 +172,7 @@ function walk(dir,depth){
     bump(b,e);
   }
 }
-walk(process.env.SP_ROOT,0);
+walk(process.env.SP_ROOT,0,[spBaseSpec(process.env.SP_ROOT)]);
 // docsOnly counts toward indexable (corpus includes `docs`); key name kept for wire compat = "docs bucket".
 out.totals.indexable=out.totals.code+out.totals.config+out.totals.docsOnly;
 process.stdout.write(JSON.stringify(out));'
@@ -419,19 +485,20 @@ sp_mode_audit() {
   cov="$(sp_coverage)"
   cache="$(sp_cache_info)"
   state="$(sp_state_json)"
+  # Cache info rides stdin, not env: its index metadata can exceed ARG_MAX.
   if [ "$json" = "1" ]; then
-    SP_COV="$cov" SP_CACHE="$cache" SP_STATE="$state" SP_ROOT="$(sc_project_root)" \
+    printf '%s' "$cache" | SP_COV="$cov" SP_STATE="$state" SP_ROOT="$(sc_project_root)" \
     SP_DISC="$SP_DISCLOSURE" node -e '
 process.stdout.write(JSON.stringify({schema:1,mode:"audit",
  projectRoot:process.env.SP_ROOT,
  coverage:JSON.parse(process.env.SP_COV),
- cache:JSON.parse(process.env.SP_CACHE),
+ cache:JSON.parse(require("fs").readFileSync(0,"utf8")),
  state:JSON.parse(process.env.SP_STATE),
  disclosure:process.env.SP_DISC,status:"ok"},null,2)+"\n");'
     return 0
   fi
-  SP_COV="$cov" SP_CACHE="$cache" SP_STATE="$state" SP_DISC="$SP_DISCLOSURE" node -e '
-const c=JSON.parse(process.env.SP_COV),k=JSON.parse(process.env.SP_CACHE),s=JSON.parse(process.env.SP_STATE);
+  printf '%s' "$cache" | SP_COV="$cov" SP_STATE="$state" SP_DISC="$SP_DISCLOSURE" node -e '
+const c=JSON.parse(process.env.SP_COV),k=JSON.parse(require("fs").readFileSync(0,"utf8")),s=JSON.parse(process.env.SP_STATE);
 const top=o=>Object.keys(o).sort((a,b)=>o[b]-o[a]||(a<b?-1:1)).slice(0,8).map(e=>e+" "+o[e]).join(", ")||"none";
 console.log("coverage: code "+c.totals.code+" | config "+c.totals.config+" | docs-only "+c.totals.docsOnly+" | excluded "+c.totals.excluded);
 console.log("  code:     "+top(c.code));
@@ -454,24 +521,29 @@ sp_mode_candidates() {
   # shellcheck disable=SC2016  # JavaScript source, not shell: $ is literal
   out="$(SP_ROOT="$root" SP_CHUNKS="${indexdir:+$indexdir/chunks.json}" \
     SP_C="$SP_EXT_CODE" SP_G="$SP_EXT_CONFIG" SP_D="$SP_EXT_DOCS" \
-    SP_SKIPD="$SP_SKIP_DIRS" node -e '
+    SP_SKIPD="$SP_SKIP_DIRS" node -e "$SP_IGNORE_JS"'
 const fs=require("fs"),path=require("path"),crypto=require("crypto");
 const set=s=>new Set(String(s||"").split(" ").filter(Boolean));
 const docsExt=set(process.env.SP_D);
 const ok=new Set([...set(process.env.SP_C),...set(process.env.SP_G),...docsExt]);
-const skipDirs=set(process.env.SP_SKIPD);
 const ROOT=process.env.SP_ROOT;
 const files=[];   // {rel, size, hash}
 function suffix(n){const i=n.lastIndexOf(".");return i<=0?"":n.slice(i).toLowerCase();}
-function walk(dir,depth){
+
+// Walk only what semble indexes, else already-excluded paths come back as proposals.
+const baseSpec=spBaseSpec(ROOT);
+function walk(dir,depth,inherited){
+  const own=spDirSpec(dir); const specs=own?[...inherited,own]:inherited;
   let ents;try{ents=fs.readdirSync(dir,{withFileTypes:true});}catch(e){return;}
   ents.sort((a,b)=>a.name<b.name?-1:1);
   for(const en of ents){
     const p=path.join(dir,en.name);
     if(en.isSymbolicLink())continue;
-    if(en.isDirectory()){ if(!skipDirs.has(en.name)&&depth<64) walk(p,depth+1); continue; }
+    const [ig,found]=spIgnored(p,en.isDirectory(),specs);
+    if(ig)continue;
+    if(en.isDirectory()){ if(depth<64) walk(p,depth+1,specs); continue; }
     if(!en.isFile())continue;
-    if(!ok.has(suffix(en.name)))continue;
+    if(!found&&!ok.has(suffix(en.name)))continue;
     let st;try{st=fs.statSync(p);}catch(e){continue;}
     if(st.size>1000000||st.size===0)continue;
     let h="";
@@ -479,7 +551,7 @@ function walk(dir,depth){
     files.push({rel:path.relative(ROOT,p),size:st.size,hash:h,docs:docsExt.has(suffix(en.name))});
   }
 }
-walk(ROOT,0);
+walk(ROOT,0,[baseSpec]);
 
 // Exact chunk counts when the index is on disk; byte share otherwise. Both are
 // reported so the proposal always says which number it is standing on.

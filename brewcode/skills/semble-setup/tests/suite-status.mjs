@@ -539,6 +539,50 @@ cat "\${SEMBLE_STUB_GUIDANCE:?}"
   check('38-nocounts-verdict', noCounts.verdict, 'ready',
     'wantCount=0 means the counts were not reported - never downgrade on a missing measurement');
 
+  // GIVEN a hand-edited rule with an old stamp WHEN status runs THEN nextStep names the diff, merge or --force, never plain upgrade
+  const RULE = join(PROJECT, '.claude', 'rules', 'semble-first.md');
+  const RULE_TPL = join(BASE, 'assets', 'semble-first.md.template');
+  const stamped = (state, cv) => ({ ...healthy, rule: { state, content_version: cv, templateContentVersion: '6.5.0' } });
+  const editedOld = guidRun(stamped('user_modified', '6.1.4'));
+  check('38b-edited-rule-old-stamp', [editedOld.verdict, editedOld.nextStep, editedOld.__reason],
+    ['partial',
+      `Review: diff -u ${RULE} ${RULE_TPL}\nThen merge by hand and set content_version: 6.5.0 in ${RULE},\n`
+      + `or replace it: /brewcode:semble-setup upgrade --force (backs up ${RULE}.bak.<epoch> first)`,
+      'semble-first rule is hand-edited at content_version 6.1.4, plugin at 6.5.0; upgrade keeps it as is'],
+    'upgrade never rewrites a user_modified rule, so plain `upgrade` would loop on its stale stamp');
+  const pristineOld = guidRun(stamped('stale', '6.1.4'));
+  check('38c-pristine-rule-old-stamp', [pristineOld.verdict, pristineOld.nextStep],
+    ['partial', 'Run /brewcode:semble-setup upgrade'],
+    'a pristine prior-release copy is replaced by upgrade, so upgrade stays the advice');
+  const editedCurrent = guidRun(stamped('user_modified', '6.5.0'));
+  check('38d-edited-rule-current-stamp', [editedCurrent.verdict, editedCurrent.nextStep], ['ready', 'none'],
+    'a hand-edited rule at the current content_version is a supported ready state');
+
+  // GIVEN only <= 6.5.0 absolute-path hook rows WHEN status runs THEN nextStep is upgrade, an install-owned clause still wins
+  const HOOKS_ABS = join(PROJECT, '.claude', 'hooks');
+  const ROWS = [['SessionStart', null, 'semble-session.mjs'], ['PostToolUse', 'm', 'semble-stats.mjs'],
+    ['PostToolUseFailure', 'm', 'semble-stats.mjs'], ['SubagentStart', null, 'semble-subagent.mjs']];
+  const absDrift = ROWS.map(([event, matcher, script]) => ({ event, matcher, script, field: 'args',
+    expected: ['${CLAUDE_PROJECT_DIR}/.claude/hooks/' + script], actual: [join(HOOKS_ABS, script)] }));
+  const absHooks = { wiredCount: 0, staleEntries: 4, absoluteCount: 4, driftedCount: 4, missingCount: 0,
+    duplicateCount: 0, drift: absDrift };
+  const absOnly = guidRun(withHooks(absHooks));
+  const absHuman = runStatus([], { SEMBLE_STUB_DETECT: DETECT_FILE, SEMBLE_STUB_GUIDANCE: GUID_FILE })
+    .stdout.split('\n').filter((l) => l.startsWith('portable:'));
+  check('38e-absolute-only', [absOnly.verdict, absOnly.nextStep, absOnly.__reason, absOnly.guidance.absoluteCount, absHuman],
+    ['partial', 'Run /brewcode:semble-setup upgrade', '4 stale settings entries; hooks wired 0/4', 4,
+      ['portable:  4 absolute-path hook entries (break every other clone) - run /brewcode:semble-setup upgrade']],
+    'absolute-only drift is the migration upgrade performs, matching the portable: line');
+  const absNoPerms = guidRun({ ...withHooks(absHooks), permissions: { wired: false } });
+  check('38f-absolute-plus-install-clause', [absNoPerms.verdict, absNoPerms.nextStep],
+    ['partial', 'Run /brewcode:semble-setup install'],
+    'an install-owned clause beside the absolute rows keeps install as the next step');
+  const absTimeout = guidRun(withHooks({ ...absHooks,
+    drift: absDrift.concat([{ ...absDrift[0], field: 'timeout', expected: 5, actual: 5000 }]) }));
+  check('38g-absolute-plus-other-drift', [absTimeout.verdict, absTimeout.nextStep],
+    ['partial', 'Run /brewcode:semble-setup install'],
+    'a row drifted on more than its absolute args is not absolute-only drift');
+
   // The downgrade only ever applies to `ready`; it must not overwrite a
   // stronger verdict that another signal already produced.
   writeState({ schema: 1, phase: 'verifying', enabled: true, completed: [], last_updated: '2026-08-02' });
@@ -666,6 +710,17 @@ cat "\${${envVar}:?}"
   check('50-index-verdict', noIndex.verdict, 'partial', 'no current content variant in the cache is not ready');
   check('50-index-reason', noIndex.__reason, 'no current content variant in the shared cache',
     'one clause names the missing exact variant without implying a second root');
+  check('50-index-nextStep', noIndex.nextStep, 'Run /brewcode:semble-setup resume',
+    'resume warms (builds) the missing variant; a full install redoes MCP, guidance and agents for nothing');
+  const noIndexUnverified = run({ completed: ['prereq', 'mcp', 'permissions', 'guidance', 'agents'],
+    cache: { ...HEALTHY_CACHE, present: false } });
+  check('50b-index-verify-nextStep', [noIndexUnverified.__reason, noIndexUnverified.nextStep],
+    ['warm and smoke not recorded in state.completed; no current content variant in the shared cache',
+      'Run /brewcode:semble-setup resume'], 'missing index plus unproven warm/smoke is still one resume');
+  const noIndexNoPerms = run({ guid: { ...HEALTHY_GUID, permissions: { wired: false } },
+    cache: { ...HEALTHY_CACHE, present: false } });
+  check('50c-index-perms-nextStep', noIndexNoPerms.nextStep, 'Run /brewcode:semble-setup install',
+    'an install-owned gap next to the missing index still routes to install');
 
   const needPatch = run({ agents: { ...HEALTHY_AGENTS, summary: { changed: 2, conflict: 0, skipped: 0 } } });
   check('51-agents-verdict', needPatch.verdict, 'partial', 'agents still needing the two tool names are not ready');
@@ -1261,6 +1316,74 @@ writeFileSync(BREW_LOG, '');
     '--section versions emits the envelope + versions');
   check('111-all-profiles-alone', runStatus(['--all-profiles']).status, 2,
     '--all-profiles without --versions is bad usage');
+}
+
+// ═══ 12. semble-mcp.sh: a user-scope MCP operation never creates project state outside a project ═══
+// Real source semble-mcp.sh + lib, own fake HOME; registration pre-seeded so `add` takes the already-registered path.
+{
+  const W = join(BASE, 'f3');
+  const H = join(W, 'home');
+  const NOTES = join(H, 'work', 'notes');
+  const REPO = join(W, 'repo');
+  const CACHE = join(W, 'cache');
+  const OKBIN = join(W, 'bin');
+  for (const d of [join(H, '.claude'), NOTES, REPO, CACHE, OKBIN]) mkdirSync(d, { recursive: true });
+  spawnSync('git', ['init', '-q', REPO]);
+  symlinkSync(process.execPath, join(OKBIN, 'node'));
+  writeFileSync(join(OKBIN, 'claude'), '#!/usr/bin/env bash\necho stub-ok\n');
+  chmodSync(join(OKBIN, 'claude'), 0o755);
+  const REAL_MCP = join(SRC_SCRIPTS, 'semble-mcp.sh');
+  const REAL_LIB = join(SRC_SCRIPTS, 'lib', 'semble-common.sh');
+  const registered = JSON.stringify({ mcpServers: { semble_code: {
+    type: 'stdio', command: 'uvx', args: ['--from', 'semble[mcp]==0.6.2', 'semble', '--content', 'code', 'docs', 'config'],
+    env: { SEMBLE_CACHE_LOCATION: CACHE }, alwaysLoad: true } } });
+  const mcpEnv = {
+    PATH: `${OKBIN}:/usr/bin:/bin`, HOME: H, SEMBLE_TEST_HOME: H, TMPDIR: BASE, LANG: 'C',
+    SEMBLE_CACHE_ROOT_CODE: CACHE, SEMBLE_CLAUDE_BIN: join(OKBIN, 'claude'), SEMBLE_NO_NETWORK: '1',
+  };
+  const mcp = (cwd, args) => {
+    const r = spawnSync('bash', [REAL_MCP, ...args, '--json'], { cwd, encoding: 'utf8', env: mcpEnv, timeout: 60000 });
+    return { status: r.status, json: safeParse((r.stdout || '').trim()) };
+  };
+  const stateFiles = () => {
+    const acc = [];
+    walk(W, acc);
+    return acc.map((l) => l.split('|')[0]).filter((p) => p.endsWith('/state.json')).map((p) => p.slice(W.length));
+  };
+
+  const cand = spawnSync('bash', ['-c', `. "${REAL_LIB}"; sc_root_candidate; echo "rc=$?"`],
+    { cwd: NOTES, encoding: 'utf8', env: mcpEnv });
+  check('120-walk-skips-home-claude', cand.stdout, `${NOTES}\nrc=1\n`,
+    "HOME's .claude is the profile, never a project marker: no root found, PWD with rc 1");
+
+  writeFileSync(join(H, '.claude.json'), registered);
+  const outside = mcp(NOTES, ['add', '--scope', 'user']);
+  check('121-user-add-outside-project', [outside.status, outside.json.status, outside.json.note, stateFiles()],
+    [0, 'unchanged',
+      'semble_code is already registered as approved; no project state written (no project root or --no-state)', []],
+    'user-scope add from a non-git dir under HOME writes no state.json, not even ~/.claude/semble/state.json');
+
+  const noState = mcp(REPO, ['add', '--scope', 'user', '--no-state']);
+  check('122-user-add-no-state', [noState.status, noState.json.status, existsSync(join(REPO, '.claude')), stateFiles()],
+    [0, 'unchanged', false, []], '--no-state from a git repo registers profile-only and creates no .claude/ there');
+
+  writeFileSync(join(H, '.claude.json'), '{}');
+  const fresh = mcp(NOTES, ['add', '--scope', 'user', '--yes']);
+  check('123-fresh-add-outside-project', [fresh.status, fresh.json.status, fresh.json.note, stateFiles()],
+    [0, 'ok', 'registered via claude mcp add-json; no project state written (no project root or --no-state); restart Claude Code', []],
+    'a new user-scope registration outside a project checkpoints nothing');
+
+  const cp = mcp(NOTES, ['checkpoint']);
+  check('124-checkpoint-outside-project', [cp.status, cp.json.status, stateFiles()], [3, 'precondition', []],
+    'an explicit checkpoint with no project root is a precondition failure, not a write into HOME');
+
+  writeFileSync(join(H, '.claude.json'), registered);
+  const inProject = mcp(REPO, ['add', '--scope', 'user']);
+  const st = safeParse(readFileSync(join(REPO, '.claude', 'semble', 'state.json'), 'utf8'));
+  check('125-in-project-checkpoint', [inProject.status, inProject.json.note, stateFiles(), st.phase],
+    [0, 'semble_code is already registered as approved; project state checkpoint at phase=awaiting_reload',
+      ['/repo/.claude/semble/state.json'], 'awaiting_reload'],
+    'the in-project skill flow still writes its reload checkpoint');
 }
 
 // ── cleanup ─────────────────────────────────────────────────────────────────

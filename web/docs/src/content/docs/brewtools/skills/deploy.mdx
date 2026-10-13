@@ -171,11 +171,11 @@ APPROVED ids for exact commands only; execution rechecks preconditions.
 | Template | Trigger | Description |
 |----------|---------|-------------|
 | Build + Push GHCR | tag / branch | Multi-platform Docker build, push to `ghcr.io` |
-| Deploy to VPS | `workflow_run` / `workflow_dispatch` | SCP + SSH deploy of release-tag images only, health check, rollback |
+| Deploy to VPS | `workflow_run` / `workflow_dispatch` | SCP + SSH deploy of release-tag images; pulls via a temporary private Docker config, deleted on exit; health check, rollback |
 | Release | tag `v*.*.*` | Extract changelog, create GitHub Release with assets |
 | Security Scan | push / PR | CodeQL / Gitleaks / Semgrep with SARIF upload |
 
-All templates pin `runs-on: ubuntu-24.04` (never `ubuntu-latest`). The Deploy template accepts only images built from a release tag (`v*.*.*`); a branch-built preview image is rejected before any server copy.
+All templates pin `runs-on: ubuntu-24.04` (never `ubuntu-latest`). The Deploy template accepts only images built from a release tag (`v*.*.*`); a branch-built preview image is rejected before any server copy. The server pull logs in to GHCR with the job token over stdin, so stale server credentials cannot cause `denied` and the VPS user's `~/.docker/config.json` stays untouched.
 
 ### Configuration storage
 

@@ -94,7 +94,7 @@ lines there.
 | # | Skill (command) | Plugin | Anchor artifact | Secondary artifacts | Off-switch: the row is `disabled` when (Phase 1b) | Hook registrations: `<event>` `<matcher>` `<script>` (Phase 1) | Byte pairs (Phase 2b) |
 |---|-----------------|--------|-----------------|---------------------|-----------------------------------------------------|------------------------------------------------------------------|------------------------|
 | 1 | `/brewcode:teams-setup` | brewcode | `.claude/teams/*/team.md` | `.claude/teams/*/trace.jsonl`, `.claude/teams/*/trace-ops.sh` | parking: every roster member named in `team.md`'s `## Agents` table is `.claude/agents/<member>.md.disabled`. `intent-guard` is never parked (`toggle-team.sh` skips it: shared with `superreview-setup`), so exclude it. The filename is the authority, not the `Status` cell (a hand `Edit` step that can lag) | none | `trace-ops.sh` vs `$BC/skills/teams-setup/scripts/trace-ops.sh` (byte-copied, meta line baked at release) |
-| 2 | `/brewcode:semble-setup` | brewcode | `.claude/rules/semble-first.md` | `.claude/hooks/semble-session.mjs`, `semble-stats.mjs`, `semble-subagent.mjs`, `.claude/semble/state.json` | flag: `.enabled` is `false` in `.claude/semble/state.json` (phase `disabled`); every file stays in place | read from Phase 2c's `guidance` (`wiredCount`/`wantCount`, `retired`, `retiredWired`, `staleEntries`), not from the `REG` lines | the three live hooks vs `$BC/skills/semble-setup/assets/*.mjs`, plus the rule vs `assets/semble-first.md.template` (a pure byte-copy, not restamped), and nothing else. The repo-root `.sembleignore` is never byte-stable: never compared. Retired hooks (`semble-explore.mjs`, `semble-reminder.mjs`, `semble-prefetch.mjs`) have no asset, so no pair: Phase 2c reports them |
+| 2 | `/brewcode:semble-setup` | brewcode | `.claude/rules/semble-first.md` | `.claude/hooks/semble-session.mjs`, `semble-stats.mjs`, `semble-subagent.mjs`, `.claude/semble/state.json` | flag: `.enabled` is `false` in `.claude/semble/state.json` (phase `disabled`); every file stays in place | read from Phase 2c's `guidance` (`wiredCount`/`wantCount`, `retired`, `retiredWired`, `staleEntries`, `absoluteCount`), not from the `REG` lines | the three live hooks vs `$BC/skills/semble-setup/assets/*.mjs`, plus the rule vs `assets/semble-first.md.template` (a pure byte-copy, not restamped), and nothing else. The repo-root `.sembleignore` is never byte-stable: never compared. Retired hooks (`semble-explore.mjs`, `semble-reminder.mjs`, `semble-prefetch.mjs`) have no asset, so no pair: Phase 2c reports them |
 | 3 | `/brewcode:superreview-setup` | brewcode | `.claude/skills/superreview/SKILL.md` | `.claude/skills/superreview/references/agent-prompt.md`, `.../report-template.md`, `.../scope.md`, `.claude/skills/superreview/.template-baseline/` | parking: `.claude/skills/superreview/SKILL.md.disabled` present and `SKILL.md` absent; `references/` and `.template-baseline/` stay live and readable | none | the `.template-baseline/` copies vs the plugin templates, raw on both sides: answers "did the plugin's templates move since this project was tailored", which the emitted stamp cannot. Never read a version out of that dir |
 | 4 | `/brewtools:task-board-setup` | brewtools | `.claude/features/board.md` | `.claude/agents/task-tracker.md`, `.claude/skills/task-board/SKILL.md`, `.claude/skills/task-spec/SKILL.md` (required unless Phase 1 proves `TASK_SPEC_MODE=off`), `.claude/rules/tasks.md`, `.claude/features/PROGRESS.md`, `.claude/features/TRACKER.md`, `.claude/features/INDEX.md`, `.claude/features/backlog/README.md`, `.claude/features/METHODOLOGY.md`, `.claude/features/ANTI-DRIFT.md`, `.claude/features/task-graph.md` | parking: every deployed one of the four entry files (`.claude/agents/task-tracker.md`, `.claude/skills/task-board/SKILL.md`, `.claude/skills/task-spec/SKILL.md`, `.claude/rules/tasks.md`) is `<name>.disabled`. `.claude/features/**` stays, so the anchor stays present; a `task-spec` that never existed (spec layer off) is absent, not parked | none | none copied verbatim (every artifact is generated). Phase 2a expands this row from the anchor and secondary cells and checks each carrier against the same source `content_version` |
 | 6 | `/brewtools:agent-deadline-setup` | brewtools | `.claude/hooks/agent-deadline-guard.mjs` (or `GLOBAL/hooks/`) | `agent-deadline-cleanup.mjs` beside it, `.claude/agent-deadline.json` (or `GLOBAL/agent-deadline.json`) | flag, opt-in: live only on `"enabled": true`. `false`, no key, unparsable or no config = inert: the guard returns on `cfg.enabled !== true` and nothing is enforced | `PreToolUse` `.*` `agent-deadline-guard.mjs`; `SubagentStop` `-` `agent-deadline-cleanup.mjs`; in the scope's `settings.json` | both `.mjs` vs `$BT/skills/agent-deadline-setup/assets/`, per scope |
@@ -304,6 +304,7 @@ A deliberately disabled setup is neither broken nor stale; every row leaves a pr
 stated, never implied; a key-less config prints `no-key` instead of guessing:
 
 ```bash
+CWD0=$PWD   # the deadline guard climbs from the payload cwd: keep it before the cd
 cd "${CLAUDE_PROJECT_DIR}" || exit 1
 G="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 flag() {
@@ -317,13 +318,24 @@ while IFS= read -r d; do
   flag agent-deadline "$d/agent-deadline.json"
   flag agent-return "$d/agent-return.json"
 done
-gov() {  # the config the hooks read: first hit of project, $CLAUDE_CONFIG_DIR, ~/.claude
-  for c in "$PWD/.claude/${1}" "$G/${1}" "$HOME/.claude/${1}"; do
-    if [ -f "$c" ]; then echo "${1} GOVERNING $c"; return; fi
-  done
-  echo "${1} GOVERNING none"
+gov() {  # mirrors each guard's loadConfig: climb to the nearest valid project config, then globals
+  NAME="${1}" START="$CWD0" RULE="${2}" PD="${CLAUDE_PROJECT_DIR}" node <<'NODE'
+const fs=require("fs"), path=require("path"), os=require("os");
+const name=process.env.NAME, pd=process.env.PD, env=(process.env.CLAUDE_CONFIG_DIR||"").trim();
+const globals=[...new Set([env?path.resolve(env):null,path.join(os.homedir(),".claude")].filter(Boolean))];
+const ok=f=>{try{const c=JSON.parse(fs.readFileSync(f,"utf8"));return !!c&&typeof c==="object"&&!Array.isArray(c);}catch{return false;}};
+let dir=path.resolve(process.env.START), hit=null;
+if(process.env.RULE==="project-root"&&pd&&fs.existsSync(pd)) dir=path.resolve(pd);
+else if(process.env.RULE==="project-root") for(let d=dir;;){ if(fs.existsSync(path.join(d,".git"))||fs.existsSync(path.join(d,".claude"))){ dir=d; break; } const up=path.dirname(d); if(up===d) break; d=up; }
+for(let i=0;i<16&&!hit;i++){
+  if(globals.includes(path.join(dir,".claude"))) break;
+  if(ok(path.join(dir,".claude",name))){ hit=path.join(dir,".claude",name); break; }
+  const up=path.dirname(dir); if(up===dir) break; dir=up;
 }
-gov agent-deadline.json; gov agent-return.json
+console.log(name+" GOVERNING "+(hit||globals.map(g=>path.join(g,name)).find(ok)||"none"));
+NODE
+}
+gov agent-deadline.json cwd; gov agent-return.json project-root
 flag agent-router .claude/brewtools/agent-router.json
 flag docsync .claude/docsync/config.json
 for f in .claude/semble/state.json .claude/brewtools/manager/state.json; do
@@ -342,9 +354,13 @@ echo "OK"
 Row 2 is `disabled` on `"enabled":false`; row 8 is live only on `"hard":true`, anything else is the
 disarmed wall. An absent key means opposite things on rows 6/11 and 7/10: read the row, never a
 house default (a key-less row 6 or 11 reported live claims a deadline is enforced, or a return
-budget applied, when the guard returns on its first line). Rows 6 and 11 read the project config
-first, then `$CLAUDE_CONFIG_DIR`, then `~/.claude`; a malformed project config is skipped and the
-global one governs, so read every scope before deciding. The `GOVERNING` file is the row's config
+budget applied, when the guard returns on its first line). Rows 6 and 11 read the nearest project
+config first, then `$CLAUDE_CONFIG_DIR`, then `~/.claude`; a malformed (non-object) project config is
+skipped and the climb goes on, so read every scope before deciding. `gov()` mirrors each guard's
+`loadConfig` start dir: row 6 climbs from the payload `cwd` (the shell cwd before the `cd`), row 11
+from the session project dir, else the nearest `.git`/`.claude` ancestor of that cwd (`projectRoot()`);
+each walks up at most 16 levels and stops at a global dir, so a config in an ancestor of the project
+dir, or under it on row 6, can govern. The `GOVERNING` file is the row's config
 secondary wherever it sits (with `CLAUDE_CONFIG_DIR` set, maybe `~/.claude/<name>.json`): a Phase 1
 MISS for it under `GLOBAL` is then not a finding and the row is not `partial`.
 
@@ -810,7 +826,7 @@ echo "OK"
 |-------|-----|
 | `pin`, `upstream.status` | the declared pin. `behind` = a newer semble exists upstream: advisory, it never changes a row |
 | `profiles[]`: `dir`, `active`, `registered`, `verdict`, `action` | one dependency-table row per profile. `verdict` is `ok`, `stale`, `ahead`, `drift`, `unpinned`, `not_registered` or `malformed`. `action` is the ready command for that profile: run it in a session started with `CLAUDE_CONFIG_DIR=<dir>` (default `~/.claude` profile: variable unset) |
-| `guidance`: `wiredCount`, `wantCount`, `retired`, `retiredWired`, `staleEntries`, `rule` | row 2's wiring in this project, read like `semble-setup status`, however current the stamps. `retired` (files) or `retiredWired` (registrations) non-empty = `partial`, *Found* `retired: <names> - stale (remove via upgrade)`, prescribing `upgrade`; otherwise `staleEntries` above 0 or `wiredCount < wantCount` = `partial`, prescribing `install`. `wantCount: 0` = counts not reported, never a defect. `rule: user_modified` is a supported state |
+| `guidance`: `wiredCount`, `wantCount`, `retired`, `retiredWired`, `staleEntries`, `absoluteCount`, `rule` | row 2's wiring in this project, read like `semble-setup status`, however current the stamps. `retired` (files) or `retiredWired` (registrations) non-empty = `partial`, *Found* `retired: <names> - stale (remove via upgrade)`, prescribing `upgrade`; otherwise `absoluteCount` above 0 as the whole wiring signal (`staleEntries == absoluteCount` and `wiredCount + absoluteCount == wantCount`) = `partial`, *Found* `portable: <N> absolute-path hook entries`, prescribing `upgrade` (row-notes Row 2; decide from these counts, never from `nextStep`, which this section never sets to `upgrade`); otherwise `staleEntries` above 0 or `wiredCount < wantCount` = `partial`, prescribing `install`. `wantCount: 0` = counts not reported, never a defect. `rule: user_modified` is a supported state |
 
 ## Phase 3 — Classify
 

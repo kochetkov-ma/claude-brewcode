@@ -106,7 +106,7 @@ function sh(code, extra = {}) {
 
 function run(script, args, extra = {}) {
   const r = spawnSync('bash', [script, ...args], {
-    encoding: 'utf8', env: env(extra), timeout: 20000,
+    encoding: 'utf8', env: env(extra), timeout: 20000, maxBuffer: 64 * 1024 * 1024,
   });
   return { out: (r.stdout || '').trim(), err: (r.stderr || '').trim(), status: r.status };
 }
@@ -972,6 +972,46 @@ check('cache.list.hashes', listed.entries.map((e) => e.hash).sort(), [hA, hB, hC
   'list reports exactly the three hashes');
 check('cache.list.variants', listed.entries.find((e) => e.hash === hA).variants.map((v) => v.name),
   ['index', 'index-code-config-docs'], 'list exposes every content variant without collapsing siblings');
+
+// ── 12b. info past ARG_MAX: the human renderer takes the report on stdin, not env ──
+const REPO_BIG = join(BASE, 'repo-big');
+const BIG_ROOT = join(BASE, 'cache-big', 'semble-code');
+mkdirSync(REPO_BIG, { recursive: true });
+const hBig = sh(`sc_repo_hash "${REPO_BIG}"`).out;
+const bigIdx = join(BIG_ROOT, hBig, 'index-code-config-docs');
+mkdirSync(join(bigIdx, 'bm25_index'), { recursive: true });
+mkdirSync(join(bigIdx, 'semantic_index'), { recursive: true });
+writeFileSync(join(bigIdx, 'chunks.json'), '[]');
+const bigFiles = {};
+for (let i = 0; i < 18000; i += 1) {
+  const n = String(i).padStart(5, '0');
+  bigFiles[`src/pkg_${n}/module_${n}.py`] = { mtime_ns: 1, start: i, count: 1 };
+}
+const bigMeta = {
+  root_path: REPO_BIG, time: 1754150000, content_type: ['code', 'docs', 'config'], cache_version: 1, files: bigFiles,
+};
+const bigMetaText = JSON.stringify(bigMeta);
+writeFileSync(join(bigIdx, 'metadata.json'), bigMetaText);
+const bigEnv = { SEMBLE_CACHE_ROOT_CODE: BIG_ROOT };
+check('cache.info.big.fixture-bytes', Buffer.byteLength(bigMetaText) - Buffer.byteLength(REPO_BIG), 1266992,
+  'exact metadata.json bytes minus the temp root path: past the 1 MiB macOS ARG_MAX on its own');
+const bigHuman = run(CACHE_SH, ['info', '--repo', REPO_BIG], bigEnv);
+check('cache.info.big.human',
+  { status: bigHuman.status, err: bigHuman.err, lines: bigHuman.out.split('\n') },
+  {
+    status: 0, err: '',
+    lines: [
+      `✅ repo cache present: ${join(BIG_ROOT, hBig)}`,
+      `hash: ${hBig}`,
+      `size: ${2 + Buffer.byteLength(bigMetaText)} bytes in 2 files | staleness: unknown`,
+      `code root: ${BIG_ROOT}`,
+      'variant: index-code-config-docs | discovered: index-code-config-docs',
+      'other repos in this root: 0',
+    ],
+  }, 'human info renders a >1 MiB report instead of failing with E2BIG');
+const bigJson = run(CACHE_SH, ['info', '--repo', REPO_BIG, '--json'], bigEnv);
+check('cache.info.big.json', { status: bigJson.status, metadata: json(bigJson).metadata },
+  { status: 0, metadata: bigMeta }, 'info --json echoes the large metadata verbatim');
 
 // ── 13. purge guards ───────────────────────────────────────────────────────
 mkdirSync(join(CODE_ROOT, 'notahash'), { recursive: true });

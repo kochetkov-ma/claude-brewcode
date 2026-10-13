@@ -1,4 +1,4 @@
-<!-- brewcode-meta: version=6.5.0 content_version=6.5.0 generated_by=brewtools:agent-deadline-setup -->
+<!-- brewcode-meta: version=6.5.1 content_version=6.5.1 generated_by=brewtools:agent-deadline-setup -->
 # agent-deadline hooks — install / configure / remove runbook
 
 Self-contained hook assets. The `/brewtools:agent-deadline-setup` skill copies these into a
@@ -734,11 +734,27 @@ console.log("OK cleaned "+f);
 ' && rm -f "$HOOKS_DIR/agent-deadline-guard.mjs" "$HOOKS_DIR/agent-deadline-cleanup.mjs" \
   && test ! -e "$HOOKS_DIR/agent-deadline-guard.mjs" && test ! -e "$HOOKS_DIR/agent-deadline-cleanup.mjs" \
   && { rmdir "$HOOKS_DIR" 2>/dev/null || true; } \
+  && { node -e '
+const fs=require("fs"), p=require("path"), os=require("os");
+const scope=p.dirname(p.resolve(process.env.SETTINGS)), home=p.join(os.homedir(),".claude");
+const G=(process.env.CLAUDE_CONFIG_DIR||"").trim()?p.resolve(process.env.CLAUDE_CONFIG_DIR):home;
+if(scope===G||scope===home) process.exit(0);           // global uninstall: nothing shadows
+const cfg=p.join(scope,"agent-deadline.json"), gs=p.join(G,"settings.json");
+let c=null; try{ c=JSON.parse(fs.readFileSync(cfg,"utf8")); }catch{}
+if(!c||typeof c!=="object"||Array.isArray(c)) process.exit(0);
+let wired=false; try{ wired=/agent-deadline-(guard|cleanup)\.mjs/.test(JSON.stringify(JSON.parse(fs.readFileSync(gs,"utf8")).hooks||{})); }catch{}
+if(wired) console.log("WARNING: kept "+cfg+" still GOVERNS: the global agent-deadline guard ("+gs+") reads the nearest project config first, so enabled="+c.enabled+" defaultMinutes="+c.defaultMinutes+" override "+p.join(G,"agent-deadline.json")+". Hand control to the global config: /brewtools:agent-deadline-setup purge project. Keeping it on purpose is valid.");
+' || true; } \
   && echo "✅ uninstalled from $HOOKS_DIR" || echo "❌ FAILED"
 ```
 
 > **STOP if ❌** — fix before continuing. What install created goes when emptied: a
 > `settings.json` left as `{}` is deleted, an empty hooks dir removed.
+
+> A project uninstall keeps `agent-deadline.json` by design. When the global scope still
+> registers the hooks, that kept file keeps GOVERNING the global guard (`loadConfig`: nearest
+> project config first), so the block prints `WARNING: kept <cfg> still GOVERNS ...`. Relay it;
+> the fix is PURGE for the project.
 
 > Global uninstall: `Write`/`Edit` on `~/.claude/*` prompts and fails headless — use
 > the Bash `node`/`rm` form above. Project uninstall goes through the same block: it

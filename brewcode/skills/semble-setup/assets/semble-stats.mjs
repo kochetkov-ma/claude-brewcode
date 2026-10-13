@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.5.0 content_version=6.5.0 generated_by=brewcode:semble-setup
+// brewcode-meta: version=6.5.1 content_version=6.5.1 generated_by=brewcode:semble-setup
 
 // PostToolUse (`ok:true`) + PostToolUseFailure (`ok:false`, failures skip PostToolUse): PURE OBSERVER, semble
 // calls vs searches -> .claude/semble/telemetry.jsonl only; always `{}`, exit 0; Node built-ins, no imports.
-import { appendFileSync, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -165,14 +165,25 @@ const SELF_ROOT = (() => {
   return basename(d) === 'hooks' && basename(dirname(d)) === '.claude' ? dirname(dirname(d)) : '';
 })();
 
+// Mirrors sc_is_profile_parent: HOME (real or test) or the active config dir's parent holds a profile .claude, never a root.
+function isProfileParent(dir) {
+  const real = (p) => { try { return realpathSync(p); } catch { return ''; } };
+  const p = real(dir);
+  if (!p) return false;
+  if ([process.env.HOME, process.env.SEMBLE_TEST_HOME].some((h) => h && real(h) === p)) return true;
+  const cfg = process.env.SEMBLE_TEST_HOME ? process.env.SEMBLE_TEST_CONFIG_DIR : process.env.CLAUDE_CONFIG_DIR;
+  return Boolean(cfg) && real(cfg) === join(p, '.claude');
+}
+
 function projectRoot(hookCwd) {
   const env = process.env.CLAUDE_PROJECT_DIR;
   if (env && existsSync(env)) return resolve(env);
-  if (SELF_ROOT) return SELF_ROOT;
+  if (SELF_ROOT && !isProfileParent(SELF_ROOT)) return SELF_ROOT;
 
   let dir = resolve(hookCwd || process.cwd());
   for (;;) {
-    if (existsSync(join(dir, '.git')) || existsSync(join(dir, '.claude'))) return dir;
+    if (existsSync(join(dir, '.git'))) return dir;
+    if (existsSync(join(dir, '.claude')) && !isProfileParent(dir)) return dir;
     const up = dirname(dir);
     if (up === dir) break;
     dir = up;

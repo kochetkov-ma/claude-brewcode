@@ -64,7 +64,13 @@ switch(args[0]) {
 `);
 stub('docker', `
 const fs = require('node:fs'), args = process.argv.slice(2), fmt = args.at(-1);
-fs.appendFileSync(process.env.FIX_LOG, JSON.stringify(args)+'\\n');
+// Mirrors the real CLI: config dir = DOCKER_CONFIG, else HOME/.docker; each call logs the config it saw.
+const cfg = process.env.DOCKER_CONFIG || process.env.HOME + '/.docker', file = cfg + '/config.json';
+const read = () => fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : null;
+fs.appendFileSync(process.env.FIX_LOG, JSON.stringify({ args, cfg: process.env.DOCKER_CONFIG ?? null, config: read(),
+  plugins: fs.existsSync(cfg + '/cli-plugins/docker-compose') })+'\\n');
+const store = (mutate) => { const data = read() || {}; data.auths = data.auths || {}; mutate(data.auths);
+  fs.mkdirSync(cfg, { recursive: true }); fs.writeFileSync(file, JSON.stringify(data)); };
 const labels = {
   'org.opencontainers.image.revision': process.env.FIX_IMAGE_SHA,
   'org.opencontainers.image.version': process.env.FIX_VERSION,
@@ -89,8 +95,12 @@ switch(args[0]) {
   case 'login': {
     const secret = fs.readFileSync(0, 'utf8');
     fs.appendFileSync(process.env.FIX_STDIN_LOG, JSON.stringify(secret)+'\\n');
+    if (secret) store((auths) => { auths[args[1]] = { auth: Buffer.from(args[3] + ':' + secret).toString('base64') }; });
     process.exitCode = secret ? 0 : 1; break;
   }
+  case 'logout':
+    if (read()) store((auths) => { delete auths[args[1]]; });
+    break;
 }
 `);
 stub('curl', `
@@ -108,21 +118,29 @@ process.exit(args.includes('/tmp/brewcode-docs-sync') ? 0 : spawnSync('/bin/rm',
 `);
 let count = 0;
 const check = (actual, expected, why) => { assert.deepEqual(actual, expected, why); count++; };
+// Stub VPS user: a shared config holding another stack's ghcr.io cred, and a per-user compose plugin.
+const home = join(temp, 'home'), shared = join(home, '.docker/config.json');
+const SHARED = JSON.stringify({ auths: { 'ghcr.io': { auth: Buffer.from('other-stack:kept-token').toString('base64') } } });
+mkdirSync(join(home, '.docker/cli-plugins'), { recursive: true });
+writeFileSync(join(home, '.docker/cli-plugins/docker-compose'), 'plugin');
+const { DOCKER_CONFIG: _inherited, ...hostEnv } = process.env;
 const base = {
-  ...process.env, PATH: bin + ':' + process.env.PATH, IMAGE,
+  ...hostEnv, HOME: home, PATH: bin + ':' + process.env.PATH, IMAGE,
   FIX_SHA: SHA, FIX_IMAGE_SHA: SHA, FIX_VERSION: '1.2.3', FIX_RUN: '123', FIX_ATTEMPT: '1', GITHUB_RUN_ATTEMPT: '1',
   FIX_DIGEST: DIGEST, FIX_INFO: join(temp, 'info'), FIX_PAGE: join(temp, 'page'),
   FIX_HASH: HASH, FIX_LOG: join(temp, 'commands.log'), FIX_STDIN_LOG: join(temp, 'login-stdin.log'),
 };
 const GHCR_USER = 'fixture-actor', GHCR_TOKEN = 'fixture-ghcr-token-value';
-const LOGIN = 'login ghcr.io -u ' + GHCR_USER + ' --password-stdin', PULL = 'compose pull docs', LOGOUT = 'logout ghcr.io';
-// Only the source workflow logs in to GHCR; the template step has no login.
-const registry = { source: { login: [LOGIN], logout: [LOGOUT], stdin: [GHCR_TOKEN] }, template: { login: [], logout: [], stdin: [] } };
-const reset = () => { writeFileSync(base.FIX_LOG, ''); writeFileSync(base.FIX_STDIN_LOG, ''); };
+const LOGIN = 'login ghcr.io -u ' + GHCR_USER + ' --password-stdin', PULL = 'compose pull docs';
+const JOB_AUTH = { auths: { 'ghcr.io': { auth: Buffer.from(GHCR_USER + ':' + GHCR_TOKEN).toString('base64') } } };
+// Template mirrors source: job-token login into a private DOCKER_CONFIG before any pull (6.5.1 F5, F11).
+const SEEDED = { auths: { 'ghcr.io': {} } };
+const reset = () => { writeFileSync(base.FIX_LOG, ''); writeFileSync(base.FIX_STDIN_LOG, ''); writeFileSync(shared, SHARED); };
 const lines = (path) => readFileSync(path, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line));
-const registryEvents = () => lines(base.FIX_LOG)
-  .filter((args) => ['login', 'logout'].includes(args[0]) || (args[0] === 'compose' && args[1] === 'pull'))
-  .map((args) => args.join(' '));
+const isRegistry = ({ args }) => ['login', 'logout'].includes(args[0]) || (args[0] === 'compose' && args[1] === 'pull');
+const registryEvents = () => lines(base.FIX_LOG).filter(isRegistry).map(({ args }) => args.join(' '));
+const registryCalls = () => lines(base.FIX_LOG).filter(isRegistry).map(({ args, ...seen }) => ({ call: args.join(' '), ...seen }));
+const configDirs = () => [...new Set(lines(base.FIX_LOG).map(({ cfg }) => cfg))];
 const bash = (body, env, cwd) => spawnSync('/bin/bash', ['-c', body], { cwd, env: { ...base, ...env }, encoding: 'utf8' });
 const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
 async function api(body, env, runPatch = {}, workflowPatch = {}) {
@@ -256,7 +274,18 @@ try {
     const remoteStep = consumer.jobs.deploy.steps.find((item) => item.uses?.startsWith('appleboy/ssh-action'));
     const remote = remoteStep.with.script.replace('DOCS_PATH=/opt/brewcode-docs', 'DOCS_PATH="' + cwd + '"');
     const remoteEnv = { ...verifierEnv, TAG: 'sha-' + SHA + '-123-1', EXPECTED_DIGEST: DIGEST, EXPECTED_ATTEMPT: '1', GHCR_USER, GHCR_TOKEN };
-    const { login, logout, stdin } = registry[label];
+    const PRIVATE = /^\/tmp\/ghcr-auth\.[A-Za-z0-9]{8}$/;
+    // GIVEN one run WHEN docker is called THEN every call shares one fresh private dir, gone after exit.
+    const privateDir = (name) => {
+      const dirs = configDirs();
+      check([dirs.length, PRIVATE.test(dirs[0])], [1, true], label + ': remote ' + name + ' one fresh DOCKER_CONFIG ' + dirs);
+      check([PRIVATE.test(String(dirs[0])), existsSync(String(dirs[0]))], [true, false],
+        label + ': remote ' + name + ' private DOCKER_CONFIG removed on exit');
+      check(readFileSync(shared, 'utf8'), SHARED, label + ': remote ' + name + ' shared ~/.docker/config.json never written');
+      check(readFileSync(join(home, '.docker/cli-plugins/docker-compose'), 'utf8'), 'plugin',
+        label + ': remote ' + name + ' cleanup never follows the linked user cli-plugins');
+      return dirs[0];
+    };
     for (const [name, changes, expected, restoredTag, pulls] of [
       ['valid', {}, 0, 'DOCS_TAG=sha-' + SHA + '-123-1\n', [PULL]],
       ['metadata mismatch', { FIX_INFO: join(temp, 'bad-info') }, 1, 'DOCS_TAG=1.2.2\n', [PULL, PULL]],
@@ -268,23 +297,25 @@ try {
       const result = bash(remote, { ...remoteEnv, ...changes }, cwd);
       check(result.status, expected, label + ': remote ' + name + ' ' + result.stderr);
       check(readFileSync(join(cwd, '.env'), 'utf8'), restoredTag, label + ': remote ' + name + ' version selection');
-      // Exact order: login before the first pull; logout last on success and rollback alike.
-      check(registryEvents(), [...login, ...pulls, ...logout], label + ': remote ' + name + ' GHCR login/pull/logout order');
-      check(lines(base.FIX_STDIN_LOG), stdin, label + ': remote ' + name + ' token reaches docker login via stdin');
+      const cfg = privateDir(name);
+      // Exact order and config: seeded login first, then deploy and rollback pulls with the job cred; no logout.
+      check(registryCalls(), [
+        { call: LOGIN, cfg, config: SEEDED, plugins: true },
+        ...pulls.map((call) => ({ call, cfg, config: JOB_AUTH, plugins: true })),
+      ], label + ': remote ' + name + ' GHCR login/pull run with the private DOCKER_CONFIG');
+      check(lines(base.FIX_STDIN_LOG), [GHCR_TOKEN], label + ': remote ' + name + ' token reaches docker login via stdin');
       check(readFileSync(base.FIX_LOG, 'utf8').includes(GHCR_TOKEN), false, label + ': remote ' + name + ' token never in docker argv');
     }
-    // GIVEN no job token WHEN the remote script starts THEN the source fails before any pull or .env edit.
+    // GIVEN no job token WHEN the remote script starts THEN source and template fail before any pull or .env edit.
     writeFileSync(join(cwd, '.env'), 'DOCS_TAG=1.2.2\n');
     reset();
     const tokenless = bash(remote, { ...remoteEnv, GHCR_TOKEN: undefined }, cwd);
-    check(tokenless.status, { source: 1, template: 0 }[label], label + ': remote without GHCR_TOKEN ' + tokenless.stderr);
-    // Unbound GHCR_TOKEN kills the printf subshell; its inherited EXIT trap races docker login, so compare sorted.
-    const tokenlessEvents = registryEvents();
-    check(tokenlessEvents.toSorted(), { source: [LOGIN, LOGOUT, LOGOUT], template: [PULL] }[label], label + ': remote without GHCR_TOKEN pulls nothing after a failed login');
-    check(tokenlessEvents.at(-1), { source: LOGOUT, template: PULL }[label], label + ': remote without GHCR_TOKEN ends with the EXIT-trap logout');
-    check(lines(base.FIX_STDIN_LOG), { source: [''], template: [] }[label], label + ': remote without GHCR_TOKEN sends an empty stdin');
-    check(readFileSync(join(cwd, '.env'), 'utf8'), { source: 'DOCS_TAG=1.2.2\n', template: 'DOCS_TAG=sha-' + SHA + '-123-1\n' }[label],
-      label + ': remote without GHCR_TOKEN version selection');
+    check(tokenless.status, 1, label + ': remote without GHCR_TOKEN fails closed ' + tokenless.stderr);
+    check(registryEvents(), [LOGIN], label + ': remote without GHCR_TOKEN pulls nothing after a failed login');
+    privateDir('without GHCR_TOKEN');
+    check(lines(base.FIX_STDIN_LOG), [''], label + ': remote without GHCR_TOKEN sends an empty stdin');
+    check(readFileSync(join(cwd, '.env'), 'utf8'), 'DOCS_TAG=1.2.2\n',
+      label + ': remote without GHCR_TOKEN leaves the previous version selected');
     // GIVEN a branch ref WHEN deriving its version THEN routing keeps the original bounded branch policy.
     check(bash(step(producer, 'Compute image tags').run, {
       GITHUB_OUTPUT: output, GITHUB_REF: 'refs/heads/feature/one', GITHUB_REF_NAME: 'feature/one', GITHUB_RUN_ID: '123',

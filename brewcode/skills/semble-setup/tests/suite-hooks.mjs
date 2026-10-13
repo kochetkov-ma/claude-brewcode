@@ -255,9 +255,14 @@ function countEntry(s, ev, matcher, full) {
 // Want table: SessionStart, the stats pair, SubagentStart with NO matcher (= every agent type).
 const WANT_N = 4;
 const STATS_MATCHER = 'mcp__semble_code__search|mcp__semble_code__find_related|Bash|Grep|Glob|Read';
+// Portable exec-form arg the merge writes (CC substitutes it per arg); file paths stay absolute on disk.
+const WIRE = '${CLAUDE_PROJECT_DIR}/.claude/hooks';
+const wirePaths = () => ({
+  session: WIRE + '/semble-session.mjs', stats: WIRE + '/semble-stats.mjs', subagent: WIRE + '/semble-subagent.mjs',
+});
 // One count per want row, in want-table order.
 function wantCounts(proj, s) {
-  const { session, stats, subagent } = semblePaths(proj);
+  const { session, stats, subagent } = wirePaths();
   return [
     countEntry(s, 'SessionStart', null, session),
     countEntry(s, 'PostToolUse', STATS_MATCHER, stats),
@@ -309,14 +314,15 @@ const READY_STATE = (extra) =>
     'status --json carries the same trailing newline');
   const s = readSettings(p);
   const { session, prefetch: pre, stats, reminder: rem, subagent: sub, explore: exp } = semblePaths(p);
+  const wire = wirePaths();
   check('A1.sessionEntry', s.hooks.SessionStart, [
-    { hooks: [{ type: 'command', command: 'node', args: [session], timeout: 5 }] },
-  ], 'SessionStart entry has the exact contract shape with an explicit 5 s timeout');
+    { hooks: [{ type: 'command', command: 'node', args: [wire.session], timeout: 5 }] },
+  ], 'SessionStart entry has the exact contract shape, a portable ${CLAUDE_PROJECT_DIR} arg and a 5 s timeout');
   check('A1.events', Object.keys(s.hooks).sort(),
     ['PostToolUse', 'PostToolUseFailure', 'SessionStart', 'SubagentStart'],
     'no UserPromptSubmit/PreToolUse registration: reminder and prefetch are retired');
   check('A1.subagentEntry', s.hooks.SubagentStart, [
-    { hooks: [{ type: 'command', command: 'node', args: [sub], timeout: 5 }] },
+    { hooks: [{ type: 'command', command: 'node', args: [wire.subagent], timeout: 5 }] },
   ], 'the subagent hook carries NO matcher, which is the only form that covers every agent type');
   check('A1.perm', s.permissions.allow, ['mcp__semble_code__search', 'mcp__semble_code__find_related'],
     'both MCP tool names land in permissions.allow');
@@ -1539,7 +1545,7 @@ function driftTimeouts(p, value) {
 {
   const p = freshProject({});
   guidance(p, ['install', '--part', 'all', '--json']);
-  const { subagent: pre } = semblePaths(p);
+  const { subagent: pre } = wirePaths();
   const s = readSettings(p);
   s.hooks.SubagentStart[0].hooks.unshift(FOREIGN_HOOK);
   s.hooks.SubagentStart[0].hooks[1].timeout = 5000;     // the semble hook next to it drifted
@@ -1562,7 +1568,7 @@ function driftTimeouts(p, value) {
 {
   const p = freshProject({});
   guidance(p, ['install', '--part', 'all', '--json']);
-  const { subagent: pre, stats } = semblePaths(p);
+  const { subagent: pre, stats } = wirePaths();
   const s = readSettings(p);
   const dupe = JSON.parse(JSON.stringify(s.hooks.SubagentStart[0]));
   dupe.hooks[0].timeout = 5000;
@@ -1622,7 +1628,7 @@ function driftTimeouts(p, value) {
   const p = freshProject({});
   guidance(p, ['install', '--part', 'all', '--json']);
   const clean = readRaw(settingsPath(p));
-  const { session } = semblePaths(p);
+  const { session } = wirePaths();
   const s = readSettings(p);
   s.hooks.SessionStart[0].hooks[0] = { command: 'node', args: [session], type: 'command' };  // timeout dropped
   writeFileSync(settingsPath(p), JSON.stringify(s, null, 2) + '\n');
@@ -1820,12 +1826,12 @@ function driftTimeouts(p, value) {
   check('M1.retiredSeen', [before.hooks.retired, before.hooks.retiredWired],
     [['semble-reminder.mjs', 'semble-explore.mjs'], ['semble-reminder.mjs', 'semble-explore.mjs']],
     'status names both retired files on disk and both retired registrations in settings.json');
-  check('M1.wiredBefore', [before.hooks.wiredCount, before.hooks.wantCount], [1, WANT_N],
-    'only SessionStart carries over: both stats rows sit on the pre-5.0.0 matcher and the'
+  check('M1.wiredBefore', [before.hooks.wiredCount, before.hooks.wantCount, before.hooks.absoluteCount], [0, WANT_N, 1],
+    'nothing carries over: SessionStart is absolute-path, both stats rows sit on the pre-5.0.0 matcher and the'
     + ' subagent row on the retired Explore matcher');
-  check('M1.staleBefore', before.hooks.staleEntries, 5,
-    'five owned entries are wired somewhere the want table does not want them - the two'
-    + ' v1 reminder rows, the Explore row, and BOTH stats rows on the retired matcher');
+  check('M1.staleBefore', before.hooks.staleEntries, 6,
+    'six owned entries are wired somewhere the want table does not want them - the two v1 reminder'
+    + ' rows, the Explore row, BOTH stats rows on the retired matcher and the absolute SessionStart row');
 
   const r = guidance(p, ['install', '--part', 'hooks', '--json']);
   check('M2.exit', r.status, 0, 'install over a v1-shaped settings file exits 0');
@@ -1834,7 +1840,7 @@ function driftTimeouts(p, value) {
   check('M2.noRetiredPath', JSON.stringify(s).includes('semble-explore.mjs'), false,
     'the retired basename survives nowhere in settings.json - the whole point of the migration');
   check('M2.subagentStartRow', s.hooks.SubagentStart,
-    [{ hooks: [{ type: 'command', command: 'node', args: [sub], timeout: 5 }] }],
+    [{ hooks: [{ type: 'command', command: 'node', args: [wirePaths().subagent], timeout: 5 }] }],
     'the SubagentStart/Explore row is REPLACED by the matcher-less subagent row - one row,'
     + ' not the old one plus the new one, and not an empty [] husk');
   check('M2.preToolUseRows', s.hooks.PreToolUse, [{ matcher: 'Write', hooks: [FOREIGN_HOOK] }],
@@ -1911,8 +1917,10 @@ function driftTimeouts(p, value) {
 }
 
 // M7 — a 6.4.0-shaped install: `upgrade` (= install) and uninstall drop reminder + prefetch
-const v640Settings = (p, fh) => {
-  const { session, stats, reminder: rem, subagent: sub, prefetch: pre } = semblePaths(p);
+// A 6.4.0 install wired absolute paths; `wire` = the same rows in the portable 6.5.1 form.
+const v640Settings = (p, fh, wire = false) => {
+  const { session, stats, subagent: sub } = wire ? wirePaths() : semblePaths(p);
+  const { reminder: rem, prefetch: pre } = semblePaths(p);
   const H = (x) => ({ type: 'command', command: 'node', args: [x], timeout: 5 });
   return {
     hooks: {
@@ -1949,16 +1957,16 @@ const seed640 = (p) => {
   const { reminder: rem, prefetch: pre } = semblePaths(p);
   const b = safeParse(guidance(p, ['status', '--json']).stdout).hooks;
   check('M7.statusBefore', [b.retired, b.retiredWired, b.staleEntries, b.wiredCount, b.prefetch, b.reminder],
-    [['semble-prefetch.mjs', 'semble-reminder.mjs'], ['semble-prefetch.mjs', 'semble-reminder.mjs'], 3, WANT_N,
+    [['semble-prefetch.mjs', 'semble-reminder.mjs'], ['semble-prefetch.mjs', 'semble-reminder.mjs'], 7, 0,
       undefined, undefined],
-    'status flags both leftovers (files + 3 registrations incl. the shell-form one), never as missing hooks');
+    'status flags both leftovers (files + 3 registrations incl. the shell-form one) and the 4 absolute live rows');
   check('M7.humanBefore', guidance(p, ['status']).stdout.includes(
     'retired:   semble-prefetch.mjs, semble-reminder.mjs - stale (remove via upgrade)'), true,
   'the human status names the leftovers and the mode that removes them');
   const r = guidance(p, ['install', '--part', 'all', '--json']);
   check('M7.exit', r.status, 0, 'upgrade over a 6.4.0 install exits 0');
   const s = readSettings(p);
-  const want = v640Settings(p, FH);
+  const want = v640Settings(p, FH, true);
   want.hooks.UserPromptSubmit = [{ hooks: [FH.ups] }];
   want.hooks.PreToolUse = [{ matcher: 'Bash|Grep', hooks: [FH.pre] }];
   check('M7.settings', s, want,
@@ -1986,6 +1994,111 @@ const seed640 = (p) => {
     permissions: { allow: ['Bash(git *)'] },
   }, 'uninstall strips every semble registration incl. reminder/prefetch and keeps foreign hooks deep-equal');
   check('M7.uninstallFiles', [existsSync(rem), existsSync(pre)], [false, false], 'and deletes both copied files');
+}
+
+// ═══ P. portable hook paths (6.5.1): absolute args broke every other clone of a tracked settings.json ═══
+const PH = (x) => ({ type: 'command', command: 'node', args: [x], timeout: 5 });
+const PERMS = ['mcp__semble_code__search', 'mcp__semble_code__find_related'];
+// 6.5.0 shape: absolute args into this project's hooks dir, plus foreign hooks and a foreign entry key.
+const v650Settings = (paths) => ({
+  model: 'opus',
+  hooks: {
+    SessionStart: [{ hooks: [PH(paths.session)] }],
+    PostToolUse: [
+      { matcher: 'Write', hooks: [FOREIGN_HOOK] },
+      { matcher: STATS_MATCHER, hooks: [FOREIGN_HOOK, PH(paths.stats)], note: 'hand-merged' },
+    ],
+    PostToolUseFailure: [{ matcher: STATS_MATCHER, hooks: [PH(paths.stats)] }],
+    SubagentStart: [{ hooks: [PH(paths.subagent)] }],
+  },
+  permissions: { allow: PERMS },
+});
+
+// P1 — GIVEN a fresh project WHEN install THEN all four rows carry the portable literal, no absolute path anywhere
+{
+  const p = freshProject({});
+  const r = guidance(p, ['install', '--part', 'hooks', '--json']);
+  const w = wirePaths();
+  check('P1.exit', r.status, 0, 'install --part hooks exits 0');
+  check('P1.hooks', readSettings(p).hooks, {
+    SessionStart: [{ hooks: [PH(w.session)] }],
+    PostToolUse: [{ matcher: STATS_MATCHER, hooks: [PH(w.stats)] }],
+    PostToolUseFailure: [{ matcher: STATS_MATCHER, hooks: [PH(w.stats)] }],
+    SubagentStart: [{ hooks: [PH(w.subagent)] }],
+  }, 'every args element is ${CLAUDE_PROJECT_DIR}/.claude/hooks/<script>, the form CC substitutes per exec-form arg');
+  check('P1.noAbsolute', readRaw(settingsPath(p)).includes(p), false,
+    'the project path never lands in settings.json, so the tracked file works in every clone');
+}
+
+// P2 — GIVEN a 6.5.0 absolute-path install WHEN status, upgrade, status, upgrade THEN stale -> migrated in place -> idempotent
+{
+  const p = freshProject({});
+  const abs = semblePaths(p);
+  const w = wirePaths();
+  writeFileSync(settingsPath(p), JSON.stringify(v650Settings(abs), null, 2) + '\n');
+  const b = safeParse(guidance(p, ['status', '--json']).stdout).hooks;
+  check('P2.statusBefore', [b.wiredCount, b.staleEntries, b.absoluteCount, b.driftedCount, b.missingCount],
+    [0, 4, 4, 4, 0], 'absolute rows are stale and drifted, never counted as wired');
+  check('P2.driftBefore', b.drift, [
+    ['SessionStart', null, 'semble-session.mjs', w.session, abs.session],
+    ['PostToolUse', STATS_MATCHER, 'semble-stats.mjs', w.stats, abs.stats],
+    ['PostToolUseFailure', STATS_MATCHER, 'semble-stats.mjs', w.stats, abs.stats],
+    ['SubagentStart', null, 'semble-subagent.mjs', w.subagent, abs.subagent],
+  ].map(([event, matcher, script, want, got]) => ({
+    event, matcher, script, field: 'args', expected: [want], actual: [got],
+  })), 'each row names the args field: expected the portable path, actual the absolute one');
+  check('P2.human', guidance(p, ['status']).stdout.split('\n').filter((l) => l.startsWith('portable:')),
+    ['portable:  4 absolute-path hook entries (break every other clone) - run /brewcode:semble-setup upgrade'],
+    'the human status names the defect and the mode that fixes it');
+  const r = guidance(p, ['install', '--part', 'hooks', '--json']);
+  check('P2.exit', r.status, 0, 'upgrade over a 6.5.0 install exits 0');
+  check('P2.migrated', readSettings(p), v650Settings(w),
+    'each absolute row is rewritten IN PLACE to the portable form; foreign hooks, entry key and order kept');
+  check('P2.noAbsolute', readRaw(settingsPath(p)).includes(hooksDirOf(p)), false, 'zero absolute args remain');
+  const a = safeParse(guidance(p, ['status', '--json']).stdout).hooks;
+  check('P2.statusAfter', [a.wiredCount, a.staleEntries, a.absoluteCount, a.driftedCount, a.duplicateCount],
+    [WANT_N, 0, 0, 0, 0], 'after upgrade the four portable rows are wired and nothing is stale');
+  const snap = readRaw(settingsPath(p));
+  const r2 = guidance(p, ['install', '--part', 'hooks', '--json']);
+  check('P2.idempotent', [safeParse(r2.stdout).changed.filter((l) => l.startsWith('settings:')),
+    readRaw(settingsPath(p))], [[], snap], 'a second upgrade is a byte-level no-op');
+}
+
+// P3 — GIVEN absolute (another clone's path too) + portable copies of one row WHEN upgrade THEN one portable row each
+{
+  const p = freshProject({});
+  const w = wirePaths();
+  const other = '/Users/someone/clone/.claude/hooks';
+  writeFileSync(settingsPath(p), JSON.stringify({
+    hooks: {
+      SessionStart: [{ hooks: [PH(other + '/semble-session.mjs')] }, { hooks: [PH(w.session)] }],
+      SubagentStart: [{ hooks: [PH(semblePaths(p).subagent), PH(w.subagent), FOREIGN_HOOK] }],
+    },
+  }, null, 2) + '\n');
+  const r = guidance(p, ['install', '--part', 'hooks', '--json']);
+  check('P3.exit', r.status, 0, 'two forms of one hook are repaired, not an ABORT');
+  const s = readSettings(p);
+  check('P3.rows', [s.hooks.SessionStart, s.hooks.SubagentStart, wantCounts(p, s)], [
+    [{ hooks: [PH(w.session)] }],
+    [{ hooks: [PH(w.subagent), FOREIGN_HOOK] }],
+    [1, 1, 1, 1],
+  ], 'absolute and portable forms share one merge key: the first is kept and rewritten, the copy dropped');
+}
+
+// P4 — GIVEN the 6.5.0 fixture WHEN the INSTALL.md merge block runs THEN its bytes equal the script's migration
+{
+  const runbook = readFileSync(join(ASSETS, 'INSTALL.md'), 'utf8');
+  const block = ([...runbook.matchAll(/\n```\n(SETTINGS=[\s\S]*?)\n```\n/g)].map((m) => m[1]))[0] || 'exit 9';
+  const blockPath = join(BASE, 'runbook-merge-p4.sh');
+  writeFileSync(blockPath, block);
+  const viaScript = freshProject({});
+  writeFileSync(settingsPath(viaScript), JSON.stringify(v650Settings(semblePaths(viaScript)), null, 2) + '\n');
+  guidance(viaScript, ['install', '--part', 'hooks', '--json']);
+  const viaRunbook = freshProject({});
+  writeFileSync(settingsPath(viaRunbook), JSON.stringify(v650Settings(semblePaths(viaRunbook)), null, 2) + '\n');
+  const rb = spawnSync('bash', [blockPath], { cwd: viaRunbook, encoding: 'utf8', timeout: 30000 });
+  check('P4.runbook', [rb.status, readRaw(settingsPath(viaRunbook))], [0, readRaw(settingsPath(viaScript))],
+    'the runbook block migrates absolute rows to the same bytes as semble-guidance.sh');
 }
 
 // M8 — R4: a pristine prior-release rule/.sembleignore is upgraded; a hand-edited one is preserved
@@ -2404,6 +2517,60 @@ const SESSION_OK = (p) => ({
     'sc_root_candidate signals "no marker found" with rc 1 while still printing $PWD, so a caller can refuse');
   check('SS01.5rootTotal', shRoot(BASE), [BASE, 0],
     'sc_project_root itself stays total: an errexit caller in "$(sc_project_root)" must never abort');
+}
+
+// SS01.6 — hook parity with sc_is_profile_parent: a profile `.claude` (HOME, test HOME, config-dir parent) is no root.
+// GIVEN ready dir h + marker-less h/notes/misc | WHEN h is a home or profile parent | THEN walk skips h, no brief, no write
+{
+  const h = freshProject({ state: READY_STATE() });
+  const cwd = deepDir(h, 'notes', 'misc');
+  const cfgH = join(h, '.claude');
+  writeFileSync(join(cfgH, '.claude.json'), JSON.stringify({ mcpServers: { semble_code: MCP_ENTRY } }));
+  const sess = (env) => safeParse(session(cwd, {}, env).stdout);
+  const sub = (env) => safeParse(subagent(cwd, 'Explore', {}, env).stdout);
+  check('SS01.6control', [sess({}), sub({})], [SESSION_OK(h), SUB_OK(h)],
+    'control: with h a plain dir the walk from h/notes/misc reaches its .claude and both hooks answer for h');
+  const asProfile = [
+    { HOME: h },
+    { SEMBLE_TEST_HOME: h, SEMBLE_TEST_CONFIG_DIR: CFG },
+    { CLAUDE_CONFIG_DIR: cfgH },
+  ];
+  check('SS01.6session', asProfile.map(sess), [{}, {}, {}],
+    'SessionStart skips h as HOME, as test HOME and as the parent of CLAUDE_CONFIG_DIR - no state at the cwd, silence');
+  check('SS01.6subagent', asProfile.map(sub), [{}, {}, {}],
+    'SubagentStart skips the same three profile parents - the profile state never steers a non-project spawn');
+  check('SS01.6envWins', [sess({ HOME: h, CLAUDE_PROJECT_DIR: h }), sub({ HOME: h, CLAUDE_PROJECT_DIR: h })],
+    [SESSION_OK(h), SUB_OK(h)], 'CLAUDE_PROJECT_DIR still wins first, even when it names the home dir');
+}
+// GIVEN h/.claude/semble present | WHEN stats hook fires from h/notes/misc | THEN telemetry only when h is not a profile parent
+{
+  const tel = (env) => {
+    const h = freshProject({ state: READY_STATE() });
+    const cwd = deepDir(h, 'notes', 'misc');
+    const r = runNode(STATS_SRC, JSON.stringify({
+      session_id: 'S1', cwd, hook_event_name: 'PostToolUse', tool_name: 'mcp__semble_code__search',
+      tool_input: { query: 'q' }, tool_response: {}, tool_use_id: 'toolu_x',
+    }), BASE, typeof env === 'function' ? env(h) : env);
+    return [r.status, safeParse(r.stdout), existsSync(telemetryFile(h)), existsSync(telemetryFile(cwd))];
+  };
+  check('SS01.6statsControl', tel({}), [0, {}, true, false],
+    'control: with h a plain dir the stats hook logs the call to h/.claude/semble/telemetry.jsonl');
+  check('SS01.6stats', [tel((h) => ({ HOME: h })), tel((h) => ({ CLAUDE_CONFIG_DIR: join(h, '.claude') }))],
+    [[0, {}, false, false], [0, {}, false, false]],
+    'with h as HOME or as the config-dir parent the stats hook never appends to the profile telemetry log');
+}
+// GIVEN hook copy at h/.claude/hooks + ready project q | WHEN HOME=h, cwd=q | THEN self-location skipped, answers for q
+{
+  const h = freshProject({ state: READY_STATE() });
+  const q = freshProject({ state: READY_STATE() });
+  const installed = join(h, '.claude', 'hooks', 'semble-session.mjs');
+  mkdirSync(dirname(installed), { recursive: true });
+  copyFileSync(SESSION_SRC, installed);
+  const run = (env) => safeParse(runNode(installed, JSON.stringify({
+    session_id: 'S1', cwd: q, hook_event_name: 'SessionStart', source: 'startup',
+  }), BASE, env).stdout);
+  check('SS01.6selfRoot', [run({}), run({ HOME: h })], [SESSION_OK(h), SESSION_OK(q)],
+    'a copy under a project .claude/hooks answers for its project; under HOME/.claude/hooks it walks from the cwd');
 }
 
 // ═══ H. Cross-hook invariants: one presence check, one routing line, a stamp on every asset ═══

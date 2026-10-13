@@ -134,6 +134,8 @@ Read `.verdict`, `.state.phase`, `.state.enabled`, `.mcp.state`, `.mcp.scopes`, 
 
 > Leftover retired hooks (`.guidance.retired` files, `.guidance.retiredWired` registrations, e.g. 6.4.0 `semble-reminder.mjs`/`semble-prefetch.mjs`) print `retired: <names> - stale (remove via upgrade)` (verdict reason `stale (remove via upgrade): <names>`); a `.guidance.rule == "stale"` (pristine prior-release copy) gives reason `semble-first rule is a prior-release copy`. On an otherwise `ready` project both make the verdict `partial` and set `.nextStep` to `Run /brewcode:semble-setup upgrade`; never report them as missing hooks.
 >
+> `partial` -> `.nextStep`: only `warm`/`smoke` unrecorded and/or the index variant missing (`no current content variant in the shared cache`, e.g. index-only) -> `resume` (warm builds it); only absolute-path hook rows (`.guidance.absoluteCount`, `portable:` line), with or without those -> `upgrade`; a hand-edited rule at an old stamp -> `diff -u`, then a hand merge setting `content_version` or `upgrade --force` (backup first), never plain `upgrade`; any missing install step -> `install`.
+>
 > An errored `guidance` probe ("unit not installed" included) makes the verdict `partial` (`guidance probe failed: <error>`), never `ready` or a passing `--strict`; an unrequested (null) section never downgrades; `cache`/`agents` carry their own error.
 
 Keep this JSON as the immutable **Before** snapshot; never refresh it after a mutation.
@@ -301,6 +303,10 @@ echo "RC=$RC"
 > On `correct`, `add` still writes the project checkpoint: absent/`prereq_ready`/`error` -> `awaiting_reload`;
 > `verifying`/`ready`/`disabled` keep their phase and refresh `cacheRoot`, `repoHash`, `resumePrompt`; its
 > `note` names the phase. `MCP_ACTION=skip` stops after the report: no wiring, no reload checkpoint.
+>
+> State only inside a project: HOME and a profile dir's parent are never roots. With no project root, or with
+> `--no-state` (profile-only registration), `add`/`repair` register but write no `state.json` (`note`: `no project
+> state written (no project root or --no-state)`); an explicit `semble-mcp.sh checkpoint` exits `3` there.
 
 ### 3.2b Wire the guidance, permissions and agents — `install` does this itself
 
@@ -332,6 +338,8 @@ else RC=1; fi
 |----------------|----|
 | corpus / `--content` / "Not in this corpus" drift, possibly mixed with local additions | show the file, the template diff and the local keys/prose a replacement would discard; replace only on explicit approval of that replacement, else report the stale fact and a targeted correction |
 | only local additions (extra frontmatter, project prose) | keep them; record `rule: user_modified, kept`; name any confirmed stale section |
+
+`upgrade --force` in the user prompt (the route `status` prints for a hand-edited rule at an old stamp) IS that explicit approval: show the diff and what is discarded, set `APPROVED_REPLACEMENT=1`, ask nothing. It covers the rule only; `.sembleignore` still needs its own approval.
 
 ```bash
 SD="${CLAUDE_SKILL_DIR}"
@@ -414,8 +422,8 @@ else echo "❌ FAILED"; fi
 | ignore (`--part ignore`) | writes `<repo>/.sembleignore` (same policy) excluding generated trees (`.claude/tmp/`, `.claude/reports/`); appends `semble-project.sh candidates` findings (duplicate trees, outsized paths) commented out, since a wrong exclusion silently drops code. Re-runs add only new paths; the file stays `managed` |
 | CLAUDE.md | refreshes the `<!-- BEGIN brewcode:semble -->` block in place (one copy; other tools must keep the marked range, `assets/INSTALL.md` §2), then reconciles the root CLAUDE.md search doctrine outside it, after a timestamped `.bak` |
 | hooks | copies `semble-session.mjs`, `semble-stats.mjs`, `semble-subagent.mjs` into `.claude/hooks/`; deletes the retired `semble-explore.mjs`, `semble-reminder.mjs`, `semble-prefetch.mjs` and their `.reminder-ts`/`.prefetch-ts`/`reminder.json` markers |
-| settings | merges four entries — SessionStart, PostToolUse and PostToolUseFailure on the stats matcher, unmatched SubagentStart (every agent type), each `"timeout": 5` (seconds) — plus the two exact permission entries. Reconcile, never append: every retired row (explore, reminder, prefetch; any matcher, path or command form) is removed |
-| `.gitignore` | writes `.claude/semble/` (`state.json`, `telemetry.jsonl` with verbatim commands, trimmed at 2 MB); strips the superseded `.reminder-ts`/`.prefetch-ts` lines |
+| settings | merges four entries — SessionStart, PostToolUse and PostToolUseFailure on the stats matcher, unmatched SubagentStart (every agent type), each `"timeout": 5` (seconds) — plus the two exact permission entries. Every `args` path is the portable `<PD>/.claude/hooks/<script>` (`<PD>` = the dollar-brace `CLAUDE_PROJECT_DIR` token, stored unexpanded), never absolute (settings.json is tracked). Reconcile, never append: every retired row (explore, reminder, prefetch; any matcher, path or command form) is removed |
+| `.gitignore` | writes `.claude/semble/` (`state.json`, `telemetry.jsonl` with verbatim commands, trimmed at 2 MB) unless a repo `.gitignore` rule already ignores that dir (`unchanged: already ignored by <source>`; per-machine excludes do not count); strips the superseded `.reminder-ts`/`.prefetch-ts` lines |
 
 CLAUDE.md reconcile, whole lines only, each removal echoed verbatim: a line denying semantic search goes even if it also scopes the tool; a line putting grep/Bash/rg first goes unless it scopes the tool to exact identifiers / regexes / paths / exhaustive enumeration (then untouched, unreported); a search heading left empty goes too; a mere mention is reported and kept. Idempotent. No measured effect on tool choice: a false line goes for being false.
 
@@ -557,10 +565,10 @@ else echo "❌ FAILED"; exit 1; fi
 > **STOP if ❌** — neither probe may hide the other's error; malformed MCP state also stops. `IRC=3` -> report
 > prerequisites and use Step 3.1's machine gate before retrying. Run `semble-mcp.sh repair --yes --json` only for the approved transition.
 
-The project half runs always, pin drift or not: `semble-guidance.sh install` is the only writer of `.claude/rules/semble-first.md`, whose frontmatter stamp `setup-status` reads, so skipping it leaves `stale` forever. **EXECUTE** the Step 3.2b block verbatim, with its user-modified-file policy: it re-copies the rule, `.sembleignore` and the three hooks (identical -> `unchanged`, stamp-only delta -> metadata re-sync, pristine prior-release copy -> `upgraded`, hand-edited -> skipped and diffed to stderr), deletes the retired `semble-explore.mjs`/`semble-reminder.mjs`/`semble-prefetch.mjs` with their settings rows, and re-merges settings entries and permissions. Then use Step 3.3 only if registration changed or state is still `awaiting_reload`; otherwise report the post-write status and any verification gap.
+The project half runs always, pin drift or not: `semble-guidance.sh install` is the only writer of `.claude/rules/semble-first.md`, whose frontmatter stamp `setup-status` reads, so skipping it leaves `stale` forever. **EXECUTE** the Step 3.2b block verbatim, with its user-modified-file policy: it re-copies the rule, `.sembleignore` and the three hooks (identical -> `unchanged`, stamp-only delta -> metadata re-sync, pristine prior-release copy -> `upgraded`, hand-edited -> skipped and diffed to stderr), deletes the retired `semble-explore.mjs`/`semble-reminder.mjs`/`semble-prefetch.mjs` with their settings rows, and re-merges settings entries and permissions. Migration (<= 6.5.0): absolute hook args (`<root>/.claude/hooks/semble-*.mjs`, which break every other clone) are rewritten in place to the portable `<PD>/.claude/hooks/...` form, never duplicated; until then `status` counts them stale (`hooks.absoluteCount`, line `portable: N absolute-path hook entries`). Then use Step 3.3 only if registration changed or state is still `awaiting_reload`; otherwise report the post-write status and any verification gap.
 
 > **STOP if ❌** — report which half failed and what it left behind; the MCP registration stands either way.
-> `skipped: rule: user_modified` leaves the stamp stale by design; generic upgrade approval never authorizes `--force` (Step 3.2b gate).
+> `skipped: rule: user_modified` leaves the stamp stale by design; generic upgrade approval never authorizes `--force`, only `upgrade --force` in the prompt does (Step 3.2b gate).
 >
 > Stray cache root: pre-5.0.1 prefetch hooks built a second index copy under `~/Library/Caches/semble` (macOS) / `$XDG_CACHE_HOME/semble` (not `semble-code`). No mode deletes it: report it and hand the user `du -sh ~/Library/Caches/semble` / `rm -rf ~/Library/Caches/semble`. A pre-0.5.5 `semble-docs` root is removed by `purge` only when `RESERVED-FOR-DOCS.txt` is its sole entry.
 

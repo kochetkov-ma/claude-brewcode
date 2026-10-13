@@ -606,10 +606,10 @@ function settingsOf(p) {
     'semble-stats.mjs is copied alongside the other three');
 
   const s = settingsOf(p);
-  const abs = join(p, '.claude', 'hooks', 'semble-stats.mjs');
+  const wire = '${CLAUDE_PROJECT_DIR}/.claude/hooks/semble-stats.mjs';   // portable arg, never absolute
   const wantEntry = {
     matcher: STATS_MATCHER,
-    hooks: [{ type: 'command', command: 'node', args: [abs], timeout: 5 }],
+    hooks: [{ type: 'command', command: 'node', args: [wire], timeout: 5 }],
   };
   check('8.install.PostToolUse', s.hooks.PostToolUse, [wantEntry],
     'exactly one PostToolUse entry, matcher is the pipe list, timeout is 5 SECONDS');
@@ -713,8 +713,8 @@ function settingsOf(p) {
   const purged = settingsOf(q);
   check('8.stale.purged',
     purged.hooks.PostToolUse.flatMap((e) => e.hooks.flatMap((h) => h.args)),
-    [join(q, '.claude', 'hooks', 'semble-stats.mjs')],
-    'install drops the stale path and leaves exactly the current one');
+    ['${CLAUDE_PROJECT_DIR}/.claude/hooks/semble-stats.mjs'],
+    'install drops the stale path and leaves exactly the current portable one');
   check('8.stale.clean', guidanceJson(q, ['status']).json.hooks.staleEntries, 0,
     'and status confirms the purge');
 }

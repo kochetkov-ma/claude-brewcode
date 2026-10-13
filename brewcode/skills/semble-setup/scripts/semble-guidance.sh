@@ -24,6 +24,9 @@ SG_PRIOR_IGNORE='c82e8a101d35964fc08714fb168356e46e7c02342d631dd716f1d4041c4b3c9
 # Want table [event, matcher, script, timeout s], mirrored in assets/INSTALL.md §4; `|`-only matcher = exact list.
 # Stats needs PostToolUseFailure too (a failed call skips PostToolUse); no SubagentStart matcher = every agent type.
 SG_STATS_MATCHER='mcp__semble_code__search|mcp__semble_code__find_related|Bash|Grep|Glob|Read'
+# Portable hook path written into tracked settings.json (CC substitutes it per exec-form arg); never an abs path.
+# shellcheck disable=SC2016  # literal placeholder, expanded by Claude Code, not by this shell
+SG_HOOK_REF='${CLAUDE_PROJECT_DIR}/.claude/hooks'
 SG_WANT_TABLE='[["SessionStart",null,"semble-session.mjs",5],["PostToolUse","'"$SG_STATS_MATCHER"'","semble-stats.mjs",5],["PostToolUseFailure","'"$SG_STATS_MATCHER"'","semble-stats.mjs",5],["SubagentStart",null,"semble-subagent.mjs",5]]'
 
 MODE=""
@@ -119,7 +122,7 @@ add_failed()    { FAILED="${FAILED}${1}
 # shellcheck disable=SC2016  # JavaScript source, not shell: $ is literal
 status_json() {
   SG_RULE="$RULE" SG_TPL="$TPL" SG_IGNORE="$IGNOREFILE" SG_IGNORE_TPL="$IGNORE_TPL" \
-  SG_CLAUDEMD="$CLAUDEMD" SG_HOOKS="$HOOKS_DIR" \
+  SG_CLAUDEMD="$CLAUDEMD" SG_HOOKS="$HOOKS_DIR" SG_REF="$SG_HOOK_REF" \
   SG_SETTINGS="$SETTINGS" SG_SEARCH="$SEMBLE_TOOL_SEARCH" SG_RELATED="$SEMBLE_TOOL_RELATED" \
   SG_WANT="$SG_WANT_TABLE" SG_STATS_MATCHER="$SG_STATS_MATCHER" \
   SG_PRIOR_RULE="$SG_PRIOR_RULE" SG_PRIOR_IGNORE="$SG_PRIOR_IGNORE" \
@@ -139,7 +142,7 @@ const out={schema:1,
   hooks:{session:{file:"missing",wired:false},stats:{file:"missing",wired:false},
          subagent:{file:"missing",wired:false},retired:[],retiredWired:[],
          settingsFile:sf,settingsParsable:true,staleEntries:0,wiredCount:0,wantCount:0,
-         driftedCount:0,missingCount:0,duplicateCount:0,entries:[],drift:[]},
+         driftedCount:0,missingCount:0,duplicateCount:0,absoluteCount:0,entries:[],drift:[]},
   permissions:{allow:[],wired:false}};
 // Verdict ignores stamp keys (release bumps, old installer `last_updated`); `stamp` = the 3 baked keys exist.
 const OWNED=["doc_type","version","content_version","generated_by","last_updated"];
@@ -205,10 +208,13 @@ const isMine=a=>marks.some(m=>a===m||a.endsWith("/"+m)||a.endsWith("\\"+m));
 const cmdMark=c=>typeof c==="string"?marks.find(m=>new RegExp("(^|[\\\\/\"\x27\\s])"+m.replace(/\./g,"\\.")+"([\"\x27\\s]|$)").test(c)):undefined;
 const ownedOf=h=>{ const a=((h&&h.args)||[]).filter(x=>typeof x==="string"&&isMine(x));
   const c=cmdMark(h&&h.command); return c?a.concat(["cmd:"+c]):a; };
-// Wanted = (event, matcher, path) TRIPLE from LIVE rows: a retired script or registration is stale.
-const want=JSON.parse(process.env.SG_WANT);
+// Wanted = (event, matcher, portable path) TRIPLE from LIVE rows: a retired script or registration is stale.
+const want=JSON.parse(process.env.SG_WANT), REF=process.env.SG_REF;
 const wkey=(ev,m,a)=>JSON.stringify([ev,m,a]);
-const wanted=new Set(want.map(w=>wkey(w[0],w[1],path.join(dir,w[2]))));
+const wanted=new Set(want.map(w=>wkey(w[0],w[1],REF+"/"+w[2])));
+// Absolute <x>/.claude/hooks/<owned> = pre-6.5.1 form of the same hook: one row, stale until upgrade rewrites it.
+const canon=a=>{ const m=/^(?:\/|[A-Za-z]:[\\/]).*[\\/]\.claude[\\/]hooks[\\/]([^\\/]+)$/.exec(a);
+  return m&&marks.indexOf(m[1])>=0?REF+"/"+m[1]:a; };
 const desiredHook=(full,timeout)=>({type:"command",command:"node",args:[full],timeout});
 const deq=(a,b)=>{                                        // key-order-insensitive deep equal
   if(a===b) return true;
@@ -225,6 +231,7 @@ if(s&&s.hooks&&typeof s.hooks==="object"&&!Array.isArray(s.hooks)){
     for(const e of arr){
       const mine=((e&&e.hooks)||[]).flatMap(ownedOf);
       if(mine.length&&!mine.every(a=>wanted.has(wkey(ev,matcherOf(e),a)))) stale++;
+      if(mine.some(a=>canon(a)!==a&&wanted.has(wkey(ev,matcherOf(e),canon(a))))) out.hooks.absoluteCount++;
       for(const a of mine){ const b=a.startsWith("cmd:")?a.slice(4):path.basename(a.replace(/\\/g,"/"));
         if(live.indexOf(b)<0) rw.add(b); }
     }
@@ -235,16 +242,17 @@ out.hooks.retiredWired=marks.filter(m=>rw.has(m));
 // Presence is not health: each row is compared field-by-field (`timeout: 5000` = drifted).
 const rowState={};
 for(const [ev,matcher,script,timeout] of want){
-  const full=path.join(dir,script);
+  const full=REF+"/"+script;
   const arr=(s&&s.hooks&&Array.isArray(s.hooks[ev]))?s.hooks[ev]:[];
-  const hits=arr.filter(e=>matcherOf(e)===matcher&&argsOf(e).includes(full));
+  // An absolute-path copy is the same row, drifted on `args`: present, but only on this checkout.
+  const hits=arr.filter(e=>matcherOf(e)===matcher&&argsOf(e).map(canon).includes(full));
   const key=ev+"/"+(matcher||"*")+"/"+script;
   const row={event:ev,matcher:matcher,script:script,count:hits.length,state:"missing"};
   const push=(field,expected,actual)=>out.hooks.drift.push(
     {event:ev,matcher:matcher,script:script,field:field,expected:expected,actual:actual});
   if(hits.length===0){ out.hooks.missingCount++; }
   else{
-    const mine=((hits[0]&&hits[0].hooks)||[]).filter(h=>((h&&h.args)||[]).includes(full));
+    const mine=((hits[0]&&hits[0].hooks)||[]).filter(h=>((h&&h.args)||[]).filter(a=>typeof a==="string").map(canon).includes(full));
     const wantHook=desiredHook(full,timeout);
     const bad=[];
     for(const k of Object.keys(wantHook)) if(!deq((mine[0]||{})[k],wantHook[k])) bad.push([k,wantHook[k],(mine[0]||{})[k]]);
@@ -290,6 +298,8 @@ for(const d of (j.hooks.drift||[])) console.log("drift:     "+d.event+"/"+(d.mat
 console.log("hooks:     "+j.hooks.session.file+" session, "+j.hooks.stats.file+" stats, "
   +((j.hooks.subagent||{}).file||"missing")+" subagent"
   +(j.hooks.staleEntries?" | "+j.hooks.staleEntries+" stale settings entr"+(j.hooks.staleEntries===1?"y":"ies"):""));
+if(j.hooks.absoluteCount) console.log("portable:  "+j.hooks.absoluteCount+" absolute-path hook entr"
+  +(j.hooks.absoluteCount===1?"y":"ies")+" (break every other clone) - run /brewcode:semble-setup upgrade");
 if((j.backups||[]).length) console.log("backups:   "+j.backups.length+" .bak file"+(j.backups.length===1?"":"s")
   +" left by --force/remove (your content, delete when you no longer need it): "+j.backups.join(", "));
 const left=[...new Set([].concat(j.hooks.retired||[],j.hooks.retiredWired||[]))];
@@ -885,11 +895,11 @@ process.stdout.write(t===""||t==="# CLAUDE.md"?"empty":"keep");' 2>/dev/null || 
 # ── settings.json merge (canonical, see assets/INSTALL.md §merge) ───────────
 merge_settings() {
   # shellcheck disable=SC2016  # JavaScript source, not shell: $ is literal
-  SG_SETTINGS="$SETTINGS" SG_HOOKS="$HOOKS_DIR" SG_DO_HOOKS="$1" SG_DO_PERMS="$2" \
+  SG_SETTINGS="$SETTINGS" SG_REF="$SG_HOOK_REF" SG_DO_HOOKS="$1" SG_DO_PERMS="$2" \
   SG_SEARCH="$SEMBLE_TOOL_SEARCH" SG_RELATED="$SEMBLE_TOOL_RELATED" \
   SG_WANT="$SG_WANT_TABLE" SG_MARKS="$SG_MARKS" node -e '
 const fs=require("fs"), path=require("path");
-const f=process.env.SG_SETTINGS, dir=process.env.SG_HOOKS;
+const f=process.env.SG_SETTINGS, REF=process.env.SG_REF;
 const doHooks=process.env.SG_DO_HOOKS==="1", doPerms=process.env.SG_DO_PERMS==="1";
 const marks=JSON.parse(process.env.SG_MARKS);   // every basename ever owned, live + retired
 const want=JSON.parse(process.env.SG_WANT);
@@ -923,12 +933,14 @@ const isMine=a=>marks.some(m=>a===m||a.endsWith("/"+m)||a.endsWith("\\"+m));
 const cmdMark=c=>typeof c==="string"?marks.find(m=>new RegExp("(^|[\\\\/\"\x27\\s])"+m.replace(/\./g,"\\.")+"([\"\x27\\s]|$)").test(c)):undefined;
 const ownedOf=h=>{ const a=((h&&h.args)||[]).filter(x=>typeof x==="string"&&isMine(x));
   const c=cmdMark(h&&h.command); return c?a.concat(["cmd:"+c]):a; };   // shell form: never wanted
-// MIGRATION: wanted = LIVE (event, matcher, path) triples, so retired scripts (explore, reminder,
-// prefetch), retired registrations of live scripts and stale paths are all purged below.
+// MIGRATION: wanted = LIVE (event, matcher, portable path) triples; retired scripts, rows and stray paths purge.
 const wkey=(ev,m,a)=>JSON.stringify([ev,m,a]);
-const wanted=new Set(want.map(w=>wkey(w[0],w[1],path.join(dir,w[2]))));
+const wanted=new Set(want.map(w=>wkey(w[0],w[1],REF+"/"+w[2])));
+// Absolute <x>/.claude/hooks/<owned> = same key as the portable path: rewritten in place, never duplicated.
+const canon=a=>{ const m=/^(?:\/|[A-Za-z]:[\\/]).*[\\/]\.claude[\\/]hooks[\\/]([^\\/]+)$/.exec(a);
+  return m&&marks.indexOf(m[1])>=0?REF+"/"+m[1]:a; };
 const desiredHook=(full,timeout)=>({type:"command",command:"node",args:[full],timeout});
-const hasArg=(h,full)=>((h&&h.args)||[]).filter(a=>typeof a==="string").includes(full);
+const hasArg=(h,full)=>((h&&h.args)||[]).filter(a=>typeof a==="string").map(canon).includes(full);
 const deq=(a,b)=>{                                        // key-order-insensitive deep equal
   if(a===b) return true;
   if(typeof a!=="object"||typeof b!=="object"||a===null||b===null) return false;
@@ -939,8 +951,9 @@ const deq=(a,b)=>{                                        // key-order-insensiti
 };
 const reconcile=(e,full,timeout)=>{                       // rewrite MY hook to the desired object,
   const w=desiredHook(full,timeout);                      // leave foreign hooks and foreign entry keys alone
-  let dirty=false;
-  const hooks=e.hooks.map(h=>{ if(!hasArg(h,full)||deq(h,w)) return h; dirty=true; return w; });
+  let dirty=false, n=0;                                   // abs + portable copy in ONE entry: keep the first
+  const hooks=e.hooks.filter(h=>!hasArg(h,full)||++n===1||!(dirty=true))
+    .map(h=>{ if(!hasArg(h,full)||deq(h,w)) return h; dirty=true; return w; });
   return dirty?Object.assign({},e,{hooks}):e;
 };
 const stripHook=(e,full)=>{                               // 2nd+ copy of a row: drop only my hook
@@ -950,7 +963,7 @@ const stripHook=(e,full)=>{                               // 2nd+ copy of a row:
 };
 const verify=(root)=>{                                    // null | message; run BEFORE the write
   if(doHooks) for(const [ev,matcher,script,timeout] of want){
-    const full=path.join(dir,script);
+    const full=REF+"/"+script;
     const hits=((root.hooks&&root.hooks[ev])||[]).filter(e=>matcherOf(e)===matcher&&argsOf(e).includes(full));
     if(hits.length!==1) return "verification failed - "+ev+"/"+(matcher||"*")+"/"+script+" present "+hits.length+" times in "+f;
     const mine=((hits[0].hooks)||[]).filter(h=>hasArg(h,full));
@@ -973,7 +986,7 @@ if(doHooks){
       const m=matcherOf(e);
       const kept=e.hooks.filter(h=>{
         const mine=ownedOf(h);
-        return mine.length===0 || mine.every(a=>wanted.has(wkey(ev,m,a)));
+        return mine.length===0 || mine.every(a=>wanted.has(wkey(ev,m,canon(a))));
       });
       if(kept.length===e.hooks.length) return e;
       return kept.length ? Object.assign({},e,{hooks:kept}) : null;   // entry dies only when empty
@@ -986,10 +999,10 @@ if(doHooks){
     if(Array.isArray(s.hooks[ev])&&s.hooks[ev].length===0&&!wantEvents.has(ev)) delete s.hooks[ev];
   for(const [ev,matcher,script,timeout] of want){        // reconcile, do not merely append
     s.hooks[ev]=Array.isArray(s.hooks[ev])?s.hooks[ev]:[];
-    const full=path.join(dir,script);
+    const full=REF+"/"+script;
     let seen=0;
     s.hooks[ev]=s.hooks[ev].map(e=>{
-      if(!e||!Array.isArray(e.hooks)||matcherOf(e)!==matcher||!argsOf(e).includes(full)) return e;
+      if(!e||!Array.isArray(e.hooks)||matcherOf(e)!==matcher||!argsOf(e).map(canon).includes(full)) return e;
       seen++;
       return seen===1?reconcile(e,full,timeout):stripHook(e,full);   // extra copies are repaired away, not aborted on
     }).filter(e=>e!==null);
@@ -1109,6 +1122,31 @@ run_settings() {
 GI_LINE='.claude/semble/'
 GI_RETIRED='.claude/semble/.reminder-ts .claude/semble/.prefetch-ts'
 gitignore_has_line() { grep -Fqx "$GI_LINE" "$GITIGNORE" 2>/dev/null; }
+GI_PROBES='.claude/semble/state.json .claude/semble/telemetry.jsonl .claude/semble/.dir-probe'
+# Prints `source:line:pattern` of a repo .gitignore rule already ignoring the whole dir; rc 1 when none.
+# Per-machine excludes are masked (empty GIT_DIR, no excludesFile): other clones would still commit telemetry.
+gitignore_covering_rule() {
+  command -v git >/dev/null 2>&1 || return 1
+  local top gd rc=0
+  top="$(git -C "$ROOT" rev-parse --show-toplevel 2>/dev/null)" || return 1
+  gd="$(mktemp -d "${TMPDIR:-/tmp}/semble-gi.XXXXXX")" || return 1
+  if git init -q --bare --template= "$gd" >/dev/null 2>&1; then
+    GIT_DIR="$gd" GIT_WORK_TREE="$top" gitignore_probe || rc=1
+  else rc=1; fi
+  rm -rf "$gd"
+  return "$rc"
+}
+gitignore_probe() {
+  local p v first=''
+  for p in $GI_PROBES; do
+    v="$(git -C "$ROOT" -c core.excludesFile=/dev/null check-ignore -v --no-index -- "$p" 2>/dev/null)" || return 1
+    v="${v%%$'\t'*}"
+    case "${v%%:*}" in /*) return 1 ;; .gitignore|*/.gitignore) ;; *) return 1 ;; esac
+    case "${v#*:*:}" in '!'*) return 1 ;; esac
+    [ -n "$first" ] || first="$v"
+  done
+  printf '%s\n' "$first"
+}
 # Space-separated list of the retired lines actually present, so the report names what
 # it dropped instead of the whole catalogue.
 gitignore_retired_present() {
@@ -1161,10 +1199,14 @@ gitignore_confirm() {   # $1 = past-tense verb for the report
 }
 
 install_gitignore() {
+  local rule
   if [ ! -f "$GITIGNORE" ]; then
     if [ ! -e "$ROOT/.git" ]; then
       add_skipped "gitignore: no $GITIGNORE and $ROOT is not a git repo - $GI_LINE not registered"
       return 0
+    fi
+    if rule="$(gitignore_covering_rule)"; then
+      add_unchanged "gitignore: $GI_LINE already ignored by $rule - nothing written"; return 0
     fi
     if [ "${SEMBLE_DRY_RUN:-}" = "1" ]; then sc_dry "create $GITIGNORE" >/dev/null; add_changed "gitignore: would create $GITIGNORE with $GI_LINE"; return 0; fi
     printf '# brewcode:semble\n%s\n' "$GI_LINE" >"$GITIGNORE" || { add_failed "gitignore: cannot create $GITIGNORE"; return 0; }
@@ -1173,6 +1215,9 @@ install_gitignore() {
   fi
   if gitignore_has_line; then
     add_unchanged "gitignore: already lists $GI_LINE"; return 0
+  fi
+  if rule="$(gitignore_covering_rule)"; then
+    add_unchanged "gitignore: $GI_LINE already ignored by $rule - not appended"; return 0
   fi
   if [ "${SEMBLE_DRY_RUN:-}" = "1" ]; then sc_dry "append to $GITIGNORE" >/dev/null; add_changed "gitignore: would append $GI_LINE"; return 0; fi
   gitignore_append || { add_failed "gitignore: cannot append to $GITIGNORE"; return 0; }

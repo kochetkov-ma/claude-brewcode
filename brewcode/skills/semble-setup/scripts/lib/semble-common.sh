@@ -59,8 +59,20 @@ sc_platform() {
   esac
 }
 
-# Canonical root (D1 Q5), same order as hook assets: test override -> CLAUDE_PROJECT_DIR -> git toplevel ->
-# upward .git/.claude marker walk -> PWD (PWD alone wrote state, cache and rule into subdirectories).
+# rc 0 when dir $1 is HOME (real or test) or the parent of the active config dir: its `.claude` is a profile, not a project.
+sc_is_profile_parent() {
+  local p h c
+  p="$( cd "$1" 2>/dev/null && pwd -P )" || return 1
+  for h in "$HOME" "$(sc_home)"; do
+    [ -n "$h" ] && [ "$p" = "$( cd "$h" 2>/dev/null && pwd -P )" ] && return 0
+  done
+  c="$(sc_config_dir)"
+  [ -n "$c" ] && [ "$p/.claude" = "$( cd "$c" 2>/dev/null && pwd -P )" ] && return 0
+  return 1
+}
+
+# Canonical root (D1 Q5): test override -> CLAUDE_PROJECT_DIR -> git toplevel -> upward .git/.claude walk -> PWD;
+# the walk skips a profile `.claude` (HOME, config-dir parent), else a non-git dir under HOME wrote ~/.claude/semble/.
 sc_root_candidate() {
   local d r
   if [ -n "${SEMBLE_PROJECT_ROOT:-}" ] && [ -d "$SEMBLE_PROJECT_ROOT" ]; then
@@ -74,11 +86,21 @@ sc_root_candidate() {
   fi
   d="$PWD"
   while [ "$d" != "/" ] && [ -n "$d" ]; do
-    if [ -d "$d/.git" ] || [ -d "$d/.claude" ]; then printf '%s\n' "$d"; return 0; fi
+    if [ -d "$d/.git" ]; then printf '%s\n' "$d"; return 0; fi
+    if [ -d "$d/.claude" ] && ! sc_is_profile_parent "$d"; then printf '%s\n' "$d"; return 0; fi
     d="$(dirname "$d")"
   done
   printf '%s\n' "$PWD"
   return 1   # no marker anywhere: the caller decides whether that is fatal
+}
+
+# rc 0 = a real project root: SEMBLE_PROJECT_ROOT, or a resolved candidate that is not HOME / a profile parent.
+# Gate for per-project state written by profile-level operations (semble-mcp.sh user-scope add/repair).
+sc_has_project_root() {
+  [ -n "${SEMBLE_PROJECT_ROOT:-}" ] && [ -d "$SEMBLE_PROJECT_ROOT" ] && return 0
+  local r
+  r="$(sc_root_candidate)" || return 1
+  ! sc_is_profile_parent "$r"
 }
 
 # Resolved abs root == Python Path(p).resolve(): `cd` + `pwd -P` expands symlinks, drops trailing slash, keeps "/".

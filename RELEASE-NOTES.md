@@ -2,6 +2,50 @@
 
 ---
 
+## v6.5.1 (2026-10-13)
+
+> Docs: [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/)
+
+> Docs: [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/)
+
+> Docs: [agent-deadline-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline-setup/) | [agent-return-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-return-setup/) | [deploy](https://doc-claude.brewcode.app/brewtools/skills/deploy/)
+
+Fixes for defects found while rolling out 6.5.0.
+
+### brewcode
+
+#### Fixed
+
+- **semble-setup:** hook entries in `settings.json` use the portable `${CLAUDE_PROJECT_DIR}/.claude/hooks/...` path; an absolute 6.5.0 entry shows as `drifted` (`guidance.absoluteCount`); `nextStep` and `setup-status` prescribe `upgrade`, which rewrites it in place.
+- **semble-setup:** an existing repo `.gitignore` rule covering `.claude/` is respected, so no duplicate line is appended; per-machine excludes do not count.
+- **semble-setup:** `status`, `cache info` and `project audit` no longer fail on a cache with a very large file list (E2BIG / stack overflow); output is unchanged.
+- **semble-setup:** `add` and `repair` write no `state.json` outside a project (new `--no-state`); `checkpoint` there exits 3. The upward root walk in the scripts and the hooks skips HOME and a profile directory's parent; `CLAUDE_PROJECT_DIR`, the git toplevel and the `PWD` fallback still resolve as before.
+- **semble-setup:** an index-only `partial` points to `resume`; a hand-edited rule gets a diff / merge / `upgrade --force` route, not a plain `upgrade`.
+- **semble-setup:** `project candidates` honours `.gitignore` and `.sembleignore` the way semble does, so excluded mirrors are no longer proposed.
+- **setup-status:** an orphaned project config that still governs a global install gets `purge project`, never `upgrade`.
+- **setup-status:** the `GOVERNING` line for agent-deadline / agent-return follows each guard's config climb (nearest valid project config, then globals).
+
+### brewdoc
+
+#### Fixed
+
+- **memory-sync-setup:** `validate` checks only the skill's own `references/*.md` citations, not another folder's; `scan` reads YAML block-list `paths:` from the frontmatter.
+
+### brewtools
+
+#### Fixed
+
+- **agent-return-setup / agent-deadline-setup:** `status` prints `governing_config`, `governing_scope` and `orphan_config`, resolved like the guards (deadline climbs from the cwd, agent-return from the session dir); `uninstall project` warns when the kept project config still governs the global hooks, and `purge project` is the fix.
+- **deploy:** the docs-service template logs in to GHCR with the job token (before the server pull and rollback pull) in a private `DOCKER_CONFIG`, deleted on exit; the shared `~/.docker/config.json` is never touched.
+
+### repo
+
+#### Fixed
+
+- **docs deploy:** `deploy-docs.yml` (job-token GHCR login added in PR #15) now runs that login in a private `DOCKER_CONFIG` as well, same as the brewtools `deploy` template.
+
+---
+
 ## v6.5.0 (2026-10-12)
 
 > Docs: [agents](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [convention-setup](https://doc-claude.brewcode.app/brewcode/skills/convention-setup/) | [e2e](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [rules](https://doc-claude.brewcode.app/brewcode/skills/rules/) | [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [superreview-setup](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | [teams-setup](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) | [brewcode hooks](https://doc-claude.brewcode.app/brewcode/hooks/)

@@ -11,6 +11,8 @@ SCOPE=user
 # An explicit `--scope X` targets exactly X; an unqualified run targets every
 # scope that actually holds the server (DESIGN §8.4 lifecycle completeness).
 SCOPE_EXPLICIT=0
+# --no-state: profile-only registration, never a project state.json (also implied when no project root resolves).
+NO_STATE=0
 # Scopes the current mutation touches, and the backups it can roll back to.
 MCP_TARGET_SCOPES=""
 MCP_BACKUPS=""
@@ -21,8 +23,8 @@ usage() {
 semble-mcp.sh — MCP registration for brewcode:semble-setup
 
   semble-mcp.sh detect     [--json]
-  semble-mcp.sh add        [--scope user|project|local] [--yes] [--json]
-  semble-mcp.sh repair     [--yes] [--json]
+  semble-mcp.sh add        [--scope user|project|local] [--yes] [--json] [--no-state]
+  semble-mcp.sh repair     [--yes] [--json] [--no-state]
   semble-mcp.sh remove     [--scope user|project|local] [--yes] [--json]
                            (without --scope: removes EVERY scope holding it)
   semble-mcp.sh checkpoint [--json]
@@ -30,6 +32,8 @@ semble-mcp.sh — MCP registration for brewcode:semble-setup
 
 Exit: 0 ok | 1 abort/failed | 2 usage | 3 precondition | 4 confirmation required
 Env : SEMBLE_DRY_RUN=1 prints every mutating command and changes nothing.
+State: add/repair checkpoint <project>/.claude/semble/state.json only inside a project
+       (not HOME, not a profile dir); --no-state skips it everywhere.
 Backup: add, repair and remove first copy every config file they can rewrite to
         <file>.bak.<epoch> and print the path (--json: "backups").
 EOF
@@ -43,6 +47,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --json) JSON=1 ;;
     --yes|-y) YES=1 ;;
+    --no-state) NO_STATE=1 ;;
     --scope) shift; SCOPE="${1:-}"; [ -n "$SCOPE" ] || { sc_err "--scope needs a value"; exit 2; }; SCOPE_EXPLICIT=1 ;;
     -h|--help) usage; exit 0 ;;
     *) sc_err "unexpected argument: $1"; exit 2 ;;
@@ -141,6 +146,9 @@ mcp_human() { # $1 state, $2 dump, $3 connectivity
   printf 'state: %s | scopes: %s | connectivity: %s\n' "$st" "${scopes:-none}" "$conn"
 }
 
+# rc 0 = this run may write project state; a user-scope operation outside a project leaves none behind.
+mcp_state_allowed() { [ "$NO_STATE" != "1" ] && sc_has_project_root; }
+
 mcp_checkpoint() { # phase -> awaiting_reload, ALWAYS before an add (DESIGN §9.3)
   if [ "${SEMBLE_DRY_RUN:-}" = "1" ]; then
     sc_dry "state checkpoint: phase -> awaiting_reload"
@@ -150,7 +158,7 @@ mcp_checkpoint() { # phase -> awaiting_reload, ALWAYS before an add (DESIGN §9.
   "$STATE_SH" phase awaiting_reload >/dev/null
 }
 
-# USER-scoped server: 2nd project's `add` finds it registered -> script still creates state.json.
+# USER-scoped server: 2nd project's `add` finds it registered -> script still creates state.json (gate: mcp_state_allowed).
 # absent/prereq_ready/error -> awaiting_reload; verifying/ready/disabled -> identity refresh, never regress/re-enable.
 mcp_checkpoint_present() {
   local p
@@ -309,6 +317,10 @@ process.stdout.write(JSON.stringify({schema:1,add:process.env.SC_A,addJson:proce
     ;;
 
   checkpoint)
+    if ! mcp_state_allowed; then
+      emit_result precondition absent "no project root resolved (or --no-state); no project state written"
+      exit 3
+    fi
     mcp_checkpoint
     emit_result ok awaiting_reload "checkpoint written before any MCP mutation"
     ;;
@@ -323,6 +335,10 @@ process.stdout.write(JSON.stringify({schema:1,add:process.env.SC_A,addJson:proce
         correct|upstream_unpinned)
           # `unchanged` is about the REGISTRATION. The per-project checkpoint is
           # written here all the same - see mcp_checkpoint_present.
+          if ! mcp_state_allowed; then
+            emit_result unchanged "$STATE" "$SEMBLE_SERVER_NAME is already registered as approved; no project state written (no project root or --no-state)"
+            exit 0
+          fi
           mcp_checkpoint_present
           emit_result unchanged "$STATE" "$SEMBLE_SERVER_NAME is already registered as approved; project state checkpoint at phase=$(sc_state_get phase 2>/dev/null || printf 'absent')"
           exit 0 ;;
@@ -338,7 +354,7 @@ process.stdout.write(JSON.stringify({schema:1,add:process.env.SC_A,addJson:proce
     [ "$SCOPE" = "user" ] || sc_warn "scope '$SCOPE' requested; the main workflow expects user scope"
     # Before the checkpoint: a backup that cannot be taken must leave no state behind either.
     mcp_backup_configs || mcp_backup_abort "$STATE"
-    mcp_checkpoint
+    STATE_OK=0; if mcp_state_allowed; then STATE_OK=1; mcp_checkpoint; fi
     # add-json FIRST: it is the only form that can carry alwaysLoad.
     if run_add_json; then
       ADDED=add-json
@@ -347,8 +363,10 @@ process.stdout.write(JSON.stringify({schema:1,add:process.env.SC_A,addJson:proce
       sc_warn "fell back to 'claude mcp add' — it cannot set alwaysLoad; run: semble-mcp.sh repair --yes"
     else
       mcp_rollback
-      "$STATE_SH" phase prereq_ready >/dev/null || true
-      "$STATE_SH" patch '{"notes":["claude mcp add and add-json both failed; semble_code was not registered"]}' >/dev/null || true
+      if [ "$STATE_OK" = "1" ]; then
+        "$STATE_SH" phase prereq_ready >/dev/null || true
+        "$STATE_SH" patch '{"notes":["claude mcp add and add-json both failed; semble_code was not registered"]}' >/dev/null || true
+      fi
       emit_result failed "$(sc_mcp_state)" "claude mcp add and add-json both failed; state left at prereq_ready"
       exit 1
     fi
@@ -357,8 +375,12 @@ process.stdout.write(JSON.stringify({schema:1,add:process.env.SC_A,addJson:proce
       exit 0
     fi
     AFTER="$(sc_mcp_state)"
-    mcp_patch_completed
-    emit_result ok "$AFTER" "registered via claude mcp $ADDED; restart Claude Code, then run: /brewcode:semble-setup resume"
+    if [ "$STATE_OK" = "1" ]; then
+      mcp_patch_completed
+      emit_result ok "$AFTER" "registered via claude mcp $ADDED; restart Claude Code, then run: /brewcode:semble-setup resume"
+    else
+      emit_result ok "$AFTER" "registered via claude mcp $ADDED; no project state written (no project root or --no-state); restart Claude Code"
+    fi
     ;;
 
   repair)
@@ -390,7 +412,7 @@ process.stdout.write(JSON.stringify({schema:1,add:process.env.SC_A,addJson:proce
       run_remove "$s" || sc_warn "claude mcp remove -s $s reported a failure; continuing"
     done
     SCOPE=user
-    mcp_checkpoint
+    STATE_OK=0; if mcp_state_allowed; then STATE_OK=1; mcp_checkpoint; fi
     if ! run_add_json; then
       mcp_rollback
       emit_result failed "$(sc_mcp_state)" "claude mcp add-json failed during repair; the MCP configs were restored from their backups"
@@ -403,8 +425,12 @@ process.stdout.write(JSON.stringify({schema:1,add:process.env.SC_A,addJson:proce
     AFTER="$(sc_mcp_state)"
     case "$AFTER" in
       correct|upstream_unpinned)
-        mcp_patch_completed
-        emit_result ok "$(sc_mcp_state)" "repaired; restart Claude Code, then run: /brewcode:semble-setup resume" ;;
+        if [ "$STATE_OK" = "1" ]; then
+          mcp_patch_completed
+          emit_result ok "$(sc_mcp_state)" "repaired; restart Claude Code, then run: /brewcode:semble-setup resume"
+        else
+          emit_result ok "$(sc_mcp_state)" "repaired; no project state written (no project root or --no-state); restart Claude Code"
+        fi ;;
       *)
         mcp_rollback
         emit_result failed "$(sc_mcp_state)" "repair finished but detection still reports '$AFTER'; the MCP configs were restored from their backups"

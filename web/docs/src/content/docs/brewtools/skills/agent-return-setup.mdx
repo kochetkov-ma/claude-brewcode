@@ -80,10 +80,23 @@ Sizing tiers, `t = Math.ceil(<report text>.length / 4)`, both boundaries inclusi
 | `upgrade` | re-emit from the current plugin version, thresholds preserved | 3 re-copied | entries re-merged (adds the `SubagentHandback` entry an older install lacks) | values preserved, metadata re-stamped |
 | `enable` | resume enforcement | kept | kept | `enabled: true` |
 | `disable` | pause enforcement | kept | kept | `enabled: false` |
-| `uninstall` | unwire | deleted | entries stripped (an emptied `settings.json` and hooks dir are removed) | **kept** |
+| `uninstall` | unwire | deleted | entries stripped (an emptied `settings.json` and hooks dir are removed) | **kept** (see [Orphan project config](#orphan-project-config)) |
 | `purge` | full wipe | deleted | entries stripped | deleted (an emptied project `.claude/` is removed too; never the global dir) |
 
 `upgrade` asks nothing: it reads `passTokens`/`fileTokens` back out of the existing config and replays the install for that scope against the current assets, so a plugin update finally reaches an installed project without re-asking. A disabled setup stays disabled. It migrates one pair once: exactly `1000` / `2500` with no `readOnlyAgentTypes` key (the pre-6.5 defaults) becomes `2500` / `6000`. One scope per run.
+
+### Orphan project config
+
+`uninstall project` keeps `.claude/agent-return.json` by design. When the global scope still registers the hooks, that kept file keeps governing them: the nearest project config is read before the global one, so its `passTokens`, `fileTokens` and `enabled` override the global config. In that case the uninstall prints `WARNING: kept <cfg> still GOVERNS ...`; the skill relays it verbatim and offers `purge project` in the same confirmation.
+
+`status` reports it with three fields:
+
+| Field | Meaning |
+|-------|---------|
+| `governing_config` / `governing_scope` | the one config every wired hook reads (resolution: see Config discovery below); scope is `project`, `global` or `none` |
+| `orphan_config` | `yes` when the governing config is project-side, the project has `0/3` registrations and the global scope has at least one |
+
+An orphan is reported as a finding, not as stale. Fix: `/brewtools:agent-return-setup purge project` deletes the file, and the global config governs again. Keeping it on purpose is valid. `upgrade` is never offered for it, because it would re-wire the project hooks and undo the uninstall.
 
 ### Installation targets
 
@@ -94,7 +107,7 @@ Sizing tiers, `t = Math.ceil(<report text>.length / 4)`, both boundaries inclusi
 
 `<config dir>` is the one Claude Code runs with: `$CLAUDE_CONFIG_DIR` when set, else `~/.claude/`. The project scope is the session's start directory (what hooks receive as `CLAUDE_PROJECT_DIR`); from a repo subdirectory the git root's `settings.json` is not loaded. The state directory `agent-return-state/` sits beside the config that enabled the feature.
 
-Config discovery starts at the resolved project root (`CLAUDE_PROJECT_DIR`, then an upward walk for a `.git` or `.claude` marker, then cwd), walks up 16 levels probing `<dir>/.claude/agent-return.json`, then falls back to `$CLAUDE_CONFIG_DIR/agent-return.json` when set, then `~/.claude/agent-return.json`. Project wins; a malformed project config is skipped and global takes over. Global writes go through Bash only — the config dir is a protected path for `Write`/`Edit`: prompted in `default` and `acceptEdits`, denied headless and in `dontAsk`, allowed only under `bypassPermissions`.
+Config discovery starts at the resolved project root (`CLAUDE_PROJECT_DIR`, then an upward walk from the cwd for a `.git` or `.claude` marker, never the git toplevel, then cwd), walks up 16 levels probing `<dir>/.claude/agent-return.json`, then falls back to `$CLAUDE_CONFIG_DIR/agent-return.json` when set, then `~/.claude/agent-return.json`. Project wins, even when the project has no hooks wired; a malformed project config is skipped and the climb goes on; global only when no valid project config is found. Global writes go through Bash only — the config dir is a protected path for `Write`/`Edit`: prompted in `default` and `acceptEdits`, denied headless and in `dontAsk`, allowed only under `bypassPermissions`.
 
 ### Config shape
 
@@ -160,7 +173,7 @@ Both skills install side by side. Both register `SubagentStop` and `PreToolUse` 
 
 ### Verification
 
-264 test cases / 1185 checks, all passing — `tests/run.sh` in the [skill source](https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/agent-return-setup/tests); run it from a checkout of the repo.
+266 test cases / 1187 checks, all passing — `tests/run.sh` in the [skill source](https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/agent-return-setup/tests); run it from a checkout of the repo.
 
 ## Related
 

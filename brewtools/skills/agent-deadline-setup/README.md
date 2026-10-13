@@ -36,6 +36,8 @@ The skill always reports status first, states its plan before asking anything, t
 
 Status resolves the project root from `CLAUDE_PROJECT_DIR`, then git toplevel, then an ancestor carrying `.git` or `.claude`. Wiring is effective only with exactly one full guard tuple (PreToolUse / `.*` / command / `node` / sole portable arg / timeout `5`) and exactly one full cleanup tuple (SubagentStop / no matcher / same handler / timeout `3`); duplicates and malformed settings or handlers are reported as non-effective.
 
+Status also prints `governing_config=<path> governing_scope=project|global|none orphan_config=yes|no`, resolved like the guard does (details on the [docs page](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline-setup/)). `orphan_config=yes` means a project config left by `uninstall project` still governs the global guard; status reports it as GOVERNING, the fix is `purge project` (or keep the file on purpose), and `upgrade` is never offered for it.
+
 ## Hooks
 
 | File | Event | Behavior |
@@ -59,6 +61,8 @@ Opt-in: not registered in `brewtools/hooks/hooks.json` — installing the plugin
 
 `upgrade` asks nothing: it replays the install for that scope against the current assets and keeps `defaultMinutes`, `byAgentType`, `hardStopRatio` and `enabled` (disabled stays disabled). One scope per run.
 
+`uninstall project` while the global scope has registrations prints `WARNING: kept <cfg> still GOVERNS ...` (see the orphan note above).
+
 `uninstall` and `purge` remove only the state recorded for this scope's config, plus files untouched for 24 h; the temp root shared by every project and the global install is never wiped.
 
 ## What it asks
@@ -80,7 +84,7 @@ Overrides are only offered if you raise them. If everything is already installed
 
 `<config dir>` = `$CLAUDE_CONFIG_DIR` when set, else `~/.claude`. Global = every repo and every session pays the per-call cost, see [Limits](#limits--read-before-trusting-it).
 
-Project config wins over global; a malformed project config is skipped and the global one is used. Merge is append + dedupe by the `agent-deadline-*.mjs` script path (idempotent re-install). State lives in the OS temp dir, `<tmpdir>/brewtools-agent-deadline/<session_id>/<agent_id>.json`, never under `~/.claude`.
+Project config wins over global; a malformed project config is skipped and the climb continues to the nearest valid one, then global. Merge is append + dedupe by the `agent-deadline-*.mjs` script path (idempotent re-install). State lives in the OS temp dir, `<tmpdir>/brewtools-agent-deadline/<session_id>/<agent_id>.json`, never under `~/.claude`.
 
 ## Config
 

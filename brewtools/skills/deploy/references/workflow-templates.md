@@ -144,7 +144,8 @@ jobs:
 ## Template 2: Deploy to VPS
 
 **Trigger:** `workflow_run` (after a successful Template 1 run) + `workflow_dispatch` (manual).
-**Key steps:** Validate tag, verify image/run provenance, checkout verified SHA, SCP, SSH deployment,
+**Key steps:** Validate tag, verify image/run provenance, checkout verified SHA, SCP, SSH deployment
+(GHCR login with the job token into a private `DOCKER_CONFIG` before any server pull, removed on every exit),
 verify running digest/labels and served metadata/content, rollback on failure. A healthy old site fails.
 Release-tag images only (rule 8): non-`v` upstream refs skip the job; the source-build check needs the
 producing run's `head_branch` == `v` + image version, so a branch image fails before any server copy.
@@ -314,13 +315,26 @@ jobs:
           EXPECTED_ATTEMPT: ${{ steps.image.outputs.build_attempt }}
           EXPECTED_DIGEST: ${{ steps.image.outputs.digest }}
           EXPECTED_PAGE_HASH: ${{ steps.image.outputs.page_hash }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          envs: TAG,EXPECTED_SHA,EXPECTED_VERSION,EXPECTED_RUN,EXPECTED_ATTEMPT,EXPECTED_DIGEST,EXPECTED_PAGE_HASH
+          envs: TAG,EXPECTED_SHA,EXPECTED_VERSION,EXPECTED_RUN,EXPECTED_ATTEMPT,EXPECTED_DIGEST,EXPECTED_PAGE_HASH,GHCR_USER,GHCR_TOKEN
           script: |
             set -euo pipefail
+            # Job token (packages: read) lives in a private DOCKER_CONFIG removed on every exit; shared ~/.docker untouched.
+            GHCR_CONFIG=""
+            trap 'case "${GHCR_CONFIG#/tmp/ghcr-auth.}" in ""|"$GHCR_CONFIG"|*/*) ;; *) rm -rf -- "$GHCR_CONFIG" ;; esac' EXIT
+            GHCR_CONFIG="$(mktemp -d /tmp/ghcr-auth.XXXXXXXX)"
+            readonly GHCR_CONFIG
+            DOCKER_CONFIG="$GHCR_CONFIG"; export DOCKER_CONFIG
+            # Seeded auths entry keeps the token in that file, not an OS keychain; user CLI plugins (compose) stay visible.
+            printf '{"auths":{"ghcr.io":{}}}\n' > "$DOCKER_CONFIG/config.json"
+            if [ -d "$HOME/.docker/cli-plugins" ]; then ln -s "$HOME/.docker/cli-plugins" "$DOCKER_CONFIG/cli-plugins"; fi
+            printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+            unset GHCR_TOKEN
             DOCS_PATH={{VPS_DEPLOY_PATH}}
             cp -R /tmp/{{DEPLOY_SYNC_DIR}}/. "$DOCS_PATH/"
             rm -rf /tmp/{{DEPLOY_SYNC_DIR}}
@@ -361,7 +375,7 @@ jobs:
             [ "$(docker inspect "$CONTAINER_ID" --format '{{index .Config.Labels "io.brewcode.docs.build-run-id"}}')" = "$EXPECTED_RUN" ]
             [ "$(docker inspect "$CONTAINER_ID" --format '{{index .Config.Labels "io.brewcode.docs.build-attempt"}}')" = "$EXPECTED_ATTEMPT" ]
             EXPECTED_INFO=$(printf '{"version":"%s","sha":"%s","buildRunId":"%s"}' "$EXPECTED_VERSION" "$EXPECTED_SHA" "$EXPECTED_RUN")
-            for i in $(seq 1 10); do
+            for _ in $(seq 1 10); do
               INFO=$(curl -fsS "{{INTERNAL_BUILD_INFO_URL}}?build=${EXPECTED_RUN}" || true)
               PAGE_HASH=$(curl -fsS "{{INTERNAL_HEALTH_URL}}?build=${EXPECTED_RUN}" | sha256sum | awk '{print $1}') || PAGE_HASH=""
               if [ "$INFO" = "$EXPECTED_INFO" ] && [ "$PAGE_HASH" = "$EXPECTED_PAGE_HASH" ]; then
@@ -455,6 +469,10 @@ jobs:
 | `{{OWNER}}`, `{{IMAGE_NAME}}` | Same registry image as Template 1 | `kochetkov-ma`, `claude-brewcode-docs` |
 
 **Required secrets:** `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`
+
+> Server GHCR auth uses the job's `GITHUB_TOKEN` (`packages: read`, no extra secret): stale or revoked creds on the
+> VPS otherwise fail the pull with `denied`, even for a public image. The login goes to a `mktemp -d` `DOCKER_CONFIG` (seeded file store,
+> user `cli-plugins` linked) that the EXIT trap removes, so the `VPS_USER`'s shared `~/.docker/config.json` and other stacks' `ghcr.io` creds are never touched.
 
 ---
 

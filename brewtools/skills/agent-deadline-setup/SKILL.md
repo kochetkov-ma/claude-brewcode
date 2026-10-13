@@ -196,7 +196,29 @@ NODE
   CV=$({ jq -r '.version // empty' "$D/agent-deadline.json" 2>/dev/null || true; }); CV=${CV:-n/a}
   META=$(content_state "$D"); CCV=${META%%|*}; REST_META=${META#*|}; RCV=${REST_META%%|*}; REST_META=${REST_META#*|}; CONTENT=${REST_META%%|*}; FINDINGS=${REST_META#*|}
   echo "$N: guard=$G cleanup=$C guard_refs=$GR cleanup_refs=$CR legacy_refs=$LEGACY settings_valid=$VALID enabled=$EN config_version=$CV config_content_version=$CCV runbook_content_version=$RCV content_state=$CONTENT content_findings=$FINDINGS config=$CFG"
+  if [ "$N" = project ]; then P_WIRED=$((GR+CR+LEGACY)); else G_WIRED=$((GR+CR+LEGACY)); fi
 done
+# governing config, resolved like the guard's loadConfig(cwd): from the payload cwd (= this shell's
+# $PWD, not project_root) up to the nearest valid project config, then global dirs
+GOV=$(START="$PWD" node <<'NODE'
+const fs=require("fs"), path=require("path"), os=require("os");
+const name="agent-deadline.json", env=(process.env.CLAUDE_CONFIG_DIR||"").trim();
+const globals=[...new Set([env?path.resolve(env):null,path.join(os.homedir(),".claude")].filter(Boolean))];
+const ok=f=>{try{const c=JSON.parse(fs.readFileSync(f,"utf8"));return !!c&&typeof c==="object"&&!Array.isArray(c);}catch{return false;}};
+let dir=path.resolve(process.env.START), hit="none", scope="none";
+for(let i=0;i<16;i++){
+  if(globals.includes(path.join(dir,".claude"))) break;
+  const f=path.join(dir,".claude",name);
+  if(ok(f)){ hit=f; scope="project"; break; }
+  const up=path.dirname(dir); if(up===dir) break; dir=up;
+}
+if(scope==="none") for(const g of globals) if(ok(path.join(g,name))){ hit=path.join(g,name); scope="global"; break; }
+console.log(hit+"|"+scope);
+NODE
+)
+GOV_SCOPE=${GOV##*|}; ORPHAN=no
+[ "$GOV_SCOPE" = project ] && [ "${P_WIRED:-0}" = 0 ] && [ "${G_WIRED:-0}" != 0 ] && ORPHAN=yes
+echo "governing_config=${GOV%|*} governing_scope=$GOV_SCOPE orphan_config=$ORPHAN"
 PV=$({ jq -r '.version // empty' "$BT_ROOT/.claude-plugin/plugin.json" 2>/dev/null || true; }); PV=${PV:-n/a}
 echo "plugin_version=$PV"
 echo "✅ status"
@@ -217,6 +239,8 @@ Field meanings — do not paraphrase them into something stronger:
 | `config_content_version` / `runbook_content_version` | installed config CV versus the INSTALL.md header; each installed hook is compared with its asset header the same way |
 | `content_state` | `current`: all config/hook CV pairs match; `stale`: at least one valid pair differs; `partial`: an installed component has missing/malformed CV or a required counterpart is absent; `missing`: no config or hook files in that scope |
 | `content_findings` | comma-separated `artifact:installed-CV->source-CV` for every mismatched/missing pair, or `none`; `n/a` = missing/malformed metadata, never a guessed version |
+| `governing_config` / `governing_scope` | the one config every wired guard reads, resolved like `loadConfig(cwd)`: nearest valid (JSON object) `.claude/agent-deadline.json` from the shell cwd `$PWD` up (the guard climbs from the payload `cwd`, so a config below `project_root` or above it counts), at most 16 levels, stopping at a global dir; then `$CLAUDE_CONFIG_DIR`, then `~/.claude`; `none` = no valid config anywhere |
+| `orphan_config` | `yes` = the governing config is project-side, the project has no owned registration (`guard_refs`+`cleanup_refs`+`legacy_refs` = 0) and the global scope has one: the global guard obeys the project file (typically left by `uninstall project`) |
 
 Print the status in this table:
 
@@ -243,9 +267,11 @@ echo "PLUGIN_VERSION=$PV LAST_UPDATED=$(date +%F)"
 
 The four keys are inert at runtime: the guard's `loadConfig()` reads only `enabled` (gate `cfg.enabled !== true` -> off), `defaultMinutes`, `byAgentType`, `hardStopRatio`, `readOnlyAgentTypes`.
 
-Content state and enabled/wiring are separate signals. Offer `upgrade` for `stale` or `partial`, naming the mismatched/missing metadata or artifact; never from a release-version difference alone. Status never edits files or settings.
+Content state and enabled/wiring are separate signals. Offer `upgrade` for `stale` or `partial`, naming the mismatched/missing metadata or artifact; never from a release-version difference alone, and never for a scope with `orphan_config=yes` (below). Status never edits files or settings.
 
-Effective = `guard=yes cleanup=yes guard_refs=1 cleanup_refs=1 legacy_refs=0 settings_valid=yes enabled=true`. Anything else, including duplicate-one/missing-other registrations or a malformed owned handler, is not effective: say so plainly instead of reporting a half-state as installed. Project config wins over global; a malformed project config is skipped and the guard silently falls back to the global one: report it and offer to rewrite.
+Effective = `guard=yes cleanup=yes guard_refs=1 cleanup_refs=1 legacy_refs=0 settings_valid=yes enabled=true`. Anything else, including duplicate-one/missing-other registrations or a malformed owned handler, is not effective: say so plainly instead of reporting a half-state as installed. Project config wins over global; a malformed project config is skipped and the guard silently climbs on to an ancestor config, else the global one (`governing_config` names the winner): report it and offer to rewrite.
+
+`orphan_config=yes` is a finding, printed under the table: *`<governing_config>` is GOVERNING: the global guard reads the nearest project config first, so its `enabled` and budget override the global config.* Fix: `/brewtools:agent-deadline-setup purge project` (deletes it and its state; the global config then governs). Keeping it on purpose is valid: `uninstall project` keeps it and now warns so. Never offer `upgrade` for it: upgrade re-wires the project hooks and undoes the uninstall.
 
 ### Early exit
 
@@ -289,7 +315,7 @@ For `disable`/`enable`/`uninstall`/`purge` only question 1 applies, and only whe
 
 ## Step 5 — Act on the resolved PLAN
 
-Use the PLAN already printed before Step 1. Resolve MODE/SCOPE, exact paths, `defaultMinutes` and the settings.json entries before any mutation. For `uninstall`/`purge`, list the exact deletions (this scope's state files included) and confirm once. Status and early exit report the table and stop; their `DO:` is "read state, report".
+Use the PLAN already printed before Step 1. Resolve MODE/SCOPE, exact paths, `defaultMinutes` and the settings.json entries before any mutation. For `uninstall`/`purge`, list the exact deletions (this scope's state files included) and confirm once; for `uninstall project` while the global scope has registrations, say the kept project config will keep GOVERNING the global guard, and offer `purge project` in the same confirmation. Status and early exit report the table and stop; their `DO:` is "read state, report".
 
 ### Delegation
 
@@ -347,7 +373,9 @@ CONTEXT:
   stays {} and HARD_STOP_RATIO unset: the config block keeps the stored byAgentType and
   hardStopRatio), then replays the copy + config + merge blocks for SCOPE.
   Uninstall = two steps: strip handlers by those two basenames, drop empty entries/event arrays and
-  delete the 2 files, then run 'STATE REMOVAL' with this scope's CFG; KEEP the config. Purge =
+  delete the 2 files, then run 'STATE REMOVAL' with this scope's CFG; KEEP the config. Step 1
+  prints a WARNING: line when the kept project config will govern the global guard: quote it
+  verbatim in your report. Purge =
   uninstall (both steps) + delete this scope's config + 'STATE REMOVAL' again. State removal
   deletes only state files recorded for CFG (plus files untouched for 24 h); never remove the
   shared brewtools-agent-deadline tmp root by hand.
@@ -374,7 +402,7 @@ DONE: report the settings.json path, the hooks dir, the config path with its fin
 
 Re-run the Step 1 status block and print the refreshed table, plus:
 
-- what changed (files, settings.json, config values, state files removed);
+- what changed (files, settings.json, config values, state files removed), and any `WARNING: kept ... still GOVERNS` line from an uninstall, verbatim, with the `purge project` fix;
 - hook wiring changes (install/upgrade/uninstall/purge) apply to the running session, no restart: Claude Code watches settings files; `/hooks` confirms. `/reload-plugins` does not apply, these are plain settings.json hooks;
 - config value changes (`enabled`, `defaultMinutes`, `byAgentType`, `hardStopRatio`, `readOnlyAgentTypes`) are read live, no restart;
 - the soft-deadline caveat: time is sampled at tool-call boundaries only; pair with `BASH_MAX_TIMEOUT_MS` for long single commands.

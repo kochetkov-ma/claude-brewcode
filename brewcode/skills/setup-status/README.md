@@ -99,6 +99,13 @@ that lacks the MCP or pins another version.
 Each command in the report is one that can clear the finding. Where `upgrade` cannot, for
 example after a hand edit, the report says which diff to review and port instead.
 
+Semble hook entries that still use absolute paths (releases up to 6.5.0) are the one wiring drift
+sent to `upgrade`, which rewrites them in place; other stale or missing wiring keeps `install`.
+
+For the agent-deadline and agent-return rows, the `GOVERNING` line names the config the guard
+itself would load. When it names a project file but only the global scope is registered, the row
+reports an orphaned project config and prescribes `purge project`, never `upgrade`.
+
 ## Source integrity
 
 The roster, probes and stamp list live in [SKILL.md](SKILL.md). Per-setup exceptions and what

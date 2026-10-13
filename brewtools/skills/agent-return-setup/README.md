@@ -36,7 +36,7 @@ Opt-in: not registered in `brewtools/hooks/hooks.json` — installing the plugin
 ## Usage
 
 ```
-/brewtools:agent-return-setup                          # status
+/brewtools:agent-return-setup                          # status (governing config, orphan check)
 /brewtools:agent-return-setup install                  # install — asks scope + thresholds
 /brewtools:agent-return-setup install global 800 2000  # global, stricter pair
 /brewtools:agent-return-setup upgrade                  # re-emit hook files, thresholds kept
@@ -44,8 +44,11 @@ Opt-in: not registered in `brewtools/hooks/hooks.json` — installing the plugin
 /brewtools:agent-return-setup disable                  # enabled:false, files stay
 /brewtools:agent-return-setup uninstall                # unwire + delete the 3 files, keep config
 /brewtools:agent-return-setup purge                    # + delete the config
+/brewtools:agent-return-setup purge project            # fix an orphan project config
 /brewtools:agent-return-setup purge everything         # free-text intent works -> purge
 ```
+
+Status prints `governing_config=<path> governing_scope=project|global|none orphan_config=yes|no`. An orphan (a kept project config governing while only the global scope has hooks, typically after `uninstall project`) is a finding; the fix is `purge project`, and `upgrade` is never offered for it. `uninstall project` prints `WARNING: kept <cfg> still GOVERNS ...`, relayed verbatim with a `purge project` offer. Details: [Orphan project config](https://doc-claude.brewcode.app/brewtools/skills/agent-return-setup/#orphan-project-config).
 
 The skill always reports status first, states its plan before asking anything, then delegates the file work to the `brewcode:hook-creator` agent.
 

@@ -392,6 +392,109 @@ try {
       ['agent-deadline-cleanup.mjs', 'agent-deadline-guard.mjs']],
     'unexported SETTINGS must abort uninstall without leaving registrations that point at deleted files',
   );
+
+  // GIVEN: global hooks wired in a profile (config 30 min) and a project install with a 7-minute config.
+  const orphan = join(base, 'orphan');
+  const profile = join(orphan, 'profile');
+  const proj = join(orphan, 'project');
+  const orphanTmp = join(orphan, 'tmp');
+  for (const dir of [join(proj, '.claude'), profile, orphanTmp]) mkdirSync(dir, { recursive: true });
+  const oEnv = { ...noProfileEnv, HOME: join(orphan, 'home'), CLAUDE_CONFIG_DIR: profile, CLAUDE_PROJECT_DIR: proj, ROOT: proj, RUNBOOK,
+    MINUTES: '7', OVERRIDES: '{}', PLUGIN_VERSION: '1.0.0', TMPDIR: orphanTmp, CLAUDE_PLUGIN_ROOT: join(HERE, '..', '..', '..') };
+  // PWD keeps the logical cwd, as the Bash tool does: status climbs from $PWD like the guard from payload cwd.
+  const run = (block, extra) => spawnSync('bash', ['-c', block], { cwd: proj, env: { ...oEnv, PWD: proj, ...(extra || {}) }, encoding: 'utf8', timeout: 30000 });
+  const step = (marker, extra) => run(fencedBlockAfter(runbookText, marker), extra);
+  const orphanWiring = ['**EXECUTE** copy (global', '**EXECUTE** merge settings (global', '**EXECUTE** copy (project',
+    '**EXECUTE** config write', '**EXECUTE** merge settings (project)'].map(marker => [marker, step(marker).status]);
+  writeFileSync(join(profile, 'agent-deadline.json'), JSON.stringify({ enabled: true, defaultMinutes: 30 }));
+  const projCfg = join(proj, '.claude', 'agent-deadline.json');
+  const orphanStatus = fencedBashBlockAfter(readFileSync(SKILL, 'utf8'), '## Step 1 — STATUS FIRST, always');
+  const statusOf = () => {
+    const r = run(orphanStatus);
+    const pick = prefix => r.stdout.split('\n').find(line => line.startsWith(prefix)) ?? `NO ${prefix} LINE`;
+    return [r.status, pick('project:').match(/guard_refs=\d cleanup_refs=\d legacy_refs=\d/)?.[0],
+      pick('global:').match(/guard_refs=\d cleanup_refs=\d legacy_refs=\d/)?.[0], pick('governing_config=')];
+  };
+  let agentSeq = 0;
+  const guardRecords = () => {
+    agentSeq += 1;
+    const payload = JSON.stringify({ session_id: 'ORPHAN', cwd: proj, hook_event_name: 'PreToolUse', agent_id: `O${agentSeq}`, agent_type: 'developer', tool_name: 'Bash', tool_input: {} });
+    const r = spawnSync('node', [join(profile, 'hooks', 'agent-deadline-guard.mjs')], { input: payload, env: oEnv, encoding: 'utf8', timeout: 30000 });
+    try { return JSON.parse(readFileSync(join(orphanTmp, 'brewtools-agent-deadline', 'ORPHAN', `O${agentSeq}.json`), 'utf8')).config; }
+    catch { return `NO STATE: ${r.stdout}${r.stderr}`; }
+  };
+  const realCfg = file => join(realpathSync(join(file, '..')), 'agent-deadline.json');
+  const wiredRefs = 'guard_refs=1 cleanup_refs=1 legacy_refs=0';
+  const noRefs = 'guard_refs=0 cleanup_refs=0 legacy_refs=0';
+  // WHEN: status probes both scopes wired.
+  const bothWired = statusOf();
+  // THEN: the project config governs, but it is no orphan while project hooks are registered.
+  assert.deepEqual([orphanWiring, bothWired], [
+    [['**EXECUTE** copy (global', 0], ['**EXECUTE** merge settings (global', 0], ['**EXECUTE** copy (project', 0],
+      ['**EXECUTE** config write', 0], ['**EXECUTE** merge settings (project)', 0]],
+    [0, wiredRefs, wiredRefs, `governing_config=${projCfg} governing_scope=project orphan_config=no`],
+  ], 'wired project config governs without an orphan finding');
+
+  // WHEN: the project scope is uninstalled while the global hooks stay wired.
+  const orphanUninstall = step("## UNINSTALL  (settings entries + hook files + this scope's state; config kept)");
+  // THEN: the kept config is named as governing, and the global guard really records it.
+  assert.deepEqual([orphanUninstall.status, orphanUninstall.stdout.trim().split('\n').slice(-2), existsSync(projCfg), statusOf(), guardRecords()], [
+    0,
+    [`WARNING: kept ${projCfg} still GOVERNS: the global agent-deadline guard (${join(profile, 'settings.json')}) reads the nearest project config first, so enabled=true defaultMinutes=7 override ${join(profile, 'agent-deadline.json')}. Hand control to the global config: /brewtools:agent-deadline-setup purge project. Keeping it on purpose is valid.`,
+      `✅ uninstalled from ${join(proj, '.claude', 'hooks')}`],
+    true,
+    [0, noRefs, wiredRefs, `governing_config=${projCfg} governing_scope=project orphan_config=yes`],
+    realCfg(projCfg),
+  ], `project uninstall under a global install warns and status flags the orphan: ${orphanUninstall.stderr}`);
+
+  // WHEN: the project scope is purged.
+  const orphanPurge = step('## PURGE  (uninstall + config');
+  // THEN: the global config governs again and no orphan is reported.
+  assert.deepEqual([orphanPurge.status, existsSync(projCfg), statusOf(), guardRecords()], [
+    0, false, [0, noRefs, wiredRefs, `governing_config=${join(profile, 'agent-deadline.json')} governing_scope=global orphan_config=no`],
+    realCfg(join(profile, 'agent-deadline.json')),
+  ], `purge project hands control to the global config: ${orphanPurge.stderr}`);
+
+  // GIVEN: a project install and an empty profile with no global hooks.
+  const lone = join(orphan, 'lone');
+  const emptyProfile = join(orphan, 'empty-profile');
+  mkdirSync(join(lone, '.claude'), { recursive: true });
+  mkdirSync(emptyProfile, { recursive: true });
+  const loneEnv = { ROOT: lone, CLAUDE_PROJECT_DIR: lone, CLAUDE_CONFIG_DIR: emptyProfile };
+  const loneWiring = ['**EXECUTE** copy (project', '**EXECUTE** config write', '**EXECUTE** merge settings (project)'].map(marker => step(marker, loneEnv).status);
+  // WHEN: the project scope is uninstalled.
+  const loneUninstall = step("## UNINSTALL  (settings entries + hook files + this scope's state; config kept)", loneEnv);
+  // THEN: nothing shadows a global config, so no warning is printed.
+  assert.deepEqual([loneWiring, loneUninstall.status, loneUninstall.stdout.split('\n').filter(line => line.startsWith('WARNING:')),
+    loneUninstall.stdout.trim().split('\n').pop(), existsSync(join(lone, '.claude', 'agent-deadline.json'))],
+  [[0, 0, 0], 0, [], `✅ uninstalled from ${join(lone, '.claude', 'hooks')}`, true],
+  `no global install: uninstall keeps the config silently: ${loneUninstall.stderr}`);
+
+  // GIVEN: session dir `top`, shell cwd drifted to top/a/sub, the only project config in its parent top/a.
+  const climb = join(realpathSync(base), 'climb');
+  const top = join(climb, 'top');
+  const parentDir = join(top, 'a');
+  const cwdSub = join(parentDir, 'sub');
+  const climbProfile = join(climb, 'profile');
+  const climbTmp = join(climb, 'tmp');
+  for (const dir of [join(top, '.claude'), join(parentDir, '.claude'), cwdSub, climbProfile, climbTmp]) mkdirSync(dir, { recursive: true });
+  const parentCfg = join(parentDir, '.claude', 'agent-deadline.json');
+  writeFileSync(parentCfg, JSON.stringify({ enabled: true, defaultMinutes: 9 }));
+  writeFileSync(join(climbProfile, 'agent-deadline.json'), JSON.stringify({ enabled: true, defaultMinutes: 30 }));
+  const climbEnv = { ...noProfileEnv, HOME: join(climb, 'home'), CLAUDE_CONFIG_DIR: climbProfile, TMPDIR: climbTmp, CLAUDE_PLUGIN_ROOT: join(HERE, '..', '..', '..') };
+  // WHEN: status runs from that cwd with the session dir substituted, and the guard gets the same payload cwd.
+  const climbStatus = spawnSync('bash', ['-c', fencedBashBlockAfter(readFileSync(SKILL, 'utf8'), '## Step 1 — STATUS FIRST, always').replaceAll('${CLAUDE_PROJECT_DIR}', top)],
+    { cwd: cwdSub, env: { ...climbEnv, PWD: cwdSub }, encoding: 'utf8', timeout: 30000 });
+  const climbPayload = JSON.stringify({ session_id: 'CLIMB', cwd: cwdSub, hook_event_name: 'PreToolUse', agent_id: 'C1', agent_type: 'developer', tool_name: 'Bash', tool_input: {} });
+  const climbGuard = spawnSync('node', [join(HERE, '..', 'assets', 'agent-deadline-guard.mjs')], { input: climbPayload, env: { ...climbEnv, CLAUDE_PROJECT_DIR: top }, encoding: 'utf8', timeout: 30000 });
+  const guardConfig = (() => {
+    try { return JSON.parse(readFileSync(join(climbTmp, 'brewtools-agent-deadline', 'CLIMB', 'C1.json'), 'utf8')).config; }
+    catch { return `NO STATE: ${climbGuard.stdout}${climbGuard.stderr}`; }
+  })();
+  // THEN: status names the parent config the guard loads, not the global one seen from the session dir.
+  assert.deepEqual([climbStatus.status, climbStatus.stdout.split('\n').find(line => line.startsWith('governing_config=')) ?? 'NO governing_config= LINE', guardConfig], [
+    0, `governing_config=${parentCfg} governing_scope=project orphan_config=no`, parentCfg,
+  ], `status climbs from the payload cwd like the guard's loadConfig(cwd): ${climbStatus.stderr}`);
 } finally {
   rmSync(base, { recursive: true, force: true });
 }

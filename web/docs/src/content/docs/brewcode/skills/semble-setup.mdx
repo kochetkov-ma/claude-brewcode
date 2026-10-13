@@ -226,15 +226,15 @@ The first seven rows are the canonical vocabulary shared by every `-setup` skill
 
 | Surface | Location |
 |---------|----------|
-| MCP server | `~/.claude.json` `.mcpServers.semble_code`, user scope — `-s user` is mandatory, the CLI default is `local`. Every mutation is rollback-safe: a failed `add`/`repair` restores the file it was about to overwrite instead of leaving it half-written |
+| MCP server | `~/.claude.json` `.mcpServers.semble_code`, user scope — `-s user` is mandatory, the CLI default is `local`. A failed `add`/`repair` restores the file it was about to overwrite |
 | Command | `uvx --from 'semble[mcp]==0.6.2' semble --content <SEMBLE_CONTENT_ARGS>` (Corpus below has the actual token list) |
 | Shared cache root | absolute `SEMBLE_CACHE_LOCATION`: macOS `~/Library/Caches/semble-code` / Linux `${XDG_CACHE_HOME:-$HOME/.cache}/semble-code` |
 | Content variants | one hashed repository directory with `index` for code-only and `index-<sorted-content>` for every other exact selection; `docs` and `config` use narrower siblings, while the registered corpus and `all` both use `index-code-config-docs` |
-| State | `<repo>/.claude/semble/state.json` — project root resolved by the canonical recipe: `CLAUDE_PROJECT_DIR` -> `git rev-parse --show-toplevel` -> an upward walk for `.git`/`.claude` -> `PWD` |
+| State | `<repo>/.claude/semble/state.json` — project root resolved by the canonical recipe: `CLAUDE_PROJECT_DIR` -> `git rev-parse --show-toplevel` -> an upward walk for `.git`/`.claude` -> `PWD`. The walk's `.claude` step skips `HOME` and the profile parent (the directory whose `.claude` is the active config dir), in the scripts and in the three hooks; user-scope `add`/`repair`/`checkpoint` write no `state.json` there (`semble-mcp.sh add|repair --no-state` forces this; `checkpoint` exits 3). An explicit `CLAUDE_PROJECT_DIR` or git toplevel is taken as given, even when it is `HOME` |
 | Rule | `<repo>/.claude/rules/semble-first.md` |
-| Ignore file | `<repo>/.sembleignore` — keeps generated/vendored trees out of the corpus; managed like the rule (user edits reported, never clobbered) and gets an appended, **commented-out** block of measured candidates (duplicate trees, disproportionately heavy directories) — nothing is excluded until the user uncomments a line |
+| Ignore file | `<repo>/.sembleignore` — keeps generated/vendored trees out of the corpus; managed like the rule (user edits reported, never clobbered) and gets an appended, **commented-out** block of measured candidates (duplicate trees, heavy directories) — nothing is excluded until the user uncomments a line. Candidates and `audit` honour `.sembleignore` and `.gitignore` like semble's own walker |
 | CLAUDE.md | a marked `<!-- BEGIN brewcode:semble -->` block, refreshed in place (one copy, never appended twice); the matching `<!-- END brewcode:semble -->` closes it. Other tools that rewrite `CLAUDE.md` (`context-slim`, `memory-sync`, `task-board-setup`, `text-optimize`) keep the marked range byte-identical. Unpaired or duplicated markers count as `malformed`: nothing is written and the user fixes the file by hand. Only `uninstall` removes the block |
-| Hooks | three files in `.claude/hooks/` — `semble-session.mjs` (SessionStart, no matcher), `semble-stats.mjs` (PostToolUse + PostToolUseFailure, matcher `mcp__semble_code__search\|mcp__semble_code__find_related\|Bash\|Grep\|Glob\|Read`), `semble-subagent.mjs` (SubagentStart, **no matcher key** — matches every agent type) — four `settings.json` registrations total, each `"timeout": 5` (seconds), plus the two exact `mcp__semble_code__*` permission entries. Status reports `hooks <n>/4 wired` — never 3 files. `semble-explore.mjs`, `semble-reminder.mjs` and `semble-prefetch.mjs` are retired: `install`/`upgrade` deletes the files and their markers and removes their settings rows, reconciling rather than appending. See Retired hooks below |
+| Hooks | three files in `.claude/hooks/` — `semble-session.mjs` (SessionStart, no matcher), `semble-stats.mjs` (PostToolUse + PostToolUseFailure, matcher `mcp__semble_code__search\|mcp__semble_code__find_related\|Bash\|Grep\|Glob\|Read`), `semble-subagent.mjs` (SubagentStart, **no matcher key** — matches every agent type) — four `settings.json` registrations total, each `"timeout": 5` (seconds), each with a portable argument `${CLAUDE_PROJECT_DIR}/.claude/hooks/<file>.mjs` so the tracked `settings.json` works in every clone, plus the two exact `mcp__semble_code__*` permission entries. Status reports `hooks <n>/4 wired` — never 3 files. `semble-explore.mjs`, `semble-reminder.mjs` and `semble-prefetch.mjs` are retired: `install`/`upgrade` deletes the files and their markers and removes their settings rows, reconciling rather than appending. See Retired hooks below |
 | Agents | project `.claude/agents/**/*.md` get the two tool names added to `tools:`; global agents are never touched. `apply` records, per file, exactly which tool names it added; `--revert` strips only those recorded names and leaves any user-authored tool name in the same list untouched — a file with no record declines to revert rather than guessing |
 
 ### CLAUDE.md conflict scan
@@ -276,6 +276,16 @@ A same-profile A/B ran 36 sessions per run. The pooled semble share was 42% with
 
 Older telemetry logs may still hold `src:"reminder"`, `src:"prefetch"` or `src:"explore"` records. The status reader counts them per channel; nothing writes them any more.
 
+### `.gitignore` behaviour
+
+`install` adds the `.claude/semble/` line to the repository `.gitignore` only when no rule there already ignores `state.json`, `telemetry.jsonl` and `.dir-probe`. A covering rule such as `/.claude/*` is listed under `unchanged` and nothing is written:
+
+```text
+gitignore: .claude/semble/ already ignored by <file>:<line>:<pattern> - not appended
+```
+
+Only repository `.gitignore` rules count: `core.excludesFile` and `.git/info/exclude` are per-machine, so they never suppress the line, and a negated (`!`) deciding rule never counts as cover. Removal drops the `.claude/semble/` line with its `# brewcode:semble` header and the retired marker lines, whoever wrote them; a covering rule stays.
+
 ### Measured delivery
 
 CC 2.1.226, real headless sessions, joined on `tool_use_id` between the hook's own telemetry record and the `hook_additional_context` transcript attachment. Only the surviving channels are listed.
@@ -306,17 +316,29 @@ The verdict logic itself follows one rule: a guidance section that **errored** a
 guidance: rule managed | CLAUDE.md present | hooks 4/4 wired | permissions yes | version X.Y.Z (plugin A.B.C - run /brewcode:semble-setup upgrade)
 ```
 
+A hook row whose argument is an absolute path (the 6.5.0 shape, valid only on the checkout that wrote it) is `drifted` and drops the project to `partial`; see the ladder below. `upgrade` (and `install`) rewrite those rows in place to the portable form `${CLAUDE_PROJECT_DIR}/.claude/hooks/...`, keep foreign hooks, and a second run is a byte no-op.
+
 Leftover retired hooks (files or settings rows) print `retired:  <names> - stale (remove via upgrade)`, the verdict reason reads `stale (remove via upgrade): <names>`, and a project that is otherwise `ready` drops to `partial` with the same next step. The JSON fields are `.guidance.retired` (files) and `.guidance.retiredWired` (registrations). They are never counted as missing hooks.
 
 The stamp lives in the frontmatter of `.claude/rules/semble-first.md` (`version:`) and on line 2 of each hook file (`// brewcode-meta: version=X.Y.Z generated_by=brewcode:semble-setup`). When the two disagree, the overall verdict drops from `ready` to `partial` and **Next Step** becomes `Run /brewcode:semble-setup upgrade`. Stamping never fabricates a value it cannot resolve — the resolver refuses to write rather than bake in a fake version.
 
-The rule and `.sembleignore` are compared after the stamp is stripped. Identical content is `unchanged`; a metadata-only delta is re-synced as `re-synced <path> (metadata only)`; a byte-pristine copy of any earlier release (v4.5.0 to v6.4.0) is replaced as `upgraded <path> (pristine prior-release copy)` with no `--force` and no backup, and `status` shows it as `stale` (`semble-first rule is a prior-release copy`). Anything else is `user_modified`: skipped, with a diff on stderr, and overwritten only by `--force` after a backup. `uninstall` deletes a pristine prior copy without a backup.
+The rule and `.sembleignore` are compared after the stamp is stripped. Identical content is `unchanged`; a metadata-only delta is re-synced as `re-synced <path> (metadata only)`; a byte-pristine copy of any earlier release (v4.5.0 to v6.4.0) is replaced as `upgraded <path> (pristine prior-release copy)` with no `--force` and no backup, and `status` shows it as `stale` (`semble-first rule is a prior-release copy`). Anything else is `user_modified`: skipped, with a diff on stderr, and overwritten only by `--force` after a backup. A hand-edited rule at an old stamp never gets plain `upgrade`; see the ladder below. `uninstall` deletes a pristine prior copy without a backup.
 
 `upgrade`'s idempotence was tightened alongside it: a run with nothing to change now reports `unchanged`, not `changed` — the `.sembleignore` half snapshots itself before and after so a template re-sync followed by the candidates re-append collapses to a net-zero result instead of a false positive on every run. And because the MCP server is registered at **user** scope, a second project on the same machine used to short-circuit on "already registered" and never receive its own `state.json`; every project now gets one, regardless of what an earlier project already wrote.
 
 <Callout type="note">
 `unchanged` from `install`/`upgrade` is never a promise of byte-identity with the plugin template — a stale metadata stamp on otherwise identical prose re-syncs and reports itself as `re-synced ... (metadata only)`, and a managed `.sembleignore` legitimately differs from the shipped template the moment `install` appends its measured-candidates block. Read `Actions`, not just the verdict, before assuming nothing moved.
 </Callout>
+
+### Next Step ladder for `partial`
+
+| Gap | Next Step |
+|-----|-----------|
+| Only warm/smoke unrecorded, and/or the index variant missing (for example an index-only cache) | `/brewcode:semble-setup resume` - warm builds the variant |
+| Hand-edited rule at an old stamp | `diff -u .claude/rules/semble-first.md <template>`, merge by hand and set `content_version`; or `/brewcode:semble-setup upgrade --force` (explicit approval; backs up `semble-first.md.bak.<epoch>` first, `.sembleignore` needs its own approval) |
+| Pin moved, retired hooks left, a pristine prior-release copy, or artifacts at an older `content_version` (rule not hand-edited) | `/brewcode:semble-setup upgrade` |
+| Only absolute-path hook rows (the 6.5.0 shape): `.guidance.absoluteCount`, line `portable:  N absolute-path hook entries (break every other clone) - run /brewcode:semble-setup upgrade` | `/brewcode:semble-setup upgrade` - rewrites them in place |
+| Any install step missing | `/brewcode:semble-setup install` |
 
 ### Reload boundary
 

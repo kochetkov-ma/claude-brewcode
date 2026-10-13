@@ -256,6 +256,26 @@ _open_tokens() {
 _fm_field() { grep -m1 "^$2:" "$1" 2>/dev/null | sed "s/^$2:[[:space:]]*//" | cut -c1-200 || true; }
 _hdr() { printf '\n--- %s ---\n' "$1"; }
 
+# Frontmatter `paths:` only: inline value verbatim, a block list (`- "a"` lines) as `["a", "b"]`; none -> empty.
+_rule_paths() {
+  awk '
+    NR == 1 { if ($0 !~ /^---[[:space:]]*$/) exit; next }
+    /^---[[:space:]]*$/ { exit }
+    inlist && /^[[:space:]]*(#.*)?$/ { next }
+    inlist && /^[[:space:]]*-([[:space:]]|$)/ {
+      v = $0; sub(/^[[:space:]]*-[[:space:]]*/, "", v); sub(/[[:space:]]+$/, "", v)
+      items = items (n++ ? ", " : "") v; next
+    }
+    inlist { exit }
+    /^paths:/ {
+      v = $0; sub(/^paths:[[:space:]]*/, "", v); sub(/[[:space:]]+$/, "", v)
+      if (v != "") { print v; exit }
+      inlist = 1
+    }
+    END { if (n) print "[" items "]" }
+  ' "$1" 2>/dev/null || true
+}
+
 # Paths arrive on STDIN, one per line - a recursive `find` feed reaches nested files no single-level
 # glob produces (CC discovers agents in subfolders such as `.claude/agents/review/`).
 _fm_list() {
@@ -298,7 +318,7 @@ scan_target() {
     _anyrule=1
     # awk counts a final line with no trailing newline; `|| echo ?` keeps an unreadable file from aborting scan.
     _ln=$(awk 'END { print NR }' "$f" 2>/dev/null || echo "?")
-    _paths=$(grep -m1 '^paths:' "$f" 2>/dev/null | sed 's/^paths:[[:space:]]*//' || true)
+    _paths=$(_rule_paths "$f")
     [ -n "$_paths" ] || _paths="(no paths:)"
     printf '%s :: %s lines :: %s\n' "$f" "$_ln" "$_paths"
   done < <(_rules_md)
@@ -586,6 +606,25 @@ refresh_refs() {
 }
 
 # ── validate ────────────────────────────────────────────────────────────────────
+# `line<TAB>references/x.md` per OWN cite (bare, memory-sync/ or ${CLAUDE_SKILL_DIR}/ prefix); other dirs' refs, .mdx skipped.
+_own_ref_cites() {
+  awk '
+    {
+      s = $0; pos = 1
+      while ((i = index(substr(s, pos), "references/")) > 0) {
+        at = pos + i - 1; pos = at + 11; pre = substr(s, 1, at - 1)
+        if (!match(substr(s, pos), /^[A-Za-z0-9._-]+/)) continue
+        tok = substr(s, pos, RLENGTH); nxt = substr(s, pos + RLENGTH, 1)
+        sub(/\.+$/, "", tok)
+        if (tok !~ /\.md$/ || nxt == "/") continue
+        if (pre ~ /[A-Za-z0-9._\/-]$/ && pre !~ /(^|[^A-Za-z0-9._-])\.claude\/skills\/memory-sync\/$/ \
+            && pre !~ /\$[{]CLAUDE_SKILL_DIR[}]\/$/) continue
+        print FNR "\treferences/" tok
+      }
+    }
+  ' "$1" 2>/dev/null || true
+}
+
 validate_emit() {
   echo "=== memory-sync-setup: validate ==="
   _errors=0
@@ -613,18 +652,19 @@ validate_emit() {
 
   # (3) references, BOTH directions: every cited references/*.md exists, every emitted one is cited.
   _refbad=0
-  for c in $(grep -oE 'references/[A-Za-z0-9._-]+\.md' "$TARGET/SKILL.md" | sort -u || true); do
+  _cites=$(_own_ref_cites "$TARGET/SKILL.md")
+  _citeset=" $(printf '%s\n' "$_cites" | cut -f2 | sort -u | tr '\n' ' ')"
+  for c in $_citeset; do
     [ -f "$TARGET/$c" ] && continue
-    _ln=$(grep -nF "$c" "$TARGET/SKILL.md" | head -1 | cut -d: -f1 || true)
+    _ln=$(printf '%s\n' "$_cites" | awk -F'\t' -v c="$c" '$2 == c { print $1; exit }')
     echo "❌ FAILED: $TARGET/SKILL.md:${_ln:-?}: cites $c which does not exist"
     _refbad=1; _errors=$((_errors+1))
   done
   for r in $EMITTED_REFS; do
     [ -f "$TARGET_REFS/$r" ] || continue
-    if ! grep -qF "references/$r" "$TARGET/SKILL.md"; then
-      echo "❌ FAILED: $TARGET_REFS/$r is emitted but never cited by $TARGET/SKILL.md"
-      _refbad=1; _errors=$((_errors+1))
-    fi
+    case "$_citeset" in *" references/$r "*) continue ;; esac
+    echo "❌ FAILED: $TARGET_REFS/$r is emitted but never cited by $TARGET/SKILL.md"
+    _refbad=1; _errors=$((_errors+1))
   done
   [ "$_refbad" -eq 0 ] && echo "✅ references consistent both ways (every citation resolves, every emitted reference is cited)"
 

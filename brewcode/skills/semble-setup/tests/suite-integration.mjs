@@ -155,7 +155,7 @@ const ENV = {
 
 function run(script, args, extraEnv = {}) {
   const r = spawnSync('bash', [script, ...args], {
-    encoding: 'utf8', env: { ...ENV, ...extraEnv }, timeout: 120000,
+    encoding: 'utf8', env: { ...ENV, ...extraEnv }, timeout: 120000, maxBuffer: 64 * 1024 * 1024,
   });
   return { stdout: r.stdout || '', stderr: r.stderr || '', status: r.status };
 }
@@ -453,10 +453,10 @@ check('wired: --strict exit', strict.status, 1, '--strict exits 1 on any verdict
 
 // ── 2a. guidance ────────────────────────────────────────────────────────────
 check('guidance: keys', keysOf(R.guidance),
-  ['claudeMd', 'content_version', 'hooks', 'ignore', 'permissionsWired', 'pluginVersion',
+  ['absoluteCount', 'claudeMd', 'content_version', 'hooks', 'ignore', 'permissionsWired', 'pluginVersion',
     'retired', 'retiredWired', 'rule', 'settingsFile', 'staleEntries', 'templateContentVersion', 'version',
     'wantCount', 'wiredCount'],
-  'the §9.1 guidance shape plus the derived wiredCount/wantCount, the migration list, and the '
+  'the §9.1 guidance shape plus the derived wiredCount/wantCount/absoluteCount, the migration list, and the '
   + 'installed-vs-plugin stamp pair that carries the stale-artifacts signal');
 // Stale-artifacts verdict keys on content_version (`version` informational-only); both pinned to shipped
 // template so neither half silently drops out of the report.
@@ -896,8 +896,61 @@ check('lifecycle: post-removal verdict', [afterRem.verdict, afterRem.state.phase
   ['partial', 'absent', 'correct'],
   'the server is still registered while the project state is gone => partial');
 
+// ═══ 3b. Large index metadata: sibling JSON never rides argv/env ═══
+// Old env transport: ~0.3 MiB -> V8 stack overflow (env bytes eat the stack), >1 MiB -> E2BIG.
+const P_BIG = join(WORLD, 'p-big');
+const BIG_CACHE = join(WORLD, 'cache-big', 'semble-code');
+const bigEnv = {
+  SEMBLE_PROJECT_ROOT: P_BIG, SEMBLE_TEST_HOME: HOME_BARE, HOME: HOME_BARE, SEMBLE_CACHE_ROOT_CODE: BIG_CACHE,
+};
+const BIG_INDEX = join(BIG_CACHE, createHash('sha256').update(P_BIG).digest('hex'), 'index-code-config-docs');
+write(join(P_BIG, 'src/app.py'), 'def main():\n    return 1\n');
+write(join(BIG_INDEX, 'chunks.json'), CHUNKS);
+write(join(BIG_INDEX, 'bm25_index'), BM25);
+write(join(BIG_INDEX, 'semantic_index'), SEMANTIC);
+function bigMeta(count) {
+  const files = {};
+  for (let i = 0; i < count; i += 1) {
+    const n = String(i).padStart(5, '0');
+    files[`src/pkg_${n}/module_${n}.py`] = { mtime_ns: 1754150000, start: i, count: 1 };
+  }
+  return { cache_version: 1, content_type: ['code', 'docs', 'config'], time: 1754150000, root_path: P_BIG, files };
+}
+const BIG_CASES = [['stack-overflow', 4500, 354493], ['e2big', 18000, 1428993]];
+let bigMetaLast = null;
+for (const [mode, count, bytesSansRoot] of BIG_CASES) {
+  bigMetaLast = bigMeta(count);
+  const text = `${JSON.stringify(bigMetaLast)}\n`;
+  write(join(BIG_INDEX, 'metadata.json'), text);
+  check(`big ${mode}: metadata.json size`, Buffer.byteLength(text) - Buffer.byteLength(P_BIG), bytesSansRoot,
+    `exact fixture bytes (minus the temp root path) for the ${mode} regime`);
+  const js = runStatus(['--section', 'all', '--json'], bigEnv);
+  const RB = safeParse(js.stdout);
+  check(`big ${mode}: --section all --json`,
+    {
+      status: js.status, stderr: js.stderr, errors: SECTIONS.filter((k) => hasError(RB[k])),
+      metadata: RB.cache && RB.cache.metadata, verdict: RB.verdict,
+    },
+    { status: 0, stderr: '', errors: [], metadata: bigMetaLast, verdict: 'not_installed' },
+    'the assembler reads sibling JSON from stdin: report produced, every section real, metadata verbatim');
+  const hu = runStatus(['--section', 'all'], bigEnv);
+  check(`big ${mode}: --section all human`,
+    { status: hu.status, stderr: hu.stderr, tail: hu.stdout.split('\n').slice(-3) },
+    {
+      status: 0, stderr: '',
+      tail: ['⏭️ not_installed - semble_code is not registered', 'Next Step: Run /brewcode:semble-setup install', ''],
+    },
+    'the human report renders to its verdict line instead of `status assembly failed`');
+}
+const bigAudit = run(PROJECT_SH, ['audit', '--json'], bigEnv);
+const bigAuditJson = safeParse(bigAudit.stdout);
+check('big e2big: semble-project.sh audit --json',
+  { status: bigAudit.status, metadata: bigAuditJson.cache && bigAuditJson.cache.metadata },
+  { status: 0, metadata: bigMetaLast },
+  'audit takes the cache info on stdin and re-emits its metadata verbatim');
+
 // ═══ 4. Read-only + external-world guarantees ═══
-check('read-only: wrapped status runs', roRuns, 16,
+check('read-only: wrapped status runs', roRuns, 20,
   'every semble-status.sh invocation in this suite was snapshot-wrapped');
 check('read-only: violations', roViolations, 0,
   'not one semble-status.sh run created, modified or deleted anything under the temp tree');

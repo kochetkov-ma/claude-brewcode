@@ -101,6 +101,62 @@ test('GIVEN mixed flag configs WHEN running the shipped flag probe THEN every co
   ] }, `flag probe output (stderr: ${result.stderr})`);
 });
 
+test('GIVEN configs only in an ancestor of the session dir WHEN running the flag probe THEN GOVERNING names the file each guard loads', t => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'setup-status-climb-')));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const top = join(root, 'top'), parent = join(top, 'a'), session = join(parent, 'sub'), tmp = join(root, 'tmp'), cfg = join(root, 'cfg');
+  for (const dir of [join(parent, '.claude'), join(session, '.claude'), tmp, cfg]) mkdirSync(dir, { recursive: true });
+  writeFileSync(join(parent, '.claude', 'agent-deadline.json'), JSON.stringify({ enabled: true, defaultMinutes: 9 }));
+  writeFileSync(join(parent, '.claude', 'agent-return.json'), JSON.stringify({ enabled: true, passTokens: 1111 }));
+  writeFileSync(join(cfg, 'agent-deadline.json'), JSON.stringify({ enabled: true, defaultMinutes: 30 }));
+  writeFileSync(join(cfg, 'agent-return.json'), JSON.stringify({ enabled: true, passTokens: 2222 }));
+  const env = { ...process.env, HOME: join(root, 'home'), CLAUDE_CONFIG_DIR: cfg, CLAUDE_PROJECT_DIR: session, TMPDIR: tmp, PWD: session };
+  const probe = spawnSync('bash', ['-e', '-o', 'pipefail', '-c', flagProbe], { cwd: session, encoding: 'utf8', env, timeout: 10000 });
+  const assets = join(ROOT, 'brewtools', 'skills');
+  const payload = JSON.stringify({ session_id: 'CLIMB', cwd: session, hook_event_name: 'PreToolUse', agent_id: 'C1', agent_type: 'developer', tool_name: 'Bash', tool_input: {} });
+  const guard = spawnSync('node', [join(assets, 'agent-deadline-setup', 'assets', 'agent-deadline-guard.mjs')], { input: payload, cwd: session, env, encoding: 'utf8', timeout: 10000 });
+  const contract = spawnSync('node', [join(assets, 'agent-return-setup', 'assets', 'agent-return-contract.mjs')], { input: '{}', cwd: session, env, encoding: 'utf8', timeout: 10000 });
+  const deadlineState = join(tmp, 'brewtools-agent-deadline', 'CLIMB', 'C1.json');
+  const actual = {
+    status: probe.status,
+    governing: probe.stdout.split('\n').filter(line => line.includes(' GOVERNING ')),
+    deadlineGuardLoads: existsSync(deadlineState) ? JSON.parse(readFileSync(deadlineState, 'utf8')).config : `NO STATE: ${guard.stderr}`,
+    returnHookBudget: contract.stdout.match(/Keep it under ~\d+ tokens/)?.[0] ?? `NO BUDGET: ${contract.stderr}`,
+  };
+  assert.deepEqual(actual, {
+    status: 0,
+    governing: [`agent-deadline.json GOVERNING ${parent}/.claude/agent-deadline.json`, `agent-return.json GOVERNING ${parent}/.claude/agent-return.json`],
+    deadlineGuardLoads: `${parent}/.claude/agent-deadline.json`,
+    returnHookBudget: 'Keep it under ~1111 tokens',
+  }, `gov() climbs like loadConfig, never only $PWD/.claude (stderr: ${probe.stderr})`);
+});
+
+test('GIVEN a session dir above the shell cwd WHEN running the flag probe THEN row 6 climbs from the cwd and row 11 from the session dir', t => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'setup-status-cwd-')));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const session = join(root, 'top'), parent = join(session, 'a'), cwd = join(parent, 'sub'), cfg = join(root, 'cfg');
+  for (const dir of [join(session, '.claude'), join(parent, '.claude'), cwd, cfg]) mkdirSync(dir, { recursive: true });
+  for (const name of ['agent-deadline.json', 'agent-return.json']) {
+    writeFileSync(join(parent, '.claude', name), '{"enabled":true}');
+    writeFileSync(join(cfg, name), '{"enabled":true}');
+  }
+  const probe = spawnSync('bash', ['-e', '-o', 'pipefail', '-c', flagProbe], {
+    cwd, encoding: 'utf8', env: { ...process.env, HOME: join(root, 'home'), CLAUDE_CONFIG_DIR: cfg, CLAUDE_PROJECT_DIR: session, PWD: cwd }, timeout: 10000,
+  });
+  assert.deepEqual([probe.status, probe.stdout.split('\n').filter(line => line.includes(' GOVERNING '))], [0, [
+    `agent-deadline.json GOVERNING ${parent}/.claude/agent-deadline.json`, `agent-return.json GOVERNING ${cfg}/agent-return.json`,
+  ]], `deadline guard reads payload cwd, agent-return hooks read CLAUDE_PROJECT_DIR (stderr: ${probe.stderr})`);
+});
+
+test('GIVEN an orphan project config WHEN reading rows 6/11 notes and both owning skills THEN the fix is purge project, never upgrade', () => {
+  const notes = read('brewcode/skills/setup-status/references/row-notes.md');
+  const orphan = notes.slice(notes.indexOf('## Rows 6 and 11')).split('\n').find(line => line.startsWith('- Orphan config:')) ?? 'NO ORPHAN NOTE';
+  const owners = ['agent-deadline-setup', 'agent-return-setup'].map(name => read(`brewtools/skills/${name}/SKILL.md`))
+    .map(skill => [skill.includes('orphan_config=$ORPHAN'), skill.includes('never for a scope with `orphan_config=yes`')]);
+  assert.deepEqual([orphan.includes('purge project'), orphan.includes('Never `upgrade`'), owners],
+    [true, true, [[true, true], [true, true]]], 'orphan config routes to purge project in setup-status and in both owning status probes');
+});
+
 test('GIVEN the Phase 2b PAIRS heredoc WHEN resolving each plugin source THEN every asset exists and semble pairs equal the live HOOK_MJS', () => {
   const pairs = source.match(/<<'PAIRS'\n([\s\S]*?)\nPAIRS\n/)[1].split('\n').map(line => line.split('|'));
   const plugin = { BC: 'brewcode', BT: 'brewtools', BD: 'brewdoc' };
@@ -111,4 +167,27 @@ test('GIVEN the Phase 2b PAIRS heredoc WHEN resolving each plugin source THEN ev
   };
   assert.deepEqual(actual, { missing: [], sembleHooks: live },
     'a PAIRS source with no plugin asset prints NOSRC; retired semble hooks belong to Phase 2c, never to PAIRS');
+});
+
+test('GIVEN absolute-path hook rows as the whole row 2 wiring signal WHEN reading Phase 2c, row-notes Row 2 and semble-setup THEN each prescribes upgrade ahead of the install fallback', () => {
+  const PAIR = ['`staleEntries == absoluteCount`', '`wiredCount + absoluteCount == wantCount`'];
+  const row = lines.find(line => line.startsWith('| `guidance`:')) ?? 'NO GUIDANCE ROW';
+  const clauses = row.split('|')[2].split('; otherwise ').map(clause =>
+    [clause.match(/`(retired|absoluteCount|staleEntries)`/)?.[1], clause.match(/prescribing `(\w+)`/)?.[1]]);
+  const absClause = row.split('; otherwise ').find(clause => clause.startsWith('`absoluteCount`')) ?? '';
+  const notes = read('brewcode/skills/setup-status/references/row-notes.md').split('\n')
+    .find(line => line.startsWith('- Absolute-path hook rows')) ?? '';
+  const ladder = read('brewcode/skills/semble-setup/SKILL.md').split('\n').find(line => line.startsWith('> `partial` -> `.nextStep`:')) ?? '';
+  const actual = {
+    fieldListed: row.split('|')[1].includes('`absoluteCount`'),
+    clauses,
+    absPair: PAIR.map(cond => absClause.includes(cond)),
+    notesPair: [...PAIR.map(cond => notes.includes(cond.replace(' == ', '` == `').replace(' + ', '` + `'))), notes.includes('Command `upgrade`')],
+    sembleLadder: /only absolute-path hook rows \(`\.guidance\.absoluteCount`[^;]*-> `upgrade`/.test(ladder),
+  };
+  assert.deepEqual(actual, {
+    fieldListed: true,
+    clauses: [['retired', 'upgrade'], ['absoluteCount', 'upgrade'], ['staleEntries', 'install']],
+    absPair: [true, true], notesPair: [true, true, true], sembleLadder: true,
+  }, 'absolute-only drift -> upgrade from the counts (never nextStep), in setup-status, its row notes and the semble ladder');
 });
