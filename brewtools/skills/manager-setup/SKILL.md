@@ -246,13 +246,13 @@ try {
   if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) { console.error('ABORT: ' + settings + ' is not a JSON object — fix it by hand; nothing was written'); process.exit(1); }
   cfg.hooks = (cfg.hooks && typeof cfg.hooks==='object') ? cfg.hooks : {};
   const arr = Array.isArray(cfg.hooks.PreToolUse) ? cfg.hooks.PreToolUse : [];
-  const has = m => Array.isArray(m.hooks) && m.hooks.some(h => typeof h.command==='string' && (h.command.includes(TAG) || h.command.includes('hardmode-guard.mjs')));
+  const has = m => Array.isArray(m.hooks) && m.hooks.some(h => typeof h.command==='string' && (h.command.includes(TAG) || [h.command, ...(Array.isArray(h.args) ? h.args : [])].join(' ').includes('hardmode-guard.mjs')));
   if (!arr.some(has)) {
     arr.push({ matcher:'*', hooks:[{ type:'command', command:\`node \"\${guard}\" # \${TAG}\`, timeout:5, onFailure:'block' }] });
     newlyRegistered = true;
   }
   // An entry written before the field existed gains it here: has() skips it above.
-  for (const m of arr) for (const h of (Array.isArray(m.hooks) ? m.hooks : [])) if (typeof h.command==='string' && (h.command.includes(TAG) || h.command.includes('hardmode-guard.mjs'))) h.onFailure = 'block';
+  for (const m of arr) for (const h of (Array.isArray(m.hooks) ? m.hooks : [])) if (typeof h.command==='string' && (h.command.includes(TAG) || [h.command, ...(Array.isArray(h.args) ? h.args : [])].join(' ').includes('hardmode-guard.mjs'))) h.onFailure = 'block';
   cfg.hooks.PreToolUse = arr;
   // 4. task graph on, same merge — idempotent, one key, every other setting preserved.
   const win = [['.claude/settings.local.json', cfg], ['.claude/settings.json', readJson(path.join(cwd,'.claude','settings.json'))],
@@ -314,7 +314,7 @@ const dir = path.join(cwd, '.claude', 'brewtools', 'manager');
 const guard = path.join(dir, 'hardmode-guard.mjs');
 const settings = path.join(cwd, '.claude', 'settings.local.json');
 const TAG = 'brewtools-manager-guard';
-const has = m => Array.isArray(m.hooks) && m.hooks.some(h => typeof h.command==='string' && (h.command.includes(TAG) || h.command.includes('hardmode-guard.mjs')));
+const has = m => Array.isArray(m.hooks) && m.hooks.some(h => typeof h.command==='string' && (h.command.includes(TAG) || [h.command, ...(Array.isArray(h.args) ? h.args : [])].join(' ').includes('hardmode-guard.mjs')));
 // Task graph: CC 2.1.233+ gates TaskCreate/Update/Get/List off unless env.CLAUDE_CODE_ENABLE_TODO_TOOLS
 // is set. Numeric compare, never string. Below 2.1.233 the key is a no-op, so skip the write.
 const ccVer = '${CCVER}';
@@ -354,7 +354,7 @@ try {
   fs.copyFileSync('${BT_ROOT}/hooks/lib/manager-state.mjs', path.join(dir, 'manager-state.mjs'));
   if (!arr.some(has)) { arr.push({ matcher:'*', hooks:[{ type:'command', command:\`node \"\${guard}\" # \${TAG}\`, timeout:5, onFailure:'block' }] }); newlyRegistered = true; }
   // An entry written before the field existed gains it here: has() skips it above.
-  for (const m of arr) for (const h of (Array.isArray(m.hooks) ? m.hooks : [])) if (typeof h.command==='string' && (h.command.includes(TAG) || h.command.includes('hardmode-guard.mjs'))) h.onFailure = 'block';
+  for (const m of arr) for (const h of (Array.isArray(m.hooks) ? m.hooks : [])) if (typeof h.command==='string' && (h.command.includes(TAG) || [h.command, ...(Array.isArray(h.args) ? h.args : [])].join(' ').includes('hardmode-guard.mjs'))) h.onFailure = 'block';
   cfg.hooks = (cfg.hooks && typeof cfg.hooks==='object') ? cfg.hooks : {};
   cfg.hooks.PreToolUse = arr;
   const win = [['.claude/settings.local.json', cfg], ['.claude/settings.json', readJson(path.join(cwd,'.claude','settings.json'))],
@@ -400,7 +400,7 @@ let registered = false;
 try {
   const cfg = JSON.parse(fs.readFileSync(settings,'utf8'));
   const arr = cfg && cfg.hooks && Array.isArray(cfg.hooks.PreToolUse) ? cfg.hooks.PreToolUse : [];
-  registered = arr.some(m => Array.isArray(m.hooks) && m.hooks.some(h => typeof h.command==='string' && (h.command.includes('brewtools-manager-guard') || h.command.includes('hardmode-guard.mjs'))));
+  registered = arr.some(m => Array.isArray(m.hooks) && m.hooks.some(h => typeof h.command==='string' && (h.command.includes('brewtools-manager-guard') || [h.command, ...(Array.isArray(h.args) ? h.args : [])].join(' ').includes('hardmode-guard.mjs'))));
 } catch (e) { if (e.code !== 'ENOENT') { console.error('ABORT: ' + settings + ' unreadable or invalid JSON (' + e.message + ') — cannot tell whether the guard is registered; fix it by hand, nothing was written'); process.exit(1); } }
 if (!registered && !fs.existsSync(guard)) { console.log(JSON.stringify({notInstalled:true})); process.exit(0); }
 const r = await writeState('project', {hard:true}, cwd);
@@ -449,7 +449,7 @@ const guard = path.join(dir, 'hardmode-guard.mjs');
 const helper = path.join(dir, 'manager-state.mjs');
 const settings = path.join(cwd, '.claude', 'settings.local.json');
 const TAG = 'brewtools-manager-guard';
-const isGuardEntry = m => Array.isArray(m.hooks) && m.hooks.some(h => typeof h.command==='string' && (h.command.includes(TAG) || h.command.includes('hardmode-guard.mjs')));
+const isGuardEntry = m => Array.isArray(m.hooks) && m.hooks.some(h => typeof h.command==='string' && (h.command.includes(TAG) || [h.command, ...(Array.isArray(h.args) ? h.args : [])].join(' ').includes('hardmode-guard.mjs')));
 const lock = settings + '.lock';
 fs.mkdirSync(path.dirname(settings), {recursive:true});
 let held = false;
@@ -540,7 +540,7 @@ let stillRegistered = false;
 try {
   const cfg = JSON.parse(fs.readFileSync(settings,'utf8'));
   const arr = cfg && cfg.hooks && Array.isArray(cfg.hooks.PreToolUse) ? cfg.hooks.PreToolUse : [];
-  stillRegistered = arr.some(m => Array.isArray(m.hooks) && m.hooks.some(h => typeof h.command==='string' && (h.command.includes('brewtools-manager-guard') || h.command.includes('hardmode-guard.mjs'))));
+  stillRegistered = arr.some(m => Array.isArray(m.hooks) && m.hooks.some(h => typeof h.command==='string' && (h.command.includes('brewtools-manager-guard') || [h.command, ...(Array.isArray(h.args) ? h.args : [])].join(' ').includes('hardmode-guard.mjs'))));
 } catch (e) { if (e.code !== 'ENOENT') { console.error('ABORT: ' + settings + ' unreadable or invalid JSON (' + e.message + ') — nothing deleted'); process.exit(1); } }
 if (stillRegistered) { console.error('ABORT: the guard is still registered in ' + settings + ' — run uninstall (steps 1 and 2) first; nothing deleted'); process.exit(1); }
 // Provenance: install/upgrade set todoToolsAdded only when the key was absent before their write.
@@ -652,7 +652,7 @@ let registered = false;
 try {
   const cfg = JSON.parse(fs.readFileSync(settings,'utf8'));
   const arr = cfg && cfg.hooks && Array.isArray(cfg.hooks.PreToolUse) ? cfg.hooks.PreToolUse : [];
-  registered = arr.some(m => Array.isArray(m.hooks) && m.hooks.some(h => typeof h.command==='string' && (h.command.includes('brewtools-manager-guard') || h.command.includes('hardmode-guard.mjs'))));
+  registered = arr.some(m => Array.isArray(m.hooks) && m.hooks.some(h => typeof h.command==='string' && (h.command.includes('brewtools-manager-guard') || [h.command, ...(Array.isArray(h.args) ? h.args : [])].join(' ').includes('hardmode-guard.mjs'))));
 } catch (e) { if (e.code !== 'ENOENT') registered = null; }
 // Version is read from the RAW project state file, never from resolveState(): a merge with
 // DEFAULT_STATE would hand an old file the current version and hide the staleness.

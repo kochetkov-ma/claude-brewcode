@@ -391,6 +391,13 @@ live script under a wrong event or matcher, is stale and the step-2 purge remove
 basename must never leave `marks`, or an old install becomes unremovable. The installer always
 writes the exec form `{hooks:[{type,command:"node",args:["${CLAUDE_PROJECT_DIR}/.claude/hooks/<script>"],timeout}]}`.
 
+**Wrapped entries are the project's.** A handler naming an owned basename (in `command` or `args`)
+whose launcher, the first word of `command` unquoted, is not `node` (e.g.
+`"$CLAUDE_PROJECT_DIR/.claude/scripts/preflight.py" exec node -- ".../semble-session.mjs"`) runs the
+hook through the project's own launcher. The merge never purges or rewrites it, and adds no
+unwrapped row for a script the same event already runs through it. `status` reports such a row as
+`custom` (counted in `wiredCount`, plus `customCount`): report-only. `remove`/`uninstall` still strip it.
+
 **Migration (pre-6.5.1 absolute paths).** An arg `<any abs dir>/.claude/hooks/<owned basename>`
 is the old form of the same hook: `canon()` maps it to the portable path, so it shares the
 portable row's key. `install`/`upgrade` rewrite it in place (position, foreign hooks and foreign
@@ -404,7 +411,7 @@ entry keys kept) and never add a second row; a copy in both forms collapses to o
 2. Drop every semble hook whose `(event, matcher, args path)` is not a want row:
    a **different** hooks dir (stale installs — Claude Code logs a hook failure on
    every tool call for each of them), a retired script, a live script on a wrong
-   event/matcher, or any shell-form `command`. Match on the canonical path (absolute
+   event/matcher, or any direct shell-form `node "<path>"` command (a wrapped one stays). Match on the canonical path (absolute
    `.claude/hooks/<owned>` -> portable), not the basename. The filter runs **inside
    `entry.hooks[]`, not over the entry array**: a hand-merged entry may hold a
    foreign hook next to a stale semble one, and only the semble one may go. An
@@ -492,19 +499,25 @@ if(fs.existsSync(f)){
     if(s===null||typeof s!=="object"||Array.isArray(s)){ console.error("ABORT: "+f+" is not a JSON object; nothing was written"); process.exit(1); }
   }
 }
-const argsOf=e=>((e&&e.hooks)||[]).flatMap(h=>(h&&h.args)||[]).filter(a=>typeof a==="string");
+// Wrapped = owned script under a project launcher (first word of `command` != node): kept, never duplicated.
+const launcher=h=>{ const m=/^\s*(?:"([^"]*)"|\x27([^\x27]*)\x27|(\S+))/.exec(typeof h.command==="string"?h.command:""); return m?String(m[1]??m[2]??m[3]).split(/[\\/]/).pop():""; };
+const namesOf=h=>marks.filter(m=>!!h&&[h.command,...(Array.isArray(h.args)?h.args:[])].some(t=>typeof t==="string"&&t.includes(m)));
+const wrappedH=h=>!!h&&typeof h.command==="string"&&!/^node(\.exe)?$/i.test(launcher(h))&&namesOf(h).length>0;
+const wrappedAt=(root,ev,script)=>((root&&root.hooks&&Array.isArray(root.hooks[ev]))?root.hooks[ev]:[]).some(e=>((e&&e.hooks)||[]).some(h=>wrappedH(h)&&namesOf(h).includes(script)));
+const argsOf=e=>((e&&e.hooks)||[]).filter(h=>!wrappedH(h)).flatMap(h=>(h&&h.args)||[]).filter(a=>typeof a==="string");
 const matcherOf=e=>(e&&typeof e.matcher==="string")?e.matcher:null;
 const isMine=a=>marks.some(m=>a===m||a.endsWith("/"+m)||a.endsWith("\\"+m));
 const cmdMark=c=>typeof c==="string"?marks.find(m=>new RegExp("(^|[\\\\/\"\x27\\s])"+m.replace(/\./g,"\\.")+"([\"\x27\\s]|$)").test(c)):undefined;
-const ownedOf=h=>{ const a=((h&&h.args)||[]).filter(x=>typeof x==="string"&&isMine(x));
-  const c=cmdMark(h&&h.command); return c?a.concat(["cmd:"+c]):a; };   // shell form: never wanted
+const ownedOf=h=>{ if(wrappedH(h)) return [];
+  const a=((h&&h.args)||[]).filter(x=>typeof x==="string"&&isMine(x));
+  const c=cmdMark(h&&h.command); return c?a.concat(["cmd:"+c]):a; };   // direct shell form: never wanted
 const wkey=(ev,m,a)=>JSON.stringify([ev,m,a]);
 const wanted=new Set(want.map(w=>wkey(w[0],w[1],REF+"/"+w[2])));   // want triples, NOT marks
 // Absolute <x>/.claude/hooks/<owned> = same key as the portable path: rewritten in place, never duplicated.
 const canon=a=>{ const m=/^(?:\/|[A-Za-z]:[\\/]).*[\\/]\.claude[\\/]hooks[\\/]([^\\/]+)$/.exec(a);
   return m&&marks.indexOf(m[1])>=0?REF+"/"+m[1]:a; };
 const desiredHook=(full,timeout)=>({type:"command",command:"node",args:[full],timeout});
-const hasArg=(h,full)=>((h&&h.args)||[]).filter(a=>typeof a==="string").map(canon).includes(full);
+const hasArg=(h,full)=>!wrappedH(h)&&((h&&h.args)||[]).filter(a=>typeof a==="string").map(canon).includes(full);
 const deq=(a,b)=>{                                     // key-order-insensitive deep equal
   if(a===b) return true;
   if(typeof a!=="object"||typeof b!=="object"||a===null||b===null) return false;
@@ -529,6 +542,7 @@ const verify=root=>{                                   // 5. null | message; run
   for(const [ev,matcher,script,timeout] of want){
     const full=REF+"/"+script;
     const hits=((root.hooks&&root.hooks[ev])||[]).filter(e=>matcherOf(e)===matcher&&argsOf(e).includes(full));
+    if(hits.length===0&&wrappedAt(root,ev,script)) continue;   // the project launches it itself
     if(hits.length!==1) return "verification failed - "+ev+"/"+(matcher||"*")+"/"+script+" present "+hits.length+" times in "+f;
     const mine=((hits[0].hooks)||[]).filter(h=>hasArg(h,full));
     if(mine.length!==1||!deq(mine[0],desiredHook(full,timeout)))
@@ -564,7 +578,7 @@ for(const [ev,matcher,script,timeout] of want){        // 3. reconcile THIS even
     seen++;
     return seen===1?reconcile(e,full,timeout):stripHook(e,full);    // extra copies are repaired away, not aborted on
   }).filter(e=>e!==null);
-  if(seen===0){
+  if(seen===0&&!wrappedAt(s,ev,script)){                // a wrapped row gets no unwrapped copy
     const entry={hooks:[desiredHook(full,timeout)]};   // timeout is SECONDS; absent = CC default 600 s
     if(matcher) entry.matcher=matcher;
     s.hooks[ev].push(entry);

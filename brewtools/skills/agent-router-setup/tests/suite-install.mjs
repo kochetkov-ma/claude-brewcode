@@ -159,10 +159,10 @@ try {
   const strictProbe = probe();
 
   // THEN: both old handlers are drift; upgrade writes the three exact entries, tier 2 without a model key.
-  assert.deepEqual(legacyProbe, { stdout: '0|2|0|0|yes\n', stderr: '', status: 0 }, 'probe must report a pinned-model tier 2 and an absolute tier-1 path as legacy');
+  assert.deepEqual(legacyProbe, { stdout: '0|2|0|0|yes|0\n', stderr: '', status: 0 }, 'probe must report a pinned-model tier 2 and an absolute tier-1 path as legacy');
   assert.equal(strictMerge.status, 0, 'strict merge over a legacy install must exit successfully');
   assert.deepEqual(strictSettings, { hooks: { PreToolUse: canonicalStrict } }, 'strict merge must write tier 1, a model-less tier 2 and the heartbeat, replacing the legacy handlers');
-  assert.deepEqual(strictProbe, { stdout: '1|0|1|1|yes\n', stderr: '', status: 0 }, 'probe must accept exactly what the installer writes at strict');
+  assert.deepEqual(strictProbe, { stdout: '1|0|1|1|yes|0\n', stderr: '', status: 0 }, 'probe must accept exactly what the installer writes at strict');
 
   // WHEN: the merge replays at fast.
   const fastMerge = spawnSync('bash', ['-c', block], { encoding: 'utf8', env, timeout: 30000 });
@@ -172,7 +172,7 @@ try {
   // THEN: tier 2 and the heartbeat are gone together.
   assert.equal(fastMerge.status, 0, 'fast merge over a strict install must exit successfully');
   assert.deepEqual(fastSettings, { hooks: { PreToolUse: [canonicalStrict[0]] } }, 'fast merge must leave the tier-1 entry only');
-  assert.deepEqual(fastProbe, { stdout: '1|0|0|0|yes\n', stderr: '', status: 0 }, 'probe must report tier 1 only at fast');
+  assert.deepEqual(fastProbe, { stdout: '1|0|0|0|yes|0\n', stderr: '', status: 0 }, 'probe must report tier 1 only at fast');
 
   // GIVEN: the exact tier-1 handler is duplicated.
   writeFileSync(settingsPath, JSON.stringify({ hooks: { PreToolUse: [
@@ -188,12 +188,12 @@ try {
   assert.equal(duplicateTier1Status.stdout.includes('tier1_refs=2 legacy_refs=0 tier2_refs=0 settings_valid=yes'), true, 'router status must expose duplicate exact tier-1 handlers');
 
   for (const [name, tier1, tier2, expected] of [
-    ['tier1Timeout', { ...exactTier1, timeout: 4 }, null, '0|1|0|0|yes\n'],
-    ['tier2EmptyPrompt', exactTier1, { ...exactTier2, prompt: '' }, '1|1|0|0|yes\n'],
-    ['tier2WrongPrompt', exactTier1, { ...exactTier2, prompt: `${judgePrompt}\nstale` }, '1|1|0|0|yes\n'],
-    ['tier2ExplicitModel', exactTier1, { ...exactTier2, model: LEGACY_PINNED_MODEL }, '1|1|0|0|yes\n'],
-    ['tier2WrongTimeout', exactTier1, { ...exactTier2, timeout: 29 }, '1|1|0|0|yes\n'],
-    ['tier2WrongStatus', exactTier1, { ...exactTier2, statusMessage: 'agent-router: stale status' }, '1|1|0|0|yes\n'],
+    ['tier1Timeout', { ...exactTier1, timeout: 4 }, null, '0|1|0|0|yes|0\n'],
+    ['tier2EmptyPrompt', exactTier1, { ...exactTier2, prompt: '' }, '1|1|0|0|yes|0\n'],
+    ['tier2WrongPrompt', exactTier1, { ...exactTier2, prompt: `${judgePrompt}\nstale` }, '1|1|0|0|yes|0\n'],
+    ['tier2ExplicitModel', exactTier1, { ...exactTier2, model: LEGACY_PINNED_MODEL }, '1|1|0|0|yes|0\n'],
+    ['tier2WrongTimeout', exactTier1, { ...exactTier2, timeout: 29 }, '1|1|0|0|yes|0\n'],
+    ['tier2WrongStatus', exactTier1, { ...exactTier2, statusMessage: 'agent-router: stale status' }, '1|1|0|0|yes|0\n'],
   ]) {
     // GIVEN: one owned handler differs from its canonical full identity.
     writeRouterSettings(tier1, tier2);
@@ -233,7 +233,7 @@ try {
   // THEN: the renamed judge is replaced; the meta line never reaches settings nor decides staleness; a body change does.
   assert.deepEqual(
     { merge: metaMerge.status, judges, inlined, metaOnly, realChange, oldInstall },
-    { merge: 0, judges: 1, inlined: judgeBody, metaOnly: '1|0|1|1|yes\n', realChange: '1|1|0|1|yes\n', oldInstall: '1|0|1|1|yes\n' },
+    { merge: 0, judges: 1, inlined: judgeBody, metaOnly: '1|0|1|1|yes|0\n', realChange: '1|1|0|1|yes|0\n', oldInstall: '1|0|1|1|yes|0\n' },
     'judge prompt must be inlined and compared without its brewcode-meta line',
   );
 
@@ -244,7 +244,7 @@ try {
   const brokenProbe = probe();
 
   // THEN: nothing is counted and the file is reported invalid.
-  assert.deepEqual(brokenProbe, { stdout: '0|0|0|0|no\n', stderr: '', status: 0 }, 'probe must report unparsable settings as invalid');
+  assert.deepEqual(brokenProbe, { stdout: '0|0|0|0|no|0\n', stderr: '', status: 0 }, 'probe must report unparsable settings as invalid');
 
   // GIVEN: uninstall sees tier 1, tier 2, the heartbeat, and a foreign handler sharing the tier entry.
   writeFileSync(settingsPath, JSON.stringify({ hooks: { PreToolUse: [
@@ -384,6 +384,69 @@ try {
       [`project_root=${h} root_resolved=yes`, `✅ ROOT=${h}`],
     ],
     'a HOME or config-dir-parent .claude is the profile: status and installer must never resolve it as the project root',
+  );
+
+  // GIVEN: the project-dusk shape, a command-only registration wrapped in the project's own launcher.
+  const wrappedHandler = { type: 'command', command: '"$CLAUDE_PROJECT_DIR/.claude/scripts/toolchain_preflight.py" exec node -- "$CLAUDE_PROJECT_DIR/.claude/hooks/agent-router.mjs"', timeout: 5 };
+  const wrappedSettings = { hooks: { PreToolUse: [{ matcher: 'Agent', hooks: [wrappedHandler] }, foreign] } };
+  writeFileSync(settingsPath, JSON.stringify(wrappedSettings, null, 2));
+
+  // WHEN: the probe reads it, then the merge replays at fast and at strict, probing after strict.
+  const wrappedProbe = probe();
+  const wrappedFast = spawnSync('bash', ['-c', block], { encoding: 'utf8', env, timeout: 30000 });
+  const afterWrappedFast = JSON.parse(readFileSync(settingsPath, 'utf8'));
+  const wrappedStrict = spawnSync('bash', ['-c', block], { encoding: 'utf8', env: { ...env, LEVEL: 'strict' }, timeout: 30000 });
+  const afterWrappedStrict = JSON.parse(readFileSync(settingsPath, 'utf8'));
+  const wrappedStrictProbe = probe();
+
+  // THEN: the wrapper counts as wrapped, never legacy; no unwrapped copy is added; only the judge joins at strict.
+  assert.deepEqual(
+    { wrappedProbe, fast: wrappedFast.status, afterWrappedFast, strict: wrappedStrict.status, afterWrappedStrict, wrappedStrictProbe },
+    {
+      wrappedProbe: { stdout: '0|0|0|0|yes|1\n', stderr: '', status: 0 },
+      fast: 0,
+      afterWrappedFast: wrappedSettings,
+      strict: 0,
+      afterWrappedStrict: { hooks: { PreToolUse: [{ matcher: 'Agent', hooks: [wrappedHandler] }, foreign, { matcher: 'Agent', hooks: [exactTier2] }] } },
+      wrappedStrictProbe: { stdout: '0|0|1|0|yes|1\n', stderr: '', status: 0 },
+    },
+    'a wrapped registration must be detected, kept byte-equal and never duplicated by install or upgrade',
+  );
+
+  // GIVEN: a hand-written direct shell form, and separately settings with no router handler at all.
+  const shellForm = { type: 'command', command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/agent-router.mjs"', timeout: 5 };
+  writeFileSync(settingsPath, JSON.stringify({ hooks: { PreToolUse: [{ matcher: 'Agent', hooks: [shellForm] }] } }, null, 2));
+
+  // WHEN: the probe reads the shell form, the merge runs, then the probe reads foreign-only settings.
+  const shellProbe = probe();
+  const shellMerge = spawnSync('bash', ['-c', block], { encoding: 'utf8', env, timeout: 30000 });
+  const afterShellMerge = JSON.parse(readFileSync(settingsPath, 'utf8'));
+  writeFileSync(settingsPath, JSON.stringify({ hooks: { PreToolUse: [foreign] } }, null, 2));
+  const missingProbe = probe();
+
+  // THEN: the shell form is legacy and migrated in place of a duplicate; a missing router stays missing.
+  assert.deepEqual(
+    { shellProbe, shell: shellMerge.status, afterShellMerge, missingProbe },
+    {
+      shellProbe: { stdout: '0|1|0|0|yes|0\n', stderr: '', status: 0 },
+      shell: 0,
+      afterShellMerge: { hooks: { PreToolUse: [canonicalStrict[0]] } },
+      missingProbe: { stdout: '0|0|0|0|yes|0\n', stderr: '', status: 0 },
+    },
+    'a direct shell-form command must be migrated, not duplicated, and an absent registration must read as missing',
+  );
+
+  // GIVEN: the wrapped registration beside a foreign entry.
+  writeFileSync(settingsPath, JSON.stringify(wrappedSettings, null, 2));
+
+  // WHEN: the canonical uninstall block runs.
+  const wrappedUninstall = spawnSync('bash', ['-c', uninstallBlock], { encoding: 'utf8', env: { ...process.env, ROOT: project }, timeout: 30000 });
+
+  // THEN: the wrapped handler goes with the hook file it launches; the foreign entry stays.
+  assert.deepEqual(
+    { rc: wrappedUninstall.status, settings: JSON.parse(readFileSync(settingsPath, 'utf8')) },
+    { rc: 0, settings: { hooks: { PreToolUse: [foreign] } } },
+    'uninstall must remove a wrapped registration, whose target file it deletes',
   );
 } finally {
   rmSync(base, { recursive: true, force: true });

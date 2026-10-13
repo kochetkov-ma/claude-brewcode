@@ -225,12 +225,17 @@ out.hooks.retired=marks.filter(m=>live.indexOf(m)<0&&fs.existsSync(path.join(dir
 let s=null; const raw=readSafe(sf);
 if(raw!==null&&raw.trim()){ try{ s=JSON.parse(raw); }catch(e){ out.hooks.settingsParsable=false; } }
 if(s!==null&&(typeof s!=="object"||Array.isArray(s))){ s=null; out.hooks.settingsParsable=false; }
-const argsOf=e=>((e&&e.hooks)||[]).flatMap(h=>(h&&h.args)||[]).filter(a=>typeof a==="string");
+// Wrapped = owned script under a project launcher (first word of `command` != node): report-only.
+const launcher=h=>{ const m=/^\s*(?:"([^"]*)"|\x27([^\x27]*)\x27|(\S+))/.exec(typeof h.command==="string"?h.command:""); return m?String(m[1]??m[2]??m[3]).split(/[\\/]/).pop():""; };
+const namesOf=h=>marks.filter(m=>!!h&&[h.command,...(Array.isArray(h.args)?h.args:[])].some(t=>typeof t==="string"&&t.includes(m)));
+const wrappedH=h=>!!h&&typeof h.command==="string"&&!/^node(\.exe)?$/i.test(launcher(h))&&namesOf(h).length>0;
+const argsOf=e=>((e&&e.hooks)||[]).filter(h=>!wrappedH(h)).flatMap(h=>(h&&h.args)||[]).filter(a=>typeof a==="string");
 const matcherOf=e=>(e&&typeof e.matcher==="string")?e.matcher:null;
 const isMine=a=>marks.some(m=>a===m||a.endsWith("/"+m)||a.endsWith("\\"+m));
 // Shell-form command naming an owned script (quoted `$CLAUDE_PROJECT_DIR` path): never wanted -> stale.
 const cmdMark=c=>typeof c==="string"?marks.find(m=>new RegExp("(^|[\\\\/\"\x27\\s])"+m.replace(/\./g,"\\.")+"([\"\x27\\s]|$)").test(c)):undefined;
-const ownedOf=h=>{ const a=((h&&h.args)||[]).filter(x=>typeof x==="string"&&isMine(x));
+const ownedOf=h=>{ if(wrappedH(h)) return [];
+  const a=((h&&h.args)||[]).filter(x=>typeof x==="string"&&isMine(x));
   const c=cmdMark(h&&h.command); return c?a.concat(["cmd:"+c]):a; };
 // Wanted = (event, matcher, portable path) TRIPLE from LIVE rows: a retired script or registration is stale.
 const want=JSON.parse(process.env.SG_WANT), REF=process.env.SG_REF;
@@ -274,9 +279,11 @@ for(const [ev,matcher,script,timeout] of want){
   const row={event:ev,matcher:matcher,script:script,count:hits.length,state:"missing"};
   const push=(field,expected,actual)=>out.hooks.drift.push(
     {event:ev,matcher:matcher,script:script,field:field,expected:expected,actual:actual});
-  if(hits.length===0){ out.hooks.missingCount++; }
+  const custom=hits.length===0&&arr.some(e=>((e&&e.hooks)||[]).some(h=>wrappedH(h)&&namesOf(h).includes(script)));
+  if(custom){ row.state="custom"; out.hooks.customCount=(out.hooks.customCount||0)+1; out.hooks.wiredCount++; }
+  else if(hits.length===0){ out.hooks.missingCount++; }
   else{
-    const mine=((hits[0]&&hits[0].hooks)||[]).filter(h=>((h&&h.args)||[]).filter(a=>typeof a==="string").map(canon).includes(full));
+    const mine=((hits[0]&&hits[0].hooks)||[]).filter(h=>!wrappedH(h)&&((h&&h.args)||[]).filter(a=>typeof a==="string").map(canon).includes(full));
     const wantHook=desiredHook(full,timeout);
     const bad=[];
     for(const k of Object.keys(wantHook)) if(!deq((mine[0]||{})[k],wantHook[k])) bad.push([k,wantHook[k],(mine[0]||{})[k]]);
@@ -291,7 +298,7 @@ for(const [ev,matcher,script,timeout] of want){
   out.hooks.entries.push(row);
 }
 out.hooks.wantCount=want.length;
-const ok=k=>rowState[k]==="wired";
+const ok=k=>rowState[k]==="wired"||rowState[k]==="custom";
 const M=process.env.SG_STATS_MATCHER;
 out.hooks.session.wired=ok("SessionStart/*/semble-session.mjs");
 // stats spans two events; a half-wired pair is not wired.
@@ -313,7 +320,8 @@ const bad=(j.hooks.driftedCount||0)+(j.hooks.duplicateCount||0);
 const total=j.hooks.wantCount||0;
 console.log("guidance: rule "+j.rule.state+" | .sembleignore "+((j.ignore&&j.ignore.state)||"absent")
   +" | CLAUDE.md "+(j.claudeMd.malformed?"malformed":j.claudeMd.state)
-  +" | hooks "+j.hooks.wiredCount+"/"+total+" wired"+(bad?" ("+bad+" drifted - re-run install to repair)":"")
+  +" | hooks "+j.hooks.wiredCount+"/"+total+" wired"
+  +(j.hooks.customCount?" ("+j.hooks.customCount+" through a custom launcher, report-only)":"")+(bad?" ("+bad+" drifted - re-run install to repair)":"")
   +" | permissions "+(j.permissions.wired?"yes":"no"));
 console.log("rule:      "+j.rule.path
   +(j.rule.content_version||j.rule.templateContentVersion?
@@ -956,12 +964,18 @@ if(fs.existsSync(f)){
     if(s===null||typeof s!=="object"||Array.isArray(s)){ console.error("ABORT: "+f+" is not a JSON object; nothing was written"); process.exit(1); }
   }
 }
-const argsOf=e=>((e&&e.hooks)||[]).flatMap(h=>(h&&h.args)||[]).filter(a=>typeof a==="string");
+// Wrapped = owned script under a project launcher (first word of `command` != node): kept, never duplicated.
+const launcher=h=>{ const m=/^\s*(?:"([^"]*)"|\x27([^\x27]*)\x27|(\S+))/.exec(typeof h.command==="string"?h.command:""); return m?String(m[1]??m[2]??m[3]).split(/[\\/]/).pop():""; };
+const namesOf=h=>marks.filter(m=>!!h&&[h.command,...(Array.isArray(h.args)?h.args:[])].some(t=>typeof t==="string"&&t.includes(m)));
+const wrappedH=h=>!!h&&typeof h.command==="string"&&!/^node(\.exe)?$/i.test(launcher(h))&&namesOf(h).length>0;
+const wrappedAt=(root,ev,script)=>((root&&root.hooks&&Array.isArray(root.hooks[ev]))?root.hooks[ev]:[]).some(e=>((e&&e.hooks)||[]).some(h=>wrappedH(h)&&namesOf(h).includes(script)));
+const argsOf=e=>((e&&e.hooks)||[]).filter(h=>!wrappedH(h)).flatMap(h=>(h&&h.args)||[]).filter(a=>typeof a==="string");
 const matcherOf=e=>(e&&typeof e.matcher==="string")?e.matcher:null;
 const isMine=a=>marks.some(m=>a===m||a.endsWith("/"+m)||a.endsWith("\\"+m));
 const cmdMark=c=>typeof c==="string"?marks.find(m=>new RegExp("(^|[\\\\/\"\x27\\s])"+m.replace(/\./g,"\\.")+"([\"\x27\\s]|$)").test(c)):undefined;
-const ownedOf=h=>{ const a=((h&&h.args)||[]).filter(x=>typeof x==="string"&&isMine(x));
-  const c=cmdMark(h&&h.command); return c?a.concat(["cmd:"+c]):a; };   // shell form: never wanted
+const ownedOf=h=>{ if(wrappedH(h)) return [];
+  const a=((h&&h.args)||[]).filter(x=>typeof x==="string"&&isMine(x));
+  const c=cmdMark(h&&h.command); return c?a.concat(["cmd:"+c]):a; };   // direct shell form: never wanted
 // MIGRATION: wanted = LIVE (event, matcher, portable path) triples; retired scripts, rows and stray paths purge.
 const wkey=(ev,m,a)=>JSON.stringify([ev,m,a]);
 const wanted=new Set(want.map(w=>wkey(w[0],w[1],REF+"/"+w[2])));
@@ -969,7 +983,7 @@ const wanted=new Set(want.map(w=>wkey(w[0],w[1],REF+"/"+w[2])));
 const canon=a=>{ const m=/^(?:\/|[A-Za-z]:[\\/]).*[\\/]\.claude[\\/]hooks[\\/]([^\\/]+)$/.exec(a);
   return m&&marks.indexOf(m[1])>=0?REF+"/"+m[1]:a; };
 const desiredHook=(full,timeout)=>({type:"command",command:"node",args:[full],timeout});
-const hasArg=(h,full)=>((h&&h.args)||[]).filter(a=>typeof a==="string").map(canon).includes(full);
+const hasArg=(h,full)=>!wrappedH(h)&&((h&&h.args)||[]).filter(a=>typeof a==="string").map(canon).includes(full);
 const deq=(a,b)=>{                                        // key-order-insensitive deep equal
   if(a===b) return true;
   if(typeof a!=="object"||typeof b!=="object"||a===null||b===null) return false;
@@ -994,6 +1008,7 @@ const verify=(root)=>{                                    // null | message; run
   if(doHooks) for(const [ev,matcher,script,timeout] of want){
     const full=REF+"/"+script;
     const hits=((root.hooks&&root.hooks[ev])||[]).filter(e=>matcherOf(e)===matcher&&argsOf(e).includes(full));
+    if(hits.length===0&&wrappedAt(root,ev,script)) continue;   // the project launches it itself
     if(hits.length!==1) return "verification failed - "+ev+"/"+(matcher||"*")+"/"+script+" present "+hits.length+" times in "+f;
     const mine=((hits[0].hooks)||[]).filter(h=>hasArg(h,full));
     if(mine.length!==1||!deq(mine[0],desiredHook(full,timeout)))
@@ -1035,7 +1050,7 @@ if(doHooks){
       seen++;
       return seen===1?reconcile(e,full,timeout):stripHook(e,full);   // extra copies are repaired away, not aborted on
     }).filter(e=>e!==null);
-    if(seen===0){
+    if(seen===0&&!wrappedAt(s,ev,script)){               // a wrapped row gets no unwrapped copy
       const entry={hooks:[desiredHook(full,timeout)]};   // timeout is SECONDS; absent = CC default 600 s
       if(matcher) entry.matcher=matcher;
       s.hooks[ev].push(entry);

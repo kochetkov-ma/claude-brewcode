@@ -392,7 +392,8 @@ Markers, used by every block below:
 
 | Tier | Marker |
 |------|--------|
-| 1 and heartbeat | a hook whose `args` contain a path ending in `agent-router.mjs` |
+| 1 and heartbeat | a hook whose `command` or `args` name `agent-router.mjs` |
+| wrapped (1 or heartbeat) | the same, launched by something other than `node` (the first word of `command`, unquoted, is not `node`): the project's own launcher, e.g. `"$CLAUDE_PROJECT_DIR/.claude/scripts/preflight.py" exec node -- ".../agent-router.mjs"`. User-owned: INSTALL and UPGRADE never remove or rewrite it and then add no command handler of their own; UNINSTALL removes it (its target file goes) |
 | 2 | a hook with `type: "agent"` and `statusMessage: "agent-router: checking agent fit"` |
 
 Read-only check of what is wired — exact entries vs owned handlers that drifted (a stale
@@ -402,8 +403,9 @@ prompt, an explicit `model`, a wrong event, matcher or timeout, an absolute path
 node "$(dirname "$RUNBOOK")/agent-router.mjs" --probe "$ROOT/.claude/settings.json"
 ```
 
-prints `tier1|legacy|tier2|heartbeat|valid`. Wired correctly = `1|0|0|0|yes` at `fast`,
-`1|0|1|1|yes` at `strict`; any `legacy` above 0 is repaired by INSTALL or UPGRADE. Run the
+prints `tier1|legacy|tier2|heartbeat|valid|wrapped`. Wired correctly = `1|0|0|0|yes|0` at `fast`,
+`1|0|1|1|yes|0` at `strict`; any `legacy` above 0 is repaired by INSTALL or UPGRADE. `wrapped`
+above 0 with `tier1` and `legacy` at 0 = wired through a custom launcher: report-only. Run the
 plugin's copy, not the installed one: the prompt is compared with the `judge-prompt.md`
 that sits beside it, its per-release stamp line stripped on both sides, so a meta-only bump never reads as legacy.
 
@@ -413,16 +415,19 @@ Merge rule, in order:
    could not parse (that turns one stray comma into total data loss).
 2. Remove tier-1 handlers individually, preserving every foreign co-handler and dropping a matcher
    entry only when no handlers remain. This removes duplicates, miswired tuples, and legacy absolute
-   checkout paths without deleting foreign work.
+   checkout paths without deleting foreign work. A shell-form `node "<path>"` command counts too
+   and is rewritten into the exec form. A **wrapped** handler (Markers) is kept as is.
 3. Remove own tier-2 handlers the same way — tier 2 is re-derived from `LEVEL` below,
    which also refreshes the inlined prompt after a plugin update and drops a `model` key
    an older install pinned.
 4. APPEND exactly one portable tier-1 handler into `PreToolUse` — never overwrite the arrays.
-   Re-running converges to the same bytes.
+   Re-running converges to the same bytes. Skipped, with the heartbeat, when a wrapped handler
+   exists: the project launches the hook itself, and a second unwrapped copy would run it twice.
 5. APPEND the tier-2 entry and the heartbeat entry only when `LEVEL=strict`, inlining
    `judge-prompt.md` from the assets dir without its stamp line (the judge never sees it).
 6. Re-read the written file and assert exactly one tier-1 entry and exactly
-   `strict ? 1 : 0` tier-2 and heartbeat entries.
+   `strict ? 1 : 0` tier-2 and heartbeat entries (with a wrapped handler: zero tier-1 and
+   heartbeat entries, the wrapped ones untouched).
 
 `timeout` is in SECONDS on every entry — Claude Code has no millisecond hook field.
 Tier 1 and the heartbeat get `5` (the hook itself finishes in well under 100 ms including
@@ -514,8 +519,11 @@ if(fs.existsSync(f)){
 s.hooks=s.hooks||{};
 const hooksOf=e=>((e&&e.hooks)||[]);
 const argsOf=h=>Array.isArray(h&&h.args)?h.args.filter(a=>typeof a==="string"):[];
-const isT1=a=>a===MARK||a.endsWith("/"+MARK)||a.endsWith("\\"+MARK);
-const isOwn=h=>argsOf(h).some(isT1)||!!h&&(h.statusMessage===SM||h.type==="agent"&&typeof h.statusMessage==="string"&&h.statusMessage.startsWith("agent-router:"));   // = --probe ownership
+const isCmd=h=>!!h&&[h.command,...argsOf(h)].some(t=>typeof t==="string"&&t.includes(MARK));   // command or args, = --probe
+const launcher=h=>{ const m=/^\s*(?:"([^"]*)"|\x27([^\x27]*)\x27|(\S+))/.exec(typeof h.command==="string"?h.command:""); return m?String(m[1]??m[2]??m[3]).split(/[\\/]/).pop():""; };
+const isWrapped=h=>isCmd(h)&&typeof h.command==="string"&&!/^node(\.exe)?$/i.test(launcher(h));   // project launcher: kept, never duplicated
+const isOwn=h=>!isWrapped(h)&&(isCmd(h)||!!h&&(h.statusMessage===SM||h.type==="agent"&&typeof h.statusMessage==="string"&&h.statusMessage.startsWith("agent-router:")));   // = --probe ownership
+const wrappedIn=root=>Object.values((root&&root.hooks)||{}).filter(Array.isArray).flat().flatMap(hooksOf).filter(isWrapped).length;
 const exactCmd=h=>h&&h.type==="command"&&h.command==="node"&&argsOf(h).length===1&&argsOf(h)[0]===full;
 const exactT1=(event,entry,h)=>event==="PreToolUse"&&entry.matcher==="Agent"&&exactCmd(h);
 const exactT2=(event,entry,h)=>event==="PreToolUse"&&entry.matcher==="Agent"&&h&&h.type==="agent"&&h.statusMessage===SM&&!("model" in h);
@@ -529,14 +537,15 @@ for(const ev of Object.keys(s.hooks)){                 // remove owned handlers,
   if(s.hooks[ev].length===0) delete s.hooks[ev];
 }
 s.hooks.PreToolUse=s.hooks.PreToolUse||[];
-s.hooks.PreToolUse.push({matcher:"Agent",hooks:[{type:"command",command:"node",args:[full],timeout:5}]});
+const wrapped=wrappedIn(s);                            // >0: the project launches the hook itself
+if(!wrapped) s.hooks.PreToolUse.push({matcher:"Agent",hooks:[{type:"command",command:"node",args:[full],timeout:5}]});
 if(level==="strict"){
   const jf=(process.env.JUDGE||"").trim();
   if(!jf||!fs.existsSync(jf)){ console.error("ABORT: JUDGE prompt not found: "+jf); process.exit(1); }
   const prompt=fs.readFileSync(jf,"utf8").replace(/^<!-- brewcode-meta[:][^\n]*-->[ \t]*\r?\n?/gm,"");   // stamp line never inlined: same regex as the --probe compare
   if(!prompt.trim()){ console.error("ABORT: JUDGE prompt is empty: "+jf); process.exit(1); }
   s.hooks.PreToolUse.push({matcher:"Agent",hooks:[{type:"agent",prompt,timeout:30,statusMessage:SM}]});   // NO model key: a pinned ID ages out and then fails open silently
-  s.hooks.PreToolUse.push({matcher:"StructuredOutput",hooks:[{type:"command",command:"node",args:[full],timeout:5}]});   // heartbeat: counts the verdicts tier 2 returns
+  if(!wrapped) s.hooks.PreToolUse.push({matcher:"StructuredOutput",hooks:[{type:"command",command:"node",args:[full],timeout:5}]});   // heartbeat: counts the verdicts tier 2 returns
 }
 fs.writeFileSync(f,JSON.stringify(s,null,2)+"\n");
 const back=JSON.parse(fs.readFileSync(f,"utf8"));      // post-write verification
@@ -545,8 +554,8 @@ const n1=pre.reduce((sum,e)=>sum+hooksOf(e).filter(h=>exactT1("PreToolUse",e,h))
 const n2=pre.reduce((sum,e)=>sum+hooksOf(e).filter(h=>exactT2("PreToolUse",e,h)).length,0);
 const n3=pre.reduce((sum,e)=>sum+hooksOf(e).filter(h=>exactHB("PreToolUse",e,h)).length,0);
 const want=level==="strict"?1:0;
-if(n1!==1||n2!==want||n3!==want){ console.error("ABORT: verification failed - tier1="+n1+" tier2="+n2+" heartbeat="+n3+" in "+f); process.exit(1); }
-console.log("OK merged "+f+" (level="+level+", tier1="+n1+", tier2="+n2+", heartbeat="+n3+")");
+if(n1!==(wrapped?0:1)||n2!==want||n3!==(wrapped?0:want)||wrappedIn(back)!==wrapped){ console.error("ABORT: verification failed - tier1="+n1+" tier2="+n2+" heartbeat="+n3+" wrapped="+wrappedIn(back)+" in "+f); process.exit(1); }
+console.log("OK merged "+f+" (level="+level+", tier1="+n1+", tier2="+n2+", heartbeat="+n3+(wrapped?", wrapped="+wrapped+" kept":"")+")");
 ' && echo "✅ settings" || echo "❌ FAILED"
 ```
 
@@ -702,7 +711,7 @@ Tune the routing the same way — edit `genericTypes`, `neverFlag`, `minScore`,
 
 ## UNINSTALL  (settings entries + hook file; config and markers kept)
 
-Markers = the tier-1 basename and the tier-2 `statusMessage` (exact, or an `agent-router:` prefix on a `type: agent` handler). Foreign hook entries
+Markers = the tier-1 basename in `command` or `args` (a wrapped handler included: the file it launches is deleted) and the tier-2 `statusMessage` (exact, or an `agent-router:` prefix on a `type: agent` handler). Foreign hook entries
 are never touched.
 
 **EXECUTE** using Bash tool:
@@ -734,8 +743,8 @@ catch(e){ console.error("ABORT: "+f+" is not valid JSON ("+e.message+") - fix or
 if(s===null||typeof s!=="object"||Array.isArray(s)){ console.error("ABORT: "+f+" is not a JSON object; nothing was written"); process.exit(1); }
 const hooksOf=e=>((e&&e.hooks)||[]);
 const argsOf=h=>Array.isArray(h&&h.args)?h.args.filter(a=>typeof a==="string"):[];
-const isT1=a=>a===MARK||a.endsWith("/"+MARK)||a.endsWith("\\"+MARK);
-const isOwn=h=>argsOf(h).some(isT1)||!!h&&(h.statusMessage===SM||h.type==="agent"&&typeof h.statusMessage==="string"&&h.statusMessage.startsWith("agent-router:"));   // = --probe ownership
+const isCmd=h=>!!h&&[h.command,...argsOf(h)].some(t=>typeof t==="string"&&t.includes(MARK));   // wrapped too: its target file goes
+const isOwn=h=>isCmd(h)||!!h&&(h.statusMessage===SM||h.type==="agent"&&typeof h.statusMessage==="string"&&h.statusMessage.startsWith("agent-router:"));   // = --probe ownership
 let removed=0;
 if(s.hooks&&typeof s.hooks==="object"){
   for(const ev of Object.keys(s.hooks)){

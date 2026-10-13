@@ -556,6 +556,20 @@ check(
   'a failed delete must roll the settings entry back — never leave a half-guarded project',
 );
 
+// GIVEN the guard registered exec-form through a project launcher (path only in `args`), beside a foreign entry
+// WHEN the shipped uninstall runs THEN the wrapped entry counts as the guard's and goes, the foreign one stays
+const U5 = makeInstalledProject('uninstall-wrapped-args');
+const wrappedGuard = { type: 'command', command: 'python3', args: ['.claude/scripts/preflight.py', 'exec', 'node', '--', join(U5, '.claude', 'brewtools', 'manager', 'hardmode-guard.mjs')], timeout: 5 };
+const foreignPre = { matcher: 'Read', hooks: [{ type: 'command', command: 'node', args: ['/foreign/keep.mjs'] }] };
+writeFileSync(join(U5, '.claude', 'settings.local.json'), JSON.stringify({ hooks: { PreToolUse: [{ matcher: '*', hooks: [wrappedGuard] }, foreignPre] } }, null, 2));
+const r5 = runUninstall(U5, 'wrapped-args');
+check(
+  '44i-uninstall-recognises-a-wrapped-args-registration',
+  { code: r5.code, deregistered: r5.out.deregistered, settings: JSON.parse(readFileSync(join(U5, '.claude', 'settings.local.json'), 'utf8')) },
+  { code: 0, deregistered: true, settings: { hooks: { PreToolUse: [foreignPre] } } },
+  'a guard path in args under a foreign launcher is the guard registration, never left behind',
+);
+
 // REGRESSION: global purge deleted only full.md; the other modes' overrides kept changing the codewords.
 function runPurge(proj, scope, cfg) {
   const md = readFileSync(SKILL_MD, 'utf8');

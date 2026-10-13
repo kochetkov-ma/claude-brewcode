@@ -681,6 +681,8 @@ if (guidRaw === null || isErr(guidRaw)) {
     // Authoritative sibling counts (SessionStart, PostToolUse, PostToolUseFailure, SubagentStart);
     // never re-derived from `wired` booleans (stats spans two events).
     wiredCount: typeof h.wiredCount === "number" ? h.wiredCount : 0,
+    // Rows run through a project launcher (wrapped): inside wiredCount, report-only.
+    customCount: typeof h.customCount === "number" ? h.customCount : 0,
     wantCount: typeof h.wantCount === "number" ? h.wantCount : 0,
     staleEntries: typeof h.staleEntries === "number" ? h.staleEntries : 0,
     // <= 6.5.0 absolute hook args (subset of staleEntries); `upgrade` rewrites them in place.

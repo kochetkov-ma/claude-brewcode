@@ -958,7 +958,13 @@ function exactCommand(h) {
 /** Drops the per-release stamp line: never inlined, never compared (same regex as INSTALL.md merge). */
 const stripJudgeMeta = (text) => text.replace(/^<!-- brewcode-meta[:][^\n]*-->[ \t]*\r?\n?/gm, '');
 
-/** `tier1|legacy|tier2|heartbeat|valid`: exact registrations vs owned handlers that drifted. */
+/** First word of a shell `command`, unquoted, basename: `node` = direct launch, else a user launcher. */
+function launcherOf(h) {
+  const m = /^\s*(?:"([^"]*)"|'([^']*)'|(\S+))/.exec(h && typeof h.command === 'string' ? h.command : '');
+  return m ? String(m[1] ?? m[2] ?? m[3]).split(/[\\/]/).pop() : '';
+}
+
+/** `tier1|legacy|tier2|heartbeat|valid|wrapped`: exact, drifted, and user-launcher (report-only) handlers. */
 function probeSettings(file) {
   const judge = stripJudgeMeta(readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'judge-prompt.md'), 'utf8'));
   const isJudge = (prompt) => typeof prompt === 'string' && stripJudgeMeta(prompt) === judge;
@@ -971,12 +977,15 @@ function probeSettings(file) {
   } catch {
     valid = false;
   }
-  const ownsCommand = (h) => JSON.stringify((h && h.args) || '').includes('agent-router.mjs');
+  // Hook path anywhere in `command` + `args`, as setup-status's REG probe reads it.
+  const ownsCommand = (h) =>
+    !!h && [h.command, ...(Array.isArray(h.args) ? h.args : [])].some((t) => typeof t === 'string' && t.includes('agent-router.mjs'));
+  const wrapped = (h) => typeof h.command === 'string' && !/^node(\.exe)?$/i.test(launcherOf(h));
   const ownsJudge = (h) =>
     !!h && typeof h === 'object' &&
     (h.statusMessage === SM || isJudge(h.prompt) ||
       (h.type === 'agent' && typeof h.statusMessage === 'string' && h.statusMessage.startsWith('agent-router:')));
-  const n = { tier1: 0, legacy: 0, tier2: 0, heartbeat: 0 };
+  const n = { tier1: 0, legacy: 0, tier2: 0, heartbeat: 0, wrapped: 0 };
   for (const [event, entries] of Object.entries((valid && s.hooks) || {})) {
     if (!Array.isArray(entries)) continue;
     for (const entry of entries) {
@@ -984,7 +993,8 @@ function probeSettings(file) {
       const pre = event === 'PreToolUse';
       for (const h of entry.hooks) {
         if (ownsCommand(h)) {
-          if (pre && entry.matcher === 'Agent' && exactCommand(h)) n.tier1 += 1;
+          if (wrapped(h)) n.wrapped += 1;
+          else if (pre && entry.matcher === 'Agent' && exactCommand(h)) n.tier1 += 1;
           else if (pre && entry.matcher === 'StructuredOutput' && exactCommand(h)) n.heartbeat += 1;
           else n.legacy += 1;
         } else if (ownsJudge(h)) {
@@ -998,7 +1008,7 @@ function probeSettings(file) {
       }
     }
   }
-  return `${n.tier1}|${n.legacy}|${n.tier2}|${n.heartbeat}|${valid ? 'yes' : 'no'}`;
+  return `${n.tier1}|${n.legacy}|${n.tier2}|${n.heartbeat}|${valid ? 'yes' : 'no'}|${n.wrapped}`;
 }
 
 function cli(mode, arg) {

@@ -120,6 +120,7 @@ Fill `<what drifted>` with the drifted files; `enable` stays the user's optional
 
 - `config.json` without `content_version` falls back to `"version"`; without both it is `stale (legacy, unstamped)`, never `missing`.
 - The `// brewcode-meta:` line of `.claude/hooks/docsync-track.mjs` only corroborates: it catches a hook set never re-copied.
+- A user fork (project-dusk shape): track and gate registered through the project's launcher (`REG ... wrapped=toolchain_preflight.py`), one `Write|Edit|MultiEdit` track handler without `if=`, no watch hook, edited hook bytes. Rule 3b: `current (custom)` with a CURRENT config stamp, never `partial` or `stale`; *Found* names the launcher, the absent watch and each `DIFFERS` hook; Command `/brewdoc:docsync-setup status`. `upgrade` keeps the wrapped handlers but re-copies track/gate over the fork and adds an unwrapped watch: the user's call only.
 
 ## Row 12 convention
 

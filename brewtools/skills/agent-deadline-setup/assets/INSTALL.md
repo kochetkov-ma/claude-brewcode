@@ -330,10 +330,14 @@ Merge rule, in order:
    you could not parse (that turns one stray comma into total data loss).
 2. Remove agent-deadline handlers individually, preserving every foreign co-handler and dropping a
    matcher entry only when no handlers remain. This removes duplicates, miswired tuples, and legacy
-   absolute project paths without deleting foreign work.
+   absolute project paths without deleting foreign work. Ownership = a script name in `command` or
+   `args`, so a shell-form `node "<path>"` is rewritten too. A **wrapped** handler (first word of
+   `command` is not `node`: the project's own launcher around the script) is kept as is.
 3. APPEND exactly one desired handler into `PreToolUse` / `SubagentStop` — never overwrite the arrays.
-   Re-running converges to the same bytes.
-4. Re-read the written file and assert exactly one full event/matcher/type/command/arg tuple per script.
+   Re-running converges to the same bytes. A script with a wrapped handler gets none: a second,
+   unwrapped copy would run it twice.
+4. Re-read the written file and assert exactly one full event/matcher/type/command/arg tuple per
+   script, zero for a wrapped one.
 
 Marker for all agent-deadline entries = any hook whose `args` contain a path
 ending in one of those two basenames.
@@ -430,18 +434,22 @@ if(fs.existsSync(f)){
 s.hooks=s.hooks||{};
 const want=[["PreToolUse",".*","agent-deadline-guard.mjs",5],["SubagentStop",null,"agent-deadline-cleanup.mjs",3]];
 const argsOf=h=>Array.isArray(h&&h.args)?h.args.filter(a=>typeof a==="string"):[];
-const isAD=a=>marks.some(m=>a===m||a.endsWith("/"+m)||a.endsWith("\\"+m));
+const names=(h,list)=>!!h&&[h.command,...argsOf(h)].some(t=>typeof t==="string"&&list.some(m=>t.includes(m)));
+const launcher=h=>{ const m=/^\s*(?:"([^"]*)"|\x27([^\x27]*)\x27|(\S+))/.exec(typeof h.command==="string"?h.command:""); return m?String(m[1]??m[2]??m[3]).split(/[\\/]/).pop():""; };
+const isWrapped=h=>names(h,marks)&&typeof h.command==="string"&&!/^node(\.exe)?$/i.test(launcher(h));   // project launcher: kept, never duplicated
+const wrappedOf=(root,script)=>Object.values((root&&root.hooks)||{}).filter(Array.isArray).flat().flatMap(e=>(e&&e.hooks)||[]).filter(h=>isWrapped(h)&&names(h,[script])).length;
 const matcherIs=(e,matcher)=>matcher===null?!Object.prototype.hasOwnProperty.call(e,"matcher"):e.matcher===matcher;
 const exact=(e,h,matcher,script)=>matcherIs(e,matcher)&&h&&h.type==="command"&&h.command==="node"&&argsOf(h).length===1&&argsOf(h)[0]===hookArg(script);
 for(const ev of Object.keys(s.hooks)){                 // remove owned handlers, preserving foreign co-handlers and entries
   if(!Array.isArray(s.hooks[ev])) continue;
   s.hooks[ev]=s.hooks[ev].map(e=>{
     if(!e||typeof e!=="object"||!Array.isArray(e.hooks)) return e;
-    return {...e,hooks:e.hooks.filter(h=>!argsOf(h).some(isAD))};
+    return {...e,hooks:e.hooks.filter(h=>isWrapped(h)||!names(h,marks))};
   }).filter(e=>!e||typeof e!=="object"||!Array.isArray(e.hooks)||e.hooks.length>0);
   if(s.hooks[ev].length===0) delete s.hooks[ev];
 }
 for(const [ev,matcher,script,timeout] of want){
+  if(wrappedOf(s,script)) continue;                    // the project launches it: no unwrapped copy
   s.hooks[ev]=s.hooks[ev]||[];
   const full=hookArg(script);
   const entry={hooks:[{type:"command",command:"node",args:[full],timeout}]};   // no timeout = CC default 600s per tool call
@@ -453,7 +461,7 @@ const back=JSON.parse(fs.readFileSync(f,"utf8"));      // post-write verificatio
 for(const [ev,,script] of want){
   const matcher=want.find(w=>w[0]===ev&&w[2]===script)[1];
   const n=(back.hooks&&back.hooks[ev]||[]).reduce((sum,e)=>sum+((e&&e.hooks)||[]).filter(h=>exact(e,h,matcher,script)).length,0);
-  if(n!==1){ console.error("ABORT: verification failed - "+ev+"/"+script+" present "+n+" times in "+f); process.exit(1); }
+  if(n!==(wrappedOf(back,script)?0:1)){ console.error("ABORT: verification failed - "+ev+"/"+script+" present "+n+" times in "+f); process.exit(1); }
 }
 console.log("OK merged "+f);
 ' && echo "✅ settings" || echo "❌ FAILED"
@@ -529,18 +537,22 @@ if(fs.existsSync(f)){
 s.hooks=s.hooks||{};
 const want=[["PreToolUse",".*","agent-deadline-guard.mjs",5],["SubagentStop",null,"agent-deadline-cleanup.mjs",3]];
 const argsOf=h=>Array.isArray(h&&h.args)?h.args.filter(a=>typeof a==="string"):[];
-const isAD=a=>marks.some(m=>a===m||a.endsWith("/"+m)||a.endsWith("\\"+m));
+const names=(h,list)=>!!h&&[h.command,...argsOf(h)].some(t=>typeof t==="string"&&list.some(m=>t.includes(m)));
+const launcher=h=>{ const m=/^\s*(?:"([^"]*)"|\x27([^\x27]*)\x27|(\S+))/.exec(typeof h.command==="string"?h.command:""); return m?String(m[1]??m[2]??m[3]).split(/[\\/]/).pop():""; };
+const isWrapped=h=>names(h,marks)&&typeof h.command==="string"&&!/^node(\.exe)?$/i.test(launcher(h));   // project launcher: kept, never duplicated
+const wrappedOf=(root,script)=>Object.values((root&&root.hooks)||{}).filter(Array.isArray).flat().flatMap(e=>(e&&e.hooks)||[]).filter(h=>isWrapped(h)&&names(h,[script])).length;
 const matcherIs=(e,matcher)=>matcher===null?!Object.prototype.hasOwnProperty.call(e,"matcher"):e.matcher===matcher;
 const exact=(e,h,matcher,script)=>matcherIs(e,matcher)&&h&&h.type==="command"&&h.command==="node"&&argsOf(h).length===1&&argsOf(h)[0]===hookArg(script);
 for(const ev of Object.keys(s.hooks)){
   if(!Array.isArray(s.hooks[ev])) continue;
   s.hooks[ev]=s.hooks[ev].map(e=>{
     if(!e||typeof e!=="object"||!Array.isArray(e.hooks)) return e;
-    return {...e,hooks:e.hooks.filter(h=>!argsOf(h).some(isAD))};
+    return {...e,hooks:e.hooks.filter(h=>isWrapped(h)||!names(h,marks))};
   }).filter(e=>!e||typeof e!=="object"||!Array.isArray(e.hooks)||e.hooks.length>0);
   if(s.hooks[ev].length===0) delete s.hooks[ev];
 }
 for(const [ev,matcher,script,timeout] of want){
+  if(wrappedOf(s,script)) continue;                    // the project launches it: no unwrapped copy
   s.hooks[ev]=s.hooks[ev]||[];
   const full=hookArg(script);
   const entry={hooks:[{type:"command",command:"node",args:[full],timeout}]};   // no timeout = CC default 600s per tool call
@@ -552,7 +564,7 @@ const back=JSON.parse(fs.readFileSync(f,"utf8"));
 for(const [ev,,script] of want){
   const matcher=want.find(w=>w[0]===ev&&w[2]===script)[1];
   const n=(back.hooks&&back.hooks[ev]||[]).reduce((sum,e)=>sum+((e&&e.hooks)||[]).filter(h=>exact(e,h,matcher,script)).length,0);
-  if(n!==1){ console.error("ABORT: verification failed - "+ev+"/"+script+" present "+n+" times in "+f); process.exit(1); }
+  if(n!==(wrappedOf(back,script)?0:1)){ console.error("ABORT: verification failed - "+ev+"/"+script+" present "+n+" times in "+f); process.exit(1); }
 }
 console.log("OK merged "+f);
 ' && echo "✅ settings" || echo "❌ FAILED"
@@ -685,7 +697,7 @@ Change the budget the same way — edit `defaultMinutes` / `byAgentType` /
 
 ## UNINSTALL  (settings entries + hook files + this scope's state; config kept)
 
-Marker = the 2 script basenames. ONE scope per run — uninstall the scope you were
+Marker = the 2 script basenames, in `command` or `args` (a wrapped handler included: the file it launches is deleted). ONE scope per run — uninstall the scope you were
 asked about and leave the other alone. Foreign hook entries are never touched.
 
 Step 1. **EXECUTE** using Bash tool — pick ONE pair of paths:
@@ -719,14 +731,14 @@ try{ s=JSON.parse(raw); }
 catch(e){ console.error("ABORT: "+f+" is not valid JSON ("+e.message+") - fix or delete it; nothing was written"); process.exit(1); }
 if(s===null||typeof s!=="object"||Array.isArray(s)){ console.error("ABORT: "+f+" is not a JSON object; nothing was written"); process.exit(1); }
 const argsOf=h=>Array.isArray(h&&h.args)?h.args.filter(a=>typeof a==="string"):[];
-const isAD=a=>marks.some(m=>a===m||a.endsWith("/"+m)||a.endsWith("\\"+m));
+const isAD=h=>!!h&&[h.command,...argsOf(h)].some(t=>typeof t==="string"&&marks.some(m=>t.includes(m)));   // wrapped too: its target file goes
 let removed=0;
 if(s.hooks&&typeof s.hooks==="object"){
   for(const ev of Object.keys(s.hooks)){
     if(!Array.isArray(s.hooks[ev])) continue;
     s.hooks[ev]=s.hooks[ev].map(e=>{
       if(!e||typeof e!=="object"||!Array.isArray(e.hooks)) return e;
-      const rest=e.hooks.filter(h=>!argsOf(h).some(isAD)); removed+=e.hooks.length-rest.length;
+      const rest=e.hooks.filter(h=>!isAD(h)); removed+=e.hooks.length-rest.length;
       return {...e,hooks:rest};
     }).filter(e=>!e||typeof e!=="object"||!Array.isArray(e.hooks)||e.hooks.length>0);
     if(s.hooks[ev].length===0) delete s.hooks[ev];
@@ -736,7 +748,7 @@ if(s.hooks&&typeof s.hooks==="object"){
 if(removed&&Object.keys(s).length===0){ fs.unlinkSync(f); console.log("OK removed "+f+" (agent-deadline was its only content)"); process.exit(0); }
 fs.writeFileSync(f,JSON.stringify(s,null,2)+"\n");
 const back=JSON.parse(fs.readFileSync(f,"utf8"));      // post-write verification
-const left=Object.values((back.hooks)||{}).flat().flatMap(e=>(e&&e.hooks)||[]).filter(h=>argsOf(h).some(isAD)).length;
+const left=Object.values((back.hooks)||{}).flat().flatMap(e=>(e&&e.hooks)||[]).filter(isAD).length;
 if(left!==0){ console.error("ABORT: verification failed - "+left+" agent-deadline handlers still in "+f); process.exit(1); }
 console.log("OK cleaned "+f);
 ' && rm -f "$HOOKS_DIR/agent-deadline-guard.mjs" "$HOOKS_DIR/agent-deadline-cleanup.mjs" \

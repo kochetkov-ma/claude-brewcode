@@ -144,13 +144,17 @@ NODE
 registrations() {
   SETTINGS="${1}/settings.json" node <<'NODE'
 const fs=require("fs");
-let n=0;
+let n=0, w=0;
 try{
   const h=JSON.parse(fs.readFileSync(process.env.SETTINGS,"utf8")).hooks||{};
   const has=(ev,script,matcher)=>(Array.isArray(h[ev])?h[ev]:[]).some(g=>g&&(matcher===undefined||g.matcher===matcher)&&JSON.stringify(g.hooks||[]).includes(script));
   n=[has("SubagentStart","agent-return-contract.mjs"),has("SubagentStop","agent-return-guard.mjs"),has("PreToolUse","agent-return-guard.mjs","SubagentHandback")].filter(Boolean).length;
+  // First word of `command` != node: the project's own launcher, report-only (still counted above).
+  const launcher=c=>{ const m=/^\s*(?:"([^"]*)"|'([^']*)'|(\S+))/.exec(c); return m?String(m[1]??m[2]??m[3]).split(/[\\/]/).pop():""; };
+  w=Object.values(h).filter(Array.isArray).flat().flatMap(g=>(g&&Array.isArray(g.hooks))?g.hooks:[])
+    .filter(x=>x&&typeof x.command==="string"&&!/^node(\.exe)?$/i.test(launcher(x.command))&&/agent-return-(contract|guard)\.mjs/.test(JSON.stringify(x))).length;
 }catch{}
-console.log(n);
+console.log(n+" "+w);
 NODE
 }
 for S in "$ROOT/.claude:project" "${CLAUDE_CONFIG_DIR:-$HOME/.claude}:global"; do
@@ -160,14 +164,14 @@ for S in "$ROOT/.claude:project" "${CLAUDE_CONFIG_DIR:-$HOME/.claude}:global"; d
   F=0
   for f in agent-return-budget.mjs agent-return-contract.mjs agent-return-guard.mjs; do [ -f "$D/hooks/$f" ] && F=$((F+1)); done
   W=$({ grep -o 'agent-return-\(contract\|guard\)\.mjs' "$D/settings.json" 2>/dev/null || true; } | sort -u | wc -l | tr -d ' '); W=${W:-0}
-  R=$(registrations "$D"); R=${R:-0}
+  RW=$(registrations "$D"); R=${RW%% *}; R=${R:-0}; WR=${RW##* }; WR=${WR:-0}
   CFG=none; [ -s "$C/agent-return.json" ] && CFG=$(tr -d '\n ' < "$C/agent-return.json"); CFG=${CFG:-none}
   EN=n/a; case "$CFG" in *'"enabled":true'*) EN=true;; *'"enabled":false'*) EN=false;; esac
   PT=$({ jq -r '.passTokens // empty' "$C/agent-return.json" 2>/dev/null || true; }); PT=${PT:-n/a}
   FT=$({ jq -r '.fileTokens // empty' "$C/agent-return.json" 2>/dev/null || true; }); FT=${FT:-n/a}
   CV=$({ jq -r '.version // empty' "$C/agent-return.json" 2>/dev/null || true; }); CV=${CV:-n/a}
   IFS='|' read -r CCV KCV RCV CONTENT FINDINGS <<< "$(content_state "$D" "$C")"
-  echo "$N: hook_files=$F/3 settings_refs=$W enabled=$EN registrations=$R/3 pass=$PT file=$FT config_version=$CV config_content_version=$CCV contract_content_version=$KCV runbook_content_version=$RCV content_state=$CONTENT content_findings=$FINDINGS config_dir=$C config=$CFG"
+  echo "$N: hook_files=$F/3 settings_refs=$W enabled=$EN registrations=$R/3 wrapped=$WR pass=$PT file=$FT config_version=$CV config_content_version=$CCV contract_content_version=$KCV runbook_content_version=$RCV content_state=$CONTENT content_findings=$FINDINGS config_dir=$C config=$CFG"
   if [ "$N" = project ]; then P_REG=$R; else G_REG=$R; fi
 done
 # governing config, resolved like the hooks' loadConfig: climb from projectRoot() (session dir, else the
@@ -209,6 +213,7 @@ Project = `PROJECT_ROOT/.claude`: the session's start dir (what hooks get as `CL
 |-------|-------|
 | `hook_files` | how many of the three files are in that scope's `hooks/`; `1/3`-`2/3` = broken install |
 | `registrations` | how many of the three expected `settings.json` entries (table above) exist, parsed from the JSON; an unreadable file counts `0/3` |
+| `wrapped` | how many of those handlers run through the project's own launcher (first word of `command` is not `node`, e.g. `"$CLAUDE_PROJECT_DIR/.claude/scripts/preflight.py" exec node -- ".../agent-return-guard.mjs"`). They count in `registrations`; user-owned, report-only: `install`/`upgrade` keep them and add no unwrapped copy beside them, so never prescribe either for a wrapped registration |
 | `settings_refs` | textual count of distinct registered script names (`0`-`2`); blind to a missing event, so judge wiring by `registrations` |
 | `enabled` | `true`/`false` from the config; `n/a` = no config or no `enabled` key |
 | `pass` / `file` | configured `passTokens` / `fileTokens`; `n/a` = the hook falls through to env vars, then `2500` / `6000` |
