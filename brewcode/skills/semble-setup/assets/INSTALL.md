@@ -65,10 +65,11 @@ It teaches the three facts that make every generated tool call work:
 | byte-equals the template | `unchanged` |
 | equal once the stamp metadata is stripped | `re-synced <path> (metadata only)`, no `--force`, no backup |
 | byte-pristine copy of a prior release (stamp-stripped sha256 in `SG_PRIOR_RULE`/`SG_PRIOR_IGNORE`, tags v4.5.0..v6.4.0; status state `stale`) | `upgraded <path> (pristine prior-release copy)`, no `--force`, no backup |
-| differs otherwise | **do not overwrite.** Report `user_modified`, print a unified diff on stderr, exit 0 |
+| differs otherwise | **do not overwrite, edit or merge.** Report `user_modified`, print a unified diff on stderr (for the user to read, never to apply), exit 0 |
 
-Only `--force` (which the skill passes after an explicit user confirmation in
-`install`/`repair`) overwrites, and it takes a `.bak.<epoch>` copy first. Removal
+Only `--force` (passed only when the user's prompt says `upgrade --force` or
+`install --force`) overwrites, and it takes a mode-0600 `.bak.<epoch>` copy first
+(the newest 3 per file are kept, older ones pruned and named on stderr). Removal
 follows the same rule: a managed or pristine prior-release file is deleted, a
 user-modified one is backed up and then deleted.
 
@@ -429,12 +430,14 @@ entry keys kept) and never add a second row; a copy in both forms collapses to o
    never fix a drifted field: an entry carrying the pre-4.7.0 `"timeout": 5000`
    (~83 minutes, since `timeout` is SECONDS) matched the old key and was
    skipped forever.
-4. Merge `permissions.allow` with the two tool names, deduped.
+4. Merge `permissions.allow` with each tool name no settings layer grants yet, deduped.
+   Layers: this file, `.claude/settings.local.json`, the profile's `settings.json`;
+   a server-wide `mcp__semble_code` / `mcp__semble_code__*` grants both tools.
 5. **Assert BEFORE the write, then re-read and assert again**: exactly 1
    `SessionStart` entry, exactly 1 `PostToolUse`/`<stats matcher>`, exactly 1
    `PostToolUseFailure`/`<stats matcher>`, exactly 1 unmatched
    `SubagentStart`, each carrying exactly one semble hook deep-equal to the
-   desired hook, and each tool name present exactly once in
+   desired hook, and each tool name step 4 added present exactly once in
    `permissions.allow`. Anything else exits 1. The pre-write check is the
    load-bearing one: a post-write-only assert reports the failure *after* it has
    already saved the bad file.
@@ -461,6 +464,11 @@ const want=[["SessionStart",null,"semble-session.mjs",5],
             ["PostToolUseFailure",STATS,"semble-stats.mjs",5],
             ["SubagentStart",null,"semble-subagent.mjs",5]];   // no matcher = every agent type
 const tools=["mcp__semble_code__search","mcp__semble_code__find_related"];
+const srv="mcp__semble_code", grants=(e,t)=>e===t||e===srv||e===srv+"__*";   // 4. any layer grants -> skip
+const allowOf=p=>{ try{ const a=JSON.parse(fs.readFileSync(p,"utf8")).permissions.allow; return Array.isArray(a)?a:[]; }catch(e){ return []; } };
+const cfg=process.env.CLAUDE_CONFIG_DIR||path.join(require("os").homedir(),".claude");
+const layers=[f,path.join(path.dirname(f),"settings.local.json"),path.join(cfg,"settings.json")];
+const add=tools.filter(t=>!layers.some(p=>allowOf(p).some(e=>grants(e,t))));
 function lock(f){                                      // shared <settings>.lock: 10 s wait, >30 s stale
   const l=f+".lock", w=new Int32Array(new SharedArrayBuffer(4));
   for(let i=0;i<100;i++){
@@ -527,7 +535,7 @@ const verify=root=>{                                   // 5. null | message; run
       return "verification failed - "+ev+"/"+(matcher||"*")+"/"+script+" does not match the desired entry in "+f
         +" (got "+JSON.stringify(mine)+")";
   }
-  for(const t of tools){
+  for(const t of add){
     const n=((root.permissions&&root.permissions.allow)||[]).filter(x=>x===t).length;
     if(n!==1) return "verification failed - permission "+t+" present "+n+" times in "+f;
   }
@@ -567,7 +575,7 @@ for(const ev of Object.keys(s.hooks))
   if(Array.isArray(s.hooks[ev])&&s.hooks[ev].length===0&&!wantEvents.has(ev)) delete s.hooks[ev];
 s.permissions=(s.permissions&&typeof s.permissions==="object"&&!Array.isArray(s.permissions))?s.permissions:{};
 const allow=Array.isArray(s.permissions.allow)?s.permissions.allow.slice():[];   // 4. permissions
-for(const t of tools) if(!allow.includes(t)) allow.push(t);
+for(const t of add) if(!allow.includes(t)) allow.push(t);
 s.permissions.allow=allow;
 const pre=verify(s);                                   // 5a. validate BEFORE writing
 if(pre){ console.error("ABORT: "+pre+"; nothing was written"); process.exit(1); }

@@ -314,6 +314,29 @@ const write = (p, body) => { mkdirSync(dirname(p), { recursive: true }); writeFi
   ]]);
 }
 
+// GIVEN outer/CLAUDE.md > h/.claude > h/notes/misc, no git WHEN h is HOME, the config-dir parent, or plain
+// THEN the root-like-ancestor refusal skips a profile h and names outer; plain h is named
+{
+  const outer = project('profile-walk');
+  const h = join(outer, 'h');
+  const cwd = join(h, 'notes', 'misc');
+  write(join(outer, 'CLAUDE.md'), '# outer\n');
+  mkdirSync(join(h, '.claude'), { recursive: true });
+  mkdirSync(cwd, { recursive: true });
+  const refusalAs = (envOver) => {
+    const env = { ...process.env, HOME: join(outer, 'elsewhere'), ...envOver };
+    delete env.MEMORY_SYNC_ROOT;
+    delete env.MEMORY_SYNC_FORCE;
+    if (!envOver.CLAUDE_CONFIG_DIR) delete env.CLAUDE_CONFIG_DIR;
+    const r = spawnSync('bash', [GEN, 'status'], { cwd, encoding: 'utf8', env });
+    return [r.status, `${r.stdout}${r.stderr}`.split('\n')[0]];
+  };
+  const refusal = (up) => [1, `❌ FAILED: ${cwd} is not a repo root (no git, but ${up} looks like one).`];
+  check('root refusal skips a profile parent (HOME, config-dir parent) but names a plain .claude ancestor',
+    [refusalAs({ HOME: h }), refusalAs({ CLAUDE_CONFIG_DIR: join(h, '.claude') }), refusalAs({})],
+    [refusal(outer), refusal(outer), refusal(h)]);
+}
+
 rmSync(BASE, { recursive: true, force: true });
 console.log(`\n${failed === 0 ? 'PASS' : 'FAIL'}  passed=${passed} failed=${failed}`);
 process.exit(failed === 0 ? 0 : 1);

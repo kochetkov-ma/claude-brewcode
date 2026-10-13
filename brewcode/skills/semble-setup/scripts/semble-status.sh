@@ -616,7 +616,8 @@ if (detect === null) {
     projectEnabled: d.projectEnabled === undefined ? null : d.projectEnabled,
     malformed: Array.isArray(d.malformed) ? d.malformed : [],
     tools: TOOLS,
-    permissions: { project: allowFor(E.SC_PROJECT_SETTINGS), user: allowFor(E.SC_USER_SETTINGS) },
+    permissions: { project: allowFor(E.SC_PROJECT_SETTINGS), user: allowFor(E.SC_USER_SETTINGS),
+      local: allowFor(E.SC_PROJECT_LOCAL_SETTINGS) },
     connectivity: typeof detect.connectivity === "string" ? detect.connectivity : "unknown",
   };
 }
@@ -674,7 +675,9 @@ if (guidRaw === null || isErr(guidRaw)) {
     // Retired hooks (explore, reminder, prefetch) on disk / still registered: `upgrade` removes both.
     retired: Array.isArray(h.retired) ? h.retired : [],
     retiredWired: Array.isArray(h.retiredWired) ? h.retiredWired : [],
+    // P3: granted by any settings layer CC reads (project, local, user); source = the granting layers.
     permissionsWired: perm.wired === true,
+    permissionsSource: Array.isArray(perm.source) ? perm.source : [],
     // Authoritative sibling counts (SessionStart, PostToolUse, PostToolUseFailure, SubagentStart);
     // never re-derived from `wired` booleans (stats spans two events).
     wiredCount: typeof h.wiredCount === "number" ? h.wiredCount : 0,
@@ -689,6 +692,9 @@ if (guidRaw === null || isErr(guidRaw)) {
     version: typeof rule.version === "string" ? rule.version : "",
     pluginVersion: typeof rule.templateVersion === "string" ? rule.templateVersion : "",
   };
+  // P2: a missing content_version is OLDER than any template stamp; same rule for every dashboard.
+  guidSec.ruleStampStale = !!guidSec.templateContentVersion && guidSec.rule !== "absent"
+    && guidSec.content_version !== guidSec.templateContentVersion;
   // Absolute-only hook drift: every stale entry absolute, every unwired row drifted on `args` alone (abs -> portable).
   const drift = Array.isArray(h.drift) ? h.drift : [];
   const absArg = function (d) {
@@ -767,6 +773,9 @@ const verifyWhy = [];
 let resumeWhy = 0;
 // Clauses that are absolute-path hook drift alone (stale entries, hooks wired): `upgrade` migrates them.
 let absWhy = 0;
+// Other clauses `upgrade` closes by itself (agent patching, a stale rule stamp): no reinstall needed.
+let upgradeWhy = 0;
+let stampStale = false;
 if (verdict === "ready") {
   if (guidSec && !isErr(guidSec)) {
     const stale = typeof guidSec.staleEntries === "number" ? guidSec.staleEntries : 0;
@@ -810,27 +819,24 @@ if (verdict === "ready") {
   }
   if (agentsSec && !isErr(agentsSec) && typeof agentsSec.needsPatch === "number" && agentsSec.needsPatch > 0) {
     why.push(agentsSec.needsPatch + (agentsSec.needsPatch === 1 ? " agent needs" : " agents need") + " patching");
+    upgradeWhy += 1;   // upgrade runs `semble-agents.sh apply` (Step 3.2b)
+  }
+  // Stale stamp (artifact-metadata.md section 6; P2: unstamped = older); a prior-release copy has its own clause.
+  if (guidSec && !isErr(guidSec) && guidSec.ruleStampStale && guidSec.rule !== "stale") {
+    stampStale = true;
+    upgradeWhy += 1;
+    why.push("artifacts at content_version " + (guidSec.content_version || "none") +
+      ", plugin at " + guidSec.templateContentVersion +
+      (guidSec.version ? " (version " + guidSec.version + ")" : ""));
   }
   if (why.length) { verdict = "partial"; reason = why.join("; "); }
 }
 
-// Stale = rule content_version older than template (artifact-metadata.md section 6); `version` bump alone !=stale.
-// Both stamps required: unstamped pre-5.5 rule reports "" and is never stale.
-let stampStale = false;
-if (verdict === "ready" && guidSec && !isErr(guidSec)
-    && guidSec.content_version && guidSec.templateContentVersion
-    && guidSec.content_version !== guidSec.templateContentVersion) {
-  stampStale = true;
-  verdict = "partial";
-  reason = "artifacts at content_version " + guidSec.content_version +
-    ", plugin at " + guidSec.templateContentVersion +
-    (guidSec.version ? " (version " + guidSec.version + ")" : "");
-}
-
 // A hand-edited rule keeps its old stamp through `upgrade` (never overwritten): plain `upgrade` would loop.
-const editedRuleOnly = stampStale && guidSec.rule === "user_modified" && !pinMoved && !retiredLeft.length;
+const editedRuleOnly = stampStale && why.length === 1 && guidSec.rule === "user_modified"
+  && !pinMoved && !retiredLeft.length;
 if (editedRuleOnly) {
-  reason = "semble-first rule is hand-edited at content_version " + guidSec.content_version +
+  reason = "semble-first rule is hand-edited at content_version " + (guidSec.content_version || "none") +
     ", plugin at " + guidSec.templateContentVersion + "; upgrade keeps it as is";
 }
 
@@ -849,13 +855,13 @@ if (verdict === "ready") {
 } else if (verdict === "verifying") {
   nextStep = "Run /brewcode:semble-setup resume";
 } else if (editedRuleOnly) {
-  nextStep = "Review: diff -u " + E.SC_RULE_FILE + " " + E.SC_RULE_TEMPLATE +
-    "\nThen merge by hand and set content_version: " + guidSec.templateContentVersion + " in " + E.SC_RULE_FILE +
-    ",\nor replace it: /brewcode:semble-setup upgrade --force (backs up " + E.SC_RULE_FILE + ".bak.<epoch> first)";
-} else if (stampStale || pinMoved || retiredLeft.length || (guidSec && guidSec.rule === "stale")) {
+  // P1: user decision only; the skill never edits a hand-edited rule, nor invites a hand merge.
+  nextStep = "User review (the skill never edits a hand-edited rule): diff -u " + E.SC_RULE_FILE + " " + E.SC_RULE_TEMPLATE +
+    "\nTo replace it with the template: /brewcode:semble-setup upgrade --force (backs up " + E.SC_RULE_FILE + ".bak.<epoch> first)";
+} else if (pinMoved || retiredLeft.length || (guidSec && guidSec.rule === "stale")) {
   nextStep = "Run /brewcode:semble-setup upgrade";
-} else if (absWhy && absWhy + verifyWhy.length + resumeWhy === why.length) {
-  // Only <= 6.5.0 absolute hook args (plus resume-owned gaps): `upgrade` rewrites them in place.
+} else if ((absWhy || upgradeWhy) && absWhy + upgradeWhy + verifyWhy.length + resumeWhy === why.length) {
+  // Only absolute hook args, agent patching or a stale stamp (plus resume-owned gaps): `upgrade` closes them.
   nextStep = "Run /brewcode:semble-setup upgrade";
 } else if ((verifyWhy.length || resumeWhy) && verifyWhy.length + resumeWhy === why.length) {
   // Installed and wired; only warm/smoke unproven or the index variant missing.
@@ -948,7 +954,8 @@ if (jsonMode) {
         ? " | content_version " + g.content_version + (g.templateContentVersion && g.templateContentVersion !== g.content_version
             ? " (plugin " + g.templateContentVersion + " - run /brewcode:semble-setup upgrade)" : "")
             + (g.version ? " [version " + g.version + "]" : "")
-        : (g.version ? " | version " + g.version : "");
+        : (g.version ? " | version " + g.version : "") + (g.ruleStampStale
+            ? " | content_version none (plugin " + g.templateContentVersion + ")" : "");
       L.push("guidance: rule " + g.rule + " | CLAUDE.md " + g.claudeMd +
         " | hooks " + g.wiredCount + "/" + (g.wantCount || 0) + " wired" +
         " | permissions " + (g.permissionsWired ? "yes" : "no") + ver);
@@ -1012,6 +1019,7 @@ REPORT="$(
   SC_RULE_TEMPLATE="$(cd "$SC_DIR/.." && pwd)/assets/semble-first.md.template" \
   SC_PROJECT_SETTINGS="$(sc_project_settings)" \
   SC_USER_SETTINGS="$(sc_user_settings)" \
+  SC_PROJECT_LOCAL_SETTINGS="$(sc_project_root)/.claude/settings.local.json" \
   SC_PREREQ_WANTED="$PREREQ_WANTED" \
   SC_BREW_PATH="$BREW_PATH" SC_BREW_VER="$BREW_VER" \
   SC_UV_PATH="$UV_PATH" SC_UV_VER="$UV_VER" \

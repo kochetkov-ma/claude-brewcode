@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.5.1 content_version=6.5.0 generated_by=brewtools:agent-return-setup
+// brewcode-meta: version=6.5.2 content_version=6.5.2 generated_by=brewtools:agent-return-setup
 
 // agent-return shared config + thresholds, imported by contract and guard so announced == enforced budget.
 // Per threshold: config `passTokens`/`fileTokens` > AGENT_RETURN_PASS/_FILE > 2500/6000; resolved once at load.
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
@@ -13,7 +13,17 @@ const STATE_NAME = 'agent-return-state';
 const READ_ONLY_DEFAULT = ['Explore', 'Plan'];
 const REPORT_DIR_DEFAULT = '.claude/reports';
 
-// Project root: CLAUDE_PROJECT_DIR -> upward walk for `.git`/`.claude` -> hook cwd; never throws.
+// Mirrors semble isProfileParent: HOME or the active config dir's parent holds a profile .claude, never a root.
+function isProfileParent(dir) {
+  const real = (p) => { try { return realpathSync(p); } catch { return ''; } };
+  const p = real(dir);
+  if (!p) return false;
+  if (process.env.HOME && real(process.env.HOME) === p) return true;
+  const cfg = process.env.CLAUDE_CONFIG_DIR;
+  return Boolean(cfg) && real(cfg) === path.join(p, '.claude');
+}
+
+// Project root: CLAUDE_PROJECT_DIR -> upward walk for `.git`/`.claude` (profile parents skipped) -> hook cwd; never throws.
 // Exported so the guard's report dir uses the same root as config discovery.
 export function projectRoot(hookCwd) {
   const env = process.env.CLAUDE_PROJECT_DIR;
@@ -21,7 +31,8 @@ export function projectRoot(hookCwd) {
 
   let dir = path.resolve(hookCwd || process.cwd());
   for (;;) {
-    if (existsSync(path.join(dir, '.git')) || existsSync(path.join(dir, '.claude'))) return dir;
+    if (existsSync(path.join(dir, '.git'))) return dir;
+    if (existsSync(path.join(dir, '.claude')) && !isProfileParent(dir)) return dir;
     const up = path.dirname(dir);
     if (up === dir) break;
     dir = up;

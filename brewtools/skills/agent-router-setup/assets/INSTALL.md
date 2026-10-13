@@ -1,4 +1,4 @@
-<!-- brewcode-meta: version=6.5.1 content_version=6.5.0 generated_by=brewtools:agent-router-setup -->
+<!-- brewcode-meta: version=6.5.2 content_version=6.5.2 generated_by=brewtools:agent-router-setup -->
 # agent-router hook — install / configure / remove runbook
 
 Self-contained hook asset. The `/brewtools:agent-router-setup` skill copies it into the
@@ -167,7 +167,7 @@ with the reason returned to the model as a tool error.
 | `minScore` | minimum roster score (step 8) before a project agent can win, and the floor a project agent must clear to outrank the specialist at step 7 |
 | `margin` | how far the winner must lead the runner-up; inside the margin it is a nudge, not a deny |
 | `intents` | OPTIONAL override of the step-7 routes; `{ "match": <STRONG regex source>, "expert": <agent type>, "label": <human label>, "weakMatch": <optional WEAK regex — nudge only>, "domain": <optional noun-only regex deciding which project agent COVERS the intent> }`. Omit `domain` and it falls back to `match`\|`weakMatch`; omit `weakMatch` and the rule has no weak side. **Omit the key entirely to keep the hook's built-in 4 routes** — see the warning below |
-| `version` / `content_version` / `generated_by` / `last_updated` | provenance, MANDATORY, re-stamped by every mode that writes this file (install, upgrade, enable, disable, level). `version` = the plugin release that produced THIS write; `content_version` = the release in which this INSTALL.md's generator logic last changed, read from this runbook's own header marker. Inert at runtime — the hook ignores unlisted keys. Never `doc_type`: that is a `.md`-frontmatter field |
+| `version` / `content_version` / `generated_by` / `last_updated` | provenance, MANDATORY, re-stamped by every mode that writes this file (install, upgrade, enable, disable, level). `version` = the plugin release that produced THIS write; `content_version` = the config contract: the header CV of `agent-router.mjs` (the one hook file that parses this config), read from the asset beside this runbook. A runbook-only change never stales an installed config; a change to the config's keys or meaning ships with a change to `agent-router.mjs`. Inert at runtime — the hook ignores unlisted keys. Never `doc_type`: that is a `.md`-frontmatter field |
 
 There is no nudge-threshold key. The nudge floor is DERIVED as
 `max(1, ceil(minScore / 2))`: a best score at or above it, without a clear win,
@@ -228,14 +228,20 @@ second, nested `.claude/` that the running Claude Code never reads. Resolve it o
 ```
 # Same ladder the hook uses at runtime, so installer and hook can never disagree:
 # CLAUDE_PROJECT_DIR -> ownership marker (.claude/brewtools/agent-router.json)
-# -> git toplevel (= nearest .git) -> upward .claude walk -> PWD.
+# -> git toplevel (= nearest .git) -> upward .claude walk -> PWD; `.claude` rungs skip profile parents.
+# rc 0: the dir is HOME or the active config dir's parent - its .claude is a profile, never a project root.
+is_profile_parent() {
+  _pp=$(cd "${1}" 2>/dev/null && pwd -P) || return 1
+  [ -n "${HOME:-}" ] && [ "$_pp" = "$(cd "$HOME" 2>/dev/null && pwd -P)" ] && return 0
+  [ -n "${CLAUDE_CONFIG_DIR:-}" ] && [ "$_pp/.claude" = "$(cd "$CLAUDE_CONFIG_DIR" 2>/dev/null && pwd -P)" ]
+}
 claude_project_root() {
   if [ -n "$CLAUDE_PROJECT_DIR" ] && [ -d "$CLAUDE_PROJECT_DIR" ]; then
     printf '%s\n' "$CLAUDE_PROJECT_DIR"; return 0
   fi
   d=$PWD
   while [ "$d" != "/" ]; do
-    if [ -f "$d/.claude/brewtools/agent-router.json" ]; then printf '%s\n' "$d"; return 0; fi
+    if [ -f "$d/.claude/brewtools/agent-router.json" ] && ! is_profile_parent "$d"; then printf '%s\n' "$d"; return 0; fi
     d=$(dirname "$d")
   done
   if r=$(git rev-parse --show-toplevel 2>/dev/null) && [ -n "$r" ]; then
@@ -243,7 +249,7 @@ claude_project_root() {
   fi
   d=$PWD
   while [ "$d" != "/" ]; do
-    if [ -d "$d/.claude" ]; then printf '%s\n' "$d"; return 0; fi
+    if [ -d "$d/.claude" ] && ! is_profile_parent "$d"; then printf '%s\n' "$d"; return 0; fi
     d=$(dirname "$d")
   done
   printf '%s\n' "$PWD"; return 1   # nonzero: caller decides
@@ -261,14 +267,14 @@ if ROOT=$(claude_project_root); then export ROOT; echo "✅ ROOT=$ROOT"; else
 Every write of the config also stamps the four mandatory JSON metadata keys —
 `version`, `content_version`, `generated_by`, `last_updated` (never `doc_type`: that
 is a `.md` frontmatter field). `version` is resolved from `.claude-plugin/plugin.json`,
-never hardcoded; `content_version` from THIS file's own `brewcode-meta:` header (via
-`$RUNBOOK`); `last_updated` is the LOCAL date.
+never hardcoded; `content_version` from the `brewcode-meta:` header of `agent-router.mjs`
+beside `$RUNBOOK` (the config contract); `last_updated` is the LOCAL date.
 
 > `version` is not a staleness signal: it bumps on every release, and a config-only
 > write (DISABLE/ENABLE) re-stamps it to the current plugin while the installed
 > `agent-router.mjs` stays old. The skill's `status` therefore compares the
 > `content_version` in the INSTALLED hook's header against the asset it was copied
-> from, and the config's `content_version` against this runbook's header.
+> from, and the config's `content_version` against that asset's header: a runbook-only change never stales a config.
 
 **EXECUTE** config write (read-modify-write, Bash tool):
 
@@ -291,10 +297,11 @@ function today(){                               // LOCAL date, like date +%F - n
   const d=new Date();
   return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
 }
-function contentVersion(){                      // own-header only; no plugin.json field for this
+function contentVersion(){                      // config contract = CV of agent-router.mjs beside RUNBOOK, never the runbook header
+  if(!process.env.RUNBOOK) return "";
   try{
-    const first=fs.readFileSync(process.env.RUNBOOK||"","utf8").split("\n",1)[0];
-    const m=/content_version=([0-9]+\.[0-9]+\.[0-9]+)/.exec(first);
+    const head=fs.readFileSync(p.join(p.dirname(process.env.RUNBOOK),"agent-router.mjs"),"utf8").split("\n").slice(0,3).join("\n");
+    const m=/content_version=([0-9]+\.[0-9]+\.[0-9]+)(?=\s|$)/.exec(head);
     if(m) return m[1];
   }catch{}
   return "";
@@ -319,7 +326,7 @@ if(!has("margin")) c.margin=2;
 const pv=pluginVersion();
 if(!pv){ console.error("ABORT: cannot resolve plugin version - export PLUGIN_VERSION=X.Y.Z or fix PJSON: "+process.env.PJSON); process.exit(1); }
 const cv=contentVersion();
-if(!cv){ console.error("ABORT: cannot resolve content_version - own header marker unreadable/missing at "+process.env.RUNBOOK); process.exit(1); }
+if(!cv){ console.error("ABORT: cannot resolve content_version - agent-router.mjs header marker unreadable/missing beside "+process.env.RUNBOOK); process.exit(1); }
 const lu=today();
 delete c.version; delete c.content_version; delete c.generated_by; delete c.last_updated;
 c.version=pv; c.content_version=cv; c.generated_by=GB; c.last_updated=lu;   // the 4 mandatory JSON metadata keys, on EVERY write, in fixed order
@@ -398,7 +405,7 @@ node "$(dirname "$RUNBOOK")/agent-router.mjs" --probe "$ROOT/.claude/settings.js
 prints `tier1|legacy|tier2|heartbeat|valid`. Wired correctly = `1|0|0|0|yes` at `fast`,
 `1|0|1|1|yes` at `strict`; any `legacy` above 0 is repaired by INSTALL or UPGRADE. Run the
 plugin's copy, not the installed one: the prompt is compared with the `judge-prompt.md`
-that sits beside it.
+that sits beside it, its per-release stamp line stripped on both sides, so a meta-only bump never reads as legacy.
 
 Merge rule, in order:
 
@@ -413,7 +420,7 @@ Merge rule, in order:
 4. APPEND exactly one portable tier-1 handler into `PreToolUse` — never overwrite the arrays.
    Re-running converges to the same bytes.
 5. APPEND the tier-2 entry and the heartbeat entry only when `LEVEL=strict`, inlining
-   `judge-prompt.md` from the assets dir.
+   `judge-prompt.md` from the assets dir without its stamp line (the judge never sees it).
 6. Re-read the written file and assert exactly one tier-1 entry and exactly
    `strict ? 1 : 0` tier-2 and heartbeat entries.
 
@@ -508,7 +515,7 @@ s.hooks=s.hooks||{};
 const hooksOf=e=>((e&&e.hooks)||[]);
 const argsOf=h=>Array.isArray(h&&h.args)?h.args.filter(a=>typeof a==="string"):[];
 const isT1=a=>a===MARK||a.endsWith("/"+MARK)||a.endsWith("\\"+MARK);
-const isOwn=h=>argsOf(h).some(isT1)||(h&&h.type==="agent"&&h.statusMessage===SM);
+const isOwn=h=>argsOf(h).some(isT1)||!!h&&(h.statusMessage===SM||h.type==="agent"&&typeof h.statusMessage==="string"&&h.statusMessage.startsWith("agent-router:"));   // = --probe ownership
 const exactCmd=h=>h&&h.type==="command"&&h.command==="node"&&argsOf(h).length===1&&argsOf(h)[0]===full;
 const exactT1=(event,entry,h)=>event==="PreToolUse"&&entry.matcher==="Agent"&&exactCmd(h);
 const exactT2=(event,entry,h)=>event==="PreToolUse"&&entry.matcher==="Agent"&&h&&h.type==="agent"&&h.statusMessage===SM&&!("model" in h);
@@ -526,7 +533,7 @@ s.hooks.PreToolUse.push({matcher:"Agent",hooks:[{type:"command",command:"node",a
 if(level==="strict"){
   const jf=(process.env.JUDGE||"").trim();
   if(!jf||!fs.existsSync(jf)){ console.error("ABORT: JUDGE prompt not found: "+jf); process.exit(1); }
-  const prompt=fs.readFileSync(jf,"utf8");
+  const prompt=fs.readFileSync(jf,"utf8").replace(/^<!-- brewcode-meta[:][^\n]*-->[ \t]*\r?\n?/gm,"");   // stamp line never inlined: same regex as the --probe compare
   if(!prompt.trim()){ console.error("ABORT: JUDGE prompt is empty: "+jf); process.exit(1); }
   s.hooks.PreToolUse.push({matcher:"Agent",hooks:[{type:"agent",prompt,timeout:30,statusMessage:SM}]});   // NO model key: a pinned ID ages out and then fails open silently
   s.hooks.PreToolUse.push({matcher:"StructuredOutput",hooks:[{type:"command",command:"node",args:[full],timeout:5}]});   // heartbeat: counts the verdicts tier 2 returns
@@ -630,8 +637,8 @@ what you want stopped.
 the `CFG=...` line with `ON=1 ` (i.e. `ON=1 CFG="$ROOT/..." PJSON="..." node -e '...'`).
 Any other value of `ON`, or no `ON` at all, disables. Re-running either direction is a
 no-op. `RUNBOOK` must be exported here too — this is a config WRITE, so it re-stamps the
-four metadata keys, `content_version` included, and reads that one out of this file's own
-header. It copies NO files: a toggle run after a plugin update leaves an old
+four metadata keys, `content_version` included, and reads that one out of the
+`agent-router.mjs` header beside this file. It copies NO files: a toggle run after a plugin update leaves an old
 `agent-router.mjs` in place while raising the config's `version`. Run `UPGRADE` for the file.
 ```
 SRC="$(dirname "$RUNBOOK")"
@@ -650,10 +657,11 @@ function today(){                               // LOCAL date, like date +%F - n
   const d=new Date();
   return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
 }
-function contentVersion(){                      // own-header only; no plugin.json field for this
+function contentVersion(){                      // config contract = CV of agent-router.mjs beside RUNBOOK, never the runbook header
+  if(!process.env.RUNBOOK) return "";
   try{
-    const first=fs.readFileSync(process.env.RUNBOOK||"","utf8").split("\n",1)[0];
-    const m=/content_version=([0-9]+\.[0-9]+\.[0-9]+)/.exec(first);
+    const head=fs.readFileSync(p.join(p.dirname(process.env.RUNBOOK),"agent-router.mjs"),"utf8").split("\n").slice(0,3).join("\n");
+    const m=/content_version=([0-9]+\.[0-9]+\.[0-9]+)(?=\s|$)/.exec(head);
     if(m) return m[1];
   }catch{}
   return "";
@@ -671,7 +679,7 @@ c.enabled = process.env.ON === "1";
 const pv=pluginVersion();
 if(!pv){ console.error("ABORT: cannot resolve plugin version - export PLUGIN_VERSION=X.Y.Z or fix PJSON: "+process.env.PJSON); process.exit(1); }
 const cv=contentVersion();
-if(!cv){ console.error("ABORT: cannot resolve content_version - own header marker unreadable/missing at "+process.env.RUNBOOK); process.exit(1); }
+if(!cv){ console.error("ABORT: cannot resolve content_version - agent-router.mjs header marker unreadable/missing beside "+process.env.RUNBOOK); process.exit(1); }
 const lu=today();
 delete c.version; delete c.content_version; delete c.generated_by; delete c.last_updated;
 c.version=pv; c.content_version=cv; c.generated_by=GB; c.last_updated=lu;   // every write stamps the 4 mandatory keys, in fixed order
@@ -694,7 +702,7 @@ Tune the routing the same way — edit `genericTypes`, `neverFlag`, `minScore`,
 
 ## UNINSTALL  (settings entries + hook file; config and markers kept)
 
-Markers = the tier-1 basename and the tier-2 `statusMessage`. Foreign hook entries
+Markers = the tier-1 basename and the tier-2 `statusMessage` (exact, or an `agent-router:` prefix on a `type: agent` handler). Foreign hook entries
 are never touched.
 
 **EXECUTE** using Bash tool:
@@ -727,7 +735,7 @@ if(s===null||typeof s!=="object"||Array.isArray(s)){ console.error("ABORT: "+f+"
 const hooksOf=e=>((e&&e.hooks)||[]);
 const argsOf=h=>Array.isArray(h&&h.args)?h.args.filter(a=>typeof a==="string"):[];
 const isT1=a=>a===MARK||a.endsWith("/"+MARK)||a.endsWith("\\"+MARK);
-const isOwn=h=>argsOf(h).some(isT1)||(h&&h.type==="agent"&&h.statusMessage===SM);
+const isOwn=h=>argsOf(h).some(isT1)||!!h&&(h.statusMessage===SM||h.type==="agent"&&typeof h.statusMessage==="string"&&h.statusMessage.startsWith("agent-router:"));   // = --probe ownership
 let removed=0;
 if(s.hooks&&typeof s.hooks==="object"){
   for(const ev of Object.keys(s.hooks)){

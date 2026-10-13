@@ -6,11 +6,15 @@
 
 ```
 claude plugin marketplace update claude-brewcode
-claude plugin update <id> --scope <scope>      # repeat per selected plugin
+claude plugin update <id> --scope <scope>      # user/managed rows, repeat per selected plugin
+(cd "<projectPath>" && claude plugin update <id> --scope <scope>)      # project/local rows
 ```
 
-`<id>` and `<scope>` come from `claude plugin list --json` (Phase 0). Always pass `--scope`: older
-CLIs default it to `user`, newer ones auto-detect. Full-suite example, all four at `user` scope:
+`<id>`, `<scope>` and `<projectPath>` come from `claude plugin list --json` (Phase 0). Always pass
+`--scope`: older CLIs default it to `user`, newer ones auto-detect. `project`/`local` scope resolves
+from the cwd, so those rows run from their own `projectPath` (rows of other projects included),
+never the session cwd; a missing `projectPath` dir = orphan install, run nothing (SKILL Phase 4).
+Full-suite example, all four at `user` scope:
 
 ```
 claude plugin update brewcode@claude-brewcode --scope user

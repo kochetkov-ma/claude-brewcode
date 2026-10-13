@@ -1466,6 +1466,35 @@ check('repair.completed.scope', stAfterRepair.scope, 'user', 'with the scope the
 check('repair.completed.cacheroot', stAfterRepair.cacheRoot, CODE_ROOT, 'and the cache root add records');
 dropAllBackups();
 
+// ── 23. R4: sc_backup writes 0600 and keeps the newest 3 per file ───────────
+// GIVEN a 0644 config and 4 older backups WHEN sc_backup runs THEN the new copy is 0600 and the 2 oldest are pruned
+{
+  const dir = join(BASE, 'bak');
+  mkdirSync(dir, { recursive: true });
+  const target = join(dir, 'cfg.json');
+  writeFileSync(target, '{"token":"x"}');
+  chmodSync(target, 0o644);
+  for (const e of [100, 101, 102, 103]) writeFileSync(`${target}.bak.${e}`, 'old');
+  writeFileSync(join(dir, 'cfg.json.bak.notes'), 'foreign');
+  const r = sh(`sc_backup "${target}"`);
+  const made = r.out;
+  check('backup.r4', {
+    status: r.status,
+    pathShape: /\/cfg\.json\.bak\.[0-9]{10}$/.test(made),
+    mode: (statSync(made).mode & 0o777).toString(8),
+    bytes: readFileSync(made, 'utf8'),
+    left: readdirSync(dir).sort(),
+    stderr: r.err.split('\n'),
+  }, {
+    status: 0,
+    pathShape: true,
+    mode: '600',
+    bytes: '{"token":"x"}',
+    left: ['cfg.json', 'cfg.json.bak.102', 'cfg.json.bak.103', basename(made), 'cfg.json.bak.notes'].sort(),
+    stderr: [`pruned backup: ${target}.bak.101 (keeping newest 3)`, `pruned backup: ${target}.bak.100 (keeping newest 3)`],
+  }, 'backups of token-bearing configs are owner-only and capped at 3; non-epoch siblings are never touched');
+}
+
 // ── report ─────────────────────────────────────────────────────────────────
 console.log('suite-core.mjs (unit B: lib + mcp + cache + state)');
 for (const line of results) console.log(line);

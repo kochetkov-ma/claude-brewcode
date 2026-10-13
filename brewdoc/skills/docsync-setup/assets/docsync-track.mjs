@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.5.1 content_version=6.5.0 generated_by=brewdoc:docsync-setup
+// brewcode-meta: version=6.5.2 content_version=6.5.2 generated_by=brewdoc:docsync-setup
 
 // PostToolUse Write|Edit on a tracked .md: log an `edit` event; no `last_updated` -> nudge once per file per session.
 // Self-contained (Node built-ins), state in <projectRoot>/.claude/docsync/; never throws, exit 0.
-import { readFileSync, appendFileSync, mkdirSync, existsSync } from 'fs';
+import { readFileSync, appendFileSync, mkdirSync, existsSync, realpathSync } from 'fs';
 import { join, relative, isAbsolute, dirname, resolve, sep } from 'path';
 
 // --- inlined helpers -------------------------------------------------------
@@ -15,7 +15,16 @@ async function readStdin() {
 }
 function output(r) { try { console.log(JSON.stringify(r)); } catch { console.log('{}'); } }
 function readJson(p, fb) { try { return JSON.parse(readFileSync(p, 'utf8')); } catch { return fb; } }
-// Project root: CLAUDE_PROJECT_DIR -> upward walk for a root marker -> hook cwd; never throws.
+// Mirrors semble isProfileParent: HOME or the active config dir's parent holds a profile .claude, never a root.
+function isProfileParent(dir) {
+  const real = (p) => { try { return realpathSync(p); } catch { return ''; } };
+  const p = real(dir);
+  if (!p) return false;
+  if (process.env.HOME && real(process.env.HOME) === p) return true;
+  const cfg = process.env.CLAUDE_CONFIG_DIR;
+  return Boolean(cfg) && real(cfg) === join(p, '.claude');
+}
+// Project root: CLAUDE_PROJECT_DIR -> upward walk for a root marker (profile parents skipped) -> hook cwd; never throws.
 // Hook `cwd` drifts mid-session (CwdChanged) -> only for relative `tool_input` paths, never for state.
 function projectRoot(hookCwd) {
   const env = process.env.CLAUDE_PROJECT_DIR;
@@ -23,7 +32,8 @@ function projectRoot(hookCwd) {
 
   let dir = resolve(hookCwd || process.cwd());
   for (;;) {
-    if (existsSync(join(dir, '.git')) || existsSync(join(dir, '.claude'))) return dir;
+    if (existsSync(join(dir, '.git'))) return dir;
+    if (existsSync(join(dir, '.claude')) && !isProfileParent(dir)) return dir;
     const up = dirname(dir);
     if (up === dir) break;
     dir = up;

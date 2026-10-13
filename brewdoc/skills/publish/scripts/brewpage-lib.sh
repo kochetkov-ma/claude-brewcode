@@ -5,8 +5,16 @@
 # zsh (macOS Bash tool): global EXIT trap and ${x:+a "$y"} word splitting, as in bash.
 if [ -n "${ZSH_VERSION:-}" ]; then setopt POSIX_TRAPS SH_WORD_SPLIT; fi
 
+# rc 0: $1 is HOME or the active config dir's parent - its .claude is a profile, never a project root.
+bp_is_profile_parent() {
+  local p
+  p=$(cd "$1" 2>/dev/null && pwd -P) || return 1
+  [ -n "${HOME:-}" ] && [ "$p" = "$(cd "$HOME" 2>/dev/null && pwd -P)" ] && return 0
+  [ -n "${CLAUDE_CONFIG_DIR:-}" ] && [ "$p/.claude" = "$(cd "$CLAUDE_CONFIG_DIR" 2>/dev/null && pwd -P)" ]
+}
+
 # Project root, canonical recipe: CLAUDE_PROJECT_DIR -> git toplevel -> upward
-# walk for .git/.claude -> PWD. The history file must not follow a nested cwd.
+# walk for .git/.claude (profile parents skipped) -> PWD. The history file must not follow a nested cwd.
 bp_project_root() {
   if [ -n "${CLAUDE_PROJECT_DIR:-}" ] && [ -d "$CLAUDE_PROJECT_DIR" ]; then
     printf '%s\n' "$CLAUDE_PROJECT_DIR"
@@ -20,7 +28,7 @@ bp_project_root() {
   fi
   local d="$PWD"
   while [ "$d" != "/" ]; do
-    if [ -d "$d/.git" ] || [ -d "$d/.claude" ]; then
+    if [ -d "$d/.git" ] || { [ -d "$d/.claude" ] && ! bp_is_profile_parent "$d"; }; then
       printf '%s\n' "$d"
       return 0
     fi

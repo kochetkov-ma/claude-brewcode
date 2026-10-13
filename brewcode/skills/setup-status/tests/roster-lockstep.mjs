@@ -94,7 +94,8 @@ test('GIVEN mixed flag configs WHEN running the shipped flag probe THEN every co
     `agent-deadline ${p}/agent-deadline.json: no-key`, `agent-return ${p}/agent-return.json: "enabled":true`,
     `agent-deadline ABSENT ${g}/agent-deadline.json`, `agent-return ABSENT ${g}/agent-return.json`,
     `agent-deadline ABSENT ${h}/agent-deadline.json`, `agent-return ABSENT ${h}/agent-return.json`,
-    `agent-deadline.json GOVERNING ${p}/agent-deadline.json`, `agent-return.json GOVERNING ${p}/agent-return.json`,
+    `agent-deadline.json CLIMB-START ${root}`, `agent-deadline.json GOVERNING ${p}/agent-deadline.json`,
+    `agent-return.json CLIMB-START ${root}`, `agent-return.json GOVERNING ${p}/agent-return.json`,
     'agent-router ABSENT .claude/brewtools/agent-router.json', 'docsync .claude/docsync/config.json: "enabled":false',
     '.claude/semble/state.json: "enabled":false "phase":"disabled" ', '.claude/brewtools/manager/state.json: "hard":true ',
     'OK', '',
@@ -146,6 +147,21 @@ test('GIVEN a session dir above the shell cwd WHEN running the flag probe THEN r
   assert.deepEqual([probe.status, probe.stdout.split('\n').filter(line => line.includes(' GOVERNING '))], [0, [
     `agent-deadline.json GOVERNING ${parent}/.claude/agent-deadline.json`, `agent-return.json GOVERNING ${cfg}/agent-return.json`,
   ]], `deadline guard reads payload cwd, agent-return hooks read CLAUDE_PROJECT_DIR (stderr: ${probe.stderr})`);
+});
+
+test('GIVEN HOME with a profile .claude and a marker-less cwd below it WHEN running the flag probe without CLAUDE_PROJECT_DIR THEN row 11 climbs from the cwd, never HOME', t => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'setup-status-home-')));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const home = join(root, 'home'), cwd = join(home, 'notes', 'misc'), prof = join(root, 'prof'), profCwd = join(prof, 'work');
+  for (const dir of [join(home, '.claude'), cwd, join(prof, '.claude'), profCwd]) mkdirSync(dir, { recursive: true });
+  const run = (dir, cfg) => spawnSync('bash', ['-e', '-o', 'pipefail', '-c', flagProbe], {
+    cwd: dir, encoding: 'utf8', env: { ...process.env, HOME: home, CLAUDE_CONFIG_DIR: cfg, CLAUDE_PROJECT_DIR: '', PWD: dir }, timeout: 10000,
+  });
+  const climbs = r => [r.status, r.stdout.split('\n').filter(line => line.startsWith('agent-return.json CLIMB-START '))];
+  assert.deepEqual({ home: climbs(run(cwd, '')), profileParent: climbs(run(profCwd, join(prof, '.claude'))) }, {
+    home: [0, [`agent-return.json CLIMB-START ${cwd}`]],
+    profileParent: [0, [`agent-return.json CLIMB-START ${profCwd}`]],
+  }, 'policy P4: the .git/.claude walk skips HOME and the active config dir parent, as agent-return-budget projectRoot()');
 });
 
 test('GIVEN an orphan project config WHEN reading rows 6/11 notes and both owning skills THEN the fix is purge project, never upgrade', () => {

@@ -138,7 +138,8 @@ One transaction, node only. Export the parameters, then run the block:
 ```bash
 ROOT="${CLAUDE_PROJECT_DIR}"
 [ -n "$ROOT" ] && [ -d "$ROOT" ] || ROOT=$(git rev-parse --show-toplevel 2>/dev/null || true)
-[ -n "$ROOT" ] || { d=$PWD; until [ -d "$d/.git" ] || [ -d "$d/.claude" ] || [ "$d" = / ]; do d=$(dirname "$d"); done; [ "$d" = / ] && ROOT=$PWD || ROOT=$d; }
+is_profile_parent() { _pp=$(cd "${1}" 2>/dev/null && pwd -P) || return 1; { [ -n "${HOME:-}" ] && [ "$_pp" = "$(cd "$HOME" 2>/dev/null && pwd -P)" ]; } || { [ -n "${CLAUDE_CONFIG_DIR:-}" ] && [ "$_pp/.claude" = "$(cd "$CLAUDE_CONFIG_DIR" 2>/dev/null && pwd -P)" ]; }; }
+[ -n "$ROOT" ] || { d=$PWD; until [ -d "$d/.git" ] || { [ -d "$d/.claude" ] && ! is_profile_parent "$d"; } || [ "$d" = / ]; do d=$(dirname "$d"); done; [ "$d" = / ] && ROOT=$PWD || ROOT=$d; }
 [ -f "$RUNBOOK" ] || { echo "❌ RUNBOOK must be the absolute path of INSTALL.md" >&2; exit 1; }
 export MODE="${MODE:-install}" THRESHOLD="${THRESHOLD:-7}"
 export EXCLUDE="${EXCLUDE:-[\"node_modules/**\",\"**/CHANGELOG.md\",\"dist/**\",\"build/**\",\"vendor/**\"]}"
@@ -324,7 +325,8 @@ Node only — no `python3`, no `jq`. `MODE` = `uninstall` (default) or `purge`:
 ```bash
 ROOT="${CLAUDE_PROJECT_DIR}"
 [ -n "$ROOT" ] && [ -d "$ROOT" ] || ROOT=$(git rev-parse --show-toplevel 2>/dev/null || true)
-[ -n "$ROOT" ] || { d=$PWD; until [ -d "$d/.git" ] || [ -d "$d/.claude" ] || [ "$d" = / ]; do d=$(dirname "$d"); done; [ "$d" = / ] && ROOT=$PWD || ROOT=$d; }
+is_profile_parent() { _pp=$(cd "${1}" 2>/dev/null && pwd -P) || return 1; { [ -n "${HOME:-}" ] && [ "$_pp" = "$(cd "$HOME" 2>/dev/null && pwd -P)" ]; } || { [ -n "${CLAUDE_CONFIG_DIR:-}" ] && [ "$_pp/.claude" = "$(cd "$CLAUDE_CONFIG_DIR" 2>/dev/null && pwd -P)" ]; }; }
+[ -n "$ROOT" ] || { d=$PWD; until [ -d "$d/.git" ] || { [ -d "$d/.claude" ] && ! is_profile_parent "$d"; } || [ "$d" = / ]; do d=$(dirname "$d"); done; [ "$d" = / ] && ROOT=$PWD || ROOT=$d; }
 export MODE="${MODE:-uninstall}"
 node - "$ROOT" <<'NODE'
 const fs = require('node:fs');

@@ -126,17 +126,19 @@ const semver=/^[0-9]+\.[0-9]+\.[0-9]+$/;
 const cvOf=f=>{try{return /content_version=([0-9]+\.[0-9]+\.[0-9]+)(?=\s|$)/.exec(fs.readFileSync(f,"utf8").split("\n").slice(0,3).join("\n"))?.[1]||null;}catch{return null;}};
 let configCV=null;
 try{const c=JSON.parse(fs.readFileSync(file,"utf8")); if(c&&typeof c==="object"&&!Array.isArray(c)&&typeof c.content_version==="string"&&semver.test(c.content_version)) configCV=c.content_version;}catch{}
+// config contract = CV of the module that parses the config; runbook prose never stales a config
+const contractCV=cvOf(path.join(assets,"agent-return-budget.mjs"));
 const runbookCV=cvOf(path.join(assets,"INSTALL.md"));
 const pairs=scripts.map(script=>[cvOf(path.join(target,"hooks",script)),cvOf(path.join(assets,script))]);
 const findings=[];
-if(!configCV||!runbookCV||configCV!==runbookCV) findings.push("agent-return.json:"+(configCV||"n/a")+"->"+(runbookCV||"n/a"));
+if(!configCV||!contractCV||configCV!==contractCV) findings.push("agent-return.json:"+(configCV||"n/a")+"->"+(contractCV||"n/a"));
 pairs.forEach(([installed,source],i)=>{if(!installed||!source||installed!==source) findings.push(scripts[i]+":"+(installed||"n/a")+"->"+(source||"n/a"));});
 let state="missing";
 if(fs.existsSync(file)||scripts.some(script=>fs.existsSync(path.join(target,"hooks",script)))) {
-  if(!configCV||!runbookCV||pairs.some(([installed,source])=>!installed||!source)) state="partial";
-  else state=configCV!==runbookCV||pairs.some(([installed,source])=>installed!==source)?"stale":"current";
+  if(!configCV||!contractCV||pairs.some(([installed,source])=>!installed||!source)) state="partial";
+  else state=configCV!==contractCV||pairs.some(([installed,source])=>installed!==source)?"stale":"current";
 }
-console.log([configCV||"n/a",runbookCV||"n/a",state,findings.join(",")||"none"].join("|"));
+console.log([configCV||"n/a",contractCV||"n/a",runbookCV||"n/a",state,findings.join(",")||"none"].join("|"));
 NODE
 }
 registrations() {
@@ -164,21 +166,23 @@ for S in "$ROOT/.claude:project" "${CLAUDE_CONFIG_DIR:-$HOME/.claude}:global"; d
   PT=$({ jq -r '.passTokens // empty' "$C/agent-return.json" 2>/dev/null || true; }); PT=${PT:-n/a}
   FT=$({ jq -r '.fileTokens // empty' "$C/agent-return.json" 2>/dev/null || true; }); FT=${FT:-n/a}
   CV=$({ jq -r '.version // empty' "$C/agent-return.json" 2>/dev/null || true; }); CV=${CV:-n/a}
-  META=$(content_state "$D" "$C"); CCV=${META%%|*}; REST_META=${META#*|}; RCV=${REST_META%%|*}; REST_META=${REST_META#*|}; CONTENT=${REST_META%%|*}; FINDINGS=${REST_META#*|}
-  echo "$N: hook_files=$F/3 settings_refs=$W enabled=$EN registrations=$R/3 pass=$PT file=$FT config_version=$CV config_content_version=$CCV runbook_content_version=$RCV content_state=$CONTENT content_findings=$FINDINGS config_dir=$C config=$CFG"
+  IFS='|' read -r CCV KCV RCV CONTENT FINDINGS <<< "$(content_state "$D" "$C")"
+  echo "$N: hook_files=$F/3 settings_refs=$W enabled=$EN registrations=$R/3 pass=$PT file=$FT config_version=$CV config_content_version=$CCV contract_content_version=$KCV runbook_content_version=$RCV content_state=$CONTENT content_findings=$FINDINGS config_dir=$C config=$CFG"
   if [ "$N" = project ]; then P_REG=$R; else G_REG=$R; fi
 done
 # governing config, resolved like the hooks' loadConfig: climb from projectRoot() (session dir, else the
-# nearest .git/.claude ancestor of $PWD; never git toplevel) to the nearest valid config, then global dirs
+# nearest .git/.claude ancestor of $PWD, profile parents skipped; never git toplevel) to the nearest valid config, then global dirs
 GOV=$(PD="${CLAUDE_PROJECT_DIR}" START="$PWD" node <<'NODE'
 const fs=require("fs"), path=require("path"), os=require("os");
 const name="agent-return.json", env=(process.env.CLAUDE_CONFIG_DIR||"").trim();
 const globals=[...new Set([env?path.resolve(env):null,path.join(os.homedir(),".claude")].filter(Boolean))];
 const ok=f=>{try{const c=JSON.parse(fs.readFileSync(f,"utf8"));return !!c&&typeof c==="object"&&!Array.isArray(c);}catch{return false;}};
+const real=p=>{try{return fs.realpathSync(p);}catch{return "";}};
+const pp=d=>{const p=real(d);return !!p&&((!!process.env.HOME&&real(process.env.HOME)===p)||(!!env&&real(env)===path.join(p,".claude")));};
 const pd=process.env.PD, start=path.resolve(process.env.START);
 let dir=start, hit="none", scope="none";
 if(pd&&fs.existsSync(pd)) dir=path.resolve(pd);
-else for(let d=start;;){ if(fs.existsSync(path.join(d,".git"))||fs.existsSync(path.join(d,".claude"))){ dir=d; break; } const up=path.dirname(d); if(up===d) break; d=up; }
+else for(let d=start;;){ if(fs.existsSync(path.join(d,".git"))||(fs.existsSync(path.join(d,".claude"))&&!pp(d))){ dir=d; break; } const up=path.dirname(d); if(up===d) break; d=up; }
 for(let i=0;i<16;i++){
   const home=path.join(dir,".claude");
   if(globals.includes(home)) break;
@@ -209,8 +213,9 @@ Project = `PROJECT_ROOT/.claude`: the session's start dir (what hooks get as `CL
 | `enabled` | `true`/`false` from the config; `n/a` = no config or no `enabled` key |
 | `pass` / `file` | configured `passTokens` / `fileTokens`; `n/a` = the hook falls through to env vars, then `2500` / `6000` |
 | `config_version` | release provenance; shown beside `plugin_version`, never a staleness signal |
-| `config_content_version` / `runbook_content_version` | installed config CV versus the INSTALL.md header; each installed hook is compared with its asset header too |
-| `content_state` | `current`: all CV pairs match; `stale`: a valid pair differs; `partial`: a CV is missing/malformed or a counterpart is absent; `missing`: no config or hook files in that scope |
+| `config_content_version` / `contract_content_version` | installed config CV versus the header CV of `agent-return-budget.mjs`, the one module that parses the config (the config contract); each installed hook is compared with its asset header too |
+| `runbook_content_version` | the INSTALL.md header CV; informational only: a runbook-only change never stales an installed config |
+| `content_state` | `current`: all CV pairs match (config vs contract, each hook vs its asset); `stale`: a valid pair differs; `partial`: a CV is missing/malformed or a counterpart is absent; `missing`: no config or hook files in that scope |
 | `content_findings` | `artifact:installed-CV->source-CV` per bad pair, or `none`; `n/a` = missing/malformed, never a guessed version |
 | `config_dir` / `config` | where the config was read from; its whitespace-stripped contents, or `none` |
 | `governing_config` / `governing_scope` | the one config every wired hook reads, resolved like `loadConfig`: nearest valid (JSON object) `.claude/agent-return.json` climbing from the hooks' `projectRoot()` (the session dir `CLAUDE_PROJECT_DIR` when it exists, else the nearest `.git`/`.claude` ancestor of `$PWD`, never the git toplevel fallback of `PROJECT_ROOT`), at most 16 levels, stopping at a global dir; then `$CLAUDE_CONFIG_DIR`, then `~/.claude`; `none` = no valid config anywhere. The hooks never read the payload `cwd` for this |
@@ -226,10 +231,10 @@ Print the status in this table:
 Every mode that writes `agent-return.json` (`install`, `upgrade`, `enable`, `disable`) leaves these four keys alongside behavior keys. `doc_type` belongs only in `.md` frontmatter:
 
 ```json
-{ "version": "{PLUGIN_VERSION}", "content_version": "<INSTALL.md header>", "generated_by": "brewtools:agent-return-setup", "last_updated": "{LAST_UPDATED}" }
+{ "version": "{PLUGIN_VERSION}", "content_version": "<agent-return-budget.mjs header>", "generated_by": "brewtools:agent-return-setup", "last_updated": "{LAST_UPDATED}" }
 ```
 
-The runbook resolves `content_version` from its own `brewcode-meta:` header via `$RUNBOOK` and aborts if missing; never pass or hardcode it. Resolve `version` and `last_updated` here. **EXECUTE** using Bash tool:
+The runbook resolves `content_version` from the `brewcode-meta:` header of `agent-return-budget.mjs` beside `$RUNBOOK` (the config contract, so a runbook-only change never stales a config) and aborts if missing; never pass or hardcode it. Resolve `version` and `last_updated` here. **EXECUTE** using Bash tool:
 
 ```bash
 BT_ROOT="${CLAUDE_PLUGIN_ROOT}"
@@ -359,7 +364,7 @@ CONTEXT:
   config (+ a project .claude/ left empty).
   METADATA: every mode that WRITES the config (install, upgrade, enable, disable) must leave
   these four keys in agent-return.json: version=\$PLUGIN_VERSION,
-  content_version=<read by the runbook from its own brewcode-meta header; never hardcoded>,
+  content_version=<read by the runbook from the agent-return-budget.mjs brewcode-meta header; never hardcoded>,
   generated_by=\"brewtools:agent-return-setup\", last_updated=\$LAST_UPDATED. No doc_type —
   it is a .md-frontmatter field and never belongs in a JSON carrier. Set them INSIDE
   the runbook's node block that re-serializes the object with JSON.stringify — never by

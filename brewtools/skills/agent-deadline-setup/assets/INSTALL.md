@@ -1,4 +1,4 @@
-<!-- brewcode-meta: version=6.5.1 content_version=6.5.1 generated_by=brewtools:agent-deadline-setup -->
+<!-- brewcode-meta: version=6.5.2 content_version=6.5.2 generated_by=brewtools:agent-deadline-setup -->
 # agent-deadline hooks — install / configure / remove runbook
 
 Self-contained hook assets. The `/brewtools:agent-deadline-setup` skill copies these into a
@@ -110,7 +110,7 @@ a profile whose `settings.json` registers the hooks keeps working from one share
 | `byAgentType` | optional per-type overrides, e.g. `{"Explore": 10, "brewtools:text-optimizer": 45}`. Empty by default = one limit for all |
 | `hardStopRatio` | optional, default `2`, must be `> 1` — multiple of the budget past which the allow-list shrinks from the finalize set to `Write, Edit, SubagentHandback`. Anything `<= 1` or non-numeric falls back to `2`. Omit the key entirely to take the default |
 | `readOnlyAgentTypes` | optional array of `agent_type` values that have no `Write`/`Edit`; default `["Explore", "Plan"]`. These agents are told "Return what you have now" instead of being told to save to a file. A list here REPLACES the default. Not written by the config block — add it by hand |
-| `version` / `content_version` / `generated_by` / `last_updated` | provenance, MANDATORY, re-stamped by every mode that writes this file (install, upgrade, enable, disable). `version` = the plugin release that produced THIS write; `content_version` = the release in which this INSTALL.md's generator logic last changed, read from this runbook's own header marker. Inert at runtime — `loadConfig()` reads only the budget keys above. Never `doc_type`: that is a `.md`-frontmatter field |
+| `version` / `content_version` / `generated_by` / `last_updated` | provenance, MANDATORY, re-stamped by every mode that writes this file (install, upgrade, enable, disable). `version` = the plugin release that produced THIS write; `content_version` = the config contract: the header CV of `agent-deadline-guard.mjs` (the one hook file that parses this config), read from the asset beside this runbook. A runbook-only change never stales an installed config; a change to the config's keys or meaning ships with a change to `agent-deadline-guard.mjs`. Inert at runtime — `loadConfig()` reads only the budget keys above. Never `doc_type`: that is a `.md`-frontmatter field |
 
 Budget = `byAgentType[agent_type] ?? defaultMinutes`. `agent_type` is the value
 Claude Code puts in the payload — plain (`Explore`, `developer`) or
@@ -158,7 +158,13 @@ installing there builds a second, nested `.claude/` that the running Claude Code
 reads. Resolve it once, in the SAME Bash call as the block that uses it:
 
 ```
-# Project root: CLAUDE_PROJECT_DIR -> git toplevel -> upward walk -> PWD.
+# rc 0: the dir is HOME or the active config dir's parent - its .claude is a profile, never a project root.
+is_profile_parent() {
+  _pp=$(cd "${1}" 2>/dev/null && pwd -P) || return 1
+  [ -n "${HOME:-}" ] && [ "$_pp" = "$(cd "$HOME" 2>/dev/null && pwd -P)" ] && return 0
+  [ -n "${CLAUDE_CONFIG_DIR:-}" ] && [ "$_pp/.claude" = "$(cd "$CLAUDE_CONFIG_DIR" 2>/dev/null && pwd -P)" ]
+}
+# Project root: CLAUDE_PROJECT_DIR -> git toplevel -> upward walk (profile parents skipped) -> PWD.
 claude_project_root() {
   if [ -n "$CLAUDE_PROJECT_DIR" ] && [ -d "$CLAUDE_PROJECT_DIR" ]; then
     printf '%s\n' "$CLAUDE_PROJECT_DIR"; return 0
@@ -168,7 +174,7 @@ claude_project_root() {
   fi
   d=$PWD
   while [ "$d" != "/" ]; do
-    if [ -d "$d/.git" ] || [ -d "$d/.claude" ]; then printf '%s\n' "$d"; return 0; fi
+    if [ -d "$d/.git" ] || { [ -d "$d/.claude" ] && ! is_profile_parent "$d"; }; then printf '%s\n' "$d"; return 0; fi
     d=$(dirname "$d")
   done
   printf '%s\n' "$PWD"; return 1   # nonzero: caller decides
@@ -209,10 +215,11 @@ function today(){                               // LOCAL date, like date +%F - n
   const d=new Date();
   return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
 }
-function contentVersion(){                      // own-header only; no plugin.json field for this
+function contentVersion(){                      // config contract = CV of agent-deadline-guard.mjs beside RUNBOOK, never the runbook header
+  if(!process.env.RUNBOOK) return "";
   try{
-    const first=fs.readFileSync(process.env.RUNBOOK||"","utf8").split("\n",1)[0];
-    const m=/content_version=([0-9]+\.[0-9]+\.[0-9]+)/.exec(first);
+    const head=fs.readFileSync(p.join(p.dirname(process.env.RUNBOOK),"agent-deadline-guard.mjs"),"utf8").split("\n").slice(0,3).join("\n");
+    const m=/content_version=([0-9]+\.[0-9]+\.[0-9]+)(?=\s|$)/.exec(head);
     if(m) return m[1];
   }catch{}
   return "";
@@ -248,7 +255,7 @@ if(hsr!==undefined) c.hardStopRatio=hsr;     // absent env keeps whatever was th
 const pv=pluginVersion();
 if(!pv){ console.error("ABORT: cannot resolve plugin version - export PLUGIN_VERSION=X.Y.Z or fix PJSON: "+process.env.PJSON); process.exit(1); }
 const cv=contentVersion();
-if(!cv){ console.error("ABORT: cannot resolve content_version - own header marker unreadable/missing at "+process.env.RUNBOOK); process.exit(1); }
+if(!cv){ console.error("ABORT: cannot resolve content_version - agent-deadline-guard.mjs header marker unreadable/missing beside "+process.env.RUNBOOK); process.exit(1); }
 const lu=today();
 delete c.version; delete c.content_version; delete c.generated_by; delete c.last_updated;
 c.version=pv; c.content_version=cv; c.generated_by=GB; c.last_updated=lu;   // the 4 mandatory JSON metadata keys, on EVERY write, in fixed order
@@ -632,10 +639,11 @@ function today(){                               // LOCAL date, like date +%F - n
   const d=new Date();
   return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
 }
-function contentVersion(){                      // own-header only; no plugin.json field for this
+function contentVersion(){                      // config contract = CV of agent-deadline-guard.mjs beside RUNBOOK, never the runbook header
+  if(!process.env.RUNBOOK) return "";
   try{
-    const first=fs.readFileSync(process.env.RUNBOOK||"","utf8").split("\n",1)[0];
-    const m=/content_version=([0-9]+\.[0-9]+\.[0-9]+)/.exec(first);
+    const head=fs.readFileSync(p.join(p.dirname(process.env.RUNBOOK),"agent-deadline-guard.mjs"),"utf8").split("\n").slice(0,3).join("\n");
+    const m=/content_version=([0-9]+\.[0-9]+\.[0-9]+)(?=\s|$)/.exec(head);
     if(m) return m[1];
   }catch{}
   return "";
@@ -653,7 +661,7 @@ c.enabled = process.env.ON === "1";
 const pv=pluginVersion();
 if(!pv){ console.error("ABORT: cannot resolve plugin version - export PLUGIN_VERSION=X.Y.Z or fix PJSON: "+process.env.PJSON); process.exit(1); }
 const cv=contentVersion();
-if(!cv){ console.error("ABORT: cannot resolve content_version - own header marker unreadable/missing at "+process.env.RUNBOOK); process.exit(1); }
+if(!cv){ console.error("ABORT: cannot resolve content_version - agent-deadline-guard.mjs header marker unreadable/missing beside "+process.env.RUNBOOK); process.exit(1); }
 const lu=today();
 delete c.version; delete c.content_version; delete c.generated_by; delete c.last_updated;
 c.version=pv; c.content_version=cv; c.generated_by=GB; c.last_updated=lu;   // every write stamps the 4 mandatory keys, in fixed order

@@ -406,8 +406,8 @@ check('wired: mcp connectivity equals the sibling probe',
   [R.mcp.connectivity, rawMcp.connectivity], ['connected', 'connected'],
   'connectivity is `claude mcp get` exit status only');
 check('wired: mcp permissions', R.mcp.permissions,
-  { project: [TOOL_SEARCH, TOOL_RELATED], user: [] },
-  'guidance wired both tools into the project settings allow list, none at user scope');
+  { project: [TOOL_SEARCH, TOOL_RELATED], user: [], local: [] },
+  'guidance wired both tools into the project settings allow list, none at user or local scope');
 
 // cache: pass-through of semble-cache.sh info
 check('wired: cache keys', keysOf(R.cache),
@@ -453,9 +453,9 @@ check('wired: --strict exit', strict.status, 1, '--strict exits 1 on any verdict
 
 // ── 2a. guidance ────────────────────────────────────────────────────────────
 check('guidance: keys', keysOf(R.guidance),
-  ['absoluteCount', 'claudeMd', 'content_version', 'hooks', 'ignore', 'permissionsWired', 'pluginVersion',
-    'retired', 'retiredWired', 'rule', 'settingsFile', 'staleEntries', 'templateContentVersion', 'version',
-    'wantCount', 'wiredCount'],
+  ['absoluteCount', 'claudeMd', 'content_version', 'hooks', 'ignore', 'permissionsSource', 'permissionsWired',
+    'pluginVersion', 'retired', 'retiredWired', 'rule', 'ruleStampStale', 'settingsFile', 'staleEntries',
+    'templateContentVersion', 'version', 'wantCount', 'wiredCount'],
   'the §9.1 guidance shape plus the derived wiredCount/wantCount/absoluteCount, the migration list, and the '
   + 'installed-vs-plugin stamp pair that carries the stale-artifacts signal');
 // Stale-artifacts verdict keys on content_version (`version` informational-only); both pinned to shipped
@@ -489,10 +489,11 @@ check('guidance: nothing retired left over',
   [R.guidance.retired, R.guidance.retiredWired, rawGuid.hooks.retired, rawGuid.hooks.retiredWired],
   [[], [], [], []],
   'a fresh install has no v1 hook file to migrate away');
-check('guidance: settingsFile + staleEntries + permissionsWired',
-  [R.guidance.settingsFile, R.guidance.staleEntries, R.guidance.permissionsWired],
-  [join(P1, '.claude/settings.json'), 0, true],
-  'project settings path, no stale entries, both tool permissions wired');
+check('guidance: settingsFile + staleEntries + permissionsWired + permissionsSource + ruleStampStale',
+  [R.guidance.settingsFile, R.guidance.staleEntries, R.guidance.permissionsWired, R.guidance.permissionsSource,
+    R.guidance.ruleStampStale],
+  [join(P1, '.claude/settings.json'), 0, true, ['project'], false],
+  'project settings path, no stale entries, both tool permissions wired by the tracked file, rule stamp current');
 check('guidance: wiredCount fully wired',
   [R.guidance.wiredCount, R.guidance.wantCount, rawGuid.hooks.wiredCount, rawGuid.hooks.wantCount],
   [4, 4, 4, 4],

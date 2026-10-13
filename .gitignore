@@ -67,6 +67,9 @@ __pycache__/
 !/.claude/scripts/check-skill-fences.sh
 !/.claude/scripts/check-install-blocks.mjs
 !/.claude/scripts/bump-version.sh
+!/.claude/scripts/update-*.sh
+!/.claude/scripts/clean-plugin-cache.sh
+!/.claude/scripts/tests/
 !/.claude/skills/
 /.claude/skills/*
 !/.claude/skills/docs/

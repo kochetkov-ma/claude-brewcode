@@ -62,8 +62,8 @@ unset CLAUDECODE && claude plugin list --json && echo "✅ list OK" || echo "❌
 ```
 
 A valid JSON array, empty included, is the authoritative inventory; use each row's `id`, `version`
-(may be `"unknown"`), `scope`, `enabled`. Ids ending `@inline`, `@skills-dir` or `@synced` are not
-marketplace installs.
+(may be `"unknown"`), `scope`, `enabled`, `projectPath` (`project`/`local` rows; other projects too).
+Ids ending `@inline`, `@skills-dir` or `@synced` are not marketplace installs.
 
 **FALLBACK** (CC < 2.1.163, error or invalid JSON) — **EXECUTE** using Bash tool:
 ```bash
@@ -139,19 +139,27 @@ Options: "Update all" / "Update suite only" / "Update selected" / "Skip updates"
 
 Update set from that answer only: "Update all" = outdated suite + every `other` marketplace row
 (latest unknown; update is a no-op when current); "Update suite only" = outdated suite; "Update
-selected" = rows answered `Update`; "Skip updates" = empty → Phase 5. Rows keep their Phase 0 `id`
-and `scope` (`user | project | local | managed`; missing → `user`); non-marketplace rows are
-reported, never updated.
+selected" = rows answered `Update`; "Skip updates" = empty → Phase 5. Rows keep their Phase 0 `id`,
+`scope` (`user | project | local | managed`; missing → `user`) and `projectPath`; non-marketplace rows
+are reported, never updated.
 
 **EXECUTE** marketplace refresh first:
 ```bash
 claude plugin marketplace update claude-brewcode && echo "✅ marketplace update OK" || echo "❌ marketplace update FAILED"
 ```
 
-Then one command per update-set row:
+Then one command per update-set row. `user` / `managed` rows:
 ```bash
 claude plugin update "<id>" --scope "<scope>" && echo "✅ update <id> OK" || echo "❌ update <id> FAILED"
 ```
+
+`project` / `local` rows resolve from the cwd, so each runs from its own `projectPath`, never the
+session cwd (the subshell keeps the session cwd):
+```bash
+(cd "<projectPath>" && claude plugin update "<id>" --scope "<scope>") && echo "✅ update <id> (<scope> <projectPath>) OK" || echo "❌ update <id> (<scope> <projectPath>) FAILED"
+```
+
+`projectPath` absent or not a directory: run nothing for that row; report `orphan <scope> install: <id> at <projectPath>` with the removal command `mkdir -p "<projectPath>" && cd "<projectPath>" && claude plugin uninstall "<id>" --scope "<scope>"`.
 
 Always pass the discovered `--scope`: CLIs before 2.1.281 read omission as `user`. On failure: report the exact error and continue. Reference: [references/update-commands.md](references/update-commands.md), [references/update-prompt.md](references/update-prompt.md).
 

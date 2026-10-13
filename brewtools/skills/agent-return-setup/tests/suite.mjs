@@ -1283,7 +1283,8 @@ function markerName(agentId) {
     uninstall: blockAfter('## UNINSTALL'),
     purge: blockAfter('## PURGE'),
   };
-  const CONTENT_VERSION = runbook.split('\n', 1)[0].replace(/^.*content_version=([0-9.]+) .*$/, '$1');
+  // The config is stamped with the config contract: the CV of the module that parses it, not the runbook header.
+  const CONTENT_VERSION = readFileSync(join(ASSETS, 'agent-return-budget.mjs'), 'utf8').split('\n')[1].replace(/^.*content_version=([0-9.]+) .*$/, '$1');
 
   const ws = newWs('runbook');
   const claude = join(ws.proj, '.claude');

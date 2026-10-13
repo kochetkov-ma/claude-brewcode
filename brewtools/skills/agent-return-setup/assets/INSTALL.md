@@ -1,4 +1,4 @@
-<!-- brewcode-meta: version=6.5.1 content_version=6.5.1 generated_by=brewtools:agent-return-setup -->
+<!-- brewcode-meta: version=6.5.2 content_version=6.5.2 generated_by=brewtools:agent-return-setup -->
 # agent-return hooks — install / configure / remove runbook
 
 Self-contained hook assets. The `/brewtools:agent-return-setup` skill copies these into a
@@ -139,7 +139,7 @@ a profile whose `settings.json` registers the hooks keeps working from one share
 | `fileTokens` | compress/file tier boundary; positive integer; default `6000` |
 | `readOnlyAgentTypes` | agent types (exact `agent_type`, e.g. `Explore`, `myplugin:reviewer`) that have no file-writing tool: over `fileTokens` they are asked for the essential part instead of a file, and their SubagentStart text carries no file step. Any array replaces the built-in list, `[]` = nobody; key absent or not an array = built-in `["Explore","Plan"]`. Written by the config block only when absent |
 | `reportDir` | optional; where the file tier sends long reports, also quoted in the SubagentStart text. Relative = under the resolved project root, absolute as is, `~/` = under `$HOME`; trailing slashes dropped; absent, blank or not a string = `.claude/reports`. Never written by a block: add it by hand, read on every hook call. See *Report dir and protected paths* |
-| `version` / `content_version` / `generated_by` / `last_updated` | provenance, MANDATORY, re-stamped by every mode that writes this file (install, upgrade, enable, disable). `version` = the plugin release that produced THIS write; `content_version` = the release in which this INSTALL.md's generator logic last changed, read from this runbook's own header marker. Inert at runtime — the module reads only the threshold keys above. Never `doc_type`: that is a `.md`-frontmatter field |
+| `version` / `content_version` / `generated_by` / `last_updated` | provenance, MANDATORY, re-stamped by every mode that writes this file (install, upgrade, enable, disable). `version` = the plugin release that produced THIS write; `content_version` = the config contract: the header CV of `agent-return-budget.mjs` (the one hook file that parses this config), read from the asset beside this runbook. A runbook-only change never stales an installed config; a change to the config's keys or meaning ships with a change to `agent-return-budget.mjs`. Inert at runtime — the module reads only the threshold keys above. Never `doc_type`: that is a `.md`-frontmatter field |
 
 A config written by an older version (no `readOnlyAgentTypes`, any thresholds) keeps
 working unchanged: absent keys take the built-in values.
@@ -240,7 +240,13 @@ installing there builds a second, nested `.claude/` that the running Claude Code
 reads. Resolve it once, in the SAME Bash call as the block that uses it:
 
 ```
-# Project root: CLAUDE_PROJECT_DIR -> git toplevel -> upward walk -> PWD.
+# rc 0: the dir is HOME or the active config dir's parent - its .claude is a profile, never a project root.
+is_profile_parent() {
+  _pp=$(cd "${1}" 2>/dev/null && pwd -P) || return 1
+  [ -n "${HOME:-}" ] && [ "$_pp" = "$(cd "$HOME" 2>/dev/null && pwd -P)" ] && return 0
+  [ -n "${CLAUDE_CONFIG_DIR:-}" ] && [ "$_pp/.claude" = "$(cd "$CLAUDE_CONFIG_DIR" 2>/dev/null && pwd -P)" ]
+}
+# Project root: CLAUDE_PROJECT_DIR -> git toplevel -> upward walk (profile parents skipped) -> PWD.
 claude_project_root() {
   if [ -n "$CLAUDE_PROJECT_DIR" ] && [ -d "$CLAUDE_PROJECT_DIR" ]; then
     printf '%s\n' "$CLAUDE_PROJECT_DIR"; return 0
@@ -250,7 +256,7 @@ claude_project_root() {
   fi
   d=$PWD
   while [ "$d" != "/" ]; do
-    if [ -d "$d/.git" ] || [ -d "$d/.claude" ]; then printf '%s\n' "$d"; return 0; fi
+    if [ -d "$d/.git" ] || { [ -d "$d/.claude" ] && ! is_profile_parent "$d"; }; then printf '%s\n' "$d"; return 0; fi
     d=$(dirname "$d")
   done
   printf '%s\n' "$PWD"; return 1   # nonzero: caller decides
@@ -294,10 +300,11 @@ function today(){                               // LOCAL date, like date +%F - n
   const d=new Date();
   return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
 }
-function contentVersion(){                      // own-header only; no plugin.json field for this
+function contentVersion(){                      // config contract = CV of agent-return-budget.mjs beside RUNBOOK, never the runbook header
+  if(!process.env.RUNBOOK) return "";
   try{
-    const first=fs.readFileSync(process.env.RUNBOOK||"","utf8").split("\n",1)[0];
-    const m=/content_version=([0-9]+\.[0-9]+\.[0-9]+)/.exec(first);
+    const head=fs.readFileSync(p.join(p.dirname(process.env.RUNBOOK),"agent-return-budget.mjs"),"utf8").split("\n").slice(0,3).join("\n");
+    const m=/content_version=([0-9]+\.[0-9]+\.[0-9]+)(?=\s|$)/.exec(head);
     if(m) return m[1];
   }catch{}
   return "";
@@ -329,7 +336,7 @@ if(!Array.isArray(c.readOnlyAgentTypes)) c.readOnlyAgentTypes=["Explore","Plan"]
 const pv=pluginVersion();
 if(!pv){ console.error("ABORT: cannot resolve plugin version - export PLUGIN_VERSION=X.Y.Z or fix PJSON: "+process.env.PJSON); process.exit(1); }
 const cv=contentVersion();
-if(!cv){ console.error("ABORT: cannot resolve content_version - own header marker unreadable/missing at "+process.env.RUNBOOK); process.exit(1); }
+if(!cv){ console.error("ABORT: cannot resolve content_version - agent-return-budget.mjs header marker unreadable/missing beside "+process.env.RUNBOOK); process.exit(1); }
 const lu=today();
 delete c.version; delete c.content_version; delete c.generated_by; delete c.last_updated;
 c.version=pv; c.content_version=cv; c.generated_by=GB; c.last_updated=lu;   // the 4 mandatory JSON metadata keys, on EVERY write, in fixed order
@@ -730,10 +737,11 @@ function today(){                               // LOCAL date, like date +%F - n
   const d=new Date();
   return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
 }
-function contentVersion(){                      // own-header only; no plugin.json field for this
+function contentVersion(){                      // config contract = CV of agent-return-budget.mjs beside RUNBOOK, never the runbook header
+  if(!process.env.RUNBOOK) return "";
   try{
-    const first=fs.readFileSync(process.env.RUNBOOK||"","utf8").split("\n",1)[0];
-    const m=/content_version=([0-9]+\.[0-9]+\.[0-9]+)/.exec(first);
+    const head=fs.readFileSync(p.join(p.dirname(process.env.RUNBOOK),"agent-return-budget.mjs"),"utf8").split("\n").slice(0,3).join("\n");
+    const m=/content_version=([0-9]+\.[0-9]+\.[0-9]+)(?=\s|$)/.exec(head);
     if(m) return m[1];
   }catch{}
   return "";
@@ -751,7 +759,7 @@ c.enabled = process.env.ON === "1";
 const pv=pluginVersion();
 if(!pv){ console.error("ABORT: cannot resolve plugin version - export PLUGIN_VERSION=X.Y.Z or fix PJSON: "+process.env.PJSON); process.exit(1); }
 const cv=contentVersion();
-if(!cv){ console.error("ABORT: cannot resolve content_version - own header marker unreadable/missing at "+process.env.RUNBOOK); process.exit(1); }
+if(!cv){ console.error("ABORT: cannot resolve content_version - agent-return-budget.mjs header marker unreadable/missing beside "+process.env.RUNBOOK); process.exit(1); }
 const lu=today();
 delete c.version; delete c.content_version; delete c.generated_by; delete c.last_updated;
 c.version=pv; c.content_version=cv; c.generated_by=GB; c.last_updated=lu;   // every write stamps the 4 mandatory keys, in fixed order

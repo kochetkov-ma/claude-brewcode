@@ -539,17 +539,35 @@ cat "\${SEMBLE_STUB_GUIDANCE:?}"
   check('38-nocounts-verdict', noCounts.verdict, 'ready',
     'wantCount=0 means the counts were not reported - never downgrade on a missing measurement');
 
-  // GIVEN a hand-edited rule with an old stamp WHEN status runs THEN nextStep names the diff, merge or --force, never plain upgrade
+  // GIVEN a hand-edited rule with an old stamp WHEN status runs THEN nextStep is the user's review + --force, no hand merge
   const RULE = join(PROJECT, '.claude', 'rules', 'semble-first.md');
   const RULE_TPL = join(BASE, 'assets', 'semble-first.md.template');
   const stamped = (state, cv) => ({ ...healthy, rule: { state, content_version: cv, templateContentVersion: '6.5.0' } });
+  const EDITED_NEXT = `User review (the skill never edits a hand-edited rule): diff -u ${RULE} ${RULE_TPL}\n`
+    + `To replace it with the template: /brewcode:semble-setup upgrade --force (backs up ${RULE}.bak.<epoch> first)`;
   const editedOld = guidRun(stamped('user_modified', '6.1.4'));
   check('38b-edited-rule-old-stamp', [editedOld.verdict, editedOld.nextStep, editedOld.__reason],
-    ['partial',
-      `Review: diff -u ${RULE} ${RULE_TPL}\nThen merge by hand and set content_version: 6.5.0 in ${RULE},\n`
-      + `or replace it: /brewcode:semble-setup upgrade --force (backs up ${RULE}.bak.<epoch> first)`,
+    ['partial', EDITED_NEXT,
       'semble-first rule is hand-edited at content_version 6.1.4, plugin at 6.5.0; upgrade keeps it as is'],
-    'upgrade never rewrites a user_modified rule, so plain `upgrade` would loop on its stale stamp');
+    'P1: upgrade never rewrites a user_modified rule and the skill never invites a hand merge');
+  // GIVEN an edited rule with no content_version WHEN status runs THEN it is as stale as an old stamp (P2)
+  const editedUnstamped = guidRun({ ...healthy,
+    rule: { state: 'user_modified', version: '5.3.1', content_version: '', templateContentVersion: '6.5.0' } });
+  check('38h-edited-rule-unstamped', [editedUnstamped.verdict, editedUnstamped.nextStep, editedUnstamped.__reason,
+    editedUnstamped.guidance.ruleStampStale],
+  ['partial', EDITED_NEXT, 'semble-first rule is hand-edited at content_version none, plugin at 6.5.0; upgrade keeps it as is',
+    true],
+  'P2: a missing content_version is older than any template stamp, never a greener verdict');
+  // GIVEN a managed rule with no content_version WHEN status runs THEN upgrade re-syncs its metadata
+  const managedUnstamped = guidRun(stamped('managed', ''));
+  check('38i-managed-rule-unstamped', [managedUnstamped.verdict, managedUnstamped.nextStep, managedUnstamped.__reason],
+    ['partial', 'Run /brewcode:semble-setup upgrade', 'artifacts at content_version none, plugin at 6.5.0'],
+    'P2: an unstamped pristine rule is stale and upgrade re-syncs it without --force');
+  // GIVEN permissions granted only by settings.local.json WHEN status runs THEN ready, the source is surfaced (P3)
+  const localPerms = guidRun({ ...healthy, permissions: { allow: [], wired: true, source: ['local'], missing: [] } });
+  check('38j-perms-local-layer', [localPerms.verdict, localPerms.nextStep, localPerms.guidance.permissionsWired,
+    localPerms.guidance.permissionsSource], ['ready', 'none', true, ['local']],
+  'a grant in any settings layer Claude Code reads is wired; never prescribe install for it');
   const pristineOld = guidRun(stamped('stale', '6.1.4'));
   check('38c-pristine-rule-old-stamp', [pristineOld.verdict, pristineOld.nextStep],
     ['partial', 'Run /brewcode:semble-setup upgrade'],
@@ -730,6 +748,26 @@ cat "\${${envVar}:?}"
   check('52-agents-singular', oneAgent.__reason, '1 agent needs patching',
     'the singular clause is singular');
 
+  // GIVEN only agents needing a patch (alone, + absolute rows, + a stale stamp) WHEN status runs THEN upgrade, not install
+  const PATCH1 = { ...HEALTHY_AGENTS, summary: { changed: 1, conflict: 0, skipped: 0 } };
+  const ABS_ROWS = [['SessionStart', null, 'semble-session.mjs'], ['PostToolUse', 'm', 'semble-stats.mjs'],
+    ['PostToolUseFailure', 'm', 'semble-stats.mjs'], ['SubagentStart', null, 'semble-subagent.mjs']];
+  const absGuid = { ...HEALTHY_GUID, hooks: { ...HEALTHY_GUID.hooks, wiredCount: 0, staleEntries: 4, absoluteCount: 4,
+    driftedCount: 4, missingCount: 0, duplicateCount: 0,
+    drift: ABS_ROWS.map(([event, matcher, script]) => ({ event, matcher, script, field: 'args',
+      expected: ['${CLAUDE_PROJECT_DIR}/.claude/hooks/' + script],
+      actual: [join(PROJECT, '.claude', 'hooks', script)] })) } };
+  const staleGuid = { ...HEALTHY_GUID, rule: { state: 'managed', content_version: '6.4.0', templateContentVersion: '6.5.0' } };
+  const routes = [run({ agents: PATCH1 }), run({ agents: PATCH1, guid: absGuid }), run({ agents: PATCH1, guid: staleGuid }),
+    run({ agents: PATCH1, guid: { ...HEALTHY_GUID, permissions: { wired: false } } })]
+    .map((j) => [j.verdict, j.nextStep, j.__reason]);
+  check('52b-agents-route-upgrade', routes, [
+    ['partial', 'Run /brewcode:semble-setup upgrade', '1 agent needs patching'],
+    ['partial', 'Run /brewcode:semble-setup upgrade', '4 stale settings entries; hooks wired 0/4; 1 agent needs patching'],
+    ['partial', 'Run /brewcode:semble-setup upgrade', '1 agent needs patching; artifacts at content_version 6.4.0, plugin at 6.5.0'],
+    ['partial', 'Run /brewcode:semble-setup install', 'MCP tool permissions not wired; 1 agent needs patching'],
+  ], 'upgrade runs semble-agents.sh apply; install stays only for a genuinely missing install surface');
+
   const conflicted = run({ agents: { ...HEALTHY_AGENTS, summary: { changed: 0, conflict: 1, skipped: 1 } } });
   check('53-agents-conflict-verdict', conflicted.verdict, 'ready',
     'a reported conflict is an outcome, not a defect - apply exits 3 on it by design');
@@ -889,13 +927,13 @@ cat "\${${envVar}:?}"
   }, null, 2));
   const perms = runStatus(['--json', '--section', 'mcp'], { SEMBLE_STUB_DETECT: DETECT_FILE });
   check('62-permissions', safeParse(perms.stdout).mcp.permissions,
-    { project: ['mcp__semble_code__search'], user: ['mcp__semble_code__find_related'] },
+    { project: ['mcp__semble_code__search'], user: ['mcp__semble_code__find_related'], local: [] },
     'only the two semble tool entries are reported, foreign entries are ignored');
 
   writeFileSync(join(PROJECT, '.claude', 'settings.json'), '{ broken');
   const brokenPerms = runStatus(['--json', '--section', 'mcp'], { SEMBLE_STUB_DETECT: DETECT_FILE });
   check('63-permissions-broken', safeParse(brokenPerms.stdout).mcp.permissions,
-    { project: [], user: ['mcp__semble_code__find_related'] },
+    { project: [], user: ['mcp__semble_code__find_related'], local: [] },
     'an unparseable project settings.json degrades to an empty allow list, it never throws');
   rmSync(join(PROJECT, '.claude', 'settings.json'), { force: true });
   rmSync(join(HOME_DIR, '.claude', 'settings.json'), { force: true });

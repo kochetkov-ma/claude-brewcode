@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 6.5.1 |
+| Version | 6.5.2 |
 | Skills | 5 |
 | Agents | 0 |
 | Hooks | 0 |

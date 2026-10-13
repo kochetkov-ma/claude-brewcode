@@ -109,6 +109,46 @@ console.log('BD04 — project root vs hook cwd');
   check('exclude globs still apply from a nested cwd', [r.code, r.out], [0, '{}']);
   check('excluded file produced no state', stateFiles(root), []);
 }
+// GIVEN outer/.git > h/.claude/docsync > h/notes/misc/doc.md WHEN h is HOME, the config-dir parent, or plain
+// THEN hooks and every skill/runbook ROOT line skip h as a profile and use outer; plain h stays the root
+{
+  const cfg = { enabled: true, threshold_days: 7, exclude: [] };
+  const fixture = (name) => {
+    const outer = makeProject(name, cfg, {});
+    mkdirSync(join(outer, '.git'));
+    const h = join(outer, 'h');
+    mkdirSync(join(h, '.claude', 'docsync'), { recursive: true });
+    writeFileSync(join(h, '.claude', 'docsync', 'config.json'), JSON.stringify(cfg));
+    const cwd = join(h, 'notes', 'misc');
+    mkdirSync(cwd, { recursive: true });
+    writeFileSync(join(cwd, 'doc.md'), UNDATED);
+    return { outer, h, cwd };
+  };
+  const rootLines = ['../SKILL.md', '../assets/INSTALL.md'].flatMap((rel) => {
+    const lines = readFileSync(join(ASSETS, rel), 'utf8').split('\n');
+    return lines.flatMap((l, i) => l.includes('until [ -d "$d/.git" ]')
+      ? [(lines[i - 1].trim().startsWith('is_profile_parent()') ? lines[i - 1].trim() + '\n' : '') + l.trim()] : []);
+  });
+  const observe = (name, envOf) => {
+    const { outer, h, cwd } = fixture(name);
+    const env = { ...process.env, DOCSYNC_NOW: NOW, TZ: 'UTC', HOME: join(outer, 'elsewhere'), ...envOf(h) };
+    delete env.CLAUDE_PROJECT_DIR;
+    if (!envOf(h).CLAUDE_CONFIG_DIR) delete env.CLAUDE_CONFIG_DIR;
+    const hook = (kind, payload) => spawnSync(process.execPath, [HOOK[kind]], { input: JSON.stringify({ session_id: 's1', cwd, ...payload }), encoding: 'utf8', cwd, env }).stdout.trim();
+    hook('watch', { tool_input: { file_path: join(cwd, 'doc.md') } });
+    hook('track', { tool_input: { file_path: join(cwd, 'doc.md') } });
+    const gate = JSON.parse(hook('gate', {}) || '{}').decision ?? 'none';
+    const roots = rootLines.map((line) => spawnSync('bash', ['-c', `ROOT=""\n${line}\nprintf '%s' "$ROOT"`], { cwd, env, encoding: 'utf8' }).stdout);
+    const evs = (root) => events(root, 'state-s1.jsonl').map((e) => (e.file ? `${e.ev}:${e.file}` : e.ev));
+    return { gate, outer: evs(outer), h: evs(h), roots: roots.map((r) => r === outer ? 'outer' : r === h ? 'h' : r) };
+  };
+  const toOuter = { gate: 'block', outer: ['read:h/notes/misc/doc.md', 'edit:h/notes/misc/doc.md', 'nudge:h/notes/misc/doc.md', 'ask'],
+    h: [], roots: Array(6).fill('outer') };
+  check('docsync hooks and ROOT lines skip a profile parent (HOME, config-dir parent) but keep a plain .claude root',
+    [observe('profile-home', (h) => ({ HOME: h })), observe('profile-cfg', (h) => ({ CLAUDE_CONFIG_DIR: join(h, '.claude') })), observe('profile-plain', () => ({}))],
+    [toOuter, toOuter, { gate: 'block', outer: [], h: ['read:notes/misc/doc.md', 'edit:notes/misc/doc.md', 'nudge:notes/misc/doc.md', 'ask'],
+      roots: Array(6).fill('h') }]);
+}
 
 // ── BD05: one state file per session ─────────────────────────────────────────
 console.log('BD05 — per-session state');

@@ -1,4 +1,4 @@
-// brewcode-meta: version=6.5.1 content_version=6.5.0 generated_by=brewtools:manager-setup
+// brewcode-meta: version=6.5.2 content_version=6.5.2 generated_by=brewtools:manager-setup
 // brewtools:manager-setup — Manager state {hard, level, mode:'full', mcpAllow?} in <root>/.claude/brewtools/manager/state.json.
 
 // CLI `get|set` is the only Bash shape the HARD wall guard self-exempts: keep it argument-strict
@@ -241,8 +241,18 @@ const SETTABLE = {
   }
 };
 
+// Mirrors semble isProfileParent: HOME or the active config dir's parent holds a profile .claude, never a root.
+function isProfileParent(dir) {
+  const real = (p) => { try { return fs.realpathSync(p); } catch { return ''; } };
+  const p = real(dir);
+  if (!p) return false;
+  if (process.env.HOME && real(process.env.HOME) === p) return true;
+  const cfg = process.env.CLAUDE_CONFIG_DIR;
+  return Boolean(cfg) && real(cfg) === path.join(p, '.claude');
+}
+
 // CLI root without --cwd: the project this copy is installed in -> CLAUDE_PROJECT_DIR -> nearest
-// .git/.claude above cwd -> cwd. Raw cwd drifts, and `set hard=false` there disarmed nothing.
+// .git/.claude above cwd (profile parents skipped) -> cwd. Raw cwd drifts, and `set hard=false` there disarmed nothing.
 function defaultRoot() {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const installed = path.sep + path.join('.claude', 'brewtools', 'manager');
@@ -251,7 +261,8 @@ function defaultRoot() {
   if (env && fs.existsSync(env)) return path.resolve(env);
   const start = process.cwd();
   for (let dir = start; ; dir = path.dirname(dir)) {
-    if (fs.existsSync(path.join(dir, '.git')) || fs.existsSync(path.join(dir, '.claude'))) return dir;
+    if (fs.existsSync(path.join(dir, '.git'))) return dir;
+    if (fs.existsSync(path.join(dir, '.claude')) && !isProfileParent(dir)) return dir;
     if (path.dirname(dir) === dir) return start;
   }
 }

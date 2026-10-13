@@ -108,6 +108,12 @@ A="$BT_ROOT/skills/agent-router-setup/assets"
 test -f "$A/INSTALL.md" && test -f "$A/agent-router.mjs" && test -f "$A/judge-prompt.md" || { echo "❌ FAILED — assets incomplete under BT_ROOT=$BT_ROOT"; exit 1; }
 echo "ASSETS_DIR=$A"
 echo "RUNBOOK=$A/INSTALL.md"
+# rc 0: the dir is HOME or the active config dir's parent - its .claude is a profile, never a project root.
+is_profile_parent() {
+  _pp=$(cd "${1}" 2>/dev/null && pwd -P) || return 1
+  [ -n "${HOME:-}" ] && [ "$_pp" = "$(cd "$HOME" 2>/dev/null && pwd -P)" ] && return 0
+  [ -n "${CLAUDE_CONFIG_DIR:-}" ] && [ "$_pp/.claude" = "$(cd "$CLAUDE_CONFIG_DIR" 2>/dev/null && pwd -P)" ]
+}
 claude_project_root() {
   PD="${CLAUDE_PROJECT_DIR}"   # substituted at load: the session start dir, as hooks get it
   if [ -n "$PD" ] && [ -d "$PD" ]; then
@@ -115,7 +121,7 @@ claude_project_root() {
   fi
   d=$PWD
   while [ "$d" != "/" ]; do
-    if [ -f "$d/.claude/brewtools/agent-router.json" ]; then printf '%s\n' "$d"; return 0; fi
+    if [ -f "$d/.claude/brewtools/agent-router.json" ] && ! is_profile_parent "$d"; then printf '%s\n' "$d"; return 0; fi
     d=$(dirname "$d")
   done
   if r=$(git rev-parse --show-toplevel 2>/dev/null) && [ -n "$r" ]; then
@@ -123,7 +129,7 @@ claude_project_root() {
   fi
   d=$PWD
   while [ "$d" != "/" ]; do
-    if [ -d "$d/.claude" ]; then printf '%s\n' "$d"; return 0; fi
+    if [ -d "$d/.claude" ] && ! is_profile_parent "$d"; then printf '%s\n' "$d"; return 0; fi
     d=$(dirname "$d")
   done
   printf '%s\n' "$PWD"; return 1
@@ -143,13 +149,14 @@ cv_of(){ { sed -n '1,3p' "${1}" 2>/dev/null || true; } | sed -n 's/.*content_ver
 HCV=$(cv_of "$D/hooks/agent-router.mjs"); HCV=${HCV:-n/a}          # INSTALLED hook body
 TCV=$(cv_of "$A/agent-router.mjs"); TCV=${TCV:-n/a}                # template it was copied from
 GCV=$({ jq -r '.content_version // empty' "$D/brewtools/agent-router.json" 2>/dev/null || true; }); GCV=${GCV:-n/a}
-RCV=$(cv_of "$A/INSTALL.md"); RCV=${RCV:-n/a}                      # generator logic behind the config
+KCV=$TCV                                                           # config contract = the hook asset that parses it
+RCV=$(cv_of "$A/INSTALL.md"); RCV=${RCV:-n/a}                      # informational: runbook prose never stales a config
 STALE=n/a
 if [ "$HCV" != n/a ] && [ "$TCV" != n/a ]; then [ "$HCV" = "$TCV" ] && STALE=no || STALE=yes; fi
-if [ "$STALE" != yes ] && [ "$GCV" != n/a ] && [ "$RCV" != n/a ] && [ "$GCV" != "$RCV" ]; then STALE=yes; fi
+if [ "$STALE" != yes ] && [ "$GCV" != n/a ] && [ "$KCV" != n/a ] && [ "$GCV" != "$KCV" ]; then STALE=yes; fi
 R=$(node "$A/agent-router.mjs" --roster "$ROOT" 2>/dev/null) || R=n/a
 echo "project: hook_file=$H tier1_refs=$T1 legacy_refs=$LEGACY_T1 tier2_refs=$T2 settings_valid=$VALID heartbeat_refs=$HB enabled=$EN level_recorded=$LV roster=$R"
-echo "content_version: hook=$HCV template=$TCV config=$GCV runbook=$RCV stale=$STALE"
+echo "content_version: hook=$HCV template=$TCV config=$GCV contract=$KCV runbook=$RCV stale=$STALE"
 echo "version: config=$CV plugin=$PV"
 echo "config=$CFG"
 [ "$T2" = 0 ] || node "$A/agent-router.mjs" --judge-health "$ROOT" || true
@@ -165,14 +172,14 @@ echo "✅ status"
 | `project_root` / `root_resolved` | the hook's own ladder (16 levels per step there): `CLAUDE_PROJECT_DIR` (substituted at load: the session start dir, the same value the hook gets), else the nearest ancestor holding `.claude/brewtools/agent-router.json`, else git toplevel, else the nearest holding a `.claude` dir, so a nested bare `.claude` cannot mask the owning root. `root_resolved=no` = read-only fallback to `$PWD` |
 | `hook_file` | `yes`/`no` — `agent-router.mjs` present in `<repo>/.claude/hooks/` |
 | `tier1_refs` | handlers exactly matching the tier-1 entry above; `1` = wired |
-| `tier2_refs` | handlers exactly matching the tier-2 entry above, prompt byte-equal to the current `judge-prompt.md`, no `model` key; `0` = tier 2 off, `1` = wired |
+| `tier2_refs` | handlers exactly matching the tier-2 entry above, prompt byte-equal to the current `judge-prompt.md` with its stamp line stripped on both sides (a meta-only bump stays current), no `model` key; `0` = tier 2 off, `1` = wired |
 | `heartbeat_refs` | handlers exactly matching the heartbeat entry; must equal `tier2_refs` |
 | `legacy_refs` | owned handlers off their exact shape: absolute path, wrong event/matcher/type/command/timeout, extra args/keys, stale or empty judge prompt, wrong status message, any explicit tier-2 `model` (installs up to 6.4.0 pinned one). Nonzero -> `install`/`upgrade` migrates |
 | `settings_valid` | `yes` only when settings are absent/empty or parse as a JSON object |
 | `judge_expected` / `judge_answered` / `judge_overdue` | printed when `tier2_refs` is not `0`: `Agent` calls seen at `level strict` / verdicts returned / verdicts expected over 90 s ago that never came (silent allows). `judge_overdue>0`, or `judge_answered=0` with `judge_expected>0` = registered but not answering. Counters cover ~24 h and include every `type:"agent"` hook verdict in the project |
 | `enabled` | from the config; `n/a` = no config or no such key |
 | `level_recorded` | the config's `level`: an install-time record, not proof of wiring; `tier2_refs` is the authority |
-| `content_version` (`hook` / `template` / `config` / `runbook`) | the staleness signal: `hook` = the `brewcode-meta:` header of the installed `.claude/hooks/agent-router.mjs`, `template` = that header in the plugin's asset copy, `config` = the config's `content_version` key, `runbook` = the header of `assets/INSTALL.md`. A difference on either pair -> `stale=yes` -> offer `upgrade`. `n/a` on a side (pre-5.6 artifact, or not installed) = unknown, not "current" |
+| `content_version` (`hook` / `template` / `config` / `contract` / `runbook`) | the staleness signal: `hook` = the `brewcode-meta:` header of the installed `.claude/hooks/agent-router.mjs`, `template` = that header in the plugin's asset copy, `config` = the config's `content_version` key, `contract` = the config contract, the `template` CV (the hook is the one file that parses the config), `runbook` = the header of `assets/INSTALL.md`, informational only: a runbook-only change never stales a config. A difference on `hook`/`template` or `config`/`contract` -> `stale=yes` -> offer `upgrade`. `n/a` on a side (pre-5.6 artifact, or not installed) = unknown, not "current" |
 | `version` / `plugin` | the config's `version` key vs the installed brewtools version. Informational: every config write (`enable`/`disable` included) re-stamps it while the hook file stays old, so never decide staleness from it |
 | `roster` | number of project agents the hook loads (its own walk via `--roster`: recursive, up to the git root, files Claude Code skips excluded); `0` = roster scoring has no candidates, the four intent routes still work |
 
@@ -190,10 +197,10 @@ Effective = `hook_file=yes tier1_refs=1 legacy_refs=0 settings_valid=yes`, tier 
 Every mode that writes `agent-router.json` (`install`, `upgrade`, `enable`, `disable`, both `level` operations) writes these four keys beside the behavior keys; `doc_type` is a `.md`-frontmatter field and never appears in JSON:
 
 ```json
-{ "version": "{PLUGIN_VERSION}", "content_version": "<INSTALL.md header>", "generated_by": "brewtools:agent-router-setup", "last_updated": "{LAST_UPDATED}" }
+{ "version": "{PLUGIN_VERSION}", "content_version": "<agent-router.mjs header>", "generated_by": "brewtools:agent-router-setup", "last_updated": "{LAST_UPDATED}" }
 ```
 
-`content_version` is not passed in: the runbook's node blocks read it from the `brewcode-meta:` header of `INSTALL.md` (via `$RUNBOOK`) and abort if unreadable. Resolve only `version` and `last_updated` here, never hardcode. **EXECUTE** using Bash tool:
+`content_version` is not passed in: the runbook's node blocks read it from the `brewcode-meta:` header of `agent-router.mjs` beside `$RUNBOOK` (the config contract, so a runbook-only change never stales a config) and abort if unreadable. Resolve only `version` and `last_updated` here, never hardcode. **EXECUTE** using Bash tool:
 
 ```bash
 BT_ROOT="${CLAUDE_PLUGIN_ROOT}"
@@ -301,7 +308,7 @@ CONTEXT:
   METADATA: every mode that WRITES the config (install, upgrade, enable, disable, level) must
   leave these four keys in agent-router.json:
   version=\$PLUGIN_VERSION, content_version=<read by the runbook block from the brewcode-meta
-  header of \$RUNBOOK — never passed in, never hardcoded>, generated_by=\"brewtools:agent-router-setup\",
+  header of agent-router.mjs beside \$RUNBOOK — never passed in, never hardcoded>, generated_by=\"brewtools:agent-router-setup\",
   last_updated=\$LAST_UPDATED. No doc_type — it is a .md-frontmatter field and never belongs
   in a JSON carrier. Set them INSIDE the runbook's node block that re-serializes the
   object with JSON.stringify — never by appending text to the file. An unparseable config
@@ -359,7 +366,7 @@ Re-install is idempotent, not inert: the merge converges to the same entries, bu
 |-----------|----------|
 | `$BT_ROOT/skills/agent-router-setup/assets` missing | ERROR: `agent-router: assets not found under $BT_ROOT — plugin cache incomplete.` STOP. |
 | `BT_ROOT` empty or without `.claude-plugin/plugin.json` | ERROR: `agent-router: cannot locate plugin root — install/update brewtools first.` STOP. |
-| `stale=yes` (hook `content_version` != template, or config != runbook) | Report it together with "installed": the project runs an old hook body. Recommend `upgrade` (re-copies the file, re-stamps the config). |
+| `stale=yes` (hook `content_version` != template, or config != contract) | Report it together with "installed": the project runs an old hook body. Recommend `upgrade` (re-copies the file, re-stamps the config). |
 | User asks for a global install | Refuse and explain: the roster is per-project, `~/.claude/*` is protected, and a global hook would route every repo against one repo's agents. Offer the project install. |
 | User wants to add or change an intent route | Warn first: a config `intents` array replaces the built-in four wholesale (no merge, no warning when three routes vanish), so copy `DEFAULT_INTENTS` out of `agent-router.mjs` and append. An entry needs `label` + `expert` + `match` (STRONG, may deny) and may carry `weakMatch` (nudge only) and `domain` (noun-only regex deciding which project agent covers the intent; falls back to `match`\|`weakMatch`). An entry whose `match` does not compile is skipped entirely, weak side included. Install never writes the key. |
 | Existing config is malformed JSON | Report it: the runbook aborts rather than overwriting it blind, and the hook fails open (every spawn allowed) until it is fixed. Offer to rewrite. |

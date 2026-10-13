@@ -175,7 +175,7 @@ triggers no protected-path prompt; `dontAsk` and headless runs need a `Write` al
 password source path is recorded, and its contents are not read through model-visible tools.
 
 **History file format:** the helper resolves the project root from `CLAUDE_PROJECT_DIR`, Git,
-an upward `.git`/`.claude` search, or the current directory. It creates
+an upward `.git`/`.claude` search (a `.claude` in `$HOME` or in the directory whose `.claude` IS `$CLAUDE_CONFIG_DIR` is a profile, not a project marker, and is skipped; a `.git` there still counts), or the current directory. It creates
 `<project-root>/.claude/brewpage-history.md` with mode `600` and git-ignore protection, then
 appends the exact URL, token, TTL, type, returned `ownerLink` and identity metadata. Existing
 history rows remain unchanged.

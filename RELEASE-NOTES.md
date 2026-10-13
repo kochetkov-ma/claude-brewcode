@@ -2,6 +2,48 @@
 
 ---
 
+## v6.5.2 (2026-10-13)
+
+> Docs: [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) | [agents](https://doc-claude.brewcode.app/brewcode/skills/agents/)
+
+> Docs: [docsync-setup](https://doc-claude.brewcode.app/brewdoc/skills/docsync-setup/) | [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/) | [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
+
+> Docs: [agent-deadline-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline-setup/) | [agent-return-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-return-setup/) | [agent-router-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-router-setup/) | [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) | [ssh](https://doc-claude.brewcode.app/brewtools/skills/ssh/)
+
+Fixes for defects found in the final review of the 6.5.1 rollout.
+
+### brewcode
+
+#### Fixed
+
+- **semble-setup:** a hand-edited rule is report-only: the skill never edits or merges it. It reports `diff -u` and `upgrade --force`, and only an explicit `--force` replaces the rule.
+- **semble-setup:** `permissions` reads project, local and profile settings plus `mcp__semble_code[__*]`; `install` no longer copies a tool that any layer grants into tracked `settings.json`.
+- **semble-setup:** an unstamped hand-edited rule is `partial` (was `ready`); new `guidance.ruleStampStale`. Agent-patch-only gaps route to `upgrade`, not `install`.
+- **semble-setup:** `.bak.<epoch>` backups are mode 0600; the newest 3 per file are kept and each pruned one is named on stderr.
+- **setup-status:** row 2 follows the same verdict as `semble-status` (`permissionsWired`, `ruleStampStale`, report-only route for an edited rule), via `semble-row.mjs`.
+- **setup-status:** a stamp-only delta between plugin asset and installed copy reads `current (restamp pending)`, not `modified`.
+- **setup-status:** agent-deadline, agent-return and agent-router configs are compared with the hook that parses them, not the runbook header.
+- **setup-status:** a new `CLIMB-START` line sits beside `GOVERNING`.
+- **all plugins:** every root walk (hooks, installers, ROOT lines, guards, state CLIs, history-file root) skips HOME and a profile directory's parent; a `.git` there still counts.
+
+### brewtools
+
+#### Fixed
+
+- **plugin-update:** `project`/`local` installs update via `(cd "<projectPath>" && claude plugin update <id> --scope <scope>)`; a missing `projectPath` is an orphan install, nothing runs.
+- **agent-deadline-setup, agent-return-setup, agent-router-setup:** a config is `current` when its `content_version` equals the parsing hook's CV; status adds `contract_content_version` / `contract`.
+- **agent-router-setup:** the tier-2 judge prompt is compared without its `brewcode-meta` stamp line, so a release no longer marks strict installs `legacy`.
+- **agent-router-setup:** `upgrade` replaces a judge with an `agent-router:` status message instead of adding a second one.
+
+### repo
+
+#### Fixed
+
+- **maintainer scripts:** `update-plugin.sh` updates `project` and `local` installs from each `projectPath` before the prune, and `clean-plugin-cache.sh` prints the exact command for each pinning row.
+- **maintainer scripts:** `update-plugin.sh`, `update-*.sh`, `clean-plugin-cache.sh` and `tests/` are tracked in git, and CI runs their suite via `validate.yml`.
+
+---
+
 ## v6.5.1 (2026-10-13)
 
 > Docs: [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/)

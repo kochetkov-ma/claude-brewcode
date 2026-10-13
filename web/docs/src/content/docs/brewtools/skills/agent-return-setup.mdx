@@ -107,7 +107,7 @@ An orphan is reported as a finding, not as stale. Fix: `/brewtools:agent-return-
 
 `<config dir>` is the one Claude Code runs with: `$CLAUDE_CONFIG_DIR` when set, else `~/.claude/`. The project scope is the session's start directory (what hooks receive as `CLAUDE_PROJECT_DIR`); from a repo subdirectory the git root's `settings.json` is not loaded. The state directory `agent-return-state/` sits beside the config that enabled the feature.
 
-Config discovery starts at the resolved project root (`CLAUDE_PROJECT_DIR`, then an upward walk from the cwd for a `.git` or `.claude` marker, never the git toplevel, then cwd), walks up 16 levels probing `<dir>/.claude/agent-return.json`, then falls back to `$CLAUDE_CONFIG_DIR/agent-return.json` when set, then `~/.claude/agent-return.json`. Project wins, even when the project has no hooks wired; a malformed project config is skipped and the climb goes on; global only when no valid project config is found. Global writes go through Bash only — the config dir is a protected path for `Write`/`Edit`: prompted in `default` and `acceptEdits`, denied headless and in `dontAsk`, allowed only under `bypassPermissions`.
+Config discovery starts at the resolved project root (`CLAUDE_PROJECT_DIR`, then an upward walk from the cwd for a `.git` or `.claude` marker, never the git toplevel, then cwd; the `.claude` step skips `HOME` and the profile parent (the directory whose `.claude` is the active config dir); a `.git` there still counts), walks up 16 levels probing `<dir>/.claude/agent-return.json`, then falls back to `$CLAUDE_CONFIG_DIR/agent-return.json` when set, then `~/.claude/agent-return.json`. Project wins, even when the project has no hooks wired; a malformed project config is skipped and the climb goes on; global only when no valid project config is found. Global writes go through Bash only — the config dir is a protected path for `Write`/`Edit`: prompted in `default` and `acceptEdits`, denied headless and in `dontAsk`, allowed only under `bypassPermissions`.
 
 ### Config shape
 
@@ -131,13 +131,13 @@ Config discovery starts at the resolved project root (`CLAUDE_PROJECT_DIR`, then
 | `fileTokens` | compress/file tier boundary; positive integer; default `6000` |
 | `readOnlyAgentTypes` | agent types without a file-writing tool, matched exactly on `agent_type` (plugin agents as `plugin:name`): over `fileTokens` they are asked for the essential part, not a file. Any array replaces the default `["Explore","Plan"]`; `[]` = nobody |
 | `reportDir` | optional, added by hand; where the file tier writes. Relative = under the project root, absolute as is, `~/` = under `$HOME`; absent or blank = `.claude/reports` |
-| `version` / `content_version` / `generated_by` / `last_updated` | Provenance restamped on install, upgrade, enable, and disable; content_version tracks changed generator content, while version identifies the producing plugin release |
+| `version` / `content_version` / `generated_by` / `last_updated` | Provenance restamped on install, upgrade, enable, and disable; `content_version` is the header version of `agent-return-budget.mjs`, the one module that parses the config, while `version` identifies the producing plugin release |
 
 **Threshold precedence, per threshold, first hit wins:** the config key — the env var (`AGENT_RETURN_PASS` / `AGENT_RETURN_FILE`, parsed with `Number()` not `parseInt()`) — the built-in `2500` / `6000`. Only a positive integer is accepted at either level; `1.7`, `abc`, `-5`, `0`, `NaN`, `Infinity` all fall through.
 
 Config values are read on every hook call — changing `enabled`, a threshold, the list or `reportDir` takes effect immediately, no restart. Hook **wiring** changes also apply to the running session, with no restart.
 
-Setup-status compares each artifact's content_version with the source for that artifact,
+Setup-status compares each artifact's content_version with the source for that artifact (config vs `agent-return-budget.mjs`; field `contract_content_version`),
 then corroborates copied hook bytes and ownership. Hook and config-generator content versions
 can differ, and unchanged content need not match a newer plugin release number. A missing
 comparison source is reported as unknown, not a fabricated stale verdict.
