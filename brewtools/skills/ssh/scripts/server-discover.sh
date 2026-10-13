@@ -34,9 +34,17 @@ esac
 # Portable outer deadline: macOS has no GNU `timeout`, so the script re-execs
 # itself once and a background killer bounds the WHOLE discovery, not each hop.
 if [ "${SSH_DISCOVER_WATCHDOG:-0}" != "1" ]; then
-    SSH_DISCOVER_WATCHDOG=1 bash "$0" "$@" &
+    # set -m: child leads its own process group, so the deadline kills hung ssh grandchildren that hold caller's stdout.
+    set -m
+    SSH_DISCOVER_WATCHDOG=1 bash "$0" "$@" </dev/null &
     child=$!
-    ( sleep "$DEADLINE"; kill -TERM "$child" 2>/dev/null ) &
+    set +m
+    killer=''
+    trap 'kill -TERM -- "-$child" 2>/dev/null; [ -z "$killer" ] || kill "$killer" 2>/dev/null; exit 130' INT TERM
+    # Timer stdio -> /dev/null: never holds caller's stdout pipe; TERM trap reaps its sleep on success.
+    ( s=''; trap '[ -z "$s" ] || kill "$s" 2>/dev/null; exit 0' TERM
+      sleep "$DEADLINE" & s=$!
+      wait "$s" && kill -TERM -- "-$child" 2>/dev/null ) </dev/null >/dev/null 2>&1 &
     killer=$!
     rc=0
     # braces + 2>/dev/null: bash prints "PID Terminated" job noise when reaping a signalled child

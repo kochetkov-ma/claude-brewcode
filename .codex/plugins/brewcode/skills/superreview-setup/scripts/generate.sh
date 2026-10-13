@@ -772,20 +772,22 @@ upgrade_skill() {
 _check_meta_frontmatter() {
   _f="$1"; _bad=0
   _fm=$(awk 'NR == 1 && $0 == "---" { f = 1; next } f && $0 == "---" { exit } f { print }' "$_f")
+  # Here-strings, never `printf | grep -q`: printf writes in chunks, an early grep exit SIGPIPEs it,
+  # and pipefail turns a present key into a false "missing" (CI run 38371469396).
   for _k in doc_type version content_version generated_by last_updated; do
-    printf '%s\n' "$_fm" | grep -q "^${_k}:" || { echo "❌ $_f frontmatter missing metadata key: $_k"; _bad=1; }
+    grep -q "^${_k}:" <<<"$_fm" || { echo "❌ $_f frontmatter missing metadata key: $_k"; _bad=1; }
   done
-  printf '%s\n' "$_fm" | grep -q '^doc_type: llm$' \
+  grep -q '^doc_type: llm$' <<<"$_fm" \
     || { echo "❌ $_f doc_type must be exactly 'llm', UNQUOTED"; _bad=1; }
-  printf '%s\n' "$_fm" | grep -Eq '^version: "[0-9]+\.[0-9]+\.[0-9]+(\+[0-9A-Za-z.-]+)?"$' \
+  grep -Eq '^version: "[0-9]+\.[0-9]+\.[0-9]+(\+[0-9A-Za-z.-]+)?"$' <<<"$_fm" \
     || { echo "❌ $_f version must be a QUOTED X.Y.Z"; _bad=1; }
-  printf '%s\n' "$_fm" | grep -Eq '^content_version: "[0-9]+\.[0-9]+\.[0-9]+"$' \
+  grep -Eq '^content_version: "[0-9]+\.[0-9]+\.[0-9]+"$' <<<"$_fm" \
     || { echo "❌ $_f content_version must be a QUOTED X.Y.Z"; _bad=1; }
-  printf '%s\n' "$_fm" | grep -Eq '^generated_by: "[^"]+"$' \
+  grep -Eq '^generated_by: "[^"]+"$' <<<"$_fm" \
     || { echo "❌ $_f generated_by must be a QUOTED <plugin>:<skill>"; _bad=1; }
-  printf '%s\n' "$_fm" | grep -Eq '^last_updated: "[0-9]{4}-[0-9]{2}-[0-9]{2}"$' \
+  grep -Eq '^last_updated: "[0-9]{4}-[0-9]{2}-[0-9]{2}"$' <<<"$_fm" \
     || { echo "❌ $_f last_updated must be a QUOTED YYYY-MM-DD"; _bad=1; }
-  _order=$(printf '%s\n' "$_fm" | grep -oE '^(doc_type|version|content_version|generated_by|last_updated)' | tr '\n' ' ' || true)
+  _order=$(grep -oE '^(doc_type|version|content_version|generated_by|last_updated)' <<<"$_fm" | tr '\n' ' ' || true)
   [ "$_order" = "doc_type version content_version generated_by last_updated " ] \
     || { echo "❌ $_f metadata keys out of order [$_order] — must be doc_type, version, content_version, generated_by, last_updated"; _bad=1; }
   return "$_bad"
@@ -944,7 +946,7 @@ EOF
   _experts=0
   for _name in $_local_agents; do
     [ "$_name" = "intent-guard" ] && continue
-    printf '%s\n' "$_wired" | grep -qxF "$_name" && _experts=$((_experts+1))
+    grep -qxF "$_name" <<<"$_wired" && _experts=$((_experts+1))   # here-string: see _check_meta_frontmatter
   done
   if [ "$_experts" -eq 0 ]; then
     if [ "${SUPERREVIEW_ALLOW_NO_EXPERTS:-0}" = "1" ]; then
