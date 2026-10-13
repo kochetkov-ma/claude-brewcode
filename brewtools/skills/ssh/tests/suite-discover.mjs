@@ -2,9 +2,7 @@
 // Suite server-discover.sh (BT-F21): port/connection operands never word-split into ssh options; discovery bounded by portable in-process deadline.
 // argv-capturing `ssh` stub on PATH, no network, no real SSH; unconditional exact-equality checks with description.
 import { spawnSync } from 'node:child_process';
-import {
-  mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, chmodSync, rmSync, realpathSync, openSync, closeSync,
-} from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, chmodSync, rmSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -39,20 +37,14 @@ function sandbox(body) {
     `#!/bin/bash\nfor a in "$@"; do printf '%s\\n' "$a" >> "${log}"; done\nprintf -- '---\\n' >> "${log}"\n[ -n "\${STUB_SLEEP:-}" ] && sleep "$STUB_SLEEP"\nexit "\${STUB_EXIT:-0}"\n`,
   );
   chmodSync(join(bin, 'ssh'), 0o755);
-  // File stdio: the script's orphaned watchdog `sleep` holds inherited pipes for the whole budget.
+  // Pipe stdio on purpose: the deadline timer must never hold a caller's pipe (case 9 bounds the time).
   const run = (args, env = {}) => {
-    const outPath = join(base, 'stdout.txt');
-    const errPath = join(base, 'stderr.txt');
-    const out = openSync(outPath, 'w');
-    const err = openSync(errPath, 'w');
     const r = spawnSync('bash', [SCRIPT, ...args], {
-      stdio: ['ignore', out, err],
+      encoding: 'utf8',
       env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, ...env },
       timeout: 30000,
     });
-    closeSync(out);
-    closeSync(err);
-    return { stdout: readFileSync(outPath, 'utf8'), stderr: readFileSync(errPath, 'utf8'), status: r.status };
+    return { stdout: r.stdout || '', stderr: r.stderr || '', status: r.status };
   };
   const argv = () => (existsSync(log) ? readFileSync(log, 'utf8') : '');
   try {
@@ -156,8 +148,17 @@ sandbox(({ run }) => {
 
 // ── 7. portable outer deadline (no GNU timeout needed) ──────────────────
 sandbox(({ run }) => {
+  const started = Date.now();
   const r = run(['deploy@10.0.0.1', '22'], { SSH_DISCOVER_TIMEOUT: '1', STUB_SLEEP: '10' });
+  const elapsedMs = Date.now() - started;
   check('deadline.exit', r.status, 124, 'a hung ssh is killed and the script exits 124');
+  // Bound 5000 ms: 1 s budget + 4 s tolerance for a loaded CI runner; the hung stub alone would hold 10 s.
+  check(
+    'deadline.pipe-released',
+    elapsedMs <= 5000,
+    true,
+    `the hung ssh is killed with the run, so the captured pipe closes: ${elapsedMs} ms, bound 5000 ms, stub sleep 10000 ms`,
+  );
   check(
     'deadline.stderr',
     r.stderr,
@@ -177,6 +178,35 @@ sandbox(({ run, argv }) => {
     'the rejection names the bad budget',
   );
   check('deadline-arg.ssh-never-invoked', argv(), '', 'ssh is never executed with an unbounded run');
+});
+
+// ── 9. $(...) capture returns on success, not at the deadline ───────────
+// Bound 5000 ms vs 20 s budget: stubbed work ~0.2 s + 4.8 s tolerance for a loaded CI runner.
+sandbox(({ base }) => {
+  const harness = join(base, 'capture.sh');
+  writeFileSync(
+    harness,
+    `#!/bin/bash\nout=$(bash "$1" deploy@10.0.0.1 22)\nrc=$?\nprintf 'rc=%s\\n%s\\n' "$rc" "$(printf '%s\\n' "$out" | grep -c '^=== Discovery Complete ===$')"\n`,
+  );
+  const started = Date.now();
+  const r = spawnSync('bash', [harness, SCRIPT], {
+    encoding: 'utf8',
+    env: { ...process.env, PATH: `${join(base, 'bin')}:${process.env.PATH}`, SSH_DISCOVER_TIMEOUT: '20' },
+    timeout: 30000,
+  });
+  const elapsedMs = Date.now() - started;
+  check(
+    'capture.output',
+    [r.status, r.stdout],
+    [0, 'rc=0\n1\n'],
+    'command substitution gets rc 0 and exactly one completion line',
+  );
+  check(
+    'capture.elapsed-within-bound',
+    elapsedMs <= 5000,
+    true,
+    `the deadline timer never holds the captured stdout: ${elapsedMs} ms, bound 5000 ms, budget 20000 ms`,
+  );
 });
 
 console.log(results.join('\n'));

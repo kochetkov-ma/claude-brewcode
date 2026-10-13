@@ -230,7 +230,7 @@ jobs:
           TAG="sha-${SHA}-${BUILD_RUN_ID}-${BUILD_ATTEMPT}"
           [[ "$REQUEST_TAG" == "$VERSION" || "$REQUEST_TAG" == "$TAG" ]] || { echo "::error::Build provenance validation failed"; exit 1; }
           [[ -z "$UPSTREAM_SHA" || ( "$SHA" == "$UPSTREAM_SHA" && "$BUILD_RUN_ID" == "$UPSTREAM_RUN_ID" && "$BUILD_ATTEMPT" == "$UPSTREAM_RUN_ATTEMPT" ) ]] || { echo "::error::Build provenance validation failed"; exit 1; }
-          DIGEST=$(docker image inspect "${IMAGE}:${REQUEST_TAG}" --format '{{range .RepoDigests}}{{println .}}{{end}}' | awk -v prefix="${IMAGE}@sha256:" 'index($0,prefix)==1 {print; exit}')
+          DIGEST=$(docker image inspect "${IMAGE}:${REQUEST_TAG}" --format '{{range .RepoDigests}}{{println .}}{{end}}' | awk -v prefix="${IMAGE}@sha256:" 'index($0,prefix)==1 && !f {print; f=1}')
           [[ "$DIGEST" == "${IMAGE}@sha256:"* && "${DIGEST#"$IMAGE"@sha256:}" =~ ^[0-9a-f]{64}$ ]] || { echo "::error::Build provenance validation failed"; exit 1; }
           docker pull "${IMAGE}:${TAG}"
           docker image inspect "${IMAGE}:${TAG}" --format '{{range .RepoDigests}}{{println .}}{{end}}' | grep -Fx -- "$DIGEST"

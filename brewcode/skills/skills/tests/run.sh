@@ -60,7 +60,8 @@ expect() {
   local label="$1" dir="$2" line="$3" want="$4" shell="$5"; shift 5
   local out rc=0
   out="$(env "$@" "$shell" "$VALIDATE" "$dir" 2>&1)" || rc=$?
-  if printf '%s\n' "$out" | grep -qxF -- "$line" && [ "$rc" -eq "$want" ]; then
+  # Here-string: `printf | grep -q` under pipefail SIGPIPEs printf on an early match -> false FAIL.
+  if grep -qxF -- "$line" <<<"$out" && [ "$rc" -eq "$want" ]; then
     pass=$((pass + 1))
   else
     fail=$((fail + 1))

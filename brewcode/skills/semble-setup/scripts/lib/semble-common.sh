@@ -174,7 +174,8 @@ sc_claude_version() { "$(sc_claude_bin)" --version 2>/dev/null | awk '{print $1}
 sc_semble_tool_version() {
   local v=""
   if sc_have uv; then
-    v="$(uv tool list 2>/dev/null | awk '$1=="semble"{print $2; exit}' | tr -d 'v')" || v=""
+    # awk drains its input: an early `exit` SIGPIPEs uv under the callers' pipefail and blanks a found version.
+    v="$(uv tool list 2>/dev/null | awk '$1=="semble" && !f {print $2; f=1}' | tr -d 'v')" || v=""
     [ -n "$v" ] && { printf '%s\n' "$v"; return 0; }
   fi
   sc_have semble || return 0

@@ -90,7 +90,7 @@ backups() {
 resolve_run_dir() {
   local spec="${1:-last}" layer="${2:-}" m
   case "$spec" in
-    last) backups "$layer" | head -1 ;;
+    last) backups "$layer" | sed -n 1p ;;   # sed drains input: `head -1` SIGPIPEs sort under pipefail
     *_context-slim|/*) printf '%s\n' "$spec" ;;
     *) m=$(backups "$layer" | { grep -F "$BACKUP_ROOT/$spec" || true; } | head -1)
        if [ -n "$m" ]; then printf '%s\n' "$m"
@@ -101,7 +101,7 @@ resolve_run_dir() {
 # Every layer dir of the newest RUN (same YYYYMMDD-HHMMSS prefix), newest first.
 run_dirs_of_newest() {
   local newest ts
-  newest=$(backups | head -1)
+  newest=$(backups | sed -n 1p)
   [ -n "$newest" ] || return 0
   ts=$(basename "$newest" | cut -c1-15)
   backups | { grep -F -- "$BACKUP_ROOT/$ts-" || true; }
@@ -295,7 +295,8 @@ EOF
   # Byte-exactness is the whole point: re-hash every restored file against the manifest.
   while IFS=' ' read -r want rel; do
     [ -n "$rel" ] || continue
-    printf '%s\n' "${rels[@]}" | grep -qxF "$rel" || continue
+    # Here-string: `printf | grep -q` under pipefail SIGPIPEs printf on an early match -> rel skipped.
+    grep -qxF "$rel" <<<"$(printf '%s\n' "${rels[@]}")" || continue
     [ -f "$run_dir/orig/$rel" ] || continue
     got=$(sha "$root/$rel" 2>/dev/null || echo MISSING)
     [ "$got" = "$want" ] || { printf '❌ CHECKSUM MISMATCH: %s\n' "$rel" >&2; bad=$((bad + 1)); }

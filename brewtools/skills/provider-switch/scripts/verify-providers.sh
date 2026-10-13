@@ -121,7 +121,8 @@ verify_provider() {
   text="$(printf '%s' "$BODY" | jq -er '[.content[]? | select(.type == "text") | .text] | join(" ")' 2>/dev/null || true)"
   resp_model="$(printf '%s' "$BODY" | jq -er '.model // empty' 2>/dev/null || true)"
 
-  if [[ "$HTTP_CODE" == "200" ]] && printf '%s' "$text" | grep -qw 'OK'; then
+  # Here-string: `printf | grep -q` under pipefail SIGPIPEs printf on an early match -> false fail.
+  if [[ "$HTTP_CODE" == "200" ]] && grep -qw 'OK' <<<"$text"; then
     echo "MODEL=${resp_model:-none}"
     [[ "$resp_model" != "$model" ]] && echo "WARNING=model mismatch: requested $model, answered ${resp_model:-none}"
     echo "RESPONSE=OK"

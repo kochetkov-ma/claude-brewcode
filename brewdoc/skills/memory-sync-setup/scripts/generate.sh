@@ -664,7 +664,8 @@ validate_emit() {
   _citeset=" $(printf '%s\n' "$_cites" | cut -f2 | sort -u | tr '\n' ' ')"
   for c in $_citeset; do
     [ -f "$TARGET/$c" ] && continue
-    _ln=$(printf '%s\n' "$_cites" | awk -F'\t' -v c="$c" '$2 == c { print $1; exit }')
+    # Here-string: awk's early `exit` SIGPIPEs a printf producer under pipefail -> errexit abort.
+    _ln=$(awk -F'\t' -v c="$c" '$2 == c { print $1; exit }' <<<"$_cites")
     echo "❌ FAILED: $TARGET/SKILL.md:${_ln:-?}: cites $c which does not exist"
     _refbad=1; _errors=$((_errors+1))
   done
