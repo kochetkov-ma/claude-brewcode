@@ -535,17 +535,17 @@ jobs:
             exit 1
           fi
 
-          echo "$BODY" > /tmp/release-body.md
+          echo "$BODY" > "$RUNNER_TEMP/release-body.md"
 
           # Append install instructions
-          printf '\n---\n\n## Quick Install\n\n```bash\n# Add marketplace\nclaude plugin marketplace add https://github.com/{{OWNER}}/{{REPO}}\n\n# Install plugins\n{{INSTALL_COMMANDS}}\n```\n\n## Already installed? Update\n\n```bash\nclaude plugin marketplace update {{REPO}}\n{{UPDATE_COMMANDS}}\n```\n' >> /tmp/release-body.md
+          printf '\n---\n\n## Quick Install\n\n```bash\n# Add marketplace\nclaude plugin marketplace add https://github.com/{{OWNER}}/{{REPO}}\n\n# Install plugins\n{{INSTALL_COMMANDS}}\n```\n\n## Already installed? Update\n\n```bash\nclaude plugin marketplace update {{REPO}}\n{{UPDATE_COMMANDS}}\n```\n' >> "$RUNNER_TEMP/release-body.md"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3.0.3
         with:
           tag_name: ${{ steps.changelog.outputs.tag }}
           name: ${{ steps.changelog.outputs.tag }}
-          body_path: /tmp/release-body.md
+          body_path: ${{ runner.temp }}/release-body.md
           draft: false
           prerelease: false
 ```

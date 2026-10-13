@@ -11,7 +11,7 @@ Convert a local Markdown file with `scripts/md_to_pdf.py`. Check dependencies wi
 
 Follow every phase below. When a phase delegates work, use Codex collaboration with only `task_name` and `message`; treat each "Codex delegation brief" block as role and message content, not executable syntax. Required approval: main presents a concrete, reviewable proposal in chat and waits for an actual user reply before dependent action. Existing authorization for the same scope remains valid; do not ask again. Optional clarification: use `request_user_input_async` only if exposed, or `request_user_input` only if available in the current runtime/mode, for optional choices and never approval. Otherwise ask in main chat. Delegated agents return unresolved questions to main. Silence, elapsed time and tool errors are not approval. Resolve `<skill-directory>`, `<plugin-root>`, `<project-root>`, and `<arguments>` before running commands.
 
-<!-- brewcode-meta: version=6.5.2 content_version=6.5.0 generated_by=brewdoc:md-to-pdf -->
+<!-- brewcode-meta: version=6.5.3 content_version=6.5.3 generated_by=brewdoc:md-to-pdf -->
 
 # MD to PDF
 
@@ -53,7 +53,7 @@ RESULT: <PDF path, or the help/styles/test output>
 |------|-----------|-------------|-------------|----------|
 | HELP | Empty or `help` | *(empty)*, help | помощь | no |
 | STYLES | `styles` or `config` | styles, config, configure, page size, color scheme | стили, настрой стиль, конфиг | yes |
-| TEST | `test` | test, sample, demo, bundled test file | тест, пример, демо | no (writes only to `/tmp/`) |
+| TEST | `test` | test, sample, demo, bundled test file | тест, пример, демо | no (private temp dir, removed on exit) |
 | CONVERT+PROMPT | Path to `.md` file + quoted string at end | convert with instructions, pdf and rewrite/strip section | сконвертируй с изменениями | yes |
 | CONVERT | Path to `.md` file (no quoted string) | convert, pdf, generate pdf, turn into pdf, `.md` file named in prose | конвертируй, сделай pdf, преврати в pdf | yes |
 
@@ -227,7 +227,19 @@ top-level `pygments_theme` (passed as `--pygments-theme`; `md_to_pdf.py` never r
 
 ### TEST Mode
 
-Run the CONVERT command with `INPUT_PATH` = `<skill-directory>/test/test-all-elements.md` and `OUTPUT_PATH` = `/tmp/md-to-pdf-test-ENGINE.pdf`, then Step 4.
+The CONVERT command on the bundled file, writing into a private 0700 `mktemp -d` dir removed on exit.
+
+**EXECUTE** using shell (replace `ENGINE`; `--config` / `--pygments-theme` as in CONVERT; keep every other byte):
+```bash
+umask 077
+TEST_DIR="$(mktemp -d "${TMPDIR:-/tmp}/md-to-pdf-test.XXXXXX")" && chmod 700 "$TEST_DIR" || { echo "---CONVERT_FAILED---"; exit 1; }
+trap 'case "${TEST_DIR##*/}" in md-to-pdf-test.??????) rm -rf -- "$TEST_DIR" ;; esac' EXIT
+python3 "<skill-directory>/scripts/md_to_pdf.py" "<skill-directory>/test/test-all-elements.md" "$TEST_DIR/md-to-pdf-test-ENGINE.pdf" --engine ENGINE 2>&1 && echo "---CONVERT_OK---" || echo "---CONVERT_FAILED---"
+```
+
+> **STOP if CONVERT_FAILED** -- as in CONVERT.
+
+Then Step 4; Output = the `OUTPUT=` path, marked `(removed on exit)`.
 
 ## Step 4: Report Results
 

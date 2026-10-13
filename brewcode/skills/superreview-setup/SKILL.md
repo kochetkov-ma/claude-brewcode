@@ -7,7 +7,7 @@ argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge]
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion]
 model: opus
 ---
-<!-- brewcode-meta: version=6.5.2 content_version=6.5.0 generated_by=brewcode:superreview-setup -->
+<!-- brewcode-meta: version=6.5.3 content_version=6.5.3 generated_by=brewcode:superreview-setup -->
 
 # Super Review Generator (brewcode:superreview-setup)
 
@@ -228,7 +228,7 @@ unconditionally at both depths, so it is broken without it.
 |------|--------|
 | **Single writer** | `scripts/generate.sh` is the only writer of `.claude/agents/intent-guard.md`, via one shared implementation exposed as two subcommands: `emit` (full generation, Phase 2) and `emit-agent` (the agent alone, no superreview skill involved — what `/brewcode:teams-setup` calls instead of authoring its own copy). Never hand-write the file. `brewcode:agent-creator` may only adapt the seeded BLOCKs of an already-written file, never author it |
 | **Reuse wins** | an existing file is the project's own tuned version (or a sibling generator's) and outranks this template: the writer prints `INTENT_GUARD: REUSE <path>` and leaves it byte-untouched — no refresh, no diff-merge, no BLOCK filling. A file without our stamp is reused whatever it contains (unresolved-looking `{UPPER_SNAKE}` tokens are only reported). Recreated, after a `.bak-<ts>` copy: an empty file, or a stamped file of ours that lost its `name: intent-guard` frontmatter or still carries unresolved `{UPPER_SNAKE}` tokens |
-| **Migrate, never re-emit** | a file carrying the retired `<!-- intent-guard template vN -->` stamp is ours but pre-standard: the writer prints `INTENT_GUARD: MIGRATED <path>` and restamps metadata only — the frontmatter metadata keys and the tail anchor; every tailored line survives byte-for-byte. A file with no stamp of either generation is the project's own hand-written agent and is only ever reused |
+| **Migrate, never re-emit** | a file carrying the retired `<!-- intent-guard template vN -->` stamp is ours but pre-standard: the writer prints `INTENT_GUARD: MIGRATED <path>` and restamps metadata only — the frontmatter metadata keys and the tail anchor; every tailored line survives byte-for-byte. A file with our current stamp whose frontmatter fails the `validate` metadata gate (an earlier generation, e.g. no `content_version`) also prints `MIGRATED`: frontmatter metadata keys restamped, body byte-for-byte. A file with no stamp of either generation is the project's own hand-written agent and is only ever reused |
 | **No AskUserQuestion** | creation is not gated: it is part of the emitted artifact, like `references/scope.md` |
 | **Roster scan** | note in Phase 1 whether the file is present (`generate.sh scan` reports it) so the Phase 5 summary can say CREATED vs REUSED |
 | **Not an expert** | never count it toward the domain-expert requirement, never put it in `DOMAIN_AGENTS_TABLE` / `FILE_GROUP_MAP` / `SIMPLIFY_AGENTS`, never make it `VALIDATOR_AGENT` or a scope-pass owner. `generate.sh validate` excludes it from the expert count |
@@ -335,7 +335,9 @@ It is unconditional, not gated on the verdict above: a plain version bump moves 
 reports `IDENTICAL`), yet the emitted `SKILL.md` frontmatter `version:` is what `/brewcode:setup-status` reads to
 decide `stale`. Nothing else in the file is touched: `doc_type` is preserved when present (it is user-owned), the
 body is compared byte-for-byte afterwards, and any mismatch aborts the run before anything is written. A second
-`upgrade` on the same version changes only `last_updated`.
+`upgrade` on the same version changes only `last_updated`. `.claude/agents/intent-guard.md` gets the same
+restamp only when its frontmatter fails the metadata gate (`INTENT_GUARD: MIGRATED`); a passing one is `REUSE`d
+byte-untouched, so `upgrade` never leaves it in a state `validate` rejects.
 
 Once the delta is applied (and any restored file has been through Phase 3), promote the new templates to the
 baseline with the command the script printed —

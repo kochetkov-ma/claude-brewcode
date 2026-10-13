@@ -36,7 +36,8 @@ IG_SEED_MARK="<!-- SEEDED-DEFAULT:"              # one per generic BLOCK default
 
 # Every temp dir goes through $_bd; the trap makes leaks impossible on any exit path.
 _bd=""
-trap '[ -n "$_bd" ] && rm -rf "$_bd"' EXIT
+_igt=""
+trap '[ -n "$_bd" ] && rm -rf "$_bd"; [ -n "$_igt" ] && rm -rf "$_igt"' EXIT
 
 validate_templates() {
   for t in "$REFS/SKILL.md.template" "$REFS/scope.md.template" "$REFS/agent-prompt.md" \
@@ -119,7 +120,12 @@ EOF
   echo ""
   echo "--- intent-guard: tier sources + existing agent ---"
   case "$(_ig_kind)" in
-    CURRENT) echo "✅ $IG_PATH EXISTS, current format — emit will REUSE it, never overwrite" ;;
+    CURRENT)
+      if _check_meta_frontmatter "$IG_PATH" >/dev/null; then
+        echo "✅ $IG_PATH EXISTS, current format — emit will REUSE it, never overwrite"
+      else
+        echo "⚠️ $IG_PATH carries our stamp but its frontmatter fails the metadata gate (earlier generation) — emit/upgrade will RESTAMP it (metadata only, body preserved)"
+      fi ;;
     FOREIGN) echo "✅ $IG_PATH EXISTS, no template stamp (the project's own agent) — emit will REUSE it, never overwrite" ;;
     LEGACY)  echo "⚠️ $IG_PATH carries the RETIRED 'intent-guard template vN' stamp — emit/upgrade will MIGRATE it (metadata restamped, tailored body preserved)" ;;
     BROKEN)  echo "⚠️ $IG_PATH is empty, or is ours and has no 'name: intent-guard' frontmatter / still carries unresolved {PLACEHOLDER} tokens — emit will back it up to .bak-<ts> and RECREATE it" ;;
@@ -346,9 +352,16 @@ _ig_foreign_conflict() {
   echo "   Treated as the project's own agent and REUSED byte-untouched. If these were meant to be template placeholders, delete the file by hand and re-run." >&2
 }
 
-# "Nothing to write" — the file is runnable AND its metadata is current. LEGACY is deliberately NOT usable:
-# it is a live agent that still needs its restamp, and every caller must see that as work outstanding.
-_ig_usable() { case "$(_ig_kind)" in CURRENT|FOREIGN) return 0 ;; *) return 1 ;; esac; }
+# CURRENT-stamped but failing the metadata gate (pre-content_version generation): frontmatter restamp, body byte-kept.
+_ig_restamp() {
+  _igt="$(mktemp -d)"
+  _subst_raw "$REFS/intent-guard.md.template" > "$_igt/tpl"
+  _restamp_meta "$IG_PATH" "$_igt/tpl" >&2 || return 1
+  rm -rf "$_igt"; _igt=""
+  _check_meta_frontmatter "$IG_PATH" >&2 \
+    || { echo "❌ restamp left $IG_PATH failing the metadata gate — fix its frontmatter by hand, then re-run" >&2; return 1; }
+  echo "INTENT_GUARD: MIGRATED $IG_PATH"
+}
 
 # Restamp a LEGACY agent IN PLACE: frontmatter keys (D2 order) + tail anchor from the substituted template;
 # body (every tailored line) copied through untouched: migration != re-emit.
@@ -408,7 +421,12 @@ write_intent_guard() {
 
   case "$(_ig_kind)" in
     CURRENT)
-      echo "INTENT_GUARD: REUSE $IG_PATH"
+      if _check_meta_frontmatter "$IG_PATH" >/dev/null; then
+        echo "INTENT_GUARD: REUSE $IG_PATH"
+        return 0
+      fi
+      echo "ℹ️ $IG_PATH is ours but its frontmatter fails the metadata gate (earlier generation) — restamping metadata in place, body preserved" >&2
+      _ig_restamp || return 1
       return 0
       ;;
     FOREIGN)
@@ -881,7 +899,8 @@ EOF
       echo "❌ $IG_PATH still carries the TEMPLATE HEADER comment — emit must strip it"
       _errors=$((_errors+1))
     fi
-    _check_meta_frontmatter "$IG_PATH" || _errors=$((_errors+1))
+    _check_meta_frontmatter "$IG_PATH" \
+      || { _errors=$((_errors+1)); echo "   Fix: 'generate.sh upgrade' (or 'emit-agent') restamps its metadata in place; the body is preserved"; }
     # (c3) TAILORING: seeded BLOCK defaults = runnable floor, not target -> WARN, not fail
     # (`emit-agent` is a standalone path whose adaptation happens in the caller's flow).
     _ig_seeded=$(grep -cF "$IG_SEED_MARK" "$IG_PATH" || true)

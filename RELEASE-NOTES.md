@@ -2,6 +2,45 @@
 
 ---
 
+## v6.5.3 (2026-10-13)
+
+> Docs: [superreview-setup](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/)
+
+> Docs: [md-to-pdf](https://doc-claude.brewcode.app/brewdoc/skills/md-to-pdf/)
+
+> Docs: [context-slim](https://doc-claude.brewcode.app/brewtools/skills/context-slim/) | [deploy](https://doc-claude.brewcode.app/brewtools/skills/deploy/)
+
+Fixes for defects found after the 6.5.2 rollout.
+
+### brewcode
+
+#### Fixed
+
+- **superreview-setup:** `upgrade` restamps a legacy stamped generated agent (intent-guard) that fails the metadata check; the body is byte-guarded and any mismatch aborts.
+- **setup-status:** a disabled row with files behind gets `upgrade` (keeps it disabled); teams, superreview, task-board and memory-sync get `enable`, `upgrade`, `disable`.
+- **setup-status:** fences run inline or through `fence-run.sh`, which uses a private 0700 temp dir removed on exit instead of shared `/tmp` files.
+
+### brewdoc
+
+#### Fixed
+
+- **md-to-pdf:** TEST mode writes its PDF into a private temp dir removed on exit, not the fixed `/tmp/md-to-pdf-test-<engine>.pdf`.
+
+### brewtools
+
+#### Fixed
+
+- **context-slim:** the keep-catalog locale fixture uses a private temp dir instead of the fixed `/tmp/cyr.txt`.
+- **deploy:** the release workflow template writes the release body to `$RUNNER_TEMP`, and the draft-release notes go through stdin, not `/tmp/notes.md`.
+
+### repo
+
+#### Fixed
+
+- **release.yml:** the release body is written to $RUNNER_TEMP instead of /tmp.
+
+---
+
 ## v6.5.2 (2026-10-13)
 
 > Docs: [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) | [agents](https://doc-claude.brewcode.app/brewcode/skills/agents/)

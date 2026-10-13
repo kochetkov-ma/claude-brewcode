@@ -33,6 +33,27 @@ Report each as a finding with what to diff and port by hand, never dressed in a 
 `.sembleignore` is not on this list: it is never compared, so there is no byte verdict for it.
 `--force` on it backs up and overwrites the user's own uncommented exclusions: never print it.
 
+## Disabled rows with drifted assets
+
+Read by Phase 3's shared disabled-row rule. `keeps` = the owner's `upgrade` refreshes the files and
+leaves the off-switch thrown; `refused` = the owner stops `upgrade` on a parked install, so the
+line re-parks after it (`enable`/`disable` there are renames, not generators: one session is fine).
+Fill `<what drifted>` with the drifted files; `enable` stays the user's optional follow-up.
+
+| Row | `upgrade` while disabled | Command for a drifted disabled row | Owner evidence |
+|-----|--------------------------|------------------------------------|----------------|
+| 1 teams | refused | `/brewcode:teams-setup enable <team>`, then `/brewcode:teams-setup upgrade <team>`, then `/brewcode:teams-setup disable <team>` | `$BC/skills/teams-setup/SKILL.md`: "Refuse to upgrade a parked member" |
+| 2 semble | keeps | `/brewcode:semble-setup upgrade "<what drifted>; keep it disabled"` | `$BC/skills/semble-setup/SKILL.md`: "`enabled`, `phase` and `completed` are never reset as a side effect" |
+| 3 superreview | refused | `/brewcode:superreview-setup enable`, then `/brewcode:superreview-setup upgrade "<what drifted>"`, then `/brewcode:superreview-setup disable` | `$BC/skills/superreview-setup/scripts/generate.sh`: "Run 'generate.sh enable' first, then upgrade." |
+| 4 task-board | refused | `/brewtools:task-board-setup enable`, then `/brewtools:task-board-setup upgrade "<what drifted>, keep every task id"`, then `/brewtools:task-board-setup disable` | `$BT/skills/task-board-setup/SKILL.md`: "tell the user to run `enable` first, then `upgrade`" |
+| 6 agent-deadline | keeps | `/brewtools:agent-deadline-setup upgrade <project\|global> "<what drifted>; keep it disabled"` | `$BT/skills/agent-deadline-setup/SKILL.md`: "keeps `defaultMinutes`, `byAgentType`, `hardStopRatio` and a disabled state" |
+| 7 agent-router | keeps | `/brewtools:agent-router-setup upgrade "<what drifted>; keep it disabled"` | `$BT/skills/agent-router-setup/assets/INSTALL.md`: "reinstall must NOT silently re-enable a disabled setup" |
+| 8 manager | keeps | `/brewtools:manager-setup upgrade "<what drifted>; keep the wall disarmed"` | `$BT/skills/manager-setup/SKILL.md`: "re-copy the guard + re-register from the CURRENT plugin version; `hard`/`level` preserved" |
+| 9 memory-sync | refused | `/brewdoc:memory-sync-setup enable`, then `/brewdoc:memory-sync-setup upgrade "<what drifted>"`, then `/brewdoc:memory-sync-setup disable` | `$BD/skills/memory-sync-setup/scripts/generate.sh`: "run 'generate.sh enable' first, then restamp" |
+| 10 docsync | keeps | `/brewdoc:docsync-setup upgrade "<what drifted>; keep it disabled"` | `$BD/skills/docsync-setup/SKILL.md`: "`threshold_days` + `enabled` unchanged" |
+| 11 agent-return | keeps | `/brewtools:agent-return-setup upgrade <project\|global> "<what drifted>; keep it disabled"` | `$BT/skills/agent-return-setup/SKILL.md`: "thresholds + `enabled` preserved" |
+| 12 convention | keeps | `/brewcode:convention-setup upgrade "<what drifted>; keep the rule parked"` | `$BC/skills/convention-setup/SKILL.md`: "P0-P8, preserve disabled state" |
+
 ## Row 1 teams
 
 - Headline = the `Content Version` row of `team.md`'s header table. No such row = a pre-5.6 install: `stale (legacy stamp)`.
