@@ -745,9 +745,6 @@ Codex does not auto-load \`.codex/rules/\`. After install/upgrade/enable, add or
 11. Re-run the file inventory, validate every cited path, and report documents changed, rules added or merged, duplicates skipped, and unresolved conflicts.
 
 Use Codex collaboration only when the user or active repository instructions explicitly require delegation. When delegation is allowed, prefer project-specific agents and keep one bounded evidence-gathering surface per agent.`,
-    'brewcode/e2e': `# End-to-end testing
-
-Translate the requested behavior into GIVEN/WHEN/THEN scenarios, inspect the active application and test stack, then implement the smallest deterministic end-to-end suite. Use Codex collaboration agents only when the user or project instructions explicitly request delegation. Run against mocks or local services unless live side effects are explicitly authorized, and report exact commands and failures.`,
     'brewcode/rules': `# Codex project rules
 
 Use only when the user explicitly requests rule creation, synchronization, improvement, review, or inventory.
@@ -775,9 +772,6 @@ Before the first write — and before the report on a read-only run — state in
 7. Report changed rules, index rows, optimization measurements, and validation evidence.
 
 The index makes rules discoverable; it does not auto-load their bodies. During later work, read the indexed rule whose \`Load when\` condition matches the task.`,
-    'brewcode/skills': `# Codex skill authoring
-
-List, create, or improve Codex skills. A skill uses \`SKILL.md\` with only \`name\` and \`description\` frontmatter, optional \`agents/openai.yaml\`, and colocated scripts, references, or assets. Keep activation wording specific, run the Codex skill quick validator, and forward-test complex workflows without production side effects.`,
     'brewcode/superreview-setup': `# Project-tailored review
 
 Inspect repository instructions, architecture, tests, and recent changes, then create a focused Codex review skill in the user-selected project \`.codex/skills/\` path. Encode evidence-based checks, severity guidance, and verification commands. Validate the generated skill and do not create Markdown agent definitions.`,
@@ -787,60 +781,6 @@ Use collaboration agents only when the user or project instructions explicitly r
     'brewdoc/md-to-pdf': `# Markdown to PDF
 
 Convert a local Markdown file with \`scripts/md_to_pdf.py\`. Check dependencies with \`scripts/check_deps.sh\`, choose a bundled style from \`styles/\`, and write only to the requested output path. Store project preferences in \`.codex/md-to-pdf.config.json\` only after confirmation. Render and inspect the result before reporting completion.`,
-    'brewdoc/memory': `# Optimize Codex instructions
-
-Audit \`AGENTS.md\` and related project Codex guidance for duplication, contradictions, stale paths, and unnecessary verbosity. Propose a compact patch that preserves load-bearing constraints and local overrides. Do not modify runtime configuration, skills, or memories unless the user explicitly requests it.`,
-    'brewdoc/my-claude': `# Document a Codex installation
-
-Use only when explicitly invoked. The stable skill id is retained for compatibility; every workflow below targets Codex.
-
-## Mode detection
-
-- no argument or \`internal\`: document the local installation.
-- \`external\`: document Codex architecture and current behavior from official sources.
-- \`research <query>\`: research one Codex topic.
-
-## Internal mode
-
-1. Inventory \`~/.codex/config.toml\`, personal and project \`AGENTS.md\`, project \`.codex/\`, installed skills, TOML agents, plugins, hooks, MCP servers, and memory metadata without mutation.
-2. Use \`codex plugin list --json\`, \`codex plugin marketplace list --json\`, and \`codex mcp list\` for managed state.
-3. Redact tokens, credentials, host secrets, and private file contents.
-4. Write the dated report under the user-selected project \`.codex/brewdoc/my-claude/\` directory and update its JSONL index.
-
-## External mode
-
-Use current official OpenAI Codex documentation and installed CLI help. Cover configuration layers, AGENTS.md scope, skills, agents, plugins, hooks, MCP, sandboxing, and trust. Cite sources and distinguish verified facts from inference.
-
-## Research mode
-
-Search current official sources first, collect concise evidence, answer the query, list sources, and add a review verdict. Never modify the installation during research.`,
-    'brewdoc/publish': `# Offline publish preview
-
-This Codex variant is explicit-only and mock-only. Never call brewpage.app, upload content, request a password, save a token, or create a public URL.
-
-## Parse and classify
-
-1. Parse the requested text, Markdown, file, directory, or local site and optional TTL.
-2. Detect the content type and enumerate included files without following links outside the selected root.
-
-## Preflight
-
-3. Show preflight statistics: file count, total bytes, excluded files, and validation warnings.
-4. Use a user-provided namespace only as a local manifest label; do not reserve it remotely.
-
-## Build the mock artifact
-
-5. Build a deterministic preview manifest with relative paths, byte sizes, SHA256 hashes, media types, TTL, and generation timestamp.
-6. Write preview artifacts only to the user-selected local directory and only after confirmation.
-
-## Report
-
-7. Report \`mock: true\`, the manifest path, and that no network publication, credential handling, or URL creation occurred.
-
-If the user requests real publishing, stop and explain that this package intentionally provides offline preview only.`,
-    'brewtools/deploy': `# Deployment workflow
-
-Inspect the repository's documented deployment target and existing CI before proposing changes. Pin dependencies, preserve safety gates, use mocks for smoke tests, and require explicit authorization for release, push, infrastructure mutation, or production traffic. Keep any Codex agent definitions as TOML under \`.codex/agents/\`.`,
     'brewtools/manager-setup': `# Ambient manager prompt mode
 
 This skill configures ambient prompt guidance only. It does not create, claim, or enforce a hard security wall.
@@ -873,36 +813,6 @@ Resolve exactly one canonical mode -- \`status\`, \`install\`, \`upgrade\`, \`en
 The codewords are hook-driven: they fire on every prompt regardless of the mode state above. \`status\` explains them and \`edit\` customizes their text; no mode turns them off.
 
 The plugin uses \`SessionStart\` and \`UserPromptSubmit\` hooks. Preserve unrelated hook entries and review changed definitions with \`/hooks\`.`,
-    'brewtools/provider-switch': `# Codex provider switch
-
-Use only when explicitly invoked.
-
-## P0-P2: language, mode, and status
-
-1. Select language and parse \`status\`, \`configure\`, \`help\`, \`verify\`, \`model-check\`, or maintainer-only \`update\`.
-2. Run \`scripts/check-status.sh\` and inspect the active \`~/.codex/config.toml\` without printing secret values.
-
-## P3-P4: provider selection and configuration
-
-3. For configuration, load the matching provider reference, verify current official documentation, select an exact model id, and obtain the API key through an environment variable or approved secret store.
-4. Show the exact \`model_providers\` TOML diff and obtain confirmation before writing global configuration. Do not create shell aliases.
-
-## P5-P8: verify, help, and model check
-
-5. Run \`scripts/verify-providers.sh\` in read-only or mock mode; perform a live request only with explicit authorization.
-6. \`help\` explains activation through Codex configuration; \`model-check\` asks the five documented diagnostic questions and returns evidence-based confidence.
-
-## P9: maintainer update
-
-7. Maintainer \`update\` compares all provider references with current official sources, shows a diff, applies approved pinned identifiers, and repeats mock verification.
-
-Never write provider secrets into a repository or modify unrelated runtime configuration.`,
-    'brewtools/secrets-scan': `# Secret scanning
-
-Scan only files in scope with existing repository tools or a pinned scanner, and never print full secret values. Report file, line, secret class, and remediation; distinguish tracked files from ignored local configuration. Do not rotate, revoke, commit, or publish anything without explicit authorization.`,
-    'brewtools/ssh': `# SSH administration
-
-Inspect connection targets and the requested operation before connecting. Default to read-only diagnostics, redact credentials, and require explicit confirmation for remote mutation, restart, deployment, firewall changes, or destructive commands. Persist optional Codex agents only as supported TOML files under \`.codex/agents/\`.`,
     'brewtools/task-board-setup': `# Codex task-board initializer
 
 Create exactly one Codex-owned file board; never create or mirror it under another assistant namespace.
@@ -963,7 +873,7 @@ Compress the requested text while preserving every load-bearing constraint, iden
 }
 
 function openAiYaml(plugin, skill, description) {
-  const display = (skill === 'my-claude' ? 'my-codex' : skill).split('-').map(part => part[0].toUpperCase() + part.slice(1)).join(' ');
+  const display = skill.split('-').map(part => part[0].toUpperCase() + part.slice(1)).join(' ');
   const specialShort = {
     'brewcode/rules': 'Project rules and AGENTS.md index; user invoked',
     'brewtools/manager-setup': 'Manager prompt modes; user invoked',
@@ -977,17 +887,6 @@ function openAiYaml(plugin, skill, description) {
     'brewtools/task-board-setup': 'Use $brewtools:task-board-setup only when the user explicitly requests board setup.'
   }[`${plugin}/${skill}`] || `Use $${plugin}:${skill} for this task.`;
   return `interface:\n  display_name: ${JSON.stringify(display)}\n  short_description: ${JSON.stringify(short.length >= 25 ? short : `${short} workflow`)}\n  default_prompt: ${JSON.stringify(defaultPrompt)}\npolicy:\n  allow_implicit_invocation: ${implicit}\n`;
-}
-
-function copySelected(source, target) {
-  const data = fs.readFileSync(source);
-  fs.mkdirSync(path.dirname(target), { recursive: true });
-  if (data.includes(0)) fs.writeFileSync(target, data);
-  else {
-    const transformed = nativeResourceText(path.relative(REPO_ROOT, source), data.toString('utf8'), { shell: isShellAsset(target) });
-    fs.writeFileSync(target, applyTextOverrides(path.relative(REPO_ROOT, source), transformed), 'utf8');
-  }
-  fs.chmodSync(target, fs.statSync(source).mode & 0o777);
 }
 
 function walkFiles(dir) {
@@ -1922,90 +1821,6 @@ The future implementation prompt must begin with Step 0: re-assume [ROLE: MANAGE
     }
   }
 
-  if (plugin === 'brewtools' && skill === 'plugin-update') {
-    writeFile(path.join(targetDir, 'scripts', 'discover-plugins.sh'), `#!/usr/bin/env bash
-set -euo pipefail
-codex plugin marketplace list --json >/dev/null
-codex plugin list --json
-`, 0o755);
-    writeFile(path.join(targetDir, 'scripts', 'fetch-latest-versions.sh'), `#!/usr/bin/env bash
-set -euo pipefail
-root="\${1:-$(pwd)}"
-node - "$root" <<'NODE'
-const fs = require('node:fs');
-const path = require('node:path');
-const root = process.argv[2];
-const result = {};
-for (const name of ['brewcode', 'brewdoc', 'brewtools']) {
-  const file = path.join(root, name, '.codex', 'package', 'plugin.json');
-  result[name] = JSON.parse(fs.readFileSync(file, 'utf8')).version;
-}
-process.stdout.write(JSON.stringify(result));
-NODE
-`, 0o755);
-    const references = {
-      'autoupdate-research.md': '# Update policy\n\nCodex plugin updates are explicit transactions. Do not enable background mutation or cache pruning. Compare exact manifest versions and preserve rollback evidence.\n',
-      'discovery.md': '# Discovery\n\nUse `codex plugin marketplace list --json` and `codex plugin list --json`. Treat those CLI results as the source of installed id, version, marketplace, and enabled state.\n',
-      'install-prompt.md': '# Install confirmation\n\nShow exact plugin ids, target versions, marketplace changes, agent paths, and rollback plan before requesting confirmation.\n',
-      'reload-notice.md': '# Reload notice\n\nAfter a successful transaction, review hook definitions with `/hooks` and start a fresh Codex session.\n',
-      'update-commands.md': '# Native commands\n\nUse only `codex plugin marketplace add`, `codex plugin marketplace list`, `codex plugin add`, `codex plugin remove`, and `codex plugin list`.\n',
-      'update-prompt.md': '# Update confirmation\n\nShow current and target id/version/enabled state plus the exact rollback snapshot. No mutation occurs before confirmation.\n'
-    };
-    for (const [name, content] of Object.entries(references)) writeFile(path.join(targetDir, 'references', name), content);
-    writeFile(path.join(targetDir, 'README.md'), '# Codex plugin update\n\nDiscovers and migrates plugins through the native CLI with exact-version validation and transactional rollback. It never edits plugin caches.\n');
-  }
-
-  if (plugin === 'brewtools' && skill === 'provider-switch') {
-    fs.rmSync(path.join(targetDir, 'scripts', 'write-alias.sh'), { force: true });
-    writeFile(path.join(targetDir, 'scripts', 'write-provider-config.sh'), `#!/usr/bin/env bash
-set -euo pipefail
-candidate="\${1:-}"
-test -f "$candidate" || { echo "usage: write-provider-config.sh <candidate-config.toml>" >&2; exit 2; }
-python3 - "$candidate" <<'PY'
-import pathlib, sys, tomllib
-data = tomllib.loads(pathlib.Path(sys.argv[1]).read_text())
-if not isinstance(data.get("model_providers"), dict):
-    raise SystemExit("candidate must contain [model_providers]")
-print("candidate provider configuration is valid TOML")
-PY
-echo "Validation only: apply the reviewed TOML diff through the approved Codex configuration workflow."
-`, 0o755);
-    writeFile(path.join(targetDir, 'README.md'), '# Provider switch for Codex\n\nBuilds and validates pinned `model_providers` configuration. It does not create shell aliases or store secrets in repository files.\n');
-    const providerReferences = {
-      'common.md': '# Codex provider configuration\n\nUse `[model_providers.<name>]` in `~/.codex/config.toml` with an official base URL, environment-backed credential key, supported wire API, and exact model id. Show the TOML diff and obtain confirmation before writing. Never create aliases or persist secret values.\n',
-      'deepseek.md': '# DeepSeek\n\nVerify the current official OpenAI-compatible endpoint and exact DeepSeek model id before creating a Codex `model_providers.deepseek` entry. Read credentials from `DEEPSEEK_API_KEY`; default verification is mocked.\n',
-      'minimax.md': '# MiniMax\n\nVerify the current official OpenAI-compatible endpoint and exact MiniMax model id before creating a Codex `model_providers.minimax` entry. Read credentials from `MINIMAX_API_KEY`; default verification is mocked.\n',
-      'openrouter.md': '# OpenRouter\n\nUse the current official OpenRouter endpoint, `OPENROUTER_API_KEY`, and an exact selected model id in a Codex provider entry. Show cost and context metadata before selection and default verification to a mock.\n',
-      'openrouter-models.md': '# OpenRouter model selection\n\nRecord the exact provider/model id, context limit, pricing timestamp, and official source URL. Do not use floating aliases.\n',
-      'qwen-dashscope.md': '# Qwen DashScope\n\nVerify the current official OpenAI-compatible DashScope endpoint and exact Qwen model id before creating a Codex provider entry. Read credentials from `DASHSCOPE_API_KEY`.\n',
-      'zai-glm.md': '# Z.ai GLM\n\nVerify the current official OpenAI-compatible endpoint and exact GLM model id before creating a Codex provider entry. Read credentials from `ZAI_API_KEY`; do not carry over flags from another client.\n',
-      'update-protocol.md': '# Provider reference update protocol\n\nFor each provider, consult current official documentation, capture source URL and access date, diff endpoint, model, and auth changes, request approval, update exact identifiers, and run mock verification. Live requests require separate authorization.\n'
-    };
-    for (const [name, content] of Object.entries(providerReferences)) writeFile(path.join(targetDir, 'references', name), content);
-    writeFile(path.join(targetDir, 'scripts', 'check-status.sh'), `#!/usr/bin/env bash
-set -euo pipefail
-config="\${CODEX_HOME:-$HOME/.codex}/config.toml"
-test -f "$config" || { echo '{"config":"missing","providers":[]}' ; exit 0; }
-python3 - "$config" <<'PY'
-import json, pathlib, sys, tomllib
-data = tomllib.loads(pathlib.Path(sys.argv[1]).read_text())
-print(json.dumps({"config": "valid", "providers": sorted((data.get("model_providers") or {}).keys())}))
-PY
-`, 0o755);
-    writeFile(path.join(targetDir, 'scripts', 'verify-providers.sh'), `#!/usr/bin/env bash
-set -euo pipefail
-candidate="\${1:-\${CODEX_HOME:-$HOME/.codex}/config.toml}"
-python3 - "$candidate" <<'PY'
-import pathlib, sys, tomllib
-data = tomllib.loads(pathlib.Path(sys.argv[1]).read_text())
-for name, provider in (data.get("model_providers") or {}).items():
-    if not isinstance(provider, dict) or not provider.get("base_url"):
-        raise SystemExit(f"provider {name} is missing base_url")
-print("provider configuration syntax verified; no live request sent")
-PY
-`, 0o755);
-  }
-
   if (plugin === 'brewtools' && skill === 'task-board-setup') {
     writeFile(path.join(targetDir, 'references', '02-task-tracker-agent.md'), `# Native task-tracker agent template
 
@@ -2075,31 +1890,6 @@ Read deployed board/TRACKER/rules and recover domains, exclusions, language and 
 Keep board/task status canonical; graph is derived, preserves all unfinished nodes + latest 10 done, archives older completion evidence before pruning. Restamp only generator provenance in control frontmatter, even on content no-op; task runtime data stays unchanged. Optional spec/design consumers retain their own gate. Main-session task-board reconciles supported native session-reminders timers on task claim/resume; this upgrade does not create timers merely by installing controls. Verify TOML/frontmatter/paths/links, both spec modes, consumer coherence, unresolved tokens and rerun idempotence; report added/patched/skipped/declined/restamped and runtime limitations. No Git writes.
 `);
     writeFile(path.join(targetDir, 'README.md'), '# Codex task board initializer\n\nCreates one canonical task board under `.codex/features/`, plus a native TOML task-tracker agent and Codex skill.\n');
-  }
-
-  if (plugin === 'brewdoc' && skill === 'publish') {
-    writeFile(path.join(targetDir, 'README.md'), '# Offline publish preview\n\nExplicit-only, mock-only workflow. It generates a local hash manifest and never uploads, requests credentials, or returns a public URL.\n');
-  }
-
-  if (plugin === 'brewdoc' && skill === 'my-claude') {
-    const references = {
-      'internal-mode.md': '# Internal mode\n\nInventory Codex configuration, scoped AGENTS.md files, project `.codex/` assets, TOML agents, skills, plugins, hooks, MCP servers, and memory metadata. Use native CLI listings, redact secrets, and make no changes.\n',
-      'external-mode.md': '# External mode\n\nResearch current Codex behavior from official OpenAI documentation and installed CLI help. Cover configuration, instruction scope, skills, agents, plugins, hooks, MCP, sandboxing, and trust with citations.\n',
-      'research-mode.md': '# Research mode\n\nResolve the query, search official OpenAI sources first, collect evidence, distinguish facts from inference, write a dated local report, and include direct source links.\n'
-    };
-    for (const [name, content] of Object.entries(references)) writeFile(path.join(targetDir, 'references', name), content);
-    writeFile(path.join(targetDir, 'README.md'), '# My Codex\n\nCompatibility skill id for documenting a Codex installation in internal, external, or focused research mode. The workflow is read-only except for the requested local report.\n');
-  }
-
-  if (plugin === 'brewcode' && skill === 'e2e') {
-    writeFile(path.join(targetDir, 'references', 'agent-template.md'), `# Native Codex agent template
-
-Create a TOML file under \`.codex/agents/\` with \`name\`, \`description\`, and \`developer_instructions\`. The instructions define mission, domain, scope, task acceptance, self-check, and colleague handoff. Delegate through Codex collaboration with \`task_name\` and \`message\` only. Do not add Markdown frontmatter, tool allowlists, or legacy model aliases.
-
-Every generated agent states output discipline: return only what the main session needs, a verdict or result plus \`file:line\` pointers; write bulk material such as long logs, full diffs, or long reports to a file under \`.codex/reports/<YYYYMMDD-HHMMSS>_<name>/\` and return the path instead of the content.
-
-Agents whose domain writes code, scripts, SQL, schemas, infrastructure, or configuration also state scope fit: build for the scale and problems that exist today, not imagined load or speculative abstraction, and make one simplification pass after finishing. Those agents also state etalon-first: ${ETALON_SENTENCE}. Omit those paragraphs for research, documentation, and review-only agents.
-`);
   }
 
   if (plugin === 'brewcode' && skill === 'teams-setup') {
@@ -2432,18 +2222,6 @@ check('codex.verifier.noMutationVerbDenylist',
 console.log('suite-agent-profile-contract.mjs');`
     );
     writeFile(profileSuite, profileText, 0o755);
-  }
-
-  if (plugin === 'brewtools' && (skill === 'deploy' || skill === 'ssh')) {
-    const sourceName = skill === 'deploy' ? 'deploy-admin-agent.md.template' : 'ssh-admin-agent.md.template';
-    const targetName = skill === 'deploy' ? 'deploy-admin-agent.toml.template' : 'ssh-admin-agent.toml.template';
-    fs.rmSync(path.join(targetDir, 'templates', sourceName), { force: true });
-    writeFile(path.join(targetDir, 'templates', targetName), `name = "${skill === 'deploy' ? 'deploy-admin' : 'ssh-admin'}"
-description = "Generated ${skill} specialist with live inventory and explicit safety gates."
-developer_instructions = '''
-Substitute the generated inventory and target configuration here. Classify every command as read, create, modify, service, delete, or privilege. Read-only checks may run directly; obtain explicit confirmation before remote mutation, release, service control, deletion, privilege escalation, or production traffic. Stop on target mismatch and report exact commands and evidence.
-'''
-`);
   }
 
   if (plugin === 'brewtools' && skill === 'text-optimize') {
