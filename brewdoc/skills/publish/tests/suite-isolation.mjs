@@ -248,6 +248,27 @@ try {
   assert.deepEqual(readdirSync(tmp).sort(), ['brewpage-password.txt', 'first-run', 'second-run'],
     'THEN every run dir under $TMPDIR was removed; only fixture files remain');
   console.log('PASS publish isolation: credentials, concurrent ownership, mode headers, exact OLD/NEW winner URLs and shipped callers');
+
+  // GIVEN outer/.git > h/.claude > h/notes/misc WHEN h is HOME, the config-dir parent, or plain
+  // THEN the history file skips a profile h (lands under outer); plain h stays the root
+  const outer = join(base, 'profile-walk');
+  const h = join(outer, 'h');
+  const cwdMisc = join(h, 'notes', 'misc');
+  mkdirSync(join(outer, '.git'), { recursive: true });
+  mkdirSync(join(h, '.claude'), { recursive: true });
+  mkdirSync(cwdMisc, { recursive: true });
+  const historyAs = (envOver) => {
+    const env = { ...process.env, LIB: lib, HOME: join(outer, 'elsewhere'), ...envOver };
+    delete env.CLAUDE_PROJECT_DIR;
+    if (!envOver.CLAUDE_CONFIG_DIR) delete env.CLAUDE_CONFIG_DIR;
+    const r = spawnSync('bash', ['-c', '. "$LIB"\nprintf "%s" "$HISTORY_FILE"'], { cwd: cwdMisc, encoding: 'utf8', timeout: 10000, env });
+    return [r.status, r.stdout];
+  };
+  assert.deepEqual(
+    [historyAs({ HOME: h }), historyAs({ CLAUDE_CONFIG_DIR: join(h, '.claude') }), historyAs({})],
+    [[0, join(outer, '.claude', 'brewpage-history.md')], [0, join(outer, '.claude', 'brewpage-history.md')], [0, join(h, '.claude', 'brewpage-history.md')]],
+    'THEN a HOME or config-dir-parent .claude is the profile: the token history never lands in the global profile',
+  );
 } finally {
   rmSync(base, { recursive: true, force: true });
 }

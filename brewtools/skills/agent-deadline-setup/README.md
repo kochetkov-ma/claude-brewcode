@@ -34,7 +34,7 @@ Finalization set as advertised to the agent: `Read, Write, Edit, NotebookEdit, T
 
 The skill always reports status first, states its plan before asking anything, then delegates the file work to the `brewcode:hook-creator` agent.
 
-Status resolves the project root from `CLAUDE_PROJECT_DIR`, then git toplevel, then an ancestor carrying `.git` or `.claude`. Wiring is effective only with exactly one full guard tuple (PreToolUse / `.*` / command / `node` / sole portable arg / timeout `5`) and exactly one full cleanup tuple (SubagentStop / no matcher / same handler / timeout `3`); duplicates and malformed settings or handlers are reported as non-effective.
+Status resolves the project root from `CLAUDE_PROJECT_DIR`, then git toplevel, then an upward walk for `.git`/`.claude`, where a `.claude` in `$HOME` or in the directory whose `.claude` IS `$CLAUDE_CONFIG_DIR` is a profile, not a project marker, and is skipped; a `.git` there still counts. `CLAUDE_PROJECT_DIR` / git toplevel are taken as given. Wiring is effective only with exactly one full guard tuple (PreToolUse / `.*` / command / `node` / sole portable arg / timeout `5`) and exactly one full cleanup tuple (SubagentStop / no matcher / same handler / timeout `3`); duplicates and malformed settings or handlers are reported as non-effective.
 
 Status also prints `governing_config=<path> governing_scope=project|global|none orphan_config=yes|no`, resolved like the guard does (details on the [docs page](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline-setup/)). `orphan_config=yes` means a project config left by `uninstall project` still governs the global guard; status reports it as GOVERNING, the fix is `purge project` (or keep the file on purpose), and `upgrade` is never offered for it.
 
@@ -95,7 +95,7 @@ Project config wins over global; a malformed project config is skipped and the c
   "byAgentType": {},
   "hardStopRatio": 2,
   "version": "{PLUGIN_VERSION}",
-  "content_version": "<INSTALL.md header>",
+  "content_version": "<agent-deadline-guard.mjs header>",
   "generated_by": "brewtools:agent-deadline-setup",
   "last_updated": "{LAST_UPDATED}"
 }
@@ -108,7 +108,7 @@ Project config wins over global; a malformed project config is skipped and the c
 | `byAgentType` | per-type overrides, e.g. `{"Explore": 10}`; empty = one limit for all |
 | `hardStopRatio` | optional, default `2`, must be `>1` — multiple of the budget after which only `Write, Edit, SubagentHandback` pass |
 | `readOnlyAgentTypes` | optional, default `["Explore", "Plan"]` — agent types without `Write`/`Edit`. A list replaces the default; add it by hand, install does not write it |
-| `version` / `content_version` / `generated_by` / `last_updated` | provenance, written on every config write, inert at runtime; `status` judges freshness by `content_version`, never by `version` |
+| `version` / `content_version` / `generated_by` / `last_updated` | provenance, written on every config write, inert at runtime; `status` judges freshness by `content_version`, never by `version`. The config is current when its `content_version` equals the header of `agent-deadline-guard.mjs` (the hook that parses it); a runbook-only change never stales it. Status prints it as `contract_content_version` |
 
 Budget = `byAgentType[agent_type] ?? defaultMinutes`. Config values are read on every hook call, so a change takes effect immediately, no restart. Hook **wiring** changes (install/upgrade/uninstall/purge) apply to the running session too: Claude Code watches settings files (`/hooks` confirms).
 

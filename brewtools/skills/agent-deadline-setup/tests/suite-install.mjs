@@ -164,6 +164,34 @@ try {
   assert.match(malformedHook.stdout, /project:.*enabled=false.*content_state=partial/, 'malformed hook CV remains partial without re-enabling');
   writeFileSync(cleanupPath, cleanupBytes);
 
+  // GIVEN: a current install, probed against plugin copies with one asset CV bumped (runbook only, or the config-reading guard).
+  writeFileSync(configPath, JSON.stringify(currentConfig));
+  const bumpedPlugin = (label, bumped) => {
+    const assets = join(base, `plugin-${label}`, 'skills', 'agent-deadline-setup', 'assets');
+    mkdirSync(assets, { recursive: true });
+    for (const name of ['INSTALL.md', 'agent-deadline-guard.mjs', 'agent-deadline-cleanup.mjs']) {
+      const bytes = readFileSync(join(HERE, '..', 'assets', name), 'utf8');
+      writeFileSync(join(assets, name), name === bumped ? bytes.replace(/content_version=[0-9.]+/, 'content_version=99.0.0') : bytes);
+    }
+    return join(base, `plugin-${label}`);
+  };
+  const contentAgainst = pluginRoot => {
+    const r = spawnSync('bash', ['-c', statusBlock], { cwd: nested, encoding: 'utf8', env: { ...statusEnv, CLAUDE_PLUGIN_ROOT: pluginRoot }, timeout: 30000 });
+    const line = r.stdout.split('\n').find(l => l.startsWith('project:')) ?? `NO project: LINE ${r.stderr}`;
+    const keys = ['config_content_version', 'contract_content_version', 'content_state', 'content_findings'];
+    return { rc: r.status, ...Object.fromEntries(keys.map(k => [k, line.match(new RegExp(` ${k}=(\\S+)`))?.[1] ?? 'absent'])) };
+  };
+  const contractCV = readFileSync(join(HERE, '..', 'assets', 'agent-deadline-guard.mjs'), 'utf8').match(/content_version=([0-9]+\.[0-9]+\.[0-9]+)/)[1];
+  // WHEN: status probes a runbook-only CV bump, then a CV bump of the guard that parses the config.
+  const runbookOnly = contentAgainst(bumpedPlugin('runbook', 'INSTALL.md'));
+  const guardBump = contentAgainst(bumpedPlugin('guard', 'agent-deadline-guard.mjs'));
+  // THEN: runbook prose never stales the config; a contract change stales the config and the guard.
+  assert.deepEqual([runbookOnly, guardBump], [
+    { rc: 0, config_content_version: contractCV, contract_content_version: contractCV, content_state: 'current', content_findings: 'none' },
+    { rc: 0, config_content_version: contractCV, contract_content_version: '99.0.0', content_state: 'stale',
+      content_findings: `agent-deadline.json:${contractCV}->99.0.0,agent-deadline-guard.mjs:${contractCV}->99.0.0` },
+  ], 'config staleness follows the config-reading guard CV, never the INSTALL.md header');
+
   // GIVEN: a legacy absolute guard entry appears beside the portable entries.
   parsed.hooks.PreToolUse.unshift({ matcher: '.*', hooks: [{ type: 'command', command: 'node', args: ['/legacy/.claude/hooks/agent-deadline-guard.mjs'], timeout: 5 }] });
   writeFileSync(settingsPath, JSON.stringify(parsed, null, 2));
@@ -495,6 +523,31 @@ try {
   assert.deepEqual([climbStatus.status, climbStatus.stdout.split('\n').find(line => line.startsWith('governing_config=')) ?? 'NO governing_config= LINE', guardConfig], [
     0, `governing_config=${parentCfg} governing_scope=project orphan_config=no`, parentCfg,
   ], `status climbs from the payload cwd like the guard's loadConfig(cwd): ${climbStatus.stderr}`);
+
+  // GIVEN outer/.git > h/.claude > h/notes/misc WHEN h is HOME, the config-dir parent, or plain
+  // THEN status and the runbook root block skip h as a profile; plain h stays a root
+  const outer = join(realpathSync(base), 'profile-walk');
+  const h = join(outer, 'h');
+  const cwdMisc = join(h, 'notes', 'misc');
+  mkdirSync(join(outer, '.git'), { recursive: true });
+  mkdirSync(join(h, '.claude'), { recursive: true });
+  mkdirSync(cwdMisc, { recursive: true });
+  const rootBlock = fencedBlockAfter(readFileSync(RUNBOOK, 'utf8'), 'Resolve it once, in the SAME Bash call');
+  const rootsAs = (envOver) => {
+    const walkEnv = { ...statusEnv, HOME: join(outer, 'elsewhere'), ...envOver };
+    const status = spawnSync('bash', ['-c', statusBlock], { cwd: cwdMisc, encoding: 'utf8', env: walkEnv, timeout: 30000 });
+    const runbook = spawnSync('bash', ['-c', rootBlock], { cwd: cwdMisc, encoding: 'utf8', env: walkEnv, timeout: 30000 });
+    return [status.stdout.split('\n').find(line => line.startsWith('project_root=')) ?? `NO project_root= LINE: ${status.stderr}`, runbook.stdout.trim()];
+  };
+  assert.deepEqual(
+    [rootsAs({ HOME: h }), rootsAs({ CLAUDE_CONFIG_DIR: join(h, '.claude') }), rootsAs({})],
+    [
+      [`project_root=${outer} root_resolved=yes`, `✅ ROOT=${outer}`],
+      [`project_root=${outer} root_resolved=yes`, `✅ ROOT=${outer}`],
+      [`project_root=${h} root_resolved=yes`, `✅ ROOT=${h}`],
+    ],
+    'a HOME or config-dir-parent .claude is the profile: status and installer must never resolve it as the project root',
+  );
 } finally {
   rmSync(base, { recursive: true, force: true });
 }

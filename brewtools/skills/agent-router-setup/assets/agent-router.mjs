@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.5.1 content_version=6.5.0 generated_by=brewtools:agent-router-setup
+// brewcode-meta: version=6.5.2 content_version=6.5.2 generated_by=brewtools:agent-router-setup
 
 // agent-router PreToolUse `Agent`, tier 1 (deterministic): deny a main-loop generic spawn when a project/plugin expert owns
 // the task, else nudge; each (session, root, task) denied at most once. Fail-open: exit 0, no stdout.
@@ -178,6 +178,16 @@ function exists(p) {
   }
 }
 
+// Mirrors semble isProfileParent: HOME or the active config dir's parent holds a profile .claude, never a root.
+function isProfileParent(dir) {
+  const real = (p) => { try { return realpathSync(p); } catch { return ''; } };
+  const p = real(dir);
+  if (!p) return false;
+  if (process.env.HOME && real(process.env.HOME) === p) return true;
+  const cfg = process.env.CLAUDE_CONFIG_DIR;
+  return Boolean(cfg) && real(cfg) === path.join(p, '.claude');
+}
+
 /** Nearest ancestor of `from` (inclusive, <= MAX_ROOT_CLIMB levels) satisfying `hit`. */
 function climb(from, hit) {
   let cur = from;
@@ -191,7 +201,7 @@ function climb(from, hit) {
 }
 
 // Root: CLAUDE_PROJECT_DIR -> nearest ancestor with THIS router's config -> `.git` -> `.claude` -> cwd
-// (a nested `.claude` must not mask a root where the router is disabled).
+// (a nested `.claude` must not mask a root where the router is disabled); `.claude` rungs skip profile parents.
 function findRoot(cwd) {
   const env = process.env.CLAUDE_PROJECT_DIR;
   if (env && isDir(env)) return path.resolve(env);
@@ -202,9 +212,9 @@ function findRoot(cwd) {
     return null;
   }
   return (
-    climb(dir, (d) => exists(path.join(d, '.claude', 'brewtools', 'agent-router.json'))) ||
+    climb(dir, (d) => exists(path.join(d, '.claude', 'brewtools', 'agent-router.json')) && !isProfileParent(d)) ||
     climb(dir, (d) => exists(path.join(d, '.git'))) ||
-    climb(dir, (d) => isDir(path.join(d, '.claude'))) ||
+    climb(dir, (d) => isDir(path.join(d, '.claude')) && !isProfileParent(d)) ||
     dir
   );
 }
@@ -945,9 +955,13 @@ function exactCommand(h) {
   );
 }
 
+/** Drops the per-release stamp line: never inlined, never compared (same regex as INSTALL.md merge). */
+const stripJudgeMeta = (text) => text.replace(/^<!-- brewcode-meta[:][^\n]*-->[ \t]*\r?\n?/gm, '');
+
 /** `tier1|legacy|tier2|heartbeat|valid`: exact registrations vs owned handlers that drifted. */
 function probeSettings(file) {
-  const judge = readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'judge-prompt.md'), 'utf8');
+  const judge = stripJudgeMeta(readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'judge-prompt.md'), 'utf8'));
+  const isJudge = (prompt) => typeof prompt === 'string' && stripJudgeMeta(prompt) === judge;
   let s = {};
   let valid = true;
   try {
@@ -960,7 +974,7 @@ function probeSettings(file) {
   const ownsCommand = (h) => JSON.stringify((h && h.args) || '').includes('agent-router.mjs');
   const ownsJudge = (h) =>
     !!h && typeof h === 'object' &&
-    (h.statusMessage === SM || h.prompt === judge ||
+    (h.statusMessage === SM || isJudge(h.prompt) ||
       (h.type === 'agent' && typeof h.statusMessage === 'string' && h.statusMessage.startsWith('agent-router:')));
   const n = { tier1: 0, legacy: 0, tier2: 0, heartbeat: 0 };
   for (const [event, entries] of Object.entries((valid && s.hooks) || {})) {
@@ -977,7 +991,7 @@ function probeSettings(file) {
           // any explicit `model` is drift: an omitted model cannot age out.
           const exact =
             pre && entry.matcher === 'Agent' && keysAre(h, 'prompt,statusMessage,timeout,type') &&
-            h.type === 'agent' && h.prompt === judge && h.timeout === 30 && h.statusMessage === SM;
+            h.type === 'agent' && isJudge(h.prompt) && h.timeout === 30 && h.statusMessage === SM;
           if (exact) n.tier2 += 1;
           else n.legacy += 1;
         }

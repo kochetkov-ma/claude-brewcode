@@ -70,7 +70,7 @@ It allows as early as it can — an ambiguous case becomes a nudge, never a bloc
 | 8 | anti-loop guard | the same task is denied at most once per session |
 | 9 | any error | fail open |
 
-`neverFlag` defaults to eight entries: `Explore`, `Plan`, `statusline-setup`, `output-style-setup` and the four intent experts (`brewcode:agent-creator`, `brewcode:skill-creator`, `brewcode:hook-creator`, `brewcode:bash-expert`); every `intents[].expert` is added at load. The project root is resolved by ownership, not by `cwd`: `CLAUDE_PROJECT_DIR`, then the nearest ancestor holding `.claude/brewtools/agent-router.json`, then one holding `.git`, then one holding a `.claude` directory, then `cwd` (up to 16 levels per step). Config and roster are read from that root, fresh on every call.
+`neverFlag` defaults to eight entries: `Explore`, `Plan`, `statusline-setup`, `output-style-setup` and the four intent experts (`brewcode:agent-creator`, `brewcode:skill-creator`, `brewcode:hook-creator`, `brewcode:bash-expert`); every `intents[].expert` is added at load. The project root is resolved by ownership, not by `cwd`: `CLAUDE_PROJECT_DIR`, then the nearest ancestor holding `.claude/brewtools/agent-router.json`, then one holding `.git`, then one holding a `.claude` directory, then `cwd` (up to 16 levels per step). The config-marker and `.claude` steps are an upward walk where a `.claude` in `$HOME` or in the directory whose `.claude` IS `$CLAUDE_CONFIG_DIR` is a profile, not a project marker, and is skipped; a `.git` there still counts. `CLAUDE_PROJECT_DIR` is taken as given. Config and roster are read from that root, fresh on every call.
 
 ### Two tiers
 
@@ -95,9 +95,9 @@ It allows as early as it can — an ambiguous case becomes a nudge, never a bloc
 | `uninstall` | unwire | deleted | entries stripped | **kept** | kept |
 | `purge` | full wipe | deleted | entries stripped | deleted | this project's tmp state deleted (`--purge-state`); other projects stay |
 | `level fast` (extra) | drop the tier-2 and heartbeat entries | kept | both stripped | `level:"fast"` | kept |
-| `level strict` (extra) | add the tier-2 entry (judge prompt inlined) and the heartbeat entry | kept | both appended | `level:"strict"` | kept |
+| `level strict` (extra) | add the tier-2 entry (judge prompt inlined without its stamp line) and the heartbeat entry | kept | both appended | `level:"strict"` | kept |
 
-Canonical order first, extras after — the same seven verbs every `-setup` skill uses. `upgrade` never asks a question and keeps your `level`: it reads `level` back out of the existing config and replays the install so a plugin update reaches the project with a fresh `agent-router.mjs` and a freshly inlined judge prompt. Nothing installed -> it becomes an `install` and the level question is asked. Upgrading an install made by brewtools 6.4.0 or older rewrites `settings.json` at `level strict`: the tier-2 entry loses its `model` key and the heartbeat entry appears; at `level fast` only the hook file changes. Every mode is idempotent and re-runnable; foreign hook entries are never touched.
+Canonical order first, extras after — the same seven verbs every `-setup` skill uses. `upgrade` never asks a question and keeps your `level`: it reads `level` back out of the existing config and replays the install so a plugin update reaches the project with a fresh `agent-router.mjs` and a freshly inlined judge prompt. Nothing installed -> it becomes an `install` and the level question is asked. Upgrading an install made by brewtools 6.4.0 or older rewrites `settings.json` at `level strict`: the tier-2 entry loses its `model` key and the heartbeat entry appears; at `level fast` only the hook file changes. Every mode is idempotent and re-runnable; foreign hook entries are never touched, while a judge handler with an `agent-router:`-prefixed status message counts as own, so `upgrade` replaces an older one instead of adding a second.
 
 ### Status probe and installer CLI
 
@@ -105,7 +105,7 @@ The plugin's copy of `agent-router.mjs` doubles as the installer CLI behind `sta
 
 | Flag | Purpose |
 |------|---------|
-| `--probe <settings.json>` | counts tier-1, legacy, tier-2 and heartbeat entries that match the shipped shapes exactly, and whether `settings.json` parses |
+| `--probe <settings.json>` | counts tier-1, legacy, tier-2 and heartbeat entries that match the shipped shapes exactly (the judge prompt is compared without its per-release `brewcode-meta` stamp line), and whether `settings.json` parses |
 | `--judge-health <root>` | at `level strict`, prints `judge_expected`, `judge_answered`, `judge_overdue` over about 24 h; overdue above zero, or zero answers with a nonzero expected count, means the judge stopped answering |
 | `--purge-state <root>` | deletes this project's tmp state only |
 
@@ -139,7 +139,7 @@ Path: `<project>/.claude/brewtools/agent-router.json`.
 | `minScore` | minimum roster score before a project agent can win |
 | `margin` | how far the winner must lead the runner-up before it is a deny rather than a nudge |
 | `intents` | optional override of the built-in intent table — **REPLACES it wholesale, does not merge**. Adding one custom route silently drops the other three unless you copy `DEFAULT_INTENTS` out of `agent-router.mjs` first |
-| `content_version` | the PRIMARY staleness signal — the release whose generator logic produced this config. `status` compares it against `assets/INSTALL.md`'s own header, and separately compares the installed hook file's header against the plugin's asset copy; a mismatch on either pair means `stale=yes` |
+| `content_version` | the PRIMARY staleness signal — the `content_version` of the `agent-router.mjs` header (the config contract) at write time. `status` compares it against the `agent-router.mjs` asset header (the file that parses the config; printed as `contract=`, so a runbook-only release does not stale it), and separately compares the installed hook file's header against the plugin's asset copy; a mismatch on either pair means `stale=yes` |
 | `version` / `generated_by` / `last_updated` | `version` is INFORMATIONAL only — it names the release that last wrote the file, bumps on every release even with no shape change, and gets re-stamped by `enable`/`disable` without touching the hook file. Never read it as a staleness signal |
 
 <Callout type="note">
@@ -148,9 +148,9 @@ Path: `<project>/.claude/brewtools/agent-router.json`.
 
 ### Version and ownership
 
-`install`/`upgrade`/`enable`/`disable`/both `level` operations write `agent-router.json`'s `version`, `content_version`, `generated_by: "brewtools:agent-router-setup"` and `last_updated` at top level. `agent-router.mjs` and `assets/INSTALL.md` carry a matching `brewcode-meta: content_version=X.Y.Z` header.
+`install`/`upgrade`/`enable`/`disable`/both `level` operations write `agent-router.json`'s `version`, `content_version`, `generated_by: "brewtools:agent-router-setup"` and `last_updated` at top level. `agent-router.mjs` and `assets/INSTALL.md` each carry their own `brewcode-meta` header; the config is stamped from the `agent-router.mjs` one.
 
-Staleness is judged on `content_version`, never on `version`: `status` diffs the installed hook file's header against the plugin's asset copy, and the config's `content_version` against the `INSTALL.md` header, and reports `stale=yes` on either mismatch. `version` alone proves nothing — a plain `enable`/`disable` re-stamps it to the current plugin while the hook file on disk stays untouched. Only a re-copy (`install` or `upgrade`) clears staleness.
+Staleness is judged on `content_version` (see the key table), never on `version`. `version` alone proves nothing — a plain `enable`/`disable` re-stamps it to the current plugin while the hook file on disk stays untouched. Only a re-copy (`install` or `upgrade`) clears staleness.
 
 ### Fails open, everywhere
 

@@ -358,11 +358,30 @@ if(!r.trim())process.exit(0);try{JSON.parse(r)}catch(e){process.exit(1)}' "$1"
 
 sc_jstr() { node -e 'process.stdout.write(JSON.stringify(process.argv[1]||""))' "$1"; }
 
+# Backup at mode 0600 (configs hold tokens); stdout = backup path, pruned paths -> stderr.
+SC_BACKUP_KEEP=3
 sc_backup() {
   [ -f "$1" ] || return 0
   local b
   b="$1.bak.$(date +%s)"
-  cp "$1" "$b" && printf '%s\n' "$b"
+  ( umask 077 && cp "$1" "$b" ) && chmod 600 "$b" || return 1
+  printf '%s\n' "$b"
+  sc_backup_prune "$1"
+}
+
+# Keeps the newest SC_BACKUP_KEEP `<file>.bak.<epoch>` siblings; never fails the caller.
+sc_backup_prune() {
+  local f e list=""
+  for f in "$1".bak.*; do
+    e="${f##*.bak.}"
+    case "$e" in ''|*[!0-9]*) continue ;; esac
+    [ -f "$f" ] && list="$list$e
+"
+  done
+  for e in $(printf '%s' "$list" | sort -rn | tail -n +"$((SC_BACKUP_KEEP + 1))"); do
+    rm -f "$1.bak.$e" && printf 'pruned backup: %s (keeping newest %s)\n' "$1.bak.$e" "$SC_BACKUP_KEEP" >&2
+  done
+  return 0
 }
 
 # ── MCP probing (read-only; truth comes from files, not `claude mcp list`) ────

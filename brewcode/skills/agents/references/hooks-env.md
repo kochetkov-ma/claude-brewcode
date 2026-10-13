@@ -41,11 +41,21 @@ No `$CLAUDE_MODEL` variable exists; an inherited `ANTHROPIC_MODEL` reflects shel
 Every generated hook and installer uses this ONE recipe, order fixed and never silent.
 
 ```js
-import { existsSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 
-/** Project root: env -> git toplevel -> marker walk -> hook cwd. */
+// HOME or the active config dir's parent holds a profile .claude, never a root.
+function isProfileParent(dir) {
+  const real = (p) => { try { return realpathSync(p); } catch { return ''; } };
+  const p = real(dir);
+  if (!p) return false;
+  if (process.env.HOME && real(process.env.HOME) === p) return true;
+  const cfg = process.env.CLAUDE_CONFIG_DIR;
+  return Boolean(cfg) && real(cfg) === join(p, '.claude');
+}
+
+/** Project root: env -> git toplevel -> marker walk (profile parents skipped) -> hook cwd. */
 export function projectRoot(hookCwd) {
   const env = process.env.CLAUDE_PROJECT_DIR;
   if (env && existsSync(env)) return resolve(env);
@@ -60,7 +70,8 @@ export function projectRoot(hookCwd) {
 
   let dir = resolve(hookCwd || process.cwd());
   for (;;) {
-    if (existsSync(join(dir, '.git')) || existsSync(join(dir, '.claude'))) return dir;
+    if (existsSync(join(dir, '.git'))) return dir;
+    if (existsSync(join(dir, '.claude')) && !isProfileParent(dir)) return dir;
     const up = dirname(dir);
     if (up === dir) break;
     dir = up;
@@ -70,7 +81,13 @@ export function projectRoot(hookCwd) {
 ```
 
 ```sh
-# Project root: CLAUDE_PROJECT_DIR -> git toplevel -> upward walk -> PWD.
+# rc 0: the dir is HOME or the active config dir's parent - its .claude is a profile, never a project root.
+is_profile_parent() {
+  _pp=$(cd "${1}" 2>/dev/null && pwd -P) || return 1
+  [ -n "${HOME:-}" ] && [ "$_pp" = "$(cd "$HOME" 2>/dev/null && pwd -P)" ] && return 0
+  [ -n "${CLAUDE_CONFIG_DIR:-}" ] && [ "$_pp/.claude" = "$(cd "$CLAUDE_CONFIG_DIR" 2>/dev/null && pwd -P)" ]
+}
+# Project root: CLAUDE_PROJECT_DIR -> git toplevel -> upward walk (profile parents skipped) -> PWD.
 claude_project_root() {
   if [ -n "${CLAUDE_PROJECT_DIR:-}" ] && [ -d "$CLAUDE_PROJECT_DIR" ]; then
     printf '%s\n' "$CLAUDE_PROJECT_DIR"; return 0
@@ -80,7 +97,7 @@ claude_project_root() {
   fi
   d=$PWD
   while [ "$d" != "/" ]; do
-    if [ -e "$d/.git" ] || [ -d "$d/.claude" ]; then printf '%s\n' "$d"; return 0; fi
+    if [ -e "$d/.git" ] || { [ -d "$d/.claude" ] && ! is_profile_parent "$d"; }; then printf '%s\n' "$d"; return 0; fi
     d=$(dirname "$d")
   done
   printf '%s\n' "$PWD"; return 1   # nonzero: caller decides
@@ -94,4 +111,4 @@ ROOT=$(claude_project_root) || echo "WARN: no project root marker found; using $
 | both fail | a SCRIPT warns on stderr and continues with `PWD`; an INSTALLER about to WRITE aborts non-zero naming what it looked for. Never write to a guessed root |
 | hook exit code | advisory/context hooks fail open; enforcement hooks must emit the event's deny/block when a required root cannot be established |
 | `input.cwd` | exactly one job: resolving RELATIVE paths inside `tool_input`. Never keys config lookup, state paths or gitignore edits -- `cwd` drifts mid-session (see `CwdChanged`), `CLAUDE_PROJECT_DIR` does not |
-| markers | `.git` OR `.claude`, in that order, never extended per-hook |
+| markers | `.git` OR `.claude`, in that order, never extended per-hook; a `.claude` at HOME or at the active config dir's parent is a profile, skipped (`isProfileParent` / `is_profile_parent`) |

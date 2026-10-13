@@ -120,10 +120,13 @@ try {
   assert.equal(miswiredStatus.stdout.includes('tier1_refs=0 legacy_refs=2 tier2_refs=0 settings_valid=yes'), true, 'router status must reject PostToolUse/Read registrations');
 
   const judgePrompt = readFileSync(join(HERE, '..', 'assets', 'judge-prompt.md'), 'utf8');
+  const judgeMeta = judgePrompt.slice(0, judgePrompt.indexOf('\n') + 1);
+  const judgeBody = judgePrompt.slice(judgeMeta.length);
+  assert.equal(judgeMeta.startsWith('<!-- brewcode-meta: '), true, 'judge-prompt.md line 1 must be its brewcode-meta stamp');
   const exactTier1 = { type: 'command', command: 'node', args: [PORTABLE], timeout: 5 };
   const exactTier2 = {
     type: 'agent',
-    prompt: judgePrompt,
+    prompt: judgeBody,
     timeout: 30,
     statusMessage: 'agent-router: checking agent fit',
   };
@@ -202,6 +205,38 @@ try {
     assert.deepEqual(result, { stdout: expected, stderr: '', status: 0 }, `${name} must be surfaced as a non-effective owned handler`);
   }
 
+  // GIVEN: a judge renamed by an older install, and plugin copies whose judge-prompt.md differs only in its meta line, or in its body.
+  writeRouterSettings(exactTier1, { ...exactTier2, statusMessage: 'agent-router: stale status' });
+  const judgeCopy = (label, bytes) => {
+    const dir = join(base, `judge-${label}`);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'agent-router.mjs'), readFileSync(HOOK, 'utf8'));
+    writeFileSync(join(dir, 'judge-prompt.md'), bytes);
+    return join(dir, 'agent-router.mjs');
+  };
+  const probeWith = hook => spawnSync(process.execPath, [hook, '--probe', settingsPath], { encoding: 'utf8', timeout: 30000 }).stdout;
+  const metaOnlyHook = judgeCopy('meta-only', `<!-- brewcode-meta: version=99.0.0 content_version=99.0.0 generated_by=brewtools:agent-router-setup -->\n${judgeBody}`);
+  const realChangeHook = judgeCopy('real-change', `${judgeMeta}${judgeBody}\nAlways block.\n`);
+  const tier2Of = settings => settings.hooks.PreToolUse.flatMap(entry => entry.hooks).find(handler => handler.type === 'agent');
+
+  // WHEN: strict inlines the prompt, probes run against both copies, then an old install still carrying a meta line is probed.
+  const metaMerge = spawnSync('bash', ['-c', block], { encoding: 'utf8', env: { ...env, LEVEL: 'strict' }, timeout: 30000 });
+  const metaSettings = JSON.parse(readFileSync(settingsPath, 'utf8'));
+  const inlined = tier2Of(metaSettings).prompt;
+  const judges = metaSettings.hooks.PreToolUse.flatMap(entry => entry.hooks).filter(handler => handler.type === 'agent').length;
+  const metaOnly = probeWith(metaOnlyHook);
+  const realChange = probeWith(realChangeHook);
+  tier2Of(metaSettings).prompt = `<!-- brewcode-meta: version=6.5.0 content_version=6.5.0 generated_by=brewtools:agent-router-setup -->\n${judgeBody}`;
+  writeFileSync(settingsPath, JSON.stringify(metaSettings, null, 2));
+  const oldInstall = probeWith(HOOK);
+
+  // THEN: the renamed judge is replaced; the meta line never reaches settings nor decides staleness; a body change does.
+  assert.deepEqual(
+    { merge: metaMerge.status, judges, inlined, metaOnly, realChange, oldInstall },
+    { merge: 0, judges: 1, inlined: judgeBody, metaOnly: '1|0|1|1|yes\n', realChange: '1|1|0|1|yes\n', oldInstall: '1|0|1|1|yes\n' },
+    'judge prompt must be inlined and compared without its brewcode-meta line',
+  );
+
   // GIVEN: settings.json that does not parse.
   writeFileSync(settingsPath, '{ "hooks": ');
 
@@ -255,6 +290,42 @@ try {
     'router purge must remove only this project config and state dir',
   );
 
+  // GIVEN: a runbook-installed project, probed against plugin copies with one asset CV bumped (runbook only, or the hook).
+  const cvProject = join(base, 'cv-project');
+  mkdirSync(join(cvProject, '.claude'), { recursive: true });
+  const cvEnv = { ...statusEnv, ROOT: cvProject, RUNBOOK, LEVEL: 'fast', PLUGIN_VERSION: '1.0.0' };
+  const cvInstall = ['**EXECUTE** copy (Bash tool', '**EXECUTE** config write', '**EXECUTE** merge settings.']
+    .map(marker => spawnSync('bash', ['-c', fencedBlockAfter(readFileSync(RUNBOOK, 'utf8'), marker)], { encoding: 'utf8', env: cvEnv, timeout: 30000 }).status);
+  const bumpedPlugin = (label, bumped) => {
+    const assets = join(base, `plugin-${label}`, 'skills', 'agent-router-setup', 'assets');
+    mkdirSync(assets, { recursive: true });
+    for (const name of ['INSTALL.md', 'agent-router.mjs', 'judge-prompt.md']) {
+      const bytes = readFileSync(join(HERE, '..', 'assets', name), 'utf8');
+      writeFileSync(join(assets, name), name === bumped ? bytes.replace(/content_version=[0-9.]+/, 'content_version=99.0.0') : bytes);
+    }
+    return join(base, `plugin-${label}`);
+  };
+  const contentAgainst = pluginRoot => {
+    const loadedCv = statusBlock.replaceAll('${CLAUDE_PROJECT_DIR}', cvProject);
+    const r = spawnSync('bash', ['-c', loadedCv], { cwd: cvProject, encoding: 'utf8', env: { ...statusEnv, CLAUDE_PLUGIN_ROOT: pluginRoot }, timeout: 30000 });
+    const line = r.stdout.split('\n').find(l => l.startsWith('content_version:')) ?? `NO content_version: LINE ${r.stderr}`;
+    return { rc: r.status, ...Object.fromEntries(['hook', 'template', 'config', 'contract', 'stale'].map(k => [k, line.match(new RegExp(` ${k}=(\\S+)`))?.[1] ?? 'absent'])) };
+  };
+  const hookCV = readFileSync(HOOK, 'utf8').match(/content_version=([0-9]+\.[0-9]+\.[0-9]+)/)[1];
+  // WHEN: status probes a runbook-only CV bump, then a CV bump of the hook that parses the config.
+  const runbookOnly = contentAgainst(bumpedPlugin('runbook', 'INSTALL.md'));
+  const hookBump = contentAgainst(bumpedPlugin('hook', 'agent-router.mjs'));
+  const cvConfigPath = join(cvProject, '.claude', 'brewtools', 'agent-router.json');
+  writeFileSync(cvConfigPath, JSON.stringify({ ...JSON.parse(readFileSync(cvConfigPath, 'utf8')), content_version: '0.0.1' }));
+  const oldConfig = contentAgainst(join(HERE, '..', '..', '..'));
+  // THEN: runbook prose never stales the config; a hook change or an older config stamp does.
+  assert.deepEqual([cvInstall, runbookOnly, hookBump, oldConfig], [
+    [0, 0, 0],
+    { rc: 0, hook: hookCV, template: hookCV, config: hookCV, contract: hookCV, stale: 'no' },
+    { rc: 0, hook: hookCV, template: '99.0.0', config: hookCV, contract: '99.0.0', stale: 'yes' },
+    { rc: 0, hook: hookCV, template: hookCV, config: '0.0.1', contract: hookCV, stale: 'yes' },
+  ], 'config staleness follows the agent-router.mjs CV, never the INSTALL.md header');
+
   // GIVEN: a git repo whose session started in a subdirectory; the skill text is substituted
   // at load, so the braced CLAUDE_PROJECT_DIR token carries that start dir into the fence.
   const repo = join(base, 'git-repo');
@@ -286,6 +357,34 @@ try {
   // THEN: every block succeeds and nothing install created is left behind.
   assert.deepEqual(results.map(([marker, r]) => [marker, r.status, r.stdout.includes('❌')]), steps.map(marker => [marker, 0, false]), 'every lifecycle block must succeed');
   assert.equal(existsSync(join(fresh, '.claude')), false, 'uninstall + purge must leave no .claude/ in a project that had none');
+
+  // GIVEN outer/.git (no repo) > h/.claude with a router config > h/notes/misc WHEN h is HOME, the config-dir parent, or plain
+  // THEN status and the runbook root block skip h as a profile and refuse (no .git rung); plain h stays the owning root
+  const outer = join(realpathSync(base), 'profile-walk');
+  const h = join(outer, 'h');
+  const cwdMisc = join(h, 'notes', 'misc');
+  mkdirSync(join(outer, '.git'), { recursive: true });
+  mkdirSync(join(h, '.claude', 'brewtools'), { recursive: true });
+  writeFileSync(join(h, '.claude', 'brewtools', 'agent-router.json'), JSON.stringify({ enabled: false }));
+  mkdirSync(cwdMisc, { recursive: true });
+  const rootBlock = fencedBlockAfter(runbookText, 'Resolve it once:');
+  const rootsAs = (envOver) => {
+    const walkEnv = { ...statusEnv, HOME: join(outer, 'elsewhere'), ...envOver };
+    if (!envOver.CLAUDE_CONFIG_DIR) delete walkEnv.CLAUDE_CONFIG_DIR;
+    const status = spawnSync('bash', ['-c', statusBlock], { cwd: cwdMisc, encoding: 'utf8', env: walkEnv, timeout: 30000 });
+    const runbook = spawnSync('bash', ['-c', rootBlock], { cwd: cwdMisc, encoding: 'utf8', env: walkEnv, timeout: 30000 });
+    return [status.stdout.split('\n').find(line => line.startsWith('project_root=')) ?? `NO project_root= LINE: ${status.stderr}`, runbook.stdout.trim()];
+  };
+  const abort = `❌ ABORT: no project root — CLAUDE_PROJECT_DIR unset, no agent-router.json marker, no git toplevel, no .claude above ${cwdMisc}; run no block below`;
+  assert.deepEqual(
+    [rootsAs({ HOME: h }), rootsAs({ CLAUDE_CONFIG_DIR: join(h, '.claude') }), rootsAs({})],
+    [
+      [`project_root=${cwdMisc} root_resolved=no`, abort],
+      [`project_root=${cwdMisc} root_resolved=no`, abort],
+      [`project_root=${h} root_resolved=yes`, `✅ ROOT=${h}`],
+    ],
+    'a HOME or config-dir-parent .claude is the profile: status and installer must never resolve it as the project root',
+  );
 } finally {
   rmSync(base, { recursive: true, force: true });
 }

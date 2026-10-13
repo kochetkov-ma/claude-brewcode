@@ -84,7 +84,7 @@ One question yields both numbers. A custom pair must satisfy `passTokens < fileT
 
 The project root is the session's start directory (`CLAUDE_PROJECT_DIR`, else the git toplevel); a session started in a subdirectory does not load the parent's `.claude/settings.json`. `<config dir>` is the one Claude Code runs with: `$CLAUDE_CONFIG_DIR` when set, else `~/.claude/`. The state directory `agent-return-state/` sits beside the config that enabled the feature.
 
-Config discovery starts at the resolved project root (`CLAUDE_PROJECT_DIR` -> upward walk for a `.git`/`.claude` marker -> cwd), then walks up probing `<dir>/.claude/agent-return.json` (16 levels), then falls back to `$CLAUDE_CONFIG_DIR/agent-return.json` when set, then to `~/.claude/agent-return.json`. Project wins; a malformed project config is skipped. Merge: drop stale paths, then append + dedupe by full script path; three entries, exec form, `timeout: 5` seconds, no `onFailure`.
+Config discovery starts at the resolved project root (`CLAUDE_PROJECT_DIR` -> upward walk for a `.git`/`.claude` marker -> cwd; the `.claude` step skips HOME and the profile parent (the directory whose `.claude` is the active config dir); a `.git` there still counts), then walks up probing `<dir>/.claude/agent-return.json` (16 levels), then falls back to `$CLAUDE_CONFIG_DIR/agent-return.json` when set, then to `~/.claude/agent-return.json`. Project wins; a malformed project config is skipped. Merge: drop stale paths, then append + dedupe by full script path; three entries, exec form, `timeout: 5` seconds, no `onFailure`.
 
 ## Config
 
@@ -95,7 +95,7 @@ Config discovery starts at the resolved project root (`CLAUDE_PROJECT_DIR` -> up
   "fileTokens": 6000,
   "readOnlyAgentTypes": ["Explore", "Plan"],
   "version": "{PLUGIN_VERSION}",
-  "content_version": "<INSTALL.md header>",
+  "content_version": "<agent-return-budget.mjs header>",
   "generated_by": "brewtools:agent-return-setup",
   "last_updated": "{LAST_UPDATED}"
 }
@@ -108,7 +108,7 @@ Config discovery starts at the resolved project root (`CLAUDE_PROJECT_DIR` -> up
 | `fileTokens` | compress/file tier boundary; positive integer; default `6000` |
 | `readOnlyAgentTypes` | agent types without a file-writing tool, matched exactly on `agent_type` (plugin agents as `plugin:name`): over `fileTokens` they are asked for the essential part, not a file. Any array replaces the default `["Explore","Plan"]`; `[]` = nobody |
 | `reportDir` | optional, never written by install: add it by hand. Where the file tier writes: absolute, `~/`-prefixed or project-root-relative. A blank or non-string value, or `/`, falls back to `.claude/reports` |
-| `version` / `generated_by` / `last_updated` | provenance, written on every config write together with `content_version` (from the runbook header). No `doc_type` — that field is `.md` frontmatter only. Inert at runtime |
+| `version` / `generated_by` / `last_updated` | provenance, written on every config write together with `content_version` (the header of `agent-return-budget.mjs`, the one module that parses the config; a runbook-only change never stales an installed config). No `doc_type` — that field is `.md` frontmatter only. Inert at runtime |
 
 **Threshold precedence, per threshold, first hit wins:** the config key -> the env var (`AGENT_RETURN_PASS` / `AGENT_RETURN_FILE`) -> the built-in `2500` / `6000`. Env values are parsed with `Number()`, not `parseInt()`, and only a positive integer is accepted: `1.7`, `abc`, `12abc`, `-5`, `0`, `""`, `NaN`, `Infinity` all fall through to the next level.
 

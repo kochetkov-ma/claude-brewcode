@@ -39,7 +39,7 @@ registration on `install`/`upgrade`, registration before script on `uninstall`/`
 State lives at `<cwd>/.claude/brewtools/manager/state.json`, registration at
 `<cwd>/.claude/settings.local.json` (personal, gitignored); both are project-scoped. `<cwd>` is the
 session's project dir (`CLAUDE_PROJECT_DIR`; fallback: skill git toplevel, hooks upward walk for
-`.git`/`.claude` → hook cwd), never the raw working directory, so the wall holds from any subdirectory.
+`.git`/`.claude`, where a `.claude` in `$HOME` or in the directory whose `.claude` IS `$CLAUDE_CONFIG_DIR` is a profile, not a project marker, and is skipped; a `.git` there still counts → hook cwd), never the raw working directory, so the wall holds from any subdirectory.
 
 ## Tool buckets
 

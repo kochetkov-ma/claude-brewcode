@@ -1494,6 +1494,41 @@ check(
   'a trace level in brewcode.config.json is ignored; BREWCODE_LOG_LEVEL (case-insensitive) or default info decides',
 );
 
+// GIVEN outer/.git > armed h/.claude > h/notes/misc | WHEN h is HOME, the config-dir parent, or plain
+// THEN guard, state CLI and utils.projectRoot skip h as a profile and resolve outer; plain h stays the armed root
+{
+  const outer = realpathSync(mkdtempSync(join(tmpdir(), 'hardmode-profile-')));
+  const h = join(outer, 'h');
+  const cwd = join(h, 'notes', 'misc');
+  mkdirSync(join(outer, '.git'), { recursive: true });
+  mkdirSync(join(h, '.claude', 'brewtools', 'manager'), { recursive: true });
+  writeFileSync(join(h, '.claude', 'brewtools', 'manager', 'state.json'), JSON.stringify({ hard: true, level: 'strict' }));
+  mkdirSync(cwd, { recursive: true });
+  const elsewhere = join(outer, 'elsewhere');
+  const observe = (envOver) => {
+    const env = { ...process.env, HOME: elsewhere };
+    delete env.CLAUDE_PROJECT_DIR;
+    delete env.CLAUDE_CONFIG_DIR;
+    Object.assign(env, envOver);
+    const guard = spawnSync(process.execPath, [GUARD_MJS], { input: stdin(cwd), encoding: 'utf8', timeout: 8000, env });
+    const cli = spawnSync(process.execPath, [STATE_MJS, 'get'], { cwd, encoding: 'utf8', timeout: 8000, env });
+    const code = `const u = await import(${JSON.stringify(UTILS_URL)}); process.stdout.write(u.projectRoot(${JSON.stringify(cwd)}));`;
+    const root = spawnSync(process.execPath, ['--input-type=module', '-e', code], { encoding: 'utf8', timeout: 8000, env });
+    return { guard: verdict(safeParse(guard.stdout || '')), hard: safeParse(cli.stdout || '').hard, root: root.stdout };
+  };
+  check(
+    '92-root-walk-skips-home-and-profile-parent',
+    [observe({ HOME: h }), observe({ CLAUDE_CONFIG_DIR: join(h, '.claude') }), observe({})],
+    [
+      { guard: 'allow', hard: false, root: outer },
+      { guard: 'allow', hard: false, root: outer },
+      { guard: 'deny', hard: true, root: h },
+    ],
+    'a HOME or config-dir-parent .claude is the profile: its manager state must never arm a non-project cwd',
+  );
+  rmSync(outer, { recursive: true, force: true });
+}
+
 try { rmSync(BASE, { recursive: true, force: true }); } catch { /* ignore */ }
 
 console.log('\n=== manager-setup E2E TEST REPORT ===');

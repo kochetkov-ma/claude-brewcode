@@ -76,6 +76,9 @@ ROOT="$(sc_project_root)" || sc_die "cannot resolve project root"
 RULE="$(sc_rule_file)"
 HOOKS_DIR="$(sc_hooks_dir)"
 SETTINGS="$(sc_project_settings)"
+# P3: CC grants a tool from any of these layers; the skill writes only the tracked $SETTINGS.
+SETTINGS_LOCAL="$ROOT/.claude/settings.local.json"
+USER_SETTINGS="$(sc_user_settings)"
 CLAUDEMD="$ROOT/CLAUDE.md"
 GITIGNORE="$ROOT/.gitignore"
 # semble reads only per-dir ./.gitignore + ./.sembleignore (no core.excludesFile, no global ignore):
@@ -105,6 +108,27 @@ case "$MODE" in
     ;;
 esac
 
+# {layers:{project,local,user}:[granting entries],source:[layers],missing:[tools],wired}; server-wide forms count.
+perm_probe() {
+  SG_P="$SETTINGS" SG_L="$SETTINGS_LOCAL" SG_U="$USER_SETTINGS" SG_SERVER="mcp__$SEMBLE_SERVER_NAME" \
+  SG_SEARCH="$SEMBLE_TOOL_SEARCH" SG_RELATED="$SEMBLE_TOOL_RELATED" node -e '
+const fs=require("fs"), E=process.env, tools=[E.SG_SEARCH,E.SG_RELATED], srv=E.SG_SERVER;
+const grants=(e,t)=>e===t||e===srv||e===srv+"__*";
+const allowOf=f=>{ try{ const s=JSON.parse(fs.readFileSync(f,"utf8")); const a=s&&s.permissions&&s.permissions.allow;
+  return Array.isArray(a)?a.filter(x=>typeof x==="string"):[]; }catch(e){ return []; } };
+const L=[["project",E.SG_P],["local",E.SG_L],["user",E.SG_U]];
+const out={layers:{},source:[],missing:[],wired:false};
+for(const [n,f] of L) out.layers[n]=allowOf(f).filter(e=>tools.some(t=>grants(e,t)));
+out.source=L.map(l=>l[0]).filter(n=>out.layers[n].length>0);
+out.missing=tools.filter(t=>!L.some(([n])=>out.layers[n].some(e=>grants(e,t))));
+out.wired=out.missing.length===0;
+process.stdout.write(JSON.stringify(out));'
+}
+# Layer name -> file, for report lines.
+perm_layer_file() {
+  case "$1" in project) printf '%s' "$SETTINGS" ;; local) printf '%s' "$SETTINGS_LOCAL" ;; *) printf '%s' "$USER_SETTINGS" ;; esac
+}
+
 CHANGED=""
 UNCHANGED=""
 SKIPPED=""
@@ -126,7 +150,7 @@ status_json() {
   SG_SETTINGS="$SETTINGS" SG_SEARCH="$SEMBLE_TOOL_SEARCH" SG_RELATED="$SEMBLE_TOOL_RELATED" \
   SG_WANT="$SG_WANT_TABLE" SG_STATS_MATCHER="$SG_STATS_MATCHER" \
   SG_PRIOR_RULE="$SG_PRIOR_RULE" SG_PRIOR_IGNORE="$SG_PRIOR_IGNORE" \
-  SG_MARKS="$SG_MARKS" SG_LIVE="$SG_LIVE" node -e '
+  SG_MARKS="$SG_MARKS" SG_LIVE="$SG_LIVE" SG_PERM="$(perm_probe)" node -e '
 const fs=require("fs"), path=require("path"), crypto=require("crypto");
 const rule=process.env.SG_RULE, tpl=process.env.SG_TPL, cmd=process.env.SG_CLAUDEMD;
 const dir=process.env.SG_HOOKS, sf=process.env.SG_SETTINGS;
@@ -183,7 +207,7 @@ const stripLine=t=>{ if(t===null) return t;
   return k.join("\n")+"\n"; };
 const ii=readSafe(process.env.SG_IGNORE), it=readSafe(process.env.SG_IGNORE_TPL);
 if(ii!==null) out.ignore.state=it!==null?verdict(ii,it,stripLine,"SG_PRIOR_IGNORE"):"user_modified";
-// <file>.bak.<epoch> from --force/remove holds user content: never auto-deleted, always reported.
+// <file>.bak.<epoch> from --force/remove holds user content: always reported; sc_backup keeps the newest 3.
 out.backups=[];
 for(const f of [rule,process.env.SG_IGNORE]){
   const d=path.dirname(f), b=path.basename(f);
@@ -275,7 +299,9 @@ out.hooks.stats.wired=ok("PostToolUse/"+M+"/semble-stats.mjs")&&ok("PostToolUseF
 out.hooks.subagent.wired=ok("SubagentStart/*/semble-subagent.mjs");
 const allow=(s&&s.permissions&&Array.isArray(s.permissions.allow))?s.permissions.allow:[];
 out.permissions.allow=tools.filter(t=>allow.includes(t));
-out.permissions.wired=tools.every(t=>allow.filter(x=>x===t).length===1);
+// P3: wired = granted by any layer CC reads (tracked, local, user), server-wide forms included.
+const pp=JSON.parse(process.env.SG_PERM);
+Object.assign(out.permissions,{wired:pp.wired,source:pp.source,missing:pp.missing,layers:pp.layers});
 process.stdout.write(JSON.stringify(out));
 '
 }
@@ -403,7 +429,9 @@ install_managed() {
     return 0
   fi
   if [ "$FORCE" != "1" ]; then
-    add_skipped "$L: user_modified, left as is (re-run with --force to overwrite; a backup is taken) $D"
+    # P1: report only. Nobody but `--force` (user-requested) writes this file; the diff is for the user to read.
+    add_skipped "$L: user_modified, left as is - never hand-edit or merge it; user review: diff -u $D $T; replace only on the user's explicit --force (backup taken) $D"
+    printf '# REVIEW ONLY - do not apply: user-edited %s vs template (the skill never edits it)\n' "$D" >&2
     diff -u "$D" "$tmp" >&2 || true
     rm -f "$tmp"
     return 0
@@ -897,13 +925,14 @@ merge_settings() {
   # shellcheck disable=SC2016  # JavaScript source, not shell: $ is literal
   SG_SETTINGS="$SETTINGS" SG_REF="$SG_HOOK_REF" SG_DO_HOOKS="$1" SG_DO_PERMS="$2" \
   SG_SEARCH="$SEMBLE_TOOL_SEARCH" SG_RELATED="$SEMBLE_TOOL_RELATED" \
-  SG_WANT="$SG_WANT_TABLE" SG_MARKS="$SG_MARKS" node -e '
+  SG_WANT="$SG_WANT_TABLE" SG_MARKS="$SG_MARKS" SG_PERM_ADD="${3:-[]}" node -e '
 const fs=require("fs"), path=require("path");
 const f=process.env.SG_SETTINGS, REF=process.env.SG_REF;
 const doHooks=process.env.SG_DO_HOOKS==="1", doPerms=process.env.SG_DO_PERMS==="1";
 const marks=JSON.parse(process.env.SG_MARKS);   // every basename ever owned, live + retired
 const want=JSON.parse(process.env.SG_WANT);
 const tools=[process.env.SG_SEARCH,process.env.SG_RELATED];
+const add=JSON.parse(process.env.SG_PERM_ADD);            // P3: only tools no settings layer grants yet
 function lock(f){                                         // shared <settings>.lock (agent-return INSTALL.md): 10 s wait, >30 s stale
   const l=f+".lock", w=new Int32Array(new SharedArrayBuffer(4));
   for(let i=0;i<100;i++){
@@ -971,7 +1000,7 @@ const verify=(root)=>{                                    // null | message; run
       return "verification failed - "+ev+"/"+(matcher||"*")+"/"+script+" does not match the desired entry in "+f
         +" (got "+JSON.stringify(mine)+")";
   }
-  if(doPerms) for(const t of tools){
+  if(doPerms) for(const t of add){
     const n=((root.permissions&&root.permissions.allow)||[]).filter(x=>x===t).length;
     if(n!==1) return "verification failed - permission "+t+" present "+n+" times in "+f;
   }
@@ -1016,7 +1045,7 @@ if(doHooks){
 if(doPerms){
   s.permissions=(s.permissions&&typeof s.permissions==="object"&&!Array.isArray(s.permissions))?s.permissions:{};
   const allow=Array.isArray(s.permissions.allow)?s.permissions.allow.slice():[];
-  for(const t of tools) if(!allow.includes(t)) allow.push(t);
+  for(const t of add) if(!allow.includes(t)) allow.push(t);
   s.permissions.allow=allow;
 }
 const pre=verify(s);                                      // validate BEFORE writing: a failed
@@ -1097,7 +1126,7 @@ console.log("OK cleaned "+f);
 }
 
 run_settings() {
-  local op="$1" doh="$2" dop="$3" label="$4" res rc snap="" had=0 now=0 same=0
+  local op="$1" doh="$2" dop="$3" label="$4" add="${5:-[]}" res rc snap="" had=0 now=0 same=0
   if [ "${SEMBLE_DRY_RUN:-}" = "1" ]; then sc_dry "$op settings $SETTINGS ($label)" >/dev/null; add_changed "settings: would $op $label in $SETTINGS"; return 0; fi
   if [ -f "$SETTINGS" ]; then                            # byte snapshot: a merge that changes
     had=1                                                # nothing must report unchanged (§13)
@@ -1105,7 +1134,7 @@ run_settings() {
     cp "$SETTINGS" "$snap"
   fi
   set +e
-  if [ "$op" = "merge" ]; then res="$(merge_settings "$doh" "$dop" 2>&1)"; else res="$(unmerge_settings "$doh" "$dop" 2>&1)"; fi
+  if [ "$op" = "merge" ]; then res="$(merge_settings "$doh" "$dop" "$add" 2>&1)"; else res="$(unmerge_settings "$doh" "$dop" 2>&1)"; fi
   rc=$?
   set -e
   if [ -f "$SETTINGS" ]; then now=1; fi
@@ -1115,6 +1144,24 @@ run_settings() {
   if [ "$rc" != "0" ]; then add_failed "settings: $res"; return 0; fi
   if [ "$same" = "1" ]; then add_unchanged "settings: $label already ${op}d in $SETTINGS"
   else add_changed "settings: $label ${op}d in $SETTINGS"; fi
+}
+
+# P3: write only tools no layer grants; a grant from local/user/server-wide = nothing written to tracked settings.
+PERM_DO=0
+PERM_ADD='[]'
+install_permissions_plan() {
+  local probe n f files=""
+  probe="$(perm_probe)" || { add_failed "settings: cannot read the permission layers"; return 0; }
+  PERM_ADD="$(SG_J="$probe" node -e 'process.stdout.write(JSON.stringify(JSON.parse(process.env.SG_J).missing))')"
+  [ "$PERM_ADD" = "[]" ] || PERM_DO=1
+  # Layers granting by anything but the exact entries this skill writes into $SETTINGS.
+  for n in $(SG_J="$probe" SG_T="$SEMBLE_TOOL_SEARCH $SEMBLE_TOOL_RELATED" node -e '
+const j=JSON.parse(process.env.SG_J), t=process.env.SG_T.split(" ");
+process.stdout.write(j.source.filter(n=>n!=="project"||j.layers.project.some(e=>t.indexOf(e)<0)).join(" "))'); do
+    f="$(perm_layer_file "$n")"; files="${files:+$files, }$f"
+  done
+  if [ -n "$files" ]; then add_unchanged "settings: permissions granted by $files are not copied into $SETTINGS"
+  elif [ "$PERM_DO" = "0" ] && ! want_part hooks; then add_unchanged "settings: permissions already merged in $SETTINGS"; fi
 }
 
 # ── .gitignore: the whole .claude/semble/ dir (state.json, telemetry.jsonl with verbatim commands) ──
@@ -1254,12 +1301,15 @@ case "$MODE" in
       gitignore_migrate
       install_gitignore
     fi
+    if want_part permissions; then
+      install_permissions_plan
+    fi
     if want_part hooks && want_part permissions; then
-      run_settings merge 1 1 "hooks+permissions"
+      run_settings merge 1 "$PERM_DO" "hooks+permissions" "$PERM_ADD"
     elif want_part hooks; then
       run_settings merge 1 0 "hooks"
-    elif want_part permissions; then
-      run_settings merge 0 1 "permissions"
+    elif [ "$PERM_DO" = "1" ]; then
+      run_settings merge 0 1 "permissions" "$PERM_ADD"
     fi
     emit_report install
     ;;

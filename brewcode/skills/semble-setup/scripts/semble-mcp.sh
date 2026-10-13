@@ -187,7 +187,7 @@ mcp_backup_configs() {
       if [ "$JSON" = "1" ]; then sc_dry "backup $f" >&2; else sc_dry "backup $f"; fi
       continue
     fi
-    b="$(sc_backup "$f" 2>/dev/null)" || b=""
+    b="$(sc_backup "$f")" || b=""   # stderr kept: names any pruned older backup
     # No backup, no mutation: the caller aborts before anything is rewritten.
     if [ -z "$b" ] || [ ! -f "$b" ]; then MCP_BACKUP_FAILED="$f"; return 1; fi
     MCP_BACKUPS="${MCP_BACKUPS}${b}"$'\n'

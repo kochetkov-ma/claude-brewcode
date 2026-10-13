@@ -1,6 +1,6 @@
 {
   "name": "brewdoc",
-  "version": "6.5.1",
+  "version": "6.5.2",
   "description": "Brewdoc - Claude Code documentation tools: doc-staleness tracking, memory-sync generator, my-claude installation docs, Markdown to PDF, publishing to brewpage.app",
   "author": {
     "name": "Maksim Kochetkov",

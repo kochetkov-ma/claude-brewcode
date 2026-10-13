@@ -83,13 +83,13 @@ Canonical order, shared by every `-setup` skill: `status | install | upgrade | e
 | Project | `<repo>/.claude/hooks/` | `<repo>/.claude/settings.json` | `<repo>/.claude/agent-deadline.json` |
 | Global | `<config dir>/hooks/` | `<config dir>/settings.json` | `<config dir>/agent-deadline.json` |
 
-`<config dir>` is `$CLAUDE_CONFIG_DIR` when set, else `~/.claude`. State lives in the OS temp dir under `brewtools-agent-deadline/<session_id>/`, never under the config dir. In the install runbook the project root is taken from `CLAUDE_PROJECT_DIR` first (the session start dir, as hooks see it), then git toplevel. The guard reads the nearest valid project config first (a JSON object in `.claude/agent-deadline.json`, walking up from the subagent's working directory, not from the project root, at most 16 levels), then the global one; a malformed (non-object) project config is skipped and the climb continues; global is used only when no valid project config is found. Global writes go through Bash only — the config dir is a protected path for `Write`/`Edit`: prompted in `default` and `acceptEdits`, denied headless and in `dontAsk`, allowed only under `bypassPermissions`.
+`<config dir>` is `$CLAUDE_CONFIG_DIR` when set, else `~/.claude`. State lives in the OS temp dir under `brewtools-agent-deadline/<session_id>/`, never under the config dir. In the install runbook the project root is taken from `CLAUDE_PROJECT_DIR` first (the session start dir, as hooks see it), then git toplevel, then an upward walk for `.git`/`.claude`, where a `.claude` in `$HOME` or in the directory whose `.claude` IS `$CLAUDE_CONFIG_DIR` is a profile, not a project marker, and is skipped; a `.git` there still counts. `CLAUDE_PROJECT_DIR` / git toplevel are taken as given. The guard reads the nearest valid project config first (a JSON object in `.claude/agent-deadline.json`, walking up from the subagent's working directory, not from the project root, at most 16 levels), then the global one; a malformed (non-object) project config is skipped and the climb continues; global is used only when no valid project config is found. Global writes go through Bash only — the config dir is a protected path for `Write`/`Edit`: prompted in `default` and `acceptEdits`, denied headless and in `dontAsk`, allowed only under `bypassPermissions`.
 
 ### Governing config after `uninstall project`
 
 `uninstall project` removes the project hooks but keeps `.claude/agent-deadline.json`. If the global scope still registers the guard, that kept file keeps governing it, so the project `enabled` and budget override the global config.
 
-Status prints `governing_config=<path> governing_scope=project|global|none orphan_config=yes|no`. `governing_config` is resolved exactly as the guard does (see Installation targets). `orphan_config=yes` means a project config governs while the project has no registrations and the global scope has some. Status then reports a finding and never offers `upgrade` for it, because upgrade re-wires the project hooks and undoes the uninstall.
+Status prints `governing_config=<path> governing_scope=project|global|none orphan_config=yes|no`. `governing_config` is resolved exactly as the guard does (see Installation targets). The per-scope status line also prints `config_content_version`, `contract_content_version` and `runbook_content_version` (informational; the config basis is in the config-keys table); `content_state` compares config against the contract value and each hook against its asset. `orphan_config=yes` means a project config governs while the project has no registrations and the global scope has some. Status then reports a finding and never offers `upgrade` for it, because upgrade re-wires the project hooks and undoes the uninstall.
 
 | Goal | Run |
 |------|-----|
@@ -120,7 +120,7 @@ When the case applies, `uninstall project` prints `WARNING: kept <cfg> still GOV
 | `byAgentType` | per-type overrides, e.g. `{"Explore": 10}`; empty object = one uniform limit |
 | `hardStopRatio` | optional, default `2`, must be `> 1` — multiple of the budget past which the allowance drops to `Write, Edit, SubagentHandback` |
 | `readOnlyAgentTypes` | optional, default `["Explore", "Plan"]` — agent types without `Write`/`Edit`; they are told to return what they have instead of saving to a file. A list replaces the default; add it by hand, install does not write it |
-| `version` / `content_version` / `generated_by` / `last_updated` | Restamped by install, upgrade, enable, and disable; version records the producing release, content_version records changed generator content |
+| `version` / `content_version` / `generated_by` / `last_updated` | Restamped by install, upgrade, enable, and disable; version records the producing release, content_version records the header of `agent-deadline-guard.mjs`, the one hook that parses the config (not the runbook: a runbook-only change never marks it stale) |
 
 Budget resolves as `byAgentType[agent_type] ?? defaultMinutes`, read fresh on every hook call.
 
@@ -142,7 +142,7 @@ Budget resolves as `byAgentType[agent_type] ?? defaultMinutes`, read fresh on ev
 
 The config carries version, content_version, generated_by, and last_updated beside behavior keys.
 Copied hooks carry baked provenance markers. Setup-status compares each artifact's content_version
-with the source for that artifact, reads producing version as provenance, and corroborates copied
+with the source for that artifact (for the config, see the config-keys table), reads producing version as provenance, and corroborates copied
 hook bytes. Generator and hook content versions can differ; neither must equal an unrelated plugin
 release to remain current. Missing source evidence is reported as unknown rather than invented drift.
 

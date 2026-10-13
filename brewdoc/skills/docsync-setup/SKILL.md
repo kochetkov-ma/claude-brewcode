@@ -7,7 +7,7 @@ argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge]
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion]
 model: sonnet
 ---
-<!-- brewcode-meta: version=6.5.1 content_version=6.5.0 generated_by=brewdoc:docsync-setup -->
+<!-- brewcode-meta: version=6.5.2 content_version=6.5.2 generated_by=brewdoc:docsync-setup -->
 
 # docsync-setup
 
@@ -47,7 +47,7 @@ that mode's checks (Verification). Verification is mandatory: report pass/fail p
 unverified success. Run in the main conversation (uses `AskUserQuestion`); no `context: fork`.
 
 > **Project root.** Each **EXECUTE** block resolves it: `CLAUDE_PROJECT_DIR` ->
-> `git rev-parse --show-toplevel` -> upward walk for `.git`/`.claude`. Keep the token
+> `git rev-parse --show-toplevel` -> upward walk for `.git`/`.claude` (a profile `.claude` at HOME is skipped). Keep the token
 > bare-braced (`${VAR:-fallback}` is never substituted). The hooks skip the `git rev-parse`
 > rung and are the authority for config/state placement under a nested `.claude`.
 
@@ -80,7 +80,8 @@ Skill-specific extras come after them: `sync [--all]`, `reread`, `frontmatter`.
 ```bash
 ROOT="${CLAUDE_PROJECT_DIR}"
 [ -n "$ROOT" ] && [ -d "$ROOT" ] || ROOT=$(git rev-parse --show-toplevel 2>/dev/null || true)
-[ -n "$ROOT" ] || { d=$PWD; until [ -d "$d/.git" ] || [ -d "$d/.claude" ] || [ "$d" = / ]; do d=$(dirname "$d"); done; [ "$d" = / ] && ROOT=$PWD || ROOT=$d; }
+is_profile_parent() { _pp=$(cd "${1}" 2>/dev/null && pwd -P) || return 1; { [ -n "${HOME:-}" ] && [ "$_pp" = "$(cd "$HOME" 2>/dev/null && pwd -P)" ]; } || { [ -n "${CLAUDE_CONFIG_DIR:-}" ] && [ "$_pp/.claude" = "$(cd "$CLAUDE_CONFIG_DIR" 2>/dev/null && pwd -P)" ]; }; }
+[ -n "$ROOT" ] || { d=$PWD; until [ -d "$d/.git" ] || { [ -d "$d/.claude" ] && ! is_profile_parent "$d"; } || [ "$d" = / ]; do d=$(dirname "$d"); done; [ "$d" = / ] && ROOT=$PWD || ROOT=$d; }
 if [ -f "$ROOT/.claude/hooks/docsync-gate.mjs" ] && grep -q 'docsync-gate.mjs' "$ROOT/.claude/settings.json" 2>/dev/null; then
   # `"enabled": false` means installed-but-inert, NOT missing. Absent key = enabled.
   if grep -q '"enabled"[[:space:]]*:[[:space:]]*false' "$ROOT/.claude/docsync/config.json" 2>/dev/null; then
@@ -150,7 +151,8 @@ them (else this block and `rg`); never infer that from the operating system.
 ```bash
 ROOT="${CLAUDE_PROJECT_DIR}"
 [ -n "$ROOT" ] && [ -d "$ROOT" ] || ROOT=$(git rev-parse --show-toplevel 2>/dev/null || true)
-[ -n "$ROOT" ] || { d=$PWD; until [ -d "$d/.git" ] || [ -d "$d/.claude" ] || [ "$d" = / ]; do d=$(dirname "$d"); done; [ "$d" = / ] && ROOT=$PWD || ROOT=$d; }
+is_profile_parent() { _pp=$(cd "${1}" 2>/dev/null && pwd -P) || return 1; { [ -n "${HOME:-}" ] && [ "$_pp" = "$(cd "$HOME" 2>/dev/null && pwd -P)" ]; } || { [ -n "${CLAUDE_CONFIG_DIR:-}" ] && [ "$_pp/.claude" = "$(cd "$CLAUDE_CONFIG_DIR" 2>/dev/null && pwd -P)" ]; }; }
+[ -n "$ROOT" ] || { d=$PWD; until [ -d "$d/.git" ] || { [ -d "$d/.claude" ] && ! is_profile_parent "$d"; } || [ "$d" = / ]; do d=$(dirname "$d"); done; [ "$d" = / ] && ROOT=$PWD || ROOT=$d; }
 cd "$ROOT" && find . -type f -name '*.md' -not -path './.git/*' -not -name CLAUDE.md -not -name CLAUDE.local.md -not -name AGENTS.md | sed 's#^\./##' | sort
 ```
 
@@ -253,7 +255,8 @@ hooks is `uninstall`. The hooks read `enabled` on every invocation (`loadConfig`
    ```bash
    ROOT="${CLAUDE_PROJECT_DIR}"
    [ -n "$ROOT" ] && [ -d "$ROOT" ] || ROOT=$(git rev-parse --show-toplevel 2>/dev/null || true)
-   [ -n "$ROOT" ] || { d=$PWD; until [ -d "$d/.git" ] || [ -d "$d/.claude" ] || [ "$d" = / ]; do d=$(dirname "$d"); done; [ "$d" = / ] && ROOT=$PWD || ROOT=$d; }
+   is_profile_parent() { _pp=$(cd "${1}" 2>/dev/null && pwd -P) || return 1; { [ -n "${HOME:-}" ] && [ "$_pp" = "$(cd "$HOME" 2>/dev/null && pwd -P)" ]; } || { [ -n "${CLAUDE_CONFIG_DIR:-}" ] && [ "$_pp/.claude" = "$(cd "$CLAUDE_CONFIG_DIR" 2>/dev/null && pwd -P)" ]; }; }
+   [ -n "$ROOT" ] || { d=$PWD; until [ -d "$d/.git" ] || { [ -d "$d/.claude" ] && ! is_profile_parent "$d"; } || [ "$d" = / ]; do d=$(dirname "$d"); done; [ "$d" = / ] && ROOT=$PWD || ROOT=$d; }
    C="$ROOT/.claude/docsync/config.json"
    PJ="${CLAUDE_SKILL_DIR}/../../.claude-plugin/plugin.json"
    SKILL_MD="${CLAUDE_SKILL_DIR}/SKILL.md"
@@ -369,7 +372,8 @@ Opt-in retro-add of docsync frontmatter to in-scope docs; never automatic at ins
 ```bash
 ROOT="${CLAUDE_PROJECT_DIR}"
 [ -n "$ROOT" ] && [ -d "$ROOT" ] || ROOT=$(git rev-parse --show-toplevel 2>/dev/null || true)
-[ -n "$ROOT" ] || { d=$PWD; until [ -d "$d/.git" ] || [ -d "$d/.claude" ] || [ "$d" = / ]; do d=$(dirname "$d"); done; [ "$d" = / ] && ROOT=$PWD || ROOT=$d; }
+is_profile_parent() { _pp=$(cd "${1}" 2>/dev/null && pwd -P) || return 1; { [ -n "${HOME:-}" ] && [ "$_pp" = "$(cd "$HOME" 2>/dev/null && pwd -P)" ]; } || { [ -n "${CLAUDE_CONFIG_DIR:-}" ] && [ "$_pp/.claude" = "$(cd "$CLAUDE_CONFIG_DIR" 2>/dev/null && pwd -P)" ]; }; }
+[ -n "$ROOT" ] || { d=$PWD; until [ -d "$d/.git" ] || { [ -d "$d/.claude" ] && ! is_profile_parent "$d"; } || [ "$d" = / ]; do d=$(dirname "$d"); done; [ "$d" = / ] && ROOT=$PWD || ROOT=$d; }
 DST="$ROOT/.claude/hooks"; D="$ROOT/.claude/docsync"; S="$ROOT/.claude/settings.json"; ok=1
 for f in docsync-track docsync-watch docsync-gate; do
   node --check "$DST/$f.mjs" && echo "✅ $f parses" || { echo "❌ $f parse FAILED"; ok=0; }

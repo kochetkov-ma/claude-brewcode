@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.5.1 content_version=6.5.0 generated_by=brewtools:manager-setup
+// brewcode-meta: version=6.5.2 content_version=6.5.2 generated_by=brewtools:manager-setup
 
 // brewtools:manager-setup — HARD wall guard (PreToolUse "*"), self-contained copy in <project>/.claude/brewtools/manager/:
 // state.hard -> deny main-session tools except delegate/read/track; subagents free. Fail-closed once installed.
@@ -20,7 +20,17 @@ function output(obj) {
   process.stdout.write(JSON.stringify(obj));
 }
 
-// ---- project root: CLAUDE_PROJECT_DIR -> upward walk for a root marker -> hook cwd; never throws ----
+// Mirrors semble isProfileParent: HOME or the active config dir's parent holds a profile .claude, never a root.
+function isProfileParent(dir) {
+  const real = (p) => { try { return realpathSync(p); } catch { return ''; } };
+  const p = real(dir);
+  if (!p) return false;
+  if (process.env.HOME && real(process.env.HOME) === p) return true;
+  const cfg = process.env.CLAUDE_CONFIG_DIR;
+  return Boolean(cfg) && real(cfg) === join(p, '.claude');
+}
+
+// ---- project root: CLAUDE_PROJECT_DIR -> upward walk for a root marker (profile parents skipped) -> hook cwd; never throws ----
 // Raw `cwd` missed state from a nested dir (BT-F01 A); it only resolves relative tool_input paths.
 function projectRoot(hookCwd) {
   const env = process.env.CLAUDE_PROJECT_DIR;
@@ -28,7 +38,8 @@ function projectRoot(hookCwd) {
 
   let dir = resolve(hookCwd || process.cwd());
   for (;;) {
-    if (existsSync(join(dir, '.git')) || existsSync(join(dir, '.claude'))) return dir;
+    if (existsSync(join(dir, '.git'))) return dir;
+    if (existsSync(join(dir, '.claude')) && !isProfileParent(dir)) return dir;
     const up = dirname(dir);
     if (up === dir) break;
     dir = up;

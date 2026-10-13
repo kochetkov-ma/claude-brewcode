@@ -116,6 +116,35 @@ try {
   assert.equal(malformedLibrary.status, 0, 'malformed library metadata status succeeds');
   assert.match(malformedLibrary.stdout, /project:.*enabled=false.*content_state=partial/, 'malformed library CV is partial without re-enabling');
 
+  // GIVEN: a current install, probed against plugin copies with one asset CV bumped (runbook only, or the config-reading module).
+  writeFileSync(budgetPath, budgetBytes);
+  writeFileSync(configPath, JSON.stringify(currentConfig));
+  const bumpedPlugin = (label, bumped) => {
+    const assets = join(base, `plugin-${label}`, 'skills', 'agent-return-setup', 'assets');
+    mkdirSync(assets, { recursive: true });
+    for (const name of ['INSTALL.md', 'agent-return-budget.mjs', 'agent-return-contract.mjs', 'agent-return-guard.mjs']) {
+      const bytes = readFileSync(join(SKILL_DIR, 'assets', name), 'utf8');
+      writeFileSync(join(assets, name), name === bumped ? bytes.replace(/content_version=[0-9.]+/, 'content_version=99.0.0') : bytes);
+    }
+    return join(base, `plugin-${label}`);
+  };
+  const contentAgainst = pluginRoot => {
+    const r = spawnSync('bash', ['-c', statusBlock], { cwd: project, env: { ...env, CLAUDE_PLUGIN_ROOT: pluginRoot }, encoding: 'utf8', timeout: 30000 });
+    const line = r.stdout.split('\n').find(l => l.startsWith('project:')) ?? `NO project: LINE ${r.stderr}`;
+    const keys = ['config_content_version', 'contract_content_version', 'content_state', 'content_findings'];
+    return { rc: r.status, ...Object.fromEntries(keys.map(k => [k, line.match(new RegExp(` ${k}=(\\S+)`))?.[1] ?? 'absent'])) };
+  };
+  const contractCV = budgetBytes.match(/content_version=([0-9]+\.[0-9]+\.[0-9]+)/)[1];
+  // WHEN: status probes a runbook-only CV bump, then a CV bump of the module that parses the config.
+  const runbookOnly = contentAgainst(bumpedPlugin('runbook', 'INSTALL.md'));
+  const moduleBump = contentAgainst(bumpedPlugin('module', 'agent-return-budget.mjs'));
+  // THEN: runbook prose never stales the config; a contract change stales the config and the module.
+  assert.deepEqual([runbookOnly, moduleBump], [
+    { rc: 0, config_content_version: contractCV, contract_content_version: contractCV, content_state: 'current', content_findings: 'none' },
+    { rc: 0, config_content_version: contractCV, contract_content_version: '99.0.0', content_state: 'stale',
+      content_findings: `agent-return.json:${contractCV}->99.0.0,agent-return-budget.mjs:${contractCV}->99.0.0` },
+  ], 'config staleness follows the config-reading module CV, never the INSTALL.md header');
+
   // GIVEN: global hooks wired in a profile (config 2500/6000) and a project install with config 1000/2500.
   const orphan = join(base, 'orphan');
   const profile = join(orphan, 'profile');
@@ -217,6 +246,31 @@ try {
   assert.deepEqual([governs(top), hookSays({ ...climbEnv, CLAUDE_PROJECT_DIR: top })], [
     [0, `governing_config=${join(climbProfile, 'agent-return.json')} governing_scope=global orphan_config=no`], 'Keep it under ~2222 tokens',
   ], 'the agent-return hooks start at CLAUDE_PROJECT_DIR, not the payload cwd: status must not climb from $PWD then');
+
+  // GIVEN outer/.git > h/.claude > h/notes/misc WHEN h is HOME, the config-dir parent, or plain
+  // THEN hook projectRoot() and the runbook root block skip h as a profile; plain h stays a root
+  const outer = join(realpathSync(base), 'profile-walk');
+  const h = join(outer, 'h');
+  const cwdMisc = join(h, 'notes', 'misc');
+  mkdirSync(join(outer, '.git'), { recursive: true });
+  mkdirSync(join(h, '.claude'), { recursive: true });
+  mkdirSync(cwdMisc, { recursive: true });
+  const rootBlock = blockAfter(readFileSync(RUNBOOK, 'utf8'), 'Resolve it once, in the SAME Bash call', '```\n');
+  const budgetUrl = new URL(`file://${join(SKILL_DIR, 'assets', 'agent-return-budget.mjs')}`).href;
+  const rootsAs = (envOver) => {
+    const walkEnv = { ...process.env, HOME: join(outer, 'elsewhere'), ...envOver };
+    delete walkEnv.CLAUDE_PROJECT_DIR;
+    if (!envOver.CLAUDE_CONFIG_DIR) delete walkEnv.CLAUDE_CONFIG_DIR;
+    const code = `const m = await import(${JSON.stringify(budgetUrl)}); process.stdout.write(m.projectRoot(${JSON.stringify(cwdMisc)}));`;
+    const hook = spawnSync(process.execPath, ['--input-type=module', '-e', code], { env: walkEnv, encoding: 'utf8', timeout: 30000 });
+    const shell = spawnSync('bash', ['-c', rootBlock], { cwd: cwdMisc, env: walkEnv, encoding: 'utf8', timeout: 30000 });
+    return [hook.stdout, shell.stdout.trim()];
+  };
+  assert.deepEqual(
+    [rootsAs({ HOME: h }), rootsAs({ CLAUDE_CONFIG_DIR: join(h, '.claude') }), rootsAs({})],
+    [[outer, `✅ ROOT=${outer}`], [outer, `✅ ROOT=${outer}`], [h, `✅ ROOT=${h}`]],
+    'a HOME or config-dir-parent .claude is the profile: hook and installer must never resolve it as the project root',
+  );
 } finally {
   rmSync(base, { recursive: true, force: true });
 }

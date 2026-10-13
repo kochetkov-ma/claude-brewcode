@@ -56,7 +56,7 @@ claude --plugin-dir ./brewtools
 | 2 | Status table | Renders a markdown table: plugin name, installed version, latest version, and status (✅ current / ⬇️ update / ❌ missing / ❓ unknown) |
 | 2b | Token cost | Optional: per-plugin skills/agents/hooks counts and always-on tokens from `claude plugin details` |
 | 3 | Install missing | For each missing suite plugin, prompts (interactive) or auto-installs (`all`); runs `claude plugin marketplace add` then `claude plugin install <plugin>@claude-brewcode` |
-| 4 | Update outdated | Marketplace update, then one `claude plugin update <id> --scope <scope>` per plugin you selected, at its installed scope |
+| 4 | Update outdated | Marketplace update, then one `claude plugin update <id> --scope <scope>` per plugin you selected, at its installed scope; `project`/`local` rows run as `(cd "<projectPath>" && ...)` from their own project directory, and a missing directory is reported as an orphan install without running anything |
 | 5 | Auto-update toggle | Interactive and `all` modes only; auto-update is off by default for this marketplace, and the skill points you to `/plugin` → Marketplaces instead of editing settings files |
 | 5b | Prune | Previews orphaned auto-installed dependencies per scope and removes them only after confirmation (`all` removes them) |
 | 6 | Final report | Prints reload notice plus a summary of what was installed, updated, skipped, and any errors |
@@ -65,7 +65,7 @@ claude --plugin-dir ./brewtools
 
 Phase 0 uses two paths:
 
-**Primary (CC 2.1.163+):** `claude plugin list --json` returns one object per installation with `id`, `version`, `scope`, `enabled` and `installPath` always present.
+**Primary (CC 2.1.163+):** `claude plugin list --json` returns one object per installation with `id`, `version`, `scope`, `enabled` and `installPath` always present; `project`/`local` rows also carry `projectPath`.
 
 **Fallback (CC < 2.1.163 or command fails):** `scripts/discover-plugins.sh` reads two sources:
 1. `settings.json` in the config directory (`CLAUDE_CONFIG_DIR`, default `~/.claude`) and `./.claude/settings.json` if present — the `enabledPlugins` map where keys are `<plugin>@<marketplace>`.

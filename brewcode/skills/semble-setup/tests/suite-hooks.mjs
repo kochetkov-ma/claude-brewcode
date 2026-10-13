@@ -2602,6 +2602,113 @@ const SESSION_OK = (p) => ({
   'no hook compares against a retired tool name');
 }
 
+// ═══ P. 6.5.2: report-only edited rule (P1) and layered permissions (P3) ═══
+const SEARCH_T = 'mcp__semble_code__search';
+const RELATED_T = 'mcp__semble_code__find_related';
+const localPath = (p) => join(p, '.claude', 'settings.local.json');
+const NO_LAYERS = { project: [], local: [], user: [] };
+
+// GIVEN a hand-edited rule WHEN install --part rule runs THEN the bytes stay, the report forbids a hand merge
+{
+  const p = freshProject({});
+  const rulePath = join(p, '.claude', 'rules', 'semble-first.md');
+  mkdirSync(dirname(rulePath), { recursive: true });
+  const edited = TPL_TEXT + '\n<!-- project note -->\n';
+  writeFileSync(rulePath, edited);
+  const tpl = join(SKILL_COPY, 'assets', 'semble-first.md.template');
+  const r = guidance(p, ['install', '--part', 'rule', '--json']);
+  const j = safeParse(r.stdout);
+  check('P1.reportOnly', [r.status, readRaw(rulePath), j.changed, j.skipped, r.stderr.split('\n')[0]],
+    [0, edited, [],
+      [`rule: user_modified, left as is - never hand-edit or merge it; user review: diff -u ${rulePath} ${tpl}; `
+        + `replace only on the user's explicit --force (backup taken) ${rulePath}`],
+      `# REVIEW ONLY - do not apply: user-edited ${rulePath} vs template (the skill never edits it)`],
+    'an edited rule is reported with the review command and the --force route, never rewritten or merge-invited');
+}
+
+// GIVEN SKILL.md and semble-status.sh WHEN scanned THEN no wording invites a hand merge and the prohibition is stated
+{
+  const skill = readFileSync(join(SKILL, 'SKILL.md'), 'utf8');
+  const statusSh = readFileSync(join(SCRIPTS, 'semble-status.sh'), 'utf8');
+  const both = skill + statusSh;
+  check('P1.noMergeInvite', {
+    targetedCorrection: both.split('targeted correction').length - 1,
+    mergeByHand: both.split('merge by hand').length - 1,
+    thenHandMerge: both.split('then a hand merge').length - 1,
+    staleSection: both.split('name any confirmed stale section').length - 1,
+    prohibition: skill.includes('**Never Write, Edit, `sed`, `cp` or hand-merge `.claude/rules/semble-first.md`, '
+      + 'and never set its `content_version` yourself**'),
+  }, { targetedCorrection: 0, mergeByHand: 0, thenHandMerge: 0, staleSection: 0, prohibition: true },
+  'P1: the skill only reports an edited rule; the model never edits or merges it');
+}
+
+// GIVEN both tools granted only by settings.local.json WHEN status runs THEN permissions are wired from `local`
+{
+  const p = freshProject({ settings: '{"hooks":{}}\n' });
+  writeFileSync(localPath(p), JSON.stringify({ permissions: { allow: [SEARCH_T, RELATED_T] } }));
+  check('P3.localWired', safeParse(guidance(p, ['status', '--json']).stdout).permissions,
+    { allow: [], wired: true, source: ['local'], missing: [],
+      layers: { ...NO_LAYERS, local: [SEARCH_T, RELATED_T] } },
+    'Claude Code honours settings.local.json, so the status counts it');
+}
+
+// GIVEN a server-wide `mcp__semble_code` rule in the tracked file WHEN status runs THEN both tools are granted
+{
+  const p = freshProject({ settings: '{"permissions":{"allow":["mcp__semble_code"]}}\n' });
+  check('P3.serverWide', safeParse(guidance(p, ['status', '--json']).stdout).permissions,
+    { allow: [], wired: true, source: ['project'], missing: [],
+      layers: { ...NO_LAYERS, project: ['mcp__semble_code'] } },
+    'a server-wide rule grants every semble_code tool');
+}
+
+// GIVEN `mcp__semble_code__*` only in the profile settings WHEN status runs THEN permissions are wired from `user`
+{
+  const p = freshProject({});
+  const userSettings = join(HOME, '.claude', 'settings.json');
+  writeFileSync(userSettings, '{"permissions":{"allow":["mcp__semble_code__*"]}}\n');
+  const st = safeParse(guidance(p, ['status', '--json']).stdout).permissions;
+  rmSync(userSettings, { force: true });
+  check('P3.userWildcard', st,
+    { allow: [], wired: true, source: ['user'], missing: [],
+      layers: { ...NO_LAYERS, user: ['mcp__semble_code__*'] } },
+    'a user-scope wildcard grant is read from the active profile settings.json');
+}
+
+// GIVEN a local grant WHEN install --part permissions runs THEN tracked settings.json is byte-unchanged
+{
+  const seed = '{"hooks":{}}\n';
+  const p = freshProject({ settings: seed });
+  writeFileSync(localPath(p), JSON.stringify({ permissions: { allow: [SEARCH_T, RELATED_T] } }));
+  const r = guidance(p, ['install', '--part', 'permissions', '--json']);
+  const j = safeParse(r.stdout);
+  check('P3.noTrackedCopy', [r.status, readRaw(settingsPath(p)), j.changed, j.unchanged],
+    [0, seed, [], [`settings: permissions granted by ${localPath(p)} are not copied into ${settingsPath(p)}`]],
+    'a tool any layer grants is never duplicated into the tracked settings.json');
+}
+
+// GIVEN a local grant WHEN install --part all then remove --part all THEN tracked holds no permissions, local untouched
+{
+  const p = freshProject({});
+  const local = JSON.stringify({ permissions: { allow: [SEARCH_T, RELATED_T, 'Bash(ls:*)'] } });
+  writeFileSync(localPath(p), local);
+  const inst = guidance(p, ['install', '--part', 'all', '--json']);
+  const afterInstall = readSettings(p);
+  const rem = guidance(p, ['remove', '--part', 'all', '--json']);
+  check('P3.allThenRemove',
+    [inst.status, afterInstall.permissions, wantCounts(p, afterInstall), rem.status, readRaw(localPath(p))],
+    [0, undefined, [1, 1, 1, 1], 0, local],
+    'hooks land in tracked settings, permissions stay where the user granted them, remove never touches local');
+}
+
+// GIVEN only the search tool granted locally WHEN install --part permissions THEN only find_related is written
+{
+  const p = freshProject({});
+  writeFileSync(localPath(p), JSON.stringify({ permissions: { allow: [SEARCH_T] } }));
+  const r = guidance(p, ['install', '--part', 'permissions', '--json']);
+  check('P3.partialGrant', [r.status, readSettings(p)], [0, { permissions: { allow: [RELATED_T] } }],
+    'the tracked file receives exactly the tool no layer grants yet');
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 console.log('\nsuite-hooks (unit D)');
 console.log(`  base: ${BASE}`);

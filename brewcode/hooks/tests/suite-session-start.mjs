@@ -378,6 +378,30 @@ const TASKS = [
     'a CLAUDE_PROJECT_DIR pointing at a missing dir is ignored in favour of the marker walk');
   delete process.env.CLAUDE_PROJECT_DIR;
 }
+// GIVEN outer/.git > h/.claude > h/notes/misc | WHEN h is HOME, the config-dir parent, or plain | THEN only plain h is a root
+{
+  const f = fixture('c6-profile-parent');
+  const h = join(f.dir, 'outer', 'h');
+  const cwd = join(h, 'notes', 'misc');
+  mkdirSync(join(f.dir, 'outer', '.git'), { recursive: true });
+  mkdirSync(join(h, '.claude'), { recursive: true });
+  mkdirSync(cwd, { recursive: true });
+  const rootAs = (env) => {
+    process.env.HOME = env.HOME;
+    if (env.CLAUDE_CONFIG_DIR) process.env.CLAUDE_CONFIG_DIR = env.CLAUDE_CONFIG_DIR;
+    else delete process.env.CLAUDE_CONFIG_DIR;
+    return projectRoot(cwd);
+  };
+  const got = [
+    rootAs({ HOME: h }),
+    rootAs({ HOME: f.home, CLAUDE_CONFIG_DIR: join(h, '.claude') }),
+    rootAs({ HOME: f.home }),
+  ];
+  delete process.env.CLAUDE_CONFIG_DIR;
+  process.env.HOME = f.home;
+  check('C6.skipsProfileParent', got, [join(f.dir, 'outer'), join(f.dir, 'outer'), h],
+    'a HOME or config-dir-parent .claude is a profile, never a root; the walk continues to the outer .git');
+}
 
 // ═══ D. end-to-end: the hook process on source=clear after a `cd` ═══
 {

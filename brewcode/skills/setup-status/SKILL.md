@@ -326,7 +326,10 @@ const globals=[...new Set([env?path.resolve(env):null,path.join(os.homedir(),".c
 const ok=f=>{try{const c=JSON.parse(fs.readFileSync(f,"utf8"));return !!c&&typeof c==="object"&&!Array.isArray(c);}catch{return false;}};
 let dir=path.resolve(process.env.START), hit=null;
 if(process.env.RULE==="project-root"&&pd&&fs.existsSync(pd)) dir=path.resolve(pd);
-else if(process.env.RULE==="project-root") for(let d=dir;;){ if(fs.existsSync(path.join(d,".git"))||fs.existsSync(path.join(d,".claude"))){ dir=d; break; } const up=path.dirname(d); if(up===d) break; d=up; }
+const real=p=>{try{return fs.realpathSync(p);}catch{return "";}};
+const profileParent=d=>{const p=real(d); return !!p&&((!!process.env.HOME&&real(process.env.HOME)===p)||(!!env&&real(env)===path.join(p,".claude")));};
+if(process.env.RULE==="project-root"&&!(pd&&fs.existsSync(pd))) for(let d=dir;;){ if(fs.existsSync(path.join(d,".git"))||(fs.existsSync(path.join(d,".claude"))&&!profileParent(d))){ dir=d; break; } const up=path.dirname(d); if(up===d) break; d=up; }
+console.log(name+" CLIMB-START "+dir);
 for(let i=0;i<16&&!hit;i++){
   if(globals.includes(path.join(dir,".claude"))) break;
   if(ok(path.join(dir,".claude",name))){ hit=path.join(dir,".claude",name); break; }
@@ -358,11 +361,13 @@ budget applied, when the guard returns on its first line). Rows 6 and 11 read th
 config first, then `$CLAUDE_CONFIG_DIR`, then `~/.claude`; a malformed (non-object) project config is
 skipped and the climb goes on, so read every scope before deciding. `gov()` mirrors each guard's
 `loadConfig` start dir: row 6 climbs from the payload `cwd` (the shell cwd before the `cd`), row 11
-from the session project dir, else the nearest `.git`/`.claude` ancestor of that cwd (`projectRoot()`);
+from the session project dir, else the nearest `.git`/`.claude` ancestor of that cwd (`projectRoot()`; a `.claude` in HOME or
+in the active config dir's parent is a profile, skipped);
 each walks up at most 16 levels and stops at a global dir, so a config in an ancestor of the project
 dir, or under it on row 6, can govern. The `GOVERNING` file is the row's config
 secondary wherever it sits (with `CLAUDE_CONFIG_DIR` set, maybe `~/.claude/<name>.json`): a Phase 1
-MISS for it under `GLOBAL` is then not a finding and the row is not `partial`.
+MISS for it under `GLOBAL` is then not a finding and the row is not `partial`. `CLIMB-START` names the dir each
+climb starts from: never HOME or a profile parent unless it is the session project dir itself.
 
 **EXECUTE** using Bash tool — entry-file parking. `LIVE` / `PARKED` / `ABSENT` are three distinct
 answers: `ABSENT` means never deployed, `PARKED` means deployed and switched off:
@@ -614,16 +619,16 @@ brewcode|.claude/skills/superreview/SKILL.md|brewcode:superreview-setup|skills/s
 brewtools|.claude/features/board.md|brewtools:task-board-setup|skills/task-board-setup/SKILL.md
 brewtools|.claude/hooks/agent-deadline-guard.mjs|brewtools:agent-deadline-setup|skills/agent-deadline-setup/assets/agent-deadline-guard.mjs
 brewtools|GLOBAL/hooks/agent-deadline-guard.mjs|brewtools:agent-deadline-setup|skills/agent-deadline-setup/assets/agent-deadline-guard.mjs
-brewtools|.claude/agent-deadline.json|brewtools:agent-deadline-setup|skills/agent-deadline-setup/assets/INSTALL.md
-brewtools|GLOBAL/agent-deadline.json|brewtools:agent-deadline-setup|skills/agent-deadline-setup/assets/INSTALL.md
+brewtools|.claude/agent-deadline.json|brewtools:agent-deadline-setup|skills/agent-deadline-setup/assets/agent-deadline-guard.mjs
+brewtools|GLOBAL/agent-deadline.json|brewtools:agent-deadline-setup|skills/agent-deadline-setup/assets/agent-deadline-guard.mjs
 brewtools|.claude/hooks/agent-router.mjs|brewtools:agent-router-setup|skills/agent-router-setup/assets/agent-router.mjs
-brewtools|.claude/brewtools/agent-router.json|brewtools:agent-router-setup|skills/agent-router-setup/assets/INSTALL.md
+brewtools|.claude/brewtools/agent-router.json|brewtools:agent-router-setup|skills/agent-router-setup/assets/agent-router.mjs
 brewtools|.claude/brewtools/manager/state.json|brewtools:manager-setup|hooks/lib/manager-state.mjs
 brewtools|.claude/brewtools/manager/hardmode-guard.mjs|brewtools:manager-setup|hooks/hardmode-guard.mjs
 brewtools|.claude/hooks/agent-return-guard.mjs|brewtools:agent-return-setup|skills/agent-return-setup/assets/agent-return-guard.mjs
 brewtools|GLOBAL/hooks/agent-return-guard.mjs|brewtools:agent-return-setup|skills/agent-return-setup/assets/agent-return-guard.mjs
-brewtools|.claude/agent-return.json|brewtools:agent-return-setup|skills/agent-return-setup/assets/INSTALL.md
-brewtools|GLOBAL/agent-return.json|brewtools:agent-return-setup|skills/agent-return-setup/assets/INSTALL.md
+brewtools|.claude/agent-return.json|brewtools:agent-return-setup|skills/agent-return-setup/assets/agent-return-budget.mjs
+brewtools|GLOBAL/agent-return.json|brewtools:agent-return-setup|skills/agent-return-setup/assets/agent-return-budget.mjs
 brewdoc|.claude/skills/memory-sync/SKILL.md|brewdoc:memory-sync-setup|skills/memory-sync-setup/SKILL.md
 brewdoc|.claude/docsync/config.json|brewdoc:docsync-setup|skills/docsync-setup/SKILL.md
 brewdoc|.claude/hooks/docsync-track.mjs|brewdoc:docsync-setup|skills/docsync-setup/assets/docsync-track.mjs
@@ -646,7 +651,7 @@ Each heredoc line is `plugin|path|expected-owner|content_version-source`:
 |-------|------|
 | path | project-relative. `GLOBAL/` = the active config dir: rows 6 and 11 are scanned in both scopes, and `MISSING` on the scope that is not installed is no finding. A glob prints one verdict per match (row 1: one per team) and one `MISSING` when it matches nothing |
 | expected-owner | the row's own `<plugin>:<skill>`. Empty skips the owner check |
-| content_version-source | `$PLUGIN_ROOT`-relative, read with the same carrier dispatch as the artifact: the asset itself for a byte copy (`assets/<same name>`), the generator's `SKILL.md` for a generated artifact (every installer takes `{CONTENT_VERSION}` from its `brewcode-meta:` marker). Empty = no per-artifact comparison, `$PLUGIN_VER` is the reference |
+| content_version-source | `$PLUGIN_ROOT`-relative, read with the same carrier dispatch as the artifact: the asset itself for a byte copy (`assets/<same name>`), the generator's `SKILL.md` for a generated artifact (every installer takes `{CONTENT_VERSION}` from its `brewcode-meta:` marker), the one hook that parses it for a hook config (rows 6, 7, 11: `agent-deadline-guard.mjs`, `agent-router.mjs`, `agent-return-budget.mjs`, as each setup's own `status` compares), never the `INSTALL.md` runbook that writes it. Empty = no per-artifact comparison, `$PLUGIN_VER` is the reference |
 
 `content_version` is compared per artifact, never to the release-wide `$PLUGIN_VER`
 (`references/artifact-metadata.md` §6): an asset untouched for three releases is three behind the
@@ -740,10 +745,13 @@ complete set; paste the three `ROOT=` values from Phase 0 (`none` skips that plu
 cd "${CLAUDE_PROJECT_DIR}" || exit 1
 BC=/abs/brewcode/root; BT=/abs/brewtools/root; BD=/abs/brewdoc/root
 G="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+# Metadata only: the `brewcode-meta:` comment line and the leading frontmatter's stamp keys.
+meta_strip() { awk 'NR==1&&/^---$/{fm=1;print;next} fm&&/^---$/{fm=0;print;next} fm&&/^(version|content_version|generated_by|last_updated):/{next} /^[[:space:]]*(\/\/|#|<!--)[[:space:]]*brewcode-meta:/{next} {print}' "${1}"; }
 pair() {
   if   [ ! -f "${1}" ]; then echo "ABSENT  ${1}"
   elif [ ! -f "${2}" ]; then echo "NOSRC   ${2}"
   elif cmp -s "${1}" "${2}"; then echo "SAME    ${1}"
+  elif cmp -s <(meta_strip "${1}") <(meta_strip "${2}"); then echo "META    ${1}"
   else echo "DIFFERS ${1}"; fi
 }
 while IFS='|' read -r pl a b; do
@@ -796,7 +804,8 @@ echo "OK"
 | Line | Reading |
 |------|---------|
 | `SAME` | the copy equals the plugin asset |
-| `DIFFERS` beside a `CURRENT` stamp | `modified (stamp current, bytes differ)`: a hand-edit, or a copy never refreshed after a same-version rebuild. Name the file |
+| `META` | only the stamp differs (the `brewcode-meta:` line, or frontmatter `version` / `content_version` / `generated_by` / `last_updated`): the release bump restamped the plugin asset, the content is the same. `current (restamp pending)`, never `modified` |
+| `DIFFERS` beside a `CURRENT` stamp | `modified (stamp current, bytes differ)`: the content itself differs (a hand-edit, or a copy never refreshed after a same-version rebuild). Name the file |
 | `DIFFERS` beside a `BEHIND` stamp | expected: the stamp verdict already says `stale` |
 | `ABSENT` | not deployed there. Normal for the scope that is not installed, for the superreview stack references the install did not pick, and for a row Phase 1 found `missing` |
 | `NOSRC` | the plugin root lacks the asset: `version unknown (plugin asset missing)`, never `stale` |
@@ -811,14 +820,18 @@ the path after the `cp`, and that the loop prints `SAME` on a fresh install in a
 
 The suite's one dependency version: the user-scope `semble_code` MCP registration, pinned as
 `semble[mcp]==X.Y.Z` per Claude Code profile. `semble-setup` owns the check; this skill prints its
-result. Both calls are read-only:
+result. Row 2's guidance verdict comes from the same run: `scripts/semble-row.mjs` maps the
+`guidance` fields through `semble-status`'s own `nextStep` ladder, so both dashboards give one verdict
+for the same bytes. Every call is read-only:
 
 **EXECUTE** using Bash tool:
 
 ```bash
 S="${CLAUDE_PLUGIN_ROOT}/skills/semble-setup/scripts/semble-status.sh"
 bash "$S" --versions --all-profiles --json || echo "VERSIONS-FAILED"
-bash "$S" --json --section guidance || echo "GUIDANCE-FAILED"
+GJ=$(bash "$S" --json --section guidance) || GJ='{"guidance":{"error":"GUIDANCE-FAILED"}}'
+printf '%s\n' "$GJ"
+printf '%s\n' "$GJ" | node "${CLAUDE_SKILL_DIR}/scripts/semble-row.mjs" "${CLAUDE_PLUGIN_ROOT}/skills/semble-setup/assets/semble-first.md.template" || echo "ROW2-FAILED"
 echo "OK"
 ```
 
@@ -826,11 +839,12 @@ echo "OK"
 |-------|-----|
 | `pin`, `upstream.status` | the declared pin. `behind` = a newer semble exists upstream: advisory, it never changes a row |
 | `profiles[]`: `dir`, `active`, `registered`, `verdict`, `action` | one dependency-table row per profile. `verdict` is `ok`, `stale`, `ahead`, `drift`, `unpinned`, `not_registered` or `malformed`. `action` is the ready command for that profile: run it in a session started with `CLAUDE_CONFIG_DIR=<dir>` (default `~/.claude` profile: variable unset) |
-| `guidance`: `wiredCount`, `wantCount`, `retired`, `retiredWired`, `staleEntries`, `absoluteCount`, `rule` | row 2's wiring in this project, read like `semble-setup status`, however current the stamps. `retired` (files) or `retiredWired` (registrations) non-empty = `partial`, *Found* `retired: <names> - stale (remove via upgrade)`, prescribing `upgrade`; otherwise `absoluteCount` above 0 as the whole wiring signal (`staleEntries == absoluteCount` and `wiredCount + absoluteCount == wantCount`) = `partial`, *Found* `portable: <N> absolute-path hook entries`, prescribing `upgrade` (row-notes Row 2; decide from these counts, never from `nextStep`, which this section never sets to `upgrade`); otherwise `staleEntries` above 0 or `wiredCount < wantCount` = `partial`, prescribing `install`. `wantCount: 0` = counts not reported, never a defect. `rule: user_modified` is a supported state |
+| `guidance`: `wiredCount`, `wantCount`, `retired`, `retiredWired`, `staleEntries`, `absoluteCount`, `rule`, `permissionsWired`, `ruleStampStale`, `content_version`, `templateContentVersion` | row 2's wiring in this project, read like `semble-setup status`, however current the stamps. `retired` (files) or `retiredWired` (registrations) non-empty = `partial`, *Found* `retired: <names> - stale (remove via upgrade)`, prescribing `upgrade`; otherwise `absoluteCount` above 0 as the whole wiring signal (`staleEntries == absoluteCount` and `wiredCount + absoluteCount == wantCount`) = `partial`, *Found* `portable: <N> absolute-path hook entries`, prescribing `upgrade` (row-notes Row 2; decide from these counts, never from `nextStep`, which this section never sets to `upgrade`); otherwise `staleEntries` above 0 or `wiredCount < wantCount` or `permissionsWired` false = `partial`, prescribing `install`. `wantCount: 0` = counts not reported, never a defect. `permissionsWired` (every settings layer) and `ruleStampStale` (an absent `content_version` counts older) are `semble-setup`'s own verdicts: never re-derive them from a settings file or a stamp here |
+| `ROW2 <state> <signal>`, `FOUND`, `COMMAND` | `semble-row.mjs`' reading of the fields above, the input Phase 3 takes for row 2. `<signal>`: `retired`, `rule-stale`, `portable`, `install`, `edited-stale` (hand-edited rule with `ruleStampStale` true: `partial`, no Command, the user decides), `stamp-stale`, `edited-current` (hand-edited at the current `content_version`: `current`, a supported state), `ok`, or `guidance-failed` (`ROW2 unknown`: Phases 2a/2b alone decide). Copy `FOUND` and `COMMAND` into the row |
 
 ## Phase 3 — Classify
 
-For a row with any probe line other than `FILE`, `LIVE`, `CURRENT`, `SAME` and its listed `REG`
+For a row with any probe line other than `FILE`, `LIVE`, `CURRENT`, `SAME`, `META` and its listed `REG`
 lines, first read that row's section of [`references/row-notes.md`](references/row-notes.md) (per-row
 exceptions, what each mode can clear). Then exactly one state per row, first match wins:
 
@@ -839,18 +853,18 @@ exceptions, what each mode can clear). Then exactly one state per row, first mat
 | 1 | The row's plugin has `ROOT=none` | `n/a` |
 | 2 | Phase 1b shows this row's off-switch thrown — a config flag reading off for that row's polarity, `.hard != true`, or every deployed entry file `PARKED`; a live/parked `CONFLICT` overrides this as `partial` | `disabled` |
 | 3 | Anchor MISS and every secondary MISS, in both spellings (no `<name>.disabled` twin anywhere on the row) and in both scopes | `missing` |
-| 4 | Anchor MISS but some secondary present, or anchor present with any required secondary MISS (`OPTIONAL` is excluded), or a row-1/row-4 toggle left half `LIVE` half `PARKED`, or hook files present with no `REG` line or no config (Phases 1, 1b), or the stamp reads `PLACEHLD`, or Phase 2a printed `OWNER-WRONG`, or row 2's wiring signal fires (Phase 2c: `retired`, `retiredWired`, `staleEntries`, or `wiredCount < wantCount`) | `partial` |
-| 5 | Stamp reads `BEHIND` or `AHEAD` | `stale (installed X.Y.Z, plugin A.B.C)` — print both versions |
+| 4 | Anchor MISS but some secondary present, or anchor present with any required secondary MISS (`OPTIONAL` is excluded), or a row-1/row-4 toggle left half `LIVE` half `PARKED`, or hook files present with no `REG` line or no config (Phases 1, 1b), or the stamp reads `PLACEHLD`, or Phase 2a printed `OWNER-WRONG`, or Phase 2c printed `ROW2 partial` (row 2: retired hooks, absolute-path or missing wiring, `permissionsWired` false, or a hand-edited rule whose `content_version` is behind the template's or absent) | `partial` |
+| 5 | Stamp reads `BEHIND` or `AHEAD`, or Phase 2c printed `ROW2 stale` | `stale (installed X.Y.Z, plugin A.B.C)` — print both versions |
 | 6 | Stamp reads `LEGACY-FMT`, or `OWNER-NONE` beside a real version | `stale (legacy stamp)` |
 | 7 | Stamp reads `LEGACY-NONE` | `stale (legacy, unstamped)` |
 | 8 | An absence signal fires (row 1 without `trace-ops.sh`; row 4, which excludes `task-spec` only when Phase 1 proved off; row 9 without `prompting-guide.md`), or the registrations are of an older shape (Phase 1) | `stale` — name the artifact that is missing, or the registration gap |
-| 9 | Stamp `CURRENT`, but any byte pair `DIFFERS` | `modified (stamp current, bytes differ)` — name the file |
-| 10 | Stamp `CURRENT`, every byte pair `SAME` (or the row defines none) | `current` |
+| 9 | Stamp `CURRENT`, but any byte pair `DIFFERS`, except row 2's `semble-first.md` beside `ROW2 current edited-current` | `modified (stamp current, bytes differ)` — name the file |
+| 10 | Stamp `CURRENT`, every byte pair `SAME` or `META` (or the row defines none, or only rule 9's row 2 exception differs: *Found* from `FOUND`) | `current`; `current (restamp pending)` when any pair reads `META`: name the files in *Found*, Command `status` (an optional `upgrade` restamps them) |
 | 11 | `SRC-MISS`, or stamp `CURRENT` with a byte source `NOSRC` | `version unknown (plugin asset missing)` — the plugin root is incomplete, never `stale` |
 
 States: `n/a` · `missing` · `disabled` · `partial` · `stale` · `modified` · `current` ·
 `version unknown`. `stale` also takes `(legacy stamp)` and `(legacy, unstamped)`, and stays bare for
-rule 8, whose artifact or registration gap goes in *Found*.
+rule 8, whose artifact or registration gap goes in *Found*. `current` also takes `(restamp pending)` (rule 10, a `META` pair).
 
 - `disabled` is evaluated before `missing`, `partial` and `stale`. Five setups `disable` by parking
   their entry file, so the anchor itself is renamed away and every later rule would misfire; a
@@ -905,7 +919,9 @@ A remedy must be able to clear the verdict it follows, or `status` says `stale`,
 success, and the next `status` says `stale` again. Prescribe a mode only when
 `references/row-notes.md` says it clears that finding; otherwise print the finding and what to diff
 and port by hand. Never prescribe the mode that just failed as the fix for its own failure, and
-never print `--force`.
+never print `--force` as a Command. One exception: row 2's `edited-stale` rule prints `semble-row.mjs`'
+`COMMAND` as is: no mode, the `diff -u` to review, `upgrade --force` (backs up first) as the user's
+replacement choice. Never edit, merge or restamp that rule yourself.
 
 Use the canonical modes only: `status` · `install` · `upgrade` · `enable` · `disable` · `uninstall` ·
 `purge`. `teams-setup` parses any other word as a team name, so a non-canonical verb there would

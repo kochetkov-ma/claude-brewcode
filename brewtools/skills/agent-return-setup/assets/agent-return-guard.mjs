@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.5.1 content_version=6.5.0 generated_by=brewtools:agent-return-setup
+// brewcode-meta: version=6.5.2 content_version=6.5.0 generated_by=brewtools:agent-return-setup
 
 // agent-return SubagentStop (`last_assistant_message`, block) + PreToolUse SubagentHandback (`tool_input.message`, deny):
 // <=PASS pass, PASS..FILE compress, >FILE write to file; at most once per agent_id (marker file). Fail-open, never exit 2.

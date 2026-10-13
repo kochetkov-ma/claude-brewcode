@@ -35,7 +35,7 @@ It allows as early as it can:
 
 Intent routes (step 6): skill authoring -> `brewcode:skill-creator`, agent authoring -> `brewcode:agent-creator`, hooks -> `brewcode:hook-creator`, bash/sh scripts -> `brewcode:bash-expert`. **A project agent covering the same intent outranks the plugin specialist.**
 
-**"The project" is resolved by ownership, not by `cwd`:** `CLAUDE_PROJECT_DIR` → nearest ancestor holding `.claude/brewtools/agent-router.json` → nearest ancestor holding `.git` → nearest ancestor holding a `.claude` directory → `cwd` (up to 16 levels per step), so a nested bare `.claude` cannot mask the root that owns the router. Config and roster are read from that root, fresh on every call.
+**"The project" is resolved by ownership, not by `cwd`:** `CLAUDE_PROJECT_DIR` → nearest ancestor holding `.claude/brewtools/agent-router.json` → nearest ancestor holding `.git` → nearest ancestor holding a `.claude` directory → `cwd` (up to 16 levels per step), so a nested bare `.claude` cannot mask the root that owns the router. The config-marker and `.claude` steps are an upward walk where a `.claude` in `$HOME` or in the directory whose `.claude` IS `$CLAUDE_CONFIG_DIR` is a profile, not a project marker, and is skipped; a `.git` there still counts. `CLAUDE_PROJECT_DIR` is taken as given. Config and roster are read from that root, fresh on every call.
 
 **A missing `.claude/agents/` is an empty roster, not a failure**: the intent rules still fire and still redirect to the plugin specialist. Only the step-7 scoring goes silent.
 
@@ -56,7 +56,7 @@ Intent routes (step 6): skill authoring -> `brewcode:skill-creator`, agent autho
 
 The skill always reports status first, states its plan before asking anything, then delegates the file work to the `brewcode:hook-creator` agent. It asks exactly one question — the level — and only when you did not already say.
 
-The status probe resolves the same root, even from a nested `cwd`. It counts only entries that match the shapes under *Where it installs* exactly: one tier-1 entry, and for tier 2 a prompt byte-current with `judge-prompt.md`, no `model` key and the heartbeat entry. Duplicates, malformed settings and drifted entries are non-effective.
+The status probe resolves the same root, even from a nested `cwd`. It counts only entries that match the shapes under *Where it installs* exactly: one tier-1 entry, and for tier 2 a prompt byte-current with `judge-prompt.md` (the per-release `brewcode-meta` stamp line is ignored on both sides, so a release alone never reads as legacy), no `model` key and the heartbeat entry. Duplicates, malformed settings and drifted entries are non-effective.
 
 ## Modes
 
@@ -87,7 +87,7 @@ Re-install is idempotent but not inert — it re-copies the hook file, which is 
 
 No roster cache, no logs. `purge` removes this project's `p-…` directory only.
 
-The tier-2 judge prompt is **inlined into `settings.json`**, not copied — `upgrade` or `level strict` refreshes it after a plugin update. Merge is strip-own + append (idempotent re-install); foreign hook entries are never touched, and a `settings.json` that does not parse aborts the write instead of being rewritten. Entries under `hooks.PreToolUse` — the first always, the other two at `level strict`:
+The tier-2 judge prompt is **inlined into `settings.json`** without its `brewcode-meta` stamp line, not copied — `upgrade` or `level strict` refreshes it after a plugin update. Merge is strip-own + append (idempotent re-install; a judge handler with an `agent-router:`-prefixed status message counts as own, so `upgrade` replaces an older one instead of adding a second); foreign hook entries are never touched, and a `settings.json` that does not parse aborts the write instead of being rewritten. Entries under `hooks.PreToolUse` — the first always, the other two at `level strict`:
 
 ```json
 { "matcher": "Agent", "hooks": [ { "type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/agent-router.mjs"], "timeout": 5 } ] }
@@ -117,7 +117,7 @@ The third entry repeats the first under matcher `StructuredOutput`: the heartbea
 |-----|---------|
 | `enabled` | only exactly `false` turns it off. Any other value — and no config file at all — means ON with these defaults. A config that exists but does not PARSE is different: the feature goes fully silent |
 | `level` | `fast` / `strict` — a record of what was wired at install time, enforced by nothing. Editing it by hand does not add or remove the tier-2 entry; run `level strict` / `level fast`. `status` prints it as `level (recorded)` next to the `tier2` count, and that count decides whether the judge fires |
-| `version` / `content_version` / `generated_by` / `last_updated` | provenance, written on every config write, inert at runtime. `version` = the brewtools release that wrote the file (informational: `enable`/`disable` re-stamp it). `status` judges staleness on `content_version`: the installed hook file's header vs the plugin's asset, and this key vs `assets/INSTALL.md` |
+| `version` / `content_version` / `generated_by` / `last_updated` | provenance, written on every config write, inert at runtime. `version` = the brewtools release that wrote the file (informational: `enable`/`disable` re-stamp it). `status` judges staleness on `content_version`: the installed hook file's header vs the plugin's asset, and this key vs the `agent-router.mjs` asset header (the file that parses the config; printed as `contract=`). A runbook-only release does not stale a config |
 | `genericTypes` | the types policed at all; anything else exits at step 5 |
 | `neverFlag` | never flagged whatever the task says; eight entries by default (four built-ins such as `Explore` and `Plan`, the right tools for search and planning, + the four intent experts, since a redirect target must not be flagged). Auto-unioned with every `intents[].expert` at load time |
 | `minScore` | minimum roster score before a project agent can win |

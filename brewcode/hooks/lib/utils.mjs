@@ -1,9 +1,19 @@
 /** Shared utilities for brewcode hooks */
-import { readFileSync, existsSync, writeFileSync, mkdirSync, renameSync, appendFileSync, lstatSync, readlinkSync } from 'fs';
+import { readFileSync, existsSync, writeFileSync, mkdirSync, renameSync, appendFileSync, lstatSync, readlinkSync, realpathSync } from 'fs';
 import { dirname, join, resolve, sep } from 'path';
 import { homedir } from 'os';
 
-// Project root: CLAUDE_PROJECT_DIR -> upward walk for .git/.claude -> hook cwd; never throws.
+// Mirrors semble isProfileParent: HOME or the active config dir's parent holds a profile .claude, never a root.
+export function isProfileParent(dir) {
+  const real = (p) => { try { return realpathSync(p); } catch { return ''; } };
+  const p = real(dir);
+  if (!p) return false;
+  if (process.env.HOME && real(process.env.HOME) === p) return true;
+  const cfg = process.env.CLAUDE_CONFIG_DIR;
+  return Boolean(cfg) && real(cfg) === join(p, '.claude');
+}
+
+// Project root: CLAUDE_PROJECT_DIR -> upward walk for .git/.claude (profile parents skipped) -> hook cwd; never throws.
 // Hook `cwd` drifts mid-session (CwdChanged) -> never the root for config/state/log paths.
 export function projectRoot(hookCwd) {
   const env = process.env.CLAUDE_PROJECT_DIR;
@@ -12,7 +22,8 @@ export function projectRoot(hookCwd) {
   const start = resolve(hookCwd || process.cwd());
   let dir = start;
   for (;;) {
-    if (existsSync(join(dir, '.git')) || existsSync(join(dir, '.claude'))) return dir;
+    if (existsSync(join(dir, '.git'))) return dir;
+    if (existsSync(join(dir, '.claude')) && !isProfileParent(dir)) return dir;
     const up = dirname(dir);
     if (up === dir) break;
     dir = up;

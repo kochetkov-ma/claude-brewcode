@@ -1000,6 +1000,28 @@ const INTENT_BASH = 'Fix the deploy.sh shell script quoting';
     'CLAUDE_PROJECT_DIR wins over a nested config marker',
   );
 }
+// GIVEN proj/.git + roster > h/.claude with a disabled router config > h/notes/misc
+// WHEN h is HOME, the config-dir parent, or plain THEN only plain h owns the cwd; a profile h is skipped to proj
+{
+  const { proj, cfgDir, env } = newRoot('t37e');
+  standardRoster(proj);
+  mkdirSync(join(proj, '.git'), { recursive: true });
+  const h = join(proj, 'h');
+  writeConfig(h, { enabled: false });
+  const cwd = join(h, 'notes', 'misc');
+  mkdirSync(cwd, { recursive: true });
+  const spawnAs = (session, envOver) => {
+    const r = run(payload({ session, cwd, description: 'Rework the conductor plan lifecycle gates' }), { ...env, ...envOver });
+    return r.stdout ? safeParse(r.stdout) : r.stdout;
+  };
+  const rootDeny = denyOut(rosterDeny('conductor-dev', '.claude/agents/conductor-dev.md', 'general-purpose'));
+  check(
+    '37e-profile-parent-is-not-a-root',
+    [spawnAs('S-home', { HOME: h }), spawnAs('S-cfg', { CLAUDE_CONFIG_DIR: join(h, '.claude') }), spawnAs('S-plain', { CLAUDE_CONFIG_DIR: cfgDir })],
+    [rootDeny, rootDeny, ''],
+    'a HOME or config-dir-parent .claude is the profile: its router config never owns a non-project cwd',
+  );
+}
 
 // 38 - BT-F25: documented tier-1/tier-2 trade-off is what ships
 // GIVEN strict level, spawn tier 2 exempts as skill-originated (tier 1 lacks that signal); WHEN 2 runs, same (session, root, task); THEN 1st denies at any level (explicit deny wins over tier 2 {"ok": true}), 2nd = notice so retry passes

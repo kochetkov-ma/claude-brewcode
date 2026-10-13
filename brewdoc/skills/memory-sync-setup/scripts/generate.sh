@@ -91,6 +91,13 @@ validate_templates() {
   [ "$CONTENT_VERSION" != "unknown" ] || { echo "❌ FAILED: cannot read content_version from $SKILL_DIR/SKILL.md - reinstall brewdoc"; exit 1; }
 }
 
+# rc 0: $1 is HOME or the active config dir's parent - its .claude is a profile, never a repo root.
+is_profile_parent() {
+  _pp=$(cd "$1" 2>/dev/null && pwd -P) || return 1
+  [ -n "${HOME:-}" ] && [ "$_pp" = "$(cd "$HOME" 2>/dev/null && pwd -P)" ] && return 0
+  [ -n "${CLAUDE_CONFIG_DIR:-}" ] && [ "$_pp/.claude" = "$(cd "$CLAUDE_CONFIG_DIR" 2>/dev/null && pwd -P)" ]
+}
+
 # ── target root ─────────────────────────────────────────────────────────────────
 # Relative TARGET: subdir would scan/emit/report WRONG tree -> cd to root (MEMORY_SYNC_ROOT=<abs path> wins); root-like ancestor = error.
 resolve_root() {
@@ -101,6 +108,7 @@ resolve_root() {
     while [ "$_up" != "/" ]; do
       _up=$(dirname "$_up")
       [ -d "$_up/.claude" ] || [ -f "$_up/CLAUDE.md" ] || continue
+      ! is_profile_parent "$_up" || continue
       echo "❌ FAILED: $(pwd) is not a repo root (no git, but $_up looks like one)."
       echo "   Run from the project root, or set MEMORY_SYNC_ROOT=<abs path>."
       exit 1

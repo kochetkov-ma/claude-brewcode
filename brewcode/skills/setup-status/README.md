@@ -69,11 +69,12 @@ Each setup gets exactly one state:
 | State | Meaning |
 |-------|---------|
 | `current` | Installed, the stamp matches the plugin, and every copied file is byte-identical |
+| `current (restamp pending)` | Installed and current; a copied file differs from the plugin only in its stamp lines (the release bump restamped the plugin asset). Not `modified`; the report names the files, and an optional `upgrade` restamps them |
 | `stale (installed X.Y.Z, plugin A.B.C)` | Installed from a different version than the plugin in use |
 | `stale (legacy stamp)`, `stale (legacy, unstamped)` | Installed by an older release that used a retired stamp or none |
 | `stale` | A required artifact or hook registration is missing or outdated; the report names it |
 | `modified (stamp current, bytes differ)` | The stamp is current, but a copied file was hand-edited or never re-copied |
-| `partial` | The installation is incomplete, half-toggled, left a placeholder unresolved, or was written by the wrong setup |
+| `partial` | The installation is incomplete, half-toggled, left a placeholder unresolved, or was written by the wrong setup; for semble also a hand-edited rule with an outdated stamp, or permissions missing from every settings layer |
 | `disabled` | The setup's own off-switch is set |
 | `missing` | Nothing of the setup is installed |
 | `n/a` | The owning plugin is not installed |
@@ -99,12 +100,21 @@ that lacks the MCP or pins another version.
 Each command in the report is one that can clear the finding. Where `upgrade` cannot, for
 example after a hand edit, the report says which diff to review and port instead.
 
+The semble row follows `semble-setup status`. A hand-edited `semble-first.md` with an outdated or
+missing stamp is `partial` with a report-only route: review the `diff -u` yourself, or replace the
+rule with `upgrade --force` (discards the edits, backs up first). The report never edits, merges or
+restamps that rule; an edit at the current stamp stays `current`.
+
 Semble hook entries that still use absolute paths (releases up to 6.5.0) are the one wiring drift
 sent to `upgrade`, which rewrites them in place; other stale or missing wiring keeps `install`.
 
-For the agent-deadline and agent-return rows, the `GOVERNING` line names the config the guard
-itself would load. When it names a project file but only the global scope is registered, the row
-reports an orphaned project config and prescribes `purge project`, never `upgrade`.
+Hook configs (deadline, router, return) are compared with the hook that parses them. For the
+agent-deadline and agent-return rows, the `GOVERNING` line names the config the guard itself would
+load; a `CLIMB-START` line shows where that search began: the payload cwd for agent-deadline, the
+guard's project root for agent-return (a `.claude` in HOME or the profile parent is skipped; an
+explicit `CLAUDE_PROJECT_DIR` is taken as given). When it names a project file but only the global
+scope is registered, the row reports an orphaned project config and prescribes `purge project`,
+never `upgrade`.
 
 ## Source integrity
 

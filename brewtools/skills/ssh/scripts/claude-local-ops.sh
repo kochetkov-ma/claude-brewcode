@@ -3,7 +3,15 @@ set -euo pipefail
 # Manage CLAUDE.local.md server entries
 # Usage: claude-local-ops.sh <subcommand> [args...]; subcommands: read, add, update, list, set-default
 
-# Project root: CLAUDE_PROJECT_DIR -> git toplevel -> upward walk -> PWD.
+# rc 0: $1 is HOME or the active config dir's parent - its .claude is a profile, never a project root.
+is_profile_parent() {
+    local p
+    p=$(cd "$1" 2>/dev/null && pwd -P) || return 1
+    [[ -n "${HOME:-}" ]] && [[ "$p" == "$(cd "$HOME" 2>/dev/null && pwd -P)" ]] && return 0
+    [[ -n "${CLAUDE_CONFIG_DIR:-}" ]] && [[ "$p/.claude" == "$(cd "$CLAUDE_CONFIG_DIR" 2>/dev/null && pwd -P)" ]]
+}
+
+# Project root: CLAUDE_PROJECT_DIR -> git toplevel -> upward walk (profile parents skipped) -> PWD.
 claude_project_root() {
     local r d
     if [[ -n "${CLAUDE_PROJECT_DIR:-}" ]] && [[ -d "$CLAUDE_PROJECT_DIR" ]]; then
@@ -14,7 +22,7 @@ claude_project_root() {
     fi
     d=$PWD
     while [[ "$d" != "/" ]]; do
-        if [[ -d "$d/.git" ]] || [[ -d "$d/.claude" ]]; then printf '%s\n' "$d"; return 0; fi
+        if [[ -d "$d/.git" ]] || { [[ -d "$d/.claude" ]] && ! is_profile_parent "$d"; }; then printf '%s\n' "$d"; return 0; fi
         d=$(dirname "$d")
     done
     printf '%s\n' "$PWD"; return 1

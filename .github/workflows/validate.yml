@@ -119,7 +119,7 @@ jobs:
             echo "::group::$runner"
             bash "$runner" < /dev/null || { echo "::error file=${runner}::suite failed"; fail=1; }
             echo "::endgroup::"
-          done < <(find brewcode brewdoc brewtools .codex/plugins -path '*/fixtures/*' -prune -o -path '*/tests/run.sh' -print | LC_ALL=C sort)
+          done < <(find brewcode brewdoc brewtools .codex/plugins .claude/scripts -path '*/fixtures/*' -prune -o -path '*/tests/run.sh' -print | LC_ALL=C sort)
           exit "$fail"
 
   teams:

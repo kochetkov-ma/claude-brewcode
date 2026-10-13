@@ -237,6 +237,32 @@ const FOREIGN_FIRST = `# Local Configuration
   rmSync(root, { recursive: true, force: true });
 }
 
+// GIVEN outer/.git > h/.claude + h/CLAUDE.local.md > h/notes/misc WHEN h is HOME, the config-dir parent, or plain
+// THEN a profile h is skipped (outer has no file), plain h is the root whose file is read
+{
+  const outer = realpathSync(mkdtempSync(join(tmpdir(), 'ssh-local-ops-profile-')));
+  const h = join(outer, 'h');
+  const cwd = join(h, 'notes', 'misc');
+  mkdirSync(join(outer, '.git'));
+  mkdirSync(join(h, '.claude'), { recursive: true });
+  mkdirSync(cwd, { recursive: true });
+  writeFileSync(join(h, 'CLAUDE.local.md'), '# Local Configuration\n');
+  const readAs = (envOver) => {
+    const env = { ...process.env, HOME: join(outer, 'elsewhere'), ...envOver };
+    delete env.CLAUDE_PROJECT_DIR;
+    if (!envOver.CLAUDE_CONFIG_DIR) delete env.CLAUDE_CONFIG_DIR;
+    const r = spawnSync('bash', [SCRIPT, 'read'], { cwd, encoding: 'utf8', env, timeout: 20000 });
+    return [r.status, r.stdout, r.stderr];
+  };
+  check(
+    'profile-parent-is-not-a-root',
+    [readAs({ HOME: h }), readAs({ CLAUDE_CONFIG_DIR: join(h, '.claude') }), readAs({})],
+    [[0, 'FILE=missing\n', ''], [0, 'FILE=missing\n', ''], [0, 'FILE=exists\n', '']],
+    'a HOME or config-dir-parent .claude is the profile: CLAUDE.local.md must never resolve there for a non-project cwd',
+  );
+  rmSync(outer, { recursive: true, force: true });
+}
+
 console.log(results.join('\n'));
 console.log(`\nsuite-local-ops: ${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);
