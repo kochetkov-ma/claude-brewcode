@@ -124,7 +124,7 @@ import { Card, CardGrid, Callout, Steps, UpdateNotice } from '../../../../compon
   <li>
     <div>
       <strong>Quorum review pipeline (C5–C9)</strong>
-      <p>3 reviewers analyze all agents in parallel (instruction quality, domain accuracy, architecture consistency). Issues confirmed by 2/3 pass the threshold. A verification agent filters false positives. <code>agent-creator</code> fixes critical and important findings. Re-verify confirms no regressions. Skip with <code>--skip-review</code>.</p>
+      <p>3 reviewers analyze all agents in parallel (instruction quality, domain accuracy, architecture consistency). Issues confirmed by 2/3 pass the threshold. A verification agent filters false positives. <code>agent-creator</code> fixes critical and important findings. Re-verify confirms no regressions. Skip with `--skip-review`.</p>
     </div>
   </li>
   <li>
@@ -240,7 +240,7 @@ The agent template carries two blocks, so every DOMAIN member of the team inheri
 `agent-creator` deletes the Scope Fit and Etalon-first pair together for research, docs, and review-only domain members; the Return Contract stays in all team agents, including `intent-guard`, which carries it via its own `## Output` section rather than this one. This matters most on a 12-agent roster, where a single verbose member can cost more context than the rest of the batch combined.
 
 <Callout type="tip" title="Legacy team missing the Return Contract">
-`verify-team.sh` checks every roster agent (`intent-guard` exempt — it comes from the superreview template, not this one) for the contract's opening line (`Verdict first, <=30 lines`) and WARNs, never fails, when a pre-existing team predates it. Fix: `/brewcode:teams-setup upgrade &lt;name&gt;`, which re-adds `## Return Contract` from `references/agent-template.md`.
+`verify-team.sh` checks every roster agent (`intent-guard` exempt — it comes from the superreview template, not this one) for the contract's opening line (`Verdict first, <=30 lines`) and WARNs, never fails, when a pre-existing team predates it. Fix: `/brewcode:teams-setup upgrade <name>`, which re-adds `## Return Contract` from `references/agent-template.md`.
 </Callout>
 
 <details>

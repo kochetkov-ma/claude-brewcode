@@ -91,7 +91,7 @@ The skill reads the source, proposes rule candidates, asks you to accept/reject 
       |--------|----------|
       | Scaffold | <code>rules.sh create</code> (global) or <code>rules.sh create-specialized {'<prefix>'} '{'<paths>'}'</code> (scoped) — stamps <code>doc_type</code>/<code>version</code>/<code>generated_by</code>/<code>last_updated</code> |
       | Edit existing file | Only refreshes <code>last_updated</code> and <code>version</code> by hand |
-      | Naming | Global <code>avoid.md</code>/<code>best-practice.md</code> carry no <code>paths:</code>; every <code>{'{prefix}'}-avoid.md</code> style file needs one |
+      | Naming | Global <code>avoid.md</code>/<code>best-practice.md</code> carry no <code>paths:</code>; every `{'{prefix}'}-avoid.md` style file needs one |
       | Row cap | Max 20 rows per table; splits into a new specialized file once exceeded |
       | Validate | <code>rules.sh validate</code> runs after every write and must pass before finishing |
     </div>

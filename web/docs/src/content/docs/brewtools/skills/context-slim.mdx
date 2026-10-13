@@ -62,7 +62,7 @@ A bare invocation measures and reports without target edits. Slim, hard, and bod
   <li>
     <div>
       <strong>Phase 0 — resolve mode and scope</strong>
-      <p>Parses the free-form prompt for an explicit mode token or keyword score, applies flags (<code>--target</code>, <code>--global</code>, <code>--memory</code>, <code>--noask</code>), and asks at most one <code>AskUserQuestion</code> — only when the answer changes what gets written. <code>measure</code> and <code>--noask</code> skip this entirely; destructive-mode and global-write confirmations always fire regardless.</p>
+      <p>Parses the free-form prompt for an explicit mode token or keyword score, applies flags (`--target`, `--global`, `--memory`, `--noask`), and asks at most one <code>AskUserQuestion</code> — only when the answer changes what gets written. <code>measure</code> and `--noask` skip this entirely; destructive-mode and global-write confirmations always fire regardless.</p>
     </div>
   </li>
   <li>
@@ -98,7 +98,7 @@ A bare invocation measures and reports without target edits. Slim, hard, and bod
   <li>
     <div>
       <strong>Phase 6 — re-measure and escalation gate</strong>
-      <p>Re-scans the same scope and compares against phase 1. A met or absent <code>--target</code> moves straight to phase 7. An unmet target on a virgin surface reports the shortfall without asking; on a surface with prior ratchet state, it asks once whether to approve a lossy pass.</p>
+      <p>Re-scans the same scope and compares against phase 1. A met or absent `--target` moves straight to phase 7. An unmet target on a virgin surface reports the shortfall without asking; on a surface with prior ratchet state, it asks once whether to approve a lossy pass.</p>
     </div>
   </li>
   <li>

@@ -74,7 +74,7 @@ No arguments? The skill asks: commit hash, file path, folder, or paste text.
   <li>
     <div>
       <strong>Phase 0 -- Greedy flow detection</strong>
-      <p>Before any processing the skill parses the argument, picks exactly ONE flow from context, and announces it: <code>Flow: &lt;name&gt; -- &lt;one-line why&gt;</code>. Detection priority: explicit intent keywords (RU+EN) first, then path/extension, then content sniff. Only that flow file and the pattern sections it needs are loaded (lazy -- not everything at once).</p>
+      <p>Before any processing the skill parses the argument, picks exactly ONE flow from context, and announces it: `Flow: <name> -- <one-line why>`. Detection priority: explicit intent keywords (RU+EN) first, then path/extension, then content sniff. Only that flow file and the pattern sections it needs are loaded (lazy -- not everything at once).</p>
     </div>
   </li>
   <li>
@@ -86,7 +86,7 @@ No arguments? The skill asks: commit hash, file path, folder, or paste text.
   <li>
     <div>
       <strong>Clean-tree precondition</strong>
-      <p>Before the first edit on any writing flow, the skill runs <code>git status --porcelain</code> over the resolved target paths only -- there is no backup, so git is the only undo. Clean → proceeds. Dirty → one <code>AskUserQuestion</code> listing the dirty paths (proceed on them / process only the clean ones / abort); this replaces, not adds to, the flow-detection question. Not a git repo → the skill says so and requires an explicit go-ahead. Inline text and other non-file input skip this -- nothing on disk changes.</p>
+      <p>Before the first edit on any writing flow, the skill runs `git status --porcelain` over the resolved target paths only -- there is no backup, so git is the only undo. Clean → proceeds. Dirty → one <code>AskUserQuestion</code> listing the dirty paths (proceed on them / process only the clean ones / abort); this replaces, not adds to, the flow-detection question. Not a git repo → the skill says so and requires an explicit go-ahead. Inline text and other non-file input skip this -- nothing on disk changes.</p>
     </div>
   </li>
   <li>

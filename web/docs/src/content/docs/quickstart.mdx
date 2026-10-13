@@ -46,7 +46,7 @@ claude plugin install brewtools@claude-brewcode</code></pre>
   <li class="step step-primary">
     <div>
       <strong>Create a domain agent team</strong> <Badge variant="primary" text="/brewcode:teams-setup" />
-      <pre><code>/brewcode:teams-setup install core "one agent per bounded context, plus a migrations specialist"</code></pre>
+      <pre><code>{"/brewcode:teams-setup install core \"one agent per bounded context, plus a migrations specialist\""}</code></pre>
       <p>Generates 5-20 project-specific agents with self-selection logic and performance tracking.
       Use the convention foundation when generating the team. To remove a team later,
       name it: <code>uninstall core</code>, or <code>purge core</code> to drop its archive and trace
@@ -57,10 +57,9 @@ claude plugin install brewtools@claude-brewcode</code></pre>
     <div>
       <strong>Set up the task board</strong> <Badge variant="primary" text="/brewtools:task-board-setup" />
       <p>Run it once per repo and explicitly select the optional spec + design layer when asked:</p>
-      <pre><code>/brewtools:task-board-setup install . "one lane per service"</code></pre>
+      <pre><code>{"/brewtools:task-board-setup install . \"one lane per service\""}</code></pre>
       <p>Create the task first, then resolve that existing task by its unique title:</p>
-      <pre><code>/task-board add "Implement JWT authorization with role-based access"
-/task-spec "Implement JWT authorization with role-based access"</code></pre>
+      <pre><code>{"/task-board add \"Implement JWT authorization with role-based access\"\n/task-spec \"Implement JWT authorization with role-based access\""}</code></pre>
       <p>The board returns the actual task ID; use that ID with <code>/task-spec</code> if titles overlap. Task-spec requires an existing task record and does not create one. If the spec layer was omitted, run task-board setup's <code>upgrade</code> and select it before invoking task-spec.</p>
       <p><strong>What happens:</strong> <code>task-board-setup</code> analyzes the repo with parallel agents and
       deploys a file-based Kanban plus a project-tailored <code>/task-spec</code> skill. <code>/task-spec</code>
@@ -71,7 +70,7 @@ claude plugin install brewtools@claude-brewcode</code></pre>
   <li class="step step-primary">
     <div>
       <strong>Generate a deep review skill</strong> <Badge variant="primary" text="/brewcode:superreview-setup" />
-      <pre><code>/brewcode:superreview-setup install "QUICK depth; gate on the existing build and lint commands"</code></pre>
+      <pre><code>{"/brewcode:superreview-setup install \"QUICK depth; gate on the existing build and lint commands\""}</code></pre>
       <p><strong>What happens:</strong> analyzes your codebase and conventions, then generates a
       project-tailored quorum review skill that merges code review and standards checking
       into one reusable skill installed locally at <code>.claude/skills/</code>.</p>
