@@ -81,9 +81,14 @@ Each setup gets exactly one state:
 | `version unknown (plugin asset missing)` | The plugin in use lacks the file to compare against |
 
 The setups table shows the `Installed` and `Plugin` versions for every row, so you can see the
-gap at a glance. A disabled setup is offered `enable`, not a repair. Teams, superreview,
-task-board, convention-setup and memory-sync are disabled by renaming their entry file to
-`*.disabled`; the others use a config flag.
+gap at a glance. Teams, superreview, task-board, convention-setup and memory-sync are disabled by
+renaming their entry file to `*.disabled`; the others use a config flag.
+
+A disabled setup with current files is offered `enable` (optional). When its files are behind the
+plugin, the row gets `upgrade`, which keeps the setup disabled, for semble, agent-deadline,
+agent-router, manager, docsync, agent-return and convention-setup. Teams, superreview, task-board
+and memory-sync refuse `upgrade` while parked, so the row gets `enable`, then `upgrade`, then
+`disable`; the renames are quick and the row ends disabled. `enable` alone never fixes drift.
 
 ## Freshness and provenance
 
@@ -117,6 +122,9 @@ scope is registered, the row reports an orphaned project config and prescribes `
 never `upgrade`.
 
 ## Source integrity
+
+The skill runs its probe fences inline, or through `scripts/fence-run.sh`, which uses a private
+temp directory (mode 0700) that is removed on exit; no fence file sits at a shared path.
 
 The roster, probes and stamp list live in [SKILL.md](SKILL.md). Per-setup exceptions and what
 each mode can clear are in [references/row-notes.md](references/row-notes.md); the stamp format

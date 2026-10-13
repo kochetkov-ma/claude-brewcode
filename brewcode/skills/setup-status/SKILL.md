@@ -131,6 +131,24 @@ Recurring tools with no installed state: `brewcode:agents`, `skills`, `rules`;
 
 ---
 
+## Running the fences
+
+Run each **EXECUTE** fence inline, one Bash call, after filling its placeholders. A fence never
+becomes a file at a fixed or shared path (the system temp root, the project, a reused dir name):
+the 6.5.2 sweep found helper scripts left world-readable there. When a fence must run from a file
+(a session rule against long inline code, or Phase 2a's three per-plugin runs), pipe the filled
+body into `fence-run.sh`: it writes it into a private `mktemp -d` (mode 0700, under
+`${TMPDIR:-/tmp}`), runs it with `bash`, removes the dir on EXIT and returns the fence's rc.
+
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/fence-run.sh" <<'FENCE'
+# the filled fence body, unchanged: its own `cd` line first
+echo "OK"
+FENCE
+```
+
+The body goes between the markers unchanged, one fence per call; a saved copy is never reused.
+
 ## Phase 0 — Resolve plugin roots
 
 The plugin version is what every stamp is compared against. brewcode's root is this skill's own
@@ -870,9 +888,7 @@ rule 8, whose artifact or registration gap goes in *Found*. `current` also takes
   their entry file, so the anchor itself is renamed away and every later rule would misfire; a
   flag-disabled row has every file in place and is not `current` either, because the mechanism is
   inert. Report `disabled` with the version Phase 2a read from the parked file or the untouched
-  config, never `--`. If the row is also behind, say so in *Found* and still offer `enable`: the
-  owning setups refuse `upgrade` on a parked install (`task-board-setup` stops, `memory-sync`'s and
-  `superreview`'s `validate` fail).
+  config, never `--`. Its Command comes from the shared rule below, never a reflex `enable`.
 - Anchor MISS is decisive: the anchor is the artifact only that setup writes, so no anchor in either
   spelling means not installed. A `.disabled` twin is not a MISS, and a shared file never makes a
   row `partial`.
@@ -880,6 +896,22 @@ rule 8, whose artifact or registration gap goes in *Found*. `current` also takes
   this roster does not define.
 - A hook under `GLOBAL` while the project also has one is a scope answer, not a conflict: report the
   scope; rows 6 and 11 are legitimately global.
+
+### Disabled rows — the shared Command rule
+
+One rule for every row Phase 3 calls `disabled`, all eleven alike. Its Phase 1, 2a, 2b and 2c lines
+are still read: **drift** is any line that rules 5-9 would turn into `stale` or `modified` on a live
+row: `BEHIND`, `LEGACY-FMT`, `LEGACY-NONE`, `OWNER-NONE`, a `DIFFERS` pair, an older-shape `REG` line
+or router probe, `ROW2 stale`. `AHEAD` (the plugin is behind), `META` and `SAME` are not drift.
+
+| Disabled row reads | State | Command | *Found* |
+|--------------------|-------|---------|---------|
+| drift | `disabled` | the row's line in `references/row-notes.md` "Disabled rows with drifted assets", filled with what drifted: `upgrade` where the owner's `upgrade` keeps the off-switch, else `enable`, `upgrade`, `disable` in that order, so the row ends disabled either way | the drifted files and both versions, then `optional, once you want it live: <enable command>` |
+| no drift | `disabled` | `enable`, as the user's optional choice; a `META` pair adds an optional `upgrade` that restamps | the version read, `switched off by choice` |
+
+`enable` alone never answers drift: it switches the stale copy back on and the files still differ.
+Row 2's `ROW2 partial edited-stale` keeps its report-only route (Phase 4) whether or not the row is
+disabled.
 
 ## Phase 4 — Output
 
@@ -894,8 +926,9 @@ Summary, two lines:
 Plugins in use: brewcode A.B.C, brewtools A.B.C, brewdoc A.B.C.
 ```
 
-Count `stale`, `modified` and `partial` rows; `missing`, `disabled` and `n/a` do not count. With
-none to count, say that every installed setup is current, and still print both tables.
+Count `stale`, `modified` and `partial` rows, plus `disabled` rows with drift (named `disabled, files
+behind`); `missing`, clean `disabled` and `n/a` do not count. With none to count, say that every
+installed setup is current, and still print both tables.
 
 **Setups table**: every roster row, in roster order. The Prompt contract's filter narrows it, and a
 single-skill filter also prints that row's roster cells and row notes in full.
@@ -911,7 +944,7 @@ single-skill filter also prints that row's roster cells and row notes in full.
 |--------|-------|
 | Installed | the headline stamp the artifact carries: `content_version`, else `version`; `legacy` or `unstamped` when Phase 2a said so, the raw token when a placeholder survived, `--` for `missing` and `n/a` |
 | Plugin | the reference the verdict used: the plugin-side artifact's own `content_version` (basis `cv-src`), or the plugin release `$PLUGIN_VER` (basis `plugin-ver`) |
-| Command | a ready-to-paste line. `stale`, `modified` and `partial` carry a concrete prompt naming what to refresh (the drifted file, the missing artifact, the layer never retrofitted, the unresolved placeholder): a bare `upgrade` is not acceptable output. `disabled` -> `enable`, `current` -> `status` |
+| Command | a ready-to-paste line. `stale`, `modified` and `partial` carry a concrete prompt naming what to refresh (the drifted file, the missing artifact, the layer never retrofitted, the unresolved placeholder): a bare `upgrade` is not acceptable output. `disabled` -> the Phase 3 disabled-row rule (drift -> the row's keep-it-disabled `upgrade` line, no drift -> optional `enable`), `current` -> `status` |
 
 `A.B.C` and `X.Y.Z` are placeholders: the report prints real numbers, none carried in from this file.
 
@@ -943,7 +976,7 @@ Below it, name every `not_registered` profile in one sentence: its sessions have
 
 Several rows consume what `teams-setup` creates (agent names for routing/`byAgentType`, the shared
 `intent-guard`) or run faster once `semble-setup`'s code index exists. Group the run-list into these
-seven stages, fixed order; a row not in scope (`n/a`, `current`, `disabled`, filtered out) is
+seven stages, fixed order; a row not in scope (`n/a`, `current`, a clean `disabled`, filtered out) is
 skipped, never renumbered, and a stage with no rows in scope prints no header:
 
 | Stage | Rows (roster #) | Why this stage, in one clause |
@@ -957,9 +990,10 @@ skipped, never renumbered, and a stage with no rows in scope prints no header:
 | 7 📚 Final docs sync | 9 memory-sync, then 10 docsync | memory-sync snapshots the FINISHED config (in stage 1 it would freeze an empty project as the baseline); docsync then tracks drift against docs that already exist |
 
 Within a stage: `partial` (broken install) before `stale` and `modified` before `missing`.
-`disabled`, `current` and `n/a` rows never appear in the run-list: a switched-off mechanism is a
-choice, not a defect. Mention a `disabled` row once, below the list, with its `enable` command and
-the stage it would occupy. Number rows continuously across stages and keep every line
+A `disabled` row with drift is listed in its stage, after `stale`, with its keep-it-disabled
+command: the switch is a choice, the outdated copy is not. A clean `disabled` row, `current` and
+`n/a` never appear in the run-list. Mention each `disabled` row once, below the list, with its
+optional `enable` command and the stage it would occupy. Number rows continuously across stages and keep every line
 copy-pasteable on its own. Print the closing paragraph every time, even for one entry: it is the
 one place the user sees why commands are handed back instead of run.
 

@@ -299,6 +299,21 @@ check('f09.no-pr-target', blocks.flatMap((b) => b.split('\n').filter((l) => l.in
   rmSync(dir, { recursive: true, force: true });
 }
 
+// ── 8. no fixed /tmp write on a runner or in the agent cheat sheet ─────────
+{
+  const fixedTmp = (text) => text.split('\n').map((l) => l.trim()).filter((l) => /\/tmp\//.test(l));
+  check('tmp.fixedPaths', { templates: fixedTmp(tplText), agent: fixedTmp(agentText) }, {
+    templates: [
+      'target: /tmp/{{DEPLOY_SYNC_DIR}}',
+      'trap \'case "${GHCR_CONFIG#/tmp/ghcr-auth.}" in ""|"$GHCR_CONFIG"|*/*) ;; *) rm -rf -- "$GHCR_CONFIG" ;; esac\' EXIT',
+      'GHCR_CONFIG="$(mktemp -d /tmp/ghcr-auth.XXXXXXXX)"',
+      'cp -R /tmp/{{DEPLOY_SYNC_DIR}}/. "$DOCS_PATH/"',
+      'rm -rf /tmp/{{DEPLOY_SYNC_DIR}}',
+    ],
+    agent: [],
+  }, 'release body lives in $RUNNER_TEMP, draft notes go on stdin; only the VPS sync dir and the ghcr mktemp touch /tmp');
+}
+
 // ── report ─────────────────────────────────────────────────────────────────
 console.log('suite-templates.mjs (BT-F08 / BT-F09 / BT-F18 + shipped-artifact invariants)');
 for (const line of results) console.log(line);

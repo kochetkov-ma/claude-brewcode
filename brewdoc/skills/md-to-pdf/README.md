@@ -17,7 +17,7 @@ Converts `docs/report.md` to `docs/report.pdf` using your saved engine preferenc
 | Convert | `/brewdoc:md-to-pdf README.md --engine weasyprint` | Converts the Markdown file to PDF; `--engine` overrides the saved engine |
 | Convert+Prompt | `/brewdoc:md-to-pdf docs/api.md "Remove the Changelog section and make all headings one level smaller"` | Applies LLM preprocessing to a temporary copy, then converts; the source file is never modified |
 | Styles | `/brewdoc:md-to-pdf styles` | Asks for page size (A4, Letter, Legal), color scheme, code theme and footer format |
-| Test | `/brewdoc:md-to-pdf test` | Converts a bundled test file to `/tmp/` to verify the setup works |
+| Test | `/brewdoc:md-to-pdf test` | Converts a bundled test file into a private temp directory (removed on exit) to verify the setup works |
 | Help | `/brewdoc:md-to-pdf` or `help` | Prints usage reference |
 
 ## Engines
@@ -49,7 +49,7 @@ The preprocessing prompt must be the last argument wrapped in double quotes: `"r
 
 ## Output
 
-The PDF is written to the same directory as the input file, with the same name and a `.pdf` extension. In test mode, output goes to `/tmp/md-to-pdf-test-<engine>.pdf`.
+The PDF is written to the same directory as the input file, with the same name and a `.pdf` extension. In test mode, the PDF goes to `md-to-pdf-test-<engine>.pdf` inside a private temp directory (mode 0700) that is removed on exit.
 
 After conversion, a result report is printed:
 

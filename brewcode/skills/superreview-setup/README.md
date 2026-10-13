@@ -81,7 +81,10 @@ prints one status line, `INTENT_GUARD: CREATED|REUSE|MIGRATED <path>` — so loc
 regeneration; only an empty file, or a generated one that lost its frontmatter or still holds placeholders, is
 backed up to `.bak-<ts>` and recreated. `MIGRATED`: a file carrying the retired `intent-guard template vN` stamp
 gets its metadata restamped in place (the frontmatter metadata keys + the tail anchor) with the tailored body
-preserved byte-for-byte. Its evidence tiers are baked in at
+preserved byte-for-byte. So does a file with the current stamp whose frontmatter fails the `validate` metadata gate
+(an earlier generation, e.g. no `content_version`): `upgrade`/`emit-agent` restamp it after a body byte-compare guard
+(any mismatch aborts, nothing written); `scan` announces the restamp and `validate` names it as the fix. A file that
+passes the gate stays `REUSE`. Its evidence tiers are baked in at
 emit time: `T1` tracker, `T2` specs, `T3` plans, `T4` policy files, `T5` the live session transcript.
 
 ## Usage

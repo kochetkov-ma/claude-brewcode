@@ -114,8 +114,10 @@ gh workflow run "workflow.yml" --ref main
 # Rerun failed
 gh run rerun RUN_ID --failed
 
-# Create draft release
-gh release create vX.Y.Z --draft --title "vX.Y.Z" --notes-file /tmp/notes.md
+# Create draft release (notes on stdin, no temp file)
+gh release create vX.Y.Z --draft --title "vX.Y.Z" --notes-file - <<'NOTES_EOF'
+RELEASE_NOTES_TEXT
+NOTES_EOF
 
 # List secrets (names only — never read or print a value)
 gh secret list

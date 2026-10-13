@@ -15,11 +15,11 @@ const SKILL = '.claude/skills/superreview';
 const REFS = `${SKILL}/references`;
 
 let passed = 0, failed = 0;
-function check(name, actual, expected) {
+function check(name, actual, expected, message = '') {
   const ok = JSON.stringify(actual) === JSON.stringify(expected);
   if (ok) { passed++; console.log(`  ok   ${name}`); return; }
   failed++;
-  console.log(`  FAIL ${name}\n       expected ${JSON.stringify(expected)}\n       actual   ${JSON.stringify(actual)}`);
+  console.log(`  FAIL ${name}${message ? ` (${message})` : ''}\n       expected ${JSON.stringify(expected)}\n       actual   ${JSON.stringify(actual)}`);
 }
 
 function run(root, mode, env = {}) {
@@ -27,7 +27,7 @@ function run(root, mode, env = {}) {
   delete e.SUPERREVIEW_FORCE;
   delete e.STACK_REF;
   const r = spawnSync('bash', [GEN, mode], { cwd: root, encoding: 'utf8', env: { ...e, ...env } });
-  return { code: r.status, out: `${r.stdout}${r.stderr}` };
+  return { code: r.status, out: `${r.stdout}${r.stderr}`, stdout: r.stdout };
 }
 
 function project(name) {
@@ -274,6 +274,68 @@ for (const stack of ['go.md', 'java-kotlin.md', 'python.md', 'typescript-react.m
   check('validate allowlist accepts the nested agent only',
     val.out.split('\n').filter(l => l.startsWith('❌ unknown agent referenced')),
     ['❌ unknown agent referenced in SKILL.md: ghost (not in target .claude/agents/ nor built-in Explore|Plan|general-purpose)']);
+}
+
+// ── 11. an intent-guard of ours from before content_version is restamped, never left for validate to reject ─
+const IG = '.claude/agents/intent-guard.md';
+const igBody = p => read(p).split('\n---\n').slice(1).join('\n---\n');
+const igErrors = out => out.split('\n').filter(l => l.startsWith('❌') && l.includes(IG));
+for (const mode of ['upgrade', 'emit-agent']) {
+  // GIVEN a live install whose intent-guard carries our current tail stamp but the 5.3.1-era four-key frontmatter
+  const root = project(`ig-pre-cv-${mode}`);
+  run(root, 'emit', { STACK_REF: 'python.md' });
+  const ig = join(root, IG);
+  write(ig, read(ig)
+    .replace(/^content_version: .*\n/m, '')
+    .replace(/^version: .*$/m, 'version: "5.3.1"')
+    .replace(/^last_updated: .*$/m, 'last_updated: "2026-08-10"')
+    .replace(/ - content_version [0-9.]+ - last_updated [0-9-]+/, ' - last_updated 2026-08-10'));
+  check(`precondition: pre-cv agent fails the metadata gate (${mode})`, igErrors(run(root, 'validate').out).length, 3,
+    'missing key, unquoted cv, key order');
+  const body = igBody(ig);
+
+  // WHEN the mode runs, then validate
+  const r = run(root, mode);
+  const val = run(root, 'validate', { SUPERREVIEW_ALLOW_NO_EXPERTS: '1' });
+
+  // THEN one MIGRATED line, the release stamp, the body byte-identical and no intent-guard validate error
+  check(`pre-cv intent-guard is restamped in place (${mode})`, {
+    code: r.code,
+    status: r.stdout.split('\n').filter(l => l.startsWith('INTENT_GUARD:')),
+    stamp: stamp(ig),
+    body: igBody(ig),
+    igErrors: igErrors(val.out),
+  }, {
+    code: 0,
+    status: [`INTENT_GUARD: MIGRATED ${IG}`],
+    stamp: RELEASE_STAMP,
+    body,
+    igErrors: [],
+  }, 'the writer must leave intent-guard in a state its own validate accepts');
+}
+
+// ── 12. control: an intent-guard whose metadata already passes the gate is reused byte-untouched ─
+{
+  // GIVEN a fresh install with a tailored, fully stamped intent-guard
+  const root = project('ig-current-reuse');
+  run(root, 'emit', { STACK_REF: 'python.md' });
+  const ig = join(root, IG);
+  write(ig, `${read(ig)}\nPROJECT TAILORING\n`);
+  const before = hash(ig);
+
+  // WHEN upgrade runs
+  const r = run(root, 'upgrade');
+
+  // THEN it reports REUSE and the file is byte-identical
+  check('complete intent-guard is reused byte-untouched by upgrade', {
+    code: r.code,
+    status: r.stdout.split('\n').filter(l => l.startsWith('INTENT_GUARD:')),
+    hash: hash(ig),
+  }, {
+    code: 0,
+    status: [`INTENT_GUARD: REUSE ${IG}`],
+    hash: before,
+  }, 'restamp must fire only when the metadata gate fails');
 }
 
 rmSync(BASE, { recursive: true, force: true });

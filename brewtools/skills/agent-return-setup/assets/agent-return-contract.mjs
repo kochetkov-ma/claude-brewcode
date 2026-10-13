@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.5.2 content_version=6.5.0 generated_by=brewtools:agent-return-setup
+// brewcode-meta: version=6.5.3 content_version=6.5.0 generated_by=brewtools:agent-return-setup
 
 // agent-return SubagentStart, advisory: states the budget enforced by agent-return-guard.mjs (same numbers, agent-return-budget.mjs).
 // Runtime throw -> `{}`; a missing sibling budget module exits 1 (ESM import, non-blocking).

@@ -372,7 +372,11 @@ cap line of `references/intent-guard.md.template` into the live `## 5. Output` s
 subcommands: `emit` (what this generator runs in Phase 2) and `emit-agent` (agent only, no
 superreview skill required — what `/brewcode:teams-setup` calls). Both honor the same env overrides
 (`PROJECT_NAME` / `TRACKER_LABEL` / `SPEC_LOCATION` / `PLAN_LOCATION` / `POLICY_LOCATION`) and print
-exactly one status line on stdout: `INTENT_GUARD: CREATED <path>` or `INTENT_GUARD: REUSE <path>`. A
+exactly one status line on stdout: `INTENT_GUARD: CREATED <path>`, `INTENT_GUARD: REUSE <path>` or
+`INTENT_GUARD: MIGRATED <path>`. `MIGRATED` restamps the metadata in place, body byte-kept (any mismatch aborts
+and writes nothing), for a retired-stamp file or a current-stamp file that fails the `validate` metadata gate
+(an earlier generation, e.g. no `content_version`); `scan` announces it and `validate` names `upgrade`/`emit-agent`
+as the fix. A file that passes the gate stays `REUSE`. A
 USABLE existing agent is never overwritten — usable meaning non-empty, carrying `name: intent-guard`
 frontmatter, and free of unresolved placeholders. An empty, truncated or placeholder-laden file is
 treated as absent and recreated.
@@ -507,8 +511,8 @@ recheck.
 
 Every artifact this generator writes — `SKILL.md`, `references/agent-prompt.md`,
 `references/report-template.md`, `references/scope.md`, and `.claude/agents/intent-guard.md` — carries
-YAML frontmatter with four metadata keys, in this exact order after the file's own keys: `doc_type`
-(unquoted `llm`), `version` (quoted `"X.Y.Z"`), `generated_by` (quoted `"brewcode:superreview-setup"`),
+YAML frontmatter with five metadata keys, in this exact order after the file's own keys: `doc_type`
+(unquoted `llm`), `version` (quoted `"X.Y.Z"`), `content_version` (quoted `"X.Y.Z"`), `generated_by` (quoted `"brewcode:superreview-setup"`),
 `last_updated` (quoted `"YYYY-MM-DD"`). `intent-guard.md` additionally carries a tail anchor comment,
 `<!-- generated_by: brewcode:superreview-setup`.
 

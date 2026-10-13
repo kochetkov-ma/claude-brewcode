@@ -350,6 +350,23 @@ try {
     check(deploy.jobs.deploy.if.includes("github.event.workflow_run.event == 'push'"), true,
       label + ': only a push-triggered upstream build deploys');
   }
+  // GIVEN live release.yml WHEN its changelog step runs THEN the body lands only in private RUNNER_TEMP (H3).
+  const releaseSrc = readFileSync(process.env.RELEASE_YML || join(ROOT, '.github/workflows/release.yml'), 'utf8');
+  const release = parse(releaseSrc), relDir = join(temp, 'release'), runnerTemp = join(temp, 'runner-temp');
+  mkdirSync(relDir); mkdirSync(runnerTemp);
+  writeFileSync(join(relDir, 'RELEASE-NOTES.md'), '## v9.8.7 (2026-10-13)\n- fixture note\n\n## v9.8.6 (2026-10-12)\n- older\n');
+  const relRun = bash(step(release, 'Extract changelog for tag version').run,
+    { GITHUB_REF_NAME: 'v9.8.7', GITHUB_OUTPUT: join(relDir, 'output'), RUNNER_TEMP: runnerTemp }, relDir);
+  const relBody = join(runnerTemp, 'release-body.md');
+  check({
+    status: relRun.status, runnerTemp: spawnSync('ls', [runnerTemp], { encoding: 'utf8' }).stdout,
+    head: existsSync(relBody) ? readFileSync(relBody, 'utf8').split('\n').slice(0, 3) : null,
+    bodyPath: step(release, 'Create GitHub Release').with.body_path,
+    fixedTmp: releaseSrc.split('\n').filter((line) => line.includes('/tmp')),
+  }, {
+    status: 0, runnerTemp: 'release-body.md\n', head: ['## v9.8.7 (2026-10-13)', '- fixture note', ''],
+    bodyPath: '${{ runner.temp }}/release-body.md', fixedTmp: [],
+  }, 'release.yml: body written to $RUNNER_TEMP, body_path = runner.temp, no fixed /tmp path');
   console.log('PASS provenance: ' + count + ' assertions; shipped producer/verifiers executed without network');
 } finally {
   rmSync(temp, { recursive: true, force: true });

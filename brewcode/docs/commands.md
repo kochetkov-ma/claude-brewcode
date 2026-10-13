@@ -6,7 +6,7 @@ description: Detailed description of all brewcode plugin commands
 
 # BC Plugin Commands
 
-> **ver:** 6.5.2 | **Author:** Maksim Kochetkov | **License:** MIT
+> **ver:** 6.5.3 | **Author:** Maksim Kochetkov | **License:** MIT
 
 ## Naming
 
@@ -168,7 +168,7 @@ The emitted skill keeps its own name: it is installed at `.claude/skills/superre
 
 ### Subcommands
 
-`generate.sh <mode>` — `scan | emit | emit-agent | upgrade | enable | disable | uninstall | purge | validate`. `emit` refuses (exit 1, `already installed`, no `INTENT_GUARD:` line) on a live install; `upgrade` is the supported refresh. `emit-agent` is the ONE writer of `.claude/agents/intent-guard.md` and prints `INTENT_GUARD: CREATED|REUSE|MIGRATED <path>` — `/brewcode:teams-setup` Phase 3 calls it.
+`generate.sh <mode>` — `scan | emit | emit-agent | upgrade | enable | disable | uninstall | purge | validate`. `emit` refuses (exit 1, `already installed`, no `INTENT_GUARD:` line) on a live install; `upgrade` is the supported refresh. `emit-agent` is the ONE writer of `.claude/agents/intent-guard.md` and prints `INTENT_GUARD: CREATED|REUSE|MIGRATED <path>` (`MIGRATED` also restamps a current-stamp file that fails the metadata gate) — `/brewcode:teams-setup` Phase 3 calls it.
 
 ### Workflow
 

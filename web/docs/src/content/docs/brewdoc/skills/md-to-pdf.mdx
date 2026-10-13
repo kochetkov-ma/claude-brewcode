@@ -149,7 +149,7 @@ Styles mode saves the `styles/default.json` structure (`page`, `colors`, `typogr
 
 ### Test mode
 
-`/brewdoc:md-to-pdf test` converts the bundled `test-all-elements.md` to `/tmp/md-to-pdf-test-ENGINE.pdf`. The test file exercises all supported Markdown elements — headings, tables, code blocks, images, lists — so you can visually verify engine output before converting real files.
+`/brewdoc:md-to-pdf test` converts the bundled `test-all-elements.md` to `md-to-pdf-test-ENGINE.pdf` inside a private `mktemp -d` directory (mode 0700) that is removed on exit. The report marks the path "(removed on exit)". The test file exercises all supported Markdown elements — headings, tables, code blocks, images, lists — so you can visually verify engine output before converting real files.
 
 ### CONVERT+PROMPT temp file lifecycle
 
