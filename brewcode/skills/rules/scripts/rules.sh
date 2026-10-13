@@ -259,7 +259,8 @@ create_specialized() {
     exit 1
   fi
 
-  if ! printf '%s' "$prefix" | grep -Eq '^[a-z0-9][a-z0-9-]*$'; then
+  # Whole-string match, no pipe: `printf | grep -q` races under pipefail and passes a multi-line prefix.
+  if ! [[ "$prefix" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
     echo "X Invalid prefix: '$prefix' (must be lowercase alphanumeric + hyphens, start with alphanumeric)"
     exit 1
   fi

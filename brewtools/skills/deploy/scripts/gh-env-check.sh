@@ -8,7 +8,8 @@ echo "=== GitHub Environment Check ==="
 # Check gh CLI
 if command -v gh &>/dev/null; then
     echo "GH_CLI=installed"
-    GH_VERSION=$(gh --version | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+    # Readers drain all input: an early-exit `head -1` SIGPIPEs gh under pipefail and aborts the script.
+    GH_VERSION=$(gh --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | sed -n 1p)
     echo "GH_VERSION=$GH_VERSION"
 else
     echo "GH_CLI=missing"
@@ -58,7 +59,9 @@ echo "SECRETS_COUNT=$SECRETS_COUNT"
 
 # Check GHCR access
 echo "=== GHCR ==="
-GHCR_ACCESS=$(gh auth status 2>&1 | grep -q "write:packages" && echo "yes" || echo "no")
+# Captured first: `gh | grep -q` under pipefail SIGPIPEs gh on an early match and reads as "no".
+GH_AUTH_STATUS=$(gh auth status 2>&1 || true)
+GHCR_ACCESS=$(grep -q "write:packages" <<<"$GH_AUTH_STATUS" && echo "yes" || echo "no")
 echo "GHCR_ACCESS=$GHCR_ACCESS"
 
 echo "=== Check Complete ==="

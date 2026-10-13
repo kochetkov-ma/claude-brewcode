@@ -22,7 +22,7 @@ if ! COMMAND=$(printf '%s' "$INPUT" | jq -er '
   .tool_input.command | select(type == "string")'); then
   printf '%s\n' 'Invalid PreToolUse Bash input; refusing the call' >&2
   exit 2                            # hard gate: malformed input is not approval
-elif printf '%s' "$COMMAND" | grep -qE 'rm[[:space:]]+-rf'; then
+elif grep -qE 'rm[[:space:]]+-rf' <<<"$COMMAND"; then  # here-string: a pipe races under pipefail
   DECISION=$(jq -n --arg reason "Destructive command blocked by hook" \
     '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":$reason}}')
 fi
