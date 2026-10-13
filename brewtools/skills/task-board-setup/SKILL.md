@@ -203,6 +203,7 @@ Runs only when `MODE=upgrade` and `board.md` EXISTS; replaces P1-P5.5 (the fresh
 
 Rules that bind the whole phase:
 
+- **Scope (normative):** `upgrade` edits only this setup's owned paths: `.claude/features/`, `.claude/agents/task-tracker.md`, `.claude/skills/task-board/`, `.claude/skills/task-spec/`, `.claude/rules/tasks.md`. Any other change (application source, tests, docs, CI, mirrors, other setups' files) is a defect to report, never to apply; `10-upgrade.md` snapshots before U3 and its U6 scope gate fails on any other changed path.
 - **Additive only.** New files (`task-spec` skill, `SPEC_TEMPLATE.md`, `DESIGN_TEMPLATE.md`) are written outright. No existing task file, board row, agent, skill or rule is rewritten wholesale.
 - **Every edit of an existing file is gated:** show the exact diff, then **AskUserQuestion** per file. Declined = no edit, continue cleanly.
 - **The metadata restamp (`10-upgrade.md` U5b) is ungated and always runs**, including when every content row is already SKIP: it rewrites only the metadata quartet in the twelve stamped control artifacts, nothing task-local. The board anchor stamp clears the `stale` verdict read by setup-status.

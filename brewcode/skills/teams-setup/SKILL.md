@@ -668,6 +668,14 @@ Recommendations: underperformers -> suggest `/brewcode:teams-setup upgrade`; >20
 
 ## Mode: UPGRADE (self-reflection)
 
+> **Scope (normative):** `upgrade` edits only this setup's owned paths: `.claude/teams/{TEAM_NAME}/`, `.claude/agents/` (roster members and `intent-guard.md`), and the team block of `CLAUDE.md` / `.claude/CLAUDE.local.md` only after the Epilogue E1 "yes". Any other change (application source, tests, docs, CI, mirrors, other setups' files) is a defect to report, never to apply: name the path and the finding, edit nothing there, and pass no such edit to a subagent.
+
+Snapshot the dirty-file state before the first read-write step (git repos; elsewhere it prints `SCOPE n/a` and the rule above is checked by hand):
+
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/scope-guard.sh" snapshot "${CLAUDE_PROJECT_DIR}" teams-upgrade && echo "OK" || echo "FAILED"
+```
+
 ### U1: Load & Parse
 
 ```bash
@@ -768,6 +776,14 @@ Set cursor:
 ```bash
 bash "${CLAUDE_SKILL_DIR}/scripts/trace-ops.sh" cursor ".claude/teams/{TEAM_NAME}" set "$UPGRADE_CUTOFF" && echo "✅" || echo "❌ FAILED"
 ```
+
+Final scope gate, the last step of the mode (before the Epilogue, which may touch `CLAUDE.md` only on its own "yes"):
+
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/scope-guard.sh" check "${CLAUDE_PROJECT_DIR}" teams-upgrade ".claude/teams/{TEAM_NAME}/" ".claude/agents/" && echo "✅ scope" || echo "❌ FAILED scope"
+```
+
+> **STOP if ❌**: every `OUTSIDE <path>` line is a defect of this run. Report each path; never keep, commit or "finish" those edits. The user decides whether to restore them.
 
 ---
 

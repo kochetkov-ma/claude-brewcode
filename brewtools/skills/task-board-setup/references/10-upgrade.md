@@ -9,6 +9,17 @@ Retrofit path for a TARGET where the board is ALREADY deployed with real tasks. 
 
 Invocation: `/brewtools:task-board-setup upgrade <path>`; SKILL.md P0 parses the verb.
 
+> **Scope (normative):** `upgrade` edits only this setup's owned paths: `.claude/features/`, `.claude/agents/task-tracker.md`, `.claude/skills/task-board/`, `.claude/skills/task-spec/`, `.claude/rules/tasks.md`. Any other change (application source, tests, docs, CI, mirrors, other setups' files) is a defect to report, never to apply: name the path and the finding, edit nothing there, and pass no such edit to a subagent.
+
+Snapshot the dirty-file state once, right after the deploy gate below and before any write (git repos; elsewhere it prints `SCOPE n/a` and the rule is checked by hand). **EXECUTE** using Bash tool:
+```bash
+TARGET="<absolute path resolved in P0>"
+test -n "$TARGET" && test -d "$TARGET" || { echo "MISS TARGET unset or not a dir -- scope snapshot did NOT run"; exit 1; }
+SG="<this skill's base directory, as SKILL.md was loaded from>/scripts/scope-guard.sh"
+test -f "$SG" || { echo "MISS scope-guard.sh not found at $SG -- snapshot did NOT run"; exit 1; }
+bash "$SG" snapshot "$TARGET" task-board-upgrade && echo "OK" || echo "FAILED"
+```
+
 ---
 
 ## Inputs (contract from P0)
@@ -457,6 +468,16 @@ done
 test "$bad" -eq 0 && echo "OK  every control artifact stamped $PV / $CV" || echo "❌ $bad artifact(s) still stale -- re-run U5b"
 ```
 A clean run prints `OK  every control artifact stamped <PV> / <CV>` -- silence means the block did not run, !=PASS. A file with no frontmatter passes on its U5b marker line.
+
+**Scope gate** (the last check of the run: only owned paths may have changed since the snapshot). **EXECUTE** using Bash tool:
+```bash
+TARGET="<absolute path resolved in P0>"
+test -n "$TARGET" && test -d "$TARGET" || { echo "MISS TARGET unset or not a dir -- scope gate did NOT run"; exit 1; }
+SG="<this skill's base directory, as SKILL.md was loaded from>/scripts/scope-guard.sh"
+bash "$SG" check "$TARGET" task-board-upgrade .claude/features/ .claude/agents/task-tracker.md .claude/skills/task-board/ .claude/skills/task-spec/ .claude/rules/tasks.md \
+  && echo "✅ scope" || echo "❌ FAILED scope"
+```
+**STOP if ❌**: every `OUTSIDE <path>` line is a defect of this run, reported by path, never kept or committed; the user decides whether to restore it.
 
 Rerun safety: a second `upgrade` on the same TARGET finds every row SKIP with `backfill-needed=0`, runs U5b (identical bytes, same plugin version), prints `upgrade: content already installed, metadata restamped to <PV>` and changes nothing on disk.
 
