@@ -146,7 +146,7 @@ In Plan mode, `+++` adds these methodology, graph and cron steps to the plan. Sc
 /brewdoc:my-claude                    # Generate Claude Code installation docs
 /brewdoc:memory-sync-setup            # Generate a project-tailored /memory-sync skill into the repo
 /brewdoc:md-to-pdf ./docs/report.md   # Convert markdown to PDF
-/brewdoc:publish "Hello world"        # Publish to brewpage.app -- returns public URL
+/brewdoc:publish "Hello world"        # Publish to brewpage.app -- returns shareable URL
 ```
 
 ### brewtools -- text utilities
@@ -197,7 +197,7 @@ Every spawn prompt carries six fields:
 
 > **The `-setup` suffix** marks a skill you run once to install a mechanism -- afterwards you use what it produced (a generated skill, a hook, an MCP server), not the skill itself. Recurring tools you invoke every day keep bare names. Every `-setup` skill shares one mode vocabulary: `status | install | upgrade | enable | disable | uninstall | purge`, and defaults are skill-specific. Semble, manager, agent-deadline, and agent-return default to `status`; a bare semble invocation therefore never triggers a machine-level package install; `/brewcode:convention-setup` defaults to `install` and inspects status before extraction. All eleven setups implement all seven verbs, via one of two mechanisms: a live config flag re-checked each invocation (semble, agent-deadline, agent-return, agent-router, manager, docsync), or entry-file parking, where the filename discovery keys on is renamed `<name>.disabled` with the body byte-identical (teams, superreview, task-board, memory-sync, convention). Convention setup parks only its loading rule; its generated documents remain readable.
 
-> **All 27 skills are user-invoked only.** Every one carries `user-invocable: true` **and** `disable-model-invocation: true` in its frontmatter: the model never sees their descriptions and never auto-activates one. You type `/plugin:skill`, or nothing runs. This is a deliberate trade about context cost -- 27 model-visible descriptions would be a permanent tax on every request -- and these skills do not want auto-activation anyway: eleven of them write real files into your repo after asking you real questions, and the rest are tools you point at a scope you choose.
+> **26 of the 27 skills are user-invoked only.** Each carries `user-invocable: true` **and** `disable-model-invocation: true` in its frontmatter: the model never sees their descriptions and never auto-activates one. You type `/plugin:skill`, or nothing runs. This is a deliberate trade about context cost -- 26 model-visible descriptions would be a permanent tax on every request -- and these skills do not want auto-activation anyway: eleven of them write real files into your repo after asking you real questions, and the rest are tools you point at a scope you choose. The one exception is `/brewdoc:publish` (`disable-model-invocation: false`): Claude can run it when you ask to share something mid-task, and typing it still works.
 
 ### Brewcode (9 skills)
 
@@ -221,7 +221,7 @@ Every spawn prompt carries six fields:
 | `/brewdoc:my-claude` | Generate Claude Code installation docs |
 | `/brewdoc:memory-sync-setup` | Generate a project-tailored `/memory-sync` skill: syncs everything auto-loaded into context (root & nested CLAUDE.md, CLAUDE.local.md, rules, conventions, AGENTS.md family, agents, skills, memory dir) against the code -- docs excluded; scopes `session` (default), `branch`, `commit <sha>`, `recent[:N]`, `all`, plus a `hard` depth (rules `paths:` precision audit + obvious-knowledge purge); non-growth, agents re-audited every run |
 | `/brewdoc:md-to-pdf` | Convert markdown to professional PDF |
-| `/brewdoc:publish` | Publish to brewpage.app -- returns public URL |
+| `/brewdoc:publish` | Publish to brewpage.app -- returns shareable URL |
 
 ### Brewtools (13 skills)
 
@@ -247,7 +247,7 @@ No skills yet -- placeholder for future UI/visual/creative tools.
 
 ### Portable skills (standalone)
 
-Self-contained `SKILL.md` folders that ship outside the four plugins -- drop them into any compatible agent runtime. Both publish content to [brewpage.app](https://brewpage.app) (text, markdown, files, multi-file sites) and return a public URL.
+Self-contained `SKILL.md` folders that ship outside the four plugins -- drop them into any compatible agent runtime. Both publish content to [brewpage.app](https://brewpage.app) (text, markdown, files, multi-file sites) and return a shareable URL.
 
 | Skill | Runtime | Path |
 |-------|---------|------|

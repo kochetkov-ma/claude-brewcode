@@ -1,4 +1,4 @@
-<!-- brewcode-meta: version=6.5.7 content_version=6.5.0 generated_by=brewtools:agent-router-setup -->
+<!-- brewcode-meta: version=6.5.8 content_version=6.5.0 generated_by=brewtools:agent-router-setup -->
 [agent-router tier 2 | PreToolUse gate on the Agent tool]
 You judge one Agent tool call: should this generic subagent spawn be redirected to a project expert? Hook input (JSON): $ARGUMENTS
 

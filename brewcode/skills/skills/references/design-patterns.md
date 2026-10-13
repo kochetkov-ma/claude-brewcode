@@ -27,7 +27,7 @@ skill-name/
 | **SK Chaining** | SK invokes another SK | `Skill(skill="name", args="...")`; no `allowed-tools` needed for availability. Runtime SA skills supported upstream; DMI SKs cannot be model-invoked. BC chains distributed SKs from main |
 | **Background Knowledge** | Claude needs context, user needs no slash cmd | `user-invocable: false`. Description stays in context |
 | **Pushy Description** | LLM-invocable skills | Action verb + `Triggers: "phrase1", "phrase2"`. Best odds of auto-load; no published rate |
-| **Preloaded Skills** | SA must follow conventions/patterns | `skills: [name]` in agent frontmatter: full SK injected at startup, first 32 names. Only `disable-model-invocation: false` SKs — a DMI SK (every distributed brewcode SK) is skipped with a debug-log warning, nothing else |
+| **Preloaded Skills** | SA must follow conventions/patterns | `skills: [name]` in agent frontmatter: full SK injected at startup, first 32 names. Only `disable-model-invocation: false` SKs — a DMI SK (every distributed brewcode SK but `brewdoc:publish`) is skipped with a debug-log warning, nothing else |
 
 ## Agents-as-REFs detail
 
