@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -132,4 +132,52 @@ test('purge is marked destructive in the mode table so a keyword tie asks first'
   const rows = skill.split('\n').filter((line) => line.startsWith('| `purge` |'));
   // THEN its Mutates? column is the destructive marker the prompt-contract tie-break keys on.
   assert.deepEqual(rows.map((line) => line.split('|').at(-2).trim()), ['yes, destructive'], 'purge row Mutates? = yes, destructive');
+});
+
+const handWritten = (t, names) => {
+  const root = mkdtempSync(join(tmpdir(), 'convention-hand-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(join(root, '.claude/convention'), { recursive: true });
+  for (const name of names) writeFileSync(join(root, `.claude/convention/${name}`), `# ${name}\n\nHand-written project notes.\n`);
+  return root;
+};
+const dashboardConv = (root) => {
+  const probes = readFileSync(resolve(pluginRoot, 'skills/setup-status/references/phase1-probes.md'), 'utf8');
+  const block = [...probes.matchAll(/```bash\n([\s\S]*?)\n```/g)].map((m) => m[1]).find((b) => b.includes('echo "CONV docs='));
+  const r = spawnSync('bash', ['-c', block], { cwd: root, encoding: 'utf8', env: { ...process.env, CLAUDE_PROJECT_DIR: root } });
+  return r.stdout.split('\n').find((line) => line.startsWith('CONV ')) ?? `NO CONV LINE: ${r.stderr}`;
+};
+
+test('hand-written convention docs read missing (hand-written docs present), every doc counted, never partial or stale', (t) => {
+  // GIVEN the finagra-bot shape (4 docs, other names) and the finagra-site shape (the 3 generator names + design-system.md), no loading rule.
+  const bot = handWritten(t, ['architecture.md', 'logging.md', 'secrets.md', 'whatsapp.md']);
+  const site = handWritten(t, ['design-system.md', 'project-architecture.md', 'reference-patterns.md', 'testing-conventions.md']);
+  // WHEN the owner status and the setup-status CONV probe read both.
+  const result = [bot, site].map((root) => [JSON.parse(invoke(root, 'status').stdout), dashboardConv(root)]);
+  // THEN both are missing with hand-written docs, all four counted, none owned.
+  assert.deepEqual(result, [
+    [{ state: 'missing', rule: '', docs: 4, owned_docs: 0, hand_written: true }, 'CONV docs=4 owned=0 rule=absent names=architecture.md logging.md secrets.md whatsapp.md'],
+    [{ state: 'missing', rule: '', docs: 4, owned_docs: 0, hand_written: true }, 'CONV docs=4 owned=0 rule=absent names=design-system.md project-architecture.md reference-patterns.md testing-conventions.md'],
+  ], 'hand-written convention dirs must never read partial or stale, and every document must be counted');
+});
+
+test('setup-status Phase 3 classifies hand-written docs as missing and never prescribes upgrade', () => {
+  // GIVEN the shipped classifier. WHEN rule 3c is read.
+  const rule = readFileSync(resolve(pluginRoot, 'skills/setup-status/SKILL.md'), 'utf8').split('\n').find((line) => line.startsWith('| 3c |')) ?? 'NO RULE 3c';
+  // THEN it names the state and forbids upgrade.
+  assert.deepEqual([rule.includes('`missing (hand-written docs present)`'), rule.includes('never `upgrade`')], [true, true],
+    'hand-written convention docs must read missing (hand-written docs present) with no upgrade');
+});
+
+test('generated convention docs without their loading rule still read partial', (t) => {
+  // GIVEN the three generated documents plus a hand-written fourth, no loading rule.
+  const root = fixture(t);
+  writeFileSync(join(root, '.claude/convention/design-system.md'), '# design system\n');
+  // WHEN the owner status and the setup-status CONV probe read it.
+  const result = [JSON.parse(invoke(root, 'status').stdout), dashboardConv(root)];
+  // THEN the missing loader is a partial install; the extra doc is counted, not owned.
+  assert.deepEqual(result, [
+    { state: 'partial', rule: '', docs: 4, owned_docs: 3, hand_written: false },
+    'CONV docs=4 owned=3 rule=absent names=design-system.md project-architecture.md reference-patterns.md testing-conventions.md',
+  ], 'generated docs without the loading rule must stay partial');
 });

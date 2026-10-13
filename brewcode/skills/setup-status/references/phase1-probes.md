@@ -48,6 +48,28 @@ echo "OK"
 | `TASK_SPEC_MODE` | bind it for Phases 1b and 2a. `on` = the deployed `TASK_TEMPLATE.md` has a `^spec:` field, or a live/parked `task-spec` exists; `off` = the template is present without either; `unknown` = the template is missing, never proof of off |
 | `OPTIONAL` | outside the required set (only `task-spec`, only under `off`): no MISS/ABSENT, no parked member, no Phase 3 defect. All other row-4 artifacts and content-version checks stay required |
 
+Row 12 counts its documents itself: the roster names only the three the generator writes, while a
+project may keep any number of `.claude/convention/*.md`, hand-written or generated. **EXECUTE** using Bash tool:
+
+```bash
+cd "${CLAUDE_PROJECT_DIR}" || exit 1
+docs=0; owned=0; names=""
+for f in .claude/convention/*.md; do
+  [ -f "$f" ] || continue
+  docs=$((docs + 1)); names="$names ${f##*/}"
+  if sed -n '1,40p' "$f" | grep -Eq '^generated_by: "?brewcode:convention(-setup)?"?$|brewcode-meta:.*generated_by=brewcode:convention'; then owned=$((owned + 1)); fi
+done
+rule=absent; [ -f .claude/rules/convention.md.disabled ] && rule=parked; [ -f .claude/rules/convention.md ] && rule=live
+echo "CONV docs=$docs owned=$owned rule=$rule names=${names# }"
+echo "OK"
+```
+
+| `CONV` line | Row 12 reading (Phase 3 rule 3c) |
+|-------------|----------------------------------|
+| `rule=absent owned=0 docs>0` | **hand-written docs**: no generator marker on any document and no loading rule. `missing (hand-written docs present)`, never `partial` or `stale`, and no `upgrade`: there is no install to upgrade, and `install` would write `reference-patterns.md` / `testing-conventions.md` / `project-architecture.md` over same-named files. *Found* names all `docs` files |
+| `rule=absent owned>0` | generated documents without their loading rule: `partial`, prescribe `install` (`references/row-notes.md` Row 12) |
+| `rule=live` or `parked` | the generator's install: Phases 1b/2a decide as usual; `docs` beyond the three generated ones are the project's own and never a defect |
+
 Then the hook registrations from the three settings files (project, local, `GLOBAL`), one line per
 handler naming a roster script (in `command` or `args`), as `REG <scope> <event> <matcher or -> <script> [if=...] [onFailure=...] [wrapped=<launcher>]`:
 

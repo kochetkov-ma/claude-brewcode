@@ -56,7 +56,9 @@ RESULT: <what the user ends up holding>
 
 After the PLAN, run `bash "${CLAUDE_SKILL_DIR}/scripts/convention.sh" status` in the project root;
 on any script failure report the ownership/collision error and change no file. `status`: report the
-JSON, stop. `enable`, `disable`, `uninstall`, `purge`: run the script with that exact mode, report its
+JSON, stop. `docs` counts every `.claude/convention/*.md`; `"hand_written":true` (no loading rule, no
+document with the owner stamp) is `missing (hand-written docs present)`: nothing to `upgrade`, and an
+`install` would write the three generated names over same-named files, so ask before running it. `enable`, `disable`, `uninstall`, `purge`: run the script with that exact mode, report its
 result, stop; no analysis or regeneration.
 
 - `disable` parks only the generated loading rule as `.claude/rules/convention.md.disabled`; `enable`

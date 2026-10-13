@@ -126,5 +126,6 @@ Fill `<what drifted>` with the drifted files; `enable` stays the user's optional
 ## Row 12 convention
 
 - Every carrier must be owned by `brewcode:convention-setup`. Documents stamped `brewcode:convention` are pre-rename evidence: prescribe `upgrade`, never delete them.
-- Documents present with the loading rule missing = `partial`: prescribe `install`.
+- Generated documents (a `generated_by: "brewcode:convention(-setup)"` stamp) present with the loading rule missing = `partial`: prescribe `install`.
+- Only hand-written documents (Phase 1 `CONV ... rule=absent owned=0`, any names, any count) = rule 3c `missing (hand-written docs present)`: report-only, never `stale`/`partial`, never `upgrade`. Count every `.claude/convention/*.md` from the `CONV` line, not the three roster names (a `design-system.md` beside them counts).
 - Accepted rules and manual CLAUDE.md references are user-owned and stay active while the loading rule is parked.
