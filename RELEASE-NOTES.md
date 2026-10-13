@@ -2,6 +2,44 @@
 
 ---
 
+## v6.5.6 (2026-10-13)
+
+> Docs: [convention-setup](https://doc-claude.brewcode.app/brewcode/skills/convention-setup/) | [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) | [superreview-setup](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | [teams-setup](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/)
+
+> Docs: [docsync-setup](https://doc-claude.brewcode.app/brewdoc/skills/docsync-setup/) | [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/)
+
+> Docs: [agent-deadline-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline-setup/) | [agent-return-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-return-setup/) | [agent-router-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-router-setup/) | [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [task-board-setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/)
+
+Setup skills recognise launcher-wrapped hook registrations instead of duplicating them, and generator upgrades are fenced to their own paths.
+
+### brewcode
+
+#### Fixed
+
+- **setup-status, semble-setup:** a launcher-wrapped, `command`-only hook registration is kept, never duplicated, and reported as `current (custom)` (the semble row adds `customCount`); before, semble read the shell form as stale and `merge` purged the wrapper and appended a copy.
+- **convention-setup:** a `.claude/convention/` dir holding only hand-written docs reads `missing (hand-written docs present)` instead of stale; every doc is counted, and only generated ones make the state partial.
+- **teams-setup, superreview-setup:** `upgrade` runs a scope gate (`scope-guard.sh`) that fails with `OUTSIDE <path>` on any change outside the setup's own paths.
+
+### brewdoc
+
+#### Fixed
+
+- **docsync-setup:** a wrapped hook registration is kept and skipped on merge instead of being removed and replaced.
+- **memory-sync-setup:** `upgrade` runs the same scope gate and fails on any change outside the setup's own paths.
+
+### brewtools
+
+#### Fixed
+
+- **agent-router-setup, agent-deadline-setup, agent-return-setup:** wrapped registrations are recognised by the probes and kept; before, they counted as legacy or args-only matches and `upgrade` added a duplicate. `status` reports the wrapped count.
+- **manager-setup:** the registration predicates match on command and args.
+- **task-board-setup:** control files with no frontmatter get a marker line and can reach `current`; the methodology section is matched by title, so it no longer patches on every upgrade.
+- **task-board-setup:** the task-tracker description is at most 100 characters, matching the teams limit (triggers and examples moved to `## When to use`); a longer legacy description is patched.
+- **task-board-setup:** a headless `upgrade` with skipped patches withholds the restamp and reports `PARTIAL`, so setup-status keeps the row stale.
+- **task-board-setup:** `upgrade` runs the scope gate and fails on any change outside the setup's own paths.
+
+---
+
 ## v6.5.5 (2026-10-13)
 
 > Docs: [agents](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [rules](https://doc-claude.brewcode.app/brewcode/skills/rules/) | [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [superreview-setup](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/)

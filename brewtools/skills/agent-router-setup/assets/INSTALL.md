@@ -1,4 +1,4 @@
-<!-- brewcode-meta: version=6.5.5 content_version=6.5.2 generated_by=brewtools:agent-router-setup -->
+<!-- brewcode-meta: version=6.5.6 content_version=6.5.6 generated_by=brewtools:agent-router-setup -->
 # agent-router hook — install / configure / remove runbook
 
 Self-contained hook asset. The `/brewtools:agent-router-setup` skill copies it into the
