@@ -14,7 +14,7 @@ const source = ['SKILL.md', 'references/phase1-probes.md', 'references/phase2-st
   .map(f => readFileSync(join(STATUS_DIR, f), 'utf8')).join('\n');
 const blocks = [...source.matchAll(/```bash\n([\s\S]*?)\n```/g)].map(match => match[1]);
 const presence = blocks.find(block => block.includes("<<'PATHS'"));
-const parking = blocks.find(block => block.includes('echo "CONFLICT $f"'));
+const parking = blocks.find(block => block.includes('echo "CONFLICT $f"')).replaceAll('${CLAUDE_SKILL_DIR}', STATUS_DIR);
 const stamps = blocks.find(block => block.includes("<<'STAMPS'"));
 const row = source.split('\n').find(line => line.startsWith('| 4 | `/brewtools:task-board-setup`'));
 const artifacts = [...row.split('|').slice(4, 6).join('\n').matchAll(/\.claude\/[A-Za-z0-9_./-]+/g)].map(match => match[0]);

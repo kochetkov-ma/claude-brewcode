@@ -132,7 +132,7 @@ Canonical mode order, shared by every `-setup` skill: `status | install | upgrad
 
 | Command | What it does |
 |---------|-------------|
-| `/brewtools:manager-setup status` | Show what is currently on -- codeword state, wall state, prompt source |
+| `/brewtools:manager-setup status` | Show what is currently on -- codeword state, wall state, prompt source. Reports whether the wall is installed; a project with only a leftover `state.json` is not, so `status` recommends `install`, never `upgrade` |
 | `/brewtools:manager-setup install` | Install the guard into this project. Asks you to confirm arming unless your prompt already said "enable the hard wall"; once armed, Claude physically cannot write/edit files here until you disable it |
 | `/brewtools:manager-setup disable` | Disarm the wall, leave the guard registered |
 | `/brewtools:manager-setup edit` | Open the Manager prompt text so you can customize it |
@@ -391,9 +391,9 @@ When `++m` is used while the session is in plan mode (`permission_mode === 'plan
 
 | Action | Command / natural language | Effect |
 |--------|---------------------------|--------|
-| `status` | `/brewtools:manager-setup status` | Full explainer: codewords + wall state + effective prompt sources. Default with no argument |
+| `status` | `/brewtools:manager-setup status` | Full explainer: codewords + wall state + effective prompt sources. Default with no argument. Probes `registered`, `guardPresent` and `installed`; a stale state version recommends `upgrade` only when `installed` is true |
 | `install` | `/brewtools:manager-setup install` | INSTALL guard (project), then ARM the HARD wall after a confirmation question unless your prompt explicitly said so; declining leaves it installed but disarmed. Applies to the running session; `/hooks` to confirm. Adds the task-tools key only when no settings layer sets it |
-| `upgrade` | `/brewtools:manager-setup upgrade` | Re-copy the guard and off-switch CLI, re-register, preserve `hard`/`level`, and refresh version/content-version provenance. Backfills a missing CLI; aborts if nothing is installed |
+| `upgrade` | `/brewtools:manager-setup upgrade` | Re-copy the guard and off-switch CLI, re-register, preserve `hard`/`level`, and refresh version/content-version provenance. Backfills a missing CLI; aborts if nothing is installed (no registration and no copied guard, even if a `state.json` is left over) -- `status` reports this case as not installed and points to `install` |
 | `enable` | `/brewtools:manager-setup enable` | ARM an already-installed wall (state flip only), after the same arm-confirmation question unless your prompt explicitly said so; declining changes nothing. Never installed -> routed to `install` |
 | `disable` | `/brewtools:manager-setup disable` | DISARM the wall (state flip only -- registration kept, guard no-ops) |
 | `uninstall` | `/brewtools:manager-setup uninstall` | Two Bash calls: the bare disarm first, then DEREGISTER guard from `settings.local.json` + delete the copied guard. Applies to the running session. State and prompt overrides kept |
@@ -428,7 +428,7 @@ Type `+++` in verified Plan mode -> injects anti-drift cron planning; scheduling
 <cron-plan block text>
 
 ## HARD wall (this project) -- registered=no  armed=OFF  level=balanced  (state source: default)
-State version: <none>  plugin: <X.Y.Z>  (no version key until install/upgrade writes one)
+State version: <none>  plugin: <X.Y.Z>  (no version key until install/upgrade writes one; "wall not installed: run install" when installed is false)
 Install:   /brewtools:manager-setup install    (install+arm; applies live, no restart)
 Upgrade:   /brewtools:manager-setup upgrade    (re-copy the guard + restamp state.json; arm state kept)
 Enable:    /brewtools:manager-setup enable     (arm an already-installed wall)

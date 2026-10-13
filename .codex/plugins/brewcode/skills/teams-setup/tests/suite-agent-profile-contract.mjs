@@ -1239,6 +1239,48 @@ part(() => {
   removeWorld(world);
 });
 
+// D2: 2800/700 holds up to 13 domain rows; each row past 13 adds 80 chars/20 tokens (SKILL.md C4).
+const DUSK_MAXIMUM_ROSTER = [...DUSK_ROSTER,
+  ['level-dev', 'Levels', 'Layout'], ['ai-dev', 'AI', 'Behaviour'], ['ui-dev', 'UI', 'HUD'],
+  ['net-dev', 'Net', 'Sync'], ['save-dev', 'Save', 'Persist'], ['perf-dev', 'Perf', 'Budget'],
+  ['audio-dev', 'Audio', 'Engine']];
+
+part(() => {
+  const world = makeWorld({ roster: DUSK_MAXIMUM_ROSTER, compactDefaults: true });
+  const team = readFileSync(join(world, '.codex', 'teams', 'dusk', 'team.md'), 'utf8');
+  const chars = Array.from(team).length;
+  const tokens = exactTokens(team, canonicalCounterPath);
+  check('verifier.maximumTeam.precondition',
+    JSON.stringify([DUSK_MAXIMUM_ROSTER.length, tokens > 700, chars <= 3360, tokens <= 840]),
+    JSON.stringify([20, true, true, true]),
+    'GIVEN the terse 20-agent Maximum variant THEN it exceeds the flat 700-token ceiling yet fits 3360/840');
+  const result = runVerifier(world);
+  check('verifier.maximumTeam.verdict', JSON.stringify([result.status,
+    result.output.includes(`CHECK: full team.md ceiling ... OK (${chars} chars, ${tokens} exact o200k tokens; 20 domain rows)`)]),
+  JSON.stringify([0, true]), 'GIVEN 20 terse domain rows WHEN verify runs THEN the scaled ceiling passes the team');
+  removeWorld(world);
+}, 2);
+
+for (const [label, targetChars, expectedStatus] of [['atCeiling', 2880, 0], ['overCeiling', 2881, 1]]) part(() => {
+  const roster = DUSK_MAXIMUM_ROSTER.slice(0, 14);
+  const world = makeWorld({ roster, compactDefaults: true });
+  const teamPath = join(world, '.codex', 'teams', 'dusk', 'team.md');
+  const base = readFileSync(teamPath, 'utf8');
+  const padded = `${base}${'='.repeat(targetChars - Array.from(base).length - 1)}\n`;
+  writeFileSync(teamPath, padded);
+  const tokens = exactTokens(padded, canonicalCounterPath);
+  check(`verifier.rowCeiling.${label}.precondition`, JSON.stringify([Array.from(padded).length, tokens <= 720]),
+    JSON.stringify([targetChars, true]), `GIVEN 14 domain rows padded to ${targetChars} chars THEN only the char ceiling is in play`);
+  const result = runVerifier(world);
+  const line = expectedStatus === 0
+    ? `CHECK: full team.md ceiling ... OK (${targetChars} chars, ${tokens} exact o200k tokens; 14 domain rows)`
+    : `CHECK: full team.md ceiling ... FAIL (${targetChars} chars, ${tokens} exact o200k tokens; maximum 2880 chars and 720 tiktoken 0.13.0/o200k_base tokens for 14 domain rows)`;
+  check(`verifier.rowCeiling.${label}.verdict`, JSON.stringify([result.status, result.output.includes(line)]),
+    JSON.stringify([expectedStatus, true]),
+    `GIVEN 14 domain rows at ${targetChars} chars WHEN verify runs THEN the 2880-char row-scaled boundary decides`);
+  removeWorld(world);
+});
+
 part(() => {
   const world = makeWorld();
   const teamPath = join(world, '.codex', 'teams', 'dusk', 'team.md');

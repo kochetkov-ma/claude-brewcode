@@ -92,6 +92,8 @@ For the organizer: ROLE is the target rule files only — never `CLAUDE.md`, nev
 
 **Output files:** `avoid.md`, `best-practice.md`, `{prefix}-avoid.md`, `{prefix}-best-practice.md` — all inside `.claude/rules/`
 
+**Validation:** `rules.sh validate` checks `avoid.md` and `best-practice.md` (both required) and `{prefix}-` files. `create` writes the two main files without `paths:`. A project that scopes a main file with `paths:` on purpose gets a `!` warning (the file then loads only when Claude touches a matching file), never an error. Keep the scoping or remove `paths:` to load the file at session start.
+
 **3-Check dedup protocol:**
 
 1. Within-file similarity: &gt;70% match → skip; 40–70% match → merge into existing entry

@@ -13,6 +13,8 @@ DISABLED=0
 # Exclusive states, as toggle-team.sh keys: DISABLED = ONLY copy parked, CONFLICT = BOTH copies
 # (never folded into DISABLED).
 CONFLICT=0
+# Roster rows another generator owns (agent-generator.sh, e.g. task-tracker): WARN, never a teams check.
+FOREIGN=0
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 TOKEN_COUNTER="$SCRIPT_DIR/count-tokens.py"
@@ -404,15 +406,6 @@ if [ ! -f "$TEAM_DIR/trace.jsonl" ]; then
 fi
 
 if [ -f "$TEAM_DIR/team.md" ]; then
-  team_chars=$(wc -m < "$TEAM_DIR/team.md" | tr -d '[:space:]')
-  team_tokens=$(python3 -I -S "$TOKENIZER_PREPARER" run "$TOKEN_COUNTER" "$TEAM_DIR/team.md")
-  if [ "$team_chars" -le 2800 ] && [ "$team_tokens" -le 700 ]; then
-    echo "CHECK: full team.md ceiling ... OK ($team_chars chars, $team_tokens exact o200k tokens)"
-  else
-    echo "CHECK: full team.md ceiling ... FAIL ($team_chars chars, $team_tokens exact o200k tokens; maximum 2800 chars and 700 tiktoken 0.13.0/o200k_base tokens)"
-    FAIL=1
-  fi
-
   declared_agents_count=$(grep -cE '^\|[[:space:]]*Agents[[:space:]]*\|' "$TEAM_DIR/team.md" || true)
   declared_agents=""
   if [ "$declared_agents_count" -eq 1 ]; then
@@ -634,6 +627,13 @@ if [ -f "$TEAM_DIR/team.md" ]; then
             intent_guard_cells_ok=0
           fi
         fi
+        if [ "$agent" != "intent-guard" ] && agent_owner=$(sh "$SCRIPT_DIR/agent-generator.sh" "$agent" 2>/dev/null); then
+          echo "CHECK: agent $agent ... FOREIGN (owned by $agent_owner)"
+          echo "  WARN: not a team member; teams never verifies, moves or restamps it."
+          echo "        Fix: /brewcode:teams-setup upgrade drops this roster row and leaves the file untouched"
+          FOREIGN=$((FOREIGN + 1))
+          continue
+        fi
         printf "CHECK: agent %s ... " "$agent"
         # BOTH copies checked FIRST (live-first if/parked-elif hid collision); `.claude/agents/` is project-global,
         # live file may be foreign -> `enable` never guesses.
@@ -715,6 +715,18 @@ if [ -f "$TEAM_DIR/team.md" ]; then
   if [ "$in_agents" -eq 0 ]; then
     echo "WARN: no ## Agents section in team.md"
   fi
+  # SKILL.md C4: 2800 chars/700 tokens up to 13 domain rows; each row past 13 adds 80 chars/20 tokens.
+  extra_rows=$((unique_domain_rows > 13 ? unique_domain_rows - 13 : 0))
+  max_chars=$((2800 + 80 * extra_rows))
+  max_tokens=$((700 + 20 * extra_rows))
+  team_chars=$(wc -m < "$TEAM_DIR/team.md" | tr -d '[:space:]')
+  team_tokens=$(python3 -I -S "$TOKENIZER_PREPARER" run "$TOKEN_COUNTER" "$TEAM_DIR/team.md")
+  if [ "$team_chars" -le "$max_chars" ] && [ "$team_tokens" -le "$max_tokens" ]; then
+    echo "CHECK: full team.md ceiling ... OK ($team_chars chars, $team_tokens exact o200k tokens; $unique_domain_rows domain rows)"
+  else
+    echo "CHECK: full team.md ceiling ... FAIL ($team_chars chars, $team_tokens exact o200k tokens; maximum $max_chars chars and $max_tokens tiktoken 0.13.0/o200k_base tokens for $unique_domain_rows domain rows)"
+    FAIL=1
+  fi
   if [ -n "$declared_agents" ] && [ "$declared_agents" -eq "$unique_domain_rows" ]; then
     echo "CHECK: declared Agents count ... OK ($declared_agents unique domain rows)"
   elif [ -n "$declared_agents" ]; then
@@ -753,6 +765,7 @@ fi
 
 printf 'DISABLED_AGENTS:%s\n' "$DISABLED"
 printf 'CONFLICT_AGENTS:%s\n' "$CONFLICT"
+printf 'FOREIGN_AGENTS:%s\n' "$FOREIGN"
 
 if [ "$FAIL" -eq 0 ]; then
   if [ "$DISABLED" -gt 0 ]; then

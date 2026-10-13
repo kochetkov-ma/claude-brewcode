@@ -99,6 +99,7 @@ Fill `<what drifted>` with the drifted files; `enable` stays the user's optional
 - Precedence: `content_version` in the raw `state.json`, then its raw `version`, then the copied guard's `// brewcode-meta:` line. Read the file, never `resolveState`'s merged view: a defaulted key would let an old state file inherit the current version.
 - `writeState` omits a version it cannot resolve instead of stamping `unknown`, so `LEGACY-NONE` on `state.json` beside a `CURRENT` guard line is `current`, and re-running a mode will not put the key back.
 - No state file = `missing`: `DEFAULT_STATE` carries no version on purpose.
+- `state.json` with no guard, no helper and no `REG` line = `missing`, never `disabled`: `uninstall` keeps the state, and a pre-wall `{enabled, mode}` file has no `hard` key. `upgrade` and `enable` refuse a wall never installed (`$BT/skills/manager-setup/SKILL.md`: "A project with no wall installed aborts and is told to run `install`"), so the Command is `install`.
 - The registration carries `onFailure: "block"` (honoured from Claude Code 2.1.295): a `REG` line whose `hardmode-guard.mjs` is a MISS blocks every tool call, armed or not. Say so first; the fix is deleting the `brewtools-manager-guard` entry from `.claude/settings.local.json` by hand, then `install`.
 - `DIFFERS` on the guard or the helper means only that `install`/`upgrade` was not re-run since the plugin update; the wall still works. `hard: false` is a different finding: `disabled`.
 

@@ -155,6 +155,8 @@ jobs:
               bash brewdoc/skills/memory-sync-setup/tests/run.sh
               bash brewtools/skills/provider-switch/tests/run.sh
               bash brewcode/skills/skills/tests/run.sh
+              bash brewcode/skills/rules/tests/run.sh
+              bash brewcode/.codex/skills/rules/tests/run.sh
               bash brewtools/skills/context-slim/tests/run.sh
               bash brewtools/skills/ssh/tests/run.sh
               bash brewtools/skills/text-optimize/tests/run.sh

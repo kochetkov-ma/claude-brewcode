@@ -663,6 +663,9 @@ try {
 } catch {}
 let pluginVersion = null;
 try { pluginVersion = JSON.parse(fs.readFileSync(path.join(root,'.claude-plugin','plugin.json'),'utf8')).version || null; } catch {}
+// upgrade's own abort test: no registration and no copied guard = wall not installed (state.json alone is a leftover).
+const guardPresent = fs.existsSync(path.join(cwd,'.claude','brewtools','manager','hardmode-guard.mjs'));
+const installed = registered === null ? null : (registered || guardPresent);
 // Task-graph tools are gated off from CC 2.1.233 unless CLAUDE_CODE_ENABLE_TODO_TOOLS is set.
 // Highest layer carrying the key decides (local > project > user), by value; no layer -> session env.
 const ccVer = '${CCVER}';
@@ -679,7 +682,7 @@ for (const [label, p] of [['.claude/settings.local.json', settings],
 const todoToolsOn = (ccVer && !todoToolsGated) || truthy(todoToolsValue) ? true : ccVer ? false : null;
 console.log(JSON.stringify({
   hard: st.hard, level: st.level, mode: st.mode, stateSource: st.source,
-  registered, settings, stateVersion, pluginVersion,
+  registered, guardPresent, installed, settings, stateVersion, pluginVersion,
   stale: (stateVersion && pluginVersion) ? (stateVersion !== pluginVersion) : null,
   ccVersion: ccVer || null, todoToolsGated, todoToolsLayer, todoToolsValue, todoToolsOn,
   promptSource: Object.fromEntries(promptModes.map(mode => [mode, prompts[mode].source])),
@@ -688,7 +691,7 @@ console.log(JSON.stringify({
 " && echo "✅ status" || echo "❌ FAILED status"
 ```
 
-> `stateVersion` `null` = unknown (state file written before the metadata keys existed, or no state file): never report it as up to date. `stale: true` -> recommend `upgrade`.
+> `stateVersion` `null` = unknown (state file written before the metadata keys existed, or no state file): never report it as up to date. `stale: true` -> recommend `upgrade` only when `installed` is `true`. `installed: false` = no wall (a `state.json` kept by `uninstall`, or a pre-wall `{enabled, mode}` file): `upgrade` aborts there, so recommend `install`, never `upgrade`.
 
 Shape (`references/hard.md` rendered with `hard`, `level`, `stateSource`, all six prompt sources, and full/planmode/cron-plan blocks under their headers):
 ```
@@ -715,7 +718,7 @@ The four letter codewords fire on matching prompts regardless of skill state; `+
 Delivery: INSTALLED into this project (not a plugin hook). Registered once in .claude/settings.local.json (personal, gitignored), gated at runtime by .claude/brewtools/manager/state.json {hard}.
 When armed, the main session cannot Write/Edit/WebFetch; it can delegate (Agent, Workflow), read (Read/Grep/Glob/LSP), track (TaskCreate/TaskUpdate/TaskList/TaskGet, TodoWrite), stop background work (TaskStop), enter and leave worktrees, and manage session timers (CronCreate/CronList/CronDelete/ScheduleWakeup). Task-board owns its timer matching/cleanup; scheduled work still passes through the wall. This exempts no external/OS scheduling. Bash and Monitor: strict denies both; balanced permits read-only commands. MCP: strict keeps only the read-only mcp__semble_code__* search tools; balanced allows tools that read as read-only, plus mcpAllow entries. The wall adds nothing to your prompts: a denied call carries the explanation and the exit.
 Allowlist summary: <one-line summary from hard.md for current level>
-State version: <stateVersion or "unknown (written before versioning)">  plugin: <pluginVersion>  <"— run upgrade" when stale>
+State version: <stateVersion or "unknown (written before versioning)">  plugin: <pluginVersion>  <"— run upgrade" when stale and installed; "— wall not installed: run install" when installed is false>
 
 ## Task graph (TaskCreate/TaskUpdate/TaskGet/TaskList) — <ON|OFF|UNKNOWN from todoToolsOn>
 Claude Code <ccVersion>. From 2.1.233 these tools are gated off by default and need env CLAUDE_CODE_ENABLE_TODO_TOOLS=1 (or true/yes/on).

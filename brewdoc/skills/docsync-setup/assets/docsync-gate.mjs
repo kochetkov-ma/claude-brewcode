@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.5.6 content_version=6.5.2 generated_by=brewdoc:docsync-setup
+// brewcode-meta: version=6.5.7 content_version=6.5.2 generated_by=brewdoc:docsync-setup
 
 // Stop: docs EDITED since last ask, in scope, with `last_updated` missing/unusable/> threshold_days behind mtime
 // -> block once, record the ask; never with `stop_hook_active` or an unrecordable ask. Self-contained, never throws.

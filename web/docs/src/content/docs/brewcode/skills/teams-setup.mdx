@@ -22,7 +22,7 @@ import { Card, CardGrid, Callout, Steps, UpdateNotice } from '../../../../compon
 | Command | `/brewcode:teams-setup` |
 | Arguments | `[prompt] [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [name]` — one free-form prompt; the mode, the `[name]` and the flags (`--skip-review`, `--review`) may sit anywhere in it. In a bare `mode [name]` pair the verb comes first, so `install enable` creates a team named `enable`; in a sentence the name comes from the text ("disable the payments team" names `payments`) |
 | No-arg default | `status` of the first existing team, `install` of a team named `default` when none exists |
-| `enable` / `disable` | Park/unpark the roster's agent files (renamed to/from `<agent>.md.disabled`) — `intent-guard` is exempt |
+| `enable` / `disable` | Park/unpark the roster's agent files (renamed to/from `<agent>.md.disabled`) — `intent-guard` and agents another generator owns (e.g. `task-tracker`) are exempt |
 | Version stamping | `team.md` header + agent frontmatter carry the plugin version; write is refused if the version cannot be resolved |
 | Model | opus |
 | Tools | Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion, Skill |
@@ -68,21 +68,21 @@ import { Card, CardGrid, Callout, Steps, UpdateNotice } from '../../../../compon
 |------|---------|--------------|
 | `status` | `/brewcode:teams-setup status <name>` | Read-only health report: success rates, open issues, insights, recommendations |
 | `install` | `/brewcode:teams-setup install <name> [prompt]` | Analyze codebase → propose team (+ fixed `intent-guard`) → create agents → quorum review → framework setup |
-| `upgrade` | `/brewcode:teams-setup upgrade <name>` | Read trace data → classify agents → tune or replace underperformers |
+| `upgrade` | `/brewcode:teams-setup upgrade <name>` | Read trace data → classify agents → tune or replace underperformers; drops a roster row that lists another generator's agent, leaving its file untouched |
 | `enable` | `/brewcode:teams-setup enable <name>` | Move each roster member's agent file from `<agent>.md.disabled` back to `<agent>.md` — reactivates without touching `team.md` or trace data |
 | `disable` | `/brewcode:teams-setup disable <name>` | Park each roster member's agent file as `<agent>.md.disabled` — Claude Code stops discovering it, nothing is deleted |
 | `uninstall` | `/brewcode:teams-setup uninstall <name>` | Archive trace entries, remove inactive agents, reset cursor |
 | `purge` | `/brewcode:teams-setup purge <name>` | Total removal, no menus and no archive: every domain agent from the `team.md` roster, then `.claude/teams/<name>/` including `trace-archive.jsonl`. One explicit confirmation, not recoverable |
 
 <Callout type="tip" title="enable / disable park the roster, not delete it">
-`disable` moves each roster member's `.claude/agents/<agent>.md` to `<agent>.md.disabled` — Claude Code stops discovering the agent as a project agent, but the file body is byte-identical either way, and `enable` moves it straight back. `intent-guard` is always skipped (`SKIP:intent-guard (shared with superreview-setup)`) because that file may belong to an install with nothing to do with this team. `team.md` and the trace log are untouched by either verb. The same keyword guard is what keeps `purge` a mode rather than a team name — earlier versions treated any unknown first word as a team name, so `/brewcode:teams-setup purge` installed a team called `purge`.
+`disable` moves each roster member's `.claude/agents/<agent>.md` to `<agent>.md.disabled` — Claude Code stops discovering the agent as a project agent, but the file body is byte-identical either way, and `enable` moves it straight back. `intent-guard` is always skipped (`SKIP:intent-guard (shared with superreview-setup)`) because that file may belong to an install with nothing to do with this team. An agent another generator owns is skipped the same way (`SKIP:<agent> (owned by <plugin>:<skill>; not a team member, never moved)`) — see [Agents owned by another generator](#agents-owned-by-another-generator). `team.md` and the trace log are untouched by either verb. The same keyword guard is what keeps `purge` a mode rather than a team name — earlier versions treated any unknown first word as a team name, so `/brewcode:teams-setup purge` installed a team called `purge`.
 </Callout>
 
 <Callout type="tip" title="Fixed: disable no longer reports success on a roster it could not parse">
 `toggle-team.sh disable` used to print `MOVED:0` alongside a green `✅ disable` and exit 0 even when its `## Agents` table parser never found the header row — every agent file stayed live while the run claimed success. The parser now recognizes a padded separator row (`| ------ |`, not just `|---|`) and hard-fails instead of silently reporting zero moves when it never passes the header. Roster agent ids are also validated against `^[a-z0-9][a-z0-9-]*$` — uppercase and `_` are rejected — so a malformed `team.md` row is reported and skipped rather than interpolated into a file path.
 </Callout>
 
-`purge` never deletes `.claude/agents/intent-guard.md`. That file is shared with [`/brewcode:superreview-setup`](/brewcode/skills/superreview-setup/) and may belong to an install that has nothing to do with this team; purge reports it as kept. A team name that does not exist stops the run — nothing is "purged" that was never installed.
+`purge` never deletes `.claude/agents/intent-guard.md`. That file is shared with [`/brewcode:superreview-setup`](/brewcode/skills/superreview-setup/) and may belong to an install that has nothing to do with this team; purge reports it as kept. An agent another generator owns is kept too (`kept: owned by <plugin>:<skill>`); only its roster row goes with the team directory. A team name that does not exist stops the run — nothing is "purged" that was never installed.
 
 <Callout type="tip" title="Why the -setup suffix">
 `teams-setup` installs a mechanism — a roster of agents in `.claude/agents/` that you use afterwards *instead of* the skill. Recurring tools like [`/brewcode:agents`](/brewcode/skills/agents/) keep a bare name because you run them again and again. The canonical mode vocabulary across setup skills is `status`, `install`, `upgrade`, `enable`, `disable`, `uninstall`, `purge`; teams implements all seven.
@@ -196,6 +196,22 @@ The corruption check used to match `${BASE}`-style shell expansions inside an al
 
 **Legacy teams.** `verify-team.sh` does not hard-fail a team created before this change: missing `team.md` row → WARN with a runnable remediation command, still passes. Row listed but `.claude/agents/intent-guard.md` missing → real FAIL.
 
+## Agents owned by another generator
+
+<Callout type="tip" title="task-tracker is not a team member">
+`.claude/agents/` is project-global, so a roster can end up listing an agent that a different setup generated. The owner is read from the file's `generated_by` stamp (live file first, then the parked `.md.disabled`); the reserved name `task-tracker` always belongs to `/brewtools:task-board-setup`, even when a stale stamp says otherwise.
+</Callout>
+
+| Step | Behavior |
+|------|----------|
+| `install` | Such a name is dropped from every variant, never renamed — that setup keeps the domain. An agent owned by another *team* is different: it is reported as taken and a distinct name is proposed |
+| `enable` / `disable` | Skipped, never moved |
+| `verify-team.sh` | Prints `CHECK: agent <name> ... FOREIGN` plus a WARN, counts it in `FOREIGN_AGENTS:<N>`, skips the profile checks, and still passes |
+| `upgrade` | Drops the roster row, decrements `Agents`, and never reads, tunes, restamps, parks or deletes the file |
+| `purge` | Keeps the file (`kept: owned by <plugin>:<skill>`) |
+
+A legacy roster that listed `task-tracker` used to fail `verify-team.sh` on the six-heading profile and the size ceiling for a file teams never generated. Run `/brewcode:teams-setup upgrade <name>` once to remove the row.
+
 ## Tracing
 
 Every generated agent logs what it took, refused, completed or failed to `.claude/teams/<name>/trace.jsonl`, and that log is the only input `status` and `upgrade` have. The agent reaches it through a **project-local** copy of the tracer:
@@ -235,6 +251,7 @@ The agent template carries two blocks, so every DOMAIN member of the team inheri
 | File | Purpose |
 |------|---------|
 | `.claude/teams/<name>/team.md` | Agent roster: names, domains, missions, health status. Source of truth for team composition. |
+| `team.md` size ceiling | Checked by `verify-team.sh` on the full file: up to 13 domain rows, at most 2800 characters and 700 exact `o200k_base` tokens. Each domain row past 13 adds 80 characters and 20 tokens, so 20 domain agents allow 3360 characters and 840 tokens. `intent-guard` is not counted |
 | `.claude/teams/<name>/trace.jsonl` | JSONL log per session: tasks (took/refused/completed/failed), issues (by severity), insights (by category). Written via `trace-ops.sh add` — append-only, ~96% token savings vs full reads. |
 | `.claude/teams/<name>/trace-ops.sh` | The tracer itself, copied from the plugin at install (C4) and re-copied on every `upgrade`. The only tracing path a generated agent can resolve. Deleted by `purge`, kept by `uninstall`. |
 | `.claude/teams/<name>/trace-archive.jsonl` | Archived entries after `uninstall`. Cursor reset after archiving. `purge` deletes this file along with everything else. |

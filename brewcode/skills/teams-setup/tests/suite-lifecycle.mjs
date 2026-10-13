@@ -13,6 +13,7 @@ const HERE = join(fileURLToPath(import.meta.url), '..');
 const TOGGLE = join(HERE, '..', 'scripts', 'toggle-team.sh');
 const VERIFY = join(HERE, '..', 'scripts', 'verify-team.sh');
 const OWNERS = join(HERE, '..', 'scripts', 'agent-owners.sh');
+const GENERATOR = join(HERE, '..', 'scripts', 'agent-generator.sh');
 const DETECT = join(HERE, '..', 'scripts', 'detect-mode.sh');
 const FRAMEWORK = join(HERE, '..', 'references', 'framework-files.md');
 
@@ -600,6 +601,122 @@ const TRAVERSAL = '../../../outside/README';
   check('a13.tree', [ls(agentsDir), ls(join(agentsDir, 'worker-two.md.disabled'))],
     [['worker-one.md', 'worker-two.md', 'worker-two.md.disabled'], []],
     'GIVEN the collision WHEN disable refused THEN no member moved and the directory is still empty');
+}
+
+// Task-board's agent: its own stamp and body shape, outside every teams contract.
+const BOARD_BODY = `---
+name: task-tracker
+description: "Owns the .claude/features task board. Triggers: create/move/close task, groom backlog, task spec"
+model: sonnet
+tools: Read, Write
+doc_type: llm
+version: "6.5.6"
+generated_by: "brewtools:task-board-setup"
+last_updated: "2026-10-13"
+content_version: "6.5.6"
+---
+
+## Mission
+task-tracker: board curator.
+
+## When to use
+Board work.
+
+## Methodology
+${'Board lifecycle rule. '.repeat(200)}
+`;
+
+// A14 — D1: disable/enable never move a file another generator stamped; the team's own member still moves.
+{
+  const root = makeProject('a14', ['worker-one', 'task-tracker', 'intent-guard'], ['worker-one', 'intent-guard']);
+  const agentsDir = join(root, '.claude', 'agents');
+  writeFileSync(join(agentsDir, 'task-tracker.md'), BOARD_BODY);
+  const off = run(TOGGLE, ['t1', 'disable'], root);
+  check('a14.disable', [off.status, summary(off.stdout), linesStartingWith(off.stdout, 'SKIP:'), ls(agentsDir),
+    readFileSync(join(agentsDir, 'task-tracker.md'), 'utf8')],
+  [0, { ACTION: 'disable', TEAM: 't1', MOVED: '1', SKIPPED: '2', MISSING: '0', INVALID: '0' },
+    ['SKIP:intent-guard (shared with superreview-setup)',
+      'SKIP:task-tracker (owned by brewtools:task-board-setup; not a team member, never moved)'],
+    ['intent-guard.md', 'task-tracker.md', 'worker-one.md.disabled'], BOARD_BODY],
+  'GIVEN a roster listing task-board\'s task-tracker WHEN disable runs THEN only worker-one is parked and task-tracker stays live, byte-identical');
+
+  writeFileSync(join(agentsDir, 'task-tracker.md.disabled'), BOARD_BODY);
+  rmSync(join(agentsDir, 'task-tracker.md'));
+  const on = run(TOGGLE, ['t1', 'enable'], root);
+  check('a14.enable', [on.status, summary(on.stdout), ls(agentsDir)],
+    [0, { ACTION: 'enable', TEAM: 't1', MOVED: '1', SKIPPED: '2', MISSING: '0', INVALID: '0' },
+      ['intent-guard.md', 'task-tracker.md.disabled', 'worker-one.md']],
+    'GIVEN task-board parked its own task-tracker WHEN teams enable runs THEN the parked foreign file stays parked');
+}
+
+// A15 — D1: verify WARNs a foreign roster row and applies no teams profile check to it.
+{
+  const root = makeProject('a15', ['worker-one', 'task-tracker', 'intent-guard'], ['worker-one', 'intent-guard']);
+  writeFileSync(join(root, '.claude', 'agents', 'task-tracker.md'), BOARD_BODY);
+  const r = run(VERIFY, ['t1'], root);
+  const out = r.stdout.split('\n');
+  const at = out.indexOf('CHECK: agent task-tracker ... FOREIGN (owned by brewtools:task-board-setup)');
+  check('a15.verify', [r.status, out.slice(at, at + 3), out.filter((l) => l.includes('FAIL')),
+    linesStartingWith(r.stdout, 'FOREIGN_AGENTS:'), linesStartingWith(r.stdout, 'VERIFY:')],
+  [0, ['CHECK: agent task-tracker ... FOREIGN (owned by brewtools:task-board-setup)',
+    '  WARN: not a team member; teams never verifies, moves or restamps it.',
+    '        Fix: /brewcode:teams-setup upgrade drops this roster row and leaves the file untouched'],
+  [], ['FOREIGN_AGENTS:1'], ['VERIFY: PASS']],
+  'GIVEN task-board\'s task-tracker (no six headings, body >3200 B) on the roster WHEN verify runs THEN it is FOREIGN, WARN only, and the team passes');
+}
+
+// A16 — ownership keys on the stamp, plus task-board's reserved name: a stale teams stamp on task-tracker
+//       (6.5.6 upgrade restamp) stays FOREIGN; any other teams-stamped name gets the full profile contract.
+{
+  const root = makeProject('a16', ['worker-one', 'task-tracker', 'board-helper', 'e2e-runner', 'intent-guard'],
+    ['worker-one', 'intent-guard']);
+  const agentsDir = join(root, '.claude', 'agents');
+  const teamsStamped = BOARD_BODY.replace('"brewtools:task-board-setup"', '"brewcode:teams-setup"');
+  writeFileSync(join(agentsDir, 'task-tracker.md'), teamsStamped);
+  writeFileSync(join(agentsDir, 'board-helper.md'), teamsStamped.replace('name: task-tracker', 'name: board-helper'));
+  writeFileSync(join(agentsDir, 'e2e-runner.md'),
+    BOARD_BODY.replace('name: task-tracker', 'name: e2e-runner').replace('"brewtools:task-board-setup"', '"brewcode:e2e"'));
+  const r = run(VERIFY, ['t1'], root);
+  check('a16.verify', [r.status, linesStartingWith(r.stdout, 'CHECK: agent ').filter((l) => l.includes('FOREIGN')),
+    linesStartingWith(r.stdout, 'FOREIGN_AGENTS:'), linesStartingWith(r.stdout, 'VERIFY:')],
+  [1, ['CHECK: agent task-tracker ... FOREIGN (owned by brewtools:task-board-setup)',
+    'CHECK: agent e2e-runner ... FOREIGN (owned by brewcode:e2e)'],
+  ['FOREIGN_AGENTS:2'], ['VERIFY: FAIL']],
+  'GIVEN a teams-stamped task-tracker, a teams-stamped board-helper and an e2e-stamped e2e-runner WHEN verify runs THEN only board-helper is checked as a member and fails');
+}
+
+// A17 — agent-owners.sh adds the generator owner, live or parked, any quoting; ours/unstamped/token add none.
+{
+  const root = makeProject('a17', ['task-tracker', 'teams-stamped', 'token-stamped', 'unstamped', 'board-stale'], []);
+  const agentsDir = join(root, '.claude', 'agents');
+  const stamped = (name, stamp) => `---\nname: ${name}\ndescription: "Fixture."\n${stamp === null ? '' : `generated_by: ${stamp}\n`}---\n\n# ${name}\n`;
+  writeFileSync(join(agentsDir, 'teams-stamped.md'), stamped('teams-stamped', '"brewcode:teams-setup"'));
+  writeFileSync(join(agentsDir, 'token-stamped.md'), stamped('token-stamped', '"{GENERATED_BY}"'));
+  writeFileSync(join(agentsDir, 'unstamped.md'), stamped('unstamped', null));
+  writeFileSync(join(agentsDir, 'board-stale.md'), stamped('board-stale', '"brewcode:teams-setup"'));
+  writeFileSync(join(agentsDir, 'board-stale.md.disabled'), stamped('board-stale', "'brewtools:task-board-setup'"));
+  writeFileSync(join(agentsDir, 'parked-board.md.disabled'), stamped('parked-board', "'brewtools:task-board-setup'"));
+  writeFileSync(join(agentsDir, 'orphan-board.md'), stamped('orphan-board', 'brewtools:task-board-setup'));
+  const owners = Object.fromEntries(['task-tracker', 'teams-stamped', 'token-stamped', 'unstamped', 'board-stale',
+    'parked-board', 'orphan-board', 'ghost'].map((a) => {
+    const o = run(OWNERS, [a], root);
+    return [a, [o.status, o.stdout, o.stderr]];
+  }));
+  check('a17.owners', owners, {
+    'task-tracker': [0, 't1\ngenerator:brewtools:task-board-setup\n', ''],
+    'teams-stamped': [0, 't1\n', ''],
+    'token-stamped': [0, 't1\n', ''],
+    unstamped: [0, 't1\n', ''],
+    'board-stale': [0, 't1\n', ''],
+    'parked-board': [0, 'generator:brewtools:task-board-setup\n', ''],
+    'orphan-board': [0, 'generator:brewtools:task-board-setup\n', ''],
+    ghost: [2, '', ''],
+  }, 'GIVEN stamped, unstamped and reserved agents WHEN owners are listed THEN only a well-formed foreign stamp (live first) or the reserved task-tracker adds a generator line');
+  const refused = [run(GENERATOR, ['../outside'], root), run(GENERATOR, [], root)].map((g) => [g.status, g.stdout, g.stderr]);
+  check('a17.generatorRefusals', refused, [
+    [1, '', 'ERROR:not an agent id: ../outside (must match ^[a-z0-9][a-z0-9-]*$)\n'],
+    [1, '', 'Usage: agent-generator.sh <agent-name>   (run from the project root)\n'],
+  ], 'GIVEN a traversal value or no argument WHEN agent-generator.sh runs THEN it refuses with rc 1 and reads nothing');
 }
 
 // ── report ──────────────────────────────────────────────────────────────────

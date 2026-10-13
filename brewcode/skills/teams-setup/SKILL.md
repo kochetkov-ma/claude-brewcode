@@ -7,7 +7,7 @@ argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge]
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion, Skill]
 model: opus
 ---
-<!-- brewcode-meta: version=6.5.6 content_version=6.5.6 generated_by=brewcode:teams-setup -->
+<!-- brewcode-meta: version=6.5.7 content_version=6.5.7 generated_by=brewcode:teams-setup -->
 
 <instructions>
 
@@ -252,7 +252,8 @@ done; echo "OK"
 
 | Exit | Meaning | Do |
 |------|---------|----|
-| 0 (any owner printed) | **TAKEN** | drop it and propose a distinct name (`{name}-{TEAM_NAME}` or another domain word); never reuse or "join" the other team's agent |
+| 0, a `generator:<plugin>:<skill>` line | **FOREIGN**: another generator owns `.claude/agents/{name}.md` by its `generated_by` stamp or a reserved name (`task-tracker` <- `brewtools:task-board-setup`) | never a member: drop it from every variant, no rename; that setup keeps the domain |
+| 0 (team owners only) | **TAKEN** | drop it and propose a distinct name (`{name}-{TEAM_NAME}` or another domain word); never reuse or "join" the other team's agent |
 | 2 (no owner) | free | use it |
 | 1 (refusal, reason on stderr) | TAKEN until the reason is fixed | report the stderr line, do not guess |
 
@@ -301,9 +302,9 @@ strip shared rules from a profile until its target `team.md` passes the gate.
    or incomplete, **STOP before the first spawn** and repair the bootstrap.
 1b. **Re-run the C2 uniqueness check on the final confirmed roster, immediately before the first spawn**
    (names typed in the "Custom" branch never passed it). Any `TAKEN` name -> **do not spawn**; rename it
-   with the user first. Also refuse a name whose `.claude/agents/{name}.md.disabled` exists with no live
-   file: it is another install's parked agent, and writing the live path recreates the dual-copy state
-   both `enable` and `disable` refuse.
+   with the user first. A `FOREIGN` name leaves the roster, never renamed. Also refuse a name whose
+   `.claude/agents/{name}.md.disabled` exists with no live file: it is another install's parked agent,
+   and writing the live path recreates the dual-copy state both `enable` and `disable` refuse.
 2. For each agent, spawn `Agent(subagent_type="brewcode:agent-creator")` — ONE agent file per spawn, never a whole team. Prompt carries GOAL (build this one `{TEAM_NAME}` roster member; siblings own other domains), ROLE (owns `.claude/agents/{name}.md` only), SCOPE (that file; other agents, `team.md`, project source out), CONTEXT (settled mission/domain/project analysis, selected model, 3-4 sibling names; no trigger/domain overlap; the gated shared contract already exists), CONSUMER (C4 adds the final roster row; C5 reviews; the roster routes work), DONE:
    - `description` <=100 chars (optimal ~80), single-line role + 2-3 triggers, no `<example>`;
    - body <=3200 bytes and <=800 exact `tiktoken==0.13.0` `o200k_base` tokens, with exactly these ordered headings and no others: `## Mission`, `## Owned surfaces`, `## Exclusions`, `## Must-load references`, `## Unique invariants`, `## Unique verification`;
@@ -476,7 +477,9 @@ never emit or adapt the agent merely to upgrade it.
    `team.md` MUST carry `|Intent guard|required|` plus an `intent-guard` row (trailing `Kind` column =
    `review-only`, trailing `Version` column = `PLUGIN_VERSION:`), whether C3-IG created or reused it.
    Under `legacy-absent`, it MUST carry `|Intent guard|legacy-absent|` and no such row. `Agents | {N}`
-   counts DOMAIN agents only.
+   counts DOMAIN agents only. A file another generator stamped (`generated_by` other than
+   `brewcode:teams-setup`, e.g. `task-tracker`) never gets a row, nor does the reserved name `task-tracker`
+   (`scripts/agent-generator.sh` decides both); `verify-team.sh` WARNs `FOREIGN` on one.
 
    The header table MUST carry these four rows, adjacent and in exactly this order, filled from the
    Phase 1 `PLUGIN_VERSION:` / `CONTENT_VERSION:` / `GENERATED_BY:` / `LAST_UPDATED:` lines:
@@ -496,8 +499,10 @@ never emit or adapt the agent merely to upgrade it.
    Keep roster `Domain`/`Mission` cells terse; agent profiles own detail. For up to 13 domain agents,
    the complete written `team.md` (metadata + shared contract + every row) MUST be <=2800 characters
    and <=700 exact `tiktoken==0.13.0` `o200k_base` tokens (the tokenizer comes only from Universal
-   Prelude step 6). Measure the full substituted file, not the empty template; if over, compress only
-   roster wording without dropping members, columns, policy, or contract facts.
+   Prelude step 6). Each domain row past 13 adds 80 characters and 20 tokens (the 13-row budget's
+   per-row share, tokens at chars/4): 20 domain agents -> <=3360 characters, <=840 tokens. Measure the
+   full substituted file, not the empty template; if over, compress only roster wording without
+   dropping members, columns, policy, or contract facts.
 
 3. Verify:
    ```bash
@@ -688,7 +693,8 @@ If cursor empty: all entries returned. If team not found -> **STOP**. If cursor 
 Capture `UPGRADE_CUTOFF` before the initial cursor/trace read and keep it unchanged throughout U1-U4. Entries
 created after that cutoff may be analyzed twice, but must never be skipped by advancing the cursor past them.
 
-**Refuse to upgrade a parked member.** U4 writes `.claude/agents/{name}.md`; while the member sits at
+**Refuse to upgrade a parked member.** `{AGENT_NAMES}` below excludes members `verify-team.sh` reports
+`FOREIGN` (U1b drops their rows). U4 writes `.claude/agents/{name}.md`; while the member sits at
 `{name}.md.disabled` that creates the live+parked dual copy `toggle-team.sh` refuses (`CONFLICT:`) and
 `verify-team.sh` fails on. Probe every roster member before U2, from the project root:
 
@@ -716,7 +722,9 @@ write the explicit `Intent guard` field first: an existing intent-guard roster r
 substitute an empty string so the shared contract never names a phantom role. Never synthesize the row on
 the latter path. If a shared block exists but is
 incomplete, replace that block from the canonical reference before proceeding. Re-copy `trace-ops.sh`,
-then run `verify-team.sh`.
+then run `verify-team.sh`. Every `CHECK: agent {name} ... FOREIGN` row is another generator's agent
+(e.g. `task-tracker`): delete that roster row, decrement `Agents`, and never read, tune, restamp, park
+or delete its file.
 
 Legacy agent bodies remain byte-identical during this gate. **No agent may be tuned, regenerated, stripped,
 deleted, or spawned until the shared contract passes.** A legacy-profile warning is safe; a shared-contract
@@ -770,7 +778,8 @@ Each domain agent you regenerate or tune gets `version` / `last_updated` refresh
 (`generated_by` stays `brewcode:teams-setup`) and migrates to the current compact template (C3 DONE
 bullets): relocate repeated acceptance/tracing/routing/return/colleague/scope-fit rules to `team.md`,
 preserve every unique fact. Untouched legacy agents keep their bodies (verifier warnings name the next
-migration set). `intent-guard.md` is byte-untouchable.
+migration set). `intent-guard.md` and every `FOREIGN` file (another generator owns it) are
+byte-untouchable: never tune or restamp them.
 
 Set cursor:
 ```bash
@@ -821,7 +830,8 @@ Parks the team, deleting nothing. Claude Code discovers a project agent only thr
 `.claude/agents/<name>.md`, so each member is renamed to `<name>.md.disabled` and ENABLE renames it
 back; file body, `team.md`, `trace.jsonl`, `trace-archive.jsonl` and the cursor stay untouched. Under
 `required`, `intent-guard` is never parked (shared with `/brewcode:superreview-setup`, as in UNINSTALL
-and PURGE); under `legacy-absent` no guard file or roster row is introduced.
+and PURGE); under `legacy-absent` no guard file or roster row is introduced. A file another generator
+owns is never moved either way (`SKIP:{name} (owned by ...)`).
 
 1. Team not found -> report and **STOP**.
 2. Show what will move (no writes):
@@ -945,6 +955,7 @@ Exception: after PURGE there is no team left — output the purge summary instea
 | `toggle-team.sh` prints `MISSING:` | A roster member has neither `.md` nor `.md.disabled`. **STOP** with the name — the team is broken, not disabled; run `upgrade` or re-create that agent |
 | `toggle-team.sh` prints `SKIP:invalid agent id` / `INVALID:{N>0}` (or `verify-team.sh` FAILs the same row) | A roster value is not `^[a-z0-9][a-z0-9-]*$`: a path that would be moved or deleted outside `.claude/agents/`. The script touches nothing for that row and exits 1. **STOP**: show the row, have `team.md`'s `## Agents` table fixed by hand |
 | `toggle-team.sh` prints `CONFLICT:{agent}` / `CONFLICT:{N>0}` (or `verify-team.sh` reports `CONFLICT` and FAILs) | That member has both `.claude/agents/{a}.md` and `{a}.md.disabled`. Both directions refuse (`enable` would overwrite the live file, `disable` the parked one) before any `mv`: nothing moved, both bodies intact. `CONFLICT:{N}` prints on every toggle run; `{N>0}` exits 1. **STOP**: name every conflicting member, have the user keep one copy and delete/rename the other, then re-run the same action. Never delete either copy yourself, never `--force` around it |
+| `verify-team.sh` prints `CHECK: agent {name} ... FOREIGN` / `FOREIGN_AGENTS:{N>0}` | WARN, still PASS: a legacy roster lists another generator's agent (`task-tracker`). Not a member and never checked; `upgrade` (U1b) drops the row and decrements `Agents`, file untouched |
 | `verify-team.sh` prints `DISABLED_AGENTS:{N>0}` | Expected on a disabled team; it still exits PASS. Not a failure, and never "repaired" by regenerating the agents — `enable` is the fix |
 | Team already exists (INSTALL) | Show roster, AskUserQuestion: "Upgrade instead?" |
 | verify-team.sh FAIL | Show missing items, attempt fix, re-verify |
