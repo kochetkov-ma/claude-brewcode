@@ -50,7 +50,8 @@ function bash(root, command) {
   return r.stdout;
 }
 
-const fill = block => block.replace('<absolute path resolved in P0>', '$CLAUDE_PROJECT_DIR')
+const PENDING_SLOT = '<label of every PATCH / ABSENT line the U1 PROBE BLOCK prints when re-run right now, space-separated; empty when none>';
+const fill = (block, pending = '') => block.replace('<absolute path resolved in P0>', '$CLAUDE_PROJECT_DIR').replace(PENDING_SLOT, pending)
   .replace('<PLUGIN_VERSION from the SKILL.md block>', PV).replace('<CONTENT_VERSION from the same block>', CV)
   .replace('<LAST_UPDATED from the same block>', '2026-10-13');
 const readStamps = root => bash(root, stamps.replace('PLUGIN_ROOT=/abs/root/printed/by/phase0', `PLUGIN_ROOT="${TOOLS}"`)
@@ -96,5 +97,27 @@ test('GIVEN an FM-less control file never restamped WHEN the U6 gate and setup-s
     { misses: gate.filter(line => line.startsWith('MISS stale marker:')).length, last: gate.pop(), stamps: readStamps(root) },
     { misses: 4, last: '❌ 4 artifact(s) still stale -- re-run U5b', stamps: Object.keys(BARE).flatMap(f => [`OWNER-NONE ${f}`, `LEGACY-NONE ${f}`]) },
     'an unstamped control file must never read current',
+  );
+});
+
+test('GIVEN declined content rows WHEN headless upgrade reaches U5b and the U6 gate THEN nothing is restamped and both print PARTIAL', t => {
+  // GIVEN: the yasna-bot board with rows 2m and 7 left PATCH (declined or unasked).
+  const root = fixture(t);
+  const files = [...Object.keys(BARE), ...STAMPED];
+  const before = Object.fromEntries(files.map(f => [f, readFileSync(join(root, f), 'utf8')]));
+  // WHEN: U5b and the stamp gate run with that pending list.
+  const restamp = bash(root, fill(restampBlock, '2m 7')).trim().split('\n');
+  const gate = bash(root, fill(gateBlock, '2m 7')).trim().split('\n');
+  const after = Object.fromEntries(files.map(f => [f, readFileSync(join(root, f), 'utf8')]));
+  // THEN: no byte moved, both blocks name the pending rows, setup-status still reads the anchor stale.
+  assert.deepEqual(
+    { restamp, gate, after, stamps: readStamps(root) },
+    {
+      restamp: ['PARTIAL content rows still pending: 2m 7', 'restamp withheld -- stamps stay at the previous version until every pending row lands'],
+      gate: ['PARTIAL restamp withheld by U5b, stamps intentionally behind -- pending: 2m 7'],
+      after: before,
+      stamps: Object.keys(BARE).flatMap(f => [`OWNER-NONE ${f}`, `LEGACY-NONE ${f}`]),
+    },
+    'a pending content row must withhold every stamp so setup-status never reads a partial upgrade as current',
   );
 });
