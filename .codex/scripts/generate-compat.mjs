@@ -873,26 +873,6 @@ Resolve exactly one canonical mode -- \`status\`, \`install\`, \`upgrade\`, \`en
 The codewords are hook-driven: they fire on every prompt regardless of the mode state above. \`status\` explains them and \`edit\` customizes their text; no mode turns them off.
 
 The plugin uses \`SessionStart\` and \`UserPromptSubmit\` hooks. Preserve unrelated hook entries and review changed definitions with \`/hooks\`.`,
-    'brewtools/plugin-update': `# Codex plugin maintenance
-
-Use native Codex plugin CLI only; never edit caches or configuration files directly.
-
-## Discovery and status
-
-1. Read configured marketplaces with \`codex plugin marketplace list --json\`.
-2. Read installed and available plugins with \`codex plugin list --json\`.
-3. Build a table containing plugin id, marketplace, installed version, enabled state, and exact target version from a trusted manifest.
-
-## Install, update, and migration
-
-1. Validate the target marketplace and package manifests before mutation.
-2. Snapshot plugin id, version, enabled state, managed agent files, and whether the marketplace is configured.
-3. Use \`codex plugin marketplace add <repository-root>\`, \`codex plugin remove <plugin-id>\`, and \`codex plugin add <plugin>@<marketplace>\` only.
-4. For this repository run \`node .codex/scripts/install-update.mjs migrate\`; it moves known remote 4.0.5 installs to the exact local manifests in one rollback-protected transaction.
-5. On any failure, restore every prior plugin id and verify version/enabled state, restore managed agents, and remove a newly added marketplace.
-6. Re-run \`codex plugin list --json\`, validators, and hook fixtures; tell the user to review hook definitions and start a fresh session.
-
-Do not prune stale caches. Cleanup is a separate operation requiring explicit authorization.`,
     'brewtools/provider-switch': `# Codex provider switch
 
 Use only when explicitly invoked.
