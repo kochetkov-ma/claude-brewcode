@@ -202,6 +202,5 @@ packages.lock.json
 # adds paths it has never proposed, so your edits here survive.
 # /.codex/   duplicate-tree  13.6%  102 of 107 files are byte-identical copies of files under brewtools
 # /RELEASE-NOTES.md   heavy-file  5.6%  one file is 6% of the corpus chunks
-# /.claude/reports/20261012-125942_cc296-refresh/semble-ab/snapshots/pin-0.6.2/   duplicate-tree  2.2%  53 of 53 files are byte-identical copies of files under .claude
 # /.codex/plugins/   duplicate-tree  1.9%  129 of 129 files are byte-identical copies of files under brewtools
 # --- end brewcode:semble measured candidates ---

@@ -503,6 +503,8 @@ const jsonMode = E.SC_JSONMODE === "1";
 const TOOLS = [E.SC_TOOL_SEARCH, E.SC_TOOL_RELATED];
 
 function out(s) { fs.writeSync(1, s); }
+// Sibling JSON arrives on stdin, NUL-terminated in this order (a bash string never holds NUL).
+const [rawMcp, rawVersions, rawCache, rawGuidance, rawAgents, rawProject] = fs.readFileSync(0, "utf8").split("\0");
 
 function parseSection(raw, label) {
   if (raw === undefined || raw === "") return null;
@@ -592,7 +594,7 @@ if (E.SC_PREREQ_WANTED === "1") {
 }
 
 // ── mcp (transform of semble-mcp.sh detect --json into the 9.1 shape) ───────
-const detect = parseSection(E.SC_MCP_JSON, "semble-mcp.sh detect");
+const detect = parseSection(rawMcp, "semble-mcp.sh detect");
 let mcpSec;
 if (detect === null) {
   mcpSec = null;
@@ -620,7 +622,7 @@ if (detect === null) {
 }
 
 // ── versions (active config dir slice of sc_versions_json) ─────────────────
-const verRaw = parseSection(E.SC_VERSIONS_JSON, "version check");
+const verRaw = parseSection(rawVersions, "version check");
 let versionsSec;
 if (verRaw === null || isErr(verRaw)) {
   versionsSec = verRaw;
@@ -642,11 +644,12 @@ const pinMoved = !!mcpSec && !isErr(mcpSec) && mcpSec.state === "stale_args"
   && (versionsSec.verdict === "stale" || versionsSec.verdict === "ahead");
 
 // ── cache (pass-through of semble-cache.sh info --json) ─────────────────────
-const cacheSec = parseSection(E.SC_CACHE_JSON, "semble-cache.sh info");
+const cacheSec = parseSection(rawCache, "semble-cache.sh info");
 
 // ── guidance (transform of semble-guidance.sh status --json) ────────────────
-const guidRaw = parseSection(E.SC_GUIDANCE_JSON, "semble-guidance.sh status");
+const guidRaw = parseSection(rawGuidance, "semble-guidance.sh status");
 let guidSec;
+let absoluteOnly = false;
 if (guidRaw === null || isErr(guidRaw)) {
   guidSec = guidRaw;
 } else {
@@ -677,6 +680,8 @@ if (guidRaw === null || isErr(guidRaw)) {
     wiredCount: typeof h.wiredCount === "number" ? h.wiredCount : 0,
     wantCount: typeof h.wantCount === "number" ? h.wantCount : 0,
     staleEntries: typeof h.staleEntries === "number" ? h.staleEntries : 0,
+    // <= 6.5.0 absolute hook args (subset of staleEntries); `upgrade` rewrites them in place.
+    absoluteCount: typeof h.absoluteCount === "number" ? h.absoluteCount : 0,
     // content_version = PRIMARY staleness signal (artifact-metadata.md section 6); `version` = informational
     // install release. Surfaced here too so old artifacts !=`ready`; /brewcode:setup-status keeps the breakdown.
     content_version: typeof rule.content_version === "string" ? rule.content_version : "",
@@ -684,10 +689,21 @@ if (guidRaw === null || isErr(guidRaw)) {
     version: typeof rule.version === "string" ? rule.version : "",
     pluginVersion: typeof rule.templateVersion === "string" ? rule.templateVersion : "",
   };
+  // Absolute-only hook drift: every stale entry absolute, every unwired row drifted on `args` alone (abs -> portable).
+  const drift = Array.isArray(h.drift) ? h.drift : [];
+  const absArg = function (d) {
+    const m = d && Array.isArray(d.actual) && d.actual.length === 1 && typeof d.actual[0] === "string"
+      ? /^(?:\/|[A-Za-z]:[\\/]).*[\\/]\.claude[\\/]hooks[\\/]([^\\/]+)$/.exec(d.actual[0]) : null;
+    return d.field === "args" && !!m && m[1] === d.script;
+  };
+  absoluteOnly = guidSec.absoluteCount > 0 && guidSec.staleEntries === guidSec.absoluteCount
+    && h.missingCount === 0 && h.duplicateCount === 0
+    && h.driftedCount === guidSec.wantCount - guidSec.wiredCount
+    && drift.length === h.driftedCount && drift.every(absArg);
 }
 
 // ── agents (transform of semble-agents.sh audit --json) ─────────────────────
-const agRaw = parseSection(E.SC_AGENTS_JSON, "semble-agents.sh audit");
+const agRaw = parseSection(rawAgents, "semble-agents.sh audit");
 let agentsSec;
 if (agRaw === null || isErr(agRaw)) {
   agentsSec = agRaw;
@@ -713,7 +729,7 @@ if (agRaw === null || isErr(agRaw)) {
 }
 
 // ── coverage (from semble-project.sh audit --json) ──────────────────────────
-const projRaw = parseSection(E.SC_PROJECT_JSON, "semble-project.sh audit");
+const projRaw = parseSection(rawProject, "semble-project.sh audit");
 let covSec;
 if (projRaw === null || isErr(projRaw)) {
   covSec = projRaw;
@@ -747,17 +763,27 @@ const why = [];
 const retiredLeft = (guidSec && !isErr(guidSec))
   ? Array.from(new Set(guidSec.retired.concat(guidSec.retiredWired))) : [];
 const verifyWhy = [];
+// Clauses outside verifyWhy that `resume` still fixes: its warm builds a missing index variant.
+let resumeWhy = 0;
+// Clauses that are absolute-path hook drift alone (stale entries, hooks wired): `upgrade` migrates them.
+let absWhy = 0;
 if (verdict === "ready") {
   if (guidSec && !isErr(guidSec)) {
     const stale = typeof guidSec.staleEntries === "number" ? guidSec.staleEntries : 0;
     const wired = typeof guidSec.wiredCount === "number" ? guidSec.wiredCount : 0;
     const want = typeof guidSec.wantCount === "number" ? guidSec.wantCount : 0;
     if (retiredLeft.length) { why.push("stale (remove via upgrade): " + retiredLeft.join(", ")); }
-    if (stale > 0) { why.push(stale + " stale settings " + (stale === 1 ? "entry" : "entries")); }
+    if (stale > 0) {
+      why.push(stale + " stale settings " + (stale === 1 ? "entry" : "entries"));
+      if (absoluteOnly) absWhy += 1;
+    }
     if (guidSec.rule === "stale") { why.push("semble-first rule is a prior-release copy"); }
     // want===0 means the wiring counts were not reported at all - never treat an
     // absent count as a defect, or a trimmed report downgrades a healthy repo.
-    if (want > 0 && wired !== want) { why.push("hooks wired " + wired + "/" + want); }
+    if (want > 0 && wired !== want) {
+      why.push("hooks wired " + wired + "/" + want);
+      if (absoluteOnly) absWhy += 1;
+    }
     // `user_modified` is a supported state (the user owns their edits); only a
     // rule that is not on disk at all leaves the guidance half uninstalled.
     if (guidSec.rule === "absent") { why.push("semble-first rule absent"); }
@@ -780,6 +806,7 @@ if (verdict === "ready") {
   if (missInstall.length) { why.push("install steps not recorded: " + missInstall.join(", ")); }
   if (cacheSec && !isErr(cacheSec) && cacheSec.present === false) {
     why.push("no current content variant in the shared cache");
+    resumeWhy += 1;
   }
   if (agentsSec && !isErr(agentsSec) && typeof agentsSec.needsPatch === "number" && agentsSec.needsPatch > 0) {
     why.push(agentsSec.needsPatch + (agentsSec.needsPatch === 1 ? " agent needs" : " agents need") + " patching");
@@ -800,6 +827,13 @@ if (verdict === "ready" && guidSec && !isErr(guidSec)
     (guidSec.version ? " (version " + guidSec.version + ")" : "");
 }
 
+// A hand-edited rule keeps its old stamp through `upgrade` (never overwritten): plain `upgrade` would loop.
+const editedRuleOnly = stampStale && guidSec.rule === "user_modified" && !pinMoved && !retiredLeft.length;
+if (editedRuleOnly) {
+  reason = "semble-first rule is hand-edited at content_version " + guidSec.content_version +
+    ", plugin at " + guidSec.templateContentVersion + "; upgrade keeps it as is";
+}
+
 let nextStep;
 if (verdict === "ready") {
   nextStep = "none";
@@ -814,11 +848,18 @@ if (verdict === "ready") {
   nextStep = "Run /brewcode:semble-setup enable";
 } else if (verdict === "verifying") {
   nextStep = "Run /brewcode:semble-setup resume";
+} else if (editedRuleOnly) {
+  nextStep = "Review: diff -u " + E.SC_RULE_FILE + " " + E.SC_RULE_TEMPLATE +
+    "\nThen merge by hand and set content_version: " + guidSec.templateContentVersion + " in " + E.SC_RULE_FILE +
+    ",\nor replace it: /brewcode:semble-setup upgrade --force (backs up " + E.SC_RULE_FILE + ".bak.<epoch> first)";
 } else if (stampStale || pinMoved || retiredLeft.length || (guidSec && guidSec.rule === "stale")) {
   nextStep = "Run /brewcode:semble-setup upgrade";
-} else if (verifyWhy.length && verifyWhy.length === why.length) {
-  // Everything is installed and wired; only the warm/smoke pair is unproven.
-  // `resume` re-runs exactly that, `install` would redo the whole thing.
+} else if (absWhy && absWhy + verifyWhy.length + resumeWhy === why.length) {
+  // Only <= 6.5.0 absolute hook args (plus resume-owned gaps): `upgrade` rewrites them in place.
+  nextStep = "Run /brewcode:semble-setup upgrade";
+} else if ((verifyWhy.length || resumeWhy) && verifyWhy.length + resumeWhy === why.length) {
+  // Installed and wired; only warm/smoke unproven or the index variant missing.
+  // `resume` re-runs exactly that (warm builds the index), `install` would redo the whole thing.
   nextStep = "Run /brewcode:semble-setup resume";
 } else {
   nextStep = "Run /brewcode:semble-setup install";
@@ -912,6 +953,8 @@ if (jsonMode) {
         " | hooks " + g.wiredCount + "/" + (g.wantCount || 0) + " wired" +
         " | permissions " + (g.permissionsWired ? "yes" : "no") + ver);
       if (retiredLeft.length) L.push("retired:  " + retiredLeft.join(", ") + " - stale (remove via upgrade)");
+      if (g.absoluteCount) L.push("portable:  " + g.absoluteCount + " absolute-path hook entr"
+        + (g.absoluteCount === 1 ? "y" : "ies") + " (break every other clone) - run /brewcode:semble-setup upgrade");
     }
   }
   if (report.agents) {
@@ -953,7 +996,9 @@ NODEJS
 )"
 
 set +e
+# Sibling JSON rides stdin: in argv/env it hits E2BIG past ARG_MAX, and env bytes shrink V8's stack.
 REPORT="$(
+  printf '%s\0' "$MCP_JSON" "$VERSIONS_JSON" "$CACHE_JSON" "$GUIDANCE_JSON" "$AGENTS_JSON" "$PROJECT_JSON" |
   SC_SECTION="$SECTION" \
   SC_JSONMODE="$JSON_MODE" \
   SC_PLATFORM="$(sc_platform)" \
@@ -963,6 +1008,8 @@ REPORT="$(
   SC_TOOL_SEARCH="$SEMBLE_TOOL_SEARCH" \
   SC_TOOL_RELATED="$SEMBLE_TOOL_RELATED" \
   SC_STATE_FILE="$(sc_state_file)" \
+  SC_RULE_FILE="$(sc_rule_file)" \
+  SC_RULE_TEMPLATE="$(cd "$SC_DIR/.." && pwd)/assets/semble-first.md.template" \
   SC_PROJECT_SETTINGS="$(sc_project_settings)" \
   SC_USER_SETTINGS="$(sc_user_settings)" \
   SC_PREREQ_WANTED="$PREREQ_WANTED" \
@@ -972,12 +1019,6 @@ REPORT="$(
   SC_CLAUDE_PATH="$CLAUDE_PATH" SC_CLAUDE_VER="$CLAUDE_VER" \
   SC_NODE_PATH="$NODE_PATH" SC_NODE_VER="$NODE_VER" \
   SC_SEMBLE_TOOLVER="$SEMBLE_TOOLVER" SC_SEMBLE_RESOLVABLE="$SEMBLE_RESOLVABLE" \
-  SC_MCP_JSON="$MCP_JSON" \
-  SC_VERSIONS_JSON="$VERSIONS_JSON" \
-  SC_CACHE_JSON="$CACHE_JSON" \
-  SC_GUIDANCE_JSON="$GUIDANCE_JSON" \
-  SC_AGENTS_JSON="$AGENTS_JSON" \
-  SC_PROJECT_JSON="$PROJECT_JSON" \
   node -e "$ASSEMBLER"
 )"
 NODE_RC=$?

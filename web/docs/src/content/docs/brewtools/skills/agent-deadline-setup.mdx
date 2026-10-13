@@ -83,7 +83,20 @@ Canonical order, shared by every `-setup` skill: `status | install | upgrade | e
 | Project | `<repo>/.claude/hooks/` | `<repo>/.claude/settings.json` | `<repo>/.claude/agent-deadline.json` |
 | Global | `<config dir>/hooks/` | `<config dir>/settings.json` | `<config dir>/agent-deadline.json` |
 
-`<config dir>` is `$CLAUDE_CONFIG_DIR` when set, else `~/.claude`. State lives in the OS temp dir under `brewtools-agent-deadline/<session_id>/`, never under the config dir. In the install runbook the project root is taken from `CLAUDE_PROJECT_DIR` first (the session start dir, as hooks see it), then git toplevel. Project config wins over global; a malformed project config is skipped and global is used instead. Global writes go through Bash only — the config dir is a protected path for `Write`/`Edit`: prompted in `default` and `acceptEdits`, denied headless and in `dontAsk`, allowed only under `bypassPermissions`.
+`<config dir>` is `$CLAUDE_CONFIG_DIR` when set, else `~/.claude`. State lives in the OS temp dir under `brewtools-agent-deadline/<session_id>/`, never under the config dir. In the install runbook the project root is taken from `CLAUDE_PROJECT_DIR` first (the session start dir, as hooks see it), then git toplevel. The guard reads the nearest valid project config first (a JSON object in `.claude/agent-deadline.json`, walking up from the subagent's working directory, not from the project root, at most 16 levels), then the global one; a malformed (non-object) project config is skipped and the climb continues; global is used only when no valid project config is found. Global writes go through Bash only — the config dir is a protected path for `Write`/`Edit`: prompted in `default` and `acceptEdits`, denied headless and in `dontAsk`, allowed only under `bypassPermissions`.
+
+### Governing config after `uninstall project`
+
+`uninstall project` removes the project hooks but keeps `.claude/agent-deadline.json`. If the global scope still registers the guard, that kept file keeps governing it, so the project `enabled` and budget override the global config.
+
+Status prints `governing_config=<path> governing_scope=project|global|none orphan_config=yes|no`. `governing_config` is resolved exactly as the guard does (see Installation targets). `orphan_config=yes` means a project config governs while the project has no registrations and the global scope has some. Status then reports a finding and never offers `upgrade` for it, because upgrade re-wires the project hooks and undoes the uninstall.
+
+| Goal | Run |
+|------|-----|
+| Hand control back to the global config | `/brewtools:agent-deadline-setup purge project` (deletes the project config and its state) |
+| Keep the project config on purpose | Nothing. The `uninstall project` warning is informational |
+
+When the case applies, `uninstall project` prints `WARNING: kept <cfg> still GOVERNS ...` and the skill offers `purge project` in the same confirmation.
 
 ### Config shape
 

@@ -173,11 +173,17 @@ Copied-byte checks cover the assets named by the roster: semantic-search hooks a
 deadline hooks, router hook, manager guard, docsync hooks, supported memory-sync references,
 team tracer, and return hook modules. Semble's wiring is checked independently, including stale
 settings entries and missing registrations. Its customized root `.sembleignore` is excluded
-from byte comparison.
+from byte comparison. When the only drift is hook entries that still use absolute paths
+(releases up to 6.5.0), the report prescribes `upgrade`, which rewrites them in place to the
+portable form; any other stale or missing wiring keeps `install`.
+
+For the opt-in deadline and return guards, each `GOVERNING` line names the config the guard itself would load; resolution details are on the [agent-deadline-setup](/brewtools/skills/agent-deadline-setup/) and [agent-return-setup](/brewtools/skills/agent-return-setup/) pages. When `GOVERNING` names a project file but only the global scope is registered, the row reports an orphaned project config and prescribes `/brewtools:<setup> purge project`, never `upgrade`.
 
 Emitted superreview metadata is read from its live SKILL.md, never from unresolved placeholders
 in the pristine baseline. A changed baseline may require manually porting template changes.
-Hand-edited references or search rules can also require a diff review rather than a blind upgrade.
+Hand-edited references can also require a diff review rather than a blind upgrade. An edited
+`semble-first.md` is never sent to plain `upgrade`, which leaves the file and its stamp: the report
+points to a diff and manual merge, or `/brewcode:semble-setup upgrade --force` (backs up first, discards the edits).
 
 ## Related
 

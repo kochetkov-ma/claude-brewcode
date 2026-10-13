@@ -173,6 +173,42 @@ check('f09.no-pr-target', blocks.flatMap((b) => b.split('\n').filter((l) => l.in
   }
 }
 
+// ── 3b. T2 server pull authenticates with the job token, private config (6.5.1 F5, F11)
+{
+  const t2 = blocks[1].split('\n');
+  const start = t2.findIndex((l) => l === '      - name: Deploy docs service');
+  const end = t2.findIndex((l, i) => i > start && /^\s{6}- name:/.test(l));
+  const step = t2.slice(start, end);
+  const script = step.slice(step.findIndex((l) => l.trim() === 'script: |') + 1).map((l) => l.trim());
+  check('ghcr.step-found', [start > -1, end > start], [true, true], 'the T2 SSH deploy step is located');
+  check('ghcr.permission', t2.filter((l) => /^ {2}packages:/.test(l)), ['  packages: read'],
+    'T2 grants the job token package read, the scope the server login needs');
+  check('ghcr.env', step.filter((l) => /^ {10}GHCR_(USER|TOKEN):/.test(l)).map((l) => l.trim()), [
+    'GHCR_USER: ${{ github.actor }}', 'GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}',
+  ], 'the deploy step receives the actor and job token through env:, not a stored VPS credential');
+  check('ghcr.envs', step.filter((l) => l.trim().startsWith('envs:')).map((l) => l.trim().split(',').slice(-2)),
+    [['GHCR_USER', 'GHCR_TOKEN']], 'appleboy/ssh-action forwards both GHCR variables to the server');
+  check('ghcr.script-head', script.slice(0, 12), [
+    'set -euo pipefail',
+    '# Job token (packages: read) lives in a private DOCKER_CONFIG removed on every exit; shared ~/.docker untouched.',
+    'GHCR_CONFIG=""',
+    'trap \'case "${GHCR_CONFIG#/tmp/ghcr-auth.}" in ""|"$GHCR_CONFIG"|*/*) ;; *) rm -rf -- "$GHCR_CONFIG" ;; esac\' EXIT',
+    'GHCR_CONFIG="$(mktemp -d /tmp/ghcr-auth.XXXXXXXX)"',
+    'readonly GHCR_CONFIG',
+    'DOCKER_CONFIG="$GHCR_CONFIG"; export DOCKER_CONFIG',
+    '# Seeded auths entry keeps the token in that file, not an OS keychain; user CLI plugins (compose) stay visible.',
+    'printf \'{"auths":{"ghcr.io":{}}}\\n\' > "$DOCKER_CONFIG/config.json"',
+    'if [ -d "$HOME/.docker/cli-plugins" ]; then ln -s "$HOME/.docker/cli-plugins" "$DOCKER_CONFIG/cli-plugins"; fi',
+    'printf \'%s\' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin',
+    'unset GHCR_TOKEN',
+  ], 'guarded EXIT cleanup, fresh private DOCKER_CONFIG, then stdin login and unset open the script, before any pull');
+  check('ghcr.shared-config-untouched', script.filter((l) => /docker logout|\.docker\/config\.json/.test(l)), [],
+    'no logout and no write to the VPS user\'s shared ~/.docker/config.json');
+  const login = script.findIndex((l) => l.includes('docker login ghcr.io'));
+  check('ghcr.pulls-after-login', [login > -1, ...script.map((l, i) => [l, i]).filter(([l]) => l.includes('docker compose pull')).map(([, i]) => i > login)],
+    [true, true, true], 'a login line exists and both the deploy pull and the rollback pull come after it');
+}
+
 // ── 4. BT-F08: banned git idioms at every shipped site ────────────────────
 {
   // Banned idiom allowed only beside ITS OWN replacement or "banned" (documenting the ban); per-idiom pairing,

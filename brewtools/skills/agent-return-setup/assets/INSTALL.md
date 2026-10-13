@@ -1,4 +1,4 @@
-<!-- brewcode-meta: version=6.5.0 content_version=6.5.0 generated_by=brewtools:agent-return-setup -->
+<!-- brewcode-meta: version=6.5.1 content_version=6.5.1 generated_by=brewtools:agent-return-setup -->
 # agent-return hooks — install / configure / remove runbook
 
 Self-contained hook assets. The `/brewtools:agent-return-setup` skill copies these into a
@@ -838,10 +838,25 @@ console.log("OK cleaned "+f);
   && { rmdir "$HOOKS_DIR" 2>/dev/null || true; } \
   && { case "$STATE_DIR" in */agent-return-state) node -e 'require("fs").rmSync(process.env.STATE_DIR,{recursive:true,force:true})';; *) echo "STATE_DIR must end in /agent-return-state, got: '$STATE_DIR'"; false;; esac; } \
   && test ! -e "$STATE_DIR" \
+  && { node -e '
+const fs=require("fs"), p=require("path"), os=require("os");
+const scope=p.dirname(p.resolve(process.env.SETTINGS)), home=p.join(os.homedir(),".claude");
+const G=(process.env.CLAUDE_CONFIG_DIR||"").trim()?p.resolve(process.env.CLAUDE_CONFIG_DIR):home;
+if(scope===G||scope===home) process.exit(0);           // global uninstall: nothing shadows
+const cfg=p.join(scope,"agent-return.json"), gs=p.join(G,"settings.json");
+let c=null; try{ c=JSON.parse(fs.readFileSync(cfg,"utf8")); }catch{}
+if(!c||typeof c!=="object"||Array.isArray(c)) process.exit(0);
+let wired=false; try{ wired=/agent-return-(contract|guard)\.mjs/.test(JSON.stringify(JSON.parse(fs.readFileSync(gs,"utf8")).hooks||{})); }catch{}
+if(wired) console.log("WARNING: kept "+cfg+" still GOVERNS: the global agent-return hooks ("+gs+") read the nearest project config first, so pass="+c.passTokens+" file="+c.fileTokens+" enabled="+c.enabled+" override "+p.join(G,"agent-return.json")+". Hand control to the global config: /brewtools:agent-return-setup purge project. Keeping it on purpose is valid.");
+' || true; } \
   && echo "✅ uninstalled from $HOOKS_DIR" || echo "❌ FAILED"
 ```
 
 > **STOP if ❌** — fix before continuing.
+
+> A project uninstall keeps `agent-return.json` by design. When the global scope still registers
+> the hooks, that kept file keeps GOVERNING them (`loadConfig`: nearest project config first), so
+> the block prints `WARNING: kept <cfg> still GOVERNS ...`. Relay it; the fix is PURGE for the project.
 
 > `STATE_DIR` holds only the once-per-agent markers (a `.gitignore` plus one small JSON
 > per challenged agent). Removing it while a subagent is running costs at most one

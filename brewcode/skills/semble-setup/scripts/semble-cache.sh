@@ -176,8 +176,9 @@ case "$SUB" in
     if [ "$JSON" = "1" ]; then
       printf '%s\n' "$INFO"
     else
-      SC_I="$INFO" node -e '
-const i=JSON.parse(process.env.SC_I);
+      # stdin, not env: the index metadata can exceed ARG_MAX.
+      printf '%s' "$INFO" | node -e '
+const i=JSON.parse(require("fs").readFileSync(0,"utf8"));
 console.log((i.present?"✅ ":"⏭️ ")+"repo cache "+(i.present?"present":"absent")+": "+(i.repoDir||"(unresolved)"));
 console.log("hash: "+(i.repoHash||"(unresolved)"));
 console.log("size: "+i.sizeBytes+" bytes in "+i.entries+" files | staleness: "+i.staleness);

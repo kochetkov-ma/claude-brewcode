@@ -172,8 +172,15 @@ jobs:
           envs: TAG,EXPECTED_SHA,EXPECTED_VERSION,EXPECTED_RUN,EXPECTED_ATTEMPT,EXPECTED_DIGEST,EXPECTED_PAGE_HASH,GHCR_USER,GHCR_TOKEN
           script: |
             set -euo pipefail
-            # Job-scoped token (packages: read) overrides stale VPS creds; logout on every exit path.
-            trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
+            # Job token (packages: read) lives in a private DOCKER_CONFIG removed on every exit; shared ~/.docker untouched.
+            GHCR_CONFIG=""
+            trap 'case "${GHCR_CONFIG#/tmp/ghcr-auth.}" in ""|"$GHCR_CONFIG"|*/*) ;; *) rm -rf -- "$GHCR_CONFIG" ;; esac' EXIT
+            GHCR_CONFIG="$(mktemp -d /tmp/ghcr-auth.XXXXXXXX)"
+            readonly GHCR_CONFIG
+            DOCKER_CONFIG="$GHCR_CONFIG"; export DOCKER_CONFIG
+            # Seeded auths entry keeps the token in that file, not an OS keychain; user CLI plugins (compose) stay visible.
+            printf '{"auths":{"ghcr.io":{}}}\n' > "$DOCKER_CONFIG/config.json"
+            if [ -d "$HOME/.docker/cli-plugins" ]; then ln -s "$HOME/.docker/cli-plugins" "$DOCKER_CONFIG/cli-plugins"; fi
             printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
             unset GHCR_TOKEN
             DOCS_PATH=/opt/brewcode-docs

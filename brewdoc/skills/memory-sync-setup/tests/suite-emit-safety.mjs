@@ -257,6 +257,63 @@ const write = (p, body) => { mkdirSync(dirname(p), { recursive: true }); writeFi
     [0, `MEMORY_DIR=${mem}`, 0, 'MEMORY_DIR=none']);
 }
 
+// ── 11. validate checks only the skill's OWN references/*.md citations ────────
+{
+  const refLines = out => out.split('\n').filter(l => /references consistent|cites |never cited/.test(l));
+  const ok = '✅ references consistent both ways (every citation resolves, every emitted reference is cited)';
+  const skill = root => join(root, SKILL, 'SKILL.md');
+
+  // GIVEN an emitted skill that mentions another skill's reference and a docs `.mdx` page.
+  const foreign = project('validate-foreign-refs');
+  run(foreign, 'emit');
+  write(skill(foreign), `${read(skill(foreign))}\nSee \`.claude/skills/docs/references/review-prompt.md\`, docs/references/x.md and \`references/mdx-template.mdx\`.\n`);
+  // WHEN validate runs THEN neither mention is read as a missing own file (the only error left: 2 open BLOCKs).
+  const v1 = run(foreign, 'validate');
+  check('foreign and .mdx reference mentions are not own citations', [v1.code, refLines(v1.out)], [1, [ok]]);
+
+  // GIVEN own citations of absent files in the three own spellings.
+  const own = project('validate-own-missing');
+  run(own, 'emit');
+  const n = read(skill(own)).split('\n').length;
+  write(skill(own), `${read(skill(own))}Own: references/missing.md. \`.claude/skills/memory-sync/references/gone.md\`, \${CLAUDE_SKILL_DIR}/references/nope.md\n`);
+  const v2 = run(own, 'validate');
+  check('own citations of absent files still fail with their line', [v2.code, refLines(v2.out)], [4, [
+    `❌ FAILED: ${SKILL}/SKILL.md:${n}: cites references/gone.md which does not exist`,
+    `❌ FAILED: ${SKILL}/SKILL.md:${n}: cites references/missing.md which does not exist`,
+    `❌ FAILED: ${SKILL}/SKILL.md:${n}: cites references/nope.md which does not exist`,
+  ]]);
+
+  // GIVEN an emitted reference mentioned only under ANOTHER dir's references/.
+  const uncited = project('validate-foreign-only-cite');
+  run(uncited, 'emit');
+  write(skill(uncited), read(skill(uncited)).replaceAll('references/prompting-guide.md', 'docs/references/prompting-guide.md'));
+  const v3 = run(uncited, 'validate');
+  check('a foreign-dir mention does not count as citing an emitted reference', [v3.code, refLines(v3.out)], [2, [
+    `❌ FAILED: ${SKILL}/references/prompting-guide.md is emitted but never cited by ${SKILL}/SKILL.md`,
+  ]]);
+}
+
+// ── 12. scan reads frontmatter `paths:` in inline AND YAML block-list form ─────
+{
+  // GIVEN rules covering every `paths:` spelling plus a body-only `paths:` line.
+  const root = project('scan-paths-forms');
+  write(join(root, '.claude/rules/a-block.md'), '---\npaths:\n  - "src/a/**"\n  - "src/b/**"\n---\n# Block\n');
+  write(join(root, '.claude/rules/b-flush.md'), '---\npaths:\n- src/c/**\n\n  # note\n- src/d/**\ndescription: x\n---\n# Flush\n');
+  write(join(root, '.claude/rules/c-flow.md'), '---\npaths: ["src/e/**", "src/f/**"]\n---\n# Flow\n');
+  write(join(root, '.claude/rules/d-scalar.md'), '---\npaths: src/g/**\n---\n# Scalar\n');
+  write(join(root, '.claude/rules/e-body.md'), '# Body only\n\npaths: not/frontmatter/**\n');
+  // WHEN scan runs.
+  const scan = run(root, 'scan');
+  // THEN each rule reports its real globs; a body line is not frontmatter.
+  check('scan renders every paths: form', [scan.code, scan.out.split('\n').filter(l => l.startsWith('.claude/rules/'))], [0, [
+    '.claude/rules/a-block.md :: 6 lines :: ["src/a/**", "src/b/**"]',
+    '.claude/rules/b-flush.md :: 9 lines :: [src/c/**, src/d/**]',
+    '.claude/rules/c-flow.md :: 4 lines :: ["src/e/**", "src/f/**"]',
+    '.claude/rules/d-scalar.md :: 4 lines :: src/g/**',
+    '.claude/rules/e-body.md :: 3 lines :: (no paths:)',
+  ]]);
+}
+
 rmSync(BASE, { recursive: true, force: true });
 console.log(`\n${failed === 0 ? 'PASS' : 'FAIL'}  passed=${passed} failed=${failed}`);
 process.exit(failed === 0 ? 0 : 1);

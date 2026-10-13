@@ -166,7 +166,32 @@ for S in "$ROOT/.claude:project" "${CLAUDE_CONFIG_DIR:-$HOME/.claude}:global"; d
   CV=$({ jq -r '.version // empty' "$C/agent-return.json" 2>/dev/null || true; }); CV=${CV:-n/a}
   META=$(content_state "$D" "$C"); CCV=${META%%|*}; REST_META=${META#*|}; RCV=${REST_META%%|*}; REST_META=${REST_META#*|}; CONTENT=${REST_META%%|*}; FINDINGS=${REST_META#*|}
   echo "$N: hook_files=$F/3 settings_refs=$W enabled=$EN registrations=$R/3 pass=$PT file=$FT config_version=$CV config_content_version=$CCV runbook_content_version=$RCV content_state=$CONTENT content_findings=$FINDINGS config_dir=$C config=$CFG"
+  if [ "$N" = project ]; then P_REG=$R; else G_REG=$R; fi
 done
+# governing config, resolved like the hooks' loadConfig: climb from projectRoot() (session dir, else the
+# nearest .git/.claude ancestor of $PWD; never git toplevel) to the nearest valid config, then global dirs
+GOV=$(PD="${CLAUDE_PROJECT_DIR}" START="$PWD" node <<'NODE'
+const fs=require("fs"), path=require("path"), os=require("os");
+const name="agent-return.json", env=(process.env.CLAUDE_CONFIG_DIR||"").trim();
+const globals=[...new Set([env?path.resolve(env):null,path.join(os.homedir(),".claude")].filter(Boolean))];
+const ok=f=>{try{const c=JSON.parse(fs.readFileSync(f,"utf8"));return !!c&&typeof c==="object"&&!Array.isArray(c);}catch{return false;}};
+const pd=process.env.PD, start=path.resolve(process.env.START);
+let dir=start, hit="none", scope="none";
+if(pd&&fs.existsSync(pd)) dir=path.resolve(pd);
+else for(let d=start;;){ if(fs.existsSync(path.join(d,".git"))||fs.existsSync(path.join(d,".claude"))){ dir=d; break; } const up=path.dirname(d); if(up===d) break; d=up; }
+for(let i=0;i<16;i++){
+  const home=path.join(dir,".claude");
+  if(globals.includes(home)) break;
+  if(ok(path.join(home,name))){ hit=path.join(home,name); scope="project"; break; }
+  const up=path.dirname(dir); if(up===dir) break; dir=up;
+}
+if(scope==="none") for(const g of globals) if(ok(path.join(g,name))){ hit=path.join(g,name); scope="global"; break; }
+console.log(hit+"|"+scope);
+NODE
+)
+GOV_SCOPE=${GOV##*|}; ORPHAN=no
+[ "$GOV_SCOPE" = project ] && [ "${P_REG:-0}" = 0 ] && [ "${G_REG:-0}" != 0 ] && ORPHAN=yes
+echo "governing_config=${GOV%|*} governing_scope=$GOV_SCOPE orphan_config=$ORPHAN"
 PV=$({ jq -r '.version // empty' "$BT_ROOT/.claude-plugin/plugin.json" 2>/dev/null || true; }); PV=${PV:-n/a}
 echo "plugin_version=$PV"
 echo "✅ status"
@@ -188,6 +213,8 @@ Project = `PROJECT_ROOT/.claude`: the session's start dir (what hooks get as `CL
 | `content_state` | `current`: all CV pairs match; `stale`: a valid pair differs; `partial`: a CV is missing/malformed or a counterpart is absent; `missing`: no config or hook files in that scope |
 | `content_findings` | `artifact:installed-CV->source-CV` per bad pair, or `none`; `n/a` = missing/malformed, never a guessed version |
 | `config_dir` / `config` | where the config was read from; its whitespace-stripped contents, or `none` |
+| `governing_config` / `governing_scope` | the one config every wired hook reads, resolved like `loadConfig`: nearest valid (JSON object) `.claude/agent-return.json` climbing from the hooks' `projectRoot()` (the session dir `CLAUDE_PROJECT_DIR` when it exists, else the nearest `.git`/`.claude` ancestor of `$PWD`, never the git toplevel fallback of `PROJECT_ROOT`), at most 16 levels, stopping at a global dir; then `$CLAUDE_CONFIG_DIR`, then `~/.claude`; `none` = no valid config anywhere. The hooks never read the payload `cwd` for this |
+| `orphan_config` | `yes` = the governing config is project-side, the project has `0/3` registrations and the global scope has at least one: the global hooks obey the project file (typically left by `uninstall project`) |
 
 Print the status in this table:
 
@@ -214,9 +241,11 @@ echo "PLUGIN_VERSION=$PV LAST_UPDATED=$(date +%F)"
 
 The four keys are inert at runtime: the module reads only `enabled` (on only when exactly `true`), `passTokens`, `fileTokens`, `readOnlyAgentTypes` and the optional `reportDir`. Only the runbook's node block writes them, re-serializing the whole object with `JSON.stringify`: a hand-appended line can break the file, and an invalid project config is silently skipped in favor of the global one.
 
-Content state and enabled/wiring are separate signals. Offer `upgrade` for `stale` or `partial`, naming the mismatched/missing artifact, never from a release-version difference alone. Status never edits files or settings.
+Content state and enabled/wiring are separate signals. Offer `upgrade` for `stale` or `partial`, naming the mismatched/missing artifact, never from a release-version difference alone, and never for a scope with `orphan_config=yes` (below). Status never edits files or settings.
 
-Effective = `hook_files=3/3 registrations=3/3 enabled=true`. Anything else is not effective: say so plainly instead of reporting a half-state as installed. Project config wins over global.
+Effective = `hook_files=3/3 registrations=3/3 enabled=true`. Anything else is not effective: say so plainly instead of reporting a half-state as installed. Project config wins over global: the `governing_config` thresholds and `enabled` are the ones in force, whichever scope's hooks fire.
+
+`orphan_config=yes` is a finding, printed under the table: *`<governing_config>` is GOVERNING: the global hooks read the nearest project config first, so its `pass`/`file`/`enabled` override the global config.* Fix: `/brewtools:agent-return-setup purge project` (deletes it; the global config then governs). Keeping it on purpose is valid: `uninstall project` keeps it and now warns so. Never offer `upgrade` for it: upgrade re-wires the project hooks and undoes the uninstall.
 
 ### Early exit
 
@@ -325,7 +354,8 @@ CONTEXT:
   Uninstall = strip entries by the agent-return basenames (all three registrations), drop empty
   event arrays, delete all 3 files and THIS scope's agent-return-state/ directory (export
   HOOKS_DIR, SETTINGS and STATE_DIR as the UNINSTALL block shows), KEEP the config; the block
-  deletes a settings.json and hooks dir left empty. Purge = uninstall + delete THIS scope's
+  deletes a settings.json and hooks dir left empty, and prints a WARNING: line when the kept project
+  config will govern the global hooks: quote that line verbatim in your report. Purge = uninstall + delete THIS scope's
   config (+ a project .claude/ left empty).
   METADATA: every mode that WRITES the config (install, upgrade, enable, disable) must leave
   these four keys in agent-return.json: version=\$PLUGIN_VERSION,
@@ -351,7 +381,7 @@ DONE: report the settings.json path, the hooks dir with all 3 files listed, the 
 
 Re-run the Step 1 status block and print the refreshed table. Then tell the user, in full sentences:
 
-- what changed (files, settings.json, config values);
+- what changed (files, settings.json, config values), and any `WARNING: kept ... still GOVERNS` line from an uninstall, verbatim, with the `purge project` fix;
 - that wiring changes (install/upgrade/uninstall/purge) apply to the running session with no restart and no `/reload-plugins` (plain settings.json hooks, settings files are watched); `/hooks` confirms;
 - that config values (`enabled`, `passTokens`, `fileTokens`, `readOnlyAgentTypes`, `reportDir`) are read on every hook call, with no restart;
 - the `content_state`, with the release `version` as provenance only;
@@ -384,7 +414,8 @@ State = `agent-return-state/` beside the config that enabled the feature: a `.gi
 | `registrations` below `3/3`, or `settings_refs=1` | Partly wired. `2/3` with only the `SubagentHandback` entry missing is an install from before that entry existed: auto-mode reports pass unsized. Re-run the merge via `upgrade`. |
 | `agent-return-budget.mjs` registered in settings.json | Defect: it is a library. `upgrade`/`uninstall` strip that entry. |
 | Custom thresholds where `passTokens >= fileTokens` | Reject before delegating and re-ask: the runbook's config block ABORTS on the inversion; installed by hand, it silently kills the compress tier. |
-| `uninstall`/`purge` requested | Restate exactly what gets deleted (3 hook files, 3 settings entries, the `agent-return-state/` directory, a `settings.json`/hooks dir left empty, and for purge the config and an empty project `.claude/`), confirm once, then delegate. |
+| `uninstall`/`purge` requested | Restate exactly what gets deleted (3 hook files, 3 settings entries, the `agent-return-state/` directory, a `settings.json`/hooks dir left empty, and for purge the config and an empty project `.claude/`), confirm once, then delegate. `uninstall project` while the global scope has registrations: say the kept project config will keep GOVERNING the global hooks, and offer `purge project` in the same confirmation. |
+| UNINSTALL prints `WARNING: kept ... still GOVERNS` | Relay it verbatim in Step 6: the kept project config overrides the global one. Fix = `purge project`; keeping it on purpose is valid. |
 | Project config exists but is malformed JSON | Report it: the module skips it and silently uses the global config. Offer to rewrite. |
 | Global, `CLAUDE_CONFIG_DIR` set, status shows another `config_dir` | The config is shared from `~/.claude`, and the runbook's global blocks act on `$CLAUDE_CONFIG_DIR` only: `upgrade` there aborts with "not installed in this scope". Run `upgrade` with `CLAUDE_CONFIG_DIR` empty (files + config in `~/.claude`), then the global copy and merge-settings blocks once per other config dir that registers the hooks. |
 | `/brewtools:agent-deadline-setup` also installed | Both register `SubagentStop` and `PreToolUse` entries; hooks of one event run in parallel, and each skill's merge/strip touches only entries naming its own scripts. An agent challenged once here continues on its ORIGINAL deadline clock (the deadline cleanup stamps `stopped` and keeps the state; a stop stamp under 5 minutes old keeps the clock), and the deadline guard always allows `SubagentHandback`. An agent-deadline install from before 6.5 restarts the clock and, past its limit, also denies the hand-back: `upgrade` it too. |

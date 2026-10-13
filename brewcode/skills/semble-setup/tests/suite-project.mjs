@@ -274,6 +274,41 @@ check('audit disclosure mdx', auditFull.disclosure.includes('.mdx'), true,
 check('audit is read-only', existsSync(join(COV, '.claude')), false,
   'audit wrote nothing into the project');
 
+// GIVEN trees excluded by .sembleignore, root and nested .gitignore, plus a `!build/` un-ignore of a semble default
+// WHEN audit THEN coverage counts exactly the files semble walks; ignored dirs land in skipped.dirs (6.5.1 F7)
+const AIG = join(BASE, 'repo-cov-ignored');
+write(join(AIG, 'src/a.py'), `def main():\n    return 1\n# ${PAD}\n`);
+write(join(AIG, 'gen/b.py'), `def gen():\n    return 2\n# ${PAD}\n`);
+write(join(AIG, '.claude/reports/c.md'), `# report\n${PAD}\n`);
+write(join(AIG, 'pkg/d.json'), `{"d":"${PAD}"}\n`);
+write(join(AIG, 'pkg/e.ts'), `export const e = 1;\n// ${PAD}\n`);
+write(join(AIG, 'build/f.py'), `def built():\n    return 3\n# ${PAD}\n`);
+write(join(AIG, 'README.md'), `# readme\n${PAD}\n`);
+write(join(AIG, '.sembleignore'), '.claude/reports/\n');
+write(join(AIG, '.gitignore'), '/gen/\n!build/\n');
+write(join(AIG, 'pkg/.gitignore'), '*.json\n');
+const aigR = run(PROJECT_SH, ['audit', '--json'], { SEMBLE_PROJECT_ROOT: AIG });
+check('audit coverage honours ignore files', [aigR.status, safeParse(aigR.stdout).coverage], [0, {
+  code: { '.py': 2, '.ts': 1 }, config: {}, docsOnly: { '.md': 1 }, excluded: {},
+  totals: { code: 3, config: 0, docsOnly: 1, excluded: 0, indexable: 4, classified: 4, unclassified: 0 },
+  skipped: { tooLarge: 0, tinyBlank: 0, symlinks: 0, dirs: 2 },
+}], 'gen/, .claude/reports/ and pkg/*.json are not counted; build/ is re-included as semble re-includes it');
+
+// GIVEN `!keep.json` and `!logo.png` negations (semble indexes them despite the suffix) next to a plain .json
+// WHEN audit THEN the negated files count indexable (config bucket); only the plain .json stays excluded
+const ANEG = join(BASE, 'repo-cov-negated');
+write(join(ANEG, 'src/a.py'), `def main():\n    return 1\n# ${PAD}\n`);
+write(join(ANEG, 'keep.json'), `{"keep":"${PAD}"}\n`);
+write(join(ANEG, 'plain.json'), `{"plain":"${PAD}"}\n`);
+write(join(ANEG, 'logo.png'), `not really a png ${PAD}\n`);
+write(join(ANEG, '.gitignore'), '!keep.json\n!logo.png\n');
+const anegR = run(PROJECT_SH, ['audit', '--json'], { SEMBLE_PROJECT_ROOT: ANEG });
+check('audit coverage counts negation-indexed files', [anegR.status, safeParse(anegR.stdout).coverage], [0, {
+  code: { '.py': 1 }, config: { '.json': 1, '.png': 1 }, docsOnly: {}, excluded: { '.json': 1 },
+  totals: { code: 1, config: 2, docsOnly: 0, excluded: 1, indexable: 3, classified: 4, unclassified: 0 },
+  skipped: { tooLarge: 0, tinyBlank: 0, symlinks: 0, dirs: 0 },
+}], 'indexable equals what semble walks (a.py, keep.json, logo.png); excluded keeps meaning unreachable');
+
 // ── 1b. candidates — measured per-repo .sembleignore proposals ──
 // Slot wasters are layout-specific (template section empty); asserts cover what it must NOT propose: wrong exclusions fail silently.
 const CAND = join(BASE, 'repo-cand');
@@ -325,6 +360,24 @@ const candHuman = run(PROJECT_SH, ['candidates'], { SEMBLE_PROJECT_ROOT: PLAIN }
 check('candidates.humanExit', candHuman.status, 0, 'the human form exits 0 too');
 check('candidates.humanEmpty', candHuman.stdout.includes('none - nothing in this repo'), true,
   'and says so in words rather than printing an empty list');
+
+// GIVEN mirrors already excluded by .sembleignore, root and nested .gitignore, semble defaults, plus one live mirror
+// WHEN candidates THEN only the live mirror is proposed and the scan counts exactly what semble walks (6.5.1 F7)
+const IGN = join(BASE, 'repo-cand-ignored');
+for (let i = 0; i < 10; i++) {
+  const body = `export function g${i}() {\n  return ${i};\n}\n${PAD}\n`;
+  for (const d of ['src', '.claude/reports/snap', 'gen', 'build', 'pkg/old']) write(join(IGN, d, `m${i}.ts`), body);
+  for (const d of ['lib', '.mirror']) write(join(IGN, d, `u${i}.ts`), `${body}// lib ${i}\n`);
+}
+write(join(IGN, '.sembleignore'), '.claude/reports/\n');
+write(join(IGN, '.gitignore'), '/gen/\n!notes.dat\n');
+write(join(IGN, 'pkg', '.gitignore'), 'old/\n');
+write(join(IGN, 'notes.dat'), `${PAD}\n`);
+const ignR = run(PROJECT_SH, ['candidates', '--json'], { SEMBLE_PROJECT_ROOT: IGN });
+const ign = safeParse(ignR.stdout);
+check('candidates.alreadyExcluded', [ignR.status, ign.scanned, (ign.candidates || []).map((c) => c.path)],
+  [0, 31, ['/.mirror/']],
+  'ignored trees are neither scanned nor proposed; the !notes.dat bypass is scanned as semble indexes it');
 
 // ── 2. warm / smoke honour SEMBLE_NO_NETWORK ──
 const warm = run(PROJECT_SH, ['warm', '--json'], { SEMBLE_PROJECT_ROOT: COV });
@@ -1061,6 +1114,80 @@ check('lone remove (bad settings) report', [safeParse(loneBad.stdout).failed, sa
   [`settings: cannot unwire ${join(LONE_BAD, '.claude/settings.json')} (not valid JSON) — nothing was deleted, the hooks are still registered`],
   [],
 ], 'the failure names the file and the reason, and nothing is reported as changed');
+
+// ── .gitignore: an existing repo rule already ignoring .claude/semble/ is never duplicated (6.5.1) ──
+const GIT_HOME = join(BASE, 'git-home');
+const GLOBAL_EXCLUDES = write(join(GIT_HOME, 'excludes'), '.claude/\n');
+const GIT_CFG = write(join(GIT_HOME, 'gitconfig'), `[core]\n\texcludesFile = ${GLOBAL_EXCLUDES}\n`);
+const gitEnv = (root) => ({
+  SEMBLE_PROJECT_ROOT: root, GIT_CONFIG_GLOBAL: GIT_CFG, GIT_CONFIG_NOSYSTEM: '1', XDG_CONFIG_HOME: GIT_HOME,
+});
+function gitRepo(name, gitignore) {
+  const p = join(BASE, name);
+  mkdirSync(join(p, '.claude'), { recursive: true });
+  const g = spawnSync('git', ['init', '-q', p], { encoding: 'utf8' });
+  check(`gitignore fixture ${name}: git init`, g.status, 0, 'the fixture is a real git repo');
+  write(join(p, '.gitignore'), gitignore);
+  return p;
+}
+const giLines = (r) => {
+  const j = safeParse(r.stdout);
+  return [r.status, ...['changed', 'unchanged', 'failed'].map((k) => (j[k] || []).filter((l) => l.startsWith('gitignore:')))];
+};
+
+// GIVEN a repo .gitignore whose rule already ignores .claude/semble/ WHEN install THEN .gitignore byte-unchanged, rule named
+for (const [i, pat] of ['/.claude/*', '/.claude/', '.claude/'].entries()) {
+  const p = gitRepo(`repo-gi-covered-${i}`, `node_modules/\n${pat}\n`);
+  const r = run(GUIDANCE_SH, ['install', '--part', 'hooks', '--json'], gitEnv(p));
+  check(`gitignore covered by ${pat}: report`, giLines(r),
+    [0, [], [`gitignore: .claude/semble/ already ignored by .gitignore:2:${pat} - not appended`], []],
+    'nothing is appended, and the report names the rule that already covers the dir');
+  check(`gitignore covered by ${pat}: bytes`, readFileSync(join(p, '.gitignore'), 'utf8'), `node_modules/\n${pat}\n`,
+    'the tracked .gitignore stays byte-identical, so git status shows no modification');
+}
+
+// GIVEN only per-machine rules (core.excludesFile, .git/info/exclude) WHEN install THEN the line IS appended
+{
+  const p = gitRepo('repo-gi-machine-only', 'node_modules/\n');
+  write(join(p, '.git/info/exclude'), '.claude/\n');
+  const r = run(GUIDANCE_SH, ['install', '--part', 'hooks', '--json'], gitEnv(p));
+  check('gitignore machine-only rules: report', giLines(r),
+    [0, [`gitignore: appended .claude/semble/ in ${join(p, '.gitignore')}`], [], []],
+    'a rule other clones do not share does not count: telemetry would still be committable there');
+  check('gitignore machine-only rules: bytes', readFileSync(join(p, '.gitignore'), 'utf8'),
+    'node_modules/\n\n# brewcode:semble\n.claude/semble/\n', 'the semble block is appended once');
+}
+
+// GIVEN `/.claude/*` re-including `!/.claude/semble/` WHEN install THEN the negation wins and the line is appended
+{
+  const p = gitRepo('repo-gi-negated', '/.claude/*\n!/.claude/semble/\n');
+  const r = run(GUIDANCE_SH, ['install', '--part', 'hooks', '--json'], gitEnv(p));
+  check('gitignore negated rule: report', giLines(r),
+    [0, [`gitignore: appended .claude/semble/ in ${join(p, '.gitignore')}`], [], []],
+    'a re-included dir is not ignored, so semble still registers its own line');
+}
+
+// GIVEN a covered repo WHEN install, remove, install THEN .gitignore never changes and remove keeps the user rule
+{
+  const p = gitRepo('repo-gi-cycle', '/.claude/\n');
+  const r1 = run(GUIDANCE_SH, ['install', '--part', 'hooks', '--json'], gitEnv(p));
+  const r2 = run(GUIDANCE_SH, ['remove', '--part', 'hooks', '--json'], gitEnv(p));
+  const r3 = run(GUIDANCE_SH, ['install', '--part', 'hooks', '--json'], gitEnv(p));
+  check('gitignore covered cycle: exits', [r1.status, r2.status, r3.status], [0, 0, 0], 'all three runs exit 0');
+  check('gitignore covered cycle: remove report', giLines(r2), [0, [], ['gitignore: nothing to clean'], []],
+    'remove drops only lines semble added; the user rule is not one of them');
+  check('gitignore covered cycle: bytes', readFileSync(join(p, '.gitignore'), 'utf8'), '/.claude/\n',
+    'the .gitignore is byte-identical after install, remove and install again');
+}
+
+// GIVEN a 6.5.0 duplicate (user rule + semble block) WHEN remove THEN only the semble block goes
+{
+  const p = gitRepo('repo-gi-dup650', '/.claude/\n\n# brewcode:semble\n.claude/semble/\n');
+  const r = run(GUIDANCE_SH, ['remove', '--part', 'hooks', '--json'], gitEnv(p));
+  check('gitignore 6.5.0 duplicate: remove', [giLines(r), readFileSync(join(p, '.gitignore'), 'utf8')],
+    [[0, [`gitignore: dropped .claude/semble/ from ${join(p, '.gitignore')}`], [], []], '/.claude/\n'],
+    'uninstall removes its own two lines and keeps the user rule');
+}
 
 // ── usage / flag handling ────────────────────────────────────────────────────
 check('project: unknown subcommand', run(PROJECT_SH, ['frobnicate'], { SEMBLE_PROJECT_ROOT: COV }).status, 2,

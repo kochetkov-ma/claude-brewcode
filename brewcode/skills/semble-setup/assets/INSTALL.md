@@ -348,23 +348,26 @@ version are **counted and skipped**, never fatal.
 
 ## 4. settings.json entry shape
 
-`<absdir>` = absolute path of the hooks dir the three files were copied into
-(`<repo>/.claude/hooks`).
+Every `args` path is the literal `${CLAUDE_PROJECT_DIR}/.claude/hooks/<script>`, never an
+absolute path: `settings.json` is usually tracked, and an absolute path breaks every other
+clone. In exec form Claude Code substitutes the placeholder into each `args` element ("the
+project root where the session started"; it does not follow an entered worktree), the same
+form docsync, agent-deadline and agent-router write.
 
 ```json
 {
   "hooks": {
     "SessionStart": [
-      { "hooks": [ { "type": "command", "command": "node", "args": ["<absdir>/semble-session.mjs"], "timeout": 5 } ] }
+      { "hooks": [ { "type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/semble-session.mjs"], "timeout": 5 } ] }
     ],
     "PostToolUse": [
-      { "matcher": "mcp__semble_code__search|mcp__semble_code__find_related|Bash|Grep|Glob|Read", "hooks": [ { "type": "command", "command": "node", "args": ["<absdir>/semble-stats.mjs"], "timeout": 5 } ] }
+      { "matcher": "mcp__semble_code__search|mcp__semble_code__find_related|Bash|Grep|Glob|Read", "hooks": [ { "type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/semble-stats.mjs"], "timeout": 5 } ] }
     ],
     "PostToolUseFailure": [
-      { "matcher": "mcp__semble_code__search|mcp__semble_code__find_related|Bash|Grep|Glob|Read", "hooks": [ { "type": "command", "command": "node", "args": ["<absdir>/semble-stats.mjs"], "timeout": 5 } ] }
+      { "matcher": "mcp__semble_code__search|mcp__semble_code__find_related|Bash|Grep|Glob|Read", "hooks": [ { "type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/semble-stats.mjs"], "timeout": 5 } ] }
     ],
     "SubagentStart": [
-      { "hooks": [ { "type": "command", "command": "node", "args": ["<absdir>/semble-subagent.mjs"], "timeout": 5 } ] }
+      { "hooks": [ { "type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/semble-subagent.mjs"], "timeout": 5 } ] }
     ]
   },
   "permissions": {
@@ -381,11 +384,16 @@ A semble entry is a hook whose `args` path, or shell-form `command` (e.g. a quot
 `"$CLAUDE_PROJECT_DIR"/.claude/hooks/...` path), names one of the **six basenames this skill
 has ever owned**: live `semble-session.mjs`, `semble-stats.mjs`, `semble-subagent.mjs`; retired
 `semble-explore.mjs`, `semble-reminder.mjs`, `semble-prefetch.mjs`. Ownership (`marks`) and
-desire (`wanted`) are SEPARATE: `wanted` holds only the want table's `(event, matcher, full
+desire (`wanted`) are SEPARATE: `wanted` holds only the want table's `(event, matcher, portable
 path)` triples, so every retired registration (any matcher, any path, any command form), and a
 live script under a wrong event or matcher, is stale and the step-2 purge removes it. A retired
 basename must never leave `marks`, or an old install becomes unremovable. The installer always
-writes the exec form `{hooks:[{type,command:"node",args:[abs],timeout}]}`.
+writes the exec form `{hooks:[{type,command:"node",args:["${CLAUDE_PROJECT_DIR}/.claude/hooks/<script>"],timeout}]}`.
+
+**Migration (pre-6.5.1 absolute paths).** An arg `<any abs dir>/.claude/hooks/<owned basename>`
+is the old form of the same hook: `canon()` maps it to the portable path, so it shares the
+portable row's key. `install`/`upgrade` rewrite it in place (position, foreign hooks and foreign
+entry keys kept) and never add a second row; a copy in both forms collapses to one.
 
 ### Merge rule, in order — do not reorder
 
@@ -395,13 +403,14 @@ writes the exec form `{hooks:[{type,command:"node",args:[abs],timeout}]}`.
 2. Drop every semble hook whose `(event, matcher, args path)` is not a want row:
    a **different** hooks dir (stale installs — Claude Code logs a hook failure on
    every tool call for each of them), a retired script, a live script on a wrong
-   event/matcher, or any shell-form `command`. Match on the FULL path, not the basename. The filter runs **inside
+   event/matcher, or any shell-form `command`. Match on the canonical path (absolute
+   `.claude/hooks/<owned>` -> portable), not the basename. The filter runs **inside
    `entry.hooks[]`, not over the entry array**: a hand-merged entry may hold a
    foreign hook next to a stale semble one, and only the semble one may go. An
    entry dies only once its `hooks[]` is empty. A hook with no semble arg is
    foreign and is **never** touched.
 3. **Reconcile each want row against the file — the merge repairs, it does not
-   only append.** The key is `event + matcher + full path` (`semble-stats.mjs`
+   only append.** The key is `event + matcher + canonical path` (`semble-stats.mjs`
    legitimately appears under two events, so deduping on the path alone would
    silently drop the `PostToolUseFailure` registration). For that key:
    - **absent** → append the full desired entry;
@@ -434,15 +443,15 @@ writes the exec form `{hooks:[{type,command:"node",args:[abs],timeout}]}`.
    event that still holds a foreign hook is left alone: a retired
    `UserPromptSubmit`/`PreToolUse` row goes, a foreign one on the same event stays.
 
-**EXECUTE** merge (project, Bash tool). `SETTINGS`/`HOOKS_DIR` are the only
-inputs; this is the canonical block — use it, not a hand `Edit`, because it is
+**EXECUTE** merge (project, Bash tool). `SETTINGS` is the only input (`HOOK_REF`
+overrides the arg prefix, global install only); this is the canonical block — use it, not a hand `Edit`, because it is
 the only path that aborts on a broken file, repairs drift, and verifies both
 before and after writing:
 
 ```
-SETTINGS="$PWD/.claude/settings.json" HOOKS_DIR="$PWD/.claude/hooks" node -e '
+SETTINGS="$PWD/.claude/settings.json" node -e '
 const fs=require("fs"), path=require("path");
-const f=process.env.SETTINGS, dir=process.env.HOOKS_DIR;
+const f=process.env.SETTINGS, REF=process.env.HOOK_REF||"${CLAUDE_PROJECT_DIR}/.claude/hooks";   // portable arg
 // EVERY basename ever owned (ownership); `wanted` = want-table triples only, so retired rows purge.
 const marks=["semble-session.mjs","semble-prefetch.mjs","semble-stats.mjs",
              "semble-reminder.mjs","semble-subagent.mjs","semble-explore.mjs"];
@@ -482,9 +491,12 @@ const cmdMark=c=>typeof c==="string"?marks.find(m=>new RegExp("(^|[\\\\/\"\x27\\
 const ownedOf=h=>{ const a=((h&&h.args)||[]).filter(x=>typeof x==="string"&&isMine(x));
   const c=cmdMark(h&&h.command); return c?a.concat(["cmd:"+c]):a; };   // shell form: never wanted
 const wkey=(ev,m,a)=>JSON.stringify([ev,m,a]);
-const wanted=new Set(want.map(w=>wkey(w[0],w[1],path.join(dir,w[2]))));   // want triples, NOT marks
+const wanted=new Set(want.map(w=>wkey(w[0],w[1],REF+"/"+w[2])));   // want triples, NOT marks
+// Absolute <x>/.claude/hooks/<owned> = same key as the portable path: rewritten in place, never duplicated.
+const canon=a=>{ const m=/^(?:\/|[A-Za-z]:[\\/]).*[\\/]\.claude[\\/]hooks[\\/]([^\\/]+)$/.exec(a);
+  return m&&marks.indexOf(m[1])>=0?REF+"/"+m[1]:a; };
 const desiredHook=(full,timeout)=>({type:"command",command:"node",args:[full],timeout});
-const hasArg=(h,full)=>((h&&h.args)||[]).filter(a=>typeof a==="string").includes(full);
+const hasArg=(h,full)=>((h&&h.args)||[]).filter(a=>typeof a==="string").map(canon).includes(full);
 const deq=(a,b)=>{                                     // key-order-insensitive deep equal
   if(a===b) return true;
   if(typeof a!=="object"||typeof b!=="object"||a===null||b===null) return false;
@@ -495,8 +507,9 @@ const deq=(a,b)=>{                                     // key-order-insensitive 
 };
 const reconcile=(e,full,timeout)=>{                    // rewrite MY hook to the desired object,
   const w=desiredHook(full,timeout);                   // leave foreign hooks and foreign entry keys alone
-  let dirty=false;
-  const hooks=e.hooks.map(h=>{ if(!hasArg(h,full)||deq(h,w)) return h; dirty=true; return w; });
+  let dirty=false, n=0;                                // abs + portable copy in ONE entry: keep the first
+  const hooks=e.hooks.filter(h=>!hasArg(h,full)||++n===1||!(dirty=true))
+    .map(h=>{ if(!hasArg(h,full)||deq(h,w)) return h; dirty=true; return w; });
   return dirty?Object.assign({},e,{hooks}):e;
 };
 const stripHook=(e,full)=>{                            // 2nd+ copy of a row: drop only my hook
@@ -506,7 +519,7 @@ const stripHook=(e,full)=>{                            // 2nd+ copy of a row: dr
 };
 const verify=root=>{                                   // 5. null | message; run BEFORE the write
   for(const [ev,matcher,script,timeout] of want){
-    const full=path.join(dir,script);
+    const full=REF+"/"+script;
     const hits=((root.hooks&&root.hooks[ev])||[]).filter(e=>matcherOf(e)===matcher&&argsOf(e).includes(full));
     if(hits.length!==1) return "verification failed - "+ev+"/"+(matcher||"*")+"/"+script+" present "+hits.length+" times in "+f;
     const mine=((hits[0].hooks)||[]).filter(h=>hasArg(h,full));
@@ -528,7 +541,7 @@ for(const ev of Object.keys(s.hooks)){                 // 2. drop unwanted sembl
     const m=matcherOf(e);
     const kept=e.hooks.filter(h=>{
       const mine=ownedOf(h);
-      return mine.length===0 || mine.every(a=>wanted.has(wkey(ev,m,a)));
+      return mine.length===0 || mine.every(a=>wanted.has(wkey(ev,m,canon(a))));
     });
     if(kept.length===e.hooks.length) return e;
     return kept.length ? Object.assign({},e,{hooks:kept}) : null;   // entry dies only when empty
@@ -536,10 +549,10 @@ for(const ev of Object.keys(s.hooks)){                 // 2. drop unwanted sembl
 }
 for(const [ev,matcher,script,timeout] of want){        // 3. reconcile THIS event+matcher, do not merely append
   s.hooks[ev]=Array.isArray(s.hooks[ev])?s.hooks[ev]:[];
-  const full=path.join(dir,script);
+  const full=REF+"/"+script;
   let seen=0;
   s.hooks[ev]=s.hooks[ev].map(e=>{
-    if(!e||!Array.isArray(e.hooks)||matcherOf(e)!==matcher||!argsOf(e).includes(full)) return e;
+    if(!e||!Array.isArray(e.hooks)||matcherOf(e)!==matcher||!argsOf(e).map(canon).includes(full)) return e;
     seen++;
     return seen===1?reconcile(e,full,timeout):stripHook(e,full);    // extra copies are repaired away, not aborted on
   }).filter(e=>e!==null);
@@ -601,6 +614,12 @@ only ratio worth printing — never a hard-coded denominator.
 (`staleEntries` counts those rows). Either non-empty = `stale (remove via upgrade)`:
 `install`/`upgrade` delete the files and the purge un-wires their rows.
 
+An absolute-path live row (pre-6.5.1) is **stale, not wired**: it fires on this checkout only.
+Its want row reads `drifted` with a `drift[]` entry on `args` (expected the portable path), the
+row counts in `staleEntries`, and `hooks.absoluteCount` counts such rows. The human line prints
+`portable:  N absolute-path hook entries (break every other clone) - run /brewcode:semble-setup upgrade`;
+`install` repairs it the same way.
+
 `drift[]` is the machine-readable "what differs": one object per differing field,
 naming `event`, `matcher`, `script`, `field`, `expected` and `actual`. A missing row
 contributes no `drift[]` entries — its `entries[]` state is `missing`. The fix for
@@ -633,7 +652,8 @@ install into `~/.claude/` is inert in every project that has no semble state —
 silent, but it still pays a Node start-up per session, spawn and tool call
 everywhere. Install per project. If a global
 install is nevertheless wanted, the same block runs with
-`SETTINGS="$HOME/.claude/settings.json" HOOKS_DIR="$HOME/.claude/hooks"` and
+`SETTINGS="$HOME/.claude/settings.json" HOOK_REF="$HOME/.claude/hooks"` (no
+`${CLAUDE_PROJECT_DIR}`: the hooks live in the profile, not the project) and
 **must go through the Bash tool only**: `~/.claude/*` is harness-protected, so
 `Write`/`Edit` are blocked there in every permission mode, including
 `bypassPermissions` and headless. The check runs before hooks; nothing can
@@ -659,8 +679,15 @@ marker is exactly how the marker ended up committed.
 | `.gitignore` | `<repo>/.git` | Outcome |
 |--------------|---------------|---------|
 | exists, has the line | — | `unchanged` |
+| exists, no line, a repo `.gitignore` rule already ignores the dir | — | `unchanged: already ignored by <source>:<line>:<pattern>`, nothing appended |
 | exists, no line | — | append, re-read, confirm the line is there → `changed`, else `failed` |
+| absent, a nested repo `.gitignore` rule already ignores the dir | present | `unchanged`, nothing created |
 | absent | present | create it with the two lines, re-read, confirm → `changed` |
+
+"Already ignored" = `git check-ignore -v --no-index` on `state.json`, `telemetry.jsonl` and a probe
+name in `.claude/semble/` all resolve to a non-negated rule in a repo `.gitignore` (e.g. `/.claude/`,
+`.claude/`, `/.claude/*`). `core.excludesFile` and `.git/info/exclude` do NOT count: they are
+per-machine, so another clone would still commit `telemetry.jsonl`.
 | absent | absent | `skipped`, with the reason spelled out — not a git repo, so there is nothing to ignore and creating a `.gitignore` would be litter |
 
 Uninstall removes exactly those two lines — plus a retired `.reminder-ts`/`.prefetch-ts`
