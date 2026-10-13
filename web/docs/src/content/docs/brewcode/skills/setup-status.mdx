@@ -112,7 +112,7 @@ Evaluated in this order:
 |---------|---------|
 | `n/a` | The owning plugin is unavailable |
 | `disabled` | The setup's off-switch confirms deliberate disablement |
-| `missing` | Anchor and secondary artifacts are absent in live and disabled spellings |
+| `missing` | Anchor and secondary artifacts are absent in live and disabled spellings; for manager also a project with only `state.json` (no guard, helper, or registration), where the row reads `state.json only, wall not installed` and the command is `install` |
 | `partial` | Incomplete installation, half-applied toggles, unresolved metadata, or wrong ownership; for semble also a hand-edited rule with an outdated stamp, or permissions missing from every settings layer |
 | `stale` | Content-version, copied-byte, absence, or wiring signals need refresh; the row reads `stale (installed X.Y.Z, plugin A.B.C)` when the versions differ |
 | `modified` | Reads `modified (stamp current, bytes differ)`: the stamp is current but a copied file was edited or never re-copied |
@@ -138,17 +138,18 @@ rules and manual CLAUDE.md references remain active when convention loading is d
 
 | Setup group | Disabled signal |
 |-------------|-----------------|
-| teams | All team roster members parked as .disabled; shared intent-guard stays |
+| teams | Every roster member parked as .disabled, except the shared intent-guard and agents owned by another generator (such as task-tracker), which teams never parks |
 | superreview, memory-sync | Generated SKILL.md parked as .disabled |
 | task-board | Every deployed machinery entry parked; task data stays |
 | convention | Loading rule parked; generated documents and accepted rules stay |
 | semble | State enabled is false |
-| manager | State hard is not true |
+| manager | State hard is not true, on an installed wall (copied guard or registration) |
 | agent-deadline, agent-return | Config enabled is not true; missing key means off |
 | agent-router, docsync | Config enabled is false; missing key means on |
 
 Disabled takes precedence over missing, partial, and stale, so a deliberate pause never enters
-the repair list.
+the repair list. A manager `state.json` alone is not a wall: `uninstall` keeps the state, and
+`upgrade` and `enable` refuse a wall that was never installed, so the row reads missing, not disabled.
 
 A disabled row whose files are behind the plugin gets `upgrade`, which keeps it disabled, for
 semble, agent-deadline, agent-router, manager, docsync, agent-return, and convention. Teams,

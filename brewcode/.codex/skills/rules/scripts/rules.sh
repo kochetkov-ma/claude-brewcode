@@ -126,7 +126,7 @@ create_rules() {
 }
 
 # Validate ONE rule file: frontmatter, the four standard metadata keys, table header.
-# $2 = "specialized" -> require paths, reject repo-wide paths. Main files must NOT have paths.
+# $2 = "specialized" -> require paths, reject repo-wide paths. Main file + paths = deliberate scoping (CC honours it): warn only.
 validate_file() {
   local f="$1" kind="${2:-main}"
   local name errs=0 k
@@ -139,7 +139,7 @@ validate_file() {
   done
 
   if [ "$kind" = "main" ]; then
-    grep -q "^paths:" "$f" && { echo "X $name is main but has paths -> remove paths for repo-wide loading"; errs=$((errs+1)); }
+    grep -q "^paths:" "$f" && echo "! $name is main but path-scoped: loads only when Codex touches a matching file (remove paths: to load it at session start)"
   else
     grep -q "^paths:" "$f" || { echo "X $name is specialized but missing paths"; errs=$((errs+1)); }
     # frontmatter only: a table row may quote the repo-wide glob as an example

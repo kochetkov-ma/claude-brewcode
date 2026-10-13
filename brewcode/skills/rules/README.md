@@ -76,6 +76,8 @@ Rule files are created or updated in `.claude/rules/`:
 
 `rules.sh validate` checks these four kinds (frontmatter metadata and table header); any other file in `.claude/rules/` is not checked.
 
+`create` writes `avoid.md` and `best-practice.md` without `paths:`, so they load at session start. A project that scopes one of them on purpose gets a `!` warning from `validate` (exit code 0, not an error); the scoping stays, and the file then loads only when Claude touches a matching file. A domain file without `paths:` still fails.
+
 ## Deduplication — 3-Check Protocol
 
 New entries pass three checks before they are written:

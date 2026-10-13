@@ -2,6 +2,39 @@
 
 ---
 
+## v6.5.7 (2026-10-13)
+
+> Docs: [rules](https://doc-claude.brewcode.app/brewcode/skills/rules/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) | [teams-setup](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/)
+
+> Docs: [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/)
+
+> Docs: [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [task-board-setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/)
+
+Setup checks stop failing healthy projects: agents owned by another generator, large teams, scoped rules and run snapshots no longer raise false errors.
+
+### brewcode
+
+#### Fixed
+
+- **teams-setup:** an agent owned by another generator (`task-tracker` from task-board-setup) is never claimed, restamped, moved by `enable`/`disable` or deleted; `verify-team.sh` reports it as a `FOREIGN` warning instead of failing the team, and `upgrade` drops its roster row.
+- **teams-setup:** the `team.md` ceiling (2800 chars / 700 tokens) now applies up to 13 domain agents and grows by 80 chars / 20 tokens per extra agent, as documented; before, verify failed every larger team.
+- **setup-status:** a manager project with only `state.json` reads `missing` with command `install` instead of prescribing an `upgrade` that aborts; the teams row ignores foreign agents when deciding `disabled`.
+- **rules:** a main rule file with `paths:` frontmatter gets a warning, not a validation error; the scoping is kept.
+
+### brewdoc
+
+#### Fixed
+
+- **memory-sync-setup:** surface counts skip `.claude/reports/` and `.claude/worktrees/`, and `surface_files` is always the script's own count, so `status` no longer reports a false STALE.
+
+### brewtools
+
+#### Fixed
+
+- **manager-setup:** `status` reports `installed` and `guardPresent`, and recommends `install` instead of `upgrade` when no wall was ever installed.
+
+---
+
 ## v6.5.6 (2026-10-13)
 
 > Docs: [convention-setup](https://doc-claude.brewcode.app/brewcode/skills/convention-setup/) | [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) | [superreview-setup](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | [teams-setup](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/)

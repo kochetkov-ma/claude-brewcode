@@ -46,7 +46,8 @@ default to `required`. Upgrade preserves an existing no-guard roster as `legacy-
 role merely to modernize the shared contract. `{INTENT_GUARD_SHARED_CONTRACT}` is exactly the sentence
 "`intent-guard` is review-only, keeps its own output contract, and never implements." for `required`
 and empty for `legacy-absent`. `intent-guard` remains shared with superreview, outside `{N}`, and never
-removed when policy is `required`.
+removed when policy is `required`. A file another generator stamped (`generated_by` other than
+`brewcode:teams-setup`) and the reserved `task-tracker` (task-board's) are never roster rows.
 
 ## trace.jsonl
 

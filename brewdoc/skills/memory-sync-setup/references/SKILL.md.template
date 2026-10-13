@@ -243,6 +243,8 @@ Phase 2 verifies every fact regardless of any diff.
 {ENUMERATION_BASH}
 
 Whatever that block contains, these bind the enumeration:
+- Prune `.claude/reports/**` (run-artifact snapshots, often full `CLAUDE.md` copies) and `.claude/worktrees/**`
+  (other checkouts of this repo) from every `find`: never memory, whatever the EXCLUDED table says.
 - Re-resolve the runtime-seat roster's call sites: grep each caller file for the seat name; roster line numbers rot,
   today's bytes decide.
 - Enumerate the per-agent memory stores over the whole tree (`find` / `ls`), never a roster: a store is born wherever

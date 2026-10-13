@@ -118,6 +118,7 @@ bash "<skill-directory>/scripts/agent-owners.sh" "{name}"
 
    | Exit | stdout | Do |
    |------|--------|----|
+   | 0, any `generator:<plugin>:<skill>` line | another generator owns it (`agent-generator.sh`: stamp or reserved `task-tracker`) | **SKIP** — report `kept: owned by <plugin>:<skill>`, delete NOTHING; only drop the roster row |
    | 0, 1 line | this team | delete (step 1) |
    | 0, >1 line | several teams | **SKIP** — report `kept: shared with {other teams}`, delete NOTHING |
    | 2 | empty | orphan, no owner — delete (step 1) |
@@ -172,11 +173,13 @@ ls -la ".codex/teams/{TEAM}" 2>/dev/null; du -sh ".codex/teams/{TEAM}" 2>/dev/nu
 printf '%s' "{name}" | grep -qE '^[a-z0-9][a-z0-9-]*$' || { echo "SKIP:invalid agent id"; exit 1; }
 owners=$(bash "<skill-directory>/scripts/agent-owners.sh" "{name}"); rc=$?
 [ "$rc" = 1 ] && { echo "SKIP:owners unknown"; exit 1; }
+printf '%s\n' "$owners" | grep -q '^generator:' && { echo "SKIP:owned by another generator"; exit 1; }
 [ "$(printf '%s\n' "$owners" | grep -c .)" -gt 1 ] && { echo "SKIP:shared agent"; exit 1; }
 rm -f ".codex/agents/{name}.toml" ".codex/agents/{name}.toml.disabled"
 ```
 
-> A skipped member is reported in the purge summary as `kept: shared` / `kept: owners unknown`; the team
+> A skipped member is reported in the purge summary as `kept: shared` / `kept: owned by <generator>` /
+> `kept: owners unknown`; the team
 > dir still goes in step 3. Purge is total for THIS team's data, never another team's roster.
 > Both names, always: a team purged while DISABLED has every member at `{name}.toml.disabled`, so removing
 > only `{name}.toml` would report success and leave the whole roster on disk.

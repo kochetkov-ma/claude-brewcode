@@ -28,7 +28,7 @@ In a bare `mode [name]` pair the verb comes first and the name after it, so `ins
 
 `disable` is a rename, not a deletion — the roster rows stay in `team.md` with `Status: disabled`, and `verify-team.sh` reports `DISABLED` per parked member and still exits PASS. `enable` puts it all back. Both take effect for the NEXT session: agent discovery is read at session start.
 
-`purge` removes both `<agent>.md` and `<agent>.md.disabled`, so purging a disabled team leaves no owned domain profile behind. When `Intent guard` is `required`, it keeps `.claude/agents/intent-guard.md` because that file is shared with `/brewcode:superreview-setup`; `legacy-absent` has no guard to keep.
+`purge` removes both `<agent>.md` and `<agent>.md.disabled`, so purging a disabled team leaves no owned domain profile behind. When `Intent guard` is `required`, it keeps `.claude/agents/intent-guard.md` because that file is shared with `/brewcode:superreview-setup`; `legacy-absent` has no guard to keep. Agents owned by another generator are never touched; see [Agents owned by another generator](#agents-owned-by-another-generator).
 
 ## Examples
 
@@ -74,6 +74,10 @@ In a bare `mode [name]` pair the verb comes first and the name after it, so `ins
 # -> Error: "Team not found. Run /brewcode:teams-setup install ghost-team"
 ```
 
+### Agents owned by another generator
+
+`teams-setup` never claims an agent stamped by another generator (or the reserved name `task-tracker`): `enable`/`disable` never move it (`SKIP:<name> (owned by ...)`), `uninstall`/`purge` never delete it, `verify-team.sh` WARNs `FOREIGN` without failing, and `upgrade` drops its roster row. Details: [teams-setup docs](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/#agents-owned-by-another-generator).
+
 ## File Structure
 
 After `/brewcode:teams-setup install my-team`:
@@ -90,6 +94,8 @@ After `/brewcode:teams-setup install my-team`:
       trace.jsonl         # Unified log: tasks, issues, insights (append-only JSONL)
       trace-ops.sh        # Tracer, copied from the plugin at install -- agents call THIS path
 ```
+
+The full `team.md` stays within 2800 characters and 700 tokens for up to 13 domain agents. Each domain row past 13 adds 80 characters and 20 tokens, so a 20-agent team may reach 3360 characters and 840 tokens. `verify-team.sh` enforces the scaled ceiling.
 
 `team.md` stores logical `intent_guard_policy=required|legacy-absent` in its `Intent guard` field.
 `required` means the roster contains exactly one `intent-guard` row. `legacy-absent` means it contains

@@ -1,6 +1,6 @@
 #!/bin/sh
-# agent-owners.sh <agent-name> (project root): teams whose `## Agents` lists it, sorted, unique, one per line.
-# `.claude/agents/<name>.md` = PROJECT-GLOBAL namespace: every delete path MUST call this, SKIP >1 owner.
+# agent-owners.sh <agent-name> (project root): teams whose `## Agents` lists it, sorted, one per line,
+# then `generator:<plugin>:<skill>` if agent-generator.sh names another owner. Claim/delete paths call it; >1 line = SKIP.
 set -eu
 # exit 0 owners | 2 none (safe to delete) | 1 usage/invalid id/unparsable roster = unknown owners: never delete.
 
@@ -79,6 +79,12 @@ for md in .claude/teams/*/team.md; do
     FOUND=$((FOUND + 1))
   fi
 done
+
+if GENERATOR=$(sh "$(dirname -- "$0")/agent-generator.sh" "$AGENT" 2>/dev/null); then
+  OWNERS="${OWNERS}generator:${GENERATOR}
+"
+  FOUND=$((FOUND + 1))
+fi
 
 [ "$UNREADABLE" -eq 0 ] || exit 1
 [ "$FOUND" -gt 0 ] || exit 2

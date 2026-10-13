@@ -6,7 +6,7 @@ Substitution is TWO-PASS, order fixed: expand the gated placeholders (`CMD_DECOM
 
 The `description:` and `## When to use` triggers stay English regardless of `{{LANG}}` (id prefixes/triggers are English by convention; prose docs follow `{{LANG}}`).
 
-`description:` decoded value <=100 characters (the `verify-team.sh` agent ceiling); trigger list and `<example>` blocks live in the body `## When to use`, !=in `description:`.
+`description:` decoded value <=100 characters (task-board's own limit, checked by upgrade row 1d; `/brewcode:teams-setup` does not verify task-tracker); trigger list and `<example>` blocks live in the body `## When to use`, !=in `description:`.
 
 For the closing-marker wording, expand `{{RELEASE_STYLE}}` per this map when substituting `{{CLOSE_MARKER}}`:
 - `vtag` -> `a vX.Y.Z tag + commit SHA when shipped via release, ELSE bare commit SHA / no tag / superseded / cancelled`

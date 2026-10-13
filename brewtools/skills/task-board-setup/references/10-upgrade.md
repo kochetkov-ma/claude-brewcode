@@ -74,7 +74,7 @@ markh() { # markh <label> <file> <section title> [<2nd>] [<3rd>]: `## <any n>. <
 }
 mark 1s "$T/.claude/agents/task-tracker.md"      '## Spec triage'
 mark 1p "$T/.claude/agents/task-tracker.md"      '## Session progress'
-if test -f "$T/.claude/agents/task-tracker.md"; then # 1d: decoded description <=100 chars (verify-team.sh ceiling)
+if test -f "$T/.claude/agents/task-tracker.md"; then # 1d: decoded description <=100 chars (task-board's own limit)
   d="$(awk 'NR == 1 && !/^---/ { exit } NR > 1 && /^---[ \t]*$/ { exit } NR > 1 && /^description:/ { sub(/^description:[ \t]*/, ""); print; exit }' "$T/.claude/agents/task-tracker.md")"
   d="${d#\"}"; d="${d%\"}"
   if [ -n "$d" ] && [ "${#d}" -le 100 ]; then echo "MARK-OK 1d"; else echo "PATCH   1d"; fi

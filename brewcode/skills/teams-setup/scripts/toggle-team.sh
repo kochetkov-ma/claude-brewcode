@@ -1,6 +1,6 @@
 #!/bin/sh
 # toggle-team.sh <team-name> <enable|disable> [--dry-run]: park `.claude/agents/<name>.md` <-> `<name>.md.disabled`, bytes kept.
-# team.md, trace*.jsonl, cursor untouched; `intent-guard` NEVER parked (shared, /brewcode:superreview-setup; cleanup-flow.md Step 3/P).
+# team.md, trace*.jsonl, cursor untouched; `intent-guard` and agents another generator owns are NEVER moved.
 set -eu
 
 TEAM_NAME="${1:-}"
@@ -23,6 +23,7 @@ case "$DRY" in
 esac
 [ "$#" -le 3 ] || { echo "ERROR:too many arguments; nothing was touched"; exit 1; }
 
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 TEAM_DIR=".claude/teams/$TEAM_NAME"
 AGENTS_DIR=".claude/agents"
 TEAM_MD="$TEAM_DIR/team.md"
@@ -84,6 +85,11 @@ walk() {
         fi
         if [ "$agent" = "intent-guard" ]; then
           [ "$_pass" = "apply" ] && echo "SKIP:intent-guard (shared with superreview-setup)"
+          SKIPPED=$((SKIPPED + 1))
+          continue
+        fi
+        if owner=$(sh "$SCRIPT_DIR/agent-generator.sh" "$agent" 2>/dev/null); then
+          [ "$_pass" = "apply" ] && echo "SKIP:$agent (owned by $owner; not a team member, never moved)"
           SKIPPED=$((SKIPPED + 1))
           continue
         fi

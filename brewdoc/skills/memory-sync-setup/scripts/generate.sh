@@ -69,8 +69,8 @@ RUNTIME_ALLOW="SCOPE FOCUS DEPTH REACH BATCH FILE_LIST FACTS BROKEN_REFS DATE N 
 # Every temp dir goes through $_bd; the trap makes leaks (and partial installs) impossible on any exit path.
 _bd=""
 trap '[ -n "$_bd" ] && rm -rf "$_bd" || true' EXIT
-# Shared find pruning - node_modules/.git/dist/build/.next/vendor are never memory.
-FIND_EXCL='-not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" -not -path "*/.next/*" -not -path "*/vendor/*"'
+# Shared find pruning - deps/build output, run-artifact snapshots (.claude/reports) and worktree checkouts are never memory.
+FIND_EXCL='-not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" -not -path "*/.next/*" -not -path "*/vendor/*" -not -path "*/.claude/reports/*" -not -path "*/.claude/worktrees/*"'
 
 # `find | sort` exits 0 when empty, so a bare `find ... || echo "(none)"` never prints the fallback.
 # `|| true`: a missing dir makes find exit 1, and a failing substitution in an assignment aborts under `set -e`.
@@ -202,7 +202,8 @@ surface_total() { derive_surface_counts | cut -d' ' -f1; }
 # Keys right before closing `---`, QUOTED (`: ` in surface_files, bare date -> Date) except enum `doc_type` (`^doc_type: llm$`).
 _stamp_frontmatter() {
   _sfile="$1"
-  _sfv=$(printf '%s' "${SURFACE_COUNTS:-unknown}" | tr -d '"' | tr '\n\r' '  ')
+  # status re-counts with derive_surface_counts: stamp that metric, never a hand-exported SURFACE_COUNTS.
+  _sfv=$(printf "%s" "$(derive_surface_counts)" | tr -d '"' | tr '\n\r' '  ')
   awk -v dt="$META_DOC_TYPE" -v ver="$VERSION" -v cv="$CONTENT_VERSION" -v gb="$META_GENERATED_BY" \
       -v lu="$(date +%F)" -v sf="$_sfv" '
     BEGIN { n = 0; done = 0 }
@@ -538,7 +539,7 @@ restamp_skill() {
   _wasdmi=$(_fm_meta "$_f" disable-model-invocation)
   _dt=$(_fm_meta "$_f" doc_type)
   case "$_dt" in llm|user|skip) ;; *) _dt="$META_DOC_TYPE" ;; esac
-  _sfv=$(printf '%s' "${SURFACE_COUNTS:-$(derive_surface_counts)}" | tr -d '"' | tr '\n\r' '  ')
+  _sfv=$(printf "%s" "$(derive_surface_counts)" | tr -d '"' | tr '\n\r' '  ')
   _lu=$(date +%F)
 
   _bd=$(mktemp -d "${TMPDIR:-/tmp}/memory-sync-restamp.XXXXXX") || { echo "❌ FAILED: cannot create a temp dir"; exit 1; }

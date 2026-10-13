@@ -207,7 +207,7 @@ echo "OK"
 | 7, 10 (opt-out) | live | `disabled` | live: never `disabled` on a missing key | a secondary (row 7) or anchor (row 10) MISS for Phase 3 |
 
 Row 2 is `disabled` on `"enabled":false`; row 8 is live only on `"hard":true`, anything else is the
-disarmed wall. An absent key means opposite things on rows 6/11 and 7/10: read the row, never a
+disarmed wall once installed (guard file or `REG` line; `state.json` alone is Phase 3 rule 3 `missing`). An absent key means opposite things on rows 6/11 and 7/10: read the row, never a
 house default (a key-less row 6 or 11 reported live claims a deadline is enforced, or a return
 budget applied, when the guard returns on its first line). Rows 6 and 11 read the nearest project
 config first, then `$CLAUDE_CONFIG_DIR`, then `~/.claude`; a malformed (non-object) project config is
@@ -238,11 +238,14 @@ for f in .claude/skills/superreview/SKILL.md .claude/skills/memory-sync/SKILL.md
   elif [ -f "$f.disabled" ]; then echo "PARKED $f.disabled"
   else                            echo "ABSENT $f"; fi
 done
+GEN="${CLAUDE_SKILL_DIR}/../teams-setup/scripts/agent-generator.sh"
+[ -f "$GEN" ] || { echo "FAILED: no agent-generator.sh at $GEN"; exit 1; }
 { find . -path './.claude/teams/*/team.md' 2>/dev/null || true; } | sed 's|^\./||' | sort | while IFS= read -r t; do
   n=$(basename "$(dirname "$t")")
   awk '/^## Agents/{a=1;next} a&&/^## /{exit} a&&/^\|/{split($(0),c,"|");gsub(/[`[:space:]]/,"",c[2]);if(c[2]!=""&&c[2]!~/^-+$/&&c[2]!="Agent")print c[2]}' "$t" |
   while IFS= read -r m; do
     [ "$m" = "intent-guard" ] && continue
+    if o=$(sh "$GEN" "$m" 2>/dev/null); then echo "FOREIGN team:$n $m ($o)"; continue; fi
     l=0; p=0
     [ -f ".claude/agents/$m.md" ] && l=1
     [ -f ".claude/agents/$m.md.disabled" ] && p=1
@@ -263,6 +266,7 @@ Reading the two multi-artifact rows (1 and 4), where a toggle can land halfway:
 | every deployed artifact `LIVE` | not disabled; fall through to the rest of Phase 3 |
 | some `LIVE`, some `PARKED` | `partial` — a `disable`/`enable` that did not finish. Name the halves; the fix is re-running the same verb (a no-op on artifacts already in the requested state) |
 | Row 4's absent `task-spec`, everything else `LIVE` | Phase 1 proved off -> `OPTIONAL`, no defect. On/unknown -> `ABSENT`, the roster's required/legacy absence signal remains; never infer a disabled state |
+| `FOREIGN team:<t> <agent> (<plugin>:<skill>)` | not a team member: another generator owns it (`agent-generator.sh`: its `generated_by` stamp, or the reserved `task-tracker`), so `toggle-team.sh` never moves it. Leave it out of every row-1 pattern: a team whose other members are all `PARKED` is `disabled`. Its own row (row 4 for `task-tracker`) reads it |
 | any `CONFLICT team:<t> <agent>` | `partial`, outranking every other teams reading. Both `.md` and `.md.disabled` exist for that member: `teams-setup enable` REFUSES the whole team (`CONFLICT:` line, nothing moved) and `verify-team.sh` FAILS. Name each member; the fix is manual — keep the copy you want, delete or rename the other, then re-run `/brewcode:teams-setup <team> enable` |
 | `CONFLICT .claude/rules/convention.md` | `partial`, before any disabled verdict: live and parked guidance both exist and the installer refuses to choose. Ask the user to retain the intended copy, then retry the requested mode |
 

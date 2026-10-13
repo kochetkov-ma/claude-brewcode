@@ -728,6 +728,24 @@ check(
   'an "" layer stops the lookup, "0" is off, true/yes are on case-insensitively, settings beat the shell export',
 );
 
+// GIVEN state.json only (uninstall leftover, brewai-hub 6.5.6 sweep) vs an installed wall WHEN status runs
+// THEN installed separates them, so a stale state never recommends the upgrade that aborts
+const SO = join(BASE, 'status-state-only');
+mkdirSync(join(SO, '.claude', 'brewtools', 'manager'), { recursive: true });
+writeFileSync(join(SO, '.claude', 'brewtools', 'manager', 'state.json'), JSON.stringify({ enabled: true, mode: 'full', version: '6.5.0', content_version: '6.5.0' }));
+const soStatus = runShipped('### status', SO);
+const soUpgrade = runShipped('### upgrade', SO);
+const inStatus = runShipped('### status', makeInstalledProject('status-installed'));
+const pick = r => ({ code: r.code, registered: r.out.registered, guardPresent: r.out.guardPresent, installed: r.out.installed, stale: r.out.stale });
+check(
+  '44i-status-installed-flag-matches-the-upgrade-abort',
+  { stateOnly: pick(soStatus), stateOnlyUpgrade: { code: soUpgrade.code, stderr: soUpgrade.stderr }, installed: pick(inStatus) },
+  { stateOnly: { code: 0, registered: false, guardPresent: false, installed: false, stale: true },
+    stateOnlyUpgrade: { code: 1, stderr: 'ABORT: the wall is not installed in this project — run install instead\n' },
+    installed: { code: 0, registered: true, guardPresent: true, installed: true, stale: null } },
+  'status must call a state.json-only project not installed, the exact case upgrade refuses',
+);
+
 // REGRESSION (M1): process.exit inside the locked try skips finally; the lock leaked and the next
 // manager command within 30 s aborted with a false "held by another setup skill".
 const LK_NONE = join(BASE, 'lock-upgrade-uninstalled');

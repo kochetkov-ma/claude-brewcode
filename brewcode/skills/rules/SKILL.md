@@ -182,6 +182,7 @@ last_updated: "{LAST_UPDATED}"
 `brewcode:rules`, `{LAST_UPDATED}` = `date +%F`; never hardcode them. `validate` gates on
 `^doc_type: llm$` (unquoted, `doc_type: "llm"` fails; the other three quoted), exits non-zero on a
 missing, misspelled or misformatted key, so run it after every write. It checks `avoid.md`,
-`best-practice.md` (both required) and `{prefix}-` files only.
+`best-practice.md` (both required) and `{prefix}-` files only. `create` writes the main files
+without `paths:`; a project that scopes one on purpose gets a `!` warning, never an error: keep it.
 
 </instructions>

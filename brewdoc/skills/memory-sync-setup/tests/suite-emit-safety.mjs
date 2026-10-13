@@ -337,6 +337,35 @@ const write = (p, body) => { mkdirSync(dirname(p), { recursive: true }); writeFi
     [refusal(outer), refusal(outer), refusal(h)]);
 }
 
+// ── 13. run-artifact snapshots and worktree checkouts never inflate the surface ──
+{
+  // GIVEN one real nested CLAUDE.md beside snapshot copies under .claude/reports and a worktree checkout (brewai-hub: 377 copies).
+  const root = project('reports-worktrees');
+  write(join(root, 'CLAUDE.md'), '# Project\n');
+  write(join(root, 'app/CLAUDE.md'), '# App\n');
+  write(join(root, '.claude/rules/r.md'), '# Rule\n');
+  write(join(root, '.claude/reports/20261006-124907_audit/snap/CLAUDE.md'), '# Snapshot\n');
+  write(join(root, '.claude/reports/20261006-124907_audit/AGENTS.md'), '# Snapshot\n');
+  write(join(root, '.claude/reports/20261006-124907_audit/.claude/rules/copy.md'), '# Snapshot rule\n');
+  write(join(root, '.claude/worktrees/feat/CLAUDE.md'), '# Checkout\n');
+  write(join(root, '.claude/worktrees/feat/app/CLAUDE.md'), '# Checkout\n');
+  const expected = '3 files: 1 root, 1 nested CLAUDE.md, 0 AGENTS.md, 1 rules, 0 conventions, 0 agents, 0 skill files';
+
+  // WHEN scan runs, then emit with a hand-written SURFACE_COUNTS export, then status.
+  const scan = run(root, 'scan');
+  const emit = run(root, 'emit', { SURFACE_COUNTS: '78 files: 2 root, 12 memory-dir notes, 1 team roster' });
+  const status = run(root, 'status');
+  const line = (out, re) => out.split('\n').filter(l => re.test(l));
+
+  // THEN all three count the same 3 files and status reports no surface drift.
+  check('scan prunes .claude/reports and .claude/worktrees', line(scan.out, /^SURFACE_COUNTS=/), [`SURFACE_COUNTS=${expected}`]);
+  check('emit stamps the derived count, not the exported one',
+    [emit.code, line(read(join(root, SKILL, 'SKILL.md')), /^surface_files:/)], [0, [`surface_files: "${expected}"`]]);
+  check('status sees no phantom surface move',
+    [status.code, line(status.out, /^(SURFACE_FILES_NOW|SURFACE_FILES_STAMPED|NOTE_SURFACE)=/)],
+    [0, ['SURFACE_FILES_NOW=3', 'SURFACE_FILES_STAMPED=3']]);
+}
+
 rmSync(BASE, { recursive: true, force: true });
 console.log(`\n${failed === 0 ? 'PASS' : 'FAIL'}  passed=${passed} failed=${failed}`);
 process.exit(failed === 0 ? 0 : 1);

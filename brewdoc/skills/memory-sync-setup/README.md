@@ -20,7 +20,9 @@ A project-tailored `memory-sync` skill:
    `CLAUDE.md` at any depth, `CLAUDE.local.md`, rules, conventions, the `AGENTS.md` family (loaded by Claude Code
    only per its **Project instructions** setting), agents, skills, the memory dir and per-agent memory stores. VERIFY-ONLY surfaces (symlinked or vendor-marked files) are marked, never edited.
 3. **Hard exclusions with reasons** -- `docs/**` (owned by a separate doc flow; refs into it are resolution-checked
-   only), all source code (read-only evidence), secrets, task-board state, build output, git-ignored scratch.
+   only), all source code (read-only evidence), secrets, task-board state, build output, git-ignored scratch,
+   run-artifact snapshots (`.claude/reports/**`) and worktree checkouts (`.claude/worktrees/**`). Every file count and
+   `find` sweep prunes the last two: they hold copies of memory files, never memory.
 4. **A checkable-fact catalogue** -- every claim memory makes paired with the exact shell command that verifies it:
    layer paths, build-tool aliases, lint rule names, scripts, version pins, env-var NAMES (never values), routes,
    migrations, test tiers and gates, CI gates.
@@ -162,6 +164,9 @@ changes. Run `status` any time to see whether it is due.
   hand-edits; `upgrade` is the safe path.
 - A stale provenance stamp is never a reason to re-emit: `generate.sh restamp` rewrites the metadata keys in
   place and refuses to write if anything outside them would move.
+- `surface_files` in the stamp is always the script's own count. `emit` and `restamp` re-derive it, the same metric
+  `status` re-counts, so an exported `SURFACE_COUNTS` fills only the body text and can no longer make a fresh install
+  read as stale.
 - The generator NEVER syncs memory itself, and the emitted skill never edits source code, `docs/**`, secrets or
   task-board state -- it reads them as evidence.
 - A run of the emitted skill that touched only the root `CLAUDE.md` is an incomplete run.

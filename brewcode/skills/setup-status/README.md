@@ -76,13 +76,18 @@ Each setup gets exactly one state:
 | `modified (stamp current, bytes differ)` | The stamp is current, but a copied file was hand-edited or never re-copied |
 | `partial` | The installation is incomplete, half-toggled, left a placeholder unresolved, or was written by the wrong setup; for semble also a hand-edited rule with an outdated stamp, or permissions missing from every settings layer |
 | `disabled` | The setup's own off-switch is set |
-| `missing` | Nothing of the setup is installed |
+| `missing` | Nothing of the setup is installed; for manager-setup also a `state.json` with no guard, no helper and no hook registration |
 | `n/a` | The owning plugin is not installed |
 | `version unknown (plugin asset missing)` | The plugin in use lacks the file to compare against |
 
 The setups table shows the `Installed` and `Plugin` versions for every row, so you can see the
 gap at a glance. Teams, superreview, task-board, convention-setup and memory-sync are disabled by
 renaming their entry file to `*.disabled`; the others use a config flag.
+
+| Setup | Reading |
+|-------|---------|
+| Teams | `disabled` when every roster member except `intent-guard` and agents owned by another generator (such as `task-tracker`, which task-board-setup owns) is parked, because `toggle-team.sh` never moves those |
+| Manager | The off-switch (`hard` is not `true`) counts only on an installed wall, meaning the copied guard or a hook registration. A `state.json` alone, which `uninstall` keeps, is `missing` with the command `install`; `upgrade` and `enable` refuse a wall that was never installed |
 
 A disabled setup with current files is offered `enable` (optional). When its files are behind the
 plugin, the row gets `upgrade`, which keeps the setup disabled, for semble, agent-deadline,

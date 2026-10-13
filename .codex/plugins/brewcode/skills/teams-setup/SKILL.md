@@ -7,7 +7,7 @@ description: "Creates and manages dynamic teams of domain agents. Triggers: crea
 
 Use collaboration agents only when the user or project instructions explicitly request a team. Split work into bounded independent tasks, keep one owner per file or surface, exchange evidence through collaboration messages, and synthesize results in the parent session. Do not invent unsupported agent parameters or create persistent team configuration unless requested.
 
-<!-- brewcode-meta: version=6.5.6 content_version=6.5.6 generated_by=brewcode:teams-setup -->
+<!-- brewcode-meta: version=6.5.7 content_version=6.5.7 generated_by=brewcode:teams-setup -->
 
 ## Native authority
 
@@ -49,7 +49,7 @@ Create one approved `.codex/agents/{name}.toml` per bounded owner from `referenc
 
 For policy `required`, the bootstrap already called the create-only intent-guard emitter: an approved existing non-symlink regular file was reused byte-identically, or an absent target was published atomically without replacement. Invalid, symlink, nonregular, or lost concurrent-create paths fail closed without mutation. Never author or overwrite the guard here. `legacy-absent` exists only on upgrades and gets no guard.
 
-Finalize only successfully parsed agents. Domain names are unique; `Agents` counts domain rows only. `required` has exactly one fixed review-only guard row and its exact shared guard sentence; `legacy-absent` has neither row nor any shared-contract mention of a phantom guard. The complete substituted `team.md` must stay <=2800 characters and <=700 exact `tiktoken==0.13.0` `o200k_base` tokens. `verify-team.sh` fails closed if that pinned tokenizer is unavailable or mismatched and never installs it.
+Finalize only successfully parsed agents. Domain names are unique; `Agents` counts domain rows only. `required` has exactly one fixed review-only guard row and its exact shared guard sentence; `legacy-absent` has neither row nor any shared-contract mention of a phantom guard. Up to 13 domain rows, the complete substituted `team.md` must stay <=2800 characters and <=700 exact `tiktoken==0.13.0` `o200k_base` tokens; each domain row past 13 adds 80 characters and 20 tokens (20 rows -> <=3360 characters, <=840 tokens). `verify-team.sh` fails closed if that pinned tokenizer is unavailable or mismatched and never installs it.
 
 ### C5-C7: independent review
 
@@ -65,11 +65,11 @@ Reject parked or live-plus-parked members before writes. Capture an immutable UT
 
 ## Mode: enable
 
-Run `scripts/toggle-team.sh {TEAM_NAME} enable --dry-run`, stop on conflicts/missing members, then restore domain `.toml.disabled` files byte-identically. Never move `intent-guard`. Update roster status/metadata without changing per-agent versions and verify; an all-live team is a no-op.
+Run `scripts/toggle-team.sh {TEAM_NAME} enable --dry-run`, stop on conflicts/missing members, then restore domain `.toml.disabled` files byte-identically. Never move `intent-guard` or an agent another generator owns (`scripts/agent-generator.sh`: its `generated_by` stamp, or the reserved `task-tracker`). Update roster status/metadata without changing per-agent versions and verify; an all-live team is a no-op.
 
 ## Mode: disable
 
-Dry-run the same script, show every move, and after approval park domain `.toml` files as `.toml.disabled` byte-identically. Keep roster, trace, archive, and guard. Update roster status/metadata and verify; an all-parked team is a no-op.
+Dry-run the same script, show every move, and after approval park domain `.toml` files as `.toml.disabled` byte-identically. Keep roster, trace, archive, and guard; never park an agent another generator owns (`scripts/agent-generator.sh`, e.g. `task-tracker`): it is no team member, so a disabled team reads all-parked without it. Update roster status/metadata and verify; an all-parked team is a no-op.
 
 ## Mode: uninstall
 
