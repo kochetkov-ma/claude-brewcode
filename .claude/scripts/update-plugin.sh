@@ -32,7 +32,7 @@ for arg in "$@"; do
         --help|-h)
             echo "Usage: [CLAUDE_CONFIG_DIR=<profile dir>] $(basename "$0") [brewcode|brewdoc|brewtools|brewui|all] [--dry-run]"
             echo ""
-            echo "  <plugin>   Update only that plugin; all (default) updates the four"
+            echo "  <plugin>   Update only that plugin; all (default) updates the four, skipping any not installed at user scope"
             echo "  --dry-run  Print the profile, resolved cache paths and planned commands; change nothing"
             echo "  Profile    \$CLAUDE_CONFIG_DIR; unset = ~/.claude (from another profile: env -u CLAUDE_CONFIG_DIR bash $(basename "$0"))"
             exit 0
@@ -149,11 +149,29 @@ project_rows() {
         || log "   WARN: claude plugin list --json is not a JSON array; project-scope installs not checked"
 }
 
+# all mode: user-scope ids of this profile; list failure -> "?" (state unknown, every plugin attempted).
+USER_IDS="?"
+load_user_ids() {
+    local list
+    if ! list=$(claude plugin list --json 2>&1) || ! USER_IDS=$(printf '%s' "$list" | jq -r '.[]? | select(.scope == "user") | .id' 2>/dev/null); then
+        USER_IDS="?"
+        log "   WARN: claude plugin list --json failed; installed state unknown, every plugin is attempted"
+    fi
+}
+
+# rc 0 = all mode and NAME has no user-scope install here (single-plugin mode never skips).
+not_installed() {
+    [[ "$TARGET" == "all" && "$USER_IDS" != "?" ]] || return 1
+    ! grep -qx "$1@claude-brewcode" <<< "$USER_IDS"
+}
+
 # --- Dry run: resolved paths + planned commands, nothing changed ---
 if [[ $DRY_RUN == true ]]; then
     log "DRY RUN - nothing is changed. Planned (CLAUDE_CONFIG_DIR=${CLAUDE_CONFIG_DIR:-<unset>}):"
     log "  claude plugin marketplace update claude-brewcode"
+    [[ "$TARGET" != "all" ]] || load_user_ids
     for NAME in $TARGETS; do
+        if not_installed "$NAME"; then log "  ${NAME}: not installed in this profile -> skipped"; continue; fi
         VER_VAR="$(printf '%s' "$NAME" | tr '[:lower:]' '[:upper:]')_VER"
         if [[ -d "$CACHE_ROOT/$NAME/${!VER_VAR}" ]]; then ACTION="update"; else ACTION="uninstall + install"; fi
         log "  claude plugin $ACTION ${NAME}@claude-brewcode -> $CACHE_ROOT/$NAME/${!VER_VAR}"
@@ -180,6 +198,7 @@ else
 fi
 [[ -n "${OUTPUT:-}" ]] && log "   $OUTPUT"
 log ""
+[[ "$TARGET" != "all" ]] || load_user_ids
 
 # --- Install helper ---
 install_plugin() {
@@ -226,25 +245,40 @@ BD_FILES=0
 BT_FILES=0
 
 if [[ "$TARGET" == "brewcode" || "$TARGET" == "all" ]]; then
-    log "$STEP. Installing brewcode..."
-    install_plugin "brewcode" "$BREWCODE_VER"
-    BC_FILES=$(find "$CACHE_ROOT/brewcode/$BREWCODE_VER" -type f 2>/dev/null | wc -l | tr -d ' ')
+    if not_installed brewcode; then
+        log "$STEP. brewcode: not installed in this profile -> skipped"
+        BC_FILES="skipped (not installed)"
+    else
+        log "$STEP. Installing brewcode..."
+        install_plugin "brewcode" "$BREWCODE_VER"
+        BC_FILES=$(find "$CACHE_ROOT/brewcode/$BREWCODE_VER" -type f 2>/dev/null | wc -l | tr -d ' ')
+    fi
     log ""
     STEP=$((STEP + 1))
 fi
 
 if [[ "$TARGET" == "brewdoc" || "$TARGET" == "all" ]]; then
-    log "$STEP. Installing brewdoc..."
-    install_plugin "brewdoc" "$BREWDOC_VER"
-    BD_FILES=$(find "$CACHE_ROOT/brewdoc/$BREWDOC_VER" -type f 2>/dev/null | wc -l | tr -d ' ')
+    if not_installed brewdoc; then
+        log "$STEP. brewdoc: not installed in this profile -> skipped"
+        BD_FILES="skipped (not installed)"
+    else
+        log "$STEP. Installing brewdoc..."
+        install_plugin "brewdoc" "$BREWDOC_VER"
+        BD_FILES=$(find "$CACHE_ROOT/brewdoc/$BREWDOC_VER" -type f 2>/dev/null | wc -l | tr -d ' ')
+    fi
     log ""
     STEP=$((STEP + 1))
 fi
 
 if [[ "$TARGET" == "brewtools" || "$TARGET" == "all" ]]; then
-    log "$STEP. Installing brewtools..."
-    install_plugin "brewtools" "$BREWTOOLS_VER"
-    BT_FILES=$(find "$CACHE_ROOT/brewtools/$BREWTOOLS_VER" -type f 2>/dev/null | wc -l | tr -d ' ')
+    if not_installed brewtools; then
+        log "$STEP. brewtools: not installed in this profile -> skipped"
+        BT_FILES="skipped (not installed)"
+    else
+        log "$STEP. Installing brewtools..."
+        install_plugin "brewtools" "$BREWTOOLS_VER"
+        BT_FILES=$(find "$CACHE_ROOT/brewtools/$BREWTOOLS_VER" -type f 2>/dev/null | wc -l | tr -d ' ')
+    fi
     log ""
     STEP=$((STEP + 1))
 fi
@@ -252,9 +286,14 @@ fi
 BU_FILES=0
 
 if [[ "$TARGET" == "brewui" || "$TARGET" == "all" ]]; then
-    log "$STEP. Installing brewui..."
-    install_plugin "brewui" "$BREWUI_VER"
-    BU_FILES=$(find "$CACHE_ROOT/brewui/$BREWUI_VER" -type f 2>/dev/null | wc -l | tr -d ' ')
+    if not_installed brewui; then
+        log "$STEP. brewui: not installed in this profile -> skipped"
+        BU_FILES="skipped (not installed)"
+    else
+        log "$STEP. Installing brewui..."
+        install_plugin "brewui" "$BREWUI_VER"
+        BU_FILES=$(find "$CACHE_ROOT/brewui/$BREWUI_VER" -type f 2>/dev/null | wc -l | tr -d ' ')
+    fi
     log ""
     STEP=$((STEP + 1))
 fi

@@ -152,4 +152,58 @@ const call = (cwd, ...args) => ({ cwd, args });
         ],
     }, 'THEN both pins are named with their scope, projectPath and exact command');
 }
+// GIVEN only brewcode installed at user scope WHEN update-plugin.sh all runs THEN the other three are skipped with one note each and project rows still update.
+{
+    const sb = sandbox();
+    const r = run(sb, 'update-plugin.sh', ['all']);
+    assert.deepEqual({ rc: r.rc, calls: r.calls, cache: r.cache, notes: r.lines.filter(l => l.includes('not installed')) }, {
+        rc: 0,
+        calls: [
+            call(sb.other, 'plugin', 'marketplace', 'update', 'claude-brewcode'),
+            call(sb.other, 'plugin', 'list', '--json'),
+            call(sb.other, 'plugin', 'update', ID),
+            call(sb.other, 'plugin', 'list', '--json'),
+            call(sb.project, 'plugin', 'update', ID, '--scope', 'project'),
+        ],
+        cache: [VER],
+        notes: [
+            '3. brewdoc: not installed in this profile -> skipped',
+            '4. brewtools: not installed in this profile -> skipped',
+            '5. brewui: not installed in this profile -> skipped',
+            '| brewdoc  | ' + VER + '  | skipped (not installed)  |',
+            '| brewtools | ' + VER + ' | skipped (not installed) |',
+            '| brewui    | ' + VER + ' | skipped (not installed) |',
+        ],
+    }, 'THEN absent plugins are skipped, never errors, and the later steps run');
+}
+
+// GIVEN the same profile WHEN update-plugin.sh all --dry-run runs THEN the absent plugins are planned as skipped.
+{
+    const sb = sandbox();
+    const r = run(sb, 'update-plugin.sh', ['all', '--dry-run']);
+    assert.deepEqual({ rc: r.rc, calls: r.calls, notes: r.lines.filter(l => l.includes('not installed')) }, {
+        rc: 0,
+        calls: [call(sb.other, 'plugin', 'list', '--json'), call(sb.other, 'plugin', 'list', '--json')],
+        notes: [
+            '  brewdoc: not installed in this profile -> skipped',
+            '  brewtools: not installed in this profile -> skipped',
+            '  brewui: not installed in this profile -> skipped',
+        ],
+    }, 'THEN dry-run names the skips and changes nothing');
+}
+
+// GIVEN an installed plugin whose user-scope update fails WHEN update-plugin.sh all runs THEN rc 1 and no later step runs.
+{
+    const sb = sandbox();
+    const r = run(sb, 'update-plugin.sh', ['all'], { STUB_FAIL_SCOPES: 'user' });
+    assert.deepEqual({ rc: r.rc, calls: r.calls, errors: r.lines.filter(l => l.startsWith('ERROR')) }, {
+        rc: 1,
+        calls: [
+            call(sb.other, 'plugin', 'marketplace', 'update', 'claude-brewcode'),
+            call(sb.other, 'plugin', 'list', '--json'),
+            call(sb.other, 'plugin', 'update', ID),
+        ],
+        errors: ['ERROR: brewcode update failed (exit 1): stub failure user'],
+    }, 'THEN a real update failure still fails the run');
+}
 console.log('suite-project-scope: PASS');
