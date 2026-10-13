@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# check-shards.sh <workflow.yml> - every tests/run.sh suite and .codex/tests file must be listed in a shard.
+# check-shards.sh <workflow.yml> - every tests/run.sh suite is in a shard; .codex/tests globs are in a step.
 # .codex/plugins/** runners are skipped: validate-compat.mjs proves them byte-equal to <plugin>/.codex/skills/**.
 set -uo pipefail
 wf="${1:?usage: check-shards.sh <workflow.yml>}"
@@ -17,8 +17,8 @@ while IFS= read -r runner; do
   done
 done < <(find brewcode brewdoc brewtools .claude/scripts -path '*/fixtures/*' -prune -o -path '*/tests/run.sh' -print | LC_ALL=C sort)
 
-for test in .codex/tests/*.test.mjs .codex/tests/*.test.py; do
-  grep -qE " ${test//./\\.}\$" "$wf" || missing "$test"
+for glob in '.codex/tests/*.test.mjs' '.codex/tests/*.test.py'; do
+  grep -qF "for test in $glob; do" "$wf" || missing "$glob"
 done
 
 [ "$fail" -eq 0 ] && echo "all suites are sharded"

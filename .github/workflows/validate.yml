@@ -76,9 +76,18 @@ jobs:
         if: ${{ !cancelled() }}
         run: node .claude/scripts/check-install-blocks.mjs
 
-      - name: Skill bash fences
+      - name: Codex tests
         if: ${{ !cancelled() }}
-        run: bash .claude/scripts/check-skill-fences.sh
+        run: |
+          set -uo pipefail
+          fail=0
+          for test in .codex/tests/*.test.mjs; do
+            node "$test" || { echo "::error file=${test}::failed"; fail=1; }
+          done
+          for test in .codex/tests/*.test.py; do
+            python -B "$test" || { echo "::error file=${test}::failed"; fail=1; }
+          done
+          exit "$fail"
 
       - name: Codex mirror and setup
         if: ${{ !cancelled() }}
@@ -97,19 +106,23 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - shard: semble
+          - shard: semble-a
             claude: true
             suites: |
               bash brewcode/skills/semble-setup/tests/run.sh core
-              bash brewcode/skills/semble-setup/tests/run.sh project
               bash brewcode/skills/semble-setup/tests/run.sh hooks
+              bash brewcode/skills/semble-setup/tests/run.sh agents telemetry
+          - shard: semble-b
+            claude: true
+            suites: |
+              bash brewcode/skills/semble-setup/tests/run.sh project
               bash brewcode/skills/semble-setup/tests/run.sh status
               bash brewcode/skills/semble-setup/tests/run.sh integration
-              bash brewcode/skills/semble-setup/tests/run.sh agents telemetry
           - shard: plugins
             claude: true
             zsh: true
             suites: |
+              bash .claude/scripts/check-skill-fences.sh
               bash brewcode/skills/setup-status/tests/run.sh
               bash brewtools/skills/deploy/tests/run.sh
               bash brewdoc/skills/docsync-setup/tests/run.sh
@@ -136,41 +149,53 @@ jobs:
               bash brewcode/agents/tests/run.sh
               bash brewtools/skills/plugin-update/tests/run.sh
               bash .claude/scripts/tests/run.sh
-          - shard: codex-teams
+          - shard: teams-others
             tokenizer: true
             suites: |
-              node .codex/tests/generate-compat.test.mjs
-              bash brewcode/skills/teams-setup/tests/run.sh lifecycle parked-conflict trace-ops multi-team intent-guard
-              bash brewcode/.codex/skills/teams-setup/tests/run.sh lifecycle parked-conflict trace-ops multi-team intent-guard
-              node .codex/tests/generate-compat-agent.test.mjs
-              node .codex/tests/hooks.test.mjs
-              node .codex/tests/install-update.test.mjs
-              node .codex/tests/manager-plan.test.mjs
-              node .codex/tests/native-agent-authoring.test.mjs
-              node .codex/tests/package-validation.test.mjs
-              node .codex/tests/setup.test.mjs
-              node .codex/tests/task-board-contract.test.mjs
-              python -B .codex/tests/setup-loader.test.py
+              bash brewcode/skills/teams-setup/tests/run.sh lifecycle
+              bash brewcode/skills/teams-setup/tests/run.sh parked-conflict trace-ops multi-team intent-guard
+              bash brewcode/.codex/skills/teams-setup/tests/run.sh lifecycle
+              bash brewcode/.codex/skills/teams-setup/tests/run.sh parked-conflict trace-ops multi-team intent-guard
           - shard: teams-profile-0
             tokenizer: true
             suites: |
-              TEAMS_PROFILE_PARTS=4 TEAMS_PROFILE_PART=0 bash brewcode/skills/teams-setup/tests/run.sh agent-profile-contract
-              TEAMS_PROFILE_PARTS=4 TEAMS_PROFILE_PART=0 bash brewcode/.codex/skills/teams-setup/tests/run.sh agent-profile-contract
+              TEAMS_PROFILE_PARTS=8 TEAMS_PROFILE_PART=0 bash brewcode/skills/teams-setup/tests/run.sh agent-profile-contract
+              TEAMS_PROFILE_PARTS=8 TEAMS_PROFILE_PART=0 bash brewcode/.codex/skills/teams-setup/tests/run.sh agent-profile-contract
           - shard: teams-profile-1
             tokenizer: true
             suites: |
-              TEAMS_PROFILE_PARTS=4 TEAMS_PROFILE_PART=1 bash brewcode/skills/teams-setup/tests/run.sh agent-profile-contract
-              TEAMS_PROFILE_PARTS=4 TEAMS_PROFILE_PART=1 bash brewcode/.codex/skills/teams-setup/tests/run.sh agent-profile-contract
+              TEAMS_PROFILE_PARTS=8 TEAMS_PROFILE_PART=1 bash brewcode/skills/teams-setup/tests/run.sh agent-profile-contract
+              TEAMS_PROFILE_PARTS=8 TEAMS_PROFILE_PART=1 bash brewcode/.codex/skills/teams-setup/tests/run.sh agent-profile-contract
           - shard: teams-profile-2
             tokenizer: true
             suites: |
-              TEAMS_PROFILE_PARTS=4 TEAMS_PROFILE_PART=2 bash brewcode/skills/teams-setup/tests/run.sh agent-profile-contract
-              TEAMS_PROFILE_PARTS=4 TEAMS_PROFILE_PART=2 bash brewcode/.codex/skills/teams-setup/tests/run.sh agent-profile-contract
+              TEAMS_PROFILE_PARTS=8 TEAMS_PROFILE_PART=2 bash brewcode/skills/teams-setup/tests/run.sh agent-profile-contract
+              TEAMS_PROFILE_PARTS=8 TEAMS_PROFILE_PART=2 bash brewcode/.codex/skills/teams-setup/tests/run.sh agent-profile-contract
           - shard: teams-profile-3
             tokenizer: true
             suites: |
-              TEAMS_PROFILE_PARTS=4 TEAMS_PROFILE_PART=3 bash brewcode/skills/teams-setup/tests/run.sh agent-profile-contract
-              TEAMS_PROFILE_PARTS=4 TEAMS_PROFILE_PART=3 bash brewcode/.codex/skills/teams-setup/tests/run.sh agent-profile-contract
+              TEAMS_PROFILE_PARTS=8 TEAMS_PROFILE_PART=3 bash brewcode/skills/teams-setup/tests/run.sh agent-profile-contract
+              TEAMS_PROFILE_PARTS=8 TEAMS_PROFILE_PART=3 bash brewcode/.codex/skills/teams-setup/tests/run.sh agent-profile-contract
+          - shard: teams-profile-4
+            tokenizer: true
+            suites: |
+              TEAMS_PROFILE_PARTS=8 TEAMS_PROFILE_PART=4 bash brewcode/skills/teams-setup/tests/run.sh agent-profile-contract
+              TEAMS_PROFILE_PARTS=8 TEAMS_PROFILE_PART=4 bash brewcode/.codex/skills/teams-setup/tests/run.sh agent-profile-contract
+          - shard: teams-profile-5
+            tokenizer: true
+            suites: |
+              TEAMS_PROFILE_PARTS=8 TEAMS_PROFILE_PART=5 bash brewcode/skills/teams-setup/tests/run.sh agent-profile-contract
+              TEAMS_PROFILE_PARTS=8 TEAMS_PROFILE_PART=5 bash brewcode/.codex/skills/teams-setup/tests/run.sh agent-profile-contract
+          - shard: teams-profile-6
+            tokenizer: true
+            suites: |
+              TEAMS_PROFILE_PARTS=8 TEAMS_PROFILE_PART=6 bash brewcode/skills/teams-setup/tests/run.sh agent-profile-contract
+              TEAMS_PROFILE_PARTS=8 TEAMS_PROFILE_PART=6 bash brewcode/.codex/skills/teams-setup/tests/run.sh agent-profile-contract
+          - shard: teams-profile-7
+            tokenizer: true
+            suites: |
+              TEAMS_PROFILE_PARTS=8 TEAMS_PROFILE_PART=7 bash brewcode/skills/teams-setup/tests/run.sh agent-profile-contract
+              TEAMS_PROFILE_PARTS=8 TEAMS_PROFILE_PART=7 bash brewcode/.codex/skills/teams-setup/tests/run.sh agent-profile-contract
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
