@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Validates internal /plugin/... cross-links in touched MDX files.
+# Validates internal /plugin/... cross-links, JSX <code> smartypants hazards and entities in backtick code in MDX files.
 # Usage: bash scripts/check-links.sh [file.mdx ...]; no args -> all .mdx under web/docs/src/content/docs/
 set -euo pipefail
 
@@ -48,11 +48,25 @@ for f in "${FILES[@]}"; do
       FAIL=1
     fi
   done
+  # smartypants rewrites -- ... ' " inside JSX <code>; a {expression} start is exempt
+  while IFS= read -r hit; do
+    [[ -z "$hit" ]] && continue
+    echo "❌ $f:${hit%%:*}: JSX <code> with --, ..., ' or \" (smartypants corrupts it) → use backtick code inside JSX"
+    FAIL=1
+  done < <(grep -nE "<code>[^<{][^<]*</code>" "$f" | grep -E "<code>[^<{]*(--|\.\.\.|[\"'])[^<]*</code>" || true)
+  # an entity inside a single-line backtick span renders literally (backtick code is not entity-decoded)
+  while IFS= read -r hit; do
+    [[ -z "$hit" ]] && continue
+    echo "❌ $f:${hit%%:*}: entity (&lt; &gt; &amp; &quot; &#39;) inside backtick code renders literally → use the raw character"
+    FAIL=1
+  done < <(grep -nE '`' "$f" | while IFS= read -r _l; do
+    grep -oE '`[^`]+`' <<< "${_l#*:}" | grep -qE '&(lt|gt|amp|quot|#39);' && echo "$_l" || true
+  done)
 done
 
 if [[ $FAIL -eq 0 ]]; then
-  echo "✅ all internal links valid"
+  echo "✅ all internal links valid, no JSX <code> hazards"
 else
-  echo "❌ broken links found"
+  echo "❌ broken links or JSX <code> hazards found"
   exit 1
 fi

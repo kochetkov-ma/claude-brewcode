@@ -71,7 +71,7 @@ Engine is saved to `.claude/md-to-pdf.config.json` after first selection. Overri
   <li>
     <div>
       <strong>Parse arguments</strong>
-      <p>Detects mode from arguments — HELP, STYLES, TEST, CONVERT, or CONVERT+PROMPT. Extracts <code>--engine</code> flag if present.</p>
+      <p>Detects mode from arguments — HELP, STYLES, TEST, CONVERT, or CONVERT+PROMPT. Extracts `--engine` flag if present.</p>
     </div>
   </li>
   <li>
@@ -95,7 +95,7 @@ Engine is saved to `.claude/md-to-pdf.config.json` after first selection. Overri
   <li>
     <div>
       <strong>Convert</strong>
-      <p>Runs <code>md_to_pdf.py INPUT OUTPUT --engine ENGINE</code>, passing <code>--config</code> and, for weasyprint, the saved <code>pygments_theme</code> as <code>--pygments-theme</code>. On failure, reads error output, attempts one auto-fix, and retries. If still failing, reports the full error and stops.</p>
+      <p>Runs `md_to_pdf.py INPUT OUTPUT --engine ENGINE`, passing `--config` and, for weasyprint, the saved <code>pygments_theme</code> as `--pygments-theme`. On failure, reads error output, attempts one auto-fix, and retries. If still failing, reports the full error and stops.</p>
     </div>
   </li>
   <li>

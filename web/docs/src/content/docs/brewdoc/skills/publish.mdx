@@ -124,7 +124,7 @@ the trusted `unlock.brewpage.app` gateway; programmatic password requests still 
   <li>
     <div>
       <strong>Parse arguments</strong>
-      <p>Extracts <code>--ttl N</code> (default: 15 days), <code>--entry filename</code> and optional <code>--delivery-mode path|subdomain</code>. Resolves a path named in prose; asks what to publish if neither a path nor content can be resolved.</p>
+      <p>Extracts `--ttl N` (default: 15 days), `--entry filename` and optional `--delivery-mode path|subdomain`. Resolves a path named in prose; asks what to publish if neither a path nor content can be resolved.</p>
     </div>
   </li>
   <li>
@@ -148,13 +148,13 @@ the trusted `unlock.brewpage.app` gateway; programmatic password requests still 
   <li>
     <div>
       <strong>Publish</strong>
-      <p>Runs one <code>brewpage-run.sh publish</code> command with the namespace, TTL, optional entry file, optional <code>--delivery-mode</code> and <code>--password-file</code> flags. When the full command would pass 8,000 characters, the text or JSON is staged first: <code>stage</code> calls pass the content in chunks of up to 6,000 characters, then <code>publish --run</code> joins them. The script validates every value, builds and verifies site archives, adds <code>X-Delivery-Mode</code> only when requested, and saves the owner token, exact link, owner API and identity metadata in project-root <code>.claude/brewpage-history.md</code> without printing the token.</p>
+      <p>Runs one <code>brewpage-run.sh publish</code> command with the namespace, TTL, optional entry file, optional `--delivery-mode` and `--password-file` flags. When the full command would pass 8,000 characters, the text or JSON is staged first: <code>stage</code> calls pass the content in chunks of up to 6,000 characters, then `publish --run` joins them. The script validates every value, builds and verifies site archives, adds <code>X-Delivery-Mode</code> only when requested, and saves the owner token, exact link, owner API and identity metadata in project-root <code>.claude/brewpage-history.md</code> without printing the token.</p>
     </div>
   </li>
   <li>
     <div>
       <strong>Return result</strong>
-      <p>The script prints one decisive line. <code>OK &lt;url&gt;</code> (sites add <code>| Files: N</code>) returns the exact server URL. <code>CONFIRM: ...</code> (exit 2, nothing uploaded) means a supplied ZIP has flagged entries: after you confirm, the same command reruns with <code>--confirmed</code>. <code>FAILED: ...</code> reports the safe failure line and withholds the response body, which may contain an owner token. The script removes its private run directory on every exit.</p>
+      <p>The script prints one decisive line. <code>OK &lt;url&gt;</code> (sites add <code>| Files: N</code>) returns the exact server URL. `CONFIRM: ...` (exit 2, nothing uploaded) means a supplied ZIP has flagged entries: after you confirm, the same command reruns with `--confirmed`. `FAILED: ...` reports the safe failure line and withholds the response body, which may contain an owner token. The script removes its private run directory on every exit.</p>
     </div>
   </li>
 </Steps>

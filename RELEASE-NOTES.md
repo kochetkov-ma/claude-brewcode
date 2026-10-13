@@ -2,6 +2,28 @@
 
 ---
 
+## v6.5.9 (2026-10-13)
+
+> Docs: [bc-rules-organizer](https://doc-claude.brewcode.app/brewcode/agents/bc-rules-organizer/) | [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [teams-setup](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/)
+
+> Docs: [md-to-pdf](https://doc-claude.brewcode.app/brewdoc/skills/md-to-pdf/) | [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/) | [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
+
+> Docs: [deploy-admin](https://doc-claude.brewcode.app/brewtools/agents/deploy-admin/) | [ssh-admin](https://doc-claude.brewcode.app/brewtools/agents/ssh-admin/) | [context-slim](https://doc-claude.brewcode.app/brewtools/skills/context-slim/) | [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) | [secrets-scan](https://doc-claude.brewcode.app/brewtools/skills/secrets-scan/) | [task-board-setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) | [text-human](https://doc-claude.brewcode.app/brewtools/skills/text-human/)
+
+> Docs: [Quick Start](https://doc-claude.brewcode.app/quickstart/) | [Full Setup](https://doc-claude.brewcode.app/full-setup/) | [FAQ](https://doc-claude.brewcode.app/faq/)
+
+Docs-only release: commands, flags and code samples on the docs site now render exactly as written.
+
+### docs
+
+#### Fixed
+
+- **code rendering:** `--flags` showed as a dash and straight quotes turned curly inside JSX `<code>` elements (Astro smartypants) on 16 pages; the text is now backtick code.
+- **entities in code:** HTML entities inside backtick code rendered literally (`&lt;ref&gt;` shown as text) on the skills and teams-setup pages; they now use the raw characters.
+- **check-links.sh:** fails on both patterns (JSX `<code>` with `--`, `...`, `'` or `"`; entities inside backtick code); rule row 11 added to `astro-avoid.md`.
+
+---
+
 ## v6.5.8 (2026-10-13)
 
 > Docs: [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [rules](https://doc-claude.brewcode.app/brewcode/skills/rules/) | [e2e](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [agents](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [superreview-setup](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/)

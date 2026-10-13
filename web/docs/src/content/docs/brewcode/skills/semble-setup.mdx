@@ -153,7 +153,7 @@ Subsequent searches are sub-second and require the absolute repo path:
   <li class="step step-primary">
     <div>
       <strong>Status first, every mode</strong>
-      <p>Runs <code>semble-status.sh --section all --json</code> — read-only, writes nothing under the project, the cache root or <code>~/.claude/settings.json</code>. Prints the pre-mutation <strong>Before</strong> snapshot.</p>
+      <p>Runs `semble-status.sh --section all --json` — read-only, writes nothing under the project, the cache root or <code>~/.claude/settings.json</code>. Prints the pre-mutation <strong>Before</strong> snapshot.</p>
     </div>
   </li>
   <li class="step step-primary">
@@ -165,7 +165,7 @@ Subsequent searches are sub-second and require the absolute repo path:
   <li class="step step-primary">
     <div>
       <strong>Install — prerequisite gate</strong>
-      <p><code>semble-install.sh &lt;check|uv|coreutils|semble|all&gt;</code> — <code>all</code> runs <code>check -&gt; uv -&gt; coreutils -&gt; semble</code>. Probes without <code>--yes</code> first. <code>uv</code> is a hard gate: missing, it asks one <code>AskUserQuestion</code> before running <code>brew install uv</code> — a machine-level mutation outside the project, never silent. <code>coreutils</code> is a soft, optional offer for the same question — see Technical details below.</p>
+      <p><code>semble-install.sh &lt;check|uv|coreutils|semble|all&gt;</code> — <code>all</code> runs <code>check -&gt; uv -&gt; coreutils -&gt; semble</code>. Probes without `--yes` first. <code>uv</code> is a hard gate: missing, it asks one <code>AskUserQuestion</code> before running <code>brew install uv</code> — a machine-level mutation outside the project, never silent. <code>coreutils</code> is a soft, optional offer for the same question — see Technical details below.</p>
     </div>
   </li>
   <li class="step step-primary">
