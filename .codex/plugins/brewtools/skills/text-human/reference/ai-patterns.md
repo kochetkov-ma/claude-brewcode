@@ -3,11 +3,9 @@
 Tiers:
 - HIGH = mechanical artifact, ~zero human FP, single hit actionable.
 - MED = real LLM-skew but present in human writing, act ONLY on co-occurring density (cluster), never on one instance.
-- weak = >50% FP folklore that mislabels non-native writers; at most a tiebreaker inside an already-flagged passage. Section 6 (DROPPED): do not flag standalone.
+- weak = >50% FP folklore that mislabels non-native writers (detectors hit 61% FP on non-native English and flag the US Constitution); at most a tiebreaker inside an already-flagged passage.
 
 Action key: strip = remove safely. rewrite = reword to neutral/concrete. flag = surface to human, NEVER auto-edit (behavior-changing).
-
-Never act on a single MED/weak surface feature: detectors hit 61% FP on non-native English and flag the US Constitution.
 
 ---
 
@@ -46,11 +44,9 @@ Never act on a single MED/weak surface feature: detectors hit 61% FP on non-nati
 | Docstring/JavaDoc restates signature: `@param userId The user ID` = reworded identifier | strip-redundant | MED | Kuryuliya |
 | Print/log narrating trivial steps: `print("Starting loop...")` | strip | MED | Netcraft |
 
-> Strip docstring lines ONLY when text == reworded identifier. Never blanket-strip -- high-level JavaDoc is where AI is good.
+> Never blanket-strip docstrings (only lines == reworded identifier): high-level JavaDoc is where AI is good.
 
 ## 4. Density-signals (MED -- act ONLY when several co-occur)
-
-Weight by count; act when the cluster crosses threshold.
 
 | Pattern | Action | Src |
 |---|---|---|
@@ -67,8 +63,6 @@ Weight by count; act when the cluster crosses threshold.
 | Section-banner overuse `# ===== HELPERS =====` in trivial files | strip | Diatom |
 
 ## 5. Surface-for-review (behavior-changing -- NEVER auto-strip)
-
-Silently editing changes meaning: fabricated refs are bugs, not cosmetics.
 
 | Pattern | Tier | Src |
 |---|---|---|

@@ -33,7 +33,7 @@ The selected model serves every Claude Code role (opus/sonnet/haiku/fable). Pres
 
 ## Model Validation
 
-Verify EVERY selected id (menu/default/custom) with the public GET; send NO key. Create `.claude/provider-switch/` with private permissions, then use the structured Write tool to write `model-request.json` containing `{ "model_id": <JSON-encoded user string> }`. User text is DATA: never interpolate it into shell/Python source, double-quoted commands or an alias body. The paths/program below are fixed; request content changes only through JSON serialization.
+Verify EVERY selected id (menu/default/custom) with the public GET; send NO key. Create `.claude/provider-switch/` with private permissions, then use the structured Write tool to write `model-request.json` containing `{ "model_id": <JSON-encoded user string> }`. User text is DATA: never interpolate it into shell/Python source, double-quoted commands or an alias body.
 
 **EXECUTE** using Bash tool:
 ```bash
@@ -64,11 +64,11 @@ print(json.dumps(result, ensure_ascii=True))
 PY
 ```
 
-Require successful GET/JSON parsing and `status: FOUND`; `NOT_FOUND` -> show suggestions and re-ask. Preserve the requested id; `[1m]` is a Claude client suffix, not a catalog id. A failed request/parser is verification failure, never model absence. Read data files; never source/eval them. For alias creation use the main skill's safe writing flow; do not substitute user text into shell templates.
+Require successful GET/JSON parsing and `status: FOUND`; `NOT_FOUND` -> show suggestions and re-ask. Preserve the requested id; `[1m]` is a Claude client suffix, not a catalog id. A failed request/parser is verification failure, never model absence. Read data files; never source/eval them.
 
 ## Selection Flow (AskUserQuestion)
 
 "Which model to use?": up to four verified coding candidates + "Other" (custom id). One model, every role.
 
 ## Context Window Note
-Catalog context does not prove the client's configured context. For >200K, verify current Claude/provider extended-context support before offering `[1m]`; validate the unsuffixed catalog id while preserving the user's chosen client id. Never append the suffix or change a configured selection automatically.
+Catalog context does not prove the client's configured context. For >200K, verify current Claude/provider extended-context support before offering `[1m]`. Never append the suffix or change a configured selection automatically.

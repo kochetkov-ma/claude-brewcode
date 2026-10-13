@@ -96,7 +96,7 @@ before the old access path closes; never chain the steps into one command:
 5. Only then deny the old path: `ufw deny 22/tcp`.
 
 An established session is not proof: ufw permits ESTABLISHED connections, so the current shell survives
-`ufw deny 22/tcp` and the lockout surfaces at disconnect, when it is unrecoverable. Keep a tested
+`ufw deny 22/tcp` and the lockout surfaces at disconnect, unrecoverable. Keep a tested
 recovery path (provider console).
 
 ## ssh-agent
@@ -108,13 +108,7 @@ recovery path (provider console).
 | Deploy from CI to server | No | Use deploy keys |
 | Jump through bastion | No by default | Prefer ProxyJump; forwarding needs a specific justified/approved exception |
 | Interactive dev session | Maybe | Convenience vs security |
-| Production servers | **Never** | Attack surface |
-
-### Agent Forwarding Risks
-
-- Compromised intermediate host can use your agent
-- Any user with root on intermediate can hijack socket
-- Mitigation: `ssh -J bastion target` (ProxyJump) instead of ForwardAgent
+| Production servers | **Never** | Attack surface: root on any intermediate host can hijack the agent socket |
 
 ## known_hosts Management
 
@@ -162,8 +156,7 @@ StrictHostKeyChecking accept-new
 
 ### Key Rotation
 
-A changed key is a MITM until proven otherwise — rotation is exactly when verification matters most,
-so the new key goes through the SAME scan -> fingerprint -> out-of-band match -> append sequence:
+A changed key is a MITM until proven otherwise, so the new key goes through the SAME scan -> fingerprint -> out-of-band match -> append sequence:
 
 ```bash
 KH_TMP=$(mktemp)

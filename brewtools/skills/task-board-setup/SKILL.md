@@ -7,7 +7,7 @@ argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge]
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, Agent, AskUserQuestion, CronCreate, CronList, CronDelete]
 model: opus
 ---
-<!-- brewcode-meta: version=6.5.3 content_version=6.5.0 generated_by=brewtools:task-board-setup -->
+<!-- brewcode-meta: version=6.5.4 content_version=6.5.4 generated_by=brewtools:task-board-setup -->
 
 [DICT: TT=task-tracker agent (generated), TB=task-board skill (generated), BRD=board.md, FEAT=.claude/features, EXCL=source-path exclusions, REL=release style (vX.Y.Z tag | commit SHA | no tag), DOM=domain id segment, FM=frontmatter, TS=task-spec skill (generated), SPEC_MODE=spec+design layer opt-in, PS=status phase, PU=upgrade phase, PR=uninstall/purge phase]
 
@@ -27,7 +27,7 @@ Generator. Run from the main conversation in (or pointed at) a TARGET repo. Depl
 
 > `SPEC_MODE` (confirmed in P1) gates only spec/design artifacts and spec-related additions. `PROGRESS.md`, `METHODOLOGY.md`, `ANTI-DRIFT.md`, `task-graph.md` and task-local methodology/cron sections are ungated, emitted in both modes; refs 02-05 + 11 own their runtime contracts.
 
-This skill orchestrates from the main conversation: it is inline (no `context`), so its Agent spawns are first-level and must not nest. It spawns bounded subagents for bulk analysis/doc sweep and integrates their output. All emitted artifacts are parametrized from Step 1 findings; each phase reads its template from `${CLAUDE_SKILL_DIR}/references/<file>`.
+Inline (no `context`): its Agent spawns are first-level and must not nest; bounded subagents do bulk analysis/doc sweep, this skill integrates their output. Every emitted artifact is parametrized from Step 1 findings; each phase reads its template from `${CLAUDE_SKILL_DIR}/references/<file>`.
 
 > **Fence rule**, every emit on every path (P2, P3, P3.5, P4a-b, and `PU`'s U3/U4 drift-ADD): when writing any generated file, unescape its inner code fences (`\`\`\`` -> ```` ``` ````) so the emitted file has valid fences; the reference templates !=repeat it.
 
@@ -71,30 +71,11 @@ block. P5's prompt-contract gate below verifies both.
 
 ## Delegation
 
-One subagent = one bounded unit -- one doc group, ~<=5 files, ~<=10 steps: an agent handed more is gone for an hour, cannot be observed or corrected, and usually drifts off-target. Split anything bigger into N tasks, all spawned in one message. Applies to both spawn points: P1 analysis and P4c doc sweep.
+One subagent = one bounded unit -- one doc group, ~<=5 files, ~<=10 steps: a bigger unit runs for an hour unobserved and drifts. Split anything bigger into N tasks, all spawned in one message. Applies to both spawn points: P1 analysis and P4c doc sweep.
 
 Every spawn brief carries six labeled fields, since a subagent starts with an empty context: GOAL (task + why), ROLE (owns, must not touch), SCOPE (paths/commands in and out), CONTEXT (done, by whom, in parallel), CONSUMER (who uses the result + its shape), DONE (acceptance + return: verdict first, evidence, bounded; long output to a file, path returned).
 
-A bare one-line task is never enough. Shape (P4c sweep agent):
-```
-Agent(subagent_type="general-purpose", prompt="
-GOAL: deploying a file-based Kanban into TARGET; the board skeleton exists and this pass
-  fills it from the repo's pre-existing task docs. Sibling agents handle other doc groups.
-ROLE: you own <these DOCS>. Do NOT create tasks that no document supports, do NOT edit
-  source dirs, do NOT touch CLAUDE.md.
-SCOPE: in -- write ONLY under TARGET/.claude/features/**; read the listed DOCS.
-  Out -- EXCLUSIONS (<list from P1>), TARGET/CLAUDE.md, .claude/agents, .claude/skills.
-CONTEXT: P1 already confirmed DOMAINS=<...>, REL_STYLE=<...>, LANG=<...> with the user, and
-  P4a-b already wrote the board skeleton, TASK_TEMPLATE.md (id convention) and board.md
-  (row format) -- read them, do not reinvent either. Sibling agents sweep the other doc
-  groups into the same tree right now, so touch only the DOCS listed for you.
-CONSUMER: P5 verification counts what landed under closed/ + backlog/, and the installed
-  task-tracker agent reads those files from then on -- an id or status dir that deviates from
-  TASK_TEMPLATE.md makes the task invisible to it.
-DONE: files written under closed/ + backlog/, and a manifest: docs migrated by status,
-  docs trashed, board rows authored. A no-op sweep must say so explicitly.
-")
-```
+A bare one-line task is never enough. Full brief shapes, used as written: P1 agents in `references/01-analysis.md`, P4c sweep agents in `references/06-doc-sweep.md`.
 
 ---
 
@@ -151,8 +132,7 @@ Resolve an unset `MODE` here: `EXISTS` -> `status`, `FRESH` -> `install`. Then d
 | `purge` | `EXISTS` | go to **PR** with `KEEP_DATA=false` |
 | `enable` / `disable` / `uninstall` / `purge` | `FRESH` | run **PS** instead and report that nothing is deployed: there is no machinery to toggle, and nothing is deleted on a guess |
 
-> Print the `## Prompt contract` PLAN block once here -- `MODE` and `TARGET` are both resolved --
-> before continuing into the dispatched phase.
+> Print the PLAN block (`## Prompt contract`) here, before the dispatched phase.
 
 **MAJOR 4 -- idempotency guard**, `install` path only (`MODE=install` and board.md `FRESH`): a `FRESH` board.md does not prove a clean slate, a prior run may have left other artifacts. **EXECUTE** using Bash tool:
 ```bash
@@ -292,7 +272,7 @@ Runs for `MODE=uninstall` (`KEEP_DATA=true`) and `MODE=purge` (`KEEP_DATA=false`
 | any `.disabled` twin of the four above (parked by `disable`) | yes | yes |
 | `.claude/features/**` (board, control files, every task and spec) | **KEPT** | yes |
 
-The generated agent/skills/rule are machinery; `.claude/features/**` is the user's data -- every task they ever wrote. `uninstall` unwires the machinery and leaves the data readable; only `purge` deletes the tasks.
+Generated agent/skills/rule are machinery; `.claude/features/**` is the user's data (every task), deleted only by `purge`.
 
 After removal confirmation and before deleting anything, run the timer-stop gate. A saved scheduler id or absent skill file never proves timer termination.
 
@@ -448,7 +428,7 @@ Read `${CLAUDE_SKILL_DIR}/references/03-task-board-skill.md`, substitute placeho
 
 Run only if `SPEC_MODE=on`; if `off`, skip silently -- write nothing, mention nothing.
 
-Read `${CLAUDE_SKILL_DIR}/references/08-task-spec-skill.md`, substitute placeholders (`{{DOMAIN_AGENTS}}`, `{{ARCHITECT_AGENT}}`, `{{DOMAINS}}`, `{{LANG}}`, `{{REPO_NAME}}`, plus whatever the reference header declares), then `Write` to `TARGET/.claude/skills/task-spec/SKILL.md`.
+Read `${CLAUDE_SKILL_DIR}/references/08-task-spec-skill.md`, substitute placeholders (Placeholder map, owner `08`), then `Write` to `TARGET/.claude/skills/task-spec/SKILL.md`.
 
 > `disable-model-invocation` MUST NOT be set on the emitted skill: plain-prose invocation is a first-class path, alongside `/task-spec <ID> [full|design|refresh]` and the `task-tracker` `NEXT: run /task-spec <ID> (...)` redirect.
 
@@ -460,7 +440,7 @@ Read `${CLAUDE_SKILL_DIR}/references/08-task-spec-skill.md`, substitute placehol
 
 ### 4a. Rule
 
-Read `${CLAUDE_SKILL_DIR}/references/04-tasks-rule.md`, substitute placeholders, then `Write` to `TARGET/.claude/rules/tasks.md` (frontmatter `paths: [".claude/features/**"]`). Its rule "at the start of any task, run the `task-tracker` agent in isolation (a spawned subagent, not inlined)" lives only in `.claude/rules/tasks.md`, never in CLAUDE.md: P0-P5 do not touch the target's CLAUDE.md, and the only sanctioned way to modify it is the optional, gated P5.5 phase below.
+Read `${CLAUDE_SKILL_DIR}/references/04-tasks-rule.md`, substitute placeholders, then `Write` to `TARGET/.claude/rules/tasks.md` (frontmatter `paths: [".claude/features/**"]`). Its task-start rule (run the `task-tracker` agent as a spawned subagent, not inlined) lives only there, never in CLAUDE.md: only the gated P5.5 edits the target's CLAUDE.md.
 
 ### 4b. Scaffold `.claude/features/**`
 
@@ -520,7 +500,7 @@ done
 ```
 > If `SPEC_MODE=off`, skip that loop -- and assert the inverse: none of those three paths may exist.
 
-**Leftover-placeholder gate**, both brace families (double `{{...}}` and the four single-brace metadata tokens), in both modes over every emitted path: no emitted body legitimately contains either, so every hit is an unresolved placeholder. `|| true` keeps a clean run's rc=1 from aborting the block, which is why the `TARGET` assert comes first: with `TARGET` empty the grep rc=2 is swallowed by `2>/dev/null` + `|| true` and the gate prints `OK` having read nothing. **EXECUTE** using Bash tool:
+**Leftover-placeholder gate**, both brace families (double `{{...}}` and the four single-brace metadata tokens), in both modes over every emitted path: every hit is an unresolved placeholder. `|| true` keeps a clean run's rc=1 from aborting, so the `TARGET` assert comes first (gate rule in P0). **EXECUTE** using Bash tool:
 ```bash
 TARGET="<absolute path resolved in P0>"
 test -n "$TARGET" && test -d "$TARGET" || { echo "MISS TARGET unresolved -- re-resolve per P0"; exit 1; }
@@ -567,6 +547,7 @@ Report to the user:
 Run only if `OPTIN` (from P1) is true; `OPTIN` false -> skip silently, CLAUDE.md is never edited outside this phase. Propose-only: every restructuring is behind AskUserQuestion, and a declined proposal means no edit.
 
 Read `${CLAUDE_SKILL_DIR}/references/07-claude-md-optimize.md` and pass it `TARGET`, `DIR` (the directive parsed in P0), and `EXCLUSIONS` from P1 (it detects `MODULES` itself). It owns the procedure: current-vs-target line count, local-only extraction to `CLAUDE.local.md`, over-budget decomposition into nested module CLAUDE.md (loaded on-demand, never `@import`: imports are eager) + path-scoped rules, rules dedup, then `/brewtools:text-optimize` commands for the touched files, printed for the user (the skill is user-only). Set `CMD_DECOMPOSED` for the report and for the task-tracker note.
+
 ---
 
 ## Guards
@@ -575,4 +556,7 @@ Read `${CLAUDE_SKILL_DIR}/references/07-claude-md-optimize.md` and pass it `TARG
 |-----------|----------|
 | `upgrade` on a DISABLED board (`.claude/rules/tasks.md.disabled` present, `tasks.md` absent) | STOP. The recovered FINDINGS are read from the deployed artifacts and a parked file is not deployed. Report it and tell the user to run `enable` first, then `upgrade` |
 | `install` over a board whose artifacts are parked as `.disabled` | refused -- at dispatch when board.md `EXISTS`, else by the MAJOR-4 guard (a `.disabled` twin still occupies the slot). Tell the user to `enable` (to resume) or `purge` (to start over) |
-| Reference template missing under `${CLAUDE_SKILL_DIR}/references` (incl. `08-task-spec-skill.md`, `09-spec-templates.md`, `10-upgrade.md` when `SPEC_MODE=on` or `upgrade`) | ERROR: reference not found -- reinstall brewtools. STOP. || Design authored without a domain-architect fan-out | Defect -- the emitted `task-spec` skill must spawn >=1 agent per touched domain in ONE message; a lone generalist design is rejected || `OPTIN` true but no root CLAUDE.md in target | report "no CLAUDE.md to optimize"; skip P5.5; do NOT create a root CLAUDE.md || Secret detected in committed CLAUDE.md | mask value in output; on move, warn gitignore != history purge; never echo full secret |
+| Reference template missing under `${CLAUDE_SKILL_DIR}/references` (incl. `08-task-spec-skill.md`, `09-spec-templates.md`, `10-upgrade.md` when `SPEC_MODE=on` or `upgrade`) | ERROR: reference not found -- reinstall brewtools. STOP. |
+| Design authored without a domain-architect fan-out | Defect -- the emitted `task-spec` skill must spawn >=1 agent per touched domain in ONE message; a lone generalist design is rejected |
+| `OPTIN` true but no root CLAUDE.md in target | report "no CLAUDE.md to optimize"; skip P5.5; do NOT create a root CLAUDE.md |
+| Secret detected in committed CLAUDE.md | mask value in output; on move, warn gitignore != history purge; never echo full secret |

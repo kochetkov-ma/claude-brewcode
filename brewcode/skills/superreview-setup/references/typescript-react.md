@@ -16,7 +16,7 @@ Standards for TypeScript, Node.js and React projects. The project's own rules in
 | Category | Checks |
 |----------|--------|
 | Async | Promise handling, unhandled rejections, correct async/await, no floating promises |
-| Types | Strict null checks, type guards, generics; no `any` (use `unknown` + narrowing) |
+| Types | Strict null checks, type guards, generics; no `any` (table below) |
 | Validation | Input sanitization, schema validation (Zod/Joi) at boundaries |
 | Reuse | existing hooks/components/utils before new ones (check `common/`, `shared/`) |
 | Security | XSS prevention, CSRF, no injected HTML (report only if CRITICAL/P0) |
@@ -44,7 +44,6 @@ Functional components only (no class components). Arrow functions for components
 |------|----------------|
 | `useState` | Over-using for derived state |
 | `useEffect` | Missing cleanup / deps array |
-| `useMemo`/`useCallback` | Premature optimization |
 | `useRef` | Using for state |
 
 Custom hooks: `use*` prefix, extract reusable logic, return object for >2 values. **Check existing hooks first**
@@ -106,7 +105,3 @@ route-level code splitting.
 ## Import Order
 
 1. React  2. External libraries  3. Internal (absolute)  4. Relative  5. Styles/assets.
-
-## Tools
-
-npm/yarn/pnpm, TypeScript, ESLint, Prettier, Jest, React Testing Library, Vite/webpack, Storybook.

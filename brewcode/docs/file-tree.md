@@ -4,7 +4,7 @@ description: Complete file tree of the brewcode plugin with descriptions
 
 # Brewcode Plugin - File Tree
 
-> Version: 6.5.3 | Reference tree of shipped source and generated project artifacts; excludes the generated `.codex/` mirror and build/cache files.
+> Version: 6.5.4 | Reference tree of shipped source and generated project artifacts; excludes the generated `.codex/` mirror and build/cache files.
 
 ## Plugin Structure
 
@@ -12,7 +12,7 @@ description: Complete file tree of the brewcode plugin with descriptions
 brewcode/                                    # Plugin root directory
 │
 ├── .claude-plugin/                            # Claude Code plugin configuration
-│   └── plugin.json                            # Manifest (name, version 6.5.3, skills/ reference)
+│   └── plugin.json                            # Manifest (name, version 6.5.4, skills/ reference)
 │
 ├── hooks/                                     # Node.js scripts for Claude Code events (2 hooks)
 │   ├── hooks.json                             # Binds 1 event (SessionStart) in 2 groups: unmatched + matcher "compact"
@@ -74,7 +74,10 @@ brewcode/                                    # Plugin root directory
 │   │   ├── README.md                          # States, staleness signals, roster self-check
 │   │   ├── references/
 │   │   │   ├── artifact-metadata.md           # doc_type/version/generated_by/last_updated contract for generated artifacts
-│   │   │   └── row-notes.md                   # Per-row probe notes for the roster
+│   │   │   ├── phase1-probes.md               # Phase 1/1b/1c probe fences
+│   │   │   ├── phase2-stamps.md               # Phase 2a content_version stamp reader + 2b byte pairs
+│   │   │   ├── row-notes.md                   # Per-row probe notes for the roster
+│   │   │   └── task-tools-offer.md            # Phase 4 task-tools AskUserQuestion offer
 │   │   └── tests/                             # run.sh + roster-lockstep, task-board-status, task-tools, team-md-content-version suites
 │   │
 │   ├── skills/                                # /brewcode:skills - Skill management
@@ -123,7 +126,7 @@ brewcode/                                    # Plugin root directory
 │
 ├── README.md                                  # Components, commands, agents, hooks, architecture, flow diagrams
 ├── INSTALL.md                                 # Installation: plugin-dir, local clone, project enabling, troubleshooting
-└── package.json                               # npm: claude-plugin-brewcode@6.5.3
+└── package.json                               # npm: claude-plugin-brewcode@6.5.4
 ```
 
 ## Target Project Structure

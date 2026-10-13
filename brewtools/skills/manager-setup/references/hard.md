@@ -2,28 +2,26 @@
 
 Contents: Delivery · Tool buckets · Levels (`mcpAllow`, balanced Bash) · `agent_id` linchpin · Off-switch safety · Status explainer.
 
-Read on demand by `SKILL.md` (`status`, `level`), not injected by a hook. `SKILL.md` holds the
-exempt-command box, the guard table, recovery and every lifecycle block; this file adds the install
-model, the per-tool and per-level policy and the status one-liners. Authority: `hooks/hardmode-guard.mjs`.
+Read on demand by `SKILL.md` (`status`, `level`), not hook-injected. `SKILL.md` holds the
+exempt-command box, guard table, recovery and every lifecycle block; this file adds the install
+model, per-tool and per-level policy and status one-liners. Authority: `hooks/hardmode-guard.mjs`.
 
-The HARD wall is the second, opt-in layer of Manager mode. While `state.hard === true` for the
-current project, a `PreToolUse` guard denies mutating tools in the main session, so the only thing
-the main agent can do is delegate, read, and track. Subagents are untouched and run with full
-tools. The wall is project scope only, defaults OFF, and persists until
-`/brewtools:manager-setup disable`. The wall flags (`hard`/`level`) are resolved project-only in
-code: the global `state.json` does not enable the wall (only the informational `mode` field may
-still resolve from global).
+The HARD wall is Manager mode's second, opt-in layer. While `state.hard === true` for the current
+project, a `PreToolUse` guard denies mutating tools in the main session: the main agent can only
+delegate, read and track. Subagents keep full tools. Project scope only, default OFF, persists until
+`/brewtools:manager-setup disable`. The wall flags (`hard`/`level`) resolve project-only in code: the
+global `state.json` does not enable the wall (only the informational `mode` field may resolve from global).
 
 ## Delivery: installed INTO the project, NOT a plugin hook
 
 The guard is not registered in the plugin's `hooks.json`: the plugin ships the self-contained guard
 at `$BT_ROOT/hooks/hardmode-guard.mjs`, and `/brewtools:manager-setup install` installs it per
-project. Install once, gate by state: the registration is persistent, inert plumbing, and
-`state.json {hard}` is the runtime kill-switch the guard re-reads on every call.
+project. Install once, gate by state: the registration is persistent, inert plumbing;
+`state.json {hard}` is the runtime kill-switch, re-read on every call.
 
 | Action | Does | Notes |
 |--------|------|-------|
-| `install` | Copies `$BT_ROOT/hooks/hardmode-guard.mjs` → `<cwd>/.claude/brewtools/manager/hardmode-guard.mjs` and the off-switch CLI `manager-state.mjs` beside it (a missing `state.json` is first written disarmed), overwritten on every `install`, so plugin updates propagate to the project copies. Idempotently registers a `PreToolUse` matcher `"*"` entry in `<cwd>/.claude/settings.local.json`: command `node "<ABS copied-guard path>" # brewtools-manager-guard`, `timeout` 5, `onFailure: "block"`. Then `writeState('project', {hard:arm})` LAST: arms only on the P1 confirmation (`SKILL.md`) and after every step above succeeded | The `# brewtools-manager-guard` tag (and the `hardmode-guard.mjs` path) lets `uninstall`/`purge` find the entry; a second `install` matches the existing entry and adds no duplicate. A new entry applies live (settings are watched); an existing one → the state flip alone arms it |
+| `install` | Copies `$BT_ROOT/hooks/hardmode-guard.mjs` → `<cwd>/.claude/brewtools/manager/hardmode-guard.mjs` and the off-switch CLI `manager-state.mjs` beside it (a missing `state.json` is first written disarmed), overwritten on every `install`, so plugin updates propagate to the project copies. Idempotently registers a `PreToolUse` matcher `"*"` entry in `<cwd>/.claude/settings.local.json`: command `node "<ABS copied-guard path>" # brewtools-manager-guard`, `timeout` 5, `onFailure: "block"`. Then `writeState('project', {hard:arm})` LAST: arms only on the P1 confirmation (`SKILL.md`) and after every step above succeeded | The `# brewtools-manager-guard` tag (and the `hardmode-guard.mjs` path) lets `uninstall`/`purge` find the entry; a second `install` matches it and adds no duplicate. A new entry applies live (settings are watched); an existing one → the state flip alone arms it |
 | `upgrade` | Re-copies the shipped guard and `manager-state.mjs` over the project copies, re-adds a missing registration, sets `onFailure: "block"` on an existing one, and restamps `state.json` (`version`/`generated_by`/`last_updated`) through an empty-partial `writeState` | `hard`/`level` survive untouched. Aborts on a project with no wall installed rather than arming one. Backfills a project that lacks the off-switch CLI |
 | `enable` | `writeState {hard:true}` on an already registered wall, behind the same P1 confirmation | The mirror of `disable` |
 | `disable` | Flips `state.hard=false` with the one self-exempt Bash shape (see Off-switch safety); does not touch `settings.local.json` | An armed guard denies `Edit`/`Bash` on arbitrary files, so a `disable` that edited settings would be blocked; this one succeeds even at `level strict`. The guard stays registered and no-ops because it reads `state.hard` |
@@ -49,15 +47,15 @@ delegation and session schedules re-enter the wall for later main-session work.
 
 | Bucket | Tools | Main session while wall ON |
 |--------|-------|----------------------------|
-| ALWAYS-ALLOW · read | `Read`, `Grep`, `Glob`, `LSP` | Allowed — inspect only |
-| ALWAYS-ALLOW · delegate | `Task`, `Agent`, `Skill`, `Workflow`, `ListAgents`, `SendMessage`, `SubagentHandback` | Allowed — they only hand work to a subagent; any main-session tool call they cause comes back through this guard |
-| ALWAYS-ALLOW · worktrees | `EnterWorktree`, `ExitWorktree` | Allowed — where delegated work is isolated; entering one writes no project file |
-| ALWAYS-ALLOW · plan mode | `EnterPlanMode`, `ExitPlanMode` | Allowed — without them an armed wall traps a plan-mode session forever |
-| ALWAYS-ALLOW · discovery | `ToolSearch`, `WaitForMcpServers` | Allowed — with `ENABLE_TOOL_SEARCH=true` the `Task*` tools are deferred, so denying `ToolSearch` would make the tracking bucket unreachable |
-| ALWAYS-ALLOW · track | `TaskCreate`, `TaskUpdate`, `TaskList`, `TaskGet`, `TodoWrite`, `ReportFindings` | Allowed — tracking/reporting, no filesystem side effects |
-| ALWAYS-ALLOW · session schedules | `CronCreate`, `CronList`, `CronDelete`, `ScheduleWakeup` | Allowed — session timer lifecycle; work delivered later still passes through the wall. Task-board owns matching/cleanup; no external/OS scheduler exemption |
-| ALWAYS-ALLOW · background tasks | `TaskStop` | Allowed — stops a shell, monitor or agent; its output is read with `Read` |
-| ALWAYS-ALLOW · MCP meta | `ListMcpResourcesTool`, `ReadMcpResourceTool` | Allowed — read-only by protocol |
+| ALWAYS-ALLOW · read | `Read`, `Grep`, `Glob`, `LSP` | Allowed: inspect only |
+| ALWAYS-ALLOW · delegate | `Task`, `Agent`, `Skill`, `Workflow`, `ListAgents`, `SendMessage`, `SubagentHandback` | Hand work to a subagent; any main-session tool call they cause re-enters this guard |
+| ALWAYS-ALLOW · worktrees | `EnterWorktree`, `ExitWorktree` | Isolate delegated work; entering one writes no project file |
+| ALWAYS-ALLOW · plan mode | `EnterPlanMode`, `ExitPlanMode` | Without them an armed wall traps a plan-mode session forever |
+| ALWAYS-ALLOW · discovery | `ToolSearch`, `WaitForMcpServers` | With `ENABLE_TOOL_SEARCH=true` the `Task*` tools are deferred, so denying `ToolSearch` would make the tracking bucket unreachable |
+| ALWAYS-ALLOW · track | `TaskCreate`, `TaskUpdate`, `TaskList`, `TaskGet`, `TodoWrite`, `ReportFindings` | Only tracking/reporting, no filesystem side effects |
+| ALWAYS-ALLOW · session schedules | `CronCreate`, `CronList`, `CronDelete`, `ScheduleWakeup` | Session timer lifecycle; work delivered later still passes through the wall. Task-board owns matching/cleanup; no external/OS scheduler exemption |
+| ALWAYS-ALLOW · background tasks | `TaskStop` | Stops a shell, monitor or agent; its output is read with `Read` |
+| ALWAYS-ALLOW · MCP meta | `ListMcpResourcesTool`, `ReadMcpResourceTool` | Read-only by protocol |
 | ALWAYS-ALLOW · human | `AskUserQuestion` | Allowed |
 | ALWAYS-BLOCK | `Write`, `Edit`, `NotebookEdit`, `WebFetch` | Denied — hands-on mutation / fetch |
 | Default-deny | `Artifact` and every unlisted tool, plus MCP-write verbs | Denied — `Artifact` publishes a page, so it stays out |
@@ -80,14 +78,14 @@ delegation and session schedules re-enter the wall for later main-session work.
 |------|--------|
 | Where | Optional `mcpAllow: string[]` in project `state.json`; consulted before the classifier, at `balanced` ONLY |
 | Entry forms | Exact scoped name `mcp__server__tool`, or whole-server prefix `mcp__server__*`. Nothing else — a bare `mcp__*` is NOT a form, and is dropped by both the helper CLI and the guard |
-| When you need it | The classifier is default-deny per token, so an unrecognised write verb denies (intended) and so does an unrecognised domain noun (`mcp__x__get_widgets`) — the latter is the false-denial case this key exists for. Ambiguous verbs (`query`/`resolve`): `SKILL.md` guard table, row MCP; allowlist one only if that server's `query` really cannot write |
+| When you need it | The classifier is default-deny per token: an unrecognised write verb denies (intended), and so does an unrecognised domain noun (`mcp__x__get_widgets`), the false denial this key exists for. Ambiguous verbs (`query`/`resolve`): `SKILL.md` guard table, row MCP; allowlist one only if that server's `query` really cannot write |
 | Set, clear | `SKILL.md` "Recovery" item 2. Self-exempt at every level; one invalid entry → exit 2, nothing written; a malformed stored value allows nothing and does not count as broken state |
 
 ### balanced — Bash read-only classifier
 
 A `Bash` or `Monitor` command passes only when every segment (split on `&&`, `||`, `;`, `|`, `&`,
-newline) is an allowlisted read-only command: default-deny, an allowlist of base commands, not a
-shell evaluator and not a list of mutation words. Binaries and denied flags: `SKILL.md` guard table,
+newline) is an allowlisted read-only base command (default-deny; not a shell evaluator, not a list
+of mutation words). Binaries and denied flags: `SKILL.md` guard table,
 row "`balanced` Bash, `Monitor`" (code: `READONLY`, `GIT_EXEC_FLAG`, `RG_EXEC_FLAG`,
 `FIND_EXEC_ACTION`). What that row leaves out:
 
@@ -102,8 +100,8 @@ row "`balanced` Bash, `Monitor`" (code: `READONLY`, `GIT_EXEC_FLAG`, `RG_EXEC_FL
 
 ## The `agent_id` linchpin
 
-The wall blocks the main session and leaves subagents free, otherwise delegation itself would be
-impossible. The discriminator in the `PreToolUse` payload is the `agent_id` field, and only that field:
+The wall blocks the main session and leaves subagents free (else delegation is impossible). The only
+discriminator in the `PreToolUse` payload is the `agent_id` field:
 
 - a non-empty string `agent_id` → a subagent-internal tool call → the guard allows it;
 - missing, `null` or empty `agent_id` → main session → the guard applies the wall. That covers the
@@ -124,13 +122,12 @@ Exactly one Bash shape survives an armed wall at any level:
 node <ABS project root>/.claude/brewtools/manager/manager-state.mjs set hard=false
 ```
 
-`install`/`upgrade` copy `manager-state.mjs` into the project for this reason:
-the command must be a fixed path with no resolution step, because resolving
-`$BT_ROOT` needs shell operators that the wall denies.
+`install`/`upgrade` copy `manager-state.mjs` into the project because the command must be a fixed
+path: resolving `$BT_ROOT` needs shell operators the wall denies.
 
 `isStateWriteCommand()` in `hooks/hardmode-guard.mjs` decides the exemption; its conditions are
-the exempt-command box at the top of `SKILL.md`. The box abbreviates one list - the complete
-evaluator-flag set is `-e`, `--eval`, `-p`, `--print`, `--input-type`, `--require`/`-r`, `--import`,
+the exempt-command box at the top of `SKILL.md`. The box abbreviates the evaluator-flag set; in full:
+`-e`, `--eval`, `-p`, `--print`, `--input-type`, `--require`/`-r`, `--import`,
 `--loader`, `--experimental-loader`. The shape stays this narrow because anything looser (an eval
 flag, a shell operator, a filename match instead of the installed path) runs arbitrary code through
 the off-switch, even at `level strict`: when a runbook line is denied, fix the line, never the
@@ -150,8 +147,8 @@ Consequences for anything that wants to disarm:
 
 ## Status explainer
 
-The template the `status` action fills is the `Shape` block in `SKILL.md` (`### status`): one copy,
-next to the block that produces its fields. This file supplies its `Allowlist summary` line:
+The `status` template is the `Shape` block in `SKILL.md` (`### status`); this file supplies its
+`Allowlist summary` line:
 
 - `balanced`: read-only Bash and Monitor commands (git status/log/diff, ls, cat, pwd, which, gh list/view), WebSearch ON, MCP-read by name + `mcpAllow`, all mutation denied.
 - `strict`: no Bash or Monitor at all, WebSearch OFF, MCP only the read-only `mcp__semble_code__*` search tools (`mcpAllow` ignored), all mutation denied.

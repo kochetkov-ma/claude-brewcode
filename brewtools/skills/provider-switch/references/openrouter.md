@@ -10,10 +10,10 @@
 | Pay model | Pay-per-token, varies by model |
 
 ## Auth Note
-Bearer `ANTHROPIC_AUTH_TOKEN`, explicit `ANTHROPIC_API_KEY=""` (the guide: "Must be explicitly empty"). Base `https://openrouter.ai/api`, without `/v1`; the unauthenticated catalog is `https://openrouter.ai/api/v1/models`. [Integration guide](https://openrouter.ai/docs/guides/coding-agents/claude-code-integration), checked 2026-10-12: only the Anthropic first-party provider is guaranteed to work; catalog presence is no proof of Claude tool/context compatibility.
+Bearer `ANTHROPIC_AUTH_TOKEN`. Base `https://openrouter.ai/api`, without `/v1`; the unauthenticated catalog is `https://openrouter.ai/api/v1/models`. [Integration guide](https://openrouter.ai/docs/guides/coding-agents/claude-code-integration), checked 2026-10-12: only the Anthropic first-party provider is guaranteed to work; catalog presence is no proof of Claude tool/context compatibility.
 
 ## Model Format
-Catalog ids: `provider/model-name`, optional route tag such as `:free`. Validate against the live catalog; keep a user-selected `[1m]` client suffix separately. Every role var gets the selected model.
+Catalog ids: `provider/model-name`, optional route tag such as `:free`. Validate against the live catalog; keep a user-selected `[1m]` client suffix separately.
 
 Examples: `qwen/qwen3.7-plus`, `z-ai/glm-5.2`. `qwen/qwen3-coder:free` is absent from the catalog (2026-10-12): format evidence only, never offer it.
 

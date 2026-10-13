@@ -1,8 +1,8 @@
 # Keep Catalog -- invariants that survive compression byte-exact
 
 Companion to `drop-catalog.md`. A missing invariant refuses acceptance: patch the owned loss, or recover
-only authorized checkpoint-proven drafts; missing proof or a concurrent change -> keep current bytes,
-report `RESTORE_REFUSED`. Never discard automatically, never accept with a warning only. Dedup
+per `SKILL.md` phase 5 (checkpoint-proven drafts only, else `RESTORE_REFUSED`). Never discard
+automatically, never accept with a warning only. Dedup
 collapses repeats with set semantics: the LAST occurrence must survive.
 
 Sections: Invariant classes -> `crit_tokens()` evidence -> Coverage map -> Drop-in extension.
@@ -45,8 +45,6 @@ Probed against those exact expressions:
 | `2/3` | `path:2/3` | covered (accidentally, via the path regex) |
 
 ## Coverage map
-
-`crit_tokens()` column names the prefix that catches the class today.
 
 | # | Class | Matcher (ERE) | Covered by `crit_tokens()` | NEW? |
 |---|-------|---------------|----------------------------|------|
@@ -94,8 +92,8 @@ for L in C en_US.UTF-8; do LC_ALL=$L /usr/bin/grep -oE '[А-Яа-яЁё]+' "$CYR
 | Claude Code's Bash-tool `grep` (ugrep, a shell function of the macOS native build) | 9 | 9 | locale-independent, correct |
 | `rg` (`/opt/homebrew/bin/rg`) | 9 | 9 | locale-independent, correct |
 
-The factor depends on the text -- never derive a count from it, only the conclusion that `LC_ALL=C` +
-BSD `grep` is unusable for `cyr:`. Two consequences:
+Never derive a count from the factor, only the conclusion that `LC_ALL=C` + BSD `grep` is unusable for
+`cyr:`. Two consequences:
 
 1. **The ugrep shadow does not reach a script.** It is a zsh function in the Bash tool's shell only --
    a `bash foo.sh` child resolves the real `/usr/bin/grep`, and `crit_tokens_ext()` runs in such a
@@ -127,8 +125,6 @@ crit_tokens_ext() {
 > gate, which is the intended refusal. Compression that only reorders and dedups keeps every member.
 
 > **Gate alphabet != drop-decision alphabet.** Everything above is evaluated with SET semantics over a
-> WHOLE FILE at verify time. It is not a per-line veto list. `slug:` and bare capitalised words in
-> particular fire on nearly every line, so feeding them into `drop-catalog.md`'s decision rule as
-> line-level KEEPs makes that rule inert (measured 86%/73%/94% whole-line keep rates). The decision
-> rule therefore consumes only the HARD classes, at CLAUSE granularity -- see
-> `drop-catalog.md`, "Gate classes are not drop vetoes".
+> WHOLE FILE at verify time, never as a per-line veto list: `slug:` and bare capitalised words fire on
+> nearly every line (measured 86%/73%/94% whole-line keep rates). Rule: `drop-catalog.md`, "Gate
+> classes are not drop vetoes".

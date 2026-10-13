@@ -18,11 +18,10 @@ Invocation: `/brewtools:task-board-setup upgrade <path>`; SKILL.md P0 parses the
 | `TARGET` | P0 path resolution | abs path, verified dir |
 | `MODE` | P0 verb parse | `upgrade`, else this file is never loaded |
 | `FINDINGS` | U2 of THIS file | P1 does NOT run in upgrade mode; every value is recovered or discovered below |
-| `SPEC_MODE` | forced `on` | upgrade mode has no off branch |
 
 P0 inverts its normal guard here: in upgrade mode a MISSING `TARGET/.claude/features/board.md` is the failure, not an existing one.
 
-> **Every Bash block below opens with the SAME two lines**: re-establish `TARGET` literally (the real absolute path resolved in P0; shell state does not survive between Bash tool calls, !=rely on a variable another block assigned), then assert it. The assert is mandatory even for a read-only block: an unasserted `mkdir` on an empty `TARGET` writes `/.claude/...` outside the repo. Same form as `SKILL.md` P0.
+> **Every Bash block below opens with the SAME two lines**: `TARGET` set literally to the P0 path (shell state does not survive between Bash tool calls, !=rely on a variable another block assigned), then asserted, even in a read-only block: an unasserted `mkdir` on an empty `TARGET` writes `/.claude/...` outside the repo.
 
 **EXECUTE** using Bash tool:
 ```bash
@@ -113,7 +112,7 @@ DETECT table:
 
 Each MARK row (`<n>s` spec, `<n>p` session progress, `<n>m` methodology/anti-drift) is an independent install unit with ONE probe line. Content no-op requires ALL ADD targets present, ALL patch rows SKIP and `backfill-needed=0`; missing methodology controls/consumers prevent the early no-op. Then skip U2's question/U3-U5, STILL run U5b and report content installed/metadata restamped.
 
-> **U5b is NOT part of that no-op.** The commonest upgrade follows `claude plugin update`: every content row is SKIP and only the version stamp `setup-status` reads is out of date; an early STOP leaves `status` at `stale` forever. U5b needs only `{PLUGIN_VERSION}`/`{CONTENT_VERSION}`/`{GENERATED_BY}`/`{LAST_UPDATED}`, re-resolved fresh, so it runs with nothing from U2's recovery table.
+> **U5b is NOT part of that no-op.** After `claude plugin update` every content row is SKIP and only the version stamp is stale; an early STOP leaves `status` at `stale` forever. U5b needs only the metadata quartet, re-resolved fresh, nothing from U2's recovery table.
 
 > `ADD (drift)` = a PATCH target is missing entirely. Do not fail: emit the full file from its reference template and NOTE the drift in the report -- the deployment is incomplete, the user should know. A drift-ADD MUST resolve EVERY token that reference's header declares -- its `Substitute ...` line AND every gated placeholder declared elsewhere in that header (see U2), including `{{CLOSE_MARKER}}` / `{{CLOSE_MARKER_SHORT}}` and, for `task-tracker.md`, the two `CMD_DECOMPOSED` line placeholders.
 
@@ -121,7 +120,7 @@ Each MARK row (`<n>s` spec, `<n>p` session progress, `<n>m` methodology/anti-dri
 
 ## U2. Re-derive placeholders
 
-Values already baked into the installed artifacts are RECOVERED by reading, !=re-run of P1 (P1 does not run in upgrade mode). Two are genuinely new and must be discovered.
+Values already baked into the installed artifacts are RECOVERED by reading, !=re-run of P1. Two are genuinely new and must be discovered.
 
 | Placeholder | Source | How |
 |-------------|--------|-----|
@@ -136,7 +135,7 @@ Values already baked into the installed artifacts are RECOVERED by reading, !=re
 | `{{ARCHITECT_AGENT}}` | NEW -- from Agent C | best architecture-capable project agent name, else `Plan` |
 | `AGENT_GAPS` | NEW -- from Agent C | REPORT-ONLY, !=a token in any emitted body. Every `{{DOMAINS}}` entry with no owning agent in the `{{DOMAIN_AGENTS}}` table -- those domains fall back to the built-in `Plan` in `/task-spec`'s design fan-out. Empty -> `none`. Carry it to the U6 report, never drop it |
 | `{{REPO_NAME}}` / `{{TODAY}}` | trivial | basename of TARGET / ISO date |
-| `{PLUGIN_VERSION}` / `{CONTENT_VERSION}` / `{GENERATED_BY}` / `{LAST_UPDATED}` | NEVER recovered | re-resolve fresh per the SKILL.md "Resolving `{PLUGIN_VERSION}`..." bash block. An upgrade is a NEW write by a NEW plugin version -- an old stamp recovered off the installed file would be a lie |
+| `{PLUGIN_VERSION}` / `{CONTENT_VERSION}` / `{GENERATED_BY}` / `{LAST_UPDATED}` | NEVER recovered | re-resolve fresh per the SKILL.md "Resolving `{PLUGIN_VERSION}`..." bash block: an upgrade is a NEW write by a NEW plugin version |
 
 Recovery conflicts (e.g. `tasks.md` and `task-tracker.md` disagree on DOMAINS) -> surface both, let the user pick via AskUserQuestion. A value that cannot be recovered at all -> ask, !=guess.
 
@@ -184,7 +183,7 @@ Every ROW below: its MARK present -> SKIP that row silently (idempotent). MARK a
 
 **Two independent LAYERS, one row each.** `<n>s` = the spec layer (`{{SPEC_*}}` sites, gated by `SPEC_MODE`); `<n>p` = the session-progress layer (UNGATED, baseline in both modes). They install and skip separately: a board that took the spec layer but predates `PROGRESS.md` is `1s`=SKIP, `1p`=PATCH. !=key one on the other -- a conjunction MARK re-inserts a block that is already there.
 
-**ALL-OR-NOTHING per ROW.** Install every site in that row's Insert cell, or leave the file untouched for that layer. The named reference's own header is the authority on its site set -- read it, !=count from here.
+**ALL-OR-NOTHING per ROW.** Install every site in that row's Insert cell, or leave the file untouched for that layer.
 
 | # | File | Layer | MARK (idempotency probe) | Insert (sites per the named reference's own header) |
 |---|------|-------|--------------------------|--------|
@@ -209,11 +208,11 @@ Every ROW below: its MARK present -> SKIP that row silently (idempotent). MARK a
 
 Rows `3` and `2s` carry a CONJUNCTION MARK -- legal because every conjunct belongs to the SAME layer; for `2s` the heading alone also matches a board upgraded before the execution-status axis. Any one conjunct missing = PATCH, so a half-patched template is repaired instead of reported SKIP forever.
 
-**STALE site -- 3-column `## Scope`.** A board deployed before the execution-status axis has `## Scope` tables with THREE columns (`id | block | in/out`); the current gated form is FOUR (`05` (D), `id | block | in/out | status`). In the two GENERATED control files -- `TASK_TEMPLATE.md`, and `TRACKER.md` section 4's example -- that table IS a gated site, so the widened header is part of the all-or-nothing set: widen the header + separator cells and append ONE `status` cell to each existing row (`not-started` for an `in` row, `--` for an `out` row). Additive, same shape as the `board.md` row append; !=rewrite any other cell. Missed, it leaves TT writing a `status` cell the template never created. Task files under `backlog/`, `todo/`, `progress/`, `closed/` are NOT touched here -- see the contract in U5.
+**STALE site -- 3-column `## Scope`.** A board deployed before the execution-status axis has `## Scope` tables with THREE columns (`id | block | in/out`); the current gated form is FOUR (`05` (D), `id | block | in/out | status`). In the two GENERATED control files -- `TASK_TEMPLATE.md`, and `TRACKER.md` section 4's example -- that table IS a gated site, so the widened header is part of the all-or-nothing set: widen the header + separator cells and append ONE `status` cell to each existing row (`not-started` for an `in` row, `--` for an `out` row). Additive, same shape as the `board.md` row append; !=rewrite any other cell. Task files under `backlog/`, `todo/`, `progress/`, `closed/` are NOT touched here -- see the contract in U5.
 
 **board.md -- structural only.** Its gated-site set, per `05`'s spec-mode header, is THREE things, not two: `{{SPEC_COL_H}}` (Progress + Todo header cells), `{{SPEC_COL_S}}` (their separator cells), and the `{{SPEC_FEATURE_TABLE_HEAD_ON}}` / `_OFF` arm pair over the `## Feature specs` header + separator. All-or-nothing spans all three, plus the row-level consequence of the first two: append ONE `spec` cell holding `--` to each existing Progress/Todo row. Nothing else -- !=touch any other line.
 
-The `spec` cell is `--`, NOT empty: the on-mode contract defines that cell as the row's `spec:` FM value or the literal `--` when there is none (`02` board-cols note, `05` (E)). An empty cell satisfies neither and puts a freshly upgraded board in breach of its own rule until TT next runs.
+The `spec` cell is `--`, NOT empty: the on-mode contract defines it as the row's `spec:` FM value or the literal `--` (`02` board-cols note, `05` (E)); an empty cell breaches that rule until TT next runs.
 
 The `## Feature specs` arm swap decides whether the patch can run at all:
 
@@ -235,7 +234,7 @@ Hard limits for this step:
 |------|-----|
 | !=`Write` over any existing file | wholesale replacement destroys the user's local edits |
 | !=touch anything under `backlog/`, `todo/`, `progress/`, `closed/` in U4 | real tasks; only U5 may touch them, and only FM |
-| !=reorder `board.md` rows, !=change existing DATA-row cell content | BRD is canonical and hand-curated. Explicitly allowed: header + separator cells, appending a `spec` cell holding `--` to each Progress/Todo row, and the `## Feature specs` header reshape when that table has no data rows. Filling the real `spec` value is TT's job, later |
+| !=reorder `board.md` rows, !=change existing DATA-row cell content | BRD is canonical and hand-curated: only the structural changes above are allowed. Filling the real `spec` value is TT's job, later |
 | !=renumber existing TRACKER sections or rule-table rows | ids are cited elsewhere |
 | !=install a subset of one ROW's sites | a rule installed without its enforcer is worse than no rule |
 | !=force an unapproved patch | declined = skipped, cleanly, recorded in the report |
@@ -265,8 +264,6 @@ Re-run the PROBE BLOCK and report every half-state -- a rule installed while its
 
 ## U5. Backfill `spec:` FM on existing tasks (gated, default = do nothing)
 
-Existing task files predate the FM contract, so they have no `spec:`.
-
 1. Operate ONLY on the eligible set from U1.
 2. `closed/` is NEVER touched -- retro-speccing shipped work is waste and the history is the record.
 3. A file with no frontmatter is SKIPPED entirely -- no edit, and never synthesize an FM block into someone's pasted log. Report each by name under `skipped-no-frontmatter`.
@@ -295,12 +292,11 @@ Option 1 leaves the field absent on every existing task; that is a legal state f
 
 ## U5b. RESTAMP the metadata quartet (ALWAYS runs, never gated, never asked)
 
-This step lets `upgrade` clear its own staleness. `setup-status` row 4 reads the frontmatter
-`version:` of the anchor `.claude/features/board.md`, a U4 PATCH target, not a U3 ADD. A PATCHED
-or SKIPPED file must end up stamped exactly like an ADDED one, so this block restamps all twelve
-unconditionally; otherwise `status` keeps printing `stale` after every successful `upgrade`.
+`setup-status` row 4 reads the frontmatter `version:` of the anchor `.claude/features/board.md`, a U4
+PATCH target: a PATCHED or SKIPPED file must end up stamped exactly like an ADDED one, so this block
+restamps all twelve unconditionally, else `status` keeps printing `stale` after every `upgrade`.
 
-Twelve stamped control artifacts, including ref 11's three controls. `TASK_TEMPLATE.md` is
+Twelve stamped control artifacts. `TASK_TEMPLATE.md` is
 deliberately UNSTAMPED (its frontmatter is copied into every task card), and task CARDS under
 `backlog/todo/progress/closed` never carry these keys at all. Neither is touched here.
 
@@ -388,7 +384,7 @@ guard), so `enable` first, then `upgrade`.
 
 ## U6. Verify + report
 
-**Leftover-placeholder gate**, owned by this file (`PU` does not run P5). It scans the same path set as P5's gate, not just the ADD set: a drift-ADD writes whole files under `.claude/agents/`, `.claude/rules/` and `.claude/features/`. It catches both brace families: double-brace tokens and the single-brace metadata tokens `{PLUGIN_VERSION}` / `{CONTENT_VERSION}` / `{GENERATED_BY}` / `{LAST_UPDATED}`.
+**Leftover-placeholder gate**, owned by this file (`PU` does not run P5). It scans the same path set as P5's gate, not just the ADD set: a drift-ADD writes whole files under `.claude/agents/`, `.claude/rules/` and `.claude/features/`.
 
 **EXECUTE** using Bash tool -- re-run the U1 PROBE BLOCK verbatim (it re-establishes its own `TARGET`/`T`/`F`), then, as a SEPARATE self-contained block:
 ```bash
@@ -413,7 +409,7 @@ Read the probe output as:
 
 > **A `PATCH`/`ABSENT`/non-zero line is a MISS only if the user did not decline it.** A declined patch or a declined backfill is expected: report it as `declined`, !=retry, !=re-emit.
 
-**Stamp gate.** The restamp is verified here too, independently of U5b's own check, because the anchor's stamp IS the staleness signal: **EXECUTE** using Bash tool:
+**Stamp gate** (independent of U5b's own check: the anchor's stamp IS the staleness signal). **EXECUTE** using Bash tool:
 ```bash
 TARGET="<absolute path resolved in P0>"
 test -n "$TARGET" && test -d "$TARGET" || { echo "MISS TARGET unset or not a dir -- stamp gate did NOT run"; exit 1; }
@@ -451,7 +447,7 @@ Report the probe rows as these buckets:
 | manual | board.md `## Feature specs` with existing rows; task files with no `links:` anchor |
 | drift | PATCH targets that were absent and got ADDed instead |
 | values used | DOMAINS, LANG, EXCLUSIONS, CLOSE_MARKER (recovered) + DOMAIN_AGENTS, ARCHITECT_AGENT (discovered) |
-| legacy scope | always printed as `legacy-scope: task scope tables left as-is` (U5 contract), so mixed 3- and 4-column tables surprise nobody |
+| legacy scope | always printed as `legacy-scope: task scope tables left as-is` (U5 contract) |
 | agent gaps | `AGENT_GAPS` from U2, always printed, even when empty (`AGENT_GAPS: none`): a hidden gap is a silently weaker design phase. Non-empty -> suggest `/brewcode:agents` to author the missing domain agents, then re-run `/brewtools:task-board-setup upgrade <path>` |
 | next | `/task-spec <ID>` on any task now marked `spec: pending` |
 

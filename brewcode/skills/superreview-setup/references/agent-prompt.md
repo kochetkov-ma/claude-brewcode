@@ -8,14 +8,12 @@ last_updated: "{LAST_UPDATED}"
 
 # Domain-Expert Agent Prompt Contract (superreview Phase 2 — {PROJECT_NAME})
 
-Single home of: the runtime expert-selection procedure + roster command, the recon-exclusion list, the domain-owner
-prompt template with the detailed focus ordering, and the test-bloat block. `SKILL.md` points here and does not
-restate any of it.
+Single home of expert selection (roster command, recon exclusion), the domain-owner prompt and the test-bloat
+block; `SKILL.md` points here.
 
 Each changed-file group is routed to the domain expert selected at runtime from the live roster
 (`.claude/agents/**/*.md`); the group->agent map in `SKILL.md` is the expected result at generation time, not a frozen
-contract. The main-session coordinator spawns all non-empty groups in one message (parallel), each with the same
-finding contract so Phase 3 can validate and Phase 4 can merge. A worker returns findings/decisions to the
+contract. The main-session coordinator spawns all non-empty groups in one message (parallel). A worker returns findings/decisions to the
 coordinator and neither re-delegates nor edits files.
 
 > Sizing: one agent = one file group — ~<=5 files, ~<=10 steps; a bigger group is split into two groups, both
@@ -45,8 +43,8 @@ Selection procedure per changed-file group:
 3. **Exclude READ-ONLY external-system recon agents** — agents that inspect a live external system (cloud console,
    SaaS API, ticket tracker, DB console, deploy target) rather than source files. Never route source-file review to
    them, and never pick one just because it sorts first alphabetically.
-4. No confident match -> built-in `Explore` (read-only). Mark that group **DEGRADED** in the report — it means the
-   project is missing a domain expert for that surface, which is worth fixing before the next run.
+4. No confident match, or the mapped agent is unavailable -> built-in `Explore` (read-only), the only allowed
+   fallback. Mark that group **DEGRADED** in the report: the project lacks a domain expert for that surface.
 5. Record the derived map in the report's `Agents run` line so the routing is auditable.
 
 > **`intent-guard` is outside this procedure.** It is not a domain expert, owns no file group, and is never the
@@ -170,14 +168,10 @@ scope passes only).
 ")
 ```
 
-> Domain-owner map (Phase 2) lives in `SKILL.md` (the `FILE_GROUP_MAP`). Built-in `Explore` is the only allowed
-> fallback if a mapped agent is unavailable.
-
 ## test agent — also audit for TEST BLOAT / over-testing (tests group only)
 
 When the `tests` group is non-empty, the test agent's prompt adds this block (cite the project `testing` rule, do
-not restate it). Use category `test-quality`; severity per impact. The goal is fewer tests; isolation, speed and
-real-ness are never traded for it.
+not restate it). Use category `test-quality`; severity per impact.
 
 ```
 ### Test bloat / over-proliferation audit (cite the project testing rule)

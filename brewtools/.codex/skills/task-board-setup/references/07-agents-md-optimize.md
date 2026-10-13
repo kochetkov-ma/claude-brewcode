@@ -18,7 +18,7 @@ A block delimited by another tool's begin/end markers (e.g. `<!-- BEGIN brewcode
 
 From P0/P1:
 - `TARGET` (abs path); `EXCLUSIONS` (from P1, used by module detection).
-- `DIR` = the free-text prompt directive parsed from `<arguments>` (may be empty). Tunes which sub-steps run / how aggressive they are. See "Directive influence" below.
+- `DIR` parsed from `<arguments>` (may be empty); see "Directive influence" below.
 - `OPTIN` = whether the user opted into this phase (asked in P1).
 
 If `OPTIN` is false -> SKIP this entire file; do nothing.
@@ -90,8 +90,6 @@ NEVER expose secret values in tool output, proposals or any LLM file. Flag line 
 
 ## 5b. PROPOSE: local preferences -> AGENTS.local.md; credentials -> references only (gated)
 
-If `DIR` disabled 5b: skip, but flag any detected credentials without values. Never interpret this as permission to copy them.
-
 Separate non-secret personal preferences/machine paths/host config from credentials. If LOCAL_ITEMS non-empty, main-chat user gate:
 
 > **Found N local-only items in AGENTS.md.** Move approved non-secret preferences to `AGENTS.local.md` (a gitignored reference; explicitly read it when applicable, never assume automatic loading). Credential values must stay outside all LLM instruction files; propose only a lookup reference naming an environment variable/keychain/secret-manager entry, with separate approval for removing an existing value.
@@ -108,7 +106,7 @@ On approval:
    TARGET="<absolute path resolved in P0>"
    grep -qxF "AGENTS.local.md" "$TARGET/.gitignore" 2>/dev/null || echo "(needs .gitignore entry)"
    ```
-   If missing, propose adding `AGENTS.local.md` to `.gitignore` (one more AskUser line, or include in the same approval). Do NOT silently edit .gitignore without the user's yes.
+   If missing, propose adding `AGENTS.local.md` to `.gitignore` (one more AskUser line, or include in the same approval).
 > If a secret was already committed, note to the user that gitignoring does NOT purge history -- they should rotate the secret. Do not attempt history rewrite.
 
 ---
@@ -206,12 +204,8 @@ Set `CMD_DECOMPOSED = true` iff 5d wrote/updated at least one MODCMD -- this fla
 
 | Condition | Response |
 |-----------|----------|
-| OPTIN false | SKIP phase entirely |
-| No root AGENTS.md | report + SKIP (do NOT create a root AGENTS.md) |
 | User declines a proposal | make NO edit for that sub-step; proceed to next |
-| `report only` / dry-run DIR | detection + full plan only; ZERO edits even if "approve" |
 | Secret found | mask before tool output; never copy values to LLM files; concrete reference/removal requires approval; gitignore != history purge |
-| DIR conflict | surface in AskUser intro; user decides |
 | Edits | Edit (not Write), bottom-up by line number; never clobber an existing MODCMD |
 
 

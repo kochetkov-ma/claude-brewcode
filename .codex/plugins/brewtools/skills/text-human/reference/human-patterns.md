@@ -16,27 +16,27 @@ Gated, separate from strip. Classify register FIRST -- misclassification is the 
 ## reddit / forum
 ADD: lowercase sentence starts; `imo`/`tbh` (lowercase=casual); hedges `imo/ymmv/afaik` on real claims; anecdote-led; parenthetical asides; self-deprecation; high burstiness, fragments OK.
 AVOID: essay intros/conclusions, "In conclusion", balanced both-sides, marketing polish, uniform sentences.
-GUARD: don't manufacture slang the poster wouldn't use. Typos incidental only.
+GUARD: don't manufacture slang the poster wouldn't use.
 
 ## slack / discord / chat
 ADD: fragments; no capitalization; one thought per line; emoji sparingly+naturally (reaction not decoration); heavy contractions; clipped ("on it", "lgtm", "wfm").
 AVOID: greetings/sign-offs, full paragraphs, numbered lists for a quick reply, emoji on every line.
-GUARD: emoji density IS the tell -- over-injection reads bot-like. No fabricated typos.
+GUARD: emoji density IS the tell -- over-injection reads bot-like.
 
 ## technical docs / README
 ADD: clear imperative ("Click Submit", "Run the build"); concrete runnable examples over abstraction; conversational-but-restrained, contractions OK, second person; varied sentence lengths.
 AVOID: marketing/buzzwords, false-simplicity (`simply`, `it's easy`, `that simple`), `please` in instructions, slang, cutesy tone.
-GUARD: NO injected typos (breaks commands). No fake stance. Humanize via tone + concrete examples only.
+GUARD: No fake stance. Humanize via tone + concrete examples only.
 
 ## commit / PR
 ADD: terse subject (<=50 chars, 72 max), blank line, body ~72 cols; body = what + why (motivation, contrast with prior), not how; real ticket refs in footer; PR = short "What changed / Why / How to test", answerable <1 min.
 AVOID: fluff, "fixes stuff", restating the diff, padding, two-page templates.
-GUARD: no injected errors; NO fake tickets; no personality -- terseness IS the human signal; stance only as grounded "why".
+GUARD: NO fake tickets; no personality -- terseness IS the human signal; stance only as grounded "why".
 
 ## formal essay / published blog
 ADD: high burstiness (mix lengths by choice; read-aloud test); a real thesis / stated position -- don't hedge "it depends" without specifics; concrete specifics over abstraction; contractions, idiom, less-predictable word choice.
 AVOID: symmetric both-sides + "ultimately it depends", uniform rhythm, abstraction-stacking, "Moreover/Furthermore" chains.
-GUARD: NO injected typos/grammar errors (loses authority). Burstiness + stance are the levers.
+GUARD: Burstiness + stance are the levers.
 
 ## JavaDoc / API docs -- CLEAN-ONLY (inject DISABLED)
 ADD (precision, not personality): third-person imperative ("Gets the foo", "Returns the bar" -- NOT "Get the foo"); explicit contract (null-handling, boundaries, ranges, corner cases); `@param`/`@return` lowercase, no trailing period; `@throws` conditional ("if the file could not be found"); lean, precise.

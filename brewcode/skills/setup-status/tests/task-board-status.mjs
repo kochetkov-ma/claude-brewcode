@@ -10,7 +10,8 @@ import { test } from 'node:test';
 const STATUS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ROOT = resolve(STATUS_DIR, '../../..');
 const TOOLS = join(ROOT, 'brewtools');
-const source = readFileSync(join(STATUS_DIR, 'SKILL.md'), 'utf8');
+const source = ['SKILL.md', 'references/phase1-probes.md', 'references/phase2-stamps.md', 'references/task-tools-offer.md']
+  .map(f => readFileSync(join(STATUS_DIR, f), 'utf8')).join('\n');
 const blocks = [...source.matchAll(/```bash\n([\s\S]*?)\n```/g)].map(match => match[1]);
 const presence = blocks.find(block => block.includes("<<'PATHS'"));
 const parking = blocks.find(block => block.includes('echo "CONFLICT $f"'));

@@ -338,6 +338,27 @@ for (const mode of ['upgrade', 'emit-agent']) {
   }, 'restamp must fire only when the metadata gate fails');
 }
 
+// ── 13. the generator's scratch rule: one private mktemp -d per run, no bare /tmp, no glob-picked dir ─
+{
+  // GIVEN the shipped generator SKILL.md
+  const lines = readFileSync(join(SKILL_SRC, 'SKILL.md'), 'utf8').split('\n');
+
+  // WHEN reading the scratch rule paragraph and the first EXECUTE fence
+  const at = lines.findIndex(l => l.startsWith('**Scratch rule.**'));
+  const rule = at < 0 ? 'NO SCRATCH RULE' : lines.slice(at, lines.indexOf('', at)).join(' ');
+
+  // THEN the rule is pinned verbatim and precedes the first fence that runs anything
+  check('scratch rule exists before the first EXECUTE fence', {
+    rule,
+    beforeFirstFence: at >= 0 && at < lines.findIndex(l => l.startsWith('**EXECUTE**')),
+  }, {
+    rule: '**Scratch rule.** Anything a run saves outside the target tree (logs, diffs, notes) goes into ONE private '
+      + '`mktemp -d` dir made once per run; reuse its printed path for every later write. Never write to `/tmp` directly, '
+      + 'never pick a temp dir by glob (`rm -rf` on the newest `tmp.*`): it may belong to another run.',
+    beforeFirstFence: true,
+  }, 'headless children must not invent world-readable /tmp logs or glob-picked temp dirs');
+}
+
 rmSync(BASE, { recursive: true, force: true });
 console.log(`\n${failed === 0 ? 'PASS' : 'FAIL'}  passed=${passed} failed=${failed}`);
 process.exit(failed === 0 ? 0 : 1);

@@ -84,17 +84,7 @@ const DebouncedInput: FC<InputProps> = ({ onChange }) => { }
 const VirtualList: FC<ListProps> = ({ renderItem, onEndReached }) => { }
 ```
 
-### Hooks
-
-```tsx
-// REMOVE - obvious hook:
-/** Hook that manages loading state. */
-const useLoading = () => { }
-
-// KEEP - non-obvious behavior:
-/** Fetches on mount + refetches every 30s. Pauses when tab inactive. */
-const usePolling = (url: string, interval = 30000) => { }
-```
+Hooks follow the same obvious / non-obvious split.
 
 ---
 

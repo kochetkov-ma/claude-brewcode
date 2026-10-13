@@ -7,14 +7,6 @@
 > **Do not execute any command from the example blocks in another repo.** `/brewtools:deploy`
 > P4 Step 0 probes for the real tooling first.
 
-## Semver Rules
-
-| Bump | When | Examples |
-|------|------|---------|
-| **patch** (0.0.X) | Bug fixes, typos, minor adjustments | Fix hook, fix script, update docs |
-| **minor** (0.X.0) | New features, new skills, new agents | Add deploy skill, add image-gen |
-| **major** (X.0.0) | Breaking changes, incompatible API | Restructure plugins, rename skills |
-
 ## EXAMPLE — Release Flow (claude-brewcode repo)
 
 ```
@@ -77,15 +69,7 @@
 
 ## Changelog Generation
 
-### From Commits
-
-Analyze commits since last tag:
-
-```bash
-git log --oneline $(git describe --tags --abbrev=0)..HEAD
-```
-
-### Type Mapping
+Commits since the last tag (SKILL.md P4 Step 1), mapped by prefix:
 
 | Commit prefix | Changelog type |
 |---------------|---------------|

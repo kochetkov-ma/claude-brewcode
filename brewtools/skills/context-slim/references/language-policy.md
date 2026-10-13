@@ -27,18 +27,6 @@ RU is KEPT where it IS the content, not a translation of it:
 
 `brewcode/skills/skills/scripts/validate-skill.sh` check 10 REQUIRES at least 1 Cyrillic character in a skill's mode table. RU keyword columns in skill mode tables are NEVER stripped, at any compression depth.
 
-Grounding — check 10 in the script:
-
-```sh
-# 10. Mode keyword table: when the skill declares 2+ modes, the table needs a
-# Mutates? column and at least one Cyrillic (RU) keyword (contract section 2).
-CYR_LOCALE="${LC_ALL:-${LANG:-en_US.UTF-8}}"
-echo "$MODE_TABLE" | LC_ALL="$CYR_LOCALE" grep -qE '[а-яёА-ЯЁ]' 2>/dev/null && CYR_OK=1
-...
-[ "$CYR_OK" -eq 0 ] && MSG="$MSG${MSG:+; }missing Cyrillic (RU) keyword"
-check fail "Mode table ($DATA_ROWS modes): $MSG"
-```
-
 A mode table with 2+ data rows and zero Cyrillic bytes fails validation (`CYR_OK` stays 0 -> `check fail`), so never propose dropping the last RU cell in such a table, even under `--target=N%`.
 
 ## Translation-pair matcher

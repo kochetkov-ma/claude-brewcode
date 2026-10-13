@@ -9,7 +9,8 @@ import { test } from 'node:test';
 
 const STATUS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ROOT = resolve(STATUS_DIR, '../../..');
-const source = readFileSync(join(STATUS_DIR, 'SKILL.md'), 'utf8');
+const source = ['SKILL.md', 'references/phase1-probes.md', 'references/phase2-stamps.md', 'references/task-tools-offer.md']
+  .map(f => readFileSync(join(STATUS_DIR, f), 'utf8')).join('\n');
 const pairs = [...source.matchAll(/```bash\n([\s\S]*?)\n```/g)].map(m => m[1]).find(b => b.includes("<<'PAIRS'"));
 const asset = rel => readFileSync(join(ROOT, rel), 'utf8');
 

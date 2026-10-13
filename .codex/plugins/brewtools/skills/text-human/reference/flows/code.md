@@ -8,7 +8,6 @@ Source code + inline comments + docstrings/JavaDoc/JSDoc/KDoc.
 
 ## Sub-profile: API-docs / JavaDoc / docstring CLEAN-ONLY
 Triggered by javadoc/jsdoc/kdoc/docstring/"api doc" intent OR detecting `/** */`, `@param`/`@return`/`@throws`, KDoc, docstrings, OpenAPI descriptions.
-- Run strip-only. Inject stage fully disabled.
 - Keep meaningful docs at any visibility or test location; never blanket-strip private/test docs. Preserve tool/runtime-consumed docstrings, doctests and JSDoc tags.
 - Strip a `@param`/`@return` line ONLY when its text == reworded identifier (`@param userId The user ID`).
 - Keep `@throws` with real conditions, contract notes, null-handling, boundaries.
@@ -46,9 +45,9 @@ Preserve BDD comments: `// GIVEN`, `// WHEN`, `// THEN`, `// AND`, their `#` equ
 Keep real tickets regardless of pattern (INTELDEV-XXXXX, JIRA-XXXXX, GH-XXX, BUG-001, FIX-123, ISSUE-42); a pattern alone proves neither. Remove only IDs proved invented AND resolving to no real ticket after checking actual tracker/provenance; unavailable access or uncertainty -> SURFACE.
 
 ## Surface-for-review -- NEVER auto-edit
-Report, do not change: every ai-patterns sec 5 item, plus unicode inside a literal/regex/identifier and mixed indentation in an excluded file.
+Report, do not change: every ai-patterns sec 5 item, plus every SURFACE case in this file.
 
 ## Formatting (safe cosmetic)
 Ordinary non-functional `/* single line */` -> `// single line`; never convert JavaDoc/JSDoc/KDoc `/** */` or directives. 3+ blank lines -> max 2; trim trailing whitespace only outside literals, tool-consumed docs/doctests and directives. Heredoc/raw-string trailing spaces are data.
 
-Indentation is NOT cosmetic. Tabs/spaces rewriting is OPT-IN: it runs only when the user asks for it in the prompt, never by default. Even then it is HARD-EXCLUDED on `*.py`, `Makefile`/`makefile`/`GNUmakefile`, `*.mk`, `*.yaml`, `*.yml`, and inside Go raw strings / heredocs / any multi-line literal -- there indentation is syntax or data, and a rewrite changes program behavior silently. Path mode targets `*.py` by default, so this exclusion is the common case, not the edge case. Mixed indentation in an excluded file -> SURFACE for review with the line numbers, never edit.
+Indentation is NOT cosmetic. Tabs/spaces rewriting is OPT-IN: it runs only when the user asks for it in the prompt, never by default. Even then it is HARD-EXCLUDED on `*.py`, `Makefile`/`makefile`/`GNUmakefile`, `*.mk`, `*.yaml`, `*.yml`, and inside Go raw strings / heredocs / any multi-line literal -- there indentation is syntax or data, and a rewrite changes program behavior silently. Mixed indentation in an excluded file -> SURFACE for review with the line numbers, never edit.

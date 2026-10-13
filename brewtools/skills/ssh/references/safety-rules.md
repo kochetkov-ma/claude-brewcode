@@ -10,7 +10,7 @@ The risk categories below are identical for both readers; the GATE is not.
 | Ordinary SA (`ssh-admin`, including skill `context: fork`) | no — ordinary tool filters remove it even if declared | Run scoped non-destructive work only; return missing decisions and exact approval envelopes to main |
 | Conversation fork | inherits parent pool; question tool may be available | Same SSH role contract: user decisions/approval stay in main; no self-approval |
 
-Ordinary SAs cannot ask the user mid-run. A conversation fork's extra tool access does not alter the approval contract. Return missing goal/host/scope/acceptance decisions to main; a safe stated assumption permits only scoped non-destructive work, never unconfirmed execution or expanded scope. Use exact envelopes for gated actions.
+Return missing goal/host/scope/acceptance decisions to main; a safe stated assumption permits only scoped non-destructive work, never unconfirmed execution or expanded scope.
 
 ## Classification Levels
 
@@ -51,8 +51,8 @@ PRECONDITION: <what must still hold at execution time>
 3. Stop, executing nothing in that block. Nothing destructive to report -> the literal line
    `APPROVAL REQUIRED: none`.
 
-The CALLER (main session, which does have `AskUserQuestion`) presents the envelope and, if approved,
-either runs it or re-spawns the agent with `APPROVED: <ids>` in the prompt.
+The CALLER (main session) presents the envelope and, if approved, either runs it or re-spawns the agent
+with `APPROVED: <ids>` in the prompt.
 **An explicit approval token in the incoming prompt is the ONLY authorization a subagent may act on.**
 `APPROVED:` covers only the envelope ids it names, exactly as worded — not a similar command, not a
 broader scope, not a retry with different arguments. Re-verify each PRECONDITION before executing.
@@ -70,7 +70,7 @@ Free READ never permits raw credentials or environment dumps. `env`, bare `print
 | Processes | `ps`, `pgrep`, `lsof` |
 | Docker | `docker ps`, `docker images`, `docker logs`, `docker inspect`, `docker stats`, `docker network ls`, `docker volume ls`, `docker compose ps` |
 | Services | `systemctl status`, `systemctl list-units`, `systemctl is-active`, `journalctl` |
-| Logs | `journalctl`, `tail -f /var/log/*`, `dmesg` |
+| Logs | `tail -f /var/log/*`, `dmesg` |
 
 ## CREATE Commands (free)
 
@@ -135,10 +135,5 @@ Free READ never permits raw credentials or environment dumps. `env`, bare `print
 
 ## Emergency Stop
 
-If any command returns unexpected output suggesting:
-- Wrong server (hostname mismatch)
-- Production environment (when expecting staging)
-- Root filesystem nearly full (<5% free)
-- Unexpected running services
-
-**STOP immediately**, including previously approved operations whose preconditions changed. Main asks before continuing; delegated roles return findings/missing decisions without self-approval. Silence is never approval, regardless of available question tools.
+Output suggesting a wrong server (hostname mismatch), production (when expecting staging), a root
+filesystem nearly full (<5% free) or unexpected running services -> **STOP immediately**, including previously approved operations whose preconditions changed. Main asks before continuing; delegated roles return findings/missing decisions without self-approval. Silence is never approval, regardless of available question tools.

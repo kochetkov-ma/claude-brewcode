@@ -9,7 +9,7 @@ Deterministic and dependency-free; `agent-return-setup` uses the same sizing for
 
 **It under-counts.** Measured against tiktoken `cl100k_base` (stand-in: Claude's BPE table is not
 pip-installable) over 186 whole files (`kind=file`, `--root . --global`; description and hook rows
-excluded). The ratio belongs to the prose: recheck on a new corpus with the command below.
+excluded). Recheck on a new corpus with the command below.
 
 | Metric | Value |
 |--------|-------|
@@ -25,7 +25,7 @@ Short table-heavy files drift most; long prose files sit near the aggregate. Rep
 python3 -c "import tiktoken,sys; enc=tiktoken.get_encoding('cl100k_base'); t=open(sys.argv[1]).read(); print(len(t), len(enc.encode(t)))" "<file>"
 ```
 
-Rule of thumb: treat any single reading within +/-7% as proxy noise; a file >20% off deserves a
+Treat any single reading within +/-7% as proxy noise; a file >20% off deserves a
 real-tokenizer spot-check before it is used to justify a cut.
 
 ## Live totals
@@ -68,7 +68,6 @@ single-file `cat`/`head` in Bash). Conventions load only if imported/read. Auto 
 | Hook-injected text | `*/hooks/*.mjs`, top-level `UPPER_SNAKE` string constants. **ESTIMATE** — the text is emitted by a script, not read from a file; quotes counted, runtime interpolation not |
 
 **PER-SPAWN** inventories bodies; only the selected agent's body loads at its spawn.
-Context inheritance differs for ordinary agents and conversation forks.
 
 | File class | Glob / rule |
 |------------|-------------|
@@ -80,10 +79,10 @@ The sum is potential corpus size, not every invocation's cost.
 | File class | Glob / rule |
 |------------|-------------|
 | Skill bodies | any `SKILL.md` under the root |
-| Skill references | `<skill-dir>/references/**/*.md` — recursive with the prune list below, inside the sibling `references/` directory of that `SKILL.md`; potential inventory, read on demand |
+| Skill references | `<skill-dir>/references/**/*.md` — recursive with the prune list below, inside the sibling `references/` directory of that `SKILL.md` |
 
 Scanner excludes skill `README.md`, `scripts/**`, `assets/**`; reads/injected script output can
-enter context. Exclusion is a measurement choice, not a runtime guarantee.
+enter context.
 
 ### Prune list — and why each class is already-counted text
 
@@ -143,8 +142,7 @@ overwrites the file whole (last run wins), creates parent dirs, and JSON-validat
 | `drops[]` | array | one object per ledger row: `{path, lines, survivor, reason}`. `[]` when `--ledger` is omitted |
 
 Absence is meaningful: `STATE: absent` = **virgin surface**, which still has lossless headroom, so an
-unmet target there is a planning defect and phase 6 does not ask to go lossy. The sole writer is what
-makes a surface stop looking virgin after its first run.
+unmet target there is a planning defect and phase 6 does not ask to go lossy.
 
 ## Never counted / never touched
 

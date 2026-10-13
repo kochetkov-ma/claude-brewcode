@@ -12,7 +12,8 @@ const REAL_HOME = os.homedir();
 const LOCAL_MARKETPLACE = 'claude-brewcode-codex-local';
 const REMOTE_MARKETPLACE = 'claude-brewcode';
 const PLUGINS = ['brewcode', 'brewdoc', 'brewtools'];
-const RETIRED_AGENT = 'brewcode-bc-rules-organizer.toml';
+const RETIRED_AGENTS = ['brewcode-bc-rules-organizer.toml', 'brewcode-architect.toml', 'brewcode-developer.toml',
+  'brewcode-reviewer.toml', 'brewcode-tester.toml', 'brewdoc-bd-auto-sync-processor.toml'];
 
 for (const relative of ['.codex/scripts/validate-compat.mjs', '.codex/tests/hooks.test.mjs']) {
   const result = spawnSync('node', [path.join(ROOT, relative)], { cwd: ROOT, encoding: 'utf8' });
@@ -82,14 +83,14 @@ function fixture(initialPlugins = remotePlugins()) {
   fs.writeFileSync(path.join(bin, 'codex'), fakeCodex, { mode: 0o755 });
   fs.writeFileSync(stateFile, JSON.stringify({ localMarketplace: false, plugins: initialPlugins }));
   for (const [index, name] of managedAgentNames().entries()) fs.writeFileSync(path.join(agentRoot, name), `before-${index}\n`);
-  fs.writeFileSync(path.join(agentRoot, RETIRED_AGENT), 'before-retired\n');
+  for (const name of RETIRED_AGENTS) fs.writeFileSync(path.join(agentRoot, name), `before-retired-${name}\n`);
   return { home, bin, stateFile, agentRoot };
 }
 
 function snapshot(value) {
   const state = JSON.parse(fs.readFileSync(value.stateFile, 'utf8'));
   state.plugins.sort((left, right) => left.pluginId.localeCompare(right.pluginId));
-  const agentNames = [...managedAgentNames(), RETIRED_AGENT].filter(name => fs.existsSync(path.join(value.agentRoot, name)));
+  const agentNames = [...managedAgentNames(), ...RETIRED_AGENTS].filter(name => fs.existsSync(path.join(value.agentRoot, name)));
   const agents = Object.fromEntries(agentNames.map(name => [name, fs.readFileSync(path.join(value.agentRoot, name), 'utf8')]));
   return { state, agents };
 }
@@ -114,7 +115,7 @@ const mutationSteps = [
   ...PLUGINS.map(name => `plugin:remove:${name}@${REMOTE_MARKETPLACE}`),
   ...PLUGINS.map(name => `plugin:add:${name}@${LOCAL_MARKETPLACE}`),
   ...managedAgentNames().map(name => `agent:write:${name}`),
-  `agent:remove:${RETIRED_AGENT}`
+  ...RETIRED_AGENTS.map(name => `agent:remove:${name}`)
 ];
 
 for (const step of mutationSteps) {
@@ -133,7 +134,7 @@ assert.equal(successResult.status, 0, successResult.stderr);
 const successState = snapshot(success);
 assert.equal(successState.state.localMarketplace, true);
 assert.deepEqual(successState.state.plugins.map(item => [item.pluginId, item.version, item.enabled]), PLUGINS.map(name => [`${name}@${LOCAL_MARKETPLACE}`, '4.0.6', true]));
-assert.equal(fs.existsSync(path.join(success.agentRoot, RETIRED_AGENT)), false);
+assert.deepEqual(RETIRED_AGENTS.filter(name => fs.existsSync(path.join(success.agentRoot, name))), [], 'every retired agent is removed');
 fs.rmSync(success.home, { recursive: true, force: true });
 
 const rejected = fixture(remotePlugins('4.0.4'));
