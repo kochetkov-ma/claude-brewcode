@@ -1,7 +1,7 @@
 ---
 doc_type: llm
-version: "6.5.7"
-content_version: "6.5.6"
+version: "6.5.8"
+content_version: "6.5.8"
 generated_by: "brewcode"
 last_updated: "2026-10-13"
 ---
@@ -138,7 +138,7 @@ last_updated: "YYYY-MM-DD"
 ---
 ```
 
-**A GENERATED artifact stays model-invocable.** The distributed skills carry
+**A GENERATED artifact stays model-invocable.** The distributed generator skills carry
 `disable-model-invocation: true`, so a generator never fires by itself; what it emits must be
 reachable mid-plan without the user typing the slash command.
 

@@ -19,8 +19,9 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 | Arguments | Inline text, a file path, a directory, or a `.zip` archive; prose naming a path resolves against the current directory |
 | Options | `--ttl N` = days (default 15); `--entry filename` = site entry; optional `--delivery-mode path\|subdomain` = creation mode |
 | Model | haiku |
-| Invocation | user-only (`disable-model-invocation: true`) |
-| Tools | Read, Write, Bash, AskUserQuestion, Glob |
+| Invocation | model-invocable (`disable-model-invocation: false`): type `/brewdoc:publish` or ask Claude ("publish this", "share a link") |
+| Tools | `Read, Bash(bash ${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh *), AskUserQuestion, Glob` |
+| Permissions | No Bash or Write prompts: every step is one `brewpage-run.sh` command that matches the skill's single allowed-tools rule. When Claude starts the skill itself, Claude Code asks once for the `Skill` call in default mode; headless and `dontAsk` runs need the allow rule `Skill(brewdoc:publish *)` in settings |
 | Requires | `jq` and `curl` on `PATH`; `zip`/`unzip`/`node` as well for directory or zip site uploads |
 
 ## When to use
@@ -29,6 +30,7 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 - **Host a JSON dataset** — `/brewdoc:publish '{"status":"ok","count":42}'` → browseable JSON page
 - **Upload any file** — `/brewdoc:publish screenshot.png --ttl 1` → direct download link, expires in 1 day
 - **Deploy a static site** — `/brewdoc:publish ./dist/ --entry index.html` → full multi-file site with routing
+- **Ask mid-task in plain language** — after Claude generates a report, say "publish the report and give me the link"; Claude can start the skill itself; you still answer the namespace and password questions (headless runs use the defaults: suggested name, no password), then it returns the URL
 - **Password-protect a page** — choose an existing local password file without exposing its contents in chat
 - **Host public content on its own address** — use `--delivery-mode subdomain` and choose `public` at the namespace prompt
 
@@ -128,7 +130,7 @@ the trusted `unlock.brewpage.app` gateway; programmatic password requests still 
   <li>
     <div>
       <strong>Detect content type</strong>
-      <p>Classifies the input as SITE, MARKDOWN, FILE, JSON, or HTML — in that order. Computes size and shows a pre-publish summary.</p>
+      <p>For a path, runs <code>brewpage-run.sh probe</code> (read-only) to get the type, absolute path and size. Classifies the input as SITE, MARKDOWN, FILE, JSON, or HTML — in that order — and shows a pre-publish summary.</p>
     </div>
   </li>
   <li>
@@ -145,14 +147,14 @@ the trusted `unlock.brewpage.app` gateway; programmatic password requests still 
   </li>
   <li>
     <div>
-      <strong>Upload via API</strong>
-      <p>Allocates a private run, validates inputs and requires <code>jq</code>. Directory sites pass archive verification; supplied ZIPs pass inspection or one confirmation for flagged entries. Adds <code>X-Delivery-Mode</code> only when requested. Saves the owner token, exact link, owner API and identity metadata in project-root <code>.claude/brewpage-history.md</code> without printing the token.</p>
+      <strong>Publish</strong>
+      <p>Runs one <code>brewpage-run.sh publish</code> command with the namespace, TTL, optional entry file, optional <code>--delivery-mode</code> and <code>--password-file</code> flags. When the full command would pass 8,000 characters, the text or JSON is staged first: <code>stage</code> calls pass the content in chunks of up to 6,000 characters, then <code>publish --run</code> joins them. The script validates every value, builds and verifies site archives, adds <code>X-Delivery-Mode</code> only when requested, and saves the owner token, exact link, owner API and identity metadata in project-root <code>.claude/brewpage-history.md</code> without printing the token.</p>
     </div>
   </li>
   <li>
     <div>
       <strong>Return result</strong>
-      <p>Returns the exact server URL and file count for sites. Reports the safe <code>FAILED:</code> line on failure, withholding the response body because it may contain an owner token. Cleans only the current run's inputs on success, failure or confirmation.</p>
+      <p>The script prints one decisive line. <code>OK &lt;url&gt;</code> (sites add <code>| Files: N</code>) returns the exact server URL. <code>CONFIRM: ...</code> (exit 2, nothing uploaded) means a supplied ZIP has flagged entries: after you confirm, the same command reruns with <code>--confirmed</code>. <code>FAILED: ...</code> reports the safe failure line and withholds the response body, which may contain an owner token. The script removes its private run directory on every exit.</p>
     </div>
   </li>
 </Steps>
@@ -160,7 +162,7 @@ the trusted `unlock.brewpage.app` gateway; programmatic password requests still 
 <details>
 <summary>Internals</summary>
 
-**Security — owner token:** The `ownerToken` field from the API response is captured inside the Bash block and written directly to `.claude/brewpage-history.md`. The LLM only sees `OK {url}` or `FAILED: ...` — never the token value, and never the raw response body on failure.
+**Security — owner token:** The `ownerToken` field from the API response is captured inside the script and written directly to `.claude/brewpage-history.md`. The LLM only sees `OK {url}`, `CONFIRM: ...` or `FAILED: ...` — never the token value, and never the raw response body on failure.
 
 **Security — password policy:** each upload uses explicit none or file mode. None ignores all
 password files, including stale inputs from previous runs. File mode takes only an existing
@@ -168,11 +170,10 @@ local source path; the helper copies its bytes into private transport and suppli
 file. Passwords never become shell literals, curl arguments, conversation output, or generated
 random values. Invalid files or control characters stop publishing.
 
-**Run isolation:** allocate a unique private run directory (`brewpage.XXXXXX`, mode 700) under
-`$TMPDIR`, else `/tmp`, before preparing inputs. It lives outside `.claude/`, so writing inputs
-triggers no protected-path prompt; `dontAsk` and headless runs need a `Write` allow rule for
-`$TMPDIR`. Do not reuse a previous run or shared input directory. Content and target paths belong to that run; only the
-password source path is recorded, and its contents are not read through model-visible tools.
+**One script, one rule:** every shell step is `bash ${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh <probe|stage|publish|cleanup> ...` with single-quoted values. The skill's single `Bash(...)` allowed-tools rule matches that exact shape, so nothing prompts, headless included. Any other shape (quoted script path, `cd` prefix, `&&` chain, `$(...)`) falls back to the normal permission prompt, and commands over 8,000 characters are always refused, hence `stage`.
+
+**Run isolation:** the script allocates a unique private run directory (`brewpage.XXXXXX`, mode 700) under
+`$TMPDIR`, else `/tmp`, outside `.claude/`, so no protected-path prompt appears. Only the script creates, fills and removes it, so the skill needs no `Write` grant. Runs never share a directory; `cleanup --run` removes a staged but unpublished run. Only the password source path is recorded, and its contents are not read through model-visible tools.
 
 **History file format:** the helper resolves the project root from `CLAUDE_PROJECT_DIR`, Git,
 an upward `.git`/`.claude` search (a `.claude` in `$HOME` or in the directory whose `.claude` IS `$CLAUDE_CONFIG_DIR` is a profile, not a project marker, and is skipped; a `.git` there still counts), or the current directory. It creates

@@ -2,6 +2,46 @@
 
 ---
 
+## v6.5.8 (2026-10-13)
+
+> Docs: [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [rules](https://doc-claude.brewcode.app/brewcode/skills/rules/) | [e2e](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [agents](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [superreview-setup](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/)
+
+> Docs: [overview](https://doc-claude.brewcode.app/brewdoc/overview/) | [skills](https://doc-claude.brewcode.app/brewdoc/skills/) | [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
+
+> Docs: [FAQ](https://doc-claude.brewcode.app/faq/)
+
+`/brewdoc:publish` is now model-invocable: ask Claude to "publish this" or "share a link" mid-task and it runs the skill, with no Bash or Write permission prompts.
+
+### brewdoc
+
+#### Fixed
+
+- **publish:** a password file must be an absolute path (`FAILED: password file must be an absolute path`); the check runs before any run is touched.
+- **publish:** staged text survives a bad password file (missing, wrong type, invalid password), and a retry publishes it.
+- **publish:** a run dir that fails the private-dir check right after creation is discarded instead of leaked.
+
+#### Changed
+
+- **publish:** `disable-model-invocation: false`. Claude can fire the skill on its own when you ask to publish or share content; typing `/brewdoc:publish` still works. The other 26 distributed skills stay user-invoked only.
+- **publish:** every shell step runs through one entry script, `scripts/brewpage-run.sh` (`probe`, `stage`, `publish`, `cleanup`), covered by a single scoped rule `Bash(bash ${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh *)`. The bare `Bash` and `Write` grants are gone, so no Bash or Write prompts appear, headless runs included.
+- **publish:** a password file is passed with `--password-file`, long text is staged in chunks (`stage`) to stay under the command-length limit, and a flagged site is uploaded only after the same command is re-run with `--confirmed`.
+- **publish:** when Claude fires the skill, Claude Code still asks for the `Skill` call itself in default mode. Headless and `dontAsk` runs need the allow rule `Skill(brewdoc:publish *)`.
+
+### brewcode
+
+#### Changed
+
+- **skill-creator, agent-creator, skills:** the agents and skill references state `brewdoc:publish` as the sole exception to the user-only policy (`DMI: false`, scoped `allowed-tools`); `skills:` preloading in agents works for it.
+- **tests:** `suite-skill` pins the exact publish frontmatter and requires every bash fence to match the allowed rule; `suite-creator-contract` checks the publish exception in skill-creator.
+
+### docs
+
+#### Fixed
+
+- **English-only pages:** rendered docs pages are English-only again. Russian trigger words on the skills, agents, rules, e2e and superreview-setup pages are replaced with English equivalents; Russian prompts still work.
+
+---
+
 ## v6.5.7 (2026-10-13)
 
 > Docs: [rules](https://doc-claude.brewcode.app/brewcode/skills/rules/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) | [teams-setup](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/)

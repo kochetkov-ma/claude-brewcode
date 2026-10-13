@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-// Shell contract of publish blocks: `scripts/brewpage-lib.sh` (BD03 token file location, protection, param validation) + SKILL.md blocks (BD02 nothing prompt-derived in shell source).
+// Shell contract: `scripts/brewpage-lib.sh` (BD03 history location, protection, validation) + SKILL.md commands and
+// `scripts/brewpage-run.sh` (BD02 values as single-quoted argv of one allow-listed command).
 // Fixtures under one mkdtemp base, removed at end; no network, no upload, no real `.claude` touched.
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, readFileSync, existsSync, statSync, rmSync, realpathSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, symlinkSync, existsSync, statSync, rmSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -201,60 +202,113 @@ for (const [ns, days, entry, want, why] of [
   check('validate.inert', r.out, 'p$(id -un)x',
     'a single-quoted substitution reaches bp_validate as literal text, unexpanded');
 }
+// GIVEN {password_file} slot values WHEN bp_password_check runs THEN only an absolute regular file with a valid password passes.
+{
+  const pw = join(BASE, 'pw');
+  mkdirSync(pw);
+  writeFileSync(join(pw, 'good.txt'), 'fixture-pass\n');
+  writeFileSync(join(pw, 'short.txt'), 'abc\n');
+  writeFileSync(join(pw, 'ctrl.txt'), 'pass\tword\n');
+  symlinkSync(join(pw, 'good.txt'), join(pw, 'link.txt'));
+  const notAbsolute = 'FAILED: password file must be an absolute path';
+  const notRegular = 'FAILED: password source must be a non-symlink regular file';
+  const invalid = 'FAILED: password must have at least 4 characters and no control characters';
+  for (const [file, want, why] of [
+    [join(pw, 'good.txt'), [0, ''], 'an absolute regular file with a valid password passes'],
+    ['good.txt', [1, notAbsolute], 'a cwd-relative path is rejected although it exists from cwd'],
+    ['./good.txt', [1, notAbsolute], 'a dot-relative path is rejected'],
+    ['', [1, notAbsolute], 'an empty path is rejected'],
+    [join(pw, 'missing.txt'), [1, notRegular], 'a missing file is rejected'],
+    [join(pw, 'link.txt'), [1, notRegular], 'a symlink is rejected'],
+    [pw, [1, notRegular], 'a directory is rejected'],
+    [join(pw, 'short.txt'), [1, invalid], 'a 3-char password is rejected'],
+    [join(pw, 'ctrl.txt'), [1, invalid], 'a control character (header injection) is rejected'],
+  ]) {
+    const r = sh(`bp_password_check '${file}'`, { cwd: pw });
+    check(`password.${JSON.stringify(file)}`, [r.status, r.out, r.err], [want[0], want[1], ''], why);
+  }
+}
 
-// ── BD02/BD03: the SKILL.md blocks themselves ──────────────────────────────
-check('skill.tools', LINES.filter((l) => l.startsWith('allowed-tools:'))[0],
-  'allowed-tools: [Read, Write, Bash, AskUserQuestion, Glob]',
-  'Write is declared — the inputs travel as files now');
-check('skill.lib.sourced', countLines(/^\. "\$\{CLAUDE_SKILL_DIR\}\/scripts\/brewpage-lib\.sh" \|\| \{ echo "FAILED: publish helper library not found"; exit 1; \}$/), 5,
-  'all five publish blocks source the lib');
-check('skill.validate.called', countLines(/^bp_begin .* \|\| exit 1$/), 5,
-  'all five blocks run the shared prelude, which validates before doing anything');
+// ── BD02/BD03: frontmatter, shipped commands and the entry script ─────────
+const RUN = readFileSync(join(HERE, '..', 'scripts', 'brewpage-run.sh'), 'utf8');
+const RUN_LINES = RUN.split('\n');
+const countRun = (re) => RUN_LINES.filter((l) => re.test(l)).length;
+const FM = LINES.slice(1, LINES.indexOf('---', 1));
+check('skill.frontmatter.keys', FM.map((l) => l.split(':')[0]),
+  ['name', 'description', 'user-invocable', 'disable-model-invocation', 'argument-hint', 'allowed-tools', 'model'],
+  'GIVEN publish frontmatter WHEN its keys are listed THEN the house key order holds, DMI key explicit');
+check('skill.frontmatter.invocation', FM.filter((l) => /^(user-invocable|disable-model-invocation|allowed-tools):/.test(l)), [
+  'user-invocable: true',
+  'disable-model-invocation: false',
+  "allowed-tools: [Read, 'Bash(bash ${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh *)', AskUserQuestion, Glob]",
+], 'GIVEN publish frontmatter WHEN invocation keys are read THEN user- and model-invocable, one scoped Bash rule, no Write/Edit');
+{
+  // GIVEN the one allowed-tools Bash rule WHEN every shipped bash fence is read THEN each is that single command.
+  const rules = [...FM.join('\n').matchAll(/'Bash\(([^)]*) \*\)'/g)].map((m) => m[1]);
+  const fences = [...SKILL.matchAll(/```bash\n([\s\S]*?)```/g)].map((m) => m[1].replace(/\n$/, ''));
+  const outsideQuotes = (cmd) => cmd.replace(/'[^']*'/g, '');
+  check('skill.fences.rule', [rules, fences.length, fences.map((f) => [
+    f.startsWith(rules[0] + ' '), f.includes('\n'), /[;&|$`()<>"\\]/.test(outsideQuotes(f.slice(rules[0].length))),
+  ])], [['bash ${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh'], 6, Array(6).fill([true, false, false])],
+  'GIVEN the rule prefix WHEN each fence is checked THEN it starts with it, is one line and has no operator, quote or expansion outside single quotes');
+  check('skill.fences.subcommands', fences.map((f) => f.split(' ')[2]),
+    ['probe', 'publish', 'publish', 'stage', 'publish', 'cleanup'],
+    'GIVEN the shipped fences WHEN their subcommands are listed THEN probe, path/text/staged publish, stage and cleanup are covered');
+  check('skill.fences.slots', fences.filter((f) => f.includes(' publish ')).map((f) => [...f.matchAll(/ --([a-z-]+) '\{?([a-z_]*)\}?'/g)].map((m) => m[1] + '=' + m[2])), [
+    ['ns=ns', 'ttl=days', 'entry=entry', 'delivery-mode=delivery_mode', 'password-file=password_file', 'path=path'],
+    ['ns=ns', 'ttl=days', 'entry=', 'delivery-mode=delivery_mode', 'password-file=password_file', 'text=content'],
+    ['ns=ns', 'ttl=days', 'entry=', 'delivery-mode=delivery_mode', 'password-file=password_file', 'run=run_id'],
+  ], 'GIVEN the publish fences WHEN their flags are read THEN every value sits in a single-quoted slot');
+}
+check('skill.lib.sourced', countRun(/^\. "\$HERE\/brewpage-lib\.sh"$/), 1,
+  'the entry script sources the lib exactly once');
+check('skill.validate.called', countRun(/^  bp_begin "\$ns" "\$days" "\$entry" "\$id" "\$pwmode" "\$mode" \|\| exit 1$/), 1,
+  'every publish runs the shared prelude, which validates before uploading');
 check('skill.history.init', [
   sh("run=$(bp_prepare); bp_begin 'mysite' '15' '' \"${run##*/}\" none >/dev/null", { cwd: BASE, env: { CLAUDE_PROJECT_DIR: BASE } }).status,
   sh("run=$(bp_prepare); bp_begin 'my site' '15' '' \"${run##*/}\" none >/dev/null", { cwd: BASE, env: { CLAUDE_PROJECT_DIR: BASE } }).status,
 ], [0, 1], 'bp_begin validates and prepares the history file, and fails the block on a bad namespace');
-const beginLines = LINES.filter(line => line.startsWith('bp_begin '));
-check('skill.ns.quoted', beginLines.map(line => [...line.matchAll(/'([^']*)'/g)].map(match => match[1])),
-  ['', '', '', '{entry}', '{entry}'].map(entry => ['{ns}', '{days}', entry, '{run_id}', '{password_mode}', '{delivery_mode}']),
-  'every substituted parameter, including optional delivery mode, sits inside single quotes');
-check('skill.history.relative', countLines(/HISTORY_FILE="\.claude/), 0,
-  'no block hardcodes a cwd-relative history path any more');
-check('skill.heredoc', SKILL.split('BREWPAGE_EOF').length - 1, 0,
-  'the content heredoc is gone — a BREWPAGE_EOF line in the content can no longer close it');
+check('skill.history.relative', countLines(/HISTORY_FILE="\.claude/) + countRun(/HISTORY_FILE="\.claude/), 0,
+  'no shipped command hardcodes a cwd-relative history path');
+check('skill.heredoc', (SKILL + RUN).split('BREWPAGE_EOF').length - 1, 0,
+  'no content heredoc: a BREWPAGE_EOF line in the content can never close one');
 check('skill.placeholders', [
-  SKILL.split('{content}').length - 1,
   SKILL.split('{original_json}').length - 1,
   SKILL.split('{password_header}').length - 1,
-], [0, 0, 0], 'no prompt-derived text, JSON or password placeholder is left in shell source');
-check('skill.password.file', countLines(/^RESPONSE=\$\(bp_post "https:\/\/brewpage\.app\/api\//), 5,
-  'all five blocks POST through bp_post, which adds the X-Password header from a file');
-check('skill.payload.file', countLines(/-d @"\$PAYLOAD_FILE"/), 2,
+  SKILL.split('{run_dir}').length - 1,
+], [0, 0, 0], 'no raw JSON, password or run-dir placeholder is left in SKILL.md');
+check('skill.password.file', countRun(/response=\$\(bp_post "https:\/\/brewpage\.app\/api\//), 4,
+  'every upload (html, json, file, site) POSTs through bp_post, which adds the X-Password header from a file');
+check('skill.payload.file', countRun(/-d @"\$(BP_RUN_DIR\/payload\.json|content)"/), 2,
   'JSON and markdown bodies are posted from files, never inlined');
 
 // ── BD01 + BD-N03: the upload is gated on the verifier ─────────────────────
 {
-  const packLine = LINES.findIndex((l) => l.includes('publish.mjs") pack') || l.includes('publish.mjs" pack'));
-  const inspectLine = LINES.findIndex((l) => l.includes('publish.mjs" inspect'));
-  const curlLines = LINES.map((l, i) => [l, i]).filter(([l]) => l.includes('archive=@')).map(([, i]) => i);
+  const packLine = RUN_LINES.findIndex((l) => l.includes('publish.mjs" pack'));
+  const inspectLine = RUN_LINES.findIndex((l) => l.includes('publish.mjs" inspect'));
+  const gateLines = RUN_LINES.map((l, i) => [l, i]).filter(([l]) => l.includes('bp_archive_gate')).map(([, i]) => i);
+  const curlLine = RUN_LINES.findIndex((l) => l.includes('archive=@'));
   check('gate.calls', [packLine >= 0, inspectLine >= 0], [true, true],
     'the directory branch packs and the supplied-ZIP branch inspects');
-  check('gate.curl.count', curlLines.length, 2, 'exactly two blocks upload an archive');
-  check('gate.order', [packLine < curlLines[0], inspectLine < curlLines[1]], [true, true],
-    'the manifest is produced before the upload line in both branches');
-  check('gate.abort', countLines(/^bp_archive_gate "\$RC" "\$MANIFEST" "(\$TMPZIP)?" \|\| exit \$\?$/), 2,
+  check('gate.curl.count', countRun(/archive=@/), 1, 'exactly one upload line sends an archive, shared by both site types');
+  check('gate.order', [packLine < gateLines[0], inspectLine < gateLines[1], gateLines[1] < curlLine], [true, true, true],
+    'the manifest and the gate come before the upload line in both branches');
+  check('gate.abort', countRun(/^ {8}bp_archive_gate "\$rc" "\$manifest" "(\$archive)?" \|\| exit \$\?$/), 2,
     'both branches abort through the shared gate on a non-zero verifier exit before reaching curl');
   const confirm = sh('bp_archive_gate 2 "ENTRY: index.html" ""', { cwd: BASE, env: { BREWPAGE_CONFIRMED: undefined } });
   const ok = sh('bp_archive_gate 0 "ENTRY: index.html" "" && printf %s "$ENTRY"', { cwd: BASE });
-  check('gate.confirm', [confirm.status, confirm.out.startsWith('CONFIRM:'), ok.status, ok.out], [2, true, 0, 'index.html'],
+  check('gate.confirm', [confirm.status, confirm.out, ok.status, ok.out],
+    [2, 'CONFIRM: flagged entries listed above — ask the user, then re-run with --confirmed', 0, 'index.html'],
     'the gate stops for confirmation on flagged entries and otherwise hands back the manifest ENTRY');
-  check('gate.tmpzip', countLines(/^TMPZIP="\$BP_RUN_DIR\/site\.zip"$/), 1,
+  check('gate.confirmed.flag', [countRun(/^  BREWPAGE_CONFIRMED=0$/), countRun(/--confirmed\) BREWPAGE_CONFIRMED=1; shift ;;/)], [1, 1],
+    'only the --confirmed flag confirms: an inherited BREWPAGE_CONFIRMED is reset first');
+  check('gate.tmpzip', countRun(/^ {8}archive="\$BP_RUN_DIR\/site\.zip"$/), 1,
     'the archive path belongs to the unique private run directory');
-  check('gate.mktemp', countLines(/\$\(mktemp/), 0,
-    'no block calls mktemp any more — its 0-byte file is what made zip exit 3 (BD-N03)');
+  check('gate.mktemp', countRun(/\$\(mktemp/), 0,
+    'the entry script never calls mktemp itself — its 0-byte file is what made zip exit 3 (BD-N03)');
 }
 
-console.log('suite-skill.mjs (brewpage-lib.sh + SKILL.md publish blocks)');
+console.log('suite-skill.mjs (brewpage-lib.sh + brewpage-run.sh + SKILL.md commands)');
 for (const line of results) console.log(line);
 console.log(`  ${passed} passed, ${failed} failed`);
 rmSync(BASE, { recursive: true, force: true });

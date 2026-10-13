@@ -40,7 +40,7 @@ Agent and hook references were refreshed through Claude Code 2.1.296. They disti
 /brewcode:agents create a backend validator agent
 /brewcode:agents improve reviewer
 /brewcode:agents sync
-/brewcode:agents синк по текущей сессии
+/brewcode:agents sync from the current session
 ```
 
 ## How it works
@@ -58,13 +58,13 @@ Agent and hook references were refreshed through Claude Code 2.1.296. They disti
 
 | Mode | Trigger | Action |
 |------|---------|--------|
-| status | default for any "show me" intent — "статус", "что есть", "состояние" | Inventory by scope, state, overlaps, health flags |
-| list | explicit only — "list" / "список" / "перечисли" | Globs `*.md` across `.claude/agents/`, `~/.claude/agents/`, `${CLAUDE_PLUGIN_ROOT}/agents/` (shipped, read-only), plus `brewcode/agents/` only inside the plugin workspace (`test -d brewcode/.claude-plugin`) |
-| create | "создай" / "create" / "new" / "добавь" / "scaffold" | Scaffolds a new agent file via `agent-creator`; asks scope, model, CLAUDE.md update |
-| improve | "улучши" / "improve" / "refactor" / "fix" / "почини", or a bare existing `<name\|path>` | Tunes description triggers and system prompt quality |
-| review | "ревью" / "review" / "validate" / "проверь корректность" | Single reviewer — the project's agent from `.claude/agents/`, else `general-purpose` — two-phase: review, then double-check the findings |
-| sync | `sync`, `синк`, `memory sync`, `актуализируй`, `обнови знания`, `приведи в соответствие с кодом` | Memory sync: rewrites agent files against ground truth via the shared reference; non-growth guaranteed |
-| batch | auto-detected fan-out flag | Not a menu item — auto-detected from plural form, "все" / "all", or multiple names/paths; triggers parallel delegation when creating or improving multiple agents |
+| status | default for any "show me" intent — "status", "what exists", "state" (Russian prompts work too) | Inventory by scope, state, overlaps, health flags |
+| list | explicit only — "list" | Globs `*.md` across `.claude/agents/`, `~/.claude/agents/`, `${CLAUDE_PLUGIN_ROOT}/agents/` (shipped, read-only), plus `brewcode/agents/` only inside the plugin workspace (`test -d brewcode/.claude-plugin`) |
+| create | "create" / "new" / "add" / "scaffold" | Scaffolds a new agent file via `agent-creator`; asks scope, model, CLAUDE.md update |
+| improve | "improve" / "refactor" / "fix", or a bare existing `<name\|path>` | Tunes description triggers and system prompt quality |
+| review | "review" / "validate" / "check correctness" | Single reviewer — the project's agent from `.claude/agents/`, else `general-purpose` — two-phase: review, then double-check the findings |
+| sync | `sync`, `memory sync`, "update knowledge", "bring in line with the code" | Memory sync: rewrites agent files against ground truth via the shared reference; non-growth guaranteed |
+| batch | auto-detected fan-out flag | Not a menu item — auto-detected from plural form, "all", or multiple names/paths; triggers parallel delegation when creating or improving multiple agents |
 
 ## Reference files
 

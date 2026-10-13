@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
-# Sourced (!=executed) by every brewdoc:publish/SKILL.md block: sets HISTORY_FILE + helpers in caller's shell.
+# Sourced (!=executed) by scripts/brewpage-run.sh, the skill's only entry: sets HISTORY_FILE + helpers.
 # Owns token-history location (BD03) and URL-safety of prompt-derived query params (BD02).
-
-# zsh (macOS Bash tool): global EXIT trap and ${x:+a "$y"} word splitting, as in bash.
-if [ -n "${ZSH_VERSION:-}" ]; then setopt POSIX_TRAPS SH_WORD_SPLIT; fi
 
 # rc 0: $1 is HOME or the active config dir's parent - its .claude is a profile, never a project root.
 bp_is_profile_parent() {
@@ -39,7 +36,7 @@ bp_project_root() {
 
 BP_ROOT="$(bp_project_root)"
 HISTORY_FILE="$BP_ROOT/.claude/brewpage-history.md"
-# Run dirs stay outside .claude/: a protected path, where the model's Write prompts or is denied (dontAsk).
+# Run dirs stay outside .claude/ (protected path); only brewpage-run.sh writes into them.
 BP_TMPDIR="${TMPDIR:-/tmp}"
 BP_TMPDIR="${BP_TMPDIR%/}"
 
@@ -131,6 +128,27 @@ bp_cleanup() {
   rm -rf -- "$BP_RUN_DIR"
 }
 
+# Removes a dir this call just made via bp_prepare, even one bp_run_dir rejects (bp_cleanup refuses it).
+bp_discard() {
+  case "${1:-}" in "$BP_TMPDIR"/brewpage.??????) rm -rf -- "$1" ;; esac
+}
+
+# jq: X-Password header line from $password; error() on <4 chars or a control char (header injection).
+# shellcheck disable=SC2016 # $password/$p are jq variables
+BP_PW_FILTER='($password | rtrimstr("\n")) as $p |
+  if ($p | length) >= 4 and ($p | explode | all(. >= 32 and . != 127))
+  then "X-Password: " + $p else error("invalid password") end'
+
+# {password_file} slot: absolute path to a readable non-symlink regular file with a valid password.
+bp_password_check() {
+  case "${1:-}" in /*) : ;; *) echo "FAILED: password file must be an absolute path"; return 1 ;; esac
+  [ -f "$1" ] && [ ! -L "$1" ] || { echo "FAILED: password source must be a non-symlink regular file"; return 1; }
+  [ -r "$1" ] || { echo "FAILED: password file is not readable"; return 1; }
+  command -v jq >/dev/null || { echo "FAILED: jq required"; return 1; }
+  jq -ner --rawfile password "$1" "$BP_PW_FILTER" >/dev/null 2>&1 ||
+    { echo "FAILED: password must have at least 4 characters and no control characters"; return 1; }
+}
+
 # Prelude: explicit run id/password policy, no implicit shared credential discovery.
 bp_begin() {
   NS="$1"; DAYS="$2"; ENTRY="$3"
@@ -147,17 +165,15 @@ bp_begin() {
   if [ "$BP_PASSWORD_MODE" = file ]; then
     local source_file="$BP_RUN_DIR/brewpage-password-source.txt" password_source=""
     [ -f "$source_file" ] && [ ! -L "$source_file" ] || { echo "FAILED: password source path file missing or unsafe"; return 1; }
-    IFS= read -r password_source < "$source_file" || [ -n "$password_source" ] || return 1
-    [ -f "$password_source" ] && [ ! -L "$password_source" ] || { echo "FAILED: password source must be a non-symlink regular file"; return 1; }
+    IFS= read -r password_source < "$source_file" || true
+    bp_password_check "$password_source" || return 1
     local password_file="$BP_RUN_DIR/brewpage-password.txt"
     [ ! -e "$password_file" ] && [ ! -L "$password_file" ] || { echo "FAILED: password transport file already exists"; return 1; }
     (umask 077; cat -- "$password_source" > "$password_file") || return 1
     BP_HEADER_FILE="$BP_RUN_DIR/password-header.txt"
-    (umask 077; jq -ner --rawfile password "$password_file" '
-      ($password | rtrimstr("\n")) as $p |
-      if ($p | length) >= 4 and ($p | explode | all(. >= 32 and . != 127))
-      then "X-Password: " + $p else error("invalid password") end
-    ' > "$BP_HEADER_FILE") 2>/dev/null || { echo "FAILED: password must have at least 4 characters and no control characters"; return 1; }
+    # Re-checks the copied bytes: the source may change after bp_password_check.
+    (umask 077; jq -ner --rawfile password "$password_file" "$BP_PW_FILTER" > "$BP_HEADER_FILE") 2>/dev/null ||
+      { echo "FAILED: password must have at least 4 characters and no control characters"; return 1; }
   fi
 }
 
@@ -201,7 +217,7 @@ bp_archive_gate() {
   local rc="$1" manifest="$2" zip="$3"
   if [ "$rc" -eq 2 ] && [ "${BREWPAGE_CONFIRMED:-0}" != "1" ]; then
     [ -n "$zip" ] && rm -f "$zip"
-    echo "CONFIRM: flagged entries listed above — ask the user, then re-run with BREWPAGE_CONFIRMED=1"
+    echo "CONFIRM: flagged entries listed above — ask the user, then re-run with --confirmed"
     return 2
   fi
   if [ "$rc" -ne 0 ] && [ "$rc" -ne 2 ]; then

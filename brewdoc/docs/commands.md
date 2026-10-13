@@ -4,7 +4,7 @@ description: Detailed description of all brewdoc plugin commands
 
 # Brewdoc Plugin Commands
 
-> **Version:** 6.5.7 | **Author:** Maksim Kochetkov | **License:** MIT
+> **Version:** 6.5.8 | **Author:** Maksim Kochetkov | **License:** MIT
 
 ## Quick Reference
 
@@ -24,7 +24,7 @@ A `-setup` suffix marks a skill that installs a mechanism -- afterwards you use 
 
 Setup skills share one verb vocabulary, in this order: `status | install | upgrade | enable | disable | uninstall | purge`. No argument = `status` if installed, `install` if not. Skill-specific extras come after the canonical verb. v5.0.0 dropped the aliases `init`, `on`, `off`, `setup`, `remove` and `reset` with no back-compat shims. Both brewdoc setup skills implement `enable`/`disable` -- `docsync-setup` flips the `enabled` key in `.claude/docsync/config.json` (and refreshes its provenance stamp on that write), `memory-sync-setup` renames `SKILL.md` <-> `SKILL.md.disabled` -- and both implement `purge`; the per-command Args column is authoritative.
 
-Every brewdoc skill carries `disable-model-invocation: true`: Claude never fires any of them on its own, you type the command. `/brewcode:setup-status` reports what is installed, stale or missing across all plugins.
+Every brewdoc skill except `/brewdoc:publish` carries `disable-model-invocation: true`: Claude never fires those on its own, you type the command. `/brewdoc:publish` is `disable-model-invocation: false`, so Claude can also run it mid-task to share a link. `/brewcode:setup-status` reports what is installed, stale or missing across all plugins.
 
 ---
 
@@ -338,7 +338,8 @@ Staleness, whole days in LOCAL time: the Stop gate compares `last_updated` with 
 | **Arguments** | `[prompt] <text\|file_path\|directory_path\|zip_path> [--ttl N] [--entry filename] [--delivery-mode path\|subdomain]` |
 | **Model** | `haiku` |
 | **Dependencies** | `curl` and `jq` for all uploads; Node.js and `unzip` for SITE; `zip` additionally for directory packaging |
-| **Allowed tools** | `Read`, `Write`, `Bash`, `AskUserQuestion`, `Glob` |
+| **Model invocation** | `disable-model-invocation: false` -- you or Claude (mid-task, to share a link). Claude's own call asks for the `Skill` permission once in default mode; pre-approve it with the allow rule `Skill(brewdoc:publish *)` (headless/`dontAsk`: required) |
+| **Allowed tools** | `Read`, `Bash(bash ${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh *)`, `AskUserQuestion`, `Glob`: every step (probe, stage, publish, cleanup) is one `scripts/brewpage-run.sh` command, so no step prompts, headless included |
 
 ### Content Type Detection
 

@@ -1,15 +1,15 @@
 #!/usr/bin/env node
-// D1 regression: shipped html/site blocks under `zsh -f` (macOS Bash-tool shell), fake curl, no network.
+// Shipped SKILL.md commands as zsh -f (macOS Bash-tool shell) parses them: quoting rule, argv, archive branches.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, chmodSync, statSync, existsSync, rmSync, realpathSync } from 'node:fs';
-import { dirname, join, basename } from 'node:path';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, chmodSync, statSync, existsSync, rmSync, realpathSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const zshProbe = spawnSync('zsh', ['-f', '--version'], { encoding: 'utf8' });
 if (zshProbe.error && zshProbe.error.code === 'ENOENT') {
-  console.log('SKIP publish zsh: zsh not found on PATH - D1 zsh regression not exercised');
+  console.log('SKIP publish zsh: zsh not found on PATH - shipped command parsing under zsh not exercised');
   process.exit(0);
 }
 
@@ -34,45 +34,33 @@ writeFileSync(curl, [
 chmodSync(curl, 0o755);
 
 const skill = readFileSync(join(skillDir, 'SKILL.md'), 'utf8');
+// Load-time substitution of the skill dir, as Claude Code does it before the model sees the body.
 const blocks = [...skill.matchAll(/```bash\n([\s\S]*?)```/g)].map(m => m[1].replaceAll('${CLAUDE_SKILL_DIR}', skillDir));
 function shipped(marker) {
   const found = blocks.filter(b => b.includes(marker));
-  assert.equal(found.length, 1, 'GIVEN exactly one shipped block contains ' + marker);
+  assert.equal(found.length, 1, 'GIVEN exactly one shipped command contains ' + marker);
   return found[0];
 }
-const shippedBlocks = { html: shipped('api/html?'), dir: shipped('publish.mjs" pack'), zip: shipped('publish.mjs" inspect') };
+const commands = { text: shipped("--text '{content}'"), path: shipped("--path '{path}'"), probe: shipped(' probe ') };
 const response = JSON.stringify({ link: 'https://fixture.brewpage.app/', ownerToken: 'zsh-owner', fileCount: 3 });
+const escape = value => value.replaceAll("'", "'\\''");
 let seq = 0;
 
-function zsh(code, log) {
+function fill(command, slots, quoteRule = escape) {
+  return Object.entries(slots).reduce((code, [key, value]) => code.replaceAll('{' + key + '}', quoteRule(value)), command);
+}
+function zsh(code) {
   const file = join(base, 'case-' + (seq++) + '.zsh');
+  const log = join(base, 'curl-' + seq + '.json');
   writeFileSync(file, code);
-  return spawnSync('zsh', ['-f', file], {
+  const result = spawnSync('zsh', ['-f', file], {
     cwd: root, encoding: 'utf8', timeout: 20000,
     env: { ...process.env, CLAUDE_PROJECT_DIR: root, TMPDIR: tmp + '/', PATH: bin + ':' + process.env.PATH, CURL_LOG: log, CURL_RESPONSE: response },
   });
+  return { result, curl: existsSync(log) ? JSON.parse(readFileSync(log, 'utf8')) : null };
 }
-function prepare() {
-  const r = zsh('. "' + skillDir + '/scripts/brewpage-lib.sh" || exit 1\nbp_prepare\n', join(base, 'unused'));
-  assert.equal(r.status, 0, 'GIVEN bp_prepare succeeds under zsh: ' + r.stderr);
-  const dir = r.stdout.trim();
-  assert.equal(statSync(dir).mode & 0o777, 0o700, 'GIVEN the zsh-allocated run dir is private');
-  assert.equal(dirname(dir), tmp, 'GIVEN zsh allocates under $TMPDIR (trailing slash, as macOS sets it)');
-  return dir;
-}
-// Drops one lib setopt via a function shadowing the builtin: proves each option is load-bearing.
-function without(option) {
-  return 'setopt() { local o; for o in "$@"; do [ "$o" = ' + option + ' ] || builtin setopt "$o"; done; }\n';
-}
-function runBlock(kind, entry, input, prefix = '') {
-  const run = prepare();
-  writeFileSync(join(run, input.name), input.body);
-  const log = join(base, 'curl-' + seq + '.json');
-  const code = shippedBlocks[kind].replaceAll('{ns}', 'public').replaceAll('{days}', '15').replaceAll('{entry}', entry)
-    .replaceAll('{run_id}', basename(run)).replaceAll('{password_mode}', 'none').replaceAll('{delivery_mode}', '');
-  const result = zsh(prefix + code, log);
-  return { run, log, result, curl: existsSync(log) ? JSON.parse(readFileSync(log, 'utf8')) : null };
-}
+const runDirs = () => readdirSync(tmp).filter(name => name.startsWith('brewpage.'));
+const normalize = values => values.map(value => value.replace(/brewpage\.[A-Za-z0-9]{6}/, 'brewpage.RUN'));
 function manifest(zipName, bytes) {
   return ['ARCHIVE MANIFEST — ' + zipName, '  index.html', '  sub/page.html', '  sub/style.css', 'FILES: 3',
     'BYTES: ' + bytes, 'ENTRY: sub/page.html', 'SKIPPED: 0', 'RESULT: ok'].join('\n') + '\n';
@@ -88,70 +76,56 @@ try {
   const packed = spawnSync('node', [join(skillDir, 'scripts/publish.mjs'), 'pack', '--dir', site, '--out', fixtureZip], { encoding: 'utf8' });
   assert.equal(packed.status, 0, 'GIVEN the fixture zip packs: ' + packed.stdout);
   const fixtureBytes = statSync(fixtureZip).size;
-  const dirInput = { name: 'brewpage-target-path.txt', body: site + '\n' };
-  const zipInput = { name: 'brewpage-target-path.txt', body: fixtureZip + '\n' };
+  const common = { ns: 'public', days: '15', delivery_mode: '', password_file: '' };
 
-  // GIVEN the shipped HTML block WHEN run under zsh -f THEN the payload survives bp_begin and reaches curl.
-  const html = runBlock('html', '', { name: 'brewpage-content.md', body: 'Fixture markdown\n' });
-  assert.equal(html.result.status, 0, 'THEN zsh HTML block exits 0: ' + html.result.stderr);
-  assert.equal(html.result.stdout, 'OK https://fixture.brewpage.app/\n', 'THEN zsh HTML block prints only the URL line');
-  assert.equal(html.result.stderr, '', 'THEN zsh HTML block writes nothing to stderr');
-  const payload = '{\n  "content": "Fixture markdown\\n"\n}\n';
-  assert.deepEqual(html.curl, {
-    args: ['-s', '-X', 'POST', 'https://brewpage.app/api/html?ns=public&ttl=15&format=markdown',
-      '-H', 'Content-Type: application/json', '-d', '@' + html.run + '/payload.json'],
-    files: { [html.run + '/payload.json']: Buffer.byteLength(payload) }, payload,
-  },'THEN curl gets exact argv and the payload file still exists at call time');
-  assert.equal(existsSync(html.run), false, 'THEN the EXIT trap removes the run dir only after the block ends');
+  // GIVEN hostile multi-line text quoted per the rule WHEN zsh -f parses the shipped command THEN argv is verbatim, nothing runs.
+  const hostile = "Fixture it's $(touch injected) `touch ticked`; && | > out\nline two\n";
+  const text = zsh(fill(commands.text, { ...common, type: 'html', content: hostile }));
+  assert.equal(text.result.status, 0, 'THEN the zsh text command exits 0: ' + text.result.stdout + text.result.stderr);
+  assert.deepEqual([text.result.stdout, text.result.stderr], ['OK https://fixture.brewpage.app/\n', ''],
+    'THEN the zsh text command prints only the URL line');
+  assert.deepEqual({ ...text.curl, args: normalize(text.curl.args), files: Object.keys(text.curl.files).length },
+    { args: ['-s', '-X', 'POST', 'https://brewpage.app/api/html?ns=public&ttl=15&format=markdown', '-H', 'Content-Type: application/json',
+      '-d', '@' + tmp + '/brewpage.RUN/payload.json'], files: 1, payload: JSON.stringify({ content: hostile }, null, 2) + '\n' },
+    'THEN curl gets exact argv and the payload holds the text byte for byte');
+  assert.deepEqual(['injected', 'ticked', 'out'].map(name => existsSync(join(root, name))), [false, false, false],
+    'THEN no substitution, backtick or redirect in the text executed');
+  assert.deepEqual(runDirs(), [], 'THEN the script removed its run dir at exit');
 
-  // GIVEN the shipped site (directory) block and a nested entry WHEN run under zsh -f THEN --entry splits into two words.
-  const dir = runBlock('dir', 'sub/page.html', dirInput);
-  assert.equal(dir.result.status, 0, 'THEN zsh site-dir block exits 0: ' + dir.result.stdout + dir.result.stderr);
-  const dirBytes = dir.curl.files[dir.run + '/site.zip'];
-  assert.equal(dir.result.stdout, manifest('site.zip', dirBytes) + 'OK https://fixture.brewpage.app/ | Files: 3\n',
-    'THEN zsh site-dir block prints the manifest with the requested entry and the URL line');
-  assert.equal(dir.result.stderr, '', 'THEN zsh site-dir block writes nothing to stderr');
-  assert.deepEqual(dir.curl.args, ['-s', '-X', 'POST', 'https://brewpage.app/api/sites?ns=public&ttl=15&entry=sub%2Fpage.html',
-    '-H', 'User-Agent: ClaudeCode/1.0', '-F', 'archive=@' + dir.run + '/site.zip'], 'THEN curl gets the encoded entry and the run-dir archive');
-  assert.equal(typeof dirBytes, 'number', 'THEN the packed archive exists when curl reads it');
-  assert.equal(existsSync(dir.run), false, 'THEN the site-dir run dir is removed at exit');
+  // GIVEN the same text with a raw quote (rule broken) WHEN zsh parses it THEN the command fails before curl (control).
+  const broken = zsh(fill(commands.text, { ...common, type: 'html', content: hostile }, value => value));
+  assert.notEqual(broken.result.status, 0, 'THEN an unescaped quote breaks the command');
+  assert.equal(broken.curl, null, 'THEN the broken command never reaches curl');
+  assert.equal(existsSync(join(root, 'injected')), false, 'THEN the break-out did not run the substitution either');
 
-  // GIVEN the shipped site (ZIP) block and a nested entry WHEN run under zsh -f THEN inspect honours the entry.
-  const zip = runBlock('zip', 'sub/page.html', zipInput);
-  assert.equal(zip.result.status, 0, 'THEN zsh site-zip block exits 0: ' + zip.result.stdout + zip.result.stderr);
+  // GIVEN the shipped probe command WHEN zsh runs it on the site dir THEN it reports type, absolute path and entry.
+  const probe = zsh(fill(commands.probe, { path: site }));
+  assert.deepEqual(probe.result.stdout.split('\n').filter(line => /^(TYPE|PATH|FILES|HTML|ENTRY):/.test(line)),
+    ['TYPE: site-dir', 'PATH: ' + site, 'FILES: 3', 'HTML: 2', 'ENTRY: index.html'], 'THEN probe classifies the directory');
+
+  // GIVEN the shipped path command for a directory and a nested entry WHEN run under zsh -f THEN the manifest honours it.
+  const dir = zsh(fill(commands.path, { ...common, type: 'site-dir', entry: 'sub/page.html', path: site }));
+  assert.equal(dir.result.status, 0, 'THEN zsh site-dir command exits 0: ' + dir.result.stdout + dir.result.stderr);
+  const dirZip = Object.keys(dir.curl.files)[0];
+  assert.equal(dir.result.stdout, manifest('site.zip', dir.curl.files[dirZip]) + 'OK https://fixture.brewpage.app/ | Files: 3\n',
+    'THEN zsh site-dir command prints the manifest with the requested entry and the URL line');
+  assert.deepEqual(normalize(dir.curl.args), ['-s', '-X', 'POST', 'https://brewpage.app/api/sites?ns=public&ttl=15&entry=sub%2Fpage.html',
+    '-H', 'User-Agent: ClaudeCode/1.0', '-F', 'archive=@' + tmp + '/brewpage.RUN/site.zip'], 'THEN curl gets the encoded entry and the run-dir archive');
+  assert.deepEqual(runDirs(), [], 'THEN the site-dir run dir is removed at exit');
+
+  // GIVEN the shipped path command for a ZIP and a nested entry WHEN run under zsh -f THEN inspect honours the entry.
+  const zip = zsh(fill(commands.path, { ...common, type: 'site-zip', entry: 'sub/page.html', path: fixtureZip }));
+  assert.equal(zip.result.status, 0, 'THEN zsh site-zip command exits 0: ' + zip.result.stdout + zip.result.stderr);
   assert.equal(zip.result.stdout, manifest('fixture.zip', fixtureBytes) + 'OK https://fixture.brewpage.app/ | Files: 3\n',
-    'THEN zsh site-zip block prints the manifest with the requested entry and the URL line');
-  assert.equal(zip.result.stderr, '', 'THEN zsh site-zip block writes nothing to stderr');
+    'THEN zsh site-zip command prints the manifest with the requested entry and the URL line');
   assert.deepEqual(zip.curl, {
     args: ['-s', '-X', 'POST', 'https://brewpage.app/api/sites?ns=public&ttl=15&entry=sub%2Fpage.html',
       '-H', 'User-Agent: ClaudeCode/1.0', '-F', 'archive=@' + fixtureZip],
     files: { [fixtureZip]: fixtureBytes }, payload: null,
   }, 'THEN curl uploads the user zip unchanged');
   assert.equal(existsSync(fixtureZip), true, 'THEN the user-supplied zip is preserved');
-  assert.equal(existsSync(zip.run), false, 'THEN the site-zip run dir is removed at exit');
-
-  // GIVEN POSIX_TRAPS dropped WHEN blocks run THEN the D1 trap defect reproduces (suite sensitivity control).
-  const noTrapHtml = runBlock('html', '', { name: 'brewpage-content.md', body: 'Fixture markdown\n' }, without('POSIX_TRAPS'));
-  assert.equal(noTrapHtml.result.status, 1, 'THEN without POSIX_TRAPS the HTML block fails');
-  assert.equal(noTrapHtml.result.stdout, '', 'THEN without POSIX_TRAPS the HTML block prints no OK line');
-  assert.match(noTrapHtml.result.stderr, new RegExp(': no such file or directory: ' + noTrapHtml.run.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '/payload\\.json\\n$'),
-    'THEN the run dir was deleted when bp_begin returned');
-  assert.equal(noTrapHtml.curl, null, 'THEN without POSIX_TRAPS curl is never reached by the HTML block');
-  const noTrapDir = runBlock('dir', '', dirInput, without('POSIX_TRAPS'));
-  assert.equal(noTrapDir.result.status, 1, 'THEN without POSIX_TRAPS the site-dir block fails');
-  assert.equal(noTrapDir.result.stdout, 'FAILED: target path missing\n', 'THEN without POSIX_TRAPS the target path file is already gone');
-  assert.equal(noTrapDir.curl, null, 'THEN without POSIX_TRAPS curl is never reached by the site-dir block');
-
-  // GIVEN SH_WORD_SPLIT dropped WHEN site blocks pass an entry THEN `--entry <name>` stays one word (D1 split defect).
-  for (const [kind, input] of [['dir', dirInput], ['zip', zipInput]]) {
-    const noSplit = runBlock(kind, 'sub/page.html', input, without('SH_WORD_SPLIT'));
-    assert.equal(noSplit.result.status, 1, 'THEN without SH_WORD_SPLIT the site-' + kind + ' block fails');
-    assert.equal(noSplit.result.stdout, 'FAILED: bad argument near "--entry sub/page.html"\nRESULT: fail\n'
-      + 'FAILED: archive not verified (publish.mjs exit 1) — nothing was uploaded\n', 'THEN publish.mjs rejects the unsplit entry word: ' + kind);
-    assert.equal(noSplit.curl, null, 'THEN without SH_WORD_SPLIT curl is never reached: ' + kind);
-    assert.equal(existsSync(noSplit.run), false, 'THEN the failed site-' + kind + ' run dir is still removed at exit');
-  }
-  console.log('PASS publish zsh: shipped html, site-dir and site-zip blocks under zsh -f; POSIX_TRAPS and SH_WORD_SPLIT controls fail as D1');
+  assert.deepEqual(runDirs(), [], 'THEN the site-zip run dir is removed at exit');
+  console.log('PASS publish zsh: shipped text, probe, site-dir and site-zip commands under zsh -f; the unescaped-quote control fails');
 } finally {
   rmSync(base, { recursive: true, force: true });
 }

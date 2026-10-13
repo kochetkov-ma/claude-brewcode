@@ -23,7 +23,7 @@ import { Card, CardGrid, Callout, Steps, UpdateNotice } from '../../../../compon
 | Arguments | `[prompt] [status\|install\|create\|update\|review\|rules]` — one free-form EN/RU prompt; the mode word may sit anywhere in it |
 | No-arg default | `status` when 3 or more `e2e-*` agents exist, `install` otherwise (empty prompt or no mode word) |
 | Rejected verbs | `uninstall`, `purge`, `upgrade`, `enable`, `disable` — exit 1, no fallback to `install` |
-| Mode detection | Prompt goes to `detect-mode.sh -` on stdin; an explicit mode word wins, else EN/RU keywords (`set up`, `add tests`, `sync tests`, `статус`, `создай`, `обнови`, `ревью`, `правила`) are scored |
+| Mode detection | Prompt goes to `detect-mode.sh -` on stdin; an explicit mode word wins, else keywords (`set up`, `add tests`, `sync tests`, `status`, `create`, `update`, `review`, `rules`) are scored; prompts work in English or Russian |
 | Model | opus |
 | Tools | Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion, Skill, WebSearch, WebFetch |
 | Project rules file | `.claude/e2e/e2e-rules.md` (= `config.rulesPath`) |

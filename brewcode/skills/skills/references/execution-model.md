@@ -56,7 +56,7 @@ House preference (not a platform limit): spawn from the main conversation.
 |---|---|---|
 | SK with FORK from **main conversation** | Use this | Session binding + hook context injection intact |
 | FORK SK, inline SK (no `context`) or `Agent` tool from a **SA** | Avoid | Nested spawn bypasses both |
-| `Skill` tool from **SA** | Avoid in BC | Upstream supports runtime skills; BC distributed SKs use `DMI: true` and cannot be model-invoked — use the twin agent. This is house policy, !=a platform ban |
+| `Skill` tool from **SA** | Avoid in BC | Upstream supports runtime skills; BC distributed SKs use `DMI: true` (except `brewdoc:publish`) and cannot be model-invoked — use the twin agent. This is house policy, !=a platform ban |
 
 ## Agent field
 
@@ -100,6 +100,12 @@ Rules: only prompting tools gain from a grant (`Bash`, `Write`/`Edit`, `Skill`, 
 scoped rules (table above; `Edit(/docs/**)` also covers `Write`). Bare `Bash`/`Write`/`Edit`
 pre-approves every call that turn, destructive ones included: only for a `disable-model-invocation: true`
 SK with open-ended shell/write paths (orchestrators, generators); a model-invocable SK stays scoped.
+Script rule spelling (probed CC 2.1.296, `-p`, default mode; etalon `brewdoc/skills/publish`):
+single-quote a list entry holding `${…}` (`'Bash(bash ${CLAUDE_SKILL_DIR}/scripts/run.sh *)'`: a bare
+`{` breaks YAML flow syntax and the entry is lost); the body runs that exact text: unquoted path, one
+command, no `;`/`&&`/`|`/`$(…)`, values as single-quoted args (multi-line fine), under 10,000 chars.
+A quoted path, a chain or a longer command is not matched. The model's own `Skill` call needs its own
+permission (`Skill(<plugin>:<name> *)`); `allowed-tools` applies only once the SK has loaded.
 Protected-path writes (`.claude/`, `.git/`) are never auto-approved outside `bypassPermissions`.
 Autonomous SK that must never stall on input -> `disallowed-tools: AskUserQuestion` (reapply next
 invocation). Pre-approve exact injected `` !`cmd` `` commands with `allowed-tools`; permission

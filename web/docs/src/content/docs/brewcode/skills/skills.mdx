@@ -33,7 +33,7 @@ from repository naming, prompt and validation requirements.
 - **Create from a prompt** — `/brewcode:skills create a semantic code search skill` researches and scaffolds a complete skill
 - **Batch improve a folder** — `/brewcode:skills improve ~/.claude/skills/` processes every SKILL.md in parallel
 - **Explicit listing** — `/brewcode:skills list` when you need a raw table, not a status summary
-- **Refresh stale skill knowledge** — `/brewcode:skills sync` (or `синк`) re-verifies claims in every SKILL.md against the real repo, deletes dead lines, never grows a file
+- **Refresh stale skill knowledge** — `/brewcode:skills sync` (or `memory sync`) re-verifies claims in every SKILL.md against the real repo, deletes dead lines, never grows a file
 
 ## Examples
 
@@ -62,13 +62,13 @@ from repository naming, prompt and validation requirements.
 
 | Mode | Trigger | Source / agent |
 |------|---------|----------------|
-| status (default) | any "show me" / "статус" / health intent | inline scan, no external script |
-| list | explicit "list" / "список" / "перечисли" only | `list-skills.sh` — self-locating, so plugin skills are found in both the dev checkout and the installed cache |
-| create | "create" / "создай" / "new" / "добавь" / "scaffold" | `brewcode:skill-creator` |
-| improve | "improve" / "улучши" / "refactor" / "fix", or a bare existing name or path | `brewcode:skill-creator` |
-| review | "review" / "ревью" / "validate" / "проверь корректность" | single reviewer: project's `.claude/agents/`, else `general-purpose` — two-phase (review, double-check) |
-| sync | `sync`, `синк`, `memory sync`, `актуализируй`, `обнови знания`, `приведи в соответствие с кодом` | `references/mode-sync.md` |
-| batch | plural form, "все" / "all", or multiple names or paths | parallel `brewcode:skill-creator` |
+| status (default) | any "show me" / "status" / health intent | inline scan, no external script |
+| list | explicit "list" only | `list-skills.sh` — self-locating, so plugin skills are found in both the dev checkout and the installed cache |
+| create | "create" / "new" / "add" / "scaffold" | `brewcode:skill-creator` |
+| improve | "improve" / "refactor" / "fix", or a bare existing name or path | `brewcode:skill-creator` |
+| review | "review" / "validate" / "check correctness" | single reviewer: project's `.claude/agents/`, else `general-purpose` — two-phase (review, double-check) |
+| sync | `sync`, `memory sync`, "update knowledge", "bring in line with the code" | `references/mode-sync.md` |
+| batch | plural form, "all", or multiple names or paths | parallel `brewcode:skill-creator` |
 
 ## Delegation
 
@@ -154,7 +154,7 @@ can supplement these checks. Report skipped or failed evaluations rather than in
 | `disable-model-invocation` | `user-invocable` | Behavior |
 |----------------------------|------------------|----------|
 | false | true | User command and model invocation |
-| true | true | User command only; repository policy for distributed skills |
+| true | true | User command only; repository policy for distributed skills (sole exception: `brewdoc:publish`) |
 | false | false | Model invocation only; hidden from the user command menu |
 | true | false | Inaccessible; avoid this combination |
 
@@ -167,7 +167,7 @@ instructions remain in context. Background execution can further narrow availabl
 <details>
 <summary>Sync mode</summary>
 
-Reachable via `sync` / `синк` / `memory sync` / `актуализируй` / `обнови знания` / `приведи в соответствие с кодом`. Owns `references/mode-sync.md` (steps S1-S6) — `/brewcode:agents` reads the same file, so the two rosters never drift apart.
+Reachable via `sync` / `memory sync` / "update knowledge" / "bring in line with the code" (Russian prompts work too). Owns `references/mode-sync.md` (steps S1-S6) — `/brewcode:agents` reads the same file, so the two rosters never drift apart.
 
 **Scope (S1):**
 

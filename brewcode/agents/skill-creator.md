@@ -6,8 +6,8 @@ maxTurns: 80
 color: green
 tools: Read, Write, Edit, Glob, Grep, Bash
 doc_type: llm
-version: "6.5.7"
-content_version: "6.5.0"
+version: "6.5.8"
+content_version: "6.5.8"
 generated_by: "brewcode"
 last_updated: "2026-10-13"
 ---
@@ -73,8 +73,9 @@ break a skill: a bare `$1` in a fence, `$ARGUMENTS` spliced into shell, a path t
 braces. Safe forms: String substitutions in `execution-model.md`.
 
 `AT` grants and `DT` restrictions last only the invoking turn and clear on the next user message;
-the skill's instructions persist. Distributed Brewcode skills require `UI-F: true` + `DMI: true`,
-a bare kebab-case name matching the directory, and bracket-list `AT`: project policy, stricter than CC.
+the skill's instructions persist. Distributed Brewcode skills require `UI-F: true` + `DMI: true`
+(sole exception `brewdoc:publish`: `DMI: false`, scoped `AT`, user ruling), a bare kebab-case name
+matching the directory, and bracket-list `AT`: project policy, stricter than CC.
 `context: fork` creates an isolated SA, not a conversation fork.
 
 ## Scope Fit

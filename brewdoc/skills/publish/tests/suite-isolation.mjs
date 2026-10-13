@@ -121,48 +121,137 @@ try {
   assert.equal(readFileSync(join(other, 'source.txt'), 'utf8'), 'other owner', 'THEN failure preserves unrelated run');
   assert.equal(run("bp_run_dir '" + basename(other) + "'; bp_cleanup", 'other-cleanup').status, 0, 'THEN other owner cleans its own run');
 
+  // GIVEN a password path that exists only relative to cwd WHEN bp_begin reads it THEN reject before copying any bytes.
+  writeFileSync(join(root, 'relative-password.txt'), 'fixture-relative\n');
+  const relativeRun = prepare();
+  writeFileSync(join(relativeRun, 'brewpage-password-source.txt'), 'relative-password.txt\n');
+  const relative = run(begin(relativeRun, 'file') + ' || { rc=$?; ls "$BP_RUN_DIR"; exit "$rc"; }\nbp_post https://example.invalid/upload', 'relative');
+  assert.deepEqual([relative.status, relative.stdout, existsSync(relativeRun), existsSync(join(base, 'args-relative'))],
+    [1, 'FAILED: password file must be an absolute path\nbrewpage-password-source.txt\n', false, false],
+    'THEN a cwd-relative password file fails with no transport copy, no upload, and its run is cleaned');
+
   const skill = readFileSync(join(here, '../SKILL.md'), 'utf8');
   assert.equal(skill.indexOf('before the first tool action') < skill.indexOf('### Step 1:'), true,
     'THEN PLAN instruction precedes all workflow actions');
   const blocks = [...skill.matchAll(/```bash\n([\s\S]*?)```/g)].map(match => match[1]);
   for (const block of blocks) assert.equal(spawnSync('bash', ['-n'], { input: block }).status, 0,
     'THEN every shipped Bash block parses');
-  // GIVEN actual shipped markdown caller WHEN consuming fixture inputs THEN helper completes without secret output.
-  const callerRun = prepare();
-  writeFileSync(join(callerRun, 'brewpage-content.md'), 'Fixture markdown\n');
-  const caller = blocks.find(block => block.includes('api/html?'))
-    .replaceAll('{ns}', 'my').replaceAll('{days}', '15')
-    .replaceAll('{run_id}', basename(callerRun)).replaceAll('{password_mode}', 'none').replaceAll('{delivery_mode}', '');
+  // Load-time substitution, as Claude Code does it, then the slots the model fills (single-quoted, '\'' escaped).
+  const quote = value => value.replaceAll("'", "'\\''");
+  const shipped = (marker, slots) => Object.entries(slots).reduce((code, [key, value]) => code.replaceAll('{' + key + '}', quote(value)),
+    blocks.find(block => block.includes(marker)).replaceAll('${CLAUDE_SKILL_DIR}', join(here, '..')));
+  const runNames = () => readdirSync(tmp).filter(name => name.startsWith('brewpage.'));
+  // GIVEN actual shipped text command WHEN run with hostile text THEN argv carries it verbatim and nothing executes.
+  const hostile = "Fixture it's $(touch injected) `id`; && | markdown";
+  const caller = shipped("--text '{content}'", { type: 'html', ns: 'my', days: '15', delivery_mode: '', password_file: '', content: hostile });
   const callerResult = run(caller, 'caller');
   assert.equal(callerResult.status, 0, 'THEN actual shipped caller succeeds with fake curl');
-  assert.deepEqual(JSON.parse(readFileSync(join(base, 'args-caller'), 'utf8')),
+  assert.deepEqual(JSON.parse(readFileSync(join(base, 'args-caller'), 'utf8')).map(arg => arg.replace(/brewpage\.[A-Za-z0-9]{6}/, 'brewpage.RUN')),
     ['-s', '-X', 'POST', 'https://brewpage.app/api/html?ns=my&ttl=15&format=markdown',
-      '-H', 'Content-Type: application/json', '-d', '@' + callerRun + '/payload.json'],
-    'THEN the my profile namespace reaches upload with the existing file-backed payload');
+      '-H', 'Content-Type: application/json', '-d', '@' + tmp + '/brewpage.RUN/payload.json'],
+    'THEN the my profile namespace reaches upload with the file-backed payload in a private run dir');
+  assert.deepEqual(JSON.parse(readFileSync(join(base, 'args-caller.payload'), 'utf8')), { content: hostile },
+    'THEN quote, substitution, backtick and operators reach the payload verbatim');
+  assert.equal(existsSync(join(root, 'injected')), false, 'THEN nothing in the text executes');
   assert.equal(callerResult.stdout, 'OK https://example.invalid/result\n', 'THEN caller exposes URL only');
   assert.equal(callerResult.stderr, '', 'THEN caller emits no response or owner token in errors');
-  assert.equal(existsSync(callerRun), false, 'THEN actual caller cleans its owned run');
+  assert.deepEqual(runNames(), [], 'THEN actual caller cleans its owned run');
   const history = readFileSync(join(root, '.claude/brewpage-history.md'), 'utf8');
   assert.equal(history.split('`fixture-owner`').length - 1, 1, 'THEN response owner token is consumed into history exactly once');
 
-  // GIVEN nested site entry with query metacharacters WHEN running shipped directory caller THEN encode it as one query value.
+  // GIVEN text split into stage chunks WHEN published by run id THEN chunks rejoin with one newline.
+  const first = run(shipped('stage --run', { run_id: '', chunk: 'part one' }), 'stage-1');
+  assert.equal(first.status, 0, 'THEN the first stage call allocates a run: ' + first.stdout);
+  const staged = first.stdout.split('\n')[0].replace('RUN: ', '');
+  const second = run(shipped('stage --run', { run_id: staged, chunk: "part two's" }), 'stage-2');
+  assert.equal(second.stdout, 'RUN: ' + staged + '\nBYTES: 19\n', 'THEN the second chunk appends to the same run');
+  const runPublish = shipped("--password-file '{password_file}' --run '{run_id}'", { type: 'html', delivery_mode: '', password_file: '', run_id: staged });
+  const badFlag = run(runPublish.replaceAll('{ns}', 'Bad NS').replaceAll('{days}', '15'), 'staged-bad');
+  assert.deepEqual([badFlag.status, badFlag.stdout, runNames()], [1, 'FAILED: namespace must be 1-32 chars of a-z0-9-\n', [staged]],
+    'THEN a bad flag fails before the staged run is touched, so the text survives a retry');
+  const stagedPublish = run(runPublish.replaceAll('{ns}', 'my').replaceAll('{days}', ''), 'staged');
+  assert.equal(stagedPublish.stdout, 'OK https://example.invalid/result\n', 'THEN the staged run publishes');
+  assert.equal(JSON.parse(readFileSync(join(base, 'args-staged'), 'utf8'))[3], 'https://brewpage.app/api/html?ns=my&ttl=15&format=markdown',
+    'THEN an empty ttl slot means the 15-day default');
+  assert.deepEqual(JSON.parse(readFileSync(join(base, 'args-staged.payload'), 'utf8')), { content: "part one\npart two's" },
+    'THEN the payload is both chunks joined by one newline');
+  assert.deepEqual(runNames(), [], 'THEN publishing removes the staged run');
+  const abandoned = run(shipped('stage --run', { run_id: '', chunk: 'drop me' }), 'stage-3').stdout.split('\n')[0].replace('RUN: ', '');
+  const cleaned = run(shipped('cleanup --run', { run_id: abandoned }), 'cleanup');
+  assert.deepEqual([cleaned.status, cleaned.stdout, runNames()], [0, 'CLEANED: ' + abandoned + '\n', []],
+    'THEN cleanup removes an abandoned staged run');
+
+  // GIVEN a password file WHEN the shipped text command names it THEN curl reads the header from a private file only.
+  const pwRun = run(shipped("--text '{content}'", { type: 'html', ns: 'my', days: '15', delivery_mode: '', password_file: passwordSource, content: 'x' }), 'pw-shipped');
+  assert.equal(pwRun.status, 0, 'THEN password publish succeeds: ' + pwRun.stdout);
+  assert.equal(readFileSync(join(base, 'headers-pw-shipped'), 'utf8'), 'X-Password: ' + password + '\n',
+    'THEN the password reaches curl only through the header file');
+  assert.equal(JSON.parse(readFileSync(join(base, 'args-pw-shipped'), 'utf8')).some(arg => arg.includes(password)), false,
+    'THEN no curl argv carries the password');
+
+  // GIVEN a staged run WHEN the shipped publish names a bad password file THEN fail before the run is touched.
+  const runPublishWith = (runId, passwordFile) => shipped("--password-file '{password_file}' --run '{run_id}'",
+    { type: 'html', ns: 'my', days: '15', delivery_mode: '', password_file: passwordFile, run_id: runId });
+  writeFileSync(join(base, 'short-password.txt'), 'abc\n');
+  const pwStaged = run(shipped('stage --run', { run_id: '', chunk: 'keep me' }), 'pw-stage').stdout.split('\n')[0].replace('RUN: ', '');
+  const badPasswords = [
+    ['relative-password.txt', 'FAILED: password file must be an absolute path\n'],
+    [join(base, 'missing-password.txt'), 'FAILED: password source must be a non-symlink regular file\n'],
+    [join(base, 'short-password.txt'), 'FAILED: password must have at least 4 characters and no control characters\n'],
+  ];
+  const runFiles = id => readdirSync(tmp, { recursive: true }).filter(name => name === id || name.startsWith(id + '/')).sort();
+  const pwOutcomes = badPasswords.map(([file], index) => {
+    const outcome = run(runPublishWith(pwStaged, file), 'pw-slot-' + index);
+    return [outcome.status, outcome.stdout, runFiles(pwStaged), existsSync(join(base, 'args-pw-slot-' + index))];
+  });
+  assert.deepEqual(pwOutcomes, badPasswords.map(([, message]) => [1, message, [pwStaged, pwStaged + '/brewpage-content.md'], false]),
+    'THEN each password slot error leaves the staged run untouched and never uploads');
+  const pwRetry = run(runPublishWith(pwStaged, passwordSource), 'pw-retry');
+  assert.deepEqual([pwRetry.stdout, readFileSync(join(base, 'headers-pw-retry'), 'utf8'),
+    JSON.parse(readFileSync(join(base, 'args-pw-retry.payload'), 'utf8')), runNames()],
+  ['OK https://example.invalid/result\n', 'X-Password: ' + password + '\n', { content: 'keep me' }, []],
+  'THEN the retry with an absolute password file publishes the surviving staged text and removes the run');
+
+  // GIVEN mktemp yields a non-private dir (setgid parent, default ACL) WHEN a fresh run is allocated THEN it is discarded.
+  const leakyBin = join(base, 'leaky-bin');
+  mkdirSync(leakyBin);
+  writeFileSync(join(leakyBin, 'mktemp'), '#!/bin/sh\nd="${2%XXXXXX}LEAKED"; mkdir "$d" && chmod 755 "$d" && printf \'%s\\n\' "$d"\n');
+  chmodSync(join(leakyBin, 'mktemp'), 0o755);
+  const leaky = { PATH: leakyBin + ':' + bin + ':' + process.env.PATH };
+  const unsafeDir = 'FAILED: publish run directory must be owned, private and non-symlink\n';
+  const leakStage = run(shipped('stage --run', { run_id: '', chunk: 'x' }), 'leak-stage', leaky);
+  assert.deepEqual([leakStage.status, leakStage.stdout, runNames()], [1, unsafeDir, []],
+    'THEN stage rejects its fresh run dir and removes it');
+  const leakPublish = run(shipped("--text '{content}'", { type: 'html', ns: 'my', days: '15', delivery_mode: '', password_file: '', content: 'x' }),
+    'leak-publish', leaky);
+  assert.deepEqual([leakPublish.status, leakPublish.stdout, runNames(), existsSync(join(base, 'args-leak-publish'))], [1, unsafeDir, [], false],
+    'THEN publish rejects its fresh run dir, removes it and never uploads');
+
+  // GIVEN an EXISTING staged run bp_run_dir rejects WHEN publish or stage names it THEN it is neither discarded nor written.
+  const kept = run(shipped('stage --run', { run_id: '', chunk: 'kept' }), 'kept-stage').stdout.split('\n')[0].replace('RUN: ', '');
+  chmodSync(join(tmp, kept), 0o755);
+  const keptPublish = run(runPublishWith(kept, ''), 'kept-publish');
+  const keptStage = run(shipped('stage --run', { run_id: kept, chunk: 'more' }), 'kept-stage-2');
+  assert.deepEqual([keptPublish.status, keptPublish.stdout, keptStage.status, keptStage.stdout,
+    runFiles(kept), existsSync(join(base, 'args-kept-publish'))],
+  [1, unsafeDir, 1, unsafeDir, [kept, kept + '/brewpage-content.md'], false], 'THEN the rejected existing run is neither discarded nor uploaded');
+  assert.equal(readFileSync(join(tmp, kept, 'brewpage-content.md'), 'utf8'), 'kept', 'THEN its staged text is byte-identical');
+  chmodSync(join(tmp, kept), 0o700);
+  assert.equal(run(shipped('cleanup --run', { run_id: kept }), 'kept-cleanup').status, 0, 'THEN the owner cleans the restored run');
+
+  // GIVEN nested site entry with query metacharacters WHEN running shipped path caller THEN encode it as one query value.
   const siteSource = join(base, 'site-source');
   const siteEntry = 'nested/hello & page.html';
   mkdirSync(join(siteSource, 'nested'), { recursive: true });
   writeFileSync(join(siteSource, siteEntry), '<h1>Fixture site</h1>');
-  const siteRun = prepare();
-  writeFileSync(join(siteRun, 'brewpage-target-path.txt'), siteSource + '\n');
-  const siteBlock = blocks.find(block => block.includes('publish.mjs" pack'));
-  assert.equal(typeof siteBlock, 'string', 'GIVEN shipped directory upload block is present');
-  const siteCode = siteBlock.replaceAll('{ns}', 'public').replaceAll('{days}', '15').replaceAll('{entry}', '')
-    .replaceAll('{run_id}', basename(siteRun)).replaceAll('{password_mode}', 'none').replaceAll('{delivery_mode}', '');
+  const siteCode = shipped("--path '{path}'", { type: 'site-dir', ns: 'public', days: '15', entry: '', delivery_mode: '', password_file: '', path: siteSource });
   const siteOutcome = run(siteCode, 'encoded-entry');
   assert.equal(siteOutcome.status, 0, 'THEN nested site archive verifies and reaches upload: ' + siteOutcome.stdout + siteOutcome.stderr);
   const siteArgs = JSON.parse(readFileSync(join(base, 'args-encoded-entry'), 'utf8'));
   assert.equal(siteArgs[3], 'https://brewpage.app/api/sites?ns=public&ttl=15&entry=' + encodeURIComponent(siteEntry),
     'THEN spaces, slash and ampersand are encoded without additional query parameters');
   assert.equal(readFileSync(join(siteSource, siteEntry), 'utf8'), '<h1>Fixture site</h1>', 'THEN authored site source stays unchanged');
-  assert.equal(existsSync(siteRun), false, 'THEN directory caller cleans its archive and transport inputs');
+  assert.deepEqual(runNames(), [], 'THEN directory caller cleans its archive and transport inputs');
 
   // GIVEN shipped callers and OLD/NEW winners WHEN publishing THEN exact server identity wins.
   const variants = [
@@ -182,11 +271,15 @@ try {
     const shippedBlocks = [...source.matchAll(/```bash\n([\s\S]*?)```/g)].map(match => match[1]);
     for (const block of shippedBlocks) assert.equal(spawnSync('bash', ['-n'], { input: block }).status, 0,
       'THEN every variant Bash block parses');
-    const uploadBlocks = shippedBlocks.filter(block => block.includes('RESPONSE=$('));
-    assert.equal(uploadBlocks.length, variant.name === 'openclaw' ? 4 : 5, 'THEN existing upload formats remain unchanged');
-    assert.equal(uploadBlocks.every(block => block.includes(variant.name === 'brewdoc' ? "'{delivery_mode}'" : '"${DELIVERY_H[@]}"')), true,
+    const brewdoc = variant.name === 'brewdoc';
+    const uploadBlocks = shippedBlocks.filter(block => block.includes(brewdoc ? ' publish ' : 'RESPONSE=$('));
+    assert.equal(uploadBlocks.length, { brewdoc: 3, standalone: 5, openclaw: 4 }[variant.name], 'THEN existing upload formats remain unchanged');
+    assert.equal(uploadBlocks.every(block => block.includes(brewdoc ? "--delivery-mode '{delivery_mode}'" : '"${DELIVERY_H[@]}"')), true,
       'THEN every existing upload block carries the optional header');
-    const html = shippedBlocks.find(block => block.includes('api/html?'));
+    const html = brewdoc
+      ? uploadBlocks.find(block => block.includes("--text '{content}'")).replaceAll('${CLAUDE_SKILL_DIR}', join(here, '..'))
+        .replaceAll('{type}', 'html').replaceAll('{password_file}', '')
+      : shippedBlocks.find(block => block.includes('api/html?'));
     for (const mode of ['', 'path', 'subdomain']) for (const [index, response] of responses.entries()) {
       const owned = prepare();
       writeFileSync(join(owned, 'brewpage-content.md'), 'Fixture markdown\n');
@@ -203,7 +296,7 @@ try {
       assert.deepEqual(args.filter(value => value.startsWith('X-Delivery-Mode:')),
         mode ? ['X-Delivery-Mode: ' + mode] : [], 'THEN only explicit requests carry a mode header even when winner differs');
       assert.deepEqual(JSON.parse(readFileSync(join(base, 'args-' + suffix + '.payload'), 'utf8')),
-        { content: variant.name === 'brewdoc' ? 'Fixture markdown\n' : 'Fixture markdown' },
+        { content: 'Fixture markdown' },
         'THEN routing metadata does not enter authored HTML payload');
       const privateHistory = readFileSync(join(root, variant.history), 'utf8');
       assert.equal(privateHistory.includes('[' + response.link + '](' + response.link + ')'), true,

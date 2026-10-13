@@ -2,13 +2,17 @@
 
 Publish text, markdown, JSON, files, or multi-file sites to [brewpage.app](https://brewpage.app) and get a shareable URL instantly. No sign-up required. Content is deleted when its TTL expires (default 15 days).
 
+**Invocation:** type `/brewdoc:publish ...`, or ask Claude mid-task ("publish this page", "share a link to this report"). The skill is model-invocable: Claude can start it on its own when you ask to publish or share a link, and you still answer the namespace and password questions (headless runs use the defaults). It is the only one of the suite's 27 distributed skills with this setting; the others run only when you type their command.
+
+**Permissions:** no Bash or Write prompts, because every shell step is one `scripts/brewpage-run.sh` command covered by a single `allowed-tools` rule. When Claude fires the skill, Claude Code asks once for the `Skill` call in default mode; headless and `dontAsk` runs need the allow rule `Skill(brewdoc:publish *)`.
+
 ## Quick Start
 
 ```
 /brewdoc:publish "Your content here"
 ```
 
-The skill asks for a namespace and optional local password-file path, then returns the server's shareable URL. A non-public namespace is unlisted; anyone with its link can open it unless a password is set.
+The skill asks for a namespace and optional local password-file path (headless: private default namespace, no password), then returns the server's shareable URL. A non-public namespace is unlisted; anyone with its link can open it unless a password is set.
 
 ## Installation
 
@@ -95,7 +99,7 @@ Owner token saved to <project-root>/.claude/brewpage-history.md
 - **URL** -- share the returned `link` exactly, including the trailing `/` on a new subdomain root. Mixed-case resource IDs and lowercase host UIDs are different identities; never build a hostname from an ID.
 - **Owner access** -- the apex `ownerLink` and identity metadata are saved with the owner token in project-root history. Use them for API operations instead of parsing a subdomain URL. Older entries keep their namespace/ID identifiers.
 - **Private history** -- mode `600`, git-ignored, and anchored to the project root even from a nested working directory. Each upload uses its own private run directory, so concurrent runs never share content or password inputs.
-- **Owner token** -- never printed to the conversation. Upload, response parsing and history saving happen in one Bash block that prints only `OK {url}` (plus the file count for sites); failure output excludes the response body.
+- **Owner token** -- never printed to the conversation. Upload, response parsing and history saving happen inside `scripts/brewpage-run.sh`, which prints only `OK {url}` (plus the file count for sites); failure output excludes the response body. The script removes its run directory on every exit.
 
 ### Deleting a Published Page
 
@@ -117,7 +121,7 @@ Find the owner token and owner API URL (`ownerLink`) in project-root `.claude/br
 ## Documentation
 
 - [Publish documentation](https://doc-claude.brewcode.app/brewdoc/skills/publish/) — workflow, routing and API details.
-- [Skill source](SKILL.md) — upload blocks and input handling.
+- [Skill source](SKILL.md) — `brewpage-run.sh` commands (probe, stage, publish, cleanup) and input handling.
 - [Brewdoc](../../README.md) — installation and other documentation tools.
 - [MD to PDF](../md-to-pdf/README.md) — create a PDF before publishing it.
 - Tests: `bash brewdoc/skills/publish/tests/run.sh` (no network, no upload).

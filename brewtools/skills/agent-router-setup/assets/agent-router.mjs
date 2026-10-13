@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.5.7 content_version=6.5.6 generated_by=brewtools:agent-router-setup
+// brewcode-meta: version=6.5.8 content_version=6.5.6 generated_by=brewtools:agent-router-setup
 
 // agent-router PreToolUse `Agent`, tier 1 (deterministic): deny a main-loop generic spawn when a project/plugin expert owns
 // the task, else nudge; each (session, root, task) denied at most once. Fail-open: exit 0, no stdout.

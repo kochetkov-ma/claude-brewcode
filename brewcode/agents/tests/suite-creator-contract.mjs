@@ -500,6 +500,9 @@ function runHookTemplate(source, stdin) {
   check('skill.invocation.distributedPolicy',
     /Distributed Brewcode skills require `UI-F: true` \+ `DMI: true`/.test(text['skill-creator.md']), true,
     'skill creator must retain the distributed explicit-invocation policy');
+  check('skill.invocation.publishException',
+    /sole exception `brewdoc:publish`: `DMI: false`, scoped `AT`/.test(text['skill-creator.md']), true,
+    'GIVEN the user ruling WHEN skill creator states the policy THEN brewdoc:publish is its only model-invocable exception');
   check('skill.context.notConversationFork',
     /`context: fork` creates an isolated SA, not a conversation fork/.test(text['skill-creator.md']), true,
     'skill context forks must not promise conversation history');

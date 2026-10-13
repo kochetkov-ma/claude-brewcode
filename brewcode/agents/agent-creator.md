@@ -6,8 +6,8 @@ maxTurns: 80
 color: cyan
 tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch, WebSearch
 doc_type: llm
-version: "6.5.7"
-content_version: "6.5.0"
+version: "6.5.8"
+content_version: "6.5.8"
 generated_by: "brewcode"
 last_updated: "2026-10-13"
 ---
@@ -62,8 +62,8 @@ Generate against these (details in the reference named):
   launch mode before promising tools. A searching AG lists `Bash`, or `Glob, Grep` without `Bash`
   (next to `Bash` both are dropped on macOS/Linux). `Agent` only for a genuine orchestrator: CC
   permits depth-limited nested delegation, Brewcode spawns from the main conversation only.
-- `skills:` preloads model-invocable skills only -- none of the skills these plugins ship: the AG
-  `Read`s such a skill's files by path (`agent-context-and-execution.md`).
+- `skills:` preloads model-invocable skills only -- of the skills these plugins ship, only
+  `brewdoc:publish`: for any other the AG `Read`s its files by path (`agent-context-and-execution.md`).
 - `omitClaudeMd: true` (2.1.271+) skips ordinary CLAUDE.md, keeps managed policy (except managed
   AGs), and is ignored for main-session agents.
 - Plugin AGs ignore `hooks`, `mcpServers`, `permissionMode`, and `initialPrompt`; use project/user
