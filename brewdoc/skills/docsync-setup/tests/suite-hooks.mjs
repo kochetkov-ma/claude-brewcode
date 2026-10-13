@@ -730,6 +730,27 @@ function legacyInstall(name, extra = {}) {
   check('a later upgrade does not re-add a removed exclude', readJsonFile(join(root, '.claude/docsync/config.json')).exclude, ['vendor/**']);
 }
 
+{
+  // GIVEN the project-dusk fork: track and gate wrapped in the project launcher, no `if`, no timeout, no watch.
+  const W = n => ({ type: 'command', command: `"$CLAUDE_PROJECT_DIR/.claude/scripts/toolchain_preflight.py" exec node -- "$CLAUDE_PROJECT_DIR/.claude/hooks/docsync-${n}.mjs"` });
+  const forked = { hooks: {
+    PostToolUse: [{ matcher: 'Write|Edit|MultiEdit', hooks: [W('track')] }],
+    Stop: [{ hooks: [W('gate')] }]
+  } };
+  const root = makeProject('upgrade-wrapped', { enabled: true, threshold_days: 30, exclude: ['vendor/**'] }, {});
+  mkdirSync(join(root, '.claude/hooks'));
+  for (const n of ['track', 'gate']) writeFileSync(join(root, `.claude/hooks/docsync-${n}.mjs`), 'fork bytes\n');
+  writeFileSync(join(root, '.claude/settings.json'), JSON.stringify(forked, null, 2) + '\n');
+  // WHEN upgrade runs.
+  const r = install(root, { mode: 'upgrade' });
+  // THEN the wrapped handlers stay byte-equal with no unwrapped twin, only the absent watch is added, no legacy seeding.
+  check('wrapped upgrade succeeds', r.status, 0);
+  check('wrapped track and gate are kept, never duplicated; only the missing watch joins', readJsonFile(join(root, '.claude/settings.json')), {
+    hooks: { PostToolUse: [forked.hooks.PostToolUse[0], REGISTRATION.hooks.PostToolUse[1]], Stop: forked.hooks.Stop }
+  });
+  check('a wrapped handler without timeout is not a legacy registration', readJsonFile(join(root, '.claude/docsync/config.json')).exclude, ['vendor/**']);
+}
+
 // ── uninstall / purge leave nothing of docsync behind ────────────────────────
 console.log('uninstall / purge — lifecycle');
 {

@@ -309,7 +309,7 @@ reports success, and `status` prints `stale` again forever.
 |-------|-----------------------------------|
 | `semble-setup` | re-runs `semble-guidance.sh install --part all`, the ONLY writer of the rule's stamp |
 | `superreview-setup` | `_restamp_meta` over every live artifact in an UNCONDITIONAL loop, deliberately not gated on `IDENTICAL`/`DIFFERS`; `intent-guard.md` via `write_intent_guard` |
-| `task-board-setup` | step `U5b` of `brewtools/skills/task-board-setup/references/10-upgrade.md`, always runs, never gated: the quartet on every stamped control artifact |
+| `task-board-setup` | step `U5b` of `brewtools/skills/task-board-setup/references/10-upgrade.md`, never asked, withheld only while a content row is pending (`partial`): the quartet on every stamped control artifact |
 | `manager-setup` | `writeState` stamps `version`, `content_version`, `generated_by`, `last_updated` on every write, an empty partial included, while all other keys merge through |
 | `memory-sync-setup` | `generate.sh restamp`, the last step of every `upgrade`; `refresh_refs` re-copies references whose only delta is the release stamp |
 

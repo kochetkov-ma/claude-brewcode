@@ -68,6 +68,9 @@ if (retired.length) {
 } else if (rule === 'user_modified') {
   emit('current', 'edited-current', `semble-first.md hand-edited at the current content_version ${cv}: supported, its byte pair DIFFERS by design`,
     `${SETUP} status`);
+} else if (num(g.customCount) > 0) {
+  emit('current', 'custom', `rule, hooks and permissions wired; ${num(g.customCount)} hook ${num(g.customCount) === 1 ? 'row runs' : 'rows run'} through the project's own launcher (custom, report-only)`,
+    `${SETUP} status`);
 } else {
   emit('current', 'ok', 'rule, hooks and permissions wired', `${SETUP} status`);
 }

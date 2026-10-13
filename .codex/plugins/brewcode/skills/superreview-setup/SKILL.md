@@ -288,10 +288,19 @@ The emitted skill **self-modifies**: its Phase 4b SELF-SYNC corrects its own rou
 baseline and shared surfaces in place on every `EXTENDED` run. A blind re-emit erases all of it, so `emit`
 REFUSES on a live installation. When it does:
 
-**EXECUTE** using shell:
+> **Scope (normative):** `upgrade` edits only this setup's owned paths: `.codex/skills/superreview/`, `.codex/agents/intent-guard.toml`, `.codex/reports/`. Any other change (application source, tests, docs, CI, mirrors, other setups' files) is a defect to report, never to apply: name the path and the finding, edit nothing there, and pass no such edit to a subagent.
+
+**EXECUTE** using shell (snapshot first; no git -> `SCOPE n/a`, the rule is checked by hand):
 ```bash
+bash "<skill-directory>/../teams-setup/scripts/scope-guard.sh" snapshot "${CODEX_PROJECT_DIR}" superreview-upgrade && echo "OK" || echo "FAILED"
 bash "<skill-directory>/scripts/generate.sh" upgrade && echo "✅ upgrade" || echo "❌ upgrade FAILED"
 ```
+
+After Phase 4 `validate`, the run's last gate. **EXECUTE** using shell:
+```bash
+bash "<skill-directory>/../teams-setup/scripts/scope-guard.sh" check "${CODEX_PROJECT_DIR}" superreview-upgrade .codex/skills/superreview/ .codex/agents/intent-guard.toml .codex/reports/ && echo "✅ scope" || echo "❌ FAILED scope"
+```
+> **STOP if ❌**: every `OUTSIDE <path>` line is a defect of this run, reported by path, never kept or committed.
 
 It rewrites no live file's content; its one write into a live file is the metadata restamp below. It stages a
 fresh emit at `.codex/skills/superreview/.upgrade-staging/` (raw new templates under

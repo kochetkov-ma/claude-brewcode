@@ -10,7 +10,7 @@ it prescribes a mode. `$BC` / `$BT` / `$BD` = the plugin roots from Phase 0.
 | 1 teams | the three header rows of `team.md` (version, content version, last update); re-copies `trace-ops.sh` | per-agent `Version` cells of agents the run did not touch |
 | 2 semble | re-runs `semble-guidance.sh install --part all`: the rule's stamp, the three live hooks (no user-modified guard), the settings entries (absolute <= 6.5.0 hook args rewritten in place to the portable form); deletes retired hooks, their markers and registrations | a prose hand-edit of `semble-first.md` |
 | 3 superreview | restamps `SKILL.md`, `references/{agent-prompt,report-template,scope}.md` and the per-stack ref, printing `RESTAMP:` per file even when the delta report says `IDENTICAL` | `.template-baseline/`: `upgrade` only stages the new templates and prints the promote command (`rm -rf <baseline> && mv <staging>/.template <baseline> && rm -rf <staging>`) |
-| 4 task-board | step `U5b` restamps every emitted carrier, also when every content row is `SKIP` | - |
+| 4 task-board | step `U5b` restamps every emitted carrier, also when every content row is `SKIP`; withheld (`partial`, stamps stay behind) while any content row is declined or unasked | - |
 | 6 agent-deadline | replays the install at the same budget (`defaultMinutes` / `byAgentType` / `hardStopRatio` read back from the config): both hooks, registrations, JSON stamps | the `enabled` value: a disabled setup stays disabled |
 | 7 agent-router | replays the install at the recorded `level`: fresh `agent-router.mjs`, registrations, restamped JSON, no question | behaviour values in the config |
 | 8 manager | `writeState('project', {}, cwd)` restamps `state.json`; guard and helper are overwritten (`install` does the same) | `hard`, `level`, `mode` and unknown keys |
@@ -79,6 +79,7 @@ Fill `<what drifted>` with the drifted files; `enable` stays the user's optional
 ## Row 4 task-board
 
 - Twelve stamped carriers with the spec layer on (the anchor + eleven secondaries), eleven with it off. `TASK_TEMPLATE.md` is deliberately unstamped, because its frontmatter is copied into every task card.
+- A control file without frontmatter (a pre-generator `board.md`, `TRACKER.md`, `INDEX.md`, `backlog/README.md`) is stamped by `upgrade` (`10-upgrade.md` U5b) with one `<!-- brewcode-meta: version=... content_version=... generated_by=brewtools:task-board-setup -->` line, read here through the marker carrier. `LEGACY-NONE` on such a file means no `upgrade` ran since 6.5.6, so one `upgrade` clears it; `LEGACY-NONE` again right after an upgrade is a defect to name, never a second `upgrade`.
 - Absent `task-spec` under `TASK_SPEC_MODE` `on` or `unknown` keeps its missing-artifact signal; `upgrade` retrofits the spec + design layer and keeps every task id.
 
 ## Rows 6 and 11 agent-deadline, agent-return
@@ -120,9 +121,11 @@ Fill `<what drifted>` with the drifted files; `enable` stays the user's optional
 
 - `config.json` without `content_version` falls back to `"version"`; without both it is `stale (legacy, unstamped)`, never `missing`.
 - The `// brewcode-meta:` line of `.claude/hooks/docsync-track.mjs` only corroborates: it catches a hook set never re-copied.
+- A user fork (project-dusk shape): track and gate registered through the project's launcher (`REG ... wrapped=toolchain_preflight.py`), one `Write|Edit|MultiEdit` track handler without `if=`, no watch hook, edited hook bytes. Rule 3b: `current (custom)` with a CURRENT config stamp, never `partial` or `stale`; *Found* names the launcher, the absent watch and each `DIFFERS` hook; Command `/brewdoc:docsync-setup status`. `upgrade` keeps the wrapped handlers but re-copies track/gate over the fork and adds an unwrapped watch: the user's call only.
 
 ## Row 12 convention
 
 - Every carrier must be owned by `brewcode:convention-setup`. Documents stamped `brewcode:convention` are pre-rename evidence: prescribe `upgrade`, never delete them.
-- Documents present with the loading rule missing = `partial`: prescribe `install`.
+- Generated documents (a `generated_by: "brewcode:convention(-setup)"` stamp) present with the loading rule missing = `partial`: prescribe `install`.
+- Only hand-written documents (Phase 1 `CONV ... rule=absent owned=0`, any names, any count) = rule 3c `missing (hand-written docs present)`: report-only, never `stale`/`partial`, never `upgrade`. Count every `.claude/convention/*.md` from the `CONV` line, not the three roster names (a `design-system.md` beside them counts).
 - Accepted rules and manual CLAUDE.md references are user-owned and stay active while the loading rule is parked.

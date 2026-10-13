@@ -139,7 +139,7 @@ echo "project_root=$ROOT root_resolved=$ROOT_OK"
 D="$ROOT/.claude"
 H=no; [ -f "$D/hooks/agent-router.mjs" ] && H=yes
 REFS=$(node "$A/agent-router.mjs" --probe "$D/settings.json") || { echo "❌ FAILED — settings probe did not run"; exit 1; }
-T1=${REFS%%|*}; REST=${REFS#*|}; LEGACY_T1=${REST%%|*}; REST=${REST#*|}; T2=${REST%%|*}; REST=${REST#*|}; HB=${REST%%|*}; VALID=${REFS##*|}
+T1=${REFS%%|*}; REST=${REFS#*|}; LEGACY_T1=${REST%%|*}; REST=${REST#*|}; T2=${REST%%|*}; REST=${REST#*|}; HB=${REST%%|*}; REST=${REST#*|}; VALID=${REST%%|*}; WR=${REFS##*|}
 CFG=none; [ -s "$D/brewtools/agent-router.json" ] && CFG=$(tr -d '\n ' < "$D/brewtools/agent-router.json"); CFG=${CFG:-none}
 EN=n/a; case "$CFG" in *'"enabled":true'*) EN=true;; *'"enabled":false'*) EN=false;; esac
 LV=n/a; case "$CFG" in *'"level":"strict"'*) LV=strict;; *'"level":"fast"'*) LV=fast;; esac
@@ -155,7 +155,7 @@ STALE=n/a
 if [ "$HCV" != n/a ] && [ "$TCV" != n/a ]; then [ "$HCV" = "$TCV" ] && STALE=no || STALE=yes; fi
 if [ "$STALE" != yes ] && [ "$GCV" != n/a ] && [ "$KCV" != n/a ] && [ "$GCV" != "$KCV" ]; then STALE=yes; fi
 R=$(node "$A/agent-router.mjs" --roster "$ROOT" 2>/dev/null) || R=n/a
-echo "project: hook_file=$H tier1_refs=$T1 legacy_refs=$LEGACY_T1 tier2_refs=$T2 settings_valid=$VALID heartbeat_refs=$HB enabled=$EN level_recorded=$LV roster=$R"
+echo "project: hook_file=$H tier1_refs=$T1 legacy_refs=$LEGACY_T1 tier2_refs=$T2 settings_valid=$VALID heartbeat_refs=$HB wrapped_refs=$WR enabled=$EN level_recorded=$LV roster=$R"
 echo "content_version: hook=$HCV template=$TCV config=$GCV contract=$KCV runbook=$RCV stale=$STALE"
 echo "version: config=$CV plugin=$PV"
 echo "config=$CFG"
@@ -165,7 +165,7 @@ echo "✅ status"
 
 > **STOP if ❌** — plugin cache incomplete; reinstall/update brewtools first.
 
-`*_refs` and `settings_valid` come from the plugin copy's `agent-router.mjs --probe <settings.json>` (`tier1|legacy|tier2|heartbeat|valid`), the installer's own identity check. Do not paraphrase a field into something stronger:
+`*_refs` and `settings_valid` come from the plugin copy's `agent-router.mjs --probe <settings.json>` (`tier1|legacy|tier2|heartbeat|valid|wrapped`), the installer's own identity check. Do not paraphrase a field into something stronger:
 
 | Field | Value |
 |-------|-------|
@@ -176,6 +176,7 @@ echo "✅ status"
 | `heartbeat_refs` | handlers exactly matching the heartbeat entry; must equal `tier2_refs` |
 | `legacy_refs` | owned handlers off their exact shape: absolute path, wrong event/matcher/type/command/timeout, extra args/keys, stale or empty judge prompt, wrong status message, any explicit tier-2 `model` (installs up to 6.4.0 pinned one). Nonzero -> `install`/`upgrade` migrates |
 | `settings_valid` | `yes` only when settings are absent/empty or parse as a JSON object |
+| `wrapped_refs` | handlers naming `agent-router.mjs` (in `command` or `args`) launched by something other than `node`: the project's own launcher, e.g. `"$CLAUDE_PROJECT_DIR/.claude/scripts/preflight.py" exec node -- ".../agent-router.mjs"`. Custom, user-owned, report-only: never `legacy`, never rewritten, and `install`/`upgrade` then add no command handler of their own (no unwrapped duplicate) |
 | `judge_expected` / `judge_answered` / `judge_overdue` | printed when `tier2_refs` is not `0`: `Agent` calls seen at `level strict` / verdicts returned / verdicts expected over 90 s ago that never came (silent allows). `judge_overdue>0`, or `judge_answered=0` with `judge_expected>0` = registered but not answering. Counters cover ~24 h and include every `type:"agent"` hook verdict in the project |
 | `enabled` | from the config; `n/a` = no config or no such key |
 | `level_recorded` | the config's `level`: an install-time record, not proof of wiring; `tier2_refs` is the authority |
@@ -185,8 +186,10 @@ echo "✅ status"
 
 Print the status in this table; when `tier2_refs` is not `0`, add one sentence giving the three judge counters and what they mean:
 
-| Hook file | portable tier1 | legacy refs | tier2 wired | heartbeat | settings valid | enabled | level (recorded) | hook cv | template cv | stale | roster |
-|-----------|----------------|-------------|-------------|-----------|----------------|---------|------------------|---------|-------------|-------|--------|
+| Hook file | portable tier1 | legacy refs | tier2 wired | heartbeat | wrapped | settings valid | enabled | level (recorded) | hook cv | template cv | stale | roster |
+|-----------|----------------|-------------|-------------|-----------|---------|----------------|---------|------------------|---------|-------------|-------|--------|
+
+Custom = `hook_file=yes tier1_refs=0 legacy_refs=0 wrapped_refs>=1 settings_valid=yes`: the project wraps the hook in its own launcher. Say "registered through a custom launcher (report-only)", never offer `install`/`upgrade` for the registration: the launcher cannot be verified from here, and a reinstall adds no unwrapped copy beside it anyway.
 
 Effective = `hook_file=yes tier1_refs=1 legacy_refs=0 settings_valid=yes`, tier 2 either off (`tier2_refs=0 heartbeat_refs=0`) or complete (`tier2_refs=1 heartbeat_refs=1`), and `enabled` anything but `false`: a missing config leaves tier 1 on with the built-in defaults, so `enabled=n/a` is effective. Not effective: a count above `1`, any `legacy_refs`, invalid settings, or a judge without its heartbeat (its silent failures cannot be seen). `stale=yes` is effective but runs old logic: say "installed, stale — run `upgrade`".
 

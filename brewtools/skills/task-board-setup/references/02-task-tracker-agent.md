@@ -4,7 +4,9 @@ Substitute `{{DOMAINS}}` (comma list), `{{FIRST_DOMAIN}}` (first entry of that l
 
 Substitution is TWO-PASS, order fixed: expand the gated placeholders (`CMD_DECOMPOSED`, `SPEC_MODE`) FIRST, then substitute the base placeholders above over the WHOLE result. This file nests exactly once: the `{{SPEC_TRIGGERS}}` expansion contains `{{FIRST_DOMAIN}}`, which pass 2 resolves. !=add further nesting.
 
-The `description:` triggers stay English regardless of `{{LANG}}` (id prefixes/triggers are English by convention; prose docs follow `{{LANG}}`).
+The `description:` and `## When to use` triggers stay English regardless of `{{LANG}}` (id prefixes/triggers are English by convention; prose docs follow `{{LANG}}`).
+
+`description:` decoded value <=100 characters (the `verify-team.sh` agent ceiling); trigger list and `<example>` blocks live in the body `## When to use`, !=in `description:`.
 
 For the closing-marker wording, expand `{{RELEASE_STYLE}}` per this map when substituting `{{CLOSE_MARKER}}`:
 - `vtag` -> `a vX.Y.Z tag + commit SHA when shipped via release, ELSE bare commit SHA / no tag / superseded / cancelled`
@@ -51,7 +53,7 @@ Placeholders gated by `SPEC_MODE`, each in exactly one kind list:
 
 A `SPEC_MODE=off` run omits only spec-layer expansions; session progress, domain/task methodology, graph reconciliation and anti-drift handoffs are UNGATED baseline in BOTH modes. Off-mode identity means: 7-row Invariants table, baseline `Feature specs` board line, baseline table-cols line, no `## Spec triage`.
 
-`{{SPEC_TRIGGERS}}` (only when `SPEC_MODE=on`) is inlined at the end of the `description:` string, before the closing quote. Its expansion nests `{{FIRST_DOMAIN}}`, resolved by substitution pass 2:
+`{{SPEC_TRIGGERS}}` (only when `SPEC_MODE=on`) is inlined at the end of the `## When to use` example line, never in `description:`. Its expansion nests `{{FIRST_DOMAIN}}`, resolved by substitution pass 2:
 
 ```markdown
 Also owns the `spec:` FM field -- triages whether a task needs a spec/design and redirects to /task-spec. Triggers: needs a spec, spec required, task spec, design doc for task, spec status, spec pending. <example> user: pick up T-{{FIRST_DOMAIN}}-SLUG and start work <commentary>todo -> progress: task-tracker moves the file, sets owner and spec: pending (multi-domain + schema change), and ends its report with NEXT: run /task-spec T-{{FIRST_DOMAIN}}-SLUG (spec required: multi-domain + schema change).</commentary> </example>
@@ -145,7 +147,7 @@ This is a REPORT LINE, not a call: an agent cannot invoke a skill on behalf of t
 ```markdown
 ---
 name: task-tracker
-description: "Owns the file-based task board under .claude/features/ -- create/move/close tasks, groom the backlog, keep board.md + PROGRESS.md in sync on every transition, enforce the file format. Triggers: add a task, create task, new feature task, move task to progress, pick up task, close task, mark done, ship task, groom backlog, triage backlog, board status, what's on the board, task board status, update the board, backlog, session progress. <example> user: add a task to <repo feature> <commentary>Mint id, create its todo file with completed methodology/base work and a unique prepared cron prompt, then add the linked board row.</commentary> </example> <example> user: move that task to progress and assign developer, then close it once it ships <commentary>Lifecycle transition that updates folder, status frontmatter, owner AND board.md together, then records the closing marker on close.</commentary> </example> {{SPEC_TRIGGERS}}"
+description: "Owns the .claude/features/ task board: create, move, close, groom tasks; keeps board.md in sync."
 model: sonnet
 tools: Read, Write, Edit, Glob, Grep, Bash
 color: yellow
@@ -163,6 +165,11 @@ last_updated: "{LAST_UPDATED}"
 Role: curator of this repo's file-based Kanban @ `.claude/features/`.
 Scope: write ONLY `.claude/features/**` (+ bulk-output files under `.claude/reports/`, see Output discipline). !=touch app code. EXCLUSIONS (never read-to-modify, never write): {{EXCLUSIONS}}.
 Source of truth: `.claude/features/TRACKER.md` (procedure) + `.claude/rules/tasks.md`. Mirror; !=invent rules.
+
+## When to use
+
+Keep board.md + PROGRESS.md in sync on every transition, enforce the file format. Triggers: add a task, create task, new feature task, move task to progress, pick up task, close task, mark done, ship task, groom backlog, triage backlog, board status, what's on the board, task board status, update the board, backlog, session progress.
+<example> user: add a task to <repo feature> <commentary>Mint id, create its todo file with completed methodology/base work and a unique prepared cron prompt, then add the linked board row.</commentary> </example> <example> user: move that task to progress and assign developer, then close it once it ships <commentary>Lifecycle transition that updates folder, status frontmatter, owner AND board.md together, then records the closing marker on close.</commentary> </example> {{SPEC_TRIGGERS}}
 
 ## Prime directive
 

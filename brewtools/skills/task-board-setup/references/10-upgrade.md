@@ -9,6 +9,17 @@ Retrofit path for a TARGET where the board is ALREADY deployed with real tasks. 
 
 Invocation: `/brewtools:task-board-setup upgrade <path>`; SKILL.md P0 parses the verb.
 
+> **Scope (normative):** `upgrade` edits only this setup's owned paths: `.claude/features/`, `.claude/agents/task-tracker.md`, `.claude/skills/task-board/`, `.claude/skills/task-spec/`, `.claude/rules/tasks.md`. Any other change (application source, tests, docs, CI, mirrors, other setups' files) is a defect to report, never to apply: name the path and the finding, edit nothing there, and pass no such edit to a subagent.
+
+Snapshot the dirty-file state once, right after the deploy gate below and before any write (git repos; elsewhere it prints `SCOPE n/a` and the rule is checked by hand). **EXECUTE** using Bash tool:
+```bash
+TARGET="<absolute path resolved in P0>"
+test -n "$TARGET" && test -d "$TARGET" || { echo "MISS TARGET unset or not a dir -- scope snapshot did NOT run"; exit 1; }
+SG="<this skill's base directory, as SKILL.md was loaded from>/scripts/scope-guard.sh"
+test -f "$SG" || { echo "MISS scope-guard.sh not found at $SG -- snapshot did NOT run"; exit 1; }
+bash "$SG" snapshot "$TARGET" task-board-upgrade && echo "OK" || echo "FAILED"
+```
+
 ---
 
 ## Inputs (contract from P0)
@@ -55,9 +66,20 @@ mark() { # mark <label> <file> <fixed-string> [<2nd, also required>] [<3rd, also
     && { test -z "$5" || grep -qF "$5" "$2"; } \
     && echo "MARK-OK $1" || echo "PATCH   $1"
 }
+markh() { # markh <label> <file> <section title> [<2nd>] [<3rd>]: `## <any n>. <title>`, matched by title, never by number
+  test -f "$2" || { echo "ABSENT  $1"; return; }
+  grep -qE "^## ([0-9]+\. +)?$3[[:space:]]*\$" "$2" && { test -z "$4" || grep -qF "$4" "$2"; } \
+    && { test -z "$5" || grep -qF "$5" "$2"; } \
+    && echo "MARK-OK $1" || echo "PATCH   $1"
+}
 mark 1s "$T/.claude/agents/task-tracker.md"      '## Spec triage'
 mark 1p "$T/.claude/agents/task-tracker.md"      '## Session progress'
-mark 2s "$F/TRACKER.md"                          '## 10. Spec layer' '| in/out | status |'
+if test -f "$T/.claude/agents/task-tracker.md"; then # 1d: decoded description <=100 chars (verify-team.sh ceiling)
+  d="$(awk 'NR == 1 && !/^---/ { exit } NR > 1 && /^---[ \t]*$/ { exit } NR > 1 && /^description:/ { sub(/^description:[ \t]*/, ""); print; exit }' "$T/.claude/agents/task-tracker.md")"
+  d="${d#\"}"; d="${d%\"}"
+  if [ -n "$d" ] && [ "${#d}" -le 100 ]; then echo "MARK-OK 1d"; else echo "PATCH   1d"; fi
+else echo "ABSENT  1d"; fi
+markh 2s "$F/TRACKER.md"                         'Spec layer' '| in/out | status |'
 mark 2p "$F/TRACKER.md"                          'PROGRESS.md'
 mark 4s "$T/.claude/skills/task-board/SKILL.md"  'SPECS view'
 mark 4p "$T/.claude/skills/task-board/SKILL.md"  'PROGRESS.md'
@@ -66,7 +88,7 @@ mark 5p "$T/.claude/rules/tasks.md"              '## Session progress'
 mark 6s "$F/INDEX.md"                            'specs/SPEC_TEMPLATE.md'
 mark 6p "$F/INDEX.md"                            'PROGRESS.md'
 mark 1m "$T/.claude/agents/task-tracker.md"      '## Methodology and anti-drift' 'task-graph.md' 'CRON: reconcile'
-mark 2m "$F/TRACKER.md"                          '## 11. Domain methodology and session anti-drift' 'METHODOLOGY.md' 'ANTI-DRIFT.md'
+markh 2m "$F/TRACKER.md"                         'Domain methodology and session anti-drift' 'METHODOLOGY.md' 'ANTI-DRIFT.md'
 mark 3m "$F/TASK_TEMPLATE.md"                    '## Methodology' '## Anti-drift cron'
 mark 4m "$T/.claude/skills/task-board/SKILL.md"  '## Methodology and session timer' 'CronCreate' 'CronDelete'
 mark 5m "$T/.claude/rules/tasks.md"              '## Methodology and anti-drift' 'task-graph.md'
@@ -104,13 +126,13 @@ DETECT table:
 | `.claude/features/specs/` | absent \| present | MKDIR \| SKIP |
 | `.claude/features/specs/SPEC_TEMPLATE.md` | absent \| present | ADD \| SKIP |
 | `.claude/features/specs/DESIGN_TEMPLATE.md` | absent \| present | ADD \| SKIP |
-| `<n>` = 1 `.claude/agents/task-tracker.md`, 2 `.claude/features/TRACKER.md`, 4 `.claude/skills/task-board/SKILL.md`, 5 `.claude/rules/tasks.md`, 6 `.claude/features/INDEX.md` | U4 rows `<n>s` + `<n>p`, each MARK-OK \| PATCH \| ABSENT | per row: SKIP \| PATCH; either ABSENT -> ADD (drift) |
+| `<n>` = 1 `.claude/agents/task-tracker.md`, 2 `.claude/features/TRACKER.md`, 4 `.claude/skills/task-board/SKILL.md`, 5 `.claude/rules/tasks.md`, 6 `.claude/features/INDEX.md` | U4 rows `<n>s` + `<n>p` (+ `1d` for the agent), each MARK-OK \| PATCH \| ABSENT | per row: SKIP \| PATCH; either ABSENT -> ADD (drift) |
 | `.claude/features/TASK_TEMPLATE.md` | U4 row `3`: MARK-OK \| PATCH \| ABSENT | SKIP \| PATCH \| ADD (drift) |
 | `.claude/features/board.md` | U4 row `7`: MARK-OK \| PATCH | SKIP \| PATCH (structural only, U4) |
 | task files missing `spec:` FM | `backfill-needed` | BACKFILL (gated) \| SKIP if 0 |
 | task files with no frontmatter | `skipped-no-frontmatter` | SKIP always, named in the report |
 
-Each MARK row (`<n>s` spec, `<n>p` session progress, `<n>m` methodology/anti-drift) is an independent install unit with ONE probe line. Content no-op requires ALL ADD targets present, ALL patch rows SKIP and `backfill-needed=0`; missing methodology controls/consumers prevent the early no-op. Then skip U2's question/U3-U5, STILL run U5b and report content installed/metadata restamped.
+Each MARK row (`<n>s` spec, `<n>p` session progress, `<n>m` methodology/anti-drift) is an independent install unit with ONE probe line. Content no-op requires ALL ADD targets present, ALL patch rows SKIP and `backfill-needed=0`; missing methodology controls/consumers prevent the early no-op. Then skip U2's question/U3-U5, STILL run U5b (its `PENDING` is empty) and report content installed/metadata restamped.
 
 > **U5b is NOT part of that no-op.** After `claude plugin update` every content row is SKIP and only the version stamp is stale; an early STOP leaves `status` at `stale` forever. U5b needs only the metadata quartet, re-resolved fresh, nothing from U2's recovery table.
 
@@ -188,8 +210,9 @@ Every ROW below: its MARK present -> SKIP that row silently (idempotent). MARK a
 | # | File | Layer | MARK (idempotency probe) | Insert (sites per the named reference's own header) |
 |---|------|-------|--------------------------|--------|
 | 1s | `.claude/agents/task-tracker.md` | spec | `## Spec triage` | every `{{SPEC_*}}` site `02` assigns to the agent body |
-| 1p | (same file) | progress | `## Session progress` | `02`'s `description:` amendment (the `PROGRESS.md`-in-sync clause + the `session progress` trigger), the `## Session progress` section, the `PROGRESS.md` layout line, invariant 4's `PROGRESS.md` clause, close step 5 (gated board-drain `NEXT:`) and the two checklist rows |
-| 2s | `.claude/features/TRACKER.md` | spec | `## 10. Spec layer` AND `` `\| in/out \| status \|` `` | section 10 + every other `05` row sited `TRACKER.md` |
+| 1d | (same file) | agent ceiling | `description:` decoded value <=100 characters | replace the `description:` line with `02`'s; move the old value past its first sentence (trigger list, `<example>` blocks, any spec triggers) VERBATIM into a new `## When to use` section after the `Source of truth:` line. The ONE row that rewrites an existing line: no word is dropped, it moves to the body |
+| 1p | (same file) | progress | `## Session progress` | `02`'s trigger amendment (the `PROGRESS.md`-in-sync clause + the `session progress` trigger, in `## When to use`, or in the legacy `description:` while `1d` is declined), the `## Session progress` section, the `PROGRESS.md` layout line, invariant 4's `PROGRESS.md` clause, close step 5 (gated board-drain `NEXT:`) and the two checklist rows |
+| 2s | `.claude/features/TRACKER.md` | spec | `## <n>. Spec layer` (matched by title, any section number) AND `` `\| in/out \| status \|` `` | section 10 + every other `05` row sited `TRACKER.md` |
 | 2p | (same file) | progress | `PROGRESS.md` | the section-2 `PROGRESS.md` layout line + section 8 step 4 |
 | 3 | `.claude/features/TASK_TEMPLATE.md` | spec | `^spec:` AND `## Scope` AND `` `\| in/out \| status \|` `` | `spec:` FM line after `links:` + `## Scope` block BEFORE `## Acceptance` (`05`, rows sited `TASK_TEMPLATE.md`) |
 | 4s | `.claude/skills/task-board/SKILL.md` | spec | `SPECS view` | every `{{SPEC_*}}` site `03` defines |
@@ -200,7 +223,7 @@ Every ROW below: its MARK present -> SKIP that row silently (idempotent). MARK a
 | 6p | (same file) | progress | `PROGRESS.md` | the `PROGRESS.md` row in the Control files table |
 | 7 | `.claude/features/board.md` | spec | `\| owner \| file \| spec \|` | STRUCTURAL ONLY -- see below (`05`, rows sited `board.md`) |
 | 1m | `.claude/agents/task-tracker.md` | methodology | `## Methodology and anti-drift` AND `task-graph.md` AND `CRON: reconcile` | ref 02 method/cron handoff, control layout, graph invariant/checklist; tracker has no scheduling tools |
-| 2m | `.claude/features/TRACKER.md` | methodology | `## 11. Domain methodology and session anti-drift` AND both method/control paths | ref 05 section 11, control layout, task-example Methodology/cron sections and session steps; preserve existing method text |
+| 2m | `.claude/features/TRACKER.md` | methodology | `## <n>. Domain methodology and session anti-drift` (matched by title, any section number: a board with its own section 11 gets it as 12) AND both method/control paths | ref 05 section 11, control layout, task-example Methodology/cron sections and session steps; preserve existing method text |
 | 3m | `.claude/features/TASK_TEMPLATE.md` | methodology | `## Methodology` AND `## Anti-drift cron` | ref 05 task Methodology/base work + Anti-drift cron sections, add only absent sections/fields |
 | 4m | `.claude/skills/task-board/SKILL.md` | methodology | `## Methodology and session timer` AND `CronCreate` AND `CronDelete` | ref 03 method/runtime section, timer tools in allowed-tools, control layout line, ADD preparation and read-only VIEW correction |
 | 5m | `.claude/rules/tasks.md` | methodology | `## Methodology and anti-drift` AND `task-graph.md` | ref 04 UNGATED method/anti-drift/plan section; preserve existing rule ids |
@@ -224,7 +247,7 @@ The `## Feature specs` arm swap decides whether the patch can run at all:
 One AskUserQuestion PER FILE (matches `SKILL.md`) covering every PATCH row of that file, showing the full diff:
 
 > **`<file>` needs an additive patch** [+X lines]: `<one-line description of every gated site>`.
-> Nothing is overwritten; every insertion is a new block.
+> Nothing is overwritten; every insertion is a new block (row `1d` alone moves the old `description:` text into the body, word for word).
 > - Apply this patch
 > - Skip this file
 
@@ -290,11 +313,18 @@ Option 1 leaves the field absent on every existing task; that is a legal state f
 
 ---
 
-## U5b. RESTAMP the metadata quartet (ALWAYS runs, never gated, never asked)
+## U5b. RESTAMP the metadata quartet (runs when no content row is pending, never asked)
 
 `setup-status` row 4 reads the frontmatter `version:` of the anchor `.claude/features/board.md`, a U4
-PATCH target: a PATCHED or SKIPPED file must end up stamped exactly like an ADDED one, so this block
-restamps all twelve unconditionally, else `status` keeps printing `stale` after every `upgrade`.
+PATCH target: a PATCHED or already-present (MARK-OK) file must end up stamped exactly like an ADDED one,
+so this block restamps all twelve, else `status` keeps printing `stale` after every `upgrade`.
+
+**Pending gate.** The stamp claims "current", so it is withheld while ANY content row is pending: re-run
+the U1 PROBE BLOCK and fill `PENDING` with the label of every `PATCH` / `ABSENT` line it prints (row ids
+and ADD-set paths; `backfill-needed` and `NOFM` lines never count, a declined backfill is a legal state).
+A declined patch, a patch skipped because the run could not ask (headless, "do not ask"), or a `manual`
+board.md decline all leave their row `PATCH`: the block then prints `PARTIAL`, restamps nothing, and
+the U6 report carries `partial` with that list. `setup-status` keeps `stale` until a rerun lands them.
 
 Twelve stamped control artifacts. `TASK_TEMPLATE.md` is
 deliberately UNSTAMPED (its frontmatter is copied into every task card), and task CARDS under
@@ -324,6 +354,17 @@ mechanism-`b` artifacts, not byte-copies). Body, tables, hand-edits, task conten
 legacy install whose frontmatter predates the quartet gets the four keys INSERTED immediately
 before the closing `---`, which is how `stale (legacy, unstamped)` clears.
 
+**A control file with no frontmatter** (line 1 is not `---`: a hand-written or pre-generator
+`board.md`, `TRACKER.md`, `INDEX.md`, `backlog/README.md`) never gets a synthesized frontmatter
+block. It gets ONE line instead, the HTML-comment marker
+`<!-- brewcode-meta: version=<PV> content_version=<CV> generated_by=brewtools:task-board-setup -->`:
+right after line 1 when line 1 is a `# ` heading, else as line 1; an existing marker in the first
+40 lines is rewritten in place. Markdown renders nothing for it, and heading/table parsers
+(the task-tracker agent, the task-board skill, a project `validate_board`-style script) skip it.
+`setup-status` reads this marker as the file's stamp (its carrier fallback), so the row can
+reach `current`: without it an FM-less control file stays `stale (legacy, unstamped)` after
+every `upgrade`, an endless prescription.
+
 First re-resolve the four values fresh (U2) — SKILL.md "Resolving `{PLUGIN_VERSION}` / `{CONTENT_VERSION}` /
 `{GENERATED_BY}` / `{LAST_UPDATED}`", run verbatim. Then, **EXECUTE** using Bash tool:
 
@@ -334,6 +375,11 @@ PV="<PLUGIN_VERSION from the SKILL.md block>"; CV="<CONTENT_VERSION from the sam
 case "$PV" in [0-9]*.[0-9]*.[0-9]*) ;; *) echo "MISS PLUGIN_VERSION='$PV' is not X.Y.Z -- restamp did NOT run"; exit 1 ;; esac
 case "$CV" in [0-9]*.[0-9]*.[0-9]*) ;; *) echo "MISS CONTENT_VERSION='$CV' is not X.Y.Z -- restamp did NOT run"; exit 1 ;; esac
 case "$LU" in [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;; *) echo "MISS LAST_UPDATED='$LU' is not YYYY-MM-DD -- restamp did NOT run"; exit 1 ;; esac
+PENDING="<label of every PATCH / ABSENT line the U1 PROBE BLOCK prints when re-run right now, space-separated; empty when none>"
+if [ -n "$PENDING" ]; then
+  echo "PARTIAL content rows still pending: $PENDING"
+  echo "restamp withheld -- stamps stay at the previous version until every pending row lands"; exit 0
+fi
 ok=0; miss=0; skip=0
 for rel in .claude/features/board.md .claude/features/TRACKER.md .claude/features/INDEX.md \
            .claude/features/PROGRESS.md .claude/features/backlog/README.md \
@@ -342,7 +388,20 @@ for rel in .claude/features/board.md .claude/features/TRACKER.md .claude/feature
            .claude/skills/task-board/SKILL.md .claude/skills/task-spec/SKILL.md; do
   f="$TARGET/$rel"
   test -f "$f" || { echo "ABSENT $rel"; skip=$((skip+1)); continue; }
-  test "$(head -n 1 "$f")" = "---" || { echo "SKIP   $rel (no frontmatter -- never synthesized)"; skip=$((skip+1)); continue; }
+  if [ "$(head -n 1 "$f")" != "---" ]; then
+    # No frontmatter: one HTML-comment marker line, never a synthesized block (renders as nothing).
+    MARK="<!-- brewcode-meta: version=$PV content_version=$CV generated_by=$GB -->"
+    if sed -n '1,40p' "$f" | grep -q '^<!-- brewcode-meta:'; then
+      awk -v mk="$MARK" '!done && NR <= 40 && /^<!-- brewcode-meta:/ { print mk; done = 1; next } { print }' "$f" > "$f.restamp.tmp"
+    elif sed -n '1p' "$f" | grep -q '^# '; then
+      awk -v mk="$MARK" 'NR == 1 { print; print mk; next } { print }' "$f" > "$f.restamp.tmp"
+    else
+      { printf '%s\n' "$MARK"; cat "$f"; } > "$f.restamp.tmp"
+    fi && mv "$f.restamp.tmp" "$f" \
+      || { rm -f "$f.restamp.tmp"; echo "MISS   $rel marker rewrite failed"; miss=$((miss+1)); continue; }
+    if grep -qxF "$MARK" "$f"; then echo "MARKER $rel"; ok=$((ok+1)); else echo "MISS   $rel marker not applied"; miss=$((miss+1)); fi
+    continue
+  fi
   awk -v pv="$PV" -v cv="$CV" -v gb="$GB" -v lu="$LU" '
     NR == 1 { print; next }
     !done && /^---[ \t]*$/ {
@@ -404,7 +463,7 @@ Read the probe output as:
 | Probe line | Expected after a full-accept run |
 |------------|----------------------------------|
 | `PRESENT` x7 + `PRESENT dir specs` | ADD set landed (incl. PROGRESS + ref 11 controls) |
-| `MARK-OK` x18 (existing 12 + six methodology rows) | every approved patch landed |
+| `MARK-OK` x19 (existing 12 + `1d` + six methodology rows) | every approved patch landed |
 | `backfill-needed=0` | backfill accepted in full |
 
 > **A `PATCH`/`ABSENT`/non-zero line is a MISS only if the user did not decline it.** A declined patch or a declined backfill is expected: report it as `declined`, !=retry, !=re-emit.
@@ -414,6 +473,8 @@ Read the probe output as:
 TARGET="<absolute path resolved in P0>"
 test -n "$TARGET" && test -d "$TARGET" || { echo "MISS TARGET unset or not a dir -- stamp gate did NOT run"; exit 1; }
 PV="<PLUGIN_VERSION from the SKILL.md block>"; CV="<CONTENT_VERSION from the same block>"
+PENDING="<label of every PATCH / ABSENT line the U1 PROBE BLOCK prints when re-run right now, space-separated; empty when none>"
+test -z "$PENDING" || { echo "PARTIAL restamp withheld by U5b, stamps intentionally behind -- pending: $PENDING"; exit 0; }
 bad=0
 for rel in .claude/features/board.md .claude/features/TRACKER.md .claude/features/INDEX.md \
            .claude/features/PROGRESS.md .claude/features/backlog/README.md \
@@ -421,14 +482,28 @@ for rel in .claude/features/board.md .claude/features/TRACKER.md .claude/feature
            .claude/agents/task-tracker.md .claude/rules/tasks.md \
            .claude/skills/task-board/SKILL.md .claude/skills/task-spec/SKILL.md; do
   f="$TARGET/$rel"; test -f "$f" || continue
-  # SAME skip rule as U5b, or the gate fails a file U5b correctly refused to touch.
-  test "$(head -n 1 "$f")" = "---" || { echo "SKIP $rel (no frontmatter -- U5b never stamps it)"; continue; }
+  # SAME split as U5b: no frontmatter -> its one marker line carries the stamp.
+  if [ "$(head -n 1 "$f")" != "---" ]; then
+    sed -n '1,40p' "$f" | grep -qxF "<!-- brewcode-meta: version=$PV content_version=$CV generated_by=brewtools:task-board-setup -->" \
+      || { echo "MISS stale marker: $rel -> $(sed -n '1,40p' "$f" | grep -m1 '^<!-- brewcode-meta:' || echo '(none)')"; bad=$((bad+1)); }
+    continue
+  fi
   grep -qxF "version: \"$PV\"" "$f" || { echo "MISS stale stamp: $rel -> $(grep -m1 '^version:' "$f" || echo '(none)')"; bad=$((bad+1)); }
   grep -qxF "content_version: \"$CV\"" "$f" || { echo "MISS stale content_version: $rel -> $(grep -m1 '^content_version:' "$f" || echo '(none)')"; bad=$((bad+1)); }
 done
-test "$bad" -eq 0 && echo "OK  every frontmatter-carrying artifact stamped $PV / $CV" || echo "❌ $bad artifact(s) still stale -- re-run U5b"
+test "$bad" -eq 0 && echo "OK  every control artifact stamped $PV / $CV" || echo "❌ $bad artifact(s) still stale -- re-run U5b"
 ```
-A clean run prints `OK  every frontmatter-carrying artifact stamped <PV> / <CV>` -- silence means the block did not run, !=PASS. A `SKIP` line (line 1 not `---`, which U5b never touches) is not a failure.
+A clean run prints `OK  every control artifact stamped <PV> / <CV>` -- silence means the block did not run, !=PASS. A file with no frontmatter passes on its U5b marker line. `PENDING` here is the U6 probe re-run's list: a label in it that U5b's `PENDING` lacked means U5b restamped over a pending row -- a MISS, name it.
+
+**Scope gate** (the last check of the run: only owned paths may have changed since the snapshot). **EXECUTE** using Bash tool:
+```bash
+TARGET="<absolute path resolved in P0>"
+test -n "$TARGET" && test -d "$TARGET" || { echo "MISS TARGET unset or not a dir -- scope gate did NOT run"; exit 1; }
+SG="<this skill's base directory, as SKILL.md was loaded from>/scripts/scope-guard.sh"
+bash "$SG" check "$TARGET" task-board-upgrade .claude/features/ .claude/agents/task-tracker.md .claude/skills/task-board/ .claude/skills/task-spec/ .claude/rules/tasks.md \
+  && echo "✅ scope" || echo "❌ FAILED scope"
+```
+**STOP if ❌**: every `OUTSIDE <path>` line is a defect of this run, reported by path, never kept or committed; the user decides whether to restore it.
 
 Rerun safety: a second `upgrade` on the same TARGET finds every row SKIP with `backfill-needed=0`, runs U5b (identical bytes, same plugin version), prints `upgrade: content already installed, metadata restamped to <PV>` and changes nothing on disk.
 
@@ -438,7 +513,8 @@ Report the probe rows as these buckets:
 |--------|---------|
 | added | files written (ADD set) + `specs/` dir if created |
 | patched | files edited + which MARK was inserted into each |
-| restamped | U5b: `<ok>/12` controls carrying version metadata; absent/skipped named; always printed, including content-no-op. Task-local methodology/prompt/runtime untouched |
+| restamped | U5b: `<ok>/12` controls carrying version metadata; absent/skipped named; printed on every run that restamped, including content-no-op. Task-local methodology/prompt/runtime untouched |
+| partial | U5b withheld the restamp: every pending row label (declined, skipped unasked, `manual`), so `setup-status` stays `stale` until a rerun lands them. Never reported as `current` |
 | skipped-already-present | ADD files that existed, PATCH files whose MARK was found |
 | declined | patches / backfill the user rejected -- named, so a later rerun can pick them up |
 | half-state | coherence pairs from U4b the user chose to leave incomplete |

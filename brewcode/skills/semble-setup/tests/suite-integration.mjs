@@ -453,7 +453,7 @@ check('wired: --strict exit', strict.status, 1, '--strict exits 1 on any verdict
 
 // ── 2a. guidance ────────────────────────────────────────────────────────────
 check('guidance: keys', keysOf(R.guidance),
-  ['absoluteCount', 'claudeMd', 'content_version', 'hooks', 'ignore', 'permissionsSource', 'permissionsWired',
+  ['absoluteCount', 'claudeMd', 'content_version', 'customCount', 'hooks', 'ignore', 'permissionsSource', 'permissionsWired',
     'pluginVersion', 'retired', 'retiredWired', 'rule', 'ruleStampStale', 'settingsFile', 'staleEntries',
     'templateContentVersion', 'version', 'wantCount', 'wiredCount'],
   'the §9.1 guidance shape plus the derived wiredCount/wantCount/absoluteCount, the migration list, and the '

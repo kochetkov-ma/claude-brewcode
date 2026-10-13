@@ -203,9 +203,10 @@ Runs only when `MODE=upgrade` and `board.md` EXISTS; replaces P1-P5.5 (the fresh
 
 Rules that bind the whole phase:
 
+- **Scope (normative):** `upgrade` edits only this setup's owned paths: `.claude/features/`, `.claude/agents/task-tracker.md`, `.claude/skills/task-board/`, `.claude/skills/task-spec/`, `.claude/rules/tasks.md`. Any other change (application source, tests, docs, CI, mirrors, other setups' files) is a defect to report, never to apply; `10-upgrade.md` snapshots before U3 and its U6 scope gate fails on any other changed path.
 - **Additive only.** New files (`task-spec` skill, `SPEC_TEMPLATE.md`, `DESIGN_TEMPLATE.md`) are written outright. No existing task file, board row, agent, skill or rule is rewritten wholesale.
 - **Every edit of an existing file is gated:** show the exact diff, then **AskUserQuestion** per file. Declined = no edit, continue cleanly.
-- **The metadata restamp (`10-upgrade.md` U5b) is ungated and always runs**, including when every content row is already SKIP: it rewrites only the metadata quartet in the twelve stamped control artifacts, nothing task-local. The board anchor stamp clears the `stale` verdict read by setup-status.
+- **The metadata restamp (`10-upgrade.md` U5b) runs whenever no content row is pending**, including when every content row is already SKIP: it rewrites only the metadata quartet in the twelve stamped control artifacts, nothing task-local. The board anchor stamp clears the `stale` verdict read by setup-status. Any declined or unasked (headless) `PATCH`/`ABSENT` row withholds it: the run reports `partial` with the pending list, never `current`.
 - **Never renumber, never delete.** Existing task ids, scope ids and closed tasks are untouchable. `board.md` rows are never reordered and existing cell content is never changed -- the one allowed row edit is appending the new `spec` cell holding `--` to each existing Progress/Todo row, per `10-upgrade.md` U4 (header + separator cells patch with it). `spec:` FM backfill is opt-in, !=run by default; when accepted, the value is `pending` or `none` -- never `full`.
 
 > `PU` is a thin handoff: `10-upgrade.md` owns detect, verify and report. Do not reuse P5 here.

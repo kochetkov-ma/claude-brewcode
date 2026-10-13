@@ -48,8 +48,30 @@ echo "OK"
 | `TASK_SPEC_MODE` | bind it for Phases 1b and 2a. `on` = the deployed `TASK_TEMPLATE.md` has a `^spec:` field, or a live/parked `task-spec` exists; `off` = the template is present without either; `unknown` = the template is missing, never proof of off |
 | `OPTIONAL` | outside the required set (only `task-spec`, only under `off`): no MISS/ABSENT, no parked member, no Phase 3 defect. All other row-4 artifacts and content-version checks stay required |
 
+Row 12 counts its documents itself: the roster names only the three the generator writes, while a
+project may keep any number of `.claude/convention/*.md`, hand-written or generated. **EXECUTE** using Bash tool:
+
+```bash
+cd "${CLAUDE_PROJECT_DIR}" || exit 1
+docs=0; owned=0; names=""
+for f in .claude/convention/*.md; do
+  [ -f "$f" ] || continue
+  docs=$((docs + 1)); names="$names ${f##*/}"
+  if sed -n '1,40p' "$f" | grep -Eq '^generated_by: "?brewcode:convention(-setup)?"?$|brewcode-meta:.*generated_by=brewcode:convention'; then owned=$((owned + 1)); fi
+done
+rule=absent; [ -f .claude/rules/convention.md.disabled ] && rule=parked; [ -f .claude/rules/convention.md ] && rule=live
+echo "CONV docs=$docs owned=$owned rule=$rule names=${names# }"
+echo "OK"
+```
+
+| `CONV` line | Row 12 reading (Phase 3 rule 3c) |
+|-------------|----------------------------------|
+| `rule=absent owned=0 docs>0` | **hand-written docs**: no generator marker on any document and no loading rule. `missing (hand-written docs present)`, never `partial` or `stale`, and no `upgrade`: there is no install to upgrade, and `install` would write `reference-patterns.md` / `testing-conventions.md` / `project-architecture.md` over same-named files. *Found* names all `docs` files |
+| `rule=absent owned>0` | generated documents without their loading rule: `partial`, prescribe `install` (`references/row-notes.md` Row 12) |
+| `rule=live` or `parked` | the generator's install: Phases 1b/2a decide as usual; `docs` beyond the three generated ones are the project's own and never a defect |
+
 Then the hook registrations from the three settings files (project, local, `GLOBAL`), one line per
-handler naming a roster script, as `REG <scope> <event> <matcher or -> <script> [if=...] [onFailure=...]`:
+handler naming a roster script (in `command` or `args`), as `REG <scope> <event> <matcher or -> <script> [if=...] [onFailure=...] [wrapped=<launcher>]`:
 
 **EXECUTE** using Bash tool:
 
@@ -62,6 +84,8 @@ import path from "node:path";
 const G = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), ".claude");
 const files = [["project", ".claude/settings.json"], ["local", ".claude/settings.local.json"], ["global", path.join(G, "settings.json")]];
 const want = /(semble-[a-z]+|agent-deadline-[a-z]+|agent-return-[a-z]+|agent-router|hardmode-guard|docsync-[a-z]+)\.mjs/;
+// First word of command, unquoted, basename; not node = a project launcher wraps the hook.
+const launcher = c => { const m = /^\s*(?:"([^"]*)"|\x27([^\x27]*)\x27|(\S+))/.exec(typeof c === "string" ? c : ""); return m ? String(m[1] ?? m[2] ?? m[3]).split(/[\\/]/).pop() : ""; };
 for (const [scope, f] of files) {
   if (!fs.existsSync(f)) { console.log(`REG ${scope} ABSENT ${f}`); continue; }
   let j;
@@ -75,7 +99,8 @@ for (const [scope, f] of files) {
         if (!m) continue;
         n++;
         console.log(`REG ${scope} ${ev} ${g.matcher ?? "-"} ${m[0]}`
-          + (h.if ? ` if=${h.if}` : "") + (h.onFailure ? ` onFailure=${h.onFailure}` : ""));
+          + (h.if ? ` if=${h.if}` : "") + (h.onFailure ? ` onFailure=${h.onFailure}` : "")
+          + (typeof h.command === "string" && !/^node(\.exe)?$/i.test(launcher(h.command)) ? ` wrapped=${launcher(h.command)}` : ""));
       }
     }
   }
@@ -89,6 +114,7 @@ Compare with the roster's registration cell, in the scope where the hook files w
 | Finding | Reading |
 |---------|---------|
 | every listed line present | wired |
+| a line ending in `wrapped=<launcher>` | **custom**: the project runs that script through its own launcher (the first word of `command` is not `node`, e.g. `toolchain_preflight.py exec node -- <hook>.mjs`). Wired, user-owned, report-only. Its shape is never an "older shape" (no `if=`, one `docsync-track.mjs` handler, no `onFailure=block`, a missing sibling handler the fork dropped), and it never prescribes `install` or `upgrade`: the setups keep a wrapped handler and add no unwrapped copy of it, so a re-run only re-copies the hook files over the project's edits. Phase 3 rule 3b |
 | hook files on disk, no `REG` line for the row | `partial`: nothing fires. Prescribe `install` |
 | fewer lines than listed, or a line of an older shape (row 11 without `SubagentHandback`; row 10 with one `docsync-track.mjs` handler or no `if=`; row 8 without `onFailure=block`) | `stale`: registered by an earlier release. Prescribe `upgrade`, which re-merges the registrations |
 | a line naming `agent-return-budget.mjs` | a defect to name in *Found*: that file is a shared module |
@@ -109,10 +135,11 @@ else echo "agent-router not installed"; fi
 echo "OK"
 ```
 
-| `tier1\|legacy\|tier2\|heartbeat\|valid` | Reading |
+| `tier1\|legacy\|tier2\|heartbeat\|valid\|wrapped` | Reading |
 |------------------------------------------|---------|
-| `1\|0\|0\|0\|yes` or `1\|0\|1\|1\|yes` | wired: `level fast`, or `level strict` (judge + its heartbeat entry) |
-| `tier1` is 0 | `partial`: the hook file is there and nothing fires. Prescribe `install` |
+| `1\|0\|0\|0\|yes\|0` or `1\|0\|1\|1\|yes\|0` | wired: `level fast`, or `level strict` (judge + its heartbeat entry) |
+| `wrapped` above 0, `tier1` and `legacy` 0, `valid` `yes` | **custom**: the router runs through the project's own launcher, as a `wrapped=` `REG` line. Wired, report-only, Phase 3 rule 3b; never `install`/`upgrade` |
+| `tier1` and `wrapped` both 0 | `partial`: the hook file is there and nothing fires. Prescribe `install` |
 | `legacy` above 0, `valid` is `no`, or `tier2` differs from `heartbeat` | `stale`: an owned handler drifted from the current shape. Prescribe `upgrade` |
 
 ### Phase 1b — Disable switches

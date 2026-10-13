@@ -414,11 +414,14 @@ Merge rule, in order:
 2. Drop agent-return entries pointing at a DIFFERENT hooks dir (stale paths from an
    earlier install into another directory — Claude Code logs a hook failure for each
    of them). Match on the FULL path, not the basename. Entries with no agent-return
-   arg are foreign: never touched.
+   arg are foreign: never touched. A direct shell-form handler (`node "<path>"` in `command`)
+   is removed on its own and re-added in the exec form. A **wrapped** handler (a script name in
+   `command` or `args`, first word of `command` not `node`: the project's own launcher) is kept as is.
 3. APPEND into `SubagentStart` / `SubagentStop` / `PreToolUse` — never overwrite — only
    if the exact `<absdir>/<script>` path is not already in that event (idempotent
-   re-install).
-4. Re-read the written file and assert exactly one entry per event.
+   re-install), and never for a script the event already runs through a wrapped handler
+   (a second, unwrapped copy would run it twice).
+4. Re-read the written file and assert exactly one entry per event (zero for a wrapped script).
 
 Marker for all agent-return entries = any hook whose `args` contain a path ending in
 one of those two basenames. `agent-return-budget.mjs` is NEVER registered — it is a
@@ -529,14 +532,26 @@ const want=[["SubagentStart",null,"agent-return-contract.mjs",5],["SubagentStop"
 const argsOf=e=>((e&&e.hooks)||[]).flatMap(h=>(h&&h.args)||[]).filter(a=>typeof a==="string");
 const isAR=a=>marks.some(m=>a===m||a.endsWith("/"+m)||a.endsWith("\\"+m));
 const wanted=new Set(marks.map(m=>path.join(dir,m)));
+const cmdNames=(h,list)=>!!h&&typeof h.command==="string"&&list.some(m=>h.command.includes(m));
+const names=(h,list)=>cmdNames(h,list)||(!!h&&Array.isArray(h.args)&&h.args.some(a=>typeof a==="string"&&list.some(m=>a.includes(m))));
+const launcher=h=>{ const m=/^\s*(?:"([^"]*)"|\x27([^\x27]*)\x27|(\S+))/.exec(typeof h.command==="string"?h.command:""); return m?String(m[1]??m[2]??m[3]).split(/[\\/]/).pop():""; };
+const isWrapped=h=>names(h,marks)&&typeof h.command==="string"&&!/^node(\.exe)?$/i.test(launcher(h));   // project launcher: kept, never duplicated
+const isShell=h=>cmdNames(h,marks)&&!isWrapped(h);   // direct `node "<path>"`: migrated to the exec form
+const wrappedOf=(root,ev,script)=>((root.hooks&&root.hooks[ev])||[]).flatMap(e=>(e&&Array.isArray(e.hooks))?e.hooks:[]).filter(h=>isWrapped(h)&&names(h,[script])).length;
+for(const ev of Object.keys(s.hooks)){                 // shell-form handlers go one by one, co-handlers stay
+  if(!Array.isArray(s.hooks[ev])) continue;
+  s.hooks[ev]=s.hooks[ev].map(e=>(e&&Array.isArray(e.hooks)&&e.hooks.some(isShell))?{...e,hooks:e.hooks.filter(h=>!isShell(h))}:e)
+    .filter(e=>!e||!Array.isArray(e.hooks)||e.hooks.length>0);
+}
 for(const ev of Object.keys(s.hooks)){                 // drop stale-path agent-return entries, keep foreign ones
   if(!Array.isArray(s.hooks[ev])) continue;
   s.hooks[ev]=s.hooks[ev].filter(e=>{
     const ar=argsOf(e).filter(isAR);
-    return ar.length===0 || ar.every(a=>wanted.has(a));
+    return ar.length===0 || ar.every(a=>wanted.has(a)) || ((e&&e.hooks)||[]).some(isWrapped);
   });
 }
 for(const [ev,matcher,script,timeout] of want){
+  if(wrappedOf(s,ev,script)) continue;                 // the project launches it: no unwrapped copy
   s.hooks[ev]=s.hooks[ev]||[];
   const full=path.join(dir,script);
   if(s.hooks[ev].some(e=>argsOf(e).includes(full))) continue;
@@ -548,7 +563,7 @@ fs.writeFileSync(f,JSON.stringify(s,null,2)+"\n");
 const back=JSON.parse(fs.readFileSync(f,"utf8"));      // post-write verification
 for(const [ev,,script] of want){
   const n=(back.hooks&&back.hooks[ev]||[]).filter(e=>argsOf(e).includes(path.join(dir,script))).length;
-  if(n!==1){ console.error("ABORT: verification failed - "+ev+"/"+script+" present "+n+" times in "+f); process.exit(1); }
+  if(n!==(wrappedOf(back,ev,script)?0:1)){ console.error("ABORT: verification failed - "+ev+"/"+script+" present "+n+" times in "+f); process.exit(1); }
 }
 console.log("OK merged "+f);
 ' && echo "✅ settings" || echo "❌ FAILED"
@@ -625,14 +640,26 @@ const want=[["SubagentStart",null,"agent-return-contract.mjs",5],["SubagentStop"
 const argsOf=e=>((e&&e.hooks)||[]).flatMap(h=>(h&&h.args)||[]).filter(a=>typeof a==="string");
 const isAR=a=>marks.some(m=>a===m||a.endsWith("/"+m)||a.endsWith("\\"+m));
 const wanted=new Set(marks.map(m=>path.join(dir,m)));
+const cmdNames=(h,list)=>!!h&&typeof h.command==="string"&&list.some(m=>h.command.includes(m));
+const names=(h,list)=>cmdNames(h,list)||(!!h&&Array.isArray(h.args)&&h.args.some(a=>typeof a==="string"&&list.some(m=>a.includes(m))));
+const launcher=h=>{ const m=/^\s*(?:"([^"]*)"|\x27([^\x27]*)\x27|(\S+))/.exec(typeof h.command==="string"?h.command:""); return m?String(m[1]??m[2]??m[3]).split(/[\\/]/).pop():""; };
+const isWrapped=h=>names(h,marks)&&typeof h.command==="string"&&!/^node(\.exe)?$/i.test(launcher(h));   // project launcher: kept, never duplicated
+const isShell=h=>cmdNames(h,marks)&&!isWrapped(h);   // direct `node "<path>"`: migrated to the exec form
+const wrappedOf=(root,ev,script)=>((root.hooks&&root.hooks[ev])||[]).flatMap(e=>(e&&Array.isArray(e.hooks))?e.hooks:[]).filter(h=>isWrapped(h)&&names(h,[script])).length;
+for(const ev of Object.keys(s.hooks)){                 // shell-form handlers go one by one, co-handlers stay
+  if(!Array.isArray(s.hooks[ev])) continue;
+  s.hooks[ev]=s.hooks[ev].map(e=>(e&&Array.isArray(e.hooks)&&e.hooks.some(isShell))?{...e,hooks:e.hooks.filter(h=>!isShell(h))}:e)
+    .filter(e=>!e||!Array.isArray(e.hooks)||e.hooks.length>0);
+}
 for(const ev of Object.keys(s.hooks)){
   if(!Array.isArray(s.hooks[ev])) continue;
   s.hooks[ev]=s.hooks[ev].filter(e=>{
     const ar=argsOf(e).filter(isAR);
-    return ar.length===0 || ar.every(a=>wanted.has(a));
+    return ar.length===0 || ar.every(a=>wanted.has(a)) || ((e&&e.hooks)||[]).some(isWrapped);
   });
 }
 for(const [ev,matcher,script,timeout] of want){
+  if(wrappedOf(s,ev,script)) continue;                 // the project launches it: no unwrapped copy
   s.hooks[ev]=s.hooks[ev]||[];
   const full=path.join(dir,script);
   if(s.hooks[ev].some(e=>argsOf(e).includes(full))) continue;
@@ -644,7 +671,7 @@ fs.writeFileSync(f,JSON.stringify(s,null,2)+"\n");
 const back=JSON.parse(fs.readFileSync(f,"utf8"));
 for(const [ev,,script] of want){
   const n=(back.hooks&&back.hooks[ev]||[]).filter(e=>argsOf(e).includes(path.join(dir,script))).length;
-  if(n!==1){ console.error("ABORT: verification failed - "+ev+"/"+script+" present "+n+" times in "+f); process.exit(1); }
+  if(n!==(wrappedOf(back,ev,script)?0:1)){ console.error("ABORT: verification failed - "+ev+"/"+script+" present "+n+" times in "+f); process.exit(1); }
 }
 console.log("OK merged "+f);
 ' && echo "✅ settings" || echo "❌ FAILED"
@@ -824,12 +851,13 @@ catch(e){ console.error("ABORT: "+f+" is not valid JSON ("+e.message+") - fix or
 if(s===null||typeof s!=="object"||Array.isArray(s)){ console.error("ABORT: "+f+" is not a JSON object; nothing was written"); process.exit(1); }
 const argsOf=e=>((e&&e.hooks)||[]).flatMap(h=>(h&&h.args)||[]).filter(a=>typeof a==="string");
 const isAR=a=>marks.some(m=>a===m||a.endsWith("/"+m)||a.endsWith("\\"+m));
+const cmdAR=e=>((e&&e.hooks)||[]).some(h=>!!h&&typeof h.command==="string"&&marks.some(m=>h.command.includes(m)));   // shell form or wrapped: its target file goes
 let removed=0;
 if(s.hooks&&typeof s.hooks==="object"){
   for(const ev of Object.keys(s.hooks)){
     if(!Array.isArray(s.hooks[ev])) continue;
     const n=s.hooks[ev].length;
-    s.hooks[ev]=s.hooks[ev].filter(e=>!argsOf(e).some(isAR));
+    s.hooks[ev]=s.hooks[ev].filter(e=>!argsOf(e).some(isAR)&&!cmdAR(e));
     removed+=n-s.hooks[ev].length;
     if(s.hooks[ev].length===0) delete s.hooks[ev];
   }
@@ -838,7 +866,7 @@ if(s.hooks&&typeof s.hooks==="object"){
 if(removed&&Object.keys(s).length===0){ fs.unlinkSync(f); console.log("OK cleaned "+f+" (agent-return was its only content: deleted)"); process.exit(0); }
 fs.writeFileSync(f,JSON.stringify(s,null,2)+"\n");
 const back=JSON.parse(fs.readFileSync(f,"utf8"));      // post-write verification
-const left=Object.values((back.hooks)||{}).flat().filter(e=>argsOf(e).some(isAR)).length;
+const left=Object.values((back.hooks)||{}).flat().filter(e=>argsOf(e).some(isAR)||cmdAR(e)).length;
 if(left!==0){ console.error("ABORT: verification failed - "+left+" agent-return entries still in "+f); process.exit(1); }
 console.log("OK cleaned "+f);
 ' && rm -f "$HOOKS_DIR/agent-return-contract.mjs" "$HOOKS_DIR/agent-return-guard.mjs" "$HOOKS_DIR/agent-return-budget.mjs" \

@@ -160,6 +160,10 @@ const WANT = [
   ['Stop', '', names[2], null, 10],
 ];
 const isDocsync = h => names.some(n => [h.command ?? '', ...(h.args ?? [])].join(' ').includes(`${n}.mjs`));
+// First word of `command` != node: the project's own launcher around the hook, kept and never duplicated.
+const launcher = h => { const m = /^\s*(?:"([^"]*)"|'([^']*)'|(\S+))/.exec(typeof h.command === 'string' ? h.command : ''); return m ? String(m[1] ?? m[2] ?? m[3]).split(/[\\/]/).pop() : ''; };
+const isWrapped = h => isDocsync(h) && typeof h.command === 'string' && !/^node(\.exe)?$/i.test(launcher(h));
+const wraps = (h, name) => isWrapped(h) && [h.command, ...(h.args ?? [])].join(' ').includes(`${name}.mjs`);
 const seeded = list => list.includes('.claude/**') ? list : [...list, '.claude/**'];
 const planned = [];
 const createdDirs = [];
@@ -238,15 +242,17 @@ try {
     const groups = data.hooks[event] ?? [];
     if (!Array.isArray(groups) || groups.some(g => !g || !Array.isArray(g.hooks) || g.hooks.some(h => !h || typeof h !== 'object' || (h.args !== undefined && !Array.isArray(h.args))))) throw new Error(`invalid ${event} hooks`);
     const next = [];
+    const wrapped = groups.flatMap(g => g.hooks).filter(isWrapped);
     for (const group of groups) {
-      const mine = group.hooks.filter(isDocsync);
+      const mine = group.hooks.filter(h => isDocsync(h) && !isWrapped(h));
       if (mine.some(h => h.timeout === undefined)) legacy = true;
-      const rest = group.hooks.filter(h => !isDocsync(h));
+      const rest = group.hooks.filter(h => !mine.includes(h));
       if (!mine.length) next.push(group);
       else if (rest.length) next.push({ ...group, hooks: rest });
     }
     for (const [wantEvent, matcher, name, rule, timeout] of WANT) {
       if (wantEvent !== event) continue;
+      if (wrapped.some(h => wraps(h, name))) continue;   // the project launches it itself: no unwrapped copy
       let group = next.find(g => (g.matcher ?? '') === matcher);
       if (!group) { group = matcher ? { matcher, hooks: [] } : { hooks: [] }; next.push(group); }
       group.hooks.push({ type: 'command', command: 'node', args: ['${CLAUDE_PROJECT_DIR}/.claude/hooks/' + name + '.mjs'], ...(rule ? { if: rule } : {}), timeout });
@@ -304,6 +310,11 @@ NODE
 - **`upgrade`** keeps `threshold_days`, `exclude`, `enabled` and any unknown config key,
   refreshes the four provenance keys, and rewrites the docsync registrations in the
   shape above whatever shape they had. Foreign hooks, `env` and permissions are untouched.
+- **Wrapped registrations are the project's.** A docsync handler whose launcher, the first
+  word of `command` unquoted, is not `node` (e.g. `"$CLAUDE_PROJECT_DIR/.claude/scripts/preflight.py"
+  exec node -- ".../docsync-track.mjs"`) is never removed or rewritten, its missing `if`/`timeout`
+  is never "legacy", and install/upgrade add no unwrapped handler for a hook the same event
+  already runs through it. A hook with no handler at all is still added.
 - **No `settings.json.bak`** is written: the transaction is its own rollback, and a
   backup left in `.claude/` was never cleaned up. An existing `.bak` is not touched here.
 - Session logs are never deleted by install or upgrade.

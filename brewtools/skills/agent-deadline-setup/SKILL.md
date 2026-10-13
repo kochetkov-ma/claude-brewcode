@@ -181,6 +181,10 @@ const ownedScript=h=>{
 const matcherIs=(entry,matcher)=>matcher===null?!Object.prototype.hasOwnProperty.call(entry,"matcher"):entry.matcher===matcher;
 const exactKeys=h=>h&&typeof h==="object"&&!Array.isArray(h)&&Object.keys(h).sort().join(",")==="args,command,timeout,type";
 const wired={"agent-deadline-guard.mjs":0,"agent-deadline-cleanup.mjs":0};
+const wrapped={"agent-deadline-guard.mjs":0,"agent-deadline-cleanup.mjs":0};
+// First word of `command` != node: the project's own launcher around the hook, report-only.
+const launcher=h=>{ const m=/^\s*(?:"([^"]*)"|'([^']*)'|(\S+))/.exec(typeof h.command==="string"?h.command:""); return m?String(m[1]??m[2]??m[3]).split(/[\\/]/).pop():""; };
+const isWrapped=h=>typeof h.command==="string"&&!/^node(\.exe)?$/i.test(launcher(h));
 let legacy=0;
 for(const [event,entries] of Object.entries((s&&s.hooks)||{})){
   if(!Array.isArray(entries)) continue;
@@ -189,22 +193,23 @@ for(const [event,entries] of Object.entries((s&&s.hooks)||{})){
     for(const handler of entry.hooks){
       const script=ownedScript(handler);
       if(!script) continue;
+      if(isWrapped(handler)){ wrapped[script]+=1; continue; }
       const spec=specs[script];
       const exact=settingsValid&&event===spec.event&&matcherIs(entry,spec.matcher)&&exactKeys(handler)&&handler.type==="command"&&handler.command==="node"&&argsOf(handler).length===1&&argsOf(handler)[0]===spec.arg&&handler.timeout===spec.timeout;
       if(exact) wired[script]+=1; else legacy+=1;
     }
   }
 }
-console.log(wired[marks[0]]+"|"+wired[marks[1]]+"|"+legacy+"|"+(settingsValid?"yes":"no"));
+console.log(wired[marks[0]]+"|"+wired[marks[1]]+"|"+legacy+"|"+(settingsValid?"yes":"no")+"|"+wrapped[marks[0]]+"|"+wrapped[marks[1]]);
 NODE
   )
-  GR=${REFS%%|*}; REST=${REFS#*|}; CR=${REST%%|*}; REST=${REST#*|}; LEGACY=${REST%%|*}; VALID=${REFS##*|}
+  GR=${REFS%%|*}; REST=${REFS#*|}; CR=${REST%%|*}; REST=${REST#*|}; LEGACY=${REST%%|*}; REST=${REST#*|}; VALID=${REST%%|*}; REST=${REST#*|}; GW=${REST%%|*}; CW=${REFS##*|}
   CFG=none; [ -s "$D/agent-deadline.json" ] && CFG=$(tr -d '\n ' < "$D/agent-deadline.json"); CFG=${CFG:-none}
   EN=n/a; case "$CFG" in *'"enabled":true'*) EN=true;; *'"enabled":false'*) EN=false;; esac
   CV=$({ jq -r '.version // empty' "$D/agent-deadline.json" 2>/dev/null || true; }); CV=${CV:-n/a}
   IFS='|' read -r CCV KCV RCV CONTENT FINDINGS <<< "$(content_state "$D")"
-  echo "$N: guard=$G cleanup=$C guard_refs=$GR cleanup_refs=$CR legacy_refs=$LEGACY settings_valid=$VALID enabled=$EN config_version=$CV config_content_version=$CCV contract_content_version=$KCV runbook_content_version=$RCV content_state=$CONTENT content_findings=$FINDINGS config=$CFG"
-  if [ "$N" = project ]; then P_WIRED=$((GR+CR+LEGACY)); else G_WIRED=$((GR+CR+LEGACY)); fi
+  echo "$N: guard=$G cleanup=$C guard_refs=$GR cleanup_refs=$CR legacy_refs=$LEGACY settings_valid=$VALID guard_wrapped=$GW cleanup_wrapped=$CW enabled=$EN config_version=$CV config_content_version=$CCV contract_content_version=$KCV runbook_content_version=$RCV content_state=$CONTENT content_findings=$FINDINGS config=$CFG"
+  if [ "$N" = project ]; then P_WIRED=$((GR+CR+LEGACY+GW+CW)); else G_WIRED=$((GR+CR+LEGACY+GW+CW)); fi
 done
 # governing config, resolved like the guard's loadConfig(cwd): from the payload cwd (= this shell's
 # $PWD, not project_root) up to the nearest valid project config, then global dirs
@@ -242,6 +247,7 @@ Field meanings — do not paraphrase them into something stronger:
 | `guard_refs` / `cleanup_refs` | handlers matching the exact tuple, per script. Guard = `PreToolUse` + `.*` + timeout `5`, cleanup = `SubagentStop` + no matcher + timeout `3`, both command/node/sole portable arg; global args are the expanded `<global dir>/hooks/<script>` path. Each must be exactly `1`: more is a duplicate and non-effective, and two guards never substitute for a missing cleanup |
 | `legacy_refs` | owned handlers that differ from the exact tuple: absolute project paths, swapped events, wrong matchers/types/commands/timeouts, extra args/keys, malformed handler values; any nonzero value requires migration |
 | `settings_valid` | `yes` only when settings are absent/empty or parse as a JSON object; anything else is non-effective |
+| `guard_wrapped` / `cleanup_wrapped` | handlers naming that script (in `command` or `args`) launched by something other than `node`: the project's own launcher, e.g. `"$CLAUDE_PROJECT_DIR/.claude/scripts/preflight.py" exec node -- ".../agent-deadline-guard.mjs"`. User-owned, report-only: never `legacy`, never rewritten, and `install`/`upgrade` add no unwrapped copy beside them |
 | `enabled` | `true`/`false` parsed from the config; `n/a` = no config or no `enabled` key |
 | `config_version` | release provenance, shown beside `plugin_version`; never a staleness signal |
 | `config_content_version` / `contract_content_version` | installed config CV vs the header CV of `agent-deadline-guard.mjs` (the config contract: the one hook that parses the config); each installed hook vs its asset header the same way |
@@ -249,12 +255,12 @@ Field meanings — do not paraphrase them into something stronger:
 | `content_state` | `current`: all CV pairs match (config vs contract, each hook vs its asset); `stale`: at least one valid pair differs; `partial`: an installed component has missing/malformed CV or a required counterpart is absent; `missing`: no config or hook files in that scope |
 | `content_findings` | comma-separated `artifact:installed-CV->source-CV` for every mismatched/missing pair, or `none`; `n/a` = missing/malformed metadata, never a guessed version |
 | `governing_config` / `governing_scope` | the one config every wired guard reads, resolved like `loadConfig(cwd)`: nearest valid (JSON object) `.claude/agent-deadline.json` from the shell cwd `$PWD` up (the guard climbs from the payload `cwd`: a config below or above `project_root` counts), at most 16 levels, stopping at a global dir; then `$CLAUDE_CONFIG_DIR`, then `~/.claude`; `none` = no valid config anywhere |
-| `orphan_config` | `yes` = the governing config is project-side, the project has no owned registration (`guard_refs`+`cleanup_refs`+`legacy_refs` = 0) and the global scope has one: the global guard obeys the project file (typically left by `uninstall project`) |
+| `orphan_config` | `yes` = the governing config is project-side, the project has no owned registration (`guard_refs`+`cleanup_refs`+`legacy_refs`+both `*_wrapped` = 0) and the global scope has one: the global guard obeys the project file (typically left by `uninstall project`) |
 
 Print status as this table:
 
-| Scope | Hook files | guard refs | cleanup refs | legacy refs | settings valid | Config | Config ver | Content state | Effective |
-|-------|-----------|------------|--------------|-------------|----------------|--------|------------|-------|-----------|
+| Scope | Hook files | guard refs | cleanup refs | legacy refs | wrapped | settings valid | Config | Config ver | Content state | Effective |
+|-------|-----------|------------|--------------|-------------|---------|----------------|--------|------------|-------|-----------|
 
 ### Config metadata (the four standard JSON keys)
 
@@ -278,7 +284,7 @@ The four keys are inert at runtime: the guard's `loadConfig()` reads only `enabl
 
 Content state and enabled/wiring are separate signals. Offer `upgrade` for `stale` or `partial`, naming the mismatched/missing metadata or artifact, never from a release-version difference alone, and never for a scope with `orphan_config=yes` (below). Status never edits files or settings.
 
-Effective = `guard=yes cleanup=yes guard_refs=1 cleanup_refs=1 legacy_refs=0 settings_valid=yes enabled=true`. Anything else, including duplicate-one/missing-other registrations or a malformed owned handler, is not effective: say so; never report a half-state as installed. A malformed project config is skipped (the guard silently climbs to an ancestor config, else the global one; `governing_config` names the winner): report it and offer to rewrite.
+Effective = `guard=yes cleanup=yes guard_refs=1 cleanup_refs=1 legacy_refs=0 settings_valid=yes enabled=true`; a script counted under `*_wrapped` instead of `*_refs` stands in for its `1` (custom launcher: say "registered through a custom launcher (report-only)" and never offer `install`/`upgrade` for that registration). Anything else, including duplicate-one/missing-other registrations or a malformed owned handler, is not effective: say so; never report a half-state as installed. A malformed project config is skipped (the guard silently climbs to an ancestor config, else the global one; `governing_config` names the winner): report it and offer to rewrite.
 
 `orphan_config=yes` is a finding, printed under the table: *`<governing_config>` is GOVERNING: the global guard reads the nearest project config first, so its `enabled` and budget override the global config.* Fix: `/brewtools:agent-deadline-setup purge project` (deletes it and its state; the global config then governs). Keeping it on purpose is valid: `uninstall project` keeps it and warns. Never offer `upgrade` for it: upgrade re-wires the project hooks and undoes the uninstall.
 

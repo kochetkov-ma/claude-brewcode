@@ -56,7 +56,9 @@ RESULT: <what the user ends up holding>
 
 After the PLAN, run `bash "${CLAUDE_SKILL_DIR}/scripts/convention.sh" status` in the project root;
 on any script failure report the ownership/collision error and change no file. `status`: report the
-JSON, stop. `enable`, `disable`, `uninstall`, `purge`: run the script with that exact mode, report its
+JSON, stop. `docs` counts every `.claude/convention/*.md`; `"hand_written":true` (no loading rule, no
+document with the owner stamp) is `missing (hand-written docs present)`: nothing to `upgrade`, and an
+`install` would write the three generated names over same-named files, so ask before running it. `enable`, `disable`, `uninstall`, `purge`: run the script with that exact mode, report its
 result, stop; no analysis or regeneration.
 
 - `disable` parks only the generated loading rule as `.claude/rules/convention.md.disabled`; `enable`
@@ -71,6 +73,18 @@ result, stop; no analysis or regeneration.
   guidance) or refreshes only its metadata; a parked rule stays parked.
 - The loading rule is the discovery mechanism: add the optional P7.5 CLAUDE.md references only on the
   user's explicit request.
+
+> **Scope (normative):** `upgrade` edits only this setup's owned paths: `.claude/convention/`, `.claude/rules/` (the loading rule and P7-accepted rules), `.claude/reports/`, and `CLAUDE.md` only after an explicit P7.5 request. Any other change (application source, tests, docs, CI, mirrors, other setups' files) is a defect to report, never to apply: name the path and the finding, edit nothing there, and pass no such edit to a subagent.
+
+For `upgrade`, snapshot before P0 writes anything and gate after P8 (git repos; elsewhere `SCOPE n/a` and the rule is checked by hand). Add `CLAUDE.md` to the check only when P7.5 ran on request. **EXECUTE** using Bash tool, before P0:
+```bash
+bash "${CLAUDE_SKILL_DIR}/../teams-setup/scripts/scope-guard.sh" snapshot "${CLAUDE_PROJECT_DIR}" convention-upgrade && echo "OK" || echo "FAILED"
+```
+**EXECUTE** using Bash tool, after P8 (the run's last gate):
+```bash
+bash "${CLAUDE_SKILL_DIR}/../teams-setup/scripts/scope-guard.sh" check "${CLAUDE_PROJECT_DIR}" convention-upgrade .claude/convention/ .claude/rules/ .claude/reports/ && echo "✅ scope" || echo "❌ FAILED scope"
+```
+> **STOP if ❌**: every `OUTSIDE <path>` line is a defect of this run, reported by path, never kept or committed.
 
 ## P0: Mode + Stack Detection
 

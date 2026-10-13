@@ -548,6 +548,84 @@ try {
     ],
     'a HOME or config-dir-parent .claude is the profile: status and installer must never resolve it as the project root',
   );
+
+  // GIVEN: the project-dusk shape, both scripts registered command-only through the project's own launcher.
+  const wrap = script => ({ type: 'command', command: `"$CLAUDE_PROJECT_DIR/.claude/scripts/toolchain_preflight.py" exec node -- "$CLAUDE_PROJECT_DIR/.claude/hooks/${script}"`, timeout: 5 });
+  const wrappedSettings = { hooks: {
+    PreToolUse: [{ matcher: '.*', hooks: [wrap('agent-deadline-guard.mjs')] }, foreign],
+    SubagentStop: [{ hooks: [wrap('agent-deadline-cleanup.mjs')] }],
+  } };
+  const statusLine = () => spawnSync('bash', ['-c', statusBlock], { cwd: nested, encoding: 'utf8', env: statusEnv, timeout: 30000 })
+    .stdout.split('\n').find(line => line.startsWith('project: '))?.match(/guard_refs=\S+ cleanup_refs=\S+ legacy_refs=\S+ settings_valid=\S+ guard_wrapped=\S+ cleanup_wrapped=\S+/)?.[0];
+  writeFileSync(settingsPath, JSON.stringify(wrappedSettings, null, 2));
+
+  // WHEN: status reads it, then the project merge (install/upgrade) runs over it.
+  const wrappedStatus = statusLine();
+  const wrappedMerge = spawnSync('bash', ['-c', block], { encoding: 'utf8', env: { ...process.env, ROOT: project }, timeout: 30000 });
+  const afterWrappedMerge = JSON.parse(readFileSync(settingsPath, 'utf8'));
+
+  // THEN: both wrappers are detected as wrapped, never legacy, and the merge adds no unwrapped copy.
+  assert.deepEqual(
+    { wrappedStatus, merge: wrappedMerge.status, afterWrappedMerge },
+    { wrappedStatus: 'guard_refs=0 cleanup_refs=0 legacy_refs=0 settings_valid=yes guard_wrapped=1 cleanup_wrapped=1', merge: 0, afterWrappedMerge: wrappedSettings },
+    'a wrapped registration must be detected and kept byte-equal, never duplicated',
+  );
+
+  // GIVEN: the guard wrapped, the cleanup registered nowhere.
+  writeFileSync(settingsPath, JSON.stringify({ hooks: { PreToolUse: [{ matcher: '.*', hooks: [wrap('agent-deadline-guard.mjs')] }] } }, null, 2));
+
+  // WHEN: status reads it, then the merge runs.
+  const halfStatus = statusLine();
+  const halfMerge = spawnSync('bash', ['-c', block], { encoding: 'utf8', env: { ...process.env, ROOT: project }, timeout: 30000 });
+  const afterHalfMerge = JSON.parse(readFileSync(settingsPath, 'utf8'));
+
+  // THEN: the missing cleanup still reads missing and is the only entry the merge adds.
+  assert.deepEqual(
+    { halfStatus, merge: halfMerge.status, afterHalfMerge },
+    {
+      halfStatus: 'guard_refs=0 cleanup_refs=0 legacy_refs=0 settings_valid=yes guard_wrapped=1 cleanup_wrapped=0',
+      merge: 0,
+      afterHalfMerge: { hooks: {
+        PreToolUse: [{ matcher: '.*', hooks: [wrap('agent-deadline-guard.mjs')] }],
+        SubagentStop: [{ hooks: [{ type: 'command', command: 'node', args: [`${PORTABLE}agent-deadline-cleanup.mjs`], timeout: 3 }] }],
+      } },
+    },
+    'a missing script must still read missing beside a wrapped one, and only it is added',
+  );
+
+  // GIVEN: a hand-written direct shell form of the guard.
+  writeFileSync(settingsPath, JSON.stringify({ hooks: { PreToolUse: [{ matcher: '.*', hooks: [
+    { type: 'command', command: `node "$CLAUDE_PROJECT_DIR/.claude/hooks/agent-deadline-guard.mjs"`, timeout: 5 },
+  ] }] } }, null, 2));
+
+  // WHEN: status reads it, then the merge runs.
+  const shellStatus = statusLine();
+  const shellMerge = spawnSync('bash', ['-c', block], { encoding: 'utf8', env: { ...process.env, ROOT: project }, timeout: 30000 });
+  const shellGuards = JSON.parse(readFileSync(settingsPath, 'utf8')).hooks.PreToolUse.flatMap(entry => entry.hooks);
+
+  // THEN: the shell form is legacy and migrated into one exec-form guard, not duplicated.
+  assert.deepEqual(
+    { shellStatus, merge: shellMerge.status, shellGuards },
+    {
+      shellStatus: 'guard_refs=0 cleanup_refs=0 legacy_refs=1 settings_valid=yes guard_wrapped=0 cleanup_wrapped=0',
+      merge: 0,
+      shellGuards: [{ type: 'command', command: 'node', args: [`${PORTABLE}agent-deadline-guard.mjs`], timeout: 5 }],
+    },
+    'a direct shell-form command must be migrated, never left beside a new copy',
+  );
+
+  // GIVEN: the wrapped registration again.
+  writeFileSync(settingsPath, JSON.stringify(wrappedSettings, null, 2));
+
+  // WHEN: the canonical uninstall block runs.
+  const wrappedUninstall = spawnSync('bash', ['-c', uninstallBlock], { encoding: 'utf8', env: { ...process.env, ROOT: project }, timeout: 30000 });
+
+  // THEN: the wrapped handlers go with the files they launch; the foreign entry stays.
+  assert.deepEqual(
+    { rc: wrappedUninstall.status, settings: JSON.parse(readFileSync(settingsPath, 'utf8')) },
+    { rc: 0, settings: { hooks: { PreToolUse: [foreign] } } },
+    'uninstall must remove wrapped registrations, whose target files it deletes',
+  );
 } finally {
   rmSync(base, { recursive: true, force: true });
 }

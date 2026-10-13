@@ -2709,6 +2709,41 @@ const NO_LAYERS = { project: [], local: [], user: [] };
     'the tracked file receives exactly the tool no layer grants yet');
 }
 
+// GIVEN the project-dusk shape: all four rows run through the project's own launcher, command-only
+// WHEN status reads it, then install --part hooks runs THEN rows read custom (wired), settings stay byte-equal
+{
+  const p = freshProject({});
+  const W = (script) => ({ type: 'command', timeout: 5,
+    command: `"$CLAUDE_PROJECT_DIR/.claude/scripts/toolchain_preflight.py" exec node -- "$CLAUDE_PROJECT_DIR/.claude/hooks/${script}"` });
+  const wrapped = { hooks: {
+    SessionStart: [{ hooks: [W('semble-session.mjs')] }],
+    PostToolUse: [{ matcher: STATS_MATCHER, hooks: [W('semble-stats.mjs')] }],
+    PostToolUseFailure: [{ matcher: STATS_MATCHER, hooks: [W('semble-stats.mjs')] }],
+    SubagentStart: [{ hooks: [W('semble-subagent.mjs')] }],
+  } };
+  writeFileSync(settingsPath(p), JSON.stringify(wrapped, null, 2) + '\n');
+  const b = safeParse(guidance(p, ['status', '--json']).stdout).hooks;
+  const r = guidance(p, ['install', '--part', 'hooks', '--json']);
+  check('W1.wrapped', [b.wiredCount, b.customCount, b.missingCount, b.staleEntries, b.entries.map((e) => e.state), r.status, readSettings(p)],
+    [4, 4, 0, 0, ['custom', 'custom', 'custom', 'custom'], 0, wrapped],
+    'a wrapped registration is detected as wired (custom), never stale, and the merge adds no unwrapped copy');
+}
+
+// GIVEN only the session row wrapped, the rest absent
+// WHEN status reads it, then install --part hooks runs THEN the three absent rows read missing and only they are added
+{
+  const p = freshProject({});
+  const W = { type: 'command', timeout: 5,
+    command: '"$CLAUDE_PROJECT_DIR/.claude/scripts/toolchain_preflight.py" exec node -- "$CLAUDE_PROJECT_DIR/.claude/hooks/semble-session.mjs"' };
+  writeFileSync(settingsPath(p), JSON.stringify({ hooks: { SessionStart: [{ hooks: [W] }] } }, null, 2) + '\n');
+  const b = safeParse(guidance(p, ['status', '--json']).stdout).hooks;
+  const r = guidance(p, ['install', '--part', 'hooks', '--json']);
+  const s = readSettings(p);
+  check('W2.halfWrapped', [b.wiredCount, b.customCount, b.missingCount, r.status, s.hooks.SessionStart, wantCounts(p, s)],
+    [1, 1, 3, 0, [{ hooks: [W] }], [0, 1, 1, 1]],
+    'a missing row still reads missing beside a wrapped one; the wrapped session row gets no second copy');
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 console.log('\nsuite-hooks (unit D)');
 console.log(`  base: ${BASE}`);

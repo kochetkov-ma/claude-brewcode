@@ -271,6 +271,53 @@ try {
     [[outer, `✅ ROOT=${outer}`], [outer, `✅ ROOT=${outer}`], [h, `✅ ROOT=${h}`]],
     'a HOME or config-dir-parent .claude is the profile: hook and installer must never resolve it as the project root',
   );
+
+  // GIVEN: the project-dusk shape, all three registrations wrapped in the project's own launcher.
+  const wrapProj = join(realpathSync(base), 'wrapped');
+  const wrapSettings = join(wrapProj, '.claude', 'settings.json');
+  mkdirSync(join(wrapProj, '.claude'), { recursive: true });
+  const wrap = script => ({ type: 'command', command: `"$CLAUDE_PROJECT_DIR/.claude/scripts/toolchain_preflight.py" exec node -- "$CLAUDE_PROJECT_DIR/.claude/hooks/${script}"`, timeout: 5 });
+  const wrapped = { hooks: {
+    SubagentStart: [{ hooks: [wrap('agent-return-contract.mjs')] }],
+    SubagentStop: [{ hooks: [wrap('agent-return-guard.mjs')] }],
+    PreToolUse: [{ matcher: 'SubagentHandback', hooks: [wrap('agent-return-guard.mjs')] }],
+  } };
+  const wrapEnv = { ...env, ROOT: wrapProj, HOME: join(base, 'wrap-home'), CLAUDE_CONFIG_DIR: join(base, 'wrap-profile'), CLAUDE_PROJECT_DIR: wrapProj };
+  const wrapStatus = () => spawnSync('bash', ['-c', rawStatus], { cwd: wrapProj, env: wrapEnv, encoding: 'utf8', timeout: 30000 })
+    .stdout.split('\n').find(line => line.startsWith('project:'))?.match(/registrations=\S+ wrapped=\S+/)?.[0];
+  const wrapMerge = () => spawnSync('bash', ['-c', blockAfter(runbookText, '**EXECUTE** merge settings (project)', '```\n')], { cwd: wrapProj, env: wrapEnv, encoding: 'utf8', timeout: 30000 }).status;
+  const wrapHooks = join(wrapProj, '.claude', 'hooks');
+  writeFileSync(wrapSettings, JSON.stringify(wrapped, null, 2));
+
+  // WHEN: status reads it, then the project merge (install/upgrade) runs over it.
+  const wrappedStatus = wrapStatus();
+  const wrappedMerge = wrapMerge();
+  const afterWrapped = JSON.parse(readFileSync(wrapSettings, 'utf8'));
+
+  // THEN: all three read as registered and wrapped; the merge keeps them byte-equal and adds no copy.
+  assert.deepEqual({ wrappedStatus, wrappedMerge, afterWrapped }, { wrappedStatus: 'registrations=3/3 wrapped=3', wrappedMerge: 0, afterWrapped: wrapped },
+    'a wrapped registration must be detected and never duplicated by install or upgrade');
+
+  // GIVEN: only the contract wrapped, plus a direct shell-form guard on SubagentStop.
+  const shellGuard = { type: 'command', command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/agent-return-guard.mjs"', timeout: 5 };
+  writeFileSync(wrapSettings, JSON.stringify({ hooks: { SubagentStart: wrapped.hooks.SubagentStart, SubagentStop: [{ hooks: [shellGuard, foreign] }] } }, null, 2));
+
+  // WHEN: status reads it, then the merge runs.
+  const halfStatus = wrapStatus();
+  const halfMerge = wrapMerge();
+  const afterHalf = JSON.parse(readFileSync(wrapSettings, 'utf8'));
+
+  // THEN: the missing handback reads missing; the shell form migrates, the wrapped contract stays, nothing doubles.
+  const exec = script => ({ type: 'command', command: 'node', args: [join(wrapHooks, script)], timeout: 5 });
+  assert.deepEqual({ halfStatus, halfMerge, afterHalf }, {
+    halfStatus: 'registrations=2/3 wrapped=1',
+    halfMerge: 0,
+    afterHalf: { hooks: {
+      SubagentStart: wrapped.hooks.SubagentStart,
+      SubagentStop: [{ hooks: [foreign] }, { hooks: [exec('agent-return-guard.mjs')] }],
+      PreToolUse: [{ matcher: 'SubagentHandback', hooks: [exec('agent-return-guard.mjs')] }],
+    } },
+  }, 'a missing registration must still read missing, and only it is added beside a wrapped one');
 } finally {
   rmSync(base, { recursive: true, force: true });
 }

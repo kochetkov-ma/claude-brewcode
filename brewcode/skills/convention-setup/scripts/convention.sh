@@ -228,9 +228,20 @@ status_convention() {
       done
     fi
     [ "$_rule" != "$RULE.disabled" ] || _state=disabled
-  elif [ -d .claude/convention ]; then _state=partial
   fi
-  printf '{"state":"%s","rule":"%s"}\n' "$_state" "$_rule"
+  # Every .claude/convention/*.md counts; with no rule, only generated ones (owner stamp) make it partial.
+  _docs=0; _owned=0
+  for _f in .claude/convention/*.md; do
+    [ -f "$_f" ] || continue
+    _docs=$((_docs + 1))
+    if sed -n '1,40p' "$_f" | grep -Eq '^generated_by: "?brewcode:convention(-setup)?"?$'; then _owned=$((_owned + 1)); fi
+  done
+  _hand=false
+  if [ -z "$_rule" ] && [ "$_docs" -gt 0 ]; then
+    if [ "$_owned" -gt 0 ]; then _state=partial; else _hand=true; fi
+  elif [ -z "$_rule" ] && [ -d .claude/convention ]; then _state=partial
+  fi
+  printf '{"state":"%s","rule":"%s","docs":%s,"owned_docs":%s,"hand_written":%s}\n' "$_state" "$_rule" "$_docs" "$_owned" "$_hand"
 }
 
 install_loading_rule() {

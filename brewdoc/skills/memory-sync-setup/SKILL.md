@@ -118,11 +118,18 @@ that output enriched with your own reads and STOPS. `upgrade` takes the drift li
 
 ### Mode: upgrade
 
+> **Scope (normative):** `upgrade` edits only this setup's owned paths: `.claude/skills/memory-sync/`. Any other change (application source, tests, docs, CI, mirrors, `CLAUDE.md`, rules, agents, other setups' files) is a defect to report, never to apply: the drift it finds there is the emitted `/memory-sync`'s job, run later by the user.
+
 Refresh against the current repo AND plugin version. Every hand-edit survives: no `emit`, no re-copy of a file
 that carries content, the stamp touched only through the metadata-only `restamp`.
 
 1. Run the `status` bash block above. `NOT INSTALLED` -> STOP (see Error Handling). `INSTALLED=parked` -> the
-   install is DISABLED, not broken: say so, offer `enable` and STOP.
+   install is DISABLED, not broken: say so, offer `enable` and STOP. Then snapshot the dirty-file state
+   (git repos; elsewhere `SCOPE n/a` and the rule is checked by hand) -- **EXECUTE** using Bash tool:
+   ```bash
+   ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")"
+   bash "${CLAUDE_SKILL_DIR}/scripts/scope-guard.sh" snapshot "$ROOT" memory-sync-upgrade && echo "OK" || echo "FAILED"
+   ```
 2. With the drift list as worklist, run Phase 1 (re-scan) -> Phase 3 (targeted `Edit`s): re-enumerate the surface,
    refresh the batch / fact / invariant tables, ADD sections for memory layers the project gained. PRESERVE
    hand-edited sections: before REPLACING one that diverges from the template, show the diff and
@@ -143,7 +150,12 @@ that carries content, the stamp touched only through the metadata-only `restamp`
    `RESTAMPED:` / `REMOVED:` / `REF …` lines verbatim. `REF DIFFERS:` is a decision, not a failure -- `hard-sync.md`
    always differs (Phase 3 filled its two BLOCKs): diff against `${CLAUDE_SKILL_DIR}/references/<name>` and port
    real prose changes by hand, never by re-copying over filled tables.
-4. Phase 4 `validate`, then the Phase 5 report.
+4. Phase 4 `validate`, then the scope gate, then the Phase 5 report. **EXECUTE** using Bash tool:
+   ```bash
+   ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")"
+   bash "${CLAUDE_SKILL_DIR}/scripts/scope-guard.sh" check "$ROOT" memory-sync-upgrade .claude/skills/memory-sync/ && echo "✅ scope" || echo "❌ FAILED scope"
+   ```
+   > **STOP if ❌**: every `OUTSIDE <path>` line is a defect of this run, reported by path, never kept or committed.
 
 ### Mode: enable / disable
 
