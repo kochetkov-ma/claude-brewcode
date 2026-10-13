@@ -2,6 +2,56 @@
 
 ---
 
+## v6.5.5 (2026-10-13)
+
+> Docs: [agents](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [rules](https://doc-claude.brewcode.app/brewcode/skills/rules/) | [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [superreview-setup](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/)
+
+> Docs: [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/)
+
+> Docs: [context-slim](https://doc-claude.brewcode.app/brewtools/skills/context-slim/) | [deploy](https://doc-claude.brewcode.app/brewtools/skills/deploy/) | [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/) | [ssh](https://doc-claude.brewcode.app/brewtools/skills/ssh/)
+
+A pipefail SIGPIPE sweep across skill scripts, a CI Validate run cut from 14-17 min to about 1.7 min, and a Codex installer that keeps user state.
+
+### brewcode
+
+#### Fixed
+
+- **superreview-setup:** the metadata frontmatter gate (`printf | grep -q` under `pipefail`) hit SIGPIPE on an early match and reported a present key as missing, so `upgrade` sometimes restamped `intent-guard.md` for no reason. It now uses a here-string.
+- **agents:** the hook template `rm -rf` check used the same pipe, so a large or multi-line command was not denied (200 KB repro: 0/10 denies before, 10/10 after).
+- **rules:** the prefix gate raced the same way and passed a multi-line prefix; it now matches the whole string with `[[ =~ ]]`.
+- **semble-setup:** `sc_semble_tool_version` could blank a found version, because an early `awk exit` SIGPIPEd `uv tool list`; awk now drains its input.
+
+### brewdoc
+
+#### Fixed
+
+- **memory-sync-setup:** `generate.sh` aborted on `awk exit` SIGPIPE in a pipeline; it now uses a here-string.
+
+### brewtools
+
+#### Fixed
+
+- **context-slim:** `context-guard.sh` aborted on `head -1` SIGPIPE once output passed the pipe buffer, and skipped a restored file in the byte check; it now uses `sed -n 1p` and a here-string.
+- **deploy:** `gh-env-check.sh` aborted on `gh --version | head -1` and reported a false `GHCR_ACCESS=no`; the `workflow-templates.md` digest step aborted when `docker inspect` listed 2 or more RepoDigests (awk now drains).
+- **provider-switch:** `verify-providers.sh` reported a false provider failure on a multi-line reply.
+- **ssh:** `server-discover.sh` held the caller's stdout until the full deadline even on success, because the orphaned timer `sleep` kept the pipe; the timer now detaches from stdio and is reaped. A hung `ssh` child also held the pipe after the deadline; the child now leads its own process group and the deadline kills the group.
+
+### repo
+
+#### Fixed
+
+- **codex:** `install-update.mjs` keeps disabled plugins disabled and the user's agent TOML keys (such as `model`), updates installs in place with exact rollback, and no longer rolls back a fresh install: Codex reports the `+codex` version suffix and the installer expected the bare version.
+- **codex:** the `validate-compat` task-board artifact check uses paths relative to the repo root, so a checkout under a `.claude/` directory (worktrees) passes.
+- **ci:** the `deploy-docs.yml` image digest step no longer aborts on SIGPIPE when an image has 2 or more RepoDigests.
+
+#### Changed
+
+- **ci:** Validate runs in about 1.7 min instead of 14-17 min: 12 parallel suite shards, a memoized tokenizer for the teams profile suite, pip/npm/tokenizer caches, and a shard coverage gate (`check-shards.sh`) that fails on an unsharded suite. Duplicate `.codex/plugins` dist-copy runs were dropped (covered by `validate-compat`).
+- **ci:** every GitHub Action is pinned to its exact latest version (for example `actions/checkout@v7.0.1`).
+- **codex:** 213 lines of unreachable generator code removed from `generate-compat.mjs`; generated output is unchanged.
+
+---
+
 ## v6.5.4 (2026-10-13)
 
 > Docs: [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) | [superreview-setup](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [e2e](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/)
