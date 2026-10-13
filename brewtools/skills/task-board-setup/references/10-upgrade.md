@@ -324,6 +324,17 @@ mechanism-`b` artifacts, not byte-copies). Body, tables, hand-edits, task conten
 legacy install whose frontmatter predates the quartet gets the four keys INSERTED immediately
 before the closing `---`, which is how `stale (legacy, unstamped)` clears.
 
+**A control file with no frontmatter** (line 1 is not `---`: a hand-written or pre-generator
+`board.md`, `TRACKER.md`, `INDEX.md`, `backlog/README.md`) never gets a synthesized frontmatter
+block. It gets ONE line instead, the HTML-comment marker
+`<!-- brewcode-meta: version=<PV> content_version=<CV> generated_by=brewtools:task-board-setup -->`:
+right after line 1 when line 1 is a `# ` heading, else as line 1; an existing marker in the first
+40 lines is rewritten in place. Markdown renders nothing for it, and heading/table parsers
+(the task-tracker agent, the task-board skill, a project `validate_board`-style script) skip it.
+`setup-status` reads this marker as the file's stamp (its carrier fallback), so the row can
+reach `current`: without it an FM-less control file stays `stale (legacy, unstamped)` after
+every `upgrade`, an endless prescription.
+
 First re-resolve the four values fresh (U2) — SKILL.md "Resolving `{PLUGIN_VERSION}` / `{CONTENT_VERSION}` /
 `{GENERATED_BY}` / `{LAST_UPDATED}`", run verbatim. Then, **EXECUTE** using Bash tool:
 
@@ -342,7 +353,20 @@ for rel in .claude/features/board.md .claude/features/TRACKER.md .claude/feature
            .claude/skills/task-board/SKILL.md .claude/skills/task-spec/SKILL.md; do
   f="$TARGET/$rel"
   test -f "$f" || { echo "ABSENT $rel"; skip=$((skip+1)); continue; }
-  test "$(head -n 1 "$f")" = "---" || { echo "SKIP   $rel (no frontmatter -- never synthesized)"; skip=$((skip+1)); continue; }
+  if [ "$(head -n 1 "$f")" != "---" ]; then
+    # No frontmatter: one HTML-comment marker line, never a synthesized block (renders as nothing).
+    MARK="<!-- brewcode-meta: version=$PV content_version=$CV generated_by=$GB -->"
+    if sed -n '1,40p' "$f" | grep -q '^<!-- brewcode-meta:'; then
+      awk -v mk="$MARK" '!done && NR <= 40 && /^<!-- brewcode-meta:/ { print mk; done = 1; next } { print }' "$f" > "$f.restamp.tmp"
+    elif sed -n '1p' "$f" | grep -q '^# '; then
+      awk -v mk="$MARK" 'NR == 1 { print; print mk; next } { print }' "$f" > "$f.restamp.tmp"
+    else
+      { printf '%s\n' "$MARK"; cat "$f"; } > "$f.restamp.tmp"
+    fi && mv "$f.restamp.tmp" "$f" \
+      || { rm -f "$f.restamp.tmp"; echo "MISS   $rel marker rewrite failed"; miss=$((miss+1)); continue; }
+    if grep -qxF "$MARK" "$f"; then echo "MARKER $rel"; ok=$((ok+1)); else echo "MISS   $rel marker not applied"; miss=$((miss+1)); fi
+    continue
+  fi
   awk -v pv="$PV" -v cv="$CV" -v gb="$GB" -v lu="$LU" '
     NR == 1 { print; next }
     !done && /^---[ \t]*$/ {
@@ -421,14 +445,18 @@ for rel in .claude/features/board.md .claude/features/TRACKER.md .claude/feature
            .claude/agents/task-tracker.md .claude/rules/tasks.md \
            .claude/skills/task-board/SKILL.md .claude/skills/task-spec/SKILL.md; do
   f="$TARGET/$rel"; test -f "$f" || continue
-  # SAME skip rule as U5b, or the gate fails a file U5b correctly refused to touch.
-  test "$(head -n 1 "$f")" = "---" || { echo "SKIP $rel (no frontmatter -- U5b never stamps it)"; continue; }
+  # SAME split as U5b: no frontmatter -> its one marker line carries the stamp.
+  if [ "$(head -n 1 "$f")" != "---" ]; then
+    sed -n '1,40p' "$f" | grep -qxF "<!-- brewcode-meta: version=$PV content_version=$CV generated_by=brewtools:task-board-setup -->" \
+      || { echo "MISS stale marker: $rel -> $(sed -n '1,40p' "$f" | grep -m1 '^<!-- brewcode-meta:' || echo '(none)')"; bad=$((bad+1)); }
+    continue
+  fi
   grep -qxF "version: \"$PV\"" "$f" || { echo "MISS stale stamp: $rel -> $(grep -m1 '^version:' "$f" || echo '(none)')"; bad=$((bad+1)); }
   grep -qxF "content_version: \"$CV\"" "$f" || { echo "MISS stale content_version: $rel -> $(grep -m1 '^content_version:' "$f" || echo '(none)')"; bad=$((bad+1)); }
 done
-test "$bad" -eq 0 && echo "OK  every frontmatter-carrying artifact stamped $PV / $CV" || echo "❌ $bad artifact(s) still stale -- re-run U5b"
+test "$bad" -eq 0 && echo "OK  every control artifact stamped $PV / $CV" || echo "❌ $bad artifact(s) still stale -- re-run U5b"
 ```
-A clean run prints `OK  every frontmatter-carrying artifact stamped <PV> / <CV>` -- silence means the block did not run, !=PASS. A `SKIP` line (line 1 not `---`, which U5b never touches) is not a failure.
+A clean run prints `OK  every control artifact stamped <PV> / <CV>` -- silence means the block did not run, !=PASS. A file with no frontmatter passes on its U5b marker line.
 
 Rerun safety: a second `upgrade` on the same TARGET finds every row SKIP with `backfill-needed=0`, runs U5b (identical bytes, same plugin version), prints `upgrade: content already installed, metadata restamped to <PV>` and changes nothing on disk.
 

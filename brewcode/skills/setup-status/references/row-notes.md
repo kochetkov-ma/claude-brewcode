@@ -79,6 +79,7 @@ Fill `<what drifted>` with the drifted files; `enable` stays the user's optional
 ## Row 4 task-board
 
 - Twelve stamped carriers with the spec layer on (the anchor + eleven secondaries), eleven with it off. `TASK_TEMPLATE.md` is deliberately unstamped, because its frontmatter is copied into every task card.
+- A control file without frontmatter (a pre-generator `board.md`, `TRACKER.md`, `INDEX.md`, `backlog/README.md`) is stamped by `upgrade` (`10-upgrade.md` U5b) with one `<!-- brewcode-meta: version=... content_version=... generated_by=brewtools:task-board-setup -->` line, read here through the marker carrier. `LEGACY-NONE` on such a file means no `upgrade` ran since 6.5.6, so one `upgrade` clears it; `LEGACY-NONE` again right after an upgrade is a defect to name, never a second `upgrade`.
 - Absent `task-spec` under `TASK_SPEC_MODE` `on` or `unknown` keeps its missing-artifact signal; `upgrade` retrofits the spec + design layer and keeps every task id.
 
 ## Rows 6 and 11 agent-deadline, agent-return
