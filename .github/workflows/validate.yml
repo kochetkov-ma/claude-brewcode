@@ -36,14 +36,33 @@ jobs:
           cache-dependency-path: .github/workflows/validate.yml
 
       - name: Set up Python
+        id: python
         uses: actions/setup-python@v7.0.0
         with:
           python-version: 3.14.8
+          cache: pip
+          cache-dependency-path: .github/workflows/validate.yml
 
       - name: Install Claude Code CLI
         run: |
           npm install -g --no-fund --no-audit "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
           claude --version
+
+      # Codex tests run the projected teams lifecycle suite, which counts exact tokens.
+      - name: Install Python test packages
+        run: >-
+          python -m pip install --disable-pip-version-check
+          pyyaml==6.0.3 reportlab==5.0.1 pillow==12.3.0 charset-normalizer==3.5.2
+          tiktoken==0.13.0 regex==2026.9.29 requests==2.34.2 idna==3.20 urllib3==2.8.0 certifi==2026.7.22
+
+      - name: Restore teams-setup tokenizer cache
+        uses: actions/cache@v6.1.0
+        with:
+          path: ~/.cache/claude-brewcode/teams-setup/tokenizer
+          key: teams-tokenizer-${{ runner.os }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('brewcode/skills/teams-setup/scripts/prepare-tokenizer.py') }}
+
+      - name: Prepare teams-setup tokenizer
+        run: python3 -I -S brewcode/skills/teams-setup/scripts/prepare-tokenizer.py prepare
 
       - name: Suite shard coverage
         if: ${{ !cancelled() }}
