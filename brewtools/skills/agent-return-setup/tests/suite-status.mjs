@@ -282,8 +282,8 @@ try {
     SubagentStop: [{ hooks: [wrap('agent-return-guard.mjs')] }],
     PreToolUse: [{ matcher: 'SubagentHandback', hooks: [wrap('agent-return-guard.mjs')] }],
   } };
-  const wrapEnv = { ...env, ROOT: wrapProj, HOME: join(base, 'wrap-home'), CLAUDE_CONFIG_DIR: join(base, 'wrap-profile') };
-  const wrapStatus = () => spawnSync('bash', ['-c', rawStatus.replaceAll('${CLAUDE_PROJECT_DIR}', wrapProj)], { cwd: wrapProj, env: wrapEnv, encoding: 'utf8', timeout: 30000 })
+  const wrapEnv = { ...env, ROOT: wrapProj, HOME: join(base, 'wrap-home'), CLAUDE_CONFIG_DIR: join(base, 'wrap-profile'), CLAUDE_PROJECT_DIR: wrapProj };
+  const wrapStatus = () => spawnSync('bash', ['-c', rawStatus], { cwd: wrapProj, env: wrapEnv, encoding: 'utf8', timeout: 30000 })
     .stdout.split('\n').find(line => line.startsWith('project:'))?.match(/registrations=\S+ wrapped=\S+/)?.[0];
   const wrapMerge = () => spawnSync('bash', ['-c', blockAfter(runbookText, '**EXECUTE** merge settings (project)', '```\n')], { cwd: wrapProj, env: wrapEnv, encoding: 'utf8', timeout: 30000 }).status;
   const wrapHooks = join(wrapProj, '.claude', 'hooks');

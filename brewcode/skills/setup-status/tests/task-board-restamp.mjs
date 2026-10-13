@@ -45,7 +45,7 @@ function fixture(t) {
 
 function bash(root, command) {
   const r = spawnSync('bash', ['-c', command], { cwd: root, encoding: 'utf8', timeout: 20000,
-    env: { ...process.env, HOME: root, CLAUDE_PROJECT_DIR: root, TASK_SPEC_MODE: 'on' } });
+    env: { ...process.env, HOME: root, CLAUDE_PROJECT_DIR: root, TASK_SPEC_MODE: 'on', TB_TOOLS: TOOLS, CLAUDE_SKILL_DIR: STATUS_DIR } });
   assert.equal(r.status, 0, `shipped block must succeed: ${r.stderr}`);
   return r.stdout;
 }
@@ -54,8 +54,8 @@ const PENDING_SLOT = '<label of every PATCH / ABSENT line the U1 PROBE BLOCK pri
 const fill = (block, pending = '') => block.replace('<absolute path resolved in P0>', '$CLAUDE_PROJECT_DIR').replace(PENDING_SLOT, pending)
   .replace('<PLUGIN_VERSION from the SKILL.md block>', PV).replace('<CONTENT_VERSION from the same block>', CV)
   .replace('<LAST_UPDATED from the same block>', '2026-10-13');
-const readStamps = root => bash(root, stamps.replace('PLUGIN_ROOT=/abs/root/printed/by/phase0', `PLUGIN_ROOT="${TOOLS}"`)
-  .replace('PLUGIN=brewcode ', 'PLUGIN=brewtools ').replaceAll('${CLAUDE_SKILL_DIR}', STATUS_DIR))
+const readStamps = root => bash(root, stamps.replace('PLUGIN_ROOT=/abs/root/printed/by/phase0', 'PLUGIN_ROOT="$TB_TOOLS"')
+  .replace('PLUGIN=brewcode ', 'PLUGIN=brewtools '))
   .split('\n').filter(line => /^(CURRENT|LEGACY-NONE|OWNER-\w+|BEHIND)\s+\.claude\/features\/(board|TRACKER|INDEX|backlog\/README)\.md/.test(line))
   .map(line => line.replace(/\s+\(.*$/, '').replace(/\s+/, ' '));
 
@@ -72,7 +72,7 @@ test('GIVEN frontmatter-less control files WHEN upgrade restamps THEN setup-stat
   const after = readStamps(root);
   // THEN: unstamped before; one marker line after the heading (or on line 1), idempotent, gate clean, all current.
   const marked = Object.fromEntries(Object.entries(BARE).map(([f, body]) => [f, body.startsWith('# ')
-    ? body.replace(/\n/, `\n${MARK}\n`) : `${MARK}\n${body}`]));
+    ? `${body.slice(0, body.indexOf('\n') + 1)}${MARK}\n${body.slice(body.indexOf('\n') + 1)}` : `${MARK}\n${body}`]));
   assert.deepEqual(
     { before, restamp: first.trim().split('\n').slice(-2), afterFirst, afterSecond, gate, after },
     {
