@@ -13,7 +13,14 @@ const TREE: Tree = {
   [`${ROOT}/.claude/placeholders/yy.md`]: def('yy', 'Why mode', 'always', 'YY BODY'),
   [`${ROOT}/.claude/placeholders/zz.md`]: def('zz', 'Zed mode', 'plan', 'ZZ BODY'),
 }
-const ENGINE = { type: 'Text', children: ['ENGINE'], part: { plugin: 'test' } }
+const ENGINE = { type: 'Text', children: ['ENGINE'] }
+
+// 2.1.300 stamps `part` on drawn roots, 2.1.296 does not: compare only what the mod controls.
+const bare = (node: any): any => {
+  if (node === null || typeof node !== 'object') return node
+  const { part: _part, ...rest } = node
+  return 'children' in rest ? { ...rest, children: rest.children.map(bare) } : rest
+}
 
 const typed = ($: { prompt: unknown }, text: string) =>
   ($.prompt as any).edit({ origin: { kind: 'composer' }, text: '', cursor: 0, start: 0, end: 0, inputText: text })
@@ -95,7 +102,6 @@ const band = (children: unknown[]) => ({
   type: 'Box',
   props: { key: 'band', flexDirection: 'column' },
   children,
-  part: { plugin: 'brewmod-placeholders' },
 })
 
 for (const surface of SURFACES) {
@@ -104,7 +110,7 @@ for (const surface of SURFACES) {
 
     const ui = await $.ui.mount({ ...PLUGIN, surface, props: PROPS })
 
-    expect(await ui.drawn(), 'collapsed band').toEqual(band([head(3, 'Show text'), rowYY([hidden('YY BODY')]), rowZZ([hidden('ZZ BODY')]), rowQ]))
+    expect(bare(await ui.drawn()), 'collapsed band').toEqual(band([head(3, 'Show text'), rowYY([hidden('YY BODY')]), rowZZ([hidden('ZZ BODY')]), rowQ]))
     await ui.unmount()
   })
 
@@ -113,9 +119,9 @@ for (const surface of SURFACES) {
     const ui = await $.ui.mount({ ...PLUGIN, surface, props: PROPS })
 
     await ui.press({ key: 'toggle' })
-    const open = await ui.drawn()
+    const open = bare(await ui.drawn())
     await ui.press({ key: 'toggle' })
-    const closed = await ui.drawn()
+    const closed = bare(await ui.drawn())
 
     expect(open, 'expanded band').toEqual(band([head(3, 'Hide text'), rowYY([shown('YY BODY')]), rowZZ([shown('ZZ BODY')]), rowQ]))
     expect(closed, 'collapsed again').toEqual(band([head(3, 'Show text'), rowYY([hidden('YY BODY')]), rowZZ([hidden('ZZ BODY')]), rowQ]))
@@ -127,7 +133,7 @@ for (const surface of SURFACES) {
 
     const ui = await $.ui.mount({ ...PLUGIN, surface, props: { ...PROPS, hasSurvey: true } })
 
-    expect(await ui.drawn(), 'passthrough').toEqual(ENGINE)
+    expect(bare(await ui.drawn()), 'passthrough').toEqual(ENGINE)
     await ui.unmount()
   })
 
@@ -136,7 +142,7 @@ for (const surface of SURFACES) {
 
     const ui = await $.ui.mount({ ...PLUGIN, surface, props: PROPS })
 
-    expect(await ui.drawn(), 'passthrough').toEqual(ENGINE)
+    expect(bare(await ui.drawn()), 'passthrough').toEqual(ENGINE)
     await ui.unmount()
   })
 }
@@ -147,7 +153,7 @@ test('GIVEN only unknown tokens WHEN the band mounts THEN one warning row each a
   const ui = await $.ui.mount({ ...PLUGIN, surface: 'terminal', props: PROPS })
 
   const w = JSON.parse(JSON.stringify(rowQ).replace(/\+\+q/g, '++w'))
-  expect(await ui.drawn(), 'two warning rows').toEqual(
+  expect(bare(await ui.drawn()), 'two warning rows').toEqual(
     band([{ type: 'Box', props: { key: 'head' }, children: [{ type: 'Text', props: { dimColor: true }, children: ['placeholders 2 '] }] }, rowQ, w]),
   )
   expect(await ui.find({ key: 'toggle' }), 'toggle').toBeUndefined()
@@ -196,7 +202,7 @@ test('GIVEN the state read fails WHEN the band mounts THEN it fails open to the 
   const ui = await $.ui.mount({ ...PLUGIN, surface: 'terminal', props: PROPS })
 
   expect(keys, 'precondition: the band draws while the state is up').toEqual(['band', 'head', 'row:++yy', undefined, undefined])
-  expect(await ui.drawn(), 'passthrough while the state is down').toEqual(ENGINE)
+  expect(bare(await ui.drawn()), 'passthrough while the state is down').toEqual(ENGINE)
   await ui.unmount()
 })
 
