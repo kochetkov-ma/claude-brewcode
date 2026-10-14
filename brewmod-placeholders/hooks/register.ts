@@ -7,21 +7,26 @@ import { SYNTHETIC_PROMPT, assembleBlocks, injectOnce, memoCompile, type Built, 
 import { configDirOf, loadRegistry, newRegistryCache, toEditorEntries, type Registry } from './lib/defs'
 import { isPlan, resetMode, type ModeTracker } from './lib/mode'
 import { bandRows, renderBand } from './lib/band'
+import { runCommand } from './lib/command'
+import { expandInline, isInlineSubmit, unknownMessage, unknownTokens } from './lib/inline'
 
 export const register: Register = (on, options) => {
   registerEditor(on, options) // T2.6 editor UX
   registerClassic(on, options) // T2.4 classic expansion + mode
   registerBand(on, options) // T2.7 preview band
+  registerCommand(on, options) // T2.8 /placeholders command
+  registerInline(on, options) // T2.9 inline expansion on submit
 }
 
 // ===== T2.6 editor UX: prompt.edit highlight + prompt.autocomplete typeahead (owner: T2.6) =====
 // The scan only reads atoms declared in this file; the T2.7 band reads this same const.
 const viewAtom = atom({ plugin: 'brewmod-placeholders', key: 'view' } as const, { tokens: [] })
+let shown: PlaceholderView | null = null // module level so T2.9 can forget it after a view reset; register() clears it
 
 function registerEditor(on: On, options: PluginOptions): void {
   const prefix = validatePrefix(options.prefix).prefix
   const style: EditorStyle = { knownColor: optionColor(options.knownColor, 'suggestion'), unknownColor: optionColor(options.unknownColor, 'warning') }
-  let shown: PlaceholderView | null = null
+  shown = null
 
   // Zero I/O except the view atom, written only when the token view changes.
   on('prompt.edit', async ($, e, next) => {
@@ -106,6 +111,12 @@ function registerClassic(on: On, options: PluginOptions): ModeTracker {
           setEditorEntries(toEditorEntries(reg.defs))
         }
         compiled = memoCompile(compiled, reg.defs, check.prefix)
+        try { // T2.9 warnUnknown toast: advisory, never alters the prompt or the expansion
+          const bad = options.warnUnknown === false ? [] : unknownTokens(compiled.matchers, prompt)
+          if (bad.length > 0) $.ui.toast(unknownMessage(bad))
+        } catch {
+          // no toast
+        }
         built = assembleBlocks(compiled, prompt, e.permission_mode)
       }
     } catch {
@@ -163,3 +174,85 @@ function registerBand(on: On, options: PluginOptions): void {
   })
 }
 // ===== end T2.7 =====
+
+// ===== T2.9 inline + warnUnknown (owner: T2.9) =====
+// Inline defs (`insert: inline`, `when: always`) are expanded in the submitted text; context defs stay on the classic path (assembleBlocks skips inline).
+// prompt.submit has no mode, so a plan/not-plan inline def is left verbatim. The warnUnknown toast lives in the classic hook above (one marked block).
+function registerInline(on: On, options: PluginOptions): void {
+  const check = validatePrefix(options.prefix)
+  const cache = newRegistryCache()
+  let compiled: Compiled | null = null
+
+  on('prompt.submit', async ($, e, next) => {
+    // The draft leaves the composer on submit only for the person's own Enter: bridge/sdk/other origins keep the band.
+    if (e.origin.kind === 'composer' && e.isMeta === undefined) {
+      try {
+        await update($, viewAtom, () => ({ tokens: [] }))
+        shown = null
+      } catch {
+        // band stays until the next edit
+      }
+    }
+    let out = e
+    try {
+      if (isInlineSubmit(e) && e.text.includes(check.prefix)) {
+        const root = await $.session.root()
+        const cfg = await $.env.get('CLAUDE_CONFIG_DIR')
+        const home = (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE'))
+        const reg = await loadRegistry(
+          { exists: (p) => $.fs.exists(p), list: (p) => $.fs.list(p), read: (p) => $.fs.read(p) },
+          { pluginRoot: $.plugin.root, root, configDir: configDirOf(cfg, home) },
+          cache,
+        )
+        compiled = memoCompile(compiled, reg.defs, check.prefix)
+        const text = expandInline(compiled, e.text)
+        if (text !== null) out = { ...e, text }
+      }
+    } catch {
+      out = e
+    }
+    return next(out)
+  })
+}
+// ===== end T2.9 =====
+
+// ===== T2.8 command (owner: T2.8) =====
+// A second unmatched session.start is refused by validate, so the registration hook carries the match-all matcher `{ cwd: /^/ }`.
+function registerCommand(on: On, _options: PluginOptions): void {
+  on('session.start', { cwd: /^/ }, async ($, e, next) => {
+    try {
+      await $.command.register({ name: 'placeholders', description: 'List, show, add, edit and remove placeholder definitions', argumentHint: '[list|show|add|edit|rm] [name] [global] [text]' })
+    } catch {
+      // the command stays unavailable; nothing else depends on it
+    }
+    return next(e)
+  })
+
+  on('command.run', { command: 'placeholders' }, async ($, e) => {
+    try {
+      const root = await $.session.root().catch(() => undefined)
+      const cfg = await $.env.get('CLAUDE_CONFIG_DIR')
+      const home = (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE'))
+      const out = await runCommand(
+        {
+          exists: (p) => $.fs.exists(p),
+          list: (p) => $.fs.list(p),
+          read: (p) => $.fs.read(p),
+          write: (p, t) => $.fs.write(p, t),
+          stat: (p) => $.fs.stat(p, { resolve: true }).catch(() => undefined),
+          remove: async (p) => {
+            const r = await $.process.run(['rm', '--', p])
+            return { exitCode: r.exitCode, stderr: r.stderr }
+          },
+        },
+        { pluginRoot: $.plugin.root, root, configDir: configDirOf(cfg, home) },
+        e.args,
+      )
+      if (out.registry !== null) setEditorEntries(toEditorEntries(out.registry.defs))
+      return { text: out.text }
+    } catch (err) {
+      return { text: `placeholders: failed: ${err instanceof Error ? err.message : String(err)}` }
+    }
+  }).catch(($, e, next) => (next.called ? next(e) : { text: 'placeholders: command failed' }))
+}
+// ===== end T2.8 =====
