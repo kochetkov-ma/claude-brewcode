@@ -1,7 +1,7 @@
 {
   "name": "brewmod-plan-effort",
   "version": "6.6.2",
-  "description": "Raises the main loop to xhigh effort while in plan mode, by rewriting each request; the session effort setting is never touched",
+  "description": "Raises the main loop to the configured effort (default xhigh) while in plan mode, by rewriting each request; the session effort setting is never touched",
   "author": {
     "name": "Maksim Kochetkov",
     "email": "apmatypa88@gmail.com",

@@ -19,43 +19,32 @@ export const register: Register = (on, options) => {
   const fromClassic = (e: { permission_mode?: unknown; agent_id?: unknown }): boolean =>
     e.agent_id === undefined && typeof e.permission_mode === 'string' && setPlan(e.permission_mode === 'plan')
 
+  // No try/catch: the engine skips a failing hook and the chain goes on (reference.md:78)
   on('classic.UserPromptSubmit', ($, e, next) => {
-    try {
-      if (fromClassic(e)) {
-        $.ui.status(undefined)
-        shown = undefined
-      }
-    } catch {
-      // fail open: keep the last known mode
+    if (fromClassic(e)) {
+      $.ui.status(undefined)
+      shown = undefined
     }
     return next(e)
   })
 
   on('classic.PostToolBatch', ($, e, next) => {
-    try {
-      if (fromClassic(e)) {
-        $.ui.status(undefined)
-        shown = undefined
-      }
-    } catch {
-      // fail open: keep the last known mode
+    if (fromClassic(e)) {
+      $.ui.status(undefined)
+      shown = undefined
     }
     return next(e)
   })
 
   // Non-classic fallback (org-managed installs); fires before turn.step
   on('session.append', ($, e, next) => {
-    try {
-      const { type, name } = e.message
-      if (e.agentId === undefined && type === 'attachment') {
-        if (name === 'plan_mode') setPlan(true)
-        else if (name === 'plan_mode_exit' && setPlan(false)) {
-          $.ui.status(undefined)
-          shown = undefined
-        }
+    const { type, name } = e.message
+    if (e.agentId === undefined && type === 'attachment') {
+      if (name === 'plan_mode') setPlan(true)
+      else if (name === 'plan_mode_exit' && setPlan(false)) {
+        $.ui.status(undefined)
+        shown = undefined
       }
-    } catch {
-      // fail open: keep the last known mode
     }
     return next(e)
   })
@@ -64,19 +53,15 @@ export const register: Register = (on, options) => {
   // Status 'plan: <target>' is pinned on a raised main step, cleared on an unraised one; only on change
   on('turn.step', async function* ($, e, next) {
     const main = e.agentId === undefined
-    const wanted = RANK[rank(options.planEffort)] ?? 'xhigh'
+    const wanted = rank(options.planEffort)
     const have = rank(e.effort)
-    const target = main && plan && have >= 0 && have < rank(wanted) ? wanted : undefined
-    try {
-      if (main && options.statusLine !== false) {
-        const text = target === undefined ? undefined : `plan: ${target}`
-        if (text !== shown) {
-          $.ui.status(text)
-          shown = text
-        }
+    const target = main && plan && have >= 0 && have < wanted ? RANK[wanted] : undefined
+    if (main && options.statusLine !== false) {
+      const text = target === undefined ? undefined : `plan: ${target}`
+      if (text !== shown) {
+        $.ui.status(text)
+        shown = text
       }
-    } catch {
-      // status is cosmetic
     }
     return yield* next(target === undefined ? e : { ...e, effort: target })
   })

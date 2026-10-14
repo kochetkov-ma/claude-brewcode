@@ -116,13 +116,13 @@ test('GIVEN no classic hooks WHEN session.append plan_mode and plan_mode_exit ro
   const left = await append($, 'plan_mode_exit')
   await step($, 'high')
   expect(seen.efforts, 'plan_mode raises, plan_mode_exit restores').toEqual(['xhigh', 'high'])
-  expect([entered, left], 'rows reach the store unchanged').toMatchObject([
+  expect([entered, left], 'rows reach the store unchanged').toEqual([
     { message: { type: 'attachment', name: 'plan_mode', content: [{ type: 'text', text: 'plan_mode' }] }, uuid: 'u-plan_mode' },
     { message: { type: 'attachment', name: 'plan_mode_exit', content: [{ type: 'text', text: 'plan_mode_exit' }] }, uuid: 'u-plan_mode_exit' },
   ])
 })
 
-for (const [planEffort, expected] of [['max', 'max'], ['high', 'high'], ['turbo', 'xhigh']] as const) {
+for (const [planEffort, expected] of [['max', 'max'], ['high', 'high']] as const) {
   test(`GIVEN planEffort ${planEffort} WHEN a plan step at medium runs THEN the engine gets ${expected}`, { options: { planEffort } }, async ($, on) => {
     const seen = bottoms(on)
     await prompt($, 'plan')
@@ -130,6 +130,40 @@ for (const [planEffort, expected] of [['max', 'max'], ['high', 'high'], ['turbo'
     expect(seen.efforts, `planEffort ${planEffort} yields ${expected}`).toEqual([expected])
   })
 }
+
+test('GIVEN planEffort turbo outside the manifest options WHEN a plan step at medium runs THEN the engine supplies the default xhigh', { options: { planEffort: 'turbo' } }, async ($, on) => {
+  const seen = bottoms(on)
+  await prompt($, 'plan')
+  await step($, 'medium')
+  expect(seen.efforts, 'engine reads an unknown option as the manifest default').toEqual(['xhigh'])
+})
+
+test('GIVEN a system row named plan_mode WHEN a step at high runs THEN the mode stays off', async ($, on) => {
+  const seen = bottoms(on)
+  await $.session.append({
+    message: { type: 'system', name: 'plan_mode', content: [{ type: 'text', text: 'plan_mode' }] },
+    door: 'notice',
+    origin: { kind: 'engine' },
+    uuid: 'u-system',
+  } as never)
+  await step($, 'high')
+  expect(seen.efforts, 'only an attachment row flips the mode').toEqual(['high'])
+})
+
+test('GIVEN a throwing ui.status handler WHEN a plan step at high runs THEN the engine still gets xhigh', async ($, on) => {
+  const seen: Seen = { efforts: [], statuses: [] }
+  on('ui.status', () => {
+    throw new Error('status failed')
+  })
+  on('classic.UserPromptSubmit', () => ({}))
+  on('turn.step', async function* (_$, e) {
+    seen.efforts.push(e.effort)
+    return result(e)
+  })
+  await prompt($, 'plan')
+  await step($, 'high')
+  expect(seen.efforts, 'a failing status handler does not reach the mod').toEqual(['xhigh'])
+})
 
 test('GIVEN a plan step with chunks WHEN it streams THEN chunks and result pass unchanged and the bottom runs once', async ($, on) => {
   let calls = 0
@@ -169,7 +203,7 @@ const signals: [string, ($: Engine) => unknown, ($: Engine) => unknown][] = [
   ['a session.append row', ($) => append($, 'plan_mode'), ($) => append($, 'plan_mode_exit')],
 ]
 for (const [label, enter, leave] of signals) {
-  test(`GIVEN a pinned status WHEN ${label} leaves plan twice THEN the status is cleared once before any step`, async ($, on) => {
+  test(`GIVEN a pinned status WHEN ${label} leaves plan twice THEN the status is cleared once on leaving plan`, async ($, on) => {
     const seen = bottoms(on)
     await enter($)
     await step($, 'high')
