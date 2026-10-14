@@ -11,7 +11,8 @@ echo "ab.sh: logs in $OUT (kept)"
 
 claude plugin list > "$OUT/plugin-list.txt" 2>&1
 BT="$(awk '/brewtools@claude-brewcode/{f=1;next} f&&/Version:/{v=$2} f&&/Status:/{print v, $NF; exit}' "$OUT/plugin-list.txt")"
-if [ "$BT" != "6.6.2 enabled" ]; then echo "ab.sh: PRECONDITION brewtools@claude-brewcode is '$BT', expected '6.6.2 enabled'"; exit 2; fi
+WANT="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["version"])' "$SRC/../brewtools/.claude-plugin/plugin.json") enabled"
+if [ "$BT" != "$WANT" ]; then echo "ab.sh: PRECONDITION brewtools@claude-brewcode is '$BT', expected '$WANT'"; exit 2; fi
 echo "ab.sh: claude $(claude --version) | brewtools@claude-brewcode $BT | mod $SRC"
 
 # AB_SRC=worktree (default): snapshot of the mod dir now; AB_SRC=head: committed HEAD via git archive (read-only). Isolates the run from a peer's mid-edit.

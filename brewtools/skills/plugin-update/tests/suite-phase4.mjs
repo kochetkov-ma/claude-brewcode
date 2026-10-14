@@ -2,7 +2,7 @@
 // Phase 4 fences run against a stub `claude`: project/local rows update from their projectPath, not the session cwd.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -17,6 +17,7 @@ fs.appendFileSync(process.env.STUB_LOG, JSON.stringify({ cwd: fs.realpathSync(pr
 `;
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), 'plugin-update-phase4-')));
+process.on('exit', () => rmSync(base, { recursive: true, force: true }));
 const project = join(base, 'proj');
 const session = join(base, 'session');
 const bin = join(base, 'bin');

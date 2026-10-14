@@ -88,7 +88,7 @@ jobs:
           CLAUDE_CONFIG_DIR="$(mktemp -d)"
           export CLAUDE_CONFIG_DIR
           fail=0
-          for mod in ./brewmod-plan-effort ./brewmod-placeholders; do
+          for mod in ./brewmod-*/; do
             claude plugin test "$mod" || { echo "::error::claude plugin test $mod failed"; fail=1; }
           done
           node brewmod-placeholders/scripts/extract-defaults.mjs --check || { echo "::error::brewmod-placeholders defaults drift from brewtools references"; fail=1; }

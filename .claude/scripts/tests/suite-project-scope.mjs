@@ -2,7 +2,7 @@
 // update-plugin.sh + clean-plugin-cache.sh: project/local installs update from their projectPath before the prune.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -40,8 +40,13 @@ fs.writeFileSync(file, JSON.stringify(db));
 console.log('updated ' + id + ' for scope ' + scope);
 `;
 
+// Sandboxes (g3-scope-, g3-repo-) removed on exit.
+const DIRS = [];
+process.on('exit', () => DIRS.forEach(d => rmSync(d, { recursive: true, force: true })));
+
 function sandbox({ profileName = '.claude-t', projectExists = true, userVersion = OLD } = {}) {
     const home = realpathSync(mkdtempSync(join(tmpdir(), 'g3-scope-')));
+    DIRS.push(home);
     const profile = join(home, profileName);
     const cache = join(profile, 'plugins/cache/claude-brewcode/brewcode');
     const project = join(home, 'proj');
@@ -205,6 +210,7 @@ const call = (cwd, ...args) => ({ cwd, args });
 // Scratch repo: update-plugin.sh + clean-plugin-cache.sh copies, plugin.json per name, marketplace.json from `plugins`.
 function scratchRepo(plugins, names = ['brewcode', ...OTHERS]) {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'g3-repo-')));
+    DIRS.push(root);
     mkdirSync(join(root, '.claude/scripts'), { recursive: true });
     mkdirSync(join(root, '.claude-plugin'));
     for (const f of ['update-plugin.sh', 'clean-plugin-cache.sh']) writeFileSync(join(root, '.claude/scripts', f), readFileSync(join(SCRIPTS, f)));

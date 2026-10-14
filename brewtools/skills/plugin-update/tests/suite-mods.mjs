@@ -2,7 +2,7 @@
 // Optional brewmod-* mods: fetched and updated when installed, never installed by this skill.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,6 +11,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SKILL = readFileSync(join(ROOT, 'SKILL.md'), 'utf8');
 const phase = (from, to) => SKILL.slice(SKILL.indexOf(from), SKILL.indexOf(to));
 const base = realpathSync(mkdtempSync(join(tmpdir(), 'plugin-update-mods-')));
+process.on('exit', () => rmSync(base, { recursive: true, force: true }));
 const bin = join(base, 'bin');
 mkdirSync(bin);
 // Stub curl answers each raw plugin.json URL with version 9.9.9 for the plugin named in the URL.
