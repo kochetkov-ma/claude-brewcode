@@ -67,7 +67,7 @@ function check(name, actual, expected, message) {
 
 function pack(args, extraEnv = {}) {
   const r = spawnSync('node', [PUBLISH, 'pack', ...args], {
-    encoding: 'utf8', env: { ...process.env, ...extraEnv }, timeout: 30000,
+    encoding: 'utf8', env: { ...process.env, ...extraEnv }, timeout: 30000, maxBuffer: 64 * 1024 * 1024,
   });
   const out = r.stdout || '';
   return {
@@ -84,7 +84,7 @@ function pack(args, extraEnv = {}) {
 
 /** Archive contents as unzip sees them, directory entries dropped. */
 function archived(zipPath) {
-  const z = spawnSync('unzip', ['-Z1', zipPath], { encoding: 'utf8' });
+  const z = spawnSync('unzip', ['-Z1', zipPath], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
   return (z.stdout || '').split('\n').map((s) => s.trim())
     .filter((s) => s !== '' && !s.endsWith('/')).sort();
 }
@@ -140,6 +140,53 @@ function archived(zipPath) {
     'no manifest is printed, so no upload step is ever reached');
   check('zipfail.artifact', existsSync(failOut), false,
     'no partial archive is left behind for a later curl to pick up');
+}
+
+// ── failure causes: a child's error/signal is named, never read as its exit status ──
+{
+  // GIVEN a site whose zip -@ list is over 1 MiB: a zip that never reads it always gets EPIPE.
+  const big = join(BASE, 'big');
+  const bigNames = ['index.html', ...Array.from({ length: 4200 }, (_, i) => `p/${'a'.repeat(240)}${String(i).padStart(5, '0')}.html`)];
+  for (const rel of bigNames) {
+    mkdirSync(dirname(join(big, rel)), { recursive: true });
+    writeFileSync(join(big, rel), '<p>x</p>');
+  }
+  check('cause.given.list', Buffer.byteLength(`${bigNames.join('\n')}\n`), 1062611, 'GIVEN the zip -@ list is 1062611 bytes (> 1 MiB pipe)');
+
+  // One fake `bin` per case, first on PATH; pack() outcome = [exit, full stdout, archive left on disk].
+  const fakeBin = (bin, tag, body) => {
+    const dir = join(BASE, `fake-${bin}-${tag}`);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, bin), `#!/bin/sh\n${body}\n`, { mode: 0o755 });
+    return { PATH: `${dir}:${process.env.PATH}` };
+  };
+  const packOutcome = (dir, name, env) => {
+    const out = join(BASE, 'out', name);
+    const r = pack(['--dir', dir, '--out', out], env);
+    return [r.status, r.out, existsSync(out)];
+  };
+
+  // WHEN zip exits 0 without reading the list THEN the pipe error is named, not "zip exited 0".
+  check('cause.zip.epipe', packOutcome(big, 'epipe.zip', fakeBin('zip', 'epipe', 'exit 0')),
+    [1, 'FAILED: zip failed (EPIPE) — no archive produced\nRESULT: fail\n', false], 'EPIPE named, no manifest, no archive');
+
+  // WHEN zip exits 3 without reading the list THEN its own status wins over the EPIPE it caused.
+  check('cause.zip.status', packOutcome(big, 'exit3.zip', fakeBin('zip', 'exit3', 'exit 3')),
+    [1, 'FAILED: zip exited 3 — no archive produced\nRESULT: fail\n', false], 'non-zero status named, no manifest, no archive');
+
+  // WHEN zip reads the list, then dies on a signal THEN the signal is named.
+  check('cause.zip.signal', packOutcome(SITE, 'zip-kill.zip', fakeBin('zip', 'kill', 'cat > /dev/null\nkill -9 $$')),
+    [1, 'FAILED: zip killed by SIGKILL — no archive produced\nRESULT: fail\n', false], 'signal named, no manifest, no archive');
+
+  // WHEN unzip dies on a signal during verification THEN the check is reported unfinished and the archive removed.
+  check('cause.unzip.signal', packOutcome(SITE, 'unzip-kill.zip', fakeBin('unzip', 'kill', 'kill -9 $$')),
+    [1, 'FAILED: archive could not be checked: unzip killed by SIGKILL\nRESULT: fail\n', false], 'unfinished check != corrupt archive');
+
+  // WHEN real zip/unzip pack the >1 MiB site THEN the unzip listing fits its buffer and the site verifies.
+  const bigOut = join(BASE, 'out', 'big.zip');
+  const r = pack(['--dir', big, '--out', bigOut]);
+  check('cause.bigsite', [r.status, r.entries, r.field('RESULT'), archived(bigOut)], [0, bigNames, 'ok', bigNames],
+    'a valid many-file site is not misread as an integrity failure (was ENOBUFS)');
 }
 
 // ── entry resolution ────────────────────────────────────────────────────────

@@ -136,7 +136,8 @@ verify_provider() {
     if [[ "$HTTP_CODE" == "200" ]]; then
       reason="200 with no assistant text block"
     else
-      reason="$(printf '%s' "$BODY" | tr -d '\r\n' | head -c 200)"
+      # `cut`, never `head -c`: head exits early, SIGPIPEs tr on a >64 KB body -> errexit aborts the run (rc 141).
+      reason="$(printf '%s' "$BODY" | tr -d '\r\n' | cut -c 1-200)"
     fi
   fi
   echo "RESPONSE=${reason:-unknown}"

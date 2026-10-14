@@ -16,6 +16,7 @@ if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
 fi
 
 command -v node >/dev/null 2>&1 || { printf '❌ node is required to run the provider-switch suites\n' >&2; exit 1; }
+command -v zsh >/dev/null 2>&1 || { printf '❌ zsh is required: suite-alias sources the generated ~/.zshrc block\n' >&2; exit 1; }
 
 SUITES=""
 if [ "$#" -gt 0 ]; then

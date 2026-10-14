@@ -26,7 +26,7 @@ mkdirSync(HOME_DIR, { recursive: true });
 const STUB = join(BIN, 'curl');
 writeFileSync(STUB, `#!/bin/bash
 [[ -n "\${STUB_ARGV_LOG:-}" ]] && printf '%s' "\$*" > "\$STUB_ARGV_LOG"
-[[ -n "\${STUB_CFG_LOG:-}" ]] && cat > "\$STUB_CFG_LOG"
+cat > "\${STUB_CFG_LOG:-/dev/null}"  # drain stdin like real \`curl -K -\`: an unread pipe SIGPIPEs printf -> rc 141
 printf '%s' "\${STUB_BODY:-}"
 printf '\\n%s' "\${STUB_CODE:-200}"
 `);
@@ -109,6 +109,17 @@ const withKey = { DEEPSEEK_API_KEY: KEY };
   const r = runVerify('deepseek', { body, code: '403', env: withKey });
   check('err403.http', kv(r.stdout, 'HTTP_CODE'), '403', 'the HTTP code is reported verbatim');
   check('err403.status', kv(r.stdout, 'STATUS'), 'fail', 'a 403 fails');
+}
+
+{
+  // Non-JSON error page past the pipe buffer: the 200-char reason must not SIGPIPE-abort the run.
+  const body = `<html>${'x'.repeat(120000)}\r\n</html>`;
+  const r = runVerify('deepseek', { body, code: '502', env: withKey });
+  check('bigerr.exit', r.status, 0, 'a huge non-JSON error body never aborts verify-providers.sh');
+  check('bigerr.http', kv(r.stdout, 'HTTP_CODE'), '502', 'the HTTP code is reported verbatim');
+  check('bigerr.status', kv(r.stdout, 'STATUS'), 'fail', 'a 502 fails');
+  check('bigerr.reason', kv(r.stdout, 'RESPONSE'), `<html>${'x'.repeat(194)}`,
+    'the reason is the first 200 chars of the CR/LF-stripped body');
 }
 
 // ── 3. no key at all is a skip, not a pass ──────────────────────────────────
