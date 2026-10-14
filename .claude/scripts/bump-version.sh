@@ -37,6 +37,7 @@ brewcode/agents/agent-creator.md|fmd|brewcode
 brewcode/agents/bash-expert.md|fmd|brewcode
 brewcode/agents/bc-rules-organizer.md|fmd|brewcode
 brewcode/agents/hook-creator.md|fmd|brewcode
+brewcode/agents/mod-creator.md|fmd|brewcode
 brewcode/agents/skill-creator.md|fmd|brewcode
 brewcode/skills/setup-status/references/artifact-metadata.md|fmd|brewcode
 brewdoc/skills/docsync-setup/assets/docsync-track.mjs|mjs|brewdoc:docsync-setup

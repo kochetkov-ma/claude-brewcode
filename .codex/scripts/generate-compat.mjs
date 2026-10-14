@@ -36,7 +36,8 @@ const MANUAL_NATIVE_SKILLS = new Set([
 const CLAUDE_ONLY_AGENT_REFERENCES = [
   'references/agent-context-and-execution.md', 'references/agent-known-issues.md', 'references/agent-scope-and-tools.md',
   'references/hooks-changes.md', 'references/hooks-env.md', 'references/hooks-events.md', 'references/hooks-templates.md',
-  'references/hooks-types-config.md', 'references/hooks-io-contract.md'
+  'references/hooks-types-config.md', 'references/hooks-io-contract.md',
+  'references/mods-api.md', 'references/mods-changes.md', 'references/mods-lifecycle.md', 'references/mods-patterns.md', 'references/mods-testing.md'
 ];
 // teams-setup Claude mode procedures; the native SKILL.md carries its own workflow (validator mirrors this).
 const CLAUDE_ONLY_TEAMS_REFERENCES = [
@@ -1785,6 +1786,8 @@ esac
 
   if (plugin === 'brewcode' && skill === 'agents') {
     for (const name of CLAUDE_ONLY_AGENT_REFERENCES) fs.rmSync(path.join(targetDir, name), { force: true });
+    // Mods (mod-creator) are Claude Code only: its drift-check script and suite stay out of the mirror.
+    for (const name of ['scripts', 'tests']) fs.rmSync(path.join(targetDir, name), { recursive: true, force: true });
     for (const [name, value] of Object.entries(nativeAgentReferences())) {
       writeFile(path.join(targetDir, 'references', name), `${value}\n`);
     }

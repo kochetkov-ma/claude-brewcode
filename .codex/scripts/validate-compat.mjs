@@ -192,7 +192,8 @@ function checkHookCommand(plugin, distRoot, hook) {
 const CLAUDE_ONLY_AGENT_REFERENCES = [
   'references/agent-context-and-execution.md', 'references/agent-known-issues.md', 'references/agent-scope-and-tools.md',
   'references/hooks-changes.md', 'references/hooks-env.md', 'references/hooks-events.md', 'references/hooks-templates.md',
-  'references/hooks-types-config.md', 'references/hooks-io-contract.md'
+  'references/hooks-types-config.md', 'references/hooks-io-contract.md',
+  'references/mods-api.md', 'references/mods-changes.md', 'references/mods-lifecycle.md', 'references/mods-patterns.md', 'references/mods-testing.md'
 ];
 // teams-setup Claude mode procedures, dropped by the generator; the native SKILL.md is self-contained.
 const CLAUDE_ONLY_TEAMS_REFERENCES = [
@@ -203,7 +204,7 @@ const CLAUDE_ONLY_TEAMS_REFERENCES = [
 function resourceTarget(plugin, skill, relative) {
   if (relative === 'SKILL.md' || relative.startsWith('.claude/') || relative.includes('/__pycache__/') || relative.endsWith('.pyc')) return null;
   if (plugin === 'brewtools' && skill === 'manager-setup' && (['references/hard.md', 'references/intent-routing.md'].includes(relative) || relative.startsWith('tests/'))) return null;
-  if (plugin === 'brewcode' && skill === 'agents' && CLAUDE_ONLY_AGENT_REFERENCES.includes(relative)) return null;
+  if (plugin === 'brewcode' && skill === 'agents' && (CLAUDE_ONLY_AGENT_REFERENCES.includes(relative) || relative.startsWith('scripts/') || relative.startsWith('tests/'))) return null;
   if (plugin === 'brewcode' && skill === 'teams-setup' && CLAUDE_ONLY_TEAMS_REFERENCES.includes(relative)) return null;
   // Claude-only invocation contract suites (DMI, allowed-tools); the generator drops them from the mirror.
   if (plugin === 'brewtools' && skill === 'text-optimize' && relative === 'tests/suite-frontmatter.mjs') return null;
