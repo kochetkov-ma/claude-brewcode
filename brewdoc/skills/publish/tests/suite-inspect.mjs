@@ -50,8 +50,8 @@ function makeZip(name, files) {
   return zipPath;
 }
 
-function inspect(args) {
-  const r = spawnSync('node', [PUBLISH, 'inspect', ...args], { encoding: 'utf8', timeout: 30000 });
+function inspect(args, extraEnv = {}) {
+  const r = spawnSync('node', [PUBLISH, 'inspect', ...args], { encoding: 'utf8', timeout: 30000, env: { ...process.env, ...extraEnv } });
   const out = r.stdout || '';
   return {
     status: r.status,
@@ -120,6 +120,24 @@ function inspect(args) {
   const nohtml = makeZip('nohtml', { 'notes.txt': 'no pages' });
   check('nohtml.exit', inspect(['--zip', nohtml]).status, 1,
     'an archive with no .html fails instead of guessing an entry');
+}
+
+// ── failure cause: an unfinished unzip check is not a corrupt archive ───────
+{
+  // GIVEN a valid ZIP with a fake unzip killed by a signal first on PATH, and a corrupt ZIP with real unzip.
+  const valid = makeZip('cause', { 'index.html': '<h1>hi</h1>' });
+  const fake = join(BASE, 'fake-unzip-kill');
+  mkdirSync(fake, { recursive: true });
+  writeFileSync(join(fake, 'unzip'), '#!/bin/sh\nkill -9 $$\n', { mode: 0o755 });
+  const corrupt = join(BASE, 'cause-corrupt.zip');
+  writeFileSync(corrupt, 'not a zip at all');
+  // WHEN both are inspected THEN the signal is named, and a non-zero unzip exit keeps the integrity message.
+  const killed = inspect(['--zip', valid], { PATH: `${fake}:${process.env.PATH}` });
+  const bad = inspect(['--zip', corrupt]);
+  check('cause.unzip', [[killed.status, killed.out], [bad.status, bad.out]], [
+    [1, 'FAILED: archive could not be checked: unzip killed by SIGKILL\nRESULT: fail\n'],
+    [1, 'FAILED: archive failed its integrity check\nRESULT: fail\n'],
+  ], 'a killed check and a corrupt archive get distinct, exact reasons');
 }
 
 // ── usage ──────────────────────────────────────────────────────────────────

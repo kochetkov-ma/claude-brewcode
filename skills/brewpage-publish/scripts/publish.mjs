@@ -22,6 +22,9 @@ const SENSITIVE_RE = /(^|\/)(\.env|id_rsa|id_ed25519)|secret|credential|password
 
 const ENTRY_RE = /^[A-Za-z0-9._-]+(\/[A-Za-z0-9._-]+)*$/;
 
+/** `unzip` stdout cap: Node's 1 MB default kills `-Z1` on a valid site with >1 MB of names (ENOBUFS). */
+const LIST_MAX_BUFFER = 64 * 1024 * 1024;
+
 function die(msg) {
   console.log(`FAILED: ${msg}`);
   console.log('RESULT: fail');
@@ -85,13 +88,28 @@ function requireTool(bin) {
   if (probe.error && probe.error.code === 'ENOENT') die(`${bin} required`);
 }
 
-/** `unzip -Z1` listing; returns file names (directory entries dropped). */
+/** Why a spawnSync child failed, '' on success; its own non-zero exit wins over the EPIPE it causes. */
+function failure(bin, r) {
+  if (r.status !== 0 && r.status !== null) return `${bin} exited ${r.status}`;
+  if (r.error) return `${bin} failed (${r.error.code || r.error.message})`;
+  return r.signal ? `${bin} killed by ${r.signal}` : '';
+}
+
+/** One `unzip` run: { out }, or { why } telling a bad archive (non-zero exit) from a check that never finished. */
+function unzip(flag, zipPath) {
+  const r = spawnSync('unzip', [flag, zipPath], { encoding: 'utf8', maxBuffer: LIST_MAX_BUFFER });
+  if (r.status !== 0 && r.status !== null) return { why: 'archive failed its integrity check' };
+  const why = failure('unzip', r);
+  return why ? { why: `archive could not be checked: ${why}` } : { out: r.stdout || '' };
+}
+
+/** `unzip -tq` then `unzip -Z1`: { names } sorted, directory entries dropped, or { why }. */
 function listArchive(zipPath) {
-  const t = spawnSync('unzip', ['-t', zipPath], { encoding: 'utf8' });
-  if (t.status !== 0) return null;
-  const z = spawnSync('unzip', ['-Z1', zipPath], { encoding: 'utf8' });
-  if (z.status !== 0) return null;
-  return (z.stdout || '').split('\n').map((s) => s.trim()).filter((s) => s !== '' && !s.endsWith('/')).sort();
+  const t = unzip('-tq', zipPath);
+  if (t.why) return t;
+  const z = unzip('-Z1', zipPath);
+  if (z.why) return z;
+  return { names: z.out.split('\n').map((s) => s.trim()).filter((s) => s !== '' && !s.endsWith('/')).sort() };
 }
 
 /** The one manifest format, and the only place the exit code is decided. */
@@ -134,9 +152,11 @@ function pack(args) {
   const z = spawnSync('zip', ['-q', '-X', '-@', out], {
     cwd: dir, input: `${kept.join('\n')}\n`, encoding: 'utf8',
   });
-  if (z.error || z.status !== 0) {
+  // zip exiting 0 without reading the list still fails: EPIPE (z.error) with status 0.
+  const zipWhy = failure('zip', z);
+  if (zipWhy) {
     rmSync(out, { force: true });
-    die(`zip exited ${z.status === null ? 'abnormally' : z.status} — no archive produced`);
+    die(`${zipWhy} — no archive produced`);
   }
 
   if (!existsSync(out) || statSync(out).size === 0) {
@@ -144,8 +164,8 @@ function pack(args) {
     die('zip produced no usable archive');
   }
   const bytes = statSync(out).size;
-  const listed = listArchive(out);
-  if (listed === null) { rmSync(out, { force: true }); die('archive failed its integrity check'); }
+  const { names: listed, why } = listArchive(out);
+  if (why) { rmSync(out, { force: true }); die(why); }
   if (listed.join('\n') !== kept.join('\n')) {
     rmSync(out, { force: true });
     die(`archive contents differ from the selected file set (in archive: ${listed.length}, selected: ${kept.length})`);
@@ -162,8 +182,8 @@ function inspect(args) {
 
   const bytes = statSync(zipPath).size;
   if (bytes === 0) die('archive is 0 bytes');
-  const listed = listArchive(zipPath);
-  if (listed === null) die('archive failed its integrity check');
+  const { names: listed, why } = listArchive(zipPath);
+  if (why) die(why);
   if (listed.length === 0) die('archive contains no files');
   const entry = resolveEntry(listed, entryArg);
 

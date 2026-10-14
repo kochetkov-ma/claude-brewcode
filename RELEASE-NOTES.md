@@ -2,6 +2,37 @@
 
 ---
 
+## v6.6.1 (2026-10-14)
+
+> Docs: [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
+
+> Docs: [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/)
+
+Fix-only hotfix: `/brewdoc:publish` accepts sites with long file lists, and `verify-providers.sh` survives huge non-JSON error pages.
+
+### brewdoc
+
+#### Fixed
+
+- **publish:** a site with a long file list no longer fails with "archive failed its integrity check": `unzip` output exceeded Node's 1 MB child buffer; the buffer is now 64 MB and the check runs `unzip -tq`.
+- **publish:** zip/unzip failures name the real cause (`zip failed (EPIPE)`, `killed by SIGNAL`, `archive could not be checked`) instead of "zip exited 0".
+- **publish tests:** deterministic zip fakes (read stdin like `zip -@`), new EPIPE, signal and large-site cases.
+
+### standalone skills
+
+#### Fixed
+
+- **brewpage-publish:** the same `publish.mjs` fixes in `skills/brewpage-publish` and `openclaw/brewpage-publish`.
+
+### brewtools
+
+#### Fixed
+
+- **provider-switch:** `verify-providers.sh` no longer aborts with exit 141 (no `STATUS` line, remaining providers skipped in `all` mode) when a provider returns a non-JSON error page over ~64 KB (`head -c` replaced by `cut -c`).
+- **provider-switch tests:** the fake curl reads its config stdin like real `curl -K -` (CI flake); the runner fails clearly when zsh is missing.
+
+---
+
 ## v6.6.0 (2026-10-14)
 
 > Docs: [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [bc-rules-organizer](https://doc-claude.brewcode.app/brewcode/agents/bc-rules-organizer/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [e2e](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [rules](https://doc-claude.brewcode.app/brewcode/skills/rules/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [teams-setup](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/)

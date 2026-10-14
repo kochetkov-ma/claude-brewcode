@@ -40,12 +40,20 @@ const FIXTURE = {
 };
 const EXPECTED_FILES = ['assets/site.css', 'index.html', 'nested/about.html'];
 const NOT_VERIFIED = 'FAILED: archive not verified (publish.mjs exit 1) — nothing was uploaded';
-// publish.mjs runs `zip -q -X -@ <out>`: $4 is the archive path.
+// Fakes `zip -q -X -@ <out>` ($4 = archive); reads the piped list to EOF like real `-@`, else exiting
+// first races node's stdin write: EPIPE -> publish.mjs prints "zip failed (EPIPE)" (flaky on Linux CI).
+const READ_LIST = 'cat > /dev/null\n';
 const FAILURES = [
-  ['zip failure', 'printf partial > "$4"\nexit 3', 'FAILED: zip exited 3 — no archive produced'],
-  ['empty archive', ': > "$4"\nexit 0', 'FAILED: zip produced no usable archive'],
-  ['corrupt archive', 'printf invalid > "$4"\nexit 0', 'FAILED: archive failed its integrity check'],
+  ['zip failure', READ_LIST + 'printf partial > "$4"\nexit 3', 'FAILED: zip exited 3 — no archive produced'],
+  ['empty archive', READ_LIST + ': > "$4"\nexit 0', 'FAILED: zip produced no usable archive'],
+  ['corrupt archive', READ_LIST + 'printf invalid > "$4"\nexit 0', 'FAILED: archive failed its integrity check'],
 ];
+// Fakes that never read a >1 MiB list: EPIPE every run, so the race above becomes the deterministic case.
+const UNREAD_FAILURES = [
+  ['zip exits 0 unread', 'exit 0', 'FAILED: zip failed (EPIPE) — no archive produced'],
+  ['zip exits 3 unread', 'exit 3', 'FAILED: zip exited 3 — no archive produced'],
+];
+const BIG_NAMES = ['index.html', ...Array.from({ length: 4200 }, (_, i) => `p/${'a'.repeat(240)}${String(i).padStart(5, '0')}.html`)];
 const CONFIRM = 'CONFIRM: flagged entries listed above — ask the user, then re-run with --confirmed';
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), 'standalone-archive-')));
@@ -103,6 +111,8 @@ const lastLine = out => out.trimEnd().split('\n').pop();
 const clearUpload = () => ['curl-args', 'uploaded.zip'].forEach(name => rmSync(join(base, name), { force: true }));
 
 after(() => rmSync(base, { recursive: true, force: true }));
+const bigSite = join(base, 'big-site');
+writeTree(bigSite, Object.fromEntries(BIG_NAMES.map(name => [name, '<p>x</p>'])));
 
 for (const copy of COPIES) {
   for (const [kind, uploadSuffix] of [['site-dir', ''], ['site-zip', '.zip']]) {
@@ -183,6 +193,18 @@ for (const copy of COPIES) {
       const r = runSync(copy, siteFence(copy, slots('site-dir', site)), binWith({ curl: UPLOAD_STUB, zip: stub }));
       assert.deepEqual([r.status, r.stdout, existsSync(join(base, 'curl-args')), runNames()],
         [1, `${message}\nRESULT: fail\n${NOT_VERIFIED}\n`, false, []], 'failure explained, curl never called, run dir removed');
+    });
+  }
+
+  for (const [failure, stub, message] of UNREAD_FAILURES) {
+    test(`${copy.name}: ${failure} names the real cause and aborts before upload`, () => {
+      // GIVEN the shared site with a 1062611-byte zip -@ list and a fake zip that never reads it.
+      assert.equal(Buffer.byteLength(BIG_NAMES.join('\n') + '\n'), 1062611, 'GIVEN a list far beyond any pipe buffer');
+      clearUpload();
+      // WHEN the path fence packs it THEN the cause is exact, curl never runs and the run dir goes.
+      const r = runSync(copy, siteFence(copy, slots('site-dir', bigSite)), binWith({ curl: UPLOAD_STUB, zip: stub }));
+      assert.deepEqual([r.status, r.stdout, existsSync(join(base, 'curl-args')), runNames()],
+        [1, `${message}\nRESULT: fail\n${NOT_VERIFIED}\n`, false, []], 'real cause named, curl never called, run dir removed');
     });
   }
 
