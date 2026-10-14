@@ -169,6 +169,8 @@ clean_plugin_dir "$CACHE_ROOT/brewcode"
 clean_plugin_dir "$CACHE_ROOT/brewdoc"
 clean_plugin_dir "$CACHE_ROOT/brewtools"
 clean_plugin_dir "$CACHE_ROOT/brewui"
+clean_plugin_dir "$CACHE_ROOT/brewmod-plan-effort"
+clean_plugin_dir "$CACHE_ROOT/brewmod-placeholders"
 
 # --- Symlink cleanup (shared across all plugins) ---
 SKILLS_DIR="$CONFIG_DIR/skills"

@@ -1,5 +1,5 @@
 #!/bin/bash
-# update-plugin.sh [brewcode|brewdoc|brewtools|brewui|all] [--dry-run|--help]: marketplace -> user-scope install/update -> project/local-scope updates (from each projectPath) -> prune old cache.
+# update-plugin.sh [brewcode|brewdoc|brewtools|brewui|brewmod-plan-effort|brewmod-placeholders|all] [--dry-run|--help]: marketplace -> user-scope install/update -> project/local-scope updates (from each projectPath) -> prune old cache.
 # Profile = $CLAUDE_CONFIG_DIR: `env -u CLAUDE_CONFIG_DIR bash update-plugin.sh` (~/.claude) | `CLAUDE_CONFIG_DIR=~/.claude-a bash update-plugin.sh`
 
 set -euo pipefail
@@ -22,24 +22,33 @@ log() { echo "$*" | tee -a "$LOG"; }
 err() { log ""; log "ERROR: $*"; exit 1; }
 
 # --- Argument parsing ---
+PLUGINS="brewcode brewdoc brewtools brewui brewmod-plan-effort brewmod-placeholders"
+PLUGIN_ALT="${PLUGINS// /|}"
 TARGET="all"
 DRY_RUN=false
 
 for arg in "$@"; do
     case "$arg" in
-        brewcode|brewdoc|brewtools|brewui|all) TARGET="$arg" ;;
         --dry-run) DRY_RUN=true ;;
         --help|-h)
-            echo "Usage: [CLAUDE_CONFIG_DIR=<profile dir>] $(basename "$0") [brewcode|brewdoc|brewtools|brewui|all] [--dry-run]"
+            echo "Usage: [CLAUDE_CONFIG_DIR=<profile dir>] $(basename "$0") [$PLUGIN_ALT|all] [--dry-run]"
             echo ""
-            echo "  <plugin>   Update only that plugin; all (default) updates the four, skipping any not installed at user scope"
+            echo "  <plugin>   Update only that plugin; all (default) updates the six, skipping any not installed at user scope"
             echo "  --dry-run  Print the profile, resolved cache paths and planned commands; change nothing"
             echo "  Profile    \$CLAUDE_CONFIG_DIR; unset = ~/.claude (from another profile: env -u CLAUDE_CONFIG_DIR bash $(basename "$0"))"
             exit 0
             ;;
-        *) err "Unknown argument '$arg'. Use: brewcode | brewdoc | brewtools | brewui | all | --dry-run | --help" ;;
+        all) TARGET="all" ;;
+        *)
+            if [[ " $PLUGINS " == *" $arg "* ]]; then TARGET="$arg"
+            else err "Unknown argument '$arg'. Use: ${PLUGINS// / | } | all | --dry-run | --help"; fi
+            ;;
     esac
 done
+
+if [[ "$TARGET" == "all" ]]; then TARGETS="$PLUGINS"; else TARGETS="$TARGET"; fi
+# brewmod-plan-effort -> BREWMOD_PLAN_EFFORT (stem of the per-plugin shell variables)
+var_key() { printf '%s' "$1" | tr '[:lower:]-' '[:upper:]_'; }
 
 log "=== Claude-Brewcode Plugin Suite Update (target: $TARGET) ==="
 log "Profile: $CONFIG_DIR (CLAUDE_CONFIG_DIR=${CLAUDE_CONFIG_DIR:-<unset>}) | cache: $CACHE_ROOT"
@@ -47,91 +56,49 @@ log "Profile: $CONFIG_DIR (CLAUDE_CONFIG_DIR=${CLAUDE_CONFIG_DIR:-<unset>}) | ca
 log ""
 
 # --- Read versions ---
-BREWCODE_JSON="$REPO_ROOT/brewcode/.claude-plugin/plugin.json"
-BREWDOC_JSON="$REPO_ROOT/brewdoc/.claude-plugin/plugin.json"
-BREWTOOLS_JSON="$REPO_ROOT/brewtools/.claude-plugin/plugin.json"
-BREWUI_JSON="$REPO_ROOT/brewui/.claude-plugin/plugin.json"
 MARKETPLACE_JSON="$REPO_ROOT/.claude-plugin/marketplace.json"
-
 [[ -f "$MARKETPLACE_JSON" ]] || err "Not found: $MARKETPLACE_JSON"
 
-# Validate and read versions only for target plugin(s)
-if [[ "$TARGET" == "brewcode" || "$TARGET" == "all" ]]; then
-    [[ -f "$BREWCODE_JSON" ]] || err "Not found: $BREWCODE_JSON"
-    BREWCODE_VER=$(jq -r '.version' "$BREWCODE_JSON")
-    MARKET_BREWCODE_VER=$(jq -r '.plugins[0].version' "$MARKETPLACE_JSON")
-fi
+# Sets MARKET_VER to the marketplace.json version of plugin $1, found by name (never by array index); call it unsubshelled so err exits.
+market_ver() {
+    MARKET_VER=$(jq -r --arg n "$1" '[.plugins[]? | select(.name == $n) | .version] | first // empty' "$MARKETPLACE_JSON") \
+        || err "cannot parse $MARKETPLACE_JSON"
+    [[ -n "$MARKET_VER" ]] || err "marketplace.json has no plugin entry named '$1' (or it has no version): $MARKETPLACE_JSON"
+}
 
-if [[ "$TARGET" == "brewdoc" || "$TARGET" == "all" ]]; then
-    [[ -f "$BREWDOC_JSON" ]] || err "Not found: $BREWDOC_JSON"
-    BREWDOC_VER=$(jq -r '.version' "$BREWDOC_JSON")
-    MARKET_BREWDOC_VER=$(jq -r '.plugins[1].version' "$MARKETPLACE_JSON")
-fi
-
-if [[ "$TARGET" == "brewtools" || "$TARGET" == "all" ]]; then
-    [[ -f "$BREWTOOLS_JSON" ]] || err "Not found: $BREWTOOLS_JSON"
-    BREWTOOLS_VER=$(jq -r '.version' "$BREWTOOLS_JSON")
-    MARKET_BREWTOOLS_VER=$(jq -r '.plugins[2].version' "$MARKETPLACE_JSON")
-fi
-
-if [[ "$TARGET" == "brewui" || "$TARGET" == "all" ]]; then
-    [[ -f "$BREWUI_JSON" ]] || err "Not found: $BREWUI_JSON"
-    BREWUI_VER=$(jq -r '.version' "$BREWUI_JSON")
-    MARKET_BREWUI_VER=$(jq -r '.plugins[3].version' "$MARKETPLACE_JSON")
-fi
+for NAME in $TARGETS; do
+    KEY=$(var_key "$NAME")
+    PLUGIN_JSON="$REPO_ROOT/$NAME/.claude-plugin/plugin.json"
+    [[ -f "$PLUGIN_JSON" ]] || err "Not found: $PLUGIN_JSON"
+    printf -v "${KEY}_VER" '%s' "$(jq -r '.version' "$PLUGIN_JSON")"
+    market_ver "$NAME"
+    printf -v "MARKET_${KEY}_VER" '%s' "$MARKET_VER"
+done
 
 # --- Version check table ---
 log "| Plugin | plugin.json | marketplace.json | Match |"
 log "|--------|-------------|-----------------|-------|"
-
-if [[ "$TARGET" == "brewcode" || "$TARGET" == "all" ]]; then
-    BREWCODE_MATCH=$([[ "$BREWCODE_VER" == "$MARKET_BREWCODE_VER" ]] && echo OK || echo MISMATCH)
-    log "| brewcode | $BREWCODE_VER | $MARKET_BREWCODE_VER | $BREWCODE_MATCH |"
-fi
-
-if [[ "$TARGET" == "brewdoc" || "$TARGET" == "all" ]]; then
-    BREWDOC_MATCH=$([[ "$BREWDOC_VER" == "$MARKET_BREWDOC_VER" ]] && echo OK || echo MISMATCH)
-    log "| brewdoc  | $BREWDOC_VER  | $MARKET_BREWDOC_VER  | $BREWDOC_MATCH |"
-fi
-
-if [[ "$TARGET" == "brewtools" || "$TARGET" == "all" ]]; then
-    BREWTOOLS_MATCH=$([[ "$BREWTOOLS_VER" == "$MARKET_BREWTOOLS_VER" ]] && echo OK || echo MISMATCH)
-    log "| brewtools | $BREWTOOLS_VER | $MARKET_BREWTOOLS_VER | $BREWTOOLS_MATCH |"
-fi
-
-if [[ "$TARGET" == "brewui" || "$TARGET" == "all" ]]; then
-    BREWUI_MATCH=$([[ "$BREWUI_VER" == "$MARKET_BREWUI_VER" ]] && echo OK || echo MISMATCH)
-    log "| brewui    | $BREWUI_VER | $MARKET_BREWUI_VER | $BREWUI_MATCH |"
-fi
-
+for NAME in $TARGETS; do
+    KEY=$(var_key "$NAME"); VV="${KEY}_VER"; MV="MARKET_${KEY}_VER"
+    MATCH=$([[ "${!VV}" == "${!MV}" ]] && echo OK || echo MISMATCH)
+    log "| $NAME | ${!VV} | ${!MV} | $MATCH |"
+done
 log ""
 
 # --- Version mismatch check ---
-if [[ "$TARGET" == "brewcode" || "$TARGET" == "all" ]]; then
-    [[ "$BREWCODE_VER" == "$MARKET_BREWCODE_VER" ]] || err "brewcode version mismatch! plugin.json=$BREWCODE_VER marketplace.json=$MARKET_BREWCODE_VER"
-fi
-
-if [[ "$TARGET" == "brewdoc" || "$TARGET" == "all" ]]; then
-    [[ "$BREWDOC_VER" == "$MARKET_BREWDOC_VER" ]] || err "brewdoc version mismatch! plugin.json=$BREWDOC_VER marketplace.json=$MARKET_BREWDOC_VER"
-fi
-
-if [[ "$TARGET" == "brewtools" || "$TARGET" == "all" ]]; then
-    [[ "$BREWTOOLS_VER" == "$MARKET_BREWTOOLS_VER" ]] || err "brewtools version mismatch! plugin.json=$BREWTOOLS_VER marketplace.json=$MARKET_BREWTOOLS_VER"
-fi
-
-if [[ "$TARGET" == "brewui" || "$TARGET" == "all" ]]; then
-    [[ "$BREWUI_VER" == "$MARKET_BREWUI_VER" ]] || err "brewui version mismatch! plugin.json=$BREWUI_VER marketplace.json=$MARKET_BREWUI_VER"
-fi
+for NAME in $TARGETS; do
+    KEY=$(var_key "$NAME"); VV="${KEY}_VER"; MV="MARKET_${KEY}_VER"
+    [[ "${!VV}" == "${!MV}" ]] || err "$NAME version mismatch! plugin.json=${!VV} marketplace.json=${!MV}"
+done
 
 if [[ "$TARGET" == "all" ]]; then
-    for OTHER_VER in "$BREWDOC_VER" "$BREWTOOLS_VER" "$BREWUI_VER"; do
-        [[ "$OTHER_VER" == "$BREWCODE_VER" ]] || err "Version mismatch across plugins! brewcode=$BREWCODE_VER brewdoc=$BREWDOC_VER brewtools=$BREWTOOLS_VER brewui=$BREWUI_VER (must be identical)"
+    for NAME in $TARGETS; do
+        VV="$(var_key "$NAME")_VER"
+        [[ "${!VV}" == "$BREWCODE_VER" ]] || err "Version mismatch across plugins! $NAME=${!VV} brewcode=$BREWCODE_VER (must be identical)"
     done
     log "Cross-plugin version: OK ($BREWCODE_VER)"
     log ""
 fi
-
-if [[ "$TARGET" == "all" ]]; then TARGETS="brewcode brewdoc brewtools brewui"; else TARGETS="$TARGET"; fi
 
 # Allow nested session (CLAUDECODE blocks recursive launches since v0.2.47)
 unset CLAUDECODE
@@ -172,7 +139,7 @@ if [[ $DRY_RUN == true ]]; then
     [[ "$TARGET" != "all" ]] || load_user_ids
     for NAME in $TARGETS; do
         if not_installed "$NAME"; then log "  ${NAME}: not installed in this profile -> skipped"; continue; fi
-        VER_VAR="$(printf '%s' "$NAME" | tr '[:lower:]' '[:upper:]')_VER"
+        VER_VAR="$(var_key "$NAME")_VER"
         if [[ -d "$CACHE_ROOT/$NAME/${!VER_VAR}" ]]; then ACTION="update"; else ACTION="uninstall + install"; fi
         log "  claude plugin $ACTION ${NAME}@claude-brewcode -> $CACHE_ROOT/$NAME/${!VER_VAR}"
     done
@@ -240,63 +207,19 @@ install_plugin() {
 
 # --- Step 2+3: Install target plugin(s) ---
 STEP=2
-BC_FILES=0
-BD_FILES=0
-BT_FILES=0
-
-if [[ "$TARGET" == "brewcode" || "$TARGET" == "all" ]]; then
-    if not_installed brewcode; then
-        log "$STEP. brewcode: not installed in this profile -> skipped"
-        BC_FILES="skipped (not installed)"
+for NAME in $TARGETS; do
+    KEY=$(var_key "$NAME"); VV="${KEY}_VER"
+    if not_installed "$NAME"; then
+        log "$STEP. $NAME: not installed in this profile -> skipped"
+        printf -v "FILES_${KEY}" '%s' "skipped (not installed)"
     else
-        log "$STEP. Installing brewcode..."
-        install_plugin "brewcode" "$BREWCODE_VER"
-        BC_FILES=$(find "$CACHE_ROOT/brewcode/$BREWCODE_VER" -type f 2>/dev/null | wc -l | tr -d ' ')
+        log "$STEP. Installing $NAME..."
+        install_plugin "$NAME" "${!VV}"
+        printf -v "FILES_${KEY}" '%s' "$(find "$CACHE_ROOT/$NAME/${!VV}" -type f 2>/dev/null | wc -l | tr -d ' ')"
     fi
     log ""
     STEP=$((STEP + 1))
-fi
-
-if [[ "$TARGET" == "brewdoc" || "$TARGET" == "all" ]]; then
-    if not_installed brewdoc; then
-        log "$STEP. brewdoc: not installed in this profile -> skipped"
-        BD_FILES="skipped (not installed)"
-    else
-        log "$STEP. Installing brewdoc..."
-        install_plugin "brewdoc" "$BREWDOC_VER"
-        BD_FILES=$(find "$CACHE_ROOT/brewdoc/$BREWDOC_VER" -type f 2>/dev/null | wc -l | tr -d ' ')
-    fi
-    log ""
-    STEP=$((STEP + 1))
-fi
-
-if [[ "$TARGET" == "brewtools" || "$TARGET" == "all" ]]; then
-    if not_installed brewtools; then
-        log "$STEP. brewtools: not installed in this profile -> skipped"
-        BT_FILES="skipped (not installed)"
-    else
-        log "$STEP. Installing brewtools..."
-        install_plugin "brewtools" "$BREWTOOLS_VER"
-        BT_FILES=$(find "$CACHE_ROOT/brewtools/$BREWTOOLS_VER" -type f 2>/dev/null | wc -l | tr -d ' ')
-    fi
-    log ""
-    STEP=$((STEP + 1))
-fi
-
-BU_FILES=0
-
-if [[ "$TARGET" == "brewui" || "$TARGET" == "all" ]]; then
-    if not_installed brewui; then
-        log "$STEP. brewui: not installed in this profile -> skipped"
-        BU_FILES="skipped (not installed)"
-    else
-        log "$STEP. Installing brewui..."
-        install_plugin "brewui" "$BREWUI_VER"
-        BU_FILES=$(find "$CACHE_ROOT/brewui/$BREWUI_VER" -type f 2>/dev/null | wc -l | tr -d ' ')
-    fi
-    log ""
-    STEP=$((STEP + 1))
-fi
+done
 
 # --- Project/local scope: resolved from the cwd, so each row updates from its own projectPath ---
 log "$STEP. Updating project-scope installs..."
@@ -332,22 +255,10 @@ log "=== Update Complete ==="
 log ""
 log "| Plugin | Version | Cache Files |"
 log "|--------|---------|-------------|"
-
-if [[ "$TARGET" == "brewcode" || "$TARGET" == "all" ]]; then
-    log "| brewcode | $BREWCODE_VER | ${BC_FILES:-?} |"
-fi
-
-if [[ "$TARGET" == "brewdoc" || "$TARGET" == "all" ]]; then
-    log "| brewdoc  | $BREWDOC_VER  | ${BD_FILES:-?}  |"
-fi
-
-if [[ "$TARGET" == "brewtools" || "$TARGET" == "all" ]]; then
-    log "| brewtools | $BREWTOOLS_VER | ${BT_FILES:-?} |"
-fi
-
-if [[ "$TARGET" == "brewui" || "$TARGET" == "all" ]]; then
-    log "| brewui    | $BREWUI_VER | ${BU_FILES:-?} |"
-fi
+for NAME in $TARGETS; do
+    KEY=$(var_key "$NAME"); VV="${KEY}_VER"; FV="FILES_${KEY}"
+    log "| $NAME | ${!VV} | ${!FV:-?} |"
+done
 
 log ""
 log ">>> Restart Claude Code to apply changes <<<"
