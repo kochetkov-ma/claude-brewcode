@@ -1,0 +1,49 @@
+{
+  "name": "brewmod-placeholders",
+  "version": "6.6.2",
+  "description": "Brewmod placeholders -- expands ++m, ++a, ++r, ++rr and +++ style placeholders into prompt context, with live highlighting and user-defined placeholders",
+  "author": {
+    "name": "Maksim Kochetkov",
+    "email": "apmatypa88@gmail.com",
+    "url": "https://github.com/kochetkov-ma"
+  },
+  "homepage": "https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewmod-placeholders",
+  "repository": "https://github.com/kochetkov-ma/claude-brewcode.git",
+  "license": "MIT",
+  "keywords": [
+    "brewmod",
+    "mod",
+    "placeholders",
+    "codewords",
+    "prompt"
+  ],
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "prefix": {
+      "type": "string",
+      "title": "Placeholder prefix",
+      "description": "2-8 ASCII punctuation characters that open a placeholder (default ++)",
+      "default": "++"
+    },
+    "knownColor": {
+      "type": "string",
+      "title": "Known placeholder color",
+      "description": "Theme color for a placeholder that has a definition",
+      "options": ["text", "inverseText", "inactive", "subtle", "suggestion", "remember", "success", "error", "warning", "merged", "claude", "permission", "planMode", "autoAccept", "promptBorder", "bashBorder", "ide", "diffAdded", "diffRemoved", "diffAddedDimmed", "diffRemovedDimmed", "diffAddedWord", "diffRemovedWord"],
+      "default": "suggestion"
+    },
+    "unknownColor": {
+      "type": "string",
+      "title": "Unknown placeholder color",
+      "description": "Theme color for a prefixed word that has no definition",
+      "options": ["text", "inverseText", "inactive", "subtle", "suggestion", "remember", "success", "error", "warning", "merged", "claude", "permission", "planMode", "autoAccept", "promptBorder", "bashBorder", "ide", "diffAdded", "diffRemoved", "diffAddedDimmed", "diffRemovedDimmed", "diffAddedWord", "diffRemovedWord"],
+      "default": "warning"
+    },
+    "warnUnknown": {
+      "type": "boolean",
+      "title": "Warn on unknown placeholders",
+      "description": "Toast when a submitted prompt holds an undefined placeholder",
+      "default": true
+    }
+  }
+}
