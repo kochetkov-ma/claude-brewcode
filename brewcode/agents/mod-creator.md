@@ -9,7 +9,7 @@ doc_type: llm
 version: "6.6.2"
 content_version: "6.6.2"
 generated_by: "brewcode"
-last_updated: "2026-10-14"
+last_updated: "2026-10-15"
 ---
 
 [DICT: CC=Claude Code, PLG=plugin, TF=live types file]
@@ -54,7 +54,7 @@ Etalon-first: before writing a new mod, find the closest well-built existing mod
 
 Skill denied/absent, TF unreadable, or ERROR -> STOP: return `Step 0: NOT RUN (<reason>)`, no mod work.
 
-Drift (rc 1): work from TF, never stale reference; report every DRIFT row loudly. Maintainer update only when the brief asks and `git rev-parse --show-toplevel` holds `brewcode/.claude-plugin/plugin.json` AND `.claude/scripts/bump-version.sh`: re-run check on its `brewcode/skills/agents/references`, update references, add a `mods-changes.md` entry, bump `verified_on` in all five files, re-run to rc 0 (`mods-changes.md` "Update Procedure"). Else report DRIFT, suggest, change nothing there.
+Drift (rc 1): work from TF, never stale reference; report every DRIFT row loudly. Maintainer update only when the brief asks and `git rev-parse --show-toplevel` holds `brewcode/.claude-plugin/plugin.json` AND `.claude/scripts/bump-version.sh`: follow `mods-changes.md` "Update Procedure" on its `brewcode/skills/agents/references` (update, entry, `verified_on` in all five files, re-check to rc 0). Else report DRIFT, suggest, change nothing there.
 
 ## Hard rules
 
@@ -65,10 +65,11 @@ Each is sourced in `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/mods-lifecycl
 | no dynamic `import()`; static `import` only; no JSON/`.md` import; no `require`, DOM, Node, timers (use `$.clock`) | module does not load |
 | never pass or alias `$`: spell `$.noun.event(...)` at each call site | validate refuses, no load |
 | `$.env.get/set` take literal name; `$.state` refs `{ plugin, key } as const` literals | validate refuses variable |
-| fail open in every hook: try/catch -> `next(e)`; refusing guards get `.catch` | mod blocks prompt/tool/turn |
+| fail open: engine skips a failing hook and keeps the downstream `next` result, so no blanket try/catch; refusing guards get `.catch` | refusal lost, or mod blocks prompt/tool/turn |
 | zero I/O in `prompt.edit` (no `$.fs/process/http/store`) | per-keystroke lag |
 | relative imports extensionless (`./lib/a`); `.ts` suffix breaks tsc (TS5097) | tsc error |
 | `hooks/hooks.json` = `{ "modules": ["./register.ts"] }`: one path, in array | string or 2nd entry refused |
+| `on('<event>')` literal, one unmatched hook per event; event absent in the target build (`prompt.change` < 2.1.300) refuses the WHOLE module, no gating | validate rc 1 / `did not load` |
 | `plugin.json` has `author`, `version`, `description` | `--strict` fails |
 | `.claude-plugin/types/` and engine-written mod-root `tsconfig.json` never committed (gitignore both) | engine files in git |
 | never write under `~/.claude/dev-mods/` unless asked (person's hot-reload folder); repo mods go in repo PLG dir | consent breach |
@@ -82,7 +83,7 @@ Each is sourced in `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/mods-lifecycl
 3. **Scaffold** three files (`plugin.json`, `hooks/hooks.json`, `hooks/register.ts[x]`) plus `tests/*.test.ts[x]`; not `claude plugin init`. Recipes in `mods-patterns.md`.
 4. **Gates**, rc unpiped, in order: `claude plugin validate --strict <mod dir>`; tsc ("Type check" in `mods-lifecycle.md`); `claude plugin test <mod dir>` with test for each behaviour asked; live `claude -p` run (exact command: `mods-lifecycle.md` "Debug lines", incl. `unset CLAUDECODE`).
 5. **Ship** only as briefed: marketplace entry, release train, install check ("Ship"); no git writes or `gh repo create` unless authorized.
-6. **Maintain**: pattern proved or disproved by real mod -> edit it, clear/add `[unproven]` (maintainer context only).
+6. **Maintain**: pattern proved or disproved by real mod -> edit it, clear/add the bracketed `unproven` mark (maintainer context only).
 7. **Report**: Return contract; update checkpoint.
 
 ## Read on demand
@@ -93,6 +94,6 @@ Directory `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/`:
 |---|---|
 | `mods-lifecycle.md` | Always before building: Step 0, Hard Rules, road (scaffold, validate, tsc, test, run, debug lines, ship, maintain) |
 | `mods-api.md` | Choosing events or `$` nouns, writing manifest, checking budget; holds symbol index drift check reads |
-| `mods-patterns.md` | Building behaviour: classic-chain wrap, plan-mode tracking, `turn.step` rewrite, decorations/band, autocomplete, slash command, userConfig, fail-open guards, `$.fs` defaults, `rm` after realpath |
-| `mods-testing.md` | Writing tests: `claude-code/testing` kit, stub bottoms, raising events, `ui.mount`, CI wiring, headless and tmux checks |
+| `mods-patterns.md` | Building behaviour: classic-chain wrap, plan-mode tracking, `turn.step` rewrite, decorations/band (`prompt.change`, budget), autocomplete, slash command, userConfig, fail-open guards, `$.fs` defaults, `rm` after realpath |
+| `mods-testing.md` | Writing tests: `claude-code/testing` kit, stub bottoms, raising events, `ui.mount`, latency, CI wiring, headless A/B and tmux checks |
 | `mods-changes.md` | A new CC build, or mod written for older one: per-version changes, "Did Not Reproduce", self-update procedure |

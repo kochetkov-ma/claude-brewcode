@@ -4,7 +4,7 @@
 
 Symbol index (drift input), event + `$` noun catalog, manifest shapes, limits of Claude Code mod API (hooks-module plugins, early access). Engine types are authority; this file is map.
 
-`src` column: `T:n` = line `n` of live types file at 2.1.300 (path per-build, ephemeral: load `plugin-authoring`, never store it) | `R:n` = line of skill's `reference.md` | `Dn` = plan decision | `P` = plan section "Re-verification on CC 2.1.300" | `S` = T2.1 spikes (2026-10-14) | `V` = `claude plugin validate` output | `T11` = T1.1 probe (artifacts/T1.1-probe.md, 2026-10-14) | `X` = live probe by this pack's author on 2.1.300 (scratch mods, `claude -p`/`plugin test`). `[unproven]` = still open (only D6 mod-throw case, T2.4).
+`src` column: `T:n` = line `n` of live types file at 2.1.300 (path per-build, ephemeral: load `plugin-authoring`, never store it) | `R:n` = line of skill's `reference.md` | `Dn` = plan decision | `P` = plan section "Re-verification on CC 2.1.300" | `S` = T2.1 spikes | `V` = `claude plugin validate` output | `T11` = T1.1 probe | `X` = live probe on 2.1.300 (scratch mods, `claude -p`/`plugin test`) | `W` = TA.7 re-probe (2.1.296 via `npx -y @anthropic-ai/claude-code@2.1.296`) | `AB` = T2.5 live A/B | `TTY` = T2.10 tmux run | `R3` = T2.R rev3 tmux probes. Every row has a source; none is open.
 
 ## Symbol Index
 
@@ -126,14 +126,14 @@ One row = one fact pack relies on. `fragment` must occur in live types after whi
 
 ## Event Catalog
 
-Hook shape `($, e, next)`; `e` frozen to every depth (`T:4945`); rewrite = copy passed to `next` (`T:6662`). Failing hook is skipped, chain goes on; `.catch(($, e, next) => ...)` answers in its place (`R:78-79`, `T:1205`). Broken module leaves session running: `claude -p` still exits 0 (`X`).
+Hook shape `($, e, next)`; `e` frozen to every depth (`T:4945`); rewrite = copy passed to `next` (`T:6662`). Failing hook (throw, overrun, wrong shape) is skipped, chain goes on; after `await next(e)` its last `next` result stands (`T:4036-4037`; `W`: debug `skipped; its last next() run's result stands`); `.catch(($, e, next) => ...)` answers in its place (`R:78-79`, `T:1205`). A module that fails to load leaves the session running, `claude -p` rc 0 (`X`).
 
 | Event | Input (key fields) | Result / rewrite | src |
 |---|---|---|---|
 | `turn.step` (streaming) | `turnId, index, model, effort?, messageCount, agentId?` (absent on main) | `async function*`, `return yield* next({ ...e, effort })`; only `model`/`effort` rewritable, rest pinned; `effort` = `'low'`..`'max'`, number, or absent (model without effort); result `TurnStepResult` (`answer, toolUses, stopReason, usage`) | T:4569, 14086-14150, 12703 |
 | `turn.start` / `turn.complete` | `agentId?` on both | observe; `turn.complete` may return `{ text }` shown beneath answer | T:4560, 4581 |
 | `prompt.edit` | `origin{kind:'composer'}, key?, text, cursor, start, end, inputText` | `{ text, cursor, decorations? }` (`PromptEditResult`); `{ text: e.text, cursor: e.cursor }` without `next` consumes key | T:4236, 8796-8870 |
-| `prompt.change` | `text, cursor, origin{kind: history/clear/undo/plugin/app/engine}` | observe only, cannot decorate: after history recall, undo, clear or accepted completion highlight appears on next keystroke | T:4247, 8464; P |
+| `prompt.change` | `text, cursor, origin{kind}`: `history` (recall, step back out), `clear` (submit, Esc Esc, stash), `undo`, `plugin{name}` (a `$.prompt.fill`), `engine` (Tab-accept, dictation, prefill), `app` | observe only (`PromptChangeResult` = `{ text }`: cannot decorate). Refresh own state; paint via `$.prompt.fill({ text, mode: 'replace', decorations })` when `e.cursor === e.text.length` (patterns #4). New in 2.1.300: an older build refuses the whole module (Manifest) | T:4247, 8464-8545, 8885-8940; R3; W |
 | `prompt.autocomplete` | `text, cursor, token` (non-whitespace run ending at cursor), `start` | `{ suggestions: { text, label?, description? }[] }`; rows join beneath engine's, unhighlighted; matcher `{ token: /^re/ }` | T:4259, 8376-8440 |
 | `prompt.submit` | `text, command?, isMeta?, attachments?, context?, turnId?, wait, origin` | `next({ ...e, text })`, `context` = hidden blocks after prompt (limits: Budgets), `{ drop: reason }`; `text` rewrite NOT applied when `command` is set or `isMeta` starts turn | T:4200, 9420-9470; R:168 |
 | `prompt.attachment` | `type, text, origin, detail?`; types with `detail`: `plan_mode` (`reminder: 'full'/'sparse', planFilePath, hasPlan`), `plan_mode_reentry`, `plan_mode_exit` | `{ text: string \| null }`; answer cached per attachment for process | T:4304, 8287-8303, 7703-7752 |
@@ -148,13 +148,13 @@ Classic base fields (`BaseHookInput`, T:853-880): `session_id, transcript_path, 
 
 | Classic event | Extra input | Result fields | Note |
 |---|---|---|---|
-| `classic.UserPromptSubmit` | `prompt, source?` (`user/sdk/system/loop_wakeup/schedule_wakeup/poll_event`; `source` absent in `-p`: never filter on it) | `additionalContext?: string[]`, `sessionTitle`, `suppressOriginalPrompt`, `block` | T:15343-15350, 1394; S |
+| `classic.UserPromptSubmit` | `prompt, source?` (`user/sdk/system/loop_wakeup/schedule_wakeup/poll_event`; `source` absent in `-p`: never filter on it); a prompt typed mid-turn fires it once, at QUEUE time (TTY: 14 s before its turn ran) | `additionalContext?: string[]`, `sessionTitle`, `suppressOriginalPrompt`, `block` | T:15343-15350, 1394; S |
 | `classic.PostToolBatch` | `tool_calls[]` | `additionalContext` | once per batch, before next model request; carries `permission_mode` (T:7985; P) |
 | `classic.PostToolUse` | per-tool | `additionalContext, updatedToolOutput` | T:8012 |
 | `classic.SessionStart` | `source, model?, ...` | `additionalContext, initialUserMessage, watchPaths, reloadSkills` | `permission_mode` key present, value always undefined; mode first appears at `classic.UserPromptSubmit` (T11 Q4; X) |
 | `classic.PreToolUse` | `ToolCallEnvelope` only | `PreToolUseResult` (`allow/ask/deny`) | no `permission_mode` (T:1279, 13265) |
 
-Chain order (T:1277): `[managed settings hooks, ...hooks modules, the other settings hooks as core]`. `S` proved live: plugin `hooks.json` `UserPromptSubmit` command hook runs INSIDE mod's `await next(e)`; `r.additionalContext` is `string[]`, one entry per hook (a hook's own `\n\n---\n\n`-joined blocks stay one entry); settings-hook entries precede plugin-hook entries; keys of `r` = `["additionalContext"]` only. Under organization-managed Claude Code, `classic.*` and `prompt.attachment` hooks of installed plugin do NOT run (`V`: "do not run in a plugin a person installs where an organization manages Claude Code").
+Chain order (T:1277): `[managed settings hooks, ...hooks modules, the other settings hooks as core]`; live proof and `r.additionalContext` shape: `mods-patterns.md` #1 (`S`). Settings-hook entries precede plugin-hook entries; keys of `r` = `["additionalContext"]` only. Under organization-managed Claude Code, `classic.*` and `prompt.attachment` hooks of installed plugin do NOT run (`V`: "do not run in a plugin a person installs where an organization manages Claude Code").
 
 ## Nouns on `$`
 
@@ -169,12 +169,13 @@ Every call async except `$.ui.status/toast/log/notice/resolve` (sync, T:2379-251
 | `$.state` | `get(ref)`, `set(ref, v, {ifVersion})`; refs `{ plugin, key } as const`, literals; contract in `types/index.d.ts` (`interface PluginState`) | survives hot reload; `set` refused while a `ui.render` hook draws; only owner writes; use `atom/read/update` from `'claude-code'` | T:3467-3510, 7932; R:143 |
 | `$.store` | `get/set/delete/keys`, JSON only | across sessions, shared on machine, 4 MiB total | T:3434-3465 |
 | `$.session` | `cwd()`, `root()`, `model()`, `version()` -> `{ version, base?, builtAt? }`, `messages()`, `id()`, `surface()`, `identity()`, `usage()` | `root()` = launch dir, not git root; follows `/cd` and worktree moves | T:2791-2990, 12226; S |
-| `$.ui` | `status(text\|undefined)` (one per plugin, 2000 chars), `toast`, `log(text,{to:'debug'})`, `notice`, `open({id,title,...})`, `close`, `invalidate`, `resolve(e)`, `view`, `selection`, `copy`, `notify`, `blit` | `resolve` only inside `ui.render`; band = terminal and desktop only | T:2366-2640 |
+| `$.ui` | `status(text\|undefined)` (one per plugin, 2000 chars), `toast`, `log(text,{to:'debug'})`, `notice`, `open({id,title,...})`, `close`, `invalidate`, `resolve(e)`, `view`, `selection`, `copy`, `notify`, `blit` | `resolve` only inside `ui.render`; band = terminal and desktop only; `invalidate('ui.render')` redraws from another hook (a `$.state` write while drawing is refused); `toast` and `command.run` `text` show under the plugin's name: never repeat it | T:2366-2640, 2465, 1863; R3 |
 | `$.command` | `register(spec)` in `session.start`; `run(...)`; `list()` | built-in's name refused; second unmatched registration fails load (web docs, research 01 row 9) | T:3139-3179, 1919 |
 | `$.tool` | `register(spec)` -> `mcp__<plugin>__<name>`; `call(...)`; `check(...)`; `list()` | serve with `on('tool.call', { tool: 'mcp__...' })` | T:3086-3138 |
 | `$.clock` | `now`, `sleep(ms,{signal})`, `after`, `every` | timers die on reload; `sleep` counts in hook budget | T:3509-3550 |
 | `$.settings` | `read({source?})` merged settings incl. `enabledPlugins` | read only | T:3646-3670 |
-| `$.prompt`, `$.model`, `$.agent`, `$.http`, `$.audio`, `$.mcp`, `$.config`, `$.telemetry`, `$.turn` | not used by two brewcode mods | `$.prompt.read()` one-shot, not subscribed (research 01 row 8); answers `{ text: '', cursor: 0 }` with no box (T:3024-3029) | T:2641-3305 |
+| `$.prompt` | `read()` -> `{ text, cursor }`; `fill({ text, mode?, decorations? })` -> `{ isFilled, text, cursor }` | `read` one-shot, not subscribed (research 01 row 8), `{ text: '', cursor: 0 }` with no box (-p, SDK, remote); `fill` `replace`/`append` put the caret at the END, `decorations` last until the next edit's `prompt.edit` answer; tests stub `on('prompt.read')` | T:3018-3032, 8885-8940; R3 |
+| `$.model`, `$.agent`, `$.http`, `$.audio`, `$.mcp`, `$.config`, `$.telemetry`, `$.turn` | not used by two brewcode mods | | T:2641-3305 |
 
 ## Manifest And Config Shapes
 
@@ -188,12 +189,13 @@ Every call async except `$.ui.status/toast/log/notice/resolve` (sync, T:2379-251
 | Rule | Evidence |
 |---|---|
 | `author` missing -> warning; `--strict` turns it into rc 1 | V (X rerun 2.1.300; S.4 on 2.1.296) |
-| unknown top-level key (`minClaudeVersion`) -> warning "Claude Code ignores it"; NO min-version field: guard with `$.session.version()` | V; P |
-| `hooks/hooks.json` = `{ "modules": ["./register.ts"] }`: one-element ARRAY; bare string -> `modules: Invalid input: expected array, received string`; second entry -> "names one hooks module per plugin; a second entry is refused" | V (X); S.4 on 2.1.296 |
-| module suffix `.ts .tsx .jsx .js .mjs .cjs .mts .cts`, ES module, `import` declarations only; `import()` -> "hooks module did not load" | R:14; V (X) |
+| unknown top-level key (`minClaudeVersion`) -> warning "Claude Code ignores it"; NO min-version field: guard behaviour with `$.session.version()` | V; P |
+| hook name the build lacks (`on('prompt.change')` on 2.1.296) -> `validate` rc 1 `"prompt.change" is not an event`; `claude -p` rc 0, stderr `hooks module did not load`; whole module off, NO gating (literal name): a newer event sets the mod's minimum build | W |
+| second unmatched `on(event, hook)` of one event (`session.start`, `classic.UserPromptSubmit`) -> validate rc 1 `registered twice without a matcher`; one owner per event, or a literal matcher on the extra (`{ cwd: /^/ }` validates) | W; V |
+| `hooks/hooks.json` (Hard Rules): bare string -> `modules: Invalid input: expected array, received string`; second entry -> "names one hooks module per plugin; a second entry is refused". Module suffix `.ts .tsx .jsx .js .mjs .cjs .mts .cts`, ES module, `import` declarations only | V (X); S.4 on 2.1.296; R:14 |
 | relative imports: extensionless, `.js`, `.ts` suffixes all validate and load; only extensionless/`.js` tsc-clean under header tsconfig (`.ts` needs `allowImportingTsExtensions`); missing file -> validate rc 1 | S; X |
 | `userConfig.<k>.type` in `string number boolean directory file`; NO `enum` (-> `expected one of ...`); `title` + `description` required; `options` (string list; only for `type:string`, not `multiple`/`sensitive`) = picker in `/config`; `default` must be one of `options`; accepted extras: `min max multiple sensitive required`; unknown key -> `Unrecognized key` error | V (X); R:74; T:7794-7804 |
-| `register(on, options)` gets values with defaults filled; stored value outside `options` counts as unset; `/config` change reloads module; classic hook commands also get `CLAUDE_PLUGIN_OPTION_<KEY>` | T:7794; P (web docs, not probed) |
+| `register(on, options)` gets values with defaults filled; a stored value outside `options`, or none, counts as unset and `default` applies (code-side fallback for a picker option is dead: the `turbo` -> `xhigh` plan-effort test passes without it); `/config` change reloads module; classic hook commands also get `CLAUDE_PLUGIN_OPTION_<KEY>` | T:7794; P (web docs, not probed) |
 | `types/index.d.ts` contract: top-level `export type`/`interface` and `declare module 'claude-code' { interface PluginState { '<plugin>': {...} } }`; top-level `export {}` refused ("a contract exports types and nothing else") | V (X); S |
 | `.claude-plugin/types/` written by engine on hot-reloaded loads (own `.gitignore`); `claude -p --plugin-dir` writes nothing into mod folder | R:50, 112; X. Interactive hot-reloaded load also writes mod-root `tsconfig.json` (`extends` the types one), NOT ignored: gitignore it too (T11 Q6) |
 
@@ -208,7 +210,7 @@ Every call async except `$.ui.status/toast/log/notice/resolve` (sync, T:2379-251
 | `$.ui.status/toast/log` text | first 2000 chars drawn on terminal | T:2510; R:155 |
 | hook `ui.render` tree | first 100,000 chars of its texts drawn, cut text ends with a note of what is left out; names held to 10,000 (`language`/`path`/`key`/`module`/`value`), 2,048 (`Link`), 131,072 (`Svg` source); rewritten prop over 100,000 chars or nested past 32 deep: engine's own drawn | R:155 |
 | `Client` surface-module tree | 20,000 nodes, 32 deep, 100,000 characters serialized, else instance unmounts | T:1439-1440, 1468 |
-| AbovePrompt band | fullscreen: bottom slot capped at half the rows; default TUI: `maxRows` = terminal height; taller content scrolls (`↓ n more`); person can collapse it; no band on VS Code/mobile | T:10640-10700 (maxRows 10660-10667); S |
+| AbovePrompt band | fullscreen: bottom slot capped at half the rows; default TUI: `maxRows` = terminal height, NOT less the prompt box and footer (~8 rows measured: 45 rows -> 37 fit, 38 clip at the TOP into scrollback); taller content scrolls (`↓ n more`); person can collapse it; no band on VS Code/mobile. Budget from `e.props.maxRows`: fullscreen (`e.viewport?.isFullscreen === true`) `min(30, maxRows)`, else `max(6, min(30, maxRows - 12))`; cap rows and body lines (`wrap="truncate-end"`, `... +K`) | T:10640-10700 (maxRows 10659-10669; viewport 10804-10812); S; R3; TTY |
 | Box `hover` | declarative style only, no callback; reveals only in fullscreen TUI (mouse tracking); hidden Box MUST be un-keyed inside visible keyed Box (or share a `scope` with the trigger: T:895-898, 939-944), else engine refuses whole band | T:889-957; S; X |
 | permission mode | NO getter, NO mode-change EVENT, NO field on `turn.step`/`prompt.submit`/`AbovePrompt` (text-only exception: Shift+Tab row) | P; T grep `setMode` only |
 | effort indicator | no API overrides it; footer (`● high · /effort`) and spinner show SESSION level, never per-request override; `$.ui.status` only channel; `classic.*` `effort.level` also stays session level | P; T:10499; T11 Q7 |
@@ -216,8 +218,7 @@ Every call async except `$.ui.status/toast/log/notice/resolve` (sync, T:2379-251
 | `turn.step` rewrite reaches API request `output_config.effort` | YES (main loop; subagent step stays at session level). Only session JSONL `api-request` rows record it: neither `--debug-file` nor `classic.PostToolBatch` `effort.level` shows it | T11 Q2; X |
 | module `let` | persists across turns of one session; RESETS on hot reload (`session.start` fires again) and on `--resume`; `$.state`/`$.store` survive | T11 Q5; X |
 | Shift+Tab | fires NO hooked event (so no `tool.call`); mode first seen at next `classic.PostToolBatch` (mid-turn) or `classic.UserPromptSubmit` (between turns); transient visit between two checkpoints invisible. FRAGILE text signal, never primary: `ui.render` `PromptHint` re-runs per cycle, `e.props.hint` carries `manual mode on` / `accept edits on` / `plan mode on` / `auto mode on` (terminal + desktop only, text-parsed, intermediate renders lack the label, `SessionMode.modes` is `[]`, none in `-p`) | T11 Q7; P; X (tmux, TA.R M5); T:10598-10640 |
-| `EnterPlanMode`/`ExitPlanMode` tools | not registered in plain `-p`, even with `--allowedTools`/`--tools`/stream-json input; present in TTY and with `--permission-prompt-tool stdio` | T11 Q3; X |
 
 ## Tool Names For Plan Mode
 
-`EnterPlanMode` input `{}`, result `{ message }`; `ExitPlanMode` input `{ allowedPrompts? }` (deprecated), result `{ plan: string | null, isAgent, filePath?, hasTaskTool?, planWasEdited?, awaitingLeaderApproval?, requestId? }` (T:16996, 17003, 21338-21360). `tool.call` hook runs before permission dialog; Shift+Tab never reaches it.
+`EnterPlanMode` input `{}`, result `{ message }`; `ExitPlanMode` input `{ allowedPrompts? }` (deprecated), result `{ plan: string | null, isAgent, filePath?, hasTaskTool?, planWasEdited?, awaitingLeaderApproval?, requestId? }` (T:16996, 17003, 21338-21360). `tool.call` hook runs before permission dialog; Shift+Tab never reaches it. Both are absent in plain `-p`, present in TTY and with `--permission-prompt-tool stdio` (T11 Q3; X).
