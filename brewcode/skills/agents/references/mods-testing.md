@@ -93,9 +93,10 @@ House rules: GIVEN/WHEN/THEN in names, one full-object `toEqual` not field-by-fi
 ## Live Headless
 
 ```bash
+PROMPT="the prompt"; MOD_DIR=/abs/mod; DEBUG_FILE=/abs/debug.log
 unset CLAUDECODE
-claude -p "<prompt>" --plugin-dir <abs mod dir> --permission-mode plan \
-  --output-format stream-json --verbose --debug-file <abs file> < /dev/null > out.jsonl 2> err.txt
+claude -p "$PROMPT" --plugin-dir "$MOD_DIR" --permission-mode plan \
+  --output-format stream-json --verbose --debug-file "$DEBUG_FILE" < /dev/null > out.jsonl 2> err.txt
 ```
 
 | Check | How | src |
