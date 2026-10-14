@@ -2,6 +2,27 @@
 
 ---
 
+## v6.6.2 (2026-10-14)
+
+> Docs: [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/)
+
+Fix-only hotfix: `/brewdoc:publish` no longer loses output of large-site manifests.
+
+### brewdoc
+
+#### Fixed
+
+- **publish:** large-site manifests are no longer cut short: `publish.mjs` called `process.exit()` right after printing instead of setting `process.exitCode`, which killed pending stdout writes when the manifest exceeded the 64 KB pipe and the reader was slow; the `SENSITIVE:` confirmation lines could be lost (exit code stayed 0/2).
+- **publish tests:** slow-reader case compares full stdout, crash-safe suite (FAIL line + summary on any error), FAIL lines capped so CI logs stay readable, smaller fixtures.
+
+### standalone skills
+
+#### Fixed
+
+- **brewpage-publish:** the same fix in `skills/brewpage-publish` and `openclaw/brewpage-publish`.
+
+---
+
 ## v6.6.1 (2026-10-14)
 
 > Docs: [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/)

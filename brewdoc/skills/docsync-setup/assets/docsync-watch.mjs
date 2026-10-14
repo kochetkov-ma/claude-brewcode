@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.6.1 content_version=6.5.2 generated_by=brewdoc:docsync-setup
+// brewcode-meta: version=6.6.2 content_version=6.5.2 generated_by=brewdoc:docsync-setup
 
 // PostToolUse Read of a tracked .md (main session): log one silent `read` event; the Stop gate ignores reads.
 // Self-contained (Node built-ins), state in <projectRoot>/.claude/docsync/; never throws, exit 0.
