@@ -3,14 +3,18 @@ import type { Engine } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
 type Mode = 'plan' | 'default' | 'acceptEdits' | 'auto' | 'bypassPermissions'
-type Seen = { efforts: unknown[]; calls: number }
+type Seen = { efforts: unknown[]; calls: number; statuses: (string | undefined)[] }
 
 const result = (e: { turnId: string; index: number }) =>
   ({ turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: null, usage: null }) as never
 
-// bottoms: classic stubs answer {}, turn.step records the effort that reaches the engine
+// bottoms: classic stubs answer {}, ui.status records the text, turn.step records the effort that reaches the engine
 const bottoms = (on: On): Seen => {
-  const seen: Seen = { efforts: [], calls: 0 }
+  const seen: Seen = { efforts: [], calls: 0, statuses: [] }
+  on('ui.status', (_$, e) => {
+    seen.statuses.push(e.text)
+    return { value: undefined } as never
+  })
   on('classic.UserPromptSubmit', () => ({}))
   on('classic.PostToolBatch', () => ({}))
   on('turn.step', async function* (_$, e) {
@@ -172,4 +176,79 @@ test('GIVEN plan mode WHEN a prompt carries a non-string mode THEN the state is 
   await batch($, { permission_mode: 42 })
   await step($, 'high')
   expect(seen.efforts, 'non-string mode keeps plan').toEqual(['xhigh'])
+})
+
+test('GIVEN plan mode and a raise WHEN two main steps run THEN status plan: xhigh is set once', async ($, on) => {
+  const seen = bottoms(on)
+  await prompt($, 'plan')
+  await step($, 'high')
+  await step($, 'medium')
+  expect(seen.statuses, 'status pinned once for consecutive raised steps').toEqual(['plan: xhigh'])
+})
+
+test('GIVEN a pinned status WHEN a default prompt leaves plan THEN the status is cleared once', async ($, on) => {
+  const seen = bottoms(on)
+  await prompt($, 'plan')
+  await step($, 'high')
+  await prompt($, 'default')
+  await prompt($, 'default')
+  await step($, 'high')
+  expect(seen.statuses, 'set then cleared, no repeat clear').toEqual(['plan: xhigh', undefined])
+})
+
+test('GIVEN a pinned status WHEN PostToolBatch leaves plan THEN the status is cleared', async ($, on) => {
+  const seen = bottoms(on)
+  await prompt($, 'plan')
+  await step($, 'high')
+  await batch($, { permission_mode: 'default' })
+  expect(seen.statuses, 'cleared by the mode tracker before any step').toEqual(['plan: xhigh', undefined])
+})
+
+test('GIVEN a pinned status WHEN session.append plan_mode_exit arrives THEN the status is cleared', async ($, on) => {
+  const seen = bottoms(on)
+  await append($, 'plan_mode')
+  await step($, 'high')
+  await append($, 'plan_mode_exit')
+  expect(seen.statuses, 'cleared by the non-classic fallback').toEqual(['plan: xhigh', undefined])
+})
+
+test('GIVEN statusLine false WHEN plan raises and leaves THEN status is never touched and effort still raised', { options: { statusLine: false } }, async ($, on) => {
+  const seen = bottoms(on)
+  await prompt($, 'plan')
+  await step($, 'high')
+  await prompt($, 'default')
+  expect(seen.statuses, 'no set and no clear').toEqual([])
+  expect(seen.efforts, 'raise unaffected by statusLine').toEqual(['xhigh'])
+})
+
+test('GIVEN a pinned status WHEN a main step already at xhigh runs THEN the status is cleared', async ($, on) => {
+  const seen = bottoms(on)
+  await prompt($, 'plan')
+  await step($, 'high')
+  await step($, 'xhigh')
+  expect(seen.statuses, 'no raise, no indicator').toEqual(['plan: xhigh', undefined])
+})
+
+test('GIVEN a pinned status WHEN a subagent step runs in plan mode THEN the status is left alone', async ($, on) => {
+  const seen = bottoms(on)
+  await prompt($, 'plan')
+  await step($, 'high')
+  await step($, 'high', { agentId: 'a1' })
+  await step($, 'xhigh', { agentId: 'a1' })
+  expect(seen.statuses, 'subagent steps neither set nor clear').toEqual(['plan: xhigh'])
+})
+
+test('GIVEN default mode WHEN steps run and prompts arrive THEN the status is never set or cleared', async ($, on) => {
+  const seen = bottoms(on)
+  await prompt($, 'default')
+  await step($, 'high')
+  await prompt($, 'acceptEdits')
+  expect(seen.statuses, 'nothing set means nothing cleared').toEqual([])
+})
+
+test('GIVEN planEffort max WHEN a plan step at high runs THEN the status names the target', { options: { planEffort: 'max' } }, async ($, on) => {
+  const seen = bottoms(on)
+  await prompt($, 'plan')
+  await step($, 'high')
+  expect(seen.statuses, 'status carries the configured target').toEqual(['plan: max'])
 })

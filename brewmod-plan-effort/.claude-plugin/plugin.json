@@ -22,8 +22,19 @@
       "type": "string",
       "title": "Plan effort",
       "description": "Effort for the main loop while in plan mode; raised only, never lowered",
-      "options": ["medium", "high", "xhigh", "max"],
+      "options": [
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
       "default": "xhigh"
+    },
+    "statusLine": {
+      "type": "boolean",
+      "title": "Status line",
+      "description": "Show 'plan: <level>' in the status area while plan mode raises the effort",
+      "default": true
     }
   }
 }
