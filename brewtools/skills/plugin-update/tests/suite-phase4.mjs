@@ -57,7 +57,7 @@ const COMMANDS = REF('update-commands.md');
 
 // GIVEN the update references WHEN they template an update THEN project/local rows run from projectPath, user/managed rows keep --scope.
 assert.deepEqual([...REF('update-prompt.md').split('\n'), ...COMMANDS.split('\n')].filter(l => l.includes('claude plugin update <id>')), [
-    '3. for every brewcode/brewdoc/brewtools/brewui row from step 1 with scope user or managed: claude plugin update <id> --scope <scope of that row>',
+    '3. for every brewcode/brewdoc/brewtools/brewui row, and every installed brewmod-plan-effort/brewmod-placeholders row (never install a missing mod), from step 1 with scope user or managed: claude plugin update <id> --scope <scope of that row>',
     '4. for every such row with scope project or local: (cd "<projectPath of that row>" && claude plugin update <id> --scope <scope of that row>); if that projectPath is not a directory, run nothing for it and report it as an orphan install',
     'claude plugin update <id> --scope <scope>      # user/managed rows, repeat per selected plugin',
     '(cd "<projectPath>" && claude plugin update <id> --scope <scope>)      # project/local rows',

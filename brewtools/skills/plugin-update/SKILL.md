@@ -10,8 +10,9 @@ model: sonnet
 
 # Brewcode Plugin Update
 
-> Check/install/update brewcode, brewdoc, brewtools, brewui. The `/plugin` UI, reload and
-> marketplace-command acceptance are user handoffs, never invented tool actions.
+> Check/install/update brewcode, brewdoc, brewtools, brewui; check/update the optional
+> brewmod-plan-effort and brewmod-placeholders mods only when installed, never install them. The
+> `/plugin` UI, reload and marketplace-command acceptance are user handoffs, never invented tool actions.
 
 ## Prompt contract
 
@@ -19,7 +20,8 @@ model: sonnet
 
 1. Mode: an explicit mode token wins outright; else the most distinct whole-word keyword hits
    (table below). No hit or empty -> `interactive`.
-2. Scope: prose that is not a mode is still input: read it for which plugins/scope it names.
+2. Scope: prose that is not a mode is still input: read it for which plugins/scope it names. Naming
+   a mod that is not installed never installs it: report it as not installed.
 3. Ask: outcome-changing ambiguity between `update` and `all` -> ONE `AskUserQuestion` before any
    work. `check` asks nothing (read-only). `interactive` asks its own per-phase `AskUserQuestion`
    gates — that IS the mode, not an extra clarifying question.
@@ -72,7 +74,8 @@ bash "${CLAUDE_SKILL_DIR}/scripts/discover-plugins.sh" && echo "✅ discover OK"
 
 Both fail -> inventory unknown (!=missing plugins): report versions/status and the reload notice,
 skip install/update/prune. Partition: `suite = {brewcode, brewdoc, brewtools, brewui}`, `other` =
-the rest. Details: [references/discovery.md](references/discovery.md).
+the rest. Mods (optional, never installed by this skill) = `{brewmod-plan-effort, brewmod-placeholders}`
+(ids `<mod>@claude-brewcode`): a mod is in play only when Phase 0 lists it; `other` excludes them. Details: [references/discovery.md](references/discovery.md).
 
 ## Phase 1 — Fetch Latest Versions
 
@@ -81,13 +84,14 @@ the rest. Details: [references/discovery.md](references/discovery.md).
 bash "${CLAUDE_SKILL_DIR}/scripts/fetch-latest-versions.sh" && echo "✅ fetch OK" || echo "❌ fetch FAILED"
 ```
 
-Merge with Phase 0. Fetch failure -> report it, mark latest unknown, stay read-only; never infer
+The output keys cover the suite and both mods. Merge with Phase 0. Fetch failure -> report it, mark latest unknown, stay read-only; never infer
 missing/outdated.
 
 ## Phase 2 — Status Table
 
 Render `| Plugin | Installed | Latest | Status |`, one row per suite plugin (missing installed
-version `—`); status ✅ current, ⬇️ update available, ❌ missing, ❓ unknown. List `other` plugins
+version `—`); status ✅ current, ⬇️ update available, ❌ missing, ❓ unknown. Add one row per
+installed mod; a mod that is not installed gets no row and never shows ❌. List `other` plugins
 below it with versions.
 
 `check`: PLAN goes before this table; then jump to Phase 6.
@@ -100,19 +104,19 @@ claude plugin details --help >/dev/null 2>&1 && echo "available" || echo "skip"
 ```
 
 `skip` → Phase 3. Else run `claude plugin details <plugin>@claude-brewcode` per installed suite
-plugin; render `| Plugin | Skills | Agents | Hooks | Always-on tokens |` from its
+plugin or mod; render `| Plugin | Skills | Agents | Hooks | Always-on tokens |` from its
 `Component inventory` counts and `Projected token cost` `Always-on`. Missing field `—`; failure →
 `❓` row. Never blocks.
 
 ## Phase 3 — Install Missing
 
 PLAN block first (SCOPE = missing/outdated plugins). Missing suite plugins: `all` installs them,
-`update` skips install.
+`update` skips install. Mods are never installed here, in any mode, even when named in the prompt.
 
 **AskUserQuestion** (interactive, missing plugins only):
 
 Question: "Install missing brewcode plugins?"
-Options: "Install all missing" / "Install selected" / "Skip install"
+Options: "Install all missing" / "Install selected" / "Skip install" (suite plugins only; mods are never offered)
 
 "Install selected" asks per plugin, options `["Install", "Skip"]`.
 
@@ -137,8 +141,8 @@ Options: "Update all" / "Update suite only" / "Update selected" / "Skip updates"
 
 "Update selected" asks per outdated plugin, options `["Update", "Skip"]`.
 
-Update set from that answer only: "Update all" = outdated suite + every `other` marketplace row
-(latest unknown; update is a no-op when current); "Update suite only" = outdated suite; "Update
+Update set from that answer only: "Update all" = outdated suite + outdated installed mods + every `other` marketplace row
+(latest unknown; update is a no-op when current); "Update suite only" = outdated suite + outdated installed mods; "Update
 selected" = rows answered `Update`; "Skip updates" = empty → Phase 5. Rows keep their Phase 0 `id`,
 `scope` (`user | project | local | managed`; missing → `user`) and `projectPath`; non-marketplace rows
 are reported, never updated.
@@ -206,3 +210,4 @@ Print this notice ([references/reload-notice.md](references/reload-notice.md)):
 > Fallback: type `exit`, then run `claude` again.
 
 Then a final summary listing the plugins installed, updated and skipped this run, and every error.
+If a mod is not installed, add one line: optional mod `<mod>` not installed (opt-in: `claude plugin install <mod>@claude-brewcode`); never run it.
