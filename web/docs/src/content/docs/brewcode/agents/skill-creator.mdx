@@ -55,17 +55,17 @@ validation results, and unresolved decisions.
 
 <Steps>
   <li><div><strong>Resolve scope and workflow</strong><p>Extract a proven workflow from available conversation context or the caller's brief. Resolve project, personal, or plugin location. Ordinary subagents return unresolved questions to the caller instead of planning an interactive question round.</p></div></li>
-  <li><div><strong>Choose invocation and execution context</strong><p>Distributed Brewcode skills require user-invocable: true and disable-model-invocation: true, with one exception: brewdoc:publish ships disable-model-invocation: false. Choose forked or inline execution for the actual workflow, and verify any selected custom agent exists.</p></div></li>
+  <li><div><strong>Choose invocation and execution context</strong><p>Distributed Brewcode skills require user-invocable: true and disable-model-invocation: true, with three exceptions: brewdoc:publish, brewtools:text-optimize and brewtools:text-human ship disable-model-invocation: false. Choose forked or inline execution for the actual workflow, and verify any selected custom agent exists.</p></div></li>
   <li><div><strong>Write the prompt contract and resources</strong><p>Use a free-text prompt entry point, explicit mode detection where needed, and a PLAN block before actions. Keep instructions concise; load schemas and detailed modes from references on demand. Use scripts for deterministic work.</p></div></li>
   <li><div><strong>Validate and evaluate</strong><p>Run validate-skill.sh, fix confirmed failures, and rerun it after changes. Evaluate three to five realistic prompts against fresh-session baselines. For explicit-only skills, evaluate output through explicit invocation instead of measuring automatic activation.</p></div></li>
-  <li><div><strong>Finish with tests, documentation, and caller-owned optimization</strong><p>Run meaningful script tests when scripts are present. Write a concise README with real examples. Request the final text-optimizer pass from the main caller; the creator does not nest delegation or delegate its own verification.</p></div></li>
+  <li><div><strong>Finish with tests, documentation, and caller-owned optimization</strong><p>Run meaningful script tests when scripts are present. Write a concise README with real examples. Return the created paths to the main caller, which invokes `Skill(skill: "brewtools:text-optimize", args: "<paths> medium --allow-dirty")`; the creator does not nest delegation or delegate its own verification.</p></div></li>
 </Steps>
 
 ## Invocation policy
 
 | Context | Configuration |
 |---------|---------------|
-| Distributed Brewcode product skill | `user-invocable: true` and `disable-model-invocation: true` (sole exception: `brewdoc:publish` with `disable-model-invocation: false`) |
+| Distributed Brewcode product skill | `user-invocable: true` and `disable-model-invocation: true` (three exceptions: `brewdoc:publish`, `brewtools:text-optimize`, `brewtools:text-human`, each with `disable-model-invocation: false`) |
 | User-only skill outside distributed products | `disable-model-invocation: true` |
 | Model-only knowledge outside distributed products | `user-invocable: false` |
 | Both invocation paths outside distributed products | Default invocation behavior |

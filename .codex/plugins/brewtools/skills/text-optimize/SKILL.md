@@ -1,6 +1,6 @@
 ---
 name: text-optimize
-description: "Optimizes text/docs for LLM token efficiency. Triggers - optimize, reduce tokens, compress, deep compress."
+description: "Optimizes text, docs and LLM prompts (AGENTS.md, rules, agent/skill files) for token efficiency in place, snapshot-backed, without losing facts. Use when asked to optimize, compress or cut tokens of named files. Triggers - optimize, reduce tokens, compress, deep compress, сожми, оптимизируй."
 ---
 
 # Optimize text for tokens
@@ -19,8 +19,8 @@ Follow every phase below. When a phase delegates work, use Codex collaboration w
 `<arguments>` is one free-form RU/EN prompt; depth flags and paths may sit anywhere in it. The depth flags are the Modes below.
 
 1. Mode: an explicit flag (`-l`, `-s`, `-d`, `-x`, `--light`, `--standard`, `--deep`, `--max`) wins without scoring; else the most distinct whole-word hits from Modes/Context Hints, ties use the earliest keyword. No hit -> `medium` before Smart Auto-Detection; empty -> `medium` or per-file auto-detection. Max is opt-in: explicit `-x`/`--max` or maximum/extreme compress hint only.
-2. Scope: take paths from the remaining prose; never treat sentence-first words as positional paths.
-3. Ask: ambiguity -> ONE scoping `main-chat user gate`.
+2. Scope: take paths from the remaining prose; never treat sentence-first words as positional paths. Invoked implicitly mid-task, the invocation text is the prompt and names the target path(s): empty there stops with "no target", never the ALL set an empty user-typed prompt selects. `--allow-dirty` in the prompt is the explicit authorization Phase 0 needs for uncommitted targets.
+3. Ask: ambiguity -> ONE scoping `main-chat user gate`; unanswered or headless -> `medium` on the named targets only, nothing blocks.
 
 Print once, after resolving mode/targets and before Phase 1 Analysis (labels literal, INPUT verbatim, authored values follow the active work-artifact language policy, otherwise conversation language). SCOPE MUST name resolved target paths and depth:
 
@@ -141,10 +141,13 @@ Resolve target paths (Usage Examples: no args, single path, list, directory) bef
 
 **Phase 0: Preconditions + Snapshot (MANDATORY, before ANY edit)**
 
-Every mode rewrites IN PLACE; snapshots must survive context compaction. Before the first edit/Phase 2 spawn, EXECUTE using Bash:
+Every mode rewrites IN PLACE; snapshots must survive context compaction. Every `text-guard.sh` call
+is ONE command of its fence shape: unquoted script path, each value single-quoted, no `cd`,
+`VAR=`, `;`, `&&`, `|` or `$(…)`. Before the first edit/Phase 2 spawn, EXECUTE using Bash (`--allow-dirty` before the
+files only under the authorization below):
 
 ```bash
-bash "<plugin-root>/skills/text-optimize/scripts/text-guard.sh" snapshot "<file>"...
+bash <skill-directory>/scripts/text-guard.sh snapshot '<file>'...
 ```
 
 > STOP unless exit 0 and `RUN_DIR` are printed; fix snapshot failure before any edit.
@@ -162,7 +165,7 @@ Immediately after each optimizer-owned atomic write/deletion, record that known 
 another edit or verification. A checkpoint is ownership evidence, not a backup:
 
 ```bash
-bash "<plugin-root>/skills/text-optimize/scripts/text-guard.sh" checkpoint --run-dir "<RUN_DIR>" "<file>"
+bash <skill-directory>/scripts/text-guard.sh checkpoint --run-dir '<RUN_DIR>' '<file>'
 ```
 
 Checkpoint only bytes just written by this optimizer (or its just-completed deletion); if another
@@ -194,7 +197,7 @@ The skill owns acceptance and disk-to-disk comparison. Every mode runs the mecha
 Step 1 — mechanical sub-gate. **EXECUTE** using shell, once per run:
 
 ```bash
-bash "<plugin-root>/skills/text-optimize/scripts/text-guard.sh" verify --no-restore --run-dir "<RUN_DIR>" "<file>"...
+bash <skill-directory>/scripts/text-guard.sh verify --no-restore --run-dir '<RUN_DIR>' '<file>'...
 ```
 
 Exit `0`: original numbers, versions, paths, `!=` prohibitions and ALL-CAPS modal keywords remain. Exit `1`: missing tokens printed, current bytes kept; classify each as preserved meaning, authorized replacement or actual loss. Record evidence for the first two; patch actual loss and repeat required review. A mechanical pass alone cannot establish semantic equivalence. Exit `2`: snapshot/state unavailable; STOP and refuse acceptance, rerun Phase 0 before editing.
@@ -214,7 +217,7 @@ recorded matching draft checkpoint (already-original bytes need no overwrite). M
 changed current bytes -> `RESTORE_REFUSED`, exit 1, preserve the file; never checkpoint to bypass it:
 
 ```bash
-bash "<plugin-root>/skills/text-optimize/scripts/text-guard.sh" restore --run-dir "<RUN_DIR>" "<file>"
+bash <skill-directory>/scripts/text-guard.sh restore --run-dir '<RUN_DIR>' '<file>'
 ```
 
 | Outcome | Result |

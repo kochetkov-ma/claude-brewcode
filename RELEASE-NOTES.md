@@ -2,6 +2,57 @@
 
 ---
 
+## v6.6.0 (2026-10-14)
+
+> Docs: [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [bc-rules-organizer](https://doc-claude.brewcode.app/brewcode/agents/bc-rules-organizer/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [e2e](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [rules](https://doc-claude.brewcode.app/brewcode/skills/rules/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [teams-setup](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/)
+
+> Docs: [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/)
+
+> Docs: [overview](https://doc-claude.brewcode.app/brewtools/overview/) | [skills](https://doc-claude.brewcode.app/brewtools/skills/) | [task-board-setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) | [text-human](https://doc-claude.brewcode.app/brewtools/skills/text-human/) | [text-optimize](https://doc-claude.brewcode.app/brewtools/skills/text-optimize/)
+
+> Docs: [Quick Start](https://doc-claude.brewcode.app/quickstart/) | [Getting Started](https://doc-claude.brewcode.app/getting-started/) | [Full Setup](https://doc-claude.brewcode.app/full-setup/) | [FAQ](https://doc-claude.brewcode.app/faq/)
+
+`/brewtools:text-optimize` and `/brewtools:text-human` are now model-invocable like `/brewdoc:publish`; 24 of 27 skills stay user-only.
+
+### brewtools
+
+#### Changed
+
+- **text-optimize:** `disable-model-invocation: false`; `allowed-tools` is scoped to one rule, `Bash(bash ${CLAUDE_SKILL_DIR}/scripts/text-guard.sh *)`. Runs fired by Claude need named targets: empty args stop with "no target". Edits to your files follow your permission mode.
+- **text-optimizer agent:** the `checkpoint` command now has the exact shape of that rule, so it runs unprompted under the skill.
+- **text-human:** `disable-model-invocation: false`, read-only tools only (`Read, Grep, Glob, Agent, AskUserQuestion`). Edits follow your permission mode; empty input asks once, headless runs stop with "nothing to humanize".
+- **task-board-setup:** runs `text-optimize` itself after approval instead of printing commands; the P5 verify body moved to `references/12-verify-report.md`.
+- **permissions:** headless and `dontAsk` runs need the allow rules `Skill(brewtools:text-optimize *)` and `Skill(brewtools:text-human *)`.
+
+### brewcode
+
+#### Changed
+
+- **convention-setup, rules, teams-setup, e2e, skill-creator, agent-creator:** invoke `text-optimize` through `Skill` instead of hand-running its workflow; with brewtools absent the pass is skipped and reported.
+- **invariant:** 24 of 27 skills are user-only, three exceptions (`brewdoc:publish`, `brewtools:text-optimize`, `brewtools:text-human`); `suite-creator-contract` tests the exception list.
+- **teams-setup:** SKILL.md split into references, behaviour unchanged.
+
+### standalone skills
+
+#### Fixed
+
+- **brewpage-publish:** `skills/brewpage-publish` and `openclaw/brewpage-publish` ship their own `scripts/` (ported from brewdoc publish).
+- **shell injection:** JSON and directory paths no longer reach the shell unescaped.
+- **password:** now an absolute file path; it was silently dropped before.
+- **text:** heredoc truncation and text over 8,000 characters fixed.
+- **history:** file mode 600, git-ignored at the project root.
+- **upload safety:** site allowlist with `--confirmed`, ZIP inspection.
+- **skills/ copy:** one scoped Bash rule, `disable-model-invocation: false` explicit.
+
+### docs
+
+#### Fixed
+
+- **invocation pages:** updated to 24 of 27 with three exceptions.
+- **text-optimize, text-human:** pages gain Invocation and Permissions rows.
+
+---
+
 ## v6.5.9 (2026-10-13)
 
 > Docs: [bc-rules-organizer](https://doc-claude.brewcode.app/brewcode/agents/bc-rules-organizer/) | [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [teams-setup](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/)

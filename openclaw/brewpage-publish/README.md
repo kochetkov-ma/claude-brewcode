@@ -8,14 +8,14 @@ This is an [AgentSkills](https://docs.openclaw.ai/tools/skills)-standard skill f
 
 1. **Detects content type** — a directory/ZIP becomes a multi-file site, a single file becomes a file upload, everything else becomes HTML (markdown rendered)
 2. **Asks namespace** — interactive prompt for a short, human-readable namespace (URL slug)
-3. **Asks password** — optional password protection (hides the page from the gallery)
+3. **Asks password** — optional protection (hides the page from the gallery): an existing local file, given by absolute path, holds the password (min 4 characters); nothing is typed or generated
 4. **Calls API** — sends content to brewpage.app
 5. **Returns URL** — public link ready to share
-6. **Saves token** — owner token written to `./brewpage-history.md`
+6. **Saves token** — the script writes the owner token to `./brewpage-history.md` (mode 600, git-ignored)
 
 ## Install / Placement
 
-OpenClaw discovers skills from two locations. Drop the `brewpage-publish/` folder (containing `SKILL.md`) into either:
+OpenClaw discovers skills from two locations. Drop the whole `brewpage-publish/` folder into either; it must include `SKILL.md` and `scripts/`:
 
 ```
 <workspace>/skills/brewpage-publish/SKILL.md     # project-local skill
@@ -24,7 +24,7 @@ OpenClaw discovers skills from two locations. Drop the `brewpage-publish/` folde
 
 The folder/`name` (`brewpage-publish`) drives the slash command and the allowlist key. The name uses lowercase + a hyphen — colon/uppercase forms like `BrewPage::publish` are **invalid** in OpenClaw.
 
-This skill is standalone and portable; it does not load Brewdoc publishing libraries. Its history stays in the current workspace at `./brewpage-history.md`.
+This skill is standalone and portable; it bundles its own `scripts/` (`brewpage-run.sh` with `probe`, `stage`, `publish` and `cleanup`, a helper library and `publish.mjs`) and does not load Brewdoc publishing libraries. Its history stays in the current workspace at `./brewpage-history.md`.
 
 ## How to Invoke
 
@@ -76,10 +76,10 @@ A create request may return an existing publication. Keep the returned winner's 
 
 `POST /api/sites` accepts a **ZIP archive** or **repeated `files` with matching `paths` fields**. This skill uses ZIP transport for directory uploads.
 
-- **Directory (primary):** point at a **built** static directory; the skill auto-zips it and uploads. Archive sealing keeps relative paths intact.
-- **Pre-built `.zip` (alternative):** uploaded as-is.
+- **Directory (primary):** point at a **built** static directory; the skill builds a ZIP from it, verifies the archive (`unzip -t`, name set) and uploads. Relative paths stay intact.
+- **Pre-built `.zip` (alternative):** uploaded as-is, never rewritten; the script inspects it first.
 
-Directory auto-zipping excludes root and nested `.git/`, `.env`/`.env.*`, `node_modules/`, `.DS_Store`, `.idea/`, `.vscode/` and `.cache/`, plus root `Thumbs.db` and any `*.map` or `*.log` file. These filename exclusions are partial: review the built bundle for other sensitive files and embedded secrets before upload. Pre-built ZIPs are uploaded as-is.
+The directory bundle is **allowlisted**: it drops dot-entries (`.env`, `.git/`, `.DS_Store`), `node_modules/`, symlinks and unknown file types (`*.map`, `*.log`, `Thumbs.db`). Kept names that look sensitive (`secret`, `token`, `password`, `credential`) are flagged, and the script stops with `CONFIRM:` before uploading anything. Review the manifest, then confirm once; on approval the identical command re-runs with `--confirmed`. A supplied ZIP is never rewritten: anything unexpected or sensitive inside it needs the same confirmation. File contents are not scanned, so still check the bundle for embedded secrets.
 
 **Built-static guard:** publish build output, not sources. No `.html` in the directory → the skill fails and tells you to build first. A source tree (`package.json` + `src/`, no top-level `.html`) → the skill asks you to point at the build output (`dist/`, `build/`, `out/`, `_site/`, `public/`).
 
@@ -93,9 +93,9 @@ Default requested time-to-live is **15 days** (normally 1..30, subject to owner 
 
 ## Owner Token & Privacy
 
-The owner token is **never printed in conversation** — the skill's shell blocks curl the API, parse the token, and append it to `./brewpage-history.md` directly. Only the public URL is shown.
+The owner token is **never printed in conversation** — `brewpage-run.sh` calls the API, parses the token, and appends it to `./brewpage-history.md` directly. Only the public URL is shown.
 
-`./brewpage-history.md` is a **private file** (keep it out of version control). Each new row stores `ownerLink` and identity: `id`, `namespace`, `type`, `routingCohort`, `deliveryMode`, `modeLocked`, `hostingVersion`, `managementLink`, `createdAt` and `expiresAt`.
+`./brewpage-history.md` is a **private file**: the script creates it with mode 600 and adds it to `./.gitignore` inside a git repo. Each new row stores `ownerLink` and identity: `id`, `namespace`, `type`, `routingCohort`, `deliveryMode`, `modeLocked`, `hostingVersion`, `managementLink`, `createdAt` and `expiresAt`.
 
 Owner API and management links remain on `brewpage.app`, even when content uses a subdomain. Use the stored `ownerLink` and metadata; old history without metadata keeps its existing API identifiers. To delete a publication, read its owner API URL and token from history:
 
@@ -113,7 +113,7 @@ New protected links stay clean: never append `?p=`. Share the exact returned URL
 
 ## Requirements
 
-All uploads require `curl` and `jq` on the host shell. Publishing a directory also requires `zip` and `unzip` to package and validate the archive; pre-built ZIP uploads need neither.
+All uploads require `bash`, `curl` and `jq`. Directory and ZIP sites also require `node` and `unzip`; directory packaging also requires `zip`.
 
 ## Documentation
 

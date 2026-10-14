@@ -2,6 +2,10 @@
 
 Optimizes text files for LLM token efficiency with 5 compression modes — from light cleanup to deep dictionary-encoded compression for LLM-only documents. Applies 52 validated rules, supports smart auto-detection of optimal mode, and verifies content against per-mode loss budgets (lossless through standard; small explicit loss at deep/max). Works on single files, multiple files in parallel, or entire directories. Includes a smart deduplication pass: accidental repeats merged, intentional emphasis capped at 2 per document.
 
+**Invocation:** type `/brewtools:text-optimize ...`, or ask Claude mid-task ("compress this prompt", "optimize CLAUDE.md"). The skill is model-invocable; Claude-started runs must name their target files, because empty arguments stop with "no target". Add `--allow-dirty` to authorize uncommitted targets.
+
+**Permissions:** see the [docs page](https://doc-claude.brewcode.app/brewtools/skills/text-optimize/).
+
 ## Quick Start
 
 ```bash
@@ -141,7 +145,7 @@ Files are modified in-place. The report is printed to the conversation.
 
 - **Start with light mode** (`-l`) on important files to preview what changes look like before committing to deeper optimization.
 - **Review deep mode diffs carefully** -- aggressive rephrasing can alter meaning in domain-specific content.
-- **Run without arguments** to optimize all standard locations at once: `CLAUDE.md`, `.claude/agents/*.md`, `.claude/skills/**/SKILL.md`.
+- **Run without arguments** (only when you type the command yourself; Claude-fired runs need named targets) to optimize all standard locations at once: `CLAUDE.md`, `.claude/agents/*.md`, `.claude/skills/**/SKILL.md`.
 - **Parallel processing** kicks in automatically when you pass multiple files or a directory -- no extra flags needed.
 
 ## Documentation

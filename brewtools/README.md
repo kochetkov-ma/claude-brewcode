@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 6.5.9 |
+| Version | 6.6.0 |
 | Skills | 13 |
 | Agents | 3 |
 | Hooks | 2 |
@@ -100,6 +100,8 @@ Setup skills all speak the same verbs:
 
 > **Run `upgrade` in projects with an existing setup.** A `-setup` skill copies files INTO the project; a plugin update does not reach those copies.
 > - `/brewtools:manager-setup upgrade` — backfills `manager-state.mjs` (the wall's off-switch CLI) into projects installed before it existed. Without it the documented disarm command has no script to run.
+
+> **Invocation.** `text-optimize` and `text-human` are model-invocable; the other brewtools skills run only when you type them -- see the [FAQ](https://doc-claude.brewcode.app/faq/#auto-invoke).
 
 > Run [`/brewcode:setup-status`](../brewcode/skills/setup-status/README.md) to see which setup skills are installed, stale or missing in the current project, with the exact command to run for each.
 

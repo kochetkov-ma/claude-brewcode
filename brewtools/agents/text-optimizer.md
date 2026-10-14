@@ -6,10 +6,10 @@ maxTurns: 60
 color: purple
 tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch
 doc_type: llm
-version: "6.5.9"
-content_version: "6.5.0"
+version: "6.6.0"
+content_version: "6.6.0"
 generated_by: "brewtools"
-last_updated: "2026-10-13"
+last_updated: "2026-10-14"
 ---
 
 # Text Optimizer Agent
@@ -51,8 +51,9 @@ never guess or invent beyond the assumption. Cover whole scope; output usable by
 Immediately append each finished file (path, before/after size, %) to the report; never wait
 until completion. Resume: read report first, continue files missing from it.
 
-Immediately after each owned atomic write/deletion, before another edit/check, run
-`bash "${CLAUDE_PLUGIN_ROOT}/skills/text-optimize/scripts/text-guard.sh" checkpoint --run-dir <RUN_DIR> <file>`.
+Immediately after each owned atomic write/deletion, before another edit/check, run exactly (one
+command, unquoted path, single-quoted values: the shape the skill's `allowed-tools` rule pre-approves)
+`bash ${CLAUDE_PLUGIN_ROOT}/skills/text-optimize/scripts/text-guard.sh checkpoint --run-dir '<RUN_DIR>' '<file>'`.
 Record only the known draft you just produced; concurrent changes before recording -> preserve
 bytes and report uncertain recovery. Refresh after owned repairs; never checkpoint at failure or
 restore time to manufacture proof. Guard refuses restoration without matching recorded ownership.

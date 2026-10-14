@@ -27,20 +27,24 @@ Publish text, markdown, JSON, files, or whole multi-file sites to [brewpage.app]
    Deploy this directory as a site
    ```
 
-Claude detects the content type, asks for a namespace and password interactively, calls the brewpage.app API, and returns a public URL. The owner token is saved to `.claude/brewpage-history.md` for later deletion.
+Claude detects the content type, asks for a namespace and an optional password file, calls the brewpage.app API, and returns a shareable URL. The owner token is saved to `.claude/brewpage-history.md` at the project root for later deletion.
+
+The skill is model-invocable: Claude can run it on its own when you ask to publish or share a link. Every step is one `brewpage-run.sh` command covered by a single scoped Bash rule, so Bash never prompts. Claude Code asks once for the `Skill` call in default permission mode.
+
+`scripts/` ships with the skill (`brewpage-run.sh` with `probe`, `stage`, `publish` and `cleanup`, plus a helper library and `publish.mjs` for site bundles). `npx skills add` copies the whole folder.
 
 ## Requirements
 
-All uploads require `curl` and `jq` on the host shell. Publishing a directory also requires `zip` and `unzip` to package and validate the archive; pre-built ZIP uploads need neither.
+All uploads require `bash`, `curl` and `jq`. Directory and ZIP sites also require `node` and `unzip`; directory packaging also requires `zip`.
 
 ## What It Does
 
 1. **Detects content type** — directory/ZIP becomes a multi-file site, single file becomes a file upload, objects/arrays become JSON, everything else becomes HTML (markdown rendered)
 2. **Asks namespace** — interactive prompt for a short, human-readable namespace (URL slug)
-3. **Asks password** — optional password protection (hides the page from the gallery)
+3. **Asks password** — optional protection (hides the page from the gallery): an existing local file, given by absolute path, holds the password (min 4 characters); nothing is typed or generated
 4. **Calls API** — sends content to brewpage.app
-5. **Returns URL** — public link ready to share
-6. **Saves token** — owner token written to `.claude/brewpage-history.md`
+5. **Returns URL** — shareable link
+6. **Saves token** — the script writes the owner token to `.claude/brewpage-history.md` at the project root (mode 600, git-ignored)
 
 ## API Coverage
 
@@ -56,10 +60,10 @@ All uploads require `curl` and `jq` on the host shell. Publishing a directory al
 
 `POST /api/sites` accepts a **ZIP archive** or **repeated `files` with matching `paths` fields**. This skill uses ZIP transport for directory uploads.
 
-- **Directory (primary):** point at a **built** static directory; the skill auto-zips it and uploads. Archive sealing keeps relative paths intact.
-- **Pre-built `.zip` (alternative):** uploaded as-is.
+- **Directory (primary):** point at a **built** static directory; the skill builds a ZIP from it, verifies the archive (`unzip -t`, name set) and uploads. Relative paths stay intact.
+- **Pre-built `.zip` (alternative):** uploaded as-is, never rewritten; the script inspects it first.
 
-The auto-zip applies filename exclusions for `.git/`, `.env`/`.env.*`, `node_modules/`, `.DS_Store`, `Thumbs.db`, `.idea/`, `.vscode/`, `.cache/`, `*.map` and `*.log`. These exclusions do not cover every sensitive filename or inspect file contents. Before upload, inspect the intended built bundle, including any ZIP, for sensitive files and embedded secrets.
+The directory bundle is **allowlisted**: it drops dot-entries (`.env`, `.git/`, `.DS_Store`), `node_modules/`, symlinks and unknown file types (`*.map`, `*.log`, `Thumbs.db`). Kept names that look sensitive (`secret`, `token`, `password`, `credential`) are flagged, and the script stops with `CONFIRM:` before uploading anything. Review the manifest, then answer once; on approval the identical command re-runs with `--confirmed`. A supplied ZIP gets the same inspection: anything unexpected or sensitive inside it needs confirmation. File contents are not scanned, so still check the built bundle for embedded secrets.
 
 **Built-static guard:** publish build output, not sources. No `.html` in the directory → the skill fails and tells you to build first. A source tree (`package.json` + `src/`, no top-level `.html`) → the skill asks you to point at the build output (`dist/`, `build/`, `out/`, `_site/`, `public/`).
 
@@ -91,7 +95,7 @@ Default requested time-to-live is **15 days** (normally 1..30, subject to owner 
 
 ## Owner Token & Privacy
 
-The owner token is **never printed in conversation** — the skill's bash blocks parse the response and save it directly to `.claude/brewpage-history.md`. This **private file** must stay out of version control. It also records the exact public URL, apex `ownerLink`, and identity fields such as `id`, `namespace`, `type`, `routingCohort`, `deliveryMode` and `hostingVersion` for later owner operations.
+The owner token is **never printed in conversation** — `brewpage-run.sh` parses the response and writes it directly to `.claude/brewpage-history.md` at the project root (`CLAUDE_PROJECT_DIR`, else the git toplevel). The script creates the file with mode 600 and adds it to the project `.gitignore`. It also records the exact public URL, apex `ownerLink`, and identity fields such as `id`, `namespace`, `type`, `routingCohort`, `deliveryMode` and `hostingVersion` for later owner operations.
 
 New password-protected links stay clean: do not append `?p=`. Readers unlock through the trusted `unlock.brewpage.app` page; programmatic reads use `X-Password` on the apex API. Existing password behavior remains unchanged.
 

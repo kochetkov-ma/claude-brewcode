@@ -102,8 +102,8 @@ CONSUMER: unscoped .claude/rules/*.md loads at session start; a path-scoped rule
       do not promise every rule loads in every session. Source column: 'convention' for all
       extracted rules.
 DONE: validate script passes; return your File | Paths | Change table and summary line, plus
-      CHECKPOINT_REPORT and the written paths for optimization. Main owns P5 snapshots,
-      RUN_DIR, optimizer fan-out and acceptance; never model-invoke a DMI skill or spawn optimizers.
+      CHECKPOINT_REPORT and the written paths for optimization. Main owns P5 (text-optimize
+      via `Skill`) and acceptance; never invoke `brewtools:text-optimize` or spawn optimizers.
 ")
 ```
 

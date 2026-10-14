@@ -194,11 +194,20 @@ const CLAUDE_ONLY_AGENT_REFERENCES = [
   'references/hooks-changes.md', 'references/hooks-env.md', 'references/hooks-events.md', 'references/hooks-templates.md',
   'references/hooks-types-config.md', 'references/hooks-io-contract.md'
 ];
+// teams-setup Claude mode procedures, dropped by the generator; the native SKILL.md is self-contained.
+const CLAUDE_ONLY_TEAMS_REFERENCES = [
+  'references/mode-install.md', 'references/review-pipeline.md', 'references/mode-upgrade.md',
+  'references/mode-enable-disable.md'
+];
 
 function resourceTarget(plugin, skill, relative) {
   if (relative === 'SKILL.md' || relative.startsWith('.claude/') || relative.includes('/__pycache__/') || relative.endsWith('.pyc')) return null;
   if (plugin === 'brewtools' && skill === 'manager-setup' && (['references/hard.md', 'references/intent-routing.md'].includes(relative) || relative.startsWith('tests/'))) return null;
   if (plugin === 'brewcode' && skill === 'agents' && CLAUDE_ONLY_AGENT_REFERENCES.includes(relative)) return null;
+  if (plugin === 'brewcode' && skill === 'teams-setup' && CLAUDE_ONLY_TEAMS_REFERENCES.includes(relative)) return null;
+  // Claude-only invocation contract suites (DMI, allowed-tools); the generator drops them from the mirror.
+  if (plugin === 'brewtools' && skill === 'text-optimize' && relative === 'tests/suite-frontmatter.mjs') return null;
+  if (plugin === 'brewtools' && skill === 'text-human' && relative.startsWith('tests/')) return null;
   return relative.replaceAll('claude-md', 'agents-md').replaceAll('claude-local', 'codex-local');
 }
 
@@ -376,8 +385,10 @@ for (const literal of ['.codex/rules/', 'AGENTS.md', 'Rule', 'Load when', 'Purpo
 }
 if (!/allow_implicit_invocation: false/.test(rulesMetadata)) fail('rules must require explicit user invocation');
 
-const optimizerMetadata = fs.readFileSync(path.join(ROOT, 'brewtools', '.codex', 'skills', 'text-optimize', 'agents', 'openai.yaml'), 'utf8');
-if (!/allow_implicit_invocation: true/.test(optimizerMetadata)) fail('text-optimize must remain available for implicit invocation');
+for (const skill of ['text-optimize', 'text-human']) {
+  const metadata = fs.readFileSync(path.join(ROOT, 'brewtools', '.codex', 'skills', skill, 'agents', 'openai.yaml'), 'utf8');
+  if (!/allow_implicit_invocation: true/.test(metadata)) fail(`${skill} must remain available for implicit invocation`);
+}
 
 const teamsDocsRoot = path.join(ROOT, 'brewcode', '.codex', 'skills', 'teams-setup');
 const teamsDocs = [

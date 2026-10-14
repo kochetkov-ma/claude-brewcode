@@ -8,7 +8,7 @@ allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion, Ski
 model: opus
 ---
 
-<!-- brewcode-meta: version=6.5.9 content_version=6.5.6 generated_by=brewcode:convention-setup -->
+<!-- brewcode-meta: version=6.6.0 content_version=6.6.0 generated_by=brewcode:convention-setup -->
 
 <instructions>
 
@@ -282,55 +282,26 @@ Target: ~{LINE_COUNT} lines.
 
 ## P5: Text Optimization
 
-Runs only when the `brewtools:text-optimizer` agent is available; otherwise (`brewtools` not
-installed, or its `text-optimize/SKILL.md` not resolvable) skip P5, report the skip, and hand P6 the
-P4 documents unchanged (`references/text-optimize-fallback.md`).
+Runs only when the `brewtools:text-optimize` skill is available in this session; otherwise
+(`brewtools` not installed) skip P5, report the skip, and hand P6 the P4 documents unchanged
+(`references/text-optimize-fallback.md`).
 
 Targets, after every P4 writer returns: the three `.claude/convention/*.md` docs, medium mode, 100%
-meaning preservation. Main owns snapshots, fan-out, acceptance and repairs; no writer, organizer or
-optimizer spawns another optimizer or verifier. That agent refuses a brief without a `RUN_DIR`, so
-read the installed `/brewtools:text-optimize` `SKILL.md` (brewtools root, not this skill's plugin
-root) and follow its workflow; never invoke it through `Skill` (`disable-model-invocation: true`).
-TEXT_GUARD (absolute path of its `scripts/text-guard.sh`), RUN_DIR, FILE, REL, ANALYSIS and
-TEXT_OPTIMIZE_SKILL_DIR below are placeholders, not shell variables: substitute concrete values first. Snapshot before any optimization edit; require exit 0 and a printed `RUN_DIR`.
-`--allow-dirty` only under existing authorization for these documents, preserving unrelated work.
-
-```bash
-bash "TEXT_GUARD" snapshot .claude/convention/reference-patterns.md .claude/convention/testing-conventions.md .claude/convention/project-architecture.md
-```
-
-Run its Phase 1 fact inventory; main owns the cross-file dedup list (default EMPTY: keep every
-cross-file fact). Spawn 3 one-file optimizers in one message, every placeholder and the actual
-analysis substituted:
+meaning preservation. Invoke the model-invocable skill through `Skill`; P4 just wrote these
+documents, so `--allow-dirty` in `args` is this installer's authorization for exactly them:
 
 ```
-Agent(subagent_type="brewtools:text-optimizer", description="Optimize one convention document", prompt="
-GOAL: compact the generated project conventions without losing evidence or changing their meaning.
-ROLE: own FILE only, medium/100% preservation. No nested delegation or acceptance of your own work.
-SCOPE: write FILE only and its explicitly owned checkpoint/report under RUN_DIR. All other docs,
-  rules, CLAUDE.md, source, and snapshots are read-only/out of bounds for writes.
-CONTEXT: P4 generation completed; sibling optimizers own the other two documents. You are not alone;
-  preserve concurrent work. Full Phase 1 findings/fact inventory: ANALYSIS.
-  Original snapshot: RUN_DIR/orig/REL. Canonical rules/references: TEXT_OPTIMIZE_SKILL_DIR.
-  D.5 decision list: EMPTY unless main provides explicit owning rows; suggest additional duplicates.
-  After each known-owned atomic write, immediately run:
-    bash 'TEXT_GUARD' checkpoint --run-dir 'RUN_DIR' 'FILE'
-  Never checkpoint someone else's bytes or manufacture proof after failure. If current bytes
-  changed concurrently, preserve them and report uncertain recovery. Never restore automatically.
-CONSUMER: main independently compares ORIGINAL and CURRENT from disk before P6; later agents use
-  these etalons, paths, constraints, metadata, and examples directly.
-DONE: return metrics with the counting method, numbered facts labelled kept/merged/lost/distorted,
-  dedup ledger, reference checks, checkpoint/report path, and unresolved conflicts. No silent loss.")
+Skill(skill="brewtools:text-optimize", args=".claude/convention/reference-patterns.md .claude/convention/testing-conventions.md .claude/convention/project-architecture.md medium --allow-dirty")
 ```
 
-After all returns, main runs the mechanical sub-gate:
-
-```bash
-bash "TEXT_GUARD" verify --no-restore --run-dir "RUN_DIR" .claude/convention/reference-patterns.md .claude/convention/testing-conventions.md .claude/convention/project-architecture.md
-```
+That skill owns the snapshot (exit 0 + `RUN_DIR`), fact inventory, cross-file dedup list (default
+EMPTY), one optimizer per file with checkpoints, and its `verify --no-restore` gate; no writer,
+organizer or optimizer spawns another optimizer or verifier. Take `RUN_DIR` from its report and
+`TEXT_GUARD` = `scripts/text-guard.sh` in its base directory; RUN_DIR, TEXT_GUARD, FILE and REL below
+are placeholders, not shell variables: substitute concrete values first.
 
 A mechanical pass cannot prove semantics, so this installer adds, even in medium mode, one fresh
-read-only verifier per document, spawned together:
+read-only verifier per document, spawned together after the skill returns:
 
 ```
 Agent(subagent_type="general-purpose", description="Verify convention meaning", prompt="
@@ -344,9 +315,10 @@ DONE: numbered original facts labelled kept/merged/lost/distorted; protected-fac
   concrete omissions/conflicts and verdict PASS|FAIL. No invented equivalence percentage.")
 ```
 
-Repair only confirmed owned loss (checkpoint each repair, repeat the checks); otherwise keep the
-current bytes and refuse acceptance, never rolling back with a default verify/restore. P6 receives
-only accepted documents, or an explicit pending/partial result with the reason.
+Repair only confirmed owned loss (checkpoint each repair with `bash TEXT_GUARD checkpoint --run-dir
+'RUN_DIR' 'FILE'`, repeat the checks); otherwise keep the current bytes and refuse acceptance, never
+rolling back with a default verify/restore. P6 receives only accepted documents, or an explicit
+pending/partial result with the reason.
 
 ## P6: User Review
 

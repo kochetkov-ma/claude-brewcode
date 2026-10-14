@@ -2,6 +2,8 @@
 
 Universal, context-aware humanizer. It removes AI surface artifacts (chat scaffolding, fake tickets, unicode, trivial docs that restate a name) and fits the text to its register -- code, technical docs, published articles, or reddit/chat. It does NOT claim to detect AI authorship.
 
+**Invocation:** type `/brewtools:text-human ...`, or ask Claude mid-task ("humanize this README", "strip AI artifacts from this commit message"). The skill is model-invocable. Permissions: see the [docs page](https://doc-claude.brewcode.app/brewtools/skills/text-human/). Empty input asks once; a headless run, or no answer, stops with "nothing to humanize".
+
 ## Quick Start
 
 ```text

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.5.9 content_version=6.5.1 generated_by=brewcode:semble-setup
+// brewcode-meta: version=6.6.0 content_version=6.5.1 generated_by=brewcode:semble-setup
 
 // PostToolUse (`ok:true`) + PostToolUseFailure (`ok:false`, failures skip PostToolUse): PURE OBSERVER, semble
 // calls vs searches -> .claude/semble/telemetry.jsonl only; always `{}`, exit 0; Node built-ins, no imports.

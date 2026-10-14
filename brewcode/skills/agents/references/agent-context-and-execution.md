@@ -33,7 +33,7 @@ Two independent mechanisms -- pick per SK, not per AG.
 skills: api-conventions, error-handling
 ```
 
-> Both channels reach only model-invocable SKs. A `disable-model-invocation: true` SK is never preloaded (skipped; only a debug-log WARN `Skill '<name>' specified in frontmatter was not found`) and the `Skill` TL blocks it -- `Read` its files by path. Every SK the Brewcode plugins ship is one, except `brewdoc:publish` (model-invocable).
+> Both channels reach only model-invocable SKs. A `disable-model-invocation: true` SK is never preloaded (skipped; only a debug-log WARN `Skill '<name>' specified in frontmatter was not found`) and the `Skill` TL blocks it -- `Read` its files by path. Every SK the Brewcode plugins ship is one, except the model-invocable `brewdoc:publish`, `brewtools:text-optimize` and `brewtools:text-human`.
 > `skills:` is the preload channel (per AG, never inherited from the parent); !=put `Skill` there and !=put a SK name in `tools:`.
 
 ### Reference-Aware SKs

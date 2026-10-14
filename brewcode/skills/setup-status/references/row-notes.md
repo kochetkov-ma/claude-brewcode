@@ -42,7 +42,7 @@ Fill `<what drifted>` with the drifted files; `enable` stays the user's optional
 
 | Row | `upgrade` while disabled | Command for a drifted disabled row | Owner evidence |
 |-----|--------------------------|------------------------------------|----------------|
-| 1 teams | refused | `/brewcode:teams-setup enable <team>`, then `/brewcode:teams-setup upgrade <team>`, then `/brewcode:teams-setup disable <team>` | `$BC/skills/teams-setup/SKILL.md`: "Refuse to upgrade a parked member" |
+| 1 teams | refused | `/brewcode:teams-setup enable <team>`, then `/brewcode:teams-setup upgrade <team>`, then `/brewcode:teams-setup disable <team>` | `$BC/skills/teams-setup/references/mode-upgrade.md`: "Refuse to upgrade a parked member" |
 | 2 semble | keeps | `/brewcode:semble-setup upgrade "<what drifted>; keep it disabled"` | `$BC/skills/semble-setup/SKILL.md`: "`enabled`, `phase` and `completed` are never reset as a side effect" |
 | 3 superreview | refused | `/brewcode:superreview-setup enable`, then `/brewcode:superreview-setup upgrade "<what drifted>"`, then `/brewcode:superreview-setup disable` | `$BC/skills/superreview-setup/scripts/generate.sh`: "Run 'generate.sh enable' first, then upgrade." |
 | 4 task-board | refused | `/brewtools:task-board-setup enable`, then `/brewtools:task-board-setup upgrade "<what drifted>, keep every task id"`, then `/brewtools:task-board-setup disable` | `$BT/skills/task-board-setup/SKILL.md`: "tell the user to run `enable` first, then `upgrade`" |

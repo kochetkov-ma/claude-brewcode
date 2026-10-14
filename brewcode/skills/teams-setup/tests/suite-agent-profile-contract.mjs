@@ -1129,9 +1129,17 @@ check(
 );
 
 // BEGIN PROJECTED WORKFLOW CONTRACT
-const bootstrapAt = canonicalSkill.indexOf('### C2.6: Shared Contract Bootstrap');
-const createAt = canonicalSkill.indexOf('### C3: Agent Creation');
+// Mode detail lives verbatim in references/; SKILL.md keeps C4 and the read pointers.
+const skillReference = (name) => readFileSync(
+  join(repo, 'brewcode', 'skills', 'teams-setup', 'references', name), 'utf8');
+const canonicalInstall = skillReference('mode-install.md');
+const canonicalReview = skillReference('review-pipeline.md');
+const canonicalUpgrade = skillReference('mode-upgrade.md');
+const bootstrapAt = canonicalInstall.indexOf('### C2.6: Shared Contract Bootstrap');
+const createAt = canonicalInstall.indexOf('### C3: Agent Creation');
+const installReadAt = canonicalSkill.indexOf('Read `${CLAUDE_SKILL_DIR}/references/mode-install.md`');
 const finalizeAt = canonicalSkill.indexOf('### C4: Roster Finalization');
+const reviewReadAt = canonicalSkill.indexOf('read `${CLAUDE_SKILL_DIR}/references/review-pipeline.md`');
 check(
   'install.bootstrapBeforeAgents',
   bootstrapAt >= 0 && bootstrapAt < createAt,
@@ -1140,11 +1148,17 @@ check(
 );
 check(
   'install.finalizeAfterAgents',
-  createAt >= 0 && createAt < finalizeAt,
+  createAt >= 0 && installReadAt >= 0 && installReadAt < finalizeAt,
   true,
   'the final roster is written only after agent creation settles',
 );
-const bootstrap = section(canonicalSkill, '### C2.6: Shared Contract Bootstrap', '### C3: Agent Creation');
+check(
+  'install.reviewAfterFinalize',
+  finalizeAt >= 0 && finalizeAt < reviewReadAt,
+  true,
+  'the C5-C9 review pipeline runs only on the finalized, verified roster',
+);
+const bootstrap = section(canonicalInstall, '### C2.6: Shared Contract Bootstrap', '### C3: Agent Creation');
 for (const literal of [
   'before any team-owned `.claude/agents/{name}.md` is written',
   'write `team.md`',
@@ -1159,16 +1173,16 @@ for (const literal of [
   );
 }
 
-const migrationAt = canonicalSkill.indexOf('### U1b: Shared Contract Migration Gate');
-const analyzeAt = canonicalSkill.indexOf('### U2: Analyze Performance');
-const applyAt = canonicalSkill.indexOf('### U4: Apply Changes');
+const migrationAt = canonicalUpgrade.indexOf('### U1b: Shared Contract Migration Gate');
+const analyzeAt = canonicalUpgrade.indexOf('### U2: Analyze Performance');
+const applyAt = canonicalUpgrade.indexOf('### U4: Apply Changes');
 check(
   'upgrade.contractBeforeAgentRewrite',
   migrationAt >= 0 && migrationAt < analyzeAt && migrationAt < applyAt,
   true,
   'legacy team.md is migrated before any compact-agent rewrite can strip local rules',
 );
-const migration = section(canonicalSkill, '### U1b: Shared Contract Migration Gate', '### U2: Analyze Performance');
+const migration = section(canonicalUpgrade, '### U1b: Shared Contract Migration Gate', '### U2: Analyze Performance');
 for (const literal of [
   'insert the canonical block before `## Agents`',
   'an existing intent-guard roster row -> `required`; no row',
@@ -1186,7 +1200,15 @@ for (const literal of [
     `legacy-upgrade ordering preserves ${JSON.stringify(literal)}`,
   );
 }
-const upgrade = section(canonicalSkill, '## Mode: UPGRADE (self-reflection)', '## Mode: ENABLE');
+const upgradeMode = section(canonicalSkill, '## Mode: UPGRADE (self-reflection)', '## Mode: ENABLE');
+const scopeSnapshotAt = upgradeMode.indexOf('scope-guard.sh" snapshot');
+const upgradeReadAt = upgradeMode.indexOf('Read `${CLAUDE_SKILL_DIR}/references/mode-upgrade.md`');
+const scopeCheckAt = upgradeMode.indexOf('scope-guard.sh" check');
+check('upgrade.scopeGateWrapsSteps',
+  scopeSnapshotAt >= 0 && scopeSnapshotAt < upgradeReadAt && upgradeReadAt < scopeCheckAt,
+  true,
+  'the scope snapshot precedes U1-U4 and the final scope check follows them');
+const upgrade = canonicalUpgrade;
 const cutoffCaptureAt = upgrade.indexOf('UPGRADE_CUTOFF=$(date -u +%Y-%m-%dT%H:%M:%SZ)');
 const cursorReadAt = upgrade.indexOf('CURSOR=$(bash');
 const traceReadAt = upgrade.indexOf('trace-ops.sh" read');
@@ -1207,36 +1229,36 @@ check('codex.upgradeCursorCutoff',
     projectedSkill.includes('set the cursor to that captured cutoff, never to a new completion-time timestamp'),
   true,
   'the generated native workflow preserves stable cursor-cutoff ordering');
-for (const literal of [
-  'a new team defaults to `required`',
-  'absence migrates\nto `legacy-absent`',
-  '`legacy-absent` forbids that row and MUST NOT add the role during upgrade',
-  'segments, backslashes, whitespace, doubled\nslashes, unresolved `{...}` tokens, control characters, or shell metacharacters',
-  'segment MUST match `^[A-Za-z0-9._-]+$`',
-  'conflicting report-root directives -> STOP',
-  '`|Agent defaults|active;{LAST_UPDATED};domain;{PLUGIN_VERSION}|`',
-  '`|name|domain|mission|||||`',
-  'the complete written `team.md` (metadata + shared contract + every row) MUST be <=2800 characters',
-  '<=700 exact `tiktoken==0.13.0` `o200k_base` tokens',
-  'Each domain row past 13 adds 80 characters and 20 tokens',
-  'A file another generator stamped (`generated_by` other than\n   `brewcode:teams-setup`, e.g. `task-tracker`) never gets a row',
+for (const [source, literal] of [
+  [canonicalSkill, 'a new team defaults to `required`'],
+  [canonicalSkill, 'absence migrates\nto `legacy-absent`'],
+  [canonicalSkill, '`legacy-absent` forbids that row and MUST NOT add the role during upgrade'],
+  [canonicalSkill, 'segments, backslashes, whitespace, doubled\nslashes, unresolved `{...}` tokens, control characters, or shell metacharacters'],
+  [canonicalSkill, 'segment MUST match `^[A-Za-z0-9._-]+$`'],
+  [canonicalInstall, 'conflicting report-root directives -> STOP'],
+  [canonicalSkill, '`|Agent defaults|active;{LAST_UPDATED};domain;{PLUGIN_VERSION}|`'],
+  [canonicalSkill, '`|name|domain|mission|||||`'],
+  [canonicalSkill, 'the complete written `team.md` (metadata + shared contract + every row) MUST be <=2800 characters'],
+  [canonicalSkill, '<=700 exact `tiktoken==0.13.0` `o200k_base` tokens'],
+  [canonicalSkill, 'Each domain row past 13 adds 80 characters and 20 tokens'],
+  [canonicalSkill, 'A file another generator stamped (`generated_by` other than\n   `brewcode:teams-setup`, e.g. `task-tracker`) never gets a row'],
 ]) {
   check(
     `policy.workflow.${literal.slice(0, 16)}`,
-    canonicalSkill.includes(literal),
+    source.includes(literal),
     true,
     `generator workflow preserves ${JSON.stringify(literal)}`,
   );
 }
 
-const c8 = section(canonicalSkill, '### C8: Fix', '### C9: Re-verify');
+const c8 = section(canonicalReview, '### C8: Fix', '### C9: Re-verify');
 check(
   'repair.canonicalTemplate',
   c8.includes('`${CLAUDE_SKILL_DIR}/references/agent-template.md`'),
   true,
   'every C8 repair brief cites the canonical domain-agent template',
 );
-const c9 = section(canonicalSkill, '### C9: Re-verify', '> To skip review pipeline');
+const c9 = section(canonicalReview, '### C9: Re-verify', '> To skip review pipeline');
 for (const literal of [
   'exactly one single-line description <=100 characters',
   'body only (frontmatter excluded): <=3200 bytes',

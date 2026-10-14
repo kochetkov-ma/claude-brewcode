@@ -105,7 +105,7 @@ The skill reads the source, proposes rule candidates, asks you to accept/reject 
   <li>
     <div>
       <strong>Optimize and report</strong>
-      <p>Returns written paths and optimization requests to main. The caller follows the installed <code>brewtools:text-optimize</code> Medium workflow: snapshot before edits, supply <code>RUN_DIR</code>, dispatch optimizers, review the result and rerun rule validation. Required mode gates and any independent verification remain in the caller's workflow. The organizer never launches an optimizer directly. Missing Brewtools is reported as skipped; valid written rules remain usable.</p>
+      <p>Returns written paths and optimization requests to main. Then the calling skill (`/brewcode:rules` or `/brewcode:convention-setup`) invokes the `brewtools:text-optimize` skill through `Skill` (Medium, `--allow-dirty`); the skill owns the snapshot, `RUN_DIR`, optimizers and verify gate. On the rules path the run then finishes with `rules.sh validate`; the caller adds independent verification. The organizer never launches an optimizer directly. Missing Brewtools is reported as skipped; valid written rules remain usable.</p>
     </div>
   </li>
 </Steps>

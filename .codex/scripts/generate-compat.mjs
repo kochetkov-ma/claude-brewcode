@@ -38,6 +38,11 @@ const CLAUDE_ONLY_AGENT_REFERENCES = [
   'references/hooks-changes.md', 'references/hooks-env.md', 'references/hooks-events.md', 'references/hooks-templates.md',
   'references/hooks-types-config.md', 'references/hooks-io-contract.md'
 ];
+// teams-setup Claude mode procedures; the native SKILL.md carries its own workflow (validator mirrors this).
+const CLAUDE_ONLY_TEAMS_REFERENCES = [
+  'references/mode-install.md', 'references/review-pipeline.md', 'references/mode-upgrade.md',
+  'references/mode-enable-disable.md'
+];
 
 // Etalon-first wording mirrored into the Codex variants. Sources of truth:
 // brewcode/skills/teams-setup/references/agent-template.md and
@@ -1635,6 +1640,11 @@ function sourcePipPins(sourceDir, required) {
 }
 
 function generateSpecialResources(plugin, skill, sourceDir, targetDir) {
+  // Claude-only invocation contract (DMI, allowed-tools); the native SKILL.md carries name/description only.
+  if (plugin === 'brewtools' && skill === 'text-optimize') {
+    fs.rmSync(path.join(targetDir, 'tests', 'suite-frontmatter.mjs'), { force: true });
+  }
+  if (plugin === 'brewtools' && skill === 'text-human') fs.rmSync(path.join(targetDir, 'tests'), { recursive: true, force: true });
   if (plugin === 'brewcode' && skill === 'superreview-setup') {
     writeFile(path.join(targetDir, 'references', 'intent-guard.toml.template'), `name = "intent-guard"
 description = "Review-only anti-drift check comparing requested and delivered scope."
@@ -1960,6 +1970,7 @@ New teams use one review-only \`intent-guard\` outside the domain count. Its sha
   }
 
   if (plugin === 'brewcode' && skill === 'teams-setup') {
+    for (const name of CLAUDE_ONLY_TEAMS_REFERENCES) fs.rmSync(path.join(targetDir, name), { force: true });
     const cleanup = path.join(targetDir, 'references', 'cleanup-flow.md');
     writeFile(cleanup, fs.readFileSync(cleanup, 'utf8').replaceAll('{name}.md', '{name}.toml'));
 
@@ -2253,6 +2264,31 @@ done
   }
 }
 
+// Claude-only invocation wording in model-invocable source bodies: Codex has no allowed-tools or Skill tool.
+// Each pattern must match; a moved passage throws instead of shipping a stale permission claim.
+const INVOCATION_BODY_REWRITES = {
+  'brewtools/text-optimize': [
+    [/ The `allowed-tools` rule pre-approves exactly that shape; any\s+other prompts\./, ''],
+  ],
+  'brewtools/text-human': []
+};
+
+function nativeInvocationBody(plugin, skill, body) {
+  const extra = INVOCATION_BODY_REWRITES[`${plugin}/${skill}`];
+  if (!extra) return body;
+  const rewrites = [
+    ...extra,
+    [/Fired by Claude mid-task\s+\(`Skill` tool\), `args` is the prompt/, 'Invoked implicitly mid-task, the invocation text is the prompt'],
+    [/\n+## Notes\n\n- Permissions: model-invocable[^\n]*\n?$/, '\n']
+  ];
+  let text = body;
+  for (const [pattern, to] of rewrites) {
+    if (!pattern.test(text)) throw new Error(`INVOCATION_BODY_REWRITES for ${plugin}/${skill} no longer matches: ${pattern}`);
+    text = text.replace(pattern, to);
+  }
+  return text;
+}
+
 function generateSkill(plugin, skill) {
   const sourceDir = path.join(REPO_ROOT, plugin, 'skills', skill);
   const targetDir = path.join(REPO_ROOT, plugin, '.codex', 'skills', skill);
@@ -2272,7 +2308,7 @@ function generateSkill(plugin, skill) {
 
 Follow every phase below. When a phase delegates work, use Codex collaboration with only \`task_name\` and \`message\`; treat each "Codex delegation brief" block as role and message content, not executable syntax. ${nativeUserGateContract()} Resolve \`<skill-directory>\`, \`<plugin-root>\`, \`<project-root>\`, and \`<arguments>\` before running commands.
 
-${nativeWorkflowText(body)}
+${nativeWorkflowText(nativeInvocationBody(plugin, skill, body))}
 `;
     writeFile(path.join(targetDir, 'SKILL.md'), `${special.trimEnd()}\n${workflow}`);
     generateSpecialResources(plugin, skill, sourceDir, targetDir);

@@ -123,7 +123,7 @@ If OVER: assemble a concrete decomposition PLAN combining 5d (module split), 5e 
 > 1. Move module detail for `<M1, M2, ...>` into per-module AGENTS.md; root keeps a compact index requiring an explicit read before module work when outside the launch path. A module-launched run discovers its local guidance subject to the combined byte cap.  [est -X lines]
 > 2. Move topic blocks `<...>` into `.codex/rules/*.md`; add complete root rule-index entries with path, load condition and purpose, requiring explicit reads when the condition matches.  [est -Y lines]
 > 3. Dedup overlap with existing rules `<...>`; delete duplicated spans.  [est -Z lines]
-> 4. Deep-compress the remainder: you run `$brewtools:text-optimize` afterwards.  [est -W lines]
+> 4. Deep-compress the remainder with `$brewtools:text-optimize` (5f).  [est -W lines]
 > Projected: <CMD_LINES> -> ~<TARGET_LINES>.
 > - Apply the full plan
 > - Apply only steps I pick
@@ -165,14 +165,11 @@ For each approved MOD in MODULES:
 
 After 5b/5d/5e, compression of the remaining CMD + touched MODCMD + RULES belongs to TO; do not hand-compress or inline-reimplement it.
 
-- TO is user-invoked only (`disable-model-invocation: true`), so this phase cannot run it: recommend these commands for the user to run after the approved edits:
-  ```
-  $brewtools:text-optimize AGENTS.md
-  $brewtools:text-optimize .codex/rules/
-  ```
-  Multiple files in one call run in parallel: `$brewtools:text-optimize AGENTS.md, <MOD>/AGENTS.md`.
+- Runs only with approval: 5c plan step 4, or (5c not triggered) one AskUser line offering it. Declined -> no call.
+- After the approved edits, invoke TO through the matching skill, ONE call over every approved file (TO runs them in parallel): skill `brewtools:text-optimize`, args = their absolute paths, e.g. `<CMD_PATH> <MOD>/AGENTS.md <TARGET>/.codex/rules/`. Append `--allow-dirty` only when the approved edits above left those files uncommitted; TO refuses other dirty targets.
 - TO auto-detects `AGENTS.md` and `.codex/rules/*.md` as LLM-only files and selects DEEP mode. DIR `aggressive`/`deep` -> add `-d`; DIR `max`/`extreme`/`atomic` -> add `-x` (max mode, 2 mandatory verify rounds).
 - TO owns its AskUser/verification; do not duplicate it.
+- DIR `report only`/`dry run`/`propose only`, or TO not available in this session (brewtools not installed) -> no call: list the equivalent `$brewtools:text-optimize <paths>` commands for the user instead.
 
 ---
 
@@ -193,7 +190,7 @@ Report:
 - Non-secret preferences moved: count + LOCAL created/updated + gitignore status; credentials: references changed or unresolved, values never copied.
 - Modules split: list of MODCMD written + that root now indexes them.
 - Rules dedup: spans removed.
-- text-optimize: the exact commands (with flags) recommended to the user.
+- text-optimize: the args (with flags) TO ran with and its verdict, or the commands listed for the user when skipped.
 - A one-line flag if any secret was found that predates this run (rotate + history note).
 
 Set `CMD_DECOMPOSED = true` iff 5d wrote/updated at least one MODCMD -- this flag is consumed by the task-tracker agent template addition (ref 02) so the generated agent knows the target's AGENTS.md is decomposed and requires explicit module-guidance reads outside the launch instruction chain.
