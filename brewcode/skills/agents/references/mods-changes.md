@@ -11,7 +11,7 @@ Types files: 2.1.296 = 21,433 lines, 2.1.300 = 22,232 lines (design docs said ~1
 | Version | Change | What to do differently | src |
 |---------|--------|------------------------|-----|
 | 2.1.300 | new event `prompt.change` (observe only; origins `history`, `clear`, `undo`, `plugin`, `app`, `engine`) | cannot decorate: highlight shows on next keystroke after history recall, undo, clear or accepted completion (`mods-api.md` catalog) | T:4247, 8464; X |
-| 2.1.300 | `PromptDecoration` gains `bold` and `virtualText` (dim ghost text before `start`, not in draft) | usable from 2.1.300 only; guard with `$.session.version()` if mod must run on older builds | T:8764-8795; X |
+| 2.1.300 | `PromptDecoration` gains `virtualText` (dim ghost text before `start`, not in draft); `bold` now declared explicitly (2.1.296 had it via `Pick<TextProps>`) | `virtualText` from 2.1.300 only; guard with `$.session.version()` if mod must run on older builds | T:8764-8795; X |
 | 2.1.300 | `prompt.submit` input gains `command` and `isMeta` | inline expansion must skip them (`text` rewrite not applied: `mods-api.md` catalog) | T:9420-9450; X |
 | 2.1.300 | added `$.prompt.media`, `$.session.identity()`, `$.ui.view()` | none required | T:2981, 2636, 3043 |
 | 2.1.300 | `TextProps` gains `size`, `weight`, `mono`, `tabular`, `dir`; Box spacing takes `Space` tokens | check element props against live table before using them | T:13158-13190, 12482 |
@@ -26,7 +26,7 @@ Each row checked against the 2.1.300 types or live run. "Plan said" = planning c
 
 | Topic | Plan said | Live | src |
 |-------|-----------|------|-----|
-| permission mode | tracking needed | CONFIRMED (`mods-api.md` Budgets): no getter, no mode-change event, no field on `turn.step`/`prompt.submit`/`AbovePrompt` props; `PermissionMode` union is `setMode` only | T:7633, 7678; P |
+| permission mode | tracking needed | CONFIRMED (`mods-api.md` Budgets): no getter, no mode-change EVENT (Shift+Tab text signal only), no field on `turn.step`/`prompt.submit`/`AbovePrompt` props; `PermissionMode` union is `setMode` only | T:7633, 7678; P |
 | rejected `ExitPlanMode` | shape unknown | `isError: true`, never `deny`; absent in plain `-p` (plan L5 "auto-denied result" does not reproduce) | T11 Q3 |
 | effort indicator | no override | CONFIRMED: only `$.ui.status`; footer + spinner show session level, never override | P; T:10499; T11 Q7 |
 | headless effort proxy | `PostToolBatch` `effort.level` shows xhigh | DOES NOT REPRODUCE: it stays session level; only session JSONL `api-request` shows override | T11 Q2; X |
@@ -49,7 +49,7 @@ Each row checked against the 2.1.300 types or live run. "Plan said" = planning c
 | contract `types/index.d.ts` | exports types | top-level `export type`/`interface` OK, top-level `export {}` refused (`mods-api.md` Manifest) | V; X; S |
 | classic hooks detect mod | none | CONFIRMED: no field or env var; D6 does not need it | P |
 | plan lines `D:nnnn` in research 01-05 | cited at 2.1.300 | all spot-checked lines (861, 865, 4054, 4569, 5230, 7804, 8764, 10649, 13312, 15343, 16996) reproduce at same numbers | X |
-| `claude plugin test` environment | has `$.plugin` | test `$` has no `$.plugin`; `prompt.edit/change/autocomplete` not on typed `$.prompt` | X |
+| `claude plugin test` environment | has `$.plugin` | test `$` has no `$.plugin` and no `$.fs/process/store/env/clock`; `prompt.edit/change/autocomplete` not on typed `$.prompt` | X |
 
 ## Update Procedure (D16, maintainer context)
 
@@ -60,7 +60,7 @@ Maintainer context = cwd is claude-brewcode repo. Elsewhere: report drift rows, 
 | 1 | `claude --version`; load `plugin-authoring` (types path, `reference.md`, `examples/`) | version printed, path known (never stored) |
 | 2 | `node skills/agents/scripts/mods-ref-check.mjs <types> references/` | rc 0 = nothing to do; rc 1 = drift rows; rc 2 = fix call |
 | 3 | per drift row: find symbol in live types, decide renamed / removed / signature changed | live declaration read, not guessed |
-| 4 | edit references (`mods-api.md` symbol index fragment and catalog row first; then patterns and testing that rely on it); fragment = one backticked literal with neither pipe nor backtick | fragment found in live types |
+| 4 | edit references (`mods-api.md` symbol index fragment and catalog row first; then patterns and testing that rely on it); fragment = one backticked literal; `\|` for a pipe, double backticks around a literal backtick | fragment found in live types |
 | 5 | re-test what changed: scratch mod -> `claude plugin validate --strict`, `claude plugin test`, `tsc` (`mods-lifecycle.md`) | all rc 0 unpiped |
 | 6 | add entry here: version, change, what to do differently, `src`; move replaced plan claim into the "Did not reproduce" table | row added |
 | 7 | bump `verified_on` in all five `mods-*.md` files to new version | `rg -c "verified_on: <new>" references/mods-*.md` lists 5 files |

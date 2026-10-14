@@ -32,7 +32,7 @@ One row = one fact pack relies on. `fragment` must occur in live types after whi
 | event | classic.SessionStart | `hook_event_name: 'SessionStart';` |
 | event | classic.PreToolUse | `'classic.PreToolUse'` |
 | event | classic.* wrappers | `[E in ClassicHookEvent as` |
-| noun | $.plugin | `This plugin, as loaded: its manifest name and its directory.` |
+| noun | $.plugin | `plugin: { /**` |
 | noun | $.fs.read | `read: FsReadCall;` |
 | noun | $.fs.list | `list: (path?: string) => Promise<FsEntry[]>;` |
 | noun | $.fs.exists | `exists: (path: string) => Promise<boolean>;` |
@@ -89,12 +89,12 @@ One row = one fact pack relies on. `fragment` must occur in live types after whi
 | type | read | `export const read: ReadFunction` |
 | type | update | `export const update: UpdateFunction` |
 | field | turn.step.effort | `effort?: 'low'` |
-| field | turn.step.agentId | `absent on main.` |
+| field | turn.step.agentId | `agentId?: string; };` |
 | field | turn.step.messageCount | `messageCount: number;` |
 | field | TurnStepResult.stopReason | `stopReason: TurnStopReason;` |
 | field | classic.permission_mode | `permission_mode?: string;` |
 | field | classic.agent_id | `agent_id?: string;` |
-| field | classic.effort | `Same shape as StatusLineCommandInput.effort.` |
+| field | classic.effort | `effort?: { /**` |
 | field | ClassicResult.additionalContext | `additionalContext?: string[];` |
 | field | prompt.edit.inputText | `inputText: string;` |
 | field | PromptEditResult.decorations | `decorations?: PromptDecoration[];` |
@@ -118,7 +118,7 @@ One row = one fact pack relies on. `fragment` must occur in live types after whi
 | field | AbovePrompt.bodyColumns | `bodyColumns: number;` |
 | field | HookBudget.ms | `readonly ms: 10_000;` |
 | field | HookBudget.catchMs | `readonly catchMs: 1_000;` |
-| option | userConfig string options picker | `as a picker over them, and a stored value outside them counts as unset` |
+| option | userConfig string options picker | `Readonly<Record<string, string \| number \| boolean \| readonly string[]>>;` |
 | option | test options | `options?: PluginOptions;` |
 | option | process.run timeoutMs | `timeoutMs?: number;` |
 | option | fs.stat resolve | `options?: FsStatOptions` |
@@ -138,7 +138,7 @@ Hook shape `($, e, next)`; `e` frozen to every depth (`T:4945`); rewrite = copy 
 | `prompt.submit` | `text, command?, isMeta?, attachments?, context?, turnId?, wait, origin` | `next({ ...e, text })`, `context` = hidden blocks after prompt (limits: Budgets), `{ drop: reason }`; `text` rewrite NOT applied when `command` is set or `isMeta` starts turn | T:4200, 9420-9470; R:168 |
 | `prompt.attachment` | `type, text, origin, detail?`; types with `detail`: `plan_mode` (`reminder: 'full'/'sparse', planFilePath, hasPlan`), `plan_mode_reentry`, `plan_mode_exit` | `{ text: string \| null }`; answer cached per attachment for process | T:4304, 8287-8303, 7703-7752 |
 | `ui.render` | `component, surface, requestId, props, viewport?`; matcher `{ component: 'AbovePrompt' }`, `{ component: 'Pane', requestId }` | tree, `next(e)`, or `next({ ...e, props })`; invalid tree refused, engine draws its own | T:4080, 9754; R:134-158 |
-| `tool.call` | `tool` + that tool's input fields, `tool_use_id`; matcher `{ tool: 'Bash' }` | `{ deny }`, `{ result }`, `{ isError: true }`; `await next(e)` blocks while permission dialog is open | T:4054, 13312; R:79 |
+| `tool.call` | `tool` + that tool's input fields, `tool_use_id`; matcher `{ tool: 'Bash' }` | `{ deny }`, `{ result, context? }`; `isError: true` (set by core, needs `result`) is read after `await next(e)`, which blocks while permission dialog is open | T:4054, 13312-13400; R:79 |
 | `tool.check` | permission verdict; only `{ decision: 'deny', reason }` refuses here | `{ deny }` refuses nothing at this event | R:79 |
 | `command.run` | `command, args, origin, presentation{isFullscreen, columns}`; matcher `{ command: 'x' }` | `{ text?, context?, exitCode?, ref? }`; `next({ ...e, args })` rewrites args | T:4350, 1825-1900 |
 | `session.start` | `cwd, surface, isInteractive` (NO permission mode) | `{ cwd }` echoed; awaited before first prompt; place for `$.command.register`/`$.tool.register` | T:4445, 12133-12150; R:183 |
@@ -158,7 +158,7 @@ Chain order (T:1277): `[managed settings hooks, ...hooks modules, the other sett
 
 ## Nouns on `$`
 
-Every call async except where noted; each hookable by name (`'fs.read'`, `'process.run'`, ...), test kit stubs them that way (`mods-testing.md`). `$.env.get/set` and `$.state` refs take literals only (Hard Rules, `mods-lifecycle.md`).
+Every call async except `$.ui.status/toast/log/notice/resolve` (sync, T:2379-2510); each hookable by name (`'fs.read'`, `'process.run'`, ...), test kit stubs them that way (`mods-testing.md`). `$.env.get/set` and `$.state` refs take literals only (Hard Rules, `mods-lifecycle.md`).
 
 | Noun | Surface verified | Limits / notes | src |
 |---|---|---|---|
@@ -192,7 +192,7 @@ Every call async except where noted; each hookable by name (`'fs.read'`, `'proce
 | `hooks/hooks.json` = `{ "modules": ["./register.ts"] }`: one-element ARRAY; bare string -> `modules: Invalid input: expected array, received string`; second entry -> "names one hooks module per plugin; a second entry is refused" | V (X); S.4 on 2.1.296 |
 | module suffix `.ts .tsx .jsx .js .mjs .cjs .mts .cts`, ES module, `import` declarations only; `import()` -> "hooks module did not load" | R:14; V (X) |
 | relative imports: extensionless, `.js`, `.ts` suffixes all validate and load; only extensionless/`.js` tsc-clean under header tsconfig (`.ts` needs `allowImportingTsExtensions`); missing file -> validate rc 1 | S; X |
-| `userConfig.<k>.type` in `string number boolean directory file`; NO `enum` (-> `expected one of ...`); `title` + `description` required; `options` (string list) = picker in `/config`; `default` must be one of `options`; accepted extras: `min max multiple sensitive required`; unknown key -> `Unrecognized key` error | V (X); R:74; T:7794-7804 |
+| `userConfig.<k>.type` in `string number boolean directory file`; NO `enum` (-> `expected one of ...`); `title` + `description` required; `options` (string list; only for `type:string`, not `multiple`/`sensitive`) = picker in `/config`; `default` must be one of `options`; accepted extras: `min max multiple sensitive required`; unknown key -> `Unrecognized key` error | V (X); R:74; T:7794-7804 |
 | `register(on, options)` gets values with defaults filled; stored value outside `options` counts as unset; `/config` change reloads module; classic hook commands also get `CLAUDE_PLUGIN_OPTION_<KEY>` | T:7794; P (web docs, not probed) |
 | `types/index.d.ts` contract: top-level `export type`/`interface` and `declare module 'claude-code' { interface PluginState { '<plugin>': {...} } }`; top-level `export {}` refused ("a contract exports types and nothing else") | V (X); S |
 | `.claude-plugin/types/` written by engine on hot-reloaded loads (own `.gitignore`); `claude -p --plugin-dir` writes nothing into mod folder | R:50, 112; X. Interactive hot-reloaded load also writes mod-root `tsconfig.json` (`extends` the types one), NOT ignored: gitignore it too (T11 Q6) |
@@ -204,19 +204,20 @@ Every call async except where noted; each hookable by name (`'fs.read'`, `'proce
 | hook budget (own time; `next`/`$` waits free) | 10,000 ms per dispatch; `.catch` handler 1,000 ms; NO documented 50 ms `prompt.edit` figure | T:5221-5240; P |
 | streaming hook budget | counts only own code: per piece, summed over a `turn.step` response | T:5221 |
 | `additionalContext` entries from mod | 12,000 and 60,000 chars arrive intact; 10k cap in brewtools' comment not enforced on mod output; settings-command output cap: not checked | S |
-| `prompt.submit.context` entry | 100,000 chars each, 200,000 together, then head + path | T:1884 |
+| `prompt.submit.context` entry | 100,000 chars each, 200,000 together, then head + path | T:9459-9460 |
 | `$.ui.status/toast/log` text | first 2000 chars drawn on terminal | T:2510; R:155 |
-| `ui.render` tree | 20,000 nodes, 32 deep, 100,000 characters serialized, else instance unmounts | T:1439-1440 |
-| AbovePrompt band | cap = half terminal rows; taller content scrolls (`↓ n more`); person can collapse it; no band on VS Code/mobile | T:10640-10700; S |
-| Box `hover` | declarative style only, no callback; reveals only in fullscreen TUI (mouse tracking); hidden Box MUST be un-keyed inside visible keyed Box, else engine refuses whole band | T:889-957; S; X |
-| permission mode | NO getter, NO mode-change event, NO field on `turn.step`/`prompt.submit`/`AbovePrompt` | P; T grep `setMode` only |
+| hook `ui.render` tree | first 100,000 chars of its texts drawn, cut text ends with a note of what is left out; names held to 10,000 (`language`/`path`/`key`/`module`/`value`), 2,048 (`Link`), 131,072 (`Svg` source); rewritten prop over 100,000 chars or nested past 32 deep: engine's own drawn | R:155 |
+| `Client` surface-module tree | 20,000 nodes, 32 deep, 100,000 characters serialized, else instance unmounts | T:1439-1440, 1468 |
+| AbovePrompt band | fullscreen: bottom slot capped at half the rows; default TUI: `maxRows` = terminal height; taller content scrolls (`↓ n more`); person can collapse it; no band on VS Code/mobile | T:10640-10700 (maxRows 10660-10667); S |
+| Box `hover` | declarative style only, no callback; reveals only in fullscreen TUI (mouse tracking); hidden Box MUST be un-keyed inside visible keyed Box (or share a `scope` with the trigger: T:895-898, 939-944), else engine refuses whole band | T:889-957; S; X |
+| permission mode | NO getter, NO mode-change EVENT, NO field on `turn.step`/`prompt.submit`/`AbovePrompt` (text-only exception: Shift+Tab row) | P; T grep `setMode` only |
 | effort indicator | no API overrides it; footer (`● high · /effort`) and spinner show SESSION level, never per-request override; `$.ui.status` only channel; `classic.*` `effort.level` also stays session level | P; T:10499; T11 Q7 |
 | rejected `ExitPlanMode` | `await next(e)` blocks while dialog is open; reject = `isError: true` (`text` = rejection message), never `deny`; approve = no `isError`, no `deny`; `deny === undefined && isError !== true` separates them | T11 Q3 |
 | `turn.step` rewrite reaches API request `output_config.effort` | YES (main loop; subagent step stays at session level). Only session JSONL `api-request` rows record it: neither `--debug-file` nor `classic.PostToolBatch` `effort.level` shows it | T11 Q2; X |
 | module `let` | persists across turns of one session; RESETS on hot reload (`session.start` fires again) and on `--resume`; `$.state`/`$.store` survive | T11 Q5; X |
-| Shift+Tab | fires NO hooked event (so no `tool.call`); mode first seen at next `classic.PostToolBatch` (mid-turn) or `classic.UserPromptSubmit` (between turns); transient visit between two checkpoints invisible | T11 Q7; P |
+| Shift+Tab | fires NO hooked event (so no `tool.call`); mode first seen at next `classic.PostToolBatch` (mid-turn) or `classic.UserPromptSubmit` (between turns); transient visit between two checkpoints invisible. FRAGILE text signal, never primary: `ui.render` `PromptHint` re-runs per cycle, `e.props.hint` carries `manual mode on` / `accept edits on` / `plan mode on` / `auto mode on` (terminal + desktop only, text-parsed, intermediate renders lack the label, `SessionMode.modes` is `[]`, none in `-p`) | T11 Q7; P; X (tmux, TA.R M5); T:10598-10640 |
 | `EnterPlanMode`/`ExitPlanMode` tools | not registered in plain `-p`, even with `--allowedTools`/`--tools`/stream-json input; present in TTY and with `--permission-prompt-tool stdio` | T11 Q3; X |
 
 ## Tool Names For Plan Mode
 
-`EnterPlanMode` input `{}`, result `{ message }`; `ExitPlanMode` input `{ allowedPrompts? }` (deprecated), result `{ plan, isAgent, filePath?, planWasEdited?, awaitingLeaderApproval?, requestId? }` (T:16996, 17003, 21338-21360). `tool.call` hook runs before permission dialog; Shift+Tab never reaches it.
+`EnterPlanMode` input `{}`, result `{ message }`; `ExitPlanMode` input `{ allowedPrompts? }` (deprecated), result `{ plan: string | null, isAgent, filePath?, hasTaskTool?, planWasEdited?, awaitingLeaderApproval?, requestId? }` (T:16996, 17003, 21338-21360). `tool.call` hook runs before permission dialog; Shift+Tab never reaches it.

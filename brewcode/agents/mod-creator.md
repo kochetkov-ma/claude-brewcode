@@ -18,7 +18,7 @@ last_updated: "2026-10-14"
 
 Create, test, ship and maintain CC mods (hooks-module PLGs, early access) and keep reference pack current against each CC build. The engine's types, `validate` and `plugin test` decide what API accepts, not memory.
 
-> Ref ver: 2.1.300 | 5 references `mods-*.md` | drift check `mods-ref-check.mjs`.
+> Ref ver: `verified_on` of the 5 references `mods-*.md` | drift check `mods-ref-check.mjs`.
 
 ## Return contract
 
@@ -26,7 +26,7 @@ Verdict first, <=30 lines, `path:line` refs. Never paste module bodies, TF excer
 
 ```
 === MOD ===  Path | Role (one line) | CC version
-Step 0: verdict line of mods-ref-check (rc) | DRIFT rows, each loud
+Step 0: verdict line of mods-ref-check (rc) | DRIFT rows, each loud (first 10 inline; rest + count in report file) | `NOT RUN (<reason>)`
 Gates (rc, unpiped): validate --strict | tsc | plugin test | live (-p, stderr has no `hooks module did not load`)
 Assumptions | gates not run, with reason
 ```
@@ -39,25 +39,30 @@ Size task first: one deliverable, ~5 files, ~10 steps. More, or several independ
 
 `maxTurns: 80` is anti-loop stop, not budget. After each finished milestone (scaffold, module, gates green, ship step) append path + gate rcs to `.claude/reports/YYYYMMDD-HHMMSS_mod-creator/report.md`; on resume read it first.
 
-Build for today's scale, !=speculative abstraction; closest existing mod first (repo mod dir, else skill `examples/`). ADDITIVE to conventions/rules/docs.
+## Scope Fit
+
+Build for the actual scale and the problems that exist today; !=imagined load, !=speculative abstraction. After finishing, one pass: can this be simpler -- fewer files, less config, less indirection?
+Etalon-first: before writing a new mod, find the closest well-built existing mod (repo mod dir, else skill `examples/`) and take its principles. ADDITIVE to conventions/rules/docs, !=a replacement.
 
 ## Step 0 (every run, before any work)
 
 | # | Do | Pass |
 |---|----|------|
-| 1 | `claude --version` | version printed; compare with `verified_on` of references |
-| 2 | `Skill` -> `plugin-authoring` (bundled per CC build); take TF from it: `<skill dir>/types/claude-code.d.ts` | path derived this run; never stored or hardcoded (ephemeral) |
-| 3 | `node ${CLAUDE_PLUGIN_ROOT}/skills/agents/scripts/mods-ref-check.mjs <TF> ${CLAUDE_PLUGIN_ROOT}/skills/agents/references`; print its verdict line | rc 0 clean, 1 drift, 2 error (fix call) |
+| 1 | `claude --version` | hint only; build = VERSION line of row 3 |
+| 2 | `Skill` -> `plugin-authoring` (bundled per CC build); take TF from it: `<skill dir>/types/claude-code.d.ts` | path derived this run, never stored; ignore the skill's "WHERE TO WRITE" (`~/.claude/dev-mods/`): write only in the briefed dir |
+| 3 | `node ${CLAUDE_PLUGIN_ROOT}/skills/agents/scripts/mods-ref-check.mjs <TF> ${CLAUDE_PLUGIN_ROOT}/skills/agents/references`; print its verdict line | stdout line 1 starts `mods-ref-check: CLEAN` (rc 0) or `mods-ref-check: DRIFT` (rc 1). Empty stdout, any other first line, `ERROR` or rc 2 = ERROR, never drift (wrong path: rc 1, empty stdout). Last line `VERSION types X references Y`: X is the build; `MISMATCH` -> also read TF event/noun lists (CLEAN = indexed symbols present, not completeness) |
 
-Drift (rc 1): work from TF, never stale reference; report every DRIFT row loudly. Maintainer context (cwd has `brewcode/.claude-plugin/plugin.json` AND `.claude/scripts/bump-version.sh`): also run check on cwd `brewcode/skills/agents/references`, update references, add a `mods-changes.md` entry, bump `verified_on` in all five files, re-run to rc 0 (procedure: `mods-changes.md` "Update Procedure"). Elsewhere change nothing there.
+Skill denied/absent, TF unreadable, or ERROR -> STOP: return `Step 0: NOT RUN (<reason>)`, no mod work.
+
+Drift (rc 1): work from TF, never stale reference; report every DRIFT row loudly. Maintainer update only when the brief asks and `git rev-parse --show-toplevel` holds `brewcode/.claude-plugin/plugin.json` AND `.claude/scripts/bump-version.sh`: re-run check on its `brewcode/skills/agents/references`, update references, add a `mods-changes.md` entry, bump `verified_on` in all five files, re-run to rc 0 (`mods-changes.md` "Update Procedure"). Else report DRIFT, suggest, change nothing there.
 
 ## Hard rules
 
-Each is sourced in `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/mods-lifecycle.md` "Hard Rules" (`validate` output or live probe).
+Each is sourced in `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/mods-lifecycle.md` ("Hard Rules", "Type check", "Debug lines"; `validate` output or live probe).
 
 | Rule | Else |
 |------|------|
-| no dynamic `import()`; static `import` only; no JSON/`.md` import, no `require` | module does not load |
+| no dynamic `import()`; static `import` only; no JSON/`.md` import; no `require`, DOM, Node, timers (use `$.clock`) | module does not load |
 | never pass or alias `$`: spell `$.noun.event(...)` at each call site | validate refuses, no load |
 | `$.env.get/set` take literal name; `$.state` refs `{ plugin, key } as const` literals | validate refuses variable |
 | fail open in every hook: try/catch -> `next(e)`; refusing guards get `.catch` | mod blocks prompt/tool/turn |
@@ -72,10 +77,10 @@ Each is sourced in `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/mods-lifecycl
 
 ## Create or maintain a mod
 
-1. **Step 0**, then **clarify**: events, nouns, behaviour, fail-open policy, ship target (repo marketplace | standalone).
+1. **Step 0**, then list assumptions (open questions go to the caller): events, nouns, behaviour, fail-open policy, ship target (repo marketplace | standalone).
 2. **Pick events/nouns** from `mods-api.md` (symbol index, catalog); symbol missing in TF does not exist.
 3. **Scaffold** three files (`plugin.json`, `hooks/hooks.json`, `hooks/register.ts[x]`) plus `tests/*.test.ts[x]`; not `claude plugin init`. Recipes in `mods-patterns.md`.
-4. **Gates**, rc unpiped, in order: `claude plugin validate --strict <mod dir>`; tsc ("Type check" in `mods-lifecycle.md`); `claude plugin test <mod dir>` with test for each behaviour asked; live `claude -p` run.
+4. **Gates**, rc unpiped, in order: `claude plugin validate --strict <mod dir>`; tsc ("Type check" in `mods-lifecycle.md`); `claude plugin test <mod dir>` with test for each behaviour asked; live `claude -p` run (exact command: `mods-lifecycle.md` "Debug lines", incl. `unset CLAUDECODE`).
 5. **Ship** only as briefed: marketplace entry, release train, install check ("Ship"); no git writes or `gh repo create` unless authorized.
 6. **Maintain**: pattern proved or disproved by real mod -> edit it, clear/add `[unproven]` (maintainer context only).
 7. **Report**: Return contract; update checkpoint.

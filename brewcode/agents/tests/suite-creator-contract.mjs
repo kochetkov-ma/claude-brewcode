@@ -623,6 +623,55 @@ function runHookTemplate(source, stdin) {
   }
 }
 
+// ------------------------------- 14. mod-creator (own block: FILES refver pins are hook-creator's CC 2.1.296 baseline)
+
+{
+  // GIVEN the mod-creator body WHEN read apart from FILES THEN its contract pieces are all present.
+  const mod = readFileSync(join(AGENTS, 'mod-creator.md'), 'utf8');
+  const fmKeys = (t) => (t.split(/^---$/m)[1] || '').split('\n')
+    .filter((l) => /^[a-z_]+:/.test(l)).map((l) => l.split(':')[0]);
+  const fmLine = (key) => ((mod.split(/^---$/m)[1] || '').split('\n').find((l) => l.startsWith(`${key}:`)) || '');
+  const step0 = mod.split(/^## /m).find((h) => h.startsWith('Step 0')) || '';
+  const refDir = join(PLUGIN_ROOT, 'skills/agents/references');
+  const cited = [...mod.matchAll(/\$\{CLAUDE_PLUGIN_ROOT\}\/[^\s`|]+\.md/g)].map((m) => m[0]);
+
+  check('mod.fm.keyOrder', fmKeys(mod), fmKeys(text['hook-creator.md']),
+    'mod-creator frontmatter keys and order must equal its peer creators');
+  check('mod.fm.tools', fmLine('tools').split(/[:,]/).slice(1).map((t) => t.trim()).filter((t) => ['Skill', 'Bash', 'AskUserQuestion', 'Agent'].includes(t)).sort(),
+    ['Bash', 'Skill'], 'mod-creator tools must carry Skill + Bash and neither AskUserQuestion nor Agent');
+  check('mod.cites.exist', cited.filter((c) => !existsSync(c.replace('${CLAUDE_PLUGIN_ROOT}', PLUGIN_ROOT))), [],
+    'every reference path mod-creator cites must exist');
+  check('mod.cites.count', cited.length > 0, true, 'mod-creator must cite at least one reference path');
+  check('mod.cites.fiveRefs', ['api', 'changes', 'lifecycle', 'patterns', 'testing']
+    .filter((n) => !existsSync(join(refDir, `mods-${n}.md`))), [], 'the five mods-*.md references must ship');
+  check('mod.headings', ['## Scope Fit', '## Return contract', '## Step 0 (every run, before any work)']
+    .filter((h) => !mod.split('\n').includes(h)), [], 'mod-creator must carry Scope Fit, Return contract and Step 0 headings');
+  check('mod.step0.threeRows', [1, 2, 3].filter((n) => !new RegExp(`^\\| ${n} \\|`, 'm').test(step0)), [],
+    'Step 0 must have its three numbered steps');
+  check('mod.step0.skillThenScript',
+    [/`Skill` -> `plugin-authoring`/.test(step0), /mods-ref-check\.mjs <TF>/.test(step0)], [true, true],
+    'Step 0 must load plugin-authoring via Skill, then run the drift script on the derived types file');
+  check('mod.step0.emptyStdoutIsError',
+    /Empty stdout, any other first line, `ERROR` or rc 2 = ERROR, never drift/.test(step0), true,
+    'Step 0 must treat empty stdout or a non-verdict first line as ERROR (wrong path gives rc 1)');
+  check('mod.step0.versionLine', /`VERSION types X references Y`/.test(step0), true,
+    'Step 0 must take the build from the VERSION line, not PATH claude --version');
+  check('mod.step0.notRun', /STOP: return `Step 0: NOT RUN \(<reason>\)`, no mod work/.test(step0), true,
+    'Step 0 must stop with NOT RUN when Skill, types file or script fails');
+  check('mod.step0.ignoreWriteLocation', /ignore the skill's "WHERE TO WRITE"/.test(step0), true,
+    'Step 0 must not follow the skill write location (~/.claude/dev-mods/)');
+  check('mod.driftFloodCap', /DRIFT rows, each loud \(first 10 inline; rest \+ count in report file\)/.test(mod), true,
+    'mod-creator must cap inline DRIFT rows at 10 and file the rest with the count (30-line cap)');
+  check('mod.returnContract', /^## Return contract\n\nVerdict first, <=30 lines, `path:line` refs\./m.test(mod), true,
+    'mod-creator must carry the verdict-first return contract');
+  check('mod.refVer.noLiteral', [/^> Ref ver: .*`verified_on`/m.test(mod), /^> Ref ver: .*\d+\.\d+\.\d+/m.test(mod)], [true, false],
+    'mod-creator Ref ver line must point at verified_on, not carry a CC version literal');
+  check('mod.maintainerOnlyWhenAsked', /Maintainer update only when the brief asks and `git rev-parse --show-toplevel`/.test(mod), true,
+    'mod-creator must update references only on request, rooted via git rev-parse');
+  check('mod.liveGate', /mods-lifecycle\.md` "Debug lines", incl\. `unset CLAUDECODE`/.test(mod), true,
+    'mod-creator live gate must point at the exact command in mods-lifecycle.md');
+}
+
 // ---------------------------------------------------------------- report
 
 console.log('\nsuite-creator-contract (brewcode creator agents)');

@@ -21,7 +21,7 @@ Full road of Claude Code mod (hooks-module plugin): scaffold, hooks module, vali
 | `$.env.get/set` take string literal; `$.state` refs `{ plugin, key } as const` literals (only family member's `id` may be computed) | validate lists them, refuses variable name (`takes a literal name`) | V; X; T:3483 |
 | fail open everywhere: mod never blocks prompt, tool or turn it did not mean to | failing hook is skipped, chain goes on; wrap own logic in try/catch, return `next(e)`; refusing guards get `.catch` | R:78-79; T:1205 |
 | zero I/O in `prompt.edit` (no `$.fs`, `$.process`, `$.http`, `$.store`) | runs per keystroke; budget is own-time 10,000 ms, no documented 50 ms figure, so targets are self-imposed (p99 < 2 ms at 4k chars, < 8 ms at 20k, no decoration above 20k chars) | T:5230; P; D (plan Risks) |
-| `.claude-plugin/types/` and mod-root `tsconfig.json` never committed | engine-written on interactive loads (types carry own `.gitignore`; root `tsconfig.json` does not): add `brewmod-*/.claude-plugin/types/` and `brewmod-*/tsconfig.json` to repo `.gitignore` (`-p` and `validate` write nothing) | R:112; PLAN S.1; T11 Q6 |
+| `.claude-plugin/types/` and mod-root `tsconfig.json` never committed | engine-written on interactive loads (types carry own `.gitignore`; root `tsconfig.json` does not): add `brewmod-*/.claude-plugin/types/` and `brewmod-*/tsconfig.json` to repo `.gitignore` (`-p` and `validate` write nothing); deliberate departure from R:112 ("tsconfig.json at the top level stays"): it `extends` the gitignored types one, so a committed copy breaks on a fresh clone | R:112; PLAN S.1; T11 Q6 |
 | never pass `$` to function or alias it: spell `$.noun.event(...)` at every call site | validate refuses `$ is passed to "log"`; module does not load | V; X |
 | never write under `~/.claude/dev-mods/` unless person asks; repo mods go in repo plugin dir | person's hot-reload mods folder (consent question) | D15; PLAN TLA |
 | `hooks/hooks.json` = `{ "modules": ["./register.ts"] }`: ONE path, in ARRAY | string -> `expected array, received string`; second entry refused | V; X; S.4 (2.1.296) |
@@ -50,12 +50,12 @@ Full road of Claude Code mod (hooks-module plugin): scaffold, hooks module, vali
 | Item | Value | src |
 |------|-------|-----|
 | types laid by engine | after hot-reloaded load: `<mod>/.claude-plugin/types/{claude-code,claude-code-tools,claude-code-mcp}/index.d.ts` + `tsconfig.json` that mod's own extends -> `tsc -p <mod dir>` | R:40-53 |
-| before first load / under `claude -p` / SDK host | tsconfig kept OUTSIDE mod folder: header options below, `include` = [types file, `<mod>/hooks`, `<mod>/tests`] | R:50-53; T:60-78 |
+| before first load / under `claude -p` / SDK host | tsconfig kept OUTSIDE mod folder: header options below, `include` = [types file, `<mod>/hooks`, `<mod>/types`, `<mod>/tests`] (`types` needed for a `$.state` contract the module does not import) | R:50-53; T:67-77 |
 | tsc version | registry-verified 2026-10-14: `npm view typescript version` = `7.0.2` (dist-tag `latest`); same mod type-checked rc 0 on `7.0.2` and `5.9.3`; types need TS >= 5.4. Pin exactly (`avoid#4`): `npx -y -p typescript@7.0.2 tsc -p <tsconfig>`; re-verify pin quarterly | X; T:8 |
 | `.ts` suffix in relative import | tsc error TS5097 under header options; use extensionless (`./lib/a`) or `./lib/a.js` | X |
 | test files | `prompt.edit/change/autocomplete` not typed on test `$` (`EventCalls.prompt` lacks them) though `$.prompt.edit(...)` works at run time: cast one call (`($.prompt as any).edit(...)`) | X; T:4841-4850 |
 
-Header tsconfig (T:60-73):
+Header tsconfig (T:67-77):
 
 ```json
 { "compilerOptions": { "target": "es2023", "lib": ["es2023"], "types": [],
@@ -72,7 +72,7 @@ Run: `unset CLAUDECODE; claude -p "say ok" --plugin-dir <dir> --debug-file <abs 
 | Situation | Where | Line (shape) | src |
 |-----------|-------|--------------|-----|
 | module loaded | debug file | `hooks module <name>@inline loaded (worker, environment N, tier user); events: <list>` | X |
-| module NOT loaded | stderr of `claude -p` text mode + debug `[ERROR] hooks module <name>@inline failed to load: ...` | `<name>: hooks module did not load: <file>, compiled line N ...: <reason>`; session still runs and `claude -p` exits 0: CI must grep this line, never trust rc | X |
+| module NOT loaded | stderr of `claude -p` text mode + debug `[ERROR] hooks module <name>@inline failed to load: ...` | `<name>: hooks module did not load: <reason>` (reason = `cannot import "<spec>" (from <file>): no such file ...`, or `<file>, compiled line N`, the offending code, `: <reason>` from the source scan); session still runs and `claude -p` exits 0: CI must grep this line, never trust rc | X |
 | options in effect | debug file | `plugin <name>: no pluginConfigs["<name>" or "<name>@inline"].options in user, --settings or managed settings ...; every option is its default` | X |
 | hook skipped | hot-reload transcript (dim line) or debug `<plugin>: <line>`; debug line carries error name + message length | `... hook was skipped: <reason>` | R:80; X (test output) |
 | tree refused | transcript while hot-reloading, else debug | `<plugin>: ui.render (<Component>) refused: <reason>; the engine drew its own`; debug `ui.render (<Component>): a hook returned a tree that does not validate` | R:80, 152-155; X |
@@ -84,8 +84,8 @@ Run: `unset CLAUDECODE; claude -p "say ok" --plugin-dir <dir> --debug-file <abs 
 | Step | Do | src |
 |------|----|-----|
 | marketplace entry | repo `.claude-plugin/marketplace.json`: append entry shaped like `brewui`'s (`name`, `description`, `version`, `category`, `keywords`, `tags`, `author`, `license`, `homepage`, `repository`, `source: "./<mod dir>"`, `"strict": true`); `metadata.description` mentions mods; `homepage` = GitHub tree URL until docs site exists | PLAN Shared integration; repo `marketplace.json` |
-| standalone repo road | repo root = the mod, `.claude-plugin/marketplace.json` `{ name, owner, plugins: [{ name, source: "./" }] }`, README install line `/plugin install <mod> --marketplace <owner>/<repo>`; secrets scan (`mcp__plugin-authoring__scan_secrets`), `git init`, commit, `gh repo create`; only when person asks | R:83-130 |
-| release train (D2) | all 6 plugins share one X.Y.Z; `bash .claude/scripts/bump-version.sh X.Y.Z`, `RELEASE-NOTES.md`, commit/tag/push, `update-plugin.sh` per profile, CI green: root `CLAUDE.md` "Version Sync"; mod paths join `bump-version.sh` in S.1 (planned) | D2; PLAN S.1 |
+| standalone repo road | repo root = the mod, `.claude-plugin/marketplace.json` `{ name, owner, plugins: [{ name, source: "./" }] }`, README install line `/plugin install <mod> --marketplace <owner>/<repo>`; secrets scan (`mcp__plugin-authoring__scan_secrets`), keep mod-root `tsconfig.json` out of the commit (see Hard Rules; R:112 keeps it), `git init`, commit, `gh repo create`; only when person asks | R:83-130 |
+| release train (D2) | all 6 plugins (brewcode, brewdoc, brewtools, brewui + `brewmod-plan-effort`, `brewmod-placeholders`) share one X.Y.Z; `bash .claude/scripts/bump-version.sh X.Y.Z`, `RELEASE-NOTES.md`, commit/tag/push, `update-plugin.sh` per profile, CI green: root `CLAUDE.md` "Version Sync"; mod `plugin.json`s are wired into `marketplace.json` and `bump-version.sh` (working tree, S.1) | D2; PLAN S.1 |
 | install check | hooks-module-only mod shows "Installed <mod>. Plugin is now active." and runs with no reload; mods on by default from 2.1.287; shell install needs `/reload-plugins` in open session | R:128; P |
 | READMEs and docs | mod README + docs page via `/docs`; no `Version` row in mod READMEs (D12); say "2.1.287+, early access" | D12; PLAN Risks |
 | gates | `claude plugin validate --strict .` (marketplace root) + every mod dir, `claude plugin test <mod>` in CI; CI pin = CC version mods were verified on (D13) | D13; PLAN S.5 |

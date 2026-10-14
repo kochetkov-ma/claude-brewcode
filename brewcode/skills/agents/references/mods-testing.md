@@ -11,12 +11,12 @@ The `claude-code/testing` kit, test patterns, CI wiring, live headless runs, tmu
 | Item | Fact | src |
 |------|------|-----|
 | test | `test(name, body)` or `test(name, { options, plugins, timeoutMs }, body)`; body `($, on) => ...`; 5000 ms default; fails on throw, reject or timeout | T:16609-16645 |
-| `$` | engine's own: `$.classic.<Event>`, `$.turn.step`, `$.command.run`, `$.fs`... as engine calls them (event input whole), plus `$.ui.mount/press/input/select`. NO `$.plugin` | T:15690-15780; X |
+| `$` | engine's own: `$.classic.<Event>`, `$.turn.step`, `$.command.run`, `$.fs`... as engine calls them (event input whole), plus `$.ui.mount/press/input/select`. NO `$.plugin`, NO `$.fs/process/store/env/clock` (TypeError at run time, tsc TS2339). Test fs-reading code by stubbing the event beneath (`on('fs.read', ...)`) and raising the event that reaches it (`$.command.run`), or keep parsing a pure function of strings | T:15690-15780, 15696-15698; X |
 | `on` | registers hooks BENEATH every plugin = stubs ("bottoms") for what engine would answer; register before first call on `$` | T:16620; X |
 | no stub | bottom throws, names event: `no implementation for fs.exists` / `nothing beneath the plugins answers command.run: a test answers it with on('command.run', ...)` | X |
 | options | `{ options: { planEffort: 'max' } }` = values stored in settings: defaults filled, value outside picker's `options` unset | T:16627-16645; X |
 | `tier` | `tier('user')` (also `prepend`, `append`, `builtin`) once at file top; default `user` | T:16552, 16661 |
-| `describe`, `expect` | `describe(name, body)` runs at file load; `expect` has `toBe`, `toEqual`, `toMatchObject`, `toThrow`, asymmetric `expect.any/objectContaining/stringMatching` | T:15646, 15940-16072; X |
+| `describe`, `expect` | `describe(name, body)` runs at file load; `expect(value, 'message')` supported; matchers `toBe`, `toEqual` (ignores undefined-valued keys), `toStrictEqual` (exact), `toMatchObject`, `toHaveProperty`, `toMatch`, `toThrow`, `.not`, `.resolves/.rejects`, asymmetric `expect.any/objectContaining/stringMatching` | T:15646, 15856-15873, 15940-16072; X |
 | `mock` | exactly `clock`, `store`, `env`, `session`. NO `mock.fs`, NO `mock.process` | T:16178; X (`Object.keys(mock)`) |
 | `mock.clock(on, {now})` | `.now() .advance(ms) .set(ms) .settle() .sleep(ms)`; timers wait for test to advance | T:16141, 16184-16240 |
 | `mock.store(on, entries)`, `mock.env(on, vars)` | `$.store` and `$.env.get` from memory; unlisted variable is unset | T:16149-16160 |
@@ -33,6 +33,7 @@ A stub is normal hook: `on('<event>', ($, e, next) => result)`. Mod's `$.fs.read
 | `$.fs.exists(p)` / `$.fs.list(p)` | `({ value: true })` / `({ value: [{ name, kind: 'file', size, mtimeMs, isLink: false }] })` | | X |
 | `$.fs.stat(p, {resolve:true})` | `(_$, e) => ({ value: { kind:'file', size:0, mtimeMs:0, isLink:false, realPath } })` | `e` = `{ path, resolve }` | T:5109; X |
 | `$.process.run(argv)` | `(_$, e) => ({ value: { exitCode:0, stdout:'', stderr:'', isStdoutTruncated:false, isStderrTruncated:false } })` | capture `e.argv` to assert call | X |
+| `$.fs.write(p, t)` | `on('fs.write', () => ({ value: undefined }))` | unstubbed: module's hook is skipped (`no implementation for fs.write`), test sees `HooksError` | X |
 | rejection (missing file, failed command) | `on('fs.read', () => ({ deny: 'ENOENT' }))` | caller's promise REJECTS with `$.fs.read: ENOENT`: module `try/catch` sees it | X |
 | stub that throws | stub's hook skipped, bottom has no answer, module's hook skipped too, test FAILS (`HooksError`) | do not use throws to model failures | X |
 | `$.store.*`, `$.env.get`, `$.clock.*` | `mock.store/env/clock` | | T:16178 |
@@ -44,7 +45,7 @@ Plan-vs-live (loud): plan said "stubs cannot reject, so call `exists`/`list` bef
 | Need | Call | src |
 |------|------|-----|
 | classic hook | `await $.classic.UserPromptSubmit({ prompt, permission_mode: 'plan' })`; needs bottom `on('classic.UserPromptSubmit', () => ({}))`; envelope (`session_id`, `transcript_path`, `cwd`) is stamped; `PreToolUse` goes through `$.tool.call` | T:15710-15725; X |
-| `turn.step` (streaming) | bottom: `on('turn.step', async function* (_$, e) { seen = e.effort; return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: null, usage: null } })`; call: `for await (const _ of $.turn.step({ turnId, index: 0, model, effort: 'high', messageCount: 1 })) {}` (stream also carries result) | T:14146-14185; X |
+| `turn.step` (streaming) | bottom: `on('turn.step', async function* (_$, e) { seen = e.effort; return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: null, usage: null } })`; call: `for await (const _ of $.turn.step({ turnId, index: 0, model, effort: 'high', messageCount: 1 })) {}`; final result: `const s = $.turn.step(...); let r = await s.next(); while (r.done !== true) r = await s.next()` then `r.value` (`await s.result` after `for await` is undefined) | T:14146-14185; X |
 | subagent step | add `agentId: 'a1'` to input | T:14112 |
 | `command.run` | typed call needs whole input: `{ command, args, origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 80 } }` | T:1825-1851; X |
 | `prompt.attachment` | `$.prompt.attachment({ type: 'plan_mode_exit', text, origin: { kind: 'engine' } } as never)` (union needs `detail` for declared types) | T:8314; X |
@@ -53,7 +54,7 @@ Plan-vs-live (loud): plan said "stubs cannot reject, so call `exists`/`list` bef
 
 ## `ui.mount`
 
-`$.ui.mount({ plugin, surface, component, props, requestId?, viewport? })` returns handle: `find({ key, type, text })`, `drawn()`, `press({ key })`, `input({ key, text })`, `unmount()`. Loop body over `['terminal', 'desktop'] as const` (`AbovePrompt` exists on those two; `Pane` on all): proves mod is not tied to one surface.
+`$.ui.mount({ plugin, surface, component, props, requestId?, viewport? })` returns handle: `find({ key, type, text })`, `drawn()`, `press({ key })`, `input({ key, text })`, `unmount()`. A `ui.render` hook that can fall through to `next(e)` needs a bottom `on('ui.render', ...)` and primed state, else mount fails `no implementation for ui.render`. Loop body over `['terminal', 'desktop'] as const` (`AbovePrompt` exists on those two; `Pane` on all): proves mod is not tied to one surface.
 
 | Fact | src |
 |------|-----|
@@ -77,7 +78,7 @@ for (const surface of ['terminal', 'desktop'] as const) {
 
 ## Test Style
 
-House rules: GIVEN/WHEN/THEN in names, one full-object `toEqual` not field-by-field, exact values, no `if` in test bodies (assert precondition, then assert unconditionally), message per assertion where runner supports it. Capture `next()` payloads with bottom stub (`on('prompt.submit', ($, e) => { seen = e; return { text: e.text } })`) and assert `seen`. Cover: each mode, raise-only, numeric/absent effort, subagent skip, de-dup matrix (mixed prefix, mod throw, other plugins' entries preserved), options fallback (`turbo` -> default), non-string mode keeps state, stream chunks pass through unchanged with bottom called once.
+House rules: GIVEN/WHEN/THEN in names, one full-object `toEqual` not field-by-field, exact values, no `if` in test bodies (assert precondition, then assert unconditionally), message per assertion (`expect(value, 'message')`), `toStrictEqual` for exact equality. Capture `next()` payloads with bottom stub (`on('prompt.submit', ($, e) => { seen = e; return { text: e.text } })`) and assert `seen`. Cover: each mode, raise-only, numeric/absent effort, subagent skip, de-dup matrix (mixed prefix, mod throw, other plugins' entries preserved), options fallback (`turbo` -> default), non-string mode keeps state, stream chunks pass through unchanged with bottom called once.
 
 ## CI Wiring (S.5, planned)
 
@@ -102,10 +103,10 @@ claude -p "$PROMPT" --plugin-dir "$MOD_DIR" --permission-mode plan \
 | Check | How | src |
 |-------|-----|-----|
 | module loaded | debug line `hooks module <name>@inline loaded ...; events: ...`; stderr empty of `did not load` | X |
-| session id | `system` / `init` message of stream-json output; transcript = `~/.claude/projects/<cwd with every non-alphanumeric char turned into a dash>/<sid>.jsonl` | X |
+| session id | `system` / `init` message of stream-json output; transcript = `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects/<cwd with every non-alphanumeric char turned into a dash>/<sid>.jsonl` | X |
 | exactly-once injection | count header string in transcript JSONL: control (no mod) vs mod; raw count includes attachment + the `api-request-blob`, so compare counts between control run and mod run, never to 1 | S; X |
 | mode | profile may default to `bypassPermissions`: pass `--permission-mode default` or `--permission-mode plan` explicitly; `e.permission_mode` then equals it | S |
-| effort reaches API | `api-request` rows `params.output_config.effort` in session JSONL (`~/.claude/projects/.../<sid>.jsonl`; subagents: `<sid>/subagents/agent-<id>.jsonl`, which show session level while main shows raised one). Debug file and `PostToolBatch` `effort.level` do NOT show it; run with `--effort high` and compare control | T11 Q2; X |
+| effort reaches API | `api-request` rows `params.output_config.effort` in session JSONL (`${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects/.../<sid>.jsonl`; subagents: `<sid>/subagents/agent-<id>.jsonl`, which show session level while main shows raised one). Debug file and `PostToolBatch` `effort.level` do NOT show it; run with `--effort high` and compare control | T11 Q2; X |
 | `ExitPlanMode` in `-p` | absent in plain `-p` (plan L5 does not reproduce); use stream-json host with `--permission-prompt-tool stdio` (reject = `isError: true`) or tmux | T11 Q3; X |
 | project root from subdirectory | run from `sub/deep`; `$.session.root()` = the launch dir, `$.env.get('CLAUDE_PROJECT_DIR')` undefined | S; X |
 | probe that prints | `$.ui.log('TAG ...', { to: 'debug' })`, then grep debug file | X |
