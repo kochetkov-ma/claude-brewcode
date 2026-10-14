@@ -48,7 +48,7 @@ Example: with the session on `high` and `planEffort` set to `max`, plan mode run
 ## How it works
 
 - **Detects plan mode from the permission mode.** The mod reads `permission_mode` on `classic.UserPromptSubmit` and `classic.PostToolBatch`. Only the main loop counts: payloads with an `agent_id` and non-string modes are ignored.
-- **Falls back to transcript attachments.** `session.append` rows named `plan_mode` and `plan_mode_exit` flip the mode too. They are the only signal when the `classic.*` hooks are skipped, as on org-managed installs. The mod does not watch `EnterPlanMode` or `ExitPlanMode` tool calls.
+- **Falls back to transcript attachments.** `session.append` rows named `plan_mode` and `plan_mode_exit` flip the mode too. `claude plugin validate` warns that `classic.UserPromptSubmit` and `classic.PostToolBatch` hooks do not run in a plugin a person installs where an organization manages Claude Code. This was not tested on a managed install. If your setup skips them, these rows are the only signal. The mod does not watch `EnterPlanMode` or `ExitPlanMode` tool calls.
 - **Raises effort per request.** `turn.step` fires before every model request. In plan mode the mod rewrites `effort` up to `planEffort`.
 - **Raise only.** Ranks run `low` < `medium` < `high` < `xhigh` < `max`. An equal or higher effort, a numeric effort and an absent effort pass through untouched.
 - **Nothing to undo.** The rewrite covers one request, so leaving plan mode needs no cleanup.
@@ -80,6 +80,7 @@ Full docs: [doc-claude.brewcode.app/mods/plan-effort](https://doc-claude.brewcod
 
 - Other mod: [Prompt placeholders](../brewmod-placeholders/)
 - All brewcode mods: [README](../README.md#claude-code-mods)
+- Release notes: [RELEASE-NOTES.md](../RELEASE-NOTES.md)
 - Source: <https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewmod-plan-effort>
 - The request this answers: [anthropics/claude-code#91444](https://github.com/anthropics/claude-code/issues/91444)
 
