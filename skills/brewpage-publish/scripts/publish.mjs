@@ -112,7 +112,8 @@ function listArchive(zipPath) {
   return { names: z.out.split('\n').map((s) => s.trim()).filter((s) => s !== '' && !s.endsWith('/')).sort() };
 }
 
-/** The one manifest format, and the only place the exit code is decided. */
+/** The one manifest format, and the only place the exit code is decided; always the caller's last call.
+ * exitCode, never process.exit(): exit drops stdout still queued for a slow pipe reader (manifest > 64 KB). */
 function report(names, bytes, entry, skipped, zipPath, unexpected = []) {
   console.log(`ARCHIVE MANIFEST — ${basename(zipPath)}`);
   for (const n of names) console.log(`  ${n}`);
@@ -123,12 +124,9 @@ function report(names, bytes, entry, skipped, zipPath, unexpected = []) {
   if (unexpected.length) console.log(`UNEXPECTED: ${unexpected.join(', ')}`);
   const flagged = names.filter((n) => SENSITIVE_RE.test(n));
   if (flagged.length) console.log(`SENSITIVE: ${flagged.join(', ')}`);
-  if (unexpected.length || flagged.length) {
-    console.log('RESULT: confirm');
-    process.exit(2);
-  }
-  console.log('RESULT: ok');
-  process.exit(0);
+  const confirm = unexpected.length > 0 || flagged.length > 0;
+  console.log(`RESULT: ${confirm ? 'confirm' : 'ok'}`);
+  process.exitCode = confirm ? 2 : 0;
 }
 
 function pack(args) {

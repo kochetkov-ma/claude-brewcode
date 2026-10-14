@@ -48,12 +48,12 @@ const FAILURES = [
   ['empty archive', READ_LIST + ': > "$4"\nexit 0', 'FAILED: zip produced no usable archive'],
   ['corrupt archive', READ_LIST + 'printf invalid > "$4"\nexit 0', 'FAILED: archive failed its integrity check'],
 ];
-// Fakes that never read a >1 MiB list: EPIPE every run, so the race above becomes the deterministic case.
+// Fakes that never read a ~4x-pipe (64 KiB) list: EPIPE every run, so the race above becomes the deterministic case.
 const UNREAD_FAILURES = [
   ['zip exits 0 unread', 'exit 0', 'FAILED: zip failed (EPIPE) — no archive produced'],
   ['zip exits 3 unread', 'exit 3', 'FAILED: zip exited 3 — no archive produced'],
 ];
-const BIG_NAMES = ['index.html', ...Array.from({ length: 4200 }, (_, i) => `p/${'a'.repeat(240)}${String(i).padStart(5, '0')}.html`)];
+const BIG_NAMES = ['index.html', ...Array.from({ length: 350 }, (_, i) => `p/${'a'.repeat(250)}/${'b'.repeat(250)}/${String(i).padStart(5, '0')}${'c'.repeat(240)}.html`)];
 const CONFIRM = 'CONFIRM: flagged entries listed above — ask the user, then re-run with --confirmed';
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), 'standalone-archive-')));
@@ -198,8 +198,8 @@ for (const copy of COPIES) {
 
   for (const [failure, stub, message] of UNREAD_FAILURES) {
     test(`${copy.name}: ${failure} names the real cause and aborts before upload`, () => {
-      // GIVEN the shared site with a 1062611-byte zip -@ list and a fake zip that never reads it.
-      assert.equal(Buffer.byteLength(BIG_NAMES.join('\n') + '\n'), 1062611, 'GIVEN a list far beyond any pipe buffer');
+      // GIVEN the shared site with a 264261-byte zip -@ list and a fake zip that never reads it.
+      assert.equal(Buffer.byteLength(BIG_NAMES.join('\n') + '\n'), 264261, 'GIVEN a list 4x the 64 KiB pipe buffer');
       clearUpload();
       // WHEN the path fence packs it THEN the cause is exact, curl never runs and the run dir goes.
       const r = runSync(copy, siteFence(copy, slots('site-dir', bigSite)), binWith({ curl: UPLOAD_STUB, zip: stub }));
