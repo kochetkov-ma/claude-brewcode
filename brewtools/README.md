@@ -244,4 +244,6 @@ Full docs: [doc-claude.brewcode.app/brewtools/overview](https://doc-claude.brewc
 | Deploy Admin (agent) | [deploy-admin](https://doc-claude.brewcode.app/brewtools/agents/deploy-admin/) |
 | Release Notes | [RELEASE-NOTES.md](../RELEASE-NOTES.md) |
 
+See also: [Claude Code mods](../README.md#claude-code-mods) — optional brewmod-plan-effort and brewmod-placeholders (a drop-in for the codewords).
+
 Author: Maksim Kochetkov | License: MIT

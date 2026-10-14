@@ -11,6 +11,8 @@ tocItems:
     text: "Claude refuses to run the update commands"
   - slug: "which-plugins"
     text: "Which plugins are in the suite?"
+  - slug: "brewcode-mods"
+    text: "What are brewcode mods?"
   - slug: "setup-suffix"
     text: "Why do some skills end in -setup?"
   - slug: "auto-invoke"
@@ -78,6 +80,14 @@ Paste the following prompt directly into the chat. The coercive phrasing is inte
 | **brewui** | UI/visual/creative tools (placeholder, empty): 0 skills | `claude plugin install brewui@claude-brewcode` |
 
 All four plugins install from the same `claude-brewcode` marketplace on GitHub — 27 skills, 9 agents, and 4 registered plugin hooks in total. Optional setup-installed hooks are separate.
+
+</Spoiler>
+
+<Spoiler id="brewcode-mods" title="What are brewcode mods?">
+
+Mods are optional plugins that change how Claude Code itself behaves, through the hooks module API. There are two: `brewmod-plan-effort` raises the effort of the main loop while Claude plans, and `brewmod-placeholders` expands tokens such as `++r` into instruction blocks.
+
+They are separate from the four suite plugins, install individually (`claude plugin install brewmod-plan-effort@claude-brewcode`), and need Claude Code 2.1.287+ (plan-effort) or 2.1.292+ (placeholders). [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/) updates them once installed. Details: [Brewcode mods](/mods/overview/).
 
 </Spoiler>
 

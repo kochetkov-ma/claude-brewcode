@@ -21,7 +21,7 @@ import { Badge, Card, CardGrid, Steps, UpdateNotice } from '../../../../componen
 
 ## What it does
 
-Mod Creator builds Claude Code mods: hooks-module plugins that register TypeScript handlers on the engine's events and `$` nouns. Mods are in early access and on by default from Claude Code 2.1.287. The agent scaffolds the three mod files, writes tests, runs the gates, and ships the mod as briefed.
+Mod Creator builds Claude Code mods: hooks-module plugins that register TypeScript handlers on the engine's events and `$` nouns. Mods are in early access and on by default from Claude Code 2.1.287. The repository's two mods, [plan-mode effort](/mods/plan-effort/) and [prompt placeholders](/mods/placeholders/), were built with this agent. The agent scaffolds the three mod files, writes tests, runs the gates, and ships the mod as briefed.
 
 The installed engine decides what the API accepts, not memory. Every run starts with a self-check against the live types file (see Step 0 below), and a symbol missing from those types does not exist for the agent.
 
@@ -119,6 +119,7 @@ Logs and failing runs go to `.claude/reports/` under a timestamped folder, and t
 
 <CardGrid>
   <Card title="Brewcode overview" icon="document" href="/brewcode/overview/">Agents, skills, and project setup tools.</Card>
+  <Card title="Brewcode mods" icon="puzzle" href="/mods/overview/">The two mods built with this agent: plan-mode effort and prompt placeholders.</Card>
   <Card title="Hook Creator" icon="wrench" href="/brewcode/agents/hook-creator/">Lifecycle hooks configured in settings or plugin hooks.json.</Card>
   <Card title="Agent Creator" icon="user" href="/brewcode/agents/agent-creator/">Create and review Claude Code subagents.</Card>
   <Card title="Skill Creator" icon="puzzle" href="/brewcode/agents/skill-creator/">Build skill workflows and resource contracts.</Card>

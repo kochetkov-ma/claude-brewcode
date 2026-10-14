@@ -10,7 +10,7 @@
 
 **Claude Code plugin suite** -- four plugins for development, documentation, text utility, and visual workflows.
 
-A regular Claude Code session hands a big task to one agent and loses sight of it. Brewcode splits work into bounded units, gives every spawn a six-field brief, and re-anchors the plan and task graph after a compaction. Four plugins. 27 skills. 9 agents. 4 registered hook commands.
+A regular Claude Code session hands a big task to one agent and loses sight of it. Brewcode splits work into bounded units, gives every spawn a six-field brief, and re-anchors the plan and task graph after a compaction. Four plugins. 27 skills. 9 agents. 4 registered hook commands. Plus two optional [mods](#claude-code-mods).
 
 [**Full Documentation**](https://doc-claude.brewcode.app/getting-started/)
 
@@ -62,6 +62,28 @@ After all commands succeed, run `/reload-plugins`. If `/reload-plugins` is unava
 | [brewdoc](brewdoc/README.md) | Documentation tools: docsync, memory-sync generation, PDF conversion, publishing | 5 | `claude plugin install brewdoc@claude-brewcode` |
 | [brewtools](brewtools/README.md) | Text optimization and humanization, secrets scanning, SSH and GitHub Actions deploy, manager codewords, subagent deadline/return-size/routing guards, task board, context slimming, plugin updates, alternative API providers | 13 | `claude plugin install brewtools@claude-brewcode` |
 | [brewui](brewui/README.md) | UI/visual/creative tools (placeholder, currently empty) | 0 | `claude plugin install brewui@claude-brewcode` |
+
+## Claude Code mods
+
+Mods are small Claude Code plugins built on the early-access hooks module API. Each one is optional, installs on its own and works without the four suite plugins.
+
+<p align="center">
+  <img src="assets/brewmods/hub.gif" width="800" alt="Terminal-style animation of the brewcode mods hub: an ASCII brewcode logo and a four-slide walkthrough of the mods">
+  <br><sub>Illustrative animation of the brewcode mods.</sub>
+</p>
+
+| Mod | What it does | Needs |
+|-----|--------------|-------|
+| [brewmod-plan-effort](brewmod-plan-effort/README.md) | Raises the main loop's effort to `xhigh` (configurable) while Claude Code is in plan mode. Your session effort setting is never touched | Claude Code 2.1.287+ |
+| [brewmod-placeholders](brewmod-placeholders/README.md) | `++` prompt placeholders: type `++r`, get an instruction block, with highlight, typeahead and a preview band in the prompt box. Drop-in for the brewtools codewords | Claude Code 2.1.292+ |
+
+Install one or both, then run `/reload-plugins`:
+
+```bash
+claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
+claude plugin install brewmod-plan-effort@claude-brewcode
+claude plugin install brewmod-placeholders@claude-brewcode
+```
 
 ## Installation
 
@@ -280,6 +302,9 @@ Self-contained `SKILL.md` folders that ship outside the four plugins -- drop the
 | Brewdoc overview | [Brewdoc](https://doc-claude.brewcode.app/brewdoc/overview/) |
 | Brewtools overview | [Brewtools](https://doc-claude.brewcode.app/brewtools/overview/) |
 | Brewui overview | [Brewui](https://doc-claude.brewcode.app/brewui/overview/) |
+| Mods overview | [Mods](https://doc-claude.brewcode.app/mods/overview/) |
+| Plan-mode effort mod | [brewmod-plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/) |
+| Prompt placeholders mod | [brewmod-placeholders](https://doc-claude.brewcode.app/mods/placeholders/) |
 | Release Notes | [RELEASE-NOTES.md](RELEASE-NOTES.md) |
 | Brewcode site | [brewcode.app](https://brewcode.app) |
 | brewdoc CLI -- standalone document-to-Markdown tool on PyPI, a separate product from the brewdoc plugin | [pypi.org/project/brewdoc](https://pypi.org/project/brewdoc/) |

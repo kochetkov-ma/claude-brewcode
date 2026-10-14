@@ -79,4 +79,6 @@ Full docs: [doc-claude.brewcode.app/brewui/overview](https://doc-claude.brewcode
 |----------|------|
 | Release Notes | [RELEASE-NOTES.md](../RELEASE-NOTES.md) |
 
+See also: [Claude Code mods](../README.md#claude-code-mods) — optional brewmod-plan-effort and brewmod-placeholders.
+
 Author: Maksim Kochetkov | License: MIT

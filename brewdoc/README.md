@@ -172,4 +172,6 @@ Full docs: [doc-claude.brewcode.app/brewdoc/overview](https://doc-claude.brewcod
 | Setup Status (brewcode) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) |
 | Release Notes | [RELEASE-NOTES.md](../RELEASE-NOTES.md) |
 
+See also: [Claude Code mods](../README.md#claude-code-mods) — optional brewmod-plan-effort and brewmod-placeholders.
+
 Author: Maksim Kochetkov | License: MIT

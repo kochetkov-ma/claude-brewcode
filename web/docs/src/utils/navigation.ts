@@ -116,6 +116,14 @@ export const navigation: NavSection[] = [
     ],
   },
   {
+    title: 'Mods',
+    items: [
+      { title: 'Overview', slug: 'mods/overview' },
+      { title: 'Plan-mode effort', slug: 'mods/plan-effort' },
+      { title: 'Prompt placeholders', slug: 'mods/placeholders' },
+    ],
+  },
+  {
     title: 'Legal',
     items: [
       { title: 'License', slug: 'license' },

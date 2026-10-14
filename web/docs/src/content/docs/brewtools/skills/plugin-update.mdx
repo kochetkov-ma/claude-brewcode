@@ -1,6 +1,6 @@
 ---
 title: "Plugin Update"
-description: "Check installed brewcode plugins, install missing ones, and update the full suite in one command — with version status table and reload prompt."
+description: "Check installed brewcode plugins and mods, install missing suite plugins, and update everything in one command, with version table and reload prompt."
 order: 3119
 ---
 import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
@@ -12,7 +12,7 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 </Callout>
 
 <Callout type="tip">
-**One skill checks, installs, and updates the full brewcode suite.** Interactive by default — or pass `check` / `update` / `all` to skip questions.
+**One skill checks, installs, and updates the full brewcode suite.** Interactive by default — or pass `check` / `update` / `all` to skip questions. Installed mods (`brewmod-plan-effort`, `brewmod-placeholders`) are checked and updated too, never installed; a mod that is not installed gets no row and never shows ❌.
 </Callout>
 
 ## Quick reference
@@ -65,6 +65,7 @@ After a run you will see a version table like this (versions are placeholders):
 | brewdoc | X.Y.1 | X.Y.1 | ✅ current |
 | brewtools | — | X.Y.1 | ❌ missing |
 | brewui | X.Y.1 | X.Y.1 | ✅ current |
+| brewmod-placeholders | X.Y.0 | X.Y.1 | ⬇️ update available |
 
 Status legend: ✅ current · ⬇️ update available · ❌ missing · ❓ unknown.
 
@@ -86,19 +87,19 @@ Status legend: ✅ current · ⬇️ update available · ❌ missing · ❓ unkn
   <li>
     <div>
       <strong>Render status table</strong>
-      <p>Prints the version table for all four suite plugins (brewcode, brewdoc, brewtools, brewui) plus any other installed plugins as informational rows. Argument <code>check</code> stops here — no changes are made.</p>
+      <p>Prints the version table for all four suite plugins (brewcode, brewdoc, brewtools, brewui), each installed mod (brewmod-plan-effort, brewmod-placeholders), plus any other installed plugins as informational rows. Argument <code>check</code> stops here — no changes are made.</p>
     </div>
   </li>
   <li>
     <div>
       <strong>Install missing plugins</strong>
-      <p>For each suite plugin not present: asks whether to install (interactive) or auto-installs (<code>all</code> mode). Runs <code>claude plugin marketplace add</code> first (idempotent), then per-plugin <code>install</code>. Skipped entirely for the <code>update</code> argument.</p>
+      <p>For each suite plugin not present: asks whether to install (interactive) or auto-installs (<code>all</code> mode). Mods are never offered or installed here, even when named in the prompt; the summary prints their <code>claude plugin install</code> command for you to run. Runs <code>claude plugin marketplace add</code> first (idempotent), then per-plugin <code>install</code>. Skipped entirely for the <code>update</code> argument.</p>
     </div>
   </li>
   <li>
     <div>
       <strong>Update outdated plugins</strong>
-      <p>Asks which plugins to update ("Update all" incl. non-suite plugins / "Update suite only" / "Update selected" / "Skip") — <code>update</code> and <code>all</code> auto-pick "Update all" without asking. The update set is built from that answer, never from a fixed list. Runs a marketplace refresh once, then one `claude plugin update <id> --scope <scope>` per selected plugin, using each plugin's own installed scope from discovery. `--scope` is always passed, because CLIs before 2.1.281 read an omitted scope as <code>user</code> and would update the wrong instance. Project and local rows resolve from the working directory, so each runs as `(cd "<projectPath>" && claude plugin update <id> --scope <scope>)` and the session directory stays untouched; a missing <code>projectPath</code> is reported as an orphan install with its uninstall command and nothing is run. Shows full CLI output for every command; any single failure is reported and the run continues.</p>
+      <p>Asks which plugins to update ("Update all" incl. non-suite plugins / "Update suite only" / "Update selected" / "Skip"; installed mods are updated in both "Update all" and "Update suite only") — <code>update</code> and <code>all</code> auto-pick "Update all" without asking. The update set is built from that answer, never from a fixed list. Runs a marketplace refresh once, then one `claude plugin update <id> --scope <scope>` per selected plugin, using each plugin's own installed scope from discovery. `--scope` is always passed, because CLIs before 2.1.281 read an omitted scope as <code>user</code> and would update the wrong instance. Project and local rows resolve from the working directory, so each runs as `(cd "<projectPath>" && claude plugin update <id> --scope <scope>)` and the session directory stays untouched; a missing <code>projectPath</code> is reported as an orphan install with its uninstall command and nothing is run. Shows full CLI output for every command; any single failure is reported and the run continues.</p>
     </div>
   </li>
   <li>
@@ -138,7 +139,7 @@ claude plugin update <id> --scope <scope>      # user/managed rows, repeat per s
 (cd "<projectPath>" && claude plugin update <id> --scope <scope>)   # project/local rows
 ```
 
-Full-suite example, all four at `user` scope:
+Full-suite example, all four at `user` scope (an installed mod follows the same pattern, for example `brewmod-placeholders@claude-brewcode`):
 
 ```bash
 claude plugin update brewcode@claude-brewcode --scope user
@@ -162,6 +163,9 @@ Each command runs via the Bash tool with full output shown. Failures are reporte
   </Card>
   <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">
     All brewtools skills in one place.
+  </Card>
+  <Card title="Brewcode mods" icon="puzzle" href="/mods/overview/">
+    Optional add-ons this skill keeps current.
   </Card>
 </CardGrid>
 
