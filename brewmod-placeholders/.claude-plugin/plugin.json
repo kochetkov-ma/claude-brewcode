@@ -1,13 +1,13 @@
 {
   "name": "brewmod-placeholders",
   "version": "6.6.2",
-  "description": "Brewmod placeholders -- expands ++m, ++a, ++r, ++rr and +++ style placeholders into prompt context, with live highlighting and user-defined placeholders",
+  "description": "Brewmod placeholders -- expands ++m, ++a, ++r, ++rr and +++ style placeholders into prompt context, with live highlighting and user-defined placeholders (Claude Code 2.1.292+ mod)",
   "author": {
     "name": "Maksim Kochetkov",
     "email": "apmatypa88@gmail.com",
     "url": "https://github.com/kochetkov-ma"
   },
-  "homepage": "https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewmod-placeholders",
+  "homepage": "https://doc-claude.brewcode.app/mods/placeholders/",
   "repository": "https://github.com/kochetkov-ma/claude-brewcode.git",
   "license": "MIT",
   "keywords": [

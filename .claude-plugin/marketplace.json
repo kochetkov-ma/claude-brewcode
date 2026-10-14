@@ -5,7 +5,7 @@
     "email": "apmatypa88@gmail.com"
   },
   "metadata": {
-    "description": "Claude Code plugin suite: brewcode for skill/agent/rule authoring and project setups, brewdoc for documentation tools, brewtools for text, ops and subagent-guard utilities, brewui placeholder for UI/visual/creative tools, brewmod-plan-effort and brewmod-placeholders for Claude Code 2.1.287+ mods",
+    "description": "Claude Code plugin suite: brewcode for skill/agent/rule authoring and project setups, brewdoc for documentation tools, brewtools for text, ops and subagent-guard utilities, brewui placeholder for UI/visual/creative tools, brewmod-plan-effort (Claude Code 2.1.287+) and brewmod-placeholders (Claude Code 2.1.292+) mods",
     "version": "6.6.2"
   },
   "plugins": [
@@ -155,14 +155,14 @@
         "email": "apmatypa88@gmail.com"
       },
       "license": "MIT",
-      "homepage": "https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewmod-plan-effort",
+      "homepage": "https://doc-claude.brewcode.app/mods/plan-effort/",
       "repository": "https://github.com/kochetkov-ma/claude-brewcode.git",
       "source": "./brewmod-plan-effort",
       "strict": true
     },
     {
       "name": "brewmod-placeholders",
-      "description": "Brewmod placeholders - ++ placeholders with live highlight, typeahead and a preview band; drop-in for the brewtools codewords (Claude Code 2.1.287+ mod)",
+      "description": "Brewmod placeholders - ++ placeholders with live highlight, typeahead and a preview band; drop-in for the brewtools codewords (Claude Code 2.1.292+ mod)",
       "version": "6.6.2",
       "category": "productivity",
       "keywords": [
@@ -183,7 +183,7 @@
         "email": "apmatypa88@gmail.com"
       },
       "license": "MIT",
-      "homepage": "https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewmod-placeholders",
+      "homepage": "https://doc-claude.brewcode.app/mods/placeholders/",
       "repository": "https://github.com/kochetkov-ma/claude-brewcode.git",
       "source": "./brewmod-placeholders",
       "strict": true
