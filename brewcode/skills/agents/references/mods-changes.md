@@ -2,22 +2,22 @@
 
 > verified_on: 2.1.300
 
-Per-Claude-Code-version log of mod API changes mod author acts on, plus self-update procedure (D16). Seeded 2.1.296 -> 2.1.300 from plan section "Re-verification on CC 2.1.300", research 01, and diff of two builds' types files (`X`). Legend: `mods-api.md`.
+Per-Claude-Code-version log of mod API changes an author acts on, plus self-update procedure (D16). Seeded 2.1.296 -> 2.1.300 from plan "Re-verification on CC 2.1.300", research 01, and a diff of two types files (`X`). Legend: `mods-api.md`.
 
 ## Changes 2.1.296 -> 2.1.300
 
-Types files: 2.1.296 = 21,433 lines, 2.1.300 = 22,232 lines. npm `latest` = 2.1.300 (2026-10-14), `stable` = 2.1.292; no 2.1.297/2.1.298. Mods on by default from 2.1.287; `claude plugin test` and hooks.json `modules` exist in 2.1.296 (S.4, D13). Of 109 symbol-index rows 106 fragments exist in the 2.1.296 types (`X`); new: `prompt.change`, `PromptDecoration.virtualText`, `prompt.submit.command`.
+Types files: 2.1.296 = 21,433 lines, 2.1.300 = 22,232 lines. npm `latest` = 2.1.300 (2026-10-14), `stable` = 2.1.292; no 2.1.297/2.1.298. Mods on by default from 2.1.287; `claude plugin test` and hooks.json `modules` exist in 2.1.296 (S.4, D13). 106 of 109 symbol-index fragments exist in the 2.1.296 types (`X`); new: `prompt.change`, `PromptDecoration.virtualText`, `prompt.submit.command`.
 
 | Version | Change | What to do differently | src |
 |---------|--------|------------------------|-----|
-| 2.1.300 | new event `prompt.change` (observe only; origins `history`, `clear`, `undo`, `plugin`, `app`, `engine`): fires on Tab-accept (`engine`), Esc Esc and submit (`clear`), history recall (`history`) | result cannot decorate, but `$.prompt.fill({ text, mode: 'replace', decorations })` paints, caret at end only (`mods-patterns.md` #4). A build before 2.1.300 refuses the whole module: no gating, minimum build rises | T:4247, 8464, 8885; R3; W |
-| 2.1.300 | test kit `ui.mount` drawn roots carry `part: { plugin }` (`Element.part`); 2.1.296 omits it | strip `part` before comparing trees when CI pins an older build (`mods-testing.md`) | T:12795; W |
-| 2.1.300 | `PromptDecoration` gains `virtualText` (dim ghost text before `start`, not in draft); `bold` now declared explicitly (2.1.296 had it via `Pick<TextProps>`) | `virtualText` from 2.1.300 only; guard with `$.session.version()` if mod must run on older builds | T:8764-8795; X |
+| 2.1.300 | new event `prompt.change` (observe only; origins `history`, `clear`, `undo`, `plugin`, `app`, `engine`): fires on Tab-accept (`engine`), Esc Esc and submit (`clear`), history recall (`history`) | result cannot decorate, but `$.prompt.fill({ text, mode: 'replace', decorations })` paints, caret at end only (`mods-patterns.md` #4). floor 2.1.300 (`mods-api.md` Manifest) | T:4247, 8464, 8885; R3; W |
+| 2.1.300 | test kit `ui.mount` drawn roots carry `part: { plugin }` (`Element.part`); 2.1.296 omits it | strip `part` before comparing trees on an older CI pin (`mods-testing.md`) | T:12795; W |
+| 2.1.300 | `PromptDecoration` gains `virtualText` (dim ghost text before `start`, not in draft); `bold` now declared explicitly (2.1.296 had it via `Pick<TextProps>`) | `virtualText` 2.1.300+ only; else guard with `$.session.version()` | T:8764-8795; X |
 | 2.1.300 | `prompt.submit` input gains `command` and `isMeta` | inline expansion must skip them (`text` rewrite not applied: `mods-api.md` catalog) | T:9420-9450; X |
 | 2.1.300 | added `$.prompt.media`, `$.session.identity()`, `$.ui.view()`; `agent.spawn.resume`; `tool.check` `agentId`/`setting`/`decider`; `HookFailure.cause` `'rewritten'`; `skill.prompt` `source`/`frontmatter` | none needed | T:2981, 2636, 3043, 387, 4628, 5267 |
 | 2.1.300 | `TextProps` gains `size`, `weight`, `mono`, `tabular`, `dir`; Box spacing takes `Space` tokens | check element props against live table before using them | T:13158-13190, 12482 |
-| 2.1.300 | `reference.md` adds the `queue` door on `session.append`, no-op reload on unchanged save, and GitHub sharing road | ship road: `mods-lifecycle.md` | R:164-170, 73, 83-130 |
-| observed at 2.1.300 (not diffed) | `claude plugin` has `init`, `validate`, `test`, `eval`, `tag`, `details`, `configure` | `eval` and `details` are not part of mod road; `init` scaffolds non-mod plugin | X (`claude plugin --help`) |
+| 2.1.300 | `reference.md` adds `queue` door on `session.append`, no-op reload on unchanged save, GitHub sharing road | ship: `mods-lifecycle.md` | R:164-170, 73, 83-130 |
+| observed at 2.1.300 (not diffed) | `claude plugin` has `init`, `validate`, `test`, `eval`, `tag`, `details`, `configure` | `eval`, `details` off the mod road; `init` scaffolds non-mod plugin | X (`claude plugin --help`) |
 | unchanged | `turn.step` (still bare: `effort` rewritable, `agentId` pinned), `permission_mode` (typed `string`), plan attachments, `prompt.autocomplete`, the `AbovePrompt` props; no permission-mode API appeared | keep tracking from signals (`mods-patterns.md` #2) | P; T:14086, 861, 8287 |
 
 ## Lessons From The Two Mod Builds (TA.7, proved on 2.1.300)
@@ -27,23 +27,20 @@ Types files: 2.1.296 = 21,433 lines, 2.1.300 = 22,232 lines. npm `latest` = 2.1.
 | failing hook is skipped, a throw AFTER `await next(e)` keeps downstream: no blanket try/catch, guards keep `.catch`, kit asserts it (patterns #8, testing Kit) | T:4036; W; T2.R rev2 |
 | picker option outside `options` or absent = unset, `default` applies: no `?? default` (patterns #7) | T:7800; X; T1.R rev1 F1 |
 | second unmatched `session.start` / `classic.UserPromptSubmit` fails validate: one owner per event, merge #1 + #2, #6 | W |
-| event absent in an older build refuses the module: `prompt.change` sets minimum 2.1.300, placeholders ships without it (plan L15) | W |
-| Tab-accept, Esc Esc, history leave band/paint stale: `prompt.change` + `$.prompt.fill`; any build `PromptHint` flip + `$.ui.invalidate('ui.render')` (patterns #4) | R3; TTY D1-D3 |
-| band taller than the screen clips at the top: budget from `e.props.maxRows` (api Budgets) | TTY D4 |
+| each event has its own first build: `prompt.autocomplete` 2.1.292 (2.1.287-2.1.291 refuse the module), `prompt.change` 2.1.300 (placeholders ships without it, L15); kit `session.append` default from 2.1.293. Floor = highest event of the mod, bisected on exact npm builds (`validate --strict` + `-p --plugin-dir`): placeholders 2.1.292+, plan-effort 2.1.287+ (its `plugin test` needs 2.1.293+) | probe L17 |
 | D6 widened by plan L14: drop every block whose token the registry resolves (patterns #1) | T2.R rev1+rev2; AB |
-| project root = launch dir, no `.git` walk: `$.session.root()`, docs say "launch directory" | AB 3a |
 | `toast` / command `text` carry the plugin name, command text is markdown: no prefix, table in a fence (patterns #6) | T:2465, 1863; TTY C1-C2 |
 | latency test red under load, A/B hit a peer's mid-edit: best p99 of 40 batches, snapshot the mod per run, count injections (testing) | T2.R; AB |
 
 ## Did Not Reproduce / Not In The API (plan vs live bytes)
 
-Each row checked against the 2.1.300 types or a live run; plan claims that held live in `mods-api.md`.
+Each row checked against 2.1.300 types or a live run; claims that held live in `mods-api.md`.
 
 | Topic | Plan said | Live | src |
 |-------|-----------|------|-----|
 | `prompt.change` cannot decorate | "cannot decorate" | the RESULT cannot; `$.prompt.fill` with `decorations` paints (caret at end) | R3; T:8885 |
-| kit "no implementation" after a throw past `next` | kit differs from engine | only with a missing or malformed bottom (`[null, 'x']`, `5`); valid bottom resolves to the downstream result like the engine | W; T2.R rev2 |
-| `$.fs` lambdas cannot be shared across hooks (stale `$`) | stale after `session.start` | `(p) => $.fs.exists(p)` built in `session.start` worked from a later hook in `-p`, validate accepts it (only `$` itself must not be passed); placeholders still spells it per hook | W |
+| kit "no implementation" after a throw past `next` | kit differs from engine | only with a missing or malformed bottom (`[null, 'x']`, `5`); a valid bottom resolves to the downstream result like the engine | W; T2.R rev2 |
+| `$.fs` lambdas cannot be shared across hooks (stale `$`) | stale after `session.start` | `(p) => $.fs.exists(p)` built in `session.start` worked from a later hook in `-p`, validate accepts it (only `$` itself must not be passed); placeholders spells it per hook | W |
 | D6 mod-throw fail-open | unproven | proven live: throw after `next` -> mod text absent, brewtools block once | T2.R rev2 |
 | rejected `ExitPlanMode` | shape unknown | `isError: true`, never `deny`; absent in plain `-p` (plan L5 does not reproduce) | T11 Q3 |
 | headless effort proxy | `PostToolBatch` `effort.level` shows xhigh | stays session level; only session JSONL `api-request` shows override | T11 Q2; X |

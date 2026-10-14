@@ -2,11 +2,11 @@
 
 > verified_on: 2.1.300
 
-Road of a Claude Code mod (hooks-module plugin): scaffold, module, validate, tsc, test, run, debug, ship, maintain. `src` legend: `mods-api.md`.
+Road of a CC mod (hooks-module plugin): scaffold, module, validate, tsc, test, run, debug, ship, maintain. `src` legend: `mods-api.md`.
 
 ## Step 0 (every run)
 
-Table and pass criteria: `mod-creator.md`. Types path is ephemeral (re-derive via `plugin-authoring`, never store); `mods-ref-check.mjs` rc 0 clean, 1 drift, 2 error; drift -> live types win, name DRIFT rows loudly; maintainer context (cwd = claude-brewcode repo) also runs `mods-changes.md` "Update Procedure" (D16).
+Table and pass criteria: `mod-creator.md`. Types path ephemeral (re-derive via `plugin-authoring`, never store); `mods-ref-check.mjs` rc 0 clean, 1 drift, 2 error; drift -> live types win, name DRIFT rows loudly; maintainer context also runs `mods-changes.md` "Update Procedure" (D16).
 
 ## Hard Rules
 
@@ -17,14 +17,14 @@ Table and pass criteria: `mod-creator.md`. Types path is ephemeral (re-derive vi
 | fail open everywhere: mod never blocks prompt, tool or turn it did not mean to | engine skips a failing hook (throw, overrun, wrong shape), chain goes on, a throw after `await next(e)` keeps the downstream result: no blanket try/catch (only to keep partial work); refusing guards get `.catch` | R:78-79; T:1205, 4036-4051; W |
 | `on('<event>')` is a literal; an event the build lacks (`prompt.change` < 2.1.300) refuses the WHOLE module, no gating; a second unmatched hook of one event fails validate | one owner per event; newer event = higher minimum build | W |
 | zero I/O in `prompt.edit` (no `$.fs`, `$.process`, `$.http`, `$.store`) | runs per keystroke; budget is own-time 10,000 ms, no documented 50 ms figure, so targets are self-imposed (p99 < 2 ms at 4k chars, < 8 ms at 20k, no decoration above 20k chars) | T:5230; P; D (plan Risks) |
-| `.claude-plugin/types/` and mod-root `tsconfig.json` never committed | engine-written on interactive loads (types carry own `.gitignore`; root `tsconfig.json` does not): add `brewmod-*/.claude-plugin/types/` and `brewmod-*/tsconfig.json` to repo `.gitignore` (`-p` and `validate` write nothing); deliberate departure from R:112 ("tsconfig.json at the top level stays"): it `extends` the gitignored types one, so a committed copy breaks on a fresh clone | R:112; PLAN S.1; T11 Q6 |
+| `.claude-plugin/types/` and mod-root `tsconfig.json` never committed | engine-written on interactive loads (types carry own `.gitignore`; root `tsconfig.json` does not): add `brewmod-*/.claude-plugin/types/` and `brewmod-*/tsconfig.json` to repo `.gitignore` (`-p`, `validate` write nothing); departs from R:112 ("tsconfig.json at the top level stays"): it `extends` the gitignored types one, so a committed copy breaks on a fresh clone | R:112; PLAN S.1; T11 Q6 |
 | never pass `$` to function or alias it: spell `$.noun.event(...)` at every call site | validate refuses `$ is passed to "log"`; module does not load | V; X |
 | never write under `~/.claude/dev-mods/` unless person asks; repo mods go in repo plugin dir | person's hot-reload mods folder (consent question) | D15; PLAN TLA |
 | `hooks/hooks.json` = `{ "modules": ["./register.ts"] }`: ONE path, in ARRAY | string -> `expected array, received string`; second entry refused | V; X; S.4 (2.1.296) |
 | no JSON or `.md` import in module; read shipped data via `$.fs` from `$.plugin.root` | only files named `.ts .tsx .jsx .js .mjs .cjs .mts .cts` load | R:14; P |
 | no `require`, no DOM, no Node, no timers (use `$.clock`) | module environment | T:20-24, 15420 |
 | `plugin.json` has `author`, `version`, `description` | `--strict` fails without `author` | V; X |
-| engine tests/validate/tsc, not model memory, decide what API accepts | early access: moves between releases | R:5 |
+| engine tests/validate/tsc, not model memory, decide what API accepts | early access: moves per release | R:5 |
 
 ## The Road
 
@@ -34,8 +34,8 @@ Table and pass criteria: `mod-creator.md`. Types path is ephemeral (re-derive vi
 | module | `export const register: Register = (on, options) => {...}`, `import type { Register } from 'claude-code'` (empty at run time); JSX compiles against global `h`; elements from `$.ui.resolve(e)` | | T:9695; R:14-24 |
 | validate | `claude plugin validate --strict <mod dir>` (`--json` for CI); output lists hooks, `$` calls, `gating hook with/without .catch` (a fact, not warning), state reads/writes, managed-org note for `classic.*`/`prompt.attachment` hooks | rc 0 unpiped | V; X; R:66 |
 | tsc | "Type check" below | rc 0 | R:40-53; X |
-| test | `claude plugin test <mod dir>` runs every `*.test.ts[x]` in child process, 5 s default per test, rc 1 on failing test | rc 0 unpiped; >=1 test per behaviour asked | CLI help; X; `mods-testing.md` |
-| run | `claude --plugin-dir <mod dir>` (repeatable), `CLAUDE_CODE_PLUGIN_DIRS` for hosts that cannot pass flag; interactive sessions hot-reload folder on save (after turn that edited it, or when tool/command of plugin is about to run); `claude -p` always loads fresh; `/reload-plugins` re-reads installed plugins | debug line `hooks module <name>@inline loaded ...` | R:72-76; X |
+| test | `claude plugin test <mod dir>` runs every `*.test.ts[x]` in a child process, 5 s per test, rc 1 on a failing test | rc 0 unpiped; >=1 test per behaviour asked | CLI help; X; `mods-testing.md` |
+| run | `claude --plugin-dir <mod dir>` (repeatable), `CLAUDE_CODE_PLUGIN_DIRS` for hosts without the flag; interactive sessions hot-reload the folder on save (after the editing turn, or when a plugin tool/command is about to run); `claude -p` always loads fresh; `/reload-plugins` re-reads installed plugins | debug line `hooks module <name>@inline loaded ...` | R:72-76; X |
 | debug | "Debug lines" below | no `did not load` / `refused` / `skipped` lines | R:78-81; X |
 | live, ship, maintain | headless `claude -p` and tmux checks: `mods-testing.md`; "Ship", "Maintain" below | | D16 |
 
@@ -81,7 +81,7 @@ Run: `unset CLAUDECODE; claude -p "say ok" --plugin-dir <dir> --debug-file <abs 
 | standalone repo road | repo root = the mod, `.claude-plugin/marketplace.json` `{ name, owner, plugins: [{ name, source: "./" }] }`, README install line `/plugin install <mod> --marketplace <owner>/<repo>`; secrets scan (`mcp__plugin-authoring__scan_secrets`), keep mod-root `tsconfig.json` out of the commit (see Hard Rules; R:112 keeps it), `git init`, commit, `gh repo create`; only when person asks | R:83-130 |
 | release train (D2) | all 6 plugins (brewcode, brewdoc, brewtools, brewui + `brewmod-plan-effort`, `brewmod-placeholders`) share one X.Y.Z; `bash .claude/scripts/bump-version.sh X.Y.Z`, `RELEASE-NOTES.md`, commit/tag/push, `update-plugin.sh` per profile, CI green: root `CLAUDE.md` "Version Sync"; mod `plugin.json`s are wired into `marketplace.json` and `bump-version.sh` (working tree, S.1) | D2; PLAN S.1 |
 | install check | hooks-module-only mod shows "Installed <mod>. Plugin is now active." and runs with no reload; mods on by default from 2.1.287; shell install needs `/reload-plugins` in open session | R:128; P |
-| READMEs and docs | mod README + docs page via `/docs`; no `Version` row in mod READMEs (D12); say "2.1.287+, early access" | D12; PLAN Risks |
+| READMEs and docs | mod README + docs page via `/docs`; no `Version` row in mod READMEs (D12); state the mod's verified floor (bisect exact npm builds, `mods-api.md` Manifest), never blanket "2.1.287+", plus "early access"; same floor in manifest `description` and marketplace entry | D12; PLAN L17 |
 | gates | `claude plugin validate --strict .` (marketplace root) + every mod dir, `claude plugin test <mod>` in CI; CI pin = CC version mods were verified on (D13) | D13; PLAN S.5 |
 
 ### Maintain
