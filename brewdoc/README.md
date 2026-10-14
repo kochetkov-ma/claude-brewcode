@@ -135,7 +135,7 @@ brewdoc/
     +-- publish/                      # brewpage.app publishing
 ```
 
-> **Brewdoc vs Brewcode:** Brewdoc is a set of documentation utilities and each skill is self-contained. Brewcode covers the project's own engineering surface -- conventions, rules, agent teams, semantic search and deep review -- with 9 skills, 5 agents and 2 registered hook commands (both SessionStart). Both install from the same `claude-brewcode` marketplace and operate independently.
+> **Brewdoc vs Brewcode:** Brewdoc is a set of documentation utilities and each skill is self-contained. Brewcode covers the project's own engineering surface -- conventions, rules, agent teams, semantic search and deep review -- with 9 skills, 6 agents and 2 registered hook commands (both SessionStart). Both install from the same `claude-brewcode` marketplace and operate independently.
 
 ## Artifact metadata
 

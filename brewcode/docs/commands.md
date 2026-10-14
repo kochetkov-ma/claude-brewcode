@@ -67,6 +67,7 @@ Run setup skills one at a time, ideally one per fresh session: each is an intera
 | `skill-creator` | inherit | Create/improve SKs -- specialist for `/brewcode:skills` |
 | `hook-creator` | inherit | Create/debug Claude Code hooks |
 | `bash-expert` | inherit | Professional sh/bash scripts for Mac/Linux |
+| `mod-creator` | inherit | Create/test/ship Claude Code mods (hooks-module plugins) |
 | `bc-rules-organizer` | haiku | Create/optimize `.claude/rules/*.md` -- internal, spawned only by `/brewcode:rules` and `/brewcode:convention-setup` |
 
 The three creator AGs are pinned by `agents/tests/suite-creator-contract.mjs`: the authoring contracts checked through CC 2.1.296 are represented in fixtures, so upstream drift fails a test instead of shipping silently.
