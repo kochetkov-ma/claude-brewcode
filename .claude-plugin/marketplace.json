@@ -5,7 +5,7 @@
     "email": "apmatypa88@gmail.com"
   },
   "metadata": {
-    "description": "Claude Code plugin suite: brewcode for skill/agent/rule authoring and project setups, brewdoc for documentation tools, brewtools for text, ops and subagent-guard utilities, brewui placeholder for UI/visual/creative tools",
+    "description": "Claude Code plugin suite: brewcode for skill/agent/rule authoring and project setups, brewdoc for documentation tools, brewtools for text, ops and subagent-guard utilities, brewui placeholder for UI/visual/creative tools, brewmod-plan-effort and brewmod-placeholders for Claude Code 2.1.287+ mods",
     "version": "6.6.2"
   },
   "plugins": [
@@ -130,6 +130,62 @@
       "homepage": "https://github.com/kochetkov-ma/claude-brewcode",
       "repository": "https://github.com/kochetkov-ma/claude-brewcode.git",
       "source": "./brewui",
+      "strict": true
+    },
+    {
+      "name": "brewmod-plan-effort",
+      "description": "Brewmod plan-effort - raises effort to xhigh only while the main loop is in plan mode (Claude Code 2.1.287+ mod)",
+      "version": "6.6.2",
+      "category": "productivity",
+      "keywords": [
+        "brewmod",
+        "mod",
+        "plan-mode",
+        "effort",
+        "xhigh",
+        "claude-code"
+      ],
+      "tags": [
+        "mod",
+        "plan-mode",
+        "effort"
+      ],
+      "author": {
+        "name": "Maksim Kochetkov",
+        "email": "apmatypa88@gmail.com"
+      },
+      "license": "MIT",
+      "homepage": "https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewmod-plan-effort",
+      "repository": "https://github.com/kochetkov-ma/claude-brewcode.git",
+      "source": "./brewmod-plan-effort",
+      "strict": true
+    },
+    {
+      "name": "brewmod-placeholders",
+      "description": "Brewmod placeholders - ++ placeholders with live highlight, typeahead and a preview band; drop-in for the brewtools codewords (Claude Code 2.1.287+ mod)",
+      "version": "6.6.2",
+      "category": "productivity",
+      "keywords": [
+        "brewmod",
+        "mod",
+        "placeholders",
+        "codewords",
+        "prompt",
+        "claude-code"
+      ],
+      "tags": [
+        "mod",
+        "placeholders",
+        "codewords"
+      ],
+      "author": {
+        "name": "Maksim Kochetkov",
+        "email": "apmatypa88@gmail.com"
+      },
+      "license": "MIT",
+      "homepage": "https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewmod-placeholders",
+      "repository": "https://github.com/kochetkov-ma/claude-brewcode.git",
+      "source": "./brewmod-placeholders",
       "strict": true
     }
   ]
