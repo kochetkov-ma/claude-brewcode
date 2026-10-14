@@ -161,6 +161,7 @@ jobs:
               bash brewtools/skills/ssh/tests/run.sh
               bash brewtools/skills/text-optimize/tests/run.sh
               bash brewtools/.codex/skills/text-optimize/tests/run.sh
+              bash brewtools/skills/text-human/tests/run.sh
               bash brewdoc/skills/md-to-pdf/tests/run.sh
               bash brewdoc/.codex/skills/md-to-pdf/tests/run.sh
               bash brewcode/skills/convention-setup/tests/run.sh

@@ -99,16 +99,16 @@ Run [Convention Setup](/brewcode/skills/convention-setup/) after semantic search
 
 <Spoiler id="auto-invoke" title="Why doesn't Claude run these skills on its own?">
 
-Because that is the design. 26 of the 27 skills are user-invoked only: they carry both `user-invocable: true` and `disable-model-invocation: true` in their frontmatter. The model never sees their descriptions and never auto-activates one — these skills run only when **you** type `/plugin:skill`.
+Because that is the design. 24 of the 27 skills are user-invoked only: they carry both `user-invocable: true` and `disable-model-invocation: true` in their frontmatter. The model never sees their descriptions and never auto-activates one — these skills run only when **you** type `/plugin:skill`.
 
-The one exception is `/brewdoc:publish` (`disable-model-invocation: false`). Claude can run it on its own when you ask to share something mid-task ("publish this", "share a link"); typing `/brewdoc:publish` still works. Publishing is a leaf action whose result, a shareable URL, is often wanted at the end of other tasks, and one model-visible description is a small token cost.
+Three skills are the exception (`disable-model-invocation: false`): `/brewdoc:publish`, `/brewtools:text-optimize` and `/brewtools:text-human`. Claude can run these three on its own mid-task. Publishing is a leaf action whose result, a shareable URL, is often wanted at the end of other tasks. `text-optimize` and `text-human` are leaf edits on files you name, and other skills in the suite now call `text-optimize` through `Skill`. Three model-visible descriptions are a small token cost.
 
-The other 26 keep installation and scope decisions with you:
+The other 24 keep installation and scope decisions with you:
 
 - The eleven `-setup` skills are interactive generators that write real files into your repo. Nothing should reach for one without you asking.
-- The recurring tools, such as `rules`, `e2e`, `text-optimize`, `secrets-scan`, `deploy` and `ssh`, are things you run at a moment you choose, on a scope you choose.
+- The recurring tools, such as `rules`, `e2e`, `secrets-scan`, `deploy` and `ssh`, are things you run at a moment you choose, on a scope you choose.
 
-The practical consequence: asking "can you sync my docs?" will not trigger `/brewdoc:docsync-setup`. Type the command. By contrast, "publish this" or "share a link" can trigger `/brewdoc:publish`. Tab completion after `/` lists everything that is installed.
+The practical consequence: asking "can you sync my docs?" will not trigger `/brewdoc:docsync-setup`. Type the command. By contrast, "publish this" or "share a link" can trigger `/brewdoc:publish`, and "compress this prompt" or "humanize this README" can trigger the two text skills. Typing any of the three still works. Tab completion after `/` lists everything that is installed.
 
 </Spoiler>
 

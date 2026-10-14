@@ -112,7 +112,7 @@ import { Card, CardGrid, Callout, Steps, UpdateNotice } from '../../../../compon
   <li>
     <div>
       <strong>Agent creation</strong>
-      <p>ONE agent file per spawn — never "create the whole team" in one task. Batches of 3–4 <code>agent-creator</code> spawns run in parallel, each carrying the full six-field brief (see Delegation below). After each batch, <code>/brewtools:text-optimize</code> compresses agent instructions.</p>
+      <p>ONE agent file per spawn — never "create the whole team" in one task. Batches of 3–4 <code>agent-creator</code> spawns run in parallel, each carrying the full six-field brief (see Delegation below). After each batch, the skill invokes `brewtools:text-optimize` through `Skill` in light mode (`-l --allow-dirty`) on that batch's agent files, keeping the six ordered headings. It runs only when brewtools is available (otherwise the skip is reported) and never touches `intent-guard.md`.</p>
     </div>
   </li>
   <li>

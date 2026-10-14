@@ -94,16 +94,13 @@ A bare one-line task is never enough.
   one message.
 - `review` -> the project's reviewer agent from `.claude/agents/`, else `general-purpose`: review ->
   double-check findings -> report.
-- Then medium-optimize exactly the written rule files, only when agent type
-  `brewtools:text-optimizer` is available in this session. It stops on a brief without `RUN_DIR`, so
-  follow the Medium workflow of the installed `/brewtools:text-optimize` `SKILL.md`: path =
-  `installPath` of the enabled `brewtools` entry in `claude plugin list --json`, which also stands
-  for `CLAUDE_PLUGIN_ROOT` in its commands; never via `Skill` (`disable-model-invocation: true`).
-  Snapshot the files, capture `RUN_DIR`, spawn one optimizer per file with the six brief fields,
-  that `RUN_DIR` and "preserve every table row, frontmatter key, name, number, negation and scope",
-  then run its verify gate and `rules.sh validate`. Delegates never spawn optimizers.
-  > Agent type unavailable or that `SKILL.md` not resolvable -> skip the pass and report the skip,
-  > not a blocker; the rules stay as written, with their validation evidence.
+- Then medium-optimize exactly the written rule files, only when the `brewtools:text-optimize`
+  skill is available in this session (`--allow-dirty`: this run just wrote them):
+  `Skill(skill="brewtools:text-optimize", args="<written rule paths> medium --allow-dirty preserve every table row, frontmatter key, name, number, negation and scope")`.
+  It owns snapshot, `RUN_DIR`, one optimizer per file and its verify gate; then run
+  `rules.sh validate`. Delegates never spawn optimizers.
+  > Skill unavailable (`brewtools` not installed) -> skip the pass and report the skip, not a
+  > blocker; the rules stay as written, with their validation evidence.
 
 ## Step 5 — Real status (NOT a flat list)
 

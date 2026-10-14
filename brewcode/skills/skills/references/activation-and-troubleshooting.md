@@ -75,7 +75,7 @@ Which questions apply, by `DMI`:
 
 | SK | Trigger question | Output question | How to run |
 |---|---|---|---|
-| `DMI: true` (every shipped brewcode SK but `brewdoc:publish`) | Skip — the model never auto-invokes it, and it is not preloaded into SAs either. Only a `/name` the user types counts, also mid-message after plain text: there it runs nothing directly but permits Claude to run the SK for that one message (2.1.287+) | Measure | Fresh `claude -p` session invoking `/name` explicitly. Never spawn a SA "with the SK": a `DMI: true` SK silently no-ops from a SA, so a SA-based run measures nothing |
+| `DMI: true` (every shipped brewcode SK but `brewdoc:publish`, `brewtools:text-optimize`, `brewtools:text-human`) | Skip — the model never auto-invokes it, and it is not preloaded into SAs either. Only a `/name` the user types counts, also mid-message after plain text: there it runs nothing directly but permits Claude to run the SK for that one message (2.1.287+) | Measure | Fresh `claude -p` session invoking `/name` explicitly. Never spawn a SA "with the SK": a `DMI: true` SK silently no-ops from a SA, so a SA-based run measures nothing |
 | `DMI: false` | Measure — did the prompt alone load it? | Measure | Fresh session per prompt; personal/project baseline via `skillOverrides: "off"`; plugin baseline via `claude plugin eval` with no plugin loaded (`skillOverrides` excludes plugins) |
 
 Wasted steps? All runs writing similar helper scripts -> bundle into `scripts/`. Heavyweight version

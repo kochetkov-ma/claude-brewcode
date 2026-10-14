@@ -43,10 +43,9 @@ function check(name, actual, expected, message) {
 
 /** Run `code` with the lib sourced, in `cwd`, with a clean env. */
 function sh(code, { cwd, env = {} } = {}) {
-  const e = { ...process.env, TMPDIR: TMP, ...env };
-  for (const k of Object.keys(env)) if (env[k] === undefined) delete e[k];
+  // An `undefined` value unsets the variable: spawnSync drops undefined env entries.
   const r = spawnSync('bash', ['-c', `. "${LIB}"\n${code}`], {
-    cwd, encoding: 'utf8', env: e, timeout: 20000,
+    cwd, encoding: 'utf8', env: { ...process.env, TMPDIR: TMP, ...env }, timeout: 20000,
   });
   return { out: (r.stdout || '').trim(), err: (r.stderr || '').trim(), status: r.status };
 }

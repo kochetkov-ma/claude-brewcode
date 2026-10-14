@@ -1,10 +1,10 @@
 ---
 name: text-human
-description: "Humanizes code, docs, articles, reddit/chat, javadoc -- strips AI artifacts, fixes unicode, fits register. Triggers: humanize, ai artifacts, unicode fix, article, reddit, javadoc."
+description: "Humanizes code, docs, commits, articles, reddit/chat, javadoc -- strips AI artifacts, fixes unicode, fits register. Use when asked to humanize a file, commit or pasted text. Triggers: humanize, ai artifacts, unicode fix, article, reddit, javadoc, очеловечь."
 user-invocable: true
-disable-model-invocation: true
+disable-model-invocation: false
 argument-hint: "[prompt] [path|commit|folder|text] [custom instructions]"
-allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Agent, AskUserQuestion]
+allowed-tools: [Read, Grep, Glob, Agent, AskUserQuestion]
 model: sonnet
 ---
 
@@ -23,11 +23,14 @@ keywords and `Mutates?` per flow.
 1. Flow: an explicit intent keyword (table below) wins outright, no scoring; unresolved cases fall
    through Phase 0's own priority order (keyword -> path/extension -> content sniff). Empty -> no
    assumed flow: Phase 0 Step 4's `AskUserQuestion` ("What to humanize?") is the ONE scoping
-   question -- do not skip it and do not guess a flow.
+   question -- do not skip it and do not guess a flow. Unanswered or headless -> stop, "nothing to
+   humanize", no edits.
 2. Scope: prose that is not a flow keyword is still input: `customPrompt` (Phase 0 Argument parsing)
-   extracts it and both selects/overrides the flow and adds custom rules.
+   extracts it and both selects/overrides the flow and adds custom rules. Fired by Claude mid-task
+   (`Skill` tool), `args` is the prompt: the path, commit hash or exact text, never a summary of it.
 3. Ask: outcome-changing ambiguity beyond the flow itself -> ONE `AskUserQuestion` before any work.
    Phase 0.5's dirty-path gate IS that question whenever it fires, and it outranks the scoping one.
+   Unanswered or headless -> its safest option (Phase 0.5); nothing blocks.
 
 Print once, right after Phase 0 announces `Flow: <name> -- <reason>`, before Phase 1 touches any
 file; SCOPE names the resolved target paths -- for `mixed`, the resolved block list (labels and plan
@@ -78,14 +81,18 @@ Files are rewritten in place with no backup; git is the only undo. Before the fi
 resolved target paths only:
 
 ```bash
-git status --porcelain -- "<resolved path>"   # one quoted arg per target path
+git status --porcelain -- '<resolved path>'
 ```
+
+One single-quoted arg per target path.
 
 - Empty -> proceed.
 - Non-empty, edits on those paths not already authorized -> ONE `AskUserQuestion` listing them:
   proceed on them / process only the clean ones / abort. It replaces the Phase 0 scoping question;
-  `mixed` commit mode runs this gate over the commit's paths.
-- Not a git repo (`git rev-parse --git-dir` fails) -> say so; proceed only on an explicit go-ahead.
+  `mixed` commit mode runs this gate over the commit's paths. Unanswered -> only the clean ones;
+  none clean -> stop, no edits.
+- Not a git repo (`git rev-parse --git-dir` fails) -> say so; proceed only on an explicit go-ahead
+  (unanswered -> stop, no edits).
 
 Inline text skips this gate.
 
@@ -173,3 +180,7 @@ Flow: <name>
 /brewtools:text-human 3be67487 also drop all @author tags      # mixed + custom rule
 /brewtools:text-human src/ only strip AI artifacts, no inject  # custom prompt overrides
 ```
+
+## Notes
+
+- Permissions: model-invocable with no Bash/Write/Edit grant: its read-only `git status`, `git rev-parse` and `git diff --name-only` calls run unprompted in default mode (CC 2.1.296); in-place edits to the user's files follow the session's permission mode by design.

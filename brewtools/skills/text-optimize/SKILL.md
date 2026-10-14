@@ -1,10 +1,10 @@
 ---
 name: text-optimize
-description: Optimizes text/docs for LLM token efficiency. Triggers - optimize, reduce tokens, compress, deep compress.
+description: "Optimizes text, docs and LLM prompts (CLAUDE.md, rules, agent/skill files) for token efficiency in place, snapshot-backed, without losing facts. Use when asked to optimize, compress or cut tokens of named files. Triggers - optimize, reduce tokens, compress, deep compress, сожми, оптимизируй."
 user-invocable: true
-disable-model-invocation: true
+disable-model-invocation: false
 argument-hint: "[prompt] [-l|-s|-d|-x|--max] [file|folder|path1,path2] — -l light, -s standard (30-50%), -d deep (LLM-only), -x|--max max (LLM-only, atomic fact-lines, 2-round verify), no flag = medium or auto-detect"
-allowed-tools: [Read, Write, Edit, Bash, Grep, Glob, Agent, AskUserQuestion]
+allowed-tools: [Read, 'Bash(bash ${CLAUDE_SKILL_DIR}/scripts/text-guard.sh *)', Grep, Glob, Agent, AskUserQuestion]
 model: sonnet
 ---
 
@@ -15,8 +15,8 @@ model: sonnet
 `$ARGUMENTS` is one free-form RU/EN prompt; depth flags and paths may sit anywhere in it. The depth flags are the Modes below.
 
 1. Mode: an explicit flag (`-l`, `-s`, `-d`, `-x`, `--light`, `--standard`, `--deep`, `--max`) wins without scoring; else the most distinct whole-word hits from Modes/Context Hints, ties use the earliest keyword. No hit -> `medium` before Smart Auto-Detection; empty -> `medium` or per-file auto-detection. Max is opt-in: explicit `-x`/`--max` or maximum/extreme compress hint only.
-2. Scope: take paths from the remaining prose; never treat sentence-first words as positional paths.
-3. Ask: ambiguity -> ONE scoping `AskUserQuestion`.
+2. Scope: take paths from the remaining prose; never treat sentence-first words as positional paths. Fired by Claude mid-task (`Skill` tool), `args` is the prompt and names the target path(s): empty there stops with "no target", never the ALL set an empty user-typed prompt selects. `--allow-dirty` in the prompt is the explicit authorization Phase 0 needs for uncommitted targets.
+3. Ask: ambiguity -> ONE scoping `AskUserQuestion`; unanswered or headless -> `medium` on the named targets only, nothing blocks.
 
 Print once, after resolving mode/targets and before Phase 1 Analysis (labels literal, INPUT verbatim, authored values follow the active work-artifact language policy, otherwise conversation language). SCOPE MUST name resolved target paths and depth:
 
@@ -137,10 +137,14 @@ Resolve target paths (Usage Examples: no args, single path, list, directory) bef
 
 **Phase 0: Preconditions + Snapshot (MANDATORY, before ANY edit)**
 
-Every mode rewrites IN PLACE; snapshots must survive context compaction. Before the first edit/Phase 2 spawn, EXECUTE using Bash:
+Every mode rewrites IN PLACE; snapshots must survive context compaction. Every `text-guard.sh` call
+is ONE command of its fence shape: unquoted script path, each value single-quoted, no `cd`,
+`VAR=`, `;`, `&&`, `|` or `$(…)`. The `allowed-tools` rule pre-approves exactly that shape; any
+other prompts. Before the first edit/Phase 2 spawn, EXECUTE using Bash (`--allow-dirty` before the
+files only under the authorization below):
 
 ```bash
-bash "${CLAUDE_PLUGIN_ROOT}/skills/text-optimize/scripts/text-guard.sh" snapshot "<file>"...
+bash ${CLAUDE_SKILL_DIR}/scripts/text-guard.sh snapshot '<file>'...
 ```
 
 > STOP unless exit 0 and `RUN_DIR` are printed; fix snapshot failure before any edit.
@@ -158,7 +162,7 @@ Immediately after each optimizer-owned atomic write/deletion, record that known 
 another edit or verification. A checkpoint is ownership evidence, not a backup:
 
 ```bash
-bash "${CLAUDE_PLUGIN_ROOT}/skills/text-optimize/scripts/text-guard.sh" checkpoint --run-dir "<RUN_DIR>" "<file>"
+bash ${CLAUDE_SKILL_DIR}/scripts/text-guard.sh checkpoint --run-dir '<RUN_DIR>' '<file>'
 ```
 
 Checkpoint only bytes just written by this optimizer (or its just-completed deletion); if another
@@ -208,7 +212,7 @@ The skill owns acceptance and disk-to-disk comparison. Every mode runs the mecha
 Step 1 — mechanical sub-gate. **EXECUTE** using Bash tool, once per run:
 
 ```bash
-bash "${CLAUDE_PLUGIN_ROOT}/skills/text-optimize/scripts/text-guard.sh" verify --no-restore --run-dir "<RUN_DIR>" "<file>"...
+bash ${CLAUDE_SKILL_DIR}/scripts/text-guard.sh verify --no-restore --run-dir '<RUN_DIR>' '<file>'...
 ```
 
 Exit `0`: original numbers, versions, paths, `!=` prohibitions and ALL-CAPS modal keywords remain. Exit `1`: missing tokens printed, current bytes kept; classify each as preserved meaning, authorized replacement or actual loss. Record evidence for the first two; patch actual loss and repeat required review. A mechanical pass alone cannot establish semantic equivalence. Exit `2`: snapshot/state unavailable; STOP and refuse acceptance, rerun Phase 0 before editing.
@@ -239,7 +243,7 @@ recorded matching draft checkpoint (already-original bytes need no overwrite). M
 changed current bytes -> `RESTORE_REFUSED`, exit 1, preserve the file; never checkpoint to bypass it:
 
 ```bash
-bash "${CLAUDE_PLUGIN_ROOT}/skills/text-optimize/scripts/text-guard.sh" restore --run-dir "<RUN_DIR>" "<file>"
+bash ${CLAUDE_SKILL_DIR}/scripts/text-guard.sh restore --run-dir '<RUN_DIR>' '<file>'
 ```
 
 | Outcome | Result |
@@ -347,3 +351,7 @@ Count words/bytes/characters with `wc -w`/`wc -c`/`wc -m`; name the method/encod
 ## Anti-Patterns
 
 `references/rules-review.md` § Rules NOT Recommended.
+
+## Notes
+
+- Permissions: model-invocable, so `allowed-tools` pre-approves only the `text-guard.sh` rule; it also covers the brewtools text-optimizer agent's `checkpoint` (same-plugin subagent, probed CC 2.1.296), never a `general-purpose` subagent. Edits to the user's files (main repairs, text-optimizer writers) follow the session's permission mode by design.

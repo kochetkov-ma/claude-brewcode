@@ -125,7 +125,7 @@ try {
   writeFileSync(join(root, 'relative-password.txt'), 'fixture-relative\n');
   const relativeRun = prepare();
   writeFileSync(join(relativeRun, 'brewpage-password-source.txt'), 'relative-password.txt\n');
-  const relative = run(begin(relativeRun, 'file') + ' || { rc=$?; ls "$BP_RUN_DIR"; exit "$rc"; }\nbp_post https://example.invalid/upload', 'relative');
+  const relative = run('set +e\n' + begin(relativeRun, 'file') + '\nrc=$?\nls "$BP_RUN_DIR"\nexit "$rc"', 'relative');
   assert.deepEqual([relative.status, relative.stdout, existsSync(relativeRun), existsSync(join(base, 'args-relative'))],
     [1, 'FAILED: password file must be an absolute path\nbrewpage-password-source.txt\n', false, false],
     'THEN a cwd-relative password file fails with no transport copy, no upload, and its run is cleaned');
@@ -254,10 +254,9 @@ try {
   assert.deepEqual(runNames(), [], 'THEN directory caller cleans its archive and transport inputs');
 
   // GIVEN shipped callers and OLD/NEW winners WHEN publishing THEN exact server identity wins.
+  // Standalone copies ship their own scripts: covered by suite-standalone.mjs.
   const variants = [
     { name: 'brewdoc', path: join(here, '../SKILL.md'), history: '.claude/brewpage-history.md' },
-    { name: 'standalone', path: join(here, '../../../../skills/brewpage-publish/SKILL.md'), history: '.claude/brewpage-history.md' },
-    { name: 'openclaw', path: join(here, '../../../../openclaw/brewpage-publish/SKILL.md'), history: 'brewpage-history.md' },
   ];
   const responses = [
     { link: 'https://fixture123.brewpage.app/', ownerToken: 'private-new-owner', ownerLink: 'https://brewpage.app/api/html/public/Fixture123',
@@ -271,30 +270,24 @@ try {
     const shippedBlocks = [...source.matchAll(/```bash\n([\s\S]*?)```/g)].map(match => match[1]);
     for (const block of shippedBlocks) assert.equal(spawnSync('bash', ['-n'], { input: block }).status, 0,
       'THEN every variant Bash block parses');
-    const brewdoc = variant.name === 'brewdoc';
-    const uploadBlocks = shippedBlocks.filter(block => block.includes(brewdoc ? ' publish ' : 'RESPONSE=$('));
-    assert.equal(uploadBlocks.length, { brewdoc: 3, standalone: 5, openclaw: 4 }[variant.name], 'THEN existing upload formats remain unchanged');
-    assert.equal(uploadBlocks.every(block => block.includes(brewdoc ? "--delivery-mode '{delivery_mode}'" : '"${DELIVERY_H[@]}"')), true,
+    const uploadBlocks = shippedBlocks.filter(block => block.includes(' publish '));
+    assert.equal(uploadBlocks.length, 3, 'THEN existing upload formats remain unchanged');
+    assert.equal(uploadBlocks.every(block => block.includes("--delivery-mode '{delivery_mode}'")), true,
       'THEN every existing upload block carries the optional header');
-    const html = brewdoc
-      ? uploadBlocks.find(block => block.includes("--text '{content}'")).replaceAll('${CLAUDE_SKILL_DIR}', join(here, '..'))
-        .replaceAll('{type}', 'html').replaceAll('{password_file}', '')
-      : shippedBlocks.find(block => block.includes('api/html?'));
-    for (const mode of ['', 'path', 'subdomain']) for (const [index, response] of responses.entries()) {
-      const owned = prepare();
-      writeFileSync(join(owned, 'brewpage-content.md'), 'Fixture markdown\n');
-      const suffix = variant.name + '-' + (mode || 'default') + '-' + index;
-      const code = html.replaceAll('{ns}', 'public').replaceAll('{days}', '15').replaceAll('{ttl}', '15')
-        .replaceAll('{run_id}', basename(owned)).replaceAll('{password_mode}', 'none')
-        .replaceAll('{delivery_mode}', mode).replaceAll('{content}', 'Fixture markdown');
-      const outcome = run((variant.name === 'brewdoc' ? '' : 'set +u\n') + code, suffix,
-        { PASSWORD: '', DELIVERY_MODE: mode, CURL_RESPONSE: JSON.stringify(response) });
+    const html = uploadBlocks.find(block => block.includes("--text '{content}'")).replaceAll('${CLAUDE_SKILL_DIR}', join(here, '..'))
+      .replaceAll('{type}', 'html').replaceAll('{password_file}', '');
+    const textCode = mode => html.replaceAll('{ns}', 'public').replaceAll('{days}', '15')
+      .replaceAll('{delivery_mode}', mode).replaceAll('{content}', 'Fixture markdown');
+    const modes = [['', 'default', []], ['path', 'path', ['X-Delivery-Mode: path']], ['subdomain', 'subdomain', ['X-Delivery-Mode: subdomain']]];
+    for (const [mode, label, header] of modes) for (const [index, response] of responses.entries()) {
+      const suffix = variant.name + '-' + label + '-' + index;
+      const outcome = run(textCode(mode), suffix, { CURL_RESPONSE: JSON.stringify(response) });
       assert.equal(outcome.status, 0, 'THEN shipped HTML caller succeeds: ' + suffix + ' ' + outcome.stderr);
       assert.equal(outcome.stdout, 'OK ' + response.link + '\n', 'THEN returned winner URL retains exact root slash or OLD form');
       assert.equal(outcome.stderr, '', 'THEN caller emits no response secrets');
       const args = JSON.parse(readFileSync(join(base, 'args-' + suffix), 'utf8'));
       assert.deepEqual(args.filter(value => value.startsWith('X-Delivery-Mode:')),
-        mode ? ['X-Delivery-Mode: ' + mode] : [], 'THEN only explicit requests carry a mode header even when winner differs');
+        header, 'THEN only explicit requests carry a mode header even when winner differs');
       assert.deepEqual(JSON.parse(readFileSync(join(base, 'args-' + suffix + '.payload'), 'utf8')),
         { content: 'Fixture markdown' },
         'THEN routing metadata does not enter authored HTML payload');
@@ -304,38 +297,20 @@ try {
       assert.equal(privateHistory.includes('`' + response.ownerToken + '`'), true, 'THEN owner token stays in per-tool history');
       assert.equal(outcome.stdout.includes(response.ownerToken), false, 'THEN no token enters output');
       const identityFields = ['id', 'namespace', 'type', 'routingCohort', 'deliveryMode', 'modeLocked', 'hostingVersion', 'managementLink', 'createdAt', 'expiresAt'];
-      const projection = Object.fromEntries(identityFields
-        .map(key => [key, response[key] ?? null]));
+      const known = { ...Object.fromEntries(identityFields.map(key => [key, null])), ...response };
+      const projection = Object.fromEntries(identityFields.map(key => [key, known[key]]));
       assert.equal(privateHistory.includes('`' + JSON.stringify(projection) + '`'), true,
         'THEN exact winner metadata and available original expiry, including OLD nulls, are retained');
-      const cleanup = run("[ ! -d '" + owned + "' ] || { bp_run_dir '" + basename(owned) + "'; bp_cleanup; }", suffix + '-cleanup');
-      assert.equal(cleanup.status, 0, 'THEN fixture cleanup succeeds');
-      assert.equal(existsSync(owned), false, 'THEN fixture allocation is cleaned without changing portable history location');
     }
     // GIVEN invalid mode in the shipped HTML caller WHEN executed THEN reject before curl.
-    const invalidOwned = prepare();
-    writeFileSync(join(invalidOwned, 'brewpage-content.md'), 'Fixture markdown\n');
-    const invalidCode = html.replaceAll('{ns}', 'public').replaceAll('{days}', '15').replaceAll('{ttl}', '15')
-      .replaceAll('{run_id}', basename(invalidOwned)).replaceAll('{password_mode}', 'none')
-      .replaceAll('{delivery_mode}', 'invalid').replaceAll('{content}', 'Fixture markdown');
-    const bad = run(invalidCode, variant.name + '-invalid', { PASSWORD: '', DELIVERY_MODE: 'invalid' });
+    const bad = run(textCode('invalid'), variant.name + '-invalid');
     assert.equal(bad.status, 1, 'THEN shipped invalid mode rejects');
     assert.equal(existsSync(join(base, 'args-' + variant.name + '-invalid')), false, 'THEN shipped invalid mode never uploads');
-    const cleanup = run("[ ! -d '" + invalidOwned + "' ] || { bp_run_dir '" + basename(invalidOwned) + "'; bp_cleanup; }", variant.name + '-invalid-cleanup');
-    assert.equal(cleanup.status, 0, 'THEN invalid fixture cleanup succeeds');
 
     // GIVEN a rejected response with a token WHEN rendering failure THEN reveal no response body.
-    const rejectedOwned = prepare();
-    writeFileSync(join(rejectedOwned, 'brewpage-content.md'), 'Fixture markdown\n');
-    const rejectedCode = html.replaceAll('{ns}', 'public').replaceAll('{days}', '15').replaceAll('{ttl}', '15')
-      .replaceAll('{run_id}', basename(rejectedOwned)).replaceAll('{password_mode}', 'none')
-      .replaceAll('{delivery_mode}', '').replaceAll('{content}', 'Fixture markdown');
-    const rejected = run((variant.name === 'brewdoc' ? '' : 'set +u\n') + rejectedCode, variant.name + '-rejected',
-      { PASSWORD: '', DELIVERY_MODE: '', CURL_RESPONSE: JSON.stringify({ ownerToken: 'error-private-owner' }) });
+    const rejected = run(textCode(''), variant.name + '-rejected', { CURL_RESPONSE: JSON.stringify({ ownerToken: 'error-private-owner' }) });
     assert.equal(rejected.stdout, 'FAILED: publish rejected (no .link in response)\n', 'THEN failure prints only its safe explanation');
     assert.equal(rejected.stderr, '', 'THEN no rejected-response token appears in errors');
-    const rejectedCleanup = run("[ ! -d '" + rejectedOwned + "' ] || { bp_run_dir '" + basename(rejectedOwned) + "'; bp_cleanup; }", variant.name + '-rejected-cleanup');
-    assert.equal(rejectedCleanup.status, 0, 'THEN rejected fixture cleanup succeeds');
   }
   assert.equal(existsSync(join(root, '.claude/tmp')), false, 'THEN no run ever touched the protected project .claude/tmp');
   assert.deepEqual(readdirSync(tmp).sort(), ['brewpage-password.txt', 'first-run', 'second-run'],
@@ -351,9 +326,7 @@ try {
   mkdirSync(join(h, '.claude'), { recursive: true });
   mkdirSync(cwdMisc, { recursive: true });
   const historyAs = (envOver) => {
-    const env = { ...process.env, LIB: lib, HOME: join(outer, 'elsewhere'), ...envOver };
-    delete env.CLAUDE_PROJECT_DIR;
-    if (!envOver.CLAUDE_CONFIG_DIR) delete env.CLAUDE_CONFIG_DIR;
+    const env = { ...process.env, LIB: lib, HOME: join(outer, 'elsewhere'), CLAUDE_PROJECT_DIR: undefined, CLAUDE_CONFIG_DIR: undefined, ...envOver };
     const r = spawnSync('bash', ['-c', '. "$LIB"\nprintf "%s" "$HISTORY_FILE"'], { cwd: cwdMisc, encoding: 'utf8', timeout: 10000, env });
     return [r.status, r.stdout];
   };

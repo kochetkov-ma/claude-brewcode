@@ -9,6 +9,19 @@ user-invocable: true
 
 Publish content to **brewpage.app** — free instant hosting for HTML pages, files, and multi-file sites. No sign-up required.
 
+## Running commands
+
+Every shell step is ONE command of the exact shape in the fences below, run with the shell tool.
+`{baseDir}` is this skill's folder; the bundled `scripts/brewpage-run.sh` does every upload.
+
+- Fill each `'{…}'` slot with the raw value and write every `'` inside it as `'\''`; nothing else is
+  escaped. Never wrap a value in double quotes. An empty slot stays `''` (= omitted).
+- Never prefix or chain the command (`cd`, `VAR=…`, `;`, `&&`, `|`, `$(…)`) and never inline the text in
+  any other form: single-quoted argv is what keeps the content inert.
+- Text longer than 6,000 characters goes through `stage` (Step 6).
+- The script prints one decisive line: `OK {url}`, `OK {url} | Files: N`, `CONFIRM: …` (exit 2,
+  nothing uploaded) or `FAILED: …`. It removes its private run directory on every exit.
+
 ## Workflow
 
 ### Step 1: Parse Arguments
@@ -17,20 +30,29 @@ Extract from the arguments string:
 - `--ttl N` → TTL in days (default: `15`)
 - `--entry <filename>` → entry file for SITE uploads (default: auto-detect)
 - `--delivery-mode path|subdomain` → optional creation header; omitted means server defaults. Reject other values before upload.
-- Remaining text → `content_arg`
+- Remaining text → `content_arg`: a path, or the exact text to publish, never a summary of it.
 
 ### Step 2: Detect Content Type
 
-| Input | Type | API |
-|-------|------|-----|
-| `content_arg` is a directory (`test -d`) | SITE | `POST /api/sites` (dir auto-zipped — primary path) |
-| `content_arg` ends with `.zip` AND file exists (`test -f`) | SITE | `POST /api/sites` (pre-built archive upload) |
-| `content_arg` is a file path AND file exists (`test -f`) | FILE | `POST /api/files` (multipart) |
-| Anything else | HTML | `POST /api/html` (format=markdown) |
+A `content_arg` that names a path -> probe it (read-only; prints `TYPE:`, the absolute `PATH:` to use
+below, and the Step 3 stats) — run with the shell tool:
 
-Mode rule: directory/ZIP → SITE. Single file → FILE. Everything else → HTML (markdown). `POST /api/sites` accepts a multipart `archive=@file.zip` or repeated `files` and matching `paths` fields. This skill auto-zips directories to preserve relative paths. Stats per type — SITE (dir): HTML count, total size, entry file. SITE (ZIP): file size, entry override. FILE: size + MIME via `file --mime-type -b`. TEXT: char count.
+```bash
+bash {baseDir}/scripts/brewpage-run.sh probe '{path}'
+```
+
+| Input | Type | `publish` type + source | API |
+|-------|------|-------------------------|-----|
+| `TYPE: site-dir` | SITE | `site-dir` + `--path` | `POST /api/sites` (ZIP built from the dir — primary path) |
+| `TYPE: site-zip` (`.zip` file) | SITE | `site-zip` + `--path` | `POST /api/sites` (pre-built archive upload) |
+| `TYPE: file` or `TYPE: markdown` (any other file) | FILE | `file` + `--path` | `POST /api/files` (multipart) |
+| Anything else (`TYPE: none`, inline text) | HTML | `html` + `--text` | `POST /api/html` (format=markdown) |
+
+Mode rule: directory/ZIP → SITE. Single file → FILE. Everything else → HTML (markdown). `POST /api/sites` accepts a multipart `archive=@file.zip` or repeated `files` and matching `paths` fields; the script zips a directory to preserve relative paths.
 
 ### Step 3: Show Pre-Publish Stats
+
+From the probe lines — SITE (dir): `HTML`, `SIZE_KB`, `ENTRY`. SITE (ZIP): `BYTES`, entry override. FILE: `BYTES` + `MIME`. TEXT: char count.
 
 For HTML/FILE:
 ```
@@ -38,16 +60,18 @@ Content:  <type description> · <size> · <api endpoint>
 TTL:      <N> days
 ```
 
-For SITE: detect entry file using priority: 1) `--entry` flag, 2) `index.html` exists, 3) first `.html` file alphabetically.
+For SITE (entry: `--entry` > `index.html` > first `.html` alphabetically; `ENTRY: none` → fail with an explicit error, never guess):
 
-**Built-static guard (run BEFORE zipping).** Publish BUILT output, never project sources:
-- If the directory contains no `.html` file at all → **FAIL** with an explicit error: "No `.html` found — build the site first, then point at the build output directory." Do not guess an entry.
-- If the directory looks like un-built sources (has `package.json` + `src/` but no top-level `.html`) → **warn and ask** the user to point at the build output instead (`dist/`, `build/`, `out/`, `_site/`, or `public/`). Do not zip the source tree.
+**Built-static guard (before publishing).** Publish BUILT output, never project sources:
+- No `.html` file in the directory (`ENTRY: none`) → **FAIL** with an explicit error: "No `.html` found — build the site first, then point at the build output directory." Do not guess an entry.
+- The directory looks like un-built sources (has `package.json` + `src/` but no top-level `.html`) → **warn and ask** the user to point at the build output instead (`dist/`, `build/`, `out/`, `_site/`, or `public/`). Do not publish the source tree.
 ```
 Content:  site · <N> files · <total_size> · POST /api/sites
 Entry:    <entry_file>
 TTL:      <N> days
 ```
+These are source-tree estimates: report the ARCHIVE MANIFEST that Step 6 prints before upload; its
+`ENTRY:` line is the entry `scripts/publish.mjs` resolved in the built archive.
 
 ### Step 4: Ask Namespace
 
@@ -86,231 +110,106 @@ Password protection (if set, page is hidden from gallery):
 
 Options:
 1) No password (default)
-2) Random: {generated 6-char password, e.g. "kx7p2m"}
-3) Enter custom password (min 4 chars)
-4) Skip → no password
+2) Use an existing local password file (min 4 characters)
+3) Skip → no password
 
-Reply with a number or your custom password.
+Reply with a number and, for option 2, the absolute local file path. Do not paste password contents.
 ```
 
-Generate random password — run with the shell tool:
-```bash
-LC_ALL=C tr -dc 'a-z0-9' < /dev/urandom | head -c6 2>/dev/null
-```
-
-Resolution:
-- `1`, `4`, or empty → no password
-- `2` → use generated random password
-- `3` or custom text → use as-is
+Resolution: `1`, `3`, or empty → `{password_file}` = `''` (no password). `2` + an existing local file
+path → `{password_file}` = that absolute path: the script moves the bytes via private header files
+(never shell literals or curl argv) and rejects control characters (header injection). Never read,
+generate or print the password contents.
 
 ### Step 6: Publish and Save Token (secure)
 
 NEW sites and non-public namespaces require Dedicated subdomain (`subdomain`); explicit `path` is rejected.
 NEW public non-sites default to Promotion (`path`) and may select `subdomain`, including password-protected uploads.
-Set `DELIVERY_MODE` to the validated flag value or empty when omitted; send only `X-Delivery-Mode`, never authored-body fields.
+Send the mode only as `X-Delivery-Mode` (the `--delivery-mode` slot), never in authored content or upload fields.
 Deduplication may return an OLD or NEW winner: retain its identity, cohort, mode and exact server `link`, even when the requested mode differs.
 Missing/null OLD routing metadata means Existing link; never infer mode from its URL.
 
-For SITE blocks, replace `{entry_shell_quoted}` with one single-quoted shell literal
-for the resolved entry path, including its surrounding quotes. Escape each apostrophe
-as `'\''` (for example, `'pages/A & B.html'`). Never insert it raw or inside double
-quotes: `jq @uri` encodes that literal before it enters the request query.
+> **SECURITY:** The ownerToken MUST NEVER appear in conversation output: the script does curl, token parsing and history save in one run and prints only the URL; failures print no response body.
 
-> **SECURITY:** The ownerToken MUST NEVER appear in conversation output. The bash blocks below handle curl + token parsing + history save atomically; the model sees only the URL. Each block sets `PASS_H` first (empty array when no password) and uses `"${PASS_H[@]}"` quoted — passwords are never string-interpolated into the command. The site-dir zip excludes (`.git/`, `.env*`, etc.) are also a secret-leak safeguard — they keep credentials and VCS data out of the published archive.
+Every slot is re-validated by the script before anything is written or uploaded:
 
-History file is workspace-relative: `./brewpage-history.md`.
+| Slot | Must match |
+|------|------------|
+| `{ns}` | `^[a-z0-9-]{1,32}$` |
+| `{days}` | positive integer; `''` = 15 |
+| `{entry}` | plain relative file name, no `..`; `''` = auto-detect; sites only |
+| `{delivery_mode}` | `''`, `path` or `subdomain` |
+| `{password_file}` | `''` or an absolute path to an existing regular file |
 
-**6a. Init history file (run once, before the publish block)** — run with the shell tool:
+A value failing its pattern: re-ask; never clean it up or substitute it anyway. A slot error fails before
+any run is touched, so staged text survives the retry. `{type}` comes from the Step 2 table.
+
+**SITE, FILE** — `{path}` is the probe's `PATH:` — run with the shell tool:
 ```bash
-HISTORY_FILE="./brewpage-history.md"
-if [ ! -f "$HISTORY_FILE" ]; then
-  cat > "$HISTORY_FILE" <<'HEADER'
-# brewpage.app — Published Pages
-
-> PRIVATE FILE — keep this out of version control and never share it.
-> Owner tokens allow delete and in-place republish (html/json/kv/sites all support PUT).
-> Delete: `curl -s -X DELETE "<Owner API>" -H "X-Owner-Token: TOKEN"`; rows without one: `https://brewpage.app/api/{type}/{ns}/{id}`, type = html|json|files|kv|sites.
-> Update site (keep same URL): `PUT /api/sites/{ns}/{id}` with `X-Owner-Token: TOKEN` + the new bundle — the uploaded bundle fully replaces the file set (adds new files, removes absent ones, overwrites matching). The link never changes.
-
-| Date | URL | Owner Token | TTL | Type | Owner API | Identity |
-|------|-----|-------------|-----|------|-----------|----------|
-HEADER
-fi
+bash {baseDir}/scripts/brewpage-run.sh publish {type} --ns '{ns}' --ttl '{days}' --entry '{entry}' --delivery-mode '{delivery_mode}' --password-file '{password_file}' --path '{path}'
 ```
 
-Then run ONE of the following publish blocks based on detected type. Each assumes `HISTORY_FILE` already exists from 6a.
-
-**HTML/Markdown text** — run with the shell tool:
+**HTML/Markdown text** — `{content}` is the exact text, verbatim — run with the shell tool:
 ```bash
-HISTORY_FILE="./brewpage-history.md"
-CONTENT=$(cat <<'BREWPAGE_EOF'
-{content}
-BREWPAGE_EOF
-)
-PAYLOAD=$(jq -n --arg c "$CONTENT" '{content: $c}')
-DELIVERY_H=()
-case "${DELIVERY_MODE:-}" in
-  '') : ;;
-  path|subdomain) DELIVERY_H=(-H "X-Delivery-Mode: $DELIVERY_MODE") ;;
-  *) echo "FAILED: delivery mode must be path or subdomain"; exit 1 ;;
-esac
-PASS_H=()
-[ -n "$PASSWORD" ] && PASS_H=(-H "X-Password: $PASSWORD")
-RESPONSE=$(curl -s -X POST "https://brewpage.app/api/html?ns={ns}&ttl={days}&format=markdown" \
-  -H "Content-Type: application/json" \
-  "${PASS_H[@]}" "${DELIVERY_H[@]}" \
-  -d "$PAYLOAD")
-
-URL=$(echo "$RESPONSE" | jq -r '.link // empty')
-TOKEN=$(echo "$RESPONSE" | jq -r '.ownerToken // empty')
-OWNER_API=$(echo "$RESPONSE" | jq -r '.ownerLink // empty')
-IDENTITY=$(echo "$RESPONSE" | jq -c '{id, namespace, type, routingCohort, deliveryMode, modeLocked, hostingVersion, managementLink, createdAt, expiresAt}')
-
-if [ -n "$URL" ]; then
-  [ -n "$TOKEN" ] && echo "| $(date '+%Y-%m-%d %H:%M') | [$URL]($URL) | \`$TOKEN\` | {ttl}d | html | $OWNER_API | \`$IDENTITY\` |" >> "$HISTORY_FILE"
-  echo "OK $URL"
-else
-  echo "FAILED: publish rejected (no .link in response)"
-fi
+bash {baseDir}/scripts/brewpage-run.sh publish html --ns '{ns}' --ttl '{days}' --entry '' --delivery-mode '{delivery_mode}' --password-file '{password_file}' --text '{content}'
 ```
 
-**File** — run with the shell tool:
+**Longer text** (over 6,000 characters): split it at line ends into chunks of at most 6,000 characters.
+The first `stage` call passes `--run ''` and prints `RUN: brewpage.XXXXXX`; every later chunk and the
+final publish pass that id. The script rejoins chunks with one newline. Run once per chunk:
 ```bash
-HISTORY_FILE="./brewpage-history.md"
-DELIVERY_H=()
-case "${DELIVERY_MODE:-}" in
-  '') : ;;
-  path|subdomain) DELIVERY_H=(-H "X-Delivery-Mode: $DELIVERY_MODE") ;;
-  *) echo "FAILED: delivery mode must be path or subdomain"; exit 1 ;;
-esac
-PASS_H=()
-[ -n "$PASSWORD" ] && PASS_H=(-H "X-Password: $PASSWORD")
-RESPONSE=$(curl -s -X POST "https://brewpage.app/api/files?ns={ns}&ttl={days}" \
-  "${PASS_H[@]}" "${DELIVERY_H[@]}" \
-  -F "file=@/absolute/path/to/file")
-
-URL=$(echo "$RESPONSE" | jq -r '.link // empty')
-TOKEN=$(echo "$RESPONSE" | jq -r '.ownerToken // empty')
-OWNER_API=$(echo "$RESPONSE" | jq -r '.ownerLink // empty')
-IDENTITY=$(echo "$RESPONSE" | jq -c '{id, namespace, type, routingCohort, deliveryMode, modeLocked, hostingVersion, managementLink, createdAt, expiresAt}')
-
-if [ -n "$URL" ]; then
-  [ -n "$TOKEN" ] && echo "| $(date '+%Y-%m-%d %H:%M') | [$URL]($URL) | \`$TOKEN\` | {ttl}d | file | $OWNER_API | \`$IDENTITY\` |" >> "$HISTORY_FILE"
-  echo "OK $URL"
-else
-  echo "FAILED: publish rejected (no .link in response)"
-fi
+bash {baseDir}/scripts/brewpage-run.sh stage --run '{run_id}' --text '{chunk}'
 ```
-
-**Site (directory)** — run with the shell tool:
+Then run:
 ```bash
-HISTORY_FILE="./brewpage-history.md"
-DELIVERY_H=()
-case "${DELIVERY_MODE:-}" in
-  '') : ;;
-  path|subdomain) DELIVERY_H=(-H "X-Delivery-Mode: $DELIVERY_MODE") ;;
-  *) echo "FAILED: delivery mode must be path or subdomain"; exit 1 ;;
-esac
-PASS_H=()
-[ -n "$PASSWORD" ] && PASS_H=(-H "X-Password: $PASSWORD")
-TMPZIP=$(mktemp /tmp/brewpage-site-XXXXXX.zip) || { echo "FAILED: cannot allocate site archive"; exit 1; }
-rm -f "$TMPZIP" || { echo "FAILED: cannot prepare site archive"; exit 1; }
-# Exclude VCS, secrets, deps, editor + OS junk and sourcemaps — publish only built static assets.
-if ! (cd "{directory_path}" && zip -r "$TMPZIP" . -x '.git/*' '*/.git/*' '.env' '.env.*' '*/.env' '*/.env.*' 'node_modules/*' '*/node_modules/*' '.DS_Store' '*/.DS_Store' 'Thumbs.db' '.idea/*' '*/.idea/*' '.vscode/*' '*/.vscode/*' '.cache/*' '*/.cache/*' '*.map' '*.log') ||
-  [ ! -s "$TMPZIP" ] || ! unzip -tq "$TMPZIP" >/dev/null; then
-  rm -f "$TMPZIP"
-  echo "FAILED: site archive creation or verification failed"
-  exit 1
-fi
-ENTRY_ENCODED=$(printf '%s' {entry_shell_quoted} | jq -sRr @uri)
-RESPONSE=$(curl -s -X POST "https://brewpage.app/api/sites?ns={ns}&ttl={days}&entry=$ENTRY_ENCODED" \
-  -H "User-Agent: OpenClaw/1.0" \
-  "${PASS_H[@]}" "${DELIVERY_H[@]}" \
-  -F "archive=@$TMPZIP")
-rm -f "$TMPZIP"
-
-URL=$(echo "$RESPONSE" | jq -r '.link // empty')
-TOKEN=$(echo "$RESPONSE" | jq -r '.ownerToken // empty')
-OWNER_API=$(echo "$RESPONSE" | jq -r '.ownerLink // empty')
-IDENTITY=$(echo "$RESPONSE" | jq -c '{id, namespace, type, routingCohort, deliveryMode, modeLocked, hostingVersion, managementLink, createdAt, expiresAt}')
-FCOUNT=$(echo "$RESPONSE" | jq -r '.fileCount // "?"')
-
-if [ -n "$URL" ]; then
-  [ -n "$TOKEN" ] && echo "| $(date '+%Y-%m-%d %H:%M') | [$URL]($URL) | \`$TOKEN\` | {ttl}d | site ($FCOUNT files) | $OWNER_API | \`$IDENTITY\` |" >> "$HISTORY_FILE"
-  echo "OK $URL | Files: $FCOUNT"
-else
-  echo "FAILED: publish rejected (no .link in response)"
-fi
+bash {baseDir}/scripts/brewpage-run.sh publish html --ns '{ns}' --ttl '{days}' --entry '' --delivery-mode '{delivery_mode}' --password-file '{password_file}' --run '{run_id}'
 ```
-
-**Site (ZIP file)** — run with the shell tool:
+Staged but not published (cancelled) — run:
 ```bash
-HISTORY_FILE="./brewpage-history.md"
-DELIVERY_H=()
-case "${DELIVERY_MODE:-}" in
-  '') : ;;
-  path|subdomain) DELIVERY_H=(-H "X-Delivery-Mode: $DELIVERY_MODE") ;;
-  *) echo "FAILED: delivery mode must be path or subdomain"; exit 1 ;;
-esac
-PASS_H=()
-[ -n "$PASSWORD" ] && PASS_H=(-H "X-Password: $PASSWORD")
-ENTRY_ENCODED=$(printf '%s' {entry_shell_quoted} | jq -sRr @uri)
-RESPONSE=$(curl -s -X POST "https://brewpage.app/api/sites?ns={ns}&ttl={days}&entry=$ENTRY_ENCODED" \
-  -H "User-Agent: OpenClaw/1.0" \
-  "${PASS_H[@]}" "${DELIVERY_H[@]}" \
-  -F "archive=@{zip_file_path}")
-
-URL=$(echo "$RESPONSE" | jq -r '.link // empty')
-TOKEN=$(echo "$RESPONSE" | jq -r '.ownerToken // empty')
-OWNER_API=$(echo "$RESPONSE" | jq -r '.ownerLink // empty')
-IDENTITY=$(echo "$RESPONSE" | jq -c '{id, namespace, type, routingCohort, deliveryMode, modeLocked, hostingVersion, managementLink, createdAt, expiresAt}')
-FCOUNT=$(echo "$RESPONSE" | jq -r '.fileCount // "?"')
-
-if [ -n "$URL" ]; then
-  [ -n "$TOKEN" ] && echo "| $(date '+%Y-%m-%d %H:%M') | [$URL]($URL) | \`$TOKEN\` | {ttl}d | site ($FCOUNT files) | $OWNER_API | \`$IDENTITY\` |" >> "$HISTORY_FILE"
-  echo "OK $URL | Files: $FCOUNT"
-else
-  echo "FAILED: publish rejected (no .link in response)"
-fi
+bash {baseDir}/scripts/brewpage-run.sh cleanup --run '{run_id}'
 ```
 
 ### Step 7: Output Result
 
-**Success** (bash printed `OK {url}`):
+**Success** (the script printed `OK {url}`):
 ```
 Published: {url from bash output}
-Owner token saved to ./brewpage-history.md
+Owner token saved to ./brewpage-history.md (mode 600, git-ignored)
 ```
 
-**Success for SITE** (bash printed `OK {url} | Files: {count}`):
+**Success for SITE** (the script printed `OK {url} | Files: {count}`):
 ```
 Published site: {url from bash output}
 Entry: {entry_file} | Files: {count}
-Owner token saved to ./brewpage-history.md
+Owner token saved to ./brewpage-history.md (mode 600, git-ignored)
 
 Share the server URL exactly as printed, including any trailing slash.
 ```
 
 **NEVER print the ownerToken in conversation.** The token lives only in the history file.
 
-**Error** (bash printed `FAILED: ...`):
+**Needs confirmation** (the script printed `CONFIRM: ...`, exit 2; nothing uploaded): show the manifest
+lines, name the flagged entries, ask the user once (publish anyway / cancel). Publish anyway -> re-run the
+identical command with ` --confirmed` appended. Cancel or no answer -> stop: the script already removed
+its own run directory and never touches other runs, user source files or the shared tmp directory.
+
+**Error** (the script printed `FAILED: ...`):
 ```
-Publish failed.
+Publish failed: {the FAILED line, verbatim}
 ```
 
 ## Notes
 
-- Always use absolute file paths with curl `-F "file=@..."`.
-- Use `jq -n --arg c "$CONTENT" '{content: $c}'` to safely encode text content. **`format` is a query param**, not a body field — `/api/html` ignores any `format` key inside the JSON body and reads only `?format=` from the URL. Wrong location = server applies default `html` and stores your markdown as raw text.
+- Scripts: `scripts/brewpage-run.sh` (the only entry), `scripts/brewpage-lib.sh` (sourced helpers), `scripts/publish.mjs` (offline SITE bundle build/verify). Requires `bash`, `curl`, `jq`; sites also `node`, `zip`, `unzip`.
+- **`format` is a query param**: `/api/html` reads only `?format=` from the URL; a body `format` key is ignored and the default `html` stores markdown as raw text.
+- History: `./brewpage-history.md` in the workspace (the shell's working directory), mode `600`, added to `./.gitignore` inside a git repo. Its header holds the **delete** command for the owner token.
+- Run dirs: private `brewpage.XXXXXX` under `$TMPDIR` (else `/tmp`); only `scripts/brewpage-run.sh` creates, fills and removes them.
 - TTL default is `15` days. Namespace must match `^[a-z0-9-]{1,32}$`, default `public`.
-- To **delete** a published page, find the owner token in `./brewpage-history.md` and use the delete command shown in that file's header.
 - Use returned `ownerLink` and stored identity metadata for owner API operations; never parse NEW root hosts for namespace/ID. OLD history without metadata retains its existing API identifiers.
 - To **update a published site**, `PUT` the replacement bundle to its apex owner API with `X-Owner-Token`; retain the host and omit `X-Delivery-Mode` on ordinary PUT/update.
 - Only NEW public non-sites allow owner-only `PATCH /api/{type}/{ns}/{id}/hosting` with `{"deliveryMode":"subdomain","expectedVersion":1}` from current identity metadata. OLD, sites and non-public identities have no mode choice. Use the returned URL/version afterward.
 - NEW password-protected links stay clean: never generate or append `?p=`. API requests still use `X-Password`; OLD password behavior remains unchanged.
-- **Sites: directory is the primary input** — this skill auto-zips it to preserve relative paths. The API also accepts repeated `files`/`paths` fields. A pre-built `.zip` is the alternative input, uploaded as-is. Always publish BUILT output (`dist/`, `build/`, `out/`, `_site/`, `public/`), never project sources.
-- The auto-zip excludes `.git/`, `.env`/`.env.*`, `node_modules/`, editor/OS junk, sourcemaps and logs — a deliberate secret-leak safeguard so credentials and VCS history never reach the public archive.
-- Entry file detection: `--entry` override > `index.html` > first `.html` alphabetically.
+- **SITE bundles are allowlisted**: the directory build drops dot-entries (`.env`, `.git/`, `.DS_Store`), `node_modules/`, symlinks and unknown types (`*.map`, `*.log`, `Thumbs.db`), flags kept names that look sensitive (`secret`, `token`, `password`, `credential`) for confirmation, and verifies the archive (`unzip -t`, name set) before upload. A supplied ZIP is never rewritten; anything unexpected or sensitive inside it needs confirmation.
 - Preserve `.link` exactly: NEW subdomain roots retain `/`; OLD links retain their existing form. Never reconstruct a host from IDs.
 - Verify NEW native sites at the exact returned URL and asset paths; a browser proves rendering. OLD sites may still use the landing-page redirect; verify those in a browser or fetch their explicit entry asset.
 

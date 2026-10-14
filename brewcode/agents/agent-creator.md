@@ -6,10 +6,10 @@ maxTurns: 80
 color: cyan
 tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch, WebSearch
 doc_type: llm
-version: "6.5.9"
-content_version: "6.5.8"
+version: "6.6.0"
+content_version: "6.6.0"
 generated_by: "brewcode"
-last_updated: "2026-10-13"
+last_updated: "2026-10-14"
 ---
 
 [DICT: AG=agent, CC=Claude Code, FM=frontmatter, SA=subagent, SP=system prompt]
@@ -63,7 +63,8 @@ Generate against these (details in the reference named):
   (next to `Bash` both are dropped on macOS/Linux). `Agent` only for a genuine orchestrator: CC
   permits depth-limited nested delegation, Brewcode spawns from the main conversation only.
 - `skills:` preloads model-invocable skills only -- of the skills these plugins ship, only
-  `brewdoc:publish`: for any other the AG `Read`s its files by path (`agent-context-and-execution.md`).
+  `brewdoc:publish`, `brewtools:text-optimize` and `brewtools:text-human`: for any other the AG
+  `Read`s its files by path (`agent-context-and-execution.md`).
 - `omitClaudeMd: true` (2.1.271+) skips ordinary CLAUDE.md, keeps managed policy (except managed
   AGs), and is ignored for main-session agents.
 - Plugin AGs ignore `hooks`, `mcpServers`, `permissionMode`, and `initialPrompt`; use project/user
@@ -95,14 +96,13 @@ conventions/rules/docs, !=a replacement.
 
 ### Optimization handoff
 
-Main resolves the installed Brewtools `text-optimize/SKILL.md` and supporting guard/reference paths
-(never this Brewcode plugin root), reads and executes the Medium workflow, not a `Skill` model invocation
-of the DMI skill. Before optimization edits it snapshots targets, requires exit 0 + `RUN_DIR`, inventories
-facts and owns cross-file decisions (default EMPTY). Main spawns one optimizer per file with the full
-GOAL/ROLE/SCOPE/CONTEXT/CONSUMER/DONE brief, concrete target/original paths, `RUN_DIR`, protected facts,
-authorized report path and immediate known-owned `checkpoint --run-dir` after every atomic edit.
-Main runs `verify --no-restore`, then a fresh independent read-only verifier comparing original/current
-from disk without writer reports; require 100% meaning, including names, numbers, paths, examples,
+Main invokes `Skill(skill: "brewtools:text-optimize", args: "<created paths> medium --allow-dirty")`
+(this creator's authorized, uncommitted files); not a hand-run copy of its Medium workflow. That skill
+snapshots targets, requires exit 0 + `RUN_DIR`, inventories facts, owns cross-file decisions (default
+EMPTY), spawns one optimizer per file with the full GOAL/ROLE/SCOPE/CONTEXT/CONSUMER/DONE brief and
+immediate known-owned `checkpoint --run-dir` after every atomic edit, then runs `verify --no-restore`.
+Main then spawns a fresh independent read-only verifier comparing `RUN_DIR/orig/` with current from
+disk without writer reports; require 100% meaning, including names, numbers, paths, examples,
 negations and scope. Main repairs owned loss, refreshes checkpoints, repeats gates + Validation Checklist,
 or refuses acceptance while preserving concurrent bytes. This creator never spawns optimizers/verifiers.
 Brewtools absent -> report skipped; validated creation remains usable, optimization is not a blocker.

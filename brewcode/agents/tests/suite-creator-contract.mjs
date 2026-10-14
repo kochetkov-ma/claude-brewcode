@@ -228,19 +228,20 @@ function runHookTemplate(source, stdin) {
   for (const file of ['agent-creator.md', 'skill-creator.md']) {
     // WHEN: the main caller consumes the creator final handoff.
     const handoff = section(file, '### Optimization handoff', '## Read on demand').join('\n');
-    const required = ['installed Brewtools', 'text-optimize/SKILL.md', 'Medium workflow',
-      'not a `Skill` model invocation', 'Before optimization edits it snapshots targets',
-      'exit 0 + `RUN_DIR`', 'inventories', 'default EMPTY',
-      'GOAL/ROLE/SCOPE/CONTEXT/CONSUMER/DONE', 'concrete target/original paths',
-      'authorized report path', 'known-owned `checkpoint --run-dir`',
+    const required = ['`Skill(skill: "brewtools:text-optimize", args: "<created paths> medium --allow-dirty")`',
+      'not a hand-run copy of its Medium workflow', 'snapshots targets',
+      'exit 0 + `RUN_DIR`', 'inventories', 'default\nEMPTY',
+      'GOAL/ROLE/SCOPE/CONTEXT/CONSUMER/DONE', 'known-owned `checkpoint --run-dir`',
       '`verify --no-restore`', 'fresh independent read-only verifier',
-      'from disk without writer reports', '100% meaning',
+      'without writer reports', '100% meaning',
       'preserving concurrent bytes', 'never spawns optimizers/verifiers',
       'Brewtools absent -> report skipped', 'requested/pending'];
 
     // THEN: no bare call bypasses the consumer prerequisites or falsely claims acceptance.
     check(`optimizer.handoff.${file}`, required.filter(token => !handoff.includes(token)), [],
-      `${file} must provide a usable main-owned snapshot/brief/checkpoint/independent acceptance handoff`);
+      `${file} must hand optimization to the model-invocable skill, then main-owned independent acceptance`);
+    check(`optimizer.noDmiWorkaround.${file}`, /DMI skill|not a `Skill` model invocation/.test(handoff), false,
+      `GIVEN text-optimize is model-invocable WHEN ${file} hands off optimization THEN no DMI workaround remains`);
     check(`optimizer.noBareCall.${file}`, /Agent\(subagent_type="brewtools:text-optimizer"/.test(text[file]), false,
       `${file} must not request a target-only optimizer call that stops for missing RUN_DIR`);
     check(`optimizer.validation.${file}`, handoff.includes({
@@ -500,9 +501,12 @@ function runHookTemplate(source, stdin) {
   check('skill.invocation.distributedPolicy',
     /Distributed Brewcode skills require `UI-F: true` \+ `DMI: true`/.test(text['skill-creator.md']), true,
     'skill creator must retain the distributed explicit-invocation policy');
-  check('skill.invocation.publishException',
-    /sole exception `brewdoc:publish`: `DMI: false`, scoped `AT`/.test(text['skill-creator.md']), true,
-    'GIVEN the user ruling WHEN skill creator states the policy THEN brewdoc:publish is its only model-invocable exception');
+  check('skill.invocation.modelInvocableExceptions',
+    /\(exceptions `brewdoc:publish`, `brewtools:text-optimize`, `brewtools:text-human`: `DMI: false`,\nscoped `AT`, user ruling\)/.test(text['skill-creator.md']), true,
+    'GIVEN the user ruling WHEN skill creator states the policy THEN publish, text-optimize and text-human are its only model-invocable exceptions');
+  check('agent.skillsPreload.exceptions',
+    /only\n  `brewdoc:publish`, `brewtools:text-optimize` and `brewtools:text-human`: for any other/.test(text['agent-creator.md']), true,
+    'GIVEN the user ruling WHEN agent creator lists preloadable shipped skills THEN exactly the three model-invocable ones');
   check('skill.context.notConversationFork',
     /`context: fork` creates an isolated SA, not a conversation fork/.test(text['skill-creator.md']), true,
     'skill context forks must not promise conversation history');

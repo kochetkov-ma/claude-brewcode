@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 6.5.9 |
+| Version | 6.6.0 |
 | Skills | 5 |
 | Agents | 0 |
 | Hooks | 0 |
@@ -81,7 +81,7 @@ claude --plugin-dir ./brewdoc
 
 > **Canonical modes.** Setup skills answer the same verbs, in this order: `status | install | upgrade | enable | disable | uninstall | purge`. No argument = `status` if installed, `install` if not. Extras (`sync`, `reread`, `frontmatter`, a fine-tune prompt) come *after* the canonical verb. The v4 aliases `init`, `on`, `off`, `setup`, `remove` and `reset` are gone -- v5.0.0 is a deliberate breaking change with no back-compat. Both brewdoc setup skills implement `enable`/`disable` -- `docsync-setup` flips the `enabled` key in `.claude/docsync/config.json`, `memory-sync-setup` renames `SKILL.md` <-> `SKILL.md.disabled` -- and both implement `purge`; the Arguments column below is authoritative.
 
-> 26 of the 27 skills across the suite, including four of the five brewdoc skills, are `user-invocable: true` **and** `disable-model-invocation: true`: Claude never sees their descriptions or fires one on its own, which saves tokens on every request. **The one exception is `/brewdoc:publish`** (`disable-model-invocation: false`): Claude can run it when you ask to share something mid-task, and typing it still works. Its result, a shareable URL, is wanted at the end of other tasks. **Skills a generator emits are the opposite by design**: `/memory-sync`, like `/superreview`, `/task-board` and `/task-spec`, ships model-invocable. Run [`/brewcode:setup-status`](../brewcode/skills/setup-status/README.md) to see what is installed, stale, disabled or missing across every plugin.
+> 24 of the 27 skills across the suite, including four of the five brewdoc skills, are `user-invocable: true` **and** `disable-model-invocation: true`: Claude never sees their descriptions or fires one on its own, which saves tokens on every request. **Three skills are exceptions** (`disable-model-invocation: false`): `/brewdoc:publish` here, plus `/brewtools:text-optimize` and `/brewtools:text-human`. Claude can run `/brewdoc:publish` when you ask to share something mid-task, and typing it still works. Its result, a shareable URL, is wanted at the end of other tasks. **Skills a generator emits are the opposite by design**: `/memory-sync`, like `/superreview`, `/task-board` and `/task-spec`, ships model-invocable. Run [`/brewcode:setup-status`](../brewcode/skills/setup-status/README.md) to see what is installed, stale, disabled or missing across every plugin.
 
 | Skill | Purpose | Model | Arguments |
 |-------|---------|-------|-----------|

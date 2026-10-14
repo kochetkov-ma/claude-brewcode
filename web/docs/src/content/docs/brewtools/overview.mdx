@@ -16,7 +16,7 @@ Each skill is self-contained and requires no prior setup.
 optional project or global mechanisms separately.
 
 <Callout type="note" title="The -setup naming rule">
-  A `-setup` suffix marks a skill that **installs a mechanism you afterwards use instead of the skill** -- hooks, a generated Kanban, a delegation wall. Recurring tools you run again and again keep bare names (`text-optimize`, `deploy`, `ssh`). Every `-setup` skill shares one canonical mode set, in this order: `status | install | upgrade | enable | disable | uninstall | purge`. No argument means `status` when it is installed and `install` when it is not.
+  A `-setup` suffix marks a skill that **installs a mechanism you afterwards use instead of the skill** -- hooks, a generated Kanban, a delegation wall. Recurring tools you run again and again keep bare names (`text-optimize`, `deploy`, `ssh`). Every `-setup` skill shares one canonical mode set, in this order: `status | install | upgrade | enable | disable | uninstall | purge`. No argument means `status` when it is installed and `install` when it is not. `text-optimize` and `text-human` are model-invocable; the other brewtools skills run only when you type them -- see the [FAQ](/faq/#auto-invoke).
 </Callout>
 
 <Callout type="warning" title="v6 hardening">

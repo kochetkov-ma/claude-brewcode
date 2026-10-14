@@ -4,10 +4,10 @@ description: "Deploys a file-based task board with domain/task methodology, deri
 user-invocable: true
 disable-model-invocation: true
 argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge] [target repo path | empty = cwd] [free-text directive, e.g. 'also dedupe rules', 'skip module split']"
-allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, Agent, AskUserQuestion, CronCreate, CronList, CronDelete]
+allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, Agent, AskUserQuestion, CronCreate, CronList, CronDelete, 'Skill(brewtools:text-optimize *)']
 model: opus
 ---
-<!-- brewcode-meta: version=6.5.9 content_version=6.5.6 generated_by=brewtools:task-board-setup -->
+<!-- brewcode-meta: version=6.6.0 content_version=6.6.0 generated_by=brewtools:task-board-setup -->
 
 [DICT: TT=task-tracker agent (generated), TB=task-board skill (generated), BRD=board.md, FEAT=.claude/features, EXCL=source-path exclusions, REL=release style (vX.Y.Z tag | commit SHA | no tag), DOM=domain id segment, FM=frontmatter, TS=task-spec skill (generated), SPEC_MODE=spec+design layer opt-in, PS=status phase, PU=upgrade phase, PR=uninstall/purge phase]
 
@@ -67,7 +67,7 @@ RESULT: <artifacts the user ends up holding -- board.md + control files, or the 
 
 Every skill this generator emits (`task-board`, and `task-spec` when `SPEC_MODE=on`) carries this
 same contract baked into its own template -- prompt-first hint, its own keyword table, its own PLAN
-block. P5's prompt-contract gate below verifies both.
+block. P5's prompt-contract gate (`references/12-verify-report.md`) verifies both.
 
 ## Delegation
 
@@ -475,71 +475,9 @@ Read `${CLAUDE_SKILL_DIR}/references/06-doc-sweep.md` and follow it: spawn sweep
 
 ## P5: Verify + report
 
-**EXECUTE** using Bash tool:
-```bash
-TARGET="<absolute path resolved in P0>"
-test -n "$TARGET" && test -d "$TARGET" || { echo "MISS TARGET unresolved -- re-resolve per P0"; exit 1; }
-for p in .claude/agents/task-tracker.md .claude/skills/task-board/SKILL.md .claude/rules/tasks.md \
-  .claude/features/board.md .claude/features/PROGRESS.md .claude/features/TRACKER.md \
-  .claude/features/METHODOLOGY.md .claude/features/ANTI-DRIFT.md .claude/features/task-graph.md \
-  .claude/features/TASK_TEMPLATE.md .claude/features/INDEX.md .claude/features/backlog/README.md; do
-  test -f "$TARGET/$p" && echo "OK  $p" || echo "MISS $p"
-done
-for d in backlog todo progress closed specs; do
-  test -d "$TARGET/.claude/features/$d" && echo "OK  folder $d" || echo "MISS folder $d"
-done
-```
-
-**If `SPEC_MODE=on`**, also **EXECUTE** using Bash tool:
-```bash
-TARGET="<absolute path resolved in P0>"
-test -n "$TARGET" && test -d "$TARGET" || { echo "MISS TARGET unresolved -- re-resolve per P0"; exit 1; }
-for p in .claude/skills/task-spec/SKILL.md \
-  .claude/features/specs/SPEC_TEMPLATE.md .claude/features/specs/DESIGN_TEMPLATE.md; do
-  test -f "$TARGET/$p" && echo "OK  $p" || echo "MISS $p"
-done
-```
-> If `SPEC_MODE=off`, skip that loop -- and assert the inverse: none of those three paths may exist.
-
-**Leftover-placeholder gate**, both brace families (double `{{...}}` and the four single-brace metadata tokens), in both modes over every emitted path: every hit is an unresolved placeholder. `|| true` keeps a clean run's rc=1 from aborting, so the `TARGET` assert comes first (gate rule in P0). **EXECUTE** using Bash tool:
-```bash
-TARGET="<absolute path resolved in P0>"
-test -n "$TARGET" && test -d "$TARGET" || { echo "MISS TARGET unresolved -- re-resolve per P0"; exit 1; }
-test -d "$TARGET/.claude/features" || { echo "MISS nothing emitted -- gate did not run"; exit 1; }
-LEFT="$(grep -rnE '\{\{|\{(PLUGIN_VERSION|CONTENT_VERSION|GENERATED_BY|LAST_UPDATED)\}' \
-  "$TARGET/.claude/features" "$TARGET/.claude/rules/tasks.md" \
-  "$TARGET/.claude/agents/task-tracker.md" "$TARGET/.claude/skills/task-board" \
-  "$TARGET/.claude/skills/task-spec" 2>/dev/null || true)"
-test -z "$LEFT" && echo "OK  no leftover placeholders" || { echo "MISS leftover placeholders:"; echo "$LEFT"; }
-```
-> A clean run PRINTS `OK  no leftover placeholders`. No output at all = the block did not run, !=PASS -- fix the block and re-run.
-
-**Prompt-contract gate.** Every emitted skill must carry the workspace prompt contract: the
-`argument-hint` starts with `[prompt]` and the body contains a `PLAN — ` block. **EXECUTE** using Bash tool:
-```bash
-TARGET="<absolute path resolved in P0>"
-test -n "$TARGET" && test -d "$TARGET" || { echo "MISS TARGET unresolved -- re-resolve per P0"; exit 1; }
-FAIL=0
-for f in "$TARGET/.claude/skills/task-board/SKILL.md" "$TARGET/.claude/skills/task-spec/SKILL.md"; do
-  test -f "$f" || continue
-  grep -qE '^argument-hint: "\[prompt\]' "$f" && echo "OK  hint $f" || { echo "MISS hint $f"; FAIL=1; }
-  grep -q '^PLAN — ' "$f" && echo "OK  PLAN $f" || { echo "MISS PLAN block $f"; FAIL=1; }
-done
-test "$FAIL" -eq 0 && echo "OK prompt contract" || echo "FAIL prompt contract"
-```
-
-> Any `MISS` (from any gate above -- existence, leftover-placeholder, prompt-contract) -> re-emit the missing artifact, re-substitute the leftover placeholder, or fix the offending hint/PLAN block, before finishing.
-
-Report to the user:
-- the 12 baseline paths created (+ 5 folders); `SPEC_MODE=on` adds 3 more
-- DOMAINS, EXCLUSIONS, REL_STYLE, LANG used
-- **`SPEC_MODE`** (`on`/`off`) and, when `on`, the `{{DOMAIN_AGENTS}}` table actually baked into the emitted `task-spec` skill (agent | domains | specialty) plus `ARCHITECT_AGENT`
-- **`AGENT_GAPS`** -- every domain with NO owning agent, which therefore falls back to the built-in `Plan`. Always print this, even when empty (`AGENT_GAPS: none`). A hidden gap is a silently weaker design phase. Non-empty -> suggest `/brewcode:agents` to author the missing domain agents, then re-run `/brewtools:task-board-setup upgrade <path>`
-- the sweep manifest counts: docs migrated (by status) / docs trashed / board rows authored -- so a silent no-op sweep is visible
-- next step: `/task-board` to view, or just start a task (the new rule runs `task-tracker` at task start). `SPEC_MODE=on` -> also `/task-spec <ID>` for any non-trivial task
-- if P5.5 ran: CLAUDE.md lines before->after (vs ~200 optimal / 300 over), local-only items moved to CLAUDE.local.md, modules split into nested CLAUDE.md, rules deduped, the `/brewtools:text-optimize` commands recommended
-
-> Do not commit: committing is the user's action.
+Read `${CLAUDE_SKILL_DIR}/references/12-verify-report.md` and run its existence (`SPEC_MODE`-aware),
+leftover-placeholder and prompt-contract gates, one Bash call each; fix any `MISS` before finishing,
+then report the items it lists. Do not commit: committing is the user's action.
 
 ---
 
@@ -547,7 +485,7 @@ Report to the user:
 
 Run only if `OPTIN` (from P1) is true; `OPTIN` false -> skip silently, CLAUDE.md is never edited outside this phase. Propose-only: every restructuring is behind AskUserQuestion, and a declined proposal means no edit.
 
-Read `${CLAUDE_SKILL_DIR}/references/07-claude-md-optimize.md` and pass it `TARGET`, `DIR` (the directive parsed in P0), and `EXCLUSIONS` from P1 (it detects `MODULES` itself). It owns the procedure: current-vs-target line count, local-only extraction to `CLAUDE.local.md`, over-budget decomposition into nested module CLAUDE.md (loaded on-demand, never `@import`: imports are eager) + path-scoped rules, rules dedup, then `/brewtools:text-optimize` commands for the touched files, printed for the user (the skill is user-only). Set `CMD_DECOMPOSED` for the report and for the task-tracker note.
+Read `${CLAUDE_SKILL_DIR}/references/07-claude-md-optimize.md` and pass it `TARGET`, `DIR` (the directive parsed in P0), and `EXCLUSIONS` from P1 (it detects `MODULES` itself). It owns the procedure: current-vs-target line count, local-only extraction to `CLAUDE.local.md`, over-budget decomposition into nested module CLAUDE.md (loaded on-demand, never `@import`: imports are eager) + path-scoped rules, rules dedup, then `/brewtools:text-optimize` through the `Skill` tool on the approved touched files (commands listed for the user only when skipped). Set `CMD_DECOMPOSED` for the report and for the task-tracker note.
 
 ---
 

@@ -7,7 +7,7 @@ import { Badge, Card, CardGrid, Steps, UpdateNotice } from '../../../../componen
 
 # Text Optimize
 
-<Badge text="sonnet" /> <Badge text="5 modes" /> <Badge text="user-invoked" />
+<Badge text="sonnet" /> <Badge text="5 modes" /> <Badge text="model-invocable" />
 
 ## Quick reference
 
@@ -15,7 +15,9 @@ import { Badge, Card, CardGrid, Steps, UpdateNotice } from '../../../../componen
 |-------|-------|
 | Command | `/brewtools:text-optimize` |
 | Input | Free-text prompt, optional depth flag, and file/folder/comma-separated targets |
-| Tools | Read, Write, Edit, Bash, Grep, Glob, Agent, AskUserQuestion |
+| Invocation | model-invocable (`disable-model-invocation: false`): type `/brewtools:text-optimize` or ask Claude ("compress this prompt", "optimize CLAUDE.md"). Claude-started runs must name their targets: empty arguments stop with "no target"; `--allow-dirty` in the prompt authorizes uncommitted targets |
+| Pre-approved tools (`allowed-tools`) | `Read, Bash(bash ${CLAUDE_SKILL_DIR}/scripts/text-guard.sh *), Grep, Glob, Agent, AskUserQuestion` |
+| Permissions | The snapshot guard (`text-guard.sh`) runs without a prompt; edits to your files follow your permission mode. When Claude starts the skill itself, Claude Code asks once for the `Skill` call in default mode; headless and `dontAsk` runs need the allow rule `Skill(brewtools:text-optimize *)` in settings |
 | Mutation | Every mode edits files in place after pre-edit snapshot |
 | Output | Edited targets, measured size changes, acceptance verdicts, and evidence paths |
 

@@ -25,7 +25,9 @@ or justify changing program behavior.
 | Arguments | `[prompt] [path\|commit\|folder\|text] [custom instructions]` |
 | Model | sonnet (haiku for simple blocks in mixed flow) |
 | Context | session |
-| Tools | Read, Write, Edit, Grep, Glob, Bash, Agent, AskUserQuestion |
+| Invocation | model-invocable (`disable-model-invocation: false`): type `/brewtools:text-human` or ask Claude ("humanize this README", "strip AI artifacts from this commit message") |
+| Pre-approved tools (`allowed-tools`) | `Read, Grep, Glob, Agent, AskUserQuestion` |
+| Permissions | Read-only git calls (`git status`, `git rev-parse`, `git diff --name-only`) run without a prompt; edits to your files follow your permission mode. When Claude starts the skill itself, Claude Code asks once for the `Skill` call in default mode; headless and `dontAsk` runs need the allow rule `Skill(brewtools:text-human *)` in settings |
 
 ## When to use
 
@@ -66,7 +68,7 @@ or justify changing program behavior.
 /brewtools:text-human 3be67487 also drop all @author tags
 ```
 
-No arguments? The skill asks: commit hash, file path, folder, or paste text.
+No arguments? In an interactive session the skill asks: commit hash, file path, folder, or paste text. An empty input asks once; a headless run, or no answer, stops with "nothing to humanize" and edits nothing.
 
 ## Flow
 

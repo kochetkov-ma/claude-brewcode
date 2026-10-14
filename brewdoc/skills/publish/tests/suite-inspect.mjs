@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // `publish.mjs inspect`: supplied-ZIP branch, BD01 disclosure route (formerly uploaded uninspected).
 // Fixtures built with real `zip` under one mkdtemp base, removed at end; no network, no upload.
+import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, statSync, rmSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -45,7 +46,7 @@ function makeZip(name, files) {
   }
   const zipPath = join(BASE, `${name}.zip`);
   const r = spawnSync('zip', ['-q', '-X', '-r', zipPath, '.'], { cwd: src, encoding: 'utf8' });
-  if (r.status !== 0) throw new Error(`fixture zip failed for ${name}: ${r.status}`);
+  assert.equal(r.status, 0, `GIVEN fixture zip ${name} builds: ${r.stderr}`);
   return zipPath;
 }
 

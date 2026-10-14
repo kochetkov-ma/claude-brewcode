@@ -56,7 +56,7 @@ House preference (not a platform limit): spawn from the main conversation.
 |---|---|---|
 | SK with FORK from **main conversation** | Use this | Session binding + hook context injection intact |
 | FORK SK, inline SK (no `context`) or `Agent` tool from a **SA** | Avoid | Nested spawn bypasses both |
-| `Skill` tool from **SA** | Avoid in BC | Upstream supports runtime skills; BC distributed SKs use `DMI: true` (except `brewdoc:publish`) and cannot be model-invoked — use the twin agent. This is house policy, !=a platform ban |
+| `Skill` tool from **SA** | Avoid in BC | Upstream supports runtime skills; BC distributed SKs use `DMI: true` (except `brewdoc:publish`, `brewtools:text-optimize`, `brewtools:text-human`) and cannot be model-invoked — use the twin agent. This is house policy, !=a platform ban |
 
 ## Agent field
 

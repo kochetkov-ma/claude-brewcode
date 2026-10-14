@@ -226,7 +226,7 @@ formats for Phase 2; a path to a `.md` file -> read it as the spec; a text promp
 
 Infer answered params before discovery; the one bundled AskUserQuestion (max 4) asks only the
 material unknowns below, never one call per row. Defaults: Quick; Standard -> Simple, Deep -> Quorum.
-Distributed skills require user-only (sole exception: `brewdoc:publish`); local skills may choose the other supported invocation
+Distributed skills require user-only (exceptions: `brewdoc:publish`, `brewtools:text-optimize`, `brewtools:text-human`); local skills may choose the other supported invocation
 options. Main collects decisions; a specialist returns unresolved questions.
 
 | Field/header | Question | Options/meaning |

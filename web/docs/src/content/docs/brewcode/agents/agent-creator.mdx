@@ -12,7 +12,7 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 </Callout>
 
 <Callout type="tip">
-Describe the role, allowed files and expected result. Agent Creator drafts frontmatter and a system prompt, validates them, and returns paths and a verdict. It asks the main caller to arrange independent research or a final text-optimizer pass when needed.
+Describe the role, allowed files and expected result. Agent Creator drafts frontmatter and a system prompt, validates them, and returns paths and a verdict. It asks the main caller to arrange independent research or a final text-optimize pass when needed.
 </Callout>
 
 <Callout type="note" title="Current authoring contracts">
@@ -83,7 +83,7 @@ For generic agents, Scope Fit is omitted for research, docs and review-only work
 ## Delegation
 
 Agent Creator completes bounded work itself and requests main-caller delegation for large independent
-Explore analysis or a final `brewtools:text-optimizer` pass. Its definition carries no `Agent` tool,
+Explore analysis or a final pass of the `brewtools:text-optimize` skill, which main invokes via `Skill`. Its definition carries no `Agent` tool,
 so it cannot spawn anything, including its own verification. Claude Code supports nested delegation within its configured depth; Brewcode policy
 keeps spawns in the main conversation so the caller can integrate each result.
 
@@ -94,33 +94,39 @@ does not gain that exception. This delegated creator returns unresolved question
 ### Optimization handoff
 
 Agent Creator returns exact created or updated paths and validation evidence to the main
-caller. The main caller resolves and reads the installed Brewtools
-[`text-optimize` skill](/brewtools/skills/text-optimize/) and its guard and references,
-then executes its Medium workflow. These resources belong to Brewtools, not the Brewcode
-plugin root. The creator cannot spawn optimizers or verifiers, or invoke the explicit-only
-skill through the `Skill` tool.
+caller. The main caller invokes the Brewtools
+[`text-optimize` skill](/brewtools/skills/text-optimize/) through the `Skill` tool:
 
-For a user-started pass in the main conversation:
+```text
+Skill(skill: "brewtools:text-optimize", args: "<created paths> medium --allow-dirty")
+```
+
+`--allow-dirty` covers the files this creator just wrote. The skill owns the snapshot, `RUN_DIR`,
+optimizers and its verify gate; it is not a hand-run copy of its Medium workflow. The creator
+itself cannot spawn optimizers or verifiers.
+
+A user can also start the pass in the main conversation:
 
 ```text
 /brewtools:text-optimize Optimize .claude/agents/reviewer.md in Medium mode, preserving all meaning.
 ```
 
-Replace the example path with the file Agent Creator returned. For its final handoff, the
-main caller applies these additional acceptance requirements from Agent Creator:
+Replace the example path with the file Agent Creator returned. In the final handoff, the skill
+performs steps 1-3 and `verify --no-restore`; the main caller adds the fresh verifier and acceptance (steps 4-5):
 
-1. Before optimization edits, run Phase 0 snapshot and require exit `0` plus `RUN_DIR`.
+1. Skill: before optimization edits, run Phase 0 snapshot and require exit `0` plus `RUN_DIR`.
    Clean targets are the default; existing explicit authorization to edit named dirty
    targets permits `--allow-dirty`, while unrelated changes remain preserved.
-2. Inventory protected facts and assign one optimizer per file. Give it the full
+2. Skill: inventory protected facts and assign one optimizer per file. Give it the full
    GOAL/ROLE/SCOPE/CONTEXT/CONSUMER/DONE brief, exact target and original paths, `RUN_DIR`,
    an authorized report path, and cross-file decisions (empty by default). Require an
    immediate owned-draft checkpoint after every atomic edit. **Missing snapshot or
    `RUN_DIR` means stop before editing; the optimizer cannot create its own snapshot.**
-3. Run `verify --no-restore`, then ask a fresh independent read-only verifier to compare
+3. Skill: run `verify --no-restore`.
+4. Main: spawn a fresh independent read-only verifier to compare
    original and current files from disk without the writer's report. Require 100% meaning
    preservation, including names, numbers, paths, examples, negations, and scope.
-4. Repair owned losses, refresh checkpoints, repeat the gates and agent validation,
+5. Main: repair owned losses, refresh checkpoints, repeat the gates and agent validation,
    or refuse acceptance while preserving concurrent bytes. Report optimization as
    requested or pending until the main caller returns gate evidence.
 
@@ -162,7 +168,7 @@ If Brewtools is unavailable, report optimization as skipped. The validated agent
   <li>
     <div>
       <strong>Optimize</strong>
-      <p>Returns paths and validation evidence for the main caller to execute the installed Brewtools text-optimize Medium workflow, with a pre-edit snapshot and independent acceptance as described above. Until gate evidence returns, optimization is requested or pending; if Brewtools is unavailable, it is skipped. The report records measured results without promising a savings percentage.</p>
+      <p>Returns paths and validation evidence; the main caller invokes the Brewtools text-optimize skill via `Skill` (Medium, `--allow-dirty`), which takes the pre-edit snapshot, and then runs a fresh independent verifier as described above. Until gate evidence returns, optimization is requested or pending; if Brewtools is unavailable, it is skipped. The report records measured results without promising a savings percentage.</p>
     </div>
   </li>
 </Steps>

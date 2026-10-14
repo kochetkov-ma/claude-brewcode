@@ -84,19 +84,17 @@ DONE: file written and parses; report as: path | model | tools | description lin
 - e2e-manual-tester
 - e2e-reviewer (disallowedTools: Write, Edit, Bash)
 
-After each batch: AskUserQuestion "Optimize agent prompts with text-optimizer?" No -> keep the
+After each batch: AskUserQuestion "Optimize agent prompts with `brewtools:text-optimize`?" No -> keep the
 agents as written and continue.
-Yes -> medium-optimize exactly this batch's `.claude/agents/{agent-name}.md` files, only when agent
-type `brewtools:text-optimizer` is available in this session. It stops on a brief without `RUN_DIR`,
-so follow the Medium workflow of the installed `/brewtools:text-optimize` `SKILL.md`: path =
-`installPath` of the enabled `brewtools` entry in `claude plugin list --json`, which also stands
-for `CLAUDE_PLUGIN_ROOT` in its commands; never via `Skill` (`disable-model-invocation: true`).
-Snapshot the files, capture `RUN_DIR`, spawn one optimizer per file with the six brief fields,
-that `RUN_DIR` and "preserve every frontmatter key, the roster model/tools, every heading, name,
-number, negation and scope", then run its verify gate and re-check each file: frontmatter parses,
-roster model/tools, the CONSUMER `description` limits above. Delegates never spawn optimizers.
-> Agent type unavailable or that `SKILL.md` not resolvable -> skip the pass and report the skip,
-> not a blocker; the agents stay as written. A refused optimization continues to S5 only after its
+Yes -> medium-optimize exactly this batch's `.claude/agents/{agent-name}.md` files, only when the
+`brewtools:text-optimize` skill is available in this session: invoke it through `Skill` with
+`args` = those paths, `medium --allow-dirty` (the batch was just written; this answer authorizes
+it) and "preserve every frontmatter key, the roster model/tools, every heading, name, number,
+negation and scope". It owns snapshot, `RUN_DIR`, one optimizer per file and its verify gate. Then
+re-check each file: frontmatter parses, roster model/tools, the CONSUMER `description` limits
+above. Delegates never spawn optimizers.
+> Skill unavailable (`brewtools` not installed) -> skip the pass and report the skip, not a
+> blocker; the agents stay as written. A refused optimization continues to S5 only after its
 > safe recovery restored the agents and the same checks pass; report the refusal separately.
 
 ## S5: Rules Generation
