@@ -13,6 +13,10 @@ Type a standalone codeword to add its operating instructions for that turn. The 
 `manager-prompt.mjs` hook returns `additionalContext`; your original prompt, including
 the codeword, remains unchanged. The optional manager hard wall is installed separately.
 
+<Callout type="tip" title="Typed placeholders with a preview">
+  The brewmod-placeholders mod (Claude Code 2.1.292+) provides the same codewords as typed placeholders, with highlight, typeahead and a preview band above the prompt. The injected text is byte-identical. With both installed, each block is injected once, and brewtools works alone too. See [Prompt placeholders](/mods/placeholders/).
+</Callout>
+
 ## Quick reference
 
 | Trigger | Selected prompt mode | Behavior |
@@ -123,6 +127,7 @@ tools; the plugin's Claude hooks do not configure Codex runtime state.
 <CardGrid>
   <Card title="Manager Setup" icon="settings" href="/brewtools/skills/manager-setup/">Inspect prompt sources, customize text, and configure the optional hard wall.</Card>
   <Card title="Task Board Setup" icon="graph" href="/brewtools/skills/task-board-setup/">Methodology, work units, graph reconciliation, and session timers.</Card>
+  <Card title="Plan-mode effort mod" icon="brain" href="/mods/plan-effort/">Raises the main loop's effort while Claude Code is in plan mode.</Card>
   <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">All brewtools skills and agents.</Card>
   <Card title="Hook source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewtools/hooks/manager-prompt.mjs">Token detection, context order, and payload gating.</Card>
 </CardGrid>

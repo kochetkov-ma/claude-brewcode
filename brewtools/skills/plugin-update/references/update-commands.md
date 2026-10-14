@@ -23,6 +23,12 @@ claude plugin update brewtools@claude-brewcode --scope user
 claude plugin update brewui@claude-brewcode --scope user
 ```
 
+Optional mods (`brewmod-plan-effort`, `brewmod-placeholders`): same command, only for a mod Phase 0 lists as installed; never `install` one from this skill.
+
+```
+claude plugin update brewmod-plan-effort@claude-brewcode --scope user
+```
+
 Reload after updates: [reload-notice.md](reload-notice.md).
 
 ## Valid CLI Subcommands

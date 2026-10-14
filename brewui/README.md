@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 6.6.2 |
+| Version | 6.7.0 |
 | Skills | 0 |
 
 ## Install
@@ -78,5 +78,7 @@ Full docs: [doc-claude.brewcode.app/brewui/overview](https://doc-claude.brewcode
 | Resource | Link |
 |----------|------|
 | Release Notes | [RELEASE-NOTES.md](../RELEASE-NOTES.md) |
+
+See also: [Claude Code mods](../README.md#claude-code-mods) — optional brewmod-plan-effort and brewmod-placeholders.
 
 Author: Maksim Kochetkov | License: MIT

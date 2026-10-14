@@ -34,9 +34,9 @@ search, project conventions, E2E tests, generated review and team skills, and a 
     brewcode, brewtools and brewdoc are current, stale, modified, partial, disabled or missing here.
     It covers 11 setups and 23 stamp carriers, with dependency-aware next commands.
   </Card>
-  <Card title="5 agents (brewers)" icon="users">
+  <Card title="6 agents (brewers)" icon="users">
     Specialists only: [skill-creator](/brewcode/agents/skill-creator/), [agent-creator](/brewcode/agents/agent-creator/),
-    [hook-creator](/brewcode/agents/hook-creator/), [bash-expert](/brewcode/agents/bash-expert/), and the internal bc-rules-organizer.
+    [hook-creator](/brewcode/agents/hook-creator/), [bash-expert](/brewcode/agents/bash-expert/), [mod-creator](/brewcode/agents/mod-creator/), and the internal bc-rules-organizer.
     Generic roles are generated per project into .claude/agents/.
   </Card>
   <Card title="2 registered hook commands" icon="settings">
@@ -71,16 +71,16 @@ SessionStart hooks handle the version check, the plan symlink and post-compactio
   │                                                          │
   │   Skills (recipes)            Agents (brewers)           │
   │   ┌──────────────┐          ┌──────────────────┐         │
-  │   │ semble-setup │          │ skill/agent/hook  │         │
-  │   │ superrev-... │ ──────>  │ creator, bash     │         │
-  │   │ e2e, conv... │          │ + project teams   │         │
+  │   │ semble-setup │          │ skill/agent/hook/│         │
+  │   │ superrev-... │ ──────>  │ mod creator, bash│         │
+  │   │ e2e, conv... │          │ + project teams  │         │
   │   └──────────────┘          └──────────────────┘         │
-  │          │                          │                     │
-  │          v                          v                     │
+  │          │                          │                    │
+  │          v                          v                    │
   │   Hooks (processes)           Rule templates             │
   │   ┌──────────────┐          ┌──────────────────┐         │
-  │   │ session-start│          │ rules templates   │         │
-  │   │compact-recall│ <──────> │ templates/        │         │
+  │   │ session-start│          │ rules templates  │         │
+  │   │compact-recall│ <──────> │ templates/       │         │
   │   └──────────────┘          └──────────────────┘         │
   │                                                          │
   └──────────────────────────────────────────────────────────┘
@@ -98,11 +98,12 @@ brewcode/
 │   ├── compact-recall.mjs             # SessionStart/compact: re-anchor plan, intent, task graph
 │   └── lib/
 │       └── utils.mjs                  # I/O, version cache, configuration
-├── agents/                            # 5 agents
+├── agents/                            # 6 agents
 │   ├── skill-creator.md               # Skill creation (inherit)
 │   ├── agent-creator.md               # Agent creation (inherit)
 │   ├── hook-creator.md                # Hook creation (inherit)
 │   ├── bash-expert.md                 # Bash scripts (inherit)
+│   ├── mod-creator.md                 # Mod creation (inherit)
 │   └── bc-rules-organizer.md          # Rules organizer (haiku)
 ├── skills/                            # 9 skills
 │   ├── semble-setup/                  # Semantic code search MCP
@@ -174,13 +175,13 @@ full version of this contract.
     | Dashboard | setup-status | Read-only: what is current, stale or missing across brewcode, brewtools and brewdoc |
   </TabItem>
   <TabItem label="Agents">
-    5 agents (brewers), all specialists. Generic implementation/review roles are generated per project
+    6 agents (brewers), all specialists. Generic implementation/review roles are generated per project
     into `.claude/agents/` by [/brewcode:teams-setup](/brewcode/skills/teams-setup/) — brewcode no longer ships them.
     See the [Agents](/brewcode/agents/) section for details.
 
     | Role | Agents | Model |
     |------|--------|-------|
-    | Creation | skill-creator, agent-creator, hook-creator | inherit |
+    | Creation | skill-creator, agent-creator, hook-creator, mod-creator | inherit |
     | Scripting | bash-expert | inherit |
     | Internal | bc-rules-organizer | haiku |
 
@@ -252,6 +253,9 @@ full version of this contract.
   </Card>
   <Card title="Convention Setup" icon="book" href="/brewcode/skills/convention-setup/">
     The foundation for coding patterns, tests and architecture.
+  </Card>
+  <Card title="brewcode mods" icon="puzzle" href="/mods/overview/">
+    Optional hooks-module plugins: plan-mode effort and prompt placeholders.
   </Card>
 </CardGrid>
 

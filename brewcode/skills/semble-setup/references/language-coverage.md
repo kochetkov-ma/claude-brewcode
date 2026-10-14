@@ -138,7 +138,7 @@ Each limit silently fails one question shape:
 
 | Limit | The question it kills |
 |-------|-----------------------|
-| `.json` unreachable | "every hook event registered across all four plugins" — registrations live in `hooks/hooks.json`. Semble returns prose *about* hooks and never the registry. Structurally unanswerable, at any content setting, after any cleanup |
+| `.json` unreachable | "every hook event registered across every plugin" — registrations live in `hooks/hooks.json`. Semble returns prose *about* hooks and never the registry. Structurally unanswerable, at any content setting, after any cleanup |
 | `.mdx`/`.txt` unmapped | Anything about an Astro/Docusaurus content page |
 | top-k is a sample | "every place that…", "all N of…" — a ranked list of 5 is not an enumeration. `rg -l`/`-c` owns this |
 | no dedup | A file committed at three paths gets three chances at the same five slots |

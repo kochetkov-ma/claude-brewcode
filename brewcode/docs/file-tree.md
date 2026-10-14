@@ -4,7 +4,7 @@ description: Complete file tree of the brewcode plugin with descriptions
 
 # Brewcode Plugin - File Tree
 
-> Version: 6.6.2 | Reference tree of shipped source and generated project artifacts; excludes the generated `.codex/` mirror and build/cache files.
+> Version: 6.7.0 | Reference tree of shipped source and generated project artifacts; excludes the generated `.codex/` mirror and build/cache files.
 
 ## Plugin Structure
 
@@ -12,7 +12,7 @@ description: Complete file tree of the brewcode plugin with descriptions
 brewcode/                                    # Plugin root directory
 │
 ├── .claude-plugin/                            # Claude Code plugin configuration
-│   └── plugin.json                            # Manifest (name, version 6.6.2, skills/ reference)
+│   └── plugin.json                            # Manifest (name, version 6.7.0, skills/ reference)
 │
 ├── hooks/                                     # Node.js scripts for Claude Code events (2 hooks)
 │   ├── hooks.json                             # Binds 1 event (SessionStart) in 2 groups: unmatched + matcher "compact"
@@ -24,11 +24,12 @@ brewcode/                                    # Plugin root directory
 │       ├── run.sh                             # Aggregates tests/suite-*.mjs; optional bare-name filter (`run.sh session-start`); an unknown named suite or a failing one exits 1
 │       └── suite-session-start.mjs            # plan-link safety/containment, plans dir, project-root recipe, post-compact recall and fail-open stdin
 │
-├── agents/                                    # Plugin agents (system prompts in Markdown, 5 total)
+├── agents/                                    # Plugin agents (system prompts in Markdown, 6 total)
 │   ├── agent-creator.md                       # Agent creator (inherit): creation process, Scope Fit, on-demand references
 │   ├── bash-expert.md                         # Bash expert (inherit): sh/bash scripts, numbered conventions and checklist, Scope Fit
 │   ├── bc-rules-organizer.md                  # Rules organizer (haiku): internal, spawned by /brewcode:rules and /brewcode:convention-setup
 │   ├── hook-creator.md                        # Hook creator (inherit): create or debug a hook, Scope Fit, on-demand references
+│   ├── mod-creator.md                         # Mod creator (inherit): create, test and ship Claude Code mods (hooks-module plugins); on-demand references
 │   ├── skill-creator.md                       # Skill creator (inherit): create, improve, apply review fixes; on-demand references
 │   └── tests/
 │       ├── run.sh                             # Runs the creator contract suite
@@ -38,7 +39,10 @@ brewcode/                                    # Plugin root directory
 │   │
 │   ├── agents/                                # /brewcode:agents - Agent roster: status/list/create/improve/review/sync
 │   │   ├── SKILL.md                           # Delegates to agent-creator + brewtools:text-optimize (opus, session)
-│   │   └── references/                        # agent-context-and-execution, agent-frontmatter-fields, agent-known-issues, agent-scope-and-tools, agent-template, hooks-* (changes, env, events, io-contract, templates, types-config)
+│   │   ├── references/                        # agent-context-and-execution, agent-frontmatter-fields, agent-known-issues, agent-scope-and-tools, agent-template, hooks-* (changes, env, events, io-contract, templates, types-config), mods-* (api, changes, lifecycle, patterns, testing)
+│   │   ├── scripts/
+│   │   │   └── mods-ref-check.mjs             # Drift check: mods-api.md symbol index vs the mods types.d.ts; rc 0 clean, 1 drift, 2 error
+│   │   └── tests/                             # run.sh + suite-mods-ref-check.mjs + suite-live.mjs + fixtures
 │   │
 │   ├── convention-setup/                      # /brewcode:convention-setup - Early foundation before teams/review
 │   │   ├── SKILL.md                           # status/install/upgrade/enable/disable/uninstall/purge; install default; full/conventions/rules/paths extras
@@ -86,16 +90,20 @@ brewcode/                                    # Plugin root directory
 │   ├── skills/                                # /brewcode:skills - Skill management
 │   │   ├── SKILL.md
 │   │   ├── references/                        # activation-and-troubleshooting, design-patterns, e2e-template, execution-model, frontmatter-fields, mode-sync, prompt-contract, readme-template, review-prompt, summary-template
-│   │   └── scripts/
-│   │       ├── list-skills.sh
-│   │       └── validate-skill.sh
+│   │   ├── scripts/
+│   │   │   ├── list-skills.sh
+│   │   │   └── validate-skill.sh
+│   │   └── tests/
+│   │       └── run.sh                         # Offline regression for validate-skill.sh: Cyrillic mode-table check is locale-independent (sh and bash x C, C.UTF-8, inherited locale)
 │   │
 │   ├── superreview-setup/                     # /brewcode:superreview-setup - Generate project-tailored deep-review skill
 │   │   ├── SKILL.md                           # status/install/upgrade/enable/disable/uninstall/purge; emits .claude/skills/superreview/ into target project (opus, session)
 │   │   ├── references/                        # Per-stack reviewer guidelines + SKILL.md/scope/intent-guard templates
 │   │   ├── scripts/
 │   │   │   └── generate.sh                    # scan|emit|emit-agent|upgrade|enable|disable|uninstall|purge|validate; shared intent-guard writer
-│   │   └── tests/                             # Lifecycle, mode/depth and intent closure regression runner/suite
+│   │   └── tests/
+│   │       ├── run.sh                         # Runs every tests/suite-*.mjs after a shellcheck pass on shipped scripts
+│   │       └── suite-emit-safety.mjs          # Lifecycle, mode/depth and intent closure regression
 │   │
 │   └── teams-setup/                           # /brewcode:teams-setup - Dynamic agent team creation/management
 │       ├── SKILL.md                           # status/install/upgrade/enable/disable/uninstall/purge, each with an optional [name] (opus)
@@ -131,7 +139,7 @@ brewcode/                                    # Plugin root directory
 │
 ├── README.md                                  # Components, commands, agents, hooks, architecture, flow diagrams
 ├── INSTALL.md                                 # Installation: plugin-dir, local clone, project enabling, troubleshooting
-└── package.json                               # npm: claude-plugin-brewcode@6.6.2
+└── package.json                               # npm: claude-plugin-brewcode@6.7.0
 ```
 
 ## Target Project Structure
@@ -188,11 +196,11 @@ Files created by the plugin in the user's project:
 | Plugin configuration | 2 | plugin.json, hooks.json |
 | Hooks | 2 | compact-recall, session-start |
 | Hook libraries | 1 | utils |
-| Agents | 5 | agent-creator, bash-expert, bc-rules-organizer, hook-creator, skill-creator |
+| Agents | 6 | agent-creator, bash-expert, bc-rules-organizer, hook-creator, mod-creator, skill-creator |
 | Skills (SKILL.md) | 9 | agents, convention-setup, e2e, rules, semble-setup, setup-status, skills, superreview-setup, teams-setup |
 | Bash scripts | 24 | semble-setup(10), teams-setup(7), skills(2), convention-setup(1), e2e(1), rules(1), setup-status(1), superreview-setup(1); excludes test runners and generated mirrors |
-| Test suites (`suite-*.mjs`) | 16 | semble-setup(7), teams-setup(6), hooks(1), agents(1), superreview-setup(1); convention-setup also ships `lifecycle.mjs` |
-| Test runners (`tests/run.sh`) | 9 | agents, convention-setup, hooks, rules, semble-setup, setup-status, skills, superreview-setup, teams-setup; excludes generated mirrors |
+| Test suites (`suite-*.mjs`) | 18 | semble-setup(7), teams-setup(6), skills/agents(2), hooks(1), agents(1), superreview-setup(1); convention-setup also ships `lifecycle.mjs` |
+| Test runners (`tests/run.sh`) | 10 | agents, skills/agents, convention-setup, hooks, rules, semble-setup, setup-status, skills, superreview-setup, teams-setup; excludes generated mirrors |
 | Test fixtures | 32 | semble-setup/tests/fixtures only: claude-json(7), repo-a(15 across src/conf/web), repo-b(5), settings(4), README(1) |
 | Templates | 2 | rules(2) |
 | Documentation | 4 | README, INSTALL, file-tree.md, commands.md |
@@ -213,4 +221,5 @@ Files created by the plugin in the user's project:
 | bash-expert | inherit | Writes sh/bash scripts for Mac/Linux |
 | bc-rules-organizer | haiku | Internal: creates/optimizes `.claude/rules/*.md` for `/brewcode:rules` and `/brewcode:convention-setup` |
 | hook-creator | inherit | Creates and debugs Claude Code hooks |
+| mod-creator | inherit | Creates, tests and ships Claude Code mods (hooks-module plugins) |
 | skill-creator | inherit | Creates and improves Claude Code skills |

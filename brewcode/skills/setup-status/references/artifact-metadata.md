@@ -1,9 +1,9 @@
 ---
 doc_type: llm
-version: "6.6.2"
-content_version: "6.5.8"
+version: "6.7.0"
+content_version: "6.7.0"
 generated_by: "brewcode"
-last_updated: "2026-10-14"
+last_updated: "2026-10-15"
 ---
 
 # Artifact metadata and versioning
@@ -80,7 +80,7 @@ and defeats the `cmp` drift signal. The stamp KINDS of `.claude/scripts/bump-ver
 | Kind | Writes | Used for |
 |------|--------|----------|
 | `fm` | `version`, `content_version`, `generated_by` | byte-copied `.md`-frontmatter assets |
-| `fmd` | `version`, `content_version`, `generated_by`, **`last_updated`** | hand-maintained shipped `.md` (8 agents + this doc) |
+| `fmd` | `version`, `content_version`, `generated_by`, **`last_updated`** | hand-maintained shipped `.md` (9 agents + this doc) |
 | `mjs` / `sh` / `md` / `marker` | `version`, `content_version`, `generated_by` inside a `brewcode-meta:` fragment | byte-copied scripts and `.md` |
 
 Worked example: `brewcode/skills/semble-setup/assets/semble-first.md.template`, kind `fm`,

@@ -1,0 +1,433 @@
+import { test, expect } from 'claude-code/testing'
+import type { On } from 'claude-code'
+import { compileDefs } from '../hooks/lib/assemble'
+import { compileMatchers } from '../hooks/lib/match'
+import { expandInline, inlineBodies, isInlineSubmit, isTypedSource, unknownMessage, unknownTokens } from '../hooks/lib/inline'
+import { CFG, ROOT, defaultsTree, memFs, wire, type Tree } from './layer-io'
+import { def } from './fixtures'
+import { VECTORS } from './parity/golden.generated'
+
+const file = (name: string, insert: string, when: string, body: string): string => `---\nname: "${name}"\ninsert: ${insert}\nwhen: ${when}\n---\n${body}`
+const at = (name: string, raw: string): Tree => ({ [`${ROOT}/.claude/placeholders/${name}.md`]: raw })
+
+const TREE: Tree = {
+  ...defaultsTree(),
+  ...at('ii', file('ii', 'inline', 'always', 'II BODY')),
+  ...at('jj', file('jj', 'inline', 'always', 'JJ BODY ++ii')),
+  ...at('jx', file('jx', 'inline', 'always', 'JX also ++cc')),
+  ...at('pp', file('pp', 'inline', 'plan', 'PP BODY')),
+  ...at('nn', file('nn', 'inline', 'not-plan', 'NN BODY')),
+  ...at('ee', file('ee', 'inline', 'always', '')),
+  ...at('cc', file('cc', 'context', 'always', 'CC CONTEXT')),
+  ...at('dual', file('dual', 'inline', 'always', 'DUAL INLINE')),
+  ...at('dual.ctx', file('dual', 'context', 'always', 'DUAL CONTEXT')),
+}
+
+type Seen = { text: string; origin: unknown; wait: boolean }
+const bottomSubmit = (on: On): Seen[] => {
+  const seen: Seen[] = []
+  on('prompt.submit', (_$, e) => {
+    seen.push({ text: e.text, origin: e.origin, wait: e.wait })
+    return { text: e.text }
+  })
+  return seen
+}
+const submit = ($: { prompt: unknown }, text: string, origin: unknown = { kind: 'composer' }, extra: object = {}) =>
+  ($.prompt as any).submit({ text, origin, wait: false, ...extra })
+const send = ($: { classic: { UserPromptSubmit: (e: never) => Promise<unknown> } }, prompt: string, mode = 'default', source?: string) =>
+  $.classic.UserPromptSubmit({ prompt, permission_mode: mode, source } as never)
+const spyWrites = (on: On): unknown[] => {
+  const writes: unknown[] = []
+  on('state.set', (_$, e, next) => {
+    writes.push(e.value)
+    return next(e)
+  })
+  return writes
+}
+const typed = ($: { prompt: unknown }, text: string) =>
+  ($.prompt as any).edit({ origin: { kind: 'composer' }, text: '', cursor: 0, start: 0, end: 0, inputText: text })
+const core = (on: On) =>
+  on('prompt.edit', (_$, e) => ({ text: e.text.slice(0, e.start) + e.inputText + e.text.slice(e.end), cursor: e.start + e.inputText.length }))
+const EMPTY_VIEW = { tokens: [] }
+const M = VECTORS.find((v) => v.id === 'spec-1')?.expected ?? 'MISSING spec-1'
+
+// ---- origins
+
+for (const kind of ['composer', 'bridge', 'sdk'] as const) {
+  test(`GIVEN origin ${kind} and an inline token WHEN the prompt is submitted THEN the text below carries the body and the origin is kept`, async ($, on) => {
+    wire(on, { tree: TREE, bottom: {} })
+    const seen = bottomSubmit(on)
+
+    await submit($, 'say ++ii now', { kind })
+
+    expect(seen, 'bottom saw').toEqual([{ text: 'say II BODY now', origin: { kind }, wait: false }])
+  })
+}
+
+for (const kind of ['task-notification', 'scheduled-trigger', 'peer', 'peer-send-message', 'projects-relay', 'engine'] as const) {
+  test(`GIVEN origin ${kind} WHEN a prompt with an inline token is submitted THEN the text is untouched and no file is read`, async ($, on) => {
+    const w = wire(on, { tree: TREE, bottom: {} })
+    const seen = bottomSubmit(on)
+
+    await submit($, 'say ++ii now', { kind })
+
+    expect([seen, w.calls], 'bottom saw and fs calls').toEqual([[{ text: 'say ++ii now', origin: { kind }, wait: false }], { exists: [], list: [], read: [] }])
+  })
+}
+
+test('GIVEN a plugin origin WHEN a prompt with an inline token is submitted THEN the text is untouched', async ($, on) => {
+  wire(on, { tree: TREE, bottom: {} })
+  const seen = bottomSubmit(on)
+
+  await submit($, '++ii', { kind: 'plugin', name: 'other' })
+
+  expect(seen.map((s) => s.text), 'texts').toEqual(['++ii'])
+})
+
+test('GIVEN a slash command WHEN it is submitted with an inline token in its arguments THEN the line is untouched', async ($, on) => {
+  wire(on, { tree: TREE, bottom: {} })
+  const seen = bottomSubmit(on)
+
+  await submit($, '/review ++ii', { kind: 'composer' }, { command: { name: 'review', args: '++ii' } })
+
+  expect(seen.map((s) => s.text), 'texts').toEqual(['/review ++ii'])
+})
+
+test('GIVEN an isMeta prompt from the composer WHEN submitted THEN the text is untouched', async ($, on) => {
+  wire(on, { tree: TREE, bottom: {} })
+  const seen = bottomSubmit(on)
+
+  await submit($, '++ii', { kind: 'composer' }, { isMeta: true })
+
+  expect(seen.map((s) => s.text), 'texts').toEqual(['++ii'])
+})
+
+// ---- when: always, bodies, single pass
+
+test('GIVEN inline defs for always, plan and not-plan WHEN a prompt with all three is submitted THEN only the always one is expanded', async ($, on) => {
+  wire(on, { tree: TREE, bottom: {} })
+  const seen = bottomSubmit(on)
+
+  await submit($, '++pp ++ii ++nn', { kind: 'composer' })
+
+  expect(seen.map((s) => s.text), 'texts').toEqual(['++pp II BODY ++nn'])
+})
+
+test('GIVEN a body that holds another token WHEN expanded THEN the inserted text is never scanned again', async ($, on) => {
+  wire(on, { tree: TREE, bottom: {} })
+  const seen = bottomSubmit(on)
+
+  await submit($, '++jj and ++II', { kind: 'composer' })
+
+  expect(seen.map((s) => s.text), 'texts').toEqual(['JJ BODY ++ii and II BODY'])
+})
+
+test('GIVEN an inline def with an empty body WHEN its token is submitted THEN the token stays verbatim', async ($, on) => {
+  wire(on, { tree: TREE, bottom: {} })
+  const seen = bottomSubmit(on)
+
+  await submit($, 'a ++ee b', { kind: 'composer' })
+
+  expect(seen.map((s) => s.text), 'texts').toEqual(['a ++ee b'])
+})
+
+test('GIVEN a context token and an unknown token WHEN submitted THEN both stay verbatim', async ($, on) => {
+  wire(on, { tree: TREE, bottom: {} })
+  const seen = bottomSubmit(on)
+
+  await submit($, '++cc ++m ++nope', { kind: 'composer' })
+
+  expect(seen.map((s) => s.text), 'texts').toEqual(['++cc ++m ++nope'])
+})
+
+test('GIVEN a prompt without the prefix WHEN submitted THEN no file is read and the text is untouched', async ($, on) => {
+  const w = wire(on, { tree: TREE, bottom: {} })
+  const seen = bottomSubmit(on)
+
+  await submit($, 'plain text', { kind: 'composer' })
+
+  expect([seen.map((s) => s.text), w.calls], 'texts and fs calls').toEqual([['plain text'], { exists: [], list: [], read: [] }])
+})
+
+test('GIVEN two submissions WHEN nothing changed on disk THEN the second reads no file again', async ($, on) => {
+  const w = wire(on, { tree: TREE, bottom: {} })
+  bottomSubmit(on)
+  await submit($, '++ii', { kind: 'composer' })
+  const afterFirst = w.calls.read.length
+  await submit($, '++ii again', { kind: 'composer' })
+
+  expect([afterFirst > 0, w.calls.read.length], 'first read something, second nothing new').toEqual([true, afterFirst])
+})
+
+test('GIVEN a custom prefix WHEN a prompt with both prefixes is submitted THEN only that prefix expands', { options: { prefix: '@@' } }, async ($, on) => {
+  wire(on, { tree: TREE, bottom: {} })
+  const seen = bottomSubmit(on)
+
+  await submit($, '++ii @@ii', { kind: 'composer' })
+
+  expect(seen.map((s) => s.text), 'texts').toEqual(['++ii II BODY'])
+})
+
+// ---- fail open
+
+for (const fail of ['exists', 'list', 'read', 'root'] as const) {
+  test(`GIVEN ${fail} fails while the registry loads WHEN a prompt is submitted THEN it passes down untouched`, async ($, on) => {
+    wire(on, { tree: TREE, bottom: {}, fail })
+    const seen = bottomSubmit(on)
+
+    await submit($, 'say ++ii now', { kind: 'composer' })
+
+    expect(seen.map((s) => s.text), 'texts').toEqual(['say ++ii now'])
+  })
+}
+
+test('GIVEN the env lookup has no answer at all WHEN a prompt is submitted THEN it passes down untouched', async ($, on) => {
+  on('session.root', () => ({ value: ROOT }))
+  const seen = bottomSubmit(on)
+
+  await submit($, '++ii', { kind: 'composer' })
+
+  expect(seen.map((s) => s.text), 'texts').toEqual(['++ii'])
+})
+
+// ---- view reset
+
+test('GIVEN a composer submission WHEN it passes THEN the view atom is written empty once', async ($, on) => {
+  wire(on, { tree: TREE, bottom: {} })
+  bottomSubmit(on)
+  const writes = spyWrites(on)
+
+  await submit($, 'plain', { kind: 'composer' })
+
+  expect(writes, 'state writes').toEqual([EMPTY_VIEW])
+})
+
+for (const kind of ['bridge', 'sdk', 'task-notification', 'peer', 'scheduled-trigger'] as const) {
+  test(`GIVEN origin ${kind} WHEN a prompt is submitted THEN the person's draft view is not touched`, async ($, on) => {
+    wire(on, { tree: TREE, bottom: {} })
+    bottomSubmit(on)
+    const writes = spyWrites(on)
+
+    await submit($, 'plain', { kind })
+
+    expect(writes, 'state writes').toEqual([])
+  })
+}
+
+test('GIVEN a refused state write WHEN a composer prompt with an inline token is submitted THEN the expansion still lands', async ($, on) => {
+  wire(on, { tree: TREE, bottom: {} })
+  const seen = bottomSubmit(on)
+  on('state.set', () => ({ deny: 'state down' }))
+
+  await submit($, '++ii', { kind: 'composer' })
+
+  expect(seen.map((s) => s.text), 'texts').toEqual(['II BODY'])
+})
+
+test('GIVEN a token typed, submitted and typed again WHEN prompt.edit runs THEN the second draft is written again (view not stale)', async ($, on) => {
+  wire(on, { tree: TREE, bottom: {} })
+  core(on)
+  bottomSubmit(on)
+  const writes = spyWrites(on)
+  const m = { text: '++m', name: 'm', isKnown: true, start: 0, end: 3 }
+
+  await typed($, '++m')
+  await submit($, '++m', { kind: 'composer' })
+  await typed($, '++m')
+
+  expect(writes, 'state writes').toEqual([{ tokens: [m] }, EMPTY_VIEW, { tokens: [m] }])
+})
+
+// ---- no double insertion
+
+test('GIVEN an inline token and a context token WHEN submit then the classic hook run THEN the inline text is inline only and context carries only the context block', async ($, on) => {
+  wire(on, { tree: TREE, bottom: {} })
+  const seen = bottomSubmit(on)
+
+  await submit($, '++ii ++cc', { kind: 'composer' })
+  const out = await send($, '++ii ++cc')
+
+  expect([seen.map((s) => s.text), out], 'submit text and classic result').toEqual([['II BODY ++cc'], { additionalContext: ['CC CONTEXT'] }])
+})
+
+test('GIVEN a plan-only inline token left verbatim WHEN the classic hook runs THEN it adds no context block', async ($, on) => {
+  wire(on, { tree: TREE, bottom: {} })
+
+  expect(await send($, '++pp ++nn', 'plan'), 'classic result').toEqual({})
+})
+
+test('GIVEN a name defined both inline and as context WHEN submitted and sent THEN it is inserted once, as context', async ($, on) => {
+  wire(on, { tree: TREE, bottom: {} })
+  const seen = bottomSubmit(on)
+
+  await submit($, '++dual', { kind: 'composer' })
+  const out = await send($, '++dual')
+
+  expect([seen.map((s) => s.text), out], 'submit text and classic result').toEqual([['++dual'], { additionalContext: ['DUAL CONTEXT'] }])
+})
+
+test('GIVEN an inline body that carries a context token WHEN submit then the classic hook run THEN the classic pass expands it (documented composition)', async ($, on) => {
+  wire(on, { tree: TREE, bottom: {} })
+  const seen = bottomSubmit(on)
+
+  await submit($, 'use ++jx now', { kind: 'composer' })
+  const out = await send($, 'use JX also ++cc now')
+
+  expect([seen.map((s) => s.text), out], 'submit text and classic result').toEqual([['use JX also ++cc now'], { additionalContext: ['CC CONTEXT'] }])
+})
+
+// ---- warnUnknown toast
+
+test('GIVEN unknown tokens and the default option WHEN the classic hook runs THEN one toast names them once each and the context is intact', async ($, on) => {
+  const w = wire(on, { tree: TREE, bottom: {} })
+
+  const out = await send($, '++m ++foo ++Foo ++bar')
+
+  expect([w.toasts, out], 'toasts and result').toEqual([['unknown ++foo, ++bar'], { additionalContext: [M] }])
+})
+
+test('GIVEN warnUnknown off WHEN a prompt with unknown tokens runs THEN there is no toast and the prompt result is the same', { options: { warnUnknown: false } }, async ($, on) => {
+  const w = wire(on, { tree: TREE, bottom: {} })
+
+  const out = await send($, '++m ++foo')
+
+  expect([w.toasts, out], 'toasts and result').toEqual([[], { additionalContext: [M] }])
+})
+
+test('GIVEN only known tokens or no prefix WHEN the classic hook runs THEN there is no toast', async ($, on) => {
+  const w = wire(on, { tree: TREE, bottom: {} })
+
+  await send($, '++m ++ii ++pp')
+  await send($, 'hello')
+
+  expect(w.toasts, 'toasts').toEqual([])
+})
+
+test('GIVEN a toast the engine refuses WHEN unknown tokens are sent THEN the expansion still happens', async ($, on) => {
+  const fs = memFs(defaultsTree())
+  const fix = (p: string): string => p.replace(/^.*\/brewmod-placeholders\/placeholders/, '/PLUG/placeholders')
+  on('fs.exists', (_$, e) => ({ value: fs.exists(fix(e.path)) }) as never)
+  on('fs.list', (_$, e) => ({ value: fs.list(fix(e.path ?? '')) }) as never)
+  on('fs.read', (_$, e) => ({ value: fs.read(fix(e.path)) }) as never)
+  on('env.get', (_$, e) => ({ value: ({ HOME: '/home/u', CLAUDE_CONFIG_DIR: CFG } as Record<string, string>)[e.name] }) as never)
+  on('session.root', () => ({ value: ROOT }) as never)
+  on('ui.toast', () => ({ deny: 'ui down' }) as never)
+  on('classic.UserPromptSubmit', () => ({}))
+
+  const out = await send($, '++m ++foo')
+
+  expect(out, 'result').toEqual({ additionalContext: [M] })
+})
+
+for (const source of ['loop_wakeup', 'schedule_wakeup', 'system', 'poll_event'] as const) {
+  test(`GIVEN source ${source} WHEN a prompt with an unknown token runs THEN there is no toast and the expansion still lands`, async ($, on) => {
+    const w = wire(on, { tree: TREE, bottom: {} })
+
+    const out = await send($, '++m ++foo', 'default', source)
+
+    expect([w.toasts, out], 'toasts and result').toEqual([[], { additionalContext: [M] }])
+  })
+}
+
+for (const source of [undefined, 'user', 'sdk'] as const) {
+  test(`GIVEN source ${String(source)} WHEN a prompt with an unknown token runs THEN one toast names it`, async ($, on) => {
+    const w = wire(on, { tree: TREE, bottom: {} })
+
+    await send($, '++foo', 'default', source)
+
+    expect(w.toasts, 'toasts').toEqual(['unknown ++foo'])
+  })
+}
+
+test('GIVEN a code-like prompt WHEN the classic hook runs THEN no toast names ++i, ++count or a token in code', async ($, on) => {
+  const w = wire(on, { tree: TREE, bottom: {} })
+
+  await send($, 'fix for (i = 0; i < n; ++i) and a[++j] and ++k; then `++tick` and\n```\n++blk\n```\nplus ++typo')
+
+  expect(w.toasts, 'toasts').toEqual(['unknown ++typo'])
+})
+
+test('GIVEN every source value WHEN checked THEN only a missing source, user and sdk are typed by the person', async () => {
+  expect(
+    [undefined, 'user', 'sdk', 'system', 'loop_wakeup', 'schedule_wakeup', 'poll_event', 7].map((s) => isTypedSource(s)),
+    'typed',
+  ).toEqual([true, true, true, false, false, false, false, false])
+})
+
+test('GIVEN a custom prefix WHEN a prompt holds unknown tokens of both prefixes THEN only the custom ones are named', { options: { prefix: '@@' } }, async ($, on) => {
+  const w = wire(on, { tree: TREE, bottom: {} })
+
+  await send($, '@@zz ++yy')
+
+  expect(w.toasts, 'toasts').toEqual(['unknown @@zz'])
+})
+
+test('GIVEN a subagent delivery with an unknown token WHEN the classic hook runs THEN there is no toast', async ($, on) => {
+  const w = wire(on, { tree: TREE, bottom: {} })
+
+  await send($, '<task-notification>++foo')
+
+  expect(w.toasts, 'toasts').toEqual([])
+})
+
+// ---- pure helpers
+
+test('GIVEN eight unknown tokens WHEN the message is built THEN five are named and the rest counted', async () => {
+  const ms = compileMatchers('++', ['m'])
+  const names = unknownTokens(ms, '++a ++b ++c ++d ++e ++f ++g ++h ++A')
+
+  expect([names.length, unknownMessage(names)], 'count and message').toEqual([8, 'unknown ++a, ++b, ++c, ++d, ++e and 3 more'])
+})
+
+test('GIVEN known and unknown tokens and a word glued to the prefix WHEN scanned THEN only standalone unknown ones are listed', async () => {
+  const ms = compileMatchers('++', ['m'])
+
+  expect(unknownTokens(ms, 'i++x ++m ++q a+++b'), 'unknown').toEqual(['++q'])
+})
+
+test('GIVEN fences, backticks, closers and an unclosed backtick WHEN scanned THEN only a standalone token outside code is unknown', async () => {
+  const ms = compileMatchers('++', ['m'])
+  const text = '~~~\n++a\n~~~ `++b` ++c) ++d] ++e[0] ++f; ++g, `++h ++i'
+
+  expect(unknownTokens(ms, text), 'unknown').toEqual(['++g', '++h', '++i'])
+})
+
+test('GIVEN defs with every insert and when combination WHEN the inline bodies are built THEN only an inline always def of a context-free name remains', async () => {
+  const defs = [
+    def({ name: 'A', insert: 'inline', when: 'always', body: 'a' }),
+    def({ name: 'a', insert: 'inline', when: 'always', body: 'second' }),
+    def({ name: 'b', insert: 'inline', when: 'plan', body: 'b' }),
+    def({ name: 'c', insert: 'inline', when: 'not-plan', body: 'c' }),
+    def({ name: 'd', insert: 'inline', when: 'always', body: '' }),
+    def({ name: 'e', insert: 'context', when: 'always', body: 'e' }),
+    def({ name: 'f', insert: 'inline', when: 'always', body: 'f-inline' }),
+    def({ name: 'f', insert: 'context', when: 'plan', body: 'f-context' }),
+  ]
+
+  expect([...inlineBodies(defs)], 'bodies').toEqual([['a', 'a']])
+})
+
+test('GIVEN a symbol-named inline def, overlapping words and adjacent tokens WHEN expanded THEN one pass replaces each token once', async () => {
+  const c = compileDefs([def({ name: '@', insert: 'inline', body: 'AT' }), def({ name: 'r', insert: 'inline', body: 'R' }), def({ name: 'rr', insert: 'inline', body: 'RR' })])
+
+  expect(expandInline(c, '++@ ++rr ++r,++@!'), 'expanded').toBe('AT RR R,AT!')
+})
+
+test('GIVEN no eligible token WHEN expanded THEN the helper answers null', async () => {
+  const c = compileDefs([def({ name: 'r', insert: 'inline', when: 'plan', body: 'R' })])
+
+  expect([expandInline(c, '++r'), expandInline(c, 'no prefix'), expandInline(compileDefs([]), '++r')], 'results').toEqual([null, null, null])
+})
+
+test('GIVEN a dollar sign in a body WHEN expanded THEN it is inserted literally', async () => {
+  const c = compileDefs([def({ name: 'p', insert: 'inline', body: "cost $& $1 $'" })])
+
+  expect(expandInline(c, 'x ++p'), 'expanded').toBe("x cost $& $1 $'")
+})
+
+test('GIVEN every origin kind WHEN checked THEN only composer, bridge and sdk without command or isMeta qualify', async () => {
+  const kinds = ['composer', 'bridge', 'sdk', 'task-notification', 'peer', 'plugin', 'engine']
+
+  expect(kinds.map((kind) => isInlineSubmit({ origin: { kind } })), 'qualifying kinds').toEqual([true, true, true, false, false, false, false])
+  expect([isInlineSubmit({ origin: { kind: 'composer' }, command: { name: 'x', args: '' } }), isInlineSubmit({ origin: { kind: 'composer' }, isMeta: true })], 'blocked').toEqual([false, false])
+})

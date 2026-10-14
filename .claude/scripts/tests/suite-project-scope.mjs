@@ -2,7 +2,7 @@
 // update-plugin.sh + clean-plugin-cache.sh: project/local installs update from their projectPath before the prune.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -12,6 +12,7 @@ const REPO = join(SCRIPTS, '..', '..');
 const VER = JSON.parse(readFileSync(join(REPO, 'brewcode/.claude-plugin/plugin.json'), 'utf8')).version;
 const OLD = '0.0.1';
 const ID = 'brewcode@claude-brewcode';
+const OTHERS = ['brewdoc', 'brewtools', 'brewui', 'brewmod-plan-effort', 'brewmod-placeholders'];
 
 // Stub `claude`: logs {cwd,args}; `update` moves rows of that scope (project/local: projectPath == cwd) to $STUB_VERSION.
 const STUB = `#!/usr/bin/env node
@@ -39,8 +40,13 @@ fs.writeFileSync(file, JSON.stringify(db));
 console.log('updated ' + id + ' for scope ' + scope);
 `;
 
+// Sandboxes (g3-scope-, g3-repo-) removed on exit.
+const DIRS = [];
+process.on('exit', () => DIRS.forEach(d => rmSync(d, { recursive: true, force: true })));
+
 function sandbox({ profileName = '.claude-t', projectExists = true, userVersion = OLD } = {}) {
     const home = realpathSync(mkdtempSync(join(tmpdir(), 'g3-scope-')));
+    DIRS.push(home);
     const profile = join(home, profileName);
     const cache = join(profile, 'plugins/cache/claude-brewcode/brewcode');
     const project = join(home, 'proj');
@@ -152,7 +158,7 @@ const call = (cwd, ...args) => ({ cwd, args });
         ],
     }, 'THEN both pins are named with their scope, projectPath and exact command');
 }
-// GIVEN only brewcode installed at user scope WHEN update-plugin.sh all runs THEN the other three are skipped with one note each and project rows still update.
+// GIVEN only brewcode installed at user scope WHEN update-plugin.sh all runs THEN the other five are skipped with one note each and project rows still update.
 {
     const sb = sandbox();
     const r = run(sb, 'update-plugin.sh', ['all']);
@@ -167,12 +173,8 @@ const call = (cwd, ...args) => ({ cwd, args });
         ],
         cache: [VER],
         notes: [
-            '3. brewdoc: not installed in this profile -> skipped',
-            '4. brewtools: not installed in this profile -> skipped',
-            '5. brewui: not installed in this profile -> skipped',
-            '| brewdoc  | ' + VER + '  | skipped (not installed)  |',
-            '| brewtools | ' + VER + ' | skipped (not installed) |',
-            '| brewui    | ' + VER + ' | skipped (not installed) |',
+            ...OTHERS.map((n, i) => `${i + 3}. ${n}: not installed in this profile -> skipped`),
+            ...OTHERS.map(n => `| ${n} | ${VER} | skipped (not installed) |`),
         ],
     }, 'THEN absent plugins are skipped, never errors, and the later steps run');
 }
@@ -185,9 +187,7 @@ const call = (cwd, ...args) => ({ cwd, args });
         rc: 0,
         calls: [call(sb.other, 'plugin', 'list', '--json'), call(sb.other, 'plugin', 'list', '--json')],
         notes: [
-            '  brewdoc: not installed in this profile -> skipped',
-            '  brewtools: not installed in this profile -> skipped',
-            '  brewui: not installed in this profile -> skipped',
+            ...OTHERS.map(n => `  ${n}: not installed in this profile -> skipped`),
         ],
     }, 'THEN dry-run names the skips and changes nothing');
 }
@@ -205,5 +205,56 @@ const call = (cwd, ...args) => ({ cwd, args });
         ],
         errors: ['ERROR: brewcode update failed (exit 1): stub failure user'],
     }, 'THEN a real update failure still fails the run');
+}
+
+// Scratch repo: update-plugin.sh + clean-plugin-cache.sh copies, plugin.json per name, marketplace.json from `plugins`.
+function scratchRepo(plugins, names = ['brewcode', ...OTHERS]) {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'g3-repo-')));
+    DIRS.push(root);
+    mkdirSync(join(root, '.claude/scripts'), { recursive: true });
+    mkdirSync(join(root, '.claude-plugin'));
+    for (const f of ['update-plugin.sh', 'clean-plugin-cache.sh']) writeFileSync(join(root, '.claude/scripts', f), readFileSync(join(SCRIPTS, f)));
+    for (const n of names) {
+        mkdirSync(join(root, n, '.claude-plugin'), { recursive: true });
+        writeFileSync(join(root, n, '.claude-plugin/plugin.json'), JSON.stringify({ name: n, version: VER }));
+    }
+    writeFileSync(join(root, '.claude-plugin/marketplace.json'), JSON.stringify({ plugins: plugins.map(name => ({ name, version: VER })) }));
+    return root;
+}
+function runIn(root, sb, args) {
+    const r = spawnSync('/bin/bash', [join(root, '.claude/scripts/update-plugin.sh'), ...args], {
+        cwd: sb.other, encoding: 'utf8', timeout: 60000,
+        env: { PATH: `${sb.bin}:${process.env.PATH}`, HOME: sb.home, CLAUDE_CONFIG_DIR: sb.profile, STUB_LOG: sb.log, STUB_VERSION: VER, BREWCODE_UPDATE_LOG: sb.updateLog },
+    });
+    return { rc: r.status, lines: r.stdout.split('\n') };
+}
+
+// GIVEN a marketplace.json listing the plugins in reverse order WHEN update-plugin.sh all --dry-run runs THEN versions are read by name and all six rows match.
+{
+    const sb = sandbox();
+    const root = scratchRepo(['brewmod-placeholders', 'brewmod-plan-effort', 'brewui', 'brewtools', 'brewdoc', 'brewcode']);
+    const r = runIn(root, sb, ['all', '--dry-run']);
+    assert.deepEqual({ rc: r.rc, table: r.lines.filter(l => l.startsWith('| brew')) },
+        { rc: 0, table: ['brewcode', ...OTHERS].map(n => `| ${n} | ${VER} | ${VER} | OK |`) },
+        'THEN a reordered marketplace.json does not shift any version read');
+}
+
+// GIVEN a marketplace.json without brewmod-placeholders WHEN update-plugin.sh runs for it or for all THEN rc 1 and the error names that entry.
+for (const args of [['brewmod-placeholders'], ['all']]) {
+    const sb = sandbox();
+    const root = scratchRepo(['brewcode', 'brewdoc', 'brewtools', 'brewui', 'brewmod-plan-effort']);
+    const r = runIn(root, sb, args);
+    assert.deepEqual({ rc: r.rc, errors: r.lines.filter(l => l.startsWith('ERROR')) },
+        { rc: 1, errors: [`ERROR: marketplace.json has no plugin entry named 'brewmod-placeholders' (or it has no version): ${join(root, '.claude-plugin/marketplace.json')}`] },
+        `THEN a missing entry fails loudly by name (${args[0]})`);
+}
+
+// GIVEN an unknown plugin name WHEN update-plugin.sh runs THEN rc 1 and the usage lists the six names.
+{
+    const sb = sandbox();
+    const r = run(sb, 'update-plugin.sh', ['brewmod-nope']);
+    assert.deepEqual({ rc: r.rc, errors: r.lines.filter(l => l.startsWith('ERROR')) },
+        { rc: 1, errors: ["ERROR: Unknown argument 'brewmod-nope'. Use: brewcode | brewdoc | brewtools | brewui | brewmod-plan-effort | brewmod-placeholders | all | --dry-run | --help"] },
+        'THEN the unknown name is rejected with the full list');
 }
 console.log('suite-project-scope: PASS');

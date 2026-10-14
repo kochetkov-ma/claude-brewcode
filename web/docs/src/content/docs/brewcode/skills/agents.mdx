@@ -68,9 +68,10 @@ Agent and hook references were refreshed through Claude Code 2.1.296. They disti
 
 ## Reference files
 
-`agent-creator` and `hook-creator` used to carry all of this inline; it now lives in this skill's
-own `references/` directory and each agent reads only the file it needs, on demand. 11 files, each
-under 200 lines.
+`agent-creator`, `hook-creator` and `mod-creator` read their domain knowledge from this skill's
+own `references/` directory, each agent only the file it needs, on demand. 16 files: 5 `agent-*`,
+6 `hooks-*`, 5 `mods-*`. The agent and hooks files stay under 200 lines; `mods-api.md` and
+`mods-patterns.md` run longer.
 
 | File | Used by | Holds |
 |------|---------|-------|
@@ -85,6 +86,13 @@ under 200 lines.
 | [hooks-env.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/hooks-env.md) | hook-creator | Env vars, sensitive-path prompt, project-root resolution |
 | [hooks-templates.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/hooks-templates.md) | hook-creator | Bash/JS hook skeletons, fail-safe design rules, pre-ship checklist |
 | [hooks-changes.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/hooks-changes.md) | hook-creator | Changes through 2.1.296 and known contract limits |
+| [mods-api.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/mods-api.md) | mod-creator | Symbol index (drift-checked), event and `$` noun catalog, manifest shapes, limits of the mod API |
+| [mods-lifecycle.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/mods-lifecycle.md) | mod-creator | Mod road: scaffold, hooks module, validate, tsc, test, run, debug, ship, maintain |
+| [mods-patterns.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/mods-patterns.md) | mod-creator | Recipes for brewcode mods and any other mod, each marked `proven` or `[unproven]` |
+| [mods-testing.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/mods-testing.md) | mod-creator | The `claude-code/testing` kit, test patterns, CI wiring, headless and tmux TTY checks |
+| [mods-changes.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/mods-changes.md) | mod-creator | Per-version log of mod API changes and the self-update procedure |
+
+**Drift check:** `scripts/mods-ref-check.mjs <types.d.ts> <refs dir>` compares every symbol-index row of `mods-api.md` with the Claude Code types file. Exit code 0 = clean, 1 = drift, 2 = error; the verdict is the first stdout line. `tests/run.sh` runs its offline suite and adds a live check when `MODS_TYPES=<types.d.ts>` is set.
 
 ## Delegation
 

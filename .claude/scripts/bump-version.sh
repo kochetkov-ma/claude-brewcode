@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# Usage: bash .claude/scripts/bump-version.sh [X.Y.Z] -> 6 version JSONs + stamps + versioned docs + .codex mirror; no arg = show.
+# Usage: bash .claude/scripts/bump-version.sh [X.Y.Z] -> 8 version JSONs (6 plugins + marketplace + package.json) + stamps + versioned docs + .codex mirror; no arg = show.
 # Idempotent (same version re-applies + re-verifies). Exit: 0 ok, 1 error or verify failed, 2 bad args.
 
 set -eu
@@ -9,6 +9,8 @@ BREWCODE_PLUGIN="brewcode/.claude-plugin/plugin.json"
 BREWDOC_PLUGIN="brewdoc/.claude-plugin/plugin.json"
 BREWTOOLS_PLUGIN="brewtools/.claude-plugin/plugin.json"
 BREWUI_PLUGIN="brewui/.claude-plugin/plugin.json"
+BREWMOD_PLAN_EFFORT_PLUGIN="brewmod-plan-effort/.claude-plugin/plugin.json"
+BREWMOD_PLACEHOLDERS_PLUGIN="brewmod-placeholders/.claude-plugin/plugin.json"
 MARKETPLACE=".claude-plugin/marketplace.json"
 PACKAGE="brewcode/package.json"
 
@@ -37,6 +39,7 @@ brewcode/agents/agent-creator.md|fmd|brewcode
 brewcode/agents/bash-expert.md|fmd|brewcode
 brewcode/agents/bc-rules-organizer.md|fmd|brewcode
 brewcode/agents/hook-creator.md|fmd|brewcode
+brewcode/agents/mod-creator.md|fmd|brewcode
 brewcode/agents/skill-creator.md|fmd|brewcode
 brewcode/skills/setup-status/references/artifact-metadata.md|fmd|brewcode
 brewdoc/skills/docsync-setup/assets/docsync-track.mjs|mjs|brewdoc:docsync-setup
@@ -115,7 +118,7 @@ die_args() { echo "ERROR: $*" >&2; exit 2; }
 command -v jq >/dev/null 2>&1 || die "jq required. Run: brew install jq"
 
 # --- Validate repo root ---
-for f in "$BREWCODE_PLUGIN" "$BREWDOC_PLUGIN" "$BREWTOOLS_PLUGIN" "$BREWUI_PLUGIN" "$MARKETPLACE" "$PACKAGE"; do
+for f in "$BREWCODE_PLUGIN" "$BREWDOC_PLUGIN" "$BREWTOOLS_PLUGIN" "$BREWUI_PLUGIN" "$BREWMOD_PLAN_EFFORT_PLUGIN" "$BREWMOD_PLACEHOLDERS_PLUGIN" "$MARKETPLACE" "$PACKAGE"; do
     [ -f "$f" ] || die "Not found: $f (run from project root)"
 done
 
@@ -130,11 +133,10 @@ if [ $# -eq 0 ]; then
     echo "  brewdoc plugin.json:     $(jq -r '.version' "$BREWDOC_PLUGIN")"
     echo "  brewtools plugin.json:   $(jq -r '.version' "$BREWTOOLS_PLUGIN")"
     echo "  brewui plugin.json:      $(jq -r '.version' "$BREWUI_PLUGIN")"
+    echo "  brewmod-plan-effort:     $(jq -r '.version' "$BREWMOD_PLAN_EFFORT_PLUGIN")"
+    echo "  brewmod-placeholders:    $(jq -r '.version' "$BREWMOD_PLACEHOLDERS_PLUGIN")"
     echo "  marketplace.json meta:   $(jq -r '.metadata.version' "$MARKETPLACE")"
-    echo "  marketplace.json [0]:    $(jq -r '.plugins[0].version' "$MARKETPLACE")"
-    echo "  marketplace.json [1]:    $(jq -r '.plugins[1].version' "$MARKETPLACE")"
-    echo "  marketplace.json [2]:    $(jq -r '.plugins[2].version' "$MARKETPLACE")"
-    echo "  marketplace.json [3]:    $(jq -r '.plugins[3].version' "$MARKETPLACE")"
+    jq -r '.plugins[] | "  marketplace.json " + .name + ": " + .version' "$MARKETPLACE"
     echo "  package.json:            $(jq -r '.version' "$PACKAGE")"
     echo "  package.json plugin:     $(jq -r '."claude-plugin".version' "$PACKAGE")"
     exit 0
@@ -161,12 +163,14 @@ jq_update() {
     jq "$_filter" "$_file" > "$_tmp" && mv "$_tmp" "$_file"
 }
 
-# --- Update all 6 files ---
+# --- Update all version files (marketplace: every plugin entry by wildcard) ---
 jq_update ".version = \"$NEW\"" "$BREWCODE_PLUGIN"
 jq_update ".version = \"$NEW\"" "$BREWDOC_PLUGIN"
 jq_update ".version = \"$NEW\"" "$BREWTOOLS_PLUGIN"
 jq_update ".version = \"$NEW\"" "$BREWUI_PLUGIN"
-jq_update ".metadata.version = \"$NEW\" | .plugins[0].version = \"$NEW\" | .plugins[1].version = \"$NEW\" | .plugins[2].version = \"$NEW\" | .plugins[3].version = \"$NEW\"" "$MARKETPLACE"
+jq_update ".version = \"$NEW\"" "$BREWMOD_PLAN_EFFORT_PLUGIN"
+jq_update ".version = \"$NEW\"" "$BREWMOD_PLACEHOLDERS_PLUGIN"
+jq_update ".metadata.version = \"$NEW\" | (.plugins[].version) = \"$NEW\"" "$MARKETPLACE"
 jq_update ".version = \"$NEW\" | .\"claude-plugin\".version = \"$NEW\"" "$PACKAGE"
 
 # Update every shipped doc that states the plugin version
@@ -270,11 +274,25 @@ verify "brewcode plugin.json"    "$(jq -r '.version' "$BREWCODE_PLUGIN")"
 verify "brewdoc plugin.json"     "$(jq -r '.version' "$BREWDOC_PLUGIN")"
 verify "brewtools plugin.json"   "$(jq -r '.version' "$BREWTOOLS_PLUGIN")"
 verify "brewui plugin.json"      "$(jq -r '.version' "$BREWUI_PLUGIN")"
+verify "brewmod-plan-effort plugin.json"  "$(jq -r '.version' "$BREWMOD_PLAN_EFFORT_PLUGIN")"
+verify "brewmod-placeholders plugin.json" "$(jq -r '.version' "$BREWMOD_PLACEHOLDERS_PLUGIN")"
 verify "marketplace.json meta"   "$(jq -r '.metadata.version' "$MARKETPLACE")"
-verify "marketplace.json [0]"    "$(jq -r '.plugins[0].version' "$MARKETPLACE")"
-verify "marketplace.json [1]"    "$(jq -r '.plugins[1].version' "$MARKETPLACE")"
-verify "marketplace.json [2]"    "$(jq -r '.plugins[2].version' "$MARKETPLACE")"
-verify "marketplace.json [3]"    "$(jq -r '.plugins[3].version' "$MARKETPLACE")"
+# Every marketplace plugin by NAME (no fixed indexes), then the required six must all be present.
+_mp_rows=$(jq -r '.plugins[] | .name + "|" + (.version // "null")' "$MARKETPLACE")
+_mp_seen=" "
+while IFS='|' read -r _n _mv; do
+    [ -z "$_n" ] && continue
+    verify "marketplace.json plugin $_n" "$_mv"
+    _mp_seen="$_mp_seen$_n "
+done <<MPROWS
+$_mp_rows
+MPROWS
+for _n in brewcode brewdoc brewtools brewui brewmod-plan-effort brewmod-placeholders; do
+    case "$_mp_seen" in
+        *" $_n "*) ;;
+        *) echo "  FAILED: marketplace.json has no plugin entry named $_n"; ERRORS=$((ERRORS + 1)) ;;
+    esac
+done
 verify "package.json"            "$(jq -r '.version' "$PACKAGE")"
 verify "package.json plugin"     "$(jq -r '."claude-plugin".version' "$PACKAGE")"
 
@@ -350,10 +368,12 @@ echo "  $BREWCODE_PLUGIN"
 echo "  $BREWDOC_PLUGIN"
 echo "  $BREWTOOLS_PLUGIN"
 echo "  $BREWUI_PLUGIN"
-echo "  $MARKETPLACE (5 fields)"
+echo "  $BREWMOD_PLAN_EFFORT_PLUGIN"
+echo "  $BREWMOD_PLACEHOLDERS_PLUGIN"
+echo "  $MARKETPLACE (metadata + every plugin entry)"
 echo "  $PACKAGE (2 fields)"
 echo "  $STAMP_COUNT baked asset stamps (brewcode-meta: version + content_version)"
 echo "  $DOC_COUNT shipped docs with a version header"
 echo "  .codex/ mirror regenerated + validated"
 echo ""
-echo "Next: bash .claude/scripts/update-plugin.sh && claude plugin marketplace update claude-brewcode && claude plugin update brewcode@claude-brewcode && claude plugin update brewdoc@claude-brewcode && claude plugin update brewtools@claude-brewcode && claude plugin update brewui@claude-brewcode"
+echo "Next: bash .claude/scripts/update-plugin.sh && claude plugin marketplace update claude-brewcode && for p in brewcode brewdoc brewtools brewui brewmod-plan-effort brewmod-placeholders; do claude plugin update \$p@claude-brewcode; done"

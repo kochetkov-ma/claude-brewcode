@@ -6,10 +6,10 @@ maxTurns: 60
 color: purple
 tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch
 doc_type: llm
-version: "6.6.2"
+version: "6.7.0"
 content_version: "6.6.0"
 generated_by: "brewtools"
-last_updated: "2026-10-14"
+last_updated: "2026-10-15"
 ---
 
 # Text Optimizer Agent

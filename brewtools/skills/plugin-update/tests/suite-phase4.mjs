@@ -2,7 +2,7 @@
 // Phase 4 fences run against a stub `claude`: project/local rows update from their projectPath, not the session cwd.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -17,6 +17,7 @@ fs.appendFileSync(process.env.STUB_LOG, JSON.stringify({ cwd: fs.realpathSync(pr
 `;
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), 'plugin-update-phase4-')));
+process.on('exit', () => rmSync(base, { recursive: true, force: true }));
 const project = join(base, 'proj');
 const session = join(base, 'session');
 const bin = join(base, 'bin');
@@ -57,7 +58,7 @@ const COMMANDS = REF('update-commands.md');
 
 // GIVEN the update references WHEN they template an update THEN project/local rows run from projectPath, user/managed rows keep --scope.
 assert.deepEqual([...REF('update-prompt.md').split('\n'), ...COMMANDS.split('\n')].filter(l => l.includes('claude plugin update <id>')), [
-    '3. for every brewcode/brewdoc/brewtools/brewui row from step 1 with scope user or managed: claude plugin update <id> --scope <scope of that row>',
+    '3. for every brewcode/brewdoc/brewtools/brewui row, and every installed brewmod-plan-effort/brewmod-placeholders row (never install a missing mod), from step 1 with scope user or managed: claude plugin update <id> --scope <scope of that row>',
     '4. for every such row with scope project or local: (cd "<projectPath of that row>" && claude plugin update <id> --scope <scope of that row>); if that projectPath is not a directory, run nothing for it and report it as an orphan install',
     'claude plugin update <id> --scope <scope>      # user/managed rows, repeat per selected plugin',
     '(cd "<projectPath>" && claude plugin update <id> --scope <scope>)      # project/local rows',

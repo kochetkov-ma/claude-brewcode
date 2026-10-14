@@ -48,6 +48,7 @@ export const navigation: NavSection[] = [
           { title: 'agent-creator', slug: 'brewcode/agents/agent-creator' },
           { title: 'hook-creator', slug: 'brewcode/agents/hook-creator' },
           { title: 'bash-expert', slug: 'brewcode/agents/bash-expert' },
+          { title: 'mod-creator', slug: 'brewcode/agents/mod-creator' },
           { title: 'bc-rules-organizer', slug: 'brewcode/agents/bc-rules-organizer' },
         ],
       },
@@ -112,6 +113,14 @@ export const navigation: NavSection[] = [
           { title: 'publish', slug: 'brewdoc/skills/publish' },
         ],
       },
+    ],
+  },
+  {
+    title: 'Mods',
+    items: [
+      { title: 'Overview', slug: 'mods/overview' },
+      { title: 'Plan-mode effort', slug: 'mods/plan-effort' },
+      { title: 'Prompt placeholders', slug: 'mods/placeholders' },
     ],
   },
   {

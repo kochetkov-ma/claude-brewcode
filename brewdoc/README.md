@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 6.6.2 |
+| Version | 6.7.0 |
 | Skills | 5 |
 | Agents | 0 |
 | Hooks | 0 |
@@ -135,7 +135,7 @@ brewdoc/
     +-- publish/                      # brewpage.app publishing
 ```
 
-> **Brewdoc vs Brewcode:** Brewdoc is a set of documentation utilities and each skill is self-contained. Brewcode covers the project's own engineering surface -- conventions, rules, agent teams, semantic search and deep review -- with 9 skills, 5 agents and 2 registered hook commands (both SessionStart). Both install from the same `claude-brewcode` marketplace and operate independently.
+> **Brewdoc vs Brewcode:** Brewdoc is a set of documentation utilities and each skill is self-contained. Brewcode covers the project's own engineering surface -- conventions, rules, agent teams, semantic search and deep review -- with 9 skills, 6 agents and 2 registered hook commands (both SessionStart). Both install from the same `claude-brewcode` marketplace and operate independently.
 
 ## Artifact metadata
 
@@ -171,5 +171,7 @@ Full docs: [doc-claude.brewcode.app/brewdoc/overview](https://doc-claude.brewcod
 | Publish | [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/) |
 | Setup Status (brewcode) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) |
 | Release Notes | [RELEASE-NOTES.md](../RELEASE-NOTES.md) |
+
+See also: [Claude Code mods](../README.md#claude-code-mods) — optional brewmod-plan-effort and brewmod-placeholders.
 
 Author: Maksim Kochetkov | License: MIT

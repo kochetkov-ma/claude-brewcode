@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# fetch-latest-versions.sh -> {"brewcode":"X.Y.Z","brewdoc":"X.Y.Z","brewtools":"X.Y.Z","brewui":"X.Y.Z"}; failed plugin = "unknown".
+# fetch-latest-versions.sh -> {"<plugin>":"X.Y.Z"} for the 4 suite plugins + 2 optional brewmod-* mods; failed plugin = "unknown".
 # Source: raw plugin.json from GitHub main branch; fallback `gh api` release tag_name.
 
 set -uo pipefail
 
 log() { printf '%s\n' "$*" >&2; }
 
-PLUGINS=(brewcode brewdoc brewtools brewui)
+PLUGINS=(brewcode brewdoc brewtools brewui brewmod-plan-effort brewmod-placeholders)
 REPO="kochetkov-ma/claude-brewcode"
 RAW_BASE="https://raw.githubusercontent.com/${REPO}/main"
 
@@ -35,7 +35,7 @@ fetch_version() {
       return
     fi
   fi
-  # fallback: release tag (shared across all 4 plugins in this repo)
+  # fallback: release tag (shared across all plugins in this repo)
   if [ -z "$RELEASE_FALLBACK" ]; then
     RELEASE_FALLBACK=$(fetch_release_tag)
   fi

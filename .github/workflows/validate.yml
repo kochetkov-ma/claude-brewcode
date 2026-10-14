@@ -75,9 +75,24 @@ jobs:
           CLAUDE_CONFIG_DIR="$(mktemp -d)"
           export CLAUDE_CONFIG_DIR
           fail=0
-          for target in . ./brewcode ./brewdoc ./brewtools ./brewui; do
+          for target in . ./brewcode ./brewdoc ./brewtools ./brewui ./brewmod-*; do
             claude plugin validate --strict "$target" || { echo "::error::claude plugin validate --strict $target failed"; fail=1; }
           done
+          exit "$fail"
+
+      # A mod whose hooks module fails to load makes both `plugin validate --strict` and `plugin test` exit non-zero (probed on 2.1.296).
+      - name: Brewmod tests (claude plugin test + parity gates)
+        if: ${{ !cancelled() }}
+        run: |
+          set -uo pipefail
+          CLAUDE_CONFIG_DIR="$(mktemp -d)"
+          export CLAUDE_CONFIG_DIR
+          fail=0
+          for mod in ./brewmod-*/; do
+            claude plugin test "$mod" || { echo "::error::claude plugin test $mod failed"; fail=1; }
+          done
+          node brewmod-placeholders/scripts/extract-defaults.mjs --check || { echo "::error::brewmod-placeholders defaults drift from brewtools references"; fail=1; }
+          node brewmod-placeholders/tests/parity/gen-golden.mjs --check || { echo "::error::brewmod-placeholders parity golden drifted from brewtools manager-prompt.mjs"; fail=1; }
           exit "$fail"
 
       - name: Skill contracts (validate-skill.sh)
@@ -85,7 +100,7 @@ jobs:
         run: |
           set -uo pipefail
           fail=0
-          for skill in brewcode/skills/*/ brewdoc/skills/*/ brewtools/skills/*/ brewui/skills/*/ skills/*/ .claude/skills/*/; do
+          for skill in brewcode/skills/*/ brewdoc/skills/*/ brewtools/skills/*/ brewui/skills/*/ brewmod-*/skills/*/ skills/*/ .claude/skills/*/; do
             [ -f "${skill}SKILL.md" ] || continue
             sh brewcode/skills/skills/scripts/validate-skill.sh "${skill%/}" || { echo "::error file=${skill}SKILL.md::validate-skill.sh failed"; fail=1; }
           done
@@ -155,6 +170,7 @@ jobs:
               bash brewdoc/skills/memory-sync-setup/tests/run.sh
               bash brewtools/skills/provider-switch/tests/run.sh
               bash brewcode/skills/skills/tests/run.sh
+              bash brewcode/skills/agents/tests/run.sh
               bash brewcode/skills/rules/tests/run.sh
               bash brewcode/.codex/skills/rules/tests/run.sh
               bash brewtools/skills/context-slim/tests/run.sh

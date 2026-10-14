@@ -1,6 +1,6 @@
 ---
 title: "Agents"
-description: "All 5 brewcode agents: models, tools, triggers, and the shared Scope guard that stops oversized tasks."
+description: "All 6 brewcode agents: models, tools, triggers, and the shared Scope guard that stops oversized tasks."
 order: 12
 ---
 
@@ -9,7 +9,7 @@ import { Card, CardGrid, Callout, UpdateNotice } from '../../../components/mdx';
 # Agents
 
 Agents (brewers) are specialized roles defined in markdown files with frontmatter metadata.
-Each agent has its own model, toolset, and system prompt. Brewcode ships 5 agents (4 public + 1 internal helper) — specialists only, for building skills, agents, hooks, and shell scripts.
+Each agent has its own model, toolset, and system prompt. Brewcode ships 6 agents (5 public + 1 internal helper) — specialists only, for building skills, agents, hooks, mods, and shell scripts.
 
 Generic roles (developer, tester, reviewer, architect) are no longer shipped: every project generates its own agents into `.claude/agents/` via [/brewcode:teams-setup](/brewcode/skills/teams-setup/) or [/brewcode:agents](/brewcode/skills/agents/), tuned to that project's stack. Skills that need a reviewer or an implementer pick the project's agent from `.claude/agents/`, falling back to `general-purpose`.
 
@@ -23,7 +23,8 @@ Purpose column = the agent's own `description` frontmatter, verbatim. That strin
 | 2 | agent-creator | inherit | Read, Write, Edit, Bash | Creates and improves Claude Code agents. Triggers: create agent, improve agent, scaffold agent. |
 | 3 | hook-creator | inherit | Read, Write, Edit, Bash | Creates and debugs Claude Code hooks. Triggers: create hook, PreToolUse hook, debug hook. |
 | 4 | bash-expert | inherit | Read, Write, Edit, Bash | Creates sh/bash scripts for Mac/Linux. Triggers: create script, bash script, shell script. |
-| 5 | bc-rules-organizer | haiku | Read, Write, Edit, Bash | Internal. Spawned only by /brewcode:rules and /brewcode:convention-setup. No direct/auto use. |
+| 5 | mod-creator | inherit | Read, Write, Edit, Bash, Skill | Creates, tests and ships Claude Code mods (hooks-module plugins). Triggers: create mod, hooks module, mod API. |
+| 6 | bc-rules-organizer | haiku | Read, Write, Edit, Bash | Internal. Spawned only by /brewcode:rules and /brewcode:convention-setup. No direct/auto use. |
 
 `model: inherit` means the agent runs on whatever model the session runs on — no per-agent pin. Only the internal `bc-rules-organizer` (haiku) is pinned.
 
@@ -40,6 +41,9 @@ Purpose column = the agent's own `description` frontmatter, verbatim. That strin
   <Card title="bash-expert" icon="terminal" href="/brewcode/agents/bash-expert/">
     Bash/sh script creation
   </Card>
+  <Card title="mod-creator" icon="package" href="/brewcode/agents/mod-creator/">
+    Mod (hooks-module plugin) creation, testing and shipping
+  </Card>
   <Card title="bc-rules-organizer" icon="link" href="/brewcode/agents/bc-rules-organizer/">
     Internal — rules file organization
   </Card>
@@ -53,7 +57,7 @@ Purpose column = the agent's own `description` frontmatter, verbatim. That strin
 `agents/tests/suite-creator-contract.mjs` is a 99-check regression suite that pins what `hook-creator`, `agent-creator` and `skill-creator` teach about the Claude Code hook and subagent API, so the next upstream change fails a test instead of silently teaching a stale one.
 </Callout>
 
-## Scope guard — shared by all 4 public agents
+## Scope guard — shared by all 5 public agents
 
 Every public brewcode agent sizes the task before starting. One bounded unit = one deliverable, roughly 5 files, roughly 10 steps. Anything larger is refused up front.
 
@@ -74,7 +78,7 @@ Agents deliver for the CONSUMER, not the literal wording: the result must be usa
 
 | Model | Agents | Meaning |
 |-------|--------|---------|
-| **inherit** | [skill-creator](/brewcode/agents/skill-creator/), [agent-creator](/brewcode/agents/agent-creator/), [hook-creator](/brewcode/agents/hook-creator/), [bash-expert](/brewcode/agents/bash-expert/) | Runs on the session's model — you control the tier |
+| **inherit** | [skill-creator](/brewcode/agents/skill-creator/), [agent-creator](/brewcode/agents/agent-creator/), [hook-creator](/brewcode/agents/hook-creator/), [bash-expert](/brewcode/agents/bash-expert/), [mod-creator](/brewcode/agents/mod-creator/) | Runs on the session's model — you control the tier |
 | **haiku** | [bc-rules-organizer](/brewcode/agents/bc-rules-organizer/) | Pinned: cheap file reorganization |
 
 <Callout type="tip" title="Automatic selection">

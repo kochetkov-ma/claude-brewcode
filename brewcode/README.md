@@ -4,9 +4,9 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 6.6.2 |
+| Version | 6.7.0 |
 | Skills | 9 |
-| Agents | 5 |
+| Agents | 6 |
 | Hooks | 2 |
 | Model | opus |
 
@@ -123,6 +123,7 @@ Hook creation includes event-specific payload, blocking and asynchronous behavio
 | [agent-creator](agents/agent-creator.md) | inherit | Creates and improves Claude Code agents |
 | [hook-creator](agents/hook-creator.md) | inherit | Creates and debugs Claude Code hooks |
 | [bash-expert](agents/bash-expert.md) | inherit | Creates sh/bash scripts for Mac/Linux |
+| [mod-creator](agents/mod-creator.md) | inherit | Creates, tests and ships Claude Code mods (hooks-module plugins) |
 | bc-rules-organizer | haiku | Internal: spawned by /brewcode:rules and /brewcode:convention-setup |
 
 > **No generic agents:** brewcode ships specialists only. Implementation, testing, review and architecture
@@ -148,7 +149,7 @@ brewcode/
 |   +-- compact-recall.mjs             # SessionStart (compact): re-anchor plan/intent + task graph
 |   +-- hooks.json                     # Event bindings
 |   +-- lib/utils.mjs                  # Shared utilities
-+-- agents/                            # 5 agents
++-- agents/                            # 6 agents
 +-- skills/                            # 9 skills
 +-- templates/                         # Rule templates
 ```
@@ -191,6 +192,7 @@ Run from the repository root; suite output gives current pass/fail totals.
 |---------|--------|
 | `node brewcode/agents/tests/suite-creator-contract.mjs` | Creator agents' hook, skill and subagent contracts |
 | `bash brewcode/agents/tests/run.sh` | Creator agents' suite runner |
+| `bash brewcode/skills/agents/tests/run.sh` | Mods reference pack drift check (`mods-ref-check.mjs`) |
 | `bash brewcode/hooks/tests/run.sh` | Session-start hook suite |
 | `bash brewcode/skills/setup-status/tests/run.sh` | Setup dashboard probes and verdicts |
 | `bash brewcode/skills/superreview-setup/tests/run.sh` | Review-skill generator |
@@ -212,7 +214,10 @@ Full docs: [doc-claude.brewcode.app/brewcode/overview](https://doc-claude.brewco
 | Skill creator | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) |
 | Agent creator | [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) |
 | Hook creator | [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) |
+| Mod creator | [mod-creator](https://doc-claude.brewcode.app/brewcode/agents/mod-creator/) |
 | Setup workflow | [Full Setup](https://doc-claude.brewcode.app/full-setup/) |
 | Release Notes | [RELEASE-NOTES.md](../RELEASE-NOTES.md) |
+
+See also: [Claude Code mods](../README.md#claude-code-mods) — optional brewmod-plan-effort and brewmod-placeholders.
 
 Author: Maksim Kochetkov | License: MIT

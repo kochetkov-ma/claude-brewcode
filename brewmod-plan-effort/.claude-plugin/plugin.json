@@ -1,0 +1,40 @@
+{
+  "name": "brewmod-plan-effort",
+  "version": "6.7.0",
+  "description": "Raises the main loop to the configured effort (default xhigh) while in plan mode, by rewriting each request; the session effort setting is never touched (Claude Code 2.1.287+ mod)",
+  "author": {
+    "name": "Maksim Kochetkov",
+    "email": "apmatypa88@gmail.com",
+    "url": "https://github.com/kochetkov-ma"
+  },
+  "homepage": "https://doc-claude.brewcode.app/mods/plan-effort/",
+  "repository": "https://github.com/kochetkov-ma/claude-brewcode.git",
+  "license": "MIT",
+  "keywords": [
+    "brewmod",
+    "mod",
+    "plan-mode",
+    "effort",
+    "xhigh"
+  ],
+  "userConfig": {
+    "planEffort": {
+      "type": "string",
+      "title": "Plan effort",
+      "description": "Effort for the main loop while in plan mode; raised only, never lowered",
+      "options": [
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "default": "xhigh"
+    },
+    "statusLine": {
+      "type": "boolean",
+      "title": "Status line",
+      "description": "Show 'plan: <level>' in the status area while plan mode raises the effort",
+      "default": true
+    }
+  }
+}

@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 6.6.2 |
+| Version | 6.7.0 |
 | Skills | 13 |
 | Agents | 3 |
 | Hooks | 2 |
@@ -243,5 +243,7 @@ Full docs: [doc-claude.brewcode.app/brewtools/overview](https://doc-claude.brewc
 | SSH Admin (agent) | [ssh-admin](https://doc-claude.brewcode.app/brewtools/agents/ssh-admin/) |
 | Deploy Admin (agent) | [deploy-admin](https://doc-claude.brewcode.app/brewtools/agents/deploy-admin/) |
 | Release Notes | [RELEASE-NOTES.md](../RELEASE-NOTES.md) |
+
+See also: [Claude Code mods](../README.md#claude-code-mods) — optional brewmod-plan-effort and brewmod-placeholders (a drop-in for the codewords).
 
 Author: Maksim Kochetkov | License: MIT

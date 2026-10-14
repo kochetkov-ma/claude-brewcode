@@ -1,0 +1,74 @@
+---
+title: "brewcode mods"
+description: "Small optional Claude Code plugins built on the hooks module API: plan-mode effort and ++ prompt placeholders. Install each one on its own."
+order: 40
+---
+
+import { Card, CardGrid, Callout, InstallPrompt, UpdateNotice } from '../../../components/mdx';
+
+# brewcode mods
+
+Mods are small, optional Claude Code plugins that change how the client behaves. They are built on
+the early-access hooks module API: TypeScript handlers that run on engine events such as a prompt
+being edited or a model request being sent. A mod installs separately from the four suite plugins
+and works without them.
+
+<p align="center">
+  <img src="/brewmods/hub.gif" alt="Terminal-style animation of the brewcode mods hub: an ASCII brewcode logo and a four-slide walkthrough of the mods" width="800" loading="lazy" />
+  <br /><small>Illustrative animation of the brewcode mods.</small>
+</p>
+
+## The mods
+
+| Mod | What it does | Needs |
+|-----|--------------|-------|
+| [`brewmod-plan-effort`](/mods/plan-effort/) | Raises the main loop's effort to `xhigh` (configurable) while Claude Code is in plan mode. The session `/effort` setting is never written | Claude Code 2.1.287+ |
+| [`brewmod-placeholders`](/mods/placeholders/) | Type `++r`, get a whole instruction block. Known tokens highlight, a typeahead lists the names and a band above the prompt previews what the draft adds. Drop-in for the brewtools codewords | Claude Code 2.1.292+ |
+
+## Installation
+
+Install one mod or both, then run `/reload-plugins`. The marketplace is the same `claude-brewcode`
+marketplace the suite uses.
+
+<InstallPrompt plugin="brewmod-plan-effort" mode="install" />
+
+<InstallPrompt plugin="brewmod-placeholders" mode="install" />
+
+To update later, run `/brewtools:plugin-update`, or use the update prompt on each mod page.
+
+<Callout type="note" title="How mods differ from plugins">
+  A mod ships no skills and no agents. Its `hooks.json` lists TypeScript hooks modules, which the
+  engine loads and runs, instead of command hooks. Mods are on by default from Claude Code 2.1.287
+  and are in early access, so the module API can change between releases. Each mod page states the
+  minimum Claude Code version it needs.
+</Callout>
+
+<Callout type="warning" title="Organization-managed installs">
+  `claude plugin validate` warns that `classic.UserPromptSubmit` and `classic.PostToolBatch` hooks do
+  not run in a plugin a person installs where an organization manages Claude Code. This was not
+  tested on a managed install. Each mod page lists what it loses if your setup skips those hooks.
+</Callout>
+
+## Build your own
+
+The [Mod Creator](/brewcode/agents/mod-creator/) agent in the brewcode plugin scaffolds a mod, writes
+its tests, runs the gates and keeps its reference pack in sync with each Claude Code build.
+
+## Related
+
+<CardGrid>
+  <Card title="Plan-mode effort" icon="brain" href="/mods/plan-effort/">
+    Options, status line and measured results.
+  </Card>
+  <Card title="Prompt placeholders" icon="puzzle" href="/mods/placeholders/">
+    Definition files, the `/placeholders` command and measured results.
+  </Card>
+  <Card title="Mod Creator" icon="robot" href="/brewcode/agents/mod-creator/">
+    The brewcode agent that builds, tests and ships a new mod.
+  </Card>
+  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode">
+    Source code, README and release notes for the suite and both mods.
+  </Card>
+</CardGrid>
+
+<UpdateNotice />

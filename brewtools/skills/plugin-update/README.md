@@ -1,6 +1,6 @@
 # Plugin Update
 
-Checks the installed brewcode plugins (brewcode, brewdoc, brewtools, brewui) with `claude plugin list --json`, fetches the latest published versions, installs missing plugins, updates outdated ones at their installed scope, and always ends with a reload notice. Every `claude plugin` command runs in the current session; only `/plugin` UI actions and `/reload-plugins` are left to you.
+Checks the installed brewcode plugins (brewcode, brewdoc, brewtools, brewui) with `claude plugin list --json`, fetches the latest published versions, installs missing plugins, updates outdated ones at their installed scope, and always ends with a reload notice. It also checks and updates the optional mods `brewmod-plan-effort` and `brewmod-placeholders`, but only when they are already installed; it never installs a mod, in any mode, even when the prompt names one. Every `claude plugin` command runs in the current session; only `/plugin` UI actions and `/reload-plugins` are left to you.
 
 ## Quick Start
 
@@ -52,11 +52,11 @@ claude --plugin-dir ./brewtools
 | Phase | Name | Description |
 |-------|------|-------------|
 | 0 | Discover | `claude plugin list --json`, or `scripts/discover-plugins.sh` as fallback (see below) |
-| 1 | Fetch latest | Runs `scripts/fetch-latest-versions.sh` to get the current published versions from the marketplace |
-| 2 | Status table | Renders a markdown table: plugin name, installed version, latest version, and status (✅ current / ⬇️ update / ❌ missing / ❓ unknown) |
+| 1 | Fetch latest | Runs `scripts/fetch-latest-versions.sh` to get the current published versions of the four plugins and both mods from the marketplace |
+| 2 | Status table | Renders a markdown table: plugin name, installed version, latest version, and status (✅ current / ⬇️ update available / ❌ missing / ❓ unknown); one row per installed mod, and a mod that is not installed gets no row |
 | 2b | Token cost | Optional: per-plugin skills/agents/hooks counts and always-on tokens from `claude plugin details` |
-| 3 | Install missing | For each missing suite plugin, prompts (interactive) or auto-installs (`all`); runs `claude plugin marketplace add` then `claude plugin install <plugin>@claude-brewcode` |
-| 4 | Update outdated | Marketplace update, then one `claude plugin update <id> --scope <scope>` per plugin you selected, at its installed scope; `project`/`local` rows run as `(cd "<projectPath>" && ...)` from their own project directory, and a missing directory is reported as an orphan install without running anything |
+| 3 | Install missing | For each missing suite plugin (never a mod), prompts (interactive) or auto-installs (`all`); runs `claude plugin marketplace add` then `claude plugin install <plugin>@claude-brewcode` |
+| 4 | Update outdated | Marketplace update, then one `claude plugin update <id> --scope <scope>` per plugin or installed mod you selected, at its installed scope; `project`/`local` rows run as `(cd "<projectPath>" && ...)` from their own project directory, and a missing directory is reported as an orphan install without running anything |
 | 5 | Auto-update toggle | Interactive and `all` modes only; auto-update is off by default for this marketplace, and the skill points you to `/plugin` → Marketplaces instead of editing settings files |
 | 5b | Prune | Previews orphaned auto-installed dependencies per scope and removes them only after confirmation (`all` removes them) |
 | 6 | Final report | Prints reload notice plus a summary of what was installed, updated, skipped, and any errors |
@@ -77,12 +77,13 @@ The status table rendered in Phase 2 looks like this:
 
 | Plugin | Installed | Latest | Status |
 |--------|-----------|--------|--------|
-| brewcode | 3.4.51 | 3.4.52 | ⬇️ update |
-| brewdoc | 3.4.51 | 3.4.51 | ✅ current |
-| brewtools | — | 3.4.51 | ❌ missing |
-| brewui | 3.4.51 | 3.4.51 | ✅ current |
+| brewcode | X.Y.0 | X.Y.1 | ⬇️ update available |
+| brewdoc | X.Y.1 | X.Y.1 | ✅ current |
+| brewtools | — | X.Y.1 | ❌ missing |
+| brewui | X.Y.1 | X.Y.1 | ✅ current |
+| brewmod-plan-effort | X.Y.0 | X.Y.1 | ⬇️ update available |
 
-Other installed plugins are listed below the table for information.
+Mod rows appear only for installed mods; a missing mod is never marked ❌. For a mod that is not installed, the report adds one line pointing at `claude plugin install <mod>@claude-brewcode`, which you run yourself. Other installed plugins are listed below the table for information.
 
 ## Tips
 

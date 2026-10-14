@@ -8,7 +8,7 @@ import { Card, CardGrid, Callout, Steps, Tabs, TabItem, InstallPrompt, UpdateNot
 
 # Installation
 
-These four products run in Claude Code: 27 skills, 8 agents, and 4 registered plugin hooks.
+These four products run in Claude Code: 27 skills, 9 agents, and 4 registered plugin hooks.
 The repository's native Codex instructions are separate; this installation does not enable
 Codex plugins or configure Codex authentication or runtime state.
 
@@ -138,6 +138,17 @@ previously copied into your project; follow its scope-specific upgrade commands 
 
 <InstallPrompt plugin="all" mode="update" />
 
+## Mods (optional)
+
+[Brewcode mods](/mods/overview/) are separate plugins that extend Claude Code itself through the hooks module API. They are not part of the four-plugin suite and are never installed with it. After adding the marketplace, install the ones you want: [`brewmod-plan-effort`](/mods/plan-effort/) and [`brewmod-placeholders`](/mods/placeholders/).
+
+```bash
+claude plugin install brewmod-plan-effort@claude-brewcode    # Claude Code 2.1.287+
+claude plugin install brewmod-placeholders@claude-brewcode   # Claude Code 2.1.292+
+```
+
+Then run `/reload-plugins`. [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/) keeps installed mods current.
+
 ## Troubleshooting
 
 <Callout type="warning" title="Common issues">
@@ -165,7 +176,7 @@ previously copied into your project; follow its scope-specific upgrade commands 
     The 11 <code>-setup</code> skills in recommended order, what each installs, and the mode vocabulary.
   </Card>
   <Card title="Brewcode Overview" icon="building" href="/brewcode/overview/">
-    Architecture, concepts, all 9 brewcode skills, 5 agents, and 2 registered hooks.
+    Architecture, concepts, all 9 brewcode skills, 6 agents, and 2 registered hooks.
   </Card>
 </CardGrid>
 
