@@ -1,4 +1,5 @@
-// Definition parsing (pure) + layered registry (D7). File access only through an injected Io, never `$`.
+// Definition parsing (pure) + layered registry. File access only through an injected Io, never `$`.
+import type { EditorEntry } from './editor'
 
 export type When = 'always' | 'plan' | 'not-plan'
 export type Insert = 'context' | 'inline'
@@ -156,7 +157,7 @@ export function toDef(parsed: Parsed, base?: Partial<Def>): Def | null {
   }
 }
 
-// ---- Layers (D7): lowest to highest priority; a layer file replaces the one below it, field by field.
+// ---- Layers: lowest to highest priority; a layer file replaces the one below it, field by field.
 
 export type IoEntry = { name: string; kind: 'file' | 'dir' | 'other'; size: number; mtimeMs: number; isLink: boolean }
 export type Io = {
@@ -312,10 +313,10 @@ export async function loadRegistry(io: Io, roots: Roots, cache: RegistryCache): 
   return registry
 }
 
-// Editor/band names: one entry per name (first def wins, so the plain `m` beats `m.plan`); body + planOnly feed the T2.7 band.
-export function toEditorEntries(defs: readonly Def[]): { name: string; description?: string; body: string; planOnly: boolean }[] {
+// Editor/band names: one entry per name (first def wins, so the plain `m` beats `m.plan`); body + planOnly feed the band.
+export function toEditorEntries(defs: readonly Def[]): EditorEntry[] {
   const seen = new Set<string>()
-  const out: { name: string; description?: string; body: string; planOnly: boolean }[] = []
+  const out: EditorEntry[] = []
   for (const d of defs) {
     const key = d.name.toLowerCase()
     if (seen.has(key)) continue

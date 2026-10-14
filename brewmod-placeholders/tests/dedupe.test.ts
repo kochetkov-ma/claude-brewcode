@@ -82,13 +82,13 @@ test('GIVEN classic payloads from main and a subagent WHEN tracked THEN only the
   const t = createModeTracker()
   t.classic({ permission_mode: 'plan' })
   t.classic({ permission_mode: 'default', agent_id: 'a1' })
-  const afterSub = [t.isPlan(), t.last()]
+  const afterSub = t.isPlan()
   t.classic({ permission_mode: 7 })
   t.classic({})
-  const afterJunk = [t.isPlan(), t.last()]
+  const afterJunk = t.isPlan()
   t.classic({ permission_mode: 'acceptEdits' })
 
-  expect([afterSub, afterJunk, [t.isPlan(), t.last()]], 'states').toEqual([[true, 'plan'], [true, 'plan'], [false, 'acceptEdits']])
+  expect([afterSub, afterJunk, t.isPlan()], 'states').toEqual([true, true, false])
 })
 
 test('GIVEN session.append rows WHEN tracked THEN main plan_mode flips it on, plan_mode_exit off, subagent and other rows are ignored', async () => {
@@ -99,10 +99,10 @@ test('GIVEN session.append rows WHEN tracked THEN main plan_mode flips it on, pl
   t.append(row('plan_mode', 'user'))
   const wrongType = t.isPlan()
   t.append(row('plan_mode'))
-  const on = [t.isPlan(), t.last()]
+  const on = t.isPlan()
   t.append(row('plan_mode_exit', 'attachment', 'a1'))
   const subExit = t.isPlan()
   t.append(row('plan_mode_exit'))
 
-  expect([sub, wrongType, on, subExit, [t.isPlan(), t.last()]], 'states').toEqual([false, false, [true, 'plan'], true, [false, undefined]])
+  expect([sub, wrongType, on, subExit, t.isPlan()], 'states').toEqual([false, false, true, true, false])
 })

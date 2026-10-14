@@ -1,7 +1,7 @@
 import { test, expect } from 'claude-code/testing'
-import { assemble, compileDefs } from '../hooks/lib/assemble'
+import { compileDefs } from '../hooks/lib/assemble'
 import { configDirOf, layerSpecs, loadRegistry, newRegistryCache, normalizeDir, toEditorEntries, type Def, type Roots } from '../hooks/lib/defs'
-import { defaultDefs } from './fixtures'
+import { assemble, defaultDefs } from './fixtures'
 import { CFG, PLUG, ROOT, defaultsTree, memIo, type Tree } from './layer-io'
 
 const ROOTS: Roots = { pluginRoot: PLUG, root: ROOT, configDir: CFG }

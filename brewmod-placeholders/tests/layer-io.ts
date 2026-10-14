@@ -61,7 +61,7 @@ export const vectorTree = (v: GoldenVector): Record<string, string> => ({
   ...Object.fromEntries(v.files.map((f) => [legacyPath(f.layer, f.legacy), f.raw])),
 })
 
-export type Wiring = { tree: Tree; env?: Record<string, string>; bottom: Record<string, unknown>; fail?: 'exists' | 'list' | 'read' | 'root' }
+export type Wiring = { tree: Tree; env?: Record<string, string>; bottom: Record<string, unknown>; fail?: 'exists' | 'list' | 'read' | 'root' | 'env' }
 export type Wired = { calls: Calls; toasts: string[] }
 
 // Stubs beneath the mod: fs/env/session answer from memory, the classic bottom plays brewtools; `fail` denies one call.
@@ -83,7 +83,7 @@ export function wire(on: On, w: Wiring): Wired {
     calls.read.push(fix(e.path))
     return (w.fail === 'read' ? { deny: 'EACCES' } : { value: fs.read(fix(e.path)) }) as never
   })
-  on('env.get', (_$, e) => ({ value: vars[e.name] }) as never)
+  on('env.get', (_$, e) => (w.fail === 'env' ? { deny: 'EACCES' } : { value: vars[e.name] }) as never)
   on('session.root', () => (w.fail === 'root' ? { deny: 'EACCES' } : { value: ROOT }) as never)
   on('ui.toast', (_$, e) => {
     toasts.push(e.text)

@@ -6,7 +6,7 @@ export const MAX_DECORATED_CHARS = 20_000
 export const EMPTY_VIEW: PlaceholderView = { tokens: [] }
 
 export type EditorStyle = { knownColor: string; unknownColor: string }
-export type EditorEntry = { name: string; description?: string; body?: string; planOnly?: boolean } // body/planOnly: T2.7 band
+export type EditorEntry = { name: string; description?: string; body?: string; planOnly?: boolean }
 export type Highlight = { view: PlaceholderView; decorations: PromptDecoration[] }
 
 // Known token -> knownColor + underline; unknown -> unknownColor. Above the cap or without the prefix -> nothing.

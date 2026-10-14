@@ -437,7 +437,7 @@ const call = (args: string) => ({ command: 'placeholders', args, origin: { kind:
 
 type Ops = { spec: unknown[]; writes: [string, string][]; ran: string[][] }
 
-function wireCmd(on: Parameters<typeof wire>[0], tree: Tree, opts: { fail?: 'exists' | 'root'; denyRegister?: boolean; real?: Record<string, string> } = {}): Ops {
+function wireCmd(on: Parameters<typeof wire>[0], tree: Tree, opts: { fail?: 'exists' | 'root' | 'env'; denyRegister?: boolean; real?: Record<string, string> } = {}): Ops {
   const fs = memFs(tree)
   const ops: Ops = { spec: [], writes: [], ran: [] }
   wire(on, { tree, bottom: {}, ...(opts.fail === undefined ? {} : { fail: opts.fail }) })
@@ -540,4 +540,12 @@ test('GIVEN no session root WHEN command.run adds THEN the project-root text com
   const out = await $.command.run(call('add x text'))
 
   expect(out.text, 'text').toBe('placeholders: no project root for this session')
+})
+
+test('GIVEN the env lookup is denied WHEN command.run runs THEN the catch handler answers readable text', async ($, on) => {
+  wireCmd(on, { ...defaults() }, { fail: 'env' })
+
+  const out = await $.command.run(call('list'))
+
+  expect(out.text, 'text').toBe('placeholders: failed: brewmod-placeholders: $.env.get: EACCES')
 })

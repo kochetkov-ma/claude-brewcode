@@ -61,7 +61,7 @@ export function matches(ms: Matchers, text: string, name: string): boolean {
   return m !== undefined && m.test.test(text)
 }
 
-// Draft -> known and unknown tokens sorted by start; unknown = standalone `P\w+`, undefined name, outside any known span.
+// Draft -> known and unknown tokens sorted by start; unknown = standalone `P\w+` with an undefined name.
 export function scanDraft(ms: Matchers, text: string): PlaceholderView {
   if (!text.includes(ms.prefix)) return { tokens: [] }
   const tokens: PlaceholderToken[] = []
@@ -71,20 +71,11 @@ export function scanDraft(ms: Matchers, text: string): PlaceholderView {
       tokens.push({ text: hit[0], name: m.name, isKnown: true, start, end: start + hit[0].length })
     }
   }
-  tokens.sort((a, b) => a.start - b.start)
-  const knownCount = tokens.length
-  let next = 0
-  let maxEnd = -1
   for (const hit of text.matchAll(ms.unknown)) {
-    const start = hit.index ?? 0
-    const end = start + hit[0].length
     const name = (hit[1] ?? '').toLowerCase()
     if (ms.byName.has(name)) continue
-    // Hits arrive in start order: advance over known spans starting before `end`, keep the furthest end.
-    for (let k = tokens[next]; next < knownCount && k !== undefined && k.start < end; k = tokens[++next]) maxEnd = Math.max(maxEnd, k.end)
-    if (maxEnd > start) continue
-    tokens.push({ text: hit[0], name, isKnown: false, start, end })
+    const start = hit.index ?? 0
+    tokens.push({ text: hit[0], name, isKnown: false, start, end: start + hit[0].length })
   }
-  tokens.sort((a, b) => a.start - b.start)
-  return { tokens }
+  return { tokens: tokens.sort((a, b) => a.start - b.start) }
 }

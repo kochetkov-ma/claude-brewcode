@@ -1,4 +1,4 @@
-// Pure helpers for T2.9: inline expansion of a submitted prompt and the unknown-token list for the toast. Zero I/O.
+// Pure helpers: inline expansion of a submitted prompt and the unknown-token list for the toast. Zero I/O.
 
 import type { Compiled } from './assemble'
 import type { Def } from './defs'

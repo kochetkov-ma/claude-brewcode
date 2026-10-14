@@ -1,11 +1,10 @@
-// Pure band rendering (T2.7): view + registry entries -> rows -> tree. Zero I/O; atoms and `$` stay in register.ts.
+// Pure band rendering: view + registry entries -> rows -> tree. Zero I/O; atoms and `$` stay in register.ts.
 import type { ElementTable, RenderElement } from 'claude-code'
-import type { EditorEntry } from './editor'
+import type { EditorEntry, EditorStyle } from './editor'
 import type { PlaceholderView } from './match'
 
 export type BandRow = { text: string; name: string; isKnown: boolean; description: string; body: string; isPlanOnly: boolean }
-export type BandStyle = { knownColor: string; unknownColor: string }
-export type BandState = { isExpanded: boolean; isPlan: boolean; style: BandStyle; onToggle: () => unknown }
+export type BandState = { isExpanded: boolean; isPlan: boolean; style: EditorStyle; onToggle: () => unknown }
 export type BandUi = Pick<ElementTable<'terminal'>, 'Box' | 'Text' | 'Button'>
 
 export const UNKNOWN_LABEL = 'unknown placeholder'

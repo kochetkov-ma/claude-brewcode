@@ -67,16 +67,12 @@ export function assembleBlocks(c: Compiled, prompt: string, mode?: string): Buil
   return blocks.length === 0 ? null : { text: capText(blocks.join(JOINER)), tokens }
 }
 
-export function assemble(c: Compiled, prompt: string, mode?: string): string | null {
-  return assembleBlocks(c, prompt, mode)?.text ?? null
-}
-
 // Recompile only when the defs array (registry identity) or the prefix changed.
 export function memoCompile(prev: Compiled | null, defs: readonly Def[], prefix: string): Compiled {
   return prev !== null && prev.defs === defs && prev.prefix === prefix ? prev : compileDefs(defs, prefix)
 }
 
-// ---- Exactly-once against brewtools (D6): its blocks open with 'User typed `<token>` ' and share ONE entry, joined by JOINER.
+// ---- Exactly-once against brewtools: its blocks open with 'User typed `<token>` ' and share ONE entry, joined by JOINER.
 
 export const BREWTOOLS_SPLIT = /\n\n---\n\n(?=User typed `(?:\+\+\+|\+\+m|\+\+a|\+\+rr|\+\+r)` )/
 const BREWTOOLS_HEADER = /^User typed `([^`]+)` /

@@ -1,7 +1,7 @@
 import { test, expect } from 'claude-code/testing'
 import { VECTORS, PLACEHOLDER_FILES } from './parity/golden.generated'
-import { assemble, compileDefs } from '../hooks/lib/assemble'
-import { applyOverrides, defaultDefs } from './fixtures'
+import { compileDefs } from '../hooks/lib/assemble'
+import { applyOverrides, assemble, defaultDefs } from './fixtures'
 
 const SPEC_LENGTHS: Record<string, number> = {
   'spec-1': 1790, 'spec-2': 3515, 'spec-3': 1019, 'spec-4': 571,

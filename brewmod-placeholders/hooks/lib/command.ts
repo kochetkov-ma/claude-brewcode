@@ -11,6 +11,8 @@ export type CmdResult = { text: string; registry: Registry | null }
 type Scope = 'project' | 'global'
 type Row = { stem: string; layer: string; def: Def }
 
+const say = (text: string): CmdResult => ({ text, registry: null })
+
 export const USAGE = [
   'usage: /placeholders <subcommand>',
   '  list                         every placeholder: name, layer, description',
@@ -44,7 +46,6 @@ function take(s: string): [string, string] {
 // defs[i] pairs with the i-th source key: resolveDefs inserts into both maps together.
 function rowsOf(reg: Registry): Row[] {
   const stems = [...reg.sources.keys()]
-  if (stems.length !== reg.defs.length) throw new Error('registry order drifted: defs and sources differ in size')
   return reg.defs
     .map((def, i): Row => {
       const stem = stems[i] ?? def.name
@@ -66,6 +67,16 @@ const noDir = (scope: Scope): string =>
 function takeScope(s: string): { scope: Scope; rest: string } {
   const [word, rest] = take(s)
   return word.toLowerCase() === 'global' ? { scope: 'global', rest } : { scope: 'project', rest: s }
+}
+
+type Target = { stem: string; scope: Scope; rest: string; dir: string | undefined }
+
+// `<name> [global] <rest>` -> stem, scope and the own-layer dir; a bad name gives the refusal text.
+function parseTarget(roots: Roots, args: string): Target | string {
+  const [nameRaw, afterName] = take(args)
+  const { scope, rest } = takeScope(afterName)
+  const stem = normalizeName(nameRaw)
+  return stem === null ? `placeholders: bad name '${nameRaw}'\n${USAGE}` : { stem, scope, rest, dir: ownDir(roots, scope) }
 }
 
 // The definition format cannot carry a fence marker or a leading front matter: refuse what would not read back.
@@ -100,55 +111,48 @@ function show(reg: Registry, stem: string): string {
 }
 
 async function add(io: CmdIo, roots: Roots, args: string): Promise<CmdResult> {
-  const [nameRaw, afterName] = take(args)
-  const { scope, rest } = takeScope(afterName)
-  const stem = normalizeName(nameRaw)
-  if (stem === null) return { text: `placeholders: bad name '${nameRaw}'\n${USAGE}`, registry: null }
-  if (rest.trim() === '') return { text: `placeholders: add needs text\n${USAGE}`, registry: null }
-  const dir = ownDir(roots, scope)
-  if (dir === undefined) return { text: noDir(scope), registry: null }
+  const t = parseTarget(roots, args)
+  if (typeof t === 'string') return say(t)
+  const { stem, scope, rest, dir } = t
+  if (rest.trim() === '') return say(`placeholders: add needs text\n${USAGE}`)
+  if (dir === undefined) return say(noDir(scope))
   const path = `${dir}/${stem}.md`
-  if (await io.exists(path)) return { text: `placeholders: ${path} already exists; /placeholders edit ${stem}${scope === 'global' ? ' global' : ''} prints it`, registry: null }
+  if (await io.exists(path)) return say(`placeholders: ${path} already exists; /placeholders edit ${stem}${scope === 'global' ? ' global' : ''} prints it`)
   const content = fileFor(rest)
-  if (content === null) return { text: CANNOT_CARRY, registry: null }
+  if (content === null) return say(CANNOT_CARRY)
   await io.write(path, content)
   const registry = await load(io, roots)
   return { text: `added ${stem} (${scope}): ${path}${shadowNote(registry, stem, scope)}`, registry }
 }
 
 async function edit(io: CmdIo, roots: Roots, args: string): Promise<CmdResult> {
-  const [nameRaw, afterName] = take(args)
-  const { scope } = takeScope(afterName)
-  const stem = normalizeName(nameRaw)
-  if (stem === null) return { text: `placeholders: bad name '${nameRaw}'\n${USAGE}`, registry: null }
-  const dir = ownDir(roots, scope)
-  if (dir === undefined) return { text: noDir(scope), registry: null }
+  const t = parseTarget(roots, args)
+  if (typeof t === 'string') return say(t)
+  const { stem, scope, dir } = t
+  if (dir === undefined) return say(noDir(scope))
   const path = `${dir}/${stem}.md`
-  if (await io.exists(path)) return { text: `exists (${scope}): ${path}\nedit it; changes apply from the next prompt`, registry: null }
-  const before = await load(io, roots)
-  const row = rowsOf(before).find((r) => r.stem === stem)
-  if (row === undefined) return { text: `placeholders: unknown placeholder '${stem}'; /placeholders add creates a new one`, registry: null }
+  if (await io.exists(path)) return say(`exists (${scope}): ${path}\nedit it; changes apply from the next prompt`)
+  const row = rowsOf(await load(io, roots)).find((r) => r.stem === stem)
+  if (row === undefined) return say(`placeholders: unknown placeholder '${stem}'; /placeholders add creates a new one`)
   const content = fileFor(row.def.body)
-  if (content === null) return { text: CANNOT_CARRY, registry: null }
+  if (content === null) return say(CANNOT_CARRY)
   await io.write(path, content)
   const registry = await load(io, roots)
   return { text: `created (${scope}) from ${layerLabel(row.layer)} text: ${path}\nedit it; changes apply from the next prompt${shadowNote(registry, stem, scope)}`, registry }
 }
 
 async function rm(io: CmdIo, roots: Roots, args: string): Promise<CmdResult> {
-  const [nameRaw, afterName] = take(args)
-  const { scope } = takeScope(afterName)
-  const stem = normalizeName(nameRaw)
-  if (stem === null) return { text: `placeholders: bad name '${nameRaw}'\n${USAGE}`, registry: null }
-  const dir = ownDir(roots, scope)
-  if (dir === undefined) return { text: noDir(scope), registry: null }
+  const t = parseTarget(roots, args)
+  if (typeof t === 'string') return say(t)
+  const { stem, scope, dir } = t
+  if (dir === undefined) return say(noDir(scope))
   const path = `${dir}/${stem}.md`
   if (!(await io.exists(path))) {
     const layer = rowsOf(await load(io, roots)).find((r) => r.stem === stem)?.layer
-    if (layer === undefined) return { text: `placeholders: unknown placeholder '${stem}'`, registry: null }
-    if (layer === 'default') return { text: `placeholders: refused, ${stem} is a plugin default and has no ${scope} file; /placeholders edit ${stem} overrides it`, registry: null }
-    if (layer.endsWith('-legacy')) return { text: `placeholders: refused, ${stem} comes from a brewtools ${layer} file, which this command never removes`, registry: null }
-    return { text: `placeholders: no ${scope} file for ${stem}; it comes from the ${layer} layer`, registry: null }
+    if (layer === undefined) return say(`placeholders: unknown placeholder '${stem}'`)
+    if (layer === 'default') return say(`placeholders: refused, ${stem} is a plugin default and has no ${scope} file; /placeholders edit ${stem} overrides it`)
+    if (layer.endsWith('-legacy')) return say(`placeholders: refused, ${stem} comes from a brewtools ${layer} file, which this command never removes`)
+    return say(`placeholders: no ${scope} file for ${stem}; it comes from the ${layer} layer`)
   }
   const dirStat = await io.stat(dir)
   const fileStat = await io.stat(path)
@@ -156,10 +160,10 @@ async function rm(io: CmdIo, roots: Roots, args: string): Promise<CmdResult> {
   const real = fileStat?.realPath
   const isInside = base !== undefined && base !== '' && real !== undefined && real.startsWith(`${base}/`)
   if (fileStat === undefined || fileStat.kind !== 'file' || fileStat.isLink || !isInside) {
-    return { text: `placeholders: refused, ${path} is not a plain file inside ${dir}`, registry: null }
+    return say(`placeholders: refused, ${path} is not a plain file inside ${dir}`)
   }
   const res = await io.remove(real)
-  if (res.exitCode !== 0) return { text: `placeholders: rm failed (exit ${res.exitCode}): ${res.stderr.trim()}`, registry: null }
+  if (res.exitCode !== 0) return say(`placeholders: rm failed (exit ${res.exitCode}): ${res.stderr.trim()}`)
   const registry = await load(io, roots)
   const now = registry.sources.get(stem)
   return { text: `removed (${scope}): ${path}\n${stem} is ${now === undefined ? 'no longer defined' : `now served by the ${layerLabel(now)} layer`}`, registry }
@@ -171,12 +175,11 @@ export async function runCommand(io: CmdIo, roots: Roots, args: string): Promise
     const [sub, rest] = take(args)
     switch (sub.toLowerCase()) {
       case 'list':
-        return { text: list(await load(io, roots)), registry: null }
+        return say(list(await load(io, roots)))
       case 'show': {
         const [nameRaw] = take(rest)
         const stem = normalizeName(nameRaw)
-        if (stem === null) return { text: `placeholders: bad name '${nameRaw}'\n${USAGE}`, registry: null }
-        return { text: show(await load(io, roots), stem), registry: null }
+        return say(stem === null ? `placeholders: bad name '${nameRaw}'\n${USAGE}` : show(await load(io, roots), stem))
       }
       case 'add':
         return await add(io, roots, rest)
@@ -186,11 +189,11 @@ export async function runCommand(io: CmdIo, roots: Roots, args: string): Promise
         return await rm(io, roots, rest)
       case '':
       case 'help':
-        return { text: USAGE, registry: null }
+        return say(USAGE)
       default:
-        return { text: `placeholders: unknown subcommand '${sub}'\n${USAGE}`, registry: null }
+        return say(`placeholders: unknown subcommand '${sub}'\n${USAGE}`)
     }
   } catch (e) {
-    return { text: `placeholders: failed: ${why(e)}`, registry: null }
+    return say(`placeholders: failed: ${why(e)}`)
   }
 }

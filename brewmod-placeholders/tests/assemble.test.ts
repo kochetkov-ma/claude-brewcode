@@ -1,6 +1,6 @@
 import { test, expect } from 'claude-code/testing'
-import { JOINER, SYNTHETIC_PROMPT, assemble, capText, compileDefs, renderHeader } from '../hooks/lib/assemble'
-import { def } from './fixtures'
+import { JOINER, SYNTHETIC_PROMPT, capText, compileDefs, renderHeader } from '../hooks/lib/assemble'
+import { assemble, def } from './fixtures'
 
 test('GIVEN two matched defs WHEN assembled THEN blocks sort by order, not by prompt position', async () => {
   const c = compileDefs([def({ name: 'b', order: 2, body: 'BB', header: 'hb' }), def({ name: 'a', order: 1, body: 'AA', header: 'ha' })])
