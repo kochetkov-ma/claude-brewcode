@@ -9,7 +9,7 @@ doc_type: llm
 version: "6.6.2"
 content_version: "6.6.0"
 generated_by: "brewcode"
-last_updated: "2026-10-14"
+last_updated: "2026-10-15"
 ---
 
 [DICT: AG=agent, CC=Claude Code, FM=frontmatter, SA=subagent, SP=system prompt]
