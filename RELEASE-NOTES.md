@@ -2,6 +2,94 @@
 
 ---
 
+## v6.7.0 (2026-10-15)
+
+> Docs: [Mods overview](https://doc-claude.brewcode.app/mods/overview/) | [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/) | [placeholders](https://doc-claude.brewcode.app/mods/placeholders/)
+
+> Docs: [mod-creator](https://doc-claude.brewcode.app/brewcode/agents/mod-creator/) | [agents](https://doc-claude.brewcode.app/brewcode/agents/) | [bash-expert](https://doc-claude.brewcode.app/brewcode/agents/bash-expert/) | [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [overview](https://doc-claude.brewcode.app/brewcode/overview/) | [skills/agents](https://doc-claude.brewcode.app/brewcode/skills/agents/)
+
+> Docs: [overview](https://doc-claude.brewcode.app/brewdoc/overview/) | [skills](https://doc-claude.brewcode.app/brewdoc/skills/)
+
+> Docs: [overview](https://doc-claude.brewcode.app/brewtools/overview/) | [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) | [prompt-injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/)
+
+> Docs: [overview](https://doc-claude.brewcode.app/brewui/overview/)
+
+> Docs: [Quick Start](https://doc-claude.brewcode.app/quickstart/) | [Getting Started](https://doc-claude.brewcode.app/getting-started/) | [Installation](https://doc-claude.brewcode.app/installation/) | [Full Setup](https://doc-claude.brewcode.app/full-setup/) | [FAQ](https://doc-claude.brewcode.app/faq/) | [License](https://doc-claude.brewcode.app/license/)
+
+First release of the brewcode mods: two opt-in Claude Code mods (TypeScript hooks modules) and the `mod-creator` agent that builds them. The release train grows from four plugins to six, all on one version.
+
+### brewmod-plan-effort
+
+#### Added
+
+- **new mod:** requires Claude Code 2.1.287+. While Claude Code is in plan mode the main loop runs at `planEffort` (default `xhigh`; options `medium`, `high`, `xhigh`, `max`) instead of your session effort. Install: `claude plugin install brewmod-plan-effort@claude-brewcode`.
+- **how:** in plan mode each main-loop request below `planEffort` is raised at `turn.step`; requests already at or above it, numeric or absent efforts and every subagent request pass through untouched. The `/effort` session setting is never written, so nothing needs undoing after the plan is approved.
+- **status:** `plan: <level>` is pinned in the status area while a request is raised; the `statusLine` option (default `true`) turns it off.
+
+### brewmod-placeholders
+
+#### Added
+
+- **new mod:** requires Claude Code 2.1.292+. Typed `++` placeholders (`++m`, `++a`, `++r`, `++rr`, `+++`) add an instruction block as hidden context for the turn; the token stays in your prompt. Install: `claude plugin install brewmod-placeholders@claude-brewcode`.
+- **prompt box:** live highlight of known and unknown tokens, typeahead after the prefix, a preview band above the prompt, and a toast naming unknown tokens on submit (the prompt is sent unchanged).
+- **your own placeholders:** one Markdown file per placeholder, layered project > global > plugin defaults, with the brewtools override paths (`.claude/brewtools/manager/prompts/` in the project, `manager/prompts/` in the config dir) read through each default's `legacy` key.
+- **inline insert:** `insert: inline` replaces the token with the block text in the prompt. Works only with `when: always` and only for prompts typed in the composer, bridge or SDK, not for slash commands.
+- **`/placeholders`:** `list`, `show`, `add`, `edit`, `rm` (`--global` for the user layer).
+- **brewtools parity:** the default set is byte-identical to the brewtools codewords, checked by a parity golden and a drift check in CI. With brewtools also installed, each token is injected exactly once: the mod drops the brewtools block of every token it resolves.
+- **options:** `prefix` (default `++`), `knownColor`, `unknownColor`, `warnUnknown` (default `true`).
+- **limitations:** a token inserted with `Tab` or a recalled history entry shows no highlight until the next keystroke; drafts over 20,000 characters get no highlight or band; org-managed installs may skip the classic hooks (context expansion and the toast then do not run).
+
+### brewcode
+
+#### Added
+
+- **mod-creator agent:** creates, tests and ships Claude Code mods. Every run starts with a drift check of its references against the types file of the running Claude Code build.
+- **mods reference pack:** `mods-lifecycle`, `mods-api`, `mods-patterns`, `mods-testing` and `mods-changes` in `skills/agents/references/`, each stamped with the Claude Code build it was verified on.
+- **mods-ref-check.mjs:** compares the symbol index of the references with the live types file; exit 0 clean, 1 drift, 2 error. Covered by a new `skills/agents/tests/run.sh` suite in CI.
+
+### brewtools
+
+#### Changed
+
+- **plugin-update:** checks and updates `brewmod-plan-effort` and `brewmod-placeholders` when they are installed (status row, version fetch, update set). It never installs a mod and reports a missing one as optional and not installed.
+- **deploy:** `references/release-best-practices.md` covers the two mod manifests and the `### brewmod-plan-effort` / `### brewmod-placeholders` release-notes sections.
+
+### repo
+
+#### Added
+
+- **assets:** hero GIFs and banners in `assets/brewmods/`.
+
+#### Changed
+
+- **release train:** `bump-version.sh` bumps and verifies six plugin manifests, and checks every `marketplace.json` entry by name instead of by array index.
+- **update-plugin.sh:** accepts all six plugin names, with `update-brewmod-plan-effort.sh` and `update-brewmod-placeholders.sh` wrappers.
+- **update-plugin.sh update path:** runs `claude plugin update` in place and keeps your plugin options and disabled state; the uninstall and reinstall fallback restores both.
+- **clean-plugin-cache.sh:** prunes the mods' caches too.
+- **CI:** `validate.yml` runs `claude plugin validate --strict` and `claude plugin test` on every `brewmod-*`, plus the placeholders defaults and parity-golden drift checks. The release body lists both mods as optional installs.
+
+### codex
+
+#### Added
+
+- **Claude-only mod-creator files:** `generate-compat.mjs` and `validate-compat.mjs` keep the mods references (`mods-*.md`) and the `skills/agents/scripts/` and `tests/` directories out of the Codex mirror; mods are Claude Code only.
+
+### docs
+
+#### Added
+
+- **Mods section:** overview, plan-effort and placeholders pages on the docs site, and a mod-creator agent page.
+- **repo README:** "Claude Code mods" section with install commands and demos.
+- **mod READMEs:** `brewmod-plan-effort/README.md` and `brewmod-placeholders/README.md`.
+- **install prompt:** `InstallPrompt` accepts the `brewmod-plan-effort` and `brewmod-placeholders` plugin ids.
+- **plugin READMEs:** brewcode, brewdoc, brewtools and brewui end with a "See also: Claude Code mods" link.
+
+#### Changed
+
+- **cross-links:** the plugin overviews, getting-started, installation, quickstart, faq, full-setup, prompt-injection and the license page now mention the mods.
+
+---
+
 ## v6.6.2 (2026-10-14)
 
 > Docs: [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/)

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.6.2 content_version=6.5.2 generated_by=brewdoc:docsync-setup
+// brewcode-meta: version=6.7.0 content_version=6.5.2 generated_by=brewdoc:docsync-setup
 
 // PostToolUse Write|Edit on a tracked .md: log an `edit` event; no `last_updated` -> nudge once per file per session.
 // Self-contained (Node built-ins), state in <projectRoot>/.claude/docsync/; never throws, exit 0.

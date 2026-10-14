@@ -4,7 +4,7 @@ description: Complete file tree of the brewcode plugin with descriptions
 
 # Brewcode Plugin - File Tree
 
-> Version: 6.6.2 | Reference tree of shipped source and generated project artifacts; excludes the generated `.codex/` mirror and build/cache files.
+> Version: 6.7.0 | Reference tree of shipped source and generated project artifacts; excludes the generated `.codex/` mirror and build/cache files.
 
 ## Plugin Structure
 
@@ -12,7 +12,7 @@ description: Complete file tree of the brewcode plugin with descriptions
 brewcode/                                    # Plugin root directory
 │
 ├── .claude-plugin/                            # Claude Code plugin configuration
-│   └── plugin.json                            # Manifest (name, version 6.6.2, skills/ reference)
+│   └── plugin.json                            # Manifest (name, version 6.7.0, skills/ reference)
 │
 ├── hooks/                                     # Node.js scripts for Claude Code events (2 hooks)
 │   ├── hooks.json                             # Binds 1 event (SessionStart) in 2 groups: unmatched + matcher "compact"
@@ -139,7 +139,7 @@ brewcode/                                    # Plugin root directory
 │
 ├── README.md                                  # Components, commands, agents, hooks, architecture, flow diagrams
 ├── INSTALL.md                                 # Installation: plugin-dir, local clone, project enabling, troubleshooting
-└── package.json                               # npm: claude-plugin-brewcode@6.6.2
+└── package.json                               # npm: claude-plugin-brewcode@6.7.0
 ```
 
 ## Target Project Structure
