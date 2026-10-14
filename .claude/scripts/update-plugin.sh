@@ -140,8 +140,7 @@ if [[ $DRY_RUN == true ]]; then
     for NAME in $TARGETS; do
         if not_installed "$NAME"; then log "  ${NAME}: not installed in this profile -> skipped"; continue; fi
         VER_VAR="$(var_key "$NAME")_VER"
-        if [[ -d "$CACHE_ROOT/$NAME/${!VER_VAR}" ]]; then ACTION="update"; else ACTION="uninstall + install"; fi
-        log "  claude plugin $ACTION ${NAME}@claude-brewcode -> $CACHE_ROOT/$NAME/${!VER_VAR}"
+        log "  claude plugin update ${NAME}@claude-brewcode -> $CACHE_ROOT/$NAME/${!VER_VAR} (uninstall + install only if update fails or leaves the cache missing)"
     done
     while IFS=$'\t' read -r ID SCOPE PROJECT; do
         [[ -n "$ID" ]] || continue
@@ -168,31 +167,60 @@ log ""
 [[ "$TARGET" != "all" ]] || load_user_ids
 
 # --- Install helper ---
+# User-scope userConfig of plugin id $1 as key=value lines (strings raw, others JSON); none -> nothing.
+saved_options() {
+    jq -r --arg id "$1" '.pluginConfigs[$id].options // {} | to_entries[]
+        | "\(.key)=\(if (.value | type) == "string" then .value else (.value | tojson) end)"' "$CONFIG_DIR/settings.json" 2>/dev/null || true
+}
+
+# rc 0 = plugin id $1 is explicitly disabled at user scope.
+saved_disabled() {
+    jq -e --arg id "$1" '.enabledPlugins[$id] == false' "$CONFIG_DIR/settings.json" >/dev/null 2>&1
+}
+
+# Fallback only: uninstall wipes userConfig and the enabled flag, so snapshot both and put them back.
+reinstall_plugin() {
+    local NAME="$1" VERSION="$2" ID="$1@claude-brewcode" LINE WAS_DISABLED=false
+    local -a CFG=()
+    while IFS= read -r LINE; do [[ -z "$LINE" ]] || CFG+=(--config "$LINE"); done < <(saved_options "$ID")
+    if saved_disabled "$ID"; then WAS_DISABLED=true; fi
+    log "${NAME}: Reinstalling (saved config args: $((${#CFG[@]} / 2)), disabled: $WAS_DISABLED)..."
+    OUTPUT=$(claude plugin uninstall "$NAME" 2>&1) || true
+    [[ -z "${OUTPUT:-}" ]] || log "   $OUTPUT"
+    log "${NAME}: Installing v$VERSION..."
+    if OUTPUT=$(claude plugin install "$ID" ${CFG[@]+"${CFG[@]}"} 2>&1); then
+        log "   OK"
+    else
+        err "${NAME} install failed (exit $?): ${OUTPUT:-no output}"
+    fi
+    [[ -z "${OUTPUT:-}" ]] || log "   $OUTPUT"
+    if [[ $WAS_DISABLED == true ]]; then
+        OUTPUT=$(claude plugin disable "$ID" 2>&1) || log "   WARN: could not restore disabled state of $ID: $OUTPUT"
+    fi
+}
+
 install_plugin() {
     local NAME="$1"
     local VERSION="$2"
     local CACHE_DIR="$CACHE_ROOT/$NAME"
     local EXPECTED_DIR="$CACHE_DIR/$VERSION"
+    local UPDATE_RC=0
+
+    log "${NAME}: Updating to v$VERSION..."
+    if OUTPUT=$(claude plugin update "${NAME}@claude-brewcode" 2>&1); then
+        log "   OK"
+    else
+        UPDATE_RC=$?
+        log "   update failed (exit $UPDATE_RC)"
+    fi
+    [[ -z "${OUTPUT:-}" ]] || log "   $OUTPUT"
+    # Update failed with the target cached: a real failure, not a missing-cache case.
+    [[ $UPDATE_RC -eq 0 || ! -d "$EXPECTED_DIR" ]] || err "${NAME} update failed (exit $UPDATE_RC): ${OUTPUT:-no output}"
 
     if [[ ! -d "$EXPECTED_DIR" ]]; then
-        log "${NAME}: Cache missing — uninstalling first..."
-        OUTPUT=$(claude plugin uninstall "$NAME" 2>&1) || true
-        [[ -n "${OUTPUT:-}" ]] && log "   $OUTPUT"
-        log "${NAME}: Installing v$VERSION..."
-        if OUTPUT=$(claude plugin install "${NAME}@claude-brewcode" 2>&1); then
-            log "   OK"
-        else
-            err "${NAME} install failed (exit $?): ${OUTPUT:-no output}"
-        fi
-    else
-        log "${NAME}: Updating to v$VERSION..."
-        if OUTPUT=$(claude plugin update "${NAME}@claude-brewcode" 2>&1); then
-            log "   OK"
-        else
-            err "${NAME} update failed (exit $?): ${OUTPUT:-no output}"
-        fi
+        log "${NAME}: v$VERSION not in cache after update -> reinstall fallback"
+        reinstall_plugin "$NAME" "$VERSION"
     fi
-    [[ -n "${OUTPUT:-}" ]] && log "   $OUTPUT"
 
     if [[ -d "$EXPECTED_DIR" ]]; then
         FILE_COUNT=$(find "$EXPECTED_DIR" -type f | wc -l | tr -d ' ')

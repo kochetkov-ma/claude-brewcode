@@ -134,7 +134,7 @@
     },
     {
       "name": "brewmod-plan-effort",
-      "description": "Brewmod plan-effort - raises effort to xhigh only while the main loop is in plan mode (Claude Code 2.1.287+ mod)",
+      "description": "Brewmod plan-effort - raises the main loop to the configured effort (default xhigh) only while in plan mode (Claude Code 2.1.287+ mod)",
       "version": "6.6.2",
       "category": "productivity",
       "keywords": [
