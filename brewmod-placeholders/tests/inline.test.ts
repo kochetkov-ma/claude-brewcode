@@ -2,7 +2,7 @@ import { test, expect } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import { compileDefs } from '../hooks/lib/assemble'
 import { compileMatchers } from '../hooks/lib/match'
-import { expandInline, inlineBodies, isInlineSubmit, unknownMessage, unknownTokens } from '../hooks/lib/inline'
+import { expandInline, inlineBodies, isInlineSubmit, isTypedSource, unknownMessage, unknownTokens } from '../hooks/lib/inline'
 import { CFG, ROOT, defaultsTree, memFs, wire, type Tree } from './layer-io'
 import { def } from './fixtures'
 import { VECTORS } from './parity/golden.generated'
@@ -14,6 +14,7 @@ const TREE: Tree = {
   ...defaultsTree(),
   ...at('ii', file('ii', 'inline', 'always', 'II BODY')),
   ...at('jj', file('jj', 'inline', 'always', 'JJ BODY ++ii')),
+  ...at('jx', file('jx', 'inline', 'always', 'JX also ++cc')),
   ...at('pp', file('pp', 'inline', 'plan', 'PP BODY')),
   ...at('nn', file('nn', 'inline', 'not-plan', 'NN BODY')),
   ...at('ee', file('ee', 'inline', 'always', '')),
@@ -33,8 +34,8 @@ const bottomSubmit = (on: On): Seen[] => {
 }
 const submit = ($: { prompt: unknown }, text: string, origin: unknown = { kind: 'composer' }, extra: object = {}) =>
   ($.prompt as any).submit({ text, origin, wait: false, ...extra })
-const send = ($: { classic: { UserPromptSubmit: (e: never) => Promise<unknown> } }, prompt: string, mode = 'default') =>
-  $.classic.UserPromptSubmit({ prompt, permission_mode: mode } as never)
+const send = ($: { classic: { UserPromptSubmit: (e: never) => Promise<unknown> } }, prompt: string, mode = 'default', source?: string) =>
+  $.classic.UserPromptSubmit({ prompt, permission_mode: mode, source } as never)
 const spyWrites = (on: On): unknown[] => {
   const writes: unknown[] = []
   on('state.set', (_$, e, next) => {
@@ -265,6 +266,16 @@ test('GIVEN a name defined both inline and as context WHEN submitted and sent TH
   expect([seen.map((s) => s.text), out], 'submit text and classic result').toEqual([['++dual'], { additionalContext: ['DUAL CONTEXT'] }])
 })
 
+test('GIVEN an inline body that carries a context token WHEN submit then the classic hook run THEN the classic pass expands it (documented composition)', async ($, on) => {
+  wire(on, { tree: TREE, bottom: {} })
+  const seen = bottomSubmit(on)
+
+  await submit($, 'use ++jx now', { kind: 'composer' })
+  const out = await send($, 'use JX also ++cc now')
+
+  expect([seen.map((s) => s.text), out], 'submit text and classic result').toEqual([['use JX also ++cc now'], { additionalContext: ['CC CONTEXT'] }])
+})
+
 // ---- warnUnknown toast
 
 test('GIVEN unknown tokens and the default option WHEN the classic hook runs THEN one toast names them once each and the context is intact', async ($, on) => {
@@ -272,7 +283,7 @@ test('GIVEN unknown tokens and the default option WHEN the classic hook runs THE
 
   const out = await send($, '++m ++foo ++Foo ++bar')
 
-  expect([w.toasts, out], 'toasts and result').toEqual([['placeholders: unknown ++foo, ++bar'], { additionalContext: [M] }])
+  expect([w.toasts, out], 'toasts and result').toEqual([['unknown ++foo, ++bar'], { additionalContext: [M] }])
 })
 
 test('GIVEN warnUnknown off WHEN a prompt with unknown tokens runs THEN there is no toast and the prompt result is the same', { options: { warnUnknown: false } }, async ($, on) => {
@@ -308,12 +319,47 @@ test('GIVEN a toast the engine refuses WHEN unknown tokens are sent THEN the exp
   expect(out, 'result').toEqual({ additionalContext: [M] })
 })
 
+for (const source of ['loop_wakeup', 'schedule_wakeup', 'system', 'poll_event'] as const) {
+  test(`GIVEN source ${source} WHEN a prompt with an unknown token runs THEN there is no toast and the expansion still lands`, async ($, on) => {
+    const w = wire(on, { tree: TREE, bottom: {} })
+
+    const out = await send($, '++m ++foo', 'default', source)
+
+    expect([w.toasts, out], 'toasts and result').toEqual([[], { additionalContext: [M] }])
+  })
+}
+
+for (const source of [undefined, 'user', 'sdk'] as const) {
+  test(`GIVEN source ${String(source)} WHEN a prompt with an unknown token runs THEN one toast names it`, async ($, on) => {
+    const w = wire(on, { tree: TREE, bottom: {} })
+
+    await send($, '++foo', 'default', source)
+
+    expect(w.toasts, 'toasts').toEqual(['unknown ++foo'])
+  })
+}
+
+test('GIVEN a code-like prompt WHEN the classic hook runs THEN no toast names ++i, ++count or a token in code', async ($, on) => {
+  const w = wire(on, { tree: TREE, bottom: {} })
+
+  await send($, 'fix for (i = 0; i < n; ++i) and a[++j] and ++k; then `++tick` and\n```\n++blk\n```\nplus ++typo')
+
+  expect(w.toasts, 'toasts').toEqual(['unknown ++typo'])
+})
+
+test('GIVEN every source value WHEN checked THEN only a missing source, user and sdk are typed by the person', async () => {
+  expect(
+    [undefined, 'user', 'sdk', 'system', 'loop_wakeup', 'schedule_wakeup', 'poll_event', 7].map((s) => isTypedSource(s)),
+    'typed',
+  ).toEqual([true, true, true, false, false, false, false, false])
+})
+
 test('GIVEN a custom prefix WHEN a prompt holds unknown tokens of both prefixes THEN only the custom ones are named', { options: { prefix: '@@' } }, async ($, on) => {
   const w = wire(on, { tree: TREE, bottom: {} })
 
   await send($, '@@zz ++yy')
 
-  expect(w.toasts, 'toasts').toEqual(['placeholders: unknown @@zz'])
+  expect(w.toasts, 'toasts').toEqual(['unknown @@zz'])
 })
 
 test('GIVEN a subagent delivery with an unknown token WHEN the classic hook runs THEN there is no toast', async ($, on) => {
@@ -330,13 +376,20 @@ test('GIVEN eight unknown tokens WHEN the message is built THEN five are named a
   const ms = compileMatchers('++', ['m'])
   const names = unknownTokens(ms, '++a ++b ++c ++d ++e ++f ++g ++h ++A')
 
-  expect([names.length, unknownMessage(names)], 'count and message').toEqual([8, 'placeholders: unknown ++a, ++b, ++c, ++d, ++e and 3 more'])
+  expect([names.length, unknownMessage(names)], 'count and message').toEqual([8, 'unknown ++a, ++b, ++c, ++d, ++e and 3 more'])
 })
 
 test('GIVEN known and unknown tokens and a word glued to the prefix WHEN scanned THEN only standalone unknown ones are listed', async () => {
   const ms = compileMatchers('++', ['m'])
 
   expect(unknownTokens(ms, 'i++x ++m ++q a+++b'), 'unknown').toEqual(['++q'])
+})
+
+test('GIVEN fences, backticks, closers and an unclosed backtick WHEN scanned THEN only a standalone token outside code is unknown', async () => {
+  const ms = compileMatchers('++', ['m'])
+  const text = '~~~\n++a\n~~~ `++b` ++c) ++d] ++e[0] ++f; ++g, `++h ++i'
+
+  expect(unknownTokens(ms, text), 'unknown').toEqual(['++g', '++h', '++i'])
 })
 
 test('GIVEN defs with every insert and when combination WHEN the inline bodies are built THEN only an inline always def of a context-free name remains', async () => {

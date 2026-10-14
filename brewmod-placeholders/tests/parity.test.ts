@@ -3,6 +3,7 @@ import { VECTORS, PLACEHOLDER_FILES } from './parity/golden.generated'
 import { compileDefs } from '../hooks/lib/assemble'
 import { applyOverrides, assemble, defaultDefs } from './fixtures'
 
+// The kit cannot read placeholders/*.md: the golden embeds them, and the CI `extract-defaults.mjs --check` + `gen-golden.mjs --check` steps tie it to disk.
 const SPEC_LENGTHS: Record<string, number> = {
   'spec-1': 1790, 'spec-2': 3515, 'spec-3': 1019, 'spec-4': 571,
   'spec-5': 895, 'spec-6': 1395, 'spec-7': 6845, 'spec-8': 3394,

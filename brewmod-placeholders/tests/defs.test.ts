@@ -70,8 +70,19 @@ test('GIVEN no front matter WHEN parsed THEN meta is empty and the whole file go
   expect(parseDefinition('```\nraw\n```\n'), 'parsed').toEqual({ meta: {}, text: 'raw', hasFrontMatter: false, issues: [] })
 })
 
-test('GIVEN an unterminated front matter WHEN parsed THEN it is plain text', async () => {
-  expect(parseDefinition('---\nname: x\nbody'), 'parsed').toEqual({ meta: {}, text: '---\nname: x\nbody', hasFrontMatter: false, issues: [] })
+test('GIVEN an unterminated front matter WHEN parsed THEN nothing is taken as a body and the file is flagged skipped', async () => {
+  expect(parseDefinition('---\nname: x\nbody'), 'parsed').toEqual({ meta: {}, text: '', hasFrontMatter: true, issues: ['front matter is not closed'], skip: true })
+})
+
+test('GIVEN a lone opening dash line or blank lines before the opening line WHEN parsed THEN the first is unclosed, the second is front matter', async () => {
+  expect([parseDefinition('---').skip, parseDefinition('\n \n---\nname: x\n---\nb')], 'parsed').toEqual([
+    true,
+    { meta: { name: 'x' }, text: 'b', hasFrontMatter: true, issues: [] },
+  ])
+})
+
+test('GIVEN a body whose first line is not a dash line WHEN parsed THEN a later dash line is plain text', async () => {
+  expect(parseDefinition('intro\n---\nname: x\n---\nb'), 'parsed').toEqual({ meta: {}, text: 'intro\n---\nname: x\n---\nb', hasFrontMatter: false, issues: [] })
 })
 
 test('GIVEN bad values and stray lines WHEN parsed THEN they become issues and the good fields survive', async () => {
@@ -131,4 +142,26 @@ test('GIVEN every shipped definition WHEN parsed THEN there are no front-matter 
   })
 
   expect(rows, 'rows').toEqual([['+', true, 0, true], ['a', true, 0, true], ['m', true, 0, true], ['m.plan', true, 0, true], ['r', true, 0, true], ['rr', true, 0, true]])
+})
+
+test('GIVEN a meta that sets every field and a base with other values WHEN completed THEN the meta wins field by field', async () => {
+  const base = { name: 'b', insert: 'inline' as const, when: 'plan' as const, order: 1, group: 'bg', priority: 1, header: 'bh', legacy: 'bl', description: 'bd' }
+  const meta = { name: 'n', insert: 'context' as const, when: 'not-plan' as const, order: -5, group: 'mg', priority: -2, header: 'mh', legacy: 'ml', description: 'md' }
+
+  expect(toDef({ meta, text: 'T', hasFrontMatter: true, issues: [] }, base), 'def').toEqual({
+    name: 'n', body: 'T', insert: 'context', when: 'not-plan', order: -5, group: 'mg', priority: -2, header: 'mh', legacy: 'ml', description: 'md',
+  })
+})
+
+test('GIVEN a meta with a name only and a full base WHEN completed THEN every other field is inherited, insert and description included', async () => {
+  const base = { insert: 'inline' as const, when: 'plan' as const, order: 1, group: 'bg', priority: 1, header: 'bh', legacy: 'bl', description: 'bd' }
+
+  expect(toDef({ meta: { name: 'n' }, text: 'T', hasFrontMatter: true, issues: [] }, base), 'def').toEqual({
+    name: 'n', body: 'T', insert: 'inline', when: 'plan', order: 1, group: 'bg', priority: 1, header: 'bh', legacy: 'bl', description: 'bd',
+  })
+})
+
+test('GIVEN negative, signed and zero integers WHEN parsed THEN a leading minus and zero pass while a plus sign is an issue', async () => {
+  expect(parseFrontMatter('order: -5\npriority: 0\nname: x'), 'negative').toEqual({ meta: { order: -5, priority: 0, name: 'x' }, issues: [] })
+  expect(parseFrontMatter('order: +5').issues, 'plus').toEqual(["order: '+5' is not an integer"])
 })

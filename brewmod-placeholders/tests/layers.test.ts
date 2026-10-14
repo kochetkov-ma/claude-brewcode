@@ -1,6 +1,6 @@
 import { test, expect } from 'claude-code/testing'
 import { compileDefs } from '../hooks/lib/assemble'
-import { configDirOf, layerSpecs, loadRegistry, newRegistryCache, normalizeDir, toEditorEntries, type Def, type Roots } from '../hooks/lib/defs'
+import { configDirOf, issuesMessage, layerSpecs, loadRegistry, newRegistryCache, normalizeDir, toEditorEntries, type Def, type Roots } from '../hooks/lib/defs'
 import { assemble, defaultDefs } from './fixtures'
 import { CFG, PLUG, ROOT, defaultsTree, memIo, type Tree } from './layer-io'
 
@@ -226,4 +226,116 @@ test('GIVEN a registry with a plan variant and a duplicate name WHEN editor entr
   const reg = await load({})
 
   expect(toEditorEntries(reg.defs).map((e) => e.name), 'names').toEqual(['+', 'a', 'm', 'r', 'rr'])
+})
+
+// ---- fail-soft loader: one bad file never costs the registry
+
+const NAME_ISSUE = (file: string, name: string): string => `project/${file}: name '${name}' is not a placeholder name (1-32 of A-Z a-z 0-9 _, or punctuation only)`
+
+test('GIVEN native files with hyphen, dot, 33-char and unicode names WHEN loaded THEN each is skipped with one issue and listed as skipped', async () => {
+  const long = 'x'.repeat(33)
+  const reg = await load({
+    [`${P_NATIVE}/my-thing.md`]: 'A',
+    [`${P_NATIVE}/foo.bar.md`]: 'B',
+    [`${P_NATIVE}/${long}.md`]: 'C',
+    [`${P_NATIVE}/caf\u00e9.md`]: 'D',
+    [`${P_NATIVE}/good.md`]: 'G',
+  })
+
+  expect([reg.issues, reg.skipped, reg.defs.map((d) => d.name), [...reg.sources.keys()]], 'issues, skipped, names, sources').toEqual([
+    [NAME_ISSUE('caf\u00e9.md', 'caf\u00e9'), NAME_ISSUE('foo.bar.md', 'foo.bar'), NAME_ISSUE('my-thing.md', 'my-thing'), NAME_ISSUE(`${long}.md`, long)],
+    ['project/caf\u00e9.md', 'project/foo.bar.md', 'project/my-thing.md', `project/${long}.md`],
+    ['+', 'a', 'm', 'm', 'r', 'rr', 'good'],
+    ['+', 'a', 'm', 'm.plan', 'r', 'rr', 'good'],
+  ])
+})
+
+test('GIVEN a symbol name and a front matter name with a hyphen WHEN loaded THEN the symbol is kept and the hyphen name is skipped', async () => {
+  const reg = await load({
+    [`${P_NATIVE}/sym.md`]: '---\nname: "@@"\n---\nS',
+    [`${P_NATIVE}/hy.md`]: '---\nname: "a-b"\n---\nH',
+  })
+
+  expect([reg.issues, reg.skipped, reg.defs.filter((d) => d.body === 'S' || d.body === 'H').map((d) => d.name)], 'issues, skipped, kept names').toEqual([
+    [NAME_ISSUE('hy.md', 'a-b')],
+    ['project/hy.md'],
+    ['@@'],
+  ])
+})
+
+test('GIVEN an unterminated front matter WHEN loaded THEN the file is skipped, never injected raw, and the default shows through', async () => {
+  const reg = await load({ [`${P_NATIVE}/a.md`]: '---\nname: a\norder: 5\nBODY' })
+
+  expect([reg.issues, reg.skipped, find(reg.defs, 'a', 'always')], 'issues, skipped, def a').toEqual([
+    ['project/a.md: front matter is not closed'],
+    ['project/a.md'],
+    find(defaultDefs(), 'a', 'always'),
+  ])
+})
+
+test('GIVEN blank lines before the opening front matter line WHEN loaded THEN the front matter is read and the body is clean', async () => {
+  const reg = await load({ [`${P_NATIVE}/foo.md`]: '\n  \n---\norder: 5\n---\nBODY' })
+
+  expect([reg.issues, reg.skipped, reg.defs.filter((d) => d.name === 'foo')], 'issues, skipped, foo').toEqual([
+    [],
+    [],
+    [{ name: 'foo', body: 'BODY', insert: 'context', when: 'always', order: 5, priority: 0, header: '' }],
+  ])
+})
+
+test('GIVEN one unreadable file next to good ones WHEN loaded THEN the registry resolves, the file is skipped and named in issues and skipped', async () => {
+  const mem = memIo({ ...defaultsTree(), [`${P_NATIVE}/dangling.md`]: { raw: 'x', isLink: true }, [`${P_NATIVE}/foo.md`]: 'F' })
+  const io = { ...mem.io, read: async (p: string) => (p.endsWith('/dangling.md') ? Promise.reject(new Error('ENOENT dangling')) : mem.io.read(p)) }
+  const reg = await loadRegistry(io, ROOTS, newRegistryCache())
+
+  expect([reg.issues, reg.skipped, reg.defs.filter((d) => d.name === 'foo').map((d) => d.body), reg.defs.length], 'issues, skipped, foo, def count').toEqual([
+    ['project/dangling.md: unreadable (ENOENT dangling)'],
+    ['project/dangling.md'],
+    ['F'],
+    7,
+  ])
+})
+
+test('GIVEN an unreadable shipped default WHEN loaded THEN the load still rejects so the hook fails open', async () => {
+  const mem = memIo(defaultsTree())
+  const io = { ...mem.io, read: async (p: string) => (p.endsWith('/a.md') ? Promise.reject(new Error('EACCES')) : mem.io.read(p)) }
+  const outcome = await loadRegistry(io, ROOTS, newRegistryCache()).then(() => 'resolved', (err: Error) => err.message)
+
+  expect(outcome, 'outcome').toBe('EACCES')
+})
+
+test('GIVEN a still unreadable file WHEN the registry loads again THEN the same registry returns, and once readable the file appears', async () => {
+  const tree: Tree = { ...defaultsTree(), [`${P_NATIVE}/dangling.md`]: { raw: '', isLink: true } }
+  const mem = memIo(tree)
+  let broken = true
+  const io = { ...mem.io, read: async (p: string) => (broken && p.endsWith('/dangling.md') ? Promise.reject(new Error('EIO')) : mem.io.read(p)) }
+  const cache = newRegistryCache()
+  const first = await loadRegistry(io, ROOTS, cache)
+  const second = await loadRegistry(io, ROOTS, cache)
+  broken = false
+  const third = await loadRegistry(io, ROOTS, cache)
+
+  expect([second === first, third === first, third.skipped, third.defs.filter((d) => d.name === 'dangling').map((d) => d.body)], 'identity, recovery').toEqual([true, false, [], ['']])
+})
+
+test('GIVEN upper-case stems WHEN loaded THEN M.md overrides m field by field and Foo.plan.md is a plan variant of foo', async () => {
+  const reg = await load({ [`${P_NATIVE}/M.md`]: 'UP', [`${P_NATIVE}/Foo.md`]: 'F', [`${P_NATIVE}/Foo.plan.md`]: 'FP' })
+  const m = reg.defs.filter((d) => d.name === 'm' && d.when === 'always')
+
+  expect([m, reg.sources.get('m'), reg.sources.has('M'), reg.defs.filter((d) => d.name.toLowerCase() === 'foo').map((d) => [d.name, d.when, d.body]), reg.issues], 'm, source, foo, issues').toEqual([
+    [withBody(find(defaultDefs(), 'm', 'always'), 'UP')],
+    'project',
+    false,
+    [['foo', 'always', 'F'], ['foo', 'plan', 'FP']],
+    [],
+  ])
+})
+
+test('GIVEN a skipped file and a plain issue WHEN the session message is built THEN it names the first issue and lists the skipped files', async () => {
+  const reg = await load({ [`${P_NATIVE}/a.md`]: '---\nwat: 1\n---\nA2', [`${P_NATIVE}/my-thing.md`]: 'X', [`${P_NATIVE}/bad.md`]: '---\nname: b' })
+
+  expect([issuesMessage(reg), issuesMessage(await load({}))], 'messages').toEqual([
+    "3 definition issue(s), first: project/a.md: unknown key 'wat'; skipped project/bad.md, project/my-thing.md",
+    null,
+  ])
 })

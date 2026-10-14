@@ -9,7 +9,7 @@ const INLINE_ORIGINS: ReadonlySet<string> = new Set(['composer', 'bridge', 'sdk'
 
 export type SubmitLike = { origin: { kind: string }; command?: unknown; isMeta?: unknown }
 
-// prompt.submit has no mode: expansion needs a real person's prompt, no slash command, and no isMeta (the engine ignores a rewrite there).
+// prompt.submit has no mode: expansion needs a real person's prompt, no slash command, and no isMeta (a rewrite of those prompts is partial or absent).
 export function isInlineSubmit(e: SubmitLike): boolean {
   return INLINE_ORIGINS.has(e.origin.kind) && e.command === undefined && e.isMeta === undefined
 }
@@ -28,8 +28,8 @@ export function inlineBodies(defs: readonly Def[]): Map<string, string> {
   return out
 }
 
-// Replaces each eligible token by its body in ONE pass over the original text (bodies are never re-scanned). Null = nothing to change.
-// Non-always inline defs and empty bodies stay verbatim; header is not used (inline text has no block header).
+// One pass over the original text (no body re-scan here); the classic pass later expands context tokens a body carries, as brewtools does. Null = nothing to change.
+// Non-always inline defs and empty bodies stay verbatim; inline text has no block header.
 export function expandInline(c: Compiled, text: string): string | null {
   if (!text.includes(c.prefix)) return null
   const bodies = inlineBodies(c.defs)
@@ -54,12 +54,20 @@ export function expandInline(c: Compiled, text: string): string | null {
 
 const MAX_NAMED = 5
 
+// The toast is for text the person typed: `user` and `sdk`, or a payload that carries no source yet; loops, schedules and peers never.
+export const isTypedSource = (source: unknown): boolean => source === undefined || source === 'user' || source === 'sdk'
+
+const CODE_SPAN = /```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`/g
+const CODE_NEXT = /[;)[\]]/
+
 // Unknown `prefix+word` tokens of a prompt: unique (case-insensitive), first-seen order, original spelling.
+// Code is not a typo: tokens inside fences or backticks, or closed by `;` `)` `[` `]` (`++i)`, `a[++i]`), are left out.
 export function unknownTokens(ms: Matchers, text: string): string[] {
   const seen = new Set<string>()
   const out: string[] = []
-  for (const t of scanDraft(ms, text).tokens) {
-    if (t.isKnown || seen.has(t.text.toLowerCase())) continue
+  const plain = text.replace(CODE_SPAN, (m) => ' '.repeat(m.length))
+  for (const t of scanDraft(ms, plain).tokens) {
+    if (t.isKnown || seen.has(t.text.toLowerCase()) || CODE_NEXT.test(text.charAt(t.end))) continue
     seen.add(t.text.toLowerCase())
     out.push(t.text)
   }
@@ -69,5 +77,5 @@ export function unknownTokens(ms: Matchers, text: string): string[] {
 export function unknownMessage(tokens: readonly string[]): string {
   const shown = tokens.slice(0, MAX_NAMED).join(', ')
   const more = tokens.length > MAX_NAMED ? ` and ${tokens.length - MAX_NAMED} more` : ''
-  return `placeholders: unknown ${shown}${more}`
+  return `unknown ${shown}${more}`
 }

@@ -1,5 +1,5 @@
 import { test, expect } from 'claude-code/testing'
-import { JOINER, SYNTHETIC_PROMPT, capText, compileDefs, renderHeader } from '../hooks/lib/assemble'
+import { JOINER, SYNTHETIC_PROMPT, assembleBlocks, capText, compileDefs, renderHeader } from '../hooks/lib/assemble'
 import { assemble, def } from './fixtures'
 
 test('GIVEN two matched defs WHEN assembled THEN blocks sort by order, not by prompt position', async () => {
@@ -102,4 +102,30 @@ test('GIVEN a symbolic def with a custom prefix WHEN assembled THEN the token is
   const c = compileDefs([def({ name: '+', when: 'plan', body: 'C', header: 'T `{token}`:' })], '@@')
 
   expect([assemble(c, '@@+', 'plan'), assemble(c, '@@@', 'plan'), assemble(c, '+++', 'plan')], 'outputs').toEqual(['T `@@+`:\n\nC', null, null])
+})
+
+test('GIVEN two always defs of one name WHEN assembled THEN the first wins; two plan variants in plan mode likewise', async () => {
+  const always = compileDefs([def({ name: 'x', body: 'FIRST' }), def({ name: 'x', body: 'SECOND' })])
+  const plans = compileDefs([def({ name: 'x', when: 'plan', body: 'P1' }), def({ name: 'x', when: 'plan', body: 'P2' })])
+
+  expect([assemble(always, '++x', 'default'), assemble(plans, '++x', 'plan')], 'outputs').toEqual(['FIRST', 'P1'])
+})
+
+test('GIVEN a plan variant listed before and after the always def WHEN the mode is plan THEN the plan variant wins either way', async () => {
+  const before = compileDefs([def({ name: 'x', when: 'plan', body: 'PLAN' }), def({ name: 'x', body: 'ALL' })])
+  const after = compileDefs([def({ name: 'x', body: 'ALL' }), def({ name: 'x', when: 'plan', body: 'PLAN' })])
+
+  expect([assemble(before, '++x', 'plan'), assemble(after, '++x', 'plan')], 'outputs').toEqual(['PLAN', 'PLAN'])
+})
+
+test('GIVEN two group members with equal priority WHEN both appear THEN the first def wins whatever the prompt order', async () => {
+  const c = compileDefs([def({ name: 'x', group: 'g', priority: 3, body: 'X' }), def({ name: 'y', group: 'g', priority: 3, body: 'Y' })])
+
+  expect([assemble(c, '++x ++y'), assemble(c, '++y ++x')], 'outputs').toEqual(['X', 'X'])
+})
+
+test('GIVEN an upper-case def name and a {token} header WHEN assembled THEN the header and token carry the lower-case name', async () => {
+  const c = compileDefs([def({ name: 'Foo', header: 'Typed `{token}`:' })])
+
+  expect(assembleBlocks(c, '++FOO'), 'built').toEqual({ text: 'Typed `++foo`:\n\nB', tokens: ['++foo'] })
 })

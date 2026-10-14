@@ -1,7 +1,7 @@
 import { test, expect } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import { ROOT, wire, type Tree } from './layer-io'
-import { PLAN_ONLY_LABEL, UNKNOWN_LABEL, bandRows, toggleLabel } from '../hooks/lib/band'
+import { PLAN_ONLY_LABEL, UNKNOWN_LABEL, bandBudget, bandRows, toggleLabel } from '../hooks/lib/band'
 
 const SURFACES = ['terminal', 'desktop'] as const
 const PROPS = { hasSurvey: false, isWorking: false, maxRows: 24, bodyColumns: 100, scroll: { bodyRows: 23, offset: 0, total: 0 }, view: {} }
@@ -25,9 +25,14 @@ const bare = (node: any): any => {
 const typed = ($: { prompt: unknown }, text: string) =>
   ($.prompt as any).edit({ origin: { kind: 'composer' }, text: '', cursor: 0, start: 0, end: 0, inputText: text })
 
+// The box the stubbed engine answers $.prompt.read with; boot sets it to the draft.
+const box = { text: '', cursor: 0 }
+
 // Real path: session.start loads the registry into the editor entries, prompt.edit writes the view atom.
-const boot = async ($: any, on: On, draft: string, stubs: (on: On) => void = () => {}) => {
-  wire(on, { tree: TREE, bottom: {} })
+const boot = async ($: any, on: On, draft: string, stubs: (on: On) => void = () => {}, tree: Tree = TREE) => {
+  wire(on, { tree, bottom: {} })
+  on('prompt.read', () => ({ value: box }) as never)
+  box.text = draft
   stubs(on)
   on('session.start', (_$, e) => ({ cwd: e.cwd }) as never)
   on('prompt.edit', (_$, e) => ({ text: e.text.slice(0, e.start) + e.inputText + e.text.slice(e.end), cursor: e.start + e.inputText.length }))
@@ -87,16 +92,18 @@ const rowQ = {
     },
   ],
 }
+// The drawn tree carries no key on a Text: only Boxes and Buttons keep theirs.
+const line = (body: string) => ({ type: 'Text', props: { dimColor: true, wrap: 'truncate-end' }, children: [body] })
 const hidden = (body: string) => ({
   type: 'Box',
-  props: { marginLeft: 2, display: 'none' },
+  props: { marginLeft: 2, flexDirection: 'column', display: 'none' },
   hover: { display: 'flex' },
-  children: [{ type: 'Text', props: { dimColor: true }, children: [body] }],
+  children: [line(body)],
 })
 const shown = (body: string) => ({
   type: 'Box',
-  props: { marginLeft: 2 },
-  children: [{ type: 'Text', props: { dimColor: true }, children: [body] }],
+  props: { marginLeft: 2, flexDirection: 'column' },
+  children: [line(body)],
 })
 const band = (children: unknown[]) => ({
   type: 'Box',
@@ -221,4 +228,99 @@ test('GIVEN tokens and entries WHEN rows are built THEN they dedupe case-insensi
     { text: '++x', name: 'x', isKnown: false, description: UNKNOWN_LABEL, body: '', isPlanOnly: false },
   ])
   expect([toggleLabel(false), toggleLabel(true)], 'labels').toEqual(['Show text', 'Hide text'])
+})
+
+test('GIVEN terminal heights and the fullscreen flag WHEN the band budget is computed THEN it is 6 to 30 rows, less the reserve outside fullscreen', async () => {
+  const table: [number, boolean][] = [[45, false], [24, false], [18, false], [10, false], [100, false], [45, true], [20, true], [50, true]]
+
+  expect(table.map(([rows, full]) => bandBudget(rows, full)), 'budgets').toEqual([30, 12, 6, 6, 30, 30, 20, 30])
+})
+
+const bodyOf = (name: string, lines: number): string =>
+  `---\nname: "${name}"\ndescription: "${name} mode"\n---\n${Array.from({ length: lines }, (_, i) => `${name}-line-${i + 1}`).join('\n')}`
+const texts = async (ui: { findAll: (q: { type: string }) => Promise<{ text?: string }[]> }): Promise<(string | undefined)[]> => (await ui.findAll({ type: 'Text' })).map((t) => t.text)
+
+test('GIVEN twelve unknown tokens and a 12-row budget WHEN the band mounts THEN ten rows show and the last row counts the rest', async ($, on) => {
+  await boot($, on, Array.from({ length: 12 }, (_, i) => `++u${i + 1}`).join(' '))
+
+  const ui = await $.ui.mount({ ...PLUGIN, surface: 'terminal', props: PROPS })
+
+  const rows = (await ui.findAll({ type: 'Text' })).map((t) => t.text).filter((t) => t?.startsWith('++u') || t?.startsWith('...') || t?.startsWith('placeholders'))
+  expect(rows, 'head, ten tokens, the more row').toEqual(['placeholders 12 ', ...Array.from({ length: 10 }, (_, i) => `++u${i + 1}`), '... +2 more placeholders'])
+  await ui.unmount()
+})
+
+test('GIVEN a 20-line body WHEN the expanded band mounts with a 12-row budget THEN nine lines show and an ellipsis row counts the 11 cut', async ($, on) => {
+  await boot($, on, '++long', undefined, { [`${ROOT}/.claude/placeholders/long.md`]: bodyOf('long', 20) })
+  const ui = await $.ui.mount({ ...PLUGIN, surface: 'terminal', props: PROPS })
+
+  await ui.press({ key: 'toggle' })
+
+  expect(await texts(ui), 'texts').toEqual([
+    'placeholders 1 ',
+    '++long',
+    '  long mode',
+    ...Array.from({ length: 9 }, (_, i) => `long-line-${i + 1}`),
+    '... +11 lines',
+  ])
+  await ui.unmount()
+})
+
+test('GIVEN a 20-line body WHEN the collapsed band mounts THEN the hover body is capped the same way', async ($, on) => {
+  await boot($, on, '++long', undefined, { [`${ROOT}/.claude/placeholders/long.md`]: bodyOf('long', 20) })
+
+  const ui = await $.ui.mount({ ...PLUGIN, surface: 'terminal', props: PROPS })
+
+  expect((await texts(ui)).slice(3), 'hover texts').toEqual([...Array.from({ length: 9 }, (_, i) => `long-line-${i + 1}`), '... +11 lines'])
+  await ui.unmount()
+})
+
+test('GIVEN three 20-line bodies WHEN the expanded band mounts with a 12-row budget THEN each body gets one line and an ellipsis', async ($, on) => {
+  const tree = Object.fromEntries(['aa', 'bb', 'cc'].map((n) => [`${ROOT}/.claude/placeholders/${n}.md`, bodyOf(n, 20)]))
+  await boot($, on, '++aa ++bb ++cc', undefined, tree)
+  const ui = await $.ui.mount({ ...PLUGIN, surface: 'terminal', props: PROPS })
+
+  await ui.press({ key: 'toggle' })
+
+  expect(await texts(ui), 'texts').toEqual([
+    'placeholders 3 ',
+    '++aa',
+    '  aa mode',
+    'aa-line-1',
+    '... +19 lines',
+    '++bb',
+    '  bb mode',
+    'bb-line-1',
+    '... +19 lines',
+    '++cc',
+    '  cc mode',
+    'cc-line-1',
+    '... +19 lines',
+  ])
+  await ui.unmount()
+})
+
+test('GIVEN a tall terminal WHEN the expanded band mounts THEN the body is not cut', async ($, on) => {
+  await boot($, on, '++long', undefined, { [`${ROOT}/.claude/placeholders/long.md`]: bodyOf('long', 20) })
+  const ui = await $.ui.mount({ ...PLUGIN, surface: 'terminal', props: { ...PROPS, maxRows: 60 } })
+
+  await ui.press({ key: 'toggle' })
+
+  expect((await texts(ui)).slice(3), 'body lines').toEqual(Array.from({ length: 20 }, (_, i) => `long-line-${i + 1}`))
+  await ui.unmount()
+})
+
+test('GIVEN tokens in the view atom and an emptied box WHEN the band mounts on the terminal THEN the engine tree is drawn and a desktop surface still draws the band', async ($, on) => {
+  await boot($, on, '++yy ++q')
+  box.text = ''
+
+  const terminal = await $.ui.mount({ ...PLUGIN, surface: 'terminal', props: PROPS })
+  const desktop = await $.ui.mount({ ...PLUGIN, surface: 'desktop', props: PROPS })
+
+  expect([bare(await terminal.drawn()), (await desktop.findAll({ type: 'Box' })).map((b) => b.key)], 'terminal tree, desktop box keys').toEqual([
+    ENGINE,
+    ['band', 'head', 'row:++yy', undefined, undefined, 'row:++q', undefined],
+  ])
+  await terminal.unmount()
+  await desktop.unmount()
 })

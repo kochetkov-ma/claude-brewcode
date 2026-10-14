@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Live A/B helper for ab.sh: run plan, transcript extraction, verdict table. Run as `python3 -I ab-check.py <cmd> ...`.
-import glob, hashlib, json, os, re, sys
+import glob, hashlib, json, os, re, shutil, sys
 
 HEADERS = {
     '++r': 'User typed `++r` — Two-phase review discipline is active for this turn:',
@@ -13,7 +13,7 @@ R_HEADER = HEADERS['++r']
 EXP_R_NATIVE = R_HEADER + '\n\n' + NATIVE_BODY
 EXP_R_LEGACY = R_HEADER + '\n\n' + LEGACY_FENCED
 
-# name, cwd key, permission mode, mod (mod|nomod), brewtools (on|off), prompt
+# name, cwd key, permission mode, mod (mod|nomod|fault), brewtools (on|off), prompt; fault = the mod snapshot patched to throw after next()
 RUNS = [
     ('c1-r-A', 'tmp', 'default', 'mod', 'on', '++r say ok'),
     ('c1-r-B', 'tmp', 'default', 'nomod', 'on', '++r say ok'),
@@ -36,6 +36,7 @@ RUNS = [
     ('c4-r-A', 'tmp', 'default', 'mod', 'off', '++r say ok'),
     ('c4-am-A', 'tmp', 'default', 'mod', 'off', '++a ++m say ok'),
     ('c4-ctl', 'tmp', 'default', 'nomod', 'off', '++r say ok'),
+    ('c5-fault', 'repo-root', 'default', 'fault', 'on', '++r say ok'),
 ]
 BY = {r[0]: r for r in RUNS}
 
@@ -53,6 +54,7 @@ UNITS = [
     ('4.r', 'brewtools off ++r', 'c4-r-A', 'c1-r-B', ['++r'], 'off'),
     ('4.am', 'brewtools off ++a ++m', 'c4-am-A', 'c1-am-B', ['++m', '++a'], 'off'),
     ('4.ctl', 'brewtools off, no mod ++r', 'c4-ctl', None, [], 'ctl'),
+    ('5.fault', 'mod throws after next(): brewtools block once', 'c5-fault', None, ['++r'], 'fault'),
 ]
 
 JOINER = '\n\n---\n\n'
@@ -67,6 +69,20 @@ def sha(s):
 def cmd_plan(_):
     for r in RUNS:
         print('\t'.join(r))
+
+
+def cmd_mkfault(a):
+    # a: <mod snapshot> <fault copy>; the throw sits right after `await next(e)` in classic.UserPromptSubmit, where a local try/catch would not reach it.
+    src, dst = a[0], a[1]
+    shutil.copytree(src, dst)
+    p = os.path.join(dst, 'hooks', 'register.ts')
+    s = open(p, encoding='utf-8').read()
+    pat = re.compile(r'(\n( +)const r = await next\(e\)\n)(?= +return built === null)')
+    if len(pat.findall(s)) != 1:
+        print('ab-check: PRECONDITION register.ts has no unique `const r = await next(e)` followed by `return built === null`')
+        sys.exit(2)
+    s = pat.sub(lambda m: m.group(1) + m.group(2) + "if (r !== undefined) throw new Error('boom-after-next')\n", s)
+    open(p, 'w', encoding='utf-8').write(s)
 
 
 def cmd_mkrepo(a):
@@ -119,6 +135,7 @@ def cmd_extract(a):
     res['stderr_bytes'] = len(err.encode('utf-8'))
     res['did_not_load'] = err.count('did not load') + dbg.count('did not load')
     res['mod_loaded'] = len(re.findall(r'hooks module brewmod-placeholders@inline loaded', dbg))
+    res['hook_failed'] = len(re.findall(r'hook failed: brewmod-placeholders', dbg))
     res['bt_hook'] = len(re.findall(r'manager-prompt\.mjs\] \(plugin brewtools@claude-brewcode\) finished with status 0', dbg))
     for line in rd('.stream.jsonl').splitlines():
         try:
@@ -147,8 +164,8 @@ def run_checks(x, spec):
         f.append(f"transcripts={x['transcripts']}")
     if x['did_not_load'] != 0:
         f.append('hooks module did not load')
-    if (x['mod_loaded'] >= 1) != (mod == 'mod'):
-        f.append(f"mod_loaded={x['mod_loaded']} (expected {'>=1' if mod == 'mod' else 0})")
+    if (x['mod_loaded'] >= 1) != (mod in ('mod', 'fault')):
+        f.append(f"mod_loaded={x['mod_loaded']} (expected {'>=1' if mod in ('mod', 'fault') else 0})")
     if (x['bt_hook'] >= 1) != (bt == 'on'):
         f.append(f"brewtools hook runs={x['bt_hook']} (expected {'>=1' if bt == 'on' else 0})")
     sub = (x['result'] or {}).get('subtype')
@@ -178,7 +195,8 @@ def cmd_verdict(a):
     allok = True
     devs = []
     lines = []
-    for uid, label, an, bn, toks, kind in UNITS:
+    only = os.environ.get('AB_ONLY')
+    for uid, label, an, bn, toks, kind in [u for u in UNITS if not only or only in (u[2], u[3])]:
         xa, xb = load(out, an), (load(out, bn) if bn else None)
         fails = []
         deviation = None
@@ -207,6 +225,13 @@ def cmd_verdict(a):
                     fails.append('A text != expected native project layer text: ' + json.dumps(xa['entries'])[:200])
                 if xb['entries'] != [EXP_R_LEGACY]:
                     fails.append('B text != expected brewtools legacy override text: ' + json.dumps(xb['entries'])[:200])
+        if kind == 'fault' and xa is not None:
+            if xa['entries'] != [EXP_R_LEGACY]:
+                fails.append('fault text != brewtools legacy override text: ' + json.dumps(xa['entries'])[:200])
+            if xa['hook_failed'] < 1:
+                fails.append('debug log has no `hook failed: brewmod-placeholders` line (the fault did not fire)')
+            if xa['bt_hook'] != 1:
+                fails.append(f"brewtools hook runs={xa['bt_hook']} (expected exactly 1, not replayed)")
         if kind == 'ctl' and xa is not None and xa['rows'] != 0:
             fails.append(f"rows={xa['rows']} with brewtools off and no mod")
         ok = not fails
@@ -231,4 +256,4 @@ def cmd_verdict(a):
 
 
 if __name__ == '__main__':
-    {'plan': cmd_plan, 'mkrepo': cmd_mkrepo, 'extract': cmd_extract, 'verdict': cmd_verdict}[sys.argv[1]](sys.argv[2:])
+    {'plan': cmd_plan, 'mkfault': cmd_mkfault, 'mkrepo': cmd_mkrepo, 'extract': cmd_extract, 'verdict': cmd_verdict}[sys.argv[1]](sys.argv[2:])

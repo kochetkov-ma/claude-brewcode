@@ -2,7 +2,7 @@ import { PLACEHOLDER_FILES, type GoldenFile } from './parity/golden.generated'
 import { parseDefinition, parseLegacy, toDef, type Def } from '../hooks/lib/defs'
 import { assembleBlocks, type Compiled } from '../hooks/lib/assemble'
 
-export const assemble = (c: Compiled, prompt: string, mode?: string): string | null => assembleBlocks(c, prompt, mode)?.text ?? null
+export const assemble = (c: Compiled, prompt: string, mode?: string): string | null => (assembleBlocks(c, prompt, mode)?.text ?? '') || null
 
 // Shipped defaults parsed from the raw placeholders/*.md captured in the golden file.
 export const defaultDefs = (): Def[] =>

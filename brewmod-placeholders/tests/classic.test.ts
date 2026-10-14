@@ -117,11 +117,61 @@ test('GIVEN the env lookup has no answer at all WHEN the mod runs THEN brewtools
   expect(await send($, '++m', 'default'), 'result').toEqual(bottom)
 })
 
-test('GIVEN the mod suppresses ++a but brewtools emits it WHEN ++m ++a runs THEN ++m is the mod and ++a stays brewtools', async ($, on) => {
-  const tree: Tree = { ...defaultsTree(), [`${ROOT}/.claude/placeholders/a.md`]: '' }
-  wire(on, { tree, bottom: { additionalContext: [[marked(M), marked(A)].join(JOINER)] } })
+const ROW_A: Tree = { ...defaultsTree(), [`${ROOT}/.claude/placeholders/a.md`]: '' }
+const putP = (name: string, raw: string): Tree => ({ ...defaultsTree(), [`${ROOT}/.claude/placeholders/${name}.md`]: raw })
 
-  expect(await send($, '++m ++a', 'default'), 'result').toEqual({ additionalContext: [[M, marked(A)].join(JOINER)] })
+test('GIVEN the mod suppresses ++a and brewtools emits ++m and ++a WHEN ++m ++a runs THEN ++m is the mod and the ++a block is gone', async ($, on) => {
+  wire(on, { tree: ROW_A, bottom: { additionalContext: [[marked(M), marked(A)].join(JOINER)] } })
+
+  expect(await send($, '++m ++a', 'default'), 'result').toEqual({ additionalContext: [M] })
+})
+
+test('GIVEN a native empty override of a WHEN brewtools emitted its ++a block THEN no block is left and the context key is gone', async ($, on) => {
+  wire(on, { tree: ROW_A, bottom: { additionalContext: [marked(A)] } })
+
+  expect(await send($, '++a', 'default'), 'result').toEqual({})
+})
+
+test('GIVEN a native empty override of a and foreign entries WHEN brewtools emitted ++a THEN only the foreign entries stay', async ($, on) => {
+  wire(on, { tree: ROW_A, bottom: { sessionTitle: 'T', additionalContext: ['F1', marked(A), 'F2'] } })
+
+  expect(await send($, '++a', 'default'), 'result').toEqual({ sessionTitle: 'T', additionalContext: ['F1', 'F2'] })
+})
+
+test('GIVEN a native empty override of a and no brewtools WHEN ++a runs THEN the result stays empty', async ($, on) => {
+  wire(on, { tree: ROW_A, bottom: {} })
+
+  expect(await send($, '++a', 'default'), 'result').toEqual({})
+})
+
+test('GIVEN a native empty override of a WHEN a prompt without ++a runs THEN brewtools output is untouched', async ($, on) => {
+  wire(on, { tree: ROW_A, bottom: { additionalContext: [marked(M)] } })
+
+  expect(await send($, '++m', 'default'), 'result').toEqual({ additionalContext: [M] })
+})
+
+test('GIVEN rr.md with priority 0 WHEN ++r ++rr runs and brewtools emitted ++rr THEN exactly one review block remains, the mod r', async ($, on) => {
+  wire(on, { tree: putP('rr', '---\npriority: 0\n---\nRR-NATIVE'), bottom: { additionalContext: [marked(RR)] } })
+
+  expect(await send($, '++r ++rr', 'default'), 'result').toEqual({ additionalContext: [R] })
+})
+
+test('GIVEN rr.md limited to plan WHEN ++r ++rr runs in default mode THEN exactly one review block remains, the mod r', async ($, on) => {
+  wire(on, { tree: putP('rr', '---\nwhen: plan\n---\nRR-NATIVE'), bottom: { additionalContext: [marked(RR)] } })
+
+  expect(await send($, '++r ++rr', 'default'), 'result').toEqual({ additionalContext: [R] })
+})
+
+test('GIVEN r.md with priority 5 WHEN ++r ++rr runs and brewtools emitted ++rr THEN the mod r block replaces it', async ($, on) => {
+  wire(on, { tree: putP('r', '---\npriority: 5\n---\nR-NATIVE'), bottom: { additionalContext: [marked(RR)] } })
+
+  expect(await send($, '++r ++rr', 'default'), 'result').toEqual({ additionalContext: [`${R.split('\n\n')[0]}\n\nR-NATIVE`] })
+})
+
+test('GIVEN a native m.md limited to plan WHEN ++m runs in default mode THEN the mod emits nothing and brewtools block is dropped', async ($, on) => {
+  wire(on, { tree: putP('m', '---\nwhen: plan\n---\nPLAN-ONLY'), bottom: { additionalContext: ['F1', marked(M)] } })
+
+  expect(await send($, '++m', 'default'), 'result').toEqual({ additionalContext: ['F1'] })
 })
 
 test('GIVEN a prompt without the prefix or a synthetic delivery WHEN the mod runs THEN it touches no file and the result is untouched', async ($, on) => {
@@ -189,7 +239,7 @@ test('GIVEN an invalid prefix WHEN the session starts THEN a toast warns and ++ 
   const out = await send($, '++m', 'default')
 
   expect([w.toasts, out], 'toasts and result').toEqual([
-    ['placeholders: prefix must be 2-8 ASCII punctuation characters (not _), using ++'],
+    ['prefix must be 2-8 ASCII punctuation characters (not _), using ++'],
     { additionalContext: [M] },
   ])
 })
@@ -201,7 +251,17 @@ test('GIVEN a broken definition file WHEN the session starts THEN one toast name
 
   await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
 
-  expect(w.toasts, 'toasts').toEqual(["placeholders: 1 definition issue(s), first: project/a.md: unknown key 'wat'"])
+  expect(w.toasts, 'toasts').toEqual(["1 definition issue(s), first: project/a.md: unknown key 'wat'"])
+})
+
+test('GIVEN skipped and unreadable files WHEN the session starts THEN one toast carries the count, the first issue and the skipped files', async ($, on) => {
+  const tree: Tree = { ...defaultsTree(), [`${ROOT}/.claude/placeholders/my-thing.md`]: 'X', [`${ROOT}/.claude/placeholders/broken.md`]: '---\nname: b' }
+  const w = wire(on, { tree, bottom: {} })
+  on('session.start', (_$, e) => ({ cwd: e.cwd }) as never)
+
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+
+  expect(w.toasts, 'toasts').toEqual(["2 definition issue(s), first: project/broken.md: front matter is not closed; skipped project/broken.md, project/my-thing.md"])
 })
 
 test('GIVEN a valid setup WHEN the session starts THEN there is no toast and the registry is already read', async ($, on) => {

@@ -1,9 +1,10 @@
-import { test, expect } from 'claude-code/testing'
+import { test, expect, mock } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import { EMPTY_VIEW, MAX_DECORATED_CHARS, highlight, optionColor, sameView, suggest } from '../hooks/lib/editor'
 import { DEFAULT_ENTRIES, editorMatchers, getEditorEntries, setEditorEntries } from '../hooks/lib/editor-state'
 import { compileMatchers } from '../hooks/lib/match'
 import { defaultDefs } from './fixtures'
+import { ROOT, wire, type Tree } from './layer-io'
 
 const STYLE = { knownColor: 'suggestion', unknownColor: 'warning' }
 const ms = (prefix = '++') => compileMatchers(prefix, DEFAULT_ENTRIES.map((e) => e.name))
@@ -56,6 +57,15 @@ test('GIVEN a draft without the prefix WHEN highlighted THEN view and decoration
   expect(highlight(ms(), 'plain text, no tokens +m', STYLE), 'highlight').toEqual({ view: { tokens: [] }, decorations: [] })
 })
 
+test('GIVEN a token followed by combining marks, ZWJ or variation selectors WHEN highlighted THEN the run ends on the grapheme edge', async () => {
+  const runs = (text: string) => highlight(ms(), text, STYLE).decorations.map((d) => [d.start, d.end])
+
+  expect(
+    [runs('a ++r\u0301 b'), runs('a ++r\u0301\u0302'), runs('a ++r\u200D'), runs('a ++r\uFE0F'), runs('a ++r\u0301b'), runs('a ++r')],
+    'runs',
+  ).toEqual([[[2, 6]], [[2, 7]], [[2, 6]], [[2, 6]], [[2, 6]], [[2, 5]]])
+})
+
 test('GIVEN a draft of exactly the cap WHEN highlighted THEN it is decorated; one char more is not', async () => {
   const atCap = '++m' + ' '.repeat(MAX_DECORATED_CHARS - 3)
   const overCap = atCap + ' '
@@ -68,12 +78,12 @@ test('GIVEN a draft of exactly the cap WHEN highlighted THEN it is decorated; on
   expect(highlight(ms(), overCap, STYLE), 'over cap').toEqual({ view: { tokens: [] }, decorations: [] })
 })
 
-test('GIVEN views WHEN compared THEN equality is exact on every token field', async () => {
+test('GIVEN views WHEN compared THEN text, name and known flag decide and offsets do not', async () => {
   const base = { tokens: [KNOWN_M] }
 
   expect(sameView(base, { tokens: [{ ...KNOWN_M }] }), 'equal copy').toBe(true)
   expect(sameView(base, EMPTY_VIEW), 'length differs').toBe(false)
-  expect(sameView(base, { tokens: [{ ...KNOWN_M, start: 5, end: 8 }] }), 'offset shifted').toBe(false)
+  expect(sameView(base, { tokens: [{ ...KNOWN_M, start: 5, end: 8 }] }), 'offset shifted').toBe(true)
   expect(sameView(base, { tokens: [{ ...KNOWN_M, isKnown: false }] }), 'known flipped').toBe(false)
   expect(sameView(base, { tokens: [{ ...KNOWN_M, text: '++M' }] }), 'case differs').toBe(false)
   expect(sameView(EMPTY_VIEW, { tokens: [] }), 'both empty').toBe(true)
@@ -94,6 +104,12 @@ test('GIVEN a partial token WHEN suggested THEN only extensions remain and an ex
   expect(suggest('++', '++RR', DEFAULT_ENTRIES), 'exact, other case').toEqual([])
   expect(suggest('++', '++R', DEFAULT_ENTRIES).map((r) => r.label), 'partial, other case').toEqual(['++rr'])
   expect(suggest('++', '++x', DEFAULT_ENTRIES), 'no name starts with x').toEqual([])
+})
+
+test('GIVEN a space after the caret WHEN suggested THEN rows end without their own space', async () => {
+  const rows = suggest('++', '++r', DEFAULT_ENTRIES, true)
+
+  expect(rows, 'rows').toEqual([{ text: '++rr', label: '++rr', description: DEFAULT_ENTRIES[3]?.description }])
 })
 
 test('GIVEN a custom prefix WHEN suggested THEN rows use it and a foreign token gives none', async () => {
@@ -323,4 +339,82 @@ test('GIVEN a refused state write WHEN prompt.edit runs twice THEN the highlight
   expect(first, 'first edit').toEqual({ text: '++m', cursor: 3, decorations: [{ start: 0, end: 3, color: 'suggestion', underline: true }] })
   expect(second, 'second edit').toEqual(first)
   expect(attempts, 'write attempts').toEqual([{ tokens: [m] }, { tokens: [m] }])
+})
+
+// --- prompt.autocomplete: space after the caret, registry refresh ---
+
+const HAND = `${ROOT}/.claude/placeholders/hand.md`
+const startedTree = (): Tree => ({ [`${ROOT}/.claude/placeholders/seed.md`]: '---\nname: "seed"\ndescription: "Seed mode"\n---\nSEED' })
+
+test('GIVEN a space right after the caret WHEN prompt.autocomplete runs THEN the row has no trailing space of its own', async ($, on) => {
+  on('prompt.autocomplete', () => ({ suggestions: [] }))
+
+  const out = await ($.prompt as any).autocomplete({ text: 'x ++r y', cursor: 5, token: '++r', start: 2 })
+
+  expect(out, 'suggestions').toEqual({ suggestions: [{ text: '++rr', label: '++rr', description: DEFAULT_ENTRIES[3]?.description }] })
+})
+
+test('GIVEN a definition file made by hand WHEN a prefixed token is completed THEN the typeahead knows it, at most once a second', async ($, on) => {
+  const tree = startedTree()
+  wire(on, { tree, bottom: {} })
+  on('session.start', (_$, e) => ({ cwd: e.cwd }) as never)
+  on('prompt.autocomplete', () => ({ suggestions: [] }))
+  const clock = mock.clock(on, { now: 0 })
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+  const ask = () => ($.prompt as any).autocomplete({ text: '++ha', cursor: 4, token: '++ha', start: 0 })
+
+  const first = await ask()
+  tree[HAND] = '---\nname: "hand"\ndescription: "Hand made"\n---\nHAND'
+  await clock.advance(999)
+  const tooSoon = await ask()
+  await clock.advance(1)
+  const later = await ask()
+
+  expect([first, tooSoon, later], 'rows at 0 ms, 999 ms, 1000 ms').toEqual([
+    { suggestions: [] },
+    { suggestions: [] },
+    { suggestions: [{ text: '++hand ', label: '++hand', description: 'Hand made' }] },
+  ])
+})
+
+test('GIVEN a registry read that fails WHEN a prefixed token is completed THEN the known rows still come back', { options: {} }, async ($, on) => {
+  wire(on, { tree: startedTree(), bottom: {}, fail: 'list' })
+  on('prompt.autocomplete', () => ({ suggestions: [] }))
+  mock.clock(on, { now: 0 })
+
+  const out = await ($.prompt as any).autocomplete({ text: '++r', cursor: 3, token: '++r', start: 0 })
+
+  expect(out, 'suggestions').toEqual({ suggestions: [{ text: '++rr ', label: '++rr', description: DEFAULT_ENTRIES[3]?.description }] })
+})
+
+// --- ui.render PromptHint: the band draws again when the box turns empty or non-empty ---
+
+const HINT = { plugin: 'brewmod-placeholders', component: 'PromptHint' } as const
+const BAND = { plugin: 'brewmod-placeholders', component: 'AbovePrompt' } as const
+const BAND_PROPS = { hasSurvey: false, isWorking: false, maxRows: 24, bodyColumns: 100, scroll: { bodyRows: 23, offset: 0, total: 0 }, view: {} }
+const hintProps = (isDraft: boolean) => ({ isDraft, isWorking: false, hint: '? for shortcuts' })
+
+// Counts the band draws that reach the engine's own bottom: a draw the mod passes through is a count.
+const drawCounts = (on: On) => {
+  const counts = { band: 0, hint: 0 }
+  on('prompt.read', () => ({ value: { text: '', cursor: 0 } }) as never)
+  on('ui.render', ($$, e) => {
+    if (e.component === 'AbovePrompt') counts.band += 1
+    if (e.component === 'PromptHint') counts.hint += 1
+    return $$.ui.resolve(e).Text({ children: 'ENGINE' })
+  })
+  return counts
+}
+
+test('GIVEN a hint line drawn with a draft and then without WHEN the flip is seen THEN the band is drawn again once', async ($, on) => {
+  const counts = drawCounts(on)
+  const band = await $.ui.mount({ ...BAND, surface: 'terminal', props: BAND_PROPS })
+  const first = await $.ui.mount({ ...HINT, surface: 'terminal', props: hintProps(true) })
+  const afterFirst = counts.band
+  const second = await $.ui.mount({ ...HINT, surface: 'terminal', props: hintProps(true) })
+  const afterSame = counts.band
+  const third = await $.ui.mount({ ...HINT, surface: 'terminal', props: hintProps(false) })
+
+  expect([afterFirst, afterSame, counts.band], 'band draws after first hint, same draft, flipped draft').toEqual([1, 1, 2])
+  for (const ui of [band, first, second, third]) await ui.unmount()
 })

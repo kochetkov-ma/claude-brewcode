@@ -1,5 +1,6 @@
 // Definition parsing (pure) + layered registry. File access only through an injected Io, never `$`.
 import type { EditorEntry } from './editor'
+import { nameKind } from './match'
 
 export type When = 'always' | 'plan' | 'not-plan'
 export type Insert = 'context' | 'inline'
@@ -16,7 +17,8 @@ export type DefMeta = {
   legacy?: string
 }
 
-export type Parsed = { meta: DefMeta; text: string; hasFrontMatter: boolean; issues: string[] }
+// `skip` = the file cannot be read as a definition (front matter never closes): the loader drops it.
+export type Parsed = { meta: DefMeta; text: string; hasFrontMatter: boolean; issues: string[]; skip?: true }
 
 export type Def = {
   name: string
@@ -45,10 +47,12 @@ export function extractFenced(raw: string): string {
 
 type Split = { fm: string; body: string }
 
-// Front matter = first line `---` (after an optional BOM) up to the next `---` line; unterminated -> none.
-function splitFrontMatter(raw: string): Split | null {
+const OPEN = /^(?:[ \t]*\r?\n)*---[ \t]*(?:\r?\n|$)/
+
+// Front matter = first non-blank line `---` (after an optional BOM) up to the next `---` line; no opening line -> null, no closing line -> 'unclosed'.
+function splitFrontMatter(raw: string): Split | 'unclosed' | null {
   const src = raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw
-  const open = /^---[ \t]*\r?\n/.exec(src)
+  const open = OPEN.exec(src)
   if (!open) return null
   const start = open[0].length
   let pos = start
@@ -61,7 +65,7 @@ function splitFrontMatter(raw: string): Split | null {
     if (nl === -1) break
     pos = nl + 1
   }
-  return null
+  return 'unclosed'
 }
 
 function scalar(value: string): string {
@@ -125,7 +129,8 @@ export function parseFrontMatter(fm: string): { meta: DefMeta; issues: string[] 
 // Mod-native definition file: optional front matter, body through extractFenced (no front matter -> whole file).
 export function parseDefinition(raw: string): Parsed {
   const split = splitFrontMatter(raw)
-  if (!split) return { meta: {}, text: extractFenced(raw), hasFrontMatter: false, issues: [] }
+  if (split === 'unclosed') return { meta: {}, text: '', hasFrontMatter: true, issues: ['front matter is not closed'], skip: true }
+  if (split === null) return { meta: {}, text: extractFenced(raw), hasFrontMatter: false, issues: [] }
   const { meta, issues } = parseFrontMatter(split.fm)
   return { meta, text: extractFenced(split.body), hasFrontMatter: true, issues }
 }
@@ -170,8 +175,8 @@ export type LayerKind = 'native' | 'legacy'
 export type LayerSpec = { id: string; kind: LayerKind; dir: string }
 export type LayerFiles = { id: string; kind: LayerKind; files: ReadonlyMap<string, string> }
 export type Roots = { pluginRoot: string; root?: string; configDir?: string }
-export type Resolved = { defs: Def[]; issues: string[]; sources: Map<string, string> }
-export type Registry = { defs: readonly Def[]; issues: readonly string[]; sources: ReadonlyMap<string, string> }
+export type Resolved = { defs: Def[]; issues: string[]; skipped: string[]; sources: Map<string, string> }
+export type Registry = { defs: readonly Def[]; issues: readonly string[]; skipped: readonly string[]; sources: ReadonlyMap<string, string> }
 
 const trimSep = (p: string): string => (p.length > 1 ? p.replace(/[\\/]+$/, '') : p)
 
@@ -215,39 +220,49 @@ function stemBase(stem: string): Partial<Def> {
   return stem.endsWith('.plan') && stem.length > 5 ? { name: stem.slice(0, -5), when: 'plan' } : { name: stem }
 }
 
-// Layers low to high; a stem is a file name without `.md`. Legacy files map to the stem whose def carries that `legacy`.
+// Layers low to high; a stem is a file name without `.md`, keyed lower-case. Legacy files map to the key whose def carries that `legacy`.
+// A file that cannot be a definition (unclosed front matter, no or unusable name) is skipped with an issue, never injected raw.
 export function resolveDefs(layers: readonly LayerFiles[]): Resolved {
   const cur = new Map<string, Def>()
   const sources = new Map<string, string>()
   const issues: string[] = []
+  const skipped: string[] = []
   const legacyStem = new Map<string, string>()
-  const put = (id: string, stem: string, parsed: Parsed, base: Partial<Def> | undefined): void => {
-    for (const i of parsed.issues) issues.push(`${id}/${stem}.md: ${i}`)
-    const def = toDef(parsed, base)
+  const put = (id: string, stem: string, key: string, parsed: Parsed, base: Partial<Def> | undefined): void => {
+    const where = `${id}/${stem}.md`
+    for (const i of parsed.issues) issues.push(`${where}: ${i}`)
+    const def = parsed.skip === true ? null : toDef(parsed, base)
     if (def === null) {
-      issues.push(`${id}/${stem}.md: no name`)
+      if (parsed.skip !== true) issues.push(`${where}: no name`)
+      skipped.push(where)
       return
     }
-    cur.set(stem, def)
-    sources.set(stem, id)
-    if (def.legacy !== undefined) legacyStem.set(def.legacy, stem)
+    if (nameKind(def.name.toLowerCase()) === null) {
+      issues.push(`${where}: name '${def.name}' is not a placeholder name (1-32 of A-Z a-z 0-9 _, or punctuation only)`)
+      skipped.push(where)
+      return
+    }
+    cur.set(key, def)
+    sources.set(key, id)
+    if (def.legacy !== undefined) legacyStem.set(def.legacy, key)
   }
   for (const layer of layers) {
     for (const [file, raw] of [...layer.files].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))) {
       if (layer.kind === 'native') {
-        put(layer.id, file, parseDefinition(raw), cur.get(file) ?? stemBase(file))
+        const key = file.toLowerCase()
+        put(layer.id, file, key, parseDefinition(raw), cur.get(key) ?? stemBase(key))
         continue
       }
       const stem = legacyStem.get(file)
-      if (stem !== undefined) put(layer.id, stem, parseLegacy(raw), cur.get(stem))
+      if (stem !== undefined) put(layer.id, stem, stem, parseLegacy(raw), cur.get(stem))
     }
   }
-  return { defs: [...cur.values()], issues, sources }
+  return { defs: [...cur.values()], issues, skipped, sources }
 }
 
 // ---- mtime cache: a layer is re-read only when its listing (name, size, mtime) changed.
 
-type Cached = { sig: string; raw: string }
+type Cached = { sig: string; raw: string; error?: string }
 export type RegistryCache = {
   files: Map<string, Map<string, Cached>>
   layerSig: Map<string, string>
@@ -260,11 +275,12 @@ export const newRegistryCache = (): RegistryCache => ({ files: new Map(), layerS
 const listSig = (es: readonly IoEntry[]): string =>
   es.map((en) => `${en.name}:${en.size}:${en.mtimeMs}:${en.isLink ? 'L' : 'F'}`).sort().join('|')
 
-// Any Io failure rejects and leaves the cache untouched; the caller fails open.
+// A listing failure, or an unreadable shipped default, rejects and leaves the cache untouched (the caller fails open); an unreadable user file is skipped.
 export async function loadRegistry(io: Io, roots: Roots, cache: RegistryCache): Promise<Registry> {
   const layers: LayerFiles[] = []
   const nextFiles = new Map<string, Map<string, Cached>>()
   const nextSig = new Map<string, string>()
+  const unreadable: string[] = []
   let legacyNames = cache.legacyNames
   let changed = cache.registry === null
 
@@ -286,13 +302,21 @@ export async function loadRegistry(io: Io, roots: Roots, cache: RegistryCache): 
         kept.set(stem, hit)
         continue
       }
-      const raw = await io.read(`${spec.dir}/${en.name}`)
-      if (hit?.raw !== raw) changed = true
-      kept.set(stem, { sig: fsig, raw })
+      try {
+        const raw = await io.read(`${spec.dir}/${en.name}`)
+        if (hit?.error !== undefined || hit?.raw !== raw) changed = true
+        kept.set(stem, { sig: fsig, raw })
+      } catch (err) {
+        if (spec.id === 'default') throw err
+        const error = err instanceof Error ? err.message : String(err)
+        if (hit?.error !== error) changed = true
+        kept.set(stem, { sig: fsig, raw: '', error })
+      }
     }
+    for (const [stem, c] of kept) if (c.error !== undefined) unreadable.push(`${spec.id}/${stem}.md: unreadable (${c.error})`)
     nextFiles.set(spec.id, kept)
     nextSig.set(spec.id, sig)
-    layers.push({ id: spec.id, kind: spec.kind, files: new Map([...kept].map(([k, v]) => [k, v.raw])) })
+    layers.push({ id: spec.id, kind: spec.kind, files: new Map([...kept].filter(([, v]) => v.error === undefined).map(([k, v]) => [k, v.raw])) })
     if (spec.id === 'default' && changed) {
       const names = new Set<string>()
       for (const raw of kept.values()) {
@@ -305,12 +329,27 @@ export async function loadRegistry(io: Io, roots: Roots, cache: RegistryCache): 
 
   if (!changed && cache.registry !== null) return cache.registry
   const out = resolveDefs(layers)
-  const registry: Registry = { defs: out.defs, issues: out.issues, sources: out.sources }
+  const registry: Registry = {
+    defs: out.defs,
+    issues: [...out.issues, ...unreadable],
+    skipped: [...out.skipped, ...unreadable.map((u) => u.slice(0, u.indexOf(': ')))],
+    sources: out.sources,
+  }
   cache.files = nextFiles
   cache.layerSig = nextSig
   cache.legacyNames = legacyNames
   cache.registry = registry
   return registry
+}
+
+const MAX_SHOWN = 5
+
+// One session toast text: issue count, the first issue and the skipped files; null = nothing to say.
+export function issuesMessage(reg: Pick<Registry, 'issues' | 'skipped'>): string | null {
+  if (reg.issues.length === 0) return null
+  const more = reg.skipped.length > MAX_SHOWN ? ` and ${reg.skipped.length - MAX_SHOWN} more` : ''
+  const skipped = reg.skipped.length === 0 ? '' : `; skipped ${reg.skipped.slice(0, MAX_SHOWN).join(', ')}${more}`
+  return `${reg.issues.length} definition issue(s), first: ${reg.issues[0]}${skipped}`
 }
 
 // Editor/band names: one entry per name (first def wins, so the plain `m` beats `m.plan`); body + planOnly feed the band.

@@ -1,5 +1,6 @@
 #!/bin/bash
-# Live A/B gate (paid, haiku): mod expands each codeword block once, byte-identical to brewtools alone. rc 0 = all PASS, 1 = a case FAILED, 2 = precondition.
+# Live A/B gate (paid, haiku): mod expands each codeword block once, byte-identical to brewtools alone; a mod that throws after next() leaves brewtools' block once. rc 0 = all PASS, 1 = a case FAILED, 2 = precondition.
+# AB_ONLY=<run name> runs just that run (e.g. c5-fault) and judges only the units that use it.
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 SRC="$(cd "$HERE/../.." && pwd)"
@@ -29,6 +30,8 @@ fi
 if [ ! -f "$MOD/.claude-plugin/plugin.json" ] || [ ! -f "$MOD/hooks/register.ts" ]; then echo "ab.sh: PRECONDITION mod snapshot $MOD is incomplete"; exit 2; fi
 echo "ab.sh: source ${AB_SRC:-worktree} | $(cd "$MOD" && shasum -a 256 hooks/register.ts hooks/hooks.json .claude-plugin/plugin.json $(ls hooks/lib/*) | awk '{print substr($1,1,12), $2}' | tr '\n' ';')"
 
+python3 -I "$PY" mkfault "$MOD" "$OUT/modfault" || exit 2
+
 mkdir "$OUT/repo" "$OUT/repo2"
 git init -q "$OUT/repo" && git init -q "$OUT/repo2"
 python3 -I "$PY" mkrepo "$OUT/repo" root || exit 2
@@ -46,10 +49,11 @@ while IFS=$'\t' read -r NAME CWDKEY PM MODE BTS PROMPT; do
   echo "$SID" > "$OUT/$NAME.sid"
   ARGS=(-p --model haiku --max-turns 1 --permission-mode "$PM" --output-format stream-json --verbose --debug-file "$OUT/$NAME.debug.log" --session-id "$SID")
   if [ "$MODE" = mod ]; then ARGS+=(--plugin-dir "$MOD"); fi
+  if [ "$MODE" = fault ]; then ARGS+=(--plugin-dir "$OUT/modfault"); fi
   if [ "$BTS" = off ]; then ARGS+=(--settings '{"enabledPlugins":{"brewtools@claude-brewcode":false}}'); fi
   (cd "$W" && claude "${ARGS[@]}" "$PROMPT" < /dev/null > "$OUT/$NAME.stream.jsonl" 2> "$OUT/$NAME.err"; echo "rc=$?" > "$OUT/$NAME.rc")
   python3 -I "$PY" extract "$OUT" "$NAME"
-done < <(python3 -I "$PY" plan)
+done < <(python3 -I "$PY" plan | { if [ -n "${AB_ONLY:-}" ]; then awk -F'\t' -v n="$AB_ONLY" '$1==n'; else cat; fi; })
 
 python3 -I "$PY" verdict "$OUT" > "$OUT/verdict.txt"
 RC=$?
