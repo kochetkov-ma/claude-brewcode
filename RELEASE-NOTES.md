@@ -2,6 +2,75 @@
 
 ---
 
+## v6.9.0 (2026-10-15)
+
+> Docs: [brewcode agents](https://doc-claude.brewcode.app/brewcode/agents/) | [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [bash-expert](https://doc-claude.brewcode.app/brewcode/agents/bash-expert/) | [bc-rules-organizer](https://doc-claude.brewcode.app/brewcode/agents/bc-rules-organizer/) | [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [mod-creator](https://doc-claude.brewcode.app/brewcode/agents/mod-creator/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | [brewcode overview](https://doc-claude.brewcode.app/brewcode/overview/) | [brewcode skills](https://doc-claude.brewcode.app/brewcode/skills/) | [brewcode/skills agents](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [convention-setup](https://doc-claude.brewcode.app/brewcode/skills/convention-setup/) | [e2e](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [review](https://doc-claude.brewcode.app/brewcode/skills/review/) | [rules](https://doc-claude.brewcode.app/brewcode/skills/rules/) | [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) | [brewcode/skills skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [superreview-setup](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | [teams-setup](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) | [brewdoc overview](https://doc-claude.brewcode.app/brewdoc/overview/) | [brewdoc skills](https://doc-claude.brewcode.app/brewdoc/skills/) | [docsync-setup](https://doc-claude.brewcode.app/brewdoc/skills/docsync-setup/) | [md-to-pdf](https://doc-claude.brewcode.app/brewdoc/skills/md-to-pdf/) | [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/) | [my-claude](https://doc-claude.brewcode.app/brewdoc/skills/my-claude/) | [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/) | [brewtools agents](https://doc-claude.brewcode.app/brewtools/agents/) | [deploy-admin](https://doc-claude.brewcode.app/brewtools/agents/deploy-admin/) | [ssh-admin](https://doc-claude.brewcode.app/brewtools/agents/ssh-admin/) | [text-optimizer](https://doc-claude.brewcode.app/brewtools/agents/text-optimizer/) | [brewtools overview](https://doc-claude.brewcode.app/brewtools/overview/) | [prompt-injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/) | [brewtools skills](https://doc-claude.brewcode.app/brewtools/skills/) | [agent-deadline-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline-setup/) | [agent-return-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-return-setup/) | [agent-router-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-router-setup/) | [context-slim](https://doc-claude.brewcode.app/brewtools/skills/context-slim/) | [deploy](https://doc-claude.brewcode.app/brewtools/skills/deploy/) | [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) | [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/) | [secrets-scan](https://doc-claude.brewcode.app/brewtools/skills/secrets-scan/) | [ssh](https://doc-claude.brewcode.app/brewtools/skills/ssh/) | [task-board-setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) | [text-human](https://doc-claude.brewcode.app/brewtools/skills/text-human/) | [text-optimize](https://doc-claude.brewcode.app/brewtools/skills/text-optimize/) | [brewui overview](https://doc-claude.brewcode.app/brewui/overview/) | [FAQ](https://doc-claude.brewcode.app/faq/) | [full-setup](https://doc-claude.brewcode.app/full-setup/) | [getting-started](https://doc-claude.brewcode.app/getting-started/) | [installation](https://doc-claude.brewcode.app/installation/) | [Mods overview](https://doc-claude.brewcode.app/mods/overview/) | [placeholders](https://doc-claude.brewcode.app/mods/placeholders/) | [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/) | [quickstart](https://doc-claude.brewcode.app/quickstart/)
+
+Minor release: mod commands become status-first, the docs are cut by half, and the docs site gets a new shell.
+
+### brewmod-plan-effort
+
+#### Added
+
+- **`/plan-effort`:** no args, `status` or `help` prints the status plus usage; `<medium|high|xhigh|max>` sets the `planEffort` /config row through `$.config.set` (under `-p` it points to /config).
+- **plan-mode toast:** `plan mode: effort <level> · /plan-effort to change`, once per plan visit.
+
+#### Changed
+
+- **config:** `userConfig` is trimmed to `planEffort`; `statusLine` is removed.
+- **verification:** live on Claude Code 2.1.300 on a Max and a Team-org profile: a subagent keeps its own effort, a rejected plan keeps the raise, an approved plan returns to the session effort.
+
+### brewmod-placeholders
+
+#### Added
+
+- **`/placeholders`:** no args, `status`, `help` or `list` shows the status. Any other text hands off to a Claude dialog that saves through the mod tools `list_placeholders`, `save_placeholder` (refuses symlinks and non-plain files) and `remove_placeholder` (own layers only), with one confirm and no permission prompt.
+- **band:** 1-2 tokens auto-expand; 3+ tokens show a `Show text  ctrl+x · tab · enter` button; a footer reads `add or change: /placeholders`.
+
+#### Changed
+
+- **config:** `userConfig` is trimmed to `prefix`; the colours and `warnUnknown` are removed. Unknown tokens still warn.
+
+#### Removed
+
+- **subcommands:** `show`, `add`, `edit` and `rm` (use `/placeholders <request>`).
+
+### brewcode
+
+#### Changed
+
+- **mod-creator:** the references gain verified facts: status-first commands, own config, the deferred `$.prompt.submit` hand-off, mod tools, toast vs status, and the hard rule that key hints are proven live.
+- **docs cut 49%:** all plugin, skill, agent and repo docs go from 1.09 MB to 0.55 MB; technical details move under spoilers. Canonical homes: Delegation (`/brewcode/skills/#delegation`), scope guard, artifact metadata. Every plugin doc links back to the mods.
+
+### brewtools
+
+#### Fixed
+
+- **manager-setup docs:** the guard denies known exec flags and binaries outside the allowlist; it does not deny every unknown flag. The v6.0.0 note that said otherwise was wrong.
+- **content fixes:** `ssh` limits and `context-slim` restore facts corrected.
+
+### brewdoc
+
+#### Fixed
+
+- **my-claude:** the docs state the default mode correctly: INTERNAL.
+
+### docs site
+
+#### Added
+
+- **icons:** Lucide icon system; decorative emoji removed.
+- **`SourceLink`:** a GitHub button after the hero on key pages.
+- **navigation:** desktop sidebar collapse, sticky sidebar, Mods section second in the nav with its own soft-green identity.
+- **demos:** six animated terminal GIFs (superreview, skill-creator, semble, teams-setup, text-optimize, task-board-setup), served at `/demos/` through a build copy step.
+
+#### Fixed
+
+- **page scripts:** they never ran, because `astro:page-load` does not fire without ClientRouter (copy buttons, TOC highlight).
+- **mods docs:** the three mod pages are rewritten.
+
+---
+
 ## v6.8.0 (2026-10-15)
 
 > Docs: [mod-creator](https://doc-claude.brewcode.app/brewcode/agents/mod-creator/) | [brewtools overview](https://doc-claude.brewcode.app/brewtools/overview/) | [prompt-injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/) | [brewtools skills](https://doc-claude.brewcode.app/brewtools/skills/) | [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [task-board-setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) | [FAQ](https://doc-claude.brewcode.app/faq/) | [Full Setup](https://doc-claude.brewcode.app/full-setup/) | [Getting Started](https://doc-claude.brewcode.app/getting-started/) | [Installation](https://doc-claude.brewcode.app/installation/) | [Mods overview](https://doc-claude.brewcode.app/mods/overview/) | [placeholders](https://doc-claude.brewcode.app/mods/placeholders/) | [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/)
