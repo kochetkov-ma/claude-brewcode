@@ -1,1 +1,7 @@
-{ "modules": ["./register.ts"] }
+{
+  "modules": ["./register.ts"],
+  "hooks": {
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/inject.mjs\"" }] }],
+    "PostToolBatch": [{ "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/inject.mjs\"" }] }]
+  }
+}

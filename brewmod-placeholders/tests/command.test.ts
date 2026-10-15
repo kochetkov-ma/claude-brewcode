@@ -542,7 +542,7 @@ type Ops = { spec: unknown[]; writes: [string, string][]; ran: string[][] }
 function wireCmd(on: Parameters<typeof wire>[0], tree: Tree, opts: { fail?: 'exists' | 'root' | 'env'; denyRegister?: boolean; real?: Record<string, string> } = {}): Ops {
   const fs = memFs(tree)
   const ops: Ops = { spec: [], writes: [], ran: [] }
-  wire(on, { tree, bottom: {}, ...(opts.fail === undefined ? {} : { fail: opts.fail }) })
+  wire(on, { tree, ...(opts.fail === undefined ? {} : { fail: opts.fail }) })
   on('session.start', () => ({ cwd: ROOT }))
   on('command.register', (_$, e) => {
     ops.spec.push(e)

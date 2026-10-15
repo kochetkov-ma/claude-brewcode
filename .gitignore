@@ -35,6 +35,7 @@ __pycache__/
 # Brewmod engine writes these on TTY loads.
 brewmod-*/.claude-plugin/types/
 brewmod-*/tsconfig.json
+brewmod-*/.state/
 
 # Codex-native plugin source is tracked in this repository.
 !.codex/

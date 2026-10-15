@@ -1,6 +1,6 @@
 // Pure helpers: inline expansion of a submitted prompt and the unknown-token list for the toast. Zero I/O.
 
-import type { Compiled } from './assemble'
+import type { Compiled } from './compiled'
 import type { Def } from './defs'
 import { scanDraft, type Matchers } from './match'
 
@@ -28,7 +28,7 @@ export function inlineBodies(defs: readonly Def[]): Map<string, string> {
   return out
 }
 
-// One pass over the original text (no body re-scan here); the classic pass later expands context tokens a body carries, as brewtools does. Null = nothing to change.
+// One pass over the original text (no body re-scan here); the command hook later expands context tokens a body carries, as brewtools did. Null = nothing to change.
 // Non-always inline defs and empty bodies stay verbatim; inline text has no block header.
 export function expandInline(c: Compiled, text: string): string | null {
   if (!text.includes(c.prefix)) return null
@@ -53,9 +53,6 @@ export function expandInline(c: Compiled, text: string): string | null {
 }
 
 const MAX_NAMED = 5
-
-// The toast is for text the person typed: `user` and `sdk`, or a payload that carries no source yet; loops, schedules and peers never.
-export const isTypedSource = (source: unknown): boolean => source === undefined || source === 'user' || source === 'sdk'
 
 const CODE_SPAN = /```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`/g
 const CODE_NEXT = /[;)[\]]/

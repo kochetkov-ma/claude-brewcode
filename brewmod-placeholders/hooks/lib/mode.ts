@@ -1,25 +1,18 @@
-// Plan-mode tracker (same shape as brewmod-plan-effort): classic payloads carry the exact mode, session.append rows are the fallback.
+// Plan-mode state written by hooks/inject.mjs: <plugin root>/.state/mode-<session id>.json = {mode, ts}.
 
-export type ModeTracker = {
-  classic: (e: { permission_mode?: unknown; agent_id?: unknown }) => void
-  append: (e: { agentId?: unknown; message: { type?: unknown; name?: unknown } }) => void
-  isPlan: () => boolean
+const SESSION_ID = /^[A-Za-z0-9_-]+$/
+
+// Null = no valid path for this id (never read a file outside .state).
+export function modeStatePath(pluginRoot: string, sessionId: unknown): string | null {
+  return typeof sessionId === 'string' && SESSION_ID.test(sessionId) ? `${pluginRoot.replace(/[\\/]+$/, '')}/.state/mode-${sessionId}.json` : null
 }
 
-export function createModeTracker(): ModeTracker {
-  let plan = false
-
-  return {
-    // Subagent payloads and non-string modes are ignored; the last known mode stays.
-    classic: (e) => {
-      if (e.agent_id === undefined && typeof e.permission_mode === 'string') plan = e.permission_mode === 'plan'
-    },
-    // A subagent's rows carry agentId and are skipped.
-    append: (e) => {
-      if (e.agentId !== undefined || e.message.type !== 'attachment') return
-      if (e.message.name === 'plan_mode') plan = true
-      else if (e.message.name === 'plan_mode_exit') plan = false
-    },
-    isPlan: () => plan,
+// True = plan, false = any other mode; null = unreadable or no string mode (the caller keeps its last value).
+export function planFromState(raw: string): boolean | null {
+  try {
+    const mode: unknown = (JSON.parse(raw) as { mode?: unknown } | null)?.mode
+    return typeof mode === 'string' ? mode === 'plan' : null
+  } catch {
+    return null
   }
 }

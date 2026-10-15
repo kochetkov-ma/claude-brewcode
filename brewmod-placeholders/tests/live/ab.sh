@@ -1,6 +1,5 @@
 #!/bin/bash
-# Live gate (paid, haiku): the mod alone (brewtools disabled) expands each codeword block exactly once, byte-equal to the frozen golden. rc 0 = all PASS, 1 = a case FAILED, 2 = precondition.
-# AB_ONLY=<run name> runs just that run (e.g. c2-m) and judges only its unit.
+# Live gate (paid, haiku): the mod alone (brewtools off) injects each codeword block once via hooks/inject.mjs, byte-equal to the golden. rc 0 PASS, 1 FAIL, 2 precondition; AB_ONLY=<run> runs one.
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 SRC="$(cd "$HERE/../.." && pwd)"

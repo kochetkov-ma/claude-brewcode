@@ -113,7 +113,7 @@ def cmd_extract(a):
     res['did_not_load'] = err.count('did not load') + dbg.count('did not load')
     res['mod_loaded'] = len(re.findall(r'hooks module brewmod-placeholders@inline loaded', dbg))
     res['hook_failed'] = len(re.findall(r'hook failed: brewmod-placeholders', dbg))
-    res['bt_hook'] = len(re.findall(r'manager-prompt\.mjs\] \(plugin brewtools@claude-brewcode\) finished with status 0', dbg))
+    res['inject_hook'] = len(re.findall(r'Hooks: UserPromptSubmit \[node "[^"]*hooks/inject\.mjs"\] \(plugin brewmod-placeholders@inline\) finished with status 0', dbg))
     for line in rd('.stream.jsonl').splitlines():
         try:
             d = json.loads(line)
@@ -123,7 +123,7 @@ def cmd_extract(a):
             res['result'] = {'subtype': d.get('subtype'), 'is_error': d.get('is_error'), 'text': (d.get('result') or '')[:40]}
     with open(g('.inj.json'), 'w', encoding='utf-8') as f:
         json.dump(res, f, ensure_ascii=False, indent=1)
-    print(f"{name}: rc={res['rc']} rows={res['rows']} count={res['count']} sha={res['sha'][:12]} chars={res['chars']} modloaded={res['mod_loaded']} btHook={res['bt_hook']} notLoad={res['did_not_load']}")
+    print(f"{name}: rc={res['rc']} rows={res['rows']} count={res['count']} sha={res['sha'][:12]} chars={res['chars']} modloaded={res['mod_loaded']} injHook={res['inject_hook']} notLoad={res['did_not_load']}")
 
 
 def load(out, name):
@@ -142,8 +142,8 @@ def run_checks(x):
         f.append('hooks module did not load')
     if x['mod_loaded'] < 1:
         f.append(f"mod_loaded={x['mod_loaded']} (expected >=1)")
-    if x['bt_hook'] != 0:
-        f.append(f"a brewtools manager-prompt hook ran {x['bt_hook']}x (expected 0: the mod runs alone)")
+    if x['inject_hook'] != 1:
+        f.append(f"inject.mjs UserPromptSubmit hook ran {x['inject_hook']}x (expected 1: the command hook is the injector)")
     sub = (x['result'] or {}).get('subtype')
     if x['rc'] != '0' and sub != 'error_max_turns':
         f.append(f"claude rc={x['rc']} result={sub}")

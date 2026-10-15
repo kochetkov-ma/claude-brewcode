@@ -1,7 +1,6 @@
 import { test, expect } from 'claude-code/testing'
-import { compileDefs } from '../hooks/lib/assemble'
 import { configDirOf, issuesMessage, layerSpecs, loadRegistry, newRegistryCache, normalizeDir, toEditorEntries, type Def, type Roots } from '../hooks/lib/defs'
-import { assemble, defaultDefs } from './fixtures'
+import { defaultDefs } from './fixtures'
 import { CFG, PLUG, ROOT, defaultsTree, memIo, type Tree } from './layer-io'
 
 const ROOTS: Roots = { pluginRoot: PLUG, root: ROOT, configDir: CFG }
@@ -54,27 +53,21 @@ const EMPTY: { title: string; tree: Tree; source: string }[] = [
 ]
 
 for (const row of EMPTY) {
-  test(`GIVEN ${row.title} WHEN the registry loads and ++a is typed THEN the empty body wins and nothing is emitted`, async () => {
+  test(`GIVEN ${row.title} WHEN the registry loads THEN the empty body wins`, async () => {
     const reg = await load(row.tree)
 
-    expect(
-      [find(reg.defs, 'a', 'always')?.body, reg.sources.get('a'), assemble(compileDefs(reg.defs), '++a', 'default')],
-      'body, source layer, assembled output',
-    ).toEqual(['', row.source, null])
+    expect([find(reg.defs, 'a', 'always')?.body, reg.sources.get('a')], 'body and source layer').toEqual(['', row.source])
   })
 }
 
-test('GIVEN a full override and a planmode override WHEN ++m is typed in both modes THEN each variant changes only its own mode', async () => {
-  const plain = await load({})
-  const full = await load({ [`${P_LEGACY}/full.md`]: 'FULL-OVR' })
-  const plan = await load({ [`${P_LEGACY}/planmode.md`]: 'PLAN-OVR' })
-  const out = (reg: { defs: readonly Def[] }, mode: string) => assemble(compileDefs(reg.defs), '++m', mode)
-  const head = (mode: string) => out(plain, mode)?.split('\n\n')[0]
+test('GIVEN a full override and a planmode override WHEN the registry loads THEN each variant changes only its own body', async () => {
+  const bodies = (reg: { defs: readonly Def[] }) => [find(reg.defs, 'm', 'always')?.body, find(reg.defs, 'm', 'plan')?.body]
+  const plain = bodies(await load({}))
 
   expect(
-    [out(full, 'default'), out(full, 'plan') === out(plain, 'plan'), out(plan, 'plan'), out(plan, 'default') === out(plain, 'default')],
-    'outputs per override and mode',
-  ).toEqual([`${head('default')}\n\nFULL-OVR`, true, `${head('plan')}\n\nPLAN-OVR`, true])
+    [bodies(await load({ [`${P_LEGACY}/full.md`]: 'FULL-OVR' })), bodies(await load({ [`${P_LEGACY}/planmode.md`]: 'PLAN-OVR' }))],
+    'always and plan bodies per override',
+  ).toEqual([['FULL-OVR', plain[1]], [plain[0], 'PLAN-OVR']])
 })
 
 test('GIVEN a native file without front matter WHEN it overrides r THEN group, priority, order, header and legacy are inherited', async () => {
@@ -99,13 +92,6 @@ test('GIVEN new native files without defaults WHEN loaded THEN the stem names th
     { name: 'foo', body: 'FP', insert: 'context', when: 'plan', order: 100, priority: 0, header: '' },
     { name: 'foo', body: 'F', insert: 'context', when: 'always', order: 100, priority: 0, header: '' },
   ])
-})
-
-test('GIVEN a foo plan variant and a foo always def WHEN ++foo is typed THEN the plan variant wins only in plan mode', async () => {
-  const reg = await load({ [`${P_NATIVE}/foo.md`]: 'F', [`${P_NATIVE}/foo.plan.md`]: 'FP' })
-  const c = compileDefs(reg.defs)
-
-  expect([assemble(c, '++foo', 'plan'), assemble(c, '++foo', 'default')], 'outputs').toEqual(['FP', 'F'])
 })
 
 test('GIVEN a legacy file with an unknown name and a directory entry WHEN loaded THEN they are never read', async () => {

@@ -1,11 +1,10 @@
 import { test, expect } from 'claude-code/testing'
 import type { On } from 'claude-code'
-import { compileDefs } from '../hooks/lib/assemble'
+import { compileDefs } from '../hooks/lib/compiled'
 import { compileMatchers } from '../hooks/lib/match'
-import { expandInline, inlineBodies, isInlineSubmit, isTypedSource, unknownMessage, unknownTokens } from '../hooks/lib/inline'
+import { expandInline, inlineBodies, isInlineSubmit, unknownMessage, unknownTokens } from '../hooks/lib/inline'
 import { CFG, ROOT, defaultsTree, memFs, wire, type Tree } from './layer-io'
 import { def } from './fixtures'
-import { VECTORS } from './parity/golden.generated'
 
 const file = (name: string, insert: string, when: string, body: string): string => `---\nname: "${name}"\ninsert: ${insert}\nwhen: ${when}\n---\n${body}`
 const at = (name: string, raw: string): Tree => ({ [`${ROOT}/.claude/placeholders/${name}.md`]: raw })
@@ -34,8 +33,6 @@ const bottomSubmit = (on: On): Seen[] => {
 }
 const submit = ($: { prompt: unknown }, text: string, origin: unknown = { kind: 'composer' }, extra: object = {}) =>
   ($.prompt as any).submit({ text, origin, wait: false, ...extra })
-const send = ($: { classic: { UserPromptSubmit: (e: never) => Promise<unknown> } }, prompt: string, mode = 'default', source?: string) =>
-  $.classic.UserPromptSubmit({ prompt, permission_mode: mode, source } as never)
 const spyWrites = (on: On): unknown[] => {
   const writes: unknown[] = []
   on('state.set', (_$, e, next) => {
@@ -49,13 +46,12 @@ const typed = ($: { prompt: unknown }, text: string) =>
 const core = (on: On) =>
   on('prompt.edit', (_$, e) => ({ text: e.text.slice(0, e.start) + e.inputText + e.text.slice(e.end), cursor: e.start + e.inputText.length }))
 const EMPTY_VIEW = { tokens: [] }
-const M = VECTORS.find((v) => v.id === 'spec-1')?.expected ?? 'MISSING spec-1'
 
 // ---- origins
 
 for (const kind of ['composer', 'bridge', 'sdk'] as const) {
   test(`GIVEN origin ${kind} and an inline token WHEN the prompt is submitted THEN the text below carries the body and the origin is kept`, async ($, on) => {
-    wire(on, { tree: TREE, bottom: {} })
+    wire(on, { tree: TREE })
     const seen = bottomSubmit(on)
 
     await submit($, 'say ++ii now', { kind })
@@ -66,7 +62,7 @@ for (const kind of ['composer', 'bridge', 'sdk'] as const) {
 
 for (const kind of ['task-notification', 'scheduled-trigger', 'peer', 'peer-send-message', 'projects-relay', 'engine'] as const) {
   test(`GIVEN origin ${kind} WHEN a prompt with an inline token is submitted THEN the text is untouched and no file is read`, async ($, on) => {
-    const w = wire(on, { tree: TREE, bottom: {} })
+    const w = wire(on, { tree: TREE })
     const seen = bottomSubmit(on)
 
     await submit($, 'say ++ii now', { kind })
@@ -76,7 +72,7 @@ for (const kind of ['task-notification', 'scheduled-trigger', 'peer', 'peer-send
 }
 
 test('GIVEN a plugin origin WHEN a prompt with an inline token is submitted THEN the text is untouched', async ($, on) => {
-  wire(on, { tree: TREE, bottom: {} })
+  wire(on, { tree: TREE })
   const seen = bottomSubmit(on)
 
   await submit($, '++ii', { kind: 'plugin', name: 'other' })
@@ -85,7 +81,7 @@ test('GIVEN a plugin origin WHEN a prompt with an inline token is submitted THEN
 })
 
 test('GIVEN a slash command WHEN it is submitted with an inline token in its arguments THEN the line is untouched', async ($, on) => {
-  wire(on, { tree: TREE, bottom: {} })
+  wire(on, { tree: TREE })
   const seen = bottomSubmit(on)
 
   await submit($, '/review ++ii', { kind: 'composer' }, { command: { name: 'review', args: '++ii' } })
@@ -94,7 +90,7 @@ test('GIVEN a slash command WHEN it is submitted with an inline token in its arg
 })
 
 test('GIVEN an isMeta prompt from the composer WHEN submitted THEN the text is untouched', async ($, on) => {
-  wire(on, { tree: TREE, bottom: {} })
+  wire(on, { tree: TREE })
   const seen = bottomSubmit(on)
 
   await submit($, '++ii', { kind: 'composer' }, { isMeta: true })
@@ -105,7 +101,7 @@ test('GIVEN an isMeta prompt from the composer WHEN submitted THEN the text is u
 // ---- when: always, bodies, single pass
 
 test('GIVEN inline defs for always, plan and not-plan WHEN a prompt with all three is submitted THEN only the always one is expanded', async ($, on) => {
-  wire(on, { tree: TREE, bottom: {} })
+  wire(on, { tree: TREE })
   const seen = bottomSubmit(on)
 
   await submit($, '++pp ++ii ++nn', { kind: 'composer' })
@@ -114,7 +110,7 @@ test('GIVEN inline defs for always, plan and not-plan WHEN a prompt with all thr
 })
 
 test('GIVEN a body that holds another token WHEN expanded THEN the inserted text is never scanned again', async ($, on) => {
-  wire(on, { tree: TREE, bottom: {} })
+  wire(on, { tree: TREE })
   const seen = bottomSubmit(on)
 
   await submit($, '++jj and ++II', { kind: 'composer' })
@@ -123,7 +119,7 @@ test('GIVEN a body that holds another token WHEN expanded THEN the inserted text
 })
 
 test('GIVEN an inline def with an empty body WHEN its token is submitted THEN the token stays verbatim', async ($, on) => {
-  wire(on, { tree: TREE, bottom: {} })
+  wire(on, { tree: TREE })
   const seen = bottomSubmit(on)
 
   await submit($, 'a ++ee b', { kind: 'composer' })
@@ -132,7 +128,7 @@ test('GIVEN an inline def with an empty body WHEN its token is submitted THEN th
 })
 
 test('GIVEN a context token and an unknown token WHEN submitted THEN both stay verbatim', async ($, on) => {
-  wire(on, { tree: TREE, bottom: {} })
+  wire(on, { tree: TREE })
   const seen = bottomSubmit(on)
 
   await submit($, '++cc ++m ++nope', { kind: 'composer' })
@@ -141,7 +137,7 @@ test('GIVEN a context token and an unknown token WHEN submitted THEN both stay v
 })
 
 test('GIVEN a prompt without the prefix WHEN submitted THEN no file is read and the text is untouched', async ($, on) => {
-  const w = wire(on, { tree: TREE, bottom: {} })
+  const w = wire(on, { tree: TREE })
   const seen = bottomSubmit(on)
 
   await submit($, 'plain text', { kind: 'composer' })
@@ -150,7 +146,7 @@ test('GIVEN a prompt without the prefix WHEN submitted THEN no file is read and 
 })
 
 test('GIVEN two submissions WHEN nothing changed on disk THEN the second reads no file again', async ($, on) => {
-  const w = wire(on, { tree: TREE, bottom: {} })
+  const w = wire(on, { tree: TREE })
   bottomSubmit(on)
   await submit($, '++ii', { kind: 'composer' })
   const afterFirst = w.calls.read.length
@@ -160,7 +156,7 @@ test('GIVEN two submissions WHEN nothing changed on disk THEN the second reads n
 })
 
 test('GIVEN a custom prefix WHEN a prompt with both prefixes is submitted THEN only that prefix expands', { options: { prefix: '@@' } }, async ($, on) => {
-  wire(on, { tree: TREE, bottom: {} })
+  wire(on, { tree: TREE })
   const seen = bottomSubmit(on)
 
   await submit($, '++ii @@ii', { kind: 'composer' })
@@ -172,7 +168,7 @@ test('GIVEN a custom prefix WHEN a prompt with both prefixes is submitted THEN o
 
 for (const fail of ['exists', 'list', 'read', 'root'] as const) {
   test(`GIVEN ${fail} fails while the registry loads WHEN a prompt is submitted THEN it passes down untouched`, async ($, on) => {
-    wire(on, { tree: TREE, bottom: {}, fail })
+    wire(on, { tree: TREE, fail })
     const seen = bottomSubmit(on)
 
     await submit($, 'say ++ii now', { kind: 'composer' })
@@ -193,7 +189,7 @@ test('GIVEN the env lookup has no answer at all WHEN a prompt is submitted THEN 
 // ---- view reset
 
 test('GIVEN a composer submission WHEN it passes THEN the view atom is written empty once', async ($, on) => {
-  wire(on, { tree: TREE, bottom: {} })
+  wire(on, { tree: TREE })
   bottomSubmit(on)
   const writes = spyWrites(on)
 
@@ -204,7 +200,7 @@ test('GIVEN a composer submission WHEN it passes THEN the view atom is written e
 
 for (const kind of ['bridge', 'sdk', 'task-notification', 'peer', 'scheduled-trigger'] as const) {
   test(`GIVEN origin ${kind} WHEN a prompt is submitted THEN the person's draft view is not touched`, async ($, on) => {
-    wire(on, { tree: TREE, bottom: {} })
+    wire(on, { tree: TREE })
     bottomSubmit(on)
     const writes = spyWrites(on)
 
@@ -215,7 +211,7 @@ for (const kind of ['bridge', 'sdk', 'task-notification', 'peer', 'scheduled-tri
 }
 
 test('GIVEN a refused state write WHEN a composer prompt with an inline token is submitted THEN the expansion still lands', async ($, on) => {
-  wire(on, { tree: TREE, bottom: {} })
+  wire(on, { tree: TREE })
   const seen = bottomSubmit(on)
   on('state.set', () => ({ deny: 'state down' }))
 
@@ -225,7 +221,7 @@ test('GIVEN a refused state write WHEN a composer prompt with an inline token is
 })
 
 test('GIVEN a token typed, submitted and typed again WHEN prompt.edit runs THEN the second draft is written again (view not stale)', async ($, on) => {
-  wire(on, { tree: TREE, bottom: {} })
+  wire(on, { tree: TREE })
   core(on)
   bottomSubmit(on)
   const writes = spyWrites(on)
@@ -238,72 +234,66 @@ test('GIVEN a token typed, submitted and typed again WHEN prompt.edit runs THEN 
   expect(writes, 'state writes').toEqual([{ tokens: [m] }, EMPTY_VIEW, { tokens: [m] }])
 })
 
-// ---- no double insertion
+// ---- no double insertion (the context half is the command hook's: tests/inject-parity.mjs)
 
-test('GIVEN an inline token and a context token WHEN submit then the classic hook run THEN the inline text is inline only and context carries only the context block', async ($, on) => {
-  wire(on, { tree: TREE, bottom: {} })
+test('GIVEN an inline token and a context token WHEN submitted THEN only the inline text is rewritten and the context token stays for the command hook', async ($, on) => {
+  wire(on, { tree: TREE })
   const seen = bottomSubmit(on)
 
   await submit($, '++ii ++cc', { kind: 'composer' })
-  const out = await send($, '++ii ++cc')
 
-  expect([seen.map((s) => s.text), out], 'submit text and classic result').toEqual([['II BODY ++cc'], { additionalContext: ['CC CONTEXT'] }])
+  expect(seen.map((s) => s.text), 'submit text').toEqual(['II BODY ++cc'])
 })
 
-test('GIVEN a plan-only inline token left verbatim WHEN the classic hook runs THEN it adds no context block', async ($, on) => {
-  wire(on, { tree: TREE, bottom: {} })
-
-  expect(await send($, '++pp ++nn', 'plan'), 'classic result').toEqual({})
-})
-
-test('GIVEN a name defined both inline and as context WHEN submitted and sent THEN it is inserted once, as context', async ($, on) => {
-  wire(on, { tree: TREE, bottom: {} })
+test('GIVEN a name defined both inline and as context WHEN submitted THEN the text stays so the token is inserted once, as context', async ($, on) => {
+  wire(on, { tree: TREE })
   const seen = bottomSubmit(on)
 
   await submit($, '++dual', { kind: 'composer' })
-  const out = await send($, '++dual')
 
-  expect([seen.map((s) => s.text), out], 'submit text and classic result').toEqual([['++dual'], { additionalContext: ['DUAL CONTEXT'] }])
+  expect(seen.map((s) => s.text), 'submit text').toEqual(['++dual'])
 })
 
-test('GIVEN an inline body that carries a context token WHEN submit then the classic hook run THEN the classic pass expands it (documented composition)', async ($, on) => {
-  wire(on, { tree: TREE, bottom: {} })
+test('GIVEN an inline body that carries a context token WHEN submitted THEN the expanded text keeps the token for the command hook', async ($, on) => {
+  wire(on, { tree: TREE })
   const seen = bottomSubmit(on)
 
   await submit($, 'use ++jx now', { kind: 'composer' })
-  const out = await send($, 'use JX also ++cc now')
 
-  expect([seen.map((s) => s.text), out], 'submit text and classic result').toEqual([['use JX also ++cc now'], { additionalContext: ['CC CONTEXT'] }])
+  expect(seen.map((s) => s.text), 'submit text').toEqual(['use JX also ++cc now'])
 })
 
 // ---- warnUnknown toast
 
-test('GIVEN unknown tokens and the default option WHEN the classic hook runs THEN one toast names them once each and the context is intact', async ($, on) => {
-  const w = wire(on, { tree: TREE, bottom: {} })
+test('GIVEN unknown tokens and the default option WHEN the prompt is submitted THEN one toast names them once each and the text is untouched', async ($, on) => {
+  const w = wire(on, { tree: TREE })
+  const seen = bottomSubmit(on)
 
-  const out = await send($, '++m ++foo ++Foo ++bar')
+  await submit($, '++m ++foo ++Foo ++bar')
 
-  expect([w.toasts, out], 'toasts and result').toEqual([['unknown ++foo, ++bar'], { additionalContext: [M] }])
+  expect([w.toasts, seen.map((s) => s.text)], 'toasts and submit text').toEqual([['unknown ++foo, ++bar'], ['++m ++foo ++Foo ++bar']])
 })
 
-test('GIVEN warnUnknown off WHEN a prompt with unknown tokens runs THEN there is no toast and the prompt result is the same', { options: { warnUnknown: false } }, async ($, on) => {
-  const w = wire(on, { tree: TREE, bottom: {} })
+test('GIVEN warnUnknown off WHEN a prompt with unknown tokens is submitted THEN there is no toast', { options: { warnUnknown: false } }, async ($, on) => {
+  const w = wire(on, { tree: TREE })
+  bottomSubmit(on)
 
-  const out = await send($, '++m ++foo')
-
-  expect([w.toasts, out], 'toasts and result').toEqual([[], { additionalContext: [M] }])
-})
-
-test('GIVEN only known tokens or no prefix WHEN the classic hook runs THEN there is no toast', async ($, on) => {
-  const w = wire(on, { tree: TREE, bottom: {} })
-
-  await send($, '++m ++ii ++pp')
-  await send($, 'hello')
+  await submit($, '++m ++foo')
 
   expect(w.toasts, 'toasts').toEqual([])
 })
 
-test('GIVEN a toast the engine refuses WHEN unknown tokens are sent THEN the expansion still happens', async ($, on) => {
+test('GIVEN only known tokens or no prefix WHEN submitted THEN there is no toast', async ($, on) => {
+  const w = wire(on, { tree: TREE })
+  bottomSubmit(on)
+
+  await submit($, '++m ++ii ++pp')
+  await submit($, 'hello')
+
+  expect(w.toasts, 'toasts').toEqual([])
+})
+
+test('GIVEN a toast the engine refuses WHEN unknown tokens are submitted THEN the text still goes on', async ($, on) => {
   const fs = memFs(defaultsTree())
   const fix = (p: string): string => p.replace(/^.*\/brewmod-placeholders\/placeholders/, '/PLUG/placeholders')
   on('fs.exists', (_$, e) => ({ value: fs.exists(fix(e.path)) }) as never)
@@ -312,62 +302,69 @@ test('GIVEN a toast the engine refuses WHEN unknown tokens are sent THEN the exp
   on('env.get', (_$, e) => ({ value: ({ HOME: '/home/u', CLAUDE_CONFIG_DIR: CFG } as Record<string, string>)[e.name] }) as never)
   on('session.root', () => ({ value: ROOT }) as never)
   on('ui.toast', () => ({ deny: 'ui down' }) as never)
-  on('classic.UserPromptSubmit', () => ({}))
+  const seen = bottomSubmit(on)
 
-  const out = await send($, '++m ++foo')
+  await submit($, '++m ++foo')
 
-  expect(out, 'result').toEqual({ additionalContext: [M] })
+  expect(seen.map((s) => s.text), 'submit text').toEqual(['++m ++foo'])
 })
 
-for (const source of ['loop_wakeup', 'schedule_wakeup', 'system', 'poll_event'] as const) {
-  test(`GIVEN source ${source} WHEN a prompt with an unknown token runs THEN there is no toast and the expansion still lands`, async ($, on) => {
-    const w = wire(on, { tree: TREE, bottom: {} })
+for (const kind of ['task-notification', 'scheduled-trigger', 'peer', 'auto-continuation'] as const) {
+  test(`GIVEN origin ${kind} WHEN a prompt with an unknown token is submitted THEN there is no toast`, async ($, on) => {
+    const w = wire(on, { tree: TREE })
+    bottomSubmit(on)
 
-    const out = await send($, '++m ++foo', 'default', source)
+    await submit($, '++m ++foo', { kind })
 
-    expect([w.toasts, out], 'toasts and result').toEqual([[], { additionalContext: [M] }])
+    expect(w.toasts, 'toasts').toEqual([])
   })
 }
 
-for (const source of [undefined, 'user', 'sdk'] as const) {
-  test(`GIVEN source ${String(source)} WHEN a prompt with an unknown token runs THEN one toast names it`, async ($, on) => {
-    const w = wire(on, { tree: TREE, bottom: {} })
+for (const kind of ['composer', 'bridge', 'sdk'] as const) {
+  test(`GIVEN origin ${kind} WHEN a prompt with an unknown token is submitted THEN one toast names it`, async ($, on) => {
+    const w = wire(on, { tree: TREE })
+    bottomSubmit(on)
 
-    await send($, '++foo', 'default', source)
+    await submit($, '++foo', { kind })
 
     expect(w.toasts, 'toasts').toEqual(['unknown ++foo'])
   })
 }
 
-test('GIVEN a code-like prompt WHEN the classic hook runs THEN no toast names ++i, ++count or a token in code', async ($, on) => {
-  const w = wire(on, { tree: TREE, bottom: {} })
+test('GIVEN a slash command prompt WHEN it is submitted with an unknown token THEN there is no toast', async ($, on) => {
+  const w = wire(on, { tree: TREE })
+  bottomSubmit(on)
 
-  await send($, 'fix for (i = 0; i < n; ++i) and a[++j] and ++k; then `++tick` and\n```\n++blk\n```\nplus ++typo')
+  await submit($, '/x ++foo', { kind: 'composer' }, { command: { name: 'x', args: '++foo' } })
+
+  expect(w.toasts, 'toasts').toEqual([])
+})
+
+test('GIVEN a code-like prompt WHEN it is submitted THEN no toast names ++i, ++count or a token in code', async ($, on) => {
+  const w = wire(on, { tree: TREE })
+  bottomSubmit(on)
+
+  await submit($, 'fix for (i = 0; i < n; ++i) and a[++j] and ++k; then `++tick` and\n```\n++blk\n```\nplus ++typo')
 
   expect(w.toasts, 'toasts').toEqual(['unknown ++typo'])
 })
 
-test('GIVEN every source value WHEN checked THEN only a missing source, user and sdk are typed by the person', async () => {
-  expect(
-    [undefined, 'user', 'sdk', 'system', 'loop_wakeup', 'schedule_wakeup', 'poll_event', 7].map((s) => isTypedSource(s)),
-    'typed',
-  ).toEqual([true, true, true, false, false, false, false, false])
-})
-
 test('GIVEN a custom prefix WHEN a prompt holds unknown tokens of both prefixes THEN only the custom ones are named', { options: { prefix: '@@' } }, async ($, on) => {
-  const w = wire(on, { tree: TREE, bottom: {} })
+  const w = wire(on, { tree: TREE })
+  bottomSubmit(on)
 
-  await send($, '@@zz ++yy')
+  await submit($, '@@zz ++yy')
 
   expect(w.toasts, 'toasts').toEqual(['unknown @@zz'])
 })
 
-test('GIVEN a subagent delivery with an unknown token WHEN the classic hook runs THEN there is no toast', async ($, on) => {
-  const w = wire(on, { tree: TREE, bottom: {} })
+test('GIVEN an unknown token inside an inline body WHEN the prompt is submitted THEN the toast reads the expanded text', async ($, on) => {
+  const w = wire(on, { tree: { ...TREE, ...at('bb', file('bb', 'inline', 'always', 'BB ++nope')) } })
+  bottomSubmit(on)
 
-  await send($, '<task-notification>++foo')
+  await submit($, 'x ++bb')
 
-  expect(w.toasts, 'toasts').toEqual([])
+  expect(w.toasts, 'toasts').toEqual(['unknown ++nope'])
 })
 
 // ---- pure helpers

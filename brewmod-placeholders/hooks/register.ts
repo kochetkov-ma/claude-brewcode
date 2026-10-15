@@ -3,12 +3,12 @@ import type { Register } from 'claude-code'
 import { editorMatchers, getEditorEntries, setEditorEntries } from './lib/editor-state'
 import { highlight, optionColor, sameView, suggest, type EditorStyle } from './lib/editor'
 import { validatePrefix, type PlaceholderView } from './lib/match'
-import { SYNTHETIC_PROMPT, applyBuilt, assembleBlocks, memoCompile, type Compiled } from './lib/assemble'
+import { memoCompile, type Compiled } from './lib/compiled'
 import { configDirOf, issuesMessage, loadRegistry, newRegistryCache, toEditorEntries, type Registry } from './lib/defs'
-import { createModeTracker } from './lib/mode'
+import { modeStatePath, planFromState } from './lib/mode'
 import { bandBudget, bandRows, renderBand } from './lib/band'
 import { runCommand } from './lib/command'
-import { expandInline, isInlineSubmit, isTypedSource, unknownMessage, unknownTokens, type SubmitLike } from './lib/inline'
+import { expandInline, isInlineSubmit, unknownMessage, unknownTokens, type SubmitLike } from './lib/inline'
 
 // Atoms are declared in this file only (the scan reads this file); the band reads the same view atom.
 const viewAtom = atom({ plugin: 'brewmod-placeholders', key: 'view' } as const, { tokens: [] })
@@ -23,7 +23,7 @@ export const register: Register = (on, options) => {
   const prefix = check.prefix
   const style: EditorStyle = { knownColor: optionColor(options.knownColor, 'suggestion'), unknownColor: optionColor(options.unknownColor, 'warning') }
   const cache = newRegistryCache()
-  const mode = createModeTracker()
+  let isPlan = false // permission_mode of the last state file hooks/inject.mjs wrote for this session
   let compiled: Compiled | null = null
   let published: Registry | null = null
   let shown: PlaceholderView | null = null // last view written to viewAtom
@@ -54,37 +54,23 @@ export const register: Register = (on, options) => {
     adopt(reg)
     const issues = issuesMessage(reg)
     if (issues !== null) $.ui.toast(issues)
-    return next(e)
-  })
-
-  // Assemble first, let brewtools' hook run inside next(e), then de-dup against its blocks.
-  on('classic.UserPromptSubmit', async ($, e, next) => {
-    mode.classic(e)
-    if (!e.prompt.includes(prefix) || SYNTHETIC_PROMPT.test(e.prompt)) return next(e)
-    const c = adopt(
-      await loadRegistry(
-        { exists: (p) => $.fs.exists(p), list: (p) => $.fs.list(p), read: (p) => $.fs.read(p) },
-        { pluginRoot: $.plugin.root, root: await $.session.root(), configDir: configDirOf(await $.env.get('CLAUDE_CONFIG_DIR'), (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE'))) },
-        cache,
-      ),
-    )
-    if (options.warnUnknown !== false && isTypedSource(e.source)) {
-      const bad = unknownTokens(c.matchers, e.prompt)
-      if (bad.length > 0) $.ui.toast(unknownMessage(bad))
+    try {
+      const file = modeStatePath($.plugin.root, await $.session.id())
+      if (file !== null) isPlan = planFromState(await $.fs.read(file)) ?? isPlan
+    } catch {
+      // no state file yet: not in plan mode
     }
-    const built = assembleBlocks(c, e.prompt, e.permission_mode)
-    const r = await next(e)
-    return built === null ? r : applyBuilt(r, built)
-  })
-
-  on('classic.PostToolBatch', (_$, e, next) => {
-    mode.classic(e)
     return next(e)
   })
 
-  // Non-classic fallback (org-managed installs); fires before turn.step.
-  on('session.append', (_$, e, next) => {
-    mode.append(e)
+  // The command hook records the mode at each prompt and tool batch; a finished turn has seen both. No I/O in prompt.edit, so the band reads the module variable.
+  on('turn.complete', async ($, e, next) => {
+    try {
+      const file = modeStatePath($.plugin.root, await $.session.id())
+      if (file !== null) isPlan = planFromState(await $.fs.read(file)) ?? isPlan
+    } catch {
+      // keep the last known mode
+    }
     return next(e)
   })
 
@@ -133,7 +119,8 @@ export const register: Register = (on, options) => {
     return rows.length === 0 ? r : { suggestions: [...r.suggestions, ...rows] }
   })
 
-  // Inline defs are expanded in the submitted text; context defs stay on the classic path. No mode here: plan/not-plan inline defs stay verbatim.
+  // Inline defs are expanded in the submitted text; context defs go through hooks/inject.mjs. No mode here: plan/not-plan inline defs stay verbatim.
+  // The unknown-token toast fires here (a command hook has no UI): only for text the person typed, after the expansion.
   on('prompt.submit', async ($, e, next) => {
     // The draft leaves the composer only on the person's own Enter: other origins keep the band.
     const own: SubmitLike = e // isMeta is absent from the 2.1.296 types
@@ -154,6 +141,10 @@ export const register: Register = (on, options) => {
       ),
     )
     const text = expandInline(c, e.text)
+    if (options.warnUnknown !== false) {
+      const bad = unknownTokens(c.matchers, text ?? e.text)
+      if (bad.length > 0) $.ui.toast(unknownMessage(bad))
+    }
     return next(text === null ? e : { ...e, text })
   })
 
@@ -165,7 +156,7 @@ export const register: Register = (on, options) => {
     if (rows.length === 0) return next(e)
     return renderBand($.ui.resolve(e), rows, {
       isExpanded: await read($, expandedAtom),
-      isPlan: mode.isPlan(),
+      isPlan,
       style,
       budget: bandBudget(e.props.maxRows, e.viewport?.isFullscreen === true),
       onToggle: () => update($, expandedAtom, (open) => !open),
