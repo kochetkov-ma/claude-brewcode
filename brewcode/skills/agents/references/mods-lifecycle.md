@@ -25,6 +25,7 @@ Table and pass criteria: `mod-creator.md`. Types path ephemeral (re-derive via `
 | no `require`, no DOM, no Node, no timers (use `$.clock`) | module environment | T:20-24, 15420 |
 | `plugin.json` has `author`, `version`, `description` | `--strict` fails without `author` | V; X |
 | module `classic.*`, `session.append` (doors `attachment`, `hook-context`), `prompt.section/context/compose/attachment`, `attribution.text` hooks are bypassed for a user-installed mod on Team/Enterprise orgs: behaviour that depends on them ships a bundled classic COMMAND hook in `hooks/hooks.json` next to `"modules"` (`mods-patterns.md` #1, #2), never a `session.append` fallback; `turn.step`, `prompt.submit`, `prompt.edit`, `ui.render`, `command.run` still run | module's context injection or mode tracking silently does nothing on the org's machines; `validate` rc 0 does not catch it | V; F1; C41; C43 |
+| HARD: every interactive affordance a mod draws (band `Button`, toggle, focusable row, hidden feature) shows its key sequence in its own label or a dim hint row (`Show text  ctrl+x · tab · enter`); people cannot discover ctrl+x band focus. A sequence is written into a label only after it is proven live step by step, one PNG after each key: focus, toggle, prompt NOT submitted, return to the prompt (`mods-testing.md` tmux) | undiscoverable feature; a wrong hint is worse than none | user ruling 2026-10-15; PH 8a, 8c; IPH; S |
 | engine tests/validate/tsc, not model memory, decide what API accepts | early access: moves per release | R:5 |
 
 ## The Road

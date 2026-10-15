@@ -5,7 +5,8 @@ import { scanDraft, type Matchers, type PlaceholderView } from './match'
 export const MAX_DECORATED_CHARS = 20_000
 export const EMPTY_VIEW: PlaceholderView = { tokens: [] }
 
-export type EditorStyle = { knownColor: string; unknownColor: string }
+export const KNOWN_COLOR = 'suggestion'
+export const UNKNOWN_COLOR = 'warning'
 export type EditorEntry = { name: string; description?: string; body?: string; planOnly?: boolean }
 export type Highlight = { view: PlaceholderView; decorations: PromptDecoration[] }
 
@@ -18,13 +19,13 @@ function graphemeEnd(text: string, end: number): number {
   return end + (m === null ? 0 : m[0].length)
 }
 
-// Known token -> knownColor + underline; unknown -> unknownColor. Above the cap or without the prefix -> nothing.
-export function highlight(ms: Matchers, text: string, style: EditorStyle): Highlight {
+// Known token -> KNOWN_COLOR + underline; unknown -> UNKNOWN_COLOR. Above the cap or without the prefix -> nothing.
+export function highlight(ms: Matchers, text: string): Highlight {
   if (text.length > MAX_DECORATED_CHARS || !text.includes(ms.prefix)) return { view: EMPTY_VIEW, decorations: [] }
   const view = scanDraft(ms, text)
   const decorations = view.tokens.map((t): PromptDecoration => {
     const end = graphemeEnd(text, t.end)
-    return t.isKnown ? { start: t.start, end, color: style.knownColor, underline: true } : { start: t.start, end, color: style.unknownColor }
+    return t.isKnown ? { start: t.start, end, color: KNOWN_COLOR, underline: true } : { start: t.start, end, color: UNKNOWN_COLOR }
   })
   return { view, decorations }
 }
@@ -54,6 +55,3 @@ export function suggest(prefix: string, token: string, entries: readonly EditorE
   }
   return rows
 }
-
-// userConfig color -> theme key; a missing or non-string value falls back to the default.
-export const optionColor = (value: unknown, fallback: string): string => (typeof value === 'string' && value !== '' ? value : fallback)

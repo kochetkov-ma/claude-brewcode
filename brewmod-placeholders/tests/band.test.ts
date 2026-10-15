@@ -1,7 +1,7 @@
 import { test, expect } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import { ROOT, STATE_FILE, wire, type Tree } from './layer-io'
-import { PLAN_ONLY_LABEL, UNKNOWN_LABEL, bandBudget, bandRows, toggleLabel } from '../hooks/lib/band'
+import { HINT, PLAN_ONLY_LABEL, TOGGLE_KEYS, UNKNOWN_LABEL, bandBudget, bandRows, toggleLabel } from '../hooks/lib/band'
 
 const SURFACES = ['terminal', 'desktop'] as const
 const PROPS = { hasSurvey: false, isWorking: false, maxRows: 24, bodyColumns: 100, scroll: { bodyRows: 23, offset: 0, total: 0 }, view: {} }
@@ -47,7 +47,7 @@ const head = (count: number, label: string) => ({
   props: { key: 'head' },
   children: [
     { type: 'Text', props: { dimColor: true }, children: [`placeholders ${count} `] },
-    { type: 'Button', props: { key: 'toggle', label }, press },
+    { type: 'Button', props: { key: 'toggle', label: `${label}  ${TOGGLE_KEYS}` }, press },
   ],
 })
 const rowYY = (extra: unknown[]) => ({
@@ -105,10 +105,11 @@ const shown = (body: string) => ({
   props: { marginLeft: 2, flexDirection: 'column' },
   children: [line(body)],
 })
+const hint = { type: 'Text', props: { dimColor: true }, children: [HINT] }
 const band = (children: unknown[]) => ({
   type: 'Box',
   props: { key: 'band', flexDirection: 'column' },
-  children,
+  children: [...children, hint],
 })
 
 for (const surface of SURFACES) {
@@ -184,8 +185,8 @@ const bandTexts = async ($: any) => {
   await ui.unmount()
   return texts
 }
-const PLAN_TEXTS = ['placeholders 1 ', '++zz', '  Zed mode', 'ZZ BODY']
-const NOT_PLAN_TEXTS = ['placeholders 1 ', '++zz', '  Zed mode', ` ${PLAN_ONLY_LABEL}`, 'ZZ BODY']
+const PLAN_TEXTS = ['placeholders 1 ', '++zz', '  Zed mode', 'ZZ BODY', HINT]
+const NOT_PLAN_TEXTS = ['placeholders 1 ', '++zz', '  Zed mode', ` ${PLAN_ONLY_LABEL}`, 'ZZ BODY', HINT]
 
 test('GIVEN the state file says plan WHEN the session starts and the band mounts THEN the plan-only label is gone', async ($, on) => {
   await boot($, on, '++zz', () => {}, stateTree('plan'))
@@ -258,7 +259,7 @@ test('GIVEN tokens and entries WHEN rows are built THEN they dedupe case-insensi
     { text: '++nd', name: 'nd', isKnown: true, description: 'nd', body: '', isPlanOnly: false },
     { text: '++x', name: 'x', isKnown: false, description: UNKNOWN_LABEL, body: '', isPlanOnly: false },
   ])
-  expect([toggleLabel(false), toggleLabel(true)], 'labels').toEqual(['Show text', 'Hide text'])
+  expect([toggleLabel(false), toggleLabel(true)], 'labels').toEqual(['Show text  ctrl+x · tab · enter', 'Hide text  ctrl+x · tab · enter'])
 })
 
 test('GIVEN terminal heights and the fullscreen flag WHEN the band budget is computed THEN it is 6 to 30 rows, less the reserve outside fullscreen', async () => {
@@ -271,38 +272,60 @@ const bodyOf = (name: string, lines: number): string =>
   `---\nname: "${name}"\ndescription: "${name} mode"\n---\n${Array.from({ length: lines }, (_, i) => `${name}-line-${i + 1}`).join('\n')}`
 const texts = async (ui: { findAll: (q: { type: string }) => Promise<{ text?: string }[]> }): Promise<(string | undefined)[]> => (await ui.findAll({ type: 'Text' })).map((t) => t.text)
 
-test('GIVEN twelve unknown tokens and a 12-row budget WHEN the band mounts THEN ten rows show and the last row counts the rest', async ($, on) => {
+test('GIVEN twelve unknown tokens and a 12-row budget WHEN the band mounts THEN nine rows show and the last row counts the rest', async ($, on) => {
   await boot($, on, Array.from({ length: 12 }, (_, i) => `++u${i + 1}`).join(' '))
 
   const ui = await $.ui.mount({ ...PLUGIN, surface: 'terminal', props: PROPS })
 
   const rows = (await ui.findAll({ type: 'Text' })).map((t) => t.text).filter((t) => t?.startsWith('++u') || t?.startsWith('...') || t?.startsWith('placeholders'))
-  expect(rows, 'head, ten tokens, the more row').toEqual(['placeholders 12 ', ...Array.from({ length: 10 }, (_, i) => `++u${i + 1}`), '... +2 more placeholders'])
+  expect(rows, 'head, nine tokens, the more row').toEqual(['placeholders 12 ', ...Array.from({ length: 9 }, (_, i) => `++u${i + 1}`), '... +3 more placeholders'])
   await ui.unmount()
 })
 
-test('GIVEN a 20-line body WHEN the expanded band mounts with a 12-row budget THEN nine lines show and an ellipsis row counts the 11 cut', async ($, on) => {
-  await boot($, on, '++long', undefined, { [`${ROOT}/.claude/placeholders/long.md`]: bodyOf('long', 20) })
+const LONG = { [`${ROOT}/.claude/placeholders/long.md`]: bodyOf('long', 20) }
+
+test('GIVEN one 20-line body WHEN the band mounts THEN three body lines show at once, with no toggle Button', async ($, on) => {
+  await boot($, on, '++long', undefined, LONG)
   const ui = await $.ui.mount({ ...PLUGIN, surface: 'terminal', props: PROPS })
 
-  await ui.press({ key: 'toggle' })
-
-  expect(await texts(ui), 'texts').toEqual([
-    'placeholders 1 ',
-    '++long',
-    '  long mode',
-    ...Array.from({ length: 9 }, (_, i) => `long-line-${i + 1}`),
-    '... +11 lines',
+  expect([await texts(ui), await ui.find({ key: 'toggle' })], 'texts and toggle').toEqual([
+    ['placeholders 1 ', '++long', '  long mode', 'long-line-1', 'long-line-2', '... +18 lines', HINT],
+    undefined,
   ])
   await ui.unmount()
 })
 
-test('GIVEN a 20-line body WHEN the collapsed band mounts THEN the hover body is capped the same way', async ($, on) => {
-  await boot($, on, '++long', undefined, { [`${ROOT}/.claude/placeholders/long.md`]: bodyOf('long', 20) })
+test('GIVEN two tokens with bodies WHEN the band mounts THEN both bodies show at once and the band has no toggle Button', async ($, on) => {
+  await boot($, on, '++yy ++zz')
+  const ui = await $.ui.mount({ ...PLUGIN, surface: 'terminal', props: PROPS })
+
+  expect([await texts(ui), await ui.find({ key: 'toggle' })], 'texts and toggle').toEqual([
+    ['placeholders 2 ', '++yy', '  Why mode', 'YY BODY', '++zz', '  Zed mode', ` ${PLAN_ONLY_LABEL}`, 'ZZ BODY', HINT],
+    undefined,
+  ])
+  await ui.unmount()
+})
+
+test('GIVEN two 20-line bodies and the smallest budget WHEN the band mounts THEN the band fits the 6 rows', async ($, on) => {
+  const tree = Object.fromEntries(['aa', 'bb'].map((n) => [`${ROOT}/.claude/placeholders/${n}.md`, bodyOf(n, 20)]))
+  await boot($, on, '++aa ++bb', undefined, tree)
+  const ui = await $.ui.mount({ ...PLUGIN, surface: 'terminal', props: { ...PROPS, maxRows: 10 } })
+
+  expect(await texts(ui), 'texts').toEqual(['placeholders 2 ', '++aa', '  aa mode', '... +20 lines', '++bb', '  bb mode', '... +20 lines', HINT])
+  await ui.unmount()
+})
+
+const THREE = { ...LONG, [`${ROOT}/.claude/placeholders/pp.md`]: bodyOf('pp', 1), [`${ROOT}/.claude/placeholders/qq.md`]: bodyOf('qq', 1) }
+
+test('GIVEN three tokens and a 20-line body WHEN the band mounts collapsed THEN the Button is labelled with the keys and the hover body is capped', async ($, on) => {
+  await boot($, on, '++long ++pp ++qq', undefined, THREE)
 
   const ui = await $.ui.mount({ ...PLUGIN, surface: 'terminal', props: PROPS })
 
-  expect((await texts(ui)).slice(3), 'hover texts').toEqual([...Array.from({ length: 9 }, (_, i) => `long-line-${i + 1}`), '... +11 lines'])
+  expect([(await ui.find({ key: 'toggle' }))?.props, (await texts(ui)).slice(3, 10)], 'button props, hover texts').toEqual([
+    { key: 'toggle', label: 'Show text  ctrl+x · tab · enter' },
+    [...Array.from({ length: 6 }, (_, i) => `long-line-${i + 1}`), '... +14 lines'],
+  ])
   await ui.unmount()
 })
 
@@ -327,17 +350,18 @@ test('GIVEN three 20-line bodies WHEN the expanded band mounts with a 12-row bud
     '  cc mode',
     'cc-line-1',
     '... +19 lines',
+    HINT,
   ])
   await ui.unmount()
 })
 
-test('GIVEN a tall terminal WHEN the expanded band mounts THEN the body is not cut', async ($, on) => {
-  await boot($, on, '++long', undefined, { [`${ROOT}/.claude/placeholders/long.md`]: bodyOf('long', 20) })
+test('GIVEN a tall terminal and one body among three tokens WHEN the expanded band mounts THEN the body is not cut', async ($, on) => {
+  await boot($, on, '++long ++q1 ++q2', undefined, LONG)
   const ui = await $.ui.mount({ ...PLUGIN, surface: 'terminal', props: { ...PROPS, maxRows: 60 } })
 
   await ui.press({ key: 'toggle' })
 
-  expect((await texts(ui)).slice(3), 'body lines').toEqual(Array.from({ length: 20 }, (_, i) => `long-line-${i + 1}`))
+  expect((await texts(ui)).slice(3, 23), 'body lines').toEqual(Array.from({ length: 20 }, (_, i) => `long-line-${i + 1}`))
   await ui.unmount()
 })
 

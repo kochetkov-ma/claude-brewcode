@@ -107,6 +107,7 @@ claude -p "$PROMPT" --plugin-dir "$MOD_DIR" --permission-mode plan \
 | effort reaches API | `api-request` rows `params.output_config.effort` in session JSONL (`${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects/.../<sid>.jsonl`; subagents: `<sid>/subagents/agent-<id>.jsonl`, which show session level while main shows raised one). Debug file and `PostToolBatch` `effort.level` do NOT show it; run with `--effort high` and compare control | T11 Q2; X |
 | `ExitPlanMode` in `-p` | absent in plain `-p` (plan L5 does not reproduce); use stream-json host with `--permission-prompt-tool stdio` (reject = `isError: true`) or tmux | T11 Q3; X |
 | project root | launch from `sub/deep` to see `$.session.root()` = launch dir (`mods-patterns.md` #9) | S; X |
+| `$.config` paths | `-p` has no plugin rows and `$.config.set` of an own key throws: test the headless answer there, the set path in tmux (`/x <value>`, then `/x` shows it; settings.json `pluginConfigs["<plugin>@inline"]` holds it; remove the key after the probe) | PE Q1, Q2 |
 | probe that prints | `$.ui.log('TAG ...', { to: 'debug' })`, then grep debug file | X |
 
 ## Team-Org Live Check
@@ -142,7 +143,9 @@ For what kit cannot prove: decoration paint, typeahead, band hover/toggle, laten
 |------|-----|
 | session: `tmux new-session -d -s <name> -x 150 -y 45 'claude --plugin-dir <abs mod>'`; read with `tmux capture-pane -p -t <name>`; keys with `tmux send-keys` | S |
 | hover reveals only in fullscreen TUI (mouse tracking: `mouse_any_flag`); `/tui fullscreen` writes `"tui"` into `~/.claude/settings.json`: restore with `/tui default` and say so | S |
-| band `Button` by keyboard: `ctrl+x`, `Tab` (focus band), `Enter`; click needs SGR mouse sequences in fullscreen; typeahead rows draw between transcript and band, Tab accepts a `'++r '` row (`mods-patterns.md` #5) | S |
+| band `Button` by keyboard: `ctrl+x`, then `Tab` within 3 s (chord cancels after 3 s; focus band), `Enter` toggles, `Esc` back to the prompt (proven: `mods-patterns.md` #12); click needs SGR mouse sequences in fullscreen; typeahead rows draw between transcript and band, Tab accepts a `'++r '` row while the prompt has focus, but NOT after `ctrl+x` (focus moves to the Button instead) (`mods-patterns.md` #5) | S; IPH 13 |
 | latency: 200 keystrokes at 0 / 4k / 20k-char drafts with and without mod; own time via `$.ui.log(..., { to: 'debug' })` under an env flag | research 05 §D |
 | clear a draft with `Esc Esc` (`ctrl+u` kills one wrapped line); on an EMPTY prompt `Esc Esc` opens Rewind; `paste-buffer` collapses to `[Pasted text #n]` and never reaches `prompt.edit`: type in chunks with `send-keys -l`; time keys via `tmux -C attach` (first `%output` after the key) | TTY |
+| key-hint proof: for every hinted sequence (`ctrl+x`, `Tab`, `Enter`, `hotkey`) `send-keys` ONE key, `capture-pane` (or screenshot) after each, and record: focus on the control, state toggled, draft NOT submitted, back at the prompt (`Esc`); send `Tab` within 3 s of `ctrl+x`; only then put the sequence in a label (`mods-lifecycle.md` Hard Rules). Proven once, steps and PNG names: `mods-patterns.md` #12. `Button hotkey` works only after the same ctrl+x Tab focus | user ruling 2026-10-15; PH 8a, 8c; IPH 05-13; S |
+| a free-text slash command that hands off to the model: type `/x <text>` + Enter, then screenshot the dialog; `/clear` then a slash command once needed a second Enter (typeahead consumed the first) | PH finding 5 |
 | clean up: kill your tmux session, never `tmux kill-server`; restore settings you changed; trust dialog adds `~/.claude.json` entries per temp dir | S; R3 |
