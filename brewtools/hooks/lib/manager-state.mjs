@@ -71,8 +71,7 @@ export function resolveStatePath(scope, cwd = process.cwd()) {
 }
 
 function clampMode(merged) {
-  // mode is vestigial — always 'full'. planmode is hook-internal (driven by
-  // permission_mode in manager-prompt.mjs), never stored as state.mode.
+  // mode is vestigial — always 'full'; plan mode is never stored as state.mode.
   if (merged.mode !== 'full') merged.mode = 'full';
   return merged;
 }

@@ -22,7 +22,6 @@ function invoke(file, payload, env) {
 
 try {
   for (const [runtime, file, env] of [
-    ['Claude', join(root, 'brewtools/hooks/manager-prompt.mjs'), { CLAUDE_PLUGIN_ROOT: join(root, 'brewtools') }],
     ['Codex', join(root, 'brewtools/.codex/hooks/manager-prompt.mjs'), { PLUGIN_ROOT: join(root, 'brewtools') }]
   ]) {
     // GIVEN a bare +++ codeword and the documented Plan-mode payload.
@@ -61,4 +60,4 @@ try {
   rmSync(cwd, { recursive: true, force: true });
 }
 
-process.stdout.write('Manager Plan-mode cron fixtures passed for Claude and Codex.\n');
+process.stdout.write('Manager Plan-mode cron fixtures passed for Codex.\n');

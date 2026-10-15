@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// E2E: HARD wall guard (hooks/hardmode-guard.mjs), codeword hook (hooks/manager-prompt.mjs), armed-wall notice (hooks/session-start.mjs).
+// E2E: HARD wall guard (hooks/hardmode-guard.mjs), armed-wall notice (hooks/session-start.mjs).
 // State lives in an isolated temp project passed as `cwd` on stdin; this repo's .claude/ never touched, no real wall armed.
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync, chmodSync, rmSync, realpathSync } from 'node:fs';
@@ -7,7 +7,8 @@ import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseCliArgs } from '../../../hooks/lib/manager-state.mjs';
-import { resolvePrompt, VALID_MODES } from '../../../hooks/lib/manager-prompts.mjs';
+// Mode names whose global overrides the shipped purge block deletes (list formerly exported by the removed prompt resolver).
+const VALID_MODES = new Set(['full', 'planmode', 'cron-plan', 'architect', 'review-regression', 'review-double']);
 
 const HERE = join(fileURLToPath(import.meta.url), '..');
 const GUARD_MJS = join(HERE, '..', '..', '..', 'hooks', 'hardmode-guard.mjs');
@@ -1314,10 +1315,9 @@ check(
   'global state is <CLAUDE_CONFIG_DIR>/manager/state.json for writer and installed CLI, ~/.claude only when unset',
 );
 
-// ---- manager-prompt.mjs (UserPromptSubmit) and session-start.mjs (SessionStart) ----------
+// ---- session-start.mjs (SessionStart) ----------
 
 const PLUGIN_ROOT = join(HERE, '..', '..', '..');
-const PROMPT_MJS = join(PLUGIN_ROOT, 'hooks', 'manager-prompt.mjs');
 const SESSION_MJS = join(PLUGIN_ROOT, 'hooks', 'session-start.mjs');
 /** Empty HOME: a real ~/.claude/manager/prompts override must not leak into expectations. */
 const EMPTY_HOME = join(BASE, 'home');
@@ -1338,134 +1338,6 @@ function runHook(script, payload, projectDir, envOver = {}) {
   });
   return safeParse(r.stdout || '');
 }
-
-const ups = (cwd, prompt, extra) => ({
-  session_id: 'S1', cwd, hook_event_name: 'UserPromptSubmit', permission_mode: 'default', prompt, ...extra,
-});
-const injected = (text) => ({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: text } });
-/** The shipped default block for a mode, read the way the hook reads it. */
-const shipped = (mode) => resolvePrompt(mode, join(BASE, 'no-such-project'), PLUGIN_ROOT).text;
-
-const HEAD_M = 'User typed `++m` — Manager mode is active for this turn:';
-const HEAD_A = 'User typed `++a` — Architecture-first discipline is active for this turn:';
-const HEAD_RR = 'User typed `++rr` — Anti-regression review discipline is active for this turn:';
-const HEAD_R = 'User typed `++r` — Two-phase review discipline is active for this turn:';
-
-check(
-  '79-codeword-m-injects-the-manager-block',
-  runHook(PROMPT_MJS, ups(DISARMED, '++m ship the feature')),
-  injected(`${HEAD_M}\n\n${shipped('full')}`),
-  'a typed ++m gets the header plus the shipped full block, wall state irrelevant',
-);
-
-check(
-  '80-codeword-groups-combine-in-order',
-  runHook(PROMPT_MJS, ups(DISARMED, 'do it ++rr ++a ++m')),
-  injected([`${HEAD_M}\n\n${shipped('full')}`, `${HEAD_A}\n\n${shipped('architect')}`, `${HEAD_RR}\n\n${shipped('review-regression')}`].join('\n\n---\n\n')),
-  'manager, architect and review blocks are all injected, in that fixed order',
-);
-
-// REGRESSION: an armed wall injected the whole `full` block (1830 B) on EVERY prompt, on top
-// of the guard that already enforces the rule and explains itself in its deny reason.
-check(
-  '81-armed-wall-injects-nothing-without-a-codeword',
-  { balanced: runHook(PROMPT_MJS, ups(ARMED, 'refactor the parser')), strict: runHook(PROMPT_MJS, ups(STRICT, 'refactor the parser')) },
-  { balanced: {}, strict: {} },
-  'no ambient per-prompt block while the wall is armed',
-);
-
-// REGRESSION: UserPromptSubmit fires for subagent deliveries; a quoted codeword activated "User typed `++m`".
-// Fixtures recorded on 2.1.296 (home paths scrubbed; hand-back line replaced by one carrying codewords).
-const NOTIFICATION = JSON.parse(readFileSync(join(HERE, 'fixtures', 'ups-task-notification.json'), 'utf8'));
-const HANDBACK = JSON.parse(readFileSync(join(HERE, 'fixtures', 'ups-agent-message.json'), 'utf8'));
-check(
-  '82-synthetic-fixtures-carry-codewords',
-  { notification: /<result>\+\+m PROBE_REPORT_TOKEN \+\+rr<\/result>/.test(NOTIFICATION.prompt), handback: / {2}\+\+m \+\+a \+\+rr PROBE_REPORT_TOKEN\n/.test(HANDBACK.prompt) },
-  { notification: true, handback: true },
-  'precondition: both recorded deliveries contain codewords the scan would match',
-);
-check(
-  '83-synthetic-subagent-deliveries-inject-nothing',
-  {
-    taskNotification: runHook(PROMPT_MJS, NOTIFICATION),
-    agentMessage: runHook(PROMPT_MJS, HANDBACK),
-    leadingWhitespace: runHook(PROMPT_MJS, { ...NOTIFICATION, prompt: `\n  ${NOTIFICATION.prompt}` }),
-  },
-  { taskNotification: {}, agentMessage: {}, leadingWhitespace: {} },
-  'a prompt that starts with <task-notification> or <agent-message is not the user typing',
-);
-
-check(
-  '84-typed-prompt-quoting-the-tag-still-fires',
-  runHook(PROMPT_MJS, ups(DISARMED, 'explain what <task-notification> means ++r')),
-  injected(`${HEAD_R}\n\n${shipped('review-double')}`),
-  'only a LEADING delivery tag marks a synthetic prompt',
-);
-
-// REGRESSION: manager-prompt skipped a bare typed `<agent-message>`; a delivery is only
-// `<task-notification>` or `<agent-message from=`.
-check(
-  '84a-only-agent-message-from-marks-a-delivery',
-  {
-    bareTag: runHook(PROMPT_MJS, ups(DISARMED, '<agent-message> ++r')),
-    fromAttr: runHook(PROMPT_MJS, ups(DISARMED, '<agent-message from="a1"> ++r')),
-  },
-  { bareTag: injected(`${HEAD_R}\n\n${shipped('review-double')}`), fromAttr: {} },
-  'a typed <agent-message> fires the codeword; <agent-message from= is a subagent delivery',
-);
-
-// REGRESSION: project prompt overrides were looked up under the raw hook cwd, so they
-// vanished as soon as the session changed directory.
-const ROOTED = makeProject('rooted', { hard: false, level: 'balanced' });
-mkdirSync(join(ROOTED, '.claude', 'brewtools', 'manager', 'prompts'), { recursive: true });
-mkdirSync(join(ROOTED, 'nested', 'deep'), { recursive: true });
-writeFileSync(join(ROOTED, '.claude', 'brewtools', 'manager', 'prompts', 'review-double.md'), 'OVERRIDE-AT-ROOT');
-writeFileSync(join(ROOTED, '.claude', 'brewtools', 'manager', 'prompts', 'architect.md'), 'x'.repeat(10000));
-check(
-  '85-project-override-resolves-from-the-project-root',
-  {
-    nestedCwd: runHook(PROMPT_MJS, ups(join(ROOTED, 'nested', 'deep'), '++r check it')),
-    projectDirEnv: runHook(PROMPT_MJS, ups('/', '++r check it'), ROOTED),
-  },
-  { nestedCwd: injected(`${HEAD_R}\n\nOVERRIDE-AT-ROOT`), projectDirEnv: injected(`${HEAD_R}\n\nOVERRIDE-AT-ROOT`) },
-  'the override is found from a nested cwd and through CLAUDE_PROJECT_DIR',
-);
-
-check(
-  '86-injection-is-capped-at-9000-chars',
-  runHook(PROMPT_MJS, ups(ROOTED, '++a design it')),
-  injected(`${`${HEAD_A}\n\n${'x'.repeat(10000)}`.slice(0, 9000)}\n...[truncated]`),
-  'an oversized override is cut to 9000 chars plus the truncation marker',
-);
-
-check(
-  '87-prompt-hook-malformed-stdin-fails-open',
-  runHook(PROMPT_MJS, '{not json'),
-  {},
-  'an advisory hook must never break the prompt',
-);
-
-// REGRESSION: the global override was hardcoded to ~/.claude/manager/prompts, so a session on
-// another profile (CLAUDE_CONFIG_DIR) read the default profile's override or none.
-const PROFILE_HOME = join(BASE, 'profile-home');
-const PROFILE_CFG = join(BASE, 'profile-cfg');
-const PROFILE_EMPTY = join(BASE, 'profile-empty');
-for (const [dir, text] of [[join(PROFILE_HOME, '.claude'), 'OVERRIDE-IN-HOME'], [PROFILE_CFG, 'OVERRIDE-IN-CONFIG-DIR']]) {
-  mkdirSync(join(dir, 'manager', 'prompts'), { recursive: true });
-  writeFileSync(join(dir, 'manager', 'prompts', 'review-double.md'), text);
-}
-mkdirSync(PROFILE_EMPTY, { recursive: true });
-const asProfile = (cfg) => runHook(PROMPT_MJS, ups(DISARMED, '++r check it'), undefined, { HOME: PROFILE_HOME, CLAUDE_CONFIG_DIR: cfg });
-check(
-  '87a-global-override-follows-claude-config-dir',
-  { configDir: asProfile(PROFILE_CFG), unset: asProfile(undefined), emptyConfigDir: asProfile(PROFILE_EMPTY) },
-  {
-    configDir: injected(`${HEAD_R}\n\nOVERRIDE-IN-CONFIG-DIR`),
-    unset: injected(`${HEAD_R}\n\nOVERRIDE-IN-HOME`),
-    emptyConfigDir: injected(`${HEAD_R}\n\n${shipped('review-double')}`),
-  },
-  'the global scope is <CLAUDE_CONFIG_DIR>/manager/prompts, ~/.claude only when unset, never a fallback',
-);
 
 const sessionNotice = (level, bash) => ({
   systemMessage: `⛔ MANAGER HARD wall ON (project, level=${level})`,
