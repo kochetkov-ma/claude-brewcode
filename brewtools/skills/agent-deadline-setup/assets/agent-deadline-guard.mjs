@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.7.0 content_version=6.5.0 generated_by=brewtools:agent-deadline-setup
+// brewcode-meta: version=6.7.1 content_version=6.5.0 generated_by=brewtools:agent-deadline-setup
 
 // agent-deadline PreToolUse: soft wall-clock budget per subagent (agent_id AND agent_type), warn 80%, finalize-only past 100%.
 // State <os.tmpdir()>/brewtools-agent-deadline/<session_id>/<agent_id>.json; sampled only at tool calls; fail-open `{}`.
