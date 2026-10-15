@@ -258,7 +258,6 @@ const rank = (d) => (d.when === 'plan' ? 2 : 1)
 
 // '' = nothing to inject. Mode is exact: only the string `plan` is plan mode.
 export function assemble(defs, prefix, prompt, mode) {
-  if (SYNTHETIC_PROMPT.test(prompt) || !prompt.includes(prefix)) return ''
   const plan = mode === 'plan'
   const winners = new Map()
   for (const d of defs) {

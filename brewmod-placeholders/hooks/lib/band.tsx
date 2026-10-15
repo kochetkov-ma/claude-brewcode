@@ -8,9 +8,9 @@ export type BandState = { isExpanded: boolean; isPlan: boolean; style: EditorSty
 export type BandUi = Pick<ElementTable<'terminal'>, 'Box' | 'Text' | 'Button'>
 
 // Default TUI: maxRows = terminal height and the prompt box + footer take 8 rows more (45-row probe: 37 fit, 38 clip); +4 for a wrapped draft or a spinner.
-export const BAND_RESERVE = 12
-export const BAND_MAX = 30
-export const BAND_MIN = 6
+const BAND_RESERVE = 12
+const BAND_MAX = 30
+const BAND_MIN = 6
 
 // Rows the whole band may take: fullscreen -> the engine's bottom-slot rows, else the terminal height less the reserve; always 6..30 (fullscreen up to maxRows).
 export const bandBudget = (maxRows: number, isFullscreen: boolean): number =>
@@ -64,7 +64,7 @@ export function bandRows(view: PlaceholderView, entries: readonly EditorEntry[])
   return rows
 }
 
-export const hasBodies = (rows: readonly BandRow[]): boolean => rows.some((r) => r.body !== '')
+const hasBodies = (rows: readonly BandRow[]): boolean => rows.some((r) => r.body !== '')
 
 export const toggleLabel = (isExpanded: boolean): string => (isExpanded ? 'Hide text' : 'Show text')
 
