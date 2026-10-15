@@ -2,6 +2,49 @@
 
 ---
 
+## v6.7.1 (2026-10-15)
+
+> Docs: [mod-creator](https://doc-claude.brewcode.app/brewcode/agents/mod-creator/)
+
+Patch release: a strict Content-Security-Policy on the docs site, a corrected mod-creator page, and v6.7.0 post-release fixes to `update-plugin.sh` and the marketplace descriptions.
+
+### docs
+
+#### Added
+
+- **Content-Security-Policy:** the docs site sends a strict policy on every response, error pages included: `default-src 'none'`; `script-src 'self' 'wasm-unsafe-eval'` (the second source is for the search WebAssembly); no inline scripts; `object-src 'none'`; `frame-ancestors 'none'`; styles from `'self'` and Google Fonts, inline style attributes only.
+
+#### Changed
+
+- **docs markup:** the GitHub badge script and the font `onload` handler are gone (the font stylesheet is a plain `<link>`), and `assetsInlineLimit: 0` keeps Vite from inlining assets.
+- **GitHub badge:** version and star count are rendered at build time, so the browser never calls `api.github.com`. One stars fetch per build with a 5 s cap; on failure the stars are left out.
+
+#### Fixed
+
+- **mod-creator page:** the page now matches the agent on fail-open handling (no blanket try/catch), the Step 0 drift-check exit codes and `VERSION` line, and when the maintainer self-update runs.
+
+### repo
+
+#### Added
+
+- **check-csp.mjs:** scans the built docs `dist/` against the policy in `web/docs/deploy/docs.Caddyfile` (inline scripts and handlers, `javascript:` URLs, foreign origins, every `srcset` candidate) and checks that the image `Caddyfile` carries the identical policy. `check-csp.test.mjs` adds 26 positive and negative cases. Both run in the Validate workflow after a docs build.
+- **deploy-docs:** a "Verify CSP header" step compares the live header with `docs.Caddyfile` after deploy (5 attempts). It is skipped for redeploys of a SHA that predates the policy.
+
+#### Changed
+
+- **docs Caddyfiles:** `deploy/docs.Caddyfile` shares one `security_headers` snippet between the site and `handle_errors`; the image `Caddyfile` policy is synced with it.
+- **verify-deploy.sh:** after the build-info check, requires a `content-security-policy` header on the live site (3 attempts, `curl -m 15`).
+
+#### Fixed
+
+- **APPROACHES.md:** the brewmod-placeholders rows describe the shipped hooks module and its definition files instead of the v6.7.0 scaffold stub.
+- **update-plugin.sh:** `all` aborts with rc 1 and no plugin changed when `claude plugin list` fails; it no longer reinstalls `brewui` and both mods into a profile that never had them (`--dry-run` reports the abort with rc 0).
+- **update-plugin.sh output:** project-scope WARN lines go to stderr instead of being parsed as project rows, and a failed project-scope update now logs the command's real exit code (it always logged `exit 0`).
+- **update-plugin tests:** `suite-project-scope.mjs` covers the list failure for `all` (real and dry run), the stderr warnings and the exit code.
+- **marketplace.json:** the descriptions of `brewui`, `brewmod-plan-effort` and `brewmod-placeholders` match their `plugin.json`.
+
+---
+
 ## v6.7.0 (2026-10-15)
 
 > Docs: [Mods overview](https://doc-claude.brewcode.app/mods/overview/) | [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/) | [placeholders](https://doc-claude.brewcode.app/mods/placeholders/)

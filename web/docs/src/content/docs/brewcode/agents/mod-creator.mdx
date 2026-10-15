@@ -66,11 +66,11 @@ and list every drifted symbol.
 
 | # | Action | Pass |
 |---|--------|------|
-| 1 | `claude --version` | Version printed; compared with the `verified_on` stamp of the references |
+| 1 | `claude --version` | Hint only: the build is X in the drift check's last line `VERSION types X references Y` (row 3) |
 | 2 | Load the `plugin-authoring` skill and derive the types file path from it | Path derived on this run; never stored or hardcoded |
-| 3 | `mods-ref-check.mjs` with the types file and the references directory | Exit 0 clean, 1 drift, 2 error (fix the call) |
+| 3 | `mods-ref-check.mjs` with the types file and the references directory | Exit 0 + first line `CLEAN` = clean; exit 1 + first line `DRIFT` = drift; empty stdout, any other first line, or exit 2 = error, not drift (fix the call; a wrong path gives rc 1 and empty stdout). Last line `VERSION types X references Y`: X is the build |
 
-On drift (exit 1) the agent works from the live types, never from the stale reference, and reports every DRIFT row loudly. In a maintainer context (the claude-brewcode repository) it also updates the references, adds an entry to the changes file, bumps `verified_on` in all five files, and re-runs the check to exit 0. Anywhere else it changes nothing in the pack.
+On drift (exit 1) the agent works from the live types, never from the stale reference, and reports every DRIFT row loudly. The maintainer update (refresh the references, add an entry to the changes file, bump `verified_on` in all five files, re-run the check to exit 0) happens only when the brief asks for it and both markers exist at the git repository root (`git rev-parse --show-toplevel`): `brewcode/.claude-plugin/plugin.json` and `.claude/scripts/bump-version.sh`. Otherwise the agent reports the DRIFT rows, suggests the update, and changes nothing in the pack.
 
 The script itself has an offline test suite, `brewcode/skills/agents/tests/run.sh`. Set `MODS_TYPES` to a live types file to add the live check.
 
@@ -82,7 +82,7 @@ A selection of the rules that cause the most damage; the full list is in the [ag
 |------|------|
 | Static `import` only: no dynamic `import()`, no JSON or `.md` import, no `require` | Module does not load |
 | Never pass or alias `$`; spell `$.noun.event(...)` at each call site. `$.env.get/set` take a literal name and `$.state` takes literal `{ plugin, key }` refs | Validate refuses |
-| Fail open in every hook: try/catch, then `next(e)`; refusing guards get `.catch` | The mod blocks the prompt, tool, or turn |
+| Fail open: the engine skips a failing hook and keeps the downstream `next` result, so no blanket try/catch; refusing guards get `.catch` | Refusal lost, or the mod blocks the prompt, tool, or turn |
 | No I/O in `prompt.edit` | Per-keystroke lag |
 | `hooks/hooks.json` is `{ "modules": ["./register.ts"] }`: one path, inside the array | String or second entry refused |
 | Never commit `.claude-plugin/types/` or the engine-written mod-root `tsconfig.json` (gitignore both) | Engine files land in git |
