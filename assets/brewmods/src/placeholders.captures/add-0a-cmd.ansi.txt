@@ -1,0 +1,40 @@
+[38;5;174m ▐[48;5;16m▛███▛█[39m[49m   [1mClaude[0m [1mCode[0m [38;5;246mv2.1.301[39m
+[38;5;174m▝▜[48;5;16m█████[49m█▀[39m  [38;5;246mOpus[39m [38;5;246m5.5[39m [38;5;246m·[39m [38;5;246mClaude[39m [38;5;246mMax[39m
+[38;5;174m ▝▝[39m   [38;5;174m▝▝[39m   [38;5;246m~/brewery[39m
+
+
+[38;5;246m[48;5;237m❯ [38;5;231mreview the diff ++r[39m
+[49m
+[38;5;114m⏺[39m [1mBash[0m(git diff --stat && git diff)
+[38;5;246m  ⎿  [39m README.md | 2 +-
+      1 file changed, 1 insertion(+), 1 deletion(-)
+     diff --git a/README.md b/README.md
+     [2m… +8 lines (ctrl+o to expand)[0m
+
+[38;5;231m⏺[39m The diff is clean and there's nothing to fix.
+
+  The only change is one line in [38;5;153mREADME.md:3[39m, which corrects the typo "recipies" to
+  "recipes". Nothing else in the file changed.
+
+  The [38;5;153m++r[39m discipline asks for a multi-agent review on significant changes. A one-word
+  typo fix in a README doesn't qualify, so I didn't spawn reviewers.
+
+  The working tree is otherwise clean, so this is ready to commit whenever you want.
+
+[38;5;246m✻[39m [38;5;246mCooked[39m [38;5;246mfor[39m [38;5;246m5s[39m [38;5;246m·[39m [38;5;246mdone[39m [38;5;246m11:56[39m [38;5;246mPM[39m
+
+[38;5;244m────────────────────────────────────────────────────────────────────────────────────────
+[39m❯ [38;5;153m/placeholders[39m global add
+[38;5;244m────────────────────────────────────────────────────────────────────────────────────────
+[39m  [38;5;246m⏸[39m [38;5;246mmanual[39m [38;5;246mmode[39m [38;5;246mon[39m
+
+
+
+
+
+
+
+
+
+
+

@@ -1,6 +1,8 @@
 import { test, expect } from 'claude-code/testing'
 import { PLACEHOLDER_FILES } from './parity/golden.generated'
-import { extractFenced, parseDefinition, parseFrontMatter, parseLegacy, toDef } from '../hooks/lib/defs'
+import { extractFenced, parseDefinition, parseFrontMatter, parseLegacy, resolveDefs, toDef, toEditorEntries, type LayerFiles, type LayerKind } from '../hooks/lib/defs'
+
+const layer = (id: string, kind: LayerKind, files: Record<string, string>): LayerFiles => ({ id, kind, files: new Map(Object.entries(files)) })
 
 test('GIVEN no fence WHEN extracting THEN the whole text is trimmed', async () => {
   expect(extractFenced('\n  plain  \n'), 'text').toBe('plain')
@@ -126,13 +128,60 @@ test('GIVEN neither a name nor a base WHEN completed THEN null; with only a name
   ])
 })
 
-test('GIVEN the shipped m.plan.md WHEN parsed THEN it carries name m, when plan, legacy planmode and starts with the m body', async () => {
-  const m = parseDefinition(PLACEHOLDER_FILES['m'] ?? '')
+test('GIVEN the shipped m.plan.md WHEN parsed THEN it is the plan add part of m: own header, legacy planmode, only the addon text', async () => {
   const plan = parseDefinition(PLACEHOLDER_FILES['m.plan'] ?? '')
 
-  expect([plan.meta.name, plan.meta.when, plan.meta.legacy, plan.issues, plan.text.startsWith(m.text + '\n\n')], 'm.plan facts').toEqual(
-    ['m', 'plan', 'planmode', [], true],
-  )
+  expect({ meta: plan.meta, issues: plan.issues, head: plan.text.slice(0, 18) }, 'm.plan facts').toEqual({
+    meta: {
+      name: 'm',
+      description: 'Manager mode in Plan mode: the manager text plus the plan addon',
+      insert: 'context',
+      when: 'plan',
+      plan: 'add',
+      order: 20,
+      header: 'User typed `{token}` — Manager + Plan Mode is active for this turn:',
+      legacy: 'planmode',
+    },
+    issues: [],
+    head: '[ADDON: PLAN MODE]',
+  })
+})
+
+test('GIVEN plan values add, replace, quoted and unknown WHEN the front matter is parsed THEN add and replace are kept and the rest is an issue', async () => {
+  expect(['plan: add', 'plan: replace', 'plan: "add"', 'plan: later', 'plan:'].map(parseFrontMatter), 'parsed').toEqual([
+    { meta: { plan: 'add' }, issues: [] },
+    { meta: { plan: 'replace' }, issues: [] },
+    { meta: { plan: 'add' }, issues: [] },
+    { meta: {}, issues: ["plan: 'later' is not add|replace"] },
+    { meta: {}, issues: ["plan: '' is not add|replace"] },
+  ])
+})
+
+test('GIVEN a base def with plan add WHEN an override without the key is completed THEN every field but plan is inherited', async () => {
+  const base = { name: 'm', when: 'plan' as const, order: 20, header: 'H', legacy: 'planmode', plan: 'add' as const }
+
+  expect([toDef(parseDefinition('OLD FULL TEXT'), base), toDef(parseLegacy('LEGACY'), base), toDef(parseDefinition('---\nplan: add\n---\nNEW'), base)], 'defs').toEqual([
+    { name: 'm', body: 'OLD FULL TEXT', insert: 'context', when: 'plan', order: 20, priority: 0, header: 'H', legacy: 'planmode' },
+    { name: 'm', body: 'LEGACY', insert: 'context', when: 'plan', order: 20, priority: 0, header: 'H', legacy: 'planmode' },
+    { name: 'm', body: 'NEW', insert: 'context', when: 'plan', order: 20, priority: 0, header: 'H', legacy: 'planmode', plan: 'add' },
+  ])
+})
+
+test('GIVEN a plan add part overridden by a legacy file in one stack and by a native file without the key in another WHEN layers resolve THEN both overrides replace, a new add part keeps add and the misplaced key is an issue', async () => {
+  const defaults = layer('default', 'native', { m: '---\nname: m\nlegacy: full\n---\nM', 'm.plan': '---\nname: m\nwhen: plan\nplan: add\nlegacy: planmode\n---\nADD', x: '---\nplan: add\n---\nX' })
+  const legacy = resolveDefs([defaults, layer('global-legacy', 'legacy', { planmode: 'PM' }), layer('project', 'native', { 'db.plan': '---\nplan: add\n---\nDB ADD' })])
+  const native = resolveDefs([defaults, layer('project', 'native', { 'm.plan': '---\nheader: "N {token}"\n---\nNATIVE' })])
+  const m = { name: 'm', body: 'M', insert: 'context', when: 'always', order: 100, priority: 0, header: '', legacy: 'full' }
+  const x = { name: 'x', body: 'X', insert: 'context', when: 'always', order: 100, priority: 0, header: '', plan: 'add' }
+  const issues = ['default/x.md: plan: add needs when: plan; sent as a normal text']
+
+  expect({ legacy: { defs: legacy.defs, issues: legacy.issues }, native: { defs: native.defs, issues: native.issues } }, 'resolved').toStrictEqual({
+    legacy: {
+      defs: [m, { name: 'm', body: 'PM', insert: 'context', when: 'plan', order: 100, priority: 0, header: '', legacy: 'planmode' }, x, { name: 'db', body: 'DB ADD', insert: 'context', when: 'plan', order: 100, priority: 0, header: '', plan: 'add' }],
+      issues,
+    },
+    native: { defs: [m, { name: 'm', body: 'NATIVE', insert: 'context', when: 'plan', order: 100, priority: 0, header: 'N {token}', legacy: 'planmode' }, x], issues },
+  })
 })
 
 test('GIVEN every shipped definition WHEN parsed THEN there are no front-matter issues and no empty body', async () => {
@@ -164,4 +213,13 @@ test('GIVEN a meta with a name only and a full base WHEN completed THEN every ot
 test('GIVEN negative, signed and zero integers WHEN parsed THEN a leading minus and zero pass while a plus sign is an issue', async () => {
   expect(parseFrontMatter('order: -5\npriority: 0\nname: x'), 'negative').toEqual({ meta: { order: -5, priority: 0, name: 'x' }, issues: [] })
   expect(parseFrontMatter('order: +5').issues, 'plus').toEqual(["order: '+5' is not an integer"])
+})
+
+test('GIVEN a plan part in the global layer, its normal text in the project and a plan-only name WHEN editor entries are built THEN the normal def names the entry and only the plan-only name is plan only', async () => {
+  const { defs } = resolveDefs([layer('global', 'native', { 'db.plan': '---\nplan: add\n---\nDB ADD', 'po.plan': 'PO' }), layer('project', 'native', { db: '---\ndescription: "Db"\n---\nDB' })])
+
+  expect(toEditorEntries(defs), 'entries').toEqual([
+    { name: 'db', body: 'DB', planOnly: false, description: 'Db' },
+    { name: 'po', body: 'PO', planOnly: true },
+  ])
 })

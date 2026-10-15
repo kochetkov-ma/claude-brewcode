@@ -1,18 +1,21 @@
 import { atom, read, update } from 'claude-code'
 import type { Register } from 'claude-code'
 import { editorMatchers, getEditorEntries, setEditorEntries } from './lib/editor-state'
-import { highlight, sameView, suggest } from './lib/editor'
-import { validatePrefix, type PlaceholderView } from './lib/match'
+import { caretFocus, highlight, isMenuOpen, sameFocus, sameView, suggest, type CaretFocus } from './lib/editor'
+import { escapeMarkers, isEscaped, markerOf, validatePrefix, type PlaceholderView } from './lib/match'
 import { memoCompile, type Compiled } from './lib/compiled'
 import { FILES_GONE, PluginFilesGone, configDirOf, issuesMessage, loadRegistry, newRegistryCache, toEditorEntries, type Registry } from './lib/defs'
 import { modeStatePath, planFromState } from './lib/mode'
-import { bandBudget, bandRows, renderBand } from './lib/band'
-import { NEEDS_NEW_CC, TOOLS, TOOL_PREFIX, handoffAck, handoffText, isStatusRequest, listTool, removeTool, saveTool, statusText, type SaveInput, type ToolOut } from './lib/command'
+import { bandRows, bandState, budgets, renderBand } from './lib/band'
+import { assembleDraft, planParts } from './lib/sent'
+import { NEEDS_NEW_CC, TOOL_PREFIX, handoffAck, handoffText, listTool, oneLayer, removeTool, saveTool, tools, type RemoveInput, type SaveInput, type ToolOut } from './lib/command'
+import { fullText, helpText, parseArgs, queryDrop, queryNames, showCommand, shownDirs, statusText } from './lib/show'
 import { expandInline, isInlineSubmit, unknownMessage, unknownTokens, type SubmitLike } from './lib/inline'
 
 // Atoms are declared in this file only (the scan reads this file); the band reads the same view atom.
 const viewAtom = atom({ plugin: 'brewmod-placeholders', key: 'view' } as const, { tokens: [] })
 const expandedAtom = atom({ plugin: 'brewmod-placeholders', key: 'expanded' } as const, false)
+const focusAtom = atom({ plugin: 'brewmod-placeholders', key: 'focus' } as const, { name: null, isQuery: false, isMenuOpen: false })
 
 const REFRESH_MS = 1000
 
@@ -22,11 +25,12 @@ export const register: Register = (on, options) => {
   const check = validatePrefix(options.prefix)
   const prefix = check.prefix
   const cache = newRegistryCache()
-  let hasTools = false // the three model tools were registered at session.start
+  let hasTools = false // the model tools were registered at session.start
   let isPlan = false // permission_mode of the last state file hooks/inject.mjs wrote for this session
   let compiled: Compiled | null = null
   let published: Registry | null = null
   let shown: PlaceholderView | null = null // last view written to viewAtom
+  let focused: CaretFocus | null = null // last focus written to focusAtom
   let refreshedAt = -REFRESH_MS // clock of the last typeahead registry refresh
   let wasDraft: boolean | null = null // isDraft of the last hint-line draw
   let isGone = false // the plugin's own placeholders/ folder vanished: the cached list stays, the band shows the reload line
@@ -64,11 +68,11 @@ export const register: Register = (on, options) => {
   // Command registration cannot fail the warm-up below, and the warm-up cannot block the session.
   on('session.start', async ($, e, next) => {
     await $.command
-      .register({ name: 'placeholders', description: 'Show your placeholders; say what to add, change or remove', argumentHint: '[what you want]' })
+      .register({ name: 'placeholders', description: 'Show, list or explain your placeholders; or say in any words what to add, change or remove', argumentHint: `[show ${prefix}<names> | list | help | any words]` })
       .catch(() => undefined)
     // Older builds have no $.tool (the call throws): hasTools stays false and the command answers with the status only.
     try {
-      for (const t of TOOLS) await $.tool.register({ name: t.name, description: t.description, inputSchema: t.inputSchema, isDeferred: false })
+      for (const t of tools(prefix)) await $.tool.register({ name: t.name, description: t.description, inputSchema: t.inputSchema, isDeferred: false })
       hasTools = true
     } catch {
       hasTools = false
@@ -107,14 +111,19 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
-  // Zero I/O except the view atom, written only when the token view changes.
+  // Zero I/O except the view and focus atoms, each written only when it changes; caret moves arrive here too (inputText '').
   on('prompt.edit', async ($, e, next) => {
     const r = await next(e)
     const h = highlight(editorMatchers(prefix), r.text)
+    const f = { ...caretFocus(h.view, r.text, r.cursor), isMenuOpen: isMenuOpen(prefix, r.text, r.cursor, getEditorEntries()) }
     try {
       if (shown === null || !sameView(h.view, shown)) {
         await update($, viewAtom, () => h.view)
         shown = h.view
+      }
+      if (focused === null || !sameFocus(f, focused)) {
+        await update($, focusAtom, () => f)
+        focused = f
       }
     } catch {
       // state write failed: keep the highlight, retry on the next edit
@@ -164,15 +173,31 @@ export const register: Register = (on, options) => {
   // Inline defs are expanded in the submitted text; context defs go through hooks/inject.mjs. No mode here: plan/not-plan inline defs stay verbatim.
   // The unknown-token toast fires here (a command hook has no UI): only for text the person typed, after the expansion.
   on('prompt.submit', async ($, e, next) => {
-    // The draft leaves the composer only on the person's own Enter: other origins keep the band.
     const own: SubmitLike = e // isMeta is absent from the 2.1.296 types
-    if (own.origin.kind === 'composer' && own.isMeta === undefined) {
+    const isTyped = own.origin.kind === 'composer' && own.isMeta === undefined
+    // The draft leaves the composer only on the person's own Enter: other origins keep the band.
+    if (isTyped) {
       try {
         await update($, viewAtom, () => ({ tokens: [] }))
         shown = null
       } catch {
         // band stays until the next edit
       }
+    }
+    // `P/` or `P\` anywhere: sent as typed, no expansion and no toast; inject.mjs skips it too.
+    if (isEscaped(prefix, e.text)) return next(e)
+    // Only `P<name>?` items, no attachments, a build with tools (the hand-off's gate; fill proven only there): dropped, the box gets `/placeholders show P<names>`.
+    // Not run in place: $.command.run passes "every hook but the calling one" (claude-code.d.ts); seen live: `prompt.submit skipped: re-entry` (hand-off).
+    const asked = isTyped && hasTools && e.command === undefined && (e.attachments?.length ?? 0) === 0 ? queryNames(editorMatchers(prefix), e.text) : null
+    if (asked !== null) {
+      $.clock.after(0, () => {
+        try {
+          void $.prompt.fill({ text: showCommand(prefix, asked), mode: 'replace' }).catch(() => undefined)
+        } catch {
+          // a fill that throws at once: the drop notice stays, the box stays empty
+        }
+      })
+      return { drop: queryDrop(prefix, asked) }
     }
     if (!isInlineSubmit(e) || !e.text.includes(prefix)) return next(e)
     const reg = await settle(
@@ -193,30 +218,48 @@ export const register: Register = (on, options) => {
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    if (e.props.hasSurvey) return next(e)
-    // An emptied box (Esc Esc, submit) draws no band: the view atom is only written by edits. A surface without a box answers '' too, so only the terminal is asked.
-    if (e.surface === 'terminal' && (await $.prompt.read()).text === '') return next(e)
-    const rows = bandRows(await read($, viewAtom), getEditorEntries())
-    if (rows.length === 0) return next(e)
-    return renderBand($.ui.resolve(e), rows, {
+    // An emptied box (Esc Esc, submit) draws no band: the atoms are only written by edits. A surface without a box answers '' too, so only the terminal is asked.
+    const draft = e.surface === 'terminal' ? (await $.prompt.read()).text : null
+    const view = await read($, viewAtom)
+    const focus = await read($, focusAtom)
+    const mode = bandState({ hasSurvey: e.props.hasSurvey, draft, view, focus: focus.name })
+    if (mode === 'hidden') return next(e)
+    // The exact text per token, from the draft (terminal) or the token texts; before the first registry load the entries' bodies stand.
+    const sent = compiled === null ? undefined : assembleDraft(draft ?? view.tokens.map((t) => t.text).join(' '), compiled, prefix, isPlan).tokens
+    const defs = compiled?.defs
+    const plans = defs === undefined ? undefined : (name: string) => planParts(defs, name, prefix)
+    return renderBand($.ui.resolve(e), bandRows(view, getEditorEntries(), sent, plans), {
+      mode,
+      focus,
+      prefix,
+      // No draft (desktop): the marker the last edit saw.
+      marker: (draft === null ? null : markerOf(compiled?.matchers ?? prefix, draft)) ?? view.escapedBy ?? escapeMarkers(prefix)[0],
       isExpanded: await read($, expandedAtom),
       isPlan,
       isGone,
-      budget: bandBudget(e.props.maxRows, e.viewport?.isFullscreen === true),
+      ...budgets(e.props.maxRows, e.viewport?.isFullscreen === true, focus.isMenuOpen),
+      columns: e.props.bodyColumns,
       onToggle: () => update($, expandedAtom, (open) => !open),
     })
   })
 
   on('command.run', { command: 'placeholders' }, async ($, e) => {
-    const roots = { pluginRoot: $.plugin.root, root: await $.session.root().catch(() => undefined), configDir: configDirOf(await $.env.get('CLAUDE_CONFIG_DIR'), (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE'))) }
+    const home = (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE'))
+    const roots = { pluginRoot: $.plugin.root, root: await $.session.root().catch(() => undefined), configDir: configDirOf(await $.env.get('CLAUDE_CONFIG_DIR'), home) }
     const reg = await settle(loadRegistry({ exists: (p) => $.fs.exists(p), list: (p) => $.fs.list(p), read: (p) => $.fs.read(p) }, roots, cache), (t) => $.ui.toast(t, { timeoutMs: 8000 }), () => $.ui.invalidate('ui.render'))
     if (reg === null) return { text: FILES_GONE }
     adopt(reg)
-    const status = statusText(reg, prefix)
-    if (isStatusRequest(e.args)) return { text: status }
+    // status, help, show and list answer here; the rest goes to Claude.
+    const act = parseArgs(e.args, prefix, reg.defs.map((d) => d.name))
+    const dirs = shownDirs(roots, home)
+    const one = oneLayer(reg, roots)
+    if (act.kind === 'help') return { text: helpText(prefix, dirs) }
+    if (act.kind === 'list' || act.kind === 'show') return { text: fullText(one, act.kind === 'list' ? null : act.names, prefix, isPlan) }
+    const status = statusText(one, prefix, dirs)
+    if (act.kind === 'status') return { text: status }
     if (!hasTools) return { text: `${status}\n${NEEDS_NEW_CC}` }
     // submit is refused inside command.run: hand off from a timer; fill is the fallback when submit refuses.
-    const text = handoffText(e.args.trim(), prefix)
+    const text = handoffText(act.request, prefix, act.scope)
     $.clock.after(250, () => {
       void (async () => {
         try {
@@ -231,7 +274,12 @@ export const register: Register = (on, options) => {
 
   // The model's tools: answered here, so Claude Code asks no permission for the file write.
   on('tool.call', { tool: /^mcp__brewmod-placeholders__/ }, async ($, e) => {
-    const roots = { pluginRoot: $.plugin.root, root: await $.session.root().catch(() => undefined), configDir: configDirOf(await $.env.get('CLAUDE_CONFIG_DIR'), (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE'))) }
+    const home = (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE'))
+    const roots = { pluginRoot: $.plugin.root, root: await $.session.root().catch(() => undefined), configDir: configDirOf(await $.env.get('CLAUDE_CONFIG_DIR'), home) }
+    if (e.tool === `${TOOL_PREFIX}placeholders_help`) {
+      const help = helpText(prefix, shownDirs(roots, home))
+      return { result: help, text: help }
+    }
     const io = {
       exists: (p: string) => $.fs.exists(p),
       list: (p: string) => $.fs.list(p),
@@ -243,16 +291,16 @@ export const register: Register = (on, options) => {
         return { exitCode: r.exitCode, stderr: r.stderr }
       },
     }
-    const input = e as SaveInput
+    const input = e as SaveInput & RemoveInput
     // Gone: nothing is written or removed, the model gets the reload hint.
     const reg = await settle(loadRegistry(io, roots, cache), (t) => $.ui.toast(t, { timeoutMs: 8000 }), () => $.ui.invalidate('ui.render'))
     if (reg === null) return { result: FILES_GONE, text: FILES_GONE, isError: true }
     const out: ToolOut =
       e.tool === `${TOOL_PREFIX}save_placeholder`
-        ? await saveTool(io, roots, input, prefix)
+        ? await saveTool(io, roots, input, prefix, home)
         : e.tool === `${TOOL_PREFIX}remove_placeholder`
-          ? await removeTool(io, roots, input, prefix)
-          : listTool(reg)
+          ? await removeTool(io, roots, input, prefix, home)
+          : await listTool(io, roots, reg, prefix)
     if (out.registry !== null) adopt(out.registry)
     return out.isError === true ? { result: out.text, text: out.text, isError: true } : { result: out.text, text: out.text }
   }).catch((_$, _e, next) => {

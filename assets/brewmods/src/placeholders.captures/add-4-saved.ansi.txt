@@ -1,0 +1,40 @@
+     it
+     Commands ([38;5;153mlist[39m, [38;5;153mshow[39m, [38;5;153mhelp[39m) are only faster; plain words work too · full help:
+     [38;5;153m/placeholders[39m [38;5;153mhelp[39m
+
+[38;5;246m› Prompt from the brewmod-placeholders plugin[39m
+[38;5;246m[48;5;237m❯ [38;5;231mPlaceholder helper. My request: <request>global add ++db: always use the staging [39m
+  [38;5;231mDB</request>[39m
+  [38;5;231mAsk first: no save_placeholder or remove_placeholder call before I answered your one [39m
+  [38;5;231mAskUserQuestion about that exact change in this turn, even if my request is explicit [39m
+  [38;5;231m(only a remove of a name with files: none skips it).[39m
+  [38;5;231mScope: global (I said it; skip only the Where question).[39m
+  [38;5;231mUse the mcp__brewmod-placeholders__* tools (list_placeholders first); a placeholder [39m
+  [38;5;231mis inserted into prompts as ++name (not in this message: ++/).[39m
+
+[38;5;114m[49m⏺[39m [1mbrewmod-placeholders - list_placeholders (MCP)[0m
+[38;5;246m  ⎿  [39m## +++ · layer: plugin · files: none · when: plan · plan: only · Anti-drift cr
+     on plan addon, active in Plan mode only
+     # [ADDON: ANTI-DRIFT CRON PLAN]
+     [2m… +112 lines (ctrl+o to expand)[0m
+
+[38;5;231m⏺[39m No [38;5;153mdb[39m exists yet. Scope is global, no plan mode mentioned.
+
+[38;5;246m⏺ [39mUser answered Claude's questions:
+[38;5;246m  ⎿  · Save ++db as drafted? → Save as drafted (Recommended)[39m
+
+[38;5;114m⏺[39m [1mbrewmod-placeholders - save_placeholder (MCP)[0m(name: "db", text: "always use the
+                                               staging DB", description: "Always use the
+                                               staging DB", scope: "global")
+[38;5;246m  ⎿  [39msaved ++db (global): ~/.claude/placeholders/db.md
+
+[38;5;231m⏺[39m I saved [38;5;153m++db[39m as a global placeholder in [38;5;153m~/.claude/placeholders/db.md[39m, so it works in
+  all your projects. Typing [38;5;153m++db[39m in a prompt adds "always use the staging DB".
+
+[38;5;246m✻[39m [38;5;246mBrewed for 7s · done 11:56 PM[39m
+
+[38;5;244m────────────────────────────────────────────────────────────────────────────────────────
+[39m❯ [2mcommit the README fix[0m
+[38;5;244m────────────────────────────────────────────────────────────────────────────────────────
+[39m  [38;5;246m⏸[39m [38;5;246mmanual[39m [38;5;246mmode[39m [38;5;246mon[39m [38;5;246m·[39m [38;5;246m? for shortcuts · ← for agents[39m                 [38;5;246m◐[39m [38;5;246mmedium[39m [38;5;246m·[39m [38;5;246m/effort[39m
+

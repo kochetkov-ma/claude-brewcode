@@ -1,0 +1,40 @@
+[38;5;246m✻[39m [38;5;246mBrewed for 7s · done 11:56 PM[39m
+[38;5;153m++r[38;5;246m  Two-phase review: review every significant change, then double-check each fin…[39m [38;5;246m[-][39m
+  [1mUser typed `++r` — Two-phase review discipline is active for this turn:[0m
+  [38;5;246m [39m
+  [38;5;246m[REVIEW DISCIPLINE: DOUBLE-CHECK][39m
+  [38;5;246mEvery significant change: multi-agent review (matching reviewer expert, else[39m
+  [38;5;246mgeneral-purpose), simplification pass first.[39m
+  [38;5;246m1) Review - finding = defect with path:line + evidence (failing command/input).[39m
+  [38;5;246m2) Double-check - reproduce each finding.[39m
+  [38;5;246m3) Fix -[39m [38;5;246mconfirmed findings only.[39m
+  [38;5;246mBig review -> split by area, never one long pass. Brief each: goal + area +[39m
+  [38;5;246macceptance, what's covered (don't re-litigate), who consumes the verdict;[39m
+  [38;5;246mreturn verdict first, then findings.[39m
+[38;5;246malso: ++db[39m
+[38;5;246mmove the caret off ++r to close · send as typed: ++/[39m
+
+[38;5;244m────────────────────────────────────────────────────────────────────────────────────────
+[39m❯ [4m[38;5;153m++db[0m [4m[38;5;153m++r[0m
+[38;5;244m────────────────────────────────────────────────────────────────────────────────────────
+[39m  [38;5;246m  ++rr   Anti-regression review: regression, project standard and functional[39m
+           [38;5;246mcorrectness axes[39m
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

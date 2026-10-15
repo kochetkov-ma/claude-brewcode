@@ -1,0 +1,40 @@
+ ▐▛███▛█   Claude Code v2.1.301
+▝▜██████▀  Opus 5.5 · Claude Max
+ ▝▝   ▝▝   ~/brewery
+
+
+❯ review the diff ++r
+
+⏺ Bash(git diff --stat && git diff)
+  ⎿   README.md | 2 +-
+      1 file changed, 1 insertion(+), 1 deletion(-)
+     diff --git a/README.md b/README.md
+     … +8 lines (ctrl+o to expand)
+
+⏺ The diff is clean and there's nothing to fix.
+
+  The only change is one line in README.md:3, which corrects the typo "recipies" to
+  "recipes". Nothing else in the file changed.
+
+  The ++r discipline asks for a multi-agent review on significant changes. A one-word
+  typo fix in a README doesn't qualify, so I didn't spawn reviewers.
+
+  The working tree is otherwise clean, so this is ready to commit whenever you want.
+
+✻ Cooked for 5s · done 11:56 PM
+
+────────────────────────────────────────────────────────────────────────────────────────
+❯ /placeholders global add
+────────────────────────────────────────────────────────────────────────────────────────
+  ⏸ manual mode on
+
+
+
+
+
+
+
+
+
+
+

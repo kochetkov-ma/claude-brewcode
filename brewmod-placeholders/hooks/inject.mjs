@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 const DEFAULT_PREFIX = '++'
 const JOINER = '\n\n---\n\n'
 const MAX_CHARS = 9000
+const CUT_NOTE = '\n...[truncated]'
 const WEEK_MS = 7 * 24 * 3600 * 1000
 // Subagent deliveries arrive as prompts too; only the leading tag marks them.
 const SYNTHETIC_PROMPT = /^\s*<(?:task-notification>|agent-message\s+from=)/
@@ -33,6 +34,14 @@ function matcher(prefix, name, kind) {
   if (kind === 'word') return new RegExp(`(?<![\\w${escClass(prefix)}])${token}(?![\\w])`, 'i')
   const cls = `[\\p{L}\\p{N}\\p{M}_${escClass([...new Set(prefix + name)].join(''))}]`
   return new RegExp(`(?<!${cls})${token}(?!${cls})`, 'u')
+}
+
+// `P/` or `P\` anywhere sends the prompt as typed: nothing injected. A marker glued on its left to a letter, digit, mark, `_` or a prefix char is none.
+export const escapeMarkers = (prefix) => [`${prefix}/`, `${prefix}\\`]
+
+export function isEscaped(prefix, text) {
+  const cls = `[\\p{L}\\p{N}\\p{M}_${escClass([...new Set(prefix)].join(''))}]`
+  return text.includes(prefix) && new RegExp(`(?<!${cls})(?:${escapeMarkers(prefix).map(escRe).join('|')})`, 'u').test(text)
 }
 
 // ---- Definitions (ported from hooks/lib/defs.ts)
@@ -105,6 +114,9 @@ export function parseFrontMatter(fm) {
       case 'when':
         if (value === 'always' || value === 'plan' || value === 'not-plan') meta.when = value
         break
+      case 'plan':
+        if (value === 'add' || value === 'replace') meta.plan = value
+        break
       case 'order':
       case 'priority':
         if (INT.test(value)) meta[key] = Number(value)
@@ -126,6 +138,7 @@ export function parseDefinition(raw) {
 export const parseLegacy = (raw) => ({ meta: {}, text: extractFenced(raw) })
 
 // Per-field inheritance: parsed meta, then base, then built-ins. No name anywhere -> null.
+// `plan` is per file, never inherited: an old full-text override (or a legacy file) of an `add` part replaces.
 export function toDef(parsed, base) {
   const m = parsed.meta
   const name = m.name ?? base?.name
@@ -140,6 +153,7 @@ export function toDef(parsed, base) {
     header: m.header ?? base?.header ?? '',
     group: m.group ?? base?.group,
     legacy: m.legacy ?? base?.legacy,
+    plan: m.plan,
   }
 }
 
@@ -248,25 +262,42 @@ export function loadDefs(roots) {
   return resolveDefs(layers)
 }
 
-// ---- Assembly (spec: tests/parity/golden.generated.ts, byte-identical to brewtools v6.7.0)
-
-export const capText = (s, max = MAX_CHARS) => (s.length > max ? s.slice(0, max) + '\n...[truncated]' : s)
+// ---- Assembly (spec: tests/parity/golden.generated.ts, byte-identical to brewtools v6.7.0 but the surrogate-safe cap cut)
 
 const applies = (d, plan) => d.when === 'always' || (d.when === 'plan') === plan
 // Same name, both applicable: `plan` beats `always`/`not-plan`; equal rank -> first wins.
 const rank = (d) => (d.when === 'plan' ? 2 : 1)
 
-// '' = nothing to inject. Mode is exact: only the string `plan` is plan mode.
-export function assemble(defs, prefix, prompt, mode) {
-  const plan = mode === 'plan'
-  const winners = new Map()
+function modeWinners(defs, plan) {
+  const out = new Map()
   for (const d of defs) {
     if (d.insert !== 'context' || !applies(d, plan)) continue
     const key = d.name.toLowerCase()
-    const cur = winners.get(key)
-    if (cur === undefined || rank(d) > rank(cur)) winners.set(key, d)
+    const cur = out.get(key)
+    if (cur === undefined || rank(d) > rank(cur)) out.set(key, d)
   }
-  const hit = [...winners.values()].filter((d) => matcher(prefix, d.name.toLowerCase(), nameKind(d.name.toLowerCase())).test(prompt))
+  return out
+}
+
+// `plan: add` part on its `always` def: plan header if any, normal body, '\n\n', addition. Empty normal body = silenced in both modes.
+const withPart = (base, part) =>
+  base.body === '' ? base : { ...base, header: part.header === '' ? base.header : part.header, body: part.body === '' ? base.body : `${base.body}\n\n${part.body}` }
+
+// What each name sends in this mode: in plan mode an `add` winner is joined to the normal def, else the mode winner as is.
+function winners(defs, plan) {
+  const out = modeWinners(defs, plan)
+  if (!plan) return out
+  const normal = modeWinners(defs, false)
+  for (const [key, d] of out) {
+    const base = normal.get(key)
+    if (d.when === 'plan' && d.plan === 'add' && base?.when === 'always') out.set(key, withPart(base, d))
+  }
+  return out
+}
+
+// '' = nothing to inject. Mode is exact: only the string `plan` is plan mode.
+export function assemble(defs, prefix, prompt, mode) {
+  const hit = [...winners(defs, mode === 'plan').values()].filter((d) => matcher(prefix, d.name.toLowerCase(), nameKind(d.name.toLowerCase())).test(prompt))
   const best = new Map()
   for (const d of hit) {
     if (d.group === undefined) continue
@@ -280,7 +311,14 @@ export function assemble(defs, prefix, prompt, mode) {
     const head = d.header.split('{token}').join(prefix + d.name.toLowerCase())
     blocks.push(head === '' ? d.body : `${head}\n\n${d.body}`)
   }
-  return blocks.length === 0 ? '' : capText(blocks.join(JOINER))
+  const text = blocks.join(JOINER)
+  return text.length > MAX_CHARS ? cutAt(text, MAX_CHARS) + CUT_NOTE : text
+}
+
+// First `at` chars, one fewer when the last would be a lone high surrogate (sent.ts cuts the same way).
+function cutAt(text, at) {
+  const c = text.charCodeAt(at - 1)
+  return text.slice(0, c >= 0xd800 && c <= 0xdbff ? at - 1 : at)
 }
 
 // ---- State: <plugin root>/.state/mode-<session_id>.json = {mode, ts}, read by register.ts. Same convention as brewmod-plan-effort.
@@ -333,7 +371,7 @@ function run(e, env) {
   }
   if (!ups || typeof e.prompt !== 'string') return {}
   const prefix = validPrefix(env.CLAUDE_PLUGIN_OPTION_PREFIX)
-  if (SYNTHETIC_PROMPT.test(e.prompt) || !e.prompt.includes(prefix)) return {}
+  if (SYNTHETIC_PROMPT.test(e.prompt) || !e.prompt.includes(prefix) || isEscaped(prefix, e.prompt)) return {}
   const projectDir = env.CLAUDE_PROJECT_DIR || e.cwd
   const text = assemble(
     loadDefs({

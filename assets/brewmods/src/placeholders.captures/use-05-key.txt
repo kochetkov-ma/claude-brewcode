@@ -1,0 +1,40 @@
+
+⏺ No db exists yet. Scope is global, no plan mode mentioned.
+
+⏺ User answered Claude's questions:
+  ⎿  · Save ++db as drafted? → Save as drafted (Recommended)
+
+⏺ brewmod-placeholders - save_placeholder (MCP)(name: "db", text: "always use the
+                                               staging DB", description: "Always use the
+                                               staging DB", scope: "global")
+  ⎿  saved ++db (global): ~/.claude/placeholders/db.md
+
+⏺ I saved ++db as a global placeholder in ~/.claude/placeholders/db.md, so it works in
+  all your projects. Typing ++db in a prompt adds "always use the staging DB".
+
+✻ Brewed for 7s · done 11:56 PM
+placeholders 1                                                                      [-]
+++db  Always use the staging DB
+  always use the staging DB
+more: put the caret on ++db · send as typed: ++/ · /placeholders help
+
+────────────────────────────────────────────────────────────────────────────────────────
+❯ ++db +
+────────────────────────────────────────────────────────────────────────────────────────
+  ⏸ manual mode on
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

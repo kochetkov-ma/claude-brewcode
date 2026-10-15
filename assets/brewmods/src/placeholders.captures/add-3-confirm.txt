@@ -1,0 +1,40 @@
+     Add, change, remove: /placeholders <your words> in any language, e.g. /placeholders
+     add ++db: use the staging DB
+     Where: global = all projects (~/.claude/placeholders), project = this one
+     (.claude/placeholders, wins over global); start with global or project, or just say
+     it
+     Commands (list, show, help) are only faster; plain words work too · full help:
+     /placeholders help
+
+› Prompt from the brewmod-placeholders plugin
+❯ Placeholder helper. My request: <request>global add ++db: always use the staging
+  DB</request>
+  Ask first: no save_placeholder or remove_placeholder call before I answered your one
+  AskUserQuestion about that exact change in this turn, even if my request is explicit
+  (only a remove of a name with files: none skips it).
+  Scope: global (I said it; skip only the Where question).
+  Use the mcp__brewmod-placeholders__* tools (list_placeholders first); a placeholder
+  is inserted into prompts as ++name (not in this message: ++/).
+
+⏺ brewmod-placeholders - list_placeholders (MCP)
+  ⎿  ## +++ · layer: plugin · files: none · when: plan · plan: only · Anti-drift cr
+     on plan addon, active in Plan mode only
+     # [ADDON: ANTI-DRIFT CRON PLAN]
+     … +112 lines (ctrl+o to expand)
+
+⏺ No db exists yet. Scope is global, no plan mode mentioned.
+
+⏺ User answered Claude's questions:
+  ⎿  · Save ++db as drafted? → Save as drafted (Recommended)
+
+✢ Proofing… (5s · ↓ 213 tokens)
+
+────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────
+  ⏸ manual mode on · esc to interrupt · ← for agents                ◐ medium · /effort
+
+
+
+
+

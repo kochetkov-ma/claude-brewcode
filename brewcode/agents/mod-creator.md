@@ -6,10 +6,10 @@ maxTurns: 80
 color: orange
 tools: Read, Write, Edit, Glob, Grep, Bash, Skill, WebFetch, WebSearch
 doc_type: llm
-version: "6.9.1"
+version: "6.9.2"
 content_version: "6.9.1"
 generated_by: "brewcode"
-last_updated: "2026-10-15"
+last_updated: "2026-10-16"
 ---
 
 [DICT: CC=Claude Code, PLG=plugin, TF=live types file]

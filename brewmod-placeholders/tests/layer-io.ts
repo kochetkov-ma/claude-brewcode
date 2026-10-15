@@ -1,12 +1,15 @@
 import type { On } from 'claude-code'
 import { PLACEHOLDER_FILES, type GoldenVector } from './parity/golden.generated'
-import type { Io, IoEntry } from '../hooks/lib/defs'
+import { loadRegistry, newRegistryCache, type Io, type IoEntry, type Roots } from '../hooks/lib/defs'
+import type { CmdIo } from '../hooks/lib/command'
 
 export const PLUG = '/PLUG'
 export const ROOT = '/proj'
 export const CFG = '/cfg'
 export const SESSION = 'sess-1'
 export const STATE_FILE = `${PLUG}/.state/mode-${SESSION}.json`
+export const ROOTS: Roots = { pluginRoot: PLUG, root: ROOT, configDir: CFG }
+export const TOOL = 'mcp__brewmod-placeholders__'
 
 export type MemFile = { raw: string; mtimeMs?: number; kind?: 'file' | 'dir'; isLink?: boolean }
 export type Tree = Record<string, string | MemFile>
@@ -94,4 +97,150 @@ export function wire(on: On, w: Wiring): Wired {
   })
   on('session.id', () => ({ value: SESSION }) as never)
   return { calls, toasts }
+}
+
+// ---- command rigs: CmdIo for the tool functions, session bottoms for /placeholders and the tools
+
+export type Rig = { io: CmdIo; tree: Tree; writes: [string, string][]; removed: string[] }
+export type RigOpts = { real?: Record<string, string>; links?: string[]; rmExit?: number; rmErr?: string }
+
+// In-memory CmdIo over a mutable tree: write adds a file, remove deletes it, stat answers file/dir/missing with optional realPath overrides.
+export function cmdRig(tree: Tree, opts: RigOpts = {}): Rig {
+  const fs = memFs(tree)
+  const writes: [string, string][] = []
+  const removed: string[] = []
+  const io: CmdIo = {
+    exists: async (p) => fs.exists(p),
+    list: async (p) => fs.list(p),
+    read: async (p) => fs.read(p),
+    write: async (p, t) => {
+      writes.push([p, t])
+      tree[p] = t
+    },
+    stat: async (p) => {
+      const real = opts.real?.[p] ?? p
+      const isFile = p in tree
+      const isDir = Object.keys(tree).some((k) => k.startsWith(`${p}/`))
+      return isFile ? { kind: 'file', isLink: opts.links?.includes(p) === true, realPath: real } : isDir ? { kind: 'dir', isLink: false, realPath: real } : undefined
+    },
+    remove: async (p) => {
+      removed.push(p)
+      const exitCode = opts.rmExit ?? 0
+      delete tree[exitCode === 0 ? p : '']
+      return { exitCode, stderr: opts.rmErr ?? '' }
+    },
+  }
+  return { io, tree, writes, removed }
+}
+
+export const regOf = (r: Rig) => loadRegistry(r.io, ROOTS, newRegistryCache())
+
+export type Ops = {
+  cmds: unknown[]
+  tools: { name: string; description: string; inputSchema: any }[]
+  writes: [string, string][]
+  ran: string[][]
+  submits: { text: string; origin: unknown }[]
+  fills: unknown[]
+  runs: unknown[]
+}
+export type WireOpts = { denyTools?: boolean; denySubmit?: boolean; fail?: 'exists' | 'env'; env?: Record<string, string> }
+
+// wire() plus bottoms for the command, the tools, file writes, rm and prompt submit/fill; the tree is mutable.
+export function wireAll(on: On, tree: Tree, opts: WireOpts = {}): Ops {
+  const fs = memFs(tree)
+  const ops: Ops = { cmds: [], tools: [], writes: [], ran: [], submits: [], fills: [], runs: [] }
+  wire(on, { tree, ...(opts.fail === undefined ? {} : { fail: opts.fail }), ...(opts.env === undefined ? {} : { env: opts.env }) })
+  on('session.start', () => ({ cwd: ROOT }))
+  on('command.register', (_$, e) => (ops.cmds.push(e), { value: { command: e.name } }) as never)
+  on('tool.register', (_$, e) => {
+    ops.tools.push(e as never)
+    return (opts.denyTools === true ? { deny: 'no tools' } : { value: { tool: `${TOOL}${e.name}` } }) as never
+  })
+  on('fs.write', (_$, e) => {
+    ops.writes.push([e.path, e.text])
+    tree[e.path] = e.text
+    return { value: undefined } as never
+  })
+  on('fs.stat', (_$, e) => {
+    const isFile = e.path in tree
+    const value = isFile || fs.exists(e.path) ? { kind: isFile ? 'file' : 'dir', size: 0, mtimeMs: 0, isLink: false, realPath: e.path } : undefined
+    return (value === undefined ? { deny: 'ENOENT' } : { value }) as never
+  })
+  on('process.run', (_$, e) => {
+    ops.ran.push([...e.argv])
+    delete tree[e.argv[2] ?? '']
+    return { value: { exitCode: 0, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } } as never
+  })
+  // No bottom answers prompt.submit: the engine's refusal inside the hand-off.
+  const submitBottoms = opts.denySubmit === true ? [] : [(e: { text: string; origin: unknown }) => (ops.submits.push({ text: e.text, origin: e.origin }), { text: e.text })]
+  submitBottoms.forEach((bottom) => on('prompt.submit', (_$, e) => bottom(e)))
+  on('prompt.fill', (_$, e) => {
+    ops.fills.push(e)
+    return { isFilled: true } as never
+  })
+  on('command.run', (_$, e) => (ops.runs.push(e), { text: 'ENGINE' }) as never)
+  return ops
+}
+
+export const boot = ($: any) => $.session.start({ cwd: ROOT, surface: null, isInteractive: false })
+export const run = ($: any, args: string) => $.command.run({ command: 'placeholders', args, origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 80 } } as never)
+
+// ---- editor: one edit, the engine's edit bottom, the view atom writes
+
+// Replaces an empty draft in one edit: the caret lands at its end.
+export const typed = ($: { prompt: unknown }, text: string) =>
+  ($.prompt as any).edit({ origin: { kind: 'composer' }, text: '', cursor: 0, start: 0, end: 0, inputText: text })
+export const core = (on: On) =>
+  on('prompt.edit', (_$, e) => ({ text: e.text.slice(0, e.start) + e.inputText + e.text.slice(e.end), cursor: e.start + e.inputText.length }))
+// Passthrough spy on the view atom: the kit answers state beneath it, so the module's real writes are visible.
+export const spyWrites = (on: On): unknown[] => {
+  const writes: unknown[] = []
+  on('state.set', { key: 'view' }, (_$, e, next) => {
+    writes.push(e.value)
+    return next(e)
+  })
+  return writes
+}
+
+// ---- band: a terminal session whose box mirrors every edit, the band mounted and read as Text rows
+
+export const BAND = { plugin: 'brewmod-placeholders', component: 'AbovePrompt' } as const
+export const bandProps = (maxRows = 24, bodyColumns = 100) => ({ hasSurvey: false, isWorking: false, maxRows, bodyColumns, scroll: { bodyRows: maxRows - 1, offset: 0, total: 0 }, view: {} })
+// The box the stubbed engine answers $.prompt.read with.
+export const box = { text: '', cursor: 0 }
+
+// extra hooks sit above the box bottoms; ui.render falls through to an ENGINE row.
+export async function bootBand($: any, on: On, w: Wiring, extra: (o: On) => void = () => {}): Promise<Wired> {
+  const wired = wire(on, w)
+  extra(on)
+  on('prompt.read', () => ({ value: box }) as never)
+  on('session.start', (_$, e) => ({ cwd: e.cwd }) as never)
+  on('prompt.edit', (_$, e) => {
+    box.text = e.text.slice(0, e.start) + e.inputText + e.text.slice(e.end)
+    box.cursor = e.start + e.inputText.length
+    return { text: box.text, cursor: box.cursor }
+  })
+  on('ui.render', ($$, e) => $$.ui.resolve(e).Text({ children: 'ENGINE' }))
+  box.text = ''
+  box.cursor = 0
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+  return wired
+}
+
+export const mountBand = ($: any, maxRows = 24, surface: 'terminal' | 'desktop' = 'terminal', bodyColumns = 100) => $.ui.mount({ ...BAND, surface, props: bandProps(maxRows, bodyColumns) })
+export const textsOf = async (ui: any): Promise<string[]> => (await ui.findAll({ type: 'Text' })).map((t: { text: string }) => t.text)
+export async function bandTexts($: any, maxRows = 24, surface: 'terminal' | 'desktop' = 'terminal', bodyColumns = 100): Promise<string[]> {
+  const ui = await mountBand($, maxRows, surface, bodyColumns)
+  const texts = await textsOf(ui)
+  await ui.unmount()
+  return texts
+}
+// Band texts after the toggle Button opens it.
+export async function openedTexts($: any, maxRows: number): Promise<string[]> {
+  const ui = await mountBand($, maxRows)
+  await ui.press({ key: 'toggle' })
+  const texts = await textsOf(ui)
+  await ui.unmount()
+  return texts
 }
