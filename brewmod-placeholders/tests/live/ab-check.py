@@ -1,63 +1,54 @@
 #!/usr/bin/env python3
-# Live A/B helper for ab.sh: run plan, transcript extraction, verdict table. Run as `python3 -I ab-check.py <cmd> ...`.
-import glob, hashlib, json, os, re, shutil, sys
+# Live gate helper for ab.sh: run plan, transcript extraction, verdict table. Run as `python3 -I ab-check.py <cmd> ...`.
+import glob, hashlib, json, os, re, sys
 
-HEADERS = {
-    '++r': 'User typed `++r` — Two-phase review discipline is active for this turn:',
-}
-LEGACY_FENCED = 'OVERRIDE-LEGACY-R: brewtools legacy review-double override\nsecond legacy line'
-LEGACY_FILE = 'prose outside the fence is ignored\n```\n' + LEGACY_FENCED + '\n```\ntrailing prose is ignored\n'
+HERE = os.path.dirname(os.path.abspath(__file__))
+GOLDEN = os.path.join(HERE, '..', 'parity', 'golden.generated.ts')
+JOINER = '\n\n---\n\n'
+
+
+def golden(vid):
+    # frozen spec: expected additionalContext of the vector `vid` in tests/parity/golden.generated.ts
+    s = open(GOLDEN, encoding='utf-8').read()
+    j = s.index('= [', s.index('export const VECTORS')) + 2
+    for v in json.loads(s[j:s.rindex(']') + 1]):
+        if v['id'] == vid:
+            return v['expected']
+    raise KeyError(vid)
+
+
 NATIVE_BODY = 'OVERRIDE-NATIVE-R: mod project-layer r.md override\nsecond native line'
 NATIVE_FILE = NATIVE_BODY + '\n'
-R_HEADER = HEADERS['++r']
+R_HEADER = 'User typed `++r` — Two-phase review discipline is active for this turn:'
 EXP_R_NATIVE = R_HEADER + '\n\n' + NATIVE_BODY
-EXP_R_LEGACY = R_HEADER + '\n\n' + LEGACY_FENCED
 
-# name, cwd key, permission mode, mod (mod|nomod|fault), brewtools (on|off), prompt; fault = the mod snapshot patched to throw after next()
+# name, cwd key, permission mode, mod (always mod), brewtools (always off: the mod runs alone), prompt
 RUNS = [
-    ('c1-r-A', 'tmp', 'default', 'mod', 'on', '++r say ok'),
-    ('c1-r-B', 'tmp', 'default', 'nomod', 'on', '++r say ok'),
-    ('c1-am-A', 'tmp', 'default', 'mod', 'on', '++a ++m say ok'),
-    ('c1-am-B', 'tmp', 'default', 'nomod', 'on', '++a ++m say ok'),
-    ('c1-rr-A', 'tmp', 'default', 'mod', 'on', '++rr say ok'),
-    ('c1-rr-B', 'tmp', 'default', 'nomod', 'on', '++rr say ok'),
-    ('c2-m-A', 'tmp', 'plan', 'mod', 'on', '++m say ok'),
-    ('c2-m-B', 'tmp', 'plan', 'nomod', 'on', '++m say ok'),
-    ('c2-cron-A', 'tmp', 'plan', 'mod', 'on', '+++ say ok'),
-    ('c2-cron-B', 'tmp', 'plan', 'nomod', 'on', '+++ say ok'),
-    ('c2-cron-default-A', 'tmp', 'default', 'mod', 'on', '+++ say ok'),
-    ('c2-cron-default-B', 'tmp', 'default', 'nomod', 'on', '+++ say ok'),
-    ('c3a-deep-A', 'repo-deep', 'default', 'mod', 'on', '++r say ok'),
-    ('c3a-deep-B', 'repo-deep', 'default', 'nomod', 'on', '++r say ok'),
-    ('c3b-root-A', 'repo-root', 'default', 'mod', 'on', '++r say ok'),
-    ('c3b-root-B', 'repo-root', 'default', 'nomod', 'on', '++r say ok'),
-    ('c3c-local-A', 'repo2-deep', 'default', 'mod', 'on', '++r say ok'),
-    ('c3c-local-B', 'repo2-deep', 'default', 'nomod', 'on', '++r say ok'),
-    ('c4-r-A', 'tmp', 'default', 'mod', 'off', '++r say ok'),
-    ('c4-am-A', 'tmp', 'default', 'mod', 'off', '++a ++m say ok'),
-    ('c4-ctl', 'tmp', 'default', 'nomod', 'off', '++r say ok'),
-    ('c5-fault', 'repo-root', 'default', 'fault', 'on', '++r say ok'),
+    ('c1-r', 'tmp', 'default', 'mod', 'off', '++r say ok'),
+    ('c1-am', 'tmp', 'default', 'mod', 'off', '++a ++m say ok'),
+    ('c1-rr', 'tmp', 'default', 'mod', 'off', '++rr say ok'),
+    ('c2-m', 'tmp', 'plan', 'mod', 'off', '++m say ok'),
+    ('c2-cron', 'tmp', 'plan', 'mod', 'off', '+++ say ok'),
+    ('c2-cron-default', 'tmp', 'default', 'mod', 'off', '+++ say ok'),
+    ('c3a-deep', 'repo-deep', 'default', 'mod', 'off', '++r say ok'),
+    ('c3b-root', 'repo-root', 'default', 'mod', 'off', '++r say ok'),
+    ('c3c-local', 'repo2-deep', 'default', 'mod', 'off', '++r say ok'),
 ]
 BY = {r[0]: r for r in RUNS}
 
-# unit id, label, A run, B run (or None), expected tokens (A and B), compare kind
+# unit id, label, run, expected tokens, expected entries (golden vector ids joined) or 'native' / 'subdir'
 UNITS = [
-    ('1.r', 'default ++r', 'c1-r-A', 'c1-r-B', ['++r'], 'same'),
-    ('1.am', 'default ++a ++m', 'c1-am-A', 'c1-am-B', ['++m', '++a'], 'same'),
-    ('1.rr', 'default ++rr', 'c1-rr-A', 'c1-rr-B', ['++rr'], 'same'),
-    ('2.m', 'plan ++m (m.plan)', 'c2-m-A', 'c2-m-B', ['++m'], 'same'),
-    ('2.cron', 'plan +++ (cron)', 'c2-cron-A', 'c2-cron-B', ['+++'], 'same'),
-    ('2.cron-def', 'default +++ (none)', 'c2-cron-default-A', 'c2-cron-default-B', [], 'same'),
-    ('3a', 'subdir launch, overrides at git root', 'c3a-deep-A', 'c3a-deep-B', ['++r'], 'subdir'),
-    ('3b', 'root launch, overrides at root', 'c3b-root-A', 'c3b-root-B', ['++r'], 'layers'),
-    ('3c', 'subdir launch, overrides in launch dir', 'c3c-local-A', 'c3c-local-B', ['++r'], 'layers'),
-    ('4.r', 'brewtools off ++r', 'c4-r-A', 'c1-r-B', ['++r'], 'off'),
-    ('4.am', 'brewtools off ++a ++m', 'c4-am-A', 'c1-am-B', ['++m', '++a'], 'off'),
-    ('4.ctl', 'brewtools off, no mod ++r', 'c4-ctl', None, [], 'ctl'),
-    ('5.fault', 'mod throws after next(): brewtools block once', 'c5-fault', None, ['++r'], 'fault'),
+    ('1.r', 'default ++r', 'c1-r', ['++r'], ['spec-4']),
+    ('1.am', 'default ++a ++m', 'c1-am', ['++m', '++a'], ['spec-1', 'spec-3']),
+    ('1.rr', 'default ++rr', 'c1-rr', ['++rr'], ['spec-5']),
+    ('2.m', 'plan ++m (m.plan)', 'c2-m', ['++m'], ['spec-2']),
+    ('2.cron', 'plan +++ (cron)', 'c2-cron', ['+++'], ['spec-6']),
+    ('2.cron-def', 'default +++ (none)', 'c2-cron-default', [], []),
+    ('3a', 'subdir launch, overrides at git root', 'c3a-deep', ['++r'], 'subdir'),
+    ('3b', 'root launch, overrides at root', 'c3b-root', ['++r'], 'native'),
+    ('3c', 'subdir launch, overrides in launch dir', 'c3c-local', ['++r'], 'native'),
 ]
 
-JOINER = '\n\n---\n\n'
 SPLIT = re.compile(r'\n\n---\n\n(?=User typed `)')
 HEAD = re.compile(r'^User typed `([^`]+)` ')
 
@@ -71,25 +62,11 @@ def cmd_plan(_):
         print('\t'.join(r))
 
 
-def cmd_mkfault(a):
-    # a: <mod snapshot> <fault copy>; the throw sits right after `await next(e)` in classic.UserPromptSubmit, where a local try/catch would not reach it.
-    src, dst = a[0], a[1]
-    shutil.copytree(src, dst)
-    p = os.path.join(dst, 'hooks', 'register.ts')
-    s = open(p, encoding='utf-8').read()
-    pat = re.compile(r'(\n( +)const r = await next\(e\)\n)(?= +return built === null)')
-    if len(pat.findall(s)) != 1:
-        print('ab-check: PRECONDITION register.ts has no unique `const r = await next(e)` followed by `return built === null`')
-        sys.exit(2)
-    s = pat.sub(lambda m: m.group(1) + m.group(2) + "if (r !== undefined) throw new Error('boom-after-next')\n", s)
-    open(p, 'w', encoding='utf-8').write(s)
-
-
 def cmd_mkrepo(a):
     d, where = a[0], a[1]
     base = d if where == 'root' else os.path.join(d, 'sub', 'deep')
     os.makedirs(os.path.join(d, 'sub', 'deep'), exist_ok=True)
-    for rel, text in (('.claude/placeholders/r.md', NATIVE_FILE), ('.claude/brewtools/manager/prompts/review-double.md', LEGACY_FILE)):
+    for rel, text in (('.claude/placeholders/r.md', NATIVE_FILE),):
         p = os.path.join(base, rel)
         os.makedirs(os.path.dirname(p), exist_ok=True)
         with open(p, 'w', encoding='utf-8') as f:
@@ -154,9 +131,8 @@ def load(out, name):
     return json.load(open(p, encoding='utf-8')) if os.path.exists(p) else None
 
 
-def run_checks(x, spec):
+def run_checks(x):
     # per-run preconditions; returns list of failure strings
-    _, _, _, mod, bt, _ = spec
     f = []
     if x is None:
         return ['no extraction']
@@ -164,10 +140,10 @@ def run_checks(x, spec):
         f.append(f"transcripts={x['transcripts']}")
     if x['did_not_load'] != 0:
         f.append('hooks module did not load')
-    if (x['mod_loaded'] >= 1) != (mod in ('mod', 'fault')):
-        f.append(f"mod_loaded={x['mod_loaded']} (expected {'>=1' if mod in ('mod', 'fault') else 0})")
-    if (x['bt_hook'] >= 1) != (bt == 'on'):
-        f.append(f"brewtools hook runs={x['bt_hook']} (expected {'>=1' if bt == 'on' else 0})")
+    if x['mod_loaded'] < 1:
+        f.append(f"mod_loaded={x['mod_loaded']} (expected >=1)")
+    if x['bt_hook'] != 0:
+        f.append(f"a brewtools manager-prompt hook ran {x['bt_hook']}x (expected 0: the mod runs alone)")
     sub = (x['result'] or {}).get('subtype')
     if x['rc'] != '0' and sub != 'error_max_turns':
         f.append(f"claude rc={x['rc']} result={sub}")
@@ -196,58 +172,42 @@ def cmd_verdict(a):
     devs = []
     lines = []
     only = os.environ.get('AB_ONLY')
-    for uid, label, an, bn, toks, kind in [u for u in UNITS if not only or only in (u[2], u[3])]:
-        xa, xb = load(out, an), (load(out, bn) if bn else None)
-        fails = []
+    for uid, label, name, toks, spec in [u for u in UNITS if not only or only == u[2]]:
+        x = load(out, name)
+        fails = ['run: ' + s for s in run_checks(x)]
         deviation = None
-        fails += ['A: ' + s for s in run_checks(xa, BY[an])]
-        if bn and bn in BY:
-            fails += ['B: ' + s for s in run_checks(xb, BY[bn])]
-        if xa is not None:
-            fails += ['A: ' + s for s in exact_once(xa, toks)]
-        if xb is not None and bn:
-            fails += ['B: ' + s for s in exact_once(xb, toks)]
-        if xa is not None and xb is not None:
-            if kind in ('same', 'off'):
-                if xa['entries'] != xb['entries'] or xa['sha'] != xb['sha']:
-                    fails.append(f"A != B bytes (A {xa['sha'][:12]}/{xa['bytes']}B, B {xb['sha'][:12]}/{xb['bytes']}B)")
-            if kind == 'subdir':
-                ctl = load(out, 'c1-r-B')
-                spec_ok = xa['entries'] == [EXP_R_NATIVE] and xb['entries'] == [EXP_R_LEGACY]
-                dflt_ok = ctl is not None and xa['entries'] == ctl['entries'] and xb['entries'] == ctl['entries']
-                if not spec_ok:
-                    if dflt_ok and not fails:
-                        deviation = 'SPEC PREMISE NOT REPRODUCED: from sub/deep neither A nor B reads overrides at the git root; both use the launch dir as project root and fall back to the DEFAULT text (A == B)'
-                    else:
-                        fails.append('A/B text is neither the spec layers nor the default text: ' + json.dumps([xa['entries'], xb['entries']])[:300])
-            if kind == 'layers':
-                if xa['entries'] != [EXP_R_NATIVE]:
-                    fails.append('A text != expected native project layer text: ' + json.dumps(xa['entries'])[:200])
-                if xb['entries'] != [EXP_R_LEGACY]:
-                    fails.append('B text != expected brewtools legacy override text: ' + json.dumps(xb['entries'])[:200])
-        if kind == 'fault' and xa is not None:
-            if xa['entries'] != [EXP_R_LEGACY]:
-                fails.append('fault text != brewtools legacy override text: ' + json.dumps(xa['entries'])[:200])
-            if xa['hook_failed'] < 1:
-                fails.append('debug log has no `hook failed: brewmod-placeholders` line (the fault did not fire)')
-            if xa['bt_hook'] != 1:
-                fails.append(f"brewtools hook runs={xa['bt_hook']} (expected exactly 1, not replayed)")
-        if kind == 'ctl' and xa is not None and xa['rows'] != 0:
-            fails.append(f"rows={xa['rows']} with brewtools off and no mod")
+        want = None
+        if x is not None:
+            fails += exact_once(x, toks)
+            if spec == 'native':
+                want = [EXP_R_NATIVE]
+            elif spec == 'subdir':
+                dflt = [golden('spec-4')]
+                if x['entries'] == [EXP_R_NATIVE]:
+                    want = [EXP_R_NATIVE]
+                elif x['entries'] == dflt and not fails:
+                    want = dflt
+                    deviation = 'SPEC PREMISE NOT REPRODUCED: from sub/deep the mod does not read overrides at the git root; it uses the launch dir as project root and falls back to the DEFAULT text'
+                else:
+                    want = dflt
+            else:
+                want = [golden(v) for v in spec]
+                want = [JOINER.join(want)] if want else []
+            if x['entries'] != want:
+                fails.append(f"entries != frozen golden/expected (got {sha(chr(0).join(x['entries']))[:12]}/{x['bytes']}B, want {sha(chr(0).join(want))[:12]})")
         ok = not fails
         allok = allok and ok
         if deviation and ok:
             devs.append((uid, deviation))
         fmt = lambda x: '-' if x is None else ','.join(f'{t}x{c}' for t, c in x['count'].items()) or 'none'
-        shaa = '-' if xa is None else f"{xa['sha'][:10]}/{xa['bytes']}B"
-        shab = '-' if xb is None else f"{xb['sha'][:10]}/{xb['bytes']}B"
-        lines.append((uid, label, fmt(xa), fmt(xb), shaa, shab, ('DEVIATION' if deviation else 'PASS') if ok else 'FAIL', fails))
-    print('| Case | Scenario | A inj | B inj | A sha/len | B sha/len | Verdict |')
-    print('|---|---|---|---|---|---|---|')
+        shaa = '-' if x is None else f"{x['sha'][:10]}/{x['bytes']}B"
+        lines.append((uid, label, fmt(x), shaa, ('DEVIATION' if deviation else 'PASS') if ok else 'FAIL', fails))
+    print('| Case | Scenario | Mod inj | sha/len | Verdict |')
+    print('|---|---|---|---|---|')
     for l in lines:
-        print('| ' + ' | '.join(l[:7]) + ' |')
+        print('| ' + ' | '.join(l[:5]) + ' |')
     for l in lines:
-        for fl in l[7]:
+        for fl in l[5]:
             print(f'FAIL-DETAIL {l[0]}: {fl}')
     for uid, d in devs:
         print(f'DEVIATION {uid}: {d}')
@@ -256,4 +216,4 @@ def cmd_verdict(a):
 
 
 if __name__ == '__main__':
-    {'plan': cmd_plan, 'mkfault': cmd_mkfault, 'mkrepo': cmd_mkrepo, 'extract': cmd_extract, 'verdict': cmd_verdict}[sys.argv[1]](sys.argv[2:])
+    {'plan': cmd_plan, 'mkrepo': cmd_mkrepo, 'extract': cmd_extract, 'verdict': cmd_verdict}[sys.argv[1]](sys.argv[2:])

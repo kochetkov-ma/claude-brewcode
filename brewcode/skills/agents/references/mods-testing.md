@@ -82,7 +82,7 @@ Own-handler cost only (scan, decorate, merge, view diff). Parallel agents stall 
 | Step | Command | src |
 |------|---------|-----|
 | validate | loop `claude plugin validate --strict` over `.` and every `./brewmod-*`; unpiped rc | V; PLAN S.5 |
-| unit tests | loop `claude plugin test ./brewmod-*/`; no `tests/run.sh` for mods (`check-shards.sh:18` would demand shard); parity gates (`extract-defaults.mjs --check`, `gen-golden.mjs --check`) in the same step | PLAN S.5; research 04 §D3 |
+| unit tests | loop `claude plugin test ./brewmod-*/`; no `tests/run.sh` for mods (`check-shards.sh:18` would demand shard); the parity goldens are a frozen spec run by `plugin test` itself (generators retired, no `--check` gates) | PLAN S.5; research 04 §D3 |
 | CC pin | `CLAUDE_CODE_VERSION: 2.1.296` (npm stable 2.1.292): has `plugin test` and `modules` (D13, S.4); a hook name newer than the pin turns validate and test red (W); tests that compare engine-stamped fields (`part`) normalise them (L13) | D13; S.4; W |
 | failed load | a mod that fails to load exits 0 in `claude -p` (grep stderr/debug for `hooks module did not load`) but non-zero in `validate --strict` and `plugin test` | X; probed on 2.1.296 |
 | type check, drift | `npx -y -p typescript@7.0.2 tsc -p <tsconfig outside the mod>` (`mods-lifecycle.md`); `node brewcode/skills/agents/scripts/mods-ref-check.mjs <types> brewcode/skills/agents/references` rc 0: not in CI, run by hand per build | X; D16 |
