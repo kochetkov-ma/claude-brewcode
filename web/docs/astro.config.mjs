@@ -13,6 +13,8 @@ export default defineConfig({
   output: 'static',
   site: 'https://doc-claude.brewcode.app',
   integrations: [tailwind(), mdx(), sitemap(), pagefind()],
+  // 0 = never inline assets or scripts, so the CSP needs no script 'unsafe-inline' or data: for scripts.
+  vite: { build: { assetsInlineLimit: 0 } },
   markdown: {
     shikiConfig: {
       theme: 'catppuccin-mocha',
