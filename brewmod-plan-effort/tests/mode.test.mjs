@@ -2,7 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, readdirSync, utimesSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
+import { mkdtempSync, readFileSync, readdirSync, utimesSync, writeFileSync, mkdirSync, existsSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -80,4 +80,28 @@ test('GIVEN a 8-day-old and a fresh mode file WHEN mode.mjs runs THEN only the o
   utimesSync(foreign, eight, eight)
   run(JSON.stringify({ session_id: 'cur', permission_mode: 'plan' }), root)
   assert.deepEqual(readdirSync(state(root)).sort(), ['mode-cur.json', 'mode-fresh.json', 'notes.txt'], 'old mode file pruned, others kept')
+})
+
+test('GIVEN an 8-day-old orphaned temp file and a fresh one WHEN mode.mjs runs THEN only the old temp is pruned', () => {
+  const root = fresh()
+  mkdirSync(state(root))
+  const oldTmp = join(state(root), 'mode-gone.json.4242.tmp')
+  const freshTmp = join(state(root), 'mode-live.json.4243.tmp')
+  for (const f of [oldTmp, freshTmp]) writeFileSync(f, '{}')
+  const eight = (Date.now() - 8 * 24 * 3600 * 1000) / 1000
+  utimesSync(oldTmp, eight, eight)
+  run(JSON.stringify({ session_id: 'cur', permission_mode: 'plan' }), root)
+  assert.deepEqual(readdirSync(state(root)).sort(), ['mode-cur.json', 'mode-live.json.4243.tmp'], 'old orphan tmp pruned, fresh tmp kept')
+})
+
+test('GIVEN a dangling symlink named like a mode file WHEN mode.mjs runs THEN the rest is still pruned and the file written', () => {
+  const root = fresh()
+  mkdirSync(state(root))
+  const old = join(state(root), 'mode-zold.json')
+  writeFileSync(old, '{}')
+  const eight = (Date.now() - 8 * 24 * 3600 * 1000) / 1000
+  utimesSync(old, eight, eight)
+  symlinkSync(join(root, 'missing-target'), join(state(root), 'mode-a-dangling.json'))
+  run(JSON.stringify({ session_id: 'cur', permission_mode: 'plan' }), root)
+  assert.deepEqual(readdirSync(state(root)).sort(), ['mode-a-dangling.json', 'mode-cur.json'], 'stat failure on one entry skipped, later old file still pruned')
 })

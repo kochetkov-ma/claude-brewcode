@@ -1,6 +1,7 @@
 import type { Register } from 'claude-code'
 
 const RANK = ['low', 'medium', 'high', 'xhigh', 'max'] as const
+const SESSION_ID = /^[A-Za-z0-9_-]+$/
 const rank = (v: unknown): number => RANK.findIndex((r) => r === v)
 
 // Pure: state-file text -> plan?; missing, corrupt or non-plan input is false (fail open)
@@ -26,7 +27,8 @@ export const register: Register = (on, options) => {
     let plan = false
     if (main && have >= 0 && have < wanted) {
       const sid = await $.session.id()
-      plan = isPlan(await $.fs.read(`${$.plugin.root}/.state/mode-${sid}.json`).catch(() => undefined))
+      // no read unless the id is path-safe (same check as mode.mjs)
+      if (typeof sid === 'string' && SESSION_ID.test(sid)) plan = isPlan(await $.fs.read(`${$.plugin.root}/.state/mode-${sid}.json`).catch(() => undefined))
     }
     const target = plan ? RANK[wanted] : undefined
     if (main && options.statusLine !== false) {

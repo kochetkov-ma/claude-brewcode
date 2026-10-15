@@ -2,13 +2,13 @@
 
 > verified_on: 2.1.300
 
-Recipes for two brewcode mods and any other mod. `proven` = validate + `plugin test` + tsc rc 0 on 2.1.300 (`X`) and/or live (`S`, `AB`, `TTY`, `R3`, `W`, `T11`, `F1`); one open: #1 mixed `hooks.json` installed from a marketplace on a Team org (`[unproven]`). Legend and event/noun facts: `mods-api.md`; test stubs: `mods-testing.md`.
+Recipes for two brewcode mods and any other mod. `proven` = validate + `plugin test` + tsc rc 0 on 2.1.300 (`X`) and/or live (`S`, `AB`, `TTY`, `R3`, `W`, `T11`, `F1`, `T6P`); none open. Legend and event/noun facts: `mods-api.md`; test stubs: `mods-testing.md`.
 
 ## Recipe Index
 
 | # | Recipe | Status | Used by |
 |---|--------|--------|---------|
-| 1 | bundled command hook for context injection (org-managed safe) | proven live on Team + Max via `--plugin-dir` (F1, C43); marketplace install `[unproven]` | placeholders (`hooks/inject.mjs`) |
+| 1 | bundled command hook for context injection (org-managed safe) | proven live on Team + Max via `--plugin-dir` and a git-source marketplace install (F1, C43, T6P) | placeholders (`hooks/inject.mjs`) |
 | 2 | plan mode via command-hook state file + `turn.step` read | proven live on Team + Max (F1, C41) | plan-effort (`hooks/mode.mjs`, `register.ts`), placeholders band |
 | 3 | `turn.step` streaming rewrite | proven live (T11, X, F1); same mod | plan-effort |
 | 4 | decorations + state atom + band | proven (X, S, R3, TTY) | placeholders |
@@ -43,7 +43,7 @@ process.stdout.write(JSON.stringify(out))
 |------|-----|
 | `modules` + `hooks` in one `hooks.json` validate (`--strict` rc 0, reports only the module) and BOTH load, on Team and Max profiles; model answered the hidden codeword (KIWI-3 on both); transcript = attachment `hook_additional_context`, `hookName` `UserPromptSubmit`, as a settings hook | F1 §3, §5; C43 |
 | a module `classic.UserPromptSubmit` on the same run is `bypassed`, the command hook still `finished with status 0` and `provided additionalContext` | F1 §3 (debug) |
-| installed from a marketplace (not `--plugin-dir`): the mixed file is `[unproven]`; brewtools ships command hooks through an installed `hooks.json` on a Team profile, so that loader reads the block | F1 §5 |
+| installed from a git-source marketplace into the cache: the mixed file loads module and command hooks on Team and Max profiles (effort `xhigh` in plan mode, `++r` block injected once); a local-path marketplace loads in place and does not test the cache copy | T6P |
 | stdin = classic payload (`prompt`, `permission_mode`, `session_id`, `cwd`, `agent_id`); options = `CLAUDE_PLUGIN_OPTION_<KEY>`; project = `CLAUDE_PROJECT_DIR` (launch dir) or `e.cwd`; root = `CLAUDE_PLUGIN_ROOT`. Synthetic prompts (`<task-notification>`, `<agent-message from=`) skipped | C43 (`inject.mjs`) |
 | no UI from a command hook: toasts (unknown token) and other UI stay in the module (`prompt.submit`), which runs on Team orgs | F1 §2; C43 |
 | no TypeScript in a command hook: logic shared with the module is ported to `.mjs`, and a CI gate keeps the copy honest (golden vectors, layer fixtures, differential vs the TS lib: `node brewmod-placeholders/tests/inject-parity.mjs`; defaults: `check-defaults.mjs`) | C43; `validate.yml` |

@@ -132,7 +132,7 @@ CLAUDE_CONFIG_DIR=<team profile dir> claude -p "<prompt with the token>" --plugi
 | isolate from other installs | `--settings '{"enabledPlugins":{"<plugin>@<market>":false}}'` per installed plugin that would also load, inject or write (F1 debug showed the installed `brewmod-*` loading beside the probe); isolates the mod under test from the profile | F1; AB |
 | side effects | note transcripts left in profile dirs; remove `plugins/data/<mod>-inline` dirs a command hook created; no `~/.claude/dev-mods/` writes | F1 §6 |
 
-Not covered: a mixed `hooks.json` loaded from a marketplace INSTALL on a Team profile (F1 used `--plugin-dir`): `[unproven]`.
+Marketplace install: a mixed `hooks.json` from a git-source marketplace passed on Team + Max (T6P); a local-path marketplace loads in place, so it does not test the cache copy.
 
 ## tmux TTY Checks
 

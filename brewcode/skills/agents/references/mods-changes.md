@@ -63,4 +63,4 @@ Maintainer context = cwd is claude-brewcode repo. Elsewhere: report drift rows, 
 
 Entry shape: `| <ver> | <what the types/CLI now do> | <what an author does differently> | T:<line>; X |`.
 
-Rules: delete before growing (a row that no longer matters goes); no fact without a `src`; an item still under test carries a bracketed `unproven` mark (one open at 2.1.300: mixed `hooks.json` from a marketplace install on a Team org, `mods-patterns.md` #1) until a real mod proves it; clear the mark in the same edit that cites the proof.
+Rules: delete before growing (a row that no longer matters goes); no fact without a `src`; an item still under test carries a bracketed `unproven` mark (none open at 2.1.300; T6P cleared the mixed `hooks.json` marketplace install) until a real mod proves it; clear the mark in the same edit that cites the proof.

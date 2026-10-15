@@ -86,7 +86,7 @@ Run: `unset CLAUDECODE; claude -p "say ok" --plugin-dir <dir> --debug-file <abs 
 | install check | hooks-module-only mod shows "Installed <mod>. Plugin is now active." and runs with no reload; mods on by default from 2.1.287; shell install needs `/reload-plugins` in open session | R:128; P |
 | READMEs and docs | mod README + docs page via `/docs`; no `Version` row in mod READMEs (D12); state the mod's verified floor (bisect exact npm builds, `mods-api.md` Manifest), never blanket "2.1.287+", plus "early access"; same floor in manifest `description` and marketplace entry | D12; PLAN L17 |
 | bundled command hooks | `hooks/*.mjs` ship in the plugin dir (`${CLAUDE_PLUGIN_ROOT}/hooks/<file>`, braced literal); state under `<root>/.state/` is gitignored (`brewmod-*/.state/`); plain-Node tests run in CI next to `plugin test` (`node --test brewmod-plan-effort/tests/mode.test.mjs`, `node brewmod-placeholders/tests/inject-parity.mjs`) | C41; C43; `validate.yml` |
-| live-test on a Team-org profile | any mod that injects context or tracks mode: run it once on a Team/Enterprise profile (not only Max/free, where nothing is bypassed): debug has `seated outermost`, module loaded line, the command hook `finished with status 0`, and the model sees the effect (`mods-testing.md` "Team-Org Live Check"); a mixed `hooks.json` installed from a marketplace is `[unproven]` until run that way | F1 §5 |
+| live-test on a Team-org profile | any mod that injects context or tracks mode: run it once on a Team/Enterprise profile (not only Max/free, where nothing is bypassed): debug has `seated outermost`, module loaded line, the command hook `finished with status 0`, and the model sees the effect (`mods-testing.md` "Team-Org Live Check"); a mixed `hooks.json` installed from a git-source marketplace passed on Team + Max | F1 §5; T6P |
 | gates | `claude plugin validate --strict .` (marketplace root) + every mod dir, `claude plugin test <mod>` in CI; CI pin = CC version mods were verified on (D13) | D13; PLAN S.5 |
 
 ### Maintain
@@ -94,5 +94,5 @@ Run: `unset CLAUDECODE; claude -p "say ok" --plugin-dir <dir> --debug-file <abs 
 | Trigger | Action | src |
 |---------|--------|-----|
 | new CC build / CI pin bump (D13) | `mods-changes.md` "Update Procedure" | D16 |
-| pattern proved or disproved by real mod | edit pattern, clear or add its bracketed `unproven` mark (open: #1 mixed `hooks.json` from a marketplace install on a Team org) | PLAN TA.7 |
+| pattern proved or disproved by real mod | edit pattern, clear or add its bracketed `unproven` mark (none open) | PLAN TA.7 |
 | engine refusal wording changes | update "Debug lines" with new shape | X |

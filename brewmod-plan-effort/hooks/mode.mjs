@@ -14,13 +14,23 @@ try {
     mkdirSync(dir, { recursive: true })
     const file = join(dir, `mode-${e.session_id}.json`)
     // temp + rename: the module never reads a torn file
-    writeFileSync(`${file}.${process.pid}.tmp`, JSON.stringify({ mode: e.permission_mode, ts: Date.now() }))
-    renameSync(`${file}.${process.pid}.tmp`, file)
-    // 7-day prune of other sessions' files
+    const tmp = `${file}.${process.pid}.tmp`
+    try {
+      writeFileSync(tmp, JSON.stringify({ mode: e.permission_mode, ts: Date.now() }))
+      renameSync(tmp, file)
+    } catch (err) {
+      try { unlinkSync(tmp) } catch { /* no tmp left to remove */ }
+      throw err
+    }
+    // 7-day prune of other sessions' files and orphaned temp files; one failing entry never stops the rest
     for (const name of readdirSync(dir)) {
-      if (!/^mode-[A-Za-z0-9_-]+\.json$/.test(name)) continue
-      const p = join(dir, name)
-      if (Date.now() - statSync(p).mtimeMs > WEEK_MS) unlinkSync(p)
+      if (!/^mode-[A-Za-z0-9_-]+\.json(\.\d+\.tmp)?$/.test(name)) continue
+      try {
+        const p = join(dir, name)
+        if (Date.now() - statSync(p).mtimeMs > WEEK_MS) unlinkSync(p)
+      } catch {
+        // raced with another prune: skip this entry
+      }
     }
   }
 } catch {

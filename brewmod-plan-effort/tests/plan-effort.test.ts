@@ -72,6 +72,22 @@ test('GIVEN state plan WHEN a main step at high runs THEN the file read is the s
   expect(seen.reads.map((p) => p.slice(p.indexOf('/.state/'))), 'one read of mode-S1.json').toEqual(['/.state/mode-S1.json'])
 })
 
+test('GIVEN state plan WHEN a main step runs with a path-traversal session id THEN no file is read and effort is untouched', async ($, on) => {
+  const reads: string[] = []
+  const efforts: unknown[] = []
+  on('session.id', () => ({ value: '../evil' }) as never)
+  on('fs.read', (_$, e) => {
+    reads.push(e.path)
+    return { value: mode('plan') } as never
+  })
+  on('turn.step', async function* (_$, e) {
+    efforts.push(e.effort)
+    return result(e)
+  })
+  await step($, 'high')
+  expect({ efforts, reads }, 'unsafe id: no read, no raise').toEqual({ efforts: ['high'], reads: [] })
+})
+
 test('GIVEN plan then default then plan state WHEN steps run THEN efforts are xhigh, high, xhigh', async ($, on) => {
   let current = mode('plan')
   const seen = bottoms(on, () => current)
