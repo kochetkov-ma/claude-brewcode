@@ -10,7 +10,7 @@
 
 **Claude Code plugin suite** -- four plugins for development, documentation, text utility, and visual workflows.
 
-A regular Claude Code session hands a big task to one agent and loses sight of it. Brewcode splits work into bounded units, gives every spawn a six-field brief, and re-anchors the plan and task graph after a compaction. Four plugins. 27 skills. 9 agents. 4 registered hook commands. Plus two optional [mods](#claude-code-mods).
+A regular Claude Code session hands a big task to one agent and loses sight of it. Brewcode splits work into bounded units, gives every spawn a six-field brief, and re-anchors the plan and task graph after a compaction. Four plugins. 27 skills. 9 agents. 3 registered hook commands. Plus two optional [mods](#claude-code-mods).
 
 [**Full Documentation**](https://doc-claude.brewcode.app/getting-started/)
 
@@ -60,7 +60,7 @@ After all commands succeed, run `/reload-plugins`. If `/reload-plugins` is unava
 |--------|---------|--------|---------|
 | [brewcode](brewcode/README.md) | Authoring toolkit: skill, agent and rule creation and sync, semantic search (semble), conventions, E2E tests, generated review and team skills | 9 | `claude plugin install brewcode@claude-brewcode` |
 | [brewdoc](brewdoc/README.md) | Documentation tools: docsync, memory-sync generation, PDF conversion, publishing | 5 | `claude plugin install brewdoc@claude-brewcode` |
-| [brewtools](brewtools/README.md) | Text optimization and humanization, secrets scanning, SSH and GitHub Actions deploy, manager codewords, subagent deadline/return-size/routing guards, task board, context slimming, plugin updates, alternative API providers | 13 | `claude plugin install brewtools@claude-brewcode` |
+| [brewtools](brewtools/README.md) | Text optimization and humanization, secrets scanning, SSH and GitHub Actions deploy, manager hard delegation wall, subagent deadline/return-size/routing guards, task board, context slimming, plugin updates, alternative API providers | 13 | `claude plugin install brewtools@claude-brewcode` |
 | [brewui](brewui/README.md) | UI/visual/creative tools (placeholder, currently empty) | 0 | `claude plugin install brewui@claude-brewcode` |
 
 ## Claude Code mods
@@ -75,7 +75,7 @@ Mods are small Claude Code plugins built on the early-access hooks module API. E
 | Mod | What it does | Needs |
 |-----|--------------|-------|
 | [brewmod-plan-effort](brewmod-plan-effort/README.md) | Raises the main loop's effort to `xhigh` (configurable) while Claude Code is in plan mode. Your session effort setting is never touched | Claude Code 2.1.287+ |
-| [brewmod-placeholders](brewmod-placeholders/README.md) | `++` prompt placeholders: type `++r`, get an instruction block, with highlight, typeahead and a preview band in the prompt box. Drop-in for the brewtools codewords | Claude Code 2.1.292+ |
+| [brewmod-placeholders](brewmod-placeholders/README.md) | `++` prompt placeholders: type `++r`, get an instruction block, with highlight, typeahead and a preview band in the prompt box. Provides the codewords `++m`, `++a`, `++r`, `++rr` and `+++` (brewtools no longer injects them since v6.8.0) | Claude Code 2.1.292+ |
 
 Install one or both, then run `/reload-plugins`:
 
@@ -84,6 +84,8 @@ claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
 claude plugin install brewmod-plan-effort@claude-brewcode
 claude plugin install brewmod-placeholders@claude-brewcode
 ```
+
+Existing codeword override files under `.claude/brewtools/manager/prompts/` keep working through the mod's legacy layer.
 
 ## Installation
 
@@ -159,7 +161,7 @@ Skills orchestrate, agents execute. Each spawn is a bounded unit with a six-fiel
 
 The task board provides shared domain methodology for reviews and tests, plus a methodology and base work units for each task. When a top-level task becomes active, the main session's `/task-board` announces and creates its unique hourly anti-drift cron; the user can choose another cadence or opt out. Each delivered tick rereads the methodology and goal, collects agent updates, reconciles statuses and dependencies, and keeps all unfinished graph entries plus the latest 10 completed entries. Older completion evidence stays in task records. The compact report gives tick time and number, elapsed time, progress, remaining work, blockers or questions, and the drift verdict. Timers run only while the session is active, subject to runtime limits; unavailable scheduling tools are reported. Completion or cancellation stops the task's timer.
 
-In Plan mode, `+++` adds these methodology, graph and cron steps to the plan. Scheduling and file changes wait until execution. See [Task board setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) and [Manager setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) for the controls.
+In Plan mode, the `+++` codeword (provided by the [brewmod-placeholders](#claude-code-mods) mod) adds these methodology, graph and cron steps to the plan. Scheduling and file changes wait until execution. See [Task board setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) and [Manager setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) for the controls.
 
 ### brewdoc -- documentation tools
 
@@ -217,7 +219,7 @@ Every spawn prompt carries six fields:
 
 ## Skills Reference
 
-> **The `-setup` suffix** marks a skill you run once to install a mechanism -- afterwards you use what it produced (a generated skill, a hook, an MCP server), not the skill itself. Recurring tools you invoke every day keep bare names. Every `-setup` skill shares one mode vocabulary: `status | install | upgrade | enable | disable | uninstall | purge`, and defaults are skill-specific. Semble, manager, agent-deadline, and agent-return default to `status`; a bare semble invocation therefore never triggers a machine-level package install; `/brewcode:convention-setup` defaults to `install` and inspects status before extraction. All eleven setups implement all seven verbs, via one of two mechanisms: a live config flag re-checked each invocation (semble, agent-deadline, agent-return, agent-router, manager, docsync), or entry-file parking, where the filename discovery keys on is renamed `<name>.disabled` with the body byte-identical (teams, superreview, task-board, memory-sync, convention). Convention setup parks only its loading rule; its generated documents remain readable.
+> **The `-setup` suffix** marks a skill you run once to install a mechanism -- afterwards you use what it produced (a generated skill, a hook, an MCP server), not the skill itself. Recurring tools you invoke every day keep bare names. Every `-setup` skill shares one mode vocabulary: `status | install | upgrade | enable | disable | uninstall | purge`, and defaults are skill-specific. Semble, manager, agent-deadline, agent-return, and agent-router default to `status`; a bare semble invocation therefore never triggers a machine-level package install; `/brewcode:convention-setup` defaults to `install` and inspects status before extraction. All eleven setups implement all seven verbs, via one of two mechanisms: a live config flag re-checked each invocation (semble, agent-deadline, agent-return, agent-router, manager, docsync), or entry-file parking, where the filename discovery keys on is renamed `<name>.disabled` with the body byte-identical (teams, superreview, task-board, memory-sync, convention). Convention setup parks only its loading rule; its generated documents remain readable.
 
 > **24 of the 27 skills are user-invoked only.** Each carries `user-invocable: true` **and** `disable-model-invocation: true` in its frontmatter: the model never sees their descriptions and never auto-activates one. You type `/plugin:skill`, or nothing runs. This is a deliberate trade about context cost -- 24 model-visible descriptions would be a permanent tax on every request -- and these skills do not want auto-activation anyway: eleven of them write real files into your repo after asking you real questions, and the rest are tools you point at a scope you choose. The three exceptions (`disable-model-invocation: false`) are `/brewdoc:publish` (share a link), `/brewtools:text-optimize` and `/brewtools:text-human`: Claude can run them mid-task when you ask to share something, compress a prompt or humanize a README you name, and typing them still works.
 
@@ -259,7 +261,7 @@ Every spawn prompt carries six fields:
 | `/brewtools:deploy` | GitHub Actions deployment -- workflows, releases, GHCR, CI/CD |
 | `/brewtools:plugin-update` | Install and update the full plugin suite |
 | `/brewtools:provider-switch` | Configure alternative API providers (DeepSeek, Z.ai/GLM, Qwen, MiniMax, OpenRouter) |
-| `/brewtools:manager-setup` | Manager mode -- hook-driven codewords `++m` (delegate-everything, plan-aware), `++a` (architecture-first), `++rr` (anti-regression review), `++r` (two-phase double-check); the opt-in HARD wall (`status`/`install`/`upgrade`/`enable`/`disable`/`uninstall`/`purge`, plus `level strict\|balanced` and `edit`) installs a project PreToolUse guard that blocks main-session writes while subagents stay free -- an allowlist of permitted binaries and per-binary flags, failing closed when it cannot parse the command |
+| `/brewtools:manager-setup` | Manager mode -- the opt-in HARD wall (project-only; `status`/`install`/`upgrade`/`enable`/`disable`/`uninstall`/`purge`, plus `level strict\|balanced`) installs a project PreToolUse guard that blocks main-session writes while subagents stay free -- an allowlist of permitted binaries and per-binary flags, failing closed when it cannot parse the command. `install`/`upgrade` also set the task-tools key `CLAUDE_CODE_ENABLE_TODO_TOOLS` in `.claude/settings.local.json` when no settings layer sets it. Codewords `++m`, `++a`, `++rr`, `++r`, `+++` moved to [brewmod-placeholders](brewmod-placeholders/README.md) (`status` prints the pointer) |
 | `/brewtools:task-board-setup` | Deploy a file-based Kanban with task-tracker, task-board, shared domain/task methodology, a derived task graph and unique session anti-drift timers; optional spec + design layer (`task-spec`), plus `upgrade` for existing boards |
 | `/brewtools:context-slim` | Shrink the permanent context surface (project+global CLAUDE.md, rules, agent descriptions, hooks, memory) via cross-layer dedup, default-knowledge removal and per-file compression -- lossless by default, whole-run rollback on any verify miss |
 

@@ -72,8 +72,9 @@ and missing ones.
 | [docsync-setup](/brewdoc/skills/docsync-setup/) | brewdoc | Three doc-staleness hooks and `.claude/docsync/` config and state |
 
 Agent-return and agent-deadline also accept global scope under `~/.claude/`. Semble registers
-its MCP server at user scope. Other listed artifacts belong to the target project. Manager's
-codeword prompt hook ships with the plugin; the hard wall is installed separately.
+its MCP server at user scope. Other listed artifacts belong to the target project. Manager installs only
+the hard wall (plus the task-tools env key); the `++m`/`++a`/`++r`/`++rr`/`+++` codewords come from the
+[brewmod-placeholders](/mods/placeholders/) mod (Claude Code 2.1.292+).
 
 ## Task methodology and session anti-drift
 
@@ -101,7 +102,8 @@ scheduling tools are unavailable, it saves the prompt and reports that schedulin
 Stored task state does not keep a timer alive after a session ends; scheduled time and actual
 receipt can differ.
 
-Typing `+++` in **Plan mode** adds an instruction to include methodology, graph reconciliation,
+With the [brewmod-placeholders](/mods/placeholders/) mod installed (Claude Code 2.1.292+),
+typing `+++` in **Plan mode** adds an instruction to include methodology, graph reconciliation,
 the task-specific prompt, and a timer step in the execution plan. Planning remains read-only:
 files and timers change during authorized execution. Outside Plan mode, `+++` adds no cron instruction.
 

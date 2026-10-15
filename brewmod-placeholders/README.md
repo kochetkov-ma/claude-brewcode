@@ -11,7 +11,7 @@
 
 A placeholder is a prefix plus a name, such as `++r`, that stands for a block of instructions. Type the token anywhere in your prompt and the mod adds the block as hidden context for that turn. The token stays in your prompt as you wrote it.
 
-The default set is a drop-in for the brewtools codewords `++m`, `++a`, `++r`, `++rr` and `+++`. Every other placeholder is a Markdown file you write yourself, in the project or in your global config. In the terminal prompt box, known tokens light up, a typo such as `++q` turns to a warning colour, and a band above the prompt shows what the draft will add.
+The default set is the codewords `++m`, `++a`, `++r`, `++rr` and `+++`, which brewtools injected before v6.8.0. This mod is now their only provider in Claude Code. Every other placeholder is a Markdown file you write yourself, in the project or in your global config. In the terminal prompt box, known tokens light up, a typo such as `++q` turns to a warning colour, and a band above the prompt shows what the draft will add.
 
 | Typed | When | Adds |
 |-------|------|------|
@@ -21,13 +21,13 @@ The default set is a drop-in for the brewtools codewords `++m`, `++a`, `++r`, `+
 | `++rr` | always | Anti-regression review: regression, project standard and functional correctness axes |
 | `+++` | Plan mode only | Anti-drift cron plan: a recurring check that the work stays on the goal |
 
-`++r` and `++rr` share the group `review`: when both appear in a prompt, `++rr` wins. Parity with the brewtools codewords is measured; see Verified.
+`++r` and `++rr` share the group `review`: when both appear in a prompt, `++rr` wins. The default texts are byte-identical to brewtools v6.7.0, now a frozen spec pinned by tests and a CI check; see Verified.
 
 ## Requirements
 
 - Claude Code **2.1.292+**. The `prompt.autocomplete` event does not exist before 2.1.292, and Claude Code 2.1.287 to 2.1.291 refuse to load the mod.
 - Mods use the hooks module API, which is early access and can change between releases.
-- brewtools is optional; see With brewtools under How it works.
+- brewtools is optional. Since brewtools 6.8.0 it ships no codeword hook; see With brewtools under How it works.
 
 ## Install
 
@@ -84,10 +84,10 @@ Front matter is optional. Every key is optional too, and a file that sets only s
 | `legacy` | text | none | Name of the brewtools override file this placeholder reads (see Layers) |
 
 - **Body.** Without a code fence, the trimmed text after the front matter is the body. With one or more fenced blocks (`` ``` `` or `~~~`), only the fenced text is used, joined by blank lines.
-- **Empty body.** An empty body suppresses the token: nothing is added, and brewtools' own block for that token is dropped too. Front-matter keys are inherited from the layer below, the body is not, so an override that holds front matter only suppresses the token.
+- **Empty body.** An empty body suppresses the token: nothing is added, and with brewtools 6.7.x installed its own block for that token is dropped too. Front-matter keys are inherited from the layer below, the body is not, so an override that holds front matter only suppresses the token.
 - **Plan variant.** `<name>.plan.md` is the plan-mode variant of `<name>`. It wins in plan mode, as `m.plan.md` does for `++m`.
 - **Inline insert.** `insert: inline` works with `when: always` only, and only for prompts typed in the composer, bridge or SDK, not for slash commands. The text carries no header.
-- **Limits.** Blocks are sorted by `order`, joined and capped at 9000 characters, the same cap brewtools uses.
+- **Limits.** Blocks are sorted by `order`, joined and capped at 9000 characters, the same cap brewtools 6.7.x applied.
 
 ### Layers
 
@@ -162,23 +162,23 @@ Open `/config` and change the plugin options. All are optional.
 
 ### With brewtools
 
-brewtools is optional. Installed together, each token is injected once.
+brewtools is optional. Since brewtools 6.8.0 it ships no codeword hook, so this mod is the only provider of `++m`, `++a`, `++r`, `++rr` and `+++`. With brewtools 6.7.x installed, each token is still injected once.
 
-- **The mod replaces brewtools' block.** For every token the mod resolves, it drops brewtools' block from the same hook result and inserts its own once.
-- **Overrides carry over.** Existing brewtools prompt overrides are read through the `legacy` key (see Layers).
-- **A mod fault leaves brewtools alone.** The failing hook is skipped, so brewtools still answers.
+- **The mod replaces brewtools' block (brewtools 6.7.x).** For every token the mod resolves, it drops brewtools' block from the same hook result and inserts its own once.
+- **Overrides carry over.** Existing brewtools prompt overrides under `.claude/brewtools/manager/prompts/` and `<config>/manager/prompts/` are read through the `legacy` key (see Layers), whatever the brewtools version.
+- **A mod fault leaves brewtools 6.7.x alone.** The failing hook is skipped, so brewtools still answers. On brewtools 6.8.0 or later nothing answers in its place.
 
 ## Verified
 
-Measured during development on Claude Code 2.1.300 with brewtools 6.6.2 (Haiku, one turn per case). Source: the `hook_additional_context` rows of each session transcript, counted as injections, not as text matches. Every row ran on the committed code of this release, except the queued-prompt row and the transcript check of the unknown-`++q` row, which ran on an earlier build of the same mod; the toast was seen again on the release code.
+Measured during development on Claude Code 2.1.300 with brewtools 6.6.2, which still shipped the codeword hook (Haiku, one turn per case). Source: the `hook_additional_context` rows of each session transcript, counted as injections, not as text matches. Every row ran on the committed code of this release, except the queued-prompt row and the transcript check of the unknown-`++q` row, which ran on an earlier build of the same mod; the toast was seen again on the release code.
 
 | Check | Result |
 |-------|--------|
-| Default `++r`, `++a ++m`, `++rr`, plan-mode `++m`, plan-mode `+++` | Each codeword injected exactly once, byte-identical to brewtools alone (same SHA-256 and length) |
+| Default `++r`, `++a ++m`, `++rr`, plan-mode `++m`, plan-mode `+++` | Each codeword injected exactly once, byte-identical to brewtools 6.6.2 alone (same SHA-256 and length) |
 | `++r` and `++a ++m` with brewtools disabled | Same bytes, injected once by the mod |
 | `+++` outside plan mode | Nothing injected, as in brewtools |
 | Project override file and brewtools legacy override file | The mod's own file wins over the legacy file in the same layer. Both replace the default text |
-| Empty `a.md` override with brewtools installed | `++a` injects nothing. Brewtools alone injects its block |
+| Empty `a.md` override with brewtools 6.6.2 installed | `++a` injects nothing. Brewtools 6.6.2 alone injects its block |
 | Fault injected in the mod after brewtools has run | Brewtools' block stays, once |
 | Queued prompt `++r` sent mid-turn | One block |
 | Unknown `++q` | Toast on submit. The prompt reaches the transcript unchanged, with no block |
@@ -201,7 +201,7 @@ Full docs: [doc-claude.brewcode.app/mods/placeholders](https://doc-claude.brewco
 - Other mod: [Plan-mode effort](../brewmod-plan-effort/)
 - All brewcode mods: [README](../README.md#claude-code-mods)
 - Release notes: [RELEASE-NOTES.md](../RELEASE-NOTES.md)
-- The brewtools codewords this replaces: [Prompt injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/)
+- History of the codewords formerly in brewtools: [Codewords (moved to mod)](https://doc-claude.brewcode.app/brewtools/prompt-injection/)
 - Source: <https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewmod-placeholders>
 
 Author: Maksim Kochetkov | License: MIT

@@ -1,13 +1,13 @@
 # Brewtools
 
-> Claude Code utilities -- text optimization and humanization, secrets scanning, SSH and GitHub Actions deploy, manager codewords, subagent deadline/return-size/routing guards, task board, context slimming, plugin updates, and alternative API providers.
+> Claude Code utilities -- text optimization and humanization, secrets scanning, SSH and GitHub Actions deploy, manager hard wall, subagent deadline/return-size/routing guards, task board, context slimming, plugin updates, and alternative API providers.
 
 | Field | Value |
 |-------|-------|
 | Version | 6.7.1 |
 | Skills | 13 |
 | Agents | 3 |
-| Hooks | 2 |
+| Hooks | 1 |
 
 ## Install
 
@@ -112,7 +112,7 @@ Setup skills all speak the same verbs:
 | [`/brewtools:secrets-scan`](skills/secrets-scan/README.md) | Scan for leaked secrets and credentials | sonnet | `[prompt] [--fix]` |
 | [`/brewtools:ssh`](skills/ssh/README.md) | SSH server management and configuration | opus | `[prompt] [setup\|connect\|configure\|update-agent]` |
 | [`/brewtools:deploy`](skills/deploy/README.md) | GitHub Actions deployment with safety gates | opus | `[prompt] [setup\|create\|release\|deploy\|monitor\|update-agent]` |
-| [`/brewtools:manager-setup`](skills/manager-setup/README.md) | Manager mode: installs a hard delegation wall into this project and explains/customizes codewords `++m` (delegate-everything, plan-aware), `++a` (architecture-first), `++rr` (anti-regression review), `++r` (two-phase double-check). The codewords are hook-driven and fire whether or not the wall is installed; the wall itself is opt-in, per-project, and blocks main-session writes while subagents stay free | sonnet | `[prompt] [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [level strict\|balanced] [edit]` |
+| [`/brewtools:manager-setup`](skills/manager-setup/README.md) | Manager mode: installs an opt-in, per-project hard delegation wall that blocks main-session writes while subagents stay free; `status` also reports the task-tools key and any legacy codeword override files. The codewords `++m`, `++a`, `++rr`, `++r` and `+++` come from the [`brewmod-placeholders`](../brewmod-placeholders/README.md) mod, not this plugin | sonnet | `[prompt] [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [level strict\|balanced]` |
 | [`/brewtools:plugin-update`](skills/plugin-update/README.md) | Check/install/update brewcode plugins | sonnet | `[prompt] [check\|update\|all]` |
 | [`/brewtools:provider-switch`](skills/provider-switch/README.md) | Configure alt API providers: DeepSeek, Z.ai/GLM, Qwen, MiniMax, OpenRouter | opus | `[prompt] [status\|install\|verify\|model-check\|help\|<provider-name>]` -- no args or empty prompt = read-only status, never an install |
 | [`/brewtools:agent-deadline-setup`](skills/agent-deadline-setup/README.md) | Install/remove a soft wall-clock budget for subagents: 80% -- non-blocking "wrap up" warning, 100% -- deny all tools except the finalization set; project or global, opt-in | sonnet | `[prompt] [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [project\|global] [minutes]` |
@@ -127,7 +127,7 @@ Task-board setup writes shared domain methodology for review and reliable tests.
 
 Each active top-level task gets a unique hourly session anti-drift cron. The user can select another cadence or opt out. Task-board announces the confirmed schedule and session limits; unavailable scheduling tools are reported. Each delivered tick rereads methodology, anti-drift rules and the goal, collects active-agent updates, reconciles statuses and dependencies, and rebuilds the graph with all unfinished entries plus the latest 10 completed entries. Older completion evidence remains in task records. The report uses at most five short lines: local time/timezone, tick number and elapsed time; achievements; remaining work and next action; blockers or questions when present; drift verdict. Completion, cancellation or parking stops the timer and verifies removal.
 
-Bare `+++` adds these steps to a plan only in Plan mode. File changes and timer creation wait until execution. Timers depend on the active session and runtime limits. See [Task Board Setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) and [Manager Setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/).
+With the [`brewmod-placeholders`](../brewmod-placeholders/README.md) mod installed, bare `+++` adds these steps to a plan only in Plan mode. File changes and timer creation wait until execution. Timers depend on the active session and runtime limits. See [Task Board Setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) and [Manager Setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/).
 
 ## Agents
 
@@ -147,10 +147,8 @@ brewtools/
 +-- hooks/
 |   +-- hooks.json                    # Hook registry
 |   +-- session-start.mjs            # Manager HARD-wall awareness
-|   +-- manager-prompt.mjs           # ++m / ++a / ++rr / ++r; +++ only in Plan mode
 |   +-- hardmode-guard.mjs            # HARD-wall guard template (not registered; copied per project by manager-setup)
 |   +-- lib/utils.mjs                 # I/O utilities
-|   +-- lib/manager-prompts.mjs       # Codeword prompt resolution (project -> global -> default)
 |   +-- lib/manager-state.mjs         # Wall state / off-switch CLI
 +-- skills/
 |   +-- text-optimize/                # Token optimization
@@ -163,7 +161,7 @@ brewtools/
 |   +-- agent-deadline-setup/          # Subagent soft wall-clock budget hooks install/remove
 |   +-- agent-return-setup/            # Size budget on subagent return messages (SubagentStart + SubagentStop + PreToolUse SubagentHandback)
 |   +-- agent-router-setup/            # EXPERIMENTAL: route generic subagent spawns to the real expert
-|   +-- manager-setup/                 # Codeword-triggered Manager mode + HARD delegation wall
+|   +-- manager-setup/                 # Manager HARD delegation wall (codewords: brewmod-placeholders)
 |   +-- task-board-setup/              # Kanban, methodology, task graph and session anti-drift
 |   +-- context-slim/                  # Permanent-context compression
 +-- agents/
@@ -202,7 +200,6 @@ always come from `.claude-plugin/plugin.json`, never hardcoded.
 | Hook | Event | Purpose |
 |------|-------|---------|
 | `session-start.mjs` | SessionStart | Manager HARD-wall awareness -- when the wall is armed, a notice with the mechanism (level, what is denied) and the exit (`/brewtools:manager-setup disable`) in systemMessage and additionalContext; silent otherwise |
-| `manager-prompt.mjs` | UserPromptSubmit | Injects `++m` (manager, plan-aware), `++a` (architecture-first), `++rr` / `++r` review blocks; bare `+++` adds anti-drift cron planning only in Plan mode |
 
 ## Regression suites
 
@@ -244,6 +241,6 @@ Full docs: [doc-claude.brewcode.app/brewtools/overview](https://doc-claude.brewc
 | Deploy Admin (agent) | [deploy-admin](https://doc-claude.brewcode.app/brewtools/agents/deploy-admin/) |
 | Release Notes | [RELEASE-NOTES.md](../RELEASE-NOTES.md) |
 
-See also: [Claude Code mods](../README.md#claude-code-mods) — optional brewmod-plan-effort and brewmod-placeholders (a drop-in for the codewords).
+See also: [Claude Code mods](../README.md#claude-code-mods) — optional brewmod-plan-effort and brewmod-placeholders, the provider of the prompt codewords `++m`, `++a`, `++rr`, `++r` and `+++` (Claude Code 2.1.292+; `claude plugin install brewmod-placeholders@claude-brewcode`).
 
 Author: Maksim Kochetkov | License: MIT

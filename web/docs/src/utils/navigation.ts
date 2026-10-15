@@ -59,7 +59,7 @@ export const navigation: NavSection[] = [
     title: 'Brewtools',
     items: [
       { title: 'Overview', slug: 'brewtools/overview' },
-      { title: 'Prompt injection', slug: 'brewtools/prompt-injection' },
+      { title: 'Codewords (moved to mod)', slug: 'brewtools/prompt-injection' },
       {
         title: 'Skills',
         slug: 'brewtools/skills',
