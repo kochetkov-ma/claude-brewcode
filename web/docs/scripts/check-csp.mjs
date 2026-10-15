@@ -102,22 +102,51 @@ const checkUrl = (file, directive, tag, raw) => {
   if (!allowsUrl(directive, raw)) flag(file, 'blocked-origin', `<${tag}> ${raw} not allowed by ${directive}`);
 };
 
+const TAG_AT = new RegExp(TAG.source, 'y');
+
+// Linear tokenizer: skips comments, captures raw-text bodies of script/style up to the real closing tag.
+const tokenize = (html) => {
+  const lower = html.toLowerCase();
+  const out = [];
+  let i = 0;
+  while (i < html.length) {
+    const lt = html.indexOf('<', i);
+    if (lt === -1) break;
+    if (html.startsWith('<!--', lt)) {
+      const end = html.indexOf('-->', lt + 4);
+      i = end === -1 ? html.length : end + 3;
+      continue;
+    }
+    TAG_AT.lastIndex = lt;
+    const m = TAG_AT.exec(html);
+    if (!m) {
+      i = lt + 1;
+      continue;
+    }
+    const name = m[1].toLowerCase();
+    i = lt + m[0].length;
+    let body = '';
+    if ((name === 'script' || name === 'style') && !m[0].endsWith('/>')) {
+      let close = lower.indexOf(`</${name}`, i);
+      while (close !== -1 && !/[\s/>]/.test(lower[close + name.length + 2] ?? '>')) close = lower.indexOf(`</${name}`, close + 1);
+      if (close === -1) close = html.length;
+      body = html.slice(i, close);
+      const gt = html.indexOf('>', close);
+      i = gt === -1 ? html.length : gt + 1;
+    }
+    out.push({ tag: name, rawAttrs: m[2], body });
+  }
+  return out;
+};
+
 const scanMarkup = (file, text) => {
-  let html = text.replace(/<!--[\s\S]*?-->/g, '');
-  html = html.replace(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi, (_m, attrs, body) => {
-    const type = /\btype\s*=\s*["']?([^"'\s>]+)/i.exec(attrs)?.[1] ?? '';
-    const src = /\bsrc\s*=/i.test(attrs);
-    if (!src && body.trim() && !NONEXEC.test(type) && !allowsInline('script-src-elem')) flag(file, 'inline-script', body.trim());
-    return `<script${attrs}></script>`;
-  });
-  html = html.replace(/<style\b([^>]*)>([\s\S]*?)<\/style>/gi, (_m, attrs, body) => {
-    if (body.trim() && !allowsInline('style-src-elem')) flag(file, 'inline-style-element', body.trim());
-    return `<style${attrs}></style>`;
-  });
-  for (const m of html.matchAll(TAG)) {
-    const tag = m[1].toLowerCase();
+  for (const t of tokenize(text)) {
+    const tag = t.tag;
     const attrs = {};
-    for (const a of m[2].matchAll(ATTR)) attrs[a[1].toLowerCase()] = a[2] ?? a[3] ?? a[4] ?? '';
+    for (const a of t.rawAttrs.matchAll(ATTR)) attrs[a[1].toLowerCase()] = a[2] ?? a[3] ?? a[4] ?? '';
+    const body = t.body.trim();
+    if (tag === 'script' && !('src' in attrs) && body && !NONEXEC.test(attrs.type ?? '') && !allowsInline('script-src-elem')) flag(file, 'inline-script', body);
+    if (tag === 'style' && body && !allowsInline('style-src-elem')) flag(file, 'inline-style-element', body);
     for (const [name, val] of Object.entries(attrs)) {
       if (/^on[a-z]+$/.test(name) && !allowsInline('script-src-attr')) flag(file, 'inline-handler', `<${tag} ${name}="${val}">`);
       if (name === 'style' && !allowsInline('style-src-attr')) flag(file, 'inline-style-attr', `<${tag} style="${val}">`);
