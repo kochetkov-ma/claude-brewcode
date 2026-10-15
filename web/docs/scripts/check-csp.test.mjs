@@ -32,6 +32,7 @@ const cases = [
   ['protocol-relative script', '<script src="//cdn.evil.test/x.js"></script>', 1],
   ['inline style element', '<style>a{}</style>', 1],
   ['foreign iframe', '<iframe src="https://youtube.com/embed/x"></iframe>', 1],
+  ['pathological attr run stays linear', `<A\t!=${'!/\t!='.repeat(20000)}`, 0],
   ['foreign form action', '<form action="https://evil.test/p"></form>', 1],
 ];
 
@@ -39,7 +40,7 @@ let failed = 0;
 cases.forEach(([name, html, want]) => {
   const d = mkdtempSync(join(base, 'c-'));
   writeFileSync(join(d, 'index.html'), html);
-  const r = spawnSync('node', [join(here, 'check-csp.mjs'), '--dist', d], { encoding: 'utf8' });
+  const r = spawnSync('node', [join(here, 'check-csp.mjs'), '--dist', d], { encoding: 'utf8', timeout: 10000 });
   const ok = r.status === want;
   if (!ok) failed++;
   console.log(`${ok ? 'PASS' : 'FAIL'} ${name}: want rc ${want}, got ${r.status}`);

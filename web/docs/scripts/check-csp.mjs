@@ -103,9 +103,6 @@ const walk = (dir) =>
   });
 
 const NONEXEC = /^(application\/(ld\+)?json|importmap|speculationrules)$/i;
-// Attrs may be separated by whitespace or "/", or touch a closing quote (<img/src=x>, <img src="a"alt=b>), as browsers parse them.
-const TAG = /<([a-zA-Z][a-zA-Z0-9-]*)((?:(?:[\s/]+|(?<=["']))[^\s"'<>/=]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+))?)*)\s*\/?>/g;
-const ATTR = /([^\s"'<>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
 const LINK_DIRECTIVE = { stylesheet: 'style-src-elem', modulepreload: 'script-src-elem', icon: 'img-src', manifest: 'manifest-src' };
 const PRELOAD_AS = { script: 'script-src-elem', style: 'style-src-elem', font: 'font-src', image: 'img-src', fetch: 'connect-src' };
 
@@ -136,7 +133,47 @@ const checkUrl = (file, directive, tag, raw) => {
   if (!allowsUrl(directive, raw)) flag(file, 'blocked-origin', `<${tag}> ${raw} not allowed by ${directive}`);
 };
 
-const TAG_AT = new RegExp(TAG.source, 'y');
+// Linear start-tag parser (no backtracking regex): attrs split on whitespace or "/", first duplicate wins, as browsers do.
+const parseTag = (html, lt) => {
+  const n = html.length;
+  let i = lt + 1;
+  if (!/[a-zA-Z]/.test(html[i] ?? '')) return null;
+  while (i < n && !/[\s/>]/.test(html[i])) i++;
+  const name = html.slice(lt + 1, i).toLowerCase();
+  const attrs = {};
+  for (;;) {
+    while (i < n && /[\s/]/.test(html[i])) i++;
+    if (i >= n) return null;
+    if (html[i] === '>') return { name, attrs, end: i + 1, selfClosing: html[i - 1] === '/' };
+    const start = i;
+    while (i < n && !/[\s/>=]/.test(html[i])) i++;
+    if (i === start) {
+      i++;
+      continue;
+    }
+    const attr = html.slice(start, i).toLowerCase();
+    let k = i;
+    while (k < n && /\s/.test(html[k])) k++;
+    let val = '';
+    if (html[k] === '=') {
+      k++;
+      while (k < n && /\s/.test(html[k])) k++;
+      const q = html[k];
+      if (q === '"' || q === "'") {
+        const e = html.indexOf(q, k + 1);
+        if (e === -1) return null;
+        val = html.slice(k + 1, e);
+        k = e + 1;
+      } else {
+        const v = k;
+        while (k < n && !/[\s>]/.test(html[k])) k++;
+        val = html.slice(v, k);
+      }
+      i = k;
+    }
+    if (!(attr in attrs)) attrs[attr] = val;
+  }
+};
 
 // Linear tokenizer: skips comments, captures raw-text bodies of script/style up to the real closing tag.
 const tokenize = (html) => {
@@ -151,16 +188,15 @@ const tokenize = (html) => {
       i = end === -1 ? html.length : end + 3;
       continue;
     }
-    TAG_AT.lastIndex = lt;
-    const m = TAG_AT.exec(html);
+    const m = parseTag(html, lt);
     if (!m) {
       i = lt + 1;
       continue;
     }
-    const name = m[1].toLowerCase();
-    i = lt + m[0].length;
+    const name = m.name;
+    i = m.end;
     let body = '';
-    if ((name === 'script' || name === 'style') && !m[0].endsWith('/>')) {
+    if ((name === 'script' || name === 'style') && !m.selfClosing) {
       let close = lower.indexOf(`</${name}`, i);
       while (close !== -1 && !/[\s/>]/.test(lower[close + name.length + 2] ?? '>')) close = lower.indexOf(`</${name}`, close + 1);
       if (close === -1) close = html.length;
@@ -168,7 +204,7 @@ const tokenize = (html) => {
       const gt = html.indexOf('>', close);
       i = gt === -1 ? html.length : gt + 1;
     }
-    out.push({ tag: name, rawAttrs: m[2], body });
+    out.push({ tag: name, attrs: m.attrs, body });
   }
   return out;
 };
@@ -176,8 +212,7 @@ const tokenize = (html) => {
 const scanMarkup = (file, text) => {
   for (const t of tokenize(text)) {
     const tag = t.tag;
-    const attrs = {};
-    for (const a of t.rawAttrs.matchAll(ATTR)) attrs[a[1].toLowerCase()] = a[2] ?? a[3] ?? a[4] ?? '';
+    const attrs = t.attrs;
     const body = t.body.trim();
     if (tag === 'script' && !('src' in attrs) && body && !NONEXEC.test(attrs.type ?? '') && !allowsInline('script-src-elem')) flag(file, 'inline-script', body);
     if (tag === 'style' && body && !allowsInline('style-src-elem')) flag(file, 'inline-style-element', body);
