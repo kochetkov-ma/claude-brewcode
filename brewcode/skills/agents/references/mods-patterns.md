@@ -2,15 +2,15 @@
 
 > verified_on: 2.1.300
 
-Recipes for two brewcode mods and any other mod. `proven` = validate + `plugin test` + tsc rc 0 on 2.1.300 (`X`) and/or live (`S`, `AB`, `TTY`, `R3`, `W`, `T11`); none open. Legend and event/noun facts: `mods-api.md`; test stubs: `mods-testing.md`.
+Recipes for two brewcode mods and any other mod. `proven` = validate + `plugin test` + tsc rc 0 on 2.1.300 (`X`) and/or live (`S`, `AB`, `TTY`, `R3`, `W`, `T11`, `F1`); one open: #1 mixed `hooks.json` installed from a marketplace on a Team org (`[unproven]`). Legend and event/noun facts: `mods-api.md`; test stubs: `mods-testing.md`.
 
 ## Recipe Index
 
 | # | Recipe | Status | Used by |
 |---|--------|--------|---------|
-| 1 | classic-chain wrap + per-block de-dup | proven live (S, X, AB; mod-throw fail-open: T2.R rev2) | placeholders (D6) |
-| 2 | plan-mode tracking | proven live (T11); mod `brewmod-plan-effort/hooks/register.ts` (e857463) | both |
-| 3 | `turn.step` streaming rewrite | proven live (T11, X); same mod | plan-effort |
+| 1 | bundled command hook for context injection (org-managed safe) | proven live on Team + Max via `--plugin-dir` (F1, C43); marketplace install `[unproven]` | placeholders (`hooks/inject.mjs`) |
+| 2 | plan mode via command-hook state file + `turn.step` read | proven live on Team + Max (F1, C41) | plan-effort (`hooks/mode.mjs`, `register.ts`), placeholders band |
+| 3 | `turn.step` streaming rewrite | proven live (T11, X, F1); same mod | plan-effort |
 | 4 | decorations + state atom + band | proven (X, S, R3, TTY) | placeholders |
 | 5 | autocomplete | proven live (S) | placeholders |
 | 6 | slash command | proven (X) | placeholders |
@@ -19,61 +19,81 @@ Recipes for two brewcode mods and any other mod. `proven` = validate + `plugin t
 | 9 | defaults via `$.fs` from `$.plugin.root`, project root | proven (S, X) | placeholders |
 | 10 | `rm` after realpath check | unit-proven (X) | placeholders |
 
-## 1. Classic-Chain Wrap With Per-Block De-Dup (D6)
+## 1. Bundled Command Hook For Context Injection
 
-Goal: mod replaces block installed command hook (brewtools) already put in `additionalContext`, so model reads each block once.
+Goal: put hidden context into the model's prompt on EVERY install, Team/Enterprise orgs included. A module `classic.UserPromptSubmit` hook is bypassed there (`mods-api.md` "Org-Managed Installs"); a classic COMMAND hook bundled in the same `hooks/hooks.json` next to `"modules"` is not.
+
+```json
+{ "modules": ["./register.ts"],
+  "hooks": { "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/inject.mjs\"" }] }],
+             "PostToolBatch": [{ "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/inject.mjs\"" }] }] } }
+```
+
+```js
+// hooks/inject.mjs: plain Node, no deps, stdin JSON -> stdout JSON, fail open
+let out = {}
+try {
+  const text = build(JSON.parse(readFileSync(0, 'utf8')), process.env) // '' = nothing to inject
+  if (text !== '') out = { hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: text } }
+} catch { out = {} }
+process.stdout.write(JSON.stringify(out))
+```
 
 | Fact | src |
 |------|-----|
-| `classic.UserPromptSubmit` chain = `[managed hooks, ...mods, other settings hooks as core]`; plugin `hooks.json` hook runs INSIDE mod's `await next(e)` | T:1277; S (debug order + marker count) |
-| `r.additionalContext` is `string[]`, one entry per hook; hook's blocks joined with `\n\n---\n\n` are ONE entry: split before dropping | S |
-| model reads only what mod returns; unmodified entries of other hooks survive | S (`OTHER-HOOK-CTX` run) |
-| a prompt typed mid-turn runs this hook ONCE, at queue time; one block reaches the API | TTY |
-| A/B vs the pre-6.8 brewtools hook (removed since): default-def blocks byte-equal (`++r`, `++a ++m`, `++rr`, plan `++m`/`+++`), native override beats the legacy file in the mod; brewtools off: mod injects once (`mods-testing.md` Live Headless) | AB |
+| `modules` + `hooks` in one `hooks.json` validate (`--strict` rc 0, reports only the module) and BOTH load, on Team and Max profiles; model answered the hidden codeword (KIWI-3 on both); transcript = attachment `hook_additional_context`, `hookName` `UserPromptSubmit`, as a settings hook | F1 §3, §5; C43 |
+| a module `classic.UserPromptSubmit` on the same run is `bypassed`, the command hook still `finished with status 0` and `provided additionalContext` | F1 §3 (debug) |
+| installed from a marketplace (not `--plugin-dir`): the mixed file is `[unproven]`; brewtools ships command hooks through an installed `hooks.json` on a Team profile, so that loader reads the block | F1 §5 |
+| stdin = classic payload (`prompt`, `permission_mode`, `session_id`, `cwd`, `agent_id`); options = `CLAUDE_PLUGIN_OPTION_<KEY>`; project = `CLAUDE_PROJECT_DIR` (launch dir) or `e.cwd`; root = `CLAUDE_PLUGIN_ROOT`. Synthetic prompts (`<task-notification>`, `<agent-message from=`) skipped | C43 (`inject.mjs`) |
+| no UI from a command hook: toasts (unknown token) and other UI stay in the module (`prompt.submit`), which runs on Team orgs | F1 §2; C43 |
+| no TypeScript in a command hook: logic shared with the module is ported to `.mjs`, and a CI gate keeps the copy honest (golden vectors, layer fixtures, differential vs the TS lib: `node brewmod-placeholders/tests/inject-parity.mjs`; defaults: `check-defaults.mjs`) | C43; `validate.yml` |
 | `e.permission_mode` is exact, any of the six `PermissionMode` strings (`default`, `acceptEdits`, `bypassPermissions`, `plan`, `dontAsk`, `auto`; typed `string`); `source` is absent in `-p`: never filter on it | S; T:7633 |
-| managed-org installs skip plugins' `classic.*` hooks: other plugin then injects alone; a settings hook cannot detect the mod (no field, no env var; D6 needs none) | V; S; P |
+| a prompt typed mid-turn fires `UserPromptSubmit` ONCE, at queue time (seen on a module hook; same event); entries of other hooks reach the model untouched | TTY; S |
+| module-only alternatives on Team: `prompt.submit` `next({ ...e, context: [...(e.context ?? []), block] })` = hidden block (model answered PINEAPPLE-7), `next({ ...e, text })` = visible inline rewrite (MANGO-9); neither carries `permission_mode`, so mode-specific blocks need the command hook | F1 §3 (A1, A2) |
+
+Rules: exit 0 and print `{}` when nothing applies; catch everything (fail open, as `inject.mjs` and `mode.mjs` do); same def layering and output shape on every profile; the module and the command hook never inject the same block (placeholders: context defs by `inject.mjs`, inline defs by the module's `prompt.submit`).
+
+Not working on org-managed installs (works elsewhere, no longer shipped): classic-chain wrap, `classic.UserPromptSubmit` `await next(e)` + per-block de-dup against another plugin's `additionalContext` entries (S, AB). The D6 de-dup died with the brewtools codeword layer (C43); do not build a new mod on it.
+
+## 2. Plan-Mode Tracking Via Command-Hook State File
+
+No permission-mode API (`mods-api.md` Budgets; Shift+Tab text signal there is fragile). On Team/Enterprise orgs nothing IN the module carries the mode: `classic.*`, `session.append` `plan_mode*` rows and `prompt.attachment` are all bypassed; `turn.step`, `turn.start`, `prompt.submit`, `session.start` fields have no mode. Only a command hook sees `permission_mode`: it records it, the module reads it in `turn.step`.
+
+```js
+// hooks/mode.mjs (UserPromptSubmit + PostToolBatch command hook), plain Node, always prints {}
+if (e.agent_id === undefined && typeof e.permission_mode === 'string' && /^[A-Za-z0-9_-]+$/.test(e.session_id)) {
+  // <root>/.state/mode-<session_id>.json = { mode, ts }, written to a temp file then renamed (never a torn read)
+}
+```
 
 ```ts
-// built.text = the mod's blocks ('' = none); built.tokens = every brewtools token its registry resolves for the prompt
-// dedupe: split each entry on SEP, drop blocks whose header token is in built.tokens, put built.text at the first drop;
-// nothing dropped -> append built.text once (brewtools absent). Shipped: assemble.ts `dedupe`/`applyBuilt`.
-on('classic.UserPromptSubmit', async ($, e, next) => {
-  const built = assemble(e.prompt, e.permission_mode) // null = no name resolves; a throw here skips the hook
-  const r = await next(e)
-  return built === null ? r : { ...r, additionalContext: dedupe(r.additionalContext ?? [], built) }
+// register.ts: raise-only effort from the state file
+on('turn.step', async function* ($, e, next) {
+  const sid = await $.session.id()
+  const plan = isPlan(await $.fs.read(`${$.plugin.root}/.state/mode-${sid}.json`).catch(() => undefined)) // false when missing/corrupt
+  return yield* next(plan && e.agentId === undefined && have >= 0 && have < wanted ? { ...e, effort: RANK[wanted] } : e)
 })
 ```
 
-Shipped in `brewmod-placeholders/hooks/lib/assemble.ts` (`applyBuilt` drops the key when emptied). `SEP` = `\n\n---\n\n`, header `^User typed \`([^\`]+)\` `. The D6 split uses brewtools header lookahead: `\n\n---\n\n(?=User typed \`(?:\+\+\+|\+\+m|\+\+a|\+\+rr|\+\+r)\` )`. Rules: assemble BEFORE `next`; drop every brewtools block whose token the mod's registry RESOLVES for the prompt (emitted, empty override = suppress, inapplicable in this mode, group loser, inline); insert `text` ONCE at the first drop; never leave an empty entry; never return changed shape (`r` keys = `additionalContext` only). No local try/catch: a throw while loading or assembling, or after `await next(e)`, skips the hook and brewtools' block reaches the model once (live: T2.R rev2, debug `skipped; its last next() run's result stands`). Plan B (receipt file checked by hook) not needed (S).
+| Fact | src |
+|------|-----|
+| surviving route, live on Team and Max: command hook on `UserPromptSubmit` + `PostToolBatch` (both fire, both carry `permission_mode=plan`, `session_id` == `$.session.id()`) writes the file; `turn.step` reads it with `$.fs.read` and raises effort (transcript `effort` `xhigh` x3 on both) | F1 §4 |
+| `turn.step` `effort` rewrite reaches the request on a Team org (transcript assistant records) | F1 §4 |
+| rendezvous = `$.plugin.root` + `/.state/` (`CLAUDE_PLUGIN_ROOT` in the hook == `$.plugin.root`); NOT `CLAUDE_PLUGIN_DATA` (`$.env.get` is `undefined` in the module); key by `session_id` (parallel sessions), skip `agent_id`; versioned cache dir is wiped on update (fine: per-session file); prune files older than 7 days; gitignore `brewmod-*/.state/` | F1 §4; C41; `.gitignore` |
+| read only when it can matter (`main && have >= 0 && have < wanted`): one `$.fs.read` per main-loop step in plan-eligible turns, none for subagents | C41 (`register.ts`) |
+| lag as before: `UserPromptSubmit` sees a mode switch at the next prompt, `PostToolBatch` between steps; Shift+Tab fires no event | F1 §4; T11 Q7 |
+| status text: `$.ui.status('plan: <level>')` while raised, cleared only when this mod set it | C41 |
+| state file is data on disk: validate `session_id` (`^[A-Za-z0-9_-]+$`) in writer AND reader (no path escape) | C41; C43 (`lib/mode.ts`) |
+| when the mod has a second reader (placeholders band shows plan mode), its command hook writes the same `mode-<session_id>.json`; the module reads at `session.start` and `turn.complete` (no I/O in `prompt.edit`) | C43 (`register.ts`, `lib/mode.ts`) |
+| tests: `mode.mjs` is plain Node (`claude plugin test` runs only `*.test.ts[x]`): `node --test brewmod-plan-effort/tests/mode.test.mjs`, run in CI; the module is tested with `on('fs.read', ...)` stubs and `$.turn.step` (`mods-testing.md`) | C41; `validate.yml` |
 
-## 2. Plan-Mode Tracking
+Order of signals when the module does NOT run under a bypass (non-managed profiles, for reading transcripts and debug): `classic.UserPromptSubmit` -> `session.append` `plan_mode` -> `turn.start` -> `turn.step` 0 -> `prompt.attachment` `plan_mode` (AFTER step 0: first plan step ran un-raised, TA.R C1) -> `classic.PostToolBatch` (BEFORE next step) -> `plan_mode_exit` -> `turn.step`. Subagents carry their own rows (`agentId`/`agent_id`): never let them clear the main flag (T11 Q1; X).
 
-No permission-mode API (`mods-api.md` Budgets; Shift+Tab text signal there is fragile). Track from signals; every hook returns `next(e)` unchanged; no try/catch (engine skips a failing hook).
+Not working on org-managed installs, no longer shipped: in-module tracking from `classic.UserPromptSubmit` / `classic.PostToolBatch` `permission_mode` and from `session.append` `plan_mode*` rows; `tool.call` `EnterPlanMode`/`ExitPlanMode` is model-initiated only (Shift+Tab fires no call) and untested on Team: not a primary signal. Reading the transcript JSONL from the module (user record `permissionMode`) is untested.
 
-| Signal | Action | src |
-|--------|--------|-----|
-| `classic.UserPromptSubmit`, `classic.PostToolBatch` with `permission_mode` string | `plan = permission_mode === 'plan'`; UserPromptSubmit is the FIRST signal of a plan turn (before `turn.step` 0), PostToolBatch fires once per batch before next model request | T:7985, 15343; P; T11 Q1 |
-| `session.append` `message.type === 'attachment'`, `message.name` `plan_mode` / `plan_mode_exit` | fallback where `classic.*`/`prompt.attachment` do not run (org-managed installs): `plan = true` / `false`; fires BEFORE `turn.step`. NO `{ door }` matcher: door is `attachment` (probe logs) but validate lists `session.append{door=attachment}` among hooks skipped under org-managed installs; unmatched costs ~7 ms per appended row (T1.2 build) | T11 Q1; V; X |
-| `prompt.attachment` `plan_mode*` | NOT for step state: fires AFTER `turn.step` 0, cached per attachment: first plan step ran un-raised (TA.R C1) | T:8287-8303, 4298; T11 Q1 |
-| events with `agent_id` / `agentId` | skip: subagent is not main loop | T:863-865, 14112-14113 |
-| `tool.call` `EnterPlanMode` / `ExitPlanMode` | contingency only: flip after `await next(e)` when `deny === undefined && isError !== true` | PLAN Mod 1 |
-| start state | `plan = false`: `classic.SessionStart` carries no mode (`mods-api.md` classic table) | T11 Q4 |
-| order in plan turn | `classic.UserPromptSubmit` -> `session.append` name `plan_mode` -> `turn.start` -> `turn.step` 0 -> `prompt.attachment` `plan_mode` (AFTER step hook) -> ... -> `classic.PostToolBatch` (BEFORE next step) -> [`session.append` `plan_mode_exit`] -> `turn.step` -> `prompt.attachment` `plan_mode_exit`: earliest signals = classic payloads, then `session.append` by `message.name`; attachments lag one step | T11 Q1; X |
-| switch out of plan between turns (Shift+Tab, host) | `plan_mode_exit` at NEXT prompt, after `classic.UserPromptSubmit`, before `turn.step`; rejected `ExitPlanMode` (`isError: true`, never `deny`) keeps plan: host reject gives `PostToolBatch pm=plan`, TTY Esc reject none | T11 Q1, Q3 |
-| subagents | own `plan_mode` rows/attachments (`agentId`) and `PostToolBatch` (`agent_id`): every handler guards on the id, else a subagent's `plan_mode_exit` clears main `plan` | T11 Q1; T:3749 |
+A module takes ONE unmatched hook per event (`session.start`): a second is refused (`registered twice without a matcher`; X, W).
 
-```ts
-let plan = false
-const track = (e: { permission_mode?: unknown; agent_id?: unknown }) => {
-  if (e.agent_id === undefined && typeof e.permission_mode === 'string') plan = e.permission_mode === 'plan'
-}
-// track(e) in classic.UserPromptSubmit + classic.PostToolBatch; session.append (agentId undefined, attachment) sets plan on
-// name 'plan_mode', off on 'plan_mode_exit'. Every hook ends in return next(e).
-```
-
-Proven end to end by `brewmod-plan-effort/hooks/register.ts` (e857463) and its tests; regression test: `classic.UserPromptSubmit` `plan`, then `turn.step` `high` -> first plan step raised. A module takes ONE unmatched hook per event (`classic.UserPromptSubmit`, `session.start`): a second is refused (`registered twice without a matcher`; X, W), so a mod using Recipes 1 and 2 merges them (placeholders runs `mode.classic(e)` first in the Recipe 1 hook).
-
-Module `let` persistence: `mods-api.md` Budgets. After `--resume` the flag stays unset until the first `classic.UserPromptSubmit`; inside `plugin test` it persists (T11 Q5; X).
+Module `let` persistence: `mods-api.md` Budgets. After `--resume` a module flag resets; a state file persists (inside `plugin test` module `let` persists; T11 Q5; X).
 
 ## 3. `turn.step` Streaming Rewrite
 

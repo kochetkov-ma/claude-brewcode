@@ -71,7 +71,7 @@ Per surface: `mount` -> `find({ key: 'toggle' })?.text` is `'More'` -> `press` -
 
 ## Test Style
 
-House rules: GIVEN/WHEN/THEN in names, one full-object `toEqual` not field-by-field, exact values, no `if` in test bodies (assert precondition, then assert unconditionally), message per assertion (`expect(value, 'message')`), `toStrictEqual` for exact equality. Capture `next()` payloads with bottom stub (`on('prompt.submit', ($, e) => { seen = e; return { text: e.text } })`) and assert `seen`. Cover: each mode, raise-only, numeric/absent effort, subagent skip, de-dup matrix (mixed prefix, mod throw, other plugins' entries preserved), options fallback (`turbo` -> default), non-string mode keeps state, stream chunks pass through unchanged with bottom called once.
+House rules: GIVEN/WHEN/THEN in names, one full-object `toEqual` not field-by-field, exact values, no `if` in test bodies (assert precondition, then assert unconditionally), message per assertion (`expect(value, 'message')`), `toStrictEqual` for exact equality. Capture `next()` payloads with bottom stub (`on('prompt.submit', ($, e) => { seen = e; return { text: e.text } })`) and assert `seen`. Cover: each mode, raise-only, numeric/absent effort, subagent skip, state file missing/corrupt/non-plan (`on('fs.read', ...)` returns it or `{ deny }`) = no raise, options fallback (`turbo` -> default), stream chunks pass through unchanged with bottom called once. Command hook (plain Node, `spawnSync('node', [script], { input, env: { CLAUDE_PLUGIN_ROOT } })`): exact file and `{}` on stdout, no temp leftovers, plan then default overwrites, subagent (`agent_id`) and bad `session_id` write nothing, empty stdin/JSON `null`/unwritable root print `{}` rc 0, 8-day-old file pruned and fresh one kept.
 
 ## Latency Tests Under Load
 
@@ -83,6 +83,7 @@ Own-handler cost only (scan, decorate, merge, view diff). Parallel agents stall 
 |------|---------|-----|
 | validate | loop `claude plugin validate --strict` over `.` and every `./brewmod-*`; unpiped rc | V; PLAN S.5 |
 | unit tests | loop `claude plugin test ./brewmod-*/`; no `tests/run.sh` for mods (`check-shards.sh:18` would demand shard); the parity goldens are a frozen spec run by `plugin test` itself (generators retired, no `--check` gates) | PLAN S.5; research 04 §D3 |
+| plain-Node tests | bundled command hooks are `.mjs`, `plugin test` skips them: `node brewmod-placeholders/tests/check-defaults.mjs`, `node brewmod-placeholders/tests/inject-parity.mjs` (golden vectors, layer fixtures, state file, fail open, differential vs the TS lib) and `node --test brewmod-plan-effort/tests/mode.test.mjs` run in the same CI step; each failure prints `::error::` | C41; C43; `validate.yml` |
 | CC pin | `CLAUDE_CODE_VERSION: 2.1.296` (npm stable 2.1.292): has `plugin test` and `modules` (D13, S.4); a hook name newer than the pin turns validate and test red (W); tests that compare engine-stamped fields (`part`) normalise them (L13) | D13; S.4; W |
 | failed load | a mod that fails to load exits 0 in `claude -p` (grep stderr/debug for `hooks module did not load`) but non-zero in `validate --strict` and `plugin test` | X; probed on 2.1.296 |
 | type check, drift | `npx -y -p typescript@7.0.2 tsc -p <tsconfig outside the mod>` (`mods-lifecycle.md`); `node brewcode/skills/agents/scripts/mods-ref-check.mjs <types> brewcode/skills/agents/references` rc 0: not in CI, run by hand per build | X; D16 |
@@ -100,13 +101,38 @@ claude -p "$PROMPT" --plugin-dir "$MOD_DIR" --permission-mode plan \
 |-------|-----|-----|
 | module loaded | debug line `hooks module <name>@inline loaded ...; events: ...`; stderr empty of `did not load` | X |
 | session id | `system` / `init` message of stream-json output; transcript = `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects/<cwd, every non-alphanumeric char -> dash>/<sid>.jsonl` | X |
-| exactly-once injection | count INJECTIONS, not raw matches (3 per block): rows `attachment.type=hook_additional_context`, `hookEvent=UserPromptSubmit`, entries split on `\n\n---\n\n(?=User typed \``, token from the header; per token blocks == 1, rows == 1, and `api-request-blob` holds it once; compare sha256 of joined entries with the control run; positive control: checker on a doubled copy reports 2 | S; AB |
+| exactly-once injection | count INJECTIONS, not raw matches (3 per block): rows `attachment.type=hook_additional_context`, `hookEvent=UserPromptSubmit`, entries split on `\n\n---\n\n(?=User typed \``, token from the header; per token blocks == 1, rows == 1, and `api-request-blob` holds it once; compare sha256 of joined entries with the golden; positive control: checker on a doubled copy reports 2 | S; AB; C43 (`tests/live/ab-check.py`) |
 | A/B harness | copy the mod per run (a peer's mid-edit broke a load) or `git archive HEAD` (abort if `plugin.json`/`register.ts` missing); per-run guards: one transcript, no `did not load`, mod-loaded line only with the mod, other hook's `finished with status` count (brewtools off: `--settings '{"enabledPlugins":{"<plugin>@<market>":false}}'`), rc 0 or `error_max_turns` | AB |
 | mode | profile may default to `bypassPermissions`: pass `--permission-mode default` or `--permission-mode plan` explicitly; `e.permission_mode` then equals it | S |
 | effort reaches API | `api-request` rows `params.output_config.effort` in session JSONL (`${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects/.../<sid>.jsonl`; subagents: `<sid>/subagents/agent-<id>.jsonl`, which show session level while main shows raised one). Debug file and `PostToolBatch` `effort.level` do NOT show it; run with `--effort high` and compare control | T11 Q2; X |
 | `ExitPlanMode` in `-p` | absent in plain `-p` (plan L5 does not reproduce); use stream-json host with `--permission-prompt-tool stdio` (reject = `isError: true`) or tmux | T11 Q3; X |
 | project root | launch from `sub/deep` to see `$.session.root()` = launch dir (`mods-patterns.md` #9) | S; X |
 | probe that prints | `$.ui.log('TAG ...', { to: 'debug' })`, then grep debug file | X |
+
+## Team-Org Live Check
+
+A mod that injects context or tracks mode passes `validate`, `plugin test` and every Max/free run while doing nothing on a Team/Enterprise org (module `classic.*`, `session.append` attachment doors, `prompt.section/context/compose/attachment`, `attribution.text` bypassed: `mods-api.md` "Org-Managed Installs"). Run it once on a Team profile next to a control profile that is not seated (F1: work = `~/.claude-work` Team, control = `~/.claude-e`).
+
+```bash
+unset CLAUDECODE
+CLAUDE_CONFIG_DIR=<team profile dir> claude -p "<prompt with the token>" --plugin-dir "$MOD_DIR" --permission-mode plan \
+  --output-format stream-json --verbose --debug-file "$DEBUG_FILE" < /dev/null > out.jsonl 2> err.txt
+```
+
+| Check | How | src |
+|-------|-----|-----|
+| org seat | debug has `cc-plugin-sec-default@builtin seated outermost: the organization is team` (control: `not seated: ... (max)`); no seat = the run proves nothing about bypass | F1 §1 |
+| what is bypassed | `grep 'bypassed by cc-plugin-sec-default' debug`: `classic.X`, `session.append`, `prompt.attachment` lines; compare fire counts of a probe module with the control | F1 §2 |
+| module loaded | `hooks module <name>@inline loaded ...; events: ...`, stderr without `did not load` | F1 |
+| command hook ran | debug `Hooks: UserPromptSubmit [node ".../hooks/<file>.mjs"] (plugin <p>@inline) finished with status 0` and `provided additionalContext (N chars)` | F1 §3 |
+| model sees it | hidden codeword answered by the model; transcript attachment `hook_additional_context`, `hookName` `UserPromptSubmit`, once | F1 §3 |
+| state file | `<plugin root>/.state/mode-<session_id>.json` = `{"mode":"plan","ts":...}` after a `--permission-mode plan` run (clean it after: `.state/` is gitignored) | C41; F1 §4 |
+| effort reached the request | session JSONL `effort` of assistant records (`xhigh` x3 for a plan-mode run) | F1 §4 |
+| UI side | tmux, no prompt submitted: band, typeahead, `/placeholders list` | F1 §2 |
+| isolate from other installs | `--settings '{"enabledPlugins":{"<plugin>@<market>":false}}'` per installed plugin that would also load, inject or write (F1 debug showed the installed `brewmod-*` loading beside the probe); isolates the mod under test from the profile | F1; AB |
+| side effects | note transcripts left in profile dirs; remove `plugins/data/<mod>-inline` dirs a command hook created; no `~/.claude/dev-mods/` writes | F1 §6 |
+
+Not covered: a mixed `hooks.json` loaded from a marketplace INSTALL on a Team profile (F1 used `--plugin-dir`): `[unproven]`.
 
 ## tmux TTY Checks
 

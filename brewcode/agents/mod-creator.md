@@ -73,7 +73,7 @@ Each is sourced in `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/mods-lifecycl
 | `plugin.json` has `author`, `version`, `description` | `--strict` fails |
 | `.claude-plugin/types/` and engine-written mod-root `tsconfig.json` never committed (gitignore both) | engine files in git |
 | never write under `~/.claude/dev-mods/` unless asked (person's hot-reload folder); repo mods go in repo PLG dir | consent breach |
-| `classic.*` hooks do not run under org-managed installs: give non-classic fallback (`session.append`) where behaviour depends on them (`mods-patterns.md`) | silent no-op |
+| module `classic.*`, `session.append` attachment doors and `prompt.section/context/compose/attachment` hooks do not run for a user-installed mod on Team/Enterprise orgs: bundle a classic COMMAND hook in `hooks/hooks.json` next to `modules` (`mods-patterns.md` #1, #2); live-test on a Team profile | silent no-op, gates stay green |
 | broken module still exits `claude -p` rc 0: grep stderr/debug for `hooks module did not load` | red gate read as green |
 
 ## Create or maintain a mod
@@ -94,6 +94,6 @@ Directory `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/`:
 |---|---|
 | `mods-lifecycle.md` | Always before building: Step 0, Hard Rules, road (scaffold, validate, tsc, test, run, debug lines, ship, maintain) |
 | `mods-api.md` | Choosing events or `$` nouns, writing manifest, checking budget; holds symbol index drift check reads |
-| `mods-patterns.md` | Building behaviour: classic-chain wrap, plan-mode tracking, `turn.step` rewrite, decorations/band (`prompt.change`, budget), autocomplete, slash command, userConfig, fail-open guards, `$.fs` defaults, `rm` after realpath |
+| `mods-patterns.md` | Building behaviour: bundled command hook (context injection), plan mode via state file, `turn.step` rewrite, decorations/band (`prompt.change`, budget), autocomplete, slash command, userConfig, fail-open guards, `$.fs` defaults, `rm` after realpath |
 | `mods-testing.md` | Writing tests: `claude-code/testing` kit, stub bottoms, raising events, `ui.mount`, latency, CI wiring, headless A/B and tmux checks |
 | `mods-changes.md` | A new CC build, or mod written for older one: per-version changes, "Did Not Reproduce", self-update procedure |

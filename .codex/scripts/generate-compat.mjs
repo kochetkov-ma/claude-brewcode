@@ -46,9 +46,8 @@ const CLAUDE_ONLY_TEAMS_REFERENCES = [
   'references/mode-enable-disable.md'
 ];
 
-// Etalon-first wording mirrored into the Codex variants. Sources of truth:
-// brewcode/skills/teams-setup/references/agent-template.md and the mod default
-// brewmod-placeholders/placeholders/a.md. Edit here only, never at the call sites.
+// Etalon-first wording mirrored into the Codex variants; sources: teams-setup/references/agent-template.md
+// and brewmod-placeholders/placeholders/a.md. Edit here only, never at the call sites.
 const ETALON_ADDITIVE = 'in addition to conventions, rules, and documentation, never instead of them';
 const ETALON_SENTENCE = `before writing a class, module, or test, find the closest well-built existing one in this repository and take its principles, ${ETALON_ADDITIVE}`;
 const ETALON_BRIEF = `find the closest well-built counterpart in the repository and follow its principles, ${ETALON_ADDITIVE}`;
