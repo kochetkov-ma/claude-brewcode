@@ -1,111 +1,41 @@
 # Deploy
 
-GitHub Actions deployment: workflows, releases, GHCR, CI/CD with safety gates and persistent config. Detects mode from your prompt, walks a phase-based flow (setup, create workflow, release, trigger deploy, monitor runs), and generates a companion `deploy-admin` agent that reads project GitHub/workflow/server config from `CLAUDE.local.md`.
+GitHub Actions deployment: workflows, releases, GHCR and CI/CD with a confirmation gate before every write or push. Generates a companion `deploy-admin` agent that reads the GitHub, workflow and server config from `CLAUDE.local.md`.
 
-User-invocable only (`disable-model-invocation: true`): you type `/brewtools:deploy` or nothing runs. A recurring tool with its own modes, not a `-setup` skill, so it has no `status | install | upgrade | enable | disable | uninstall | purge` verbs.
+## Install
 
-## Quick Start
+```bash
+claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
+claude plugin install brewtools@claude-brewcode
+```
+
+User-invocable only (`disable-model-invocation: true`): type `/brewtools:deploy` or nothing runs.
+
+## Usage
 
 ```
-/brewtools:deploy
+/brewtools:deploy [prompt] [setup|create|release|deploy|monitor|update-agent]
 ```
 
-No GitHub config in `CLAUDE.local.md` yet → setup. Config exists → monitor.
+Example:
 
-## Modes
+```
+/brewtools:deploy release patch
+```
 
-| Mode | How to trigger | What it does |
+No arguments: setup when `CLAUDE.local.md` has no GitHub config, monitor otherwise.
+
+| Mode | Trigger words | What it does |
 |------|---------------|--------------|
-| Setup | `setup`, `check`, `prerequisites`, `init` (or no config yet) | Verify `gh` auth, detect repo, check secrets, check SSH integration, discover workflows, persist config, generate `deploy-admin` agent |
-| Create | `create`, `new workflow`, `add workflow` | Generate a new GitHub Actions workflow YAML from a template (exact action pins; a production deploy takes release-tag builds only), persist it to config |
-| Release | `release`, `bump`, `version`, `tag`, `publish` | Probe project release tooling, plan without writing, confirmation gate, bump version + changelog, one commit + tag + push chain, watch every CI run of the pushed commit, verify published artifact |
-| Deploy | `deploy`, `trigger`, `dispatch`, `run workflow` | List deployable workflows, select one, confirmation gate, trigger, watch the run, VPS health + version gate when applicable |
-| Monitor | `monitor`, `watch`, `status`, `check runs`, `logs` (default when config exists and no args) | Recent workflow runs, workflow states, releases, failed-run logs |
-| Update agent | `update agent`, `refresh`, `rescan` | Re-discover workflows, regenerate `deploy-admin` agent from fresh data |
+| Setup | `setup`, `check`, `prerequisites`, `init` | Verify `gh` auth, detect repo, discover workflows, persist config, generate `deploy-admin` |
+| Create | `create`, `new workflow`, `add workflow` | Generate workflow YAML from a template; production deploys take release-tag builds only |
+| Release | `release`, `bump`, `version`, `tag`, `publish` | Probe tooling, plan, confirm, bump, commit + tag + push, watch CI, verify artifact |
+| Deploy | `deploy`, `trigger`, `dispatch`, `run workflow` | Select a workflow, confirm, trigger, watch the run |
+| Monitor | `monitor`, `watch`, `status`, `check runs`, `logs` | Recent runs, workflow states, releases, failed-run logs |
+| Update agent | `update agent`, `refresh`, `rescan` | Re-discover workflows, regenerate `deploy-admin` |
 
-## Examples
-
-### Good Usage
-
-```bash
-# First run in a repo with no GitHub config -- walks setup
-/brewtools:deploy
-
-# Scaffold a new workflow
-/brewtools:deploy create a workflow that builds and pushes to GHCR
-
-# Cut a release
-/brewtools:deploy release
-
-# Trigger a specific deploy workflow
-/brewtools:deploy deploy the vps-deploy workflow
-
-# Check recent CI runs and releases
-/brewtools:deploy status
-```
-
-### Common Mistakes
-
-```bash
-# Expecting a bump/changelog script that does not exist in this repo
-/brewtools:deploy release
-# The skill probes .claude/scripts/, scripts/, package.json, Makefile first --
-# a "none" result is not a failure, it asks which files carry the version.
-
-# Assuming release pushes without confirmation
-/brewtools:deploy release
-# Step 3 is an AskUserQuestion gate before the first write and the commit+tag+push.
-
-# Running deploy/release without gh auth
-/brewtools:deploy release
-# P1 env check fails fast: run `gh auth login` first.
-```
-
-## What It Does
-
-| Phase | Name | Description |
-|-------|------|-------------|
-| P0 | Mode detection | Matches your prompt against mode keywords, or falls back to the config-presence default |
-| P1 | Environment + config check | `gh` auth/version/repo/secrets check, loads existing `CLAUDE.local.md` GitHub config |
-| P2 | Setup | Verify auth, detect repo, check secrets, check SSH integration section, discover workflows, persist config, gitignore `CLAUDE.local.md`, generate `deploy-admin` agent |
-| P3 | Create workflow | Pick a workflow type (build+push GHCR / deploy to VPS / release / security scan / custom), write YAML, update config |
-| P4 | Release | Probe tooling, plan, confirmation gate, bump version, changelog, commit+tag+push chain, post-release hook, watch CI for the pushed commit, verify artifact |
-| P5 | Deploy | List active workflows, select, confirmation gate, trigger, watch run, VPS health + version gate if applicable |
-| P6 | Monitor | Recent runs, workflow states, releases, failed-run logs, config refresh |
-| Mode: update-agent | Re-discover workflows, regenerate `deploy-admin` agent |
-
-Every confirmation gate (release Step 3, deploy Step 4) runs in the main conversation via AskUserQuestion, never in a subagent.
-
-## Companion Agent
-
-The skill generates `.claude/agents/deploy-admin.md` during setup, parametrized from the project's own GitHub config, workflow inventory and (if present) SSH server targets. The skill drives the phase-based flow directly in-session; `deploy-admin` is what you delegate a bounded release/deploy/monitor unit to afterward, or what the skill itself spawns via `Agent` for a self-contained deliverable. Both share the same safety classification (READ/CREATE free, MODIFY/SERVICE/DELETE/PRIVILEGE gated) and read `CLAUDE.local.md` for project config; `references/safety-rules.md` and the agent body carry the same table.
-
-## Output
-
-```markdown
-# Deploy [MODE]
-
-## Detection
-| Field | Value |
-## Environment
-| Component | Status |
-## Actions Taken
-- [action 1]
-## Status
-[success / partial / failed]
-```
-
-## Tips
-
-- Run `/brewtools:deploy` with no arguments first in a new repo — it tells you whether setup or monitor is about to run before you commit to a mode.
-- `release` is safe to cancel at the confirmation gate (Step 3): nothing is written or pushed until you approve.
-- If a step reports "no post-release script" or "no external artifact to verify", that is expected for projects without one — not a failure.
-- Delegate a multi-repo or multi-environment release to several `deploy-admin` spawns, one per target, rather than one agent looping over all of them.
+READ and CREATE commands run freely; MODIFY, SERVICE, DELETE and PRIVILEGE always ask. Gates run in the main conversation, never in a subagent.
 
 ## Documentation
 
-| Link | Target |
-|------|--------|
-| Plugin overview | [brewtools/README.md](../../README.md) |
-| Companion agent | [deploy-admin](../../agents/deploy-admin.md) |
-| Docs site | https://doc-claude.brewcode.app/brewtools/skills/deploy/ |
+Full guide: https://doc-claude.brewcode.app/brewtools/skills/deploy/ | [deploy-admin](../../agents/deploy-admin.md) | [brewtools](../../README.md)

@@ -4,7 +4,7 @@ description: Detailed description of all brewdoc plugin commands
 
 # Brewdoc Plugin Commands
 
-> **Version:** 6.8.0 | **Author:** Maksim Kochetkov | **License:** MIT
+> **Version:** 6.9.0 | **Author:** Maksim Kochetkov | **License:** MIT
 
 ## Quick Reference
 
@@ -30,193 +30,58 @@ Every brewdoc skill except `/brewdoc:publish` carries `disable-model-invocation:
 
 ## 1. `/brewdoc:my-claude`
 
-**Purpose:** Generates docs about your Claude Code installation and environment. Three modes: INTERNAL (local setup inventory), EXTERNAL (hook/context/agent architecture from official sources), RESEARCH (query-driven investigation from multiple web sources). Output goes to `.claude/brewdoc/my-claude/` in the current project, tracked in `.claude/brewdoc/INDEX.jsonl`.
+**Purpose:** Documents your Claude Code installation. Output goes to `.claude/brewdoc/my-claude/` in the current project, tracked in `.claude/brewdoc/INDEX.jsonl`. An existing entry for the same mode triggers an update offer (version bump).
 
 | Parameter | Value |
 |-----------|-------|
 | **Arguments** | `[prompt] [ext [context]] \| [r <query>]` |
 | **Model** | `opus` |
-| **Dependencies** | None |
 | **Allowed tools** | `Read`, `Write`, `Edit`, `Glob`, `Grep`, `Bash`, `Agent`, `WebFetch`, `WebSearch`, `AskUserQuestion` |
 
-### Arguments
+| Arguments | Mode | Output file |
+|-----------|------|-------------|
+| *(empty)* | INTERNAL: local setup inventory (active config dir `CLAUDE_CONFIG_DIR`, default `~/.claude`; project `CLAUDE.md`, rules, memory) | `.claude/brewdoc/my-claude/YYYYMMDD_my-claude-internal.md` |
+| `ext` or `external` | EXTERNAL: hook/context/agent architecture from official sources | `.claude/brewdoc/my-claude/YYYYMMDD_my-claude-external.md` |
+| `ext context` | EXTERNAL context-schema (`additionalContext`, `updatedInput`) | `.claude/brewdoc/my-claude/external/YYYYMMDD_context-schema.md` |
+| `r <query>` or `research <query>` | RESEARCH: query split into 2-5 source groups | `.claude/brewdoc/my-claude/YYYYMMDD_research-{slug}.md` |
 
-| Arguments | Mode | Sub-mode | Output File |
-|-----------|------|----------|-------------|
-| *(empty)* | INTERNAL | -- | `.claude/brewdoc/my-claude/YYYYMMDD_my-claude-internal.md` |
-| `ext` or `external` | EXTERNAL | default | `.claude/brewdoc/my-claude/YYYYMMDD_my-claude-external.md` |
-| `ext context` or `external context` | EXTERNAL | context-schema | `.claude/brewdoc/my-claude/external/YYYYMMDD_context-schema.md` |
-| `r <query>` or `research <query>` | RESEARCH | query = rest of args | `.claude/brewdoc/my-claude/YYYYMMDD_research-{slug}.md` |
-
-### Modes
-
-| Mode | Goal | Sources |
-|------|------|---------|
-| INTERNAL | Document local Claude Code setup | Active config dir (`CLAUDE_CONFIG_DIR`, default `~/.claude`): `CLAUDE.md`, `rules/*.md`, `agents/*.md`, `skills/`; project `CLAUDE.md`, `.claude/rules/*.md`, memory files |
-| EXTERNAL (default) | Document hook/context/agent architecture | Local hook files, WebSearch (releases, CHANGELOG), official docs, GitHub, community forums |
-| EXTERNAL (context-schema) | Document context injection schema | `additionalContext`, `updatedInput`, and related patterns |
-| RESEARCH | Research specific Claude Code query | Official docs, GitHub, Reddit, forums, marketplaces (2-5 source groups) |
-
-### INDEX Tracking
-
-All entries tracked in `.claude/brewdoc/INDEX.jsonl`:
-
-```jsonl
-{"ts":"2026-02-28T10:00:00","mode":"internal","path":".claude/brewdoc/my-claude/20260228_my-claude-internal.md","title":"Internal Claude Setup Overview","version":"1.0"}
-```
-
-If an existing entry for the same mode exists, the skill offers to update (version bump).
-
-### Workflow
-
-**INTERNAL mode:**
-1. Load `references/internal-mode.md`
-2. Spawn 3 parallel `Explore` agents: (1) global config (active config dir: `CLAUDE_CONFIG_DIR`, default `~/.claude`), (2) project `.claude` config, (3) memory files
-3. Aggregate findings into structured document
-4. Write to `.claude/brewdoc/my-claude/YYYYMMDD_my-claude-internal.md`
-5. Spawn an independent read-only `Explore` agent to re-check the written doc (file paths exist, counts match)
-6. Apply its fixes; add INDEX entry
-
-**EXTERNAL mode (default):**
-1. Load `references/external-mode.md`
-2. Analyze local hook files for event model patterns
-3. WebSearch for recent Claude Code releases and CHANGELOG
-4. Spawn `general-purpose` agents for: official docs, GitHub releases, community forums
-5. Generate `.claude/brewdoc/my-claude/YYYYMMDD_my-claude-external.md`
-6. Spawn an independent `general-purpose` agent to re-check the written doc against its sources via WebFetch/WebSearch; apply its fixes; add INDEX entry
-
-**EXTERNAL mode (context-schema):**
-1. Focus on context injection schema (`additionalContext`, `updatedInput`, etc.)
-2. Output to `.claude/brewdoc/my-claude/external/YYYYMMDD_context-schema.md`
-3. Spawn an independent `general-purpose` agent to re-check the written doc against its sources; apply its fixes; add INDEX entry
-
-**RESEARCH mode:**
-1. Analyze query -- divide into 2-5 source groups (official docs, GitHub, Reddit, forums, marketplaces)
-2. Spawn `general-purpose` agents per source group in parallel
-3. Aggregate with citation tracking (source URL per fact)
-4. Output to `.claude/brewdoc/my-claude/YYYYMMDD_research-{slug}.md`
-5. Spawn an independent `general-purpose` agent to re-check the written doc against its sources via WebFetch/WebSearch (facts, source reliability); apply its fixes; add INDEX entry
-
-### Output
-
-| Mode | Created Files |
-|------|---------------|
-| INTERNAL | `.claude/brewdoc/my-claude/YYYYMMDD_my-claude-internal.md`, INDEX entry |
-| EXTERNAL (default) | `.claude/brewdoc/my-claude/YYYYMMDD_my-claude-external.md`, INDEX entry |
-| EXTERNAL (context) | `.claude/brewdoc/my-claude/external/YYYYMMDD_context-schema.md`, INDEX entry |
-| RESEARCH | `.claude/brewdoc/my-claude/YYYYMMDD_research-{slug}.md`, INDEX entry |
-
-### Output Document Structure
-
-**INTERNAL:**
-```markdown
-# Claude Code Internal Setup -- {date}
-## Global Configuration
-### Instructions (CLAUDE.md)
-### Rules ({N} rules)
-### Agents ({N} agents)
-### Skills ({N} skills)
-## Project Configuration
-### Project Instructions
-### Project Rules
-## Memory
-### Active Memories ({N} entries)
-## Summary
-| Component | Count | Location |
-```
-
-**RESEARCH:**
-```markdown
-# Research: {query} -- {date}
-## Findings
-### {Source Group 1}
-...
-## Sources
-| Fact | Source | Reliability |
-## Review Verdict
-```
-
-### Examples
+**Workflow:** load the mode reference (`references/internal-mode.md` or `external-mode.md`), gather in parallel (INTERNAL: 3 `Explore` agents for global config, project config, memory; EXTERNAL and RESEARCH: `general-purpose` agents per source group, RESEARCH keeps a source URL per fact), write the document, then an independent read-only agent re-checks it (paths exist, counts match, sources hold), its fixes are applied and the INDEX entry is added.
 
 ```
 /brewdoc:my-claude
-/brewdoc:my-claude ext
 /brewdoc:my-claude ext context
 /brewdoc:my-claude r "how do PreToolUse hooks modify agent prompts"
-/brewdoc:my-claude research "Claude Code plugin marketplace submission process"
 ```
 
 ---
 
 ## 2. `/brewdoc:memory-sync-setup`
 
-**Purpose:** GENERATOR. It analyzes the target project and writes a self-contained, project-local `.claude/skills/memory-sync/` into that repo -- it never syncs memory itself. The emitted skill keeps everything that gets AUTO-LOADED into context truthful against the code; documentation is explicitly out of scope.
+**Purpose:** GENERATOR. Analyzes the target project and writes a self-contained `.claude/skills/memory-sync/` into that repo; it never syncs memory itself. The emitted skill keeps everything AUTO-LOADED into context truthful against the code; documentation is out of scope.
 
 | Parameter | Value |
 |-----------|-------|
 | **Arguments** | `[prompt] [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [fine-tune-prompt]` |
 | **Model** | `opus` |
-| **Dependencies** | None |
 | **Allowed tools** | `Read`, `Edit`, `Glob`, `Grep`, `Bash`, `Agent`, `AskUserQuestion` |
 | **Model invocation** | `disable-model-invocation: true` -- user-invoked only |
 
-### Modes
-
-| Mode | Writes | Runs |
+| Mode | Writes | Does |
 |------|--------|------|
-| `status` (**default when installed**) | nothing | Is `memory-sync` installed, what its provenance frontmatter says (`doc_type`/`version`/`content_version`/`generated_by`/`last_updated`/`surface_files`), how stale its surface tables are vs the live repo. Verdict `IN SYNC` / `STALE (n drifts)` / `STALE-LEGACY (n drifts)` (pre-5.0 tail stamp -- run `upgrade`) / `NOT INSTALLED`, each prefixed `PARKED - ` when disabled |
-| `install` (**default when not installed**) | the 5 emitted files (`SKILL.md` + `references/memory-guide.md`, `agent-audit.md`, `hard-sync.md`, `prompting-guide.md`) | Full analysis + emit. Refuses an existing installation |
-| `upgrade` | targeted edits + provenance restamp | Re-scan and refresh an existing installation; hand-edits preserved, never blind-overwritten |
-| `enable` | renames `SKILL.md.disabled` -> `SKILL.md` | Brings `/memory-sync` back in the current session (Claude Code watches `.claude/skills/`; bare mode: new session); nothing regenerated |
-| `disable` | renames `SKILL.md` -> `SKILL.md.disabled` | Withdraws `/memory-sync` from the roster; the 4 references and every hand-edit stay byte-identical. Reversible by `enable` |
-| `uninstall` | deletes exactly what `emit` wrote (`SKILL.md`/parked form + the 4 references) | Removes the emitted skill after confirmation. Files the user added to that dir are kept and listed |
-| `purge` | deletes `<target>/.claude/skills/memory-sync/` outright | Removes everything including user-added files. Confirmation first |
+| `status` (default when installed) | nothing | Reports provenance frontmatter and surface-table drift: `IN SYNC` / `STALE (n drifts)` / `STALE-LEGACY (n drifts)` (pre-5.0 stamp, run `upgrade`) / `NOT INSTALLED`, prefixed `PARKED - ` when disabled |
+| `install` (default when not installed) | `SKILL.md` + `references/memory-guide.md`, `agent-audit.md`, `hard-sync.md`, `prompting-guide.md` | Full analysis and emit; refuses an existing installation |
+| `upgrade` | targeted edits + restamp | Re-scans; hand-edits preserved |
+| `enable` / `disable` | renames `SKILL.md.disabled` <-> `SKILL.md` | Parks or restores `/memory-sync`; references and hand-edits stay byte-identical |
+| `uninstall` | deletes what `emit` wrote | After confirmation; user-added files kept and listed |
+| `purge` | deletes `.claude/skills/memory-sync/` | Everything including user-added files; confirmation first |
 
-### Emitted surface (every run of `/memory-sync`)
+**Emitted surface:** root and nested `CLAUDE.md` (any depth), `CLAUDE.local.md`, `.claude/rules/*.md`, `CONVENTIONS.md`, `CONTRIBUTING.md`, `@path` imports, `AGENTS.md` (any depth), `.claude/agents/*.md`, `.claude/skills/*/SKILL.md` + references, `$MEMORY_DIR/*.md` (`autoMemoryDirectory`, else `~/.claude/projects/<hash>/memory/`). Excluded: `docs/**`, source code (read-only evidence), secrets, task-board state, build output.
 
-| Layer | Path |
-|-------|------|
-| Root CLAUDE.md | `./CLAUDE.md`, `./.claude/CLAUDE.md`, `CLAUDE.local.md` |
-| Nested CLAUDE.md | every `**/CLAUDE.md` at any depth |
-| Rules | `.claude/rules/*.md` |
-| Conventions | `CONVENTIONS.md`, `CONTRIBUTING.md`, `@path` imports |
-| AGENTS.md family | `AGENTS.md` at any depth |
-| Agents / Skills | `.claude/agents/*.md`, `.claude/skills/*/SKILL.md` + their `references/*.md` |
-| Memory dir | `$MEMORY_DIR/*.md` (`autoMemoryDirectory`, else `~/.claude/projects/<hash>/memory/`) |
-
-Excluded with reasons: `docs/**` (a separate doc flow owns it), all source code (read-only evidence), secrets, task-board state, build output.
-
-### Emitted behaviour
-
-1. **Scopes:** `session` (default) / `branch` / `commit <sha>` / `recent[:N]` / `all`, plus a `hard` depth. Free-form focus text steers emphasis and never narrows the sweep.
-2. **`hard` depth:** two extra aggressive passes -- a rules `paths:` PRECISION audit (a broad glob loads the rule into every context and burns tokens everywhere) and an OBVIOUS-KNOWLEDGE PURGE (delete what a competent model already knows; keep only project decisions and domain facts).
-3. **GATHER -> SYNC -> VERIFY:** parallel read-only gather, one bounded agent per disjoint batch (all spawned in ONE message), then independent checkers, never the agent that wrote the batch.
-4. **Agent re-audit:** agents are re-audited against current best practice every run, not merely fact-checked.
-5. **Non-growth:** facts first, then dedup, then compression; each file `<=` its original line count, total delta `<= 0`.
-6. **SELF-SYNC:** the emitted skill refreshes its own surface tables and adds sections for memory layers the project gained.
-
-### Output
-
-```markdown
-## memory-sync-setup [status|install|upgrade|enable|disable|uninstall|purge]
-
-### Surface / Batches / Exclusions
-| Batch | Files | Paths |
-
-### Emitted files / Ambiguities resolved / How to run it
-```
-
-### Examples
+**Emitted behaviour:** scopes `session` (default) / `branch` / `commit <sha>` / `recent[:N]` / `all`, plus a `hard` depth (rules `paths:` precision audit, obvious-knowledge purge); parallel read-only GATHER, then SYNC per disjoint batch, then VERIFY by independent checkers; agents re-audited against current best practice each run; non-growth (each file `<=` its original line count, total delta `<= 0`); SELF-SYNC refreshes its own surface tables.
 
 ```
-/brewdoc:memory-sync-setup
 /brewdoc:memory-sync-setup install "weight stale-fact removal over compression"
 /brewdoc:memory-sync-setup status
-/brewdoc:memory-sync-setup upgrade
-/brewdoc:memory-sync-setup disable
-/brewdoc:memory-sync-setup enable
-/brewdoc:memory-sync-setup uninstall
-/brewdoc:memory-sync-setup purge
 ```
 
 Then, inside that project: `/memory-sync`, `/memory-sync branch`, `/memory-sync all hard "only rules"`.
@@ -225,179 +90,119 @@ Then, inside that project: `/memory-sync`, `/memory-sync branch`, `/memory-sync 
 
 ## 3. `/brewdoc:docsync-setup`
 
-**Purpose:** Installs three project-local hooks that log which `.md` docs are edited and read, then block once per ask when an edited doc is stale by date. Source of truth is each doc's own frontmatter (`last_updated`) -- date only, local time, no hash, no deps. Runs in the main conversation (uses `AskUserQuestion`), no `context: fork`.
+**Purpose:** Installs three project-local hooks that log which `.md` docs are edited and read, then block once per ask when an edited doc is stale by date. Source of truth is each doc's own `last_updated` frontmatter (date only, local time). Runs in the main conversation (`AskUserQuestion`), no `context: fork`.
 
 | Parameter | Value |
 |-----------|-------|
 | **Arguments** | `[prompt] [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [sync [--all]\|reread\|frontmatter] \| free-text` |
 | **Model** | `sonnet` |
-| **Dependencies** | None |
 | **Allowed tools** | `Read`, `Write`, `Edit`, `Bash`, `Glob`, `Grep`, `AskUserQuestion` |
 | **Model invocation** | `disable-model-invocation: true` -- user-invoked only |
 
-### Modes
+| Mode | Writes | Does |
+|------|--------|------|
+| `status` (default when installed) | nothing | Tracked docs, staleness, docs edited and read this session |
+| `install` (default when not installed) | `docsync-{track,watch,gate}.mjs` in `.claude/hooks/`, `.claude/docsync/config.json` | Asks threshold (7/14/30/other days) and exclude globs; merges `settings.json` in one transaction (foreign hooks kept, rolled back on failure, `settings.json.lock` held) |
+| `upgrade` | hooks, settings entries, `config.json` provenance keys | Re-copies the hooks, re-registers missing ones; `enabled`, `threshold_days`, `exclude` and session logs preserved |
+| `enable` / `disable` | `config.json`: `enabled` + provenance refresh | Live, no restart; hooks stay registered but no-op when disabled (an absent `enabled` key counts as `true`) |
+| `uninstall` | hooks + `settings.json` entries | Removes only the 3 docsync entries; `.claude/docsync/` kept for a later `install` |
+| `purge` | `uninstall` + deletes `.claude/docsync/` | Destructive: hooks, registration, config and state |
 
-| Mode | Writes | Description |
-|------|--------|-------------|
-| `status` (**default when installed**) | nothing | Report tracked docs, staleness, docs edited and read this session |
-| `install` (**default when not installed**) | hooks + `.claude/docsync/config.json` (per-session `state-<sid>.jsonl` logs are created by the hooks) | Ask threshold (7/14/30/other days) + exclude globs; copy `docsync-{track,watch,gate}.mjs` into `.claude/hooks/`; write `config.json` with `version` (the plugin version, by skill self-location), `content_version`, `generated_by` (`brewdoc:docsync-setup`), `last_updated` (`date +%F`), `threshold_days` and `exclude`; merge `settings.json` in one transaction (never clobbers foreign hooks, rolled back on failure, no `.bak` file, `settings.json.lock` held) |
-| `upgrade` | hook files + settings entries + `config.json` provenance keys | Re-copy the 3 hooks from the current plugin version, re-register any that went missing, and refresh the four provenance keys in `config.json` (`version` / `content_version` / `generated_by` / `last_updated`); `enabled`, `threshold_days`, `exclude` and the session logs are preserved |
-| `enable` | `config.json`: `enabled: true` + provenance refresh | Flips docsync back to live; hooks stay registered throughout, effective immediately, no session restart. Provenance keys are backfilled if missing or stale, not required to already match |
-| `disable` | `config.json`: `enabled: false` + provenance refresh | Flips docsync inert without unwiring it; hooks stay registered but all three no-op (absent `enabled` key still counts as `true`, so this is the only way to pause). Reversible by `enable` |
-| `uninstall` | removes hooks + settings.json entries | Inverse-merge removes only the 3 docsync hook entries; foreign hooks preserved; `.claude/docsync/` (config + session logs) is kept for a later `install` to reuse. Takes `settings.json.lock` |
-| `purge` | `uninstall` + deletes `.claude/docsync/` | The destructive one: hooks, registration, config and state all go |
-
-**Extras** -- run after install, no canonical verb needed:
-
-| Extra | Writes | Description |
-|-------|--------|-------------|
-| `sync [--all]` | frontmatter `last_updated` | Refresh stale docs (or every in-scope doc with `--all`) WITH confirmation; Claude reads each doc's `sync_procedure` and follows it (prose hint -- no hook parses it); compression by `doc_type` (`llm` = deep, `user` = light, absent = `user`) |
-| `reread` | nothing | Force re-read of tracked docs to refresh in-context understanding |
-| `frontmatter` | frontmatter block | Opt-in retro-add of `doc_type`/`last_updated`/`sync_procedure` to docs missing them; never runs automatically at `install` |
-
-### Frontmatter schema
+| Extra | Does |
+|-------|------|
+| `sync [--all]` | Refreshes `last_updated` of stale docs (every in-scope doc with `--all`) after confirmation; follows each doc's `sync_procedure`; compression by `doc_type` (`llm` deep, `user` light) |
+| `reread` | Forces a re-read of tracked docs |
+| `frontmatter` | Opt-in retro-add of `doc_type`/`last_updated`/`sync_procedure`; never runs at `install` |
 
 ```yaml
 ---
-doc_type: llm                  # optional, UNQUOTED; absent or unrecognized => user. values: llm | user | skip
+doc_type: llm                  # optional, UNQUOTED; llm | user | skip (absent = user)
 last_updated: "2026-07-19"     # sole staleness input (YYYY-MM-DD, LOCAL time)
-sync_procedure: "what to check / where to look when syncing"   # optional, prose
+sync_procedure: "what to check when syncing"   # optional prose, no hook reads it
 ---
 ```
 
-`CLAUDE.md`, `CLAUDE.local.md` and `AGENTS.md` (any depth) are auto-loaded instruction files: never tracked, nudged or gated, whatever `exclude` says.
-
-`doc_type: skip` excludes a file from tracking entirely -- enforced by all three hooks, the Stop gate
-included. Absent or unrecognized `doc_type` is normalized to `user` in code, not just in docs.
-`sync_procedure` is a model-only hint: no hook reads it. `last_updated` and `sync_procedure` are quoted,
-`doc_type` is bare -- the hooks' parser strips quotes either way, but a real YAML consumer types an
-unquoted `2026-07-19` as a Date, and `doc_type` is an enum matched literally as `^doc_type: llm$`.
-Staleness, whole days in LOCAL time: the Stop gate compares `last_updated` with the file's modification day (`modified day - last_updated > threshold_days`); `status` and `sync` age it against today (`today - last_updated > threshold_days`).
+`doc_type: skip` excludes a file from all three hooks. `CLAUDE.md`, `CLAUDE.local.md` and `AGENTS.md` (any depth) are never tracked, nudged or gated. Staleness in whole local days: the Stop gate compares `last_updated` with the file's modification day, `status` and `sync` with today (`> threshold_days`).
 
 ```
-/brewdoc:docsync-setup
 /brewdoc:docsync-setup install
-/brewdoc:docsync-setup status
-/brewdoc:docsync-setup upgrade
-/brewdoc:docsync-setup disable
-/brewdoc:docsync-setup enable
 /brewdoc:docsync-setup sync --all
-/brewdoc:docsync-setup frontmatter
-/brewdoc:docsync-setup uninstall
-/brewdoc:docsync-setup purge
 ```
 
 ---
 
 ## 4. `/brewdoc:md-to-pdf`
 
-**Purpose:** Converts a Markdown file to PDF using one of two rendering engines. Detects missing dependencies and offers to install them; saves the chosen engine/style as project or global config; supports optional LLM preprocessing of the source Markdown before conversion.
+**Purpose:** Converts Markdown to PDF with reportlab or weasyprint. Detects missing dependencies and offers to install them; saves engine and style as project or global config.
 
 | Parameter | Value |
 |-----------|-------|
 | **Arguments** | `[prompt] <file.md> [--engine name] ["prompt"] \| styles \| test \| (no args = help)` |
 | **Model** | `sonnet` |
-| **Dependencies** | None |
 | **Allowed tools** | `Read`, `Write`, `Edit`, `Bash`, `Glob`, `Grep`, `AskUserQuestion` |
 
-### Modes
+| Mode | Trigger | Does |
+|------|---------|------|
+| HELP | empty or `help` | Prints usage |
+| STYLES | `styles` or `config` | Asks page size, colours, code theme, footer; saves `.claude/md-to-pdf.config.json` |
+| TEST | `test` | Converts the bundled `test/test-all-elements.md` |
+| CONVERT | `<file.md>` | Converts with the saved or flagged engine |
+| CONVERT+PROMPT | `<file.md> "prompt"` | Applies LLM edits to a temp copy, converts, deletes the copy |
 
-| Mode | Trigger | Description |
-|------|---------|-------------|
-| HELP | empty or `help` | Print usage and exit |
-| STYLES | `styles` or `config` | Interactive `AskUserQuestion` config: page size, color scheme, code theme, footer format; saved to `.claude/md-to-pdf.config.json` |
-| TEST | `test` | Convert the bundled `test/test-all-elements.md` sample |
-| CONVERT | `<file.md>` | Convert with saved/flagged engine |
-| CONVERT+PROMPT | `<file.md> "prompt"` | Apply LLM transformations to a temp copy, then convert, then delete the temp file |
-
-### Engines
-
-| Feature | reportlab | weasyprint |
-|---------|-----------|------------|
-| Install | pip only | pip + brew |
-| Quality | Good | Excellent |
-| CSS Styling | No | Yes |
-| Code highlight | No | Yes (Pygments) |
+reportlab: pip only, good quality, no CSS. weasyprint: pip + brew, excellent quality, CSS and Pygments code highlight.
 
 ```
-/brewdoc:md-to-pdf report.md
 /brewdoc:md-to-pdf report.md --engine weasyprint
-/brewdoc:md-to-pdf report.md "remove section 3"
-/brewdoc:md-to-pdf styles
-/brewdoc:md-to-pdf test
 ```
 
 ---
 
 ## 5. `/brewdoc:publish`
 
-**Purpose:** Publishes text, Markdown, a file, a directory, or a ZIP to brewpage.app, returning the server's shareable URL. No sign-up required. Auto-detects content type, asks for a namespace and optional local password-file path, then saves the owner token and returned owner API/identity metadata to project-root `.claude/brewpage-history.md`.
+**Purpose:** Publishes text, Markdown, a file, a directory or a ZIP to brewpage.app and returns the shareable URL. Asks for a namespace and optional local password-file path; saves the owner token and returned owner metadata to project-root `.claude/brewpage-history.md`.
 
 | Parameter | Value |
 |-----------|-------|
 | **Arguments** | `[prompt] <text\|file_path\|directory_path\|zip_path> [--ttl N] [--entry filename] [--delivery-mode path\|subdomain]` |
 | **Model** | `haiku` |
-| **Dependencies** | `curl` and `jq` for all uploads; Node.js and `unzip` for SITE; `zip` additionally for directory packaging |
-| **Model invocation** | `disable-model-invocation: false` -- you or Claude (mid-task, to share a link). Claude's own call asks for the `Skill` permission once in default mode; pre-approve it with the allow rule `Skill(brewdoc:publish *)` (headless/`dontAsk`: required) |
-| **Allowed tools** | `Read`, `Bash(bash ${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh *)`, `AskUserQuestion`, `Glob`: every step (probe, stage, publish, cleanup) is one `scripts/brewpage-run.sh` command, so no step prompts, headless included |
-
-### Content Type Detection
+| **Dependencies** | `curl`, `jq`; Node.js and `unzip` for SITE; `zip` for directory packaging |
+| **Model invocation** | `disable-model-invocation: false` -- Claude may run it mid-task to share a link; pre-approve with `Skill(brewdoc:publish *)` (required headless/`dontAsk`) |
+| **Allowed tools** | `Read`, `Bash(bash ${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh *)`, `AskUserQuestion`, `Glob` -- every step is one `brewpage-run.sh` command |
 
 | Input | Type | API |
 |-------|------|-----|
-| Directory | SITE | `POST /api/sites` (ZIP built from dir) |
-| `.zip` file | SITE | `POST /api/sites` (archive upload) |
+| Directory or `.zip` | SITE | `POST /api/sites` |
 | `.md`/`.markdown` file | MARKDOWN | `POST /api/html?format=markdown` |
-| Any other existing file | FILE | `POST /api/files` (multipart) |
+| Any other existing file | FILE | `POST /api/files` |
 | Starts with `{` or `[` | JSON | `POST /api/json` |
-| Anything else | HTML | `POST /api/html` (format=markdown) |
+| Anything else | HTML | `POST /api/html` |
 
-### Flags
-
-| Flag | Default | Description |
-|------|---------|-------------|
+| Flag | Default | Does |
+|------|---------|------|
 | `--ttl N` | `15` days | Time to live |
-| `--entry filename` | auto-detect | Entry file for SITE uploads: flag > `index.html` > first `.html`/`.htm` alphabetically |
-| `--delivery-mode path\|subdomain` | server default | Optional creation choice sent only as `X-Delivery-Mode`; never inserted into content or multipart fields |
+| `--entry filename` | auto-detect | SITE entry: flag > `index.html` > first `.html`/`.htm` |
+| `--delivery-mode path\|subdomain` | server default | Sent only as `X-Delivery-Mode`. NEW SITE and non-public publications lock to `subdomain`; public text, JSON or file allows `path` or `subdomain` |
 
-### Delivery and Visibility
-
-Omit `--delivery-mode` to use the server default. For NEW publications (`routingCohort=new-v1`):
-
-| Publication | Default | Allowed choice |
-|-------------|---------|----------------|
-| SITE, any namespace or password | Dedicated subdomain (`subdomain`) | Locked; explicit `path` is rejected |
-| Non-site outside `public` | Dedicated subdomain (`subdomain`) | Locked; explicit `path` is rejected |
-| Public text/Markdown, JSON or file, including password-protected content | Promotion (`path`) | `path` or `subdomain` |
-
-OLD publications retain their existing links and behavior. The server may return an existing OLD or NEW publication: use its actual identity, cohort, mode and exact returned `link`, even if the mode differs from your request. Missing/null OLD routing metadata means **Existing link**; do not infer a mode from the address. Preserve the trailing `/` on a NEW subdomain root; never build a hostname from an ID.
-
-Namespace: `public` makes unprotected content eligible for gallery discovery; eligible Promotion publications may be indexed. An auto-suggested/custom private namespace is unlisted, not secret: anyone with the link can open it unless a password is set. Eligible public content may be indexed on either address; unlisted, protected or otherwise ineligible native responses use `noindex`. Password-protected content is excluded from the gallery.
+OLD publications keep their links. Use the exact returned `link`, cohort and mode; never infer a mode from the address or build a hostname from an ID. Namespace `public` makes unprotected content gallery-eligible; a private namespace is unlisted, not secret, unless a password is set.
 
 ```
-/brewdoc:publish report.md
-/brewdoc:publish report.md --delivery-mode subdomain
 /brewdoc:publish ./dist --entry index.html
 /brewdoc:publish "hello world" --ttl 30
 ```
 
-See the [publish README](../skills/publish/README.md) and [full workflow](https://doc-claude.brewcode.app/brewdoc/skills/publish/) for password access, owner operations and hosting changes.
+Password access, owner operations and hosting changes: [publish README](../skills/publish/README.md), [full workflow](https://doc-claude.brewcode.app/brewdoc/skills/publish/).
 
 ---
 
 ## Error Handling
 
-| Error | Applies To | Action |
-|-------|-----------|--------|
-| `memory-sync` already installed | memory-sync-setup | `install` refuses; use `upgrade` (or `MEMORY_SYNC_FORCE=1` to destroy hand-edits) |
-| Surviving `{PLACEHOLDER}` after emit | memory-sync-setup | `generate.sh validate` fails; fill the slot before reporting |
-| Emitted agent name does not resolve | memory-sync-setup | Fall back to `general-purpose`, report the substitution |
+| Error | Skill | Action |
+|-------|-------|--------|
+| `memory-sync` already installed | memory-sync-setup | `install` refuses; use `upgrade` (`MEMORY_SYNC_FORCE=1` destroys hand-edits) |
+| Surviving `{PLACEHOLDER}` after emit | memory-sync-setup | `generate.sh validate` fails; fill the slot |
 | `upgrade` but nothing installed | memory-sync-setup, docsync-setup | Stop; point at `install` |
-| `settings.json` invalid JSON | docsync-setup | Abort before anything is written or removed (no `.bak` file; a failed write rolls back), report |
-| No `.html`/`.htm` in SITE bundle during entry auto-detection | publish | Fail with explicit error, never guess an entry file |
-| Dependency install fails | md-to-pdf | Report `INSTALL_FAILED` and stop |
-| Conversion fails | md-to-pdf | Read error, attempt one fix + retry, else report error |
+| `settings.json` invalid JSON | docsync-setup | Abort before any write; report |
+| No `.html`/`.htm` in SITE bundle | publish | Fail loudly, never guess an entry |
+| Dependency install or conversion fails | md-to-pdf | `INSTALL_FAILED` and stop, or one fix + retry, else report |
 
-## Plugin Variable
-
-brewdoc has no hooks. Skills resolve their own resources natively via `${CLAUDE_SKILL_DIR}` -- substituted by Claude Code itself. No hook injection is needed.
+brewdoc has no hooks; skills resolve their own files via `${CLAUDE_SKILL_DIR}`. Optional mods: [overview](https://doc-claude.brewcode.app/mods/overview/).

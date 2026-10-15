@@ -1,0 +1,462 @@
+{
+ "name": "teams-setup",
+ "duration": 20,
+ "layout": {
+  "maxCols": 94
+ },
+ "targetBytes": 2000000,
+ "forbid": [
+  "auto-?fix",
+  "guarantee",
+  "never fails"
+ ],
+ "forbidAllow": [],
+ "meta": {
+  "version": "2.1.300",
+  "model": "Opus 5.5 (1M context)",
+  "cwd": "~/brewery-api",
+  "statusLine": "maksim@Mac ~/brewery-api (refunds) [Opus 5.5 (1M context)] high ctx:5%",
+  "footer": "⏸ manual mode on",
+  "placeholder": "/brewcode:teams-setup",
+  "rows": 28
+ },
+ "chapters": [
+  {
+   "at": 0,
+   "label": "setup"
+  },
+  {
+   "at": 8.0,
+   "label": "run"
+  },
+  {
+   "at": 12.9,
+   "label": "status"
+  },
+  {
+   "at": 16.4,
+   "label": "card"
+  }
+ ],
+ "captions": [
+  {
+   "at": 0,
+   "text": "Build a team of domain agents for this repo"
+  },
+  {
+   "at": 2.4,
+   "text": "Domain owners plus a review-only intent guard"
+  },
+  {
+   "at": 8.0,
+   "text": "Describe a task: the owning agents take it, in parallel"
+  },
+  {
+   "at": 12.9,
+   "text": "Every task is traced: health per agent"
+  },
+  {
+   "at": 16.5,
+   "text": "A team that tracks itself"
+  }
+ ],
+ "events": [
+  {
+   "type": "type",
+   "at": 0.3,
+   "text": "/brewcode:teams-setup install payments",
+   "cps": 30
+  },
+  {
+   "type": "key",
+   "at": 1.6,
+   "glyph": "⏎",
+   "word": "enter · set up"
+  },
+  {
+   "type": "submit",
+   "at": 1.75
+  },
+  {
+   "type": "print",
+   "at": 1.9,
+   "reveal": 0.05,
+   "kv": true,
+   "lines": [
+    "Mode: install, Team: payments",
+    "[[b gold|PLAN — brewcode:teams-setup]]",
+    "INPUT:  install payments",
+    "MODE:   install — explicit",
+    "SCOPE:  team payments · 2 domain agents + intent-guard · .claude/teams/payments/",
+    "DO:     - analyze the project and propose a roster",
+    "        - create one agent per domain, verify the team",
+    "RESULT: .claude/teams/payments/ + .claude/agents/ roster, verified"
+   ]
+  },
+  {
+   "type": "skip",
+   "at": 2.5,
+   "until": 4.5,
+   "factor": 5
+  },
+  {
+   "type": "agent",
+   "at": 2.55,
+   "agent": "brewcode:agent-creator",
+   "desc": "Create payments-api",
+   "doneAt": 3.7,
+   "stats": "8 tool uses · 14.8k tokens · 52s",
+   "ticks": [
+    [
+     2.8,
+     "Read(brewcode/skills/teams-setup/references/agent-template.md)"
+    ],
+    [
+     3.3,
+     "Write(.claude/agents/payments-api.md)"
+    ]
+   ]
+  },
+  {
+   "type": "agent",
+   "at": 2.6,
+   "gap": 0,
+   "agent": "brewcode:agent-creator",
+   "desc": "Create ledger-db",
+   "doneAt": 3.8,
+   "stats": "7 tool uses · 12.6k tokens · 44s",
+   "ticks": [
+    [
+     2.9,
+     "Read(db/migrations)"
+    ],
+    [
+     3.4,
+     "Write(.claude/agents/ledger-db.md)"
+    ]
+   ]
+  },
+  {
+   "type": "tool",
+   "at": 3.9,
+   "gap": 0,
+   "name": "Bash",
+   "arg": "generate.sh emit-agent",
+   "resultAt": 4.15,
+   "result": [
+    "INTENT_GUARD: CREATED .claude/agents/intent-guard.md"
+   ]
+  },
+  {
+   "type": "tool",
+   "at": 4.2,
+   "gap": 0,
+   "name": "Bash",
+   "arg": "verify-team.sh payments",
+   "resultAt": 4.45,
+   "result": [
+    "[[ok|CHECK: intent-guard roster contract ... OK]]",
+    "[[ok|CHECK: declared Agents count ... OK (2 unique domain rows)]]",
+    "[[b ok|VERIFY: PASS]]"
+   ]
+  },
+  {
+   "type": "clear",
+   "at": 5.3
+  },
+  {
+   "type": "print",
+   "at": 5.4,
+   "bullet": true,
+   "reveal": 0.07,
+   "kv": "gold",
+   "lines": [
+    "[[b ok|Team payments installed]] -> ~/brewery-api/.claude/teams/payments/",
+    "",
+    "Domain agents:  2 created (payments-api, ledger-db)",
+    "Intent guard:   [[ok|required (review-only)]] — asked vs delivered",
+    "Tracing:        project-local trace-ops.sh, one trace.jsonl per team",
+    "Roster file:    .claude/teams/payments/team.md",
+    "Verify:         [[b ok|PASS]]",
+    "",
+    "Use it:  [[b gold|just describe a task]] -> the owning agent accepts it, the rest refuse",
+    "Health:  [[b gold|/brewcode:teams-setup status payments]]"
+   ]
+  },
+  {
+   "type": "hl",
+   "at": 6.2,
+   "hold": 0.8,
+   "match": "required (review-only)"
+  },
+  {
+   "type": "clear",
+   "at": 7.9
+  },
+  {
+   "type": "type",
+   "at": 8.0,
+   "text": "refunds return 500 on partial amounts, let the team handle it",
+   "cps": 50
+  },
+  {
+   "type": "key",
+   "at": 9.3,
+   "glyph": "⏎",
+   "word": "enter · send"
+  },
+  {
+   "type": "submit",
+   "at": 9.45
+  },
+  {
+   "type": "print",
+   "at": 9.6,
+   "bullet": true,
+   "lines": [
+    "Routing this to the agents that own it."
+   ]
+  },
+  {
+   "type": "skip",
+   "at": 9.9,
+   "until": 11.3,
+   "factor": 8
+  },
+  {
+   "type": "agent",
+   "at": 9.9,
+   "agent": "payments-api",
+   "desc": "Partial-refund 500",
+   "doneAt": 11.3,
+   "stats": "14 tool uses · 29.3k tokens · 1m 20s",
+   "ticks": [
+    [
+     10.1,
+     "Bash(trace-ops.sh add … took)"
+    ],
+    [
+     10.4,
+     "Read(src/payments/refund.ts)"
+    ],
+    [
+     10.7,
+     "Edit(src/payments/refund.ts)"
+    ],
+    [
+     11.0,
+     "Bash(npm test -- refund)"
+    ]
+   ]
+  },
+  {
+   "type": "agent",
+   "at": 9.95,
+   "gap": 0,
+   "agent": "ledger-db",
+   "desc": "Check refund rows",
+   "doneAt": 10.9,
+   "stats": "6 tool uses · 11.2k tokens · 35s",
+   "ticks": [
+    [
+     10.2,
+     "Bash(trace-ops.sh add … took)"
+    ],
+    [
+     10.5,
+     "Read(db/queries/refunds.sql)"
+    ]
+   ]
+  },
+  {
+   "type": "spin",
+   "at": 9.9,
+   "until": 11.3,
+   "verb": "Brewing",
+   "secs": [
+    0,
+    80
+   ],
+   "tokens": 1200
+  },
+  {
+   "type": "print",
+   "at": 11.4,
+   "bullet": true,
+   "reveal": 0.1,
+   "kv": "gold",
+   "lines": [
+    "[[b ok|Partial refunds no longer return 500]] — [[b gold|src/payments/refund.ts:57]]",
+    "The ledger needs no migration. Both agents traced the task."
+   ]
+  },
+  {
+   "type": "clear",
+   "at": 12.8
+  },
+  {
+   "type": "type",
+   "at": 12.9,
+   "text": "/brewcode:teams-setup status payments",
+   "cps": 44
+  },
+  {
+   "type": "key",
+   "at": 13.8,
+   "glyph": "⏎",
+   "word": "enter · status"
+  },
+  {
+   "type": "submit",
+   "at": 13.95
+  },
+  {
+   "type": "print",
+   "at": 14.1,
+   "reveal": 0.04,
+   "kv": true,
+   "lines": [
+    "[[b gold|PLAN — brewcode:teams-setup]]",
+    "INPUT:  status payments",
+    "MODE:   status — explicit",
+    "SCOPE:  team payments · 2 agents · read-only",
+    "DO:     - read team.md and trace.jsonl, compute per-agent stats",
+    "RESULT: Team Status table"
+   ]
+  },
+  {
+   "type": "print",
+   "at": 14.5,
+   "reveal": 0.05,
+   "lines": [
+    [
+     "# Team Status: payments",
+     "b gold"
+    ],
+    [
+     "| Metric        | Value                    |",
+     "b"
+    ],
+    "| Agents        | 2                        |",
+    "| Tasks tracked | 2                        |",
+    "| Success rate  | 100%                     |",
+    "| Open issues   | 0 (high: 0, critical: 0) |",
+    "",
+    [
+     "## Per Agent",
+     "b gold"
+    ],
+    [
+     "| Agent        | Tasks | Success | Refused | Issues | Insights | Health  |",
+     "b"
+    ],
+    "| payments-api | 1     | 1       | 0       | 0      | 1        | Healthy |",
+    "| ledger-db    | 1     | 1       | 0       | 0      | 0        | Healthy |"
+   ]
+  },
+  {
+   "type": "hl",
+   "at": 15.2,
+   "hold": 1.2,
+   "match": "Healthy"
+  },
+  {
+   "type": "card",
+   "at": 16.4,
+   "title": "✻ teams-setup · payments is live",
+   "tiles": [
+    {
+     "label": "Agents",
+     "to": 3,
+     "sub": "2 domain + guard"
+    },
+    {
+     "label": "Tool uses",
+     "to": 20,
+     "sub": "2 agents in parallel"
+    },
+    {
+     "label": "Tokens",
+     "to": 40.5,
+     "dec": 1,
+     "suffix": "k",
+     "sub": "whole task"
+    },
+    {
+     "label": "Health",
+     "text": "2/2",
+     "cls": "ok",
+     "sub": "Healthy"
+    }
+   ],
+   "verdict": {
+    "label": "Team",
+    "text": "payments · tasks traced · 0 open issues",
+    "cls": "ok"
+   },
+   "note": ".claude/teams/payments/ · agents trace into trace.jsonl"
+  },
+  {
+   "type": "clear",
+   "at": 19.4
+  }
+ ],
+ "facts": [
+  {
+   "src": "brewcode/skills/teams-setup/SKILL.md",
+   "has": "PLAN — brewcode:teams-setup"
+  },
+  {
+   "src": "brewcode/skills/teams-setup/SKILL.md",
+   "has": "Output: `Mode: {MODE}, Team: {TEAM_NAME}`"
+  },
+  {
+   "src": "brewcode/skills/teams-setup/SKILL.md",
+   "has": "# Team Status: {TEAM_NAME}"
+  },
+  {
+   "src": "brewcode/skills/teams-setup/SKILL.md",
+   "has": "| Open issues | {N} (high: {N}, critical: {N}) |"
+  },
+  {
+   "src": "brewcode/skills/teams-setup/SKILL.md",
+   "has": "| Agent | Tasks | Success | Refused | Issues | Insights | Health |"
+  },
+  {
+   "src": "brewcode/skills/teams-setup/SKILL.md",
+   "has": "| Healthy | >70% success, active |"
+  },
+  {
+   "src": "brewcode/skills/teams-setup/SKILL.md",
+   "has": "Intent guard: {required (review-only) | legacy-absent}"
+  },
+  {
+   "src": "brewcode/skills/teams-setup/references/mode-install.md",
+   "has": "Agent(subagent_type=\"brewcode:agent-creator\")"
+  },
+  {
+   "src": "brewcode/skills/teams-setup/references/framework-files.md",
+   "has": "Gate Domain/Duplicate/Best: Mismatch/duplicate/better -> refuse+owner/link+return"
+  },
+  {
+   "src": "brewcode/skills/teams-setup/scripts/verify-team.sh",
+   "has": "CHECK: intent-guard roster contract ... OK"
+  },
+  {
+   "src": "brewcode/skills/teams-setup/scripts/verify-team.sh",
+   "has": "CHECK: declared Agents count ... OK ($declared_agents unique domain rows)"
+  },
+  {
+   "src": "brewcode/skills/teams-setup/scripts/verify-team.sh",
+   "has": "VERIFY: PASS"
+  },
+  {
+   "src": "brewcode/skills/superreview-setup/scripts/generate.sh",
+   "has": "INTENT_GUARD: CREATED $IG_PATH"
+  },
+  {
+   "src": "brewcode/skills/teams-setup/scripts/trace-ops.sh",
+   "has": "add"
+  }
+ ]
+}

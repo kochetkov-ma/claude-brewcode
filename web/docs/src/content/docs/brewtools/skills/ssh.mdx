@@ -3,208 +3,113 @@ title: "SSH"
 description: "Remote server management — connect, configure, deploy, administer Linux servers with safety gates and persistent config."
 order: 3116
 ---
-import { Card, CardGrid, Callout, Steps, Badge, UpdateNotice } from '../../../../components/mdx';
+import { Card, CardGrid, Badge, Callout, Steps, Spoiler, UpdateNotice } from '../../../../components/mdx';
 
 # ssh — manage servers
 
-<Badge variant="primary" text="opus" /> <Badge variant="accent" text="brewtools" />
+<Badge variant="primary" text="opus" /> <Badge variant="accent" text="human-invoked" />
 
-<Callout type="caution">
-**Every destructive command requires explicit confirmation.** DELETE and PRIVILEGE operations always gate on user approval — even when chained with safe commands. The skill breaks compound requests into individually classified steps before executing anything.
-</Callout>
-
-<Callout type="tip">
-**No server configured yet?** Run `/brewtools:ssh setup` — the skill walks you through key auth, writes `~/.ssh/config`, and generates the `ssh-admin` agent with full server context baked in. For complex multi-step operations (deploy, rollback, migration) the skill delegates to that agent automatically.
-</Callout>
+Connects to Linux servers, discovers what runs there and executes your requests, classifying every command by risk. Setup writes `~/.ssh/config` and generates an `ssh-admin` agent with the server inventory baked in.
 
 ## Quick reference
 
 | Field | Value |
 |-------|-------|
 | Command | `/brewtools:ssh` |
-| Arguments | `[prompt] [setup\|connect\|configure\|update-agent]` — free-form prompt, mode token anywhere |
+| Arguments | `[prompt] [setup\|connect\|configure\|update-agent]` |
 | Model | opus |
-| Agent | [ssh-admin](/brewtools/agents/ssh-admin/) — auto-delegated for complex ops; falls back to the plugin's `brewtools:ssh-admin` when the project has no generated agent |
-| Config storage | `CLAUDE.local.md` (gitignored, never committed) |
+| Config | `CLAUDE.local.md` (gitignored, never committed) |
+| Agent | [ssh-admin](/brewtools/agents/ssh-admin/) |
 
-## When to use
+## Modes
 
-- **First-time setup** — add a new server: `/brewtools:ssh setup`
-- **System admin** — disk usage, memory, logs, pending updates: `/brewtools:ssh check disk space on vps-main`
-- **Docker ops** — containers, images, compose lifecycle: `/brewtools:ssh show running containers`
-- **Deploy** — pull a pinned image, restart service, and verify health: `/brewtools:ssh pull ghcr.io/org/app:1.2.3 and restart on vps-main`
-- **Security audit** — firewall rules, fail2ban, sshd config: `/brewtools:ssh check ufw and fail2ban status`
-- **Agent refresh** — after server changes: `/brewtools:ssh update-agent`
+| Mode | Does |
+|------|------|
+| `setup` | Add a server: key auth, `~/.ssh/config` entry, discovery, agent |
+| `connect` | Connect to the configured server, or ask which |
+| `configure` | Apply a config change under the same classification |
+| any other text | Execute: plan, classify, run after confirmation |
+| `update-agent` | Re-discover up to 3 servers, refresh `ssh-admin` |
 
-## Examples
+## Example
 
 ```bash
-# First time — set up a new server
-/brewtools:ssh setup
-
-# Execute tasks (default mode when servers are configured)
 /brewtools:ssh check disk space and docker status on vps-main
-
-# Deploy: pull + restart
-/brewtools:ssh pull ghcr.io/org/app:1.2.3 and restart on vps-main
 ```
 
-```bash
-# Connect explicitly, then describe the task
-/brewtools:ssh connect to staging
+Read-only checks run without prompts. A restart or removal asks for confirmation first.
 
-# Refresh the ssh-admin agent after infrastructure changes
-/brewtools:ssh update-agent
-```
-
-## Flow
+## How it works
 
 <Steps>
-  <li>
-    <div>
-      <strong>Mode detection</strong>
-      <p>An explicit mode token wins; otherwise score distinct whole-word keywords. Equal top scores or conflicting explicit modes require clarification before action. Without matches, use execute. Empty input selects setup if no servers exist, otherwise execute with server selection.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Environment check</strong>
-      <p>Scans for SSH keys, running <code>ssh-agent</code>, existing <code>&#126;/.ssh/config</code> entries, and server inventory in <code>CLAUDE.local.md</code>. Fails fast with a clear error if SSH environment is broken.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Connection setup (setup mode)</strong>
-      <p>Asks for host, user, port, alias. Tries available keys (ed25519 → rsa → ecdsa). On failure offers password login + key install flow. Writes a <code>Host</code> block to <code>&#126;/.ssh/config</code>.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Server discovery</strong>
-      <p>Runs read-only commands over SSH: OS, kernel, Docker version and containers, disk mounts, listening ports, active services. Max 30 s timeout — partial results reported if it times out.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Persist config</strong>
-      <p>Saves server inventory to <code>CLAUDE.local.md</code>. Adds <code>CLAUDE.local.md</code> to <code>.gitignore</code>. Generates (or regenerates) <code>.claude/agents/ssh-admin.md</code> with discovered server data baked in.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Classify and confirm</strong>
-      <p>Each command is assigned a safety level. READ and CREATE run freely. MODIFY and SERVICE ask for confirmation. DELETE and PRIVILEGE show a destructive-action warning and always require explicit approval.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Execute and report</strong>
-      <p>Simple ops run inline (max 5 SSH calls per invocation). Complex multi-step tasks delegate to ssh-admin through Agent. Return the server, mode, actions taken, verified changes, and remaining approval needs.</p>
-    </div>
-  </li>
+  <li><div><strong>Detect mode</strong><p>An explicit token wins; otherwise keywords decide. Empty input means setup with no servers, execute otherwise.</p></div></li>
+  <li><div><strong>Check environment</strong><p>Scans SSH keys, `ssh-agent`, `~/.ssh/config` and the server list in `CLAUDE.local.md`.</p></div></li>
+  <li><div><strong>Connect and discover</strong><p>Tries keys (ed25519, rsa, ecdsa), reads OS, Docker, disks, ports and services within 30 s.</p></div></li>
+  <li><div><strong>Persist</strong><p>Saves inventory to `CLAUDE.local.md`, gitignores it, generates `.claude/agents/ssh-admin.md`.</p></div></li>
+  <li><div><strong>Classify, confirm, report</strong><p>READ and CREATE run freely; MODIFY and SERVICE ask; DELETE and PRIVILEGE warn and always ask.</p></div></li>
 </Steps>
 
-## Delegation
+## Good to know
 
-<Callout type="warning">
-**A big task handed to one agent = an agent gone for an hour.** You cannot observe it, you cannot correct it, and it usually drifts off-target. One `ssh-admin` spawn gets ONE bounded unit: one deliverable on **one host**, ~5 files or services, ~10 commands. Three hosts means three tasks, one deliverable each, all spawned in a single message.
+<Callout type="caution">
+Every destructive command requires explicit confirmation, even when chained with safe ones. Compound requests are split into individually classified steps.
 </Callout>
 
-Every spawn prompt carries six fields. A bare one-line task is never enough:
+- sshd, port and firewall changes pass a 5-step lockout gate: allow-new, `sshd -t`, reload, prove a new session, then deny-old.
+- Password prompts cannot be answered by Claude Code: use `! ssh deploy@your-server`.
 
-| Field | Content |
-|-------|---------|
-| GOAL | the overall task and why it exists — the point beyond the command |
-| ROLE | what this agent owns; what it must NOT touch |
-| SCOPE | exact host and commands in bounds + explicit out-of-bounds |
-| CONTEXT | host / user / port / key, what discovery already found, what runs in parallel |
-| CONSUMER | who or what uses the result next, and the shape it must fit |
-| DONE | acceptance criteria + the exact report shape expected back |
+## Technical details
 
-**The confirmation gates stay in the main conversation.** Ordinary subagents cannot use
-AskUserQuestion; conversation forks retain parent tools, but that distinction does not change
-this workflow's approval policy. SSH Admin returns unresolved decisions or exact destructive
-operation envelopes with COMMAND, HOST, EFFECT, ROLLBACK, EVIDENCE, and PRECONDITION.
-The main caller presents them and supplies APPROVED ids for exact commands only; the agent
-rechecks preconditions before execution. No pending operations means APPROVAL REQUIRED: none.
+<Spoiler id="safety-classification" title="Safety classification and limits">
 
-<details>
-<summary>Safety classification matrix & internals</summary>
-
-**Safety levels — what needs confirmation:**
-
-| Level | Example commands | Confirmation |
-|-------|-----------------|--------------|
-| READ | Bounded nonsensitive file/state probes, `df`, `docker ps`, `systemctl status` | None; secret files and broad environment dumps are excluded |
-| CREATE | `mkdir`, `docker pull`, `touch` | None if non-destructive |
-| MODIFY | `chmod`, `sed`, config edits | Required |
-| SERVICE | `restart`, `reload`, `docker compose up` | Required |
-| DELETE | `rm`, `docker rm`, `prune` | Always required |
-| PRIVILEGE | `sudo`, firewall changes, user management | Always required |
-
-**Loop and timeout limits:**
+Risk classes (READ, CREATE, MODIFY, SERVICE, DELETE, PRIVILEGE) and their gates: [ssh-admin safety classes](/brewtools/agents/ssh-admin/#safety-rules).
 
 | Rule | Limit |
 |------|-------|
-| SSH connection timeout | 10 s (`ConnectTimeout=10 BatchMode=yes`) |
-| Server discovery script | 30 s total |
-| Single SSH command | 60 s — killed and reported on timeout |
-| Total SSH calls per invocation | 15 max, then stop and report |
-| Key auth attempts (setup) | 3, then ask user |
-| AskUserQuestion per phase | 3 max, combined into one if more needed |
+| Connection timeout | 10 s (`ConnectTimeout=10 BatchMode=yes`) |
+| Discovery script | 30 s total |
+| Single SSH command | 60 s, then killed and reported |
+| Inline SSH commands (Phase 5) | 5, more are delegated to `ssh-admin` |
+| SSH calls per invocation | 15 in total, then stop and report |
+| Key auth attempts | 3, then ask |
+| AskUserQuestion per phase | 3 max |
 
-Discovery bounds its own 30 s deadline inline — macOS has no GNU `timeout`, so the script re-execs
-itself under a portable watchdog. Individual SSH operations use the shared, tested helper from
-the same Brewtools plugin: `skills/deploy/scripts/lib/deploy-common.sh`, sourced through
-`CLAUDE_PLUGIN_ROOT`. Its `ght 60 ssh ...` wrapper enforces the 60 s command limit using
-`timeout`, `gtimeout`, or a built-in Bash watchdog; `ght_reason` distinguishes timeout,
-missing tools, and command failure. Discovery keeps its separate 30 s total bound.
+Individual commands run through the shared `ght 60 ssh ...` helper in `skills/deploy/scripts/lib/deploy-common.sh`, which uses `timeout`, `gtimeout` or a Bash watchdog.
 
-**Server discovery collects:**
+</Spoiler>
 
-- OS distribution, version, kernel, architecture
-- Docker version, running containers, compose projects
-- Disk mounts, filesystem types, usage percentages
-- Listening ports, active systemd services
-
-**Config files:**
+<Spoiler id="config-files" title="Config files and host keys">
 
 | File | Purpose |
 |------|---------|
-| `CLAUDE.local.md` | Server inventory table — alias, host, user, key, OS, Docker |
-| `~/.ssh/config` | Host blocks — skill reads but does not overwrite existing blocks |
-| `.claude/agents/ssh-admin.md` | Generated agent with server context; use `update-agent` to refresh |
+| `CLAUDE.local.md` | Server inventory: alias, host, user, key, OS, Docker |
+| `~/.ssh/config` | Host blocks; existing blocks are never overwritten |
+| `.claude/agents/ssh-admin.md` | Generated agent; refresh with `update-agent` |
 
-**Generated agent safety:** the generated `ssh-admin` carries a Lockout Guard. Any sshd, port, or firewall change is PRIVILEGE and passes a 5-step gate before the old access path is disabled: allow-new, `sshd -t`, reload, prove a new session, only then deny-old. An established session is not proof, because ufw keeps existing connections alive.
+For a new or changed host key, compare the scanned SHA256 fingerprint with an out-of-band record before trusting it. A connection failure alone is not permission to erase known_hosts entries. Environment values are read only when named and needed; env dumps and credential files are never printed. If a helper script fails, the skill retries inline, then reports `SCRIPT_ERROR` / `EXIT_CODE` / `STDERR` / `PHASE` and stops.
 
-**Fallback strategy:** if a helper script fails, the skill attempts the same operation inline (individual Bash calls). If both fail, it reports `SCRIPT_ERROR` / `EXIT_CODE` / `STDERR` / `PHASE` and stops — no silent swallowing.
+</Spoiler>
 
-**Interactive terminal commands** (e.g., `sudo` with password prompt): use the Claude Code escape hatch `! ssh deploy@your-server` to open a direct terminal session.
+<Spoiler id="delegation" title="Delegation">
 
-Read only explicitly named nonsensitive environment values when diagnostics require them.
-Do not dump env/printenv or expose credential files in tool output. Registry login uses
-user-supplied environment credentials or a private token file through password-stdin; missing
-credentials return an input requirement without asking for their value in chat.
+A bounded multi-command job on one host goes to [ssh-admin](/brewtools/agents/ssh-admin/) (the plugin's `brewtools:ssh-admin` when the project has no generated agent), one agent per host, briefed with the six fields in [Delegation](/brewcode/skills/#delegation). Confirmation gates stay in the main conversation; the agent returns exact approval envelopes and runs only the APPROVED ids.
 
-For a new or changed host key, compare the scanned SHA256 fingerprint with an independent
-provider-console or out-of-band record before trusting it. Verify the replacement fingerprint
-before removing an old known_hosts entry; a connection failure alone is not permission to
-erase trust history.
+</Spoiler>
 
-</details>
+## Related
 
 <CardGrid>
   <Card title="ssh-admin agent" icon="robot" href="/brewtools/agents/ssh-admin/">
-    The agent generated by this skill — handles complex multi-step server operations with full inventory context.
+    Handles multi-step server operations with inventory context.
   </Card>
   <Card title="Deploy skill" icon="rocket" href="/brewtools/skills/deploy/">
-    GitHub Actions deployment — workflows, releases, GHCR, CI/CD automation.
+    GitHub Actions workflows, releases and GHCR.
   </Card>
-  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/ssh">
-    Source code, helper scripts, and agent template.
+  <Card title="GitHub source" icon="github" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/ssh">
+    Helper scripts and agent template.
   </Card>
   <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">
-    All brewtools skills — text, secrets, deploy, provider switching, plugin management.
+    All brewtools skills.
   </Card>
 </CardGrid>
 

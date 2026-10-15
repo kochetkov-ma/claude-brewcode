@@ -3,11 +3,15 @@ title: "Skill Creator"
 description: "Create or improve Claude Code skills with explicit invocation rules, bounded scope, validated prompt contracts, and realistic output evaluation."
 order: 1205
 ---
-import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+import { Badge, Card, CardGrid, SourceLink, Spoiler, Steps, UpdateNotice } from '../../../../components/mdx';
 
 # Skill Creator
 
 <Badge text="inherit" /> <Badge text="skill authoring" /> <Badge text="bounded scope" />
+
+<p align="center"><img src="/demos/skill-creator.gif" alt="Terminal animation: a plain-English request to create a release-notes skill is handed to the skill-creator expert, then the new skill runs and a summary card appears." width="720" loading="lazy" /><br /><small>Illustrative animation: ask in plain English, hand-off to skill-creator, run the new skill, summary card. Names and numbers come from an invented demo project.</small></p>
+
+<SourceLink path="brewcode/agents/skill-creator.md" kind="file" label="View agent file on GitHub" />
 
 ## Quick reference
 
@@ -16,30 +20,18 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 | Agent | `brewcode:skill-creator` |
 | Triggers | create skill, improve skill, fix activation |
 | Model | inherit: uses the session model |
-| Tools | Read, Write, Edit, Glob, Grep, Bash |
-| Output | Skill directory, artifact list, validator/evaluation results, and remaining questions |
+| Output | Skill directory, artifact list, validator and evaluation results, open questions |
 
-## What it does
-
-Create a reusable Claude Code skill from a concrete workflow, improve an existing skill, or
-apply confirmed review findings. Skill Creator chooses the structure, writes instructions and
-supporting resources, validates the result, and evaluates realistic examples.
-
-Start with a clear goal, exact directory ownership, relevant completed work, the next consumer,
-and acceptance evidence. The agent follows the closest well-built skill in the repository,
-alongside conventions and project rules. It handles one bounded deliverable; larger requests
-return a split proposal before implementation.
+Skill Creator turns a proven workflow into a reusable Claude Code skill, improves an existing one, or applies confirmed review findings. It follows the closest well-built skill in the repository, writes `SKILL.md` plus only the references and scripts the workflow needs, then validates and evaluates the result.
 
 ## When to use
 
 - Capture a proven workflow as a reusable skill.
 - Add a skill with deterministic scripts and supporting references.
-- Fix incorrect frontmatter, tool assumptions, or invocation behavior.
-- Apply independently confirmed review findings to an existing skill.
+- Fix wrong frontmatter, tool assumptions, or invocation behavior.
+- Apply independently confirmed review findings to a skill.
 
 ## Example
-
-Ask the main session to delegate:
 
 ```text
 Create one project skill for database migrations. Own .claude/skills/db-migration/.
@@ -47,73 +39,50 @@ Follow the existing migration workflow and project test commands. Require explic
 invocation; return artifact paths, validator verdict, and output-evaluation evidence.
 ```
 
-Expected result: a SKILL.md and only the references, scripts, tests, and README needed by
-that workflow. Detailed logs stay in a report file; the final return names written artifacts,
-validation results, and unresolved decisions.
+Expected result: a `SKILL.md` and the needed references, scripts and tests. Logs stay in a report file; the return names written artifacts, validation results, and unresolved decisions.
 
-## Workflow
+## How it works
 
 <Steps>
-  <li><div><strong>Resolve scope and workflow</strong><p>Extract a proven workflow from available conversation context or the caller's brief. Resolve project, personal, or plugin location. Ordinary subagents return unresolved questions to the caller instead of planning an interactive question round.</p></div></li>
-  <li><div><strong>Choose invocation and execution context</strong><p>Distributed Brewcode skills require user-invocable: true and disable-model-invocation: true, with three exceptions: brewdoc:publish, brewtools:text-optimize and brewtools:text-human ship disable-model-invocation: false. Choose forked or inline execution for the actual workflow, and verify any selected custom agent exists.</p></div></li>
-  <li><div><strong>Write the prompt contract and resources</strong><p>Use a free-text prompt entry point, explicit mode detection where needed, and a PLAN block before actions. Keep instructions concise; load schemas and detailed modes from references on demand. Use scripts for deterministic work.</p></div></li>
-  <li><div><strong>Validate and evaluate</strong><p>Run validate-skill.sh, fix confirmed failures, and rerun it after changes. Evaluate three to five realistic prompts against fresh-session baselines. For explicit-only skills, evaluate output through explicit invocation instead of measuring automatic activation.</p></div></li>
-  <li><div><strong>Finish with tests, documentation, and caller-owned optimization</strong><p>Run meaningful script tests when scripts are present. Write a concise README with real examples. Return the created paths to the main caller, which invokes `Skill(skill: "brewtools:text-optimize", args: "<paths> medium --allow-dirty")`; the creator does not nest delegation or delegate its own verification.</p></div></li>
+  <li><div><strong>Resolve scope</strong><p>Extract the workflow from the brief and pick the project, personal, or plugin location.</p></div></li>
+  <li><div><strong>Choose invocation</strong><p>Apply the invocation policy and decide between forked and inline execution.</p></div></li>
+  <li><div><strong>Write</strong><p>Free-text prompt entry point, a PLAN block before actions, details in references loaded on demand.</p></div></li>
+  <li><div><strong>Validate and evaluate</strong><p>Run <code>validate-skill.sh</code>, then test three to five realistic prompts against fresh-session baselines.</p></div></li>
+  <li><div><strong>Hand back</strong><p>Return paths to the main caller, which runs <code>brewtools:text-optimize</code> on them.</p></div></li>
 </Steps>
 
-## Invocation policy
+Refuses and returns a split proposal for briefs over about 5 files or 10 steps. Does not spawn agents or run its own optimization; the main caller does ([delegation](/brewcode/skills/#delegation)). Generic refusals: [scope guard](/brewcode/agents/#scope-guard).
+
+<Spoiler id="invocation-policy" title="Invocation policy">
 
 | Context | Configuration |
 |---------|---------------|
-| Distributed Brewcode product skill | `user-invocable: true` and `disable-model-invocation: true` (three exceptions: `brewdoc:publish`, `brewtools:text-optimize`, `brewtools:text-human`, each with `disable-model-invocation: false`) |
+| Distributed Brewcode product skill | `user-invocable: true` and `disable-model-invocation: true` (exceptions: `brewdoc:publish`, `brewtools:text-optimize`, `brewtools:text-human`, each `disable-model-invocation: false`) |
 | User-only skill outside distributed products | `disable-model-invocation: true` |
 | Model-only knowledge outside distributed products | `user-invocable: false` |
-| Both invocation paths outside distributed products | Default invocation behavior |
+| Both paths outside distributed products | Default behavior |
 
-The distributed-product rule is repository policy, stricter than upstream defaults.
-Explicit invocation makes the entry point deliberate; it does not guarantee correct execution.
-Claude Code publishes no automatic-activation percentage.
+The distributed-product rule is repository policy, stricter than upstream defaults. Evaluate output through explicit invocation; Claude Code publishes no automatic-activation percentage.
 
-<Callout type="note" title="Evaluate behavior, not invented activation rates">
-  Description and trigger phrasing can affect discovery for model-invocable skills. Use actual
-  triggered/missed and output results from realistic runs. For disable-model-invocation skills,
-  automatic activation and subagent preloading are unavailable by design.
-</Callout>
+</Spoiler>
 
-## Execution and tools
+<Spoiler id="execution-and-tools" title="Execution and tools">
 
-**A skill fork is an ordinary subagent, not a conversation fork.** A skill with
-`context: fork` starts an isolated subagent. Ordinary subagents have tool filtering and cannot
-use AskUserQuestion for an interactive user round. Conversation forks retain the parent's tools;
-do not apply ordinary-subagent limitations to that distinct mode.
+- A skill with `context: fork` starts an ordinary subagent, not a conversation fork: tools are filtered and `AskUserQuestion` is unavailable.
+- The agent carries no `Agent` tool; split and optimization requests go back to the caller.
+- `allowed-tools` preapproves calls; it is not a sandbox. Grants clear on the next user message, skill instructions persist.
+- Scope permissions to the needed calls. Bare `Bash`, `Write` or `Edit` fits only a user-invoked skill with open-ended shell or write paths.
+- `${CLAUDE_SKILL_DIR}` is a load-time substitution, not an environment variable for hooks or agents.
 
-Upstream supports configurable nested-agent depth, but this agent carries no Agent tool and the
-project's authoring policy keeps delegation with the main caller. Skill Creator completes bounded
-work itself and returns split or optimization requests to the caller.
+</Spoiler>
 
-`allowed-tools` preapproves supported calls; it is not a tool-access sandbox. Grants and
-`disallowed-tools` restrictions apply to the invoking turn and clear on the next user message,
-while skill instructions persist. Scope permissions to the required calls when scoped rules
-cover every call. Bare Bash, Write, or Edit fits only a user-invoked skill
-(`disable-model-invocation: true`) with open-ended shell or write paths.
+<Spoiler id="validation-and-references" title="Validation and references">
 
-Dynamic skill-text substitutions such as `${CLAUDE_SKILL_DIR}` are not ordinary environment
-variables available to hooks or agents. Use the documented substitution and resource path for
-the execution surface being authored.
+The bundled validator checks frontmatter, naming, prompt contract and structure; a pass complements evaluation but does not prove the workflow works. Confirmed fixes need another run.
 
-## Validation and references
+References under `brewcode/skills/skills/references/` hold the frontmatter catalog, execution model, design patterns, activation troubleshooting, prompt contract and review checklist, refreshed through Claude Code 2.1.296. The agent checkpoints artifact paths in its report directory; `maxTurns` is a loop stop, so partial work resumes from evidence.
 
-The creator uses the bundled validator for frontmatter, naming, prompt contract, structure, and
-other supported checks. A passing validator complements evaluation; it does not prove the workflow
-achieves its goal. Confirmed fixes require another validator run.
-
-Reference files under `brewcode/skills/skills/references/` provide the current frontmatter catalog,
-execution model, design patterns, activation troubleshooting, prompt contract, and review checklist.
-The source was refreshed against upstream contracts through Claude Code 2.1.296; historical line
-citations in references are context, not a permanent API guarantee.
-
-The agent checkpoints artifact paths and status in its report directory as it works.
-Its maxTurns limit is a loop stop; partial work remains incomplete and must be resumed from evidence.
+</Spoiler>
 
 ## Related
 
@@ -121,7 +90,6 @@ Its maxTurns limit is a loop stop; partial work remains incomplete and must be r
   <Card title="Brewcode overview" icon="document" href="/brewcode/overview/">Project skills, agents, and review tools.</Card>
   <Card title="Skills" icon="puzzle" href="/brewcode/skills/skills/">The user-facing skill creation and improvement workflow.</Card>
   <Card title="Hook Creator" icon="settings" href="/brewcode/agents/hook-creator/">Create lifecycle hooks against event-specific contracts.</Card>
-  <Card title="Agent source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/agents/skill-creator.md">Scope, validation, evaluation, and caller-owned delegation policy.</Card>
   <Card title="Authoring references" icon="library" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/skills/references">Frontmatter, execution, prompt contracts, and review guidance.</Card>
 </CardGrid>
 

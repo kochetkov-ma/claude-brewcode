@@ -1,103 +1,39 @@
 # Text Humanizer
 
-Universal, context-aware humanizer. It removes AI surface artifacts (chat scaffolding, fake tickets, unicode, trivial docs that restate a name) and fits the text to its register -- code, technical docs, published articles, or reddit/chat. It does NOT claim to detect AI authorship.
+Strips AI surface artifacts (chat scaffolding, fake tickets, unicode, trivial docs that restate a name) from code, docs, commits, articles and chat text, and fits the register. It does not claim to detect AI authorship.
 
-**Invocation:** type `$brewtools:text-human ...`, or ask Codex mid-task ("humanize this README", "strip AI artifacts from this commit message"). The skill is model-invocable. Permissions: see the [docs page](https://doc-claude.brewcode.app/brewtools/skills/text-human/). Empty input asks once; a headless run, or no answer, stops with "nothing to humanize".
+## Install
 
-## Quick Start
+```bash
+codex plugin add brewtools@claude-brewcode
+```
+
+Model-invocable: type `$brewtools:text-human ...` or ask Codex mid-task ("humanize this README"). Empty input asks once; a headless run stops with "nothing to humanize".
+
+## Usage
 
 ```text
 $brewtools:text-human [path|commit|folder|text] [custom instructions]
 ```
 
-## How it works
-
-### Phase 0 -- greedy flow detection
-At the start the skill picks exactly ONE flow from context and announces it (`Flow: <name> -- <why>`), then lazy-loads only that flow file plus the pattern sections it needs.
-
-| Flow | Domain | Inject stage |
-|------|--------|--------------|
-| code | source, comments, docstrings, JavaDoc/JSDoc/KDoc | OFF (formal contract) |
-| docs | README, guides, PR/commit, changelogs | ON, restrained (terse for PR/commit) |
-| social | reddit, forum, slack, discord, chat | ON, casual |
-| article | formal essay, published blog, long-form | ON, burstiness + stance |
-| mixed | commit / folder dispatcher | per-file routing |
-
-Detection priority: explicit intent keywords (RU+EN) -> path/extension -> content sniff.
-
-### Two-pass model
-- PASS 1 STRIP: remove validated AI tells. HIGH-tier acts on single hits; MED density-signals act only on clusters; behavior-changing items (hallucinated refs, fake tickets) are surfaced for review, never auto-edited.
-- PASS 2 INJECT (gated): apply human style for the domain. HARD-OFF for code and API docs. Never injects typos, errors, or fabricated references.
-
-## Arguments
-
-The first token is scope when it resolves to a path or a 7+ hex git hash; the rest, or the whole input otherwise, is a custom prompt that selects/overrides the flow and adds rules.
-
 | Input shape | Result |
 |-------------|--------|
-| File path | code/docs/article flow on one file, direct |
-| Commit hash | mixed flow, all changed files |
-| Folder | mixed flow, parallel blocks |
-| Free text | flow inferred from the text + intent |
-| Path + prompt | scope + custom rules |
-| No args | interactive fallback |
-
-## Examples
+| File path | One file, flow picked from path and content |
+| Commit hash (7+ hex) | Mixed flow over all changed files (current worktree content) |
+| Folder | Mixed flow, parallel blocks |
+| Free text | Flow inferred from text and intent |
+| Path + prompt | Scope plus custom rules |
+| No args | Interactive fallback |
 
 ```text
-# Code -- strip AI tells, normalize unicode, inject OFF
 $brewtools:text-human src/main/java/com/example/OrderService.java
-
-# JavaDoc / API docs -- clean-only sub-profile
-$brewtools:text-human clean the javadoc in PaymentApi.java
-
-# Commit -- mixed flow routes each file to its domain
-$brewtools:text-human 3be67487
-
-# Reddit reply -- casual injection, sparse emoji, lowercase
-$brewtools:text-human review this reddit reply: <text>
-
-# Blog post -- burstiness + real stance
-$brewtools:text-human humanize this blog post: <text>
-
-# Custom prompt overrides defaults
-$brewtools:text-human src/ only strip AI artifacts, no inject
 $brewtools:text-human 3be67487 also drop all @author tags
+$brewtools:text-human src/ only strip AI artifacts, no inject
 ```
 
-## What it strips (PASS 1)
+Flows: code (inject OFF), docs, social, article, mixed. Edits are in place with no backup: a dirty target asks first, and git is the undo.
 
-| Category | Example | Tier |
-|----------|---------|------|
-| Chat scaffolding | "Certainly!", "I hope this helps", "Here's the rewritten..." | HIGH |
-| AI self-attribution | `// AI-generated`, `# Codex suggestion`, bot trailers | HIGH |
-| Prompt residue | `// Replace with your...` placeholder narration | HIGH |
-| Unicode in prose + code comments | em-dash, arrows, smart quotes -> ASCII (never inside a literal, regex or identifier) | HIGH |
-| Trivial doc/comment | `// Loop through users`, `@param userId The user ID` | density |
-| Excess-vocab cluster | delve, leverage, seamless, landscape (co-occurring) | MED cluster only |
-| Promotional/template prose | "In today's fast-paced world", "plays a significant role" | HIGH/MED |
-
-## What it surfaces (never auto-edits)
-
-Hallucinated package/method/URL refs, fabricated tickets, try/except-everything, empty catch-all, placeholder TODO logic, duplicated abstractions, happy-path-only tests, CI gaming, unicode inside a string literal or regex, mixed indentation in an indentation-sensitive file. These change meaning -- they are reported, not changed.
-
-## Before it writes
-
-Edits are in place with no backup, so the skill runs `git status --porcelain` over the target paths
-first and asks before touching a dirty one. Commit mode is explicitly current-worktree: the hash
-picks the file names, the edits land on today's content.
-
-## What it keeps
-
-WHY comments, public API docs, real project tickets (INTELDEV-12345, JIRA-456), `@throws` with conditions, structural SQL/YAML banners, complex algorithm explanations, BDD comments.
-
-## Injection (PASS 2, per flow)
-
-Per-domain weights (burstiness, contractions, stance, emoji): [reference/human-patterns.md](reference/human-patterns.md#per-domain-weight-matrix).
-
-## Output
-
-A **Humanization Report**: flow, scope, files/blocks, fast model/balanced model split, per-file strip/inject counts, a surfaced-for-review section, and totals. Files are edited in place -- use git to revert.
+Two passes: STRIP removes validated AI tells (HIGH-tier on single hits, MED only on clusters); INJECT applies human style per domain, hard-off for code and API docs. Hallucinated refs and fabricated tickets are surfaced for review, never auto-edited. WHY comments, public API docs and real tickets are kept.
 
 ## Documentation
 

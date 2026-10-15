@@ -4,15 +4,17 @@ description: "How to install the brewcode, brewdoc, brewtools, and brewui plugin
 order: 2
 ---
 
-import { Card, CardGrid, Callout, Steps, Tabs, TabItem, InstallPrompt, UpdateNotice } from '../../components/mdx';
+import { Card, CardGrid, Callout, Steps, Tabs, TabItem, InstallPrompt, Spoiler, UpdateNotice } from '../../components/mdx';
 
 # Installation
 
 These four products run in Claude Code: 27 skills, 9 agents, and 3 registered plugin hooks.
-The repository's native Codex instructions are separate; this installation does not enable
-Codex plugins or configure Codex authentication or runtime state.
 
 <InstallPrompt plugin="all" mode="install" />
+
+<Callout type="note" title="Claude Code only">
+  The repository's native Codex instructions are separate; this installation does not enable Codex plugins or configure Codex authentication or runtime state.
+</Callout>
 
 ## Requirements
 
@@ -47,7 +49,7 @@ Codex plugins or configure Codex authentication or runtime state.
     claude plugin install brewui@claude-brewcode
     ```
 
-    **3. Restart Claude Code** -- the plugins will load automatically.
+    **3. Reload the plugins** -- run `/reload-plugins` inside a session. If the command is unavailable, type `exit` and run `claude` again.
   </TabItem>
   <TabItem label="Local directory (developers only)">
     Run from a cloned repository. Suitable for plugin development or one-off use.
@@ -80,63 +82,26 @@ Codex plugins or configure Codex authentication or runtime state.
 <Steps>
   <li class="step step-primary">
     <div>
-      <strong>Install the plugins</strong>
-      <p>Run the commands from the section above. Restart Claude Code after installation.</p>
-    </div>
-  </li>
-  <li class="step step-primary">
-    <div>
       <strong>Check the plugin list</strong>
-      <p>In your terminal, run:</p>
+      <p>Run <code>/reload-plugins</code> in your session (or restart Claude Code if the command is unavailable), then run in your terminal. It lists <code>brewcode</code>, <code>brewdoc</code>, <code>brewtools</code> and <code>brewui</code>.</p>
       <pre><code>claude plugin list</code></pre>
-      <p>You should see <code>brewcode</code>, <code>brewdoc</code>, <code>brewtools</code>, and <code>brewui</code> in the list.</p>
     </div>
   </li>
   <li class="step step-primary">
     <div>
-      <strong>Inspect project setup first</strong>
-      <p>Inside a Claude Code session, run:</p>
+      <strong>Inspect project setup</strong>
+      <p>Inside a session, the dashboard probes eleven setups and orders their commands by dependency. It runs no setup.</p>
       <pre><code>/brewcode:setup-status</code></pre>
-      <p>It probes eleven setups and gives commands ordered by their dependencies. It runs no setup; its only optional write is a separately accepted task-tools settings key.</p>
     </div>
   </li>
   <li class="step step-primary">
     <div>
-      <strong>Build the project foundation</strong>
-      <p>Follow the dashboard one setup per session: semantic search, conventions before teams, agent consumers, task management, then documentation sync.</p>
+      <strong>Build the foundation</strong>
+      <p>Follow the dashboard, one setup per session, conventions before teams. See <a href="/full-setup/">Full Setup</a>.</p>
       <pre><code>/brewcode:convention-setup install</code></pre>
-      <p>Conventions supply architecture, coding, and testing patterns before project agents consume them. The <a href="/full-setup/">Full Setup</a> page includes the return guard stage and all setup commands.</p>
     </div>
   </li>
 </Steps>
-
-## Updating
-
-Already have Brewcode installed? Update to the latest version:
-
-<Callout type="tip" title="Easy path: plugin-update skill">
-  Run <a href="/brewtools/skills/plugin-update/"><code>/brewtools:plugin-update</code></a> inside a Claude Code session. It checks versions,
-  runs the full update chain, and prompts you to reload -- no manual commands needed.
-</Callout>
-
-Or run the update commands manually:
-
-```bash
-claude plugin marketplace update claude-brewcode
-claude plugin update brewcode@claude-brewcode
-claude plugin update brewdoc@claude-brewcode
-claude plugin update brewtools@claude-brewcode
-claude plugin update brewui@claude-brewcode
-```
-
-<Callout type="note" title="After updating: reload required">
-  Run <code>/reload-plugins</code> inside your session (preferred), or type <code>exit</code> and run <code>claude</code> again (fallback). Updates are not active until a reload.
-</Callout>
-
-After reloading, rerun setup-status. Plugin updates do not replace artifacts that a setup
-previously copied into your project; follow its scope-specific upgrade commands where needed.
-
-<InstallPrompt plugin="all" mode="update" />
 
 ## Mods (optional)
 
@@ -149,43 +114,47 @@ claude plugin install brewmod-placeholders@claude-brewcode   # Claude Code 2.1.2
 
 Then run `/reload-plugins`. [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/) keeps installed mods current.
 
-## Troubleshooting
+<Spoiler id="updating" title="Updating">
+  <Callout type="tip" title="Easy path: plugin-update skill">
+    Run <a href="/brewtools/skills/plugin-update/"><code>/brewtools:plugin-update</code></a> inside a Claude Code session. It checks versions, runs the full update chain, and prompts you to reload.
+  </Callout>
 
-<Callout type="warning" title="Common issues">
-  **Plugins don't appear in `claude plugin list`**
-  -- Make sure the marketplace is added: `claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode`.
-  Reinstall and restart Claude Code.
+  Or run the update commands manually:
 
-  **`/brewcode:*` commands are not recognized**
-  -- Restart Claude Code after installation. Plugins only load at session start.
+  ```bash
+  claude plugin marketplace update claude-brewcode
+  claude plugin update brewcode@claude-brewcode
+  claude plugin update brewdoc@claude-brewcode
+  claude plugin update brewtools@claude-brewcode
+  claude plugin update brewui@claude-brewcode
+  ```
 
-  **`timeout` command missing on macOS**
-  -- The semble-setup scripts use `timeout`/`gtimeout` when present and fall back to a pure-bash timer otherwise. Install coreutils with `brew install coreutils` for the native one.
+  Run `/reload-plugins` inside your session (preferred), or type `exit` and run `claude` again. Updates are not active until a reload. Then rerun setup-status: plugin updates do not replace artifacts that a setup copied into your project, so follow its scope-specific upgrade commands.
 
-  **`CLAUDECODE` environment variable interferes with launch**
-  -- Run `unset CLAUDECODE` before running `claude` in scripts (applies to v0.2.47+).
-</Callout>
+  <InstallPrompt plugin="all" mode="update" />
+</Spoiler>
+
+<Spoiler id="troubleshooting" title="Troubleshooting">
+  **Plugins don't appear in `claude plugin list`**: add the marketplace with `claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode`, reinstall and restart Claude Code.
+
+  **`/brewcode:*` commands are not recognized**: restart Claude Code. Plugins only load at session start.
+
+  **`timeout` command missing on macOS**: the semble-setup scripts use `timeout`/`gtimeout` when present and fall back to a pure-bash timer. `brew install coreutils` gives the native one.
+
+  **`CLAUDECODE` environment variable interferes with launch**: run `unset CLAUDECODE` before `claude` in scripts (v0.2.47+).
+</Spoiler>
 
 ## Next step
 
 <CardGrid>
   <Card title="Quick Start" icon="rocket" href="/quickstart/">
-    Start with [convention setup](/brewcode/skills/convention-setup/), [task board](/brewtools/skills/task-board-setup/), and [deep review](/brewcode/skills/superreview-setup/).
+    Conventions, task board and deep review in ten minutes.
   </Card>
   <Card title="Full Setup" icon="list" href="/full-setup/">
-    The 11 <code>-setup</code> skills in recommended order, what each installs, and the mode vocabulary.
+    The 11 `-setup` skills in recommended order.
   </Card>
   <Card title="Brewcode Overview" icon="building" href="/brewcode/overview/">
-    Architecture, concepts, all 9 brewcode skills, 6 agents, and 2 registered hooks.
-  </Card>
-</CardGrid>
-
-<CardGrid>
-  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
-    Download, changelog, and installation instructions.
-  </Card>
-  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode">
-    Source code, README, and configuration files.
+    Architecture, 9 skills, 6 agents and 2 registered hooks.
   </Card>
 </CardGrid>
 

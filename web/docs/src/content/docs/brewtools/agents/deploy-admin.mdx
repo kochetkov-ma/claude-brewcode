@@ -3,16 +3,16 @@ title: "deploy-admin"
 description: "GitHub Actions and deployment agent — workflows, releases, GHCR, CI/CD, semver, and VPS deployment tracking."
 order: 3213
 ---
-import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+import { Badge, Callout, Card, CardGrid, SourceLink, Spoiler, Steps, UpdateNotice } from '../../../../components/mdx';
 
 # Deploy Admin
 
-<Callout type="caution">
-Published commits, tags, and releases require explicit verification and recovery planning. Deploy Admin classifies every operation before execution; see Approval contract and Scope guard below for how approvals and task size are handled.
-</Callout>
+<Badge text="inherit" /> <Badge text="approval envelopes" /> <Badge text="one target per run" />
+
+<SourceLink path="brewtools/agents/deploy-admin.md" kind="file" label="View agent file on GitHub" />
 
 <Callout type="tip">
-**Run `/brewtools:deploy setup` first.** The skill writes `CLAUDE.local.md` with your GitHub config, workflow inventory, and server targets. The agent reads that file automatically on every task start.
+**Run `/brewtools:deploy setup` first.** The skill writes `CLAUDE.local.md` with your GitHub config, workflow inventory, and server targets. The agent reads that file at the start of every task.
 </Callout>
 
 ## Quick reference
@@ -23,244 +23,120 @@ Published commits, tags, and releases require explicit verification and recovery
 | Model | `inherit` — runs on the session's model |
 | Tools | Read, Write, Edit, Bash, Glob, Grep, WebFetch, WebSearch |
 | Triggers | "deploy", "release" |
-| Safety gate | Returns MODIFY / SERVICE / DELETE / PRIVILEGE operations as an `APPROVAL REQUIRED` envelope instead of running them |
+| Safety gate | MODIFY / SERVICE / DELETE / PRIVILEGE operations return as an `APPROVAL REQUIRED` envelope instead of running |
 | Scope | One bounded unit per run; one agent per repo / environment / service |
 
 ## What it does
 
-Deploy Admin handles GitHub Actions work: releases, workflow edits, CI monitoring, GHCR images, and VPS deployment checks. The agent carries no baked-in inventory. At task start it reads `CLAUDE.local.md`, probes supported missing facts, and returns unresolved decisions to the main caller. It never invents targets or workflows.
-
-| Fact | Read | Probe | If still missing |
-|------|------|-------|-------------------|
-| GitHub config | `## GitHub Config` (owner, repo, registry, default branch) | `gh repo view --json owner,name,defaultBranchRef` | A derived value is never self-approved for a MODIFY+ operation — it carries into the envelope's `HOST:` field |
-| Workflow inventory | `## Workflows:` | `ls .github/workflows/` + `gh workflow list` | Stops and returns the list as `## NEEDS-INPUT` — never guesses a workflow to trigger |
-| Server targets | `## SSH Servers` (hosts, users, keys, ports) | — | Stops and returns a `## NEEDS-INPUT` block. Never invents a host |
-| Secret names | `CLAUDE.local.md` may record which secret each workflow expects | `gh secret list` (READ level — needs admin; if it fails, say so and continue without the list) | — |
-
-<Callout type="caution">
-**Names only.** The agent never reads, prints, or logs a secret value.
-</Callout>
+Deploy Admin handles GitHub Actions work: releases, workflow edits, CI monitoring, GHCR images, and VPS deployment checks. It carries no baked-in inventory. At task start it reads `CLAUDE.local.md`, probes missing facts, and returns unresolved decisions to the main caller. It never invents targets or workflows, and never prints a secret value (names only).
 
 ## When to use
 
-- **Release a new version** — bump semver, generate changelog, commit, tag, push, verify CI green
-- **Create or update a workflow** — write workflow YAML, add matrix, configure caching, set up GHCR push
-- **Monitor CI** — check why a run failed, fetch step logs, rerun failed jobs
-- **Publish a draft release** — review notes, attach assets, flip draft to published
-- **Deploy to VPS** — dispatch workflow, watch run live, SSH health-check the server after deploy
-- **Manage secrets** — list names (never values), set from file, clean up stale entries
+- **Release a version** — bump, changelog, tag, push, verify CI
+- **Create or fix a workflow** — YAML, caching, GHCR push; read failed logs, rerun
+- **Deploy to VPS** — dispatch the workflow, watch the run, SSH health-check the server
+- **Manage secrets** — list names, set from file or stdin, clean up stale entries
 
-## Examples
+## Example
 
+```text
+Release v3.6.0 with a changelog from recent commits
 ```
-# Release a new version with full pipeline
-"Release v3.6.0 with changelog from recent commits"
 
-# Investigate a failed run
-"Check why the last docs workflow failed and suggest a fix"
-
-# Trigger a deploy and verify it landed
-"Trigger deploy-docs workflow and verify health on the VPS"
-```
+The agent proposes the version and changelog edits, stages commit, tag, and both pushes as one `APPROVAL REQUIRED` envelope, and stops. After you approve, it runs the transaction, resolves the CI run for the pushed SHA, and reports a table of operations and checks.
 
 ## Flow
 
 <Steps>
-  <li>
-    <div>
-      <strong>Read context</strong>
-      <p>Reads <code>CLAUDE.local.md</code> for GitHub config, workflow inventory, server targets, and secret names. Verifies <code>gh auth status</code> — wrong user stops everything before touching any resource.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Classify operations</strong>
-      <p>Every planned command is assigned a safety level: READ (free), CREATE (free), MODIFY (confirm), SERVICE (confirm), DELETE (always confirm), PRIVILEGE (always confirm). Compound pipelines inherit the highest level of any constituent command.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Emit approval envelope</strong>
-      <p>Gather evidence and return exact envelopes for operations requiring approval (see Approval contract). Wrong targets, branches, or secret exposure stop execution.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Execute operations</strong>
-      <p>Run only approved operations: workflow dispatch, release publication, stdin-based secret setting, exact tag-ref pushes, or registry publication. Keep release preparation and publication in the project's approved transaction order, and checkpoint each completed command.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Verify</strong>
-      <p>Resolves the CI run for the exact pushed SHA and watches it with `gh run watch --exit-status` — never the newest rows in <code>gh run list</code>, which can show an unrelated run as green. Also checks release state and deployment health via SSH. For plugin releases, also verifies the plugin cache updated correctly.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Report</strong>
-      <p>Outputs a structured table: repository, task, operations executed, highest safety level reached, and per-check verification results. No silent failures.</p>
-    </div>
-  </li>
+  <li><div><strong>Read context</strong><p>Loads <code>CLAUDE.local.md</code> and checks <code>gh auth status</code>. A wrong user stops the run before any resource is touched.</p></div></li>
+  <li><div><strong>Classify and envelope</strong><p>Each command gets a safety level; a pipeline takes its highest part. MODIFY and above become envelopes (see Approval contract).</p></div></li>
+  <li><div><strong>Execute approved ids</strong><p>Runs only what <code>APPROVED:</code> names, rechecks each precondition, and checkpoints every completed command.</p></div></li>
+  <li><div><strong>Verify</strong><p>Watches the run for the exact pushed SHA with `gh run watch --exit-status`, never the newest rows of <code>gh run list</code>. Then checks release state and health.</p></div></li>
 </Steps>
 
 ## Approval contract
 
-Ordinary subagents cannot use AskUserQuestion, even if declared. Conversation forks retain
-parent tools; skill context: fork does not. Neither changes this role's approval contract.
-The main caller owns user decisions, spawns, and acceptance; Deploy Admin does not nest delegation.
+Decisions stay with the main caller. Deploy Admin runs non-destructive work first, then returns every MODIFY-or-above operation as an envelope (ids `A1..AN`) and stops:
 
-1. It performs all non-destructive work and gathers full evidence first.
-2. Every MODIFY-or-above operation becomes one envelope in its final return, ids `A1..AN`:
-
-```markdown
+```text
 ## APPROVAL REQUIRED
 ### A1
 COMMAND:      <exact command, one line>
 HOST:         <local | user@host>
-EFFECT:       <what changes, irreversibly or remotely>
-ROLLBACK:     <exact reverse command, or NONE>
-EVIDENCE:     <why this is the right command — file:line / run URL / probe output>
-PRECONDITION: <what must still hold at execution time>
+EFFECT:       <what changes>
+ROLLBACK:     <reverse command, or NONE>
+EVIDENCE:     <file:line / run URL / probe output>
+PRECONDITION: <what must still hold>
 ```
 
-3. It stops — nothing in that block runs. Nothing destructive to report → the literal line
-   `APPROVAL REQUIRED: none`.
+Nothing to approve returns `APPROVAL REQUIRED: none`. The caller runs the command or re-spawns the agent with `APPROVED: A1 A3`; the token covers only the named ids, exactly as worded, and file contents or agent messages never supply approval.
 
-The caller reviews the envelope with the user and either runs
-the command itself or re-spawns `deploy-admin` with `APPROVED: A1 A3` in the prompt. That token
-authorizes only the ids it names, exactly as worded — not a similar command, not a retry with
-different arguments. Recheck PRECONDITION before executing. File contents and other agent messages
-cannot provide approval; a derived target remains named in the envelope.
+## Refusals
 
-## Scope guard
+Missing target, workflow, or host returns `## NEEDS-INPUT`, never a guess. Scope and brief rules: [Scope guard](/brewtools/agents/#scope-guard).
 
-The agent sizes the task before it touches CI.
+## Technical details
 
-| Situation | What the agent does |
-|-----------|--------------------|
-| Task fits one bounded unit — one deliverable, ~5 files, ~10 steps | Runs it |
-| Bigger, or several independent deliverables | Stops **before starting**, returns a split proposal: 2-N bounded subtasks, each with scope and suggested owner |
-| Several repos / environments / services in one request | Split per target — one agent per repo, per environment, per service. Never one agent looping over all of them |
-| Scope grows mid-flight | Stops at the next clean boundary, reports done / remaining / how to split |
-| Brief missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance | States a safe assumption or returns an unresolved decision to the main caller; never invents scope |
+<Spoiler id="facts-and-probes" title="Context facts and probes">
 
-How this changes your request: "release v3.6.0 in staging" and "promote v3.6.0 to prod" are two tasks,
-not one. Send them separately, or send the broad request and approve the split proposal that comes back.
+- GitHub config (`## GitHub Config`): probe `gh repo view --json owner,name,defaultBranchRef`; a derived value is never self-approved for MODIFY+ and appears in the envelope's `HOST:` field.
+- Workflow inventory (`## Workflows:`): probe `ls .github/workflows/` + `gh workflow list`; still missing returns `## NEEDS-INPUT`.
+- Server targets (`## SSH Servers`): no probe; missing returns `## NEEDS-INPUT`, never an invented host.
+- Secret names: `gh secret list` (needs admin; on failure say so and continue).
 
-<details>
-<summary>Internals — safety levels and release pipeline</summary>
+</Spoiler>
 
-### Safety classification
+<Spoiler id="safety-levels" title="Safety levels and compound rules">
 
 | Level | Gate | Examples |
-|-------|------|---------|
-| READ | free | `gh run list/view`, `gh workflow list/view`, `gh release list/view`, `gh secret list`, `gh api` (GET) |
-| CREATE | free | Create workflow YAML, `gh release create --draft`, create branch |
-| MODIFY | envelope | Edit workflow YAML, `gh secret set`, update RELEASE-NOTES.md, `git commit`, `git tag` |
+|-------|------|----------|
+| READ, CREATE | free | `gh run view`, `gh release list`, `gh secret list`, `gh api` (GET), new workflow YAML, `gh release create --draft` |
+| MODIFY | envelope | Edit workflow YAML, `gh secret set`, `git commit`, `git tag` |
 | SERVICE | envelope | `gh workflow run`, `gh run rerun`, `git push origin HEAD`, `git push origin refs/tags/vX.Y.Z`, `gh api` (POST/PUT/PATCH) |
-| DELETE | always envelope | `gh release delete`, `gh run cancel`, remove workflow file, `git tag -d` |
-| PRIVILEGE | always envelope | `gh secret delete`, branch protection changes, `gh workflow disable`, `gh repo edit` |
+| DELETE | always envelope | `gh release delete`, `gh run cancel`, `git tag -d` |
+| PRIVILEGE | always envelope | `gh secret delete`, branch protection, `gh workflow disable`, `gh repo edit` |
 
-Compound rules:
+Compound rules: `sudo` is PRIVILEGE; a pipeline or script takes the highest level of its parts; `curl | bash` is PRIVILEGE; `gh release edit --draft=false` is SERVICE (publishes).
 
-| Combination | Result |
-|-------------|--------|
-| `sudo` + any command | PRIVILEGE (overrides base level) |
-| Pipeline `cmd1 \| cmd2` | Highest level of both |
-| `curl \| bash`, `wget && chmod +x` | PRIVILEGE (arbitrary execution) |
-| Multiple operations in one script | Highest level among all operations |
-| Draft release + undraft (`gh release edit --draft=false`) | SERVICE (publishes the release) |
+</Spoiler>
 
-### gh CLI conventions
+<Spoiler id="release-pipeline" title="Release pipeline and gh conventions">
 
-| Area | Convention |
-|------|-----------|
-| Releases | Create with `--draft` first, publish separately via `gh release edit TAG --draft=false` (SERVICE level) |
-| Secrets | Set from file or stdin: `gh secret set NAME < FILE` — never `--body "VALUE"`, it lands in shell history |
-| Failure triage | `gh run view RUN_ID --log-failed` before rerunning; `gh run watch RUN_ID` to follow a live run |
+1. Propose the version bump (the project's bump helper) and changelog (`git log --oneline vPREV..HEAD`) before writing: MODIFY.
+2. Commit, tag, and both pushes go in ONE envelope, run as a single `&&` chain: `git push origin HEAD` + `git push origin refs/tags/vX.Y.Z`, never `git push --tags`: SERVICE.
+3. Resolve the run for the commit SHA and `gh run watch --exit-status`; verify the published artifact (image, package, or `/version`). Nothing published is not a failure.
 
-### Release pipeline steps
-
-| Step | Command | Level |
-|------|---------|-------|
-| 1. Bump version | Propose the project's bump helper or exact version-file changes before writing; carry the approved preparation into the transaction | MODIFY |
-| 2. Changelog | Read `git log --oneline vPREV..HEAD` and propose changelog changes in the existing style before writing | MODIFY |
-| 3-5. Release transaction | Commit, tag, and both pushes staged as ONE envelope, run as a single `&&` chain once approved — never split across turns. `git push origin HEAD` + `git push origin refs/tags/vX.Y.Z`, never `git push --tags` (that publishes every unpushed local tag) | SERVICE |
-| 6. Post-release | The project's own post-release/publish script, if it has one | SERVICE |
-| 7. Verify CI | Resolve the run for this commit's SHA, then `gh run watch --exit-status` — never the newest rows in `gh run list` | READ |
-| 8. Verify artifact | Whatever this project publishes — container image, npm/PyPI package, a live `/version` endpoint. Nothing published is not a failure | READ |
+Releases are created with `--draft` and published via `gh release edit TAG --draft=false`. Secrets: `gh secret set NAME < FILE`, never `--body "VALUE"`. Every version file must end on the same version. `${CLAUDE_PLUGIN_ROOT}/skills/deploy/references/release-best-practices.md` is a worked example of the flow, not commands for your repo.
 
 <Callout type="caution">
-**A pushed tag has no rollback.** `git reset --soft HEAD~1` and `git tag -d vX.Y.Z` only recover a failure *before* the first push. Once `git push origin refs/tags/vX.Y.Z` succeeds, deleting or force-moving that tag is irreversible for anyone who already fetched it — their clone keeps the old object while the tag name now points elsewhere. The non-destructive escape is always the next patch version.
+**A pushed tag has no rollback.** `git reset --soft HEAD~1` and `git tag -d vX.Y.Z` recover only a failure before the first push. After `git push origin refs/tags/vX.Y.Z` succeeds, deleting or moving the tag is irreversible for anyone who fetched it. The escape is the next patch version.
 </Callout>
 
-<Callout type="note">
-No script path in that table is hardcoded. The agent reads `${CLAUDE_PLUGIN_ROOT}/skills/deploy/references/release-best-practices.md` as a *worked example* from one multi-package repo — the shape of the flow (probe, then run; every version file in lockstep; verify the published artifact), never as commands to execute in yours.
-</Callout>
+</Spoiler>
 
-Rule that survives every repo: **every version file must end up on the same version.** Hand-editing one and missing another is the classic release break, which is why a project bump script is used when one exists.
+<Spoiler id="docker-ssh" title="Docker, GHCR and SSH deploy">
 
-### Docker / GHCR
+Build, push, and deploy exact tags or digests with `docker build --platform linux/amd64`; no floating tags. Deleting a GHCR version via `gh api -X DELETE /user/packages/container/IMAGE/versions/VERSION_ID` is DELETE level: an envelope with `ROLLBACK: NONE`. Remote health and restarts use `ssh -o ConnectTimeout=10 -o BatchMode=yes USER@HOST '...'`.
 
-```bash
-# Build for linux/amd64 and push
-docker build --platform linux/amd64 -t ghcr.io/OWNER/IMAGE:TAG .
-docker push ghcr.io/OWNER/IMAGE:TAG
-```
+</Spoiler>
 
-Build, push, and deploy exact image tags or digests; do not create floating convenience tags.
-Deleting a GHCR version (`gh api -X DELETE /user/packages/container/IMAGE/versions/VERSION_ID`) is
-DELETE level — always an `APPROVAL REQUIRED` envelope with `ROLLBACK: NONE`.
+<Spoiler id="return-contract" title="Return contract">
 
-### SSH deploy
+- Verdict first, `<=30 lines`, `path:line`. No YAML, `gh run` logs, or changelog text; a CI run is cited by URL, a failure by step, job, URL, and one error line. Full logs go to `.claude/reports/YYYYMMDD-HHMMSS_deploy/`, returned as a path.
+- `maxTurns` stops loops, not publication. Each result is checkpointed with SHA, run id, and health evidence; the caller reads it before resuming and never repeats a logged tag or push.
+- Once pushed, report the partial state and use an approved next patch version. Credentials go to stdin, never argv or output.
+- [`/brewtools:agent-return-setup`](/brewtools/skills/agent-return-setup/) enforces the size budget when installed; the contract ships unconditionally.
 
-```bash
-# Health check
-ssh -o ConnectTimeout=10 -o BatchMode=yes USER@HOST 'uptime && df -h && docker ps'
+</Spoiler>
 
-# Pull and restart
-ssh -o ConnectTimeout=10 -o BatchMode=yes USER@HOST 'cd /opt/app && docker compose pull && docker compose up -d'
-```
-
-</details>
-
-## Return Contract
-
-### Release and recovery evidence
-
-Prepare version and changelog proposals before writing them. Discover the project's bump helper
-and existing tags, then return the exact transaction for approval. Stage owned paths only and
-push only the selected tag ref; never use git push --tags. Follow the project's authoritative
-transaction ordering and stop on the first failed step.
-
-Rollback descriptions must distinguish local from public state. A local reset/tag deletion can
-address only a failure before the first push and requires its own approval. Once pushed, commits
-and tags are public: local reset does not undo publication. Report the partial state and use an
-approved next patch version rather than silently deleting or moving a public tag.
-
-The maxTurns limit stops loops, not publication. Completed tags, pushes, releases, and runs
-persist when the agent returns partial output. Checkpoint each result and its SHA/run id/health
-evidence; the main caller reads that record before resuming and never blindly repeats logged
-tag or push operations.
-
-Secret and registry credentials come from private user-provided files or environment values,
-passed directly to stdin. Never print values, pass them in argv, or copy auth state between tools.
-Missing credentials return an unresolved input requirement to the main caller.
-
-Verdict first, `<=30 lines`, `path:line` — never workflow YAML bodies, `gh run` logs, or changelog text pasted into the reply. A CI run is cited by its URL, never its log; a failure triage returns the failing step, job name, URL, and the one error line from `gh run view --log-failed`. Full logs, long diffs, and per-file version audits go to `.claude/reports/YYYYMMDD-HHMMSS_deploy/`, returned as a path.
-
-[`/brewtools:agent-return-setup`](/brewtools/skills/agent-return-setup/) enforces this at ~2500 / ~6000 est-tokens when installed; the contract itself ships unconditionally.
+## Related
 
 <CardGrid>
   <Card title="Deploy skill" icon="rocket" href="/brewtools/skills/deploy/">
-    The skill that configures GitHub integration and writes <code>CLAUDE.local.md</code> for this agent to read.
+    Configures GitHub integration and writes <code>CLAUDE.local.md</code> for this agent.
   </Card>
   <Card title="ssh-admin agent" icon="terminal" href="/brewtools/agents/ssh-admin/">
-    Companion agent for VPS management — SSH connections, server config, and Docker operations on remote hosts.
-  </Card>
-  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/agents/deploy-admin.md">
-    Agent definition with full safety rules and workflow templates.
+    Companion agent for VPS management over SSH.
   </Card>
   <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">
     All brewtools skills and agents in one place.

@@ -3,17 +3,13 @@ title: "Plugin Update"
 description: "Check installed brewcode plugins and mods, install missing suite plugins, and update everything in one command, with version table and reload prompt."
 order: 3119
 ---
-import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+import { Badge, Callout, Card, CardGrid, Spoiler, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# plugin-update — manage plugin versions
+# plugin-update
 
-<Callout type="caution">
-**Running old plugin versions causes silent mismatches.** Skills added in newer releases are missing. Fixes don't apply. The skill manifest Claude loads at startup can be weeks behind the repo. There is no auto-update prompt — you have to ask.
-</Callout>
+<Badge text="sonnet" /> <Badge text="4 modes" /> <Badge text="user-invoked" />
 
-<Callout type="tip">
-**One skill checks, installs, and updates the full brewcode suite.** Interactive by default — or pass `check` / `update` / `all` to skip questions. Installed mods (`brewmod-plan-effort`, `brewmod-placeholders`) are checked and updated too, never installed; a mod that is not installed gets no row and never shows ❌.
-</Callout>
+Checks, installs and updates the brewcode suite (brewcode, brewdoc, brewtools, brewui) in one command. Installed mods (`brewmod-plan-effort`, `brewmod-placeholders`) are checked and updated too, never installed: a mod that is not installed gets no row and never shows as missing.
 
 ## Quick reference
 
@@ -22,42 +18,22 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 | Command | `/brewtools:plugin-update` |
 | Arguments | `[prompt] [check\|update\|all]` — free-form prompt first; no args = interactive |
 | Model | sonnet |
-| Context | session |
-| Tools | Read, Bash, Write, AskUserQuestion, WebFetch |
+| Output | Version table, change summary, reload notice |
 
-## When to use
-
-- **Version check before a long session** — confirm the suite is current before investing time
-- **After seeing unfamiliar errors** — an outdated plugin may lack a fix already released
-- **First run on a new machine** — install all four plugins non-interactively with `all`
-- **CI / scripted setup** — `all` mode skips every confirmation prompt
+## Modes
 
 | Situation | Command |
 |-----------|---------|
-| Just check versions, change nothing | `/brewtools:plugin-update check` |
-| Update what's outdated, skip missing | `/brewtools:plugin-update update` |
-| Install missing + update all, no prompts | `/brewtools:plugin-update all` |
 | Walk through each decision interactively | `/brewtools:plugin-update` |
+| Just check versions, change nothing | `/brewtools:plugin-update check` |
+| Update what is outdated, skip missing | `/brewtools:plugin-update update` |
+| Install missing + update all, no prompts (new machine, CI) | `/brewtools:plugin-update all` |
 
-## Examples
+## Example
 
 ```bash
-# Interactive — check versions and decide what to update
-/brewtools:plugin-update
-
-# Status check only — no changes made
 /brewtools:plugin-update check
 ```
-
-```bash
-# Update all outdated plugins non-interactively
-/brewtools:plugin-update update
-
-# Install missing + update all — fully non-interactive
-/brewtools:plugin-update all
-```
-
-After a run you will see a version table like this (versions are placeholders):
 
 | Plugin | Installed | Latest | Status |
 |--------|-----------|--------|--------|
@@ -67,79 +43,38 @@ After a run you will see a version table like this (versions are placeholders):
 | brewui | X.Y.1 | X.Y.1 | ✅ current |
 | brewmod-placeholders | X.Y.0 | X.Y.1 | ⬇️ update available |
 
-Status legend: ✅ current · ⬇️ update available · ❌ missing · ❓ unknown.
-
-## Flow
-
-<Steps>
-  <li>
-    <div>
-      <strong>Discover installed plugins</strong>
-      <p>Primary path: runs `claude plugin list --json` (CC 2.1.163+, prefixed with <code>unset CLAUDECODE &&</code> inside a session). Returns an array of objects: <code>id</code>, <code>version</code>, <code>scope</code>, <code>enabled</code>, <code>installPath</code>, <code>installedAt</code>, <code>lastUpdated</code>, <code>projectPath</code> (present only on project/local rows, absent on user rows), and optional <code>mcpServers</code>. The <code>version</code> field may read `"unknown"` for locally-loaded plugins. Fallback: if the command errors, returns empty output, or produces invalid JSON, the skill runs <code>discover-plugins.sh</code>, which reads <code>settings.json</code> in the config directory (<code>CLAUDE_CONFIG_DIR</code>, default <code>&#126;/.claude</code>) and walks the plugin cache (<code>CLAUDE_CODE_PLUGIN_CACHE_DIR</code>, default <code>&lt;config dir&gt;/plugins/cache/</code>) directly.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Fetch latest versions</strong>
-      <p>Fetches release metadata from GitHub. If the network request fails, all latest versions are marked "unknown" and the run stays read-only: the failure is reported and nothing is inferred as missing or outdated.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Render status table</strong>
-      <p>Prints the version table for all four suite plugins (brewcode, brewdoc, brewtools, brewui), each installed mod (brewmod-plan-effort, brewmod-placeholders), plus any other installed plugins as informational rows. Argument <code>check</code> stops here — no changes are made.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Install missing plugins</strong>
-      <p>For each suite plugin not present: asks whether to install (interactive) or auto-installs (<code>all</code> mode). Mods are never offered or installed here, even when named in the prompt; the summary prints their <code>claude plugin install</code> command for you to run. Runs <code>claude plugin marketplace add</code> first (idempotent), then per-plugin <code>install</code>. Skipped entirely for the <code>update</code> argument.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Update outdated plugins</strong>
-      <p>Asks which plugins to update ("Update all" incl. non-suite plugins / "Update suite only" / "Update selected" / "Skip"; installed mods are updated in both "Update all" and "Update suite only") — <code>update</code> and <code>all</code> auto-pick "Update all" without asking. The update set is built from that answer, never from a fixed list. Runs a marketplace refresh once, then one `claude plugin update <id> --scope <scope>` per selected plugin, using each plugin's own installed scope from discovery. `--scope` is always passed, because CLIs before 2.1.281 read an omitted scope as <code>user</code> and would update the wrong instance. Project and local rows resolve from the working directory, so each runs as `(cd "<projectPath>" && claude plugin update <id> --scope <scope>)` and the session directory stays untouched; a missing <code>projectPath</code> is reported as an orphan install with its uninstall command and nothing is run. Shows full CLI output for every command; any single failure is reported and the run continues.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Auto-update toggle hint</strong>
-      <p>Only in interactive and <code>all</code> modes. Auto-update is OFF by default for a third-party marketplace like claude-brewcode, and the only switch is the <code>/plugin</code> UI (Marketplaces → claude-brewcode → Enable auto-update); no CLI sets it. The skill never patches <code>settings.json</code> directly and only points you to the UI.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Prune orphaned dependencies</strong>
-      <p>Interactive and <code>all</code> only; <code>check</code> and <code>update</code> skip it. Previews orphaned auto-installed dependencies with `claude plugin prune --dry-run --scope <scope>`, once per distinct scope seen during discovery — plugins installed directly are never touched. Empty preview → nothing to remove. Non-empty preview asks once on the exact list (<code>all</code> auto-picks "Prune listed"); on a "Prune listed" answer it runs `claude plugin prune --scope <scope> -y`. The <code>-y</code> flag is mandatory: the Bash tool is not a TTY, and a bare <code>prune</code> without a TTY removes nothing and still exits 0, so the run would look pruned when it was not. Non-fatal if the CLI lacks <code>prune</code> — prints a skip notice and continues.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Reload notice + final summary</strong>
-      <p>Always printed at the end of every run (<code>check</code> included), even on no-op runs. Lists what was installed, updated, skipped, and any errors. Preferred reload: run <code>/reload-plugins</code> in this session. Fallback: <code>exit</code>, then <code>claude</code> again.</p>
-    </div>
-  </li>
-</Steps>
+Versions are placeholders. Legend: ✅ current · ⬇️ update available · ❌ missing · ❓ unknown.
 
 <Callout type="warning">
-Run `/reload-plugins` or restart the session after any install or update. Claude Code reads skill and agent definitions once at startup — changes take effect only after a reload.
+Run `/reload-plugins` or restart the session after any install or update. Claude Code reads skill and agent definitions once at startup, so changes take effect only after a reload.
 </Callout>
 
-<details>
-<summary>Internals</summary>
+## How it works
 
-**Discovery** — primary: `claude plugin list --json` (available since CC 2.1.163). Returns objects with fields `id`, `version`, `scope`, `enabled`, `installPath`, `installedAt`, `lastUpdated`, `projectPath` (project/local rows) and optionally `mcpServers`. The `version` field may be `"unknown"` for dev-mode plugins. When run inside a session, the Bash invocation is prefixed with `unset CLAUDECODE &&` to avoid the env-var conflict. Fallback: if the command errors, returns empty output, or returns invalid JSON (CC older than 2.1.163), the skill falls back to `discover-plugins.sh`, which parses `settings.json` in the config directory (`CLAUDE_CONFIG_DIR`, default `~/.claude`) for marketplace registrations and walks the plugin cache (`CLAUDE_CODE_PLUGIN_CACHE_DIR`, default `<config dir>/plugins/cache/`) for installed version directories.
+<Steps>
+  <li><div><strong>Discover</strong><p>Lists installed plugins with `claude plugin list --json`, or a script fallback on older CLIs.</p></div></li>
+  <li><div><strong>Fetch latest</strong><p>Reads published versions from GitHub; on a network failure the run stays read-only.</p></div></li>
+  <li><div><strong>Status table</strong><p>Prints the table above. `check` stops here.</p></div></li>
+  <li><div><strong>Install missing</strong><p>Suite plugins only, asked or automatic (`all`); skipped for `update`.</p></div></li>
+  <li><div><strong>Update outdated</strong><p>One marketplace refresh, then one `claude plugin update` per selected plugin at its own scope.</p></div></li>
+  <li><div><strong>Auto-update hint</strong><p>Points to `/plugin` → Marketplaces; the skill never edits settings files.</p></div></li>
+  <li><div><strong>Prune</strong><p>Previews orphaned dependencies and removes them only after confirmation.</p></div></li>
+  <li><div><strong>Reload notice</strong><p>Always printed, with a summary of installed, updated, skipped and failed items.</p></div></li>
+</Steps>
 
-**Update chain** — marketplace refresh once, then one command per plugin actually selected, `--scope` mandatory and taken from that plugin's own discovery row:
+## Technical details
+
+<Spoiler id="internals" title="Internals: discovery, update chain, gates">
+
+**Discovery.** `claude plugin list --json` (CC 2.1.163+) returns `id`, `version`, `scope`, `enabled`, `installPath`, `installedAt`, `lastUpdated`, optional `mcpServers`, and `projectPath` on project/local rows only. `version` may be `"unknown"` for locally loaded plugins. Inside a session the call is prefixed with `unset CLAUDECODE &&`. If it errors, returns nothing or invalid JSON, `scripts/discover-plugins.sh` reads `settings.json` (`CLAUDE_CONFIG_DIR`, default `~/.claude`) and walks the cache (`CLAUDE_CODE_PLUGIN_CACHE_DIR`, default `<config dir>/plugins/cache/`). If both fail, the inventory is reported unknown and install, update and prune are skipped.
+
+**Update chain.** `--scope` is always passed from the plugin's own discovery row, because CLIs before 2.1.281 read an omitted scope as `user` and update the wrong instance:
 
 ```bash
 claude plugin marketplace update claude-brewcode
-claude plugin update <id> --scope <scope>      # user/managed rows, repeat per selected plugin
-(cd "<projectPath>" && claude plugin update <id> --scope <scope>)   # project/local rows
+claude plugin update <id> --scope <scope>
+(cd "<projectPath>" && claude plugin update <id> --scope <scope>)
 ```
-
-Full-suite example, all four at `user` scope (an installed mod follows the same pattern, for example `brewmod-placeholders@claude-brewcode`):
 
 ```bash
 claude plugin update brewcode@claude-brewcode --scope user
@@ -148,18 +83,23 @@ claude plugin update brewtools@claude-brewcode --scope user
 claude plugin update brewui@claude-brewcode --scope user
 ```
 
-Each command runs via the Bash tool with full output shown. Failures are reported inline; remaining steps continue regardless. Project and local installs also need their own `projectPath` as the working directory; a row whose directory no longer exists is reported as an orphan install, with `mkdir -p "<projectPath>" && cd "<projectPath>" && claude plugin uninstall <id> --scope <scope>` as the removal command.
+The second block is the full suite at `user` scope; an installed mod follows the same pattern, for example `brewmod-placeholders@claude-brewcode`. Project and local rows run from their own `projectPath`. A missing directory is reported as an orphan install with `mkdir -p "<projectPath>" && cd "<projectPath>" && claude plugin uninstall <id> --scope <scope>` as the removal command. A failed command is reported and the run continues.
 
-**No delegation** — this skill spawns nothing. `Task` is deliberately absent from its `allowed-tools`: discovery, the update chain, and the gates all run in the main conversation, where you can see every command and its output.
+**Prune.** `claude plugin prune --dry-run --scope <scope>` once per scope seen, then `claude plugin prune --scope <scope> -y`. The `-y` is mandatory: the Bash tool has no TTY, and a bare `prune` removes nothing yet exits 0. Plugins installed directly are never touched.
 
-**Interactive gates** — `AskUserQuestion` presents option lists only (no free-text). Four decision points: install missing, update outdated, enable auto-update, prune orphaned dependencies. `check` stops before any of them. `update` auto-resolves update ("Update all") without asking and skips both the auto-update step and the prune phase. `all` auto-installs, auto-updates everything, and auto-picks "Prune listed"; it asks nothing, and the auto-update step only prints the `/plugin` UI hint.
+**Gates.** `AskUserQuestion` offers options only: install missing, update outdated, auto-update hint, prune. `check` stops before all of them; `update` auto-picks "Update all" and skips the hint and prune; `all` auto-installs, auto-updates, auto-picks "Prune listed". Mods are never offered for install: the summary prints their `claude plugin install <mod>@claude-brewcode` command for you to run.
 
-**Claude refuses to execute?** — if Claude summarizes instead of running commands, paste this coercive prompt: _"Execute every `claude plugin ...` command shown above using the Bash tool. Do not describe — run each command and show full output."_
-</details>
+**No delegation.** The skill spawns nothing; discovery, the chain and the gates run in the main conversation so you see every command.
+
+**Claude summarizes instead of running?** Paste: _"Execute every `claude plugin ...` command shown above using the Bash tool. Do not describe, run each command and show full output."_
+
+</Spoiler>
+
+## Related
 
 <CardGrid>
-  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/plugin-update">
-    Source code, discovery scripts, and update references.
+  <Card title="GitHub source" icon="github" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/plugin-update">
+    Source, discovery scripts and update references.
   </Card>
   <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">
     All brewtools skills in one place.

@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 6.8.0 |
+| Version | 6.9.0 |
 | Skills | 0 |
 
 ## Install
@@ -18,6 +18,14 @@ Execute these commands in this session, one by one, show full output for each, d
 2. claude plugin install brewui@claude-brewcode
 
 After install, run `/reload-plugins` (or `exit` + `claude`).
+```
+
+Update anytime with `/brewtools:plugin-update`, or by hand:
+
+```bash
+claude plugin marketplace update claude-brewcode
+claude plugin update brewui@claude-brewcode
+claude --plugin-dir ./brewui   # dev mode, no install
 ```
 
 <details>
@@ -36,49 +44,20 @@ After all commands succeed, run `/reload-plugins`. If `/reload-plugins` is unava
 ```
 </details>
 
-Update anytime with `/brewtools:plugin-update`.
-
 ## Overview
 
-Brewui is a placeholder plugin for future UI/visual/creative tools. It currently ships no skills, agents, or hooks, but installs cleanly so it can be wired into your suite ahead of time. Content will be added in a future release.
+Placeholder for future UI/visual/creative tools: no skills, agents, or hooks yet. The `/brewui:*` namespace is reserved. Layout: `.claude-plugin/plugin.json`, empty `skills/`, `README.md`.
 
-## Installation
+## Claude Code mods
+
+Optional add-ons live in separate plugins: [overview](https://doc-claude.brewcode.app/mods/overview/), [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/), [placeholders](https://doc-claude.brewcode.app/mods/placeholders/).
 
 ```bash
-# Marketplace (recommended)
-claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
-claude plugin install brewui@claude-brewcode
-
-# Already installed? Update
-claude plugin marketplace update claude-brewcode
-claude plugin update brewui@claude-brewcode
-
-# Dev mode (no install)
-claude --plugin-dir ./brewui
-```
-
-## Skills
-
-No skills yet -- coming soon. Brewui is an empty placeholder; the `/brewui:*` command namespace is reserved for future tools.
-
-## Architecture
-
-```
-brewui/
-├── .claude-plugin/
-│   └── plugin.json              # Plugin manifest
-├── skills/                      # Empty -- placeholder for future tools
-└── README.md
+claude plugin install brewmod-plan-effort@claude-brewcode
 ```
 
 ## Documentation
 
-Full docs: [doc-claude.brewcode.app/brewui/overview](https://doc-claude.brewcode.app/brewui/overview/)
-
-| Resource | Link |
-|----------|------|
-| Release Notes | [RELEASE-NOTES.md](../RELEASE-NOTES.md) |
-
-See also: [Claude Code mods](../README.md#claude-code-mods) — optional brewmod-plan-effort and brewmod-placeholders.
+[doc-claude.brewcode.app/brewui/overview](https://doc-claude.brewcode.app/brewui/overview/) | [RELEASE-NOTES.md](../RELEASE-NOTES.md)
 
 Author: Maksim Kochetkov | License: MIT

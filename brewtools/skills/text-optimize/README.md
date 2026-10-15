@@ -1,20 +1,23 @@
 # Text Optimizer
 
-Optimizes text files for LLM token efficiency with 5 compression modes — from light cleanup to deep dictionary-encoded compression for LLM-only documents. Applies 52 validated rules, supports smart auto-detection of optimal mode, and verifies content against per-mode loss budgets (lossless through standard; small explicit loss at deep/max). Works on single files, multiple files in parallel, or entire directories. Includes a smart deduplication pass: accidental repeats merged, intentional emphasis capped at 2 per document.
+<p align="center"><img src="../../../assets/demos/text-optimize.gif" width="800" alt="Terminal animation: /brewtools:text-optimize -s README.md, docs/guide.md prints a PLAN, snapshots both files, runs one optimizer agent per file, then shows before and after metrics and a summary card."><br><sub>Illustrative animation: prompt → snapshot, one optimizer agent per file → measured before/after report → summary card.</sub></p>
 
-**Invocation:** type `/brewtools:text-optimize ...`, or ask Claude mid-task ("compress this prompt", "optimize CLAUDE.md"). The skill is model-invocable; Claude-started runs must name their target files, because empty arguments stop with "no target". Add `--allow-dirty` to authorize uncommitted targets.
+Compress prompts and docs for LLM token efficiency in 5 modes, from light cleanup to deep dictionary encoding. Files are edited in place after a snapshot, and every result is checked against a per-mode loss budget.
 
-**Permissions:** see the [docs page](https://doc-claude.brewcode.app/brewtools/skills/text-optimize/).
+## Install
 
-## Quick Start
+```bash
+claude plugin install brewtools@claude-brewcode
+```
+
+Model-invocable: type `/brewtools:text-optimize ...` or ask Claude mid-task ("compress this prompt"). Claude-started runs must name target files; `--allow-dirty` authorizes uncommitted ones.
+
+## Usage
 
 ```bash
 /brewtools:text-optimize CLAUDE.md
+/brewtools:text-optimize -s README.md,docs/guide.md
 ```
-
-Auto-detects optimal mode for the file (deep for CLAUDE.md, standard for README.md), applies all standard transformations, and prints a report with token savings.
-
-## Modes
 
 | Mode | Flag | Best For | What Changes |
 |------|------|----------|--------------|
@@ -24,129 +27,7 @@ Auto-detects optimal mode for the file (deep for CLAUDE.md, standard for README.
 | **Deep** | `-d` | CLAUDE.md, system prompts, agent/skill defs | 2-3x compression for LLM-only consumption. Dictionary encoding, symbol substitutions, abbreviation tables, plus aggressive lossy pass (line fusion, word drop, paraphrase, known-fact elision) gated at >=95% semantic match. 1-2 verification rounds |
 | **Max** | `-x` | Cost-critical LLM-only prompts (opt-in) | 3-4x. Atomic fact-lines, ASCII operators, Chain-of-Density pass, same aggressive lossy pass as deep (A.1-A.4), same gate. 2 independent verification rounds |
 
-## Examples
-
-### Good Usage
-
-```bash
-# Single file, mode auto-detected (CLAUDE.md -> deep)
-/brewtools:text-optimize CLAUDE.md
-
-# Light mode on a production agent -- safe, minimal changes
-/brewtools:text-optimize -l .claude/agents/reviewer.md
-
-# Deep mode on a verbose prompt you want compressed
-/brewtools:text-optimize -d prompts/analysis-prompt.md
-
-# Multiple files processed in parallel
-/brewtools:text-optimize agents/planner.md, agents/executor.md, CLAUDE.md
-
-# All markdown files in a directory
-/brewtools:text-optimize -d agents/
-
-# Standard mode — 30-50% compression, stays human-readable
-/brewtools:text-optimize -s docs/getting-started.md
-
-# Deep mode — max compression with dictionary encoding for LLM consumption
-/brewtools:text-optimize -d CLAUDE.md
-
-# Auto-detect: CLAUDE.md → deep, README.md → standard
-/brewtools:text-optimize CLAUDE.md
-/brewtools:text-optimize README.md
-
-# Prompt hint overrides auto-detect
-/brewtools:text-optimize "super compress" verbose-doc.md
-```
-
-### Common Mistakes
-
-```bash
-# Running deep mode on production files without reviewing the diff
-/brewtools:text-optimize -d CLAUDE.md
-# Deep mode aggressively rephrases and merges sections.
-# ALWAYS review the diff before accepting deep mode changes.
-
-# Optimizing generated or third-party files you don't control
-/brewtools:text-optimize node_modules/some-lib/README.md
-# Only optimize files YOU maintain. External files get overwritten on update.
-
-# Using deep mode on files with precise technical references
-/brewtools:text-optimize -d API-REFERENCE.md
-# Deep mode may rephrase domain terms or merge sections that need to stay separate.
-# Use light (-l) or medium for reference documentation.
-
-# Using deep mode on user-facing documentation
-/brewtools:text-optimize -d README.md
-# Deep mode uses dictionary encoding and symbols not readable by humans.
-# Use standard (-s) for docs that humans will read.
-
-# Expecting deep mode output to be human-readable
-# Deep mode is designed for LLM consumption only (CLAUDE.md, system prompts).
-# The output uses DICT headers, symbols (->, !=, bc), and abbreviations.
-```
-
-## Auto-Detection
-
-When no mode flag is provided, the optimizer analyzes the file path and content to select the best mode:
-
-| File Pattern | Auto-Selected Mode |
-|--------------|-------------------|
-| `CLAUDE.md`, `.claude/rules/*.md` | Deep |
-| `.claude/agents/*.md`, `.claude/skills/**/SKILL.md` | Deep |
-| `KNOWLEDGE.*`, system prompts | Deep |
-| `README.md`, `docs/**` | Standard |
-| API references, user-facing docs | Standard |
-| Unknown / mixed | Asks user |
-
-Prompt text can also hint at the mode: "compress for LLM" → deep, "safe compress" → standard, "super compress" → deep.
-
-## Verification
-
-Medium runs a self-check; standard, deep, and max run automatic verification rounds against per-mode loss budgets.
-
-| Mode | Rounds | Pass Threshold |
-|------|--------|----------------|
-| Medium | self-check | Zero loss |
-| Standard | 1 | >= 98% fact inventory |
-| Deep | 1-2 | >= 95% |
-| Max | 2 (independent methods) | >= 95% + 100% of numbers/names/negations/scope qualifiers |
-
-The report includes a semantic match percentage and lists any facts that were lost or distorted during compression.
-
-## What It Does
-
-- Converts verbose prose to dense tables (up to 3x more token-efficient)
-- Removes filler words and passive constructions
-- Deduplicates: merges accidental repeats, caps intentional emphasis at 2 per document (full form early + short echo at end)
-- Restructures numbered lists to bullets where order does not matter
-- Converts multi-line code blocks to inline code when a single expression suffices
-- Merges redundant or overlapping sections
-- Applies positive framing ("do Y" instead of "don't do X")
-- Verifies all file paths (R.1), URLs (R.2), and circular references (R.3)
-- Uses standard abbreviations in tables only (full words in prose)
-- Deep/max apply the A.1-A.4 lossy pass (see Modes); A.2/A.4 drops logged in loss ledger
-- Leaves blocks owned by another setup (delimited by its begin/end markers, e.g. the semble block in CLAUDE.md) untouched and reports them as `managed by <setup>`
-
-## Output
-
-Each file produces an optimization report containing:
-
-| Section | Contents |
-|---------|----------|
-| Metrics | Lines and tokens -- before, after, percent reduction |
-| Rules Applied | Which rule IDs were used and what changed |
-| Issues Found | Broken references, redundancies, structural problems -- and how they were fixed |
-| Cross-Reference Check | Verification status for file paths, URLs, circular refs |
-| Semantic Match | Compression ratio and semantic match % (standard/deep modes) |
-
-Files are modified in-place. The report is printed to the conversation.
-
-## Tips
-
-- **Start with light mode** (`-l`) on important files to preview what changes look like before committing to deeper optimization.
-- **Review deep mode diffs carefully** -- aggressive rephrasing can alter meaning in domain-specific content.
-- **Run without arguments** (only when you type the command yourself; Claude-fired runs need named targets) to optimize all standard locations at once: `CLAUDE.md`, `.claude/agents/*.md`, `.claude/skills/**/SKILL.md`.
-- **Parallel processing** kicks in automatically when you pass multiple files or a directory -- no extra flags needed.
+No flag auto-detects: `CLAUDE.md`, rules, agents, skills -> deep; `README.md`, `docs/**` -> standard; unknown or mixed -> asks one question; unanswered or headless -> medium.
 
 ## Documentation
 

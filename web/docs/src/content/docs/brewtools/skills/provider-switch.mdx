@@ -3,138 +3,99 @@ title: "Provider Switch"
 description: "Configure alternative Claude Code providers with shell aliases, private credential input and verified model selection while preserving existing choices."
 order: 3120
 ---
-import { Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+import { Card, CardGrid, Spoiler, Steps, UpdateNotice } from '../../../../components/mdx';
 
 # Provider Switch
 
-Configure DeepSeek, Z.ai/GLM, Qwen/DashScope, MiniMax or OpenRouter for Claude Code.
-The skill writes a provider alias to `~/.zshrc`, keeps existing choices unless you select a change,
-and provides status and connectivity checks. Provider billing, model support and rate limits
-remain separate from your Anthropic subscription.
+Configure DeepSeek, Z.ai/GLM, Qwen/DashScope, MiniMax or OpenRouter for Claude Code. The skill writes a provider alias to `~/.zshrc`, keeps existing choices unless you select a change, and offers status and connectivity checks. Provider billing and rate limits are separate from your Anthropic subscription.
 
 ## Quick reference
 
 | Field | Value |
 |-------|-------|
 | Command | `/brewtools:provider-switch [prompt] [status\|install\|verify\|model-check\|help\|<provider-name>]` |
-| Default | Read-only status |
+| Default | Read-only status, never an install |
 | Output | Provider alias and selected configuration in `~/.zshrc` |
 | Model | opus |
 | Credentials | Existing shell environment variable or private local file; never paste keys into chat |
 
-## When to use
+## Modes
 
-- Configure an alternative provider for a new Claude Code session.
-- Inspect existing aliases and model selections without changing them.
-- Check connectivity or refresh provider reference information before a requested change.
+| Argument | Mode | What it does |
+|----------|------|--------------|
+| (none) | status | Provider table, read-only; prints the install command if nothing is configured |
+| `install` | install | Interactive selection of one or more providers |
+| `deepseek` / `ds` / `dpsk` | provider-deepseek | Configure DeepSeek V4 only (priority default) |
+| `glm` / `zai` / `z.ai` | provider-glm | Configure Z.ai/GLM only |
+| `qwen` / `dashscope` | provider-qwen | Configure Qwen/DashScope only |
+| `minimax` / `mini` | provider-minimax | Configure MiniMax only |
+| `openrouter` / `router` | provider-openrouter | Configure OpenRouter and pick a model |
+| `help` / `how` | help | How aliases, env vars and dashboards work |
+| `verify` / `test` | verify | Minimal API request to each configured endpoint; can consume provider usage |
+| `model-check` / `identify` | model-check | 5 diagnostic questions to identify the model; run inside a provider session |
 
 ## Setup
 
 <Steps>
-  <li><div><strong>Choose the provider</strong><p>Get a key through that provider's console. For Qwen, identify the billing product, region and workspace before choosing an endpoint.</p></div></li>
-  <li><div><strong>Run the skill</strong><p>Use <code>/brewtools:provider-switch install</code> or name one provider. Supply the key through an existing shell variable or a private file. Confirm the alias and model choices.</p></div></li>
-  <li><div><strong>Launch a session</strong><p>Load the new alias in your shell, then run it to start Claude Code. The alias sets provider variables before launch. To return to Anthropic, launch from a shell without those provider overrides.</p></div></li>
+  <li><div><strong>Choose the provider</strong><p>Get a key in that provider's console. For Qwen, identify billing product, region and workspace first.</p></div></li>
+  <li><div><strong>Run the skill</strong><p>Use <code>/brewtools:provider-switch install</code> or name a provider. Supply the key through a shell variable or a private file, then confirm alias and models.</p></div></li>
+  <li><div><strong>Launch a session</strong><p>Load the alias in your shell and run it. To return to Anthropic, launch from a shell without the provider overrides.</p></div></li>
 </Steps>
 
-```text
-/brewtools:provider-switch status
-/brewtools:provider-switch install
-/brewtools:provider-switch openrouter
-```
-
-```bash
-claudeds       # DeepSeek
-claudeglm      # Z.ai / GLM
-claudeqwen     # Qwen / DashScope
-claudeminimax  # MiniMax
-claudeor       # OpenRouter, user-selected catalog model
-```
-
-These are default alias names; custom names begin with `claude` and contain lowercase
-letters and digits only. Existing model and endpoint choices survive a reference refresh.
+Default aliases: `claudeds`, `claudeglm`, `claudeqwen`, `claudeminimax`, `claudeor`; custom names start with `claude` and use lowercase letters and digits only.
 
 ## Providers, models and pricing
 
-Model catalogs and prices change. Check the direct provider's current terms for region,
-context tier, input/output, cache hits and your billing product before choosing a model.
-Provider references were refreshed on 2026-10-12. Use these primary catalogs and pricing pages
-before setup, rather than assuming a fixed monthly cost or comparative quality ranking.
+One model serves all four roles (opus, sonnet, haiku, fable), so subagents pinned to any of them stay on the provider. USD per 1M tokens, input/output, per the skill's references checked 2026-10-12; confirm on the provider page.
 
-| Provider | Alias | Primary reference |
-|----------|-------|-------------------|
-| DeepSeek | `claudeds` | [Models and pricing](https://api-docs.deepseek.com/quick_start/pricing/) |
-| Z.ai / GLM | `claudeglm` | [Pricing](https://docs.z.ai/guides/overview/pricing) |
-| Qwen / DashScope | `claudeqwen` | [Claude Code integration](https://www.alibabacloud.com/help/en/model-studio/claude-code) and [model pricing](https://www.alibabacloud.com/help/en/model-studio/model-pricing) |
-| MiniMax | `claudeminimax` | [Pay-as-you-go pricing](https://platform.minimax.io/docs/guides/pricing-paygo) |
-| OpenRouter | `claudeor` | [Live catalog](https://openrouter.ai/api/v1/models) and [model variants](https://openrouter.ai/docs/guides/routing/model-variants/overview) |
+| Provider | Alias | Model | Direct price | Reference |
+|----------|-------|-------|--------------|-----------|
+| DeepSeek V4 (priority) | `claudeds` | `deepseek-v4-pro`, 1M context | $1.32 / $3.96 peak, $0.66 / $1.98 off-peak (cache miss) | [Pricing](https://api-docs.deepseek.com/quick_start/pricing/) |
+| Z.ai / GLM | `claudeglm` | `glm-5.2`, 1M context | $1.40 / $4.40 | [Pricing](https://docs.z.ai/guides/overview/pricing) |
+| Qwen / DashScope | `claudeqwen` | `qwen3.7-plus[1m]` | $0.40 / $1.60 up to 256K input, $1.20 / $4.80 above | [Claude Code guide](https://www.alibabacloud.com/help/en/model-studio/claude-code), [pricing](https://www.alibabacloud.com/help/en/model-studio/model-pricing) |
+| MiniMax | `claudeminimax` | `MiniMax-M3`, up to 1M context | $0.30 / $1.20 up to 512K, $0.60 / $2.40 above | [Pricing](https://platform.minimax.io/docs/guides/pricing-paygo) |
+| OpenRouter | `claudeor` | user-selected, default `qwen/qwen3.7-plus[1m]` | route-dependent | [Live catalog](https://openrouter.ai/api/v1/models) |
 
-DeepSeek remains the repository's priority provider; that is a configuration policy, not a
-benchmark claim. Direct-provider pricing and OpenRouter routing prices can differ. Prompt
-cache support, thresholds and TTL depend on the provider and route; check the current reference
-and response/billing evidence instead of assuming a universal discount.
+DeepSeek is the priority provider by configuration policy, not benchmark. Direct and OpenRouter prices differ; cache support depends on provider and route.
 
-### Qwen region, workspace and plan
+<Spoiler id="qwen-region-workspace-and-plan" title="Qwen: key, region and plan">
 
-Match the key to the endpoint's region, workspace and billing product. The official integration
-lists pay-as-you-go endpoints for Beijing, Singapore and Virginia, and different endpoints for
-Coding Plan and Token Plan. Region or key validity cannot be inferred from its prefix or length.
-The skill preserves an existing endpoint unless you select a change. See the
-[Alibaba Cloud integration guide](https://www.alibabacloud.com/help/en/model-studio/claude-code).
+A key works only with the endpoint of the region, workspace and billing product it was created in (pay-as-you-go: Beijing, Singapore, Virginia; Coding Plan and Token Plan use others). The default alias uses `dashscope-intl.aliyuncs.com`, so create the key in the matching region. Prefix or length reveals nothing about region. An existing endpoint is kept unless you change it.
 
-### OpenRouter selection
+</Spoiler>
 
-Before presenting model choices, the skill refreshes the public catalog and verifies every
-selected ID, including menu, default and custom selections. A successful fetch, valid JSON and
-an exact catalog match are required. Missing IDs prompt suggestions and at most two retries;
-request/parser failures are reported as verification failures. No model is written on failure,
-and there is no automatic replacement of the user's configured model.
+<Spoiler id="openrouter-selection" title="OpenRouter model selection">
 
-The selected ID maps to the Opus, Sonnet, Haiku and Fable slots together. OpenRouter IDs are picked from the live OpenRouter catalog; the bundled reference lists budget/free and general-purpose rows, and its prices are not a recommendation. Selected IDs are not given an
-automatic `[1m]` suffix. Context length and capabilities come from the selected catalog entry;
-provider routing suffixes have their own rules in the
-[OpenRouter variant reference](https://openrouter.ai/docs/guides/routing/model-variants/overview).
+Every selected ID (menu, default or custom) must match the live public catalog exactly. A missing ID gets suggestions and at most two retries; a fetch or parser failure writes nothing. The ID fills all four role slots with no automatic `[1m]` suffix. See the [variant reference](https://openrouter.ai/docs/guides/routing/model-variants/overview).
 
-## Verification
+</Spoiler>
 
-| Command | Result and limit |
-|---------|------------------|
-| `status` | Read-only configured-provider table |
-| `verify` | Minimal API requests to configured providers; can consume provider usage and reports actual responses |
-| `model-check` | In-session model diagnostics after launching an alias; model self-identification alone is not authoritative identity proof |
-| `help` | Switching reference |
+<Spoiler id="credentials-and-compatibility" title="Credentials, environment variables and compatibility flags">
 
-A catalog lookup is public and unauthenticated. It proves an ID is listed, not that your account
-can use it or that a paid inference request succeeded.
+- Keys enter the writer on stdin, never as arguments. A key file readable by group or world is refused until `chmod 600`.
+- The shell backup is private and removed after a successful write.
 
-## Credentials and compatibility
+Each alias exports seven variables: `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, an explicit empty `ANTHROPIC_API_KEY` (avoids OAuth fallback), and `ANTHROPIC_DEFAULT_OPUS_MODEL`, `ANTHROPIC_DEFAULT_SONNET_MODEL`, `ANTHROPIC_DEFAULT_HAIKU_MODEL`, `ANTHROPIC_DEFAULT_FABLE_MODEL`.
 
-Keys enter the writer on stdin rather than command arguments. A key file that is group- or world-accessible is refused (on Linux and macOS alike) until you run `chmod 600` on it. Connectivity checks pass secrets
-through curl configuration input; the model-list lookup needs no auth header. The shell backup
-is private and cleaned after a successful write. Do not paste a runtime secret into an
-`AskUserQuestion` answer or a report.
-
-| Provider | Compatibility flags installed from its reference |
-|----------|--------------------------------------------------|
-| DeepSeek | None |
+| Provider | Compatibility flags |
+|----------|---------------------|
+| DeepSeek, OpenRouter | None |
 | Z.ai / GLM and MiniMax | `CLAUDE_ENABLE_BYTE_WATCHDOG=0`, `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` |
 | Qwen / DashScope | `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` |
-| OpenRouter | None |
 
-Each alias exports seven variables: `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, an explicit empty `ANTHROPIC_API_KEY`, and `ANTHROPIC_DEFAULT_OPUS_MODEL`, `ANTHROPIC_DEFAULT_SONNET_MODEL`, `ANTHROPIC_DEFAULT_HAIKU_MODEL` and `ANTHROPIC_DEFAULT_FABLE_MODEL`. This avoids unintended OAuth fallback. Supported context settings
-are provider-specific; a model-name hint cannot create context capacity a provider does not offer.
+</Spoiler>
 
-## Reference refresh
+<Spoiler id="reference-refresh" title="Reference refresh">
 
-The main coordinator dispatches one bounded research agent per provider using `Agent`, with
-GOAL, ROLE, SCOPE, CONTEXT, CONSUMER and DONE. Each returns a Current/Fetched/Source URL table
-for model IDs, pricing and endpoints; it does not edit shell configuration. The skill presents
-verified differences for user selection before writes, preserving choices that were not changed.
+One research agent per provider ([delegation](/brewcode/skills/#delegation)) returns a Current/Fetched/Source table; verified differences are shown for your choice before any write.
+
+</Spoiler>
 
 <CardGrid>
   <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">
     Text, provider and deployment utilities.
   </Card>
-  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/provider-switch">
+  <Card title="GitHub source" icon="github" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/provider-switch">
     Skill, provider references and validation helpers.
   </Card>
   <Card title="Plugin Update" icon="sync" href="/brewtools/skills/plugin-update/">

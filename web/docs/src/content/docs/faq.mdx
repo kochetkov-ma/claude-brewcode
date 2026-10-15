@@ -31,7 +31,7 @@ import { Callout, Steps, InstallPrompt, Spoiler, UpdateNotice } from '../../comp
 
 # FAQ
 
-Click any question to expand the answer. Use the table of contents on the right to jump straight to a specific question.
+Click a question to expand the answer, or jump to it from the table of contents.
 
 <Spoiler id="update-plugins" title="How do I update brewcode plugins?">
 
@@ -50,23 +50,15 @@ If `/reload-plugins` is unavailable, type `exit` and run `claude` again.
 
 <Spoiler id="install-too-old" title="My install is too old — the skill isn't available">
 
-If [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/) is missing (very old install or partial install), use the **Claude Code prompt** below. It tells Claude to run the marketplace update + every plugin update for you, no skill required:
-
-<InstallPrompt plugin="all" mode="update" />
-
-After Claude finishes, the [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/) skill will be available for all future updates.
+If [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/) is missing (very old or partial install), paste the update prompt from [How do I update brewcode plugins?](#update-plugins). It runs the marketplace update and every plugin update, no skill required. Afterwards the skill is available for all future updates.
 
 </Spoiler>
 
 <Spoiler id="claude-refuses" title="Claude refuses to run the update commands">
 
-Paste the following prompt directly into the chat. The coercive phrasing is intentional — it prevents Claude from summarizing or skipping steps.
+Paste the update prompt from [How do I update brewcode plugins?](#update-plugins) into the chat. Its coercive phrasing is intentional: it stops Claude from summarizing or skipping steps.
 
-<InstallPrompt plugin="all" mode="update" />
-
-<Callout type="note" title="Easier alternative">
-  Once any plugin update has succeeded, switch to the [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/) skill — it handles refusal scenarios internally.
-</Callout>
+Once an update has succeeded, switch to [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/); it handles refusals internally.
 
 </Spoiler>
 
@@ -78,8 +70,10 @@ Paste the following prompt directly into the chat. The coercive phrasing is inte
 | **brewdoc** | Documentation tools: docsync-setup, memory-sync-setup, my-claude, PDF, publishing — 5 skills, 0 agents, 0 hooks | `claude plugin install brewdoc@claude-brewcode` |
 | **brewtools** | Text utilities, [SSH](/brewtools/skills/ssh/), [deploy](/brewtools/skills/deploy/), [plugin-update](/brewtools/skills/plugin-update/), manager mode, hook layer: 13 skills, 3 agents, 1 registered hook | `claude plugin install brewtools@claude-brewcode` |
 | **brewui** | UI/visual/creative tools (placeholder, empty): 0 skills | `claude plugin install brewui@claude-brewcode` |
+| [**brewmod-plan-effort**](/mods/plan-effort/) | Mod: raises main-loop effort while Claude plans | `claude plugin install brewmod-plan-effort@claude-brewcode` |
+| [**brewmod-placeholders**](/mods/placeholders/) | Mod: expands `++` tokens such as `++r` into instruction blocks | `claude plugin install brewmod-placeholders@claude-brewcode` |
 
-All four plugins install from the same `claude-brewcode` marketplace on GitHub — 27 skills, 9 agents, and 3 registered plugin hooks in total. Optional setup-installed hooks are separate.
+All six install from the same `claude-brewcode` marketplace on GitHub. The four plugins total 27 skills, 9 agents and 3 registered plugin hooks; optional setup-installed hooks are separate. Mods are covered in [Brewcode mods](/mods/overview/).
 
 </Spoiler>
 
@@ -95,11 +89,7 @@ They are separate from the four suite plugins, install individually (`claude plu
 
 A `-setup` suffix marks a skill that installs a mechanism into the project — agents, hooks, a generated skill, a board. After it runs you use the installed thing, not the skill. Skills without the suffix are recurring tools: running them repeatedly is the intended usage.
 
-There are eleven `-setup` skills. They share one mode vocabulary — `status | install | upgrade | enable | disable | uninstall | purge`. Use explicit modes: defaults vary. Convention-setup defaults to install, while semble-setup and manager-setup default to status.
-
-Skill-specific verbs come after the canonical set, never in place of it. All eleven setups implement all seven canonical verbs. Two mechanisms do the work: a live config flag that the reader re-checks on every invocation (semble, agent-deadline, agent-return, agent-router, manager, docsync), or entry-file parking, where the filename discovery keys on is renamed `<name>.disabled` with the body left byte-identical (teams, superreview, task-board, convention, memory-sync).
-
-Run [Convention Setup](/brewcode/skills/convention-setup/) after semantic search and before teams. It captures architecture, coding, and testing patterns that project agents will consume.
+There are eleven `-setup` skills. All share one mode vocabulary, `status | install | upgrade | enable | disable | uninstall | purge`; skill-specific verbs come after it. Use explicit modes: convention-setup defaults to install, semble-setup and manager-setup to status. Enable and disable work through a live config flag (semble, agent-deadline, agent-return, agent-router, manager, docsync) or entry-file parking, renaming the discovery file to `<name>.disabled` (teams, superreview, task-board, convention, memory-sync).
 
 <Callout type="warning" title="Run them one at a time">
   Each setup is an interactive generator: it fans out subagents, analyses the repo and asks you real questions. Two in one session degrade each other. Start with [`/brewcode:setup-status`](/brewcode/skills/setup-status/) and work its list, one setup per fresh session — full details on the [Full Setup](/full-setup/) page.
@@ -109,16 +99,13 @@ Run [Convention Setup](/brewcode/skills/convention-setup/) after semantic search
 
 <Spoiler id="auto-invoke" title="Why doesn't Claude run these skills on its own?">
 
-Because that is the design. 24 of the 27 skills are user-invoked only: they carry both `user-invocable: true` and `disable-model-invocation: true` in their frontmatter. The model never sees their descriptions and never auto-activates one — these skills run only when **you** type `/plugin:skill`.
+By design. 24 of the 27 skills are user-invoked only: they carry `user-invocable: true` and `disable-model-invocation: true`. The model never sees their descriptions and never auto-activates one; they run only when **you** type `/plugin:skill`.
 
-Three skills are the exception (`disable-model-invocation: false`): `/brewdoc:publish`, `/brewtools:text-optimize` and `/brewtools:text-human`. Claude can run these three on its own mid-task. Publishing is a leaf action whose result, a shareable URL, is often wanted at the end of other tasks. `text-optimize` and `text-human` are leaf edits on files you name, and other skills in the suite now call `text-optimize` through `Skill`. Three model-visible descriptions are a small token cost.
+Three skills are the exception (`disable-model-invocation: false`): `/brewdoc:publish`, `/brewtools:text-optimize` and `/brewtools:text-human`. Claude can run them mid-task: publishing returns a shareable URL, and the text skills are leaf edits on files you name. Other suite skills also call `text-optimize` through `Skill`.
 
-The other 24 keep installation and scope decisions with you:
+The other 24 keep installation and scope decisions with you. The eleven `-setup` skills write real files into your repo, and recurring tools such as `rules`, `e2e`, `secrets-scan`, `deploy` and `ssh` run when and where you choose.
 
-- The eleven `-setup` skills are interactive generators that write real files into your repo. Nothing should reach for one without you asking.
-- The recurring tools, such as `rules`, `e2e`, `secrets-scan`, `deploy` and `ssh`, are things you run at a moment you choose, on a scope you choose.
-
-The practical consequence: asking "can you sync my docs?" will not trigger `/brewdoc:docsync-setup`. Type the command. By contrast, "publish this" or "share a link" can trigger `/brewdoc:publish`, and "compress this prompt" or "humanize this README" can trigger the two text skills. Typing any of the three still works. Tab completion after `/` lists everything that is installed.
+So "can you sync my docs?" will not trigger `/brewdoc:docsync-setup`; type the command. "Publish this" or "humanize this README" can trigger the three exceptions. Tab completion after `/` lists everything installed.
 
 </Spoiler>
 
@@ -149,9 +136,7 @@ Paste the prompt below into any Claude Code session — Claude will add the mark
 
 <InstallPrompt plugin="all" mode="install" />
 
-<Callout type="tip" title="After install">
-  Once installed, manage updates with the [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/) skill.
-</Callout>
+Manage later updates with [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/).
 
 </Spoiler>
 
@@ -160,30 +145,19 @@ Paste the prompt below into any Claude Code session — Claude will add the mark
 Plugins are stored locally after installation:
 
 ```
-&#126;/.claude/plugins/cache/<marketplace>/<plugin>/<version>/
+~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/
 ```
 
-For example:
-
-```
-&#126;/.claude/plugins/cache/claude-brewcode/brewcode/5.0.0/
-&#126;/.claude/plugins/cache/claude-brewcode/brewtools/5.0.0/
-```
-
-The marketplace metadata lives at:
-
-```
-&#126;/.claude/plugins/marketplaces/
-```
+For example `~/.claude/plugins/cache/claude-brewcode/brewcode/5.0.0/`. Marketplace metadata lives in `~/.claude/plugins/marketplaces/`.
 
 </Spoiler>
 
 <Spoiler id="check-version" title="How do I check my installed version?">
 
-Run [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/) inside a Claude Code session. It reports the installed and latest available version for each plugin and prompts you to update if a newer version exists.
+Run [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/) in a session: it reports installed and latest versions per plugin and offers the update.
 
 <Callout type="note" title="CLI version check (CC 2.1.163+)">
-  Run <code>claude plugin list</code> (or `claude plugin list --json` for machine-readable output) to see installed plugins with their versions. Inside an active Claude session, prefix with <code>unset CLAUDECODE &amp;&amp;</code> to avoid the env-var conflict. On CC older than 2.1.163 the command does not exist — use the cache directory path above or <a href="/brewtools/skills/plugin-update/"><code>/brewtools:plugin-update</code></a> as a fallback.
+  Run `claude plugin list` (`--json` for machine-readable output). Inside an active Claude session, prefix with `unset CLAUDECODE &&` to avoid the env-var conflict. Older CC lacks the command: use the cache path above or [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/).
 </Callout>
 
 </Spoiler>

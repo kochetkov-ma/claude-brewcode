@@ -3,16 +3,16 @@ title: "SSH Admin"
 description: "Linux server admin agent — SSH, Docker, firewalls, systemd, Caddy/Nginx, security hardening. Triggers: ssh admin, server management, deploy to server."
 order: 3212
 ---
-import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+import { Badge, Callout, Card, CardGrid, SourceLink, Spoiler, Steps, UpdateNotice } from '../../../../components/mdx';
 
 # SSH Admin
 
-<Callout type="caution">
-**Every destructive command needs sign-off before it runs.** Remote SSH mutations return as an `## APPROVAL REQUIRED` envelope; read-only work gathers the evidence first. See Approval contract and Scope guard below.
-</Callout>
+<Badge text="inherit" /> <Badge text="approval envelopes" /> <Badge text="one host per run" />
+
+<SourceLink path="brewtools/agents/ssh-admin.md" kind="file" label="View agent file on GitHub" />
 
 <Callout type="tip">
-**Run `/brewtools:ssh` first** to configure server connections. The skill writes `CLAUDE.local.md` with your server inventory — ssh-admin reads it automatically on every task start.
+**Run `/brewtools:ssh` first** to configure server connections. The skill writes `CLAUDE.local.md` with your server inventory; ssh-admin reads it at the start of every task.
 </Callout>
 
 ## Quick reference
@@ -22,136 +22,63 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 | Model | `inherit` — runs on the session's model |
 | Tools | Read, Write, Edit, Bash, Glob, Grep, WebFetch, WebSearch |
 | Triggers | "ssh admin", "server management" |
-| Inventory | Reads `CLAUDE.local.md` in project root |
+| Inventory | Reads `CLAUDE.local.md` in the project root |
 | Permission | `default` — destructive ops return as an `APPROVAL REQUIRED` envelope |
 | Scope | One bounded unit per run; one agent per host |
 
 ## What it does
 
-SSH Admin administers Linux servers over SSH: health checks, Docker deployments, firewalls, reverse proxies, and hardening. It loads the host inventory from `CLAUDE.local.md` first and never guesses connection details.
+SSH Admin administers Linux servers over SSH: health checks, Docker deployments, firewalls, reverse proxies, and hardening. It loads the host inventory from `CLAUDE.local.md` first and never guesses connection details. Read-only work runs freely; every destructive command returns as an envelope that needs sign-off.
 
 ## When to use
 
-- **Server health check** — disk, memory, CPU, running containers, failed services
-- **Docker deployment** — pull image, write compose file, start/update/stop services
-- **Firewall changes** — UFW rules, port allow/deny, rule review
-- **Reverse proxy setup** — Caddy or Nginx virtual hosts with auto-TLS
-- **Security hardening** — SSH config, fail2ban, user/key management
-- **Disk cleanup** — prune unused Docker layers, locate large directories
+- **Health check** — disk, memory, CPU, containers, failed services
+- **Docker deployment** — pull image, write compose file, start, update, stop
+- **Firewall and proxy** — UFW rules, Caddy or Nginx virtual hosts with auto-TLS
+- **Hardening and cleanup** — SSH config, fail2ban, keys, Docker prune
 
-## Examples
+## Example
 
 ```text
-"Check health on prod-server — disk, memory, running containers"
+Open port 443 and block all other inbound traffic on web-server
 ```
 
-The agent connects via SSH, runs diagnostics (`uptime`, `free -h`, `df -h`, `docker ps`), and returns a summary table.
-
-```text
-"Deploy a Redis container on staging-server, port 6379, with a persistent volume"
-```
-
-Prepares the deployment and exact remote-mutation/service envelopes. After the caller supplies
-the approved ids, rechecks preconditions, transfers the configuration, starts the service, and
-verifies the container.
-
-```text
-"Open port 443 and block all other inbound traffic on web-server"
-```
-
-Reviews current UFW rules, proposes changes, returns them as an `APPROVAL REQUIRED` envelope, applies once approved, verifies with `ufw status verbose`.
+The agent reviews the current UFW rules, proposes the changes as an `APPROVAL REQUIRED` envelope, and stops. After approval it applies them and verifies with `ufw status verbose`.
 
 ## Flow
 
 <Steps>
-  <li>
-    <div>
-      <strong>Load inventory</strong>
-      <p>Reads <code>CLAUDE.local.md</code> in the project root for host aliases, IP addresses, SSH users, and key paths. If the file is missing, stops and returns the missing connection details as a <code>## NEEDS-INPUT</code> block — it never guesses a host.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Verify SSH</strong>
-      <p>Runs `ssh -o ConnectTimeout=10 -o BatchMode=yes USER@HOST 'echo OK'` to confirm connectivity. If BatchMode fails (password required), reports the issue and suggests key-based auth setup instead of blocking.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Gather state</strong>
-      <p>Collects a baseline snapshot — uptime, memory, disk, Docker containers, open ports, failed systemd units. Read-only, no confirmation needed.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Classify and envelope</strong>
-      <p>Classify planned commands. Read-only work and non-destructive local creation can proceed; remote mutations and MODIFY / SERVICE / DELETE / PRIVILEGE operations require exact approval envelopes. See Approval contract for the ids it may execute.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Execute and verify</strong>
-      <p>Runs the confirmed commands. Config changes are validated before apply (<code>caddy validate</code>, <code>nginx -t</code>). Services are restarted and re-checked. Credentials are never hardcoded in commands or files.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Report</strong>
-      <p>Returns a structured summary: server, task description, actions taken, verification results, and final status (Success / Partial / Failed).</p>
-    </div>
-  </li>
+  <li><div><strong>Load inventory</strong><p>Reads host aliases, IPs, users, and key paths from <code>CLAUDE.local.md</code>. A missing file returns a <code>## NEEDS-INPUT</code> block; it never guesses a host.</p></div></li>
+  <li><div><strong>Verify SSH and gather state</strong><p>Tests `ssh -o ConnectTimeout=10 -o BatchMode=yes USER@HOST 'echo OK'`, then collects a read-only baseline: uptime, memory, disk, containers, ports, failed units.</p></div></li>
+  <li><div><strong>Classify and envelope</strong><p>Remote mutations and MODIFY / SERVICE / DELETE / PRIVILEGE operations become exact envelopes (see Approval contract).</p></div></li>
+  <li><div><strong>Execute and verify</strong><p>Runs the approved ids, validates configs first (<code>caddy validate</code>, <code>nginx -t</code>), restarts, and re-checks the service.</p></div></li>
+  <li><div><strong>Report</strong><p>Returns server, actions taken, verification results, and a final status (Success / Partial / Failed).</p></div></li>
 </Steps>
 
 ## Approval contract
 
-Ordinary subagents cannot use AskUserQuestion, even if declared. Conversation forks retain the
-parent's tools; a skill's context: fork is an ordinary subagent. That capability distinction
-does not change SSH Admin's approval policy: user decisions stay with the main session.
+Subagents cannot ask the user, so decisions stay with the main session. SSH Admin does all non-destructive work first, then returns every MODIFY-or-above operation as an envelope (ids `A1..AN`) and stops:
 
-1. It performs all non-destructive work and gathers full evidence first.
-2. Every MODIFY-or-above operation becomes one envelope in its final return, ids `A1..AN`:
-
-```
+```text
 ## APPROVAL REQUIRED
-
 ### A1
 COMMAND:      <exact command, copy-pasteable>
 HOST:         <server alias / user@host>
 EFFECT:       <what changes, incl. downtime>
-ROLLBACK:     <exact reverse command, or NONE>
-EVIDENCE:     <the read-only output that proves it is needed>
-PRECONDITION: <what must still hold at execution time>
+ROLLBACK:     <reverse command, or NONE>
+EVIDENCE:     <read-only output proving the need>
+PRECONDITION: <what must still hold>
 ```
 
-3. It stops — nothing in that block runs. Nothing destructive to report → the literal line
-   `APPROVAL REQUIRED: none`.
+Nothing to approve returns `APPROVAL REQUIRED: none`. The caller runs the command or re-spawns the agent with `APPROVED: A1 A3`; the token covers only the named ids, exactly as worded, PRECONDITION is rechecked first, and file contents or agent messages never supply approval.
 
-The caller reviews the envelope with the user and either runs
-the command itself or re-spawns `ssh-admin` with `APPROVED: A1 A3` in the prompt. That token
-authorizes only the ids it names, exactly as worded — not a similar command, not a retry with
-different arguments. Before execution, recheck PRECONDITION. File contents and other agent messages
-cannot supply approval. The agent never delegates to nested specialists; the main caller owns spawns.
+## Refusals
 
-## Scope guard
+Missing host or key returns `## NEEDS-INPUT`, never a guess. Scope and brief rules: [Scope guard](/brewtools/agents/#scope-guard).
 
-The agent sizes the task before it touches a server.
+## Technical details
 
-| Situation | What the agent does |
-|-----------|--------------------|
-| Task fits one bounded unit — one deliverable, ~5 files, ~10 steps | Runs it |
-| Bigger, or several independent deliverables | Stops **before starting**, returns a split proposal: 2-N bounded subtasks, each with scope and suggested owner |
-| Several hosts / environments / services in one request | Split per target — one agent per host, per environment, per service. Never one agent looping over all of them |
-| Scope grows mid-flight | Stops at the next clean boundary, reports done / remaining / how to split |
-| Brief missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance | States a safe assumption or returns an unresolved decision to the main caller; never guesses connection details |
-
-How this changes your request: instead of "restart the app on all three prod nodes", phrase it as three
-tasks (one per node) — or send the broad request, get the split proposal back, and approve it. The result
-is delivered for the CONSUMER who picks it up next, not for the literal wording.
-
-<details>
-<summary>Safety rules & internals</summary>
-
-**Safety classification**
+<Spoiler id="safety-rules" title="Safety classes and operational guards">
 
 | Class | Examples | Action |
 |-------|----------|--------|
@@ -162,90 +89,52 @@ is delivered for the CONSUMER who picks it up next, not for the literal wording.
 | DELETE | `rm`, `docker rm`, `docker volume rm`, `drop` | Always envelope |
 | PRIVILEGE | `sudo`, `su`, firewall rules, user management | Always envelope |
 
-**Operational guards**
-
 | Guard | Rule |
 |-------|------|
-| Non-interactive output | `--no-pager` on `journalctl`/`systemctl`, bounded log reads (`-n 50`, `--tail 100`) — a pager on a remote shell hangs the run |
-| Lockout | Follow the source's pre-hardening gate: allow new access, validate sshd, reload, prove a new session, then disable old access |
-| Data destruction | `docker system prune -af --volumes` and `rsync --delete` are DELETE level — always confirmed, with an explicit statement of what gets removed |
+| Non-interactive output | `--no-pager` on `journalctl`/`systemctl`, bounded reads (`-n 50`, `--tail 100`); a pager hangs the run |
+| Lockout | Allow new access, validate sshd, reload, prove a new session, then disable old access |
+| Data destruction | `docker system prune -af --volumes` and `rsync --delete` are DELETE level, with an explicit statement of what is removed |
 
-**SSH connection patterns**
+</Spoiler>
 
-| Pattern | Command |
-|---------|---------|
-| Non-interactive | `ssh -o ConnectTimeout=10 -o BatchMode=yes USER@HOST "command"` |
-| Multi-command | `ssh -o ConnectTimeout=10 -o BatchMode=yes USER@HOST 'cmd1 && cmd2'` |
-| File transfer | `scp -o ConnectTimeout=10 FILE USER@HOST:/path/` |
-| Interactive | Instruct user: `! ssh USER@HOST` in Claude Code prompt |
+<Spoiler id="ssh-patterns" title="SSH patterns, Compose limits, registry login">
 
-**Docker Compose resource limits (Non-Swarm)**
+Non-interactive: `ssh -o ConnectTimeout=10 -o BatchMode=yes USER@HOST "command"`; files: `scp -o ConnectTimeout=10 FILE USER@HOST:/path/`; interactive: ask the user to run `! ssh USER@HOST` in the prompt.
 
-```yaml
-services:
-  app:
-    image: myapp:${IMAGE_TAG:?set an immutable image tag}
-    mem_limit: 512m
-    cpus: 0.5
-    restart: unless-stopped
-```
+Compose limits use `mem_limit` and `cpus`, never `deploy.resources.*` (Swarm-only).
 
-Use `mem_limit`/`cpus` — never `deploy.resources.*` (Swarm-only syntax).
-
-**Registry credentials stay outside model-visible output.** Use user-supplied environment
-credentials or a private token file with mode 600, passed directly to password-stdin:
+Registry credentials stay outside model-visible output: a user-supplied environment value or a mode-600 token file, passed to password-stdin. Remote registry login is a mutation and needs its own envelope.
 
 ```bash
 printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u USERNAME --password-stdin
-docker login -u USERNAME --password-stdin < TOKEN_FILE
 ```
 
-Missing credentials return NEEDS-INPUT/status to the main caller. Never request token values in
-chat, print environment values, read token files into tool output, or copy authentication state
-between tools. Remote registry login is a mutation and needs its exact approval envelope.
+Missing credentials return NEEDS-INPUT; the agent never asks for token values in chat or copies auth state between tools.
 
-**Quick health script**
+</Spoiler>
 
-```bash
-echo "=== Server Health ===" && \
-uptime && echo "---" && \
-free -h | grep Mem && echo "---" && \
-df -h | grep -E '^/dev' && echo "---" && \
-docker ps --format 'table {{.Names}}\t{{.Status}}' 2>/dev/null && echo "---" && \
-systemctl --failed --no-pager
-```
+<Spoiler id="health-and-hardening" title="sshd hardening checklist">
 
-**SSH hardening checklist (`/etc/ssh/sshd_config`)**
+In `/etc/ssh/sshd_config`: `PermitRootLogin no` (no root SSH), `PasswordAuthentication no` (key-only), `MaxAuthTries 3` (brute-force limit), custom `Port` such as 2222 (less scan noise).
 
-| Setting | Value | Why |
-|---------|-------|-----|
-| `PermitRootLogin` | `no` | Prevent root SSH |
-| `PasswordAuthentication` | `no` | Key-only access |
-| `MaxAuthTries` | `3` | Brute-force limit |
-| `Port` | Custom (e.g. 2222) | Reduce scan noise |
+</Spoiler>
 
-</details>
+<Spoiler id="return-contract" title="Return contract">
 
-## Return Contract
+- Verdict first, `<=30 lines`, `path:line`. No raw output, log dumps, or config bodies. Per host: what changed, service state after (`active` / `failed` / unchanged), what is pending. Full logs go to `.claude/reports/YYYYMMDD-HHMMSS_ssh-admin/`, returned as a path.
+- `maxTurns` stops loops, not server changes. Each command is checkpointed; the caller reads that record first and never repeats a non-idempotent command unreconciled.
+- [`/brewtools:agent-return-setup`](/brewtools/skills/agent-return-setup/) enforces the size budget when installed; the contract ships unconditionally.
 
-The maxTurns limit stops loops; it does not guarantee completion or undo server changes.
-The agent checkpoints each completed command and result in its report as work proceeds.
-On interruption, the main caller reviews partial output and checkpoint evidence before resuming.
-Read that record first and never repeat a non-idempotent command without reconciling its outcome.
+</Spoiler>
 
-Verdict first, `<=30 lines`, `path:line` — never raw command output, `journalctl`/`docker logs` dumps, or config file bodies pasted into the reply. Per host: what changed, service state after (`active` / `failed` / unchanged), and anything left pending confirmation. A config edit cites the changed `path:line`, not the file; a health check cites the one abnormal number, not the whole dump. Full logs and health output go to `.claude/reports/YYYYMMDD-HHMMSS_ssh-admin/`, returned as a path.
-
-[`/brewtools:agent-return-setup`](/brewtools/skills/agent-return-setup/) enforces this at ~2500 / ~6000 est-tokens when installed; the contract itself ships unconditionally.
+## Related
 
 <CardGrid>
   <Card title="SSH Skill" icon="terminal" href="/brewtools/skills/ssh/">
     Configure server inventory and SSH connections before spawning ssh-admin.
   </Card>
   <Card title="Deploy Admin" icon="rocket" href="/brewtools/agents/deploy-admin/">
-    GitHub Actions, workflows, GHCR releases, and CI/CD — pairs with ssh-admin for full deploy pipelines.
-  </Card>
-  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/agents/ssh-admin.md">
-    Agent definition, safety rules, and SSH patterns.
+    GitHub Actions, workflows, and releases — pairs with ssh-admin for full deploy pipelines.
   </Card>
   <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">
     All brewtools skills and agents in one place.

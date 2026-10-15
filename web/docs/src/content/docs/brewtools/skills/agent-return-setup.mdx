@@ -1,32 +1,37 @@
 ---
 title: "Agent Return Setup"
-description: "Install hooks that size every subagent's final return, on both delivery paths, and challenge the oversized ones once: compress, file-and-cite or essential part."
+description: "Install hooks that size every subagent's final return and challenge oversized ones once: compress, file-and-cite or essential part."
 order: 3130
 ---
-import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+import { Badge, Callout, Card, CardGrid, Spoiler, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# Agent Return Setup — size budget for subagent returns
+# Agent Return Setup
 
-<Badge variant="primary" text="sonnet" /> <Badge variant="accent" text="status / install / upgrade / enable / disable / uninstall / purge" /> <Badge variant="secondary" text="project | global" /> <Badge variant="accent" text="opt-in" /> <Badge variant="accent" text="user-invoked" />
+<Badge variant="primary" text="sonnet" /> <Badge variant="accent" text="opt-in" /> <Badge variant="secondary" text="project | global" />
 
-## What it does
+Subagent reports are the largest single context cost of a session that delegates. The hooks state a token budget when the agent starts and enforce it when it returns: an oversized report is sent back once to be shortened or filed. No LLM judge, only a number comparison.
 
-Subagent returns are the largest single context cost in a manager session. The rule "verdict first, at most 30 lines, <code>path:line</code>" already existed as prose and was ignored — a rule sitting at the top of context loses to whatever the agent just did. `/brewtools:agent-return-setup` restates that rule mechanically, at the exact moment it bites.
+## Quick reference
 
-It installs three hook files sharing one module, wired as three registrations: a <code>SubagentStart</code> contract hook injects the return rule as advisory context, and one guard file sizes the final message against two thresholds on two events — <code>SubagentStop</code> (classic path) and <code>PreToolUse</code> with matcher <code>SubagentHandback</code> (auto-mode hand-back path). No LLM judge anywhere — the decision is a plain number comparison.
+| Field | Value |
+|-------|-------|
+| Command | `/brewtools:agent-return-setup` |
+| Args | `[prompt] [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [project\|global] [pass] [file]` |
+| Model | sonnet |
+| Defaults | no args = `status`; `passTokens` 2500, `fileTokens` 6000; ABSENT config = DISABLED (`enabled` must be exactly `true`) |
+| Output | 3 hook files, 3 `settings.json` entries, `agent-return.json` |
 
-Run the skill with no arguments and it reports status first — installed scopes, wired hooks, current thresholds — before doing anything else. Every mode, including <code>status</code>, prints the 5-field PLAN block up front; the mutating ones (<code>install</code>, <code>upgrade</code>, <code>enable</code>, <code>disable</code>, <code>uninstall</code>, <code>purge</code>) then ask only what is still unknown before delegating the file and settings work to the <code>brewcode:hook-creator</code> agent. The feature is **opt-in** — these hooks are not registered in <code>brewtools/hooks/hooks.json</code>, so installing the plugin does nothing until this skill runs.
+## Modes
 
-## When to use
-
-| Situation | Suggested invocation |
-|-----------|----------------------|
-| Manager sessions losing context to bloated subagent reports | `/brewtools:agent-return-setup install` |
-| Same budget on every project on this machine | `/brewtools:agent-return-setup install global` |
-| Pick up a new hook version after a brewtools update, same thresholds | `/brewtools:agent-return-setup upgrade` |
-| Check what is currently installed without changing anything | `/brewtools:agent-return-setup status` |
-| Temporarily stop enforcing without removing files | `/brewtools:agent-return-setup disable` |
-| Fully remove hooks, settings entries and config | `/brewtools:agent-return-setup purge` |
+| Mode | Does |
+|------|------|
+| `status` | Report installed scopes, wiring, governing config (default) |
+| `install` | Copy 3 hook files, merge settings, write config |
+| `upgrade` | Re-emit hooks from the current plugin, thresholds kept |
+| `enable` | Set `enabled: true` |
+| `disable` | Set `enabled: false`, files stay |
+| `uninstall` | Unwire and delete hooks, keep config |
+| `purge` | Uninstall and delete config |
 
 ## Example
 
@@ -34,82 +39,71 @@ Run the skill with no arguments and it reports status first — installed scopes
 /brewtools:agent-return-setup install project 2500 6000
 ```
 
-Expected flow: the skill prints the current status table, states the plan ("copy 3 files into <code>.claude/hooks/</code>, write <code>.claude/agent-return.json</code> with <code>passTokens: 2500</code>, <code>fileTokens: 6000</code>, merge 3 settings.json entries"), asks nothing — scope and both thresholds are already supplied, so the question step is skipped entirely, delegates to <code>brewcode:hook-creator</code>, then re-prints the status table showing <code>hook_files=3/3 settings_refs=2 enabled=true registrations=3/3</code>.
+The skill prints the status table, states its plan (3 files into `.claude/hooks/`, config with both thresholds, 3 settings entries), skips the questions because scope and thresholds are given, delegates to `brewcode:hook-creator` and re-prints status: `hook_files=3/3 settings_refs=2 enabled=true registrations=3/3`.
 
-## Workflow
+## How it works
+
+The size `t` is `chars/4` of the final message.
+
+| Size | Order |
+|------|-------|
+| `t <= passTokens` (2500) | pass |
+| up to `fileTokens` (6000) | compress: re-send shortened, no new work |
+| above `fileTokens` | file: write the full report, return path + verdict + summary |
+| above `fileTokens`, agent cannot write | essential part only |
+
+Each agent is **blocked at most once**, on either delivery path (`SubagentStop` classic, `SubagentHandback` in auto mode). Agent types in `readOnlyAgentTypes` (default `Explore`, `Plan`) get the essential-part order instead of a file.
 
 <Steps>
-  <li><div><strong>Status first, always</strong><p>Before any mode runs, the skill checks both project and global scope for the three hook files, <code>settings.json</code> wiring and an existing config, and prints a state table. Nothing installs or removes blind.</p></div></li>
-  <li><div><strong>Mode decided from free text</strong><p>Empty input defaults to status whether installed or absent. Explicit modes win; otherwise whole-word intent selects a mode. Destructive ambiguity is clarified before actions.</p></div></li>
-  <li><div><strong>Plan stated before any question</strong><p>The skill writes out, in plain text, exactly what changes: which files, which paths, which <code>settings.json</code> entries — before asking anything.</p></div></li>
-  <li><div><strong>Only missing answers are asked</strong><p>Scope (Project / Global / Both) and thresholds (default 2500 / 6000, one question yields both numbers) are asked via <code>AskUserQuestion</code> only if not already given. A custom pair must satisfy <code>passTokens &lt; fileTokens</code> or the config write aborts.</p></div></li>
-  <li><div><strong>File work delegated to hook-creator</strong><p>A single <code>brewcode:hook-creator</code> spawn per mode-and-scope combination copies all three files as a unit, merges or strips the three <code>settings.json</code> entries, and writes or edits <code>agent-return.json</code>. Both scopes at once means two spawns in one message.</p></div></li>
-  <li><div><strong>Refreshed status printed</strong><p>The status block re-runs. Hook <em>wiring</em> changes (install/upgrade/uninstall/purge) apply to the running session — no restart and no <code>/reload-plugins</code>; <code>/hooks</code> confirms. Config <em>value</em> changes (<code>enabled</code>, <code>passTokens</code>, <code>fileTokens</code>, <code>readOnlyAgentTypes</code>, <code>reportDir</code>) are read live too.</p></div></li>
+  <li><div><strong>Status first</strong><p>Both scopes are checked for hook files, wiring and config before anything changes.</p></div></li>
+  <li><div><strong>Plan, then questions</strong><p>The plan is printed; scope and the threshold pair are asked only if missing.</p></div></li>
+  <li><div><strong>Delegated file work</strong><p>One <code>brewcode:hook-creator</code> spawn per scope copies the files and merges settings. See <a href="/brewcode/skills/#delegation">Delegation</a>.</p></div></li>
+  <li><div><strong>Live status</strong><p>Wiring and config changes apply to the running session; no restart, <code>/hooks</code> confirms.</p></div></li>
 </Steps>
+
+## Good to know
+
+- Opt-in: the hooks are not in `brewtools/hooks/hooks.json`, so installing the plugin changes nothing until you run this skill.
+- A global install is cheap: the hooks fire only at spawn, stop and hand-back, about 30-53 ms each.
+- `passTokens` must stay below `fileTokens`; the config write aborts on an inversion.
+
+<Callout type="warning">
+Only the final message is sized: see Limits below.
+</Callout>
 
 ## Technical details
 
-### The three files
+<Spoiler id="hooks-and-tiers" title="Hook files, tiers, one-challenge rule">
 
 | File | Event | Behavior |
 |------|-------|----------|
-| `agent-return-budget.mjs` | — | Shared module: config discovery, threshold resolution, read-only list, report dir, `estimateTokens`, the contract text. **Never registered in settings.json** — imported by both hooks, so the announced budget and the enforced budget can never drift apart |
-| `agent-return-contract.mjs` | `SubagentStart` (matcher-less) | Injects the return contract as `additionalContext`. Advisory only, no decision |
-| `agent-return-guard.mjs` | `SubagentStop` (matcher-less) | Classic path: sizes `last_assistant_message`, blocks at most once with a compress, file or essential-part order |
-| `agent-return-guard.mjs` (same file) | `PreToolUse`, matcher `SubagentHandback` | Auto-mode path (Claude Code 2.1.271+): sizes `tool_input.message`, denies the hand-back at most once. Older versions have only the classic path |
+| `agent-return-budget.mjs` | never registered | Shared module: config, thresholds, read-only list, `estimateTokens`, contract text |
+| `agent-return-contract.mjs` | `SubagentStart` | Injects the budget as advisory `additionalContext` |
+| `agent-return-guard.mjs` | `SubagentStop` | Sizes `last_assistant_message`, blocks once |
+| `agent-return-guard.mjs` | `PreToolUse`, matcher `SubagentHandback` | Auto-mode path (Claude Code 2.1.271+): sizes `tool_input.message`, denies once |
 
-All three install as a unit. ESM resolution runs before evaluation, so a hooks dir holding 2 of the 3 files exits 1 with an empty stdout and a hook-error banner on every subagent spawn and return — never copy 2 of 3.
+The three files install as a unit: with 2 of 3 present, ESM resolution fails and both hooks exit 1 with a hook-error banner on every spawn and return.
 
-Sizing tiers, `t = Math.ceil(<report text>.length / 4)`, both boundaries inclusive on the low side:
+Boundaries are inclusive on the low side: exactly `passTokens` passes, exactly `fileTokens` still compresses. A denied file write is never retried; the agent returns a compressed inline report.
 
-| Range | Decision | Order |
-|-------|----------|-------|
-| `t <= passTokens` (default 2500) | pass | none |
-| `passTokens < t <= fileTokens` (default 6000) | block | **compress** — re-send the same answer, keep the verdict and every `path:line`, drop preamble/bodies/output/logs/restated context, no new work |
-| `t > fileTokens`, agent can write | block | **file** — write the full report to `<project root>/<reportDir>/YYYYMMDD-HHMMSS_<agent-slug>-<run-id>/` (`reportDir` default `.claude/reports`), then answer with that path plus verdict plus a summary within the budget. A denied write is never retried: a compressed inline report instead |
-| `t > fileTokens`, agent cannot write (plan mode, or a type in `readOnlyAgentTypes`) | block | **essential part** — no file; verdict, findings the caller must act on, key `path:line` refs, one line naming what was left out |
+A marker `agent-return-state/<sha256(agent_id)>.json` beside the config (pruned after 24 h) records the challenge; `stop_hook_active === true` is checked before any sizing. A payload without `agent_id` (main session, internal agents) is never challenged. A compress round that lands slightly over budget is not challenged again.
 
-**Challenged at most once per agent, across both paths** — before a challenge the guard creates a marker `agent-return-state/<sha256(agent_id)>.json` beside the config (pruned after 24 h), and `stop_hook_active === true` is checked before any sizing. A compress round that lands slightly over `passTokens` (observed live: 1417 -> 1026 est-tokens against a budget of 1000) is not challenged a second time. A payload without `agent_id` (main session, internal agents) is never challenged. Deliberate trade: repeated hand-back denies make the harness withhold the report, and the once-only guarantee outranks the last few percent.
+</Spoiler>
 
-### Modes
-
-| Mode | Effect | Hook files | settings.json | Config |
-|------|--------|-----------|----------------|--------|
-| `status` (default with empty input) | report only | — | — | — |
-| `install` | wire + configure | 3 copied | 3 entries merged | written |
-| `upgrade` | re-emit from the current plugin version, thresholds preserved | 3 re-copied | entries re-merged (adds the `SubagentHandback` entry an older install lacks) | values preserved, metadata re-stamped |
-| `enable` | resume enforcement | kept | kept | `enabled: true` |
-| `disable` | pause enforcement | kept | kept | `enabled: false` |
-| `uninstall` | unwire | deleted | entries stripped (an emptied `settings.json` and hooks dir are removed) | **kept** (see [Orphan project config](#orphan-project-config)) |
-| `purge` | full wipe | deleted | entries stripped | deleted (an emptied project `.claude/` is removed too; never the global dir) |
-
-`upgrade` asks nothing: it reads `passTokens`/`fileTokens` back out of the existing config and replays the install for that scope against the current assets, so a plugin update finally reaches an installed project without re-asking. A disabled setup stays disabled. It migrates one pair once: exactly `1000` / `2500` with no `readOnlyAgentTypes` key (the pre-6.5 defaults) becomes `2500` / `6000`. One scope per run.
-
-### Orphan project config
-
-`uninstall project` keeps `.claude/agent-return.json` by design. When the global scope still registers the hooks, that kept file keeps governing them: the nearest project config is read before the global one, so its `passTokens`, `fileTokens` and `enabled` override the global config. In that case the uninstall prints `WARNING: kept <cfg> still GOVERNS ...`; the skill relays it verbatim and offers `purge project` in the same confirmation.
-
-`status` reports it with three fields:
-
-| Field | Meaning |
-|-------|---------|
-| `governing_config` / `governing_scope` | the one config every wired hook reads (resolution: see Config discovery below); scope is `project`, `global` or `none` |
-| `orphan_config` | `yes` when the governing config is project-side, the project has `0/3` registrations and the global scope has at least one |
-
-An orphan is reported as a finding, not as stale. Fix: `/brewtools:agent-return-setup purge project` deletes the file, and the global config governs again. Keeping it on purpose is valid. `upgrade` is never offered for it, because it would re-wire the project hooks and undo the uninstall.
-
-### Installation targets
+<Spoiler id="installation-targets" title="Installation targets and config discovery">
 
 | Scope | Hooks dir | settings.json | Config |
-|-------|-----------|----------------|--------|
+|-------|-----------|---------------|--------|
 | Project | `<repo>/.claude/hooks/` | `<repo>/.claude/settings.json` | `<repo>/.claude/agent-return.json` |
 | Global | `<config dir>/hooks/` | `<config dir>/settings.json` | `<config dir>/agent-return.json` |
 
-`<config dir>` is the one Claude Code runs with: `$CLAUDE_CONFIG_DIR` when set, else `~/.claude/`. The project scope is the session's start directory (what hooks receive as `CLAUDE_PROJECT_DIR`); from a repo subdirectory the git root's `settings.json` is not loaded. The state directory `agent-return-state/` sits beside the config that enabled the feature.
+`<config dir>` is `$CLAUDE_CONFIG_DIR` when set, else `~/.claude/`. The state directory sits beside the config that enabled the feature.
 
-Config discovery starts at the resolved project root (`CLAUDE_PROJECT_DIR`, then an upward walk from the cwd for a `.git` or `.claude` marker, never the git toplevel, then cwd; the `.claude` step skips `HOME` and the profile parent (the directory whose `.claude` is the active config dir); a `.git` there still counts), walks up 16 levels probing `<dir>/.claude/agent-return.json`, then falls back to `$CLAUDE_CONFIG_DIR/agent-return.json` when set, then `~/.claude/agent-return.json`. Project wins, even when the project has no hooks wired; a malformed project config is skipped and the climb goes on; global only when no valid project config is found. Global writes go through Bash only — the config dir is a protected path for `Write`/`Edit`: prompted in `default` and `acceptEdits`, denied headless and in `dontAsk`, allowed only under `bypassPermissions`.
+Discovery starts at the project root (`CLAUDE_PROJECT_DIR`, then an upward walk for `.git` or `.claude`, then cwd), probes `<dir>/.claude/agent-return.json` up to 16 levels, then `$CLAUDE_CONFIG_DIR/agent-return.json`, then `~/.claude/agent-return.json`. Project wins, even without wired hooks; a malformed project config is skipped. Global writes go through Bash only, because the config dir is a protected path for `Write`/`Edit`.
 
-### Config shape
+</Spoiler>
+
+<Spoiler id="config-shape" title="Config shape and threshold precedence">
 
 ```json
 {
@@ -126,54 +120,63 @@ Config discovery starts at the resolved project root (`CLAUDE_PROJECT_DIR`, then
 
 | Key | Meaning |
 |-----|---------|
-| `enabled` | must be exactly `true`; anything else, or no config at all, turns both hooks into no-ops — the enable/disable mechanism |
-| `passTokens` | pass ceiling, the number quoted as `budget` in every order; positive integer; default `2500` |
-| `fileTokens` | compress/file tier boundary; positive integer; default `6000` |
-| `readOnlyAgentTypes` | agent types without a file-writing tool, matched exactly on `agent_type` (plugin agents as `plugin:name`): over `fileTokens` they are asked for the essential part, not a file. Any array replaces the default `["Explore","Plan"]`; `[]` = nobody |
-| `reportDir` | optional, added by hand; where the file tier writes. Relative = under the project root, absolute as is, `~/` = under `$HOME`; absent or blank = `.claude/reports` |
-| `version` / `content_version` / `generated_by` / `last_updated` | Provenance restamped on install, upgrade, enable, and disable; `content_version` is the header version of `agent-return-budget.mjs`, the one module that parses the config, while `version` identifies the producing plugin release |
+| `enabled` | Exactly `true`; anything else, or no config, makes both hooks no-ops |
+| `passTokens` / `fileTokens` | Positive integers; defaults `2500` / `6000` |
+| `readOnlyAgentTypes` | Matched on `agent_type` (plugin agents as `plugin:name`); an array replaces the default, `[]` = nobody |
+| `reportDir` | Optional, added by hand; default `.claude/reports`. Relative = project root, `~/` = `$HOME` |
+| `version` / `content_version` / `generated_by` / `last_updated` | Provenance, inert at runtime |
 
-**Threshold precedence, per threshold, first hit wins:** the config key — the env var (`AGENT_RETURN_PASS` / `AGENT_RETURN_FILE`, parsed with `Number()` not `parseInt()`) — the built-in `2500` / `6000`. Only a positive integer is accepted at either level; `1.7`, `abc`, `-5`, `0`, `NaN`, `Infinity` all fall through.
+Per threshold, first hit wins: config key, then env var (`AGENT_RETURN_PASS` / `AGENT_RETURN_FILE`, parsed with `Number()`), then the built-in value. Only positive integers are accepted; `1.7`, `abc`, `-5`, `0` fall through. Values are read on every hook call.
 
-Config values are read on every hook call — changing `enabled`, a threshold, the list or `reportDir` takes effect immediately, no restart. Hook **wiring** changes also apply to the running session, with no restart.
+</Spoiler>
 
-Setup-status compares each artifact's content_version with the source for that artifact (config vs `agent-return-budget.mjs`; field `contract_content_version`),
-then corroborates copied hook bytes and ownership. Hook and config-generator content versions
-can differ, and unchanged content need not match a newer plugin release number. A missing
-comparison source is reported as unknown, not a fabricated stale verdict.
+<Spoiler id="upgrade-and-uninstall" title="Upgrade details and uninstall file effects">
 
-### Why 2500 / 6000
+`upgrade` asks nothing: it reads both thresholds from the config and replays the install against the current assets, adding the `SubagentHandback` entry an older install lacks. A disabled setup stays disabled. The pair `1000` / `2500` with no `readOnlyAgentTypes` key (the pre-6.5 defaults) migrates once to `2500` / `6000`. One scope per run.
 
-Measured over 80 real Agent returns across 4 session transcripts, sized `chars/4`:
+`uninstall` deletes the hook files and strips the settings entries (an emptied `settings.json` and hooks dir are removed) but keeps the config. `purge` also deletes the config and an emptied project `.claude/`, never the global dir.
+
+</Spoiler>
+
+<Spoiler id="orphan-project-config" title="Orphan project config">
+
+`uninstall project` keeps `.claude/agent-return.json` by design. While the global scope still registers the hooks, that file keeps governing them: the nearest project config is read first. The uninstall prints `WARNING: kept <cfg> still GOVERNS ...` and the skill offers `purge project` in the same confirmation.
+
+`status` prints `governing_config`, `governing_scope` (`project`, `global` or `none`) and `orphan_config=yes` when the governing config is project-side, the project has `0/3` registrations and global has at least one. An orphan is a finding, not stale. Fix: `/brewtools:agent-return-setup purge project`. Keeping it on purpose is valid. `upgrade` is never offered, because it would re-wire the project and undo the uninstall.
+
+</Spoiler>
+
+<Spoiler id="why-2500-6000" title="Why 2500 / 6000">
+
+Measured over 80 real Agent returns in 4 session transcripts, sized `chars/4`:
 
 | p10 | p25 | p50 | p75 | p90 | max |
 |-----|-----|-----|-----|-----|-----|
 | 502 | 761 | 1404 | 2256 | 3164 | 7931 |
 
-Total 136.7k est-tokens, of which 79.4k (58%) is overflow above 800 — preamble, restated context, pasted file bodies, command output, logs. `2500` is roughly p78, so only the heaviest fifth of returns is challenged. `6000` sits between p90 and the maximum and is a judgement call, not a fit: below it one compression round can still reach the budget, above it the detail needs a durable home.
+58% of the 136.7k total est-tokens is overflow above 800. `2500` is about p78, so only the heaviest fifth is challenged. `6000` sits between p90 and the maximum and is a judgement call: below it one compression round can still reach the budget, above it the detail needs a durable home.
 
-Live proof, measured at the pre-6.5 thresholds (1000 / 2500), one real session, two blocked returns each blocked exactly once: `1417 -> 1026` est-tokens (compress tier) and `2585 -> 245` est-tokens citing a report path (file tier) — 2731 est-tokens of manager context saved across two returns.
+</Spoiler>
 
-<Callout type="warning">
-**Honest limits — read before relying on this.**
+<Spoiler id="limits" title="Limits: read before trusting it">
 
-- **`chars/4` is not a tokenizer, on purpose.** The thresholds were fitted to a distribution measured with `chars/4`. Swapping the heuristic moves the boundaries off the data — re-measure and re-fit both in the same change.
-- **Only the final assistant message is sized.** A subagent that burned context on 40 tool calls and returns 6 lines is invisible to this guard — it budgets the return, not the work.
-- **`passTokens < fileTokens` is not enforced by the hook itself.** Inverting them degrades gracefully — the compress tier vanishes and everything over `passTokens` gets a self-contradictory file order; no loop, no error, exit 0. The config write step rejects the inversion; the hook carries no validator.
-- **The default `reportDir` is a protected path.** `.claude/reports` costs the file tier a permission check: prompted in `default` and `acceptEdits`, routed to the classifier in `auto`, denied in `dontAsk` and headless runs, allowed in `bypassPermissions`; `permissions.allow` rules do not pre-approve it. The agent then returns a compressed inline report. For unattended runs set `reportDir` outside `.claude/`.
-- **No hook payload exposes an agent's tool inventory.** Write ability is known only from `readOnlyAgentTypes` and plan mode; add unlisted read-only agent types to the list.
-- **Fail-open everywhere, never exit 2.** The guard blocks through JSON output, not an exit code. Malformed JSON, missing stdin, wrong shapes, any runtime throw -> `{}` and exit 0.
-- **A missing `agent-return-budget.mjs` is not catchable** — the hook exits 1 with empty stdout, a non-blocking hook-error banner (see the unit rule above).
-- **Cost: no per-tool-call tax.** Measured on Node v24.19.0, 15 invocations each, wall clock including node startup: about 30-53 ms per fire, at spawn, at each stop and, in auto mode, at the hand-back — node startup dominates, message size barely registers. Registered timeout is 5 s. Unlike `agent-deadline-setup`, whose guard sits on a `.*` PreToolUse matcher and taxes roughly 58 ms on every tool call, this pair fires only at subagent spawn, stop and hand-back, so a **global install is cheap**. Numbers are from one machine — re-measure before quoting them as facts.
-</Callout>
+- `chars/4` is not a tokenizer on purpose: the thresholds are fitted to it. Change the heuristic and re-fit both numbers.
+- Only the final message is sized; the work behind it is not budgeted.
+- The hook does not validate `passTokens < fileTokens`; inverted values degrade to a contradictory file order, no error, exit 0.
+- The default `reportDir` is under `.claude/`, a protected path: prompted in `default`/`acceptEdits`, denied in `dontAsk` and headless runs. The agent then returns a compressed inline report. For unattended runs set `reportDir` outside `.claude/`.
+- No hook payload exposes an agent's tool inventory: write ability is known only from `readOnlyAgentTypes` and plan mode. List unlisted read-only agent types.
+- Fail-open, never exit 2: malformed input or any runtime throw gives `{}` and exit 0. A missing `agent-return-budget.mjs` is not catchable (see the unit rule above).
+- Timings (Node v24.19.0, one machine) are not a guarantee; re-measure before quoting.
 
-### Coexistence with `agent-deadline-setup`
+</Spoiler>
 
-Both skills install side by side. Both register `SubagentStop` and `PreToolUse` entries; hooks of one event run in parallel, and each skill's merge and strip only touch entries naming its own scripts. An agent challenged once by this guard continues on its original deadline clock, and the deadline guard always allows `SubagentHandback`. An agent-deadline install from before 6.5 also denies the hand-back past its limit, so upgrade it too.
+<Spoiler id="coexistence" title="Coexistence with agent-deadline-setup and tests">
 
-### Verification
+Both skills install side by side; each merge and strip touches only entries naming its own scripts. An agent challenged once here continues on its original deadline clock, and the deadline guard always allows `SubagentHandback`. A pre-6.5 agent-deadline install also denies the hand-back past its limit: upgrade it too.
 
-266 test cases / 1187 checks, all passing — `tests/run.sh` in the [skill source](https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/agent-return-setup/tests); run it from a checkout of the repo.
+Tests: `tests/run.sh` in the [skill source](https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/agent-return-setup/tests), run from a checkout.
+
+</Spoiler>
 
 ## Related
 
@@ -182,13 +185,13 @@ Both skills install side by side. Both register `SubagentStop` and `PreToolUse` 
     All brewtools skills and agents in one place.
   </Card>
   <Card title="Agent Deadline Setup" icon="clock" href="/brewtools/skills/agent-deadline-setup/">
-    A soft wall-clock budget for subagents — installable side by side with agent-return, both share the `SubagentStop` and `PreToolUse` events.
+    Soft wall-clock budget for subagents; installs side by side with this skill.
   </Card>
   <Card title="Setup Status" icon="clipboard" href="/brewcode/skills/setup-status/">
-    Read-only dashboard across every `-setup` skill — installed, stale or missing, with the hand-run command for each.
+    Read-only dashboard across every `-setup` skill.
   </Card>
-  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/agent-return-setup">
-    SKILL.md, the install runbook, and all three hook files.
+  <Card title="GitHub source" icon="github" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/agent-return-setup">
+    SKILL.md, the install runbook and the hook files.
   </Card>
 </CardGrid>
 

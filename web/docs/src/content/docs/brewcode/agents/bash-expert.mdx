@@ -3,207 +3,76 @@ title: "Bash Expert"
 description: "Creates production-quality sh/bash scripts for Mac/Linux. Triggers: create script, bash script, shell script."
 order: 1208
 ---
-import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+import { Card, CardGrid, Spoiler, Steps, UpdateNotice } from '../../../../components/mdx';
 
 # Bash Expert
-
-<Callout type="caution">
-Missing error handling, unquoted variables and hardcoded paths can break scripts on another
-machine. Bash Expert follows repository patterns and checks syntax, ShellCheck findings and error paths.
-</Callout>
-
-<Callout type="tip">
-**Trigger by describing the script you need.** "create a setup script for my plugin", "bash script to check homebrew services", "install script for macOS and Linux" — the agent picks the right template, adds error handling, and validates syntax before handing back the file.
-</Callout>
-
-<Callout type="note" title="Current execution contract">
-Bash Expert writes and validates a bounded script itself. Missing decisions return to the main
-caller; it does not spawn nested agents. Its `maxTurns: 80` is an anti-loop stop, with partial
-results and on-disk checkpoints for recovery.
-</Callout>
 
 ## Quick reference
 
 | Field | Value |
 |-------|-------|
-| Model | `inherit` — runs on the session's model |
+| Model | `inherit`: runs on the session's model |
 | Tools | Read, Write, Edit, Glob, Grep, Bash, WebFetch |
 | Triggers | "create script", "bash script", "shell script" |
 | Output | `.sh` file + `bash -n` + ShellCheck report |
 
+Bash Expert writes and validates one bounded script. It matches repository conventions, adds error handling and quoting, and checks syntax and ShellCheck findings before handing the file back.
+
 ## When to use
 
-- **Plugin lifecycle scripts** — setup, install, teardown, version-bump for brewcode/brewtools/brewui/brewdoc
-- **CI helper scripts** — health checks, service validation, environment bootstrap
-- **Cross-platform portability** — script must run on both macOS (ARM + Intel) and Linux without modification
-- **Structured output** — script prints markdown tables or phase headers consumed by Claude Code skills
-- **Idempotent installers** — safe to re-run; checks state before mutating
+- Plugin lifecycle scripts: setup, install, teardown, version bump.
+- CI helpers: health checks, environment bootstrap.
+- Scripts that must run on macOS (ARM and Intel) and Linux unchanged.
+- Idempotent installers and scripts printing markdown tables for skills.
 
-## Examples
+## Example
 
-```bash
-# Natural language triggers
-"create a setup script for the brewtools plugin"
-"bash script to check if all homebrew services are running"
-"write an install script that works on macOS and Linux"
+```text
+write an install script that works on macOS and Linux
 ```
 
-```bash
-# Multi-mode dispatch
-"write a multi-mode script with status/install/help commands"
-```
+Expected result: an executable `.sh` with strict mode, usage header and `help` subcommand, plus a report of `bash -n` and ShellCheck results.
 
-```bash
-# Plugin-aware paths resolve via ${CLAUDE_PLUGIN_ROOT}
-"create a version-bump script for the plugin"
-```
-
-## Scope guard
-
-Bash Expert sizes the task before writing. One bounded unit = one deliverable, roughly 5 files, roughly 10 steps.
-
-| Situation | What the agent does |
-|-----------|---------------------|
-| Brief fits one bounded unit | Starts immediately |
-| Brief exceeds ~5 files / ~10 steps, or bundles several independent deliverables | Stops before starting, returns a split proposal: 2-N bounded subtasks, each with scope and a suggested owner |
-| Scope grows mid-flight | Stops at the next clean boundary, reports done / remaining / how to split |
-| Brief is missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance | States a safe assumption or returns the unresolved question to the main caller; never invents scope |
-
-"Write the whole CI toolchain" gets a split proposal. "Write the install script for brewtools" gets a script.
-
-Ordinary subagents cannot use `AskUserQuestion`; conversation forks retain the parent's tool
-pool. This ordinary delegated agent returns decision requests to its caller. Claude Code allows
-depth-limited nested delegation, but Brewcode dispatches through the main conversation using
-the `Agent` tool. Bash Expert's own tool list contains no `Agent`.
-
-On `maxTurns` exhaustion, Claude Code 2.1.246+ returns a partial result. The caller inspects it
-and resumes with `SendMessage` rather than marking the work complete. After ShellCheck and a
-smoke run, Bash Expert records each script's path and status in
-`.claude/reports/YYYYMMDD-HHMMSS_bash-expert/report.md`; it reads that checkpoint first on resume.
-
-- **Scope fit:** builds for today's scale, starts from the closest well-built repo script, and makes one simplification pass.
-
-<Callout type="tip">
-**Got a split proposal instead of a script?** That is the guard working. Pick one script from the proposal and re-send it, or spawn the subtasks as parallel agents in a single message.
-</Callout>
-
-## Flow
+## How it works
 
 <Steps>
-  <li>
-    <div>
-      <strong>Analyze the request</strong>
-      <p>Reads existing scripts in the repo (Glob + Grep) to match conventions. Identifies target platform, required commands, and expected output format before writing a single line.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Choose a template</strong>
-      <p>Minimal (single-purpose, ≤20 lines) or full multi-mode dispatch ({'`CMD="${1:-help}"`'} + <code>case</code> block). Plugin scripts always get <code>SCRIPT_DIR</code> self-location and correct plugin-root resolution.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Implement</strong>
-      <p>Writes the script with <code>set -euo pipefail</code>, quoted variables and <code>trap cleanup EXIT</code> where needed. Uses compact status circles and plain warning text; check/cross markers remain optional. Platform detection handles macOS/Linux differences.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Validate</strong>
-      <p>Runs <code>bash -n script.sh</code> (syntax check) and <code>shellcheck script.sh</code> (static analysis). Fixes all ShellCheck warnings before reporting.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Report</strong>
-      <p>Prints a structured summary: file path, purpose, platform, and a checklist of verified properties. You get a ready-to-run script, not a draft.</p>
-    </div>
-  </li>
+  <li><div><strong>Analyze</strong><p>Reads existing repo scripts to match conventions; fixes platform, commands and output format.</p></div></li>
+  <li><div><strong>Choose a template</strong><p>Minimal (single purpose) or multi-mode dispatch with a <code>case</code> block; plugin scripts self-locate via <code>SCRIPT_DIR</code>.</p></div></li>
+  <li><div><strong>Implement and validate</strong><p>Strict mode, quoted variables, cleanup trap; then <code>bash -n</code> and <code>shellcheck</code>, all warnings fixed.</p></div></li>
+  <li><div><strong>Report</strong><p>File path, purpose, platform and a checklist of verified properties.</p></div></li>
 </Steps>
 
-<details>
-<summary>Internals — patterns, templates, and platform handling</summary>
+Refuses: batches such as "write the whole CI toolchain" (returns a split proposal), and any brief missing consumer or acceptance (states an assumption or returns the question). Generic rules: [scope guard](/brewcode/agents/#scope-guard). It has no `Agent` tool and records each script's status in `.claude/reports/YYYYMMDD-HHMMSS_bash-expert/report.md`; on `maxTurns` (80) exhaustion the caller resumes with `SendMessage`.
 
-### Conventions
+<Spoiler id="internals" title="Conventions, templates and platform handling">
 
 | Pattern | Example | Use |
 |---------|---------|-----|
-| Strict mode | `set -euo pipefail` | Every script, by default |
-| Cleanup trap | `trap cleanup EXIT` | Temp files, locks, other resources |
+| Strict mode | `set -euo pipefail` | Every script |
+| Cleanup trap | `trap cleanup EXIT` | Temp files, locks |
 | Required var | `${VAR:?error msg}` | Mandatory input |
 | Soft failure | `cmd \|\| echo "Warning: optional step failed" >&2` | Optional steps |
 
-### Mode detection
+Mode detection follows the canonical modes:
 
 ```bash
 ARGS_LOWER=$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')
 case "$ARGS_LOWER" in
   status|install|upgrade|enable|disable|uninstall|purge) MODE="$ARGS_LOWER" ;;
-  '') MODE="default" ;; # Resolve using this setup's documented default.
+  '') MODE="default" ;;
   *) echo "Unsupported mode: $ARGS_LOWER" >&2; exit 2 ;;
 esac
 ```
-
-### Minimal template
-
-```bash
-#!/bin/bash
-set -euo pipefail
-ARG="${1:-}"
-[[ -z "$ARG" ]] && { echo "Usage: script.sh <arg>"; exit 1; }
-echo "Processing: $ARG"
-echo "✅ Done"
-```
-
-### macOS vs Linux divergences
 
 | Feature | macOS | Linux |
 |---------|-------|-------|
 | Brew prefix | `/opt/homebrew` (ARM), `/usr/local` (Intel) | `/home/linuxbrew/.linuxbrew` |
 | `/bin/bash` | 3.2: no `${v,,}`, `mapfile`, `declare -A` | 4+ |
-| timeout | absent in stock macOS; coreutils adds `gtimeout` and `timeout` | `timeout` |
+| timeout | absent; coreutils adds `gtimeout` | `timeout` |
 | sed in-place | `sed -i ''` | `sed -i` |
-| readlink | native `-f` on macOS 15; older: `greadlink -f` | `readlink -f` |
+| readlink | native `-f` on macOS 15; older `greadlink -f` | `readlink -f` |
 
-Always derive prefix via `$(brew --prefix)` — never hardcode.
-
-### Structured output
-
-| Element | Pattern |
-|---------|---------|
-| Status symbols | `🟢` success · `🔴` error/blocker · `⚪` pending/skipped · `🔵` active/updated; warnings use `Warning:` |
-| Markdown table | `echo "\| Component \| Status \|"` then the separator row, then data rows |
-| Phase header | `echo "=== Phase 1: Scanning ===" && echo ""` |
-
-### JSON parsing fallback chain
-
-Use a real JSON parser and pass the input file explicitly. Regex extraction is not a JSON parser,
-and macOS's system grep does not support `-P`.
-
-```bash
-if command -v jq >/dev/null; then
-  jq -r '.key' file.json
-elif command -v python3 >/dev/null; then
-  python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["key"])' file.json
-else
-  echo "need jq or python3" >&2; exit 1
-fi
-```
-
-### Plugin path variables
-
-| Variable | Available in |
-|----------|-------------|
-| `${CLAUDE_PLUGIN_ROOT}` | Claude expands plugin skill/agent text and hook/MCP commands; ordinary scripts must receive or derive the value |
-| `${CLAUDE_SKILL_DIR}` | Skills (string substitution) |
-| `$PLUGIN_ROOT/skills/X/scripts/` | Scripts that explicitly define or receive `PLUGIN_ROOT` |
-
-Plugin agent text receives root substitution at `Agent` spawn. Project-local agents receive no
-plugin-root substitution. Prompt tokens do not guarantee corresponding shell environment variables;
-standalone scripts locate themselves with `SCRIPT_DIR` and derive or accept their root.
-
-### Anti-patterns
+Derive the prefix via `$(brew --prefix)`, never hardcode. For JSON use `jq`, fall back to `python3`; never regex or `grep -P` on macOS.
 
 | Avoid | Prefer |
 |-------|--------|
@@ -211,42 +80,26 @@ standalone scripts locate themselves with `SCRIPT_DIR` and derive or accept thei
 | `cat file \| grep` | `grep X file` |
 | `ls \| while read` | `find -exec` or glob |
 | `cd dir; cmd; cd -` | `(cd dir && cmd)` |
-| `echo $VAR` | `echo "$VAR"` |
 | `if [ $? -eq 0 ]` | `if cmd; then` |
-| `/usr/local` hardcoded | `$(brew --prefix)` |
 
-### Delivery checklist
+`${CLAUDE_PLUGIN_ROOT}` is substituted in plugin skill/agent text and hook/MCP commands, not in ordinary scripts: they receive or derive the root. Status symbols: `🟢` success, `🔴` error, `⚪` skipped, `🔵` active; warnings use `Warning:`.
 
-| # | Check |
-|---|-------|
-| 1 | `#!/bin/bash` shebang |
-| 2 | `set -euo pipefail` |
-| 3 | Usage header comment |
-| 4 | `shellcheck` clean |
-| 5 | `chmod +x` applied |
-| 6 | `bash -n` passes |
-| 7 | `help` subcommand works |
-| 8 | Error paths tested |
-| 9 | Idempotent — safe re-run |
+Delivery checklist: shebang, strict mode, usage header, `shellcheck` clean, `chmod +x`, `bash -n`, `help` works, error paths tested, idempotent re-run.
 
-</details>
+</Spoiler>
 
-## Return Contract
+<Spoiler id="return-contract" title="Return contract">
 
-Verdict first, `<=30 lines`, `path:line`. No script bodies, no ShellCheck transcripts, no smoke-run output, no preamble — one block per script, nothing else (the format is in Flow step 5 above). Failures return the check that failed plus the offending <code>path:line</code>, never the full output; long logs and full ShellCheck runs go to <code>.claude/reports/&lt;YYYYMMDD-HHMMSS&gt;_bash-expert/</code>, path only.
+Verdict first, at most 30 lines with `path:line`, one block per script. Failures name the failed check and `path:line`; long logs go to `.claude/reports/<YYYYMMDD-HHMMSS>_bash-expert/`, path only. [`/brewtools:agent-return-setup`](/brewtools/skills/agent-return-setup/) enforces ~2500 / ~6000 est-tokens when installed.
 
-[`/brewtools:agent-return-setup`](/brewtools/skills/agent-return-setup/) enforces this at ~2500 / ~6000 est-tokens when installed; the contract itself ships unconditionally.
+</Spoiler>
+
+## Related
 
 <CardGrid>
-  <Card title="hook-creator agent" icon="link" href="/brewcode/agents/hook-creator/">
-    Builds Claude Code hooks — pairs with bash-expert when a hook shells out.
-  </Card>
-  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/agents/bash-expert.md">
-    Agent definition, system prompt, and tool configuration.
-  </Card>
-  <Card title="Brewcode overview" icon="document" href="/brewcode/overview/">
-    All brewcode skills and agents in one place.
-  </Card>
+  <Card title="Hook Creator" icon="link" href="/brewcode/agents/hook-creator/">Builds hooks; pairs with Bash Expert when a hook shells out.</Card>
+  <Card title="Brewcode overview" icon="document" href="/brewcode/overview/">All brewcode skills and agents in one place.</Card>
+  <Card title="GitHub source" icon="github" href="https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/agents/bash-expert.md">Agent definition, system prompt, and tool configuration.</Card>
 </CardGrid>
 
 <UpdateNotice />

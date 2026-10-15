@@ -1,141 +1,109 @@
 ---
 title: "Plan-mode effort"
-description: "Raises the main loop to xhigh while Claude Code is in plan mode and leaves your session effort untouched. Install, configure, and verified behavior."
+description: "xhigh while Claude plans, your session effort everywhere else. One command, one setting."
 order: 41
 ---
-import { Badge, Callout, Card, CardGrid, InstallPrompt, Steps, UpdateNotice } from '../../../components/mdx';
+import { Badge, Callout, Card, CardGrid, InstallPrompt, SourceLink, Spoiler, UpdateNotice } from '../../../components/mdx';
 
 # Plan-mode effort
 
-<Badge variant="accent" text="mod" /> <Badge variant="secondary" text="Claude Code 2.1.287+" /> <Badge variant="primary" text="brewmod-plan-effort" />
+<Badge variant="mod" text="Claude Code 2.1.287+" /> <Badge variant="secondary" text="Works on Team orgs" /> <Badge variant="primary" text="brewmod-plan-effort" />
+
+By default `xhigh` while Claude plans. Your session effort everywhere else.
 
 <p align="center">
-  <img src="/brewmods/plan-effort.gif" alt="Claude Code window with a glyph effort dial: Shift+Tab turns on plan mode, the needle swings from high to xhigh, Enter approves the plan and the needle swings back to high" width="800" loading="lazy" />
-  <br /><small>Illustrative animation: session effort <code>high</code>, then <code>Shift+Tab</code> into plan mode, <code>xhigh</code> while planning, <code>Enter</code> approves the plan, back to <code>high</code>.</small>
+  <img src="/brewmods/plan-effort.gif" alt="Claude Code window with a glyph effort dial: Shift+Tab turns on plan mode, the needle swings from high to xhigh, Enter approves the plan and the needle swings back to high" width="720" loading="lazy" />
+  <br /><small>Illustrative animation: session effort <code>high</code>, <code>Shift+Tab</code> into plan mode, <code>xhigh</code> while planning, <code>Enter</code> approves the plan, back to <code>high</code>.</small>
 </p>
 
-## Quick reference
-
-| Field | Value |
-|-------|-------|
-| Type | Claude Code mod (hooks module, no skills or agents) |
-| Plugin | `brewmod-plan-effort` |
-| Requires | Claude Code 2.1.287+, and `node` on the `PATH` (runs the bundled command hook `hooks/mode.mjs`) |
-| Raises | Main loop effort in plan mode, to `planEffort` (default `xhigh`) |
-| Never touches | The session `/effort` setting, subagent effort |
-| Options | `planEffort`, `statusLine` (both optional, set in `/config`) |
-| Status line | `plan: <level>` while the raise is active |
-| Works on | Team organizations (Enterprise not run): a bundled command hook reads the mode where Claude Code bypasses a mod's `classic.*` hooks |
-| Verified on | Terminal UI, Claude Code 2.1.300: Team-org and Max profiles, `--plugin-dir` and installed copies (Enterprise not run) |
-
-## What it does
-
-The mod raises the effort of the main loop while Claude Code is in plan mode and leaves every other mode at your session effort, for example `high`. No `/effort xhigh` before planning and no `/effort high` after it.
-
-The raise is applied to each model request on its way out, so nothing stays behind if you forget to switch back. Subagents keep their own effort.
-
-The mode comes from a bundled command hook, so the mod also works on Team and Enterprise organizations, where Claude Code's builtin security layer bypasses the `classic.*` hooks of a user-installed mod. Verified live on Claude Code 2.1.300 on a Team-org profile and a Max profile, each with a `--plugin-dir` copy and with a copy installed from a git marketplace. Enterprise orgs were not run.
-
-## When to use
-
-| Scenario | What happens |
-|----------|--------------|
-| Session on `high`, you press `Shift+Tab` into plan mode | Plan-mode requests run at `xhigh`, no `/effort` change needed |
-| You approve the plan and Claude starts editing | The next request is back at your session effort |
-| You reject the plan | Effort stays raised, because Claude is still in plan mode |
-| Session already on `max` | Nothing changes |
-| You want a different plan-mode level | Set `planEffort` in `/config` |
-
-## Example
-
-With the session on `high`:
-
-1. Press `Shift+Tab` until plan mode is on.
-2. Send a prompt. The status area shows `⚠ brewmod-plan-effort: plan: xhigh` while Claude plans.
-3. Approve the plan. The status line clears and the next request runs at `high`.
-
-The native footer keeps showing your session effort (`high`) during the raised requests. The status line is the only indicator of the raise.
+<SourceLink path="brewmod-plan-effort/README.md" anchor="plan-mode-effort" variant="mod" />
 
 ## Install
 
 <InstallPrompt plugin="brewmod-plan-effort" mode="install" />
 
-Dev mode, without installing:
+Run `/reload-plugins` afterwards.
 
-```bash
-claude --plugin-dir ./brewmod-plan-effort
-```
+Needs Claude Code 2.1.287+ and `node` on the `PATH`; the `/plan-effort` command is verified on 2.1.300.
 
-Update anytime with `/brewtools:plugin-update`, or with the prompt below.
+<Spoiler title="Update, dev mode" id="update">
 
 <InstallPrompt plugin="brewmod-plan-effort" mode="update" />
 
-## Configuration
+Dev mode without installing: `claude --plugin-dir ./brewmod-plan-effort`
 
-Open `/config` and change the plugin options. Both are optional.
+</Spoiler>
 
-| Option | Type | Default | Values | Effect |
-|--------|------|---------|--------|--------|
-| `planEffort` | string | `xhigh` | `medium`, `high`, `xhigh`, `max` | Effort for the main loop in plan mode |
-| `statusLine` | boolean | `true` | `true`, `false` | Show a status line while plan mode raises the effort |
+## Use it
 
-With the session on `high` and `planEffort` set to `max`, plan mode runs at `max`.
+| You do | You get |
+|--------|---------|
+| `Shift+Tab` into plan mode | Requests run at `xhigh`; the toast `plan mode: effort xhigh · /plan-effort to change` shows once per plan visit |
+| Approve the plan | The next request is back at your session effort, nothing to undo |
+| `/plan-effort max` | Plan-mode level set to `max`, same as the `planEffort` option in `/config` |
 
-## How it works
+## Commands
 
-<Steps>
-  <li><div><strong>Record the permission mode</strong><p>The bundled command hook <code>hooks/mode.mjs</code> runs on <code>UserPromptSubmit</code> and <code>PostToolBatch</code>. It writes the main loop permission mode to <code>.state/mode-&lt;session_id&gt;.json</code> in the plugin root. Payloads with an <code>agent_id</code> are ignored, and state files older than 7 days are pruned.</p></div></li>
-  <li><div><strong>Raise effort per request</strong><p>The <code>turn.step</code> event fires before every model request. The module reads the state file for the current session. In plan mode it rewrites <code>effort</code> up to <code>planEffort</code>. Ranks run low, medium, high, xhigh, max. An equal or higher effort, a numeric effort, and an absent effort pass through untouched.</p></div></li>
-  <li><div><strong>Show the status line</strong><p>While a request is raised, the mod pins the status text <code>plan: &lt;level&gt;</code>. Claude Code renders it with the plugin name, for example <code>⚠ brewmod-plan-effort: plan: xhigh</code>. The line clears when a main request needs no raise.</p></div></li>
-  <li><div><strong>Leave nothing behind</strong><p>The rewrite covers one request, so leaving plan mode needs no cleanup. A missing or unreadable state file counts as not in plan mode. The command hook never blocks a prompt or a tool batch, and the engine skips a failing module hook.</p></div></li>
-</Steps>
+| Command | Result |
+|---------|--------|
+| `/plan-effort` (also `status`, `help`) | Status block (`plan effort`, `session`, `mode now`) plus usage |
+| `/plan-effort <medium\|high\|xhigh\|max>` | Sets `planEffort` and prints `plan effort: <old> -> <new>`; an unknown word prints `unknown '<arg>'` |
 
-## Verified
+`/config` has one option, `planEffort` (default `xhigh`). In `claude -p` there is no `/config` row, so the command asks you to use `/config` interactively.
 
-### Current path (command hook)
+<Callout type="note" title="Good to know">
+  - Your session `/effort` setting is never written, and subagents keep their own effort.
+  - The mod only raises: a session already at or above `planEffort` stays as it is.
+  - Rejecting a plan keeps the raise, because Claude is still in plan mode.
+</Callout>
 
-Measured on Claude Code 2.1.300 (`claude -p --model sonnet`) with the bundled command hook `hooks/mode.mjs`. Source: count of `"effort":"xhigh"` in the session transcript. Each row was run on a `--plugin-dir` copy and on a copy installed from a git marketplace.
+<Spoiler title="Technical details" id="technical-details" meta="how it works, verification">
 
-| Profile | Mode | `xhigh` requests in the transcript |
-|---------|------|------------------------------------|
+**How it works.** The bundled command hook `hooks/mode.mjs` runs on `UserPromptSubmit` and `PostToolBatch` and writes the main loop permission mode to `.state/mode-<session_id>.json` in the plugin root (subagent payloads are ignored, files older than 7 days are pruned). The `turn.step` event fires before every model request; in plan mode the module raises `effort` to `planEffort`. Ranks run low, medium, high, xhigh, max; equal, higher, numeric and absent efforts pass through. The rewrite covers one request, so leaving plan mode needs no cleanup.
+
+**Team organizations.** Claude Code's builtin security layer bypasses the `classic.*` hooks of a user-installed mod, while a bundled command hook still runs. That is why the mode comes from `mode.mjs`. Enterprise organizations were not run.
+
+**Failure mode.** A missing or unreadable state file counts as not in plan mode; no hook blocks a prompt or a tool batch.
+
+<Spoiler title="Verified" id="verified" meta="Claude Code 2.1.300">
+
+Current path (command hook), `claude -p --model sonnet`. Source: count of `"effort":"xhigh"` in the session transcript, run on a `--plugin-dir` copy and on a copy installed from a git marketplace.
+
+| Profile | Mode | `xhigh` requests |
+|---------|------|------------------|
 | Team org | plan | 4 |
 | Team org | default | 0 (session level) |
 | Max | plan | 4 |
 | Max | default | 0 (session level) |
-| Installed copy, Team org and Max | plan / default | 4 / 0, same as above |
 
-Enterprise orgs were not run.
+Subagent, reject, approve and Team-org checks, same version, session effort `high`, effort read per request from the session transcript:
 
-### Earlier in-module detection (same effort rewrite)
+| Check | Profile | Measured |
+|-------|---------|----------|
+| Explore subagent in plan mode | Max | subagent request at `high` while the main loop ran `xhigh` |
+| Reject the plan at ExitPlanMode | Max | next main request still `xhigh` |
+| Approve the plan | Max | next main requests back at `high` |
+| `/plan-effort max`, then plan mode | Team org | plan-mode main requests at `max`, toast shown |
 
-Measured during development on Claude Code 2.1.300 (Opus 5.5, session effort `high`) with the in-module mode detection that preceded the command hook; the effort rewrite is the same as in this release. Source: `output_config.effort` of each request in the session JSONL.
+Prompt cache, measured on the earlier detection path (same effort rewrite): 3 plan enter/exit pairs in one ~64k-token session gave 0 extra cache misses over 6 mode flips against a control run without the mod, and +58 cache-write tokens. The run used requests seconds apart on one model, so cache expiry between slow requests is not covered. The `/plan-effort` command and the toast were checked live on 2.1.300; unit tests cover `planEffort` set to `high` or `max` and an unknown value that counts as unset.
 
-| Check | Result |
-|-------|--------|
-| Plan-mode main requests | `xhigh` |
-| Default-mode main requests | `high` |
-| Explore subagent in plan mode | `high` |
-| Approve `ExitPlanMode` | next request `high` |
-| Reject `ExitPlanMode` | stays `xhigh` |
-| Prompt cache, 3 plan enter/exit pairs in one ~64k-token session | 0 extra cache misses against a control run without the mod, +58 cache-write tokens over 6 mode flips |
+</Spoiler>
 
-Scope: the cache run used requests seconds apart on one model, so cache expiry between slow requests is not covered. Unit tests in `tests/plan-effort.test.ts` (not live runs) cover `planEffort` set to `high` or `max`, an unknown value that counts as unset so the default `xhigh` applies, and `statusLine: false`.
+<Spoiler title="Limitations" id="limitations">
 
-## Limitations
+A plan-mode visit that starts and ends between two prompt or tool-batch checkpoints is not seen. The native footer keeps showing the session effort during raised requests; the toast is the only indicator.
 
-<Callout type="warning" title="Shift+Tab fires no event of its own">
-  The mod learns the new mode at the next prompt or tool batch, so a mode switch takes effect then and the status line stays on screen until then. A plan-mode visit that starts and ends between two of those checkpoints is not seen.
-</Callout>
+</Spoiler>
+
+</Spoiler>
 
 ## Related
 
 <CardGrid>
-  <Card title="Mods overview" icon="document" href="/mods/overview/">All brewcode mods and how they load.</Card>
-  <Card title="Prompt placeholders" icon="puzzle" href="/mods/placeholders/">The other brewcode mod: expand short codes in your prompt.</Card>
-  <Card title="mod-creator" icon="wrench" href="/brewcode/agents/mod-creator/">Agent that builds and verifies Claude Code mods.</Card>
-  <Card title="Source on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewmod-plan-effort">Mod manifest, hooks module, and tests.</Card>
-  <Card title="Project page" icon="rocket" href="https://brewcode.app/mods/plan-effort/">The mod on brewcode.app.</Card>
-  <Card title="anthropics/claude-code#91444" icon="external" href="https://github.com/anthropics/claude-code/issues/91444">The feature request this mod answers.</Card>
+  <Card variant="mod" title="Mods overview" icon="puzzle" href="/mods/overview/">All brewcode mods and how they load.</Card>
+  <Card variant="mod" title="Source on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewmod-plan-effort">Mod manifest, hooks module, and tests.</Card>
+  <Card variant="mod" title="Prompt placeholders" icon="terminal" href="/mods/placeholders/">The other brewcode mod: expand short codes in your prompt.</Card>
+  <Card variant="mod" title="Project page" icon="globe" href="https://brewcode.app/mods/plan-effort/">The mod on brewcode.app.</Card>
 </CardGrid>
 
 <UpdateNotice />

@@ -3,11 +3,13 @@ title: "Mod Creator"
 description: "Create, test, ship and maintain Claude Code mods (hooks-module plugins) and keep the agent's reference pack in sync with each Claude Code build."
 order: 1209
 ---
-import { Badge, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+import { Badge, Card, CardGrid, SourceLink, Spoiler, Steps, UpdateNotice } from '../../../../components/mdx';
 
 # Mod Creator
 
 <Badge text="inherit" /> <Badge text="CC 2.1.287+ · verified 2.1.300" />
+
+<SourceLink path="brewcode/agents/mod-creator.md" kind="file" label="View agent file on GitHub" />
 
 ## Quick reference
 
@@ -17,26 +19,22 @@ import { Badge, Card, CardGrid, Steps, UpdateNotice } from '../../../../componen
 | Triggers | create mod, hooks module, mod API |
 | Model | inherit: uses the session model |
 | Tools | Read, Write, Edit, Glob, Grep, Bash, Skill, WebFetch, WebSearch |
-| Output | Mod files, gate exit codes, drift verdict (see Return contract) |
+| Output | Mod files, gate exit codes, drift verdict |
 
-## What it does
+Mod Creator builds Claude Code mods: hooks-module plugins whose TypeScript `register.ts` registers handlers on engine events and `$` nouns. Mods are early access, on by default from Claude Code 2.1.287. See [Brewcode mods](/mods/overview/); [plan-mode effort](/mods/plan-effort/) and [prompt placeholders](/mods/placeholders/) were built with this agent.
 
-Mod Creator builds Claude Code mods: hooks-module plugins that register TypeScript handlers on the engine's events and `$` nouns. Mods are in early access and on by default from Claude Code 2.1.287. The repository's two mods, [plan-mode effort](/mods/plan-effort/) and [prompt placeholders](/mods/placeholders/), were built with this agent. The agent scaffolds the three mod files, writes tests, runs the gates, and ships the mod as briefed.
-
-The installed engine decides what the API accepts, not memory. Every run starts with a self-check against the live types file (see Step 0 below), and a symbol missing from those types does not exist for the agent.
-
-Give the agent one bounded deliverable: the events, the behavior, the fail-open policy, and the ship target. A brief without a goal, scope, consumer, or acceptance criteria returns as a question with stated assumptions. An oversized task returns as a split proposal.
+The installed engine decides what the API accepts, not memory: every run starts with a drift check against the live types file, and a symbol missing there does not exist for the agent. Every interactive affordance a mod ships carries its key hint, proven live key by key (reference `mods-patterns.md` section 12).
 
 ## When to use
 
 | Scenario | Prompt |
 |----------|--------|
-| New mod from an idea | `Create a mod that ...` with the events and the behavior |
+| New mod from an idea | `Create a mod that ...` with events and behavior |
 | Pick events and nouns | `Which mod events cover X?` |
-| Fix a mod that does not load | `Mod does not load, debug it` |
-| Add tests to an existing mod | `Add plugin tests for the mod in <dir>` |
-| Port a mod to a new Claude Code build | `Re-verify the mod against the installed build` |
-| Ship a mod | `Add the mod to the marketplace and check the install` |
+| Mod does not load | `Mod does not load, debug it` |
+| Tests for an existing mod | `Add plugin tests for the mod in <dir>` |
+| Port to a new build | `Re-verify the mod against the installed build` |
+| Ship | `Add the mod to the marketplace and check the install` |
 
 ## Examples
 
@@ -51,80 +49,70 @@ Check whether the mod in ./my-mod still matches the installed Claude Code build
 and list every drifted symbol.
 ```
 
-## Workflow
+## How it works
 
 <Steps>
-  <li><div><strong>Step 0: self-check</strong><p>Self-check against the live types file; see Step 0 below.</p></div></li>
-  <li><div><strong>Clarify</strong><p>Resolve events, nouns, behavior, fail-open policy, and ship target (repo marketplace or standalone). Missing decisions go back to the caller.</p></div></li>
-  <li><div><strong>Pick events and nouns</strong><p>Choose from the symbol index and catalog in the API reference. Anything absent from the live types is rejected.</p></div></li>
-  <li><div><strong>Scaffold</strong><p>Write <code>plugin.json</code>, <code>hooks/hooks.json</code>, <code>hooks/register.ts</code> and the tests by hand, using the recipes in the patterns reference.</p></div></li>
-  <li><div><strong>Run the gates</strong><p>In order, with unpiped exit codes: strict plugin validation, type check, plugin tests (one test per requested behavior), then a live headless run.</p></div></li>
-  <li><div><strong>Ship and report</strong><p>Ship only as briefed: marketplace entry, release train, install check. The agent makes no git writes unless authorized. The report follows the Return contract below.</p></div></li>
+  <li><div><strong>Self-check</strong><p>Drift check of the reference pack against the live types file.</p></div></li>
+  <li><div><strong>Clarify and pick</strong><p>Events, nouns, behavior, fail-open policy, ship target; missing decisions return to the caller.</p></div></li>
+  <li><div><strong>Scaffold</strong><p>Write <code>plugin.json</code>, <code>hooks/hooks.json</code>, <code>hooks/register.ts</code> and tests by hand.</p></div></li>
+  <li><div><strong>Run the gates</strong><p>Strict validation, type check, plugin tests, then a live headless run, with unpiped exit codes.</p></div></li>
+  <li><div><strong>Ship and report</strong><p>Ship only as briefed; no git writes unless authorized.</p></div></li>
 </Steps>
 
-## Step 0 and self-update
+One bounded deliverable per run; oversized briefs return a split proposal ([scope guard](/brewcode/agents/#scope-guard)). The agent refuses to write under `~/.claude/dev-mods/` unless asked.
+
+<Spoiler id="step-0" title="Step 0 and self-update">
 
 | # | Action | Pass |
 |---|--------|------|
-| 1 | `claude --version` | Hint only: the build is X in the drift check's last line `VERSION types X references Y` (row 3) |
-| 2 | Load the `plugin-authoring` skill and derive the types file path from it | Path derived on this run; never stored or hardcoded |
-| 3 | `mods-ref-check.mjs` with the types file and the references directory | Exit 0 + first line `CLEAN` = clean; exit 1 + first line `DRIFT` = drift; empty stdout, any other first line, or exit 2 = error, not drift (fix the call; a wrong path gives rc 1 and empty stdout). Last line `VERSION types X references Y`: X is the build |
+| 1 | `claude --version` | Hint only; the build is X in the last line of the drift check |
+| 2 | Load the `plugin-authoring` skill, derive the types file path | Derived each run, never stored |
+| 3 | `mods-ref-check.mjs` with types file and references dir | Exit 0 + first line `CLEAN`; exit 1 + `DRIFT`; anything else is an error, not drift. Last line `VERSION types X references Y` |
 
-On drift (exit 1) the agent works from the live types, never from the stale reference, and reports every DRIFT row loudly. The maintainer update (refresh the references, add an entry to the changes file, bump `verified_on` in all five files, re-run the check to exit 0) happens only when the brief asks for it and both markers exist at the git repository root (`git rev-parse --show-toplevel`): `brewcode/.claude-plugin/plugin.json` and `.claude/scripts/bump-version.sh`. Otherwise the agent reports the DRIFT rows, suggests the update, and changes nothing in the pack.
+On drift the agent works from the live types and reports every DRIFT row. The maintainer update (refresh references, add a changes entry, bump `verified_on` in all five files, re-run to exit 0) happens only when the brief asks and both markers exist at the git root: `brewcode/.claude-plugin/plugin.json` and `.claude/scripts/bump-version.sh`. Offline tests: `brewcode/skills/agents/tests/run.sh`; set `MODS_TYPES` for the live check.
 
-The script itself has an offline test suite, `brewcode/skills/agents/tests/run.sh`. Set `MODS_TYPES` to a live types file to add the live check.
+</Spoiler>
 
-## Key rules
+<Spoiler id="key-rules" title="Key rules">
 
-A selection of the rules that cause the most damage; the full list is in the [agent source](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/agents/mod-creator.md). Each rule is sourced in the lifecycle reference from `validate` output or a live probe.
+Full list in the agent file; each rule is sourced from `validate` output or a live probe.
 
 | Rule | Else |
 |------|------|
-| Static `import` only: no dynamic `import()`, no JSON or `.md` import, no `require` | Module does not load |
-| Never pass or alias `$`; spell `$.noun.event(...)` at each call site. `$.env.get/set` take a literal name and `$.state` takes literal `{ plugin, key }` refs | Validate refuses |
-| Fail open: the engine skips a failing hook and keeps the downstream `next` result, so no blanket try/catch; refusing guards get `.catch` | Refusal lost, or the mod blocks the prompt, tool, or turn |
+| Static `import` only: no `import()`, JSON or `.md` import, `require` | Module does not load |
+| Never pass or alias `$`; spell `$.noun.event(...)` at each call site | Validate refuses |
+| Fail open: no blanket try/catch; refusing guards get `.catch` | Refusal lost, or the mod blocks the prompt |
 | No I/O in `prompt.edit` | Per-keystroke lag |
-| `hooks/hooks.json` carries `{ "modules": ["./register.ts"] }`: one path, inside the array. A classic `"hooks"` command-hook sibling is allowed and both load | String or second `modules` entry refused |
-| Never commit `.claude-plugin/types/` or the engine-written mod-root `tsconfig.json` (gitignore both) | Engine files land in git |
-| A broken module still exits `claude -p` with rc 0: grep stderr for `hooks module did not load` | A red gate is read as green |
-| Never write under `~/.claude/dev-mods/` unless asked | Consent breach: it is the person's hot-reload folder |
-| Behavior that must survive Team/Enterprise orgs ships a classic command hook bundled in `hooks.json`; live-test it on a Team-organization profile | Module `classic.*` hooks are bypassed there: silent no-op |
+| `hooks/hooks.json` carries `{ "modules": ["./register.ts"] }`; a classic `"hooks"` sibling is allowed | Second `modules` entry refused |
+| Never commit `.claude-plugin/types/` or the engine-written `tsconfig.json` | Engine files land in git |
+| A broken module still exits `claude -p` with rc 0: grep stderr for `hooks module did not load` | Red gate read as green |
+| Behavior that must survive Team/Enterprise orgs ships a bundled command hook | Module `classic.*` hooks are bypassed: silent no-op |
+| Every interactive affordance shows its key sequence (label or dim row) | Undiscoverable control |
 
-## Reference pack
+</Spoiler>
 
-Five files under `brewcode/skills/agents/references/`, each stamped with `verified_on`.
+<Spoiler id="reference-pack" title="Reference pack and return contract">
+
+Five files under `brewcode/skills/agents/references/`, each stamped `verified_on`.
 
 | File | Read when |
 |------|-----------|
-| `mods-lifecycle.md` | Always before building: Step 0, hard rules, scaffold, validate, type check, test, run, debug, ship, maintain |
-| `mods-api.md` | Choosing events or `$` nouns, writing the manifest, checking limits; holds the symbol index the drift check reads |
-| `mods-patterns.md` | Building behavior: bundled command hook (context injection), plan mode via state file, `turn.step` rewrite, decorations and band, autocomplete, slash command, userConfig, fail-open guards |
-| `mods-testing.md` | Writing tests: the `claude-code/testing` kit, stubs, raising events, `ui.mount`, CI wiring, headless and tmux checks |
-| `mods-changes.md` | A new Claude Code build, or a mod written for an older one: per-version changes and the self-update procedure |
+| `mods-lifecycle.md` | Always before building: hard rules, scaffold, validate, test, ship |
+| `mods-api.md` | Choosing events or `$` nouns; holds the symbol index |
+| `mods-patterns.md` | Building behavior: command hooks, state files, `turn.step`, band, slash commands |
+| `mods-testing.md` | Tests: kit, stubs, `ui.mount`, CI, headless and tmux checks |
+| `mods-changes.md` | New build or older mod: per-version changes |
 
-## Return contract
+Return: verdict first, at most 30 lines. Per mod: path and role, Step 0 verdict plus DRIFT rows, gate exit codes (validate, tsc, test, live run), gaps. Logs go to a timestamped `.claude/reports/` folder, path only.
 
-The agent returns a verdict first, at most 30 lines, with `path:line` references and no module bodies or log dumps. Each mod gets a short block.
-
-| Part | Content |
-|------|---------|
-| Mod | Path, one-line role, Claude Code version |
-| Step 0 | Verdict line of the drift check, plus every DRIFT row |
-| Gates | Exit codes for validate, tsc, plugin test, and the live run |
-| Gaps | Assumptions and gates not run, with the reason |
-
-Logs and failing runs go to `.claude/reports/` under a timestamped folder, and the report returns that path.
+</Spoiler>
 
 ## Related
 
 <CardGrid>
   <Card title="Brewcode overview" icon="document" href="/brewcode/overview/">Agents, skills, and project setup tools.</Card>
-  <Card title="Brewcode mods" icon="puzzle" href="/mods/overview/">The two mods built with this agent: plan-mode effort and prompt placeholders.</Card>
-  <Card title="Hook Creator" icon="wrench" href="/brewcode/agents/hook-creator/">Lifecycle hooks configured in settings or plugin hooks.json.</Card>
-  <Card title="Agent Creator" icon="user" href="/brewcode/agents/agent-creator/">Create and review Claude Code subagents.</Card>
-  <Card title="Skill Creator" icon="puzzle" href="/brewcode/agents/skill-creator/">Build skill workflows and resource contracts.</Card>
-  <Card title="Brewcode agents" icon="group" href="/brewcode/agents/">All agents of the brewcode plugin.</Card>
-  <Card title="Agent source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/agents/mod-creator.md">Step 0, hard rules, and the return contract.</Card>
+  <Card title="Brewcode mods" icon="puzzle" href="/mods/overview/">The two mods built with this agent.</Card>
+  <Card title="Hook Creator" icon="wrench" href="/brewcode/agents/hook-creator/">Lifecycle hooks in settings or plugin hooks.json.</Card>
   <Card title="Mod references" icon="library" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/agents/references">The five mods-*.md files and the drift-check script.</Card>
 </CardGrid>
 

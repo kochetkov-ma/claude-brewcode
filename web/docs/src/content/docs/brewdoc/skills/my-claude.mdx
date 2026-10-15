@@ -1,200 +1,93 @@
 ---
 title: "My Claude"
-description: "Document your Claude Code installation — local setup overview, official architecture docs, or custom web research from forums, GitHub, and marketplaces."
+description: "Document your Claude Code installation: local setup overview, official architecture docs, or custom web research from forums, GitHub, and marketplaces."
 order: 24
 ---
-import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+import { Badge, Card, CardGrid, Spoiler, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# my-claude — document your setup
+# my-claude: document your setup
 
-<Callout type="caution">
-**A local-config dump stops being enough once the setup grows.** Plugins, hooks, custom agents, alternative providers, project rules — a flat snapshot of `settings.json` and a couple of CLAUDE.md files does not explain how any of it fits together, and there is nothing to compare against next month.
-</Callout>
+<Badge variant="primary" text="opus" /> <Badge variant="secondary" text="user-invoked" />
 
-<Callout type="tip">
-**`/brewdoc:my-claude` goes further.** Internal mode maps everything in the active config directory (`CLAUDE_CONFIG_DIR`, default `&#126;/.claude`) and your project's `.claude`, then writes the doc and has an independent `Explore` agent re-check every file path and count. External mode synthesizes hook/context/agent architecture from official Anthropic docs, GitHub releases, and community forums. Research mode launches parallel agents across multiple live sources for any Claude Code query — with per-fact source citations and a reliability table.
-</Callout>
+Maps your Claude Code setup into one shareable Markdown doc: the local config and project `.claude` (internal), the official architecture (external), or a cited answer from live sources (research). An independent agent re-checks every path and count before the run ends.
 
 ## Quick reference
 
 | Field | Value |
 |-------|-------|
 | Command | `/brewdoc:my-claude` |
-| Arguments | `[prompt] [ext [context]]` \| `[r <query>]` — no args = internal installation docs |
+| Arguments | `[prompt] [ext [context]]` \| `[r <query>]`; no args = internal installation docs |
 | Model | opus |
-| Invocation | user-only (`disable-model-invocation: true`) |
-| Context | main conversation |
-| Tools | Read, Write, Edit, Glob, Grep, Bash, Agent, WebFetch, WebSearch, AskUserQuestion |
-
-## When to use
-
-- **New team member onboarding** — generate a complete map of your Claude Code setup as a shareable doc
-- **Plugin audit before a release** — snapshot your current skills, agents, hooks, and rules
-- **Architecture research** — pull official Anthropic docs on hooks, context injection, agent schema into one place
-- **Custom investigation** — research any Claude Code topic across multiple live sources with citations
-- **Version tracking** — INDEX entries persist across runs; compare docs over time
-
-## Examples
-
-```bash
-# Internal mode — maps the active config dir (default &#126;/.claude) + project .claude
-/brewdoc:my-claude
-
-# External mode — official architecture docs (hooks, context, agents)
-/brewdoc:my-claude ext
-
-# External mode, context-schema sub-mode — focuses on additionalContext / updatedInput
-/brewdoc:my-claude ext context
-
-# Research mode — any Claude Code query, multi-source with citations
-/brewdoc:my-claude r plugin hooks additionalContext regression
-```
-
-## vs built-in `/team-onboarding`
-
-Built-in `/team-onboarding` (Claude Code 2.1.101+) is enough for a quick teammate handoff doc from local config. Use `/brewdoc:my-claude` instead when the job needs web research, EXTERNAL architecture synthesis, RESEARCH mode, or the persistent `.claude/brewdoc/INDEX.jsonl` with citations.
 
 ## Modes
 
-| Argument | Mode | What it does |
-|----------|------|--------------|
-| *(none)* | INTERNAL | Analyzes the active config dir (`CLAUDE_CONFIG_DIR`, default `&#126;/.claude`) + project `.claude` — rules, agents, skills, memories |
-| `ext` or `external` | EXTERNAL (default) | Official docs + local hook analysis + recent releases |
-| `ext context` | EXTERNAL (context-schema) | Focuses on context injection schema: `additionalContext`, `updatedInput` |
-| `r <query>` or `research <query>` | RESEARCH | Custom query across GitHub, Reddit, forums, marketplaces |
+| Argument | Mode | What it does | Output (in `.claude/brewdoc/my-claude/`) |
+|----------|------|--------------|------|
+| *(none)*, or no keyword match | INTERNAL (default) | Rules, agents, skills, memories of the config dir and the project | `YYYYMMDD_my-claude-internal.md` |
+| `ext` or `external` | EXTERNAL | Official docs, local hook analysis, recent releases | `YYYYMMDD_my-claude-external.md` |
+| `ext context` | EXTERNAL, context-schema | `additionalContext`, `updatedInput`, `decision` | `external/YYYYMMDD_context-schema.md` |
+| `r <query>` or `research <query>` | RESEARCH | GitHub, Reddit, forums, marketplaces, with citations | `YYYYMMDD_research-{slug}.md` |
+
+## When to use
+
+- **Onboarding:** hand a new teammate a complete map of your setup.
+- **Audit before a release:** snapshot current skills, agents, hooks, and rules.
+- **Hook development:** run `ext context` for a fresh reference on which channels work for which events.
+- **Custom investigation:** research any topic across live sources.
+
+## Example
+
+```bash
+/brewdoc:my-claude                      # internal: your local setup
+/brewdoc:my-claude ext context          # context injection schema
+/brewdoc:my-claude r plugin hooks additionalContext regression
+```
 
 ## Flow
 
 <Steps>
-  <li>
-    <div>
-      <strong>Detect mode</strong>
-      <p>Reads <code>$ARGUMENTS</code> and selects INTERNAL, EXTERNAL, or RESEARCH. Loads the corresponding reference file from <code>references/</code>.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Parallel discovery</strong>
-      <p>INTERNAL: spawns 3 parallel <code>Explore</code> agents — (1) global config (<code>CLAUDE_CONFIG_DIR</code>, default <code>&#126;/.claude</code>), (2) project <code>.claude</code> config, (3) memory files. EXTERNAL/RESEARCH: spawns <code>general-purpose</code> agents per source group (official docs, GitHub, forums).</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Aggregate findings</strong>
-      <p>Merges agent outputs into a structured Markdown document. RESEARCH mode tracks source URL per fact for the citations table.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Write output</strong>
-      <p>Writes the document to <code>.claude/brewdoc/my-claude/</code> (project-relative; writes under <code>.claude/</code> are prompted in <code>default</code>/<code>acceptEdits</code> and allowed under <code>bypassPermissions</code>). Internal and external modes write <code>YYYYMMDD_my-claude-internal.md</code> / <code>YYYYMMDD_my-claude-external.md</code>, research mode <code>YYYYMMDD_research-&#123;slug&#125;.md</code>, and the context-schema sub-mode <code>external/YYYYMMDD_context-schema.md</code>. Creates the directory if needed with <code>mkdir -p</code>.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Validation pass</strong>
-      <p>Spawns an independent agent to re-check the written doc - file paths exist, counts match, no invented file names. INTERNAL uses <code>Explore</code>, since the check is read-only path existence. EXTERNAL and RESEARCH use <code>general-purpose</code>, which has the <code>WebFetch</code> / <code>WebSearch</code> access needed to re-open sources. Fixes are applied to the written doc.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>INDEX entry</strong>
-      <p>Appends a record to <code>.claude/brewdoc/INDEX.jsonl</code> with timestamp, mode, path, title, and version. If an entry for this mode already exists, asks via <code>AskUserQuestion</code> whether to update (bump version) or create a new entry alongside the existing one.</p>
-    </div>
-  </li>
+  <li><div><strong>Detect mode</strong><p>Picks INTERNAL, EXTERNAL, or RESEARCH and loads its reference file.</p></div></li>
+  <li><div><strong>Parallel discovery</strong><p>Internal spawns 3 `Explore` agents (global config, project config, memory); external and research spawn `general-purpose` agents per source group. Each spawn gets one bounded unit and a six-field brief; research runs 2 to 5 groups. Contract: [Delegation](/brewcode/skills/#delegation).</p></div></li>
+  <li><div><strong>Write and validate</strong><p>Merges findings into one doc, writes it under `.claude/brewdoc/my-claude/`, then an independent agent checks paths, counts, and sources.</p></div></li>
+  <li><div><strong>INDEX entry</strong><p>Appends a record to `.claude/brewdoc/INDEX.jsonl`; asks to bump or add when the mode already has one.</p></div></li>
 </Steps>
 
-## Delegation — how every spawn is briefed
+<Spoiler id="technical-details" title="Technical details">
 
-The rule applies to every `Explore` and `general-purpose` spawn in all three modes: a big task handed to one agent = an agent gone for an hour. You cannot observe it, cannot correct it, and it usually drifts off-target.
+**Mode selection.** The argument is one free-form prompt (RU or EN). An explicit prefix (`ext`, `external`, `r `, `research `) wins; otherwise the most distinct keyword picks the mode, a tie triggers one question, no match falls back to Internal. The prefix needs a trailing space: `rsome query` is not research mode.
 
-One subagent = ONE bounded unit — one source group, about 5 files and 10 steps at most. Anything bigger is split into N tasks and all of them are spawned in a **single** message.
+**Internal config path.** Internal mode reads the active config directory (`CLAUDE_CONFIG_DIR`, default `~/.claude`) and the project `.claude`.
 
-Every spawn prompt carries six fields:
+**Versus `/team-onboarding`.** The built-in `/team-onboarding` (Claude Code 2.1.101+) covers a quick handoff; use this skill for web research, architecture synthesis, or the persistent INDEX.
 
-| Field | Content |
-|-------|---------|
-| GOAL | the overall task and why it exists — the point beyond the file edit |
-| ROLE | what this agent owns; what it must NOT touch |
-| SCOPE | exact paths and commands in bounds + explicit out-of-bounds |
-| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what this agent needs |
-| CONSUMER | who or what uses the result next, and the shape it must fit |
-| DONE | acceptance criteria + the exact report shape expected back |
+**Common mistakes.** Research mode produces documentation, not code; delegate implementation to a project agent. `ext` documents the external architecture; use no arguments for your own setup. Internal mode never copies secret values, only their names.
 
-A bare one-line task is never enough. INTERNAL mode uses this shape for its three `Explore` groups; EXTERNAL and RESEARCH use it per source group.
+**Output paths.** Files are listed in the Modes table. Writes under `.claude/` are protected: prompted in `default` and `acceptEdits`, allowed under `bypassPermissions`, never pre-approved by allow rules; headless without bypass fails.
 
-<details>
-<summary>Internals — output paths, INDEX schema, document structures</summary>
+**Validation.** Internal uses `Explore` (read-only path and count check). External and research use `general-purpose`, which re-opens sources with `WebFetch` and `WebSearch`. Fixes land in the written doc.
 
-**Output directory:** `.claude/brewdoc/my-claude/` (project-relative) — the only supported target. Writes under `.claude/` are protected: prompted in `default`/`acceptEdits`, allowed under `bypassPermissions`, never pre-approved by allow rules; headless without bypass fails.
+**Provenance frontmatter.** Every generated doc opens with `doc_type: user`, `version`, `generated_by: "brewdoc:my-claude"`, `last_updated`. `version` comes from the plugin's own `plugin.json`; re-generating refreshes the three stamps and keeps a hand-edited `doc_type` (`llm` or `skip`).
 
-**Every generated doc opens with provenance frontmatter**, before the `#` heading, in all three modes:
-```yaml
----
-doc_type: user
-version: "{PLUGIN_VERSION}"
-generated_by: "brewdoc:my-claude"
-last_updated: "{LAST_UPDATED}"
----
-```
-`{PLUGIN_VERSION}` is read from the brewdoc plugin's own `plugin.json` by self-location, never hardcoded; `{LAST_UPDATED}` is `date +%F`. Re-generating an existing doc refreshes all three quoted values and leaves a hand-edited `doc_type` (`llm` / `skip`) as the user set it.
+**Internal sources.** `<config>/CLAUDE.md`, `rules/*.md`, `agents/*.md`, `skills/`, project `CLAUDE.md` and `.claude/rules/*.md`, `<config>/projects/*/memory/*.md` (`MEMORY.md` is the index), and `agent-memory/*/`.
 
-**INTERNAL sources analyzed** (`<config>` = active config dir, `CLAUDE_CONFIG_DIR`, default `&#126;/.claude`):
-- `<config>/CLAUDE.md` — global instructions
-- `<config>/rules/*.md` — global rules
-- `<config>/agents/*.md` — global agents
-- `<config>/skills/` — global skills
-- Project `CLAUDE.md` and `.claude/rules/*.md`
-- `<config>/projects/*/memory/*.md` — memory files (`MEMORY.md` is the index), plus `agent-memory/*/` in `<config>` and `.claude/`
+**INDEX and legacy migration.** One JSON line per run with `ts`, `mode`, `path`, `title`, `version`. If `~/.claude/brewdoc/INDEX.jsonl` exists and the project INDEX is empty, its entries are merged once (read-only) with a notice; the legacy file is never written.
 
-**INDEX format:**
-```jsonl
-{"ts":"2026-02-28T10:00:00","mode":"internal","path":".claude/brewdoc/my-claude/20260228_my-claude-internal.md","title":"Internal Claude Setup Overview","version":"1.0"}
-```
+**Doc structure.** Internal: Global Configuration, Project Configuration, Memory, Summary table. Research: Findings per source group, Sources table (fact, source, reliability), Review Verdict.
 
-**Legacy migration:** if `&#126;/.claude/brewdoc/INDEX.jsonl` exists and the project INDEX is empty, entries are merged once (read-only). The legacy file is never written to. A notice is printed: `ℹ️ Migrated {N} entries from legacy &#126;/.claude/brewdoc/INDEX.jsonl`.
-
-**INTERNAL output structure:**
-```markdown
-# Claude Code Internal Setup — {date}
-## Global Configuration
-### Instructions (CLAUDE.md) | Rules ({N}) | Agents ({N}) | Skills ({N})
-## Project Configuration
-### Project Instructions | Project Rules
-## Memory
-### Active Memories ({N} entries)
-## Summary
-| Component | Count | Location |
-```
-
-**RESEARCH output structure:**
-```markdown
-# Research: {query} — {date}
-## Findings
-### {Source Group 1} ...
-## Sources
-| Fact | Source | Reliability |
-## Review Verdict
-```
-
-**EXTERNAL context-schema sub-mode** writes to `.claude/brewdoc/my-claude/external/YYYYMMDD_context-schema.md` instead of the default path.
-
-**RESEARCH agent count:** 2–5 `general-purpose` agents spawned in parallel, one per source group (official docs, GitHub issues, Reddit/forums, marketplaces).
-
-</details>
+</Spoiler>
 
 <CardGrid>
   <Card title="docsync-setup" icon="sync" href="/brewdoc/skills/docsync-setup/">
-    Track doc staleness — keeps Markdown, MDX, and knowledge files current by date.
+    Track doc staleness by date.
   </Card>
   <Card title="memory-sync-setup" icon="brain" href="/brewdoc/skills/memory-sync-setup/">
-    Generates a project-local `/memory-sync` skill for CLAUDE.md, rules and conventions — delete-first, non-growth.
+    Project-local `/memory-sync` for CLAUDE.md, rules, and conventions.
   </Card>
-  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewdoc/skills/my-claude">
+  <Card title="GitHub source" icon="github" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewdoc/skills/my-claude">
     Source code, reference files, and mode instructions.
   </Card>
   <Card title="brewdoc overview" icon="document" href="/brewdoc/overview/">
-    All brewdoc skills — docsync-setup, my-claude, memory-sync-setup, md-to-pdf, publish.
+    All brewdoc skills.
   </Card>
 </CardGrid>
 

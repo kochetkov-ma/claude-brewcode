@@ -3,7 +3,7 @@ title: "Hook Creator"
 description: "Create and debug Claude Code lifecycle hooks using event-specific input, output, handler support, and explicit failure policies."
 order: 1207
 ---
-import { Badge, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+import { Badge, Card, CardGrid, Spoiler, Steps, UpdateNotice } from '../../../../components/mdx';
 
 # Hook Creator
 
@@ -17,26 +17,17 @@ import { Badge, Card, CardGrid, Steps, UpdateNotice } from '../../../../componen
 | Triggers | create hook, PreToolUse hook, debug hook |
 | Model | inherit: uses the session model |
 | Tools | Read, Write, Edit, Glob, Grep, Bash, WebFetch, WebSearch |
-| Output | Hook or handler configuration, registration snippet, verification evidence, and limits |
+| Output | Hook or handler configuration, registration snippet, verification evidence, limits |
 
-## What it does
-
-Create, debug, or validate a lifecycle hook against the actual event contract. Hook Creator
-selects the event, handler type, input schema, output channel, matcher, and failure policy.
-Its source references were refreshed through Claude Code 2.1.296.
-
-Give the main caller one bounded deliverable: behavior, owned files, target registration
-surface, and acceptance evidence. Ordinary subagent questions return to the caller; permission
-and approval gates stay in the main session. The agent follows an existing well-built hook
-alongside project rules.
+Hook Creator creates, debugs or validates a lifecycle hook against the real event contract. It selects event, handler type, input schema, output channel, matcher and failure policy, following an existing well-built hook and project rules. References are refreshed through Claude Code 2.1.296.
 
 ## When to use
 
 - Block an action before it runs, with an explicit hard-gate failure policy.
-- Add advisory operating context at a supported lifecycle boundary.
+- Add advisory context at a supported lifecycle boundary.
 - Fix output that a hook emits but the event ignores.
-- Diagnose a stop loop, incorrect matcher, or broken registration.
-- Choose between deterministic, HTTP, MCP, prompt, and agent handlers.
+- Diagnose a stop loop, wrong matcher, or broken registration.
+- Choose between command, HTTP, MCP, prompt and agent handlers.
 
 ## Examples
 
@@ -51,17 +42,18 @@ Debug my Stop hook: it keeps blocking after the task finishes.
 Verify the Stop output contract and stop_hook_active guard.
 ```
 
-## Workflow
+## How it works
 
 <Steps>
-  <li><div><strong>Resolve behavior and ownership</strong><p>Determine whether the goal is gating, context, modification, logging, or cleanup. Resolve project settings, user settings, plugin hooks.json, or supported frontmatter ownership; preserve unrelated registrations.</p></div></li>
-  <li><div><strong>Choose an event and supported handler</strong><p>Use the current event and type-support tables. Handler availability and blocking behavior differ by event; neither a handler name nor a nonzero exit guarantees a block.</p></div></li>
-  <li><div><strong>Implement the event contract</strong><p>Validate the fields needed by that event, emit the correct output shape, and choose fail-open advisory or fail-closed gate behavior deliberately. Stop handlers guard repeated blocking with stop_hook_active.</p></div></li>
-  <li><div><strong>Register without collisions</strong><p>Generate the exact matcher, type, executable path, and timeout. Prefer command exec form for placeholder paths; reserve single-writer modifications for one owning handler.</p></div></li>
-  <li><div><strong>Verify and report</strong><p>Exercise success, denial, malformed input, and failure cases appropriate to the behavior. Rerun relevant checks after a fix. Return files, registration details, actual validation, and any untested runtime limits.</p></div></li>
+  <li><div><strong>Resolve behavior and ownership</strong><p>Gating, context, modification, logging or cleanup; project settings, user settings or plugin <code>hooks.json</code>. Unrelated registrations stay.</p></div></li>
+  <li><div><strong>Choose event and handler</strong><p>Handler support and blocking differ per event; a nonzero exit does not guarantee a block.</p></div></li>
+  <li><div><strong>Implement the contract</strong><p>Emit the event's output shape; pick fail-open advisory or fail-closed gate on purpose.</p></div></li>
+  <li><div><strong>Register and verify</strong><p>Exact matcher, type, path and timeout; test success, denial, malformed input and failure.</p></div></li>
 </Steps>
 
-## Handler types
+One bounded deliverable per run; larger briefs return a split proposal ([scope guard](/brewcode/agents/#scope-guard)). Questions and approvals stay with the main caller.
+
+<Spoiler id="handler-types" title="Handler types and command exec form">
 
 | Type | Purpose and limits |
 |------|--------------------|
@@ -71,12 +63,7 @@ Verify the Stop output contract and stop_hook_active guard.
 | `prompt` | LLM decision handler with ok/reason output; supported events only |
 | `agent` | LLM agent decision handler; supported events only |
 
-Prompt and agent handlers evaluate decisions; their prompt text is not ordinary context injection.
-They are not available on every event. For example, SessionStart supports command/MCP handlers,
-while Setup skips MCP and runs command handlers. PermissionRequest skips agent handlers, and
-its decisions require that event's output shape rather than a generic prompt ok=false response.
-
-### Command exec form
+Prompt and agent handlers evaluate decisions, not inject context. SessionStart supports command/MCP handlers, Setup skips MCP, PermissionRequest skips agent handlers and needs its own output shape.
 
 ```json
 {
@@ -87,69 +74,52 @@ its decisions require that event's output shape rather than a generic prompt ok=
 }
 ```
 
-With args present, command resolves on PATH and runs directly without shell parsing. Each
-argument is literal after supported substitutions; shell quoting and expansion do not apply.
-Shell form remains available when a pipe or other shell operation is actually needed.
-Args, shell, async, and asyncRewake are command-only configuration fields.
+With `args`, the command resolves on PATH and runs without shell parsing; use shell form only for pipes. `args`, `shell`, `async` and `asyncRewake` are command-only.
 
-## Event-specific output
+</Spoiler>
+
+<Spoiler id="event-specific-output" title="Event-specific output">
 
 | Goal | Correct contract |
 |------|------------------|
 | Add context on a supported event | `hookSpecificOutput.additionalContext` |
-| Deny a tool before execution | PreToolUse permissionDecision=deny |
-| Modify tool parameters | Supported updatedInput field; reserve for one owner |
-| Give stop feedback or continue work | Stop/SubagentStop context or decision=block with reason |
-| Report after a tool runs | PostToolUse context/feedback; prior side effects remain |
-| Replace a visible tool result | Supported PostToolUse updatedToolOutput |
-| Show ordinary user-facing status | Top-level systemMessage, where supported |
-| Create a custom worktree | WorktreeCreate command stdout contains only its created absolute path |
+| Deny a tool before execution | PreToolUse `permissionDecision=deny` |
+| Modify tool parameters | Supported `updatedInput`; one owner only |
+| Stop feedback or continue work | Stop/SubagentStop context or `decision=block` with reason |
+| Report after a tool runs | PostToolUse context; prior side effects remain |
+| Replace a visible tool result | PostToolUse `updatedToolOutput` |
+| User-facing status | Top-level `systemMessage`, where supported |
+| Custom worktree | WorktreeCreate stdout holds only the created absolute path |
 
-UserPromptSubmit cannot rewrite the prompt through updatedInput. Setup discards JSON output
-fields. PreCompact has event-specific blocking but no additionalContext injection; PostCompact
-does not provide that context channel either. PermissionRequest and PermissionDenied have
-their own decision/retry contracts. Use the reference matrix before copying another event's schema.
+UserPromptSubmit cannot rewrite the prompt via `updatedInput`. Setup discards JSON output. PreCompact and PostCompact have no `additionalContext` channel. Check the reference matrix before copying another event's schema.
 
-Context can accumulate across handlers. Parameter/result modifications have single-writer
-semantics; multiple owners can overwrite each other's edits.
+</Spoiler>
 
-### Exit codes and errors
+<Spoiler id="exit-codes-and-errors" title="Exit codes and failure policy">
 
-**Valid JSON can take effect on nonzero exits.** For standard decision events, valid output
-fields are parsed even when the process exits nonzero. Exit 2 still blocks where supported
-and cannot be overridden by an allow decision. Other events ignore or route exit codes
-differently; worktree events use their own contract.
+- Valid JSON takes effect even on a nonzero exit for standard decision events; exit 2 still blocks where supported.
+- A failed command is not a denial. A policy gate emits an explicit denial; never reuse an advisory fail-open template for a hard requirement.
+- Hard gate on `command` or `http`: set `onFailure: "block"` (Claude Code 2.1.295+; older versions ignore it). Without it a crash, timeout or missing script lets the action through. One `if` rule per tool; test-fire each path.
+- Async handlers never gate; `asyncRewake` reports a later result only.
 
-Prefer exit 0 and one JSON object for structured output. A failed command is not automatically
-a hard denial. Advisory hooks can return an empty result on failure; a policy gate must emit
-an explicit supported denial or blocking failure. Never reuse an advisory fail-open template
-for a hard safety requirement without changing and testing its failure paths.
+</Spoiler>
 
-For a hard gate on a `command` or `http` handler, set `onFailure: "block"` (Claude Code 2.1.295+; older versions ignore the field silently). Without it, a crash, timeout, or missing script lets the action through. Use one `if` rule per tool, and test-fire each path before reporting the gate as working.
+<Spoiler id="references-and-validation" title="References and validation limits">
 
-Async handlers do not synchronously block the action. AsyncRewake can report a later result,
-but it does not turn background work into a pre-action gate.
+References under `brewcode/skills/agents/references/` cover all 33 events, handler types, I/O routing, registration, environment variables and templates. Fixtures validate implemented branches only; the final report separates generated files, registration changes, tests run and untested live behavior.
 
-## Reference and validation boundaries
+`agents/tests/suite-creator-contract.mjs` is a 99-check regression suite pinning what `hook-creator`, `agent-creator` and `skill-creator` teach about the hook and subagent API.
 
-The current references under `brewcode/skills/agents/references/` cover all 33 events, five
-handler types, I/O routing, registration, environment variables, templates, and upstream changes.
-Consult the exact event/type support rather than assuming every event can block or every handler
-accepts the same fields.
-
-Test fixtures validate implemented branches; successful local checks do not prove live
-registration or every runtime payload variant. The final report distinguishes generated files,
-registration changes, tests actually run, and any remaining live verification.
+</Spoiler>
 
 ## Related
 
 <CardGrid>
   <Card title="Brewcode overview" icon="document" href="/brewcode/overview/">Agents, skills, and project setup tools.</Card>
-  <Card title="Brewcode hooks" icon="settings" href="/brewcode/hooks/">The two registered plugin handlers (both SessionStart) and their actual channels.</Card>
+  <Card title="Brewcode hooks" icon="settings" href="/brewcode/hooks/">The two registered plugin handlers and their channels.</Card>
   <Card title="Skill Creator" icon="puzzle" href="/brewcode/agents/skill-creator/">Build skill workflows and resource contracts.</Card>
-  <Card title="Mod Creator" icon="package" href="/brewcode/agents/mod-creator/">Build and debug Claude Code mods with a reference pack and drift check.</Card>
-  <Card title="Agent source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/agents/hook-creator.md">Authoring policy, event selection, and verification requirements.</Card>
-  <Card title="Hook references" icon="library" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/agents/references">Current event, type-support, and output matrices.</Card>
+  <Card title="Mod Creator" icon="package" href="/brewcode/agents/mod-creator/">Build Claude Code mods with a reference pack and drift check.</Card>
+  <Card title="GitHub source" icon="github" href="https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/agents/hook-creator.md">Authoring policy, event selection, and verification requirements.</Card>
 </CardGrid>
 
 <UpdateNotice />

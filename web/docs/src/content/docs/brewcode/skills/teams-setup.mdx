@@ -1,313 +1,211 @@
 ---
 title: "teams-setup"
-description: "Build a domain-specific agent team (5-20 domain agents + fixed review-only intent-guard member). Quorum review, trace log, self-updating via performance data."
+description: "Build a domain-specific agent team: 5-20 domain agents plus one review-only intent-guard, quorum review, and a trace log that drives upgrades."
 order: 1109
 ---
-import { Card, CardGrid, Callout, Steps, UpdateNotice } from '../../../../components/mdx';
+import { Badge, Callout, Card, CardGrid, Spoiler, SourceLink, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# teams-setup — install an agent team
+# teams-setup <Badge variant="secondary" text="opus" /> <Badge variant="accent" text="generator" />
 
-<Callout type="caution">
-**Generic agents handle everything — and excel at nothing.** A frontend task routed to a generic backend agent loses domain context, triggers wrong tools, and produces half-correct results. Claude Code has no native way to scope agents to domains or enforce routing between them.
-</Callout>
+Generic agents handle everything and excel at nothing: a frontend task routed to a backend agent loses domain context and picks wrong tools. `/brewcode:teams-setup install` analyzes the codebase, proposes a team (Minimal / Balanced / Maximum), creates each agent with quorum-reviewed scaffolding, and writes a `trace.jsonl` log that `upgrade` uses to tune the team.
 
-<Callout type="tip">
-**`/brewcode:teams-setup install`** analyzes your codebase, proposes agent variants (Minimal / Balanced / Maximum), creates each agent via quorum-reviewed scaffolding, and writes a `trace.jsonl` log so the team self-improves via `/brewcode:teams-setup upgrade`. Every team also gets a fixed review-only `intent-guard` member — see [Intent guard](#intent-guard) below.
-</Callout>
+<p align="center"><img src="/demos/teams-setup.gif" alt="Terminal animation: install a payments team for a sample repo, run a task across the owning agents, then read the per-agent status table" width="720" loading="lazy" /><br /><small>Illustrative animation: install a team, describe a task, owning agents take it in parallel, status shows health per agent. Project and agent names are invented.</small></p>
+
+<SourceLink path="brewcode/skills/teams-setup/README.md" anchor="teams" />
 
 ## Quick reference
 
 | Field | Value |
 |-------|-------|
 | Command | `/brewcode:teams-setup` |
-| Arguments | `[prompt] [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [name]` — one free-form prompt; the mode, the `[name]` and the flags (`--skip-review`, `--review`) may sit anywhere in it. In a bare `mode [name]` pair the verb comes first, so `install enable` creates a team named `enable`; in a sentence the name comes from the text ("disable the payments team" names `payments`) |
-| No-arg default | `status` of the first existing team, `install` of a team named `default` when none exists |
-| `enable` / `disable` | Park/unpark the roster's agent files (renamed to/from `<agent>.md.disabled`) — `intent-guard` and agents another generator owns (e.g. `task-tracker`) are exempt |
-| Version stamping | `team.md` header + agent frontmatter carry the plugin version; write is refused if the version cannot be resolved |
+| Arguments | `[prompt] [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [name]` |
+| No-arg default | `status` of the first existing team; `install` of a team named `default` when none exists |
 | Model | opus |
-| Tools | Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion, Skill |
+| Output | `.claude/agents/*.md` + `.claude/teams/<name>/` (`team.md`, `trace.jsonl`, `trace-ops.sh`) |
+
+`[name]` is positional after the canonical modes. In a bare `mode [name]` pair the verb comes first, so `install enable` creates a team named `enable`; in a sentence the name comes from the text ("disable the payments team" names `payments`).
 
 ## When to use
 
-- **New project onboarding** — turn architectural analysis into a ready-to-use agent roster
-- **Large codebase** — split domains (API, data, frontend, infra, testing) so each agent stays focused
-- **Repeated failures** — a specific domain keeps producing poor results; `install` or `upgrade` that agent
-- **Maintenance** — `status` to see health, `upgrade` to tune underperformers, `uninstall` to archive trace data and drop inactive agents, `purge` to remove the team entirely
-
-## Examples
-
-```bash
-# Install a balanced team for the current project
-/brewcode:teams-setup install my-team
-
-# Install with a free-form hint about what matters
-/brewcode:teams-setup install my-team "focus on API and data pipeline domains"
-
-# Check team health and success rates
-/brewcode:teams-setup status my-team
-
-# Tune agents that are underperforming
-/brewcode:teams-setup upgrade my-team
-
-# Park the roster's agent files without deleting anything
-/brewcode:teams-setup disable my-team
-
-# Bring a parked team back
-/brewcode:teams-setup enable my-team
-
-# Archive trace data, remove inactive agents
-/brewcode:teams-setup uninstall my-team
-
-# Delete the team outright — agents, framework dir, trace and its archive
-/brewcode:teams-setup purge my-team
-```
+| Scenario | Command |
+|----------|---------|
+| New project onboarding | `/brewcode:teams-setup install my-team` |
+| A domain keeps producing poor results | `/brewcode:teams-setup upgrade my-team` |
+| Check team health | `/brewcode:teams-setup status my-team` |
+| Pause or remove a team | `disable`, `uninstall`, `purge` |
 
 ## Modes
 
-| Mode | Command | What it does |
-|------|---------|--------------|
-| `status` | `/brewcode:teams-setup status <name>` | Read-only health report: success rates, open issues, insights, recommendations |
-| `install` | `/brewcode:teams-setup install <name> [prompt]` | Analyze codebase → propose team (+ fixed `intent-guard`) → create agents → quorum review → framework setup |
-| `upgrade` | `/brewcode:teams-setup upgrade <name>` | Read trace data → classify agents → tune or replace underperformers; drops a roster row that lists another generator's agent, leaving its file untouched |
-| `enable` | `/brewcode:teams-setup enable <name>` | Move each roster member's agent file from `<agent>.md.disabled` back to `<agent>.md` — reactivates without touching `team.md` or trace data |
-| `disable` | `/brewcode:teams-setup disable <name>` | Park each roster member's agent file as `<agent>.md.disabled` — Claude Code stops discovering it, nothing is deleted |
-| `uninstall` | `/brewcode:teams-setup uninstall <name>` | Archive trace entries, remove inactive agents, reset cursor |
-| `purge` | `/brewcode:teams-setup purge <name>` | Total removal, no menus and no archive: every domain agent from the `team.md` roster, then `.claude/teams/<name>/` including `trace-archive.jsonl`. One explicit confirmation, not recoverable |
+| Mode | Does |
+|------|------|
+| `status` | Read-only health report: success rates, open issues, insights |
+| `install` | Analyze, propose, create agents, review, set up framework |
+| `upgrade` | Read trace data, tune or replace underperformers |
+| `enable` | Restore parked `<agent>.md.disabled` files |
+| `disable` | Park agent files; nothing deleted |
+| `uninstall` | Archive trace entries, remove inactive agents |
+| `purge` | Delete agents and `.claude/teams/<name>/`; one confirmation |
 
-<Callout type="tip" title="enable / disable park the roster, not delete it">
-`disable` moves each roster member's `.claude/agents/<agent>.md` to `<agent>.md.disabled` — Claude Code stops discovering the agent as a project agent, but the file body is byte-identical either way, and `enable` moves it straight back. `intent-guard` is always skipped (`SKIP:intent-guard (shared with superreview-setup)`) because that file may belong to an install with nothing to do with this team. An agent another generator owns is skipped the same way (`SKIP:<agent> (owned by <plugin>:<skill>; not a team member, never moved)`) — see [Agents owned by another generator](#agents-owned-by-another-generator). `team.md` and the trace log are untouched by either verb. The same keyword guard is what keeps `purge` a mode rather than a team name — earlier versions treated any unknown first word as a team name, so `/brewcode:teams-setup purge` installed a team called `purge`.
-</Callout>
+## Example
 
-<Callout type="tip" title="Fixed: disable no longer reports success on a roster it could not parse">
-`toggle-team.sh disable` used to print `MOVED:0` alongside a green `✅ disable` and exit 0 even when its `## Agents` table parser never found the header row — every agent file stayed live while the run claimed success. The parser now recognizes a padded separator row (`| ------ |`, not just `|---|`) and hard-fails instead of silently reporting zero moves when it never passes the header. Roster agent ids are also validated against `^[a-z0-9][a-z0-9-]*$` — uppercase and `_` are rejected — so a malformed `team.md` row is reported and skipped rather than interpolated into a file path.
-</Callout>
+```bash
+/brewcode:teams-setup install api-team "focus on REST API, auth and database layers"
+/brewcode:teams-setup status api-team
+/brewcode:teams-setup upgrade api-team
+```
 
-`purge` never deletes `.claude/agents/intent-guard.md`. That file is shared with [`/brewcode:superreview-setup`](/brewcode/skills/superreview-setup/) and may belong to an install that has nothing to do with this team; purge reports it as kept. An agent another generator owns is kept too (`kept: owned by <plugin>:<skill>`); only its roster row goes with the team directory. A team name that does not exist stops the run — nothing is "purged" that was never installed.
+`install` ends with the full Team Status table: agents, tasks tracked, success rate, open issues.
 
-<Callout type="tip" title="Why the -setup suffix">
-`teams-setup` installs a mechanism — a roster of agents in `.claude/agents/` that you use afterwards *instead of* the skill. Recurring tools like [`/brewcode:agents`](/brewcode/skills/agents/) keep a bare name because you run them again and again. The canonical mode vocabulary across setup skills is `status`, `install`, `upgrade`, `enable`, `disable`, `uninstall`, `purge`; teams implements all seven.
-</Callout>
-
-## Flow
+## How it works
 
 <Steps>
-  <li>
-    <div>
-      <strong>Parse + confirm</strong>
-      <p>Mode, team name, and optional prompt are extracted from arguments. Current team state (if any) and agent roster are loaded. The plan is shown via <code>AskUserQuestion</code> before any mutation.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Project analysis</strong>
-      <p>3–5 Explore agents run in parallel: code structure, existing agents, tech stack, CI/CD, domain boundaries. Results are consolidated into a single analysis document before the team proposal.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Team proposal + model selection</strong>
-      <p>Three variants presented, domain agents only: Minimal (5), Balanced (10–12, recommended), Maximum (15–20); <code>intent-guard</code> is a fixed non-domain addition to every variant (see [Intent guard](#intent-guard)). User selects variant and default model (Opus / Sonnet / Haiku / Mixed) for domain agents; <code>intent-guard</code> keeps the fixed <code>model: sonnet</code> its template ships with. Final agent list confirmed before creation.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Agent creation</strong>
-      <p>ONE agent file per spawn — never "create the whole team" in one task. Batches of 3–4 <code>agent-creator</code> spawns run in parallel, each carrying the full six-field brief (see Delegation below). After each batch, the skill invokes `brewtools:text-optimize` through `Skill` in light mode (`-l --allow-dirty`) on that batch's agent files, keeping the six ordered headings. It runs only when brewtools is available (otherwise the skip is reported) and never touches `intent-guard.md`.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>intent-guard (C3-IG)</strong>
-      <p>Exactly once, always — outside the batches above. Creates or reuses <code>.claude/agents/intent-guard.md</code> via the writer shared with <code>/brewcode:superreview-setup</code> (<code>generate.sh emit-agent</code>); see [Intent guard](#intent-guard) for the full write/reuse contract.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Quorum review pipeline (C5–C9)</strong>
-      <p>3 reviewers analyze all agents in parallel (instruction quality, domain accuracy, architecture consistency). Issues confirmed by 2/3 pass the threshold. A verification agent filters false positives. <code>agent-creator</code> fixes critical and important findings. Re-verify confirms no regressions. Skip with `--skip-review`.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Framework setup</strong>
-      <p><code>.claude/teams/&lt;name&gt;/team.md</code> (roster) and <code>trace.jsonl</code> (empty log) created, then <code>trace-ops.sh</code> is copied next to them — the project-local tracer every generated agent calls (see <a href="#tracing">Tracing</a>). <code>verify-team.sh</code> validates the structure and stops if anything is missing.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Epilogue: CLAUDE.md + final status</strong>
-      <p>Optionally writes a Teams section to project or local CLAUDE.md — <code>purge</code> removes that section instead. Always outputs the full Team Status table (agents, tasks tracked, success rate, open issues) so you know exactly what was created; after <code>purge</code> there is no team left, so the purge summary is printed instead.</p>
-    </div>
-  </li>
+  <li><div><strong>Parse + confirm</strong><p>Mode, name and prompt are extracted; the plan is shown before any change.</p></div></li>
+  <li><div><strong>Analyze</strong><p>3-5 Explore agents map structure, stack, CI/CD and domain boundaries in parallel.</p></div></li>
+  <li><div><strong>Propose</strong><p>Pick Minimal (5), Balanced (10-12) or Maximum (15-20) and a model for the domain agents.</p></div></li>
+  <li><div><strong>Create</strong><p>One <code>agent-creator</code> per agent file, in batches of 3-4; one <code>intent-guard</code> is added outside the batches.</p></div></li>
+  <li><div><strong>Review</strong><p>3 reviewers, 2/3 quorum, verification, fix, re-verify. Skip with `--skip-review`.</p></div></li>
+  <li><div><strong>Framework + status</strong><p><code>team.md</code>, <code>trace.jsonl</code> and <code>trace-ops.sh</code> are written and checked by <code>verify-team.sh</code>.</p></div></li>
 </Steps>
 
-## Delegation
+## Good to know
 
-<Callout type="caution" title="Why one agent file per spawn">
-  A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct it, and it usually drifts off-target.
-</Callout>
+- Each domain profile has six ordered headings: `Mission`, `Owned surfaces`, `Exclusions`, `Must-load references`, `Unique invariants`, `Unique verification`.
+- `team.md` stores `intent_guard_policy=required|legacy-absent`. A new team gets exactly one review-only `intent-guard`; `upgrade` never adds it to a `legacy-absent` roster.
+- `enable` and `disable` take effect next session, because agent discovery is read at session start.
+- `upgrade` on a team with no tracking data classifies every agent Inactive: run some tasks first. `status` on an unknown name stops with `Team not found`.
+- The `-setup` suffix marks a skill that installs a mechanism (a roster in `.claude/agents/`) you use afterwards instead of the skill. All seven canonical modes are implemented.
+- Delegation: see [Delegation](/brewcode/skills/#delegation).
 
-One subagent = **ONE bounded unit** — here, ONE agent file: roughly 5 files, roughly 10 steps. A 12-agent roster is 12 spawns, batched 3–4 per message in parallel; the C5 review and the C8 fix pass fan out the same way.
+## Technical details
 
-Every spawn prompt carries six fields. A bare one-line task is never enough:
+<Spoiler id="modes-detail" title="Mode details: enable, disable, purge">
 
-| Field | Content |
-|-------|---------|
-| GOAL | the overall task and why it exists — the point beyond the file edit |
-| ROLE | what this agent owns; what it must NOT touch |
-| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
-| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what THIS agent needs |
-| CONSUMER | who or what uses the result next, and the shape it must fit |
-| DONE | acceptance criteria + the exact report shape you want back |
+`disable` renames each roster member's `.claude/agents/<agent>.md` to `<agent>.md.disabled`. Claude Code stops discovering it; the body stays byte-identical, and `team.md` (roster rows `Status: disabled`) and trace data are untouched. `verify-team.sh` reports `DISABLED` per parked member and still passes. `enable` reverses it.
 
-In C3 that means each `agent-creator` owns exactly `.claude/agents/{name}.md`, is told which colleagues its batch-mates are building (stay off their domains, do not duplicate their triggers), and knows its description line lands in the `team.md` roster row. In C8 the fixer is told the finding is already verified by 2/3 reviewers plus the C7 double-check — do not re-litigate it — and that C9 will re-verify the same file for regressions.
+`intent-guard` is skipped (`SKIP:intent-guard (shared with superreview-setup)`), as is any agent another generator owns. `disable` hard-fails when it cannot parse the `## Agents` table, and roster ids must match `^[a-z0-9][a-z0-9-]*$`.
 
-Every code/test spawn brief in this skill also carries the etalon-first instruction verbatim: find the closest well-built counterpart in the repo and follow its principles, in addition to conventions, rules and docs — never instead of them.
+`purge` removes `<agent>.md` and `<agent>.md.disabled`, then `.claude/teams/<name>/` including `trace-archive.jsonl`. It keeps `.claude/agents/intent-guard.md` (shared with [`/brewcode:superreview-setup`](/brewcode/skills/superreview-setup/)) and stops when the team name does not exist. Mode keywords are guarded: `purge` is never read as a team name.
 
-## Intent guard
+</Spoiler>
 
-<Callout type="tip">
-Every team gets a fixed review-only `intent-guard` member outside the domain-agent count — Minimal (5), Balanced (10-12), Maximum (15-20) all mean domain agents; picking "Custom" cannot drop it. A model can follow an approved plan for hours and still drift from what was actually asked — intent-guard is the check for that, not a code reviewer and not a smoke test.
-</Callout>
+<Spoiler id="flow-detail" title="Flow details and step codes">
+
+| Code | Step |
+|------|------|
+| C1 | Project analysis, 3-5 Explore agents |
+| C2 / C2.5 | Proposal, 3 variants, user confirmation; model choice (opus / sonnet / haiku / mixed) |
+| C2.6 | `team.md` + `trace.jsonl` + `trace-ops.sh`, before any agent |
+| C3 | `agent-creator` x N, batches of 3-4; then `brewtools:text-optimize` in light mode (`-l --allow-dirty`) on each batch when brewtools is available, keeping the six headings, never on `intent-guard.md` |
+| C3-IG | `required`: emit or reuse `intent-guard`; `legacy-absent`: nothing |
+| C4 | Final roster + `verify-team.sh`; copies `trace-ops.sh`, stops if the copy fails |
+| C5-C9 | Quorum review, 2/3 consensus, cross-check against files, fix critical and important findings, re-verify (max 2 cycles) |
+| E1 / E2 | Optional `CLAUDE.md` Teams section; final status (`purge`: summary) |
+
+Run the review alone with `/brewcode:teams-setup upgrade <name> --review`.
+
+</Spoiler>
+
+<Spoiler id="intent-guard" title="intent-guard">
+
+A fixed review-only member outside the domain-agent count; choosing "Custom" cannot drop it. It is an anti-drift check: it compares what was **ASKED** with what was **DELIVERED** and reports the delta. It is not a code reviewer.
+
+| Policy | Roster | Upgrade |
+|--------|--------|---------|
+| `required` | Exactly one `intent-guard` row | Preserve it, never duplicate |
+| `legacy-absent` | Zero rows | Preserve absence, never create |
 
 | Property | Value |
 |----------|-------|
-| Counted in the roster size? | No — outside 5 / 10-12 / 15-20, cannot be dropped |
-| Compares | What was **ASKED** (tracker ticket, Slack thread, quoted requirements, the user's verbatim words, or the chat request itself) against what was **DELIVERED** |
-| Source hierarchy | Five tiers; tier 1 (external/original) always wins and is labeled in the report. An absent tier 1 is normal — the chat request becomes the top source. Sources are never invented |
-| Evidence | Cheap only: session transcript, file/directory names, `git diff --stat`, dependency manifests, doc headings — never full-file code reads, builds, tests, or linters |
-| Drift it hunts | Building something other than asked, over-engineering for an unplanned scale, interface/factory bloat where a direct implementation was requested, file explosion, test bloat against a minimal-tests policy, an unnecessary dependency, architecture substitution, ignored CLAUDE.md/rules instructions, silent skips, over-claimed completion, unrequested artifacts — open-ended examples, not a closed checklist |
-| Tools | Read-only. Invoked explicitly by name at review time only — never competes for auto-activation with the team's development agents |
+| Tools | Read-only: `Read`, `Glob`, `Grep`, `Bash` |
+| Model | `sonnet`, fixed by its template |
+| Invocation | Explicit, by name, at review time only; never an implementation owner |
+| Sources | Five tiers; tier 1 (ticket, thread, verbatim request) wins; sources are never invented |
+| Evidence | Transcript, file names, `git diff --stat`, manifests, doc headings; no builds or tests |
+| Output | `ALIGNED` / `MINOR DRIFT` / `MAJOR DRIFT` plus up to 10 findings |
 
-**One writer, shared with superreview.** `teams-setup` does not author `intent-guard.md`. It runs `generate.sh emit-agent` from the sibling `/brewcode:superreview-setup` skill, which creates-or-reuses the file and prints `INTENT_GUARD: CREATED` or `INTENT_GUARD: REUSE`. A USABLE existing agent is reused untouched — usable meaning non-empty, carrying `name: intent-guard` frontmatter, and free of unresolved placeholders. An empty, truncated or placeholder-laden file is treated as absent and recreated. `agent-creator` is spawned only on `CREATED`, to replace three seeded generic blocks (project invariants, drift examples, evidence commands) with project-specific content; it never authors the file.
+`teams-setup` never writes the file. It runs `superreview-setup/scripts/generate.sh emit-agent`, which prints `INTENT_GUARD: CREATED|REUSE|MIGRATED <path>`. A usable existing file (non-empty, `name: intent-guard`, no unresolved placeholders) is reused untouched; on `CREATED`, one `agent-creator` pass tailors three seeded blocks (project invariants, drift examples, evidence commands).
 
-<Callout type="tip" title="Fixed in v5.1.0">
-The corruption check used to match `${BASE}`-style shell expansions inside an already-adapted evidence block as an unresolved placeholder, so a healthy reused agent could be wrongly deleted and re-emitted. The scan now strips `${VAR}` references before matching `{PLACEHOLDER}` tokens. Separately, the write verification used an unanchored count for the template-header marker, which also matched a tail comment that legitimately names it — every healthy install hit the same false-fail loop back into re-adaptation. Both counts are now anchored to the literal artifact line, not prose about it.
-</Callout>
+It is excluded from quorum review, implementation ownership, the `uninstall` inactive sweep (it writes no trace) and `text-optimize`. `verify-team.sh` only warns on a legacy team missing the row; a listed row with no file is a FAIL.
 
-**Excluded from:**
+</Spoiler>
 
-| Flow | Why |
-|------|-----|
-| Quorum reviewer role (C5/C7/C9) | Not a general reviewer — no code domain to judge others by |
-| Implementation ownership | Never accepts a build/fix task |
-| `uninstall` inactive-agent sweep | Emits no trace records by design; zero activity is normal, not grounds for deletion |
-| `text-optimize` post-processing | Would reword its deliberately short, review-only description into a normal domain description |
+<Spoiler id="agents-owned-by-another-generator" title="Agents owned by another generator">
 
-**Legacy teams.** `verify-team.sh` does not hard-fail a team created before this change: missing `team.md` row → WARN with a runnable remediation command, still passes. Row listed but `.claude/agents/intent-guard.md` missing → real FAIL.
-
-## Agents owned by another generator
-
-<Callout type="tip" title="task-tracker is not a team member">
-`.claude/agents/` is project-global, so a roster can end up listing an agent that a different setup generated. The owner is read from the file's `generated_by` stamp (live file first, then the parked `.md.disabled`); the reserved name `task-tracker` always belongs to `/brewtools:task-board-setup`, even when a stale stamp says otherwise.
-</Callout>
+`.claude/agents/` is project-global, so a roster can list an agent another setup generated. The owner comes from the `generated_by` stamp; the name `task-tracker` always belongs to `/brewtools:task-board-setup`.
 
 | Step | Behavior |
 |------|----------|
-| `install` | Such a name is dropped from every variant, never renamed — that setup keeps the domain. An agent owned by another *team* is different: it is reported as taken and a distinct name is proposed |
+| `install` | Name dropped from every variant; an agent owned by another team is reported as taken and a distinct name is proposed |
 | `enable` / `disable` | Skipped, never moved |
-| `verify-team.sh` | Prints `CHECK: agent <name> ... FOREIGN` plus a WARN, counts it in `FOREIGN_AGENTS:<N>`, skips the profile checks, and still passes |
-| `upgrade` | Drops the roster row, decrements `Agents`, and never reads, tunes, restamps, parks or deletes the file |
+| `verify-team.sh` | `FOREIGN` warning, counted in `FOREIGN_AGENTS:<N>`, still passes |
+| `upgrade` | Drops the roster row; the file is never touched |
 | `purge` | Keeps the file (`kept: owned by <plugin>:<skill>`) |
 
-A legacy roster that listed `task-tracker` used to fail `verify-team.sh` on the six-heading profile and the size ceiling for a file teams never generated. Run `/brewcode:teams-setup upgrade <name>` once to remove the row.
+A legacy roster that lists `task-tracker`: run `upgrade <name>` once to remove the row.
 
-## Tracing
+</Spoiler>
 
-Every generated agent logs what it took, refused, completed or failed to `.claude/teams/<name>/trace.jsonl`, and that log is the only input `status` and `upgrade` have. The agent reaches it through a **project-local** copy of the tracer:
+<Spoiler id="tracing" title="Tracing and upgrading old teams">
+
+Every agent logs what it took, refused, completed or failed to `.claude/teams/<name>/trace.jsonl`; `status` and `upgrade` read nothing else. Agents call a project-local tracer:
 
 ```bash
 bash ".claude/teams/<name>/trace-ops.sh" add ".claude/teams/<name>" "$SID" "<agent>" "track" "took" "<task>"
 ```
 
-The path is repo-relative on purpose. A file in `.claude/agents/` is not plugin-owned, so `${CLAUDE_PLUGIN_ROOT}` is not substituted inside it and no `*_PLUGIN_ROOT` environment variable exists there — a plugin path in a generated agent resolves to nothing and the call silently no-ops. Install step C4 therefore `cp`s `trace-ops.sh` into the team directory and stops the run if the copy fails.
+The path is repo-relative because `${CLAUDE_PLUGIN_ROOT}` is not substituted in `.claude/agents/` files.
 
-<Callout type="caution" title="Upgrade an existing team">
-Teams created by an earlier version point their agents at a plugin path that has been dead since 4.0.0, so **not one trace entry was ever written**: `status` reports 0 tasks, and `upgrade` phase U2 classifies the entire roster as `Inactive` and proposes deleting it. Run `/brewcode:teams-setup upgrade <name>` once — the `cp` is idempotent and part of the flow, so the team self-heals. `verify-team.sh` also WARNs on a missing `trace-ops.sh` and prints the exact `cp` line to run by hand. Until then, treat any "inactive agent" verdict on an old team as an artefact, not evidence.
+<Callout type="caution" title="Teams created before 4.0.0 trace nothing">
+Their agents point at a dead plugin path, so `status` reports 0 tasks and `upgrade` classifies the roster as Inactive. Run `/brewcode:teams-setup upgrade <name>` once: the copy of `trace-ops.sh` is idempotent. `verify-team.sh` warns and prints the fix.
 </Callout>
 
-## Guardrails in every team agent
+</Spoiler>
 
-The agent template carries two blocks, so every DOMAIN member of the team inherits them (`intent-guard` comes from a different template — see the third row):
+<Spoiler id="guardrails" title="Guardrails in every team agent">
 
-| Guardrail | Applies to | What it says |
-|-----------|-----------|--------------|
-| **Return Contract** | Every team agent, unconditionally | A named `## Return Contract` section: verdict first, &lt;=30 lines, <code>path:line</code>, no file bodies / command output / logs / preamble. Bulk material goes to `.claude/reports/<YYYYMMDD-HHMMSS>_<name>/` and only the path returns. When [`/brewtools:agent-return-setup`](/brewtools/skills/agent-return-setup/) is installed, the same guard enforces it at the token level (~2500 est-tokens blocks for compression, ~6000 routes the detail to a report). |
-| **Scope Fit** | Only agents whose domain writes code, scripts, SQL, schemas or infra | Build for the actual scale and the problems that exist today, not imagined load or speculative abstraction — a 10-user app does not need hardening against DB lock contention. After finishing, one pass: can this be simpler — fewer files, less config, less indirection? |
-| **Etalon-first** | Same gating as Scope Fit — code/script/SQL/schema/infra domains only | Before writing a class, module or test, find the closest well-built existing one in this repo (`.claude/convention/*` checked first) and take its principles — additive to conventions, rules and docs, never a replacement |
-| **Anti-drift review** | `intent-guard` only — not built from these two blocks | Compares ASKED vs DELIVERED at review time, explicit invocation only — see [Intent guard](#intent-guard) above |
+| Guardrail | Applies to | Says |
+|-----------|-----------|------|
+| Return Contract | Every team agent | Verdict first, at most 30 lines, `path:line`, no bodies or logs; bulk goes to `.claude/reports/<YYYYMMDD-HHMMSS>_<name>/`. [`/brewtools:agent-return-setup`](/brewtools/skills/agent-return-setup/) enforces it by token budget |
+| Scope Fit | Code, script, SQL, schema, infra domains | Build for today's scale; one simplicity pass at the end |
+| Etalon-first | Same domains | Copy the closest well-built counterpart in the repo, in addition to conventions |
+| Anti-drift review | `intent-guard` only | See [intent-guard](#intent-guard) |
 
-`agent-creator` deletes the Scope Fit and Etalon-first pair together for research, docs, and review-only domain members; the Return Contract stays in all team agents, including `intent-guard`, which carries it via its own `## Output` section rather than this one. This matters most on a 12-agent roster, where a single verbose member can cost more context than the rest of the batch combined.
+`agent-creator` removes Scope Fit and Etalon-first together for research, docs and review-only members. `verify-team.sh` warns, never fails, on a legacy team missing the Return Contract; `upgrade` re-adds it.
 
-<Callout type="tip" title="Legacy team missing the Return Contract">
-`verify-team.sh` checks every roster agent (`intent-guard` exempt — it comes from the superreview template, not this one) for the contract's opening line (`Verdict first, <=30 lines`) and WARNs, never fails, when a pre-existing team predates it. Fix: `/brewcode:teams-setup upgrade <name>`, which re-adds `## Return Contract` from `references/agent-template.md`.
-</Callout>
+</Spoiler>
 
-<details>
-<summary>Internals</summary>
-
-**Framework files**
+<Spoiler id="internals" title="Framework files, versions, health">
 
 | File | Purpose |
 |------|---------|
-| `.claude/teams/<name>/team.md` | Agent roster: names, domains, missions, health status. Source of truth for team composition. |
-| `team.md` size ceiling | Checked by `verify-team.sh` on the full file: up to 13 domain rows, at most 2800 characters and 700 exact `o200k_base` tokens. Each domain row past 13 adds 80 characters and 20 tokens, so 20 domain agents allow 3360 characters and 840 tokens. `intent-guard` is not counted |
-| `.claude/teams/<name>/trace.jsonl` | JSONL log per session: tasks (took/refused/completed/failed), issues (by severity), insights (by category). Written via `trace-ops.sh add` — append-only, ~96% token savings vs full reads. |
-| `.claude/teams/<name>/trace-ops.sh` | The tracer itself, copied from the plugin at install (C4) and re-copied on every `upgrade`. The only tracing path a generated agent can resolve. Deleted by `purge`, kept by `uninstall`. |
-| `.claude/teams/<name>/trace-archive.jsonl` | Archived entries after `uninstall`. Cursor reset after archiving. `purge` deletes this file along with everything else. |
+| `team.md` | Roster, domains, missions, status. At most 2800 characters and 700 `o200k_base` tokens for 13 domain rows; each row past 13 adds 80 characters and 20 tokens (20 agents: 3360 / 840). `intent-guard` not counted |
+| `trace.jsonl` | Append-only JSONL: tasks, issues, insights |
+| `trace-ops.sh` | Tracer copied at install, re-copied on `upgrade`; deleted by `purge`, kept by `uninstall` |
+| `trace-archive.jsonl` | Written by `uninstall`; deleted by `purge` |
 
-**Version and ownership**
-
-| Field | Where | Value |
-|-------|-------|-------|
-| Header rows | `team.md`: `\| Version \|`, `\| Generated by \|`, `\| Last update \|` | Plugin version, `brewcode:teams-setup`, install/upgrade date |
-| Frontmatter | Each `.claude/agents/<member>.md` | `doc_type: llm`, `version: "X.Y.Z"`, `generated_by: "brewcode:teams-setup"`, `last_updated: "YYYY-MM-DD"` |
-| Source | `detect-mode.sh` reads `.claude-plugin/plugin.json` | Resolves before any write; if it cannot, the run exits 1 (`ERROR:cannot resolve plugin version`) instead of stamping a fake value |
-| Staleness check | `/brewcode:setup-status` | Reads the `\| Version \|` row and flags a team installed at an older plugin version than the one currently running |
-
-**Task Acceptance Protocol**
-
-Every generated agent contains a self-selection protocol. When a task arrives, the agent evaluates three questions before accepting:
-
-1. **Domain check** — "Is this my domain?" If not, refuses and names a better-suited colleague from `team.md`.
-2. **Duplicate check** — "Has this been done?" If yes, refuses and links the existing result in `trace.jsonl`.
-3. **Best candidate** — "Is a colleague better suited?" If yes, redirects without accepting.
-
-**Agent health classification**
+Version stamps: `team.md` rows `Version`, `Generated by`, `Last update`; agent frontmatter `doc_type`, `version`, `generated_by`, `last_updated`. `detect-mode.sh` reads `.claude-plugin/plugin.json` and exits 1 (`ERROR:cannot resolve plugin version`) rather than stamping a fake value. `/brewcode:setup-status` flags older stamps.
 
 | Health | Criteria | Action |
 |--------|----------|--------|
-| Green | >70% success, active in recent tasks | No action needed |
-| Yellow | 30–70% success or many refusals | Tune instructions via `upgrade` |
-| Red | &lt;30% success or inactive | Replace or remove via `upgrade` |
+| Green | >70% success, active | None |
+| Yellow | 30-70% success or many refusals | Tune via `upgrade` |
+| Red | under 30% success or inactive | Replace or remove via `upgrade` |
 
-**Immutable vs mutable traits**
+Agents accept a task only after three checks (domain, duplicate, best fit) and refuse with a colleague suggestion otherwise. Name and base role are immutable (delete and recreate); character and instructions are tunable. Other skills resolve agents in this order: team agent > project agent > plugin specialist > system agent (`Explore`, `Plan`, `general-purpose`). A refusing agent is re-delegated to the next level, max 2 retries, then system agents. `intent-guard` is outside this chain under `required`.
 
-| Trait | Mutable? | If wrong |
-|-------|----------|----------|
-| Name | No | Delete + create new |
-| Base role | No | Delete + create new |
-| Character | Yes | Update during tuning |
-| Instructions | Yes | Update during tuning |
+</Spoiler>
 
-**Integration with core skills**
-
-Team agents are preferred by any skill that spawns domain work when matching domains are found. Priority: team agent → project agent → plugin agent.
-
-</details>
+## Related
 
 <CardGrid>
-  <Card title="Agents skill" icon="robot" href="/brewcode/skills/agents/">
-    Create individual domain agents — the same scaffolding teams use under the hood.
+  <Card title="agents" icon="robot" href="/brewcode/skills/agents/">
+    Create individual domain agents with the same scaffolding.
   </Card>
   <Card title="setup-status" icon="clipboard" href="/brewcode/skills/setup-status/">
-    Read-only dashboard: is this team installed, stale or missing, and what command fixes it.
-  </Card>
-  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/teams-setup">
-    Source code, scripts, and framework file templates.
+    Dashboard: is this team installed, stale or missing.
   </Card>
   <Card title="Brewcode overview" icon="document" href="/brewcode/overview/">
-    All brewcode skills — setup, agents, conventions, review, and more.
+    All brewcode skills.
   </Card>
 </CardGrid>
 

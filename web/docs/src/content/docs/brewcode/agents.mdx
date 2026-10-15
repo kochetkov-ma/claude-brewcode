@@ -4,99 +4,65 @@ description: "All 6 brewcode agents: models, tools, triggers, and the shared Sco
 order: 12
 ---
 
-import { Card, CardGrid, Callout, UpdateNotice } from '../../../components/mdx';
+import { Card, CardGrid, Spoiler, ModPromo, UpdateNotice } from '../../../components/mdx';
 
 # Agents
 
-Agents (brewers) are specialized roles defined in markdown files with frontmatter metadata.
-Each agent has its own model, toolset, and system prompt. Brewcode ships 6 agents (5 public + 1 internal helper) — specialists only, for building skills, agents, hooks, mods, and shell scripts.
+Agents (brewers) are specialized roles defined in markdown files with their own model, toolset and system prompt. Brewcode ships 6 (5 public + 1 internal helper), specialists only: skills, agents, hooks, mods and shell scripts.
 
-Generic roles (developer, tester, reviewer, architect) are no longer shipped: every project generates its own agents into `.claude/agents/` via [/brewcode:teams-setup](/brewcode/skills/teams-setup/) or [/brewcode:agents](/brewcode/skills/agents/), tuned to that project's stack. Skills that need a reviewer or an implementer pick the project's agent from `.claude/agents/`, falling back to `general-purpose`.
+Generic roles (developer, tester, reviewer, architect) are not shipped. Every project generates its own into `.claude/agents/` with [/brewcode:teams-setup](/brewcode/skills/teams-setup/) or [/brewcode:agents](/brewcode/skills/agents/); skills that need a reviewer or implementer pick the project's agent, falling back to `general-purpose`. Brewcode skills spawn the relevant agent automatically via the `Agent` tool.
 
 ## Summary table
 
-Purpose column = the agent's own `description` frontmatter, verbatim. That string is what Claude matches against when auto-selecting an agent.
+| Agent | Model | Write tools | Description (verbatim from frontmatter) |
+|-------|-------|-------------|------------------------------------------|
+| [skill-creator](/brewcode/agents/skill-creator/) | inherit | Read, Write, Edit, Bash | Creates and improves Claude Code skills. Triggers: create skill, improve skill, fix activation. |
+| [agent-creator](/brewcode/agents/agent-creator/) | inherit | Read, Write, Edit, Bash | Creates and improves Claude Code agents. Triggers: create agent, improve agent, scaffold agent. |
+| [hook-creator](/brewcode/agents/hook-creator/) | inherit | Read, Write, Edit, Bash | Creates and debugs Claude Code hooks. Triggers: create hook, PreToolUse hook, debug hook. |
+| [bash-expert](/brewcode/agents/bash-expert/) | inherit | Read, Write, Edit, Bash | Creates sh/bash scripts for Mac/Linux. Triggers: create script, bash script, shell script. |
+| [mod-creator](/brewcode/agents/mod-creator/) | inherit | Read, Write, Edit, Bash, Skill | Creates, tests and ships Claude Code mods (hooks-module plugins). Triggers: create mod, hooks module, mod API. |
+| [bc-rules-organizer](/brewcode/agents/bc-rules-organizer/) | haiku | Read, Write, Edit, Bash | Internal. Spawned only by /brewcode:rules and /brewcode:convention-setup. No direct/auto use. |
 
-| # | Agent | Model | Write tools | Description (verbatim) |
-|---|-------|-------|-------------|------------------------|
-| 1 | skill-creator | inherit | Read, Write, Edit, Bash | Creates and improves Claude Code skills. Triggers: create skill, improve skill, fix activation. |
-| 2 | agent-creator | inherit | Read, Write, Edit, Bash | Creates and improves Claude Code agents. Triggers: create agent, improve agent, scaffold agent. |
-| 3 | hook-creator | inherit | Read, Write, Edit, Bash | Creates and debugs Claude Code hooks. Triggers: create hook, PreToolUse hook, debug hook. |
-| 4 | bash-expert | inherit | Read, Write, Edit, Bash | Creates sh/bash scripts for Mac/Linux. Triggers: create script, bash script, shell script. |
-| 5 | mod-creator | inherit | Read, Write, Edit, Bash, Skill | Creates, tests and ships Claude Code mods (hooks-module plugins). Triggers: create mod, hooks module, mod API. |
-| 6 | bc-rules-organizer | haiku | Read, Write, Edit, Bash | Internal. Spawned only by /brewcode:rules and /brewcode:convention-setup. No direct/auto use. |
+`inherit` runs on the session's model, so you control the tier. Only the internal `bc-rules-organizer` is pinned to haiku (cheap file reorganization). The description string is what Claude matches against when auto-selecting an agent.
 
-`model: inherit` means the agent runs on whatever model the session runs on — no per-agent pin. Only the internal `bc-rules-organizer` (haiku) is pinned.
+<ModPromo variant="strip" />
 
-<CardGrid>
-  <Card title="skill-creator" icon="puzzle" href="/brewcode/agents/skill-creator/">
-    Skill creation and improvement
-  </Card>
-  <Card title="agent-creator" icon="people" href="/brewcode/agents/agent-creator/">
-    Agent creation and improvement
-  </Card>
-  <Card title="hook-creator" icon="link" href="/brewcode/agents/hook-creator/">
-    Hook creation and debugging
-  </Card>
-  <Card title="bash-expert" icon="terminal" href="/brewcode/agents/bash-expert/">
-    Bash/sh script creation
-  </Card>
-  <Card title="mod-creator" icon="package" href="/brewcode/agents/mod-creator/">
-    Mod (hooks-module plugin) creation, testing and shipping
-  </Card>
-  <Card title="bc-rules-organizer" icon="link" href="/brewcode/agents/bc-rules-organizer/">
-    Internal — rules file organization
-  </Card>
-</CardGrid>
+## Technical details
 
-<Callout type="note" title="Internal agent">
-`bc-rules-organizer` is internal — spawned only by [`/brewcode:rules`](/brewcode/skills/rules/) and [`/brewcode:convention-setup`](/brewcode/skills/convention-setup/), never user-invokable directly.
-</Callout>
-
-<Callout type="tip" title="Creator contract suite">
-`agents/tests/suite-creator-contract.mjs` is a 99-check regression suite that pins what `hook-creator`, `agent-creator` and `skill-creator` teach about the Claude Code hook and subagent API, so the next upstream change fails a test instead of silently teaching a stale one.
-</Callout>
-
-## Scope guard — shared by all 5 public agents
+<Spoiler id="scope-guard" title="Scope guard: shared by all 5 public agents">
 
 Every public brewcode agent sizes the task before starting. One bounded unit = one deliverable, roughly 5 files, roughly 10 steps. Anything larger is refused up front.
 
 | Situation | What the agent does |
 |-----------|---------------------|
 | Brief fits one bounded unit | Starts immediately |
-| Brief exceeds ~5 files / ~10 steps, or bundles several independent deliverables | Stops before starting, returns a split proposal: 2-N bounded subtasks, each with scope and a suggested owner |
+| Brief exceeds ~5 files / ~10 steps, or bundles independent deliverables | Stops before starting, returns a split proposal: 2-N bounded subtasks, each with scope and a suggested owner |
 | Scope grows mid-flight | Stops at the next clean boundary, reports done / remaining / how to split |
-| Brief is missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance | States the assumption explicitly in the report, or asks once — never invents scope |
+| Brief lacks GOAL, SCOPE, CONTEXT, CONSUMER or acceptance | States the assumption in the report, or asks once; never invents scope |
 
-Agents deliver for the CONSUMER, not the literal wording: the result must be usable as-is by whoever picks it up next, with the whole briefed scope covered.
+Agents deliver for the CONSUMER, not the literal wording: the result must be usable as-is by whoever picks it up next. A split proposal is the guard working, not a failure: re-send one subtask, or spawn the subtasks as parallel agents in a single message.
 
-<Callout type="tip" title="Got a split proposal instead of a result?">
-  The brief was too big — this is the guard working, not a failure. Pick one subtask from the proposal and re-send it, or spawn the subtasks as parallel agents in a single message.
-</Callout>
+</Spoiler>
 
-## Models
+<Spoiler id="creator-contract-suite" title="Creator contract suite">
 
-| Model | Agents | Meaning |
-|-------|--------|---------|
-| **inherit** | [skill-creator](/brewcode/agents/skill-creator/), [agent-creator](/brewcode/agents/agent-creator/), [hook-creator](/brewcode/agents/hook-creator/), [bash-expert](/brewcode/agents/bash-expert/), [mod-creator](/brewcode/agents/mod-creator/) | Runs on the session's model — you control the tier |
-| **haiku** | [bc-rules-organizer](/brewcode/agents/bc-rules-organizer/) | Pinned: cheap file reorganization |
+`agents/tests/suite-creator-contract.mjs` is a 99-check regression suite that pins what `hook-creator`, `agent-creator` and `skill-creator` teach about the Claude Code hook and subagent API, so an upstream change fails a test instead of silently teaching a stale one.
 
-<Callout type="tip" title="Automatic selection">
-  Agents are launched automatically by brewcode skills via the `Agent` tool.
-  Each skill spawns the relevant agent for its domain — no manual agent selection required.
-</Callout>
+</Spoiler>
 
-<Callout type="note" title="Moved Agents">
-  Agents [text-optimizer](/brewtools/agents/text-optimizer/), [ssh-admin](/brewtools/agents/ssh-admin/), and [deploy-admin](/brewtools/agents/deploy-admin/) have been moved to
-  <a href="/brewtools/agents/">Brewtools</a>.
-</Callout>
+`bc-rules-organizer` is internal: spawned only by [`/brewcode:rules`](/brewcode/skills/rules/) and [`/brewcode:convention-setup`](/brewcode/skills/convention-setup/). Agents [text-optimizer](/brewtools/agents/text-optimizer/), [ssh-admin](/brewtools/agents/ssh-admin/) and [deploy-admin](/brewtools/agents/deploy-admin/) live in [Brewtools](/brewtools/agents/).
+
+## Related
 
 <CardGrid>
-  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
-    Download, changelog, and installation instructions.
+  <Card title="Brewcode overview" icon="document" href="/brewcode/overview/">
+    Plugin skills, agents and hooks.
   </Card>
-  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/agents">
-    Source code, README, and configuration files.
+  <Card title="Brewcode mods" icon="puzzle" href="/mods/overview/">
+    Optional add-ons: plan-mode effort and prompt placeholders.
+  </Card>
+  <Card title="View on GitHub" icon="github" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/agents">
+    Agent source files.
   </Card>
 </CardGrid>
 

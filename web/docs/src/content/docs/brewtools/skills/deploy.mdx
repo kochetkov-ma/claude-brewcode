@@ -3,17 +3,13 @@ title: "Deploy"
 description: "GitHub Actions deployment — workflows, releases, GHCR, CI/CD with safety gates and persistent config."
 order: 3117
 ---
-import { Card, CardGrid, Callout, Steps, UpdateNotice } from '../../../../components/mdx';
+import { Card, CardGrid, Badge, Callout, Steps, Spoiler, UpdateNotice } from '../../../../components/mdx';
 
 # deploy — GitHub Actions CI/CD
 
-<Callout type="caution">
-**Every destructive operation requires explicit confirmation.** The skill classifies each `gh` command before executing it — DELETE and PRIVILEGE class operations always prompt. Compound commands are split into individually classified steps.
-</Callout>
+<Badge variant="primary" text="opus" /> <Badge variant="accent" text="human-invoked" />
 
-<Callout type="tip">
-**Run without args** — `/brewtools:deploy` — and the skill auto-detects mode from context: no config yet → setup; config exists → monitor. For complex multi-step DevOps work the [deploy-admin](/brewtools/agents/deploy-admin/) agent is spawned automatically.
-</Callout>
+Creates workflows, cuts releases, triggers deployments and watches runs, with a confirmation gate before every write or push. Run it with no arguments: no config yet starts setup, an existing config opens monitor.
 
 ## Quick reference
 
@@ -21,211 +17,123 @@ import { Card, CardGrid, Callout, Steps, UpdateNotice } from '../../../../compon
 |-------|-------|
 | Command | `/brewtools:deploy` |
 | Arguments | `[prompt] [setup\|create\|release\|deploy\|monitor\|update-agent]` |
-| Modes | `setup` · `create` · `release` · `deploy` · `monitor` · `update-agent` |
-| Agent | [deploy-admin](/brewtools/agents/deploy-admin/) — auto-delegated for complex ops |
-| Config | `CLAUDE.local.md` (gitignored) |
 | Model | opus |
-| Tools | Read, Write, Edit, Bash, Agent, AskUserQuestion, Glob, Grep |
+| Config | `CLAUDE.local.md` (gitignored) |
+| Agent | [deploy-admin](/brewtools/agents/deploy-admin/) |
 
-## When to use
+## Modes
 
-- **First-time setup** — `setup` detects repo, enumerates workflows, writes `CLAUDE.local.md`, generates the `deploy-admin` agent
-- **New workflow** — `create` generates YAML from 4 battle-tested templates (Build+GHCR, Deploy VPS, Release, Security Scan)
-- **Release a version** — discover tags and preparation, approve the transaction, then stage → commit → HEAD push → tag → tag-ref push → verify
-- **Trigger a deployment** — `deploy` selects a `workflow_dispatch` workflow, confirms, triggers, monitors run
-- **Check CI status** — `monitor` shows recent runs, workflow states, latest releases, failed run logs
-- **Refresh agent** — `update-agent` re-discovers workflows and regenerates the `deploy-admin` agent with current data
+| Mode | Does |
+|------|------|
+| `setup` | Detect repo, list workflows and secrets, write config, generate `deploy-admin` |
+| `create` | Generate workflow YAML from a template (Build+GHCR, Deploy VPS, Release, Security Scan) |
+| `release` | Probe tooling, plan, confirm, bump, commit + tag + push, watch CI, verify artifact |
+| `deploy` | Pick a `workflow_dispatch` workflow, confirm, trigger, watch the run |
+| `monitor` | Recent runs, workflow states, releases, failed-run logs |
+| `update-agent` | Re-discover workflows, regenerate `deploy-admin` |
 
-## Examples
-
-```bash
-# First-time GitHub integration setup
-/brewtools:deploy setup
-```
+## Example
 
 ```bash
-# Release patch version — bump, changelog, tag, push, verify CI
 /brewtools:deploy release patch
-
-# Release a specific version
-/brewtools:deploy release v3.5.0
 ```
 
-```bash
-# Create a Docker build workflow for GHCR
-/brewtools:deploy create new build workflow for ghcr.io
+The skill probes release tooling, shows the plan, asks for approval, then runs the approved commit, tag and push chain and watches every CI run of the pushed commit.
 
-# Trigger a deployment and watch progress
-/brewtools:deploy trigger deploy-docs workflow
-```
-
-## Flow
+## How it works
 
 <Steps>
-  <li>
-    <div>
-      <strong>Mode detection</strong>
-      <p>Explicit whole-word mode tokens win; otherwise distinct keyword hits select the mode. Conflicting explicit modes or tied mutating intents require clarification before actions. Empty input uses setup without GitHub Config and monitor when that section exists.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Environment check</strong>
-      <p>Verifies <code>gh</code> CLI installation, auth status, token scopes, and repo detection. Reads existing <code>CLAUDE.local.md</code> for GitHub config and workflow inventory.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Setup (first run)</strong>
-      <p>Detects owner/repo, enumerates workflows and secrets, checks SSH server targets, writes GitHub config to <code>CLAUDE.local.md</code>, adds <code>CLAUDE.local.md</code> to <code>.gitignore</code>, generates <code>deploy-admin</code> agent.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Operation</strong>
-      <p>Create proposes workflow configuration. Release discovers project tooling and tags, prepares bump/changelog proposals, and obtains approval before writes. Run the approved chain in project order: stage, commit, HEAD push, tag, and exact tag-ref push. Deploy approves dispatch, resolves the resulting run, and checks deployment health when applicable.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Safety gate</strong>
-      <p>Every <code>gh</code> command is classified before execution. READ and CREATE run freely. MODIFY, SERVICE, DELETE, and PRIVILEGE always ask for confirmation. Confirmation gates on release and deploy show a preview before any push.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Monitor</strong>
-      <p>Dashboard of recent runs, workflow states, latest releases, and failed run logs — auto-triggered after release/deploy and available standalone via <code>monitor</code> mode.</p>
-    </div>
-  </li>
+  <li><div><strong>Detect mode</strong><p>An explicit mode token wins; otherwise keyword hits decide. Conflicts require clarification.</p></div></li>
+  <li><div><strong>Check environment</strong><p>Verifies `gh` auth, scopes and repo, then loads the GitHub config from `CLAUDE.local.md`.</p></div></li>
+  <li><div><strong>Set up (first run)</strong><p>Writes the config, gitignores `CLAUDE.local.md`, generates `deploy-admin`.</p></div></li>
+  <li><div><strong>Classify and confirm</strong><p>READ and CREATE run freely. MODIFY, SERVICE, DELETE and PRIVILEGE always ask first.</p></div></li>
+  <li><div><strong>Operate and monitor</strong><p>Create, release or deploy runs after approval, then monitor reports run states and failed logs.</p></div></li>
 </Steps>
 
-## Release mode knows nothing about your repo until it looks
+## Good to know
 
-<Callout type="note">
-`release` runs a **Step 0 probe** before anything else. It lists `.claude/scripts/*.sh`, `scripts/`, the `scripts` block of `package.json` and `Makefile`, and records three values — each defaulting to `none`:
-
-| Value | What it holds |
-|-------|---------------|
-| `BUMP_SCRIPT` | a bump/version script, or `none` |
-| `POST_SCRIPT` | a post-release/publish script, or `none` |
-| `CHANGELOG` | `CHANGELOG.md`, `RELEASE-NOTES.md`, or `none` |
-
-**`none` is not a failure.** It means that step is skipped or done by hand, and the report says so.
+<Callout type="caution">
+Every destructive operation requires explicit confirmation. Compound commands are split into individually classified steps.
 </Callout>
-
-Nothing in the release path is hardcoded to a particular repo layout:
-
-| Step | Behavior |
-|------|----------|
-| Bump | Propose the discovered helper or exact version-file changes before writes; unresolved version carriers require clarification |
-| Changelog | Propose changes in the existing heading style before writes; without a changelog file, use the tag/release body |
-| Post-release | Runs only if `POST_SCRIPT` was found; otherwise skipped and reported as "no post-release script" |
-| Verify | Checks whichever artifact the project actually publishes — container image, npm/PyPI package, a live `/version` endpoint, a plugin cache entry. Nothing published → "no external artifact to verify", not a failure |
-
-The multi-package flow with its own bump script, plugin-cache verification and doc links lives in `references/release-best-practices.md` as a clearly labelled worked EXAMPLE — a pattern to adapt, not commands to run.
 
 <Callout type="warning">
-**Local recovery does not undo publication.** Before any push, approved local recovery can address a failed commit/tag step. Once HEAD is pushed, the commit is public; once the tag is pushed, consumers may have fetched it. Report partial publication and use an approved next patch version rather than deleting or moving public history.
+Local recovery does not undo publication. After the HEAD push the commit is public; after the tag push consumers may have fetched it. Use an approved next patch version rather than moving public history.
 </Callout>
 
-## Delegation
+## Technical details
 
-<Callout type="warning">
-Every Agent spawn gets one bounded deliverable, roughly five files and ten steps, for one repo/environment. Independent targets are assigned separate owners in parallel.
-</Callout>
+<Spoiler id="release-probe" title="Release mode: nothing assumed about your repo">
 
-Every spawn prompt carries six fields. A bare one-line task is never enough:
+Step 0 lists `.claude/scripts/*.sh`, `scripts/`, the `package.json` scripts and `Makefile`, then records three values, each defaulting to `none`:
 
-| Field | Content |
-|-------|---------|
-| GOAL | the overall task and why it exists — the point beyond the file edit |
-| ROLE | what this agent owns; what it must NOT touch |
-| SCOPE | exact paths and commands in bounds + explicit out-of-bounds |
-| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what this agent needs |
-| CONSUMER | who or what uses the result next, and the shape it must fit |
-| DONE | acceptance criteria + the exact report shape expected back |
+| Value | Holds |
+|-------|-------|
+| `BUMP_SCRIPT` | a bump/version script |
+| `POST_SCRIPT` | a post-release/publish script |
+| `CHANGELOG` | `CHANGELOG.md` or `RELEASE-NOTES.md` |
 
-**Safety decisions stay with the main caller.** Ordinary subagents cannot use AskUserQuestion;
-conversation forks retain parent tools, but this distinction does not change the project's
-approval contract. Deploy Admin gathers evidence and returns exact envelopes with COMMAND,
-HOST, EFFECT, ROLLBACK, EVIDENCE, and PRECONDITION. The main caller presents them and passes
-APPROVED ids for exact commands only; execution rechecks preconditions.
+`none` is not a failure: the step is skipped or done by hand, and the report says so. Bump and changelog changes are proposed before any write. Verify checks whatever the project publishes (image, package, `/version` endpoint); nothing published reports "no external artifact to verify". `references/release-best-practices.md` holds a worked example to adapt, not commands to run.
 
-<details>
-<summary>Workflows, secrets, and internals</summary>
+</Spoiler>
 
-### Safety classification
+<Spoiler id="safety-classification" title="Safety classification and templates">
 
-| Class | Operations | Confirmation |
-|-------|-----------|--------------|
-| READ | `gh run list`, `gh workflow list`, `gh release view`, `gh secret list` | None |
-| CREATE | Create workflow YAML, `gh release create --draft` | None (non-destructive) |
-| MODIFY | Edit workflow, `gh secret set`, `git commit/tag` | Required |
-| SERVICE | `gh workflow run`, `gh run rerun`, `git push` | Required |
-| DELETE | `gh release delete`, `gh run cancel`, remove workflow file | Always required |
-| PRIVILEGE | `gh secret delete`, branch protection, `gh workflow disable` | Always required |
+Risk classes (READ, CREATE, MODIFY, SERVICE, DELETE, PRIVILEGE) and their gates: [deploy-admin safety levels](/brewtools/agents/deploy-admin/#safety-levels).
 
-### Workflow templates
+| Template | Trigger |
+|----------|---------|
+| Build + Push GHCR | tag / branch |
+| Deploy to VPS | `workflow_run` / `workflow_dispatch`, release-tag images only, health check, rollback |
+| Release | tag `v*.*.*` |
+| Security Scan | push / PR, SARIF upload |
 
-| Template | Trigger | Description |
-|----------|---------|-------------|
-| Build + Push GHCR | tag / branch | Multi-platform Docker build, push to `ghcr.io` |
-| Deploy to VPS | `workflow_run` / `workflow_dispatch` | SCP + SSH deploy of release-tag images; pulls via a temporary private Docker config, deleted on exit; health check, rollback |
-| Release | tag `v*.*.*` | Extract changelog, create GitHub Release with assets |
-| Security Scan | push / PR | CodeQL / Gitleaks / Semgrep with SARIF upload |
+All templates pin `runs-on: ubuntu-24.04`. The Deploy template rejects branch-built images before any server copy and logs in to GHCR with the job token over stdin.
 
-All templates pin `runs-on: ubuntu-24.04` (never `ubuntu-latest`). The Deploy template accepts only images built from a release tag (`v*.*.*`); a branch-built preview image is rejected before any server copy. The server pull logs in to GHCR with the job token over stdin, so stale server credentials cannot cause `denied` and the VPS user's `~/.docker/config.json` stays untouched.
+</Spoiler>
 
-### Configuration storage
+<Spoiler id="config-and-limits" title="Config, SSH integration and limits">
 
-GitHub config and workflow inventory are stored in `CLAUDE.local.md` at the project root. This file is gitignored automatically during setup. Secret **names** are stored for reference; secret **values** are never read or written.
+- Config and workflow inventory live in `CLAUDE.local.md`. Secret names are stored, values are never read or written.
+- VPS targets come from the SSH inventory written by the [ssh](/brewtools/skills/ssh/) skill: run `/brewtools:ssh setup` first.
+- Limits: 2 retries per operation, 15 `gh` calls per invocation, 30 s per `gh` command, 15 min for `gh run watch`.
+- CI runs are matched by the pushed commit's `headSha`; unmatched or timed-out runs are reported, never treated as success. Transaction failures keep their nonzero exit and stop later steps; RELEASED is emitted only after every approved step succeeds.
+- Run `update-agent` after workflow or config changes.
 
-The `deploy-admin` agent is generated with workflow inventory, GitHub config, and SSH server targets baked into its prompt. Run `update-agent` mode after workflow or config changes to refresh it.
+</Spoiler>
 
-### SSH integration
+<Spoiler id="delegation" title="Delegation">
 
-The skill reads SSH server inventory from `CLAUDE.local.md` (written by the [ssh](/brewtools/skills/ssh/) skill) for VPS deployment targets and post-deploy health checks. Run `/brewtools:ssh setup` first if you need VPS deployments.
+For a bounded unit the skill spawns [deploy-admin](/brewtools/agents/deploy-admin/), one per repo or environment, with the six-field brief described in [Delegation](/brewcode/skills/#delegation). Confirmation gates stay in the main conversation; the agent returns exact approval envelopes and runs only the APPROVED ids.
 
-### Robustness rules
+</Spoiler>
 
-Release transaction failures retain their nonzero exit status and stop later steps. Emit
-RELEASED only after every approved step succeeds. Secret setting uses private file/stdin input
-without printing values or passing them as command arguments.
+<Spoiler id="troubleshooting" title="Troubleshooting">
 
-For deployment provenance, correlate the successful source build's exact SHA, run id, and attempt
-with the downstream trigger, actual checkout, and published image. Use bounded version tags or
-SHA/run/attempt tags and verify labels/digests; mutable aliases do not establish provenance.
-Report missing linkage or live health checks as unverified rather than treating an unrelated
-green run as deployment success.
+| Issue | Fix |
+|-------|-----|
+| `gh` not installed | Install from https://cli.github.com/ |
+| Not authenticated | `! gh auth login` |
+| Insufficient scopes | `! gh auth login -s repo,workflow,write:packages` |
+| Workflow not triggering | Check the trigger and branch/tag pattern in the YAML |
+| Release CI failed | `/brewtools:deploy monitor` |
+| VPS deploy failed | `/brewtools:ssh connect to server-name` |
 
-Every Bash call preserves its exit status when reporting OK or FAILED; failure reporting must not turn a failed call into success. Max 2 retries per operation, max 15 `gh` calls per invocation. Every bounded call runs through a shared watchdog (real `timeout`/`gtimeout` when installed, a bash fallback otherwise — GNU `timeout` is Homebrew-only on macOS): 30 s for `gh` commands, 15 min for `gh run watch`. The generated `deploy-admin` agent watches every CI run for the pushed SHA (HEAD and tag pushes each start workflows) to a terminal state. CI runs are correlated by the pushed commit's `headSha`, not by reading the newest rows of `gh run list` — a bare "latest run" can belong to a concurrent push. A run that can't be matched or times out is reported as such, never silently treated as success.
+</Spoiler>
 
-### Troubleshooting
-
-| Issue | Solution |
-|-------|---------|
-| `gh` CLI not installed | Install from https://cli.github.com/ |
-| Not authenticated | Run `! gh auth login` in Claude Code terminal |
-| Insufficient token scopes | Re-authenticate: `! gh auth login -s repo,workflow,write:packages` |
-| Workflow not triggering | Check trigger config in workflow YAML, verify branch/tag pattern |
-| Release CI failed | `/brewtools:deploy monitor` to view failed run logs |
-| VPS deploy failed | Check SSH connectivity with `/brewtools:ssh connect to server-name` |
-
-</details>
+## Related
 
 <CardGrid>
   <Card title="deploy-admin agent" icon="robot" href="/brewtools/agents/deploy-admin/">
-    The auto-generated agent handles complex multi-step DevOps operations with full workflow inventory context.
+    Handles multi-step release and deploy units.
   </Card>
   <Card title="SSH skill" icon="terminal" href="/brewtools/skills/ssh/">
-    Configure SSH server inventory used by deploy for VPS targets and health checks.
+    Server inventory used for VPS targets.
   </Card>
-  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/deploy">
-    Source code, scripts, and workflow templates.
+  <Card title="GitHub source" icon="github" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/deploy">
+    Scripts and workflow templates.
   </Card>
   <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">
-    All brewtools skills — text, secrets, SSH, deploy, and more.
+    All brewtools skills.
   </Card>
 </CardGrid>
 

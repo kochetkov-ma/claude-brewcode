@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 6.8.0 |
+| Version | 6.9.0 |
 | Skills | 5 |
 | Agents | 0 |
 | Hooks | 0 |
@@ -38,125 +38,57 @@ After all commands succeed, run `/reload-plugins`. If `/reload-plugins` is unava
 ```
 </details>
 
-Update anytime with `/brewtools:plugin-update`.
+Update anytime with `/brewtools:plugin-update`, or by hand:
+
+```bash
+claude plugin marketplace update claude-brewcode
+claude plugin update brewdoc@claude-brewcode
+```
 
 ## Overview
 
-Brewdoc keeps documentation in sync with the codebase, optimizes content for LLM consumption, and exports documents to ready-made formats. Each skill is self-contained and independent of the others.
+Brewdoc keeps documentation in sync with the codebase, generates installation docs, and exports documents to ready-made formats. Each skill is self-contained.
 
-## Installation
-
-```bash
-# Marketplace (recommended)
-claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
-claude plugin install brewdoc@claude-brewcode
-
-# Already installed? Update
-claude plugin marketplace update claude-brewcode
-claude plugin update brewdoc@claude-brewcode
-
-# Dev mode (no install)
-claude --plugin-dir ./brewdoc
-```
+Dev mode (no install): `claude --plugin-dir ./brewdoc`.
 
 ## Quick Start
 
 ```bash
 /brewdoc:docsync-setup                # No verb -> status if installed, install if not
-/brewdoc:docsync-setup install        # Install project-local doc-staleness tracking hooks
-/brewdoc:docsync-setup status         # What is tracked and what is stale
 /brewdoc:docsync-setup sync           # Sync stale docs (with confirmation)
 /brewdoc:my-claude                    # Document your local Claude setup
-/brewdoc:my-claude ext                # Document Claude Code architecture
 /brewdoc:my-claude r "how do hooks work"  # Research any Claude topic
 /brewdoc:memory-sync-setup install    # Emit a project-tailored /memory-sync skill into this repo
-/brewdoc:memory-sync-setup status     # Is it installed, and how stale are its surface tables
 /brewdoc:md-to-pdf README.md          # Convert markdown to PDF
 /brewdoc:publish "Hello world"        # Publish to brewpage.app -- returns URL
 ```
 
 ## Skills
 
-> **Naming rule.** A `-setup` suffix marks a skill that *installs a mechanism* -- after running it you use the installed hooks or the generated skill, not the setup skill itself. Recurring tools you invoke every time (`my-claude`, `md-to-pdf`, `publish`) keep bare names.
-
-> **Canonical modes.** Setup skills answer the same verbs, in this order: `status | install | upgrade | enable | disable | uninstall | purge`. No argument = `status` if installed, `install` if not. Extras (`sync`, `reread`, `frontmatter`, a fine-tune prompt) come *after* the canonical verb. The v4 aliases `init`, `on`, `off`, `setup`, `remove` and `reset` are gone -- v5.0.0 is a deliberate breaking change with no back-compat. Both brewdoc setup skills implement `enable`/`disable` -- `docsync-setup` flips the `enabled` key in `.claude/docsync/config.json`, `memory-sync-setup` renames `SKILL.md` <-> `SKILL.md.disabled` -- and both implement `purge`; the Arguments column below is authoritative.
-
-> 24 of the 27 skills across the suite, including four of the five brewdoc skills, are `user-invocable: true` **and** `disable-model-invocation: true`: Claude never sees their descriptions or fires one on its own, which saves tokens on every request. **Three skills are exceptions** (`disable-model-invocation: false`): `/brewdoc:publish` here, plus `/brewtools:text-optimize` and `/brewtools:text-human`. Claude can run `/brewdoc:publish` when you ask to share something mid-task, and typing it still works. Its result, a shareable URL, is wanted at the end of other tasks. **Skills a generator emits are the opposite by design**: `/memory-sync`, like `/superreview`, `/task-board` and `/task-spec`, ships model-invocable. Run [`/brewcode:setup-status`](../brewcode/skills/setup-status/README.md) to see what is installed, stale, disabled or missing across every plugin.
+A `-setup` suffix marks a skill that *installs a mechanism*; both setup skills share `status | install | upgrade | enable | disable | uninstall | purge`. No argument = `status` if installed, `install` if not. Every skill except `/brewdoc:publish` is user-invoked only; `publish` is model-invocable. [`/brewcode:setup-status`](../brewcode/skills/setup-status/README.md) shows what is installed, stale or missing across plugins.
 
 | Skill | Purpose | Model | Arguments |
 |-------|---------|-------|-----------|
-| [`/brewdoc:docsync-setup`](skills/docsync-setup/README.md) | Installs project-local doc-staleness tracking (track on `Write\|Edit`, a Stop gate that blocks on edited stale docs) and reports/forces doc sync | sonnet | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [sync [--all]\|reread\|frontmatter] \| free-text` |
-| [`/brewdoc:my-claude`](skills/my-claude/README.md) | Document your Claude Code installation -- setup, architecture, web research | opus | `[ext [context]] \| [r <query>]` -- no args = internal installation docs |
-| [`/brewdoc:memory-sync-setup`](skills/memory-sync-setup/README.md) | Generator -- analyzes a target project and emits the 5 files of a project-tailored `.claude/skills/memory-sync/` (batches, fact catalogue, non-growth sync, independent verify) | opus | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [fine-tune-prompt]` |
-| [`/brewdoc:md-to-pdf`](skills/md-to-pdf/README.md) | Convert Markdown to PDF via reportlab or weasyprint engines | sonnet | `<file.md> [--engine name] ["prompt"] \| styles \| test` |
-| [`/brewdoc:publish`](skills/publish/README.md) | Publish text/markdown/file/site to brewpage.app, returns canonical URL | haiku | `<text\|file_path\|directory_path\|zip_path> [--ttl N] [--entry filename] [--delivery-mode path\|subdomain]` |
+| [`/brewdoc:docsync-setup`](skills/docsync-setup/README.md) | Project-local doc-staleness tracking hooks; report/force doc sync | sonnet | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [sync [--all]\|reread\|frontmatter] \| free-text` |
+| [`/brewdoc:my-claude`](skills/my-claude/README.md) | Document your Claude Code installation: setup, architecture, web research | opus | `[ext [context]] \| [r <query>]` -- no args = internal installation docs |
+| [`/brewdoc:memory-sync-setup`](skills/memory-sync-setup/README.md) | Generator: emits a project-tailored `.claude/skills/memory-sync/` | opus | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [fine-tune-prompt]` |
+| [`/brewdoc:md-to-pdf`](skills/md-to-pdf/README.md) | Markdown to PDF via reportlab or weasyprint | sonnet | `<file.md> [--engine name] ["prompt"] \| styles \| test` |
+| [`/brewdoc:publish`](skills/publish/README.md) | Publish text/file/site to brewpage.app, returns the URL | haiku | `<text\|file_path\|directory_path\|zip_path> [--ttl N] [--entry filename] [--delivery-mode path\|subdomain]` |
 
-> Need a portable, plugin-free version? See the standalone [`brewpage-publish`](../skills/brewpage-publish/) (Claude Code) and [`openclaw/brewpage-publish`](../openclaw/brewpage-publish/) (OpenClaw / AgentSkills) skills.
+Needs: `publish` -- `curl`, `jq` (sites also `node`, `unzip`; directories also `zip`); `md-to-pdf` -- `reportlab` or `weasyprint`; `my-claude` -- nothing extra, writes only to `.claude/brewdoc/my-claude/`.
 
-### Requirements per skill
-
-`docsync-setup` validates installation inputs before writing hooks, configuration and settings.
-It retains an existing settings backup and session state. If a write fails, it restores files
-that still match this run's writes; concurrent edits remain intact and any recovery gap is reported.
-
-| Skill | Needs |
-|-------|-------|
-| `publish` | `curl` and `jq` on `PATH`; each run uses a scratch run directory under `$TMPDIR`; site directories and ZIPs also need `node` and `unzip`; site directories additionally need `zip` |
-| `md-to-pdf` | a Python engine -- `reportlab` or `weasyprint` |
-| `my-claude` | nothing extra; reads the active Claude config dir (`CLAUDE_CONFIG_DIR`, else `~/.claude`) and writes only to `.claude/brewdoc/my-claude/` in the current project |
-
-### Fixed in 6.0.0
-
-- **`publish` site-from-directory now actually publishes.** The archive step wrote its output to a `mktemp` path, which starts as a 0-byte file; Info-ZIP refused to write into it (exit 3), the exit code went unchecked, and the 0-byte archive was uploaded and reported as success. `pack` now removes any pre-existing output file first, checks `zip`'s exit status, and verifies the result with `unzip -t` before it ever reaches `curl`.
-- **The site archive no longer sweeps in secrets.** `.env` and `.git/config` were bundled into every directory upload; the bundler is now allowlisted to known web-asset extensions and drops every dot-entry, `node_modules/` and symlinks.
-- **Concurrent `md-to-pdf` conversions no longer collide.** Two conversions in the same session shared a temp filename derived from the source name; the temp file is now `mktemp`-generated and unique per invocation.
-- **`--quiet` removed from `md_to_pdf.py`.** It was documented but had never done anything; argparse now rejects it instead of silently ignoring it.
-- `docsync-setup`'s three hooks resolve the project root through the canonical `CLAUDE_PROJECT_DIR` -> git-toplevel -> upward-walk recipe, and a gate polarity bug (an absent `enabled` key must count as `true`, not `false`) is fixed.
-- `memory-sync-setup` derives tracked/untracked files from a real `comm -23` set difference instead of an approximation.
-- Regression suites added: `publish` 108 checks (40 archive + 20 inspect + 48 skill), `md-to-pdf` 14, `docsync-setup` 26 -- all green.
-
-### Fixed in 5.0.0
-
-- **`publish` published password-protected pages without the password.** The upload blocks referenced a `PASS_H` array built from a `$PASSWORD` variable that nothing ever assigned, and each Bash call is a fresh shell -- so the header vanished while the skill still reported a password. The blocks now carry a `{password_header}` placeholder that must be substituted before running, and the skill states the consequence of skipping it. Pages published protected by an earlier version are public; delete and republish them.
-- **`my-claude` spawned a `reviewer` agent that does not exist** in any plugin, project or built-in set, so its validation step -- the one that guaranteed no invented file names -- silently never ran. It now uses `Explore` for read-only path checks and `general-purpose` where `WebFetch`/`WebSearch` are needed. Its plugin-data output directory, dead since v4.0.0, is gone; `.claude/brewdoc/my-claude/` is the only target.
+Portable, plugin-free publish: [`brewpage-publish`](../skills/brewpage-publish/) (Claude Code), [`openclaw/brewpage-publish`](../openclaw/brewpage-publish/) (OpenClaw).
 
 ## Architecture
 
 ```
 brewdoc/
-+-- .claude-plugin/plugin.json        # Plugin manifest
-+-- hooks/
-|   +-- hooks.json                    # no hooks ({"hooks":{}})
-+-- skills/
-    +-- docsync-setup/                # Doc-staleness tracker
-    +-- my-claude/                    # Installation documentation
-    +-- memory-sync-setup/            # Memory-sync generator (references/: SKILL.md.template, memory-guide, agent-audit, hard-sync, prompting-guide)
-    +-- md-to-pdf/                    # PDF conversion
-    +-- publish/                      # brewpage.app publishing
++-- .claude-plugin/plugin.json    # manifest
++-- hooks/hooks.json              # {"hooks":{}} -- no hooks
++-- skills/                       # docsync-setup, my-claude, memory-sync-setup, md-to-pdf, publish
 ```
 
-> **Brewdoc vs Brewcode:** Brewdoc is a set of documentation utilities and each skill is self-contained. Brewcode covers the project's own engineering surface -- conventions, rules, agent teams, semantic search and deep review -- with 9 skills, 6 agents and 2 registered hook commands (both SessionStart). Both install from the same `claude-brewcode` marketplace and operate independently.
-
-## Artifact metadata
-
-Every artifact a `-setup` skill installs into your project carries the same five fields, so you can
-tell at a glance what wrote a file, which plugin version it was written at and when its content last changed.
-
-| Field | Values | Where |
-|-------|--------|-------|
-| `doc_type` | `llm` \| `user` \| `skip` -- unquoted | `.md` frontmatter only, never JSON |
-| `version` | `"X.Y.Z"` -- plugin version at install time | all carriers |
-| `content_version` | `"X.Y.Z"` -- last release that changed this artifact's content | all carriers |
-| `generated_by` | `"<plugin>:<skill>"` | all carriers |
-| `last_updated` | `"YYYY-MM-DD"` | all carriers except a byte-copied `.mjs`/`.sh`/`.md` |
-
-A byte-copied asset omits `last_updated`: the value would be the release date,
-identical in the plugin file and the copy, so rewriting it on every build would churn bytes and
-defeat the `cmp` drift check that mechanism exists for. The five keys always sit after the file's
-own keys, in that order. JSON artifacts carry the same four snake_case keys at top level (no
-`doc_type`) in every writing mode. `docsync-setup` and `memory-sync-setup` each stamp their own
-emitted files this way; versions always come from `.claude-plugin/plugin.json`, never hardcoded. `/brewcode:setup-status` reads these back to tell you
-when a setup here has a `content_version` behind the plugin's value for that artifact.
+Artifact metadata fields (`doc_type`, `version`, `content_version`, `generated_by`, `last_updated`): [overview](https://doc-claude.brewcode.app/brewcode/overview/#artifact-metadata).
 
 ## Documentation
 
@@ -164,14 +96,10 @@ Full docs: [doc-claude.brewcode.app/brewdoc/overview](https://doc-claude.brewcod
 
 | Resource | Link |
 |----------|------|
-| Docsync Setup | [docsync-setup](https://doc-claude.brewcode.app/brewdoc/skills/docsync-setup/) |
-| My-Claude | [my-claude](https://doc-claude.brewcode.app/brewdoc/skills/my-claude/) |
-| Memory-Sync Setup | [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/) |
-| MD to PDF | [md-to-pdf](https://doc-claude.brewcode.app/brewdoc/skills/md-to-pdf/) |
-| Publish | [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/) |
+| Skills | [docsync-setup](https://doc-claude.brewcode.app/brewdoc/skills/docsync-setup/), [my-claude](https://doc-claude.brewcode.app/brewdoc/skills/my-claude/), [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/), [md-to-pdf](https://doc-claude.brewcode.app/brewdoc/skills/md-to-pdf/), [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/) |
 | Setup Status (brewcode) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) |
 | Release Notes | [RELEASE-NOTES.md](../RELEASE-NOTES.md) |
 
-See also: [Claude Code mods](../README.md#claude-code-mods) — optional brewmod-plan-effort and brewmod-placeholders.
+Optional mods: [overview](https://doc-claude.brewcode.app/mods/overview/), [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/), [placeholders](https://doc-claude.brewcode.app/mods/placeholders/). Install: `claude plugin install brewmod-plan-effort@claude-brewcode`
 
 Author: Maksim Kochetkov | License: MIT

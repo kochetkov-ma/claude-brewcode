@@ -3,18 +3,16 @@ title: "Text Human"
 description: "Clean surface artifacts across code and prose while preserving functional directives, useful contracts and verified references."
 order: 3102
 ---
-import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+import { Badge, Callout, Card, CardGrid, Spoiler, Steps, UpdateNotice } from '../../../../components/mdx';
 
 # text-human -- universal AI artifact humanizer
 
-<Callout type="caution">
-Humanization targets surface artifacts such as self-attribution comments and repetitive prose.
-Ticket IDs, Unicode and comments can carry real meaning; appearance alone does not prove fabrication
-or justify changing program behavior.
-</Callout>
+<Badge text="sonnet" /> <Badge text="model-invocable" />
 
-<Callout type="tip">
-**One command, any content.** Pass a commit hash, a file, a folder, or paste the text inline. The skill detects which domain it is dealing with, picks a matching flow, and runs a two-pass model: strip validated AI tells first, then a gated injection of human style fit for that domain.
+Give it a commit hash, a file, a folder or pasted text. The skill picks the matching flow, strips validated AI tells, then applies a gated human style fit for that domain.
+
+<Callout type="caution">
+The skill cleans surface artifacts such as self-attribution comments and repetitive prose. Ticket IDs, Unicode and comments can carry real meaning, so appearance alone never justifies a behavior change. It does not detect authorship.
 </Callout>
 
 ## Quick reference
@@ -24,165 +22,74 @@ or justify changing program behavior.
 | Command | `/brewtools:text-human` |
 | Arguments | `[prompt] [path\|commit\|folder\|text] [custom instructions]` |
 | Model | sonnet (haiku for simple blocks in mixed flow) |
-| Context | session |
-| Invocation | model-invocable (`disable-model-invocation: false`): type `/brewtools:text-human` or ask Claude ("humanize this README", "strip AI artifacts from this commit message") |
-| Pre-approved tools (`allowed-tools`) | `Read, Grep, Glob, Agent, AskUserQuestion` |
-| Permissions | Read-only git calls (`git status`, `git rev-parse`, `git diff --name-only`) run without a prompt; edits to your files follow your permission mode. When Claude starts the skill itself, Claude Code asks once for the `Skill` call in default mode; headless and `dontAsk` runs need the allow rule `Skill(brewtools:text-human *)` in settings |
+| Invocation | Model-invocable (`disable-model-invocation: false`): type the command or ask Claude ("humanize this README", "strip AI artifacts from this commit message") |
+| Output | In-place edits plus a Humanization Report |
 
 ## When to use
 
 | Situation | Command |
 |-----------|---------|
-| After an AI-assisted commit -- clean all touched files (current worktree content at those paths, not the historical commit blob) | `/brewtools:text-human 3be67487` |
-| Before code review -- strip obvious AI markers so reviewers focus on logic | `/brewtools:text-human src/main/java/services/` |
-| JavaDoc / API docs -- remove trivial param restates, keep contracts | `/brewtools:text-human clean the javadoc in PaymentApi.java` |
-| README / guide -- fix metronomic prose, trim scaffolding phrases | `/brewtools:text-human docs/getting-started.md` |
-| Reddit or Slack reply -- add register-fit casual voice | `/brewtools:text-human review this reddit reply: <text>` |
-| Published blog post or essay -- add burstiness and real stance | `/brewtools:text-human humanize this blog post: <text>` |
-| Folder-wide unicode and marker pass -- strip only, no inject | `/brewtools:text-human src/ only strip AI artifacts, no inject` |
+| After an AI-assisted commit: clean all touched files (current worktree content, not the historical blob) | `/brewtools:text-human 3be67487` |
+| Before review: strip AI markers from a folder | `/brewtools:text-human src/main/java/services/` |
+| JavaDoc / API docs: remove param restates, keep contracts | `/brewtools:text-human clean the javadoc in PaymentApi.java` |
+| README or guide: fix metronomic prose | `/brewtools:text-human docs/getting-started.md` |
+| Reddit or Slack reply: casual register | `/brewtools:text-human review this reddit reply: <text>` |
+| Blog post or essay: burstiness and stance | `/brewtools:text-human humanize this blog post: <text>` |
+| Strip only, no inject | `/brewtools:text-human src/ only strip AI artifacts, no inject` |
 | Custom rule on top of defaults | `/brewtools:text-human 3be67487 also drop all @author tags` |
 
-## Examples
+## Example
 
-```bash
-# Code flow -- strip AI tells, normalize unicode, inject OFF
-/brewtools:text-human src/main/java/com/example/OrderService.java
-
-# JavaDoc clean-only sub-profile
-/brewtools:text-human clean the javadoc in PaymentApi.java
-
-# Commit -- mixed flow routes each changed file to its domain
+```text
 /brewtools:text-human 3be67487
-
-# Reddit reply -- casual injection, sparse emoji, lowercase
-/brewtools:text-human review this reddit reply: <text>
-
-# Blog post -- burstiness + real stance
-/brewtools:text-human humanize this blog post: <text>
-
-# Folder -- mixed flow, parallel blocks
-/brewtools:text-human src/main/java/services/
-
-# Custom prompt overrides defaults (scope + rule)
-/brewtools:text-human src/ only strip AI artifacts, no inject
-/brewtools:text-human 3be67487 also drop all @author tags
 ```
 
-No arguments? In an interactive session the skill asks: commit hash, file path, folder, or paste text. An empty input asks once; a headless run, or no answer, stops with "nothing to humanize" and edits nothing.
+Mixed flow routes each changed file to its domain, then prints a Humanization Report: flow, scope, files, strip/inject counts and items surfaced for review. No arguments in an interactive session asks once; a headless run, or no answer, stops with "nothing to humanize" and edits nothing.
 
-## Flow
+## How it works
 
 <Steps>
-  <li>
-    <div>
-      <strong>Phase 0 -- Greedy flow detection</strong>
-      <p>Before any processing the skill parses the argument, picks exactly ONE flow from context, and announces it: `Flow: <name> -- <one-line why>`. Detection priority: explicit intent keywords (RU+EN) first, then path/extension, then content sniff. Only that flow file and the pattern sections it needs are loaded (lazy -- not everything at once).</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Argument parsing</strong>
-      <p>The first token is parsed as scope when it resolves to an existing path or a 7+ hex git hash; the rest becomes a custom prompt. Otherwise the whole input is a custom prompt (inline text to humanize or intent description). No args triggers <code>AskUserQuestion</code> as fallback. The custom prompt both selects/overrides the flow and adds custom rules at highest priority.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Clean-tree precondition</strong>
-      <p>Before the first edit on any writing flow, the skill runs `git status --porcelain` over the resolved target paths only -- there is no backup, so git is the only undo. Clean → proceeds. Dirty → one <code>AskUserQuestion</code> listing the dirty paths (proceed on them / process only the clean ones / abort); this replaces, not adds to, the flow-detection question. Not a git repo → the skill says so and requires an explicit go-ahead. Inline text and other non-file input skip this -- nothing on disk changes.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>PASS 1 -- Strip</strong>
-      <p>Validated AI tells are removed per the tiered pattern catalog. HIGH-tier universals (chat scaffolding, self-attribution comments, prompt residue, unicode normalization in prose and code comments) act on single hits. Unicode inside a string literal, regex, or identifier is never rewritten -- it is surfaced instead, since normalizing it could change program behavior. MED density-signals act only when several co-occur in a cluster. Behavior-changing items -- hallucinated refs, fabricated tickets, try/except-everywhere -- are surfaced for review, never auto-edited.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>PASS 2 -- Inject (gated)</strong>
-      <p>Human style is applied for the detected domain. HARD-OFF for code and API/formal docs. For docs, commits, social, and articles the injection is tuned by domain: burstiness weight, contraction frequency, stance, emoji policy. Global guard: never injects typos, errors, or fabricated references in any flow.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Parallel execution (mixed flow)</strong>
-      <p>Commit or folder scope uses bounded mixed-flow blocks, with haiku for simple content and sonnet for logic, tests or complex SQL. Main launches <code>Agent</code> calls together and supplies resolved absolute rule paths and custom instructions. Preservation constraints still apply. A commit selects changed paths; edits affect current worktree content after the scoped clean-tree gate.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Humanization Report</strong>
-      <p>Results merge into a report of flow, scope, processed files/blocks, model split, strip/inject counts and behavior-changing items surfaced for review. Files are edited in place; review the resulting diff.</p>
-    </div>
-  </li>
+  <li><div><strong>Detect the flow</strong><p>Intent keywords (RU+EN), then path/extension, then content sniff. The skill announces `Flow: <name> -- <why>` and loads only that flow.</p></div></li>
+  <li><div><strong>Parse the scope</strong><p>The first token is scope if it is an existing path or a 7+ hex hash; the rest is a custom prompt with top priority.</p></div></li>
+  <li><div><strong>Check the tree</strong><p>No backup exists, so `git status --porcelain` runs over the targets. Dirty paths trigger one question: proceed, clean only, or abort. Inline text skips this.</p></div></li>
+  <li><div><strong>Strip</strong><p>Chat scaffolding, self-attribution, prompt residue and unicode in prose act on single hits; density signals act on clusters.</p></div></li>
+  <li><div><strong>Inject (gated)</strong><p>Domain-tuned human style. Off for code and API docs; never typos, errors or invented references.</p></div></li>
+  <li><div><strong>Report</strong><p>Results merge into one report. Files are edited in place; review the diff.</p></div></li>
 </Steps>
 
-## Delegation (mixed flow)
+## Good to know
 
-Functional preservation overrides cosmetic cleanup. Keep meaningful private/internal and test
-contracts, fixture assumptions, tool-consumed docs and doctests. Preserve GIVEN/WHEN/THEN/AND
-and Arrange/Act/Assert comments, plus lint, type, security, build, license and coverage directives
-byte-for-byte, including unexplained `noqa` or ESLint suppressions. Missing reasons are surfaced.
+- Behavior-changing findings (hallucinated refs, fabricated tickets, try/except-everywhere, unicode inside a string literal or regex) are surfaced, never auto-edited.
+- Kept as is: WHY comments, public API docs, real tickets of any pattern, conditional `@throws`, structural banners, BDD comments, lint/type/license directives.
+- Read-only git calls (`git status`, `git rev-parse`, `git diff --name-only`) run without a prompt; edits follow your permission mode.
 
-A cosmetic pass does not migrate types or APIs, remove/narrow suppressions, convert useful
-JavaDoc into ordinary comments, or change debug output. Such changes require separate explicit
-scope and relevant checks. Real tickets remain regardless of ID pattern; removal requires proof
-that an ID was invented and resolves to no real ticket in the actual tracker/provenance. Missing
-access or uncertainty is reported rather than guessed away.
+<Spoiler id="delegation" title="Delegation (mixed flow)">
 
-<Callout type="warning">
-**A big task handed to one agent = an agent gone for an hour.** You cannot observe it, you cannot correct it, and it usually drifts off-target. In the mixed flow one subagent = **one block** of ~5 files, ~10 steps. A large commit or folder is split into N blocks, all spawned in a single message.
-</Callout>
+A commit or folder splits into blocks of about 5 files; each subagent gets the six-field brief and all blocks start in one message. Haiku takes simple content, sonnet logic, tests and complex SQL. Field table: [Delegation](/brewcode/skills/#delegation).
 
-Every block prompt carries six fields. A bare one-line task is never enough:
+Functional preservation overrides cosmetic cleanup: GIVEN/WHEN/THEN and Arrange/Act/Assert comments and lint, type, security, build, license and coverage directives stay byte-for-byte, including unexplained `noqa` or ESLint suppressions. Real tickets stay unless proven invented against the tracker; uncertainty is reported, not guessed away.
 
-| Field | Content |
-|-------|---------|
-| GOAL | humanize the commit or folder so it reads as human-written; this agent owns block N of M |
-| ROLE | edit only this block's files in place; never auto-fix behavior-changing items — surface them |
-| SCOPE | in — the exact file list; out — every other path, git history, build output |
-| CONTEXT | flow per file already classified, PASS 2 inject ON/OFF, custom instructions verbatim, sibling blocks listed, and the **absolute** path to the flow rules — never a plugin-root variable, which does not resolve inside a subagent |
-| CONSUMER | the skill merges each block's JSON into one Humanization Report the user acts on |
-| DONE | JSON per the `mixed.md` aggregation schema — stripped, injected, surfaced per file |
+</Spoiler>
 
-Two failure modes the brief prevents: a "helpful" edit outside the block collides with a sibling agent that already owns that file, and a surfaced item quietly fixed never reaches the user who was supposed to decide on it.
+<Spoiler id="internals" title="Flows, strip catalog and injection weights">
 
-<details>
-<summary>Internals</summary>
+| Flow | Domain | Inject stage |
+|------|--------|--------------|
+| code | source, comments, docstrings, JavaDoc/JSDoc/KDoc | OFF |
+| docs | README, guides, PR/commit, changelogs | ON, restrained (terse for PR/commit) |
+| social | reddit, forum, slack, discord, chat | ON, casual |
+| article | formal essay, published blog, long-form | ON, full |
+| mixed | commit / folder dispatcher | per-file routing |
 
-**5 flows**
-
-| Flow | Domain | Inject stage | Notes |
-|------|--------|-------------|-------|
-| code | source files, comments, docstrings, JavaDoc/JSDoc/KDoc | OFF | formal contract -- strip only |
-| docs | README, guides, PR/commit, changelogs | ON, restrained | terse for PR/commit |
-| social | reddit, forum, slack, discord, chat | ON, casual | burstiness high, fragments OK |
-| article | formal essay, published blog, long-form | ON, full | burstiness + real stance |
-| mixed | commit / folder dispatcher | per-file routing | routes each file to its flow |
-
-**PASS 1 -- What gets stripped**
-
-| Category | Example | Tier |
-|----------|---------|------|
-| Chat scaffolding | "Certainly!", "I hope this helps", "Here's the rewritten..." | HIGH |
-| AI self-attribution | `// AI-generated`, `// Claude suggestion`, bot/co-author trailers | HIGH |
-| Prompt residue | `# Remember to paste...`, `// Replace with your...` placeholder narration | HIGH |
-| Unicode normalization | em-dash, smart quotes, arrows -- prose and code comments/docstrings only, ASCII form | HIGH |
-| Promotional openers | "In today's fast-paced world", "plays a significant role" | HIGH/MED |
-| Trivial comment/docstring | `// Loop through users`, `@param userId The user ID` | MED density |
-| Excess-vocab cluster | delve, leverage, seamless, landscape (co-occurring set) | MED cluster only |
-
-**PASS 1 -- What gets surfaced (never auto-edited)**
-
-Hallucinated package/method/URL refs, fabricated tickets, try/except-everywhere, empty catch-all, placeholder TODO logic, duplicated abstraction layers, happy-path-only tests, CI gaming, unicode inside a string literal or regex, mixed indentation in an indentation-sensitive file. These change meaning -- they are reported, not changed.
-
-**PASS 1 -- What gets kept**
-
-WHY comments, useful contracts at any visibility or test location, fixture assumptions,
-tool-consumed documentation/doctests, real tickets of any pattern, conditional `@throws`,
-structural banners, algorithm explanations, BDD comments and functional directives.
-
-**PASS 2 -- Injection weight matrix**
+| Strip category | Example | Tier |
+|----------------|---------|------|
+| Chat scaffolding | "Certainly!", "I hope this helps" | HIGH |
+| AI self-attribution | `// AI-generated`, bot/co-author trailers | HIGH |
+| Prompt residue | `// Replace with your...` | HIGH |
+| Unicode in prose and code comments | em-dash, smart quotes, arrows -> ASCII | HIGH |
+| Promotional openers | "In today's fast-paced world" | HIGH/MED |
+| Trivial comment/docstring | `// Loop through users` | MED density |
+| Excess-vocab cluster | delve, leverage, seamless | MED cluster only |
 
 | Signal | reddit | chat | docs | commit/PR | article | code/API |
 |--------|--------|------|------|-----------|---------|----------|
@@ -190,33 +97,28 @@ structural banners, algorithm explanations, BDD comments and functional directiv
 | Contractions | high | high | OK | low | high | FORBIDDEN |
 | Stance | high | med | none | grounded-why | high | FORBIDDEN |
 | Emoji | rare | incidental | no | no | no | no |
-| Inject stage | ON | ON | ON | ON terse | ON | OFF |
 
-**Block sizing (mixed flow)**
+| Files | Lines | Blocks |
+|-------|-------|--------|
+| 1-2 | under 200 | 1 (direct) |
+| 3-5 | under 500 | 3 |
+| 6-10 | 500-1500 | 5 |
+| 11-20 | 1500-3000 | 7 |
+| 21+ | 3000+ | 10 |
 
-| Files | Lines | Blocks | Agents |
-|-------|-------|--------|--------|
-| 1-2 | &lt;200 | 1 | direct |
-| 3-5 | &lt;500 | 3 | parallel |
-| 6-10 | 500-1500 | 5 | parallel |
-| 11-20 | 1500-3000 | 7 | parallel |
-| 21+ | 3000+ | 10 | parallel |
+Permissions: when Claude starts the skill, Claude Code asks once for the `Skill` call in default mode; headless and `dontAsk` runs need `Skill(brewtools:text-human *)` in settings. Pre-approved tools: `Read, Grep, Glob, Agent, AskUserQuestion` (no Bash rule).
 
-The skill cleans surface artifacts and fits register; it does not determine authorship.
-Weak signals need contextual evidence, and functional preservation takes priority over every
-cosmetic pattern.
-
-</details>
+</Spoiler>
 
 <CardGrid>
   <Card title="Text Optimize" icon="sparkle" href="/brewtools/skills/text-optimize/">
     Trim token waste from prompts and docs. Complements text-human for pre-commit cleanup.
   </Card>
-  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/text-human">
+  <Card title="GitHub source" icon="github" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/text-human">
     SKILL.md and reference/ flows, preservation rules and language-specific guidance.
   </Card>
   <Card title="Brewtools overview" icon="rocket" href="/brewtools/overview/">
-    All brewtools skills -- text, secrets, deploy, SSH, provider switching.
+    All brewtools skills: text, secrets, deploy, SSH, provider switching.
   </Card>
 </CardGrid>
 

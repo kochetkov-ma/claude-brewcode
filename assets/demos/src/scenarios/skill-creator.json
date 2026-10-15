@@ -1,0 +1,303 @@
+{
+  "name": "skill-creator",
+  "duration": 20,
+  "layout": {
+    "maxCols": 94
+  },
+  "targetBytes": 2000000,
+  "forbid": [
+    "\\d+ ?%",
+    "auto-?activat",
+    "guarantee"
+  ],
+  "forbidAllow": [],
+  "meta": {
+    "version": "2.1.300",
+    "model": "Opus 5.5 (1M context)",
+    "cwd": "~/brewery-api",
+    "statusLine": "maksim@Mac ~/brewery-api (refunds) [Opus 5.5 (1M context)] high ctx:5%",
+    "footer": "⏸ manual mode on",
+    "placeholder": "create a skill for ...",
+    "rows": 28
+  },
+  "chapters": [
+    {
+      "at": 0,
+      "label": "ask"
+    },
+    {
+      "at": 3.4,
+      "label": "expert"
+    },
+    {
+      "at": 9.4,
+      "label": "result"
+    },
+    {
+      "at": 12.3,
+      "label": "run"
+    },
+    {
+      "at": 16.0,
+      "label": "card"
+    }
+  ],
+  "captions": [
+    {
+      "at": 0,
+      "text": "Ask in plain English"
+    },
+    {
+      "at": 3.2,
+      "text": "Claude hands the job to the skill-creator expert"
+    },
+    {
+      "at": 9.5,
+      "text": "The skill is validated before you see it"
+    },
+    {
+      "at": 12.4,
+      "text": "Use it right away"
+    },
+    {
+      "at": 16.1,
+      "text": "A new skill in minutes, not an afternoon"
+    }
+  ],
+  "facts": [
+    {
+      "src": "brewcode/agents/skill-creator.md",
+      "has": "Give the verdict first, in <=30 lines with `path:line` references."
+    },
+    {
+      "src": "brewcode/agents/skill-creator.md",
+      "has": "Asked for a slash command -> create a skill"
+    },
+    {
+      "src": "brewcode/agents/skill-creator.md",
+      "has": "mark a fix done without re-running `validate-skill.sh`"
+    },
+    {
+      "src": "brewcode/skills/skills/SKILL.md",
+      "has": "Agent(subagent_type=\"brewcode:skill-creator\""
+    },
+    {
+      "src": "brewcode/skills/skills/scripts/validate-skill.sh",
+      "has": "PLAN block present with all 5 labels"
+    },
+    {
+      "src": "brewcode/skills/skills/scripts/validate-skill.sh",
+      "has": "echo \"=== Result: $PASS passed, $FAIL failed, $WARN warned ===\""
+    },
+    {
+      "src": "brewcode/skills/skills/references/prompt-contract.md",
+      "has": "PLAN — <plugin>:<skill>"
+    }
+  ],
+  "events": [
+    {
+      "type": "type",
+      "at": 0.3,
+      "text": "create a skill that writes release notes from git log, with the expert",
+      "cps": 30
+    },
+    {
+      "type": "key",
+      "at": 2.75,
+      "glyph": "⏎",
+      "word": "enter · send"
+    },
+    {
+      "type": "submit",
+      "at": 2.9
+    },
+    {
+      "type": "print",
+      "at": 3.15,
+      "bullet": true,
+      "lines": [
+        "I'll hand this to the skill-creator expert."
+      ]
+    },
+    {
+      "type": "skip",
+      "at": 3.6,
+      "until": 9.2,
+      "factor": 30
+    },
+    {
+      "type": "agent",
+      "at": 3.6,
+      "agent": "brewcode:skill-creator",
+      "desc": "Create release-notes skill",
+      "doneAt": 9.2,
+      "stats": "17 tool uses · 38.6k tokens · 2m 48s",
+      "ticks": [
+        [
+          4.0,
+          "Read(brewcode/skills/skills/references/prompt-contract.md)"
+        ],
+        [
+          5.0,
+          "Write(.claude/skills/release-notes/SKILL.md)"
+        ],
+        [
+          6.2,
+          "Write(.claude/skills/release-notes/references/notes-format.md)"
+        ],
+        [
+          7.3,
+          "Write(.claude/skills/release-notes/README.md)"
+        ],
+        [
+          8.3,
+          "Bash(bash validate-skill.sh .claude/skills/release-notes)"
+        ]
+      ]
+    },
+    {
+      "type": "spin",
+      "at": 3.6,
+      "until": 9.2,
+      "verb": "Brewing",
+      "secs": [
+        0,
+        168
+      ],
+      "tokens": 900
+    },
+    {
+      "type": "print",
+      "at": 9.4,
+      "bullet": true,
+      "reveal": 0.14,
+      "kv": "gold",
+      "lines": [
+        "[[b ok|Created skill release-notes]] — validate-skill.sh: [[b ok|20 passed, 0 failed, 0 warned]]",
+        "  Dir:      .claude/skills/release-notes/",
+        "  Written:  SKILL.md (43 lines), references/notes-format.md, README.md",
+        "  Assumed:  project scope; invoker unclear -> disable-model-invocation: true",
+        "  Not run:  claude plugin eval"
+      ]
+    },
+    {
+      "type": "tool",
+      "at": 10.4,
+      "name": "Bash",
+      "arg": "bash validate-skill.sh .claude/skills/release-notes",
+      "resultAt": 10.9,
+      "result": [
+        "[[ok|✅]] PLAN block present with all 5 labels",
+        "=== Result: 20 passed, 0 failed, 0 warned ==="
+      ]
+    },
+    {
+      "type": "hl",
+      "at": 10.95,
+      "hold": 1.2,
+      "match": "20 passed, 0 failed, 0 warned ==="
+    },
+    {
+      "type": "clear",
+      "at": 12.3
+    },
+    {
+      "type": "type",
+      "at": 12.5,
+      "text": "/release-notes v2.4.0",
+      "cps": 24
+    },
+    {
+      "type": "key",
+      "at": 13.45,
+      "glyph": "⏎",
+      "word": "enter · run"
+    },
+    {
+      "type": "submit",
+      "at": 13.6
+    },
+    {
+      "type": "print",
+      "at": 13.8,
+      "reveal": 0.05,
+      "kv": true,
+      "lines": [
+        "[[b gold|PLAN — release-notes]]",
+        "INPUT:  v2.4.0",
+        "MODE:   draft — default",
+        "SCOPE:  v2.3.0..HEAD -> RELEASE-NOTES.md",
+        "DO:     - read the commits in the range",
+        "        - group them by conventional-commit type",
+        "        - write the notes file",
+        "RESULT: RELEASE-NOTES section for the new version"
+      ]
+    },
+    {
+      "type": "tool",
+      "at": 14.3,
+      "name": "Bash",
+      "arg": "git log v2.3.0..HEAD --format=%s",
+      "resultAt": 14.55,
+      "result": [
+        "27 commits"
+      ]
+    },
+    {
+      "type": "print",
+      "at": 14.8,
+      "bullet": true,
+      "reveal": 0.09,
+      "lines": [
+        "[[b gold|## v2.4.0]] (2026-10-15)",
+        "[[b ok|### Added]]",
+        "- **refunds:** partial refunds with idempotency keys",
+        "- **webhooks:** retry with exponential backoff",
+        "[[b warn|### Fixed]]",
+        "- **ledger:** rounding on partial amounts",
+        "[[b gold|### Changed]]",
+        "- **docs:** refund API guide"
+      ]
+    },
+    {
+      "type": "card",
+      "at": 16.0,
+      "title": "✻ skill-creator · release-notes ready",
+      "tiles": [
+        {
+          "label": "Files",
+          "to": 3,
+          "sub": "SKILL.md + 2"
+        },
+        {
+          "label": "Checks",
+          "text": "20/20",
+          "cls": "ok",
+          "sub": "validate-skill.sh"
+        },
+        {
+          "label": "Tokens",
+          "to": 38.6,
+          "dec": 1,
+          "suffix": "k",
+          "sub": "17 tool uses"
+        },
+        {
+          "label": "Commits",
+          "to": 27,
+          "sub": "turned into notes"
+        }
+      ],
+      "verdict": {
+        "label": "Ready",
+        "text": "/release-notes <version>",
+        "cls": "ok"
+      },
+      "note": ".claude/skills/release-notes/ · project scope"
+    },
+    {
+      "type": "clear",
+      "at": 19.4
+    }
+  ]
+}

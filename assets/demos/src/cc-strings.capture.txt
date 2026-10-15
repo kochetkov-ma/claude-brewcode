@@ -1,0 +1,34 @@
+# Verbatim lines from a real Claude Code v2.1.300 tmux session (haiku, Explore agent); paths and ids redacted.
+ ▐▛███▛█   Claude Code v2.1.300
+▝▜██████▀  Haiku 5.5 · Claude Max
+ ▝▝   ▝▝   /private/tmp/<scratch>
+❯ Spawn an Explore agent in the foreground (run_in_background false, wait for it) to grep -rn beta
+⏺ Explore(Grep beta in scratch dir)
+  ⎿  Initializing…
+  ⎿  Bash(rg -n -uu beta /private/tmp/<scratch>; echo "rc=$?")
+     Running…
+⏺ Reading 1 file… (ctrl+o to expand)
+  ⎿  a.txt
+     (ctrl+b to run in background)
+✶ Frolicking… (2s · ↓ 97 tokens)
+✳ Frolicking… (5s · ↓ 364 tokens)
+  ⎿  Done (1 tool use · 15.4k tokens · 4s)
+  (ctrl+o to expand)
+  Read 1 file (ctrl+o to expand)
+⏺ Agent "Find files containing "beta"" finished · 23s
+✻ Waiting for 1 background agent to finish
+✻ Cogitated for 10s · done 4:47 PM
+────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  user@host /private/tmp/<scratch> [Haiku 5.5] high ctx:3% (34k/1000k) 5h 4% (2h2m) - wee…
+  ⏵⏵ bypass permissions on (shift+tab to cycle)
+# second session (default permission mode, 3 Read calls inside the agent)
+  ⎿  Read(a.txt)
+     Read(b.txt)
+     (ctrl+b to run in background)
+· Osmosing… (3s · ↓ 131 tokens)
+  ⎿  Done (3 tool uses · 13.7k tokens · 7s)
+✻ Brewed for 23s · done 4:52 PM
+  user@host /private/tmp/<scratch> [Haiku 5.5] high ctx:3% (31k/1000k)
+  ⏸ manual mode on
