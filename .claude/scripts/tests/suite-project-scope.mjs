@@ -77,13 +77,14 @@ function run(sb, script, args, extraEnv = {}) {
 }
 
 const call = (cwd, ...args) => ({ cwd, args });
+const orphanMarked = sb => existsSync(join(sb.cache, OLD, '.orphaned_at'));
 
 // GIVEN a user row on the target version and a project row pinning 0.0.1 at projectPath P
-// WHEN update-plugin.sh brewcode runs from another dir THEN the project update runs from P with --scope project and 0.0.1 is pruned.
+// WHEN update-plugin.sh brewcode runs from another dir THEN the project update runs from P, and the prune then marks 0.0.1 orphaned.
 {
     const sb = sandbox();
     const r = run(sb, 'update-plugin.sh', ['brewcode']);
-    assert.deepEqual({ rc: r.rc, calls: r.calls, cache: r.cache, project: r.lines.filter(l => l.includes('(project ')) }, {
+    assert.deepEqual({ rc: r.rc, calls: r.calls, cache: r.cache, marked: orphanMarked(sb), project: r.lines.filter(l => l.includes('(project ')) }, {
         rc: 0,
         calls: [
             call(sb.other, 'plugin', 'marketplace', 'update', 'claude-brewcode'),
@@ -92,9 +93,10 @@ const call = (cwd, ...args) => ({ cwd, args });
             call(sb.other, 'plugin', 'list', '--json'),
             call(sb.project, 'plugin', 'update', ID, '--scope', 'project'),
         ],
-        cache: [VER],
+        cache: [OLD, VER],
+        marked: true,
         project: [`   ${ID} (project ${sb.project}): updating...`],
-    }, 'THEN the project row updates from its projectPath, before the prune, and the old version is deleted');
+    }, 'THEN the project row updates before the prune, so 0.0.1 is already unpinned there: marked .orphaned_at and kept for the grace');
 }
 
 // GIVEN the same profile WHEN update-plugin.sh --dry-run runs THEN only the read-only list is called and the planned project command is printed.
@@ -209,7 +211,7 @@ for (const dry of [true, false]) {
 {
     const sb = sandbox();
     const r = run(sb, 'update-plugin.sh', ['all']);
-    assert.deepEqual({ rc: r.rc, calls: r.calls, cache: r.cache, notes: r.lines.filter(l => l.includes('not installed')) }, {
+    assert.deepEqual({ rc: r.rc, calls: r.calls, cache: r.cache, marked: orphanMarked(sb), notes: r.lines.filter(l => l.includes('not installed')) }, {
         rc: 0,
         calls: [
             call(sb.other, 'plugin', 'marketplace', 'update', 'claude-brewcode'),
@@ -218,7 +220,8 @@ for (const dry of [true, false]) {
             call(sb.other, 'plugin', 'list', '--json'),
             call(sb.project, 'plugin', 'update', ID, '--scope', 'project'),
         ],
-        cache: [VER],
+        cache: [OLD, VER],
+        marked: true,
         notes: [
             ...OTHERS.map((n, i) => `${i + 3}. ${n}: not installed in this profile -> skipped`),
             ...OTHERS.map(n => `| ${n} | ${VER} | skipped (not installed) |`),

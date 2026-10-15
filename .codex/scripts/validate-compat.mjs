@@ -5,6 +5,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { validateNativePackage } from './validate-native-package.mjs';
+import { brokenLinks, rebaseLinks, resolveLink } from './markdown-links.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const VERSION = '4.0.6';
@@ -155,9 +156,7 @@ function json(file) {
   catch (error) { fail(`${path.relative(ROOT, file)}: ${error.message}`); return null; }
 }
 
-// Build artifacts are gitignored, are never mirrored by the generator, and recur the moment
-// anyone compiles or installs -- a single stray `.pyc` under a skill's scripts/ made the
-// canonical/dist comparison report a differing resource and aborted the release.
+// Gitignored build artifacts, never mirrored: a stray `.pyc` in scripts/ failed canonical/dist parity and a release.
 const IGNORED_ENTRIES = new Set(['__pycache__', 'node_modules', '.DS_Store']);
 
 function walk(dir) {
@@ -169,6 +168,12 @@ function walk(dir) {
     else files.push(target);
   }
   return files;
+}
+
+// Dist sits one level deeper: markdown expected with the generator's link rebase, all else byte-equal.
+function distExpected(canonical, distributed) {
+  if (!canonical.endsWith('.md')) return fs.readFileSync(canonical);
+  return Buffer.from(rebaseLinks(fs.readFileSync(canonical, 'utf8'), canonical, distributed).text, 'utf8');
 }
 
 function textFiles(dir) {
@@ -277,12 +282,8 @@ for (const [plugin, [skillCount, agentCount]] of Object.entries(EXPECTED)) {
     if (manual && source.length < 900) fail(`${plugin}/${entry.name}: native workflow is too short to preserve source phases`);
     if (!manual && source.length < sourceText.length * 0.75) fail(`${plugin}/${entry.name}: transformed workflow lost substantive source content`);
 
-    // Mode parity. A MANUAL_NATIVE variant is hand-authored and does NOT track source
-    // SKILL.md edits, so a mode added or renamed upstream reaches nobody here and
-    // regeneration will never notice. The source argument-hint is the contract: every
-    // canonical mode it declares must be documented in the Codex variant. Checked for
-    // every skill, not only the manual ones -- a transformed variant satisfies it for
-    // free, which is exactly why the manual ones are the only place it can rot.
+    // Mode parity: every canonical mode in the source argument-hint must appear in the Codex variant. All skills checked;
+    // hand-authored MANUAL_NATIVE variants never track source edits, so only they can rot.
     const sourceHint = sourceText.match(/^argument-hint:\s*(.*)$/m)?.[1] ?? '';
     for (const mode of CANONICAL_MODES) {
       if (!new RegExp(`[[|]${mode}[\\]|]`).test(sourceHint)) continue;
@@ -315,7 +316,7 @@ for (const [plugin, [skillCount, agentCount]] of Object.entries(EXPECTED)) {
     for (const canonical of walk(targetRoot)) {
       const relative = path.relative(targetRoot, canonical);
       const distributed = path.join(distRoot, 'skills', entry.name, relative);
-      if (!fs.existsSync(distributed) || !fs.readFileSync(canonical).equals(fs.readFileSync(distributed))) fail(`${plugin}/${entry.name}: dist resource differs from canonical ${relative}`);
+      if (!fs.existsSync(distributed) || !distExpected(canonical, distributed).equals(fs.readFileSync(distributed))) fail(`${plugin}/${entry.name}: dist resource differs from canonical ${relative}`);
     }
   }
 
@@ -363,6 +364,9 @@ for (const [plugin, [skillCount, agentCount]] of Object.entries(EXPECTED)) {
       if (/\bbc-rules-organizer\b/.test(source)) fail(`${path.relative(ROOT, file)}: contains retired Codex agent bc-rules-organizer`);
       if (/\$brewcode:spec\b|\/brewcode:spec\b/.test(source)) fail(`${path.relative(ROOT, file)}: contains removed Codex skill brewcode:spec`);
       checkFloatingInstalls(file, source);
+      if (file.endsWith('.md')) {
+        for (const link of brokenLinks(source, file)) fail(`${path.relative(ROOT, file)}: relative link ${link.url} resolves to missing ${path.relative(ROOT, resolveLink(file, link.target))}`);
+      }
     }
   }
 

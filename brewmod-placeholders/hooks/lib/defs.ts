@@ -275,7 +275,16 @@ export const newRegistryCache = (): RegistryCache => ({ files: new Map(), layerS
 const listSig = (es: readonly IoEntry[]): string =>
   es.map((en) => `${en.name}:${en.size}:${en.mtimeMs}:${en.isLink ? 'L' : 'F'}`).sort().join('|')
 
-// A listing failure, or an unreadable shipped default, rejects and leaves the cache untouched (the caller fails open); an unreadable user file is skipped.
+export const FILES_GONE = 'plugin files removed (updated?) · run /reload-plugins'
+
+// The plugin's own placeholders/ folder is missing or holds no .md file (an rm -rf mid-walk): its root was deleted or replaced.
+export class PluginFilesGone extends Error {
+  constructor() {
+    super(FILES_GONE)
+  }
+}
+
+// A listing failure, a missing or unreadable shipped default rejects and leaves the cache untouched (the caller fails open); an unreadable user file is skipped.
 export async function loadRegistry(io: Io, roots: Roots, cache: RegistryCache): Promise<Registry> {
   const layers: LayerFiles[] = []
   const nextFiles = new Map<string, Map<string, Cached>>()
@@ -290,6 +299,7 @@ export async function loadRegistry(io: Io, roots: Roots, cache: RegistryCache): 
       if (en.kind === 'dir' || en.name.startsWith('.') || !en.name.endsWith('.md')) return false
       return spec.kind === 'native' || legacyNames.has(en.name.slice(0, -3))
     })
+    if (spec.id === 'default' && entries.length === 0) throw new PluginFilesGone()
     const sig = listSig(entries)
     const prev = cache.files.get(spec.id)
     const kept = new Map<string, Cached>()
@@ -360,7 +370,7 @@ export function toEditorEntries(defs: readonly Def[]): EditorEntry[] {
     const key = d.name.toLowerCase()
     if (seen.has(key)) continue
     seen.add(key)
-    const base = { name: d.name, body: d.body, planOnly: d.when === 'plan' }
+    const base = { name: d.name, body: d.body, planOnly: d.when === 'plan', ...(d.insert === 'inline' ? { isInline: true } : {}) }
     out.push(d.description === undefined ? base : { ...base, description: d.description })
   }
   return out

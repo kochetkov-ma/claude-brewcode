@@ -1,10 +1,12 @@
 // Pure band rendering: view + registry entries -> rows -> tree. Zero I/O; atoms and `$` stay in register.ts.
 import type { ElementTable, RenderElement } from 'claude-code'
+import { FILES_GONE } from './defs'
 import { KNOWN_COLOR, UNKNOWN_COLOR, type EditorEntry } from './editor'
 import type { PlaceholderView } from './match'
 
-export type BandRow = { text: string; name: string; isKnown: boolean; description: string; body: string; isPlanOnly: boolean }
-export type BandState = { isExpanded: boolean; isPlan: boolean; onToggle: () => unknown; budget: number }
+export type BandRow = { text: string; name: string; isKnown: boolean; description: string; body: string; isPlanOnly: boolean; isInline?: boolean }
+// isGone = the plugin files vanished: context previews go (their hook cannot run), inline ones stay; the foot says to reload.
+export type BandState = { isExpanded: boolean; isPlan: boolean; isGone: boolean; onToggle: () => unknown; budget: number }
 export type BandUi = Pick<ElementTable<'terminal'>, 'Box' | 'Text' | 'Button'>
 
 // Default TUI: maxRows = terminal height and the prompt box + footer take 8 rows more (45-row probe: 37 fit, 38 clip); +4 for a wrapped draft or a spinner.
@@ -59,6 +61,7 @@ export function bandRows(view: PlaceholderView, entries: readonly EditorEntry[])
       description: token.isKnown ? (entry?.description ?? token.name) : UNKNOWN_LABEL,
       body: entry?.body ?? '',
       isPlanOnly: entry?.planOnly === true,
+      ...(entry?.isInline === true ? { isInline: true } : {}),
     })
   }
   return rows
@@ -66,27 +69,30 @@ export function bandRows(view: PlaceholderView, entries: readonly EditorEntry[])
 
 const hasBodies = (rows: readonly BandRow[]): boolean => rows.some((r) => r.body !== '')
 
-export const TOGGLE_KEYS = 'ctrl+x · tab · enter'
+export const TOGGLE_KEYS = 'ctrl+x → tab → enter'
 export const HINT = 'add or change: /placeholders'
 export const AUTO_MAX_ROWS = 2
 export const AUTO_LINES = 3
 
 export const toggleLabel = (isExpanded: boolean): string => `${isExpanded ? 'Hide text' : 'Show text'}  ${TOGGLE_KEYS}`
 
-// Header (count + toggle Button, only for 3+ rows with a body; 1-2 rows show 3 body lines at once), one keyed row per token, a `+K more` row past the budget, a dim foot hint.
-// Collapsed -> UN-keyed hidden hover Box under the keyed row (a keyed hidden hover Box makes the engine refuse the band).
-export function renderBand(ui: BandUi, rows: readonly BandRow[], state: BandState): RenderElement {
+// Header (count + toggle Button: 3+ rows with a body, or 1-2 rows whose 3-line preview cuts a body the budget could show), one keyed row per token, `+K more` past the budget, a foot hint.
+// Collapsed 3+ rows -> UN-keyed hidden hover Box under the keyed row (a keyed hidden hover Box makes the engine refuse the band).
+export function renderBand(ui: BandUi, all: readonly BandRow[], state: BandState): RenderElement {
   const { Box, Text, Button } = ui
   const { isPlan, budget } = state
+  const rows = state.isGone ? all.map((r) => (r.isInline === true ? r : { ...r, body: '' })) : all
   const auto = rows.length <= AUTO_MAX_ROWS
-  const isExpanded = auto || state.isExpanded
-  const toggle = hasBodies(rows) && !auto
   const shown = rows.length + 2 <= budget ? rows : rows.slice(0, Math.max(budget - 3, 1))
   const hidden = rows.length - shown.length
   const free = budget - 2 - shown.length - (hidden > 0 ? 1 : 0)
   const bodies = shown.filter((r) => r.body !== '').length
   const fit = Math.max(bodies === 0 ? 0 : Math.floor(free / bodies), 1)
-  const lines = auto ? Math.min(AUTO_LINES, fit) : fit
+  const preview = Math.min(AUTO_LINES, fit)
+  const toggle = auto ? fit > AUTO_LINES && shown.some((r) => r.body.split('\n').length > AUTO_LINES) : hasBodies(rows)
+  const isExpanded = toggle && state.isExpanded
+  const isVisible = auto || isExpanded
+  const lines = isExpanded ? fit : preview
   const hoverLines = Math.max(free, 1)
 
   return (
@@ -104,7 +110,7 @@ export function renderBand(ui: BandUi, rows: readonly BandRow[], state: BandStat
             </Text>
             {row.isPlanOnly && !isPlan ? <Text dimColor>{` ${PLAN_ONLY_LABEL}`}</Text> : null}
           </Box>
-          {row.body === '' ? null : isExpanded ? (
+          {row.body === '' ? null : isVisible ? (
             <Box marginLeft={2} flexDirection="column">
               {bodyRows(Text, row.body, lines, row.text.toLowerCase())}
             </Box>
@@ -116,9 +122,15 @@ export function renderBand(ui: BandUi, rows: readonly BandRow[], state: BandStat
         </Box>
       ))}
       {hidden > 0 ? <Text dimColor>{`... +${hidden} more placeholders`}</Text> : null}
-      <Text key="hint" dimColor>
-        {HINT}
-      </Text>
+      {state.isGone ? (
+        <Text key="hint" color={UNKNOWN_COLOR}>
+          {FILES_GONE}
+        </Text>
+      ) : (
+        <Text key="hint" dimColor>
+          {HINT}
+        </Text>
+      )}
     </Box>
   )
 }

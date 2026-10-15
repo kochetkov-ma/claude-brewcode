@@ -1,6 +1,6 @@
 ---
 title: "Manager Setup"
-description: "Opt-in project wall that forces the main Claude session to delegate edits to subagents, plus the task-tools key. Codewords moved to brewmod-placeholders."
+description: "Opt-in project wall that makes the main Claude session delegate edits to subagents, plus the task-tools key. Codewords come from the brewmod-placeholders mod."
 order: 3124
 ---
 import { Badge, Callout, Card, CardGrid, Spoiler, SourceLink, Steps, UpdateNotice } from '../../../../components/mdx';
@@ -29,10 +29,6 @@ The skill installs a self-contained `PreToolUse` guard into the project and regi
 
 On Claude Code 2.1.233 and later, `install` and `upgrade` also set `env.CLAUDE_CODE_ENABLE_TODO_TOOLS="1"` in `.claude/settings.local.json`, so `TaskCreate`, `TaskUpdate`, `TaskGet` and `TaskList` stay available. The key is written only when no settings layer already sets it; an explicit `0`, `false` or empty value is kept and reported as `kept off`. `uninstall` keeps the key; `purge` removes it only when this skill added it (`todoToolsAdded` in `state.json`).
 
-## Codewords moved to a mod
-
-`++m`, `++a`, `++rr`, `++r` and the Plan-mode `+++` come from the [brewmod-placeholders](/mods/placeholders/) mod (Claude Code 2.1.292+), not this skill. Install it with `claude plugin install brewmod-placeholders@claude-brewcode`. Existing override files under `.claude/brewtools/manager/prompts/` keep working through the mod's legacy layer; `status` lists them.
-
 ## When to use
 
 | Situation | What to type |
@@ -49,7 +45,7 @@ Canonical order, shared by every `-setup` skill: `status | install | upgrade | e
 
 | Command | What it does |
 |---------|-------------|
-| `status` | Wall state, task-tools state, codewords pointer, legacy override files. A leftover `state.json` alone is not an install: `status` recommends `install`, never `upgrade` |
+| `status` | Wall state, task-tools state, codewords pointer, override files. A leftover `state.json` alone is not an install: `status` recommends `install`, never `upgrade` |
 | `install` | Install the guard; asks to confirm arming unless your prompt already said "enable the hard wall". Declining installs it disarmed |
 | `upgrade` | Re-copy the guard and off-switch CLI, backfill what an older install lacks, preserve `hard`/`level` |
 | `enable` / `disable` | Arm an installed wall / disarm it (state flip only, registration stays) |
@@ -58,7 +54,11 @@ Canonical order, shared by every `-setup` skill: `status | install | upgrade | e
 | `level <strict\|balanced>` | `balanced` = read-only Bash allowed; `strict` = all Bash denied |
 
 <Callout type="note">
-`on`, `off` and `reset` are not commands; as free text they route to `enable`, `disable`, `purge`. `edit` moved to the mod's `/placeholders edit <name>`.
+`on`, `off` and `reset` are not commands; as free text they route to `enable`, `disable`, `purge`. There is no `edit` command; change codeword text in the [placeholders mod](/mods/placeholders/) (Claude Code 2.1.300+).
+</Callout>
+
+<Callout type="note" title="Codewords live in a mod">
+The codewords `++m`, `++a`, `++rr`, `++r` and the Plan-mode `+++` are provided by the [brewmod-placeholders](/mods/placeholders/) mod (Claude Code 2.1.292+), not by this skill. Install it with `claude plugin install brewmod-placeholders@claude-brewcode`. The mod reads override files under `.claude/brewtools/manager/prompts/`; `status` lists them.
 </Callout>
 
 ## The wall in action

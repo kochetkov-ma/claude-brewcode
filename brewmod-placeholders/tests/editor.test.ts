@@ -4,7 +4,7 @@ import { EMPTY_VIEW, MAX_DECORATED_CHARS, highlight, sameView, suggest } from '.
 import { DEFAULT_ENTRIES, editorMatchers, getEditorEntries, setEditorEntries } from '../hooks/lib/editor-state'
 import { compileMatchers } from '../hooks/lib/match'
 import { defaultDefs } from './fixtures'
-import { ROOT, wire, type Tree } from './layer-io'
+import { defaultsTree, ROOT, wire, type Tree } from './layer-io'
 
 const ms = (prefix = '++') => compileMatchers(prefix, DEFAULT_ENTRIES.map((e) => e.name))
 const DRAFT = 'use ++m and ++zzz, then ++rr!'
@@ -324,7 +324,7 @@ test('GIVEN a refused state write WHEN prompt.edit runs twice THEN the highlight
 // --- prompt.autocomplete: space after the caret, registry refresh ---
 
 const HAND = `${ROOT}/.claude/placeholders/hand.md`
-const startedTree = (): Tree => ({ [`${ROOT}/.claude/placeholders/seed.md`]: '---\nname: "seed"\ndescription: "Seed mode"\n---\nSEED' })
+const startedTree = (): Tree => ({ ...defaultsTree(), [`${ROOT}/.claude/placeholders/seed.md`]: '---\nname: "seed"\ndescription: "Seed mode"\n---\nSEED' })
 
 test('GIVEN a space right after the caret WHEN prompt.autocomplete runs THEN the row has no trailing space of its own', async ($, on) => {
   on('prompt.autocomplete', () => ({ suggestions: [] }))

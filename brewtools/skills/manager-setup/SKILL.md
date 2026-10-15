@@ -12,7 +12,7 @@ model: sonnet
 
 Manager mode is the opt-in HARD wall plus the task-graph tools key. The prompt codewords (`++m` / `++a` / `++rr` / `++r` / bare `+++`) are NOT part of this plugin: the `brewmod-placeholders` mod provides them (Claude Code 2.1.292+). This skill neither installs nor toggles them; `status` only reports where they come from.
 
-**Codewords — provided by `brewmod-placeholders`.** Install: `claude plugin install brewmod-placeholders@claude-brewcode`. Existing text overrides keep working with no migration: the mod reads `<project>/.claude/brewtools/manager/prompts/<mode>.md` and `<config dir>/manager/prompts/<mode>.md` as its legacy layer (`<mode>` = `full`, `planmode`, `architect`, `review-regression`, `review-double`, `cron-plan`). This skill never reads, writes or deletes them. Codeword list, `/placeholders` command: the mod's README.
+**Codewords — provided by `brewmod-placeholders`.** Install: `claude plugin install brewmod-placeholders@claude-brewcode`. Text override files are read by the mod's legacy layer: it reads `<project>/.claude/brewtools/manager/prompts/<mode>.md` and `<config dir>/manager/prompts/<mode>.md` as its legacy layer (`<mode>` = `full`, `planmode`, `architect`, `review-regression`, `review-double`, `cron-plan`). This skill never reads, writes or deletes them. Codeword list, `/placeholders` command: the mod's README.
 
 **HARD wall — opt-in, this skill only, project-only, persistent, default OFF; no codeword.** `install` puts a self-contained PreToolUse guard into the project and registers it once in the personal, gitignored `<cwd>/.claude/settings.local.json`; it is not a plugin hook. The guard rechecks project `state.json {hard}` on every call and is inert while disarmed; armed, it denies main-session mutations while subagents remain free (`agent_id`). Arming always passes the P1 arm-confirmation gate. An armed wall denies arbitrary Edit/Bash, so `disable` never edits settings: it flips state through the one exempt command, valid even at `strict`. An armed wall injects nothing per prompt.
 
@@ -137,7 +137,7 @@ Actions, in canonical order, then the extras and the three run actions:
 | `manager-run` | `<task> as manager` | `<task> от роли менеджера` | no (wall untouched) | run task in manager role, wall untouched |
 | `inline-run` | bare task, no control verb, no marker | — | no (wall untouched) | gentle default for a bare task |
 
-> `on` / `off` / `reset` / `setup` / `remove` are not command words: `on` and `off` are free-text synonyms routed to `enable` / `disable`, `reset` routes to `purge`. Never print them as commands. `edit` is gone with the codewords: route a request to change codeword text to the `brewmod-placeholders` mod (`/placeholders edit <name>`).
+> `on` / `off` / `reset` / `setup` / `remove` are not command words: `on` and `off` are free-text synonyms routed to `enable` / `disable`, `reset` routes to `purge`. Never print them as commands. `edit` is not a command word: route a request to change codeword text to the `brewmod-placeholders` mod (`/placeholders change <name>`, free text).
 
 Every action is project-only (the wall has no global scope); `--scope global`, `глобально`, `globally` are ignored with a note.
 
@@ -677,7 +677,7 @@ Shape (`references/hard.md` rendered with `hard`, `level`, `stateSource`):
 ## Codewords
 codewords: provided by brewmod-placeholders (Claude Code 2.1.292+) — ++m, ++a, ++rr, ++r, bare +++ (Plan mode). Not part of this plugin; this skill neither enables nor disables them.
 Install:   claude plugin install brewmod-placeholders@claude-brewcode
-Overrides: <legacyOverrides, one path per line, or "none found"> — files under .claude/brewtools/manager/prompts/ and <config dir>/manager/prompts/ keep working through the mod's legacy layer (no migration).
+Overrides: <legacyOverrides, one path per line, or "none found"> — files under .claude/brewtools/manager/prompts/ and <config dir>/manager/prompts/ are read through the mod's legacy layer.
 
 ## HARD wall (this project) — registered=<yes|no>  armed=<ON|OFF>  level=<strict|balanced>  (state source: <project|global|default>)
 Delivery: INSTALLED into this project (not a plugin hook). Registered once in .claude/settings.local.json (personal, gitignored), gated at runtime by .claude/brewtools/manager/state.json {hard}.

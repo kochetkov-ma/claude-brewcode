@@ -45,6 +45,7 @@ claude --plugin-dir ./brewmod-placeholders   # dev mode, no install
 | `++r check the diff` | The two-phase review block, added as hidden context. The token stays in your prompt |
 | `++` | A typeahead of names. A band above the prompt previews the blocks |
 | `/placeholders` | Your placeholders with layer and description, plus how to add one |
+| `/placeholders show ++r` | Claude prints the full name and text of that placeholder |
 
 ## Built-in placeholders
 
@@ -82,6 +83,7 @@ Before tagging: run the full test suite, update RELEASE-NOTES.md, then show me t
 | Command | What it does |
 |---------|--------------|
 | `/placeholders` (also `status`, `help`, `list`) | Shows the list and usage |
+| `/placeholders show ++r` | Claude prints the full text of one placeholder (Claude Code 2.1.300+) |
 | `/placeholders <what you want>` | Starts the dialog to add, change or remove a placeholder |
 
 ## Prompt box
@@ -90,7 +92,7 @@ Before tagging: run the full test suite, update RELEASE-NOTES.md, then show me t
 |---------|----------|
 | Highlight | A known token is coloured and underlined; an unknown prefixed word turns to a warning colour |
 | Typeahead | After the prefix, matching names with descriptions. `Tab` inserts the token and a space |
-| Band | One row per token. With 1-2 tokens the text expands on its own; with 3+ use `Show text` |
+| Band | One row per token. 1-2 tokens: a 3-line preview per body; the `Show text  ctrl+x → tab → enter` button appears when a preview cuts a body and the band has room for more than 3 lines. 3+ tokens: name rows only, until `Show text`. Opened: the whole body within the height budget, then `... +N lines` |
 | Toast | On submit, unknown tokens are named, for example `unknown ++q`. The prompt is sent unchanged |
 
 Terminal UI only. Set the prefix in `/config`: the one option, `prefix` (default `++`, 2-8 ASCII punctuation characters).
@@ -102,10 +104,10 @@ Front matter keys (`name`, `description`, `insert`, `when`, `order`, `group`, `p
 <details>
 <summary>With brewtools</summary>
 
-brewtools is optional. Since brewtools 6.8.0 it ships no codeword hook, so this mod is the only provider of `++m`, `++a`, `++r`, `++rr` and `+++` in Claude Code.
+brewtools is optional. brewtools 6.8.0+ ships no codeword hook, so this mod is the only provider of `++m`, `++a`, `++r`, `++rr` and `+++` in Claude Code.
 
-- **Update brewtools together with the mod.** brewtools 6.7.x with this mod injects each block twice: the mod no longer de-duplicates against brewtools.
-- **Overrides carry over.** Prompt overrides under `.claude/brewtools/manager/prompts/` and `<config>/manager/prompts/` are read through the `legacy` key, whatever the brewtools version.
+- **Use brewtools 6.8.0+.** brewtools 6.7.x also injects these blocks, so each block appears twice.
+- **brewtools override files.** Files under `.claude/brewtools/manager/prompts/` and `<config>/manager/prompts/` are read through the `legacy` key, whatever the brewtools version.
 
 </details>
 
@@ -113,9 +115,9 @@ brewtools is optional. Since brewtools 6.8.0 it ships no codeword hook, so this 
 <summary>Technical details</summary>
 
 - **Mod tools.** Free-text `/placeholders` requests hand off to Claude with `list_placeholders`, `save_placeholder` and `remove_placeholder`. Saving refuses symlinks and anything that is not a plain file inside the layer; removing never touches plugin defaults or legacy brewtools files.
-- **Band keys.** `ctrl+x` is a 3 s chord prefix, `Tab` focuses the button (it does not accept the typeahead), `Enter` toggles without sending, `Esc` returns to the prompt.
+- **Band keys.** Press `ctrl+x` (no visible change), then `Tab` within 3 s (focuses the button; it does not accept a typeahead suggestion), then `Enter` (toggles; the prompt is not sent). `Esc` returns to typing.
 - **Team and Enterprise organizations.** The builtin security layer bypasses a mod's `classic.*` hooks, so a bundled command hook (`hooks/inject.mjs`) adds the blocks. Verified on Team-org and Max profiles; Enterprise was not run.
-- **Limitations.** A token inserted with `Tab` or a recalled history entry shows no highlight or band until the next keystroke. Drafts over 20,000 characters get no highlight and no band; expansion on submit still works.
+- **Limitations.** A token inserted with `Tab` or a recalled history entry shows no highlight or band until the next keystroke. Drafts over 20,000 characters get no highlight and no band; expansion on submit still works. If plugin files are deleted under a running session (for example by a plugin update), the band and one toast say `plugin files removed (updated?) · run /reload-plugins`; tokens are not marked unknown and inline placeholders keep expanding. Context blocks return after `/reload-plugins`.
 
 [Full technical details](https://doc-claude.brewcode.app/mods/placeholders/#technical-details)
 

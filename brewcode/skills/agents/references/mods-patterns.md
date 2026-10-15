@@ -126,7 +126,7 @@ on('turn.step', async function* ($, e, next) {
 | `$.state`/atom contract: `mods-api.md` Manifest; state persists across mounts in one `plugin test` (reset it there) | V; S; X |
 | hover: visible KEYED Box holds an UN-keyed inner Box `display="none"` + `hover={{ display: 'flex' }}` (rules: api Budgets) | T:889-957; S; X |
 | hover dead in default TUI (fullscreen only): `Button` toggle is primary affordance (`ctrl+x`, Tab, Enter or click) | S |
-| `prompt.edit` sees keystrokes only: Tab-accept, Esc Esc, history recall leave band and paint stale. 2.1.300+: `on('prompt.change')` scans, writes the atom, re-fills the SAME text with `decorations` (`$.prompt.fill` `replace`) when `e.origin.kind !== 'plugin'` (own fill), `e.cursor === e.text.length` (replace puts the caret at the end) and `$.prompt.read()` still equals `e.text`/`e.cursor`. Mid-draft accept and history Down stay unpainted until the next key. Proven T2.R rev3; not shipped (needs >= 2.1.300, plan L15) | T:8464-8545, 8885-8940; R3 |
+| `prompt.edit` sees keystrokes only: Tab-accept, Esc Esc, history recall leave band and paint stale. 2.1.300+: `on('prompt.change')` scans, writes the atom, re-fills the SAME text with `decorations` (`$.prompt.fill` `replace`) when `e.origin.kind !== 'plugin'` (own fill), `e.cursor === e.text.length` (replace puts the caret at the end) and `$.prompt.read()` still equals `e.text`/`e.cursor`. Mid-draft accept and history Down stay unpainted until the next key. Proven T2.R rev3; not shipped (needs >= 2.1.300, plan L15). Known limitation of `brewmod-placeholders` (floor 2.1.292): a Tab-accepted row (`++r` -> `++rr`) leaves the band one key behind. No feature detection: on 2.1.296 even `if (options.x) on('prompt.change', ...)` fails `validate` (`"prompt.change" is not an event`) and `-p` logs `hooks module did not load` | T:8464-8545, 8885-8940; R3; MF (F5 probe) |
 | any build: a render hook cannot write `$.state`; hide the band on an empty box (`$.prompt.read()` in `AbovePrompt`, terminal only), redraw on Esc Esc/submit from a `PromptHint` hook calling `$.ui.invalidate('ui.render')` when `e.props.isDraft` flips (loads on 2.1.296: W) | T:10603-10615, 2393; TTY D2; W |
 | band size: budget from `e.props.maxRows` (`mods-api.md` Budgets); unbounded rows or bodies clip at the top | R3; TTY D4 |
 | band (surfaces, height cap: `mods-api.md` Budgets): `hasSurvey` -> yield with `next(e)`; redraw throttle 10/s (web docs, research 01 row 8) | T:10640-10700; S |
@@ -290,17 +290,18 @@ Team seat: `command.run` and `$.config.set` (own row, reload, next status) ran t
 | persistent state | `$.ui.status(text)`: yellow `⚠ <plugin>: ...` row until cleared; keep it opt-in, toast the default | PE Q5a |
 | mode / plan signal | NOT `PromptHint` `e.props.hint` (lags one Shift+Tab press), not `SessionMode`: state file (#2) | PE Q5c |
 | discoverability of the command | one dim row at the band foot (`add or change: /<mod>`) plus the status block; an extra typeahead row on every bare token is skipped (acceptance untested) | PH 5a-5c |
-| band body | auto-show it (3 lines per token, `... +K`) while 1-2 tokens; from 3 collapse and show a `Button` | PH 8b |
-| key hint | every interactive affordance carries its key sequence in the label or a dim row: `[ Show text  ctrl+x · tab · enter ]` (label flips to `Hide text ...` when open); hard rule in `mods-lifecycle.md`. `hotkey="t"` is an optional extra after the same focus (label then reads `ctrl+x tab, then t`), never the only path. Sequence proven below | PH 8a, 8c; IPH |
+| plugin files deleted under a running session (cache cleaner, update) | the module stays loaded, its `$.fs` defaults vanish: a shipped dir that is missing or holds no `.md` (an `rm -rf` mid-walk) means "files gone", never "empty"; keep the cached list (no false `unknown`), redraw the band on every flip, toast once `plugin files removed (updated?) · run /reload-plugins`, drop only previews that promise an injection (inline ones still expand). A deleted root's command hook never runs: CC prints `UserPromptSubmit hook error` / `Plugin directory does not exist: <root> (<plugin> — run /plugin to reinstall)` per prompt, so a command-hook-only mod needs no toast. A `--plugin-dir` module unloads at the next prompt once `plugin.json` is gone | MF 24-29 |
+| band body | 1-2 tokens: a 3-line preview per body (`... +K lines`), plus the toggle `Button` when a preview cuts a body the budget could show (open = whole body within the budget, `... +N lines` past it); 3+ tokens: bodies collapsed behind the `Button` | PH 8b; MF 02-08 |
+| key hint | every interactive affordance carries its key sequence in the label or a dim row: `[ Show text  ctrl+x → tab → enter ]` (label flips to `Hide text ...` when open; arrows, never `·`: a person read `ctrl+x · tab · enter` as three alternative keys); hard rule in `mods-lifecycle.md`. `hotkey="t"` is an optional extra after the same focus (label then reads `ctrl+x tab, then t`), never the only path. Sequence proven below | PH 8a, 8c; IPH; MF |
 
-Proven band toggle sequence (2.1.300, tmux, one key then capture; Button label `[ Show text  ctrl+x · tab · enter ]`):
+Proven band toggle sequence (2.1.300, tmux, one key then capture; Button label `[ Show text  ctrl+x → tab → enter ]`; re-proven for 1 token, MF 02-08, and 3 tokens, MF 10-22):
 
 | Step | Key | Observed | src |
 |------|-----|----------|-----|
 | 1 | type tokens | draft holds them, band lists them, Button collapsed | IPH 05 |
 | 2 | `ctrl+x` | chord prefix, no visible change; cancels after 3 s (`ctrl+x cancelled - no next key within 3s`): send `Tab` within 3 s | IPH 06; report.md (message text not in a capture) |
-| 3 | `Tab` | Button focused (reverse video); draft untouched | IPH 07 |
-| 4 | `Enter` | band expands, label `Hide text`; prompt NOT submitted | IPH 08 |
-| 5 | `Enter` | band collapses, label `Show text`; Button stays focused | IPH 09 |
-| 6 | `Esc` | focus back to the prompt (reverse video gone); next typed char lands in the draft | IPH 10, 11 |
-| - | `Tab` while a typeahead row is open | focus moves to the Button; typeahead NOT accepted (draft unchanged, row stays). Accept typeahead with `Tab` only while the prompt owns focus, never after `ctrl+x` | IPH 12, 13 |
+| 3 | `Tab` | Button focused (reverse video, ANSI `1;7m`); draft untouched | IPH 07; MF 04, 18 |
+| 4 | `Enter` | band expands, label `Hide text`; prompt NOT submitted | IPH 08; MF 05, 19 |
+| 5 | `Enter` | band collapses, label `Show text`; Button stays focused | IPH 09; MF 06, 20 |
+| 6 | `Esc` | focus back to the prompt (reverse video gone); next typed char lands in the draft | IPH 10, 11; MF 07-08, 21-22 |
+| - | `Tab` while a typeahead row is open | focus moves to the Button; typeahead NOT accepted (draft unchanged, row stays). Accept typeahead with `Tab` only while the prompt owns focus, never after `ctrl+x` | IPH 12, 13; MF 04, 12 |

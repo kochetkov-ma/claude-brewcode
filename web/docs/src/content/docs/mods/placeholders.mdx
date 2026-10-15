@@ -40,6 +40,7 @@ Dev mode without installing: `claude --plugin-dir ./brewmod-placeholders`.
 | `++r check the diff` | The review block is added as hidden context. The token stays in your prompt |
 | `++` | A typeahead of names. `Tab` inserts the token. A band above the prompt previews the blocks |
 | `/placeholders` | The list of placeholders with their layers, plus how to add one |
+| `/placeholders show ++r` | Claude prints that placeholder's name and full text |
 
 ## Built-in placeholders
 
@@ -51,7 +52,7 @@ Dev mode without installing: `claude --plugin-dir ./brewmod-placeholders`.
 | `++rr` | always | Anti-regression review on three axes |
 | `+++` | plan mode | Anti-drift cron plan that keeps work on the goal |
 
-`++rr` beats `++r` when both appear. Brewtools v6.8.0+ no longer ships these codewords: this mod is their only provider.
+`++rr` beats `++r` when both appear. This mod is the only provider of these codewords; use brewtools 6.8.0+ alongside it.
 
 ## Add your own
 
@@ -76,6 +77,7 @@ The dialog is verified on 2.1.300; builds without the mod tool API print `needs 
 | Command | What it does |
 |---------|--------------|
 | `/placeholders`, `status`, `help`, `list` | Shows `<N> placeholders: type ++name in any prompt`, one row per placeholder with layer and description, then `add or change: /placeholders <what you want>` |
+| `/placeholders show ++r` | Claude reads the list and prints the name and full body of one placeholder. Needs Claude Code 2.1.300+ |
 | `/placeholders <anything else>` | Starts the model-run dialog above |
 
 Config: `/config` has one option, `prefix` (default `++`, 2-8 ASCII punctuation characters).
@@ -86,8 +88,15 @@ Config: `/config` has one option, `prefix` (default `++`, 2-8 ASCII punctuation 
 |---------|----------|
 | Highlight | A known token is underlined. An unknown prefixed word takes the warning colour |
 | Typeahead | After the prefix, matching names with descriptions. `Tab` inserts the token |
-| Band | One row per distinct token. 1-2 tokens show 3 lines of text at once. With 3+ tokens, press the `Show text  ctrl+x · tab · enter` button: `ctrl+x` (chord, 3 s), `Tab` to focus, `Enter` to toggle without sending, `Esc` back to the prompt |
+| Band | One row per distinct token. With 1-2 tokens, each body shows a 3-line preview, and the `Show text  ctrl+x → tab → enter` button appears when a preview cuts a body and the band has room for more than 3 lines. With 3+ tokens, only the name rows show until `Show text`. Opened, it shows the whole body within the height budget, then `... +N lines` |
 | Unknown token | A toast such as `unknown ++q` on submit. The prompt is sent unchanged |
+
+To read the full text, press the keys one after another, not together:
+
+1. `ctrl+x`: nothing changes on screen.
+2. `Tab` within 3 seconds: focuses the button. It does not accept a typeahead suggestion.
+3. `Enter`: toggles `Show text` and `Hide text`. The prompt is not sent.
+4. `Esc`: back to typing.
 
 Terminal UI only. The band foot reads `add or change: /placeholders`.
 
@@ -129,9 +138,9 @@ The highest layer wins, file by file:
 <Spoiler title="With brewtools">
 
 - **Update brewtools with the mod.** brewtools 6.7.x plus this mod injects each block twice.
-- **Overrides carry over.** Existing files under `.claude/brewtools/manager/prompts/` and `<config>/manager/prompts/` keep working.
+- **brewtools override files.** Files under `.claude/brewtools/manager/prompts/` and `<config>/manager/prompts/` are read through the `legacy` layer.
 - **Silence a token.** Give your override an empty body.
-- History: [Codewords (moved to mod)](/brewtools/prompt-injection/).
+- **Codewords.** The brewtools-side notes live in [Codewords](/brewtools/prompt-injection/).
 
 </Spoiler>
 
@@ -143,6 +152,7 @@ The highest layer wins, file by file:
 - **Match.** A name must stand alone: `++rr` is not `++r`.
 - **Inject.** The module expands only inline placeholders and names unknown tokens in a toast. The command hook builds the context blocks, picks plan variants from the permission mode and skips subagent deliveries.
 - **Fail open.** Any error returns an empty result, so a fault never blocks a prompt.
+- **Plugin files deleted** (for example a plugin update during a running session). The band reads `plugin files removed (updated?) · run /reload-plugins` and one toast per session says the same. Tokens are not marked unknown and inline placeholders keep expanding, but context blocks cannot be added until `/reload-plugins`.
 
 The hook records the permission mode in `.state/mode-<session_id>.json` in the plugin root. The band reads it for the plan label, which updates one turn late after `Shift+Tab`.
 

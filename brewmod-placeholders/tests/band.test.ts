@@ -1,6 +1,6 @@
 import { test, expect } from 'claude-code/testing'
 import type { On } from 'claude-code'
-import { ROOT, STATE_FILE, wire, type Tree } from './layer-io'
+import { ROOT, STATE_FILE, defaultsTree, wire, type Tree } from './layer-io'
 import { HINT, PLAN_ONLY_LABEL, TOGGLE_KEYS, UNKNOWN_LABEL, bandBudget, bandRows, toggleLabel } from '../hooks/lib/band'
 
 const SURFACES = ['terminal', 'desktop'] as const
@@ -29,8 +29,9 @@ const typed = ($: { prompt: unknown }, text: string) =>
 const box = { text: '', cursor: 0 }
 
 // Real path: session.start loads the registry into the editor entries, prompt.edit writes the view atom.
+// The plugin's own placeholders/ ships with every install: merged in, keeping the tree object a test mutates.
 const boot = async ($: any, on: On, draft: string, stubs: (on: On) => void = () => {}, tree: Tree = TREE) => {
-  wire(on, { tree })
+  wire(on, { tree: Object.assign(tree, { ...defaultsTree(), ...tree }) })
   on('prompt.read', () => ({ value: box }) as never)
   box.text = draft
   stubs(on)
@@ -259,7 +260,7 @@ test('GIVEN tokens and entries WHEN rows are built THEN they dedupe case-insensi
     { text: '++nd', name: 'nd', isKnown: true, description: 'nd', body: '', isPlanOnly: false },
     { text: '++x', name: 'x', isKnown: false, description: UNKNOWN_LABEL, body: '', isPlanOnly: false },
   ])
-  expect([toggleLabel(false), toggleLabel(true)], 'labels').toEqual(['Show text  ctrl+x · tab · enter', 'Hide text  ctrl+x · tab · enter'])
+  expect([toggleLabel(false), toggleLabel(true)], 'labels').toEqual(['Show text  ctrl+x → tab → enter', 'Hide text  ctrl+x → tab → enter'])
 })
 
 test('GIVEN terminal heights and the fullscreen flag WHEN the band budget is computed THEN it is 6 to 30 rows, less the reserve outside fullscreen', async () => {
@@ -284,14 +285,41 @@ test('GIVEN twelve unknown tokens and a 12-row budget WHEN the band mounts THEN 
 
 const LONG = { [`${ROOT}/.claude/placeholders/long.md`]: bodyOf('long', 20) }
 
-test('GIVEN one 20-line body WHEN the band mounts THEN three body lines show at once, with no toggle Button', async ($, on) => {
+test('GIVEN one 20-line body WHEN the band mounts THEN a three-line preview shows with a Show text Button, and a press shows the body up to the budget', async ($, on) => {
   await boot($, on, '++long', undefined, LONG)
   const ui = await $.ui.mount({ ...PLUGIN, surface: 'terminal', props: PROPS })
+  const preview = [await texts(ui), (await ui.find({ key: 'toggle' }))?.props]
 
-  expect([await texts(ui), await ui.find({ key: 'toggle' })], 'texts and toggle').toEqual([
-    ['placeholders 1 ', '++long', '  long mode', 'long-line-1', 'long-line-2', '... +18 lines', HINT],
-    undefined,
-  ])
+  await ui.press({ key: 'toggle' })
+  const open = [await texts(ui), (await ui.find({ key: 'toggle' }))?.props]
+  await ui.press({ key: 'toggle' })
+
+  expect({ preview, open, closed: await texts(ui) }, 'preview, opened, closed').toEqual({
+    preview: [['placeholders 1 ', '++long', '  long mode', 'long-line-1', 'long-line-2', '... +18 lines', HINT], { key: 'toggle', label: 'Show text  ctrl+x → tab → enter' }],
+    open: [
+      ['placeholders 1 ', '++long', '  long mode', ...Array.from({ length: 8 }, (_, i) => `long-line-${i + 1}`), '... +12 lines', HINT],
+      { key: 'toggle', label: 'Hide text  ctrl+x → tab → enter' },
+    ],
+    closed: ['placeholders 1 ', '++long', '  long mode', 'long-line-1', 'long-line-2', '... +18 lines', HINT],
+  })
+  await ui.unmount()
+})
+
+test('GIVEN one 20-line body and a tall terminal WHEN the band is opened THEN the whole body shows with no lines-cut row', async ($, on) => {
+  await boot($, on, '++long', undefined, LONG)
+  const ui = await $.ui.mount({ ...PLUGIN, surface: 'terminal', props: { ...PROPS, maxRows: 45 } })
+
+  await ui.press({ key: 'toggle' })
+
+  expect(await texts(ui), 'full body').toEqual(['placeholders 1 ', '++long', '  long mode', ...Array.from({ length: 20 }, (_, i) => `long-line-${i + 1}`), HINT])
+  await ui.unmount()
+})
+
+test('GIVEN one 3-line body WHEN the band mounts THEN the preview holds it whole and there is no Button', async ($, on) => {
+  await boot($, on, '++short', undefined, { [`${ROOT}/.claude/placeholders/short.md`]: bodyOf('short', 3) })
+  const ui = await $.ui.mount({ ...PLUGIN, surface: 'terminal', props: PROPS })
+
+  expect([await texts(ui), await ui.find({ key: 'toggle' })], 'texts and toggle').toEqual([['placeholders 1 ', '++short', '  short mode', 'short-line-1', 'short-line-2', 'short-line-3', HINT], undefined])
   await ui.unmount()
 })
 
@@ -323,7 +351,7 @@ test('GIVEN three tokens and a 20-line body WHEN the band mounts collapsed THEN 
   const ui = await $.ui.mount({ ...PLUGIN, surface: 'terminal', props: PROPS })
 
   expect([(await ui.find({ key: 'toggle' }))?.props, (await texts(ui)).slice(3, 10)], 'button props, hover texts').toEqual([
-    { key: 'toggle', label: 'Show text  ctrl+x · tab · enter' },
+    { key: 'toggle', label: 'Show text  ctrl+x → tab → enter' },
     [...Array.from({ length: 6 }, (_, i) => `long-line-${i + 1}`), '... +14 lines'],
   ])
   await ui.unmount()

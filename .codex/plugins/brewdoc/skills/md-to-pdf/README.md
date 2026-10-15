@@ -4,7 +4,7 @@ Converts Markdown to a styled PDF with **reportlab** (pure Python, no system dep
 
 ## Install
 
-Install the [Brewdoc plugin](../../README.md#install), then `/reload-plugins`. The skill offers to install its engine on first use.
+Install the [Brewdoc plugin](../../../../../brewdoc/README.md#install), then `/reload-plugins`. The skill offers to install its engine on first use.
 
 ## Usage
 

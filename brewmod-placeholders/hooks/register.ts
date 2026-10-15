@@ -4,7 +4,7 @@ import { editorMatchers, getEditorEntries, setEditorEntries } from './lib/editor
 import { highlight, sameView, suggest } from './lib/editor'
 import { validatePrefix, type PlaceholderView } from './lib/match'
 import { memoCompile, type Compiled } from './lib/compiled'
-import { configDirOf, issuesMessage, loadRegistry, newRegistryCache, toEditorEntries, type Registry } from './lib/defs'
+import { FILES_GONE, PluginFilesGone, configDirOf, issuesMessage, loadRegistry, newRegistryCache, toEditorEntries, type Registry } from './lib/defs'
 import { modeStatePath, planFromState } from './lib/mode'
 import { bandBudget, bandRows, renderBand } from './lib/band'
 import { NEEDS_NEW_CC, TOOLS, TOOL_PREFIX, handoffAck, handoffText, isStatusRequest, listTool, removeTool, saveTool, statusText, type SaveInput, type ToolOut } from './lib/command'
@@ -29,6 +29,27 @@ export const register: Register = (on, options) => {
   let shown: PlaceholderView | null = null // last view written to viewAtom
   let refreshedAt = -REFRESH_MS // clock of the last typeahead registry refresh
   let wasDraft: boolean | null = null // isDraft of the last hint-line draw
+  let isGone = false // the plugin's own placeholders/ folder vanished: the cached list stays, the band shows the reload line
+  let goneToasted = false
+
+  // A load that finds the plugin files gone resolves null (cache kept); a flip of that state redraws the band, the first sighting toasts.
+  const settle = async (load: Promise<Registry>, toast: (text: string) => void, redraw: () => void): Promise<Registry | null> => {
+    const was = isGone
+    let reg: Registry | null = null
+    try {
+      reg = await load
+      isGone = false
+    } catch (err) {
+      if (!(err instanceof PluginFilesGone)) throw err
+      isGone = true
+    }
+    if (isGone !== was) redraw()
+    if (isGone && !goneToasted) {
+      goneToasted = true
+      toast(FILES_GONE)
+    }
+    return reg
+  }
 
   // Hands a freshly loaded registry to the editor/band names and the compiled matchers; both skip an unchanged registry.
   const adopt = (reg: Registry): Compiled => {
@@ -53,14 +74,19 @@ export const register: Register = (on, options) => {
       hasTools = false
     }
     if (check.warning !== null) $.ui.toast(check.warning)
-    const reg = await loadRegistry(
-      { exists: (p) => $.fs.exists(p), list: (p) => $.fs.list(p), read: (p) => $.fs.read(p) },
-      { pluginRoot: $.plugin.root, root: await $.session.root(), configDir: configDirOf(await $.env.get('CLAUDE_CONFIG_DIR'), (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE'))) },
-      cache,
+    const reg = await settle(
+      loadRegistry(
+        { exists: (p) => $.fs.exists(p), list: (p) => $.fs.list(p), read: (p) => $.fs.read(p) },
+        { pluginRoot: $.plugin.root, root: await $.session.root(), configDir: configDirOf(await $.env.get('CLAUDE_CONFIG_DIR'), (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE'))) },
+        cache,
+      ),
+      (t) => $.ui.toast(t, { timeoutMs: 8000 }), () => $.ui.invalidate('ui.render'),
     )
-    adopt(reg)
-    const issues = issuesMessage(reg)
-    if (issues !== null) $.ui.toast(issues)
+    if (reg !== null) {
+      adopt(reg)
+      const issues = issuesMessage(reg)
+      if (issues !== null) $.ui.toast(issues)
+    }
     try {
       const file = modeStatePath($.plugin.root, await $.session.id())
       if (file !== null) isPlan = planFromState(await $.fs.read(file)) ?? isPlan
@@ -105,19 +131,28 @@ export const register: Register = (on, options) => {
   })
 
   // A prefixed token re-reads the definitions at most once a second, so a file made by hand shows as known without a submit. A failed read keeps the rows.
+  // prompt.edit already drew this key's view with the old names: a changed list re-draws it here, so the band does not lag a key.
   on('prompt.autocomplete', { token: /^[^\w\s]{2}/ }, async ($, e, next) => {
     const r = await next(e)
     try {
       const now = await $.clock.now()
       if (e.token.startsWith(prefix) && now - refreshedAt >= REFRESH_MS) {
         refreshedAt = now
-        adopt(
-          await loadRegistry(
+        const reg = await settle(
+          loadRegistry(
             { exists: (p) => $.fs.exists(p), list: (p) => $.fs.list(p), read: (p) => $.fs.read(p) },
             { pluginRoot: $.plugin.root, root: await $.session.root(), configDir: configDirOf(await $.env.get('CLAUDE_CONFIG_DIR'), (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE'))) },
             cache,
           ),
+          (t) => $.ui.toast(t, { timeoutMs: 8000 }), () => $.ui.invalidate('ui.render'),
         )
+        const before = getEditorEntries()
+        if (reg !== null) adopt(reg)
+        const view = highlight(editorMatchers(prefix), e.text).view
+        if (getEditorEntries() !== before && (shown === null || !sameView(view, shown))) {
+          await update($, viewAtom, () => view)
+          shown = view
+        }
       }
     } catch {
       // keep the entries we have: a failed refresh must not drop the typeahead rows
@@ -140,15 +175,19 @@ export const register: Register = (on, options) => {
       }
     }
     if (!isInlineSubmit(e) || !e.text.includes(prefix)) return next(e)
-    const c = adopt(
-      await loadRegistry(
+    const reg = await settle(
+      loadRegistry(
         { exists: (p) => $.fs.exists(p), list: (p) => $.fs.list(p), read: (p) => $.fs.read(p) },
         { pluginRoot: $.plugin.root, root: await $.session.root(), configDir: configDirOf(await $.env.get('CLAUDE_CONFIG_DIR'), (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE'))) },
         cache,
       ),
+      (t) => $.ui.toast(t, { timeoutMs: 8000 }), () => $.ui.invalidate('ui.render'),
     )
+    // Gone: inline defs expand from the cached list; no unknown toast, the list cannot be vouched for.
+    const c = reg === null ? compiled : adopt(reg)
+    if (c === null) return next(e)
     const text = expandInline(c, e.text)
-    const bad = unknownTokens(c.matchers, text ?? e.text)
+    const bad = reg === null ? [] : unknownTokens(c.matchers, text ?? e.text)
     if (bad.length > 0) $.ui.toast(unknownMessage(bad))
     return next(text === null ? e : { ...e, text })
   })
@@ -162,6 +201,7 @@ export const register: Register = (on, options) => {
     return renderBand($.ui.resolve(e), rows, {
       isExpanded: await read($, expandedAtom),
       isPlan,
+      isGone,
       budget: bandBudget(e.props.maxRows, e.viewport?.isFullscreen === true),
       onToggle: () => update($, expandedAtom, (open) => !open),
     })
@@ -169,7 +209,8 @@ export const register: Register = (on, options) => {
 
   on('command.run', { command: 'placeholders' }, async ($, e) => {
     const roots = { pluginRoot: $.plugin.root, root: await $.session.root().catch(() => undefined), configDir: configDirOf(await $.env.get('CLAUDE_CONFIG_DIR'), (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE'))) }
-    const reg = await loadRegistry({ exists: (p) => $.fs.exists(p), list: (p) => $.fs.list(p), read: (p) => $.fs.read(p) }, roots, cache)
+    const reg = await settle(loadRegistry({ exists: (p) => $.fs.exists(p), list: (p) => $.fs.list(p), read: (p) => $.fs.read(p) }, roots, cache), (t) => $.ui.toast(t, { timeoutMs: 8000 }), () => $.ui.invalidate('ui.render'))
+    if (reg === null) return { text: FILES_GONE }
     adopt(reg)
     const status = statusText(reg, prefix)
     if (isStatusRequest(e.args)) return { text: status }
@@ -203,13 +244,19 @@ export const register: Register = (on, options) => {
       },
     }
     const input = e as SaveInput
+    // Gone: nothing is written or removed, the model gets the reload hint.
+    const reg = await settle(loadRegistry(io, roots, cache), (t) => $.ui.toast(t, { timeoutMs: 8000 }), () => $.ui.invalidate('ui.render'))
+    if (reg === null) return { result: FILES_GONE, text: FILES_GONE, isError: true }
     const out: ToolOut =
       e.tool === `${TOOL_PREFIX}save_placeholder`
         ? await saveTool(io, roots, input, prefix)
         : e.tool === `${TOOL_PREFIX}remove_placeholder`
           ? await removeTool(io, roots, input, prefix)
-          : listTool(await loadRegistry(io, roots, cache))
+          : listTool(reg)
     if (out.registry !== null) adopt(out.registry)
     return out.isError === true ? { result: out.text, text: out.text, isError: true } : { result: out.text, text: out.text }
+  }).catch((_$, _e, next) => {
+    const text = `failed: ${next.error.message ?? next.error.kind}`
+    return { result: text, text, isError: true }
   })
 }
