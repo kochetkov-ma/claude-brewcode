@@ -4,15 +4,7 @@ import { GITHUB_URL, getGitHubStars, getPluginVersion } from '../../utils/github
 // Build-time data: a CSP without 'unsafe-inline' and connect-src 'self' forbids browser fetches.
 const rawVersion = getPluginVersion();
 const version = rawVersion === '0.0.0' ? null : `v${rawVersion}`;
-let stars: number | null = null;
-try {
-  stars = await Promise.race([
-    getGitHubStars(),
-    new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000).unref()),
-  ]);
-} catch {
-  stars = null;
-}
+const stars = await getGitHubStars();
 const starsLabel = stars ? `${stars}+` : null;
 ---
 
