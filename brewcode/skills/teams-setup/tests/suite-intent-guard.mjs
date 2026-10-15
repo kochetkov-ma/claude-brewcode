@@ -10,6 +10,8 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const HERE = join(fileURLToPath(import.meta.url), '..');
+// Hang guard, not a readiness wait: slow runners exceeded the old 30 s budget.
+const SPAWN_TIMEOUT_MS = 180000;
 const GENERATE = join(HERE, '..', '..', 'superreview-setup', 'scripts', 'generate.sh');
 
 const BASE = realpathSync(mkdtempSync(join(tmpdir(), 'teams-intent-guard-')));
@@ -42,8 +44,8 @@ function makeProject(label, body) {
 }
 
 function emitAgent(root) {
-  const r = spawnSync('bash', [GENERATE, 'emit-agent'], { cwd: root, encoding: 'utf8', timeout: 30000 });
-  return { stdout: (r.stdout || '').trim(), stderr: r.stderr || '', status: r.status };
+  const r = spawnSync('bash', [GENERATE, 'emit-agent'], { cwd: root, encoding: 'utf8', timeout: SPAWN_TIMEOUT_MS });
+  return { stdout: (r.stdout || '').trim(), stderr: r.stderr || '', status: r.status ?? `TIMEOUT signal=${r.signal} error=${r.error?.code}` };
 }
 
 const agentNames = (root) => readdirSync(join(root, '.claude', 'agents')).sort();
