@@ -206,7 +206,7 @@ export function resolveDefs(layers) {
   return [...cur.values()]
 }
 
-// *.md files of a layer dir (stem -> raw). Missing dir -> empty. A listing error rejects the load; an unreadable user file is skipped, an unreadable default throws.
+// *.md files of a layer dir (stem -> raw). Missing dir -> empty. Unreadable user layer or file -> skipped; an unreadable default throws.
 function readLayer(spec, legacyNames) {
   const files = new Map()
   if (!fs.existsSync(spec.dir)) return files
@@ -229,7 +229,13 @@ export function loadDefs(roots) {
   const layers = []
   let legacyNames = new Set()
   for (const spec of layerSpecs(roots)) {
-    const files = readLayer(spec, legacyNames)
+    let files
+    try {
+      files = readLayer(spec, legacyNames)
+    } catch (err) {
+      if (spec.id === 'default') throw err
+      files = new Map()
+    }
     layers.push({ kind: spec.kind, files })
     if (spec.id === 'default') {
       legacyNames = new Set()
@@ -281,6 +287,7 @@ export function assemble(defs, prefix, prompt, mode) {
 // ---- State: <plugin root>/.state/mode-<session_id>.json = {mode, ts}, read by register.ts. Same convention as brewmod-plan-effort.
 
 const SESSION_ID = /^[A-Za-z0-9_-]+$/
+const STATE_FILE = /^mode-[A-Za-z0-9_-]+\.json(\.\d+\.tmp)?$/
 
 function recordMode(e, root, prune) {
   if (e.agent_id !== undefined || typeof e.permission_mode !== 'string' || typeof e.session_id !== 'string' || !SESSION_ID.test(e.session_id)) return
@@ -288,13 +295,31 @@ function recordMode(e, root, prune) {
   fs.mkdirSync(dir, { recursive: true })
   const file = path.join(dir, `mode-${e.session_id}.json`)
   const tmp = `${file}.${process.pid}.tmp`
-  fs.writeFileSync(tmp, JSON.stringify({ mode: e.permission_mode, ts: Date.now() }))
-  fs.renameSync(tmp, file)
-  if (!prune) return
+  try {
+    fs.writeFileSync(tmp, JSON.stringify({ mode: e.permission_mode, ts: Date.now() }))
+    fs.renameSync(tmp, file)
+  } catch (err) {
+    try {
+      fs.unlinkSync(tmp)
+    } catch {
+      // no temp file to remove
+    }
+    throw err
+  }
+  if (prune) pruneState(dir)
+}
+
+// Old mode files and orphan temp files; regular files only (lstat, links never followed), one bad entry skips only itself.
+function pruneState(dir) {
   for (const name of fs.readdirSync(dir)) {
-    if (!/^mode-[A-Za-z0-9_-]+\.json$/.test(name)) continue
-    const p = path.join(dir, name)
-    if (Date.now() - fs.statSync(p).mtimeMs > WEEK_MS) fs.unlinkSync(p)
+    if (!STATE_FILE.test(name)) continue
+    try {
+      const p = path.join(dir, name)
+      const st = fs.lstatSync(p)
+      if (st.isFile() && Date.now() - st.mtimeMs > WEEK_MS) fs.unlinkSync(p)
+    } catch {
+      // best effort per file
+    }
   }
 }
 

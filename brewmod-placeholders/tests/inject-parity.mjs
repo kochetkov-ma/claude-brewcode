@@ -28,7 +28,7 @@ const report = (name, fn) => (err) => {
   return fn;
 };
 
-// One hook run: `{ out, rc, raw }`; env is minimal so nothing leaks in from the developer's profile.
+// One hook run: `{ rc, stdout, stderr }`; env is minimal so nothing leaks in from the developer's profile.
 function run({ input, env, root = MOD, raw }) {
   const stdin = raw ?? JSON.stringify(input);
   return new Promise((resolve) => {
@@ -70,25 +70,34 @@ job('golden: group counts', async () => {
 
 // ---- 1. Golden vectors (98): defaults from the real placeholders/, overrides from the vector
 
-for (const v of VECTORS) {
-  job(`golden ${v.id}`, async () => {
-    const d = sandbox();
-    for (const f of v.files) {
-      const rel = f.layer === 'project' ? `proj/.claude/brewtools/manager/prompts/${f.legacy}.md` : `cfg/manager/prompts/${f.legacy}.md`;
-      put(d, { [rel]: f.raw });
-    }
-    // The launch-dir vectors hook-cwd is a subdir holding a decoy override that must be ignored.
-    put(d, { 'proj/sub/.claude/brewtools/manager/prompts/architect.md': '```\nDECOY\n```\n' });
-    const input = { hook_event_name: 'UserPromptSubmit', cwd: path.join(d, 'proj', 'sub'), prompt: v.prompt, ...(v.mode === null ? {} : { permission_mode: v.mode }) };
-    const env = { CLAUDE_PROJECT_DIR: path.join(d, 'proj'), CLAUDE_CONFIG_DIR: path.join(d, 'cfg'), CLAUDE_PLUGIN_OPTION_PREFIX: v.prefix };
-    const r = await run({ input, env });
-    assert.equal(r.rc, 0, `${v.id}: rc`);
-    assert.equal(r.stdout, v.expected === null ? '{}' : ctx(v.expected), `${v.id}: stdout`);
-    if (v.expected !== null) assert.equal(v.expected.length, v.length, `${v.id}: golden length`);
+async function runGolden(v) {
+  const d = sandbox();
+  for (const f of v.files) {
+    const rel = f.layer === 'project' ? `proj/.claude/brewtools/manager/prompts/${f.legacy}.md` : `cfg/manager/prompts/${f.legacy}.md`;
+    put(d, { [rel]: f.raw });
+  }
+  // The launch-dir vectors hook-cwd is a subdir holding a decoy override that must be ignored.
+  put(d, { 'proj/sub/.claude/brewtools/manager/prompts/architect.md': '```\nDECOY\n```\n' });
+  const input = { hook_event_name: 'UserPromptSubmit', cwd: path.join(d, 'proj', 'sub'), prompt: v.prompt, permission_mode: v.mode ?? undefined };
+  const env = { CLAUDE_PROJECT_DIR: path.join(d, 'proj'), CLAUDE_CONFIG_DIR: path.join(d, 'cfg'), CLAUDE_PLUGIN_OPTION_PREFIX: v.prefix };
+  return run({ input, env });
+}
+
+for (const v of VECTORS.filter((x) => x.expected === null)) {
+  job(`golden ${v.id} (no injection)`, async () => {
+    const r = await runGolden(v);
+    assert.deepEqual([r.rc, r.stdout], [0, '{}'], `${v.id}: rc and stdout`);
   });
 }
 
-// ---- 2. Layer, mode and option fixtures: expected text, null = `{}`
+for (const v of VECTORS.filter((x) => x.expected !== null)) {
+  job(`golden ${v.id}`, async () => {
+    const r = await runGolden(v);
+    assert.deepEqual([r.rc, r.stdout, v.expected.length], [0, ctx(v.expected), v.length], `${v.id}: rc, stdout, golden length`);
+  });
+}
+
+// ---- 2. Layer, mode and option fixtures: expected text, null = `{}`; last item builds env/cwd overrides from the sandbox
 
 const A_HEAD = 'User typed `++a` — Architecture-first discipline is active for this turn:';
 const P = '.claude/placeholders';
@@ -116,6 +125,7 @@ const CASES = [
   ['unclosed front matter is skipped, default stays', { [`proj/${P}/a.md`]: '---\nname: a\nBODY' }, '++a', 'default', vec('spec-3')],
   ['bad placeholder name is skipped', { [`proj/${P}/my-thing.md`]: 'X' }, '++my-thing', 'default', null],
   ['CRLF and BOM native file with front matter', { [`proj/${P}/bar.md`]: '\ufeff---\r\nheader: "H"\r\n---\r\nBODY\r\n' }, '++bar', 'default', 'H\n\nBODY'],
+  ['a file where the project placeholders dir should be: defaults still inject', { [`proj/${P}`]: 'a file, not a dir' }, '++r', 'default', vec('spec-4')],
   ['dot file and directory named *.md are ignored', { [`proj/${P}/.hid.md`]: 'HID', [`proj/${P}/dir.md`]: null }, '++hid ++dir', 'default', null],
   ['uppercase stem and uppercase token', { [`proj/${P}/Foo.md`]: 'UP' }, '++FOO', 'default', 'UP'],
   ['front matter name differs from the stem', { [`proj/${P}/zzz.md`]: fm('name: "qq"', 'QQ') }, '++qq ++zzz', 'default', 'QQ'],
@@ -123,25 +133,45 @@ const CASES = [
   ['word before the prefix is no token', { [`proj/${P}/foo.md`]: 'F' }, 'x++foo', 'default', null],
   ['synthetic delivery', {}, '<task-notification>++m', 'default', null],
   ['no prefix at all', {}, 'hello', 'default', null],
-  ['invalid prefix option falls back to ++', {}, '++r', 'default', vec('spec-4'), { CLAUDE_PLUGIN_OPTION_PREFIX: 'ab' }],
-  ['custom prefix ignores ++ tokens', {}, '++r', 'default', null, { CLAUDE_PLUGIN_OPTION_PREFIX: '@@' }],
-  ['custom prefix header token', { [`proj/${P}/h.md`]: fm('header: "T {token}:"', 'HB') }, '@@H', 'default', 'T @@h:\n\nHB', { CLAUDE_PLUGIN_OPTION_PREFIX: '@@' }],
-  ['launch dir comes from cwd without CLAUDE_PROJECT_DIR', { [`proj/${P}/foo.md`]: 'CWD' }, '++foo', 'default', 'CWD', { CLAUDE_PROJECT_DIR: '', CWD: 'proj' }],
-  ['config dir falls back to HOME/.claude', { [`home/.claude/placeholders/foo.md`]: 'HOMEFOO' }, '++foo', 'default', 'HOMEFOO', { CLAUDE_CONFIG_DIR: '', HOME: 'home' }],
+  ['invalid prefix option falls back to ++', {}, '++r', 'default', vec('spec-4'), () => ({ env: { CLAUDE_PLUGIN_OPTION_PREFIX: 'ab' } })],
+  ['custom prefix ignores ++ tokens', {}, '++r', 'default', null, () => ({ env: { CLAUDE_PLUGIN_OPTION_PREFIX: '@@' } })],
+  ['custom prefix header token', { [`proj/${P}/h.md`]: fm('header: "T {token}:"', 'HB') }, '@@H', 'default', 'T @@h:\n\nHB', () => ({ env: { CLAUDE_PLUGIN_OPTION_PREFIX: '@@' } })],
+  ['launch dir comes from cwd without CLAUDE_PROJECT_DIR', { [`proj/${P}/foo.md`]: 'CWD' }, '++foo', 'default', 'CWD', () => ({ env: { CLAUDE_PROJECT_DIR: '' }, cwd: 'proj' })],
+  ['config dir falls back to HOME/.claude', { [`home/.claude/placeholders/foo.md`]: 'HOMEFOO' }, '++foo', 'default', 'HOMEFOO', (d) => ({ env: { CLAUDE_CONFIG_DIR: '', HOME: path.join(d, 'home') } })],
 ];
 
-for (const [name, tree, prompt, mode, want, over = {}] of CASES) {
-  job(`layer: ${name}`, async () => {
-    const d = sandbox();
-    put(d, tree);
-    const env = { CLAUDE_PROJECT_DIR: path.join(d, 'proj'), CLAUDE_CONFIG_DIR: path.join(d, 'cfg') };
-    for (const [k, v] of Object.entries(over)) if (k !== 'CWD') env[k] = k === 'HOME' ? path.join(d, v) : v;
-    const cwd = path.join(d, over.CWD ?? 'proj/sub');
-    const r = await run({ input: { hook_event_name: 'UserPromptSubmit', cwd, prompt, permission_mode: mode }, env });
-    assert.equal(r.rc, 0, 'rc');
-    assert.equal(r.stdout, want === null ? '{}' : ctx(want), 'stdout');
+async function runLayer([, tree, prompt, mode, , over = () => ({})]) {
+  const d = sandbox();
+  put(d, tree);
+  const o = over(d);
+  const env = { CLAUDE_PROJECT_DIR: path.join(d, 'proj'), CLAUDE_CONFIG_DIR: path.join(d, 'cfg'), ...o.env };
+  const cwd = path.join(d, o.cwd ?? 'proj/sub');
+  return run({ input: { hook_event_name: 'UserPromptSubmit', cwd, prompt, permission_mode: mode }, env });
+}
+
+for (const c of CASES.filter((x) => x[4] === null)) {
+  job(`layer: ${c[0]} (no injection)`, async () => {
+    const r = await runLayer(c);
+    assert.deepEqual([r.rc, r.stdout], [0, '{}'], 'rc and stdout');
   });
 }
+
+for (const c of CASES.filter((x) => x[4] !== null)) {
+  job(`layer: ${c[0]}`, async () => {
+    const r = await runLayer(c);
+    assert.deepEqual([r.rc, r.stdout], [0, ctx(c[4])], 'rc and stdout');
+  });
+}
+
+job('layer: an unreadable global placeholders dir -> defaults still inject', async () => {
+  assert.notEqual(process.getuid(), 0, 'precondition: chmod 000 is enforced for a non-root user');
+  const d = sandbox();
+  put(d, { 'cfg/placeholders/foo.md': 'G' });
+  fs.chmodSync(path.join(d, 'cfg', 'placeholders'), 0o000);
+  const r = await run({ input: { hook_event_name: 'UserPromptSubmit', cwd: path.join(d, 'proj'), prompt: '++r', permission_mode: 'default' }, env: { CLAUDE_PROJECT_DIR: path.join(d, 'proj'), CLAUDE_CONFIG_DIR: path.join(d, 'cfg') } });
+  fs.chmodSync(path.join(d, 'cfg', 'placeholders'), 0o755);
+  assert.deepEqual([r.rc, r.stdout], [0, ctx(vec('spec-4'))], 'rc and stdout');
+});
 
 // ---- 3. Fail open
 
@@ -151,6 +181,7 @@ job('fail open: garbage and empty stdin', async () => {
 });
 
 job('fail open: unreadable default layer', async () => {
+  assert.notEqual(process.getuid(), 0, 'precondition: chmod 000 is enforced for a non-root user');
   const root = fs.mkdtempSync(path.join(TMP, 'noroot-'));
   fs.mkdirSync(path.join(root, 'hooks'));
   fs.copyFileSync(INJECT, path.join(root, 'hooks', 'inject.mjs'));
@@ -159,7 +190,7 @@ job('fail open: unreadable default layer', async () => {
   fs.chmodSync(path.join(root, 'placeholders', 'm.md'), 0o000);
   const r = await run({ root, input: { hook_event_name: 'UserPromptSubmit', prompt: '++m', permission_mode: 'default' }, env: {} });
   fs.chmodSync(path.join(root, 'placeholders', 'm.md'), 0o644);
-  assert.deepEqual([r.rc, r.stdout], process.getuid?.() === 0 ? [0, ctx('M')] : [0, '{}'], 'rc and stdout');
+  assert.deepEqual([r.rc, r.stdout], [0, '{}'], 'rc and stdout');
 });
 
 // ---- 4. State file
@@ -176,10 +207,9 @@ const readState = (root, sid) => JSON.parse(fs.readFileSync(path.join(root, '.st
 for (const event of ['UserPromptSubmit', 'PostToolBatch']) {
   job(`state: ${event} records the mode`, async () => {
     const root = stateRoot();
-    const before = Date.now();
     const r = await run({ root, input: { hook_event_name: event, session_id: SID, permission_mode: 'plan', ...(event === 'UserPromptSubmit' ? { prompt: 'plain' } : { tool_calls: [] }) }, env: {} });
     const s = readState(root, SID);
-    assert.deepEqual([r.rc, r.stdout, Object.keys(s), s.mode, s.ts >= before && s.ts <= Date.now()], [0, '{}', ['mode', 'ts'], 'plan', true], 'rc, stdout, state shape');
+    assert.deepEqual([r.rc, r.stdout, Object.keys(s), s.mode, Number.isInteger(s.ts)], [0, '{}', ['mode', 'ts'], 'plan', true], 'rc, stdout, state shape (ts is an integer)');
     assert.deepEqual(fs.readdirSync(path.join(root, '.state')), [`mode-${SID}.json`], 'no temp file left');
   });
 }
@@ -214,6 +244,46 @@ job('state: a prompt prunes week-old mode files only', async () => {
   assert.deepEqual([afterBatch, fs.readdirSync(dir).sort()], [[`mode-${SID}.json`, 'mode-fresh.json', 'mode-old.json', 'notes.txt'], [`mode-${SID}.json`, 'mode-fresh.json', 'notes.txt']], 'files after batch and after prompt');
 });
 
+const OLD = new Date(Date.now() - 8 * 24 * 3600 * 1000);
+const prompt = (root) => run({ root, input: { hook_event_name: 'UserPromptSubmit', session_id: SID, permission_mode: 'plan', prompt: 'x' }, env: {} });
+
+job('state: an orphan old temp file is pruned, a fresh one kept', async () => {
+  const root = stateRoot();
+  const dir = path.join(root, '.state');
+  fs.mkdirSync(dir);
+  for (const [name, date] of [['mode-gone.json.4242.tmp', OLD], ['mode-live.json.4343.tmp', new Date()], ['mode-x.json.tmp', OLD]]) {
+    fs.writeFileSync(path.join(dir, name), '{}');
+    fs.utimesSync(path.join(dir, name), date, date);
+  }
+  await prompt(root);
+  assert.deepEqual(fs.readdirSync(dir).sort(), [`mode-${SID}.json`, 'mode-live.json.4343.tmp', 'mode-x.json.tmp'], 'old numbered tmp gone; fresh tmp and non-matching name kept');
+});
+
+job('state: a directory named mode-dir.json does not stop pruning of old files', async () => {
+  const root = stateRoot();
+  const dir = path.join(root, '.state');
+  fs.mkdirSync(path.join(dir, 'mode-dir.json'), { recursive: true });
+  fs.utimesSync(path.join(dir, 'mode-dir.json'), OLD, OLD);
+  for (const name of ['mode-zold.json', 'mode-aold.json']) {
+    fs.writeFileSync(path.join(dir, name), '{}');
+    fs.utimesSync(path.join(dir, name), OLD, OLD);
+  }
+  await prompt(root);
+  assert.deepEqual(fs.readdirSync(dir).sort(), [`mode-${SID}.json`, 'mode-dir.json'], 'both old files pruned, the directory untouched');
+});
+
+job('state: an old symlink is not followed out of .state', async () => {
+  const root = stateRoot();
+  const dir = path.join(root, '.state');
+  const outside = path.join(root, 'outside.json');
+  fs.mkdirSync(dir);
+  fs.writeFileSync(outside, 'keep');
+  fs.utimesSync(outside, OLD, OLD);
+  fs.symlinkSync(outside, path.join(dir, 'mode-link.json'));
+  await prompt(root);
+  assert.deepEqual([fs.readFileSync(outside, 'utf8'), fs.readdirSync(dir).sort()], ['keep', [`mode-${SID}.json`, 'mode-link.json']], 'target intact, link left alone');
+});
+
 job('state: a failing state write does not stop the injection', async () => {
   const root = fs.mkdtempSync(path.join(TMP, 'statefail-'));
   fs.mkdirSync(path.join(root, 'hooks'));
@@ -233,7 +303,7 @@ job('state: the prompt injection writes the state too', async () => {
   const sid = `parity-${process.pid}`;
   const r = await run({ root, input: { hook_event_name: 'UserPromptSubmit', session_id: sid, prompt: '++r', permission_mode: 'plan' }, env: { CLAUDE_PROJECT_DIR: path.join(d, 'proj'), CLAUDE_CONFIG_DIR: path.join(d, 'cfg') } });
   const mode = readState(root, sid).mode;
-  assert.deepEqual([r.stdout.startsWith('{"hookSpecificOutput"'), mode], [true, 'plan'], 'injected and recorded');
+  assert.deepEqual([r.stdout, mode], [ctx(vec('spec-4')), 'plan'], 'injected and recorded');
 });
 
 // ---- 5. Differential: the TS lib (band, command, typeahead) and inject.mjs must resolve the same definitions
