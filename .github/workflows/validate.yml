@@ -140,6 +140,7 @@ jobs:
           npm --prefix web/docs ci --no-fund --no-audit
           npm --prefix web/docs run build
           node web/docs/scripts/check-csp.mjs
+          node web/docs/scripts/check-csp.test.mjs
 
   suites:
     name: suites (${{ matrix.shard }})
