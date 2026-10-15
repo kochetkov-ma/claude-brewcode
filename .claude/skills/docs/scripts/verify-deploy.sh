@@ -67,7 +67,12 @@ for _ in 1 2 3 4 5 6; do
   LIVE=$(curl -fsS -m 15 "${BUILD_INFO_URL}?build=${DOCS_ID}" || true)
   if [[ "$LIVE" == "$EXPECTED" ]]; then
     echo "✅ live build-info matches $TAG: $LIVE"
-    CSP=$(curl -fsS -m 15 -D - -o /dev/null "${PAGE_URL}?build=${DOCS_ID}" | tr -d '\r' | grep -i '^content-security-policy: ' || true)
+    CSP=""
+    for _ in 1 2 3; do
+      CSP=$(curl -fsS -m 15 -D - -o /dev/null "${PAGE_URL}?build=${DOCS_ID}" | tr -d '\r' | grep -i '^content-security-policy: ' || true)
+      [[ -n "$CSP" ]] && break
+      sleep 5
+    done
     if [[ -z "$CSP" ]]; then
       echo "❌ CSP gate FAILED: no content-security-policy header on $PAGE_URL"
       exit 1
