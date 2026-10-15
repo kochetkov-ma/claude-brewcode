@@ -1,10 +1,10 @@
 // Pure band rendering: view + registry entries -> rows -> tree. Zero I/O; atoms and `$` stay in register.ts.
 import type { ElementTable, RenderElement } from 'claude-code'
-import type { EditorEntry, EditorStyle } from './editor'
+import { KNOWN_COLOR, UNKNOWN_COLOR, type EditorEntry } from './editor'
 import type { PlaceholderView } from './match'
 
 export type BandRow = { text: string; name: string; isKnown: boolean; description: string; body: string; isPlanOnly: boolean }
-export type BandState = { isExpanded: boolean; isPlan: boolean; style: EditorStyle; onToggle: () => unknown; budget: number }
+export type BandState = { isExpanded: boolean; isPlan: boolean; onToggle: () => unknown; budget: number }
 export type BandUi = Pick<ElementTable<'terminal'>, 'Box' | 'Text' | 'Button'>
 
 // Default TUI: maxRows = terminal height and the prompt box + footer take 8 rows more (45-row probe: 37 fit, 38 clip); +4 for a wrapped draft or a spinner.
@@ -66,19 +66,27 @@ export function bandRows(view: PlaceholderView, entries: readonly EditorEntry[])
 
 const hasBodies = (rows: readonly BandRow[]): boolean => rows.some((r) => r.body !== '')
 
-export const toggleLabel = (isExpanded: boolean): string => (isExpanded ? 'Hide text' : 'Show text')
+export const TOGGLE_KEYS = 'ctrl+x · tab · enter'
+export const HINT = 'add or change: /placeholders'
+export const AUTO_MAX_ROWS = 2
+export const AUTO_LINES = 3
 
-// Header (count + toggle Button, only when some row has a body), one keyed row per token, a `+K more` row past the budget; expanded -> capped body under the row.
+export const toggleLabel = (isExpanded: boolean): string => `${isExpanded ? 'Hide text' : 'Show text'}  ${TOGGLE_KEYS}`
+
+// Header (count + toggle Button, only for 3+ rows with a body; 1-2 rows show 3 body lines at once), one keyed row per token, a `+K more` row past the budget, a dim foot hint.
 // Collapsed -> UN-keyed hidden hover Box under the keyed row (a keyed hidden hover Box makes the engine refuse the band).
 export function renderBand(ui: BandUi, rows: readonly BandRow[], state: BandState): RenderElement {
   const { Box, Text, Button } = ui
-  const { isExpanded, isPlan, style, budget } = state
-  const toggle = hasBodies(rows)
-  const shown = rows.length + 1 <= budget ? rows : rows.slice(0, Math.max(budget - 2, 1))
+  const { isPlan, budget } = state
+  const auto = rows.length <= AUTO_MAX_ROWS
+  const isExpanded = auto || state.isExpanded
+  const toggle = hasBodies(rows) && !auto
+  const shown = rows.length + 2 <= budget ? rows : rows.slice(0, Math.max(budget - 3, 1))
   const hidden = rows.length - shown.length
-  const free = budget - 1 - shown.length - (hidden > 0 ? 1 : 0)
+  const free = budget - 2 - shown.length - (hidden > 0 ? 1 : 0)
   const bodies = shown.filter((r) => r.body !== '').length
-  const lines = Math.max(bodies === 0 ? 0 : Math.floor(free / bodies), 1)
+  const fit = Math.max(bodies === 0 ? 0 : Math.floor(free / bodies), 1)
+  const lines = auto ? Math.min(AUTO_LINES, fit) : fit
   const hoverLines = Math.max(free, 1)
 
   return (
@@ -90,8 +98,8 @@ export function renderBand(ui: BandUi, rows: readonly BandRow[], state: BandStat
       {shown.map((row) => (
         <Box key={`row:${row.text.toLowerCase()}`} flexDirection="column">
           <Box>
-            <Text color={row.isKnown ? style.knownColor : style.unknownColor}>{row.text}</Text>
-            <Text color={row.isKnown ? undefined : style.unknownColor} dimColor={row.isKnown} wrap="truncate-end">
+            <Text color={row.isKnown ? KNOWN_COLOR : UNKNOWN_COLOR}>{row.text}</Text>
+            <Text color={row.isKnown ? undefined : UNKNOWN_COLOR} dimColor={row.isKnown} wrap="truncate-end">
               {`  ${row.description}`}
             </Text>
             {row.isPlanOnly && !isPlan ? <Text dimColor>{` ${PLAN_ONLY_LABEL}`}</Text> : null}
@@ -108,6 +116,9 @@ export function renderBand(ui: BandUi, rows: readonly BandRow[], state: BandStat
         </Box>
       ))}
       {hidden > 0 ? <Text dimColor>{`... +${hidden} more placeholders`}</Text> : null}
+      <Text key="hint" dimColor>
+        {HINT}
+      </Text>
     </Box>
   )
 }

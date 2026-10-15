@@ -3,22 +3,11 @@ title: "Docsync Setup"
 description: "Project-local doc-staleness tracker — installs 3 hooks that watch edited .md files and block when frontmatter last_updated goes stale."
 order: 21
 ---
-import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+import { Badge, Card, CardGrid, Spoiler, Steps, UpdateNotice } from '../../../../components/mdx';
 
-# docsync-setup — track and fix doc drift
+# docsync-setup <Badge variant="secondary" text="sonnet" /> <Badge variant="accent" text="setup" />
 
-<Callout type="caution">
-**Docs go stale the moment code moves on.** Nobody remembers to re-read `SKILL.md` after a refactor, and a forgotten `README.md` means the next session starts from wrong assumptions. Manual checks don't scale across dozens of files.
-</Callout>
-
-<Callout type="tip">
-**Frontmatter is the source of truth — no separate ledger.** Docsync installs three project-local hooks that quietly record which `.md` files you read or edit. At the end of a turn, if any edited doc is stale by its own `last_updated` date, it blocks the turn and has Claude set the date or sync the doc. The skill is user-invoked only (`disable-model-invocation: true`) — the model never fires it on its own; the installed hooks do the running afterwards.
-</Callout>
-
-<Callout type="note">
-**Shared setup metadata.** Docsync is one of 11 setup skills across Brewcode, Brewtools and Brewdoc.
-Its config carries provenance and a separate `content_version` for content-drift checks.
-</Callout>
+Docs go stale the moment code moves on. Docsync installs three project-local hooks (track, watch, gate) that log which `.md` files a session edits. At the end of a turn, an edited doc whose `last_updated` is missing or behind the file blocks the turn, and Claude sets the date or syncs the doc. Frontmatter is the source of truth; there is no ledger. One of 11 setup skills; its config carries the [artifact metadata](/brewcode/overview/#artifact-metadata) provenance keys.
 
 ## Quick reference
 
@@ -27,45 +16,27 @@ Its config carries provenance and a separate `content_version` for content-drift
 | Command | `/brewdoc:docsync-setup [prompt] [mode]` |
 | Canonical modes | `status` · `install` · `upgrade` · `enable` · `disable` · `uninstall` · `purge` |
 | Extras | `sync [--all]` · `reread` · `frontmatter` · free text (RU/EN) |
-| No argument | `status` when the hooks are installed, `install` when they are not |
-| Invocation | user-invoked only — `disable-model-invocation: true` |
+| No argument | `status` when installed, `install` when not |
+| Invocation | user-invoked only (`disable-model-invocation: true`) |
 | Model | sonnet |
 | Tools | Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion |
 
 ## When to use
 
-Fits repos with hand-maintained prose docs — README, SKILL.md, design notes — that
-quietly drift behind the code they describe. It is not for generated docs (API
-reference, changelogs) that already regenerate on build. Purely user-driven:
-`disable-model-invocation: true` in the skill's frontmatter means the model never
-runs it on its own — you always invoke it by hand.
+Fits repos with hand-maintained prose docs (README, SKILL.md, design notes). Skip generated docs that regenerate on build.
 
 | Scenario | Command |
 |----------|---------|
-| First time in a project — set up staleness tracking | `/brewdoc:docsync-setup install` |
-| Check what's tracked and what's stale, no changes | `/brewdoc:docsync-setup status` |
-| Refresh an existing install to the current plugin version | `/brewdoc:docsync-setup upgrade` |
-| Pause tracking without unwiring hooks or losing config | `/brewdoc:docsync-setup disable` |
-| Resume a paused tracker with zero re-analysis | `/brewdoc:docsync-setup enable` |
-| Refresh stale docs after confirming which ones | `/brewdoc:docsync-setup sync` |
-| Force a full resync of every in-scope doc | `/brewdoc:docsync-setup sync --all` |
-| Reload tracked docs into context without editing | `/brewdoc:docsync-setup reread` |
-| Retro-add tracking frontmatter to existing docs | `/brewdoc:docsync-setup frontmatter` |
-| Remove the tracker without touching foreign hooks | `/brewdoc:docsync-setup uninstall` |
-| Remove the tracker and delete `.claude/docsync/` too | `/brewdoc:docsync-setup purge` |
+| Set up tracking | `/brewdoc:docsync-setup install` |
+| See what is stale, no changes | `/brewdoc:docsync-setup status` |
+| Pause or resume tracking | `/brewdoc:docsync-setup disable` / `enable` |
+| Sync stale docs (asks which) | `/brewdoc:docsync-setup sync` |
+| Remove the tracker | `/brewdoc:docsync-setup uninstall` (`purge` also deletes `.claude/docsync/`) |
 
-## Examples
+## Example
 
 ```bash
-# First run in a project — asks threshold + excludes, installs 3 hooks
 /brewdoc:docsync-setup install
-```
-
-```bash
-# Natural language also works, RU or EN
-"what docs are stale"
-"track doc staleness in this project"
-"docsync status"
 ```
 
 `status` prints an age table per tracked doc:
@@ -82,108 +53,86 @@ runs it on its own — you always invoke it by hand.
 ## Flow
 
 <Steps>
-  <li>
-    <div>
-      <strong>Resolve mode</strong>
-      <p>Free text in RU or EN resolves a canonical lifecycle verb or an extra mode. Empty input means install when absent, otherwise status. Explicit modes can appear anywhere in the prompt; the skill asks at most one question, only when the answer changes what gets written.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Install (once)</strong>
-      <p><code>install</code> asks for a threshold (default 7 days) and excludes, then validates inputs, settings and hook syntax before writes. It copies three hooks, writes configuration and idempotently merges settings. The settings merge runs under <code>settings.json.lock</code> and writes no <code>settings.json.bak</code>; the transaction is its own rollback. <code>upgrade</code> refreshes provenance and hooks while preserving enabled state, threshold, excludes and other config fields. Neither mode resets session state or adds document frontmatter.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Track silently</strong>
-      <p>Settings are watched, so the hooks normally apply in the running session (restart it if they do not fire). <code>docsync-track.mjs</code> (PostToolUse on <code>Write|Edit</code>, one handler per tool) logs every <code>.md</code> file edited, and <code>docsync-watch.mjs</code> (PostToolUse on <code>Read</code>) logs every one read — no output, no interruption.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Block on stale</strong>
-      <p>At <code>Stop</code>, <code>docsync-gate.mjs</code> checks the docs edited this session against their own <code>last_updated</code> frontmatter. If a doc was modified more than <code>threshold_days</code> after its <code>last_updated</code> day — or the date is missing or unusable — it blocks once for the docs edited since its last ask, listing every offender. After a block the gate stays silent until one of those docs is edited again.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Sync</strong>
-      <p><code>/brewdoc:docsync-setup sync</code> lists the stale set and asks which docs to sync via <code>AskUserQuestion</code>; it syncs only the confirmed ones. For each, it reads the doc, follows its <code>sync_procedure</code> (prose Claude acts on — no hook parses it) and bumps <code>last_updated</code> to today. Compression depth follows <code>doc_type</code>: <code>llm</code> = deep, <code>user</code> = light, absent = <code>user</code>.</p>
-    </div>
-  </li>
+  <li><div><strong>Track silently</strong><p>Edits and reads of `.md` files are logged. No output, no interruption.</p></div></li>
+  <li><div><strong>Block on stale</strong><p>At `Stop`, the gate blocks once for edited docs whose `last_updated` is missing, unusable or behind the file.</p></div></li>
+  <li><div><strong>Sync</strong><p>`sync` lists stale docs, asks which to sync, follows each `sync_procedure` and bumps `last_updated`.</p></div></li>
 </Steps>
 
-<details>
-<summary>Internals</summary>
+<Spoiler id="technical-details" title="Technical details">
 
-**Frontmatter schema** — every tracked `.md` carries its own state, no separate registry:
+**Modes**
+
+| Mode | Does |
+|------|------|
+| `install` | Asks a threshold (default 7 days) and excludes, validates inputs and hook syntax, copies 3 hooks, writes `.claude/docsync/config.json`, merges `settings.json` under `settings.json.lock` (no `.bak`). Never adds frontmatter |
+| `upgrade` | Re-copies hooks, rewrites registrations, refreshes the provenance keys; `enabled`, `threshold_days`, `exclude` and logs stay |
+| `enable` / `disable` | Flip `enabled` in `config.json`. Hooks stay wired and no-op from the next call, no restart |
+| `uninstall` | Removes docsync hook entries and files, keeps `.claude/docsync/`; foreign entries untouched |
+| `purge` | `uninstall` plus deletes `.claude/docsync/` |
+| `sync [--all]` | Per-doc `sync_procedure`, then `last_updated` = today; depth follows `doc_type` (`llm` deep, `user` light) |
+| `reread` / `frontmatter` | Re-read tracked docs / opt-in retro-add of frontmatter |
+
+Removed aliases: `init`, `on`, `off`, `setup`, `remove`, `reset`, `create`, `update`, `cleanup`.
+
+**Enable/disable polarity.** The flag is `"enabled"` in `config.json`, and an **absent key means ENABLED** (`enabled: c.enabled !== false`). The opposite of `brewtools:agent-deadline-setup`, where an absent key is inert.
+
+</Spoiler>
+
+<Spoiler id="frontmatter-schema" title="Frontmatter schema and scope">
 
 ```yaml
 ---
-doc_type: llm                  # optional, unquoted; absent or unrecognized => user. values: llm | user | skip
+doc_type: llm                  # optional, UNQUOTED; llm | user | skip (absent = user)
 last_updated: "2026-07-19"     # sole staleness input (YYYY-MM-DD, LOCAL time)
 sync_procedure: "what to check / where to look when syncing"   # optional, prose
 ---
 ```
 
-Staleness is DATE ONLY, no hashing, no `depends_on` graph. The Stop gate compares `last_updated` with the file's modification day (modification day minus `last_updated` > `threshold_days`) and also blocks on missing or unusable dates. `status` and `sync` age docs against today instead.
+- Unusable `last_updated`: not a real `YYYY-MM-DD` date (`soon`, `2026-13-45`) or later than today. The gate reports it separately from stale and asks Claude to set today's date.
+- Staleness is date only: no hashing, no `depends_on`. The gate compares `last_updated` with the file's modification day (> `threshold_days` = stale); `status` and `sync` age against today.
+- Quote `last_updated` and `sync_procedure`, leave `doc_type` bare: a YAML consumer types an unquoted date as a Date, and other tooling matches `^doc_type: llm$`.
+- `sync_procedure` is a model-only hint; no hook parses it.
+- Scope: all `*.md` minus `exclude` globs (`.claude/**` always added), `doc_type: skip` files, and `CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md` at any depth. All three hooks apply this, so marking a doc `skip` mid-session silences it at once.
+- Only docs edited through `Write`/`Edit` are raised. A doc that was only read, or changed by Bash or outside Claude Code, never is.
 
-- **Quote `last_updated` and `sync_procedure`; leave `doc_type` bare.** The hooks' frontmatter parser reads either form, so existing docs keep working — but a real YAML consumer types an unquoted `2026-07-19` as a Date, and other tooling matches `^doc_type: llm$` literally.
-- `doc_type: skip` excludes a file entirely. Absent or unrecognized `doc_type` is normalized to `user` by a `docTypeOf()` helper present in all three hooks — the default is enforced in code, not only described here.
-- `sync_procedure` is a **model-only hint**: no hook parses it. `sync` mode and the gate's block message tell Claude to read the doc and follow it.
+</Spoiler>
 
-**Enable/disable polarity — the opposite of what you'd guess.** The flag lives in `config.json` under `"enabled"`, and an **absent key means ENABLED**: every hook's `loadConfig()` reads `enabled: c.enabled !== false`. So `"enabled": false` is installed-but-inert, not missing — a config with no `enabled` key at all is live. This is the reverse of `brewtools:agent-deadline-setup`, whose gate checks `cfg.enabled !== true`, so an absent key there is INERT. Do not assume the two setups share a polarity.
-
-Enable/disable refreshes provenance and content-version metadata while preserving threshold and excludes.
-
-**Write failure and recovery.** Install/upgrade snapshots every destination before mutation and
-publishes each file through a checked atomic rename. If a destination changes meanwhile, setup
-stops rather than overwriting it. On failure, rollback restores each committed file's prior bytes
-and mode only if it still matches this run's output; concurrent edits remain intact and recovery
-gaps are reported. This is per-file publication and recovery, not an all-files atomic transaction.
-
-**The three hooks**
+<Spoiler id="hooks" title="The three hooks">
 
 | File | Event | Matcher | Action |
 |------|-------|---------|--------|
-| `docsync-track.mjs` | PostToolUse | `Write\|Edit`; two handlers with `if` (`Write(**/*.md)`, `Edit(**/*.md)`), 5 s each | Records edited `.md`; nudges once per file to add `last_updated` when missing |
-| `docsync-watch.mjs` | PostToolUse | `Read`; `if` `Read(**/*.md)`, 5 s | Records read `.md`. Silent by design — a `Read` fires constantly, so mid-turn context injection on every one would be noise |
-| `docsync-gate.mjs` | Stop | — (10 s) | Re-applies scope (`exclude` globs + `doc_type: skip`) to the docs edited since its last ask, then blocks once, listing every stale, unusable **and** undated doc |
+| `docsync-track.mjs` | PostToolUse | `Write\|Edit` (`Write(**/*.md)`, `Edit(**/*.md)`), 5 s | Logs the edit; nudges once per file to add a missing `last_updated` |
+| `docsync-watch.mjs` | PostToolUse | `Read(**/*.md)`, 5 s | Logs reads. Silent by design |
+| `docsync-gate.mjs` | Stop | none, 10 s | Blocks once for docs edited since its last ask that are stale, unusable or undated |
 
-The gate records each ask in the session log. After a block it stays silent until one of the listed docs is edited again, and it never blocks when `stop_hook_active` is true or the ask cannot be recorded — a `Stop` hook that blocks repeatedly loops. The block message has Claude set a missing or unusable date itself; any other stale doc needs a sync, which Claude decides on, asking first only before deleting or wholesale rewriting content. A doc that was only read, changed by Bash or changed outside Claude Code is never raised.
+After a block the gate stays silent until one of the listed docs is edited again, and never blocks when `stop_hook_active` is true. Claude sets a missing date itself; any other stale doc needs a sync, asking first only before deleting or wholesale rewriting content.
 
-**Project root resolution — the hooks resolve it themselves, at runtime.** Each hook tries `CLAUDE_PROJECT_DIR` first, then walks upward from the hook's own `cwd` for the nearest `.git` or `.claude` marker (a `.claude` in `$HOME` or in the directory whose `.claude` IS `$CLAUDE_CONFIG_DIR` is a profile, not a project marker, and is skipped; a `.git` there still counts), then falls back to that same `cwd` — there is no `git rev-parse` rung inside the hooks. The skill's own install/upgrade/status Bash snippets add one extra rung, `git rev-parse --show-toplevel`, between the env var and the walk; the two agree on every layout except a nested `.claude`, where the hooks — not the skill's shell snippet — decide where config and state actually land. `input.cwd` is never treated as the root: it drifts mid-session, so it is used only to resolve a relative `tool_input` path.
+The hooks are self-contained ESM (Node built-ins only) and apply in the running session; restart only if they do not fire. Line 2 carries `// brewcode-meta: version=… generated_by=brewdoc:docsync-setup` for byte comparison with the plugin copy. Each hook resolves the project root itself: `CLAUDE_PROJECT_DIR`, then the nearest `.git` or `.claude` upward from `cwd` (a profile `.claude` is skipped), then `cwd`.
 
-Hooks are self-contained ESM (Node built-ins only), read state from `.claude/docsync/` at runtime,
-and normally apply in the running session (settings are watched; restart only if they do not fire). Their line-2 metadata supports installed-copy comparison.
-Local hook tests cover session isolation, excludes, enabled polarity, gate blocking and missing
-config.
+</Spoiler>
 
-**State / config** — `.claude/docsync/`:
+<Spoiler id="state-and-recovery" title="State, config and recovery">
 
-- `config.json` — version/content-version provenance, enabled state, threshold and exclude globs; upgrade retains configuration values while refreshing metadata.
-- `state-<session_id>.jsonl` — append-only log per session (events `edit`, `read`, `nudge`, `ask`), hook-owned. A missing session id falls back to `state.jsonl`. Install/upgrade preserves existing session files.
+`.claude/docsync/config.json`: `version`, `content_version`, `generated_by`, `last_updated` (inert provenance, read by `/brewcode:setup-status`), then `enabled` (default `true`), `threshold_days` (default 7) and `exclude` (absent = `[".claude/**"]`; deleting that entry tracks docs under `.claude/`).
 
-**Scope** — all `*.md` in the project minus `exclude` globs and any file marked `doc_type: skip`. All three hooks apply both filters, the Stop gate included, so marking a doc `skip` mid-session silences it immediately — even if it was already touched. `CLAUDE.md`, `CLAUDE.local.md` and `AGENTS.md` (any depth) are never tracked, nudged or gated, whatever `exclude` says. Only docs edited through `Write`/`Edit` in a session are raised at the end of a turn; untouched or merely read docs never are.
+`state-<session_id>.jsonl` is one append-only log per session (events `edit`, `read`, `nudge`, `ask`). The gate prunes logs, old `state*.json` and stray `.tmp` files older than 14 days.
 
-**`uninstall`** removes only the three docsync hook entries and files, preserving foreign entries,
-and keeps `.claude/docsync/`, so configuration and session history survive. **`purge`** removes it as well. Both take `settings.json.lock` for the settings merge; foreign settings remain.
+Install and upgrade snapshot every destination and publish each file by atomic rename. If a destination changed meanwhile, setup stops. Rollback restores prior bytes only where the file still matches this run's output, so concurrent edits survive. Recovery is per file, not all-or-nothing.
 
-</details>
+</Spoiler>
 
 <CardGrid>
   <Card title="memory-sync-setup" icon="brain" href="/brewdoc/skills/memory-sync-setup/">
-    Generates a project-local `/memory-sync` skill that keeps CLAUDE.md and rules truthful — pairs well with keeping docs fresh.
+    Generates a project-local `/memory-sync` skill that keeps CLAUDE.md and rules truthful.
   </Card>
-  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewdoc/skills/docsync-setup">
-    Source code, hook assets, and full SKILL.md for docsync.
+  <Card title="GitHub source" icon="github" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewdoc/skills/docsync-setup">
+    Hook assets and the full SKILL.md.
   </Card>
   <Card title="Brewdoc overview" icon="rocket" href="/brewdoc/overview/">
     All brewdoc skills in one place.
   </Card>
   <Card title="Setup Status" icon="clipboard" href="/brewcode/skills/setup-status/">
-    Read-only dashboard across every `-setup` skill -- installed, stale or missing, with the hand-run command for each.
+    Dashboard across every `-setup` skill: installed, stale or missing.
   </Card>
 </CardGrid>
 

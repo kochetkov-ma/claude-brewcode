@@ -1,0 +1,450 @@
+{
+  "name": "superreview",
+  "duration": 20,
+  "layout": {
+    "maxCols": 94
+  },
+  "targetBytes": 2000000,
+  "forbid": [
+    "\\b(fix(ed|es)?|appl(y|ied|ies)|auto-?fix)\\b"
+  ],
+  "forbidAllow": [
+    "it does not apply fixes"
+  ],
+  "meta": {
+    "version": "2.1.300",
+    "model": "Opus 5.5 (1M context)",
+    "cwd": "~/brewery-api",
+    "statusLine": "maksim@Mac ~/brewery-api (refunds) [Opus 5.5 (1M context)] high ctx:5%",
+    "footer": "⏸ manual mode on",
+    "placeholder": "/superreview",
+    "rows": 28
+  },
+  "chapters": [
+    {
+      "at": 0,
+      "label": "setup"
+    },
+    {
+      "at": 7.5,
+      "label": "run"
+    },
+    {
+      "at": 10.6,
+      "label": "agent"
+    },
+    {
+      "at": 12.6,
+      "label": "result"
+    }
+  ],
+  "captions": [
+    {
+      "at": 0,
+      "text": "Generate a review skill for this repo"
+    },
+    {
+      "at": 2.0,
+      "text": "It wires domain experts and an intent guard"
+    },
+    {
+      "at": 7.5,
+      "text": "Then review your changes with one command"
+    },
+    {
+      "at": 10.7,
+      "text": "QUICK depth: one agent, 11 tool calls, ~23k tokens"
+    },
+    {
+      "at": 12.7,
+      "text": "Drift verdict, findings, a report"
+    },
+    {
+      "at": 15.7,
+      "text": "Read-only: it reports, you decide"
+    }
+  ],
+  "events": [
+    {
+      "type": "type",
+      "at": 0.3,
+      "text": "/brewcode:superreview-setup install",
+      "cps": 28
+    },
+    {
+      "type": "key",
+      "at": 1.7,
+      "glyph": "⏎",
+      "word": "enter · run"
+    },
+    {
+      "type": "submit",
+      "at": 1.85
+    },
+    {
+      "type": "print",
+      "at": 2.0,
+      "reveal": 0.07,
+      "kv": true,
+      "lines": [
+        "[[b gold|PLAN — brewcode:superreview-setup]]",
+        "INPUT:  install",
+        "MODE:   install — explicit",
+        "SCOPE:  ~/brewery-api · TypeScript/Node · focus: default",
+        "DO:     - scan the project and its rules",
+        "        - wire domain experts + create intent-guard",
+        "        - emit the project-local /superreview skill",
+        "RESULT: .claude/skills/superreview/ + .claude/agents/intent-guard.md"
+      ]
+    },
+    {
+      "type": "skip",
+      "at": 3.0,
+      "until": 4.8,
+      "factor": 6
+    },
+    {
+      "type": "tool",
+      "at": 3.0,
+      "name": "Bash",
+      "arg": "generate.sh scan",
+      "resultAt": 3.3,
+      "result": [
+        "agents=2"
+      ]
+    },
+    {
+      "type": "agent",
+      "at": 3.4,
+      "gap": 0,
+      "agent": "brewcode:agent-creator",
+      "desc": "Create billing-expert",
+      "doneAt": 4.3,
+      "stats": "9 tool uses · 18.4k tokens · 54s",
+      "ticks": [
+        [
+          3.6,
+          "Read(.claude/agents/api-expert.md)"
+        ],
+        [
+          4.0,
+          "Write(.claude/agents/billing-expert.md)"
+        ]
+      ]
+    },
+    {
+      "type": "tool",
+      "at": 4.4,
+      "gap": 0,
+      "name": "Bash",
+      "arg": "generate.sh emit",
+      "resultAt": 4.7,
+      "result": [
+        "[[ok|✅]] .claude/skills/superreview/SKILL.md"
+      ]
+    },
+    {
+      "type": "print",
+      "at": 4.95,
+      "bullet": true,
+      "reveal": 0.09,
+      "kv": "gold",
+      "lines": [
+        "[[b ok|superreview generated]] -> ~/brewery-api/.claude/skills/superreview/",
+        "",
+        "Stack:          TypeScript / Node  (reference: typescript-react.md)",
+        "Domain experts: 3 wired (api, db, billing); created this run: billing-expert",
+        "General agents: reviewer, arbiter (arbiter + validator)",
+        "Intent guard:   [[ok|CREATED from template]]",
+        "Depth axis:     QUICK (default — intent + gates, 1 spawn) | EXTENDED (full fan-out)",
+        "Mechanical gates: npm run lint, npm run typecheck, npm test",
+        "Rule pointers:  6 files referenced (not restated)",
+        "",
+        "Run it:  [[b gold|/superreview \"<focus>\" [scope]]] -> QUICK: intent + gates, 1 agent",
+        "         [[b gold|/superreview \"deep review of <focus>\"]] -> EXTENDED: full expert fan-out + validation"
+      ]
+    },
+    {
+      "type": "hl",
+      "at": 5.6,
+      "hold": 1.0,
+      "match": "3 wired"
+    },
+    {
+      "type": "hl",
+      "at": 6.1,
+      "hold": 1.2,
+      "match": "QUICK: intent + gates, 1 agent"
+    },
+    {
+      "type": "clear",
+      "at": 7.5
+    },
+    {
+      "type": "type",
+      "at": 7.7,
+      "text": "/superreview payments refund flow",
+      "cps": 26
+    },
+    {
+      "type": "key",
+      "at": 9.05,
+      "glyph": "⏎",
+      "word": "enter · review"
+    },
+    {
+      "type": "submit",
+      "at": 9.2
+    },
+    {
+      "type": "print",
+      "at": 9.4,
+      "reveal": 0.05,
+      "kv": true,
+      "lines": [
+        "[[b gold|PLAN — brewery-api superreview]]",
+        "INPUT:  payments refund flow",
+        "MODE:   UNCOMMITTED — dirty tree",
+        "        Depth: QUICK (default)",
+        "        intent + gates only, 1 agent — say 'deep review' to run the full expert fan-out",
+        "SCOPE:  Branch: refunds",
+        "        Scope: working-tree diff vs HEAD",
+        "        Files: 14",
+        "        Focus: n/a (QUICK)",
+        "DO:     Gates: lint OK / typecheck OK / test OK",
+        "        Intent pass: intent-guard will run",
+        "        Experts (derived from live roster): none (QUICK)",
+        "RESULT: one merged, validated report + chat summary"
+      ]
+    },
+    {
+      "type": "hl",
+      "at": 10.1,
+      "hold": 0.5,
+      "match": "Files: 14"
+    },
+    {
+      "type": "skip",
+      "at": 10.6,
+      "until": 12.4,
+      "factor": 20
+    },
+    {
+      "type": "agent",
+      "at": 10.6,
+      "agent": "intent-guard",
+      "desc": "Asked vs delivered: payments refund flow",
+      "doneAt": 12.4,
+      "stats": "11 tool uses · 23.1k tokens · 41s",
+      "ticks": [
+        [
+          10.9,
+          "Read(docs/refunds.md)"
+        ],
+        [
+          11.4,
+          "Bash(git diff --stat)"
+        ],
+        [
+          11.9,
+          "Read(src/payments/refund.ts)"
+        ]
+      ]
+    },
+    {
+      "type": "spin",
+      "at": 10.6,
+      "until": 12.4,
+      "verb": "Brewing",
+      "secs": [
+        0,
+        41
+      ],
+      "tokens": 640
+    },
+    {
+      "type": "hl",
+      "at": 12.45,
+      "hold": 1.0,
+      "match": "23.1k tokens"
+    },
+    {
+      "type": "print",
+      "at": 12.6,
+      "bullet": true,
+      "reveal": 0.12,
+      "kv": "gold",
+      "lines": [
+        "[[b ok|Super Review complete]] — MODE=UNCOMMITTED / DEPTH=QUICK (branch refunds), 14 files, 1 agent.",
+        "",
+        "DRIFT: [[b warn|MINOR DRIFT]] — refund flow delivered, plus an unrequested retry queue",
+        "       Sources: T1 none / T2 none / T3 none / T4 CLAUDE.md / T5 transcript",
+        "       2 intent finding(s): intent#scope - retry queue; intent#tests - no failed-refund test",
+        "",
+        "VERDICT: [[b warn|CONDITIONAL]]",
+        "Gates: lint OK / typecheck OK / test OK",
+        "Experts (live roster): none (QUICK)",
+        "",
+        "Report: .claude/reports/20261015-101530_superreview/REPORT.md",
+        "",
+        "Recommendations / next steps (superreview is READ-ONLY — it does not apply fixes):",
+        "- Optional: /code-review (built-in) for a focused correctness diff pass."
+      ]
+    },
+    {
+      "type": "hl",
+      "at": 13.2,
+      "hold": 1.0,
+      "match": "14 files"
+    },
+    {
+      "type": "hl",
+      "at": 13.7,
+      "hold": 1.0,
+      "match": "MINOR DRIFT"
+    },
+    {
+      "type": "card",
+      "at": 15.7,
+      "title": "✻ superreview · QUICK review complete",
+      "tiles": [
+        {
+          "label": "Files",
+          "to": 14,
+          "sub": "vs HEAD"
+        },
+        {
+          "label": "Tokens",
+          "to": 23.1,
+          "dec": 1,
+          "suffix": "k",
+          "sub": "1 agent"
+        },
+        {
+          "label": "Time",
+          "to": 41,
+          "suffix": "s",
+          "sub": "11 tool calls"
+        },
+        {
+          "label": "Findings",
+          "to": 2,
+          "cls": "warn",
+          "sub": "scope · tests"
+        }
+      ],
+      "verdict": {
+        "label": "Verdict",
+        "text": "CONDITIONAL — MINOR DRIFT",
+        "cls": "warn"
+      },
+      "note": "READ-ONLY report: .claude/reports/…_superreview/REPORT.md"
+    },
+    {
+      "type": "clear",
+      "at": 19.4
+    }
+  ],
+  "facts": [
+    {
+      "src": "brewcode/skills/superreview-setup/SKILL.md",
+      "has": "PLAN — brewcode:superreview-setup"
+    },
+    {
+      "src": "brewcode/skills/superreview-setup/SKILL.md",
+      "has": "superreview generated -> "
+    },
+    {
+      "src": "brewcode/skills/superreview-setup/SKILL.md",
+      "has": "Domain experts: {N} wired"
+    },
+    {
+      "src": "brewcode/skills/superreview-setup/SKILL.md",
+      "has": "Intent guard:   {CREATED from template"
+    },
+    {
+      "src": "brewcode/skills/superreview-setup/SKILL.md",
+      "has": "Depth axis:     QUICK (default — intent + gates, 1 spawn) | EXTENDED (full fan-out)"
+    },
+    {
+      "src": "brewcode/skills/superreview-setup/SKILL.md",
+      "has": "Mechanical gates: {list of commands}"
+    },
+    {
+      "src": "brewcode/skills/superreview-setup/SKILL.md",
+      "has": "Rule pointers:  {N} files referenced (not restated)"
+    },
+    {
+      "src": "brewcode/skills/superreview-setup/SKILL.md",
+      "has": "-> QUICK: intent + gates, 1 agent"
+    },
+    {
+      "src": "brewcode/skills/superreview-setup/SKILL.md",
+      "has": "-> EXTENDED: full expert fan-out + validation"
+    },
+    {
+      "src": "brewcode/skills/superreview-setup/scripts/generate.sh",
+      "has": "echo \"agents=$_n\""
+    },
+    {
+      "src": "brewcode/skills/superreview-setup/references/SKILL.md.template",
+      "has": "PLAN — {PROJECT_NAME} superreview"
+    },
+    {
+      "src": "brewcode/skills/superreview-setup/references/SKILL.md.template",
+      "has": "MODE:   {MODE} — {which rule resolved it: whole-project request | explicit token | dirty tree | clean tree}"
+    },
+    {
+      "src": "brewcode/skills/superreview-setup/references/SKILL.md.template",
+      "has": "intent + gates only, 1 agent — say 'deep review' to run the full expert fan-out"
+    },
+    {
+      "src": "brewcode/skills/superreview-setup/references/SKILL.md.template",
+      "has": "Intent pass: intent-guard {will run"
+    },
+    {
+      "src": "brewcode/skills/superreview-setup/references/SKILL.md.template",
+      "has": "RESULT: one merged, validated report + chat summary"
+    },
+    {
+      "src": "brewcode/skills/superreview-setup/references/SKILL.md.template",
+      "has": "Super Review complete — MODE={MODE} / DEPTH={DEPTH} (branch {BRANCH}), {COUNT} files, {N} agents."
+    },
+    {
+      "src": "brewcode/skills/superreview-setup/references/SKILL.md.template",
+      "has": "DRIFT: {INTENT_VERDICT verbatim"
+    },
+    {
+      "src": "brewcode/skills/superreview-setup/references/SKILL.md.template",
+      "has": "Sources: T1 {label|none} / T2 {…} / T3 {…} / T4 {…} / T5 transcript"
+    },
+    {
+      "src": "brewcode/skills/superreview-setup/references/SKILL.md.template",
+      "has": "VERDICT: {APPROVED | CONDITIONAL | REWORK}"
+    },
+    {
+      "src": "brewcode/skills/superreview-setup/references/SKILL.md.template",
+      "has": "Experts (live roster): {group -> agent, ...}{, DEGRADED: ...} | none (QUICK)"
+    },
+    {
+      "src": "brewcode/skills/superreview-setup/references/SKILL.md.template",
+      "has": "Report: .claude/reports/{TIMESTAMP}_superreview/REPORT.md"
+    },
+    {
+      "src": "brewcode/skills/superreview-setup/references/SKILL.md.template",
+      "has": "Recommendations / next steps (superreview is READ-ONLY — it does not apply fixes):"
+    },
+    {
+      "src": "brewcode/skills/superreview-setup/references/SKILL.md.template",
+      "has": "Optional: /code-review (built-in) for a focused correctness diff pass."
+    },
+    {
+      "src": "brewcode/skills/superreview-setup/references/intent-guard.md.template",
+      "has": "Hard budget: **<= 15 tool calls"
+    },
+    {
+      "src": "brewcode/skills/superreview-setup/references/intent-guard.md.template",
+      "has": "VERDICT: ALIGNED | MINOR DRIFT | MAJOR DRIFT"
+    }
+  ]
+}

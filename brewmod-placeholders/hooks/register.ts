@@ -1,13 +1,13 @@
 import { atom, read, update } from 'claude-code'
 import type { Register } from 'claude-code'
 import { editorMatchers, getEditorEntries, setEditorEntries } from './lib/editor-state'
-import { highlight, optionColor, sameView, suggest, type EditorStyle } from './lib/editor'
+import { highlight, sameView, suggest } from './lib/editor'
 import { validatePrefix, type PlaceholderView } from './lib/match'
 import { memoCompile, type Compiled } from './lib/compiled'
 import { configDirOf, issuesMessage, loadRegistry, newRegistryCache, toEditorEntries, type Registry } from './lib/defs'
 import { modeStatePath, planFromState } from './lib/mode'
 import { bandBudget, bandRows, renderBand } from './lib/band'
-import { runCommand } from './lib/command'
+import { NEEDS_NEW_CC, TOOLS, TOOL_PREFIX, handoffAck, handoffText, isStatusRequest, listTool, removeTool, saveTool, statusText, type SaveInput, type ToolOut } from './lib/command'
 import { expandInline, isInlineSubmit, unknownMessage, unknownTokens, type SubmitLike } from './lib/inline'
 
 // Atoms are declared in this file only (the scan reads this file); the band reads the same view atom.
@@ -21,8 +21,8 @@ const REFRESH_MS = 1000
 export const register: Register = (on, options) => {
   const check = validatePrefix(options.prefix)
   const prefix = check.prefix
-  const style: EditorStyle = { knownColor: optionColor(options.knownColor, 'suggestion'), unknownColor: optionColor(options.unknownColor, 'warning') }
   const cache = newRegistryCache()
+  let hasTools = false // the three model tools were registered at session.start
   let isPlan = false // permission_mode of the last state file hooks/inject.mjs wrote for this session
   let compiled: Compiled | null = null
   let published: Registry | null = null
@@ -43,8 +43,15 @@ export const register: Register = (on, options) => {
   // Command registration cannot fail the warm-up below, and the warm-up cannot block the session.
   on('session.start', async ($, e, next) => {
     await $.command
-      .register({ name: 'placeholders', description: 'List, show, add, edit and remove placeholder definitions', argumentHint: '[list|show|add|edit|rm] [name] [--global] [text]' })
+      .register({ name: 'placeholders', description: 'Show your placeholders; say what to add, change or remove', argumentHint: '[what you want]' })
       .catch(() => undefined)
+    // Older builds have no $.tool (the call throws): hasTools stays false and the command answers with the status only.
+    try {
+      for (const t of TOOLS) await $.tool.register({ name: t.name, description: t.description, inputSchema: t.inputSchema, isDeferred: false })
+      hasTools = true
+    } catch {
+      hasTools = false
+    }
     if (check.warning !== null) $.ui.toast(check.warning)
     const reg = await loadRegistry(
       { exists: (p) => $.fs.exists(p), list: (p) => $.fs.list(p), read: (p) => $.fs.read(p) },
@@ -77,7 +84,7 @@ export const register: Register = (on, options) => {
   // Zero I/O except the view atom, written only when the token view changes.
   on('prompt.edit', async ($, e, next) => {
     const r = await next(e)
-    const h = highlight(editorMatchers(prefix), r.text, style)
+    const h = highlight(editorMatchers(prefix), r.text)
     try {
       if (shown === null || !sameView(h.view, shown)) {
         await update($, viewAtom, () => h.view)
@@ -141,10 +148,8 @@ export const register: Register = (on, options) => {
       ),
     )
     const text = expandInline(c, e.text)
-    if (options.warnUnknown !== false) {
-      const bad = unknownTokens(c.matchers, text ?? e.text)
-      if (bad.length > 0) $.ui.toast(unknownMessage(bad))
-    }
+    const bad = unknownTokens(c.matchers, text ?? e.text)
+    if (bad.length > 0) $.ui.toast(unknownMessage(bad))
     return next(text === null ? e : { ...e, text })
   })
 
@@ -157,30 +162,54 @@ export const register: Register = (on, options) => {
     return renderBand($.ui.resolve(e), rows, {
       isExpanded: await read($, expandedAtom),
       isPlan,
-      style,
       budget: bandBudget(e.props.maxRows, e.viewport?.isFullscreen === true),
       onToggle: () => update($, expandedAtom, (open) => !open),
     })
   })
 
   on('command.run', { command: 'placeholders' }, async ($, e) => {
-    const out = await runCommand(
-      {
-        exists: (p) => $.fs.exists(p),
-        list: (p) => $.fs.list(p),
-        read: (p) => $.fs.read(p),
-        write: (p, t) => $.fs.write(p, t),
-        stat: (p) => $.fs.stat(p, { resolve: true }).catch(() => undefined),
-        remove: async (p) => {
-          const r = await $.process.run(['rm', '--', p])
-          return { exitCode: r.exitCode, stderr: r.stderr }
-        },
-      },
-      { pluginRoot: $.plugin.root, root: await $.session.root().catch(() => undefined), configDir: configDirOf(await $.env.get('CLAUDE_CONFIG_DIR'), (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE'))) },
-      e.args,
-      prefix,
-    )
-    if (out.registry !== null) setEditorEntries(toEditorEntries(out.registry.defs))
-    return { text: out.text }
+    const roots = { pluginRoot: $.plugin.root, root: await $.session.root().catch(() => undefined), configDir: configDirOf(await $.env.get('CLAUDE_CONFIG_DIR'), (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE'))) }
+    const reg = await loadRegistry({ exists: (p) => $.fs.exists(p), list: (p) => $.fs.list(p), read: (p) => $.fs.read(p) }, roots, cache)
+    adopt(reg)
+    const status = statusText(reg, prefix)
+    if (isStatusRequest(e.args)) return { text: status }
+    if (!hasTools) return { text: `${status}\n${NEEDS_NEW_CC}` }
+    // submit is refused inside command.run: hand off from a timer; fill is the fallback when submit refuses.
+    const text = handoffText(e.args.trim(), prefix)
+    $.clock.after(250, () => {
+      void (async () => {
+        try {
+          await $.prompt.submit({ text, asUser: true })
+        } catch {
+          await $.prompt.fill({ text, mode: 'replace' }).catch(() => undefined)
+        }
+      })()
+    })
+    return { text: handoffAck(status) }
   }).catch((_$, _e, next) => ({ text: `failed: ${next.error.message ?? next.error.kind}` }))
+
+  // The model's tools: answered here, so Claude Code asks no permission for the file write.
+  on('tool.call', { tool: /^mcp__brewmod-placeholders__/ }, async ($, e) => {
+    const roots = { pluginRoot: $.plugin.root, root: await $.session.root().catch(() => undefined), configDir: configDirOf(await $.env.get('CLAUDE_CONFIG_DIR'), (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE'))) }
+    const io = {
+      exists: (p: string) => $.fs.exists(p),
+      list: (p: string) => $.fs.list(p),
+      read: (p: string) => $.fs.read(p),
+      write: (p: string, t: string) => $.fs.write(p, t),
+      stat: (p: string) => $.fs.stat(p, { resolve: true }).catch(() => undefined),
+      remove: async (p: string) => {
+        const r = await $.process.run(['rm', '--', p])
+        return { exitCode: r.exitCode, stderr: r.stderr }
+      },
+    }
+    const input = e as SaveInput
+    const out: ToolOut =
+      e.tool === `${TOOL_PREFIX}save_placeholder`
+        ? await saveTool(io, roots, input, prefix)
+        : e.tool === `${TOOL_PREFIX}remove_placeholder`
+          ? await removeTool(io, roots, input, prefix)
+          : listTool(await loadRegistry(io, roots, cache))
+    if (out.registry !== null) adopt(out.registry)
+    return out.isError === true ? { result: out.text, text: out.text, isError: true } : { result: out.text, text: out.text }
+  })
 }

@@ -4,21 +4,15 @@ description: "Install the eleven project setups in dependency order: search, con
 order: 4
 ---
 
-import { Card, CardGrid, Callout, Steps, Badge, UpdateNotice } from '../../components/mdx';
+import { Card, CardGrid, Callout, Badge, Spoiler, UpdateNotice } from '../../components/mdx';
 
 # Full Setup
 
 <Badge variant="primary" text="11 setups" /> <Badge variant="secondary" text="27 skills · 9 agents" /> <Badge variant="accent" text="24 of 27 user-only" />
 
-Run `/brewcode:setup-status` first. Its run-list puts search and conventions before the agents that
-consume them, then installs task management and finishes with documentation sync. Run each setup
-yourself, preferably in a fresh session, and inspect the generated files before committing them.
+Run `/brewcode:setup-status` first. It lists the setups still to run, with search and conventions before the agents that consume them. Run each one yourself, one per fresh session, and inspect the generated files before committing them.
 
-A `-setup` skill installs or maintains agents, hooks, generated skills, rules, or a task board.
-Use the installed mechanism afterwards; rerun its setup to inspect, refresh, disable, or remove
-it. Tools such as `/brewtools:text-optimize` and `/brewdoc:publish` remain recurring commands.
-
-## Start here: the dashboard
+A `-setup` skill installs a mechanism (agents, hooks, a generated skill, rules, a task board). Use the installed mechanism afterwards; rerun the setup to inspect, refresh, disable or remove it.
 
 ```text
 /brewcode:setup-status
@@ -26,108 +20,53 @@ it. Tools such as `/brewtools:text-optimize` and `/brewdoc:publish` remain recur
 /brewcode:setup-status convention-setup
 ```
 
-The first command reports all installed plugins; the others filter by plugin or setup. Rows show
-found artifacts, content versions, producing plugin versions, and the next command. The dashboard
-does not run setups and has no `--run` mode. Its one optional write is an explicitly accepted
-task-tools settings key; the setup probes themselves are read-only.
+The first command reports every installed plugin; the others filter by plugin or setup. The dashboard runs no setup; its one optional write is an accepted task-tools settings key.
 
 <Callout type="warning" title="Run setups separately">
-  Setups can analyse the repository, delegate work, and ask for choices that change generated
-  artifacts. Supply known choices in your prompt; the setup asks for unresolved ones. Run them
-  one at a time so later analysis sees completed earlier artifacts. The suite's skills use
-  <code>user-invocable: true</code>; all but three (<code>/brewdoc:publish</code>, <code>/brewtools:text-optimize</code>, <code>/brewtools:text-human</code>) also set
-  <code>disable-model-invocation: true</code>.
+  Setups analyse the repository, delegate work and ask for choices. Supply known choices in your prompt and run them one at a time, so later analysis sees the earlier artifacts. All skills use `user-invocable: true`; all but `/brewdoc:publish`, `/brewtools:text-optimize` and `/brewtools:text-human` also set `disable-model-invocation: true`.
 </Callout>
 
 ## Recommended order
 
-This follows the seven stages in `setup-status`. Its run-list omits installed, deliberately
-disabled, unavailable, and filtered-out rows. Within each stage, partial installs precede stale
-and missing ones.
+The dashboard groups its run-list into the same seven stages, shown in the Stage column. It omits installed, disabled and unavailable rows and never renumbers the rest; within a stage, partial installs come before stale and missing ones.
 
-<Steps>
-  <li><div><strong>Check the agent-return guard</strong><p>Inspect a global installation first: its return contract and budget affect subagents used by later setups. Refresh a stale installation, or install this optional guard if you want it.</p><pre><code>/brewtools:agent-return-setup status</code></pre><p>Use the scope-specific install or upgrade command reported by the dashboard. This guard sizes subagent final messages.</p></div></li>
-  <li><div><strong>Install semantic search</strong><p>Build the code index before the remaining setups analyse the repository.</p><pre><code>/brewcode:semble-setup install</code></pre><p>A bare invocation reports status. Explicit install can register the user-scope MCP server and offer machine prerequisites such as uv.</p></div></li>
-  <li><div><strong>Extract conventions before creating agents</strong><p>Capture architecture, representative implementations, and testing patterns as the foundation for agents and review.</p><pre><code>/brewcode:convention-setup install</code></pre><p>This writes three documents in <code>.claude/convention/</code> and a reversible loading rule at <code>.claude/rules/convention.md</code>. It has no teams prerequisite. Use <code>/brewcode:rules</code> afterwards for additional project rules.</p></div></li>
-  <li><div><strong>Create the project agents</strong><p>Build the domain roster and shared intent-guard that routing, delegation, and review consume.</p><pre><code>{"/brewcode:teams-setup install backend \"Kotlin services, Postgres, integration tests — one agent per bounded context\""}</code></pre><p>The team name and brief are optional; tie the brief to the repository's actual domains.</p></div></li>
-  <li><div><strong>Configure agent consumers</strong><p>Run agent-router, manager, agent-deadline, and superreview setups separately as needed. They consume agent names, delegation rules, or intent-guard from the preceding stage. Conventions and rules already exist when superreview builds its project rule pointers.</p><pre><code>/brewtools:agent-router-setup install</code></pre><pre><code>/brewtools:manager-setup install</code></pre><pre><code>/brewtools:agent-deadline-setup install</code></pre><pre><code>/brewcode:superreview-setup install</code></pre></div></li>
-  <li><div><strong>Install the board and task methodology</strong><p>Create the board, task-tracker, task-board skill, shared domain methodology, anti-drift instructions, and derived task graph. The task-spec skill and spec/design templates are optional: setup asks you to confirm <code>SPEC_MODE</code> before generation. Choose <code>on</code> if you want the complete task, graph, spec, and design workflow; <code>off</code> keeps methodology, graph, progress, and anti-drift controls.</p><pre><code>/brewtools:task-board-setup install .</code></pre><p>Each task specializes the methodology with its review strategy, reliable tests, base work units, owners, dependencies, and acceptance evidence. Task-board manages its session timer when execution starts.</p></div></li>
-  <li><div><strong>Finish with memory and documentation sync</strong><p>Run memory-sync after agents, rules, conventions, and the task process are present. Then configure docsync for the documents you want tracked. Use separate sessions.</p><pre><code>/brewdoc:memory-sync-setup install</code></pre><pre><code>/brewdoc:docsync-setup install</code></pre></div></li>
-</Steps>
+| # | Stage | Skill | Why | Command |
+|---|-------|-------|-----|---------|
+| 1 | 1 | [agent-return-setup](/brewtools/skills/agent-return-setup/) | Optional guard that sizes subagent returns; install first so later setups obey it | `/brewtools:agent-return-setup status` |
+| 2 | 2 | [semble-setup](/brewcode/skills/semble-setup/) | Code index before other setups analyse the repo; bare call reports status only | `/brewcode:semble-setup install` |
+| 3 | 3 | [convention-setup](/brewcode/skills/convention-setup/) | Architecture and testing patterns that agents and review consume | `/brewcode:convention-setup install` |
+| 4 | 4 | [teams-setup](/brewcode/skills/teams-setup/) | Domain agents and the shared intent-guard | `/brewcode:teams-setup install backend "Kotlin services, Postgres"` |
+| 5 | 5 | [agent-router-setup](/brewtools/skills/agent-router-setup/) | Routes spawns to the new agents | `/brewtools:agent-router-setup install` |
+| 6 | 5 | [manager-setup](/brewtools/skills/manager-setup/) | Opt-in delegation hard wall | `/brewtools:manager-setup install` |
+| 7 | 5 | [agent-deadline-setup](/brewtools/skills/agent-deadline-setup/) | Wall-clock budget per subagent | `/brewtools:agent-deadline-setup install` |
+| 8 | 5 | [superreview-setup](/brewcode/skills/superreview-setup/) | Project review skill built on conventions and rules | `/brewcode:superreview-setup install` |
+| 9 | 6 | [task-board-setup](/brewtools/skills/task-board-setup/) | Board, methodology, anti-drift; asks for `SPEC_MODE` | `/brewtools:task-board-setup install .` |
+| 10 | 7 | [memory-sync-setup](/brewdoc/skills/memory-sync-setup/) | Sync auto-loaded context after agents, rules and tasks exist | `/brewdoc:memory-sync-setup install` |
+| 11 | 7 | [docsync-setup](/brewdoc/skills/docsync-setup/) | Track documents for staleness | `/brewdoc:docsync-setup install` |
 
-## What the eleven setups install
+Optional after the run: the [brewcode mods](/mods/overview/) change Claude Code itself, for example `claude plugin install brewmod-plan-effort@claude-brewcode` raises effort while you plan ([plan-effort](/mods/plan-effort/)).
 
-| Skill | Plugin | Main artifacts |
-|-------|--------|----------------|
-| [agent-return-setup](/brewtools/skills/agent-return-setup/) | brewtools | Three shared hook files and `.claude/agent-return.json`; SubagentStart contract and SubagentStop return guard |
-| [semble-setup](/brewcode/skills/semble-setup/) | brewcode | User-scope `semble_code` MCP server, five project hook files wired to six events, `.claude/rules/semble-first.md`, `.claude/semble/`, `.sembleignore`, and a managed CLAUDE.md block |
-| [convention-setup](/brewcode/skills/convention-setup/) | brewcode | `.claude/convention/{reference-patterns,testing-conventions,project-architecture}.md` and `.claude/rules/convention.md` |
-| [teams-setup](/brewcode/skills/teams-setup/) | brewcode | Team manifests, trace files, project agents, and shared intent-guard |
-| [agent-router-setup](/brewtools/skills/agent-router-setup/) | brewtools | `.claude/hooks/agent-router.mjs` and `.claude/brewtools/agent-router.json` |
-| [manager-setup](/brewtools/skills/manager-setup/) | brewtools | Manager hard-wall guard, state and disarm helper under `.claude/brewtools/manager/`, plus settings registration |
-| [agent-deadline-setup](/brewtools/skills/agent-deadline-setup/) | brewtools | Deadline guard and cleanup hooks, with `.claude/agent-deadline.json` |
-| [superreview-setup](/brewcode/skills/superreview-setup/) | brewcode | Project `/superreview` skill, references, pristine template baseline, and shared intent-guard |
-| [task-board-setup](/brewtools/skills/task-board-setup/) | brewtools | Board tree, task-tracker, task-board skill, tasks rule, PROGRESS.md, METHODOLOGY.md, ANTI-DRIFT.md, and task-graph.md; task-spec skill and spec/design templates only when you accept `SPEC_MODE=on` |
-| [memory-sync-setup](/brewdoc/skills/memory-sync-setup/) | brewdoc | Project `/memory-sync` skill and memory-guide, agent-audit, and hard-sync references |
-| [docsync-setup](/brewdoc/skills/docsync-setup/) | brewdoc | Three doc-staleness hooks and `.claude/docsync/` config and state |
+<Spoiler id="what-the-eleven-setups-install" title="What the eleven setups install">
 
-Agent-return and agent-deadline also accept global scope under `~/.claude/`. Semble registers
-its MCP server at user scope. Other listed artifacts belong to the target project. Manager installs only
-the hard wall (plus the task-tools env key); the `++m`/`++a`/`++r`/`++rr`/`+++` codewords come from the
-[brewmod-placeholders](/mods/placeholders/) mod (Claude Code 2.1.292+).
+| Skill | Main artifacts |
+|-------|----------------|
+| agent-return-setup | Three hook files, `.claude/agent-return.json` |
+| semble-setup | User-scope `semble_code` MCP, hooks on six events, `.claude/rules/semble-first.md`, `.claude/semble/`, `.sembleignore`, CLAUDE.md block |
+| convention-setup | `.claude/convention/{reference-patterns,testing-conventions,project-architecture}.md`, `.claude/rules/convention.md` |
+| teams-setup | Team manifests, trace files, project agents, intent-guard |
+| agent-router-setup | `.claude/hooks/agent-router.mjs`, `.claude/brewtools/agent-router.json` |
+| manager-setup | Hard-wall guard, state and disarm helper in `.claude/brewtools/manager/` |
+| agent-deadline-setup | Deadline hooks, `.claude/agent-deadline.json` |
+| superreview-setup | Project `/superreview` skill, references, template baseline |
+| task-board-setup | Board tree, task-tracker, task-board skill, tasks rule, PROGRESS, METHODOLOGY, ANTI-DRIFT, task-graph; task-spec only with `SPEC_MODE=on` |
+| memory-sync-setup | Project `/memory-sync` skill and references |
+| docsync-setup | Three staleness hooks, `.claude/docsync/` |
 
-## Task methodology and session anti-drift
+Agent-return and agent-deadline also accept global scope under `~/.claude/`. Manager installs only the hard wall; the `++m`/`++a`/`++r`/`++rr`/`+++` codewords come from the [brewmod-placeholders](/mods/placeholders/) mod (Claude Code 2.1.292+, see [mods overview](/mods/overview/)).
 
-Task-board setup generates shared domain guidance at `.claude/features/METHODOLOGY.md`. Every
-accepted task gets its own Methodology and Anti-drift cron sections before implementation.
-They record the goal, review and test strategy, base work units, and a complete task-specific
-tick prompt.
+</Spoiler>
 
-When a top-level task becomes active, the main session's `task-board` flow reconciles one session
-timer for it. The default is hourly (`0 * * * *`); your requested cadence or opt-out takes
-precedence. Child work units use their parent's timer. Task-tracker reconciles task records
-and returns timer actions to the main session.
-
-Each delivered tick:
-
-- Rereads shared and task methodology, anti-drift instructions, goal, spec, user corrections, and task records.
-- Requests concise evidence from available active agents and reconciles statuses, dependencies, counts, and next work.
-- Rebuilds `task-graph.md`, keeping every unfinished node and the latest ten completed nodes; preserves older completion evidence in task records before pruning graph rows.
-- Checks drift against the goal and acceptance evidence, corrects deviations within scope, and advances the next unblocked authorized step.
-- Reports local time and timezone, tick number, elapsed time, achievements, remaining work, next action, and any blockers or user questions in at most five short lines using 🟢 🔵 🔴 ⚪.
-
-Task-board announces the confirmed timer id, cadence, timezone, known due time, session scope,
-and stop/change controls. It verifies stopping on completion, cancellation, or parking. If
-scheduling tools are unavailable, it saves the prompt and reports that scheduling is unavailable.
-Stored task state does not keep a timer alive after a session ends; scheduled time and actual
-receipt can differ.
-
-With the [brewmod-placeholders](/mods/placeholders/) mod installed (Claude Code 2.1.292+),
-typing `+++` in **Plan mode** adds an instruction to include methodology, graph reconciliation,
-the task-specific prompt, and a timer step in the execution plan. Planning remains read-only:
-files and timers change during authorized execution. Outside Plan mode, `+++` adds no cron instruction.
-
-## Read the setup verdicts
-
-| Verdict | Meaning |
-|---------|---------|
-| `n/a` | The owning plugin is not installed |
-| `disabled` | A live off-switch or parked entry file shows deliberate disablement |
-| `missing` | No anchor or secondary artifact is present |
-| `partial` | Incomplete artifacts, half-applied toggles, unresolved metadata, or incorrect ownership |
-| `stale` | Artifact content version, compared bytes, or a required artifact/wiring signal needs refresh |
-| `installed` | Required artifacts, content-version signals, and applicable byte comparisons agree |
-
-`content_version` is the headline freshness signal; `version` identifies the plugin release
-that produced the installation. A newer plugin release alone does not make unchanged artifact
-content stale. Generated project content has no meaningful byte-for-byte comparison with a
-raw template. The dashboard also checks `generated_by` ownership and copied assets where applicable.
-
-Disabled state takes precedence over missing, partial, and stale. Config-based setups switch a
-live flag; teams, superreview, task-board, conventions, and memory-sync park discovery entry files.
-Disabling conventions parks the loading rule only: accepted coding rules and manual CLAUDE.md
-references remain active. A missing plugin comparison asset is a reported validation gap,
-not evidence that the installed file is stale.
+Task methodology and the session timer: [Task Board Setup](/brewtools/skills/task-board-setup/). Verdicts (`installed`, `stale`, `partial`, `missing`, `disabled`, `n/a`): [Setup Status](/brewcode/skills/setup-status/).
 
 ## Shared modes
 
@@ -135,20 +74,16 @@ not evidence that the installed file is stale.
 |------|---------|
 | `status` | Inspect without changing artifacts |
 | `install` | Generate or copy artifacts and wire the mechanism |
-| `upgrade` | Refresh from current source while preserving supported local configuration and disabled state |
-| `enable` / `disable` | Resume or pause the installed mechanism |
-| `uninstall` | Remove installation artifacts or wiring according to that setup's ownership boundary |
-| `purge` | Remove the additional owned data specified by that setup |
+| `upgrade` | Refresh from current source, keeping local configuration and disabled state |
+| `enable` / `disable` | Resume or pause the mechanism |
+| `uninstall` | Remove artifacts or wiring per that setup's ownership boundary |
+| `purge` | Remove the additional owned data |
 
-All eleven accept these seven modes. Use explicit modes: many setups choose status when installed
-and install when absent, but conventions default to install and semble always defaults to status.
-Convention setup also accepts `full`, `conventions`, `rules`, and `paths`; semble adds `reindex`,
-`optimize`, and `resume`. Each skill page documents exact scope, arguments, and removal boundaries.
+All eleven accept these seven modes. Use explicit modes: most setups pick status when installed and install when absent, but conventions default to install and semble always to status. Convention setup also accepts `full`, `conventions`, `rules` and `paths`; semble adds `reindex`, `optimize` and `resume`.
 
-## Disarm the manager wall
+<Spoiler id="disarm-the-manager-wall" title="Disarm the manager wall">
 
-The installed manager hard wall can block main-session file and shell tools. Its narrow helper
-exemption lets you disarm it:
+The installed hard wall can block main-session file and shell tools. Disarm it with:
 
 ```text
 /brewtools:manager-setup disable
@@ -160,24 +95,22 @@ The skill runs the installed helper in this form:
 node /abs/path/to/project/.claude/brewtools/manager/manager-state.mjs set hard=false
 ```
 
-Use the actual project path and helper CLI directly. Shell operators, expansions, and node eval
-flags invalidate the exemption. If an old installation lacks the helper, have a subagent
-perform `manager-setup upgrade`, then disable the wall through the installed helper.
+Use the actual project path and call the helper directly: shell operators, expansions and node eval flags invalidate the exemption. If an old installation lacks the helper, have a subagent run `manager-setup upgrade`, then disable the wall.
+
+</Spoiler>
 
 ## After setup
 
-Rerun `/brewcode:setup-status` after plugin updates. Follow its scope-specific commands to repair
-partial installs or refresh changed artifacts. Plugin installation alone does not replace files
-that a setup previously copied into your project.
+Rerun `/brewcode:setup-status` after plugin updates and follow its commands to repair partial installs. A plugin update does not replace files a setup already copied into your project.
 
 ## Related
 
 <CardGrid>
   <Card title="Brewcode overview" icon="document" href="/brewcode/overview/">Project analysis, conventions, agents, and review tools.</Card>
-  <Card title="Setup Status" icon="eye" href="/brewcode/skills/setup-status/">Artifact probes, verdicts, and the dependency-ordered run-list.</Card>
-  <Card title="Convention Setup" icon="clipboard" href="/brewcode/skills/convention-setup/">Extract the project foundation before agents consume it.</Card>
+  <Card title="Setup Status" icon="eye" href="/brewcode/skills/setup-status/">Artifact probes, verdicts, and the run-list.</Card>
   <Card title="Task Board Setup" icon="graph" href="/brewtools/skills/task-board-setup/">Task methodology, graph reconciliation, and session anti-drift.</Card>
-  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/setup-status">The authoritative setup roster and run-list.</Card>
+  <Card title="Brewcode mods" icon="link" href="/mods/overview/">Optional plugins for plan effort and prompt placeholders.</Card>
+  <Card title="GitHub source" icon="github" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/setup-status">The authoritative setup roster and run-list.</Card>
 </CardGrid>
 
 <UpdateNotice />

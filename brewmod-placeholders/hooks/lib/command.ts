@@ -1,4 +1,4 @@
-// /placeholders management: pure over an injected Io, never `$`, so the hook spells every `$.fs`/`$.process` call itself.
+// /placeholders status block, model hand-off text and the three model tools: pure over an injected Io, never `$`.
 import { DEFAULT_PREFIX } from './match'
 import { layerSpecs, loadRegistry, newRegistryCache, parseDefinition, type Def, type Io, type Registry, type Roots } from './defs'
 
@@ -8,28 +8,20 @@ export type CmdIo = Io & {
   stat: (path: string) => Promise<StatLite | undefined>
   remove: (path: string) => Promise<{ exitCode: number; stderr: string }>
 }
-export type CmdResult = { text: string; registry: Registry | null }
-type Scope = 'project' | 'global'
+export type Scope = 'project' | 'global'
+export type SaveInput = { name?: unknown; description?: unknown; when?: unknown; text?: unknown; scope?: unknown }
+export type ToolOut = { text: string; registry: Registry | null; isError?: true }
 type Row = { stem: string; layer: string; def: Def }
 
-const say = (text: string): CmdResult => ({ text, registry: null })
+export const TOOL_PREFIX = 'mcp__brewmod-placeholders__'
+export const NEEDS_NEW_CC = 'needs Claude Code 2.1.300+ for the dialog'
 
 // Markdown-safe block: the first line stays plain (the engine glues "<plugin>: " in front of it, so a fence cannot open there), the rest sits in a fence longer than any backtick run inside.
-export function block(head: string, lines: readonly string[]): string {
+export function block(head: string, lines: readonly string[], foot: readonly string[] = []): string {
   const run = Math.max(0, ...[...lines.join('\n').matchAll(/`+/g)].map((m) => m[0].length))
   const fence = '`'.repeat(Math.max(3, run + 1))
-  return [head, fence, ...lines, fence].join('\n')
+  return [head, fence, ...lines, fence, ...foot].join('\n')
 }
-
-export const USAGE = block('usage: /placeholders list | show | add | edit | rm', [
-  'list                          every placeholder: name, layer, description',
-  'show <name>                   effective text and source layer (plus <name>.plan)',
-  'add <name> [--global] <text>  new own-layer file (project by default; --global or -g = the config dir)',
-  'edit <name> [--global]        seed an own-layer override from the effective text, print its path',
-  'rm <name> [--global]          remove an own-layer file (never defaults or legacy files)',
-  'the flag must directly follow the name; any other word after it is the text (add) or refused (edit, rm)',
-  'name: a-z 0-9 _ (1-32) or a run of ! # $ % & \' ( ) + , - ; = @ [ ] ^ ` { } ~, optional .plan suffix',
-])
 
 const WORD = /^[a-z0-9_]{1,32}$/
 const SYMBOL = /^[!#$%&'()+,\-;=@[\]^`{}~]{1,32}$/
@@ -44,12 +36,10 @@ export function normalizeName(raw: string): string | null {
 
 const why = (e: unknown): string => (e instanceof Error ? e.message : String(e))
 const layerLabel = (id: string): string => (id === 'default' ? 'plugin' : id)
-
-// First whitespace-delimited token and the text after it (inner whitespace and newlines kept).
-function take(s: string): [string, string] {
-  const m = /^\s*(\S+)\s*([\s\S]*)$/.exec(s)
-  return m === null ? ['', ''] : [m[1] ?? '', m[2] ?? '']
-}
+const load = (io: CmdIo, roots: Roots): Promise<Registry> => loadRegistry(io, roots, newRegistryCache())
+const ownDir = (roots: Roots, scope: Scope): string | undefined => layerSpecs(roots).find((s) => s.id === scope)?.dir
+const noDir = (scope: Scope): string => (scope === 'project' ? 'no project root for this session' : 'no config directory (CLAUDE_CONFIG_DIR and HOME are unset)')
+const fail = (text: string): ToolOut => ({ text, registry: null, isError: true })
 
 // defs[i] pairs with the i-th source key: resolveDefs inserts into both maps together.
 function rowsOf(reg: Registry): Row[] {
@@ -62,162 +52,139 @@ function rowsOf(reg: Registry): Row[] {
     .sort((a, b) => (a.stem < b.stem ? -1 : a.stem > b.stem ? 1 : 0))
 }
 
-const load = (io: CmdIo, roots: Roots): Promise<Registry> => loadRegistry(io, roots, newRegistryCache())
+// `/placeholders`, `status`, `help`, `list` (any case, alone) show the status; every other text goes to the model.
+export const isStatusRequest = (args: string): boolean => ['', 'status', 'help', 'list'].includes(args.trim().toLowerCase())
 
-function ownDir(roots: Roots, scope: Scope): string | undefined {
-  return layerSpecs(roots).find((s) => s.id === scope)?.dir
-}
-
-const noDir = (scope: Scope): string =>
-  scope === 'project' ? 'no project root for this session' : 'no config directory (CLAUDE_CONFIG_DIR and HOME are unset)'
-
-const GLOBAL_FLAGS: readonly string[] = ['--global', '-g']
-
-// `--global`/`-g` as the first word picks the global layer; any other word leaves project scope and the remainder untouched.
-function takeScope(s: string): { scope: Scope; rest: string } {
-  const [word, rest] = take(s)
-  return GLOBAL_FLAGS.includes(word) ? { scope: 'global', rest } : { scope: 'project', rest: s }
-}
-
-type Target = { stem: string; scope: Scope; rest: string; dir: string | undefined }
-
-// `<name> [--global] <rest>` -> stem, scope and the own-layer dir; a bad name, or text where none is allowed (edit, rm), gives the refusal.
-function parseTarget(roots: Roots, args: string, hasText: boolean): Target | string {
-  const [nameRaw, afterName] = take(args)
-  const { scope, rest } = takeScope(afterName)
-  const stem = normalizeName(nameRaw)
-  if (stem === null) return `bad name '${nameRaw}'\n${USAGE}`
-  if (!hasText && rest.trim() !== '') return `unexpected '${take(rest)[0]}' after the name; the global layer is --global (or -g)\n${USAGE}`
-  return { stem, scope, rest, dir: ownDir(roots, scope) }
-}
-
-// The definition format cannot carry a fence marker or a leading front matter: refuse what would not read back.
-function fileFor(text: string): string | null {
-  const content = `${text.trim()}\n`
-  const back = parseDefinition(content)
-  return back.hasFrontMatter || back.issues.length > 0 || back.text !== text.trim() ? null : content
-}
-
-const CANNOT_CARRY = 'that text holds a ``` or ~~~ fence marker or opens with a --- line, which the definition format cannot carry; write the file by hand'
-
-function shadowNote(reg: Registry, stem: string, scope: Scope): string {
-  const layer = reg.sources.get(stem)
-  return layer === undefined || layer === scope ? '' : `\nnote: the effective layer is ${layerLabel(layer)}, which wins over ${scope}`
-}
-
-function list(reg: Registry): string {
+export function statusText(reg: Registry, prefix: string = DEFAULT_PREFIX): string {
   const rows = rowsOf(reg)
-  const w = Math.max(...rows.map((r) => r.stem.length), 4)
-  const lines = rows.map((r) => `${r.stem.padEnd(w)}  ${layerLabel(r.layer).padEnd(14)}  ${r.def.description ?? '-'}`)
+  const w = Math.max(...rows.map((r) => (prefix + r.stem).length), 4)
+  const lines = rows.map((r) => `${(prefix + r.stem).padEnd(w)}  ${layerLabel(r.layer).padEnd(14)}  ${r.def.description ?? '-'}`)
   const issues = reg.issues.length === 0 ? [] : ['', `issues (${reg.issues.length}):`, ...reg.issues.map((i) => `  ${i}`)]
-  return block(`${rows.length} placeholders`, [...lines, ...issues])
+  return block(`${rows.length} placeholders: type ${prefix}name in any prompt`, [...lines, ...issues], ['add or change: /placeholders <what you want>'])
 }
 
-const showRows = (reg: Registry, stem: string): Row[] => {
-  const stems = stem.endsWith(PLAN) ? [stem] : [stem, stem + PLAN]
-  return rowsOf(reg).filter((r) => stems.includes(r.stem))
-}
+export const handoffAck = (status: string): string => `asking Claude to help with your placeholder ...\n${status}`
 
-// A name typed as a token (`++r`) means its stem; a defined stem spelled literally wins (`+++` is a symbol stem).
-function showStem(reg: Registry, nameRaw: string, prefix: string): string | null {
-  const stripped = nameRaw.startsWith(prefix) && nameRaw.length > prefix.length ? normalizeName(nameRaw.slice(prefix.length)) : null
-  const options = [normalizeName(nameRaw), stripped].filter((c): c is string => c !== null)
-  return options.find((c) => showRows(reg, c).length > 0) ?? options[0] ?? null
-}
+// Short on purpose: it shows in the transcript. The rules live in the tool descriptions.
+export const handoffText = (request: string, prefix: string = DEFAULT_PREFIX): string =>
+  `Placeholder helper. My request: <request>${request}</request>\nUse the ${TOOL_PREFIX}* tools (list_placeholders first); a placeholder is inserted into prompts as ${prefix}name.`
 
-function show(reg: Registry, stem: string): string {
-  const rows = showRows(reg, stem)
-  if (rows.length === 0) return `unknown placeholder '${stem}'; /placeholders list shows the defined ones`
-  return rows
-    .map((r) => block(`${r.stem} (layer: ${layerLabel(r.layer)}, when: ${r.def.when}, insert: ${r.def.insert}, order: ${r.def.order})`, (r.def.body === '' ? '(empty)' : r.def.body).split('\n')))
+export const TOOLS = [
+  {
+    name: 'list_placeholders',
+    description:
+      'List the effective placeholders: name, layer (plugin | project | global | legacy), description and body text. Call it first, before creating, changing, removing or showing a placeholder. To show one, print its name and body to the user.',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'save_placeholder',
+    description:
+      'Create or change a placeholder in the user\'s own layer (project by default, global only when the user asked). Never use Write for this. Name: lowercase letters, digits, underscore, no prefix. When the user gave the text, keep their words verbatim; when they only described it, draft it. To change one, start from its effective text from list_placeholders and apply the change. Call AskUserQuestion exactly once before saving: header "Placeholder", question shows the name and the text, options "Save as drafted (Recommended)" and "Change it" (Other = a different name or text; apply and save without asking again). Then say where it was saved.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'lowercase name without the prefix' },
+        description: { type: 'string', description: 'one short line shown in the list and the typeahead' },
+        text: { type: 'string', description: 'the placeholder text inserted into prompts' },
+        when: { type: 'string', enum: ['always', 'plan', 'not-plan'], description: 'optional; default always' },
+        scope: { type: 'string', enum: ['project', 'global'], description: 'default project' },
+      },
+      required: ['name', 'description', 'text'],
+    },
+  },
+  {
+    name: 'remove_placeholder',
+    description:
+      'Remove a placeholder file from the user\'s own layer (project by default, global only when asked); plugin defaults and legacy brewtools files are never removed. Call AskUserQuestion exactly once to confirm first ("Remove it (Recommended)" / "Keep it"), then say what is served afterwards.',
+    inputSchema: {
+      type: 'object',
+      properties: { name: { type: 'string', description: 'name without the prefix' }, scope: { type: 'string', enum: ['project', 'global'] } },
+      required: ['name'],
+    },
+  },
+] as const
+
+export function listTool(reg: Registry): ToolOut {
+  const rows = rowsOf(reg)
+  const text = rows
+    .map((r) => `## ${r.stem} (layer: ${layerLabel(r.layer)}, when: ${r.def.when}) ${r.def.description ?? ''}\n${r.def.body === '' ? '(empty)' : r.def.body}`)
     .join('\n\n')
+  return { text: text === '' ? 'no placeholders defined' : text, registry: null }
 }
 
-async function add(io: CmdIo, roots: Roots, args: string): Promise<CmdResult> {
-  const t = parseTarget(roots, args, true)
-  if (typeof t === 'string') return say(t)
-  const { stem, scope, rest, dir } = t
-  if (rest.trim() === '') return say(`add needs text\n${USAGE}`)
-  if (dir === undefined) return say(noDir(scope))
-  const path = `${dir}/${stem}.md`
-  if (await io.exists(path)) return say(`${path} already exists; /placeholders edit ${stem}${scope === 'global' ? ' --global' : ''} prints it`)
-  const content = fileFor(rest)
-  if (content === null) return say(CANNOT_CARRY)
-  await io.write(path, content)
-  const registry = await load(io, roots)
-  return { text: `added ${stem} (${scope}): ${path}${shadowNote(registry, stem, scope)}`, registry }
+const scopeOf = (v: unknown): Scope | null => (v === undefined || v === 'project' ? 'project' : v === 'global' ? 'global' : null)
+const bare = (raw: unknown, prefix: string): string | null => {
+  if (typeof raw !== 'string') return null
+  const s = raw.trim()
+  return normalizeName(s.startsWith(prefix) && s.length > prefix.length ? s.slice(prefix.length) : s)
 }
 
-async function edit(io: CmdIo, roots: Roots, args: string): Promise<CmdResult> {
-  const t = parseTarget(roots, args, false)
-  if (typeof t === 'string') return say(t)
-  const { stem, scope, dir } = t
-  if (dir === undefined) return say(noDir(scope))
-  const path = `${dir}/${stem}.md`
-  if (await io.exists(path)) return say(`exists (${scope}): ${path}\nedit it; changes apply from the next prompt`)
-  const row = rowsOf(await load(io, roots)).find((r) => r.stem === stem)
-  if (row === undefined) return say(`unknown placeholder '${stem}'; /placeholders add creates a new one`)
-  const content = fileFor(row.def.body)
-  if (content === null) return say(CANNOT_CARRY)
-  await io.write(path, content)
-  const registry = await load(io, roots)
-  return { text: `created (${scope}) from ${layerLabel(row.layer)} text: ${path}\nedit it; changes apply from the next prompt${shadowNote(registry, stem, scope)}`, registry }
+// File = front matter (description, optional when) + body; null when the text would not read back (fence marker, leading ---).
+export function definitionFile(description: string, when: string | undefined, text: string): string | null {
+  const head = [`description: ${JSON.stringify(description)}`, ...(when === undefined || when === 'always' ? [] : [`when: ${when}`])]
+  const body = text.trim()
+  const content = `---\n${head.join('\n')}\n---\n${body}\n`
+  const back = parseDefinition(content)
+  return body === '' || back.issues.length > 0 || back.text !== body || back.meta.description !== description ? null : content
 }
 
-async function rm(io: CmdIo, roots: Roots, args: string): Promise<CmdResult> {
-  const t = parseTarget(roots, args, false)
-  if (typeof t === 'string') return say(t)
-  const { stem, scope, dir } = t
-  if (dir === undefined) return say(noDir(scope))
-  const path = `${dir}/${stem}.md`
-  if (!(await io.exists(path))) {
-    const layer = rowsOf(await load(io, roots)).find((r) => r.stem === stem)?.layer
-    if (layer === undefined) return say(`unknown placeholder '${stem}'`)
-    if (layer === 'default') return say(`refused, ${stem} is a plugin default and has no ${scope} file; /placeholders edit ${stem} overrides it`)
-    if (layer.endsWith('-legacy')) return say(`refused, ${stem} comes from a brewtools ${layer} file, which this command never removes`)
-    return say(`no ${scope} file for ${stem}; it comes from the ${layer} layer`)
-  }
-  const dirStat = await io.stat(dir)
-  const fileStat = await io.stat(path)
-  const base = dirStat?.realPath?.replace(/\/+$/, '')
-  const real = fileStat?.realPath
-  const isInside = base !== undefined && base !== '' && real !== undefined && real.startsWith(`${base}/`)
-  if (fileStat === undefined || fileStat.kind !== 'file' || fileStat.isLink || !isInside) {
-    return say(`refused, ${path} is not a plain file inside ${dir}`)
-  }
-  const res = await io.remove(real)
-  if (res.exitCode !== 0) return say(`rm failed (exit ${res.exitCode}): ${res.stderr.trim()}`)
-  const registry = await load(io, roots)
-  const now = registry.sources.get(stem)
-  return { text: `removed (${scope}): ${path}\n${stem} is ${now === undefined ? 'no longer defined' : `now served by the ${layerLabel(now)} layer`}`, registry }
-}
-
-// Never throws: any failure becomes readable text. `registry` is set only after a mutation, for the editor entries.
-export async function runCommand(io: CmdIo, roots: Roots, args: string, prefix = DEFAULT_PREFIX): Promise<CmdResult> {
+export async function saveTool(io: CmdIo, roots: Roots, input: SaveInput, prefix: string = DEFAULT_PREFIX): Promise<ToolOut> {
   try {
-    const [sub, rest] = take(args)
-    switch (sub.toLowerCase()) {
-      case 'list':
-        return say(list(await load(io, roots)))
-      case 'show': {
-        const [nameRaw] = take(rest)
-        const reg = await load(io, roots)
-        const stem = showStem(reg, nameRaw, prefix)
-        return say(stem === null ? `bad name '${nameRaw}'\n${USAGE}` : show(reg, stem))
-      }
-      case 'add':
-        return await add(io, roots, rest)
-      case 'edit':
-        return await edit(io, roots, rest)
-      case 'rm':
-        return await rm(io, roots, rest)
-      case '':
-      case 'help':
-        return say(USAGE)
-      default:
-        return say(`unknown subcommand '${sub}'\n${USAGE}`)
-    }
+    const stem = bare(input.name, prefix)
+    if (stem === null) return fail('bad name: use lowercase letters, digits, underscore (1-32) or punctuation only, optional .plan suffix')
+    const scope = scopeOf(input.scope)
+    if (scope === null) return fail("scope must be 'project' or 'global'")
+    if (typeof input.text !== 'string' || input.text.trim() === '') return fail('text is empty')
+    const description = typeof input.description === 'string' ? input.description.trim().replace(/\s+/g, ' ') : ''
+    if (description === '') return fail('description is empty')
+    const when = input.when === undefined ? undefined : String(input.when)
+    if (when !== undefined && !['always', 'plan', 'not-plan'].includes(when)) return fail("when must be 'always', 'plan' or 'not-plan'")
+    const dir = ownDir(roots, scope)
+    if (dir === undefined) return fail(noDir(scope))
+    const content = definitionFile(description, when, input.text)
+    if (content === null) return fail('that text holds a ``` or ~~~ fence marker or opens with a --- line, which the definition format cannot carry')
+    const path = `${dir}/${stem}.md`
+    // Same-name entry (any case): a symlink or directory would send the write outside the layer dir.
+    const clash = (await io.exists(dir)) ? (await io.list(dir)).find((en) => en.name.toLowerCase() === `${stem}.md` && (en.isLink || en.kind !== 'file')) : undefined
+    if (clash !== undefined) return fail(`refused, ${dir}/${clash.name} is not a plain file`)
+    await io.write(path, content)
+    const registry = await load(io, roots)
+    const layer = registry.sources.get(stem)
+    const note = layer === undefined || layer === scope ? '' : `; note: the ${layerLabel(layer)} layer wins over ${scope}`
+    return { text: `saved ${prefix}${stem} (${scope}): ${path}${note}`, registry }
   } catch (e) {
-    return say(`failed: ${why(e)}`)
+    return fail(`failed: ${why(e)}`)
+  }
+}
+
+export async function removeTool(io: CmdIo, roots: Roots, input: { name?: unknown; scope?: unknown }, prefix: string = DEFAULT_PREFIX): Promise<ToolOut> {
+  try {
+    const stem = bare(input.name, prefix)
+    if (stem === null) return fail('bad name')
+    const scope = scopeOf(input.scope)
+    if (scope === null) return fail("scope must be 'project' or 'global'")
+    const dir = ownDir(roots, scope)
+    if (dir === undefined) return fail(noDir(scope))
+    const path = `${dir}/${stem}.md`
+    if (!(await io.exists(path))) {
+      const layer = rowsOf(await load(io, roots)).find((r) => r.stem === stem)?.layer
+      if (layer === undefined) return fail(`unknown placeholder '${stem}'`)
+      if (layer === 'default') return fail(`refused, ${stem} is a plugin default and has no ${scope} file`)
+      if (layer.endsWith('-legacy')) return fail(`refused, ${stem} comes from a brewtools ${layer} file, which is never removed here`)
+      return fail(`no ${scope} file for ${stem}; it comes from the ${layer} layer`)
+    }
+    const dirStat = await io.stat(dir)
+    const fileStat = await io.stat(path)
+    const base = dirStat?.realPath?.replace(/\/+$/, '')
+    const real = fileStat?.realPath
+    const isInside = base !== undefined && base !== '' && real !== undefined && real.startsWith(`${base}/`)
+    if (fileStat === undefined || fileStat.kind !== 'file' || fileStat.isLink || !isInside) return fail(`refused, ${path} is not a plain file inside ${dir}`)
+    const res = await io.remove(real)
+    if (res.exitCode !== 0) return fail(`rm failed (exit ${res.exitCode}): ${res.stderr.trim()}`)
+    const registry = await load(io, roots)
+    const now = registry.sources.get(stem)
+    return { text: `removed (${scope}): ${path}; ${prefix}${stem} is ${now === undefined ? 'no longer defined' : `now served by the ${layerLabel(now)} layer`}`, registry }
+  } catch (e) {
+    return fail(`failed: ${why(e)}`)
   }
 }

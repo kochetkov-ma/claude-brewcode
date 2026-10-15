@@ -4,100 +4,65 @@ description: "Meet the Brewcode Claude Code plugin suite: conventions, project a
 order: 1
 ---
 
-import { Card, CardGrid, Callout, InstallPrompt, Spoiler, UpdateNotice } from '../../components/mdx';
+import { Card, CardGrid, Callout, InstallPrompt, ModPromo, UpdateNotice } from '../../components/mdx';
 
 # Introduction
 
-**Brewcode** is a plugin suite for Claude Code: project conventions and rules, domain agent teams, multi-agent quorum review, semantic code search, and tooling to build your own skills, agents, and hooks. Recipes (skills) define what to brew, brewers (agents) do the work, and a few hooks handle session start and post-compact recall. The optional brewmod-placeholders mod adds codeword placeholders such as `++r`.
+**Brewcode** is a plugin suite for Claude Code: project conventions and rules, domain agent teams, multi-agent quorum review, semantic code search, and tooling to build your own skills, agents and hooks. Recipes (skills) define what to brew, brewers (agents) do the work, and a few hooks handle session start and post-compact recall. Two optional [brewcode mods](/mods/overview/) from the same marketplace extend Claude Code itself; they install separately and are not counted among the four plugins.
 
-Every skill except `/brewdoc:publish`, `/brewtools:text-optimize` and `/brewtools:text-human` runs only when you type `/plugin:skill` — see the [FAQ](/faq/#auto-invoke) for why that is deliberate. Claude can run those three itself (publish or share a link; compress or humanize files you name); typing them still works.
+Every skill except `/brewdoc:publish`, `/brewtools:text-optimize` and `/brewtools:text-human` runs only when you type `/plugin:skill`; see the [FAQ](/faq/#auto-invoke) for why.
+
+<ModPromo />
 
 <Callout type="tip" title="Start with the project foundation">
-  Run setup-status first. Establish semantic search, run convention-setup before teams-setup,
-  configure agent consumers, then install the task board and finish with documentation sync.
-  Follow the [Full Setup](/full-setup/) run-list one setup per session.
+  Run setup-status first. Establish semantic search, run convention-setup before teams-setup, configure agent consumers, then install the task board and finish with documentation sync. Follow the [Full Setup](/full-setup/) run list one setup per session.
 </Callout>
 
-## Four plugins, one suite
+## Pick a path
 
 <CardGrid>
-  <Card title="brewcode" icon="infinity" href="/brewcode/overview/">
-    The core: semantic code search, quorum review, conventions, skill/agent/hook/mod creation. 9 skills · 6 agents · 2 registered hooks.
+  <Card title="Installation" icon="file" href="/installation/">
+    One command adds the marketplace, one installs the plugins.
   </Card>
-  <Card title="brewtools" icon="settings" href="/brewtools/overview/">
-    Universal utilities: prompt optimization, AI artifact removal, secrets scanning, SSH, deploy. 13 skills · 3 agents · 1 registered hook.
+  <Card title="Quick Start" icon="play" href="/quickstart/">
+    Conventions, task board and deep review in ten minutes.
   </Card>
-  <Card title="brewui" icon="image" href="/brewui/overview/">
-    UI / visual / creative tools (placeholder, currently empty). 0 skills · 0 agents.
-  </Card>
-  <Card title="brewdoc" icon="file" href="/brewdoc/overview/">
-    Documentation tools: docsync doc-staleness tracking, memory-sync generation, Markdown → PDF, publishing. 5 skills · 0 agents.
+  <Card title="Full Setup" icon="list" href="/full-setup/">
+    All 11 `-setup` skills in recommended order, one per session.
   </Card>
 </CardGrid>
 
-Two optional [brewcode mods](/mods/overview/) sit outside the suite: they install separately from the same marketplace and are not counted among the four plugins.
+## Install
 
-**Naming rule:** a skill whose name ends in `-setup` installs a mechanism into the project — after it runs you use the installed thing, not the skill. Recurring tools keep bare names and are correct to run over and over. See [Full Setup](/full-setup/) for the ordered run list.
+<InstallPrompt plugin="all" mode="install" />
+
+Full instructions: [Installation](/installation/). Upgrading: [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/).
+
+## Four plugins, one suite
+
+| Plugin | Purpose | Skills | Agents | Hooks |
+|--------|---------|--------|--------|-------|
+| [**brewcode**](/brewcode/overview/) | Conventions and rules, agent teams, semantic search, quorum review, skill/agent/hook/mod creation | 9 | 6 | 2 |
+| [**brewtools**](/brewtools/overview/) | Text utilities, secrets scanning, SSH, deploy, manager mode, the opt-in hook layer | 13 | 3 | 1 |
+| [**brewui**](/brewui/overview/) | UI / visual / creative tools (placeholder, empty) | 0 | 0 | — |
+| [**brewdoc**](/brewdoc/overview/) | Doc-staleness tracking, memory sync, setup docs, PDF, publishing | 5 | 0 | — |
+
+All four install from a single marketplace and load with every Claude Code session. The suite has three registered plugin hooks; project hooks installed by a `-setup` skill are separate. **Naming rule:** a skill ending in `-setup` installs a mechanism you use afterwards; recurring tools keep bare names.
 
 ## What makes it different
 
 <CardGrid>
   <Card title="Task board and methodology" icon="document" href="/brewtools/skills/task-board-setup/">
-    Domain methodology, per-task work/review/test plans, and a task graph. Active top-level tasks
-    get unique hourly session anti-drift timers unless you override them; specs are optional.
+    Domain methodology, per-task work/review/test plans and a task graph. Active top-level tasks get hourly anti-drift timers unless you override them; specs are optional.
   </Card>
   <Card title="Quorum code review" icon="search" href="/brewcode/skills/superreview-setup/">
-    3 to 5 parallel reviewers work independently. Results are merged via a
-    quorum algorithm (2/3 agreement). Deduplication and ranking by severity.
+    3 to 5 independent reviewers, merged at 2/3 agreement, deduplicated and ranked by severity.
   </Card>
   <Card title="Convention setup" icon="book" href="/brewcode/skills/convention-setup/">
-    Extracts etalon classes, patterns, and architecture into convention docs,
-    then syncs the distilled rules into <code>.claude/rules/</code>.
+    Etalon classes and patterns become convention docs, then rules in `.claude/rules/`.
   </Card>
-  <Card title="Skills and agents" icon="settings" href="/brewcode/skills/">
-    27 skills and 9 specialized agents across 4 plugins. Built-in tools for
-    creating your own skills, agents, hooks, and mods. Prompt optimization included.
-  </Card>
-  <Card title="One setup dashboard" icon="clipboard" href="/full-setup/">
-    <code>/brewcode:setup-status</code> reports which of the 11 setups are installed, stale,
-    disabled, partial or missing here, and prints the exact command for each row.
-  </Card>
-</CardGrid>
-
-## What's included
-
-| Plugin | Purpose | Skills | Agents | Hooks |
-|--------|---------|--------|--------|-------|
-| **brewcode** | Conventions and rules, agent teams, semantic search, quorum review, skill/agent/hook/mod creation | 9 | 6 | 2 |
-| **brewtools** | Text utilities, secrets scanning, SSH, deploy, manager mode, the opt-in hook layer | 13 | 3 | 1 |
-| **brewui** | UI / visual / creative tools (placeholder, empty) | 0 | 0 | — |
-| **brewdoc** | Documentation tools: doc-staleness tracking, memory sync, setup docs, PDF, publishing | 5 | 0 | — |
-
-All four plugins install with a single marketplace and load automatically with every Claude Code session.
-The suite has three registered plugin hooks; additional setup-installed project hooks are separate.
-
-## Install
-
-<Spoiler title="📦 How to install Brewcode — click to expand install instructions">
-  <InstallPrompt plugin="all" mode="install" />
-
-  Full instructions: [Installation](/installation/) · Upgrading: [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/).
-</Spoiler>
-
-## Next step
-
-<CardGrid>
-  <Card title="Installation" icon="file" href="/installation/">
-    Set up Brewcode in 2 minutes. One command to add the marketplace, one to install.
-  </Card>
-  <Card title="Quick Start" icon="play" href="/quickstart/">
-    Get started with [convention setup](/brewcode/skills/convention-setup/), [task board](/brewtools/skills/task-board-setup/), and [deep review](/brewcode/skills/superreview-setup/).
-  </Card>
-  <Card title="Full Setup" icon="list" href="/full-setup/">
-    All 11 <code>-setup</code> skills in recommended order, one per session, with the mode vocabulary.
-  </Card>
-  <Card title="brewcode mods" icon="puzzle" href="/mods/overview/">
-    Two optional mods for Claude Code: plan-mode effort and prompt placeholders. Installed separately.
+  <Card title="One setup dashboard" icon="clipboard" href="/brewcode/skills/setup-status/">
+    `/brewcode:setup-status` shows which of the 11 setups are installed, stale, disabled, partial or missing, with the exact command for each.
   </Card>
 </CardGrid>
 

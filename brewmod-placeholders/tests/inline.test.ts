@@ -274,15 +274,6 @@ test('GIVEN unknown tokens and the default option WHEN the prompt is submitted T
   expect([w.toasts, seen.map((s) => s.text)], 'toasts and submit text').toEqual([['unknown ++foo, ++bar'], ['++m ++foo ++Foo ++bar']])
 })
 
-test('GIVEN warnUnknown off WHEN a prompt with unknown tokens is submitted THEN there is no toast', { options: { warnUnknown: false } }, async ($, on) => {
-  const w = wire(on, { tree: TREE })
-  bottomSubmit(on)
-
-  await submit($, '++m ++foo')
-
-  expect(w.toasts, 'toasts').toEqual([])
-})
-
 test('GIVEN only known tokens or no prefix WHEN submitted THEN there is no toast', async ($, on) => {
   const w = wire(on, { tree: TREE })
   bottomSubmit(on)

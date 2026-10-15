@@ -4,11 +4,17 @@ description: "Inspect all eleven setups across the plugin suite, detect missing 
 order: 1118
 ---
 
-import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+import { Badge, Callout, Card, CardGrid, SourceLink, Spoiler, Steps, UpdateNotice } from '../../../../components/mdx';
 
 # Setup Status
 
 <Badge text="sonnet" /> <Badge text="read-only probes" /> <Badge text="11 setups" />
+
+<SourceLink path="brewcode/skills/setup-status/README.md" anchor="setup-status" />
+
+Inspect a repository or check copied artifacts after a plugin update. The skill
+reports each setup as current, disabled, missing, partial, stale or modified and prints the exact
+next command. It runs no setup itself and spawns no agents.
 
 ## Quick reference
 
@@ -16,19 +22,8 @@ import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../..
 |-------|-------|
 | Command | `/brewcode:setup-status` |
 | Input | Free-text prompt; optional plugin or skill filter |
-| Tools | Read, Bash, Glob, Grep, AskUserQuestion; no Write, Edit, or Agent |
 | Covers | Eleven setups across brewcode, brewtools, and brewdoc |
 | Writes | No setup artifacts; one optional, explicitly accepted task-tools settings key |
-
-## What it does
-
-Inspect an unfamiliar repository or check copied artifacts after updating the plugins. The skill
-reports current, disabled, missing, partial, stale, or modified setups and gives the exact next command.
-It compares artifact content versions, ownership, copied bytes, and required artifacts or wiring.
-
-The probes are read-only. The skill runs no setup and spawns no agents. Its only write is an
-optional one-key settings merge after you accept the task-tools offer. The merge takes the shared `settings.json.lock` and aborts after 10 s if another setup holds it. There is no `--run`,
-`--fix`, or automatic setup mode.
 
 ## When to use
 
@@ -37,10 +32,8 @@ optional one-key settings merge after you accept the task-tools offer. The merge
 | Inspect the whole project | `/brewcode:setup-status` |
 | Inspect one plugin | `/brewcode:setup-status brewtools` |
 | Inspect conventions and their loading rule | `/brewcode:setup-status convention-setup` |
-| Inspect semantic-search wiring | `/brewcode:setup-status semble-setup` |
 
-Filters can occur in a free-text RU/EN prompt. Unrecognized text means a full report, not an
-error. Report prose follows your language; paths and commands remain literal.
+Filters can sit in a free-text RU/EN prompt; other text gives the full report. Commands stay literal.
 
 ## Example
 
@@ -48,43 +41,23 @@ error. Report prose follows your language; paths and commands remain literal.
 /brewcode:setup-status convention-setup
 ```
 
-On a project without conventions, expect a missing row pointing to
-`/brewcode:convention-setup install`. On a deliberately disabled installation, expect disabled
-and an enable command; it will stay out of the run-list. An outdated document or loading-rule
-content version can produce stale even if the other convention files are current.
+Without conventions, expect a `missing` row pointing to `/brewcode:convention-setup install`.
 
 <Callout type="warning" title="Run setups yourself, one per session">
-  Setups can analyse the repository, generate artifacts, delegate work, and ask outcome-changing
-  questions. Follow the report's commands separately, preferably in fresh sessions. This
-  dashboard reports what to do; it does not batch installations.
+  Setups are interactive generators. Follow the report's commands separately, in fresh sessions. There is no `--run`, `--fix`, or automatic mode.
 </Callout>
 
-## Workflow
+## How it works
 
 <Steps>
-  <li><div><strong>Resolve installed plugin roots</strong><p>Find the installed plugins and resolve their versions. Missing plugins produce n/a rows rather than missing project artifacts. An unresolved version is reported instead of guessed.</p></div></li>
-  <li><div><strong>Probe artifacts and off-switches</strong><p>Check each roster row's anchor, secondary files, settings, and live or parked discovery entry. Disabled state is evaluated before incomplete or outdated artifacts.</p></div></li>
-  <li><div><strong>Compare content, ownership, and bytes</strong><p>Compare each artifact's content version with its own plugin source, check generated_by, and compare copied files where appropriate. Generated project content is not compared byte-for-byte with raw templates.</p></div></li>
-  <li><div><strong>Print verdicts and the dependency-ordered run-list</strong><p>Within each stage, partial installs precede stale and modified ones, then missing ones. Disabled, current, unavailable, and filtered-out rows stay out of the list.</p></div></li>
-  <li><div><strong>Check roster coverage and task-tool availability</strong><p>Compare the roster with installed setup directories and warn about unknown setups. A complete roster prints roster: 11/11 in sync. The highest settings layer that sets the task-tools key decides. If no layer sets it and the session env does not turn it on, offer the separate one-key settings change after the report; a higher layer's `"0"` reports `off (<layer>)` with no offer.</p></div></li>
+  <li><div><strong>Resolve plugin roots</strong><p>Find the installed plugins and their versions. A missing plugin gives an `n/a` row; an unresolved version is reported, never guessed.</p></div></li>
+  <li><div><strong>Probe artifacts and off-switches</strong><p>Check anchors, secondary files, settings, and parked entries.</p></div></li>
+  <li><div><strong>Compare content, ownership, bytes</strong><p>Compare each artifact's content version with its own plugin source, check `generated_by`, and compare copied files byte by byte.</p></div></li>
+  <li><div><strong>Print verdicts and the run-list</strong><p>Partial installs come first within a stage, then stale and modified, then missing.</p></div></li>
+  <li><div><strong>Check roster and task tools</strong><p>Warn about unknown setups, else print `roster: 11/11 in sync`. Offer the task-tools key merge if no layer sets it.</p></div></li>
 </Steps>
 
-## Run-list order
-
-| Stage | Setups | Reason |
-|-------|--------|--------|
-| 1 | agent-return | Inspect global drift before later subagent work |
-| 2 | semble | Establish semantic search for repository analysis |
-| 3 | convention | Extract architecture, coding, and testing patterns before agents consume them |
-| 4 | teams | Create project agents and shared intent-guard |
-| 5 | agent-router, manager, agent-deadline, superreview | Configure consumers of agents and intent-guard |
-| 6 | task-board | Install the task process, methodology, and board |
-| 7 | memory-sync, then docsync | Capture the completed configuration and track document drift |
-
-A stage without actionable rows is omitted. Conventions need no teams prerequisite.
-See [Full Setup](/full-setup/) for installation examples.
-
-## The eleven setups and their anchors
+## The eleven setups
 
 | Setup | Anchor |
 |-------|--------|
@@ -100,11 +73,13 @@ See [Full Setup](/full-setup/) for installation examples.
 | [memory-sync-setup](/brewdoc/skills/memory-sync-setup/) | Emitted `.claude/skills/memory-sync/SKILL.md` |
 | [docsync-setup](/brewdoc/skills/docsync-setup/) | `.claude/docsync/config.json` |
 
-Recurring tools such as agents, skills, rules, text-optimize, and publish do not have setup
-installation state and stay out of this roster. Convention-setup installs persistent documents
-and loading guidance, so it belongs in the roster.
+Recurring tools have no installed state and stay out of the roster. The run-list follows seven stages, from agent-return and semble through
+conventions, teams, consumers, task-board and memory-sync with docsync. The order and install
+commands live on [Full Setup](/full-setup/).
 
-## Verdicts
+## Technical details
+
+<Spoiler id="verdicts" title="Verdicts and off-switches">
 
 Evaluated in this order:
 
@@ -112,88 +87,61 @@ Evaluated in this order:
 |---------|---------|
 | `n/a` | The owning plugin is unavailable |
 | `disabled` | The setup's off-switch confirms deliberate disablement |
-| `missing` | Anchor and secondary artifacts are absent in live and disabled spellings; for manager also a project with only `state.json` (no guard, helper, or registration), where the row reads `state.json only, wall not installed` and the command is `install` |
-| `partial` | Incomplete installation, half-applied toggles, unresolved metadata, or wrong ownership; for semble also a hand-edited rule with an outdated stamp, or permissions missing from every settings layer |
-| `stale` | Content-version, copied-byte, absence, or wiring signals need refresh; the row reads `stale (installed X.Y.Z, plugin A.B.C)` when the versions differ |
-| `modified` | Reads `modified (stamp current, bytes differ)`: the stamp is current but a copied file was edited or never re-copied |
-| `current` | Required artifacts and applicable checks agree; reads `current (restamp pending)` when a copied file differs from the plugin only in its stamp lines; the report names the files and an optional `upgrade` restamps them |
+| `missing` | Anchor and secondary artifacts absent in live and disabled spellings; manager with only `state.json`: `state.json only, wall not installed`, command `install` |
+| `partial` | Incomplete install, half-applied toggle, unresolved metadata, or wrong ownership; semble also: hand-edited rule with outdated stamp, or permissions missing everywhere |
+| `stale` | Content-version, byte, absence, or wiring signals need refresh; reads `stale (installed X.Y.Z, plugin A.B.C)` when versions differ |
+| `modified` | `modified (stamp current, bytes differ)`: a copied file was edited or never re-copied |
+| `current` | Required artifacts and checks agree; `current (restamp pending)` when a copied file differs only in its stamp lines (optional `upgrade` restamps) |
 
-The report distinguishes changed content, legacy stamps, unstamped artifacts, and byte drift.
-A missing plugin comparison source is an unknown validation result, never proof of stale content.
-Shared files from another setup do not prove installation.
-
-### Conventions: documents and reversible loading
-
-The convention row checks `.claude/rules/convention.md` and all three generated documents:
-`reference-patterns.md`, `testing-conventions.md`, and `project-architecture.md`. Their
-`generated_by` must identify convention-setup, and their content versions are checked against
-its current source. These documents are project-specific; no byte comparison with a template
-can establish their freshness.
-
-Parking the loader as `convention.md.disabled` reports disabled. Upgrade refreshes conventions
-and owned loader metadata while preserving local wording and the parked state. Accepted coding
-rules and manual CLAUDE.md references remain active when convention loading is disabled.
-
-### Off-switches
+Convention checks the loader plus its three generated documents; a parked loader (`convention.md.disabled`) reads `disabled`.
 
 | Setup group | Disabled signal |
 |-------------|-----------------|
-| teams | Every roster member parked as .disabled, except the shared intent-guard and agents owned by another generator (such as task-tracker), which teams never parks |
-| superreview, memory-sync | Generated SKILL.md parked as .disabled |
+| teams | Every roster member parked as `.disabled`, except the shared intent-guard and agents owned by another generator (such as task-tracker) |
+| superreview, memory-sync | Generated `SKILL.md` parked as `.disabled` |
 | task-board | Every deployed machinery entry parked; task data stays |
-| convention | Loading rule parked; generated documents and accepted rules stay |
-| semble | State enabled is false |
-| manager | State hard is not true, on an installed wall (copied guard or registration) |
-| agent-deadline, agent-return | Config enabled is not true; missing key means off |
-| agent-router, docsync | Config enabled is false; missing key means on |
+| convention | Loading rule parked; documents and accepted rules stay |
+| semble | State `enabled` is false |
+| manager | State `hard` is not `true`, on an installed wall (copied guard or registration) |
+| agent-deadline, agent-return | Config `enabled` is not `true`; missing key means off |
+| agent-router, docsync | Config `enabled` is false; missing key means on |
 
-Disabled takes precedence over missing, partial, and stale, so a deliberate pause never enters
-the repair list. A manager `state.json` alone is not a wall: `uninstall` keeps the state, and
-`upgrade` and `enable` refuse a wall that was never installed, so the row reads missing, not disabled.
+Disabled wins over the repair verdicts. A manager `state.json` alone is not a wall, so the row reads `missing`. A disabled row behind the plugin gets `upgrade` (stays disabled) for semble, agent-deadline, agent-router, manager, docsync, agent-return, and convention; teams, superreview, task-board, and memory-sync refuse `upgrade` while parked, so the row gets `enable`, `upgrade`, then `disable`.
 
-A disabled row whose files are behind the plugin gets `upgrade`, which keeps it disabled, for
-semble, agent-deadline, agent-router, manager, docsync, agent-return, and convention. Teams,
-superreview, task-board, and memory-sync refuse `upgrade` while parked, so the row gets `enable`,
-then `upgrade`, then `disable` (quick renames; the row ends disabled). A disabled row with current
-files only gets an optional `enable`.
+</Spoiler>
 
-## Technical signals
+<Spoiler id="technical-signals" title="Signals, stamps and carriers">
 
 | Signal | Question |
 |--------|----------|
 | `content_version` | Has this artifact's own tracked content changed? |
-| `version` | Which plugin release produced this installation? |
-| `generated_by` | Did the setup that owns this path write it? |
-| Applicable `cmp` comparison | Was a copied asset refreshed, or has its body drifted? |
+| `version` | Which plugin release produced this install? |
+| `generated_by` | Did the owning setup write this path? |
+| `cmp` comparison | Was a copied asset refreshed, or has its body drifted? |
 
-The content version is compared with the plugin source for that same artifact, not the
-release-wide plugin version. A release with unchanged artifact content does not make an
-installation stale. Legacy version-only artifacts use the source's fallback rules.
+The content version is compared with the plugin source for that same artifact, so an unrelated release does not make an install stale. The `STAMPS` table in `references/phase2-stamps.md` holds **23 carrier entries: 7 brewcode, 13 brewtools, 3 brewdoc**; counts describe carriers, not setups. Copied-byte checks cover the hooks, rules, guards and references the roster names; semble wiring is checked separately and its root `.sembleignore` is excluded. Hook entries still using absolute paths (releases up to 6.5.0) are the one drift sent to `upgrade`; other stale or missing wiring keeps `install`.
 
-The `STAMPS` table in the skill's `references/phase2-stamps.md` contains **23 carrier entries: 7 brewcode, 13 brewtools, and 3 brewdoc**.
-Conventions contribute four: the loader and three documents. Deadline and return each contribute
-guard/config pairs for project and global scopes; router contributes hook/config, and manager
-contributes state plus guard fallback. Counts describe carrier entries, not setup totals.
-TOTAL and per-plugin SEEN/WANT assertions reject missing entries.
+</Spoiler>
 
-Copied-byte checks cover the assets named by the roster: semantic-search hooks and rule,
-deadline hooks, router hook, manager guard, docsync hooks, supported memory-sync references,
-team tracer, and return hook modules. Semble's wiring is checked independently, including stale
-settings entries and missing registrations. Its customized root `.sembleignore` is excluded
-from byte comparison. When the only drift is hook entries that still use absolute paths
-(releases up to 6.5.0), the report prescribes `upgrade`, which rewrites them in place to the
-portable form; any other stale or missing wiring keeps `install`.
+<Spoiler id="guards-and-semble" title="Guard configs and the semble rule">
 
-For the opt-in deadline and return guards, each `GOVERNING` line names the config the guard itself would load, and a `CLIMB-START` line shows where that search began: the payload cwd for agent-deadline, the guard's project root for agent-return (a `.claude` in HOME or the profile parent is skipped; an explicit `CLAUDE_PROJECT_DIR` is taken as given); resolution details are on the [agent-deadline-setup](/brewtools/skills/agent-deadline-setup/) and [agent-return-setup](/brewtools/skills/agent-return-setup/) pages. Hook configs (deadline, router, return) are compared with the hook that parses them. When `GOVERNING` names a project file but only the global scope is registered, the row reports an orphaned project config and prescribes `/brewtools:<setup> purge project`, never `upgrade`.
+For agent-deadline and agent-return, `GOVERNING` names the config the guard would load and `CLIMB-START` where the search began (payload cwd for agent-deadline, the guard's project root for agent-return; an explicit `CLAUDE_PROJECT_DIR` is taken as given). A project file with only global scope registered is an orphaned config: the row prescribes `/brewtools:<setup> purge project`, never `upgrade`.
 
-The skill runs its probe fences inline, or through `scripts/fence-run.sh`, which uses a private
-temp directory (mode 0700) removed on exit; no fence file is left at a shared path.
+An edited `semble-first.md` is never sent to plain `upgrade`: review the `diff -u`, or run `/brewcode:semble-setup upgrade --force` (backs up first, discards the edits). The skill never edits, merges or restamps that rule; an edit at the current stamp stays `current`.
 
-Emitted superreview metadata is read from its live SKILL.md, never from unresolved placeholders
-in the pristine baseline. A changed baseline may require manually porting template changes.
-Hand-edited references can also require a diff review rather than a blind upgrade. An edited
-`semble-first.md` is never sent to plain `upgrade`, which leaves the file and its stamp: the report
-points to a `diff -u` for you to review, or `/brewcode:semble-setup upgrade --force` (backs up first, discards the edits). The row stays `current` when the edit sits at the current stamp; the skill never edits, merges or restamps the rule.
+</Spoiler>
+
+<Spoiler id="task-tools" title="Task-tools offer and probe safety">
+
+The highest settings layer that sets `CLAUDE_CODE_ENABLE_TODO_TOOLS` decides (local, project,
+global); only `1`, `true`, `yes` or `on` turns it on. A higher layer's `"0"` reports
+`off (<layer>)` with no offer. Otherwise the report asks once to add it to global or project
+`settings.json`; `Leave off` changes nothing. The merge holds `settings.json.lock` and aborts
+after 10 s if another setup holds it.
+
+Probe fences run inline or through `scripts/fence-run.sh` (private 0700 temp directory, removed on exit).
+
+</Spoiler>
 
 ## Related
 
@@ -201,7 +149,6 @@ points to a `diff -u` for you to review, or `/brewcode:semble-setup upgrade --fo
   <Card title="Brewcode overview" icon="document" href="/brewcode/overview/">Analysis, agents, conventions, and review tools.</Card>
   <Card title="Convention Setup" icon="clipboard" href="/brewcode/skills/convention-setup/">Install the foundation before creating project agents.</Card>
   <Card title="Full Setup" icon="settings" href="/full-setup/">The complete dependency order and setup examples.</Card>
-  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/setup-status">The authoritative roster, carrier table, probes, and report contract.</Card>
 </CardGrid>
 
 <UpdateNotice />

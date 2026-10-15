@@ -11,8 +11,11 @@ import { Badge, Callout, Card, CardGrid, UpdateNotice } from '../../../component
 
 The codewords `++m`, `++a`, `++r`, `++rr` and `+++` now come only from the
 [brewmod-placeholders](/mods/placeholders/) mod. Brewtools v6.8.0 deleted its own
-`UserPromptSubmit` codeword hook, so one provider injects each block. The injected text is
-unchanged, and your prompt, including the codeword, still reaches the model as typed.
+`UserPromptSubmit` codeword hook. The injected text is unchanged, and your prompt still reaches the model as typed.
+
+<Callout type="warning" title="Update brewtools with the mod">
+  Update brewtools to 6.8.0+ together with installing the mod. An older brewtools still ships its own hook, so each block is injected twice.
+</Callout>
 
 <Callout type="tip" title="Get the codewords back">
   Requires Claude Code 2.1.292+. Install the mod, then run `/reload-plugins`:
@@ -26,23 +29,19 @@ unchanged, and your prompt, including the codeword, still reaches the model as t
 
 | Item | Value |
 |------|-------|
-| Moved in | brewtools v6.8.0 |
 | New home | `brewmod-placeholders` mod, [Prompt placeholders](/mods/placeholders/) |
-| Codewords | `++m`, `++a`, `++r`, `++rr`, `+++` (Plan mode only) |
-| Needs | Claude Code 2.1.292+ |
-| Still in brewtools | The optional manager hard wall, via [Manager Setup](/brewtools/skills/manager-setup/) |
+| Still in brewtools | Optional hard wall: [Manager Setup](/brewtools/skills/manager-setup/) |
 
 ## Existing overrides keep working
 
-Override files you wrote for brewtools need no migration. The mod reads them through its
-legacy layer:
+Your brewtools override files need no migration; the mod reads them through its legacy layer:
 
 | Scope | File location |
 |-------|---------------|
 | Project | `.claude/brewtools/manager/prompts/<mode>.md` |
 | Global | `<config dir>/manager/prompts/<mode>.md` |
 
-Each codeword reads one override file name in those folders (the `legacy` key of the mod's default):
+Each codeword reads one file name in those folders:
 
 | Override file | Codeword |
 |---------------|----------|
@@ -53,25 +52,18 @@ Each codeword reads one override file name in those folders (the `legacy` key of
 | `review-regression.md` | `++rr` |
 | `cron-plan.md` | `+++` (Plan mode only) |
 
-To change codeword text from now on, use the mod's `/placeholders edit <name>`.
-`/brewtools:manager-setup status` lists any legacy override files it finds.
+Edit codeword text with the mod's `/placeholders edit <name>`; `/brewtools:manager-setup status` lists legacy override files.
 
-## Staying on an older Claude Code
+## Older Claude Code and Codex
 
-The mod needs Claude Code 2.1.292+. On an older build, keep brewtools 6.7.x, which still
-ships the codeword hook.
-
-## Codex
-
-Codex keeps its own codeword hook in the Codex mirror of brewtools. The mod is a Claude Code
-feature and does not apply to Codex.
+The mod needs Claude Code 2.1.292+. On an older build, keep brewtools 6.7.x, which still ships the codeword hook. Codex keeps its own codeword hook in the Codex mirror of brewtools; the mod does not apply to it.
 
 ## Related
 
 <CardGrid>
-  <Card title="Prompt placeholders" icon="puzzle" href="/mods/placeholders/">Install, layers, typeahead, preview band, and custom placeholders.</Card>
-  <Card title="Mods overview" icon="package" href="/mods/overview/">All brewcode mods and their requirements.</Card>
-  <Card title="Manager Setup" icon="settings" href="/brewtools/skills/manager-setup/">Optional hard wall; status points to the mod for codewords.</Card>
+  <Card title="Prompt placeholders" icon="puzzle" href="/mods/placeholders/">Install, layers and custom placeholders.</Card>
+  <Card title="Mods overview" icon="package" href="/mods/overview/">All brewcode mods.</Card>
+  <Card title="Manager Setup" icon="settings" href="/brewtools/skills/manager-setup/">Optional hard wall.</Card>
 </CardGrid>
 
 <UpdateNotice />

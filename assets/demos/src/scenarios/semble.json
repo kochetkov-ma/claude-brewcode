@@ -1,0 +1,359 @@
+{
+  "name": "semble",
+  "duration": 20,
+  "layout": {
+    "maxCols": 94
+  },
+  "targetBytes": 2000000,
+  "forbid": [
+    "\\d+ ?%",
+    "\\bdaemon\\b",
+    "\\bwatcher\\b",
+    "\\bsavings?\\b"
+  ],
+  "forbidAllow": [],
+  "meta": {
+    "version": "2.1.300",
+    "model": "Opus 5.5 (1M context)",
+    "cwd": "~/brewery-api",
+    "statusLine": "maksim@Mac ~/brewery-api (refunds) [Opus 5.5 (1M context)] high ctx:5%",
+    "footer": "⏸ manual mode on",
+    "placeholder": "/brewcode:semble-setup",
+    "rows": 28
+  },
+  "chapters": [
+    {
+      "at": 0,
+      "label": "install"
+    },
+    {
+      "at": 6.0,
+      "label": "resume"
+    },
+    {
+      "at": 10.6,
+      "label": "search"
+    },
+    {
+      "at": 15.7,
+      "label": "card"
+    }
+  ],
+  "captions": [
+    {
+      "at": 0,
+      "text": "One command wires semantic code search"
+    },
+    {
+      "at": 2.0,
+      "text": "Pinned MCP, a search rule and 4 hooks"
+    },
+    {
+      "at": 6.0,
+      "text": "New session, then resume: warm index and a smoke query"
+    },
+    {
+      "at": 10.7,
+      "text": "Ask by meaning, not by exact words"
+    },
+    {
+      "at": 15.8,
+      "text": "Behaviour questions go to semble, exact names to rg"
+    }
+  ],
+  "facts": [
+    {
+      "src": "brewcode/skills/semble-setup/SKILL.md",
+      "has": "PLAN — brewcode:semble-setup"
+    },
+    {
+      "src": "brewcode/skills/semble-setup/SKILL.md",
+      "has": "semble-mcp.sh add --scope user --yes"
+    },
+    {
+      "src": "brewcode/skills/semble-setup/SKILL.md",
+      "has": "install --part all --json"
+    },
+    {
+      "src": "brewcode/skills/semble-setup/SKILL.md",
+      "has": "Reload Claude Code (new session), then run: /brewcode:semble-setup resume"
+    },
+    {
+      "src": "brewcode/skills/semble-setup/SKILL.md",
+      "has": "Both require `repo`"
+    },
+    {
+      "src": "brewcode/skills/semble-setup/references/output-contract.md",
+      "has": "reload required — MCP registered, waiting for a new session"
+    },
+    {
+      "src": "brewcode/skills/semble-setup/references/output-contract.md",
+      "has": "smoke:    <query> -> <n> results, top = <file_path>:<start_line>-<end_line> score <score>"
+    },
+    {
+      "src": "brewcode/skills/semble-setup/references/output-contract.md",
+      "has": "corpus:   code docs config | repo <hash8|unknown>"
+    },
+    {
+      "src": "brewcode/skills/semble-setup/references/output-contract.md",
+      "has": "hooks <n>/4 wired"
+    },
+    {
+      "src": "brewcode/skills/semble-setup/references/output-contract.md",
+      "has": "<ready | reload required |"
+    }
+  ],
+  "events": [
+    {
+      "type": "type",
+      "at": 0.3,
+      "text": "/brewcode:semble-setup install",
+      "cps": 28
+    },
+    {
+      "type": "key",
+      "at": 1.45,
+      "glyph": "⏎",
+      "word": "enter · run"
+    },
+    {
+      "type": "submit",
+      "at": 1.6
+    },
+    {
+      "type": "print",
+      "at": 1.8,
+      "reveal": 0.06,
+      "kv": true,
+      "lines": [
+        "[[b gold|PLAN — brewcode:semble-setup]]",
+        "INPUT:  install",
+        "MODE:   install — explicit",
+        "SCOPE:  ~/brewery-api · user scope · semble[mcp]==0.6.2",
+        "DO:     - register the pinned semble_code MCP",
+        "        - wire the semble-first rule + 4 hooks",
+        "RESULT: MCP registration, rule + hooks, warm index, report"
+      ]
+    },
+    {
+      "type": "skip",
+      "at": 2.5,
+      "until": 3.6,
+      "factor": 8
+    },
+    {
+      "type": "tool",
+      "at": 2.5,
+      "name": "Bash",
+      "arg": "semble-mcp.sh add --scope user --yes --json",
+      "resultAt": 2.85,
+      "result": [
+        "[[ok|✅]] semble_code registered"
+      ]
+    },
+    {
+      "type": "tool",
+      "at": 3.0,
+      "gap": 0,
+      "name": "Bash",
+      "arg": "semble-guidance.sh install --part all --json",
+      "resultAt": 3.4,
+      "result": [
+        "[[ok|✅]] rule + 4 hooks wired"
+      ]
+    },
+    {
+      "type": "print",
+      "at": 3.8,
+      "bullet": true,
+      "reveal": 0.11,
+      "kv": "gold",
+      "lines": [
+        "[[b ok|# Semble install]]",
+        "",
+        "## Actions",
+        "changed:   mcp semble_code @ user, rule semble-first.md, hooks 4/4",
+        "",
+        "## Current Status",
+        "[[b warn|reload required]] — MCP registered, waiting for a new session",
+        "",
+        "## Next Step",
+        "Reload Claude Code (new session), then run: [[b gold|/brewcode:semble-setup resume]]",
+        "Checkpoint: ~/brewery-api/.claude/semble/state.json"
+      ]
+    },
+    {
+      "type": "hl",
+      "at": 4.9,
+      "hold": 1.0,
+      "match": "reload required"
+    },
+    {
+      "type": "skip",
+      "at": 5.5,
+      "until": 6.3,
+      "factor": 1,
+      "label": "new session"
+    },
+    {
+      "type": "clear",
+      "at": 6.0
+    },
+    {
+      "type": "type",
+      "at": 6.3,
+      "text": "/brewcode:semble-setup resume",
+      "cps": 28
+    },
+    {
+      "type": "key",
+      "at": 7.4,
+      "glyph": "⏎",
+      "word": "enter · resume"
+    },
+    {
+      "type": "submit",
+      "at": 7.55
+    },
+    {
+      "type": "print",
+      "at": 7.75,
+      "reveal": 0.05,
+      "kv": true,
+      "lines": [
+        "[[b gold|PLAN — brewcode:semble-setup]]",
+        "INPUT:  resume",
+        "MODE:   resume — checkpoint resume",
+        "SCOPE:  ~/brewery-api · index-code-config-docs",
+        "DO:     - smoke query, warm the index",
+        "        - re-run guidance wiring (idempotent)",
+        "RESULT: ready status + verification report"
+      ]
+    },
+    {
+      "type": "skip",
+      "at": 8.2,
+      "until": 9.0,
+      "factor": 15
+    },
+    {
+      "type": "print",
+      "at": 8.2,
+      "bullet": true,
+      "reveal": 0.12,
+      "kv": "gold",
+      "lines": [
+        "[[b ok|# Semble resume]]",
+        "",
+        "## Verification",
+        "smoke:    retry webhook delivery -> 5 results, top = src/webhooks/deliver.ts:41-78 score 0.82",
+        "corpus:   code docs config | repo a1b2c3d4 | 412 files",
+        "",
+        "## Current Status",
+        "[[b ok|ready]] — registered, index warm, smoke passed"
+      ]
+    },
+    {
+      "type": "hl",
+      "at": 9.4,
+      "hold": 1.0,
+      "match": "ready"
+    },
+    {
+      "type": "clear",
+      "at": 10.5
+    },
+    {
+      "type": "type",
+      "at": 10.7,
+      "text": "where do we retry failed webhook deliveries?",
+      "cps": 30
+    },
+    {
+      "type": "key",
+      "at": 12.25,
+      "glyph": "⏎",
+      "word": "enter · ask"
+    },
+    {
+      "type": "submit",
+      "at": 12.4
+    },
+    {
+      "type": "tool",
+      "at": 12.7,
+      "name": "semble_code - search (MCP)",
+      "arg": "query: \"retry failed webhook delivery\", repo: \"~/brewery-api\"",
+      "resultAt": 13.5,
+      "result": [
+        "5 results",
+        "[[b gold|src/webhooks/deliver.ts:41-78]]       0.82",
+        "src/webhooks/queue.ts:12-40         0.74",
+        "test/webhooks/deliver.test.ts:8-33  0.69"
+      ]
+    },
+    {
+      "type": "hl",
+      "at": 13.6,
+      "hold": 1.2,
+      "match": "src/webhooks/deliver.ts:41-78"
+    },
+    {
+      "type": "tool",
+      "at": 14.1,
+      "name": "Read",
+      "arg": "src/webhooks/deliver.ts",
+      "resultAt": 14.4,
+      "result": [
+        "Read 38 lines"
+      ]
+    },
+    {
+      "type": "print",
+      "at": 14.7,
+      "bullet": true,
+      "lines": [
+        "Retries live in [[b gold|deliver.ts:41-78]]: 3 attempts with exponential backoff."
+      ]
+    },
+    {
+      "type": "card",
+      "at": 15.7,
+      "title": "✻ semble · semantic search ready",
+      "tiles": [
+        {
+          "label": "Files",
+          "to": 412,
+          "sub": "indexed"
+        },
+        {
+          "label": "Results",
+          "to": 5,
+          "sub": "for one question"
+        },
+        {
+          "label": "Top score",
+          "to": 0.82,
+          "dec": 2,
+          "sub": "deliver.ts:41-78"
+        },
+        {
+          "label": "Query",
+          "to": 140,
+          "suffix": "ms",
+          "sub": "warm index"
+        }
+      ],
+      "verdict": {
+        "label": "Status",
+        "text": "ready — index warm, smoke passed",
+        "cls": "ok"
+      },
+      "note": "behaviour questions -> semble · exact names and counts -> rg"
+    },
+    {
+      "type": "clear",
+      "at": 19.4
+    }
+  ]
+}

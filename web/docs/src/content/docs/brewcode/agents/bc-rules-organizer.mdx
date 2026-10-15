@@ -3,55 +3,25 @@ title: "Rules Organizer"
 description: "Internal organizer for accepted project rules: scoped frontmatter, deduplicated tables, per-file checkpoints and main-caller optimization."
 order: 1210
 ---
-import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+import { Callout, Card, CardGrid, Spoiler, Steps, UpdateNotice } from '../../../../components/mdx';
 
 # Rules Organizer
 
 <Callout type="note">
-Internal agent with no direct or automatic invocation. The main orchestrator supplies an accepted,
-bounded rule batch through [rules](/brewcode/skills/rules/) or the rule-writing phase of
-[convention-setup](/brewcode/skills/convention-setup/). Convention setup establishes project patterns
-early, before teams and review setup.
-</Callout>
-
-<Callout type="note" title="Current execution contract">
-The organizer writes its briefed rules and its own checkpoint/report. The main caller owns
-optimizer spawns, snapshots, `RUN_DIR` and acceptance. Loading behavior was rechecked through
-Claude Code 2.1.296; the agent uses the existing rule scaffold and validation gates.
+Internal agent with no direct or automatic invocation. The main orchestrator spawns it with an accepted, bounded rule batch from [rules](/brewcode/skills/rules/) or the rule-writing phase of [convention-setup](/brewcode/skills/convention-setup/).
 </Callout>
 
 ## Quick reference
 
 | Field | Value |
 |-------|-------|
-| Model | `haiku` — pinned, cheap file reorganization |
+| Model | `haiku`: pinned, cheap file reorganization |
 | Tools | Read, Write, Edit, Glob, Grep, Bash |
 | Write access | Briefed `.claude/rules/` files plus its checkpoint/report directory |
-| `maxTurns` | 60 — anti-loop stop, not a budget |
-| Invocation | Main-caller `Agent` spawn for the accepted rule batch; no manual trigger |
+| `maxTurns` | 60: anti-loop stop, not a budget |
+| Invocation | Main-caller `Agent` spawn; no manual trigger |
 
-## Scope guard
-
-The main caller batches and confirms one bounded unit before spawning the organizer. Scope
-stays fixed to the brief; out-of-scope work returns to the caller.
-
-| Situation | What the agent does |
-|-----------|---------------------|
-| Brief matches the accepted rule batch | Writes the briefed rules and its checkpoint/report; no global rules or CLAUDE.md writes |
-| Request reaches beyond rule organization | Reports it back instead of expanding scope |
-| Brief omits CONTEXT (what the skill already did) or CONSUMER (who reads the rules next) | States a safe assumption or returns the question to main; never invents scope |
-| `maxTurns: 60` is hit mid-run | Written files survive; main checks the partial result before acceptance and can resume with `SendMessage`; the agent reads its checkpoint first |
-| Before writing a new rule file (Scope Fit) | Finds the closest well-built existing rule file in `.claude/rules/*.md` first and takes its principles — additive, never a wholesale replacement; after finishing, one pass to cut files/config/indirection if the result can be simpler |
-
-## What it does
-
-Ordinary subagents cannot use `AskUserQuestion`; conversation forks retain the parent's tool
-pool. This organizer returns unresolved decisions to the main caller. It has no `Agent` tool and
-never delegates. Main owns all research and optimizer spawns.
-
-Rules Organizer takes rules extracted from a source (docs, code, session learnings) and turns them into `.claude/rules/*.md` files with correct `paths:` frontmatter — one file per logical scope, deduplicated against everything already there, formatted as numbered tables instead of prose.
-
-It owns two authoritative table formats (`| # | Avoid | Instead | Why |` and `| # | Practice | Context | Source |`), a 3-check dedup protocol that catches near-duplicates and avoid/best-practice antonym pairs, and a hard 20-row-per-file ceiling that forces a split into `{prefix}-avoid.md` / `{prefix}-best-practice.md` once a file grows past it.
+Rules Organizer turns extracted rules (docs, code, session learnings) into `.claude/rules/*.md` files with correct `paths:` frontmatter: one file per logical scope, deduplicated against existing rules, formatted as numbered tables. Two table formats are authoritative (`| # | Avoid | Instead | Why |` and `| # | Practice | Context | Source |`), and a 20-row-per-file ceiling forces a split into `{prefix}-avoid.md` / `{prefix}-best-practice.md`.
 
 ## Example
 
@@ -59,63 +29,22 @@ It owns two authoritative table formats (`| # | Avoid | Instead | Why |` and `| 
 /brewcode:rules "extract logging and SQL conventions from docs/conventions.md"
 ```
 
-The skill reads the source, proposes rule candidates, asks you to accept/reject in batches, then spawns `bc-rules-organizer` once with the accepted set. Expected result: `.claude/rules/logging.md` and `.claude/rules/sql-best-practice.md` created or updated, each with `paths:` frontmatter, numbered tables, and a report listing files created/updated plus a rule count.
+The skill proposes rule candidates, you accept them in batches, then it spawns `bc-rules-organizer` once. Expected result: `.claude/rules/logging.md` and `.claude/rules/sql-best-practice.md` created or updated with `paths:` frontmatter, numbered tables, and a report with file and rule counts.
 
-## Workflow
+## How it works
 
 <Steps>
-  <li>
-    <div>
-      <strong>Analysis</strong>
-      <p>Reads the source file completely, identifies rule categories, maps each to a path pattern (or auto-detects from project structure), checks existing rules first.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Extraction</strong>
-      <p>Groups rules by logical scope (component, API, test, build, module) and classifies each as anti-pattern (avoid) or best practice.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Optimization and dedup</strong>
-      <p>Converts prose to tables, applies abbreviations, adds lazy links for detail. Runs the 3-Check Dedup Protocol: within-file similarity, cross-file avoid/best-practice antonym pairs, and a CLAUDE.md duplicate check — CLAUDE.md is the dedup baseline only, never a source; anything already there is skipped, never re-added.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>File creation</strong>
-      <p>New files scaffold automatically; editing an existing file is manual. Behavior differs by action:</p>
-
-      | Action | Behavior |
-      |--------|----------|
-      | Scaffold | <code>rules.sh create</code> (global) or <code>rules.sh create-specialized {'<prefix>'} '{'<paths>'}'</code> (scoped) — stamps <code>doc_type</code>/<code>version</code>/<code>generated_by</code>/<code>last_updated</code> |
-      | Edit existing file | Only refreshes <code>last_updated</code> and <code>version</code> by hand |
-      | Naming | Global <code>avoid.md</code>/<code>best-practice.md</code> carry no <code>paths:</code>; every `{'{prefix}'}-avoid.md` style file needs one |
-      | Row cap | Max 20 rows per table; splits into a new specialized file once exceeded |
-      | Validate | <code>rules.sh validate</code> runs after every write and must pass before finishing |
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Checkpoint per file</strong>
-      <p>Appends each finished file (path + change) to <code>.claude/reports/YYYYMMDD-HHMMSS_rules-organizer/report.md</code> immediately. Claude Code 2.1.246+ returns partial output on turn exhaustion. Main checks that marker before accepting or resuming; the organizer reads the checkpoint first.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Optimize and report</strong>
-      <p>Returns written paths and optimization requests to main. Then the calling skill (`/brewcode:rules` or `/brewcode:convention-setup`) invokes the `brewtools:text-optimize` skill through `Skill` (Medium, `--allow-dirty`); the skill owns the snapshot, `RUN_DIR`, optimizers and verify gate. On the rules path the run then finishes with `rules.sh validate`; the caller adds independent verification. The organizer never launches an optimizer directly. Missing Brewtools is reported as skipped; valid written rules remain usable.</p>
-    </div>
-  </li>
+  <li><div><strong>Analyze and extract</strong><p>Reads the source fully, groups rules by scope, classifies each as avoid or best practice, checks existing rules first.</p></div></li>
+  <li><div><strong>Optimize and dedup</strong><p>Prose becomes tables; a 3-check protocol drops near-duplicates. CLAUDE.md is a dedup baseline only, never a source.</p></div></li>
+  <li><div><strong>Write</strong><p>Scaffold with <code>rules.sh create</code> or <code>create-specialized</code>; <code>rules.sh validate</code> must pass after every write.</p></div></li>
+  <li><div><strong>Checkpoint and report</strong><p>Appends each finished file to <code>.claude/reports/YYYYMMDD-HHMMSS_rules-organizer/report.md</code>; the calling skill then runs <code>brewtools:text-optimize</code>.</p></div></li>
 </Steps>
 
-<details>
-<summary>Technical details — frontmatter, dedup protocol, file naming</summary>
+Refuses: anything beyond rule organization, global rules or CLAUDE.md writes, and spawning optimizers (no `Agent` tool). A brief without CONTEXT or CONSUMER gets a stated assumption or a question back. Generic rules: [scope guard](/brewcode/agents/#scope-guard). On `maxTurns` exhaustion written files survive and main resumes with `SendMessage`.
 
-### Rule-file frontmatter contract
+<Spoiler id="frontmatter-and-loading" title="Rule-file frontmatter and loading">
 
-`paths:` is the only field Claude Code itself reads for scoping — source: [code.claude.com/docs/en/memory](https://code.claude.com/docs/en/memory.md#path-specific-rules) (`globs`, `alwaysApply` and `description` are not real fields). On top of that, `rules.sh validate` requires four more keys on every rule file the agent writes: `doc_type`, `version`, `generated_by`, `last_updated`. The agent never adds `description:` (a legacy one is tolerated) and does not use `!` negation in `paths`.
+`paths:` is the only field Claude Code reads for scoping ([memory docs](https://code.claude.com/docs/en/memory.md#path-specific-rules)). `rules.sh validate` also requires `doc_type`, `version`, `generated_by`, `last_updated`. The agent never adds `description:` and does not use `!` negation in `paths`.
 
 ```yaml
 ---
@@ -128,66 +57,48 @@ last_updated: "2026-09-12"
 ---
 ```
 
-Patterns must be quoted (`"**/*.tsx"`, not bare) and given as an array, never a bare string; `doc_type` is the one unquoted value (`doc_type: llm` exactly).
+Quote patterns, give them as an array; `doc_type: llm` is the one unquoted value. Version, `generated_by` and `last_updated` are rewritten at release, never hand-edited.
 
-### Loading (rechecked through 2.1.296)
+| Frontmatter | Loads |
+|-------------|-------|
+| No `paths` | At session start, like project CLAUDE.md |
+| With `paths` | Lazily, when Claude reads a matching file (rechecked through 2.1.296) |
 
-| Frontmatter | Behavior |
-|-------------|----------|
-| No `paths` | Loads at session start, same priority as project CLAUDE.md |
-| With `paths` | Loads lazily — only when Claude reads a file matching the glob, not on every tool use |
+Language and directory conventions get `paths:`; tool-choice policy (lsp-first, semble-first) and global anti-patterns do not.
 
-The source reference supersedes the old all-rules-at-start observation in
-[#16299](https://github.com/anthropics/claude-code/issues/16299). A rule that must apply before
-any file is read stays unscoped:
+</Spoiler>
 
-| Rule kind | `paths:`? |
-|-----------|-----------|
-| Language/dir conventions (naming, test layout, SQL style) | yes |
-| Tool-choice and search policy (lsp-first, semble-first) | no |
-| Global anti-patterns | no |
-
-### 3-Check Dedup Protocol
+<Spoiler id="dedup-and-naming" title="Dedup protocol and file naming">
 
 | Check | Scope | Action |
 |-------|-------|--------|
 | 1. Within-file | Same target file | >70% similarity skip; 40-70% merge |
-| 2. Cross-file antonym | Paired avoid/best-practice file | Same concept as opposite — keep the avoid entry, delete the best-practice one |
-| 3. CLAUDE.md duplicate | Project CLAUDE.md | Already documented there — skip entirely, `"CLAUDE.md"` is a forbidden Source value |
-
-### File naming
+| 2. Cross-file antonym | Paired avoid/best-practice file | Keep the avoid entry, delete the best-practice one |
+| 3. CLAUDE.md | Project CLAUDE.md | Already documented: skip; `"CLAUDE.md"` is a forbidden Source value |
 
 | Pattern | Example | Content |
 |---------|---------|---------|
 | Global | `avoid.md`, `best-practice.md` | No `paths:` |
-| Path-scoped pair | `{'{prefix}'}-avoid.md`, `{'{prefix}'}-best-practice.md` | Common prefixes: test, sql, api, security, kotlin, java, react |
-| Domain-specific | `bq-core.md`, `logging.md` | Mixed avoid + best-practice tables under one `paths:` scope |
+| Path-scoped pair | `{prefix}-avoid.md`, `{prefix}-best-practice.md` | Prefixes: test, sql, api, security, kotlin, java, react |
+| Domain-specific | `bq-core.md`, `logging.md` | Mixed tables under one `paths:` scope |
 
-### Version stamping (v5.1.0+)
+Editing an existing file only refreshes `last_updated` and `version` by hand. A new rule file starts from the closest well-built file in `.claude/rules/*.md`, additive, never a wholesale replacement.
 
-Its frontmatter `version`, `generated_by`, and `last_updated` are rewritten at release, never edited by hand.
+</Spoiler>
 
-</details>
+<Spoiler id="return-contract" title="Return contract">
 
-## Return Contract
+Verdict first, at most 30 lines, `path:line`. One row per file (path, matched `paths:`, change) plus totals: new/updated, rule counts, dedup skipped/merged, optimizer run or skipped. The dedup ledger and rationale go to the checkpoint file; only the path comes back. [`/brewtools:agent-return-setup`](/brewtools/skills/agent-return-setup/) enforces ~2500 / ~6000 est-tokens when installed.
 
-Verdict first, `<=30 lines`, `path:line`. No rule-file bodies, no pasted tables, no extraction notes, no preamble. Returns one row per file (path, matched <code>paths:</code>, change) plus totals: new/updated counts, rule counts, dedup skipped/merged, and whether text-optimizer ran. Dedup ledger, per-rule rationale, and source excerpts go to the same <code>.claude/reports/&lt;YYYYMMDD-HHMMSS&gt;_rules-organizer/</code> checkpoint file — only the path comes back.
+</Spoiler>
 
-[`/brewtools:agent-return-setup`](/brewtools/skills/agent-return-setup/) enforces this at ~2500 / ~6000 est-tokens when installed; the contract itself ships unconditionally.
+## Related
 
 <CardGrid>
-  <Card title="rules skill" icon="link" href="/brewcode/skills/rules/">
-    Interactive extraction, accepted batches and main-caller optimization.
-  </Card>
-  <Card title="Convention Setup" icon="clipboard" href="/brewcode/skills/convention-setup/">
-    Establish coding, testing and architecture patterns before creating teams.
-  </Card>
-  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/agents/bc-rules-organizer.md">
-    Agent definition, table formats, and dedup protocol in full.
-  </Card>
-  <Card title="Brewcode overview" icon="document" href="/brewcode/overview/">
-    All brewcode skills and agents in one place.
-  </Card>
+  <Card title="rules skill" icon="link" href="/brewcode/skills/rules/">Interactive extraction, accepted batches and main-caller optimization.</Card>
+  <Card title="Convention Setup" icon="clipboard" href="/brewcode/skills/convention-setup/">Establish coding, testing and architecture patterns before creating teams.</Card>
+  <Card title="Brewcode overview" icon="document" href="/brewcode/overview/">All brewcode skills and agents in one place.</Card>
+  <Card title="GitHub source" icon="github" href="https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/agents/bc-rules-organizer.md">Agent definition, table formats, and dedup protocol in full.</Card>
 </CardGrid>
 
 <UpdateNotice />

@@ -5,11 +5,7 @@
 </div>
 
 <style>
-  /* Scoped to DIRECT children only so nested <ul><li> inside a step's body
-     do not get counter-increment, a circle marker, or the grid layout.
-     Previously `.steps-timeline :global(li)` matched ANY descendant <li>,
-     which broke nested lists (file lists, bullet lists) by renumbering them
-     as continuation steps. See .claude/rules/astro-avoid.md. */
+  /* Direct children only: nested <ul><li> in a step body must not count or grid (astro-avoid#8-9). */
   .steps-timeline {
     counter-reset: step-counter;
     list-style: none;

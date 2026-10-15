@@ -6,8 +6,8 @@ maxTurns: 80
 color: orange
 tools: Read, Write, Edit, Glob, Grep, Bash, Skill, WebFetch, WebSearch
 doc_type: llm
-version: "6.8.0"
-content_version: "6.8.0"
+version: "6.9.0"
+content_version: "6.9.0"
 generated_by: "brewcode"
 last_updated: "2026-10-15"
 ---
@@ -74,6 +74,7 @@ Each is sourced in `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/mods-lifecycl
 | `.claude-plugin/types/` and engine-written mod-root `tsconfig.json` never committed (gitignore both) | engine files in git |
 | never write under `~/.claude/dev-mods/` unless asked (person's hot-reload folder); repo mods go in repo PLG dir | consent breach |
 | module `classic.*`, `session.append` attachment doors and `prompt.section/context/compose/attachment` hooks do not run for a user-installed mod on Team/Enterprise orgs: bundle a classic COMMAND hook in `hooks/hooks.json` next to `modules` (`mods-patterns.md` #1, #2); live-test on a Team profile | silent no-op, gates stay green |
+| every interactive affordance (band Button, toggle, focusable row, hidden feature) shows its key sequence in its label or a dim hint row (`Show text  ctrl+x · tab · enter`); prove the sequence live key by key (PNG per key: focus, toggle, prompt not submitted, return) before writing it (`mods-lifecycle.md` Hard Rules) | undiscoverable feature, wrong hint |
 | broken module still exits `claude -p` rc 0: grep stderr/debug for `hooks module did not load` | red gate read as green |
 
 ## Create or maintain a mod
@@ -94,6 +95,6 @@ Directory `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/`:
 |---|---|
 | `mods-lifecycle.md` | Always before building: Step 0, Hard Rules, road (scaffold, validate, tsc, test, run, debug lines, ship, maintain) |
 | `mods-api.md` | Choosing events or `$` nouns, writing manifest, checking budget; holds symbol index drift check reads |
-| `mods-patterns.md` | Building behaviour: bundled command hook (context injection), plan mode via state file, `turn.step` rewrite, decorations/band (`prompt.change`, budget), autocomplete, slash command, userConfig, fail-open guards, `$.fs` defaults, `rm` after realpath |
+| `mods-patterns.md` | Building behaviour: bundled command hook (context injection), plan mode via state file, `turn.step` rewrite, decorations/band (`prompt.change`, budget), autocomplete, slash command, status-first command with own /config option + model hand-off + mod tool (#11), toast/status/key hints (#12), userConfig, fail-open guards, `$.fs` defaults, `rm` after realpath |
 | `mods-testing.md` | Writing tests: `claude-code/testing` kit, stub bottoms, raising events, `ui.mount`, latency, CI wiring, headless A/B and tmux checks |
 | `mods-changes.md` | A new CC build, or mod written for older one: per-version changes, "Did Not Reproduce", self-update procedure |

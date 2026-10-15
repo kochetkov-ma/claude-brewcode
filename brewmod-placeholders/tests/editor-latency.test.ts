@@ -2,7 +2,6 @@ import { test, expect } from 'claude-code/testing'
 import { EMPTY_VIEW, highlight, sameView } from '../hooks/lib/editor'
 import { editorMatchers } from '../hooks/lib/editor-state'
 
-const STYLE = { knownColor: 'suggestion', unknownColor: 'warning' }
 const BASE = [{ start: 0, end: 1, bold: true }]
 const REALISTIC = 'Refactor the billing module and keep tests green ++m then ++rr, mention ++nope here. '
 const DENSE = '++m ++zz ++rr ++q +++ '
@@ -13,7 +12,7 @@ const fill = (chars: number, chunk: string) => chunk.repeat(Math.ceil(chars / ch
 // Own-handler cost of one keystroke: matcher lookup, scan, decorate, merge, view diff. Returns sorted ms samples.
 function sample(text: string, iterations: number, shown: { view: typeof EMPTY_VIEW }): number[] {
   const once = () => {
-    const h = highlight(editorMatchers('++'), text, STYLE)
+    const h = highlight(editorMatchers('++'), text)
     const merged = [...BASE, ...h.decorations]
     const changed = !sameView(h.view, shown.view)
     shown.view = h.view

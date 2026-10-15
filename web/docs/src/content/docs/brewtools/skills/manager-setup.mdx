@@ -3,15 +3,15 @@ title: "Manager Setup"
 description: "Opt-in project wall that forces the main Claude session to delegate edits to subagents, plus the task-tools key. Codewords moved to brewmod-placeholders."
 order: 3124
 ---
-import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+import { Badge, Callout, Card, CardGrid, Spoiler, SourceLink, Steps, UpdateNotice } from '../../../../components/mdx';
 
 # Manager Setup -- opt-in HARD delegation wall
 
 <Badge variant="primary" text="sonnet" /> <Badge variant="accent" text="hard wall" /> <Badge variant="secondary" text="project only" /> <Badge variant="accent" text="user-invoked" />
 
-<Callout type="tip">
-Manager Setup installs a guard into your project that blocks Write, Edit and mutating Bash in the main chat, so Claude has to hand hands-on work to subagents. It is opt-in, per project, and off until you arm it. For the codewords (`++m`, `++a`, `++rr`, `++r`, `+++`) see [brewmod-placeholders](/mods/placeholders/).
-</Callout>
+<SourceLink path="brewtools/skills/manager-setup/README.md" anchor="manager" />
+
+Manager Setup installs a guard into your project that blocks Write, Edit and mutating Bash in the main chat, so Claude hands hands-on work to subagents. It is opt-in, per project, and off until you arm it.
 
 ## Quick reference
 
@@ -20,353 +20,198 @@ Manager Setup installs a guard into your project that blocks Write, Edit and mut
 | Command | `/brewtools:manager-setup` |
 | Arguments | `[prompt] [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [level strict\|balanced]` |
 | Model | sonnet |
-| Tools | `Read`, `Bash`, `AskUserQuestion`, `Agent` |
 | Scope | Project only; the wall has no global scope |
 | Default | `status` with no argument |
 
 ## What it does
 
-The skill installs a self-contained `PreToolUse` guard into the current project and registers it once in the personal, gitignored `.claude/settings.local.json`. A `state.json` flag decides at run time whether the guard is armed. While it is armed, the main session can read, search, plan, track tasks and delegate; every edit, write and mutating command goes to a subagent. Subagents keep full freedom.
+The skill installs a self-contained `PreToolUse` guard into the project and registers it once in the personal, gitignored `.claude/settings.local.json`. A `state.json` flag decides at run time whether the guard is armed. While armed, the main session can read, search, plan, track tasks and delegate; every edit, write and mutating command goes to a subagent. Subagents keep full freedom.
 
-On Claude Code 2.1.233 and later, `install` and `upgrade` also set `env.CLAUDE_CODE_ENABLE_TODO_TOOLS="1"` in `.claude/settings.local.json`, so the task tools (`TaskCreate`, `TaskUpdate`, `TaskGet`, `TaskList`) stay available. The key is written only when no settings layer already sets it; an explicit `0`, `false` or empty value is kept and reported as `kept off`.
-
-The skill never injects text into your prompts. An armed wall adds nothing per prompt: a denied call carries its own explanation and the exit command.
+On Claude Code 2.1.233 and later, `install` and `upgrade` also set `env.CLAUDE_CODE_ENABLE_TODO_TOOLS="1"` in `.claude/settings.local.json`, so `TaskCreate`, `TaskUpdate`, `TaskGet` and `TaskList` stay available. The key is written only when no settings layer already sets it; an explicit `0`, `false` or empty value is kept and reported as `kept off`. `uninstall` keeps the key; `purge` removes it only when this skill added it (`todoToolsAdded` in `state.json`).
 
 ## Codewords moved to a mod
 
-<Callout type="note">
-`++m`, `++a`, `++rr`, `++r` and the Plan-mode `+++` come from the [brewmod-placeholders](/mods/placeholders/) mod (Claude Code 2.1.292+), not from this skill. The skill neither installs nor toggles them; `status` only reports where they come from.
-</Callout>
-
-Install the mod with:
-
-```
-claude plugin install brewmod-placeholders@claude-brewcode
-```
-
-`status` prints `codewords: provided by brewmod-placeholders (Claude Code 2.1.292+)` plus that install line. Existing text overrides need no migration: files under `<project>/.claude/brewtools/manager/prompts/` and `<config dir>/manager/prompts/` keep working through the mod's legacy layer, and `status` lists them. The skill never reads, writes or deletes those files. To change a codeword's text, use the mod's `/placeholders edit <name>`.
-
-`<task> as manager` and a bare task still run the task in the Manager role from this skill: `TaskList` first, then delegation to the best-matching expert agent (else `general-purpose`), independent units in parallel. The full Manager contract (spawn brief, review gates) is the mod's `++m` block; when the mod did not inject it this turn, the skill tells you once that `++m` needs the mod.
-
----
+`++m`, `++a`, `++rr`, `++r` and the Plan-mode `+++` come from the [brewmod-placeholders](/mods/placeholders/) mod (Claude Code 2.1.292+), not this skill. Install it with `claude plugin install brewmod-placeholders@claude-brewcode`. Existing override files under `.claude/brewtools/manager/prompts/` keep working through the mod's legacy layer; `status` lists them.
 
 ## When to use
 
 | Situation | What to type |
 |-----------|-------------|
-| Run one-turn Manager, review or architecture contracts (`++m`, `++rr`, `++r`, `++a`, `+++`) | Install [brewmod-placeholders](/mods/placeholders/), then type the token in your prompt |
-| Enforce the delegation rule for a whole project session | `/brewtools:manager-setup install` |
-| Run one task under the wall then auto-revert | `refactor payment service in hard mode` |
-| Run task as Manager without changing any wall state | `build release plan as manager` |
+| Enforce delegation for a whole project session | `/brewtools:manager-setup install` |
+| Run one task under the wall, then auto-revert | `refactor payment service in hard mode` |
+| Run a task as Manager, wall untouched | `build release plan as manager` |
 | Check current state | `/brewtools:manager-setup status` |
-| Pick the guard up after a plugin update | `/brewtools:manager-setup upgrade` |
-| Wall installed before v5.0.0 -- get the off-switch CLI into the project | `/brewtools:manager-setup upgrade` |
+| Pick up the guard after a plugin update | `/brewtools:manager-setup upgrade` |
 
----
+## Commands
 
-## Everyday commands
-
-Canonical mode order, shared by every `-setup` skill: `status | install | upgrade | enable | disable | uninstall | purge`. No argument = `status`.
+Canonical order, shared by every `-setup` skill: `status | install | upgrade | enable | disable | uninstall | purge`, then `level <strict|balanced>`. No argument = `status`.
 
 | Command | What it does |
 |---------|-------------|
-| `/brewtools:manager-setup status` | Show what is currently on -- wall state, task-tools state, the codewords pointer (mod) and any legacy override files. Reports whether the wall is installed; a project with only a leftover `state.json` is not, so `status` recommends `install`, never `upgrade` |
-| `/brewtools:manager-setup install` | Install the guard into this project. Asks you to confirm arming unless your prompt already said "enable the hard wall"; once armed, Claude physically cannot write/edit files here until you disable it |
-| `/brewtools:manager-setup disable` | Disarm the wall, leave the guard registered |
+| `status` | Wall state, task-tools state, codewords pointer, legacy override files. A leftover `state.json` alone is not an install: `status` recommends `install`, never `upgrade` |
+| `install` | Install the guard; asks to confirm arming unless your prompt already said "enable the hard wall". Declining installs it disarmed |
+| `upgrade` | Re-copy the guard and off-switch CLI, backfill what an older install lacks, preserve `hard`/`level` |
+| `enable` / `disable` | Arm an installed wall / disarm it (state flip only, registration stays) |
+| `uninstall` | Deregister and delete the copied guard. State, overrides and the task-tools key are kept |
+| `purge` | `uninstall` + delete state and helpers. The only destructive action |
+| `level <strict\|balanced>` | `balanced` = read-only Bash allowed; `strict` = all Bash denied |
 
 <Callout type="note">
-The old command words `on`, `off` and `reset` are gone. They still work as free text (`on` -> `enable`, `off` -> `disable`, `reset` -> `purge`), but the canonical verbs are the ones above. `edit` is gone too: it edited codeword text, which is now the mod's `/placeholders edit <name>`.
+`on`, `off` and `reset` are not commands; as free text they route to `enable`, `disable`, `purge`. `edit` moved to the mod's `/placeholders edit <name>`.
 </Callout>
 
----
-
-## The HARD wall
+## The wall in action
 
 <Callout type="caution">
-**With the HARD wall ON, Claude in the main chat physically cannot edit files, write, or run mutating commands.** It is forced to delegate every hands-on step to a subagent. Subagents have full freedom -- they can write, edit, run tests, push commits, anything. Arm it with `/brewtools:manager-setup install` (it asks for confirmation first; declining installs the guard disarmed), drop it with `/brewtools:manager-setup disable`. It is opt-in and per-project -- nothing changes until you install it.
+With the wall ON, Claude in the main chat cannot edit files, write, or run mutating commands. Subagents can do anything. Drop the wall with `/brewtools:manager-setup disable`.
 </Callout>
 
-### The wall in action
-
-The wall is ON. You ask:
-
-```
-fix the bug in payment.ts
-```
-
-Claude tries to edit the file directly -- and is blocked:
-
-<Callout type="caution">
-**Hard wall: Edit is blocked in the main session.** Manager mode keeps the main context for orchestration, so pass this step to a subagent with the Agent tool: subagents are not restricted, and reading, search and task tracking still work here. The wall comes off only when the user asks: `/brewtools:manager-setup disable`.
-</Callout>
-
-So Claude does the right thing -- it spawns a subagent, which has full access:
+You ask `fix the bug in payment.ts`. Claude tries `Edit` and is denied with an explanation and the exit command.
 
 <Steps>
-  <li><div><strong>Main session: delegate</strong><p>Claude spawns a developer subagent with the task "fix the bug in payment.ts".</p></div></li>
-  <li><div><strong>Subagent: do the work</strong><p>The subagent edits <code>payment.ts</code>, runs the tests -- all tools allowed inside a subagent.</p></div></li>
-  <li><div><strong>Main session: integrate</strong><p>Claude reads the subagent's result and reports back. It never touched the file itself.</p></div></li>
+  <li><div><strong>Main session: delegate</strong><p>Claude spawns a developer subagent with the task.</p></div></li>
+  <li><div><strong>Subagent: do the work</strong><p>The subagent edits <code>payment.ts</code> and runs the tests; every tool is allowed inside a subagent.</p></div></li>
+  <li><div><strong>Main session: integrate</strong><p>Claude reads the result and reports back without touching the file.</p></div></li>
 </Steps>
-
-### What is allowed vs blocked (wall ON)
 
 | In the MAIN chat (wall ON) | Allowed? |
 |----------------------------|----------|
 | Read, search, plan, delegate (Agent) | Yes |
 | Edit / Write files | No -- delegate |
-| Run mutating commands | No -- delegate (read-only Bash allowed on the default level) |
-| Anything inside a subagent | Yes -- full freedom |
+| Mutating commands | No -- delegate (read-only Bash allowed at `balanced`) |
+| Anything inside a subagent | Yes |
 
-This is what "delegate everything" means in practice -- the wall makes it physically true, not just a suggestion. As of v6.0.0 the guard is a strict allowlist (not a denylist) with per-binary flag vetting, and it fails closed on a broken or unparseable state -- see the technical spoiler below for exactly which binaries and flags are vetted.
+The guard is a strict binary allowlist with exec-flag vetting. It fails closed on an unparseable payload, a missing or corrupt `state.json`, an unknown MCP tool token and a missing guard with `onFailure: "block"`.
 
----
+<Spoiler id="hard-wall" title="Technical: how the HARD wall works">
 
-<details>
-<summary>Technical: how the HARD wall works (tool buckets, strict vs balanced, agent_id linchpin)</summary>
+### Install-once and state gate
 
-The HARD wall is an optional, project-scoped guard that physically blocks the main Claude session from writing or editing files. Subagents always stay fully free -- delegation is never blocked.
+`install` copies `hardmode-guard.mjs` to `<cwd>/.claude/brewtools/manager/hardmode-guard.mjs` and registers a `PreToolUse *` entry in `<cwd>/.claude/settings.local.json`. `upgrade` re-copies it without duplicates and without touching the arm state. Settings are watched, so the change applies live (`/hooks` confirms). `install` also copies `lib/manager-state.mjs` to `<cwd>/.claude/brewtools/manager/manager-state.mjs`, the off-switch CLI (`get` / `set hard=<bool> level=<strict|balanced> mcpAllow=<mcp__srv__tool[,...]|> [--cwd DIR]`), at a fixed path because resolving the plugin root needs shell operators the armed wall denies.
 
-### Install-once + state-gate
+The guard reads `state.json` on every call. When `hard !== true` it exits immediately; `disable` only flips `state.hard=false`. `uninstall` is two Bash calls: the bare disarm first, then the deregistration.
 
-`/brewtools:manager-setup install` copies `hardmode-guard.mjs` from the plugin cache into `<cwd>/.claude/brewtools/manager/hardmode-guard.mjs` and registers a `PreToolUse *` entry in `<cwd>/.claude/settings.local.json` (personal, gitignored). The guard is registered once; a later `upgrade` re-copies it from the current plugin version (so plugin updates propagate) without adding duplicates and without touching the arm state. The registration applies to the running session because settings are watched; run `/hooks` to confirm it.
+The registration carries `onFailure: "block"` (Claude Code 2.1.295+; older versions ignore it and fail open). If the registered script is missing (the `.claude/brewtools/` tree deleted by hand, the project moved), every tool call fails with `blocking because onFailure is "block"`, `Read` included, even with the wall disabled. Recovery is outside the session: delete the `brewtools-manager-guard` entry from `.claude/settings.local.json`; settings are watched, so it drops live. Remove the wall with `disable` or `uninstall`, never by deleting files.
 
-The entry carries `onFailure: "block"`, honoured on Claude Code 2.1.295 and later (older versions ignore the field and stay fail-open). A guard that cannot start, times out or exits unexpectedly then blocks the call instead of letting it through. If the registered guard script is missing (the `.claude/brewtools/` tree deleted by hand, the project moved or renamed), every tool call fails with `blocking because onFailure is "block"`, in the main session and in subagents, `Read` included, even with the wall disabled. Recovery is outside the session: delete the `brewtools-manager-guard` entry from `.claude/settings.local.json` in an editor or from a terminal in the project root. Settings are watched, so the entry drops in the running session; restart only if `/hooks` still lists it. For this reason `install` and `upgrade` write the script first and the registration second, and `uninstall` and `purge` remove the registration first.
+### agent_id linchpin
 
-`install` also copies `lib/manager-state.mjs` to `<cwd>/.claude/brewtools/manager/manager-state.mjs`. That copy is the wall's off-switch CLI (`get` / `set hard=<bool> level=<strict|balanced> mcpAllow=<mcp__srv__tool[,...]|> [--cwd DIR]`); it lives at a fixed project path because resolving the plugin root would need shell operators the armed wall denies.
-
-The guard reads `<cwd>/.claude/brewtools/manager/state.json` on every `PreToolUse` call. When `hard !== true`, the guard exits immediately -- no denial. `disable` flips `state.hard=false` without touching `settings.local.json`; the guard stays registered but becomes a no-op. This split exists because editing settings while the wall is armed would be blocked -- the state flip goes through the one self-exempt Bash shape instead. `uninstall` is therefore two Bash calls: the bare disarm first, then the deregistration block, which is only allowed because the first call disarmed the wall.
-
-### agent_id linchpin -- main session blocked, subagents free
-
-The `PreToolUse` payload carries `agent_id` / `agent_type` only for subagent-internal tool calls. Main-session calls have no `agent_id`. The guard denies mutations only when `agent_id` is absent. Subagents pass through freely -- delegation itself is never blocked.
-
-Re-verified on CC 2.1.195 (2026-06-27) -- the discriminator still holds. `agent_id` / `agent_type` presence is an undocumented field; re-verify on each major CC upgrade.
+The `PreToolUse` payload carries `agent_id` / `agent_type` only for subagent-internal calls. The guard denies mutations only when `agent_id` is absent, including for a session started with `claude --agent <name>`. The field is undocumented: re-verify on each major Claude Code upgrade.
 
 ### Tool buckets
 
-| Bucket | Tools | Main session while wall ON |
-|--------|-------|----------------------------|
-| ALWAYS-ALLOW · read | `Read`, `Grep`, `Glob`, `LSP` | Allowed -- inspect only |
-| ALWAYS-ALLOW · delegate | `Agent`, `Task`, `Skill`, `Workflow`, `ListAgents`, `SendMessage`, `SubagentHandback` | Allowed -- they only hand work to a subagent |
-| ALWAYS-ALLOW · worktrees | `EnterWorktree`, `ExitWorktree` | Allowed -- isolation for delegated work; entering one writes no project file |
-| ALWAYS-ALLOW · plan mode | `EnterPlanMode`, `ExitPlanMode` | Allowed -- without `ExitPlanMode` an armed wall traps a plan-mode session |
-| ALWAYS-ALLOW · discovery | `ToolSearch`, `WaitForMcpServers` | Allowed -- under `ENABLE_TOOL_SEARCH=true` the `Task*` tools are deferred, so denying it would make the tracking bucket unreachable |
-| ALWAYS-ALLOW · track | `TaskCreate`, `TaskUpdate`, `TaskList`, `TaskGet`, `TodoWrite`, `ReportFindings` | Allowed -- no filesystem side effects |
-| ALWAYS-ALLOW · timers | `CronCreate`, `CronList`, `CronDelete`, `ScheduleWakeup` | Allowed -- later main-session work still passes through the guard |
-| ALWAYS-ALLOW · background | `TaskStop` | Allowed -- stops a shell, monitor or agent; output is read with `Read` |
-| ALWAYS-ALLOW · MCP meta | `ListMcpResourcesTool`, `ReadMcpResourceTool` | Allowed -- read-only by protocol |
-| ALWAYS-ALLOW · human | `AskUserQuestion` | Allowed |
-| ALWAYS-BLOCK | `Write`, `Edit`, `NotebookEdit`, `WebFetch` | Denied -- hands-on mutation / fetch |
-| Default-deny | `Artifact` and every unlisted tool, plus MCP-write verbs | Denied -- `Artifact` publishes a page, so it stays out |
-| LEVEL-gated | `Bash`, `Monitor` (it runs a shell command, so it follows the Bash rule), `WebSearch`, MCP-read tools | Decided by `level` (see below) |
+| Bucket | Tools | Main session |
+|--------|-------|--------------|
+| ALWAYS-ALLOW | read: `Read`, `Grep`, `Glob`, `LSP` - delegate: `Agent`, `Task`, `Skill`, `Workflow`, `ListAgents`, `SendMessage`, `SubagentHandback` - worktrees: `EnterWorktree`, `ExitWorktree` - plan: `EnterPlanMode`, `ExitPlanMode` - discovery: `ToolSearch`, `WaitForMcpServers` - track: `TaskCreate`, `TaskUpdate`, `TaskList`, `TaskGet`, `TodoWrite`, `ReportFindings` - timers: `CronCreate`, `CronList`, `CronDelete`, `ScheduleWakeup` - `TaskStop`, `ListMcpResourcesTool`, `ReadMcpResourceTool`, `AskUserQuestion` | Allowed |
+| ALWAYS-BLOCK | `Write`, `Edit`, `NotebookEdit`, `WebFetch`, `Artifact`, every unlisted tool, MCP-write tools | Denied |
+| LEVEL-gated | `Bash`, `Monitor`, `WebSearch`, MCP-read tools | Decided by `level` |
 
-The plan-mode and discovery rows were self-defeating omissions before v5.0.0: a denied `ExitPlanMode` left a plan-mode session with no way out, and a denied `ToolSearch` hid the very task-tracking tools the Manager contract requires.
-
-### Fail-closed (v6.0.0)
-
-Before v6.0.0 three failure paths let a mutation through undenied: a `PreToolUse` payload the guard could not parse, an installed manager directory whose `state.json` was missing or corrupt, and an uncaught internal error. All three now DENY the main session instead of passing through:
-
-| Failure | New behaviour |
-|---------|---------------|
-| Unparseable stdin (malformed JSON) | Denied -- "the guard could not parse its PreToolUse payload and denies by default" |
-| Manager directory present, `state.json` missing or not valid JSON | Denied -- "manager state at `<path>` is missing or unreadable, so the guard denies by default" |
-| Uncaught error inside the guard itself | Denied, except the subagent discriminator -- checked first, so a genuine subagent call never sees a false deny |
-
-Only two pass-throughs remain, both by design: the manager was never installed in this project at all (no manager directory at any candidate root -- a no-op, not a security decision), and a genuine subagent call (`agent_id` present in the payload). Recovery from a broken `state.json` is still available because the self-exempt off-switch CLI is checked BEFORE the broken-state deny: `node <ABS root>/.claude/brewtools/manager/manager-state.mjs set hard=false` runs and rewrites the file even while `state.json` is corrupt.
-
-### Strict vs balanced
-
-<Callout type="caution">
-**v6.0.0: the `balanced` Bash classifier changed shape, not just its contents.** It used to be a denylist -- anything not explicitly forbidden passed through, so a new dangerous flag on an already-listed binary opened a silent hole. It is now a strict allowlist: exactly the binaries below run at all, several with per-binary flag vetting on top. An unlisted binary, or a listed one used with a disallowed flag, is denied by default -- not because someone remembered to forbid it.
-</Callout>
+### strict vs balanced
 
 | Aspect | `strict` | `balanced` (default) |
 |--------|----------|----------------------|
-| `Bash` | Fully OFF -- every command denied | Allowlist classifier -- allow inspection, deny everything else |
-| Allowed binaries (balanced) | -- | `ls cat pwd which head tail wc date whoami basename dirname realpath test [ jq echo grep rg find git gh node` -- bare names only, so `/bin/ls`, `VAR=x ls`, `env ls` never match |
+| `Bash`, `Monitor` | All denied | Allowlist classifier: inspection only |
+| Allowed binaries | -- | `ls cat pwd which head tail wc date whoami basename dirname realpath test [ jq echo grep rg find git gh node`, bare names only (`/bin/ls`, `VAR=x ls`, `env ls` never match) |
 | `WebSearch` | OFF | ON |
-| MCP-read | Only the read-only `mcp__semble_code__*` search tools | Heuristic allow (read-shaped tool names), plus entries in `mcpAllow` |
+| MCP-read | Only `mcp__semble_code__*` search tools | Read-shaped names plus the `mcpAllow` state key |
 | MCP-write | Denied | Denied |
 
-The allowlist is a single table, one binary per row, so a binary and its flag vetter cannot drift apart into "added to one, forgotten in the other." `env` is deliberately absent -- it looks like an inspection tool but is a universal exec wrapper (`env node evil.js` would launder any command through it). Any `>`, `<` redirection, `$(...)`, or a backtick anywhere in the command denies the WHOLE command, on any binary.
+Any `>`, `<`, `$(...)` or backtick denies the whole command. `env` is absent on purpose: it is a universal exec wrapper.
 
-#### Per-binary flag vetting
+### Exec-flag vetting
+
+An unlisted binary is denied by default. For listed binaries the guard denies a fixed set of known exec and write flags (below); it does not allowlist flags, so an unknown flag on `rg`, `grep` or `find` passes, and `ls`, `cat`, `jq` and similar accept any arguments.
 
 | Binary | Vetted how |
 |--------|-----------|
-| `git` | `status`/`log`/`diff`/`show`/`rev-parse`/`describe` bare; `remote` only with `-v`; `tag` only with `-l`; `stash` only with `list`; `branch` bare or every argument a listing flag (`--list`, `-l`, `--show-current`, `-a`/`-r`/`--all`/`--remotes`, `-v`/`-vv`, `--contains`, `--merged`, `--no-merged`, `--format=...`). Any of `-c`, `--config-env`, `--exec-path`, `--upload-pack`, `--receive-pack`, `--ext-diff`, `-C`, `--output`, `--textconv` denies the command outright, on any subcommand |
-| `gh` | Read verbs are POSITIONAL only -- `gh <group> <verb>` or `gh <verb>` where the verb is `list`/`view`/`status`. A matching word elsewhere in the argument list does not count |
+| `git` | `status`/`log`/`diff`/`show`/`rev-parse`/`describe` bare; `remote -v`; `tag -l`; `stash list`; `branch` bare or listing flags only. `-c`, `--config-env`, `--exec-path`, `--upload-pack`, `--receive-pack`, `--ext-diff`, `-C`, `--output`, `--textconv` deny on any subcommand |
+| `gh` | Positional read verbs only: `list`, `view`, `status` |
 | `grep` / `rg` | Denied on `--pre`, `--pre-glob`, `--hostname-bin`, `--search-zip`, `-z` |
-| `find` | Denied on any exec-class action: `-exec`, `-execdir`, `-ok`, `-okdir`, `-delete`, `-fprint`, `-fprint0`, `-fprintf`, `-fls` |
-| `node` | Only `node --check <file>` -- every other invocation counts as execution |
-| everything else on the list | No flags vetted -- `ls`, `cat`, `pwd`, `which`, `head`, `tail`, `wc`, `date`, `whoami`, `basename`, `dirname`, `realpath`, `test`/`[`, `jq`, `echo` cannot exec by design |
+| `find` | Denied on `-exec`, `-execdir`, `-ok`, `-okdir`, `-delete`, `-fprint`, `-fprint0`, `-fprintf`, `-fls` |
+| `node` | Only `node --check <file>` |
 
-**Four bypasses closed in v6.0.0** -- each one used to slip past the old denylist looking read-only, and each is now covered by a dedicated case in `tests/suite.mjs`:
-
-| Command | Before | Now | Why it was a hole |
-|---------|--------|-----|--------------------|
-| `git diff --output=/tmp/pwned HEAD~1` | Allowed | Denied | `--output` turns a read subcommand into a file write |
-| `git branch -D main` | Allowed | Denied | `branch` deletes/renames; only listing flags are read-shaped |
-| `gh issue comment 1 --body list` | Allowed | Denied | the read-verb word `list` showed up as a flag VALUE, not the actual verb -- position-blind matching let it launder a write |
-| `find . -fprint0 /tmp/pwned` | Allowed | Denied | GNU `find` writes a file through a search action that reads as inspection |
+The guard also denies the main session on an unparseable payload, a missing or corrupt `state.json`, and an internal error. Only two pass-throughs remain: the manager was never installed in this project, and a genuine subagent call.
 
 ### Off-switch safety
 
-Exactly ONE Bash shape survives an armed wall, at every level:
+Exactly one Bash shape survives an armed wall, at every level:
 
 ```
 node <ABS project root>/.claude/brewtools/manager/manager-state.mjs set hard=false
 ```
 
-`/brewtools:manager-setup disable` issues precisely that, as a single Bash call with nothing appended -- no `BT_ROOT=` prelude, no `&& echo`, no `|| echo`. `Skill` is in ALWAYS-ALLOW, so the skill can always start. The exemption check runs only for `tool_name === 'Bash'`, after every other tool has already been classified -- no other tool can inherit it.
-
-The exemption is narrow on purpose. The guard lets the command through only when ALL of these hold:
-
-| # | Condition |
-|---|-----------|
-| 1 | The command starts with `node ` -- no env prefix, no other binary -- and it is the ONLY segment: no `&&`, `\|\|`, `;`, `\|`, `&`, or newline chaining |
-| 2 | No forbidden metacharacter anywhere, quoted or not -- `$(`, a backtick, `>`, or `<` denies the whole command outright, before any of the rules below run |
-| 3 | No `$` anywhere in the raw command -- no variable or command expansion beyond what rule 2 already blocks |
-| 4 | No evaluator flag on the `node` invocation: `-e`, `--eval`, `-p`, `--print`, `--input-type`, `--require`/`-r`, `--import`, `--loader`, `--experimental-loader` |
-| 5 | The path `node` actually executes, resolved with `realpath`, must equal a helper file this project or the plugin genuinely shipped -- `<cwd>/.claude/brewtools/manager/manager-state.mjs` or the plugin's own `hooks/lib/manager-state.mjs` next to the guard. A file merely *named* `manager-state.mjs` elsewhere on disk, or a path that does not resolve at all, is NOT exempt |
-| 6 | The remaining tokens are the helper's own CLI: `get`, or `set` with `hard=<true\|false>` / `level=<strict\|balanced>` / `mcpAllow=<mcp__srv__tool[,...]\|>` (comma list of exact `mcp__server__tool` or `mcp__server__*` entries; empty clears) and an optional `--cwd DIR` |
-
-Conditions 3-6 were introduced in v5.0.0 to close an arbitrary-code-execution hole: the original exemption matched the bare token `manager-state.mjs` anywhere on the line and skipped quoted text, so a crafted `node` invocation could run an arbitrary payload in a guarded main session at `level strict`. Condition 5 was tightened again for v6.0.0: it used to match a **tail regex** against the command string (`(.claude/brewtools/manager|hooks/lib)/manager-state.mjs$`), so a file merely *planted* at a matching path -- e.g. `/tmp/evil/hooks/lib/manager-state.mjs` -- passed too. The anchor is now the resolved absolute path of the file actually installed, checked with `realpath`, never a string pattern. Do not relax either fix back to tolerate `&&` or a path-suffix match.
-
-The same exempt shape also repairs a false MCP denial at `balanced` (`strict` ignores `mcpAllow`). Quote the value so the shell keeps the `*`:
-
-```
-node <ABS project root>/.claude/brewtools/manager/manager-state.mjs set 'mcpAllow=mcp__semble_code__*,mcp__github__get_file'
-```
-
-The list is replaced wholesale, one invalid entry writes nothing (exit 2), and `set 'mcpAllow='` clears it.
-
-| Guarantee | Mechanism |
-|-----------|-----------|
-| `/brewtools:manager-setup disable` can always start | `Skill` is ALWAYS-ALLOW |
-| Its one Bash call is allowed even at `level strict` | The command above satisfies the six conditions -- but only in that exact shape |
-| Anything the main session cannot run | Delegate it: `Task`/`Agent` are always allowed and subagents bypass the wall entirely |
-| Every denied tool call shows the exit command | The deny reason carries it verbatim |
+`disable` runs precisely that (`Skill` is always allowed). The command must start with `node `, be the only segment (no `&&`, `||`, `;`, `|`, `&`), carry no `$`, backtick, `>`, `<`, no evaluator flag (`-e`, `--eval`, `-p`, `--print`, `--input-type`, `-r`/`--require`, `--import`, `--loader`, `--experimental-loader`), and the script `node` executes, resolved with `realpath`, must be the helper installed in this project or the plugin's own `hooks/lib/manager-state.mjs`. Appending `&& echo` or a `BT_ROOT=` prelude makes the guard deny it. The remaining tokens must be the helper's CLI. To repair a false MCP denial at `balanced`, quote the value: `set 'mcpAllow=mcp__semble_code__*,mcp__github__get_file'` (replaces the list; `set 'mcpAllow='` clears it). Anything else: delegate to a subagent.
 
 <Callout type="caution">
-**Installed the wall before v5.0.0? Run `/brewtools:manager-setup upgrade` once.** The disarm command runs a project-local `manager-state.mjs`, and only `install`/`upgrade` copy it there. An older project has no such file, so the command fails with `Cannot find module` and the wall has no working off-switch. `upgrade` backfills it and leaves `hard`/`level` untouched. If the wall is already armed, delegate the `upgrade` to a subagent -- resolving the plugin root in the main session needs shell operators the wall denies.
+Installed the wall before v5.0.0? Run `/brewtools:manager-setup upgrade` once: the disarm command needs the project-local `manager-state.mjs`, otherwise it fails with `Cannot find module`. If the wall is armed, delegate the `upgrade` to a subagent.
 </Callout>
 
 ### Version and ownership
 
-Writes to `state.json` stamp `version`, `content_version`, `generated_by`
-(`"brewtools:manager-setup"`) and `last_updated` when their sources resolve. Version records
-release provenance; content_version records the writer's content revision. The date uses the
-local calendar. Upgrade refreshes metadata while preserving `hard` and `level`.
+Writes to `state.json` stamp `version`, `content_version`, `generated_by` (`"brewtools:manager-setup"`) and `last_updated`; `upgrade` refreshes them and preserves `hard` and `level`. `setup-status` reads `content_version` first. If the plugin version cannot be resolved, `writeState` deletes the `version` key and warns instead of aborting, so a user is never locked behind an armed wall.
 
-The copied guard's line-2 stamp carries `version`, `content_version` and `generated_by`;
-byte-copied assets omit `last_updated`. Setup-status reads `state.json`'s `content_version`
-first, with release-version fallback for older metadata and the guard stamp as the documented
-companion fallback. Release provenance alone does not prove content drift.
+</Spoiler>
 
-One documented exception: `pluginVersion()` in `manager-state.mjs` returns `null` -- and `writeState` then DELETES the `version` key from `state.json` and warns on stderr -- when the plugin version cannot be resolved at all, instead of aborting like every other stamped-artifact writer in this repo. `state.json` is the HARD wall's own off-switch (`set hard=false`); a writer that aborted here would leave the user locked behind an armed wall with no way out. It is the sole licensed exception to "abort when the version can't be resolved."
-
-</details>
-
-<details>
-<summary>Technical: scopes and state (where the wall's files live)</summary>
-
-### Scope table
+<Spoiler id="state" title="Technical: scopes, state and natural-language prompts">
 
 | Thing | Scope | Files |
 |-------|-------|-------|
-| Wall flags `{"{"}hard, level{"}"}` | PROJECT ONLY | `<cwd>/.claude/brewtools/manager/state.json` |
-| Wall registration (guard) | PROJECT ONLY | `<cwd>/.claude/settings.local.json` + `<cwd>/.claude/brewtools/manager/hardmode-guard.mjs` + the copied off-switch CLI `manager-state.mjs` |
-| Soft `mode` field (informational) | project state, then global | same `state.json`, else `<config dir>/manager/state.json` |
-| Codeword text overrides | not managed here | `<cwd>/.claude/brewtools/manager/prompts/<mode>.md` and `<config dir>/manager/prompts/<mode>.md`: the mod's legacy layer, listed by `status`, kept by `uninstall` and `purge` |
+| Wall flags `{"{"}hard, level{"}"}` | Project only | `<cwd>/.claude/brewtools/manager/state.json` |
+| Registration and guard | Project only | `<cwd>/.claude/settings.local.json`, `hardmode-guard.mjs`, `manager-state.mjs` in `<cwd>/.claude/brewtools/manager/` |
+| Informational `mode` | Project state, then global | same `state.json`, else `<config dir>/manager/state.json` (`CLAUDE_CONFIG_DIR`, default `~/.claude`) |
+| Codeword overrides | Not managed here | `prompts/<mode>.md` under the project and global manager dirs: listed by `status`, kept by `uninstall` and `purge` |
 
-The project root is the directory the session started in (the one hooks receive as `CLAUDE_PROJECT_DIR`), falling back to the git top level; a session started in a subdirectory installs and reads there. `install` and `upgrade` also set `env.CLAUDE_CODE_ENABLE_TODO_TOOLS` to `"1"` in `settings.local.json`, but only when no settings layer already sets it: an explicit `0`, `false` or empty value is kept and reported as `kept off`.
+`<cwd>` is `CLAUDE_PROJECT_DIR`, else the git top level. Defaults: `hard: false`, `level: "balanced"`, `mode: "full"`. Wall enforcement reads project state only; `--scope global` is ignored. The project `.claude/` is a protected path, so the skill writes through bundled Node helpers via Bash.
 
-The wall flags (`hard`/`level`) are resolved project-only. Passing `--scope global` (or `globally`) to any action is ignored with a note: the wall has no global scope.
+Free text resolves to a command (Russian too; ambiguity triggers `AskUserQuestion`):
 
-State defaults are `hard: false`, `level: "balanced"`, `mode: "full"`; there is no default `enabled: true` field. Wall enforcement reads project state only. The informational mode can fall back to global state. Bundled helpers manage state; current permissions still apply.
+| Phrase | Resolves to |
+|--------|-------------|
+| `install manager`, `install the wall` | `install` |
+| `update the guard` | `upgrade` |
+| `enable manager`, `manager on`, `arm wall` | `enable` |
+| `turn off manager`, `manager off`, `disarm wall` | `disable` |
+| `remove hook`, `uninstall` | `uninstall` |
+| `reset`, `restore defaults`, `remove everything` | `purge` |
+| `level strict`, `strict mode`, `level balanced`, `balanced mode` | `level <name>` |
+| `manager status` | `status` |
+| `<task> in hard mode` | `hard-one-shot`: confirm, arm, run, auto-disarm (even on failure) |
+| `<task> as manager` | `manager-run`: Manager role, wall untouched; the full contract is the mod's `++m` block |
 
-An armed wall does not inject text per prompt; the wall's deny message explains itself. Session-start separately shows a notice naming the mechanism, the level and the exit (`/brewtools:manager-setup disable`).
+</Spoiler>
 
-</details>
-
-<details>
-<summary>Full command and intent reference (all actions, hard-one-shot vs manager-run)</summary>
-
-> The skill also understands natural-language Russian (e.g. on/off, hard mode, status). The complete RU+EN trigger list lives in the skill's SKILL.md.
-
-### Actions
-
-| Action | Command / natural language | Effect |
-|--------|---------------------------|--------|
-| `status` | `/brewtools:manager-setup status` | Read-only explainer: wall state, task-tools state, the codewords pointer (mod) and legacy override files. Default with no argument. Probes `registered`, `guardPresent` and `installed`; a stale state version recommends `upgrade` only when `installed` is true |
-| `install` | `/brewtools:manager-setup install` | INSTALL guard (project), then ARM the HARD wall after a confirmation question unless your prompt explicitly said so; declining leaves it installed but disarmed. Applies to the running session; `/hooks` to confirm. Adds the task-tools key only when no settings layer sets it |
-| `upgrade` | `/brewtools:manager-setup upgrade` | Re-copy the guard and off-switch CLI, re-register, preserve `hard`/`level`, and refresh version/content-version provenance. Backfills a missing CLI; aborts if nothing is installed (no registration and no copied guard, even if a `state.json` is left over) -- `status` reports this case as not installed and points to `install` |
-| `enable` | `/brewtools:manager-setup enable` | ARM an already-installed wall (state flip only), after the same arm-confirmation question unless your prompt explicitly said so; declining changes nothing. Never installed -> routed to `install` |
-| `disable` | `/brewtools:manager-setup disable` | DISARM the wall (state flip only -- registration kept, guard no-ops) |
-| `uninstall` | `/brewtools:manager-setup uninstall` | Two Bash calls: the bare disarm first, then DEREGISTER guard from `settings.local.json` + delete the copied guard. Applies to the running session. State and codeword overrides kept |
-| `purge` | `/brewtools:manager-setup purge` | `uninstall` + delete `state.json`, the copied guard and off-switch CLI, an emptied `.claude/brewtools/`, a leftover `settings.local.json.bak`, and the task-tools key when this skill added it. Codeword override files (`prompts/`, project and global) are kept; delete them by hand if you want them gone |
-| `level strict` | `/brewtools:manager-setup level strict` | Wall strictness = strict (Bash fully off) |
-| `level balanced` | `/brewtools:manager-setup level balanced` | Wall strictness = balanced (read-only Bash allowed) |
-| `hard-one-shot` | `<task> in hard mode` | Arm-confirmation question first (declining changes nothing); then wall ON -- run task as Manager -- auto-revert wall OFF when done (reverts even on failure or abort) |
-| `manager-run` | `<task> as manager` | Run task as Manager with wall UNTOUCHED (delegation by prompt only -- no wall toggle) |
-| `inline-run` | `/brewtools:manager-setup <task>` | Run the task as Manager, execute -- no state change |
-
-### Expected `status` output (wall off)
+<Spoiler id="status-output" title="Expected status output (wall off)">
 
 ```
 # Manager -- status
 
 ## Codewords
-codewords: provided by brewmod-placeholders (Claude Code 2.1.292+) -- ++m, ++a, ++rr, ++r, bare +++ (Plan mode). Not part of this plugin; this skill neither enables nor disables them.
+codewords: provided by brewmod-placeholders (Claude Code 2.1.292+) -- ++m, ++a, ++rr, ++r, bare +++ (Plan mode).
 Install:   claude plugin install brewmod-placeholders@claude-brewcode
-Overrides: <legacy override paths, one per line, or "none found"> -- files under .claude/brewtools/manager/prompts/ and <config dir>/manager/prompts/ keep working through the mod's legacy layer (no migration).
+Overrides: <legacy override paths, one per line, or "none found">
 
 ## HARD wall (this project) -- registered=no  armed=OFF  level=balanced  (state source: default)
-Delivery: INSTALLED into this project (not a plugin hook). Registered once in .claude/settings.local.json (personal, gitignored), gated at runtime by .claude/brewtools/manager/state.json {hard}.
-When armed, the main session cannot Write/Edit/WebFetch; it can delegate, read, track, stop background work and manage session timers. Bash and Monitor: strict denies both; balanced permits read-only commands. The wall adds nothing to your prompts: a denied call carries the explanation and the exit.
-Allowlist summary: <one-line summary for the current level>
-State version: <none>  plugin: <X.Y.Z>  (run upgrade when stale and installed; "wall not installed: run install" when installed is false)
+State version: <none>  plugin: <X.Y.Z>
 
 ## Task graph (TaskCreate/TaskUpdate/TaskGet/TaskList) -- <ON|OFF|UNKNOWN>
-Claude Code <version>. From 2.1.233 these tools are gated off by default and need env CLAUDE_CODE_ENABLE_TODO_TOOLS=1.
-<which settings layer sets the key, or the one-line remedy when it is off>
 
-Install:   /brewtools:manager-setup install    (install+arm; applies live, no restart)
-Upgrade:   /brewtools:manager-setup upgrade    (re-copy the guard + restamp state.json; arm state kept)
-Enable:    /brewtools:manager-setup enable     (arm an already-installed wall)
-Disable:   /brewtools:manager-setup disable    (disarm only -- registration kept, guard no-ops)
-Uninstall: /brewtools:manager-setup uninstall  (deregister from settings.local.json; applies live)
-Purge:     /brewtools:manager-setup purge      (uninstall + delete state; prompt overrides kept)
-Level:     /brewtools:manager-setup level strict | balanced
 Exit:      node <ABS project root>/.claude/brewtools/manager/manager-state.mjs set hard=false
 ```
 
-`disable` always has a way out: `Skill` is ALWAYS-ALLOW, and the one Bash call it makes is the exempt command above -- allowed at `level strict` too, but only in that exact shape. Copy it verbatim; a `BT_ROOT=` prelude or an appended `&& echo` makes the guard deny it. For anything else, delegate -- subagents bypass the wall.
-
-### `hard-one-shot` vs `manager-run`
-
-`hard-one-shot` (`<task> in hard mode`) actually toggles the guard. Like `install` and `enable`, it asks the arm-confirmation question first unless your prompt explicitly said so; declining changes nothing. Then wall ON -- task runs -- wall auto-reverts OFF when done, even on failure or abort. The guard never silently persists.
-
-`manager-run` (`<task> as manager`) does NOT touch the wall state at all. Delegation is by prompt only; the full Manager contract is the mod's `++m` block. Use this when you want Manager behavior without arming or changing the guard.
-
-</details>
+</Spoiler>
 
 <CardGrid>
   <Card title="Prompt placeholders" icon="puzzle" href="/mods/placeholders/">
-    The brewmod-placeholders mod: the `++m` / `++rr` / `++r` / `++a` / `+++` codewords, typeahead, preview band and `/placeholders`.
+    The brewmod-placeholders mod: `++m` / `++rr` / `++r` / `++a` / `+++` codewords and `/placeholders`.
   </Card>
   <Card title="Task Board Setup" icon="graph" href="/brewtools/skills/task-board-setup/">
-    Domain methodology, task-specific work plans, graph reconciliation, and session anti-drift timers.
+    Domain methodology, work plans and session anti-drift timers.
   </Card>
   <Card title="Setup Status" icon="clipboard" href="/brewcode/skills/setup-status/">
-    Read-only dashboard across every `-setup` skill -- installed, stale or missing, with the hand-run command for each.
+    Read-only dashboard across every `-setup` skill.
   </Card>
   <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">
     All brewtools skills and agents in one place.
-  </Card>
-  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/manager-setup">
-    Source code -- skill, wall reference, intent routing, and the hardmode-guard.mjs and manager-state.mjs helpers.
   </Card>
 </CardGrid>
 

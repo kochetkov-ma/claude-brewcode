@@ -1,28 +1,16 @@
 # claude-brewcode
 
-[![macOS](https://img.shields.io/badge/macOS-support-000000?logo=apple&logoColor=white)](https://www.apple.com/macos/)
-[![Claude](https://img.shields.io/badge/Claude-Anthropic-orange?logo=anthropic&logoColor=white)](https://claude.ai)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Plugin-blueviolet?logo=anthropic&logoColor=white)](https://code.claude.com)
-
-[![Release](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/release.yml/badge.svg)](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/release.yml)
 [![Latest Release](https://img.shields.io/github/v/release/kochetkov-ma/claude-brewcode?label=latest&color=blue)](https://github.com/kochetkov-ma/claude-brewcode/releases/latest)
 [![Documentation](https://img.shields.io/badge/Docs-doc--claude.brewcode.app-4A90D9?logo=bookstack&logoColor=white)](https://doc-claude.brewcode.app/getting-started/)
 
-**Claude Code plugin suite** -- four plugins for development, documentation, text utility, and visual workflows.
+**Claude Code plugin suite.** A regular session hands a big task to one agent and loses sight of it. Brewcode splits work into bounded units, gives every spawn a six-field brief, and re-anchors the plan and task graph after a compaction. Four plugins, 27 skills, 9 agents, plus two optional [mods](#claude-code-mods).
 
-A regular Claude Code session hands a big task to one agent and loses sight of it. Brewcode splits work into bounded units, gives every spawn a six-field brief, and re-anchors the plan and task graph after a compaction. Four plugins. 27 skills. 9 agents. 3 registered hook commands. Plus two optional [mods](#claude-code-mods).
+[**Full documentation**](https://doc-claude.brewcode.app/getting-started/) | [**Approaches**](APPROACHES.md) -- every hook, agent and injection the suite installs.
 
-[**Full Documentation**](https://doc-claude.brewcode.app/getting-started/)
+> **Security:** code is scanned on every commit ([Gitleaks](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/gitleaks.yml), [CodeQL](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/codeql.yml), [Semgrep](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/semgrep.yml)); no personal data is collected or transmitted.
 
-[**Approaches**](APPROACHES.md) -- every hook, agent and injection the suite installs, and who installs what.
-
-> **Security:** Code is scanned on every commit. No personal data is collected or transmitted.
->
-> [![Gitleaks](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/gitleaks.yml/badge.svg)](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/gitleaks.yml?query=branch%3Amain)
-> [![CodeQL](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/codeql.yml/badge.svg)](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/codeql.yml?query=branch%3Amain)
-> [![Semgrep](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/semgrep.yml/badge.svg)](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/semgrep.yml?query=branch%3Amain)
-
-## 🚀 Install in 30 seconds
+## Install in 30 seconds
 
 Paste this prompt into any Claude Code session -- Claude will run the full install for you:
 
@@ -52,147 +40,66 @@ Execute these commands in this Claude Code session, one by one, show full output
 After all commands succeed, run `/reload-plugins`. If `/reload-plugins` is unavailable, tell me to type `exit` and run `claude` again. Run the commands now.
 ```
 
-> After install/update, run `/reload-plugins` (or `exit` + `claude` to restart). For manual install steps see [Installation](#installation) below.
-
-## Plugin Suite
-
-| Plugin | Purpose | Skills | Install |
-|--------|---------|--------|---------|
-| [brewcode](brewcode/README.md) | Authoring toolkit: skill, agent and rule creation and sync, semantic search (semble), conventions, E2E tests, generated review and team skills | 9 | `claude plugin install brewcode@claude-brewcode` |
-| [brewdoc](brewdoc/README.md) | Documentation tools: docsync, memory-sync generation, PDF conversion, publishing | 5 | `claude plugin install brewdoc@claude-brewcode` |
-| [brewtools](brewtools/README.md) | Text optimization and humanization, secrets scanning, SSH and GitHub Actions deploy, manager hard delegation wall, subagent deadline/return-size/routing guards, task board, context slimming, plugin updates, alternative API providers | 13 | `claude plugin install brewtools@claude-brewcode` |
-| [brewui](brewui/README.md) | UI/visual/creative tools (placeholder, currently empty) | 0 | `claude plugin install brewui@claude-brewcode` |
+> Mods are optional: see [Claude Code mods](#claude-code-mods) below. After install or update, run `/reload-plugins` (or `exit` + `claude`). Requirements and local install: [Installation](#installation).
 
 ## Claude Code mods
 
-Mods are small Claude Code plugins built on the early-access hooks module API. Each one is optional, installs on its own and works without the four suite plugins. Both bundle a classic command hook next to the hooks module for Team and Enterprise organizations, where Claude Code bypasses the `classic.*` hooks of a user-installed mod. Verified live on Claude Code 2.1.300 on a Team-organization profile and on a Max profile, with `--plugin-dir` and installed copies; an Enterprise organization was not run. Promo page: [brewcode.app/mods](https://brewcode.app/mods/).
+> Tiny add-ons that change how Claude Code behaves. One feature each, one command to install, no suite needed. [brewcode.app/mods](https://brewcode.app/mods/) | [Docs](https://doc-claude.brewcode.app/mods/overview/)
+
+[![GitHub stars](https://img.shields.io/github/stars/kochetkov-ma/claude-brewcode?style=flat&logo=github&label=stars)](https://github.com/kochetkov-ma/claude-brewcode/stargazers)
 
 <p align="center">
-  <img src="assets/brewmods/hub.gif" width="800" alt="Terminal-style animation of the brewcode mods hub: an ASCII brewcode logo and a four-slide walkthrough of the mods">
-  <br><sub>Illustrative animation of the brewcode mods.</sub>
+  <img src="assets/brewmods/hub.gif" width="640" alt="Terminal-style animation of the brewcode mods hub: an ASCII brewcode logo and a four-slide walkthrough of the mods">
 </p>
 
-| Mod | What it does | Needs |
-|-----|--------------|-------|
-| [brewmod-plan-effort](brewmod-plan-effort/README.md) | Raises the main loop's effort to `xhigh` (configurable) while Claude Code is in plan mode. Your session effort setting is never touched | Claude Code 2.1.287+ and `node` on the `PATH` |
-| [brewmod-placeholders](brewmod-placeholders/README.md) | `++` prompt placeholders: type `++r`, get an instruction block, with highlight, typeahead and a preview band in the prompt box. Provides the codewords `++m`, `++a`, `++r`, `++rr` and `+++` (brewtools no longer injects them since v6.8.0) | Claude Code 2.1.292+ and `node` on the `PATH` |
+| Mod | Type this, get that | Install |
+|-----|---------------------|---------|
+| [brewmod-plan-effort](brewmod-plan-effort/README.md) | Enter plan mode: effort goes to `xhigh` while Claude plans. `/plan-effort max` sets the level | `claude plugin install brewmod-plan-effort@claude-brewcode` |
+| [brewmod-placeholders](brewmod-placeholders/README.md) | `++r` in a prompt: a whole review block. `/placeholders <what you want>`: Claude drafts your own | `claude plugin install brewmod-placeholders@claude-brewcode` |
 
-Install one or both, then run `/reload-plugins`:
+First time: `claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode`, then `/reload-plugins` after installing. Needs Claude Code 2.1.287+ (placeholders 2.1.292+) and `node` on the `PATH`; the `/plan-effort` and `/placeholders` commands are verified on 2.1.300.
 
-```bash
-claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
-claude plugin install brewmod-plan-effort@claude-brewcode
-claude plugin install brewmod-placeholders@claude-brewcode
-```
+Team/Enterprise organizations, the brewtools 6.7.x double injection and legacy codeword overrides: [mods overview](https://doc-claude.brewcode.app/mods/overview/).
 
-Existing codeword override files under `.claude/brewtools/manager/prompts/` and `<config>/manager/prompts/` keep working through the mod's legacy layer (`<config>` is `CLAUDE_CONFIG_DIR`, or `~/.claude` when unset).
 
-brewtools 6.7.x together with `brewmod-placeholders` injects each codeword twice. Update brewtools to 6.8.0 or later together with the mod.
+## Plugin Suite
+
+| Plugin | Purpose | Skills |
+|--------|---------|--------|
+| [brewcode](brewcode/README.md) | Authoring toolkit: skill, agent and rule creation and sync, semantic search (semble), conventions, E2E tests, generated review and team skills | 9 |
+| [brewdoc](brewdoc/README.md) | Documentation tools: docsync, memory-sync generation, PDF conversion, publishing | 5 |
+| [brewtools](brewtools/README.md) | Text optimization, secrets scanning, SSH and deploy, manager hard wall, subagent guards, task board, context slimming, plugin updates, alternative providers | 13 |
+| [brewui](brewui/README.md) | UI/visual/creative tools (placeholder, currently empty) | 0 |
 
 ## Installation
 
-### Marketplace (recommended)
-
-Permanent installation through the Claude Code plugin system. Plugins load automatically with every session.
-
-1. **Add marketplace** -- registers the plugin source:
-
-```bash
-claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
-```
-
-2. **Install plugins** -- copies plugins to local cache:
-
-```bash
-claude plugin install brewcode@claude-brewcode
-claude plugin install brewdoc@claude-brewcode
-claude plugin install brewtools@claude-brewcode
-claude plugin install brewui@claude-brewcode
-```
-
-3. **Reload plugins** -- run `/reload-plugins` in Claude Code, or `exit` + `claude` to restart.
-
-### Already installed? Update
-
-Use `/brewtools:plugin-update` inside Claude Code for the easiest path -- it runs all update commands and reloads automatically.
-
-Or run manually:
-
-```bash
-claude plugin marketplace update claude-brewcode
-claude plugin update brewcode@claude-brewcode
-claude plugin update brewdoc@claude-brewcode
-claude plugin update brewtools@claude-brewcode
-claude plugin update brewui@claude-brewcode
-```
-
-After updating, run `/reload-plugins` (preferred) or `exit` + `claude` to restart.
-
-### Local directory (for development)
+Install with the prompts above or run `claude plugin install <plugin>@claude-brewcode` per plugin. Update with `/brewtools:plugin-update`. Run from source:
 
 ```bash
 claude --plugin-dir ./brewcode --plugin-dir ./brewdoc --plugin-dir ./brewtools --plugin-dir ./brewui
 ```
 
-### Requirements
-
 | Component | Version | Purpose |
 |-----------|---------|---------|
 | Claude Code CLI | latest | Plugin runtime |
 | Node.js | 20+ | Hook runtime |
-| macOS | 13+ | Supported OS |
-
-> **macOS only.** Linux and Windows support is planned for future releases.
+| macOS | 13+ | Supported OS (Linux and Windows planned) |
 
 ## Quick Start
 
-### brewcode -- authoring toolkit
-
 ```bash
-/brewcode:setup-status       # 1. Inspect setup state and the recommended installation order
-/brewcode:convention-setup   # 2. Establish coding, architecture and testing patterns before teams
-/brewcode:teams-setup        # 3. Create agents that use those project conventions
-/brewtools:task-board-setup install  # 4. Deploy the board; select the optional spec/design layer
-/task-board add "Implement JWT authorization"  # 5. Create an accepted task with methodology and work units
-/task-spec <returned-task-id>  # 6. Research and write specs for that existing task
-/brewcode:superreview-setup  # 7. Generate a project-tailored deep-review skill
-/brewcode:setup-status       # anytime: what is installed, stale or missing in this project
+/brewcode:setup-status       # Inspect setup state and the recommended order
+/brewcode:convention-setup   # Establish coding and testing patterns first
+/brewcode:teams-setup        # Create agents that use those conventions
+/brewcode:superreview-setup  # Generate a project-tailored deep-review skill
 ```
 
-Skills orchestrate, agents execute. Each spawn is a bounded unit with a six-field brief; the `compact-recall` hook (SessionStart, matcher `compact`) re-anchors the plan or intent plus the task graph after a compaction, so work stays observable across compaction cycles.
-
-The task board provides shared domain methodology for reviews and tests, plus a methodology and base work units for each task. When a top-level task becomes active, the main session's `/task-board` announces and creates its unique hourly anti-drift cron; the user can choose another cadence or opt out. Each delivered tick rereads the methodology and goal, collects agent updates, reconciles statuses and dependencies, and keeps all unfinished graph entries plus the latest 10 completed entries. Older completion evidence stays in task records. The compact report gives tick time and number, elapsed time, progress, remaining work, blockers or questions, and the drift verdict. Timers run only while the session is active, subject to runtime limits; unavailable scheduling tools are reported. Completion or cancellation stops the task's timer.
-
-In Plan mode, the `+++` codeword (provided by the [brewmod-placeholders](#claude-code-mods) mod) adds these methodology, graph and cron steps to the plan. Scheduling and file changes wait until execution. See [Task board setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) and [Manager setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) for the controls.
-
-### brewdoc -- documentation tools
-
-```bash
-/brewdoc:docsync-setup                # Install doc-staleness tracking, then sync stale docs
-/brewdoc:my-claude                    # Generate Claude Code installation docs
-/brewdoc:memory-sync-setup            # Generate a project-tailored /memory-sync skill into the repo
-/brewdoc:md-to-pdf ./docs/report.md   # Convert markdown to PDF
-/brewdoc:publish "Hello world"        # Publish to brewpage.app -- returns shareable URL
-```
-
-### brewtools -- text utilities
-
-```bash
-/brewtools:text-optimize CLAUDE.md         # Token-efficient optimization (52 rules)
-/brewtools:text-human 3be67487             # Remove AI artifacts from a commit
-/brewtools:secrets-scan                    # Scan for leaked credentials
-/brewtools:plugin-update                   # Install or update the plugin suite
-/brewtools:context-slim measure            # Inventory potential context sources, read-only
-```
-
-### brewui -- visual tools
-
-Placeholder plugin, currently empty. No commands yet -- coming soon.
+Commands for every plugin are in its README: [brewcode](brewcode/README.md), [brewdoc](brewdoc/README.md), [brewtools](brewtools/README.md).
 
 ## How It Works
 
 ```
-  accepted task + optional spec layer --> /task-spec <task-id> --> research + Q&A --> spec + design
+  accepted task --> /task-spec --> research + Q&A --> spec + design
         │
         v
   project agents from .claude/agents/ --> bounded units, fanned out in ONE message
@@ -200,76 +107,18 @@ Placeholder plugin, currently empty. No commands yet -- coming soon.
         v
   /brewcode:superreview-setup --> project-tailored deep-review skill
 
-  after a compaction: compact-recall (SessionStart, matcher compact) re-injects
-    the plan or intent and the task graph
+  after a compaction: compact-recall re-injects the plan or intent and the task graph
 ```
 
-### Delegation contract
-
-Every skill that spawns subagents carries a `## Delegation` section; every shipped agent carries a scope-guard section. Both encode the same rule: one subagent = ONE bounded unit -- one deliverable, ~5 files, ~10 steps. Anything bigger is split into N tasks spawned in a single message.
-
-Every spawn prompt carries six fields:
-
-| Field | Content |
-|-------|---------|
-| GOAL | the overall task and why it exists -- the point beyond the file edit |
-| ROLE | what this agent owns; what it must NOT touch |
-| SCOPE | exact paths and commands in bounds, plus explicit out-of-bounds |
-| CONTEXT | what is already done, by whom, what runs in parallel |
-| CONSUMER | who or what uses the result next, and the shape it must fit |
-| DONE | acceptance criteria plus the exact report shape expected back |
+One subagent = one bounded unit (one deliverable, ~5 files, ~10 steps); bigger work is split into N tasks spawned in one message. Every spawn carries six fields: GOAL, ROLE, SCOPE, CONTEXT, CONSUMER, DONE -- see the [delegation contract](https://doc-claude.brewcode.app/brewcode/skills/#delegation).
 
 ## Skills Reference
 
-> **The `-setup` suffix** marks a skill you run once to install a mechanism -- afterwards you use what it produced (a generated skill, a hook, an MCP server), not the skill itself. Recurring tools you invoke every day keep bare names. Every `-setup` skill shares one mode vocabulary: `status | install | upgrade | enable | disable | uninstall | purge`, and defaults are skill-specific. Semble, manager, agent-deadline, agent-return, and agent-router default to `status`; a bare semble invocation therefore never triggers a machine-level package install; `/brewcode:convention-setup` defaults to `install` and inspects status before extraction. All eleven setups implement all seven verbs, via one of two mechanisms: a live config flag re-checked each invocation (semble, agent-deadline, agent-return, agent-router, manager, docsync), or entry-file parking, where the filename discovery keys on is renamed `<name>.disabled` with the body byte-identical (teams, superreview, task-board, memory-sync, convention). Convention setup parks only its loading rule; its generated documents remain readable.
+27 skills: [brewcode](https://doc-claude.brewcode.app/brewcode/skills/) (9: authoring, semble search, conventions, E2E, review and team generators), [brewdoc](https://doc-claude.brewcode.app/brewdoc/skills/) (5: docsync, memory-sync, PDF, publish), [brewtools](https://doc-claude.brewcode.app/brewtools/skills/) (13: text, secrets, SSH, deploy, guards, task board), brewui (0).
 
-> **24 of the 27 skills are user-invoked only.** Each carries `user-invocable: true` **and** `disable-model-invocation: true` in its frontmatter: the model never sees their descriptions and never auto-activates one. You type `/plugin:skill`, or nothing runs. This is a deliberate trade about context cost -- 24 model-visible descriptions would be a permanent tax on every request -- and these skills do not want auto-activation anyway: eleven of them write real files into your repo after asking you real questions, and the rest are tools you point at a scope you choose. The three exceptions (`disable-model-invocation: false`) are `/brewdoc:publish` (share a link), `/brewtools:text-optimize` and `/brewtools:text-human`: Claude can run them mid-task when you ask to share something, compress a prompt or humanize a README you name, and typing them still works.
-
-### Brewcode (9 skills)
-
-| Skill | Purpose |
-|-------|---------|
-| `/brewcode:setup-status` | Read-only cross-plugin dashboard: which setup skills are installed, stale, disabled, partial or missing here, plus the exact command to run for each. `disabled` outranks `partial`/`stale`, so a mechanism you turned off on purpose is never reported as broken. Runs nothing itself -- setups are interactive generators that spawn many subagents, and stacking several in one session degrades all of them |
-| `/brewcode:superreview-setup` | Generate a project-tailored deep-review skill: `QUICK` (default, `intent-guard` + mechanical gates) or `EXTENDED` (adds domain-expert fan-out, scope discipline, adversarial validation) depth, read from your prompt |
-| `/brewcode:teams-setup` | Create and manage dynamic teams of domain-specific agents -- every team also gets a fixed review-only `intent-guard` member (not counted in team size). Modes `status`/`install`/`upgrade`/`enable`/`disable`/`uninstall`/`purge`, each taking an optional team `[name]`; `enable`/`disable` park/unpark each roster member's agent file |
-| `/brewcode:convention-setup` | Install project coding, testing and architecture conventions with reversible loading guidance; run early, before teams and review setup |
-| `/brewcode:rules` | Prompt-driven rules management: status, create, improve, review |
-| `/brewcode:skills` | Prompt-driven skill management: status, create, improve, sync, review |
-| `/brewcode:agents` | Prompt-driven agent management: status, create, improve, sync, review |
-| `/brewcode:e2e` | E2E testing orchestration with BDD scenarios and quorum review |
-| `/brewcode:semble-setup` | Semantic code search setup: installs the pinned semble_code MCP, shared content-variant cache, semble-first rule + hooks, agent migration |
-
-### Brewdoc (5 skills)
-
-| Skill | Purpose |
-|-------|---------|
-| `/brewdoc:docsync-setup` | Install project-local doc-staleness tracking (hooks + config), then report or force a sync |
-| `/brewdoc:my-claude` | Generate Claude Code installation docs |
-| `/brewdoc:memory-sync-setup` | Generate a project-tailored `/memory-sync` skill: syncs everything auto-loaded into context (root & nested CLAUDE.md, CLAUDE.local.md, rules, conventions, AGENTS.md family, agents, skills, memory dir) against the code -- docs excluded; scopes `session` (default), `branch`, `commit <sha>`, `recent[:N]`, `all`, plus a `hard` depth (rules `paths:` precision audit + obvious-knowledge purge); non-growth, agents re-audited every run |
-| `/brewdoc:md-to-pdf` | Convert markdown to professional PDF |
-| `/brewdoc:publish` | Publish to brewpage.app -- returns shareable URL |
-
-### Brewtools (13 skills)
-
-| Skill | Purpose |
-|-------|---------|
-| `/brewtools:text-optimize` | LLM token efficiency optimization (52 rules, smart dedup + aggressive lossy) |
-| `/brewtools:text-human` | Remove AI artifacts, humanize code |
-| `/brewtools:agent-deadline-setup` | Install/remove a soft wall-clock budget for subagents -- 80% warns "wrap up", 100% blocks all but finalization tools; project or global, opt-in |
-| `/brewtools:agent-return-setup` | Install/remove a size budget on every subagent's final return -- a SubagentStart hook states the budget, a SubagentStop hook sizes the return (`chars/4`) and blocks at most once, ordering a compress above `passTokens` (default 2500) or a write-to-file above `fileTokens` (default 6000); project or global, opt-in |
-| `/brewtools:agent-router-setup` | EXPERIMENTAL -- install/remove a PreToolUse hook that denies a generic subagent spawn in favor of the real project/plugin expert, or nudges when the fit is only uncertain; project scope only, opt-in |
-| `/brewtools:secrets-scan` | Scan git-tracked files for leaked secrets |
-| `/brewtools:ssh` | SSH server management -- connect, configure, deploy |
-| `/brewtools:deploy` | GitHub Actions deployment -- workflows, releases, GHCR, CI/CD |
-| `/brewtools:plugin-update` | Install and update the full plugin suite |
-| `/brewtools:provider-switch` | Configure alternative API providers (DeepSeek, Z.ai/GLM, Qwen, MiniMax, OpenRouter) |
-| `/brewtools:manager-setup` | Manager mode -- the opt-in HARD wall (project-only; `status`/`install`/`upgrade`/`enable`/`disable`/`uninstall`/`purge`, plus `level strict\|balanced`) installs a project PreToolUse guard that blocks main-session writes while subagents stay free -- an allowlist of permitted binaries and per-binary flags, failing closed when it cannot parse the command. `install`/`upgrade` also set the task-tools key `CLAUDE_CODE_ENABLE_TODO_TOOLS` in `.claude/settings.local.json` when no settings layer sets it. Codewords `++m`, `++a`, `++rr`, `++r`, `+++` moved to [brewmod-placeholders](brewmod-placeholders/README.md) (`status` prints the pointer) |
-| `/brewtools:task-board-setup` | Deploy a file-based Kanban with task-tracker, task-board, shared domain/task methodology, a derived task graph and unique session anti-drift timers; optional spec + design layer (`task-spec`), plus `upgrade` for existing boards |
-| `/brewtools:context-slim` | Shrink the permanent context surface (project+global CLAUDE.md, rules, agent descriptions, hooks, memory) via cross-layer dedup, default-knowledge removal and per-file compression -- lossless by default, whole-run rollback on any verify miss |
-
-### Brewui (0 skills)
-
-No skills yet -- placeholder for future UI/visual/creative tools.
+> **`-setup` suffix:** 11 skills install a mechanism you use afterwards; all share the modes `status | install | upgrade | enable | disable | uninstall | purge`, and defaults are skill-specific (semble, manager, agent-deadline, agent-return, agent-router default to `status`).
+>
+> **24 of 27 skills are user-invoked only** (`disable-model-invocation: true`): you type `/plugin:skill`. Exceptions Claude may run mid-task: `/brewdoc:publish`, `/brewtools:text-optimize`, `/brewtools:text-human`.
 
 ### Portable skills (standalone)
 
@@ -294,21 +143,15 @@ Self-contained `SKILL.md` folders that ship outside the four plugins -- drop the
 | ssh-admin | brewtools | inherit | Linux server administration via SSH |
 | deploy-admin | brewtools | inherit | GitHub Actions deployment and CI/CD |
 
-> **Scope guard:** every shipped agent carries a scope-guard section -- a task larger than one bounded unit (one deliverable, ~5 files, ~10 steps) makes the agent stop before starting and return a split proposal instead of grinding for an hour. `ssh-admin` and `deploy-admin` additionally split per host, repo, and environment.
+Every shipped agent stops and returns a split proposal when a task exceeds one bounded unit: [scope guard](https://doc-claude.brewcode.app/brewcode/agents/#scope-guard).
 
 ## Documentation
 
 | Resource | Link |
 |----------|------|
-| Full documentation | [doc-claude.brewcode.app](https://doc-claude.brewcode.app/getting-started/) |
-| Quick Start guide | [Quickstart](https://doc-claude.brewcode.app/quickstart/) |
-| Brewcode overview | [Brewcode](https://doc-claude.brewcode.app/brewcode/overview/) |
-| Brewdoc overview | [Brewdoc](https://doc-claude.brewcode.app/brewdoc/overview/) |
-| Brewtools overview | [Brewtools](https://doc-claude.brewcode.app/brewtools/overview/) |
-| Brewui overview | [Brewui](https://doc-claude.brewcode.app/brewui/overview/) |
+| Full documentation, quickstart | [doc-claude.brewcode.app](https://doc-claude.brewcode.app/getting-started/) / [Quickstart](https://doc-claude.brewcode.app/quickstart/) |
+| Plugin overviews | [Brewcode](https://doc-claude.brewcode.app/brewcode/overview/), [Brewdoc](https://doc-claude.brewcode.app/brewdoc/overview/), [Brewtools](https://doc-claude.brewcode.app/brewtools/overview/), [Brewui](https://doc-claude.brewcode.app/brewui/overview/) |
 | Mods overview | [Mods](https://doc-claude.brewcode.app/mods/overview/) |
-| Plan-mode effort mod | [brewmod-plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/) |
-| Prompt placeholders mod | [brewmod-placeholders](https://doc-claude.brewcode.app/mods/placeholders/) |
 | Release Notes | [RELEASE-NOTES.md](RELEASE-NOTES.md) |
 | Brewcode site | [brewcode.app](https://brewcode.app) |
 | brewdoc CLI -- standalone document-to-Markdown tool on PyPI, a separate product from the brewdoc plugin | [pypi.org/project/brewdoc](https://pypi.org/project/brewdoc/) |

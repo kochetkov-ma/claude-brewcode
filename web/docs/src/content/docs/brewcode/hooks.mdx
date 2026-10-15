@@ -4,155 +4,86 @@ description: "Brewcode's two SessionStart hooks: session-start (status line, upd
 order: 13
 ---
 
-import { Card, CardGrid, Badge, UpdateNotice } from '../../../components/mdx';
+import { Card, CardGrid, Spoiler, ModPromo, UpdateNotice } from '../../../components/mdx';
 
 # Hooks
 
-Hooks are Node.js scripts attached to Claude Code lifecycle events.
-They inject context and manage session state. Brewcode registers 2 hook commands in `hooks.json`,
-both on SessionStart, plus a shared `lib/utils.mjs` with the I/O helpers they import.
+Hooks are Node.js scripts attached to Claude Code lifecycle events. Brewcode registers 2 hook commands in `hooks.json`, both on SessionStart, plus a shared `lib/utils.mjs` with their I/O helpers.
 
 ## Summary table
 
 | # | Hook | Event | Matcher | Channel | Timeout | Purpose |
 |---|------|-------|---------|---------|---------|---------|
-| 1 | session-start | SessionStart | -- | systemMessage | 3s | User-visible session/version info and permission_mode tag |
+| 1 | session-start | SessionStart | -- | systemMessage | 3s | User-visible session/version info and `permission_mode` tag |
 | 2 | compact-recall | SessionStart | compact | additionalContext | 2s | Re-anchor plan, intent and task graph after a compaction |
 
-## Execution flow
+The `systemMessage` channel is user-visible; `additionalContext` is model context. Optional project search hooks come from [semble-setup](/brewcode/skills/semble-setup/), not from the plugin registration.
 
-```
-SessionStart
-  └── session-start.mjs        Version check, plan-symlink, permission_mode tag
+<ModPromo variant="strip" />
 
-SessionStart (matcher: compact)
-  └── compact-recall.mjs       [PLAN] or [INTENT], plus [TASKS] when a task graph exists
-```
+[Brewcode mods](/mods/overview/) bundle their own command hooks and a hooks module; they are separate from the two hooks on this page.
 
-## Hook files
+## Technical details
 
-```
-brewcode/hooks/
-  session-start.mjs            SessionStart handler
-  compact-recall.mjs           SessionStart handler, matcher "compact"
-  hooks.json                   Hook registry (event bindings)
-  lib/
-    utils.mjs                  Shared I/O, configuration, logging
-  tests/
-    run.sh                      Runs every suite, reports pass/fail counts
-    suite-session-start.mjs     Covers session-start.mjs and compact-recall.mjs
-```
+<Spoiler id="session-start" title="session-start.mjs">
 
-## I/O protocol
-
-All hooks follow a unified protocol:
-
-1. Read JSON from stdin (via `readStdin()`)
-2. Read event-specific input: common session/cwd fields, source for SessionStart, and transcript_path when needed. Treat optional permission_mode as a payload signal, not a value to infer.
-3. Output JSON to stdout (via `output()`)
-4. Write logs to stderr
-
-Output channels have different audiences: top-level `systemMessage` is user-visible, while
-`hookSpecificOutput.additionalContext` supplies model context on supported events. Input and
-decision schemas are event-specific.
-
-**Shared utilities:**
-- `hooks/lib/utils.mjs` -- I/O, configuration, logging, and `projectRoot()`: `CLAUDE_PROJECT_DIR` env var when it points at a real path, else walk upward from the hook's `cwd` for the nearest `.git` or `.claude` directory, else the starting `cwd` itself -- never throws, never guesses beyond that
-
----
-
-## Detailed description
-
-### 1. session-start.mjs
-
-<Badge variant="primary" text="SessionStart" /> <Badge variant="secondary" text="systemMessage" />
-
-Initializes the session, checks for a newer brewcode release (24 h cache), manages Plan Mode symlinks, and reports the active `permission_mode` in the system message for audit.
-
-| Parameter | Value |
-|-----------|-------|
-| Event | SessionStart |
-| Channel | systemMessage |
-| Timeout | 3000 ms |
-
-When present, `permission_mode` is appended to the user-visible `systemMessage`. This hook emits no additionalContext: version and session information do not become operating instructions for the model.
-
-**Logic by session source:**
+Checks for a newer brewcode release (24 h cache), manages the plan symlink and appends the active `permission_mode` to the `systemMessage` when the payload has it. It emits no `additionalContext`, so version info never becomes model instructions.
 
 | Source | Behavior |
 |--------|----------|
-| `startup` | Log session_id, append permission_mode tag when present |
-| `resume` | Log session_id, append permission_mode tag |
-| `clear` | Create symlink LATEST.md -> newest plan |
+| `startup`, `resume` | Log session_id, append `permission_mode` tag when present |
+| `clear` | Create symlink `LATEST.md` -> newest plan |
 
-**LATEST.md symlink:**
-1. Resolves `plansDirectory` from local, project, then user settings; a value outside the project root falls back to `<config dir>/plans` (`CLAUDE_CONFIG_DIR`, else `~/.claude`), which is also the default when none is set
-2. Picks the newest one (by mtime)
-3. If the file is less than 60 seconds old, creates `.claude/plans/LATEST.md` pointing to that plan; preserves unrelated existing files or foreign links
+`LATEST.md`: the plans dir resolves from local, project, then user `plansDirectory` (a value outside the project falls back to `<config dir>/plans`, following `CLAUDE_CONFIG_DIR`, else `~/.claude`). The newest plan by mtime is linked as `.claude/plans/LATEST.md` only if it is under 60 seconds old; unrelated files and foreign links are preserved. If `.claude/plans` is itself a symlink out of the project, the hook logs a warning and creates nothing.
 
-If `<root>/.claude/plans` is itself a symlink out of the project, the hook detects it, logs a warning, and
-returns without creating anything -- it no longer follows that symlink to write `LATEST.md` somewhere outside
-the project root.
+</Spoiler>
 
----
+<Spoiler id="compact-recall" title="compact-recall.mjs: decision ladder">
 
-### 2. compact-recall.mjs
+Re-anchors plan, original intent and task graph after a compaction, so the session does not start a new task graph on top of the old one. It uses SessionStart `additionalContext`, because UserPromptSubmit does not fire on an auto-compaction. It reads only this session's `transcript_path` (regular file, at most 64 MB) and scans the raw buffer for a few markers, no JSONL parsing.
 
-<Badge variant="primary" text="SessionStart / compact" /> <Badge variant="secondary" text="additionalContext" />
-
-Re-anchors plan, original intent and task graph after a compaction, so the session does not start a brand-new task
-graph on top of the one it already had. It uses SessionStart additionalContext for model instructions.
-UserPromptSubmit does not fire on an auto-compaction because there is no user prompt.
-
-| Parameter | Value |
-|-----------|-------|
-| Event | SessionStart |
-| Matcher | compact |
-| Channel | additionalContext |
-| Timeout | 2000 ms |
-
-It reads only this session's `transcript_path` -- one `readFileSync`, guarded by a `statSync` check (must be a
-regular file, at most 64 MB) -- then scans the raw buffer for a handful of markers, no JSONL parsing. Measured on
-an 8.13 MB transcript: the scan itself (one buffer read plus five substring scans) is ~6 ms; the full process
-wall clock is ~30 ms standalone and ~55 ms spawned from a node parent, where node startup dominates.
-
-**Decision ladder, first match wins:**
+First match wins:
 
 | Branch | Condition | Injects |
 |--------|-----------|---------|
-| `plan-file` | last recorded plan path still exists on disk | `[PLAN]` -- read that file before any other action |
-| `plan-latest` | no usable `planFilePath` in the transcript, but `<project-root>/.claude/plans/LATEST.md` is a symlink this plugin created, pointing at an existing plan | `[PLAN]` -- read that project-local link before any other action |
-| `plan-missing` | plan path recorded, but the file is gone (`<config dir>/plans` gets pruned) | `[PLAN]` -- rebuild from the compact summary plus TaskList |
-| `plan-in-summary` | plan mode ran, no plan file was ever recorded | `[PLAN]` -- follow a plan if the summary holds one, else fall back to intent |
-| `intent` | none of the above | `[INTENT]` -- re-read the user's original task from the compact summary |
+| `plan-file` | last recorded plan path still exists | `[PLAN]`: read that file first |
+| `plan-latest` | no usable `planFilePath`, but `.claude/plans/LATEST.md` is a symlink this plugin created, pointing at an existing plan | `[PLAN]`: read that link first |
+| `plan-missing` | plan path recorded, file gone (plans dir pruned) | `[PLAN]`: rebuild from the compact summary plus TaskList |
+| `plan-in-summary` | plan mode ran, no plan file recorded | `[PLAN]`: follow a plan if the summary holds one, else intent |
+| `intent` | none of the above | `[INTENT]`: re-read the original task from the summary |
 
-`plan-latest` exists because the hook's only signal, `"planFilePath":"`, is written INTO the transcript --
-a plan that predates the transcript (after `--resume` or `/clear`) leaves no such marker to scan for. The
-project-local `LATEST.md` symlink is the same one `session-start.mjs` maintains on `source === 'clear'`. A plain file or a foreign symlink never qualifies (its target must match the recorded `_planLink` or sit inside the plans directory), so
-this rung can only ever point at this project's own most recent plan.
+`plan-latest` exists because a plan that predates the transcript (after `--resume` or `/clear`) leaves no marker to scan. A plain file or foreign symlink never qualifies, so this rung only points at this project's own latest plan. `[TASKS]` is appended whenever the transcript contains a `TaskCreate`, ordered before the plan is acted on; `TaskList` is the authority, since the built-in reminder can lag.
 
-`[TASKS]` is appended whenever the transcript contains a `TaskCreate` call, and is ordered before the plan is acted
-on -- the built-in task reminder can lag several turns and show empty, so `TaskList` is the authority.
+**Guarantee:** on `source === 'compact'` it always injects something; every failure degrades to `[INTENT]`, never silence, and it never names a foreign plan. **Trade-off:** with two plans in one session the last recorded plan path wins.
 
-**Guarantee:** on `source === 'compact'` it always injects something -- every failure path degrades to `[INTENT]`,
-never to silence, and it never names a foreign plan: only this session's transcript or this project's plugin-owned `LATEST.md` link.
+</Spoiler>
 
-**Trade-off:** two plans in one session -- the LAST recorded plan path wins.
+<Spoiler id="files-and-protocol" title="Hook files and I/O protocol">
 
----
+```
+brewcode/hooks/
+  session-start.mjs      SessionStart handler
+  compact-recall.mjs     SessionStart handler, matcher "compact"
+  hooks.json             Event bindings
+  lib/utils.mjs          Shared I/O, configuration, logging
+  tests/run.sh           Runs every suite (suite-session-start.mjs covers both hooks)
+```
+
+Each hook reads JSON from stdin (`readStdin()`), writes JSON to stdout (`output()`) and logs to stderr. Optional `permission_mode` is a payload signal, not a value to infer. `lib/utils.mjs` also exports `projectRoot()`: `CLAUDE_PROJECT_DIR` when it points at a real path, else the nearest `.git` or `.claude` directory above the hook's `cwd`, else `cwd` itself; it never throws.
+
+</Spoiler>
+
+## Related
 
 <CardGrid>
-  <Card title="Semble Setup" icon="search" href="/brewcode/skills/semble-setup/">
-    Optional project search hooks installed separately from the two plugin registrations.
+  <Card title="Brewcode overview" icon="document" href="/brewcode/overview/">
+    Plugin skills, agents and hooks.
   </Card>
-  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
-    Download, changelog, and installation instructions.
+  <Card title="Semble setup" icon="search" href="/brewcode/skills/semble-setup/">
+    Optional project search hooks, installed separately.
   </Card>
-  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/hooks">
-    Source code, README, and configuration files.
-  </Card>
-  <Card title="Brewcode Overview" icon="rocket" href="/brewcode/overview/">
-    Plugin overview, skills, and agents.
+  <Card title="View on GitHub" icon="github" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/hooks">
+    Hook source and tests.
   </Card>
 </CardGrid>
 

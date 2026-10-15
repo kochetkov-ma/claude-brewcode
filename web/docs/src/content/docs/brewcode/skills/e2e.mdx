@@ -3,16 +3,14 @@ title: "E2E Testing"
 description: "End-to-end testing orchestration: install agents, create BDD scenarios, write Playwright autotests, run quorum reviews."
 order: 1113
 ---
-import { Card, CardGrid, Callout, Steps, UpdateNotice } from '../../../../components/mdx';
+import { Card, CardGrid, Callout, Steps, Spoiler, UpdateNotice } from '../../../../components/mdx';
 
 # e2e — manage E2E tests
 
-<Callout type="caution">
-  Before using `create`, `update`, `review`, or `rules` — run `/brewcode:e2e install` first. The skill checks for at least 3 `e2e-*` agents and stops with a clear message if they are missing. `status` never stops: it reports the gap instead.
-</Callout>
+Installs five project-tuned `e2e-*` agents, then writes BDD scenarios and autotests with a review cycle and checks them with a 3-reviewer quorum.
 
-<Callout type="tip">
-  Review cycles are capped at 3 iterations (MAX_CYCLES=3). If issues remain after the third pass, the skill surfaces them to you via `AskUserQuestion` — you decide whether to continue or accept as-is.
+<Callout type="caution">
+  Run `/brewcode:e2e install` before `create`, `update`, `review` or `rules`. Without at least 3 `e2e-*` agents the skill stops with a clear message; `status` never stops and reports the gap instead.
 </Callout>
 
 ## Quick reference
@@ -21,197 +19,110 @@ import { Card, CardGrid, Callout, Steps, UpdateNotice } from '../../../../compon
 |-------|-------|
 | Command | `/brewcode:e2e` |
 | Arguments | `[prompt] [status\|install\|create\|update\|review\|rules]` — one free-form EN/RU prompt; the mode word may sit anywhere in it |
-| No-arg default | `status` when 3 or more `e2e-*` agents exist, `install` otherwise (empty prompt or no mode word) |
+| No-arg default | `status` when 3 or more `e2e-*` agents exist, `install` otherwise |
 | Rejected verbs | `uninstall`, `purge`, `upgrade`, `enable`, `disable` — exit 1, no fallback to `install` |
-| Mode detection | Prompt goes to `detect-mode.sh -` on stdin; an explicit mode word wins, else keywords (`set up`, `add tests`, `sync tests`, `status`, `create`, `update`, `review`, `rules`) are scored; prompts work in English or Russian |
 | Model | opus |
-| Tools | Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion, Skill, WebSearch, WebFetch |
 | Project rules file | `.claude/e2e/e2e-rules.md` (= `config.rulesPath`) |
 
 ## When to use
 
 | Goal | Command |
 |------|---------|
-| First time — analyze project, create 5 agents, generate rules | `/brewcode:e2e install` |
-| Write BDD scenarios + autotests for a new feature | `/brewcode:e2e create "checkout flow with Stripe"` |
+| First time: analyze project, create 5 agents, generate rules | `/brewcode:e2e install` |
+| BDD scenarios + autotests for a new feature | `/brewcode:e2e create "checkout flow with Stripe"` |
 | Sync existing scenarios after code changes | `/brewcode:e2e update "add negative auth scenarios"` |
-| Multi-agent quorum review of scenario/test quality | `/brewcode:e2e review "focus on assertion quality"` |
-| Refresh E2E rules (frameworks update, new patterns) | `/brewcode:e2e rules "add async messaging patterns"` |
+| Quorum review of scenario and test quality | `/brewcode:e2e review "focus on assertion quality"` |
+| Refresh E2E rules (framework update, new patterns) | `/brewcode:e2e rules "add async messaging patterns"` |
 | Read-only infrastructure health check | `/brewcode:e2e status` |
 
-## Examples
+## Example
 
-**Java / JUnit 5 — full install and first scenario:**
 ```
 /brewcode:e2e install
 /brewcode:e2e create "user registration with email verification"
 /brewcode:e2e review
 ```
 
-**Python / pytest — scenario then rules update:**
-```
-/brewcode:e2e install
-/brewcode:e2e create "checkout flow with Stripe payments"
-/brewcode:e2e rules "add async messaging patterns"
-```
-
-**JS / Playwright — create then patch:**
-```
-/brewcode:e2e install
-/brewcode:e2e create "login and dashboard navigation"
-/brewcode:e2e update "add negative scenarios to auth"
-```
+`install` writes the agents, `.claude/e2e/e2e-rules.md` and `.claude/e2e/config.json`. `create` asks you to approve the scenario list, writes the tests and ends with a report: Detection, Results, Next Steps.
 
 ## Modes
 
 | Mode | What happens |
 |------|-------------|
-| `install` | 3-5 Explore agents analyze the project; `agent-creator` spawns 5 specialized e2e agents in 2 batches (after each batch you may opt in to a `brewtools:text-optimize` pass over that batch's agent files, invoked via `Skill` with `medium --allow-dirty`; it is skipped and reported when brewtools is unavailable); `e2e-architect` + WebSearch + `e2e-reviewer` generate rules; S6 writes `.claude/e2e/e2e-rules.md` and `.claude/e2e/config.json` |
-| `create` | Prerequisite check → define scope (from prompt or AskUser) → `scenario-analyst` writes BDD → 3-round review cycle → user approves → `automation-tester` writes tests → compile smoke check |
-| `update` | Locate existing artifacts → apply changes via the appropriate e2e agent → 3-round review cycle → summary with diff |
-| `review` | Split scope into parts → 3 parallel reviewers per part → quorum (2/3 consensus) → cross-agent re-check of confirmed findings → report with fix proposals |
-| `rules` | Load the live `.claude/e2e/e2e-rules.md` → WebSearch + `e2e-architect` analysis → `e2e-reviewer` validates the diff → rewrite that same file → optional condensed export to `.claude/rules/e2e-conventions.md` |
-| `status` | Read-only: count `e2e-*` agents, show config (stack, framework, paths), artifact counts, freshness — compares the stamped `content_version` against the running skill's `CONTENT_VERSION` (falls back to `version` vs `PLUGIN_VERSION` on a pre-`content_version` install) |
+| `install` | Explore agents analyze the project; `agent-creator` spawns 5 e2e agents in 2 batches; `e2e-architect` + WebSearch + `e2e-reviewer` generate rules |
+| `create` | Define scope, `scenario-analyst` writes BDD, 3-round review, you approve, `automation-tester` writes tests, compile smoke check |
+| `update` | Locate artifacts, apply changes via the matching e2e agent, 3-round review, summary with diff |
+| `review` | Split scope, 3 parallel reviewers per part, 2/3 quorum, cross-agent re-check, report with fix proposals |
+| `rules` | Load `.claude/e2e/e2e-rules.md`, WebSearch + architect analysis, reviewer validates the diff, rewrite the same file |
+| `status` | Read-only: agent count, config, artifact counts, freshness against the running skill's `CONTENT_VERSION` |
 
-Those six are the entire mode set. `detect-mode.sh` rejects `uninstall`, `purge`, `upgrade`, `enable` and `disable` with `ERROR:e2e has no <verb> mode` and exits 1. With no mode word at all, the whole text stays the prompt and the mode defaults to `status` when 3 or more `e2e-*` agents exist, otherwise `install`. A tie between modes resolves to `status`, or between two mutating modes to the keyword that comes first. To remove the setup, delete `.claude/agents/e2e-*.md` and `.claude/e2e/` by hand.
-
-## Rules live in your repo
-
-`install` step S6 merges the plugin's base rules with the `[WEB]` and `[PROJECT]` findings accepted in S5 and writes the result to **`.claude/e2e/e2e-rules.md`**. `config.rulesPath` points there, every generated `e2e-*` agent loads that path before doing anything, and `rules` mode reads and rewrites the same file — nothing is ever written back into the plugin.
-
-<Callout type="tip" title="Why a repo-relative path, not an absolute one">
-A generated `.claude/agents/e2e-*.md` is not plugin-owned: `${CLAUDE_PLUGIN_ROOT}` is not substituted inside it and no `*_PLUGIN_ROOT` variable exists there, so a plugin path in an agent resolves to nothing. A resolved absolute cache path is no better — `~/.claude/plugins/cache/claude-brewcode/brewcode/<version>/…` embeds the plugin version and dies at the next update. A repo-relative file survives plugin updates, uninstall, clone and CI. The agents stop with a clear message if it is missing, and so does `rules` mode: it never falls back to the plugin copy, because the agents cannot read it.
-</Callout>
+Those six are the entire mode set. To remove the setup, delete `.claude/agents/e2e-*.md` and `.claude/e2e/` by hand.
 
 ## Flow
 
 <Steps>
-  <li>
-    <div>
-      <strong>Parse arguments</strong>
-      <p>The prompt is piped to <code>detect-mode.sh -</code> on stdin through a quoted heredoc, so the shell never parses it. The script extracts MODE and optional PROMPT: an explicit mode word anywhere wins, else EN/RU keywords decide. The skill prints a <code>PLAN</code> block before the first action. An unsupported verb prints <code>ERROR:</code> and exits 1; the skill reports that line verbatim and stops, never falling back to <code>install</code>.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Load mode reference</strong>
-      <p>Reads <code>references/mode-&#123;MODE&#125;.md</code> plus the plugin's baseline <code>e2e-rules.md</code> and <code>e2e-architecture.md</code>. Missing reference = hard stop with a clear message.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Prerequisite check</strong>
-      <p>All modes except `install` and `status` verify at least 3 `e2e-*` agents exist in `.claude/agents/`. If not, the skill instructs you to run `install` first.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Discovery phase</strong>
-      <p>3-5 Explore agents analyze the target area in parallel — source structure, existing tests, framework conventions, API contracts.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Core work — BDD to autotest</strong>
-      <p>`scenario-analyst` produces Gherkin scenarios; `automation-tester` converts approved scenarios to framework-specific autotests; `e2e-architect` enforces the layered test architecture (Test Classes → Steps → Verification → Data → Support → Config).</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Review cycle (max 3 rounds)</strong>
-      <p>A different agent reviews every artifact against the rules. Confirmed findings (2/3 quorum in review mode) get cross-checked before fixing. After 3 rounds, unresolved issues surface to you.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>User approval + summary</strong>
-      <p>`AskUserQuestion` at every key decision point (scope, scenario list, final diff). Output: structured report with Detection → Results → Next Steps.</p>
-    </div>
-  </li>
+  <li><div><strong>Parse arguments</strong><p>The prompt goes to `detect-mode.sh -` on stdin; an explicit mode word wins, else EN/RU keywords decide. A `PLAN` block is printed first. An unsupported verb prints `ERROR:` and stops.</p></div></li>
+  <li><div><strong>Load references</strong><p>Reads <code>references/mode-&#123;MODE&#125;.md</code> plus the baseline `e2e-rules.md` and `e2e-architecture.md`. A missing reference is a hard stop.</p></div></li>
+  <li><div><strong>Check prerequisites</strong><p>Every mode except `install` and `status` needs at least 3 `e2e-*` agents in `.claude/agents/`.</p></div></li>
+  <li><div><strong>Discover and build</strong><p>3-5 Explore agents map the target area; `scenario-analyst` writes Gherkin, `automation-tester` converts approved scenarios to autotests.</p></div></li>
+  <li><div><strong>Review, max 3 rounds</strong><p>A different agent reviews every artifact. After the third round, unresolved issues go to you through `AskUserQuestion`.</p></div></li>
 </Steps>
 
 ## Delegation
 
-<Callout type="caution" title="Why the rule exists">
-  A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct it, and it usually drifts off-target.
-</Callout>
+Each fan-out is one subagent per bounded unit (one feature's tests or one review part), all spawned in one message with the six-field brief. Full table: [Delegation](/brewcode/skills/#delegation).
 
-One subagent = **ONE bounded unit** — here, ONE feature's tests or ONE review part: roughly 5 files, roughly 10 steps. "Write the whole suite" is never one task; it is split into N tasks fired in **ONE message**. In `review` mode, an oversized part is split before the reviewers go out, not handed whole to one agent.
+<Spoiler id="rules-live-in-your-repo" title="Rules live in your repo">
 
-Every spawn prompt carries six fields. A bare one-line task is never enough:
+`install` step S6 merges the plugin's base rules with the `[WEB]` and `[PROJECT]` findings accepted in S5 and writes **`.claude/e2e/e2e-rules.md`**. `config.rulesPath` points there, every generated `e2e-*` agent loads it before doing anything, and `rules` mode rewrites the same file. Nothing is written back into the plugin.
 
-| Field | Content |
-|-------|---------|
-| GOAL | the overall task and why it exists — the point beyond the file edit |
-| ROLE | what this agent owns; what it must NOT touch |
-| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
-| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what THIS agent needs |
-| CONSUMER | who or what uses the result next, and the shape it must fit |
-| DONE | acceptance criteria + the exact report shape you want back |
+A generated `.claude/agents/e2e-*.md` is not plugin-owned, so `${CLAUDE_PLUGIN_ROOT}` is not substituted inside it, and an absolute cache path embeds the plugin version and dies at the next update. A repo-relative file survives updates, uninstall, clone and CI. Agents and `rules` mode stop if it is missing and never fall back to the plugin copy.
 
-A feature agent is told that `install` already landed the framework, the `e2e-*` roster and `e2e-rules.md` (follow them, do not re-decide), that the BDD scenarios are approved, and that siblings own the shared page objects — reuse, never redefine. Its CONSUMER is the review cycle plus a green CI run, so it reports blockers instead of quarantining a test. The same brief lives in every `references/mode-*.md` file, so each mode's own fan-out inherits it.
+</Spoiler>
 
-Every spawn brief also tells the agent, verbatim, to find the closest well-built existing test before writing a new one and take its principles — additive to the rules above, never instead.
+<Spoiler id="technical-details" title="Technical details">
 
-<details>
-<summary>Internals</summary>
+**Mode detection.** Keywords scored by `detect-mode.sh`: `set up`, `add tests`, `sync tests`, `status`, `create`, `update`, `review`, `rules`. A tie resolves to `status`, or between two mutating modes to the keyword that comes first. Rejected verbs print `ERROR:e2e has no <verb> mode` and exit 1.
+
+**Tools.** Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion, Skill, WebSearch, WebFetch. After each `install` batch you may opt in to a `brewtools:text-optimize` pass (`medium --allow-dirty`); it is skipped and reported when brewtools is unavailable. `rules` mode can export a condensed copy to `.claude/rules/e2e-conventions.md`.
 
 **Agents created by `install`**
 
 | Agent | Model | Role |
 |-------|-------|------|
 | `e2e-architect` | opus | Defines patterns, creates rules and conventions |
-| `e2e-scenario-analyst` | opus | Writes detailed BDD scenarios from system analysis |
+| `e2e-scenario-analyst` | opus | Writes BDD scenarios from system analysis |
 | `e2e-automation-tester` | opus | Converts approved scenarios to autotests |
 | `e2e-manual-tester` | sonnet | Verifies system via UI/API, finds exploratory bugs |
-| `e2e-reviewer` | opus | READ-ONLY: reviews quality, rule compliance, coverage |
+| `e2e-reviewer` | opus | READ-ONLY: quality, rule compliance, coverage |
 
-Each one opens with a Rules Loading Protocol: read `.claude/e2e/e2e-rules.md` (project-relative), stop immediately if it is not there. Each also carries a permanent Etalon-first line in its Domain Instructions: before writing a test or page object, find the closest well-built existing one in this repo and take its principles — additive to `e2e-rules.md` and project conventions, never a replacement.
+Each agent opens with a Rules Loading Protocol (read `.claude/e2e/e2e-rules.md`, stop if absent) and an Etalon-first line: find the closest well-built existing test in the repo and take its principles. Agents, `config.json` and `e2e-rules.md` carry a metadata stamp (`doc_type`, `version`, `content_version`, `generated_by`, `last_updated`); `status` compares `content_version` for staleness.
 
-Every generated agent, plus `config.json` and `e2e-rules.md`, closes with a standard metadata stamp — `doc_type`, `version`, `content_version`, `generated_by`, `last_updated`. `content_version` is the field `status` and `rules` actually compare for staleness; earlier installs stamped `version` only, so a content change to this skill could never be detected as stale.
+**Test architecture layers:** Test Classes, Steps, Verification, Data, Support, Config.
 
-**Test architecture layers (stack-agnostic)**
-
-| Layer | Purpose | Example |
-|-------|---------|---------|
-| Test Classes | Domain-specific, parameterized | `CheckoutE2ETest extends BasePaymentE2E` |
-| Steps | Business-language reusable steps | `givenUserIsAuthorized("admin")` |
-| Verification | Strict assertion steps | `thenOrderStatusIs(COMPLETED)` |
-| Data | Test data generation via API | `createTestUser(role: "buyer")` |
-| Support | Technical integration utilities | `KafkaSupport`, `DatabaseSupport` |
-| Config | Environment settings | Credentials, endpoints, timeouts |
-
-**Quorum rules (review mode)**
-
-| Agreement | Classification |
-|-----------|---------------|
-| 2-3 reviewers flag same issue | Confirmed finding — fixed |
-| Only 1 reviewer flags | Unconfirmed — noted, not auto-fixed |
-| All 3 agree clean | Clean |
+**Quorum (review mode):** 2-3 reviewers flag the same issue = confirmed and fixed; 1 reviewer = unconfirmed, noted, not auto-fixed; all 3 clean = clean.
 
 **Error handling**
 
 | Condition | Action |
 |-----------|--------|
-| Unsupported verb (`uninstall`, `purge`, `upgrade`, `enable`, `disable`) | `detect-mode.sh` exits 1; report the `ERROR:` line verbatim and stop |
-| `.claude/e2e/e2e-rules.md` missing | Stop — "Run `/brewcode:e2e install` first". Never falls back to the plugin's baseline copy |
-| Agents missing (non-install/status) | Stop — "Run `/brewcode:e2e install` first" |
-| Config missing (non-install/status) | Stop — "Run `/brewcode:e2e install` first" |
+| Unsupported verb | `detect-mode.sh` exits 1; the `ERROR:` line is reported verbatim |
+| Rules file, agents or config missing | Stop: "Run `/brewcode:e2e install` first" |
 | Review cycle limit (3) reached | `AskUserQuestion` with remaining issues |
 | Compilation fails after fix | Report to user, suggest manual intervention |
-| Agent refuses task | Re-assign to colleague, max 2 retries |
+| Agent refuses task | Re-assign to a colleague, max 2 retries |
 
-</details>
+</Spoiler>
 
 <CardGrid>
   <Card title="teams-setup skill" icon="robot" href="/brewcode/skills/teams-setup/">
-    Companion skill for spawning and coordinating multi-agent teams — same orchestration patterns used by e2e internally.
+    Companion skill for spawning and coordinating multi-agent teams.
   </Card>
-  <Card title="Source on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/e2e">
-    SKILL.md, mode reference files, detect-mode.sh, and architecture reference.
+  <Card title="GitHub source" icon="github" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/e2e">
+    SKILL.md, mode references, detect-mode.sh, architecture reference.
   </Card>
   <Card title="brewcode overview" icon="rocket" href="/brewcode/overview/">
-    Full plugin overview — all 9 skills, agents, and hooks in one place.
+    All 9 skills, agents and hooks in one place.
   </Card>
 </CardGrid>
 

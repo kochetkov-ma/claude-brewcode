@@ -13,9 +13,16 @@ interface Props {
 }
 
 const { title, description, headings = [], currentSlug = '' } = Astro.props;
+
+const [first = '', second = ''] = currentSlug.split('/');
+const cap = (v: string) => v.charAt(0).toUpperCase() + v.slice(1);
+const kind = first === 'mods' ? 'mod' : ['brewcode', 'brewtools', 'brewdoc', 'brewui'].includes(first) ? 'plugin' : 'guide';
+const eyebrowLabel = kind === 'mod' ? 'MOD' : kind === 'plugin' ? 'PLUGIN' : 'GUIDE';
+const trail = kind === 'mod' ? ['brewcode mods'] : kind === 'plugin' ? [first, ...(['skills', 'agents'].includes(second) ? [cap(second)] : [])] : [];
 ---
 
 <BaseLayout title={title} description={description}>
+  <script is:inline src="/sidebar-init.js"></script>
   <div class="drawer lg:drawer-open">
     <input id="docs-drawer" type="checkbox" class="drawer-toggle" />
 
@@ -26,24 +33,18 @@ const { title, description, headings = [], currentSlug = '' } = Astro.props;
       <main id="main-content" class="flex-1 flex justify-center" role="main">
         <div class="flex w-full max-w-[90rem] px-4 lg:px-8">
           <!-- Article content -->
-          <article class="prose flex-1 max-w-5xl py-8 min-w-0" data-pagefind-body>
-            {/*
-              Pagefind ranking tuning:
-              - Title gets weight 10 (max) AND is duplicated 30× — this
-                pushes BM25 term-frequency well past the saturation knee.
-              - Body content is wrapped in a weight 0.2 scope, so prose
-                mentions of common words ("start", "plan", "spec") count
-                for 1/5 of their natural weight. This makes the title
-                boost dominate by ~50× effective ratio.
-              - We deliberately do NOT set `data-pagefind-meta="title"` —
-                that would overwrite the page title Pagefind derives from
-                <h1> with our duplicated string.
-              - `sr-only` hides the title boost visually; `display: contents`
-                on the body wrapper keeps layout / prose styles unchanged.
-            */}
+          <article class="prose flex-1 max-w-5xl py-8 min-w-0" data-kind={kind} data-pagefind-body>
+            {/* Pagefind: title x30 at weight 10 (sr-only), body at 0.2 so the title dominates; no data-pagefind-meta=title (it would overwrite the h1 title) */}
             <span class="sr-only" aria-hidden="true">
               <span data-pagefind-weight="10">{Array(30).fill(title).join(' ')}</span>
             </span>
+            <p class="eyebrow not-prose" data-pagefind-ignore>
+              <span class="eyebrow-chip">{eyebrowLabel}</span>
+              {trail.length > 0 && <span>{trail.join(' / ')}</span>}
+            </p>
+            <div data-pagefind-ignore>
+              <TableOfContents headings={headings} variant="inline" />
+            </div>
             <div data-pagefind-weight="0.2" style="display: contents">
               <slot />
             </div>

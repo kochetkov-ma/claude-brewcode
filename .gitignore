@@ -93,3 +93,6 @@ brewmod-*/.state/
 !/.claude/skills/eurodns/
 /.claude/skills/eurodns/*
 !/.claude/skills/eurodns/LICENSE
+
+# Demo GIFs copied from assets/demos at build time
+/web/docs/public/demos/

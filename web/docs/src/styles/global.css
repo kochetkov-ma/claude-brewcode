@@ -18,6 +18,8 @@
   --pagefind-ui-border-width: 1px;
   --pagefind-ui-border-radius: 8px;
   --pagefind-ui-scale: 1;
+  --mod: #86C98B;
+  --mod-light: #B0E0B4;
 }
 
 @media (max-width: 639px) {
@@ -27,7 +29,7 @@
 }
 
 .prose {
-  line-height: 1.85;
+  line-height: 1.7;
   --tw-prose-body: #D6D3D1;
   --tw-prose-headings: #D6D3D1;
   --tw-prose-links: #EBBB40;
@@ -48,6 +50,7 @@
 
 .prose code:not(pre code) {
   @apply bg-base-300 px-1.5 py-0.5 rounded text-xs font-mono font-normal;
+  overflow-wrap: anywhere;
 }
 
 .prose code:not(pre code)::before,
@@ -82,7 +85,7 @@
 
 [data-tab-panel] h3 {
   color: #E7E5E4;
-  @apply border-l-4 border-[#D4A85C]/60 pl-3 pt-2 mt-8 first:mt-0;
+  @apply border-t border-[#D4A85C]/40 pt-3 mt-8 first:mt-0;
 }
 
 .prose th {
@@ -104,7 +107,7 @@
 }
 
 .alert {
-  @apply border-l-4;
+  @apply border;
   grid-template-columns: auto minmax(0, 1fr);
   min-width: 0;
 }
@@ -119,25 +122,25 @@
 
 .alert-info {
   background-color: rgba(235, 187, 64, 0.15) !important;
-  border-left-color: #FAE96F;
+  border-color: rgba(250, 233, 111, 0.45);
   color: #D6D3D1 !important;
 }
 
 .alert-success {
   background-color: rgba(100, 156, 103, 0.28) !important;
-  border-left-color: #649c67;
+  border-color: rgba(100, 156, 103, 0.7);
   color: #D6D3D1 !important;
 }
 
 .alert-warning {
   background-color: rgba(223, 141, 3, 0.28) !important;
-  border-left-color: #DF8D03;
+  border-color: rgba(223, 141, 3, 0.7);
   color: #D6D3D1 !important;
 }
 
 .alert-error {
   background-color: rgba(207, 102, 121, 0.28) !important;
-  border-left-color: #cf6679;
+  border-color: rgba(207, 102, 121, 0.7);
   color: #D6D3D1 !important;
 }
 
@@ -145,4 +148,139 @@
   background-color: rgba(255, 255, 255, 0.15) !important;
   color: inherit !important;
   @apply px-1.5 py-0.5 rounded text-xs font-mono;
+}
+
+/* Readability: measure, headings, lead, tables */
+.prose > :is(p, ul, ol, blockquote),
+.prose > div > :is(p, ul, ol, blockquote) {
+  max-width: 72ch;
+}
+
+.prose h2 {
+  margin-top: 2.5rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid #3D3826;
+  scroll-margin-top: 5rem;
+}
+
+.prose h3 {
+  margin-top: 1.75rem;
+  scroll-margin-top: 5rem;
+}
+
+.prose :is(h1, h4, details[id]) {
+  scroll-margin-top: 5rem;
+}
+
+.prose h1 + p {
+  font-size: 1.125rem;
+  color: #E7E5E4;
+}
+
+.prose td {
+  vertical-align: top;
+}
+
+.prose tbody tr:nth-child(even) {
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+/* Media cap for hub and mod GIFs */
+.prose p[align='center'] img {
+  width: auto;
+  max-width: 100%;
+  max-height: min(55vh, 480px);
+  margin-inline: auto;
+  object-fit: contain;
+}
+
+/* Eyebrow above h1 */
+.eyebrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(231, 229, 228, 0.7);
+}
+
+.eyebrow-chip {
+  padding: 0 0.5rem;
+  border-radius: 0.25rem;
+  font-weight: 600;
+  background-color: #272318;
+  color: #E7E5E4;
+}
+
+[data-kind='mod'] .eyebrow-chip {
+  background-color: var(--mod);
+  color: #141414;
+}
+
+.toc-link.toc-active {
+  color: #EBBB40;
+}
+
+body:has([data-kind='mod']) .toc-link.toc-active {
+  color: var(--mod);
+}
+
+/* Mod pages: green identity */
+[data-kind='mod'] {
+  --tw-prose-links: var(--mod);
+  --tw-prose-code: var(--mod);
+}
+
+[data-kind='mod'] h1 {
+  color: var(--mod-light);
+}
+
+[data-kind='mod'] h2 {
+  border-bottom-color: rgba(134, 201, 139, 0.3);
+}
+
+[data-kind='mod'] th {
+  color: var(--mod);
+}
+
+[data-kind='mod'] details.spoiler > summary:focus-visible {
+  outline: 2px solid var(--mod);
+  outline-offset: 2px;
+}
+
+[data-kind='mod'] .alert-info {
+  border-color: var(--mod);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    scroll-behavior: auto !important;
+    transition: none !important;
+  }
+}
+
+/* daisyUI .menu .active overrides utility colors */
+#sidebar-nav li > a.active.text-mod {
+  color: var(--mod);
+  background-color: rgba(134, 201, 139, 0.15);
+}
+
+#sidebar-nav li > a.active.text-primary {
+  color: #EBBB40;
+}
+
+/* Desktop sidebar collapse: html[data-sidebar] set by public/sidebar-init.js + Header toggle */
+@media (min-width: 1024px) {
+  html[data-sidebar="collapsed"] .drawer > .drawer-side { display: none; }
+}
+#sidebar-toggle[aria-expanded="true"] svg[data-icon="open"],
+#sidebar-toggle[aria-expanded="false"] svg[data-icon="close"] { display: none; }
+
+/* Desktop: nav scrolls on its own inside the sticky 100vh drawer-side (p-4 top+bottom = 2rem) */
+@media (min-width: 1024px) {
+  #sidebar-nav { max-height: calc(100vh - 2rem); max-height: calc(100dvh - 2rem); overscroll-behavior: contain; }
 }

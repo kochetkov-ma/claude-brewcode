@@ -2,7 +2,7 @@
 
 > verified_on: 2.1.300
 
-Recipes for two brewcode mods and any other mod. `proven` = validate + `plugin test` + tsc rc 0 on 2.1.300 (`X`) and/or live (`S`, `AB`, `TTY`, `R3`, `W`, `T11`, `F1`, `T6P`); none open. Legend and event/noun facts: `mods-api.md`; test stubs: `mods-testing.md`.
+Recipes for two brewcode mods and any other mod. `proven` = validate + `plugin test` + tsc rc 0 on 2.1.300 (`X`) and/or live (`S`, `AB`, `TTY`, `R3`, `W`, `T11`, `F1`, `T6P`, `PE`, `PH`, `IPH`); none open. Legend and event/noun facts: `mods-api.md`; test stubs: `mods-testing.md`.
 
 ## Recipe Index
 
@@ -18,6 +18,8 @@ Recipes for two brewcode mods and any other mod. `proven` = validate + `plugin t
 | 8 | fail-open / `.catch` guards | proven (V, X); R:78-79 | both |
 | 9 | defaults via `$.fs` from `$.plugin.root`, project root | proven (S, X) | placeholders |
 | 10 | `rm` after realpath check | unit-proven (X) | placeholders |
+| 11 | status-first slash command + own `/config` option + model hand-off + mod tool (no-prompt save) | shipped + live-proven in placeholders on 2.1.300 (IPH; probes PE, PH); Team seat: `config.set` only | plan-effort (status/option), placeholders (all) |
+| 12 | hints: toast vs status, key hint on every interactive affordance (sequence live-proven key by key), band auto-show | live (PE Q5, PH 5, 8, IPH) | placeholders |
 
 ## 1. Bundled Command Hook For Context Injection
 
@@ -251,3 +253,54 @@ await $.process.run(['rm', '--', target.realPath])
 ```
 
 Own-layer files only: never defaults, never legacy paths. Missing path rejects `ENOENT` (T:3364); CLI-only `$.process` does not exist on remote surfaces.
+
+## 11. Status-First Command, Own Config, Model Hand-Off, Mod Tool
+
+Goal: `/<mod>` with no args prints the state and the next step; a word changes the mod's own `/config` option; free text goes to the model, which asks once and saves through a mod tool (no permission prompt). Probed on 2.1.300 with throwaway mods (PE, PH), then shipped in `brewmod-placeholders` and re-proven live in the real mod (IPH: tmux, `--permission-mode default`, save, change and remove each through one confirm, PNG per step).
+
+| Part | Do | src |
+|------|----|-----|
+| register | `$.command.register({ name, description, argumentHint })` in the one `session.start` hook, `.catch(() => undefined)`; `name` = letters, digits, `_`, `-`, <= 64, no colon; idempotent (re-fires after every reload) | T:1919-1928; PE Q2 |
+| status first | no args -> `{ text }` block: first line plain (engine glues `<plugin>: ` to it, never repeat the name), table or aligned rows in a fence, last lines = how to change and how to ask (`/x <level>`, `/x <what you want>`) | PE Q4; PH 5c |
+| own option | key = `row.key` found in `await $.config.list()` (`endsWith('.<field>')` + `provider` plugin starts with `$.plugin.name`), never hardcoded; `const r = await $.config.set({ key, value })` -> `{ value }` or `{ deny }` (out-of-options text: `takes one of: medium, high, xhigh, max`): answer `deny` verbatim | PE Q1, Q2 |
+| after a set | module reloads (locals reset, `session.start` re-fires, engine row `options changed - reloaded`); the handler's closure and `options` still hold the OLD value: reply `old -> new (applies from the next request)`, read the new value from `$.config.list()`; keep what status needs in `$.state` (contract file) or print `n/a until the next request`; command hooks see `CLAUDE_PLUGIN_OPTION_<KEY>` from the next prompt and need their own default | PE Q2 |
+| headless | `-p`: no plugin rows, `set` throws: wrap in `try/catch` (or `rows.find`) and answer text "run it in an interactive session or edit pluginConfigs"; do not rewrite shared settings.json via `$.fs.write` (untested race) | PE Q1, Q3 |
+| model hand-off | first word not a subcommand -> `{ text: 'asking Claude ...' }` + `$.clock.after(250, () => { void $.prompt.submit({ text, asUser: true }) })`; a synchronous `$.prompt.submit` in `command.run` is REFUSED (`called from a command.run hook, it would wait on the turn this hook is holding; submit from a later event`); the mod's own `prompt.submit` hook is skipped for it (`re-entry`) | PH Q1 |
+| submit forms | framed `{ text }` = model reads `The <plugin> plugin sent a message: ...` (+180 chars); `asUser: true` = bare text as the person's words; 4,000-char text intact both ways; the person sees `Prompt from the <plugin> plugin` either way; typed mid-turn the engine queues the slash command itself; `{ context }` from `command.run` starts no turn; fallback `$.prompt.fill({ text })` (person presses Enter; plain user text) | PH Q1a-e, Q2, Q3 |
+| dialog | ONE `AskUserQuestion` confirm, drafted from the request: options "Save as drafted (Recommended)" / "Change it" (Other = new name or text, apply without asking again); worked 3/3 on haiku (PH) and 3/3 on Opus 5.5 in the shipped mod: save, change, remove, each ONE confirm then the tool call (IPH 02-03, 14-17); a two-question Name/Text free-text dialog failed (haiku read "Other" as a style note, refused to save); tell the model what the name must not contain (a `++` prefix ended up in a file name) | PH Q4, findings 2-3; IPH |
+| mod tool | `$.tool.register({ name, description, inputSchema, isDeferred: false })` per tool in `session.start` -> `mcp__<plugin>__<name>`; ONE `on('tool.call', { tool: /^mcp__<plugin>__/ })` serves them all (shipped: `list_placeholders`, `save_placeholder`, `remove_placeholder`, dispatch on `e.tool`), validates input in code, `$.fs.write`s, returns `{ result, text }`; no prompt in `default` when the hook answers; read input from `e.<field>` (`e.name`, `e.text`), NOT `e.input`: a throwing hook falls to the MCP path and DOES prompt; the model's own Write into `.claude/` prompts in `default` (protected path). Other permission modes and Team orgs untested | PH 4a, 4b; IPH 03, 15, 17 (save, change, remove: no permission prompt in `default`) |
+
+```ts
+on('command.run', { command: 'mymod' }, async ($, e) => {
+  const word = e.args.trim().split(/\s+/)[0] ?? ''
+  if (word === '') return { text: await status($) }
+  if (isLevel(word)) return { text: await setLevel($, word) } // config.list -> config.set, try/catch, deny verbatim
+  $.clock.after(250, () => { void $.prompt.submit({ text: handoff(e.args), asUser: true }) })
+  return { text: 'asking Claude to draft it with you' }
+}).catch(($, e, next) => (next.called ? next(e) : { text: 'mymod failed' }))
+```
+
+Team seat: `command.run` and `$.config.set` (own row, reload, next status) ran there (PE Q6); deferred `$.prompt.submit` and the mod tool there are NOT run: live-test before claiming it. Floor: 2.1.300 verified; 2.1.287 only proves the API validates, own-row set there unverified (PE Q7).
+
+## 12. Hints: Toast, Status, Key Hints, Band Auto-Show
+
+| Need | Use | src |
+|------|-----|-----|
+| one-shot "mode raised" note | `$.ui.toast(text, { timeoutMs: 5000 })` on the first event of a visit (module flag, reset when it ends; worst case one repeat after a reload); dim footer line right, ~5 s, no transcript row | PE Q5b |
+| persistent state | `$.ui.status(text)`: yellow `⚠ <plugin>: ...` row until cleared; keep it opt-in, toast the default | PE Q5a |
+| mode / plan signal | NOT `PromptHint` `e.props.hint` (lags one Shift+Tab press), not `SessionMode`: state file (#2) | PE Q5c |
+| discoverability of the command | one dim row at the band foot (`add or change: /<mod>`) plus the status block; an extra typeahead row on every bare token is skipped (acceptance untested) | PH 5a-5c |
+| band body | auto-show it (3 lines per token, `... +K`) while 1-2 tokens; from 3 collapse and show a `Button` | PH 8b |
+| key hint | every interactive affordance carries its key sequence in the label or a dim row: `[ Show text  ctrl+x · tab · enter ]` (label flips to `Hide text ...` when open); hard rule in `mods-lifecycle.md`. `hotkey="t"` is an optional extra after the same focus (label then reads `ctrl+x tab, then t`), never the only path. Sequence proven below | PH 8a, 8c; IPH |
+
+Proven band toggle sequence (2.1.300, tmux, one key then capture; Button label `[ Show text  ctrl+x · tab · enter ]`):
+
+| Step | Key | Observed | src |
+|------|-----|----------|-----|
+| 1 | type tokens | draft holds them, band lists them, Button collapsed | IPH 05 |
+| 2 | `ctrl+x` | chord prefix, no visible change; cancels after 3 s (`ctrl+x cancelled - no next key within 3s`): send `Tab` within 3 s | IPH 06; report.md (message text not in a capture) |
+| 3 | `Tab` | Button focused (reverse video); draft untouched | IPH 07 |
+| 4 | `Enter` | band expands, label `Hide text`; prompt NOT submitted | IPH 08 |
+| 5 | `Enter` | band collapses, label `Show text`; Button stays focused | IPH 09 |
+| 6 | `Esc` | focus back to the prompt (reverse video gone); next typed char lands in the draft | IPH 10, 11 |
+| - | `Tab` while a typeahead row is open | focus moves to the Button; typeahead NOT accepted (draft unchanged, row stays). Accept typeahead with `Tab` only while the prompt owns focus, never after `ctrl+x` | IPH 12, 13 |

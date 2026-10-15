@@ -1,0 +1,36 @@
+---
+import { getCollection } from 'astro:content';
+import Card from './Card.astro';
+import { mods, assertModPages } from '../../utils/mods';
+
+interface Props {
+  variant?: 'hero' | 'strip';
+}
+
+const { variant = 'hero' } = Astro.props;
+assertModPages((await getCollection('docs')).map((e) => e.id));
+---
+
+{variant === 'hero' ? (
+  <section aria-labelledby="mod-promo-heading" class="not-prose my-8 rounded-lg border border-mod/30 bg-mod/10 p-5">
+    <h2 id="mod-promo-heading" class="!mt-0 !pt-0 !border-0 font-headline text-xl font-semibold text-mod-light">brewcode mods</h2>
+    <p class="mt-1 mb-4 text-sm text-base-content/70">Small optional add-ons for Claude Code: one feature each, one command to install.</p>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {mods.map((m) => (
+        <Card variant="mod" size="lg" icon={m.icon} title={m.name} href={`/mods/${m.slug}/`} meta={`Try: ${m.try}`}>
+          <p>{m.pitch}</p>
+          <p class="mt-1 text-xs text-base-content/60">Requires {m.requires}</p>
+        </Card>
+      ))}
+    </div>
+    <p class="mt-4 mb-0 text-sm"><a href="/mods/overview/" class="link text-mod">All mods</a></p>
+  </section>
+) : (
+  <p class="not-prose my-4 text-sm text-base-content/70">
+    Mods (optional add-ons):
+    {mods.map((m, i) => (
+      <>{i > 0 ? ' · ' : ' '}<a href={`/mods/${m.slug}/`} class="link text-mod">{m.name}</a></>
+    ))}
+    {' · '}<a href="/mods/overview/" class="link text-mod">all mods</a>
+  </p>
+)}

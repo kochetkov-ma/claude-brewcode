@@ -1,0 +1,58 @@
+/* Claude Code terminal palette (2.1.300 dark, as lifted in the mods mockups) */
+:root { --bg: #161616; --cc-bg: #1C1D20; --cc-chrome: #2A2B2F; --cc-text: #F5F5F3; --cc-body: #D4D2CC; --cc-dim: #9C9CA1;
+  --cc-rule: #6F7075; --cc-band: #37383C; --cc-clawd: #D77757; --cc-ok: #4EBA65; --cc-gold: #EBBB40; --cc-gold-hi: #FAE96F;
+  --cc-warn: #F29A12; --cc-err: #D88291; --rows: 26; }
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); }
+body { width: 800px; padding: 10px 10px 8px; font: 400 13px/19px "JetBrains Mono", Menlo, ui-monospace, monospace;
+  font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; color: var(--cc-body); }
+#win { width: 780px; border-radius: 10px; overflow: hidden; background: var(--cc-bg);
+  box-shadow: 0 0 0 1px rgba(255,255,255,.08), 0 18px 40px -20px rgba(0,0,0,.85); }
+#tb { height: 30px; background: var(--cc-chrome); display: flex; align-items: center; gap: 7px; padding: 0 12px; position: relative; }
+#tb > i { width: 11px; height: 11px; border-radius: 50%; display: block; }
+#tb > i:nth-child(1) { background: #FF5F57; } #tb > i:nth-child(2) { background: #FEBC2E; } #tb > i:nth-child(3) { background: #28C840; }
+#ttl { position: absolute; left: 0; right: 0; text-align: center; font: 500 12px "Work Sans", system-ui, sans-serif; color: #B9B9BE; pointer-events: none; }
+#chap { position: absolute; right: 12px; font: 500 11px "JetBrains Mono", monospace; color: var(--cc-dim); white-space: nowrap; }
+#chap i { font-style: normal; color: var(--cc-gold); font-weight: 700; }
+#chip { position: absolute; right: 190px; font: 700 11px "JetBrains Mono", monospace; color: #141414; background: var(--cc-gold);
+  border-radius: 9px; padding: 1px 8px; white-space: nowrap; }
+#prog { position: relative; height: 3px; background: rgba(255,255,255,.08); overflow: hidden; }
+#fill { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--cc-gold); box-shadow: 0 0 8px rgba(235,187,64,.5); }
+.gap { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--cc-bg); }
+#term { position: relative; padding: 10px 18px 8px; min-height: calc((var(--rows) + 5) * 19px + 18px); }
+#stage { display: flex; flex-direction: column; height: calc(var(--rows) * 19px); overflow: hidden; }
+.row { height: 19px; flex: none; white-space: pre; overflow: hidden; }
+.band { background: var(--cc-band); color: var(--cc-text); margin: 0 -18px; padding: 0 18px; }
+.rule { height: 19px; margin: 0 -18px; position: relative; }
+.rule::after { content: ""; position: absolute; left: 0; right: 0; top: 9px; height: 1px; background: var(--cc-rule); }
+#inp { position: relative; color: var(--cc-text); overflow: visible; }
+.cur { display: inline-block; width: 1ch; height: 16px; vertical-align: -3px; background: #E8E8E6; }
+.g1 { display: inline-block; width: 1ch; text-align: center; }
+.dim { color: var(--cc-dim); } .ok { color: var(--cc-ok); } .gold { color: var(--cc-gold); } .warn { color: var(--cc-warn); }
+.err { color: var(--cc-err); } .b { font-weight: 700; } .wt { color: var(--cc-text); } .clawd { color: var(--cc-clawd); font-size: 14.4px; letter-spacing: -.84px; }
+.hl { color: var(--cc-gold-hi); font-weight: 700; }
+#kbd { position: absolute; right: 0; top: -8px; height: 36px; display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+#kbd .key { display: flex; align-items: center; justify-content: center; min-width: 46px; height: 32px; padding: 0 12px; border-radius: 7px;
+  font: 700 17px "JetBrains Mono", monospace; color: var(--cc-gold-hi); background: linear-gradient(#4B4636, #302D22); border: 1px solid rgba(250,233,111,.75);
+  box-shadow: 0 4px 0 #8A6D1F, 0 8px 16px rgba(0,0,0,.5), 0 0 14px rgba(235,187,64,.35); }
+#kbd.press .key { transform: translateY(3px); box-shadow: 0 1px 0 #8A6D1F, 0 3px 8px rgba(0,0,0,.5), 0 0 22px rgba(250,233,111,.55); background: linear-gradient(#5A5238, #3A3626); }
+#kbd small { font: 600 12px "Work Sans", system-ui, sans-serif; color: #E7DDB0; padding: 3px 9px; border-radius: 8px; background: rgba(40,36,24,.96); border: 1px solid rgba(250,233,111,.3); }
+/* summary card overlay: tinted tiles with full thin borders, no side bars */
+#card { display: none; position: absolute; top: 10px; left: 18px; right: 18px; height: calc(var(--rows) * 19px); flex-direction: column; justify-content: center; gap: 18px;
+  background: var(--cc-bg); z-index: 3; }
+#card .ct { font: 600 15px "Work Sans", system-ui, sans-serif; color: var(--cc-gold); letter-spacing: .04em; text-transform: uppercase; text-align: center; }
+#card .tiles { display: flex; gap: 12px; }
+#card .tile { flex: 1; min-width: 0; padding: 14px 8px 12px; border-radius: 12px; text-align: center; background: rgba(235,187,64,.08); border: 1px solid rgba(235,187,64,.4); overflow: hidden; }
+#card .tile.ok { background: rgba(78,186,101,.09); border-color: rgba(78,186,101,.45); }
+#card .tile.warn { background: rgba(242,154,18,.09); border-color: rgba(242,154,18,.45); }
+#card .tl { font: 600 11px "Work Sans", system-ui, sans-serif; letter-spacing: .12em; text-transform: uppercase; color: var(--cc-dim); height: 16px; line-height: 16px; }
+#card .tv { font: 700 40px/52px "JetBrains Mono", monospace; color: var(--cc-gold-hi); white-space: nowrap; }
+#card .tile.ok .tv { color: #8FDB9F; } #card .tile.warn .tv { color: #FFB84D; }
+#card .ts { font: 400 11.5px "Work Sans", system-ui, sans-serif; color: var(--cc-dim); height: 16px; line-height: 16px; white-space: nowrap; overflow: hidden; }
+#card .verdict { display: flex; align-items: center; justify-content: center; gap: 14px; height: 56px; border-radius: 12px; background: rgba(78,186,101,.10); border: 1px solid rgba(78,186,101,.5); overflow: hidden; white-space: nowrap; }
+#card .verdict.warn { background: rgba(242,154,18,.10); border-color: rgba(242,154,18,.5); }
+#card .verdict span { font: 600 11px "Work Sans", system-ui, sans-serif; letter-spacing: .14em; text-transform: uppercase; color: var(--cc-dim); }
+#card .verdict b { font: 700 22px "JetBrains Mono", monospace; color: #8FDB9F; } #card .verdict.warn b { color: #FFB84D; }
+#card .note { text-align: center; color: var(--cc-dim); height: 19px; white-space: nowrap; overflow: hidden; }
+#cap { height: 34px; padding: 8px 0 0 4px; color: #D9D5CC; font: 400 15px/24px "Work Sans", system-ui, sans-serif; white-space: nowrap; overflow: hidden; }
+#cap::before { content: "›"; color: var(--cc-gold); font-weight: 500; margin-right: 9px; }

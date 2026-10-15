@@ -3,112 +3,86 @@ title: "Rules"
 description: "Syncs KNOWLEDGE.jsonl or session learnings to project rules. Use when updating rules, syncing knowledge, extracting learnings, organizing anti-patterns."
 order: 1106
 ---
-import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+import { Badge, Callout, Card, CardGrid, Steps, Spoiler, UpdateNotice } from '../../../../components/mdx';
 
 # rules <Badge variant="secondary" text="sonnet" />
 
-<Callout type="caution" title="Project scope only">Writes to project `.claude/rules/` only — never `~/.claude/rules/`.</Callout>
+Turns session learnings, `KNOWLEDGE.jsonl` files and review notes into table-row rules in `.claude/rules/`. Claude Code loads a rule without `paths:` at session start and a path-scoped rule when it works with a matching file.
+
+<Callout type="caution" title="Project scope only">Writes to project `.claude/rules/` only, never `~/.claude/rules/`.</Callout>
 
 ## Quick reference
 
 | Field | Value |
 |-------|-------|
 | Command | `/brewcode:rules` |
-| Input | free-form prompt, or empty |
+| Arguments | `[prompt] [status\|list\|create\|improve\|review]`, free-form EN/RU prompt or empty |
 | Model | sonnet |
-| Specialist | bc-rules-organizer (Agent) |
-| List source | `rules.sh list` (Bash) |
+| Specialist | `bc-rules-organizer` (create, improve); `rules.sh list` (Bash) |
 | Target dir | `.claude/rules/` (project only) |
 
 ## When to use
 
-- After fixing a bug: capture what went wrong and the correct pattern
-- After a code review: lock in the standards that were enforced
-- After a session with many learnings: extract the 5 most impactful findings
-- To inspect which rules already exist in the project
-- To import structured knowledge from a `KNOWLEDGE.jsonl` file
-
-## Examples
-
-```bash
-/brewcode:rules
-/brewcode:rules what is the current state of our rules
-/brewcode:rules capture what we learned fixing the auth bug
-/brewcode:rules path/to/KNOWLEDGE.jsonl add new entries
-/brewcode:rules list
-```
-
-## How it works
-
-<Steps>
-  <li><div><strong>Input gate</strong><p>Treats the whole of `$ARGUMENTS` as ONE free-form sentence — no keyword grammar, no argument parser. An empty prompt resolves to `status`; a non-empty one goes to mode selection; the menu appears only on an explicit request.</p></div></li>
-  <li><div><strong>Auto-mode select</strong><p>Prints the <code>PLAN — brewcode:rules</code> block before the first action (<code>INPUT</code>, <code>MODE</code> with the reason, <code>SCOPE</code>, <code>DO</code>, <code>RESULT</code>). Defaults to <code>status</code> for any "show me" intent or when no keyword hits; detects <code>create</code>, <code>improve</code>, or <code>review</code> from explicit cues; <code>list</code> only on an explicit "list". Prompts work in English or Russian. A `.jsonl` path or inline prompt is treated as a knowledge source passed to the organizer, not a separate mode.</p></div></li>
-  <li><div><strong>Menu (on request only)</strong><p>When the prompt explicitly asks for a menu, sends one AskUserQuestion with two questions. Q1 offers <strong>Status (rules)</strong> (recommended), <strong>Create new rules</strong>, <strong>Improve existing rules</strong> and <strong>Review rules</strong>. Q2 offers the variant: <strong>As chosen</strong> (recommended), <strong>Status (all: agents+rules+skills)</strong> or <strong>List (plain)</strong>. Cancel via Other stops the run.</p></div></li>
-  <li><div><strong>Dispatch</strong><p>Routes <code>create</code> and <code>improve</code> to bc-rules-organizer via the Agent tool, passing the prepared knowledge block and mode; <code>review</code> goes to the project's reviewer agent, else <code>general-purpose</code>. For `list` mode, runs `rules.sh list` directly via Bash instead. After a write, the skill invokes `brewtools:text-optimize` through `Skill` on the written rule files in medium mode (`medium --allow-dirty`) when brewtools is available, then runs `rules.sh validate`; otherwise the skip is reported.</p></div></li>
-  <li><div><strong>Real status</strong><p>For `status`, one Explore/Bash subagent collects and main assembles four blocks: <strong>Inventory</strong> (plugin / project / global counts, names, load path), <strong>State</strong> (enabled or disabled, legacy markers, model), <strong>Overlaps</strong> (same name across scopes, duplicate triggers) and <strong>Health</strong> (missing README or frontmatter, agents without a search tool, weak triggers, rules duplicated in CLAUDE.md). If bc-rules-organizer is unavailable, create and improve stop with: `brewcode:bc-rules-organizer not available — install brewcode plugin`.</p></div></li>
-  <li><div><strong>Final output</strong><p>Prints a summary of rules added, merged, or skipped, grouped by target file. Skipped entries include the dedup reason (similarity %, cross-file antonym, or CLAUDE.md duplicate).</p></div></li>
-</Steps>
+| Situation | Command |
+|-----------|---------|
+| Inspect which rules exist | `/brewcode:rules` |
+| After fixing a bug: capture the pattern | `/brewcode:rules capture what we learned fixing the auth bug` |
+| After a long session, before compaction | `/brewcode:rules add session learnings` |
+| Import structured knowledge | `/brewcode:rules path/to/KNOWLEDGE.jsonl add new entries` |
 
 ## Modes
 
 | Mode | Trigger | Execution |
 |------|---------|-----------|
-| `status` (default) | Empty prompt, no keyword hit, or any "show me" / "state" / health intent | One collector subagent gathers inventory, state, overlaps and health; main assembles the report |
-| `list` | Explicit "list" only | Runs `rules.sh list` directly — no agent spawned, no status assembly |
-| `create` | Conversational cue or menu selection | Creates missing rule files from plugin templates; accepts KNOWLEDGE.jsonl or inline prompt as knowledge source |
-| `improve` | Conversational cue or menu selection | Rewrites weak or redundant entries for clarity; accepts KNOWLEDGE.jsonl or inline prompt as knowledge source |
-| `review` | Conversational cue or menu selection | The project's reviewer agent (else `general-purpose`) reviews, double-checks findings and reports |
-| batch | Plural, "all" or several names/paths | Not a separate mode: one specialist spawn per item, all fired in one message |
+| `status` (default) | Empty prompt, no keyword hit, any "show me" / health intent | One collector subagent gathers inventory, state, overlaps, health |
+| `list` | Explicit "list" only | Runs `rules.sh list`, no agent |
+| `create` | Conversational cue or menu | Adds rows from a KNOWLEDGE.jsonl or inline knowledge source |
+| `improve` | Conversational cue or menu | Rewrites weak or redundant entries |
+| `review` | Conversational cue or menu | The project's reviewer agent (else `general-purpose`) audits and double-checks |
+
+Several names, "all" or a plural fan out to one specialist per item, all in one message.
 
 ## Delegation
 
-<Callout type="caution" title="Why the rule exists">
-  A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct it, and it usually drifts off-target.
-</Callout>
+`create` and `improve` spawn one `bc-rules-organizer` per target rule file, all in one message. The organizer edits only the target rule files, never `CLAUDE.md` or global rules. Full table: [Delegation](/brewcode/skills/#delegation).
 
-One subagent = **ONE bounded unit** — here, ONE rule file: roughly 5 files, roughly 10 steps. A batch is split into N tasks fired in **ONE message**, one `bc-rules-organizer` per target.
+<Spoiler id="technical-details" title="Flow, sources, output files, dedup, status, menu">
 
-Every spawn prompt carries six fields. A bare one-line task is never enough:
+**Flow**
 
-| Field | Content |
-|-------|---------|
-| GOAL | the overall task and why it exists — the point beyond the file edit |
-| ROLE | what this agent owns; what it must NOT touch |
-| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
-| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what THIS agent needs |
-| CONSUMER | who or what uses the result next, and the shape it must fit |
-| DONE | acceptance criteria + the exact report shape you want back |
+<Steps>
+  <li><div><strong>Input gate</strong><p>The whole `$ARGUMENTS` is one free-form sentence. Empty means `status`; the menu appears only on explicit request.</p></div></li>
+  <li><div><strong>Mode select</strong><p>Prints the <code>PLAN — brewcode:rules</code> block first. A `.jsonl` path or inline prompt is a knowledge source, not a mode.</p></div></li>
+  <li><div><strong>Dispatch</strong><p>`create` and `improve` go to `bc-rules-organizer`, `review` to the reviewer agent, `list` runs `rules.sh list`. If the organizer is unavailable, the run stops with `brewcode:bc-rules-organizer not available — install brewcode plugin`.</p></div></li>
+  <li><div><strong>Optimize and validate</strong><p>With brewtools installed, written files pass `brewtools:text-optimize` (`medium --allow-dirty`), then `rules.sh validate` runs. Otherwise the skip is reported.</p></div></li>
+  <li><div><strong>Report</strong><p>Per file: rows added, merged, skipped, with the dedup reason.</p></div></li>
+</Steps>
 
-For the organizer: ROLE is the target rule files only — never `CLAUDE.md`, never global rules. CONTEXT says the knowledge source is already chosen (do not re-ask) and the existing `.claude/rules/*.md` are the dedup baseline. CONSUMER is the sharpest constraint: Claude Code auto-loads `.claude/rules/*.md` into every session, so entries must be table rows, not prose.
+**Knowledge sources**
 
-<details>
-<summary>Knowledge sources &amp; dedup</summary>
+| Source | Handling |
+|--------|----------|
+| `KNOWLEDGE.jsonl` path | `t:"❌"` maps to avoid, `t:"✅"` to best-practice |
+| File path + inline prompt | The organizer reads the file and follows the prompt |
+| Session learnings (no path) | The 5 most impactful findings become `❌`/`✅` pairs |
 
-**Sources accepted:**
+**Output files** in `.claude/rules/`: `avoid.md` (table #, Avoid, Instead, Why), `best-practice.md` (#, Practice, Context, Source), `{prefix}-avoid.md`, `{prefix}-best-practice.md` (domain files, e.g. `sql-avoid.md`). Domain files carry `paths:` globs and load only for matching files.
 
-- `KNOWLEDGE.jsonl` path — parses each line; `t:"❌"` maps to avoid, `t:"✅"` maps to best-practice
-- File path + inline prompt — organizer reads the file and uses the prompt as instruction
-- Session learnings — the skill selects the 5 most impactful findings from the current conversation and formats them as ❌/✅ pairs
+**Validation.** `rules.sh validate` checks these four kinds (frontmatter metadata and table header); other files are not checked. `create` writes `avoid.md` and `best-practice.md` without `paths:`. A project that scopes one on purpose gets a `!` warning (exit 0, not an error); a domain file without `paths:` still fails.
 
-**Output files:** `avoid.md`, `best-practice.md`, `{prefix}-avoid.md`, `{prefix}-best-practice.md` — all inside `.claude/rules/`
+**3-check dedup.** Within-file similarity: over 70% skip, 40-70% merge. Cross-file antonym: a pattern in both avoid and best-practice keeps the avoid entry. CLAUDE.md duplicate: skip. `"CLAUDE.md"` is forbidden as a Source value. The skill never updates CLAUDE.md.
 
-**Validation:** `rules.sh validate` checks `avoid.md` and `best-practice.md` (both required) and `{prefix}-` files. `create` writes the two main files without `paths:`. A project that scopes a main file with `paths:` on purpose gets a `!` warning (the file then loads only when Claude touches a matching file), never an error. Keep the scoping or remove `paths:` to load the file at session start.
+**Status blocks.** Inventory, State, Overlaps (same name across scopes, duplicate triggers), Health (missing frontmatter, weak triggers, rules duplicated in CLAUDE.md).
 
-**3-Check dedup protocol:**
+**Menu (on request only).** One `AskUserQuestion` with two questions. Q1: Status (rules), Create, Improve, Review. Q2: As chosen, Status (all: agents + rules + skills), List (plain); a non-default Q2 replaces Q1. Cancel via Other stops.
 
-1. Within-file similarity: &gt;70% match → skip; 40–70% match → merge into existing entry
-2. Cross-file antonym check: if the same pattern appears in both avoid and best-practice → keep the avoid entry only
-3. CLAUDE.md duplicate: if the content already appears in `CLAUDE.md`, skip entirely. The string `"CLAUDE.md"` is forbidden as a Source value in rule entries
-
-**Specialist:** bc-rules-organizer — acts as organizer only (no separate creator agent). Spawned via the Agent tool; the agent resolves paths via native `${CLAUDE_PLUGIN_ROOT}` (substituted in its .md at Agent spawn).
-
-</details>
+</Spoiler>
 
 <CardGrid>
   <Card title="agents" icon="settings" href="/brewcode/skills/agents/">Sibling: manage agents</Card>
   <Card title="skills" icon="pencil" href="/brewcode/skills/skills/">Sibling: manage skills</Card>
   <Card title="brewcode" icon="rocket" href="/brewcode/overview/">Plugin overview</Card>
-  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/rules/SKILL.md">SKILL.md</Card>
+  <Card title="GitHub source" icon="github" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/rules">SKILL.md, rules.sh, references</Card>
 </CardGrid>
 
 <UpdateNotice />

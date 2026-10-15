@@ -8,3 +8,6 @@ export { default as Badge } from './Badge.astro';
 export { default as InstallPrompt } from './InstallPrompt.astro';
 export { default as UpdateNotice } from './UpdateNotice.astro';
 export { default as Spoiler } from './Spoiler.astro';
+export { default as ModPromo } from './ModPromo.astro';
+export { default as Icon } from './Icon.astro';
+export { default as SourceLink } from './SourceLink.astro';

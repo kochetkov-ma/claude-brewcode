@@ -1,147 +1,90 @@
 ---
 title: "Brewcode Overview"
-description: "Architecture, concepts, and structure of the Brewcode plugin"
+description: "Brewcode toolkit overview: 9 skills, 6 agents and 2 hooks for authoring, search, conventions, review, teams and post-compaction recovery"
 order: 10
 ---
 
-import { Card, CardGrid, Callout, Tabs, TabItem, Steps, Badge, InstallPrompt, UpdateNotice } from '../../../components/mdx';
+import { Card, CardGrid, Callout, Steps, Badge, InstallPrompt, Spoiler, ModPromo, UpdateNotice } from '../../../components/mdx';
 
 # Brewcode Overview
 
+Brewcode is a Claude Code authoring toolkit: skills (recipes) define what to brew, agents (brewers) do the work, hooks (processes) handle session start and recovery after compaction.
+
+## Install
+
 <InstallPrompt plugin="brewcode" mode="install" />
 
-Install the entire suite:
+## What you get
 
-<InstallPrompt plugin="all" mode="install" />
+| Part | What it does | Page |
+|------|--------------|------|
+| `setup-status` | Read-only dashboard: 11 setups and 23 stamp carriers across brewcode, brewtools, brewdoc | [Skill](/brewcode/skills/setup-status/) |
+| `semble-setup` | Semantic code-search MCP: install, audit, reindex | [Skill](/brewcode/skills/semble-setup/) |
+| `convention-setup` | Coding, testing and architecture conventions with reversible loading | [Skill](/brewcode/skills/convention-setup/) |
+| `teams-setup` | Dynamic project agent teams (5-20) with tracing and tuning | [Skill](/brewcode/skills/teams-setup/) |
+| `superreview-setup` | Generates a project-tailored deep-review skill | [Skill](/brewcode/skills/superreview-setup/) |
+| `rules`, `skills`, `agents`, `e2e` | Recurring tools: rules, skill and agent management, E2E tests | [All skills](/brewcode/skills/) |
+| 6 agents | skill-, agent-, hook-, mod-creator, bash-expert, internal bc-rules-organizer | [Agents](/brewcode/agents/) |
+| 2 hooks | `session-start` and `compact-recall` (plan, intent, task graph after compaction) | [Hooks](/brewcode/hooks/) |
 
-Brewcode is a Claude Code authoring toolkit: skill, agent and rule creation and sync, semantic code
-search, project conventions, E2E tests, generated review and team skills, and a setup dashboard. The name is a nod to brewing: skills (recipes) define what to brew, agents
-(brewers) do the work, and hooks (processes) handle session start and post-compaction recovery.
+<ModPromo variant="strip" />
 
-## Key Features
+## How it fits
 
-<CardGrid>
-  <Card title="Native plugin paths" icon="infinity">
-    Plugin agents resolve paths via native `${CLAUDE_PLUGIN_ROOT}`, substituted at Agent spawn.
-    No hook injection, no shared runtime state.
-  </Card>
-  <Card title="9 skills (recipes)" icon="terminal">
-    From convention setup (<a href="/brewcode/skills/convention-setup/">/brewcode:convention-setup</a>) and agent teams
-    (<a href="/brewcode/skills/teams-setup/">/brewcode:teams-setup</a>) to multi-agent review (<a href="/brewcode/skills/superreview-setup/">/brewcode:superreview-setup</a>).
-  </Card>
-  <Card title="One dashboard for every setup" icon="clipboard">
-    <a href="/brewcode/skills/setup-status/">/brewcode:setup-status</a> reports, read-only, which setup skills across
-    brewcode, brewtools and brewdoc are current, stale, modified, partial, disabled or missing here.
-    It covers 11 setups and 23 stamp carriers, with dependency-aware next commands.
-  </Card>
-  <Card title="6 agents (brewers)" icon="users">
-    Specialists only: [skill-creator](/brewcode/agents/skill-creator/), [agent-creator](/brewcode/agents/agent-creator/),
-    [hook-creator](/brewcode/agents/hook-creator/), [bash-expert](/brewcode/agents/bash-expert/), [mod-creator](/brewcode/agents/mod-creator/), and the internal bc-rules-organizer.
-    Generic roles are generated per project into .claude/agents/.
-  </Card>
-  <Card title="2 registered hook commands" icon="settings">
-    Two SessionStart hooks: session-start (version-check, plan symlink, permission tag) and compact-recall (post-compaction recovery of plan, intent and task graph).
-  </Card>
-  <Card title="E2E testing" icon="check">
-    BDD scenario authoring and Playwright autotest orchestration
-    via <a href="/brewcode/skills/e2e/">/brewcode:e2e</a>.
-  </Card>
-  <Card title="Code quality" icon="shield">
-    Review and convention setup capture project patterns.
-    Accepted rules are written and validated in .claude/rules/.
-  </Card>
-  <Card title="Dynamic teams" icon="group">
-    Create project-specific agent teams (5-20) with self-selection,
-    performance tracking, and automatic tuning.
-  </Card>
-  <Card title="Test suites" icon="flask">
-    Creator contracts, hooks, team lifecycle, convention lifecycle and semantic search
-    have local regression suites. Their output supplies current pass/fail totals.
-  </Card>
-</CardGrid>
+Brewcode layers on top of Claude Code with no external runtime. Skills spawn agents, agents write rules and project files, and the two SessionStart hooks keep sessions anchored. Generic implementation and review roles are generated per project into `.claude/agents/` by [`/brewcode:teams-setup`](/brewcode/skills/teams-setup/). Optional [brewcode mods](/mods/overview/) add plan-mode effort and prompt placeholders.
 
-## Architecture
+## Quick start
 
-Brewcode works as a layer on top of Claude Code. The plugin has no external runtime. Its two
-SessionStart hooks handle the version check, the plan symlink and post-compaction recovery.
+<Steps>
+  <li>
+    <div>
+      <strong>See what is already here</strong> <Badge variant="primary" text="/brewcode:setup-status" />
+      <p>One table of every setup skill: current, stale, partial, missing, plus the exact command per row.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Convention foundation</strong> <Badge variant="primary" text="/brewcode:convention-setup install" />
+      <p>Extract coding, testing and architecture patterns into <code>.claude/convention/</code> before teams and review.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Team install</strong> <Badge variant="secondary" text="/brewcode:teams-setup install" />
+      <p>Create project agents that use those conventions.</p>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Deep review</strong> <Badge variant="primary" text="/brewcode:superreview-setup install" />
+      <p>Generate a review skill wired to your agents, gates and conventions.</p>
+    </div>
+  </li>
+</Steps>
 
-```
-                         Brewcode Plugin
-  ┌──────────────────────────────────────────────────────────┐
-  │                                                          │
-  │   Skills (recipes)            Agents (brewers)           │
-  │   ┌──────────────┐          ┌──────────────────┐         │
-  │   │ semble-setup │          │ skill/agent/hook/│         │
-  │   │ superrev-... │ ──────>  │ mod creator, bash│         │
-  │   │ e2e, conv... │          │ + project teams  │         │
-  │   └──────────────┘          └──────────────────┘         │
-  │          │                          │                    │
-  │          v                          v                    │
-  │   Hooks (processes)           Rule templates             │
-  │   ┌──────────────┐          ┌──────────────────┐         │
-  │   │ session-start│          │ rules templates  │         │
-  │   │compact-recall│ <──────> │ templates/       │         │
-  │   └──────────────┘          └──────────────────┘         │
-  │                                                          │
-  └──────────────────────────────────────────────────────────┘
-```
-
-## Plugin structure
-
-```
-brewcode/
-├── .claude-plugin/
-│   └── plugin.json                    # Plugin manifest
-├── hooks/
-│   ├── hooks.json                     # 2 hooks (SessionStart x2)
-│   ├── session-start.mjs              # Version-check, plan-symlink, permission tag
-│   ├── compact-recall.mjs             # SessionStart/compact: re-anchor plan, intent, task graph
-│   └── lib/
-│       └── utils.mjs                  # I/O, version cache, configuration
-├── agents/                            # 6 agents
-│   ├── skill-creator.md               # Skill creation (inherit)
-│   ├── agent-creator.md               # Agent creation (inherit)
-│   ├── hook-creator.md                # Hook creation (inherit)
-│   ├── bash-expert.md                 # Bash scripts (inherit)
-│   ├── mod-creator.md                 # Mod creation (inherit)
-│   └── bc-rules-organizer.md          # Rules organizer (haiku)
-├── skills/                            # 9 skills
-│   ├── semble-setup/                  # Semantic code search MCP
-│   ├── convention-setup/              # Coding, testing and architecture foundation
-│   ├── rules/                         # Rule extraction
-│   ├── superreview-setup/             # Multi-agent quorum review generator
-│   ├── setup-status/                  # Read-only cross-plugin setup dashboard
-│   ├── skills/                        # Skill management
-│   ├── agents/                        # Agent management
-│   ├── teams-setup/                   # Dynamic agent teams
-│   └── e2e/                           # E2E testing orchestration
-└── templates/                         # Rule templates
-```
-
-## Naming: `-setup` vs bare
-
-<Callout type="tip" title="The suffix tells you how often to run it">
-A **`-setup`** skill installs a mechanism — agents, hooks, a rule, a generated skill — that you then use. Run it once and `upgrade` it when needed. Bare-named skills are recurring tools. Every setup answers `status`, `install`, `upgrade`, `enable`, `disable`, `uninstall`, `purge`. A bare invocation normally means status when installed and install when absent. [`semble-setup`](/brewcode/skills/semble-setup/) always defaults to status; [`convention-setup`](/brewcode/skills/convention-setup/) defaults to install and checks status before extraction.
+<Callout type="caution" title="One setup per session">
+  Every `-setup` skill is an interactive generator that fans out subagents and asks real questions. Two in one session degrade each other, so `setup-status` reports and stops. Run setups one at a time, ideally in a fresh session.
 </Callout>
 
-Convention setup establishes coding, testing and architecture patterns after the search foundation
-and before teams and review setup. It installs reversible loading guidance; disabling that guidance
-keeps the generated documents readable.
+## Technical details
 
-## Artifact metadata
+<Spoiler id="naming" title="Naming: -setup vs bare">
 
-v5.1.0 standardizes what every `-setup` skill stamps onto what it installs, across
-brewcode, brewtools and brewdoc. Version always comes from `.claude-plugin/plugin.json`, never hardcoded and never the
-literal `unknown` — a writer that cannot resolve it refuses to write rather than stamp a fake.
+A **`-setup`** skill installs a mechanism (agents, hooks, a rule, a generated skill) that you then use. Run it once, `upgrade` it later. Bare-named skills are recurring tools. Every setup answers `status`, `install`, `upgrade`, `enable`, `disable`, `uninstall`, `purge`. A bare call means status when installed and install when absent; [`semble-setup`](/brewcode/skills/semble-setup/) always defaults to status, [`convention-setup`](/brewcode/skills/convention-setup/) to install. Full rule: [Skills](/brewcode/skills/).
+
+</Spoiler>
+
+<Spoiler id="artifact-metadata" title="Artifact metadata">
+
+Every artifact a `-setup` skill installs carries the same stamp across brewcode, brewtools and brewdoc. The version always comes from `.claude-plugin/plugin.json`, never hardcoded and never the literal `unknown`: a writer that cannot resolve it refuses to write.
 
 | Field | Values | Where |
 |-------|--------|-------|
 | `doc_type` | `llm` \| `user` \| `skip`, unquoted | `.md` frontmatter only, never JSON |
-| `version` | quoted `"X.Y.Z"` | every carrier |
+| `version` | quoted `"X.Y.Z"`, plugin version at install | every carrier |
+| `content_version` | quoted `"X.Y.Z"`, last release that changed the content | every carrier |
 | `generated_by` | quoted `"<plugin>:<skill>"` | every carrier |
-| `last_updated` | quoted `"YYYY-MM-DD"` | every carrier except a byte-copied `.mjs`/`.sh`/`.md` — the date would just be the release date and would churn the drift check |
-
-Five carriers, depending on the file type it is stamping:
+| `last_updated` | quoted `"YYYY-MM-DD"` | every carrier except a byte-copied `.mjs`/`.sh`/`.md` (the date would churn the drift check) |
 
 | Carrier | Applies to |
 |---------|-----------|
@@ -151,111 +94,42 @@ Five carriers, depending on the file type it is stamping:
 | header table (`\| Version \|`, `\| Generated by \|`, `\| Last update \|`) | `team.md` |
 | `<!-- brewcode-meta: ... -->`, line 1 | byte-copied `.md` |
 
-[`/brewcode:setup-status`](/brewcode/skills/setup-status/) is the
-payoff — it reads these stamps back and compares them against the installed plugin version across
-all eleven `-setup` skills to report current, stale, modified, partial, disabled or missing. See
-[`superreview-setup`](/brewcode/skills/superreview-setup/#version-and-ownership) for one skill's
-full version of this contract.
+[`/brewcode:setup-status`](/brewcode/skills/setup-status/) reads the stamps back and flags any artifact whose `content_version` is behind the plugin. One skill's full contract: [`superreview-setup`](/brewcode/skills/superreview-setup/#version-and-ownership).
 
-## Components in detail
+</Spoiler>
 
-<Tabs>
-  <TabItem label="Skills">
-    9 skills (recipes) cover search, review, conventions, and meta-tooling.
-    See [Skills](/brewcode/skills/) for details.
+<Spoiler id="plugin-structure" title="Plugin structure">
 
-    | Group | Skills | Purpose |
-    |-------|--------|---------|
-    | Search | semble-setup | Semantic code-search MCP install and maintenance |
-    | Convention foundation | convention-setup | Coding, testing and architecture documents with reversible loading guidance |
-    | Quality | superreview-setup, rules | Multi-agent review and accepted rule extraction |
-    | Dynamic | teams-setup | Agent team creation and management |
-    | Testing | e2e | E2E testing orchestration with BDD scenarios |
-    | Meta | skills, agents | Skill and agent management |
-    | Dashboard | setup-status | Read-only: what is current, stale or missing across brewcode, brewtools and brewdoc |
-  </TabItem>
-  <TabItem label="Agents">
-    6 agents (brewers), all specialists. Generic implementation/review roles are generated per project
-    into `.claude/agents/` by [/brewcode:teams-setup](/brewcode/skills/teams-setup/) — brewcode no longer ships them.
-    See the [Agents](/brewcode/agents/) section for details.
+```
+brewcode/
+├── .claude-plugin/plugin.json   # manifest
+├── hooks/                       # hooks.json, session-start.mjs, compact-recall.mjs, lib/utils.mjs
+├── agents/                      # 6 agents (5 public + bc-rules-organizer, haiku)
+├── skills/                      # 9 skills
+└── templates/                   # rule templates
+```
 
-    | Role | Agents | Model |
-    |------|--------|-------|
-    | Creation | skill-creator, agent-creator, hook-creator, mod-creator | inherit |
-    | Scripting | bash-expert | inherit |
-    | Internal | bc-rules-organizer | haiku |
+Full tree: [file-tree.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/docs/file-tree.md).
 
-    + dynamic project agents created by [`/brewcode:teams-setup`](/brewcode/skills/teams-setup/)
+</Spoiler>
 
-    Creator agents and on-demand references follow official authoring contracts checked through
-    Claude Code 2.1.296. They distinguish ordinary agents, conversation forks and skill forks,
-    honor current plugin field restrictions, and return unresolved decisions to the main caller.
-    Main owns dispatch and review under repository policy; local validation is distinct from live evaluation.
-  </TabItem>
-  <TabItem label="Hooks">
-    2 hooks manage session start and post-compaction recovery.
-    See the [Hooks](/brewcode/hooks/) section for details.
+<Spoiler id="agents-and-contracts" title="Agent contracts and tests">
 
-    | Event | Hook | Purpose |
-    |-------|------|---------|
-    | SessionStart | session-start | Initialization, version-check, plan symlink |
-    | SessionStart (compact) | compact-recall | Re-anchor plan, intent and task graph after a compaction |
-  </TabItem>
-</Tabs>
+Creator agents and their on-demand references follow Claude Code authoring contracts checked through 2.1.296. They distinguish ordinary agents, conversation forks and skill forks, and return unresolved decisions to the main caller. Local regression suites cover creator contracts, hooks, team lifecycle, convention lifecycle and semantic search; their output gives current pass/fail totals and does not replace live evaluation.
 
-## Quick start
+</Spoiler>
 
-<Steps>
-  <li class="step step-primary">
-    <div>
-      <strong>See what is already here</strong> <Badge variant="primary" text="/brewcode:setup-status" />
-      <p>One table of every setup skill across brewcode, brewtools and brewdoc: current, stale, partial, missing — plus the exact command for each row. Read-only except an opt-in task-tools key merge, applied only after you agree.</p>
-    </div>
-  </li>
-  <li class="step step-primary">
-    <div>
-      <strong>Convention foundation</strong> <Badge variant="primary" text="/brewcode:convention-setup install" />
-      <p>After search setup, extract coding, testing and architecture patterns into <code>.claude/convention/</code> and install loading guidance. Do this before teams and review setup.</p>
-    </div>
-  </li>
-  <li class="step step-primary">
-    <div>
-      <strong>Team install</strong> <Badge variant="secondary" text="/brewcode:teams-setup install" />
-      <p>Create project-specific agents that use the convention foundation.</p>
-    </div>
-  </li>
-  <li class="step step-secondary">
-    <div>
-      <strong>Deep review</strong> <Badge variant="primary" text="/brewcode:superreview-setup install" />
-      <p>Generate a project-tailored review skill using project agents, gates and conventions.</p>
-    </div>
-  </li>
-</Steps>
-
-<Callout type="caution" title="One setup per session">
-  Every `-setup` skill is an interactive generator: it fans out subagents, analyses the repo and asks you real questions. Two in one session degrade each other — the second answers against the first one's stale analysis. Run them one at a time, ideally in a fresh session each. That is exactly why `setup-status` reports and stops instead of running anything.
-</Callout>
-
-<Callout type="tip" title="Next steps">
-  Check [Skills](/brewcode/skills/) for detailed descriptions of all available skills,
-  or explore [Agents](/brewcode/agents/) for the full list of specialized agents.
-</Callout>
+## Related
 
 <CardGrid>
-  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
-    Download, changelog, and installation instructions.
+  <Card title="Installation" icon="book" href="/installation/">
+    Full setup, update and troubleshooting.
   </Card>
-  <Card title="Installation Guide" icon="book" href="/installation/">
-    Full setup, update, and troubleshooting instructions.
+  <Card title="Brewcode mods" icon="puzzle" href="/mods/overview/">
+    Plan-mode effort and prompt placeholders.
   </Card>
-  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/">
-    Source code, README, and configuration files.
-  </Card>
-  <Card title="Convention Setup" icon="book" href="/brewcode/skills/convention-setup/">
-    The foundation for coding patterns, tests and architecture.
-  </Card>
-  <Card title="brewcode mods" icon="puzzle" href="/mods/overview/">
-    Optional hooks-module plugins: plan-mode effort and prompt placeholders.
+  <Card title="View on GitHub" icon="github" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/">
+    Source code, README and configuration.
   </Card>
 </CardGrid>
 

@@ -3,16 +3,12 @@ title: "Context Slim"
 description: "Inventory potential context sources, remove repeated instructions, and compress owned files with snapshots, semantic review, and safe recovery."
 order: 3131
 ---
-import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+import { Callout, Card, CardGrid, Spoiler, Steps, UpdateNotice } from '../../../../components/mdx';
 
 # context-slim — shrink potential context sources
 
 <Callout type="caution">
-**Discovery is not proof of loaded context.** The scan inventories potential sources: startup instructions, recursive rules, imported conventions, client-dependent AGENTS.md, memory, agent definitions, and skill resources. Path-scoped rules load conditionally; only selected agent bodies and read skill references apply to a particular run. Use measure for inventory sizes, then inspect runtime context before claiming actual session cost.
-</Callout>
-
-<Callout type="tip">
-**Three levers, one coordinated pass.** Cross-layer dedup, generic-knowledge removal, and per-file compression preserve protected values, paths, pins, and non-default instructions. A failed gate prevents acceptance. Recovery is limited to proven owned drafts; concurrent changes remain intact.
+**Discovery is not proof of loaded context.** The scan inventories potential sources (startup instructions, rules, AGENTS.md, memory, agent definitions, skill resources). Path-scoped rules load conditionally. Use `measure` for inventory sizes, then inspect runtime context before claiming actual session cost.
 </Callout>
 
 ## Quick reference
@@ -27,151 +23,99 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 
 ## What it does
 
-The skill coordinates potential context sources across three inventory tiers: startup/conditional instructions, per-spawn agent bodies, and per-invocation skill bodies/references.
+Three levers in one pass: cross-layer dedup, generic-knowledge removal, per-file compression. The skill never drops an exact value, key, path, version pin or `!=` prohibition. If the verification gate misses one, the run does a full rollback and reports FAILED.
 
-A bare invocation measures and reports without target edits. Slim, hard, and bodies require a byte-exact snapshot before target edits and the source's project-target cleanliness gate; the global layer has its own snapshot. Restore is a separate recovery operation and requires matching existing owned-draft proof before overwriting current bytes.
+A bare invocation measures and reports without edits. `slim`, `hard` and `bodies` take a byte-exact snapshot first. MCP servers, plugin enablement and `settings.json` are never mutated, only advised in the report.
 
 ## When to use
 
-- **CLAUDE.md keeps growing** — measure the potential inventory before deciding what to compress
-- **Onboarding a new machine or repo** — inventory potential sources and loading conditions before adding rules
-- **Rules duplicate across files** — cross-layer dedup finds facts repeated between project and global layers
-- **Skill or agent bodies feel bloated** — `bodies` mode extends scope to `SKILL.md` and `references/*.md`, which are normally excluded
-- **A prior slim pass wasn't aggressive enough** — an unmet `--target` triggers the same lossy-pass confirmation in any mutating mode; `hard` just lets that pass cut further once approved
-- **Something broke after a compression run** — request checkpoint-proven recovery through restore
+| Scenario | Command |
+|----------|---------|
+| CLAUDE.md keeps growing | `/brewtools:context-slim` (measure first) |
+| Rules duplicate across files | `/brewtools:context-slim preview` |
+| Skill or agent bodies feel bloated | `/brewtools:context-slim bodies slim` |
+| A prior pass was not aggressive enough | `/brewtools:context-slim hard --target=30%` |
+| Something broke after a run | `/brewtools:context-slim restore last` |
 
 ## Examples
 
 ```bash
-# Bare invocation — measure only, no writes, no questions asked
+# Measure only: no writes, no questions
 /brewtools:context-slim
 
-# Free-form prompt — resolved to slim mode from keywords
+# Free-form prompt, resolved to slim from keywords
 /brewtools:context-slim shrink the context, remove duplicates in the rules
 
-# Target ratio, including the global layer (asks for confirmation on the global write)
+# Target ratio including the global layer (asks to confirm the global write)
 /brewtools:context-slim slim --target=30% --global
-
-# Request checkpoint-proven recovery of the most recent run
-/brewtools:context-slim restore last
 ```
-
-## Flow
-
-<Steps>
-  <li>
-    <div>
-      <strong>Phase 0 — resolve mode and scope</strong>
-      <p>Parses the free-form prompt for an explicit mode token or keyword score, applies flags (`--target`, `--global`, `--memory`, `--noask`), and asks at most one <code>AskUserQuestion</code> — only when the answer changes what gets written. <code>measure</code> and `--noask` skip this entirely; destructive-mode and global-write confirmations always fire regardless.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Phase 1 — discover and measure</strong>
-      <p>Run context-scan.sh over the resolved scope for per-file inventory sizes and loading conditions. Its bytes/4 proxy is not a tokenizer measurement. The report marks actual loading as unobserved; measure stops after reporting.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Phase 2 — snapshot (fail-closed)</strong>
-      <p>Copies every target byte-exact into a timestamped run directory under <code>~/.claude/backups/</code>, one directory per layer. The project layer requires a clean git tree first — a dirty tracked target refuses the run and names the exact paths to commit or stash.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Phase 3 — cross-layer dedup analysis</strong>
-      <p>Orchestrator-only barrier: a mechanical prefilter over exact and near-duplicate content, followed by an LLM judgment pass on candidate pairs. Produces a per-file drop/keep decision list. <code>preview</code> stops here and prints the projected delta.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Phase 4 — per-file compression</strong>
-      <p>Spawn one text-optimizer per file with its ownership and assigned dedup decisions. Originals remain immutable but readable. Immediately after each known owned edit/deletion/repair, record the draft checkpoint before further edits/checks. Exclude this skill's own directory from fan-out.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Phase 5 — verify (barrier)</strong>
-      <p>Verify with --no-restore, then use independent read-only comparison against original evidence. A miss fails acceptance. Repair owned loss or attempt safe checkpoint-proven recovery; missing proof or changed current bytes refuses restoration.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Phase 6 — re-measure and escalation gate</strong>
-      <p>Re-scans the same scope and compares against phase 1. A met or absent `--target` moves straight to phase 7. An unmet target on a virgin surface reports the shortfall without asking; on a surface with prior ratchet state, it asks once whether to approve a lossy pass.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Phase 7 — ratchet state and report</strong>
-      <p>Write state with before/after inventory proxies, achieved ratio, and the drop ledger. Report measurement method, loading limits, verification/recovery results, contradictions, untouched-surface advice, and escalation outcome.</p>
-    </div>
-  </li>
-</Steps>
 
 ## Modes
 
 | Mode | What it does | Mutates? |
 |------|---------------|----------|
-| `measure` | Reports potential inventory size proxies per tier/file (including `.claude/CLAUDE.md` and subdirectory `CLAUDE.md` files), not loaded-context tokens. Default with empty input | no |
+| `measure` | Reports potential inventory size proxies per tier and file, not loaded-context tokens. Default with empty input | no |
 | `preview` | Runs discovery through the dedup analysis and prints the projected plan and token delta | no |
 | `slim` | Full lossless compression: dedup, default-knowledge removal, per-file rewrite, verify | yes |
-| `hard` | Same as `slim`; when a `--target` isn't met losslessly, the escalation gate (which fires in any mutating mode) is allowed to cut further | yes, destructive |
-| `bodies` | Extends scope to `SKILL.md` and `references/*.md` (normally opt-in only). Combine with `preview`/`slim`/`hard`, or alone it means `bodies` + `slim` | yes |
-| `restore` | Requests prior-snapshot recovery using last, a timestamp, or --run-dir; refuses unsafe overwrites | yes, destructive |
+| `hard` | Same as `slim`; when a `--target` is not met losslessly, the escalation gate (fires in any mutating mode) may cut further | yes, destructive |
+| `bodies` | Extends scope to `SKILL.md` and `references/*.md`. Alone it means `bodies` + `slim` | yes |
+| `restore` | Prior-snapshot recovery using `last`, a timestamp or `--run-dir`; refuses unsafe overwrites | yes, destructive |
 
-## Safety and rollback
+## Flow
 
-Every mutating run is snapshotted before a single byte is written. The project layer's snapshot is gated on a clean git tree over the target files — untracked or git-ignored files are still snapshotted (`SNAPSHOT-ONLY`, never refused) since git has no pre-state to fall back on for those. The global layer, when in scope, gets its own snapshot under `~/.claude/backups/<ts>-global_context-slim/`, separate from the project run directory, so a same-second collision across layers can't happen.
+<Steps>
+  <li><div><strong>Resolve mode and scope</strong><p>Parses the prompt and flags; asks at most one `AskUserQuestion`. Destructive and global-write confirmations always fire.</p></div></li>
+  <li><div><strong>Discover and measure</strong><p>`context-scan.sh` reports per-file sizes (bytes/4 proxy, not a tokenizer). `measure` stops here.</p></div></li>
+  <li><div><strong>Snapshot, fail-closed</strong><p>Copies targets byte-exact under `~/.claude/backups/`. A dirty tracked target refuses the run and names the paths.</p></div></li>
+  <li><div><strong>Dedup analysis</strong><p>Mechanical prefilter plus an LLM judgment pass yields a drop/keep list. `preview` stops here.</p></div></li>
+  <li><div><strong>Compress and verify</strong><p>One text-optimizer per file, then independent comparison against the originals. A miss fails acceptance and triggers recovery.</p></div></li>
+  <li><div><strong>Re-measure and report</strong><p>Compares with phase 1, asks once before a lossy pass on an unmet target, then writes ratchet state and the report.</p></div></li>
+</Steps>
 
-Original snapshots are comparison evidence. Recovery must validate the prior manifest and recorded
-owned drafts across all touched layers. Missing state, damaged originals, or current bytes changed
-by another writer prevents restoration; never create a checkpoint at failure time to bypass it.
+<Spoiler id="safety-and-rollback" title="Safety and rollback">
 
-To request recovery of a prior run:
+Every mutating run is snapshotted before a byte is written. The project layer is gated on a clean git tree over tracked targets; untracked or ignored files are still snapshotted (`SNAPSHOT-ONLY`, never refused). The global layer gets its own snapshot under `~/.claude/backups/<ts>-global_context-slim/`.
+
+Recovery validates the prior manifest and the recorded owned drafts across all touched layers. Missing state, damaged originals or bytes changed by another writer prevent restoration; no checkpoint is created at failure time to bypass that.
+
+| Fact | Behavior |
+|------|----------|
+| Retention | Keeps the newest 5 runs (all layer dirs of one timestamp); never prunes a run under 24 h old |
+| Collisions | Dir name is `<YYYYMMDD-HHMMSS>-<layer>_context-slim`; a repeat gets a `-2`, `-3` suffix |
+| `.gitignore` | In a git root the guard appends `.claude/reports/` (creating the file); `restore` never reverts it and it shows in `git status` |
+| Layer pick | `restore last` covers every layer of the newest run; `restore --global last` targets the newest global run even if a project run shares its second |
 
 ```bash
 /brewtools:context-slim restore last
+/brewtools:context-slim restore --global last
 ```
 
-## Technical details
+</Spoiler>
 
-Recursive rule/reference discovery follows linked directories while detecting cycles and unsafe
-or unreadable paths. An incomplete scan is reported as partial: stop measurement and optimization
-instead of publishing totals, savings, or new run state from an incomplete inventory.
+<Spoiler id="technical-details" title="Technical details and what it never touches">
 
-Every optimization run verifies protected tokens and uses independent semantic checks on dropped or merged facts. Any miss fails acceptance. Verification runs `context-guard.sh verify --ledger`, which accepts a missing token only when a ledger row covers it and its survivor still carries it. Whole-run recovery across touched layers proceeds only when snapshots and recorded ownership prove it is safe; otherwise current bytes are preserved and recovery refusal is reported.
+Recursive discovery follows linked directories, detects cycles and unsafe paths, and reports an incomplete scan as partial: no totals, savings or run state are published from it.
 
-A block delimited by another tool's begin/end markers (for example `<!-- BEGIN brewcode:semble -->` to `<!-- END brewcode:semble -->`) belongs to that setup. The skill never compresses, moves or deletes it, marker lines included, and reports it as `managed by <setup>`. Duplicates are removed from the other copy instead.
-
-When a global copy covers a git-tracked project copy, `slim` and `hard` report the pair and keep both, because teammates and CI never load this machine's global layer.
-
-## What it never touches
+Verification runs `context-guard.sh verify --ledger`: a missing token is accepted only when a ledger row covers it and its survivor still carries it. A block between another tool's begin/end markers (for example `BEGIN brewcode:semble`) is never compressed, moved or deleted and is reported as `managed by <setup>`. When a global copy covers a git-tracked project copy, both are kept.
 
 | Surface | Handling |
 |---------|----------|
-| MCP servers | Signal only — reported as advice in the final report, never mutated |
-| Plugin enablement | Signal only — reported as advice, never mutated |
-| `settings.json` | Signal only — reported as advice, never mutated |
+| MCP servers, plugin enablement, `settings.json` | Signal only: advice in the final report, never mutated |
 | `~/.claude/plugins/cache/**` | Read for signals, never written |
 
-The scanner's legacy token_model label chars/4 represents a **bytes/4 inventory proxy**. Unicode
-and tokenizer differences are corpus-dependent. Do not describe proxy reductions as measured
-token savings.
+The `chars/4` label is a bytes/4 inventory proxy, not measured token savings. MCP server count alone does not establish context cost.
 
-ToolSearch can defer tool schemas where the client supports discovery. MCP server count alone
-does not establish context cost, and a mention of lazy loading is not proof that a schema was
-absent from a particular session. MCP advice remains advisory; this skill never rewrites settings.
+</Spoiler>
 
 <CardGrid>
   <Card title="Text Optimize" icon="brain" href="/brewtools/skills/text-optimize/">
-    The per-file compression subagent context-slim fans out to in phase 4.
+    The per-file compression subagent context-slim fans out to.
   </Card>
-  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/context-slim">
-    Source code, scripts, and the full decision-rule reference set.
+  <Card title="GitHub source" icon="github" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/context-slim">
+    Source code, scripts and the decision-rule reference set.
   </Card>
   <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">
-    All brewtools skills — text, secrets, SSH, deploy, plugin management.
+    All brewtools skills in one place.
   </Card>
 </CardGrid>
 

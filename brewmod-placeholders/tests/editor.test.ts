@@ -1,12 +1,11 @@
 import { test, expect, mock } from 'claude-code/testing'
 import type { On } from 'claude-code'
-import { EMPTY_VIEW, MAX_DECORATED_CHARS, highlight, optionColor, sameView, suggest } from '../hooks/lib/editor'
+import { EMPTY_VIEW, MAX_DECORATED_CHARS, highlight, sameView, suggest } from '../hooks/lib/editor'
 import { DEFAULT_ENTRIES, editorMatchers, getEditorEntries, setEditorEntries } from '../hooks/lib/editor-state'
 import { compileMatchers } from '../hooks/lib/match'
 import { defaultDefs } from './fixtures'
 import { ROOT, wire, type Tree } from './layer-io'
 
-const STYLE = { knownColor: 'suggestion', unknownColor: 'warning' }
 const ms = (prefix = '++') => compileMatchers(prefix, DEFAULT_ENTRIES.map((e) => e.name))
 const DRAFT = 'use ++m and ++zzz, then ++rr!'
 
@@ -15,7 +14,7 @@ const UNKNOWN_ZZZ = { text: '++zzz', name: 'zzz', isKnown: false, start: 12, end
 const KNOWN_RR = { text: '++rr', name: 'rr', isKnown: true, start: 24, end: 28 }
 
 test('GIVEN known and unknown tokens WHEN highlighted THEN decorations carry exact offsets, colors and underline only on known', async () => {
-  const out = highlight(ms(), DRAFT, STYLE)
+  const out = highlight(ms(), DRAFT)
 
   expect(out, 'highlight').toEqual({
     view: { tokens: [KNOWN_M, UNKNOWN_ZZZ, KNOWN_RR] },
@@ -27,17 +26,8 @@ test('GIVEN known and unknown tokens WHEN highlighted THEN decorations carry exa
   })
 })
 
-test('GIVEN custom colors WHEN highlighted THEN each run takes its own color', async () => {
-  const out = highlight(ms(), '++a ++nope', { knownColor: 'success', unknownColor: 'error' })
-
-  expect(out.decorations, 'decorations').toEqual([
-    { start: 0, end: 3, color: 'success', underline: true },
-    { start: 4, end: 10, color: 'error' },
-  ])
-})
-
 test('GIVEN a custom prefix WHEN highlighted THEN only that prefix is scanned', async () => {
-  const out = highlight(ms('@@'), '++m @@m @@zz', STYLE)
+  const out = highlight(ms('@@'), '++m @@m @@zz')
 
   expect(out, 'highlight').toEqual({
     view: {
@@ -54,11 +44,11 @@ test('GIVEN a custom prefix WHEN highlighted THEN only that prefix is scanned', 
 })
 
 test('GIVEN a draft without the prefix WHEN highlighted THEN view and decorations are empty', async () => {
-  expect(highlight(ms(), 'plain text, no tokens +m', STYLE), 'highlight').toEqual({ view: { tokens: [] }, decorations: [] })
+  expect(highlight(ms(), 'plain text, no tokens +m'), 'highlight').toEqual({ view: { tokens: [] }, decorations: [] })
 })
 
 test('GIVEN a token followed by combining marks, ZWJ or variation selectors WHEN highlighted THEN the run ends on the grapheme edge', async () => {
-  const runs = (text: string) => highlight(ms(), text, STYLE).decorations.map((d) => [d.start, d.end])
+  const runs = (text: string) => highlight(ms(), text).decorations.map((d) => [d.start, d.end])
 
   expect(
     [runs('a ++r\u0301 b'), runs('a ++r\u0301\u0302'), runs('a ++r\u200D'), runs('a ++r\uFE0F'), runs('a ++r\u0301b'), runs('a ++r')],
@@ -71,11 +61,11 @@ test('GIVEN a draft of exactly the cap WHEN highlighted THEN it is decorated; on
   const overCap = atCap + ' '
 
   expect(atCap.length, 'at-cap length').toBe(20000)
-  expect(highlight(ms(), atCap, STYLE), 'at cap').toEqual({
+  expect(highlight(ms(), atCap), 'at cap').toEqual({
     view: { tokens: [{ text: '++m', name: 'm', isKnown: true, start: 0, end: 3 }] },
     decorations: [{ start: 0, end: 3, color: 'suggestion', underline: true }],
   })
-  expect(highlight(ms(), overCap, STYLE), 'over cap').toEqual({ view: { tokens: [] }, decorations: [] })
+  expect(highlight(ms(), overCap), 'over cap').toEqual({ view: { tokens: [] }, decorations: [] })
 })
 
 test('GIVEN views WHEN compared THEN text, name and known flag decide and offsets do not', async () => {
@@ -157,16 +147,6 @@ test('GIVEN the entries setter WHEN names change THEN matchers rebuild once per 
   expect(other === a, 'new prefix rebuilds').toBe(false)
   expect(names, 'new entries compiled').toEqual(['ship'])
   expect(getEditorEntries() === before, 'restored').toBe(true)
-})
-
-test('GIVEN option values WHEN resolved THEN only a non-empty string wins', async () => {
-  expect([optionColor('success', 'x'), optionColor('', 'x'), optionColor(undefined, 'x'), optionColor(3, 'x'), optionColor(false, 'x')], 'colors').toEqual([
-    'success',
-    'x',
-    'x',
-    'x',
-    'x',
-  ])
 })
 
 // --- through the engine: prompt.edit / prompt.autocomplete hooks of the loaded module ---
@@ -265,7 +245,7 @@ test('GIVEN the first edit has no tokens WHEN prompt.edit runs THEN the empty vi
   expect(writes, 'view writes').toEqual([{ tokens: [] }])
 })
 
-test('GIVEN a custom prefix and colors WHEN prompt.edit runs THEN they drive the highlight', { options: { prefix: '@@', knownColor: 'success', unknownColor: 'error' } }, async ($, on) => {
+test('GIVEN a custom prefix WHEN prompt.edit runs THEN it drives the highlight with the fixed colors', { options: { prefix: '@@' } }, async ($, on) => {
   core(on)
 
   const out = await typed($, '++m @@m @@zz')
@@ -274,8 +254,8 @@ test('GIVEN a custom prefix and colors WHEN prompt.edit runs THEN they drive the
     text: '++m @@m @@zz',
     cursor: 12,
     decorations: [
-      { start: 4, end: 7, color: 'success', underline: true },
-      { start: 8, end: 12, color: 'error' },
+      { start: 4, end: 7, color: 'suggestion', underline: true },
+      { start: 8, end: 12, color: 'warning' },
     ],
   })
 })

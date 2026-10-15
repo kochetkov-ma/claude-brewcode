@@ -1,65 +1,53 @@
 ---
 title: "Agents"
-description: "All Brewtools agents: models, triggers, tools"
+description: "The three Brewtools agents: text-optimizer, ssh-admin and deploy-admin, with models, triggers and tools."
 order: 32
 ---
 
-import { Card, CardGrid } from '../../../components/mdx';
+import { Card, CardGrid, Spoiler, UpdateNotice } from '../../../components/mdx';
 
 # Agents
 
-Agents are specialized roles defined in markdown files with frontmatter metadata.
-Each agent has its own model, toolset, and system prompt. Brewtools includes 3 agents.
+Agents are specialist roles defined in markdown with their own model, toolset and system prompt. Brewtools has 3.
 
 ## Summary table
 
-| # | Agent | Model | Description (agent frontmatter) |
-|---|-------|-------|---------------------------------|
-| 1 | text-optimizer | sonnet | Optimizes text/docs for LLM token efficiency. Triggers: optimize prompt, reduce tokens, compress. |
-| 2 | ssh-admin | inherit | Linux server admin: SSH, Docker, systemd, Nginx, SSL. Triggers: ssh admin, server management. |
-| 3 | deploy-admin | inherit | GitHub Actions deployment: workflows, releases, GHCR, CI/CD. Triggers: deploy, release. |
+| # | Agent | Model | Description |
+|---|-------|-------|-------------|
+| 1 | [text-optimizer](/brewtools/agents/text-optimizer/) | sonnet | Optimizes text/docs for LLM token efficiency. Triggers: optimize prompt, reduce tokens, compress. |
+| 2 | [ssh-admin](/brewtools/agents/ssh-admin/) | inherit | Linux server admin: SSH, Docker, systemd, Nginx, SSL. Triggers: ssh admin, server management. |
+| 3 | [deploy-admin](/brewtools/agents/deploy-admin/) | inherit | GitHub Actions deployment: workflows, releases, GHCR, CI/CD. Triggers: deploy, release. |
 
-<CardGrid>
-  <Card title="text-optimizer" icon="sparkle" href="/brewtools/agents/text-optimizer/">
-    Text optimization with rule-based validation
-  </Card>
-  <Card title="ssh-admin" icon="terminal" href="/brewtools/agents/ssh-admin/">
-    SSH server administration
-  </Card>
-  <Card title="deploy-admin" icon="sync" href="/brewtools/agents/deploy-admin/">
-    GitHub Actions, CI/CD, releases
-  </Card>
-</CardGrid>
+<Spoiler id="scope-guard" title="Scope guard: shared by all 3 agents">
 
-## Scope guard — all three agents
+Each agent sizes the task before starting. **One bounded unit = one deliverable, ~5 files, ~10 steps.** Anything bigger, or spanning several independent deliverables, makes the agent stop and return a split proposal: 2-N bounded subtasks, each with its scope and a suggested owner. Mid-flight the rule is the same: stop at the next clean boundary, report done / remaining / how to split.
 
-Each agent sizes the task before starting. **One bounded unit = one deliverable, ~5 files, ~10 steps.**
-Anything bigger, or spanning several independent deliverables, and the agent stops before starting and
-returns a split proposal: 2-N bounded subtasks, each with its scope and a suggested owner. Mid-flight
-the rule is the same — stop at the next clean boundary, report done / remaining / how to split.
+A brief missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance criteria is not invented: the agent states its assumption in the report or asks once. The result is written for the CONSUMER, whoever picks it up next, not for the literal wording of the request.
 
-A brief missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance criteria is not invented: the agent
-states its assumption in the report or asks once. The result is delivered for the CONSUMER — whoever
-picks it up next — not for the literal wording of the request.
-
-**v6: `AskUserQuestion` removed.** Claude Code 2.1.233 dropped `AskUserQuestion` from every subagent.
-`ssh-admin` and `deploy-admin` no longer ask mid-task — a destructive or privileged step now returns
-a `## APPROVAL REQUIRED` envelope to the caller, or proceeds only if pre-approved in the prompt.
-`ssh-admin` also no longer places secrets on `curl` argv.
+Subagents have no `AskUserQuestion` (removed in Claude Code 2.1.233). `ssh-admin` and `deploy-admin` return a `## APPROVAL REQUIRED` envelope to the caller for a destructive or privileged step, or proceed only if the prompt pre-approved it.
 
 | Rule | Applies to |
 |------|-----------|
 | One bounded unit per run, otherwise split proposal | text-optimizer, ssh-admin, deploy-admin |
-| **Split per target** — one agent per host / environment / service / repo, never one agent looping over all of them | ssh-admin, deploy-admin |
+| Split per target: one agent per host / environment / service / repo, never one agent looping over all | ssh-admin, deploy-admin |
 | Missing brief fields: state the assumption or ask once, never invent scope | all three |
 
-> Phrase multi-target work as separate requests: "deploy staging" + "deploy prod", not "deploy to all environments".
+Phrase multi-target work as separate requests: "deploy staging" + "deploy prod", not "deploy to all environments".
+
+</Spoiler>
+
+## Related
 
 <CardGrid>
-  <Card title="Latest Release" icon="rocket" href="https://github.com/kochetkov-ma/claude-brewcode/releases/latest">
-    Download, changelog, and installation instructions.
+  <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">
+    Install, commands and plugin structure.
   </Card>
-  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/agents">
-    Source code, README, and configuration files.
+  <Card title="Skills" icon="book" href="/brewtools/skills/">
+    The 13 skills that spawn these agents.
+  </Card>
+  <Card title="View on GitHub" icon="github" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/agents">
+    Agent definitions.
   </Card>
 </CardGrid>
+
+<UpdateNotice />

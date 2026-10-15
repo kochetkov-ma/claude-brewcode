@@ -1,19 +1,15 @@
 ---
 title: "MD to PDF"
-description: "Convert Markdown to professional PDF. Two rendering engines, LLM preprocessing, style customization, dependency management."
+description: "Convert Markdown to a styled PDF with the reportlab or weasyprint engine, optional LLM preprocessing, saved style settings and a self-test mode."
 order: 23
 ---
-import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+import { Badge, Card, CardGrid, Spoiler, UpdateNotice } from '../../../../components/mdx';
 
 # md-to-pdf
 
-<Callout type="caution">
-**Raw Markdown exports look raw.** Most PDF exporters produce plain text with no styling, no code highlighting, and broken tables. Sharing a PDF that looks like a terminal dump is worse than sharing nothing.
-</Callout>
+<Badge text="sonnet" variant="primary" /> <Badge text="user-invoked" variant="secondary" />
 
-<Callout type="tip">
-**Two engines, one command.** `reportlab` requires zero system dependencies — install and go. `weasyprint` adds full CSS, syntax highlighting, and pixel-perfect tables when quality matters. LLM preprocessing lets you strip or rewrite sections before conversion.
-</Callout>
+Turns a Markdown file into a PDF next to the source. `reportlab` needs no system dependencies; `weasyprint` adds full CSS, syntax highlighting and accurate tables. An optional quoted instruction rewrites a temporary copy first, so the original is never touched.
 
 ## Quick reference
 
@@ -22,167 +18,97 @@ import { Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../compon
 | Command | `/brewdoc:md-to-pdf` |
 | Arguments | `[prompt] <file.md> [--engine name] ["llm prompt"]` \| `styles` \| `test` \| no args = help |
 | Model | sonnet |
-| Tools | Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion |
+| Output | `<file>.pdf` in the source directory, plus a summary table |
 
-## When to use
+## Modes
 
-- **Share a deliverable** — convert a SPEC.md or PLAN.md to PDF before a review meeting
-- **Archive a report** — turn a daily/weekly markdown report into a permanent PDF snapshot
-- **Preprocess before export** — strip internal sections, rewrite headings, restructure — then convert
-- **Verify engine setup** — run `test` mode to confirm your engine renders correctly end-to-end
-- **Customize appearance** — use `styles` mode once to set page size, color scheme, and code theme
+| Mode | Example | Does |
+|------|---------|------|
+| Convert | `/brewdoc:md-to-pdf README.md --engine weasyprint` | Converts; `--engine` overrides the saved engine |
+| Convert+Prompt | `/brewdoc:md-to-pdf spec.md "remove the Internal Notes section"` | Edits a temp copy, then converts |
+| Styles | `/brewdoc:md-to-pdf styles` | Sets page size, colors, code theme, footer |
+| Test | `/brewdoc:md-to-pdf test` | Renders a bundled file to verify the engine |
+| Help | `/brewdoc:md-to-pdf` | Prints usage |
 
-## Examples
-
-```bash
-# Basic conversion — output lands next to the source file
-/brewdoc:md-to-pdf README.md
-
-# Force a specific engine for this run
-/brewdoc:md-to-pdf report.md --engine weasyprint
-
-# LLM preprocessing before conversion
-/brewdoc:md-to-pdf spec.md "remove the Internal Notes section, rewrite all headings as imperatives"
-
-# Verify engine installation
-/brewdoc:md-to-pdf test
-
-# Configure page size, colors, code theme once
-/brewdoc:md-to-pdf styles
-```
+Flow: parse the mode and strip `--engine`; pick the engine (flag, project config, global config, `reportlab`; asks once if none saved); check dependencies; preprocess a temp copy when a prompt is quoted; convert, retry once after an auto-fix, print the summary.
 
 ## Engines
 
 | Feature | reportlab | weasyprint |
 |---------|-----------|------------|
-| Installation | pip only | pip + brew (system deps) |
-| Quality | Good | Excellent |
-| Speed | Fast | Moderate |
-| Images | Basic | Full |
-| CSS styling | No | Yes |
+| Install | pip only | pip + brew system deps |
+| Quality / speed | Good / fast | Excellent / moderate |
+| Images, CSS | Basic, no CSS | Full, CSS |
 | Code highlighting | No | Yes (Pygments) |
 | Best for | Quick text docs | Tables, code, complex layout |
 
-Engine is saved to `.claude/md-to-pdf.config.json` after first selection. Override any run with `--engine`.
+The default is `reportlab`. The first conversion asks for an engine and saves it to `.claude/md-to-pdf.config.json`; `--engine` overrides any run.
 
-## Flow
+## Example
 
-<Steps>
-  <li>
-    <div>
-      <strong>Parse arguments</strong>
-      <p>Detects mode from arguments — HELP, STYLES, TEST, CONVERT, or CONVERT+PROMPT. Extracts `--engine` flag if present.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Engine selection</strong>
-      <p>Reads saved config from project (<code>.claude/md-to-pdf.config.json</code>) or global (<code>&#126;/.claude/md-to-pdf.config.json</code>). With no saved engine, CONVERT modes ask via an interactive comparison prompt; TEST mode uses <code>reportlab</code> and writes nothing. Selection is merged into the project config, so saved engine and style keys survive.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Dependency check</strong>
-      <p>Runs <code>check_deps.sh check ENGINE</code>. If packages are missing, offers three options: install the current engine, switch to the other engine, or cancel. Installation is automatic on user consent. HELP and STYLES modes skip this step.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>LLM preprocessing (CONVERT+PROMPT only)</strong>
-      <p>Reads the source file, applies the quoted instruction — delete sections, rewrite headings, restructure — writes result to a temp file. The temp file feeds the converter; original stays untouched.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Convert</strong>
-      <p>Runs `md_to_pdf.py INPUT OUTPUT --engine ENGINE`, passing `--config` and, for weasyprint, the saved <code>pygments_theme</code> as `--pygments-theme`. On failure, reads error output, attempts one auto-fix, and retries. If still failing, reports the full error and stops.</p>
-    </div>
-  </li>
-  <li>
-    <div>
-      <strong>Report results</strong>
-      <p>Prints a summary table: source path, output path, page count, file size, engine used, and preprocessing summary (or <code>none</code>).</p>
-    </div>
-  </li>
-</Steps>
+```bash
+/brewdoc:md-to-pdf docs/report.md --engine weasyprint
+```
 
-<details>
-<summary>Customization & internals</summary>
+The skill writes `docs/report.pdf` and prints source, output, page count, size, engine and preprocessing summary (`none` without a prompt).
 
-### Styles mode
+<Spoiler id="styles-config" title="Styles and config">
 
-Run `/brewdoc:md-to-pdf styles` for four interactive questions:
+`styles` asks four questions and merges the answers into `.claude/md-to-pdf.config.json`, so a saved `engine` survives.
 
 | Parameter | Options | Default |
 |-----------|---------|---------|
 | Page size | A4, Letter, Legal | A4 |
-| Color scheme | Default blue (#1a3a5c), Dark (#2d3748), Custom hex | Default blue |
+| Color scheme | Default blue (#1a3a5c), Dark (#2d3748), custom hex | Default blue |
 | Code theme (weasyprint) | github, monokai, friendly, solarized-dark, solarized-light | github |
-| Footer | `Page {page} of {total}`, `{page}/{total}`, Disabled | `Page {page} of {total}` |
+| Footer | `Page {page} of {total}`, `{page}/{total}`, disabled | `Page {page} of {total}` |
 
-Config is saved to `.claude/md-to-pdf.config.json`, always carrying `version` / `content_version` / `generated_by` / `last_updated` (resolved from the plugin's own `plugin.json` and `SKILL.md`, never hardcoded) alongside the style settings. Example (style groups abbreviated):
+Config keys (`styles` saves the `styles/default.json` structure with the changed values):
+
+| Key | Holds |
+|-----|-------|
+| `engine` | `reportlab` or `weasyprint` |
+| `page`, `colors`, `typography`, `code`, `footer` | Style groups the converter reads (size, palette, font sizes, code font, footer `enabled`/`format`) |
+| `pygments_theme` | Code theme, passed to weasyprint as `--pygments-theme` |
+| `version`, `content_version`, `generated_by`, `last_updated` | Provenance, resolved from the plugin on every write |
 
 ```json
 {
   "engine": "weasyprint",
   "page": { "size": "Letter" },
   "colors": { "primary": "#2d3748" },
-  "typography": { "body_size": 9 },
-  "code": { "theme": "monokai", "font_size": 8 },
   "footer": { "enabled": true, "format": "{page}/{total}" },
-  "pygments_theme": "monokai",
-  "version": "X.Y.Z",
-  "content_version": "X.Y.Z",
-  "generated_by": "brewdoc:md-to-pdf",
-  "last_updated": "2026-08-08"
+  "pygments_theme": "monokai"
 }
 ```
 
-Styles mode saves the `styles/default.json` structure (`page`, `colors`, `typography`, `code`, `footer`) with the changed values, plus the code theme as top-level `pygments_theme`. The save merges into the existing file, so a saved `engine` is kept.
+Lookup order: `--engine`, project `.claude/md-to-pdf.config.json`, global `~/.claude/md-to-pdf.config.json`, default `reportlab`.
 
-### Config lookup order
+**Dependency pins.** `check_deps.sh` installs exact versions only: `reportlab` 5.0.1 (reportlab); `weasyprint` 70.0, `markdown` 3.11, `pygments` 2.21.0 (weasyprint).
 
-1. `--engine` flag on the command line (always wins)
-2. Project config: `.claude/md-to-pdf.config.json`
-3. Global config: `&#126;/.claude/md-to-pdf.config.json`
-4. Default: `reportlab`
+</Spoiler>
 
-### Test mode
+<Spoiler id="test-and-temp-files" title="Test mode, temp files and images">
 
-`/brewdoc:md-to-pdf test` converts the bundled `test-all-elements.md` to `md-to-pdf-test-ENGINE.pdf` inside a private `mktemp -d` directory (mode 0700) that is removed on exit. The report marks the path "(removed on exit)". The test file exercises all supported Markdown elements — headings, tables, code blocks, images, lists — so you can visually verify engine output before converting real files.
+`test` converts the bundled `test-all-elements.md` (headings, tables, code, images, lists) into a private `mktemp -d` directory (mode 0700) removed on exit; with no saved engine it uses `reportlab` and writes no config.
 
-### CONVERT+PROMPT temp file lifecycle
+Convert+Prompt creates `{original_dir}/.tmp_XXXXXX` with a random suffix, so concurrent runs never collide; a trap removes it on exit. A remote, missing or unreadable image logs a warning with the path and alt text, and conversion continues.
 
-The temp file is created with `mktemp "{original_dir}/.tmp_XXXXXX"` — a random suffix, never composed from the source name. Each invocation gets its own unique temp file, so concurrent conversions of the same source never collide. A trap constrained to the `.tmp_??????` basename removes it on exit regardless of success or failure. The original source file is never modified.
+Tests: `bash brewdoc/skills/md-to-pdf/tests/run.sh` (14 checks).
 
-Tests: `bash brewdoc/skills/md-to-pdf/tests/run.sh` — 14 checks covering concurrent conversions, temp-file uniqueness, and leftover cleanup.
+</Spoiler>
 
-### Dependency pins
-
-`check_deps.sh` installs and checks these exact versions — no floating versions:
-
-| Package | Version | Engine |
-|---------|---------|--------|
-| `reportlab` | `5.0.1` | reportlab |
-| `weasyprint` | `70.0` | weasyprint |
-| `markdown` | `3.11` | weasyprint |
-| `pygments` | `2.21.0` | weasyprint |
-
-### Missing images
-
-If a referenced image can't be resolved (remote URL, missing file, or a read error), conversion emits a warning naming the file path and the image's alt text, then continues without it.
-
-</details>
+## Related
 
 <CardGrid>
-  <Card title="Publish skill" icon="rocket" href="/brewdoc/skills/publish/">
-    Push generated PDFs (and other artifacts) to remote destinations via the publish skill.
-  </Card>
-  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewdoc/skills/md-to-pdf">
-    Source code, scripts, and bundled test file.
+  <Card title="Publish" icon="rocket" href="/brewdoc/skills/publish/">
+    Share the generated PDF as a link.
   </Card>
   <Card title="Brewdoc overview" icon="document" href="/brewdoc/overview/">
-    All brewdoc skills — docsync, memory, my-claude, md-to-pdf, and more.
+    All brewdoc skills.
+  </Card>
+  <Card title="GitHub source" icon="github" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewdoc/skills/md-to-pdf">
+    Scripts, styles and the bundled test file.
   </Card>
 </CardGrid>
 

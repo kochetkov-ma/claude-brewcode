@@ -56,6 +56,11 @@ jobs:
           printf '{"version":"%s","sha":"%s","buildRunId":"%s"}\n' \
             "$VERSION" "$SHA" "$GITHUB_RUN_ID" > web/docs/public/build-info.json
 
+      - name: Stage demo GIFs into the build context
+        run: |
+          mkdir -p web/docs/public/demos
+          cp assets/demos/*.gif web/docs/public/demos/
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4.4.1
 

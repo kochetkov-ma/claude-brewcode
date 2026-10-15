@@ -3,182 +3,139 @@ title: "Agents"
 description: "Manage Claude Code agents — create, improve, review, sync (memory sync), or list project and global agents with auto-mode selection."
 order: 1116
 ---
-import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../../components/mdx';
+import { Badge, Card, CardGrid, Spoiler, Steps, UpdateNotice } from '../../../../components/mdx';
 
 # agents <Badge variant="secondary" text="opus" />
 
-<Callout type="tip" title="Prompt-driven">Give a free-form prompt; the skill auto-selects a mode and tells you why. No keyword grammar.</Callout>
-
-<Callout type="note" title="Current authoring contracts">
-Agent and hook references were refreshed through Claude Code 2.1.296. They distinguish execution surfaces, plugin-ignored fields, and event-specific hook contracts — see [Reference files](#reference-files).
-</Callout>
+Manages the agent roster across project, global and plugin scopes. Give one free-form prompt; the skill picks a mode, prints a `PLAN` block, and tells you why. No keyword grammar.
 
 ## Quick reference
 
 | Field | Value |
 |-------|-------|
 | Command | `/brewcode:agents` |
-| Input | free-form prompt; empty defaults to read-only status |
+| Input | `[prompt] [status\|list\|create\|improve\|review\|sync]`; empty = read-only status |
 | Specialist | `brewcode:agent-creator` |
 | List source | `.claude/agents/`, `~/.claude/agents/`, `${CLAUDE_PLUGIN_ROOT}/agents/` (shipped, read-only) |
 | Model | opus |
 
 ## When to use
 
-- Check the status of all agents across project and global scopes
-- Create a new agent from a plain-English description
-- Improve an existing agent's trigger phrases or system prompt
-- Review an agent for quality, focus, and trigger coverage
-- Sync agent files against real code/CLAUDE.md/rules after a repo, session, or commit changed (memory sync)
-- Batch-create or batch-improve a set of agents in one pass
-
-## Examples
-
-```bash
-/brewcode:agents
-/brewcode:agents status of my agents
-/brewcode:agents create a backend validator agent
-/brewcode:agents improve reviewer
-/brewcode:agents sync
-/brewcode:agents sync from the current session
-```
-
-## How it works
-
-<Steps>
-  <li><div><strong>Input gate</strong><p>Reads the complete free-text prompt. Empty input defaults to read-only status. An explicitly requested menu opens the menu; other prompts resolve a mode and target.</p></div></li>
-  <li><div><strong>Auto-mode select</strong><p>Classifies the prompt by keywords, intent, and target presence, then prints the <code>PLAN — brewcode:agents</code> block once before the first action: <code>INPUT</code>, <code>MODE</code> (explicit, matched keyword, or default), <code>SCOPE</code>, <code>DO</code>, and <code>RESULT</code>.</p></div></li>
-  <li><div><strong>Resolve material decisions once</strong><p>Reuse supplied prompt/history answers. Read-only runs ask nothing unless you request a menu. Before writes, bundle unresolved decisions that change scope or output into one AskUserQuestion call, with at most four questions.</p></div></li>
-  <li><div><strong>Dispatch</strong><p>Create, improve, and sync delegate through Agent to brewcode:agent-creator with bounded ownership and relevant context. Review uses the project's reviewer or general-purpose fallback. Sync fans out one file per owner. After create/improve, the coordinator checks only the written file against the shared sync reference and applies verified corrections.</p></div></li>
-  <li><div><strong>Real status</strong><p>Four blocks, never a flat list: inventory by scope (shipped plugin, read-only / plugin source, workspace-only / project / global — counts, names, load path), state (enabled or disabled via setup config or <code>&lt;name&gt;.disabled</code> parking, legacy <code>_&lt;name&gt;.md</code> markers flagged, model), overlaps and conflicts (same name shadowed across scopes, duplicate triggers or descriptions), and health flags (missing README or frontmatter, agents whose <code>tools:</code> names none of <code>Bash</code>, <code>Glob</code>, <code>Grep</code>).</p></div></li>
-  <li><div><strong>Final output</strong><p>Prints a detection + result table: mode chosen, target, file path, model, scope, and CLAUDE.md update status. Suggests next steps such as <code>/reload-plugins</code> and a test invocation phrase.</p></div></li>
-</Steps>
+| Situation | Prompt |
+|-----------|--------|
+| See which agents exist and where they overlap | `/brewcode:agents` |
+| Add an expert for a recurring job | `/brewcode:agents create a backend validator agent` |
+| Fix weak triggers or a bloated system prompt | `/brewcode:agents improve <agent-name>` |
+| Re-check agent files against the code | `/brewcode:agents sync from the current session` |
 
 ## Modes
 
-| Mode | Trigger | Action |
-|------|---------|--------|
-| status | default for any "show me" intent — "status", "what exists", "state" (Russian prompts work too) | Inventory by scope, state, overlaps, health flags |
-| list | explicit only — "list" | Globs `*.md` across `.claude/agents/`, `~/.claude/agents/`, `${CLAUDE_PLUGIN_ROOT}/agents/` (shipped, read-only), plus `brewcode/agents/` only inside the plugin workspace (`test -d brewcode/.claude-plugin`) |
-| create | "create" / "new" / "add" / "scaffold" | Scaffolds a new agent file via `agent-creator`; asks scope, model, CLAUDE.md update |
-| improve | "improve" / "refactor" / "fix", or a bare existing `<name\|path>` | Tunes description triggers and system prompt quality |
-| review | "review" / "validate" / "check correctness" | Single reviewer — the project's agent from `.claude/agents/`, else `general-purpose` — two-phase: review, then double-check the findings |
-| sync | `sync`, `memory sync`, "update knowledge", "bring in line with the code" | Memory sync: rewrites agent files against ground truth via the shared reference; non-growth guaranteed |
-| batch | auto-detected fan-out flag | Not a menu item — auto-detected from plural form, "all", or multiple names/paths; triggers parallel delegation when creating or improving multiple agents |
+| Mode | Trigger | Does |
+|------|---------|------|
+| status | default for any "show me" intent | Inventory by scope, state, overlaps, health flags |
+| list | explicit "list" only | Plain listing of `*.md` across all agent scopes |
+| create | "create" / "new" / "add" / "scaffold" | Scaffolds an agent via `agent-creator` |
+| improve | "improve" / "refactor" / "fix", or a bare name | Tunes description triggers and system prompt |
+| review | "review" / "validate" | One reviewer (project agent, else `general-purpose`): review, then double-check |
+| sync | `sync`, `memory sync`, "bring in line with the code" | Re-verifies each agent file against the code, deletes first, never grows |
 
-## Reference files
+Batch is a flag, not a mode: a plural form, "all" or several names fan out to one spawn per agent. Russian prompts work too.
 
-`agent-creator`, `hook-creator` and `mod-creator` read their domain knowledge from this skill's
-own `references/` directory, each agent only the file it needs, on demand. 16 files: 5 `agent-*`,
-6 `hooks-*`, 5 `mods-*`. The agent and hooks files stay under 200 lines; `mods-api.md` and
-`mods-patterns.md` run longer.
+## Example
 
-| File | Used by | Holds |
-|------|---------|-------|
-| [agent-frontmatter-fields.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/agent-frontmatter-fields.md) | agent-creator | AG file format, frontmatter field reference (incl. `experimental.cacheTtl`) |
-| [agent-scope-and-tools.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/agent-scope-and-tools.md) | agent-creator | Available tools, model precedence, scope rules |
-| [agent-context-and-execution.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/agent-context-and-execution.md) | agent-creator | Subagent context inheritance, execution modes, resource limits |
-| [agent-template.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/agent-template.md) | agent-creator | Description budget, system-prompt structure, guardrails, validation checklist |
-| [agent-known-issues.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/agent-known-issues.md) | agent-creator | Known bugs, limitations, version history, debugging |
-| [hooks-events.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/hooks-events.md) | hook-creator | Session lifecycle order, 33-event table, matcher pattern syntax |
-| [hooks-io-contract.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/hooks-io-contract.md) | hook-creator | Stdin fields, message-routing matrix, exit codes, output schemas |
-| [hooks-types-config.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/hooks-types-config.md) | hook-creator | 5 hook types and their config fields, precedence |
-| [hooks-env.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/hooks-env.md) | hook-creator | Env vars, sensitive-path prompt, project-root resolution |
-| [hooks-templates.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/hooks-templates.md) | hook-creator | Bash/JS hook skeletons, fail-safe design rules, pre-ship checklist |
-| [hooks-changes.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/hooks-changes.md) | hook-creator | Changes through 2.1.296 and known contract limits |
-| [mods-api.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/mods-api.md) | mod-creator | Symbol index (drift-checked), event and `$` noun catalog, manifest shapes, limits of the mod API |
-| [mods-lifecycle.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/mods-lifecycle.md) | mod-creator | Mod road: scaffold, hooks module, validate, tsc, test, run, debug, ship, maintain |
-| [mods-patterns.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/mods-patterns.md) | mod-creator | Recipes for brewcode mods and any other mod, each marked `proven` or `[unproven]` |
-| [mods-testing.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/mods-testing.md) | mod-creator | The `claude-code/testing` kit, test patterns, CI wiring, headless and tmux TTY checks |
-| [mods-changes.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/references/mods-changes.md) | mod-creator | Per-version log of mod API changes and the self-update procedure |
+```bash
+/brewcode:agents create a backend validator agent
+/brewcode:agents sync from the current session
+```
 
-**Drift check:** `scripts/mods-ref-check.mjs <types.d.ts> <refs dir>` compares every symbol-index row of `mods-api.md` with the Claude Code types file. Exit code 0 = clean, 1 = drift, 2 = error; the verdict is the first stdout line. `tests/run.sh` runs its offline suite and adds a live check when `MODS_TYPES=<types.d.ts>` is set.
+The first prints a `PLAN` block, asks scope, model and CLAUDE.md update in one question, then reports the file path, model and next steps (`/reload-plugins`, a test phrase). The second re-verifies agent files against the session and reports the line delta.
 
-## Delegation
+<Spoiler id="how-it-works" title="How it works">
 
-Ordinary subagents receive bounded context through the Agent prompt and cannot use AskUserQuestion;
-unresolved user decisions return to the main caller. Conversation forks retain parent history
-and tools. A skill's context: fork is an ordinary subagent, not a conversation fork.
-Upstream nested-agent depth support does not override this project's main-caller ownership of
-delegation, decisions, and acceptance. A partial maxTurns return is unfinished work, even when
-files were written; inspect checkpoint evidence before resuming or declaring completion.
+<Steps>
+  <li><div><strong>Input gate</strong><p>Reads the whole prompt. Empty input runs read-only status; only an explicit menu request opens the menu.</p></div></li>
+  <li><div><strong>Announce</strong><p>Prints `PLAN — brewcode:agents` once: INPUT, MODE, SCOPE, DO, RESULT.</p></div></li>
+  <li><div><strong>Decide once</strong><p>Bundles unresolved write decisions into one AskUserQuestion (at most four questions). Read-only runs ask nothing.</p></div></li>
+  <li><div><strong>Dispatch</strong><p>Create, improve and sync go to `brewcode:agent-creator`, one spawn per file; review goes to one reviewer.</p></div></li>
+  <li><div><strong>Scoped sync</strong><p>After create or improve, the coordinator checks only the written file against the shared sync reference.</p></div></li>
+  <li><div><strong>Report</strong><p>Prints mode, target, path, model, scope and CLAUDE.md status.</p></div></li>
+</Steps>
 
-Plugin agents ignore frontmatter hooks, mcpServers, permissionMode, and initialPrompt. Place
-plugin hooks in hooks/hooks.json; use the appropriate local/session surface when those agent
-fields are required. Local files and CLI JSON also have different supported fields. The hook
-references cover 33 events and five handler types with event-specific output and type support.
+</Spoiler>
 
-<Callout type="caution" title="Why the rule exists">
-  A big task handed to one agent = an agent gone for an hour: you cannot observe it, cannot correct it, and it usually drifts off-target.
-</Callout>
+Delegation of the fan-out follows the six-field brief in [Delegation](/brewcode/skills/#delegation). One subagent owns one agent definition.
 
-One subagent = **ONE bounded unit** — here, ONE agent definition: roughly 5 files, roughly 10 steps. "Create the whole roster" is never one task; a batch is split into N spawns fired in **ONE message**, one `agent-creator` per agent file.
+Authoring a Claude Code mod is a separate job: see [mod-creator](/brewcode/agents/mod-creator/) and [mods](/mods/overview/).
 
-Every spawn prompt carries six fields. A bare one-line task is never enough:
+## Technical details
 
-| Field | Content |
-|-------|---------|
-| GOAL | the overall task and why it exists — the point beyond the file edit |
-| ROLE | what this agent owns; what it must NOT touch |
-| SCOPE | exact paths/commands in bounds + explicit out-of-bounds |
-| CONTEXT | what is already done, by whom, what runs in parallel — trimmed to what THIS agent needs |
-| CONSUMER | who or what uses the result next, and the shape it must fit |
-| DONE | acceptance criteria + the exact report shape you want back |
-
-For `create`, that means the specialist is told the scope and model were already decided (do not re-ask), which agents already exist and must not be duplicated, how many siblings run in parallel, and that its description line drops verbatim into the CLAUDE.md agents table row written right after it finishes.
-
-<details>
-<summary>Create / improve parameters</summary>
+<Spoiler id="parameters" title="Create / improve parameters">
 
 | Parameter | Options | Notes |
 |-----------|---------|-------|
-| Scope | Project / Global / Plugin | Project → `.claude/agents/`; Global → `~/.claude/agents/`; Plugin → `brewcode/agents/`, offered only when `test -d brewcode/.claude-plugin` succeeds (the dev/plugin workspace) — elsewhere the option is dropped, since it would write a stray `<cwd>/brewcode/agents/` |
-| Model | sonnet / opus / haiku / inherit, or a verified supported model id | Inherit uses the caller's model; choose from the current supported catalog rather than an assumed alias |
-| CLAUDE.md update | yes / no | Adds or updates the agent row in the agents table; appends a new section if none exists |
-| Improve focus | triggers / system prompt / both / full review | Asked for improve mode only |
-| Description | Canonical budget ≤150 tokens, approximately 600 characters; lead sentence ≤160 characters | Drives discovery; ≤100 characters is an optional brevity target, not a second required cap |
-| Specialist | `brewcode:agent-creator` | Handles file scaffolding and prompt engineering; never writes under `${CLAUDE_PLUGIN_ROOT}` — the installed plugin copy is read-only |
+| Scope | Project / Global / Plugin | Project: `.claude/agents/`; Global: `~/.claude/agents/`; Plugin: `brewcode/agents/`, offered only when `test -d brewcode/.claude-plugin` succeeds |
+| Model | sonnet / opus / haiku / inherit, or a verified model id | Inherit uses the caller's model |
+| CLAUDE.md update | yes / no | Adds or updates the agent row in the agents table |
+| Improve focus | triggers / system prompt / both / full review | Improve mode only |
+| Description | Budget ≤150 tokens (about 600 characters); lead sentence ≤160 characters | Drives discovery; ≤100 characters is an optional target |
+| Specialist | `brewcode:agent-creator` | Never writes under `${CLAUDE_PLUGIN_ROOT}`: the installed copy is read-only |
 
-`improve` resolves the target across the writable scopes (project / global / plugin workspace) only.
-A name that only matches under the shipped, read-only `${CLAUDE_PLUGIN_ROOT}/agents/` is reported and
-the skill stops — it is never copied or edited.
+`improve` resolves the target across writable scopes only. A name found only under the shipped `${CLAUDE_PLUGIN_ROOT}/agents/` is reported and the skill stops.
 
-</details>
+</Spoiler>
 
-<details>
-<summary>Sync mode</summary>
+<Spoiler id="sync-mode" title="Sync mode">
 
 | Scope | Meaning |
 |-------|---------|
 | `repo` (default) | Whole working tree |
-| `session` | This conversation only — decisions, user corrections, bugs hit |
-| `commit` | `git show`/`git diff <ref>`, default `HEAD` |
+| `session` | This conversation: decisions, corrections, bugs hit |
+| `commit` | `git show` / `git diff <ref>`, default `HEAD` |
 
-Announced as `Sync scope: <scope> — <evidence> | targets: <N> agents`. Implemented in `brewcode/skills/skills/references/mode-sync.md` (steps S1-S6) via the constant `SYNC_REF` = `${CLAUDE_SKILL_DIR}/../skills/references/mode-sync.md` — the same file `/brewcode:skills sync` runs, so the two rosters cannot drift apart.
+Announced as `Sync scope: <scope> — <evidence> | targets: <N> agents`. Implemented in `brewcode/skills/skills/references/mode-sync.md` (steps S1-S6), the same file `/brewcode:skills sync` runs.
 
-**Non-growth directive:** each synced file ends `<=` its original line count; total delta `<= 0`. Any positive delta needs per-line justification. Order: DELETE first, then FIX, then ADD last.
-
-**Auto-dispatch after create/improve:** once a `create` or `improve` completes, the same reference runs again scoped to only the file just written — S3 ground truth through S5 verdicts, folded into one row of the final report. No second `agent-creator` spawn: the coordinator applies every verdict itself with targeted `Edit` calls, since S4 fan-out is skipped for this scoped pass. A clean file reports one line: `sync: no drift`.
+**Non-growth:** each synced file ends at or below its original line count; total delta ≤ 0. Order: DELETE, then FIX, then ADD. A clean file reports `sync: no drift`.
 
 | Verdict | Action |
 |---------|--------|
 | STALE | Fix to minimal true form |
-| DEAD | Delete, plus anything that only existed to explain it |
+| DEAD | Delete, plus anything that only explained it |
 | DUPLICATE | Keep the single best location |
 | OBVIOUS | Delete |
 | DRIFT | Compress prose to a table row |
-| MISSING | Add `<=` 1 line, only if verified against a real source and its absence costs a real failure |
+| MISSING | Add ≤ 1 line, only if verified against a real source |
 
-**Report:** per-target table (File \| Lines before → after \| Fixed \| Deleted \| Added \| Key change), stale facts corrected, added items with source, skipped agents, total delta.
+Report: per-target table (File, Lines before → after, Fixed, Deleted, Added, Key change), corrected facts, added items with source, skipped agents, total delta.
 
-</details>
+</Spoiler>
+
+<Spoiler id="reference-files" title="Reference files">
+
+`agent-creator`, `hook-creator` and `mod-creator` read domain knowledge from this skill's `references/` directory, each only the file it needs: 16 files in [references/](https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/agents/references).
+
+| Prefix | Used by | Holds |
+|--------|---------|-------|
+| `agent-*` (5) | agent-creator | File format, frontmatter fields, scope and tools, context and execution, template and checklist, known issues |
+| `hooks-*` (6) | hook-creator | 33-event table, stdin and output contract, 5 handler types, env vars, templates, changes through 2.1.296 |
+| `mods-*` (5) | mod-creator | API index, mod lifecycle, patterns, testing kit, per-version changes |
+
+**Drift check:** `scripts/mods-ref-check.mjs <types.d.ts> <refs dir>` compares every symbol-index row of `mods-api.md` with the Claude Code types file. Exit 0 = clean, 1 = drift, 2 = error; the verdict is the first stdout line. `tests/run.sh` runs the offline suite and adds a live check when `MODS_TYPES=<types.d.ts>` is set.
+
+</Spoiler>
+
+<Spoiler id="plugin-agent-limits" title="Plugin agent limits">
+
+Plugin agents ignore frontmatter `hooks`, `mcpServers`, `permissionMode` and `initialPrompt`; place plugin hooks in `hooks/hooks.json`. Ordinary subagents cannot use AskUserQuestion, so unresolved decisions return to the main caller. A partial `maxTurns` return is unfinished work: inspect checkpoint evidence before resuming.
+
+</Spoiler>
+
+## Related
 
 <CardGrid>
-  <Card title="rules" icon="list" href="/brewcode/skills/rules/">Sibling: manage project rules</Card>
   <Card title="skills" icon="pencil" href="/brewcode/skills/skills/">Sibling: manage skills</Card>
-  <Card title="memory-sync-setup" icon="sync" href="/brewdoc/skills/memory-sync-setup/">Sibling: generates a project-local sync over memory files, CLAUDE.md, rules — same non-growth rule</Card>
+  <Card title="rules" icon="list" href="/brewcode/skills/rules/">Sibling: manage project rules</Card>
   <Card title="brewcode" icon="rocket" href="/brewcode/overview/">Plugin overview</Card>
-  <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/SKILL.md">SKILL.md</Card>
+  <Card title="GitHub source" icon="github" href="https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/skills/agents/SKILL.md">SKILL.md</Card>
 </CardGrid>
 
 <UpdateNotice />

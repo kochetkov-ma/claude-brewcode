@@ -6,28 +6,33 @@ interface Props {
 }
 
 const { currentSlug = '' } = Astro.props;
+
+const modSlugs = navigation.filter((s) => s.kind === 'mod').flatMap((s) => s.items.map((i) => i.slug));
+const inMods = modSlugs.includes(currentSlug);
+const isActivePlugin = (slug?: string) =>
+  !!slug && !inMods && currentSlug.startsWith(`${slug.split('/')[0]}/`);
+const linkClass = (active: boolean, mod: boolean) => [
+  'rounded-lg min-h-10 lg:min-h-0',
+  active
+    ? mod
+      ? 'active bg-mod/15 text-mod font-medium'
+      : 'active bg-primary/10 text-primary font-medium'
+    : 'text-base-content/70 hover:text-base-content hover:bg-base-300',
+];
 ---
 
 <nav id="sidebar-nav" class="overflow-y-auto" aria-label="Documentation navigation">
   <ul class="menu menu-sm gap-1">
-    {navigation.map((section) => (
-      <li>
-        <h3 class="menu-title text-base-content/50 font-headline text-xs uppercase tracking-wider mt-4 first:mt-0">
-          {section.title}
-        </h3>
+    {navigation.map((section) => {
+      const isMod = section.kind === 'mod';
+      const visible = section.items.filter((item) => !item.hidden);
+      const body = (
         <ul>
-          {section.items.map((item) =>
+          {visible.map((item) =>
             item.children && item.children.length > 0 ? (
               <li>
                 <details open={currentSlug.startsWith(item.slug)}>
-                  <summary
-                    class:list={[
-                      'rounded-lg',
-                      currentSlug === item.slug
-                        ? 'active bg-primary/10 text-primary font-medium'
-                        : 'text-base-content/70 hover:text-base-content hover:bg-base-300',
-                    ]}
-                  >
+                  <summary class:list={linkClass(currentSlug === item.slug, false)}>
                     <a
                       href={`/${item.slug}/`}
                       class="no-underline text-inherit"
@@ -41,12 +46,7 @@ const { currentSlug = '' } = Astro.props;
                       <li>
                         <a
                           href={`/${child.slug}/`}
-                          class:list={[
-                            'rounded-lg',
-                            currentSlug === child.slug
-                              ? 'active bg-primary/10 text-primary font-medium'
-                              : 'text-base-content/70 hover:text-base-content hover:bg-base-300',
-                          ]}
+                          class:list={linkClass(currentSlug === child.slug, false)}
                           aria-current={currentSlug === child.slug ? 'page' : undefined}
                         >
                           {child.title}
@@ -60,27 +60,82 @@ const { currentSlug = '' } = Astro.props;
               <li>
                 <a
                   href={`/${item.slug}/`}
-                  class:list={[
-                    'rounded-lg',
-                    currentSlug === item.slug
-                      ? 'active bg-primary/10 text-primary font-medium'
-                      : 'text-base-content/70 hover:text-base-content hover:bg-base-300',
-                  ]}
+                  class:list={linkClass(currentSlug === item.slug, isMod)}
                   aria-current={currentSlug === item.slug ? 'page' : undefined}
                 >
                   {item.title}
+                  {item.tag && (
+                    <span class="ml-1 rounded border border-mod/40 px-1.5 text-[0.6875rem] leading-4 text-mod">
+                      {item.tag}
+                    </span>
+                  )}
                 </a>
               </li>
             ),
           )}
         </ul>
-      </li>
-    ))}
+      );
+      return (
+        <>
+          {section.eyebrow && (
+            <li class="mt-6 mb-1 px-3 text-[0.6875rem] font-headline uppercase tracking-widest text-base-content/50" aria-hidden="true">
+              {section.eyebrow}
+            </li>
+          )}
+          <li class:list={[isMod && 'my-3 rounded bg-mod/10 border border-mod/30 py-1']}>
+            {section.collapsible && section.slug ? (
+              visible.length === 0 ? (
+                <a
+                  href={`/${section.slug}/`}
+                  class:list={[
+                    'font-headline text-[0.8125rem] font-semibold uppercase tracking-wider min-h-10 lg:min-h-0',
+                    currentSlug === section.slug ? 'text-primary' : 'text-base-content/70',
+                  ]}
+                  aria-current={currentSlug === section.slug ? 'page' : undefined}
+                >
+                  {section.title}
+                </a>
+              ) : (
+                <details open={isActivePlugin(section.slug)}>
+                  <summary class="font-headline text-[0.8125rem] font-semibold uppercase tracking-wider min-h-10 lg:min-h-0">
+                    <a
+                      href={`/${section.slug}/`}
+                      class:list={[
+                        'no-underline',
+                        currentSlug === section.slug ? 'text-primary' : 'text-base-content/70',
+                      ]}
+                      aria-current={currentSlug === section.slug ? 'page' : undefined}
+                    >
+                      {section.title}
+                    </a>
+                  </summary>
+                  {body}
+                </details>
+              )
+            ) : (
+              <>
+                <h3
+                  class:list={[
+                    'menu-title font-headline text-[0.8125rem] font-semibold uppercase tracking-wider mt-4 first:mt-0',
+                    isMod ? 'text-mod' : 'text-base-content/70',
+                  ]}
+                >
+                  {section.title}
+                </h3>
+                {body}
+              </>
+            )}
+          </li>
+        </>
+      );
+    })}
   </ul>
 </nav>
 
 <script>
-  document.addEventListener('astro:page-load', () => {
+  import { onPageInit } from '../../utils/page-init';
+
+  onPageInit(() => {
     const nav = document.getElementById('sidebar-nav');
     if (!nav) return;
 
