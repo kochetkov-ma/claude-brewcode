@@ -14,13 +14,14 @@ const OLD = '0.0.1';
 const ID = 'brewcode@claude-brewcode';
 const OTHERS = ['brewdoc', 'brewtools', 'brewui', 'brewmod-plan-effort', 'brewmod-placeholders'];
 
-// Stub `claude`: logs {cwd,args}; `update` moves rows of that scope (project/local: projectPath == cwd) to $STUB_VERSION.
+// Stub `claude`: logs {cwd,args}; `update` moves rows of that scope to $STUB_VERSION; $STUB_LIST_FAIL fails `list`, $STUB_FAIL_RC sets the failure rc.
 const STUB = `#!/usr/bin/env node
 const fs = require('fs'), path = require('path');
 const args = process.argv.slice(2), cwd = fs.realpathSync(process.cwd());
 fs.appendFileSync(process.env.STUB_LOG, JSON.stringify({ cwd, args }) + '\\n');
 const file = path.join(process.env.CLAUDE_CONFIG_DIR, 'plugins', 'installed_plugins.json');
 const db = JSON.parse(fs.readFileSync(file, 'utf8'));
+if (args[1] === 'list' && process.env.STUB_LIST_FAIL) { console.error('stub list failure'); process.exit(1); }
 if (args[1] === 'list') {
   const rows = Object.entries(db.plugins).flatMap(([id, rs]) => rs.map(r => ({ id, scope: r.scope, version: r.version,
     projectPath: r.projectPath ?? null, installPath: r.installPath, enabled: true })));
@@ -29,7 +30,7 @@ if (args[1] === 'list') {
 }
 if (args[1] !== 'update') process.exit(0);
 const id = args[2], si = args.indexOf('--scope'), scope = si > 0 ? args[si + 1] : 'user';
-if ((process.env.STUB_FAIL_SCOPES || '').split(',').includes(scope)) { console.error('stub failure ' + scope); process.exit(1); }
+if ((process.env.STUB_FAIL_SCOPES || '').split(',').includes(scope)) { console.error('stub failure ' + scope); process.exit(Number(process.env.STUB_FAIL_RC || 1)); }
 const hits = (db.plugins[id] || []).filter(r => r.scope === scope && (scope === 'user' || r.projectPath === cwd));
 if (hits.length === 0) { console.error('not installed at scope ' + scope + ' in ' + cwd); process.exit(1); }
 const name = id.split('@')[0], dir = path.join(process.env.CLAUDE_CONFIG_DIR, 'plugins/cache/claude-brewcode', name, process.env.STUB_VERSION);
@@ -142,6 +143,50 @@ const call = (cwd, ...args) => ({ cwd, args });
             `Keep (installed): ${VER}`,
         ],
     }, 'THEN the failure is not reported green and the pin carries its exact fix');
+}
+
+// GIVEN the project-scope update exits 3 WHEN update-plugin.sh runs THEN the FAILED line carries the real exit code 3 (not the arithmetic's 0).
+{
+    const sb = sandbox();
+    const r = run(sb, 'update-plugin.sh', ['brewcode'], { STUB_FAIL_SCOPES: 'project', STUB_FAIL_RC: '3' });
+    assert.deepEqual({ rc: r.rc, failed: r.lines.filter(l => l.includes('FAILED')) },
+        { rc: 1, failed: ['   FAILED (exit 3): stub failure project'] },
+        'THEN the logged exit matches the failing command');
+}
+
+// GIVEN plugin list fails WHEN update-plugin.sh brewcode runs (dry and real) THEN the WARN goes to stderr: no bogus orphan row, real run prints "none".
+for (const dry of [true, false]) {
+    const sb = sandbox();
+    const r = run(sb, 'update-plugin.sh', dry ? ['brewcode', '--dry-run'] : ['brewcode'], { STUB_LIST_FAIL: '1' });
+    assert.deepEqual({ rc: r.rc, orphan: r.lines.filter(l => l.includes('orphan')), warn: r.lines.filter(l => l.includes('WARN')), none: r.lines.filter(l => l === '   none') },
+        { rc: 0, orphan: [], warn: [], none: dry ? [] : ['   none'] },
+        `THEN the list-failure WARN is not parsed as a project row (dry=${dry})`);
+    const logged = readFileSync(sb.updateLog, 'utf8').split('\n').filter(l => l.includes('WARN'));
+    assert.deepEqual(logged, ['   WARN: claude plugin list --json failed; project-scope installs not checked: stub list failure'],
+        `THEN the WARN still reaches the log file (dry=${dry})`);
+}
+
+// GIVEN plugin list and every update fail WHEN update-plugin.sh all runs THEN rc 1 before any update/uninstall/install: brewui and brewmod-* are never installed.
+{
+    const sb = sandbox();
+    const r = run(sb, 'update-plugin.sh', ['all'], { STUB_LIST_FAIL: '1', STUB_FAIL_SCOPES: 'user' });
+    assert.deepEqual({ rc: r.rc, calls: r.calls, errors: r.lines.filter(l => l.startsWith('ERROR')), cache: r.cache }, {
+        rc: 1,
+        calls: [call(sb.other, 'plugin', 'marketplace', 'update', 'claude-brewcode'), call(sb.other, 'plugin', 'list', '--json')],
+        errors: ['ERROR: all: installed state unknown (plugin list failed); no plugin changed - rerun with plugin names, e.g. update-plugin.sh brewcode'],
+        cache: [OLD, VER],
+    }, 'THEN unknown installed state aborts all and installs nothing');
+}
+
+// GIVEN plugin list fails WHEN update-plugin.sh all --dry-run runs THEN rc 0, only the list is called, and the plan says a real run aborts.
+{
+    const sb = sandbox();
+    const r = run(sb, 'update-plugin.sh', ['all', '--dry-run'], { STUB_LIST_FAIL: '1' });
+    assert.deepEqual({ rc: r.rc, calls: r.calls, plan: r.lines.filter(l => l.startsWith('  all:')) }, {
+        rc: 0,
+        calls: [call(sb.other, 'plugin', 'list', '--json')],
+        plan: ['  all: installed state unknown -> a real run aborts before touching any plugin (name the plugins instead)'],
+    }, 'THEN dry-run reports the abort and changes nothing');
 }
 
 // GIVEN the ~/.claude profile with stale user and project pins WHEN clean-plugin-cache.sh --dry-run runs THEN each pin line unsets CLAUDE_CONFIG_DIR.

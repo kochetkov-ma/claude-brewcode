@@ -107,22 +107,22 @@ unset CLAUDECODE
 project_rows() {
     local list
     if ! list=$(claude plugin list --json 2>&1); then
-        log "   WARN: claude plugin list --json failed; project-scope installs not checked: $list"
+        log "   WARN: claude plugin list --json failed; project-scope installs not checked: $list" >&2
         return 0
     fi
     printf '%s' "$list" | jq -r --arg names "$TARGETS" '($names | split(" ") | map(. + "@claude-brewcode")) as $ids
         | .[]? | select((.scope == "project" or .scope == "local") and (.id as $i | $ids | index($i)))
         | [.id, .scope, (.projectPath // "")] | @tsv' 2>/dev/null \
-        || log "   WARN: claude plugin list --json is not a JSON array; project-scope installs not checked"
+        || log "   WARN: claude plugin list --json is not a JSON array; project-scope installs not checked" >&2
 }
 
-# all mode: user-scope ids of this profile; list failure -> "?" (state unknown, every plugin attempted).
+# all mode: user-scope ids of this profile; list failure -> "?" (state unknown: a real run aborts, never installs).
 USER_IDS="?"
 load_user_ids() {
     local list
     if ! list=$(claude plugin list --json 2>&1) || ! USER_IDS=$(printf '%s' "$list" | jq -r '.[]? | select(.scope == "user") | .id' 2>/dev/null); then
         USER_IDS="?"
-        log "   WARN: claude plugin list --json failed; installed state unknown, every plugin is attempted"
+        log "   WARN: claude plugin list --json failed; installed state unknown"
     fi
 }
 
@@ -137,6 +137,10 @@ if [[ $DRY_RUN == true ]]; then
     log "DRY RUN - nothing is changed. Planned (CLAUDE_CONFIG_DIR=${CLAUDE_CONFIG_DIR:-<unset>}):"
     log "  claude plugin marketplace update claude-brewcode"
     [[ "$TARGET" != "all" ]] || load_user_ids
+    if [[ "$TARGET" == "all" && "$USER_IDS" == "?" ]]; then
+        log "  all: installed state unknown -> a real run aborts before touching any plugin (name the plugins instead)"
+        exit 0
+    fi
     for NAME in $TARGETS; do
         if not_installed "$NAME"; then log "  ${NAME}: not installed in this profile -> skipped"; continue; fi
         VER_VAR="$(var_key "$NAME")_VER"
@@ -165,6 +169,8 @@ fi
 [[ -n "${OUTPUT:-}" ]] && log "   $OUTPUT"
 log ""
 [[ "$TARGET" != "all" ]] || load_user_ids
+# Unknown state must not install the opt-in plugins (brewui, brewmod-*) via the reinstall fallback: abort, name plugins instead.
+[[ "$TARGET" != "all" || "$USER_IDS" != "?" ]] || err "all: installed state unknown (plugin list failed); no plugin changed - rerun with plugin names, e.g. $(basename "$0") brewcode"
 
 # --- Install helper ---
 # User-scope userConfig of plugin id $1 as key=value lines (strings raw, others JSON); none -> nothing.
@@ -264,8 +270,9 @@ while IFS=$'\t' read -r ID SCOPE PROJECT; do
     if OUTPUT=$(cd "$PROJECT" && claude plugin update "$ID" --scope "$SCOPE" 2>&1); then
         log "   OK"
     else
+        UPD_RC=$?
         PROJECT_FAILED=$((PROJECT_FAILED + 1))
-        log "   FAILED (exit $?): ${OUTPUT:-no output}"
+        log "   FAILED (exit $UPD_RC): ${OUTPUT:-no output}"
     fi
     [[ -n "${OUTPUT:-}" ]] && log "   $OUTPUT"
 done < <(project_rows)

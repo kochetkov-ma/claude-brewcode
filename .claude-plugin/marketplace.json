@@ -106,7 +106,7 @@
     },
     {
       "name": "brewui",
-      "description": "Placeholder for future UI/visual/creative tools (currently empty, installable)",
+      "description": "Brewui -- placeholder for future UI/visual/creative tools",
       "version": "6.7.0",
       "category": "productivity",
       "keywords": [
@@ -134,7 +134,7 @@
     },
     {
       "name": "brewmod-plan-effort",
-      "description": "Brewmod plan-effort - raises the main loop to the configured effort (default xhigh) only while in plan mode (Claude Code 2.1.287+ mod)",
+      "description": "Raises the main loop to the configured effort (default xhigh) while in plan mode, by rewriting each request; the session effort setting is never touched (Claude Code 2.1.287+ mod)",
       "version": "6.7.0",
       "category": "productivity",
       "keywords": [
@@ -162,7 +162,7 @@
     },
     {
       "name": "brewmod-placeholders",
-      "description": "Brewmod placeholders - ++ placeholders with live highlight, typeahead and a preview band; drop-in for the brewtools codewords (Claude Code 2.1.292+ mod)",
+      "description": "Brewmod placeholders -- expands ++m, ++a, ++r, ++rr and +++ style placeholders into prompt context, with live highlighting and user-defined placeholders (Claude Code 2.1.292+ mod)",
       "version": "6.7.0",
       "category": "productivity",
       "keywords": [
