@@ -248,17 +248,20 @@ jobs:
         run: |
           set -euo pipefail
           EXPECTED_INFO=$(printf '{"version":"%s","sha":"%s","buildRunId":"%s"}' "$EXPECTED_VERSION" "$EXPECTED_SHA" "$EXPECTED_RUN")
+          CSP_EXPECTED=$(sed -n 's/^[[:space:]]*Content-Security-Policy "\(.*\)"[[:space:]]*$/\1/p' web/docs/deploy/docs.Caddyfile)
+          [[ -n "$CSP_EXPECTED" ]] || { echo "::error::no Content-Security-Policy in web/docs/deploy/docs.Caddyfile"; exit 1; }
           for i in $(seq 1 5); do
             INFO=$(curl -fsS "${BUILD_INFO_URL}?build=${EXPECTED_RUN}" || true)
             PAGE_HASH=$(curl -fsS "${HEALTH_URL}?build=${EXPECTED_RUN}" | sha256sum | awk '{print $1}') || PAGE_HASH=""
-            if [[ "$INFO" == "$EXPECTED_INFO" && "$PAGE_HASH" == "$EXPECTED_PAGE_HASH" ]]; then
-              echo "External build metadata and content verified"
+            CSP_LIVE=$(curl -fsS -D - -o /dev/null "${HEALTH_URL}?build=${EXPECTED_RUN}" | tr -d '\r' | sed -n 's/^content-security-policy: //Ip') || CSP_LIVE=""
+            if [[ "$INFO" == "$EXPECTED_INFO" && "$PAGE_HASH" == "$EXPECTED_PAGE_HASH" && "$CSP_LIVE" == "$CSP_EXPECTED" ]]; then
+              echo "External build metadata, content and Content-Security-Policy verified"
               exit 0
             fi
-            echo "Waiting for matching build metadata/content (attempt $i/5)"
+            echo "Waiting for matching build metadata/content/CSP header (attempt $i/5)"
             sleep 5
           done
-          echo "::error::External build metadata/content did not match after 5 attempts"
+          echo "::error::External build metadata/content/CSP header did not match after 5 attempts"
           exit 1
       - name: Update deployment (success)
         if: success()
