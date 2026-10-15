@@ -29,7 +29,7 @@ Goal: mod replaces block installed command hook (brewtools) already put in `addi
 | `r.additionalContext` is `string[]`, one entry per hook; hook's blocks joined with `\n\n---\n\n` are ONE entry: split before dropping | S |
 | model reads only what mod returns; unmodified entries of other hooks survive | S (`OTHER-HOOK-CTX` run) |
 | a prompt typed mid-turn runs this hook ONCE, at queue time; one block reaches the API | TTY |
-| A/B vs brewtools alone: default-def blocks byte-equal (`++r`, `++a ++m`, `++rr`, plan `++m`/`+++`), native override beats the legacy file in the mod; brewtools off: mod injects once (`mods-testing.md` Live Headless) | AB |
+| A/B vs the pre-6.8 brewtools hook (removed since): default-def blocks byte-equal (`++r`, `++a ++m`, `++rr`, plan `++m`/`+++`), native override beats the legacy file in the mod; brewtools off: mod injects once (`mods-testing.md` Live Headless) | AB |
 | `e.permission_mode` is exact, any of the six `PermissionMode` strings (`default`, `acceptEdits`, `bypassPermissions`, `plan`, `dontAsk`, `auto`; typed `string`); `source` is absent in `-p`: never filter on it | S; T:7633 |
 | managed-org installs skip plugins' `classic.*` hooks: other plugin then injects alone; a settings hook cannot detect the mod (no field, no env var; D6 needs none) | V; S; P |
 

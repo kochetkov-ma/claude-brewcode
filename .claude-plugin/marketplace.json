@@ -73,7 +73,7 @@
     },
     {
       "name": "brewtools",
-      "description": "Brewtools - Claude Code utilities: text optimization and humanization, secrets scanning, SSH and GitHub Actions deploy, manager codewords, subagent deadline/return-size/routing guards, task board, context slimming, plugin updates, alternative API providers",
+      "description": "Brewtools - Claude Code utilities: text optimization and humanization, secrets scanning, SSH and GitHub Actions deploy, manager hard-wall guard, subagent deadline/return-size/routing guards, task board, context slimming, plugin updates, alternative API providers",
       "version": "6.7.1",
       "category": "productivity",
       "keywords": [
