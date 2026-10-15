@@ -91,6 +91,7 @@ jobs:
           for mod in ./brewmod-*/; do
             claude plugin test "$mod" || { echo "::error::claude plugin test $mod failed"; fail=1; }
           done
+          node brewmod-placeholders/tests/check-defaults.mjs || { echo "::error::brewmod-placeholders defaults drifted from defaults-pin.test.ts"; fail=1; }
           exit "$fail"
 
       - name: Skill contracts (validate-skill.sh)
