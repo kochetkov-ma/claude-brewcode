@@ -11,16 +11,17 @@ const SCRIPTS = join(dirname(fileURLToPath(import.meta.url)), '..');
 const VER = JSON.parse(readFileSync(join(SCRIPTS, '..', '..', 'brewcode/.claude-plugin/plugin.json'), 'utf8')).version;
 const ID = 'brewcode@claude-brewcode';
 
-// Stub `claude`: logs args; `update` fails when $STUB_FAIL_UPDATE is set; `update`/`install` create the VER cache dir; `list` is empty.
+// Stub `claude`: logs args; `update` fails when $STUB_FAIL_UPDATE is set; `update`/`install` create the VER cache dir; `list` prints $STUB_LIST (DEF: brewcode installed at user scope).
 const STUB = `#!/usr/bin/env node
 const fs = require('fs'), path = require('path');
 const args = process.argv.slice(2);
 fs.appendFileSync(process.env.STUB_LOG, JSON.stringify(args) + '\\n');
-if (args[1] === 'list') { process.stdout.write('[]'); process.exit(0); }
+if (args[1] === 'list') { process.stdout.write(process.env.STUB_LIST || '[{"id":"brewcode@claude-brewcode","scope":"user"}]'); process.exit(0); }
 if (args[1] === 'update' && process.env.STUB_FAIL_UPDATE) { console.error('stub update failure'); process.exit(1); }
 if (args[1] === 'update' || args[1] === 'install') {
-  fs.mkdirSync(path.join(process.env.CLAUDE_CONFIG_DIR, 'plugins/cache/claude-brewcode/brewcode', process.env.STUB_VERSION), { recursive: true });
-  fs.writeFileSync(path.join(process.env.CLAUDE_CONFIG_DIR, 'plugins/cache/claude-brewcode/brewcode', process.env.STUB_VERSION, 'plugin.json'), '{}');
+  const dir = path.join(process.env.CLAUDE_CONFIG_DIR, 'plugins/cache/claude-brewcode', args[2].split('@')[0], process.env.STUB_VERSION);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'plugin.json'), '{}');
 }
 `;
 
@@ -63,6 +64,7 @@ const SETTINGS = {
         rc: 0,
         calls: [
             ['plugin', 'marketplace', 'update', 'claude-brewcode'],
+            ['plugin', 'list', '--json'],
             ['plugin', 'update', ID],
             ['plugin', 'list', '--json'],
         ],
@@ -78,6 +80,7 @@ const SETTINGS = {
         rc: 0,
         calls: [
             ['plugin', 'marketplace', 'update', 'claude-brewcode'],
+            ['plugin', 'list', '--json'],
             ['plugin', 'update', ID],
             ['plugin', 'uninstall', 'brewcode'],
             ['plugin', 'install', ID, '--config', 'planEffort=max', '--config', 'statusLine=false', '--config', 'label=a=b c'],
@@ -96,6 +99,7 @@ const SETTINGS = {
         rc: 0,
         calls: [
             ['plugin', 'marketplace', 'update', 'claude-brewcode'],
+            ['plugin', 'list', '--json'],
             ['plugin', 'update', ID],
             ['plugin', 'uninstall', 'brewcode'],
             ['plugin', 'install', ID],
@@ -110,9 +114,61 @@ const SETTINGS = {
     const r = run(sb, ['brewcode', '--dry-run']);
     assert.deepEqual({ rc: r.rc, calls: r.calls, planned: r.lines.filter(l => l.includes('plugin update')) }, {
         rc: 0,
-        calls: [['plugin', 'list', '--json']],
+        calls: [['plugin', 'list', '--json'], ['plugin', 'list', '--json']],
         planned: [`  claude plugin update ${ID} -> ${join(sb.profile, 'plugins/cache/claude-brewcode/brewcode', VER)} (uninstall + install only if update fails or leaves the cache missing)`],
     }, 'THEN dry-run plans update, not uninstall+install');
+}
+
+const MOD = 'brewmod-placeholders';
+const MOD_ID = `${MOD}@claude-brewcode`;
+const MOD_VER = JSON.parse(readFileSync(join(SCRIPTS, '..', '..', MOD, '.claude-plugin/plugin.json'), 'utf8')).version;
+const modCache = sb => join(sb.profile, 'plugins/cache/claude-brewcode', MOD, MOD_VER);
+
+// GIVEN the mod's version dir is already cached but the mod is absent from the user-scope list
+// WHEN the single-name run happens THEN install runs (no update, no uninstall) and rc is 0.
+{
+    const sb = sandbox({});
+    mkdirSync(modCache(sb), { recursive: true });
+    writeFileSync(join(modCache(sb), 'plugin.json'), '{}');
+    const r = run(sb, [MOD], { STUB_LIST: '[]', STUB_VERSION: MOD_VER });
+    assert.deepEqual({ rc: r.rc, calls: r.calls }, {
+        rc: 0,
+        calls: [
+            ['plugin', 'marketplace', 'update', 'claude-brewcode'],
+            ['plugin', 'list', '--json'],
+            ['plugin', 'install', MOD_ID],
+            ['plugin', 'list', '--json'],
+        ],
+    }, 'THEN a pre-existing cache dir does not skip the first install');
+}
+
+// GIVEN the mod is installed at user scope and its version dir is cached WHEN the single-name run happens
+// THEN only update runs: no install, no uninstall.
+{
+    const sb = sandbox({});
+    mkdirSync(modCache(sb), { recursive: true });
+    writeFileSync(join(modCache(sb), 'plugin.json'), '{}');
+    const r = run(sb, [MOD], { STUB_LIST: JSON.stringify([{ id: MOD_ID, scope: 'user' }]), STUB_VERSION: MOD_VER });
+    assert.deepEqual({ rc: r.rc, calls: r.calls }, {
+        rc: 0,
+        calls: [
+            ['plugin', 'marketplace', 'update', 'claude-brewcode'],
+            ['plugin', 'list', '--json'],
+            ['plugin', 'update', MOD_ID],
+            ['plugin', 'list', '--json'],
+        ],
+    }, 'THEN an installed mod is only updated');
+}
+
+// GIVEN the mod is absent from the user-scope list WHEN --dry-run runs THEN the plan says install and nothing changes.
+{
+    const sb = sandbox({});
+    const r = run(sb, [MOD, '--dry-run'], { STUB_LIST: '[]' });
+    assert.deepEqual({ rc: r.rc, calls: r.calls, planned: r.lines.filter(l => l.includes('plugin install')) }, {
+        rc: 0,
+        calls: [['plugin', 'list', '--json'], ['plugin', 'list', '--json']],
+        planned: [`  claude plugin install ${MOD_ID} -> ${modCache(sb)} (not installed at user scope)`],
+    }, 'THEN dry-run plans install for a mod that is not installed');
 }
 
 console.log('suite-update-install: all assertions passed');

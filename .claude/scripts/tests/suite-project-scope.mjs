@@ -87,6 +87,7 @@ const call = (cwd, ...args) => ({ cwd, args });
         rc: 0,
         calls: [
             call(sb.other, 'plugin', 'marketplace', 'update', 'claude-brewcode'),
+            call(sb.other, 'plugin', 'list', '--json'),
             call(sb.other, 'plugin', 'update', ID),
             call(sb.other, 'plugin', 'list', '--json'),
             call(sb.project, 'plugin', 'update', ID, '--scope', 'project'),
@@ -102,7 +103,7 @@ const call = (cwd, ...args) => ({ cwd, args });
     const r = run(sb, 'update-plugin.sh', ['brewcode', '--dry-run']);
     assert.deepEqual({ rc: r.rc, calls: r.calls, cache: r.cache, planned: r.lines.filter(l => l.includes('--scope project')) }, {
         rc: 0,
-        calls: [call(sb.other, 'plugin', 'list', '--json')],
+        calls: [call(sb.other, 'plugin', 'list', '--json'), call(sb.other, 'plugin', 'list', '--json')],
         cache: [OLD, VER],
         planned: [
             `  (cd ${sb.project} && claude plugin update ${ID} --scope project)`,
@@ -119,6 +120,7 @@ const call = (cwd, ...args) => ({ cwd, args });
         rc: 0,
         calls: [
             call(sb.other, 'plugin', 'marketplace', 'update', 'claude-brewcode'),
+            call(sb.other, 'plugin', 'list', '--json'),
             call(sb.other, 'plugin', 'update', ID),
             call(sb.other, 'plugin', 'list', '--json'),
         ],
@@ -136,7 +138,7 @@ const call = (cwd, ...args) => ({ cwd, args });
     const r = run(sb, 'update-plugin.sh', ['brewcode'], { STUB_FAIL_SCOPES: 'project' });
     assert.deepEqual({ rc: r.rc, calls: r.calls.length, cache: r.cache, keep: r.lines.filter(l => l.startsWith('Keep (')) }, {
         rc: 1,
-        calls: 4,
+        calls: 5,
         cache: [OLD, VER],
         keep: [
             `Keep (installed, project ${sb.project}): ${OLD} -> cd ${sb.project} && CLAUDE_CONFIG_DIR=${sb.profile} claude plugin update ${ID} --scope project`,

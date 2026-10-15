@@ -116,13 +116,13 @@ project_rows() {
         || log "   WARN: claude plugin list --json is not a JSON array; project-scope installs not checked" >&2
 }
 
-# all mode: user-scope ids of this profile; list failure -> "?" (state unknown: a real run aborts, never installs).
+# User-scope ids of this profile; list failure -> "?" (state unknown: a real run aborts, never installs).
 USER_IDS="?"
 load_user_ids() {
     local list
     if ! list=$(claude plugin list --json 2>&1) || ! USER_IDS=$(printf '%s' "$list" | jq -r '.[]? | select(.scope == "user") | .id' 2>/dev/null); then
         USER_IDS="?"
-        log "   WARN: claude plugin list --json failed; installed state unknown"
+        [[ "$TARGET" != "all" ]] || log "   WARN: claude plugin list --json failed; installed state unknown"
     fi
 }
 
@@ -132,11 +132,17 @@ not_installed() {
     ! grep -qx "$1@claude-brewcode" <<< "$USER_IDS"
 }
 
+# rc 0 = user-scope state known and NAME is absent from it (any mode); the cache dir never decides.
+missing_user() {
+    [[ "$USER_IDS" != "?" ]] || return 1
+    ! grep -qx "$1@claude-brewcode" <<< "$USER_IDS"
+}
+
 # --- Dry run: resolved paths + planned commands, nothing changed ---
 if [[ $DRY_RUN == true ]]; then
     log "DRY RUN - nothing is changed. Planned (CLAUDE_CONFIG_DIR=${CLAUDE_CONFIG_DIR:-<unset>}):"
     log "  claude plugin marketplace update claude-brewcode"
-    [[ "$TARGET" != "all" ]] || load_user_ids
+    load_user_ids
     if [[ "$TARGET" == "all" && "$USER_IDS" == "?" ]]; then
         log "  all: installed state unknown -> a real run aborts before touching any plugin (name the plugins instead)"
         exit 0
@@ -144,6 +150,7 @@ if [[ $DRY_RUN == true ]]; then
     for NAME in $TARGETS; do
         if not_installed "$NAME"; then log "  ${NAME}: not installed in this profile -> skipped"; continue; fi
         VER_VAR="$(var_key "$NAME")_VER"
+        if missing_user "$NAME"; then log "  claude plugin install ${NAME}@claude-brewcode -> $CACHE_ROOT/$NAME/${!VER_VAR} (not installed at user scope)"; continue; fi
         log "  claude plugin update ${NAME}@claude-brewcode -> $CACHE_ROOT/$NAME/${!VER_VAR} (uninstall + install only if update fails or leaves the cache missing)"
     done
     while IFS=$'\t' read -r ID SCOPE PROJECT; do
@@ -168,7 +175,7 @@ else
 fi
 [[ -n "${OUTPUT:-}" ]] && log "   $OUTPUT"
 log ""
-[[ "$TARGET" != "all" ]] || load_user_ids
+load_user_ids
 # Unknown state must not install the opt-in plugins (brewui, brewmod-*) via the reinstall fallback: abort, name plugins instead.
 [[ "$TARGET" != "all" || "$USER_IDS" != "?" ]] || err "all: installed state unknown (plugin list failed); no plugin changed - rerun with plugin names, e.g. $(basename "$0") brewcode"
 
@@ -184,15 +191,17 @@ saved_disabled() {
     jq -e --arg id "$1" '.enabledPlugins[$id] == false' "$CONFIG_DIR/settings.json" >/dev/null 2>&1
 }
 
-# Fallback only: uninstall wipes userConfig and the enabled flag, so snapshot both and put them back.
+# Uninstall wipes userConfig and the enabled flag, so snapshot both and put them back; $3=fresh skips the uninstall.
 reinstall_plugin() {
-    local NAME="$1" VERSION="$2" ID="$1@claude-brewcode" LINE WAS_DISABLED=false
+    local NAME="$1" VERSION="$2" FRESH="${3:-}" ID="$1@claude-brewcode" LINE WAS_DISABLED=false
     local -a CFG=()
     while IFS= read -r LINE; do [[ -z "$LINE" ]] || CFG+=(--config "$LINE"); done < <(saved_options "$ID")
     if saved_disabled "$ID"; then WAS_DISABLED=true; fi
     log "${NAME}: Reinstalling (saved config args: $((${#CFG[@]} / 2)), disabled: $WAS_DISABLED)..."
-    OUTPUT=$(claude plugin uninstall "$NAME" 2>&1) || true
-    [[ -z "${OUTPUT:-}" ]] || log "   $OUTPUT"
+    if [[ "$FRESH" != fresh ]]; then
+        OUTPUT=$(claude plugin uninstall "$NAME" 2>&1) || true
+        [[ -z "${OUTPUT:-}" ]] || log "   $OUTPUT"
+    fi
     log "${NAME}: Installing v$VERSION..."
     if OUTPUT=$(claude plugin install "$ID" ${CFG[@]+"${CFG[@]}"} 2>&1); then
         log "   OK"
@@ -205,12 +214,9 @@ reinstall_plugin() {
     fi
 }
 
-install_plugin() {
-    local NAME="$1"
-    local VERSION="$2"
-    local CACHE_DIR="$CACHE_ROOT/$NAME"
-    local EXPECTED_DIR="$CACHE_DIR/$VERSION"
-    local UPDATE_RC=0
+# Installed plugin: update, reinstall only when the target is still not cached.
+update_plugin() {
+    local NAME="$1" VERSION="$2" EXPECTED_DIR="$CACHE_ROOT/$1/$2" UPDATE_RC=0
 
     log "${NAME}: Updating to v$VERSION..."
     if OUTPUT=$(claude plugin update "${NAME}@claude-brewcode" 2>&1); then
@@ -226,6 +232,20 @@ install_plugin() {
     if [[ ! -d "$EXPECTED_DIR" ]]; then
         log "${NAME}: v$VERSION not in cache after update -> reinstall fallback"
         reinstall_plugin "$NAME" "$VERSION"
+    fi
+}
+
+install_plugin() {
+    local NAME="$1"
+    local VERSION="$2"
+    local CACHE_DIR="$CACHE_ROOT/$NAME"
+    local EXPECTED_DIR="$CACHE_DIR/$VERSION"
+
+    if missing_user "$NAME"; then
+        log "${NAME}: not installed at user scope -> install"
+        reinstall_plugin "$NAME" "$VERSION" fresh
+    else
+        update_plugin "$NAME" "$VERSION"
     fi
 
     if [[ -d "$EXPECTED_DIR" ]]; then
