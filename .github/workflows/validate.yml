@@ -132,6 +132,16 @@ jobs:
           node .codex/scripts/validate-setup.mjs || fail=1
           exit "$fail"
 
+      # Docs build -> dist scanned against the CSP in web/docs/deploy/docs.Caddyfile (inline scripts/handlers, foreign origins).
+      - name: Docs CSP (build + check-csp)
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          npm --prefix web/docs ci --no-fund --no-audit
+          npm --prefix web/docs run build
+          node web/docs/scripts/check-csp.mjs
+          node web/docs/scripts/check-csp.test.mjs
+
   suites:
     name: suites (${{ matrix.shard }})
     runs-on: ubuntu-24.04

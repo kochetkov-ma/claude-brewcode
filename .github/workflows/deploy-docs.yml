@@ -260,6 +260,26 @@ jobs:
           done
           echo "::error::External build metadata/content did not match after 5 attempts"
           exit 1
+      - name: Verify CSP header
+        run: |
+          set -euo pipefail
+          CSP_EXPECTED=""
+          [[ ! -f web/docs/deploy/docs.Caddyfile ]] || CSP_EXPECTED=$(sed -n 's/^[[:space:]]*Content-Security-Policy "\(.*\)"[[:space:]]*$/\1/p' web/docs/deploy/docs.Caddyfile)
+          if [[ -z "$CSP_EXPECTED" ]]; then
+            echo "::notice::No Content-Security-Policy in web/docs/deploy/docs.Caddyfile at this SHA (pre-CSP redeploy): header check skipped"
+            exit 0
+          fi
+          for i in $(seq 1 5); do
+            CSP_LIVE=$(curl -fsS -m 15 -D - -o /dev/null "${HEALTH_URL}?csp=${GITHUB_RUN_ID}" | tr -d '\r' | sed -n 's/^content-security-policy: //Ip') || CSP_LIVE=""
+            if [[ "$CSP_LIVE" == "$CSP_EXPECTED" ]]; then
+              echo "Live Content-Security-Policy matches web/docs/deploy/docs.Caddyfile"
+              exit 0
+            fi
+            echo "Waiting for the live Content-Security-Policy header (attempt $i/5)"
+            sleep 5
+          done
+          echo "::error::Live Content-Security-Policy header missing or different from web/docs/deploy/docs.Caddyfile"
+          exit 1
       - name: Update deployment (success)
         if: success()
         uses: actions/github-script@v9.0.0

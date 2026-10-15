@@ -4,30 +4,35 @@ import { resolve } from 'node:path';
 export const GITHUB_REPO = 'kochetkov-ma/claude-brewcode';
 export const GITHUB_URL = `https://github.com/${GITHUB_REPO}`;
 
-let cachedStars: number | null | undefined;
+const STARS_TIMEOUT_MS = 5000;
 
-export async function getGitHubStars(): Promise<number | null> {
-  if (cachedStars !== undefined) {
-    return cachedStars;
-  }
-
+async function fetchStars(): Promise<number | null> {
   try {
     const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}`, {
       headers: { 'User-Agent': 'brewcode-docs' },
+      signal: AbortSignal.timeout(STARS_TIMEOUT_MS),
     });
     if (!res.ok) {
       console.warn(`GitHub API returned ${res.status}: ${res.statusText}`);
-      cachedStars = null;
       return null;
     }
     const data = await res.json();
-    cachedStars = data.stargazers_count > 0 ? data.stargazers_count : null;
+    return data.stargazers_count > 0 ? data.stargazers_count : null;
   } catch (error) {
     console.warn(`Failed to fetch GitHub stars: ${error}`);
-    cachedStars = null;
+    return null;
   }
+}
 
-  return cachedStars ?? null;
+// One in-flight promise per build: a hanging endpoint costs the cap once, not once per page.
+let starsPromise: Promise<number | null> | undefined;
+
+export function getGitHubStars(): Promise<number | null> {
+  starsPromise ??= Promise.race([
+    fetchStars(),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), STARS_TIMEOUT_MS).unref()),
+  ]);
+  return starsPromise;
 }
 
 let cachedVersion: string | undefined;

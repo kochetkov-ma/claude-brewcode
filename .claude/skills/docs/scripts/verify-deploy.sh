@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# verify-deploy.sh — wait for one tag's docs.yml + deploy-docs.yml, then gate on the live build-info.json
-# Usage: bash scripts/verify-deploy.sh vX.Y.Z   (rc 0 = live site serves exactly that tag's build)
+# verify-deploy.sh — wait for one tag's docs.yml + deploy-docs.yml, then gate on the live build-info.json + CSP header
+# Usage: bash scripts/verify-deploy.sh vX.Y.Z   (rc 0 = live site serves exactly that tag's build, with a CSP header)
 set -euo pipefail
 
 TAG="${1:-}"
@@ -9,6 +9,7 @@ if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   exit 2
 fi
 BUILD_INFO_URL="https://doc-claude.brewcode.app/build-info.json"
+PAGE_URL="https://doc-claude.brewcode.app/getting-started/"
 
 if ! command -v gh >/dev/null 2>&1; then
   echo "❌ gh CLI not installed"
@@ -66,6 +67,17 @@ for _ in 1 2 3 4 5 6; do
   LIVE=$(curl -fsS -m 15 "${BUILD_INFO_URL}?build=${DOCS_ID}" || true)
   if [[ "$LIVE" == "$EXPECTED" ]]; then
     echo "✅ live build-info matches $TAG: $LIVE"
+    CSP=""
+    for _ in 1 2 3; do
+      CSP=$(curl -fsS -m 15 -D - -o /dev/null "${PAGE_URL}?build=${DOCS_ID}" | tr -d '\r' | grep -i '^content-security-policy: ' || true)
+      [[ -n "$CSP" ]] && break
+      sleep 5
+    done
+    if [[ -z "$CSP" ]]; then
+      echo "❌ CSP gate FAILED: no content-security-policy header on $PAGE_URL"
+      exit 1
+    fi
+    echo "✅ live ${CSP:0:120}..."
     exit 0
   fi
   sleep 10
