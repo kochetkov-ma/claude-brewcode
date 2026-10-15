@@ -84,11 +84,11 @@ A selection of the rules that cause the most damage; the full list is in the [ag
 | Never pass or alias `$`; spell `$.noun.event(...)` at each call site. `$.env.get/set` take a literal name and `$.state` takes literal `{ plugin, key }` refs | Validate refuses |
 | Fail open: the engine skips a failing hook and keeps the downstream `next` result, so no blanket try/catch; refusing guards get `.catch` | Refusal lost, or the mod blocks the prompt, tool, or turn |
 | No I/O in `prompt.edit` | Per-keystroke lag |
-| `hooks/hooks.json` is `{ "modules": ["./register.ts"] }`: one path, inside the array | String or second entry refused |
+| `hooks/hooks.json` carries `{ "modules": ["./register.ts"] }`: one path, inside the array. A classic `"hooks"` command-hook sibling is allowed and both load | String or second `modules` entry refused |
 | Never commit `.claude-plugin/types/` or the engine-written mod-root `tsconfig.json` (gitignore both) | Engine files land in git |
 | A broken module still exits `claude -p` with rc 0: grep stderr for `hooks module did not load` | A red gate is read as green |
 | Never write under `~/.claude/dev-mods/` unless asked | Consent breach: it is the person's hot-reload folder |
-| `classic.*` hooks need a non-classic fallback where behavior depends on them | Silent no-op under org-managed installs |
+| Behavior that must survive Team/Enterprise orgs ships a classic command hook bundled in `hooks.json`; live-test it on a Team-organization profile | Module `classic.*` hooks are bypassed there: silent no-op |
 
 ## Reference pack
 
@@ -98,7 +98,7 @@ Five files under `brewcode/skills/agents/references/`, each stamped with `verifi
 |------|-----------|
 | `mods-lifecycle.md` | Always before building: Step 0, hard rules, scaffold, validate, type check, test, run, debug, ship, maintain |
 | `mods-api.md` | Choosing events or `$` nouns, writing the manifest, checking limits; holds the symbol index the drift check reads |
-| `mods-patterns.md` | Building behavior: classic-chain wrap, plan-mode tracking, `turn.step` rewrite, decorations, autocomplete, slash commands, fail-open guards |
+| `mods-patterns.md` | Building behavior: bundled command hook (context injection), plan mode via state file, `turn.step` rewrite, decorations and band, autocomplete, slash command, userConfig, fail-open guards |
 | `mods-testing.md` | Writing tests: the `claude-code/testing` kit, stubs, raising events, `ui.mount`, CI wiring, headless and tmux checks |
 | `mods-changes.md` | A new Claude Code build, or a mod written for an older one: per-version changes and the self-update procedure |
 

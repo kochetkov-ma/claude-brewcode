@@ -65,7 +65,7 @@ After all commands succeed, run `/reload-plugins`. If `/reload-plugins` is unava
 
 ## Claude Code mods
 
-Mods are small Claude Code plugins built on the early-access hooks module API. Each one is optional, installs on its own and works without the four suite plugins.
+Mods are small Claude Code plugins built on the early-access hooks module API. Each one is optional, installs on its own and works without the four suite plugins. Both bundle a classic command hook next to the hooks module for Team and Enterprise organizations, where Claude Code bypasses the `classic.*` hooks of a user-installed mod. Verified live on Claude Code 2.1.300 on a Team-organization profile and on a Max profile, with `--plugin-dir` and installed copies; an Enterprise organization was not run. Promo page: [brewcode.app/mods](https://brewcode.app/mods/).
 
 <p align="center">
   <img src="assets/brewmods/hub.gif" width="800" alt="Terminal-style animation of the brewcode mods hub: an ASCII brewcode logo and a four-slide walkthrough of the mods">
@@ -74,8 +74,8 @@ Mods are small Claude Code plugins built on the early-access hooks module API. E
 
 | Mod | What it does | Needs |
 |-----|--------------|-------|
-| [brewmod-plan-effort](brewmod-plan-effort/README.md) | Raises the main loop's effort to `xhigh` (configurable) while Claude Code is in plan mode. Your session effort setting is never touched | Claude Code 2.1.287+ |
-| [brewmod-placeholders](brewmod-placeholders/README.md) | `++` prompt placeholders: type `++r`, get an instruction block, with highlight, typeahead and a preview band in the prompt box. Provides the codewords `++m`, `++a`, `++r`, `++rr` and `+++` (brewtools no longer injects them since v6.8.0) | Claude Code 2.1.292+ |
+| [brewmod-plan-effort](brewmod-plan-effort/README.md) | Raises the main loop's effort to `xhigh` (configurable) while Claude Code is in plan mode. Your session effort setting is never touched | Claude Code 2.1.287+ and `node` on the `PATH` |
+| [brewmod-placeholders](brewmod-placeholders/README.md) | `++` prompt placeholders: type `++r`, get an instruction block, with highlight, typeahead and a preview band in the prompt box. Provides the codewords `++m`, `++a`, `++r`, `++rr` and `+++` (brewtools no longer injects them since v6.8.0) | Claude Code 2.1.292+ and `node` on the `PATH` |
 
 Install one or both, then run `/reload-plugins`:
 
@@ -85,7 +85,9 @@ claude plugin install brewmod-plan-effort@claude-brewcode
 claude plugin install brewmod-placeholders@claude-brewcode
 ```
 
-Existing codeword override files under `.claude/brewtools/manager/prompts/` keep working through the mod's legacy layer.
+Existing codeword override files under `.claude/brewtools/manager/prompts/` and `<config>/manager/prompts/` keep working through the mod's legacy layer (`<config>` is `CLAUDE_CONFIG_DIR`, or `~/.claude` when unset).
+
+brewtools 6.7.x together with `brewmod-placeholders` injects each codeword twice. Update brewtools to 6.8.0 or later together with the mod.
 
 ## Installation
 

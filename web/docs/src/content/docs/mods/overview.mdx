@@ -22,8 +22,8 @@ and works without them.
 
 | Mod | What it does | Needs |
 |-----|--------------|-------|
-| [`brewmod-plan-effort`](/mods/plan-effort/) | Raises the main loop's effort to `xhigh` (configurable) while Claude Code is in plan mode. The session `/effort` setting is never written | Claude Code 2.1.287+ |
-| [`brewmod-placeholders`](/mods/placeholders/) | Type `++r`, get a whole instruction block. Known tokens highlight, a typeahead lists the names and a band above the prompt previews what the draft adds. Provides the codewords `++m`, `++a`, `++r`, `++rr` and `+++` (brewtools no longer injects them since v6.8.0) | Claude Code 2.1.292+ |
+| [`brewmod-plan-effort`](/mods/plan-effort/) | Raises the main loop's effort to `xhigh` (configurable) while Claude Code is in plan mode. The session `/effort` setting is never written | Claude Code 2.1.287+ and `node` |
+| [`brewmod-placeholders`](/mods/placeholders/) | Type `++r`, get a whole instruction block. Known tokens highlight, a typeahead lists the names and a band above the prompt previews what the draft adds. Provides the codewords `++m`, `++a`, `++r`, `++rr` and `+++` (brewtools no longer injects them since v6.8.0) | Claude Code 2.1.292+ and `node` |
 
 ## Installation
 
@@ -38,15 +38,22 @@ To update later, run `/brewtools:plugin-update`, or use the update prompt on eac
 
 <Callout type="note" title="How mods differ from plugins">
   A mod ships no skills and no agents. Its `hooks.json` lists TypeScript hooks modules, which the
-  engine loads and runs, instead of command hooks. Mods are on by default from Claude Code 2.1.287
-  and are in early access, so the module API can change between releases. Each mod page states the
-  minimum Claude Code version it needs.
+  engine loads and runs, plus a small bundled command hook for the parts that need one. Mods are on
+  by default from Claude Code 2.1.287 and are in early access, so the module API can change between
+  releases. Each mod page states the minimum Claude Code version it needs.
 </Callout>
 
-<Callout type="warning" title="Organization-managed installs">
-  `claude plugin validate` warns that `classic.UserPromptSubmit` and `classic.PostToolBatch` hooks do
-  not run in a plugin a person installs where an organization manages Claude Code. This was not
-  tested on a managed install. Each mod page lists what it loses if your setup skips those hooks.
+<Callout type="tip" title="Team and Enterprise organizations">
+  On a Team or Enterprise organization, Claude Code's builtin security layer bypasses the `classic.*`
+  hooks of a mod a person installs. Both brewcode mods bundle a classic command hook for the parts
+  that need them. Verified live on Claude Code 2.1.300 on a Team-organization profile and on a Max
+  profile, with `--plugin-dir` and installed copies. An Enterprise organization was not run.
+</Callout>
+
+<Callout type="note" title="brewtools and brewmod-placeholders">
+  brewtools 6.7.x together with `brewmod-placeholders` injects each codeword twice. Update brewtools
+  to 6.8.0 or later together with the mod. From 6.8.0 brewtools no longer injects the codewords, so
+  the mod is their only source.
 </Callout>
 
 ## Build your own
@@ -65,6 +72,9 @@ its tests, runs the gates and keeps its reference pack in sync with each Claude 
   </Card>
   <Card title="Mod Creator" icon="robot" href="/brewcode/agents/mod-creator/">
     The brewcode agent that builds, tests and ships a new mod.
+  </Card>
+  <Card title="brewcode.app/mods" icon="globe" href="https://brewcode.app/mods/">
+    The brewcode mods hub on brewcode.app.
   </Card>
   <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode">
     Source code, README and release notes for the suite and both mods.

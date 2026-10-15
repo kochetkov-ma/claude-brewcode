@@ -13,9 +13,20 @@ The mod raises the effort of the main loop while Claude Code is in plan mode and
 
 The raise is applied to each model request on its way out. The session `/effort` setting is never written, so nothing stays behind if you forget to switch back. Subagents keep their own effort.
 
+## When to use
+
+| Scenario | What happens |
+|----------|--------------|
+| Session on `high`, you press `Shift+Tab` into plan mode | Plan-mode requests run at `xhigh`, no `/effort` change needed |
+| You approve the plan and Claude starts editing | The next request is back at your session effort |
+| You reject the plan | Effort stays raised, because Claude is still in plan mode |
+| Session already on `max` | Nothing changes |
+| You want a different plan-mode level | Set `planEffort` in `/config` |
+
 ## Requirements
 
 - Claude Code 2.1.287+.
+- `node` on the `PATH`: it runs the bundled command hook `hooks/mode.mjs`.
 - Mods use the hooks module API, which is early access and can change between releases.
 
 ## Install
@@ -47,17 +58,33 @@ Example: with the session on `high` and `planEffort` set to `max`, plan mode run
 
 ## How it works
 
-- **Detects plan mode from the permission mode.** The mod reads `permission_mode` on `classic.UserPromptSubmit` and `classic.PostToolBatch`. Only the main loop counts: payloads with an `agent_id` and non-string modes are ignored.
-- **Falls back to transcript attachments.** `session.append` rows named `plan_mode` and `plan_mode_exit` flip the mode too. `claude plugin validate` warns that `classic.UserPromptSubmit` and `classic.PostToolBatch` hooks do not run in a plugin a person installs where an organization manages Claude Code. This was not tested on a managed install. If your setup skips them, these rows are the only signal. The mod does not watch `EnterPlanMode` or `ExitPlanMode` tool calls.
-- **Raises effort per request.** `turn.step` fires before every model request. In plan mode the mod rewrites `effort` up to `planEffort`.
+- **Records the permission mode with a command hook.** The bundled `hooks/mode.mjs` runs on `UserPromptSubmit` and `PostToolBatch` and writes the main loop's `permission_mode` to `<plugin root>/.state/mode-<session_id>.json`. Only the main loop counts: payloads with an `agent_id` are ignored. State files older than 7 days are pruned.
+- **Works on Team and Enterprise orgs.** There Claude Code's builtin security layer bypasses a user-installed mod's `classic.*` hooks. A bundled command hook is not bypassed, which is why the mod reads the mode from it. Verified live on Claude Code 2.1.300 on a Team-org profile and a Max profile, each with a `--plugin-dir` copy and with a copy installed from a git marketplace. Enterprise orgs were not run.
+- **Raises effort per request.** `turn.step` fires before every model request. The module reads the state file for the current session. In plan mode it rewrites `effort` up to `planEffort`. A missing or unreadable file counts as not in plan mode.
 - **Raise only.** Ranks run `low` < `medium` < `high` < `xhigh` < `max`. An equal or higher effort, a numeric effort and an absent effort pass through untouched.
 - **Nothing to undo.** The rewrite covers one request, so leaving plan mode needs no cleanup.
-- **Shows a status line.** While a request is raised, the mod pins the status text `plan: <level>`. Claude Code renders it with the plugin name, for example `⚠ brewmod-plan-effort: plan: xhigh`. The line clears when plan mode ends (in the `classic.UserPromptSubmit`, `classic.PostToolBatch` and `session.append` handlers) or when a main request needs no raise (in `turn.step`). The native footer keeps showing your session effort, so the status line is the only indicator of the raise.
-- **Fails open.** The mod has no `try/catch`: the engine skips a failing hook and the chain goes on.
+- **Shows a status line.** While a request is raised, the mod pins the status text `plan: <level>`. Claude Code renders it with the plugin name, for example `⚠ brewmod-plan-effort: plan: xhigh`. The line clears when a main request needs no raise. The native footer keeps showing your session effort, so the status line is the only indicator of the raise.
+- **Fails open.** The command hook swallows its own errors and never blocks a prompt or a tool batch. In the module, a failed hook is skipped by the engine and the chain goes on.
 
 ## Verified
 
-Measured during development on Claude Code 2.1.300 (Opus 5.5, session effort `high`) with the same effort and mode logic as this release; later edits removed redundant guards and folded the mode handling into one helper. Source: `output_config.effort` of each request in the session JSONL.
+### Current path (command hook)
+
+Measured on Claude Code 2.1.300 (`claude -p --model sonnet`) with the bundled command hook `hooks/mode.mjs`. Source: count of `"effort":"xhigh"` in the session transcript. Each row was run on a `--plugin-dir` copy and on a copy installed from a git marketplace.
+
+| Profile | Mode | `xhigh` requests in the transcript |
+|---------|------|------------------------------------|
+| Team org | plan | 4 |
+| Team org | default | 0 (session level) |
+| Max | plan | 4 |
+| Max | default | 0 (session level) |
+| Installed copy, Team org and Max | plan / default | 4 / 0, same as above |
+
+Enterprise orgs were not run.
+
+### Earlier in-module detection (same effort rewrite)
+
+Measured during development on Claude Code 2.1.300 (Opus 5.5, session effort `high`) with the in-module mode detection that preceded the command hook; the effort rewrite is the same as in this release. Source: `output_config.effort` of each request in the session JSONL.
 
 | Check | Result |
 |-------|--------|
@@ -72,11 +99,13 @@ Scope: the cache run used requests seconds apart on one model, so cache expiry b
 
 ## Limitations
 
-- **Shift+Tab out of plan mode fires no event.** The mod learns the new mode at the next prompt or tool batch, so the status line stays on screen until then. A plan-mode visit that starts and ends between two of those checkpoints is not seen.
+- **Shift+Tab fires no event of its own.** The mod learns the new mode at the next prompt or tool batch, so a mode switch takes effect then and the status line stays on screen until then. A plan-mode visit that starts and ends between two of those checkpoints is not seen.
 
 ## Documentation
 
 Full docs: [doc-claude.brewcode.app/mods/plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/)
+
+Project page: [brewcode.app/mods/plan-effort](https://brewcode.app/mods/plan-effort/)
 
 - Other mod: [Prompt placeholders](../brewmod-placeholders/)
 - All brewcode mods: [README](../README.md#claude-code-mods)
