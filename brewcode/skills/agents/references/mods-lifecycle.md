@@ -20,19 +20,20 @@ Table and pass criteria: `mod-creator.md`. Types path ephemeral (re-derive via `
 | `.claude-plugin/types/` and mod-root `tsconfig.json` never committed | engine-written on interactive loads (types carry own `.gitignore`; root `tsconfig.json` does not): add `brewmod-*/.claude-plugin/types/` and `brewmod-*/tsconfig.json` to repo `.gitignore` (`-p`, `validate` write nothing); departs from R:112 ("tsconfig.json at the top level stays"): it `extends` the gitignored types one, so a committed copy breaks on a fresh clone | R:112; PLAN S.1; T11 Q6 |
 | never pass `$` to function or alias it: spell `$.noun.event(...)` at every call site | validate refuses `$ is passed to "log"`; module does not load | V; X |
 | never write under `~/.claude/dev-mods/` unless person asks; repo mods go in repo plugin dir | person's hot-reload mods folder (consent question) | D15; PLAN TLA |
-| `hooks/hooks.json` = `{ "modules": ["./register.ts"] }`: ONE path, in ARRAY | string -> `expected array, received string`; second entry refused | V; X; S.4 (2.1.296) |
+| `hooks/hooks.json` = `{ "modules": ["./register.ts"] }`: ONE path, in ARRAY; a classic command hook may sit beside it under `"hooks"` (accepted, both run) | string -> `expected array, received string`; second entry refused | V; X; S.4 (2.1.296); F1 §5; C41 |
 | no JSON or `.md` import in module; read shipped data via `$.fs` from `$.plugin.root` | only files named `.ts .tsx .jsx .js .mjs .cjs .mts .cts` load | R:14; P |
 | no `require`, no DOM, no Node, no timers (use `$.clock`) | module environment | T:20-24, 15420 |
 | `plugin.json` has `author`, `version`, `description` | `--strict` fails without `author` | V; X |
+| module `classic.*`, `session.append` (doors `attachment`, `hook-context`), `prompt.section/context/compose/attachment`, `attribution.text` hooks are bypassed for a user-installed mod on Team/Enterprise orgs: behaviour that depends on them ships a bundled classic COMMAND hook in `hooks/hooks.json` next to `"modules"` (`mods-patterns.md` #1, #2), never a `session.append` fallback; `turn.step`, `prompt.submit`, `prompt.edit`, `ui.render`, `command.run` still run | module's context injection or mode tracking silently does nothing on the org's machines; `validate` rc 0 does not catch it | V; F1; C41; C43 |
 | engine tests/validate/tsc, not model memory, decide what API accepts | early access: moves per release | R:5 |
 
 ## The Road
 
 | Phase | Command / action | Pass | src |
 |-------|------------------|------|-----|
-| scaffold | three files: `.claude-plugin/plugin.json`, `hooks/hooks.json`, `hooks/register.ts[x]`; plus `types/index.d.ts` when `$.state` is used (named in `plugin.json` `"types"`), `tests/*.test.ts[x]`, `LICENSE`, `README.md` (via `/docs`). `claude plugin init` scaffolds another kind of plugin: do not use it for mods | files exist | R:9; skill text |
+| scaffold | three files: `.claude-plugin/plugin.json`, `hooks/hooks.json`, `hooks/register.ts[x]`; plus `types/index.d.ts` when `$.state` is used (named in `plugin.json` `"types"`), `tests/*.test.ts[x]`, `LICENSE`, `README.md` (via `/docs`); `hooks/*.mjs` command hooks (declared under `"hooks"` in `hooks.json`) when behaviour must survive Team/Enterprise orgs. `claude plugin init` scaffolds another kind of plugin: do not use it for mods | files exist | R:9; skill text |
 | module | `export const register: Register = (on, options) => {...}`, `import type { Register } from 'claude-code'` (empty at run time); JSX compiles against global `h`; elements from `$.ui.resolve(e)` | | T:9695; R:14-24 |
-| validate | `claude plugin validate --strict <mod dir>` (`--json` for CI); output lists hooks, `$` calls, `gating hook with/without .catch` (a fact, not warning), state reads/writes, managed-org note for `classic.*`/`prompt.attachment` hooks | rc 0 unpiped | V; X; R:66 |
+| validate | `claude plugin validate --strict <mod dir>` (`--json` for CI); output lists hooks, `$` calls, `gating hook with/without .catch` (a fact, not warning), state reads/writes, managed-org note for `classic.*`/`prompt.*`/`session.compact`/`attribution.text` hooks; it reports only the module part of a mixed `hooks.json` | rc 0 unpiped | V; X; R:66 |
 | tsc | "Type check" below | rc 0 | R:40-53; X |
 | test | `claude plugin test <mod dir>` runs every `*.test.ts[x]` in a child process, 5 s per test, rc 1 on a failing test | rc 0 unpiped; >=1 test per behaviour asked | CLI help; X; `mods-testing.md` |
 | run | `claude --plugin-dir <mod dir>` (repeatable), `CLAUDE_CODE_PLUGIN_DIRS` for hosts without the flag; interactive sessions hot-reload the folder on save (after the editing turn, or when a plugin tool/command is about to run); `claude -p` always loads fresh; `/reload-plugins` re-reads installed plugins | debug line `hooks module <name>@inline loaded ...` | R:72-76; X |
@@ -72,6 +73,8 @@ Run: `unset CLAUDECODE; claude -p "say ok" --plugin-dir <dir> --debug-file <abs 
 | tree refused | transcript while hot-reloading, else debug | `<plugin>: ui.render (<Component>) refused: <reason>; the engine drew its own`; debug `ui.render (<Component>): a hook returned a tree that does not validate` | R:80, 152-155; X |
 | settings hook alongside | debug file | `<hook command> (plugin <p>@<m>) finished with status 0 (39ms)` then `hooks module <mod>@inline classic.UserPromptSubmit settled in N ms (worker hop, next() included)`: order proves hook ran inside `next(e)` | S |
 | managed org | `validate` note | `hooks on classic.* ... do not run in a plugin a person installs where an organization manages Claude Code` | V; X |
+| Team org seat | debug file | `cc-plugin-sec-default@builtin seated outermost: the organization is team`; `<plugins>: <event> bypassed by cc-plugin-sec-default (tier user); beneath runs`; control `not seated: no managed settings and not a Team or Enterprise organization (<plan>)` | F1 |
+| command hook | debug file | `Hooks: UserPromptSubmit [node "<path>"] (plugin <p>@<m>) finished with status 0`, `Hook UserPromptSubmit (...) provided additionalContext (N chars)` | F1 §3 |
 
 ### Ship
 
@@ -82,6 +85,8 @@ Run: `unset CLAUDECODE; claude -p "say ok" --plugin-dir <dir> --debug-file <abs 
 | release train (D2) | all 6 plugins (brewcode, brewdoc, brewtools, brewui + `brewmod-plan-effort`, `brewmod-placeholders`) share one X.Y.Z; `bash .claude/scripts/bump-version.sh X.Y.Z`, `RELEASE-NOTES.md`, commit/tag/push, `update-plugin.sh` per profile, CI green: root `CLAUDE.md` "Version Sync"; mod `plugin.json`s are wired into `marketplace.json` and `bump-version.sh` (working tree, S.1) | D2; PLAN S.1 |
 | install check | hooks-module-only mod shows "Installed <mod>. Plugin is now active." and runs with no reload; mods on by default from 2.1.287; shell install needs `/reload-plugins` in open session | R:128; P |
 | READMEs and docs | mod README + docs page via `/docs`; no `Version` row in mod READMEs (D12); state the mod's verified floor (bisect exact npm builds, `mods-api.md` Manifest), never blanket "2.1.287+", plus "early access"; same floor in manifest `description` and marketplace entry | D12; PLAN L17 |
+| bundled command hooks | `hooks/*.mjs` ship in the plugin dir (`${CLAUDE_PLUGIN_ROOT}/hooks/<file>`, braced literal); state under `<root>/.state/` is gitignored (`brewmod-*/.state/`); plain-Node tests run in CI next to `plugin test` (`node --test brewmod-plan-effort/tests/mode.test.mjs`, `node brewmod-placeholders/tests/inject-parity.mjs`) | C41; C43; `validate.yml` |
+| live-test on a Team-org profile | any mod that injects context or tracks mode: run it once on a Team/Enterprise profile (not only Max/free, where nothing is bypassed): debug has `seated outermost`, module loaded line, the command hook `finished with status 0`, and the model sees the effect (`mods-testing.md` "Team-Org Live Check"); a mixed `hooks.json` installed from a git-source marketplace passed on Team + Max | F1 §5; T6P |
 | gates | `claude plugin validate --strict .` (marketplace root) + every mod dir, `claude plugin test <mod>` in CI; CI pin = CC version mods were verified on (D13) | D13; PLAN S.5 |
 
 ### Maintain
@@ -89,5 +94,5 @@ Run: `unset CLAUDECODE; claude -p "say ok" --plugin-dir <dir> --debug-file <abs 
 | Trigger | Action | src |
 |---------|--------|-----|
 | new CC build / CI pin bump (D13) | `mods-changes.md` "Update Procedure" | D16 |
-| pattern proved or disproved by real mod | edit pattern, clear or add its bracketed `unproven` mark | PLAN TA.7 |
+| pattern proved or disproved by real mod | edit pattern, clear or add its bracketed `unproven` mark (none open) | PLAN TA.7 |
 | engine refusal wording changes | update "Debug lines" with new shape | X |

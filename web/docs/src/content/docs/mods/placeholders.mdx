@@ -1,6 +1,6 @@
 ---
 title: "Prompt placeholders"
-description: "Type ++r and get a whole instruction block. Tokens highlight, a typeahead lists names, a band previews the block, and you add your own Markdown placeholders."
+description: "Type ++r and get a whole instruction block. Tokens highlight, a typeahead lists names, a band previews the block. Add your own Markdown placeholders."
 order: 42
 ---
 
@@ -23,9 +23,9 @@ Type `++r`, get a whole instruction block. See it highlighted and previewed befo
 |-------|-------|
 | Type | Claude Code mod (hooks module, no skills or agents) |
 | Plugin | `brewmod-placeholders` |
-| Requires | Claude Code 2.1.292+ (the `prompt.autocomplete` event does not exist before it; 2.1.287 to 2.1.291 refuse to load the mod) |
+| Requires | Claude Code 2.1.292+ (the `prompt.autocomplete` event does not exist before it; 2.1.287 to 2.1.291 refuse to load the mod). `node` on the PATH (runs `hooks/inject.mjs`) |
 | Command | `/placeholders` with `list`, `show`, `add`, `edit`, `rm` |
-| Default tokens | The five brewtools codewords, listed under Default placeholders |
+| Default tokens | `++m`, `++a`, `++r`, `++rr`, `+++`, the codewords brewtools shipped before v6.8.0. The mod is now their only provider |
 | Your own | One Markdown file per placeholder in `.claude/placeholders/` or `<config>/placeholders/` |
 | Options | `prefix`, `knownColor`, `unknownColor`, `warnUnknown` in `/config` |
 | Verified on | Terminal UI, Claude Code 2.1.300 |
@@ -34,13 +34,15 @@ Type `++r`, get a whole instruction block. See it highlighted and previewed befo
 
 A placeholder is a prefix plus a name, such as `++r`, that stands for a block of instructions. Type the token anywhere in your prompt and the mod adds the block as hidden context for that turn. The token stays in your prompt as you wrote it.
 
-The default set is a drop-in for the brewtools codewords (see Default placeholders). Every other placeholder is a Markdown file you write yourself, in the project or in your global config. In the terminal prompt box, known tokens light up, a typo such as `++q` turns to a warning colour, and a band above the prompt shows what the draft will add.
+The default set is the codewords brewtools injected before v6.8.0 (see Default placeholders). This mod is now their only provider in Claude Code. Every other placeholder is a Markdown file you write yourself, in the project or in your global config. In the terminal prompt box, known tokens light up, a typo such as `++q` turns to a warning colour, and a band above the prompt shows what the draft will add.
+
+It works on Team-organization profiles, where Claude Code's builtin security layer bypasses a mod's `classic.*` hooks: a bundled command hook adds the blocks instead. Verified live on Claude Code 2.1.300 on a Team-org profile and a Max profile, from a `--plugin-dir` copy and from a copy installed through a git marketplace. Enterprise organizations were not run.
 
 ## When to use
 
 | Scenario | What to do |
 |----------|------------|
-| Reuse the brewtools codewords without brewtools | Install the mod and type a default token |
+| Get `++m`, `++a`, `++r`, `++rr` or `+++` | Install the mod and type a default token. Brewtools v6.8.0 and later no longer injects them, so update brewtools together with the mod |
 | Keep a recurring instruction one token away | Create `.claude/placeholders/<name>.md`, then type `++<name>` |
 | Catch a mistyped token before sending | Watch for the warning colour and the `unknown ++q` toast |
 | See what a prompt adds | Read the band above the prompt |
@@ -67,7 +69,7 @@ Dev mode without installing: `claude --plugin-dir ./brewmod-placeholders`.
 | `++rr` | always | Anti-regression review: regression, project standard and functional correctness axes |
 | `+++` | Plan mode only | Anti-drift cron plan: a recurring check that the work stays on the goal |
 
-`++r` and `++rr` share the group `review`: when both appear in a prompt, `++rr` wins. Parity with the brewtools codewords is measured; see Verified.
+`++r` and `++rr` share the group `review`: when both appear in a prompt, `++rr` wins. The default texts are byte-identical to brewtools v6.7.0, now a frozen spec pinned by tests and a CI check; see Verified.
 
 ## Your own placeholders
 
@@ -108,10 +110,10 @@ Front matter is optional. Every key is optional too, and a file that sets only s
 | `legacy` | text | none | Name of the brewtools override file this placeholder reads (see Layers) |
 
 - **Body.** Without a code fence, the trimmed text after the front matter is the body. With one or more fenced blocks (three backticks or `~~~`), only the fenced text is used, joined by blank lines.
-- **Empty body.** An empty body suppresses the token: nothing is added, and brewtools' own block for that token is dropped too. Front-matter keys are inherited from the layer below, the body is not, so an override that holds front matter only suppresses the token.
+- **Empty body.** An empty body suppresses the token: nothing is added. Front-matter keys are inherited from the layer below, the body is not, so an override that holds front matter only suppresses the token.
 - **Plan variant.** `<name>.plan.md` is the plan-mode variant of `<name>`. It wins in plan mode, as `m.plan.md` does for `++m`.
 - **Inline insert.** `insert: inline` works with `when: always` only, and only for prompts typed in the composer, bridge or SDK, not for slash commands. The text carries no header.
-- **Limits.** Blocks are sorted by `order`, joined and capped at 9000 characters, the same cap brewtools uses.
+- **Limits.** Blocks are sorted by `order`, joined and capped at 9000 characters, the same cap brewtools 6.7.x applied.
 
 ### Layers
 
@@ -150,7 +152,7 @@ The highest layer wins, file by file.
 
 ## Editing in the prompt box
 
-Verified in the terminal UI only. VS Code and mobile have no band slot. The unknown-placeholder warning runs on the classic hook and was not tested there. The desktop app is untested.
+Verified in the terminal UI only. VS Code and mobile have no band slot. The unknown-placeholder toast fires from the module on submit and was not tested outside the terminal. The desktop app is untested.
 
 | Feature | Behavior |
 |---------|----------|
@@ -176,44 +178,57 @@ Open `/config` and change the plugin options. All are optional.
 
 ## With brewtools
 
-brewtools is optional. Installed together, each token is injected once. The codewords themselves are described on [Prompt injection](/brewtools/prompt-injection/).
+brewtools is optional. Since brewtools v6.8.0 it ships no codeword hook, so this mod is the only provider of the codewords. The move is described on [Codewords (moved to mod)](/brewtools/prompt-injection/).
 
-- **The mod replaces brewtools' block.** For every token the mod resolves, it drops brewtools' block from the same hook result and inserts its own once.
-- **Overrides carry over.** Existing brewtools prompt overrides keep working (see Layers).
-- **An empty override silences a token.** The rule is under Definition files. Brewtools alone still injects its block.
-- **A mod fault leaves brewtools alone.** The failing hook is skipped, so brewtools still answers.
+- **Update brewtools together with the mod.** brewtools 6.7.x with this mod injects each block twice: the mod no longer de-duplicates against brewtools.
+- **Overrides carry over.** Existing brewtools prompt overrides under `.claude/brewtools/manager/prompts/` and `<config>/manager/prompts/` keep working, whatever the brewtools version (see Layers).
+- **An empty override silences a token.** The rule is under Definition files.
 
 ## How it works
 
 <Steps>
-  <li><div><strong>Load</strong><p>On <code>session.start</code> the mod registers <code>/placeholders</code> and loads the definitions. A definition that cannot be read, has unclosed front matter or an invalid name is skipped. A toast lists the skipped files, and <code>/placeholders list</code> repeats the reasons.</p></div></li>
+  <li><div><strong>Load</strong><p>On <code>session.start</code> the mod registers <code>/placeholders</code>, loads the definitions and reads the recorded mode. A definition that cannot be read, has unclosed front matter or an invalid name is skipped. A toast lists the skipped files, and <code>/placeholders list</code> repeats the reasons.</p></div></li>
   <li><div><strong>Edit</strong><p>On <code>prompt.edit</code> the mod scans the draft, adds the colour and underline decorations and updates the token list the band reads. <code>prompt.autocomplete</code> lists matching names and refreshes the definitions at most once a second.</p></div></li>
-  <li><div><strong>Match</strong><p>The name is case-insensitive and must stand alone: <code>++rr</code> is not <code>++r</code>, and <code>a++r</code> or <code>i++</code> match nothing. Layers are listed on each prompt that holds the prefix and re-read only when a file changes.</p></div></li>
-  <li><div><strong>Submit</strong><p><code>prompt.submit</code> expands only <code>insert: inline</code> placeholders. A context token inside an inline body is expanded by the classic pass.</p></div></li>
-  <li><div><strong>Inject</strong><p><code>classic.UserPromptSubmit</code> builds the blocks from the layered definitions and adds them as hidden context. Subagent deliveries are skipped, unknown tokens are named in a toast, and the <code>permission_mode</code> of this payload decides which <code>when</code> variants apply.</p></div></li>
-  <li><div><strong>Track plan mode</strong><p>A mode tracker reads <code>permission_mode</code> from <code>classic.UserPromptSubmit</code> and <code>classic.PostToolBatch</code>, with <code>session.append</code> attachments as the fallback. It feeds the band's plan label only. Switching mode with <code>Shift+Tab</code> fires no event, so the label updates at the next prompt or tool batch.</p></div></li>
-  <li><div><strong>Fail open</strong><p>A failing hook is skipped and the chain goes on.</p></div></li>
+  <li><div><strong>Match</strong><p>The name is case-insensitive and must stand alone: <code>++rr</code> is not <code>++r</code>, and <code>a++r</code> or <code>i++</code> match nothing. The module re-reads the layers only when a file changes.</p></div></li>
+  <li><div><strong>Submit</strong><p><code>prompt.submit</code> expands only <code>insert: inline</code> placeholders and names unknown tokens in a toast. A context token inside an inline body is expanded by the command hook.</p></div></li>
+  <li><div><strong>Inject</strong><p>The command hook <code>hooks/inject.mjs</code> (plain Node, <code>UserPromptSubmit</code>) lists the layers on each prompt that holds the prefix, builds the blocks and adds them as hidden context. It uses the same layers as the module, legacy overrides included, picks plan variants from <code>permission_mode</code>, caps the result at 9000 characters and skips subagent deliveries. The text is byte-identical to the frozen defaults.</p></div></li>
+  <li><div><strong>Track plan mode</strong><p>The same hook, on <code>UserPromptSubmit</code> and <code>PostToolBatch</code>, records <code>permission_mode</code> in <code>&lt;plugin root&gt;/.state/mode-&lt;session_id&gt;.json</code> (main loop only). The module reads that file at <code>session.start</code> and <code>turn.complete</code> and uses it only for the band's plan label. Switching mode with <code>Shift+Tab</code> fires no event, so the label updates one turn late.</p></div></li>
+  <li><div><strong>Fail open</strong><p>A failing module hook is skipped and the chain goes on. The command hook answers with an empty result on any error, so a fault never blocks a prompt.</p></div></li>
 </Steps>
 
 ## Verified
 
-Measured during development on Claude Code 2.1.300 with brewtools 6.6.2 (Haiku, one turn per case). Source: the `hook_additional_context` rows of each session transcript, counted as injections, not as text matches. Every row ran on the committed code of this release, except the queued-prompt row and the transcript check of the unknown `++q` row, which ran on an earlier build of the same mod; the toast was seen again on the release code.
+### Current path: command hook
+
+Source: `tests/inject-parity.mjs` and live runs on Claude Code 2.1.300 with `claude -p`, one turn per case, the mod alone with brewtools disabled. Live results are the `hook_additional_context` rows of each session transcript, counted as injections. The model is named per row. Profiles: a Team-org profile (the builtin security layer seated) and a Max profile (no org layer). Enterprise organizations were not run.
 
 | Check | Result |
 |-------|--------|
-| Default `++r`, `++a ++m`, `++rr`, plan-mode `++m`, plan-mode `+++` | Each codeword injected exactly once, byte-identical to brewtools alone (same SHA-256 and length) |
-| `++r` and `++a ++m` with brewtools disabled | Same bytes, injected once by the mod |
-| `+++` outside plan mode | Nothing injected, as in brewtools |
-| Project override file and brewtools legacy override file | The mod's own file wins over the legacy file in the same layer. Both replace the default text |
-| Empty `a.md` override with brewtools installed | `++a` injects nothing. Brewtools alone injects its block |
-| Fault injected in the mod after brewtools has run | Brewtools' block stays, once |
-| Queued prompt `++r` sent mid-turn | One block |
-| Unknown `++q` | Toast on submit. The prompt reaches the transcript unchanged, with no block |
+| `hooks/inject.mjs` against the frozen default texts, the layer fixtures, the state file and the fail-open paths (`node tests/inject-parity.mjs`) | 164 checks pass: 98 golden vectors, 34 layer fixtures |
+| Team-org profile, `--plugin-dir` copy, Sonnet: `++r` | 1 block, 571 characters |
+| Team-org profile, `--plugin-dir` copy, Sonnet: plan-mode `++m` | 1 block, the plan variant |
+| Max profile, `--plugin-dir` copy, Sonnet: `++r` | 1 block, 571 characters |
+| Both profiles, copy installed from a git marketplace, Sonnet: `++r` | 1 block each, starting `User typed` + the token |
+| `tests/live/ab.sh` on both profiles, Haiku, 8 cases | PASS: blocks byte-equal to the frozen golden. The subdirectory-launch case records the launch-dir deviation (project layers come from the launch dir) |
+| Custom prefix `@@` set through the plugin options, Max profile, Sonnet: `@@r ++r` | Only the `@@r` block is injected |
+| Unknown `++q`, Haiku, measured before the move to the command hook | Toast on submit. The prompt reaches the transcript unchanged, with no block. The transcript check ran on an earlier build of the mod |
 | Typing latency, terminal UI, mod minus control, p50 per keystroke end to end | Plain keystrokes at the end of a draft of 0 / 4,000 / 19,700 characters: -2.6 / +6.6 / +2.1 ms. Keystrokes that change a token, typed as ` ++r`: +2.4 / +6.6 / +5.6 ms. Run-to-run noise is about as large as the deltas. A 60 Hz frame is 16.7 ms |
 | Band repaint after a token-changing keystroke | A second paint lands about 19 to 21 ms after the key at p50, and 44 to 61 ms at p99, at the same three draft sizes |
 | Handler time per keystroke, unit-tested | p99 under 2 ms at 4,000 characters, under 8 ms at 20,000 |
 
-Not covered live: a custom `prefix`, custom colours, the global layer on disk, the 9000-character cap, `insert: inline`, `/placeholders add`, `edit` and `rm` (only `list` and `show` ran), fullscreen hover and click on this build (checked on a prototype only), the `... +K more placeholders` row, the desktop app, VS Code, subagent surfaces and other models. Unit tests cover the prefix, layers and cap.
+### Earlier classic path
+
+Measured on Claude Code 2.1.300 with brewtools 6.6.2, which still shipped the codeword hook, before the injection moved to the command hook (Haiku, one turn per case). Every row ran on the committed code of that release, except the queued-prompt row, which ran on an earlier build of the same mod.
+
+| Check | Result |
+|-------|--------|
+| Default `++r`, `++a ++m`, `++rr`, plan-mode `++m`, plan-mode `+++` | Each codeword injected exactly once, byte-identical to brewtools 6.6.2 alone (same SHA-256 and length) |
+| `++r` and `++a ++m` with brewtools disabled | Same bytes, injected once by the mod |
+| `+++` outside plan mode | Nothing injected, as in brewtools |
+| Project override file and brewtools legacy override file | The mod's own file wins over the legacy file in the same layer. Both replace the default text |
+| Queued prompt `++r` sent mid-turn | One block |
+
+Not covered live: custom colours, the global layer on disk, the 9000-character cap, the unknown-token toast on its `prompt.submit` path, `insert: inline`, `/placeholders add`, `edit` and `rm` (only `list` and `show` ran), fullscreen hover and click on this build (checked on a prototype only), the `... +K more placeholders` row, the desktop app, VS Code, subagent surfaces and other models. Unit tests cover the prefix, layers and cap.
 
 ## Limitations
 
@@ -221,7 +236,6 @@ Not covered live: a custom `prefix`, custom colours, the global layer on disk, t
   <ul>
     <li><strong>A token inserted with Tab and a recalled history entry show no highlight or band until the next keystroke.</strong> Redrawing sooner needs the <code>prompt.change</code> event of Claude Code 2.1.300, which the mod does not use so that it also runs on older builds. A recalled draft can show a stale band for the same reason.</li>
     <li><strong>Drafts over 20,000 characters get no highlight and no band.</strong> Expansion on submit still works.</li>
-    <li><strong>Org-managed installs may skip the classic hooks</strong> (see <a href="/mods/overview/">brewcode mods</a>). Then context expansion and the unknown-token toast do not run. Highlight, typeahead, the band and <code>/placeholders</code> keep working.</li>
   </ul>
 </Callout>
 
@@ -230,8 +244,9 @@ Not covered live: a custom `prefix`, custom colours, the global layer on disk, t
 <CardGrid>
   <Card title="brewcode mods" icon="puzzle" href="/mods/overview/">All mods and how they differ from plugins.</Card>
   <Card title="Plan-mode effort" icon="settings" href="/mods/plan-effort/">The other mod: raises effort while Claude Code is in plan mode.</Card>
-  <Card title="Prompt injection" icon="terminal" href="/brewtools/prompt-injection/">The brewtools codewords this mod replaces.</Card>
+  <Card title="Codewords (moved to mod)" icon="terminal" href="/brewtools/prompt-injection/">History: the codewords formerly in brewtools.</Card>
   <Card title="mod-creator" icon="wrench" href="/brewcode/agents/mod-creator/">Agent that builds Claude Code mods like this one.</Card>
+  <Card title="Project page" icon="globe" href="https://brewcode.app/mods/placeholders/">The mod on brewcode.app.</Card>
   <Card title="GitHub source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewmod-placeholders">Hooks module, default definitions and tests.</Card>
 </CardGrid>
 

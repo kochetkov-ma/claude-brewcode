@@ -4,7 +4,7 @@
 
 Symbol index (drift input), event + `$` noun catalog, manifest shapes, limits of Claude Code mod API (hooks-module plugins, early access). Engine types are authority; this file is map.
 
-`src` column: `T:n` = line `n` of live types file at 2.1.300 (path per-build, ephemeral: load `plugin-authoring`, never store it) | `R:n` = line of skill's `reference.md` | `Dn` = plan decision | `P` = plan section "Re-verification on CC 2.1.300" | `S` = T2.1 spikes | `V` = `claude plugin validate` output | `T11` = T1.1 probe | `X` = live probe on 2.1.300 (scratch mods, `claude -p`/`plugin test`) | `W` = TA.7 re-probe (2.1.296 via `npx -y @anthropic-ai/claude-code@2.1.296`) | `AB` = T2.5 live A/B | `TTY` = T2.10 tmux run | `R3` = T2.R rev3 tmux probes. Every row has a source.
+`src` column: `T:n` = line `n` of live types file at 2.1.300 (path per-build, ephemeral: load `plugin-authoring`, never store it) | `R:n` = line of skill's `reference.md` | `Dn` = plan decision | `P` = plan section "Re-verification on CC 2.1.300" | `S` = T2.1 spikes | `V` = `claude plugin validate` output | `T11` = T1.1 probe | `X` = live probe on 2.1.300 (scratch mods, `claude -p`/`plugin test`) | `T6P` = `artifacts/T6P-install.md` (git-source marketplace install proof) | `W` = TA.7 re-probe (2.1.296 via `npx -y @anthropic-ai/claude-code@2.1.296`) | `AB` = T2.5 live A/B | `TTY` = T2.10 tmux run | `R3` = T2.R rev3 tmux probes | `F1` = Team-org spike on 2.1.300 (`.claude/tasks/20261014_201227_brewcode-mods_task/artifacts/F1/F1-findings.md`, raw logs beside it; `claude plugin validate` note, debug lines) | `C41` / `C43` = commits `41c20910` (plan-effort) / `4372322f` (placeholders). Every row has a source.
 
 ## Symbol Index
 
@@ -69,6 +69,8 @@ One row = one fact pack relies on. `fragment` must occur in live types after whi
 | type | CatchHandler | `export type CatchHandler<F>` |
 | type | HookBudget | `export type HookBudget = {` |
 | type | Frozen | `export type Frozen<T>` |
+| type | TIERS | `const TIERS: readonly ["prepend", "user", "append", "builtin", "core"];` |
+| type | TargetTier | `export type TargetTier = Exclude<Tier, 'prepend' \| 'user'>;` |
 | type | ToolCallResult | `export type ToolCallResult<Name extends string = string> = {` |
 | type | TurnStepResult | `export type TurnStepResult = {` |
 | type | PromptDecoration | `export type PromptDecoration = {` |
@@ -135,14 +137,14 @@ Hook shape `($, e, next)`; `e` frozen to every depth (`T:4945`); rewrite = copy 
 | `prompt.edit` | `origin{kind:'composer'}, key?, text, cursor, start, end, inputText` | `{ text, cursor, decorations? }` (`PromptEditResult`); `{ text: e.text, cursor: e.cursor }` without `next` consumes key | T:4236, 8796-8870 |
 | `prompt.change` | `text, cursor, origin{kind}`: `history` (recall, step back out), `clear` (submit, Esc Esc, stash), `undo`, `plugin{name}` (a `$.prompt.fill`), `engine` (Tab-accept, dictation, prefill), `app` | observe only (`PromptChangeResult` = `{ text }`: cannot decorate). Refresh own state; paint via `$.prompt.fill({ text, mode: 'replace', decorations })` when `e.cursor === e.text.length` (patterns #4). Floor 2.1.300 (Manifest) | T:4247, 8464-8545, 8885-8940; R3; W |
 | `prompt.autocomplete` | `text, cursor, token` (non-whitespace run ending at cursor), `start` | `{ suggestions: { text, label?, description? }[] }`; rows join beneath engine's, unhighlighted; matcher `{ token: /^re/ }` | T:4259, 8376-8440 |
-| `prompt.submit` | `text, command?, isMeta?, attachments?, context?, turnId?, wait, origin` | `next({ ...e, text })`, `context` = hidden blocks after prompt (limits: Budgets), `{ drop: reason }`; `text` rewrite NOT applied when `command` is set or `isMeta` starts turn | T:4200, 9420-9470; R:168 |
+| `prompt.submit` | `text, command?, isMeta?, attachments?, context?, turnId?, wait, origin` | `next({ ...e, text })`, `context` = hidden blocks after prompt (limits: Budgets), `{ drop: reason }`; `text` rewrite NOT applied when `command` is set or `isMeta` starts turn; runs on Team orgs (`context` and `text` both reach the model) | T:4200, 9420-9470; R:168; F1 |
 | `prompt.attachment` | `type, text, origin, detail?`; types with `detail`: `plan_mode` (`reminder: 'full'/'sparse', planFilePath, hasPlan`), `plan_mode_reentry`, `plan_mode_exit` | `{ text: string \| null }`; answer cached per attachment for process | T:4304, 8287-8303, 7703-7752 |
 | `ui.render` | `component, surface, requestId, props, viewport?`; matcher `{ component: 'AbovePrompt' }`, `{ component: 'Pane', requestId }` | tree, `next(e)`, or `next({ ...e, props })`; invalid tree refused, engine draws its own | T:4080, 9754; R:134-158 |
 | `tool.call` | `tool` + that tool's input fields, `tool_use_id`; matcher `{ tool: 'Bash' }` | `{ deny }`, `{ result, context? }`; `isError: true` (set by core, needs `result`) is read after `await next(e)`, which blocks while permission dialog is open | T:4054, 13312-13400; R:79 |
 | `tool.check` | permission verdict; only `{ decision: 'deny', reason }` refuses here | `{ deny }` refuses nothing at this event | R:79 |
 | `command.run` | `command, args, origin, presentation{isFullscreen, columns}`; matcher `{ command: 'x' }` | `{ text?, context?, exitCode?, ref? }`; `next({ ...e, args })` rewrites args | T:4350, 1825-1900 |
 | `session.start` | `cwd, surface, isInteractive` (NO permission mode) | `{ cwd }` echoed; awaited before first prompt; place for `$.command.register`/`$.tool.register` | T:4445, 12133-12150; R:183 |
-| `classic.<Event>` | classic hook's whole stdin: base fields below + event fields | `ClassicResult` subset per event (`ClassicResultFields`) | T:1262-1425 |
+| `classic.<Event>` | classic hook's whole stdin: base fields below + event fields | `ClassicResult` subset per event (`ClassicResultFields`); NOT run for a user-installed mod on Team/Enterprise orgs: bundle a command hook ("Org-Managed Installs") | T:1262-1425; F1 |
 
 Classic base fields (`BaseHookInput`, T:853-880): `session_id, transcript_path, cwd, prompt_id?, permission_mode?: string, agent_id?, agent_type?, effort?: { level }`. `agent_id` present ONLY inside subagent (absent on main, also in `--agent` sessions). `permission_mode` typed `string`; union with `'plan'` (`PermissionMode`) exists only for the `setMode` permission update (T:7633, 7678).
 
@@ -154,7 +156,30 @@ Classic base fields (`BaseHookInput`, T:853-880): `session_id, transcript_path, 
 | `classic.SessionStart` | `source, model?, ...` | `additionalContext, initialUserMessage, watchPaths, reloadSkills` | `permission_mode` key present, value always undefined; mode first appears at `classic.UserPromptSubmit` (T11 Q4; X) |
 | `classic.PreToolUse` | `ToolCallEnvelope` only | `PreToolUseResult` (`allow/ask/deny`) | no `permission_mode` (T:1279, 13265) |
 
-Chain order (T:1277): `[managed settings hooks, ...hooks modules, the other settings hooks as core]`; live proof and `r.additionalContext` shape: `mods-patterns.md` #1 (`S`). Settings-hook entries precede plugin-hook entries; keys of `r` = `["additionalContext"]` only. Under organization-managed Claude Code, `classic.*` and `prompt.attachment` hooks of installed plugin do NOT run (`V`: "do not run in a plugin a person installs where an organization manages Claude Code").
+Chain order (T:1277): `[managed settings hooks, ...hooks modules, the other settings hooks as core]`; `r.additionalContext` is `string[]`, one entry per hook (blocks joined by `\n\n---\n\n` are ONE entry); settings-hook entries precede plugin-hook entries; keys of `r` = `["additionalContext"]` only (`S`; recipes: `mods-patterns.md` #1). Under organization-managed Claude Code the module's `classic.*`, `prompt.attachment` and more are bypassed: table below.
+
+## Org-Managed Installs (Team/Enterprise)
+
+On a Team/Enterprise org (or with managed settings) the built-in `cc-plugin-sec-default` is seated at tier `prepend` and, on its listed events, calls `next.to(e, <lower tier>)`: every `user` hook (a mod a person installs) is skipped, `beneath runs`. Tiers outermost first: `prepend` (admin-listed), `user` (everything a person installs), `append`, `builtin`, `core`; `next.to` never skips a tier with more authority, so no user hook skips the org's. Debug: `cc-plugin-sec-default@builtin seated outermost: the organization is team`, `... loaded (native, environment 1, tier prepend)`, `<plugins>: <event> bypassed by cc-plugin-sec-default (tier user); beneath runs`; control (Max): `not seated: no managed settings and not a Team or Enterprise organization (max)`. No setting or manifest field changes a user plugin's tier; only an admin listing the mod in managed settings runs the bypassed events (T:13204-13221, 6668-6680, 12879, 13866-13871; F1 §1).
+
+| Event of a user-installed mod | Team org | src |
+|---|---|---|
+| `classic.*` (UserPromptSubmit, Stop, SessionStart/End, PreToolUse, PostToolUse, PostToolBatch, MessageDisplay) | BYPASSED | F1 §2 (0 fires vs 1 on control) |
+| `session.append`, doors `attachment` and `hook-context` | BYPASSED (`plan_mode*` rows with them) | F1 §2 |
+| `session.append`, doors `prompt`, `response`, `tool-result` | runs | F1 §2 |
+| `prompt.section`, `prompt.context`, `prompt.compose`, `prompt.attachment`, `attribution.text` | BYPASSED | F1 §2 |
+| `skill.prompt`, `session.compact` | bypassed per `validate` note, not exercised live | V; F1 |
+| `prompt.submit` (`context`, `text`), `turn.start/step/complete`, `tool.call/check`, `session.start/measure/end`, `command.run` | runs; `turn.step` `effort` rewrite reaches the request | F1 §2, §4 |
+| `prompt.edit`, `prompt.autocomplete`, `ui.render` (`AbovePrompt`, `PromptHint`) | runs (tmux: band, typeahead, `/placeholders list`) | F1 §2 |
+| classic COMMAND hook in `hooks/hooks.json` beside `"modules"` | runs, never bypassed; `validate --strict` accepts the mix (reports only the module) | F1 §1, §5; C41; C43 |
+
+`validate` states it: "hooks on prompt.section, prompt.context, prompt.compose, prompt.attachment, skill.prompt, attribution.text, session.compact, classic.* do not run in a plugin a person installs where an organization manages Claude Code" (V; F1). Recipes: `mods-patterns.md` #1 (bundled command hook), #2 (state file read by `turn.step`).
+
+| Command-hook fact (shipped `inject.mjs`, `mode.mjs`) | src |
+|---|---|
+| stdin = classic payload (`session_id`, `permission_mode`, `prompt`, `cwd`, `agent_id` inside subagents); stdout `{}` or `{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"..."}}` -> transcript attachment `hook_additional_context` (same shape as a settings hook) | F1 §3; C43 |
+| env: `CLAUDE_PLUGIN_ROOT` (== `$.plugin.root`, versioned cache dir), `CLAUDE_PLUGIN_OPTION_<KEY>`, `CLAUDE_PROJECT_DIR`; `CLAUDE_PLUGIN_DATA` set for the hook but `$.env.get('CLAUDE_PLUGIN_DATA')` is `undefined` in the module: rendezvous = `<$.plugin.root>/.state/` | F1 §4; C41; C43 |
+| plain Node `.mjs`, no TypeScript, no UI (`$.ui.toast` only from a module hook); fail open: any error -> `{}`, rc 0 | C41; C43 |
 
 ## Nouns on `$`
 
@@ -212,7 +237,7 @@ Every call async except `$.ui.status/toast/log/notice/resolve` (sync, T:2379-251
 | `Client` surface-module tree | 20,000 nodes, 32 deep, 100,000 characters serialized, else instance unmounts | T:1439-1440, 1468 |
 | AbovePrompt band | fullscreen: bottom slot capped at half the rows; default TUI: `maxRows` = terminal height, NOT less the prompt box and footer (~8 rows measured: 45 rows -> 37 fit, 38 clip at the TOP into scrollback); taller content scrolls (`↓ n more`), collapsible; no band on VS Code/mobile. Budget from `e.props.maxRows`: fullscreen (`e.viewport?.isFullscreen === true`) `min(30, maxRows)`, else `max(6, min(30, maxRows - 12))`; cap rows and body lines (`wrap="truncate-end"`, `... +K`) | T:10640-10700 (maxRows 10659-10669; viewport 10804-10812); S; R3; TTY |
 | Box `hover` | declarative style only, no callback; reveals only in fullscreen TUI (mouse tracking); hidden Box MUST be un-keyed inside visible keyed Box (or share a `scope` with the trigger: T:895-898, 939-944), else engine refuses whole band | T:889-957; S; X |
-| permission mode | NO getter, NO mode-change EVENT, NO field on `turn.step`/`prompt.submit`/`AbovePrompt` (text-only exception: Shift+Tab row) | P; T grep `setMode` only |
+| permission mode | NO getter, NO mode-change EVENT, NO field on `turn.step`/`prompt.submit`/`AbovePrompt` (text-only exception: Shift+Tab row); only command-hook stdin carries it where module `classic.*` is bypassed: state file (`mods-patterns.md` #2) | P; T grep `setMode` only; F1 §4 |
 | effort indicator | no API overrides it; footer (`● high · /effort`) and spinner show SESSION level, never the per-request override; `$.ui.status` only channel; `classic.*` `effort.level` stays session level | P; T:10499; T11 Q7 |
 | rejected `ExitPlanMode` | `await next(e)` blocks while dialog is open; reject = `isError: true` (`text` = rejection message), never `deny`; approve = no `isError`, no `deny`; `deny === undefined && isError !== true` separates them | T11 Q3 |
 | `turn.step` rewrite reaches API request `output_config.effort` | YES (main loop; subagent step stays at session level). Only session JSONL `api-request` rows record it: neither `--debug-file` nor `classic.PostToolBatch` `effort.level` shows it | T11 Q2; X |

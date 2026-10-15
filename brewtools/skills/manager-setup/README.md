@@ -1,59 +1,42 @@
 # Manager
 
-Manager mode has **two independent layers**. Keep them straight:
+Manager mode is the opt-in **HARD wall**: a `PreToolUse` guard denies mutating tools (Write/Edit/Bash/...) in the **main session**, leaving only delegate/read/track. Subagents stay fully free. **Project-only, defaults OFF, installed into the project by this skill.** There is no codeword for the wall.
 
-| Layer | What | Scope | Persistent |
-|-------|------|-------|-----------|
-| **SOFT codewords** (`++m` / `++rr` / `++r` / `++a` / bare `+++`) | A `UserPromptSubmit` hook injects the matching prompt block for ONE turn when it sees a codeword. **It always fires — this skill does NOT enable/disable it.** The skill only customizes the text (`edit`/`purge`) and explains it (`status`). | Global or project (prompt text) | Yes (hook is always on) |
-| **HARD wall** | An opt-in `PreToolUse` guard denies mutating tools (Write/Edit/Bash/…) in the **main session**, leaving only delegate/read/track. Subagents stay fully free. **Project-only, defaults OFF, installed into the project by this skill.** No codeword for the wall. | Project only | Yes, until `disable`/`uninstall` |
+## Codewords
 
-The two layers are orthogonal: either can be used alone.
+`++m`, `++a`, `++rr`, `++r` and bare `+++` (Plan mode) are **not** part of this plugin any more: the [`brewmod-placeholders`](https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewmod-placeholders) mod provides them (Claude Code 2.1.292+).
 
-## Codewords (SOFT — always active)
+```
+claude plugin install brewmod-placeholders@claude-brewcode
+```
 
-Alphabetic codewords are case-insensitive standalone tokens. Manager, architecture, and review are independent groups; `++rr` wins over `++r`. A standalone `+++` adds cron planning only when the hook payload confirms Plan mode (`permission_mode === 'plan'`), independently of `++m`. Context order when combined is cron planning, manager, architecture, then the selected review block. Your original prompt, including codewords, is preserved.
-
-| Type anywhere in your prompt | Means | Injects | When |
-|------------------------------|-------|---------|------|
-| `++m` | Manager — delegate-everything for the current task: call `TaskList` first, reuse an existing task graph and create one only when none exists, hand each unit to a matching expert agent, else `general-purpose`. Plan-aware: in plan mode the plan itself must encode the manager role and the whole TaskGraph in English, pre-decomposed with owners, dependencies, and parallel markers | `full` block, or `planmode` (full + plan addon) when `permission_mode === 'plan'` — auto, no separate codeword | Always |
-| `++rr` | Regression Review — after each significant phase: no regression + project standard + correctness; two-phase review→double-check→fix; final cross-review at task end | `review-regression` block | Always — tested before `++r` |
-| `++r` | Review — two-phase multi-agent review→double-check→fix after each significant change | `review-double` block | Always |
-| `++a` | Architecture — architecture-first directive before implementation: the design goes to a matching architect or reviewer agent, fits the existing project architecture/patterns/rules, stays as simple as possible while scalable (no over-engineering), reuses the closest well-built counterpart in the repo (additive to conventions/rules/docs, not a replacement), and keeps clean seams | `architect` block (`[DIRECTIVE: ARCHITECTURE-FIRST]`) | Independent group; combines with `++m`/`++rr`/`++r`; mode-agnostic — same block in normal and plan mode (written into the plan in plan mode) |
-| `+++` | Plan task-specific session anti-drift scheduling for execution | `cron-plan` block | Only verified Plan mode; requires neither `++m` nor the hard wall |
-
-The Injects column names the prompt modes (`<mode>` in the paths below). The block applies to that one turn only, and nothing else is injected per prompt: an armed HARD wall explains itself in the reason attached to each denied tool call and in one notice at session start. A subagent report that quotes a codeword triggers nothing: the hook ignores prompts starting with `<task-notification>` or `<agent-message`.
+`status` prints `codewords: provided by brewmod-placeholders (Claude Code 2.1.292+)` plus that install line. Existing text overrides need no migration: files under `<project>/.claude/brewtools/manager/prompts/` and `<config dir>/manager/prompts/` stay in use through the mod's legacy layer, and `status` lists them. This skill never reads, writes or deletes them. To change codeword text use the mod's `/placeholders edit`.
 
 ## Commands
 
 | Command | What it does |
 |---------|-------------|
 | `/brewtools:manager-setup` | No argument = `status`. |
-| `/brewtools:manager-setup status` | Print wall state, prompt sources, codeword behavior, and resolved prompt blocks. Reports whether a wall is installed (registration or copied guard present): a `state.json` left by `uninstall` is not a wall, so a stale version there recommends `install`, never `upgrade` |
+| `/brewtools:manager-setup status` | Print wall state, task-tools state, the codewords pointer (mod) and any legacy override files. Reports whether a wall is installed (registration or copied guard present): a `state.json` left by `uninstall` is not a wall, so a stale version there recommends `install`, never `upgrade` |
 | `/brewtools:manager-setup install` | Install the HARD wall guard into this project. Asks to confirm before arming (`AskUserQuestion`) unless your prompt already said so explicitly (e.g. "enable the hard wall") — plain `install` or autonomy phrasing never counts; declining still installs and leaves `state.hard=false`. Applies live (settings are watched). On Claude Code >= 2.1.233 it also sets the task-tools key `env.CLAUDE_CODE_ENABLE_TODO_TOOLS="1"` in `.claude/settings.local.json`, but only when no settings layer (local, project, user) already sets it; an explicit `0`/`false`/empty value is kept and reported `kept off`. |
 | `/brewtools:manager-setup upgrade` | Re-copy the guard and the off-switch CLI from the current plugin version, re-register if missing, add what an older install lacks (`onFailure: "block"`, the task-tools key under the same no-override rule), and restamp `state.json`'s `version`/`generated_by`/`last_updated`, which clears a `stale` verdict in `/brewcode:setup-status`. `hard`/`level` preserved; aborts if not installed (no registration and no copied guard; a leftover `state.json` alone does not count). |
 | `/brewtools:manager-setup enable` | Arm an already-installed wall (state flip only) — same confirm gate as `install`; declining aborts with nothing changed. Not installed → routes you to `install`. |
 | `/brewtools:manager-setup disable` | Disarm the HARD wall (state flip only; registration stays in `settings.local.json`). Guard no-ops until re-armed. |
-| `/brewtools:manager-setup uninstall` | Deregister the wall from `settings.local.json` + delete the copied guard. Auto-disarms first. State, prompt overrides and the task-tools key are KEPT. Applies live; a settings file left `{}` is deleted. |
-| `/brewtools:manager-setup purge [--scope global\|project]` | `uninstall` + delete `state.json` and the prompt override(s), plus an emptied `.claude/brewtools/`, a leftover `settings.local.json.bak`, an emptied `settings.local.json`/`.claude/`. The task-tools key is removed only when this skill's install added it. The only destructive action. |
+| `/brewtools:manager-setup uninstall` | Deregister the wall from `settings.local.json` + delete the copied guard. Auto-disarms first. State, codeword overrides and the task-tools key are KEPT. Applies live; a settings file left `{}` is deleted. |
+| `/brewtools:manager-setup purge` | `uninstall` + delete `state.json`, the copied guard and helper (codeword `prompts/` overrides are kept), plus an emptied `.claude/brewtools/`, a leftover `settings.local.json.bak`, an emptied `settings.local.json`/`.claude/`. The task-tools key is removed only when this skill's install added it. The only destructive action. |
 | `/brewtools:manager-setup level <strict\|balanced>` | Set wall strictness (project only). `balanced` = read-only Bash allowed; `strict` = all Bash denied. |
-| `/brewtools:manager-setup edit [full] [--scope ...]` | Copy default block to an override and show the path for editing |
-| `/brewtools:manager-setup <any task>` | Inline Manager run — prepends the full block and delegates the task |
+| `/brewtools:manager-setup <any task>` | Inline Manager run — delegates the task, wall untouched |
 
-The wall verbs are project-only — `--scope` applies to `edit`/`purge` (the prompt-text override files) and is ignored elsewhere. `on`, `off` and `reset` are not commands, only free-text synonyms routed to `enable` / `disable` / `purge`; `setup` and `remove` route nowhere.
+Every verb is project-only; `--scope global` is ignored. `on`, `off` and `reset` are not commands, only free-text synonyms routed to `enable` / `disable` / `purge`; `setup` and `remove` route nowhere.
 
 ## Examples
 
 ```
-# Codewords (always work, no setup needed)
-++m implement the new caching layer
-++m ++a implement the new caching layer      # Manager + architecture-first
-# In plan mode, ++m auto-adds the plan supplement
-
 # Hard wall: install (arming asks for confirmation unless your prompt said so)
 /brewtools:manager-setup install
 /brewtools:manager-setup level strict        # no Bash at all in the main session
 /brewtools:manager-setup disable             # disarm, registration stays
-/brewtools:manager-setup uninstall           # state + prompt overrides kept
+/brewtools:manager-setup uninstall           # state + codeword overrides kept
 /brewtools:manager-setup purge               # remove everything this skill wrote
 
 # Inline Manager run (no wall change)
@@ -75,27 +58,22 @@ Free-text phrases resolve to a command; Russian prompts are accepted too.
 | `level strict`, `strict mode` | `level strict` |
 | `level balanced`, `balanced mode` | `level balanced` |
 | `manager status`, no argument | `status` |
-| `edit prompt`, `customize` | `edit` |
 | `<task> in hard mode` | `hard-one-shot`: confirm, arm, run the task, disarm |
 | `<task> as manager` | `manager-run`: run the task as manager, wall untouched |
 
 Ambiguous or conflicting input triggers `AskUserQuestion`.
 
-## Scopes & resolution
+## State & resolution
 
-| Scope | State file | Prompt overrides |
-|-------|-----------|------------------|
-| Project (default) | `.claude/brewtools/manager/state.json` | `.claude/brewtools/manager/prompts/<mode>.md` |
-| Global | `<config dir>/manager/state.json` | `<config dir>/manager/prompts/<mode>.md` |
+| Scope | State file |
+|-------|-----------|
+| Project (default) | `.claude/brewtools/manager/state.json` |
+| Global | `<config dir>/manager/state.json` (informational `mode` only) |
 
-Resolution order (first hit wins):
 - **Wall flags** `{hard, level}`: **project only** — global state never enables the wall
 - **State** `mode` (informational): project → global → default `full`
-- **Prompt** `<mode>`: project → global → plugin default (`skills/manager-setup/references/<mode>.md`)
 
-`<config dir>` = `CLAUDE_CONFIG_DIR`, default `~/.claude`. Migration: a non-default profile's global overrides and state now live in that profile's dir, not `~/.claude/manager/`.
-
-Both scopes sit under protected `.claude/` paths: `<config dir>/manager/*` and the project `.claude/` (worktrees and agent-memory `.md` excepted). A Write/Edit there is prompted in `default`/`acceptEdits`, allowed in `bypassPermissions`, denied in headless/`dontAsk` runs, and allow rules never pre-approve it. The skill writes through bundled Node helpers via Bash instead.
+`<config dir>` = `CLAUDE_CONFIG_DIR`, default `~/.claude`. The project `.claude/` is a protected path: a Write/Edit there is prompted in `default`/`acceptEdits`, allowed in `bypassPermissions`, denied in headless/`dontAsk` runs, and allow rules never pre-approve it. The skill writes through bundled Node helpers via Bash instead.
 
 ## Hard wall
 
@@ -146,49 +124,10 @@ Universal fallback: delegate to a subagent — the `Agent` tool is always allowe
 
 > A wall installed before v5.0.0 has no project copy of `manager-state.mjs`, so the disarm command fails with `Cannot find module`. Run `/brewtools:manager-setup upgrade` once; if the wall is armed, delegate the `upgrade` to a subagent, then re-issue the disarm command.
 
-## Plan-only session anti-drift
-
-While already in Plan mode, type:
-
-```text
-+++ plan the API migration and task tracking
-```
-
-This includes a future execution step through task-board: one unique session timer per active
-top-level task, hourly by default or at your requested cadence. Prepare the task's methodology,
-base work units, complete unique prompt, timezone, schedule id, delivered tick count, and stop
-rule. Child work units share their parent's timer. Planning writes no task files and creates or
-deletes no timers.
-
-Each delivered tick rereads the goal and methodology, reconciles the task graph (all unfinished
-nodes plus the latest ten completed ones), checks drift against the acceptance criteria and
-reports in at most five short lines: local time/timezone, tick number and elapsed time; 🟢 results;
-🔵 remaining work and next action; 🔴 present problems/blockers/questions; ⚪ drift verdict.
-The exact contract is the [cron planning prompt](references/cron-plan.md).
-
-The main session's task-board flow owns scheduling and verifies stopping on completion or
-cancellation. Missing scheduling tools are reported as a gap; stored intent is not a live
-timer. Timers are session-scoped, and scheduled time does not guarantee exact receipt or
-delivery after session closure.
-
-CronCreate, CronList, CronDelete, and ScheduleWakeup pass the hard wall so task-board can own live timer
-lifecycle during execution. This allowlist does not override read-only Plan mode.
-
-These are Claude Code product hooks and scheduling contracts. Codex uses its own native
-instructions and available tools; these files do not configure Codex runtime state.
-
-## Customizing the prompt
-
-```
-/brewtools:manager-setup edit full     # copy default into project override, then edit it
-/brewtools:manager-setup purge         # drop the override AND the wall, back to plugin default
-```
-
-`edit` creates the override (seeded with the current effective text) if absent, then shows the path. The injected text is everything inside the fenced ``` or ~~~ blocks if present, else the whole file. All blocks injected for one prompt share a 9000-character cap; longer text is truncated.
-
 ## Related
 
 - [Brewtools overview](../../README.md)
-- [Skill source](SKILL.md) and [cron planning prompt](references/cron-plan.md)
+- [Skill source](SKILL.md) and [wall reference](references/hard.md)
+- [brewmod-placeholders](https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewmod-placeholders) (codewords)
 - [Task Board Setup](../task-board-setup/README.md)
 - [Full documentation](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/)

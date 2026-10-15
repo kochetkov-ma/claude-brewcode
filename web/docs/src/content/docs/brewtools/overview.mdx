@@ -12,11 +12,11 @@ Brewtools is a lightweight plugin providing universal utilities: token-efficient
 AI-artifact removal, secrets scanning, SSH server management, and GitHub Actions deployment.
 Each skill is self-contained and requires no prior setup.
 
-**13 skills · 3 agents · 2 registered plugin hook commands.** Setup skills install their
+**13 skills · 3 agents · 1 registered plugin hook command.** Setup skills install their
 optional project or global mechanisms separately.
 
 <Callout type="note" title="The -setup naming rule">
-  A `-setup` suffix marks a skill that **installs a mechanism you afterwards use instead of the skill** -- hooks, a generated Kanban, a delegation wall. Recurring tools you run again and again keep bare names (`text-optimize`, `deploy`, `ssh`). Every `-setup` skill shares one canonical mode set, in this order: `status | install | upgrade | enable | disable | uninstall | purge`. No argument means `status` when it is installed and `install` when it is not. `text-optimize` and `text-human` are model-invocable; the other brewtools skills run only when you type them -- see the [FAQ](/faq/#auto-invoke).
+  A `-setup` suffix marks a skill that **installs a mechanism you afterwards use instead of the skill** -- hooks, a generated Kanban, a delegation wall. Recurring tools you run again and again keep bare names (`text-optimize`, `deploy`, `ssh`). Every `-setup` skill shares one canonical mode set, in this order: `status | install | upgrade | enable | disable | uninstall | purge`. No-argument defaults differ: `manager-setup`, `agent-deadline-setup`, `agent-return-setup` and `agent-router-setup` default to read-only `status`, even when absent; `task-board-setup` defaults to `status` when deployed and `install` when absent. Use explicit `install` to request setup. `text-optimize` and `text-human` are model-invocable; the other brewtools skills run only when you type them -- see the [FAQ](/faq/#auto-invoke).
 </Callout>
 
 <Callout type="warning" title="v6 hardening">
@@ -80,8 +80,8 @@ Install the entire suite:
   </Card>
   <Card title="manager-setup" icon="star" href="/brewtools/skills/manager-setup/">
     Installs a hard delegation wall for this project -- strict per-binary
-    allowlist, fails closed -- and the `++m` / `++a` / `++rr` / `++r` codewords.
-    Bare `+++` adds anti-drift cron planning only in Plan mode.
+    allowlist, fails closed. The `++m` / `++a` / `++rr` / `++r` / `+++` codewords
+    come from the brewmod-placeholders mod, not this skill.
   </Card>
   <Card title="task-board-setup" icon="clipboard" href="/brewtools/skills/task-board-setup/">
     Deploys a file-based Kanban with domain/task methodology, a task graph and
@@ -104,7 +104,7 @@ Install the entire suite:
 | [`/brewtools:agent-deadline-setup`](/brewtools/skills/agent-deadline-setup/) | Install a soft wall-clock budget for subagents | sonnet | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [project\|global] [minutes]` |
 | [`/brewtools:agent-return-setup`](/brewtools/skills/agent-return-setup/) | Cap the size of every subagent's final return message | sonnet | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [project\|global] [pass] [file]` |
 | [`/brewtools:agent-router-setup`](/brewtools/skills/agent-router-setup/) | Route a generic subagent spawn to the real expert (experimental) | sonnet | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [level fast\|strict]` |
-| [`/brewtools:manager-setup`](/brewtools/skills/manager-setup/) | Manager mode: hard delegation wall + codewords | sonnet | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [level strict\|balanced] [edit]` |
+| [`/brewtools:manager-setup`](/brewtools/skills/manager-setup/) | Manager mode: hard delegation wall | sonnet | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [level strict\|balanced]` |
 | [`/brewtools:task-board-setup`](/brewtools/skills/task-board-setup/) | Deploy a file-based Kanban into any repo | opus | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [repo path] [free-text directive]` |
 
 ## Task methodology and anti-drift
@@ -123,7 +123,8 @@ remaining work and next action, blockers or questions when present, and the drif
 Completion, cancellation or parking stops the timer and verifies removal. Timers depend on
 the active session and runtime limits; unavailable scheduling is reported.
 
-Bare `+++` injects these planning steps only in Plan mode. File changes and scheduling wait
+With the [brewmod-placeholders](/mods/placeholders/) mod installed (Claude Code 2.1.292+), bare `+++`
+injects these planning steps only in Plan mode. File changes and scheduling wait
 until execution. See [Task Board Setup](/brewtools/skills/task-board-setup/) and
 [Manager Setup](/brewtools/skills/manager-setup/).
 
@@ -137,7 +138,7 @@ until execution. See [Task Board Setup](/brewtools/skills/task-board-setup/) and
 
 ## Artifact metadata
 
-Every `-setup` skill stamps what it writes with the plugin version that generated it and `generated_by` naming the skill. JSON artifacts carry these plus `last_updated` as top-level keys. The byte-copied `.mjs`/`.md` hook and prompt files carry only `version` and `generated_by` in a `// brewcode-meta:` comment line (or `.md` frontmatter) -- never `last_updated`, since the date would be the release date already present at the top of the file and rewriting it on every build would defeat the copy's own drift check.
+Every `-setup` skill stamps what it writes with the plugin version that generated it and `generated_by` naming the skill. JSON artifacts carry these plus `last_updated` as top-level keys. The byte-copied `.mjs`/`.md` hook and asset files carry only `version` and `generated_by` in a `// brewcode-meta:` comment line (or `.md` frontmatter) -- never `last_updated`, since the date would be the release date already present at the top of the file and rewriting it on every build would defeat the copy's own drift check.
 
 | Skill | Carrier |
 |-------|---------|
@@ -165,10 +166,9 @@ brewtools/
 │   └── plugin.json              # Plugin manifest
 ├── hooks/                       # filenames deliberately NOT renamed in v5.0.0
 │   ├── hooks.json               # Hook registry
-│   ├── session-start.mjs        # SessionStart: HARD-wall awareness, manager codeword prep
-│   ├── manager-prompt.mjs       # Codewords; +++ only in Plan mode
+│   ├── session-start.mjs        # SessionStart: HARD-wall notice when armed
 │   ├── hardmode-guard.mjs       # Copied into a project by manager-setup install
-│   └── lib/                     # utils.mjs, manager-state.mjs, manager-prompts.mjs
+│   └── lib/                     # utils.mjs, manager-state.mjs
 ├── skills/
 │   ├── text-optimize/           # Token optimization
 │   ├── text-human/              # AI artifact removal
@@ -181,7 +181,7 @@ brewtools/
 │   ├── agent-deadline-setup/    # Soft wall-clock budget for subagents
 │   ├── agent-return-setup/      # Size budget on every subagent's final return
 │   ├── agent-router-setup/      # Generic-spawn router (experimental)
-│   ├── manager-setup/           # Hard delegation wall + codewords
+│   ├── manager-setup/           # Hard delegation wall
 │   └── task-board-setup/        # Kanban, methodology, graph and session anti-drift
 └── agents/
     ├── text-optimizer.md        # Text optimization agent

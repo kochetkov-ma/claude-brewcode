@@ -206,7 +206,8 @@ prompt, a timer execution step, and the final PROGRESS refresh. Planning is read
 writes and timer creation/deletion until authorized execution. A tick received during planning
 reports proposed reconciliation only.
 
-Typing `+++` in Plan mode injects this planning requirement through the plugin's prompt hook.
+With the brewmod-placeholders mod installed (Claude Code 2.1.292+), typing `+++` in Plan mode
+injects this planning requirement through the mod's default `+` placeholder (`when: plan`).
 Outside Plan mode, it adds no cron instruction. A `/task-board` view remains read-only and
 reports missing or stale state without scheduling.
 

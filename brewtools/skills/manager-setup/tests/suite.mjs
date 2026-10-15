@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// E2E: HARD wall guard (hooks/hardmode-guard.mjs), codeword hook (hooks/manager-prompt.mjs), armed-wall notice (hooks/session-start.mjs).
+// E2E: HARD wall guard (hooks/hardmode-guard.mjs), armed-wall notice (hooks/session-start.mjs).
 // State lives in an isolated temp project passed as `cwd` on stdin; this repo's .claude/ never touched, no real wall armed.
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync, chmodSync, rmSync, realpathSync } from 'node:fs';
@@ -7,7 +7,6 @@ import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseCliArgs } from '../../../hooks/lib/manager-state.mjs';
-import { resolvePrompt, VALID_MODES } from '../../../hooks/lib/manager-prompts.mjs';
 
 const HERE = join(fileURLToPath(import.meta.url), '..');
 const GUARD_MJS = join(HERE, '..', '..', '..', 'hooks', 'hardmode-guard.mjs');
@@ -570,31 +569,38 @@ check(
   'a guard path in args under a foreign launcher is the guard registration, never left behind',
 );
 
-// REGRESSION: global purge deleted only full.md; the other modes' overrides kept changing the codewords.
-function runPurge(proj, scope, cfg) {
+function runPurge(proj, cfg) {
   const md = readFileSync(SKILL_MD, 'utf8');
   const from = md.indexOf(NODE_E, md.indexOf('### purge'));
   const body = md.slice(from + NODE_E.length, md.indexOf('\n"', from))
     .split('${BT_ROOT}').join(join(HERE, '..', '..', '..'))
-    .split("'${ROOT}'").join(JSON.stringify(proj)).split("'SCOPE'").join(JSON.stringify(scope));
-  const file = join(BASE, `purge-${scope}.mjs`);
+    .split("'${ROOT}'").join(JSON.stringify(proj));
+  const file = join(BASE, `purge-${passed + failed}.mjs`);
   writeFileSync(file, body);
   const r = spawnSync(process.execPath, [file], { encoding: 'utf8', timeout: 8000, env: { ...process.env, CLAUDE_CONFIG_DIR: cfg } });
   return { code: r.status, out: safeParse(r.stdout || '') };
 }
+// GIVEN codeword overrides (the mod's legacy layer) in the project and the profile WHEN purge runs
+// THEN the wall files go and every override file stays
 const P_CFG = join(BASE, 'purge-cfg');
-const P_PDIR = join(P_CFG, 'manager', 'prompts');
+const P_GDIR = join(P_CFG, 'manager', 'prompts');
+mkdirSync(P_GDIR, { recursive: true });
+writeFileSync(join(P_GDIR, 'full.md'), 'GLOBAL OVERRIDE');
+const P_PROJ = makeInstalledProject('purge-keeps-overrides');
+const P_PDIR = join(P_PROJ, '.claude', 'brewtools', 'manager', 'prompts');
 mkdirSync(P_PDIR, { recursive: true });
-for (const m of [...VALID_MODES, 'notes']) writeFileSync(join(P_PDIR, `${m}.md`), `OVERRIDE ${m}`);
-const pProject = runPurge(makeProject('purge-project', {}), 'project', P_CFG);
-const pGlobal = runPurge(makeProject('purge-global', {}), 'global', P_CFG);
+writeFileSync(join(P_PDIR, 'architect.md'), 'PROJECT OVERRIDE');
+const pPrep = runUninstall(P_PROJ, 'purge-keeps');
+const pPurge = runPurge(P_PROJ, P_CFG);
+const pDir = join(P_PROJ, '.claude', 'brewtools', 'manager');
 check(
-  '44a-purge-global-removes-every-mode-override-and-keeps-foreign-files',
-  { projectCode: pProject.code, projectGlobal: pProject.out.globalPrompts, code: pGlobal.code,
-    removed: pGlobal.out.globalPrompts, kept: pGlobal.out.globalKept, left: readdirSync(P_PDIR) },
-  { projectCode: 0, projectGlobal: [], code: 0,
-    removed: [...VALID_MODES].map(m => join(P_PDIR, `${m}.md`)), kept: ['notes.md'], left: ['notes.md'] },
-  'global purge deletes the override of each VALID_MODES mode, never an unknown file; project scope leaves global alone',
+  '44a-purge-keeps-codeword-overrides-and-deletes-the-wall-files',
+  { prepCode: pPrep.code, code: pPurge.code, promptsKept: pPurge.out.promptsKept, managerDir: readdirSync(pDir),
+    projectOverride: readFileSync(join(P_PDIR, 'architect.md'), 'utf8'), globalFiles: readdirSync(P_GDIR),
+    globalOverride: readFileSync(join(P_GDIR, 'full.md'), 'utf8') },
+  { prepCode: 0, code: 0, promptsKept: true, managerDir: ['prompts'],
+    projectOverride: 'PROJECT OVERRIDE', globalFiles: ['full.md'], globalOverride: 'GLOBAL OVERRIDE' },
+  'purge removes state.json, the guard and the helper but never a prompts/ override, project or global (the mod owns them)',
 );
 
 // REGRESSION: uninstall + purge left `.claude/settings.local.json` = {} and `.claude/` in a project that had neither.
@@ -612,7 +618,7 @@ writeFileSync(join(E2, '.claude', 'brewtools', 'manager', 'state.json'), JSON.st
 const e2settings = onlyGuardSettings(E2, { env: { CLAUDE_CODE_ENABLE_TODO_TOOLS: '1' } });
 const e2u = runUninstall(E2, 'purge-prep');
 const e2prepLeft = existsSync(e2settings);
-const e2 = runPurge(E2, 'project', P_CFG);
+const e2 = runPurge(E2, P_CFG);
 check(
   '44b-uninstall-and-purge-delete-what-they-emptied',
   { uninstallCode: e1.code, uninstallSettingsLeft: existsSync(join(E1, '.claude', 'settings.local.json')),
@@ -642,7 +648,7 @@ check(
   { recipes: md45.split(RECIPE).length - 1, rootLines: (md45.match(/^ROOT=/gm) || []).length, unbraced: md45.includes('$CLAUDE_PROJECT_DIR'),
     substituted: runRecipe(RECIPE.split('${CLAUDE_PROJECT_DIR}').join(join(R_REPO, 'sub')), R_REPO),
     literal: runRecipe(RECIPE, join(R_REPO, 'sub')) },
-  { recipes: 7, rootLines: 7, unbraced: false,
+  { recipes: 6, rootLines: 6, unbraced: false,
     substituted: join(R_REPO, 'sub'),
     literal: realpathSync(R_REPO) },
   'every block resolves ROOT from the load-time session dir, git toplevel only when the token stays literal',
@@ -744,6 +750,32 @@ check(
     stateOnlyUpgrade: { code: 1, stderr: 'ABORT: the wall is not installed in this project — run install instead\n' },
     installed: { code: 0, registered: true, guardPresent: true, installed: true, stale: null } },
   'status must call a state.json-only project not installed, the exact case upgrade refuses',
+);
+
+// GIVEN a legacy codeword override in the project WHEN status runs THEN it is listed (the mod reads it), never opened
+const LG = makeInstalledProject('status-legacy-overrides');
+mkdirSync(join(LG, '.claude', 'brewtools', 'manager', 'prompts'), { recursive: true });
+writeFileSync(join(LG, '.claude', 'brewtools', 'manager', 'prompts', 'review-double.md'), 'OVERRIDE');
+writeFileSync(join(LG, '.claude', 'brewtools', 'manager', 'prompts', 'notes.txt'), 'ignored');
+const lgNone = runShipped('### status', makeInstalledProject('status-no-overrides'));
+const lgSome = runShipped('### status', LG);
+check(
+  '44j-status-lists-legacy-codeword-overrides-and-nothing-else',
+  { none: { code: lgNone.code, list: lgNone.out.legacyOverrides }, some: { code: lgSome.code, list: lgSome.out.legacyOverrides } },
+  { none: { code: 0, list: [] }, some: { code: 0, list: [join(LG, '.claude', 'brewtools', 'manager', 'prompts', 'review-double.md')] } },
+  'status reports *.md files under the legacy prompts dirs (the mod\'s layer) and carries no prompt text or source',
+);
+
+// GIVEN the codewords left this plugin WHEN the skill text is read THEN status points at the mod and no deleted asset is referenced
+const skillText = readFileSync(SKILL_MD, 'utf8');
+check(
+  '44k-skill-points-at-the-mod-and-references-no-deleted-codeword-asset',
+  { codewordsLine: skillText.includes('codewords: provided by brewmod-placeholders (Claude Code 2.1.292+)'),
+    installLine: skillText.includes('claude plugin install brewmod-placeholders@claude-brewcode'),
+    deadRefs: skillText.match(/manager-prompts|resolvePrompt|VALID_MODES|references\/(full|planmode|architect|review-double|review-regression|cron-plan)\.md/g) || [],
+    editMode: /^\| `edit` \|/m.test(skillText), leftovers: readdirSync(join(HERE, '..', 'references')).sort() },
+  { codewordsLine: true, installLine: true, deadRefs: [], editMode: false, leftovers: ['hard.md', 'intent-routing.md'] },
+  'status carries the mod pointer and install line; no import of the deleted prompt helper, no edit row, only hard.md and intent-routing.md remain',
 );
 
 // REGRESSION (M1): process.exit inside the locked try skips finally; the lock leaked and the next
@@ -1314,10 +1346,9 @@ check(
   'global state is <CLAUDE_CONFIG_DIR>/manager/state.json for writer and installed CLI, ~/.claude only when unset',
 );
 
-// ---- manager-prompt.mjs (UserPromptSubmit) and session-start.mjs (SessionStart) ----------
+// ---- session-start.mjs (SessionStart) ----------
 
 const PLUGIN_ROOT = join(HERE, '..', '..', '..');
-const PROMPT_MJS = join(PLUGIN_ROOT, 'hooks', 'manager-prompt.mjs');
 const SESSION_MJS = join(PLUGIN_ROOT, 'hooks', 'session-start.mjs');
 /** Empty HOME: a real ~/.claude/manager/prompts override must not leak into expectations. */
 const EMPTY_HOME = join(BASE, 'home');
@@ -1338,134 +1369,6 @@ function runHook(script, payload, projectDir, envOver = {}) {
   });
   return safeParse(r.stdout || '');
 }
-
-const ups = (cwd, prompt, extra) => ({
-  session_id: 'S1', cwd, hook_event_name: 'UserPromptSubmit', permission_mode: 'default', prompt, ...extra,
-});
-const injected = (text) => ({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: text } });
-/** The shipped default block for a mode, read the way the hook reads it. */
-const shipped = (mode) => resolvePrompt(mode, join(BASE, 'no-such-project'), PLUGIN_ROOT).text;
-
-const HEAD_M = 'User typed `++m` — Manager mode is active for this turn:';
-const HEAD_A = 'User typed `++a` — Architecture-first discipline is active for this turn:';
-const HEAD_RR = 'User typed `++rr` — Anti-regression review discipline is active for this turn:';
-const HEAD_R = 'User typed `++r` — Two-phase review discipline is active for this turn:';
-
-check(
-  '79-codeword-m-injects-the-manager-block',
-  runHook(PROMPT_MJS, ups(DISARMED, '++m ship the feature')),
-  injected(`${HEAD_M}\n\n${shipped('full')}`),
-  'a typed ++m gets the header plus the shipped full block, wall state irrelevant',
-);
-
-check(
-  '80-codeword-groups-combine-in-order',
-  runHook(PROMPT_MJS, ups(DISARMED, 'do it ++rr ++a ++m')),
-  injected([`${HEAD_M}\n\n${shipped('full')}`, `${HEAD_A}\n\n${shipped('architect')}`, `${HEAD_RR}\n\n${shipped('review-regression')}`].join('\n\n---\n\n')),
-  'manager, architect and review blocks are all injected, in that fixed order',
-);
-
-// REGRESSION: an armed wall injected the whole `full` block (1830 B) on EVERY prompt, on top
-// of the guard that already enforces the rule and explains itself in its deny reason.
-check(
-  '81-armed-wall-injects-nothing-without-a-codeword',
-  { balanced: runHook(PROMPT_MJS, ups(ARMED, 'refactor the parser')), strict: runHook(PROMPT_MJS, ups(STRICT, 'refactor the parser')) },
-  { balanced: {}, strict: {} },
-  'no ambient per-prompt block while the wall is armed',
-);
-
-// REGRESSION: UserPromptSubmit fires for subagent deliveries; a quoted codeword activated "User typed `++m`".
-// Fixtures recorded on 2.1.296 (home paths scrubbed; hand-back line replaced by one carrying codewords).
-const NOTIFICATION = JSON.parse(readFileSync(join(HERE, 'fixtures', 'ups-task-notification.json'), 'utf8'));
-const HANDBACK = JSON.parse(readFileSync(join(HERE, 'fixtures', 'ups-agent-message.json'), 'utf8'));
-check(
-  '82-synthetic-fixtures-carry-codewords',
-  { notification: /<result>\+\+m PROBE_REPORT_TOKEN \+\+rr<\/result>/.test(NOTIFICATION.prompt), handback: / {2}\+\+m \+\+a \+\+rr PROBE_REPORT_TOKEN\n/.test(HANDBACK.prompt) },
-  { notification: true, handback: true },
-  'precondition: both recorded deliveries contain codewords the scan would match',
-);
-check(
-  '83-synthetic-subagent-deliveries-inject-nothing',
-  {
-    taskNotification: runHook(PROMPT_MJS, NOTIFICATION),
-    agentMessage: runHook(PROMPT_MJS, HANDBACK),
-    leadingWhitespace: runHook(PROMPT_MJS, { ...NOTIFICATION, prompt: `\n  ${NOTIFICATION.prompt}` }),
-  },
-  { taskNotification: {}, agentMessage: {}, leadingWhitespace: {} },
-  'a prompt that starts with <task-notification> or <agent-message is not the user typing',
-);
-
-check(
-  '84-typed-prompt-quoting-the-tag-still-fires',
-  runHook(PROMPT_MJS, ups(DISARMED, 'explain what <task-notification> means ++r')),
-  injected(`${HEAD_R}\n\n${shipped('review-double')}`),
-  'only a LEADING delivery tag marks a synthetic prompt',
-);
-
-// REGRESSION: manager-prompt skipped a bare typed `<agent-message>`; a delivery is only
-// `<task-notification>` or `<agent-message from=`.
-check(
-  '84a-only-agent-message-from-marks-a-delivery',
-  {
-    bareTag: runHook(PROMPT_MJS, ups(DISARMED, '<agent-message> ++r')),
-    fromAttr: runHook(PROMPT_MJS, ups(DISARMED, '<agent-message from="a1"> ++r')),
-  },
-  { bareTag: injected(`${HEAD_R}\n\n${shipped('review-double')}`), fromAttr: {} },
-  'a typed <agent-message> fires the codeword; <agent-message from= is a subagent delivery',
-);
-
-// REGRESSION: project prompt overrides were looked up under the raw hook cwd, so they
-// vanished as soon as the session changed directory.
-const ROOTED = makeProject('rooted', { hard: false, level: 'balanced' });
-mkdirSync(join(ROOTED, '.claude', 'brewtools', 'manager', 'prompts'), { recursive: true });
-mkdirSync(join(ROOTED, 'nested', 'deep'), { recursive: true });
-writeFileSync(join(ROOTED, '.claude', 'brewtools', 'manager', 'prompts', 'review-double.md'), 'OVERRIDE-AT-ROOT');
-writeFileSync(join(ROOTED, '.claude', 'brewtools', 'manager', 'prompts', 'architect.md'), 'x'.repeat(10000));
-check(
-  '85-project-override-resolves-from-the-project-root',
-  {
-    nestedCwd: runHook(PROMPT_MJS, ups(join(ROOTED, 'nested', 'deep'), '++r check it')),
-    projectDirEnv: runHook(PROMPT_MJS, ups('/', '++r check it'), ROOTED),
-  },
-  { nestedCwd: injected(`${HEAD_R}\n\nOVERRIDE-AT-ROOT`), projectDirEnv: injected(`${HEAD_R}\n\nOVERRIDE-AT-ROOT`) },
-  'the override is found from a nested cwd and through CLAUDE_PROJECT_DIR',
-);
-
-check(
-  '86-injection-is-capped-at-9000-chars',
-  runHook(PROMPT_MJS, ups(ROOTED, '++a design it')),
-  injected(`${`${HEAD_A}\n\n${'x'.repeat(10000)}`.slice(0, 9000)}\n...[truncated]`),
-  'an oversized override is cut to 9000 chars plus the truncation marker',
-);
-
-check(
-  '87-prompt-hook-malformed-stdin-fails-open',
-  runHook(PROMPT_MJS, '{not json'),
-  {},
-  'an advisory hook must never break the prompt',
-);
-
-// REGRESSION: the global override was hardcoded to ~/.claude/manager/prompts, so a session on
-// another profile (CLAUDE_CONFIG_DIR) read the default profile's override or none.
-const PROFILE_HOME = join(BASE, 'profile-home');
-const PROFILE_CFG = join(BASE, 'profile-cfg');
-const PROFILE_EMPTY = join(BASE, 'profile-empty');
-for (const [dir, text] of [[join(PROFILE_HOME, '.claude'), 'OVERRIDE-IN-HOME'], [PROFILE_CFG, 'OVERRIDE-IN-CONFIG-DIR']]) {
-  mkdirSync(join(dir, 'manager', 'prompts'), { recursive: true });
-  writeFileSync(join(dir, 'manager', 'prompts', 'review-double.md'), text);
-}
-mkdirSync(PROFILE_EMPTY, { recursive: true });
-const asProfile = (cfg) => runHook(PROMPT_MJS, ups(DISARMED, '++r check it'), undefined, { HOME: PROFILE_HOME, CLAUDE_CONFIG_DIR: cfg });
-check(
-  '87a-global-override-follows-claude-config-dir',
-  { configDir: asProfile(PROFILE_CFG), unset: asProfile(undefined), emptyConfigDir: asProfile(PROFILE_EMPTY) },
-  {
-    configDir: injected(`${HEAD_R}\n\nOVERRIDE-IN-CONFIG-DIR`),
-    unset: injected(`${HEAD_R}\n\nOVERRIDE-IN-HOME`),
-    emptyConfigDir: injected(`${HEAD_R}\n\n${shipped('review-double')}`),
-  },
-  'the global scope is <CLAUDE_CONFIG_DIR>/manager/prompts, ~/.claude only when unset, never a fallback',
-);
 
 const sessionNotice = (level, bash) => ({
   systemMessage: `⛔ MANAGER HARD wall ON (project, level=${level})`,

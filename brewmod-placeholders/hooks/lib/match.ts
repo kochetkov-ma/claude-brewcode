@@ -7,7 +7,7 @@ export type PlaceholderView = { tokens: PlaceholderToken[] }
 export type PrefixCheck = { prefix: string; warning: string | null }
 export type NameKind = 'word' | 'symbol'
 
-export type Matcher = { name: string; kind: NameKind; test: RegExp; scan: RegExp }
+export type Matcher = { name: string; kind: NameKind; scan: RegExp }
 export type Matchers = { prefix: string; byName: ReadonlyMap<string, Matcher>; unknown: RegExp }
 
 const PREFIX_RE = /^[!-/:-@[-^`{-~]{2,8}$/
@@ -36,11 +36,11 @@ function build(prefix: string, name: string, kind: NameKind): Matcher {
   const token = escRe(prefix + name)
   if (kind === 'word') {
     const src = `(?<![\\w${escClass(prefix)}])${token}(?![\\w])`
-    return { name, kind, test: new RegExp(src, 'i'), scan: new RegExp(src, 'gi') }
+    return { name, kind, scan: new RegExp(src, 'gi') }
   }
   const cls = `[\\p{L}\\p{N}\\p{M}_${escClass([...new Set(prefix + name)].join(''))}]`
   const src = `(?<!${cls})${token}(?!${cls})`
-  return { name, kind, test: new RegExp(src, 'u'), scan: new RegExp(src, 'gu') }
+  return { name, kind, scan: new RegExp(src, 'gu') }
 }
 
 // Names are keyed lowercase; a name that is neither word nor symbol is skipped.
@@ -54,11 +54,6 @@ export function compileMatchers(prefix: string, names: Iterable<string>): Matche
   }
   const unknown = new RegExp(`(?<![\\w${escClass(prefix)}])${escRe(prefix)}(\\w+)`, 'g')
   return { prefix, byName, unknown }
-}
-
-export function matches(ms: Matchers, text: string, name: string): boolean {
-  const m = ms.byName.get(name.toLowerCase())
-  return m !== undefined && m.test.test(text)
 }
 
 // Draft -> known and unknown tokens sorted by start; unknown = standalone `P\w+` with an undefined name.

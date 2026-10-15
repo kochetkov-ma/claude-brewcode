@@ -2,6 +2,80 @@
 
 ---
 
+## v6.8.0 (2026-10-15)
+
+> Docs: [mod-creator](https://doc-claude.brewcode.app/brewcode/agents/mod-creator/) | [brewtools overview](https://doc-claude.brewcode.app/brewtools/overview/) | [prompt-injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/) | [brewtools skills](https://doc-claude.brewcode.app/brewtools/skills/) | [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [task-board-setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) | [FAQ](https://doc-claude.brewcode.app/faq/) | [Full Setup](https://doc-claude.brewcode.app/full-setup/) | [Getting Started](https://doc-claude.brewcode.app/getting-started/) | [Installation](https://doc-claude.brewcode.app/installation/) | [Mods overview](https://doc-claude.brewcode.app/mods/overview/) | [placeholders](https://doc-claude.brewcode.app/mods/placeholders/) | [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/)
+
+Minor release: codewords move from brewtools to `brewmod-placeholders`; both mods now run bundled command hooks: placeholders injects context through `hooks/inject.mjs`, plan-effort only writes a state file through `hooks/mode.mjs`; so they work on Team orgs (Enterprise expected, not tested).
+
+**Migration:**
+
+- Codewords (`++m`, `++a`, `++rr`, `++r`, `+++`) now need `brewmod-placeholders` on Claude Code 2.1.292+: `claude plugin install brewmod-placeholders@claude-brewcode`.
+- Update brewtools and the mods together: brewtools 6.7.x next to the new mod injects each block twice.
+- Existing override files (`.claude/brewtools/manager/prompts/`, `<config>/manager/prompts/`) keep working through the mod's legacy layer.
+- On Claude Code below 2.1.292, upgrade Claude Code first, or skip the brewtools update and stay on 6.7.1 (the plugin-update flow updates the whole train).
+- Codex is unchanged.
+
+### brewtools
+
+#### Removed
+
+- **codeword hook:** `hooks/manager-prompt.mjs`, `hooks/lib/manager-prompts.mjs` and the `UserPromptSubmit` entry in `hooks/hooks.json`.
+- **manager-setup codewords:** the codeword layer, the `edit` mode, the 6 prompt references (`architect`, `cron-plan`, `full`, `planmode`, `review-double`, `review-regression`) and the hook's `UserPromptSubmit` test fixtures (`ups-agent-message.json`, `ups-task-notification.json`). `manager-setup` is now the opt-in hard wall plus the task-tools env merge; `status` points to `brewmod-placeholders`.
+
+#### Changed
+
+- **descriptions:** the `plugin.json` description now says "manager hard-wall guard" instead of "manager codewords" (matches `marketplace.json`). `brewtools/README.md`, `skills/task-board-setup/README.md` (`+++` credited to the mod) and `skills/context-slim/references/mcp-advice.md` point to `brewmod-placeholders`.
+
+### brewmod-placeholders
+
+#### Fixed
+
+- **Team orgs:** the bundled command hook `hooks/inject.mjs` (a plain `hooks.json` command entry) is the only context injector. Claude Code's builtin security layer bypasses the `classic.*` hooks of a user-installed mod on those orgs; a bundled command hook still runs. Verified on Claude Code 2.1.300 on a Team-org and a Max profile, with `--plugin-dir` and installed copies; Enterprise was not run.
+- **hook resilience:** the state-file prune skips one bad entry instead of stopping, regular files only, and removes orphan tmp files; an unreadable user layer is skipped (an unreadable default still throws); a failed state write removes its tmp file.
+
+#### Changed
+
+- **module scope:** the hooks module keeps highlight, typeahead, the preview band, `/placeholders` and inline expansion.
+- **requirements:** `node` on PATH; hook timeout 5 s.
+- **defaults:** default bodies are frozen to the v6.7.0 spec; CI checks them with `check-defaults.mjs` and `inject-parity.mjs` (golden vectors against the TypeScript lib).
+
+### brewmod-plan-effort
+
+#### Fixed
+
+- **Team orgs:** plan mode is detected by the bundled command hook `hooks/mode.mjs`, which writes a state file that `turn.step` reads, so the effort raise works where the module's `classic.*` hooks are bypassed (Team orgs; Enterprise not tested). Requires `node`.
+- **hook resilience:** orphan state tmp files are pruned, the session id is validated before the state file is read, one bad entry no longer stops the prune, a failed state write removes its tmp file, hook timeout 5 s.
+
+### brewcode
+
+#### Changed
+
+- **mod-creator:** the agent and its references cover the org-managed bypass and the bundled command-hook patterns.
+
+### repo
+
+#### Changed
+
+- **Validate CI:** `check-defaults.mjs` and `inject-parity.mjs` replace the `extract-defaults --check` and `gen-golden --check` gates; CI also runs `node --test brewmod-plan-effort/tests/mode.test.mjs`.
+- **README:** registered hook commands 4 -> 3, the mods section covers the bundled command hooks and the `node` requirement.
+- **APPROACHES.md:** codewords documented as coming from `brewmod-placeholders`.
+- **.gitignore:** `brewmod-*/.state/`.
+
+### codex
+
+#### Changed
+
+- **generator:** reads `cron-plan` from the `brewmod-placeholders` default; the mirror is unchanged.
+
+### docs
+
+#### Changed
+
+- **pages:** the 13 pages in the Docs line (brewtools manager pages, codewords stub, mods pages, mod-creator agent page), plus brewcode.app/mods/ promo links and hook counts.
+
+---
+
 ## v6.7.1 (2026-10-15)
 
 > Docs: [mod-creator](https://doc-claude.brewcode.app/brewcode/agents/mod-creator/)

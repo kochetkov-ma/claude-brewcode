@@ -1,61 +1,36 @@
 import type { Register } from 'claude-code'
 
 const RANK = ['low', 'medium', 'high', 'xhigh', 'max'] as const
+const SESSION_ID = /^[A-Za-z0-9_-]+$/
 const rank = (v: unknown): number => RANK.findIndex((r) => r === v)
 
+// Pure: state-file text -> plan?; missing, corrupt or non-plan input is false (fail open)
+const isPlan = (text: unknown): boolean => {
+  if (typeof text !== 'string') return false
+  try {
+    return (JSON.parse(text) as { mode?: unknown } | null)?.mode === 'plan'
+  } catch {
+    return false
+  }
+}
+
 export const register: Register = (on, options) => {
-  let plan = false
   // Status text this mod pinned; undefined = nothing of ours is shown (never clear what we did not set)
   let shown: string | undefined
 
-  // Sets the mode; true = plan was left with our status pinned, so the caller clears it ($ is never passed to a helper)
-  const setPlan = (value: boolean): boolean => {
-    const left = plan && !value && shown !== undefined
-    plan = value
-    return left
-  }
-
-  // Classic payloads carry the exact mode; subagent (agent_id) and non-string modes are ignored
-  const fromClassic = (e: { permission_mode?: unknown; agent_id?: unknown }): boolean =>
-    e.agent_id === undefined && typeof e.permission_mode === 'string' && setPlan(e.permission_mode === 'plan')
-
-  // No try/catch: the engine skips a failing hook and the chain goes on (reference.md:78)
-  on('classic.UserPromptSubmit', ($, e, next) => {
-    if (fromClassic(e)) {
-      $.ui.status(undefined)
-      shown = undefined
-    }
-    return next(e)
-  })
-
-  on('classic.PostToolBatch', ($, e, next) => {
-    if (fromClassic(e)) {
-      $.ui.status(undefined)
-      shown = undefined
-    }
-    return next(e)
-  })
-
-  // Non-classic fallback (org-managed installs); fires before turn.step
-  on('session.append', ($, e, next) => {
-    const { type, name } = e.message
-    if (e.agentId === undefined && type === 'attachment') {
-      if (name === 'plan_mode') setPlan(true)
-      else if (name === 'plan_mode_exit' && setPlan(false)) {
-        $.ui.status(undefined)
-        shown = undefined
-      }
-    }
-    return next(e)
-  })
-
-  // Raise only: lower or equal-rank, numeric, absent efforts and subagent steps pass untouched
-  // Status 'plan: <target>' is pinned on a raised main step, cleared on an unraised one; only on change
+  // Raise only (lower/equal, numeric, absent efforts and subagent steps untouched); status 'plan: <target>' pinned on a raise, cleared otherwise
+  // Mode = hooks/mode.mjs command hook -> <root>/.state/mode-<session>.json (works on org-managed installs too)
   on('turn.step', async function* ($, e, next) {
     const main = e.agentId === undefined
     const wanted = rank(options.planEffort)
     const have = rank(e.effort)
-    const target = main && plan && have >= 0 && have < wanted ? RANK[wanted] : undefined
+    let plan = false
+    if (main && have >= 0 && have < wanted) {
+      const sid = await $.session.id()
+      // no read unless the id is path-safe (same check as mode.mjs)
+      if (typeof sid === 'string' && SESSION_ID.test(sid)) plan = isPlan(await $.fs.read(`${$.plugin.root}/.state/mode-${sid}.json`).catch(() => undefined))
+    }
+    const target = plan ? RANK[wanted] : undefined
     if (main && options.statusLine !== false) {
       const text = target === undefined ? undefined : `plan: ${target}`
       if (text !== shown) {

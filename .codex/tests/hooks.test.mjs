@@ -20,7 +20,6 @@ function invoke(file, input, env = {}) {
   return JSON.parse(result.stdout || '{}');
 }
 
-const brewtoolsSource = path.join(ROOT, 'brewtools');
 const brewcodeRoot = path.join(ROOT, '.codex', 'plugins', 'brewcode');
 const brewtoolsRoot = path.join(ROOT, '.codex', 'plugins', 'brewtools');
 const common = { session_id: `fixture-session-${process.pid}-${Date.now()}`, turn_id: 'fixture-turn', cwd: ROOT, model: 'fixture-model', permission_mode: 'default' };
@@ -63,9 +62,6 @@ assert.match(invokeManager('++m lowercase remains supported').hookSpecificOutput
 assert.deepEqual(invokeManager('C++ modules and R values are not codewords'), {});
 assert.deepEqual(invoke(managerHook, '{malformed', { PLUGIN_ROOT: brewtoolsRoot }), {});
 assert.deepEqual(invoke(path.join(brewtoolsRoot, 'hooks', 'session-start.mjs'), JSON.stringify({ ...common, hook_event_name: 'SessionStart', source: 'resume' })), {});
-
-const claudeManager = invoke(path.join(brewtoolsSource, 'hooks', 'manager-prompt.mjs'), JSON.stringify({ ...common, hook_event_name: 'UserPromptSubmit', prompt: '++r review this' }), { CLAUDE_PLUGIN_ROOT: brewtoolsSource });
-assert.equal(claudeManager.hookSpecificOutput.hookEventName, 'UserPromptSubmit');
 
 const hookDefinition = fs.readFileSync(path.join(brewcodeRoot, 'hooks', 'hooks.json'));
 const originalHash = crypto.createHash('sha256').update(hookDefinition).digest('hex');

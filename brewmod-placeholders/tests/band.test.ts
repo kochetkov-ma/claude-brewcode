@@ -1,6 +1,6 @@
 import { test, expect } from 'claude-code/testing'
 import type { On } from 'claude-code'
-import { ROOT, wire, type Tree } from './layer-io'
+import { ROOT, STATE_FILE, wire, type Tree } from './layer-io'
 import { PLAN_ONLY_LABEL, UNKNOWN_LABEL, bandBudget, bandRows, toggleLabel } from '../hooks/lib/band'
 
 const SURFACES = ['terminal', 'desktop'] as const
@@ -30,7 +30,7 @@ const box = { text: '', cursor: 0 }
 
 // Real path: session.start loads the registry into the editor entries, prompt.edit writes the view atom.
 const boot = async ($: any, on: On, draft: string, stubs: (on: On) => void = () => {}, tree: Tree = TREE) => {
-  wire(on, { tree, bottom: {} })
+  wire(on, { tree })
   on('prompt.read', () => ({ value: box }) as never)
   box.text = draft
   stubs(on)
@@ -176,27 +176,58 @@ test('GIVEN the same token typed twice in two cases WHEN the band mounts THEN it
   await ui.unmount()
 })
 
-test('GIVEN plan mode is the last known mode WHEN the band mounts THEN the plan-only label is gone', async ($, on) => {
-  await boot($, on, '++zz')
-  await $.classic.PostToolBatch({ tool_calls: [], permission_mode: 'plan' } as never)
-
+const stateTree = (mode: unknown): Tree => ({ ...TREE, [STATE_FILE]: JSON.stringify({ mode, ts: 1 }) })
+const turnEnd = ($: any) => $.turn.complete({ turnId: 't1', answer: '', durationMs: 1, isAborted: false, reason: 'end_turn' })
+const bandTexts = async ($: any) => {
   const ui = await $.ui.mount({ ...PLUGIN, surface: 'terminal', props: PROPS })
-
-  const texts = (await ui.findAll({ type: 'Text' })).map((t) => t.text)
-  expect(texts, 'texts').toEqual(['placeholders 1 ', '++zz', '  Zed mode', 'ZZ BODY'])
+  const texts = (await ui.findAll({ type: 'Text' })).map((t: { text: string }) => t.text)
   await ui.unmount()
+  return texts
+}
+const PLAN_TEXTS = ['placeholders 1 ', '++zz', '  Zed mode', 'ZZ BODY']
+const NOT_PLAN_TEXTS = ['placeholders 1 ', '++zz', '  Zed mode', ` ${PLAN_ONLY_LABEL}`, 'ZZ BODY']
+
+test('GIVEN the state file says plan WHEN the session starts and the band mounts THEN the plan-only label is gone', async ($, on) => {
+  await boot($, on, '++zz', () => {}, stateTree('plan'))
+
+  expect(await bandTexts($), 'texts').toEqual(PLAN_TEXTS)
 })
 
-test('GIVEN a mode other than plan WHEN the band mounts THEN the plan-only label shows', async ($, on) => {
-  await boot($, on, '++zz')
-  await $.classic.PostToolBatch({ tool_calls: [], permission_mode: 'default' } as never)
+test('GIVEN the state file says another mode WHEN the session starts THEN the plan-only label shows', async ($, on) => {
+  await boot($, on, '++zz', () => {}, stateTree('default'))
 
-  const ui = await $.ui.mount({ ...PLUGIN, surface: 'terminal', props: PROPS })
-
-  const texts = (await ui.findAll({ type: 'Text' })).map((t) => t.text)
-  expect(texts, 'texts').toEqual(['placeholders 1 ', '++zz', '  Zed mode', ` ${PLAN_ONLY_LABEL}`, 'ZZ BODY'])
-  await ui.unmount()
+  expect(await bandTexts($), 'texts').toEqual(NOT_PLAN_TEXTS)
 })
+
+test('GIVEN no state file yet WHEN the session starts THEN the mode is not plan', async ($, on) => {
+  await boot($, on, '++zz')
+
+  expect(await bandTexts($), 'texts').toEqual(NOT_PLAN_TEXTS)
+})
+
+test('GIVEN the hook writes plan after the session start WHEN a turn completes THEN the band follows, and back to default on the next turn', async ($, on) => {
+  const tree: Tree = { ...TREE }
+  await boot($, on, '++zz', (o) => o('turn.complete', (_$, e) => ({ text: e.answer })), tree)
+  const before = await bandTexts($)
+  tree[STATE_FILE] = JSON.stringify({ mode: 'plan', ts: 2 })
+  await turnEnd($)
+  const planned = await bandTexts($)
+  tree[STATE_FILE] = JSON.stringify({ mode: 'acceptEdits', ts: 3 })
+  await turnEnd($)
+
+  expect([before, planned, await bandTexts($)], 'band texts per step').toEqual([NOT_PLAN_TEXTS, PLAN_TEXTS, NOT_PLAN_TEXTS])
+})
+
+for (const raw of ['{', '{"mode":5}', 'null', '']) {
+  test(`GIVEN an unusable state file ${JSON.stringify(raw)} after plan WHEN a turn completes THEN the last known mode stays`, async ($, on) => {
+    const tree: Tree = stateTree('plan')
+    await boot($, on, '++zz', (o) => o('turn.complete', (_$, e) => ({ text: e.answer })), tree)
+    tree[STATE_FILE] = raw
+    await turnEnd($)
+
+    expect(await bandTexts($), 'texts').toEqual(PLAN_TEXTS)
+  })
+}
 
 test('GIVEN the state read fails WHEN the band mounts THEN it fails open to the engine tree', async ($, on) => {
   const down = { value: false }

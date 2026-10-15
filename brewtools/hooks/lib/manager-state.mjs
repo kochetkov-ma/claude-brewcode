@@ -1,4 +1,4 @@
-// brewcode-meta: version=6.7.1 content_version=6.5.2 generated_by=brewtools:manager-setup
+// brewcode-meta: version=6.8.0 content_version=6.8.0 generated_by=brewtools:manager-setup
 // brewtools:manager-setup — Manager state {hard, level, mode:'full', mcpAllow?} in <root>/.claude/brewtools/manager/state.json.
 
 // CLI `get|set` is the only Bash shape the HARD wall guard self-exempts: keep it argument-strict
@@ -71,8 +71,7 @@ export function resolveStatePath(scope, cwd = process.cwd()) {
 }
 
 function clampMode(merged) {
-  // mode is vestigial — always 'full'. planmode is hook-internal (driven by
-  // permission_mode in manager-prompt.mjs), never stored as state.mode.
+  // mode is vestigial — always 'full'; plan mode is never stored as state.mode.
   if (merged.mode !== 'full') merged.mode = 'full';
   return merged;
 }

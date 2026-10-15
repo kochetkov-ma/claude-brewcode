@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readModDefault } from './mod-default.mjs';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(SCRIPT_DIR, '..', '..');
@@ -45,9 +46,8 @@ const CLAUDE_ONLY_TEAMS_REFERENCES = [
   'references/mode-enable-disable.md'
 ];
 
-// Etalon-first wording mirrored into the Codex variants. Sources of truth:
-// brewcode/skills/teams-setup/references/agent-template.md and
-// brewtools/skills/manager-setup/references/architect.md. Edit here only, never at the call sites.
+// Etalon-first wording mirrored into the Codex variants; sources: teams-setup/references/agent-template.md
+// and brewmod-placeholders/placeholders/a.md. Edit here only, never at the call sites.
 const ETALON_ADDITIVE = 'in addition to conventions, rules, and documentation, never instead of them';
 const ETALON_SENTENCE = `before writing a class, module, or test, find the closest well-built existing one in this repository and take its principles, ${ETALON_ADDITIVE}`;
 const ETALON_BRIEF = `find the closest well-built counterpart in the repository and follow its principles, ${ETALON_ADDITIVE}`;
@@ -1824,7 +1824,7 @@ The future implementation prompt must begin with Step 0: re-assume [ROLE: MANAGE
     const prompts = {
       'full.md': managerFull,
       'planmode.md': managerPlan,
-      'cron-plan.md': fs.readFileSync(path.join(sourceDir, 'references', 'cron-plan.md'), 'utf8').trim(),
+      'cron-plan.md': readModDefault('+'),
       'architect.md': `Start from system boundaries, data flow, ownership, failure modes, and compatibility constraints before choosing an implementation. ${ETALON_ARCHITECT}`,
       'review-regression.md': 'Before the review proper, pass the code for simplification: over-engineered? simpler? Then review for behavioral regressions first. Compare old and new contracts, exercise negative paths, and require evidence for compatibility claims.',
       'review-double.md': 'Before the review proper, pass the code for simplification: over-engineered? simpler? Then perform two passes: first correctness and safety, then maintainability, clarity, and missing validation. Keep findings evidence-based.'

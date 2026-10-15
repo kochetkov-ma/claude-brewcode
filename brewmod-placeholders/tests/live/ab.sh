@@ -1,6 +1,5 @@
 #!/bin/bash
-# Live A/B gate (paid, haiku): mod expands each codeword block once, byte-identical to brewtools alone; a mod that throws after next() leaves brewtools' block once. rc 0 = all PASS, 1 = a case FAILED, 2 = precondition.
-# AB_ONLY=<run name> runs just that run (e.g. c5-fault) and judges only the units that use it.
+# Live gate (paid, haiku): the mod alone (brewtools off) injects each codeword block once via hooks/inject.mjs, byte-equal to the golden. rc 0 PASS, 1 FAIL, 2 precondition; AB_ONLY=<run> runs one.
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 SRC="$(cd "$HERE/../.." && pwd)"
@@ -10,11 +9,7 @@ unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT CLAUDE_EFFORT CLAUDE_MODEL ANTHROPIC_MOD
 OUT="$(mktemp -d)"
 echo "ab.sh: logs in $OUT (kept)"
 
-claude plugin list > "$OUT/plugin-list.txt" 2>&1
-BT="$(awk '/brewtools@claude-brewcode/{f=1;next} f&&/Version:/{v=$2} f&&/Status:/{print v, $NF; exit}' "$OUT/plugin-list.txt")"
-WANT="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["version"])' "$SRC/../brewtools/.claude-plugin/plugin.json") enabled"
-if [ "$BT" != "$WANT" ]; then echo "ab.sh: PRECONDITION brewtools@claude-brewcode is '$BT', expected '$WANT'"; exit 2; fi
-echo "ab.sh: claude $(claude --version) | brewtools@claude-brewcode $BT | mod $SRC"
+echo "ab.sh: claude $(claude --version) | mod $SRC | brewtools disabled for every run"
 
 # AB_SRC=worktree (default): snapshot of the mod dir now; AB_SRC=head: committed HEAD via git archive (read-only). Isolates the run from a peer's mid-edit.
 MOD="$OUT/mod"
@@ -29,8 +24,6 @@ else
 fi
 if [ ! -f "$MOD/.claude-plugin/plugin.json" ] || [ ! -f "$MOD/hooks/register.ts" ]; then echo "ab.sh: PRECONDITION mod snapshot $MOD is incomplete"; exit 2; fi
 echo "ab.sh: source ${AB_SRC:-worktree} | $(cd "$MOD" && shasum -a 256 hooks/register.ts hooks/hooks.json .claude-plugin/plugin.json $(ls hooks/lib/*) | awk '{print substr($1,1,12), $2}' | tr '\n' ';')"
-
-python3 -I "$PY" mkfault "$MOD" "$OUT/modfault" || exit 2
 
 mkdir "$OUT/repo" "$OUT/repo2"
 git init -q "$OUT/repo" && git init -q "$OUT/repo2"
@@ -48,8 +41,7 @@ while IFS=$'\t' read -r NAME CWDKEY PM MODE BTS PROMPT; do
   SID="$(uuidgen | tr 'A-Z' 'a-z')"
   echo "$SID" > "$OUT/$NAME.sid"
   ARGS=(-p --model haiku --max-turns 1 --permission-mode "$PM" --output-format stream-json --verbose --debug-file "$OUT/$NAME.debug.log" --session-id "$SID")
-  if [ "$MODE" = mod ]; then ARGS+=(--plugin-dir "$MOD"); fi
-  if [ "$MODE" = fault ]; then ARGS+=(--plugin-dir "$OUT/modfault"); fi
+  ARGS+=(--plugin-dir "$MOD")
   if [ "$BTS" = off ]; then ARGS+=(--settings '{"enabledPlugins":{"brewtools@claude-brewcode":false}}'); fi
   (cd "$W" && claude "${ARGS[@]}" "$PROMPT" < /dev/null > "$OUT/$NAME.stream.jsonl" 2> "$OUT/$NAME.err"; echo "rc=$?" > "$OUT/$NAME.rc")
   python3 -I "$PY" extract "$OUT" "$NAME"

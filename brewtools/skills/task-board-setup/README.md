@@ -98,8 +98,9 @@ prompt, timer execution step, and a final PROGRESS refresh. Create or delete tim
 records only during authorized execution. Delivered ticks during planning report proposed
 reconciliation. A task-board view reports state without scheduling.
 
-The plugin's standalone `+++` codeword adds this planning requirement only when its hook payload
-confirms Plan mode; it does not need `++m`.
+The `+++` Plan-mode codeword comes from the brewmod-placeholders mod (default `+` placeholder,
+`when: plan`, Claude Code 2.1.292+), not from brewtools. It adds this planning requirement only
+in Plan mode and does not need `++m`.
 
 ## Optional spec/design layer
 

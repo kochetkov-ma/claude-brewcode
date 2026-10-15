@@ -356,7 +356,7 @@ test('GIVEN a space right after the caret WHEN prompt.autocomplete runs THEN the
 
 test('GIVEN a definition file made by hand WHEN a prefixed token is completed THEN the typeahead knows it, at most once a second', async ($, on) => {
   const tree = startedTree()
-  wire(on, { tree, bottom: {} })
+  wire(on, { tree })
   on('session.start', (_$, e) => ({ cwd: e.cwd }) as never)
   on('prompt.autocomplete', () => ({ suggestions: [] }))
   const clock = mock.clock(on, { now: 0 })
@@ -378,7 +378,7 @@ test('GIVEN a definition file made by hand WHEN a prefixed token is completed TH
 })
 
 test('GIVEN a registry read that fails WHEN a prefixed token is completed THEN the known rows still come back', { options: {} }, async ($, on) => {
-  wire(on, { tree: startedTree(), bottom: {}, fail: 'list' })
+  wire(on, { tree: startedTree(), fail: 'list' })
   on('prompt.autocomplete', () => ({ suggestions: [] }))
   mock.clock(on, { now: 0 })
 

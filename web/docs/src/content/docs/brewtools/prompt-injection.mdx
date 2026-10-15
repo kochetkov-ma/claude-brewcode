@@ -1,135 +1,77 @@
 ---
-title: "Prompt Injection"
-description: "How manager, review, architecture, and Plan-only cron codewords add operating instructions through the plugin's UserPromptSubmit hook."
+title: "Codewords (moved to mod)"
+description: "The codewords ++m ++a ++r ++rr +++ moved from brewtools to the brewmod-placeholders mod in brewtools v6.8.0. Install the mod, keep your overrides."
 order: 3100
 ---
-import { Badge, Callout, Card, CardGrid, Steps, UpdateNotice } from '../../../components/mdx';
+import { Badge, Callout, Card, CardGrid, UpdateNotice } from '../../../components/mdx';
 
-# Prompt Injection
+# Codewords (moved to mod)
 
-<Badge variant="accent" text="UserPromptSubmit" /> <Badge variant="secondary" text="5 codewords · 6 prompt modes" />
+<Badge variant="accent" text="moved" /> <Badge variant="secondary" text="brewtools v6.8.0" /> <Badge variant="primary" text="brewmod-placeholders" />
 
-Type a standalone codeword to add its operating instructions for that turn. The plugin's
-`manager-prompt.mjs` hook returns `additionalContext`; your original prompt, including
-the codeword, remains unchanged. The optional manager hard wall is installed separately.
+The codewords `++m`, `++a`, `++r`, `++rr` and `+++` now come only from the
+[brewmod-placeholders](/mods/placeholders/) mod. Brewtools v6.8.0 deleted its own
+`UserPromptSubmit` codeword hook, so one provider injects each block. The injected text is
+unchanged, and your prompt, including the codeword, still reaches the model as typed.
 
-<Callout type="tip" title="Typed placeholders with a preview">
-  The brewmod-placeholders mod (Claude Code 2.1.292+) provides the same codewords as typed placeholders, with highlight, typeahead and a preview band above the prompt. The injected text is byte-identical. With both installed, each block is injected once, and brewtools works alone too. See [Prompt placeholders](/mods/placeholders/).
+<Callout type="tip" title="Get the codewords back">
+  Requires Claude Code 2.1.292+. Install the mod, then run `/reload-plugins`:
+
+  ```bash
+  claude plugin install brewmod-placeholders@claude-brewcode
+  ```
 </Callout>
 
 ## Quick reference
 
-| Trigger | Selected prompt mode | Behavior |
-|---------|----------------------|----------|
-| `++m` | `full`, or `planmode` in verified Plan mode | Delegate bounded work, track dependencies, integrate evidence; add task-graph planning in Plan mode |
-| `++a` | `architect` | Design against existing architecture, conventions, and reusable patterns |
-| `++rr` | `review-regression` | Regression-focused review and double-check |
-| `++r` | `review-double` | Review and independent double-check; skipped when ++rr is also present |
-| `+++` | `cron-plan`, only in verified Plan mode | Plan task-specific session anti-drift scheduling for execution |
+| Item | Value |
+|------|-------|
+| Moved in | brewtools v6.8.0 |
+| New home | `brewmod-placeholders` mod, [Prompt placeholders](/mods/placeholders/) |
+| Codewords | `++m`, `++a`, `++r`, `++rr`, `+++` (Plan mode only) |
+| Needs | Claude Code 2.1.292+ |
+| Still in brewtools | The optional manager hard wall, via [Manager Setup](/brewtools/skills/manager-setup/) |
 
-Alphabetic codewords are case-insensitive. Manager, architecture, and review are independent
-groups; `++rr` wins over `++r`. A standalone `+++` is independent of `++m` and requires
-the hook payload's `permission_mode` to equal `plan`. Embedded words and longer plus
-sequences do not activate the tokens.
+## Existing overrides keep working
 
-When combined, blocks are emitted in this order: cron planning, manager, architecture,
-then the selected review contract. The hook is codeword-only: an armed hard wall injects
-no prompt block; its deny messages explain themselves.
+Override files you wrote for brewtools need no migration. The mod reads them through its
+legacy layer:
 
-## Example
-
-```text
-++m ++a fix the login flow
-```
-
-The model receives Manager and architecture context alongside the original message.
-Manager instructions require bounded delegated units, owners and real dependencies,
-evidence review, and a final simplification task after all implementation is written.
-Architecture instructions require following existing project patterns and the closest
-well-built counterpart.
-
-## How it works
-
-<Steps>
-  <li><div><strong>Detect tokens and permission mode</strong><p>The hook runs on UserPromptSubmit. It finds standalone codewords and selects plan-aware Manager or Plan-only cron instructions using the permission-mode payload.</p></div></li>
-  <li><div><strong>Resolve each prompt block</strong><p>Project override, global override, then plugin default: the first available source wins independently for each of the six modes.</p></div></li>
-  <li><div><strong>Return additional context</strong><p>The hook emits selected text through additionalContext without rewriting your message. Combined blocks are bounded to 9,000 characters, with a truncation marker if needed. An error returns an empty hook result.</p></div></li>
-  <li><div><strong>Return nothing without a codeword</strong><p>With no active codeword the hook returns an empty result, whether or not the hard wall is armed. Prompts that start with a subagent delivery tag (task-notification, or agent-message from=) are skipped.</p></div></li>
-</Steps>
-
-## Plan-only anti-drift instructions
-
-While already in Plan mode, type:
-
-```text
-+++ plan the migration and task tracking
-```
-
-This works without `++m` and without installing the hard wall. It requires a read-only
-plan to include task methodology, base work units and graph reconciliation, a complete
-unique task-specific tick prompt, and a future execution step through task-board.
-
-During authorized execution, the main session's task-board flow reconciles one session
-timer per active top-level task, hourly by default or at your requested cadence. Child
-work units use their parent's timer. Planning itself writes no files and creates or
-deletes no timers.
-
-The planned tick rereads the goal, shared/task methodology, anti-drift instructions,
-task/spec records, and user corrections. It collects concise active-agent evidence,
-reconciles statuses, dependencies, counts, and remaining work, and rebuilds the graph.
-Retain every unfinished node and the latest ten completed nodes; preserve older completion
-evidence in task records before pruning graph rows. Check drift against acceptance evidence,
-correct deviations within scope, and advance the next authorized unblocked step.
-
-The report uses at most five short lines: local time/timezone, delivered tick number and
-elapsed time; 🟢 achievements; 🔵 remaining work and next action; 🔴 present problems,
-blockers, or questions; ⚪ drift verdict. Omit empty rows; keep full evidence in task records.
-
-Task-board records the prompt, scheduling state, and stop rule and verifies stopping on
-completion or cancellation. Missing tools are reported as a scheduling gap. Timers belong
-to the session; due time does not guarantee exact receipt or delivery after session closure.
-Outside verified Plan mode, `+++` adds no cron instruction; other codewords still add
-their own context.
-
-<Callout type="note" title="Planning instructions do not create a timer">
-  The codeword adds a requirement to the execution plan. Actual creation, reconciliation,
-  and verified cleanup belong to the main session's task-board flow.
-</Callout>
-
-## Prompt sources and customization
-
-| Priority | Source |
-|----------|--------|
+| Scope | File location |
+|-------|---------------|
 | Project | `.claude/brewtools/manager/prompts/<mode>.md` |
-| Global | `<config dir>/manager/prompts/<mode>.md` (`CLAUDE_CONFIG_DIR`, default `~/.claude`) |
-| Plugin | `skills/manager-setup/references/<mode>.md` |
+| Global | `<config dir>/manager/prompts/<mode>.md` |
 
-The resolver supports `full`, `planmode`, `cron-plan`, `architect`, `review-double`,
-and `review-regression`. Fenced prompt blocks are extracted in order; an unfenced file
-uses its complete trimmed text. Overrides live outside the plugin cache and can therefore
-retain older wording after an update.
+Each codeword reads one override file name in those folders (the `legacy` key of the mod's default):
 
-Use `/brewtools:manager-setup status` to inspect effective sources and
-`/brewtools:manager-setup edit` to prepare an override. Purge removes owned overrides
-and wall state according to the skill's removal contract.
+| Override file | Codeword |
+|---------------|----------|
+| `full.md` | `++m` |
+| `planmode.md` | `++m` in Plan mode |
+| `architect.md` | `++a` |
+| `review-double.md` | `++r` |
+| `review-regression.md` | `++rr` |
+| `cron-plan.md` | `+++` (Plan mode only) |
 
-## Other operating context
+To change codeword text from now on, use the mod's `/placeholders edit <name>`.
+`/brewtools:manager-setup status` lists any legacy override files it finds.
 
-Brewcode's prompt and session hooks can supply operating context independently of these
-codewords. See [Brewcode hooks](/brewcode/hooks/). Teams and agent generation also add
-the closest-counterpart rule for agents that write code, scripts, schemas, or infrastructure.
+## Staying on an older Claude Code
 
-These are Claude Code product contracts. Codex uses separate native instructions and
-tools; the plugin's Claude hooks do not configure Codex runtime state.
+The mod needs Claude Code 2.1.292+. On an older build, keep brewtools 6.7.x, which still
+ships the codeword hook.
+
+## Codex
+
+Codex keeps its own codeword hook in the Codex mirror of brewtools. The mod is a Claude Code
+feature and does not apply to Codex.
 
 ## Related
 
 <CardGrid>
-  <Card title="Manager Setup" icon="settings" href="/brewtools/skills/manager-setup/">Inspect prompt sources, customize text, and configure the optional hard wall.</Card>
-  <Card title="Task Board Setup" icon="graph" href="/brewtools/skills/task-board-setup/">Methodology, work units, graph reconciliation, and session timers.</Card>
-  <Card title="Plan-mode effort mod" icon="brain" href="/mods/plan-effort/">Raises the main loop's effort while Claude Code is in plan mode.</Card>
-  <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">All brewtools skills and agents.</Card>
-  <Card title="Hook source" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewtools/hooks/manager-prompt.mjs">Token detection, context order, and payload gating.</Card>
+  <Card title="Prompt placeholders" icon="puzzle" href="/mods/placeholders/">Install, layers, typeahead, preview band, and custom placeholders.</Card>
+  <Card title="Mods overview" icon="package" href="/mods/overview/">All brewcode mods and their requirements.</Card>
+  <Card title="Manager Setup" icon="settings" href="/brewtools/skills/manager-setup/">Optional hard wall; status points to the mod for codewords.</Card>
 </CardGrid>
 
 <UpdateNotice />

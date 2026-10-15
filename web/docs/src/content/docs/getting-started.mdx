@@ -8,7 +8,7 @@ import { Card, CardGrid, Callout, InstallPrompt, Spoiler, UpdateNotice } from '.
 
 # Introduction
 
-**Brewcode** is a plugin suite for Claude Code: project conventions and rules, domain agent teams, multi-agent quorum review, semantic code search, and tooling to build your own skills, agents, and hooks. Recipes (skills) define what to brew, brewers (agents) do the work, and a few hooks handle session start, post-compact recall, and manager codewords.
+**Brewcode** is a plugin suite for Claude Code: project conventions and rules, domain agent teams, multi-agent quorum review, semantic code search, and tooling to build your own skills, agents, and hooks. Recipes (skills) define what to brew, brewers (agents) do the work, and a few hooks handle session start and post-compact recall. The optional brewmod-placeholders mod adds codeword placeholders such as `++r`.
 
 Every skill except `/brewdoc:publish`, `/brewtools:text-optimize` and `/brewtools:text-human` runs only when you type `/plugin:skill` — see the [FAQ](/faq/#auto-invoke) for why that is deliberate. Claude can run those three itself (publish or share a link; compress or humanize files you name); typing them still works.
 
@@ -25,7 +25,7 @@ Every skill except `/brewdoc:publish`, `/brewtools:text-optimize` and `/brewtool
     The core: semantic code search, quorum review, conventions, skill/agent/hook/mod creation. 9 skills · 6 agents · 2 registered hooks.
   </Card>
   <Card title="brewtools" icon="settings" href="/brewtools/overview/">
-    Universal utilities: prompt optimization, AI artifact removal, secrets scanning, SSH, deploy. 13 skills · 3 agents · 2 registered hooks.
+    Universal utilities: prompt optimization, AI artifact removal, secrets scanning, SSH, deploy. 13 skills · 3 agents · 1 registered hook.
   </Card>
   <Card title="brewui" icon="image" href="/brewui/overview/">
     UI / visual / creative tools (placeholder, currently empty). 0 skills · 0 agents.
@@ -69,12 +69,12 @@ Two optional [brewcode mods](/mods/overview/) sit outside the suite: they instal
 | Plugin | Purpose | Skills | Agents | Hooks |
 |--------|---------|--------|--------|-------|
 | **brewcode** | Conventions and rules, agent teams, semantic search, quorum review, skill/agent/hook/mod creation | 9 | 6 | 2 |
-| **brewtools** | Text utilities, secrets scanning, SSH, deploy, manager mode, the opt-in hook layer | 13 | 3 | 2 |
+| **brewtools** | Text utilities, secrets scanning, SSH, deploy, manager mode, the opt-in hook layer | 13 | 3 | 1 |
 | **brewui** | UI / visual / creative tools (placeholder, empty) | 0 | 0 | — |
 | **brewdoc** | Documentation tools: doc-staleness tracking, memory sync, setup docs, PDF, publishing | 5 | 0 | — |
 
 All four plugins install with a single marketplace and load automatically with every Claude Code session.
-The suite has four registered plugin hooks; additional setup-installed project hooks are separate.
+The suite has three registered plugin hooks; additional setup-installed project hooks are separate.
 
 ## Install
 

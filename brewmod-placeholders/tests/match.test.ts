@@ -1,5 +1,5 @@
 import { test, expect } from 'claude-code/testing'
-import { compileMatchers, matches, nameKind, scanDraft, validatePrefix, type Matchers, type PlaceholderToken } from '../hooks/lib/match'
+import { compileMatchers, nameKind, scanDraft, validatePrefix, type Matchers, type PlaceholderToken } from '../hooks/lib/match'
 
 const NAMES = ['m', 'a', 'r', 'rr', '+']
 const tokens = (text: string, prefix = '++') => scanDraft(compileMatchers(prefix, NAMES), text).tokens
@@ -85,15 +85,15 @@ for (const prefix of ['$$', '^^', '\\\\', '[]', '--', '{{', '||', '..', '*?', '(
 
 test('GIVEN a symbolic name WHEN matched THEN Unicode letters, digits, marks and the name chars block it', async () => {
   const ms = compileMatchers('++', ['+'])
-  const hits = ['+++', '+++!', '+++‍', 'x +++ y', 'é+++', '字+++字', '+++5', '++++', '+++́'].map((t) => matches(ms, t, '+'))
+  const hits = ['+++', '+++!', '+++‍', 'x +++ y', 'é+++', '字+++字', '+++5', '++++', '+++́'].map((t) => scanDraft(ms, t).tokens.length > 0)
 
   expect(hits, 'matches per draft').toEqual([true, true, true, true, false, false, false, false, false])
 })
 
-test('GIVEN a word name WHEN matched THEN the check is case-insensitive and unknown names are false', async () => {
+test('GIVEN a word name WHEN scanned THEN the match is case-insensitive and an unknown name is flagged unknown', async () => {
   const ms = compileMatchers('++', NAMES)
 
-  expect([matches(ms, '++RR', 'rr'), matches(ms, '++RR', 'RR'), matches(ms, '++rr', 'zz')], 'results').toEqual([true, true, false])
+  expect(['++RR', '++rr', '++zz'].map((t) => scanDraft(ms, t).tokens.map((x) => [x.name, x.isKnown])), 'results').toEqual([[['rr', true]], [['rr', true]], [['zz', false]]])
 })
 
 test('GIVEN names of both kinds and junk WHEN classified THEN word, symbol or null', async () => {

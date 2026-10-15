@@ -41,7 +41,7 @@ promises a fixed saving:
 ## Plugin-count advice
 
 Count registered hook emissions (payload x firing cadence), not installed plugins: a codeword-gated
-hook (brewtools `manager-prompt.mjs`) adds text only when triggered, a `compact`-matcher hook only
+hook (the `brewmod-placeholders` mod's bundled `UserPromptSubmit` command hook `hooks/inject.mjs`) adds text only when triggered, a `compact`-matcher hook only
 after compaction.
 
 | Signal | Arithmetic | Threshold | Advice |

@@ -1,7 +1,7 @@
 ---
 doc_type: llm
-version: "6.7.1"
-content_version: "6.7.0"
+version: "6.8.0"
+content_version: "6.8.0"
 generated_by: "brewcode"
 last_updated: "2026-10-15"
 ---
@@ -548,7 +548,7 @@ defect.
 | File | Why it carries no stamp |
 |------|-------------------------|
 | `.claude/features/specs/SPEC_TEMPLATE.md`, `DESIGN_TEMPLATE.md` (task-board) | TEMPLATES inside the project: `/task-spec` copies each to `specs/<ID>-spec.md` / `<ID>-design.md`, so a stamp in their frontmatter would be inherited by every derived card, and cards carry task DOMAIN data (`created:`/`updated:`/`status:`), exempt by the first row of this section. Same reasoning as `TASK_TEMPLATE.md`; U5b excludes all of them by name (`references/10-upgrade.md`) |
-| `.claude/brewtools/manager/prompts/<mode>.md` and the global twin `<config dir>/manager/prompts/<mode>.md` (`CLAUDE_CONFIG_DIR`, default `~/.claude`) | USER-authored prompt-text overrides, not generated artifacts. The plugin default is `skills/manager-setup/references/<mode>.md`; the override is the last step of a three-step read precedence, its whole body is injected as prompt text, and `purge` deletes it |
+| `.claude/brewtools/manager/prompts/<mode>.md` and the global twin `<config dir>/manager/prompts/<mode>.md` (`CLAUDE_CONFIG_DIR`, default `~/.claude`) | USER-authored prompt-text overrides, not generated artifacts. Read by the `brewmod-placeholders` mod's legacy layer, which maps `<mode>` to a placeholder (`full`->`m`, `planmode`->`m.plan`, `architect`->`a`, `review-regression`->`rr`, `review-double`->`r`, `cron-plan`->`+`) and overrides the mod's default `placeholders/<name>.md`; `manager-setup` only lists them, and `purge` KEEPS them |
 
 The shared test: a file is stampable only if it is INSTALLED as a durable plugin artifact
 AND some reader compares its version.
