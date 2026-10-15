@@ -10,7 +10,8 @@ import { CASES, SESSIONS, INLINE, GLOBAL_FIXTURES } from './cases.mjs'
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const REPO = path.resolve(HERE, '../../..')
 const MOD_SRC = path.join(REPO, 'brewmod-placeholders')
-const BASE = '/Users/maximus/Archives/claude-brewcode-reports/20261015-193500_scope-preview/live'
+// Output root: LP_OUT, else the gitignored <repo>/.claude/reports/live-placeholders.
+const BASE = process.env.LP_OUT || path.join(REPO, '.claude', 'reports', 'live-placeholders')
 const LAUNCH = path.join(HERE, 'launch.sh')
 const SOCK = 'lp'
 const DISABLE = { 'brewmod-placeholders@claude-brewcode': false }
@@ -287,7 +288,8 @@ class Run {
   constructor(o) {
     this.o = o
     this.id = `lp-${Date.now().toString(36)}`
-    this.cfg = process.env.CLAUDE_CONFIG_DIR || '/Users/maximus/.claude-d'
+    // The profile under test (login, settings, guarded placeholders/ dir): CLAUDE_CONFIG_DIR, else Claude Code's own default.
+    this.cfg = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude')
     this.out = o.out ?? path.join(BASE, o.installed ? `cp${o.cp}-${path.basename(this.cfg)}` : `cp${o.cp}`)
     this.sessions = []
     this.rows = []
@@ -369,6 +371,7 @@ class Run {
     const g = spawnSync('git', ['-C', REPO, 'rev-parse', '--abbrev-ref', 'HEAD'], { encoding: 'utf8' })
     lines.push(`git ${(g.stdout ?? '').trim()} ${(spawnSync('git', ['-C', REPO, 'rev-parse', '--short', 'HEAD'], { encoding: 'utf8' }).stdout ?? '').trim()}`)
     lines.push(`trust entry added for project ${this.proj}`)
+    lines.push(`guarded real global dir ${this.realGlobal} (entries before: ${this.realBefore.length})`)
     if (this.mod !== '-') {
       this.fingerprint = treeFingerprint(this.mod)
       lines.push(`fingerprint ${this.fingerprint} (sha256 of "<sha256>  hooks/<file>" lines, pre-patch)`)
@@ -504,7 +507,8 @@ class Run {
 
   runPrint(x) {
     const debug = path.join(this.out, `${x.id}.debug.log`)
-    const args = ['-p', x.prompt, '--output-format', 'json', '--model', this.o.model, '--permission-mode', x.mode ?? 'default', '--debug-file', debug]
+    // Mod tools denied: the answer must come from the received context, never from list_placeholders (cp4c: Haiku called it).
+    const args = ['-p', x.prompt, '--output-format', 'json', '--model', this.o.model, '--permission-mode', x.mode ?? 'default', '--debug-file', debug, '--disallowedTools', 'mcp__brewmod-placeholders']
     if (this.mod !== '-') args.push('--plugin-dir', this.mod, '--settings', JSON.stringify({ enabledPlugins: DISABLE }))
     // globalFiles: this case alone reads a fresh scratch global dir holding them (patched copy only).
     let env = this.env
@@ -534,6 +538,7 @@ class Run {
     for (const re of x.debugExpect ?? []) if (!re.test(dbg)) problems.push(`debug missing ${re}`)
     for (const re of x.debugForbid ?? []) if (re.test(dbg)) problems.push(`debug has ${re}`)
     if (/hooks module did not load/.test(`${r.stderr}\n${dbg}`)) problems.push('module did not load')
+    if (/tool\.call mcp__brewmod-placeholders__/.test(dbg)) problems.push('the model called a mod tool: the answer is not only the received context')
     const who = this.o.installed ? 'brewmod-placeholders@claude-brewcode' : 'brewmod-placeholders@inline'
     if (!dbg.includes(`hooks module ${who} loaded`)) problems.push(`debug: no "hooks module ${who} loaded"`)
     this.record(x, problems, path.join(this.out, `${x.id}.result.txt`))
@@ -578,7 +583,10 @@ async function main() {
   } finally {
     for (const s of run.sessions) run.kill(s)
   }
-  process.exit(run.summary())
+  // All PASS -> the mktemp scratch (copy + project) goes; a failure keeps it for debugging (path in snapshot.txt).
+  const rc = run.summary()
+  if (rc === 0) fs.rmSync(run.scratch, { recursive: true, force: true })
+  process.exit(rc)
 }
 
 main().catch((e) => {

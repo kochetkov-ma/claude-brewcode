@@ -71,10 +71,7 @@ const TURN_MS = 120000
 export const SESSIONS = {
   d80: { size: '80x24', mode: 'default' },
   d80x30: { size: '80x30', mode: 'default' },
-  d120: { size: '120x40', mode: 'default' },
   d200: { size: '200x60', mode: 'default' },
-  planCold: { size: '120x40', mode: 'plan' },
-  planWarm: { size: '120x40', mode: 'plan', warm: true },
   planWarmShow: { size: '200x60', mode: 'plan', warm: true },
   p1cue: { size: '120x40', mode: 'default', isolate: true },
   scope: { size: '200x60', mode: 'default', isolate: true },
@@ -86,8 +83,15 @@ const compactR = () => c([B(COMPACT('++r'))], [B(FOCUS_ANY)])
 // TUI matrix (review round): each case runs in the default TUI and fullscreen at 88x40 and 120x40; ids end -d88, -d120, -fs88, -fs120.
 // Fullscreen: the typeahead draws above the box and the band budget is the engine's bottom slot (~14 rows at 40), so an opened 1-2 token band equals its preview.
 const COMBOS = [['d', 'default'], ['fs', 'fullscreen']].flatMap(([tag, tui]) => ['88x40', '120x40'].map((size) => ({ tag: `${tag}${size.split('x')[0]}`, tui, size })))
-for (const m of COMBOS) SESSIONS[`m-${m.tag}`] = { size: m.size, mode: 'default', tui: m.tui }
-const matrix = (base, cp, title, build) => COMBOS.map((m) => ({ id: `${base}-${m.tag}`, cp, session: `m-${m.tag}`, title: `${title} [${m.tui} ${m.size}]`, steps: build(m.tui === 'fullscreen') }))
+// Session families per combo: m = default mode, pc = launched in plan mode (no prompt yet), pw = plan mode after one model turn.
+for (const m of COMBOS) {
+  SESSIONS[`m-${m.tag}`] = { size: m.size, mode: 'default', tui: m.tui }
+  SESSIONS[`pc-${m.tag}`] = { size: m.size, mode: 'plan', tui: m.tui }
+  SESSIONS[`pw-${m.tag}`] = { size: m.size, mode: 'plan', tui: m.tui, warm: true }
+}
+// fam null = a fresh session per case (default mode); tuis narrows the combos.
+const matrix = (base, cp, title, build, { fam = 'm', tuis = ['default', 'fullscreen'] } = {}) =>
+  COMBOS.filter((m) => tuis.includes(m.tui)).map((m) => ({ id: `${base}-${m.tag}`, cp, ...(fam === null ? { size: m.size, mode: 'default', tui: m.tui } : { session: `${fam}-${m.tag}` }), title: `${title} [${m.tui} ${m.size}]`, steps: build(m.tui === 'fullscreen') }))
 
 export const CASES = [
   // CP1/CP4: band in both TUIs. Toggle and the Enter-sends case close each matrix session (toggle leaves the band opened).
@@ -98,6 +102,15 @@ export const CASES = [
   ...matrix('also-row', 4, 'caret view of ++r ++m: also row names the other token, both ways', () => [t('++r ++m'), c([B(M_HEAD), B('also: ++r'), B(FOCUS('++m'))], [B(R_HEAD)]), k('Left', 4), c([B(R_HEAD), B('also: ++m'), B(FOCUS('++r'))], [B(M_HEAD)])]),
   ...matrix('escape-bs-only', 4, '++\\ alone (no ++/): escaped band names ++\\', () => [t('++\\ hello'), c([B('++\\  placeholders off: this message is sent exactly as typed'), B('delete ++\\ to turn them back on')], [B('++/'), B(FOCUS_ANY), B(COMPACT_ANY)])]),
   ...matrix('two-cut', 4, '++m ++a: bodies cut; Button only when the opened band has more rows', (fs) => [t('++m ++a '), fs ? c([B('placeholders 2'), B(/lines · \/placeholders show \+\+[ma]/)], [B('Show text')]) : c([B('placeholders 2'), B(TOGGLE_SHOW)])]),
+  ...matrix('caret-home', 1, '++r fix it: compact, Home onto ++r: focus', () => [t('++r fix it'), compactR(), k('Home'), focusR()]),
+  ...matrix('caret-end', 1, 'fix it ++r, Home: compact, End back onto ++r: focus', () => [t('fix it ++r'), k('Home'), compactR(), k('End'), focusR()]),
+  ...matrix('rm-caret-m', 1, '++r ++m, caret on ++m: m focus, also ++r, plan-part note', () => [t('++r ++m'), c([B(M_HEAD), B(M_TOP), B('also: ++r'), B(FOCUS('++m')), B(PLAN_PLUS), B(PLAN_NOTE)], [B(R_HEAD), B(PLAN_ADDS)])]),
+  ...matrix('escape-slash', 1, '++/ ++r: escaped band, nothing sent, token struck through', () => [t('++/ ++r'), c([B('++/  placeholders off: this message is sent exactly as typed'), B('++r  (not sent: ++/ in this message)'), B('delete ++/ to turn them back on'), A(STRIKE)], [B(R_TOP), B(FOCUS_ANY)])]),
+  ...matrix('escape-backslash', 1, '++\\ ++r: escape alias', () => [t('++\\ ++r'), c([B('++\\  placeholders off: this message is sent exactly as typed'), B('(not sent: ++\\ in this message)'), B('delete ++\\ to turn them back on')], [B(R_TOP)])]),
+  ...matrix('unknown-zz', 1, '++zz: unknown row and list hint', () => [t('++zz'), c([B('++zz  unknown placeholder'), B('names: /placeholders list')], [B(R_TOP)])]),
+  ...matrix('m-default', 1, 'default mode ++m: plan + tag, dim plan-part note, show hint', () => [t('++m'), c([B(M_HEAD), B(PLAN_PLUS), B(PLAN_NOTE), B(SHOW('m'))], [B(PLAN_ADDS), B(PLAN_HEAD)])]),
+  ...matrix('plus-default', 1, 'default mode +++: (plan only)', () => [t('+++ '), c([B('Anti-drift cron plan addon'), B('(plan only)')], [B(PLAN_HEAD)])]),
+  ...matrix('inline', 1, 'project inline def ++lpinl: row and its body', () => [t(`${INLINE.token} `), c([B(INLINE.token), B(INLINE.description), B(INLINE.body)], [B('unknown placeholder')])]),
   ...matrix('toggle', 4, 'ctrl+x → tab → enter on 3 tokens: Button focused, band opened, draft kept, Esc back', () => [
     t('++a ++r ++rr '), c([B('placeholders 3'), B(TOGGLE_SHOW), B('(not sent: ++rr wins)')], [B(A_TOP)]),
     k('C-x'), k('Tab'), c([A(FOCUSED_BUTTON), P('++a ++r ++rr')]),
@@ -109,30 +122,29 @@ export const CASES = [
     k('Enter'), c([/⏺ .*LPOK/], [BUSY], { debugExpect: [SUBMITTED, PROVIDED], timeout: TURN_MS }),
   ]),
 
-  // CP1: band, default TUI only (not TUI-dependent, or sized to the old default sessions).
+  // CP1: band at sizes outside the matrix, default TUI.
   { id: 'r-end-menu-80', cp: 1, session: 'd80', title: '++r at 80x24, typeahead open: capped; ? would not show it all, so the show hint', steps: [t('++r'), c([B(R_TOP), B(` lines · ${SHOW('r')}`), M('++rr')], [B(R_LAST), B(QUERY_R), B(COMPACT_ANY)])] },
   { id: 'r-end-menu-q-80x30', cp: 4, session: 'd80x30', title: '++r at 80x30, typeahead open: capped; ? shows it all, so the ? hint', steps: [t('++r'), c([B(R_TOP), B(QUERY_R), M('++rr')], [B(R_LAST), B(SHOW('r'))])] },
   { id: 'r-query-80x30', cp: 4, session: 'd80x30', title: '++r? at 80x30: whole text', steps: [t('++r?'), focusR([B(R_LAST)])] },
   { id: 'r-end-menu-200', cp: 1, session: 'd200', title: '++r at 200x60, typeahead open: whole r text', steps: [t('++r'), focusR([B(R_LAST), M(RR_ROW)])] },
-  { id: 'caret-home-120', cp: 1, session: 'd120', title: '++r fix it: compact, Home onto ++r: focus', steps: [t('++r fix it'), compactR(), k('Home'), focusR()] },
-  { id: 'caret-end-120', cp: 1, session: 'd120', title: 'fix it ++r, Home: compact, End back onto ++r: focus', steps: [t('fix it ++r'), k('Home'), compactR(), k('End'), focusR()] },
   { id: 'r-query-80', cp: 1, session: 'd80', title: '++r? at 80x24: focus cut with the show hint, no ? hint', steps: [t('++r?'), c([B(R_TOP), B(` lines · ${SHOW('r')}`), B(FOCUS('++r'))], [B(QUERY_R), M(RR_ROW)])] },
   { id: 'r-query-200', cp: 1, session: 'd200', title: '++r? at 200x60: whole text', steps: [t('++r?'), focusR([B(R_LAST)])] },
-  { id: 'rm-caret-m-120', cp: 1, session: 'd120', title: '++r ++m, caret on ++m: m focus, also ++r, plan-part note', steps: [t('++r ++m'), c([B(M_HEAD), B(M_TOP), B('also: ++r'), B(FOCUS('++m')), B(PLAN_PLUS), B(PLAN_NOTE)], [B(R_HEAD), B(PLAN_ADDS)])] },
-  { id: 'escape-slash-120', cp: 1, session: 'd120', title: '++/ ++r: escaped band, nothing sent, token struck through', steps: [t('++/ ++r'), c([B('++/  placeholders off: this message is sent exactly as typed'), B('++r  (not sent: ++/ in this message)'), B('delete ++/ to turn them back on'), A(STRIKE)], [B(R_TOP), B(FOCUS_ANY)])] },
-  { id: 'escape-backslash-120', cp: 1, session: 'd120', title: '++\\ ++r: escape alias', steps: [t('++\\ ++r'), c([B('++\\  placeholders off: this message is sent exactly as typed'), B('(not sent: ++\\ in this message)'), B('delete ++\\ to turn them back on')], [B(R_TOP)])] },
-  { id: 'unknown-zz-120', cp: 1, session: 'd120', title: '++zz: unknown row and list hint', steps: [t('++zz'), c([B('++zz  unknown placeholder'), B('names: /placeholders list')], [B(R_TOP)])] },
-  { id: 'm-default-120', cp: 1, session: 'd120', title: 'default mode ++m: plan + tag, dim plan-part note, show hint', steps: [t('++m'), c([B(M_HEAD), B(PLAN_PLUS), B(PLAN_NOTE), B(SHOW('m'))], [B(PLAN_ADDS), B(PLAN_HEAD)])] },
   { id: 'm-default-80', cp: 1, session: 'd80', title: 'default mode ++m at 80x24: cut, plan-part note', steps: [t('++m'), c([B(M_TOP), B(PLAN_NOTE), B(SHOW('m'))], [B(PLAN_ADDS)])] },
   { id: 'm-default-200', cp: 1, session: 'd200', title: 'default mode ++m at 200x60: cut at 15 rows, plan-part note', steps: [t('++m'), c([B(M_HEAD), B(PLAN_NOTE), B(SHOW('m'))], [B(PLAN_ADDS)])] },
-  { id: 'plus-default-120', cp: 1, session: 'd120', title: 'default mode +++: (plan only)', steps: [t('+++ '), c([B('Anti-drift cron plan addon'), B('(plan only)')], [B(PLAN_HEAD)])] },
-  { id: 'inline-120', cp: 1, session: 'd120', title: 'project inline def ++lpinl: row and its body', steps: [t(`${INLINE.token} `), c([B(INLINE.token), B(INLINE.description), B(INLINE.body)], [B('unknown placeholder')])] },
-  { id: 'plan-m-cold-120', cp: 1, session: 'planCold', title: 'launched in plan mode, no prompt yet, ++m: honest plan-part note, no plan mode adds', steps: [c(['plan mode on']), t('++m'), c([B(M_HEAD), B(PLAN_PLUS), B(PLAN_NOTE)], [B(PLAN_ADDS)])] },
-  { id: 'plan-head-cold-120', cp: 1, session: 'planCold', title: 'launched in plan mode, no prompt yet, ++m ++r + space: no plan mode head yet, plan-part note', steps: [t('++m ++r '), c([B('placeholders 2'), B(PLAN_NOTE)], [B(`placeholders 2 ${PLAN_HEAD}`), B(PLAN_ADDS)])] },
-  { id: 'plan-m-warm-120', cp: 1, session: 'planWarm', title: 'plan mode after one turn, ++m: plan mode adds', steps: [t('++m'), c([B(PLAN_ADDS), B(M_ADDON), B(PLAN_PLUS)], [B(PLAN_NOTE)])] },
-  { id: 'plan-head-warm-120', cp: 1, session: 'planWarm', title: 'plan mode after one turn, ++m ++r + space: head says plan mode', steps: [t('++m ++r '), c([B(`placeholders 2 ${PLAN_HEAD}`)])] },
-  { id: 'plan-plus-warm-120', cp: 1, session: 'planWarm', title: 'plan mode after one turn, +++: no (plan only), body shown', steps: [t('+++ '), c([B(PLUS_TOP), B(PLAN_HEAD)], [B('(plan only)')])] },
-  { id: 'plan-shifttab-m-120', cp: 1, size: '120x40', mode: 'default', title: 'Shift+Tab x2 into plan mode, no prompt yet, ++m: honest plan-part note', steps: [k('BTab', 2), c(['plan mode on']), t('++m'), c([B(PLAN_NOTE)], [B(PLAN_ADDS)])] },
+  // Plan mode, both TUIs: pc = launched in plan mode (band only has the note), pw = after one turn (inject.mjs recorded plan).
+  ...matrix('plan-m-cold', 1, 'launched in plan mode, no prompt yet, ++m: honest plan-part note, no plan mode adds', () => [c(['plan mode on']), t('++m'), c([B(M_HEAD), B(PLAN_PLUS), B(PLAN_NOTE)], [B(PLAN_ADDS)])], { fam: 'pc' }),
+  ...matrix('plan-head-cold', 1, 'launched in plan mode, no prompt yet, ++m ++r + space: no plan mode head yet, plan-part note', () => [t('++m ++r '), c([B('placeholders 2'), B(PLAN_NOTE)], [B(`placeholders 2 ${PLAN_HEAD}`), B(PLAN_ADDS)])], { fam: 'pc' }),
+  ...matrix('plan-m-warm', 1, 'plan mode after one turn, ++m: plan mode adds', () => [t('++m'), c([B(PLAN_ADDS), B(M_ADDON), B(PLAN_PLUS)], [B(PLAN_NOTE)])], { fam: 'pw' }),
+  ...matrix('plan-head-warm', 1, 'plan mode after one turn, ++m ++r + space: head says plan mode', () => [t('++m ++r '), c([B(`placeholders 2 ${PLAN_HEAD}`)])], { fam: 'pw' }),
+  ...matrix('plan-plus-warm', 1, 'plan mode after one turn, +++: no (plan only), body shown', () => [t('+++ '), c([B(PLUS_TOP), B(PLAN_HEAD)], [B('(plan only)')])], { fam: 'pw' }),
+  // Emoji band rows: +.md line 16 (⚪ 🟢 🔵 🔴) shows only in the opened band; fullscreen at 40 has no Button (budget = auto budget). Last in pw.
+  ...matrix('plus-open-emoji', 4, 'plan mode +++, Show text: whole +.md incl. the emoji row, no row clipped', () => [
+    t('+++ '), c([B(`placeholders 1 ${PLAN_HEAD}`), B(TOGGLE_SHOW)]),
+    k('C-x'), k('Tab'), c([A(FOCUSED_BUTTON)]),
+    k('Enter'), c([B(TOGGLE_HIDE), B(/⚪\s+anti-drift\s+verdict/), B(/task\s+completion\s+or\s+cancellation\./)], [B('... +'), B(/^ {2}[^⎿\n]*…$/m)]),
+    k('Escape'), c([P('+++')]),
+  ], { fam: 'pw', tuis: ['default'] }),
+  ...matrix('plan-shifttab-m', 1, 'Shift+Tab x2 into plan mode, no prompt yet, ++m: honest plan-part note', () => [k('BTab', 2), c(['plan mode on']), t('++m'), c([B(PLAN_NOTE)], [B(PLAN_ADDS)])], { fam: null }),
   { id: 'cmd-status-smoke', cp: 1, size: '120x40', mode: 'default', title: '/placeholders prints the status rows', steps: [t('/placeholders'), enter(), c([H('Two-phase review: review every significant change'), H('Anti-regression review: regression')], [H(HANDOFF)])] },
 
   // CP2: /placeholders status, help, list, show and P1 on Enter. Output renders markdown: inline backticks vanish, fenced text stays raw.
@@ -228,5 +240,7 @@ export const CASES = [
   { id: 'e2e-plan-m', cp: 1, kind: 'print', mode: 'plan', title: '-p plan mode ++m: Claude quotes the plan addon', prompt: '++m Quote verbatim every line of the additional context you received that starts with "[", one per line, nothing else.', expect: [M_TOP, M_ADDON], forbid: [], debugExpect: [PROVIDED] },
   // An empty normal m.md in the (scratch) global layer silences ++m in plan mode too: no block, so no plan addon.
   { id: 'e2e-plan-m-empty', cp: 4, kind: 'print', mode: 'plan', globalFiles: { 'm.md': '---\ndescription: "LP empty m override"\n---\n' }, title: '-p plan mode ++m with an empty global m.md: nothing reaches Claude', prompt: '++m Quote verbatim every line of any additional context you received that starts with "[". If there is none, reply NONE.', expect: ['NONE'], forbid: [M_ADDON, M_TOP], debugForbid: [PROVIDED] },
+  // Control for the -p mod-tool deny (drive.mjs runPrint): asked outright, the model still cannot call list_placeholders.
+  { id: 'e2e-tool-denied', cp: 4, kind: 'print', mode: 'default', title: '-p: the mod tools are denied, so every e2e answer comes from the received context', prompt: 'Call the list_placeholders tool now. If no such tool is available to you, reply with exactly NOTOOL and nothing else.', expect: ['NOTOOL'], forbid: [R_TOP] },
   { id: 'e2e-inline', cp: 1, kind: 'print', mode: 'default', title: '-p ++lpinl: the inline body replaces the token', prompt: `${INLINE.token} <- repeat my whole message verbatim, nothing else.`, expect: [INLINE.body], forbid: [INLINE.token] },
 ]

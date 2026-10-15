@@ -64,8 +64,9 @@ export function bandState(p: { hasSurvey: boolean; draft: string | null; view: P
 }
 
 const ASCII = /^[\x20-\x7e]*$/
-const WIDE = /[\p{Emoji_Presentation}ᄀ-ᅟ⺀-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦\u{1f300}-\u{1faff}\u{20000}-\u{3fffd}]/u
-const ZERO = /[\p{M}​-‍︀-️]/u
+// East Asian Wide/Fullwidth blocks, sorted and disjoint; escapes only, as editors NFC-fold a raw U+F900 to U+8C48.
+const WIDE = /[\p{Emoji_Presentation}\u1100-\u115F\u2E80-\uA4CF\uA960-\uA97C\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFF60\uFFE0-\uFFE6\u{1F300}-\u{1FAFF}\u{20000}-\u{3FFFD}]/u
+const ZERO = /[\p{M}\u200B-\u200D\uFE00-\uFE0F]/u
 const PICTO = /\p{Extended_Pictographic}/u
 const VS16 = '\uFE0F'
 

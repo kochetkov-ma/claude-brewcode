@@ -261,6 +261,15 @@ test('GIVEN ASCII, accented, wide, combining and emoji text WHEN cells are count
   expect(texts.map(cells), 'cells').toEqual([3, 1, 4, 1, 2, 2, 2, 2, 2, 2, 0, 0, 1, 2, 22])
 })
 
+test('GIVEN the first and last code point of each wide range and their narrow neighbours WHEN cells are counted THEN the ranges take 2, private use and the Yi-to-Hangul gap 1', async () => {
+  const points = [0x1100, 0x115f, 0x1160, 0x2e80, 0xa4cf, 0xa4d0, 0xa960, 0xa97c, 0xa97d, 0xac00, 0xd7a3, 0xd7a4, 0xe000, 0xf8ff, 0xf900, 0xfaff, 0xfe30, 0xfe4f, 0xff01, 0xff60, 0xffe0, 0xffe6]
+
+  expect(Object.fromEntries(points.map((cp) => [cp.toString(16), cells(String.fromCodePoint(cp))])), 'cells per code point').toEqual({
+    '1100': 2, '115f': 2, '1160': 1, '2e80': 2, a4cf: 2, a4d0: 1, a960: 2, a97c: 2, a97d: 1, ac00: 2, d7a3: 2, d7a4: 1,
+    e000: 1, f8ff: 1, f900: 2, faff: 2, fe30: 2, fe4f: 2, ff01: 2, ff60: 2, ffe0: 2, ffe6: 2,
+  })
+})
+
 test('GIVEN texts and room WHEN clipped THEN a text that fits stays, a longer one ends in an ellipsis within the room, no room gives nothing', async () => {
   expect(['abc', 'abcdef', '日本語', 'abc', 'ab'].map((t, i) => clip(t, [3, 4, 4, 0, -2][i] ?? 0)), 'clipped').toEqual(['abc', 'abc…', '日…', '', ''])
 })

@@ -30,6 +30,8 @@ const PRIVATE = [/\/Users\//, /\/private\//, /Debug mode/, /SessionStart:/, /tmu
 const die = (m, code = 1) => { console.error(m); process.exit(code); };
 const sha = (p) => createHash('sha256').update(readFileSync(p)).digest('hex');
 const uniq = (a) => [...new Set(a)];
+// repeat to a fixpoint: one pass may leave markup (CodeQL js/incomplete-multi-character-sanitization)
+const stripTags = (s) => { let prev; do { prev = s; s = s.replace(/<[^>]+>/g, ''); } while (s !== prev); return s; };
 
 function parseArgs(argv) {
   const pos = [], opt = {};
@@ -115,7 +117,7 @@ function textGates(story, opt, gates) {
   const badKeys = story.keys.filter((k) => !KEY_ALLOW.includes(`${k.glyph} ${k.word}`));
   gates.push(['keycaps', badKeys.length === 0, badKeys.length ? `not a real macOS keycap: ${badKeys.map((k) => `"${k.glyph} ${k.word}" at ${k.at}s`).join(', ')}`
     : `${story.keys.length} keycaps, all in the macOS allow-list: ${uniq(story.keys.map((k) => `${k.glyph} ${k.word}`.trim())).join(' | ')}`]);
-  const storyText = [...story.captions.map((c) => c[1].replace(/<[^>]+>/g, '')), ...story.chapters.map((c) => c[1]), ...story.typing.map((t) => t.text)];
+  const storyText = [...story.captions.map((c) => stripTags(c[1])), ...story.chapters.map((c) => c[1]), ...story.typing.map((t) => t.text)];
   const sHits = storyText.flatMap((s) => [...BANNED, ...BANNED_STORY].filter((re) => re.test(s)).map((re) => `${re} in "${s}"`));
   gates.push(['story-text', sHits.length === 0, sHits.length ? sHits.slice(0, 3).join(' | ') : `${storyText.length} captions/chapters/typed texts: no banned words, no non-Mac key names`]);
   const dataSrc = existsSync(DATA) ? readFileSync(DATA, 'utf8') : '';
