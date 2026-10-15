@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // check-csp.mjs - scan a built docs dist against the CSP in deploy/docs.Caddyfile; rc 0 clean, 1 violations, 2 usage
-// Usage: node scripts/check-csp.mjs [--dist DIR] [--caddyfile FILE] [--site ORIGIN]
+// Usage: node scripts/check-csp.mjs [--dist DIR] [--caddyfile FILE] [--image-caddyfile FILE] [--site ORIGIN]
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -20,6 +20,14 @@ const die = (msg) => {
   process.exit(2);
 };
 
+function readFileSyncOr(file) {
+  try {
+    return readFileSync(file, 'utf8');
+  } catch {
+    return null;
+  }
+}
+
 let caddy;
 try {
   caddy = readFileSync(caddyfile, 'utf8');
@@ -28,6 +36,10 @@ try {
 }
 const found = [...caddy.matchAll(/^\s*Content-Security-Policy\s+"([^"]+)"/gim)];
 if (found.length !== 1) die(`expected exactly one Content-Security-Policy in ${caddyfile}, found ${found.length}`);
+
+// The image's built-in Caddyfile (no prod mount) must carry the same policy string.
+const imageCaddyfile = resolve(opt('--image-caddyfile', join(root, 'Caddyfile')));
+const imageCsp = [...(readFileSyncOr(imageCaddyfile) ?? '').matchAll(/^\s*Content-Security-Policy\s+"([^"]+)"/gim)].map((m) => m[1]);
 
 const policy = new Map();
 for (const part of found[0][1].split(';')) {
@@ -91,10 +103,32 @@ const walk = (dir) =>
   });
 
 const NONEXEC = /^(application\/(ld\+)?json|importmap|speculationrules)$/i;
-const TAG = /<([a-zA-Z][a-zA-Z0-9-]*)((?:\s+[^\s"'<>/=]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+))?)*)\s*\/?>/g;
+// Attrs may be separated by whitespace or "/", or touch a closing quote (<img/src=x>, <img src="a"alt=b>), as browsers parse them.
+const TAG = /<([a-zA-Z][a-zA-Z0-9-]*)((?:(?:[\s/]+|(?<=["']))[^\s"'<>/=]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+))?)*)\s*\/?>/g;
 const ATTR = /([^\s"'<>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
 const LINK_DIRECTIVE = { stylesheet: 'style-src-elem', modulepreload: 'script-src-elem', icon: 'img-src', manifest: 'manifest-src' };
 const PRELOAD_AS = { script: 'script-src-elem', style: 'style-src-elem', font: 'font-src', image: 'img-src', fetch: 'connect-src' };
+
+// HTML srcset: a candidate URL ends at whitespace; trailing commas end it with no descriptor.
+const srcsetUrls = (srcset) => {
+  const out = [];
+  let i = 0;
+  while (i < srcset.length) {
+    while (i < srcset.length && /[\s,]/.test(srcset[i])) i++;
+    let j = i;
+    while (j < srcset.length && !/\s/.test(srcset[j])) j++;
+    const url = srcset.slice(i, j).replace(/,+$/, '');
+    if (!url) break;
+    out.push(url);
+    if (j > i && srcset[j - 1] === ',') {
+      i = j;
+      continue;
+    }
+    let depth = 0;
+    for (i = j; i < srcset.length && !(srcset[i] === ',' && depth === 0); i++) depth += srcset[i] === '(' ? 1 : srcset[i] === ')' ? -1 : 0;
+  }
+  return out;
+};
 
 const checkUrl = (file, directive, tag, raw) => {
   if (!raw || raw.startsWith('#')) return;
@@ -160,8 +194,11 @@ const scanMarkup = (file, text) => {
       else if (rel) checkUrl(file, LINK_DIRECTIVE[rel], tag, attrs.href);
     } else if (tag === 'img') {
       checkUrl(file, 'img-src', tag, attrs.src);
-      for (const c of (attrs.srcset ?? '').split(',')) checkUrl(file, 'img-src', tag, c.trim().split(/\s+/)[0]);
-    } else if (tag === 'source') checkUrl(file, attrs.srcset === undefined ? 'media-src' : 'img-src', tag, attrs.src ?? attrs.srcset?.split(/[\s,]+/)[0]);
+      for (const u of srcsetUrls(attrs.srcset ?? '')) checkUrl(file, 'img-src', tag, u);
+    } else if (tag === 'source') {
+      checkUrl(file, 'media-src', tag, attrs.src);
+      for (const u of srcsetUrls(attrs.srcset ?? '')) checkUrl(file, 'img-src', tag, u);
+    }
     else if (tag === 'video' || tag === 'audio') {
       checkUrl(file, 'media-src', tag, attrs.src);
       checkUrl(file, 'img-src', tag, attrs.poster);
@@ -193,6 +230,10 @@ const scanJs = (file, js) => {
     if (!allowsUrl(directive, url)) flag(file, 'blocked-origin', `${m[1]}(${url}) not allowed by ${directive}`);
   }
 };
+
+if (imageCsp.length !== 1 || imageCsp[0] !== found[0][1]) {
+  violations.push({ file: imageCaddyfile, kind: 'csp-drift', detail: `image Caddyfile must carry exactly one CSP identical to ${caddyfile} (found ${imageCsp.length})` });
+}
 
 for (const d of ['script-src', 'script-src-elem', 'script-src-attr']) {
   const list = effective(d) ?? [];
