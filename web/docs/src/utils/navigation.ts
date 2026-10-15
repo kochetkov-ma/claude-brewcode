@@ -2,7 +2,6 @@ export interface NavItem {
   title: string;
   slug: string;
   children?: NavItem[];
-  tag?: 'moved';
   hidden?: boolean;
 }
 
@@ -34,7 +33,7 @@ export const navigation: NavSection[] = [
       { title: 'All mods', slug: 'mods/overview' },
       { title: 'Plan-mode effort', slug: 'mods/plan-effort' },
       { title: 'Prompt placeholders', slug: 'mods/placeholders' },
-      { title: 'Codewords', slug: 'brewtools/prompt-injection', tag: 'moved' },
+      { title: 'Codewords', slug: 'brewtools/prompt-injection' },
     ],
   },
   {

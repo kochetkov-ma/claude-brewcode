@@ -41,7 +41,7 @@ Every action is project-only (the wall has no global scope): "globally"/`--scope
 
 ## Non-command words
 
-> `edit` is not an action (it edited codeword text; that is the mod's `/placeholders edit`). `on`, `off` and `reset` are not command words: they are recognized only as free-text
+> `edit` is not an action; route codeword-text requests to the mod's free-text form, e.g. `/placeholders change r`. `on`, `off` and `reset` are not command words: they are recognized only as free-text
 > synonyms in the table above and always resolve to a canonical action
 > (`enable`/`disable`/`purge`); `setup` and `remove` alone route nowhere. Never echo any of
 > them back to the user as commands.

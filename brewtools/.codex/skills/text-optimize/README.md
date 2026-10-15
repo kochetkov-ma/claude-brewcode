@@ -1,6 +1,6 @@
 # Text Optimizer
 
-<p align="center"><img src="../../../assets/demos/text-optimize.gif" width="800" alt="Terminal animation: $brewtools:text-optimize -s README.md, docs/guide.md prints a PLAN, snapshots both files, runs one optimizer agent per file, then shows before and after metrics and a summary card."><br><sub>Illustrative animation: prompt → snapshot, one optimizer agent per file → measured before/after report → summary card.</sub></p>
+<p align="center"><img src="../../../../assets/demos/text-optimize.gif" width="800" alt="Terminal animation: $brewtools:text-optimize -s README.md, docs/guide.md prints a PLAN, snapshots both files, runs one optimizer agent per file, then shows before and after metrics and a summary card."><br><sub>Illustrative animation: prompt → snapshot, one optimizer agent per file → measured before/after report → summary card.</sub></p>
 
 Compress prompts and docs for LLM token efficiency in 5 modes, from light cleanup to deep dictionary encoding. Files are edited in place after a snapshot, and every result is checked against a per-mode loss budget.
 

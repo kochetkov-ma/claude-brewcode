@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const VALIDATOR_INPUTS = ['.agents', '.codex', 'brewcode', 'brewdoc', 'brewtools'];
+const VALIDATOR_INPUTS = ['.agents', '.codex', 'assets', 'brewcode', 'brewdoc', 'brewtools'];
 const SKIPPED = new Set(['node_modules', '__pycache__', '.DS_Store']);
 const STALE_ARTIFACT = '- task-board-setup Codex variant contains a stale foreign-assistant artifact';
 
@@ -46,6 +46,18 @@ test('GIVEN a .claude/ dir inside the task-board-setup Codex variant WHEN valida
   const result = validate(fixture.root);
   assert.equal(result.status, 1, `in-repo artifact must fail:\n${result.stdout}`);
   assert.deepEqual(result.stderr.trim().split('\n'), [STALE_ARTIFACT, STALE_ARTIFACT], 'exactly the stale-artifact error, once per variant');
+  fs.rmSync(fixture.base, { recursive: true, force: true });
+});
+
+test('GIVEN dist README body text drifted from canonical WHEN validate-compat runs THEN it fails on that resource only', () => {
+  const fixture = checkoutUnderClaudeParent();
+  const readme = path.join(fixture.root, '.codex', 'plugins', 'brewcode', 'skills', 'superreview-setup', 'README.md');
+  const original = fs.readFileSync(readme, 'utf8');
+  assert.equal(original.includes('Illustrative animation'), true, 'fixture README carries the drift anchor');
+  fs.writeFileSync(readme, original.replace('Illustrative animation', 'Illustrative drift'));
+  const result = validate(fixture.root);
+  assert.equal(result.status, 1, `dist drift must fail:\n${result.stdout}`);
+  assert.deepEqual(result.stderr.trim().split('\n'), ['- brewcode/superreview-setup: dist resource differs from canonical README.md'], 'exactly the dist drift error');
   fs.rmSync(fixture.base, { recursive: true, force: true });
 });
 

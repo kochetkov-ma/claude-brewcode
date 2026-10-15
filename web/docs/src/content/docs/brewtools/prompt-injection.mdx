@@ -1,23 +1,22 @@
 ---
-title: "Codewords (moved to mod)"
-description: "The codewords ++m ++a ++r ++rr +++ moved from brewtools to the brewmod-placeholders mod in brewtools v6.8.0. Install the mod, keep your overrides."
+title: "Codewords"
+description: "The codewords ++m ++a ++r ++rr +++ are provided by the brewmod-placeholders mod. Install the mod to use them in any prompt."
 order: 3100
 ---
 import { Badge, Callout, Card, CardGrid, UpdateNotice } from '../../../components/mdx';
 
-# Codewords (moved to mod)
+# Codewords
 
-<Badge variant="accent" text="moved" /> <Badge variant="secondary" text="brewtools v6.8.0" /> <Badge variant="primary" text="brewmod-placeholders" />
+<Badge variant="primary" text="brewmod-placeholders" />
 
-The codewords `++m`, `++a`, `++r`, `++rr` and `+++` now come only from the
-[brewmod-placeholders](/mods/placeholders/) mod. Brewtools v6.8.0 deleted its own
-`UserPromptSubmit` codeword hook. The injected text is unchanged, and your prompt still reaches the model as typed.
+The codewords `++m`, `++a`, `++r`, `++rr` and `+++` come from the
+[brewmod-placeholders](/mods/placeholders/) mod. Type one in any prompt and the mod adds its instruction block; your prompt still reaches the model as typed.
 
 <Callout type="warning" title="Update brewtools with the mod">
-  Update brewtools to 6.8.0+ together with installing the mod. An older brewtools still ships its own hook, so each block is injected twice.
+  brewtools 6.7.x also injects these blocks, so each one would appear twice. Use brewtools 6.8.0+ with the mod.
 </Callout>
 
-<Callout type="tip" title="Get the codewords back">
+<Callout type="tip" title="Install the mod">
   Requires Claude Code 2.1.292+. Install the mod, then run `/reload-plugins`:
 
   ```bash
@@ -29,12 +28,12 @@ The codewords `++m`, `++a`, `++r`, `++rr` and `+++` now come only from the
 
 | Item | Value |
 |------|-------|
-| New home | `brewmod-placeholders` mod, [Prompt placeholders](/mods/placeholders/) |
-| Still in brewtools | Optional hard wall: [Manager Setup](/brewtools/skills/manager-setup/) |
+| Provided by | `brewmod-placeholders` mod, [Prompt placeholders](/mods/placeholders/) |
+| Related in brewtools | Optional hard wall: [Manager Setup](/brewtools/skills/manager-setup/) |
 
-## Existing overrides keep working
+## Override files
 
-Your brewtools override files need no migration; the mod reads them through its legacy layer:
+The mod reads codeword override files from these brewtools folders:
 
 | Scope | File location |
 |-------|---------------|
@@ -52,7 +51,7 @@ Each codeword reads one file name in those folders:
 | `review-regression.md` | `++rr` |
 | `cron-plan.md` | `+++` (Plan mode only) |
 
-Edit codeword text with the mod's `/placeholders edit <name>`; `/brewtools:manager-setup status` lists legacy override files.
+To change codeword text, describe the change, for example `/placeholders make ++r shorter` (Claude Code 2.1.300+; older builds show the status view and the line `needs Claude Code 2.1.300+ for the dialog`). Claude shows one confirm dialog and saves to your own layer, `.claude/placeholders/<name>.md`, which outranks the override files above; it does not edit them. `/brewtools:manager-setup status` lists the override files.
 
 ## Older Claude Code and Codex
 

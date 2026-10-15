@@ -64,11 +64,6 @@ const linkClass = (active: boolean, mod: boolean) => [
                   aria-current={currentSlug === item.slug ? 'page' : undefined}
                 >
                   {item.title}
-                  {item.tag && (
-                    <span class="ml-1 rounded border border-mod/40 px-1.5 text-[0.6875rem] leading-4 text-mod">
-                      {item.tag}
-                    </span>
-                  )}
                 </a>
               </li>
             ),

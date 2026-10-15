@@ -7,7 +7,7 @@ export const EMPTY_VIEW: PlaceholderView = { tokens: [] }
 
 export const KNOWN_COLOR = 'suggestion'
 export const UNKNOWN_COLOR = 'warning'
-export type EditorEntry = { name: string; description?: string; body?: string; planOnly?: boolean }
+export type EditorEntry = { name: string; description?: string; body?: string; planOnly?: boolean; isInline?: boolean }
 export type Highlight = { view: PlaceholderView; decorations: PromptDecoration[] }
 
 const GRAPHEME_TAIL = /[\p{M}\u200D\uFE00-\uFE0F]*/uy

@@ -2,6 +2,68 @@
 
 ---
 
+## v6.9.1 (2026-10-15)
+
+> Docs: [placeholders](https://doc-claude.brewcode.app/mods/placeholders/) | [prompt-injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/) | [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) | [mod-creator](https://doc-claude.brewcode.app/brewcode/agents/mod-creator/) | [brewcode agents skill](https://doc-claude.brewcode.app/brewcode/skills/agents/)
+
+Patch release: `brewmod-placeholders` survives a plugin update under a running session, the maintainer cache cleaner stops deleting versions in use, and the docs site and Codex mirror get link and style fixes.
+
+### brewmod-placeholders
+
+#### Fixed
+
+- **plugin files removed:** when the plugin's files vanish under a running session (a plugin update), built-in tokens are no longer marked `unknown placeholder`. The band and one toast say `plugin files removed (updated?) · run /reload-plugins`, and inline placeholders keep working.
+- **dialog tools:** they fail open again (`tool.call` returns an error result instead of throwing).
+- **band:** it redraws on every detection path (registry refresh in the typeahead, files-gone flips).
+
+#### Changed
+
+- **`Show text  ctrl+x → tab → enter` button:** arrows mark a key sequence. 1-2 tokens get the 3-line preview, and the button also appears there when the preview cuts a body; 3+ tokens show names until `Show text`.
+- **docs:** `/placeholders show ++r` is documented.
+
+### brewcode
+
+#### Changed
+
+- **mod-creator:** the key-hint rule uses arrows (`Show text  ctrl+x → tab → enter`).
+- **mod references:** `mods-{api,changes,lifecycle,patterns}.md` add the deleted-plugin-root pattern, the 1-2 token band button rule and the `prompt.change` floor limitation (a Tab-accepted row leaves the band one key behind).
+
+### brewtools
+
+#### Fixed
+
+- **manager-setup:** a request to change codeword text routes to the mod's free-text `/placeholders change <name>`; the removed `/placeholders edit` was named before.
+- **plugin-update docs:** the status markers are shown as quoted skill output.
+
+### repo
+
+#### Fixed
+
+- **`clean-plugin-cache.sh`:** it never deletes a cached version a running session still uses. It honours Claude Code's `.in_use/<pid>` entries and a 14-day `.orphaned_at` grace (by marker mtime, matching Claude Code), skips `.linking-*` temp dirs, and exits 2 on an unreadable `installed_plugins.json`.
+- **v6.9.0 incident:** at the v6.9.0 release the old cleaner deleted 6.8.0 under running maintainer sessions, so mods, hooks and agents stopped working there until `/reload-plugins`. The cleaner is a maintainer-only script, called only by `update-plugin.sh`; consumer installs through `claude plugin update` were not affected.
+
+### codex
+
+#### Fixed
+
+- **mirror READMEs:** relative image and link paths are recomputed per destination; 4 demo GIFs and the md-to-pdf install link were broken on GitHub. The validator now checks every relative link.
+
+### docs site
+
+#### Fixed
+
+- **caution callouts:** they use the palette's burnt orange `#D9531E` instead of rose.
+- **Tailwind:** CSS is loaded once instead of twice (about 103 KB less per page).
+- **callouts:** a stray scrollbar is gone.
+- **sitemap:** it no longer lists the redirecting `/`.
+- **stale references:** the Codewords and manager-setup pages no longer name the removed `/placeholders edit`; they point to the mod's free-text dialog (for example `/placeholders make ++r shorter`).
+
+#### Changed
+
+- **navigation:** the "moved" labels are gone; the Codewords page is a plain pointer to the mod.
+
+---
+
 ## v6.9.0 (2026-10-15)
 
 > Docs: [brewcode agents](https://doc-claude.brewcode.app/brewcode/agents/) | [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [bash-expert](https://doc-claude.brewcode.app/brewcode/agents/bash-expert/) | [bc-rules-organizer](https://doc-claude.brewcode.app/brewcode/agents/bc-rules-organizer/) | [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [mod-creator](https://doc-claude.brewcode.app/brewcode/agents/mod-creator/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | [brewcode overview](https://doc-claude.brewcode.app/brewcode/overview/) | [brewcode skills](https://doc-claude.brewcode.app/brewcode/skills/) | [brewcode/skills agents](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [convention-setup](https://doc-claude.brewcode.app/brewcode/skills/convention-setup/) | [e2e](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [review](https://doc-claude.brewcode.app/brewcode/skills/review/) | [rules](https://doc-claude.brewcode.app/brewcode/skills/rules/) | [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) | [brewcode/skills skills](https://doc-claude.brewcode.app/brewcode/skills/skills/) | [superreview-setup](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | [teams-setup](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) | [brewdoc overview](https://doc-claude.brewcode.app/brewdoc/overview/) | [brewdoc skills](https://doc-claude.brewcode.app/brewdoc/skills/) | [docsync-setup](https://doc-claude.brewcode.app/brewdoc/skills/docsync-setup/) | [md-to-pdf](https://doc-claude.brewcode.app/brewdoc/skills/md-to-pdf/) | [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/) | [my-claude](https://doc-claude.brewcode.app/brewdoc/skills/my-claude/) | [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/) | [brewtools agents](https://doc-claude.brewcode.app/brewtools/agents/) | [deploy-admin](https://doc-claude.brewcode.app/brewtools/agents/deploy-admin/) | [ssh-admin](https://doc-claude.brewcode.app/brewtools/agents/ssh-admin/) | [text-optimizer](https://doc-claude.brewcode.app/brewtools/agents/text-optimizer/) | [brewtools overview](https://doc-claude.brewcode.app/brewtools/overview/) | [prompt-injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/) | [brewtools skills](https://doc-claude.brewcode.app/brewtools/skills/) | [agent-deadline-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline-setup/) | [agent-return-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-return-setup/) | [agent-router-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-router-setup/) | [context-slim](https://doc-claude.brewcode.app/brewtools/skills/context-slim/) | [deploy](https://doc-claude.brewcode.app/brewtools/skills/deploy/) | [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) | [provider-switch](https://doc-claude.brewcode.app/brewtools/skills/provider-switch/) | [secrets-scan](https://doc-claude.brewcode.app/brewtools/skills/secrets-scan/) | [ssh](https://doc-claude.brewcode.app/brewtools/skills/ssh/) | [task-board-setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) | [text-human](https://doc-claude.brewcode.app/brewtools/skills/text-human/) | [text-optimize](https://doc-claude.brewcode.app/brewtools/skills/text-optimize/) | [brewui overview](https://doc-claude.brewcode.app/brewui/overview/) | [FAQ](https://doc-claude.brewcode.app/faq/) | [full-setup](https://doc-claude.brewcode.app/full-setup/) | [getting-started](https://doc-claude.brewcode.app/getting-started/) | [installation](https://doc-claude.brewcode.app/installation/) | [Mods overview](https://doc-claude.brewcode.app/mods/overview/) | [placeholders](https://doc-claude.brewcode.app/mods/placeholders/) | [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/) | [quickstart](https://doc-claude.brewcode.app/quickstart/)

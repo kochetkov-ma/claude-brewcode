@@ -51,7 +51,7 @@ export default {
           "info":             "#EBBB40",
           "success":          "#649c67",
           "warning":          "#DF8D03",
-          "error":            "#cf6679",
+          "error":            "#D9531E",
           "--rounded-box":      "0.5rem",
           "--rounded-btn":      "0.375rem",
           "--rounded-badge":    "0.25rem",

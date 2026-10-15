@@ -1,6 +1,6 @@
 # brewcode:superreview-setup
 
-<p align="center"><img src="../../../assets/demos/superreview.gif" width="800" alt="Terminal animation: a review skill is generated for a repo, wires domain experts and an intent guard, runs on a payments refund flow, and ends with a minor-drift verdict from a read-only report."><br><sub>Illustrative animation: generate a review skill → it wires domain experts and an intent guard → run it on a change → drift verdict and findings in a read-only report.</sub></p>
+<p align="center"><img src="../../../../../assets/demos/superreview.gif" width="800" alt="Terminal animation: a review skill is generated for a repo, wires domain experts and an intent guard, runs on a payments refund flow, and ends with a minor-drift verdict from a read-only report."><br><sub>Illustrative animation: generate a review skill → it wires domain experts and an intent guard → run it on a change → drift verdict and findings in a read-only report.</sub></p>
 
 A **human-invoked generator**. It analyzes your project and writes a self-contained, project-local `.codex/skills/superreview/` plus `.codex/agents/intent-guard.toml`: a deep code-review skill covering intent, domain experts and scope discipline. The emitted `/superreview` does the reviewing; this skill only generates it.
 

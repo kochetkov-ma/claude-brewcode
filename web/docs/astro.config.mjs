@@ -12,7 +12,14 @@ import {
 export default defineConfig({
   output: 'static',
   site: 'https://doc-claude.brewcode.app',
-  integrations: [tailwind(), mdx(), sitemap(), pagefind()],
+  integrations: [
+    // global.css carries the @tailwind directives; base styles on too -> a 2nd identical bundle.
+    tailwind({ applyBaseStyles: false }),
+    mdx(),
+    // `/` is a 301 to /getting-started/ (Caddy): keep redirects out of the sitemap.
+    sitemap({ filter: (page) => new URL(page).pathname !== '/' }),
+    pagefind(),
+  ],
   // 0 = never inline assets or scripts, so the CSP needs no script 'unsafe-inline' or data: for scripts.
   vite: { build: { assetsInlineLimit: 0 } },
   markdown: {
