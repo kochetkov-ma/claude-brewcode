@@ -7,8 +7,6 @@ import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseCliArgs } from '../../../hooks/lib/manager-state.mjs';
-// Mode names whose global overrides the shipped purge block deletes (list formerly exported by the removed prompt resolver).
-const VALID_MODES = new Set(['full', 'planmode', 'cron-plan', 'architect', 'review-regression', 'review-double']);
 
 const HERE = join(fileURLToPath(import.meta.url), '..');
 const GUARD_MJS = join(HERE, '..', '..', '..', 'hooks', 'hardmode-guard.mjs');
@@ -571,31 +569,38 @@ check(
   'a guard path in args under a foreign launcher is the guard registration, never left behind',
 );
 
-// REGRESSION: global purge deleted only full.md; the other modes' overrides kept changing the codewords.
-function runPurge(proj, scope, cfg) {
+function runPurge(proj, cfg) {
   const md = readFileSync(SKILL_MD, 'utf8');
   const from = md.indexOf(NODE_E, md.indexOf('### purge'));
   const body = md.slice(from + NODE_E.length, md.indexOf('\n"', from))
     .split('${BT_ROOT}').join(join(HERE, '..', '..', '..'))
-    .split("'${ROOT}'").join(JSON.stringify(proj)).split("'SCOPE'").join(JSON.stringify(scope));
-  const file = join(BASE, `purge-${scope}.mjs`);
+    .split("'${ROOT}'").join(JSON.stringify(proj));
+  const file = join(BASE, `purge-${passed + failed}.mjs`);
   writeFileSync(file, body);
   const r = spawnSync(process.execPath, [file], { encoding: 'utf8', timeout: 8000, env: { ...process.env, CLAUDE_CONFIG_DIR: cfg } });
   return { code: r.status, out: safeParse(r.stdout || '') };
 }
+// GIVEN codeword overrides (the mod's legacy layer) in the project and the profile WHEN purge runs
+// THEN the wall files go and every override file stays
 const P_CFG = join(BASE, 'purge-cfg');
-const P_PDIR = join(P_CFG, 'manager', 'prompts');
+const P_GDIR = join(P_CFG, 'manager', 'prompts');
+mkdirSync(P_GDIR, { recursive: true });
+writeFileSync(join(P_GDIR, 'full.md'), 'GLOBAL OVERRIDE');
+const P_PROJ = makeInstalledProject('purge-keeps-overrides');
+const P_PDIR = join(P_PROJ, '.claude', 'brewtools', 'manager', 'prompts');
 mkdirSync(P_PDIR, { recursive: true });
-for (const m of [...VALID_MODES, 'notes']) writeFileSync(join(P_PDIR, `${m}.md`), `OVERRIDE ${m}`);
-const pProject = runPurge(makeProject('purge-project', {}), 'project', P_CFG);
-const pGlobal = runPurge(makeProject('purge-global', {}), 'global', P_CFG);
+writeFileSync(join(P_PDIR, 'architect.md'), 'PROJECT OVERRIDE');
+const pPrep = runUninstall(P_PROJ, 'purge-keeps');
+const pPurge = runPurge(P_PROJ, P_CFG);
+const pDir = join(P_PROJ, '.claude', 'brewtools', 'manager');
 check(
-  '44a-purge-global-removes-every-mode-override-and-keeps-foreign-files',
-  { projectCode: pProject.code, projectGlobal: pProject.out.globalPrompts, code: pGlobal.code,
-    removed: pGlobal.out.globalPrompts, kept: pGlobal.out.globalKept, left: readdirSync(P_PDIR) },
-  { projectCode: 0, projectGlobal: [], code: 0,
-    removed: [...VALID_MODES].map(m => join(P_PDIR, `${m}.md`)), kept: ['notes.md'], left: ['notes.md'] },
-  'global purge deletes the override of each VALID_MODES mode, never an unknown file; project scope leaves global alone',
+  '44a-purge-keeps-codeword-overrides-and-deletes-the-wall-files',
+  { prepCode: pPrep.code, code: pPurge.code, promptsKept: pPurge.out.promptsKept, managerDir: readdirSync(pDir),
+    projectOverride: readFileSync(join(P_PDIR, 'architect.md'), 'utf8'), globalFiles: readdirSync(P_GDIR),
+    globalOverride: readFileSync(join(P_GDIR, 'full.md'), 'utf8') },
+  { prepCode: 0, code: 0, promptsKept: true, managerDir: ['prompts'],
+    projectOverride: 'PROJECT OVERRIDE', globalFiles: ['full.md'], globalOverride: 'GLOBAL OVERRIDE' },
+  'purge removes state.json, the guard and the helper but never a prompts/ override, project or global (the mod owns them)',
 );
 
 // REGRESSION: uninstall + purge left `.claude/settings.local.json` = {} and `.claude/` in a project that had neither.
@@ -613,7 +618,7 @@ writeFileSync(join(E2, '.claude', 'brewtools', 'manager', 'state.json'), JSON.st
 const e2settings = onlyGuardSettings(E2, { env: { CLAUDE_CODE_ENABLE_TODO_TOOLS: '1' } });
 const e2u = runUninstall(E2, 'purge-prep');
 const e2prepLeft = existsSync(e2settings);
-const e2 = runPurge(E2, 'project', P_CFG);
+const e2 = runPurge(E2, P_CFG);
 check(
   '44b-uninstall-and-purge-delete-what-they-emptied',
   { uninstallCode: e1.code, uninstallSettingsLeft: existsSync(join(E1, '.claude', 'settings.local.json')),
@@ -643,7 +648,7 @@ check(
   { recipes: md45.split(RECIPE).length - 1, rootLines: (md45.match(/^ROOT=/gm) || []).length, unbraced: md45.includes('$CLAUDE_PROJECT_DIR'),
     substituted: runRecipe(RECIPE.split('${CLAUDE_PROJECT_DIR}').join(join(R_REPO, 'sub')), R_REPO),
     literal: runRecipe(RECIPE, join(R_REPO, 'sub')) },
-  { recipes: 7, rootLines: 7, unbraced: false,
+  { recipes: 6, rootLines: 6, unbraced: false,
     substituted: join(R_REPO, 'sub'),
     literal: realpathSync(R_REPO) },
   'every block resolves ROOT from the load-time session dir, git toplevel only when the token stays literal',
@@ -745,6 +750,32 @@ check(
     stateOnlyUpgrade: { code: 1, stderr: 'ABORT: the wall is not installed in this project — run install instead\n' },
     installed: { code: 0, registered: true, guardPresent: true, installed: true, stale: null } },
   'status must call a state.json-only project not installed, the exact case upgrade refuses',
+);
+
+// GIVEN a legacy codeword override in the project WHEN status runs THEN it is listed (the mod reads it), never opened
+const LG = makeInstalledProject('status-legacy-overrides');
+mkdirSync(join(LG, '.claude', 'brewtools', 'manager', 'prompts'), { recursive: true });
+writeFileSync(join(LG, '.claude', 'brewtools', 'manager', 'prompts', 'review-double.md'), 'OVERRIDE');
+writeFileSync(join(LG, '.claude', 'brewtools', 'manager', 'prompts', 'notes.txt'), 'ignored');
+const lgNone = runShipped('### status', makeInstalledProject('status-no-overrides'));
+const lgSome = runShipped('### status', LG);
+check(
+  '44j-status-lists-legacy-codeword-overrides-and-nothing-else',
+  { none: { code: lgNone.code, list: lgNone.out.legacyOverrides }, some: { code: lgSome.code, list: lgSome.out.legacyOverrides } },
+  { none: { code: 0, list: [] }, some: { code: 0, list: [join(LG, '.claude', 'brewtools', 'manager', 'prompts', 'review-double.md')] } },
+  'status reports *.md files under the legacy prompts dirs (the mod\'s layer) and carries no prompt text or source',
+);
+
+// GIVEN the codewords left this plugin WHEN the skill text is read THEN status points at the mod and no deleted asset is referenced
+const skillText = readFileSync(SKILL_MD, 'utf8');
+check(
+  '44k-skill-points-at-the-mod-and-references-no-deleted-codeword-asset',
+  { codewordsLine: skillText.includes('codewords: provided by brewmod-placeholders (Claude Code 2.1.292+)'),
+    installLine: skillText.includes('claude plugin install brewmod-placeholders@claude-brewcode'),
+    deadRefs: skillText.match(/manager-prompts|resolvePrompt|VALID_MODES|references\/(full|planmode|architect|review-double|review-regression|cron-plan)\.md/g) || [],
+    editMode: /^\| `edit` \|/m.test(skillText), leftovers: readdirSync(join(HERE, '..', 'references')).sort() },
+  { codewordsLine: true, installLine: true, deadRefs: [], editMode: false, leftovers: ['hard.md', 'intent-routing.md'] },
+  'status carries the mod pointer and install line; no import of the deleted prompt helper, no edit row, only hard.md and intent-routing.md remain',
 );
 
 // REGRESSION (M1): process.exit inside the locked try skips finally; the lock leaked and the next
