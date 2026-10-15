@@ -1,6 +1,6 @@
 <p align="center">
-  <img src="../assets/brewmods/plan-effort.gif" width="800" alt="Claude Code window with a glyph effort dial: Shift+Tab turns on plan mode, the needle swings from high to xhigh, Enter approves the plan and the needle swings back to high">
-  <br><sub>Illustrative animation: session effort <code>high</code> → <code>Shift+Tab</code> into plan mode → <code>xhigh</code> → <code>Enter</code> approves the plan → back to <code>high</code>.</sub>
+  <img src="../assets/brewmods/plan-effort.gif" width="800" alt="Claude Code window with a glyph effort dial: Shift+Tab from accept edits into plan mode swings the needle from high to xhigh, Enter approves the plan and the needle swings back to high">
+  <br><sub>Illustrative animation: session effort <code>high</code> → <code>Shift+Tab</code> from <code>accept edits on</code> into plan mode → <code>xhigh</code> → <code>Enter</code> approves the plan → back to <code>high</code>.</sub>
 </p>
 
 <h1 align="center">Plan-mode effort</h1>
@@ -42,7 +42,7 @@ claude --plugin-dir ./brewmod-plan-effort   # dev mode, no install
 
 | You do | You get |
 |--------|---------|
-| `Shift+Tab` into plan mode | Requests run at `xhigh`. A toast `plan mode: effort xhigh · /plan-effort to change` shows once |
+| `Shift+Tab` twice from the default mode (`manual mode on` → `accept edits on` → `plan mode on`), or `/plan` | Requests run at `xhigh` from the next prompt. A toast `plan mode: effort xhigh · /plan-effort to change` shows once per plan visit |
 | Approve the plan | The next request is back at your session effort, nothing to undo |
 | `/plan-effort max` | Plan-mode level set to `max`, same as the `planEffort` option in `/config` |
 

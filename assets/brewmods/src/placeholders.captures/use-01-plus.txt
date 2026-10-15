@@ -1,0 +1,40 @@
+     it
+     Commands (list, show, help) are only faster; plain words work too · full help:
+     /placeholders help
+
+› Prompt from the brewmod-placeholders plugin
+❯ Placeholder helper. My request: <request>global add ++db: always use the staging
+  DB</request>
+  Ask first: no save_placeholder or remove_placeholder call before I answered your one
+  AskUserQuestion about that exact change in this turn, even if my request is explicit
+  (only a remove of a name with files: none skips it).
+  Scope: global (I said it; skip only the Where question).
+  Use the mcp__brewmod-placeholders__* tools (list_placeholders first); a placeholder
+  is inserted into prompts as ++name (not in this message: ++/).
+
+⏺ brewmod-placeholders - list_placeholders (MCP)
+  ⎿  ## +++ · layer: plugin · files: none · when: plan · plan: only · Anti-drift cr
+     on plan addon, active in Plan mode only
+     # [ADDON: ANTI-DRIFT CRON PLAN]
+     … +112 lines (ctrl+o to expand)
+
+⏺ No db exists yet. Scope is global, no plan mode mentioned.
+
+⏺ User answered Claude's questions:
+  ⎿  · Save ++db as drafted? → Save as drafted (Recommended)
+
+⏺ brewmod-placeholders - save_placeholder (MCP)(name: "db", text: "always use the
+                                               staging DB", description: "Always use the
+                                               staging DB", scope: "global")
+  ⎿  saved ++db (global): ~/.claude/placeholders/db.md
+
+⏺ I saved ++db as a global placeholder in ~/.claude/placeholders/db.md, so it works in
+  all your projects. Typing ++db in a prompt adds "always use the staging DB".
+
+✻ Brewed for 7s · done 11:56 PM
+
+────────────────────────────────────────────────────────────────────────────────────────
+❯ +
+────────────────────────────────────────────────────────────────────────────────────────
+  ⏸ manual mode on                                                  ◐ medium · /effort
+

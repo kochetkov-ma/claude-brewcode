@@ -2,6 +2,57 @@
 
 ---
 
+## v6.9.2 (2026-10-16)
+
+> Docs: [placeholders](https://doc-claude.brewcode.app/mods/placeholders/) | [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/) | [getting started](https://doc-claude.brewcode.app/getting-started/) | [prompt-injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/)
+
+Hotfix: `brewmod-placeholders` shows what a token sends, answers `show`, `list` and `help` instantly, and gets plan-mode parts and a save scope. The mod and docs pages are rewritten.
+
+### brewmod-placeholders
+
+#### Added
+
+- **band text:** with the caret on a token the band shows its text (up to 15 rows; `++r?` for more when the menu caps it). A message of only `++r?` fills `/placeholders show ++r`; Enter again prints it.
+- **instant answers:** `/placeholders show ++r ++m`, `list`, `help` and natural RU/EN "show" wording are answered at once, with no Claude turn.
+- **escape:** `++/` (alias `++\`) sends a message exactly as typed.
+- **save scope:** `global` or `project` (default global). One `Where` question, Global recommended; the confirm reads `Save ++db as drafted?` (the layer shows in the `Where` question and in the result line `saved ++db (global): ~/.claude/placeholders/db.md`).
+- **ask first:** Claude asks once before every save or remove, even for an explicit request; only a remove of a name with no files skips the question.
+- **plan-mode parts:** `<name>.plan.md` with `plan: add` adds text in plan mode only. Shown as `plan +` and `plan mode adds:`. A plan part can be removed on its own.
+- **`placeholders_help` tool:** the mod's help is available to Claude as a tool.
+- **plan mode in the band:** `· plan mode`, plus an honest `· sent in plan mode` note until the first prompt confirms the mode.
+
+#### Changed
+
+- **`m.plan.md`:** the shipped file is now an addition (`plan: add`), so a user's `m.md` override flows into plan mode. Plan-mode `++m` output is byte-identical.
+- **band:** it shows source lines exactly as sent.
+- **paths:** saved and removed files are shown as `~/.claude/placeholders/<file>`.
+- **tool descriptions:** they use the configured prefix.
+- **launch in `~`:** the one folder counts as global.
+
+#### Fixed
+
+- **plan mode:** an empty body silences a token there too; `show` prints the header actually sent.
+- **9000-char cap:** it never splits an emoji (surrogate pair).
+- **band:** the budget never overflows.
+- **save:** `when: always` is written explicitly.
+- **attachments:** messages with attachments are skipped by the first-prompt check.
+
+### brewmod-plan-effort
+
+#### Changed
+
+- **docs:** plan mode is entered by `Shift+Tab` twice from the default mode (`manual mode on` → `accept edits on` → `plan mode on`), or `/plan`.
+
+### repo
+
+#### Changed
+
+- **mod README:** rewritten with examples, normal vs plan mode and keys on macOS.
+- **docs site:** one migration notice on the home page and the mod pages.
+- **GitHub releases:** bodies end with the plugin and mod install commands and docs links (`.github/release-footer.md`).
+
+---
+
 ## v6.9.1 (2026-10-15)
 
 > Docs: [placeholders](https://doc-claude.brewcode.app/mods/placeholders/) | [prompt-injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/) | [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) | [mod-creator](https://doc-claude.brewcode.app/brewcode/agents/mod-creator/) | [brewcode agents skill](https://doc-claude.brewcode.app/brewcode/skills/agents/)

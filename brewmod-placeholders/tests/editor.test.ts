@@ -4,7 +4,7 @@ import { EMPTY_VIEW, MAX_DECORATED_CHARS, highlight, sameView, suggest } from '.
 import { DEFAULT_ENTRIES, editorMatchers, getEditorEntries, setEditorEntries } from '../hooks/lib/editor-state'
 import { compileMatchers } from '../hooks/lib/match'
 import { defaultDefs } from './fixtures'
-import { defaultsTree, ROOT, wire, type Tree } from './layer-io'
+import { BAND, ROOT, bandProps, core, defaultsTree, spyWrites, typed, wire, type Tree } from './layer-io'
 
 const ms = (prefix = '++') => compileMatchers(prefix, DEFAULT_ENTRIES.map((e) => e.name))
 const DRAFT = 'use ++m and ++zzz, then ++rr!'
@@ -77,6 +77,16 @@ test('GIVEN views WHEN compared THEN text, name and known flag decide and offset
   expect(sameView(base, { tokens: [{ ...KNOWN_M, isKnown: false }] }), 'known flipped').toBe(false)
   expect(sameView(base, { tokens: [{ ...KNOWN_M, text: '++M' }] }), 'case differs').toBe(false)
   expect(sameView(EMPTY_VIEW, { tokens: [] }), 'both empty').toBe(true)
+  expect(sameView({ ...base, isEscaped: true, escapedBy: '++/' }, { ...base, isEscaped: true, escapedBy: '++\\' }), 'other marker').toBe(false)
+})
+
+test('GIVEN drafts with both escape markers WHEN highlighted THEN the view names the first marker typed', async () => {
+  const r = { text: '++r', name: 'r', isKnown: true, start: 2, end: 5 }
+
+  expect([highlight(ms(), 'x ++r ++/ ++\\').view, highlight(ms(), 'x ++r ++\\ ++/').view], 'views').toEqual([
+    { tokens: [r], isEscaped: true, escapedBy: '++/' },
+    { tokens: [r], isEscaped: true, escapedBy: '++\\' },
+  ])
 })
 
 test('GIVEN the bare prefix WHEN suggested THEN every default name is a row with its description', async () => {
@@ -125,8 +135,7 @@ test('GIVEN repeated names WHEN suggested THEN the first entry wins and no row r
 })
 
 test('GIVEN the shipped definitions WHEN compared with the default entries THEN names and descriptions match the first file per name', async () => {
-  const shipped = new Map<string, string | undefined>()
-  for (const d of defaultDefs()) if (!shipped.has(d.name)) shipped.set(d.name, d.description)
+  const shipped = new Map([...defaultDefs()].reverse().map((d) => [d.name, d.description]))
 
   expect([...shipped.keys()].sort(), 'names').toEqual(DEFAULT_ENTRIES.map((e) => e.name).sort())
   expect(DEFAULT_ENTRIES.map((e) => [e.name, e.description]).sort(), 'descriptions').toEqual([...shipped.entries()].sort())
@@ -150,22 +159,6 @@ test('GIVEN the entries setter WHEN names change THEN matchers rebuild once per 
 })
 
 // --- through the engine: prompt.edit / prompt.autocomplete hooks of the loaded module ---
-
-const typed = ($: { prompt: unknown }, text: string) =>
-  ($.prompt as any).edit({ origin: { kind: 'composer' }, text: '', cursor: 0, start: 0, end: 0, inputText: text })
-
-const core = (on: On) =>
-  on('prompt.edit', (_$, e) => ({ text: e.text.slice(0, e.start) + e.inputText + e.text.slice(e.end), cursor: e.start + e.inputText.length }))
-
-// Passthrough spy: the kit answers state beneath it, so the module's real writes are visible.
-const spyWrites = (on: On) => {
-  const writes: unknown[] = []
-  on('state.set', (_$, e, next) => {
-    writes.push(e.value)
-    return next(e)
-  })
-  return writes
-}
 
 test('GIVEN a draft with tokens WHEN prompt.edit runs THEN the box is unchanged and decorations are appended', async ($, on) => {
   core(on)
@@ -232,6 +225,20 @@ test('GIVEN a sequence of edits WHEN prompt.edit runs THEN the view atom is writ
     { tokens: [m] },
     { tokens: [m, { text: '++zz', name: 'zz', isKnown: false, start: 10, end: 14 }] },
     { tokens: [] },
+  ])
+})
+
+test('GIVEN both escape markers WHEN one edit deletes the first THEN the view is written again with the marker left', async ($, on) => {
+  core(on)
+  const writes = spyWrites(on)
+
+  await typed($, 'x ++r ++/ ++\\')
+  await typed($, 'x ++r ++\\')
+
+  const r = { text: '++r', name: 'r', isKnown: true, start: 2, end: 5 }
+  expect(writes, 'view writes').toEqual([
+    { tokens: [r], isEscaped: true, escapedBy: '++/' },
+    { tokens: [r], isEscaped: true, escapedBy: '++\\' },
   ])
 })
 
@@ -370,8 +377,6 @@ test('GIVEN a registry read that fails WHEN a prefixed token is completed THEN t
 // --- ui.render PromptHint: the band draws again when the box turns empty or non-empty ---
 
 const HINT = { plugin: 'brewmod-placeholders', component: 'PromptHint' } as const
-const BAND = { plugin: 'brewmod-placeholders', component: 'AbovePrompt' } as const
-const BAND_PROPS = { hasSurvey: false, isWorking: false, maxRows: 24, bodyColumns: 100, scroll: { bodyRows: 23, offset: 0, total: 0 }, view: {} }
 const hintProps = (isDraft: boolean) => ({ isDraft, isWorking: false, hint: '? for shortcuts' })
 
 // Counts the band draws that reach the engine's own bottom: a draw the mod passes through is a count.
@@ -388,7 +393,7 @@ const drawCounts = (on: On) => {
 
 test('GIVEN a hint line drawn with a draft and then without WHEN the flip is seen THEN the band is drawn again once', async ($, on) => {
   const counts = drawCounts(on)
-  const band = await $.ui.mount({ ...BAND, surface: 'terminal', props: BAND_PROPS })
+  const band = await $.ui.mount({ ...BAND, surface: 'terminal', props: bandProps() })
   const first = await $.ui.mount({ ...HINT, surface: 'terminal', props: hintProps(true) })
   const afterFirst = counts.band
   const second = await $.ui.mount({ ...HINT, surface: 'terminal', props: hintProps(true) })

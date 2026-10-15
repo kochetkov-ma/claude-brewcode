@@ -1,5 +1,5 @@
 # Creates a GitHub Release on any pushed v*.*.* tag (branch-agnostic).
-# Body = the tag's RELEASE-NOTES.md section + install instructions.
+# Body = the tag's RELEASE-NOTES.md section + .github/release-footer.md (single source).
 
 name: Release
 
@@ -19,7 +19,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
         with:
-          sparse-checkout: RELEASE-NOTES.md
+          sparse-checkout: |
+            RELEASE-NOTES.md
+            .github/release-footer.md
 
       - name: Extract changelog for tag version
         id: changelog
@@ -61,9 +63,8 @@ jobs:
           # Write changelog to the per-job private RUNNER_TEMP dir
           echo "$BODY" > "$RUNNER_TEMP/release-body.md"
 
-          # Append install instructions (backticks are literal Markdown fences)
-          # shellcheck disable=SC2016
-          printf '\n---\n\n## Quick Install\n\n```bash\n# 1. Add marketplace (one-time)\nclaude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode\n\n# 2. Install plugins\nclaude plugin install brewcode@claude-brewcode\nclaude plugin install brewdoc@claude-brewcode\nclaude plugin install brewtools@claude-brewcode\n\n# 3. Optional mods\nclaude plugin install brewmod-plan-effort@claude-brewcode\nclaude plugin install brewmod-placeholders@claude-brewcode\n```\n\n## Already installed? Update\n\n```bash\nclaude plugin marketplace update claude-brewcode\nclaude plugin update brewcode@claude-brewcode\nclaude plugin update brewdoc@claude-brewcode\nclaude plugin update brewtools@claude-brewcode\nclaude plugin update brewmod-plan-effort@claude-brewcode\nclaude plugin update brewmod-placeholders@claude-brewcode\n```\n' >> "$RUNNER_TEMP/release-body.md"
+          # Append separator + install/docs footer (single source)
+          printf '\n---\n\n' >> "$RUNNER_TEMP/release-body.md" && cat .github/release-footer.md >> "$RUNNER_TEMP/release-body.md"
 
           echo "Release body written to $RUNNER_TEMP/release-body.md"
           echo "--- Preview (first 20 lines) ---"

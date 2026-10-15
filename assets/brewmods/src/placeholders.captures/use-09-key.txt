@@ -1,0 +1,40 @@
+✻ Brewed for 7s · done 11:56 PM
+placeholders 2 [ Show text  ctrl+x → tab → enter ]                                  [-]
+++db  Always use the staging DB
+  always use the staging DB
+++r  Two-phase review: review every significant change, then double-check each fin…
+  User typed `++r` — Two-phase review discipline is active for this turn:
+
+  [REVIEW DISCIPLINE: DOUBLE-CHECK]
+  Every significant change: multi-agent review (matching reviewer expert, else
+  general-purpose), simplification pass first.
+  1) Review - finding = defect with path:line + evidence (failing command/input).
+  2) Double-check - reproduce each finding.
+  3) Fix - confirmed findings only.
+  Big review -> split by area, never one long pass. Brief each: goal + area +
+  ... +2 lines
+more: put the caret on ++db · send as typed: ++/ · /placeholders help
+
+────────────────────────────────────────────────────────────────────────────────────────
+❯ ++db ++r +
+────────────────────────────────────────────────────────────────────────────────────────
+  ⏸ manual mode on
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

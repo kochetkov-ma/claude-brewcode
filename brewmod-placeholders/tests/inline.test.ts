@@ -3,7 +3,7 @@ import type { On } from 'claude-code'
 import { compileDefs } from '../hooks/lib/compiled'
 import { compileMatchers } from '../hooks/lib/match'
 import { expandInline, inlineBodies, isInlineSubmit, unknownMessage, unknownTokens } from '../hooks/lib/inline'
-import { CFG, ROOT, defaultsTree, memFs, wire, type Tree } from './layer-io'
+import { CFG, ROOT, core, defaultsTree, memFs, spyWrites, typed, wire, type Tree } from './layer-io'
 import { def } from './fixtures'
 
 const file = (name: string, insert: string, when: string, body: string): string => `---\nname: "${name}"\ninsert: ${insert}\nwhen: ${when}\n---\n${body}`
@@ -33,18 +33,6 @@ const bottomSubmit = (on: On): Seen[] => {
 }
 const submit = ($: { prompt: unknown }, text: string, origin: unknown = { kind: 'composer' }, extra: object = {}) =>
   ($.prompt as any).submit({ text, origin, wait: false, ...extra })
-const spyWrites = (on: On): unknown[] => {
-  const writes: unknown[] = []
-  on('state.set', (_$, e, next) => {
-    writes.push(e.value)
-    return next(e)
-  })
-  return writes
-}
-const typed = ($: { prompt: unknown }, text: string) =>
-  ($.prompt as any).edit({ origin: { kind: 'composer' }, text: '', cursor: 0, start: 0, end: 0, inputText: text })
-const core = (on: On) =>
-  on('prompt.edit', (_$, e) => ({ text: e.text.slice(0, e.start) + e.inputText + e.text.slice(e.end), cursor: e.start + e.inputText.length }))
 const EMPTY_VIEW = { tokens: [] }
 
 // ---- origins

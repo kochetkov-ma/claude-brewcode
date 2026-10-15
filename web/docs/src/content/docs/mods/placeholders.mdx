@@ -1,6 +1,6 @@
 ---
 title: "Prompt placeholders"
-description: "Type ++r and get a whole instruction block. Tokens highlight, a typeahead lists names, a band previews the block. Add your own with /placeholders."
+description: "Prompt shortcuts for Claude Code: type ++r to attach a saved instruction block, read its text before you send, add your own with /placeholders."
 order: 42
 ---
 
@@ -10,11 +10,21 @@ import { Badge, Callout, Card, CardGrid, InstallPrompt, SourceLink, Spoiler, Upd
 
 <Badge variant="mod" text="Claude Code 2.1.292+" /> <Badge variant="secondary" text="Works on Team orgs" /> <Badge variant="primary" text="brewmod-placeholders" />
 
-Type `++r`, get a whole instruction block. See it highlighted and previewed before you send.
+<Callout type="warning" title="++m ++a ++r ++rr +++ do nothing?">
+  Since [brewtools v6.8.0](https://github.com/kochetkov-ma/claude-brewcode/releases/tag/v6.8.0) the prompt-injection codewords `++m`, `++a`, `++r`, `++rr` and `+++` live in the `brewmod-placeholders` mod, not in brewtools. The mod is easier to use and lets you add your own placeholders. Install it (Claude Code 2.1.292+), then run `/reload-plugins`:
+
+  ```bash
+  claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode && claude plugin install brewmod-placeholders@claude-brewcode
+  ```
+
+  Start here: [Quick start](#quick-start).
+</Callout>
+
+Prompt shortcuts for Claude Code: type `++r` to attach a saved instruction block, read its text before you send, add your own with `/placeholders`.
 
 <p align="center">
-  <img src="/brewmods/placeholders.gif" alt="Claude Code prompt box: typing ++ opens a typeahead of placeholder names, a band above the prompt previews the block a token adds, and an unknown ++q turns to a warning colour" width="800" loading="lazy" />
-  <br /><small>Illustrative animation: type <code>++</code>, pick a name, read the band, send.</small>
+  <img src="/brewmods/placeholders.gif" alt="Claude Code terminal. Typing ++ opens a list of placeholders; the Up arrow selects ++r and Tab inserts it. Moving the caret onto ++r shows its full review text above the prompt, and Enter sends the prompt; Claude reviews a one-line README fix. Then /placeholders global add ++db: always use the staging DB asks one question, Save as drafted, and saves to ~/.claude/placeholders/db.md. Typing ++ again, one Up arrow selects the new ++db; with ++r and ++m added, three rows show, and ctrl+x, tab, enter opens their text." width="800" loading="lazy" />
+  <br /><small>Real Claude Code 2.1.301 screens, sped up where the title bar shows ⏩. Type <code>++</code>, pick <code>++r</code> with <code>↑</code> and <code>⇥</code>; the caret on it shows its full text, <code>⏎</code> sends. <code>/placeholders global add ++db: …</code> saves your own after one question. With three tokens, <code>ctrl+x → tab → enter</code> (one key after another) shows the text of every block.</small>
 </p>
 
 <SourceLink path="brewmod-placeholders/README.md" anchor="prompt-placeholders" variant="mod" />
@@ -23,103 +33,230 @@ Type `++r`, get a whole instruction block. See it highlighted and previewed befo
 
 <InstallPrompt plugin="brewmod-placeholders" mode="install" />
 
-Then run `/reload-plugins`. Needs Claude Code 2.1.292+ and `node` on the `PATH`; the `/placeholders` dialog is verified on 2.1.300.
+Then run `/reload-plugins`. Works on Team organizations.
 
-<Spoiler title="Update, dev mode">
+<Spoiler title="Update, dev mode, requirements">
 
 <InstallPrompt plugin="brewmod-placeholders" mode="update" />
 
-Dev mode without installing: `claude --plugin-dir ./brewmod-placeholders`.
+Dev mode, no install: `claude --plugin-dir ./brewmod-placeholders`. Claude Code **2.1.292+** and `node` on the `PATH` (the bundled command hook runs as plain Node). Builds 2.1.287 to 2.1.291 refuse to load the mod; earlier ones lack the `prompt.autocomplete` event. Adding, changing or removing a placeholder through Claude, and Enter on `++r?`, need Claude Code **2.1.300+**; older builds print `needs Claude Code 2.1.300+ for the dialog`. Mods use the hooks module API, which is early access.
 
 </Spoiler>
 
-## Use it
+## Quick start
+| Want | Do |
+|---|---|
+| Add a block | `++r check the diff`, then Enter. The block is sent as hidden context; your prompt stays as typed |
+| Read a token's text while typing | Put the caret on it (arrows, Home, End) or type `++r?`. The band shows up to 15 rows of it; with the menu capping the view, type `?` after the token for more. `/placeholders show ++m` prints the whole text. Move the caret off to return to the compact band |
+| See exactly what will be sent | A `Show text` button appears with 1-2 tokens only when the opened band has more rows than the preview, and with 3+ tokens (at least one with a body) always: `ctrl+x → tab → enter`, one key after another; `Esc` takes you back ([keys](#keys-on-macos)). With no button that sequence is not available and Enter sends the prompt |
+| Print texts in the chat | `/placeholders show ++r ++m`, or `/placeholders show me ++m and ++r`; `/placeholders list` prints all. Or type `++r?` alone and press Enter twice. Full help: `/placeholders help`, or `/placeholders` plus a question in your own words |
+| Make your own | `/placeholders add ++ship: …`. With no scope word the one dialog also asks `Where` (Global recommended, or Project); start with `global` or `project` to skip that question |
 
-| You type | You get |
-|----------|---------|
-| `++r check the diff` | The review block is added as hidden context. The token stays in your prompt |
-| `++` | A typeahead of names. `Tab` inserts the token. A band above the prompt previews the blocks |
-| `/placeholders` | The list of placeholders with their layers, plus how to add one |
-| `/placeholders show ++r` | Claude prints that placeholder's name and full text |
-
-## Built-in placeholders
-
-| Typed | When | Adds |
-|-------|------|------|
-| `++m` | always | Manager mode: delegate, never code in the main context |
-| `++a` | always | Architecture first: experts design before implementing |
-| `++r` | always | Two-phase review, then double-check each finding |
-| `++rr` | always | Anti-regression review on three axes |
-| `+++` | plan mode | Anti-drift cron plan that keeps work on the goal |
-
-`++rr` beats `++r` when both appear. This mod is the only provider of these codewords; use brewtools 6.8.0+ alongside it.
-
-## Add your own
-
-Run `/placeholders` followed by what you want, in plain words:
-
+## What Claude receives
 ```text
-/placeholders a ++ship placeholder: release checklist, run tests, update RELEASE-NOTES.md, show me the diff
+you type      ++r check the diff
+Claude reads  ++r check the diff                     <- your prompt, unchanged
+            + hidden context (not shown in the transcript, not even with ctrl+o):
+              User typed `++r` — Two-phase review discipline is active for this turn:
+              [REVIEW DISCIPLINE: DOUBLE-CHECK]
+              Every significant change: multi-agent review ... (9 lines)
 ```
 
-Claude lists the existing placeholders, takes your text as written or drafts it, then asks once: **Save as drafted (Recommended)** or **Change it**. It saves to `.claude/placeholders/` in the project, or globally when you ask, and Claude Code shows no permission prompt for the write. Removal works the same way: **Remove it (Recommended)** or **Keep it**. Only your own layers change, never plugin defaults.
+| Token | Normal mode | Plan mode |
+|---|---|---|
+| `++m` | `Manager mode is active`: `[ROLE: MANAGER]`, delegate, never code (27 lines) | `Manager + Plan Mode is active`: the same text **+ `[ADDON: PLAN MODE]`**: stay read-only; the plan opens with the role and the full task graph, plus a deferred anti-drift cron (57 lines) |
+| `++a` | `Architecture-first`: delegate the design to expert agents before implementing | same text: `++a` has no plan part |
+| `++r` | `[REVIEW DISCIPLINE: DOUBLE-CHECK]`: review, reproduce, fix confirmed findings only (9 lines) | same text: `++r` has no plan part |
+| `++rr` | `Anti-regression review`: regression, project standard and functional correctness axes | same text: `++rr` has no plan part |
+| `+++` | nothing | `[ADDON: ANTI-DRIFT CRON PLAN]` |
+| `++rr` + `++r` | only `++rr` is sent (one review per message) | same |
 
-Then type `++ship fix the flaky login test`. The saved body is added as hidden context, and the token stays in your prompt:
+<Spoiler title="++r text as sent">
 
 ```text
-Before tagging: run the full test suite, update RELEASE-NOTES.md, then show me the diff.
+User typed `++r` — Two-phase review discipline is active for this turn:
+
+[REVIEW DISCIPLINE: DOUBLE-CHECK]
+Every significant change: multi-agent review (matching reviewer expert, else
+general-purpose), simplification pass first.
+1) Review - finding = defect with path:line + evidence (failing command/input).
+2) Double-check - reproduce each finding.
+3) Fix - confirmed findings only.
+Big review -> split by area, never one long pass. Brief each: goal + area +
+acceptance, what's covered (don't re-litigate), who consumes the verdict;
+return verdict first, then findings.
 ```
 
-The dialog is verified on 2.1.300; builds without the mod tool API print `needs Claude Code 2.1.300+ for the dialog` and keep the status view. Prefer files? See [Definition files](#definition-files).
+</Spoiler>
+
+<Spoiler title="++m text as sent, normal and plan mode">
+
+```text
+User typed `++m` — Manager mode is active for this turn:
+
+[ROLE: MANAGER]
+
+Manage; never code/build/test/hand-debug: the main context is for orchestration.
+
+Protocol: 1) TaskList; graph exists -> reuse it, else TaskCreate the full graph
+before any work. 2) addBlockedBy/addBlocks only for real data-handoffs, else
+parallel. 3) TaskUpdate owner, then launch. 4) Validate reports, integrate;
+completed only when truly done; failure -> follow-up task + re-delegate. 5) all
+code written -> final task: simplify, strip over-engineering.
+No Task tools (CLAUDE_CODE_ENABLE_TODO_TOOLS=1 unset) -> same numbered graph
+in the plan or .claude/features/<task>.md.
+
+Sizing: one subagent = 1 deliverable, ~<=5 files, ~<=10 steps, ~<=20 min;
+larger -> split. An hour-long agent = drift nobody can observe.
+Scan all agents: best-matching expert per task, else general-purpose.
+
+Spawn brief: six labeled fields. A subagent starts with an empty context, so a bare one-line task is never enough.
+GOAL: task + why it exists - without the why it cannot rank the work.
+ROLE: what it owns, must not touch - else two agents edit one file.
+SCOPE: paths/commands in bounds and out - else the task widens.
+CONTEXT: done, by whom, in parallel; only what this agent needs - else work is redone or overwritten.
+CONSUMER: who or what uses the result next + the shape it must fit - else a correct result fails the next step.
+DONE: acceptance, what counts as a finding, return (verdict first; evidence: command, result, unchecked; bounded; long output to a file it can write, path returned) - else it stops early or returns a dump.
+Code/test briefs add: follow the closest well-built repo counterpart's
+principles - additive to conventions/rules/docs, never instead.
+
+Finish the whole job; decide without routine questions.
+```
+
+Plan mode: the first line becomes ``User typed `++m` — Manager + Plan Mode is active for this turn:``; the normal text stays, then a blank line and this addition:
+
+```text
+[ADDON: PLAN MODE]
+
+Stay read-only: no code, board/task-state writes, installation, configuration,
+or cron creation. Read-only expert exploration is allowed.
+
+Include in the plan (English, token economy):
+- PREAMBLE: [ROLE: MANAGER] + the 5-step protocol restated verbatim as the
+  plan's opening section - this addon expires, so the plan carries the role
+  into implementation, no hook needed.
+- STEP 0, stated literally: "Re-assume the MANAGER role. Call TaskList; if no
+  graph exists, create the ENTIRE TaskGraph now - TaskCreate for every node, or
+  the numbered checklist if task tools are absent - then delegate." On exit
+  this comes first: not code, not one task.
+- The full TaskGraph: every task decomposed (subject, acceptance, owner
+  agent, bounded scope+acceptance per spawn), dependencies marked, parallel
+  branches explicit, critical path named.
+
+Include the task-board execution step: announce and create one unique session
+anti-drift cron per top-level task, hourly unless the user chooses another tick;
+during execution record its task-specific methodology/prompt, timezone, ID,
+tick count and stop rule. Scheduling unavailable -> explicit gap, never a
+claimed schedule. Each tick: reread methodology/anti-drift rules, collect agent
+updates, reconcile status/dependencies/goal, keep all unfinished + latest 10
+completed graph entries, preserve older evidence outside the active graph.
+The tick report is `HH:MM TZ · tick N · elapsed`, then only the nonempty rows:
+🟢 completed, 🔵 active/remaining/next, 🔴 problems/blockers/questions,
+⚪ anti-drift verdict. Completion/cancellation -> stop and verify cron removal.
+
+Deliver the embedded role + graph + deferred cron step, not implementation code.
+```
+
+</Spoiler>
+
+Your own placeholder can have a plan part too: see [Examples](#examples).
+
+## Keys on macOS
+| Hint on screen | Mac key | Glyph | Does |
+|---|---|---|---|
+| `ctrl+x` | Control + X (Control, not Command) | ⌃X | First key of the band sequence (only while the `Show text` button exists): `ctrl+x → tab → enter` is one key after another, never together (Control+X, release, Tab within 3 s, then Return); cancels after 3 s |
+| `tab` | Tab | ⇥ | Inserts the selected typeahead name. Within 3 s after `ctrl+x`, it focuses the band button instead |
+| `enter` | Return | ⏎ | Sends the prompt. On the focused band button it switches `Show text`/`Hide text` and sends nothing |
+| `esc` | Esc | ⎋ | Closes the typeahead; leaves the band, back to typing |
+| `↑` `↓` `←` `→` | arrow keys | ↑↓←→ | Move in the typeahead (↑↓) or onto a token to read its text (←→) |
+| `shift+tab` | Shift + Tab | ⇧⇥ | Default mode (`⏸ manual mode on`): twice, accept edits then plan; or type `/plan`. The band shows `plan mode adds:` only after your first prompt in plan mode. The effort toast comes from the other mod, [brewmod-plan-effort](/mods/plan-effort/) |
+| `ctrl+o` | Control + O | ⌃O | Transcript view: your prompt and the answer only. The injected text is NOT there; use the band or `/placeholders show` |
+
+## Examples
+| Do | You type | What happens |
+|---|---|---|
+| Add | `/placeholders add ++db: always use the staging DB` | Claude drafts it and asks once: `Save ++db as drafted?` with `Save as drafted (Recommended)` or `Change it` (the question never names a layer; scope words count only outside the placeholder's own text); with no scope word, the same dialog also asks `Where to save ++db?` with `Global (Recommended)` or `Project`; starting with `global` or `project` skips it. Reply: `saved ++db (global): ~/.claude/placeholders/db.md` |
+| Add with a plan part | `/placeholders add ++ship: run the tests; in plan mode also list the release steps` | The same dialog adds `Add this plan-mode part to ++ship?` (`Add it (Recommended)` or `No plan part`). Saved as `ship.md` (`run the tests`) and `ship.plan.md` (`also list the release steps`, `plan: add`) |
+| Change | `/placeholders make ++r shorter` | Claude starts from the current text; the change stays in its layer (a plugin default -> asks where) |
+| Remove | `/placeholders remove ++db` | Asks once: `Remove it (Recommended)` or `Keep it`; if the name is in both layers, it also asks where. Removing your override of a built-in brings the built-in back; plugin defaults are never removed (`++r is built in and cannot be removed`). Reply: `removed ++db (global): ~/.claude/placeholders/db.md · ++db is no longer defined` |
+| Remove a plan part | `/placeholders remove the plan part of ++ship` | Asks `Remove the plan-mode part of ++ship (global)?`, then deletes `ship.plan.md`; `++ship` keeps its normal text |
+| Show | `/placeholders show ++r ++m`, or `++r?` alone + Enter | Prints the exact text with no Claude turn: outside plan mode `normal:` then `plan mode adds:`; in plan mode one block `normal + plan mode part:` as sent. An inline placeholder that does not expand shows `stays as typed`; an empty body silences the token, in plan mode too. With `++r?`, the first Enter sends nothing and fills `/placeholders show ++r`; the second Enter prints it |
+| List | `/placeholders list` | Prints every placeholder with its text as sent, normal and plan mode, with no Claude turn |
+| Escape | `++/ what does ++r do?` | Sent exactly as typed: no block, `++/` stays in the text |
+| Scope | `/placeholders project add ++lint: run npm run lint first` | Reply: `saved ++lint (project): .claude/placeholders/lint.md`; the project copy wins over global |
 
 ## Commands
-
 | Command | What it does |
 |---------|--------------|
-| `/placeholders`, `status`, `help`, `list` | Shows `<N> placeholders: type ++name in any prompt`, one row per placeholder with layer and description, then `add or change: /placeholders <what you want>` |
-| `/placeholders show ++r` | Claude reads the list and prints the name and full body of one placeholder. Needs Claude Code 2.1.300+ |
-| `/placeholders <anything else>` | Starts the model-run dialog above |
-
-Config: `/config` has one option, `prefix` (default `++`, 2-8 ASCII punctuation characters).
+| `/placeholders` (also `status`) | One row per name with layer and tags (`plan +`, `plan only`), plus hints for reading texts, escape and scope |
+| `/placeholders show ++<name> ...`, `list`, `help` | Print the exact text sent (`list` = all, normal and plan), or the full help, with no Claude turn |
+| `/placeholders <anything else>` | Claude answers, or drafts, asks once and saves; any language. A first word `global` or `project` picks the layer; without it your words decide, else one question (Global first) |
 
 ## Prompt box
+| State | What you see |
+|-------|--------------|
+| Highlight, typeahead | Terminal UI only. A known token is underlined; after the prefix, matching names appear, `Tab` inserts one. The one option, `prefix` (default `++`, 2-8 punctuation characters), is set in `/config` |
+| Compact band | `placeholders 3 [ Show text  ctrl+x → tab → enter ]` (the button shows with 3+ tokens, at least one with a body, or with 1-2 tokens when the opened band has more rows than the preview), then one row per token, then `more: put the caret on ++r · send as typed: ++/ · /placeholders help`. `plan +` marks a name with a plan part; a skipped token says why, for example `(not sent: ++rr wins)` |
+| Caret on a token, or `++r?` | Up to 15 rows of that token's text; `move the caret off ++r to close`. A cut ends with `... +K lines · type ? after ++r for more` (menu capping the view) or `... +K lines · /placeholders show ++r`; other tokens sit on one `also: ++m ++a` row |
+| Expanded | `Show text` opened (offered as in the compact band row): exactly what is sent. In plan mode, `plan mode adds:` then the addition. Outside it: `+ plan-mode part, N lines · sent in plan mode` |
+| Escaped, unknown | `++/` in the message: `placeholders off: this message is sent exactly as typed`, every token `(not sent: ++/ in this message)`. An unknown `++zz` shows `unknown placeholder` in a warning colour; on submit a toast names it and the prompt is sent unchanged |
 
-| Feature | Behavior |
-|---------|----------|
-| Highlight | A known token is underlined. An unknown prefixed word takes the warning colour |
-| Typeahead | After the prefix, matching names with descriptions. `Tab` inserts the token |
-| Band | One row per distinct token. With 1-2 tokens, each body shows a 3-line preview, and the `Show text  ctrl+x → tab → enter` button appears when a preview cuts a body and the band has room for more than 3 lines. With 3+ tokens, only the name rows show until `Show text`. Opened, it shows the whole body within the height budget, then `... +N lines` |
-| Unknown token | A toast such as `unknown ++q` on submit. The prompt is sent unchanged |
+## Your own files
+| File | Means |
+|---|---|
+| `<name>.md` in `~/.claude/placeholders/` (global) or `.claude/placeholders/` (project, wins) | The text; the file name is the token name; front matter is optional |
+| `<name>.plan.md` with `plan: add` (front matter `when: plan`, `plan: add`) | Appended to `<name>.md` in plan mode only. Example: `ship.md` = `run the tests`, `ship.plan.md` = `also list the release steps` |
+| `<name>.plan.md` without `plan: add` | Replaces the text in plan mode. A `<name>.md` with `when: plan` alone is plan-only, like `+++` |
 
-To read the full text, press the keys one after another, not together:
+Layers, highest wins file by file: project > its brewtools override > global > its brewtools override > plugin defaults. Keys and verification tables: [definition files](#definition-files), [verified](#verified).
 
-1. `ctrl+x`: nothing changes on screen.
-2. `Tab` within 3 seconds: focuses the button. It does not accept a typeahead suggestion.
-3. `Enter`: toggles `Show text` and `Hide text`. The prompt is not sent.
-4. `Esc`: back to typing.
+<Spoiler title="With brewtools">
 
-Terminal UI only. The band foot reads `add or change: /placeholders`.
+brewtools 6.8.0+ ships no codeword hook, so this mod is the only provider of `++m`, `++a`, `++r`, `++rr` and `+++`. brewtools 6.7.x also injects them, so each block appears twice: use 6.8.0+. Override files under `.claude/brewtools/manager/prompts/` and `<config>/manager/prompts/` are read through the `legacy` key, whatever the brewtools version. To silence a token, give your override an empty body (it stays silent in plan mode too). The brewtools-side notes live in [Codewords](/brewtools/prompt-injection/).
+
+</Spoiler>
 
 <Spoiler id="definition-files" title="Definition files and layers">
 
-One Markdown file per placeholder. The file name is the placeholder name. Front matter is optional, and a file inherits unset keys from the placeholder it overrides.
+One Markdown file per placeholder. The file name is the placeholder name. Front matter is optional, and a file inherits unset keys from the placeholder it overrides (`plan` is the exception: it is per file and never inherited).
 
 | Key | Values | Default | Effect |
 |-----|--------|---------|--------|
 | `name` | 1-32 letters, digits or `_`, or ASCII punctuation | file name | Token name, case-insensitive |
 | `description` | text | none | Shown in the typeahead and band |
 | `insert` | `context`, `inline` | `context` | `context` adds hidden context and keeps the token. `inline` replaces the token |
-| `when` | `always`, `plan`, `not-plan` | `always` | Applies only in that permission mode |
+| `when` | `always`, `plan`, `not-plan` | `always` | Applies only in that permission mode. `plan` is plan mode; `not-plan` is every other mode |
+| `plan` | `add`, `replace` | `replace` | On a `when: plan` file: `add` appends its body to the normal text of the same name; `replace` (or absent) swaps the whole text in plan mode. `add` without `when: plan` is reported and the file is sent as a normal text |
 | `order` | integer | `100` | Blocks join from the lowest `order` up |
-| `group` | text | none | Placeholders in one group exclude each other |
+| `group` | text | none | Placeholders in one group exclude each other; the loser shows `not sent: ++rr wins` |
 | `priority` | integer | `0` | In a group, the highest wins |
-| `header` | text | none | First line of the block. `{token}` becomes the prefix plus name |
+| `header` | text | none | First line of the block. `{token}` becomes the prefix plus the lower-case name. A plan part without a header keeps the normal header |
 | `legacy` | text | none | Name of the brewtools override file it reads |
 
 - **Body.** With fenced blocks, only the fenced text counts. Otherwise the trimmed text after the front matter.
 - **Empty body.** Suppresses the token. Keys are inherited from the layer below, the body is not.
-- **Plan variant.** `<name>.plan.md` wins in plan mode.
-- **Cap.** Blocks are sorted by `order`, joined and cut at 9000 characters.
+- **Plan part.** Without front matter, `<name>.plan.md` is read as the plan part of `<name>`. A `when: plan` file with no normal text of the same name is plan-only, like `+++`. In plan mode a `plan` file beats an `always` file of the same name.
+- **Cap.** Blocks are sorted by `order`, joined with a `---` line and cut at 9000 characters (`...[truncated]`).
+
+A plan part that adds to a normal text:
+
+```text
+~/.claude/placeholders/ship.md
+---
+description: "Run the tests; in plan mode also list the release steps"
+---
+run the tests
+
+~/.claude/placeholders/ship.plan.md
+---
+description: "Run the tests; in plan mode also list the release steps"
+when: plan
+plan: add
+---
+also list the release steps
+```
+
+`++ship` sends `run the tests` in normal modes. In plan mode it sends `run the tests`, a blank line, then `also list the release steps`. Without `plan: add`, `ship.plan.md` would replace the text instead.
 
 The highest layer wins, file by file:
 
@@ -135,43 +272,34 @@ The highest layer wins, file by file:
 
 </Spoiler>
 
-<Spoiler title="With brewtools">
-
-- **Update brewtools with the mod.** brewtools 6.7.x plus this mod injects each block twice.
-- **brewtools override files.** Files under `.claude/brewtools/manager/prompts/` and `<config>/manager/prompts/` are read through the `legacy` layer.
-- **Silence a token.** Give your override an empty body.
-- **Codewords.** The brewtools-side notes live in [Codewords](/brewtools/prompt-injection/).
-
-</Spoiler>
-
 <Spoiler id="technical-details" title="Technical details">
 
 **Team organizations.** Claude Code's builtin security layer bypasses a mod's `classic.*` hooks there. A bundled command hook, `hooks/inject.mjs`, adds the blocks instead. Verified on a Team-org and a Max profile. Enterprise was not run.
 
 - **Load.** Unreadable or invalid definition files are skipped, with a toast and a line in the status view.
-- **Match.** A name must stand alone: `++rr` is not `++r`.
+- **Match.** A name must stand alone: `++rr` is not `++r`. `++/` or `++\` anywhere in a message turns every placeholder off for that message.
 - **Inject.** The module expands only inline placeholders and names unknown tokens in a toast. The command hook builds the context blocks, picks plan variants from the permission mode and skips subagent deliveries.
+- **Show.** `/placeholders show`, `list` and `help` are answered by the module with no Claude turn; `++r?` alone in a prompt hands off to `show` the same way. The text shown is a port of the hook's assembly, checked against it byte by byte.
+- **Mod tools.** Free-text `/placeholders` requests hand off to Claude with `list_placeholders`, `save_placeholder`, `remove_placeholder` and `placeholders_help`. Saving refuses symlinks; removing never touches plugin defaults or legacy brewtools files. Each save or remove asks once through one dialog; no permission prompt follows.
+- **Plan mode.** The hook records the permission mode in `.state/mode-<session_id>.json` in the plugin root. There is no live plan-mode signal for the band: it learns plan mode from your first prompt in it.
 - **Fail open.** Any error returns an empty result, so a fault never blocks a prompt.
 - **Plugin files deleted** (for example a plugin update during a running session). The band reads `plugin files removed (updated?) · run /reload-plugins` and one toast per session says the same. Tokens are not marked unknown and inline placeholders keep expanding, but context blocks cannot be added until `/reload-plugins`.
 
-The hook records the permission mode in `.state/mode-<session_id>.json` in the plugin root. The band reads it for the plan label, which updates one turn late after `Shift+Tab`.
+<Spoiler id="verified" title="Verified" meta="Claude Code 2.1.301">
 
-<Spoiler id="verified" title="Verified" meta="Claude Code 2.1.300">
-
-Live runs use `claude -p`, one turn per case, brewtools disabled. Injections are the `hook_additional_context` rows of the session transcript.
+Live runs drive the terminal UI in tmux (80, 120 and 200 columns) or use `claude -p`, one turn per case, brewtools disabled. Injections are the `hook_additional_context` rows of the session transcript.
 
 | Check | Result |
 |-------|--------|
-| `node tests/inject-parity.mjs`: frozen texts, layers, state file, fail-open | 164 checks pass: 98 golden vectors, 34 layer fixtures |
-| Team-org and Max profiles, `--plugin-dir` and marketplace copies, Sonnet: `++r` | 1 block, 571 characters |
-| Team-org, Sonnet: plan-mode `++m` | 1 block, the plan variant |
-| `tests/live/ab.sh`, both profiles, Haiku, 8 cases | PASS: blocks byte-equal to the golden |
-| Custom prefix `@@`, Max, Sonnet: `@@r ++r` | Only the `@@r` block |
-| Unknown `++q`, Haiku (measured on an earlier build) | Toast on submit, prompt unchanged, no block |
-| `/placeholders` dialog, terminal UI, 2.1.300 | Status view, save and remove each ask once, file written without a permission prompt |
-| Latency, p50: typing per keystroke (mod minus control, drafts of 0 / 4,000 / 19,700 chars) and band repaint after a token keystroke | Typing -2.6 / +6.6 / +2.1 ms, token keystrokes +2.4 / +6.6 / +5.6 ms, noise as large as the deltas. Repaint 19 to 21 ms at p50, 44 to 61 ms at p99 |
+| `node tests/inject-parity.mjs`: frozen texts, layers, state file, fail-open | 303 checks pass: 98 golden vectors, 12 escape, 19 plan-part, 35 layer fixtures |
+| Pre-release live check, terminal UI (default and fullscreen, 80 to 200 columns): caret focus, `++r?` query, compact and expanded band, plan-mode `++m` and `+++`, Shift+Tab, `ctrl+x → tab → enter`, `++/` escape, inline, unknown token, `status`, `help`, `list`, `show`, add and remove with `global` first word | 82 of 82 PASS |
+| Same check, `-p` received-context e2e: `++r`, `++/ ++r`, plan-mode `++m`, plan-mode `++m` with an empty global `m.md`, an inline placeholder | 5 of 5 PASS, counted apart from the 82 (87 rows in all, 0 FAIL): Claude quotes the `r` block, receives no block when escaped, quotes `[ADDON: PLAN MODE]`, receives nothing for the empty `m.md`, and gets the inline body in place of the token |
+| `/placeholders` dialogs (S4), terminal UI, Haiku | Add (global and project), add with a plan part (`ship.md` + `ship.plan.md`), remove, remove the plan part, remove from the project layer when the name is in both layers (`the global ++two is served now`), refusal to remove built-in `++r`; each asks once and writes without a permission prompt |
+| Team-org and Max profiles, `--plugin-dir` and marketplace copies, Sonnet: `++r` (2.1.300 run) | 1 block, 571 characters |
+| Custom prefix `@@`, Max, Sonnet: `@@r ++r` (2.1.300 run) | Only the `@@r` block |
+| Latency, p50 (2.1.300 run): typing per keystroke (mod minus control, drafts of 0 / 4,000 / 19,700 chars) and band repaint after a token keystroke | Typing -2.6 / +6.6 / +2.1 ms, token keystrokes +2.4 / +6.6 / +5.6 ms, noise as large as the deltas. Repaint 19 to 21 ms at p50, 44 to 61 ms at p99 |
 
-Not covered live: the global layer on disk, the 9000-character cap, `insert: inline`, the `+K more placeholders` row, the unknown-token toast on the current build, fullscreen hover and click, the desktop app, VS Code, subagents and other models. Unit tests cover prefix, layers and cap.
+Not covered live: the 9000-character cap, the `+K more placeholders` row, fullscreen hover and click, the desktop app, VS Code, subagents and other models. Unit tests cover prefix, layers and cap.
 
 </Spoiler>
 
@@ -181,7 +309,7 @@ Not covered live: the global layer on disk, the 9000-character cap, `insert: inl
 
 </Spoiler>
 
-## Related
+### Related
 
 <CardGrid>
   <Card variant="mod" title="brewcode mods" icon="puzzle" href="/mods/overview/">All mods and how they differ from plugins.</Card>

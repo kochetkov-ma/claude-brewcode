@@ -1,6 +1,6 @@
 {
   "name": "brewcode",
-  "version": "6.9.1",
+  "version": "6.9.2",
   "description": "Brewcode - Claude Code authoring toolkit: skill, agent and rule creation and sync, semantic code search (semble), project conventions, E2E tests, generated review and domain-team skills, setup dashboard, post-compact plan re-anchor",
   "author": {
     "name": "Maksim Kochetkov",

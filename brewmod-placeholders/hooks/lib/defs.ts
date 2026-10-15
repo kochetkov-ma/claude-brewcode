@@ -4,6 +4,8 @@ import { nameKind } from './match'
 
 export type When = 'always' | 'plan' | 'not-plan'
 export type Insert = 'context' | 'inline'
+// A `when: plan` def's relation to its name's normal def; absent = replace.
+export type PlanKind = 'add' | 'replace'
 
 export type DefMeta = {
   name?: string
@@ -15,6 +17,7 @@ export type DefMeta = {
   priority?: number
   header?: string
   legacy?: string
+  plan?: PlanKind
 }
 
 // `skip` = the file cannot be read as a definition (front matter never closes): the loader drops it.
@@ -31,6 +34,7 @@ export type Def = {
   header: string
   legacy?: string
   description?: string
+  plan?: PlanKind
 }
 
 // Text inside all ``` or ~~~ fences, blank-line joined; no fence -> whole raw trimmed. 1:1 port of brewtools.
@@ -114,6 +118,10 @@ export function parseFrontMatter(fm: string): { meta: DefMeta; issues: string[] 
         if (value === 'always' || value === 'plan' || value === 'not-plan') meta.when = value
         else issues.push(`when: '${value}' is not always|plan|not-plan`)
         break
+      case 'plan':
+        if (value === 'add' || value === 'replace') meta.plan = value
+        else issues.push(`plan: '${value}' is not add|replace`)
+        break
       case 'order':
       case 'priority':
         if (INT.test(value)) meta[key] = Number(value)
@@ -141,6 +149,7 @@ export function parseLegacy(raw: string): Parsed {
 }
 
 // Per-field inheritance: parsed meta wins, then base, then built-ins. No name anywhere -> null.
+// `plan` is per file, never inherited: an old full-text override (or a legacy file) of an `add` part replaces.
 export function toDef(parsed: Parsed, base?: Partial<Def>): Def | null {
   const m = parsed.meta
   const name = m.name ?? base?.name
@@ -159,6 +168,7 @@ export function toDef(parsed: Parsed, base?: Partial<Def>): Def | null {
     ...(group === undefined ? {} : { group }),
     ...(legacy === undefined ? {} : { legacy }),
     ...(description === undefined ? {} : { description }),
+    ...(m.plan === undefined ? {} : { plan: m.plan }),
   }
 }
 
@@ -242,6 +252,7 @@ export function resolveDefs(layers: readonly LayerFiles[]): Resolved {
       skipped.push(where)
       return
     }
+    if (def.plan === 'add' && def.when !== 'plan') issues.push(`${where}: plan: add needs when: plan; sent as a normal text`)
     cur.set(key, def)
     sources.set(key, id)
     if (def.legacy !== undefined) legacyStem.set(def.legacy, key)
@@ -362,16 +373,16 @@ export function issuesMessage(reg: Pick<Registry, 'issues' | 'skipped'>): string
   return `${reg.issues.length} definition issue(s), first: ${reg.issues[0]}${skipped}`
 }
 
-// Editor/band names: one entry per name (first def wins, so the plain `m` beats `m.plan`); body + planOnly feed the band.
+// Editor/band names: one entry per name, first-seen order; the first non-plan def wins (a plan part in a lower layer never makes it plan only).
 export function toEditorEntries(defs: readonly Def[]): EditorEntry[] {
-  const seen = new Set<string>()
-  const out: EditorEntry[] = []
+  const pick = new Map<string, Def>()
   for (const d of defs) {
     const key = d.name.toLowerCase()
-    if (seen.has(key)) continue
-    seen.add(key)
-    const base = { name: d.name, body: d.body, planOnly: d.when === 'plan', ...(d.insert === 'inline' ? { isInline: true } : {}) }
-    out.push(d.description === undefined ? base : { ...base, description: d.description })
+    const cur = pick.get(key)
+    if (cur === undefined || (cur.when === 'plan' && d.when !== 'plan')) pick.set(key, d)
   }
-  return out
+  return [...pick.values()].map((d) => {
+    const base = { name: d.name, body: d.body, planOnly: d.when === 'plan', ...(d.insert === 'inline' ? { isInline: true } : {}) }
+    return d.description === undefined ? base : { ...base, description: d.description }
+  })
 }

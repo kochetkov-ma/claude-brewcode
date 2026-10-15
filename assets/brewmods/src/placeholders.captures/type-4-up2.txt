@@ -1,0 +1,40 @@
+ ▐▛███▛█   Claude Code v2.1.301
+▝▜██████▀  Opus 5.5 · Claude Max
+ ▝▝   ▝▝   ~/brewery
+
+
+────────────────────────────────────────────────────────────────────────────────────────
+❯ review the diff ++
+────────────────────────────────────────────────────────────────────────────────────────
+    +++    Anti-drift cron plan addon, active in Plan mode only
+    ++a    Architecture-first: delegate the design to expert agents before
+           implementing
+    ++m    Manager mode: orchestrate and delegate, never code in the main context
+  ❯ ++r    Two-phase review: review every significant change, then double-check each
+           finding
+    ++rr   Anti-regression review: regression, project standard and functional
+           correctness axes
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

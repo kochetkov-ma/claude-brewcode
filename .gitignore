@@ -76,6 +76,7 @@ brewmod-*/.state/
 !/.claude/scripts/update-*.sh
 !/.claude/scripts/clean-plugin-cache.sh
 !/.claude/scripts/tests/
+!/.claude/scripts/live-placeholders/
 !/.claude/skills/
 /.claude/skills/*
 !/.claude/skills/docs/

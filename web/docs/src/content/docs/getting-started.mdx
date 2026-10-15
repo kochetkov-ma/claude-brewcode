@@ -8,6 +8,16 @@ import { Card, CardGrid, Callout, InstallPrompt, ModPromo, UpdateNotice } from '
 
 # Introduction
 
+<Callout type="warning" title="++m ++a ++r ++rr +++ do nothing?">
+  Since [brewtools v6.8.0](https://github.com/kochetkov-ma/claude-brewcode/releases/tag/v6.8.0) the prompt-injection codewords `++m`, `++a`, `++r`, `++rr` and `+++` live in the `brewmod-placeholders` mod, not in brewtools. The mod is easier to use and lets you add your own placeholders. Install it (Claude Code 2.1.292+), then run `/reload-plugins`:
+
+  ```bash
+  claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode && claude plugin install brewmod-placeholders@claude-brewcode
+  ```
+
+  Docs: [Prompt placeholders](/mods/placeholders/).
+</Callout>
+
 **Brewcode** is a plugin suite for Claude Code: project conventions and rules, domain agent teams, multi-agent quorum review, semantic code search, and tooling to build your own skills, agents and hooks. Recipes (skills) define what to brew, brewers (agents) do the work, and a few hooks handle session start and post-compact recall. Two optional [brewcode mods](/mods/overview/) from the same marketplace extend Claude Code itself; they install separately and are not counted among the four plugins.
 
 Every skill except `/brewdoc:publish`, `/brewtools:text-optimize` and `/brewtools:text-human` runs only when you type `/plugin:skill`; see the [FAQ](/faq/#auto-invoke) for why.

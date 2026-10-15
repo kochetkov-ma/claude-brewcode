@@ -12,8 +12,8 @@ import { Badge, Callout, Card, CardGrid, InstallPrompt, SourceLink, Spoiler, Upd
 By default `xhigh` while Claude plans. Your session effort everywhere else.
 
 <p align="center">
-  <img src="/brewmods/plan-effort.gif" alt="Claude Code window with a glyph effort dial: Shift+Tab turns on plan mode, the needle swings from high to xhigh, Enter approves the plan and the needle swings back to high" width="720" loading="lazy" />
-  <br /><small>Illustrative animation: session effort <code>high</code>, <code>Shift+Tab</code> into plan mode, <code>xhigh</code> while planning, <code>Enter</code> approves the plan, back to <code>high</code>.</small>
+  <img src="/brewmods/plan-effort.gif" alt="Claude Code window with a glyph effort dial: Shift+Tab from accept edits into plan mode swings the needle from high to xhigh, Enter approves the plan and the needle swings back to high" width="720" loading="lazy" />
+  <br /><small>Illustrative animation: session effort <code>high</code>, <code>Shift+Tab</code> from <code>accept edits on</code> into plan mode, <code>xhigh</code> while planning, <code>Enter</code> approves the plan, back to <code>high</code>.</small>
 </p>
 
 <SourceLink path="brewmod-plan-effort/README.md" anchor="plan-mode-effort" variant="mod" />
@@ -38,7 +38,7 @@ Dev mode without installing: `claude --plugin-dir ./brewmod-plan-effort`
 
 | You do | You get |
 |--------|---------|
-| `Shift+Tab` into plan mode | Requests run at `xhigh`; the toast `plan mode: effort xhigh · /plan-effort to change` shows once per plan visit |
+| `Shift+Tab` twice from the default mode (`manual mode on` → `accept edits on` → `plan mode on`), or `/plan` | Requests run at `xhigh` from the next prompt; the toast `plan mode: effort xhigh · /plan-effort to change` shows once per plan visit |
 | Approve the plan | The next request is back at your session effort, nothing to undo |
 | `/plan-effort max` | Plan-mode level set to `max`, same as the `planEffort` option in `/config` |
 
