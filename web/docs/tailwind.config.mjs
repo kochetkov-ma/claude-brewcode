@@ -24,6 +24,7 @@ export default {
         dark: '#141414',
         malt: '#1C1A14',
         surface: '#272318',
+        mod: { DEFAULT: '#86C98B', light: '#B0E0B4' },
       },
     },
   },

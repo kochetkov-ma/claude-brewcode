@@ -1,0 +1,40 @@
+---
+import { icons, FILL_ICONS, resolveIcon } from '../../utils/icons';
+
+interface Props {
+  name: string;
+  size?: 'xs' | 'sm' | 'md' | 'lg' | 'em' | number;
+  label?: string;
+  class?: string;
+}
+
+const { name, size = 'md', label, class: className } = Astro.props;
+// Unknown name -> warn + circle-help (astro-avoid#5 contract); add the name to utils/icons.ts.
+let key = resolveIcon(name);
+if (!key) {
+  console.warn(`[Icon] Unknown icon "${name}": add it to utils/icons.ts. Rendering circle-help.`);
+  key = 'circle-help';
+}
+const px: Record<string, number> = { xs: 14, sm: 16, md: 20, lg: 24 };
+const isEm = size === 'em';
+const dim = typeof size === 'number' ? size : px[size];
+const isFill = FILL_ICONS.has(key);
+---
+
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 24 24"
+  width={isEm ? undefined : dim}
+  height={isEm ? undefined : dim}
+  fill={isFill ? 'currentColor' : 'none'}
+  stroke={isFill ? undefined : 'currentColor'}
+  stroke-width={isFill ? undefined : 1.75}
+  stroke-linecap={isFill ? undefined : 'round'}
+  stroke-linejoin={isFill ? undefined : 'round'}
+  class:list={['shrink-0 inline-block', isEm && 'h-[1em] w-[1em]', className]}
+  role={label ? 'img' : undefined}
+  aria-label={label}
+  aria-hidden={label ? undefined : 'true'}
+  focusable="false"
+  set:html={icons[key]}
+/>

@@ -2,16 +2,23 @@ export interface NavItem {
   title: string;
   slug: string;
   children?: NavItem[];
+  tag?: 'moved';
+  hidden?: boolean;
 }
 
 export interface NavSection {
   title: string;
   items: NavItem[];
+  kind?: 'start' | 'mod' | 'plugin' | 'meta';
+  slug?: string;
+  eyebrow?: string;
+  collapsible?: boolean;
 }
 
 export const navigation: NavSection[] = [
   {
     title: 'Getting Started',
+    kind: 'start',
     items: [
       { title: 'Introduction', slug: 'getting-started' },
       { title: 'Installation', slug: 'installation' },
@@ -21,9 +28,22 @@ export const navigation: NavSection[] = [
     ],
   },
   {
-    title: 'Brewcode',
+    title: 'Mods',
+    kind: 'mod',
     items: [
-      { title: 'Overview', slug: 'brewcode/overview' },
+      { title: 'All mods', slug: 'mods/overview' },
+      { title: 'Plan-mode effort', slug: 'mods/plan-effort' },
+      { title: 'Prompt placeholders', slug: 'mods/placeholders' },
+      { title: 'Codewords', slug: 'brewtools/prompt-injection', tag: 'moved' },
+    ],
+  },
+  {
+    title: 'Brewcode',
+    kind: 'plugin',
+    slug: 'brewcode/overview',
+    collapsible: true,
+    eyebrow: 'Plugins',
+    items: [
       {
         title: 'Skills',
         slug: 'brewcode/skills',
@@ -57,9 +77,10 @@ export const navigation: NavSection[] = [
   },
   {
     title: 'Brewtools',
+    kind: 'plugin',
+    slug: 'brewtools/overview',
+    collapsible: true,
     items: [
-      { title: 'Overview', slug: 'brewtools/overview' },
-      { title: 'Codewords (moved to mod)', slug: 'brewtools/prompt-injection' },
       {
         title: 'Skills',
         slug: 'brewtools/skills',
@@ -91,17 +112,11 @@ export const navigation: NavSection[] = [
     ],
   },
   {
-    title: 'Brewui',
-    items: [
-      { title: 'Overview', slug: 'brewui/overview' },
-      { title: 'Skills', slug: 'brewui/skills' },
-      { title: 'Agents', slug: 'brewui/agents' },
-    ],
-  },
-  {
     title: 'Brewdoc',
+    kind: 'plugin',
+    slug: 'brewdoc/overview',
+    collapsible: true,
     items: [
-      { title: 'Overview', slug: 'brewdoc/overview' },
       {
         title: 'Skills',
         slug: 'brewdoc/skills',
@@ -116,15 +131,18 @@ export const navigation: NavSection[] = [
     ],
   },
   {
-    title: 'Mods',
+    title: 'Brewui',
+    kind: 'plugin',
+    slug: 'brewui/overview',
+    collapsible: true,
     items: [
-      { title: 'Overview', slug: 'mods/overview' },
-      { title: 'Plan-mode effort', slug: 'mods/plan-effort' },
-      { title: 'Prompt placeholders', slug: 'mods/placeholders' },
+      { title: 'Skills', slug: 'brewui/skills', hidden: true },
+      { title: 'Agents', slug: 'brewui/agents', hidden: true },
     ],
   },
   {
     title: 'Legal',
+    kind: 'meta',
     items: [
       { title: 'License', slug: 'license' },
     ],

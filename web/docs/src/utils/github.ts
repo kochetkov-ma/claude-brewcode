@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-export const GITHUB_REPO = 'kochetkov-ma/claude-brewcode';
+const GITHUB_REPO = 'kochetkov-ma/claude-brewcode';
 export const GITHUB_URL = `https://github.com/${GITHUB_REPO}`;
 
 const STARS_TIMEOUT_MS = 5000;

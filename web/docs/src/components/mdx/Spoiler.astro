@@ -3,15 +3,17 @@ interface Props {
   title: string;
   id?: string;
   open?: boolean;
+  meta?: string;
 }
 
-const { title, id, open = false } = Astro.props;
+const { title, id, open = false, meta } = Astro.props;
 ---
 
 <details class="spoiler not-prose my-3" id={id} open={open}>
   <summary class="spoiler-summary">
     <span class="spoiler-icon" aria-hidden="true">▶</span>
     <span class="spoiler-title">{title}</span>
+    {meta && <span class="spoiler-meta">{meta}</span>}
   </summary>
   <div class="spoiler-content prose">
     <slot />
@@ -19,14 +21,21 @@ const { title, id, open = false } = Astro.props;
 </details>
 
 <script>
+  import { onPageInit } from '../../utils/page-init';
+
   function openSpoilerForHash() {
     const hash = window.location.hash.slice(1);
     if (!hash) return;
     const target = document.getElementById(hash);
-    if (target instanceof HTMLDetailsElement && target.classList.contains('spoiler')) {
-      if (!target.open) target.open = true;
-      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (!target) return;
+    let el: Element | null = target.closest('details.spoiler');
+    if (!el) return;
+    while (el) {
+      (el as HTMLDetailsElement).open = true;
+      el = el.parentElement?.closest('details.spoiler') ?? null;
     }
+    const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    target.scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'start' });
   }
 
   function initSpoilerHashHandling() {
@@ -41,12 +50,7 @@ const { title, id, open = false } = Astro.props;
     });
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initSpoilerHashHandling);
-  } else {
-    initSpoilerHashHandling();
-  }
-  document.addEventListener('astro:page-load', initSpoilerHashHandling);
+  onPageInit(initSpoilerHashHandling);
 </script>
 
 <style>
@@ -102,6 +106,39 @@ const { title, id, open = false } = Astro.props;
   .spoiler-title {
     flex: 1;
     color: #D6D3D1;
+  }
+
+  .spoiler-meta {
+    margin-left: auto;
+    font-size: 0.75rem;
+    font-weight: 400;
+    color: #A8A29E;
+    white-space: nowrap;
+  }
+
+  .spoiler .spoiler {
+    border-color: rgba(61, 56, 38, 0.7);
+    background-color: transparent;
+    margin: 0.75rem 0;
+  }
+
+  .spoiler .spoiler[open] {
+    background-color: transparent;
+  }
+
+  .spoiler .spoiler .spoiler-summary {
+    padding: 0.6rem 0.9rem;
+  }
+
+  .spoiler .spoiler .spoiler-content {
+    padding: 0.25rem 0.9rem 0.9rem 0.9rem;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .spoiler-icon,
+    .spoiler-summary {
+      transition: none;
+    }
   }
 
   .spoiler-content {

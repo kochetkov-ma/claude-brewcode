@@ -1,0 +1,36 @@
+---
+import Icon from './Icon.astro';
+import { GITHUB_URL } from '../../utils/github';
+
+interface Props {
+  path: string;
+  anchor?: string;
+  label?: string;
+  kind?: 'readme' | 'file' | 'dir';
+  variant?: 'default' | 'mod';
+}
+
+const { path, anchor, label: rawLabel, kind: rawKind, variant = 'default' } = Astro.props;
+const clean = path.replace(/^\/+|\/+$/g, '');
+const kind = rawKind ?? (/\.md$/i.test(clean) ? (/(^|\/)README\.md$/i.test(clean) ? 'readme' : 'file') : 'dir');
+const label = rawLabel ?? (kind === 'readme' ? 'View README on GitHub' : 'View source on GitHub');
+const href = `${GITHUB_URL}/${kind === 'dir' ? 'tree' : 'blob'}/main/${clean}${anchor ? `#${anchor}` : ''}`;
+const isMod = variant === 'mod';
+---
+
+<p class="not-prose my-4">
+  <a
+    href={href}
+    target="_blank"
+    rel="noopener noreferrer"
+    class:list={[
+      'inline-flex items-center gap-2 min-h-11 px-4 rounded-lg border border-base-300 bg-base-200 text-sm font-medium text-base-content no-underline transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2',
+      isMod ? 'hover:border-mod hover:text-mod focus-visible:outline-mod' : 'hover:border-primary hover:text-primary focus-visible:outline-primary',
+    ]}
+  >
+    <Icon name="github" />
+    <span>{label}</span>
+    <Icon name="external-link" size="xs" class="text-base-content/60" />
+    <span class="sr-only">(opens in a new tab)</span>
+  </a>
+</p>

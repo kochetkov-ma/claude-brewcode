@@ -1,12 +1,15 @@
 ---
 interface Props {
-  plugin?: 'brewcode' | 'brewdoc' | 'brewtools' | 'brewui' | 'brewmod-plan-effort' | 'brewmod-placeholders' | 'all';
+  plugin?: 'brewcode' | 'brewdoc' | 'brewtools' | 'brewui' | 'brewmod-plan-effort' | 'brewmod-placeholders' | 'mods' | 'all';
   mode?: 'install' | 'update';
+  compact?: boolean;
+  collapsed?: boolean;
 }
 
-const { plugin = 'all', mode = 'install' } = Astro.props;
+const { plugin = 'all', mode = 'install', compact = true, collapsed = false } = Astro.props;
 
 const allPlugins = ['brewcode', 'brewdoc', 'brewtools', 'brewui'] as const;
+const allMods = ['brewmod-plan-effort', 'brewmod-placeholders'] as const;
 
 function buildPrompt(plugin: typeof Astro.props['plugin'], mode: 'install' | 'update'): string {
   const isUpdate = mode === 'update';
@@ -15,8 +18,9 @@ function buildPrompt(plugin: typeof Astro.props['plugin'], mode: 'install' | 'up
     ? 'claude plugin marketplace update claude-brewcode'
     : 'claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode';
 
-  if (plugin === 'all') {
-    const commands = [marketplaceCmd, ...allPlugins.map((name) => `claude plugin ${verb} ${name}@claude-brewcode`)];
+  if (plugin === 'all' || plugin === 'mods') {
+    const names = plugin === 'mods' ? allMods : allPlugins;
+    const commands = [marketplaceCmd, ...names.map((name) => `claude plugin ${verb} ${name}@claude-brewcode`)];
     return [
       'Execute these commands in this Claude Code session, one by one, show full output for each, do not skip any, do not summarize:',
       '',
@@ -41,23 +45,45 @@ const isUpdate = mode === 'update';
 const title = isUpdate ? 'Update prompt' : 'Install prompt';
 const calloutType = isUpdate ? 'warning' : 'tip';
 const prompt = buildPrompt(plugin, mode);
+const icon = isUpdate
+  ? 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'
+  : 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z';
+const preClass = compact
+  ? 'bg-base-300 rounded-lg px-3 py-2 text-xs leading-snug max-h-32 overflow-auto whitespace-pre-wrap'
+  : 'bg-base-300 rounded-lg p-4 text-sm overflow-x-auto whitespace-pre-wrap';
 ---
 
-<div class="not-prose my-6">
-  <div class:list={['alert', isUpdate ? 'alert-warning' : 'alert-success', 'mb-3']}>
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-5 h-5">
-      {isUpdate ? (
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
-      ) : (
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-      )}
-    </svg>
-    <div>
-      <h4 class="font-semibold">{title}</h4>
-      <div class="text-sm">
-        If Claude refuses to run the commands, paste the prompt below directly into the chat.
+{collapsed ? (
+  <details class="not-prose my-4">
+    <summary class="cursor-pointer text-sm font-semibold py-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 rounded">
+      {title}: {plugin === 'mods' ? 'both mods' : plugin === 'all' ? 'all plugins' : plugin}
+    </summary>
+    <pre class={preClass + ' mt-2'} tabindex="0"><code>{prompt}</code></pre>
+  </details>
+) : compact ? (
+  <div class="not-prose my-4">
+    <p class="flex items-center gap-2 mb-2 text-sm">
+      <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class:list={['stroke-current shrink-0 w-4 h-4', isUpdate ? 'text-warning' : 'text-success']}>
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d={icon}></path>
+      </svg>
+      <span class="font-semibold">{title}</span>
+      <span class="text-base-content/60">- if Claude refuses, paste this into the chat</span>
+    </p>
+    <pre class={preClass} tabindex="0"><code>{prompt}</code></pre>
+  </div>
+) : (
+  <div class="not-prose my-6">
+    <div class:list={['alert', isUpdate ? 'alert-warning' : 'alert-success', 'mb-3']}>
+      <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-5 h-5">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d={icon}></path>
+      </svg>
+      <div>
+        <h4 class="font-semibold">{title}</h4>
+        <div class="text-sm">
+          If Claude refuses to run the commands, paste the prompt below directly into the chat.
+        </div>
       </div>
     </div>
+    <pre class={preClass} tabindex="0"><code>{prompt}</code></pre>
   </div>
-  <pre class="bg-base-300 rounded-lg p-4 text-sm overflow-x-auto whitespace-pre-wrap"><code>{prompt}</code></pre>
-</div>
+)}

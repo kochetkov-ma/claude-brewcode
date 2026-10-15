@@ -1,6 +1,6 @@
 ---
 interface Props {
-  variant?: 'primary' | 'secondary' | 'accent';
+  variant?: 'primary' | 'secondary' | 'accent' | 'mod';
   text: string;
 }
 
@@ -12,4 +12,5 @@ const { variant = 'primary', text } = Astro.props;
   variant === 'primary' && 'bg-brand-200/20 text-brand-200 border border-brand-200/30',
   variant === 'secondary' && 'bg-secondary/20 text-secondary border border-secondary/30',
   variant === 'accent' && 'bg-accent/20 text-accent border border-accent/30',
+  variant === 'mod' && 'bg-mod/20 text-mod border border-mod/30',
 ]}>{text}</span>
