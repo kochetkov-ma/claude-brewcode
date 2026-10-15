@@ -11,6 +11,8 @@ const TEMPLATE = join(HERE, '..', '..', 'superreview-setup', 'references', 'inte
 const VERIFY = join(HERE, '..', 'scripts', 'verify-team.sh');
 const FRAMEWORK = join(HERE, '..', 'references', 'framework-files.md');
 const TRACE_OPS = join(HERE, '..', 'scripts', 'trace-ops.sh');
+// Hang guard, not a readiness wait: the full verifier is ~2 s locally, >30 s on a loaded runner.
+const SPAWN_TIMEOUT_MS = 180000;
 let passed = 0;
 let failed = 0;
 const results = [];
@@ -26,8 +28,8 @@ function check(name, actual, expected, description) {
 }
 
 function run(root) {
-  const result = spawnSync('bash', [EMIT, root], { encoding: 'utf8', timeout: 30000 });
-  return { status: result.status, output: (result.stdout || '') + (result.stderr || '') };
+  const result = spawnSync('bash', [EMIT, root], { encoding: 'utf8', timeout: SPAWN_TIMEOUT_MS });
+  return { status: result.status ?? 'TIMEOUT signal=' + result.signal + ' error=' + result.error?.code, output: (result.stdout || '') + (result.stderr || '') };
 }
 
 function runConcurrent(root) {
@@ -73,8 +75,8 @@ function makeBootstrap(root) {
 }
 
 function verify(root) {
-  const result = spawnSync('bash', [VERIFY, 'fresh'], { cwd: root, encoding: 'utf8', timeout: 30000 });
-  return { status: result.status, output: (result.stdout || '') + (result.stderr || '') };
+  const result = spawnSync('bash', [VERIFY, 'fresh'], { cwd: root, encoding: 'utf8', timeout: SPAWN_TIMEOUT_MS });
+  return { status: result.status ?? 'TIMEOUT signal=' + result.signal + ' error=' + result.error?.code, output: (result.stdout || '') + (result.stderr || '') };
 }
 
 const template = parse(TEMPLATE);
