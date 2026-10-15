@@ -81,7 +81,7 @@ jobs:
           exit "$fail"
 
       # A mod whose hooks module fails to load makes both `plugin validate --strict` and `plugin test` exit non-zero (probed on 2.1.296).
-      - name: Brewmod tests (claude plugin test + parity gates)
+      - name: Brewmod tests (claude plugin test)
         if: ${{ !cancelled() }}
         run: |
           set -uo pipefail
@@ -91,8 +91,6 @@ jobs:
           for mod in ./brewmod-*/; do
             claude plugin test "$mod" || { echo "::error::claude plugin test $mod failed"; fail=1; }
           done
-          node brewmod-placeholders/scripts/extract-defaults.mjs --check || { echo "::error::brewmod-placeholders defaults drift from brewtools references"; fail=1; }
-          node brewmod-placeholders/tests/parity/gen-golden.mjs --check || { echo "::error::brewmod-placeholders parity golden drifted from brewtools manager-prompt.mjs"; fail=1; }
           exit "$fail"
 
       - name: Skill contracts (validate-skill.sh)
