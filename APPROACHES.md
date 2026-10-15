@@ -169,7 +169,7 @@ Notes for this section:
 - Text reaches the model through `hookSpecificOutput.additionalContext`, never `updatedInput`, which
   `UserPromptSubmit` ignores. Injecting hooks cap at 9000 chars, under the 10,000-char
   `additionalContext` cap: brewcode through `capText`/`TEXT_CHANNEL_CAP` in `brewcode/hooks/lib/utils.mjs`,
-  the placeholders mod through `MAX_CHARS` in `brewmod-placeholders/hooks/lib/assemble.ts`.
+  the placeholders mod through `MAX_CHARS` in `brewmod-placeholders/hooks/inject.mjs`.
 - `additionalContext` accumulates across hooks on one event; `updatedInput`/`updatedToolOutput` are
   single-writer/last-wins. `SubagentStart` context reaches the subagent, `PreToolUse` context only the
   calling session (`brewcode/skills/agents/references/hooks-io-contract.md`).
