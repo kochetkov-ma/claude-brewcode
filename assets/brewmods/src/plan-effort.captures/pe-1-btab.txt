@@ -1,14 +1,14 @@
-✻ Brewed for 7s · done 11:56 PM
-placeholders 3 [ Show text  ctrl+x → tab → enter ]                                  [-]
-++db  Always use the staging DB
-++r  Two-phase review: review every significant change, then double-check each fin…
-++m  Manager mode: orchestrate and delegate, never code in the main context plan +
-more: put the caret on ++db · send as typed: ++/ · /placeholders help
+ ▐▛███▛█   Claude Code v2.1.301
+▝▜██████▀  Sonnet 5.5 with high effort · Claude Max
+ ▝▝   ▝▝   ~/brewery
+
 
 ────────────────────────────────────────────────────────────────────────────────────────
-❯ ++db ++r ++m
+❯ Try "fix typecheck errors"
 ────────────────────────────────────────────────────────────────────────────────────────
-  ⏸ manual mode on
+  ⏵⏵ accept edits on (shift+tab to cycle) · ← for agents              ● high · /effort
+
+
 
 
 

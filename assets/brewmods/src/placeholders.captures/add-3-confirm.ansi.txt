@@ -22,12 +22,12 @@
      # [ADDON: ANTI-DRIFT CRON PLAN]
      [2m… +112 lines (ctrl+o to expand)[0m
 
-[38;5;231m⏺[39m No [38;5;153mdb[39m exists yet. Scope is global, no plan mode mentioned.
-
 [38;5;246m⏺ [39mUser answered Claude's questions:
 [38;5;246m  ⎿  · Save ++db as drafted? → Save as drafted (Recommended)[39m
 
-[38;5;174m✢[39m [38;5;174mProofing… [38;5;246m(5s · ↓[39m [38;5;246m213 tokens)[39m
+[38;5;174m✶[39m [38;5;174mSock-hopping… [38;5;246m(5s · ↓[39m [38;5;246m198 tokens)[39m
+[38;5;246m  ⎿  Tip: Double-tap esc to rewind the code and/or conversation to a previous point in [39m
+     [38;5;246mtime[39m
 
 [38;5;244m────────────────────────────────────────────────────────────────────────────────────────
 [38;5;246m❯ [39m

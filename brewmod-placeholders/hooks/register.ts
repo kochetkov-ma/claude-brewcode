@@ -6,15 +6,14 @@ import { escapeMarkers, isEscaped, markerOf, validatePrefix, type PlaceholderVie
 import { memoCompile, type Compiled } from './lib/compiled'
 import { FILES_GONE, PluginFilesGone, configDirOf, issuesMessage, loadRegistry, newRegistryCache, toEditorEntries, type Registry } from './lib/defs'
 import { modeStatePath, planFromState } from './lib/mode'
-import { bandRows, bandState, budgets, renderBand } from './lib/band'
+import { bandRows, bandState, budgets, renderBand, treeRows } from './lib/band'
 import { assembleDraft, planParts } from './lib/sent'
 import { NEEDS_NEW_CC, TOOL_PREFIX, handoffAck, handoffText, listTool, oneLayer, removeTool, saveTool, tools, type RemoveInput, type SaveInput, type ToolOut } from './lib/command'
-import { fullText, helpText, parseArgs, queryDrop, queryNames, showCommand, shownDirs, statusText } from './lib/show'
+import { fillText, fullText, helpText, parseArgs, queryDrop, queryNames, shownDirs, statusText } from './lib/show'
 import { expandInline, isInlineSubmit, unknownMessage, unknownTokens, type SubmitLike } from './lib/inline'
 
 // Atoms are declared in this file only (the scan reads this file); the band reads the same view atom.
 const viewAtom = atom({ plugin: 'brewmod-placeholders', key: 'view' } as const, { tokens: [] })
-const expandedAtom = atom({ plugin: 'brewmod-placeholders', key: 'expanded' } as const, false)
 const focusAtom = atom({ plugin: 'brewmod-placeholders', key: 'focus' } as const, { name: null, isQuery: false, isMenuOpen: false })
 
 const REFRESH_MS = 1000
@@ -91,23 +90,28 @@ export const register: Register = (on, options) => {
       const issues = issuesMessage(reg)
       if (issues !== null) $.ui.toast(issues)
     }
+    const wasPlan = isPlan
     try {
       const file = modeStatePath($.plugin.root, await $.session.id())
       if (file !== null) isPlan = planFromState(await $.fs.read(file)) ?? isPlan
     } catch {
       // no state file yet: not in plan mode
     }
+    // The band reads a module variable, not an atom: a flipped mode redraws it now, not at the next key.
+    if (isPlan !== wasPlan) $.ui.invalidate('ui.render')
     return next(e)
   })
 
   // The command hook records the mode at each prompt and tool batch; a finished turn has seen both. No I/O in prompt.edit, so the band reads the module variable.
   on('turn.complete', async ($, e, next) => {
+    const wasPlan = isPlan
     try {
       const file = modeStatePath($.plugin.root, await $.session.id())
       if (file !== null) isPlan = planFromState(await $.fs.read(file)) ?? isPlan
     } catch {
       // keep the last known mode
     }
+    if (isPlan !== wasPlan) $.ui.invalidate('ui.render')
     return next(e)
   })
 
@@ -186,13 +190,13 @@ export const register: Register = (on, options) => {
     }
     // `P/` or `P\` anywhere: sent as typed, no expansion and no toast; inject.mjs skips it too.
     if (isEscaped(prefix, e.text)) return next(e)
-    // Only `P<name>?` items, no attachments, a build with tools (the hand-off's gate; fill proven only there): dropped, the box gets `/placeholders show P<names>`.
+    // Only `P<name>?` items, no attachments, a build with tools (the hand-off's gate; fill proven only there): dropped, the box gets `/placeholders show P<names> `.
     // Not run in place: $.command.run passes "every hook but the calling one" (claude-code.d.ts); seen live: `prompt.submit skipped: re-entry` (hand-off).
     const asked = isTyped && hasTools && e.command === undefined && (e.attachments?.length ?? 0) === 0 ? queryNames(editorMatchers(prefix), e.text) : null
     if (asked !== null) {
       $.clock.after(0, () => {
         try {
-          void $.prompt.fill({ text: showCommand(prefix, asked), mode: 'replace' }).catch(() => undefined)
+          void $.prompt.fill({ text: fillText(prefix, asked), mode: 'replace' }).catch(() => undefined)
         } catch {
           // a fill that throws at once: the drop notice stays, the box stays empty
         }
@@ -228,19 +232,21 @@ export const register: Register = (on, options) => {
     const sent = compiled === null ? undefined : assembleDraft(draft ?? view.tokens.map((t) => t.text).join(' '), compiled, prefix, isPlan).tokens
     const defs = compiled?.defs
     const plans = defs === undefined ? undefined : (name: string) => planParts(defs, name, prefix)
-    return renderBand($.ui.resolve(e), bandRows(view, getEditorEntries(), sent, plans), {
+    // Another mod's rows beneath sit above the band (kept on screen, as when that mod is outermost); the band gives up their rows.
+    const below = await next(e)
+    const ui = $.ui.resolve(e)
+    const band = renderBand(ui, bandRows(view, getEditorEntries(), sent, plans), {
       mode,
       focus,
       prefix,
       // No draft (desktop): the marker the last edit saw.
       marker: (draft === null ? null : markerOf(compiled?.matchers ?? prefix, draft)) ?? view.escapedBy ?? escapeMarkers(prefix)[0],
-      isExpanded: await read($, expandedAtom),
       isPlan,
       isGone,
-      ...budgets(e.props.maxRows, e.viewport?.isFullscreen === true, focus.isMenuOpen),
+      ...budgets(e.props.maxRows - treeRows(below), e.viewport?.isFullscreen === true, focus.isMenuOpen),
       columns: e.props.bodyColumns,
-      onToggle: () => update($, expandedAtom, (open) => !open),
     })
+    return below.type === 'engine' ? band : ui.Box({ flexDirection: 'column', children: [below, band] })
   })
 
   on('command.run', { command: 'placeholders' }, async ($, e) => {

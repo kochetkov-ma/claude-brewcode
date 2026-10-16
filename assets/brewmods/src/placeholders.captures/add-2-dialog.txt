@@ -22,19 +22,19 @@
      # [ADDON: ANTI-DRIFT CRON PLAN]
      … +112 lines (ctrl+o to expand)
 
-⏺ No db exists yet. Scope is global, no plan mode mentioned.
 ────────────────────────────────────────────────────────────────────────────────────────
  ☐ Placeholder
 
 Save ++db as drafted?
 
-❯ 1. Save as drafted (Recommended)
-     Text: "always use the staging DB"
-  2. Change it
-     Edit the name or text before saving
-  3. Type something.
-────────────────────────────────────────────────────────────────────────────────────────
-  4. Chat about this
+❯ 1. Save as drafted              ┌──────────────────────────────────────────┐
+    (Recommended)                 │ always use the staging DB                │
+  2. Change it                    └──────────────────────────────────────────┘
 
-Enter to select · ↑/↓ to navigate · Esc to cancel
+                                  Notes: press n to add notes
+
+────────────────────────────────────────────────────────────────────────────────────────
+  Chat about this
+
+Enter to select · ↑/↓ to navigate · n to add notes · Esc to cancel
 

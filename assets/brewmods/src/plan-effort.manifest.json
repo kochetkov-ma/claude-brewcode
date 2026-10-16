@@ -1,0 +1,25 @@
+{
+  "gif": {
+    "file": "plan-effort.gif",
+    "bytes": 3029481,
+    "sha256": "0218d25ab26f6c618d601a4e1b6efb02bf12c889fd91badd81de6507e46245a7",
+    "width": 800,
+    "height": 648,
+    "seconds": 23
+  },
+  "sources": {
+    "render.html": "66bf935f460d6b8bdc55b170e13e8c75b303230db57a7540f3120486972c7409",
+    "plan-effort.story.js": "e264f9d641338c5334789c270b372f6c9881f8d26b78efc3a0863272e14ba1a8",
+    "plan-effort.data.js": "7dc0cba938d82f30b45790efcff69ce785eeab927b7dc52ad24ff253284e31b1",
+    "record-gifs.mjs": "cba6693c2afb098d856d1f50e5833a965105476d8489b15d9a08bb0602d875d7"
+  },
+  "ccVersion": "2.1.301",
+  "still": 12,
+  "tools": {
+    "playwrightCore": "1.64.0",
+    "ffmpeg": "9.0.2",
+    "gifsicle": "1.96",
+    "node": "v24.19.0"
+  },
+  "recorded": "2026-10-16T09:24:55.504Z"
+}

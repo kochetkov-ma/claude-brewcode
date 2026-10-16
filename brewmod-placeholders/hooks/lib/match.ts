@@ -11,6 +11,7 @@ export type NameKind = 'word' | 'symbol'
 export type Matcher = { name: string; kind: NameKind; scan: RegExp }
 export type Matchers = { prefix: string; byName: ReadonlyMap<string, Matcher>; unknown: RegExp; escape: RegExp }
 
+const PREFIX_FIX = '/config -> Placeholder prefix'
 const PREFIX_RE = /^[!-/:-@[-^`{-~]{2,8}$/
 const WORD_NAME = /^[A-Za-z0-9_]{1,32}$/
 const SYMBOL_NAME = /^[!-/:-@[-^`{-~]+$/
@@ -19,9 +20,9 @@ const SYMBOL_NAME = /^[!-/:-@[-^`{-~]+$/
 export function validatePrefix(raw: unknown): PrefixCheck {
   if (raw === undefined) return { prefix: DEFAULT_PREFIX, warning: null }
   if (typeof raw !== 'string' || !PREFIX_RE.test(raw)) {
-    return { prefix: DEFAULT_PREFIX, warning: `prefix must be 2-8 ASCII punctuation characters (not _), using ${DEFAULT_PREFIX}` }
+    return { prefix: DEFAULT_PREFIX, warning: `prefix must be 2-8 ASCII punctuation characters (not _), using ${DEFAULT_PREFIX} · change: ${PREFIX_FIX}` }
   }
-  return { prefix: raw, warning: raw.startsWith('/') ? 'prefix starting with / clashes with slash commands' : null }
+  return { prefix: raw, warning: raw.startsWith('/') ? `prefix starting with / clashes with slash commands · change: ${PREFIX_FIX}` : null }
 }
 
 export function nameKind(name: string): NameKind | null {

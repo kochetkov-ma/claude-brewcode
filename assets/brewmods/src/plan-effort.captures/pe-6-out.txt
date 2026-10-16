@@ -1,0 +1,40 @@
+ ▐▛███▛█   Claude Code v2.1.301
+▝▜██████▀  Sonnet 5.5 with high effort · Claude Max
+ ▝▝   ▝▝   ~/brewery
+
+
+❯ what does README.md cover? one line
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ README.md is a short intro to the repo, "Homebrew recipes and fermentation logs", with
+  a list of two batches: 01 pale ale and 02 stout.
+
+✻ Churned for 6s · done 10:04 AM
+
+────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents                 ● high · /effort
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

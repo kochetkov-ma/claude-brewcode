@@ -1,5 +1,5 @@
-✻ Brewed for 7s · done 11:56 PM
-++r  Two-phase review: review every significant change, then double-check each fin… [-]
+✻ Worked for 8s · done 9:42 AM
+++r · Claude receives these lines now:                                              [-]
   User typed `++r` — Two-phase review discipline is active for this turn:
 
   [REVIEW DISCIPLINE: DOUBLE-CHECK]
@@ -12,7 +12,7 @@
   acceptance, what's covered (don't re-litigate), who consumes the verdict;
   return verdict first, then findings.
 also: ++db
-move the caret off ++r to close · send as typed: ++/
+close: move the caret off ++r · send as typed: ++/
 
 ────────────────────────────────────────────────────────────────────────────────────────
 ❯ ++db ++r

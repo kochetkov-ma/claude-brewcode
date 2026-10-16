@@ -1,5 +1,4 @@
-
-[38;5;231m⏺[39m No [38;5;153mdb[39m exists yet. Scope is global, no plan mode mentioned.
+     [2m… +112 lines (ctrl+o to expand)[0m
 
 [38;5;246m⏺ [39mUser answered Claude's questions:
 [38;5;246m  ⎿  · Save ++db as drafted? → Save as drafted (Recommended)[39m
@@ -10,14 +9,15 @@
 [38;5;246m  ⎿  [39msaved ++db (global): ~/.claude/placeholders/db.md
 
 [38;5;231m⏺[39m I saved [38;5;153m++db[39m as a global placeholder in [38;5;153m~/.claude/placeholders/db.md[39m, so it works in
-  all your projects. Typing [38;5;153m++db[39m in a prompt adds "always use the staging DB".
+  all your projects. When you type [38;5;153m++db[39m in a prompt, it adds "always use the staging
+  DB".
 
-[38;5;246m✻[39m [38;5;246mBrewed for 7s · done 11:56 PM[39m
+[38;5;246m✻[39m [38;5;246mWorked for 8s · done 9:42 AM[39m
 
 [38;5;244m────────────────────────────────────────────────────────────────────────────────────────
 [39m❯ ++db
 [38;5;244m────────────────────────────────────────────────────────────────────────────────────────
-[39m  [38;5;246m⏸[39m [38;5;246mmanual[39m [38;5;246mmode on[39m                                                  [38;5;246m◐ medium · /effort[39m
+[39m  [38;5;246m⏸ manual mode on[39m
 
 
 

@@ -1,5 +1,4 @@
-
-⏺ No db exists yet. Scope is global, no plan mode mentioned.
+     … +112 lines (ctrl+o to expand)
 
 ⏺ User answered Claude's questions:
   ⎿  · Save ++db as drafted? → Save as drafted (Recommended)
@@ -10,13 +9,14 @@
   ⎿  saved ++db (global): ~/.claude/placeholders/db.md
 
 ⏺ I saved ++db as a global placeholder in ~/.claude/placeholders/db.md, so it works in
-  all your projects. Typing ++db in a prompt adds "always use the staging DB".
+  all your projects. When you type ++db in a prompt, it adds "always use the staging
+  DB".
 
-✻ Brewed for 7s · done 11:56 PM
+✻ Worked for 8s · done 9:42 AM
 placeholders 1                                                                      [-]
-++db  Always use the staging DB
+++db  Always use the staging DB · Claude receives these lines now:
   always use the staging DB
-more: put the caret on ++db · send as typed: ++/ · /placeholders help
+more: put the caret on ++db · send as typed: ++/ · help: /placeholders help
 
 ────────────────────────────────────────────────────────────────────────────────────────
 ❯ ++db +

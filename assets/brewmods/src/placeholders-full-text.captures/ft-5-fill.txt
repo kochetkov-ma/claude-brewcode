@@ -1,0 +1,40 @@
+ ▐▛███▛█   Claude Code v2.1.301
+▝▜██████▀  Opus 5.5 · Claude Max
+ ▝▝   ▝▝   ~/brewery
+
+
+⏺ Prompt dropped by a hook: ++m? = /placeholders show ++m · not sent to Claude ·
+  press Enter to print it
+
+────────────────────────────────────────────────────────────────────────────────────────
+❯ /placeholders show ++m
+────────────────────────────────────────────────────────────────────────────────────────
+  ⏸ manual mode on
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

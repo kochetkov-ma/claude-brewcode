@@ -1,6 +1,7 @@
 // /placeholders model hand-off text and the model tools: pure over an injected Io, never `$`.
 import { DEFAULT_PREFIX, escapeMarkers } from './match'
 import { planParts, type PlanParts } from './sent'
+import { FOCUS_MAX } from './band'
 import { layerSpecs, loadRegistry, newRegistryCache, parseDefinition, type Def, type Io, type Registry, type Roots } from './defs'
 
 export type StatLite = { kind: 'file' | 'dir' | 'other'; isLink: boolean; realPath?: string }
@@ -17,7 +18,7 @@ export type ToolOut = { text: string; registry: Registry | null; isError?: true 
 export type Row = { stem: string; layer: string; def: Def }
 
 export const TOOL_PREFIX = 'mcp__brewmod-placeholders__'
-export const NEEDS_NEW_CC = 'needs Claude Code 2.1.300+ for the dialog'
+export const NEEDS_NEW_CC = 'changing placeholders by words needs Claude Code 2.1.300+ · meanwhile: edit the <name>.md files by hand'
 export const SCOPE_REQUIRED = "scope is required: 'global' or 'project'"
 const BAD_SCOPE = "scope must be 'project' or 'global'"
 const BAD_FENCE = 'that text holds a ``` or ~~~ fence marker or opens with a --- line, which the definition format cannot carry'
@@ -137,7 +138,7 @@ export const tools = (p: string) => [
   },
   {
     name: 'placeholders_help',
-    description: `How the user's ${p} placeholders work: syntax, full text (caret on a token, ${p}name?), sending a message as typed (${escapeMarkers(p)[0]}), global vs project, file format, /placeholders commands and doc links. Call it before answering any question about placeholders or the ${p} prefix.`,
+    description: `How the user's ${p} placeholders work: syntax, full text (/placeholders show ${p}name; the caret on a token shows up to ${FOCUS_MAX} rows in the band), sending a message as typed (${escapeMarkers(p)[0]}), global vs project, file format, /placeholders commands and doc links. Call it before answering any question about placeholders or the ${p} prefix.`,
     inputSchema: { type: 'object', properties: {} },
   },
 ] as const

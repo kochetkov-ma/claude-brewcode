@@ -5,8 +5,9 @@ import { loadRegistry, newRegistryCache } from '../hooks/lib/defs'
 
 // Exact user-visible strings; the engine glues "brewmod-placeholders: " in front of a toast.
 const GONE = 'plugin files removed (updated?) · run /reload-plugins'
-const HINT = 'more: put the caret on ++r · send as typed: ++/ · /placeholders help'
-const R_DESC = '  Two-phase review: review every significant change, then double-check each finding'
+const HINT = 'more: put the caret on ++r · send as typed: ++/ · help: /placeholders help'
+// Compact head over a drawn body: the description gives way to what Claude receives.
+const R_PREVIEW = ['  Two-phase review: review every significant change, then dou…', ' · Claude receives these lines now:']
 // Gone: the context row says why it is not sent and its description gives way (100 cells less the token and the label).
 const R_GONE = ['  Two-phase review: review every significant change, then doubl…', ' (not sent: plugin files removed)']
 // The band shows the sent text, so its first line is the rendered header.
@@ -49,7 +50,7 @@ test('GIVEN the plugin placeholders folder is already gone WHEN the session star
 
   await typeAll($, '++r ')
 
-  expect({ toasts: w.toasts, band: await bandTexts($) }, 'fresh load while gone').toEqual({ toasts: [GONE], band: ['placeholders 1 ', '++r', ...R_GONE, GONE] })
+  expect({ toasts: w.toasts, band: await bandTexts($) }, 'fresh load while gone').toEqual({ toasts: [GONE], band: ['placeholders 1', '++r', ...R_GONE, GONE] })
 })
 
 test('GIVEN a warm registry WHEN the plugin placeholders folder is gone and the registry reloads THEN it rejects with the reload hint and the cache keeps the old list', async () => {
@@ -85,8 +86,8 @@ test('GIVEN a running session with the built-ins loaded WHEN the plugin placehol
   await w.clock.advance(2000)
   await typeAll($, 'x ++r ')
 
-  expect(before.slice(0, 4), 'precondition: known with its preview').toEqual(['placeholders 1 ', '++r', R_DESC, R_HEAD])
-  expect({ toasts: w.toasts, band: await bandTexts($) }, 'after the folder is gone').toEqual({ toasts: [GONE], band: ['placeholders 1 ', '++r', ...R_GONE, GONE] })
+  expect(before.slice(0, 5), 'precondition: known with its preview').toEqual(['placeholders 1', '++r', ...R_PREVIEW, R_HEAD])
+  expect({ toasts: w.toasts, band: await bandTexts($) }, 'after the folder is gone').toEqual({ toasts: [GONE], band: ['placeholders 1', '++r', ...R_GONE, GONE] })
 })
 
 test('GIVEN the folder was gone WHEN it comes back and the typeahead re-reads THEN the preview and the normal hint return', async ($, on) => {
@@ -103,9 +104,9 @@ test('GIVEN the folder was gone WHEN it comes back and the typeahead re-reads TH
   await typeAll($, '++r ')
   const back = await bandTexts($)
 
-  expect({ gone, back: [back[0], back[1], back[2], back[3], back[back.length - 1]] }, 'gone then back').toEqual({
-    gone: ['placeholders 1 ', '++r', ...R_GONE, GONE],
-    back: ['placeholders 1 ', '++r', R_DESC, R_HEAD, HINT],
+  expect({ gone, back: [back[0], back[1], back[2], back[3], back[4], back[back.length - 1]] }, 'gone then back').toEqual({
+    gone: ['placeholders 1', '++r', ...R_GONE, GONE],
+    back: ['placeholders 1', '++r', ...R_PREVIEW, R_HEAD, HINT],
   })
 })
 
@@ -143,7 +144,7 @@ test('GIVEN a placeholder file made by hand WHEN its token is pasted in one edit
 
   await key($, '++foo')
 
-  expect(await bandTexts($), 'band right after the last key, caret on the token').toEqual(['++foo', '  Foo thing', 'FOO TEXT', 'move the caret off ++foo to close · send as typed: ++/'])
+  expect(await bandTexts($), 'band right after the last key, caret on the token').toEqual(['++foo', ' · Claude receives these lines now:', 'FOO TEXT', 'close: move the caret off ++foo · send as typed: ++/'])
 })
 
 test('GIVEN the plugin folder is gone WHEN the model calls save_placeholder THEN the reload hint comes back as an error and nothing is written', async ($, on) => {
@@ -186,7 +187,7 @@ test('GIVEN the plugin placeholders folder is present but holds no .md file WHEN
 
   await typeAll($, '++r ')
 
-  expect({ toasts: w.toasts, band: await bandTexts($) }, 'empty shipped folder').toEqual({ toasts: [GONE], band: ['placeholders 1 ', '++r', ...R_GONE, GONE] })
+  expect({ toasts: w.toasts, band: await bandTexts($) }, 'empty shipped folder').toEqual({ toasts: [GONE], band: ['placeholders 1', '++r', ...R_GONE, GONE] })
 })
 
 for (const [label, trigger] of [
@@ -213,5 +214,5 @@ test('GIVEN an inline project placeholder WHEN the plugin folder is gone THEN it
 
   await typeAll($, '++sig ++r ')
 
-  expect(await bandTexts($), 'band while gone').toEqual(['placeholders 2 ', '++sig', '  sig', 'SIGNED', '++r', ...R_GONE, GONE])
+  expect(await bandTexts($), 'band while gone').toEqual(['placeholders 2', '++sig', '  sig', ' · Claude receives these lines now:', 'SIGNED', '++r', ...R_GONE, GONE])
 })

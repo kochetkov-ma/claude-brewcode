@@ -335,7 +335,7 @@ test('GIVEN no tools on this build WHEN command.run gets a request THEN the stat
   const out = await run($, 'I want one')
   await clock.advance(1000)
 
-  expect([lines(out.text).slice(-1), ops.submits], 'last line and submits').toEqual([['needs Claude Code 2.1.300+ for the dialog'], []])
+  expect([lines(out.text).slice(-1), ops.submits], 'last line and submits').toEqual([['changing placeholders by words needs Claude Code 2.1.300+ · meanwhile: edit the <name>.md files by hand'], []])
 })
 
 test('GIVEN the save tool called by the model WHEN the hook answers THEN the file is written, the text returns and the typeahead knows the name', async ($, on) => {

@@ -1,0 +1,40 @@
+ ▐▛███▛█   Claude Code v2.1.301
+▝▜██████▀  Sonnet 5.5 with high effort · Claude Max
+ ▝▝   ▝▝   ~/brewery
+
+
+❯ what does README.md cover? one line
+
+· Transfiguring…
+plan mode · effort xhigh for this mode · change: /plan-effort <level>               [-]
+
+────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────
+  ⏸ plan mode on (shift+tab to cycle) · esc to interrupt · ← for agents
+                               brewmod-plan-effort: plan mode · effort raised to xhigh
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

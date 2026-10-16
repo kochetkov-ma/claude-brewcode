@@ -51,7 +51,7 @@ Each codeword reads one file name in those folders:
 | `review-regression.md` | `++rr` |
 | `cron-plan.md` | `+++` (Plan mode only) |
 
-To change codeword text, describe the change, for example `/placeholders make ++r shorter` (Claude Code 2.1.300+; older builds show the status view and the line `needs Claude Code 2.1.300+ for the dialog`). Claude shows one confirm dialog and saves your own file; it does not edit the override files above. Without a scope word the dialog asks where to save (Global recommended: `~/.claude/placeholders/<name>.md`, all projects; Project: `.claude/placeholders/<name>.md`); start with `global` or `project` to skip the question. A project save outranks both brewtools override folders, a global save only the global one. Full rules: [Prompt placeholders](/mods/placeholders/). `/brewtools:manager-setup status` lists the override files.
+To change codeword text, describe the change, for example `/placeholders make ++r shorter` (Claude Code 2.1.300+; older builds show the status view and the line `changing placeholders by words needs Claude Code 2.1.300+ · meanwhile: edit the <name>.md files by hand`). Claude shows one confirm dialog and saves your own file; it does not edit the override files above. Without a scope word the dialog asks where to save (Global recommended: `~/.claude/placeholders/<name>.md`, all projects; Project: `.claude/placeholders/<name>.md`); start with `global` or `project` to skip the question. A project save outranks both brewtools override folders, a global save only the global one. Full rules: [Prompt placeholders](/mods/placeholders/). `/brewtools:manager-setup status` lists the override files.
 
 ## Older Claude Code and Codex
 

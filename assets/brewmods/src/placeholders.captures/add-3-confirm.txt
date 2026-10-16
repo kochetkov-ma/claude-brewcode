@@ -22,12 +22,12 @@
      # [ADDON: ANTI-DRIFT CRON PLAN]
      … +112 lines (ctrl+o to expand)
 
-⏺ No db exists yet. Scope is global, no plan mode mentioned.
-
 ⏺ User answered Claude's questions:
   ⎿  · Save ++db as drafted? → Save as drafted (Recommended)
 
-✢ Proofing… (5s · ↓ 213 tokens)
+✶ Sock-hopping… (5s · ↓ 198 tokens)
+  ⎿  Tip: Double-tap esc to rewind the code and/or conversation to a previous point in
+     time
 
 ────────────────────────────────────────────────────────────────────────────────────────
 ❯ 

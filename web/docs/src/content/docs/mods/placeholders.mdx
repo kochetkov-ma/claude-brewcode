@@ -23,8 +23,8 @@ import { Badge, Callout, Card, CardGrid, InstallPrompt, SourceLink, Spoiler, Upd
 Prompt shortcuts for Claude Code: type `++r` to attach a saved instruction block, read its text before you send, add your own with `/placeholders`.
 
 <p align="center">
-  <img src="/brewmods/placeholders.gif" alt="Claude Code terminal. Typing ++ opens a list of placeholders; the Up arrow selects ++r and Tab inserts it. Moving the caret onto ++r shows its full review text above the prompt, and Enter sends the prompt; Claude reviews a one-line README fix. Then /placeholders global add ++db: always use the staging DB asks one question, Save as drafted, and saves to ~/.claude/placeholders/db.md. Typing ++ again, one Up arrow selects the new ++db; with ++r and ++m added, three rows show, and ctrl+x, tab, enter opens their text." width="800" loading="lazy" />
-  <br /><small>Real Claude Code 2.1.301 screens, sped up where the title bar shows ⏩. Type <code>++</code>, pick <code>++r</code> with <code>↑</code> and <code>⇥</code>; the caret on it shows its full text, <code>⏎</code> sends. <code>/placeholders global add ++db: …</code> saves your own after one question. With three tokens, <code>ctrl+x → tab → enter</code> (one key after another) shows the text of every block.</small>
+  <img src="/brewmods/placeholders.gif" alt="Claude Code terminal, real session: ++ opens the placeholder list, Tab inserts ++r, the caret on it shows the lines Claude receives, and /placeholders global add ++db saves your own after one question." width="800" loading="lazy" />
+  <br /><small>Real Claude Code 2.1.301 screens, sped up where the title bar shows ⏩. <code>++</code>, <code>↑</code>, <code>⇥</code> insert <code>++r</code>; <code>⏎</code> sends; <code>/placeholders global add ++db: …</code> saves your own.</small>
 </p>
 
 <SourceLink path="brewmod-placeholders/README.md" anchor="prompt-placeholders" variant="mod" />
@@ -39,7 +39,7 @@ Then run `/reload-plugins`. Works on Team organizations.
 
 <InstallPrompt plugin="brewmod-placeholders" mode="update" />
 
-Dev mode, no install: `claude --plugin-dir ./brewmod-placeholders`. Claude Code **2.1.292+** and `node` on the `PATH` (the bundled command hook runs as plain Node). Builds 2.1.287 to 2.1.291 refuse to load the mod; earlier ones lack the `prompt.autocomplete` event. Adding, changing or removing a placeholder through Claude, and Enter on `++r?`, need Claude Code **2.1.300+**; older builds print `needs Claude Code 2.1.300+ for the dialog`. Mods use the hooks module API, which is early access.
+Dev mode, no install: `claude --plugin-dir ./brewmod-placeholders`. Claude Code **2.1.292+** and `node` on the `PATH` (the bundled command hook runs as plain Node). Builds 2.1.287 to 2.1.291 refuse to load the mod; earlier ones lack the `prompt.autocomplete` event. Adding, changing or removing a placeholder through Claude, and Enter on `++r?`, need Claude Code **2.1.300+**; older builds print `changing placeholders by words needs Claude Code 2.1.300+ · meanwhile: edit the <name>.md files by hand`. Mods use the hooks module API, which is early access.
 
 </Spoiler>
 
@@ -47,9 +47,8 @@ Dev mode, no install: `claude --plugin-dir ./brewmod-placeholders`. Claude Code 
 | Want | Do |
 |---|---|
 | Add a block | `++r check the diff`, then Enter. The block is sent as hidden context; your prompt stays as typed |
-| Read a token's text while typing | Put the caret on it (arrows, Home, End) or type `++r?`. The band shows up to 15 rows of it; with the menu capping the view, type `?` after the token for more. `/placeholders show ++m` prints the whole text. Move the caret off to return to the compact band |
-| See exactly what will be sent | A `Show text` button appears with 1-2 tokens only when the opened band has more rows than the preview, and with 3+ tokens (at least one with a body) always: `ctrl+x → tab → enter`, one key after another; `Esc` takes you back ([keys](#keys-on-macos)). With no button that sequence is not available and Enter sends the prompt |
-| Print texts in the chat | `/placeholders show ++r ++m`, or `/placeholders show me ++m and ++r`; `/placeholders list` prints all. Or type `++r?` alone and press Enter twice. Full help: `/placeholders help`, or `/placeholders` plus a question in your own words |
+| Read a token's text while typing | Put the caret on it (arrows, Home, End). The band shows up to 15 rows of its text, cut row and plan note included; move the caret off to return to the compact band ([details](#read-the-full-text)) |
+| Print the whole text | `/placeholders show ++r`, or `++r?` alone and Enter twice ([how](#read-the-full-text)). `/placeholders list` prints all. Full help: `/placeholders help`, or `/placeholders` plus a question in your own words |
 | Make your own | `/placeholders add ++ship: …`. With no scope word the one dialog also asks `Where` (Global recommended, or Project); start with `global` or `project` to skip that question |
 
 ## What Claude receives
@@ -59,17 +58,19 @@ Claude reads  ++r check the diff                     <- your prompt, unchanged
             + hidden context (not shown in the transcript, not even with ctrl+o):
               User typed `++r` — Two-phase review discipline is active for this turn:
               [REVIEW DISCIPLINE: DOUBLE-CHECK]
-              Every significant change: multi-agent review ... (9 lines)
+              Every significant change: multi-agent review ... (11 lines in all)
 ```
 
 | Token | Normal mode | Plan mode |
 |---|---|---|
-| `++m` | `Manager mode is active`: `[ROLE: MANAGER]`, delegate, never code (27 lines) | `Manager + Plan Mode is active`: the same text **+ `[ADDON: PLAN MODE]`**: stay read-only; the plan opens with the role and the full task graph, plus a deferred anti-drift cron (57 lines) |
+| `++m` | `Manager mode is active`: `[ROLE: MANAGER]`, delegate, never code (29 lines) | `Manager + Plan Mode is active`: the same text **+ `[ADDON: PLAN MODE]`**: stay read-only; the plan opens with the role and the full task graph, plus a deferred anti-drift cron (59 lines) |
 | `++a` | `Architecture-first`: delegate the design to expert agents before implementing | same text: `++a` has no plan part |
-| `++r` | `[REVIEW DISCIPLINE: DOUBLE-CHECK]`: review, reproduce, fix confirmed findings only (9 lines) | same text: `++r` has no plan part |
+| `++r` | `[REVIEW DISCIPLINE: DOUBLE-CHECK]`: review, reproduce, fix confirmed findings only (11 lines) | same text: `++r` has no plan part |
 | `++rr` | `Anti-regression review`: regression, project standard and functional correctness axes | same text: `++rr` has no plan part |
 | `+++` | nothing | `[ADDON: ANTI-DRIFT CRON PLAN]` |
 | `++rr` + `++r` | only `++rr` is sent (one review per message) | same |
+
+Line counts are lines of the sent text, header line included: the numbers the band uses.
 
 <Spoiler title="++r text as sent">
 
@@ -164,13 +165,42 @@ Your own placeholder can have a plan part too: see [Examples](#examples).
 ## Keys on macOS
 | Hint on screen | Mac key | Glyph | Does |
 |---|---|---|---|
-| `ctrl+x` | Control + X (Control, not Command) | ⌃X | First key of the band sequence (only while the `Show text` button exists): `ctrl+x → tab → enter` is one key after another, never together (Control+X, release, Tab within 3 s, then Return); cancels after 3 s |
-| `tab` | Tab | ⇥ | Inserts the selected typeahead name. Within 3 s after `ctrl+x`, it focuses the band button instead |
-| `enter` | Return | ⏎ | Sends the prompt. On the focused band button it switches `Show text`/`Hide text` and sends nothing |
-| `esc` | Esc | ⎋ | Closes the typeahead; leaves the band, back to typing |
+| `tab` | Tab | ⇥ | Inserts the selected typeahead name |
+| `enter` | Return | ⏎ | Sends the prompt. On `++r?` alone it runs the query instead ([how](#read-the-full-text)) |
+| `esc` | Esc | ⎋ | Closes the typeahead, back to typing |
 | `↑` `↓` `←` `→` | arrow keys | ↑↓←→ | Move in the typeahead (↑↓) or onto a token to read its text (←→) |
-| `shift+tab` | Shift + Tab | ⇧⇥ | Default mode (`⏸ manual mode on`): twice, accept edits then plan; or type `/plan`. The band shows `plan mode adds:` only after your first prompt in plan mode. The effort toast comes from the other mod, [brewmod-plan-effort](/mods/plan-effort/) |
+| `shift+tab` | Shift + Tab | ⇧⇥ | Default mode (`⏸ manual mode on`): twice, accept edits then plan; or type `/plan`. The band does not change at the press, entering or leaving plan mode: it shows the mode of your last completed prompt, so `plan mode adds:` appears only after a prompt has run in plan mode. The next prompt is still sent with the new mode's text. The effort toast comes from the other mod, [brewmod-plan-effort](/mods/plan-effort/) |
 | `ctrl+o` | Control + O | ⌃O | Transcript view: your prompt and the answer only. The injected text is NOT there; use the band or `/placeholders show` |
+
+## Read the full text
+
+<p align="center">
+  <img src="/brewmods/placeholders-full-text.gif" alt="Claude Code terminal, real session: the caret on ++m shows its text cut to fit; ? then Enter fills /placeholders show ++m, and Enter again prints the whole text in the chat without a Claude turn." width="800" loading="lazy" />
+  <br /><small>Real Claude Code 2.1.301 screens. Caret on <code>++m</code>; <code>?</code> and <code>⏎</code> fill the show command, nothing is sent; <code>⏎</code> again prints the whole text.</small>
+</p>
+
+| Where you look | It shows | How |
+|---|---|---|
+| The band above the prompt | Up to 15 rows of what Claude receives, cut row and plan note included | Put the caret on the token (arrows, Home, End); move it off to close |
+| The chat, `/placeholders show ++m` | The whole text, printed locally; nothing is sent to Claude | Type it, or type `++m?` alone and press Enter twice (below) |
+| The chat, `/placeholders list` | Every placeholder with its text, normal and plan mode | Type it |
+
+**What `?` does.** A `?` right after a token, with nothing else in the message, is a query, not text. The first Enter fills `/placeholders show ++m ` in the box and sends nothing to Claude. Claude Code prefixes the notice: `Prompt dropped by a hook: ++m? = /placeholders show ++m · not sent to Claude · press Enter to print it`. That is the expected result: nothing was sent. The second Enter prints the text in the chat. A query needs Claude Code **2.1.300+**; in a longer message (`check ++r?`) or on an older build, `++r?` is ordinary text: the `++r` block is sent and the `?` stays.
+
+While the name menu is open (typing `++r` offers `++rr`), it caps the band, and a `?` right after the token closes it. If the whole text then fits in 15 rows, the cut row ends with `· type ? after ++r to see all`. `++m` never shows that hint: its 29 lines do not fit in 15 rows. Otherwise the band looks the same with or without the `?`: the caret already shows the text.
+
+Band with the caret on `++m` (default mode, 120x40). Plain text is exactly what Claude receives; grey (dim) text is explanation and is never sent.
+
+```text
+++m · Claude receives these lines now:                     ++m coloured, rest dim
+  User typed `++m` — Manager mode is active ...            plain, header bold
+  ... 12 more text rows (13 in all) ...                    plain
+  ... 16 more lines · whole text: /placeholders show ++m   dim
+  not sent now · plan mode adds 29 lines                   dim
+close: move the caret off ++m · send as typed: ++/         dim
+```
+
+The text under the head holds up to 15 rows, the cut row and the plan note included; the head and foot rows (and an `also:` row) come on top. The text rows are wrapped to the terminal width, so how many fit changes with it. `K more lines` counts the lines of the sent text left out (its header line and blank line included): `++m` is 29 lines, 13 text rows shown at 120x40 (13 + the cut row + the plan note = 15). `plan mode adds N lines` counts the lines of the plan part. In plan mode the band shows the plan header, the normal rows, a dim `plan mode adds:` and then `[ADDON: PLAN MODE]` with its rows. A plan-only token outside plan mode reads `+++ · not sent now (plan only):` with a dim text.
 
 ## Examples
 | Do | You type | What happens |
@@ -180,7 +210,7 @@ Your own placeholder can have a plan part too: see [Examples](#examples).
 | Change | `/placeholders make ++r shorter` | Claude starts from the current text; the change stays in its layer (a plugin default -> asks where) |
 | Remove | `/placeholders remove ++db` | Asks once: `Remove it (Recommended)` or `Keep it`; if the name is in both layers, it also asks where. Removing your override of a built-in brings the built-in back; plugin defaults are never removed (`++r is built in and cannot be removed`). Reply: `removed ++db (global): ~/.claude/placeholders/db.md · ++db is no longer defined` |
 | Remove a plan part | `/placeholders remove the plan part of ++ship` | Asks `Remove the plan-mode part of ++ship (global)?`, then deletes `ship.plan.md`; `++ship` keeps its normal text |
-| Show | `/placeholders show ++r ++m`, or `++r?` alone + Enter | Prints the exact text with no Claude turn: outside plan mode `normal:` then `plan mode adds:`; in plan mode one block `normal + plan mode part:` as sent. An inline placeholder that does not expand shows `stays as typed`; an empty body silences the token, in plan mode too. With `++r?`, the first Enter sends nothing and fills `/placeholders show ++r`; the second Enter prints it |
+| Show | `/placeholders show ++r ++m`, or `++r?` alone + Enter | Prints the exact text with no Claude turn: outside plan mode `normal:` then `plan mode adds:`; in plan mode one block `normal + plan mode part:` as sent. An inline placeholder that does not expand shows `stays as typed`; an empty body silences the token, in plan mode too. For `++r?` see [Read the full text](#read-the-full-text) |
 | List | `/placeholders list` | Prints every placeholder with its text as sent, normal and plan mode, with no Claude turn |
 | Escape | `++/ what does ++r do?` | Sent exactly as typed: no block, `++/` stays in the text |
 | Scope | `/placeholders project add ++lint: run npm run lint first` | Reply: `saved ++lint (project): .claude/placeholders/lint.md`; the project copy wins over global |
@@ -188,7 +218,7 @@ Your own placeholder can have a plan part too: see [Examples](#examples).
 ## Commands
 | Command | What it does |
 |---------|--------------|
-| `/placeholders` (also `status`) | One row per name with layer and tags (`plan +`, `plan only`), plus hints for reading texts, escape and scope |
+| `/placeholders` (also `status`) | One row per name with layer and tags (`plan +`, `plan only`), plus hints for reading texts (caret, `/placeholders show`), escape and scope |
 | `/placeholders show ++<name> ...`, `list`, `help` | Print the exact text sent (`list` = all, normal and plan), or the full help, with no Claude turn |
 | `/placeholders <anything else>` | Claude answers, or drafts, asks once and saves; any language. A first word `global` or `project` picks the layer; without it your words decide, else one question (Global first) |
 
@@ -196,10 +226,11 @@ Your own placeholder can have a plan part too: see [Examples](#examples).
 | State | What you see |
 |-------|--------------|
 | Highlight, typeahead | Terminal UI only. A known token is underlined; after the prefix, matching names appear, `Tab` inserts one. The one option, `prefix` (default `++`, 2-8 punctuation characters), is set in `/config` |
-| Compact band | `placeholders 3 [ Show text  ctrl+x → tab → enter ]` (the button shows with 3+ tokens, at least one with a body, or with 1-2 tokens when the opened band has more rows than the preview), then one row per token, then `more: put the caret on ++r · send as typed: ++/ · /placeholders help`. `plan +` marks a name with a plan part; a skipped token says why, for example `(not sent: ++rr wins)` |
-| Caret on a token, or `++r?` | Up to 15 rows of that token's text; `move the caret off ++r to close`. A cut ends with `... +K lines · type ? after ++r for more` (menu capping the view) or `... +K lines · /placeholders show ++r`; other tokens sit on one `also: ++m ++a` row |
-| Expanded | `Show text` opened (offered as in the compact band row): exactly what is sent. In plan mode, `plan mode adds:` then the addition. Outside it: `+ plan-mode part, N lines · sent in plan mode` |
-| Escaped, unknown | `++/` in the message: `placeholders off: this message is sent exactly as typed`, every token `(not sent: ++/ in this message)`. An unknown `++zz` shows `unknown placeholder` in a warning colour; on submit a toast names it and the prompt is sent unchanged |
+| Compact band | Header `placeholders 3` (` · plan mode` is appended in plan mode), then one row per token: `++r  <description>`, with `· Claude receives these lines now:` and the text under it when the text is drawn. Rows past the space fold into `... K more placeholders`. Foot: `more: put the caret on ++r · send as typed: ++/ · help: /placeholders help`. `plan +` marks a name with a plan part; a skipped token says why, for example `(not sent: ++rr wins)` |
+| Caret on a token | The band shown in [Read the full text](#read-the-full-text). A plan part that replaces the normal text reads `plan mode sends N lines instead`; other tokens sit on one `also: ++m ++a` row |
+| Rows from other mods | Rows another mod draws above the prompt, for example the yellow plan-mode row of [brewmod-plan-effort](/mods/plan-effort/), stay visible above the band; the band fits into the rows that are left |
+| Escaped | `++/` in the message: header `++/  placeholders off: this message is sent exactly as typed`, every token `(not sent: ++/ in this message)`, foot `turn back on: delete ++/` |
+| Unknown | An unknown `++zz` shows `unknown placeholder` dimmed; while the caret is on it the foot reads `names: /placeholders list`, otherwise the compact foot. On submit a toast names it and the prompt is sent unchanged |
 
 ## Your own files
 | File | Means |
@@ -287,19 +318,21 @@ The highest layer wins, file by file:
 
 <Spoiler id="verified" title="Verified" meta="Claude Code 2.1.301">
 
-Live runs drive the terminal UI in tmux (80, 120 and 200 columns) or use `claude -p`, one turn per case, brewtools disabled. Injections are the `hook_additional_context` rows of the session transcript.
+Live runs drive the terminal UI in tmux (default and fullscreen, 80x24 to 200x60) or use `claude -p`, one turn per case, brewtools disabled. Injections are the `hook_additional_context` rows of the session transcript.
 
 | Check | Result |
 |-------|--------|
-| `node tests/inject-parity.mjs`: frozen texts, layers, state file, fail-open | 303 checks pass: 98 golden vectors, 12 escape, 19 plan-part, 35 layer fixtures |
-| Pre-release live check, terminal UI (default and fullscreen, 80 to 200 columns): caret focus, `++r?` query, compact and expanded band, plan-mode `++m` and `+++`, Shift+Tab, `ctrl+x → tab → enter`, `++/` escape, inline, unknown token, `status`, `help`, `list`, `show`, add and remove with `global` first word | 82 of 82 PASS |
-| Same check, `-p` received-context e2e: `++r`, `++/ ++r`, plan-mode `++m`, plan-mode `++m` with an empty global `m.md`, an inline placeholder | 5 of 5 PASS, counted apart from the 82 (87 rows in all, 0 FAIL): Claude quotes the `r` block, receives no block when escaped, quotes `[ADDON: PLAN MODE]`, receives nothing for the empty `m.md`, and gets the inline body in place of the token |
-| `/placeholders` dialogs (S4), terminal UI, Haiku | Add (global and project), add with a plan part (`ship.md` + `ship.plan.md`), remove, remove the plan part, remove from the project layer when the name is in both layers (`the global ++two is served now`), refusal to remove built-in `++r`; each asks once and writes without a permission prompt |
+| `node tests/inject-parity.mjs`: frozen texts, layers, state file, fail-open | 312 checks pass: 98 golden vectors, 12 escape, 23 plan-part, 3 cap, 35 layer fixtures |
+| Unit tests (`claude plugin test`) | 411 pass, 0 fail, 16 files |
+| Pre-release live check (build fingerprint `aecb636c`, Claude Code 2.1.301), terminal UI in default and fullscreen mode, 80x24 to 200x60: caret focus, `++r?` query and its fill, compact band, cut rows, plan-mode `++m` and `+++`, Shift+Tab, `++/` escape, inline, unknown token, `status`, `help`, `list`, `show`, add and remove with `global` first word | 165 of 165 cases PASS: 159 terminal UI cases and 6 `claude -p` cases |
+| Same check, the 6 `-p` received-context e2e cases, mod tools denied so the answer comes from the received context: `++r`, `++/ ++r`, plan-mode `++m`, plan-mode `++m` with an empty global `m.md`, an inline placeholder | PASS, counted apart from the terminal UI cases: Claude quotes the `r` block, receives no block when escaped, quotes `[ADDON: PLAN MODE]`, receives nothing for the empty `m.md`, and gets the inline body in place of the token |
+| Both mods together (brewmod-placeholders and brewmod-plan-effort), both load orders | PASS: the plan-effort row `plan mode · effort xhigh for this mode · change: /plan-effort <level>` stays above the placeholders band |
+| `/placeholders` dialogs (S4), terminal UI, Haiku, part of the 165 | Add (global and project), add with a plan part (`ship.md` + `ship.plan.md`), remove, remove the plan part, remove from the project layer when the name is in both layers (`the global ++two is served now`), refusal to remove built-in `++r`; each asks once and writes without a permission prompt |
 | Team-org and Max profiles, `--plugin-dir` and marketplace copies, Sonnet: `++r` (2.1.300 run) | 1 block, 571 characters |
 | Custom prefix `@@`, Max, Sonnet: `@@r ++r` (2.1.300 run) | Only the `@@r` block |
 | Latency, p50 (2.1.300 run): typing per keystroke (mod minus control, drafts of 0 / 4,000 / 19,700 chars) and band repaint after a token keystroke | Typing -2.6 / +6.6 / +2.1 ms, token keystrokes +2.4 / +6.6 / +5.6 ms, noise as large as the deltas. Repaint 19 to 21 ms at p50, 44 to 61 ms at p99 |
 
-Not covered live: the 9000-character cap, the `+K more placeholders` row, fullscreen hover and click, the desktop app, VS Code, subagents and other models. Unit tests cover prefix, layers and cap.
+Not covered live: the 9000-character cap, the `... K more placeholders` row, fullscreen hover and click, the desktop app, VS Code, subagents and other models. Unit tests cover prefix, layers and cap.
 
 </Spoiler>
 

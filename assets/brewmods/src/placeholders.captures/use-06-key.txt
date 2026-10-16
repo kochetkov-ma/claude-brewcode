@@ -1,4 +1,3 @@
-  ⎿  · Save ++db as drafted? → Save as drafted (Recommended)
 
 ⏺ brewmod-placeholders - save_placeholder (MCP)(name: "db", text: "always use the
                                                staging DB", description: "Always use the
@@ -6,13 +5,14 @@
   ⎿  saved ++db (global): ~/.claude/placeholders/db.md
 
 ⏺ I saved ++db as a global placeholder in ~/.claude/placeholders/db.md, so it works in
-  all your projects. Typing ++db in a prompt adds "always use the staging DB".
+  all your projects. When you type ++db in a prompt, it adds "always use the staging
+  DB".
 
-✻ Brewed for 7s · done 11:56 PM
+✻ Worked for 8s · done 9:42 AM
 placeholders 1                                                                      [-]
-++db  Always use the staging DB
+++db  Always use the staging DB · Claude receives these lines now:
   always use the staging DB
-more: put the caret on ++db · send as typed: ++/ · /placeholders help
+more: put the caret on ++db · send as typed: ++/ · help: /placeholders help
 
 ────────────────────────────────────────────────────────────────────────────────────────
 ❯ ++db ++

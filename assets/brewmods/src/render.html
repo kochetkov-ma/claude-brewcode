@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>placeholders.gif source · brewmod-placeholders</title>
+<title>brewmods GIF source (?story=&lt;name&gt;)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Work+Sans:wght@400;500&display=swap" rel="stylesheet">
@@ -51,7 +51,7 @@ body { width: 1200px; font: 400 16px/1.5 "Work Sans", system-ui, sans-serif; }
 </style>
 </head>
 <body>
-<section id="hero" aria-label="Claude Code prompt box: type ++r and Tab, caret on it shows its full text, ctrl+x then tab then enter shows the exact text sent, Enter sends, then /placeholders adds ++db and it is used">
+<section id="hero">
   <pre id="ferm" aria-hidden="true"></pre>
   <div class="win" aria-hidden="true">
     <div class="tb"><i></i><i></i><i></i><span class="title">Claude Code</span><span class="right"><span class="chip" id="chip"></span><span class="chap" id="chap"></span></span></div>
@@ -61,12 +61,17 @@ body { width: 1200px; font: 400 16px/1.5 "Work Sans", system-ui, sans-serif; }
   <div class="cap" id="cap" aria-hidden="true"></div>
   <div class="kbd" id="kbd"></div>
 </section>
-<script src="placeholders.story.js"></script>
-<script src="placeholders.data.js"></script>
+<script>
+// ?story=<name> (default placeholders) loads <name>.story.js and <name>.data.js before the renderer runs
+(() => { const n = new URLSearchParams(location.search).get('story') || 'placeholders';
+  if (!/^[a-z0-9-]+$/.test(n)) throw new Error('bad story name: ' + n);
+  document.write(`<script src="${n}.story.js"><\/script><script src="${n}.data.js"><\/script>`); })();
+</script>
 <script>
 (() => {
   const S = window.PH_STORY, D = window.PH_SCREENS || {}, qs = new URLSearchParams(location.search);
   const $ = (id) => document.getElementById(id);
+  if (S.aria) $('hero').setAttribute('aria-label', S.aria);
   const rnd = (i) => { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
   const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
   const span = (t, a, b) => clamp((t - a) / (b - a));

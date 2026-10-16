@@ -5,7 +5,9 @@ import { VECTORS } from './parity/golden.generated'
 import { loadRegistry, newRegistryCache, type Registry } from '../hooks/lib/defs'
 import { block } from '../hooks/lib/command'
 import { compileMatchers } from '../hooks/lib/match'
-import { fullText, helpText, parseArgs, queryNames, shownDirs, statusText, type Action } from '../hooks/lib/show'
+import { fillText, fullText, helpText, parseArgs, queryNames, shownDirs, statusText, type Action } from '../hooks/lib/show'
+import { isMenuOpen } from '../hooks/lib/editor'
+import { DEFAULT_ENTRIES } from '../hooks/lib/editor-state'
 
 const NAMES = ['m', 'a', 'r', 'rr', '+']
 const DIRS = { global: '~/.claude/placeholders', project: '.claude/placeholders' }
@@ -24,7 +26,7 @@ const load = (tree: Tree): Promise<Registry> => loadRegistry(memIo(tree).io, ROO
 const heads = (text: string): string[] => text.split('\n').filter((l) => /^`[^`]/.test(l))
 
 const STATUS_FOOT = [
-  'Full text: put the caret on a token, or type `++r?` · Enter on `++r?` alone sends nothing and fills `/placeholders show ++r` · `/placeholders list` for all',
+  'Caret on a token: the band shows up to 15 rows of what it sends · whole text: `/placeholders show ++r`, or `++r?` alone + Enter twice · `/placeholders list` for all',
   'Send one message as typed: put `++/` anywhere in it',
   'Add, change, remove: `/placeholders <your words>` in any language, e.g. `/placeholders add ++db: use the staging DB`',
   'Where: global = all projects (`~/.claude/placeholders`), project = this one (`.claude/placeholders`, wins over global); start with `global` or `project`, or just say it',
@@ -208,7 +210,8 @@ test('GIVEN the default prefix WHEN the help is built THEN every topic line and 
   expect(helpText('++', DIRS).split('\n'), 'help').toEqual([
     'placeholders help · a placeholder is a short token (++name) that adds saved text to your prompt',
     'Use: type `++m` anywhere in a prompt; Tab completes; the band above the prompt shows what each token sends.',
-    'Full text: put the caret on a token (arrows, Home, End) · type `++r?` to see up to 15 rows of it · Enter on a message of only `++r?` sends nothing and fills `/placeholders show ++r` (Enter again prints the whole text) · `/placeholders show ++r ++m` · `/placeholders list` · every body in the band: `ctrl+x → tab → enter` on Show text.',
+    'Caret on a token (arrows, Home, End): the band shows up to 15 rows of what it sends; `?` right after the token only makes room for those rows while the name menu is open.',
+    'Whole text, printed in the chat, not sent to Claude: `/placeholders show ++r` (several: `/placeholders show ++r ++m`) · or `++r?` alone in a message: Enter fills that command, Enter again prints it · all: `/placeholders list`.',
     'Send as typed: `++/` (or `++\\`) anywhere in a message turns every placeholder in it off; the marker stays in the text.',
     'Plan mode: `<name>.plan.md` with `plan: add` adds its text to `<name>.md` only in Plan mode (built-in `++m` works this way); without `plan: add` it replaces the text; `when: plan` in `<name>.md` alone = plan-only (`+++`). The band marks `plan +` and shows "plan mode adds:"; one review per message (`++rr` wins over `++r`).',
     'Add, change, remove: `/placeholders <your words, any language>`; Claude drafts, asks once, saves. E.g. `/placeholders add ++db: use the staging DB` · `/placeholders global make ++r shorter` · `/placeholders удали ++db` · `/placeholders add a plan-mode part to ++db: plan first, then build`.',
@@ -373,7 +376,7 @@ test('GIVEN the placeholders_help tool WHEN the model calls it THEN the help tex
   expect(out, 'tool result').toEqual({ result: helpText('++', WIRED_DIRS), text: helpText('++', WIRED_DIRS) })
 })
 
-test('GIVEN a typed prompt of only ++r? ++m? WHEN it is submitted THEN it is dropped, nothing reaches Claude and the box gets the show command', async ($, on) => {
+test('GIVEN a typed prompt of only ++r? ++m? WHEN it is submitted THEN it is dropped, nothing reaches Claude and the box gets the show command with a trailing space', async ($, on) => {
   const clock = mock.clock(on, { now: 0 })
   const ops = wireAll(on, defaultsTree())
   await boot($)
@@ -384,8 +387,19 @@ test('GIVEN a typed prompt of only ++r? ++m? WHEN it is submitted THEN it is dro
   expect({ out, submits: ops.submits.map((x) => x.text), fills: ops.fills, runs: ops.runs }, 'P1').toEqual({
     out: { drop: '++r? ++m? = /placeholders show ++r ++m · not sent to Claude · press Enter to print it' },
     submits: [],
-    fills: [{ text: '/placeholders show ++r ++m', mode: 'replace', origin: { kind: 'plugin', name: 'brewmod-placeholders' } }],
+    fills: [{ text: '/placeholders show ++r ++m ', mode: 'replace', origin: { kind: 'plugin', name: 'brewmod-placeholders' } }],
     runs: [],
+  })
+})
+
+test('GIVEN the P1 fill and the same line typed by hand WHEN the name menu is checked at the end of each THEN only the hand-typed token opens it', async () => {
+  const filled = fillText('++', ['r'])
+  const typedLines = ['/placeholders show ++', '/placeholders show ++r']
+
+  expect({ filled, fillMenu: isMenuOpen('++', filled, filled.length, DEFAULT_ENTRIES), typedMenus: typedLines.map((t) => isMenuOpen('++', t, t.length, DEFAULT_ENTRIES)) }, 'menu after fill vs typed').toEqual({
+    filled: '/placeholders show ++r ',
+    fillMenu: false,
+    typedMenus: [true, true],
   })
 })
 
@@ -407,7 +421,7 @@ test('GIVEN user names that are cue words WHEN ++fix? ++all? ++!? is submitted a
 
   expect({ out, fill, shown: shown.text, submits: ops.submits.map((x) => x.text) }, 'prefixed fill').toEqual({
     out: { drop: '++fix? ++all? ++!? = /placeholders show ++fix ++all ++! · not sent to Claude · press Enter to print it' },
-    fill: '/placeholders show ++fix ++all ++!',
+    fill: '/placeholders show ++fix ++all ++! ',
     shown: ['++fix, ++all, ++! · full text as sent · plan mode off', '`++fix` · project', block('normal:', ['FIX']), '`++all` · project', block('normal:', ['ALL']), '`++!` · project', block('normal:', ['BANG'])].join('\n'),
     submits: [],
   })

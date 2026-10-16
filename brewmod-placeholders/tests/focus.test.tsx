@@ -2,7 +2,7 @@ import { test, expect } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import { PLUG, ROOT, STATE_FILE, bandTexts, bootBand, box, defaultsTree, mountBand, textsOf, typed, type Tree } from './layer-io'
 import { defaultDefs } from './fixtures'
-import { bandState, budgets, wrapRows } from '../hooks/lib/band'
+import { bandState, budgets, receivesLabel, wrapRows, type BandRow } from '../hooks/lib/band'
 import { caretFocus, isMenuOpen } from '../hooks/lib/editor'
 import { DEFAULT_ENTRIES } from '../hooks/lib/editor-state'
 import { compileMatchers, markerOf, scanDraft } from '../hooks/lib/match'
@@ -26,6 +26,36 @@ test('GIVEN lines, a long word, spaces and wide characters WHEN pre-wrapped THEN
     ['abc def'],
     [''],
     ['x'.repeat(97)],
+  ])
+})
+
+const row = (body: string, extra: Partial<BandRow> = {}): BandRow => ({ text: '++x', name: 'x', isKnown: true, description: 'X', body, isPlanOnly: false, ...extra })
+
+test('GIVEN rows sent now, in the other mode, cut, not sent, empty and unknown WHEN the receives label is built THEN it says sent now, not sent in this mode, or is null when nothing is sent', async () => {
+  const cases: [BandRow, boolean][] = [
+    [row('a\nb\nc'), false],
+    [row('one'), true],
+    [row('p1\np2', { isPlanOnly: true }), false],
+    [row('p1\np2', { isPlanOnly: true }), true],
+    [row('n1', { reason: 'not in plan mode' }), true],
+    [row('c1\n...[truncated]', { reason: 'cut at 9000 chars' }), false],
+    [row('', { reason: 'not sent: ++rr wins' }), false],
+    [row('t', { reason: 'not sent: plugin files removed' }), false],
+    [row(''), false],
+    [row('', { isKnown: false }), false],
+  ]
+
+  expect(cases.map(([r, isPlan]) => receivesLabel(r, isPlan)), 'labels').toEqual([
+    'Claude receives these lines now:',
+    'Claude receives these lines now:',
+    'not sent now (plan only):',
+    'Claude receives these lines now:',
+    'not sent in plan mode:',
+    'Claude receives these lines now (cut at 9000 chars):',
+    null,
+    null,
+    null,
+    null,
   ])
 })
 
@@ -142,8 +172,9 @@ const R_ROWS = [
   "acceptance, what's covered (don't re-litigate), who consumes the verdict;",
   'return verdict first, then findings.',
 ]
-const R_DESC = '  Two-phase review: review every significant change, then double-check each finding'
-const R_FOOT = 'move the caret off ++r to close · send as typed: ++/'
+// Focus head: the token, then the receives label instead of the description.
+const RECV = ' · Claude receives these lines now:'
+const R_FOOT = 'close: move the caret off ++r · send as typed: ++/'
 const LONG = Array.from({ length: 40 }, (_, i) => `long-line-${i + 1}`)
 
 test('GIVEN ++r typed while ++rr is offered WHEN the band mounts at 24, 30 and 40 rows THEN the cut row names ? only where ? would show the whole text', async ($, on) => {
@@ -151,9 +182,9 @@ test('GIVEN ++r typed while ++rr is offered WHEN the band mounts at 24, 30 and 4
   await typed($, '++r')
 
   expect([await bandTexts($, 24), await bandTexts($, 30), await bandTexts($, 40)], 'focus under the menu').toEqual([
-    ['++r', R_DESC, ...R_ROWS.slice(0, 3), '... +8 lines · /placeholders show ++r', R_FOOT],
-    ['++r', R_DESC, ...R_ROWS.slice(0, 6), '... +5 lines · type ? after ++r for more', R_FOOT],
-    ['++r', R_DESC, ...R_ROWS, R_FOOT],
+    ['++r', RECV, ...R_ROWS.slice(0, 3), '... 8 more lines · whole text: /placeholders show ++r', R_FOOT],
+    ['++r', RECV, ...R_ROWS.slice(0, 6), '... 5 more lines · type ? after ++r to see all', R_FOOT],
+    ['++r', RECV, ...R_ROWS, R_FOOT],
   ])
 })
 
@@ -161,7 +192,7 @@ test('GIVEN ++r? typed WHEN the band mounts at 24 rows THEN the menu is closed, 
   await boot($, on)
   await typed($, '++r?')
 
-  expect(await bandTexts($, 24), 'query focus').toEqual(['++r', R_DESC, ...R_ROWS.slice(0, 9), '... +2 lines · /placeholders show ++r', R_FOOT])
+  expect(await bandTexts($, 24), 'query focus').toEqual(['++r', RECV, ...R_ROWS.slice(0, 9), '... 2 more lines · whole text: /placeholders show ++r', R_FOOT])
 })
 
 test('GIVEN ++r? typed and the caret moved between ++r and ? WHEN the band mounts at 24 and 30 rows THEN the menu caps FOCUS and the cut row names the show command, never ?', async ($, on) => {
@@ -170,8 +201,8 @@ test('GIVEN ++r? typed and the caret moved between ++r and ? WHEN the band mount
   await move($, 3)
 
   expect([await bandTexts($, 24), await bandTexts($, 30)], 'caret before the ?').toEqual([
-    ['++r', R_DESC, ...R_ROWS.slice(0, 3), '... +8 lines · /placeholders show ++r', R_FOOT],
-    ['++r', R_DESC, ...R_ROWS.slice(0, 6), '... +5 lines · /placeholders show ++r', R_FOOT],
+    ['++r', RECV, ...R_ROWS.slice(0, 3), '... 8 more lines · whole text: /placeholders show ++r', R_FOOT],
+    ['++r', RECV, ...R_ROWS.slice(0, 6), '... 5 more lines · whole text: /placeholders show ++r', R_FOOT],
   ])
 })
 
@@ -179,11 +210,11 @@ for (const surface of ['terminal', 'desktop'] as const) {
   test(`GIVEN a 40-line placeholder under the caret on ${surface} WHEN the band mounts at 40 and 24 rows THEN at most 15 rows show and the last one names the show command`, async ($, on) => {
     await boot($, on)
     await typed($, 'see ++long')
-    const foot = 'move the caret off ++long to close · send as typed: ++/'
+    const foot = 'close: move the caret off ++long · send as typed: ++/'
 
     expect([await bandTexts($, 40, surface), await bandTexts($, 24, surface)], 'capped long focus').toEqual([
-      ['++long', '  Long mode', ...LONG.slice(0, 14), '... +26 lines · /placeholders show ++long', foot],
-      ['++long', '  Long mode', ...LONG.slice(0, 9), '... +31 lines · /placeholders show ++long', foot],
+      ['++long', RECV, ...LONG.slice(0, 14), '... 26 more lines · whole text: /placeholders show ++long', foot],
+      ['++long', RECV, ...LONG.slice(0, 9), '... 31 more lines · whole text: /placeholders show ++long', foot],
     ])
   })
 }
@@ -191,16 +222,16 @@ for (const surface of ['terminal', 'desktop'] as const) {
 test('GIVEN two tokens and the caret on the second WHEN the band mounts at 40 and 24 rows THEN the focused text shows, the other token sits on one also row and the band keeps its budget', async ($, on) => {
   await boot($, on)
   await typed($, 'see ++yy and ++long')
-  const foot = 'move the caret off ++long to close · send as typed: ++/'
+  const foot = 'close: move the caret off ++long · send as typed: ++/'
 
   expect([await bandTexts($, 40), await bandTexts($, 24)], 'focus with another token').toEqual([
-    ['++long', '  Long mode', ...LONG.slice(0, 14), '... +26 lines · /placeholders show ++long', 'also: ++yy', foot],
-    ['++long', '  Long mode', ...LONG.slice(0, 8), '... +32 lines · /placeholders show ++long', 'also: ++yy', foot],
+    ['++long', RECV, ...LONG.slice(0, 14), '... 26 more lines · whole text: /placeholders show ++long', 'also: ++yy', foot],
+    ['++long', RECV, ...LONG.slice(0, 8), '... 32 more lines · whole text: /placeholders show ++long', 'also: ++yy', foot],
   ])
 })
 
-// Auto view at 45 rows: 15 rows, ++long gets 10 of them and the Button opens the rest.
-const COMPACT = ['placeholders 2 ', '++yy', '  Why mode', 'YY BODY', '++long', '  Long mode', ...LONG.slice(0, 9), '... +31 lines', 'more: put the caret on ++yy · send as typed: ++/ · /placeholders help']
+// Auto view at 45 rows: 15 rows, ++long gets 10 of them; the cut row names the show command.
+const COMPACT = ['placeholders 2', '++yy', '  Why mode', RECV, 'YY BODY', '++long', '  Long mode', RECV, ...LONG.slice(0, 9), '... 31 more lines · whole text: /placeholders show ++long', 'more: put the caret on ++yy · send as typed: ++/ · help: /placeholders help']
 
 test('GIVEN a draft typed past its tokens WHEN Left lands on ++yy, then on the space, then End leaves the draft THEN compact, focus, compact', async ($, on) => {
   await boot($, on)
@@ -214,7 +245,7 @@ test('GIVEN a draft typed past its tokens WHEN Left lands on ++yy, then on the s
 
   expect({ compact1, focused, off, compact2: await bandTexts($, 45) }, 'band per caret').toEqual({
     compact1: COMPACT,
-    focused: ['++yy', '  Why mode', 'YY BODY', 'also: ++long', 'move the caret off ++yy to close · send as typed: ++/'],
+    focused: ['++yy', RECV, 'YY BODY', 'also: ++long', 'close: move the caret off ++yy · send as typed: ++/'],
     off: COMPACT,
     compact2: COMPACT,
   })
@@ -239,7 +270,7 @@ for (const surface of ['terminal', 'desktop'] as const) {
       '  (not sent: ++/ in this message)',
       '++long',
       '  (not sent: ++/ in this message)',
-      'delete ++/ to turn them back on',
+      'turn back on: delete ++/',
     ])
   })
 }
@@ -252,8 +283,8 @@ test('GIVEN ++/ and twelve unknown tokens WHEN the escaped band mounts at 24 row
     '++/',
     '  placeholders off: this message is sent exactly as typed',
     ...Array.from({ length: 9 }, (_, i) => [`++u${i + 1}`, '  (not sent: ++/ in this message)']).flat(),
-    '... +3 more placeholders',
-    'delete ++/ to turn them back on',
+    '... 3 more placeholders',
+    'turn back on: delete ++/',
   ])
 })
 
@@ -267,8 +298,8 @@ test('GIVEN a mounted escaped band WHEN one edit deletes the first marker and le
   await ui.unmount()
 
   expect({ before, after }, 'marker per edit').toEqual({
-    before: ['++/', '  placeholders off: this message is sent exactly as typed', '++yy', '  (not sent: ++/ in this message)', 'delete ++/ to turn them back on'],
-    after: ['++\\', '  placeholders off: this message is sent exactly as typed', '++yy', '  (not sent: ++\\ in this message)', 'delete ++\\ to turn them back on'],
+    before: ['++/', '  placeholders off: this message is sent exactly as typed', '++yy', '  (not sent: ++/ in this message)', 'turn back on: delete ++/'],
+    after: ['++\\', '  placeholders off: this message is sent exactly as typed', '++yy', '  (not sent: ++\\ in this message)', 'turn back on: delete ++\\'],
   })
 })
 
@@ -276,7 +307,7 @@ test('GIVEN the backslash marker typed WHEN the band mounts on desktop, which ha
   await boot($, on)
   await typed($, 'go ++yy ++\\')
 
-  expect(await bandTexts($, 24, 'desktop'), 'desktop escaped band').toEqual(['++\\', '  placeholders off: this message is sent exactly as typed', '++yy', '  (not sent: ++\\ in this message)', 'delete ++\\ to turn them back on'])
+  expect(await bandTexts($, 24, 'desktop'), 'desktop escaped band').toEqual(['++\\', '  placeholders off: this message is sent exactly as typed', '++yy', '  (not sent: ++\\ in this message)', 'turn back on: delete ++\\'])
 })
 
 test('GIVEN only the marker, or the backslash marker WHEN the band mounts THEN the escape rows name the marker typed', async ($, on) => {
@@ -286,29 +317,9 @@ test('GIVEN only the marker, or the backslash marker WHEN the band mounts THEN t
   await typed($, 'go ++yy ++\\')
 
   expect({ alone, back: await bandTexts($, 24) }, 'escape markers').toEqual({
-    alone: ['++/', '  placeholders off: this message is sent exactly as typed', 'delete ++/ to turn them back on'],
-    back: ['++\\', '  placeholders off: this message is sent exactly as typed', '++yy', '  (not sent: ++\\ in this message)', 'delete ++\\ to turn them back on'],
+    alone: ['++/', '  placeholders off: this message is sent exactly as typed', 'turn back on: delete ++/'],
+    back: ['++\\', '  placeholders off: this message is sent exactly as typed', '++yy', '  (not sent: ++\\ in this message)', 'turn back on: delete ++\\'],
   })
-})
-
-test('GIVEN three tokens and the band opened WHEN the caret lands on one and leaves THEN focus replaces the opened band and the opened band comes back', async ($, on) => {
-  await boot($, on)
-  await typed($, '++yy ++long ++a go')
-  const ui = await mountBand($, 45)
-  await ui.press({ key: 'toggle' })
-  const opened = (await ui.find({ key: 'toggle' }))?.props
-  await ui.unmount()
-  await move($, 4)
-  const focused = await bandTexts($, 45)
-  await move($, 18)
-  const back = await mountBand($, 45)
-
-  expect({ opened, focused, back: (await back.find({ key: 'toggle' }))?.props }, 'opened, focused, back').toEqual({
-    opened: { key: 'toggle', label: 'Hide text  ctrl+x → tab → enter' },
-    focused: ['++yy', '  Why mode', 'YY BODY', 'also: ++long ++a', 'move the caret off ++yy to close · send as typed: ++/'],
-    back: { key: 'toggle', label: 'Hide text  ctrl+x → tab → enter' },
-  })
-  await back.unmount()
 })
 
 test('GIVEN the plugin files gone from the start WHEN ++r is focused THEN its row says not sent and the foot is the reload line', async ($, on) => {
@@ -369,16 +380,17 @@ const M_ADDITION = [
   ' ',
   'Include in the plan (English, token economy):',
 ]
-const M_DESC = '  Manager mode: orchestrate and delegate, never code in the main context'
-const M_FOOT = 'move the caret off ++m to close · send as typed: ++/'
-const M_NOTE = '+ plan-mode part, 29 lines · sent in plan mode'
+// Compact head: the description gives way to plan + and the receives label.
+const M_DESC = '  Manager mode: orchestrate and delegate, never code i…'
+const M_FOOT = 'close: move the caret off ++m · send as typed: ++/'
+const M_NOTE = 'not sent now · plan mode adds 29 lines'
 const PLAN_TREE: Tree = { ...TREE, [STATE_FILE]: JSON.stringify({ mode: 'plan', ts: 1 }) }
 const XX = {
   [`${ROOT}/.claude/placeholders/xx.md`]: file('xx', 'Ex mode', 'XX BODY'),
   [`${ROOT}/.claude/placeholders/xx.plan.md`]: '---\nname: "xx"\ndescription: "Ex mode"\nwhen: plan\n---\nXX PLAN\nSECOND',
 }
 
-test('GIVEN plan mode and ++m under the caret WHEN the band mounts THEN the normal rows, a bold plan mode adds: row, then the addition, each cut on its own', async ($, on) => {
+test('GIVEN plan mode and ++m under the caret WHEN the band mounts THEN the head says what Claude receives, then the normal rows, a dim plan mode adds: row and the addition, each cut on its own', async ($, on) => {
   await boot($, on, PLAN_TREE)
   await typed($, '++m')
   const ui = await mountBand($, 40)
@@ -386,20 +398,20 @@ test('GIVEN plan mode and ++m under the caret WHEN the band mounts THEN the norm
   await ui.unmount()
 
   expect({ texts: await bandTexts($, 40), mark }, 'plan focus').toEqual({
-    texts: ['++m', M_DESC, ' plan +', MP_HEAD, ' ', ...M_BODY.slice(0, 4), '... +28 lines', 'plan mode adds:', ...M_ADDITION, '... +23 lines · /placeholders show ++m', M_FOOT],
-    mark: { bold: true, color: 'planMode', wrap: 'truncate-end' },
+    texts: ['++m', RECV, MP_HEAD, ' ', ...M_BODY.slice(0, 4), '... 23 more lines', 'plan mode adds:', ...M_ADDITION, '... 23 more lines · whole text: /placeholders show ++m', M_FOOT],
+    mark: { dimColor: true, wrap: 'truncate-end' },
   })
 })
 
-test('GIVEN default mode and ++m WHEN the band mounts focused and compact THEN the row carries plan + and the focus ends with a dim plan-mode part note', async ($, on) => {
+test('GIVEN default mode and ++m WHEN the band mounts focused and compact THEN the compact row carries plan +, the focus head says what Claude receives and both end with a dim not-sent-now plan note', async ($, on) => {
   await boot($, on)
   await typed($, '++m')
   const focused = await bandTexts($, 40)
   await typed($, '++m ')
 
   expect({ focused, compact: await bandTexts($, 40) }, 'default mode').toEqual({
-    focused: ['++m', M_DESC, ' plan +', M_HEAD, ' ', ...M_BODY, '... +21 lines · /placeholders show ++m', M_NOTE, M_FOOT],
-    compact: ['placeholders 1 ', '++m', M_DESC, ' plan +', M_HEAD, ' ', ...M_BODY.slice(0, 8), '... +24 lines', M_NOTE, 'more: put the caret on ++m · send as typed: ++/ · /placeholders help'],
+    focused: ['++m', RECV, M_HEAD, ' ', ...M_BODY, '... 16 more lines · whole text: /placeholders show ++m', M_NOTE, M_FOOT],
+    compact: ['placeholders 1', '++m', M_DESC, ' plan +', RECV, M_HEAD, ' ', ...M_BODY.slice(0, 8), '... 19 more lines · whole text: /placeholders show ++m', M_NOTE, 'more: put the caret on ++m · send as typed: ++/ · help: /placeholders help'],
   })
 })
 
@@ -408,21 +420,23 @@ test('GIVEN plan mode and a compact band WHEN it mounts THEN the head says plan 
   await typed($, '++yy ++m ')
 
   expect(await bandTexts($, 40), 'plan compact').toEqual([
-    'placeholders 2 · plan mode ',
+    'placeholders 2 · plan mode',
     '++yy',
     '  Why mode',
+    RECV,
     'YY BODY',
     '++m',
     M_DESC,
     ' plan +',
+    RECV,
     MP_HEAD,
     ' ',
     ...M_BODY.slice(0, 2),
-    '... +30 lines',
+    '... 25 more lines',
     'plan mode adds:',
     ...M_ADDITION.slice(0, 3),
-    '... +26 lines',
-    'more: put the caret on ++yy · send as typed: ++/ · /placeholders help',
+    '... 26 more lines · whole text: /placeholders show ++m',
+    'more: put the caret on ++yy · send as typed: ++/ · help: /placeholders help',
   ])
 })
 
@@ -435,10 +449,62 @@ test('GIVEN a plan file that replaces its normal text WHEN focused in plan mode 
   tree[STATE_FILE] = JSON.stringify({ mode: 'plan', ts: 2 })
   await $.turn.complete({ turnId: 't1', answer: '', durationMs: 1, isAborted: false, reason: 'answer' })
   await typed($, '++xx')
-  const foot = 'move the caret off ++xx to close · send as typed: ++/'
+  const foot = 'close: move the caret off ++xx · send as typed: ++/'
 
   expect({ normal, plan: await bandTexts($, 40) }, 'replace').toEqual({
-    normal: ['++xx', '  Ex mode', ' plan +', 'XX BODY', '+ plan-mode text, 2 lines · sent in plan mode', foot],
-    plan: ['++xx', '  Ex mode', ' plan +', 'plan mode sends instead:', 'XX PLAN', 'SECOND', foot],
+    normal: ['++xx', RECV, 'XX BODY', 'not sent now · plan mode sends 2 lines instead', foot],
+    plan: ['++xx', RECV, 'plan mode sends instead:', 'XX PLAN', 'SECOND', foot],
   })
+})
+
+// ---- body need: a plan note or a `sends instead` mark takes a row; plan mode's `adds` mark takes the blank separator row
+
+const planAdd = (name: string, body: string): string => `---\nname: "${name}"\ndescription: "${name} plan"\nwhen: plan\nplan: add\n---\n${body}`
+const NEED: Tree = {
+  ...TREE,
+  [`${ROOT}/.claude/placeholders/pp.md`]: file('pp', 'Pp mode', 'P1\nP2\nP3'),
+  [`${ROOT}/.claude/placeholders/pp.plan.md`]: planAdd('pp', 'PA\nPB'),
+  [`${ROOT}/.claude/placeholders/one.md`]: file('one', 'One mode', 'O1'),
+  [`${ROOT}/.claude/placeholders/one.plan.md`]: planAdd('one', 'OA'),
+  [`${ROOT}/.claude/placeholders/nn.md`]: file('nn', 'Nn mode', 'N1\nN2'),
+  [`${ROOT}/.claude/placeholders/nn.plan.md`]: planAdd('nn', 'PA\nPB'),
+  [`${ROOT}/.claude/placeholders/nnn.md`]: file('nnn', 'Nnn mode', 'NNN'),
+}
+const compactFoot = (token: string) => `more: put the caret on ${token} · send as typed: ++/ · help: /placeholders help`
+
+test('GIVEN short bodies with a plan addition in default mode WHEN the compact band mounts THEN each body shows whole and keeps its plan note', async ($, on) => {
+  await boot($, on, NEED)
+  await typed($, '++pp ')
+  const pp = await bandTexts($, 40)
+  await typed($, '++one ')
+
+  expect({ pp, one: await bandTexts($, 40) }, 'whole bodies, plan notes kept').toEqual({
+    pp: ['placeholders 1', '++pp', '  Pp mode', ' plan +', RECV, 'P1', 'P2', 'P3', 'not sent now · plan mode adds 2 lines', compactFoot('++pp')],
+    one: ['placeholders 1', '++one', '  One mode', ' plan +', RECV, 'O1', 'not sent now · plan mode adds 1 line', compactFoot('++one')],
+  })
+})
+
+test('GIVEN a 2-line plan text that replaces its normal text WHEN the compact band mounts in plan mode THEN the sends instead mark and both lines show', async ($, on) => {
+  await boot($, on, { ...TREE, ...XX, [STATE_FILE]: JSON.stringify({ mode: 'plan', ts: 1 }) })
+  await typed($, '++xx ')
+
+  expect(await bandTexts($, 40), 'plan compact replace').toEqual(['placeholders 1 · plan mode', '++xx', '  Ex mode', ' plan +', RECV, 'plan mode sends instead:', 'XX PLAN', 'SECOND', compactFoot('++xx')])
+})
+
+test('GIVEN plan mode, ++nn with a 2-line addition under the caret and the menu open WHEN the band mounts at 19 and 18 rows THEN ? is named exactly where it would show all 5 rows', async ($, on) => {
+  await boot($, on, { ...NEED, [STATE_FILE]: JSON.stringify({ mode: 'plan', ts: 1 }) })
+  await typed($, '++nn')
+  const foot = 'close: move the caret off ++nn · send as typed: ++/'
+
+  expect([await bandTexts($, 19), await bandTexts($, 18)], 'query hint at the boundary').toEqual([
+    ['++nn', RECV, '... 5 more lines · type ? after ++nn to see all', foot],
+    ['++nn', RECV, '... 5 more lines · whole text: /placeholders show ++nn', foot],
+  ])
+})
+
+test('GIVEN a body whose last source line wraps past the cut WHEN the compact band mounts in 40 columns THEN the cut row counts source lines, not wrapped rows', async ($, on) => {
+  await boot($, on, { ...TREE, [`${ROOT}/.claude/placeholders/wrap.md`]: file('wrap', 'Wrap mode', `a\nb\nc\n${'word '.repeat(30).trim()}`) })
+  await typed($, '++wrap ')
+
+  expect(await bandTexts($, 18, 'terminal', 40), 'two source lines hidden').toEqual(['placeholders 1', '++wrap', RECV, 'a', 'b', '... 2 more lines · whole text: /placeholders show ++wrap', compactFoot('++wrap')])
 })

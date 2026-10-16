@@ -259,7 +259,7 @@ test('GIVEN unknown tokens and the default option WHEN the prompt is submitted T
 
   await submit($, '++m ++foo ++Foo ++bar')
 
-  expect([w.toasts, seen.map((s) => s.text)], 'toasts and submit text').toEqual([['unknown ++foo, ++bar'], ['++m ++foo ++Foo ++bar']])
+  expect([w.toasts, seen.map((s) => s.text)], 'toasts and submit text').toEqual([['unknown ++foo, ++bar · sent as typed · names: /placeholders list'], ['++m ++foo ++Foo ++bar']])
 })
 
 test('GIVEN only known tokens or no prefix WHEN submitted THEN there is no toast', async ($, on) => {
@@ -306,7 +306,7 @@ for (const kind of ['composer', 'bridge', 'sdk'] as const) {
 
     await submit($, '++foo', { kind })
 
-    expect(w.toasts, 'toasts').toEqual(['unknown ++foo'])
+    expect(w.toasts, 'toasts').toEqual(['unknown ++foo · sent as typed · names: /placeholders list'])
   })
 }
 
@@ -325,7 +325,7 @@ test('GIVEN a code-like prompt WHEN it is submitted THEN no toast names ++i, ++c
 
   await submit($, 'fix for (i = 0; i < n; ++i) and a[++j] and ++k; then `++tick` and\n```\n++blk\n```\nplus ++typo')
 
-  expect(w.toasts, 'toasts').toEqual(['unknown ++typo'])
+  expect(w.toasts, 'toasts').toEqual(['unknown ++typo · sent as typed · names: /placeholders list'])
 })
 
 test('GIVEN a custom prefix WHEN a prompt holds unknown tokens of both prefixes THEN only the custom ones are named', { options: { prefix: '@@' } }, async ($, on) => {
@@ -334,7 +334,7 @@ test('GIVEN a custom prefix WHEN a prompt holds unknown tokens of both prefixes 
 
   await submit($, '@@zz ++yy')
 
-  expect(w.toasts, 'toasts').toEqual(['unknown @@zz'])
+  expect(w.toasts, 'toasts').toEqual(['unknown @@zz · sent as typed · names: /placeholders list'])
 })
 
 test('GIVEN an unknown token inside an inline body WHEN the prompt is submitted THEN the toast reads the expanded text', async ($, on) => {
@@ -343,7 +343,7 @@ test('GIVEN an unknown token inside an inline body WHEN the prompt is submitted 
 
   await submit($, 'x ++bb')
 
-  expect(w.toasts, 'toasts').toEqual(['unknown ++nope'])
+  expect(w.toasts, 'toasts').toEqual(['unknown ++nope · sent as typed · names: /placeholders list'])
 })
 
 // ---- pure helpers
@@ -352,7 +352,7 @@ test('GIVEN eight unknown tokens WHEN the message is built THEN five are named a
   const ms = compileMatchers('++', ['m'])
   const names = unknownTokens(ms, '++a ++b ++c ++d ++e ++f ++g ++h ++A')
 
-  expect([names.length, unknownMessage(names)], 'count and message').toEqual([8, 'unknown ++a, ++b, ++c, ++d, ++e and 3 more'])
+  expect([names.length, unknownMessage(names)], 'count and message').toEqual([8, 'unknown ++a, ++b, ++c, ++d, ++e and 3 more · sent as typed · names: /placeholders list'])
 })
 
 test('GIVEN known and unknown tokens and a word glued to the prefix WHEN scanned THEN only standalone unknown ones are listed', async () => {

@@ -1,18 +1,18 @@
 [38;5;174m ▝▝[39m   [38;5;174m▝▝[39m   [38;5;246m~/brewery[39m
 
-[38;5;153m++r[38;5;246m  Two-phase review: review every significant change, then double-check each fin…[39m [38;5;246m[-][39m
+[38;5;153m++r[38;5;246m · Claude receives these lines now:[39m                                              [38;5;246m[-][39m
   [1mUser typed `++r` — Two-phase review discipline is active for this turn:[0m
-  [38;5;246m [39m
-  [38;5;246m[REVIEW DISCIPLINE: DOUBLE-CHECK][39m
-  [38;5;246mEvery significant change: multi-agent review (matching reviewer expert, else[39m
-  [38;5;246mgeneral-purpose),[39m [38;5;246msimplification[39m [38;5;246mpass[39m [38;5;246mfirst.[39m
-  [38;5;246m1)[39m [38;5;246mReview[39m [38;5;246m-[39m [38;5;246mfinding[39m [38;5;246m=[39m [38;5;246mdefect[39m [38;5;246mwith[39m [38;5;246mpath:line[39m [38;5;246m+[39m [38;5;246mevidence[39m [38;5;246m(failing[39m [38;5;246mcommand/input).[39m
-  [38;5;246m2)[39m [38;5;246mDouble-check[39m [38;5;246m-[39m [38;5;246mreproduce[39m [38;5;246meach[39m [38;5;246mfinding.[39m
-  [38;5;246m3)[39m [38;5;246mFix[39m [38;5;246m-[39m [38;5;246mconfirmed[39m [38;5;246mfindings[39m [38;5;246monly.[39m
-  [38;5;246mBig[39m [38;5;246mreview[39m [38;5;246m->[39m [38;5;246msplit[39m [38;5;246mby[39m [38;5;246marea,[39m [38;5;246mnever[39m [38;5;246mone[39m [38;5;246mlong[39m [38;5;246mpass.[39m [38;5;246mBrief[39m [38;5;246meach:[39m [38;5;246mgoal[39m [38;5;246m+[39m [38;5;246marea[39m [38;5;246m+[39m
-  [38;5;246macceptance,[39m [38;5;246mwhat's[39m [38;5;246mcovered[39m [38;5;246m(don't[39m [38;5;246mre-litigate),[39m [38;5;246mwho[39m [38;5;246mconsumes[39m [38;5;246mthe[39m [38;5;246mverdict;[39m
-  [38;5;246mreturn[39m [38;5;246mverdict[39m [38;5;246mfirst,[39m [38;5;246mthen[39m [38;5;246mfindings.[39m
-[38;5;246mmove[39m [38;5;246mthe[39m [38;5;246mcaret[39m [38;5;246moff[39m [38;5;246m++r[39m [38;5;246mto[39m [38;5;246mclose[39m [38;5;246m·[39m [38;5;246msend[39m [38;5;246mas[39m [38;5;246mtyped:[39m [38;5;246m++/[39m
+
+  [REVIEW DISCIPLINE: DOUBLE-CHECK]
+  Every significant change: multi-agent review (matching reviewer expert, else
+  general-purpose), simplification pass first.
+  1) Review - finding = defect with path:line + evidence (failing command/input).
+  2) Double-check - reproduce each finding.
+  3) Fix - confirmed findings only.
+  Big review -> split by area, never one long pass. Brief each: goal + area +
+  acceptance, what's covered (don't re-litigate), who consumes the verdict;
+  return verdict first, then findings.
+[38;5;246mclose:[39m [38;5;246mmove[39m [38;5;246mthe[39m [38;5;246mcaret[39m [38;5;246moff[39m [38;5;246m++r[39m [38;5;246m·[39m [38;5;246msend[39m [38;5;246mas[39m [38;5;246mtyped:[39m [38;5;246m++/[39m
 
 [38;5;244m────────────────────────────────────────────────────────────────────────────────────────
 [39m❯ review the diff [4m[38;5;153m++r[0m

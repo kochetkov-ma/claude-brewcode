@@ -167,7 +167,7 @@ test('GIVEN a glued marker WHEN submitted THEN the inline token expands and the 
 
   await submit($, 'c++/java ++ii ++nope')
 
-  expect([seen, w.toasts], 'bottom saw and toasts').toEqual([['c++/java II BODY ++nope'], ['unknown ++nope']])
+  expect([seen, w.toasts], 'bottom saw and toasts').toEqual([['c++/java II BODY ++nope'], ['unknown ++nope · sent as typed · names: /placeholders list']])
 })
 
 test('GIVEN a custom prefix WHEN the other prefix marker is submitted THEN its inline token still expands', { options: { prefix: '@@' } }, async ($, on) => {
