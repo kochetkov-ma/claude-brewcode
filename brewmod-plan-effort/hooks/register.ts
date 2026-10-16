@@ -137,6 +137,6 @@ export const register: Register = (on, options) => {
     if (text === undefined) return next(e)
     const below = await next({ ...e, props: { ...e.props, maxRows: Math.max(1, e.props.maxRows - 1) } })
     const { Box, Text } = $.ui.resolve(e)
-    return Box({ flexDirection: 'column', children: [Text({ color: 'warning', wrap: 'truncate-end', children: text }), below] })
+    return Box({ flexDirection: 'column', children: [Text({ color: 'planMode', wrap: 'truncate-end', children: text }), below] })
   })
 }

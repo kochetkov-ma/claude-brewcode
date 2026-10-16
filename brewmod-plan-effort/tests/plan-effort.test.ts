@@ -374,14 +374,14 @@ for (const surface of SURFACES) {
   })
 }
 
-test('GIVEN a plan step at high WHEN the band draws THEN the row is in the theme warning colour', async ($, on) => {
+test('GIVEN a plan step at high WHEN the band draws THEN the row is in the theme plan-mode colour', async ($, on) => {
   bottoms(on, () => mode('plan'))
   beneath(on)
   await step($, 'high')
   const ui = await $.ui.mount({ plugin: 'brewmod-plan-effort', surface: 'terminal', component: 'AbovePrompt', props: bandProps() } as never)
   const found = await ui.findAll({ type: 'Text', text: /^plan mode/ })
   await ui.unmount()
-  expect(found.map((t: { props: { color?: unknown } }) => t.props.color), 'one warning row').toEqual(['warning'])
+  expect(found.map((t: { props: { color?: unknown } }) => t.props.color), 'one plan-mode row').toEqual(['planMode'])
 })
 
 for (const [effort, planEffort, text] of [
