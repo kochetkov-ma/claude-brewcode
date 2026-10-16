@@ -18,7 +18,8 @@ const SOCK = 'lp'
 const DISABLE = { 'brewmod-placeholders@claude-brewcode': false }
 // The parent session's identity vars; a child that inherits them can attach to it.
 const SCRUB = ['CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT', 'CLAUDE_CODE_SESSION_ID', 'CLAUDE_CODE_CHILD_SESSION', 'CLAUDE_CODE_SESSION_ATTENDED', 'CLAUDE_CODE_MESSAGING_SOCKET', 'CLAUDE_CODE_MESSAGING_TOKEN', 'CLAUDE_CODE_EXECPATH', 'CLAUDE_PID', 'CLAUDE_MODEL', 'CLAUDE_EFFORT', 'CLAUDE_CODE_SSE_PORT']
-const BORDER = /^─{20,}\s*$/
+// The box top may carry a label (`─── History 2/2 ───` while a recall shows).
+const BORDER = /^(?:─{20,}|─{3} \S.* ─{10,})\s*$/
 const BAND_MARK = /send as typed:|move the caret off|names: \/placeholders list|placeholders off:|to turn them back on/
 const POLL_MS = 120
 const STABLE_MS = 350

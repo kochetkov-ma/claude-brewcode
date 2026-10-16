@@ -25,6 +25,9 @@ export const register: Register = (on, options) => {
   const prefix = check.prefix
   const cache = newRegistryCache()
   let hasTools = false // the model tools were registered at session.start
+  // Settles with hasTools once session.start's registration ends: a command typed right after launch waits for it.
+  let toolsSettled: (v: boolean) => void = () => undefined
+  const toolsReady = new Promise<boolean>((resolve) => (toolsSettled = resolve))
   let isPlan = false // permission_mode of the last state file hooks/inject.mjs wrote for this session
   let compiled: Compiled | null = null
   let published: Registry | null = null
@@ -78,6 +81,7 @@ export const register: Register = (on, options) => {
     } catch {
       hasTools = false
     }
+    toolsSettled(hasTools)
     if (check.warning !== null) $.ui.toast(check.warning)
     const reg = await settle(
       loadRegistry(
@@ -117,24 +121,37 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
-  // Zero I/O except the view and focus atoms, each written only when it changes; caret moves arrive here too (inputText '').
-  on('prompt.edit', async ($, e, next) => {
-    const r = await next(e)
-    const h = highlight(editorMatchers(prefix), r.text)
-    const f = { ...caretFocus(h.view, r.text, r.cursor), isMenuOpen: isMenuOpen(prefix, r.text, r.cursor, getEditorEntries()) }
+  // The box's view and focus, each atom written only when it changed; writers spelled at the call site. Returns the highlight.
+  const publish = async (text: string, cursor: number, writeView: (v: PlaceholderView) => Promise<unknown>, writeFocus: (f: CaretFocus) => Promise<unknown>) => {
+    const h = highlight(editorMatchers(prefix), text)
+    const f = { ...caretFocus(h.view, text, cursor), isMenuOpen: isMenuOpen(prefix, text, cursor, getEditorEntries()) }
     try {
       if (shown === null || !sameView(h.view, shown)) {
-        await update($, viewAtom, () => h.view)
+        await writeView(h.view)
         shown = h.view
       }
       if (focused === null || !sameFocus(f, focused)) {
-        await update($, focusAtom, () => f)
+        await writeFocus(f)
         focused = f
       }
     } catch {
       // state write failed: keep the highlight, retry on the next edit
     }
+    return h
+  }
+
+  // Zero I/O except the view and focus atoms, each written only when it changes; caret moves arrive here too (inputText '').
+  on('prompt.edit', async ($, e, next) => {
+    const r = await next(e)
+    const h = await publish(r.text, r.cursor, (v) => update($, viewAtom, () => v), (f) => update($, focusAtom, () => f))
     return h.decorations.length === 0 ? r : { ...r, decorations: [...(r.decorations ?? []), ...h.decorations] }
+  })
+
+  // A taken row, a recall, an undo, a dropped draft put back or a fill change the box without prompt.edit: the band follows here.
+  // No paint channel here: the box underline waits for the next key.
+  on('prompt.change', async ($, e, next) => {
+    await publish(e.text, e.cursor, (v) => update($, viewAtom, () => v), (f) => update($, focusAtom, () => f))
+    return next(e)
   })
 
   // The hint line redraws when the box turns empty or non-empty (Esc Esc, submit, a recall into an empty box): draw the band again, it reads the box. A state write is refused while drawing.
@@ -176,7 +193,7 @@ export const register: Register = (on, options) => {
     return rows.length === 0 ? r : { suggestions: [...r.suggestions, ...rows] }
   })
 
-  // Inline defs are expanded in the submitted text; context defs go through hooks/inject.mjs. No mode here: plan/not-plan inline defs stay verbatim.
+  // Inline defs are expanded in the submitted text; context defs go through hooks/inject.mjs. No mode here: an inline plan part never expands.
   // The unknown-token toast fires here (a command hook has no UI): only for text the person typed, after the expansion.
   on('prompt.submit', async ($, e, next) => {
     const own: SubmitLike = e // isMeta is absent from the 2.1.296 types
@@ -224,7 +241,7 @@ export const register: Register = (on, options) => {
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    // An emptied box (Esc Esc, submit) draws no band: the atoms are only written by edits. A surface without a box answers '' too, so only the terminal is asked.
+    // An emptied box (Esc Esc, submit) draws no band: the box is read, as the atoms may still hold the last draft. Other surfaces answer '', so only the terminal is asked.
     const draft = e.surface === 'terminal' ? (await $.prompt.read()).text : null
     const view = await read($, viewAtom)
     const focus = await read($, focusAtom)
@@ -258,15 +275,17 @@ export const register: Register = (on, options) => {
     const reg = await settle(loadRegistry({ exists: (p) => $.fs.exists(p), list: (p) => $.fs.list(p), read: (p) => $.fs.read(p) }, roots, cache), (t) => $.ui.toast(t, { timeoutMs: 8000 }), () => $.ui.invalidate('ui.render'))
     if (reg === null) return { text: FILES_GONE }
     adopt(reg)
+    // A command run before the tools registered waits for them, at most 3 s.
+    const withTools = hasTools || (await Promise.race([toolsReady, new Promise<boolean>((resolve) => $.clock.after(3000, () => resolve(false)))]))
     // status, help, show and list answer here; the rest goes to Claude.
     const act = parseArgs(e.args, prefix, reg.defs.map((d) => d.name))
     const dirs = shownDirs(roots, home)
     const one = oneLayer(reg, roots)
-    if (act.kind === 'help') return { text: helpText(prefix, dirs, hasTools) }
+    if (act.kind === 'help') return { text: helpText(prefix, dirs, withTools) }
     if (act.kind === 'list' || act.kind === 'show') return { text: fullText(one, act.kind === 'list' ? null : act.names, prefix, isPlan) }
-    const status = statusText(one, prefix, dirs, hasTools)
+    const status = statusText(one, prefix, dirs, withTools)
     if (act.kind === 'status') return { text: status }
-    if (!hasTools) return { text: `${status}\n${NEEDS_NEW_CC}` }
+    if (!withTools) return { text: `${status}\n${NEEDS_NEW_CC}` }
     // submit is refused inside command.run: hand off from a timer; fill is the fallback when submit refuses.
     const text = handoffText(act.request, prefix, act.scope)
     $.clock.after(250, () => {

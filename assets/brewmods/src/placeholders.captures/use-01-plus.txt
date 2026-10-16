@@ -13,10 +13,10 @@
   is inserted into prompts as ++name (not in this message: ++/).
 
 ⏺ brewmod-placeholders - list_placeholders (MCP)
-  ⎿  ## +++ · layer: plugin · files: none · when: plan · plan: only · Anti-drift cr
-     on plan addon, active in Plan mode only
-     # [ADDON: ANTI-DRIFT CRON PLAN]
-     … +112 lines (ctrl+o to expand)
+  ⎿  ## +++ · layer: plugin · files: none · plan: add · Anti-drift cron for the cur
+     rent task; plan mode plans it as a step
+     # [ADDON: ANTI-DRIFT CRON]
+     … +105 lines (ctrl+o to expand)
 
 ⏺ User answered Claude's questions:
   ⎿  · Save ++db as drafted? → Save as drafted (Recommended)
@@ -27,14 +27,14 @@
   ⎿  saved ++db (global): ~/.claude/placeholders/db.md
 
 ⏺ I saved ++db as a global placeholder in ~/.claude/placeholders/db.md, so it works in
-  all your projects. Typing ++db in a prompt inserts "always use the staging DB".
+  all your projects. Typing ++db in a prompt now inserts "always use the staging DB". It
+  has no extra text for Plan mode.
 
-✻ Crunched for 8s · done 11:49 AM
+✻ Brewed for 9s · done 3:52 PM
 
 ────────────────────────────────────────────────────────────────────────────────────────
 ❯ +
 ────────────────────────────────────────────────────────────────────────────────────────
   ⏸ manual mode on                                                  ◐ medium · /effort
-
 
 

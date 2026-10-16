@@ -10,7 +10,7 @@ const def = (name: string, description: string, when: string, body: string): str
   `---\nname: "${name}"\ndescription: "${description}"\nwhen: ${when}\n---\n${body}`
 const TREE: Tree = {
   [`${ROOT}/.claude/placeholders/yy.md`]: def('yy', 'Why mode', 'always', 'YY BODY'),
-  [`${ROOT}/.claude/placeholders/zz.md`]: def('zz', 'Zed mode', 'plan', 'ZZ BODY'),
+  [`${ROOT}/.claude/placeholders/zz.md`]: def('zz', 'Zed mode', 'always', 'ZZ BODY'),
 }
 const ENGINE = ENGINE_NODE
 
@@ -30,7 +30,7 @@ const boot = async ($: any, on: On, draft: string, stubs: (on: On) => void = () 
 
 // Token names are bold in the placeholder colour (desktop adds its semibold weight).
 const TOK = { terminal: { color: 'suggestion', bold: true }, desktop: { color: 'suggestion', bold: true, weight: 'semibold' } }
-const head = (count: number) => ({ type: 'Text', props: { dimColor: true }, children: [`placeholders ${count}`] })
+const head = (count: number) => ({ type: 'Box', props: { key: 'head' }, children: [{ type: 'Text', props: { dimColor: true }, children: [`placeholders ${count}`] }] })
 const rowYY = (extra: unknown[], surface: Surface = 'terminal') => ({
   type: 'Box',
   props: { key: 'row:++yy', flexDirection: 'column' },
@@ -54,7 +54,6 @@ const rowZZ = (extra: unknown[], surface: Surface = 'terminal') => ({
       children: [
         { type: 'Text', props: TOK[surface], children: ['++zz'] },
         { type: 'Text', props: { dimColor: true, wrap: 'truncate-end' }, children: ['  Zed mode'] },
-        { type: 'Text', props: { dimColor: true }, children: [' (plan only)'] },
       ],
     },
     ...extra,
@@ -100,12 +99,12 @@ const band = (children: unknown[], token = '++yy') => ({
 })
 
 for (const surface of SURFACES) {
-  test(`GIVEN known, plan-only and unknown tokens WHEN the band mounts on ${surface} THEN one keyed row per token and a hidden un-keyed hover Box per body`, async ($, on) => {
+  test(`GIVEN two known and one unknown token WHEN the band mounts on ${surface} THEN one keyed row per token and a hidden un-keyed hover Box per body`, async ($, on) => {
     await boot($, on, '++yy ++zz ++q')
 
     const ui = await $.ui.mount({ ...BAND, surface, props: bandProps() })
 
-    expect(bare(await ui.drawn()), 'collapsed band').toEqual(band([head(3), rowYY([hidden('YY BODY', true, surface)], surface), rowZZ([hidden('ZZ BODY', false, surface)], surface), rowQOn(surface)]))
+    expect(bare(await ui.drawn()), 'collapsed band').toEqual(band([head(3), rowYY([hidden('YY BODY', true, surface)], surface), rowZZ([hidden('ZZ BODY', true, surface)], surface), rowQOn(surface)]))
     await ui.unmount()
   })
 
@@ -147,7 +146,7 @@ for (const surface of SURFACES) {
     expect(bare(await ui.drawn()), 'inner tree first, then the band').toEqual({
       type: 'Box',
       props: { flexDirection: 'column' },
-      children: [INNER, band([head(3), rowYY([hidden('YY BODY', true, surface)], surface), rowZZ([hidden('ZZ BODY', false, surface)], surface), rowQOn(surface)])],
+      children: [INNER, band([head(3), rowYY([hidden('YY BODY', true, surface)], surface), rowZZ([hidden('ZZ BODY', true, surface)], surface), rowQOn(surface)])],
     })
     await ui.unmount()
   })
@@ -209,14 +208,14 @@ test('GIVEN the same token typed twice in two cases WHEN the band mounts THEN it
 
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal', props: bandProps() })
 
-  expect((await ui.findAll({ type: 'Box' })).map((b) => b.key), 'box keys').toEqual(['band', 'row:++yy', undefined, undefined])
+  expect((await ui.findAll({ type: 'Box' })).map((b) => b.key), 'box keys').toEqual(['band', 'head', 'row:++yy', undefined, undefined])
   await ui.unmount()
 })
 
 const stateTree = (mode: unknown): Tree => ({ ...TREE, [STATE_FILE]: JSON.stringify({ mode, ts: 1 }) })
 const turnEnd = ($: any) => $.turn.complete({ turnId: 't1', answer: '', durationMs: 1, isAborted: false, reason: 'end_turn' })
-const PLAN_TEXTS = ['placeholders 1 · plan mode', '++zz', '  Zed mode', ' · Claude receives these lines now:', 'ZZ BODY', foot('++zz')]
-const NOT_PLAN_TEXTS = ['placeholders 1', '++zz', '  Zed mode', ' · not sent now (plan only):', 'ZZ BODY', foot('++zz')]
+const PLAN_TEXTS = ['placeholders 1', ' · plan mode', '++zz', '  Zed mode', ' · Claude receives these lines now:', 'ZZ BODY', foot('++zz')]
+const NOT_PLAN_TEXTS = ['placeholders 1', '++zz', '  Zed mode', ' · Claude receives these lines now:', 'ZZ BODY', foot('++zz')]
 
 test('GIVEN the state file says plan WHEN the session starts and the band mounts THEN the head says Claude receives the text now', async ($, on) => {
   await boot($, on, '++zz', () => {}, stateTree('plan'))
@@ -314,7 +313,7 @@ test('GIVEN the state read fails WHEN the band mounts THEN it fails open to the 
   down.value = true
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal', props: bandProps() })
 
-  expect(keys, 'precondition: the band draws while the state is up').toEqual(['band', 'row:++yy', undefined, undefined])
+  expect(keys, 'precondition: the band draws while the state is up').toEqual(['band', 'head', 'row:++yy', undefined, undefined])
   expect(bare(await ui.drawn()), 'passthrough while the state is down').toEqual(ENGINE)
   await ui.unmount()
 })
@@ -323,15 +322,15 @@ test('GIVEN tokens and entries WHEN rows are built THEN they dedupe case-insensi
   const tok = (text: string, name: string, isKnown: boolean, start: number) => ({ text, name, isKnown, start, end: start + text.length })
   const view = { tokens: [tok('++m', 'm', true, 0), tok('++M', 'm', true, 4), tok('++nd', 'nd', true, 8), tok('++x', 'x', false, 13), tok('++X', 'x', false, 17)] }
   const entries = [
-    { name: 'M', description: 'D1', body: 'B1', planOnly: true },
+    { name: 'M', description: 'D1', body: 'B1' },
     { name: 'm', description: 'ignored second entry', body: 'B2' },
     { name: 'nd' },
   ]
 
   expect(bandRows(view, entries), 'rows').toEqual([
-    { text: '++m', name: 'm', isKnown: true, description: 'D1', body: 'B1', isPlanOnly: true },
-    { text: '++nd', name: 'nd', isKnown: true, description: 'nd', body: '', isPlanOnly: false },
-    { text: '++x', name: 'x', isKnown: false, description: 'unknown placeholder', body: '', isPlanOnly: false },
+    { text: '++m', name: 'm', isKnown: true, description: 'D1', body: 'B1' },
+    { text: '++nd', name: 'nd', isKnown: true, description: 'nd', body: '' },
+    { text: '++x', name: 'x', isKnown: false, description: 'unknown placeholder', body: '' },
   ])
 })
 
@@ -424,7 +423,7 @@ test('GIVEN two tokens with bodies WHEN the band mounts THEN both bodies show at
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal', props: bandProps() })
 
   expect([await textsOf(ui), await ui.findAll({ type: 'Button' })], 'texts and buttons').toEqual([
-    ['placeholders 2', '++yy', '  Why mode', L, 'YY BODY', '++zz', '  Zed mode', ' · not sent now (plan only):', 'ZZ BODY', foot('++yy')],
+    ['placeholders 2', '++yy', '  Why mode', L, 'YY BODY', '++zz', '  Zed mode', L, 'ZZ BODY', foot('++yy')],
     [],
   ])
   await ui.unmount()
@@ -486,7 +485,7 @@ test('GIVEN tokens in the view atom and an emptied box WHEN the band mounts on t
 
   expect([bare(await terminal.drawn()), (await desktop.findAll({ type: 'Box' })).map((b) => b.key)], 'terminal tree, desktop box keys').toEqual([
     ENGINE,
-    ['band', 'row:++yy', undefined, undefined, 'row:++q', undefined],
+    ['band', 'head', 'row:++yy', undefined, undefined, 'row:++q', undefined],
   ])
   await terminal.unmount()
   await desktop.unmount()

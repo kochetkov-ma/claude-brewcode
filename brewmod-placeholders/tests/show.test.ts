@@ -1,7 +1,6 @@
 import { test, expect, mock } from 'claude-code/testing'
 import { CFG, PLUG, ROOT, ROOTS, TOOL, boot, defaultsTree, memIo, run, wireAll, type Tree } from './layer-io'
-import { bodyOf } from './fixtures'
-import { VECTORS } from './parity/golden.generated'
+import { bodyOf, golden } from './fixtures'
 import { loadRegistry, newRegistryCache, type Registry } from '../hooks/lib/defs'
 import { block } from '../hooks/lib/command'
 import { compileMatchers } from '../hooks/lib/match'
@@ -15,19 +14,21 @@ const WIRED_DIRS = { global: `${CFG}/placeholders`, project: '.claude/placeholde
 const P_DIR = `${ROOT}/.claude/placeholders`
 const G_DIR = `${CFG}/placeholders`
 // Frozen hook output (brewtools v6.7.0): what each built-in sends alone, per mode.
-const spec = (id: string): string => VECTORS.find((v) => v.id === id)?.expected ?? `NO ${id}`
+const spec = (id: string): string => golden(id) ?? `NULL ${id}`
 const M_SENT = spec('spec-1')
 const M_PLAN_SENT = spec('spec-2')
 const A_SENT = spec('spec-3')
 const R_SENT = spec('spec-4')
 const RR_SENT = spec('spec-5')
-const PLUS_SENT = spec('spec-6')
+const PLUS_SENT = spec('x07-cron-default')
+const PLUS_ADD = bodyOf('+.plan')
 const load = (tree: Tree): Promise<Registry> => loadRegistry(memIo(tree).io, ROOTS, newRegistryCache())
 const heads = (text: string): string[] => text.split('\n').filter((l) => /^`[^`]/.test(l))
 
 const STATUS_FOOT = [
   'Caret on a token: the band shows up to 15 rows of what it sends · whole text: `/placeholders show ++r`, or `++r?` alone + Enter twice · `/placeholders list` for all',
   'Send one message as typed: put `++/` anywhere in it',
+  '`plan +`: its `<name>.plan.md` adds text in Plan mode; `<name>.md` is sent in every mode',
   'Add, change, remove: `/placeholders <your words>` in any language, e.g. `/placeholders add ++db: use the staging DB`',
   'Where: global = all projects (`~/.claude/placeholders`), project = this one (`.claude/placeholders`, wins over global); start with `global` or `project`, or just say it',
   'Commands (`list`, `show`, `help`) are only faster; plain words work too · full help: `/placeholders help`',
@@ -35,8 +36,9 @@ const STATUS_FOOT = [
 
 const LIST_DEFAULTS = [
   '5 placeholders · full text as sent · plan mode off',
-  '`+++` · plugin · plan only',
-  block('plan mode only:', PLUS_SENT.split('\n')),
+  '`+++` · plugin · plan +',
+  block('normal:', PLUS_SENT.split('\n')),
+  block('plan mode adds:', PLUS_ADD.split('\n')),
   '`++a` · plugin',
   block('normal:', A_SENT.split('\n')),
   '`++m` · plugin · plan +',
@@ -168,11 +170,11 @@ test('GIVEN the plugin defaults WHEN the status is built THEN one row per name c
   expect(out.split('\n'), 'status').toEqual([
     '5 placeholders · type ++name anywhere in a prompt',
     '```',
-    '+++   plugin  plan only  Anti-drift cron plan addon, active in Plan mode only',
-    '++a   plugin             Architecture-first: delegate the design to expert agents before implementing',
-    '++m   plugin  plan +     Manager mode: orchestrate and delegate, never code in the main context',
-    '++r   plugin             Two-phase review: review every significant change, then double-check each finding',
-    '++rr  plugin             Anti-regression review: regression, project standard and functional correctness axes',
+    '+++   plugin  plan +  Anti-drift cron for the current task; plan mode plans it as a step',
+    '++a   plugin          Architecture-first: delegate the design to expert agents before implementing',
+    '++m   plugin  plan +  Manager mode: orchestrate and delegate, never code in the main context',
+    '++r   plugin          Two-phase review: review every significant change, then double-check each finding',
+    '++rr  plugin          Anti-regression review: regression, project standard and functional correctness axes',
     '```',
     ...STATUS_FOOT,
   ])
@@ -184,7 +186,7 @@ test('GIVEN user layers, a plan part from another layer and a bad key WHEN the s
     [`${P_DIR}/rel.md`]: '---\ndescription: "Release checklist"\n---\nCHECK',
     [`${P_DIR}/bad.md`]: '---\nwat: 1\n---\nB',
     [`${G_DIR}/a.md`]: '---\ndescription: "My architect"\n---\nMINE',
-    [`${G_DIR}/m.plan.md`]: 'OTHER',
+    [`${G_DIR}/m.plan.md`]: '---\nplan: add\n---\nOTHER',
   }
 
   const out = statusText(await load(tree), '++', DIRS)
@@ -192,7 +194,7 @@ test('GIVEN user layers, a plan part from another layer and a bad key WHEN the s
   expect(out.split('\n').slice(0, 13), 'rows and issues').toEqual([
     '7 placeholders · type ++name anywhere in a prompt',
     '```',
-    '+++    plugin   plan only        Anti-drift cron plan addon, active in Plan mode only',
+    '+++    plugin   plan +           Anti-drift cron for the current task; plan mode plans it as a step',
     '++a    global                    My architect',
     '++bad  project                   -',
     '++m    plugin   plan + (global)  Manager mode: orchestrate and delegate, never code in the main context',
@@ -206,6 +208,27 @@ test('GIVEN user layers, a plan part from another layer and a bad key WHEN the s
   ])
 })
 
+test('GIVEN old when:, plan: and orphan plan files WHEN the status is built THEN one warning per file sits in the issues block', async () => {
+  const tree: Tree = {
+    ...defaultsTree(),
+    [`${P_DIR}/wp.md`]: '---\nwhen: plan\n---\nWP',
+    [`${P_DIR}/pk.md`]: '---\nplan: add\n---\nPK',
+    [`${P_DIR}/db.md`]: 'DB',
+    [`${P_DIR}/db.plan.md`]: '---\nwhen: plan\n---\nSTEPS',
+    [`${G_DIR}/solo.plan.md`]: '---\nplan: add\n---\nSOLO',
+  }
+
+  const out = statusText(await load(tree), '++', DIRS).split('\n')
+
+  expect(out.slice(out.indexOf('') + 1, out.indexOf('```', 2)), 'issues').toEqual([
+    'issues (4):',
+    '  project/db.plan.md: no plan: add; its text is added in plan mode',
+    '  project/pk.md: plan: is for pk.plan.md; ignored',
+    '  project/wp.md: when: plan is gone; sent in every mode',
+    '  global/solo.plan.md: no solo.md; sent in every mode',
+  ])
+})
+
 test('GIVEN the default prefix WHEN the help is built THEN every topic line and both doc links come back', async () => {
   expect(helpText('++', DIRS).split('\n'), 'help').toEqual([
     'placeholders help · a placeholder is a short token (++name) that adds saved text to your prompt',
@@ -213,11 +236,11 @@ test('GIVEN the default prefix WHEN the help is built THEN every topic line and 
     'Caret on a token (arrows, Home, End): the band shows up to 15 rows of what it sends; `?` right after the token only makes room for those rows while the name menu is open.',
     'Whole text, printed in the chat, not sent to Claude: `/placeholders show ++r` (several: `/placeholders show ++r ++m`) · or `++r?` alone in a message: Enter fills that command, Enter again prints it · all: `/placeholders list`.',
     'Send as typed: `++/` (or `++\\`) anywhere in a message turns every placeholder in it off; the marker stays in the text.',
-    'Plan mode: `<name>.plan.md` with `plan: add` adds its text to `<name>.md` only in Plan mode (built-in `++m` works this way); without `plan: add` it replaces the text; `when: plan` in `<name>.md` alone = plan-only (`+++`). The band marks `plan +` and shows "plan mode adds:"; one review per message (`++rr` wins over `++r`).',
+    'Plan mode: `<name>.md` is sent in every mode; an optional `<name>.plan.md` (`plan: add`) adds its text in Plan mode (`++m`, `+++`), marked `plan +`. One review per message: `++rr` wins over `++r`.',
     'Add, change, remove: `/placeholders <your words, any language>`; Claude drafts, asks once, saves. E.g. `/placeholders add ++db: use the staging DB` · `/placeholders global make ++r shorter` · `/placeholders удали ++db` · `/placeholders add a plan-mode part to ++db: plan first, then build`.',
     'Remove: `/placeholders remove ++db` (both parts) · `/placeholders удали план у ++db` (plan part only) · removing your override brings the built-in back; built-ins cannot be removed.',
     'Where: global = all projects, `~/.claude/placeholders/<name>.md`; project = this project, `.claude/placeholders/<name>.md`, wins over global; plugin defaults sit below both. A first word `global` or `project` decides, else your words do; unclear -> one question, Global first. A change keeps its layer; a remove asks when the name is in both.',
-    'Files: `<name>.md` = optional front matter (description, when: always|plan|not-plan, insert: context|inline, order, group, priority, header) + the text. Edit by hand any time; the next prompt reads it.',
+    'Files: `<name>.md` = optional front matter (description, insert: context|inline, order, group, priority, header) + the text; `<name>.plan.md` = its Plan mode addition. Edit by hand any time; the next prompt reads it.',
     'Prefix: `/config` -> Placeholder prefix (2-8 punctuation characters, default `++`).',
     'Commands: `/placeholders` status · `list` · `show ++<name> ...` · `help` · anything else goes to Claude. Commands are shortcuts; plain words work too.',
     'Docs: https://doc-claude.brewcode.app/mods/placeholders/',
@@ -248,6 +271,17 @@ test('GIVEN ++m with an added plan-mode part WHEN shown in plan mode THEN one fe
   expect(out, 'show m in plan mode').toBe(['++m · full text as sent · plan mode on', '`++m` · plugin · plan +', block('normal + plan mode part:', M_PLAN_SENT.split('\n'))].join('\n'))
 })
 
+test('GIVEN an empty plan part with its own header WHEN status and show run in both modes THEN no plan + tag, no addition, and plan mode shows its header over the normal body', async () => {
+  const reg = await load({ ...defaultsTree(), [`${P_DIR}/ee.md`]: '---\ndescription: "Ee"\n---\nE1', [`${P_DIR}/ee.plan.md`]: '---\nplan: add\nheader: "P {token}"\n---\n' })
+  const status = statusText(reg, '++', DIRS).split('\n')
+
+  expect({ row: status.find((l) => l.startsWith('++ee')), off: fullText(reg, ['ee'], '++', false), on: fullText(reg, ['ee'], '++', true) }, 'empty part').toEqual({
+    row: `++ee  project${' '.repeat(10)}Ee`,
+    off: ['++ee · full text as sent · plan mode off', '`++ee` · project', block('normal:', ['E1'])].join('\n'),
+    on: ['++ee · full text as sent · plan mode on', '`++ee` · project', block('normal:', ['P ++ee', '', 'E1'])].join('\n'),
+  })
+})
+
 test('GIVEN a normal text and an added part that fit alone but not joined WHEN shown in both modes THEN the cut note follows the joined length', async () => {
   const reg = await load({
     ...defaultsTree(),
@@ -263,7 +297,7 @@ test('GIVEN a normal text and an added part that fit alone but not joined WHEN s
   })
 })
 
-test('GIVEN the plan-only +++ and a full-text plan override WHEN shown THEN plan mode only: and plan mode sends instead: label them', async () => {
+test('GIVEN +++ and an old full-text m.plan override WHEN shown THEN each prints its normal text and its plan-mode addition', async () => {
   const reg = await load({ ...defaultsTree(), [`${G_DIR}/m.plan.md`]: 'OTHER' })
 
   const out = fullText(reg, ['+', 'm'], '++', false)
@@ -271,11 +305,12 @@ test('GIVEN the plan-only +++ and a full-text plan override WHEN shown THEN plan
   expect(out, 'show + m').toBe(
     [
       '+++, ++m · full text as sent · plan mode off',
-      '`+++` · plugin · plan only',
-      block('plan mode only:', PLUS_SENT.split('\n')),
+      '`+++` · plugin · plan +',
+      block('normal:', PLUS_SENT.split('\n')),
+      block('plan mode adds:', PLUS_ADD.split('\n')),
       '`++m` · plugin · plan + (global)',
       block('normal:', M_SENT.split('\n')),
-      block('plan mode sends instead:', ['User typed `++m` — Manager + Plan Mode is active for this turn:', '', 'OTHER']),
+      block('plan mode adds:', ['OTHER']),
     ].join('\n'),
   )
 })
@@ -304,13 +339,13 @@ test('GIVEN inline, empty, oversized and unknown names WHEN shown THEN each gets
   )
 })
 
-test('GIVEN an inline def with when: plan and an empty inline def WHEN shown THEN both say they stay as typed instead of replacing the token', async () => {
+test('GIVEN an inline def with a stale when: plan and an empty inline def WHEN shown THEN the first replaces the token and the empty one stays as typed', async () => {
   const reg = await load({ ...defaultsTree(), [`${P_DIR}/pl.md`]: '---\ninsert: inline\nwhen: plan\n---\nPLANTEXT', [`${P_DIR}/em.md`]: '---\ninsert: inline\n---\n' })
 
   const out = fullText(reg, ['pl', 'em'], '++', true)
 
   expect(out, 'show pl em').toBe(
-    ['++pl, ++em · full text as sent · plan mode on', '`++pl` · project · inline', block('stays as typed (when: plan); its text:', ['PLANTEXT']), '`++em` · project · inline', 'stays as typed (empty)'].join('\n'),
+    ['++pl, ++em · full text as sent · plan mode on', '`++pl` · project · inline', block('replaces the token with:', ['PLANTEXT']), '`++em` · project · inline', 'stays as typed (empty)'].join('\n'),
   )
 })
 
@@ -462,7 +497,7 @@ test('GIVEN a build without the mod tools WHEN status and help are built THEN ne
   const status = statusText(await load(defaultsTree()), '++', DIRS, false).split('\n')
   const help = helpText('++', DIRS, false).split('\n')
 
-  expect([status[status.length - 5], help[3]], 'whole-text lines').toEqual([
+  expect([status[status.length - 6], help[3]], 'whole-text lines').toEqual([
     'Caret on a token: the band shows up to 15 rows of what it sends · whole text: `/placeholders show ++r` · `/placeholders list` for all',
     'Whole text, printed in the chat, not sent to Claude: `/placeholders show ++r` (several: `/placeholders show ++r ++m`) · all: `/placeholders list`.',
   ])

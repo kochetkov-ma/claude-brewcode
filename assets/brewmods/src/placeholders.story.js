@@ -1,4 +1,4 @@
-// Storyboard v3 of placeholders.gif (keys re-verified live on CC 2.1.301, main-screen TUI, mod 6.9.4 band): times in s.
+// Storyboard v3 of placeholders.gif (keys re-verified live on CC 2.1.301, main-screen TUI, mod 6.9.5 band): times in s.
 // Keys = macOS keycaps (glyph + on-screen word); record-gifs.mjs --check holds them to its allow-list and the facts below.
 window.PH_STORY = {
   term: { cols: 88, rows: 40 },
@@ -57,9 +57,9 @@ window.PH_STORY = {
   ],
   // compressed spans: title-bar chip `⏩ <factor>x`; factor = real elapsed (session transcript timestamps) / shown
   skips: [
-    { at: 11.0, until: 12.6, factor: 5 },
-    { at: 17.2, until: 19.0, factor: 2.4 },
-    { at: 22.5, until: 23.4, factor: 4.4 },
+    { at: 11.0, until: 12.6, factor: 5.4 },
+    { at: 17.2, until: 19.0, factor: 2.8 },
+    { at: 22.5, until: 23.4, factor: 4.7 },
   ],
   captions: [
     [0, 'Type <k>++</k>, pick a name with <k>↑</k>, then <k>Tab</k>'],

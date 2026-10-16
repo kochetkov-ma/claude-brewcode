@@ -69,7 +69,7 @@ test('GIVEN a warm registry WHEN the plugin placeholders folder is gone and the 
   expect({ outcome, kept: cache.registry === warm, warmNames: warm.defs.map((d) => d.name) }, 'reload outcome and cache').toEqual({
     outcome: { rejected: GONE, names: null },
     kept: true,
-    warmNames: ['+', 'a', 'm', 'm', 'r', 'rr'],
+    warmNames: ['+', '+', 'a', 'm', 'm', 'r', 'rr'],
   })
 })
 

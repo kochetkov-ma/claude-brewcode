@@ -7,7 +7,7 @@ export const DEFAULT_ENTRIES: readonly EditorEntry[] = [
   { name: 'a', description: 'Architecture-first: delegate the design to expert agents before implementing' },
   { name: 'r', description: 'Two-phase review: review every significant change, then double-check each finding' },
   { name: 'rr', description: 'Anti-regression review: regression, project standard and functional correctness axes' },
-  { name: '+', description: 'Anti-drift cron plan addon, active in Plan mode only', planOnly: true },
+  { name: '+', description: 'Anti-drift cron for the current task; plan mode plans it as a step' },
 ]
 
 let entries: readonly EditorEntry[] = DEFAULT_ENTRIES

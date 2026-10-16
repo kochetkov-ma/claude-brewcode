@@ -97,7 +97,7 @@ const DEFAULT_DIRS: Dirs = { global: '~/.claude/placeholders', project: '.claude
 
 type NameRow = { name: string; layer: string; planLayer: string | null; kind: PlanParts['kind']; inline: boolean; description: string }
 
-// One row per name, sorted by name; layer = the normal part's (plan-only: the plan file's).
+// One row per name, sorted by name; layer = the normal part's.
 const nameRows = (reg: Registry, prefix: string): NameRow[] =>
   byName(reg, prefix).map(({ name, lead, plan, own, kind }) => ({
     name,
@@ -109,7 +109,7 @@ const nameRows = (reg: Registry, prefix: string): NameRow[] =>
   }))
 
 const tagOf = (r: NameRow): string =>
-  r.kind === 'only' ? PLAN_LABEL.only : r.kind === 'add' || r.kind === 'replace' ? (r.planLayer === null || r.planLayer === r.layer ? PLAN_LABEL.plus : `${PLAN_LABEL.plus} (${r.planLayer})`) : r.inline ? 'inline' : ''
+  r.kind === 'add' ? (r.planLayer === null || r.planLayer === r.layer ? PLAN_LABEL.plus : `${PLAN_LABEL.plus} (${r.planLayer})`) : r.inline ? 'inline' : ''
 
 // The example name in hints: `r` when defined, else the first word name, else the first name.
 const sample = (rows: readonly NameRow[]): string => rows.find((r) => r.name === 'r')?.name ?? rows.find((r) => /^\w+$/.test(r.name))?.name ?? rows[0]?.name ?? 'name'
@@ -127,6 +127,7 @@ export function statusText(reg: Registry, prefix: string = DEFAULT_PREFIX, dirs:
   return block(`${rows.length} placeholders · type ${prefix}name anywhere in a prompt`, [...lines, ...issues], [
     `Caret on a token: the band shows up to ${FOCUS_MAX} rows of what it sends · whole text: \`${showCommand(prefix, [s])}\`${hasQuery ? `, or \`${prefix}${s}?\` alone + Enter twice` : ''} · \`/placeholders list\` for all`,
     `Send one message as typed: put \`${prefix}/\` anywhere in it`,
+    `\`${PLAN_LABEL.plus}\`: its \`<name>.plan.md\` adds text in Plan mode; \`<name>.md\` is sent in every mode`,
     `Add, change, remove: \`/placeholders <your words>\` in any language, e.g. \`/placeholders add ${prefix}db: use the staging DB\``,
     `Where: global = all projects (\`${dirs.global}\`), project = this one (\`${dirs.project}\`, wins over global); start with \`global\` or \`project\`, or just say it`,
     'Commands (`list`, `show`, `help`) are only faster; plain words work too · full help: `/placeholders help`',
@@ -141,11 +142,11 @@ export function helpText(prefix: string = DEFAULT_PREFIX, dirs: Dirs = DEFAULT_D
     `Caret on a token (arrows, Home, End): the band shows up to ${FOCUS_MAX} rows of what it sends; \`?\` right after the token only makes room for those rows while the name menu is open.`,
     `Whole text, printed in the chat, not sent to Claude: \`${showCommand(p, ['r'])}\` (several: \`${showCommand(p, ['r', 'm'])}\`)${hasQuery ? ` · or \`${p}r?\` alone in a message: Enter fills that command, Enter again prints it` : ''} · all: \`/placeholders list\`.`,
     `Send as typed: \`${p}/\` (or \`${p}\\\`) anywhere in a message turns every placeholder in it off; the marker stays in the text.`,
-    `Plan mode: \`<name>.plan.md\` with \`plan: add\` adds its text to \`<name>.md\` only in Plan mode (built-in \`${p}m\` works this way); without \`plan: add\` it replaces the text; \`when: plan\` in \`<name>.md\` alone = plan-only (\`${p}+\`). The band marks \`${PLAN_LABEL.plus}\` and shows "${PLAN_LABEL.adds}"; one review per message (\`${p}rr\` wins over \`${p}r\`).`,
+    `Plan mode: \`<name>.md\` is sent in every mode; an optional \`<name>.plan.md\` (\`plan: add\`) adds its text in Plan mode (\`${p}m\`, \`${p}+\`), marked \`${PLAN_LABEL.plus}\`. One review per message: \`${p}rr\` wins over \`${p}r\`.`,
     `Add, change, remove: \`/placeholders <your words, any language>\`; Claude drafts, asks once, saves. E.g. \`/placeholders add ${p}db: use the staging DB\` · \`/placeholders global make ${p}r shorter\` · \`/placeholders удали ${p}db\` · \`/placeholders add a plan-mode part to ${p}db: plan first, then build\`.`,
     `Remove: \`/placeholders remove ${p}db\` (both parts) · \`/placeholders удали план у ${p}db\` (plan part only) · removing your override brings the built-in back; built-ins cannot be removed.`,
     `Where: global = all projects, \`${dirs.global}/<name>.md\`; project = this project, \`${dirs.project}/<name>.md\`, wins over global; plugin defaults sit below both. A first word \`global\` or \`project\` decides, else your words do; unclear -> one question, Global first. A change keeps its layer; a remove asks when the name is in both.`,
-    'Files: `<name>.md` = optional front matter (description, when: always|plan|not-plan, insert: context|inline, order, group, priority, header) + the text. Edit by hand any time; the next prompt reads it.',
+    'Files: `<name>.md` = optional front matter (description, insert: context|inline, order, group, priority, header) + the text; `<name>.plan.md` = its Plan mode addition. Edit by hand any time; the next prompt reads it.',
     `Prefix: \`/config\` -> Placeholder prefix (2-8 punctuation characters, default \`${DEFAULT_PREFIX}\`).`,
     `Commands: \`/placeholders\` status · \`list\` · \`show ${p}<name> ...\` · \`help\` · anything else goes to Claude. Commands are shortcuts; plain words work too.`,
     `Docs: ${DOCS_URL}`,
@@ -163,20 +164,19 @@ function nameBlock(reg: Registry, r: NameRow, prefix: string, isPlan: boolean): 
   if (r.inline) {
     const body = inlineBodies(reg.defs).get(r.name)
     if (body !== undefined) return [head, part('replaces the token with:', body)].join('\n')
-    // Only a `when: always` inline def with a body expands (the module has no mode); any other stays as typed.
+    // Only a normal inline def with a body expands; any other stays as typed.
     const d = reg.defs.find((x) => x.name.toLowerCase() === r.name && x.insert === 'inline')
-    return [head, d === undefined || d.body === '' ? `${REASON.staysAsTyped} (empty)` : part(`${REASON.staysAsTyped} (when: ${d.when}); its text:`, d.body, 0)].join('\n')
+    return [head, d === undefined || d.body === '' ? `${REASON.staysAsTyped} (empty)` : part(`${REASON.staysAsTyped}; its text:`, d.body, 0)].join('\n')
   }
   const p = planParts(reg.defs, r.name, prefix)
-  if (p.kind === 'only') return [head, part(PLAN_LABEL.onlyPart, p.plan)].join('\n')
   if (p.kind === 'add') {
     // Plan mode sends one block: the plan header when it has one, the normal body, then the part.
     const joined = sentText(r.name, reg.defs, prefix, true).text
     if (isPlan) return [head, part('normal + plan mode part:', joined)].join('\n')
     return [head, part('normal:', p.normal), part(PLAN_LABEL.adds, p.plan, joined.length)].join('\n')
   }
-  const extra = p.kind === 'replace' ? [part(PLAN_LABEL.instead, p.plan)] : []
-  return [head, part('normal:', p.normal), ...extra].join('\n')
+  // An empty plan part adds nothing, but its header still heads the plan-mode block.
+  return [head, part('normal:', isPlan ? sentText(r.name, reg.defs, prefix, true).text : p.normal)].join('\n')
 }
 
 // show (names) or list (null): one block per name; unknown names are listed at the foot.

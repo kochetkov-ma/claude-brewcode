@@ -1,4 +1,4 @@
-// Live cases for brewmod-placeholders; every literal re-synced 2026-10-15 (CP4) from band.tsx, show.ts, command.ts, sent.ts bytes.
+// Live cases for brewmod-placeholders; every literal re-synced 2026-10-16 (6.9.5 UI) from band.tsx, show.ts, command.ts, sent.ts bytes.
 // cp = checkpoint where a case becomes valid: 1 band, 2 /placeholders show/list/status/help, 3 scope + plan parts, 4 review-round additions.
 
 // Regions: band = rows above the prompt box, prompt = inside it, below = under it, menu = the typeahead (below; above in fullscreen), hist = scrollback.
@@ -29,8 +29,10 @@ const NO_BUTTON = [B('Show text'), B('Hide text'), B('ctrl+x')]
 const PLAN_HEAD = '· plan mode'
 const PLAN_PLUS = 'plan +'
 const PLAN_ADDS = 'plan mode adds:'
-// planNote(m): 29 = lines of the m.plan.md addition (plan: add); shown until the first prompt confirms plan mode (task #92).
-const PLAN_NOTE = 'not sent now · plan mode adds 29 lines'
+// planNote(m): 18 = lines of the m.plan.md addition (plan: add); shown until the first prompt confirms plan mode (task #92).
+const PLAN_NOTE = 'not sent now · plan mode adds 18 lines'
+// planNote(+): 3 = lines of the +.plan.md addition.
+const PLUS_NOTE = 'not sent now · plan mode adds 3 lines'
 // placeholders/*.md: headers ({token} = ++name) and body anchors.
 const R_HEAD = 'User typed `++r` — Two-phase review discipline is active for this turn:'
 const R_TOP = '[REVIEW DISCIPLINE: DOUBLE-CHECK]'
@@ -44,7 +46,11 @@ const M_ADDON = '[ADDON: PLAN MODE]'
 const PLAN_ROW = /^plan mode · effort /m
 const SCROLLED = /^↓ \d+ more/m
 const A_TOP = '[DIRECTIVE: ARCHITECTURE-FIRST]'
+// +.md (every mode) and its +.plan.md addition (plan mode).
+const PLUS_NOW = '[ADDON: ANTI-DRIFT CRON]'
 const PLUS_TOP = '[ADDON: ANTI-DRIFT CRON PLAN]'
+// The compact head clips the description beside `plan +` and the receives label.
+const PLUS_DESC = 'Anti-drift cron'
 const RR_ROW = 'Anti-regression review'
 const R_DESC_ROW = 'Two-phase review: review every'
 // Fixtures: drive.mjs writes INLINE into <project>/.claude/placeholders and GLOBAL_FIXTURES into the isolated global dir.
@@ -78,6 +84,12 @@ const TOK_A = (tok) => new RegExp(`\\x1b\\[1m\\x1b\\[38;5;153m${RX(tok)}\\x1b\\[
 const UNK_A = (tok) => new RegExp(`\\x1b\\[1m\\x1b\\[38;5;220m${RX(tok)}\\x1b\\[0m`)
 const ACT_A = (s) => new RegExp(`\\x1b\\[4m\\x1b\\[38;5;231m${RX(s)}\\x1b\\[0m`)
 const LABEL_A = (word) => new RegExp(`\\x1b\\[38;5;246m${RX(word)}`)
+// 6.9.5 plan-mode colour (theme planMode, dark 73, light 30): labels, the plan + tag, the head suffix, the plan-effort row; sent addition bold.
+// The default TUI often repaints a coloured run word by word (`\x1b[38;5;73mplan\x1b[39m \x1b[38;5;73mmode`): words may be split by an SGR reset.
+const SGR_WORDS = (s, open) => s.trim().split(/ +/).map(RX).join(`(?:\\x1b\\[(?:39|0)m)? (?:${open})?`)
+const PLAN_A = (s, n = 73) => new RegExp(`\\x1b\\[38;5;${n}m ?${SGR_WORDS(s, `\\x1b\\[38;5;${n}m`)}`)
+const PLAN_SENT_A = (s) => new RegExp(`\\x1b\\[1m\\x1b\\[38;5;73m${SGR_WORDS(s, '\\x1b\\[1m\\x1b\\[38;5;73m')}`)
+const PLAN_ROW_A = PLAN_A('plan mode · effort')
 const SENT_A = /\x1b\[1m\x1b\[38;5;231mUser/
 // Focus foot: the action underlined in the text colour, the dim label run right after it (the row's first label can inherit its SGR from the line above).
 const FOOT_A = /\x1b\[4m\x1b\[38;5;231mmove the caret off \+\+m\x1b\[0m\x1b\[38;5;246m ·/
@@ -143,12 +155,23 @@ export const CASES = [
   ...matrix('escape-backslash', 1, '++\\ ++r: escape alias', () => [t('++\\ ++r'), c([B('++\\  placeholders off: this message is sent exactly as typed'), B('(not sent: ++\\ in this message)'), B('turn back on: delete ++\\')], [B(R_TOP)])]),
   ...matrix('unknown-zz', 1, '++zz: unknown row and list hint', () => [t('++zz'), c([B('++zz  unknown placeholder'), B('names: /placeholders list')], [B(R_TOP)])]),
   ...matrix('m-default', 1, 'default mode ++m: receives label, not-sent-now plan note, show hint; no plan + in focus', () => [t('++m'), c([B(M_HEAD), B(RECV('++m')), B(PLAN_NOTE), B(SHOW('m'))], [B(PLAN_ADDS), B(/placeholders \d+ · plan mode/), B(PLAN_PLUS)])]),
-  ...matrix('plus-default', 1, 'default mode +++: (plan only)', () => [t('+++ '), c([B('Anti-drift cron plan addon'), B('(plan only)')], [B(PLAN_HEAD)])]),
+  ...matrix('plus-default', 1, 'default mode +++: sent now (cron text), plan + tag and plan-part note', () => [t('+++ '), c([B(PLUS_DESC), B(PLAN_PLUS), B(PLUS_NOW), B(PLUS_NOTE)], [B(/placeholders \d+ · plan mode/), B(PLAN_ADDS), B('(plan only)')])]),
   ...matrix('inline', 1, 'project inline def ++lpinl: row and its body', () => [t(`${INLINE.token} `), c([B(INLINE.token), B(INLINE.description), B(INLINE.body)], [B('unknown placeholder')])]),
   ...matrix('nobutton-enter', 4, '1 token: no Button; Enter sends the prompt with the r context', (fs) => [
     t('++r reply with only the word LPOK'), c([B('placeholders 1'), B(COMPACT('++r')), ...(fs ? [] : [B(R_LAST)])], [B('Show text'), B(FOCUS_ANY)]),
     k('Enter'), c([/⏺ .*LPOK/], [BUSY], { debugExpect: [SUBMITTED, PROVIDED], timeout: TURN_MS }),
   ]),
+
+  // Typeahead accept, recall and undo change the box without prompt.edit: prompt.change redraws the band at once (the box underline still waits for the next key).
+  ...matrix('acc-tab', 4, '++ then Down x4 onto ++r, Tab takes it: band at once, no extra key', () => [t('++'), c([M('++a')]), k('Down', 4), c([M(/❯ \+\+r\s+Two-phase/)]), k('Tab'), c([P('++r'), B('placeholders 1'), B(COMPACT('++r'))], [M(RR_ROW), B(FOCUS_ANY)])]),
+  ...matrix('acc-enter', 4, '++ then Down x4 onto ++r, Enter takes it: band at once, nothing submitted', () => [t('++'), c([M('++a')]), k('Down', 4), c([M(/❯ \+\+r\s+Two-phase/)]), k('Enter'), c([P('++r'), B('placeholders 1'), B(COMPACT('++r'))], [M(RR_ROW), B(FOCUS_ANY)], { debugForbid: [SUBMITTED] })]),
+  // Undo granularity varies live (empty box, hello, ++r seen): the box loses ++rr and the band must not name it any more.
+  ...matrix('acc-undo', 4, 'hello ++r, Tab takes ++rr: band names ++rr at once; undo drops ++rr: band no longer names it', () => [t('hello '), c([P('hello')]), t('++r'), c([M('++rr')]), k('Tab'), c([P('hello ++rr'), B('placeholders 1'), B(COMPACT('++rr'))], [B(R_HEAD)]), k('C-_'), c([P(/^❯(?!.*\+\+rr)/m)], [B(COMPACT('++rr')), B(FOCUS('++rr')), B(RR_TOP)])]),
+  // The recalled entry names ++r while the last edit saw ++m (then an empty box): a band of ++r can only come from the recall.
+  ...matrix('acc-hist', 4, '/placeholders show ++r sent; ++m typed and killed; Up recalls the command: ++r focus band at once', () => [t('/placeholders show ++r'), enter(), c([P(/^❯\s*$/m)], [], { debugForbid: [SUBMITTED] }), t('++m'), c([B(M_HEAD)]), k('C-u'), c([P(/^❯\s*$/m)], [B(M_HEAD)]), k('Up'), c([P('/placeholders show ++r'), B(R_HEAD), B(FOCUS('++r'))], [B(M_HEAD)])]),
+  // P1 drop: the engine puts ++r? back, then the fill lands; the band must be the filled line's, as typed by hand (acc-p1-typed, also run on 6.9.4), never the dropped draft's focus.
+  ...matrix('acc-p1', 4, 'Enter on ++r? alone: filled show command, compact ++r band of the filled line, no stale focus', () => [t('++r?'), c([B(FOCUS('++r'))]), k('Enter'), c([P('/placeholders show ++r'), B('placeholders 1'), B(COMPACT('++r'))], [B(FOCUS_ANY)], { debugForbid: [SUBMITTED] })]),
+  ...matrix('acc-p1-typed', 4, '/placeholders show ++r + space typed by hand: compact ++r band', () => [t('/placeholders show ++r '), c([P('/placeholders show ++r'), B('placeholders 1'), B(COMPACT('++r'))], [B(FOCUS_ANY)])]),
 
   // CP1: band at sizes outside the matrix, default TUI.
   { id: 'r-end-menu-80', cp: 1, session: 'd80', title: '++r at 80x24, typeahead open: capped; ? would not show it all, so the show hint', steps: [t('++r'), c([B(R_TOP), B(CUT('r')), M('++rr')], [B(R_LAST), B(QUERY_R), B(COMPACT_ANY)])] },
@@ -164,16 +187,16 @@ export const CASES = [
   ...matrix('plan-head-cold', 1, 'launched in plan mode, no prompt yet, ++m ++r + space: no plan mode head yet, plan-part note', () => [t('++m ++r '), c([B('placeholders 2'), B(PLAN_NOTE)], [B(`placeholders 2 ${PLAN_HEAD}`), B(PLAN_ADDS)])], { fam: 'pc' }),
   ...matrix('plan-m-warm', 1, 'plan mode after one turn, ++m: plan mode adds', () => [t('++m'), c([B(PLAN_ADDS), B(M_ADDON), B(RECV('++m'))], [B(PLAN_NOTE), B(PLAN_PLUS)])], { fam: 'pw' }),
   ...matrix('plan-head-warm', 1, 'plan mode after one turn, ++m ++r + space: head says plan mode', () => [t('++m ++r '), c([B(`placeholders 2 ${PLAN_HEAD}`)])], { fam: 'pw' }),
-  ...matrix('plan-plus-warm', 1, 'plan mode after one turn, +++: no (plan only), body shown', () => [t('+++ '), c([B(PLUS_TOP), B(PLAN_HEAD)], [B('(plan only)')])], { fam: 'pw' }),
+  ...matrix('plan-plus-warm', 1, 'plan mode after one turn, +++: cron text, plan mode adds: and the plan addon', () => [t('+++ '), c([B(PLUS_NOW), B(PLAN_ADDS), B(PLUS_TOP), B(PLAN_HEAD)], [B('(plan only)'), B(PLUS_NOTE)])], { fam: 'pw' }),
   ...matrix('plan-shifttab-m', 1, 'Shift+Tab x2 into plan mode, no prompt yet, ++m: honest plan-part note', () => [k('BTab', 2), c(['plan mode on']), t('++m'), c([B(PLAN_NOTE)], [B(PLAN_ADDS)])], { fam: null }),
   { id: 'cmd-status-smoke', cp: 1, size: '120x40', mode: 'default', title: '/placeholders prints the status rows', steps: [t('/placeholders'), enter(), c([H('Two-phase review: review every significant change'), H('Anti-regression review: regression')], [H(HANDOFF)])] },
 
   // CP2: /placeholders status, help, list, show and P1 on Enter. Output renders markdown: inline backticks vanish, fenced text stays raw.
   // 6 names = 5 plugin + the ++lpinl fixture. Long help lines wrap at 200 columns: regexes allow the wrap (\s+).
-  { id: 'cmd-status', cp: 2, size: '200x60', mode: 'default', title: '/placeholders: one row per name with plan +/plan only/inline tags, full-text line, no ++m.plan', steps: [t('/placeholders'), enter(), c([H(STATUS_HEAD), H(/\+\+\+\s+plugin\s+plan only\s+Anti-drift cron plan addon/), H(/\+\+m\s+plugin\s+plan \+\s+Manager mode/), H(/\+\+lpinl\s+project\s+inline\s+LP inline fixture/), H(W(STATUS_FULL))], [H('++m.plan'), H(HANDOFF)], { debugForbid: [SUBMITTED] })] },
+  { id: 'cmd-status', cp: 2, size: '200x60', mode: 'default', title: '/placeholders: one row per name with plan +/inline tags, full-text line, no ++m.plan', steps: [t('/placeholders'), enter(), c([H(STATUS_HEAD), H(/\+\+\+\s+plugin\s+plan \+\s+Anti-drift cron for the current task/), H(/\+\+m\s+plugin\s+plan \+\s+Manager mode/), H(/\+\+lpinl\s+project\s+inline\s+LP inline fixture/), H(W(STATUS_FULL))], [H('++m.plan'), H(HANDOFF)], { debugForbid: [SUBMITTED] })] },
   { id: 'cmd-status-escape-row', cp: 2, size: '200x60', mode: 'default', title: '/placeholders status: the ++/ escape row', steps: [t('/placeholders status'), enter(), c([H(STATUS_HEAD), H('Send one message as typed: put ++/ anywhere in it')], [H(HANDOFF)])] },
   { id: 'cmd-help', cp: 2, size: '200x60', mode: 'default', title: '/placeholders help: full help, caret and whole-text lines, escape alias, layers, doc links', steps: [t('/placeholders help'), enter(), c([H(HELP_HEAD), H(W(HELP_CARET)), H(W(HELP_WHOLE)), H('Send as typed: ++/ (or ++\\) anywhere in a message'), H(/global = all projects, ~\/\.claude[\w-]*\/placeholders\/<name>\.md/), H('Docs: https://doc-claude.brewcode.app/mods/placeholders/')], [H(HANDOFF)], { debugForbid: [SUBMITTED] })] },
-  { id: 'cmd-list', cp: 2, size: '200x60', mode: 'default', title: '/placeholders list: every name with its full text and plan part', steps: [t('/placeholders list'), enter(), c([H(LIST_HEAD), H('+++ · plugin · plan only'), H('plan mode only:'), H('++m · plugin · plan +'), H('++lpinl · project · inline'), H('replaces the token with:'), H(R_TOP), H(RR_TOP), H(A_TOP), H(M_TOP), H(PLUS_TOP), H(M_ADDON), H(INLINE.body), H('Add, change, remove: /placeholders <your words>')], [H(HANDOFF)], { debugForbid: [SUBMITTED] })] },
+  { id: 'cmd-list', cp: 2, size: '200x60', mode: 'default', title: '/placeholders list: every name with its full text and plan part', steps: [t('/placeholders list'), enter(), c([H(LIST_HEAD), H('+++ · plugin · plan +'), H(PLAN_ADDS), H(PLUS_NOW), H('++m · plugin · plan +'), H('++lpinl · project · inline'), H('replaces the token with:'), H(R_TOP), H(RR_TOP), H(A_TOP), H(M_TOP), H(PLUS_TOP), H(M_ADDON), H(INLINE.body), H('Add, change, remove: /placeholders <your words>')], [H(HANDOFF)], { debugForbid: [SUBMITTED] })] },
   { id: 'cmd-show-r-m', cp: 2, size: '200x60', mode: 'default', title: '/placeholders show r m (plan mode off): normal: + plan mode adds:', steps: [t('/placeholders show r m'), enter(), c([H(SHOW_HEAD('++r, ++m')), H('++r · plugin'), H('++m · plugin · plan +'), H('normal:'), H(PLAN_ADDS), H(R_TOP), H(M_TOP), H(M_ADDON)], [H(A_TOP), H(RR_TOP), H(HANDOFF), H('normal + plan mode part:')], { debugForbid: [SUBMITTED] })] },
   { id: 'cmd-show-ru', cp: 2, size: '200x60', mode: 'default', title: '/placeholders покажи ++m и ++r: instant show', steps: [t('/placeholders покажи ++m и ++r'), enter(), c([H(SHOW_HEAD('++m, ++r')), H('++m · plugin · plan +'), H('++r · plugin')], [H(A_TOP), H(RR_TOP), H(HANDOFF)], { debugForbid: [SUBMITTED] })] },
   { id: 'cmd-show-en', cp: 2, size: '200x60', mode: 'default', title: '/placeholders show me ++m and ++r: instant show', steps: [t('/placeholders show me ++m and ++r'), enter(), c([H(SHOW_HEAD('++m, ++r')), H('++m · plugin · plan +'), H('++r · plugin')], [H(A_TOP), H(RR_TOP), H(HANDOFF)], { debugForbid: [SUBMITTED] })] },
@@ -207,7 +230,7 @@ export const CASES = [
 
   // CP3: scope, plan part, remove. Dialogs are drafted by the model; headers, questions, options and tool results are fixed by the tool
   // descriptions in command.ts. Session `scope` writes only its isolated global root; {GDIR} = that dir as the mod shows it (~/...).
-  { id: 'cmd-status-plan-tags', cp: 3, size: '200x60', mode: 'default', title: '/placeholders: plan + and plan only tags', steps: [t('/placeholders'), enter(), c([H('plan +'), H('plan only')], [H('++m.plan'), H(HANDOFF)])] },
+  { id: 'cmd-status-plan-tags', cp: 3, size: '200x60', mode: 'default', title: '/placeholders: plan + tags, no plan only', steps: [t('/placeholders'), enter(), c([H('plan +')], [H('plan only'), H('++m.plan'), H(HANDOFF)])] },
   { id: 'cmd-show-m-parts', cp: 3, size: '200x60', mode: 'default', title: '/placeholders show m: normal and plan mode adds parts', steps: [t('/placeholders show m'), enter(), c([H('normal:'), H(PLAN_ADDS), H(M_ADDON)], [H(HANDOFF)])] },
   { id: 'cmd-help-scope', cp: 3, size: '200x60', mode: 'default', title: '/placeholders help: project layer path, remove forms', steps: [t('/placeholders help'), enter(), c([H('project = this project, .claude/placeholders/<name>.md, wins over global'), H('Remove: /placeholders remove ++db (both parts)')], [H(HANDOFF)])] },
   // Every write is confirmed first: the question shows while no saved/removed line exists, and its answered row precedes that line (order).
@@ -218,8 +241,8 @@ export const CASES = [
       k('Enter'), c([H('saved ++lpdb (global): {GDIR}/lpdb.md')], [BUSY], { timeout: TURN_MS, order: [H('Save ++lpdb as drafted?'), H('saved ++lpdb (global): {GDIR}/lpdb.md')] }),
     ],
   },
-  // Tab-accept leaves the band one key behind (design-a §3, known): the band is checked after the next key.
-  { id: 'scope-typeahead-band', cp: 3, session: 'scope', title: 'after the save, ++lpd offers ++lpdb; Tab takes it; next key: band shows its text', steps: [t('++lpd'), c([M('++lpdb')]), k('Tab'), c([P('++lpdb')]), t(' '), c([B('++lpdb'), B(/always use the staging DB/i)], [B('unknown placeholder')])] },
+  // Tab-accept: prompt.change draws the band at once, no extra key.
+  { id: 'scope-typeahead-band', cp: 3, session: 'scope', title: 'after the save, ++lpd offers ++lpdb; Tab takes it: band shows its text at once', steps: [t('++lpd'), c([M('++lpdb')]), k('Tab'), c([P('++lpdb'), B('++lpdb'), B(/always use the staging DB/i)], [B('unknown placeholder')])] },
   {
     id: 'scope-remove', cp: 3, session: 'scope', title: '/placeholders remove ++lpdb: one Remove question with the layer, then the removal',
     steps: [
@@ -289,17 +312,20 @@ export const CASES = [
   ]),
   ...hx('hx-status', '/placeholders status: the caret / whole-text line', (fs, small) => [t('/placeholders status'), enter(), c([fs ? (small ? W('/placeholders list for all') : W(STATUS_FULL)) : H(W(STATUS_FULL))], [H(HANDOFF)], { debugForbid: [SUBMITTED] })]),
   // Fullscreen 80x24: the plan-effort row leaves the band 5 slot rows, so the addition is cut to its count row; the foot always shows, never an engine scroll row.
-  ...hx('hxp-m', 'plan mode after one turn, ++m: receives label, dim plan mode adds: row, addon text (cut at fullscreen 80x24), whole band under the plan row', (fs, small) => [t('++m'), c([B(PLAN_ROW), B(RECV('++m')), B(PLAN_ADDS), B(fs && small ? W(CUT('m')) : M_ADDON), B(FOCUS('++m'))], [B(PLAN_NOTE), B(PLAN_PLUS), B(SCROLLED)])], 'hxp'),
+  ...hx('hxp-m', 'plan mode after one turn, ++m: receives label, plan-colour plan mode adds: row, bold plan-colour addon (cut at fullscreen 80x24), whole band under the plan-colour plan row', (fs, small) => [t('++m'), c([B(PLAN_ROW), B(RECV('++m')), B(PLAN_ADDS), B(fs && small ? W(CUT('m')) : M_ADDON), B(FOCUS('++m')), A(PLAN_ROW_A), A(PLAN_A(PLAN_ADDS)), ...(fs && small ? [] : [A(PLAN_SENT_A(M_ADDON))])], [B(PLAN_NOTE), B(PLAN_PLUS), B(SCROLLED)])], 'hxp'),
+  ...hx('hxp-compact', 'plan mode after one turn, ++m ++r + space: dim head count with plan-colour plan mode suffix, plan-colour plan + tag', () => [t('++m ++r '), c([B(`placeholders 2 ${PLAN_HEAD}`), B(PLAN_PLUS), A(LABEL_A('placeholders')), A(PLAN_A(` ${PLAN_HEAD}`)), A(PLAN_A(` ${PLAN_PLUS}`))], [B(FOCUS_ANY)])], 'hxp'),
+  ...hx('hxp-plus', 'plan mode after one turn, caret on +++: cron text, plan-colour plan mode adds:, bold plan-colour plan addon', (fs, small) => [t('+++'), c([B(RECV('+++')), B(PLAN_ADDS), A(PLAN_A(PLAN_ADDS)), ...(fs && small ? [] : [B(PLUS_NOW), B(PLUS_TOP), A(PLAN_SENT_A(`# ${PLUS_TOP}`))])], [B(PLUS_NOTE), B('(plan only)'), B(SCROLLED)])], 'hxp'),
+  ...hx('hx-plus', 'default mode, caret on +++: sent now cron text (cut at fullscreen 80x24), plan-colour plan-part note', (fs, small) => [t('+++'), c([B(RECV('+++')), ...(fs && small ? [] : [B(PLUS_NOW)]), B(PLUS_NOTE), A(PLAN_A(PLUS_NOTE))], [B(PLAN_ADDS), B(PLUS_TOP), B('(plan only)')])]),
   ...hx('hx-help', '/placeholders help: caret line and whole-text line', (fs, small) => [t('/placeholders help'), enter(), c(fs ? (small ? [W('README: https://github.com/kochetkov-ma/claude-brewcode')] : [W(HELP_CARET), W(HELP_WHOLE)]) : [H(W(HELP_CARET)), H(W(HELP_WHOLE))], [H(HANDOFF)], { debugForbid: [SUBMITTED] })]),
 
   // 6.9.4 restyle (mockup-6.9.4-final.html states 1-4): tokens bold placeholder colour, sent rows bold text colour, labels dim, actions underlined text colour, [Enter] text colour.
-  ...hx('rst-m', 'state 1: caret on ++m, default mode: bold token, bold sent rows, cut row show or ++m? alone [Enter], underlined foot actions', (fs, small) => [t('++m'), c([B(RECV('++m')), B(FOCUS('++m')), B(W(CUT('m'))), A(TOK_A('++m')), A(SENT_A), A(FOOT_A), A(ACT_A('++/')), A(ACT_A('/placeholders show ++m')), ...(small ? [] : [B(W(OR_Q('m'))), A(ACT_A('++m?')), A(KEY_A)])], [B(COMPACT_ANY)])]),
-  ...hx('rst-pm', 'state 2: plan mode after one turn, ++m: plan row, dim plan mode adds:, cut row and foot actions', (fs, small) => [t('++m'), c([B(PLAN_ROW), B(RECV('++m')), B(PLAN_ADDS), B(FOCUS('++m')), A(TOK_A('++m')), ...(fs && small ? [] : [A(SENT_A)]), A(FOOT_A), A(ACT_A('/placeholders show ++m')), ...(small ? [] : [A(ACT_A('++m?')), A(KEY_A)])], [B(PLAN_NOTE), B(SCROLLED)])], 'hxp'),
+  ...hx('rst-m', 'state 1: caret on ++m, default mode: bold token, bold sent rows, cut row show or ++m? alone [Enter], plan-colour plan note, underlined foot actions', (fs, small) => [t('++m'), c([B(RECV('++m')), B(FOCUS('++m')), B(W(CUT('m'))), A(TOK_A('++m')), A(SENT_A), A(FOOT_A), A(PLAN_A(PLAN_NOTE)), A(ACT_A('++/')), A(ACT_A('/placeholders show ++m')), ...(small ? [] : [B(W(OR_Q('m'))), A(ACT_A('++m?')), A(KEY_A)])], [B(COMPACT_ANY)])]),
+  ...hx('rst-pm', 'state 2: plan mode after one turn, ++m: plan-colour plan row and plan mode adds:, bold plan-colour addition, cut row and foot actions', (fs, small) => [t('++m'), c([B(PLAN_ROW), B(RECV('++m')), B(PLAN_ADDS), B(FOCUS('++m')), A(TOK_A('++m')), A(PLAN_ROW_A), A(PLAN_A(PLAN_ADDS)), ...(fs && small ? [] : [A(SENT_A), A(PLAN_SENT_A(M_ADDON))]), A(FOOT_A), A(ACT_A('/placeholders show ++m')), ...(small ? [] : [A(ACT_A('++m?')), A(KEY_A)])], [B(PLAN_NOTE), B(SCROLLED)])], 'hxp'),
   ...hx('rst-compact', 'state 3: caret past three tokens: bold tokens, dim descriptions, three underlined foot actions', () => [t('++r ++a ++m check the auth module'), c([B('placeholders 3'), B(COMPACT('++r')), A(TOK_A('++r')), A(TOK_A('++a')), A(TOK_A('++m')), A(LABEL_A('more:')), A(ACT_A('put the caret on ++r')), A(ACT_A('/placeholders help'))], [B(FOCUS_ANY)])]),
   ...hx('rst-escaped', 'state 4: ++/ in the message: marker and token bold placeholder colour, dim reasons, underlined delete ++/', () => [t('++/ what does ++r do?'), c([B('++/  placeholders off: this message is sent exactly as typed'), B('++r  (not sent: ++/ in this message)'), B('turn back on: delete ++/'), A(TOK_A('++/')), A(TOK_A('++r')), A(LABEL_A('turn')), A(ACT_A('delete ++/'))], [B(FOCUS_ANY), B(COMPACT_ANY)])]),
   ...hx('rst-unknown', 'unknown ++zz: bold warning token, underlined /placeholders list', () => [t('++zz'), c([B('++zz  unknown placeholder'), A(UNK_A('++zz')), A(LABEL_A('names:')), A(ACT_A('/placeholders list'))])]),
   // Light theme (settings `theme`): the same roles under the light palette; the capture is the readability evidence.
-  { id: 'rst-light-m', cp: 4, session: 'light120', title: 'light theme, caret on ++m: token, sent rows, labels and actions in the light palette', steps: [t('++m'), c([B(RECV('++m')), B(FOCUS('++m')), B(W(OR_Q('m'))), A(/\x1b\[4m\x1b\[38;[25];[\d;]+mmove the caret off \+\+m\x1b\[0m/), A(/\x1b\[1m\x1b\[38;[25];[\d;]+m\+\+m\x1b\[0m/)])] },
+  { id: 'rst-light-m', cp: 4, session: 'light120', title: 'light theme, caret on ++m: token, sent rows, labels and actions in the light palette', steps: [t('++m'), c([B(RECV('++m')), B(FOCUS('++m')), B(W(OR_Q('m'))), A(/\x1b\[4m\x1b\[38;[25];[\d;]+mmove the caret off \+\+m\x1b\[0m/), A(/\x1b\[1m\x1b\[38;[25];[\d;]+m\+\+m\x1b\[0m/), A(PLAN_A(PLAN_NOTE, 30))])] },
   { id: 'rst-light-compact', cp: 4, session: 'light120', title: 'light theme, three tokens: compact band', steps: [t('++r ++a ++m check the auth module'), c([B('placeholders 3'), B(COMPACT('++r'))])] },
 
   // E2E: what Claude receives (claude -p, paid)
@@ -310,5 +336,8 @@ export const CASES = [
   { id: 'e2e-plan-m-empty', cp: 4, kind: 'print', mode: 'plan', globalFiles: { 'm.md': '---\ndescription: "LP empty m override"\n---\n' }, title: '-p plan mode ++m with an empty global m.md: nothing reaches Claude', prompt: '++m Quote verbatim every line of any additional context you received that starts with "[". If there is none, reply NONE.', expect: ['NONE'], forbid: [M_ADDON, M_TOP], debugForbid: [PROVIDED] },
   // Control for the -p mod-tool deny (drive.mjs runPrint): asked outright, the model still cannot call list_placeholders.
   { id: 'e2e-tool-denied', cp: 4, kind: 'print', mode: 'default', title: '-p: the mod tools are denied, so every e2e answer comes from the received context', prompt: 'Call the list_placeholders tool now. If no such tool is available to you, reply with exactly NOTOOL and nothing else.', expect: ['NOTOOL'], forbid: [R_TOP] },
+  // +++ in every mode: default sends the cron-now addon alone; plan mode adds the plan-step addon.
+  { id: 'e2e-plus-default', cp: 4, kind: 'print', mode: 'default', title: '-p default mode +++: Claude quotes the cron-now addon, no plan addon', prompt: '+++ Quote verbatim every line of the additional context you received that starts with "# [ADDON", one per line, nothing else.', expect: [PLUS_NOW], forbid: [PLUS_TOP], debugExpect: [PROVIDED] },
+  { id: 'e2e-plus-plan', cp: 4, kind: 'print', mode: 'plan', title: '-p plan mode +++: Claude quotes the cron addon and the plan-step addon', prompt: '+++ Quote verbatim every line of the additional context you received that starts with "# [ADDON", one per line, nothing else.', expect: [PLUS_NOW, PLUS_TOP], forbid: [], debugExpect: [PROVIDED] },
   { id: 'e2e-inline', cp: 1, kind: 'print', mode: 'default', title: '-p ++lpinl: the inline body replaces the token', prompt: `${INLINE.token} <- repeat my whole message verbatim, nothing else.`, expect: [INLINE.body], forbid: [INLINE.token] },
 ]

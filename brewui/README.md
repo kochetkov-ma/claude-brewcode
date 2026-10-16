@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 6.9.4 |
+| Version | 6.9.5 |
 | Skills | 0 |
 
 ## Install

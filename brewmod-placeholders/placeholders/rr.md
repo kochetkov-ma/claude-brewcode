@@ -2,7 +2,6 @@
 name: "rr"
 description: "Anti-regression review: regression, project standard and functional correctness axes"
 insert: context
-when: always
 order: 40
 group: review
 priority: 2

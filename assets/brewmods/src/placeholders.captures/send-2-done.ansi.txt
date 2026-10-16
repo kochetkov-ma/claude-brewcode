@@ -5,33 +5,33 @@
 
 [38;5;246m[48;5;237m❯ [38;5;231mreview the diff ++r[39m
 [49m
-[38;5;114m⏺[39m [1mBash[0m(git diff && git status --short && ls)
+[38;5;114m⏺[39m [1mBash[0m(git diff && git ls-files)
 [38;5;246m  ⎿  [39mdiff --git a/README.md b/README.md
      index 1fa1a91..5d65d2f 100644
      --- a/README.md
-     [2m… +11 lines (ctrl+o to expand)[0m
+     [2m… +10 lines (ctrl+o to expand)[0m
 
   [38;5;246mRead [1m1[0m[38;5;246m file (ctrl+o to expand)[39m
 
-[38;5;231m⏺[39m The change looks good and I found no problems.
+[38;5;231m⏺[39m I found no problems in the diff. It changes one word: "recipies" becomes "recipes" at
+  [38;5;153mREADME.md:3[39m, which fixes a spelling mistake.
 
-  The whole diff is one line in [38;5;153mREADME.md:3[39m, which fixes the spelling "recipies" →
-  "recipes". The rest of the README ([38;5;153m# brewery[39m, [38;5;153m## Batches[39m, two list items) has no other
-  typos or formatting problems.
+  I also read the rest of [38;5;153mREADME.md[39m (it's 8 lines, and it's the only tracked file in the
+  repo) and found nothing else that needs fixing.
 
-  I didn't run the multi-agent review that [38;5;153m++r[39m asks for, because that's meant for
-  significant changes and a one-word fix in a doc has nothing to reproduce or
-  double-check. It's ready to commit.
+  Your [38;5;153m++r[39m rules call for a multi-agent review on significant changes. A one-word
+  spelling fix isn't one, so I reviewed it myself. With no findings, there was nothing
+  to double-check or fix.
 
-[38;5;246m✻[39m [38;5;246mCogitated for 8s · done 11:49 AM[39m
+  The change is ready to commit. I can commit it as [38;5;153mdocs:[39m [38;5;153mfix[39m [38;5;153mtypo[39m [38;5;153min[39m [38;5;153mREADME[39m if you'd
+  like.
+
+[38;5;246m✻[39m [38;5;246mCooked for 8s ·[39m [38;5;246mdone 3:52 PM[39m
 
 [38;5;244m────────────────────────────────────────────────────────────────────────────────────────
-[39m❯ 
+[39m❯ [2mcommit it[0m
 [38;5;244m────────────────────────────────────────────────────────────────────────────────────────
 [39m  [38;5;246m⏸[39m [38;5;246mmanual[39m [38;5;246mmode[39m [38;5;246mon[39m [38;5;246m·[39m [38;5;246m? for shortcuts · ← for agents[39m
-
-
-
 
 
 

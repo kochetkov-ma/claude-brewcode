@@ -1,6 +1,6 @@
 import { test, expect } from 'claude-code/testing'
 import { PLACEHOLDER_FILES } from './parity/golden.generated'
-import { extractFenced, parseDefinition, parseFrontMatter, parseLegacy, resolveDefs, toDef, toEditorEntries, type LayerFiles, type LayerKind } from '../hooks/lib/defs'
+import { extractFenced, parseDefinition, parseFrontMatter, parseLegacy, resolveDefs, stemBase, toDef, toEditorEntries, type LayerFiles, type LayerKind } from '../hooks/lib/defs'
 
 const layer = (id: string, kind: LayerKind, files: Record<string, string>): LayerFiles => ({ id, kind, files: new Map(Object.entries(files)) })
 
@@ -91,9 +91,8 @@ test('GIVEN bad values and stray lines WHEN parsed THEN they become issues and t
   const out = parseFrontMatter('name: ok\nwhen: sometimes\ninsert: later\norder: 1.5\npriority: x\nwat: 1\nnot a pair\n# comment\n\n')
 
   expect(out, 'result').toEqual({
-    meta: { name: 'ok' },
+    meta: { name: 'ok', when: 'sometimes' },
     issues: [
-      "when: 'sometimes' is not always|plan|not-plan",
       "insert: 'later' is not context|inline",
       "order: '1.5' is not an integer",
       "priority: 'x' is not an integer",
@@ -112,10 +111,10 @@ test('GIVEN a legacy override with leading dashes WHEN parsed THEN no front matt
 })
 
 test('GIVEN a partial meta and a base WHEN completed THEN fields inherit per field and the body is the new text', async () => {
-  const base = { name: 'r', group: 'review', priority: 1, order: 40, header: 'H {token}', legacy: 'review-double', when: 'always' as const }
+  const base = { name: 'r', group: 'review', priority: 1, order: 40, header: 'H {token}', legacy: 'review-double' }
 
   expect(toDef({ meta: { order: 7 }, text: 'T', hasFrontMatter: false, issues: [] }, base), 'def').toEqual({
-    name: 'r', body: 'T', insert: 'context', when: 'always', order: 7, priority: 1, header: 'H {token}', group: 'review', legacy: 'review-double',
+    name: 'r', body: 'T', insert: 'context', order: 7, priority: 1, header: 'H {token}', group: 'review', legacy: 'review-double', isPlan: false,
   })
 })
 
@@ -124,7 +123,7 @@ test('GIVEN neither a name nor a base WHEN completed THEN null; with only a name
 
   expect([toDef(bare), toDef({ ...bare, meta: { name: 'z' } })], 'defs').toEqual([
     null,
-    { name: 'z', body: 'T', insert: 'context', when: 'always', order: 100, priority: 0, header: '' },
+    { name: 'z', body: 'T', insert: 'context', order: 100, priority: 0, header: '', isPlan: false },
   ])
 })
 
@@ -136,7 +135,6 @@ test('GIVEN the shipped m.plan.md WHEN parsed THEN it is the plan add part of m:
       name: 'm',
       description: 'Manager mode in Plan mode: the manager text plus the plan addon',
       insert: 'context',
-      when: 'plan',
       plan: 'add',
       order: 20,
       header: 'User typed `{token}` — Manager + Plan Mode is active for this turn:',
@@ -147,41 +145,90 @@ test('GIVEN the shipped m.plan.md WHEN parsed THEN it is the plan add part of m:
   })
 })
 
-test('GIVEN plan values add, replace, quoted and unknown WHEN the front matter is parsed THEN add and replace are kept and the rest is an issue', async () => {
-  expect(['plan: add', 'plan: replace', 'plan: "add"', 'plan: later', 'plan:'].map(parseFrontMatter), 'parsed').toEqual([
+test('GIVEN plan and when values WHEN the front matter is parsed THEN each is kept raw and none is an issue', async () => {
+  expect(['plan: add', 'plan: replace', 'plan: "add"', 'when: plan', 'when: always'].map(parseFrontMatter), 'parsed').toEqual([
     { meta: { plan: 'add' }, issues: [] },
     { meta: { plan: 'replace' }, issues: [] },
     { meta: { plan: 'add' }, issues: [] },
-    { meta: {}, issues: ["plan: 'later' is not add|replace"] },
-    { meta: {}, issues: ["plan: '' is not add|replace"] },
+    { meta: { when: 'plan' }, issues: [] },
+    { meta: { when: 'always' }, issues: [] },
   ])
 })
 
-test('GIVEN a base def with plan add WHEN an override without the key is completed THEN every field but plan is inherited', async () => {
-  const base = { name: 'm', when: 'plan' as const, order: 20, header: 'H', legacy: 'planmode', plan: 'add' as const }
+test('GIVEN stems x, x.plan and .plan WHEN their base is read THEN only x.plan is a plan part of x', async () => {
+  expect([stemBase('x'), stemBase('x.plan'), stemBase('.plan')], 'bases').toEqual([{ name: 'x' }, { name: 'x', isPlan: true }, { name: '.plan' }])
+})
+
+test('GIVEN a plan part base WHEN an old full text, a legacy file and a new part complete it THEN all three are plan parts with every field inherited', async () => {
+  const base = { name: 'm', order: 20, header: 'H', legacy: 'planmode', isPlan: true }
+  const part = { name: 'm', insert: 'context', order: 20, priority: 0, header: 'H', legacy: 'planmode', isPlan: true }
 
   expect([toDef(parseDefinition('OLD FULL TEXT'), base), toDef(parseLegacy('LEGACY'), base), toDef(parseDefinition('---\nplan: add\n---\nNEW'), base)], 'defs').toEqual([
-    { name: 'm', body: 'OLD FULL TEXT', insert: 'context', when: 'plan', order: 20, priority: 0, header: 'H', legacy: 'planmode' },
-    { name: 'm', body: 'LEGACY', insert: 'context', when: 'plan', order: 20, priority: 0, header: 'H', legacy: 'planmode' },
-    { name: 'm', body: 'NEW', insert: 'context', when: 'plan', order: 20, priority: 0, header: 'H', legacy: 'planmode', plan: 'add' },
+    { ...part, body: 'OLD FULL TEXT' },
+    { ...part, body: 'LEGACY' },
+    { ...part, body: 'NEW' },
   ])
 })
 
-test('GIVEN a plan add part overridden by a legacy file in one stack and by a native file without the key in another WHEN layers resolve THEN both overrides replace, a new add part keeps add and the misplaced key is an issue', async () => {
-  const defaults = layer('default', 'native', { m: '---\nname: m\nlegacy: full\n---\nM', 'm.plan': '---\nname: m\nwhen: plan\nplan: add\nlegacy: planmode\n---\nADD', x: '---\nplan: add\n---\nX' })
-  const legacy = resolveDefs([defaults, layer('global-legacy', 'legacy', { planmode: 'PM' }), layer('project', 'native', { 'db.plan': '---\nplan: add\n---\nDB ADD' })])
+test('GIVEN a plan part overridden by a legacy file in one stack and by a native file without the key in another WHEN layers resolve THEN both stay plan parts with one warning per file', async () => {
+  const defaults = layer('default', 'native', { m: '---\nname: m\nlegacy: full\n---\nM', 'm.plan': '---\nname: m\nplan: add\nlegacy: planmode\n---\nADD', x: '---\nplan: add\n---\nX' })
+  const legacy = resolveDefs([defaults, layer('global-legacy', 'legacy', { planmode: 'PM' }), layer('project', 'native', { 'db.plan': '---\nplan: add\n---\nDB ADD', db: 'DB' })])
   const native = resolveDefs([defaults, layer('project', 'native', { 'm.plan': '---\nheader: "N {token}"\n---\nNATIVE' })])
-  const m = { name: 'm', body: 'M', insert: 'context', when: 'always', order: 100, priority: 0, header: '', legacy: 'full' }
-  const x = { name: 'x', body: 'X', insert: 'context', when: 'always', order: 100, priority: 0, header: '', plan: 'add' }
-  const issues = ['default/x.md: plan: add needs when: plan; sent as a normal text']
+  const m = { name: 'm', body: 'M', insert: 'context', order: 100, priority: 0, header: '', legacy: 'full', isPlan: false }
+  const mp = { name: 'm', insert: 'context', order: 100, priority: 0, legacy: 'planmode', isPlan: true }
+  const x = { name: 'x', body: 'X', insert: 'context', order: 100, priority: 0, header: '', isPlan: false }
+  const db = { insert: 'context', order: 100, priority: 0, header: '' }
+  const xIssue = 'default/x.md: plan: is for x.plan.md; ignored'
 
   expect({ legacy: { defs: legacy.defs, issues: legacy.issues }, native: { defs: native.defs, issues: native.issues } }, 'resolved').toStrictEqual({
     legacy: {
-      defs: [m, { name: 'm', body: 'PM', insert: 'context', when: 'plan', order: 100, priority: 0, header: '', legacy: 'planmode' }, x, { name: 'db', body: 'DB ADD', insert: 'context', when: 'plan', order: 100, priority: 0, header: '', plan: 'add' }],
-      issues,
+      defs: [m, { ...mp, body: 'PM', header: '' }, x, { ...db, name: 'db', body: 'DB', isPlan: false }, { ...db, name: 'db', body: 'DB ADD', isPlan: true }],
+      issues: [xIssue, 'global-legacy/planmode.md: brewtools file: its text is added in plan mode; to clear this, move it to placeholders/m.plan.md with plan: add'],
     },
-    native: { defs: [m, { name: 'm', body: 'NATIVE', insert: 'context', when: 'plan', order: 100, priority: 0, header: 'N {token}', legacy: 'planmode' }, x], issues },
+    native: { defs: [m, { ...mp, body: 'NATIVE', header: 'N {token}' }, x], issues: [xIssue, 'project/m.plan.md: no plan: add; its text is added in plan mode'] },
   })
+})
+
+test('GIVEN stale when values, a misplaced plan key and orphan plan parts WHEN layers resolve THEN every def is sent in every mode with one warning per file', async () => {
+  const out = resolveDefs([
+    layer('global', 'native', { a: '---\nwhen: plan\nplan: add\n---\nA', b: '---\nwhen: not-plan\n---\nB', c: '---\nwhen: always\n---\nC', 'o.plan': 'O', 'p.plan': '---\nplan: add\n---\nP' }),
+    layer('project', 'native', { 'o.plan': '---\nplan: add\n---\nO2' }),
+  ])
+  const d = { insert: 'context', order: 100, priority: 0, header: '', isPlan: false }
+
+  expect({ defs: out.defs, issues: out.issues }, 'resolved').toStrictEqual({
+    defs: [{ ...d, name: 'a', body: 'A' }, { ...d, name: 'b', body: 'B' }, { ...d, name: 'c', body: 'C' }, { ...d, name: 'o', body: 'O2' }, { ...d, name: 'p', body: 'P' }],
+    issues: [
+      'global/a.md: when: plan is gone; sent in every mode',
+      'global/b.md: when: not-plan is gone; sent in every mode',
+      'global/o.plan.md: no plan: add; its text is added in plan mode',
+      'project/o.plan.md: no o.md; sent in every mode',
+      'global/p.plan.md: no p.md; sent in every mode',
+    ],
+  })
+})
+
+test('GIVEN a legacy planmode.md in a layer with its dir WHEN layers resolve THEN the warning names that real file and how to clear it', async () => {
+  const defaults = layer('default', 'native', { m: '---\nname: m\nlegacy: full\n---\nM', 'm.plan': '---\nname: m\nplan: add\nlegacy: planmode\n---\nADD' })
+  const legacy = { ...layer('project-legacy', 'legacy', { planmode: '' }), dir: '/w/p/.claude/brewtools/manager/prompts' }
+
+  expect(resolveDefs([defaults, legacy]).issues, 'issues').toStrictEqual([
+    '/w/p/.claude/brewtools/manager/prompts/planmode.md: brewtools file: its text is added in plan mode; to clear this, move it to placeholders/m.plan.md with plan: add',
+  ])
+})
+
+test('GIVEN files whose name an earlier file of the same part holds WHEN layers resolve THEN their mode warnings say shadowed and not sent, never sent in every mode', async () => {
+  const out = resolveDefs([
+    layer('default', 'native', { m: '---\nname: m\n---\nM', 'm.plan': '---\nname: m\nplan: add\n---\nADD' }),
+    layer('project', 'native', { foo: '---\nname: m\nwhen: plan\nplan: add\n---\nPLANX', 'bar.plan': '---\nname: m\n---\nBAR', 'q.plan': 'Q1', 'z.plan': '---\nname: q\n---\nQ2' }),
+  ])
+
+  expect(out.issues, 'issues').toStrictEqual([
+    'project/bar.plan.md: shadowed by default/m.plan.md; not sent',
+    'project/foo.md: shadowed by default/m.md; not sent',
+    'project/q.plan.md: no q.md; sent in every mode',
+    'project/z.plan.md: shadowed by project/q.plan.md; not sent',
+  ])
 })
 
 test('GIVEN every shipped definition WHEN parsed THEN there are no front-matter issues and no empty body', async () => {
@@ -190,23 +237,23 @@ test('GIVEN every shipped definition WHEN parsed THEN there are no front-matter 
     return [k, p.hasFrontMatter, p.issues.length, p.text.length > 0]
   })
 
-  expect(rows, 'rows').toEqual([['+', true, 0, true], ['a', true, 0, true], ['m', true, 0, true], ['m.plan', true, 0, true], ['r', true, 0, true], ['rr', true, 0, true]])
+  expect(rows, 'rows').toEqual([['+', true, 0, true], ['+.plan', true, 0, true], ['a', true, 0, true], ['m', true, 0, true], ['m.plan', true, 0, true], ['r', true, 0, true], ['rr', true, 0, true]])
 })
 
 test('GIVEN a meta that sets every field and a base with other values WHEN completed THEN the meta wins field by field', async () => {
-  const base = { name: 'b', insert: 'inline' as const, when: 'plan' as const, order: 1, group: 'bg', priority: 1, header: 'bh', legacy: 'bl', description: 'bd' }
-  const meta = { name: 'n', insert: 'context' as const, when: 'not-plan' as const, order: -5, group: 'mg', priority: -2, header: 'mh', legacy: 'ml', description: 'md' }
+  const base = { name: 'b', insert: 'inline' as const, isPlan: true, order: 1, group: 'bg', priority: 1, header: 'bh', legacy: 'bl', description: 'bd' }
+  const meta = { name: 'n', insert: 'context' as const, when: 'not-plan', plan: 'add', order: -5, group: 'mg', priority: -2, header: 'mh', legacy: 'ml', description: 'md' }
 
   expect(toDef({ meta, text: 'T', hasFrontMatter: true, issues: [] }, base), 'def').toEqual({
-    name: 'n', body: 'T', insert: 'context', when: 'not-plan', order: -5, group: 'mg', priority: -2, header: 'mh', legacy: 'ml', description: 'md',
+    name: 'n', body: 'T', insert: 'context', order: -5, group: 'mg', priority: -2, header: 'mh', legacy: 'ml', description: 'md', isPlan: true,
   })
 })
 
 test('GIVEN a meta with a name only and a full base WHEN completed THEN every other field is inherited, insert and description included', async () => {
-  const base = { insert: 'inline' as const, when: 'plan' as const, order: 1, group: 'bg', priority: 1, header: 'bh', legacy: 'bl', description: 'bd' }
+  const base = { insert: 'inline' as const, isPlan: true, order: 1, group: 'bg', priority: 1, header: 'bh', legacy: 'bl', description: 'bd' }
 
   expect(toDef({ meta: { name: 'n' }, text: 'T', hasFrontMatter: true, issues: [] }, base), 'def').toEqual({
-    name: 'n', body: 'T', insert: 'inline', when: 'plan', order: 1, group: 'bg', priority: 1, header: 'bh', legacy: 'bl', description: 'bd',
+    name: 'n', body: 'T', insert: 'inline', order: 1, group: 'bg', priority: 1, header: 'bh', legacy: 'bl', description: 'bd', isPlan: true,
   })
 })
 
@@ -215,11 +262,11 @@ test('GIVEN negative, signed and zero integers WHEN parsed THEN a leading minus 
   expect(parseFrontMatter('order: +5').issues, 'plus').toEqual(["order: '+5' is not an integer"])
 })
 
-test('GIVEN a plan part in the global layer, its normal text in the project and a plan-only name WHEN editor entries are built THEN the normal def names the entry and only the plan-only name is plan only', async () => {
+test('GIVEN a plan part in the global layer, its normal text in the project and an orphan plan part WHEN editor entries are built THEN the normal def names the entry and the orphan is a normal entry', async () => {
   const { defs } = resolveDefs([layer('global', 'native', { 'db.plan': '---\nplan: add\n---\nDB ADD', 'po.plan': 'PO' }), layer('project', 'native', { db: '---\ndescription: "Db"\n---\nDB' })])
 
   expect(toEditorEntries(defs), 'entries').toEqual([
-    { name: 'db', body: 'DB', planOnly: false, description: 'Db' },
-    { name: 'po', body: 'PO', planOnly: true },
+    { name: 'db', body: 'DB', description: 'Db' },
+    { name: 'po', body: 'PO' },
   ])
 })

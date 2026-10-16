@@ -17,7 +17,7 @@
   [1m[38;5;231mNo Task tools (CLAUDE_CODE_ENABLE_TODO_TOOLS=1 unset) -> same numbered graph[0m
   [1m[38;5;231min the plan or .claude/features/<task>.md.[0m
   [38;5;246m... 16 more lines · whole text: [4m[38;5;231m/placeholders show ++m[0m[38;5;246m or [4m[38;5;231m++m?[0m[38;5;246m alone [38;5;231m[Enter][39m
-  [38;5;246mnot sent now · plan mode adds 29 lines[39m
+  [38;5;73mnot sent now · plan mode adds 18 lines[39m
 [38;5;246mclose: [4m[38;5;231mmove the caret off ++m[0m[38;5;246m · send as typed: [4m[38;5;231m++/[0m
 
 [38;5;244m────────────────────────────────────────────────────────────────────────────────────────

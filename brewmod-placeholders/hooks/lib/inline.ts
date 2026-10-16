@@ -14,22 +14,22 @@ export function isInlineSubmit(e: SubmitLike): boolean {
   return INLINE_ORIGINS.has(e.origin.kind) && e.command === undefined && e.isMeta === undefined
 }
 
-// Lowercase name -> body. Only `insert: inline` + `when: always` defs with a non-empty body; first wins per name.
-// A name that also has a context def is excluded entirely, so one token can never be inserted twice (inline + context).
+// Lowercase name -> body. Only normal (non-plan) `insert: inline` defs with a non-empty body; first wins per name.
+// A name that also has a normal context def is excluded entirely, so one token can never be inserted twice (inline + context).
 export function inlineBodies(defs: readonly Def[]): Map<string, string> {
   const contextNames = new Set<string>()
-  for (const d of defs) if (d.insert === 'context') contextNames.add(d.name.toLowerCase())
+  for (const d of defs) if (d.insert === 'context' && !d.isPlan) contextNames.add(d.name.toLowerCase())
   const out = new Map<string, string>()
   for (const d of defs) {
     const key = d.name.toLowerCase()
-    if (d.insert !== 'inline' || d.when !== 'always' || d.body === '' || contextNames.has(key) || out.has(key)) continue
+    if (d.insert !== 'inline' || d.isPlan || d.body === '' || contextNames.has(key) || out.has(key)) continue
     out.set(key, d.body)
   }
   return out
 }
 
 // One pass over the original text (no body re-scan here); the command hook later expands context tokens a body carries, as brewtools did. Null = nothing to change.
-// Non-always inline defs and empty bodies stay verbatim; inline text has no block header.
+// Plan-part inline defs and empty bodies stay verbatim; inline text has no block header.
 export function expandInline(c: Compiled, text: string): string | null {
   if (!text.includes(c.prefix)) return null
   const bodies = inlineBodies(c.defs)

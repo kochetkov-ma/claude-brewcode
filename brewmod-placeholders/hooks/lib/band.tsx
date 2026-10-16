@@ -1,14 +1,12 @@
 // Pure band rendering: view + registry entries + sent texts -> rows -> tree. Zero I/O; atoms and `$` stay in register.ts.
 import type { ElementTable, RenderElement } from 'claude-code'
 import { FILES_GONE } from './defs'
-import { KNOWN_COLOR, UNKNOWN_COLOR, type CaretFocus, type EditorEntry } from './editor'
+import { KNOWN_COLOR, PLAN_COLOR, UNKNOWN_COLOR, type CaretFocus, type EditorEntry } from './editor'
 import type { PlaceholderView } from './match'
 import { PLAN_LABEL, REASON, escapedReason, type PlanParts, type Sent } from './sent'
 
-// body = exact text the token sends; reason = why it is not sent (plan-only has its own flag); plan = its plan-mode addon.
-export type BandRow = { text: string; name: string; isKnown: boolean; description: string; body: string; isPlanOnly: boolean; isInline?: boolean; reason?: string; plan?: RowPlan }
-// A plan-mode text beside the normal one: add = plan is the addition, replace = plan is the whole plan-mode text.
-export type RowPlan = { kind: 'add' | 'replace'; plan: string }
+// body = exact text the token sends; reason = why it is not sent; plan = the text its `<name>.plan.md` adds in plan mode.
+export type BandRow = { text: string; name: string; isKnown: boolean; description: string; body: string; isInline?: boolean; reason?: string; plan?: string }
 export type BandMode = 'hidden' | 'escaped' | 'focus' | 'compact'
 // mode = bandState's pick; marker = the escape typed; budget = focus band and hover rows, autoBudget = compact rows, queryBudget = rows once `?` closes the menu; columns = bodyColumns.
 export type BandOptions = {
@@ -150,8 +148,8 @@ export function clip(s: string, room: number): string {
 
 // Rows a body takes at `width`: its source lines as they are (the text exactly as sent), each wrapped.
 const rowsOf = (body: string, width: number): number => (body === '' ? 0 : body.split('\n').reduce((n, l) => n + wrapRows(l, width).length, 0))
-// Rows a drawn body needs: a plan note (outside plan mode) or a `sends instead` mark adds one; plan mode's `adds` mark takes the blank separator row.
-const needOf = (r: BandRow, isPlan: boolean, width: number): number => rowsOf(r.body, width) + (r.plan !== undefined && (!isPlan || r.plan.kind === 'replace') ? 1 : 0)
+// Rows a drawn body needs: a plan note (outside plan mode) adds one; plan mode's `adds` mark takes the blank separator row.
+const needOf = (r: BandRow, isPlan: boolean, width: number): number => rowsOf(r.body, width) + (r.plan !== undefined && !isPlan ? 1 : 0)
 
 // Rows per body, never more than `free` in all: a body needing less leaves its spare rows to the rest; each gets one while rows are left.
 export function shareRows(needs: readonly number[], free: number): number[] {
@@ -166,10 +164,13 @@ export function shareRows(needs: readonly number[], free: number): number[] {
   return out
 }
 
-// Body rows: sent now = bold theme text colour, else dim.
+// Body rows: sent now = bold theme text colour (a plan-mode addition: bold plan colour), else dim; plan-mode labels in the plan colour.
 const SENT_STYLE = { color: 'text', bold: true } as const
 const DIM_STYLE = { dimColor: true } as const
-const styleOf = (isSent: boolean) => (isSent ? SENT_STYLE : DIM_STYLE)
+const PLAN_STYLE = { color: PLAN_COLOR } as const
+const PLAN_SENT_STYLE = { color: PLAN_COLOR, bold: true } as const
+type BodyStyle = typeof SENT_STYLE | typeof DIM_STYLE | typeof PLAN_SENT_STYLE
+const styleOf = (isSent: boolean, isAddition = false): BodyStyle => (!isSent ? DIM_STYLE : isAddition ? PLAN_SENT_STYLE : SENT_STYLE)
 const plural = (n: number, word: string): string => (n === 1 ? word : `${word}s`)
 const nMore = (n: number, word: string): string => `... ${n} more ${plural(n, word)}`
 
@@ -218,7 +219,7 @@ function cutParts(left: number, more: More, width: number): Part[] {
 }
 
 // Whole source lines of a body while their pre-wrapped rows fit `rows`; a cut adds one row counting the source lines left and what `more` offers.
-function bodyRows(Text: BandUi['Text'], body: string, rows: number, key: string, width: number, more: More, isSent: boolean): RenderElement[] {
+function bodyRows(Text: BandUi['Text'], body: string, rows: number, key: string, width: number, more: More, style: BodyStyle): RenderElement[] {
   const lines = body.split('\n').map((l) => wrapRows(l, width))
   const total = lines.reduce((n, l) => n + l.length, 0)
   const room = total > rows ? rows - 1 : total
@@ -231,7 +232,7 @@ function bodyRows(Text: BandUi['Text'], body: string, rows: number, key: string,
   }
   const out = lines.slice(0, take).flatMap((parts, i) =>
     parts.map((p, j) => (
-      <Text key={`${key}:${i}:${j}`} {...styleOf(isSent)} wrap="truncate-end">
+      <Text key={`${key}:${i}:${j}`} {...style} wrap="truncate-end">
         {p === '' ? ' ' : p}
       </Text>
     )),
@@ -241,10 +242,9 @@ function bodyRows(Text: BandUi['Text'], body: string, rows: number, key: string,
 }
 
 export const UNKNOWN_LABEL = 'unknown placeholder'
-export const PLAN_ONLY_LABEL = `(${PLAN_LABEL.only})`
 const GONE_REASON = 'not sent: plugin files removed'
 
-// One row per distinct token (case-insensitive, first occurrence); known rows take description and plan flag from the entry, the text from `sent` when given.
+// One row per distinct token (case-insensitive, first occurrence); known rows take the description from the entry, the text from `sent` when given.
 export function bandRows(view: PlaceholderView, entries: readonly EditorEntry[], sent?: readonly Sent[], plans?: (name: string) => PlanParts): BandRow[] {
   const byName = new Map<string, EditorEntry>()
   for (const entry of entries) {
@@ -268,10 +268,9 @@ export function bandRows(view: PlaceholderView, entries: readonly EditorEntry[],
       isKnown: token.isKnown,
       description: token.isKnown ? (entry?.description ?? token.name) : UNKNOWN_LABEL,
       body: s === undefined ? (entry?.body ?? '') : s.text,
-      isPlanOnly: entry?.planOnly === true,
       ...(entry?.isInline === true ? { isInline: true } : {}),
-      ...(reason !== null && reason !== REASON.planOnly ? { reason } : {}),
-      ...(pp?.kind === 'add' || pp?.kind === 'replace' ? { plan: { kind: pp.kind, plan: pp.plan } } : {}),
+      ...(reason !== null ? { reason } : {}),
+      ...(pp?.kind === 'add' ? { plan: pp.plan } : {}),
     })
   }
   return rows
@@ -288,10 +287,9 @@ const escapedFoot = (marker: string): Part[] => ['turn back on: ', { act: `delet
 const PLAN_HEAD = ' · plan mode'
 const PLAN_PLUS = ` ${PLAN_LABEL.plus}`
 // The band knows plan mode only after a prompt (state file), so the note says when the text is sent.
-const planNote = (p: RowPlan): string => {
-  const n = p.plan.split('\n').length
-  const lines = `${n} ${plural(n, 'line')}`
-  return p.kind === 'add' ? `not sent now · plan mode adds ${lines}` : `not sent now · plan mode sends ${lines} instead`
+const planNote = (plan: string): string => {
+  const n = plan.split('\n').length
+  return `not sent now · plan mode adds ${n} ${plural(n, 'line')}`
 }
 
 // Body rows sit 2 cells in.
@@ -314,28 +312,25 @@ function fitRows(rows: readonly BandRow[], budget: number, width: number, isPlan
   return { shown, alloc: new Map(bodies.map((r, i) => [r, give[i] ?? 0])) }
 }
 
-// The body is what Claude receives with this message (a cut body too); else it is the other mode's text or not sent.
-export const isSentNow = (row: BandRow, isPlan: boolean): boolean => row.isKnown && row.body !== '' && !(row.isPlanOnly && !isPlan) && (row.reason === undefined || row.reason === REASON.cut)
+// The body is what Claude receives with this message (a cut body too).
+export const isSentNow = (row: BandRow): boolean => row.isKnown && row.body !== '' && (row.reason === undefined || row.reason === REASON.cut)
 
 export const RECEIVES = 'Claude receives these lines now:'
-// Label over a drawn body; null = nothing drawn or not sent in either mode (the head keeps its reason tag).
-export function receivesLabel(row: BandRow, isPlan: boolean): string | null {
+// Label over a drawn body; null = nothing drawn or not sent (the head keeps its reason tag).
+export function receivesLabel(row: BandRow): string | null {
   if (!row.isKnown || row.body === '') return null
-  if (row.isPlanOnly && !isPlan) return `not sent now (${PLAN_LABEL.only}):`
-  if (row.reason === REASON.notInPlan) return 'not sent in plan mode:'
   if (row.reason === REASON.cut) return `Claude receives these lines now (${REASON.cut}):`
   return row.reason === undefined ? RECEIVES : null
 }
 
 // A token's one line: the description gives way so the token and its labels stay whole.
-// label = receivesLabel of a drawn body: it replaces the plan-only/reason tags; isFocus also drops the description and the plan tag.
+// label = receivesLabel of a drawn body: it replaces the reason tag; isFocus also drops the description and the plan tag.
 function drawHead(ui: BandUi, row: BandRow, o: BandOptions, label: string | null = null, isFocus = false): RenderElement {
   const { Box, Text } = ui
   const tail = label === null ? '' : ` · ${label}`
-  const planLabel = label === null && row.isPlanOnly && !o.isPlan ? ` ${PLAN_ONLY_LABEL}` : ''
   const reasonLabel = label !== null || row.reason === undefined ? '' : ` (${row.reason})`
   const plus = row.plan === undefined || (isFocus && label !== null) ? '' : PLAN_PLUS
-  const description = isFocus && label !== null ? '' : clip(`  ${row.description}`, o.columns - cells(row.text) - cells(plus) - cells(planLabel) - cells(reasonLabel) - cells(tail))
+  const description = isFocus && label !== null ? '' : clip(`  ${row.description}`, o.columns - cells(row.text) - cells(plus) - cells(reasonLabel) - cells(tail))
   return (
     <Box>
       <Text {...tokStyle(row.isKnown)}>{row.text}</Text>
@@ -344,8 +339,7 @@ function drawHead(ui: BandUi, row: BandRow, o: BandOptions, label: string | null
           {description}
         </Text>
       )}
-      {plus === '' ? null : <Text dimColor>{plus}</Text>}
-      {planLabel === '' ? null : <Text dimColor>{planLabel}</Text>}
+      {plus === '' ? null : <Text {...PLAN_STYLE}>{plus}</Text>}
       {reasonLabel === '' ? null : <Text dimColor>{reasonLabel}</Text>}
       {tail === '' ? null : (
         <Text dimColor wrap="truncate-end">
@@ -396,7 +390,7 @@ function tokenRow(ui: BandUi, row: BandRow, o: BandOptions, rows: number, more: 
   const body = row.body === '' || rows < 1 ? null : planBody(Text, row, rows, key, o, more)
   return (
     <Box key={`row:${key}`} flexDirection="column">
-      {drawHead(ui, row, o, body === null || isHover ? null : receivesLabel(row, o.isPlan), isFocus)}
+      {drawHead(ui, row, o, body === null || isHover ? null : receivesLabel(row), isFocus)}
       {body === null ? null : isHover ? (
         <Box marginLeft={2} flexDirection="column" display="none" hover={{ display: 'flex' }}>
           {body}
@@ -410,32 +404,28 @@ function tokenRow(ui: BandUi, row: BandRow, o: BandOptions, rows: number, more: 
   )
 }
 
-// A body within `rows`: plan mode marks where the plan-mode text starts (dim label row), outside a dim row says it exists.
+// A body within `rows`: plan mode marks where the addition starts (plan-colour label row), outside a plan-colour row says it exists.
 function planBody(Text: BandUi['Text'], row: BandRow, rows: number, key: string, o: BandOptions, more: More): RenderElement[] {
-  const p = row.plan
+  const plan = row.plan
   const width = bodyWidth(o)
-  const isSent = isSentNow(row, o.isPlan)
-  const whole = (n: number): RenderElement[] => bodyRows(Text, row.body, n, key, width, more, isSent)
-  if (p === undefined || rows < (o.isPlan ? 3 : 2)) return whole(rows)
-  if (!o.isPlan) {
-    const note = (
-      <Text key={`${key}:plan`} dimColor wrap="truncate-end">
-        {planNote(p)}
-      </Text>
-    )
-    return [...whole(rows - 1), note]
-  }
+  const isSent = isSentNow(row)
+  const whole = (n: number): RenderElement[] => bodyRows(Text, row.body, n, key, width, more, styleOf(isSent))
+  if (plan === undefined || rows < (o.isPlan ? 3 : 2)) return whole(rows)
   const mark = (label: string): RenderElement => (
-    <Text key={`${key}:plan`} dimColor wrap="truncate-end">
+    <Text key={`${key}:plan`} {...PLAN_STYLE} wrap="truncate-end">
       {label}
     </Text>
   )
-  if (p.kind === 'replace') return [mark(PLAN_LABEL.instead), ...whole(rows - 1)]
-  const sep = `\n\n${p.plan}`
+  if (!o.isPlan) return [...whole(rows - 1), mark(planNote(plan))]
+  const sep = `\n\n${plan}`
   if (!row.body.endsWith(sep)) return whole(rows)
   const normal = row.body.slice(0, -sep.length)
-  const [a, b] = shareRows([rowsOf(normal, width), rowsOf(p.plan, width)], rows - 1)
-  return [...bodyRows(Text, normal, a ?? 1, `${key}:a`, width, null, isSent), mark(PLAN_LABEL.adds), ...bodyRows(Text, p.plan, b ?? 1, `${key}:b`, width, more, isSent)]
+  const [a, b] = shareRows([rowsOf(normal, width), rowsOf(plan, width)], rows - 1)
+  return [
+    ...bodyRows(Text, normal, a ?? 1, `${key}:a`, width, null, styleOf(isSent)),
+    mark(PLAN_LABEL.adds),
+    ...bodyRows(Text, plan, b ?? 1, `${key}:b`, width, more, styleOf(isSent, true)),
+  ]
 }
 
 // `P/` in the message: nothing is substituted, so no bodies and no Button; one row per token says so.
@@ -475,9 +465,10 @@ function renderCompact(ui: BandUi, rows: readonly BandRow[], o: BandOptions): Re
   const first = rows.find((r) => r.isKnown) ?? rows[0]
   return (
     <Box key="band" flexDirection="column">
-      <Text key="head" dimColor>
-        {`placeholders ${rows.length}${o.isPlan ? PLAN_HEAD : ''}`}
-      </Text>
+      <Box key="head">
+        <Text dimColor>{`placeholders ${rows.length}`}</Text>
+        {o.isPlan ? <Text {...PLAN_STYLE}>{PLAN_HEAD}</Text> : null}
+      </Box>
       {shown.map((row) => (view === null ? tokenRow(ui, row, o, hoverRows, showMore(o, row), true) : tokenRow(ui, row, o, view.alloc.get(row) ?? 0, showMore(o, row))))}
       {rows.length > shown.length ? <Text dimColor>{nMore(rows.length - shown.length, 'placeholder')}</Text> : null}
       {foot(ui, o, compactFoot(first?.text ?? `${o.prefix}name`, o.prefix))}

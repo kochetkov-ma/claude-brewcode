@@ -7,16 +7,16 @@
 
   Read 1 file (ctrl+o to expand)
 
-⏺ It's a short README for a homebrew project ("brewery"), covering recipes and
-  fermentation logs, with a batch list of 01 pale ale and 02 stout.
+⏺ README.md covers a short description of the repo as Homebrew recipes and fermentation
+  logs, with a list of two batches (01 pale ale and 02 stout).
 
-✻ Crunched for 8s · done 11:50 AM
+✻ Churned for 28s · done 3:54 PM
 plan mode · effort xhigh for this mode · change: /plan-effort <level>               [-]
 
 ────────────────────────────────────────────────────────────────────────────────────────
 ❯ 
 ────────────────────────────────────────────────────────────────────────────────────────
-  ⏸ plan mode on (shift+tab to cycle) · ← for agents                  ● high · /effort
+  ⏸ plan mode on (shift+tab to cycle) · ← for agents
 
 
 

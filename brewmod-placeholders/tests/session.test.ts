@@ -37,7 +37,7 @@ test('GIVEN a valid setup WHEN the session starts THEN there is no toast, the re
 
   await start($, on)
 
-  expect([w.toasts, w.calls.read.filter((p) => !p.includes('/.state/')).length, w.calls.read.filter((p) => p.includes('/.state/'))], 'toasts, registry reads, state reads').toEqual([[], 6, ['/PLUG/.state/mode-sess-1.json']])
+  expect([w.toasts, w.calls.read.filter((p) => !p.includes('/.state/')).length, w.calls.read.filter((p) => p.includes('/.state/'))], 'toasts, registry reads, state reads').toEqual([[], 7, ['/PLUG/.state/mode-sess-1.json']])
 })
 
 test('GIVEN a user-defined placeholder in the project layer WHEN typeahead runs THEN it is offered with its description', async ($, on) => {

@@ -1,4 +1,4 @@
-// Storyboard of placeholders-full-text.gif (keys verified live on CC 2.1.301, main-screen TUI, mod 6.9.4): times in s.
+// Storyboard of placeholders-full-text.gif (keys verified live on CC 2.1.301, main-screen TUI, mod 6.9.5): times in s.
 // Same renderer and gates as placeholders.story.js; window = this story's loop bounds for record-gifs.mjs --check.
 window.PH_STORY = {
   term: { cols: 88, rows: 40 },
@@ -46,7 +46,7 @@ window.PH_STORY = {
     { screen: 'ft-4-q', has: '❯\u00a0++m?\n', why: '? typed right after the token' },
     { screen: 'ft-5-fill', has: '++m? = /placeholders show ++m · not sent to Claude ·', why: 'P1 notice (show.ts)' },
     { screen: 'ft-5-fill', has: '❯\u00a0/placeholders show ++m\n', why: 'P1 fill, trailing space, no typeahead row' },
-    { screen: 'ft-6-print', has: 'Deliver the embedded role + graph + deferred cron step, not implementation code.', why: 'last line of the m.plan.md part' },
+    { screen: 'ft-6-print', has: 'Deliver the embedded role + graph, not implementation code.', why: 'last line of the m.plan.md part' },
     { screen: 'ft-6-print', has: '⏸ manual mode on · ? for shortcuts', why: 'idle footer: no Claude turn running' },
     { screen: 'ft-7-top', has: '❯ /placeholders show ++m\n', why: 'the command that printed it' },
     { screen: 'ft-7-top', has: 'brewmod-placeholders: ++m · full text as sent · plan mode off', why: 'show output head (show.ts)' },

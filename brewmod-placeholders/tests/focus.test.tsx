@@ -29,28 +29,22 @@ test('GIVEN lines, a long word, spaces and wide characters WHEN pre-wrapped THEN
   ])
 })
 
-const row = (body: string, extra: Partial<BandRow> = {}): BandRow => ({ text: '++x', name: 'x', isKnown: true, description: 'X', body, isPlanOnly: false, ...extra })
+const row = (body: string, extra: Partial<BandRow> = {}): BandRow => ({ text: '++x', name: 'x', isKnown: true, description: 'X', body, ...extra })
 
-test('GIVEN rows sent now, in the other mode, cut, not sent, empty and unknown WHEN the receives label is built THEN it says sent now, not sent in this mode, or is null when nothing is sent', async () => {
-  const cases: [BandRow, boolean][] = [
-    [row('a\nb\nc'), false],
-    [row('one'), true],
-    [row('p1\np2', { isPlanOnly: true }), false],
-    [row('p1\np2', { isPlanOnly: true }), true],
-    [row('n1', { reason: 'not in plan mode' }), true],
-    [row('c1\n...[truncated]', { reason: 'cut at 9000 chars' }), false],
-    [row('', { reason: 'not sent: ++rr wins' }), false],
-    [row('t', { reason: 'not sent: plugin files removed' }), false],
-    [row(''), false],
-    [row('', { isKnown: false }), false],
+test('GIVEN rows sent now, with a plan part, cut, not sent, empty and unknown WHEN the receives label is built THEN it says sent now, or is null when nothing is sent', async () => {
+  const cases: BandRow[] = [
+    row('a\nb\nc'),
+    row('p1\n\np2', { plan: 'p2' }),
+    row('c1\n...[truncated]', { reason: 'cut at 9000 chars' }),
+    row('', { reason: 'not sent: ++rr wins' }),
+    row('t', { reason: 'not sent: plugin files removed' }),
+    row(''),
+    row('', { isKnown: false }),
   ]
 
-  expect(cases.map(([r, isPlan]) => receivesLabel(r, isPlan)), 'labels').toEqual([
+  expect(cases.map((r) => receivesLabel(r)), 'labels').toEqual([
     'Claude receives these lines now:',
     'Claude receives these lines now:',
-    'not sent now (plan only):',
-    'Claude receives these lines now:',
-    'not sent in plan mode:',
     'Claude receives these lines now (cut at 9000 chars):',
     null,
     null,
@@ -354,6 +348,58 @@ test('GIVEN edits and caret moves WHEN prompt.edit runs THEN the view and focus 
   ])
 })
 
+// ---- prompt.change: a taken typeahead row, a recall or an undo changes the box without prompt.edit
+
+// The compact ++r band at 40 rows: caret past the token and its space.
+const ACCEPTED_R = ['placeholders 1', '++r', '  Two-phase review: review every significant change, then dou…', RECV, ...R_ROWS, 'more: put the caret on ++r · send as typed: ++/ · help: /placeholders help']
+// The box as the engine left it, then the event it raises for that change.
+const changed = ($: any, text: string, origin: object) => {
+  box.text = text
+  box.cursor = text.length
+  return $.prompt.change({ text, cursor: text.length, origin })
+}
+
+test('GIVEN an empty box WHEN a taken typeahead row leaves ++r and a space (origin engine) THEN the band draws without another key, as for the typed draft', async ($, on) => {
+  await boot($, on)
+  const before = await bandTexts($, 40)
+  await changed($, '++r ', { kind: 'engine' })
+  const accepted = await bandTexts($, 40)
+  await typed($, '++r ')
+
+  expect({ before, accepted, typed: await bandTexts($, 40) }, 'band before and after the accept').toEqual({ before: [], accepted: ACCEPTED_R, typed: ACCEPTED_R })
+})
+
+test('GIVEN an empty box WHEN a history recall puts fix ++m back (caret at its end) THEN the band focuses ++m', async ($, on) => {
+  await boot($, on)
+  await changed($, 'fix ++m', { kind: 'history' })
+
+  expect(await bandTexts($, 40), 'recalled focus band').toEqual(['++m', RECV, M_HEAD, ' ', ...M_BODY, '... 16 more lines · whole text: /placeholders show ++m', M_NOTE, M_FOOT])
+})
+
+test('GIVEN box changes from the engine, history, undo and a plugin fill WHEN prompt.change runs THEN the atoms follow every change and are written only when they change', async ($, on) => {
+  const writes: unknown[] = []
+  on('state.set', (_$, e, next) => {
+    writes.push({ key: e.key, value: e.value })
+    return next(e)
+  })
+  await boot($, on)
+
+  await changed($, '++r ', { kind: 'engine' })
+  await changed($, '++r ', { kind: 'engine' })
+  await changed($, '/placeholders show ++m', { kind: 'plugin', name: 'brewmod-placeholders' })
+  await changed($, '++m', { kind: 'history' })
+  await changed($, '', { kind: 'undo' })
+
+  expect(writes, 'state writes').toEqual([
+    { key: 'view', value: { tokens: [{ text: '++r', name: 'r', isKnown: true, start: 0, end: 3 }] } },
+    { key: 'focus', value: { name: null, isQuery: false, isMenuOpen: false } },
+    { key: 'view', value: { tokens: [{ text: '++m', name: 'm', isKnown: true, start: 19, end: 22 }] } },
+    { key: 'focus', value: { name: 'm', isQuery: false, isMenuOpen: false } },
+    { key: 'view', value: { tokens: [] } },
+    { key: 'focus', value: { name: null, isQuery: false, isMenuOpen: false } },
+  ])
+})
+
 // ---- plan part: m.plan.md (`plan: add`) = an addition joined to the m.md body in plan mode (design-a2 sections 1-2)
 
 // The first rows of the ++m text as sent (source lines, a blank line as ' '); m.md's body is 32 rows at 98 cells, m.plan.md's addition 29.
@@ -375,22 +421,22 @@ const M_BODY = [
 const M_ADDITION = [
   '[ADDON: PLAN MODE]',
   ' ',
-  'Stay read-only: no code, board/task-state writes, installation, configuration,',
-  'or cron creation. Read-only expert exploration is allowed.',
+  'Stay read-only: no code, board/task-state writes, installation or',
+  'configuration. Read-only expert exploration is allowed.',
   ' ',
   'Include in the plan (English, token economy):',
 ]
 // Compact head: the description gives way to plan + and the receives label.
 const M_DESC = '  Manager mode: orchestrate and delegate, never code i…'
 const M_FOOT = 'close: move the caret off ++m · send as typed: ++/'
-const M_NOTE = 'not sent now · plan mode adds 29 lines'
+const M_NOTE = 'not sent now · plan mode adds 18 lines'
 const PLAN_TREE: Tree = { ...TREE, [STATE_FILE]: JSON.stringify({ mode: 'plan', ts: 1 }) }
 const XX = {
   [`${ROOT}/.claude/placeholders/xx.md`]: file('xx', 'Ex mode', 'XX BODY'),
   [`${ROOT}/.claude/placeholders/xx.plan.md`]: '---\nname: "xx"\ndescription: "Ex mode"\nwhen: plan\n---\nXX PLAN\nSECOND',
 }
 
-test('GIVEN plan mode and ++m under the caret WHEN the band mounts THEN the head says what Claude receives, then the normal rows, a dim plan mode adds: row and the addition, each cut on its own', async ($, on) => {
+test('GIVEN plan mode and ++m under the caret WHEN the band mounts THEN the head says what Claude receives, then the normal rows, a plan-colour plan mode adds: row and the addition, each cut on its own', async ($, on) => {
   await boot($, on, PLAN_TREE)
   await typed($, '++m')
   const ui = await mountBand($, 40)
@@ -398,12 +444,12 @@ test('GIVEN plan mode and ++m under the caret WHEN the band mounts THEN the head
   await ui.unmount()
 
   expect({ texts: await bandTexts($, 40), mark }, 'plan focus').toEqual({
-    texts: ['++m', RECV, MP_HEAD, ' ', ...M_BODY.slice(0, 4), '... 23 more lines', 'plan mode adds:', ...M_ADDITION, '... 23 more lines · whole text: /placeholders show ++m', M_FOOT],
-    mark: { dimColor: true, wrap: 'truncate-end' },
+    texts: ['++m', RECV, MP_HEAD, ' ', ...M_BODY.slice(0, 4), '... 23 more lines', 'plan mode adds:', ...M_ADDITION, '... 12 more lines · whole text: /placeholders show ++m', M_FOOT],
+    mark: { color: 'planMode', wrap: 'truncate-end' },
   })
 })
 
-test('GIVEN default mode and ++m WHEN the band mounts focused and compact THEN the compact row carries plan +, the focus head says what Claude receives and both end with a dim not-sent-now plan note', async ($, on) => {
+test('GIVEN default mode and ++m WHEN the band mounts focused and compact THEN the compact row carries plan +, the focus head says what Claude receives and both end with a plan-colour not-sent-now plan note', async ($, on) => {
   await boot($, on)
   await typed($, '++m')
   const focused = await bandTexts($, 40)
@@ -420,7 +466,7 @@ test('GIVEN plan mode and a compact band WHEN it mounts THEN the head says plan 
   await typed($, '++yy ++m ')
 
   expect(await bandTexts($, 40), 'plan compact').toEqual([
-    'placeholders 2 · plan mode',
+    'placeholders 2', ' · plan mode',
     '++yy',
     '  Why mode',
     RECV,
@@ -435,12 +481,12 @@ test('GIVEN plan mode and a compact band WHEN it mounts THEN the head says plan 
     '... 25 more lines',
     'plan mode adds:',
     ...M_ADDITION.slice(0, 3),
-    '... 26 more lines · whole text: /placeholders show ++m',
+    '... 15 more lines · whole text: /placeholders show ++m',
     'more: put the caret on ++yy · send as typed: ++/ · help: /placeholders help',
   ])
 })
 
-test('GIVEN a plan file that replaces its normal text WHEN focused in plan mode and in default mode THEN sends instead, or a plan-mode text note', async ($, on) => {
+test('GIVEN an old plan file without plan: add WHEN focused in plan mode and in default mode THEN its text is added, or a plan-mode note', async ($, on) => {
   const tree: Tree = { ...TREE, ...XX }
   on('turn.complete', (_$, e) => ({ text: e.answer }) as never)
   await boot($, on, tree)
@@ -451,15 +497,15 @@ test('GIVEN a plan file that replaces its normal text WHEN focused in plan mode 
   await typed($, '++xx')
   const foot = 'close: move the caret off ++xx · send as typed: ++/'
 
-  expect({ normal, plan: await bandTexts($, 40) }, 'replace').toEqual({
-    normal: ['++xx', RECV, 'XX BODY', 'not sent now · plan mode sends 2 lines instead', foot],
-    plan: ['++xx', RECV, 'plan mode sends instead:', 'XX PLAN', 'SECOND', foot],
+  expect({ normal, plan: await bandTexts($, 40) }, 'old plan file added').toEqual({
+    normal: ['++xx', RECV, 'XX BODY', 'not sent now · plan mode adds 2 lines', foot],
+    plan: ['++xx', RECV, 'XX BODY', 'plan mode adds:', 'XX PLAN', 'SECOND', foot],
   })
 })
 
-// ---- body need: a plan note or a `sends instead` mark takes a row; plan mode's `adds` mark takes the blank separator row
+// ---- body need: a plan note takes a row; plan mode's `adds` mark takes the blank separator row
 
-const planAdd = (name: string, body: string): string => `---\nname: "${name}"\ndescription: "${name} plan"\nwhen: plan\nplan: add\n---\n${body}`
+const planAdd = (name: string, body: string): string => `---\nname: "${name}"\ndescription: "${name} plan"\nplan: add\n---\n${body}`
 const NEED: Tree = {
   ...TREE,
   [`${ROOT}/.claude/placeholders/pp.md`]: file('pp', 'Pp mode', 'P1\nP2\nP3'),
@@ -484,11 +530,27 @@ test('GIVEN short bodies with a plan addition in default mode WHEN the compact b
   })
 })
 
-test('GIVEN a 2-line plan text that replaces its normal text WHEN the compact band mounts in plan mode THEN the sends instead mark and both lines show', async ($, on) => {
+const EMPTY_PART: Tree = { ...TREE, [`${ROOT}/.claude/placeholders/ee.md`]: file('ee', 'Ee mode', 'E1'), [`${ROOT}/.claude/placeholders/ee.plan.md`]: planAdd('ee', '') }
+
+test('GIVEN an empty plan part in default mode WHEN the compact band mounts THEN neither a plan + tag nor a plan note shows', async ($, on) => {
+  await boot($, on, EMPTY_PART)
+  await typed($, '++ee ')
+
+  expect(await bandTexts($, 40), 'empty part adds nothing').toEqual(['placeholders 1', '++ee', '  Ee mode', RECV, 'E1', compactFoot('++ee')])
+})
+
+test('GIVEN an empty plan part in plan mode WHEN the compact band mounts THEN neither a plan + tag nor a plan mode adds row shows', async ($, on) => {
+  await boot($, on, { ...EMPTY_PART, [STATE_FILE]: JSON.stringify({ mode: 'plan', ts: 1 }) })
+  await typed($, '++ee ')
+
+  expect(await bandTexts($, 40), 'empty part adds nothing').toEqual(['placeholders 1', ' · plan mode', '++ee', '  Ee mode', RECV, 'E1', compactFoot('++ee')])
+})
+
+test('GIVEN an old 2-line plan text without plan: add WHEN the compact band mounts in plan mode THEN it is added under the normal text', async ($, on) => {
   await boot($, on, { ...TREE, ...XX, [STATE_FILE]: JSON.stringify({ mode: 'plan', ts: 1 }) })
   await typed($, '++xx ')
 
-  expect(await bandTexts($, 40), 'plan compact replace').toEqual(['placeholders 1 · plan mode', '++xx', '  Ex mode', ' plan +', RECV, 'plan mode sends instead:', 'XX PLAN', 'SECOND', compactFoot('++xx')])
+  expect(await bandTexts($, 40), 'old plan file added').toEqual(['placeholders 1', ' · plan mode', '++xx', '  Ex mode', ' plan +', RECV, 'XX BODY', 'plan mode adds:', 'XX PLAN', 'SECOND', compactFoot('++xx')])
 })
 
 test('GIVEN plan mode, ++nn with a 2-line addition under the caret and the menu open WHEN the band mounts at 19 and 18 rows THEN ? is named exactly where it would show all 5 rows', async ($, on) => {
@@ -547,28 +609,43 @@ test('GIVEN fullscreen plan mode and an inner mod row beneath WHEN focus and com
   expect(drawn, 'rows drawn per slot, the inner row included').toEqual({ focus: [6, 14], compact: [6, 14] })
 })
 
-// ---- colour rule: every row sent now is bold in the theme text colour, every explanation dim
+// ---- colour rule: every row sent now is bold (theme text; a plan addition plan colour), plan-mode labels plan colour, explanations dim
 
-const styled = async ($: any): Promise<{ sent: string[]; dim: string[]; act: string[] }> => {
+const styled = async ($: any): Promise<{ sent: string[]; plansent: string[]; plan: string[]; dim: string[]; act: string[] }> => {
   const ui = await mountBand($, 40)
   const runs = await spansOf(ui)
   await ui.unmount()
   const of = (k: string): string[] => runs.filter(([s]) => s === k).map(([, t]) => t)
-  return { sent: of('sent'), dim: of('dim'), act: of('act') }
+  return { sent: of('sent'), plansent: of('plansent'), plan: of('plan'), dim: of('dim'), act: of('act') }
 }
 
-test('GIVEN plan mode and ++m focused WHEN the band mounts THEN the normal rows and the addition are bold text colour, labels dim and the actions underlined text colour', async ($, on) => {
+test('GIVEN plan mode and ++m focused WHEN the band mounts THEN the normal rows are bold text colour, the addition bold plan colour, its label plan colour, the rest dim and the actions underlined', async ($, on) => {
   await boot($, on, PLAN_TREE)
   await typed($, '++m')
 
   expect(await styled($), 'plan focus styles').toEqual({
-    sent: [MP_HEAD, ' ', ...M_BODY.slice(0, 4), ...M_ADDITION],
-    dim: [RECV, '... 23 more lines', 'plan mode adds:', '... 23 more lines · whole text: ', 'close: ', ' · send as typed: '],
+    sent: [MP_HEAD, ' ', ...M_BODY.slice(0, 4)],
+    plansent: M_ADDITION,
+    plan: ['plan mode adds:'],
+    dim: [RECV, '... 23 more lines', '... 12 more lines · whole text: ', 'close: ', ' · send as typed: '],
     act: ['/placeholders show ++m', 'move the caret off ++m', '++/'],
   })
 })
 
-test('GIVEN default mode WHEN ++m (plan part not sent), +++ (plan only) and ++/ ++m (escaped) bands mount THEN only the ++m normal rows are bold text colour', async ($, on) => {
+// The compact +++ rows at the default width: its head and the first wrapped lines of the cron text.
+const PLUS_ROWS = [
+  'User typed `+++` — Anti-drift cron is active for this turn:',
+  ' ',
+  '# [ADDON: ANTI-DRIFT CRON]',
+  ' ',
+  "Now: announce and create one unique session cron for the current task, hourly unless the user's",
+  'interval differs, using available native scheduling tools. Record its task-specific prompt,',
+  'schedule ID, timezone, tick count and stop rule. If scheduling is unavailable, report the gap',
+  'without claiming a schedule exists.',
+  ' ',
+]
+
+test('GIVEN default mode WHEN ++m (plan part not sent), +++ and ++/ ++m (escaped) bands mount THEN only the ++m and +++ normal rows are bold text colour', async ($, on) => {
   await boot($, on)
   const out: Record<string, string[]> = {}
   for (const draft of ['++m', '+++', '++/ ++m']) {
@@ -576,5 +653,5 @@ test('GIVEN default mode WHEN ++m (plan part not sent), +++ (plan only) and ++/ 
     out[draft] = (await styled($)).sent
   }
 
-  expect(out, 'sent rows per draft').toEqual({ '++m': [M_HEAD, ' ', ...M_BODY], '+++': [], '++/ ++m': [] })
+  expect(out, 'sent rows per draft').toEqual({ '++m': [M_HEAD, ' ', ...M_BODY], '+++': PLUS_ROWS, '++/ ++m': [] })
 })

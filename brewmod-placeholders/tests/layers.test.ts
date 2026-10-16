@@ -10,7 +10,7 @@ const G_NATIVE = `${CFG}/placeholders`
 const G_LEGACY = `${CFG}/manager/prompts`
 
 const load = (extra: Tree) => loadRegistry(memIo({ ...defaultsTree(), ...extra }).io, ROOTS, newRegistryCache())
-const find = (defs: readonly Def[], name: string, when: string): Def | undefined => defs.find((d) => d.name === name && d.when === when)
+const find = (defs: readonly Def[], name: string, isPlan = false): Def | undefined => defs.find((d) => d.name === name && d.isPlan === isPlan)
 const withBody = <T extends { body: string }>(d: T | undefined, body: string) => ({ ...d, body })
 
 test('GIVEN only the shipped defaults WHEN the registry loads THEN it equals the parsed defaults and every source is default', async () => {
@@ -19,7 +19,7 @@ test('GIVEN only the shipped defaults WHEN the registry loads THEN it equals the
   expect([reg.defs, reg.issues, [...reg.sources]], 'registry').toEqual([
     defaultDefs(),
     [],
-    [['+', 'default'], ['a', 'default'], ['m', 'default'], ['m.plan', 'default'], ['r', 'default'], ['rr', 'default']],
+    [['+', 'default'], ['+.plan', 'default'], ['a', 'default'], ['m', 'default'], ['m.plan', 'default'], ['r', 'default'], ['rr', 'default']],
   ])
 })
 
@@ -38,8 +38,8 @@ for (const row of PRECEDENCE) {
   test(`GIVEN ${row.title} WHEN the registry loads THEN the winner's body is ${row.body} and the other fields stay the default's`, async () => {
     const reg = await load(row.tree)
 
-    expect([find(reg.defs, 'a', 'always'), reg.sources.get('a')], 'def a and its source layer').toEqual([
-      withBody(find(defaultDefs(), 'a', 'always'), row.body),
+    expect([find(reg.defs, 'a'), reg.sources.get('a')], 'def a and its source layer').toEqual([
+      withBody(find(defaultDefs(), 'a'), row.body),
       row.source,
     ])
   })
@@ -56,12 +56,12 @@ for (const row of EMPTY) {
   test(`GIVEN ${row.title} WHEN the registry loads THEN the empty body wins`, async () => {
     const reg = await load(row.tree)
 
-    expect([find(reg.defs, 'a', 'always')?.body, reg.sources.get('a')], 'body and source layer').toEqual(['', row.source])
+    expect([find(reg.defs, 'a')?.body, reg.sources.get('a')], 'body and source layer').toEqual(['', row.source])
   })
 }
 
 test('GIVEN a full override and a planmode override WHEN the registry loads THEN each variant changes only its own body', async () => {
-  const bodies = (reg: { defs: readonly Def[] }) => [find(reg.defs, 'm', 'always')?.body, find(reg.defs, 'm', 'plan')?.body]
+  const bodies = (reg: { defs: readonly Def[] }) => [find(reg.defs, 'm')?.body, find(reg.defs, 'm', true)?.body]
   const plain = bodies(await load({}))
 
   expect(
@@ -73,24 +73,24 @@ test('GIVEN a full override and a planmode override WHEN the registry loads THEN
 test('GIVEN a native file without front matter WHEN it overrides r THEN group, priority, order, header and legacy are inherited', async () => {
   const reg = await load({ [`${P_NATIVE}/r.md`]: 'MINE' })
 
-  expect(find(reg.defs, 'r', 'always'), 'def r').toEqual(withBody(find(defaultDefs(), 'r', 'always'), 'MINE'))
+  expect(find(reg.defs, 'r'), 'def r').toEqual(withBody(find(defaultDefs(), 'r'), 'MINE'))
 })
 
 test('GIVEN a native file with partial front matter WHEN it overrides r THEN only the named fields change', async () => {
   const reg = await load({ [`${P_NATIVE}/r.md`]: '---\norder: 7\nheader: "H {token}"\n---\nMINE' })
 
-  expect(find(reg.defs, 'r', 'always'), 'def r').toEqual({ ...withBody(find(defaultDefs(), 'r', 'always'), 'MINE'), order: 7, header: 'H {token}' })
+  expect(find(reg.defs, 'r'), 'def r').toEqual({ ...withBody(find(defaultDefs(), 'r'), 'MINE'), order: 7, header: 'H {token}' })
 })
 
-test('GIVEN new native files without defaults WHEN loaded THEN the stem names them and .plan marks the plan variant', async () => {
+test('GIVEN new native files without defaults WHEN loaded THEN the stem names them and .plan marks the plan part', async () => {
   const reg = await load({ [`${P_NATIVE}/foo.md`]: 'F', [`${G_NATIVE}/foo.plan.md`]: 'FP' })
 
   expect(
     reg.defs.filter((d) => d.name === 'foo'),
     'foo variants',
   ).toEqual([
-    { name: 'foo', body: 'FP', insert: 'context', when: 'plan', order: 100, priority: 0, header: '' },
-    { name: 'foo', body: 'F', insert: 'context', when: 'always', order: 100, priority: 0, header: '' },
+    { name: 'foo', body: 'FP', insert: 'context', order: 100, priority: 0, header: '', isPlan: true },
+    { name: 'foo', body: 'F', insert: 'context', order: 100, priority: 0, header: '', isPlan: false },
   ])
 })
 
@@ -105,7 +105,7 @@ test('GIVEN a legacy file with an unknown name and a directory entry WHEN loaded
   })
   const reg = await loadRegistry(io, ROOTS, newRegistryCache())
 
-  expect([calls.read.filter((p) => p.startsWith(ROOT)), reg.defs.length], 'project reads, def count').toEqual([[], 6])
+  expect([calls.read.filter((p) => p.startsWith(ROOT)), reg.defs.length], 'project reads, def count').toEqual([[], 7])
 })
 
 test('GIVEN a bad front matter and an empty explicit name WHEN loaded THEN issues name the layer and file and the good fields survive', async () => {
@@ -114,11 +114,11 @@ test('GIVEN a bad front matter and an empty explicit name WHEN loaded THEN issue
     [`${G_NATIVE}/z.md`]: '---\nname: ""\n---\nZ',
   })
 
-  expect([reg.issues, find(reg.defs, 'a', 'always')?.body], 'issues and a body').toEqual([
+  expect([reg.issues, find(reg.defs, 'a')?.body], 'issues and a body').toEqual([
     [
       'global/z.md: no name',
-      "project/a.md: when: 'sometimes' is not always|plan|not-plan",
       "project/a.md: unknown key 'wat'",
+      'project/a.md: when: sometimes is gone; sent in every mode',
     ],
     'A2',
   ])
@@ -131,7 +131,7 @@ test('GIVEN an unchanged listing WHEN the registry loads again THEN nothing is r
   const readsAfterFirst = calls.read.length
   const second = await loadRegistry(io, ROOTS, cache)
 
-  expect([readsAfterFirst, calls.read.length, second === first], 'reads after first, reads after second, same object').toEqual([6, 6, true])
+  expect([readsAfterFirst, calls.read.length, second === first], 'reads after first, reads after second, same object').toEqual([7, 7, true])
 })
 
 test('GIVEN one file whose mtime moves WHEN the registry loads again THEN only that file is re-read and the new text shows', async () => {
@@ -143,7 +143,7 @@ test('GIVEN one file whose mtime moves WHEN the registry loads again THEN only t
   tree[`${P_NATIVE}/a.md`] = { raw: 'V2', mtimeMs: 6 }
   const second = await loadRegistry(io, ROOTS, cache)
 
-  expect([calls.read, find(first.defs, 'a', 'always')?.body, find(second.defs, 'a', 'always')?.body, second === first], 'reads, bodies, identity').toEqual([
+  expect([calls.read, find(first.defs, 'a')?.body, find(second.defs, 'a')?.body, second === first], 'reads, bodies, identity').toEqual([
     [`${P_NATIVE}/a.md`],
     'V1',
     'V2',
@@ -231,8 +231,8 @@ test('GIVEN native files with hyphen, dot, 33-char and unicode names WHEN loaded
   expect([reg.issues, reg.skipped, reg.defs.map((d) => d.name), [...reg.sources.keys()]], 'issues, skipped, names, sources').toEqual([
     [NAME_ISSUE('caf\u00e9.md', 'caf\u00e9'), NAME_ISSUE('foo.bar.md', 'foo.bar'), NAME_ISSUE('my-thing.md', 'my-thing'), NAME_ISSUE(`${long}.md`, long)],
     ['project/caf\u00e9.md', 'project/foo.bar.md', 'project/my-thing.md', `project/${long}.md`],
-    ['+', 'a', 'm', 'm', 'r', 'rr', 'good'],
-    ['+', 'a', 'm', 'm.plan', 'r', 'rr', 'good'],
+    ['+', '+', 'a', 'm', 'm', 'r', 'rr', 'good'],
+    ['+', '+.plan', 'a', 'm', 'm.plan', 'r', 'rr', 'good'],
   ])
 })
 
@@ -252,10 +252,10 @@ test('GIVEN a symbol name and a front matter name with a hyphen WHEN loaded THEN
 test('GIVEN an unterminated front matter WHEN loaded THEN the file is skipped, never injected raw, and the default shows through', async () => {
   const reg = await load({ [`${P_NATIVE}/a.md`]: '---\nname: a\norder: 5\nBODY' })
 
-  expect([reg.issues, reg.skipped, find(reg.defs, 'a', 'always')], 'issues, skipped, def a').toEqual([
+  expect([reg.issues, reg.skipped, find(reg.defs, 'a')], 'issues, skipped, def a').toEqual([
     ['project/a.md: front matter is not closed'],
     ['project/a.md'],
-    find(defaultDefs(), 'a', 'always'),
+    find(defaultDefs(), 'a'),
   ])
 })
 
@@ -265,7 +265,7 @@ test('GIVEN blank lines before the opening front matter line WHEN loaded THEN th
   expect([reg.issues, reg.skipped, reg.defs.filter((d) => d.name === 'foo')], 'issues, skipped, foo').toEqual([
     [],
     [],
-    [{ name: 'foo', body: 'BODY', insert: 'context', when: 'always', order: 5, priority: 0, header: '' }],
+    [{ name: 'foo', body: 'BODY', insert: 'context', order: 5, priority: 0, header: '', isPlan: false }],
   ])
 })
 
@@ -278,7 +278,7 @@ test('GIVEN one unreadable file next to good ones WHEN loaded THEN the registry 
     ['project/dangling.md: unreadable (ENOENT dangling)'],
     ['project/dangling.md'],
     ['F'],
-    7,
+    8,
   ])
 })
 
@@ -304,16 +304,16 @@ test('GIVEN a still unreadable file WHEN the registry loads again THEN the same 
   expect([second === first, third === first, third.skipped, third.defs.filter((d) => d.name === 'dangling').map((d) => d.body)], 'identity, recovery').toEqual([true, false, [], ['']])
 })
 
-test('GIVEN upper-case stems WHEN loaded THEN M.md overrides m field by field and Foo.plan.md is a plan variant of foo', async () => {
+test('GIVEN upper-case stems WHEN loaded THEN M.md overrides m field by field and Foo.plan.md is a plan part of foo', async () => {
   const reg = await load({ [`${P_NATIVE}/M.md`]: 'UP', [`${P_NATIVE}/Foo.md`]: 'F', [`${P_NATIVE}/Foo.plan.md`]: 'FP' })
-  const m = reg.defs.filter((d) => d.name === 'm' && d.when === 'always')
+  const m = reg.defs.filter((d) => d.name === 'm' && !d.isPlan)
 
-  expect([m, reg.sources.get('m'), reg.sources.has('M'), reg.defs.filter((d) => d.name.toLowerCase() === 'foo').map((d) => [d.name, d.when, d.body]), reg.issues], 'm, source, foo, issues').toEqual([
-    [withBody(find(defaultDefs(), 'm', 'always'), 'UP')],
+  expect([m, reg.sources.get('m'), reg.sources.has('M'), reg.defs.filter((d) => d.name.toLowerCase() === 'foo').map((d) => [d.name, d.isPlan, d.body]), reg.issues], 'm, source, foo, issues').toEqual([
+    [withBody(find(defaultDefs(), 'm'), 'UP')],
     'project',
     false,
-    [['foo', 'always', 'F'], ['foo', 'plan', 'FP']],
-    [],
+    [['foo', false, 'F'], ['foo', true, 'FP']],
+    ['project/Foo.plan.md: no plan: add; its text is added in plan mode'],
   ])
 })
 

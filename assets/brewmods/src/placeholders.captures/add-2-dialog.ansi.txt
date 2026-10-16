@@ -1,5 +1,5 @@
-     [38;5;153m/placeholders[39m [38;5;153mshow[39m [38;5;153m++r[39m, or [38;5;153m++r?[39m alone + Enter twice · [38;5;153m/placeholders[39m [38;5;153mlist[39m for all
      Send one message as typed: put [38;5;153m++/[39m anywhere in it
+     [38;5;153mplan[39m [38;5;153m+[39m: its [38;5;153m<name>.plan.md[39m adds text in Plan mode; [38;5;153m<name>.md[39m is sent in every mode
      Add, change, remove: [38;5;153m/placeholders[39m [38;5;153m<your[39m [38;5;153mwords>[39m in any language, e.g. [38;5;153m/placeholders
 [39m     [38;5;153madd[39m [38;5;153m++db:[39m [38;5;153muse[39m [38;5;153mthe[39m [38;5;153mstaging[39m [38;5;153mDB[39m
      Where: global = all projects ([38;5;153m~/.claude/placeholders[39m), project = this one
@@ -19,19 +19,19 @@
   [38;5;231mis inserted into prompts as ++name (not in this message: ++/).[39m
 
 [38;5;114m[49m⏺[39m [1mbrewmod-placeholders - list_placeholders (MCP)[0m
-[38;5;246m  ⎿  [39m## +++ · layer: plugin · files: none · when: plan · plan: only · Anti-drift cr
-     on plan addon, active in Plan mode only
-     # [ADDON: ANTI-DRIFT CRON PLAN]
-     [2m… +112 lines (ctrl+o to expand)[0m
+[38;5;246m  ⎿  [39m## +++ · layer: plugin · files: none · plan: add · Anti-drift cron for the cur
+     rent task; plan mode plans it as a step
+     # [ADDON: ANTI-DRIFT CRON]
+     [2m… +105 lines (ctrl+o to expand)[0m
 [38;5;246m────────────────────────────────────────────────────────────────────────────────────────
 [38;5;16m[48;5;153m ☐ Placeholder [39m[49m
 
 [1m[38;5;231mSave ++db as drafted?[0m
 
 [38;5;153m❯[39m [38;5;246m1.[39m [38;5;153mSave as drafted (Recommended)[39m
-     [38;5;246mText: "always use the staging DB"[39m
+     [38;5;246mText: "always use the staging DB" — saved globally (~/.claude/placeholders/db.md)[39m
   [38;5;246m2.[39m Change it
-     [38;5;246mEdit the name[39m [38;5;246mor text before saving[39m
+     [38;5;246mEdit[39m [38;5;246mthe[39m [38;5;246mname[39m [38;5;246mor[39m [38;5;246mtext[39m [38;5;246mbefore[39m [38;5;246msaving[39m
   [38;5;246m3.[39m [38;5;246mType[39m [38;5;246msomething.[39m
 [38;5;246m────────────────────────────────────────────────────────────────────────────────────────
 [39m  4. Chat about this

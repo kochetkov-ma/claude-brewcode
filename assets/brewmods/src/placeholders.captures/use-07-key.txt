@@ -1,4 +1,4 @@
-✻ Crunched for 8s · done 11:49 AM
+✻ Brewed for 9s · done 3:52 PM
 ++r · Claude receives these lines now:                                              [-]
   User typed `++r` — Two-phase review discipline is active for this turn:
 

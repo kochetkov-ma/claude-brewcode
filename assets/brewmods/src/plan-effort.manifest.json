@@ -1,17 +1,17 @@
 {
   "gif": {
     "file": "plan-effort.gif",
-    "bytes": 3056503,
-    "sha256": "4215d50f5f1479b52cc51199effd5caf456368954912b3e427e637bafcf6997c",
+    "bytes": 3009614,
+    "sha256": "843cac3960770b4c3b20c8f997a72e81f6306843871777072a496a54ff80293c",
     "width": 800,
     "height": 648,
     "seconds": 23
   },
   "sources": {
     "render.html": "66bf935f460d6b8bdc55b170e13e8c75b303230db57a7540f3120486972c7409",
-    "plan-effort.story.js": "e71fc1bcd4ea248eb34154afb81d51c3b176482b85b4699c388151220a8b65ea",
-    "plan-effort.data.js": "a571855ba6568560f483829df3efedf739670636b4ea218bd34335070e40d122",
-    "record-gifs.mjs": "cba6693c2afb098d856d1f50e5833a965105476d8489b15d9a08bb0602d875d7"
+    "plan-effort.story.js": "3e914ae89f9b9668770b5971a4b05292df40d4cd540309deb71a588ae9d3376d",
+    "plan-effort.data.js": "6fa528819b97f4a559febdb4248b10ae3cf9bc7b27b2e1723ee34ae5601a2ea6",
+    "record-gifs.mjs": "b2108f5acba6806d0757be6181886a4d2e06f56d729241d3f9b7caa3b7a87d60"
   },
   "ccVersion": "2.1.301",
   "still": 12,
@@ -21,5 +21,5 @@
     "gifsicle": "1.96",
     "node": "v24.19.0"
   },
-  "recorded": "2026-10-16T11:02:33.280Z"
+  "recorded": "2026-10-16T15:11:05.628Z"
 }

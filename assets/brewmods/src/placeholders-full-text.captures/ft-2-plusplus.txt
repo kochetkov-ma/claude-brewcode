@@ -6,7 +6,7 @@
 ────────────────────────────────────────────────────────────────────────────────────────
 ❯ ++
 ────────────────────────────────────────────────────────────────────────────────────────
-    +++    Anti-drift cron plan addon, active in Plan mode only
+    +++    Anti-drift cron for the current task; plan mode plans it as a step
     ++a    Architecture-first: delegate the design to expert agents before
            implementing
     ++m    Manager mode: orchestrate and delegate, never code in the main context
