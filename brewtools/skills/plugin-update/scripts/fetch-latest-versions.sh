@@ -22,35 +22,35 @@ fetch_release_tag() {
 }
 
 RELEASE_FALLBACK=""
+FALLBACK_TRIED=0
 
+# Result in $FV, not stdout: a $(...) call would run in a subshell and lose the RELEASE_FALLBACK cache.
 fetch_version() {
   local plugin="$1"
   local url="${RAW_BASE}/${plugin}/.claude-plugin/plugin.json"
   local body ver
+  FV=""
   body=$(curl -sSL --max-time 10 "$url" 2>/dev/null || true)
   if [ -n "$body" ]; then
     ver=$(printf '%s' "$body" | jq -r '.version // ""' 2>/dev/null || true)
     if [ -n "$ver" ] && [ "$ver" != "null" ]; then
-      printf '%s' "$ver"
+      FV="$ver"
       return
     fi
   fi
-  # fallback: release tag (shared across all plugins in this repo)
-  if [ -z "$RELEASE_FALLBACK" ]; then
+  # fallback: release tag (shared across all plugins in this repo), one gh call per run
+  if [ "$FALLBACK_TRIED" -eq 0 ]; then
+    FALLBACK_TRIED=1
     RELEASE_FALLBACK=$(fetch_release_tag)
   fi
-  if [ -n "$RELEASE_FALLBACK" ]; then
-    printf '%s' "$RELEASE_FALLBACK"
-    return
-  fi
-  printf 'unknown'
+  FV="${RELEASE_FALLBACK:-unknown}"
 }
 
 # Build JSON directly (no associative array — macOS bash 3.2 compat)
 entries=""
 for p in "${PLUGINS[@]}"; do
-  v=$(fetch_version "$p")
-  entries+=$(jq -nc --arg p "$p" --arg v "$v" '{($p): $v}')
+  fetch_version "$p"
+  entries+=$(jq -nc --arg p "$p" --arg v "$FV" '{($p): $v}')
   entries+=$'\n'
 done
 printf '%s' "$entries" | jq -s 'add // {}'
