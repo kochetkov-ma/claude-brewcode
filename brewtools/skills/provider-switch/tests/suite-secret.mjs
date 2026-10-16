@@ -166,8 +166,8 @@ esac
     "the stored line single-quotes the value with ' doubled as '\\''");
 
   // Sourcing it back must yield the byte-identical value, with no expansion of $() or backticks.
-  const back = spawnSync('bash', ['-c', `set -a; . "$1"; printf '%s' "$ZAI_API_KEY"`, 'bash', join(w.home, '.zshrc')],
-    { env: { ...CLEAN_ENV, HOME: w.home }, encoding: 'utf8' });
+  const back = spawnSync('bash', ['-c', `set -a; . "$SOURCED_RC"; printf '%s' "$ZAI_API_KEY"`],
+    { env: { ...CLEAN_ENV, HOME: w.home, SOURCED_RC: join(w.home, '.zshrc') }, encoding: 'utf8' });
   check('nasty.roundtrip', back.stdout, NASTY, 'sourcing ~/.zshrc restores the exact key, nothing expanded');
   check('nasty.roundtrip.exit', back.status, 0, 'the generated ~/.zshrc is valid shell');
 }

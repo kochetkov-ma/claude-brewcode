@@ -19,10 +19,12 @@ const headerRows = producer.match(/\| Version \| \{PLUGIN_VERSION\} \|\n\s*\| Co
   .split('\n').map(line => line.trim()).join('\n');
 
 function readStamps(root, command = stamps) {
-  const script = command.replace('PLUGIN_ROOT=/abs/root/printed/by/phase0', `PLUGIN_ROOT="${BREWCODE}"`)
-    .replaceAll('${CLAUDE_SKILL_DIR}', STATUS_DIR);
+  // Paths reach bash via env, never spliced into the command text.
+  const script = command.replace('PLUGIN_ROOT=/abs/root/printed/by/phase0', 'PLUGIN_ROOT="${SUBST_PLUGIN_ROOT}"')
+    .replaceAll('${CLAUDE_SKILL_DIR}', '${SUBST_SKILL_DIR}');
   const result = spawnSync('bash', ['-e', '-o', 'pipefail', '-c', script], {
-    cwd: root, encoding: 'utf8', env: { ...process.env, HOME: root, CLAUDE_CONFIG_DIR: join(root, 'cfg'), CLAUDE_PROJECT_DIR: root }, timeout: 10000,
+    cwd: root, encoding: 'utf8', env: { ...process.env, HOME: root, CLAUDE_CONFIG_DIR: join(root, 'cfg'), CLAUDE_PROJECT_DIR: root,
+      SUBST_PLUGIN_ROOT: BREWCODE, SUBST_SKILL_DIR: STATUS_DIR }, timeout: 10000,
   });
   assert.equal(result.status, 0, `actual shipped stamp probe must succeed: ${result.stderr}`);
   return result.stdout;

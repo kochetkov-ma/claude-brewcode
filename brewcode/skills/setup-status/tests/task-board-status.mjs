@@ -14,7 +14,8 @@ const source = ['SKILL.md', 'references/phase1-probes.md', 'references/phase2-st
   .map(f => readFileSync(join(STATUS_DIR, f), 'utf8')).join('\n');
 const blocks = [...source.matchAll(/```bash\n([\s\S]*?)\n```/g)].map(match => match[1]);
 const presence = blocks.find(block => block.includes("<<'PATHS'"));
-const parking = blocks.find(block => block.includes('echo "CONFLICT $f"')).replaceAll('${CLAUDE_SKILL_DIR}', STATUS_DIR);
+// Load-time tokens -> env refs filled by run(): paths never enter the command text.
+const parking = blocks.find(block => block.includes('echo "CONFLICT $f"')).replaceAll('${CLAUDE_SKILL_DIR}', '${SUBST_SKILL_DIR}');
 const stamps = blocks.find(block => block.includes("<<'STAMPS'"));
 const row = source.split('\n').find(line => line.startsWith('| 4 | `/brewtools:task-board-setup`'));
 const artifacts = [...row.split('|').slice(4, 6).join('\n').matchAll(/\.claude\/[A-Za-z0-9_./-]+/g)].map(match => match[0]);
@@ -52,16 +53,16 @@ function probe(root, cwd = root) {
 
 function run(root, command, mode = 'unknown', cwd = root) {
   const result = spawnSync('bash', ['-e', '-o', 'pipefail', '-c', command], {
-    cwd, encoding: 'utf8', env: { ...process.env, HOME: root, CLAUDE_PROJECT_DIR: root, TASK_SPEC_MODE: mode }, timeout: 10000,
+    cwd, encoding: 'utf8', env: { ...process.env, HOME: root, CLAUDE_PROJECT_DIR: root, TASK_SPEC_MODE: mode, SUBST_SKILL_DIR: STATUS_DIR, SUBST_PLUGIN_ROOT: TOOLS }, timeout: 10000,
   });
   assert.equal(result.status, 0, `actual shipped read-only probe must succeed: ${result.stderr}`);
   return result.stdout;
 }
 
 function readStamps(root, mode, cwd = root) {
-  const command = stamps.replace('PLUGIN_ROOT=/abs/root/printed/by/phase0', `PLUGIN_ROOT="${TOOLS}"`)
+  const command = stamps.replace('PLUGIN_ROOT=/abs/root/printed/by/phase0', 'PLUGIN_ROOT="${SUBST_PLUGIN_ROOT}"')
     .replace('PLUGIN=brewcode ', 'PLUGIN=brewtools ')
-    .replaceAll('${CLAUDE_SKILL_DIR}', STATUS_DIR);
+    .replaceAll('${CLAUDE_SKILL_DIR}', '${SUBST_SKILL_DIR}');
   return run(root, command, mode, cwd);
 }
 

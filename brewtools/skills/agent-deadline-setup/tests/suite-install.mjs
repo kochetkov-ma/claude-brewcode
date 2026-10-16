@@ -352,10 +352,11 @@ try {
   const startDir = join(repo, 'sub');
   mkdirSync(join(startDir, '.claude'), { recursive: true });
   assert.equal(spawnSync('git', ['init', '-q', repo]).status, 0, 'fixture git init must succeed');
-  const loaded = statusBlock.replaceAll('${CLAUDE_PROJECT_DIR}', realpathSync(startDir));
+  // Token -> env ref: the start dir reaches bash via env, never spliced into the command text.
+  const loaded = statusBlock.replaceAll('${CLAUDE_PROJECT_DIR}', '${SUBST_PROJECT_DIR}');
 
   // WHEN: status runs as loaded, and as raw text with the variable absent from the Bash env.
-  const loadedStatus = spawnSync('bash', ['-c', loaded], { cwd: startDir, encoding: 'utf8', env: statusEnv, timeout: 30000 });
+  const loadedStatus = spawnSync('bash', ['-c', loaded], { cwd: startDir, encoding: 'utf8', env: { ...statusEnv, SUBST_PROJECT_DIR: realpathSync(startDir) }, timeout: 30000 });
   const rawStatus = spawnSync('bash', ['-c', statusBlock], { cwd: startDir, encoding: 'utf8', env: statusEnv, timeout: 30000 });
 
   // THEN: the substituted start dir wins over the git toplevel; unsubstituted, the toplevel is the fallback.
@@ -511,8 +512,8 @@ try {
   writeFileSync(join(climbProfile, 'agent-deadline.json'), JSON.stringify({ enabled: true, defaultMinutes: 30 }));
   const climbEnv = { ...noProfileEnv, HOME: join(climb, 'home'), CLAUDE_CONFIG_DIR: climbProfile, TMPDIR: climbTmp, CLAUDE_PLUGIN_ROOT: join(HERE, '..', '..', '..') };
   // WHEN: status runs from that cwd with the session dir substituted, and the guard gets the same payload cwd.
-  const climbStatus = spawnSync('bash', ['-c', fencedBashBlockAfter(readFileSync(SKILL, 'utf8'), '## Step 1 — STATUS FIRST, always').replaceAll('${CLAUDE_PROJECT_DIR}', top)],
-    { cwd: cwdSub, env: { ...climbEnv, PWD: cwdSub }, encoding: 'utf8', timeout: 30000 });
+  const climbStatus = spawnSync('bash', ['-c', fencedBashBlockAfter(readFileSync(SKILL, 'utf8'), '## Step 1 — STATUS FIRST, always').replaceAll('${CLAUDE_PROJECT_DIR}', '${SUBST_PROJECT_DIR}')],
+    { cwd: cwdSub, env: { ...climbEnv, PWD: cwdSub, SUBST_PROJECT_DIR: top }, encoding: 'utf8', timeout: 30000 });
   const climbPayload = JSON.stringify({ session_id: 'CLIMB', cwd: cwdSub, hook_event_name: 'PreToolUse', agent_id: 'C1', agent_type: 'developer', tool_name: 'Bash', tool_input: {} });
   const climbGuard = spawnSync('node', [join(HERE, '..', 'assets', 'agent-deadline-guard.mjs')], { input: climbPayload, env: { ...climbEnv, CLAUDE_PROJECT_DIR: top }, encoding: 'utf8', timeout: 30000 });
   const guardConfig = (() => {

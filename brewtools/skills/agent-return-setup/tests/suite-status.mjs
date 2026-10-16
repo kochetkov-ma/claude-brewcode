@@ -228,8 +228,9 @@ try {
   const climbEnv = { ...env, HOME: join(climb, 'home'), CLAUDE_CONFIG_DIR: climbProfile, PWD: cwdSub };
   delete climbEnv.CLAUDE_PROJECT_DIR;
   const climbStatus = blockAfter(readFileSync(join(SKILL_DIR, 'SKILL.md'), 'utf8'), '## Step 1 — STATUS FIRST, always', '```bash\n');
+  // Token -> env ref: the session dir reaches bash via env, never spliced into the command text.
   const governs = sessionDir => {
-    const r = spawnSync('bash', ['-c', climbStatus.replaceAll('${CLAUDE_PROJECT_DIR}', sessionDir)], { cwd: cwdSub, env: climbEnv, encoding: 'utf8', timeout: 30000 });
+    const r = spawnSync('bash', ['-c', climbStatus.replaceAll('${CLAUDE_PROJECT_DIR}', '${SUBST_PROJECT_DIR}')], { cwd: cwdSub, env: { ...climbEnv, SUBST_PROJECT_DIR: sessionDir }, encoding: 'utf8', timeout: 30000 });
     return [r.status, r.stdout.split('\n').find(line => line.startsWith('governing_config=')) ?? `NO governing_config= LINE: ${r.stderr}`];
   };
   const hookSays = hookEnv => {
