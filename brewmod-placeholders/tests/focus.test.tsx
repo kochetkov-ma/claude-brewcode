@@ -1,9 +1,9 @@
-import { test, expect } from 'claude-code/testing'
+import { test, expect, mock } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import { BAND, PLUG, ROOT, STATE_FILE, bandProps, bandTexts, bootBand, box, defaultsTree, mountBand, spansOf, textsOf, typed, type Tree } from './layer-io'
 import { defaultDefs } from './fixtures'
 import { bandState, budgets, receivesLabel, treeRows, wrapRows, type BandRow } from '../hooks/lib/band'
-import { caretFocus, isMenuOpen } from '../hooks/lib/editor'
+import { caretFocus, heldFocus, isMenuOpen, tokenAt } from '../hooks/lib/editor'
 import { DEFAULT_ENTRIES } from '../hooks/lib/editor-state'
 import { compileMatchers, markerOf, scanDraft } from '../hooks/lib/match'
 import { assembleDraft, injectedContext } from '../hooks/lib/sent'
@@ -80,6 +80,32 @@ test('GIVEN drafts and carets WHEN the menu is checked THEN it is open only whil
   const cases: [string, number][] = [['++r', 3], ['++rr', 4], ['++r?', 4], ['++r ', 4], ['say ++', 6], ['++r go', 3], ['++a', 3], ['++r go', 6], ['@@r', 3]]
 
   expect(cases.map(([t, c]) => isMenuOpen('++', t, c, DEFAULT_ENTRIES)), 'menu open').toEqual([true, false, false, false, true, true, false, false, false])
+})
+
+test('GIVEN the menu open on a token WHEN an edit closes it THEN the menu stays open (same name keeps isQuery) only while our typeahead still answers the word before the caret', async () => {
+  const open = { name: 'r', isQuery: false, isMenuOpen: true }
+  const cases: [string, number, { name: string | null; isQuery: boolean; isMenuOpen: boolean }, typeof open | null][] = [
+    ['++r?', 4, { name: 'r', isQuery: true, isMenuOpen: false }, open],
+    ['++rr', 4, { name: 'rr', isQuery: false, isMenuOpen: false }, open],
+    ['++r ', 4, { name: null, isQuery: false, isMenuOpen: false }, open],
+    ['++r?', 4, { name: 'r', isQuery: true, isMenuOpen: false }, { ...open, isMenuOpen: false }],
+    ['++r?', 4, { name: 'r', isQuery: true, isMenuOpen: false }, null],
+    ['++r', 3, { name: 'r', isQuery: false, isMenuOpen: true }, open],
+    ['go ++r', 3, { name: 'r', isQuery: false, isMenuOpen: false }, open],
+  ]
+
+  expect({ tokens: cases.map(([t, c]) => tokenAt(t, c)), held: cases.map(([t, c, next, last]) => heldFocus(next, last, t, c)) }, 'tokens and published focus').toEqual({
+    tokens: ['++r?', '++rr', '', '++r?', '++r?', '++r', ''],
+    held: [
+      { name: 'r', isQuery: false, isMenuOpen: true },
+      { name: 'rr', isQuery: false, isMenuOpen: true },
+      { name: null, isQuery: false, isMenuOpen: false },
+      { name: 'r', isQuery: true, isMenuOpen: false },
+      { name: 'r', isQuery: true, isMenuOpen: false },
+      { name: 'r', isQuery: false, isMenuOpen: true },
+      { name: 'r', isQuery: false, isMenuOpen: false },
+    ],
+  })
 })
 
 const tok = (name: string) => ({ text: `++${name}`, name, isKnown: true, start: 0, end: name.length + 2 })
@@ -198,6 +224,38 @@ test('GIVEN ++r? typed and the caret moved between ++r and ? WHEN the band mount
     ['++r', RECV, ...R_ROWS.slice(0, 3), '... 8 more lines · whole text: /placeholders show ++r', R_FOOT],
     ['++r', RECV, ...R_ROWS.slice(0, 6), '... 5 more lines · whole text: /placeholders show ++r', R_FOOT],
   ])
+})
+
+// The engine keeps the last typeahead rows of a token until our answer for its new text lands: the band may grow only after that.
+test('GIVEN ++r typed while ++rr is offered WHEN ? is typed, then our typeahead answers ++r? with no rows THEN the band stays as it was until the answer, then grows', async ($, on) => {
+  const writes: unknown[] = []
+  on('state.set', { key: 'focus' }, (_$, e, next) => {
+    writes.push(e.value)
+    return next(e)
+  })
+  on('prompt.autocomplete', () => ({ suggestions: [] }))
+  const clock = mock.clock(on, { now: 0 })
+  await boot($, on)
+  await typed($, '++r')
+  const before = [await bandTexts($, 24), await bandTexts($, 30)]
+  await ($.prompt as any).edit({ origin: { kind: 'composer' }, text: '++r', cursor: 3, start: 3, end: 3, inputText: '?' })
+  const held = [await bandTexts($, 24), await bandTexts($, 30)]
+  const stale = await ($.prompt as any).autocomplete({ text: '++r', cursor: 3, token: '++r', start: 0 })
+  await clock.settle()
+  const afterStale = await bandTexts($, 24)
+  const answer = await ($.prompt as any).autocomplete({ text: '++r?', cursor: 4, token: '++r?', start: 0 })
+  await clock.settle()
+
+  expect({ held, afterStale, answers: [stale.suggestions.length, answer], writes, grown: await bandTexts($, 24) }, 'band through the menu close').toEqual({
+    held: before,
+    afterStale: before[0],
+    answers: [1, { suggestions: [] }],
+    writes: [
+      { name: 'r', isQuery: false, isMenuOpen: true },
+      { name: 'r', isQuery: true, isMenuOpen: false },
+    ],
+    grown: ['++r', RECV, ...R_ROWS.slice(0, 9), '... 2 more lines · whole text: /placeholders show ++r', R_FOOT],
+  })
 })
 
 for (const surface of ['terminal', 'desktop'] as const) {

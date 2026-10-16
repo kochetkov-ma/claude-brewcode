@@ -63,13 +63,26 @@ export function caretFocus(view: PlaceholderView, text: string, cursor: number):
 }
 
 const SPACE = /\s/
+// Tokens our prompt.autocomplete hook answers: the literal matcher in register.ts (validate reads only a literal there).
+export const ASKED_TOKEN = /^[^\w\s]{2}/
 
-// Our typeahead has rows for the word before the caret; computed in prompt.edit, as prompt.autocomplete lands too late.
-// A backward walk, not /\S*$/: that regex is quadratic on a long word (a pasted blob).
-export function isMenuOpen(prefix: string, text: string, cursor: number, entries: readonly EditorEntry[]): boolean {
+// The engine's typeahead token: the word before the caret. A backward walk, not /\S*$/: that regex is quadratic on a long word (a pasted blob).
+export function tokenAt(text: string, cursor: number): string {
   let i = cursor
   while (i > 0 && !SPACE.test(text.charAt(i - 1))) i--
-  return suggest(prefix, text.slice(i, cursor), entries).length > 0
+  return text.slice(i, cursor)
+}
+
+// Our typeahead has rows for the word before the caret; computed in prompt.edit, as prompt.autocomplete lands too late.
+export function isMenuOpen(prefix: string, text: string, cursor: number, entries: readonly EditorEntry[]): boolean {
+  return suggest(prefix, tokenAt(text, cursor), entries).length > 0
+}
+
+// A menu closing on a token we still answer stays open (the band as it was) until that answer lands: the engine draws its last rows till then,
+// and a band grown under them overflows the screen, its top scrolled away for good. Same name keeps isQuery, so the band does not change.
+export function heldFocus(next: CaretFocus, last: CaretFocus | null, text: string, cursor: number): CaretFocus {
+  if (next.isMenuOpen || last?.isMenuOpen !== true || !ASKED_TOKEN.test(tokenAt(text, cursor))) return next
+  return { ...next, isMenuOpen: true, isQuery: next.name === last.name ? last.isQuery : next.isQuery }
 }
 
 export const sameFocus = (a: CaretFocus, b: CaretFocus): boolean => a.name === b.name && a.isQuery === b.isQuery && a.isMenuOpen === b.isMenuOpen

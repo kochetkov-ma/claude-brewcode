@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { Register } from 'claude-code'
 import { editorMatchers, getEditorEntries, setEditorEntries } from './lib/editor-state'
-import { caretFocus, highlight, isMenuOpen, sameFocus, sameView, suggest, type CaretFocus } from './lib/editor'
+import { caretFocus, heldFocus, highlight, isMenuOpen, sameFocus, sameView, suggest, type CaretFocus } from './lib/editor'
 import { escapeMarkers, isEscaped, markerOf, validatePrefix, type PlaceholderView } from './lib/match'
 import { memoCompile, type Compiled } from './lib/compiled'
 import { FILES_GONE, PluginFilesGone, configDirOf, issuesMessage, loadRegistry, newRegistryCache, toEditorEntries, type Registry } from './lib/defs'
@@ -33,6 +33,7 @@ export const register: Register = (on, options) => {
   let published: Registry | null = null
   let shown: PlaceholderView | null = null // last view written to viewAtom
   let focused: CaretFocus | null = null // last focus written to focusAtom
+  let held: { text: string; cursor: number; focus: CaretFocus } | null = null // box and true focus while heldFocus keeps the menu open
   let refreshedAt = -REFRESH_MS // clock of the last typeahead registry refresh
   let wasDraft: boolean | null = null // isDraft of the last hint-line draw
   let isGone = false // the plugin's own placeholders/ folder vanished: the cached list stays, the band shows the reload line
@@ -124,7 +125,9 @@ export const register: Register = (on, options) => {
   // The box's view and focus, each atom written only when it changed; writers spelled at the call site. Returns the highlight.
   const publish = async (text: string, cursor: number, writeView: (v: PlaceholderView) => Promise<unknown>, writeFocus: (f: CaretFocus) => Promise<unknown>) => {
     const h = highlight(editorMatchers(prefix), text)
-    const f = { ...caretFocus(h.view, text, cursor), isMenuOpen: isMenuOpen(prefix, text, cursor, getEditorEntries()) }
+    const real = { ...caretFocus(h.view, text, cursor), isMenuOpen: isMenuOpen(prefix, text, cursor, getEditorEntries()) }
+    const f = heldFocus(real, focused, text, cursor)
+    held = f === real ? null : { text, cursor, focus: real }
     try {
       if (shown === null || !sameView(h.view, shown)) {
         await writeView(h.view)
@@ -190,6 +193,15 @@ export const register: Register = (on, options) => {
       // keep the entries we have: a failed refresh must not drop the typeahead rows
     }
     const rows = suggest(prefix, e.token, getEditorEntries(), /\s/.test(e.text.charAt(e.cursor)))
+    // No rows closes the held menu: the true focus goes out after this answer (clock.after), so the band grows only once the rows are gone.
+    const wait = held
+    if (wait !== null && rows.length === 0 && r.suggestions.length === 0 && wait.text === e.text && wait.cursor === e.cursor) {
+      $.clock.after(0, () => {
+        if (held !== wait) return
+        held = null
+        void update($, focusAtom, () => wait.focus).then(() => (focused = wait.focus), () => undefined)
+      })
+    }
     return rows.length === 0 ? r : { suggestions: [...r.suggestions, ...rows] }
   })
 
