@@ -34,31 +34,33 @@ if [[ ${#FILES[@]} -eq 0 ]]; then
   exit 0
 fi
 
-# Fence or <pre> between <Callout ...> and </Callout> -> "line:kind:open_line"; fence bodies, frontmatter, backtick spans skipped
+# Fence or <pre> between <Callout ...> and </Callout> -> "line:kind:open_line"; CR, frontmatter, fence bodies, `code` spans, {/* */}, "strings" skipped
 # shellcheck disable=SC2016
 CALLOUT_AWK='
 function hit(ln, kind) { print ln ":" kind ":" open_ln }
+{ sub(/\r$/, "") }
 NR == 1 && $0 == "---" { fm = 1; next }
 fm { if ($0 == "---") fm = 0; next }
 {
   s = $0; sub(/^[ \t]+/, "", s)
+  u = s; sub(/^((>[ \t]*)|(([-*+]|[0-9]+[.)])[ \t]+))+/, "", u)
   if (fch != "") {
-    t = s; sub(/[ \t]+$/, "", t); n = 0
+    t = fpre ? u : s; sub(/[ \t]+$/, "", t); n = 0
     while (substr(t, n + 1, 1) == fch) n++
     if (n >= flen && n == length(t)) fch = ""
     next
   }
-  c = substr(s, 1, 3)
+  c = substr(u, 1, 3)
   if (c == "```" || c == "~~~") {
-    ch = substr(s, 1, 1); n = 0
-    while (substr(s, n + 1, 1) == ch) n++
-    if (!(ch == "`" && index(substr(s, n + 1), "`") > 0)) {
-      fch = ch; flen = n
+    ch = substr(u, 1, 1); n = 0
+    while (substr(u, n + 1, 1) == ch) n++
+    if (!(ch == "`" && index(substr(u, n + 1), "`") > 0)) {
+      fch = ch; flen = n; fpre = (u != s)
       if (depth > 0) hit(NR, "fenced code block")
       next
     }
   }
-  t = $0 " "; gsub(/`[^`]*`/, "", t)
+  t = $0 " "; gsub(/`[^`]*`/, "", t); gsub(/\{\/\*[^}]*\*\/\}/, "", t); gsub(/"[^"]*"/, "", t)
   while (match(t, /<\/?Callout[ \t>\/]|<pre[ \t>]/)) {
     tok = substr(t, RSTART, RLENGTH); t = substr(t, RSTART + RLENGTH)
     if (substr(tok, 2, 1) == "/") { if (depth > 0) depth--; continue }

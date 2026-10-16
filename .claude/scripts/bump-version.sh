@@ -9,8 +9,8 @@ BREWCODE_PLUGIN="brewcode/.claude-plugin/plugin.json"
 BREWDOC_PLUGIN="brewdoc/.claude-plugin/plugin.json"
 BREWTOOLS_PLUGIN="brewtools/.claude-plugin/plugin.json"
 BREWUI_PLUGIN="brewui/.claude-plugin/plugin.json"
-BREWMOD_PLAN_EFFORT_PLUGIN="brewmod-plan-effort/.claude-plugin/plugin.json"
 BREWMOD_PLACEHOLDERS_PLUGIN="brewmod-placeholders/.claude-plugin/plugin.json"
+BREWMOD_PLAN_EFFORT_PLUGIN="brewmod-plan-effort/.claude-plugin/plugin.json"
 MARKETPLACE=".claude-plugin/marketplace.json"
 PACKAGE="brewcode/package.json"
 
@@ -118,7 +118,7 @@ die_args() { echo "ERROR: $*" >&2; exit 2; }
 command -v jq >/dev/null 2>&1 || die "jq required. Run: brew install jq"
 
 # --- Validate repo root ---
-for f in "$BREWCODE_PLUGIN" "$BREWDOC_PLUGIN" "$BREWTOOLS_PLUGIN" "$BREWUI_PLUGIN" "$BREWMOD_PLAN_EFFORT_PLUGIN" "$BREWMOD_PLACEHOLDERS_PLUGIN" "$MARKETPLACE" "$PACKAGE"; do
+for f in "$BREWCODE_PLUGIN" "$BREWDOC_PLUGIN" "$BREWTOOLS_PLUGIN" "$BREWUI_PLUGIN" "$BREWMOD_PLACEHOLDERS_PLUGIN" "$BREWMOD_PLAN_EFFORT_PLUGIN" "$MARKETPLACE" "$PACKAGE"; do
     [ -f "$f" ] || die "Not found: $f (run from project root)"
 done
 
@@ -168,8 +168,8 @@ jq_update ".version = \"$NEW\"" "$BREWCODE_PLUGIN"
 jq_update ".version = \"$NEW\"" "$BREWDOC_PLUGIN"
 jq_update ".version = \"$NEW\"" "$BREWTOOLS_PLUGIN"
 jq_update ".version = \"$NEW\"" "$BREWUI_PLUGIN"
-jq_update ".version = \"$NEW\"" "$BREWMOD_PLAN_EFFORT_PLUGIN"
 jq_update ".version = \"$NEW\"" "$BREWMOD_PLACEHOLDERS_PLUGIN"
+jq_update ".version = \"$NEW\"" "$BREWMOD_PLAN_EFFORT_PLUGIN"
 jq_update ".metadata.version = \"$NEW\" | (.plugins[].version) = \"$NEW\"" "$MARKETPLACE"
 jq_update ".version = \"$NEW\" | .\"claude-plugin\".version = \"$NEW\"" "$PACKAGE"
 
@@ -274,8 +274,8 @@ verify "brewcode plugin.json"    "$(jq -r '.version' "$BREWCODE_PLUGIN")"
 verify "brewdoc plugin.json"     "$(jq -r '.version' "$BREWDOC_PLUGIN")"
 verify "brewtools plugin.json"   "$(jq -r '.version' "$BREWTOOLS_PLUGIN")"
 verify "brewui plugin.json"      "$(jq -r '.version' "$BREWUI_PLUGIN")"
-verify "brewmod-plan-effort plugin.json"  "$(jq -r '.version' "$BREWMOD_PLAN_EFFORT_PLUGIN")"
 verify "brewmod-placeholders plugin.json" "$(jq -r '.version' "$BREWMOD_PLACEHOLDERS_PLUGIN")"
+verify "brewmod-plan-effort plugin.json"  "$(jq -r '.version' "$BREWMOD_PLAN_EFFORT_PLUGIN")"
 verify "marketplace.json meta"   "$(jq -r '.metadata.version' "$MARKETPLACE")"
 # Every marketplace plugin by NAME (no fixed indexes), then the required six must all be present.
 _mp_rows=$(jq -r '.plugins[] | .name + "|" + (.version // "null")' "$MARKETPLACE")
@@ -287,7 +287,7 @@ while IFS='|' read -r _n _mv; do
 done <<MPROWS
 $_mp_rows
 MPROWS
-for _n in brewcode brewdoc brewtools brewui brewmod-plan-effort brewmod-placeholders; do
+for _n in brewcode brewdoc brewtools brewui brewmod-placeholders brewmod-plan-effort; do
     case "$_mp_seen" in
         *" $_n "*) ;;
         *) echo "  FAILED: marketplace.json has no plugin entry named $_n"; ERRORS=$((ERRORS + 1)) ;;

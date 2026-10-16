@@ -85,6 +85,7 @@ brewmod-*/.state/
 /.claude/skills/docs/scripts/*
 !/.claude/skills/docs/scripts/check-links.sh
 !/.claude/skills/docs/scripts/verify-deploy.sh
+!/.claude/skills/docs/tests/
 !/.claude/skills/claude-plugin-guide/
 /.claude/skills/claude-plugin-guide/*
 !/.claude/skills/claude-plugin-guide/LICENSE
