@@ -109,7 +109,7 @@ const nameRows = (reg: Registry, prefix: string): NameRow[] =>
   }))
 
 const tagOf = (r: NameRow): string =>
-  r.kind === 'only' ? PLAN_LABEL.only : r.kind === 'add' || r.kind === 'replace' ? (r.planLayer === null || r.planLayer === r.layer ? PLAN_LABEL.plus : `${PLAN_LABEL.plus} (${r.planLayer})`) : r.inline ? 'inline' : ''
+  r.kind === 'add' ? (r.planLayer === null || r.planLayer === r.layer ? PLAN_LABEL.plus : `${PLAN_LABEL.plus} (${r.planLayer})`) : r.inline ? 'inline' : ''
 
 // The example name in hints: `r` when defined, else the first word name, else the first name.
 const sample = (rows: readonly NameRow[]): string => rows.find((r) => r.name === 'r')?.name ?? rows.find((r) => /^\w+$/.test(r.name))?.name ?? rows[0]?.name ?? 'name'
@@ -163,20 +163,18 @@ function nameBlock(reg: Registry, r: NameRow, prefix: string, isPlan: boolean): 
   if (r.inline) {
     const body = inlineBodies(reg.defs).get(r.name)
     if (body !== undefined) return [head, part('replaces the token with:', body)].join('\n')
-    // Only a `when: always` inline def with a body expands (the module has no mode); any other stays as typed.
+    // Only a normal inline def with a body expands; any other stays as typed.
     const d = reg.defs.find((x) => x.name.toLowerCase() === r.name && x.insert === 'inline')
-    return [head, d === undefined || d.body === '' ? `${REASON.staysAsTyped} (empty)` : part(`${REASON.staysAsTyped} (when: ${d.when}); its text:`, d.body, 0)].join('\n')
+    return [head, d === undefined || d.body === '' ? `${REASON.staysAsTyped} (empty)` : part(`${REASON.staysAsTyped}; its text:`, d.body, 0)].join('\n')
   }
   const p = planParts(reg.defs, r.name, prefix)
-  if (p.kind === 'only') return [head, part(PLAN_LABEL.onlyPart, p.plan)].join('\n')
   if (p.kind === 'add') {
     // Plan mode sends one block: the plan header when it has one, the normal body, then the part.
     const joined = sentText(r.name, reg.defs, prefix, true).text
     if (isPlan) return [head, part('normal + plan mode part:', joined)].join('\n')
     return [head, part('normal:', p.normal), part(PLAN_LABEL.adds, p.plan, joined.length)].join('\n')
   }
-  const extra = p.kind === 'replace' ? [part(PLAN_LABEL.instead, p.plan)] : []
-  return [head, part('normal:', p.normal), ...extra].join('\n')
+  return [head, part('normal:', p.normal)].join('\n')
 }
 
 // show (names) or list (null): one block per name; unknown names are listed at the foot.

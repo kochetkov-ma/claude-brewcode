@@ -241,7 +241,7 @@ function bodyRows(Text: BandUi['Text'], body: string, rows: number, key: string,
 }
 
 export const UNKNOWN_LABEL = 'unknown placeholder'
-export const PLAN_ONLY_LABEL = `(${PLAN_LABEL.only})`
+export const PLAN_ONLY_LABEL = '(plan only)'
 const GONE_REASON = 'not sent: plugin files removed'
 
 // One row per distinct token (case-insensitive, first occurrence); known rows take description and plan flag from the entry, the text from `sent` when given.
@@ -270,8 +270,8 @@ export function bandRows(view: PlaceholderView, entries: readonly EditorEntry[],
       body: s === undefined ? (entry?.body ?? '') : s.text,
       isPlanOnly: entry?.planOnly === true,
       ...(entry?.isInline === true ? { isInline: true } : {}),
-      ...(reason !== null && reason !== REASON.planOnly ? { reason } : {}),
-      ...(pp?.kind === 'add' || pp?.kind === 'replace' ? { plan: { kind: pp.kind, plan: pp.plan } } : {}),
+      ...(reason !== null ? { reason } : {}),
+      ...(pp?.kind === 'add' ? { plan: { kind: pp.kind, plan: pp.plan } } : {}),
     })
   }
   return rows
@@ -321,8 +321,7 @@ export const RECEIVES = 'Claude receives these lines now:'
 // Label over a drawn body; null = nothing drawn or not sent in either mode (the head keeps its reason tag).
 export function receivesLabel(row: BandRow, isPlan: boolean): string | null {
   if (!row.isKnown || row.body === '') return null
-  if (row.isPlanOnly && !isPlan) return `not sent now (${PLAN_LABEL.only}):`
-  if (row.reason === REASON.notInPlan) return 'not sent in plan mode:'
+  if (row.isPlanOnly && !isPlan) return 'not sent now (plan only):'
   if (row.reason === REASON.cut) return `Claude receives these lines now (${REASON.cut}):`
   return row.reason === undefined ? RECEIVES : null
 }
@@ -430,7 +429,7 @@ function planBody(Text: BandUi['Text'], row: BandRow, rows: number, key: string,
       {label}
     </Text>
   )
-  if (p.kind === 'replace') return [mark(PLAN_LABEL.instead), ...whole(rows - 1)]
+  if (p.kind === 'replace') return [mark('plan mode sends instead:'), ...whole(rows - 1)]
   const sep = `\n\n${p.plan}`
   if (!row.body.endsWith(sep)) return whole(rows)
   const normal = row.body.slice(0, -sep.length)

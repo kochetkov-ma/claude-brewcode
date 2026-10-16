@@ -86,15 +86,15 @@ test('GIVEN an isMeta prompt from the composer WHEN submitted THEN the text is u
   expect(seen.map((s) => s.text), 'texts').toEqual(['++ii'])
 })
 
-// ---- when: always, bodies, single pass
+// ---- stale when values, bodies, single pass
 
-test('GIVEN inline defs for always, plan and not-plan WHEN a prompt with all three is submitted THEN only the always one is expanded', async ($, on) => {
+test('GIVEN inline defs with when always, plan and not-plan WHEN a prompt with all three is submitted THEN the stale when is ignored and all three expand', async ($, on) => {
   wire(on, { tree: TREE })
   const seen = bottomSubmit(on)
 
   await submit($, '++pp ++ii ++nn', { kind: 'composer' })
 
-  expect(seen.map((s) => s.text), 'texts').toEqual(['++pp II BODY ++nn'])
+  expect(seen.map((s) => s.text), 'texts').toEqual(['PP BODY II BODY NN BODY'])
 })
 
 test('GIVEN a body that holds another token WHEN expanded THEN the inserted text is never scanned again', async ($, on) => {
@@ -368,19 +368,20 @@ test('GIVEN fences, backticks, closers and an unclosed backtick WHEN scanned THE
   expect(unknownTokens(ms, text), 'unknown').toEqual(['++g', '++h', '++i'])
 })
 
-test('GIVEN defs with every insert and when combination WHEN the inline bodies are built THEN only an inline always def of a context-free name remains', async () => {
+test('GIVEN defs with every insert and plan-part combination WHEN the inline bodies are built THEN only a normal inline def with a body of a name without a normal context def remains', async () => {
   const defs = [
-    def({ name: 'A', insert: 'inline', when: 'always', body: 'a' }),
-    def({ name: 'a', insert: 'inline', when: 'always', body: 'second' }),
-    def({ name: 'b', insert: 'inline', when: 'plan', body: 'b' }),
-    def({ name: 'c', insert: 'inline', when: 'not-plan', body: 'c' }),
-    def({ name: 'd', insert: 'inline', when: 'always', body: '' }),
-    def({ name: 'e', insert: 'context', when: 'always', body: 'e' }),
-    def({ name: 'f', insert: 'inline', when: 'always', body: 'f-inline' }),
-    def({ name: 'f', insert: 'context', when: 'plan', body: 'f-context' }),
+    def({ name: 'A', insert: 'inline', body: 'a' }),
+    def({ name: 'a', insert: 'inline', body: 'second' }),
+    def({ name: 'b', insert: 'inline', isPlan: true, body: 'b' }),
+    def({ name: 'd', insert: 'inline', body: '' }),
+    def({ name: 'e', insert: 'context', body: 'e' }),
+    def({ name: 'f', insert: 'inline', body: 'f-inline' }),
+    def({ name: 'f', insert: 'context', isPlan: true, body: 'f-context' }),
+    def({ name: 'g', insert: 'inline', body: 'g-inline' }),
+    def({ name: 'g', insert: 'context', body: 'g-context' }),
   ]
 
-  expect([...inlineBodies(defs)], 'bodies').toEqual([['a', 'a']])
+  expect([...inlineBodies(defs)], 'bodies').toEqual([['a', 'a'], ['f', 'f-inline']])
 })
 
 test('GIVEN a symbol-named inline def, overlapping words and adjacent tokens WHEN expanded THEN one pass replaces each token once', async () => {
@@ -390,7 +391,7 @@ test('GIVEN a symbol-named inline def, overlapping words and adjacent tokens WHE
 })
 
 test('GIVEN no eligible token WHEN expanded THEN the helper answers null', async () => {
-  const c = compileDefs([def({ name: 'r', insert: 'inline', when: 'plan', body: 'R' })])
+  const c = compileDefs([def({ name: 'r', insert: 'inline', isPlan: true, body: 'R' })])
 
   expect([expandInline(c, '++r'), expandInline(c, 'no prefix'), expandInline(compileDefs([]), '++r')], 'results').toEqual([null, null, null])
 })

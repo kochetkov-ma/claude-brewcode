@@ -10,7 +10,7 @@ const G_DIR = `${CFG}/placeholders`
 const G_LEGACY = `${CFG}/manager/prompts`
 const fm = (fields: string, body: string): string => `---\n${fields}\n---\n${body}\n`
 const DB = fm('description: "Staging DB"', 'GLOBAL DB')
-const DB_PLAN = fm('description: "Staging DB"\nwhen: plan\nplan: add', 'LIST STEPS')
+const DB_PLAN = fm('description: "Staging DB"\nplan: add', 'LIST STEPS')
 const M_BODY = bodyOf('m')
 const ASK_FIRST_LINE = 'Ask first: no save_placeholder or remove_placeholder call before I answered your one AskUserQuestion about that exact change in this turn, even if my request is explicit (only a remove of a name with files: none skips it).'
 const NO_SCOPE_LINE = 'Scope: not given; infer it from my words outside the placeholder text, else ask "Where to save?" in the same dialog, Global first; a change keeps its layer, a remove uses the layer that holds it.'
@@ -72,7 +72,7 @@ test('GIVEN the tools registered at session start WHEN their specs are read THEN
     'specs',
   ).toEqual({
     saveRequired: ['name', 'description', 'scope'],
-    saveProps: ['name', 'description', 'text', 'planText', 'when', 'scope'],
+    saveProps: ['name', 'description', 'text', 'planText', 'scope'],
     scopeEnum: ['global', 'project'],
     removeRequired: ['name'],
     partEnum: ['all', 'normal', 'plan'],
@@ -121,8 +121,8 @@ test('GIVEN a new name with a plan-mode part WHEN save runs THEN both files are 
   ).toEqual({
     text: `saved ++ship (global): ${G_DIR}/ship.md, ${G_DIR}/ship.plan.md`,
     writes: [
-      [`${G_DIR}/ship.md`, fm('description: "Ship it"\nwhen: always', 'run the tests')],
-      [`${G_DIR}/ship.plan.md`, fm('description: "Ship it"\nwhen: plan\nplan: add', 'also list the release steps')],
+      [`${G_DIR}/ship.md`, fm('description: "Ship it"', 'run the tests')],
+      [`${G_DIR}/ship.plan.md`, fm('description: "Ship it"\nplan: add', 'also list the release steps')],
     ],
     normal: 'run the tests',
     plan: 'run the tests\n\nalso list the release steps',
@@ -152,58 +152,56 @@ test('GIVEN the built-in ++m WHEN save changes only its plan part in global THEN
   })
 })
 
-test('GIVEN a plan part for an unknown name, a plan-only text, a .plan name or a served base that is not-plan or inline WHEN save runs THEN each is refused and nothing is written', async () => {
-  const r = rig({ [`${G_DIR}/np.md`]: fm('description: "np"\nwhen: not-plan', 'NP'), [`${G_DIR}/il.md`]: fm('description: "il"\ninsert: inline', 'IL') })
+test('GIVEN a plan part for an unknown name, a .plan name, an empty text or an inline base WHEN save runs THEN each is refused and nothing is written', async () => {
+  const r = rig({ [`${G_DIR}/il.md`]: fm('description: "il"\ninsert: inline', 'IL') })
 
   const outs = [
     await saveTool(r.io, ROOTS, { name: 'nope', description: 'd', planText: 'P', scope: 'global' }),
-    await saveTool(r.io, ROOTS, { name: 'x', description: 'd', text: 'T', when: 'plan', planText: 'P', scope: 'global' }),
     await saveTool(r.io, ROOTS, { name: 'x.plan', description: 'd', text: 'T', planText: 'P', scope: 'global' }),
     await saveTool(r.io, ROOTS, { name: 'x', description: 'd', text: ' ', planText: '', scope: 'global' }),
-    await saveTool(r.io, ROOTS, { name: 'np', description: 'd', planText: 'P', scope: 'global' }),
+    await saveTool(r.io, ROOTS, { name: 'il', description: 'd', planText: 'P', scope: 'global' }),
     await saveTool(r.io, ROOTS, { name: 'il', description: 'd', text: 'T', planText: 'P', scope: 'project' }),
   ]
 
   expect({ texts: outs.map((o) => o.text), errors: outs.map((o) => o.isError), writes: r.writes }, 'refused').toEqual({
     texts: [
-      '++nope has no text yet: send text too (a placeholder only for Plan mode: text with when: plan)',
-      'a plan-mode part needs a normal text with when: always',
+      '++nope has no text yet: send text too',
       'planText needs the name without .plan',
       'text is empty',
-      'a plan-mode part needs a normal text with when: always',
-      'a plan-mode part needs a normal text with when: always',
+      'a plan-mode part needs a normal text that is not inline',
+      'a plan-mode part needs a normal text that is not inline',
     ],
-    errors: [true, true, true, true, true, true],
+    errors: [true, true, true, true, true],
     writes: [],
   })
 })
 
-test('GIVEN a global not-plan text WHEN a project save brings text and a plan-mode part without when THEN the text file states when: always and plan mode adds the part', async () => {
+test('GIVEN a global text with a stale when: not-plan WHEN a project save brings text, a plan-mode part and a stale when THEN no file carries when and plan mode adds the part', async () => {
   const r = rig({ [`${G_DIR}/db.md`]: fm('description: "Staging DB"\nwhen: not-plan', 'GLOBAL DB') })
 
-  const out = await saveTool(r.io, ROOTS, { name: 'db', description: 'Project DB', text: 'PROJECT DB', planText: 'plan the migration', scope: 'project' })
+  const out = await saveTool(r.io, ROOTS, { name: 'db', description: 'Project DB', text: 'PROJECT DB', planText: 'plan the migration', when: 'plan', scope: 'project' } as never)
   const defs = out.registry?.defs ?? []
 
-  expect({ text: out.text, writes: r.writes, kind: planParts(defs, 'db').kind, plan: injectedContext(defs, '++', 'go ++db', 'plan') }, 'explicit when').toEqual({
+  expect({ text: out.text, writes: r.writes, kind: planParts(defs, 'db').kind, plan: injectedContext(defs, '++', 'go ++db', 'plan') }, 'no when').toEqual({
     text: 'saved ++db (project): .claude/placeholders/db.md, .claude/placeholders/db.plan.md',
     writes: [
-      [`${P_DIR}/db.md`, fm('description: "Project DB"\nwhen: always', 'PROJECT DB')],
-      [`${P_DIR}/db.plan.md`, fm('description: "Project DB"\nwhen: plan\nplan: add', 'plan the migration')],
+      [`${P_DIR}/db.md`, fm('description: "Project DB"', 'PROJECT DB')],
+      [`${P_DIR}/db.plan.md`, fm('description: "Project DB"\nplan: add', 'plan the migration')],
     ],
     kind: 'add',
     plan: 'PROJECT DB\n\nplan the migration',
   })
 })
 
-test('GIVEN the plan-only built-in +++ WHEN save makes it when: always THEN the file states it and a default-mode prompt sends it', async () => {
+test('GIVEN the built-in +++ WHEN save overrides its text in global with a stale when THEN the file has no when and default mode sends it under the built-in header', async () => {
   const r = rig({})
 
-  const out = await saveTool(r.io, ROOTS, { name: '+', description: 'Cron always', when: 'always', text: 'plan the cron', scope: 'global' })
+  const out = await saveTool(r.io, ROOTS, { name: '+', description: 'Cron always', when: 'always', text: 'plan the cron', scope: 'global' } as never)
 
-  expect({ text: out.text, writes: r.writes, sent: injectedContext(out.registry?.defs ?? [], '++', 'go +++', 'default') }, 'always override').toEqual({
+  expect({ text: out.text, writes: r.writes, sent: injectedContext(out.registry?.defs ?? [], '++', 'go +++', 'default') }, 'override').toEqual({
     text: `saved +++ (global): ${G_DIR}/+.md`,
-    writes: [[`${G_DIR}/+.md`, fm('description: "Cron always"\nwhen: always', 'plan the cron')]],
-    sent: 'User typed `+++` in Plan mode — plan the task anti-drift cron:\n\nplan the cron',
+    writes: [[`${G_DIR}/+.md`, fm('description: "Cron always"', 'plan the cron')]],
+    sent: 'User typed `+++` — Anti-drift cron is active for this turn:\n\nplan the cron',
   })
 })
 
@@ -283,7 +281,7 @@ test('GIVEN a name with files in both layers and a global plan part WHEN the lis
   const out = await listTool(r.io, ROOTS, await regOf(r), '++')
 
   expect(out.text.split('\n\n').find((e) => e.startsWith('## ++db')), 'db entry').toBe(
-    '## ++db · layer: project · files: global (db.md, db.plan.md), project (db.md) · when: always · plan: add · Project DB\nPROJECT DB\n### plan mode adds · layer: global\nLIST STEPS',
+    '## ++db · layer: project · files: global (db.md, db.plan.md), project (db.md) · plan: add · Project DB\nPROJECT DB\n### plan mode adds · layer: global\nLIST STEPS',
   )
 })
 
@@ -299,7 +297,7 @@ test('GIVEN claude launched in HOME so the project dir is the global one WHEN li
     { entry: list.text.split('\n\n').find((e) => e.startsWith('## ++db')), saved: saved.text, removed: removed.text, writes: r.writes, rm: r.removed },
     'one layer',
   ).toEqual({
-    entry: '## ++db · layer: global · files: global (db.md) · when: always · plan: none · Staging DB\nGLOBAL DB',
+    entry: '## ++db · layer: global · files: global (db.md) · plan: none · Staging DB\nGLOBAL DB',
     saved: 'saved ++db (global): ~/.claude/placeholders/db.md',
     removed: 'removed ++db (global): ~/.claude/placeholders/db.md · ++db is no longer defined',
     writes: [['/home/u/.claude/placeholders/db.md', fm('description: "Staging DB"', 'NEW DB')]],

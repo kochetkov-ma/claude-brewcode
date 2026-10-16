@@ -2,7 +2,6 @@
 name: "r"
 description: "Two-phase review: review every significant change, then double-check each finding"
 insert: context
-when: always
 order: 40
 group: review
 priority: 1

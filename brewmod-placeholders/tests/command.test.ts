@@ -9,7 +9,7 @@ const P_LEGACY = `${ROOT}/.claude/brewtools/manager/prompts`
 const fm = (fields: string, body: string): string => `---\n${fields}\n---\n${body}`
 const defaults = (): Tree => ({
   [`${PLUG}/placeholders/m.md`]: fm('name: "m"\ndescription: "Manager mode"\nlegacy: full', 'MGR'),
-  [`${PLUG}/placeholders/m.plan.md`]: fm('name: "m"\ndescription: "Manager plan"\nwhen: plan\nlegacy: planmode', 'MGR+PLAN'),
+  [`${PLUG}/placeholders/m.plan.md`]: fm('name: "m"\ndescription: "Manager plan"\nplan: add\nlegacy: planmode', 'MGR+PLAN'),
   [`${PLUG}/placeholders/a.md`]: fm('name: "a"\ndescription: "Architect"\nlegacy: architect', 'ARCH'),
 })
 
@@ -37,26 +37,26 @@ test('GIVEN names WHEN normalized THEN words, symbol runs and .plan stems pass l
 })
 
 test('GIVEN a description with quotes and a plain text WHEN the file is built THEN front matter and body come back exactly', async () => {
-  expect(definitionFile('Say "hi"', undefined, ' hello \n'), 'file').toBe('---\ndescription: "Say \\"hi\\""\n---\nhello\n')
+  expect(definitionFile('Say "hi"', ' hello \n'), 'file').toBe('---\ndescription: "Say \\"hi\\""\n---\nhello\n')
 })
 
-test('GIVEN when plan WHEN the file is built THEN the when line follows the description', async () => {
-  expect(definitionFile('d', 'plan', 'T'), 'file').toBe('---\ndescription: "d"\nwhen: plan\n---\nT\n')
+test('GIVEN plan add WHEN the file is built THEN the plan line follows the description and no when line is written', async () => {
+  expect(definitionFile('d', 'T', 'add'), 'file').toBe('---\ndescription: "d"\nplan: add\n---\nT\n')
 })
 
 test('GIVEN a fence marker or empty text WHEN the file is built THEN it is refused (a fence pair reads back as its inside)', async () => {
-  expect([definitionFile('d', undefined, 'a\n```\nb\n```\nc'), definitionFile('d', undefined, '  ')], 'files').toEqual([null, null])
+  expect([definitionFile('d', 'a\n```\nb\n```\nc'), definitionFile('d', '  ')], 'files').toEqual([null, null])
 })
 
 // ---- list tool
 
-test('GIVEN the defaults WHEN the list tool runs THEN one entry per name prints layer, files, when, plan kind, description, text and plan-mode text', async () => {
+test('GIVEN the defaults WHEN the list tool runs THEN one entry per name prints layer, files, plan kind, description, text and plan-mode text', async () => {
   const r = rig({})
 
   const out = await listTool(r.io, ROOTS, await regOf(r), '++')
 
   expect(out, 'list').toEqual({
-    text: '## ++a · layer: plugin · files: none · when: always · plan: none · Architect\nARCH\n\n## ++m · layer: plugin · files: none · when: always · plan: replace · Manager mode\nMGR\n### plan mode sends instead · layer: plugin\nMGR+PLAN',
+    text: '## ++a · layer: plugin · files: none · plan: none · Architect\nARCH\n\n## ++m · layer: plugin · files: none · plan: add · Manager mode\nMGR\n### plan mode adds · layer: plugin\nMGR+PLAN',
     registry: null,
   })
 })
@@ -81,7 +81,7 @@ test('GIVEN a plugin default WHEN save changes it THEN an own-layer override is 
   const out = await saveTool(r.io, ROOTS, { name: 'a', description: 'Architect v2', text: 'NEW ARCH', scope: 'project' })
 
   expect([out.registry?.defs.find((d) => d.name === 'a'), out.registry?.sources.get('a')], 'effective def and layer').toEqual([
-    { name: 'a', body: 'NEW ARCH', insert: 'context', when: 'always', order: 100, priority: 0, header: '', legacy: 'architect', description: 'Architect v2' },
+    { name: 'a', body: 'NEW ARCH', insert: 'context', order: 100, priority: 0, header: '', legacy: 'architect', description: 'Architect v2', isPlan: false },
     'project',
   ])
 })
@@ -94,12 +94,24 @@ test('GIVEN a global file shadowed by a project file WHEN save runs with scope g
   expect(out.text, 'text').toBe(`saved ++x (global): ${G_DIR}/x.md; note: the project layer wins over global`)
 })
 
-test('GIVEN a plan stem WHEN save runs THEN the file is a plan-only variant of its base name', async () => {
+test('GIVEN a plan stem without a normal text WHEN save runs THEN the file says plan: add and the orphan part is sent in every mode with a warning', async () => {
   const r = rig({})
 
   const out = await saveTool(r.io, ROOTS, { name: 'rel.plan', description: 'Plan release', text: 'PLAN IT', scope: 'project' })
 
-  expect(out.registry?.defs.find((d) => d.body === 'PLAN IT'), 'def').toEqual({ name: 'rel', body: 'PLAN IT', insert: 'context', when: 'plan', order: 100, priority: 0, header: '', description: 'Plan release' })
+  expect([r.writes, out.registry?.defs.find((d) => d.body === 'PLAN IT'), out.registry?.issues], 'writes, def, issues').toEqual([
+    [[`${P_DIR}/rel.plan.md`, '---\ndescription: "Plan release"\nplan: add\n---\nPLAN IT\n']],
+    { name: 'rel', body: 'PLAN IT', insert: 'context', order: 100, priority: 0, header: '', description: 'Plan release', isPlan: false },
+    ['project/rel.plan.md: no rel.md; sent in every mode'],
+  ])
+})
+
+test('GIVEN a stale when argument WHEN save runs THEN it is ignored and the file has no when line', async () => {
+  const r = rig({})
+
+  const out = await saveTool(r.io, ROOTS, { name: 'ok', description: 'd', text: 'T', when: 'never', scope: 'project' } as never)
+
+  expect([out.text, out.isError, r.writes], 'text, flag, writes').toEqual(['saved ++ok (project): .claude/placeholders/ok.md', undefined, [[`${P_DIR}/ok.md`, '---\ndescription: "d"\n---\nT\n']]])
 })
 
 test('GIVEN bad input WHEN save runs THEN a readable error comes back and nothing is written', async () => {
@@ -109,7 +121,6 @@ test('GIVEN bad input WHEN save runs THEN a readable error comes back and nothin
     await saveTool(r.io, ROOTS, { name: 'ok', description: 'd', text: '  ', scope: 'project' }),
     await saveTool(r.io, ROOTS, { name: 'ok', description: '', text: 'T', scope: 'project' }),
     await saveTool(r.io, ROOTS, { name: 'ok', description: 'd', text: 'T', scope: 'team' }),
-    await saveTool(r.io, ROOTS, { name: 'ok', description: 'd', text: 'T', when: 'never', scope: 'project' }),
     await saveTool(r.io, ROOTS, { name: 'ok', description: 'd', text: 'a\n```\nb\n```\nc', scope: 'project' }),
     await saveTool(r.io, { pluginRoot: PLUG, configDir: CFG }, { name: 'ok', description: 'd', text: 'T', scope: 'project' }),
     await saveTool(r.io, ROOTS, { name: 'ok', description: 'd', text: 'T' }),
@@ -121,12 +132,11 @@ test('GIVEN bad input WHEN save runs THEN a readable error comes back and nothin
       'text is empty',
       'description is empty',
       "scope must be 'project' or 'global'",
-      "when must be 'always', 'plan' or 'not-plan'",
       'that text holds a ``` or ~~~ fence marker or opens with a --- line, which the definition format cannot carry',
       'no project root for this session',
       "scope is required: 'global' or 'project'",
     ],
-    [true, true, true, true, true, true, true, true],
+    [true, true, true, true, true, true, true],
     [],
   ])
 })
@@ -384,7 +394,7 @@ test('GIVEN the list tool called by the model WHEN the hook answers THEN the eff
 
   const out = await $.tool.call({ tool: `${TOOL}list_placeholders` } as never)
 
-  expect((out.text ?? '').split('\n\n')[0], 'first entry').toBe('## ++a · layer: plugin · files: none · when: always · plan: none · Architect\nARCH')
+  expect((out.text ?? '').split('\n\n')[0], 'first entry').toBe('## ++a · layer: plugin · files: none · plan: none · Architect\nARCH')
 })
 
 test('GIVEN the file system denies a call WHEN command.run runs THEN the catch handler answers readable text', async ($, on) => {

@@ -10,12 +10,13 @@ const CRON_PLAN = join(ROOT, 'brewtools', '.codex', 'skills', 'manager-setup', '
 const DIST_CRON_PLAN = join(ROOT, '.codex', 'plugins', 'brewtools', 'skills', 'manager-setup', 'references', 'cron-plan.md');
 
 const tests = [
-  ['GIVEN the plus mod default WHEN read THEN it equals the generated cron-plan.md bytes', () => {
-    assert.equal(`${readModDefault('+')}\n`, readFileSync(CRON_PLAN, 'utf8'), 'generated brewtools cron-plan.md');
-    assert.equal(`${readModDefault('+')}\n`, readFileSync(DIST_CRON_PLAN, 'utf8'), 'distribution cron-plan.md');
+  ['GIVEN the plus mod default and its plan part WHEN joined THEN they equal the generated cron-plan.md bytes', () => {
+    const joined = `${readModDefault('+')}\n\n${readModDefault('+.plan')}\n`;
+    assert.equal(joined, readFileSync(CRON_PLAN, 'utf8'), 'generated brewtools cron-plan.md');
+    assert.equal(joined, readFileSync(DIST_CRON_PLAN, 'utf8'), 'distribution cron-plan.md');
   }],
   ['GIVEN a mod default WHEN read THEN front matter is stripped and the body starts at the addon heading', () => {
-    assert.equal(readModDefault('+').split('\n')[0], '# [ADDON: ANTI-DRIFT CRON PLAN]', 'first body line');
+    assert.deepEqual([readModDefault('+').split('\n')[0], readModDefault('+.plan').split('\n')[0]], ['# [ADDON: ANTI-DRIFT CRON]', '# [ADDON: ANTI-DRIFT CRON PLAN]'], 'first body lines');
   }],
   ['GIVEN an unknown default name WHEN read THEN it throws naming the missing file', () => {
     assert.throws(

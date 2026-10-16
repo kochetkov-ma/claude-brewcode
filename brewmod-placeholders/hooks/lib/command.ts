@@ -12,7 +12,8 @@ export type CmdIo = Io & {
 }
 export type Scope = 'project' | 'global'
 export type Part = 'all' | 'normal' | 'plan'
-export type SaveInput = { name?: unknown; description?: unknown; when?: unknown; text?: unknown; planText?: unknown; scope?: unknown }
+// A stale `when` from an older tool spec may still arrive: it is ignored, never rejected.
+export type SaveInput = { name?: unknown; description?: unknown; text?: unknown; planText?: unknown; scope?: unknown }
 export type RemoveInput = { name?: unknown; scope?: unknown; part?: unknown }
 export type ToolOut = { text: string; registry: Registry | null; isError?: true }
 export type Row = { stem: string; layer: string; def: Def }
@@ -22,7 +23,7 @@ export const NEEDS_NEW_CC = 'changing placeholders by words needs Claude Code 2.
 export const SCOPE_REQUIRED = "scope is required: 'global' or 'project'"
 const BAD_SCOPE = "scope must be 'project' or 'global'"
 const BAD_FENCE = 'that text holds a ``` or ~~~ fence marker or opens with a --- line, which the definition format cannot carry'
-const NEEDS_ALWAYS = 'a plan-mode part needs a normal text with when: always'
+const NEEDS_CONTEXT = 'a plan-mode part needs a normal text that is not inline'
 
 // Markdown-safe block: the first line stays plain (the engine glues "<plugin>: " in front of it, so a fence cannot open there), the rest sits in a fence longer than any backtick run inside.
 export function block(head: string, lines: readonly string[], foot: readonly string[] = []): string {
@@ -84,8 +85,8 @@ export function byName(reg: Registry, prefix: string): Named[] {
   const rows = rowsOf(reg)
   return [...new Set(rows.map((r) => r.def.name.toLowerCase()))].flatMap((name) => {
     const own = rows.filter((r) => r.def.name.toLowerCase() === name)
-    const plan = own.find((r) => r.def.when === 'plan')
-    const lead = own.find((r) => r.def.when !== 'plan') ?? plan
+    const plan = own.find((r) => r.def.isPlan)
+    const lead = own.find((r) => !r.def.isPlan) ?? plan
     return lead === undefined ? [] : [{ name, lead, plan, own, kind: planParts(reg.defs, name, prefix).kind }]
   })
 }
@@ -104,7 +105,7 @@ export const handoffText = (request: string, prefix: string = DEFAULT_PREFIX, sc
 export const tools = (p: string) => [
   {
     name: 'list_placeholders',
-    description: `List every placeholder, one entry per name: token, layer (plugin | global | project | global-legacy | project-legacy), files (the user files per layer; both layers when it is in both), when, plan (add | replace | only | none), description, its text and its plan-mode text. Call it first before creating, changing, removing or showing one. To show placeholders, print the requested ones verbatim; /placeholders show ${p}<name> also prints them instantly.`,
+    description: `List every placeholder, one entry per name: token, layer (plugin | global | project | global-legacy | project-legacy), files (the user files per layer; both layers when it is in both), plan (add | none), description, its text and its plan-mode text. Call it first before creating, changing, removing or showing one. To show placeholders, print the requested ones verbatim; /placeholders show ${p}<name> also prints them instantly.`,
     inputSchema: { type: 'object', properties: {} },
   },
   {
@@ -117,7 +118,6 @@ export const tools = (p: string) => [
         description: { type: 'string', description: 'one short line shown in the list and the typeahead' },
         text: { type: 'string', description: 'the normal text inserted into prompts; optional when only planText changes on an existing name' },
         planText: { type: 'string', description: 'optional plan-mode part, added to the text only in Plan mode' },
-        when: { type: 'string', enum: ['always', 'plan', 'not-plan'], description: 'optional; default always (plan alone = a plan-only placeholder, no planText)' },
         scope: { type: 'string', enum: ['global', 'project'], description: 'required: global (all projects) or project (this project only)' },
       },
       required: ['name', 'description', 'scope'],
@@ -175,12 +175,11 @@ function entry({ name, lead, plan, kind }: Named, held: readonly Held[], prefix:
     `## ${prefix}${name}`,
     `layer: ${layerLabel(lead.layer)}`,
     `files: ${files.length === 0 ? 'none' : files.map((h) => `${h.scope} (${h.files.join(', ')})`).join(', ')}`,
-    `when: ${lead.def.when}`,
     `plan: ${kind}`,
     ...(lead.def.insert === 'inline' ? ['insert: inline'] : []),
     lead.def.description ?? '-',
   ].join(' · ')
-  const extra = plan === undefined || plan === lead ? [] : [`### plan mode ${kind === 'add' ? 'adds' : 'sends instead'} · layer: ${layerLabel(plan.layer)}`, bodyOf(plan.def)]
+  const extra = plan === undefined || plan === lead ? [] : [`### plan mode adds · layer: ${layerLabel(plan.layer)}`, bodyOf(plan.def)]
   return [head, bodyOf(lead.def), ...extra].join('\n')
 }
 
@@ -198,17 +197,16 @@ const bare = (raw: unknown, prefix: string): string | null => {
 }
 const filled = (v: unknown): string | null => (typeof v === 'string' && v.trim() !== '' ? v : null)
 
-// File = front matter (description, when when given, plan) + body; null when the text would not read back (fence marker, leading ---).
-export function definitionFile(description: string, when: string | undefined, text: string, plan?: 'add'): string | null {
-  const head = [`description: ${JSON.stringify(description)}`, ...(when === undefined ? [] : [`when: ${when}`]), ...(plan === undefined ? [] : [`plan: ${plan}`])]
+// File = front matter (description, plan when given) + body; null when the text would not read back (fence marker, leading ---).
+export function definitionFile(description: string, text: string, plan?: 'add'): string | null {
+  const head = [`description: ${JSON.stringify(description)}`, ...(plan === undefined ? [] : [`plan: ${plan}`])]
   const body = text.trim()
   const content = `---\n${head.join('\n')}\n---\n${body}\n`
   const back = parseDefinition(content)
   return body === '' || back.issues.length > 0 || back.text !== body || back.meta.description !== description || back.meta.plan !== plan ? null : content
 }
 
-// text -> `<stem>.md`, planText -> `<stem>.plan.md` (`when: plan`, `plan: add`), both in the scope's dir; an omitted part is left untouched.
-// With planText the text file states `when` itself, so it never inherits a lower layer's `not-plan`. home: shown paths use `~`.
+// text -> `<stem>.md`, planText -> `<stem>.plan.md` (`plan: add`), both in the scope's dir; an omitted part is left untouched. home: shown paths use `~`.
 export async function saveTool(io: CmdIo, roots: Roots, input: SaveInput, prefix: string = DEFAULT_PREFIX, home?: string): Promise<ToolOut> {
   try {
     const stem = bare(input.name, prefix)
@@ -221,23 +219,20 @@ export async function saveTool(io: CmdIo, roots: Roots, input: SaveInput, prefix
     if (text === null && planText === null) return fail('text is empty')
     const description = typeof input.description === 'string' ? input.description.trim().replace(/\s+/g, ' ') : ''
     if (description === '') return fail('description is empty')
-    const given = input.when === undefined ? undefined : String(input.when)
-    if (given !== undefined && !['always', 'plan', 'not-plan'].includes(given)) return fail("when must be 'always', 'plan' or 'not-plan'")
-    const when = planText !== null && text !== null ? (given ?? 'always') : given
     const token = prefix + stem
     if (planText !== null) {
       if (stem.endsWith(PLAN)) return fail('planText needs the name without .plan')
-      // The normal def the part joins, as served after this save: its when is this text's, else the served one's; insert is inherited.
-      const base = rowsOf(await load(io, roots)).find((r) => r.def.name.toLowerCase() === stem && r.def.when !== 'plan')?.def
-      if (text === null && base === undefined) return fail(`${token} has no text yet: send text too (a placeholder only for Plan mode: text with when: plan)`)
-      if ((text === null ? base?.when : when) !== 'always' || (base?.insert ?? 'context') !== 'context') return fail(NEEDS_ALWAYS)
+      // The normal def the part joins; a new text file inherits its insert.
+      const base = rowsOf(await load(io, roots)).find((r) => r.def.name.toLowerCase() === stem && !r.def.isPlan)?.def
+      if (text === null && base === undefined) return fail(`${token} has no text yet: send text too`)
+      if ((base?.insert ?? 'context') !== 'context') return fail(NEEDS_CONTEXT)
     }
     const dir = dirOf(roots, scope)
     if (dir === undefined) return fail(noDir(scope))
     const files: [string, string][] = []
     for (const [file, content] of [
-      [`${stem}.md`, text === null ? undefined : definitionFile(description, when, text)],
-      [`${stem}${PLAN_MD}`, planText === null ? undefined : definitionFile(description, 'plan', planText, 'add')],
+      [`${stem}.md`, text === null ? undefined : definitionFile(description, text, stem.endsWith(PLAN) ? 'add' : undefined)],
+      [`${stem}${PLAN_MD}`, planText === null ? undefined : definitionFile(description, planText, 'add')],
     ] as const) {
       if (content === null) return fail(BAD_FENCE)
       if (content !== undefined) files.push([file, content])

@@ -1,19 +1,19 @@
 import { test, expect } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import { ROOT, bandTexts, bootBand, defaultsTree, mountBand, textsOf, typed, type Tree } from './layer-io'
-import { VECTORS } from './parity/golden.generated'
-import { def, defaultDefs } from './fixtures'
+import { def, defaultDefs, golden } from './fixtures'
 import type { Def } from '../hooks/lib/defs'
 import { compileDefs } from '../hooks/lib/compiled'
 import { PLAN_LABEL, assembleDraft, injectedContext, planParts, sentText } from '../hooks/lib/sent'
 
-// Sent texts from the frozen v6.7.0 spec, never from the parser under test.
-const vec = (id: string): string => VECTORS.find((v) => v.id === id)?.expected ?? `MISSING ${id}`
+// Sent texts from the frozen v6.7.0 spec with the reviewed 6.9.5 overlay, never from the parser under test.
+const vec = (id: string): string => golden(id) ?? `NULL ${id}`
 const R_SENT = vec('spec-4')
 const RR_SENT = vec('spec-5')
 const M_SENT = vec('spec-1')
 const M_PLAN_SENT = vec('spec-2')
 const PLUS_SENT = vec('spec-6')
+const PLUS_DEFAULT_SENT = vec('x07-cron-default')
 const M_HEAD = 'User typed `++m` — Manager mode is active for this turn:'
 const MP_HEAD = 'User typed `++m` — Manager + Plan Mode is active for this turn:'
 const M_BODY = M_SENT.slice(M_HEAD.length + 2)
@@ -78,31 +78,29 @@ test('GIVEN ++m with a plan variant WHEN its text is asked outside and inside pl
   ])
 })
 
-// ---- plan-mode parts: `plan: add` joins the part to the `always` def; any other plan def replaces it
+// ---- plan-mode parts: a `<name>.plan.md` part is always added to its normal def in plan mode
 
-const withM = (body: string): Def[] => D.map((d) => (d.name === 'm' && d.when === 'always' ? { ...d, body } : d))
+const withM = (body: string): Def[] => D.map((d) => (d.name === 'm' && !d.isPlan ? { ...d, body } : d))
 
-test('GIVEN a user m.md override, an old full-text m.plan override and an empty m.md WHEN ++m is asked in plan mode THEN the override takes the addition, the old text replaces, the empty body silences ++m', async () => {
-  const old = D.map(({ plan: _key, ...d }) => (d.name === 'm' && d.when === 'plan' ? { ...d, body: 'OLD FULL' } : d))
+test('GIVEN a user m.md override, an old full-text m.plan override and an empty m.md WHEN ++m is asked in plan mode THEN both parts are joined, the old text is added, the empty body silences ++m', async () => {
+  const old = D.map((d) => (d.name === 'm' && d.isPlan ? { ...d, body: 'OLD FULL' } : d))
 
   expect([sentText('++m', withM('MY M'), '++', true), sentText('++m', old, '++', true), sentText('++m', withM(''), '++', true)], 'plan mode ++m').toStrictEqual([
     { token: '++m', name: 'm', kind: 'context', text: `${MP_HEAD}\n\nMY M\n\n${ADDITION}`, isSent: true, reason: null },
-    { token: '++m', name: 'm', kind: 'context', text: `${MP_HEAD}\n\nOLD FULL`, isSent: true, reason: null },
+    { token: '++m', name: 'm', kind: 'context', text: `${MP_HEAD}\n\n${M_BODY}\n\nOLD FULL`, isSent: true, reason: null },
     { token: '++m', name: 'm', kind: 'context', text: '', isSent: false, reason: 'not sent: empty' },
   ])
 })
 
-test('GIVEN an add part without a header, one over a not-plan def, one alone and two empty parts WHEN asked in plan mode THEN normal header, no join, plan only, not sent', async () => {
-  const xs = [def({ name: 'x', header: 'N {token}', body: 'X' }), def({ name: 'x', when: 'plan', plan: 'add', body: 'ADD' })]
-  const np = [def({ name: 'y', when: 'not-plan', body: 'NP' }), def({ name: 'y', when: 'plan', plan: 'add', body: 'ADD' })]
-  const only = [def({ name: 'z', when: 'plan', plan: 'add', header: 'Z', body: 'ONLY' })]
-  const empty = [def({ name: 'e', body: '' }), def({ name: 'e', when: 'plan', plan: 'add', body: '' })]
+test('GIVEN a part without a header, a part without a normal context def and two empty parts WHEN asked in plan mode THEN normal header, the inline normal text, not sent', async () => {
+  const xs = [def({ name: 'x', header: 'N {token}', body: 'X' }), def({ name: 'x', isPlan: true, body: 'ADD' })]
+  const inl = [def({ name: 'y', insert: 'inline', body: 'INL' }), def({ name: 'y', isPlan: true, body: 'ADD' })]
+  const empty = [def({ name: 'e', body: '' }), def({ name: 'e', isPlan: true, body: '' })]
 
-  expect([sentText('x', xs, '++', true), sentText('y', np, '++', true), sentText('z', only, '++', true), sentText('z', only, '++', false), sentText('e', empty, '++', true)], 'texts').toStrictEqual([
+  expect([sentText('x', xs, '++', true), sentText('x', xs, '++', false), sentText('y', inl, '++', true), sentText('e', empty, '++', true)], 'texts').toStrictEqual([
     { token: '++x', name: 'x', kind: 'context', text: 'N ++x\n\nX\n\nADD', isSent: true, reason: null },
-    { token: '++y', name: 'y', kind: 'context', text: 'ADD', isSent: true, reason: null },
-    { token: '++z', name: 'z', kind: 'context', text: 'Z\n\nONLY', isSent: true, reason: null },
-    { token: '++z', name: 'z', kind: 'context', text: 'Z\n\nONLY', isSent: false, reason: 'plan only' },
+    { token: '++x', name: 'x', kind: 'context', text: 'N ++x\n\nX', isSent: true, reason: null },
+    { token: '++y', name: 'y', kind: 'inline', text: 'INL', isSent: true, reason: null },
     { token: '++e', name: 'e', kind: 'context', text: '', isSent: false, reason: 'not sent: empty' },
   ])
 })
@@ -110,7 +108,7 @@ test('GIVEN an add part without a header, one over a not-plan def, one alone and
 test('GIVEN an add part with its own order and group WHEN a plan-mode draft is assembled THEN the normal def order and group priority decide', async () => {
   const defs = [
     def({ name: 'x', order: 5, group: 'g', priority: 2, body: 'X' }),
-    def({ name: 'x', when: 'plan', plan: 'add', order: 99, body: 'ADD' }),
+    def({ name: 'x', isPlan: true, order: 99, body: 'ADD' }),
     def({ name: 'y', order: 1, group: 'g', priority: 1, body: 'Y' }),
     def({ name: 'w', order: 7, body: 'W' }),
   ]
@@ -126,45 +124,45 @@ test('GIVEN an add part with its own order and group WHEN a plan-mode draft is a
   })
 })
 
-test('GIVEN the shipped defs and keyed variants WHEN plan parts are read THEN the key decides add, replace, only or none, never a shared prefix', async () => {
-  const x = (body: string, extra: Partial<Def> = {}) => def({ name: 'x', when: 'plan', body, ...extra })
+test('GIVEN the shipped defs and keyed variants WHEN plan parts are read THEN a part over a normal context def adds, anything else is none, never a shared prefix', async () => {
+  const x = (body: string, extra: Partial<Def> = {}) => def({ name: 'x', isPlan: true, body, ...extra })
   const kinds = [
-    [def({ name: 'x', body: 'A' }), x('C', { plan: 'add' })],
-    [def({ name: 'x', body: 'A' }), x('A\n\nC')],
-    [def({ name: 'x', body: 'A' }), x('R', { plan: 'replace', header: 'H' })],
-    [x('C', { plan: 'add', header: 'H' })],
-    [def({ name: 'x', when: 'not-plan', body: 'N' }), x('C', { plan: 'add' })],
-    [def({ name: 'x', body: 'A', plan: 'add' })],
+    [def({ name: 'x', body: 'A' }), x('C')],
+    [def({ name: 'x', body: 'A' }), x('', { header: 'H' })],
+    [def({ name: 'x', body: '' }), x('C')],
+    [def({ name: 'x', insert: 'inline', body: 'A' }), x('C')],
+    [def({ name: 'x', body: 'A' })],
+    [def({ name: 'xy', body: 'A' }), def({ name: 'xy', isPlan: true, body: 'C' })],
   ].map((defs) => planParts(defs, 'x'))
 
-  expect({ m: planParts(D, 'M', '++'), emptyM: planParts(withM(''), 'm'), r: planParts(D, 'r'), plus: planParts(D, '+').kind, kinds }, 'plan parts').toStrictEqual({
+  expect({ m: planParts(D, 'M', '++'), emptyM: planParts(withM(''), 'm'), r: planParts(D, 'r'), plus: planParts(D, '+'), kinds }, 'plan parts').toStrictEqual({
     m: { normal: M_SENT, plan: ADDITION, kind: 'add' },
     emptyM: { normal: '', plan: '', kind: 'none' },
     r: { normal: R_SENT, plan: '', kind: 'none' },
-    plus: 'only',
+    plus: { normal: PLUS_DEFAULT_SENT, plan: PLUS_SENT.slice(PLUS_SENT.lastIndexOf('\n\n# [ADDON: ANTI-DRIFT CRON PLAN]') + 2), kind: 'add' },
     kinds: [
       { normal: 'A', plan: 'C', kind: 'add' },
-      { normal: 'A', plan: 'A\n\nC', kind: 'replace' },
-      { normal: 'A', plan: 'H\n\nR', kind: 'replace' },
-      { normal: '', plan: 'H\n\nC', kind: 'only' },
-      { normal: 'N', plan: 'C', kind: 'replace' },
+      { normal: 'A', plan: '', kind: 'add' },
+      { normal: '', plan: '', kind: 'none' },
+      { normal: '', plan: '', kind: 'none' },
       { normal: 'A', plan: '', kind: 'none' },
+      { normal: '', plan: '', kind: 'none' },
     ],
   })
 })
 
-test('GIVEN the plan-only +++ WHEN its text is asked outside and inside plan mode THEN outside it carries the plan text unsent, inside it is sent', async () => {
+test('GIVEN +++ WHEN its text is asked outside and inside plan mode THEN outside it sends the cron text, inside the cron text plus its plan part', async () => {
   expect([sentText('+++', D, '++', false), sentText('+', D, '++', true)], 'plus both modes').toStrictEqual([
-    { token: '+++', name: '+', kind: 'context', text: PLUS_SENT, isSent: false, reason: 'plan only' },
+    { token: '+++', name: '+', kind: 'context', text: PLUS_DEFAULT_SENT, isSent: true, reason: null },
     { token: '+++', name: '+', kind: 'context', text: PLUS_SENT, isSent: true, reason: null },
   ])
 })
 
-test('GIVEN a not-plan def, an unknown name and a custom prefix WHEN texts are asked THEN plan mode skips the def, the name is unknown and the header carries the prefix', async () => {
-  const defs = [...D, def({ name: 'np', when: 'not-plan', body: 'NP' })]
+test('GIVEN a normal def, an unknown name and a custom prefix WHEN texts are asked THEN plan mode sends the def, the name is unknown and the header carries the prefix', async () => {
+  const defs = [...D, def({ name: 'np', body: 'NP' })]
 
   expect([sentText('np', defs, '++', true), sentText('zz', defs, '++', false), sentText('@@r', D, '@@', false).text.split('\n')[0]], 'three asks').toStrictEqual([
-    { token: '++np', name: 'np', kind: 'context', text: 'NP', isSent: false, reason: 'not in plan mode' },
+    { token: '++np', name: 'np', kind: 'context', text: 'NP', isSent: true, reason: null },
     { token: '++zz', name: 'zz', kind: 'none', text: '', isSent: false, reason: 'unknown placeholder' },
     'User typed `@@r` — Two-phase review discipline is active for this turn:',
   ])
@@ -186,7 +184,7 @@ test('GIVEN an empty ++rr override WHEN ++r ++rr is assembled THEN the empty win
 test('GIVEN inline defs WHEN drafts are assembled THEN always-inline text replaces the token, a plan inline stays, an empty one is dropped and a context twin wins', async () => {
   const defs = [
     def({ name: 'sig', insert: 'inline', body: 'SIGNED' }),
-    def({ name: 'pl', insert: 'inline', when: 'plan', body: 'PL' }),
+    def({ name: 'pl', insert: 'inline', isPlan: true, body: 'PL' }),
     def({ name: 'nil', insert: 'inline', body: '' }),
     def({ name: 'dual', insert: 'inline', body: 'DUAL INLINE' }),
     def({ name: 'dual', insert: 'context', body: 'DUAL CONTEXT' }),
@@ -269,7 +267,7 @@ test('GIVEN compiled defs for this prefix, compiled defs for another prefix and 
 })
 
 test('GIVEN the plan-mode labels WHEN read THEN each is the literal the band and show print', async () => {
-  expect(PLAN_LABEL, 'labels').toStrictEqual({ adds: 'plan mode adds:', instead: 'plan mode sends instead:', onlyPart: 'plan mode only:', only: 'plan only', plus: 'plan +' })
+  expect(PLAN_LABEL, 'labels').toStrictEqual({ adds: 'plan mode adds:', plus: 'plan +' })
 })
 
 // ---- band: what will be sent

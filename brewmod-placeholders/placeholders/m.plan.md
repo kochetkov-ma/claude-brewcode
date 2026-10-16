@@ -2,7 +2,6 @@
 name: "m"
 description: "Manager mode in Plan mode: the manager text plus the plan addon"
 insert: context
-when: plan
 plan: add
 order: 20
 header: "User typed `{token}` — Manager + Plan Mode is active for this turn:"
@@ -10,8 +9,8 @@ legacy: planmode
 ---
 [ADDON: PLAN MODE]
 
-Stay read-only: no code, board/task-state writes, installation, configuration,
-or cron creation. Read-only expert exploration is allowed.
+Stay read-only: no code, board/task-state writes, installation or
+configuration. Read-only expert exploration is allowed.
 
 Include in the plan (English, token economy):
 - PREAMBLE: [ROLE: MANAGER] + the 5-step protocol restated verbatim as the
@@ -25,15 +24,4 @@ Include in the plan (English, token economy):
   agent, bounded scope+acceptance per spawn), dependencies marked, parallel
   branches explicit, critical path named.
 
-Include the task-board execution step: announce and create one unique session
-anti-drift cron per top-level task, hourly unless the user chooses another tick;
-during execution record its task-specific methodology/prompt, timezone, ID,
-tick count and stop rule. Scheduling unavailable -> explicit gap, never a
-claimed schedule. Each tick: reread methodology/anti-drift rules, collect agent
-updates, reconcile status/dependencies/goal, keep all unfinished + latest 10
-completed graph entries, preserve older evidence outside the active graph.
-The tick report is `HH:MM TZ · tick N · elapsed`, then only the nonempty rows:
-🟢 completed, 🔵 active/remaining/next, 🔴 problems/blockers/questions,
-⚪ anti-drift verdict. Completion/cancellation -> stop and verify cron removal.
-
-Deliver the embedded role + graph + deferred cron step, not implementation code.
+Deliver the embedded role + graph, not implementation code.

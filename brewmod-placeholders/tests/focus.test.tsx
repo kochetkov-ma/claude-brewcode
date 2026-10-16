@@ -37,7 +37,6 @@ test('GIVEN rows sent now, in the other mode, cut, not sent, empty and unknown W
     [row('one'), true],
     [row('p1\np2', { isPlanOnly: true }), false],
     [row('p1\np2', { isPlanOnly: true }), true],
-    [row('n1', { reason: 'not in plan mode' }), true],
     [row('c1\n...[truncated]', { reason: 'cut at 9000 chars' }), false],
     [row('', { reason: 'not sent: ++rr wins' }), false],
     [row('t', { reason: 'not sent: plugin files removed' }), false],
@@ -50,7 +49,6 @@ test('GIVEN rows sent now, in the other mode, cut, not sent, empty and unknown W
     'Claude receives these lines now:',
     'not sent now (plan only):',
     'Claude receives these lines now:',
-    'not sent in plan mode:',
     'Claude receives these lines now (cut at 9000 chars):',
     null,
     null,
@@ -427,15 +425,15 @@ const M_BODY = [
 const M_ADDITION = [
   '[ADDON: PLAN MODE]',
   ' ',
-  'Stay read-only: no code, board/task-state writes, installation, configuration,',
-  'or cron creation. Read-only expert exploration is allowed.',
+  'Stay read-only: no code, board/task-state writes, installation or',
+  'configuration. Read-only expert exploration is allowed.',
   ' ',
   'Include in the plan (English, token economy):',
 ]
 // Compact head: the description gives way to plan + and the receives label.
 const M_DESC = '  Manager mode: orchestrate and delegate, never code i…'
 const M_FOOT = 'close: move the caret off ++m · send as typed: ++/'
-const M_NOTE = 'not sent now · plan mode adds 29 lines'
+const M_NOTE = 'not sent now · plan mode adds 18 lines'
 const PLAN_TREE: Tree = { ...TREE, [STATE_FILE]: JSON.stringify({ mode: 'plan', ts: 1 }) }
 const XX = {
   [`${ROOT}/.claude/placeholders/xx.md`]: file('xx', 'Ex mode', 'XX BODY'),
@@ -450,7 +448,7 @@ test('GIVEN plan mode and ++m under the caret WHEN the band mounts THEN the head
   await ui.unmount()
 
   expect({ texts: await bandTexts($, 40), mark }, 'plan focus').toEqual({
-    texts: ['++m', RECV, MP_HEAD, ' ', ...M_BODY.slice(0, 4), '... 23 more lines', 'plan mode adds:', ...M_ADDITION, '... 23 more lines · whole text: /placeholders show ++m', M_FOOT],
+    texts: ['++m', RECV, MP_HEAD, ' ', ...M_BODY.slice(0, 4), '... 23 more lines', 'plan mode adds:', ...M_ADDITION, '... 12 more lines · whole text: /placeholders show ++m', M_FOOT],
     mark: { dimColor: true, wrap: 'truncate-end' },
   })
 })
@@ -487,12 +485,12 @@ test('GIVEN plan mode and a compact band WHEN it mounts THEN the head says plan 
     '... 25 more lines',
     'plan mode adds:',
     ...M_ADDITION.slice(0, 3),
-    '... 26 more lines · whole text: /placeholders show ++m',
+    '... 15 more lines · whole text: /placeholders show ++m',
     'more: put the caret on ++yy · send as typed: ++/ · help: /placeholders help',
   ])
 })
 
-test('GIVEN a plan file that replaces its normal text WHEN focused in plan mode and in default mode THEN sends instead, or a plan-mode text note', async ($, on) => {
+test('GIVEN an old plan file without plan: add WHEN focused in plan mode and in default mode THEN its text is added, or a plan-mode note', async ($, on) => {
   const tree: Tree = { ...TREE, ...XX }
   on('turn.complete', (_$, e) => ({ text: e.answer }) as never)
   await boot($, on, tree)
@@ -504,8 +502,8 @@ test('GIVEN a plan file that replaces its normal text WHEN focused in plan mode 
   const foot = 'close: move the caret off ++xx · send as typed: ++/'
 
   expect({ normal, plan: await bandTexts($, 40) }, 'replace').toEqual({
-    normal: ['++xx', RECV, 'XX BODY', 'not sent now · plan mode sends 2 lines instead', foot],
-    plan: ['++xx', RECV, 'plan mode sends instead:', 'XX PLAN', 'SECOND', foot],
+    normal: ['++xx', RECV, 'XX BODY', 'not sent now · plan mode adds 2 lines', foot],
+    plan: ['++xx', RECV, 'XX BODY', 'plan mode adds:', 'XX PLAN', 'SECOND', foot],
   })
 })
 
@@ -536,11 +534,11 @@ test('GIVEN short bodies with a plan addition in default mode WHEN the compact b
   })
 })
 
-test('GIVEN a 2-line plan text that replaces its normal text WHEN the compact band mounts in plan mode THEN the sends instead mark and both lines show', async ($, on) => {
+test('GIVEN an old 2-line plan text without plan: add WHEN the compact band mounts in plan mode THEN it is added under the normal text', async ($, on) => {
   await boot($, on, { ...TREE, ...XX, [STATE_FILE]: JSON.stringify({ mode: 'plan', ts: 1 }) })
   await typed($, '++xx ')
 
-  expect(await bandTexts($, 40), 'plan compact replace').toEqual(['placeholders 1 · plan mode', '++xx', '  Ex mode', ' plan +', RECV, 'plan mode sends instead:', 'XX PLAN', 'SECOND', compactFoot('++xx')])
+  expect(await bandTexts($, 40), 'plan compact replace').toEqual(['placeholders 1 · plan mode', '++xx', '  Ex mode', ' plan +', RECV, 'XX BODY', 'plan mode adds:', 'XX PLAN', 'SECOND', compactFoot('++xx')])
 })
 
 test('GIVEN plan mode, ++nn with a 2-line addition under the caret and the menu open WHEN the band mounts at 19 and 18 rows THEN ? is named exactly where it would show all 5 rows', async ($, on) => {
@@ -615,12 +613,25 @@ test('GIVEN plan mode and ++m focused WHEN the band mounts THEN the normal rows 
 
   expect(await styled($), 'plan focus styles').toEqual({
     sent: [MP_HEAD, ' ', ...M_BODY.slice(0, 4), ...M_ADDITION],
-    dim: [RECV, '... 23 more lines', 'plan mode adds:', '... 23 more lines · whole text: ', 'close: ', ' · send as typed: '],
+    dim: [RECV, '... 23 more lines', 'plan mode adds:', '... 12 more lines · whole text: ', 'close: ', ' · send as typed: '],
     act: ['/placeholders show ++m', 'move the caret off ++m', '++/'],
   })
 })
 
-test('GIVEN default mode WHEN ++m (plan part not sent), +++ (plan only) and ++/ ++m (escaped) bands mount THEN only the ++m normal rows are bold text colour', async ($, on) => {
+// The compact +++ rows at the default width: its head and the first wrapped lines of the cron text.
+const PLUS_ROWS = [
+  'User typed `+++` — Anti-drift cron is active for this turn:',
+  ' ',
+  '# [ADDON: ANTI-DRIFT CRON]',
+  ' ',
+  "Now: announce and create one unique session cron for the current task, hourly unless the user's",
+  'interval differs, using available native scheduling tools. Record its task-specific prompt,',
+  'schedule ID, timezone, tick count and stop rule. If scheduling is unavailable, report the gap',
+  'without claiming a schedule exists.',
+  ' ',
+]
+
+test('GIVEN default mode WHEN ++m (plan part not sent), +++ and ++/ ++m (escaped) bands mount THEN only the ++m and +++ normal rows are bold text colour', async ($, on) => {
   await boot($, on)
   const out: Record<string, string[]> = {}
   for (const draft of ['++m', '+++', '++/ ++m']) {
@@ -628,5 +639,5 @@ test('GIVEN default mode WHEN ++m (plan part not sent), +++ (plan only) and ++/ 
     out[draft] = (await styled($)).sent
   }
 
-  expect(out, 'sent rows per draft').toEqual({ '++m': [M_HEAD, ' ', ...M_BODY], '+++': [], '++/ ++m': [] })
+  expect(out, 'sent rows per draft').toEqual({ '++m': [M_HEAD, ' ', ...M_BODY], '+++': PLUS_ROWS, '++/ ++m': [] })
 })

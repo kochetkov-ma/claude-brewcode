@@ -16,8 +16,6 @@ const cutAt = (text: string, at: number): string => {
 const SYNTHETIC_PROMPT = /^\s*<(?:task-notification>|agent-message\s+from=)/
 
 export const REASON = {
-  planOnly: 'plan only',
-  notInPlan: 'not in plan mode',
   empty: 'not sent: empty',
   staysAsTyped: 'stays as typed',
   overCap: `not sent: over ${MAX_CHARS} chars`,
@@ -26,11 +24,11 @@ export const REASON = {
   unknown: 'unknown placeholder',
 } as const
 // Plan-mode part labels and tags of the band and `/placeholders show`.
-export const PLAN_LABEL = { adds: 'plan mode adds:', instead: 'plan mode sends instead:', onlyPart: 'plan mode only:', only: REASON.planOnly, plus: 'plan +' } as const
+export const PLAN_LABEL = { adds: 'plan mode adds:', plus: 'plan +' } as const
 const winsReason = (token: string): string => `not sent: ${token} wins`
 export const escapedReason = (marker: string): string => `not sent: ${marker} in this message`
 
-// text = exact text the token adds ('' = nothing; a mode mismatch carries the other mode's text).
+// text = exact text the token adds ('' = nothing).
 export type Sent = { token: string; name: string; kind: 'context' | 'inline' | 'none'; text: string; isSent: boolean; reason: string | null }
 // prompt = the text after inline expansion; context = the hook's additionalContext ('' = none); tokens = one per known draft name, draft order.
 export type Draft = { prompt: string; context: string; tokens: Sent[] }
@@ -39,42 +37,35 @@ const unsent = (reason: string): Pick<Sent, 'text' | 'isSent' | 'reason'> => ({ 
 // The hook sends nothing for a delivery tag or a prompt without the prefix.
 const isSkipped = (prompt: string, prefix: string): boolean => SYNTHETIC_PROMPT.test(prompt) || !prompt.includes(prefix)
 
-const applies = (d: Def, plan: boolean): boolean => d.when === 'always' || (d.when === 'plan') === plan
-// Same name, both applicable: `plan` beats `always`/`not-plan`; equal rank -> first wins.
-const rank = (d: Def): number => (d.when === 'plan' ? 2 : 1)
-
 function blockOf(d: Def, prefix: string): { text: string } {
   const head = d.header.split('{token}').join(prefix + d.name.toLowerCase())
   return { text: head === '' ? d.body : `${head}\n\n${d.body}` }
 }
 
-function modeWinners(defs: readonly Def[], plan: boolean): Map<string, Def> {
-  const out = new Map<string, Def>()
+// Per name, context defs only: the first normal def and the first plan part (a part without a normal context def is never sent).
+function parts(defs: readonly Def[]): { normal: Map<string, Def>; plan: Map<string, Def> } {
+  const normal = new Map<string, Def>()
+  const plan = new Map<string, Def>()
   for (const d of defs) {
-    if (d.insert !== 'context' || !applies(d, plan)) continue
-    const key = d.name.toLowerCase()
-    const cur = out.get(key)
-    if (cur === undefined || rank(d) > rank(cur)) out.set(key, d)
+    if (d.insert !== 'context') continue
+    const m = d.isPlan ? plan : normal
+    if (!m.has(d.name.toLowerCase())) m.set(d.name.toLowerCase(), d)
   }
-  return out
+  return { normal, plan }
 }
 
-const isAdd = (p: Def, base: Def | undefined): base is Def => p.when === 'plan' && p.plan === 'add' && base?.when === 'always'
-
-// `plan: add` part on its `always` def: plan header if any, normal body, '\n\n', addition. Empty normal body = silenced in both modes.
+// Plan part on its normal def: plan header if any, normal body, '\n\n', addition. Empty normal body = silenced in both modes.
 const withPart = (base: Def, part: Def): Def =>
   base.body === '' ? base : { ...base, header: part.header === '' ? base.header : part.header, body: part.body === '' ? base.body : `${base.body}\n\n${part.body}` }
 
-// What each name sends in this mode: in plan mode an `add` winner is joined to the normal def, else the mode winner as is.
+// What each name sends in this mode: the normal def; in plan mode its plan part joined to it.
 function winners(defs: readonly Def[], plan: boolean): Map<string, Def> {
-  const out = modeWinners(defs, plan)
-  if (!plan) return out
-  const normal = modeWinners(defs, false)
-  for (const [key, d] of out) {
-    const base = normal.get(key)
-    if (isAdd(d, base)) out.set(key, withPart(base, d))
-  }
-  return out
+  const { normal, plan: part } = parts(defs)
+  if (!plan) return normal
+  return new Map([...normal].map(([key, d]) => {
+    const p = part.get(key)
+    return [key, p === undefined ? d : withPart(d, p)]
+  }))
 }
 
 // The caller's compiled defs (register.ts memoises them); a bare defs array is compiled per call.
@@ -123,18 +114,15 @@ export function injectedContext(src: DefsLike, prefix: string, prompt: string, m
   return join(pick(c, prompt, mode === 'plan').picked, prefix).context
 }
 
-// A name's plan-mode text: add (`plan: add` on an `always` def; plan = the addition body), replace (plan = the plan block), only (no normal def) or none.
-export type PlanParts = { normal: string; plan: string; kind: 'add' | 'replace' | 'only' | 'none' }
+// A name's plan-mode text: add (plan = the addition body) or none (no plan part, or an empty normal body that silences both modes).
+export type PlanParts = { normal: string; plan: string; kind: 'add' | 'none' }
 export function planParts(defs: readonly Def[], name: string, prefix: string = DEFAULT_PREFIX): PlanParts {
   const key = name.toLowerCase()
-  const ctx = defs.filter((d) => d.insert === 'context' && d.name.toLowerCase() === key)
-  const p = modeWinners(ctx, true).get(key)
-  const b = modeWinners(ctx, false).get(key)
+  const { normal: n, plan: pp } = parts(defs.filter((d) => d.name.toLowerCase() === key))
+  const b = n.get(key)
+  const p = pp.get(key)
   const normal = b === undefined || b.body === '' ? '' : blockOf(b, prefix).text
-  if (p === undefined || p === b) return { normal, plan: '', kind: 'none' }
-  // An add part over an empty normal body sends nothing in plan mode either.
-  if (isAdd(p, b)) return b.body === '' ? { normal, plan: '', kind: 'none' } : { normal, plan: p.body, kind: 'add' }
-  return { normal, plan: blockOf(p, prefix).text, kind: b === undefined ? 'only' : 'replace' }
+  return b === undefined || p === undefined || b.body === '' ? { normal, plan: '', kind: 'none' } : { normal, plan: p.body, kind: 'add' }
 }
 
 // Known names of a draft, first occurrence order.
@@ -151,18 +139,13 @@ export function sentText(token: string, defs: readonly Def[], prefix: string, is
   const name = strip(token, prefix)
   const base = { token: prefix + name, name }
   const ctx = defs.filter((d) => d.insert === 'context' && d.name.toLowerCase() === name)
-  if (ctx.length > 0) {
-    const now = winners(ctx, isPlan).get(name)
-    if (now !== undefined) return now.body === '' ? { ...base, kind: 'context', ...unsent(REASON.empty) } : { ...base, kind: 'context', ...blockOf(now, prefix), isSent: true, reason: null }
-    const other = winners(ctx, !isPlan).get(name)
-    const block = other === undefined || other.body === '' ? { text: '' } : blockOf(other, prefix)
-    return { ...base, kind: 'context', ...block, isSent: false, reason: isPlan ? REASON.notInPlan : REASON.planOnly }
-  }
+  const now = winners(ctx, isPlan).get(name)
+  if (now !== undefined) return now.body === '' ? { ...base, kind: 'context', ...unsent(REASON.empty) } : { ...base, kind: 'context', ...blockOf(now, prefix), isSent: true, reason: null }
   const body = inlineBodies(defs).get(name)
   if (body !== undefined) return { ...base, kind: 'inline', text: body, isSent: true, reason: null }
   const inl = defs.filter((d) => d.insert === 'inline' && d.name.toLowerCase() === name)
   if (inl.length === 0) return { ...base, kind: 'none', ...unsent(REASON.unknown) }
-  return { ...base, kind: 'inline', ...unsent(inl.some((d) => d.when === 'always' && d.body === '') ? REASON.empty : REASON.staysAsTyped) }
+  return { ...base, kind: 'inline', ...unsent(inl.some((d) => !d.isPlan && d.body === '') ? REASON.empty : REASON.staysAsTyped) }
 }
 
 // A typed draft as the person sends it: inline expansion (module), then the context blocks (command hook) with group and cap reasons.

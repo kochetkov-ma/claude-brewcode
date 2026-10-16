@@ -1,7 +1,6 @@
 import { test, expect, mock } from 'claude-code/testing'
 import { CFG, PLUG, ROOT, ROOTS, TOOL, boot, defaultsTree, memIo, run, wireAll, type Tree } from './layer-io'
-import { bodyOf } from './fixtures'
-import { VECTORS } from './parity/golden.generated'
+import { bodyOf, golden } from './fixtures'
 import { loadRegistry, newRegistryCache, type Registry } from '../hooks/lib/defs'
 import { block } from '../hooks/lib/command'
 import { compileMatchers } from '../hooks/lib/match'
@@ -15,13 +14,14 @@ const WIRED_DIRS = { global: `${CFG}/placeholders`, project: '.claude/placeholde
 const P_DIR = `${ROOT}/.claude/placeholders`
 const G_DIR = `${CFG}/placeholders`
 // Frozen hook output (brewtools v6.7.0): what each built-in sends alone, per mode.
-const spec = (id: string): string => VECTORS.find((v) => v.id === id)?.expected ?? `NO ${id}`
+const spec = (id: string): string => golden(id) ?? `NULL ${id}`
 const M_SENT = spec('spec-1')
 const M_PLAN_SENT = spec('spec-2')
 const A_SENT = spec('spec-3')
 const R_SENT = spec('spec-4')
 const RR_SENT = spec('spec-5')
-const PLUS_SENT = spec('spec-6')
+const PLUS_SENT = spec('x07-cron-default')
+const PLUS_ADD = bodyOf('+.plan')
 const load = (tree: Tree): Promise<Registry> => loadRegistry(memIo(tree).io, ROOTS, newRegistryCache())
 const heads = (text: string): string[] => text.split('\n').filter((l) => /^`[^`]/.test(l))
 
@@ -35,8 +35,9 @@ const STATUS_FOOT = [
 
 const LIST_DEFAULTS = [
   '5 placeholders · full text as sent · plan mode off',
-  '`+++` · plugin · plan only',
-  block('plan mode only:', PLUS_SENT.split('\n')),
+  '`+++` · plugin · plan +',
+  block('normal:', PLUS_SENT.split('\n')),
+  block('plan mode adds:', PLUS_ADD.split('\n')),
   '`++a` · plugin',
   block('normal:', A_SENT.split('\n')),
   '`++m` · plugin · plan +',
@@ -168,11 +169,11 @@ test('GIVEN the plugin defaults WHEN the status is built THEN one row per name c
   expect(out.split('\n'), 'status').toEqual([
     '5 placeholders · type ++name anywhere in a prompt',
     '```',
-    '+++   plugin  plan only  Anti-drift cron plan addon, active in Plan mode only',
-    '++a   plugin             Architecture-first: delegate the design to expert agents before implementing',
-    '++m   plugin  plan +     Manager mode: orchestrate and delegate, never code in the main context',
-    '++r   plugin             Two-phase review: review every significant change, then double-check each finding',
-    '++rr  plugin             Anti-regression review: regression, project standard and functional correctness axes',
+    '+++   plugin  plan +  Anti-drift cron for the current task; plan mode plans it as a step',
+    '++a   plugin          Architecture-first: delegate the design to expert agents before implementing',
+    '++m   plugin  plan +  Manager mode: orchestrate and delegate, never code in the main context',
+    '++r   plugin          Two-phase review: review every significant change, then double-check each finding',
+    '++rr  plugin          Anti-regression review: regression, project standard and functional correctness axes',
     '```',
     ...STATUS_FOOT,
   ])
@@ -184,7 +185,7 @@ test('GIVEN user layers, a plan part from another layer and a bad key WHEN the s
     [`${P_DIR}/rel.md`]: '---\ndescription: "Release checklist"\n---\nCHECK',
     [`${P_DIR}/bad.md`]: '---\nwat: 1\n---\nB',
     [`${G_DIR}/a.md`]: '---\ndescription: "My architect"\n---\nMINE',
-    [`${G_DIR}/m.plan.md`]: 'OTHER',
+    [`${G_DIR}/m.plan.md`]: '---\nplan: add\n---\nOTHER',
   }
 
   const out = statusText(await load(tree), '++', DIRS)
@@ -192,7 +193,7 @@ test('GIVEN user layers, a plan part from another layer and a bad key WHEN the s
   expect(out.split('\n').slice(0, 13), 'rows and issues').toEqual([
     '7 placeholders · type ++name anywhere in a prompt',
     '```',
-    '+++    plugin   plan only        Anti-drift cron plan addon, active in Plan mode only',
+    '+++    plugin   plan +           Anti-drift cron for the current task; plan mode plans it as a step',
     '++a    global                    My architect',
     '++bad  project                   -',
     '++m    plugin   plan + (global)  Manager mode: orchestrate and delegate, never code in the main context',
@@ -263,7 +264,7 @@ test('GIVEN a normal text and an added part that fit alone but not joined WHEN s
   })
 })
 
-test('GIVEN the plan-only +++ and a full-text plan override WHEN shown THEN plan mode only: and plan mode sends instead: label them', async () => {
+test('GIVEN +++ and an old full-text m.plan override WHEN shown THEN each prints its normal text and its plan-mode addition', async () => {
   const reg = await load({ ...defaultsTree(), [`${G_DIR}/m.plan.md`]: 'OTHER' })
 
   const out = fullText(reg, ['+', 'm'], '++', false)
@@ -271,11 +272,12 @@ test('GIVEN the plan-only +++ and a full-text plan override WHEN shown THEN plan
   expect(out, 'show + m').toBe(
     [
       '+++, ++m · full text as sent · plan mode off',
-      '`+++` · plugin · plan only',
-      block('plan mode only:', PLUS_SENT.split('\n')),
+      '`+++` · plugin · plan +',
+      block('normal:', PLUS_SENT.split('\n')),
+      block('plan mode adds:', PLUS_ADD.split('\n')),
       '`++m` · plugin · plan + (global)',
       block('normal:', M_SENT.split('\n')),
-      block('plan mode sends instead:', ['User typed `++m` — Manager + Plan Mode is active for this turn:', '', 'OTHER']),
+      block('plan mode adds:', ['OTHER']),
     ].join('\n'),
   )
 })
@@ -304,13 +306,13 @@ test('GIVEN inline, empty, oversized and unknown names WHEN shown THEN each gets
   )
 })
 
-test('GIVEN an inline def with when: plan and an empty inline def WHEN shown THEN both say they stay as typed instead of replacing the token', async () => {
+test('GIVEN an inline def with a stale when: plan and an empty inline def WHEN shown THEN the first replaces the token and the empty one stays as typed', async () => {
   const reg = await load({ ...defaultsTree(), [`${P_DIR}/pl.md`]: '---\ninsert: inline\nwhen: plan\n---\nPLANTEXT', [`${P_DIR}/em.md`]: '---\ninsert: inline\n---\n' })
 
   const out = fullText(reg, ['pl', 'em'], '++', true)
 
   expect(out, 'show pl em').toBe(
-    ['++pl, ++em · full text as sent · plan mode on', '`++pl` · project · inline', block('stays as typed (when: plan); its text:', ['PLANTEXT']), '`++em` · project · inline', 'stays as typed (empty)'].join('\n'),
+    ['++pl, ++em · full text as sent · plan mode on', '`++pl` · project · inline', block('replaces the token with:', ['PLANTEXT']), '`++em` · project · inline', 'stays as typed (empty)'].join('\n'),
   )
 })
 

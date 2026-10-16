@@ -15,9 +15,9 @@ const INJECT = path.join(MOD, 'hooks', 'inject.mjs');
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'inject-parity-'));
 const JOINER = '\n\n---\n\n';
 const CUT_NOTE = '\n...[truncated]';
-const { files: GOLDEN_FILES, vectors: VECTORS } = readGolden();
+const { files: GOLDEN_FILES, vectors: VECTORS, frozen: FROZEN, breaks: BREAKS } = readGolden();
 const vec = (id) => VECTORS.find((v) => v.id === id)?.expected ?? `MISSING ${id}`;
-// Sole deliberate break from v6.7.0 (6.9.2): the 9000 cap never splits a surrogate pair; the frozen vector keeps the old lone high surrogate.
+// Deliberate breaks from v6.7.0: the reviewed 6.9.5 overlay (golden-read.mjs) and this one (6.9.2): the 9000 cap never splits a surrogate pair; the frozen vector keeps the old lone high surrogate.
 const SURROGATE_CUT = 'o29-cap-splits-surrogate';
 const expectedOf = (v) => (v.id === SURROGATE_CUT ? v.expected.slice(0, 8999) + CUT_NOTE : v.expected);
 
@@ -69,6 +69,13 @@ job('golden: group counts', async () => {
   const counts = {};
   for (const v of VECTORS) counts[v.group] = (counts[v.group] ?? 0) + 1;
   assert.deepEqual(counts, { spec: 8, edge: 16, extra: 29, override: 26, cap: 5, 'launch-dir': 3, 'custom-prefix': 11 }, 'vectors per group');
+});
+
+// The 6.9.5 overlay: exactly the reviewed ids, each one a real change with a reason.
+const BREAK_IDS = ['spec-2', 'spec-6', 'e14-punct-after-cron', 'e15-zwj-after-cron', 'e16-standalone-cron', 'spec-7', 'x18-cron-m-plan', 'x21-all-plan', 'p02-m-plan', 'p04-cron', 'p06-all-plan', 'spec-8', 'x07-cron-default', 'p08-cron-default', 'o03-empty-planmode', 'o04-empty-planmode-with-a', 'o07-empty-cron', 'o22-reference-planmode-raw', 'o23-reference-cron-raw', 'o30-cap-combined-plan'];
+job('golden: the 6.9.5 overlay holds the 20 reviewed ids, each changes its frozen text', async () => {
+  const rows = Object.entries(BREAKS).map(([id, b]) => [id, FROZEN.find((v) => v.id === id)?.expected !== b.expected, b.reason.length > 0]);
+  assert.deepEqual(rows, BREAK_IDS.map((id) => [id, true, true]), 'overlay id, differs from frozen, has a reason');
 });
 
 // ---- 1. Golden vectors (98): defaults from the real placeholders/, overrides from the vector
@@ -127,14 +134,15 @@ const CASES = [
   ['project legacy over global native', { [`cfg/placeholders/a.md`]: 'GN', [`proj/.claude/brewtools/manager/prompts/architect.md`]: 'PL' }, '++a', 'default', `${A_HEAD}\n\nPL`],
   ['global native over global legacy', { [`cfg/manager/prompts/architect.md`]: 'GL', [`cfg/placeholders/a.md`]: 'GN' }, '++a', 'default', `${A_HEAD}\n\nGN`],
   ['legacy file with an unknown name is not a def', { [`proj/.claude/brewtools/manager/prompts/other.md`]: 'X' }, '++other', 'default', null],
-  ['x.plan stem is the plan variant (plan)', { [`proj/${P}/x.md`]: 'X ALL', [`proj/${P}/x.plan.md`]: 'X PLAN' }, '++x', 'plan', 'X PLAN'],
-  ['x.plan stem is the plan variant (default)', { [`proj/${P}/x.md`]: 'X ALL', [`proj/${P}/x.plan.md`]: 'X PLAN' }, '++x', 'default', 'X ALL'],
+  ['x.plan stem is the plan part: plan mode adds it', { [`proj/${P}/x.md`]: 'X ALL', [`proj/${P}/x.plan.md`]: 'X PLAN' }, '++x', 'plan', 'X ALL\n\nX PLAN'],
+  ['x.plan stem is the plan part: default mode sends the normal text', { [`proj/${P}/x.md`]: 'X ALL', [`proj/${P}/x.plan.md`]: 'X PLAN' }, '++x', 'default', 'X ALL'],
+  ['an orphan x.plan.md is sent in every mode', { [`proj/${P}/o.plan.md`]: 'ORPH' }, '++o', 'default', 'ORPH'],
   ['name defined inline and as context injects the context', { [`proj/${P}/dual.md`]: fm('name: "dual"\ninsert: inline', 'DUAL INLINE'), [`proj/${P}/dual.ctx.md`]: fm('name: "dual"\ninsert: context', 'DUAL CONTEXT') }, '++dual', 'default', 'DUAL CONTEXT'],
   ['context token left in text by an inline expansion', { [`proj/${P}/cc.md`]: fm('insert: context', 'CC CONTEXT') }, 'use JX also ++cc now', 'default', 'CC CONTEXT'],
   ['inline def injects nothing', { [`proj/${P}/foo.md`]: fm('insert: inline', 'INL') }, '++foo', 'default', null],
-  ['not-plan def in plan mode', { [`proj/${P}/np.md`]: fm('when: not-plan', 'NP') }, '++np', 'plan', null],
-  ['not-plan def in default mode', { [`proj/${P}/np.md`]: fm('when: not-plan', 'NP') }, '++np', 'default', 'NP'],
-  ['mode auto is not plan', { [`proj/${P}/np.md`]: fm('when: not-plan', 'NP') }, '++np', 'auto', 'NP'],
+  ['a stale when: not-plan def is sent in plan mode too', { [`proj/${P}/np.md`]: fm('when: not-plan', 'NP') }, '++np', 'plan', 'NP'],
+  ['a stale when: plan def is sent in default mode too', { [`proj/${P}/wp.md`]: fm('when: plan', 'WP') }, '++wp', 'default', 'WP'],
+  ['mode auto is not plan', { [`proj/${P}/x.md`]: 'X ALL', [`proj/${P}/x.plan.md`]: 'X PLAN' }, '++x', 'auto', 'X ALL'],
   ['group keeps the highest priority', { [`proj/${P}/g1.md`]: fm('group: g\npriority: 1', 'G1'), [`proj/${P}/g2.md`]: fm('group: g\npriority: 5', 'G2') }, '++g1 ++g2', 'default', 'G2'],
   ['order sorts the blocks', { [`proj/${P}/o1.md`]: fm('order: 20', 'ONE'), [`proj/${P}/o2.md`]: fm('order: 10', 'TWO') }, '++o1 ++o2', 'default', `TWO${JOINER}ONE`],
   ['unclosed front matter is skipped, default stays', { [`proj/${P}/a.md`]: '---\nname: a\nBODY' }, '++a', 'default', vec('spec-3')],
@@ -339,14 +347,14 @@ const RAWS = [
   '---\n---\nempty fm', '---\nname: "q"\n---\nQ', '---\nname: q\nBODY no close', '---', '---\n', '\n\n---\nname: n\n---\nN', '\ufeff---\r\nname: bom\r\n---\r\nB',
   '---\nname: \'single\'\ndescription: "d" # c\norder: 7\npriority: -2\n---\nS', '---\nname: x\norder: seven\nwhen: sometimes\ninsert: nope\nwat: 1\n---\nBAD',
   '---\n# comment\n\nname: c\nheader: "H \\"{token}\\""\ngroup: g\nlegacy: l\nwhen: not-plan\ninsert: inline\n---\nC', '---\nname: "bad name"\n---\nN', '---\nname: "++"\n---\nSYM', '---\nname: ""\n---\nE',
-  '---\nplan: add\n---\nADD', '---\nname: "m"\nwhen: plan\nplan: replace\n---\nR', '---\nwhen: plan\nplan: nope\n---\nN',
+  '---\nplan: add\n---\nADD', '---\nname: "m"\nwhen: plan\nplan: replace\n---\nR', '---\nwhen: plan\nplan: nope\n---\nN', '---\nwhen: always\n---\nW',
 ];
-const stems = ['m', 'm.plan', 'x', 'Mixed', '.plan', 'a.plan', '!!', 'bad name'];
+const stems = ['m', 'm.plan', 'x', 'x.plan', 'Mixed', '.plan', 'a.plan', '!!', 'bad name'];
 for (let i = 0; i < RAWS.length; i++) {
   job(`differential: raw #${i} as default, native override and legacy`, async () => {
     const mk = (kind, files) => ({ id: 'l', kind, files: new Map(files) });
     for (const stem of stems) {
-      const base = mk('native', [['m', '---\nname: "m"\nlegacy: full\norder: 5\nheader: "HD"\n---\nBASE'], ['m.plan', '---\nname: "m"\nwhen: plan\nplan: add\n---\nBASEPLAN']]);
+      const base = mk('native', [['m', '---\nname: "m"\nlegacy: full\norder: 5\nheader: "HD"\n---\nBASE'], ['m.plan', '---\nname: "m"\nplan: add\n---\nBASEPLAN']]);
       const layers = [base, mk('legacy', [['full', RAWS[i]]]), mk('native', [[stem, RAWS[i]]]), mk('native', [['Other', RAWS[(i + 1) % RAWS.length]]])];
       const want = strip(ts.resolveDefs(layers.map((l) => ({ ...l }))).defs);
       const got = strip(inject.resolveDefs(layers));
@@ -450,24 +458,25 @@ const PLAN_CASES = [
   ['shipped m: plan mode is the frozen v6.7.0 text', {}, '++m', vec('spec-2'), vec('spec-1'), 'add'],
   ['project m.md override flows into plan mode with the shipped addition', { [`proj/${P}/m.md`]: 'MY M' }, '++m', `${MP_HEAD}\n\nMY M\n\n${ADDITION}`, `${M_HEAD}\n\nMY M`, 'add'],
   ['global m.md with its own header: plan mode keeps the plan header', { 'cfg/placeholders/m.md': fm('header: "G {token}"', 'GM') }, '++m', `${MP_HEAD}\n\nGM\n\n${ADDITION}`, 'G ++m\n\nGM', 'add'],
-  ['legacy planmode.md replaces the whole plan-mode text', { [`proj/${LEG}/planmode.md`]: '```\nPM OLD\n```\n' }, '++m', `${MP_HEAD}\n\nPM OLD`, vec('spec-1'), 'replace'],
-  ['legacy planmode.md replaces even over a native m.md override', { [`proj/${P}/m.md`]: 'MY M', 'cfg/manager/prompts/planmode.md': 'PM' }, '++m', `${MP_HEAD}\n\nPM`, `${M_HEAD}\n\nMY M`, 'replace'],
+  ['legacy planmode.md is added to the m text', { [`proj/${LEG}/planmode.md`]: '```\nPM OLD\n```\n' }, '++m', `${MP_HEAD}\n\n${M_BODY}\n\nPM OLD`, vec('spec-1'), 'add'],
+  ['legacy planmode.md is added to a native m.md override', { [`proj/${P}/m.md`]: 'MY M', 'cfg/manager/prompts/planmode.md': 'PM' }, '++m', `${MP_HEAD}\n\nMY M\n\nPM`, `${M_HEAD}\n\nMY M`, 'add'],
   ['legacy full.md flows into plan mode with the shipped addition', { 'cfg/manager/prompts/full.md': 'FULL OLD' }, '++m', `${MP_HEAD}\n\nFULL OLD\n\n${ADDITION}`, `${M_HEAD}\n\nFULL OLD`, 'add'],
-  ['old full-text m.plan.md without front matter replaces', { [`proj/${P}/m.plan.md`]: 'OLD FULL PLAN' }, '++m', `${MP_HEAD}\n\nOLD FULL PLAN`, vec('spec-1'), 'replace'],
-  ['old m.plan.md with front matter and no plan key replaces', { 'cfg/placeholders/m.plan.md': fm('name: "m"\nwhen: plan\nheader: "OLD {token}"', 'OLDP') }, '++m', 'OLD ++m\n\nOLDP', vec('spec-1'), 'replace'],
+  ['old full-text m.plan.md without front matter is added', { [`proj/${P}/m.plan.md`]: 'OLD FULL PLAN' }, '++m', `${MP_HEAD}\n\n${M_BODY}\n\nOLD FULL PLAN`, vec('spec-1'), 'add'],
+  ['old m.plan.md with front matter and no plan key is added under its header', { 'cfg/placeholders/m.plan.md': fm('name: "m"\nwhen: plan\nheader: "OLD {token}"', 'OLDP') }, '++m', `OLD ++m\n\n${M_BODY}\n\nOLDP`, vec('spec-1'), 'add'],
+  ['an empty m.plan.md no longer silences ++m in plan mode', { [`proj/${P}/m.plan.md`]: '' }, '++m', `${MP_HEAD}\n\n${M_BODY}`, vec('spec-1'), 'add'],
   ['user m.plan.md with plan: add changes only the addition', { [`proj/${P}/m.plan.md`]: fm('plan: add', 'MY ADD') }, '++m', `${MP_HEAD}\n\n${M_BODY}\n\nMY ADD`, vec('spec-1'), 'add'],
-  ['explicit plan: replace replaces', { [`proj/${P}/m.plan.md`]: fm('plan: replace', 'R') }, '++m', `${MP_HEAD}\n\nR`, vec('spec-1'), 'replace'],
+  ['a stale plan: replace is added too', { [`proj/${P}/m.plan.md`]: fm('plan: replace', 'R') }, '++m', `${MP_HEAD}\n\n${M_BODY}\n\nR`, vec('spec-1'), 'add'],
   ['empty m.md silences ++m in plan mode too', { [`proj/${P}/m.md`]: '' }, '++m', null, null, 'none'],
   ['empty legacy full.md silences ++m in plan mode too', { 'cfg/manager/prompts/full.md': '' }, '++m', null, null, 'none'],
   ['an add part over an empty normal body with headers sends nothing', { [`proj/${P}/db.md`]: fm('header: "N {token}"', ''), [`proj/${P}/db.plan.md`]: fm('plan: add\nheader: "P {token}"', 'ADD') }, '++db', null, null, 'none'],
   ['user db.md + db.plan.md plan: add, no headers', { [`proj/${P}/db.md`]: 'DB', [`proj/${P}/db.plan.md`]: fm('plan: add', 'DB ADD') }, '++db', 'DB\n\nDB ADD', 'DB', 'add'],
   ['plan part without a header takes the normal header', { [`proj/${P}/db.md`]: fm('header: "N {token}"', 'DB'), [`proj/${P}/db.plan.md`]: fm('plan: add', 'ADD') }, 'x ++db', 'N ++db\n\nDB\n\nADD', 'N ++db\n\nDB', 'add'],
   ['global normal + project plan part join across layers', { 'cfg/placeholders/db.md': 'GDB', [`proj/${P}/db.plan.md`]: fm('plan: add', 'PADD') }, '++db', 'GDB\n\nPADD', 'GDB', 'add'],
-  ['plan: add without a normal def is plan only', { [`proj/${P}/db.plan.md`]: fm('plan: add', 'ONLY') }, '++db', 'ONLY', null, 'only'],
-  ['plan: add over a not-plan normal def is not joined', { [`proj/${P}/db.md`]: fm('when: not-plan', 'NP'), [`proj/${P}/db.plan.md`]: fm('plan: add', 'ADD') }, '++db', 'ADD', 'NP', 'replace'],
-  ['plan: add on an always def is a normal def', { [`proj/${P}/db.md`]: fm('plan: add', 'DB') }, '++db', 'DB', 'DB', 'none'],
+  ['an orphan db.plan.md (no db.md anywhere) is sent in every mode', { [`proj/${P}/db.plan.md`]: fm('plan: add', 'ONLY') }, '++db', 'ONLY', 'ONLY', 'none'],
+  ['plan part over a stale when: not-plan def is joined', { [`proj/${P}/db.md`]: fm('when: not-plan', 'NP'), [`proj/${P}/db.plan.md`]: fm('plan: add', 'ADD') }, '++db', 'NP\n\nADD', 'NP', 'add'],
+  ['plan: add in db.md is ignored: a normal def', { [`proj/${P}/db.md`]: fm('plan: add', 'DB') }, '++db', 'DB', 'DB', 'none'],
   ['++r ++rr: group priority unchanged in plan mode', {}, '++r ++rr', vec('spec-5'), vec('spec-5'), 'none'],
-  ['an add part keeps the normal order among other tokens', { [`proj/${P}/m.md`]: 'MY M' }, '+++ ++a ++m', `${vec('spec-6')}${JOINER}${MP_HEAD}\n\nMY M\n\n${ADDITION}${JOINER}${vec('spec-3')}`, `${M_HEAD}\n\nMY M${JOINER}${vec('spec-3')}`, 'add'],
+  ['an add part keeps the normal order among other tokens', { [`proj/${P}/m.md`]: 'MY M' }, '+++ ++a ++m', `${vec('spec-6')}${JOINER}${MP_HEAD}\n\nMY M\n\n${ADDITION}${JOINER}${vec('spec-3')}`, `${vec('x07-cron-default')}${JOINER}${M_HEAD}\n\nMY M${JOINER}${vec('spec-3')}`, 'add'],
   [
     'an add part keeps the normal order, group and priority; an empty addition adds nothing',
     { [`proj/${P}/db.md`]: fm('order: 5\ngroup: g\npriority: 2', 'DB'), [`proj/${P}/db.plan.md`]: fm('plan: add\norder: 99', 'ADD'), [`proj/${P}/y.md`]: fm('order: 1\ngroup: g\npriority: 1', 'Y'), [`proj/${P}/w.md`]: fm('order: 7', 'W'), [`proj/${P}/w.plan.md`]: fm('plan: add', '') },

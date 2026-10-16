@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Pins placeholders/*.md to the frozen golden (whole file), their bodies to SPEC_BODIES in defaults-pin.test.ts, m + m.plan to vector spec-2.
+// Pins placeholders/*.md to the golden copy (whole file), their bodies to SPEC_BODIES in defaults-pin.test.ts, m + m.plan to spec-2 and + + +.plan to spec-6 (6.9.5 overlay).
 // rc 0 ok, 1 drift, 2 missing/unparsable.
 import fs from 'node:fs';
 import crypto from 'node:crypto';
@@ -10,18 +10,18 @@ import { readGolden } from './golden-read.mjs';
 
 const pinFile = path.join(path.dirname(fileURLToPath(import.meta.url)), 'defaults-pin.test.ts');
 const src = fs.readFileSync(pinFile, 'utf8');
-// Single source of truth: parse the map from the test; a count != 6 means the format drifted -> rc 2.
+// Single source of truth: parse the map from the test; a count != 7 means the format drifted -> rc 2.
 const pins = new Map();
 for (const m of src.matchAll(/^\s*(?:'([^']+)'|(\w+)): \{ sha256: '([0-9a-f]{64})', len: (\d+) \},?$/gm)) {
   pins.set(m[1] ?? m[2], { sha256: m[3], len: Number(m[4]) });
 }
-if (pins.size !== 6) {
-  console.error(`check-defaults: parsed ${pins.size} pins from ${pinFile}, expected 6`);
+if (pins.size !== 7) {
+  console.error(`check-defaults: parsed ${pins.size} pins from ${pinFile}, expected 7`);
   process.exit(2);
 }
 
 let rc = 0;
-// Front matter (name/when/order/header/insert/priority/group/legacy) is part of the spec: the whole file must equal the golden copy.
+// Front matter (name/order/header/insert/plan/priority/group/legacy) is part of the spec: the whole file must equal the golden copy.
 const dir = path.join(path.dirname(pinFile), '..', 'placeholders');
 const { files: golden, vectors } = readGolden();
 const onDisk = fs.readdirSync(dir).filter((f) => f.endsWith('.md')).map((f) => f.slice(0, -3)).sort();
@@ -60,13 +60,18 @@ for (const [label, body, pin] of checks) {
     console.log(`OK ${label} len=${body.length}`);
   }
 }
-// Plan-mode ++m = plan header, m body, blank line, m.plan part (`plan: add`): byte-identical to the frozen v6.7.0 vector spec-2.
-const spec2 = vectors.find((v) => v.id === 'spec-2')?.expected;
-const planM = `User typed \`++m\` — Manager + Plan Mode is active for this turn:\n\n${bodies.m}\n\n${bodies['m.plan']}`;
-if (planM !== spec2) {
-  console.error(`DRIFT m.md + m.plan.md (plan-mode ++m): len ${planM.length} vs spec-2 ${spec2?.length ?? 'missing'}`);
-  rc = 1;
-} else {
-  console.log(`OK m.md + m.plan.md (plan-mode ++m) = spec-2 len=${planM.length}`);
+// Plan-mode text = plan header, normal body, blank line, the `<name>.plan.md` part: byte-identical to the reviewed overlay vector.
+const joins = [
+  ['m.md + m.plan.md (plan-mode ++m)', 'spec-2', `User typed \`++m\` — Manager + Plan Mode is active for this turn:\n\n${bodies.m}\n\n${bodies['m.plan']}`],
+  ['+.md + +.plan.md (plan-mode +++)', 'spec-6', `User typed \`+++\` in Plan mode — plan the task anti-drift cron:\n\n${bodies['+']}\n\n${bodies['+.plan']}`],
+];
+for (const [label, id, text] of joins) {
+  const want = vectors.find((v) => v.id === id)?.expected;
+  if (text !== want) {
+    console.error(`DRIFT ${label}: len ${text.length} vs ${id} ${want?.length ?? 'missing'}`);
+    rc = 1;
+  } else {
+    console.log(`OK ${label} = ${id} len=${text.length}`);
+  }
 }
 process.exit(rc);

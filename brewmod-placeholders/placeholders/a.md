@@ -2,7 +2,6 @@
 name: "a"
 description: "Architecture-first: delegate the design to expert agents before implementing"
 insert: context
-when: always
 order: 30
 header: "User typed `{token}` — Architecture-first discipline is active for this turn:"
 legacy: architect

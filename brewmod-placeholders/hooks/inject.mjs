@@ -106,16 +106,12 @@ export function parseFrontMatter(fm) {
       case 'group':
       case 'header':
       case 'legacy':
+      case 'when':
+      case 'plan':
         meta[key] = value
         break
       case 'insert':
         if (value === 'context' || value === 'inline') meta.insert = value
-        break
-      case 'when':
-        if (value === 'always' || value === 'plan' || value === 'not-plan') meta.when = value
-        break
-      case 'plan':
-        if (value === 'add' || value === 'replace') meta.plan = value
         break
       case 'order':
       case 'priority':
@@ -138,7 +134,7 @@ export function parseDefinition(raw) {
 export const parseLegacy = (raw) => ({ meta: {}, text: extractFenced(raw) })
 
 // Per-field inheritance: parsed meta, then base, then built-ins. No name anywhere -> null.
-// `plan` is per file, never inherited: an old full-text override (or a legacy file) of an `add` part replaces.
+// isPlan comes only from base (the `x.plan` stem or the lower layer's def of that key), never from meta.
 export function toDef(parsed, base) {
   const m = parsed.meta
   const name = m.name ?? base?.name
@@ -147,13 +143,12 @@ export function toDef(parsed, base) {
     name,
     body: parsed.text,
     insert: m.insert ?? base?.insert ?? 'context',
-    when: m.when ?? base?.when ?? 'always',
     order: m.order ?? base?.order ?? 100,
     priority: m.priority ?? base?.priority ?? 0,
     header: m.header ?? base?.header ?? '',
     group: m.group ?? base?.group,
     legacy: m.legacy ?? base?.legacy,
-    plan: m.plan,
+    isPlan: base?.isPlan ?? false,
   }
 }
 
@@ -193,10 +188,11 @@ export function layerSpecs(r) {
   return specs
 }
 
-// A native file without front matter and without a lower layer: `x.plan` -> name x, plan variant.
-const stemBase = (stem) => (stem.endsWith('.plan') && stem.length > 5 ? { name: stem.slice(0, -5), when: 'plan' } : { name: stem })
+// Base of a native file without a lower layer: `x.plan` -> name x, plan part.
+const stemBase = (stem) => (stem.endsWith('.plan') && stem.length > 5 ? { name: stem.slice(0, -5), isPlan: true } : { name: stem })
 
 // layers: [{kind, files: Map<stem, raw>}] low to high. Unusable files (unclosed front matter, no or bad name) are skipped, never injected raw.
+// A plan part whose name has no normal def in any layer is sent in every mode.
 export function resolveDefs(layers) {
   const cur = new Map()
   const legacyStem = new Map()
@@ -217,6 +213,8 @@ export function resolveDefs(layers) {
       if (stem !== undefined) put(stem, parseLegacy(raw), cur.get(stem))
     }
   }
+  const normal = new Set([...cur.values()].filter((d) => !d.isPlan).map((d) => d.name.toLowerCase()))
+  for (const [key, d] of cur) if (d.isPlan && !normal.has(d.name.toLowerCase())) cur.set(key, { ...d, isPlan: false })
   return [...cur.values()]
 }
 
@@ -262,37 +260,29 @@ export function loadDefs(roots) {
   return resolveDefs(layers)
 }
 
-// ---- Assembly (spec: tests/parity/golden.generated.ts, byte-identical to brewtools v6.7.0 but the surrogate-safe cap cut)
+// ---- Assembly (spec: tests/parity/golden.generated.ts, byte-identical to brewtools v6.7.0 but the surrogate-safe cap cut and the 6.9.5 overlay)
 
-const applies = (d, plan) => d.when === 'always' || (d.when === 'plan') === plan
-// Same name, both applicable: `plan` beats `always`/`not-plan`; equal rank -> first wins.
-const rank = (d) => (d.when === 'plan' ? 2 : 1)
-
-function modeWinners(defs, plan) {
-  const out = new Map()
+// Per name, context defs only: the first normal def and the first plan part (a part without a normal context def is never sent).
+function parts(defs) {
+  const normal = new Map()
+  const plan = new Map()
   for (const d of defs) {
-    if (d.insert !== 'context' || !applies(d, plan)) continue
-    const key = d.name.toLowerCase()
-    const cur = out.get(key)
-    if (cur === undefined || rank(d) > rank(cur)) out.set(key, d)
+    if (d.insert !== 'context') continue
+    const m = d.isPlan ? plan : normal
+    if (!m.has(d.name.toLowerCase())) m.set(d.name.toLowerCase(), d)
   }
-  return out
+  return { normal, plan }
 }
 
-// `plan: add` part on its `always` def: plan header if any, normal body, '\n\n', addition. Empty normal body = silenced in both modes.
+// Plan part on its normal def: plan header if any, normal body, '\n\n', addition. Empty normal body = silenced in both modes.
 const withPart = (base, part) =>
   base.body === '' ? base : { ...base, header: part.header === '' ? base.header : part.header, body: part.body === '' ? base.body : `${base.body}\n\n${part.body}` }
 
-// What each name sends in this mode: in plan mode an `add` winner is joined to the normal def, else the mode winner as is.
+// What each name sends in this mode: the normal def; in plan mode its plan part joined to it.
 function winners(defs, plan) {
-  const out = modeWinners(defs, plan)
-  if (!plan) return out
-  const normal = modeWinners(defs, false)
-  for (const [key, d] of out) {
-    const base = normal.get(key)
-    if (d.when === 'plan' && d.plan === 'add' && base?.when === 'always') out.set(key, withPart(base, d))
-  }
-  return out
+  const { normal, plan: part } = parts(defs)
+  if (!plan) return normal
+  return new Map([...normal].map(([key, d]) => [key, part.has(key) ? withPart(d, part.get(key)) : d]))
 }
 
 // '' = nothing to inject. Mode is exact: only the string `plan` is plan mode.

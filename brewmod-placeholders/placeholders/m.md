@@ -2,7 +2,6 @@
 name: "m"
 description: "Manager mode: orchestrate and delegate, never code in the main context"
 insert: context
-when: always
 order: 20
 header: "User typed `{token}` — Manager mode is active for this turn:"
 legacy: full
