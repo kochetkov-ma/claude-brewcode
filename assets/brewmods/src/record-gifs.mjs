@@ -13,15 +13,17 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '../../..');
 const PAGE = join(HERE, 'render.html');
 // per story <name>: <name>.story.js, <name>.data.js, <name>.captures/, <name>.manifest.json -> ../<name>.gif, -still.png, -bottle.gif + docs/app copies
-let NAME, STORY, DATA, MANIFEST, GIF, STILL, BOTTLE, DOCS_GIF, DOCS_STILL, APP_GIF, MIN_S, MAX_S;
+let NAME, STORY, DATA, MANIFEST, GIF, STILL, BOTTLE, DOCS_GIF, APP_GIF, MIN_S, MAX_S;
 function useStory(name) {
   NAME = name; STORY = join(HERE, `${name}.story.js`); DATA = join(HERE, `${name}.data.js`); MANIFEST = join(HERE, `${name}.manifest.json`);
   GIF = resolve(HERE, `../${name}.gif`); STILL = resolve(HERE, `../${name}-still.png`); BOTTLE = resolve(HERE, `../${name}-bottle.gif`);
-  DOCS_GIF = join(ROOT, `web/docs/public/brewmods/${name}.gif`); DOCS_STILL = join(ROOT, `web/docs/public/brewmods/${name}-still.png`);
+  // docs get the GIF only: a still there is gitignored (*.png) and unreferenced; brewcode.app uses ../<name>-still.png
+  DOCS_GIF = join(ROOT, `web/docs/public/brewmods/${name}.gif`);
   APP_GIF = join(process.env.BREWCODE_APP_DIR || resolve(ROOT, '../brewcode-app'), `site/main/public/mods/${name}.gif`);
 }
-// GIF px: terminal frame (~768 CSS px) at 1.5x for HiDPI; README bottle (420 CSS px) at 1x
-const PW_PIN = '1.64.0', VIEWPORT = 1200, LOOP_WINDOW = [30, 38], MAX_SECONDS = 40, BOTTLE_WIDTH = 420, BOTTLE_BYTES = 1_000_000;
+// GIF px: terminal frame (770 CSS px at 88 cols) at 1.5x for HiDPI; README bottle (420 CSS px, shown at 200-260) at 1x
+// bottle: ladder stops at BOTTLE_TARGET (~0.45 MB, no visible loss at README size), BOTTLE_BYTES = hard cap
+const PW_PIN = '1.64.0', VIEWPORT = 1200, LOOP_WINDOW = [30, 38], MAX_SECONDS = 40, BOTTLE_WIDTH = 420, BOTTLE_TARGET = 450_000, BOTTLE_BYTES = 1_000_000;
 let WIDTH = 1152;
 const TARGET_BYTES = 3_500_000, MAX_BYTES = 5_000_000, SEAM_MIN = 0.985;
 const CHROME = process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
@@ -172,7 +174,17 @@ function textGates(story, opt, gates) {
   gates.push(['captures-errors', errRows.length === 0, errRows.length ? uniq(errRows).slice(0, 4).join(' | ') : 'no error rows (shell, Traceback, *Error)']);
   gates.push(['captures-notices', noticeRows.length === 0 ? true : 'warn', noticeRows.length ? uniq(noticeRows).join(' | ') : 'no unknown-placeholder rows']);
   gates.push(['captures-version', vers.size <= 1, `Claude Code ${[...vers].join(', ') || '(no header in view)'}`]);
-  gates.push(['captures-prompt-row', noPrompt.length === 0, noPrompt.length ? `typing overlay has no ❯ row under a rule in: ${noPrompt.join(', ')}` : `${typed} of ${story.typing.length} typing screens captured, each has its prompt row`]);
+  // typing frames draw the capture's own prompt row cut to the typed prefix: that row must read ❯ + the typed text
+  const badTyped = story.typing.filter((ty) => data[ty.on] && typeof data[ty.on] === 'object').filter((ty) => {
+    const txt = data[ty.on].lines.map(plain), i = txt.findLastIndex((l, k) => k > 0 && l.startsWith('❯') && /^─{8,}$/.test(txt[k - 1].trim()));
+    return i >= 0 && [...txt[i]].slice(2).join('').trimEnd() !== ty.text.trimEnd();
+  }).map((ty) => `${ty.on} != "${ty.text.trimEnd()}"`);
+  gates.push(['captures-prompt-row', noPrompt.length === 0 && badTyped.length === 0, noPrompt.length ? `typing overlay has no ❯ row under a rule in: ${noPrompt.join(', ')}`
+    : badTyped.length ? `captured prompt row is not the typed text: ${badTyped.join(' | ')}` : `${typed} of ${story.typing.length} typing screens captured, each prompt row reads the typed text`]);
+  // screen-reader text quotes only what a captured screen shows
+  const seen = shot.map(([n]) => data[n].lines.map((l) => plain(l).trimEnd()).join('\n')).join('\n');
+  const quotes = [...(story.aria || '').matchAll(/"([^"]+)"/g)].map((m) => m[1]), unseen = quotes.filter((q) => !seen.includes(q));
+  gates.push(['aria-quotes', unseen.length === 0, unseen.length ? `story.aria quotes text no capture shows: ${unseen.map((q) => `"${q}"`).join(' | ')}` : `${quotes.length} quotes in story.aria, each on a captured screen`]);
 }
 
 function gifInfo(file) {
@@ -194,7 +206,7 @@ function gifGates(gates) {
   const ok = !!m && m.gif.sha256 === sha(GIF) && drift.length === 0;
   gates.push(['gif-recorded', ok, !m ? `no ${NAME}.manifest.json: ${NAME}.gif was not recorded from these sources` : m.gif.sha256 !== sha(GIF) ? `${NAME}.gif sha != manifest (re-encoded or replaced by hand)`
     : drift.length ? `sources changed since the recording: ${drift.join(', ')}` : `recorded ${m.recorded} from the current sources`]);
-  // the still (reduced-motion poster) and the README bottle ride on the same recording
+  // the still (frame at story.still; brewcode.app's reduced-motion poster) and the README bottle ride on the same recording
   const still = existsSync(STILL) ? sha(STILL) : 'missing', bottle = existsSync(BOTTLE) ? sha(BOTTLE) : 'missing';
   gates.push(['still', !!m && still === m.still?.sha256, still === 'missing' ? `missing ${STILL}` : !m || still !== m.still?.sha256 ? `${NAME}-still.png sha != manifest` : `${NAME}-still.png ${m.still.width}x${m.still.height} t=${m.still.t}`]);
   const bi = bottle === 'missing' ? null : gifInfo(BOTTLE);
@@ -204,8 +216,6 @@ function gifGates(gates) {
   const short = ([p, s]) => `${p.replace(resolve(ROOT, '..') + '/', '')}=${s.slice(0, 12)}`;
   const one = copies[1][1] === copies[0][1] && copies[0][1] !== 'missing';
   gates.push(['copies-sha', one, one ? `repo + docs copies, sha256 ${copies[0][1].slice(0, 12)}` : copies.slice(0, 2).map(short).join(' ')]);
-  const stillDocs = existsSync(DOCS_STILL) ? sha(DOCS_STILL) : 'missing';
-  gates.push(['copies-still', stillDocs === still && still !== 'missing', stillDocs === still && still !== 'missing' ? `repo + docs stills, sha256 ${still.slice(0, 12)}` : `docs still ${stillDocs.slice(0, 12)} != repo ${still.slice(0, 12)}`]);
   // brewcode-app copy ships with that site's own release: a mismatch only warns
   gates.push(['copies-app', copies[2][1] === copies[0][1] ? true : 'warn', copies[2][1] === copies[0][1] ? 'brewcode-app copy matches' : `${short(copies[2])} (copy it there)`]);
 }
@@ -228,7 +238,7 @@ function loadPlaywright() {
 
 // sel = '#hero' (terminal frame) or '#bottle' (README bottle, &bottle=1)
 async function capture(browser, times, dir, sel = '#hero') {
-  // viewport taller than the frame (88x40 terminal + bars = 885 px), else the screenshot clip drops the caption bar
+  // viewport taller than the frame (88x30 terminal + bars = 685 px; 1100 leaves room up to ~50 rows), else the clip drops the caption bar
   const ctx = await browser.newContext({ viewport: { width: VIEWPORT, height: 1100 }, deviceScaleFactor: 2 });
   const page = await ctx.newPage(), errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
@@ -314,13 +324,13 @@ async function record(story, opt, gates) {
     const bottleFile = test ? join(outDir, `${NAME}-bottle.gif`) : BOTTLE;
     try {
       errors.push(...await capture(browser, Array.from({ length: bn }, (_, i) => i / B.fps), bdir, '#bottle'));
-      const benc = encode(bdir, bn, B.fps, bottleFile, [], BOTTLE_WIDTH, BOTTLE_BYTES), binfo = gifInfo(bottleFile);
+      const benc = encode(bdir, bn, B.fps, bottleFile, [], BOTTLE_WIDTH, BOTTLE_TARGET), binfo = gifInfo(bottleFile);
       const bseam = ssim(join(bdir, `f_${String(bn - 1).padStart(4, '0')}.png`), join(bdir, 'f_0000.png'));
-      gates.push(['record-bottle', benc.bytes <= BOTTLE_BYTES, `${NAME}-bottle.gif ${binfo.width}x${binfo.height}, ${binfo.seconds.toFixed(2)} s, ${(benc.bytes / 1e6).toFixed(2)} MB, colors ${benc.colors}, seam SSIM ${bseam.toFixed(4)}`]);
+      gates.push(['record-bottle', benc.bytes <= BOTTLE_BYTES, `${NAME}-bottle.gif ${binfo.width}x${binfo.height}, ${binfo.seconds.toFixed(2)} s, ${(benc.bytes / 1e6).toFixed(2)} MB (target ${BOTTLE_TARGET / 1e6}, hard ${BOTTLE_BYTES / 1e6}), colors ${benc.colors}${benc.lossy ? ` lossy ${benc.lossy}` : ''}, seam SSIM ${bseam.toFixed(4)}`]);
     } finally { if (!opt.keep) rmSync(bdir, { recursive: true, force: true }); }
     gates.push(['record-errors', errors.length === 0, errors.length ? errors.slice(0, 2).join(' | ') : '0 page errors']);
     if (!test && gates.every((g) => g[1] !== false)) {
-      copyFileSync(GIF, DOCS_GIF); copyFileSync(STILL, DOCS_STILL);
+      copyFileSync(GIF, DOCS_GIF);
       const vers = uniq(Object.values(loadJs(DATA, 'PH_SCREENS')).flatMap((s) => (typeof s === 'object' ? s.lines.map(plain) : [])).map((l) => l.match(/Claude Code v(\S+)/)?.[1]).filter(Boolean));
       const tools = { playwrightCore: PW_PIN, ffmpeg: ver('ffmpeg', ['-version'], /version (\S+)/), gifsicle: ver('gifsicle', ['--version'], /Gifsicle (\S+)/), node: process.version };
       const png = readFileSync(STILL), bi = gifInfo(BOTTLE);
@@ -328,7 +338,7 @@ async function record(story, opt, gates) {
         still: { file: `${NAME}-still.png`, sha256: sha(STILL), width: png.readUInt32BE(16), height: png.readUInt32BE(20), t: story.still },
         bottle: { file: `${NAME}-bottle.gif`, bytes: statSync(BOTTLE).size, sha256: sha(BOTTLE), width: bi.width, height: bi.height, seconds: bi.seconds, label: B.label },
         sources: sourceHashes(), ccVersion: vers.join(', ') || 'unknown', tools, recorded: new Date().toISOString() }, null, 2) + '\n');
-      console.log(`copied ${NAME}.gif + ${NAME}-still.png to ${dirname(DOCS_GIF)}; manifest written; brewcode-app: copy both to ${dirname(APP_GIF)}`);
+      console.log(`copied ${NAME}.gif to ${dirname(DOCS_GIF)}; manifest written; brewcode-app: copy ${NAME}.gif + ${NAME}-still.png to ${dirname(APP_GIF)}`);
     }
   } finally {
     await browser.close();

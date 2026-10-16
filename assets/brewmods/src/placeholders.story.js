@@ -2,7 +2,7 @@
 // Keys = macOS keycaps (glyph + on-screen word); record-gifs.mjs --check holds them to its allow-list and the facts below. Times in s.
 window.PH_STORY = {
   term: { cols: 88, rows: 30 },
-  aria: 'Claude Code terminal recorded from a real session: typing ++ opens the placeholder list, Up picks ++r and Tab inserts it; the band above the prompt shows the lines Claude receives; Enter sends and Claude reviews the diff by the ++r rules: a finding at brew.js:11, reproduced, then fixed with a test. /placeholders global add ++db: always use the staging DB saves a new placeholder after one question. In plan mode the caret on ++db shows its text, Enter sends and Claude answers "Run it against the staging DB, per your ++db rule". Then ++db ++m in one prompt: the caret on ++m shows its text plus the teal "plan mode adds:" part; adding ++/ turns placeholders off so the message is sent exactly as typed',
+  aria: 'Claude Code terminal recorded from a real session: typing ++ opens the placeholder list, Up picks ++r and Tab inserts it; the band above the prompt shows the lines Claude receives; Enter sends and Claude reviews the diff by the ++r rules: a finding at brew.js:11, reproduced, then fixed with a test. /placeholders global add ++db: always use the staging DB saves a new placeholder after one question. In plan mode the caret on ++db shows its text, Enter sends and Claude answers "Run it against the staging DB, as your ++db rule says." Then ++db ++m in one prompt: the caret on ++m shows its text plus the teal "plan mode adds:" part; adding ++/ turns placeholders off so the message is sent exactly as typed',
   loop: 35.8, end: 35.0, fps: 10, still: 29.5,
   chapters: [[0, 'pick'], [3.6, 'see it'], [7.2, 'send'], [13.8, 'add your own'], [19.0, 'plan mode'], [26.4, 'two tokens'], [31.8, '++/']],
   // [from, screen, beat]: the captured screen shown from `from` on; beat names the TODO-CAPTURE slot
@@ -34,12 +34,12 @@ window.PH_STORY = {
     [31.8, 'h-23-esc', 'escape'],
     [35.2, 'h-00-start', 'pick'],
   ],
-  // prompt-row overlay while typing: `on` = capture after the typed text, prompt row cut to the typed prefix; `from` = chars already typed.
-  // ++db, ++m and ++/ land as whole captures (h-17-qdb, h-21-pdb, h-22-pm, h-23-esc): the band changes only once a token is complete
+  // typing: `on` = capture after the typed text, its prompt row cut to the typed prefix; `from` = chars already typed. A token lands whole (band changes
+  // only once complete): ++db/++m/++/ as captures (h-17-qdb, h-21-pdb, h-22-pm, h-23-esc), or from: 28 (`add ++db` at once over h-09-typed's ++db band)
   typing: [
     { at: 0.3, text: 'review the diff +', cps: 16, on: 'h-01-plus' },
     { at: 13.8, text: '/placeholders global add', cps: 40, on: 'h-08-cmd' },
-    { at: 14.4, text: '/placeholders global add ++db: always use the staging DB', from: 24, cps: 40, on: 'h-09-typed' },
+    { at: 14.4, text: '/placeholders global add ++db: always use the staging DB', from: 28, cps: 40, on: 'h-09-typed' },
     { at: 20.2, text: 'which DB should I run the migration against? one line ', cps: 40, on: 'h-16-q' },
     { at: 26.4, text: 'plan the users table migration ', cps: 40, on: 'h-20-plan' },
   ],
@@ -55,7 +55,7 @@ window.PH_STORY = {
     { at: 19.6, glyph: '⇧⇥', word: 'shift+tab' },
     { at: 23.0, glyph: '⏎', word: 'enter' },
   ],
-  // compressed spans: title-bar chip `⏩ <factor>x`; factor = real seconds in the span (session transcript timestamps) / shown seconds.
+  // compressed spans: title-bar chip `⏩ <factor>x`; factor = real seconds in the span (transcript rows: placeholders.captures/timings.txt) / shown seconds.
   // send 14.51 s (prompt 16:20:59.540 -> text 16:21:14.049; h-06b-repro at ~7.3 s), dialog 3.31 s, save 2.83 s (answer -> text), plan-mode answer 4.67 s; spans start 0.2-0.4 s after Enter
   skips: [
     { at: 7.6, until: 9.6, factor: 7.1 },

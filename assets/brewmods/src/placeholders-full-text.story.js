@@ -2,7 +2,7 @@
 // Same renderer and gates as placeholders.story.js; window = this story's loop bounds for record-gifs.mjs --check.
 window.PH_STORY = {
   term: { cols: 88, rows: 30 },
-  aria: 'Claude Code prompt: type ++m and the caret on it shows the lines Claude receives, cut to fit with a "... more lines · whole text: /placeholders show ++m or ++m? alone [Enter]" row; type ? to make ++m?, Enter fills the box with /placeholders show ++m and sends nothing to Claude, Enter again prints the whole ++m text in the chat; scrolled up it starts with "++m · full text as sent"',
+  aria: 'Claude Code prompt: type ++m and the caret on it shows the lines Claude receives, cut to fit with a "... 16 more lines · whole text: /placeholders show ++m or ++m? alone [Enter]" row; type ? to make ++m?, Enter fills the box with /placeholders show ++m and sends nothing to Claude, Enter again prints the whole ++m text in the chat; scrolled up it starts with "++m · full text as sent"',
   window: [20, 30],
   loop: 24, end: 23, fps: 10, still: 4,
   chapters: [[0, 'type ++m'], [2.0, 'cut to fit'], [8.0, '++m?'], [10.5, 'enter'], [14.5, 'enter again']],

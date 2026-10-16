@@ -1,33 +1,33 @@
 {
   "gif": {
     "file": "plan-effort.gif",
-    "bytes": 481345,
-    "sha256": "e342901c6cab14510e4fae1621d1d382adf56c17c6670f76831cec9f4980d331",
+    "bytes": 496833,
+    "sha256": "43758d4136aa9cf05ad39262aa5afb20bc0c484001a21668e52157943ed0cd89",
     "width": 1152,
     "height": 786,
     "seconds": 23
   },
   "still": {
     "file": "plan-effort-still.png",
-    "sha256": "38c797110936cd3fdad6795c675bbc6db176466cfa2103be71207cb132ee2d60",
+    "sha256": "022b3a791e43431f76801fea80cec2730e4ad8170d0f44dcd27300b61b74c649",
     "width": 1152,
     "height": 786,
     "t": 12
   },
   "bottle": {
     "file": "plan-effort-bottle.gif",
-    "bytes": 849357,
-    "sha256": "6b4b162699d2738e80dade07d473294d26b861b173d228383be3563f8f58b3fe",
+    "bytes": 441218,
+    "sha256": "ac833f4100288e00b855add493afea905a2d54fdd127d7a0cd8cb28748275b6b",
     "width": 420,
     "height": 628,
     "seconds": 5,
     "label": "xhigh · batch 04"
   },
   "sources": {
-    "render.html": "d11908522cd6f070c36dd218bf6679673a3b25c039e57f89360f81fe175c9a7a",
-    "plan-effort.story.js": "5be9c9ed6db04353a2cc1bb89af72ad0e016278991bed6189ed9eae30f02b9e6",
+    "render.html": "6faee2f039b952c59250572e6b6212ceae3d5be49921a890f56194fbbdfe5f31",
+    "plan-effort.story.js": "5f21183f7129f57b7c06ca7220296a27ceb68b85025adb9b153f68b574f06ac5",
     "plan-effort.data.js": "4fe1c71ca623e80f7fc0584f993953043fdda01a594522ac40b7c55d58dc0742",
-    "record-gifs.mjs": "374dd59b9bef46be6fabd3cf0bc99ac2596e72fe165b6bdb3117244d06b10e9e"
+    "record-gifs.mjs": "57c8dc6d77cf4d7707cdd02f0ff090c85ad30c4dbaaf02bb78f682ac13ba99eb"
   },
   "ccVersion": "2.1.301",
   "tools": {
@@ -36,5 +36,5 @@
     "gifsicle": "1.96",
     "node": "v24.19.0"
   },
-  "recorded": "2026-10-16T16:15:34.925Z"
+  "recorded": "2026-10-16T17:09:14.139Z"
 }

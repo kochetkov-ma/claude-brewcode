@@ -16,18 +16,18 @@
   },
   "bottle": {
     "file": "placeholders-full-text-bottle.gif",
-    "bytes": 839633,
-    "sha256": "e080ec954e34ad28675913ebc683f1d7808c6ac0a0b05aadc21d82d9d4e3471b",
+    "bytes": 433800,
+    "sha256": "e68ffc595081fd269c899873258432314aa8ab9b1a2e795edd5e1a8f214cb9b1",
     "width": 420,
     "height": 628,
     "seconds": 5,
     "label": "++m · batch 03"
   },
   "sources": {
-    "render.html": "d11908522cd6f070c36dd218bf6679673a3b25c039e57f89360f81fe175c9a7a",
-    "placeholders-full-text.story.js": "6fd3860f2f9fa833e649c93b10b4530d04025302b8d40d7c40c5b3f0e402e1d5",
+    "render.html": "6faee2f039b952c59250572e6b6212ceae3d5be49921a890f56194fbbdfe5f31",
+    "placeholders-full-text.story.js": "ea9ad1b98730f939c4f65012596d3a6c58470f15a21866ed1d86af82f1beb428",
     "placeholders-full-text.data.js": "a9616d8eaec930fa4f49d28f244a5e0fd8b8a0eb0e8d6a86b961ac785fdca20e",
-    "record-gifs.mjs": "374dd59b9bef46be6fabd3cf0bc99ac2596e72fe165b6bdb3117244d06b10e9e"
+    "record-gifs.mjs": "57c8dc6d77cf4d7707cdd02f0ff090c85ad30c4dbaaf02bb78f682ac13ba99eb"
   },
   "ccVersion": "2.1.301",
   "tools": {
@@ -36,5 +36,5 @@
     "gifsicle": "1.96",
     "node": "v24.19.0"
   },
-  "recorded": "2026-10-16T16:13:36.223Z"
+  "recorded": "2026-10-16T17:08:40.497Z"
 }
