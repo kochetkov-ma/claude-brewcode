@@ -29,11 +29,12 @@ const ISO_ENV = 'LP_PLACEHOLDERS_CFG'
 // A turn in progress: the spinner row (`Concocting… (6s · ↓ 531 tokens)`).
 const BUSY = /esc to interrupt|…\s*\(\d+s/i
 
-const USAGE = `usage: bash run.sh [--cp 1-5] [--only id,id] [--size WxH] [--out dir] [--installed] [--no-e2e | --e2e-only] [--model m] [--fingerprint hex]
+const USAGE = `usage: bash run.sh [--cp 1-5] [--only id,id] [--size WxH] [--out dir] [--installed] [--no-e2e | --e2e-only] [--model m] [--fingerprint hex] [--installed-version X.Y.Z]
   --cp N       checkpoint: runs cases tagged cp <= N (4 and 5 = all); output <base>/cpN (default 4)
   --only ids   exactly these case ids, any checkpoint
   --size WxH   only tmux cases of that terminal size
   --installed  CP5: the installed plugin of CLAUDE_CONFIG_DIR, no --plugin-dir
+  --installed-version X.Y.Z  with --installed: every debug log must load the module from that cache dir (fingerprinted)
   --no-e2e / --e2e-only   skip / only the claude -p cases
   --fingerprint hex       stop (rc 2) unless sha256 of the copy's "<sha256>  hooks/<file>" list equals hex
 rc: 0 all selected pass, 1 a case failed, 2 harness error`
@@ -44,7 +45,7 @@ function fail2(msg) {
 }
 
 function parseArgs(argv) {
-  const o = { cp: 4, only: null, size: null, out: null, installed: false, e2e: true, tmux: true, model: 'haiku', fingerprint: null }
+  const o = { cp: 4, only: null, size: null, out: null, installed: false, e2e: true, tmux: true, model: 'haiku', fingerprint: null, installedVersion: null }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
     const val = () => (i + 1 < argv.length ? argv[++i] : fail2(`${a} needs a value`))
@@ -55,6 +56,7 @@ function parseArgs(argv) {
     else if (a === '--model') o.model = val()
     else if (a === '--installed') o.installed = true
     else if (a === '--fingerprint') o.fingerprint = val().toLowerCase()
+    else if (a === '--installed-version') o.installedVersion = val()
     else if (a === '--no-e2e') o.e2e = false
     else if (a === '--e2e-only') o.tmux = false
     else if (a === '-h' || a === '--help') fail2('help')
@@ -62,6 +64,7 @@ function parseArgs(argv) {
   }
   if (![1, 2, 3, 4, 5].includes(o.cp)) fail2('--cp must be 1-5')
   if (o.size !== null && !/^\d+x\d+$/.test(o.size)) fail2('--size must be WxH')
+  if (o.installedVersion !== null && (!o.installed || !/^\d+\.\d+\.\d+$/.test(o.installedVersion))) fail2('--installed-version needs --installed and X.Y.Z')
   return o
 }
 
@@ -290,6 +293,11 @@ class Run {
     this.id = `lp-${Date.now().toString(36)}`
     // The profile under test (login, settings, guarded placeholders/ dir): CLAUDE_CONFIG_DIR, else Claude Code's own default.
     this.cfg = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude')
+    // Unset stays unset for claude: an explicit ~/.claude makes the CLI read <dir>/.claude.json, not ~/.claude.json.
+    this.cfgSet = Boolean(process.env.CLAUDE_CONFIG_DIR)
+    // --installed-version: the cache dir every debug log must name (plugins dir = CLAUDE_CODE_PLUGIN_CACHE_DIR, else <cfg>/plugins).
+    const plugins = process.env.CLAUDE_CODE_PLUGIN_CACHE_DIR || path.join(this.cfg, 'plugins')
+    this.installedDir = o.installedVersion === null ? null : path.join(plugins, 'cache', 'claude-brewcode', 'brewmod-placeholders', o.installedVersion)
     this.out = o.out ?? path.join(BASE, o.installed ? `cp${o.cp}-${path.basename(this.cfg)}` : `cp${o.cp}`)
     this.sessions = []
     this.rows = []
@@ -312,7 +320,10 @@ class Run {
       const r = spawnSync('rsync', ['-a', '--exclude', '.state', '--exclude', 'node_modules', '--exclude', '.claude-plugin/types', '--exclude', 'tsconfig.json', '--exclude', 'tests', `${MOD_SRC}/`, `${this.mod}/`], { encoding: 'utf8' })
       if (r.status !== 0) fail2(`rsync failed: ${r.stderr}`)
     }
-    this.env = { ...process.env, CLAUDE_CONFIG_DIR: this.cfg, [ISO_ENV]: this.cfg }
+    if (this.installedDir !== null && !fs.existsSync(path.join(this.installedDir, 'hooks', 'hooks.json'))) fail2(`no installed cache at ${this.installedDir}`)
+    this.env = { ...process.env, [ISO_ENV]: this.cfg }
+    if (this.cfgSet) this.env.CLAUDE_CONFIG_DIR = this.cfg
+    else delete this.env.CLAUDE_CONFIG_DIR
     for (const k of SCRUB) delete this.env[k]
     // Isolated global root under HOME (~/Library/Caches), so saved paths show the `~` form the mod prints for real profiles.
     const caches = path.join(os.homedir(), 'Library', 'Caches')
@@ -365,19 +376,22 @@ class Run {
 
   // Which bytes were tested: per-file sha256 of the copied mod, CLI version, git head.
   snapshot() {
-    const lines = [`run ${this.id} ${new Date().toISOString()}`, `args ${process.argv.slice(2).join(' ')}`, `config ${this.cfg}`, `scratch ${this.scratch}`, `mod ${this.mod === '-' ? 'installed (no --plugin-dir)' : this.mod}`]
+    const lines = [`run ${this.id} ${new Date().toISOString()}`, `args ${process.argv.slice(2).join(' ')}`, `config ${this.cfg}${this.cfgSet ? '' : ' (CLAUDE_CONFIG_DIR unset: CLI default, ~/.claude.json)'}`, `scratch ${this.scratch}`, `mod ${this.mod === '-' ? 'installed (no --plugin-dir)' : this.mod}`]
     const v = spawnSync('claude', ['--version'], { env: this.env, encoding: 'utf8', input: '' })
     lines.push(`claude ${(v.stdout ?? '').trim()}`)
     const g = spawnSync('git', ['-C', REPO, 'rev-parse', '--abbrev-ref', 'HEAD'], { encoding: 'utf8' })
     lines.push(`git ${(g.stdout ?? '').trim()} ${(spawnSync('git', ['-C', REPO, 'rev-parse', '--short', 'HEAD'], { encoding: 'utf8' }).stdout ?? '').trim()}`)
     lines.push(`trust entry added for project ${this.proj}`)
     lines.push(`guarded real global dir ${this.realGlobal} (entries before: ${this.realBefore.length})`)
-    if (this.mod !== '-') {
-      this.fingerprint = treeFingerprint(this.mod)
+    // Fingerprinted tree: the copy, or under --installed-version the cache dir the module must load from.
+    const fpDir = this.mod === '-' ? this.installedDir : this.mod
+    if (fpDir !== null) {
+      if (fpDir === this.installedDir) lines.push(`installed cache ${fpDir}`)
+      this.fingerprint = treeFingerprint(fpDir)
       lines.push(`fingerprint ${this.fingerprint} (sha256 of "<sha256>  hooks/<file>" lines, pre-patch)`)
       process.stdout.write(`fingerprint ${this.fingerprint}${this.o.fingerprint === null ? '' : ` expected ${this.o.fingerprint}`}\n`)
       const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]))
-      for (const f of walk(this.mod).sort()) lines.push(`${crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex').slice(0, 16)}  ${path.relative(this.mod, f)}`)
+      for (const f of walk(fpDir).sort()) lines.push(`${crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex').slice(0, 16)}  ${path.relative(fpDir, f)}`)
     }
     fs.writeFileSync(path.join(this.out, 'snapshot.txt'), `${lines.join('\n')}\n`)
     if (this.o.fingerprint !== null && this.fingerprint !== this.o.fingerprint) fail2(`fingerprint mismatch: copy ${this.fingerprint}, expected ${this.o.fingerprint}`)
@@ -398,7 +412,7 @@ class Run {
     s.pcfg = spec.isolate === true ? this.pcfg : this.cfg
     // tui pinned per session (the profile's own value would leak in otherwise); the installed copy is off when testing a --plugin-dir copy.
     const settings = JSON.stringify({ ...(this.mod === '-' ? {} : { enabledPlugins: DISABLE }), tui: spec.tui ?? 'default' })
-    tmux('new-session', '-d', '-s', name, '-x', w, '-y', h, '-c', this.proj, 'bash', LAUNCH, this.cfg, this.mod, spec.mode, debug, this.o.model, this.mod === '-' ? '' : s.pcfg, settings)
+    tmux('new-session', '-d', '-s', name, '-x', w, '-y', h, '-c', this.proj, 'bash', LAUNCH, this.cfgSet ? this.cfg : '-', this.mod, spec.mode, debug, this.o.model, this.mod === '-' ? '' : s.pcfg, settings)
     tmux('set-option', '-t', name, 'remain-on-exit', 'on')
     const t0 = Date.now()
     let keyAt = 0
@@ -461,6 +475,16 @@ class Run {
     return { problems: ['case has no check'], file: '', since }
   }
 
+  // --installed: where the CLI read the enabled mod's hooks.json, logged to module-paths.txt; with --installed-version it must be that cache dir.
+  modulePaths(name, text) {
+    if (!this.o.installed) return []
+    const paths = [...new Set([...text.matchAll(/Read hooks\.json for plugin brewmod-placeholders \(enabled=true\): (\S+)/g)].map((m) => m[1]))]
+    fs.appendFileSync(path.join(this.out, 'module-paths.txt'), `${name}\t${paths.join(' ') || '(none)'}\n`)
+    if (this.installedDir === null) return []
+    const want = path.join(this.installedDir, 'hooks', 'hooks.json')
+    return paths.length === 1 && paths[0] === want ? [] : [`debug: module hooks.json ${paths.join(', ') || 'not logged'}, expected ${want}`]
+  }
+
   // Debug-log verdicts per session: module load, refused band trees and skipped hooks inside each case's time window.
   audit(s, results) {
     const text = fs.existsSync(s.debug) ? fs.readFileSync(s.debug, 'utf8') : ''
@@ -468,6 +492,7 @@ class Run {
     const global = []
     if (!text.includes(`hooks module ${who} loaded`)) global.push(`debug: no "hooks module ${who} loaded"`)
     if (/hooks module did not load|hooks module brewmod-placeholders\S* failed to load/.test(text)) global.push('debug: module did not load')
+    global.push(...this.modulePaths(s.name, text))
     const bad = text.split('\n').filter((l) => /ui\.render \(\w+\): a hook returned a tree that does not validate|hook failed: brewmod-placeholders|brewmod-placeholders: .*(skipped|refused)/.test(l))
     for (const r of results) {
       const own = bad.filter((l) => r.since !== undefined && l.slice(0, 24) >= r.since && (r.until === undefined || l.slice(0, 24) <= r.until))
@@ -539,6 +564,7 @@ class Run {
     for (const re of x.debugForbid ?? []) if (re.test(dbg)) problems.push(`debug has ${re}`)
     if (/hooks module did not load/.test(`${r.stderr}\n${dbg}`)) problems.push('module did not load')
     if (/tool\.call mcp__brewmod-placeholders__/.test(dbg)) problems.push('the model called a mod tool: the answer is not only the received context')
+    problems.push(...this.modulePaths(x.id, dbg))
     const who = this.o.installed ? 'brewmod-placeholders@claude-brewcode' : 'brewmod-placeholders@inline'
     if (!dbg.includes(`hooks module ${who} loaded`)) problems.push(`debug: no "hooks module ${who} loaded"`)
     this.record(x, problems, path.join(this.out, `${x.id}.result.txt`))
