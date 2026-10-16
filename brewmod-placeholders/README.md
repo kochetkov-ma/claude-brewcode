@@ -8,7 +8,7 @@
 <h1 align="center">Prompt placeholders</h1>
 <p align="center">Prompt shortcuts for Claude Code: type <code>++r</code> to attach a saved instruction block, read its text before you send, add your own with <code>/placeholders</code>.</p>
 <p align="center">
-  <a href="https://github.com/kochetkov-ma/claude-brewcode/stargazers"><img src="https://img.shields.io/github/stars/kochetkov-ma/claude-brewcode?style=flat&logo=github" alt="GitHub stars"></a>
+  <a href="https://github.com/kochetkov-ma/claude-brewcode/stargazers"><img src="https://badgen.net/github/stars/kochetkov-ma/claude-brewcode?icon=github&label=stars" alt="GitHub stars"></a>
   <img src="https://img.shields.io/badge/Claude_Code-2.1.301%2B-d97706" alt="Requires Claude Code 2.1.301+">
   <img src="https://img.shields.io/badge/type-mod-8b5cf6" alt="Claude Code mod">
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT">

@@ -3,9 +3,9 @@
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Plugin-blueviolet?logo=anthropic&logoColor=white)](https://code.claude.com)
 [![Mods](https://img.shields.io/badge/Mods-%2B%2Br_placeholders_%C2%B7_plan_effort-d97706?logo=claude&logoColor=white)](https://doc-claude.brewcode.app/mods/overview/)
 [![Approaches](https://img.shields.io/badge/Approaches-hooks_%C2%B7_agents_%C2%B7_injections-8b5cf6?logo=readme&logoColor=white)](APPROACHES.md)
-[![Latest Release](https://img.shields.io/github/v/release/kochetkov-ma/claude-brewcode?label=latest&color=blue)](https://github.com/kochetkov-ma/claude-brewcode/releases/latest)
+[![Latest Release](https://badgen.net/github/release/kochetkov-ma/claude-brewcode?label=latest&color=blue)](https://github.com/kochetkov-ma/claude-brewcode/releases/latest)
 [![Documentation](https://img.shields.io/badge/Docs-doc--claude.brewcode.app-4A90D9?logo=bookstack&logoColor=white)](https://doc-claude.brewcode.app/getting-started/)
-[![GitHub stars](https://img.shields.io/github/stars/kochetkov-ma/claude-brewcode?style=flat&logo=github&label=stars)](https://github.com/kochetkov-ma/claude-brewcode/stargazers)
+[![GitHub stars](https://badgen.net/github/stars/kochetkov-ma/claude-brewcode?icon=github&label=stars)](https://github.com/kochetkov-ma/claude-brewcode/stargazers)
 
 **Claude Code mods:** type `++r` and get a whole review block; read it before you send, add your own with `/placeholders`. Plan mode raises effort to `xhigh`. [See the mods](#claude-code-mods)
 
