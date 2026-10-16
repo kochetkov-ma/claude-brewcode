@@ -150,6 +150,14 @@ export const CASES = [
     k('Enter'), c([/⏺ .*LPOK/], [BUSY], { debugExpect: [SUBMITTED, PROVIDED], timeout: TURN_MS }),
   ]),
 
+  // Typeahead accept, recall and undo change the box without prompt.edit: prompt.change redraws the band at once (the box underline still waits for the next key).
+  ...matrix('acc-tab', 4, '++ then Down x4 onto ++r, Tab takes it: band at once, no extra key', () => [t('++'), c([M('++a')]), k('Down', 4), c([M(/❯ \+\+r\s+Two-phase/)]), k('Tab'), c([P('++r'), B('placeholders 1'), B(COMPACT('++r'))], [M(RR_ROW), B(FOCUS_ANY)])]),
+  ...matrix('acc-enter', 4, '++ then Down x4 onto ++r, Enter takes it: band at once, nothing submitted', () => [t('++'), c([M('++a')]), k('Down', 4), c([M(/❯ \+\+r\s+Two-phase/)]), k('Enter'), c([P('++r'), B('placeholders 1'), B(COMPACT('++r'))], [M(RR_ROW), B(FOCUS_ANY)], { debugForbid: [SUBMITTED] })]),
+  // Undo groups the typed burst with the accept (seen live): one undo empties the box.
+  ...matrix('acc-undo', 4, 'hello ++r, Tab takes ++rr: band names ++rr at once; undo empties the box: band gone', () => [t('hello '), c([P('hello')]), t('++r'), c([M('++rr')]), k('Tab'), c([P('hello ++rr'), B('placeholders 1'), B(COMPACT('++rr'))], [B(R_HEAD)]), k('C-_'), c([P(/^❯\s*$/m)], [B(COMPACT_ANY), B(FOCUS_ANY)])]),
+  // The recalled entry names ++r while the last edit saw ++m (then an empty box): a band of ++r can only come from the recall.
+  ...matrix('acc-hist', 4, '/placeholders show ++r sent; ++m typed and killed; Up recalls the command: ++r focus band at once', () => [t('/placeholders show ++r'), enter(), c([P(/^❯\s*$/m)], [], { debugForbid: [SUBMITTED] }), t('++m'), c([B(M_HEAD)]), k('C-u'), c([P(/^❯\s*$/m)], [B(M_HEAD)]), k('Up'), c([P('/placeholders show ++r'), B(R_HEAD), B(FOCUS('++r'))], [B(M_HEAD)])]),
+
   // CP1: band at sizes outside the matrix, default TUI.
   { id: 'r-end-menu-80', cp: 1, session: 'd80', title: '++r at 80x24, typeahead open: capped; ? would not show it all, so the show hint', steps: [t('++r'), c([B(R_TOP), B(CUT('r')), M('++rr')], [B(R_LAST), B(QUERY_R), B(COMPACT_ANY)])] },
   { id: 'r-end-menu-q-80x30', cp: 4, session: 'd80x30', title: '++r at 80x30, typeahead open: capped; ? shows it all, so the ? hint', steps: [t('++r'), c([B(R_TOP), B(QUERY_R), M('++rr')], [B(R_LAST), B(SHOW('r'))])] },
@@ -218,8 +226,8 @@ export const CASES = [
       k('Enter'), c([H('saved ++lpdb (global): {GDIR}/lpdb.md')], [BUSY], { timeout: TURN_MS, order: [H('Save ++lpdb as drafted?'), H('saved ++lpdb (global): {GDIR}/lpdb.md')] }),
     ],
   },
-  // Tab-accept leaves the band one key behind (design-a §3, known): the band is checked after the next key.
-  { id: 'scope-typeahead-band', cp: 3, session: 'scope', title: 'after the save, ++lpd offers ++lpdb; Tab takes it; next key: band shows its text', steps: [t('++lpd'), c([M('++lpdb')]), k('Tab'), c([P('++lpdb')]), t(' '), c([B('++lpdb'), B(/always use the staging DB/i)], [B('unknown placeholder')])] },
+  // Tab-accept: prompt.change draws the band at once, no extra key.
+  { id: 'scope-typeahead-band', cp: 3, session: 'scope', title: 'after the save, ++lpd offers ++lpdb; Tab takes it: band shows its text at once', steps: [t('++lpd'), c([M('++lpdb')]), k('Tab'), c([P('++lpdb'), B('++lpdb'), B(/always use the staging DB/i)], [B('unknown placeholder')])] },
   {
     id: 'scope-remove', cp: 3, session: 'scope', title: '/placeholders remove ++lpdb: one Remove question with the layer, then the removal',
     steps: [

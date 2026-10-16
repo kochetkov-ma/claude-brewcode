@@ -354,6 +354,58 @@ test('GIVEN edits and caret moves WHEN prompt.edit runs THEN the view and focus 
   ])
 })
 
+// ---- prompt.change: a taken typeahead row, a recall or an undo changes the box without prompt.edit
+
+// The compact ++r band at 40 rows: caret past the token and its space.
+const ACCEPTED_R = ['placeholders 1', '++r', '  Two-phase review: review every significant change, then dou…', RECV, ...R_ROWS, 'more: put the caret on ++r · send as typed: ++/ · help: /placeholders help']
+// The box as the engine left it, then the event it raises for that change.
+const changed = ($: any, text: string, origin: object) => {
+  box.text = text
+  box.cursor = text.length
+  return $.prompt.change({ text, cursor: text.length, origin })
+}
+
+test('GIVEN an empty box WHEN a taken typeahead row leaves ++r and a space (origin engine) THEN the band draws without another key, as for the typed draft', async ($, on) => {
+  await boot($, on)
+  const before = await bandTexts($, 40)
+  await changed($, '++r ', { kind: 'engine' })
+  const accepted = await bandTexts($, 40)
+  await typed($, '++r ')
+
+  expect({ before, accepted, typed: await bandTexts($, 40) }, 'band before and after the accept').toEqual({ before: [], accepted: ACCEPTED_R, typed: ACCEPTED_R })
+})
+
+test('GIVEN an empty box WHEN a history recall puts fix ++m back (caret at its end) THEN the band focuses ++m', async ($, on) => {
+  await boot($, on)
+  await changed($, 'fix ++m', { kind: 'history' })
+
+  expect(await bandTexts($, 40), 'recalled focus band').toEqual(['++m', RECV, M_HEAD, ' ', ...M_BODY, '... 16 more lines · whole text: /placeholders show ++m', M_NOTE, M_FOOT])
+})
+
+test('GIVEN box changes from the engine, history, undo and a plugin fill WHEN prompt.change runs THEN the atoms follow every change but the fill and are written only when they change', async ($, on) => {
+  const writes: unknown[] = []
+  on('state.set', (_$, e, next) => {
+    writes.push({ key: e.key, value: e.value })
+    return next(e)
+  })
+  await boot($, on)
+
+  await changed($, '++r ', { kind: 'engine' })
+  await changed($, '++r ', { kind: 'engine' })
+  await changed($, '/placeholders show ++m', { kind: 'plugin', name: 'brewmod-placeholders' })
+  await changed($, '++m', { kind: 'history' })
+  await changed($, '', { kind: 'undo' })
+
+  expect(writes, 'state writes').toEqual([
+    { key: 'view', value: { tokens: [{ text: '++r', name: 'r', isKnown: true, start: 0, end: 3 }] } },
+    { key: 'focus', value: { name: null, isQuery: false, isMenuOpen: false } },
+    { key: 'view', value: { tokens: [{ text: '++m', name: 'm', isKnown: true, start: 0, end: 3 }] } },
+    { key: 'focus', value: { name: 'm', isQuery: false, isMenuOpen: false } },
+    { key: 'view', value: { tokens: [] } },
+    { key: 'focus', value: { name: null, isQuery: false, isMenuOpen: false } },
+  ])
+})
+
 // ---- plan part: m.plan.md (`plan: add`) = an addition joined to the m.md body in plan mode (design-a2 sections 1-2)
 
 // The first rows of the ++m text as sent (source lines, a blank line as ' '); m.md's body is 32 rows at 98 cells, m.plan.md's addition 29.

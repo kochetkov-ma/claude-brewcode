@@ -117,24 +117,37 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
-  // Zero I/O except the view and focus atoms, each written only when it changes; caret moves arrive here too (inputText '').
-  on('prompt.edit', async ($, e, next) => {
-    const r = await next(e)
-    const h = highlight(editorMatchers(prefix), r.text)
-    const f = { ...caretFocus(h.view, r.text, r.cursor), isMenuOpen: isMenuOpen(prefix, r.text, r.cursor, getEditorEntries()) }
+  // The box's view and focus, each atom written only when it changed; writers spelled at the call site. Returns the highlight.
+  const publish = async (text: string, cursor: number, writeView: (v: PlaceholderView) => Promise<unknown>, writeFocus: (f: CaretFocus) => Promise<unknown>) => {
+    const h = highlight(editorMatchers(prefix), text)
+    const f = { ...caretFocus(h.view, text, cursor), isMenuOpen: isMenuOpen(prefix, text, cursor, getEditorEntries()) }
     try {
       if (shown === null || !sameView(h.view, shown)) {
-        await update($, viewAtom, () => h.view)
+        await writeView(h.view)
         shown = h.view
       }
       if (focused === null || !sameFocus(f, focused)) {
-        await update($, focusAtom, () => f)
+        await writeFocus(f)
         focused = f
       }
     } catch {
       // state write failed: keep the highlight, retry on the next edit
     }
+    return h
+  }
+
+  // Zero I/O except the view and focus atoms, each written only when it changes; caret moves arrive here too (inputText '').
+  on('prompt.edit', async ($, e, next) => {
+    const r = await next(e)
+    const h = await publish(r.text, r.cursor, (v) => update($, viewAtom, () => v), (f) => update($, focusAtom, () => f))
     return h.decorations.length === 0 ? r : { ...r, decorations: [...(r.decorations ?? []), ...h.decorations] }
+  })
+
+  // A taken typeahead row, a history recall or an undo changes the box without prompt.edit: the band follows it here. No paint channel: the underline waits for the next key.
+  // A plugin's fill (the P1 show command, the hand-off fallback) keeps its old band.
+  on('prompt.change', async ($, e, next) => {
+    if (e.origin.kind !== 'plugin') await publish(e.text, e.cursor, (v) => update($, viewAtom, () => v), (f) => update($, focusAtom, () => f))
+    return next(e)
   })
 
   // The hint line redraws when the box turns empty or non-empty (Esc Esc, submit, a recall into an empty box): draw the band again, it reads the box. A state write is refused while drawing.

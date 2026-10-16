@@ -223,6 +223,8 @@ export async function bootBand($: any, on: On, w: Wiring, extra: (o: On) => void
     box.cursor = e.start + e.inputText.length
     return { text: box.text, cursor: box.cursor }
   })
+  // Core echoes the box it already changed (PromptChangeResult).
+  on('prompt.change', (_$, e) => ({ text: e.text }))
   on('ui.render', () => ENGINE_NODE as never)
   box.text = ''
   box.cursor = 0
