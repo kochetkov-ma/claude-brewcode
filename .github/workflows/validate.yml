@@ -18,7 +18,7 @@ concurrency:
 
 env:
   PYTHONDONTWRITEBYTECODE: "1"
-  CLAUDE_CODE_VERSION: 2.1.296
+  CLAUDE_CODE_VERSION: 2.1.301
 
 jobs:
   validators:

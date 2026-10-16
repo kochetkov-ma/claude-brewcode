@@ -1,8 +1,8 @@
 import { test, expect } from 'claude-code/testing'
 import type { On } from 'claude-code'
-import { PLUG, ROOT, STATE_FILE, bandTexts, bootBand, box, defaultsTree, mountBand, textsOf, typed, type Tree } from './layer-io'
+import { BAND, PLUG, ROOT, STATE_FILE, bandProps, bandTexts, bootBand, box, defaultsTree, mountBand, spansOf, textsOf, typed, type Tree } from './layer-io'
 import { defaultDefs } from './fixtures'
-import { bandState, budgets, receivesLabel, wrapRows, type BandRow } from '../hooks/lib/band'
+import { bandState, budgets, receivesLabel, treeRows, wrapRows, type BandRow } from '../hooks/lib/band'
 import { caretFocus, isMenuOpen } from '../hooks/lib/editor'
 import { DEFAULT_ENTRIES } from '../hooks/lib/editor-state'
 import { compileMatchers, markerOf, scanDraft } from '../hooks/lib/match'
@@ -134,8 +134,8 @@ test('GIVEN an escaped draft WHEN it is assembled THEN nothing is injected or ex
       prompt: '++/ ++m go ++r',
       context: '',
       tokens: [
-        { token: '++m', name: 'm', kind: 'context', text: '', headLines: 0, isSent: false, reason: 'not sent: ++/ in this message' },
-        { token: '++r', name: 'r', kind: 'context', text: '', headLines: 0, isSent: false, reason: 'not sent: ++/ in this message' },
+        { token: '++m', name: 'm', kind: 'context', text: '', isSent: false, reason: 'not sent: ++/ in this message' },
+        { token: '++r', name: 'r', kind: 'context', text: '', isSent: false, reason: 'not sent: ++/ in this message' },
       ],
     },
     back: ['not sent: ++\\ in this message'],
@@ -502,9 +502,79 @@ test('GIVEN plan mode, ++nn with a 2-line addition under the caret and the menu 
   ])
 })
 
-test('GIVEN a body whose last source line wraps past the cut WHEN the compact band mounts in 40 columns THEN the cut row counts source lines, not wrapped rows', async ($, on) => {
+test('GIVEN a body whose last source line wraps past the cut WHEN the compact band mounts in 40 columns THEN the cut row counts source lines, not wrapped rows, and a row too narrow for the count keeps the show command whole', async ($, on) => {
   await boot($, on, { ...TREE, [`${ROOT}/.claude/placeholders/wrap.md`]: file('wrap', 'Wrap mode', `a\nb\nc\n${'word '.repeat(30).trim()}`) })
   await typed($, '++wrap ')
 
-  expect(await bandTexts($, 18, 'terminal', 40), 'two source lines hidden').toEqual(['placeholders 1', '++wrap', RECV, 'a', 'b', '... 2 more lines · whole text: /placeholders show ++wrap', compactFoot('++wrap')])
+  expect([await bandTexts($, 18, 'terminal', 60), await bandTexts($, 18, 'terminal', 40)], 'two source lines hidden').toEqual([
+    ['placeholders 1', '++wrap', '  Wrap mode', RECV, 'a', 'b', '... 2 more lines · whole text: /placeholders show ++wrap', compactFoot('++wrap')],
+    ['placeholders 1', '++wrap', RECV, 'a', 'b', '/placeholders show ++wrap', compactFoot('++wrap')],
+  ])
+})
+
+// ---- fullscreen slot: maxRows = the engine's bottom slot; an outer plan-effort row arrives as maxRows - 1, an inner one is counted beneath
+
+const fsRows = async ($: any, maxRows: number): Promise<number> => {
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal', viewport: { columns: 102, rows: 48, isFullscreen: true }, props: bandProps(maxRows) })
+  const rows = treeRows(await ui.drawn())
+  await ui.unmount()
+  return rows
+}
+const SLOTS = [6, 5, 14, 13]
+
+test('GIVEN fullscreen plan mode and ++m WHEN focus, compact and escaped bands mount at slots 6 and 14 alone and 5 and 13 under an outer row THEN focus and compact fill the slot exactly and escaped takes 3 rows', async ($, on) => {
+  await boot($, on, PLAN_TREE)
+  const drawn: Record<string, number[]> = {}
+  for (const [state, draft] of [['focus', '++m'], ['compact', '++m '], ['escaped', '++/ ++m']] as const) {
+    await typed($, draft)
+    drawn[state] = []
+    for (const slot of SLOTS) drawn[state].push(await fsRows($, slot))
+  }
+
+  expect(drawn, 'rows drawn per slot').toEqual({ focus: [6, 5, 14, 13], compact: [6, 5, 14, 13], escaped: [3, 3, 3, 3] })
+})
+
+test('GIVEN fullscreen plan mode and an inner mod row beneath WHEN focus and compact ++m bands mount at slots 6 and 14 THEN the row plus the band fill the slot exactly', async ($, on) => {
+  await bootBand($, on, { tree: PLAN_TREE }, (o) =>
+    o('ui.render', { component: 'AbovePrompt' }, async ($$, e, next) => $$.ui.resolve(e).Box({ flexDirection: 'column', children: [$$.ui.resolve(e).Text({ color: 'warning', wrap: 'truncate-end', children: 'PLAN ROW' }), await next(e)] })),
+  )
+  const drawn: Record<string, number[]> = {}
+  for (const [state, draft] of [['focus', '++m'], ['compact', '++m ']] as const) {
+    await typed($, draft)
+    drawn[state] = [await fsRows($, 6), await fsRows($, 14)]
+  }
+
+  expect(drawn, 'rows drawn per slot, the inner row included').toEqual({ focus: [6, 14], compact: [6, 14] })
+})
+
+// ---- colour rule: every row sent now is bold in the theme text colour, every explanation dim
+
+const styled = async ($: any): Promise<{ sent: string[]; dim: string[]; act: string[] }> => {
+  const ui = await mountBand($, 40)
+  const runs = await spansOf(ui)
+  await ui.unmount()
+  const of = (k: string): string[] => runs.filter(([s]) => s === k).map(([, t]) => t)
+  return { sent: of('sent'), dim: of('dim'), act: of('act') }
+}
+
+test('GIVEN plan mode and ++m focused WHEN the band mounts THEN the normal rows and the addition are bold text colour, labels dim and the actions underlined text colour', async ($, on) => {
+  await boot($, on, PLAN_TREE)
+  await typed($, '++m')
+
+  expect(await styled($), 'plan focus styles').toEqual({
+    sent: [MP_HEAD, ' ', ...M_BODY.slice(0, 4), ...M_ADDITION],
+    dim: [RECV, '... 23 more lines', 'plan mode adds:', '... 23 more lines · whole text: ', 'close: ', ' · send as typed: '],
+    act: ['/placeholders show ++m', 'move the caret off ++m', '++/'],
+  })
+})
+
+test('GIVEN default mode WHEN ++m (plan part not sent), +++ (plan only) and ++/ ++m (escaped) bands mount THEN only the ++m normal rows are bold text colour', async ($, on) => {
+  await boot($, on)
+  const out: Record<string, string[]> = {}
+  for (const draft of ['++m', '+++', '++/ ++m']) {
+    await typed($, draft)
+    out[draft] = (await styled($)).sent
+  }
+
+  expect(out, 'sent rows per draft').toEqual({ '++m': [M_HEAD, ' ', ...M_BODY], '+++': [], '++/ ++m': [] })
 })

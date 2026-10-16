@@ -5,7 +5,7 @@
 
 [38;5;246m[48;5;237m❯ [38;5;231mwhat does README.md cover? one line[39m
 
-[38;5;174m[49m·[39m [38;5;174mTransfiguring… [39m
+[38;5;174m[49m✢[39m [38;5;174mGenerating[38;5;216m…[38;5;174m [39m
 [38;5;220mplan mode · effort xhigh for this mode · change: /plan-effort <level>[39m               [38;5;246m[-][39m
 
 [38;5;244m────────────────────────────────────────────────────────────────────────────────────────

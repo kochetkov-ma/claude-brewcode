@@ -67,7 +67,7 @@ In plan mode the yellow row (theme warning colour) above the prompt and the `ses
 
 Claude Code adds the `brewmod-plan-effort:` prefix to the toast and to the first line of command output; the mod supplies the text after it.
 
-The row stays through turns and typing, sits above any other prompt-area UI and steps aside while a survey is open. With [brewmod-placeholders](../brewmod-placeholders/) loaded, it stays visible above the placeholders band in either load order.
+The row stays through turns and typing, sits above any other prompt-area UI and steps aside while a survey is open. With [brewmod-placeholders](../brewmod-placeholders/) loaded, it stays visible above the placeholders band in either load order. The row takes one row from the band's budget, so the band below keeps its full layout and does not overflow in fullscreen.
 
 `/plan-effort` prints a status block:
 
@@ -106,6 +106,7 @@ mode now     plan
 - Rejecting a plan keeps the raise, because Claude is still in plan mode.
 - Works on Team organizations, where the builtin security layer bypasses `classic.*` hooks.
 - Live on Claude Code 2.1.301: 78 of 78 checks passed over 10 sessions, both mod load orders, 120x40 and 80x24 terminals; unit tests: 70 pass. Earlier measurement on 2.1.300: plan mode sent 4 `xhigh` requests, default mode 0, on Team-org and Max profiles. [Full results](https://doc-claude.brewcode.app/mods/plan-effort/#verified).
+- Prompt cache on Claude Code 2.1.301: 15 requests per run, 0 cache misses with and without the mod, and `xhigh` on all 6 plan-mode requests. [Measurement and limits](https://doc-claude.brewcode.app/mods/plan-effort/#verified).
 
 <details>
 <summary>Technical details</summary>

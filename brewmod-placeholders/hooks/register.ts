@@ -73,6 +73,8 @@ export const register: Register = (on, options) => {
     try {
       for (const t of tools(prefix)) await $.tool.register({ name: t.name, description: t.description, inputSchema: t.inputSchema, isDeferred: false })
       hasTools = true
+      // A band drawn while the tools were registering lacks the `P<name>?` hand-off: draw it again.
+      $.ui.invalidate('ui.render')
     } catch {
       hasTools = false
     }
@@ -245,6 +247,7 @@ export const register: Register = (on, options) => {
       isGone,
       ...budgets(e.props.maxRows - treeRows(below), e.viewport?.isFullscreen === true, focus.isMenuOpen),
       columns: e.props.bodyColumns,
+      hasQuery: hasTools,
     })
     return below.type === 'engine' ? band : ui.Box({ flexDirection: 'column', children: [below, band] })
   })
@@ -259,9 +262,9 @@ export const register: Register = (on, options) => {
     const act = parseArgs(e.args, prefix, reg.defs.map((d) => d.name))
     const dirs = shownDirs(roots, home)
     const one = oneLayer(reg, roots)
-    if (act.kind === 'help') return { text: helpText(prefix, dirs) }
+    if (act.kind === 'help') return { text: helpText(prefix, dirs, hasTools) }
     if (act.kind === 'list' || act.kind === 'show') return { text: fullText(one, act.kind === 'list' ? null : act.names, prefix, isPlan) }
-    const status = statusText(one, prefix, dirs)
+    const status = statusText(one, prefix, dirs, hasTools)
     if (act.kind === 'status') return { text: status }
     if (!hasTools) return { text: `${status}\n${NEEDS_NEW_CC}` }
     // submit is refused inside command.run: hand off from a timer; fill is the fallback when submit refuses.

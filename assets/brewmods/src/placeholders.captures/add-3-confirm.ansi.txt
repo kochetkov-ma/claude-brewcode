@@ -1,3 +1,5 @@
+     [38;5;153m/placeholders[39m [38;5;153mshow[39m [38;5;153m++r[39m, or [38;5;153m++r?[39m alone + Enter twice · [38;5;153m/placeholders[39m [38;5;153mlist[39m for all
+     Send one message as typed: put [38;5;153m++/[39m anywhere in it
      Add, change, remove: [38;5;153m/placeholders[39m [38;5;153m<your[39m [38;5;153mwords>[39m in any language, e.g. [38;5;153m/placeholders
 [39m     [38;5;153madd[39m [38;5;153m++db:[39m [38;5;153muse[39m [38;5;153mthe[39m [38;5;153mstaging[39m [38;5;153mDB[39m
      Where: global = all projects ([38;5;153m~/.claude/placeholders[39m), project = this one
@@ -25,16 +27,14 @@
 [38;5;246m⏺ [39mUser answered Claude's questions:
 [38;5;246m  ⎿  · Save ++db as drafted? → Save as drafted (Recommended)[39m
 
-[38;5;174m✶[39m [38;5;174mSock-hopping… [38;5;246m(5s · ↓[39m [38;5;246m198 tokens)[39m
-[38;5;246m  ⎿  Tip: Double-tap esc to rewind the code and/or conversation to a previous point in [39m
-     [38;5;246mtime[39m
+[38;5;174m✽[39m [38;5;216mHarmonizing…[38;5;174m [38;5;246m(5s · ↓[39m [38;5;246m185 tokens)[39m
+[38;5;246m  ⎿  Tip: Use /statusline to set up a custom status line that will display beneath the [39m
+     [38;5;246minput box[39m
 
 [38;5;244m────────────────────────────────────────────────────────────────────────────────────────
 [38;5;246m❯ [39m
 [38;5;244m────────────────────────────────────────────────────────────────────────────────────────
 [39m  [38;5;246m⏸[39m [38;5;246mmanual[39m [38;5;246mmode[39m [38;5;246mon[39m [38;5;246m·[39m [38;5;246mesc[39m [38;5;246mto[39m [38;5;246minterrupt[39m [38;5;246m·[39m [38;5;246m←[39m [38;5;246mfor[39m [38;5;246magents[39m                [38;5;246m◐[39m [38;5;246mmedium[39m [38;5;246m·[39m [38;5;246m/effort[39m
-
-
 
 
 

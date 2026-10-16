@@ -1,4 +1,4 @@
-// Storyboard v3 of placeholders.gif (keys re-verified live on CC 2.1.301, main-screen TUI, mod 6.9.3 band): times in s.
+// Storyboard v3 of placeholders.gif (keys re-verified live on CC 2.1.301, main-screen TUI, mod 6.9.4 band): times in s.
 // Keys = macOS keycaps (glyph + on-screen word); record-gifs.mjs --check holds them to its allow-list and the facts below.
 window.PH_STORY = {
   term: { cols: 88, rows: 40 },
@@ -58,8 +58,8 @@ window.PH_STORY = {
   // compressed spans: title-bar chip `⏩ <factor>x`; factor = real elapsed (session transcript timestamps) / shown
   skips: [
     { at: 11.0, until: 12.6, factor: 5 },
-    { at: 17.2, until: 19.0, factor: 2.5 },
-    { at: 22.5, until: 23.4, factor: 5.5 },
+    { at: 17.2, until: 19.0, factor: 2.4 },
+    { at: 22.5, until: 23.4, factor: 4.4 },
   ],
   captions: [
     [0, 'Type <k>++</k>, pick a name with <k>↑</k>, then <k>Tab</k>'],
@@ -89,7 +89,7 @@ window.PH_STORY = {
     { screen: 'use-04-tab', has: '++db\n', why: 'Tab inserts ++db' },
     { screen: 'use-11-key', has: '❯\u00a0++db ++r ++m\n', why: 'three tokens typed, caret on ++m' },
     { screen: 'use-11-key', has: '++m · Claude receives these lines now:', why: 'focus band on ++m' },
-    { screen: 'use-11-key', has: ' more lines · whole text: /placeholders show ++m\n', why: 'cut row names the whole-text command' },
+    { screen: 'use-11-key', has: ' more lines · whole text: /placeholders show ++m or ++m? alone [Enter]\n', why: 'cut row names the whole-text command and the ++m? hand-off (band.tsx)' },
     { screen: 'use-11-key', has: 'close: move the caret off ++m · send as typed: ++/', why: 'focus foot' },
   ],
   // fermenter beats: kick when a token is accepted, burst on each send/save

@@ -63,7 +63,7 @@ In plan mode the yellow row (theme warning colour) above the prompt and the `ses
 
 Claude Code adds the `brewmod-plan-effort:` prefix to the toast and to the first line of command output; the mod supplies the text after it.
 
-The row stays through turns and typing, sits above any other prompt-area UI and steps aside while a survey is open. With [brewmod-placeholders](/mods/placeholders/) loaded, it stays visible above the placeholders band in either load order.
+The row stays through turns and typing, sits above any other prompt-area UI and steps aside while a survey is open. With [brewmod-placeholders](/mods/placeholders/) loaded, it stays visible above the placeholders band in either load order. The row takes one row from the band's budget, so the band below keeps its full layout and does not overflow in fullscreen.
 
 `/plan-effort` prints a status block:
 
@@ -103,7 +103,7 @@ mode now     plan
 
 <Spoiler title="Technical details" id="technical-details" meta="how it works, verification">
 
-**How it works.** The bundled command hook `hooks/mode.mjs` runs on `UserPromptSubmit` and `PostToolBatch` and writes the main loop permission mode to `.state/mode-<session_id>.json` in the plugin root (subagent payloads are ignored, files older than 7 days are pruned). The `turn.step` event fires before every model request; in plan mode the module raises `effort` to `planEffort`, and records the mode and the session effort in `$.state` for the row. The row is drawn in the `AbovePrompt` component; a hook on the `PromptHint` component clears it when the hint line names `plan mode on` as the mode just left. Ranks run low, medium, high, xhigh, max; equal, higher, numeric and absent efforts pass through. The rewrite covers one request, so leaving plan mode needs no cleanup.
+**How it works.** The bundled command hook `hooks/mode.mjs` runs on `UserPromptSubmit` and `PostToolBatch` and writes the main loop permission mode to `.state/mode-<session_id>.json` in the plugin root (subagent payloads are ignored, files older than 7 days are pruned). The `turn.step` event fires before every model request; in plan mode the module raises `effort` to `planEffort`, and records the mode and the session effort in `$.state` for the row. The row is drawn in the `AbovePrompt` component; a hook on the `PromptHint` component clears it when the hint line names `plan mode on` as the mode just left. Ranks run low, medium, high, xhigh, max; equal, higher, numeric and absent efforts pass through. The rewrite covers one request, so leaving plan mode needs no cleanup. The `AbovePrompt` hook passes one row less (`maxRows - 1`) to the hooks beneath it, so a placeholders band sized to its slot fits under the row, also in fullscreen.
 
 **Team organizations.** Claude Code's builtin security layer bypasses the `classic.*` hooks of a user-installed mod, while a bundled command hook still runs. That is why the mode comes from `mode.mjs`. Enterprise organizations were not run.
 
@@ -143,7 +143,22 @@ Plan-mode row and toast, checked live on Claude Code 2.1.301 with both mods load
 
 Plan approval through ExitPlanMode (row gone at the next main request) is covered by unit tests only. The desktop surface, an installed (non `--plugin-dir`) copy and a Team-organization profile were not checked for the row.
 
-Prompt cache, measured on the earlier detection path (same effort rewrite): 3 plan enter/exit pairs in one ~64k-token session gave 0 extra cache misses over 6 mode flips against a control run without the mod, and +58 cache-write tokens. The run used requests seconds apart on one model, so cache expiry between slow requests is not covered. The `/plan-effort` command and the toast were checked live on 2.1.301; unit tests cover `planEffort` set to `high` or `max` and an unknown value that counts as unset.
+Prompt cache, measured on Claude Code 2.1.301 with `claude -p --model sonnet --effort high` (`claude-sonnet-5-5`), one run with the mod and one control run without it. Each run is 15 requests from a context of about 62-64k tokens, with plan mode entered and left three times (headless `set_permission_mode`, the same mode change as `Shift+Tab`).
+
+| Measure | Control (no mod) | With the mod |
+|---------|------------------|--------------|
+| Context at the baseline request | 62,506 tokens | 64,633 tokens |
+| Requests | 15 | 15 |
+| Cache misses | 0 | 0 |
+| Effort on the 6 plan-mode requests | `high` | `xhigh` |
+| Effort on all other requests | `high` | `high` |
+| Cache writes after the baseline request | 13,882 tokens | 12,380 tokens |
+
+Each of the 6 effort flips (3 `high` to `xhigh`, 3 `xhigh` to `high`) read the whole previous prefix from cache, apart from 25, 25, 62, 0, 0 and 0 tokens. The 25-token gap also appears on plain default-mode turns in both runs. The lower write count with the mod comes from a roughly 2.4k-token `deferred_tools_delta` attachment that Claude Code sent at a different point in each run, not from the effort. The mod run also carries about 2.1k more context at the baseline, from the mods' own surface; the source was not itemized.
+
+Limits: one run per arm and one model; only `high` to `xhigh` flips (a `max` plan effort, a `medium` session and Opus were not re-run); requests were seconds apart, so cache expiry between slow turns is not covered; the mode flips were headless, not a real `Shift+Tab` in the terminal. The finding is that an effort change does not invalidate a hot cache.
+
+The `/plan-effort` command and the toast were checked live on 2.1.301; unit tests cover `planEffort` set to `high` or `max` and an unknown value that counts as unset.
 
 </Spoiler>
 

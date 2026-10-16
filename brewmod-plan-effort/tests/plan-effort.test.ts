@@ -408,6 +408,32 @@ for (const m of ['default', 'acceptEdits', 'auto', 'bypassPermissions']) {
   })
 }
 
+// Records the maxRows each drawing beneath was given
+const sizedBeneath = (on: On): number[] => {
+  const got: number[] = []
+  on('ui.render', ($$, e) => {
+    got.push((e.props as { maxRows: number }).maxRows)
+    return $$.ui.resolve(e).Text({ children: 'BELOW' })
+  })
+  return got
+}
+
+test('GIVEN a plan row, no row and a survey WHEN the band draws at 24 rows THEN beneath gets 23, 24 and 24 rows', async ($, on) => {
+  let m = 'plan'
+  bottoms(on, () => mode(m))
+  const got = sizedBeneath(on)
+  await step($, 'high')
+  await bandTexts($)
+  m = 'default'
+  await step($, 'high')
+  await bandTexts($)
+  m = 'plan'
+  await step($, 'high')
+  await bandTexts($, 'terminal', true)
+
+  expect(got, 'the row takes one row from the band beneath').toEqual([23, 24, 24])
+})
+
 test('GIVEN no step yet WHEN the band draws THEN no row', async ($, on) => {
   bottoms(on, () => mode('plan'))
   beneath(on)

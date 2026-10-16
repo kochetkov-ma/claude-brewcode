@@ -128,13 +128,14 @@ export const register: Register = (on, options) => {
   })
 
   // Persistent plan-mode row above whatever the plugins beneath draw; yields to a survey
+  // The row takes one of maxRows: hooks beneath get one fewer, so a band sized to it never scrolls under the row
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    const below = await next(e)
-    if (e.props.hasSurvey) return below
+    if (e.props.hasSurvey) return next(e)
     const seen = (await $.state.get(plan).catch(() => undefined))?.value
     const sess = (await $.state.get(session).catch(() => undefined))?.value
     const text = rowText(seen?.isPlan === true, String(options.planEffort), sess)
-    if (text === undefined) return below
+    if (text === undefined) return next(e)
+    const below = await next({ ...e, props: { ...e.props, maxRows: Math.max(1, e.props.maxRows - 1) } })
     const { Box, Text } = $.ui.resolve(e)
     return Box({ flexDirection: 'column', children: [Text({ color: 'warning', wrap: 'truncate-end', children: text }), below] })
   })

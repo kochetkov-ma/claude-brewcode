@@ -1,3 +1,5 @@
+     [38;5;153m/placeholders[39m [38;5;153mshow[39m [38;5;153m++r[39m, or [38;5;153m++r?[39m alone + Enter twice · [38;5;153m/placeholders[39m [38;5;153mlist[39m for all
+     Send one message as typed: put [38;5;153m++/[39m anywhere in it
      Add, change, remove: [38;5;153m/placeholders[39m [38;5;153m<your[39m [38;5;153mwords>[39m in any language, e.g. [38;5;153m/placeholders
 [39m     [38;5;153madd[39m [38;5;153m++db:[39m [38;5;153muse[39m [38;5;153mthe[39m [38;5;153mstaging[39m [38;5;153mDB[39m
      Where: global = all projects ([38;5;153m~/.claude/placeholders[39m), project = this one
@@ -21,20 +23,18 @@
      on plan addon, active in Plan mode only
      # [ADDON: ANTI-DRIFT CRON PLAN]
      [2m… +112 lines (ctrl+o to expand)[0m
-
 [38;5;246m────────────────────────────────────────────────────────────────────────────────────────
 [38;5;16m[48;5;153m ☐ Placeholder [39m[49m
 
 [1m[38;5;231mSave ++db as drafted?[0m
 
-[38;5;153m❯[38;5;246m 1.[1m[38;5;153m Save as drafted [0m             [38;5;246m┌──────────────────────────────────────────┐[39m
-    [1m[38;5;153m(Recommended)[0m                 [38;5;246m│ [39malways use the staging DB[38;5;246m                │[39m
- [38;5;246m 2.[39m Change it                    [38;5;246m└──────────────────────────────────────────┘[39m
-
-                                  [38;5;153mNotes:[39m [3m[38;5;246mpress[0m [3m[38;5;246mn[0m [3m[38;5;246mto[0m [3m[38;5;246madd[0m [3m[38;5;246mnotes[0m
-
+[38;5;153m❯[39m [38;5;246m1.[39m [38;5;153mSave as drafted (Recommended)[39m
+     [38;5;246mText: "always use the staging DB"[39m
+  [38;5;246m2.[39m Change it
+     [38;5;246mEdit the name[39m [38;5;246mor text before saving[39m
+  [38;5;246m3.[39m [38;5;246mType[39m [38;5;246msomething.[39m
 [38;5;246m────────────────────────────────────────────────────────────────────────────────────────
-[39m  Chat about this
+[39m  4. Chat about this
 
-[38;5;246mEnter[39m [38;5;246mto[39m [38;5;246mselect[39m [38;5;246m·[39m [38;5;246m↑/↓[39m [38;5;246mto[39m [38;5;246mnavigate[39m [38;5;246m·[39m [38;5;246mn[39m [38;5;246mto[39m [38;5;246madd[39m [38;5;246mnotes[39m [38;5;246m·[39m [38;5;246mEsc[39m [38;5;246mto[39m [38;5;246mcancel[39m
+[38;5;246mEnter[39m [38;5;246mto[39m [38;5;246mselect[39m [38;5;246m·[39m [38;5;246m↑/↓[39m [38;5;246mto[39m [38;5;246mnavigate[39m [38;5;246m·[39m [38;5;246mEsc[39m [38;5;246mto[39m [38;5;246mcancel[39m
 

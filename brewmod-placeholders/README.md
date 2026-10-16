@@ -172,18 +172,41 @@ Your own placeholder can have a plan part too: see [Examples](#examples).
 
 While the name menu is open (typing `++r` offers `++rr`), it caps the band, and a `?` right after the token closes it. If the whole text then fits in 15 rows, the cut row ends with `· type ? after ++r to see all`. `++m` never shows that hint: its 29 lines do not fit in 15 rows. Otherwise the band looks the same with or without the `?`: the caret already shows the text.
 
-Band with the caret on `++m` (default mode, 120x40). Plain text is exactly what Claude receives; grey (dim) text is explanation and is never sent.
+Band with the caret on `++m` (default mode, 120x40). Colours come from your Claude Code theme.
 
 ```text
-++m · Claude receives these lines now:                     ++m coloured, rest dim
-  User typed `++m` — Manager mode is active ...            plain, header bold
-  ... 12 more text rows (13 in all) ...                    plain
-  ... 16 more lines · whole text: /placeholders show ++m   dim
-  not sent now · plan mode adds 29 lines                   dim
-close: move the caret off ++m · send as typed: ++/         dim
+++m · Claude receives these lines now:
+  User typed `++m` — Manager mode is active ...
+  ... 12 more text rows (13 in all) ...
+  ... 16 more lines · whole text: /placeholders show ++m or ++m? alone [Enter]
+  not sent now · plan mode adds 29 lines
+close: move the caret off ++m · send as typed: ++/
 ```
 
-The text under the head holds up to 15 rows, the cut row and the plan note included; the head and foot rows (and an `also:` row) come on top. The text rows are wrapped to the terminal width, so how many fit changes with it. `K more lines` counts the lines of the sent text left out (its header line and blank line included): `++m` is 29 lines, 13 text rows shown at 120x40 (13 + the cut row + the plan note = 15). `plan mode adds N lines` counts the lines of the plan part. In plan mode the band shows the plan header, the normal rows, a dim `plan mode adds:` and then `[ADDON: PLAN MODE]` with its rows. A plan-only token outside plan mode reads `+++ · not sent now (plan only):` with a dim text.
+| Looks like | Means | In the band above |
+|---|---|---|
+| Bold, placeholder blue (the theme's suggestion colour) | A placeholder name; an unknown one is bold yellow | `++m`, `++zz` |
+| Bold, theme text colour (white on a dark theme, black on a light one) | Text Claude receives with this message | the `User typed ...` rows |
+| Underlined, theme text colour | An action: what to type or do | `/placeholders show ++m`, `++m?`, `move the caret off ++m`, `++/` |
+| Plain, theme text colour | A key to press | `[Enter]` |
+| Grey (dim) | Labels and notes; never sent. Text that is not sent now (the other mode's text) is grey too | `close:`, `more:`, `... 16 more lines`, `plan mode adds:`, `not sent now · plan mode adds 29 lines` |
+
+The text under the head holds up to 15 rows, the cut row and the plan note included; the head and foot rows (and an `also:` row) come on top. The text rows are wrapped to the terminal width, so how many fit changes with it. `K more lines` counts the lines of the sent text left out (its header line and blank line included): `++m` is 29 lines, 13 text rows shown at 120x40 (13 + the cut row + the plan note = 15). `plan mode adds N lines` counts the lines of the plan part. In plan mode the band shows the plan header, the normal rows, a grey `plan mode adds:` and then `[ADDON: PLAN MODE]` with its rows. A plan-only token outside plan mode reads `+++ · not sent now (plan only):` with a grey text.
+
+Hint rows, as drawn. A custom `prefix` replaces `++` in all of them.
+
+| Row | Text |
+|---|---|
+| Cut row | `... 16 more lines · whole text: /placeholders show ++m or ++m? alone [Enter]` |
+| Cut row, narrow terminal or a build without the mod tools | `... 16 more lines · whole text: /placeholders show ++m` |
+| Cut row, name menu open and `?` would show it all | `... 5 more lines · type ? after ++r to see all` |
+| Foot with the caret on a token | `close: move the caret off ++m · send as typed: ++/` |
+| Foot with the caret on an unknown token | `names: /placeholders list` |
+| Foot of the compact band | `more: put the caret on ++r · send as typed: ++/ · help: /placeholders help` |
+| Foot of an escaped message | `turn back on: delete ++/` |
+| Other tokens while the caret is on one | `also: ++a ++rr` |
+
+The `or ++m? alone [Enter]` part is the query from [What `?` does](#read-the-full-text): `[Enter]` fills the show command. It appears only when the build has the mod tools (Claude Code 2.1.300+) and the whole row fits the width. A narrower terminal shrinks the row in steps: first `or ++m? alone [Enter]` goes, then `whole text:`, then the count (`... 16 more lines · `). The show command is never cut while it fits on its own. `/placeholders` and `/placeholders help` name the `++r?` hand-off only on builds that have the mod tools; older builds name the show command alone.
 
 ## Examples
 | Do | You type | What happens |
@@ -209,11 +232,11 @@ The text under the head holds up to 15 rows, the cut row and the plan note inclu
 | State | What you see |
 |-------|--------------|
 | Highlight, typeahead | Terminal UI only. A known token is underlined; after the prefix, matching names appear, `Tab` inserts one. The one option, `prefix` (default `++`, 2-8 punctuation characters), is set in `/config` |
-| Compact band | Header `placeholders 3` (` · plan mode` is appended in plan mode), then one row per token: `++r  <description>`, with `· Claude receives these lines now:` and the text under it when the text is drawn. Rows past the space fold into `... K more placeholders`. Foot: `more: put the caret on ++r · send as typed: ++/ · help: /placeholders help`. `plan +` marks a name with a plan part; a skipped token says why, for example `(not sent: ++rr wins)` |
+| Compact band | Header `placeholders 3` (` · plan mode` is appended in plan mode), then one row per token: `++r  <description>` (name in bold blue, description grey), with `· Claude receives these lines now:` and the text under it when the text is drawn. Rows past the space fold into `... K more placeholders`. Foot (actions underlined): `more: put the caret on ++r · send as typed: ++/ · help: /placeholders help`. `plan +` marks a name with a plan part; a skipped token says why, for example `(not sent: ++rr wins)` |
 | Caret on a token | The band shown in [Read the full text](#read-the-full-text). A plan part that replaces the normal text reads `plan mode sends N lines instead`; other tokens sit on one `also: ++m ++a` row |
-| Rows from other mods | Rows another mod draws above the prompt, for example the yellow plan-mode row of [brewmod-plan-effort](../brewmod-plan-effort/), stay visible above the band; the band fits into the rows that are left |
-| Escaped | `++/` in the message: header `++/  placeholders off: this message is sent exactly as typed`, every token `(not sent: ++/ in this message)`, foot `turn back on: delete ++/` |
-| Unknown | An unknown `++zz` shows `unknown placeholder` dimmed; while the caret is on it the foot reads `names: /placeholders list`, otherwise the compact foot. On submit a toast names it and the prompt is sent unchanged |
+| Rows from other mods | Rows another mod draws above the prompt, for example the yellow plan-mode row of [brewmod-plan-effort](../brewmod-plan-effort/), stay visible above the band; the band fits into the rows that are left, in the default and the fullscreen view alike, whichever of the two mods loads first: head, text, cut row and foot all stay on screen |
+| Escaped | `++/` in the message: header `++/  placeholders off: this message is sent exactly as typed` and every token `(not sent: ++/ in this message)` (markers and names bold blue, reasons grey), foot `turn back on: delete ++/` |
+| Unknown | An unknown `++zz` shows bold yellow with `unknown placeholder` grey; while the caret is on it the foot reads `names: /placeholders list`, otherwise the compact foot. On submit a toast names it and the prompt is sent unchanged |
 
 ## Your own files
 | File | Means |

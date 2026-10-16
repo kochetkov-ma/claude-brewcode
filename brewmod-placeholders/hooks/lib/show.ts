@@ -114,7 +114,8 @@ const tagOf = (r: NameRow): string =>
 // The example name in hints: `r` when defined, else the first word name, else the first name.
 const sample = (rows: readonly NameRow[]): string => rows.find((r) => r.name === 'r')?.name ?? rows.find((r) => /^\w+$/.test(r.name))?.name ?? rows[0]?.name ?? 'name'
 
-export function statusText(reg: Registry, prefix: string = DEFAULT_PREFIX, dirs: Dirs = DEFAULT_DIRS): string {
+// hasQuery = the `P<name>?` hand-off runs (the build has the mod tools); else the texts name only the show command.
+export function statusText(reg: Registry, prefix: string = DEFAULT_PREFIX, dirs: Dirs = DEFAULT_DIRS, hasQuery = true): string {
   const rows = nameRows(reg, prefix)
   const tags = rows.map(tagOf)
   const w = Math.max(4, ...rows.map((r) => (prefix + r.name).length))
@@ -124,7 +125,7 @@ export function statusText(reg: Registry, prefix: string = DEFAULT_PREFIX, dirs:
   const issues = reg.issues.length === 0 ? [] : ['', `issues (${reg.issues.length}):`, ...reg.issues.map((i) => `  ${i}`)]
   const s = sample(rows)
   return block(`${rows.length} placeholders · type ${prefix}name anywhere in a prompt`, [...lines, ...issues], [
-    `Caret on a token: the band shows up to ${FOCUS_MAX} rows of what it sends · whole text: \`${showCommand(prefix, [s])}\`, or \`${prefix}${s}?\` alone + Enter twice · \`/placeholders list\` for all`,
+    `Caret on a token: the band shows up to ${FOCUS_MAX} rows of what it sends · whole text: \`${showCommand(prefix, [s])}\`${hasQuery ? `, or \`${prefix}${s}?\` alone + Enter twice` : ''} · \`/placeholders list\` for all`,
     `Send one message as typed: put \`${prefix}/\` anywhere in it`,
     `Add, change, remove: \`/placeholders <your words>\` in any language, e.g. \`/placeholders add ${prefix}db: use the staging DB\``,
     `Where: global = all projects (\`${dirs.global}\`), project = this one (\`${dirs.project}\`, wins over global); start with \`global\` or \`project\`, or just say it`,
@@ -132,13 +133,13 @@ export function statusText(reg: Registry, prefix: string = DEFAULT_PREFIX, dirs:
   ])
 }
 
-export function helpText(prefix: string = DEFAULT_PREFIX, dirs: Dirs = DEFAULT_DIRS): string {
+export function helpText(prefix: string = DEFAULT_PREFIX, dirs: Dirs = DEFAULT_DIRS, hasQuery = true): string {
   const p = prefix
   return [
     `placeholders help · a placeholder is a short token (${p}name) that adds saved text to your prompt`,
     `Use: type \`${p}m\` anywhere in a prompt; Tab completes; the band above the prompt shows what each token sends.`,
     `Caret on a token (arrows, Home, End): the band shows up to ${FOCUS_MAX} rows of what it sends; \`?\` right after the token only makes room for those rows while the name menu is open.`,
-    `Whole text, printed in the chat, not sent to Claude: \`${showCommand(p, ['r'])}\` (several: \`${showCommand(p, ['r', 'm'])}\`) · or \`${p}r?\` alone in a message: Enter fills that command, Enter again prints it · all: \`/placeholders list\`.`,
+    `Whole text, printed in the chat, not sent to Claude: \`${showCommand(p, ['r'])}\` (several: \`${showCommand(p, ['r', 'm'])}\`)${hasQuery ? ` · or \`${p}r?\` alone in a message: Enter fills that command, Enter again prints it` : ''} · all: \`/placeholders list\`.`,
     `Send as typed: \`${p}/\` (or \`${p}\\\`) anywhere in a message turns every placeholder in it off; the marker stays in the text.`,
     `Plan mode: \`<name>.plan.md\` with \`plan: add\` adds its text to \`<name>.md\` only in Plan mode (built-in \`${p}m\` works this way); without \`plan: add\` it replaces the text; \`when: plan\` in \`<name>.md\` alone = plan-only (\`${p}+\`). The band marks \`${PLAN_LABEL.plus}\` and shows "${PLAN_LABEL.adds}"; one review per message (\`${p}rr\` wins over \`${p}r\`).`,
     `Add, change, remove: \`/placeholders <your words, any language>\`; Claude drafts, asks once, saves. E.g. \`/placeholders add ${p}db: use the staging DB\` · \`/placeholders global make ${p}r shorter\` · \`/placeholders удали ${p}db\` · \`/placeholders add a plan-mode part to ${p}db: plan first, then build\`.`,

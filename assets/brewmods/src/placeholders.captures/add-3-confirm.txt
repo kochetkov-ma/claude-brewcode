@@ -1,3 +1,5 @@
+     /placeholders show ++r, or ++r? alone + Enter twice · /placeholders list for all
+     Send one message as typed: put ++/ anywhere in it
      Add, change, remove: /placeholders <your words> in any language, e.g. /placeholders
      add ++db: use the staging DB
      Where: global = all projects (~/.claude/placeholders), project = this one
@@ -25,16 +27,14 @@
 ⏺ User answered Claude's questions:
   ⎿  · Save ++db as drafted? → Save as drafted (Recommended)
 
-✶ Sock-hopping… (5s · ↓ 198 tokens)
-  ⎿  Tip: Double-tap esc to rewind the code and/or conversation to a previous point in
-     time
+✽ Harmonizing… (5s · ↓ 185 tokens)
+  ⎿  Tip: Use /statusline to set up a custom status line that will display beneath the
+     input box
 
 ────────────────────────────────────────────────────────────────────────────────────────
 ❯ 
 ────────────────────────────────────────────────────────────────────────────────────────
   ⏸ manual mode on · esc to interrupt · ← for agents                ◐ medium · /effort
-
-
 
 
 

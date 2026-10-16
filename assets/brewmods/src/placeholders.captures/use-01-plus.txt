@@ -1,3 +1,4 @@
+     it
      Commands (list, show, help) are only faster; plain words work too · full help:
      /placeholders help
 
@@ -26,10 +27,9 @@
   ⎿  saved ++db (global): ~/.claude/placeholders/db.md
 
 ⏺ I saved ++db as a global placeholder in ~/.claude/placeholders/db.md, so it works in
-  all your projects. When you type ++db in a prompt, it adds "always use the staging
-  DB".
+  all your projects. Typing ++db in a prompt inserts "always use the staging DB".
 
-✻ Worked for 8s · done 9:42 AM
+✻ Crunched for 8s · done 11:49 AM
 
 ────────────────────────────────────────────────────────────────────────────────────────
 ❯ +
