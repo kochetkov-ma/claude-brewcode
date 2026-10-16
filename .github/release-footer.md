@@ -5,6 +5,7 @@ claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
 claude plugin install brewcode@claude-brewcode
 claude plugin install brewdoc@claude-brewcode
 claude plugin install brewtools@claude-brewcode
+# mods need Claude Code 2.1.301+: run `claude update` first
 claude plugin install brewmod-placeholders@claude-brewcode   # mod: ++m ++r prompt placeholders
 claude plugin install brewmod-plan-effort@claude-brewcode    # mod: higher effort in plan mode
 ```
