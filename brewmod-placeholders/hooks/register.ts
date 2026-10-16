@@ -241,7 +241,7 @@ export const register: Register = (on, options) => {
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    // An emptied box (Esc Esc, submit) draws no band: the atoms are only written by edits. A surface without a box answers '' too, so only the terminal is asked.
+    // An emptied box (Esc Esc, submit) draws no band: the box is read, as the atoms may still hold the last draft. Other surfaces answer '', so only the terminal is asked.
     const draft = e.surface === 'terminal' ? (await $.prompt.read()).text : null
     const view = await read($, viewAtom)
     const focus = await read($, focusAtom)

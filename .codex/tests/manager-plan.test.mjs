@@ -5,6 +5,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readModDefault } from '../scripts/mod-default.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const cwd = mkdtempSync(join(tmpdir(), 'manager-plan-'));
@@ -34,12 +35,11 @@ try {
       assert.equal(text.includes(required), true, `${runtime} cron plan must preserve ${required}`);
     }
 
-    // GIVEN ordinary modes, absent mode, misleading fields, or malformed input.
-    // WHEN the hook evaluates +++.
-    // THEN it creates the cron now and never infers Plan mode from user text or unrelated fields.
+    // GIVEN ordinary, absent or misleading modes WHEN the hook evaluates +++
+    // THEN it sends exactly the mod's +.md cron text, never inferring Plan mode from other fields.
     for (const permission_mode of ['default', 'acceptEdits', 'bypassPermissions', 'PLAN', undefined, null, {}, true]) {
-      const now = invoke(file, { ...input, permission_mode, collaboration_mode: 'plan' }, env).hookSpecificOutput?.additionalContext ?? '';
-      assert.deepEqual([now.startsWith('# [ADDON: ANTI-DRIFT CRON]'), now.includes('ANTI-DRIFT CRON PLAN'), now.includes('create one unique session cron for the current task')], [true, false, true], `${runtime} non-plan mode ${JSON.stringify(permission_mode)} creates the cron now`);
+      const now = invoke(file, { ...input, permission_mode, collaboration_mode: 'plan' }, env);
+      assert.deepEqual(now, { hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: readModDefault('+') } }, `${runtime} non-plan mode ${JSON.stringify(permission_mode)} creates the cron now`);
     }
     assert.deepEqual(invoke(file, '{malformed', env), {}, `${runtime} malformed JSON must fail open without injection`);
     assert.deepEqual(invoke(file, { ...input, permission_mode: 'plan', prompt: { codeword: '+++' } }, env), {}, `${runtime} non-string prompt must not inject`);
@@ -47,8 +47,7 @@ try {
       assert.deepEqual(invoke(file, { ...input, permission_mode: 'plan', prompt }, env), {}, `${runtime} must reject non-codeword ${prompt}`);
     }
 
-    // GIVEN all existing codeword groups combined with +++ in Plan mode.
-    // WHEN their independent blocks are composed.
+    // GIVEN every codeword group with +++ in Plan mode WHEN their blocks are composed
     // THEN each survives and ++rr retains precedence over ++r.
     const combined = invoke(file, { ...input, permission_mode: 'plan', prompt: '+++ ++M ++A ++R ++RR' }, env).hookSpecificOutput.additionalContext;
     for (const pattern of [/ANTI-DRIFT CRON PLAN/, /MANAGER|Manager/, /Architecture|boundaries/, /regression|regressions/]) {
