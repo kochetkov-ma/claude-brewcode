@@ -2,6 +2,36 @@
 
 ---
 
+## v6.9.4 (2026-10-16)
+
+> Docs: [placeholders](https://doc-claude.brewcode.app/mods/placeholders/) | [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/)
+
+Hotfix: the `brewmod-placeholders` band fits its slot in fullscreen plan mode and reads clearer; `brewmod-plan-effort` hands the band one row less.
+
+### brewmod-placeholders
+
+#### Changed
+
+- **band colours:** placeholder tokens are blue and bold; the text Claude receives is bright and bold; hint actions are brighter and underlined; labels stay grey.
+- **cut row:** reads `... K more lines · whole text: /placeholders show ++m or ++m? alone [Enter]` where the `++m?` hand-off runs, else the show command alone.
+
+#### Fixed
+
+- **fullscreen plan mode:** the band no longer overflows under the plan-effort row.
+- **redraw:** the band redraws once the mod tools register, so a band drawn at startup gains the `++m?` hand-off.
+
+### brewmod-plan-effort
+
+#### Fixed
+
+- **plan-mode row:** passes one row less (`maxRows - 1`) to the band beneath it.
+
+#### Changed
+
+- **docs:** prompt-cache measurement on Claude Code 2.1.301: 15 requests per run, 0 cache misses with and without the mod, `xhigh` on all 6 plan-mode requests.
+
+---
+
 ## v6.9.3 (2026-10-16)
 
 > Docs: [placeholders](https://doc-claude.brewcode.app/mods/placeholders/) | [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/) | [mods overview](https://doc-claude.brewcode.app/mods/overview/) | [prompt-injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/)
