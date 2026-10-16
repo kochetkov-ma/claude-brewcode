@@ -474,5 +474,8 @@ test('GIVEN a build without the model tools WHEN /placeholders and /placeholders
 
   const [status, help] = [(await run($, '')).text, (await run($, 'help')).text]
 
-  expect([status.includes('alone + Enter twice'), help.includes('Enter again prints it'), help.includes('`/placeholders show ++r` (several: `/placeholders show ++r ++m`) · all:')], 'no hand-off named').toEqual([false, false, true])
+  expect({ status, help }, 'whole status and help texts, no hand-off').toEqual({
+    status: statusText(await load(defaultsTree()), '++', WIRED_DIRS, false),
+    help: helpText('++', WIRED_DIRS, false),
+  })
 })

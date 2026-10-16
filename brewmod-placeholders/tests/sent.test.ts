@@ -65,16 +65,16 @@ test('GIVEN ++r and ++rr of one group WHEN the draft is assembled THEN ++r is no
     prompt: 'check ++r ++rr',
     context: RR_SENT,
     tokens: [
-      { token: '++r', name: 'r', kind: 'context', text: '', headLines: 0, isSent: false, reason: 'not sent: ++rr wins' },
-      { token: '++rr', name: 'rr', kind: 'context', text: RR_SENT, headLines: 1, isSent: true, reason: null },
+      { token: '++r', name: 'r', kind: 'context', text: '', isSent: false, reason: 'not sent: ++rr wins' },
+      { token: '++rr', name: 'rr', kind: 'context', text: RR_SENT, isSent: true, reason: null },
     ],
   })
 })
 
 test('GIVEN ++m with a plan variant WHEN its text is asked outside and inside plan mode THEN each mode gives its own header and body', async () => {
   expect([sentText('m', D, '++', false), sentText('++M', D, '++', true)], 'm both modes').toStrictEqual([
-    { token: '++m', name: 'm', kind: 'context', text: M_SENT, headLines: 1, isSent: true, reason: null },
-    { token: '++m', name: 'm', kind: 'context', text: M_PLAN_SENT, headLines: 1, isSent: true, reason: null },
+    { token: '++m', name: 'm', kind: 'context', text: M_SENT, isSent: true, reason: null },
+    { token: '++m', name: 'm', kind: 'context', text: M_PLAN_SENT, isSent: true, reason: null },
   ])
 })
 
@@ -86,9 +86,9 @@ test('GIVEN a user m.md override, an old full-text m.plan override and an empty 
   const old = D.map(({ plan: _key, ...d }) => (d.name === 'm' && d.when === 'plan' ? { ...d, body: 'OLD FULL' } : d))
 
   expect([sentText('++m', withM('MY M'), '++', true), sentText('++m', old, '++', true), sentText('++m', withM(''), '++', true)], 'plan mode ++m').toStrictEqual([
-    { token: '++m', name: 'm', kind: 'context', text: `${MP_HEAD}\n\nMY M\n\n${ADDITION}`, headLines: 1, isSent: true, reason: null },
-    { token: '++m', name: 'm', kind: 'context', text: `${MP_HEAD}\n\nOLD FULL`, headLines: 1, isSent: true, reason: null },
-    { token: '++m', name: 'm', kind: 'context', text: '', headLines: 0, isSent: false, reason: 'not sent: empty' },
+    { token: '++m', name: 'm', kind: 'context', text: `${MP_HEAD}\n\nMY M\n\n${ADDITION}`, isSent: true, reason: null },
+    { token: '++m', name: 'm', kind: 'context', text: `${MP_HEAD}\n\nOLD FULL`, isSent: true, reason: null },
+    { token: '++m', name: 'm', kind: 'context', text: '', isSent: false, reason: 'not sent: empty' },
   ])
 })
 
@@ -99,11 +99,11 @@ test('GIVEN an add part without a header, one over a not-plan def, one alone and
   const empty = [def({ name: 'e', body: '' }), def({ name: 'e', when: 'plan', plan: 'add', body: '' })]
 
   expect([sentText('x', xs, '++', true), sentText('y', np, '++', true), sentText('z', only, '++', true), sentText('z', only, '++', false), sentText('e', empty, '++', true)], 'texts').toStrictEqual([
-    { token: '++x', name: 'x', kind: 'context', text: 'N ++x\n\nX\n\nADD', headLines: 1, isSent: true, reason: null },
-    { token: '++y', name: 'y', kind: 'context', text: 'ADD', headLines: 0, isSent: true, reason: null },
-    { token: '++z', name: 'z', kind: 'context', text: 'Z\n\nONLY', headLines: 1, isSent: true, reason: null },
-    { token: '++z', name: 'z', kind: 'context', text: 'Z\n\nONLY', headLines: 1, isSent: false, reason: 'plan only' },
-    { token: '++e', name: 'e', kind: 'context', text: '', headLines: 0, isSent: false, reason: 'not sent: empty' },
+    { token: '++x', name: 'x', kind: 'context', text: 'N ++x\n\nX\n\nADD', isSent: true, reason: null },
+    { token: '++y', name: 'y', kind: 'context', text: 'ADD', isSent: true, reason: null },
+    { token: '++z', name: 'z', kind: 'context', text: 'Z\n\nONLY', isSent: true, reason: null },
+    { token: '++z', name: 'z', kind: 'context', text: 'Z\n\nONLY', isSent: false, reason: 'plan only' },
+    { token: '++e', name: 'e', kind: 'context', text: '', isSent: false, reason: 'not sent: empty' },
   ])
 })
 
@@ -119,9 +119,9 @@ test('GIVEN an add part with its own order and group WHEN a plan-mode draft is a
     prompt: '++w ++y ++x',
     context: `X\n\nADD${JOINER}W`,
     tokens: [
-      { token: '++w', name: 'w', kind: 'context', text: 'W', headLines: 0, isSent: true, reason: null },
-      { token: '++y', name: 'y', kind: 'context', text: '', headLines: 0, isSent: false, reason: 'not sent: ++x wins' },
-      { token: '++x', name: 'x', kind: 'context', text: 'X\n\nADD', headLines: 0, isSent: true, reason: null },
+      { token: '++w', name: 'w', kind: 'context', text: 'W', isSent: true, reason: null },
+      { token: '++y', name: 'y', kind: 'context', text: '', isSent: false, reason: 'not sent: ++x wins' },
+      { token: '++x', name: 'x', kind: 'context', text: 'X\n\nADD', isSent: true, reason: null },
     ],
   })
 })
@@ -155,8 +155,8 @@ test('GIVEN the shipped defs and keyed variants WHEN plan parts are read THEN th
 
 test('GIVEN the plan-only +++ WHEN its text is asked outside and inside plan mode THEN outside it carries the plan text unsent, inside it is sent', async () => {
   expect([sentText('+++', D, '++', false), sentText('+', D, '++', true)], 'plus both modes').toStrictEqual([
-    { token: '+++', name: '+', kind: 'context', text: PLUS_SENT, headLines: 1, isSent: false, reason: 'plan only' },
-    { token: '+++', name: '+', kind: 'context', text: PLUS_SENT, headLines: 1, isSent: true, reason: null },
+    { token: '+++', name: '+', kind: 'context', text: PLUS_SENT, isSent: false, reason: 'plan only' },
+    { token: '+++', name: '+', kind: 'context', text: PLUS_SENT, isSent: true, reason: null },
   ])
 })
 
@@ -164,8 +164,8 @@ test('GIVEN a not-plan def, an unknown name and a custom prefix WHEN texts are a
   const defs = [...D, def({ name: 'np', when: 'not-plan', body: 'NP' })]
 
   expect([sentText('np', defs, '++', true), sentText('zz', defs, '++', false), sentText('@@r', D, '@@', false).text.split('\n')[0]], 'three asks').toStrictEqual([
-    { token: '++np', name: 'np', kind: 'context', text: 'NP', headLines: 0, isSent: false, reason: 'not in plan mode' },
-    { token: '++zz', name: 'zz', kind: 'none', text: '', headLines: 0, isSent: false, reason: 'unknown placeholder' },
+    { token: '++np', name: 'np', kind: 'context', text: 'NP', isSent: false, reason: 'not in plan mode' },
+    { token: '++zz', name: 'zz', kind: 'none', text: '', isSent: false, reason: 'unknown placeholder' },
     'User typed `@@r` — Two-phase review discipline is active for this turn:',
   ])
 })
@@ -177,8 +177,8 @@ test('GIVEN an empty ++rr override WHEN ++r ++rr is assembled THEN the empty win
     prompt: '++r ++rr',
     context: '',
     tokens: [
-      { token: '++r', name: 'r', kind: 'context', text: '', headLines: 0, isSent: false, reason: 'not sent: ++rr wins' },
-      { token: '++rr', name: 'rr', kind: 'context', text: '', headLines: 0, isSent: false, reason: 'not sent: empty' },
+      { token: '++r', name: 'r', kind: 'context', text: '', isSent: false, reason: 'not sent: ++rr wins' },
+      { token: '++rr', name: 'rr', kind: 'context', text: '', isSent: false, reason: 'not sent: empty' },
     ],
   })
 })
@@ -196,10 +196,10 @@ test('GIVEN inline defs WHEN drafts are assembled THEN always-inline text replac
     prompt: 'hi SIGNED ++pl ++nil ++dual',
     context: 'DUAL CONTEXT',
     tokens: [
-      { token: '++sig', name: 'sig', kind: 'inline', text: 'SIGNED', headLines: 0, isSent: true, reason: null },
-      { token: '++pl', name: 'pl', kind: 'inline', text: '', headLines: 0, isSent: false, reason: 'stays as typed' },
-      { token: '++nil', name: 'nil', kind: 'inline', text: '', headLines: 0, isSent: false, reason: 'not sent: empty' },
-      { token: '++dual', name: 'dual', kind: 'context', text: 'DUAL CONTEXT', headLines: 0, isSent: true, reason: null },
+      { token: '++sig', name: 'sig', kind: 'inline', text: 'SIGNED', isSent: true, reason: null },
+      { token: '++pl', name: 'pl', kind: 'inline', text: '', isSent: false, reason: 'stays as typed' },
+      { token: '++nil', name: 'nil', kind: 'inline', text: '', isSent: false, reason: 'not sent: empty' },
+      { token: '++dual', name: 'dual', kind: 'context', text: 'DUAL CONTEXT', isSent: true, reason: null },
     ],
   })
 })
@@ -210,7 +210,7 @@ test('GIVEN an inline body that carries a context token WHEN the draft is assemb
   expect(assembleDraft('++jx', defs, '++', false), 'draft').toStrictEqual({
     prompt: 'see ++cc',
     context: 'CC CONTEXT',
-    tokens: [{ token: '++jx', name: 'jx', kind: 'inline', text: 'see ++cc', headLines: 0, isSent: true, reason: null }],
+    tokens: [{ token: '++jx', name: 'jx', kind: 'inline', text: 'see ++cc', isSent: true, reason: null }],
   })
 })
 
@@ -224,9 +224,9 @@ test('GIVEN three blocks past the 9000-char cap WHEN the draft is assembled THEN
     prompt: '++c3 ++c2 ++c1',
     context: A + JOINER + B.slice(0, room) + CUT_NOTE,
     tokens: [
-      { token: '++c3', name: 'c3', kind: 'context', text: '', headLines: 0, isSent: false, reason: 'not sent: over 9000 chars' },
-      { token: '++c2', name: 'c2', kind: 'context', text: B.slice(0, room) + CUT_NOTE, headLines: 0, isSent: true, reason: 'cut at 9000 chars' },
-      { token: '++c1', name: 'c1', kind: 'context', text: A, headLines: 0, isSent: true, reason: null },
+      { token: '++c3', name: 'c3', kind: 'context', text: '', isSent: false, reason: 'not sent: over 9000 chars' },
+      { token: '++c2', name: 'c2', kind: 'context', text: B.slice(0, room) + CUT_NOTE, isSent: true, reason: 'cut at 9000 chars' },
+      { token: '++c1', name: 'c1', kind: 'context', text: A, isSent: true, reason: null },
     ],
   })
 })
@@ -242,13 +242,13 @@ test('GIVEN a delivery tag or a mode string other than plan WHEN the context is 
 
 test('GIVEN an inline body that brings ++/ into the prompt WHEN the draft is assembled THEN the inline text stays expanded and every context token names the marker', async () => {
   const defs = [...D, def({ name: 'skip', insert: 'inline', body: 'please ++/ ignore' })]
-  const escaped = { text: '', headLines: 0, isSent: false, reason: 'not sent: ++/ in this message' }
+  const escaped = { text: '', isSent: false, reason: 'not sent: ++/ in this message' }
 
   expect(assembleDraft('++skip ++r +++ ++m', defs, '++', false), 'draft').toStrictEqual({
     prompt: 'please ++/ ignore ++r +++ ++m',
     context: '',
     tokens: [
-      { token: '++skip', name: 'skip', kind: 'inline', text: 'please ++/ ignore', headLines: 0, isSent: true, reason: null },
+      { token: '++skip', name: 'skip', kind: 'inline', text: 'please ++/ ignore', isSent: true, reason: null },
       { token: '++r', name: 'r', kind: 'context', ...escaped },
       { token: '+++', name: '+', kind: 'context', ...escaped },
       { token: '++m', name: 'm', kind: 'context', ...escaped },

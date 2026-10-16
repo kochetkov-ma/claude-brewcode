@@ -30,12 +30,12 @@ export const PLAN_LABEL = { adds: 'plan mode adds:', instead: 'plan mode sends i
 const winsReason = (token: string): string => `not sent: ${token} wins`
 export const escapedReason = (marker: string): string => `not sent: ${marker} in this message`
 
-// text = exact text the token adds ('' = nothing; a mode mismatch carries the other mode's text); headLines = its leading header lines.
-export type Sent = { token: string; name: string; kind: 'context' | 'inline' | 'none'; text: string; headLines: number; isSent: boolean; reason: string | null }
+// text = exact text the token adds ('' = nothing; a mode mismatch carries the other mode's text).
+export type Sent = { token: string; name: string; kind: 'context' | 'inline' | 'none'; text: string; isSent: boolean; reason: string | null }
 // prompt = the text after inline expansion; context = the hook's additionalContext ('' = none); tokens = one per known draft name, draft order.
 export type Draft = { prompt: string; context: string; tokens: Sent[] }
 
-const unsent = (reason: string): Pick<Sent, 'text' | 'headLines' | 'isSent' | 'reason'> => ({ text: '', headLines: 0, isSent: false, reason })
+const unsent = (reason: string): Pick<Sent, 'text' | 'isSent' | 'reason'> => ({ text: '', isSent: false, reason })
 // The hook sends nothing for a delivery tag or a prompt without the prefix.
 const isSkipped = (prompt: string, prefix: string): boolean => SYNTHETIC_PROMPT.test(prompt) || !prompt.includes(prefix)
 
@@ -43,9 +43,9 @@ const applies = (d: Def, plan: boolean): boolean => d.when === 'always' || (d.wh
 // Same name, both applicable: `plan` beats `always`/`not-plan`; equal rank -> first wins.
 const rank = (d: Def): number => (d.when === 'plan' ? 2 : 1)
 
-function blockOf(d: Def, prefix: string): { text: string; headLines: number } {
+function blockOf(d: Def, prefix: string): { text: string } {
   const head = d.header.split('{token}').join(prefix + d.name.toLowerCase())
-  return head === '' ? { text: d.body, headLines: 0 } : { text: `${head}\n\n${d.body}`, headLines: head.split('\n').length }
+  return { text: head === '' ? d.body : `${head}\n\n${d.body}` }
 }
 
 function modeWinners(defs: readonly Def[], plan: boolean): Map<string, Def> {
@@ -155,11 +155,11 @@ export function sentText(token: string, defs: readonly Def[], prefix: string, is
     const now = winners(ctx, isPlan).get(name)
     if (now !== undefined) return now.body === '' ? { ...base, kind: 'context', ...unsent(REASON.empty) } : { ...base, kind: 'context', ...blockOf(now, prefix), isSent: true, reason: null }
     const other = winners(ctx, !isPlan).get(name)
-    const block = other === undefined || other.body === '' ? { text: '', headLines: 0 } : blockOf(other, prefix)
+    const block = other === undefined || other.body === '' ? { text: '' } : blockOf(other, prefix)
     return { ...base, kind: 'context', ...block, isSent: false, reason: isPlan ? REASON.notInPlan : REASON.planOnly }
   }
   const body = inlineBodies(defs).get(name)
-  if (body !== undefined) return { ...base, kind: 'inline', text: body, headLines: 0, isSent: true, reason: null }
+  if (body !== undefined) return { ...base, kind: 'inline', text: body, isSent: true, reason: null }
   const inl = defs.filter((d) => d.insert === 'inline' && d.name.toLowerCase() === name)
   if (inl.length === 0) return { ...base, kind: 'none', ...unsent(REASON.unknown) }
   return { ...base, kind: 'inline', ...unsent(inl.some((d) => d.when === 'always' && d.body === '') ? REASON.empty : REASON.staysAsTyped) }

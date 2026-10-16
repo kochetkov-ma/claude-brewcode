@@ -134,8 +134,8 @@ test('GIVEN an escaped draft WHEN it is assembled THEN nothing is injected or ex
       prompt: '++/ ++m go ++r',
       context: '',
       tokens: [
-        { token: '++m', name: 'm', kind: 'context', text: '', headLines: 0, isSent: false, reason: 'not sent: ++/ in this message' },
-        { token: '++r', name: 'r', kind: 'context', text: '', headLines: 0, isSent: false, reason: 'not sent: ++/ in this message' },
+        { token: '++m', name: 'm', kind: 'context', text: '', isSent: false, reason: 'not sent: ++/ in this message' },
+        { token: '++r', name: 'r', kind: 'context', text: '', isSent: false, reason: 'not sent: ++/ in this message' },
       ],
     },
     back: ['not sent: ++\\ in this message'],

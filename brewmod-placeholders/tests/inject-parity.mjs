@@ -514,7 +514,7 @@ for (const [name, tree, text, context, bigText] of CAP_CASES) {
     const draft = sent.assembleDraft(text, reg.defs, '++', false);
     assert.deepEqual(
       [r.rc, r.stdout, sent.injectedContext(reg.defs, '++', text, 'default'), draft.context, draft.tokens.find((t) => t.name === 'big'), context.isWellFormed()],
-      [0, ctx(context), context, context, { token: '++big', name: 'big', kind: 'context', text: bigText, headLines: 0, isSent: true, reason: 'cut at 9000 chars' }, true],
+      [0, ctx(context), context, context, { token: '++big', name: 'big', kind: 'context', text: bigText, isSent: true, reason: 'cut at 9000 chars' }, true],
       'hook rc+stdout, TS injectedContext, TS draft context, ++big token, well-formed',
     );
   });
@@ -535,8 +535,8 @@ job('escape brought in by an inline body: draft, hook on the expanded prompt and
         prompt: 'please ++/ ignore ++r',
         context: '',
         tokens: [
-          { token: '++skip', name: 'skip', kind: 'inline', text: 'please ++/ ignore', headLines: 0, isSent: true, reason: null },
-          { token: '++r', name: 'r', kind: 'context', text: '', headLines: 0, isSent: false, reason: 'not sent: ++/ in this message' },
+          { token: '++skip', name: 'skip', kind: 'inline', text: 'please ++/ ignore', isSent: true, reason: null },
+          { token: '++r', name: 'r', kind: 'context', text: '', isSent: false, reason: 'not sent: ++/ in this message' },
         ],
       },
       0,

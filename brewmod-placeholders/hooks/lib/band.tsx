@@ -166,54 +166,46 @@ export function shareRows(needs: readonly number[], free: number): number[] {
   return out
 }
 
-// Colour rule: every row Claude receives now is bold in the theme text colour; everything else is dim.
+// Body rows: sent now = bold theme text colour, else dim.
 const SENT_STYLE = { color: 'text', bold: true } as const
-const styleOf = (isSent: boolean) => (isSent ? SENT_STYLE : { dimColor: true })
+const DIM_STYLE = { dimColor: true } as const
+const styleOf = (isSent: boolean) => (isSent ? SENT_STYLE : DIM_STYLE)
 const plural = (n: number, word: string): string => (n === 1 ? word : `${word}s`)
-const moreLines = (n: number): string => `... ${n} more ${plural(n, 'line')}`
+const nMore = (n: number, word: string): string => `... ${n} more ${plural(n, word)}`
 
 // A row piece: plain = dim label, act = what to type or do, key = a key to press, tok = a placeholder name.
-export type Part = string | { act: string } | { key: string } | { tok: string; isKnown: boolean }
+type Part = string | { act: string } | { key: string } | { tok: string; isKnown: boolean }
 // Token names: placeholder colour (unknown: warning), bold; actions: theme text colour, underlined; keys: theme text colour.
-export const tokStyle = (isKnown: boolean) => ({ color: isKnown ? KNOWN_COLOR : UNKNOWN_COLOR, bold: true }) as const
+const tokStyle = (isKnown: boolean) => ({ color: isKnown ? KNOWN_COLOR : UNKNOWN_COLOR, bold: true }) as const
 const ACT_STYLE = { color: 'text', underline: true } as const
 const KEY_STYLE = { color: 'text' } as const
-const partText = (p: Part): string => (typeof p === 'string' ? p : 'act' in p ? p.act : 'key' in p ? p.key : p.tok)
-const partsCells = (parts: readonly Part[]): number => cells(parts.map(partText).join(''))
+type Style = typeof DIM_STYLE | typeof ACT_STYLE | typeof KEY_STYLE | ReturnType<typeof tokStyle>
+const pieceOf = (p: Part): [Style, string] =>
+  typeof p === 'string' ? [DIM_STYLE, p] : 'act' in p ? [ACT_STYLE, p.act] : 'key' in p ? [KEY_STYLE, p.key] : [tokStyle(p.isKnown), p.tok]
+const partsCells = (parts: readonly Part[]): number => cells(parts.map((p) => pieceOf(p)[1]).join(''))
 
 // One row of styled pieces, cut at the end as a whole.
 function partsRow(Text: BandUi['Text'], key: string, parts: readonly Part[]): RenderElement {
   return (
     <Text key={key} wrap="truncate-end">
-      {parts.map((p, i) =>
-        typeof p === 'string' ? (
-          <Text key={`${key}:${i}`} dimColor>
-            {p}
+      {parts.map((p, i) => {
+        const [style, text] = pieceOf(p)
+        return (
+          <Text key={`${key}:${i}`} {...style}>
+            {text}
           </Text>
-        ) : 'act' in p ? (
-          <Text key={`${key}:${i}`} {...ACT_STYLE}>
-            {p.act}
-          </Text>
-        ) : 'key' in p ? (
-          <Text key={`${key}:${i}`} {...KEY_STYLE}>
-            {p.key}
-          </Text>
-        ) : (
-          <Text key={`${key}:${i}`} {...tokStyle(p.isKnown)}>
-            {p.tok}
-          </Text>
-        ),
-      )}
+        )
+      })}
     </Text>
   )
 }
 
 // What a cut row offers: the show command (plus the `P<name>?` hand-off where it runs), or `?` while the menu caps the rows.
-export type More = { kind: 'show'; token: string; hasQuery: boolean } | { kind: 'query'; token: string } | null
+type More = { kind: 'show'; token: string; hasQuery: boolean } | { kind: 'query'; token: string } | null
 
 // The cut row: the widest variant that fits `width`; the hand-off goes first, the show command is never cut while it fits alone.
-export function cutParts(left: number, more: More, width: number): Part[] {
-  const lines = moreLines(left)
+function cutParts(left: number, more: More, width: number): Part[] {
+  const lines = nMore(left, 'line')
   if (more === null) return [lines]
   if (more.kind === 'query') return [`${lines} · `, { act: `type ? after ${more.token}` }, ' to see all']
   const show: Part = { act: `/placeholders show ${more.token}` }
@@ -291,7 +283,6 @@ const compactFoot = (token: string, prefix: string): Part[] => ['more: ', { act:
 const focusFoot = (token: string, prefix: string): Part[] => ['close: ', { act: `move the caret off ${token}` }, ' · send as typed: ', { act: `${prefix}/` }]
 const UNKNOWN_FOOT: Part[] = ['names: ', { act: '/placeholders list' }]
 const alsoRow = (rows: readonly BandRow[]): Part[] => ['also:', ...rows.flatMap((r): Part[] => [' ', { tok: r.text, isKnown: r.isKnown }])]
-const moreText = (hidden: number): string => `... ${hidden} more ${plural(hidden, 'placeholder')}`
 const ESCAPED_HEAD = '  placeholders off: this message is sent exactly as typed'
 const escapedFoot = (marker: string): Part[] => ['turn back on: ', { act: `delete ${marker}` }]
 const PLAN_HEAD = ' · plan mode'
@@ -468,7 +459,7 @@ function renderEscaped(ui: BandUi, rows: readonly BandRow[], o: BandOptions): Re
           </Text>
         </Box>
       ))}
-      {rows.length > shown.length ? <Text dimColor>{moreText(rows.length - shown.length)}</Text> : null}
+      {rows.length > shown.length ? <Text dimColor>{nMore(rows.length - shown.length, 'placeholder')}</Text> : null}
       {partsRow(Text, 'hint', escapedFoot(o.marker))}
     </Box>
   )
@@ -488,7 +479,7 @@ function renderCompact(ui: BandUi, rows: readonly BandRow[], o: BandOptions): Re
         {`placeholders ${rows.length}${o.isPlan ? PLAN_HEAD : ''}`}
       </Text>
       {shown.map((row) => (view === null ? tokenRow(ui, row, o, hoverRows, showMore(o, row), true) : tokenRow(ui, row, o, view.alloc.get(row) ?? 0, showMore(o, row))))}
-      {rows.length > shown.length ? <Text dimColor>{moreText(rows.length - shown.length)}</Text> : null}
+      {rows.length > shown.length ? <Text dimColor>{nMore(rows.length - shown.length, 'placeholder')}</Text> : null}
       {foot(ui, o, compactFoot(first?.text ?? `${o.prefix}name`, o.prefix))}
     </Box>
   )
