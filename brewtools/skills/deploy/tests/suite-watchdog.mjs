@@ -85,8 +85,9 @@ function runScript(script, args = [], extra = {}, cwd = REPO) {
   return { out: (r.stdout || '').trim(), err: (r.stderr || '').trim(), status: r.status };
 }
 
+// Lib path reaches bash via env (T_LIB), never spliced into the command text.
 function lib(code, extra = {}) {
-  const r = spawnSync('/bin/bash', ['-c', `. "${LIB}"\n${code}`], { encoding: 'utf8', env: envFor(extra), cwd: REPO, timeout: 60000 });
+  const r = spawnSync('/bin/bash', ['-c', `. "$T_LIB"\n${code}`], { encoding: 'utf8', env: envFor({ T_LIB: LIB, ...extra }), cwd: REPO, timeout: 60000 });
   return { out: (r.stdout || '').trim(), err: (r.stderr || '').trim(), status: r.status };
 }
 

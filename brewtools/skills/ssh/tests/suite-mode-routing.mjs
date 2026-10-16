@@ -87,13 +87,14 @@ try {
     const snippets = [...SOURCE.matchAll(/```bash\n([\s\S]*?)\n```/g)].map(match => match[1]);
     const snippet = snippets.find(text => text.includes('/scripts/detect-mode.sh'));
     check(typeof snippet, 'string', 'the skill consumer contains the producer invocation');
-    const command = snippet.replaceAll('${CLAUDE_SKILL_DIR}', SKILL).replace('"PROMPT_HERE"', '"$1"');
+    // Load-time token -> env ref: the skill dir reaches bash via env, never spliced into the command text.
+    const command = snippet.replaceAll('${CLAUDE_SKILL_DIR}', '${SUBST_SKILL_DIR}').replace('"PROMPT_HERE"', '"$1"');
     const marker = join(BASE, 'must-not-exist');
     const payload = `unknown $(touch ${marker}) ; \`touch ${marker}\``;
     // WHEN the consumer passes that prompt as data through its materialized Bash call.
     const integrated = spawnSync('/bin/bash', ['-c', command, 'mode-consumer', payload], {
         cwd: CONFIGURED, encoding: 'utf8', timeout: 10000,
-        env: { PATH: process.env.PATH, LC_ALL: 'C' },
+        env: { PATH: process.env.PATH, LC_ALL: 'C', SUBST_SKILL_DIR: SKILL },
     });
     // THEN shell syntax in the prompt never runs; the output enters the safe default/gated route.
     verify(integrated, payload, "execute");

@@ -39,10 +39,11 @@ function project(t, settings) {
   return root;
 }
 
+// Plugin root reaches bash via env, never spliced into the command text.
 function run(root, block) {
-  const r = spawnSync('bash', ['-c', block.replace('BT=/abs/brewtools/root', `BT="${TOOLS}"`)], {
+  const r = spawnSync('bash', ['-c', block.replace('BT=/abs/brewtools/root', 'BT="${SUBST_PLUGIN_ROOT}"')], {
     cwd: root, encoding: 'utf8', timeout: 20000,
-    env: { ...process.env, CLAUDE_PROJECT_DIR: root, CLAUDE_CONFIG_DIR: join(root, 'profile'), HOME: root },
+    env: { ...process.env, CLAUDE_PROJECT_DIR: root, CLAUDE_CONFIG_DIR: join(root, 'profile'), HOME: root, SUBST_PLUGIN_ROOT: TOOLS },
   });
   assert.equal(r.status, 0, `shipped probe must run: ${r.stderr}`);
   return r.stdout.split('\n').filter(line => line.startsWith('REG project ') || /^\d+\|/.test(line));

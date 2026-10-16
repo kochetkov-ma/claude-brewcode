@@ -44,8 +44,9 @@ function check(name, actual, expected, message) {
 /** Run `code` with the lib sourced, in `cwd`, with a clean env. */
 function sh(code, { cwd, env = {} } = {}) {
   // An `undefined` value unsets the variable: spawnSync drops undefined env entries.
-  const r = spawnSync('bash', ['-c', `. "${LIB}"\n${code}`], {
-    cwd, encoding: 'utf8', env: { ...process.env, TMPDIR: TMP, ...env }, timeout: 20000,
+  // Paths reach bash as env vars (T_LIB, callers' T_ARG), never spliced into the command text.
+  const r = spawnSync('bash', ['-c', `. "$T_LIB"\n${code}`], {
+    cwd, encoding: 'utf8', env: { ...process.env, TMPDIR: TMP, T_LIB: LIB, ...env }, timeout: 20000,
   });
   return { out: (r.stdout || '').trim(), err: (r.stderr || '').trim(), status: r.status };
 }
@@ -223,7 +224,7 @@ for (const [ns, days, entry, want, why] of [
     [join(pw, 'short.txt'), [1, invalid], 'a 3-char password is rejected'],
     [join(pw, 'ctrl.txt'), [1, invalid], 'a control character (header injection) is rejected'],
   ]) {
-    const r = sh(`bp_password_check '${file}'`, { cwd: pw });
+    const r = sh('bp_password_check "$T_ARG"', { cwd: pw, env: { T_ARG: file } });
     check(`password.${JSON.stringify(file)}`, [r.status, r.out, r.err], [want[0], want[1], ''], why);
   }
 }
