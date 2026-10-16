@@ -5,8 +5,8 @@ import { KNOWN_COLOR, UNKNOWN_COLOR, type CaretFocus, type EditorEntry } from '.
 import type { PlaceholderView } from './match'
 import { PLAN_LABEL, REASON, escapedReason, type PlanParts, type Sent } from './sent'
 
-// body = exact text the token sends; headLines = its leading header lines; reason = why it is not sent (plan-only has its own flag); plan = its plan-mode addon.
-export type BandRow = { text: string; name: string; isKnown: boolean; description: string; body: string; isPlanOnly: boolean; isInline?: boolean; headLines?: number; reason?: string; plan?: RowPlan }
+// body = exact text the token sends; reason = why it is not sent (plan-only has its own flag); plan = its plan-mode addon.
+export type BandRow = { text: string; name: string; isKnown: boolean; description: string; body: string; isPlanOnly: boolean; isInline?: boolean; reason?: string; plan?: RowPlan }
 // A plan-mode text beside the normal one: add = plan is the addition, replace = plan is the whole plan-mode text.
 export type RowPlan = { kind: 'add' | 'replace'; plan: string }
 export type BandMode = 'hidden' | 'escaped' | 'focus' | 'compact'
@@ -164,13 +164,14 @@ export function shareRows(needs: readonly number[], free: number): number[] {
   return out
 }
 
-// Colour rule: text Claude receives now is the band's only non-dim content (its header bold); everything else is dim.
-const styleOf = (isHead: boolean, isSent: boolean) => (isSent ? (isHead ? { bold: true } : {}) : { dimColor: true })
+// Colour rule: every row Claude receives now is bold in the theme text colour; everything else is dim.
+const SENT_STYLE = { color: 'text', bold: true } as const
+const styleOf = (isSent: boolean) => (isSent ? SENT_STYLE : { dimColor: true })
 const plural = (n: number, word: string): string => (n === 1 ? word : `${word}s`)
 const moreLines = (n: number): string => `... ${n} more ${plural(n, 'line')}`
 
 // Whole source lines of a body while their pre-wrapped rows fit `rows`; a cut adds one row counting the source lines left, plus `more`.
-function bodyRows(Text: BandUi['Text'], body: string, rows: number, key: string, width: number, headLines = 0, more = '', isSent: boolean): RenderElement[] {
+function bodyRows(Text: BandUi['Text'], body: string, rows: number, key: string, width: number, more: string, isSent: boolean): RenderElement[] {
   const lines = body.split('\n').map((l) => wrapRows(l, width))
   const total = lines.reduce((n, l) => n + l.length, 0)
   const room = total > rows ? rows - 1 : total
@@ -183,7 +184,7 @@ function bodyRows(Text: BandUi['Text'], body: string, rows: number, key: string,
   }
   const out = lines.slice(0, take).flatMap((parts, i) =>
     parts.map((p, j) => (
-      <Text key={`${key}:${i}:${j}`} {...styleOf(i < headLines, isSent)} wrap="truncate-end">
+      <Text key={`${key}:${i}:${j}`} {...styleOf(isSent)} wrap="truncate-end">
         {p === '' ? ' ' : p}
       </Text>
     )),
@@ -228,7 +229,6 @@ export function bandRows(view: PlaceholderView, entries: readonly EditorEntry[],
       body: s === undefined ? (entry?.body ?? '') : s.text,
       isPlanOnly: entry?.planOnly === true,
       ...(entry?.isInline === true ? { isInline: true } : {}),
-      ...(s !== undefined && s.headLines > 0 ? { headLines: s.headLines } : {}),
       ...(reason !== null && reason !== REASON.planOnly ? { reason } : {}),
       ...(pp?.kind === 'add' || pp?.kind === 'replace' ? { plan: { kind: pp.kind, plan: pp.plan } } : {}),
     })
@@ -385,7 +385,7 @@ function planBody(Text: BandUi['Text'], row: BandRow, rows: number, key: string,
   const p = row.plan
   const width = bodyWidth(o)
   const isSent = isSentNow(row, o.isPlan)
-  const whole = (n: number): RenderElement[] => bodyRows(Text, row.body, n, key, width, row.headLines, more, isSent)
+  const whole = (n: number): RenderElement[] => bodyRows(Text, row.body, n, key, width, more, isSent)
   if (p === undefined || rows < (o.isPlan ? 3 : 2)) return whole(rows)
   if (!o.isPlan) {
     const note = (
@@ -405,7 +405,7 @@ function planBody(Text: BandUi['Text'], row: BandRow, rows: number, key: string,
   if (!row.body.endsWith(sep)) return whole(rows)
   const normal = row.body.slice(0, -sep.length)
   const [a, b] = shareRows([rowsOf(normal, width), rowsOf(p.plan, width)], rows - 1)
-  return [...bodyRows(Text, normal, a ?? 1, `${key}:a`, width, row.headLines, '', isSent), mark(PLAN_LABEL.adds), ...bodyRows(Text, p.plan, b ?? 1, `${key}:b`, width, 0, more, isSent)]
+  return [...bodyRows(Text, normal, a ?? 1, `${key}:a`, width, '', isSent), mark(PLAN_LABEL.adds), ...bodyRows(Text, p.plan, b ?? 1, `${key}:b`, width, more, isSent)]
 }
 
 // `P/` in the message: nothing is substituted, so no bodies and no Button; one row per token says so.

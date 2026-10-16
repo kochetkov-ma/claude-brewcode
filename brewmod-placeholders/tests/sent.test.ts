@@ -324,7 +324,7 @@ test('GIVEN ++r and ++rr of one group WHEN the band mounts THEN ++r says it is n
   ])
 })
 
-test('GIVEN ++r WHEN the band mounts THEN the sent header line is bold, the sent body lines plain, labels dim, and every pre-wrapped row truncates at the end', async ($, on) => {
+test('GIVEN ++r WHEN the band mounts THEN every sent row (header and body) is bold in the theme text colour, labels dim, and every pre-wrapped row truncates at the end', async ($, on) => {
   await boot($, on, defaultsTree())
   await typed($, '++r ')
   const ui = await mountBand($, 45)
@@ -333,13 +333,14 @@ test('GIVEN ++r WHEN the band mounts THEN the sent header line is bold, the sent
 
   const dimRow = { dimColor: true, wrap: 'truncate-end' }
 
-  expect(props, 'props: count, token, description, dim receives label, bold header line, 10 plain body rows, dim foot').toEqual([
+  const sentRow = { color: 'text', bold: true, wrap: 'truncate-end' }
+
+  expect(props, 'props: count, token, description, dim receives label, 11 sent rows bold in the text colour, dim foot').toEqual([
     { dimColor: true },
     { color: 'suggestion' },
     dimRow,
     dimRow,
-    { bold: true, wrap: 'truncate-end' },
-    ...Array.from({ length: 10 }, () => ({ wrap: 'truncate-end' })),
+    ...Array.from({ length: 11 }, () => sentRow),
     dimRow,
   ])
   await ui.unmount()

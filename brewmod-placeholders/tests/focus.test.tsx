@@ -543,3 +543,33 @@ test('GIVEN fullscreen plan mode and an inner mod row beneath WHEN focus and com
 
   expect(drawn, 'rows drawn per slot, the inner row included').toEqual({ focus: [6, 14], compact: [6, 14] })
 })
+
+// ---- colour rule: every row sent now is bold in the theme text colour, every explanation dim
+
+const styled = async ($: any): Promise<{ sent: string[]; dim: string[] }> => {
+  const ui = await mountBand($, 40)
+  const texts = (await ui.findAll({ type: 'Text' })) as { text: string; props: { color?: unknown; bold?: unknown; dimColor?: unknown } }[]
+  await ui.unmount()
+  return { sent: texts.filter((t) => t.props.color === 'text' && t.props.bold === true).map((t) => t.text), dim: texts.filter((t) => t.props.dimColor === true).map((t) => t.text) }
+}
+
+test('GIVEN plan mode and ++m focused WHEN the band mounts THEN the normal rows and the addition are bold text colour, labels, cut rows and foot dim', async ($, on) => {
+  await boot($, on, PLAN_TREE)
+  await typed($, '++m')
+
+  expect(await styled($), 'plan focus styles').toEqual({
+    sent: [MP_HEAD, ' ', ...M_BODY.slice(0, 4), ...M_ADDITION],
+    dim: [RECV, '... 23 more lines', 'plan mode adds:', '... 23 more lines · whole text: /placeholders show ++m', M_FOOT],
+  })
+})
+
+test('GIVEN default mode WHEN ++m (plan part not sent), +++ (plan only) and ++/ ++m (escaped) bands mount THEN only the ++m normal rows are bold text colour', async ($, on) => {
+  await boot($, on)
+  const out: Record<string, string[]> = {}
+  for (const draft of ['++m', '+++', '++/ ++m']) {
+    await typed($, draft)
+    out[draft] = (await styled($)).sent
+  }
+
+  expect(out, 'sent rows per draft').toEqual({ '++m': [M_HEAD, ' ', ...M_BODY], '+++': [], '++/ ++m': [] })
+})

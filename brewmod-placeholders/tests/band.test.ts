@@ -4,6 +4,7 @@ import { BAND, ENGINE_NODE, ROOT, STATE_FILE, bandProps, bandTexts, bootBand, bo
 import { autoBudget, bandBudget, bandRows, cells, clip, shareRows, treeRows } from '../hooks/lib/band'
 
 const SURFACES = ['terminal', 'desktop'] as const
+type Surface = (typeof SURFACES)[number]
 
 const def = (name: string, description: string, when: string, body: string): string =>
   `---\nname: "${name}"\ndescription: "${description}"\nwhen: ${when}\n---\n${body}`
@@ -71,13 +72,14 @@ const rowQ = {
   ],
 }
 // The drawn tree carries no key on a Text: only Boxes keep theirs.
-// Sent text is plain, a text not sent now is dim.
-const line = (body: string, isSent: boolean) => ({ type: 'Text', props: isSent ? { wrap: 'truncate-end' } : { dimColor: true, wrap: 'truncate-end' }, children: [body] })
-const hidden = (body: string, isSent = true) => ({
+// Sent text is bold in the theme text colour (desktop adds its semibold weight), a text not sent now is dim.
+const SENT_PROPS = { terminal: { color: 'text', bold: true, wrap: 'truncate-end' }, desktop: { color: 'text', bold: true, wrap: 'truncate-end', weight: 'semibold' } }
+const line = (body: string, isSent: boolean, surface: Surface) => ({ type: 'Text', props: isSent ? SENT_PROPS[surface] : { dimColor: true, wrap: 'truncate-end' }, children: [body] })
+const hidden = (body: string, isSent = true, surface: Surface = 'terminal') => ({
   type: 'Box',
   props: { marginLeft: 2, flexDirection: 'column', display: 'none' },
   hover: { display: 'flex' },
-  children: [line(body, isSent)],
+  children: [line(body, isSent, surface)],
 })
 const foot = (token: string) => `more: put the caret on ${token} · send as typed: ++/ · help: /placeholders help`
 const hint = (token: string) => ({ type: 'Text', props: { dimColor: true, wrap: 'truncate-end' }, children: [foot(token)] })
@@ -93,7 +95,7 @@ for (const surface of SURFACES) {
 
     const ui = await $.ui.mount({ ...BAND, surface, props: bandProps() })
 
-    expect(bare(await ui.drawn()), 'collapsed band').toEqual(band([head(3), rowYY([hidden('YY BODY')]), rowZZ([hidden('ZZ BODY', false)]), rowQ]))
+    expect(bare(await ui.drawn()), 'collapsed band').toEqual(band([head(3), rowYY([hidden('YY BODY', true, surface)]), rowZZ([hidden('ZZ BODY', false, surface)]), rowQ]))
     await ui.unmount()
   })
 
@@ -135,7 +137,7 @@ for (const surface of SURFACES) {
     expect(bare(await ui.drawn()), 'inner tree first, then the band').toEqual({
       type: 'Box',
       props: { flexDirection: 'column' },
-      children: [INNER, band([head(3), rowYY([hidden('YY BODY')]), rowZZ([hidden('ZZ BODY', false)]), rowQ])],
+      children: [INNER, band([head(3), rowYY([hidden('YY BODY', true, surface)]), rowZZ([hidden('ZZ BODY', false, surface)]), rowQ])],
     })
     await ui.unmount()
   })
