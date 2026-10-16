@@ -231,7 +231,30 @@ export async function bootBand($: any, on: On, w: Wiring, extra: (o: On) => void
 }
 
 export const mountBand = ($: any, maxRows = 24, surface: 'terminal' | 'desktop' = 'terminal', bodyColumns = 100) => $.ui.mount({ ...BAND, surface, props: bandProps(maxRows, bodyColumns) })
-export const textsOf = async (ui: any): Promise<string[]> => (await ui.findAll({ type: 'Text' })).map((t: { text: string }) => t.text)
+// One entry per outermost Text, its nested styled pieces joined: a row reads as drawn.
+const shown = (n: any): string => (typeof n === 'string' ? n : n !== null && typeof n === 'object' ? (n.children ?? []).map(shown).join('') : '')
+const outer = (n: any): string[] => (n === null || typeof n !== 'object' ? [] : n.type === 'Text' ? [shown(n)] : (n.children ?? []).flatMap(outer))
+export const textsOf = async (ui: any): Promise<string[]> => outer(await ui.drawn())
+// Each drawn run as [style, text]: tok/unk = token name, sent = text Claude receives, act = what to type or do, key = a key, dim = explanation; other props as JSON.
+const STYLES: Record<string, string> = {
+  '{"color":"suggestion","bold":true}': 'tok',
+  '{"color":"warning","bold":true}': 'unk',
+  '{"color":"text","bold":true,"wrap":"truncate-end"}': 'sent',
+  '{"color":"text","underline":true}': 'act',
+  '{"color":"text"}': 'key',
+  '{"dimColor":true}': 'dim',
+  '{"dimColor":true,"wrap":"truncate-end"}': 'dim',
+}
+const runs = (n: any): [string, string][] => {
+  if (n === null || typeof n !== 'object') return []
+  const kids: unknown[] = n.children ?? []
+  if (n.type !== 'Text' || kids.some((k) => typeof k === 'object')) return kids.flatMap(runs)
+  const key = JSON.stringify(n.props ?? {})
+  return [[STYLES[key] ?? key, shown(n)]]
+}
+export const spansOf = async (ui: any): Promise<[string, string][]> => runs(await ui.drawn())
+// The build's mod tools answer, so the `P<name>?` hand-off runs and the cut row names it.
+export const withTools = (o: On) => o('tool.register', (_$, e) => ({ value: { tool: `${TOOL}${e.name}` } }) as never)
 export async function bandTexts($: any, maxRows = 24, surface: 'terminal' | 'desktop' = 'terminal', bodyColumns = 100): Promise<string[]> {
   const ui = await mountBand($, maxRows, surface, bodyColumns)
   const texts = await textsOf(ui)

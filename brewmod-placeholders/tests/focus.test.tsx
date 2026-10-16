@@ -1,6 +1,6 @@
 import { test, expect } from 'claude-code/testing'
 import type { On } from 'claude-code'
-import { BAND, PLUG, ROOT, STATE_FILE, bandProps, bandTexts, bootBand, box, defaultsTree, mountBand, textsOf, typed, type Tree } from './layer-io'
+import { BAND, PLUG, ROOT, STATE_FILE, bandProps, bandTexts, bootBand, box, defaultsTree, mountBand, spansOf, textsOf, typed, type Tree } from './layer-io'
 import { defaultDefs } from './fixtures'
 import { bandState, budgets, receivesLabel, treeRows, wrapRows, type BandRow } from '../hooks/lib/band'
 import { caretFocus, isMenuOpen } from '../hooks/lib/editor'
@@ -502,11 +502,14 @@ test('GIVEN plan mode, ++nn with a 2-line addition under the caret and the menu 
   ])
 })
 
-test('GIVEN a body whose last source line wraps past the cut WHEN the compact band mounts in 40 columns THEN the cut row counts source lines, not wrapped rows', async ($, on) => {
+test('GIVEN a body whose last source line wraps past the cut WHEN the compact band mounts in 40 columns THEN the cut row counts source lines, not wrapped rows, and a row too narrow for the count keeps the show command whole', async ($, on) => {
   await boot($, on, { ...TREE, [`${ROOT}/.claude/placeholders/wrap.md`]: file('wrap', 'Wrap mode', `a\nb\nc\n${'word '.repeat(30).trim()}`) })
   await typed($, '++wrap ')
 
-  expect(await bandTexts($, 18, 'terminal', 40), 'two source lines hidden').toEqual(['placeholders 1', '++wrap', RECV, 'a', 'b', '... 2 more lines · whole text: /placeholders show ++wrap', compactFoot('++wrap')])
+  expect([await bandTexts($, 18, 'terminal', 60), await bandTexts($, 18, 'terminal', 40)], 'two source lines hidden').toEqual([
+    ['placeholders 1', '++wrap', '  Wrap mode', RECV, 'a', 'b', '... 2 more lines · whole text: /placeholders show ++wrap', compactFoot('++wrap')],
+    ['placeholders 1', '++wrap', RECV, 'a', 'b', '/placeholders show ++wrap', compactFoot('++wrap')],
+  ])
 })
 
 // ---- fullscreen slot: maxRows = the engine's bottom slot; an outer plan-effort row arrives as maxRows - 1, an inner one is counted beneath
@@ -546,20 +549,22 @@ test('GIVEN fullscreen plan mode and an inner mod row beneath WHEN focus and com
 
 // ---- colour rule: every row sent now is bold in the theme text colour, every explanation dim
 
-const styled = async ($: any): Promise<{ sent: string[]; dim: string[] }> => {
+const styled = async ($: any): Promise<{ sent: string[]; dim: string[]; act: string[] }> => {
   const ui = await mountBand($, 40)
-  const texts = (await ui.findAll({ type: 'Text' })) as { text: string; props: { color?: unknown; bold?: unknown; dimColor?: unknown } }[]
+  const runs = await spansOf(ui)
   await ui.unmount()
-  return { sent: texts.filter((t) => t.props.color === 'text' && t.props.bold === true).map((t) => t.text), dim: texts.filter((t) => t.props.dimColor === true).map((t) => t.text) }
+  const of = (k: string): string[] => runs.filter(([s]) => s === k).map(([, t]) => t)
+  return { sent: of('sent'), dim: of('dim'), act: of('act') }
 }
 
-test('GIVEN plan mode and ++m focused WHEN the band mounts THEN the normal rows and the addition are bold text colour, labels, cut rows and foot dim', async ($, on) => {
+test('GIVEN plan mode and ++m focused WHEN the band mounts THEN the normal rows and the addition are bold text colour, labels dim and the actions underlined text colour', async ($, on) => {
   await boot($, on, PLAN_TREE)
   await typed($, '++m')
 
   expect(await styled($), 'plan focus styles').toEqual({
     sent: [MP_HEAD, ' ', ...M_BODY.slice(0, 4), ...M_ADDITION],
-    dim: [RECV, '... 23 more lines', 'plan mode adds:', '... 23 more lines · whole text: /placeholders show ++m', M_FOOT],
+    dim: [RECV, '... 23 more lines', 'plan mode adds:', '... 23 more lines · whole text: ', 'close: ', ' · send as typed: '],
+    act: ['/placeholders show ++m', 'move the caret off ++m', '++/'],
   })
 })
 

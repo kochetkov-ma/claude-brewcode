@@ -22,6 +22,8 @@ export type BandOptions = {
   autoBudget: number
   queryBudget: number
   columns: number
+  // The `P<name>?` hand-off runs (the build has the mod tools): the cut row names it.
+  hasQuery: boolean
 }
 export type BandUi = Pick<ElementTable<'terminal'>, 'Box' | 'Text'>
 
@@ -170,8 +172,61 @@ const styleOf = (isSent: boolean) => (isSent ? SENT_STYLE : { dimColor: true })
 const plural = (n: number, word: string): string => (n === 1 ? word : `${word}s`)
 const moreLines = (n: number): string => `... ${n} more ${plural(n, 'line')}`
 
-// Whole source lines of a body while their pre-wrapped rows fit `rows`; a cut adds one row counting the source lines left, plus `more`.
-function bodyRows(Text: BandUi['Text'], body: string, rows: number, key: string, width: number, more: string, isSent: boolean): RenderElement[] {
+// A row piece: plain = dim label, act = what to type or do, key = a key to press, tok = a placeholder name.
+export type Part = string | { act: string } | { key: string } | { tok: string; isKnown: boolean }
+// Token names: placeholder colour (unknown: warning), bold; actions: theme text colour, underlined; keys: theme text colour.
+export const tokStyle = (isKnown: boolean) => ({ color: isKnown ? KNOWN_COLOR : UNKNOWN_COLOR, bold: true }) as const
+const ACT_STYLE = { color: 'text', underline: true } as const
+const KEY_STYLE = { color: 'text' } as const
+const partText = (p: Part): string => (typeof p === 'string' ? p : 'act' in p ? p.act : 'key' in p ? p.key : p.tok)
+const partsCells = (parts: readonly Part[]): number => cells(parts.map(partText).join(''))
+
+// One row of styled pieces, cut at the end as a whole.
+function partsRow(Text: BandUi['Text'], key: string, parts: readonly Part[]): RenderElement {
+  return (
+    <Text key={key} wrap="truncate-end">
+      {parts.map((p, i) =>
+        typeof p === 'string' ? (
+          <Text key={`${key}:${i}`} dimColor>
+            {p}
+          </Text>
+        ) : 'act' in p ? (
+          <Text key={`${key}:${i}`} {...ACT_STYLE}>
+            {p.act}
+          </Text>
+        ) : 'key' in p ? (
+          <Text key={`${key}:${i}`} {...KEY_STYLE}>
+            {p.key}
+          </Text>
+        ) : (
+          <Text key={`${key}:${i}`} {...tokStyle(p.isKnown)}>
+            {p.tok}
+          </Text>
+        ),
+      )}
+    </Text>
+  )
+}
+
+// What a cut row offers: the show command (plus the `P<name>?` hand-off where it runs), or `?` while the menu caps the rows.
+export type More = { kind: 'show'; token: string; hasQuery: boolean } | { kind: 'query'; token: string } | null
+
+// The cut row: the widest variant that fits `width`; the hand-off goes first, the show command is never cut while it fits alone.
+export function cutParts(left: number, more: More, width: number): Part[] {
+  const lines = moreLines(left)
+  if (more === null) return [lines]
+  if (more.kind === 'query') return [`${lines} · `, { act: `type ? after ${more.token}` }, ' to see all']
+  const show: Part = { act: `/placeholders show ${more.token}` }
+  const tiers: Part[][] = [
+    ...(more.hasQuery ? [[`${lines} · whole text: `, show, ' or ', { act: `${more.token}?` }, ' alone ', { key: '[Enter]' }]] : []),
+    [`${lines} · whole text: `, show],
+    [`${lines} · `, show],
+  ]
+  return tiers.find((t) => partsCells(t) <= width) ?? [show]
+}
+
+// Whole source lines of a body while their pre-wrapped rows fit `rows`; a cut adds one row counting the source lines left and what `more` offers.
+function bodyRows(Text: BandUi['Text'], body: string, rows: number, key: string, width: number, more: More, isSent: boolean): RenderElement[] {
   const lines = body.split('\n').map((l) => wrapRows(l, width))
   const total = lines.reduce((n, l) => n + l.length, 0)
   const room = total > rows ? rows - 1 : total
@@ -189,13 +244,7 @@ function bodyRows(Text: BandUi['Text'], body: string, rows: number, key: string,
       </Text>
     )),
   )
-  if (used < total) {
-    out.push(
-      <Text key={`${key}:more`} dimColor wrap="truncate-end">
-        {`${moreLines(lines.length - take)}${more}`}
-      </Text>,
-    )
-  }
+  if (used < total) out.push(partsRow(Text, `${key}:more`, cutParts(lines.length - take, more, width)))
   return out
 }
 
@@ -237,15 +286,14 @@ export function bandRows(view: PlaceholderView, entries: readonly EditorEntry[],
 }
 
 // Every band string; P = the prefix, token = the first or focused token as typed.
-const showHint = (token: string): string => ` · whole text: /placeholders show ${token}`
-const queryHint = (token: string): string => ` · type ? after ${token} to see all`
-const compactFoot = (token: string, prefix: string): string => `more: put the caret on ${token} · send as typed: ${prefix}/ · help: /placeholders help`
-const focusFoot = (token: string, prefix: string): string => `close: move the caret off ${token} · send as typed: ${prefix}/`
-const UNKNOWN_FOOT = 'names: /placeholders list'
-const alsoRow = (tokens: readonly string[]): string => `also: ${tokens.join(' ')}`
+const showMore = (o: BandOptions, row: BandRow): More => ({ kind: 'show', token: o.prefix + row.name, hasQuery: o.hasQuery })
+const compactFoot = (token: string, prefix: string): Part[] => ['more: ', { act: `put the caret on ${token}` }, ' · send as typed: ', { act: `${prefix}/` }, ' · help: ', { act: '/placeholders help' }]
+const focusFoot = (token: string, prefix: string): Part[] => ['close: ', { act: `move the caret off ${token}` }, ' · send as typed: ', { act: `${prefix}/` }]
+const UNKNOWN_FOOT: Part[] = ['names: ', { act: '/placeholders list' }]
+const alsoRow = (rows: readonly BandRow[]): Part[] => ['also:', ...rows.flatMap((r): Part[] => [' ', { tok: r.text, isKnown: r.isKnown }])]
 const moreText = (hidden: number): string => `... ${hidden} more ${plural(hidden, 'placeholder')}`
 const ESCAPED_HEAD = '  placeholders off: this message is sent exactly as typed'
-const escapedFoot = (marker: string): string => `turn back on: delete ${marker}`
+const escapedFoot = (marker: string): Part[] => ['turn back on: ', { act: `delete ${marker}` }]
 const PLAN_HEAD = ' · plan mode'
 const PLAN_PLUS = ` ${PLAN_LABEL.plus}`
 // The band knows plan mode only after a prompt (state file), so the note says when the text is sent.
@@ -299,7 +347,7 @@ function drawHead(ui: BandUi, row: BandRow, o: BandOptions, label: string | null
   const description = isFocus && label !== null ? '' : clip(`  ${row.description}`, o.columns - cells(row.text) - cells(plus) - cells(planLabel) - cells(reasonLabel) - cells(tail))
   return (
     <Box>
-      <Text color={row.isKnown ? KNOWN_COLOR : UNKNOWN_COLOR}>{row.text}</Text>
+      <Text {...tokStyle(row.isKnown)}>{row.text}</Text>
       {description === '' ? null : (
         <Text dimColor wrap="truncate-end">
           {description}
@@ -317,13 +365,8 @@ function drawHead(ui: BandUi, row: BandRow, o: BandOptions, label: string | null
   )
 }
 
-function foot(ui: BandUi, o: BandOptions, text: string): RenderElement {
-  const { Text } = ui
-  return (
-    <Text key="hint" dimColor wrap="truncate-end">
-      {o.isGone ? FILES_GONE : text}
-    </Text>
-  )
+function foot(ui: BandUi, o: BandOptions, parts: readonly Part[]): RenderElement {
+  return partsRow(ui.Text, 'hint', o.isGone ? [FILES_GONE] : parts)
 }
 
 // Gone: a context row cannot be sent (its hook is gone); an inline one still expands.
@@ -344,15 +387,11 @@ function renderFocus(ui: BandUi, rows: readonly BandRow[], row: BandRow, o: Band
   const roomOf = (budget: number): number => Math.max(0, Math.min(FOCUS_MAX, budget - 2 - (others.length > 0 ? 1 : 0)))
   const room = roomOf(o.budget)
   const need = needOf(row, o.isPlan, bodyWidth(o))
-  const more = o.focus.isMenuOpen && !o.focus.isQuery && need <= roomOf(o.queryBudget) ? queryHint(row.text) : showHint(o.prefix + row.name)
+  const more: More = o.focus.isMenuOpen && !o.focus.isQuery && need <= roomOf(o.queryBudget) ? { kind: 'query', token: row.text } : showMore(o, row)
   return (
     <Box key="band" flexDirection="column">
       {tokenRow(ui, row, o, room, more, false, true)}
-      {others.length === 0 ? null : (
-        <Text key="also" dimColor wrap="truncate-end">
-          {alsoRow(others.map((r) => r.text))}
-        </Text>
-      )}
+      {others.length === 0 ? null : partsRow(Text, 'also', alsoRow(others))}
       {foot(ui, o, row.isKnown ? focusFoot(row.text, o.prefix) : UNKNOWN_FOOT)}
     </Box>
   )
@@ -360,7 +399,7 @@ function renderFocus(ui: BandUi, rows: readonly BandRow[], row: BandRow, o: Band
 
 // A token's head and its body within `rows`; isHover = the body stays hidden until hovered (un-keyed Box: a keyed one is refused).
 // A drawn body gets the receives label on the head; isFocus = the label replaces the description.
-function tokenRow(ui: BandUi, row: BandRow, o: BandOptions, rows: number, more: string, isHover = false, isFocus = false): RenderElement {
+function tokenRow(ui: BandUi, row: BandRow, o: BandOptions, rows: number, more: More, isHover = false, isFocus = false): RenderElement {
   const { Box, Text } = ui
   const key = row.text.toLowerCase()
   const body = row.body === '' || rows < 1 ? null : planBody(Text, row, rows, key, o, more)
@@ -381,7 +420,7 @@ function tokenRow(ui: BandUi, row: BandRow, o: BandOptions, rows: number, more: 
 }
 
 // A body within `rows`: plan mode marks where the plan-mode text starts (dim label row), outside a dim row says it exists.
-function planBody(Text: BandUi['Text'], row: BandRow, rows: number, key: string, o: BandOptions, more: string): RenderElement[] {
+function planBody(Text: BandUi['Text'], row: BandRow, rows: number, key: string, o: BandOptions, more: More): RenderElement[] {
   const p = row.plan
   const width = bodyWidth(o)
   const isSent = isSentNow(row, o.isPlan)
@@ -405,7 +444,7 @@ function planBody(Text: BandUi['Text'], row: BandRow, rows: number, key: string,
   if (!row.body.endsWith(sep)) return whole(rows)
   const normal = row.body.slice(0, -sep.length)
   const [a, b] = shareRows([rowsOf(normal, width), rowsOf(p.plan, width)], rows - 1)
-  return [...bodyRows(Text, normal, a ?? 1, `${key}:a`, width, '', isSent), mark(PLAN_LABEL.adds), ...bodyRows(Text, p.plan, b ?? 1, `${key}:b`, width, more, isSent)]
+  return [...bodyRows(Text, normal, a ?? 1, `${key}:a`, width, null, isSent), mark(PLAN_LABEL.adds), ...bodyRows(Text, p.plan, b ?? 1, `${key}:b`, width, more, isSent)]
 }
 
 // `P/` in the message: nothing is substituted, so no bodies and no Button; one row per token says so.
@@ -416,25 +455,21 @@ function renderEscaped(ui: BandUi, rows: readonly BandRow[], o: BandOptions): Re
   return (
     <Box key="band" flexDirection="column">
       <Box key="head">
-        <Text color={UNKNOWN_COLOR} bold>
-          {o.marker}
-        </Text>
+        <Text {...tokStyle(true)}>{o.marker}</Text>
         <Text dimColor wrap="truncate-end">
           {ESCAPED_HEAD}
         </Text>
       </Box>
       {shown.map((r) => (
         <Box key={`row:${r.text.toLowerCase()}`}>
-          <Text dimColor>{r.text}</Text>
+          <Text {...tokStyle(r.isKnown)}>{r.text}</Text>
           <Text dimColor wrap="truncate-end">
             {reason}
           </Text>
         </Box>
       ))}
       {rows.length > shown.length ? <Text dimColor>{moreText(rows.length - shown.length)}</Text> : null}
-      <Text key="hint" dimColor wrap="truncate-end">
-        {escapedFoot(o.marker)}
-      </Text>
+      {partsRow(Text, 'hint', escapedFoot(o.marker))}
     </Box>
   )
 }
@@ -452,7 +487,7 @@ function renderCompact(ui: BandUi, rows: readonly BandRow[], o: BandOptions): Re
       <Text key="head" dimColor>
         {`placeholders ${rows.length}${o.isPlan ? PLAN_HEAD : ''}`}
       </Text>
-      {shown.map((row) => (view === null ? tokenRow(ui, row, o, hoverRows, showHint(o.prefix + row.name), true) : tokenRow(ui, row, o, view.alloc.get(row) ?? 0, showHint(o.prefix + row.name))))}
+      {shown.map((row) => (view === null ? tokenRow(ui, row, o, hoverRows, showMore(o, row), true) : tokenRow(ui, row, o, view.alloc.get(row) ?? 0, showMore(o, row))))}
       {rows.length > shown.length ? <Text dimColor>{moreText(rows.length - shown.length)}</Text> : null}
       {foot(ui, o, compactFoot(first?.text ?? `${o.prefix}name`, o.prefix))}
     </Box>

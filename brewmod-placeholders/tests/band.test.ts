@@ -28,29 +28,31 @@ const boot = async ($: any, on: On, draft: string, stubs: (on: On) => void = () 
   await typed($, `${draft} `)
 }
 
+// Token names are bold in the placeholder colour (desktop adds its semibold weight).
+const TOK = { terminal: { color: 'suggestion', bold: true }, desktop: { color: 'suggestion', bold: true, weight: 'semibold' } }
 const head = (count: number) => ({ type: 'Text', props: { dimColor: true }, children: [`placeholders ${count}`] })
-const rowYY = (extra: unknown[]) => ({
+const rowYY = (extra: unknown[], surface: Surface = 'terminal') => ({
   type: 'Box',
   props: { key: 'row:++yy', flexDirection: 'column' },
   children: [
     {
       type: 'Box',
       children: [
-        { type: 'Text', props: { color: 'suggestion' }, children: ['++yy'] },
+        { type: 'Text', props: TOK[surface], children: ['++yy'] },
         { type: 'Text', props: { dimColor: true, wrap: 'truncate-end' }, children: ['  Why mode'] },
       ],
     },
     ...extra,
   ],
 })
-const rowZZ = (extra: unknown[]) => ({
+const rowZZ = (extra: unknown[], surface: Surface = 'terminal') => ({
   type: 'Box',
   props: { key: 'row:++zz', flexDirection: 'column' },
   children: [
     {
       type: 'Box',
       children: [
-        { type: 'Text', props: { color: 'suggestion' }, children: ['++zz'] },
+        { type: 'Text', props: TOK[surface], children: ['++zz'] },
         { type: 'Text', props: { dimColor: true, wrap: 'truncate-end' }, children: ['  Zed mode'] },
         { type: 'Text', props: { dimColor: true }, children: [' (plan only)'] },
       ],
@@ -58,19 +60,20 @@ const rowZZ = (extra: unknown[]) => ({
     ...extra,
   ],
 })
-const rowQ = {
+const rowQOn = (surface: Surface) => ({
   type: 'Box',
   props: { key: 'row:++q', flexDirection: 'column' },
   children: [
     {
       type: 'Box',
       children: [
-        { type: 'Text', props: { color: 'warning' }, children: ['++q'] },
+        { type: 'Text', props: { ...TOK[surface], color: 'warning' }, children: ['++q'] },
         { type: 'Text', props: { dimColor: true, wrap: 'truncate-end' }, children: ['  unknown placeholder'] },
       ],
     },
   ],
-}
+})
+const rowQ = rowQOn('terminal')
 // The drawn tree carries no key on a Text: only Boxes keep theirs.
 // Sent text is bold in the theme text colour (desktop adds its semibold weight), a text not sent now is dim.
 const SENT_PROPS = { terminal: { color: 'text', bold: true, wrap: 'truncate-end' }, desktop: { color: 'text', bold: true, wrap: 'truncate-end', weight: 'semibold' } }
@@ -82,7 +85,14 @@ const hidden = (body: string, isSent = true, surface: Surface = 'terminal') => (
   children: [line(body, isSent, surface)],
 })
 const foot = (token: string) => `more: put the caret on ${token} · send as typed: ++/ · help: /placeholders help`
-const hint = (token: string) => ({ type: 'Text', props: { dimColor: true, wrap: 'truncate-end' }, children: [foot(token)] })
+// The foot: dim labels, each action in the theme text colour and underlined, one row cut at the end.
+const label = (t: string) => ({ type: 'Text', props: { dimColor: true }, children: [t] })
+const act = (t: string) => ({ type: 'Text', props: { color: 'text', underline: true }, children: [t] })
+const hint = (token: string) => ({
+  type: 'Text',
+  props: { wrap: 'truncate-end' },
+  children: [label('more: '), act(`put the caret on ${token}`), label(' · send as typed: '), act('++/'), label(' · help: '), act('/placeholders help')],
+})
 const band = (children: unknown[], token = '++yy') => ({
   type: 'Box',
   props: { key: 'band', flexDirection: 'column' },
@@ -95,7 +105,7 @@ for (const surface of SURFACES) {
 
     const ui = await $.ui.mount({ ...BAND, surface, props: bandProps() })
 
-    expect(bare(await ui.drawn()), 'collapsed band').toEqual(band([head(3), rowYY([hidden('YY BODY', true, surface)]), rowZZ([hidden('ZZ BODY', false, surface)]), rowQ]))
+    expect(bare(await ui.drawn()), 'collapsed band').toEqual(band([head(3), rowYY([hidden('YY BODY', true, surface)], surface), rowZZ([hidden('ZZ BODY', false, surface)], surface), rowQOn(surface)]))
     await ui.unmount()
   })
 
@@ -137,7 +147,7 @@ for (const surface of SURFACES) {
     expect(bare(await ui.drawn()), 'inner tree first, then the band').toEqual({
       type: 'Box',
       props: { flexDirection: 'column' },
-      children: [INNER, band([head(3), rowYY([hidden('YY BODY', true, surface)]), rowZZ([hidden('ZZ BODY', false, surface)]), rowQ])],
+      children: [INNER, band([head(3), rowYY([hidden('YY BODY', true, surface)], surface), rowZZ([hidden('ZZ BODY', false, surface)], surface), rowQOn(surface)])],
     })
     await ui.unmount()
   })

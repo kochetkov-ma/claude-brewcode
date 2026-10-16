@@ -457,3 +457,22 @@ test('GIVEN a build without the model tools WHEN ++r? alone is submitted THEN it
 
   expect({ out, submits: ops.submits.map((x) => x.text), fills: ops.fills }, 'old build').toEqual({ out: { text: '++r?' }, submits: ['++r?'], fills: [] })
 })
+
+test('GIVEN a build without the mod tools WHEN status and help are built THEN neither offers the ++r? hand-off, only the show command', async () => {
+  const status = statusText(await load(defaultsTree()), '++', DIRS, false).split('\n')
+  const help = helpText('++', DIRS, false).split('\n')
+
+  expect([status[status.length - 5], help[3]], 'whole-text lines').toEqual([
+    'Caret on a token: the band shows up to 15 rows of what it sends · whole text: `/placeholders show ++r` · `/placeholders list` for all',
+    'Whole text, printed in the chat, not sent to Claude: `/placeholders show ++r` (several: `/placeholders show ++r ++m`) · all: `/placeholders list`.',
+  ])
+})
+
+test('GIVEN a build without the model tools WHEN /placeholders and /placeholders help run THEN both texts equal the no-hand-off variants', async ($, on) => {
+  wireAll(on, defaultsTree(), { denyTools: true })
+  await boot($)
+
+  const [status, help] = [(await run($, '')).text, (await run($, 'help')).text]
+
+  expect([status.includes('alone + Enter twice'), help.includes('Enter again prints it'), help.includes('`/placeholders show ++r` (several: `/placeholders show ++r ++m`) · all:')], 'no hand-off named').toEqual([false, false, true])
+})

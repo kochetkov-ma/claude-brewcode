@@ -335,25 +335,26 @@ test('GIVEN ++r WHEN the band mounts THEN every sent row (header and body) is bo
 
   const sentRow = { color: 'text', bold: true, wrap: 'truncate-end' }
 
-  expect(props, 'props: count, token, description, dim receives label, 11 sent rows bold in the text colour, dim foot').toEqual([
+  expect(props, 'props: count, bold token, description, dim receives label, 11 sent rows bold in the text colour, foot of dim labels and underlined actions').toEqual([
     { dimColor: true },
-    { color: 'suggestion' },
+    { color: 'suggestion', bold: true },
     dimRow,
     dimRow,
     ...Array.from({ length: 11 }, () => sentRow),
-    dimRow,
+    { wrap: 'truncate-end' },
+    ...[0, 1, 2].flatMap(() => [{ dimColor: true }, { color: 'text', underline: true }]),
   ])
   await ui.unmount()
 })
 
-test('GIVEN a 119-char line in a 50-cell band WHEN the band mounts THEN its 3 wrapped rows count against the budget and the cut row names the show command', async ($, on) => {
+test('GIVEN a 119-char line in a 50-cell band WHEN the band mounts THEN its 3 wrapped rows count against the budget and the cut row drops its label to keep the show command whole', async ($, on) => {
   const wide = Array.from({ length: 24 }, () => 'word').join(' ')
   await boot($, on, { ...defaultsTree(), [`${ROOT}/.claude/placeholders/wide.md`]: `---\ndescription: "wide mode"\n---\n${wide}\n- line-2\n- line-3` })
   await typed($, '++wide ')
 
   const w10 = 'word word word word word word word word word word'
 
-  expect(await bandTexts($, 19, 'terminal', 52), 'texts').toEqual(['placeholders 1', '++wide', '  wide mode', ' · Claude receives these lines now:', w10, w10, 'word word word word', '... 2 more lines · whole text: /placeholders show ++wide', foot('++wide')])
+  expect(await bandTexts($, 19, 'terminal', 52), 'texts').toEqual(['placeholders 1', '++wide', '  wide mode', ' · Claude receives these lines now:', w10, w10, 'word word word word', '... 2 more lines · /placeholders show ++wide', foot('++wide')])
 })
 
 test('GIVEN ++r ++rr in a 75-cell band WHEN the band mounts THEN the description gives way and the not-sent and receives labels stay whole on the row', async ($, on) => {
