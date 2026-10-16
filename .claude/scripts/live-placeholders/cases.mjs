@@ -75,6 +75,10 @@ export const SESSIONS = {
   planWarmShow: { size: '200x60', mode: 'plan', warm: true },
   p1cue: { size: '120x40', mode: 'default', isolate: true },
   scope: { size: '200x60', mode: 'default', isolate: true },
+  // Writes only the scratch project layer (or nothing), so it also runs under --installed; the guard row still watches the real global dir.
+  scopeProj: { size: '200x60', mode: 'default' },
+  // CP5 UI-only smoke: answered locally, never a model turn (every check forbids inject.mjs on a submitted prompt).
+  smoke: { size: '120x40', mode: 'default' },
 }
 
 const focusR = (extra = []) => c([B(R_HEAD), B(FOCUS('++r')), ...extra], [B(COMPACT_ANY)])
@@ -207,7 +211,7 @@ export const CASES = [
     ],
   },
   // A built-in has files: none, so the ask-first rule lets the refusal come without a question.
-  { id: 'scope-remove-builtin', cp: 3, session: 'scope', title: '/placeholders remove ++r: built-in refusal, no Remove question', steps: [t('/placeholders remove ++r'), enter(), c([H('++r is built in and cannot be removed · change what it sends: /placeholders change ++r ...')], [BUSY, H(/Remove \+\+r \(\w+\)\?/)], { timeout: TURN_MS })] },
+  { id: 'scope-remove-builtin', cp: 3, session: 'scopeProj', title: '/placeholders remove ++r: built-in refusal, no Remove question', steps: [t('/placeholders remove ++r'), enter(), c([H('++r is built in and cannot be removed · change what it sends: /placeholders change ++r ...')], [BUSY, H(/Remove \+\+r \(\w+\)\?/)], { timeout: TURN_MS })] },
   {
     id: 'scope-plan-part-add', cp: 3, session: 'scope', title: 'add with a plan part: Placeholder (no layer), Plan mode, Where in order, then both files in global',
     steps: [
@@ -220,19 +224,29 @@ export const CASES = [
   },
   // Project layer = the scratch project's .claude/placeholders; removed again so later runs of the same project see 6 names.
   {
-    id: 'scope-project-add', cp: 4, session: 'scope', title: '/placeholders project add ++lpproj: one Placeholder question (no layer), project-relative saved path',
+    id: 'scope-project-add', cp: 4, session: 'scopeProj', title: '/placeholders project add ++lpproj: one Placeholder question (no layer), project-relative saved path',
     steps: [
       t('/placeholders project add ++lpproj: run npm run lint first'), enter(), c(['☐ Placeholder', 'Save ++lpproj as drafted?', H(HANDOFF_SCOPE('project'))], ['☐ Where', '(project) as drafted?', H('saved ++lpproj')], { timeout: TURN_MS }),
       k('Enter'), c([H('saved ++lpproj (project): .claude/placeholders/lpproj.md')], [BUSY], { timeout: TURN_MS, order: [H('Save ++lpproj as drafted?'), H('saved ++lpproj (project)')] }),
     ],
   },
   {
-    id: 'scope-project-remove', cp: 4, session: 'scope', title: '/placeholders remove ++lpproj: one Remove question with the layer, project-relative removed path',
+    id: 'scope-project-remove', cp: 4, session: 'scopeProj', title: '/placeholders remove ++lpproj: one Remove question with the layer, project-relative removed path',
     steps: [
       t('/placeholders remove ++lpproj'), enter(), c(['☐ Remove', 'Remove ++lpproj (project)?'], [H('removed ++lpproj')], { timeout: TURN_MS }),
       k('Enter'), c([H('removed ++lpproj (project): .claude/placeholders/lpproj.md · ++lpproj is no longer defined')], [BUSY], { timeout: TURN_MS, order: [H('Remove ++lpproj (project)?'), H('removed ++lpproj (project)')] }),
     ],
   },
+
+  // CP5 UI-only smoke (any profile, free tier and corporate too): no model turn; P1 stops before the second Enter.
+  ...[
+    { id: 'smoke-compact', title: '++r then space: compact band, whole r text', steps: [t('++r '), c([B('placeholders 1'), B(COMPACT('++r')), B(R_LAST)], [B(FOCUS_ANY)], { debugForbid: [SUBMITTED] })] },
+    { id: 'smoke-caret', title: 'fix ++r now, Left x4 onto ++r: focus', steps: [t('fix ++r now'), compactR(), k('Left', 4), c([B(R_HEAD), B(FOCUS('++r')), B(R_LAST)], [B(COMPACT_ANY)], { debugForbid: [SUBMITTED] })] },
+    { id: 'smoke-p1-fill', title: 'Enter on ++r? alone: dropped, box filled with the show command (no second Enter)', steps: [t('++r?'), c([B(FOCUS('++r'))]), k('Enter'), c([`${DROPPED}++r? = /placeholders show ++r · ${NOT_SENT}`, P('/placeholders show ++r')], [B(FOCUS_ANY)], { debugForbid: [SUBMITTED] })] },
+    { id: 'smoke-escape', title: '++/ ++r: escaped band, nothing sent', steps: [t('++/ ++r'), c([B('++/  placeholders off: this message is sent exactly as typed'), B('++r  (not sent: ++/ in this message)'), B('delete ++/ to turn them back on')], [B(R_TOP), B(FOCUS_ANY)], { debugForbid: [SUBMITTED] })] },
+    { id: 'smoke-status', title: '/placeholders: status rows, answered locally', steps: [t('/placeholders'), enter(), c([H(STATUS_HEAD), H('Two-phase review: review every significant change'), H('Anti-regression review: regression'), H(/\+\+lpinl\s+project\s+inline/)], [H(HANDOFF)], { debugForbid: [SUBMITTED] })] },
+    { id: 'smoke-show-r', title: '/placeholders show ++r: the whole r text, answered locally', steps: [t('/placeholders show ++r'), enter(), c([H(SHOW_HEAD('++r')), H('++r · plugin'), H(/return\s+verdict\s+first,\s+then\s+findings\./)], [H('++m · plugin'), H(HANDOFF)], { debugForbid: [SUBMITTED] })] },
+  ].map((x) => ({ ...x, cp: 5, session: 'smoke' })),
 
   // E2E: what Claude receives (claude -p, paid)
   { id: 'e2e-r', cp: 1, kind: 'print', mode: 'default', title: '-p ++r: Claude quotes the r block', prompt: '++r Quote verbatim every line of the additional context you received that starts with "[", one per line, nothing else.', expect: [R_TOP], forbid: [], debugExpect: [PROVIDED] },
