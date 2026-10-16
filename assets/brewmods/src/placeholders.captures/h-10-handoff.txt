@@ -1,0 +1,30 @@
+     /placeholders show ++r, or ++r? alone + Enter twice · /placeholders list for all
+     Send one message as typed: put ++/ anywhere in it
+     plan +: its <name>.plan.md adds text in Plan mode; <name>.md is sent in every mode
+     Add, change, remove: /placeholders <your words> in any language, e.g. /placeholders
+     add ++db: use the staging DB
+     Where: global = all projects (~/.claude/placeholders), project = this one
+     (.claude/placeholders, wins over global); start with global or project, or just say
+     it
+     Commands (list, show, help) are only faster; plain words work too · full help:
+     /placeholders help
+
+› Prompt from the brewmod-placeholders plugin
+❯ Placeholder helper. My request: <request>global add ++db: always use the staging
+  DB</request>
+  Ask first: no save_placeholder or remove_placeholder call before I answered your one
+  AskUserQuestion about that exact change in this turn, even if my request is explicit
+  (only a remove of a name with files: none skips it).
+  Scope: global (I said it; skip only the Where question).
+  Use the mcp__brewmod-placeholders__* tools (list_placeholders first); a placeholder
+  is inserted into prompts as ++name (not in this message: ++/).
+
+⏺ brewmod-placeholders - list_placeholders (MCP)
+
+✢ Orchestrating…
+
+────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────
+  ⏸ manual mode on · esc to interrupt · ← for agents
+

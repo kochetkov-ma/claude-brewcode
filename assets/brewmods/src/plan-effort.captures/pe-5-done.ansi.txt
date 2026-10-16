@@ -7,34 +7,16 @@
 
 [49m  [38;5;246mRead [1m1[0m[38;5;246m file (ctrl+o to expand)[39m
 
-[38;5;231m⏺[39m README.md covers a short description of the repo as Homebrew recipes and fermentation
-  logs, with a list of two batches (01 pale ale and 02 stout).
+[38;5;231m⏺[39m It's a short overview of the brewery repo, "Homebrew recipes and fermentation logs",
+  and it lists two batches: 01 pale ale and 02 stout.
 
-[38;5;246m✻[39m [38;5;246mChurned for 28s · done 3:54 PM[39m
+[38;5;246m✻[39m [38;5;246mCooked for 4s · done 5:14 PM[39m
 [38;5;73mplan mode · effort xhigh for this mode · change: /plan-effort <level>[39m               [38;5;246m[-][39m
 
 [38;5;244m────────────────────────────────────────────────────────────────────────────────────────
 [39m❯ 
 [38;5;244m────────────────────────────────────────────────────────────────────────────────────────
-[39m  [38;5;73m⏸[39m [38;5;73mplan[39m [38;5;73mmode[39m [38;5;73mon[38;5;246m (shift+tab[39m [38;5;246mto[39m [38;5;246mcycle)[39m [38;5;246m·[39m [38;5;246m← for agents[39m
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+[39m  [38;5;73m⏸[39m [38;5;73mplan[39m [38;5;73mmode[39m [38;5;73mon[38;5;246m (shift+tab[39m [38;5;246mto[39m [38;5;246mcycle)[39m [38;5;246m·[39m [38;5;246m← for agents[39m                  [38;5;246m● high · /effort[39m
 
 
 

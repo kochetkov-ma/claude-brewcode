@@ -7,33 +7,15 @@
 
   Read 1 file (ctrl+o to expand)
 
-⏺ README.md covers a short description of the repo as Homebrew recipes and fermentation
-  logs, with a list of two batches (01 pale ale and 02 stout).
+⏺ It's a short overview of the brewery repo, "Homebrew recipes and fermentation logs",
+  and it lists two batches: 01 pale ale and 02 stout.
 
-✻ Churned for 28s · done 3:54 PM
+✻ Cooked for 4s · done 5:14 PM
 
 ────────────────────────────────────────────────────────────────────────────────────────
 ❯ 
 ────────────────────────────────────────────────────────────────────────────────────────
-  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents                 ● high · /effort
 
 
 

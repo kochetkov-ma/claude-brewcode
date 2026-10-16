@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Records render.html (#hero, ?story=<name>&t= frames) into ../<name>.gif; --check = all gates, no Chrome. Usage: README.md.
+// Records render.html (#hero terminal frames; #bottle with &bottle=1) into ../<name>.gif + ../<name>-bottle.gif; --check = all gates, no Chrome. Usage: README.md.
 import { createRequire } from 'node:module';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { mkdtempSync, mkdirSync, statSync, rmSync, readFileSync, writeFileSync, existsSync, copyFileSync } from 'node:fs';
@@ -12,14 +12,17 @@ import vm from 'node:vm';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '../../..');
 const PAGE = join(HERE, 'render.html');
-// per story <name>: <name>.story.js, <name>.data.js, <name>.captures/, <name>.manifest.json -> ../<name>.gif + docs/app copies
-let NAME, STORY, DATA, MANIFEST, GIF, DOCS_GIF, APP_GIF, MIN_S, MAX_S;
+// per story <name>: <name>.story.js, <name>.data.js, <name>.captures/, <name>.manifest.json -> ../<name>.gif, -still.png, -bottle.gif + docs/app copies
+let NAME, STORY, DATA, MANIFEST, GIF, STILL, BOTTLE, DOCS_GIF, DOCS_STILL, APP_GIF, MIN_S, MAX_S;
 function useStory(name) {
   NAME = name; STORY = join(HERE, `${name}.story.js`); DATA = join(HERE, `${name}.data.js`); MANIFEST = join(HERE, `${name}.manifest.json`);
-  GIF = resolve(HERE, `../${name}.gif`); DOCS_GIF = join(ROOT, `web/docs/public/brewmods/${name}.gif`);
+  GIF = resolve(HERE, `../${name}.gif`); STILL = resolve(HERE, `../${name}-still.png`); BOTTLE = resolve(HERE, `../${name}-bottle.gif`);
+  DOCS_GIF = join(ROOT, `web/docs/public/brewmods/${name}.gif`); DOCS_STILL = join(ROOT, `web/docs/public/brewmods/${name}-still.png`);
   APP_GIF = join(process.env.BREWCODE_APP_DIR || resolve(ROOT, '../brewcode-app'), `site/main/public/mods/${name}.gif`);
 }
-const PW_PIN = '1.64.0', WIDTH = 800, VIEWPORT = 1200, LOOP_WINDOW = [30, 38], MAX_SECONDS = 40;
+// GIF px: terminal frame (~768 CSS px) at 1.5x for HiDPI; README bottle (420 CSS px) at 1x
+const PW_PIN = '1.64.0', VIEWPORT = 1200, LOOP_WINDOW = [30, 38], MAX_SECONDS = 40, BOTTLE_WIDTH = 420, BOTTLE_BYTES = 1_000_000;
+let WIDTH = 1152;
 const TARGET_BYTES = 3_500_000, MAX_BYTES = 5_000_000, SEAM_MIN = 0.985;
 const CHROME = process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const LADDER = [{ colors: 256 }, { colors: 128 }, { colors: 96 }, { colors: 64 }, { colors: 96, lossy: 20 }, { colors: 64, lossy: 20 }, { colors: 48, lossy: 10 }, { colors: 32, lossy: 30 }];
@@ -42,11 +45,12 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (['--check', '--embed', '--keep'].includes(a)) opt[a.slice(2)] = true;
-    else if (['--preview', '--out', '--captures'].includes(a)) { if (i + 1 >= argv.length) die(`missing value for ${a}`, 2); opt[a.slice(2)] = argv[++i]; }
+    else if (['--preview', '--out', '--captures', '--width'].includes(a)) { if (i + 1 >= argv.length) die(`missing value for ${a}`, 2); opt[a.slice(2)] = argv[++i]; }
     else if (a.startsWith('--')) die(`unknown option ${a}`, 2);
     else pos.push(a);
   }
-  if (pos.length !== 1 || !/^[a-z0-9-]+$/.test(pos[0]) || !existsSync(join(HERE, `${pos[0]}.story.js`))) die('usage: node record-gifs.mjs <story: a <story>.story.js here> [--check] [--embed] [--preview <t>] [--out dir] [--captures dir] [--keep]', 2);
+  if (pos.length !== 1 || !/^[a-z0-9-]+$/.test(pos[0]) || !existsSync(join(HERE, `${pos[0]}.story.js`))) die('usage: node record-gifs.mjs <story: a <story>.story.js here> [--check] [--embed] [--preview <t>] [--out dir] [--width px, test runs only] [--captures dir] [--keep]', 2);
+  if (opt.width !== undefined) { if (!opt.out && opt.preview === undefined) die('--width is for test runs (--out or --preview) only', 2); WIDTH = Number(opt.width); if (!(WIDTH >= 320 && WIDTH <= 2400)) die('bad --width', 2); }
   useStory(pos[0]);
   opt.captures = resolve(opt.captures || join(HERE, `${pos[0]}.captures`));
   return opt;
@@ -121,6 +125,8 @@ function textGates(story, opt, gates) {
   // story.window = [min, max] loop seconds; default LOOP_WINDOW
   [MIN_S, MAX_S] = story.window || LOOP_WINDOW;
   gates.push(['story-loop', story.loop >= MIN_S && story.loop <= MAX_S && story.end < story.loop, `${story.loop} s loop (window ${MIN_S}-${MAX_S}), end card from ${story.end} s`]);
+  const B = story.bottle;
+  gates.push(['story-bottle', !!B && B.loop > 0 && B.fps > 0 && B.blips > 0 && typeof B.label === 'string' && B.label.length <= 20, B ? `bottle ${B.loop} s, ${B.fps} fps, label "${B.label}"` : 'no story.bottle { loop, fps, blips, label }']);
   const badKeys = story.keys.filter((k) => !KEY_ALLOW.includes(`${k.glyph} ${k.word}`));
   gates.push(['keycaps', badKeys.length === 0, badKeys.length ? `not a real macOS keycap: ${badKeys.map((k) => `"${k.glyph} ${k.word}" at ${k.at}s`).join(', ')}`
     : `${story.keys.length} keycaps, all in the macOS allow-list: ${uniq(story.keys.map((k) => `${k.glyph} ${k.word}`.trim())).join(' | ')}`]);
@@ -188,10 +194,18 @@ function gifGates(gates) {
   const ok = !!m && m.gif.sha256 === sha(GIF) && drift.length === 0;
   gates.push(['gif-recorded', ok, !m ? `no ${NAME}.manifest.json: ${NAME}.gif was not recorded from these sources` : m.gif.sha256 !== sha(GIF) ? `${NAME}.gif sha != manifest (re-encoded or replaced by hand)`
     : drift.length ? `sources changed since the recording: ${drift.join(', ')}` : `recorded ${m.recorded} from the current sources`]);
+  // the still (reduced-motion poster) and the README bottle ride on the same recording
+  const still = existsSync(STILL) ? sha(STILL) : 'missing', bottle = existsSync(BOTTLE) ? sha(BOTTLE) : 'missing';
+  gates.push(['still', !!m && still === m.still?.sha256, still === 'missing' ? `missing ${STILL}` : !m || still !== m.still?.sha256 ? `${NAME}-still.png sha != manifest` : `${NAME}-still.png ${m.still.width}x${m.still.height} t=${m.still.t}`]);
+  const bi = bottle === 'missing' ? null : gifInfo(BOTTLE);
+  gates.push(['bottle', !!m && bottle === m.bottle?.sha256 && bi.width === BOTTLE_WIDTH, bottle === 'missing' ? `missing ${BOTTLE}` : !m || bottle !== m.bottle?.sha256 ? `${NAME}-bottle.gif sha != manifest`
+    : `${NAME}-bottle.gif ${bi.width}x${bi.height}, ${bi.seconds.toFixed(2)} s, ${(statSync(BOTTLE).size / 1e6).toFixed(2)} MB`]);
   const copies = [GIF, DOCS_GIF, APP_GIF].map((p) => [p, existsSync(p) ? sha(p) : 'missing']);
   const short = ([p, s]) => `${p.replace(resolve(ROOT, '..') + '/', '')}=${s.slice(0, 12)}`;
   const one = copies[1][1] === copies[0][1] && copies[0][1] !== 'missing';
   gates.push(['copies-sha', one, one ? `repo + docs copies, sha256 ${copies[0][1].slice(0, 12)}` : copies.slice(0, 2).map(short).join(' ')]);
+  const stillDocs = existsSync(DOCS_STILL) ? sha(DOCS_STILL) : 'missing';
+  gates.push(['copies-still', stillDocs === still && still !== 'missing', stillDocs === still && still !== 'missing' ? `repo + docs stills, sha256 ${still.slice(0, 12)}` : `docs still ${stillDocs.slice(0, 12)} != repo ${still.slice(0, 12)}`]);
   // brewcode-app copy ships with that site's own release: a mismatch only warns
   gates.push(['copies-app', copies[2][1] === copies[0][1] ? true : 'warn', copies[2][1] === copies[0][1] ? 'brewcode-app copy matches' : `${short(copies[2])} (copy it there)`]);
 }
@@ -212,22 +226,23 @@ function loadPlaywright() {
   return die(`playwright-core not found: cd "$(mktemp -d)" && npm i playwright-core@${PW_PIN} --no-package-lock, run from there`, 2);
 }
 
-async function capture(browser, times, dir) {
-  // viewport taller than #hero (88x40 window + caption = 947 px), else the screenshot clip drops the caption
+// sel = '#hero' (terminal frame) or '#bottle' (README bottle, &bottle=1)
+async function capture(browser, times, dir, sel = '#hero') {
+  // viewport taller than the frame (88x40 terminal + bars = 885 px), else the screenshot clip drops the caption bar
   const ctx = await browser.newContext({ viewport: { width: VIEWPORT, height: 1100 }, deviceScaleFactor: 2 });
   const page = await ctx.newPage(), errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-  const base = `${pathToFileURL(PAGE).href}?story=${NAME}&`;
+  const base = `${pathToFileURL(PAGE).href}?story=${NAME}&${sel === '#bottle' ? 'bottle=1&' : ''}`;
   let clip = null;
   for (let k = 0; k < times.length; k++) {
     await page.goto(`${base}t=${Math.round(times[k] * 10000) / 10000}`, { waitUntil: k === 0 ? 'networkidle' : 'load' });
     await page.evaluate(() => document.fonts.ready.then(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))));
     if (!clip) {
       if (!(await page.evaluate(() => document.fonts.check('14px "JetBrains Mono"')))) throw new Error('JetBrains Mono not loaded (network for Google Fonts?)');
-      clip = await page.locator('#hero').boundingBox();
-      if (!clip) throw new Error('#hero not found');
-      if (clip.y + clip.height > 1100) throw new Error(`#hero bottom ${clip.y + clip.height}px is below the 1100px viewport`);
+      clip = await page.locator(sel).boundingBox();
+      if (!clip) throw new Error(`${sel} not found`);
+      if (clip.y + clip.height > 1100) throw new Error(`${sel} bottom ${clip.y + clip.height}px is below the 1100px viewport`);
     }
     await page.screenshot({ path: join(dir, `f_${String(k).padStart(4, '0')}.png`), clip });
   }
@@ -244,17 +259,17 @@ const keepColours = () => uniq(Object.values(loadJs(DATA, 'PH_SCREENS') || {}).f
   .flatMap((s) => s.lines.flat().map((seg) => seg[1].match(/(?:^| )f(\S+)/)?.[1]).filter(Boolean)).map(hexOf).map((h) => h.toLowerCase()));
 
 // one swatch frame of stripes, ~1000 rows of each kept colour across `n` palette-only frames
-function swatch(dir, colours) {
+function swatch(dir, colours, width) {
   const png = readFileSync(join(dir, 'f_0000.png')), w = png.readUInt32BE(16), h = png.readUInt32BE(20), stripe = Math.ceil(h / colours.length);
   const out = join(dir, 'swatch.png'), ins = colours.flatMap((c) => ['-f', 'lavfi', '-i', `color=c=0x${c.slice(1)}:s=${w}x${stripe}:d=1`]);
   run('ffmpeg', ['-nostdin', '-v', 'error', '-y', ...ins, '-filter_complex', `${colours.map((_, i) => `[${i}:v]`).join('')}vstack=inputs=${colours.length},crop=${w}:${h}:0:0`, '-frames:v', '1', out]);
-  return { out, n: Math.ceil((colours.length * 1000 * w) / (WIDTH * h)) };
+  return { out, n: Math.ceil((colours.length * 1000 * w) / (width * h)) };
 }
 
-function encode(dir, frames, fps, outFile, colours) {
-  const raw = join(dir, 'raw.gif'), sw = colours.length > 1 ? swatch(dir, colours) : null;
+function encode(dir, frames, fps, outFile, colours, width = WIDTH, target = TARGET_BYTES) {
+  const raw = join(dir, 'raw.gif'), sw = colours.length > 1 ? swatch(dir, colours, width) : null;
   const inputs = ['-framerate', String(fps), '-i', join(dir, 'f_%04d.png'), ...(sw ? ['-loop', '1', '-framerate', String(fps), '-t', String(sw.n / fps), '-i', sw.out] : [])];
-  const feed = sw ? `[0:v]scale=${WIDTH}:-2:flags=lanczos,split[a][b];[1:v]scale=${WIDTH}:-2:flags=neighbor[s];[a][s]concat=n=2:v=1:a=0[pa];[pa]` : `[0:v]scale=${WIDTH}:-2:flags=lanczos,split[a][b];[a]`;
+  const feed = sw ? `[0:v]scale=${width}:-2:flags=lanczos,split[a][b];[1:v]scale=${width}:-2:flags=neighbor[s];[a][s]concat=n=2:v=1:a=0[pa];[pa]` : `[0:v]scale=${width}:-2:flags=lanczos,split[a][b];[a]`;
   let best = null;
   for (const step of LADDER) {
     run('ffmpeg', ['-nostdin', '-v', 'error', '-y', ...inputs, '-frames:v', String(frames),
@@ -263,7 +278,7 @@ function encode(dir, frames, fps, outFile, colours) {
     run('gifsicle', ['-O3', ...(step.lossy ? [`--lossy=${step.lossy}`] : []), raw, '-o', tmp]);
     const bytes = statSync(tmp).size;
     if (!best || bytes < best.bytes) best = { bytes, tmp, ...step };
-    if (bytes <= TARGET_BYTES) break;
+    if (bytes <= target) break;
   }
   copyFileSync(best.tmp, outFile);
   return best;
@@ -287,21 +302,33 @@ async function record(story, opt, gates) {
     if (n / story.fps > MAX_SECONDS) return gates.push(['record', false, `${n / story.fps} s is over the ${MAX_SECONDS} s cap`]);
     const times = Array.from({ length: n }, (_, i) => i / story.fps);
     const errors = await capture(browser, [...times, story.still], dir);
-    const outFile = test ? join(outDir, `${NAME}.gif`) : GIF;
+    const outFile = test ? join(outDir, `${NAME}.gif`) : GIF, stillFile = test ? join(outDir, `${NAME}-still.png`) : STILL;
     const enc = encode(dir, n, story.fps, outFile, keepColours()), info = gifInfo(outFile);
-    const seam = ssim(f(n - 1), f(0)), still = join(test ? outDir : tmpdir(), `${NAME}-still.png`);
-    run('ffmpeg', ['-nostdin', '-v', 'error', '-y', '-i', f(n), '-vf', `scale=${WIDTH}:-2:flags=lanczos`, still]);
+    const seam = ssim(f(n - 1), f(0));
+    run('ffmpeg', ['-nostdin', '-v', 'error', '-y', '-i', f(n), '-vf', `scale=${WIDTH}:-2:flags=lanczos`, stillFile]);
     gates.push(['record-bytes', enc.bytes <= MAX_BYTES, `${(enc.bytes / 1e6).toFixed(2)} MB, colors ${enc.colors}${enc.lossy ? ` lossy ${enc.lossy}` : ''}${enc.bytes > TARGET_BYTES ? ' (over target)' : ''}`]);
     gates.push(['record-seam', seam >= SEAM_MIN, `SSIM last-to-first ${seam.toFixed(4)} (min ${SEAM_MIN})`]);
+    console.log(`${test ? 'TEST ' : ''}${outFile}: ${info.width}x${info.height}, ${info.seconds.toFixed(2)} s, ${info.frames} frames; still t=${story.still} -> ${stillFile}`);
+    // README bottle: its own frames dir, steady loop, BOTTLE_WIDTH px
+    const B = story.bottle, bdir = mkdtempSync(join(tmpdir(), `bcm-${NAME}-bottle-`)), bn = Math.round(B.loop * B.fps);
+    const bottleFile = test ? join(outDir, `${NAME}-bottle.gif`) : BOTTLE;
+    try {
+      errors.push(...await capture(browser, Array.from({ length: bn }, (_, i) => i / B.fps), bdir, '#bottle'));
+      const benc = encode(bdir, bn, B.fps, bottleFile, [], BOTTLE_WIDTH, BOTTLE_BYTES), binfo = gifInfo(bottleFile);
+      const bseam = ssim(join(bdir, `f_${String(bn - 1).padStart(4, '0')}.png`), join(bdir, 'f_0000.png'));
+      gates.push(['record-bottle', benc.bytes <= BOTTLE_BYTES, `${NAME}-bottle.gif ${binfo.width}x${binfo.height}, ${binfo.seconds.toFixed(2)} s, ${(benc.bytes / 1e6).toFixed(2)} MB, colors ${benc.colors}, seam SSIM ${bseam.toFixed(4)}`]);
+    } finally { if (!opt.keep) rmSync(bdir, { recursive: true, force: true }); }
     gates.push(['record-errors', errors.length === 0, errors.length ? errors.slice(0, 2).join(' | ') : '0 page errors']);
-    console.log(`${test ? 'TEST ' : ''}${outFile}: ${info.width}x${info.height}, ${info.seconds.toFixed(2)} s, ${info.frames} frames; still t=${story.still} -> ${still}`);
     if (!test && gates.every((g) => g[1] !== false)) {
-      copyFileSync(GIF, DOCS_GIF);
+      copyFileSync(GIF, DOCS_GIF); copyFileSync(STILL, DOCS_STILL);
       const vers = uniq(Object.values(loadJs(DATA, 'PH_SCREENS')).flatMap((s) => (typeof s === 'object' ? s.lines.map(plain) : [])).map((l) => l.match(/Claude Code v(\S+)/)?.[1]).filter(Boolean));
       const tools = { playwrightCore: PW_PIN, ffmpeg: ver('ffmpeg', ['-version'], /version (\S+)/), gifsicle: ver('gifsicle', ['--version'], /Gifsicle (\S+)/), node: process.version };
+      const png = readFileSync(STILL), bi = gifInfo(BOTTLE);
       writeFileSync(MANIFEST, JSON.stringify({ gif: { file: `${NAME}.gif`, bytes: enc.bytes, sha256: sha(GIF), width: info.width, height: info.height, seconds: info.seconds },
-        sources: sourceHashes(), ccVersion: vers.join(', ') || 'unknown', still: story.still, tools, recorded: new Date().toISOString() }, null, 2) + '\n');
-      console.log(`copied to ${DOCS_GIF}; manifest written; copy it + the still to ${dirname(APP_GIF)}`);
+        still: { file: `${NAME}-still.png`, sha256: sha(STILL), width: png.readUInt32BE(16), height: png.readUInt32BE(20), t: story.still },
+        bottle: { file: `${NAME}-bottle.gif`, bytes: statSync(BOTTLE).size, sha256: sha(BOTTLE), width: bi.width, height: bi.height, seconds: bi.seconds, label: B.label },
+        sources: sourceHashes(), ccVersion: vers.join(', ') || 'unknown', tools, recorded: new Date().toISOString() }, null, 2) + '\n');
+      console.log(`copied ${NAME}.gif + ${NAME}-still.png to ${dirname(DOCS_GIF)}; manifest written; brewcode-app: copy both to ${dirname(APP_GIF)}`);
     }
   } finally {
     await browser.close();

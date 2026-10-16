@@ -1,0 +1,30 @@
+  DB</request>
+  Ask first: no save_placeholder or remove_placeholder call before I answered your one
+  AskUserQuestion about that exact change in this turn, even if my request is explicit
+  (only a remove of a name with files: none skips it).
+  Scope: global (I said it; skip only the Where question).
+  Use the mcp__brewmod-placeholders__* tools (list_placeholders first); a placeholder
+  is inserted into prompts as ++name (not in this message: ++/).
+
+⏺ brewmod-placeholders - list_placeholders (MCP)
+  ⎿  ## +++ · layer: plugin · files: none · plan: add · Anti-drift cron for the cur
+     rent task; plan mode plans it as a step
+     # [ADDON: ANTI-DRIFT CRON]
+     … +105 lines (ctrl+o to expand)
+
+────────────────────────────────────────────────────────────────────────────────────────
+ ☐ Placeholder
+
+Save ++db as drafted?
+
+❯ 1. Save as drafted              ┌──────────────────────────────────────────┐
+    (Recommended)                 │ always use the staging DB                │
+  2. Change it                    └──────────────────────────────────────────┘
+
+                                  Notes: press n to add notes
+
+────────────────────────────────────────────────────────────────────────────────────────
+  Chat about this
+
+Enter to select · ↑/↓ to navigate · n to add notes · Esc to cancel
+

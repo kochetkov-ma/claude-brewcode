@@ -1,25 +1,40 @@
 {
   "gif": {
     "file": "plan-effort.gif",
-    "bytes": 3009614,
-    "sha256": "843cac3960770b4c3b20c8f997a72e81f6306843871777072a496a54ff80293c",
-    "width": 800,
-    "height": 648,
+    "bytes": 481345,
+    "sha256": "e342901c6cab14510e4fae1621d1d382adf56c17c6670f76831cec9f4980d331",
+    "width": 1152,
+    "height": 786,
     "seconds": 23
   },
+  "still": {
+    "file": "plan-effort-still.png",
+    "sha256": "38c797110936cd3fdad6795c675bbc6db176466cfa2103be71207cb132ee2d60",
+    "width": 1152,
+    "height": 786,
+    "t": 12
+  },
+  "bottle": {
+    "file": "plan-effort-bottle.gif",
+    "bytes": 849357,
+    "sha256": "6b4b162699d2738e80dade07d473294d26b861b173d228383be3563f8f58b3fe",
+    "width": 420,
+    "height": 628,
+    "seconds": 5,
+    "label": "xhigh · batch 04"
+  },
   "sources": {
-    "render.html": "66bf935f460d6b8bdc55b170e13e8c75b303230db57a7540f3120486972c7409",
-    "plan-effort.story.js": "3e914ae89f9b9668770b5971a4b05292df40d4cd540309deb71a588ae9d3376d",
-    "plan-effort.data.js": "6fa528819b97f4a559febdb4248b10ae3cf9bc7b27b2e1723ee34ae5601a2ea6",
-    "record-gifs.mjs": "b2108f5acba6806d0757be6181886a4d2e06f56d729241d3f9b7caa3b7a87d60"
+    "render.html": "d11908522cd6f070c36dd218bf6679673a3b25c039e57f89360f81fe175c9a7a",
+    "plan-effort.story.js": "5be9c9ed6db04353a2cc1bb89af72ad0e016278991bed6189ed9eae30f02b9e6",
+    "plan-effort.data.js": "4fe1c71ca623e80f7fc0584f993953043fdda01a594522ac40b7c55d58dc0742",
+    "record-gifs.mjs": "374dd59b9bef46be6fabd3cf0bc99ac2596e72fe165b6bdb3117244d06b10e9e"
   },
   "ccVersion": "2.1.301",
-  "still": 12,
   "tools": {
     "playwrightCore": "1.64.0",
     "ffmpeg": "9.0.2",
     "gifsicle": "1.96",
     "node": "v24.19.0"
   },
-  "recorded": "2026-10-16T15:11:05.628Z"
+  "recorded": "2026-10-16T16:15:34.925Z"
 }

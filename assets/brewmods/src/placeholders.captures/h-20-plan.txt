@@ -1,0 +1,30 @@
+     # [ADDON: ANTI-DRIFT CRON]
+     … +105 lines (ctrl+o to expand)
+
+⏺ User answered Claude's questions:
+  ⎿  · Save ++db as drafted? → Save as drafted (Recommended)
+
+⏺ brewmod-placeholders - save_placeholder (MCP)(name: "db", text: "always use the
+                                               staging DB", description: "Always use the
+                                               staging DB", scope: "global")
+  ⎿  saved ++db (global): ~/.claude/placeholders/db.md
+
+⏺ I saved ++db as a global placeholder in ~/.claude/placeholders/db.md. It works in all
+  your projects: typing ++db in a prompt inserts "always use the staging DB".
+
+✻ Baked for 6s · done 5:21 PM
+
+❯ which DB should I run the migration against? one line ++db
+
+⏺ Run it against the staging DB, as your ++db rule says. I didn't find any migration or
+  DB config in this repo, so that answer comes only from the rule.
+
+✻ Baked for 4s · done 5:21 PM
+plan mode · effort xhigh for this mode · change: /plan-effort <level>               [-]
+
+────────────────────────────────────────────────────────────────────────────────────────
+❯ plan the users table migration
+────────────────────────────────────────────────────────────────────────────────────────
+  ⏸ plan mode on (shift+tab to cycle)                               ◐ medium · /effort
+
+

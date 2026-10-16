@@ -1,25 +1,40 @@
 {
   "gif": {
     "file": "placeholders-full-text.gif",
-    "bytes": 3073204,
-    "sha256": "bf1fde43205fbc24476991b8c82da3806ed815d9f7fcefe84f3e38b9cbd4f3df",
-    "width": 800,
-    "height": 648,
-    "seconds": 26
+    "bytes": 956919,
+    "sha256": "e27d3cb206068ac592856e18ac5349f805f464573c2a14e0a33806fc2175acd8",
+    "width": 1152,
+    "height": 1024,
+    "seconds": 24
+  },
+  "still": {
+    "file": "placeholders-full-text-still.png",
+    "sha256": "2701ba4cd81e2178221b17fa675d7847b0edbf29197cfa3e3b60d00eeab278ee",
+    "width": 1152,
+    "height": 1024,
+    "t": 4
+  },
+  "bottle": {
+    "file": "placeholders-full-text-bottle.gif",
+    "bytes": 839633,
+    "sha256": "e080ec954e34ad28675913ebc683f1d7808c6ac0a0b05aadc21d82d9d4e3471b",
+    "width": 420,
+    "height": 628,
+    "seconds": 5,
+    "label": "++m · batch 03"
   },
   "sources": {
-    "render.html": "66bf935f460d6b8bdc55b170e13e8c75b303230db57a7540f3120486972c7409",
-    "placeholders-full-text.story.js": "d4e6e06597995cee751d06f9a58c612ca71f963a3d2f5ab1ee19e73b6891a671",
-    "placeholders-full-text.data.js": "f8fa5af2bd590eeeab466aca2993d40283ec2b7f839fb0d761409735f5a2921c",
-    "record-gifs.mjs": "b2108f5acba6806d0757be6181886a4d2e06f56d729241d3f9b7caa3b7a87d60"
+    "render.html": "d11908522cd6f070c36dd218bf6679673a3b25c039e57f89360f81fe175c9a7a",
+    "placeholders-full-text.story.js": "6fd3860f2f9fa833e649c93b10b4530d04025302b8d40d7c40c5b3f0e402e1d5",
+    "placeholders-full-text.data.js": "a9616d8eaec930fa4f49d28f244a5e0fd8b8a0eb0e8d6a86b961ac785fdca20e",
+    "record-gifs.mjs": "374dd59b9bef46be6fabd3cf0bc99ac2596e72fe165b6bdb3117244d06b10e9e"
   },
   "ccVersion": "2.1.301",
-  "still": 4,
   "tools": {
     "playwrightCore": "1.64.0",
     "ffmpeg": "9.0.2",
     "gifsicle": "1.96",
     "node": "v24.19.0"
   },
-  "recorded": "2026-10-16T15:10:20.995Z"
+  "recorded": "2026-10-16T16:13:36.223Z"
 }

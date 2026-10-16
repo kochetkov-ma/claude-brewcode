@@ -1,0 +1,30 @@
+
+[38;5;114m⏺[39m [1mBash[0m(node --test 2>&1 | grep -E '^(ok|not ok|ℹ (pass|fail))')
+[38;5;246m  ⎿  [39mℹ pass 3
+     ℹ fail 0
+
+[38;5;231m⏺[39m I found one bug in the diff, and I've fixed it. I reviewed it myself rather than
+  splitting it across several agents, because it's only two small hunks.
+
+  [1mThe bug: [38;5;153mlastBatch[39m never returns anything.[0m In [38;5;153mbrew.js:11[39m, [38;5;153mbatches[batches.length][39m
+  reads one slot past the end of the list, so the function always returns [38;5;153mundefined[39m.
+  - [1mHow I confirmed it:[0m I ran [38;5;153mlastBatch(['a','b'])[39m and [38;5;153mlastBatch()[39m (which uses the
+    default two-batch log), and both returned [38;5;153mundefined[39m.
+  - [1mWhy[0m [1mthe[0m [1mtests[0m [1mdidn't[0m [1mcatch[0m [1mit:[0m the only new test checks an empty list, where
+    [38;5;153mundefined[39m is the right answer anyway. The suite passed with the bug in place.
+
+  [1mWhat[0m [1mI[0m [1mchanged:[0m
+  - [38;5;153mbrew.js:11[39m now uses [38;5;153mbatches[batches.length[39m [38;5;153m-[39m [38;5;153m1][39m.
+  - [38;5;153mbrew.test.js[39m has a new test checking that [38;5;153mlastBatch()[39m returns [38;5;153m'02[39m [38;5;153mstout'[39m from the
+    default log. It fails on the old code.
+
+  All 3 tests now pass. The rest of the diff (the export and the test import) is fine.
+  Nothing is committed yet.
+
+[38;5;246m✻[39m [38;5;246mCooked[39m [38;5;246mfor[39m [38;5;246m14s[39m [38;5;246m·[39m [38;5;246mdone[39m [38;5;246m5:21[39m [38;5;246mPM[39m
+
+[38;5;244m────────────────────────────────────────────────────────────────────────────────────────
+[39m❯ [38;5;153m/placeholders[39m global add
+[38;5;244m────────────────────────────────────────────────────────────────────────────────────────
+[39m  [38;5;246m⏸[39m [38;5;246mmanual[39m [38;5;246mmode[39m [38;5;246mon[39m
+

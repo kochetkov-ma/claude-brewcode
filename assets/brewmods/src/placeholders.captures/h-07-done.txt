@@ -1,0 +1,30 @@
+
+⏺ Bash(node --test 2>&1 | grep -E '^(ok|not ok|ℹ (pass|fail))')
+  ⎿  ℹ pass 3
+     ℹ fail 0
+
+⏺ I found one bug in the diff, and I've fixed it. I reviewed it myself rather than
+  splitting it across several agents, because it's only two small hunks.
+
+  The bug: lastBatch never returns anything. In brew.js:11, batches[batches.length]
+  reads one slot past the end of the list, so the function always returns undefined.
+  - How I confirmed it: I ran lastBatch(['a','b']) and lastBatch() (which uses the
+    default two-batch log), and both returned undefined.
+  - Why the tests didn't catch it: the only new test checks an empty list, where
+    undefined is the right answer anyway. The suite passed with the bug in place.
+
+  What I changed:
+  - brew.js:11 now uses batches[batches.length - 1].
+  - brew.test.js has a new test checking that lastBatch() returns '02 stout' from the
+    default log. It fails on the old code.
+
+  All 3 tests now pass. The rest of the diff (the export and the test import) is fine.
+  Nothing is committed yet.
+
+✻ Cooked for 14s · done 5:21 PM
+
+────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────
+  ⏸ manual mode on · ? for shortcuts · ← for agents
+

@@ -1,0 +1,30 @@
+❯ which DB should I run the migration against? one line ++db
+
+⏺ Run it against the staging DB, as your ++db rule says. I didn't find any migration or
+  DB config in this repo, so that answer comes only from the rule.
+
+✻ Baked for 4s · done 5:21 PM
+plan mode · effort xhigh for this mode · change: /plan-effort <level>               [-]
+++/  placeholders off: this message is sent exactly as typed
+++db  (not sent: ++/ in this message)
+++m  (not sent: ++/ in this message)
+turn back on: delete ++/
+
+────────────────────────────────────────────────────────────────────────────────────────
+❯ plan the users table migration ++db ++m ++/
+────────────────────────────────────────────────────────────────────────────────────────
+  ⏸ plan mode on (shift+tab to cycle)                               ◐ medium · /effort
+
+
+
+
+
+
+
+
+
+
+
+
+
+

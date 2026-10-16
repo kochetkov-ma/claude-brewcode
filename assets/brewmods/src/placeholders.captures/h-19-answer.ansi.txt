@@ -1,0 +1,30 @@
+     # [ADDON: ANTI-DRIFT CRON]
+     [2m… +105 lines (ctrl+o to expand)[0m
+
+[38;5;246m⏺ [39mUser answered Claude's questions:
+[38;5;246m  ⎿  · Save ++db as drafted? → Save as drafted (Recommended)[39m
+
+[38;5;114m⏺[39m [1mbrewmod-placeholders - save_placeholder (MCP)[0m(name: "db", text: "always use the
+                                               staging DB", description: "Always use the
+                                               staging DB", scope: "global")
+[38;5;246m  ⎿  [39msaved ++db (global): ~/.claude/placeholders/db.md
+
+[38;5;231m⏺[39m I saved [38;5;153m++db[39m as a global placeholder in [38;5;153m~/.claude/placeholders/db.md[39m. It works in all
+  your projects: typing [38;5;153m++db[39m in a prompt inserts "always use the staging DB".
+
+[38;5;246m✻[39m [38;5;246mBaked for 6s · done 5:21 PM[39m
+
+[38;5;246m[48;5;237m❯ [38;5;231mwhich DB should I run the migration against? one line ++db[39m
+
+[38;5;231m[49m⏺[39m Run it against the staging DB, as your [38;5;153m++db[39m rule says. I didn't find any migration or
+  DB config in this repo, so that answer comes only from the rule.
+
+[38;5;246m✻[39m [38;5;246mBaked for 4s · done 5:21 PM[39m
+[38;5;73mplan mode · effort xhigh for this mode · change: /plan-effort <level>[39m               [38;5;246m[-][39m
+
+[38;5;244m────────────────────────────────────────────────────────────────────────────────────────
+[39m❯ 
+[38;5;244m────────────────────────────────────────────────────────────────────────────────────────
+[39m  [38;5;73m⏸ plan mode on[38;5;246m (shift+tab to cycle) · ← for agents[39m                [38;5;246m◐ medium · /effort[39m
+
+

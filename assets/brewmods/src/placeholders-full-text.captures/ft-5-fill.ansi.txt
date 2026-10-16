@@ -3,35 +3,25 @@
 [38;5;174m ▝▝[39m   [38;5;174m▝▝[39m   [38;5;246m~/brewery[39m
 
 
-[38;5;220m⏺[39m [38;5;220mPrompt dropped by a hook: ++m? = /placeholders show ++m · not sent to Claude ·[39m
-  [38;5;220mpress Enter to print it[39m
+[38;5;220m⏺[39m [38;5;220mPrompt[39m [38;5;220mdropped[39m [38;5;220mby[39m [38;5;220ma[39m [38;5;220mhook:[39m [38;5;220m++m?[39m [38;5;220m=[39m [38;5;220m/placeholders[39m [38;5;220mshow[39m [38;5;220m++m[39m [38;5;220m·[39m [38;5;220mnot[39m [38;5;220msent[39m [38;5;220mto[39m [38;5;220mClaude[39m [38;5;220m·[39m
+  [38;5;220mpress[39m [38;5;220mEnter[39m [38;5;220mto[39m [38;5;220mprint[39m [38;5;220mit[39m
 [38;5;246mplaceholders 1[39m                                                                      [38;5;246m[-][39m
 [1m[38;5;153m++m[0m[38;5;246m  Manager mode: orchestrate and deleg…[38;5;73m plan +[38;5;246m · Claude receives these lines now:[39m
   [1m[38;5;231mUser typed `++m` — Manager mode is active for this turn:[0m
   [1m[38;5;231m [0m
   [1m[38;5;231m[ROLE: MANAGER][0m
   [1m[38;5;231m [0m
-  [1m[38;5;231mManage; never code/build/test/hand-debug: the main context is for orchestration.[0m
+  [1m[38;5;231mManage;[0m [1m[38;5;231mnever[0m [1m[38;5;231mcode/build/test/hand-debug:[0m [1m[38;5;231mthe[0m [1m[38;5;231mmain[0m [1m[38;5;231mcontext[0m [1m[38;5;231mis[0m [1m[38;5;231mfor[0m [1m[38;5;231morchestration.[0m
   [1m[38;5;231m [0m
-  [1m[38;5;231mProtocol: 1) TaskList; graph exists -> reuse it, else TaskCreate the full graph[0m
-  [1m[38;5;231mbefore any work. 2) addBlockedBy/addBlocks only for real data-handoffs, else[0m
-  [1m[38;5;231mparallel. 3) TaskUpdate owner, then launch. 4) Validate reports, integrate;[0m
-  [1m[38;5;231mcompleted only when truly done; failure -> follow-up task + re-delegate. 5) all[0m
-  [38;5;246m... 19 more lines · whole text: [4m[38;5;231m/placeholders show ++m[0m[38;5;246m or [4m[38;5;231m++m?[0m[38;5;246m alone [38;5;231m[Enter][39m
-  [38;5;73mnot sent now · plan mode adds 18 lines[39m
-[38;5;246mmore: [4m[38;5;231mput the caret on ++m[0m[38;5;246m · send as typed: [4m[38;5;231m++/[0m[38;5;246m · help: [4m[38;5;231m/placeholders help[0m
+  [1m[38;5;231mProtocol:[0m [1m[38;5;231m1)[0m [1m[38;5;231mTaskList;[0m [1m[38;5;231mgraph[0m [1m[38;5;231mexists[0m [1m[38;5;231m->[0m [1m[38;5;231mreuse[0m [1m[38;5;231mit,[0m [1m[38;5;231melse[0m [1m[38;5;231mTaskCreate[0m [1m[38;5;231mthe[0m [1m[38;5;231mfull[0m [1m[38;5;231mgraph[0m
+  [38;5;246m...[39m [38;5;246m22[39m [38;5;246mmore[39m [38;5;246mlines[39m [38;5;246m·[39m [38;5;246mwhole[39m [38;5;246mtext:[39m [4m[38;5;231m/placeholders show ++m[0m[38;5;246m or[39m [4m[38;5;231m++m?[0m[38;5;246m alone[39m [38;5;231m[Enter][39m
+  [38;5;73mnot[39m [38;5;73msent[39m [38;5;73mnow[39m [38;5;73m·[39m [38;5;73mplan[39m [38;5;73mmode[39m [38;5;73madds[39m [38;5;73m18[39m [38;5;73mlines[39m
+[38;5;246mmore:[39m [4m[38;5;231mput the caret on ++m[0m[38;5;246m ·[39m [38;5;246msend[39m [38;5;246mas[39m [38;5;246mtyped:[39m [4m[38;5;231m++/[0m[38;5;246m ·[39m [38;5;246mhelp:[39m [4m[38;5;231m/placeholders help[0m
 
 [38;5;244m────────────────────────────────────────────────────────────────────────────────────────
 [39m❯ [38;5;153m/placeholders[39m show ++m
 [38;5;244m────────────────────────────────────────────────────────────────────────────────────────
-[39m  [38;5;246m⏸ manual mode on[39m
-
-
-
-
-
-
-
+[39m  [38;5;246m⏸[39m [38;5;246mmanual[39m [38;5;246mmode[39m [38;5;246mon[39m
 
 
 
