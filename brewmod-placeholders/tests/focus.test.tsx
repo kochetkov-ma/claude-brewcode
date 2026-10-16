@@ -3,7 +3,7 @@ import type { On } from 'claude-code'
 import { BAND, PLUG, ROOT, STATE_FILE, bandProps, bandTexts, bootBand, box, defaultsTree, mountBand, spansOf, textsOf, typed, type Tree } from './layer-io'
 import { defaultDefs } from './fixtures'
 import { bandState, budgets, receivesLabel, treeRows, wrapRows, type BandRow } from '../hooks/lib/band'
-import { caretFocus, heldFocus, isMenuOpen, tokenAt } from '../hooks/lib/editor'
+import { caretFocus, heldFocus, isMenuOpen, tokenAt, type CaretFocus } from '../hooks/lib/editor'
 import { DEFAULT_ENTRIES } from '../hooks/lib/editor-state'
 import { compileMatchers, markerOf, scanDraft } from '../hooks/lib/match'
 import { assembleDraft, injectedContext } from '../hooks/lib/sent'
@@ -84,7 +84,7 @@ test('GIVEN drafts and carets WHEN the menu is checked THEN it is open only whil
 
 test('GIVEN the menu open on a token WHEN an edit closes it THEN the menu stays open (same name keeps isQuery) only while our typeahead still answers the word before the caret', async () => {
   const open = { name: 'r', isQuery: false, isMenuOpen: true }
-  const cases: [string, number, { name: string | null; isQuery: boolean; isMenuOpen: boolean }, typeof open | null][] = [
+  const cases: [string, number, CaretFocus, CaretFocus | null][] = [
     ['++r?', 4, { name: 'r', isQuery: true, isMenuOpen: false }, open],
     ['++rr', 4, { name: 'rr', isQuery: false, isMenuOpen: false }, open],
     ['++r ', 4, { name: null, isQuery: false, isMenuOpen: false }, open],
@@ -456,6 +456,264 @@ test('GIVEN box changes from the engine, history, undo and a plugin fill WHEN pr
     { key: 'view', value: { tokens: [] } },
     { key: 'focus', value: { name: null, isQuery: false, isMenuOpen: false } },
   ])
+})
+
+// ---- the held menu ends: our answer, the hold timer, a recall (no typeahead while an entry is shown), our rows for the box
+
+const spyFocus = (on: On): unknown[] => {
+  const writes: unknown[] = []
+  on('state.set', { key: 'focus' }, (_$, e, next) => {
+    writes.push(e.value)
+    return next(e)
+  })
+  return writes
+}
+const R_Q24 = ['++r', RECV, ...R_ROWS.slice(0, 9), '... 2 more lines · whole text: /placeholders show ++r', R_FOOT]
+const R_MENU24 = ['++r', RECV, ...R_ROWS.slice(0, 3), '... 8 more lines · whole text: /placeholders show ++r', R_FOOT]
+const RR_ROWS = [
+  'User typed `++rr` — Anti-regression review discipline is active for this turn:',
+  ' ',
+  '[REVIEW DISCIPLINE: ANTI-REGRESSION]',
+  'Every significant phase: one review (matching reviewer expert, else',
+  'general-purpose), simplification pass first.',
+  'Axes: 1) no regression (primary) - existing behavior intact; 2) project',
+  'standard - existing conventions/patterns; 3) functional correctness - the new',
+  'functionality works.',
+  'a) Review - finding = defect on an axis with path:line + evidence (failing',
+]
+const RR_FOOT = 'close: move the caret off ++rr · send as typed: ++/'
+
+test('GIVEN check ++r recalled, then explain ++r? recalled WHEN the band mounts at 24 rows after each THEN no menu is assumed and nothing is held: both bands take 9 rows', async ($, on) => {
+  const writes = spyFocus(on)
+  await boot($, on)
+  await changed($, 'check ++r', { kind: 'history' })
+  const first = await bandTexts($, 24)
+  await changed($, 'explain ++r?', { kind: 'history' })
+
+  expect({ writes, first, second: await bandTexts($, 24) }, 'recalled bands').toEqual({
+    writes: [
+      { name: 'r', isQuery: false, isMenuOpen: false },
+      { name: 'r', isQuery: true, isMenuOpen: false },
+    ],
+    first: R_Q24,
+    second: R_Q24,
+  })
+})
+
+test('GIVEN a recall stepped back to the draft go ++r WHEN our typeahead answers that box with the ++rr row THEN the menu is reported open and the band capped', async ($, on) => {
+  const writes = spyFocus(on)
+  on('prompt.autocomplete', () => ({ suggestions: [] }))
+  await boot($, on)
+  await changed($, 'go ++r', { kind: 'history' })
+  const recalled = await bandTexts($, 24)
+  const answer = await ($.prompt as any).autocomplete({ text: 'go ++r', cursor: 6, token: '++r', start: 3 })
+
+  expect({ writes, recalled, rows: answer.suggestions.map((s: { label: string }) => s.label), band: await bandTexts($, 24) }, 'draft put back').toEqual({
+    writes: [
+      { name: 'r', isQuery: false, isMenuOpen: false },
+      { name: 'r', isQuery: false, isMenuOpen: true },
+    ],
+    recalled: R_Q24,
+    rows: ['++rr'],
+    band: R_MENU24,
+  })
+})
+
+// Seen live: the engine asks for the new box while prompt.edit still writes its focus; the answer must not write a stale focus.
+test('GIVEN go typed WHEN ++r is typed and our answer for it comes while its focus write is still in flight THEN the focus is r with the menu open, never the stale empty one', async ($, on) => {
+  const writes: unknown[] = []
+  const clock = mock.clock(on, { now: 0 })
+  on('state.set', { key: 'focus' }, async (_$, e, next) => {
+    writes.push(e.value)
+    await clock.sleep(10)
+    return next(e)
+  })
+  on('prompt.autocomplete', () => ({ suggestions: [] }))
+  await boot($, on)
+  const first = typed($, 'go ')
+  await clock.advance(20)
+  await first
+  const edit = ($.prompt as any).edit({ origin: { kind: 'composer' }, text: 'go ', cursor: 3, start: 3, end: 3, inputText: '++r' })
+  await clock.settle()
+  const ask = ($.prompt as any).autocomplete({ text: 'go ++r', cursor: 6, token: '++r', start: 3 })
+  await clock.advance(50)
+  await edit
+  const answer = await ask
+
+  expect({ writes, rows: answer.suggestions.map((s: { label: string }) => s.label), band: await bandTexts($, 24) }, 'focus under a concurrent answer').toEqual({
+    writes: [
+      { name: null, isQuery: false, isMenuOpen: false },
+      { name: 'r', isQuery: false, isMenuOpen: true },
+    ],
+    rows: ['++rr'],
+    band: R_MENU24,
+  })
+})
+
+// Esc drops the rows and the engine asks nothing for the same text again: only the hold timer ends the hold.
+test('GIVEN the caret moved into ++rr under its ++rr row WHEN it moves back to the end and no answer comes THEN the band holds for 300 ms, then grows', async ($, on) => {
+  const writes = spyFocus(on)
+  const clock = mock.clock(on, { now: 0 })
+  await boot($, on)
+  await typed($, '++rr')
+  const grownBand = await bandTexts($, 24)
+  await move($, 3)
+  const menuBand = await bandTexts($, 24)
+  await move($, 4)
+  const held = await bandTexts($, 24)
+  await clock.advance(299)
+  const late = await bandTexts($, 24)
+  await clock.advance(1)
+
+  expect({ writes, grownBand, menuBand, held, late, grown: await bandTexts($, 24) }, 'hold ended by the timer').toEqual({
+    writes: [
+      { name: 'rr', isQuery: false, isMenuOpen: false },
+      { name: 'rr', isQuery: false, isMenuOpen: true },
+      { name: 'rr', isQuery: false, isMenuOpen: false },
+    ],
+    grownBand: ['++rr', RECV, ...RR_ROWS, '... 7 more lines · whole text: /placeholders show ++rr', RR_FOOT],
+    menuBand: ['++rr', RECV, ...RR_ROWS.slice(0, 3), '... 13 more lines · whole text: /placeholders show ++rr', RR_FOOT],
+    held: ['++rr', RECV, ...RR_ROWS.slice(0, 3), '... 13 more lines · whole text: /placeholders show ++rr', RR_FOOT],
+    late: ['++rr', RECV, ...RR_ROWS.slice(0, 3), '... 13 more lines · whole text: /placeholders show ++rr', RR_FOOT],
+    grown: ['++rr', RECV, ...RR_ROWS, '... 7 more lines · whole text: /placeholders show ++rr', RR_FOOT],
+  })
+})
+
+test('GIVEN ? typed after ++r (held) WHEN a space follows before any answer and the hold timer runs out THEN the space focus stands and the stale hold writes nothing', async ($, on) => {
+  const writes = spyFocus(on)
+  const clock = mock.clock(on, { now: 0 })
+  await boot($, on)
+  await typed($, '++r')
+  await ($.prompt as any).edit({ origin: { kind: 'composer' }, text: '++r', cursor: 3, start: 3, end: 3, inputText: '?' })
+  await ($.prompt as any).edit({ origin: { kind: 'composer' }, text: '++r?', cursor: 4, start: 4, end: 4, inputText: ' ' })
+  await clock.advance(1000)
+
+  expect(writes, 'focus writes').toEqual([
+    { name: 'r', isQuery: false, isMenuOpen: true },
+    { name: null, isQuery: false, isMenuOpen: false },
+  ])
+})
+
+// Undo to the same token start keeps the engine's stale rows until our answer: the hold stays there.
+test('GIVEN ++r with its menu open WHEN undo puts ++rr back THEN the band holds until our empty answer for ++rr, then the true focus goes out', async ($, on) => {
+  const writes = spyFocus(on)
+  on('prompt.autocomplete', () => ({ suggestions: [] }))
+  const clock = mock.clock(on, { now: 0 })
+  await boot($, on)
+  await typed($, '++r')
+  await changed($, '++rr', { kind: 'undo' })
+  const held = [...writes]
+  const answer = await ($.prompt as any).autocomplete({ text: '++rr', cursor: 4, token: '++rr', start: 0 })
+  await clock.settle()
+
+  expect({ held, answer, writes }, 'undo hold').toEqual({
+    held: [
+      { name: 'r', isQuery: false, isMenuOpen: true },
+      { name: 'rr', isQuery: false, isMenuOpen: true },
+    ],
+    answer: { suggestions: [] },
+    writes: [
+      { name: 'r', isQuery: false, isMenuOpen: true },
+      { name: 'rr', isQuery: false, isMenuOpen: true },
+      { name: 'rr', isQuery: false, isMenuOpen: false },
+    ],
+  })
+})
+
+// ---- focus writes go out one after another, in order: a write in flight never loses or overtakes a later one
+
+// One composer key on the mirrored box: inputText replaces start..end (default: at the caret).
+const key = ($: any, inputText: string, start = box.cursor, end = start) => $.prompt.edit({ origin: { kind: 'composer' }, text: box.text, cursor: box.cursor, start, end, inputText })
+// Every focus write is recorded, then held `ms` on the mock clock before it lands.
+const slowFocus = (on: On, clock: { sleep: (ms: number) => Promise<void> }, ms: (v: CaretFocus) => number): unknown[] => {
+  const writes: unknown[] = []
+  on('state.set', { key: 'focus' }, async (_$, e, next) => {
+    writes.push(e.value)
+    await clock.sleep(ms(e.value as CaretFocus))
+    return next(e)
+  })
+  return writes
+}
+const RR_GROWN24 = ['++rr', RECV, ...RR_ROWS, '... 7 more lines · whole text: /placeholders show ++rr', RR_FOOT]
+
+test('GIVEN ++r? held and our empty answer releasing it WHEN Backspace brings back ++r and its ++rr row while the release write is in flight THEN the menu focus goes out after it and the band stays capped', async ($, on) => {
+  const clock = mock.clock(on, { now: 0 })
+  const writes = slowFocus(on, clock, () => 10)
+  on('prompt.autocomplete', () => ({ suggestions: [] }))
+  await boot($, on)
+  const first = typed($, '++r')
+  await clock.advance(20)
+  await first
+  await key($, '?')
+  await ($.prompt as any).autocomplete({ text: '++r?', cursor: 4, token: '++r?', start: 0 })
+  await clock.advance(1)
+  const back = key($, '', 3, 4)
+  await clock.advance(50)
+  await back
+  const answer = await ($.prompt as any).autocomplete({ text: '++r', cursor: 3, token: '++r', start: 0 })
+
+  expect({ writes, rows: answer.suggestions.map((s: { label: string }) => s.label), band: await bandTexts($, 24) }, 'key during the release write').toEqual({
+    writes: [
+      { name: 'r', isQuery: false, isMenuOpen: true },
+      { name: 'r', isQuery: true, isMenuOpen: false },
+      { name: 'r', isQuery: false, isMenuOpen: true },
+    ],
+    rows: ['++rr'],
+    band: R_MENU24,
+  })
+})
+
+test('GIVEN ++r with its menu open WHEN r is typed (held write slow) and our empty answer for ++rr releases the hold while that write is in flight THEN the release write lands last and the band grows', async ($, on) => {
+  const clock = mock.clock(on, { now: 0 })
+  let isSlow = false
+  const writes = slowFocus(on, clock, (v) => (isSlow && v.name === 'rr' && v.isMenuOpen ? 30 : 5))
+  on('prompt.autocomplete', () => ({ suggestions: [] }))
+  await boot($, on)
+  const first = typed($, '++r')
+  await clock.advance(20)
+  await first
+  isSlow = true
+  const edit = key($, 'r')
+  await clock.settle()
+  await ($.prompt as any).autocomplete({ text: '++rr', cursor: 4, token: '++rr', start: 0 })
+  await clock.advance(1)
+  await clock.advance(200)
+  await edit
+
+  expect({ writes, band: await bandTexts($, 24) }, 'release after the held write').toEqual({
+    writes: [
+      { name: 'r', isQuery: false, isMenuOpen: true },
+      { name: 'rr', isQuery: false, isMenuOpen: true },
+      { name: 'rr', isQuery: false, isMenuOpen: false },
+    ],
+    band: RR_GROWN24,
+  })
+})
+
+// The atom keeps the last landed focus when a write is refused: the hold follows the focus asked for, not that one.
+test('GIVEN ++r with its menu open and the focus write for the space after it refused WHEN ++rr is pasted after the space THEN no menu is held and the band grows', async ($, on) => {
+  mock.clock(on, { now: 0 })
+  const writes: unknown[] = []
+  let isRefused = false
+  on('state.set', { key: 'focus' }, (_$, e, next) => {
+    writes.push(e.value)
+    return isRefused ? { deny: 'state down' } : next(e)
+  })
+  await boot($, on)
+  await typed($, '++r')
+  isRefused = true
+  await key($, ' ')
+  isRefused = false
+  await key($, '++rr')
+
+  expect({ writes, band: await bandTexts($, 24) }, 'no hold after a refused write').toEqual({
+    writes: [
+      { name: 'r', isQuery: false, isMenuOpen: true },
+      { name: null, isQuery: false, isMenuOpen: false },
+      { name: 'rr', isQuery: false, isMenuOpen: false },
+    ],
+    band: ['++rr', RECV, ...RR_ROWS.slice(0, 8), '... 8 more lines · whole text: /placeholders show ++rr', 'also: ++r', RR_FOOT],
+  })
 })
 
 // ---- plan part: m.plan.md (`plan: add`) = an addition joined to the m.md body in plan mode (design-a2 sections 1-2)

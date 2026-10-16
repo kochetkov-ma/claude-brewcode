@@ -64,7 +64,7 @@ export function caretFocus(view: PlaceholderView, text: string, cursor: number):
 
 const SPACE = /\s/
 // Tokens our prompt.autocomplete hook answers: the literal matcher in register.ts (validate reads only a literal there).
-export const ASKED_TOKEN = /^[^\w\s]{2}/
+const ASKED_TOKEN = /^[^\w\s]{2}/
 
 // The engine's typeahead token: the word before the caret. A backward walk, not /\S*$/: that regex is quadratic on a long word (a pasted blob).
 export function tokenAt(text: string, cursor: number): string {
@@ -78,7 +78,7 @@ export function isMenuOpen(prefix: string, text: string, cursor: number, entries
   return suggest(prefix, tokenAt(text, cursor), entries).length > 0
 }
 
-// A menu closing on a token we still answer stays open (the band as it was) until that answer lands: the engine draws its last rows till then,
+// A menu closing on a token we still answer stays open until that answer or the hold timer (register.ts): the engine draws its last rows till then,
 // and a band grown under them overflows the screen, its top scrolled away for good. Same name keeps isQuery, so the band does not change.
 export function heldFocus(next: CaretFocus, last: CaretFocus | null, text: string, cursor: number): CaretFocus {
   if (next.isMenuOpen || last?.isMenuOpen !== true || !ASKED_TOKEN.test(tokenAt(text, cursor))) return next
