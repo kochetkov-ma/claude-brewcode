@@ -63,7 +63,7 @@ Brewcode layers on top of Claude Code with no external runtime. Skills spawn age
 </Steps>
 
 <Callout type="caution" title="One setup per session">
-  Every `-setup` skill is an interactive generator that fans out subagents and asks real questions. Two in one session degrade each other, so `setup-status` reports and stops. Run setups one at a time, ideally in a fresh session.
+  Every `-setup` skill is an interactive generator that fans out subagents and asks you questions. Two in one session degrade each other, so `setup-status` reports and stops. Run setups one at a time, ideally in a fresh session.
 </Callout>
 
 ## Technical details
@@ -115,7 +115,7 @@ Full tree: [file-tree.md](https://github.com/kochetkov-ma/claude-brewcode/blob/m
 
 <Spoiler id="agents-and-contracts" title="Agent contracts and tests">
 
-Creator agents and their on-demand references follow Claude Code authoring contracts checked through 2.1.296. They distinguish ordinary agents, conversation forks and skill forks, and return unresolved decisions to the main caller. Local regression suites cover creator contracts, hooks, team lifecycle, convention lifecycle and semantic search; their output gives current pass/fail totals and does not replace live evaluation.
+Creator agents and their on-demand references follow Claude Code authoring contracts checked through 2.1.296. They distinguish ordinary agents, conversation forks and skill forks, and return unresolved decisions to the main caller. Local regression suites cover creator contracts, hooks, team lifecycle, convention lifecycle and semantic search; each prints current pass/fail totals, and none replaces a live evaluation.
 
 </Spoiler>
 

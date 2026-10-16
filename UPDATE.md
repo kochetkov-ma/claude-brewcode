@@ -1,6 +1,6 @@
 # Install or update brewcode
 
-❗ **Update Claude Code first:** mods need Claude Code 2.1.301 or newer — `claude --version`; below that run `claude update`.
+❗ **Update Claude Code first:** mods need Claude Code 2.1.301 or newer. Check with `claude --version`; below that, run `claude update`.
 
 Written for you and for an LLM. Paste into Claude Code: `Read https://raw.githubusercontent.com/kochetkov-ma/claude-brewcode/main/UPDATE.md and follow it.`
 

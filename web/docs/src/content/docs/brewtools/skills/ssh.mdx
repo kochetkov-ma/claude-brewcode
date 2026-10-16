@@ -56,7 +56,7 @@ Every destructive command requires explicit confirmation, even when chained with
 </Callout>
 
 - sshd, port and firewall changes pass a 5-step lockout gate: allow-new, `sshd -t`, reload, prove a new session, then deny-old.
-- Password prompts cannot be answered by Claude Code: use `! ssh deploy@your-server`.
+- Claude Code cannot answer password prompts: use `! ssh deploy@your-server`.
 
 ## Technical details
 

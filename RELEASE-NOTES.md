@@ -13,7 +13,7 @@
 - `+++` now works in every mode. In a normal prompt Claude sets up one recurring check for the session (a cron, hourly unless you say otherwise) that re-reads your goal and keeps the task from drifting. In plan mode it adds that check to the plan as a step instead. See [prompt placeholders](https://doc-claude.brewcode.app/mods/placeholders/).
 - Placeholders come in two kinds only. `<name>.md` is sent in every mode; an optional `<name>.plan.md` adds more text in plan mode. If one of your own files used `when: plan`, it is now sent in every mode: run `/placeholders status` to see which files changed.
 - Plan mode looks the same in both mods. The plan-mode band, the plan text it shows and the `brewmod-plan-effort` row are drawn in Claude Code's own plan-mode teal (the row was yellow). See [plan-mode effort](https://doc-claude.brewcode.app/mods/plan-effort/).
-- The band shows up at once after you accept a suggestion with Tab or Enter, recall history or undo, and `/placeholders` typed right after launch waits until the mod is ready.
+- The band now appears at once after you accept a suggestion with Tab or Enter, recall history or undo. `/placeholders` typed right after launch waits until the mod is ready.
 
 ![Claude Code plan mode: Shift+Tab into plan mode, then a teal plan-effort row above the prompt](https://brewcode.app/mods/plan-effort.gif)
 
@@ -549,7 +549,7 @@ The GIF shows the placeholders mod as it looks today. Plan-effort in action: [pl
 
 More: [Mods overview](https://doc-claude.brewcode.app/mods/overview/) · [placeholders on brewcode.app](https://brewcode.app/mods/placeholders/) · [plan-effort on brewcode.app](https://brewcode.app/mods/plan-effort/)
 
-First release of the brewcode mods: two Claude Code mods (TypeScript hooks modules) and the `mod-creator` agent that builds them. The release train grows from four plugins to six, all on one version. This release asked for Claude Code 2.1.292+ (placeholders) and 2.1.287+ (plan-effort); both mods need 2.1.301+ since v6.9.4.
+First release of the brewcode mods: two Claude Code mods (TypeScript hooks modules) and the `mod-creator` agent that builds them. The release train grows from four plugins to six, all on one version. This release required Claude Code 2.1.292+ (placeholders) and 2.1.287+ (plan-effort); both mods need 2.1.301+ since v6.9.4.
 
 ### brewmod-placeholders
 

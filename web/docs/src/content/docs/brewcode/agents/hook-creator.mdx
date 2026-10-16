@@ -63,7 +63,7 @@ One bounded deliverable per run; larger briefs return a split proposal ([scope g
 | `prompt` | LLM decision handler with ok/reason output; supported events only |
 | `agent` | LLM agent decision handler; supported events only |
 
-Prompt and agent handlers evaluate decisions, not inject context. SessionStart supports command/MCP handlers, Setup skips MCP, PermissionRequest skips agent handlers and needs its own output shape.
+Prompt and agent handlers return decisions and do not inject context. SessionStart supports command/MCP handlers, Setup skips MCP, PermissionRequest skips agent handlers and needs its own output shape.
 
 ```json
 {

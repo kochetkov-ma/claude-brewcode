@@ -47,7 +47,7 @@ claude plugin update brewdoc@claude-brewcode
 
 ## Overview
 
-Brewdoc keeps documentation in sync with the codebase, generates installation docs, and exports documents to ready-made formats. Each skill is self-contained.
+Brewdoc tracks stale docs and syncs them with the codebase, and documents your Claude Code installation. It also generates a project-tailored `/memory-sync` skill, converts Markdown to PDF and publishes text, files and sites to brewpage.app. Each skill is self-contained.
 
 Dev mode (no install): `claude --plugin-dir ./brewdoc`.
 

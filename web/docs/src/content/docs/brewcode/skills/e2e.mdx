@@ -7,10 +7,10 @@ import { Card, CardGrid, Callout, Steps, Spoiler, UpdateNotice } from '../../../
 
 # e2e — manage E2E tests
 
-Installs five project-tuned `e2e-*` agents, then writes BDD scenarios and autotests with a review cycle and checks them with a 3-reviewer quorum.
+Installs five project-tuned `e2e-*` agents, then writes BDD scenarios and autotests with a review cycle. A 3-reviewer quorum checks the result.
 
 <Callout type="caution">
-  Run `/brewcode:e2e install` before `create`, `update`, `review` or `rules`. Without at least 3 `e2e-*` agents the skill stops with a clear message; `status` never stops and reports the gap instead.
+  Run `/brewcode:e2e install` before `create`, `update`, `review` or `rules`. With fewer than 3 `e2e-*` agents the skill stops and says "Run `/brewcode:e2e install` first."; `status` never stops and reports the gap instead.
 </Callout>
 
 ## Quick reference

@@ -7,7 +7,7 @@ import { Badge, Callout, Card, CardGrid, Steps, Spoiler, UpdateNotice } from '..
 
 # Review (dynamic) <Badge variant="secondary" text="opus" />
 
-Deep-review coordinator written into your repository by [`/brewcode:superreview-setup`](/brewcode/skills/superreview-setup/) and wired to that project's agents, rules, build commands and task tracker. One `/superreview` run covers correctness, architecture, reuse, version pins, business requirements and scope discipline in one report.
+Deep-review coordinator written into your repository by [`/brewcode:superreview-setup`](/brewcode/skills/superreview-setup/) and wired to that project's agents, rules, build commands and task tracker. One `/superreview` run covers correctness, architecture, reuse, version pins, business requirements and scope discipline, and writes a single report.
 
 <Callout type="caution">
 **Not shipped with the plugin.** The generator writes it to `.claude/skills/superreview/` in your repo; you invoke it there as `/superreview`.
@@ -26,7 +26,7 @@ Deep-review coordinator written into your repository by [`/brewcode:superreview-
 
 ## What it does
 
-The skill resolves one review mode from your argument, runs your project's real build and test commands as ground truth, routes each group of changed files to the agent that owns that surface, and checks the change against the task or issue that sanctioned it.
+The skill resolves one review mode from your argument and runs your project's real build and test commands as ground truth. It routes each group of changed files to the agent that owns that surface, then checks the change against the task or issue that sanctioned it.
 
 Nothing reaches the report unvalidated. An agent that does not own the file reverse-checks every candidate finding; failures are dropped, and anything unvalidatable is reported as `UNVALIDATED` with the run marked `INCOMPLETE`. A degraded run never looks clean. The report recommends `/simplify` and a fix session in Manager mode; the skill never edits code.
 

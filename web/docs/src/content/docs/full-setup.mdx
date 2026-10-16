@@ -44,7 +44,7 @@ The dashboard groups its run-list into the same seven stages, shown in the Stage
 | 10 | 7 | [memory-sync-setup](/brewdoc/skills/memory-sync-setup/) | Sync auto-loaded context after agents, rules and tasks exist | `/brewdoc:memory-sync-setup install` |
 | 11 | 7 | [docsync-setup](/brewdoc/skills/docsync-setup/) | Track documents for staleness | `/brewdoc:docsync-setup install` |
 
-After the run, add the [brewcode mods](/mods/overview/), which change Claude Code itself: `claude plugin install brewmod-placeholders@claude-brewcode` expands `++` tokens such as `++r` into instruction blocks ([placeholders](/mods/placeholders/)), and `claude plugin install brewmod-plan-effort@claude-brewcode` raises effort while you plan ([plan-effort](/mods/plan-effort/)).
+After the run, add the [brewcode mods](/mods/overview/), which change Claude Code itself. [`brewmod-placeholders`](/mods/placeholders/) expands `++` tokens such as `++r` into instruction blocks; [`brewmod-plan-effort`](/mods/plan-effort/) raises effort while you plan. Install them with `claude plugin install brewmod-placeholders@claude-brewcode` and `claude plugin install brewmod-plan-effort@claude-brewcode`.
 
 <Spoiler id="what-the-eleven-setups-install" title="What the eleven setups install">
 

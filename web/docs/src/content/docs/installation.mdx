@@ -13,7 +13,7 @@ These four products run in Claude Code: 27 skills, 9 agents, and 3 registered pl
 <InstallPrompt plugin="all" mode="install" />
 
 <Callout type="note" title="Claude Code only">
-  The repository's native Codex instructions are separate; this installation does not enable Codex plugins or configure Codex authentication or runtime state.
+  The repository keeps separate native instructions for Codex. This installation does not enable Codex plugins or change Codex authentication or runtime state.
 </Callout>
 
 ## Requirements
@@ -61,13 +61,13 @@ These four products run in Claude Code: 27 skills, 9 agents, and 3 registered pl
     cd claude-brewcode
     ```
 
-    **2. Launch with the `--plugin-dir` flag** (developers only):
+    **2. Launch with the `--plugin-dir` flag:**
 
     ```bash
     claude --plugin-dir ./brewcode --plugin-dir ./brewdoc --plugin-dir ./brewtools --plugin-dir ./brewui
     ```
 
-    For a single plugin (developers only):
+    For a single plugin:
 
     ```bash
     claude --plugin-dir ./brewcode
@@ -83,7 +83,7 @@ These four products run in Claude Code: 27 skills, 9 agents, and 3 registered pl
   <li class="step step-primary">
     <div>
       <strong>Check the plugin list</strong>
-      <p>Run <code>/reload-plugins</code> in your session (or restart Claude Code if the command is unavailable), then run in your terminal. It lists <code>brewcode</code>, <code>brewdoc</code>, <code>brewtools</code> and <code>brewui</code>.</p>
+      <p>Run <code>/reload-plugins</code> in your session (or restart Claude Code if the command is unavailable), then run the command below in your terminal. It lists <code>brewcode</code>, <code>brewdoc</code>, <code>brewtools</code> and <code>brewui</code>.</p>
       <pre><code>claude plugin list</code></pre>
     </div>
   </li>

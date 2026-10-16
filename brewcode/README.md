@@ -54,7 +54,7 @@ Dev mode (no install): `claude --plugin-dir ./brewcode`
 
 ## Overview
 
-Brewcode keeps long tasks on track across Claude Code compaction: the `compact-recall` hook re-anchors the plan, intent and task graph, so the session continues from recorded state. Skills cover semantic code search, multi-agent review, conventions, e2e, project rules and meta-tooling for skills, agents and teams. Agents are specialists only; implementation, testing and review roles are generated per project by `/brewcode:teams-setup`.
+After a Claude Code compaction, the `compact-recall` hook re-anchors the plan, intent and task graph, so the session continues from recorded state. Skills cover semantic code search, multi-agent review, conventions, e2e, project rules and meta-tooling for skills, agents and teams. The shipped agents are specialists only; `/brewcode:teams-setup` generates the implementation, testing and review roles per project.
 
 ## Quick Start
 

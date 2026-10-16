@@ -7,7 +7,7 @@
 [![Documentation](https://img.shields.io/badge/Docs-doc--claude.brewcode.app-4A90D9?logo=bookstack&logoColor=white)](https://doc-claude.brewcode.app/getting-started/)
 [![GitHub stars](https://img.shields.io/github/stars/kochetkov-ma/claude-brewcode?style=flat&logo=github&label=stars)](https://github.com/kochetkov-ma/claude-brewcode/stargazers)
 
-**Claude Code mods:** type `++r` and get a whole review block, read it before you send, add your own with `/placeholders`; plan mode raises effort to `xhigh`. [See the mods](#claude-code-mods)
+**Claude Code mods:** type `++r` and get a whole review block; read it before you send, add your own with `/placeholders`. Plan mode raises effort to `xhigh`. [See the mods](#claude-code-mods)
 
 **Claude Code plugin suite.** Keeps big tasks on track: bounded units, a six-field brief per spawn, the plan re-anchored after a compaction. 4 plugins, 27 skills, 9 agents. [**Full documentation**](https://doc-claude.brewcode.app/getting-started/) | [**Approaches**](APPROACHES.md) | [**Update**](UPDATE.md)
 
@@ -57,7 +57,7 @@ Run these commands in order in this session, show full output, then run `/reload
 
 First time: `claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode`, then `/reload-plugins` after installing. Both mods require Claude Code 2.1.301+ (run `claude update` first) and `node` on the `PATH`.
 
-Team/Enterprise organizations, the brewtools 6.7.x double injection and legacy codeword overrides: [mods overview](https://doc-claude.brewcode.app/mods/overview/).
+Team/Enterprise organizations, the brewtools 6.7.x double injection and legacy codeword overrides are covered in the [mods overview](https://doc-claude.brewcode.app/mods/overview/).
 
 ## Top 5 features
 

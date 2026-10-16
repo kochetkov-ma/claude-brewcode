@@ -46,7 +46,7 @@ Only one? Run `claude plugin marketplace add https://github.com/kochetkov-ma/cla
 <Spoiler title="How mods differ from plugins" id="technical-details">
   A mod ships no skills and no agents. Its `hooks.json` lists TypeScript hooks modules that the engine loads, plus a small bundled command hook for the parts that need one. Mods are on by default from Claude Code 2.1.287 and are in early access, so the module API can change between releases.
 
-  On a Team or Enterprise organization, Claude Code's builtin security layer bypasses the `classic.*` hooks of a mod a person installs. Both brewcode mods bundle a command hook for the parts that need them. Verified live on Claude Code 2.1.300 on a Team-organization profile and on a Max profile, with `--plugin-dir` and installed copies. An Enterprise organization was not run.
+  On a Team or Enterprise organization, Claude Code's builtin security layer bypasses the `classic.*` hooks of a mod a person installs, but a bundled command hook still runs. Both brewcode mods ship one. Verified live on Claude Code 2.1.300 on a Team-organization profile and on a Max profile, with `--plugin-dir` and installed copies. An Enterprise organization was not run.
 
   brewtools 6.7.x together with `brewmod-placeholders` injects each codeword twice. Update brewtools to 6.8.0 or later; from 6.8.0 the mod is the only source of the codewords.
 </Spoiler>

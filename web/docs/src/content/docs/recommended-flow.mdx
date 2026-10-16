@@ -105,8 +105,8 @@ Type the token anywhere in the prompt box, followed by the task:
 
 Claude receives your prompt unchanged plus a hidden instruction block. To read exactly what is sent, put the caret on the token or run `/placeholders show ++m`.
 
-- **A design first.** Switch to plan mode (`Shift+Tab` twice from the default mode, or `/plan`), then send `++m <task>`. The plan opens with the manager role and the full task graph. The plan-effort mod raises plan-mode requests to `xhigh` by default and never changes your session effort.
-- **A long run.** Add `+++`: `++m +++ <task>`. Claude creates one session cron for the current task, hourly by default, that re-reads the goal and reports drift. In plan mode it plans the cron as a step instead.
+- **To get a design first:** switch to plan mode (`Shift+Tab` twice from the default mode, or `/plan`), then send `++m <task>`. The plan opens with the manager role and the full task graph. The plan-effort mod raises plan-mode requests to `xhigh` by default and never changes your session effort.
+- **For a long run:** add `+++`: `++m +++ <task>`. Claude creates one session cron for the current task, hourly by default, that re-reads the goal and reports drift. In plan mode it plans the cron as a step instead.
 
 Tokens combine, except that `++rr` wins over `++r`. `++a` (architecture first) and your own tokens work the same way. The [Prompt placeholders](/mods/placeholders/) page opens with a recorded terminal session of `++` in action; [Plan-mode effort](/mods/plan-effort/) has one for plan mode.
 

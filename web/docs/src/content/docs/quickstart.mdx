@@ -20,7 +20,7 @@ The first ten minutes: conventions, domain agents, a task board and a project-ta
   <li class="step step-primary">
     <div>
       <strong>Install the plugins</strong>
-      <p>Add the marketplace and install brewcode (once per machine); brewtools, needed for the task board, follows below.</p>
+      <p>Add the marketplace and install brewcode once per machine. The task board needs brewtools, so install it too.</p>
       <pre><code>claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
 claude plugin install brewcode@claude-brewcode
 claude plugin install brewtools@claude-brewcode</code></pre>
@@ -75,7 +75,7 @@ claude plugin install brewtools@claude-brewcode</code></pre>
 
   Remove a team later by name: `uninstall core`, or `purge core` to drop its archive and trace files too.
 
-  The board returns the task ID, which `/task-spec` accepts if titles overlap. If the spec layer was omitted, run task-board setup's `upgrade` and select it. It researches the codebase, asks clarifying questions and fans out to domain agents; methodology, spec and design land under `.claude/features/`.
+  The board returns the task ID, which `/task-spec` accepts if titles overlap. If the spec layer was omitted, run task-board setup's `upgrade` and select it. `/task-spec` researches the codebase, asks clarifying questions and fans out to domain agents; methodology, spec and design land under `.claude/features/`.
 
   When a top-level task becomes active, the main session's task-board announces its hourly anti-drift cron, with a cadence you choose or an opt-out. Timers depend on the active session and runtime limits.
 

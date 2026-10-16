@@ -13,7 +13,7 @@ import { Badge, Callout, Card, CardGrid, Spoiler, SourceLink, Steps, UpdateNotic
 
 <SourceLink path="brewtools/skills/task-board-setup/README.md" anchor="task-board-setup" />
 
-Point the skill at any repo. It analyses the domains, confirms the findings with you, then writes a file-based Kanban: curator agent, dashboard skill, lifecycle rule and the `.claude/features/**` tree. The repo stays self-contained afterwards, with no dependency on this generator.
+Point the skill at any repo. It analyzes the domains, confirms the findings with you, then writes a file-based Kanban: curator agent, dashboard skill, lifecycle rule and the `.claude/features/**` tree. The repo stays self-contained afterwards, with no dependency on this generator.
 
 ## Quick reference
 
@@ -64,7 +64,7 @@ Canonical order, shared by every `-setup` skill:
 ## How it works
 
 <Steps>
-  <li><div><strong>Analyse the repo</strong><p>Three parallel subagents derive domains, source exclusions, release style, doc language and the repo's own agents; you confirm the findings and the `SPEC_MODE` choice via `AskUserQuestion`.</p></div></li>
+  <li><div><strong>Analyze the repo</strong><p>Three parallel subagents derive domains, source exclusions, release style, doc language and the repo's own agents; you confirm the findings and the `SPEC_MODE` choice via `AskUserQuestion`.</p></div></li>
   <li><div><strong>Generate the curator and dashboard</strong><p>Writes `task-tracker` (writes only under `.claude/features/**`) and the `task-board` skill, plus `task-spec` when `SPEC_MODE` is on.</p></div></li>
   <li><div><strong>Generate the rule and scaffold</strong><p>Writes `.claude/rules/tasks.md` and the folder tree; it never edits the target's `CLAUDE.md`.</p></div></li>
   <li><div><strong>Sweep legacy docs</strong><p>Bounded subagents migrate old backlog and feature docs into `closed/` and `backlog/`. No legacy docs means no sweep.</p></div></li>
@@ -238,7 +238,7 @@ Self-review loop: A finds (one adversarial reviewer per domain), B verifies each
     Arm a HARD wall that forces the main session to orchestrate via subagents.
   </Card>
   <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">
-    All brewtools skills in one place.
+    Commands, models and arguments for every brewtools skill.
   </Card>
 </CardGrid>
 

@@ -23,7 +23,7 @@ import { Badge, Card, CardGrid, SourceLink, Spoiler, Steps, UpdateNotice } from 
 
 ## What it does
 
-Compresses text while preserving the facts and behavior that make it useful. It removes repetition, tightens wording, and applies the selected mode's transformations. Numbers, names, dates, paths, versions, examples, negations, and scope qualifiers stay protected.
+Compresses text and keeps its facts and behavior intact. It removes repetition, tightens wording, and applies the selected mode's transformations. Numbers, names, dates, paths, versions, examples, negations, and scope qualifiers stay protected.
 
 A block between another tool's begin/end markers, such as `<!-- BEGIN brewcode:semble -->`, stays byte-identical, marker lines included, and is reported as `managed by <setup>`.
 
@@ -80,7 +80,7 @@ Shared rules for all brewtools agents: [Scope guard](/brewtools/agents/#scope-gu
 <CardGrid>
   <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">Text utilities, agents, and task orchestration.</Card>
   <Card title="Text Optimize" icon="sparkle" href="/brewtools/skills/text-optimize/">The main skill that owns snapshots, delegation, and acceptance.</Card>
-  <Card title="Context Slim" icon="zap" href="/brewtools/skills/context-slim/">Coordinate context cleanup across instruction surfaces.</Card>
+  <Card title="Context Slim" icon="zap" href="/brewtools/skills/context-slim/">Trims the instruction text that permanently enters the LLM context.</Card>
 </CardGrid>
 
 <UpdateNotice />

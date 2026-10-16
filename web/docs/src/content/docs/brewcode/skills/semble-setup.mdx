@@ -1,6 +1,6 @@
 ---
 title: "semble-setup"
-description: "Installs, audits, repairs and removes the semble_code semantic code-search MCP server for a project — pinned version, user-scope registration, honest limits."
+description: "Installs, audits, repairs and removes the semble_code semantic code-search MCP server for a project — pinned version, user-scope registration, known limits."
 order: 1117
 ---
 
@@ -46,7 +46,7 @@ Every other `-setup` skill falls back to `install` when nothing is installed. `s
 | `optimize` | read-only audit with concrete recommendations | no |
 | `resume` | after the reload: smoke query, self-repairing re-run, `phase=ready` | yes |
 
-The first seven rows are the vocabulary shared by every `-setup` skill; `reindex`, `optimize` and `resume` are semble-specific. `setup`, `update` and `remove` stay accepted as free-text synonyms.
+The first six rows hold the seven modes shared by every `-setup` skill; `reindex`, `optimize` and `resume` are semble-specific. `setup`, `update` and `remove` stay accepted as free-text synonyms.
 
 ## When to use
 
@@ -150,7 +150,7 @@ absent -> prereq_ready -> awaiting_reload -> verifying -> ready
                                    +-> disabled <----------+
 ```
 
-`ready` is reachable only from `verifying`, so a run that dies half-way leaves an honest record. Re-registration parks the phase at `awaiting_reload`; `disable` reaches `disabled` from any set-up state. Installer-owned fields (`resumePrompt`, `cacheRoot`, `repoHash`, `approvedVersion`, `projectRoot`, `schema`, metadata) are recomputed on every write; `enabled`, `phase`, `completed` and `notes` are never reset as a side effect.
+`ready` is reachable only from `verifying`, so a run that dies half-way leaves an accurate record. Re-registration parks the phase at `awaiting_reload`; `disable` reaches `disabled` from any set-up state. Installer-owned fields (`resumePrompt`, `cacheRoot`, `repoHash`, `approvedVersion`, `projectRoot`, `schema`, metadata) are recomputed on every write; `enabled`, `phase`, `completed` and `notes` are never reset as a side effect.
 
 </Spoiler>
 

@@ -40,7 +40,7 @@ The skill proposes rule candidates, you accept them in batches, then it spawns `
   <li><div><strong>Checkpoint and report</strong><p>Appends each finished file to <code>.claude/reports/YYYYMMDD-HHMMSS_rules-organizer/report.md</code>; the calling skill then runs <code>brewtools:text-optimize</code>.</p></div></li>
 </Steps>
 
-Refuses: anything beyond rule organization, global rules or CLAUDE.md writes, and spawning optimizers (no `Agent` tool). A brief without CONTEXT or CONSUMER gets a stated assumption or a question back. Generic rules: [scope guard](/brewcode/agents/#scope-guard). On `maxTurns` exhaustion written files survive and main resumes with `SendMessage`.
+It refuses anything beyond rule organization, writes to global rules or CLAUDE.md, and spawning optimizers (it has no `Agent` tool). A brief without CONTEXT or CONSUMER gets a stated assumption or a question back. Generic rules: [scope guard](/brewcode/agents/#scope-guard). If it exhausts `maxTurns`, the files already written survive and main resumes it with `SendMessage`.
 
 <Spoiler id="frontmatter-and-loading" title="Rule-file frontmatter and loading">
 
@@ -57,7 +57,7 @@ last_updated: "2026-09-12"
 ---
 ```
 
-Quote patterns, give them as an array; `doc_type: llm` is the one unquoted value. Version, `generated_by` and `last_updated` are rewritten at release, never hand-edited.
+Quote the patterns and give them as an array; `doc_type: llm` is the one unquoted value. Version, `generated_by` and `last_updated` are rewritten at release, never hand-edited.
 
 | Frontmatter | Loads |
 |-------------|-------|

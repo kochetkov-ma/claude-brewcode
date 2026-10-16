@@ -14,7 +14,7 @@ import { Badge, Callout, Card, CardGrid, InstallPrompt, SourceLink, Spoiler, Upd
   The codewords `++m`, `++a`, `++r`, `++rr` and `+++` come with this mod. Install it once and they work in every prompt, next to placeholders you write yourself: see [Install](#install) and the [Quick start](#quick-start).
 </Callout>
 
-Prompt shortcuts for Claude Code: type `++r` to attach a saved instruction block, read its text before you send, add your own with `/placeholders`.
+Type `++r` and Claude gets a saved instruction block along with your prompt. Read the block's text before you send, and add your own with `/placeholders`.
 
 {/* Stable deep link, shared outside the docs: /mods/placeholders/#demo. Keep the id. */}
 <p align="center" id="demo">
@@ -181,7 +181,7 @@ Your own placeholder can have a plan part too: see [Examples](#examples).
 | `enter` | Return | ⏎ | Sends the prompt. On `++r?` alone it runs the query instead ([how](#read-the-full-text)) |
 | `esc` | Esc | ⎋ | Closes the typeahead, back to typing |
 | `↑` `↓` `←` `→` | arrow keys | ↑↓←→ | Move in the typeahead (↑↓) or onto a token to read its text (←→) |
-| `shift+tab` | Shift + Tab | ⇧⇥ | Default mode (`⏸ manual mode on`): twice, accept edits then plan; or type `/plan`. The band does not change at the press, entering or leaving plan mode: it shows the mode of your last completed prompt, so `plan mode adds:` appears only after a prompt has run in plan mode. The next prompt is still sent with the new mode's text. The effort toast comes from the other mod, [brewmod-plan-effort](/mods/plan-effort/) |
+| `shift+tab` | Shift + Tab | ⇧⇥ | Default mode (`⏸ manual mode on`): twice, accept edits then plan; or type `/plan`. The band does not change at the keypress, whether you enter or leave plan mode: it shows the mode of your last completed prompt, so `plan mode adds:` appears only after a prompt has run in plan mode. The next prompt is still sent with the new mode's text. The effort toast comes from the other mod, [brewmod-plan-effort](/mods/plan-effort/) |
 | `ctrl+o` | Control + O | ⌃O | Transcript view: your prompt and the answer only. The injected text is NOT there; use the band or `/placeholders show` |
 
 ## Read the full text
@@ -223,7 +223,11 @@ close: move the caret off ++m · send as typed: ++/
 | Plain, theme text colour | A key to press | `[Enter]` |
 | Grey (dim) | Labels and notes; never sent. Text that is not sent (a skipped token, an escaped message) is grey too | `close:`, `more:`, `... 16 more lines`, `placeholders 2` |
 
-The text under the head holds up to 15 rows, the cut row and the plan note included; the head and foot rows (and an `also:` row) come on top. The text rows are wrapped to the terminal width, so how many fit changes with it. `K more lines` counts the lines of the sent text left out (its header line and blank line included): `++m` is 29 lines, 13 text rows shown at 120x40 (13 + the cut row + the plan note = 15). `plan mode adds N lines` counts the lines of the plan part; an empty plan part counts as none, so it gets no `plan +` tag and no note. In plan mode the band shows the plan header, the normal rows, a `plan mode adds:` row in the plan-mode colour and then `[ADDON: PLAN MODE]` with its rows in bold plan-mode colour. Outside plan mode a name with a plan part ends with the note `not sent now · plan mode adds N lines` in the plan-mode colour; `+++` shows its own text there, sent and bold, with the note `not sent now · plan mode adds 3 lines`.
+The text under the head holds up to 15 rows, the cut row and the plan note included; the head and foot rows (and an `also:` row) come on top. The text rows are wrapped to the terminal width, so how many fit changes with it. `K more lines` counts the lines of the sent text left out (its header line and blank line included): `++m` is 29 lines, 13 text rows shown at 120x40 (13 + the cut row + the plan note = 15).
+
+`plan mode adds N lines` counts the lines of the plan part; an empty plan part counts as none, so it gets no `plan +` tag and no note.
+
+In plan mode the band shows the plan header, the normal rows, a `plan mode adds:` row in the plan-mode colour and then `[ADDON: PLAN MODE]` with its rows in bold plan-mode colour. Outside plan mode a name with a plan part ends with the note `not sent now · plan mode adds N lines` in the plan-mode colour; `+++` shows its own text there, sent and bold, with the note `not sent now · plan mode adds 3 lines`.
 
 Hint rows, as drawn. A custom `prefix` replaces `++` in all of them.
 

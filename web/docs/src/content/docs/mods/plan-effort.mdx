@@ -43,7 +43,7 @@ Dev mode without installing: `claude --plugin-dir ./brewmod-plan-effort`
 
 | You do | You get |
 |--------|---------|
-| `Shift+Tab` twice from the default mode (`manual mode on` → `accept edits on` → `plan mode on`), or `/plan` | Nothing shows at the keypress itself: Claude Code gives mods no live mode signal, so the mod learns plan mode at the first prompt or tool batch. From that prompt, requests run at `xhigh`, a row in Claude Code's plan-mode colour (teal) appears above the prompt and a toast shows once per plan visit |
+| `Shift+Tab` twice from the default mode (`manual mode on` → `accept edits on` → `plan mode on`), or `/plan` | Nothing shows at the keypress itself: Claude Code gives mods no live mode signal, so the mod learns plan mode at the first prompt or tool batch. From that prompt on, requests run at `xhigh`, a row in Claude Code's plan-mode colour (teal) appears above the prompt, and a toast shows once per plan visit |
 | `Shift+Tab` out of plan mode | The row disappears at once (about 0.1 s), because the hint line Claude Code draws names the mode just left. The next request is already at your session effort. The status line keeps showing your session effort: the mod raises effort per request and never changes the session setting |
 | `Shift+Tab` back into plan mode, then a prompt | A second plan visit: the row and the toast show again |
 | Approve the plan | The next request is back at your session effort, nothing to undo |
@@ -68,7 +68,7 @@ In plan mode the row above the prompt, drawn in Claude Code's plan-mode colour (
 
 Claude Code adds the `brewmod-plan-effort:` prefix to the toast and to the first line of command output; the mod supplies the text after it.
 
-The row stays through turns and typing, sits above any other prompt-area UI and steps aside while a survey is open. With [brewmod-placeholders](/mods/placeholders/) loaded, it stays visible above the placeholders band in either load order. The row takes one row from the band's budget, so the band below keeps its full layout and does not overflow in fullscreen.
+The row stays through turns and typing, sits above any other prompt-area UI and steps aside while a survey is open. With [brewmod-placeholders](/mods/placeholders/) loaded, it stays visible above the placeholders band in either load order. It uses one of the rows the band would otherwise get, so the band below keeps its full layout and does not overflow in fullscreen.
 
 `/plan-effort` prints a status block:
 

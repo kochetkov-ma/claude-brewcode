@@ -1,10 +1,10 @@
 # Approaches
 
-This page indexes every engineering approach the brewcode suite (four plugins and two mods) applies, and
-the links between them: which setup skill installs which hook, which skill writes which agent, which text is
-injected at which moment. It is for the maintainer who forgot where a file comes from, and for the user who
-wants to know what a plugin or mod actually does to a session. The [Mods](#mods) come first: they act on
-the prompt you type and on plan mode.
+This page lists every approach the brewcode suite (four plugins and two mods) applies and how they connect:
+which setup skill installs which hook, which skill writes which agent, which text is injected at which
+moment. It is for the maintainer who forgot where a file comes from, and for the user who wants to know
+what a plugin or mod does to a session. The [Mods](#mods) come first: they act on the prompt you type and
+on plan mode.
 
 Rule: every new hook, agent, generated skill or injection gets a row here - in its domain table (a mod's
 pieces: in [Mods](#mods)) and in "Where each thing lives". A feature without a row is undocumented.
@@ -23,7 +23,7 @@ Column meanings are the same in every table below.
 
 Two conventions across the suite:
 
-- **Fail-open, with deliberate exceptions.** A discipline hook returns `{}` when anything goes wrong, so a
+- Fail-open, with deliberate exceptions. A discipline hook returns `{}` when anything goes wrong, so a
   broken layer costs a good habit, never the ability to work. Five hooks block on purpose: the hard wall,
   the agent router, the deadline guard, the return guard and the docsync gate. Two depart from the rule.
   `compact-recall.mjs` fails open *loudly*: every error path, its outer `catch` included, degrades to the
@@ -32,7 +32,7 @@ Two conventions across the suite:
   an internal error denies; it exits only 0 or 2, and its registration carries `onFailure: "block"`
   (Claude Code >= 2.1.295) so a guard that cannot start blocks too. Its only pass-throughs are "no manager
   installed here" and a real subagent; the self-exempt exit CLI survives both.
-- **Say it at the moment it applies.** Contracts are injected at session open, prompt submit, subagent
+- Say it at the moment it applies. Contracts are injected at session open, prompt submit, subagent
   spawn or tool call - never left to be remembered from earlier in the context.
 
 ## Mods
@@ -67,12 +67,12 @@ For one mod, keep only its `claude plugin install`. Update later with `/brewtool
 | Bundled command hook | `hooks/inject.mjs` (placeholders), `hooks/mode.mjs` (plan-effort); both on `UserPromptSubmit` and `PostToolBatch` in the same `hooks.json`, timeout 5 s | Plain Node, no dependencies; any error prints `{}` | On Team/Enterprise organizations the builtin security layer bypasses a user mod's `classic.*` module hooks, the ones that add context; a command hook still runs. Verified live on a Team-organization and a Max profile; Enterprise was not run |
 | Mode file | `<plugin root>/.state/mode-<session_id>.json`, `{mode,ts}`, gitignored, pruned after 7 days | The command hook writes the main loop's `permission_mode` (a payload with an `agent_id` is ignored; the session id must match `[A-Za-z0-9_-]+`); the module reads it | A module gets no live permission-mode signal: plan mode is learned at the next prompt or tool batch |
 
-- **Fail-open.** A command hook ends in a `catch` that prints `{}`; the engine skips a failing module hook
+- Fail-open. A command hook ends in a `catch` that prints `{}`; the engine skips a failing module hook
   and the chain goes on. A broken mod costs its feature, never a prompt or a tool batch.
-- **Two mode files, one format.** Each mod writes `.state/mode-<session_id>.json` under its own plugin root,
+- Two mode files, one format. Each mod writes `.state/mode-<session_id>.json` under its own plugin root,
   so either runs alone. With both loaded, the plan-effort row stays visible above the placeholders band in
   either load order: the row takes one row of the band's budget.
-- **Early access.** Mods use the hooks module API, which can change between Claude Code releases.
+- Early access. Mods use the hooks module API, which can change between Claude Code releases.
 
 ### brewmod-placeholders (flagship)
 
@@ -171,7 +171,7 @@ classDiagram
   style IG fill:#bf8700,stroke:#7d5300,color:#ffffff
 ```
 
-**One turn in time.** Blue band = main session, violet = inside a subagent; the band note names the hook
+One turn in time. Blue band = main session, violet = inside a subagent; the band note names the hook
 event. A crossed arrow marks a mechanism that can deny the call or block the return - everything else fails
 open and stays silent. The compaction band fires whenever the context is squeezed, mid-turn included, and
 can fire several times per session.
@@ -279,7 +279,7 @@ Notes for this section:
   calling session (`brewcode/skills/agents/references/hooks-io-contract.md`).
 - brewcode registers two hooks, both on `SessionStart`: `session-start.mjs` unmatched (human-only
   `systemMessage`), `compact-recall.mjs` in a `"matcher": "compact"` group (model-only `additionalContext`).
-- **One project-root recipe, copied on purpose.** Every hook and installer resolves the root in this order:
+- One project-root recipe, copied on purpose. Every hook and installer resolves the root in this order:
   `CLAUDE_PROJECT_DIR` -> git toplevel -> upward walk for `.git`/`.claude` -> `PWD`
   (`brewcode/skills/agents/references/hooks-env.md`; the plugin JS form skips the git step). Hook processes
   always get `CLAUDE_PROJECT_DIR`; an interactive or Bash-tool shell does not, which is expected. `input.cwd`
@@ -287,7 +287,7 @@ Notes for this section:
   config, state or logs. Plugin hooks import `projectRoot` from `lib/utils.mjs`; every **generated** hook
   and `hardmode-guard.mjs` inline a copy (Node built-ins only), because they land alone in someone else's
   repo. A hook never exits non-zero over an ambiguous root; an installer about to write aborts.
-- **`${CLAUDE_PLUGIN_DATA}`** (`~/.claude/plugins/data/<plugin-id>/`) survives plugin updates; a hook writes
+- `${CLAUDE_PLUGIN_DATA}` (`~/.claude/plugins/data/<plugin-id>/`) survives plugin updates; a hook writes
   there freely, a `Write`/`Edit` tool call gets a permission ask, so unattended runs use
   `${CLAUDE_PROJECT_DIR}/.claude/<subdir>/` (`hooks-env.md`).
 - Installing brewtools does **not** arm the wall. Only `/brewtools:manager-setup install` does.
@@ -321,7 +321,7 @@ from `/brewtools:manager-setup`, which must be run first; installing brewtools d
 ## 3. Subagent control
 
 Three opt-in setups, none in `brewtools/hooks/hooks.json`: each skill delegates file work to
-`brewcode:hook-creator` along its `assets/INSTALL.md` runbook. Global scope = `${CLAUDE_CONFIG_DIR:-$HOME/.claude}`.
+`brewcode:hook-creator` with its own `assets/INSTALL.md` runbook. Global scope = `${CLAUDE_CONFIG_DIR:-$HOME/.claude}`.
 Sharing `SubagentStop` is safe: the deadline cleanup hook always returns `{}`.
 
 | Approach | Installed by | Scope | Files | Trigger | Fires when | Excerpt | Config and defaults | Off switch | Purpose | Problem solved |
@@ -353,7 +353,7 @@ every non-destructive step, then ends its final return with an envelope the CALL
 | Destructive is enumerated, not judged | same contract | `rm`/`mv` over existing paths, service restart/stop, firewall/user/permission changes, secret rotation, `docker system prune`, any remote `ssh` mutation; `deploy-admin` adds force-push, tag delete, DB writes/migrations, deploy/rollback | The agent does not decide what counts | An agent classifying its own risky step as routine |
 | The gate stays with the skill | `brewtools/skills/ssh/SKILL.md`, `brewtools/skills/deploy/SKILL.md` | deploy: `This skill owns every spawn and acceptance; delegates never nest and return unresolved decisions.`; ssh presents each envelope as a Phase 5 Step 3 confirmation | The one context that still has `AskUserQuestion` owns the gate | A skill delegating its confirmation into a subagent that cannot confirm |
 
-The six-field block is the interoperability contract between writer and reader. It appears in
+Writer and reader share one contract: the six-field block. It appears in
 `brewtools/skills/ssh/references/safety-rules.md`, `brewtools/skills/deploy/SKILL.md`, both
 `templates/*-admin-agent.md.template` and both shipped agents `brewtools/agents/{ssh,deploy}-admin.md`;
 `ssh/SKILL.md` names the fields and points at `safety-rules.md`. The one asymmetry is the `HOST:` value:
@@ -544,8 +544,8 @@ contract exemption, hard-coded in `validate-skill.sh`, and still accepts `[promp
 
 ### Regression harnesses
 
-The load-bearing half of each contract is pinned by a runnable suite, so an edit that breaks a contract fails
-a test instead of shipping. Every suite dir has a `tests/run.sh` (rc 0 = green): `brewcode/hooks/tests`,
+Each contract's load-bearing half is pinned by a runnable suite: an edit that breaks one turns a test red
+before it ships. Every suite dir has a `tests/run.sh` (rc 0 = green): `brewcode/hooks/tests`,
 `brewcode/skills/{convention-setup,semble-setup,setup-status,superreview-setup,teams-setup}/tests`,
 `brewdoc/skills/{docsync-setup,md-to-pdf,memory-sync-setup,publish}/tests` and
 `brewtools/skills/{agent-deadline-setup,agent-return-setup,agent-router-setup,context-slim,deploy,manager-setup,provider-switch,secrets-scan,ssh,text-optimize}/tests`;
@@ -582,7 +582,7 @@ brewcode's `session-start.mjs` writes one field, and it is not a model field:
 }
 ```
 
-**What the model sees:** nothing; `systemMessage` is printed to the human. Hooks that do speak to the
+What the model sees: nothing; `systemMessage` is printed to the human. Hooks that do speak to the
 model at session start (semble, the wall notice) add `hookSpecificOutput.additionalContext` instead.
 
 ### B. A tool call denied by the hard wall
@@ -674,7 +674,7 @@ You type `++r check the diff` in the default permission mode. The command hook
 }
 ```
 
-**What the model sees:** your prompt as typed, plus this block as hidden context; the `ctrl+o` transcript
+What the model sees: your prompt as typed, plus this block as hidden context; the `ctrl+o` transcript
 shows the prompt and the answer only, not the block. The same call writes `.state/mode-<session_id>.json` as
 `{"mode":"default","ts":...}`. In plan mode `permission_mode` is `plan`, so `++m` and `+++` append their
 `<name>.plan.md` text after the normal block; `++r` has no plan part and sends the same text. `++rr` and `++r`

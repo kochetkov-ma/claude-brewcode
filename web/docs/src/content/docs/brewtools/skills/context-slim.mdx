@@ -23,7 +23,7 @@ import { Callout, Card, CardGrid, Spoiler, Steps, UpdateNotice } from '../../../
 
 ## What it does
 
-Three levers in one pass: cross-layer dedup, generic-knowledge removal, per-file compression. The skill never drops an exact value, key, path, version pin or `!=` prohibition. If the verification gate misses one, the run does a full rollback and reports FAILED.
+Three levers in one pass: cross-layer dedup, generic-knowledge removal, per-file compression. The skill never drops an exact value, key, path, version pin or `!=` prohibition. If the verification gate finds one missing, the run rolls back in full and reports FAILED.
 
 A bare invocation measures and reports without edits. `slim`, `hard` and `bodies` take a byte-exact snapshot first. MCP servers, plugin enablement and `settings.json` are never mutated, only advised in the report.
 

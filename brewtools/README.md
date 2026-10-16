@@ -116,7 +116,7 @@ brewtools/
 +-- agents/       # text-optimizer, ssh-admin, deploy-admin
 ```
 
-Brewtools provides text, ops and subagent-control utilities; [Brewcode](../brewcode/README.md) is the authoring toolkit. Both install from the same marketplace and operate independently.
+Brewtools covers text, ops and subagent control; [Brewcode](../brewcode/README.md) is the authoring toolkit. Both install from the same marketplace and work independently.
 
 ## Hooks
 

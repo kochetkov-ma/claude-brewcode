@@ -18,7 +18,7 @@
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT">
 </p>
 
-> Pairs well with [brewmod-placeholders](../brewmod-placeholders/). Part of the [brewcode mods](../README.md#claude-code-mods).
+> Runs alongside [brewmod-placeholders](../brewmod-placeholders/): the plan-mode row sits above its band. Part of the [brewcode mods](../README.md#claude-code-mods).
 
 ## Install
 
@@ -49,7 +49,7 @@ claude --plugin-dir ./brewmod-plan-effort   # dev mode, no install
 
 | You do | You get |
 |--------|---------|
-| `Shift+Tab` twice from the default mode (`manual mode on` → `accept edits on` → `plan mode on`), or `/plan` | Nothing shows at the keypress itself: Claude Code gives mods no live mode signal, so the mod learns plan mode at the first prompt or tool batch. From that prompt, requests run at `xhigh`, a row in Claude Code's plan-mode colour (teal) appears above the prompt and a toast shows once per plan visit |
+| `Shift+Tab` twice from the default mode (`manual mode on` → `accept edits on` → `plan mode on`), or `/plan` | Nothing shows at the keypress itself: Claude Code gives mods no live mode signal, so the mod learns plan mode at the first prompt or tool batch. From that prompt, requests run at `xhigh`; a row in Claude Code's plan-mode colour (teal) appears above the prompt; a toast shows once per plan visit |
 | `Shift+Tab` out of plan mode | The row disappears at once (about 0.1 s), because the hint line Claude Code draws names the mode just left. The next request is already at your session effort. The status line keeps showing your session effort: the mod raises effort per request and never changes the session setting |
 | `Shift+Tab` back into plan mode, then a prompt | A second plan visit: the row and the toast show again |
 | Approve the plan | The next request is back at your session effort, nothing to undo |
@@ -62,7 +62,7 @@ claude --plugin-dir ./brewmod-plan-effort   # dev mode, no install
 | Toast, 5 s | `brewmod-plan-effort: plan mode · effort raised to xhigh` | Once per plan visit (leaving and re-entering plan mode starts a new one), only when the mod raised the effort |
 | No row | | Default or any other mode; before the first prompt of a plan visit; after `Shift+Tab` out of plan mode |
 
-In plan mode the row above the prompt, drawn in Claude Code's plan-mode colour (the `planMode` theme colour: teal on a dark theme, a darker teal on a light one), and the `session` line of the `/plan-effort` status block follow the session effort:
+The row above the prompt is drawn in Claude Code's plan-mode colour (the `planMode` theme colour: teal on a dark theme, a darker teal on a light one). In plan mode it and the `session` line of the `/plan-effort` status block follow the session effort:
 
 | Session effort | Row above the prompt | `session` line |
 |----------------|----------------------|----------------|
