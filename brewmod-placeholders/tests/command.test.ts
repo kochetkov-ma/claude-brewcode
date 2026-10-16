@@ -94,16 +94,43 @@ test('GIVEN a global file shadowed by a project file WHEN save runs with scope g
   expect(out.text, 'text').toBe(`saved ++x (global): ${G_DIR}/x.md; note: the project layer wins over global`)
 })
 
-test('GIVEN a plan stem without a normal text WHEN save runs THEN the file says plan: add and the orphan part is sent in every mode with a warning', async () => {
-  const r = rig({})
+test('GIVEN a .plan name without a normal text anywhere WHEN save runs THEN it is refused like a planText-only save and nothing is written', async () => {
+  const r = rig({ [`${P_DIR}/orph.plan.md`]: fm('plan: add', 'OLD ORPHAN') })
 
-  const out = await saveTool(r.io, ROOTS, { name: 'rel.plan', description: 'Plan release', text: 'PLAN IT', scope: 'project' })
+  const outs = [
+    await saveTool(r.io, ROOTS, { name: 'rel.plan', description: 'Plan release', text: 'PLAN IT', scope: 'project' }),
+    await saveTool(r.io, ROOTS, { name: 'orph.plan', description: 'd', text: 'NEW', scope: 'project' }),
+    await saveTool(r.io, ROOTS, { name: 'orph', description: 'd', planText: 'NEW', scope: 'project' }),
+  ]
 
-  expect([r.writes, out.registry?.defs.find((d) => d.body === 'PLAN IT'), out.registry?.issues], 'writes, def, issues').toEqual([
-    [[`${P_DIR}/rel.plan.md`, '---\ndescription: "Plan release"\nplan: add\n---\nPLAN IT\n']],
-    { name: 'rel', body: 'PLAN IT', insert: 'context', order: 100, priority: 0, header: '', description: 'Plan release', isPlan: false },
-    ['project/rel.plan.md: no rel.md; sent in every mode'],
+  expect({ outs, writes: r.writes }, 'results and writes').toEqual({
+    outs: [
+      { text: '++rel has no text yet: save name rel with text and planText', registry: null, isError: true },
+      { text: '++orph has no text yet: save name orph with text and planText', registry: null, isError: true },
+      { text: '++orph has no text yet: send text too', registry: null, isError: true },
+    ],
+    writes: [],
+  })
+})
+
+test('GIVEN db.md WHEN save runs with the name db.plan THEN db.plan.md gets plan: add and the reply names the plan-mode part of ++db', async () => {
+  const r = rig({ [`${P_DIR}/db.md`]: 'DB' })
+
+  const out = await saveTool(r.io, ROOTS, { name: 'db.plan', description: 'Db plan', text: 'STEPS', scope: 'project' })
+
+  expect([out.text, r.writes, out.registry?.issues], 'text, writes, issues').toEqual([
+    'saved the plan-mode part of ++db (project): .claude/placeholders/db.plan.md',
+    [[`${P_DIR}/db.plan.md`, '---\ndescription: "Db plan"\nplan: add\n---\nSTEPS\n']],
+    [],
   ])
+})
+
+test('GIVEN an inline normal text WHEN save runs with the name x.plan THEN it is refused as needing a context text', async () => {
+  const r = rig({ [`${P_DIR}/x.md`]: fm('insert: inline', 'X') })
+
+  const out = await saveTool(r.io, ROOTS, { name: 'x.plan', description: 'd', text: 'P', scope: 'project' })
+
+  expect([out, r.writes], 'result and writes').toEqual([{ text: 'a plan-mode part needs a normal text that is not inline', registry: null, isError: true }, []])
 })
 
 test('GIVEN a stale when argument WHEN save runs THEN it is ignored and the file has no when line', async () => {
@@ -202,14 +229,41 @@ test('GIVEN a default, a legacy file, a file in the other layer and an unknown n
   ])
 })
 
-test('GIVEN both parts in project WHEN remove runs with part normal THEN only the normal file goes and the plan-mode part stays', async () => {
-  const r = rig({ [`${P_DIR}/db.md`]: 'DB', [`${P_DIR}/db.plan.md`]: fm('when: plan\nplan: add', 'STEPS') })
+test('GIVEN both parts in project and no other normal text WHEN remove runs with part normal THEN it is refused, since the plan part would be sent in every mode, and nothing is removed', async () => {
+  const r = rig({ [`${P_DIR}/db.md`]: 'DB', [`${P_DIR}/db.plan.md`]: fm('plan: add', 'STEPS') })
 
   const out = await removeTool(r.io, ROOTS, { name: 'db', part: 'normal' })
 
+  expect({ out, removed: r.removed }, 'result and removed').toEqual({
+    out: {
+      text: 'removing only the normal text of ++db would leave its plan-mode part alone, and that part would then be sent in every mode · remove both parts (part all), or change the normal text instead',
+      registry: null,
+      isError: true,
+    },
+    removed: [],
+  })
+})
+
+test('GIVEN a global db.md under a project db.md and db.plan.md WHEN remove runs with part normal THEN the project normal file goes and the global text is served', async () => {
+  const r = rig({ [`${G_DIR}/db.md`]: 'GDB', [`${P_DIR}/db.md`]: 'DB', [`${P_DIR}/db.plan.md`]: fm('plan: add', 'STEPS') })
+
+  const out = await removeTool(r.io, ROOTS, { name: 'db', part: 'normal', scope: 'project' })
+
   expect({ text: out.text, removed: r.removed }, 'text and removed').toEqual({
-    text: 'removed ++db (project): .claude/placeholders/db.md · ++db keeps only its plan-mode part',
+    text: 'removed ++db (project): .claude/placeholders/db.md · the global ++db is served now',
     removed: [`${P_DIR}/db.md`],
+  })
+})
+
+test('GIVEN a project db.md and a global db.plan.md WHEN remove runs on the project layer THEN the reply says the plan-mode part is now sent in every mode', async () => {
+  const r = rig({ [`${G_DIR}/db.plan.md`]: fm('plan: add', 'STEPS'), [`${P_DIR}/db.md`]: 'DB' })
+
+  const out = await removeTool(r.io, ROOTS, { name: 'db', scope: 'project' })
+
+  expect({ text: out.text, removed: r.removed, issues: out.registry?.issues }, 'text, removed, issues').toEqual({
+    text: 'removed ++db (project): .claude/placeholders/db.md · its plan-mode part is now sent in every mode',
+    removed: [`${P_DIR}/db.md`],
+    issues: ['global/db.plan.md: no db.md; sent in every mode'],
   })
 })
 

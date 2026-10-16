@@ -24,6 +24,8 @@ export const SCOPE_REQUIRED = "scope is required: 'global' or 'project'"
 const BAD_SCOPE = "scope must be 'project' or 'global'"
 const BAD_FENCE = 'that text holds a ``` or ~~~ fence marker or opens with a --- line, which the definition format cannot carry'
 const NEEDS_CONTEXT = 'a plan-mode part needs a normal text that is not inline'
+const LEAVES_PLAN = (token: string): string =>
+  `removing only the normal text of ${token} would leave its plan-mode part alone, and that part would then be sent in every mode · remove both parts (part all), or change the normal text instead`
 
 // Markdown-safe block: the first line stays plain (the engine glues "<plugin>: " in front of it, so a fence cannot open there), the rest sits in a fence longer than any backtick run inside.
 export function block(head: string, lines: readonly string[], foot: readonly string[] = []): string {
@@ -125,7 +127,7 @@ export const tools = (p: string) => [
   },
   {
     name: 'remove_placeholder',
-    description: `Never call this tool before the user answered your one AskUserQuestion about this exact removal in this turn, even when the request is explicit; only a name with files: none in list_placeholders skips the question (a plugin default or legacy brewtools file: nothing is removed; relay the result). Remove a placeholder file from the global or project layer; never use Bash rm. The wording is free (remove, delete, drop, удали, убери, сотри). Call list_placeholders first. part: all (default; <name>.md and <name>.plan.md), plan (the plan-mode part only: plan part, plan mode, план, в режиме плана), normal (the normal text only). scope: a first word global or project wins; else omit it and the tool takes the one layer holding the file. Question 1, header "Remove": "Remove ${p}<name> (<layer>)?", options "Remove it (Recommended)" / "Keep it"; when it has a plan-mode part and no part was named: "Remove ${p}<name> (<layer>)? It has a plan-mode part.", options "Both parts (Recommended)" / "Only the plan-mode part" / "Keep it"; when the plan part was named: "Remove the plan-mode part of ${p}<name> (<layer>)?", options "Remove it (Recommended)" / "Keep it". When list_placeholders shows files in both layers and no scope was given, add question 2 in the same call: header "Where", "Remove ${p}<name> from where?", options "Global" / "Project". Then say what is served afterwards (the result says it).`,
+    description: `Never call this tool before the user answered your one AskUserQuestion about this exact removal in this turn, even when the request is explicit; only a name with files: none in list_placeholders skips the question (a plugin default or legacy brewtools file: nothing is removed; relay the result). Remove a placeholder file from the global or project layer; never use Bash rm. The wording is free (remove, delete, drop, удали, убери, сотри). Call list_placeholders first. part: all (default; <name>.md and <name>.plan.md), plan (the plan-mode part only: plan part, plan mode, план, в режиме плана), normal (the normal text only; refused while a plan-mode part would be left without it, since that part would then be sent in every mode). scope: a first word global or project wins; else omit it and the tool takes the one layer holding the file. Question 1, header "Remove": "Remove ${p}<name> (<layer>)?", options "Remove it (Recommended)" / "Keep it"; when it has a plan-mode part and no part was named: "Remove ${p}<name> (<layer>)? It has a plan-mode part.", options "Both parts (Recommended)" / "Only the plan-mode part" / "Keep it"; when the plan part was named: "Remove the plan-mode part of ${p}<name> (<layer>)?", options "Remove it (Recommended)" / "Keep it". When list_placeholders shows files in both layers and no scope was given, add question 2 in the same call: header "Where", "Remove ${p}<name> from where?", options "Global" / "Project". Then say what is served afterwards (the result says it).`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -219,19 +221,22 @@ export async function saveTool(io: CmdIo, roots: Roots, input: SaveInput, prefix
     if (text === null && planText === null) return fail('text is empty')
     const description = typeof input.description === 'string' ? input.description.trim().replace(/\s+/g, ' ') : ''
     if (description === '') return fail('description is empty')
-    const token = prefix + stem
-    if (planText !== null) {
-      if (stem.endsWith(PLAN)) return fail('planText needs the name without .plan')
-      // The normal def the part joins; a new text file inherits its insert.
-      const base = rowsOf(await load(io, roots)).find((r) => r.def.name.toLowerCase() === stem && !r.def.isPlan)?.def
-      if (text === null && base === undefined) return fail(`${token} has no text yet: send text too`)
+    const isPlanName = stem.endsWith(PLAN)
+    const name = isPlanName ? stem.slice(0, -PLAN.length) : stem
+    const token = prefix + name
+    if (planText !== null && isPlanName) return fail('planText needs the name without .plan')
+    if (planText !== null || isPlanName) {
+      // The normal def the part joins (an orphan plan part sent in every mode is none); a new text file inherits its insert.
+      const base = rowsOf(await load(io, roots)).find((r) => r.def.name.toLowerCase() === name && !r.def.isPlan && !r.stem.endsWith(PLAN))?.def
+      if (base === undefined && isPlanName) return fail(`${token} has no text yet: save name ${name} with text and planText`)
+      if (base === undefined && text === null) return fail(`${token} has no text yet: send text too`)
       if ((base?.insert ?? 'context') !== 'context') return fail(NEEDS_CONTEXT)
     }
     const dir = dirOf(roots, scope)
     if (dir === undefined) return fail(noDir(scope))
     const files: [string, string][] = []
     for (const [file, content] of [
-      [`${stem}.md`, text === null ? undefined : definitionFile(description, text, stem.endsWith(PLAN) ? 'add' : undefined)],
+      [`${stem}.md`, text === null ? undefined : definitionFile(description, text, isPlanName ? 'add' : undefined)],
       [`${stem}${PLAN_MD}`, planText === null ? undefined : definitionFile(description, planText, 'add')],
     ] as const) {
       if (content === null) return fail(BAD_FENCE)
@@ -245,7 +250,7 @@ export async function saveTool(io: CmdIo, roots: Roots, input: SaveInput, prefix
     const registry = await load(io, roots)
     const won = files.map(([f]) => registry.sources.get(f.slice(0, -3))).find((l) => l !== undefined && l !== scope)
     const note = won === undefined ? '' : `; note: the ${layerLabel(won)} layer wins over ${scope}`
-    const what = text === null ? `the plan-mode part of ${token}` : token
+    const what = text === null || isPlanName ? `the plan-mode part of ${token}` : token
     const shown = shownDirs(roots, home)[scope]
     return { text: `saved ${what} (${scope}): ${files.map(([f]) => `${shown}/${f}`).join(', ')}${note}`, registry }
   } catch (e) {
@@ -261,7 +266,15 @@ function after(reg: Registry, stem: string, token: string, isPlanPart: boolean):
   const what = isPlanPart ? `plan-mode part of ${token}` : token
   if (now !== undefined) return now === 'default' ? `the built-in ${what} is back` : `the ${servedLabel(now)} ${what} is served now`
   if (!reg.sources.has(isPlanPart ? stem : `${stem}${PLAN}`)) return `${token} is no longer defined`
-  return isPlanPart ? `${token} keeps its normal text` : `${token} keeps only its plan-mode part`
+  return isPlanPart ? `${token} keeps its normal text` : `its plan-mode part is now sent in every mode`
+}
+
+// The registry as if the given files were gone: their listing entries are hidden.
+const hiding = (io: Io, gone: readonly string[]): Io => ({ ...io, list: async (dir) => (await io.list(dir)).filter((en) => !gone.includes(`${dir}/${en.name}`)) })
+// The name is served only by plan files: an orphan plan part, sent in every mode.
+const isLeftAlone = (reg: Registry, stem: string): boolean => {
+  const own = rowsOf(reg).filter((r) => r.def.name.toLowerCase() === stem)
+  return own.length > 0 && own.every((r) => r.stem.endsWith(PLAN))
 }
 
 // No user file to remove: a legacy brewtools file, a built-in, a missing plan part or an unknown name.
@@ -310,6 +323,7 @@ export async function removeTool(io: CmdIo, roots: Roots, input: RemoveInput, pr
       }
       reals.push(real)
     }
+    if (part === 'normal' && isLeftAlone(await load(hiding(io, target.files.map((f) => `${target.dir}/${f}`)), roots), stem)) return fail(LEAVES_PLAN(token))
     for (const real of reals) {
       const res = await io.remove(real)
       if (res.exitCode !== 0) return fail(`rm failed (exit ${res.exitCode}): ${res.stderr.trim()}`)
