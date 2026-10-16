@@ -5,7 +5,7 @@
 **Update with Claude: paste this prompt into Claude Code**
 
 ```text
-Check `claude --version`. Below 2.1.301 (the mods need it), run `claude update`, then stop and tell me to restart Claude Code and paste this prompt again. Otherwise read https://raw.githubusercontent.com/kochetkov-ma/claude-brewcode/main/UPDATE.md and follow it to update to __TAG__, then read https://github.com/kochetkov-ma/claude-brewcode/releases/tag/__TAG__ and explain in plain words what changed, and recommend what I should try first.
+Check `claude --version`. Below 2.1.301 (the mods need it), run `claude update`, then stop and tell me to restart Claude Code and paste this prompt again. Otherwise run `claude plugin list` and note the installed brewcode plugin and mod versions, then read https://raw.githubusercontent.com/kochetkov-ma/claude-brewcode/main/UPDATE.md and follow it to update to the latest release (__TAG__ or newer). Then read the sections of https://raw.githubusercontent.com/kochetkov-ma/claude-brewcode/main/RELEASE-NOTES.md for every version newer than the one I had, explain in plain words what changed, and recommend what I should try first.
 ```
 
 How to update and use it well: [UPDATE.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/UPDATE.md) · [Recommended flow](https://doc-claude.brewcode.app/recommended-flow/)

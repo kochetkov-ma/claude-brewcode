@@ -4,7 +4,7 @@
 
 Written for you and for an LLM. Paste into Claude Code: `Read https://raw.githubusercontent.com/kochetkov-ma/claude-brewcode/main/UPDATE.md and follow it.`
 
-**LLM rules:** run every command with the Bash tool, in order, and show its full output; stop on an error and report it; finish with `/reload-plugins` (a slash command: if you cannot run it, tell the user to type it or to restart Claude Code). `claude update` does not change the running session: after it succeeds, stop and tell the user to restart Claude Code (exit, run `claude`) and paste the same prompt again. Pick one section: run `claude plugin list`; an `@claude-brewcode` entry means "Already installed", none means "New here".
+**LLM rules:** run every command with the Bash tool, in order, and show its full output; stop on an error and report it; finish with `/reload-plugins` (a slash command: if you cannot run it, tell the user to type it or to restart Claude Code). `claude update` does not change the running session: after it succeeds, stop and tell the user to restart Claude Code (exit, run `claude`) and paste the same prompt again. Pick one section: run `claude plugin list` and note the plugin and mod versions (the versions the user had); an `@claude-brewcode` entry means "Already installed", none means "New here".
 
 ## New here: install
 
@@ -36,7 +36,7 @@ Project- or local-scope installs update from their own project directory. `/brew
 
 ## After updating
 
-1. Read https://github.com/kochetkov-ma/claude-brewcode/releases/latest.
+1. Read the sections of https://raw.githubusercontent.com/kochetkov-ma/claude-brewcode/main/RELEASE-NOTES.md for every version newer than the versions the user had (noted from `claude plugin list` before the update).
 2. Tell the user in plain words, 5 lines at most, what changed for the plugins they have.
 3. Recommend one to three things to try:
    - `++r` in a prompt: a whole review block; the caret on it shows its text before Enter.
