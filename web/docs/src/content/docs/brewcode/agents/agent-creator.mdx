@@ -52,13 +52,13 @@ Describe the role, allowed files and expected result. Agent Creator drafts front
 
 It refuses a brief that bundles several agents ("Create six agents for my team" returns a split proposal, one agent per subtask) and never invents scope. It has no `Agent` tool, so independent research and optimization are requested from the main caller ([delegation](/brewcode/skills/#delegation)). Generic rules: [scope guard](/brewcode/agents/#scope-guard).
 
-<Spoiler id="guardrails" title="Guardrails in every generated agent">
+<Spoiler id="guardrails" title="Guardrails in generated agents">
 
-Two blocks land in the body of every agent Agent Creator writes; they are output contract, not advice.
+Return Contract lands in the body of every generic agent Agent Creator writes; Scope Fit only in agents that write code or config. Both are output contract, not advice.
 
 | Guardrail | Applies to | What it says |
 |-----------|-----------|--------------|
-| **Return Contract** | Every generated agent | Verdict first, `<=30 lines`, `path:line`; bulk material goes to a file under `.claude/reports/<YYYYMMDD-HHMMSS>_<name>/` and only the path returns. With the agent-return guard installed, a return over ~2500 est-tokens (chars/4) is blocked for compression, over ~6000 it must file the detail. |
+| **Return Contract** | Every generic agent | Verdict first, `<=30 lines`, `path:line`; bulk material goes to a file under `.claude/reports/<YYYYMMDD-HHMMSS>_<name>/` and only the path returns. With the agent-return guard installed, a return over ~2500 est-tokens (chars/4) is blocked for compression, over ~6000 it must file the detail. |
 | **Scope Fit** | Agents that write code, scripts, SQL, schemas, infra or config | Build for today's scale, then one pass: fewer files, less config, less indirection. Omitted for research, docs and review-only work. |
 
 Team profiles use the teams-setup exception: shared return and scope rules live in `team.md`.
@@ -130,7 +130,7 @@ Plugin agent paths resolve through `${CLAUDE_PLUGIN_ROOT}`. The [known-issues re
 <Spoiler id="resource-limits" title="Subagent resource limits: turns, timeouts, checkpointing">
 
 <Callout type="caution">
-**A subagent has no wall-clock timeout.** It is bounded by turns, API-call timeouts and token caps. An agent stuck in one 25-minute `Bash` call is one turn; `maxTurns` will not touch it.
+**A subagent has no wall-clock timeout.** It is bounded by turns, API-call timeouts and token caps. An agent stuck in one long `Bash` call (up to `BASH_MAX_TIMEOUT_MS`, 10 minutes by default) is one turn; `maxTurns` will not touch it.
 </Callout>
 
 A turn is one model inference plus its tool calls; parallel calls in one message count once. `maxTurns` is an emergency anti-loop stop, about 2-3x the role's typical run. Every generated agent gets an explicit value:

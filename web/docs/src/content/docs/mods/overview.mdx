@@ -5,6 +5,7 @@ order: 40
 ---
 
 import { Badge, Callout, Card, CardGrid, InstallPrompt, SourceLink, Spoiler, UpdateNotice } from '../../../components/mdx';
+import { mods } from '../../../utils/mods';
 
 # brewcode mods
 
@@ -13,18 +14,17 @@ import { Badge, Callout, Card, CardGrid, InstallPrompt, SourceLink, Spoiler, Upd
 Mods are small Claude Code add-ons: one feature each, no skills, no agents, no setup. Install one or both; they work without the brewcode plugins.
 
 <p align="center">
-  <img src="/brewmods/hub.gif" alt="Terminal-style animation of the brewcode mods hub: an ASCII brewcode logo and a four-slide walkthrough of the mods" width="560" loading="lazy" />
+  <img src="/brewmods/hub.gif" alt="Terminal-style animation of the brewcode mods hub: an ASCII brewcode tap pours the mods' source code into a glass in four stages: slide in, pour, head, served" width="560" loading="lazy" />
 </p>
 
 ## Pick a mod
 
 <CardGrid>
-  <Card variant="mod" size="lg" title="Prompt placeholders" icon="puzzle" href="/mods/placeholders/" meta="Try: ++r">
-    Type ++r, get a whole instruction block.
-  </Card>
-  <Card variant="mod" size="lg" title="Plan-mode effort" icon="brain" href="/mods/plan-effort/" meta="Try: /plan-effort max">
-    xhigh while Claude plans, your session effort everywhere else.
-  </Card>
+  {mods.map((m) => (
+    <Card variant="mod" size="lg" title={m.name} icon={m.icon} href={`/mods/${m.slug}/`} meta={`Try: ${m.try}`}>
+      {m.pitch}
+    </Card>
+  ))}
 </CardGrid>
 
 <SourceLink path="brewmod-placeholders" label="brewmod-placeholders on GitHub" variant="mod" />
@@ -34,7 +34,7 @@ Mods are small Claude Code add-ons: one feature each, no skills, no agents, no s
 ## Install all
 
 <Callout type="warning" title="Update Claude Code first">
-  The mods need Claude Code 2.1.301 or newer. Check with `claude --version`; if it is lower, run `claude update`.
+  The mods need Claude Code 2.1.301 or newer. Check with `claude --version`; if it is lower, run `claude update`, then restart Claude Code (exit, run `claude`).
 </Callout>
 
 Needs `node` on the `PATH`.

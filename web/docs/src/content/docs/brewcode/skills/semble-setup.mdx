@@ -29,7 +29,7 @@ Wires the `semble_code` MCP server into a project so Claude finds code by intent
 | Output | six-section report: Detection, Before, Actions, Verification, Current Status, Next Step |
 
 <Callout type="caution" title="A bare call never installs">
-Every other `-setup` skill falls back to `install` when nothing is installed. `semble-setup` does not: `install` runs `brew install uv`, a machine-level change outside the project. Empty input is always read-only `status`; to install, type the verb.
+Unlike most `-setup` skills, `semble-setup` never falls back to `install`: it runs `brew install uv`, a machine-level change outside the project. Empty input is always read-only `status`; type the verb to install.
 </Callout>
 
 ## Modes

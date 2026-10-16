@@ -22,7 +22,7 @@ By default `xhigh` while Claude plans. Your session effort everywhere else.
 ## Install
 
 <Callout type="warning" title="Update Claude Code first">
-  The mods need Claude Code 2.1.301 or newer. Check with `claude --version`; if it is lower, run `claude update`.
+  The mods need Claude Code 2.1.301 or newer. Check with `claude --version`; if it is lower, run `claude update`, then restart Claude Code (exit, run `claude`).
 </Callout>
 
 Needs `node` on the `PATH`.
@@ -100,11 +100,11 @@ mode now     plan
 
 `/config` has one option, `planEffort` (default `xhigh`). In `claude -p` there is no `/config` row: the command prints `plan effort: cannot set it here (no /config row, e.g. under -p) · set: /config in an interactive session, or settings.json pluginConfigs`.
 
-<Callout type="note" title="Good to know">
-  - Your session `/effort` setting is never written, and subagents keep their own effort.
-  - The mod only raises: a session already at or above `planEffort` stays as it is.
-  - Rejecting a plan keeps the raise, because Claude is still in plan mode.
-</Callout>
+## Good to know
+
+- Your session `/effort` setting is never written, and subagents keep their own effort.
+- The mod only raises: a session already at or above `planEffort` stays as it is.
+- Rejecting a plan keeps the raise, because Claude is still in plan mode.
 
 <Spoiler title="Technical details" id="technical-details" meta="how it works, verification">
 
@@ -183,9 +183,9 @@ The `/plan-effort` command and the toast were checked live on 2.1.301; unit test
 ## Related
 
 <CardGrid>
-  <Card variant="mod" title="Mods overview" icon="puzzle" href="/mods/overview/">All brewcode mods and how they load.</Card>
+  <Card variant="mod" title="Mods overview" icon="package" href="/mods/overview/">All brewcode mods and how they load.</Card>
   <Card variant="mod" title="Source on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewmod-plan-effort">Mod manifest, hooks module, and tests.</Card>
-  <Card variant="mod" title="Prompt placeholders" icon="terminal" href="/mods/placeholders/">The other brewcode mod: expand short codes in your prompt.</Card>
+  <Card variant="mod" title="Prompt placeholders" icon="puzzle" href="/mods/placeholders/">The other brewcode mod: expand short codes in your prompt.</Card>
   <Card variant="mod" title="Project page" icon="globe" href="https://brewcode.app/mods/plan-effort/">The mod on brewcode.app.</Card>
 </CardGrid>
 

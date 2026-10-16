@@ -87,7 +87,7 @@ The second block is the full suite at `user` scope; an installed mod follows the
 
 **Prune.** `claude plugin prune --dry-run --scope <scope>` once per scope seen, then `claude plugin prune --scope <scope> -y`. The `-y` is mandatory: the Bash tool has no TTY, and a bare `prune` removes nothing yet exits 0. Plugins installed directly are never touched.
 
-**Gates.** `AskUserQuestion` offers options only: install missing, update outdated, auto-update hint, prune. `check` stops before all of them; `update` auto-picks "Update all" and skips the hint and prune; `all` auto-installs, auto-updates, auto-picks "Prune listed". Mods are never offered for install: the summary prints their `claude plugin install <mod>@claude-brewcode` command for you to run.
+**Gates.** `AskUserQuestion` offers options only: install missing, update outdated, auto-update hint, prune. `check` stops before all of them; `update` auto-picks "Update all" and skips the hint and prune; `all` auto-installs, auto-updates, auto-picks "Prune listed". Mods are never offered for install: the summary prints their `claude plugin install <mod>@claude-brewcode` command for you to run. Mods need Claude Code 2.1.301+: run `claude update`, then restart Claude Code (type `exit`, then run `claude`).
 
 **No delegation.** The skill spawns nothing; discovery, the chain and the gates run in the main conversation so you see every command.
 

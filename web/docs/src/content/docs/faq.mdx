@@ -39,12 +39,12 @@ Click a question to expand the answer, or jump to it from the table of contents.
   Run the [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/) skill inside any Claude Code session. It runs the full update chain automatically, reports versions, and prompts you to reload.
 </Callout>
 
-If the skill is unavailable (very old install, plugin not yet installed, or Claude refuses to invoke it), paste the prompt below directly into the chat. Claude Code runs every command for you:
+If the skill is unavailable (very old install, plugin not yet installed, or Claude refuses to invoke it), paste the prompt below directly into the chat. It starts with a check that Claude Code is 2.1.301 or newer (the mods need it) and stops with an instruction if it is not; otherwise Claude Code runs every command for you:
 
 <InstallPrompt plugin="all" mode="update" />
 
 After all commands succeed, run `/reload-plugins` inside your Claude Code session.
-If `/reload-plugins` is unavailable, type `exit` and run `claude` again.
+If `/reload-plugins` is unavailable, or you ran `claude update`, type `exit` and run `claude` again.
 
 </Spoiler>
 
@@ -64,14 +64,18 @@ Once an update has succeeded, switch to [`/brewtools:plugin-update`](/brewtools/
 
 <Spoiler id="which-plugins" title="Which plugins are in the suite?">
 
+<Callout type="warning" title="Update Claude Code first">
+  The two mods in this table need Claude Code 2.1.301 or newer. Check with `claude --version`; if it is lower, run `claude update` and restart Claude Code (`exit`, then `claude`).
+</Callout>
+
 | Plugin | Purpose | Install command |
 |--------|---------|----------------|
 | **brewcode** | Convention setup, rules, teams, deep review, semantic search: 9 skills, 6 agents, 2 registered hooks | `claude plugin install brewcode@claude-brewcode` |
 | **brewdoc** | Documentation tools: docsync-setup, memory-sync-setup, my-claude, PDF, publishing: 5 skills, 0 agents, 0 hooks | `claude plugin install brewdoc@claude-brewcode` |
 | **brewtools** | Text utilities, [SSH](/brewtools/skills/ssh/), [deploy](/brewtools/skills/deploy/), [plugin-update](/brewtools/skills/plugin-update/), manager mode, hook layer: 13 skills, 3 agents, 1 registered hook | `claude plugin install brewtools@claude-brewcode` |
 | **brewui** | UI/visual/creative tools (placeholder, empty): 0 skills | `claude plugin install brewui@claude-brewcode` |
-| [**brewmod-placeholders**](/mods/placeholders/) | Mod: expands `++` tokens such as `++r` into instruction blocks | `claude plugin install brewmod-placeholders@claude-brewcode` |
-| [**brewmod-plan-effort**](/mods/plan-effort/) | Mod: raises main-loop effort while Claude plans | `claude plugin install brewmod-plan-effort@claude-brewcode` |
+| [**brewmod-placeholders**](/mods/placeholders/) | Mod (Claude Code 2.1.301+): expands `++` tokens such as `++r` into instruction blocks | `claude plugin install brewmod-placeholders@claude-brewcode` |
+| [**brewmod-plan-effort**](/mods/plan-effort/) | Mod (Claude Code 2.1.301+): raises main-loop effort while Claude plans | `claude plugin install brewmod-plan-effort@claude-brewcode` |
 
 All six install from the same `claude-brewcode` marketplace on GitHub. The four plugins total 27 skills, 9 agents and 3 registered plugin hooks; optional setup-installed hooks are separate. Mods are covered in [Brewcode mods](/mods/overview/).
 
@@ -82,10 +86,10 @@ All six install from the same `claude-brewcode` marketplace on GitHub. The four 
 Mods are plugins that change how Claude Code itself behaves, through the hooks module API. There are two. `brewmod-placeholders` expands tokens such as `++r` into instruction blocks and is the only provider of the codewords `++m`, `++a`, `++r`, `++rr` and `+++`. `brewmod-plan-effort` raises the effort of the main loop while Claude plans.
 
 <Callout type="warning" title="Update Claude Code first">
-  The mods need Claude Code 2.1.301 or newer. Check with `claude --version`; if it is lower, run `claude update`.
+  The mods need Claude Code 2.1.301 or newer. Check with `claude --version`; if it is lower, run `claude update` and restart Claude Code (`exit`, then `claude`).
 </Callout>
 
-They are separate from the four suite plugins and install individually (`claude plugin install brewmod-placeholders@claude-brewcode`). [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/) updates them once installed. Details: [Brewcode mods](/mods/overview/).
+They are separate from the four suite plugins, and the recommended install adds both: `claude plugin install brewmod-placeholders@claude-brewcode`, then `claude plugin install brewmod-plan-effort@claude-brewcode`. [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/) updates them once installed. Details: [Brewcode mods](/mods/overview/).
 
 </Spoiler>
 
@@ -93,7 +97,7 @@ They are separate from the four suite plugins and install individually (`claude 
 
 A `-setup` suffix marks a skill that installs a mechanism into the project: agents, hooks, a generated skill, a board. After it runs you use the installed thing, not the skill. Skills without the suffix are recurring tools: running them repeatedly is the intended usage.
 
-There are eleven `-setup` skills. All share one mode vocabulary, `status | install | upgrade | enable | disable | uninstall | purge`; skill-specific verbs come after it. Use explicit modes: convention-setup defaults to install, semble-setup and manager-setup to status. Enable and disable work through a live config flag (semble, agent-deadline, agent-return, agent-router, manager, docsync) or entry-file parking, renaming the discovery file to `<name>.disabled` (teams, superreview, task-board, convention, memory-sync).
+There are eleven `-setup` skills. All share one mode vocabulary, `status | install | upgrade | enable | disable | uninstall | purge`; skill-specific verbs come after it. A bare call picks its own default: convention-setup runs install; semble-setup, manager-setup, agent-deadline-setup, agent-return-setup and agent-router-setup run status; the other five run status when installed and install when absent. Use explicit modes. Enable and disable work through a live config flag (semble, agent-deadline, agent-return, agent-router, manager, docsync) or entry-file parking, renaming the discovery file to `<name>.disabled` (teams, superreview, task-board, convention, memory-sync).
 
 <Callout type="warning" title="Run them one at a time">
   Each setup is an interactive generator: it fans out subagents, analyses the repo and asks you real questions. Two in one session degrade each other. Start with [`/brewcode:setup-status`](/brewcode/skills/setup-status/) and work its list, one setup per fresh session. Details are on the [Full Setup](/full-setup/) page.
@@ -115,19 +119,19 @@ So "can you sync my docs?" will not trigger `/brewdoc:docsync-setup`; type the c
 
 <Spoiler id="restart-after-update" title="Do I need to restart after updating?">
 
-Yes. Plugin changes only take effect after a reload.
+Yes. Plugin changes only take effect after a reload, and a new Claude Code version (`claude update`) needs a restart.
 
 <Steps>
   <li class="step step-primary">
     <div>
       <strong>Preferred: reload in session</strong>
-      <p>Run <code>/reload-plugins</code> inside your active Claude Code session. This applies updates without closing the terminal.</p>
+      <p>After plugin installs and updates, run <code>/reload-plugins</code> inside your active Claude Code session. This applies them without closing the terminal.</p>
     </div>
   </li>
   <li class="step step-secondary">
     <div>
       <strong>Fallback: restart the CLI</strong>
-      <p>Type <code>exit</code> to close the session, then run <code>claude</code> to start a new one. The new session loads every update.</p>
+      <p>After <code>claude update</code>, or when <code>/reload-plugins</code> is unavailable, type <code>exit</code> to close the session, then run <code>claude</code> to start a new one. The new session loads every update.</p>
     </div>
   </li>
 </Steps>
@@ -136,7 +140,7 @@ Yes. Plugin changes only take effect after a reload.
 
 <Spoiler id="install-missing" title="How do I install missing plugins?">
 
-Paste the prompt below into any Claude Code session. Claude adds the marketplace and installs all four plugins for you:
+Paste the prompt below into any Claude Code session. Claude checks that Claude Code is 2.1.301 or newer, adds the marketplace and installs both mods and all four plugins for you:
 
 <InstallPrompt plugin="all" mode="install" />
 
@@ -152,7 +156,7 @@ Plugins are stored locally after installation:
 ~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/
 ```
 
-For example `~/.claude/plugins/cache/claude-brewcode/brewcode/5.0.0/`. Marketplace metadata lives in `~/.claude/plugins/marketplaces/`.
+For example `~/.claude/plugins/cache/claude-brewcode/brewcode/<version>/`. Marketplace metadata lives in `~/.claude/plugins/marketplaces/`.
 
 </Spoiler>
 
@@ -161,7 +165,7 @@ For example `~/.claude/plugins/cache/claude-brewcode/brewcode/5.0.0/`. Marketpla
 Run [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/) in a session: it reports installed and latest versions per plugin and offers the update.
 
 <Callout type="note" title="CLI version check (CC 2.1.163+)">
-  Run `claude plugin list` (`--json` for machine-readable output). Inside an active Claude session, prefix with `unset CLAUDECODE &&` to avoid the env-var conflict. Older CC lacks the command: use the cache path above or [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/).
+  Run `claude plugin list` (`--json` for machine-readable output); it works inside an active Claude session. Older CC lacks the command: use the cache path above or [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/).
 </Callout>
 
 </Spoiler>

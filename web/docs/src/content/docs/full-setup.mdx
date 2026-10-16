@@ -10,6 +10,8 @@ import { Card, CardGrid, Callout, Badge, Spoiler, UpdateNotice } from '../../com
 
 <Badge variant="primary" text="11 setups" /> <Badge variant="secondary" text="27 skills · 9 agents" /> <Badge variant="accent" text="24 of 27 user-only" />
 
+Install the plugins and the two [brewcode mods](/mods/overview/) first ([Installation](/installation/)). Update Claude Code before the mods: they need 2.1.301 or newer (`claude --version`; if it is lower, run `claude update` and restart Claude Code).
+
 Run `/brewcode:setup-status` first. It lists the setups still to run, with search and conventions before the agents that consume them. Run each one yourself, one per fresh session, and inspect the generated files before committing them.
 
 A `-setup` skill installs a mechanism (agents, hooks, a generated skill, rules, a task board). Use the installed mechanism afterwards; rerun the setup to inspect, refresh, disable or remove it.
@@ -23,7 +25,7 @@ A `-setup` skill installs a mechanism (agents, hooks, a generated skill, rules, 
 The first command reports every installed plugin; the others filter by plugin or setup. The dashboard runs no setup; its one optional write is an accepted task-tools settings key.
 
 <Callout type="warning" title="Run setups separately">
-  Setups analyse the repository, delegate work and ask for choices. Supply known choices in your prompt and run them one at a time, so later analysis sees the earlier artifacts. All skills use `user-invocable: true`; all but `/brewdoc:publish`, `/brewtools:text-optimize` and `/brewtools:text-human` also set `disable-model-invocation: true`.
+  Setups analyse the repository, delegate work and ask for choices, so run them one at a time and supply known choices in your prompt; later analysis then sees the earlier artifacts. Only you start them: see [why Claude does not run skills on its own](/faq/#auto-invoke).
 </Callout>
 
 ## Recommended order
@@ -44,7 +46,7 @@ The dashboard groups its run-list into the same seven stages, shown in the Stage
 | 10 | 7 | [memory-sync-setup](/brewdoc/skills/memory-sync-setup/) | Sync auto-loaded context after agents, rules and tasks exist | `/brewdoc:memory-sync-setup install` |
 | 11 | 7 | [docsync-setup](/brewdoc/skills/docsync-setup/) | Track documents for staleness | `/brewdoc:docsync-setup install` |
 
-After the run, add the [brewcode mods](/mods/overview/), which change Claude Code itself. [`brewmod-placeholders`](/mods/placeholders/) expands `++` tokens such as `++r` into instruction blocks; [`brewmod-plan-effort`](/mods/plan-effort/) raises effort while you plan. Install them with `claude plugin install brewmod-placeholders@claude-brewcode` and `claude plugin install brewmod-plan-effort@claude-brewcode`.
+The [brewcode mods](/mods/overview/) change Claude Code itself. [`brewmod-placeholders`](/mods/placeholders/) expands `++` tokens such as `++r` into instruction blocks; [`brewmod-plan-effort`](/mods/plan-effort/) raises effort while you plan. Not installed yet? After `claude update` (Claude Code 2.1.301 or newer), run `claude plugin install brewmod-placeholders@claude-brewcode` and `claude plugin install brewmod-plan-effort@claude-brewcode`, then restart Claude Code.
 
 <Spoiler id="what-the-eleven-setups-install" title="What the eleven setups install">
 
@@ -79,7 +81,7 @@ Task methodology and the session timer: [Task Board Setup](/brewtools/skills/tas
 | `uninstall` | Remove artifacts or wiring per that setup's ownership boundary |
 | `purge` | Remove the additional owned data |
 
-All eleven accept these seven modes. Use explicit modes: most setups pick status when installed and install when absent, but conventions default to install and semble always to status. Convention setup also accepts `full`, `conventions`, `rules` and `paths`; semble adds `reindex`, `optimize` and `resume`.
+All eleven accept these seven modes. A bare call picks its own default: semble, manager, agent-deadline, agent-return and agent-router run `status`; convention runs `install`; teams, superreview, task-board, memory-sync and docsync run `status` when installed and `install` when absent. Use explicit modes. Convention setup also accepts `full`, `conventions`, `rules` and `paths`; semble adds `reindex`, `optimize` and `resume`.
 
 <Spoiler id="disarm-the-manager-wall" title="Disarm the manager wall">
 
@@ -109,7 +111,7 @@ Rerun `/brewcode:setup-status` after plugin updates and follow its commands to r
   <Card title="Brewcode overview" icon="document" href="/brewcode/overview/">Project analysis, conventions, agents, and review tools.</Card>
   <Card title="Setup Status" icon="eye" href="/brewcode/skills/setup-status/">Artifact probes, verdicts, and the run-list.</Card>
   <Card title="Task Board Setup" icon="graph" href="/brewtools/skills/task-board-setup/">Task methodology, graph reconciliation, and session anti-drift.</Card>
-  <Card title="Brewcode mods" icon="link" href="/mods/overview/">Add-ons for prompt placeholders and plan effort.</Card>
+  <Card title="Brewcode mods" icon="link" href="/mods/overview/">Prompt placeholders and plan-mode effort for Claude Code.</Card>
   <Card title="GitHub source" icon="github" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/setup-status">The authoritative setup roster and run-list.</Card>
 </CardGrid>
 

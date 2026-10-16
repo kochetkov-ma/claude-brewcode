@@ -21,10 +21,10 @@ Manual equivalent:
 
 ```bash
 claude plugin marketplace update claude-brewcode
-for p in brewcode brewdoc brewtools brewui brewmod-placeholders brewmod-plan-effort; do claude plugin update "$p@claude-brewcode"; done
+for p in brewmod-placeholders brewmod-plan-effort brewcode brewdoc brewtools brewui; do claude plugin update "$p@claude-brewcode"; done
 ```
 
-One name per call: `claude plugin update` updates only the first name and silently ignores the rest (exit code 0), so the brace form `{a,b}@claude-brewcode` and a list of names both update a single plugin. Drop a mod from the loop if it is not installed.
+One name per call: `claude plugin update` updates only the first name and silently ignores the rest (exit code 0), so the brace form `{a,b}@claude-brewcode` and a list of names both update a single plugin. Drop a mod from the loop if it is not installed. The loop updates `user`-scope installs; for a `project` or `local` install, run `claude plugin update <id> --scope <scope>` from that project directory (`claude plugin list --json` shows both), because CLIs before 2.1.281 read an omitted scope as `user`. The skill does this per row for you.
 
 Run `/reload-plugins` afterwards: plugins are not active until reloaded. Discovery uses `claude plugin list --json` (CC 2.1.163+) with a `scripts/discover-plugins.sh` fallback; `check` is always safe to run.
 

@@ -210,4 +210,4 @@ Print this notice ([references/reload-notice.md](references/reload-notice.md)):
 > Fallback: type `exit`, then run `claude` again.
 
 Then a final summary listing the plugins installed, updated and skipped this run, and every error.
-If a mod is not installed, add one line: mod `<mod>` not installed (opt-in: `claude plugin install <mod>@claude-brewcode`); never run it.
+If a mod is not installed, add one line: mod `<mod>` not installed; it needs Claude Code 2.1.301+ (run `claude update`, then restart Claude Code (type `exit`, then run `claude`)), then `claude plugin install <mod>@claude-brewcode`; never run it.

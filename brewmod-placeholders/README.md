@@ -14,18 +14,12 @@
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT">
 </p>
 
-> [!IMPORTANT]
-> **`++m` `++a` `++r` `++rr` `+++` do nothing?** Since [brewtools v6.8.0](https://github.com/kochetkov-ma/claude-brewcode/releases/tag/v6.8.0) these prompt-injection codewords live in this mod, `brewmod-placeholders`, not in brewtools. It is easier to use and lets you add your own placeholders. Install it (update Claude Code first: see [Install](#install)), then run `/reload-plugins`:
->
-> ```bash
-> claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode && claude plugin install brewmod-placeholders@claude-brewcode
-> ```
->
-> Docs: https://doc-claude.brewcode.app/mods/placeholders/
+> [!NOTE]
+> **Looking for ++m, ++r or +++?** The codewords `++m`, `++a`, `++r`, `++rr` and `+++` come with this mod. Install it once and they work in every prompt, next to placeholders you write yourself: see [Install](#install), the [Quick start](#quick-start) and the [docs page](https://doc-claude.brewcode.app/mods/placeholders/).
 
 ## Install
 
-> ❗ **Update Claude Code first:** the mods need Claude Code 2.1.301 or newer. Check with `claude --version`; if it is lower, run `claude update`.
+> ❗ **Update Claude Code first:** the mods need Claude Code 2.1.301 or newer. Check with `claude --version`; if it is lower, run `claude update`, then restart Claude Code (exit, run `claude`).
 
 ```bash
 claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode && claude plugin install brewmod-placeholders@claude-brewcode
@@ -35,7 +29,7 @@ Then run `/reload-plugins`. Works on Team organizations.
 <details>
 <summary>Update, dev mode, requirements</summary>
 
-Update: run `claude update`, then `claude plugin marketplace update claude-brewcode && claude plugin update brewmod-placeholders@claude-brewcode`. Dev mode, no install: `claude --plugin-dir ./brewmod-placeholders`. Needs `node` on the `PATH` (the bundled command hook runs as plain Node). Mods use the hooks module API, which is early access.
+Update: run `claude update` and restart Claude Code, then `claude plugin marketplace update claude-brewcode && claude plugin update brewmod-placeholders@claude-brewcode`. Dev mode, no install: `claude --plugin-dir ./brewmod-placeholders`. Needs Claude Code 2.1.301 or newer and `node` on the `PATH` (the bundled command hook runs as plain Node). Mods use the hooks module API, which is early access.
 
 </details>
 
@@ -176,7 +170,7 @@ Your own placeholder can have a plan part too: see [Examples](#examples).
 | `enter` | Return | ⏎ | Sends the prompt. On `++r?` alone it runs the query instead ([how](#read-the-full-text)) |
 | `esc` | Esc | ⎋ | Closes the typeahead, back to typing |
 | `↑` `↓` `←` `→` | arrow keys | ↑↓←→ | Move in the typeahead (↑↓) or onto a token to read its text (←→) |
-| `shift+tab` | Shift + Tab | ⇧⇥ | Default mode (`⏸ manual mode on`): twice, accept edits then plan; or type `/plan`. The band does not change at the press, entering or leaving plan mode: it shows the mode of your last completed prompt, so `plan mode adds:` appears only after a prompt has run in plan mode. The next prompt is still sent with the new mode's text. The effort toast comes from the other mod, [brewmod-plan-effort](../brewmod-plan-effort/) |
+| `shift+tab` | Shift + Tab | ⇧⇥ | Default mode (`⏸ manual mode on`): twice, accept edits then plan; or type `/plan`. The band does not change at the keypress, whether you enter or leave plan mode: it shows the mode of your last completed prompt, so `plan mode adds:` appears only after a prompt has run in plan mode. The next prompt is still sent with the new mode's text. The effort toast comes from the other mod, [brewmod-plan-effort](../brewmod-plan-effort/) |
 | `ctrl+o` | Control + O | ⌃O | Transcript view: your prompt and the answer only. The injected text is NOT there; use the band or `/placeholders show` |
 
 ## Read the full text
@@ -215,7 +209,11 @@ close: move the caret off ++m · send as typed: ++/
 | Plain, theme text colour | A key to press | `[Enter]` |
 | Grey (dim) | Labels and notes; never sent. Text that is not sent (a skipped token, an escaped message) is grey too | `close:`, `more:`, `... 16 more lines`, `placeholders 2` |
 
-The text under the head holds up to 15 rows, the cut row and the plan note included; the head and foot rows (and an `also:` row) come on top. The text rows are wrapped to the terminal width, so how many fit changes with it. `K more lines` counts the lines of the sent text left out (its header line and blank line included): `++m` is 29 lines, 13 text rows shown at 120x40 (13 + the cut row + the plan note = 15). `plan mode adds N lines` counts the lines of the plan part; an empty plan part counts as none, so it gets no `plan +` tag and no note. In plan mode the band shows the plan header, the normal rows, a `plan mode adds:` row in the plan-mode colour and then `[ADDON: PLAN MODE]` with its rows in bold plan-mode colour. Outside plan mode a name with a plan part ends with the note `not sent now · plan mode adds N lines` in the plan-mode colour; `+++` shows its own text there, sent and bold, with the note `not sent now · plan mode adds 3 lines`.
+The text under the head holds up to 15 rows, the cut row and the plan note included; the head and foot rows (and an `also:` row) come on top. The text rows are wrapped to the terminal width, so how many fit changes with it. `K more lines` counts the lines of the sent text left out (its header line and blank line included): `++m` is 29 lines, 13 text rows shown at 120x40 (13 + the cut row + the plan note = 15).
+
+`plan mode adds N lines` counts the lines of the plan part; an empty plan part counts as none, so it gets no `plan +` tag and no note.
+
+In plan mode the band shows the plan header, the normal rows, a `plan mode adds:` row in the plan-mode colour and then `[ADDON: PLAN MODE]` with its rows in bold plan-mode colour. Outside plan mode a name with a plan part ends with the note `not sent now · plan mode adds N lines` in the plan-mode colour; `+++` shows its own text there, sent and bold, with the note `not sent now · plan mode adds 3 lines`.
 
 Hint rows, as drawn. A custom `prefix` replaces `++` in all of them.
 
@@ -294,11 +292,11 @@ Layers, highest wins file by file: project > its brewtools override > global > i
 <details>
 <summary>Technical details</summary>
 
-- **With brewtools.** brewtools 6.8.0+ ships no codeword hook, so this mod is the only provider of `++m`, `++a`, `++r`, `++rr` and `+++`. brewtools 6.7.x also injects them, so each block appears twice: use 6.8.0+. Override files under `.claude/brewtools/manager/prompts/` and `<config>/manager/prompts/` are read through the `legacy` key, whatever the brewtools version. To silence a token, give your override an empty body; it stays silent in plan mode too.
+- **With brewtools.** brewtools 6.8.0+ ships no codeword hook, so this mod is the only provider of `++m`, `++a`, `++r`, `++rr` and `+++`. brewtools 6.7.x also injects them, so each block appears twice: use 6.8.0+. Override files under `.claude/brewtools/manager/prompts/` and `<config>/manager/prompts/` are read through the `legacy` key, whatever the brewtools version. To silence a token, give your override an empty body (it stays silent in plan mode too). The brewtools-side notes live in [Codewords](https://doc-claude.brewcode.app/brewtools/prompt-injection/).
 - **Mod tools.** Free-text `/placeholders` requests hand off to Claude with `list_placeholders`, `save_placeholder`, `remove_placeholder` and `placeholders_help`. Saving refuses symlinks; removing never touches plugin defaults or legacy brewtools files. Each save or remove asks once through one dialog; no permission prompt follows.
 - **Team and Enterprise organizations.** The builtin security layer bypasses a mod's `classic.*` hooks, so a bundled command hook (`hooks/inject.mjs`) adds the blocks. Verified on Team-org and Max profiles; Enterprise was not run.
 - **Limitations.** The band learns plan mode only from your first prompt in it. The band shows at once after `Tab` or `Enter` on a typeahead row, a history recall and an undo; the underline in the prompt box appears with the next key (engine limit). Drafts over 20,000 characters get no highlight and no band; expansion on submit still works. If plugin files are deleted under a running session (for example by a plugin update), the band and one toast say `plugin files removed (updated?) · run /reload-plugins`; tokens are not marked unknown and inline placeholders keep expanding. Context blocks return after `/reload-plugins`. [Full technical details](https://doc-claude.brewcode.app/mods/placeholders/#technical-details)
-- **Verified.** Claude Code 2.1.301: full live run before the review fixes (build fingerprint `8d91c3c7`) 225 of 225 cases PASS (217 terminal UI, 8 `claude -p`); after the fixes (build `6c4dfa44`) the 11-case live subset passes 11 of 11; 443 unit tests, 316 parity checks; plan-mode rows in the plan-mode colour (`38;5;73` dark, `38;5;30` light note captured). [Verified tables](https://doc-claude.brewcode.app/mods/placeholders/#verified)
+- **Verified.** Claude Code 2.1.301: final live matrix of release 6.9.6 (terminal UI, both mods loaded from the working tree, default and fullscreen view) 140 of 140 cases PASS; the earlier full run before the review fixes, the one with the 8 `claude -p` cases, was 225 of 225 (217 terminal UI, 8 `claude -p`); 454 unit tests, 316 parity checks; plan-mode rows in the plan-mode colour (`38;5;73` dark, `38;5;30` light note captured). [Verified tables](https://doc-claude.brewcode.app/mods/placeholders/#verified)
 
 </details>
 

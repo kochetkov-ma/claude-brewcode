@@ -1,4 +1,4 @@
-// Single source for mod promo copy; ModPromo reads it. Edit text here, never in MDX.
+// Single source for mod promo copy; ModPromo and mods/overview.mdx read it. Edit text here, never in MDX.
 export interface ModInfo {
   name: string;
   slug: string;

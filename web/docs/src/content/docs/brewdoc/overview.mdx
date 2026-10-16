@@ -46,7 +46,9 @@ A `-setup` suffix marks a skill that **installs a mechanism you afterwards use i
 
 </Spoiler>
 
-<Spoiler id="installation-all" title="Install the whole suite">
+<Spoiler id="installation-all" title="Install the whole suite (plugins and mods)">
+
+The mods need Claude Code 2.1.301 or newer: run `claude update`, then restart Claude Code (type `exit`, then run `claude`).
 
 <InstallPrompt plugin="all" mode="install" />
 
@@ -67,7 +69,7 @@ brewdoc/
 
 <Spoiler id="behaviour-notes" title="Safety and scope behaviour">
 
-Docsync installation validates inputs before writing hooks, configuration and settings, retains settings backups and session state, and on a write failure restores only files that still match this run's writes. A generated memory-sync follows restrictions such as "only rules" or "do not touch agents". Scope, depth and reach are separate choices. Claims are checked against current code, no file ends longer than it started, and a checker other than the writer verifies each batch.
+Docsync installation validates inputs before writing hooks, configuration and settings, merges settings under a lock with no backup file (the transaction is its own rollback), leaves an existing `settings.json.bak` and session state untouched, and on a write failure restores only files that still match this run's writes. A generated memory-sync follows restrictions such as "only rules" or "do not touch agents". Scope, depth and reach are separate choices. Claims are checked against current code, no file ends longer than it started, and a checker other than the writer verifies each batch.
 
 </Spoiler>
 

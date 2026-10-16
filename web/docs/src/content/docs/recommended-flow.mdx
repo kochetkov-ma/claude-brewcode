@@ -60,12 +60,12 @@ Select a step to jump to it. Steps 3 and 4 repeat: review each phase, then retur
 ## Step 1: Install once
 
 <Callout type="warning" title="Update Claude Code first">
-  The mods need Claude Code 2.1.301 or newer. Check `claude --version`; run `claude update` if it is lower.
+  The mods need Claude Code 2.1.301 or newer. Check `claude --version`; if it is lower, run `claude update` and restart Claude Code (`exit`, then `claude`).
 </Callout>
 
 Why: the plugins hold the setup, publish and update skills used in steps 2 and 5; the mods add the `++` tokens and the plan-mode effort that steps 3 and 4 rely on.
 
-Run these in a terminal, then run `/reload-plugins` inside a Claude Code session:
+Run these in a terminal, then restart Claude Code (`exit`, then `claude`). `/reload-plugins` alone is enough only when `claude update` changed nothing.
 
 ```bash
 claude update
@@ -73,11 +73,12 @@ claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
 claude plugin install brewmod-placeholders@claude-brewcode
 claude plugin install brewmod-plan-effort@claude-brewcode
 claude plugin install brewcode@claude-brewcode
-claude plugin install brewtools@claude-brewcode
 claude plugin install brewdoc@claude-brewcode
+claude plugin install brewtools@claude-brewcode
+claude plugin install brewui@claude-brewcode
 ```
 
-The mods also need `node` on the `PATH`. To let Claude run the commands for you, paste the prompt from [Installation](/installation/). More on each mod: [Prompt placeholders](/mods/placeholders/), [Plan-mode effort](/mods/plan-effort/).
+The mods also need `node` on the `PATH`. To let Claude run the commands for you, paste the prompt from [Installation](/installation/): it checks the Claude Code version, then installs both mods and the four plugins. More on each mod: [Prompt placeholders](/mods/placeholders/), [Plan-mode effort](/mods/plan-effort/).
 
 ## Step 2: Set up each project once
 
@@ -116,7 +117,7 @@ Why: a review after each phase finds regressions before the next phase builds on
 
 - **After a significant change:** `++r check the diff`. A multi-agent review, then every finding is reproduced before anything is fixed.
 - **After each phase:** `++rr review phase 1`. A review on three axes: regression first, project standard, functional correctness. At task end it asks for a final cross-review of all phases.
-- **Before merge:** `/superreview "the CSV export"`. The skill generated in step 2 runs independent reviewers and merges their findings at 2/3 agreement. See [superreview-setup](/brewcode/skills/superreview-setup/).
+- **Before merge:** `/superreview "deep review of the CSV export"`. The skill generated in step 2 runs your build, lint and test gates and an intent check (was the delivered change the asked one?) by default. A depth word such as `deep` adds domain experts, scope checks and a validator that re-checks every finding. See [superreview-setup](/brewcode/skills/superreview-setup/).
 
 ## Step 5: Share and stay current
 
@@ -130,7 +131,7 @@ Share a file, folder or text as a link:
 
 [`/brewdoc:publish`](/brewdoc/skills/publish/) uploads to brewpage.app and returns a URL. Publishing is unlisted by default: anyone who has the link can open it.
 
-Stay current with [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/): `check` only reports versions, a bare call walks through the update. Run `/reload-plugins` afterwards. Plugin updates do not replace files a setup already copied into your project, so run `/brewcode:setup-status` after an update and follow its upgrade commands. A paste-in update prompt for Claude Code is in [UPDATE.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/UPDATE.md) on GitHub.
+Stay current with [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/): `check` only reports versions, a bare call walks through the update. Run `/reload-plugins` afterwards (restart Claude Code instead after `claude update`). Plugin updates do not replace files a setup already copied into your project, so run `/brewcode:setup-status` after an update and follow its upgrade commands. A paste-in update prompt for Claude Code is in [UPDATE.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/UPDATE.md) on GitHub.
 
 ## One task, start to finish
 
@@ -140,7 +141,7 @@ The same flow on one feature, using only what steps 1 and 2 installed.
   <li><div><strong>Plan</strong><p>Press `Shift+Tab` twice for plan mode and send `++m +++ Add CSV export to the invoice list`. The plan-effort mod runs plan mode at `xhigh`, and the plan opens with the manager role and the task graph.</p></div></li>
   <li><div><strong>Run</strong><p>Approve the plan. Claude leaves plan mode, delegates the graph to agents and creates the cron that `+++` planned.</p></div></li>
   <li><div><strong>Review each phase</strong><p>When a phase is done, send `++rr review phase 1`, then continue with phase 2.</p></div></li>
-  <li><div><strong>Review before merge</strong><p>Run `/superreview "the CSV export"` and fix what the reviewers confirm.</p></div></li>
+  <li><div><strong>Review before merge</strong><p>Run `/superreview "deep review of the CSV export"` and fix what the report confirms.</p></div></li>
   <li><div><strong>Share</strong><p>Run `/brewdoc:publish docs/csv-export.md` and send the link.</p></div></li>
 </Steps>
 
@@ -148,7 +149,7 @@ The same flow on one feature, using only what steps 1 and 2 installed.
 
 <CardGrid>
   <Card title="Installation" icon="package" href="/installation/">
-    One command adds the marketplace, one installs the plugins.
+    Add the marketplace, then install the mods and plugins.
   </Card>
   <Card title="Quick Start" icon="play" href="/quickstart/">
     Conventions, task board and deep review in ten minutes.

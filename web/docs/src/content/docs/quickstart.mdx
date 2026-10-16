@@ -64,7 +64,7 @@ claude plugin install brewtools@claude-brewcode</code></pre>
   <li class="step step-primary">
     <div>
       <strong>Generate the deep review skill</strong>
-      <p>Merges code review and standards checking into one quorum skill installed at `.claude/skills/`.</p>
+      <p>Writes a project-tailored `/superreview` skill into `.claude/skills/`. The default depth runs your build, lint and test gates plus an intent check; a depth word such as `deep` adds domain experts and a validator.</p>
       <pre><code>{"/brewcode:superreview-setup install \"QUICK depth; gate on the existing build and lint commands\""}</code></pre>
     </div>
   </li>
@@ -84,12 +84,16 @@ claude plugin install brewtools@claude-brewcode</code></pre>
 
 ## What's next
 
+<Callout type="warning" title="Update Claude Code first">
+  The mods in the last row need Claude Code 2.1.301 or newer. Check with `claude --version`; if it is lower, run `claude update` and restart Claude Code (`exit`, then `claude`).
+</Callout>
+
 | Goal | Command |
 |------|---------|
 | [Deep review](/brewcode/skills/superreview-setup/): invoke the generated skill | `/superreview` |
 | [Extract rules](/brewcode/skills/rules/) from conventions and commits | `/brewcode:rules "derive rules from .claude/convention/, one file per domain"` |
 | [Optimize prompts](/brewtools/skills/text-optimize/) and agents | `/brewtools:text-optimize .claude/agents/` |
-| [Add-on mods](/mods/overview/): prompt placeholders, plan-mode effort | `claude plugin install brewmod-placeholders@claude-brewcode`<br />`claude plugin install brewmod-plan-effort@claude-brewcode` |
+| [Brewcode mods](/mods/overview/): prompt placeholders, plan-mode effort | `claude plugin install brewmod-placeholders@claude-brewcode`<br />`claude plugin install brewmod-plan-effort@claude-brewcode` |
 
 All 27 skills are listed on the plugin pages: [brewcode](/brewcode/overview/), [brewtools](/brewtools/overview/), [brewdoc](/brewdoc/overview/), [brewui](/brewui/overview/).
 

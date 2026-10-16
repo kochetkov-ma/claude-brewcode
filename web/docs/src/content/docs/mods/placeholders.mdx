@@ -27,7 +27,7 @@ Type `++r` and Claude gets a saved instruction block along with your prompt. Rea
 ## Install
 
 <Callout type="warning" title="Update Claude Code first">
-  The mods need Claude Code 2.1.301 or newer. Check with `claude --version`; if it is lower, run `claude update`.
+  The mods need Claude Code 2.1.301 or newer. Check with `claude --version`; if it is lower, run `claude update`, then restart Claude Code (exit, run `claude`).
 </Callout>
 
 <InstallPrompt plugin="brewmod-placeholders" mode="install" />
@@ -213,6 +213,8 @@ Band with the caret on `++m` (default mode, 120x40). Colours come from your Clau
 close: move the caret off ++m · send as typed: ++/
 ```
 
+<Spoiler id="band-colours" title="Band colours and hint rows">
+
 | Looks like | Means | In the band above |
 |---|---|---|
 | Bold, placeholder blue (the theme's suggestion colour) | A placeholder name; an unknown one is bold yellow (the theme's warning colour) | `++m`, `++zz` |
@@ -243,6 +245,8 @@ Hint rows, as drawn. A custom `prefix` replaces `++` in all of them.
 | Other tokens while the caret is on one | `also: ++a ++rr` |
 
 The `or ++m? alone [Enter]` part is the query from [What `?` does](#read-the-full-text): `[Enter]` fills the show command. It appears only when the whole row fits the width. A narrower terminal shrinks the row in steps: first `or ++m? alone [Enter]` goes, then `whole text:`, then the count (`... 16 more lines · `). The show command is never cut while it fits on its own. `/placeholders` and `/placeholders help` name the `++r?` hand-off.
+
+</Spoiler>
 
 ## Examples
 | Do | You type | What happens |
@@ -383,9 +387,9 @@ Live runs drive the terminal UI in tmux (default and fullscreen, 80x24 to 200x60
 | Check | Result |
 |-------|--------|
 | `node tests/inject-parity.mjs`: frozen texts, layers, state file, fail-open | 316 checks pass: 101 golden, 98 `sent.ts` golden, 37 layer, 26 differential, 25 plan-part, 14 escape, 10 state, 3 jobs cap, 2 fail-open |
-| Unit tests (`claude plugin test`) | brewmod-placeholders 443 pass, 0 fail, 17 files; [brewmod-plan-effort](/mods/plan-effort/) 71 pass, 0 fail, 1 file. `tsc` and `claude plugin validate --strict` of both mods, `check-defaults` and the mode test all exit 0 |
+| Unit tests (`claude plugin test`) | brewmod-placeholders 454 pass, 0 fail, 17 files; [brewmod-plan-effort](/mods/plan-effort/) 71 pass, 0 fail, 1 file. `tsc` and `claude plugin validate --strict` of both mods, `check-defaults` and the mode test all exit 0 |
 | Full pre-release live check, run before the review fixes (build fingerprint `8d91c3c7`, Claude Code 2.1.301), installed load order with brewmod-plan-effort loaded, terminal UI in default and fullscreen mode, 80x24 to 200x60: band colours and hint rows, caret focus, band right after `Tab` or `Enter` on a typeahead row, history recall and undo, `++r?` query and its fill, compact band, cut rows, plan-mode `++m`, `+++` in every mode, Shift+Tab, `++/` escape, inline, unknown token, `status`, `help`, `list`, `show`, add and remove with `global` first word | 225 of 225 cases PASS: 217 terminal UI cases and 8 `claude -p` cases |
-| Live subset after the review fixes (build fingerprint `6c4dfa44`, Claude Code 2.1.301), terminal UI, no `claude -p` cases: `++m` in default mode (88x40), `+++` in default mode (120x40) and plan-mode `++m` (120x40), each in the default and the fullscreen view; `/placeholders` status, plan tags and `show m`; the caret and whole-text line of `status` (default and fullscreen, 120x40) | 11 of 11 PASS. The 225 above is the full run before the fixes |
+| Final live matrix, release 6.9.6 (Claude Code 2.1.301), terminal UI, no `claude -p` cases, brewmod-placeholders and brewmod-plan-effort both loaded from the working tree, default and fullscreen view, 80x24, 80x30, 88x40 and 120x40: taking a typeahead row with `Tab` or `Enter`, undo, history recall and the filled `++r?` line (24 cases); the band while the name menu closes (`++r` then `?` run 21 times at 80x24 in the default view and 11 times in fullscreen), Esc then a caret move, history recall with and without a draft, cut rows, `/placeholders` status and help, no extra buttons (82); plan-mode `++m`, compact band and `+++` (12); band colours: caret on `++m`, compact band, escaped message, unknown token, plan-mode `++m` and two light-theme cases (22) | 140 of 140 PASS, 0 FAIL. The 225 above is the earlier full run, before the review fixes, and the only run with `claude -p` cases |
 | Same check, the `claude -p` received-context e2e cases, mod tools denied so the answer comes from the received context: `++r`, `++/ ++r`, plan-mode `++m`, plan-mode `++m` with an empty global `m.md`, `+++` in default mode, `+++` in plan mode, an inline placeholder (7 cases plus the check that the tools are denied) | PASS, counted apart from the terminal UI cases: Claude quotes the `r` block, receives no block when escaped, quotes `[ADDON: PLAN MODE]`, receives nothing for the empty `m.md`, quotes the `[ADDON: ANTI-DRIFT CRON]` text without the plan addon in default mode and with `[ADDON: ANTI-DRIFT CRON PLAN]` in plan mode, and gets the inline body in place of the token |
 | Both mods together (brewmod-placeholders and brewmod-plan-effort), default and fullscreen, 80x24 and 120x40 | PASS in the installed load order (inside the 225 cases) and, with brewmod-plan-effort loading first, on the colour, hint-row and `+++` subset: the plan-effort row `plan mode · effort xhigh for this mode · change: /plan-effort <level>` stays above the placeholders band, and the band keeps its head, text, cut row and foot. In that subset 12 cases first failed on wrong expectations in the test cases (the hooks were unchanged); after the correction the 12 pass, 12 of 12 |
 | Band colours, 22 colour cases (dark theme and `theme: "light"`): caret on `++m` in default and plan mode, compact band, escaped message, unknown token | 22 of 22 PASS. Checked on the terminal's colour codes: token names bold blue, sent rows bold in the text colour, plan-mode rows (`plan mode adds:`, `not sent now · plan mode adds N lines`, `plan +`, ` · plan mode`) in the plan-mode colour `38;5;73` on a dark theme (on the light theme the `not sent now` note was captured in `38;5;30`), the sent plan addition bold in that colour, actions underlined, labels grey, `[Enter]` plain. A terminal may split a coloured run per word, so a row can carry the colour code once per word |
@@ -404,11 +408,11 @@ Not covered live: the light theme as a rendered image (it is checked through its
 
 </Spoiler>
 
-### Related
+## Related
 
 <CardGrid>
-  <Card variant="mod" title="brewcode mods" icon="puzzle" href="/mods/overview/">All mods and how they differ from plugins.</Card>
-  <Card variant="mod" title="Plan-mode effort" icon="settings" href="/mods/plan-effort/">The other mod: raises effort in plan mode.</Card>
+  <Card variant="mod" title="brewcode mods" icon="package" href="/mods/overview/">All mods and how they differ from plugins.</Card>
+  <Card variant="mod" title="Plan-mode effort" icon="brain" href="/mods/plan-effort/">The other mod: raises effort in plan mode.</Card>
   <Card variant="mod" title="Project page" icon="globe" href="https://brewcode.app/mods/placeholders/">The mod on brewcode.app.</Card>
   <Card title="GitHub source" icon="github" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewmod-placeholders">Hooks module, definitions and tests.</Card>
 </CardGrid>

@@ -1,14 +1,14 @@
 # Install or update brewcode
 
-❗ **Update Claude Code first:** mods need Claude Code 2.1.301 or newer. Check with `claude --version`; below that, run `claude update`.
+❗ **Update Claude Code first:** mods need Claude Code 2.1.301 or newer. Check with `claude --version`; below that, run `claude update` and restart Claude Code (exit, run `claude`).
 
 Written for you and for an LLM. Paste into Claude Code: `Read https://raw.githubusercontent.com/kochetkov-ma/claude-brewcode/main/UPDATE.md and follow it.`
 
-**LLM rules:** run every command with the Bash tool, in order, and show its full output; stop on an error and report it; finish with `/reload-plugins` (a slash command: if you cannot run it, tell the user to type it or to restart Claude Code). Pick one section: run `claude plugin list`; an `@claude-brewcode` entry means "Already installed", none means "New here".
+**LLM rules:** run every command with the Bash tool, in order, and show its full output; stop on an error and report it; finish with `/reload-plugins` (a slash command: if you cannot run it, tell the user to type it or to restart Claude Code). `claude update` does not change the running session: after it succeeds, stop and tell the user to restart Claude Code (exit, run `claude`) and paste the same prompt again. Pick one section: run `claude plugin list`; an `@claude-brewcode` entry means "Already installed", none means "New here".
 
 ## New here: install
 
-1. Run `claude --version`. Below 2.1.301: run `claude update`, then restart Claude Code.
+1. Run `claude --version`. Below 2.1.301: run `claude update`, then stop and tell the user to restart Claude Code and paste the prompt again.
 2. Run in order:
 
 ```bash
@@ -26,7 +26,7 @@ claude plugin install brewui@claude-brewcode
 
 ## Already installed: update
 
-1. Run `claude --version`. Below 2.1.301: run `claude update`, then restart Claude Code.
+1. Run `claude --version`. Below 2.1.301: run `claude update`, then stop and tell the user to restart Claude Code and paste the prompt again.
 2. Run `claude plugin marketplace update claude-brewcode`.
 3. Run `claude plugin update <name>@claude-brewcode` once per installed plugin, one name per call (a second name is silently ignored). Names: `brewmod-placeholders`, `brewmod-plan-effort`, `brewcode`, `brewdoc`, `brewtools`, `brewui`.
 4. A mod missing from `claude plugin list`: say in one line what it adds (`brewmod-placeholders`: `++r` and other prompt blocks; `brewmod-plan-effort`: effort `xhigh` in plan mode), offer to install it, install on yes with `claude plugin install <name>@claude-brewcode`. Offer a missing plugin the same way.

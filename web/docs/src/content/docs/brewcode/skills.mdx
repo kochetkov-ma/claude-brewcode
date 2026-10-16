@@ -33,15 +33,15 @@ Skills (recipes) are slash commands defined in `SKILL.md` files. Brewcode ships 
 A **`-setup`** skill installs a mechanism (agents, hooks, a rule, a generated skill) that you use afterwards instead of the skill itself. Run it once, then `upgrade`. **Bare-named** skills are recurring tools and leave no installed state.
 </Callout>
 
-All eleven `-setup` skills implement the same verbs, in this order: `status` · `install` · `upgrade` · `enable` · `disable` · `uninstall` · `purge`. Extras come after, never in place (`reindex`, `optimize`, `resume` on `semble-setup`; `[name]` on `teams-setup`). A bare call means `status` when installed and `install` when absent; [`semble-setup`](/brewcode/skills/semble-setup/) always defaults to `status` because installation reaches outside the project, and [`convention-setup`](/brewcode/skills/convention-setup/) defaults to `install`.
+All eleven `-setup` skills implement the same verbs, in this order: `status` · `install` · `upgrade` · `enable` · `disable` · `uninstall` · `purge`. Extras come after, never in place (`reindex`, `optimize`, `resume` on `semble-setup`; `[name]` on `teams-setup`). A bare call means `status` when installed and `install` when absent. Two groups differ: [`semble-setup`](/brewcode/skills/semble-setup/) (installation reaches outside the project) and the four brewtools guard setups ([`manager-setup`](/brewtools/skills/manager-setup/), [`agent-deadline-setup`](/brewtools/skills/agent-deadline-setup/), [`agent-return-setup`](/brewtools/skills/agent-return-setup/), [`agent-router-setup`](/brewtools/skills/agent-router-setup/)) always default to `status`; [`convention-setup`](/brewcode/skills/convention-setup/) defaults to `install`.
 
 Run order: `setup-status`, `semble-setup`, `convention-setup`, `teams-setup`, `superreview-setup`; the full chain is under [Skill dependencies](#skill-dependencies). `setup-status`, `superreview-setup`, `skills`, `agents` and `e2e` also work standalone. Run `teams-setup upgrade` later to tune underperforming agents from recorded trace data. [text-optimize](/brewtools/skills/text-optimize/), [text-human](/brewtools/skills/text-human/), [secrets-scan](/brewtools/skills/secrets-scan/), [ssh](/brewtools/skills/ssh/) and [deploy](/brewtools/skills/deploy/) live in the [Brewtools](/brewtools/skills/) plugin.
 
 ## Technical details
 
-<Spoiler id="delegation" title="Delegation: one contract for all nine skills">
+<Spoiler id="delegation" title="Delegation: one contract for skills that spawn agents">
 
-Every skill here except read-only `setup-status` fans work out to subagents under one sizing rule. A big task handed to one agent means an agent gone for an hour that you cannot observe or correct, and it usually drifts.
+Every skill here except `setup-status` and `semble-setup` (neither has the `Agent` tool) fans work out to subagents under one sizing rule. A big task handed to one agent means an agent gone for an hour that you cannot observe or correct, and it usually drifts.
 
 One subagent = **one bounded unit**: one deliverable, roughly 5 files, roughly 10 steps. Larger work splits into independent parallel assignments. Convention setup partitions layer analysis, E2E partitions scenarios, teams setup creates agents one file per spawn.
 

@@ -63,14 +63,14 @@ Brewcode layers on top of Claude Code with no external runtime. Skills spawn age
 </Steps>
 
 <Callout type="caution" title="One setup per session">
-  Every `-setup` skill is an interactive generator that fans out subagents and asks you questions. Two in one session degrade each other, so `setup-status` reports and stops. Run setups one at a time, ideally in a fresh session.
+  Most `-setup` skills are interactive generators that fan out subagents and ask you questions. Two in one session degrade each other, so `setup-status` reports and stops. Run setups one at a time, ideally in a fresh session.
 </Callout>
 
 ## Technical details
 
 <Spoiler id="naming" title="Naming: -setup vs bare">
 
-A **`-setup`** skill installs a mechanism (agents, hooks, a rule, a generated skill) that you then use. Run it once, `upgrade` it later. Bare-named skills are recurring tools. Every setup answers `status`, `install`, `upgrade`, `enable`, `disable`, `uninstall`, `purge`. A bare call means status when installed and install when absent; [`semble-setup`](/brewcode/skills/semble-setup/) always defaults to status, [`convention-setup`](/brewcode/skills/convention-setup/) to install. Full rule: [Skills](/brewcode/skills/).
+A **`-setup`** skill installs a mechanism (agents, hooks, a rule, a generated skill) that you then use. Run it once, `upgrade` it later. Bare-named skills are recurring tools. Every setup answers `status`, `install`, `upgrade`, `enable`, `disable`, `uninstall`, `purge`. A bare call means status when installed and install when absent; [`semble-setup`](/brewcode/skills/semble-setup/) and the four brewtools guard setups (manager, agent-deadline, agent-return, agent-router) always default to status, [`convention-setup`](/brewcode/skills/convention-setup/) to install. Full rule: [Skills](/brewcode/skills/).
 
 </Spoiler>
 

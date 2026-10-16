@@ -15,10 +15,10 @@
 
 ## Install in 30 seconds
 
-❗ **Update Claude Code first:** mods need 2.1.301+, run `claude update`. Paste this prompt:
+❗ **Update Claude Code first:** mods need 2.1.301+. Run `claude update`, restart, then paste this prompt:
 
 ```
-Run these commands in order in this session, show full output, then run `/reload-plugins`:
+Run in order, show full output; stop if `claude --version` < 2.1.301; end with `/reload-plugins`:
 1. claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
 2. claude plugin install brewmod-placeholders@claude-brewcode
 3. claude plugin install brewmod-plan-effort@claude-brewcode
@@ -32,7 +32,7 @@ Run these commands in order in this session, show full output, then run `/reload
 Short steps for you and your LLM, including what to try after the update: [UPDATE.md](UPDATE.md). Or paste this prompt:
 
 ```
-Run these commands in order in this session, show full output, then run `/reload-plugins`:
+Run in order, show full output; stop if `claude --version` < 2.1.301; end with `/reload-plugins`:
 1. claude plugin marketplace update claude-brewcode
 2. claude plugin update brewmod-placeholders@claude-brewcode
 3. claude plugin update brewmod-plan-effort@claude-brewcode
@@ -47,15 +47,17 @@ Run these commands in order in this session, show full output, then run `/reload
 > Tiny add-ons, one feature each, one command to install. [brewcode.app/mods](https://brewcode.app/mods/) | [Docs](https://doc-claude.brewcode.app/mods/overview/)
 
 <p align="center">
-  <a id="mods-demo"></a><img src="assets/brewmods/hub.gif" width="640" alt="Terminal-style animation of the brewcode mods hub: an ASCII brewcode logo and a four-slide walkthrough of the mods">
+  <a id="mods-demo"></a><img src="assets/brewmods/hub.gif" width="640" alt="Terminal-style animation of the brewcode mods hub: an ASCII brewcode tap pours the mods' source code into a glass in four stages: slide in, pour, head, served">
 </p>
+
+❗ **Update Claude Code first:** mods need 2.1.301+ (`claude --version`; `claude update`, then restart Claude Code) and `node` on the `PATH`.
 
 | Mod | Type this, get that | Install |
 |-----|---------------------|---------|
 | [brewmod-placeholders](brewmod-placeholders/README.md) | `++r` in a prompt: a whole review block. `/placeholders <what you want>`: Claude drafts your own | `claude plugin install brewmod-placeholders@claude-brewcode` |
 | [brewmod-plan-effort](brewmod-plan-effort/README.md) | Enter plan mode: effort goes to `xhigh` while Claude plans. `/plan-effort max` sets the level | `claude plugin install brewmod-plan-effort@claude-brewcode` |
 
-First time: `claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode`, then `/reload-plugins` after installing. Both mods require Claude Code 2.1.301+ (run `claude update` first) and `node` on the `PATH`.
+First time: `claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode`, then `/reload-plugins` after installing.
 
 Team/Enterprise organizations, the brewtools 6.7.x double injection and legacy codeword overrides are covered in the [mods overview](https://doc-claude.brewcode.app/mods/overview/).
 
@@ -66,7 +68,7 @@ Team/Enterprise organizations, the brewtools 6.7.x double injection and legacy c
 Type `++r` and Claude receives a whole review-discipline block. A band above the prompt shows exactly the text it will get before you press Enter. Your own placeholders take one command: `/placeholders add ...`.
 
 <p align="center">
-  <a id="placeholders-demo"></a><img src="assets/brewmods/placeholders.gif" width="720" alt="Terminal-style recording of Claude Code: typing ++ opens the placeholder list, Tab inserts ++r, the caret on it shows the text Claude receives, and /placeholders saves your own">
+  <a id="placeholders-demo"></a><img src="assets/brewmods/placeholders.gif" width="720" alt="Claude Code terminal, real session: ++ opens the placeholder list, Up and Tab insert ++r, the band above the prompt shows the lines Claude receives, and Enter sends: Claude reviews by the ++r rules. /placeholders global add ++db saves a new one after one question. In plan mode Claude answers with the ++db rule, the caret on ++m shows its teal plan-mode part, and ++/ sends the message exactly as typed.">
 </p>
 
 | You do | What happens |
@@ -141,7 +143,7 @@ Also shipped: `/brewtools:ssh`, `/brewtools:deploy`, `/brewtools:provider-switch
 
 How the pieces fit, in the order they are used. Full page: [doc-claude.brewcode.app/recommended-flow](https://doc-claude.brewcode.app/recommended-flow/).
 
-1. **Install once.** ❗ Claude Code 2.1.301+ first (`claude --version`, below that `claude update`), then the install prompt above or [UPDATE.md](UPDATE.md).
+1. **Install once.** ❗ Claude Code 2.1.301+ first (`claude --version`; below that `claude update`, then restart Claude Code), then the install prompt above or [UPDATE.md](UPDATE.md).
 2. **Once per project.** `/brewcode:semble-setup install`, `/brewcode:convention-setup install`, `/brewcode:teams-setup install`, `/brewcode:superreview-setup install`; docs-heavy repos also `/brewdoc:docsync-setup install`. Check with `/brewcode:setup-status`.
 3. **Every bigger task.** Start with `++m` (manager: task graph and delegation); design in plan mode with `++m` (plan-effort raises effort to `xhigh`); long runs add `+++` (anti-drift cron).
 4. **Review.** `++r` or `++rr` after each phase, the generated `/superreview` before merge.
@@ -176,7 +178,7 @@ claude --plugin-dir ./brewcode --plugin-dir ./brewdoc --plugin-dir ./brewtools -
 
 | Component | Version | Purpose |
 |-----------|---------|---------|
-| Claude Code CLI | latest (mods: 2.1.301+) | Plugin runtime |
+| Claude Code CLI | 2.1.296 reference for the plugins; mods 2.1.301+ | Plugin runtime |
 | Node.js | 20+ | Hook runtime |
 | macOS | 13+ | Supported OS (Linux and Windows planned) |
 

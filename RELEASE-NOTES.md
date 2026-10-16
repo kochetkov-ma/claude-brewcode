@@ -2,13 +2,104 @@
 
 ---
 
+## v6.9.6 (2026-10-16)
+
+> Docs: [placeholders](https://doc-claude.brewcode.app/mods/placeholders/) | [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/) | [mods overview](https://doc-claude.brewcode.app/mods/overview/) | [recommended flow](https://doc-claude.brewcode.app/recommended-flow/) | [getting started](https://doc-claude.brewcode.app/getting-started/) | [installation](https://doc-claude.brewcode.app/installation/) | [quick start](https://doc-claude.brewcode.app/quickstart/) | [full setup](https://doc-claude.brewcode.app/full-setup/) | [FAQ](https://doc-claude.brewcode.app/faq/) | [license](https://doc-claude.brewcode.app/license/) | [brewcode agents](https://doc-claude.brewcode.app/brewcode/agents/) | [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [bash-expert](https://doc-claude.brewcode.app/brewcode/agents/bash-expert/) | [bc-rules-organizer](https://doc-claude.brewcode.app/brewcode/agents/bc-rules-organizer/) | [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [mod-creator](https://doc-claude.brewcode.app/brewcode/agents/mod-creator/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [brewcode hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | [brewcode overview](https://doc-claude.brewcode.app/brewcode/overview/) | [brewcode skills](https://doc-claude.brewcode.app/brewcode/skills/) | [agents skill](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [convention-setup](https://doc-claude.brewcode.app/brewcode/skills/convention-setup/) | [e2e](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [review](https://doc-claude.brewcode.app/brewcode/skills/review/) | [rules](https://doc-claude.brewcode.app/brewcode/skills/rules/) | [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) | [teams-setup](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) | [brewdoc overview](https://doc-claude.brewcode.app/brewdoc/overview/) | [brewdoc skills](https://doc-claude.brewcode.app/brewdoc/skills/) | [docsync-setup](https://doc-claude.brewcode.app/brewdoc/skills/docsync-setup/) | [md-to-pdf](https://doc-claude.brewcode.app/brewdoc/skills/md-to-pdf/) | [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/) | [my-claude](https://doc-claude.brewcode.app/brewdoc/skills/my-claude/) | [brewtools agents](https://doc-claude.brewcode.app/brewtools/agents/) | [deploy-admin](https://doc-claude.brewcode.app/brewtools/agents/deploy-admin/) | [ssh-admin](https://doc-claude.brewcode.app/brewtools/agents/ssh-admin/) | [text-optimizer](https://doc-claude.brewcode.app/brewtools/agents/text-optimizer/) | [brewtools overview](https://doc-claude.brewcode.app/brewtools/overview/) | [prompt-injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/) | [agent-deadline-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline-setup/) | [agent-return-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-return-setup/) | [agent-router-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-router-setup/) | [context-slim](https://doc-claude.brewcode.app/brewtools/skills/context-slim/) | [deploy](https://doc-claude.brewcode.app/brewtools/skills/deploy/) | [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) | [secrets-scan](https://doc-claude.brewcode.app/brewtools/skills/secrets-scan/) | [ssh](https://doc-claude.brewcode.app/brewtools/skills/ssh/) | [task-board-setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) | [text-human](https://doc-claude.brewcode.app/brewtools/skills/text-human/) | [text-optimize](https://doc-claude.brewcode.app/brewtools/skills/text-optimize/) | [brewui agents](https://doc-claude.brewcode.app/brewui/agents/) | [brewui overview](https://doc-claude.brewcode.app/brewui/overview/) | [brewui skills](https://doc-claude.brewcode.app/brewui/skills/)
+
+**What changed for you**
+
+❗ **Update Claude Code first:** the mods need Claude Code 2.1.301 or newer. Run `claude update`, restart Claude Code (exit, then run `claude`), and check with `claude --version`.
+
+- On a small terminal the `brewmod-placeholders` band no longer pushes the top of your screen out of view: at 80x24 it waits until the suggestion list has closed before it grows. See [prompt placeholders](https://doc-claude.brewcode.app/mods/placeholders/).
+- The demo recordings of both mods are new: real Claude Code screens, terminal only, usage first. The placeholders recording goes from typing `++` to sending `++r`, then saves your own placeholder and shows plan mode and `++/`. Link someone straight to a recording: [placeholders](https://doc-claude.brewcode.app/mods/placeholders/#demo), [full text](https://doc-claude.brewcode.app/mods/placeholders/#full-text-demo), [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/#demo).
+- New [Recommended flow](https://doc-claude.brewcode.app/recommended-flow/) page: five steps from install to a reviewed, shared change. [UPDATE.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/UPDATE.md) holds the install and update steps for you and for an LLM, and [llms.txt](https://doc-claude.brewcode.app/llms.txt) indexes the docs for LLMs.
+- Every GitHub release now ends with a copy-paste prompt that updates you to that release. Update commands take one plugin name per call: `claude plugin update` ignores a second name without an error.
+- `brewmod-placeholders`, the flagship mod, is listed first wherever the two mods appear: README, docs navigation, marketplace, install and update commands. The README and the docs pages are rewritten in plainer language, and wrong counts and claims found in review are corrected.
+
+![Claude Code terminal, real session: typing ++ opens the placeholder list, Tab inserts ++r, the band shows the lines Claude receives and Enter sends; /placeholders saves your own placeholder, then plan mode and ++/](https://brewcode.app/mods/placeholders.gif)
+
+Update: `/brewtools:plugin-update`, or the update prompt at the end of the [release page](https://github.com/kochetkov-ma/claude-brewcode/releases/tag/v6.9.6).
+
+More: [prompt placeholders on brewcode.app](https://brewcode.app/mods/placeholders/) · [Recommended flow](https://doc-claude.brewcode.app/recommended-flow/)
+
+### brewmod-placeholders
+
+#### Fixed
+
+- **band at 80x24:** the band waits for the typeahead menu to close before it grows. A menu that closes on a token the typeahead still answers (`++r?`) stays counted as open until that answer arrives, then the real focus goes out. Before, the band grew under the menu's last rows and the top of a 24-row screen scrolled away for good.
+- **band hold:** after the typeahead menu closes, the band keeps its small, menu-capped layout only until the mod's own empty typeahead answer arrives, or for at most 300 ms. A history recall (Up) shows the full band at once, Esc followed by a caret move onto a token no longer leaves the band small, and undo keeps the hold; in bash (`!`) mode the band stays small, because the mod cannot see that mode.
+
+#### Changed
+
+- **docs:** the page and the README carry the new recordings under the stable anchors `#demo` and `#full-text-demo`; the README opens with a looping ASCII fermenter. The page's codewords notice links to Install instead of repeating the command, and "Update Claude Code first" sits above the install command.
+
+### brewmod-plan-effort
+
+#### Changed
+
+- **docs:** the page and the README carry the new recording under `#demo`, with "Update Claude Code first" and a restart step above the install command; the README opens with a looping ASCII fermenter. "Good to know" is a plain section instead of a Callout.
+
+### brewcode
+
+#### Fixed
+
+- **setup-status:** the wording says which setup skills spawn subagents: `convention-setup`, `teams-setup`, `superreview-setup`, `memory-sync-setup` and `task-board-setup` fan out, `agent-deadline-setup`, `agent-return-setup` and `agent-router-setup` spawn a `hook-creator`, and `semble-setup`, `docsync-setup` and `manager-setup` spawn none (it said every setup skill fans out subagents).
+- **agent-creator:** a long Bash call runs up to `BASH_MAX_TIMEOUT_MS`, 10 minutes by default (it said 25 minutes).
+
+### brewtools
+
+#### Changed
+
+- **plugin-update:** it lists and updates `brewmod-placeholders` before `brewmod-plan-effort`; it still never installs a mod. Its README updates one name per call.
+
+#### Fixed
+
+- **fetch-latest-versions.sh:** the release-tag fallback makes one `gh` call per run instead of up to 6 (the cached tag was lost in a subshell); the new `suite-fetch-fallback.mjs` pins it.
+
+### repo
+
+#### Added
+
+- **UPDATE.md:** install and update steps for you and for an LLM, what to tell the user after an update, and first steps in a project. After `claude update` the LLM stops and asks you to restart Claude Code and paste the prompt again.
+- **Recommended flow:** the page `/recommended-flow/` (five steps, diagram, one task from start to finish), listed under Introduction in the docs navigation, plus a README section.
+- **llms.txt:** `web/docs/public/llms.txt`, an index of the docs for LLMs with the Claude Code 2.1.301 requirement.
+- **recordings:** `placeholders.gif`, `placeholders-full-text.gif` and `plan-effort.gif` re-recorded (2.81 MB, 0.96 MB and 0.50 MB; were 3.39, 3.07 and 3.01 MB), each with a still and a bottle GIF (0.43-0.44 MB each) in `assets/brewmods/`; sources and `record-gifs.mjs --check` in `assets/brewmods/src/`.
+- **Callout check:** `check-links.sh` fails on a fenced code block or `<pre>` inside `<Callout>`; the rule is `astro-avoid` #15. Validate CI runs it over all docs pages, and `.claude/skills/docs/tests/run.sh` pins its cases.
+
+#### Changed
+
+- **release workflow:** `release.yml` starts only on `vX.Y.Z` tags, so docs-only tags such as `v3.4.24-docs` no longer produce a failed Release run. The extract step rejects any other tag, stops with `::error::.github/release-footer.md not found` when the footer is missing, and replaces every `__TAG__` in the footer with the release tag. `suite-provenance.mjs` runs the step the way Actions does (`bash -e`, no pipefail) and covers these cases.
+- **release footer:** every release body ends with an "Update with Claude" prompt for its tag, update commands with one name per call, and the install commands.
+- **order:** `brewmod-placeholders` comes before `brewmod-plan-effort` in `marketplace.json`, the update and cache scripts, the `plugin-update` lists, `InstallPrompt`, the mods list and navigation, and `AGENTS.md`.
+- **APPROACHES.md:** a new Mods section (hooks module, bundled command hooks, mode files, the placeholders and plan-effort pieces); counts corrected to 3 semble hook files and 4 settings entries, 9 shipped agents, 7 agents at `maxTurns` 80 and 2 at 60, and `## Scope Fit` in 6 of 9.
+
+### docs
+
+#### Changed
+
+- **README and plugin READMEs:** "Install in 30 seconds" and "Already installed? Update" follow the order marketplace, placeholders, plan-effort, brewcode, brewdoc, brewtools, brewui; the brewcode, brewdoc, brewtools and brewui READMEs install the whole suite, mods included, behind "Update Claude Code first".
+- **wording:** README, UPDATE.md, APPROACHES.md, release notes and the docs pages are rewritten in plainer language.
+- **install prompts:** `InstallPrompt plugin="all"` checks `claude --version` (2.1.301 or newer, else `claude update` and a restart) and installs the two mods before the four plugins, one name per call; the installation, getting-started, quickstart, full-setup and FAQ pages show the same order with "Update Claude Code first" above every mod install command.
+
+#### Fixed
+
+- **counts and claims:** the creator suite is 120 checks (was 99); `/superreview` QUICK runs the mechanical gates and `intent-guard`, and the invented 2/3 agreement rule is gone; a long Bash call can run up to 10 minutes; semble, manager, agent-deadline, agent-return and agent-router default to `status` and convention to `install`; `md-to-pdf` has 3 suites and 21 checks; the FAQ cache-path example uses `<version>`; the license page has its heading back.
+
+### docs site
+
+#### Changed
+
+- **mod recordings:** they use the full content width with no height cap, and the `#demo` and `#full-text-demo` links clear the sticky header.
+
+---
+
 ## v6.9.5 (2026-10-16)
 
 > Docs: [placeholders](https://doc-claude.brewcode.app/mods/placeholders/) | [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/) | [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [task-board-setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) | [prompt-injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/)
 
 **What changed for you**
 
-❗ **Update Claude Code first:** the mods need Claude Code 2.1.301 or newer. Run `claude update`, check with `claude --version`.
+❗ **Update Claude Code first:** the mods need Claude Code 2.1.301 or newer. Run `claude update`, restart Claude Code (exit, then run `claude`), and check with `claude --version`.
 
 - `+++` now works in every mode. In a normal prompt Claude sets up one recurring check for the session (a cron, hourly unless you say otherwise) that re-reads your goal and keeps the task from drifting. In plan mode it adds that check to the plan as a step instead. See [prompt placeholders](https://doc-claude.brewcode.app/mods/placeholders/).
 - Placeholders come in two kinds only. `<name>.md` is sent in every mode; an optional `<name>.plan.md` adds more text in plan mode. If one of your own files used `when: plan`, it is now sent in every mode: run `/placeholders status` to see which files changed.
@@ -20,12 +111,6 @@
 Update: `/brewtools:plugin-update`, or the update prompt at the end of the [release page](https://github.com/kochetkov-ma/claude-brewcode/releases/tag/v6.9.5).
 
 More: [prompt placeholders on brewcode.app](https://brewcode.app/mods/placeholders/) · [plan-effort on brewcode.app](https://brewcode.app/mods/plan-effort/)
-
-Placeholders now come in two kinds, `+++` works in every mode, and plan mode is drawn in one colour in both mods.
-
-**Requirement:** both mods require Claude Code 2.1.301+ (run `claude update` first).
-
-**Migration:** user files with `when: plan` are now sent in every mode; check the `/placeholders status` warnings.
 
 ### brewmod-placeholders
 
@@ -64,7 +149,7 @@ Placeholders now come in two kinds, `+++` works in every mode, and plan mode is 
 
 **What changed for you**
 
-❗ **Update Claude Code first:** the mods need Claude Code 2.1.301 or newer. Run `claude update`, check with `claude --version`. This release raised the minimum for both mods.
+❗ **Update Claude Code first:** the mods need Claude Code 2.1.301 or newer. Run `claude update`, restart Claude Code (exit, then run `claude`), and check with `claude --version`. This release raised the minimum for both mods.
 
 - The band above your prompt is easier to read: placeholder names are blue and bold, the text Claude receives is bright and bold, hint actions are brighter and underlined, and labels stay grey. See [prompt placeholders](https://doc-claude.brewcode.app/mods/placeholders/).
 - In fullscreen plan mode the band no longer overflows under the plan-effort row.
@@ -76,8 +161,6 @@ Update: `/brewtools:plugin-update`, or the update prompt at the end of the [rele
 Watch how it works: [GIF of the full-text flow](https://brewcode.app/mods/placeholders-full-text.gif) · [prompt placeholders on brewcode.app](https://brewcode.app/mods/placeholders/)
 
 Hotfix: the `brewmod-placeholders` band fits its slot in fullscreen plan mode and reads clearer; `brewmod-plan-effort` hands the band one row less.
-
-**Requirement:** both mods now require Claude Code 2.1.301+ (run `claude update` first); CI pins Claude Code 2.1.301.
 
 ### brewmod-placeholders
 
@@ -101,6 +184,12 @@ Hotfix: the `brewmod-placeholders` band fits its slot in fullscreen plan mode an
 
 - **docs:** prompt-cache measurement on Claude Code 2.1.301: 15 requests per run, 0 cache misses with and without the mod, `xhigh` on all 6 plan-mode requests.
 
+### repo
+
+#### Changed
+
+- **requirement:** both mods now declare Claude Code 2.1.301+ (their `plugin.json` descriptions); Validate CI pins Claude Code 2.1.301.
+
 ---
 
 ## v6.9.3 (2026-10-16)
@@ -109,7 +198,7 @@ Hotfix: the `brewmod-placeholders` band fits its slot in fullscreen plan mode an
 
 **What changed for you**
 
-❗ **Update Claude Code first:** the mods need Claude Code 2.1.301 or newer. Run `claude update`, check with `claude --version`.
+❗ **Update Claude Code first:** the current mods need Claude Code 2.1.301 or newer (this release needed 2.1.292+ for placeholders and 2.1.287+ for plan-effort). Run `claude update`, restart Claude Code (exit, then run `claude`), and check with `claude --version`.
 
 - Put the caret on a token such as `++m` and the band shows exactly the lines Claude receives, in plain colour; labels and notes are dim. A cut text ends with `... K more lines · whole text: /placeholders show ++m`, and a token with a plan-mode part adds `not sent now · plan mode adds N lines`. See [prompt placeholders](https://doc-claude.brewcode.app/mods/placeholders/).
 - In plan mode, `brewmod-plan-effort` shows a yellow row after your first prompt: `plan mode · effort xhigh for this mode · change: /plan-effort <level>`. It disappears when you leave plan mode (Shift+Tab), and the toast `plan mode · effort raised to xhigh` repeats on every plan visit. The row has been plan-mode teal since v6.9.5. See [plan-mode effort](https://doc-claude.brewcode.app/mods/plan-effort/).
@@ -168,7 +257,7 @@ Hotfix: the `brewmod-placeholders` focus band shows exactly what Claude receives
 
 **What changed for you**
 
-❗ **Update Claude Code first:** the mods need Claude Code 2.1.301 or newer. Run `claude update`, check with `claude --version`.
+❗ **Update Claude Code first:** the current mods need Claude Code 2.1.301 or newer (this release needed 2.1.292+ for placeholders and 2.1.287+ for plan-effort). Run `claude update`, restart Claude Code (exit, then run `claude`), and check with `claude --version`.
 
 - You can read what a token sends before you send it. Put the caret on a token such as `++r` and the band shows its text (up to 15 rows). If the menu cuts it, type `?` right after the token (`++r?`) and press Enter: the box fills with `/placeholders show ++r`, and a second Enter prints the whole text. See [prompt placeholders](https://doc-claude.brewcode.app/mods/placeholders/).
 - `/placeholders show ++r ++m`, `list` and `help` answer at once with no Claude turn, and so does a plain "show" request in English or Russian.
@@ -235,7 +324,7 @@ Hotfix: `brewmod-placeholders` shows what a token sends, answers `show`, `list` 
 
 **What changed for you**
 
-❗ **Update Claude Code first:** the mods need Claude Code 2.1.301 or newer. Run `claude update`, check with `claude --version`.
+❗ **Update Claude Code first:** the current mods need Claude Code 2.1.301 or newer (this release needed 2.1.292+ for placeholders and 2.1.287+ for plan-effort). Run `claude update`, restart Claude Code (exit, then run `claude`), and check with `claude --version`.
 
 - If you update a plugin while Claude Code is running, the placeholders mod no longer calls `++m`, `++r` and the others `unknown placeholder`. The band and one toast say `plugin files removed (updated?) · run /reload-plugins`, and inline placeholders keep working. After any plugin update, run `/reload-plugins`. See [prompt placeholders](https://doc-claude.brewcode.app/mods/placeholders/).
 - To change the text of a placeholder, run `/placeholders change <name>` or describe the change in plain words after `/placeholders` (for example `/placeholders make ++r shorter`). The docs and `manager-setup` point there instead of the removed `/placeholders edit`.
@@ -311,7 +400,7 @@ Patch release: `brewmod-placeholders` survives a plugin update under a running s
 
 **What changed for you**
 
-❗ **Update Claude Code first:** the mods need Claude Code 2.1.301 or newer. Run `claude update`, check with `claude --version`.
+❗ **Update Claude Code first:** the current mods need Claude Code 2.1.301 or newer (this release needed 2.1.292+ for placeholders and 2.1.287+ for plan-effort). Run `claude update`, restart Claude Code (exit, then run `claude`), and check with `claude --version`.
 
 - `/placeholders` and `/plan-effort` open with a status. Run either one with no arguments to see what is active; `/plan-effort max` (or `medium`, `high`, `xhigh`) sets the plan-mode level, the same as the `planEffort` row in `/config`. See [plan-mode effort](https://doc-claude.brewcode.app/mods/plan-effort/).
 - To add or change a placeholder, describe it after `/placeholders` (for example `/placeholders add ++ship: ...`). Claude saves it after one confirmation. The old `show`, `add`, `edit` and `rm` subcommands are gone. See [prompt placeholders](https://doc-claude.brewcode.app/mods/placeholders/).
@@ -394,7 +483,7 @@ Minor release: the mod commands open with a status, the docs are cut by half, an
 
 **What changed for you**
 
-❗ **Update Claude Code first:** the mods need Claude Code 2.1.301 or newer. Run `claude update`, check with `claude --version`.
+❗ **Update Claude Code first:** the current mods need Claude Code 2.1.301 or newer (this release needed 2.1.292+ for placeholders and 2.1.287+ for plan-effort). Run `claude update`, restart Claude Code (exit, then run `claude`), and check with `claude --version`.
 
 - The codewords `++m`, `++a`, `++r`, `++rr` and `+++` now come from `brewmod-placeholders`, not from brewtools. If they stopped working after the brewtools update, install the mod: `claude plugin install brewmod-placeholders@claude-brewcode`. See [prompt placeholders](https://doc-claude.brewcode.app/mods/placeholders/).
 - Update brewtools and the mods together: brewtools 6.7.x next to the new mod injects each block twice.
@@ -481,12 +570,12 @@ Minor release: the codewords move from brewtools to `brewmod-placeholders`, and 
 
 **What changed for you**
 
+❗ **Update Claude Code first:** the current mods need Claude Code 2.1.301 or newer (this release needed 2.1.292+ for placeholders and 2.1.287+ for plan-effort). Run `claude update`, restart Claude Code (exit, then run `claude`), and check with `claude --version`.
+
 - No plugin or mod behaviour changed in this patch.
 - The docs site now sends a strict Content-Security-Policy on every response, so a page runs only the site's own scripts. The GitHub badge shows the version and star count rendered at build time, so your browser no longer calls `api.github.com`.
 - The [mod-creator page](https://doc-claude.brewcode.app/brewcode/agents/mod-creator/) now matches what the agent does.
 - The marketplace descriptions of `brewui`, `brewmod-placeholders` and `brewmod-plan-effort` match their `plugin.json`.
-
-❗ **Update Claude Code first:** the mods need Claude Code 2.1.301 or newer. Run `claude update`, check with `claude --version`.
 
 New to the mods? [Prompt placeholders](https://doc-claude.brewcode.app/mods/placeholders/) · [plan-mode effort](https://doc-claude.brewcode.app/mods/plan-effort/) · [console GIF with `++r`](https://brewcode.app/mods/placeholders.gif) · [mods on brewcode.app](https://brewcode.app/mods/)
 
@@ -535,12 +624,12 @@ Patch release: a strict Content-Security-Policy on the docs site, a corrected mo
 
 **What changed for you**
 
-❗ **Update Claude Code first:** the mods need Claude Code 2.1.301 or newer. Run `claude update`, check with `claude --version`.
+❗ **Update Claude Code first:** the current mods need Claude Code 2.1.301 or newer (this release needed 2.1.292+ for placeholders and 2.1.287+ for plan-effort). Run `claude update`, restart Claude Code (exit, then run `claude`), and check with `claude --version`.
 
 - Two Claude Code mods are new, so the release train grows from four plugins to six. A mod is a small add-on that hooks into the Claude Code prompt box and its turns.
 - `brewmod-placeholders` gives you prompt shortcuts. Type `++r` (or `++m`, `++a`, `++rr`, `+++`) in a prompt and Claude gets a saved instruction block as hidden context for that turn; your prompt stays as typed. Known tokens are highlighted while you type, `++` opens suggestions, and you can write your own placeholders as one Markdown file each. Install: `claude plugin install brewmod-placeholders@claude-brewcode`. See [prompt placeholders](https://doc-claude.brewcode.app/mods/placeholders/).
 - `brewmod-plan-effort` makes Claude think harder while it plans. In plan mode the main loop runs at `xhigh` effort (you can set `medium`, `high`, `xhigh` or `max`); outside plan mode your own effort applies, and nothing needs undoing after you approve the plan. Install: `claude plugin install brewmod-plan-effort@claude-brewcode`. See [plan-mode effort](https://doc-claude.brewcode.app/mods/plan-effort/).
-- Already use `++m` or `++r` from brewtools? With both installed, each token is injected exactly once.
+- Already use `++m` or `++r` from brewtools? In this release the mod and brewtools 6.7.0 together inject each token exactly once. Since v6.8.0 the codewords live only in the mod, so update brewtools to 6.8.0 or newer: brewtools 6.7.x next to a current mod injects each block twice.
 - For builders: the new `mod-creator` agent creates, tests and ships mods ([docs](https://doc-claude.brewcode.app/brewcode/agents/mod-creator/)), and `/brewtools:plugin-update` now also updates installed mods.
 
 ![Claude Code prompt: type ++ to open the placeholder list, pick ++r, and read the text Claude receives (placeholders mod as it looks today)](https://brewcode.app/mods/placeholders.gif)
@@ -560,7 +649,7 @@ First release of the brewcode mods: two Claude Code mods (TypeScript hooks modul
 - **your own placeholders:** one Markdown file per placeholder, layered project > global > plugin defaults, with the brewtools override paths (`.claude/brewtools/manager/prompts/` in the project, `manager/prompts/` in the config dir) read through each default's `legacy` key.
 - **inline insert:** `insert: inline` replaces the token with the block text in the prompt. Works only with `when: always` and only for prompts typed in the composer, bridge or SDK, not for slash commands.
 - **`/placeholders`:** `list`, `show`, `add`, `edit`, `rm` (`--global` for the user layer).
-- **brewtools parity:** the default set is byte-identical to the brewtools codewords, checked by a parity golden and a drift check in CI. With brewtools also installed, each token is injected exactly once: the mod drops the brewtools block of every token it resolves.
+- **brewtools parity:** the default set is byte-identical to the brewtools codewords, checked by a parity golden and a drift check in CI. With brewtools 6.7.0 also installed, each token is injected exactly once: the mod drops the brewtools block of every token it resolves. v6.8.0 removed this de-duplication together with the brewtools codewords.
 - **options:** `prefix` (default `++`), `knownColor`, `unknownColor`, `warnUnknown` (default `true`).
 - **limitations:** a token inserted with `Tab` or a recalled history entry shows no highlight until the next keystroke; drafts over 20,000 characters get no highlight or band; org-managed installs may skip the classic hooks (context expansion and the toast then do not run).
 
@@ -585,7 +674,7 @@ First release of the brewcode mods: two Claude Code mods (TypeScript hooks modul
 #### Changed
 
 - **plugin-update:** checks and updates `brewmod-placeholders` and `brewmod-plan-effort` when they are installed (status row, version fetch, update set). It never installs a mod; a mod that is not installed is reported as not installed.
-- **deploy:** `references/release-best-practices.md` covers the two mod manifests and the `### brewmod-plan-effort` / `### brewmod-placeholders` release-notes sections.
+- **deploy:** `references/release-best-practices.md` covers the two mod manifests and the `### brewmod-placeholders` / `### brewmod-plan-effort` release-notes sections.
 
 ### repo
 
@@ -596,7 +685,7 @@ First release of the brewcode mods: two Claude Code mods (TypeScript hooks modul
 #### Changed
 
 - **release train:** `bump-version.sh` bumps and verifies six plugin manifests, and checks every `marketplace.json` entry by name instead of by array index.
-- **update-plugin.sh:** accepts all six plugin names, with `update-brewmod-plan-effort.sh` and `update-brewmod-placeholders.sh` wrappers.
+- **update-plugin.sh:** accepts all six plugin names, with `update-brewmod-placeholders.sh` and `update-brewmod-plan-effort.sh` wrappers.
 - **update-plugin.sh update path:** runs `claude plugin update` in place and keeps your plugin options and disabled state; the uninstall and reinstall fallback restores both.
 - **clean-plugin-cache.sh:** prunes the mods' caches too.
 - **CI:** `validate.yml` runs `claude plugin validate --strict` and `claude plugin test` on every `brewmod-*`, plus the placeholders defaults and parity-golden drift checks. The release body lists the install commands for both mods.
@@ -611,10 +700,10 @@ First release of the brewcode mods: two Claude Code mods (TypeScript hooks modul
 
 #### Added
 
-- **Mods section:** overview, plan-effort and placeholders pages on the docs site, and a mod-creator agent page.
+- **Mods section:** overview, placeholders and plan-effort pages on the docs site, and a mod-creator agent page.
 - **repo README:** "Claude Code mods" section with install commands and demos.
-- **mod READMEs:** `brewmod-plan-effort/README.md` and `brewmod-placeholders/README.md`.
-- **install prompt:** `InstallPrompt` accepts the `brewmod-plan-effort` and `brewmod-placeholders` plugin ids.
+- **mod READMEs:** `brewmod-placeholders/README.md` and `brewmod-plan-effort/README.md`.
+- **install prompt:** `InstallPrompt` accepts the `brewmod-placeholders` and `brewmod-plan-effort` plugin ids.
 - **plugin READMEs:** brewcode, brewdoc, brewtools and brewui end with a "See also: Claude Code mods" link.
 
 #### Changed

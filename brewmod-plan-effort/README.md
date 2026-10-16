@@ -22,7 +22,7 @@
 
 ## Install
 
-> ❗ **Update Claude Code first:** the mods need Claude Code 2.1.301 or newer. Check with `claude --version`; if it is lower, run `claude update`.
+> ❗ **Update Claude Code first:** the mods need Claude Code 2.1.301 or newer. Check with `claude --version`; if it is lower, run `claude update`, then restart Claude Code (exit, run `claude`).
 
 ```bash
 claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode && claude plugin install brewmod-plan-effort@claude-brewcode
@@ -34,11 +34,12 @@ Then run `/reload-plugins`.
 <summary>Update, dev mode, requirements</summary>
 
 ```bash
-claude update   # Claude Code first
+claude update   # Claude Code 2.1.301+ first, then restart Claude Code
 claude plugin marketplace update claude-brewcode && claude plugin update brewmod-plan-effort@claude-brewcode
 claude --plugin-dir ./brewmod-plan-effort   # dev mode, no install
 ```
 
+- Claude Code 2.1.301 or newer.
 - Mods use the hooks module API, which is early access.
 - `node` on the `PATH` (runs the bundled command hook `hooks/mode.mjs`).
 - Update anytime with `/brewtools:plugin-update`.
@@ -49,7 +50,7 @@ claude --plugin-dir ./brewmod-plan-effort   # dev mode, no install
 
 | You do | You get |
 |--------|---------|
-| `Shift+Tab` twice from the default mode (`manual mode on` → `accept edits on` → `plan mode on`), or `/plan` | Nothing shows at the keypress itself: Claude Code gives mods no live mode signal, so the mod learns plan mode at the first prompt or tool batch. From that prompt, requests run at `xhigh`; a row in Claude Code's plan-mode colour (teal) appears above the prompt; a toast shows once per plan visit |
+| `Shift+Tab` twice from the default mode (`manual mode on` → `accept edits on` → `plan mode on`), or `/plan` | Nothing shows at the keypress itself: Claude Code gives mods no live mode signal, so the mod learns plan mode at the first prompt or tool batch. From that prompt on, requests run at `xhigh`, a row in Claude Code's plan-mode colour (teal) appears above the prompt, and a toast shows once per plan visit |
 | `Shift+Tab` out of plan mode | The row disappears at once (about 0.1 s), because the hint line Claude Code draws names the mode just left. The next request is already at your session effort. The status line keeps showing your session effort: the mod raises effort per request and never changes the session setting |
 | `Shift+Tab` back into plan mode, then a prompt | A second plan visit: the row and the toast show again |
 | Approve the plan | The next request is back at your session effort, nothing to undo |
@@ -62,7 +63,7 @@ claude --plugin-dir ./brewmod-plan-effort   # dev mode, no install
 | Toast, 5 s | `brewmod-plan-effort: plan mode · effort raised to xhigh` | Once per plan visit (leaving and re-entering plan mode starts a new one), only when the mod raised the effort |
 | No row | | Default or any other mode; before the first prompt of a plan visit; after `Shift+Tab` out of plan mode |
 
-The row above the prompt is drawn in Claude Code's plan-mode colour (the `planMode` theme colour: teal on a dark theme, a darker teal on a light one). In plan mode it and the `session` line of the `/plan-effort` status block follow the session effort:
+In plan mode the row above the prompt, drawn in Claude Code's plan-mode colour (the `planMode` theme colour: teal on a dark theme, a darker teal on a light one), and the `session` line of the `/plan-effort` status block follow the session effort:
 
 | Session effort | Row above the prompt | `session` line |
 |----------------|----------------------|----------------|
@@ -74,7 +75,7 @@ The row above the prompt is drawn in Claude Code's plan-mode colour (the `planMo
 
 Claude Code adds the `brewmod-plan-effort:` prefix to the toast and to the first line of command output; the mod supplies the text after it.
 
-The row stays through turns and typing, sits above any other prompt-area UI and steps aside while a survey is open. With [brewmod-placeholders](../brewmod-placeholders/) loaded, it stays visible above the placeholders band in either load order. The row takes one row from the band's budget, so the band below keeps its full layout and does not overflow in fullscreen.
+The row stays through turns and typing, sits above any other prompt-area UI and steps aside while a survey is open. With [brewmod-placeholders](../brewmod-placeholders/) loaded, it stays visible above the placeholders band in either load order. It uses one of the rows the band would otherwise get, so the band below keeps its full layout and does not overflow in fullscreen.
 
 `/plan-effort` prints a status block:
 
@@ -108,8 +109,8 @@ mode now     plan
 
 ## Good to know
 
-- Your session `/effort` is never written; subagents keep their own effort.
-- Raise only: a session already at or above `planEffort` (for example `max`) is not changed.
+- Your session `/effort` setting is never written, and subagents keep their own effort.
+- The mod only raises: a session already at or above `planEffort` stays as it is.
 - Rejecting a plan keeps the raise, because Claude is still in plan mode.
 - Works on Team organizations, where the builtin security layer bypasses `classic.*` hooks.
 - Live on Claude Code 2.1.301: row, toast and `Shift+Tab` behaviour 78 of 78 checks over 10 sessions, both mod load orders, 120x40 and 80x24 terminals. Row colour and the placeholders band beside it: 225 of 225 cases of the 6.9.5 live run with both mods loaded (the row in terminal colour `38;5;73` on a dark theme). Unit tests: 71 pass. Earlier measurement on 2.1.300: plan mode sent 4 `xhigh` requests, default mode 0, on Team-org and Max profiles. [Full results](https://doc-claude.brewcode.app/mods/plan-effort/#verified).

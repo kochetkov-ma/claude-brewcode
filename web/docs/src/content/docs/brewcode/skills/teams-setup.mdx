@@ -7,7 +7,7 @@ import { Badge, Callout, Card, CardGrid, Spoiler, SourceLink, Steps, UpdateNotic
 
 # teams-setup <Badge variant="secondary" text="opus" /> <Badge variant="accent" text="generator" />
 
-A generic agent takes any task. Route a frontend task to a backend agent and it loses domain context and picks the wrong tools. `/brewcode:teams-setup install` analyzes the codebase, proposes a team (Minimal / Balanced / Maximum), creates each agent with quorum-reviewed scaffolding, and writes a `trace.jsonl` log that `upgrade` uses to tune the team.
+A generic agent takes any task and is expert at none, and a frontend task routed to the wrong specialist loses domain context and picks the wrong tools. A domain team gives each area its own owner. `/brewcode:teams-setup install` analyzes the codebase, proposes a team (Minimal / Balanced / Maximum), creates each agent with quorum-reviewed scaffolding, and writes a `trace.jsonl` log that `upgrade` uses to tune the team.
 
 <p align="center"><img src="/demos/teams-setup.gif" alt="Terminal animation: install a payments team for a sample repo, run a task across the owning agents, then read the per-agent status table" width="720" loading="lazy" /><br /><small>Illustrative animation: install a team, describe a task, owning agents take it in parallel, status shows health per agent. Project and agent names are invented.</small></p>
 
