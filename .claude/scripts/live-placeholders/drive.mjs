@@ -427,8 +427,8 @@ class Run {
     const s = { name, debug, spec, cases: [], why: null }
     this.sessions.push(s)
     s.pcfg = spec.isolate === true ? this.pcfg : this.cfg
-    // tui pinned per session (the profile's own value would leak in otherwise); the installed copy is off when testing a --plugin-dir copy.
-    const settings = JSON.stringify({ ...(this.mod === '-' ? {} : { enabledPlugins: this.disable }), tui: spec.tui ?? 'default' })
+    // tui pinned per session (the profile's own value would leak in otherwise), theme only where a session names one; the installed copy is off when testing a --plugin-dir copy.
+    const settings = JSON.stringify({ ...(this.mod === '-' ? {} : { enabledPlugins: this.disable }), tui: spec.tui ?? 'default', ...(spec.theme === undefined ? {} : { theme: spec.theme }) })
     tmux('new-session', '-d', '-s', name, '-x', w, '-y', h, '-c', this.proj, 'bash', LAUNCH, this.cfgSet ? this.cfg : '-', this.mod, spec.mode, debug, this.o.model, this.mod === '-' ? '' : s.pcfg, settings, this.pe, this.o.peFirst ? 'first' : '')
     tmux('set-option', '-t', name, 'remain-on-exit', 'on')
     const t0 = Date.now()

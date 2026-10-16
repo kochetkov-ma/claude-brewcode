@@ -72,6 +72,18 @@ const HELP_WHOLE = 'Whole text, printed in the chat, not sent to Claude: /placeh
 const SUBMITTED = /UserPromptSubmit \[node "[^"]*inject\.mjs"\]/
 const PROVIDED = /inject\.mjs"\) provided additionalContext/
 const STRIKE = /\x1b\[(?:\d+;)*9(?:;\d+)*m/
+// 6.9.4 restyle SGR, dark theme (suggestion 153, text 231, dim 246); the default TUI splits dim runs per word, actions stay whole.
+const RX = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const TOK_A = (tok) => new RegExp(`\\x1b\\[1m\\x1b\\[38;5;153m${RX(tok)}\\x1b\\[0m`)
+const UNK_A = (tok) => new RegExp(`\\x1b\\[1m\\x1b\\[38;5;220m${RX(tok)}\\x1b\\[0m`)
+const ACT_A = (s) => new RegExp(`\\x1b\\[4m\\x1b\\[38;5;231m${RX(s)}\\x1b\\[0m`)
+const LABEL_A = (word) => new RegExp(`\\x1b\\[38;5;246m${RX(word)}`)
+const SENT_A = /\x1b\[1m\x1b\[38;5;231mUser/
+// Focus foot: the action underlined in the text colour, the dim label run right after it (the row's first label can inherit its SGR from the line above).
+const FOOT_A = /\x1b\[4m\x1b\[38;5;231mmove the caret off \+\+m\x1b\[0m\x1b\[38;5;246m ·/
+// ` alone ` dim and not underlined, then [Enter] in the text colour, not underlined.
+const KEY_A = /\x1b\[38;5;246m alone(?:\x1b\[39m)? \x1b\[38;5;231m\[Enter\]\x1b\[39m/
+const OR_Q = (n) => `/placeholders show ++${n} or ++${n}? alone [Enter]`
 // A turn in progress (spinner row `Concocting… (6s · ↓ 531 tokens)`); a model-driven check waits up to TURN_MS.
 const BUSY = /…\s*\(\d+s/
 const TURN_MS = 120000
@@ -89,6 +101,7 @@ export const SESSIONS = {
   scopeProj: { size: '200x60', mode: 'default' },
   // CP5 UI-only smoke: answered locally, never a model turn (every check forbids inject.mjs on a submitted prompt).
   smoke: { size: '120x40', mode: 'default' },
+  light120: { size: '120x40', mode: 'default', theme: 'light' },
 }
 
 const focusR = (extra = []) => c([B(R_HEAD), B(FOCUS('++r')), ...extra], [B(COMPACT_ANY)])
@@ -278,6 +291,16 @@ export const CASES = [
   // Fullscreen 80x24: the plan-effort row leaves the band 5 slot rows, so the addition is cut to its count row; the foot always shows, never an engine scroll row.
   ...hx('hxp-m', 'plan mode after one turn, ++m: receives label, dim plan mode adds: row, addon text (cut at fullscreen 80x24), whole band under the plan row', (fs, small) => [t('++m'), c([B(PLAN_ROW), B(RECV('++m')), B(PLAN_ADDS), B(fs && small ? W(CUT('m')) : M_ADDON), B(FOCUS('++m'))], [B(PLAN_NOTE), B(PLAN_PLUS), B(SCROLLED)])], 'hxp'),
   ...hx('hx-help', '/placeholders help: caret line and whole-text line', (fs, small) => [t('/placeholders help'), enter(), c(fs ? (small ? [W('README: https://github.com/kochetkov-ma/claude-brewcode')] : [W(HELP_CARET), W(HELP_WHOLE)]) : [H(W(HELP_CARET)), H(W(HELP_WHOLE))], [H(HANDOFF)], { debugForbid: [SUBMITTED] })]),
+
+  // 6.9.4 restyle (mockup-6.9.4-final.html states 1-4): tokens bold placeholder colour, sent rows bold text colour, labels dim, actions underlined text colour, [Enter] text colour.
+  ...hx('rst-m', 'state 1: caret on ++m, default mode: bold token, bold sent rows, cut row show or ++m? alone [Enter], underlined foot actions', (fs, small) => [t('++m'), c([B(RECV('++m')), B(FOCUS('++m')), B(W(CUT('m'))), A(TOK_A('++m')), A(SENT_A), A(FOOT_A), A(ACT_A('++/')), A(ACT_A('/placeholders show ++m')), ...(small ? [] : [B(W(OR_Q('m'))), A(ACT_A('++m?')), A(KEY_A)])], [B(COMPACT_ANY)])]),
+  ...hx('rst-pm', 'state 2: plan mode after one turn, ++m: plan row, dim plan mode adds:, cut row and foot actions', (fs, small) => [t('++m'), c([B(PLAN_ROW), B(RECV('++m')), B(PLAN_ADDS), B(FOCUS('++m')), A(TOK_A('++m')), ...(fs && small ? [] : [A(SENT_A)]), A(FOOT_A), A(ACT_A('/placeholders show ++m')), ...(small ? [] : [A(ACT_A('++m?')), A(KEY_A)])], [B(PLAN_NOTE), B(SCROLLED)])], 'hxp'),
+  ...hx('rst-compact', 'state 3: caret past three tokens: bold tokens, dim descriptions, three underlined foot actions', () => [t('++r ++a ++m check the auth module'), c([B('placeholders 3'), B(COMPACT('++r')), A(TOK_A('++r')), A(TOK_A('++a')), A(TOK_A('++m')), A(LABEL_A('more:')), A(ACT_A('put the caret on ++r')), A(ACT_A('/placeholders help'))], [B(FOCUS_ANY)])]),
+  ...hx('rst-escaped', 'state 4: ++/ in the message: marker and token bold placeholder colour, dim reasons, underlined delete ++/', () => [t('++/ what does ++r do?'), c([B('++/  placeholders off: this message is sent exactly as typed'), B('++r  (not sent: ++/ in this message)'), B('turn back on: delete ++/'), A(TOK_A('++/')), A(TOK_A('++r')), A(LABEL_A('turn')), A(ACT_A('delete ++/'))], [B(FOCUS_ANY), B(COMPACT_ANY)])]),
+  ...hx('rst-unknown', 'unknown ++zz: bold warning token, underlined /placeholders list', () => [t('++zz'), c([B('++zz  unknown placeholder'), A(UNK_A('++zz')), A(LABEL_A('names:')), A(ACT_A('/placeholders list'))])]),
+  // Light theme (settings `theme`): the same roles under the light palette; the capture is the readability evidence.
+  { id: 'rst-light-m', cp: 4, session: 'light120', title: 'light theme, caret on ++m: token, sent rows, labels and actions in the light palette', steps: [t('++m'), c([B(RECV('++m')), B(FOCUS('++m')), B(W(OR_Q('m'))), A(/\x1b\[4m\x1b\[38;[25];[\d;]+mmove the caret off \+\+m\x1b\[0m/), A(/\x1b\[1m\x1b\[38;[25];[\d;]+m\+\+m\x1b\[0m/)])] },
+  { id: 'rst-light-compact', cp: 4, session: 'light120', title: 'light theme, three tokens: compact band', steps: [t('++r ++a ++m check the auth module'), c([B('placeholders 3'), B(COMPACT('++r'))])] },
 
   // E2E: what Claude receives (claude -p, paid)
   { id: 'e2e-r', cp: 1, kind: 'print', mode: 'default', title: '-p ++r: Claude quotes the r block', prompt: '++r Quote verbatim every line of the additional context you received that starts with "[", one per line, nothing else.', expect: [R_TOP], forbid: [], debugExpect: [PROVIDED] },
