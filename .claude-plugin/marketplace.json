@@ -5,7 +5,7 @@
     "email": "apmatypa88@gmail.com"
   },
   "metadata": {
-    "description": "Claude Code plugin suite: brewcode for skill/agent/rule authoring and project setups, brewdoc for documentation tools, brewtools for text, ops and subagent-guard utilities, brewui placeholder for UI/visual/creative tools, brewmod-plan-effort (Claude Code 2.1.287+) and brewmod-placeholders (Claude Code 2.1.292+) mods",
+    "description": "Claude Code plugin suite: brewcode for skill/agent/rule authoring and project setups, brewdoc for documentation tools, brewtools for text, ops and subagent-guard utilities, brewui placeholder for UI/visual/creative tools, brewmod-plan-effort and brewmod-placeholders mods (Claude Code 2.1.301+)",
     "version": "6.9.4"
   },
   "plugins": [
@@ -134,7 +134,7 @@
     },
     {
       "name": "brewmod-plan-effort",
-      "description": "Raises the main loop to the configured effort (default xhigh) while in plan mode, by rewriting each request; the session effort setting is never touched (Claude Code 2.1.287+ mod)",
+      "description": "Raises the main loop to the configured effort (default xhigh) while in plan mode, by rewriting each request; the session effort setting is never touched (Claude Code 2.1.301+ mod)",
       "version": "6.9.4",
       "category": "productivity",
       "keywords": [
@@ -162,7 +162,7 @@
     },
     {
       "name": "brewmod-placeholders",
-      "description": "Brewmod placeholders -- expands ++m, ++a, ++r, ++rr and +++ style placeholders into prompt context, with live highlighting and user-defined placeholders (Claude Code 2.1.292+ mod)",
+      "description": "Brewmod placeholders -- expands ++m, ++a, ++r, ++rr and +++ style placeholders into prompt context, with live highlighting and user-defined placeholders (Claude Code 2.1.301+ mod)",
       "version": "6.9.4",
       "category": "productivity",
       "keywords": [

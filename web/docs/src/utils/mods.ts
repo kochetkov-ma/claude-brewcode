@@ -14,7 +14,7 @@ export const mods: ModInfo[] = [
     slug: 'plan-effort',
     pitch: 'xhigh while Claude plans, your session effort everywhere else.',
     try: '/plan-effort max',
-    requires: 'Claude Code 2.1.287+',
+    requires: 'Claude Code 2.1.301+',
     icon: 'brain',
   },
   {
@@ -22,7 +22,7 @@ export const mods: ModInfo[] = [
     slug: 'placeholders',
     pitch: 'Type ++r, get a whole instruction block.',
     try: '++r',
-    requires: 'Claude Code 2.1.292+',
+    requires: 'Claude Code 2.1.301+',
     icon: 'puzzle',
   },
 ];

@@ -770,7 +770,7 @@ check(
 const skillText = readFileSync(SKILL_MD, 'utf8');
 check(
   '44k-skill-points-at-the-mod-and-references-no-deleted-codeword-asset',
-  { codewordsLine: skillText.includes('codewords: provided by brewmod-placeholders (Claude Code 2.1.292+)'),
+  { codewordsLine: skillText.includes('codewords: provided by brewmod-placeholders (Claude Code 2.1.301+)'),
     installLine: skillText.includes('claude plugin install brewmod-placeholders@claude-brewcode'),
     deadRefs: skillText.match(/manager-prompts|resolvePrompt|VALID_MODES|references\/(full|planmode|architect|review-double|review-regression|cron-plan)\.md/g) || [],
     editMode: /^\| `edit` \|/m.test(skillText), leftovers: readdirSync(join(HERE, '..', 'references')).sort() },

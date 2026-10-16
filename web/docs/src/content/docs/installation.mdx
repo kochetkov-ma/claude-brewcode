@@ -105,11 +105,12 @@ These four products run in Claude Code: 27 skills, 9 agents, and 3 registered pl
 
 ## Mods (optional)
 
-[Brewcode mods](/mods/overview/) are separate plugins that extend Claude Code itself through the hooks module API. They are not part of the four-plugin suite and are never installed with it. After adding the marketplace, install the ones you want: [`brewmod-plan-effort`](/mods/plan-effort/) and [`brewmod-placeholders`](/mods/placeholders/).
+[Brewcode mods](/mods/overview/) are separate plugins that extend Claude Code itself through the hooks module API. They are not part of the four-plugin suite and are never installed with it. After adding the marketplace, install the ones you want: [`brewmod-plan-effort`](/mods/plan-effort/) and [`brewmod-placeholders`](/mods/placeholders/). Both require Claude Code 2.1.301+: run `claude update` first.
 
 ```bash
-claude plugin install brewmod-plan-effort@claude-brewcode    # Claude Code 2.1.287+
-claude plugin install brewmod-placeholders@claude-brewcode   # Claude Code 2.1.292+
+claude update
+claude plugin install brewmod-plan-effort@claude-brewcode
+claude plugin install brewmod-placeholders@claude-brewcode
 ```
 
 Then run `/reload-plugins`. [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/) keeps installed mods current.

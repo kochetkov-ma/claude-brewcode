@@ -8,7 +8,7 @@ import { Badge, Card, CardGrid, InstallPrompt, SourceLink, Spoiler, UpdateNotice
 
 # brewcode mods
 
-<Badge variant="mod" text="early access" /> <Badge variant="mod" text="Claude Code 2.1.287+" />
+<Badge variant="mod" text="early access" /> <Badge variant="mod" text="Claude Code 2.1.301+" />
 
 Mods are small, optional Claude Code add-ons: one feature each, no skills, no agents, no setup. Install one or both; they work without the brewcode plugins.
 
@@ -33,9 +33,9 @@ Mods are small, optional Claude Code add-ons: one feature each, no skills, no ag
 
 ## Install all
 
-<InstallPrompt plugin="mods" mode="install" />
+Requires Claude Code 2.1.301+ (run `claude update` first) and `node` on the `PATH`.
 
-Needs Claude Code 2.1.287+ (placeholders 2.1.292+) and `node` on the `PATH`; `/plan-effort` and `/placeholders` are verified on 2.1.301.
+<InstallPrompt plugin="mods" mode="install" />
 
 Only one? Run `claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode`, then `claude plugin install brewmod-plan-effort@claude-brewcode` or `claude plugin install brewmod-placeholders@claude-brewcode`, then `/reload-plugins`. To update later, run `/brewtools:plugin-update`.
 

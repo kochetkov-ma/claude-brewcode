@@ -5,13 +5,13 @@
 <p align="center">Prompt shortcuts for Claude Code: type <code>++r</code> to attach a saved instruction block, read its text before you send, add your own with <code>/placeholders</code>.</p>
 <p align="center">
   <a href="https://github.com/kochetkov-ma/claude-brewcode/stargazers"><img src="https://img.shields.io/github/stars/kochetkov-ma/claude-brewcode?style=flat&logo=github" alt="GitHub stars"></a>
-  <img src="https://img.shields.io/badge/Claude_Code-2.1.292%2B-d97706" alt="Requires Claude Code 2.1.292+">
+  <img src="https://img.shields.io/badge/Claude_Code-2.1.301%2B-d97706" alt="Requires Claude Code 2.1.301+">
   <img src="https://img.shields.io/badge/type-mod-8b5cf6" alt="Claude Code mod">
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT">
 </p>
 
 > [!IMPORTANT]
-> **`++m` `++a` `++r` `++rr` `+++` do nothing?** Since [brewtools v6.8.0](https://github.com/kochetkov-ma/claude-brewcode/releases/tag/v6.8.0) these prompt-injection codewords live in this mod, `brewmod-placeholders`, not in brewtools. It is easier to use and lets you add your own placeholders. Install it (Claude Code 2.1.292+), then run `/reload-plugins`:
+> **`++m` `++a` `++r` `++rr` `+++` do nothing?** Since [brewtools v6.8.0](https://github.com/kochetkov-ma/claude-brewcode/releases/tag/v6.8.0) these prompt-injection codewords live in this mod, `brewmod-placeholders`, not in brewtools. It is easier to use and lets you add your own placeholders. Install it (Claude Code 2.1.301+: run `claude update` first), then run `/reload-plugins`:
 >
 > ```bash
 > claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode && claude plugin install brewmod-placeholders@claude-brewcode
@@ -20,6 +20,7 @@
 > Docs: https://doc-claude.brewcode.app/mods/placeholders/
 
 ## Install
+Requires Claude Code 2.1.301+: run `claude update` first.
 ```bash
 claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode && claude plugin install brewmod-placeholders@claude-brewcode
 ```
@@ -28,7 +29,7 @@ Then run `/reload-plugins`. Works on Team organizations.
 <details>
 <summary>Update, dev mode, requirements</summary>
 
-Update: `claude plugin marketplace update claude-brewcode && claude plugin update brewmod-placeholders@claude-brewcode`. Dev mode, no install: `claude --plugin-dir ./brewmod-placeholders`. Claude Code **2.1.292+** and `node` on the `PATH` (the bundled command hook runs as plain Node). Builds 2.1.287 to 2.1.291 refuse to load the mod; earlier ones lack the `prompt.autocomplete` event. Adding, changing or removing a placeholder through Claude, and Enter on `++r?`, need Claude Code **2.1.300+**; older builds print `changing placeholders by words needs Claude Code 2.1.300+ · meanwhile: edit the <name>.md files by hand`. Mods use the hooks module API, which is early access.
+Update: `claude update` first (Claude Code **2.1.301+**), then `claude plugin marketplace update claude-brewcode && claude plugin update brewmod-placeholders@claude-brewcode`. Dev mode, no install: `claude --plugin-dir ./brewmod-placeholders`. Needs `node` on the `PATH` (the bundled command hook runs as plain Node). Mods use the hooks module API, which is early access.
 
 </details>
 
@@ -168,7 +169,7 @@ Your own placeholder can have a plan part too: see [Examples](#examples).
 | The chat, `/placeholders show ++m` | The whole text, printed locally; nothing is sent to Claude | Type it, or type `++m?` alone and press Enter twice (below) |
 | The chat, `/placeholders list` | Every placeholder with its text, normal and plan mode | Type it |
 
-**What `?` does.** A `?` right after a token, with nothing else in the message, is a query, not text. The first Enter fills `/placeholders show ++m ` in the box and sends nothing to Claude. Claude Code prefixes the notice: `Prompt dropped by a hook: ++m? = /placeholders show ++m · not sent to Claude · press Enter to print it`. That is the expected result: nothing was sent. The second Enter prints the text in the chat. A query needs Claude Code **2.1.300+**; in a longer message (`check ++r?`) or on an older build, `++r?` is ordinary text: the `++r` block is sent and the `?` stays.
+**What `?` does.** A `?` right after a token, with nothing else in the message, is a query, not text. The first Enter fills `/placeholders show ++m ` in the box and sends nothing to Claude. Claude Code prefixes the notice: `Prompt dropped by a hook: ++m? = /placeholders show ++m · not sent to Claude · press Enter to print it`. That is the expected result: nothing was sent. The second Enter prints the text in the chat. In a longer message (`check ++r?`), `++r?` is ordinary text: the `++r` block is sent and the `?` stays.
 
 While the name menu is open (typing `++r` offers `++rr`), it caps the band, and a `?` right after the token closes it. If the whole text then fits in 15 rows, the cut row ends with `· type ? after ++r to see all`. `++m` never shows that hint: its 29 lines do not fit in 15 rows. Otherwise the band looks the same with or without the `?`: the caret already shows the text.
 
@@ -206,7 +207,7 @@ Hint rows, as drawn. A custom `prefix` replaces `++` in all of them.
 | Foot of an escaped message | `turn back on: delete ++/` |
 | Other tokens while the caret is on one | `also: ++a ++rr` |
 
-The `or ++m? alone [Enter]` part is the query from [What `?` does](#read-the-full-text): `[Enter]` fills the show command. It appears only when the build has the mod tools (Claude Code 2.1.300+) and the whole row fits the width. A narrower terminal shrinks the row in steps: first `or ++m? alone [Enter]` goes, then `whole text:`, then the count (`... 16 more lines · `). The show command is never cut while it fits on its own. `/placeholders` and `/placeholders help` name the `++r?` hand-off only on builds that have the mod tools; older builds name the show command alone.
+The `or ++m? alone [Enter]` part is the query from [What `?` does](#read-the-full-text): `[Enter]` fills the show command. It appears only when the whole row fits the width. A narrower terminal shrinks the row in steps: first `or ++m? alone [Enter]` goes, then `whole text:`, then the count (`... 16 more lines · `). The show command is never cut while it fits on its own. `/placeholders` and `/placeholders help` name the `++r?` hand-off.
 
 ## Examples
 | Do | You type | What happens |
