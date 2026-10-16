@@ -332,10 +332,11 @@ try {
   const startDir = join(repo, 'sub');
   mkdirSync(join(startDir, '.claude'), { recursive: true });
   assert.equal(spawnSync('git', ['init', '-q', repo]).status, 0, 'fixture git init must succeed');
-  const loaded = statusBlock.replaceAll('${CLAUDE_PROJECT_DIR}', realpathSync(startDir));
+  // Token -> env ref: the start dir reaches bash via env, never spliced into the command text.
+  const loaded = statusBlock.replaceAll('${CLAUDE_PROJECT_DIR}', '${SUBST_PROJECT_DIR}');
 
   // WHEN: status runs as loaded, and as raw text with the variable absent from the Bash env.
-  const loadedStatus = spawnSync('bash', ['-c', loaded], { cwd: startDir, encoding: 'utf8', env: statusEnv, timeout: 30000 });
+  const loadedStatus = spawnSync('bash', ['-c', loaded], { cwd: startDir, encoding: 'utf8', env: { ...statusEnv, SUBST_PROJECT_DIR: realpathSync(startDir) }, timeout: 30000 });
   const rawStatus = spawnSync('bash', ['-c', statusBlock], { cwd: startDir, encoding: 'utf8', env: statusEnv, timeout: 30000 });
 
   // THEN: the substituted start dir wins over the git toplevel; unsubstituted, the toplevel is the fallback.

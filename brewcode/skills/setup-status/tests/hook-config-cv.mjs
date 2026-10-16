@@ -50,10 +50,12 @@ test('GIVEN hook configs stamped with their parsing hook content_version WHEN ru
     mkdirSync(dirname(file), { recursive: true });
     writeFileSync(file, JSON.stringify({ enabled: true, version: '9.9.9', content_version: cvs[key], generated_by: `brewtools:${skill}` }));
   }
-  const command = stamps.replace('PLUGIN_ROOT=/abs/root/printed/by/phase0', `PLUGIN_ROOT="${TOOLS}"`)
-    .replace('PLUGIN=brewcode ', 'PLUGIN=brewtools ').replaceAll('${CLAUDE_SKILL_DIR}', STATUS_DIR);
+  // Paths reach bash via env, never spliced into the command text.
+  const command = stamps.replace('PLUGIN_ROOT=/abs/root/printed/by/phase0', 'PLUGIN_ROOT="${SUBST_PLUGIN_ROOT}"')
+    .replace('PLUGIN=brewcode ', 'PLUGIN=brewtools ').replaceAll('${CLAUDE_SKILL_DIR}', '${SUBST_SKILL_DIR}');
   const r = spawnSync('bash', ['-e', '-o', 'pipefail', '-c', command], {
-    cwd: project, encoding: 'utf8', env: { ...process.env, HOME: join(root, 'home'), CLAUDE_CONFIG_DIR: cfg, CLAUDE_PROJECT_DIR: project, TASK_SPEC_MODE: 'off' }, timeout: 10000,
+    cwd: project, encoding: 'utf8', env: { ...process.env, HOME: join(root, 'home'), CLAUDE_CONFIG_DIR: cfg, CLAUDE_PROJECT_DIR: project, TASK_SPEC_MODE: 'off',
+      SUBST_PLUGIN_ROOT: TOOLS, SUBST_SKILL_DIR: STATUS_DIR }, timeout: 10000,
   });
   const lines = r.stdout.split('\n').filter(line => /agent-(deadline|router|return)\.json/.test(line));
   assert.deepEqual({ status: r.status, lines }, {

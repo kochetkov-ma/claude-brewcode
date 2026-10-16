@@ -97,9 +97,10 @@ function check(name, actual, expected, message) {
   }
 }
 
+// Paths reach bash as env vars (T_LIB, callers' T_ARG), never spliced into the command text.
 function sh(code, extra = {}) {
-  const r = spawnSync('bash', ['-c', `. "${LIB}"\n${code}`], {
-    encoding: 'utf8', env: env(extra), timeout: 20000,
+  const r = spawnSync('bash', ['-c', `. "$T_LIB"\n${code}`], {
+    encoding: 'utf8', env: env({ T_LIB: LIB, ...extra }), timeout: 20000,
   });
   return { out: (r.stdout || '').trim(), err: (r.stderr || '').trim(), status: r.status };
 }
@@ -149,8 +150,8 @@ function resetProject() { rmSync(join(PROJ, '.claude'), { recursive: true, force
 function resetLog() { rmSync(LOG, { force: true }); writeFileSync(LOG, ''); }
 
 // ── 1. repo hash: byte-match against Python ────────────────────────────────
-const hashA = sh(`sc_repo_hash "${REPO_A}"`);
-const hashB = sh(`sc_repo_hash "${REPO_B}"`);
+const hashA = sh('sc_repo_hash "$T_ARG"', { T_ARG: REPO_A });
+const hashB = sh('sc_repo_hash "$T_ARG"', { T_ARG: REPO_B });
 check('hash.python.repo-a', hashA.out, pyHash(REPO_A), 'sc_repo_hash == sha256(str(Path(p).expanduser().resolve()))');
 check('hash.python.repo-b', hashB.out, pyHash(REPO_B), 'same equality for a second repo');
 check('hash.distinct', hashA.out === hashB.out, false, 'two repos hash to two different directories');
@@ -158,15 +159,15 @@ check('hash.len.a', hashA.out.length, 64, 'hash is exactly 64 chars');
 check('hash.len.b', hashB.out.length, 64, 'hash is exactly 64 chars');
 check('hash.hex.a', /^[0-9a-f]{64}$/.test(hashA.out), true, 'hash is lowercase hex');
 check('hash.hex.b', /^[0-9a-f]{64}$/.test(hashB.out), true, 'hash is lowercase hex');
-check('hash.symlink-resolved', sh(`sc_repo_hash "${join(BASE, 'repo-a', '.')}"`).out, hashA.out, '"." component normalised like Path.resolve()');
+check('hash.symlink-resolved', sh('sc_repo_hash "$T_ARG"', { T_ARG: join(BASE, 'repo-a', '.') }).out, hashA.out, '"." component normalised like Path.resolve()');
 check('hash.missing-path.exit', sh('sc_repo_hash /no/such/dir-xyz').status, 1, 'unresolvable path exits 1 instead of hashing a guess');
 
 // ── 2. index dir contract (deviation fix) ──────────────────────────────────
-check('indexdir.ok', sh(`sc_repo_index_dir "${REPO_A}"`).out, `${CODE_ROOT}/${hashA.out}/index-code-config-docs`,
+check('indexdir.ok', sh('sc_repo_index_dir "$T_ARG"', { T_ARG: REPO_A }).out, `${CODE_ROOT}/${hashA.out}/index-code-config-docs`,
   'combined code/config/docs uses its exact content-variant leaf');
-check('indexdir.legacy', sh(`sc_repo_legacy_index_dir "${REPO_A}"`).out, `${CODE_ROOT}/${hashA.out}/index`,
+check('indexdir.legacy', sh('sc_repo_legacy_index_dir "$T_ARG"', { T_ARG: REPO_A }).out, `${CODE_ROOT}/${hashA.out}/index`,
   'the pre-0.5.5 bare index remains separately addressable for migration');
-check('indexdir.code-only', sh(`SEMBLE_CONTENT_ARGS=code sc_repo_index_dir "${REPO_A}"`).out, `${CODE_ROOT}/${hashA.out}/index`,
+check('indexdir.code-only', sh('SEMBLE_CONTENT_ARGS=code sc_repo_index_dir "$T_ARG"', { T_ARG: REPO_A }).out, `${CODE_ROOT}/${hashA.out}/index`,
   'code-only remains the canonical bare index variant');
 check('indexdir.missing.exit', sh('sc_repo_index_dir /no/such/dir-xyz').status, 1,
   'unresolvable repo -> exit 1 instead of returning a partial variant path');
@@ -330,7 +331,7 @@ check('add.state.completed', stAfterAdd.completed, ['mcp'], 'completed records e
 check('add.state.scope', stAfterAdd.scope, 'user', 'scope recorded as user');
 check('add.state.cacheRoot', stAfterAdd.cacheRoot, CODE_ROOT, 'cacheRoot recorded absolute');
 check('add.state.schema', stAfterAdd.schema, 1, 'state schema is 1');
-check('add.state.repoHash', stAfterAdd.repoHash, sh(`sc_repo_hash "${PROJ}"`).out, 'repoHash matches the project hash');
+check('add.state.repoHash', stAfterAdd.repoHash, sh('sc_repo_hash "$T_ARG"', { T_ARG: PROJ }).out, 'repoHash matches the project hash');
 
 // add is a no-op when the server is already correct
 writeClaudeJson(FIXTURES.correct);
@@ -743,7 +744,7 @@ check('resume.noshortcut.msg',
 // D5: st_init_file wrote resumePrompt/cacheRoot/repoHash only on create -> stale `/brewcode:semble resume` after rename.
 const DEAD_PROMPT = '/brewcode:semble resume';
 const LIVE_PROMPT = '/brewcode:semble-setup resume';
-const PROJ_HASH = sh(`sc_repo_hash "${PROJ}"`).out;
+const PROJ_HASH = sh('sc_repo_hash "$T_ARG"', { T_ARG: PROJ }).out;
 const STALE_FIELDS = { resumePrompt: DEAD_PROMPT, cacheRoot: '/gone/semble-code', repoHash: 'deadbeef' };
 
 check('refresh.prompt.source', SKILL_MD.includes(LIVE_PROMPT), true,
@@ -811,8 +812,8 @@ Array(SD_LINES.length).fill(PD_LINE), 'every SD block exports the substituted pr
   const g = join(BASE, 'pd-git');
   mkdirSync(join(g, 'sub'), { recursive: true });
   spawnSync('git', ['init', '-q', g]);
-  const root = (pd) => spawnSync('bash', ['-c', `. "${LIB}"; ${PD_LINE.replace('${CLAUDE_PROJECT_DIR}', pd)}; sc_project_root`], {
-    cwd: join(g, 'sub'), encoding: 'utf8', env: { ...process.env, SEMBLE_PROJECT_ROOT: '', CLAUDE_PROJECT_DIR: '' },
+  const root = (pd) => spawnSync('bash', ['-c', `. "$T_LIB"; ${PD_LINE.replace('${CLAUDE_PROJECT_DIR}', '${T_PD}')}; sc_project_root`], {
+    cwd: join(g, 'sub'), encoding: 'utf8', env: { ...process.env, SEMBLE_PROJECT_ROOT: '', CLAUDE_PROJECT_DIR: '', T_LIB: LIB, T_PD: pd },
   }).stdout.trim();
   check('sd.projectDir.resolve', [root(join(g, 'sub')), root('')], [join(g, 'sub'), g],
     'substituted -> the session dir wins over the git toplevel; unsubstituted (empty) -> git toplevel');
@@ -880,7 +881,7 @@ function makeIndex(repo, {
   contentType = ['code', 'docs', 'config'], version = 1, files = {}, complete = true,
   leaf = 'index-code-config-docs', reset = true,
 } = {}) {
-  const h = sh(`sc_repo_hash "${repo}"`).out;
+  const h = sh('sc_repo_hash "$T_ARG"', { T_ARG: repo }).out;
   const idx = join(CODE_ROOT, h, leaf);
   if (reset) rmSync(join(CODE_ROOT, h), { recursive: true, force: true });
   else rmSync(idx, { recursive: true, force: true });
@@ -977,7 +978,7 @@ check('cache.list.variants', listed.entries.find((e) => e.hash === hA).variants.
 const REPO_BIG = join(BASE, 'repo-big');
 const BIG_ROOT = join(BASE, 'cache-big', 'semble-code');
 mkdirSync(REPO_BIG, { recursive: true });
-const hBig = sh(`sc_repo_hash "${REPO_BIG}"`).out;
+const hBig = sh('sc_repo_hash "$T_ARG"', { T_ARG: REPO_BIG }).out;
 const bigIdx = join(BIG_ROOT, hBig, 'index-code-config-docs');
 mkdirSync(join(bigIdx, 'bm25_index'), { recursive: true });
 mkdirSync(join(bigIdx, 'semantic_index'), { recursive: true });
@@ -1168,7 +1169,7 @@ dropBackups(HOME, '.claude.json.bak.');
 // ── 17. purge-repo asserts the cache-root leaf ─────────────────────────────
 // m5: without it, an overridden SEMBLE_CACHE_ROOT_CODE let purge-repo delete a 64-hex dir under ANY parent.
 const EVIL_ROOT = join(BASE, 'not-semble-code');
-const evilHash = sh(`sc_repo_hash "${REPO_B}"`).out;
+const evilHash = sh('sc_repo_hash "$T_ARG"', { T_ARG: REPO_B }).out;
 mkdirSync(join(EVIL_ROOT, evilHash), { recursive: true });
 writeFileSync(join(EVIL_ROOT, evilHash, 'keep.txt'), 'keep');
 const evilPurge = run(CACHE_SH, ['purge-repo', '--repo', REPO_B, '--yes', '--json'], { SEMBLE_CACHE_ROOT_CODE: EVIL_ROOT });
@@ -1229,7 +1230,7 @@ check('timeout.delegate.log', readFileSync(TIMEOUT_LOG, 'utf8'),
 {
   const marker = join(BASE, 'watch-ran-to-completion');
   const t0 = Date.now();
-  const r = sh(`sc_timeout 1 sh -c 'sleep 600; : > ${marker}'`, { SEMBLE_TIMEOUT_BIN: 'none' });
+  const r = sh(`sc_timeout 1 sh -c 'sleep 600; : > "$T_ARG"'`, { SEMBLE_TIMEOUT_BIN: 'none', T_ARG: marker });
   const elapsed = Date.now() - t0;
   check('timeout.watch.code', r.status, 124, 'the watchdog reports 124, the GNU timeout convention');
   check('timeout.watch.early', existsSync(marker), false,
@@ -1241,7 +1242,7 @@ check('timeout.delegate.log', readFileSync(TIMEOUT_LOG, 'utf8'),
   // The bound is a parameter, not a constant: doubling it doubles the floor.
   const marker = join(BASE, 'watch-ran-to-completion-2');
   const t0 = Date.now();
-  const r = sh(`sc_timeout 2 sh -c 'sleep 600; : > ${marker}'`, { SEMBLE_TIMEOUT_BIN: 'none' });
+  const r = sh(`sc_timeout 2 sh -c 'sleep 600; : > "$T_ARG"'`, { SEMBLE_TIMEOUT_BIN: 'none', T_ARG: marker });
   const elapsed = Date.now() - t0;
   check('timeout.watch.scale.code', r.status, 124, 'a 2 s bound reports 124 the same way');
   check('timeout.watch.scale.early', existsSync(marker), false, 'and still cuts the command off');
@@ -1277,8 +1278,8 @@ check('timeout.watch.stderr',
 // never get to write its marker.
 {
   const MARK = join(BASE, 'watchdog-grandchild.marker');
-  const r = sh(`sc_timeout 1 bash -c '(sleep 3; touch "${MARK}") & sleep 5'; sleep 4`,
-    { SEMBLE_TIMEOUT_BIN: 'none' });
+  const r = sh(`sc_timeout 1 bash -c '(sleep 3; touch "$T_ARG") & sleep 5'; sleep 4`,
+    { SEMBLE_TIMEOUT_BIN: 'none', T_ARG: MARK });
   check('timeout.watch.group.code', r.status, 0, 'the trailing sleep makes the probe itself succeed');
   check('timeout.watch.group.marker', existsSync(MARK), false,
     'the grandchild died with the group instead of surviving the timeout');
@@ -1476,7 +1477,7 @@ dropAllBackups();
   chmodSync(target, 0o644);
   for (const e of [100, 101, 102, 103]) writeFileSync(`${target}.bak.${e}`, 'old');
   writeFileSync(join(dir, 'cfg.json.bak.notes'), 'foreign');
-  const r = sh(`sc_backup "${target}"`);
+  const r = sh('sc_backup "$T_ARG"', { T_ARG: target });
   const made = r.out;
   check('backup.r4', {
     status: r.status,

@@ -77,10 +77,11 @@ function siteFence(copy, slots) {
   const source = readFileSync(join(copy.dir, 'SKILL.md'), 'utf8');
   const found = [...source.matchAll(/```bash\n([\s\S]*?)```/g)].map(m => m[1].replace(/\n$/, '')).filter(f => f.includes("--path '{path}'"));
   assert.equal(found.length, 1, 'GIVEN exactly one ' + copy.name + ' path fence');
+  // Skill dir and {path} become env refs filled by runSync/runAsync: paths never enter the command text.
   return Object.entries(slots).reduce((code, [key, value]) => code.replaceAll('{' + key + '}', value.replaceAll("'", "'\\''")),
-    found[0].replaceAll(copy.token, copy.dir));
+    found[0].replaceAll(copy.token, '${SUBST_SKILL_DIR}').replaceAll('{path}', `'"$SUBST_PATH"'`));
 }
-const slots = (type, path, extra = {}) => ({ type, ns: 'fixture', days: '7', entry: '', delivery_mode: '', password_file: '', path, ...extra });
+const slots = (type, extra = {}) => ({ type, ns: 'fixture', days: '7', entry: '', delivery_mode: '', password_file: '', ...extra });
 function writeTree(dir, files) {
   for (const [name, content] of Object.entries(files)) {
     mkdirSync(dirname(join(dir, name)), { recursive: true });
@@ -92,14 +93,16 @@ function project(copy) {
   mkdirSync(dir, { recursive: true });
   return dir;
 }
-function runSync(copy, code, bin, extraEnv = {}) {
+function runSync(copy, code, path, bin, extraEnv = {}) {
   return spawnSync('bash', ['-c', code], { cwd: project(copy), encoding: 'utf8', timeout: 20000,
-    env: { ...process.env, CLAUDE_PROJECT_DIR: project(copy), TMPDIR: tmp, PATH: bin + ':' + process.env.PATH, TEST_BASE: base, ...extraEnv } });
+    env: { ...process.env, CLAUDE_PROJECT_DIR: project(copy), TMPDIR: tmp, PATH: bin + ':' + process.env.PATH, TEST_BASE: base,
+      SUBST_SKILL_DIR: copy.dir, SUBST_PATH: path, ...extraEnv } });
 }
-function runAsync(copy, code, bin, extraEnv) {
+function runAsync(copy, code, path, bin, extraEnv) {
   return new Promise((done, fail) => {
     const child = spawn('bash', ['-c', code], { cwd: project(copy), timeout: 20000,
-      env: { ...process.env, CLAUDE_PROJECT_DIR: project(copy), TMPDIR: tmp, PATH: bin + ':' + process.env.PATH, ...extraEnv } });
+      env: { ...process.env, CLAUDE_PROJECT_DIR: project(copy), TMPDIR: tmp, PATH: bin + ':' + process.env.PATH,
+        SUBST_SKILL_DIR: copy.dir, SUBST_PATH: path, ...extraEnv } });
     let stdout = '', stderr = '';
     child.stdout.on('data', chunk => { stdout += chunk; });
     child.stderr.on('data', chunk => { stderr += chunk; });
@@ -140,7 +143,7 @@ for (const copy of COPIES) {
           writeTree(site, { [entry]: '<h1>entry fixture</h1>' });
           const archive = site + '.zip';
           assert.equal(spawnSync('zip', ['-qr', archive, '.'], { cwd: site }).status, 0, 'GIVEN a valid fixture archive');
-          outcomes.push(await runAsync(copy, siteFence(copy, slots(kind, site + uploadSuffix)), bin, { BP_ENDPOINT: endpoint, REAL_CURL: realCurl }));
+          outcomes.push(await runAsync(copy, siteFence(copy, slots(kind)), site + uploadSuffix, bin, { BP_ENDPOINT: endpoint, REAL_CURL: realCurl }));
         }
         // THEN each entry decodes to its original name, the copy's user agent and real ZIP bytes reach the server.
         assert.deepEqual(outcomes.map(o => [o.status, lastLine(o.stdout), o.stdout.split('\n').filter(l => l.startsWith('ENTRY: '))]),
@@ -162,7 +165,7 @@ for (const copy of COPIES) {
     const site = join(base, copy.name + '-explicit');
     writeTree(site, { 'pages/A & B.html': '<h1>x</h1>' });
     clearUpload();
-    const r = runSync(copy, siteFence(copy, slots('site-dir', site, { entry: 'pages/A & B.html' })), binWith({ curl: UPLOAD_STUB }));
+    const r = runSync(copy, siteFence(copy, slots('site-dir', { entry: 'pages/A & B.html' })), site, binWith({ curl: UPLOAD_STUB }));
     assert.deepEqual([r.status, r.stdout, existsSync(join(base, 'curl-args')), runNames()],
       [1, 'FAILED: entry must be a plain relative file name\n', false, []], 'refused, curl never called');
   });
@@ -172,7 +175,7 @@ for (const copy of COPIES) {
     const site = join(base, copy.name + '-built site');
     writeTree(site, FIXTURE);
     clearUpload();
-    const r = runSync(copy, siteFence(copy, slots('site-dir', site, { delivery_mode: 'subdomain' })), binWith({ curl: UPLOAD_STUB }));
+    const r = runSync(copy, siteFence(copy, slots('site-dir', { delivery_mode: 'subdomain' })), site, binWith({ curl: UPLOAD_STUB }));
     // THEN the upload holds exactly the kept files, byte-identical, and the run dir is gone.
     const archive = join(base, 'uploaded.zip');
     const listing = spawnSync('unzip', ['-Z1', archive], { encoding: 'utf8' }).stdout.trim().split('\n').filter(n => !n.endsWith('/')).sort();
@@ -190,7 +193,7 @@ for (const copy of COPIES) {
       const site = join(base, copy.name + '-fail-' + failure.replace(' ', '-'));
       writeTree(site, { 'index.html': '<h1>x</h1>' });
       clearUpload();
-      const r = runSync(copy, siteFence(copy, slots('site-dir', site)), binWith({ curl: UPLOAD_STUB, zip: stub }));
+      const r = runSync(copy, siteFence(copy, slots('site-dir')), site, binWith({ curl: UPLOAD_STUB, zip: stub }));
       assert.deepEqual([r.status, r.stdout, existsSync(join(base, 'curl-args')), runNames()],
         [1, `${message}\nRESULT: fail\n${NOT_VERIFIED}\n`, false, []], 'failure explained, curl never called, run dir removed');
     });
@@ -202,7 +205,7 @@ for (const copy of COPIES) {
       assert.equal(Buffer.byteLength(BIG_NAMES.join('\n') + '\n'), 264261, 'GIVEN a list 4x the 64 KiB pipe buffer');
       clearUpload();
       // WHEN the path fence packs it THEN the cause is exact, curl never runs and the run dir goes.
-      const r = runSync(copy, siteFence(copy, slots('site-dir', bigSite)), binWith({ curl: UPLOAD_STUB, zip: stub }));
+      const r = runSync(copy, siteFence(copy, slots('site-dir')), bigSite, binWith({ curl: UPLOAD_STUB, zip: stub }));
       assert.deepEqual([r.status, r.stdout, existsSync(join(base, 'curl-args')), runNames()],
         [1, `${message}\nRESULT: fail\n${NOT_VERIFIED}\n`, false, []], 'real cause named, curl never called, run dir removed');
     });
@@ -214,10 +217,10 @@ for (const copy of COPIES) {
     writeTree(site, { 'index.html': '<h1>x</h1>', 'secret-config.json': '{}' });
     clearUpload();
     const bin = binWith({ curl: UPLOAD_STUB });
-    const command = siteFence(copy, slots('site-dir', site));
-    const asked = runSync(copy, command, bin);
+    const command = siteFence(copy, slots('site-dir'));
+    const asked = runSync(copy, command, site, bin);
     const askedState = [asked.status, asked.stdout.split('\n').filter(l => l.startsWith('SENSITIVE: ')), lastLine(asked.stdout), existsSync(join(base, 'curl-args')), runNames()];
-    const confirmed = runSync(copy, command + ' --confirmed', bin);
+    const confirmed = runSync(copy, command + ' --confirmed', site, bin);
     const listing = spawnSync('unzip', ['-Z1', join(base, 'uploaded.zip')], { encoding: 'utf8' }).stdout.trim().split('\n').sort();
     assert.deepEqual([askedState, confirmed.status, lastLine(confirmed.stdout), listing, runNames()],
       [[2, ['SENSITIVE: secret-config.json'], CONFIRM, false, []], 0, 'OK https://example.test/ | Files: 3', ['index.html', 'secret-config.json'], []],

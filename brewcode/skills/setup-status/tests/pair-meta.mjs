@@ -33,10 +33,11 @@ test('GIVEN byte copies differing only in stamp vs in content WHEN running the P
     mkdirSync(dirname(join(project, rel)), { recursive: true });
     writeFileSync(join(project, rel), body);
   }
+  // Repo root reaches bash via env, never spliced into the command text.
   const command = pairs.replace('BC=/abs/brewcode/root; BT=/abs/brewtools/root; BD=/abs/brewdoc/root',
-    `BC="${ROOT}/brewcode"; BT="${ROOT}/brewtools"; BD="${ROOT}/brewdoc"`);
+    'BC="${SUBST_REPO_ROOT}/brewcode"; BT="${SUBST_REPO_ROOT}/brewtools"; BD="${SUBST_REPO_ROOT}/brewdoc"');
   const r = spawnSync('bash', ['-e', '-o', 'pipefail', '-c', command], {
-    cwd: project, encoding: 'utf8', env: { ...process.env, HOME: join(root, 'home'), CLAUDE_CONFIG_DIR: join(root, 'cfg'), CLAUDE_PROJECT_DIR: project }, timeout: 10000,
+    cwd: project, encoding: 'utf8', env: { ...process.env, HOME: join(root, 'home'), CLAUDE_CONFIG_DIR: join(root, 'cfg'), CLAUDE_PROJECT_DIR: project, SUBST_REPO_ROOT: ROOT }, timeout: 10000,
   });
   const verdicts = r.stdout.split('\n').filter(line => !line.startsWith('ABSENT') && line !== '');
   assert.deepEqual({ status: r.status, verdicts }, {

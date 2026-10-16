@@ -28,9 +28,10 @@ function project(t, agents) {
   return root;
 }
 
+// Load-time token -> env ref: the path reaches bash via env, never spliced into the command text.
 function teamLines(root, fence = parking) {
-  const result = spawnSync('bash', ['-e', '-o', 'pipefail', '-c', fence.replaceAll('${CLAUDE_SKILL_DIR}', STATUS_DIR)], {
-    cwd: root, encoding: 'utf8', env: { ...process.env, HOME: root, CLAUDE_PROJECT_DIR: root }, timeout: 10000,
+  const result = spawnSync('bash', ['-e', '-o', 'pipefail', '-c', fence.replaceAll('${CLAUDE_SKILL_DIR}', '${SUBST_SKILL_DIR}')], {
+    cwd: root, encoding: 'utf8', env: { ...process.env, HOME: root, CLAUDE_PROJECT_DIR: root, SUBST_SKILL_DIR: STATUS_DIR }, timeout: 10000,
   });
   return { status: result.status, lines: result.stdout.split('\n').filter(line => / team:/.test(line)) };
 }
@@ -62,8 +63,8 @@ test('GIVEN a live member stamped by teams-setup WHEN the parking probe runs THE
 
 test('GIVEN no agent-generator.sh at the filled skill dir WHEN the parking probe runs THEN it fails loudly instead of counting foreign rows', t => {
   const root = project(t, { 'task-tracker': ['task-tracker.md', '# unstamped\n'] });
-  const result = spawnSync('bash', ['-c', parking.replaceAll('${CLAUDE_SKILL_DIR}', join(root, 'nowhere'))], {
-    cwd: root, encoding: 'utf8', env: { ...process.env, HOME: root, CLAUDE_PROJECT_DIR: root }, timeout: 10000,
+  const result = spawnSync('bash', ['-c', parking.replaceAll('${CLAUDE_SKILL_DIR}', '${SUBST_SKILL_DIR}')], {
+    cwd: root, encoding: 'utf8', env: { ...process.env, HOME: root, CLAUDE_PROJECT_DIR: root, SUBST_SKILL_DIR: join(root, 'nowhere') }, timeout: 10000,
   });
   assert.deepEqual({ status: result.status, failed: /^FAILED: no agent-generator\.sh at /m.test(result.stdout) }, { status: 1, failed: true },
     'an unfilled or wrong skill dir must stop the probe, never report task-tracker as a live member');
