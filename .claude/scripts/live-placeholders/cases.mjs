@@ -40,6 +40,9 @@ const M_HEAD = 'User typed `++m` — Manager mode is active for this turn:'
 const M_PLAN_HEAD = 'User typed `++m` — Manager + Plan Mode is active for this turn:'
 const M_TOP = '[ROLE: MANAGER]'
 const M_ADDON = '[ADDON: PLAN MODE]'
+// The plan-effort row (its copy loads with --with-plan-effort, or the installed one) and the engine's scroll row under a band past its slot.
+const PLAN_ROW = /^plan mode · effort /m
+const SCROLLED = /^↓ \d+ more/m
 const A_TOP = '[DIRECTIVE: ARCHITECTURE-FIRST]'
 const PLUS_TOP = '[ADDON: ANTI-DRIFT CRON PLAN]'
 const RR_ROW = 'Anti-regression review'
@@ -272,7 +275,8 @@ export const CASES = [
     t('r'), c([M(RR_ROW), P('/placeholders show ++r')]),
   ]),
   ...hx('hx-status', '/placeholders status: the caret / whole-text line', (fs, small) => [t('/placeholders status'), enter(), c([fs ? (small ? W('/placeholders list for all') : W(STATUS_FULL)) : H(W(STATUS_FULL))], [H(HANDOFF)], { debugForbid: [SUBMITTED] })]),
-  ...hx('hxp-m', 'plan mode after one turn, ++m: receives label, dim plan mode adds: row, addon text', () => [t('++m'), c([B(RECV('++m')), B(PLAN_ADDS), B(M_ADDON), B(FOCUS('++m'))], [B(PLAN_NOTE), B(PLAN_PLUS)])], 'hxp'),
+  // Fullscreen 80x24: the plan-effort row leaves the band 5 slot rows, so the addition is cut to its count row; the foot always shows, never an engine scroll row.
+  ...hx('hxp-m', 'plan mode after one turn, ++m: receives label, dim plan mode adds: row, addon text (cut at fullscreen 80x24), whole band under the plan row', (fs, small) => [t('++m'), c([B(PLAN_ROW), B(RECV('++m')), B(PLAN_ADDS), B(fs && small ? W(CUT('m')) : M_ADDON), B(FOCUS('++m'))], [B(PLAN_NOTE), B(PLAN_PLUS), B(SCROLLED)])], 'hxp'),
   ...hx('hx-help', '/placeholders help: caret line and whole-text line', (fs, small) => [t('/placeholders help'), enter(), c(fs ? (small ? [W('README: https://github.com/kochetkov-ma/claude-brewcode')] : [W(HELP_CARET), W(HELP_WHOLE)]) : [H(W(HELP_CARET)), H(W(HELP_WHOLE))], [H(HANDOFF)], { debugForbid: [SUBMITTED] })]),
 
   // E2E: what Claude receives (claude -p, paid)

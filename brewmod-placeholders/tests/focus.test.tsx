@@ -1,8 +1,8 @@
 import { test, expect } from 'claude-code/testing'
 import type { On } from 'claude-code'
-import { PLUG, ROOT, STATE_FILE, bandTexts, bootBand, box, defaultsTree, mountBand, textsOf, typed, type Tree } from './layer-io'
+import { BAND, PLUG, ROOT, STATE_FILE, bandProps, bandTexts, bootBand, box, defaultsTree, mountBand, textsOf, typed, type Tree } from './layer-io'
 import { defaultDefs } from './fixtures'
-import { bandState, budgets, receivesLabel, wrapRows, type BandRow } from '../hooks/lib/band'
+import { bandState, budgets, receivesLabel, treeRows, wrapRows, type BandRow } from '../hooks/lib/band'
 import { caretFocus, isMenuOpen } from '../hooks/lib/editor'
 import { DEFAULT_ENTRIES } from '../hooks/lib/editor-state'
 import { compileMatchers, markerOf, scanDraft } from '../hooks/lib/match'
@@ -507,4 +507,39 @@ test('GIVEN a body whose last source line wraps past the cut WHEN the compact ba
   await typed($, '++wrap ')
 
   expect(await bandTexts($, 18, 'terminal', 40), 'two source lines hidden').toEqual(['placeholders 1', '++wrap', RECV, 'a', 'b', '... 2 more lines · whole text: /placeholders show ++wrap', compactFoot('++wrap')])
+})
+
+// ---- fullscreen slot: maxRows = the engine's bottom slot; an outer plan-effort row arrives as maxRows - 1, an inner one is counted beneath
+
+const fsRows = async ($: any, maxRows: number): Promise<number> => {
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal', viewport: { columns: 102, rows: 48, isFullscreen: true }, props: bandProps(maxRows) })
+  const rows = treeRows(await ui.drawn())
+  await ui.unmount()
+  return rows
+}
+const SLOTS = [6, 5, 14, 13]
+
+test('GIVEN fullscreen plan mode and ++m WHEN focus, compact and escaped bands mount at slots 6 and 14 alone and 5 and 13 under an outer row THEN focus and compact fill the slot exactly and escaped takes 3 rows', async ($, on) => {
+  await boot($, on, PLAN_TREE)
+  const drawn: Record<string, number[]> = {}
+  for (const [state, draft] of [['focus', '++m'], ['compact', '++m '], ['escaped', '++/ ++m']] as const) {
+    await typed($, draft)
+    drawn[state] = []
+    for (const slot of SLOTS) drawn[state].push(await fsRows($, slot))
+  }
+
+  expect(drawn, 'rows drawn per slot').toEqual({ focus: [6, 5, 14, 13], compact: [6, 5, 14, 13], escaped: [3, 3, 3, 3] })
+})
+
+test('GIVEN fullscreen plan mode and an inner mod row beneath WHEN focus and compact ++m bands mount at slots 6 and 14 THEN the row plus the band fill the slot exactly', async ($, on) => {
+  await bootBand($, on, { tree: PLAN_TREE }, (o) =>
+    o('ui.render', { component: 'AbovePrompt' }, async ($$, e, next) => $$.ui.resolve(e).Box({ flexDirection: 'column', children: [$$.ui.resolve(e).Text({ color: 'warning', wrap: 'truncate-end', children: 'PLAN ROW' }), await next(e)] })),
+  )
+  const drawn: Record<string, number[]> = {}
+  for (const [state, draft] of [['focus', '++m'], ['compact', '++m ']] as const) {
+    await typed($, draft)
+    drawn[state] = [await fsRows($, 6), await fsRows($, 14)]
+  }
+
+  expect(drawn, 'rows drawn per slot, the inner row included').toEqual({ focus: [6, 14], compact: [6, 14] })
 })

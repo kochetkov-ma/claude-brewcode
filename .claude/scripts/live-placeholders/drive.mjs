@@ -10,6 +10,7 @@ import { CASES, SESSIONS, INLINE, GLOBAL_FIXTURES } from './cases.mjs'
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const REPO = path.resolve(HERE, '../../..')
 const MOD_SRC = path.join(REPO, 'brewmod-placeholders')
+const PE_SRC = path.join(REPO, 'brewmod-plan-effort')
 // Output root: LP_OUT, else the gitignored <repo>/.claude/reports/live-placeholders.
 const BASE = process.env.LP_OUT || path.join(REPO, '.claude', 'reports', 'live-placeholders')
 const LAUNCH = path.join(HERE, 'launch.sh')
@@ -29,7 +30,7 @@ const ISO_ENV = 'LP_PLACEHOLDERS_CFG'
 // A turn in progress: the spinner row (`Concocting… (6s · ↓ 531 tokens)`).
 const BUSY = /esc to interrupt|…\s*\(\d+s/i
 
-const USAGE = `usage: bash run.sh [--cp 1-5] [--only id,id] [--size WxH] [--out dir] [--installed] [--no-e2e | --e2e-only] [--model m] [--fingerprint hex] [--installed-version X.Y.Z]
+const USAGE = `usage: bash run.sh [--cp 1-5] [--only id,id] [--size WxH] [--out dir] [--installed] [--no-e2e | --e2e-only] [--model m] [--fingerprint hex] [--installed-version X.Y.Z] [--with-plan-effort]
   --cp N       checkpoint: runs cases tagged cp <= N (4 and 5 = all); output <base>/cpN (default 4)
   --only ids   exactly these case ids, any checkpoint
   --size WxH   only tmux cases of that terminal size
@@ -37,6 +38,7 @@ const USAGE = `usage: bash run.sh [--cp 1-5] [--only id,id] [--size WxH] [--out 
   --installed-version X.Y.Z  with --installed: every debug log must load the module from that cache dir (fingerprinted)
   --no-e2e / --e2e-only   skip / only the claude -p cases
   --fingerprint hex       stop (rc 2) unless sha256 of the copy's "<sha256>  hooks/<file>" list equals hex
+  --with-plan-effort      also load a working-tree copy of brewmod-plan-effort (installed one off)
 rc: 0 all selected pass, 1 a case failed, 2 harness error`
 
 function fail2(msg) {
@@ -45,7 +47,7 @@ function fail2(msg) {
 }
 
 function parseArgs(argv) {
-  const o = { cp: 4, only: null, size: null, out: null, installed: false, e2e: true, tmux: true, model: 'haiku', fingerprint: null, installedVersion: null }
+  const o = { cp: 4, only: null, size: null, out: null, installed: false, e2e: true, tmux: true, model: 'haiku', fingerprint: null, installedVersion: null, withPe: false }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
     const val = () => (i + 1 < argv.length ? argv[++i] : fail2(`${a} needs a value`))
@@ -57,6 +59,7 @@ function parseArgs(argv) {
     else if (a === '--installed') o.installed = true
     else if (a === '--fingerprint') o.fingerprint = val().toLowerCase()
     else if (a === '--installed-version') o.installedVersion = val()
+    else if (a === '--with-plan-effort') o.withPe = true
     else if (a === '--no-e2e') o.e2e = false
     else if (a === '--e2e-only') o.tmux = false
     else if (a === '-h' || a === '--help') fail2('help')
@@ -64,6 +67,7 @@ function parseArgs(argv) {
   }
   if (![1, 2, 3, 4, 5].includes(o.cp)) fail2('--cp must be 1-5')
   if (o.size !== null && !/^\d+x\d+$/.test(o.size)) fail2('--size must be WxH')
+  if (o.withPe && o.installed) fail2('--with-plan-effort needs a --plugin-dir copy, not --installed')
   if (o.installedVersion !== null && (!o.installed || !/^\d+\.\d+\.\d+$/.test(o.installedVersion))) fail2('--installed-version needs --installed and X.Y.Z')
   return o
 }
@@ -320,6 +324,15 @@ class Run {
       const r = spawnSync('rsync', ['-a', '--exclude', '.state', '--exclude', 'node_modules', '--exclude', '.claude-plugin/types', '--exclude', 'tsconfig.json', '--exclude', 'tests', `${MOD_SRC}/`, `${this.mod}/`], { encoding: 'utf8' })
       if (r.status !== 0) fail2(`rsync failed: ${r.stderr}`)
     }
+    // --with-plan-effort: its copy sits beside, loaded as a second --plugin-dir with the installed one off.
+    this.pe = ''
+    this.disable = { ...DISABLE, ...(this.o.withPe ? { 'brewmod-plan-effort@claude-brewcode': false } : {}) }
+    if (this.o.withPe) {
+      this.pe = path.join(this.scratch, 'mod', 'brewmod-plan-effort')
+      fs.mkdirSync(this.pe, { recursive: true })
+      const r = spawnSync('rsync', ['-a', '--exclude', '.state', '--exclude', 'node_modules', '--exclude', '.claude-plugin/types', '--exclude', 'tsconfig.json', '--exclude', 'tests', `${PE_SRC}/`, `${this.pe}/`], { encoding: 'utf8' })
+      if (r.status !== 0) fail2(`rsync failed: ${r.stderr}`)
+    }
     if (this.installedDir !== null && !fs.existsSync(path.join(this.installedDir, 'hooks', 'hooks.json'))) fail2(`no installed cache at ${this.installedDir}`)
     this.env = { ...process.env, [ISO_ENV]: this.cfg }
     if (this.cfgSet) this.env.CLAUDE_CONFIG_DIR = this.cfg
@@ -393,6 +406,7 @@ class Run {
       const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]))
       for (const f of walk(fpDir).sort()) lines.push(`${crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex').slice(0, 16)}  ${path.relative(fpDir, f)}`)
     }
+    if (this.pe !== '') lines.push(`plan-effort copy ${this.pe} fingerprint ${treeFingerprint(this.pe)}`)
     fs.writeFileSync(path.join(this.out, 'snapshot.txt'), `${lines.join('\n')}\n`)
     if (this.o.fingerprint !== null && this.fingerprint !== this.o.fingerprint) fail2(`fingerprint mismatch: copy ${this.fingerprint}, expected ${this.o.fingerprint}`)
   }
@@ -411,8 +425,8 @@ class Run {
     this.sessions.push(s)
     s.pcfg = spec.isolate === true ? this.pcfg : this.cfg
     // tui pinned per session (the profile's own value would leak in otherwise); the installed copy is off when testing a --plugin-dir copy.
-    const settings = JSON.stringify({ ...(this.mod === '-' ? {} : { enabledPlugins: DISABLE }), tui: spec.tui ?? 'default' })
-    tmux('new-session', '-d', '-s', name, '-x', w, '-y', h, '-c', this.proj, 'bash', LAUNCH, this.cfgSet ? this.cfg : '-', this.mod, spec.mode, debug, this.o.model, this.mod === '-' ? '' : s.pcfg, settings)
+    const settings = JSON.stringify({ ...(this.mod === '-' ? {} : { enabledPlugins: this.disable }), tui: spec.tui ?? 'default' })
+    tmux('new-session', '-d', '-s', name, '-x', w, '-y', h, '-c', this.proj, 'bash', LAUNCH, this.cfgSet ? this.cfg : '-', this.mod, spec.mode, debug, this.o.model, this.mod === '-' ? '' : s.pcfg, settings, this.pe)
     tmux('set-option', '-t', name, 'remain-on-exit', 'on')
     const t0 = Date.now()
     let keyAt = 0
@@ -491,6 +505,7 @@ class Run {
     const who = this.o.installed ? 'brewmod-placeholders@claude-brewcode' : 'brewmod-placeholders@inline'
     const global = []
     if (!text.includes(`hooks module ${who} loaded`)) global.push(`debug: no "hooks module ${who} loaded"`)
+    if (this.pe !== '' && !text.includes('hooks module brewmod-plan-effort@inline loaded')) global.push('debug: no "hooks module brewmod-plan-effort@inline loaded"')
     if (/hooks module did not load|hooks module brewmod-placeholders\S* failed to load/.test(text)) global.push('debug: module did not load')
     global.push(...this.modulePaths(s.name, text))
     const bad = text.split('\n').filter((l) => /ui\.render \(\w+\): a hook returned a tree that does not validate|hook failed: brewmod-placeholders|brewmod-placeholders: .*(skipped|refused)/.test(l))
@@ -534,7 +549,8 @@ class Run {
     const debug = path.join(this.out, `${x.id}.debug.log`)
     // Mod tools denied: the answer must come from the received context, never from list_placeholders (cp4c: Haiku called it).
     const args = ['-p', x.prompt, '--output-format', 'json', '--model', this.o.model, '--permission-mode', x.mode ?? 'default', '--debug-file', debug, '--disallowedTools', 'mcp__brewmod-placeholders']
-    if (this.mod !== '-') args.push('--plugin-dir', this.mod, '--settings', JSON.stringify({ enabledPlugins: DISABLE }))
+    if (this.mod !== '-') args.push('--plugin-dir', this.mod, '--settings', JSON.stringify({ enabledPlugins: this.disable }))
+    if (this.pe !== '') args.push('--plugin-dir', this.pe)
     // globalFiles: this case alone reads a fresh scratch global dir holding them (patched copy only).
     let env = this.env
     if (x.globalFiles !== undefined && this.mod !== '-') {

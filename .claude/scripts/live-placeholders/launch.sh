@@ -1,6 +1,6 @@
 #!/bin/bash
 # tmux pane command: claude in the cwd, parent env scrubbed. Args: config dir ("-" = unset), mod dir ("-" = installed cache), permission mode,
-# debug file, model, global placeholder root of the patched copy (LP_PLACEHOLDERS_CFG, "" = none), --settings JSON ("" = none).
+# debug file, model, global placeholder root of the patched copy (LP_PLACEHOLDERS_CFG, "" = none), --settings JSON ("" = none), 2nd mod dir ("" = none).
 cfg="$1" mod="$2" mode="$3" debug="$4" model="$5"
 [ -n "${6:-}" ] && export LP_PLACEHOLDERS_CFG="$6"
 unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT CLAUDE_CODE_SESSION_ID CLAUDE_CODE_CHILD_SESSION CLAUDE_CODE_SESSION_ATTENDED \
@@ -10,4 +10,5 @@ if [ "$cfg" = "-" ]; then unset CLAUDE_CONFIG_DIR; else export CLAUDE_CONFIG_DIR
 args=(--permission-mode "$mode" --debug-file "$debug" --model "$model")
 [ "$mod" != "-" ] && args+=(--plugin-dir "$mod")
 [ -n "${7:-}" ] && args+=(--settings "$7")
+[ -n "${8:-}" ] && args+=(--plugin-dir "$8")
 exec claude "${args[@]}"
