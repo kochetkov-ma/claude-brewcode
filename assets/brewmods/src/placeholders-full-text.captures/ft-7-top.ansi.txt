@@ -1,0 +1,40 @@
+[38;5;174m ▐[48;5;16m▛███▛█[39m[49m   [1mClaude[0m [1mCode[0m [38;5;246mv2.1.301[39m
+[38;5;174m▝▜[48;5;16m█████[49m█▀[39m  [38;5;246mOpus[39m [38;5;246m5.5[39m [38;5;246m·[39m [38;5;246mClaude[39m [38;5;246mMax[39m
+[38;5;174m ▝▝[39m   [38;5;174m▝▝[39m   [38;5;246m~/brewery[39m
+
+
+[38;5;220m⏺[39m [38;5;220mPrompt dropped by a hook: ++m? = /placeholders show ++m · not sent to Claude ·[39m
+  [38;5;220mpress Enter to print it[39m
+
+[38;5;246m[48;5;237m❯[39m [38;5;231m/placeholders show ++m[39m [49m
+[38;5;246m  ⎿  [39mbrewmod-placeholders: ++m · full text as sent · plan mode off
+     [38;5;153m++m[39m · plugin · plan +
+     normal:
+     [38;5;153mUser typed `++m` — Manager mode is active for this turn:[39m
+
+     [38;5;153m[ROLE: MANAGER][39m
+
+     [38;5;153mManage; never code/build/test/hand-debug: the main context is for orchestration.[39m
+
+     [38;5;153mProtocol:[39m [38;5;153m1)[39m [38;5;153mTaskList;[39m [38;5;153mgraph[39m [38;5;153mexists[39m [38;5;153m->[39m [38;5;153mreuse[39m [38;5;153mit,[39m [38;5;153melse[39m [38;5;153mTaskCreate[39m [38;5;153mthe[39m [38;5;153mfull[39m [38;5;153mgraph[39m
+     [38;5;153mbefore[39m [38;5;153many[39m [38;5;153mwork.[39m [38;5;153m2)[39m [38;5;153maddBlockedBy/addBlocks[39m [38;5;153monly[39m [38;5;153mfor[39m [38;5;153mreal[39m [38;5;153mdata-handoffs,[39m [38;5;153melse[39m
+     [38;5;153mparallel.[39m [38;5;153m3)[39m [38;5;153mTaskUpdate[39m [38;5;153mowner,[39m [38;5;153mthen[39m [38;5;153mlaunch.[39m [38;5;153m4)[39m [38;5;153mValidate[39m [38;5;153mreports,[39m [38;5;153mintegrate;[39m
+     [38;5;153mcompleted[39m [38;5;153monly[39m [38;5;153mwhen[39m [38;5;153mtruly[39m [38;5;153mdone;[39m [38;5;153mfailure[39m [38;5;153m->[39m [38;5;153mfollow-up[39m [38;5;153mtask[39m [38;5;153m+[39m [38;5;153mre-delegate.[39m [38;5;153m5)[39m [38;5;153mall[39m
+     [38;5;153mcode[39m [38;5;153mwritten[39m [38;5;153m->[39m [38;5;153mfinal[39m [38;5;153mtask:[39m [38;5;153msimplify,[39m [38;5;153mstrip[39m [38;5;153mover-engineering.[39m
+     [38;5;153mNo[39m [38;5;153mTask[39m [38;5;153mtools[39m [38;5;153m(CLAUDE_CODE_ENABLE_TODO_TOOLS=1[39m [38;5;153munset)[39m [38;5;153m->[39m [38;5;153msame[39m [38;5;153mnumbered[39m [38;5;153mgraph[39m
+     [38;5;153min[39m [38;5;153mthe[39m [38;5;153mplan[39m [38;5;153mor[39m [38;5;153m.claude/features/<task>.md.[39m
+
+     [38;5;153mSizing:[39m [38;5;153mone[39m [38;5;153msubagent[39m [38;5;153m=[39m [38;5;153m1[39m [38;5;153mdeliverable,[39m [38;5;153m~<=5[39m [38;5;153mfiles,[39m [38;5;153m~<=10[39m [38;5;153msteps,[39m [38;5;153m~<=20[39m [38;5;153mmin;[39m
+     [38;5;153mlarger[39m [38;5;153m->[39m [38;5;153msplit.[39m [38;5;153mAn[39m [38;5;153mhour-long[39m [38;5;153magent[39m [38;5;153m=[39m [38;5;153mdrift[39m [38;5;153mnobody[39m [38;5;153mcan[39m [38;5;153mobserve.[39m
+     [38;5;153mScan[39m [38;5;153mall[39m [38;5;153magents:[39m [38;5;153mbest-matching[39m [38;5;153mexpert[39m [38;5;153mper[39m [38;5;153mtask,[39m [38;5;153melse[39m [38;5;153mgeneral-purpose.[39m
+
+     [38;5;153mSpawn[39m [38;5;153mbrief:[39m [38;5;153msix[39m [38;5;153mlabeled[39m [38;5;153mfields.[39m [38;5;153mA[39m [38;5;153msubagent[39m [38;5;153mstarts[39m [38;5;153mwith[39m [38;5;153man[39m [38;5;153mempty[39m [38;5;153mcontext,[39m [38;5;153mso[39m [38;5;153ma[39m [38;5;153mbare
+[39m     [38;5;153mone-line[39m [38;5;153mtask[39m [38;5;153mis[39m [38;5;153mnever[39m [38;5;153menough.[39m
+     [38;5;153mGOAL:[39m [38;5;153mtask[39m [38;5;153m+[39m [38;5;153mwhy[39m [38;5;153mit[39m [38;5;153mexists[39m [38;5;153m-[39m [38;5;153mwithout[39m [38;5;153mthe[39m [38;5;153mwhy[39m [38;5;153mit[39m [38;5;153mcannot[39m [38;5;153mrank[39m [38;5;153mthe[39m [38;5;153mwork.[39m
+     [38;5;153mROLE:[39m [38;5;153mwhat[39m [38;5;153mit[39m [38;5;153mowns,[39m [38;5;153mmust[39m [38;5;153mnot[39m [38;5;153mtouch[39m [38;5;153m-[39m [38;5;153melse[39m [38;5;153mtwo[39m [38;5;153magents[39m [38;5;153medit[39m [38;5;153mone[39m [38;5;153mfile.[39m
+     [38;5;153mSCOPE:[39m [38;5;153mpaths/commands[39m [38;5;153min[39m [38;5;153mbounds[39m [38;5;153mand[39m [38;5;153mout[39m [38;5;153m-[39m [38;5;153melse[39m [38;5;153mthe[39m [38;5;153mtask[39m [38;5;153mwidens.[39m
+     [38;5;153mCONTEXT:[39m [38;5;153mdone,[39m [38;5;153mby[39m [38;5;153mwhom,[39m [38;5;153min[39m [38;5;153mparallel;[39m [38;5;153monly[39m [38;5;153mwhat[39m [38;5;153mthis[39m [38;5;153magent[39m [38;5;153mneeds[39m [38;5;153m-[39m [38;5;153melse[39m [38;5;153mwork[39m [38;5;153mis[39m
+     [38;5;153mredone[39m [38;5;153mor[39m [38;5;153moverwritten.[39m
+     [38;5;153mCONSUMER:[39m [38;5;153mwho[39m [38;5;153mor[39m [38;5;153mwhat[39m [38;5;153muses[39m [38;5;153mthe[39m [38;5;153mresult[39m [38;5;153mnext[39m [38;5;153m+[39m [38;5;153mthe[39m [38;5;153mshape[39m [38;5;153mit[39m [38;5;153mmust[39m [38;5;153mfit[39m [38;5;153m-[39m [38;5;153melse[39m [38;5;153ma[39m [38;5;153mcorrect
+[39m     [38;5;153mresult[39m [38;5;153mfails[39m [38;5;153mthe[39m [38;5;153mnext[39m [38;5;153mstep.[39m
+     [38;5;153mDONE:[39m [38;5;153macceptance,[39m [38;5;153mwhat[39m [38;5;153mcounts[39m [38;5;153mas[39m [38;5;153ma[39m [38;5;153mfinding,[39m [38;5;153mreturn[39m [38;5;153m(verdict[39m [38;5;153mfirst;[39m [38;5;153mevidence:[39m

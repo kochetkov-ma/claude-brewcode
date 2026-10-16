@@ -2,6 +2,52 @@
 
 ---
 
+## v6.9.3 (2026-10-16)
+
+> Docs: [placeholders](https://doc-claude.brewcode.app/mods/placeholders/) | [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/) | [mods overview](https://doc-claude.brewcode.app/mods/overview/) | [prompt-injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/)
+
+Hotfix: the `brewmod-placeholders` focus band shows exactly what Claude receives now, and `brewmod-plan-effort` shows a yellow row while plan mode raises the effort.
+
+### brewmod-placeholders
+
+#### Changed
+
+- **focus band:** with the caret on a token the band reads `++m` with a dim `· Claude receives these lines now:` label, then the sent text in plain colour, then `... K more lines · whole text: /placeholders show ++m` when cut, `not sent now · plan mode adds N lines` when a plan-mode part exists, and the foot `close: move the caret off ++m · send as typed: ++/`.
+- **colour rule:** text Claude receives now is the band's only non-dim content (its header bold); labels, tags, notes and feet are dim.
+- **hint texts:** the status hint, help text, `placeholders_help` tool description and prefix warnings are reworded to match the band.
+
+#### Removed
+
+- **Show text button:** removed with its `ctrl+x → tab → enter` keys (the keys differ per terminal); caret focus, `?` and `/placeholders show` cover it.
+
+#### Fixed
+
+- **`?` hint:** reads `type ? after ++r to see all` and appears only when `?` really shows the whole text.
+- **`/placeholders show` fill:** no typeahead row after the fill, so the second Enter runs the command.
+- **other mods:** their rows stay visible above the band; the band shrinks by their height.
+- **plan mode:** the band redraws when a turn reveals plan mode, not at the next key.
+- **budget:** the plan note is counted in the band's row budget.
+- **`K more lines`:** counts hidden text lines, not wrapped rows.
+
+### brewmod-plan-effort
+
+#### Added
+
+- **plan-mode row:** a yellow row `plan mode · effort xhigh for this mode · change: /plan-effort <level>` appears after the first prompt in plan mode and is gone on leaving it (Shift+Tab).
+
+#### Changed
+
+- **toast:** `plan mode · effort raised to xhigh`, shown again on each plan visit.
+- **help/status:** new help head and `mode now` texts.
+
+### repo
+
+#### Changed
+
+- **docs GIFs:** new `placeholders-full-text.gif`; `placeholders.gif` and `plan-effort.gif` re-recorded from real screens.
+
+---
+
 ## v6.9.2 (2026-10-16)
 
 > Docs: [placeholders](https://doc-claude.brewcode.app/mods/placeholders/) | [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/) | [getting started](https://doc-claude.brewcode.app/getting-started/) | [prompt-injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/)

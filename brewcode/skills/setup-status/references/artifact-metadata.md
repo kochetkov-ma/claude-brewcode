@@ -1,6 +1,6 @@
 ---
 doc_type: llm
-version: "6.9.2"
+version: "6.9.3"
 content_version: "6.8.0"
 generated_by: "brewcode"
 last_updated: "2026-10-16"

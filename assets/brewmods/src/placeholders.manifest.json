@@ -1,0 +1,25 @@
+{
+  "gif": {
+    "file": "placeholders.gif",
+    "bytes": 3373980,
+    "sha256": "14be83fb8e1dc7466c9523f3138f3498827d203ec8e105e1c06575cbc5493146",
+    "width": 800,
+    "height": 648,
+    "seconds": 37
+  },
+  "sources": {
+    "render.html": "66bf935f460d6b8bdc55b170e13e8c75b303230db57a7540f3120486972c7409",
+    "placeholders.story.js": "823008e4cd716f5f1930ab8e8b66ca6b6a47b49d76df241bb3dde753dda8b681",
+    "placeholders.data.js": "408a32e6572664300e5525a1b15bbfb6c684269fa5d6ef782e21cc0cbe66e82b",
+    "record-gifs.mjs": "cba6693c2afb098d856d1f50e5833a965105476d8489b15d9a08bb0602d875d7"
+  },
+  "ccVersion": "2.1.301",
+  "still": 7.5,
+  "tools": {
+    "playwrightCore": "1.64.0",
+    "ffmpeg": "9.0.2",
+    "gifsicle": "1.96",
+    "node": "v24.19.0"
+  },
+  "recorded": "2026-10-16T09:23:09.621Z"
+}

@@ -88,6 +88,8 @@ export function queryNames(ms: Matchers, text: string): string[] | null {
 
 // Prefixed tokens: a bare name can be a cue word (`fix`, `docs`, `all`) and turn the line into another command.
 export const showCommand = (prefix: string, names: readonly string[]): string => `/placeholders show ${names.map((n) => prefix + n).join(' ')}`
+// P1 fill: a trailing space puts the caret past the last token, so no name typeahead opens under the box and Enter runs the command.
+export const fillText = (prefix: string, names: readonly string[]): string => `${showCommand(prefix, names)} `
 export const queryDrop = (prefix: string, names: readonly string[]): string =>
   `${names.map((n) => `${prefix}${n}?`).join(' ')} = ${showCommand(prefix, names)} · not sent to Claude · press Enter to print it`
 
@@ -122,7 +124,7 @@ export function statusText(reg: Registry, prefix: string = DEFAULT_PREFIX, dirs:
   const issues = reg.issues.length === 0 ? [] : ['', `issues (${reg.issues.length}):`, ...reg.issues.map((i) => `  ${i}`)]
   const s = sample(rows)
   return block(`${rows.length} placeholders · type ${prefix}name anywhere in a prompt`, [...lines, ...issues], [
-    `Full text: put the caret on a token, or type \`${prefix}${s}?\` · Enter on \`${prefix}${s}?\` alone sends nothing and fills \`${showCommand(prefix, [s])}\` · \`/placeholders list\` for all`,
+    `Caret on a token: the band shows up to ${FOCUS_MAX} rows of what it sends · whole text: \`${showCommand(prefix, [s])}\`, or \`${prefix}${s}?\` alone + Enter twice · \`/placeholders list\` for all`,
     `Send one message as typed: put \`${prefix}/\` anywhere in it`,
     `Add, change, remove: \`/placeholders <your words>\` in any language, e.g. \`/placeholders add ${prefix}db: use the staging DB\``,
     `Where: global = all projects (\`${dirs.global}\`), project = this one (\`${dirs.project}\`, wins over global); start with \`global\` or \`project\`, or just say it`,
@@ -135,7 +137,8 @@ export function helpText(prefix: string = DEFAULT_PREFIX, dirs: Dirs = DEFAULT_D
   return [
     `placeholders help · a placeholder is a short token (${p}name) that adds saved text to your prompt`,
     `Use: type \`${p}m\` anywhere in a prompt; Tab completes; the band above the prompt shows what each token sends.`,
-    `Full text: put the caret on a token (arrows, Home, End) · type \`${p}r?\` to see up to ${FOCUS_MAX} rows of it · Enter on a message of only \`${p}r?\` sends nothing and fills \`${showCommand(p, ['r'])}\` (Enter again prints the whole text) · \`${showCommand(p, ['r', 'm'])}\` · \`/placeholders list\` · every body in the band: \`ctrl+x → tab → enter\` on Show text.`,
+    `Caret on a token (arrows, Home, End): the band shows up to ${FOCUS_MAX} rows of what it sends; \`?\` right after the token only makes room for those rows while the name menu is open.`,
+    `Whole text, printed in the chat, not sent to Claude: \`${showCommand(p, ['r'])}\` (several: \`${showCommand(p, ['r', 'm'])}\`) · or \`${p}r?\` alone in a message: Enter fills that command, Enter again prints it · all: \`/placeholders list\`.`,
     `Send as typed: \`${p}/\` (or \`${p}\\\`) anywhere in a message turns every placeholder in it off; the marker stays in the text.`,
     `Plan mode: \`<name>.plan.md\` with \`plan: add\` adds its text to \`<name>.md\` only in Plan mode (built-in \`${p}m\` works this way); without \`plan: add\` it replaces the text; \`when: plan\` in \`<name>.md\` alone = plan-only (\`${p}+\`). The band marks \`${PLAN_LABEL.plus}\` and shows "${PLAN_LABEL.adds}"; one review per message (\`${p}rr\` wins over \`${p}r\`).`,
     `Add, change, remove: \`/placeholders <your words, any language>\`; Claude drafts, asks once, saves. E.g. \`/placeholders add ${p}db: use the staging DB\` · \`/placeholders global make ${p}r shorter\` · \`/placeholders удали ${p}db\` · \`/placeholders add a plan-mode part to ${p}db: plan first, then build\`.`,

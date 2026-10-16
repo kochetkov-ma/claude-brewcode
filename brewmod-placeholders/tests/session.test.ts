@@ -11,7 +11,7 @@ test('GIVEN an invalid prefix WHEN the session starts THEN a toast warns', { opt
 
   await start($, on)
 
-  expect(w.toasts, 'toasts').toEqual(['prefix must be 2-8 ASCII punctuation characters (not _), using ++'])
+  expect(w.toasts, 'toasts').toEqual(['prefix must be 2-8 ASCII punctuation characters (not _), using ++ · change: /config -> Placeholder prefix'])
 })
 
 test('GIVEN a broken definition file WHEN the session starts THEN one toast names the first issue', async ($, on) => {
@@ -20,7 +20,7 @@ test('GIVEN a broken definition file WHEN the session starts THEN one toast name
 
   await start($, on)
 
-  expect(w.toasts, 'toasts').toEqual(["1 definition issue(s), first: project/a.md: unknown key 'wat'"])
+  expect(w.toasts, 'toasts').toEqual(["1 definition issue(s), first: project/a.md: unknown key 'wat' · all: /placeholders status"])
 })
 
 test('GIVEN skipped and unreadable files WHEN the session starts THEN one toast carries the count, the first issue and the skipped files', async ($, on) => {
@@ -29,7 +29,7 @@ test('GIVEN skipped and unreadable files WHEN the session starts THEN one toast 
 
   await start($, on)
 
-  expect(w.toasts, 'toasts').toEqual(['2 definition issue(s), first: project/broken.md: front matter is not closed; skipped project/broken.md, project/my-thing.md'])
+  expect(w.toasts, 'toasts').toEqual(['2 definition issue(s), first: project/broken.md: front matter is not closed; skipped project/broken.md, project/my-thing.md · all: /placeholders status'])
 })
 
 test('GIVEN a valid setup WHEN the session starts THEN there is no toast, the registry is read and the mode state file is asked for', async ($, on) => {

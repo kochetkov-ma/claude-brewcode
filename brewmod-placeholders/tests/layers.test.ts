@@ -321,7 +321,7 @@ test('GIVEN a skipped file and a plain issue WHEN the session message is built T
   const reg = await load({ [`${P_NATIVE}/a.md`]: '---\nwat: 1\n---\nA2', [`${P_NATIVE}/my-thing.md`]: 'X', [`${P_NATIVE}/bad.md`]: '---\nname: b' })
 
   expect([issuesMessage(reg), issuesMessage(await load({}))], 'messages').toEqual([
-    "3 definition issue(s), first: project/a.md: unknown key 'wat'; skipped project/bad.md, project/my-thing.md",
+    "3 definition issue(s), first: project/a.md: unknown key 'wat'; skipped project/bad.md, project/my-thing.md · all: /placeholders status",
     null,
   ])
 })

@@ -1,4 +1,4 @@
-import { test, expect } from 'claude-code/testing'
+import { test, expect, mock } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
@@ -10,24 +10,28 @@ const MISSING: State = 'missing'
 const mode = (m: string): string => JSON.stringify({ mode: m, ts: 1 })
 const OWN = { plugin: 'brewmod-plan-effort@inline', tier: 'user' } as const
 const row = (value: string) => ({ key: 'brewmod-plan-effort.planEffort', label: 'Plan effort', kind: 'choice', value, options: ['medium', 'high', 'xhigh', 'max'], provider: OWN, isLocked: false }) as never
-const TOAST = 'plan mode: effort xhigh · /plan-effort to change'
+const TOAST = 'plan mode · effort raised to xhigh'
 
 const result = (e: { turnId: string; index: number }) =>
   ({ turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: null, usage: null }) as never
 
-// bottoms: session.id answers S1, fs.read answers the state (read per call), $.state is an in-memory map, ui.toast and turn.step record
+// bottoms: session.id answers S1, fs.read answers the state (read per call), $.state is a versioned in-memory map honouring ifVersion, ui.toast and turn.step record
 const bottoms = (on: On, state: () => State, onToast?: (text: string) => void): Seen => {
   const seen: Seen = { efforts: [], toasts: [], reads: [], kv: {}, sets: [] }
+  const versions: Record<string, number> = {}
   on('session.id', () => ({ value: 'S1' }) as never)
   on('fs.read', (_$, e) => {
     seen.reads.push(e.path)
     const s = state()
     return (s === MISSING ? { deny: 'ENOENT' } : { value: s }) as never
   })
-  on('state.get', (_$, e) => ({ value: { value: seen.kv[e.key], version: 1 } }) as never)
+  on('state.get', (_$, e) => ({ value: { value: seen.kv[e.key], version: versions[e.key] ?? 0 } }) as never)
   on('state.set', (_$, e) => {
+    const version = versions[e.key] ?? 0
+    if (e.ifVersion !== undefined && e.ifVersion !== version) return { value: { isSet: false, version } } as never
     seen.kv[e.key] = e.value
-    return { value: { isSet: true, version: 2 } } as never
+    versions[e.key] = version + 1
+    return { value: { isSet: true, version: version + 1 } } as never
   })
   on('ui.toast', (_$, e) => {
     ;(onToast ?? ((text: string) => seen.toasts.push(text)))(e.text)
@@ -191,7 +195,7 @@ test('GIVEN a toast already shown in state WHEN the module is reloaded and a pla
 test('GIVEN planEffort max WHEN a plan step runs THEN the toast names max', { options: { planEffort: 'max' } }, async ($, on) => {
   const seen = bottoms(on, () => mode('plan'))
   await step($, 'high')
-  expect(seen.toasts, 'toast carries the configured target').toEqual(['plan mode: effort max · /plan-effort to change'])
+  expect(seen.toasts, 'toast carries the configured target').toEqual(['plan mode · effort raised to max'])
 })
 
 test('GIVEN a main plan step already at xhigh WHEN it runs THEN no toast and the effort is kept', async ($, on) => {
@@ -247,7 +251,7 @@ const configBottoms = (on: On, seen: Seen, rows: () => unknown[], setTo: () => {
   })
 }
 
-for (const args of ['', 'status', 'help']) {
+for (const args of ['', 'status']) {
   test(`GIVEN args '${args}' in plan mode with session high WHEN the command runs THEN the status block comes back`, async ($, on) => {
     const seen = bottoms(on, () => mode('plan'))
     seen.kv.session = 'high'
@@ -259,13 +263,23 @@ for (const args of ['', 'status', 'help']) {
   })
 }
 
+test('GIVEN help in plan mode with session high WHEN the command runs THEN the head says what the mod does and the status rows follow', async ($, on) => {
+  const seen = bottoms(on, () => mode('plan'))
+  seen.kv.session = 'high'
+  configBottoms(on, seen, () => [row('xhigh')], () => ({ value: 'xhigh' }))
+  const out = await $.command.run(call('help'))
+  expect(out.text, 'help head, status and usage').toBe(
+    ['help · in plan mode, main-session requests below the plan effort are sent at it; never lowered; subagents and the session effort setting are left alone', 'plan effort  xhigh  (medium | high | xhigh | max)', 'session      high   -> raised to xhigh in plan mode', 'mode now     plan', USAGE].join('\n'),
+  )
+})
+
 test('GIVEN session max and no state file WHEN status runs THEN not raised and mode unknown', async ($, on) => {
   const seen = bottoms(on, () => MISSING)
   seen.kv.session = 'max'
   configBottoms(on, seen, () => [row('xhigh')], () => ({ value: 'xhigh' }))
   const out = await $.command.run(call(''))
   expect(out.text, 'not raised, unknown mode').toBe(
-    ['status', 'plan effort  xhigh  (medium | high | xhigh | max)', 'session      max    not raised, session already >= plan effort', 'mode now     unknown', USAGE].join('\n'),
+    ['status', 'plan effort  xhigh  (medium | high | xhigh | max)', 'session      max    not raised, session already >= plan effort', 'mode now     unknown until the next prompt', USAGE].join('\n'),
   )
 })
 
@@ -314,7 +328,7 @@ test('GIVEN no /config row for the mod (headless) WHEN a level is set THEN a cle
   expect({ sets: seen.sets, text: out.text }, 'no row, no set, /config hint').toEqual({
     sets: [],
     text: [
-      'plan effort: cannot set it here (no /config row, e.g. under -p): use /config in an interactive session or set pluginConfigs',
+      'plan effort: cannot set it here (no /config row, e.g. under -p) · set: /config in an interactive session, or settings.json pluginConfigs',
       'plan effort  xhigh  (medium | high | xhigh | max)',
       'session      n/a until the next request',
       'mode now     default',
@@ -329,4 +343,207 @@ test('GIVEN another plugin row also ending in .planEffort WHEN a level is set TH
   configBottoms(on, seen, () => [other, row('xhigh')], () => ({ value: 'high' }))
   await $.command.run(call('high'))
   expect(seen.sets, 'own key only').toEqual([{ key: 'brewmod-plan-effort.planEffort', value: 'high' }])
+})
+
+// ---- plan-mode row above the prompt
+
+const ROW = 'plan mode · effort xhigh for this mode · change: /plan-effort <level>'
+const LEFT_HINT = 'plan mode on (shift+tab to cycle)'
+const SURFACES = ['terminal', 'desktop'] as const
+const bandProps = (hasSurvey = false) => ({ hasSurvey, isWorking: false, maxRows: 24, bodyColumns: 100, scroll: { bodyRows: 23, offset: 0, total: 0 }, view: {} })
+// Stands for a plugin or the engine beneath: one BELOW text per drawing
+const beneath = (on: On) => on('ui.render', ($$, e) => $$.ui.resolve(e).Text({ children: 'BELOW' }))
+type Surface = (typeof SURFACES)[number]
+const bandTexts = async ($: Engine, surface: Surface = 'terminal', hasSurvey = false): Promise<string[]> => {
+  const ui = await $.ui.mount({ plugin: 'brewmod-plan-effort', surface, component: 'AbovePrompt', props: bandProps(hasSurvey) } as never)
+  const texts = (await ui.findAll({ type: 'Text' })).map((t: { text: string }) => t.text)
+  await ui.unmount()
+  return texts
+}
+const drawHint = async ($: Engine, hint: string) => {
+  const ui = await $.ui.mount({ plugin: 'brewmod-plan-effort', surface: 'terminal', component: 'PromptHint', props: { isDraft: false, isWorking: false, hint } } as never)
+  await ui.unmount()
+}
+
+for (const surface of SURFACES) {
+  test(`GIVEN a plan step at high on ${surface} WHEN the band draws THEN the plan row sits above what is beneath`, async ($, on) => {
+    bottoms(on, () => mode('plan'))
+    beneath(on)
+    await step($, 'high')
+    expect(await bandTexts($, surface), 'row first, beneath kept').toEqual([ROW, 'BELOW'])
+  })
+}
+
+test('GIVEN a plan step at high WHEN the band draws THEN the row is in the theme warning colour', async ($, on) => {
+  bottoms(on, () => mode('plan'))
+  beneath(on)
+  await step($, 'high')
+  const ui = await $.ui.mount({ plugin: 'brewmod-plan-effort', surface: 'terminal', component: 'AbovePrompt', props: bandProps() } as never)
+  const found = await ui.findAll({ type: 'Text', text: /^plan mode/ })
+  await ui.unmount()
+  expect(found.map((t: { props: { color?: unknown } }) => t.props.color), 'one warning row').toEqual(['warning'])
+})
+
+for (const [effort, planEffort, text] of [
+  ['max', 'xhigh', 'plan mode · effort max, already >= xhigh'],
+  ['xhigh', 'xhigh', 'plan mode · effort xhigh, already >= xhigh'],
+  ['medium', 'max', 'plan mode · effort max for this mode · change: /plan-effort <level>'],
+  [undefined, 'xhigh', 'plan mode · effort not raised: model takes no effort level'],
+  [3, 'xhigh', 'plan mode · effort not raised: 3 is not an effort level'],
+] as const) {
+  test(`GIVEN a plan step at ${String(effort)} and planEffort ${planEffort} WHEN the band draws THEN the row says ${text}`, { options: { planEffort } }, async ($, on) => {
+    bottoms(on, () => mode('plan'))
+    beneath(on)
+    await step($, effort)
+    expect(await bandTexts($), 'truthful row variant').toEqual([text, 'BELOW'])
+  })
+}
+
+for (const m of ['default', 'acceptEdits', 'auto', 'bypassPermissions']) {
+  test(`GIVEN a ${m} step WHEN the band draws THEN no row, only what is beneath`, async ($, on) => {
+    bottoms(on, () => mode(m))
+    beneath(on)
+    await step($, 'high')
+    expect(await bandTexts($), 'no plan row').toEqual(['BELOW'])
+  })
+}
+
+test('GIVEN no step yet WHEN the band draws THEN no row', async ($, on) => {
+  bottoms(on, () => mode('plan'))
+  beneath(on)
+  expect(await bandTexts($), 'row waits for the first prompt').toEqual(['BELOW'])
+})
+
+test('GIVEN a subagent plan step only WHEN the band draws THEN no row', async ($, on) => {
+  bottoms(on, () => mode('plan'))
+  beneath(on)
+  await step($, 'high', { agentId: 'a1' })
+  expect(await bandTexts($), 'subagent steps say nothing about the main mode').toEqual(['BELOW'])
+})
+
+test('GIVEN a plan row WHEN a survey holds the band THEN the row yields', async ($, on) => {
+  bottoms(on, () => mode('plan'))
+  beneath(on)
+  await step($, 'high')
+  expect(await bandTexts($, 'terminal', true), 'survey only').toEqual(['BELOW'])
+})
+
+test('GIVEN a plan row WHEN the hint line names plan mode as left THEN the row is gone after the timer', async ($, on) => {
+  const clock = mock.clock(on)
+  bottoms(on, () => mode('plan'))
+  beneath(on)
+  await step($, 'high')
+  await drawHint($, LEFT_HINT)
+  await clock.advance(0)
+  expect(await bandTexts($), 'row dropped on Shift+Tab out').toEqual(['BELOW'])
+})
+
+for (const hint of ['accept edits on (shift+tab to cycle)', 'manual mode on', '(shift+tab to cycle)', '', 'esc to interrupt']) {
+  test(`GIVEN a plan row WHEN the hint line reads '${hint}' THEN the row stays`, async ($, on) => {
+    const clock = mock.clock(on)
+    bottoms(on, () => mode('plan'))
+    beneath(on)
+    await step($, 'high')
+    await drawHint($, hint)
+    await clock.advance(0)
+    expect(await bandTexts($), 'row kept').toEqual([ROW, 'BELOW'])
+  })
+}
+
+test('GIVEN plan left by Shift+Tab and the same state file WHEN a main step runs (no prompt) THEN no raise and no row', async ($, on) => {
+  const clock = mock.clock(on)
+  const seen = bottoms(on, () => mode('plan'))
+  beneath(on)
+  await step($, 'high')
+  await drawHint($, LEFT_HINT)
+  await clock.advance(0)
+  await step($, 'high')
+  expect({ efforts: seen.efforts, band: await bandTexts($) }, 'stale plan file ignored').toEqual({ efforts: ['xhigh', 'high'], band: ['BELOW'] })
+})
+
+test('GIVEN plan left by Shift+Tab WHEN a newer plan file arrives with the next prompt THEN raise and row are back', async ($, on) => {
+  const clock = mock.clock(on)
+  let current = mode('plan')
+  const seen = bottoms(on, () => current)
+  beneath(on)
+  await step($, 'high')
+  await drawHint($, LEFT_HINT)
+  await clock.advance(0)
+  current = JSON.stringify({ mode: 'plan', ts: 2 })
+  await step($, 'high')
+  expect({ efforts: seen.efforts, band: await bandTexts($) }, 'new file wins').toEqual({ efforts: ['xhigh', 'xhigh'], band: [ROW, 'BELOW'] })
+})
+
+test('GIVEN plan left by Shift+Tab WHEN status runs THEN mode now says plan mode was left', async ($, on) => {
+  const clock = mock.clock(on)
+  const seen = bottoms(on, () => mode('plan'))
+  beneath(on)
+  configBottoms(on, seen, () => [row('xhigh')], () => ({ value: 'xhigh' }))
+  await step($, 'high')
+  await drawHint($, LEFT_HINT)
+  await clock.advance(0)
+  const out = await $.command.run(call('status'))
+  expect(out.text, 'left plan in mode now').toBe(
+    ['status', 'plan effort  xhigh  (medium | high | xhigh | max)', 'session      high   -> raised to xhigh in plan mode', 'mode now     plan mode left (Shift+Tab); known at the next prompt', USAGE].join('\n'),
+  )
+})
+
+test('GIVEN a step with no effort WHEN status runs THEN the session line says the model takes no effort level', async ($, on) => {
+  const seen = bottoms(on, () => mode('plan'))
+  configBottoms(on, seen, () => [row('xhigh')], () => ({ value: 'xhigh' }))
+  await step($, undefined)
+  const out = await $.command.run(call(''))
+  expect(out.text, 'none, not raised').toBe(
+    ['status', 'plan effort  xhigh  (medium | high | xhigh | max)', 'session      none   not raised, model takes no effort level', 'mode now     plan', USAGE].join('\n'),
+  )
+})
+
+test('GIVEN a plan row WHEN the state file is gone at the next main step THEN the row is gone', async ($, on) => {
+  let current: State = mode('plan')
+  bottoms(on, () => current)
+  beneath(on)
+  await step($, 'high')
+  current = MISSING
+  await step($, 'high')
+  expect(await bandTexts($), 'missing file = not plan').toEqual(['BELOW'])
+})
+
+test('GIVEN a left-plan hint WHEN a newer plan step runs before the timer fires THEN the stale left-write is refused and raise and row stay', async ($, on) => {
+  const clock = mock.clock(on)
+  let current = mode('plan')
+  const seen = bottoms(on, () => current)
+  beneath(on)
+  await step($, 'high')
+  await drawHint($, LEFT_HINT)
+  current = JSON.stringify({ mode: 'plan', ts: 2 })
+  await step($, 'high')
+  await clock.advance(0)
+  await step($, 'high')
+  expect({ efforts: seen.efforts, band: await bandTexts($), plan: seen.kv.plan }, 'ifVersion from the draw beats the timer').toEqual({ efforts: ['xhigh', 'xhigh', 'xhigh'], band: [ROW, 'BELOW'], plan: { isPlan: true, ts: 2, isLeft: false } })
+})
+
+test('GIVEN a ts-less plan file left by Shift+Tab WHEN the next main step runs THEN raise and row are back', async ($, on) => {
+  const clock = mock.clock(on)
+  const seen = bottoms(on, () => JSON.stringify({ mode: 'plan' }))
+  beneath(on)
+  await step($, 'high')
+  await drawHint($, LEFT_HINT)
+  await clock.advance(0)
+  const band = await bandTexts($)
+  await step($, 'high')
+  expect({ efforts: seen.efforts, leftBand: band, band: await bandTexts($) }, 'ts 0 never holds the left hint').toEqual({ efforts: ['xhigh', 'xhigh'], leftBand: ['BELOW'], band: [ROW, 'BELOW'] })
+})
+
+test('GIVEN a toasted plan visit left by Shift+Tab WHEN plan is entered again and a raised step runs THEN the new visit toasts once more', async ($, on) => {
+  const clock = mock.clock(on)
+  let current = mode('plan')
+  const seen = bottoms(on, () => current)
+  beneath(on)
+  await step($, 'high')
+  await drawHint($, LEFT_HINT)
+  await clock.advance(0)
+  current = JSON.stringify({ mode: 'plan', ts: 2 })
+  await step($, 'high')
+  await step($, 'high')
+  expect(seen.toasts, 'Shift+Tab out ends the visit, one toast per visit').toEqual([TOAST, TOAST])
 })

@@ -1,0 +1,40 @@
+     Code/test briefs add: follow the closest well-built repo counterpart's
+     principles - additive to conventions/rules/docs, never instead.
+
+     Finish the whole job; decide without routine questions.
+     plan mode adds:
+     [ADDON: PLAN MODE]
+
+     Stay read-only: no code, board/task-state writes, installation, configuration,
+     or cron creation. Read-only expert exploration is allowed.
+
+     Include in the plan (English, token economy):
+     - PREAMBLE: [ROLE: MANAGER] + the 5-step protocol restated verbatim as the
+       plan's opening section - this addon expires, so the plan carries the role
+       into implementation, no hook needed.
+     - STEP 0, stated literally: "Re-assume the MANAGER role. Call TaskList; if no
+       graph exists, create the ENTIRE TaskGraph now - TaskCreate for every node, or
+       the numbered checklist if task tools are absent - then delegate." On exit
+       this comes first: not code, not one task.
+     - The full TaskGraph: every task decomposed (subject, acceptance, owner
+       agent, bounded scope+acceptance per spawn), dependencies marked, parallel
+       branches explicit, critical path named.
+
+     Include the task-board execution step: announce and create one unique session
+     anti-drift cron per top-level task, hourly unless the user chooses another tick;
+     during execution record its task-specific methodology/prompt, timezone, ID,
+     tick count and stop rule. Scheduling unavailable -> explicit gap, never a
+     claimed schedule. Each tick: reread methodology/anti-drift rules, collect agent
+     updates, reconcile status/dependencies/goal, keep all unfinished + latest 10
+     completed graph entries, preserve older evidence outside the active graph.
+     The tick report is `HH:MM TZ · tick N · elapsed`, then only the nonempty rows:
+     🟢 completed, 🔵 active/remaining/next, 🔴 problems/blockers/questions,
+     ⚪ anti-drift verdict. Completion/cancellation -> stop and verify cron removal.
+
+     Deliver the embedded role + graph + deferred cron step, not implementation code.
+
+────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────
+  ⏸ manual mode on · ? for shortcuts · ← for agents
+

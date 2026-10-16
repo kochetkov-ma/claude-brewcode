@@ -1,5 +1,3 @@
-     5 placeholders · type ++name anywhere in a prompt
-     +++   plugin  plan only  Anti-drift cron plan addon, active in Plan mode only
      ++a   plugin             Architecture-first: delegate the design to expert agents
      before implementing
      ++m   plugin  plan +     Manager mode: orchestrate and delegate, never code in the
@@ -8,8 +6,8 @@
      double-check each finding
      ++rr  plugin             Anti-regression review: regression, project standard and
      functional correctness axes
-     Full text: put the caret on a token, or type ++r? · Enter on ++r? alone sends
-     nothing and fills /placeholders show ++r · /placeholders list for all
+     Caret on a token: the band shows up to 15 rows of what it sends · whole text:
+     /placeholders show ++r, or ++r? alone + Enter twice · /placeholders list for all
      Send one message as typed: put ++/ anywhere in it
      Add, change, remove: /placeholders <your words> in any language, e.g. /placeholders
      add ++db: use the staging DB
@@ -31,7 +29,9 @@
 
 ⏺ brewmod-placeholders - list_placeholders (MCP)
 
-✽ Proofing…
+· Sock-hopping…
+  ⎿  Tip: Double-tap esc to rewind the code and/or conversation to a previous point in
+     time
 
 ────────────────────────────────────────────────────────────────────────────────────────
 ❯ 

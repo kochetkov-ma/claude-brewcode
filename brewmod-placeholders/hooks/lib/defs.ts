@@ -370,7 +370,7 @@ export function issuesMessage(reg: Pick<Registry, 'issues' | 'skipped'>): string
   if (reg.issues.length === 0) return null
   const more = reg.skipped.length > MAX_SHOWN ? ` and ${reg.skipped.length - MAX_SHOWN} more` : ''
   const skipped = reg.skipped.length === 0 ? '' : `; skipped ${reg.skipped.slice(0, MAX_SHOWN).join(', ')}${more}`
-  return `${reg.issues.length} definition issue(s), first: ${reg.issues[0]}${skipped}`
+  return `${reg.issues.length} definition issue(s), first: ${reg.issues[0]}${skipped} · all: /placeholders status`
 }
 
 // Editor/band names: one entry per name, first-seen order; the first non-plan def wins (a plan part in a lower layer never makes it plan only).

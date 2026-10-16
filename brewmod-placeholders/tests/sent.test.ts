@@ -1,6 +1,6 @@
 import { test, expect } from 'claude-code/testing'
 import type { On } from 'claude-code'
-import { ROOT, bandTexts, bootBand, defaultsTree, mountBand, openedTexts, textsOf, typed, type Tree } from './layer-io'
+import { ROOT, bandTexts, bootBand, defaultsTree, mountBand, textsOf, typed, type Tree } from './layer-io'
 import { VECTORS } from './parity/golden.generated'
 import { def, defaultDefs } from './fixtures'
 import type { Def } from '../hooks/lib/defs'
@@ -18,10 +18,11 @@ const M_HEAD = 'User typed `++m` — Manager mode is active for this turn:'
 const MP_HEAD = 'User typed `++m` — Manager + Plan Mode is active for this turn:'
 const M_BODY = M_SENT.slice(M_HEAD.length + 2)
 const ADDITION = M_PLAN_SENT.slice(MP_HEAD.length + 2 + M_BODY.length + 2)
-const R_DESC = '  Two-phase review: review every significant change, then double-check each finding'
+// Compact head over a drawn body: the description gives way to what Claude receives.
+const R_DESC = ['  Two-phase review: review every significant change, then dou…', ' · Claude receives these lines now:']
 const JOINER = '\n\n---\n\n'
 const CUT_NOTE = '\n...[truncated]'
-const foot = (token: string) => `more: put the caret on ${token} · send as typed: ++/ · /placeholders help`
+const foot = (token: string) => `more: put the caret on ${token} · send as typed: ++/ · help: /placeholders help`
 // Band rows of spec-4 (++r) in a 100-cell band: its source lines as sent, each under 98 cells, the blank line drawn as ' '.
 const R_ROWS = [
   'User typed `++r` — Two-phase review discipline is active for this turn:',
@@ -282,11 +283,11 @@ test('GIVEN the literal ++r and ++rr band rows WHEN joined back THEN they are th
   expect([joined(R_ROWS), joined(RR_ROWS)], 'rows vs spec-4, spec-5').toEqual([R_SENT, RR_SENT])
 })
 
-test('GIVEN ++r and a 30-row terminal WHEN the band is opened THEN it shows the header line and the whole body as sent', async ($, on) => {
+test('GIVEN ++r and a 30-row terminal WHEN the band mounts THEN the auto view shows the header line first and the cut row names the show command', async ($, on) => {
   await boot($, on, defaultsTree())
   await typed($, '++r ')
 
-  expect(await openedTexts($, 30), 'opened band').toEqual(['placeholders 1 ', '++r', R_DESC, ...R_ROWS, foot('++r')])
+  expect(await bandTexts($, 30), 'band').toEqual(['placeholders 1', '++r', ...R_DESC, ...R_ROWS.slice(0, 8), '... 3 more lines · whole text: /placeholders show ++r', foot('++r')])
 })
 
 test('GIVEN ++r and a 45-row terminal WHEN the band mounts THEN the auto view already shows the header line and the whole body, with no Button', async ($, on) => {
@@ -294,34 +295,36 @@ test('GIVEN ++r and a 45-row terminal WHEN the band mounts THEN the auto view al
   await typed($, '++r ')
   const ui = await mountBand($, 45)
 
-  expect([await textsOf(ui), await ui.find({ key: 'toggle' })], 'auto band').toEqual([['placeholders 1 ', '++r', R_DESC, ...R_ROWS, foot('++r')], undefined])
+  expect([await textsOf(ui), await ui.findAll({ type: 'Button' })], 'auto band').toEqual([['placeholders 1', '++r', ...R_DESC, ...R_ROWS, foot('++r')], []])
   await ui.unmount()
 })
 
-test('GIVEN ++r and a 24-row terminal WHEN the band is opened THEN the cut row names the show command', async ($, on) => {
+test('GIVEN ++r and a 24-row terminal WHEN the band mounts THEN the cut row names the show command', async ($, on) => {
   await boot($, on, defaultsTree())
   await typed($, '++r ')
 
-  expect(await openedTexts($, 24), 'opened band').toEqual(['placeholders 1 ', '++r', R_DESC, ...R_ROWS.slice(0, 8), '... +3 lines · /placeholders show ++r', foot('++r')])
+  expect(await bandTexts($, 24), 'band').toEqual(['placeholders 1', '++r', ...R_DESC, ...R_ROWS.slice(0, 5), '... 6 more lines · whole text: /placeholders show ++r', foot('++r')])
 })
 
-test('GIVEN ++r and ++rr of one group WHEN the band is opened THEN ++r says it is not sent and only the ++rr text shows', async ($, on) => {
+test('GIVEN ++r and ++rr of one group WHEN the band mounts THEN ++r says it is not sent and only the ++rr text shows, cut to the auto view', async ($, on) => {
   await boot($, on, defaultsTree())
   await typed($, '++r ++rr ')
 
-  expect(await openedTexts($, 60), 'opened band').toEqual([
-    'placeholders 2 ',
+  expect(await bandTexts($, 60), 'band').toEqual([
+    'placeholders 2',
     '++r',
     '  Two-phase review: review every significant change, then double-check eac…',
     ' (not sent: ++rr wins)',
     '++rr',
-    '  Anti-regression review: regression, project standard and functional correctness axes',
-    ...RR_ROWS,
+    '  Anti-regression review: regression, project standard and f…',
+    ' · Claude receives these lines now:',
+    ...RR_ROWS.slice(0, 10),
+    '... 6 more lines · whole text: /placeholders show ++rr',
     foot('++r'),
   ])
 })
 
-test('GIVEN ++r WHEN the band mounts THEN the header line is bold, the body lines dim, and every pre-wrapped row truncates at the end', async ($, on) => {
+test('GIVEN ++r WHEN the band mounts THEN the sent header line is bold, the sent body lines plain, labels dim, and every pre-wrapped row truncates at the end', async ($, on) => {
   await boot($, on, defaultsTree())
   await typed($, '++r ')
   const ui = await mountBand($, 45)
@@ -330,12 +333,13 @@ test('GIVEN ++r WHEN the band mounts THEN the header line is bold, the body line
 
   const dimRow = { dimColor: true, wrap: 'truncate-end' }
 
-  expect(props, 'props: count, token, description, bold header line, 10 dim body rows, dim foot').toEqual([
+  expect(props, 'props: count, token, description, dim receives label, bold header line, 10 plain body rows, dim foot').toEqual([
     { dimColor: true },
     { color: 'suggestion' },
     dimRow,
+    dimRow,
     { bold: true, wrap: 'truncate-end' },
-    ...Array.from({ length: 10 }, () => dimRow),
+    ...Array.from({ length: 10 }, () => ({ wrap: 'truncate-end' })),
     dimRow,
   ])
   await ui.unmount()
@@ -348,20 +352,21 @@ test('GIVEN a 119-char line in a 50-cell band WHEN the band mounts THEN its 3 wr
 
   const w10 = 'word word word word word word word word word word'
 
-  expect(await bandTexts($, 19, 'terminal', 52), 'texts').toEqual(['placeholders 1 ', '++wide', '  wide mode', w10, w10, 'word word word word', '... +2 lines · /placeholders show ++wide', foot('++wide')])
+  expect(await bandTexts($, 19, 'terminal', 52), 'texts').toEqual(['placeholders 1', '++wide', '  wide mode', ' · Claude receives these lines now:', w10, w10, 'word word word word', '... 2 more lines · whole text: /placeholders show ++wide', foot('++wide')])
 })
 
-test('GIVEN ++r ++rr in a 75-cell band WHEN the band mounts THEN the description gives way and the not-sent label stays whole on the row', async ($, on) => {
+test('GIVEN ++r ++rr in a 75-cell band WHEN the band mounts THEN the description gives way and the not-sent and receives labels stay whole on the row', async ($, on) => {
   await boot($, on, defaultsTree())
   await typed($, '++r ++rr ')
 
   expect(await bandTexts($, 40, 'terminal', 75), 'texts').toEqual([
-    'placeholders 2 ',
+    'placeholders 2',
     '++r',
     '  Two-phase review: review every significant chan…',
     ' (not sent: ++rr wins)',
     '++rr',
-    '  Anti-regression review: regression, project standard and functional …',
+    '  Anti-regression review: regressio…',
+    ' · Claude receives these lines now:',
     'User typed `++rr` — Anti-regression review discipline is active for this',
     'turn:',
     ' ',
@@ -372,7 +377,7 @@ test('GIVEN ++r ++rr in a 75-cell band WHEN the band mounts THEN the description
     'standard - existing conventions/patterns; 3) functional correctness - the',
     'new',
     'functionality works.',
-    '... +10 lines',
+    '... 8 more lines · whole text: /placeholders show ++rr',
     foot('++r'),
   ])
 })

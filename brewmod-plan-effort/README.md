@@ -1,6 +1,6 @@
 <p align="center">
-  <img src="../assets/brewmods/plan-effort.gif" width="800" alt="Claude Code window with a glyph effort dial: Shift+Tab from accept edits into plan mode swings the needle from high to xhigh, Enter approves the plan and the needle swings back to high">
-  <br><sub>Illustrative animation: session effort <code>high</code> → <code>Shift+Tab</code> from <code>accept edits on</code> into plan mode → <code>xhigh</code> → <code>Enter</code> approves the plan → back to <code>high</code>.</sub>
+  <img src="../assets/brewmods/plan-effort.gif" width="800" alt="Claude Code terminal, session effort high: Shift+Tab into plan mode shows no row, the first prompt shows a toast and a yellow plan-mode row above the prompt, and Shift+Tab out removes the row.">
+  <br><sub>Recorded in a real Claude Code 2.1.301 session (session effort <code>high</code>), sped up where the title bar shows ⏩.</sub>
 </p>
 
 <h1 align="center">Plan-mode effort</h1>
@@ -32,28 +32,72 @@ claude plugin marketplace update claude-brewcode && claude plugin update brewmod
 claude --plugin-dir ./brewmod-plan-effort   # dev mode, no install
 ```
 
-- Claude Code 2.1.287+ (mods use the hooks module API, early access). The `/plan-effort` command is verified on 2.1.300.
+- Claude Code 2.1.287+ (mods use the hooks module API, early access). The `/plan-effort` command and the plan-mode row are verified on 2.1.301.
 - `node` on the `PATH` (runs the bundled command hook `hooks/mode.mjs`).
 - Update anytime with `/brewtools:plugin-update`.
 
 </details>
 
-## Type this, get that
+## Use it
 
 | You do | You get |
 |--------|---------|
-| `Shift+Tab` twice from the default mode (`manual mode on` → `accept edits on` → `plan mode on`), or `/plan` | Requests run at `xhigh` from the next prompt. A toast `plan mode: effort xhigh · /plan-effort to change` shows once per plan visit |
+| `Shift+Tab` twice from the default mode (`manual mode on` → `accept edits on` → `plan mode on`), or `/plan` | Nothing shows at the keypress itself: Claude Code gives mods no live mode signal, so the mod learns plan mode at the first prompt or tool batch. From that prompt, requests run at `xhigh`, a yellow row appears above the prompt and a toast shows once per plan visit |
+| `Shift+Tab` out of plan mode | The row disappears at once (about 0.1 s), because the hint line Claude Code draws names the mode just left. The next request is already at your session effort. The status line keeps showing your session effort: the mod raises effort per request and never changes the session setting |
+| `Shift+Tab` back into plan mode, then a prompt | A second plan visit: the row and the toast show again |
 | Approve the plan | The next request is back at your session effort, nothing to undo |
-| `/plan-effort max` | Plan-mode level set to `max`, same as the `planEffort` option in `/config` |
+| `/plan-effort max` | Plan-mode level set to `max`, same as the `planEffort` option in `/config`; the row updates to the new level |
+
+## What you see
+
+| Where | Text | When |
+|-------|------|------|
+| Toast, 5 s | `brewmod-plan-effort: plan mode · effort raised to xhigh` | Once per plan visit (leaving and re-entering plan mode starts a new one), only when the mod raised the effort |
+| No row | | Default or any other mode; before the first prompt of a plan visit; after `Shift+Tab` out of plan mode |
+
+In plan mode the yellow row (theme warning colour) above the prompt and the `session` line of the `/plan-effort` status block follow the session effort:
+
+| Session effort | Row above the prompt | `session` line |
+|----------------|----------------------|----------------|
+| Below `planEffort` (here `high`) | `plan mode · effort xhigh for this mode · change: /plan-effort <level>` | `high   -> raised to xhigh in plan mode` |
+| At or above `planEffort` (here `max`) | `plan mode · effort max, already >= xhigh` | `max    not raised, session already >= plan effort` |
+| None: the model takes no effort level | `plan mode · effort not raised: model takes no effort level` | `none   not raised, model takes no effort level` |
+| A number (here `3`) | `plan mode · effort not raised: 3 is not an effort level` | `3      not raised, 3 is not an effort level` |
+| No request seen yet | no row | `n/a until the next request` |
+
+Claude Code adds the `brewmod-plan-effort:` prefix to the toast and to the first line of command output; the mod supplies the text after it.
+
+The row stays through turns and typing, sits above any other prompt-area UI and steps aside while a survey is open. With [brewmod-placeholders](../brewmod-placeholders/) loaded, it stays visible above the placeholders band in either load order.
+
+`/plan-effort` prints a status block:
+
+```text
+status
+plan effort  xhigh  (medium | high | xhigh | max)
+session      high   -> raised to xhigh in plan mode
+mode now     plan
+/plan-effort <level>   set the plan-mode effort
+/plan-effort           show this status
+```
+
+`plan effort` shows the configured level and the allowed levels; `mode now` is one of:
+
+| `mode now` | Meaning |
+|------------|---------|
+| `plan` (or the other mode name from the state file) | Mode recorded at the last prompt or tool batch |
+| `unknown until the next prompt` | No state file yet |
+| `plan mode left (Shift+Tab); known at the next prompt` | You left plan mode by `Shift+Tab`; the new mode is learned at the next prompt |
 
 ## Commands
 
-| Command | Does |
-|---------|------|
-| `/plan-effort` (also `status`, `help`) | Shows plan effort, session effort, current mode and usage |
-| `/plan-effort <medium\|high\|xhigh\|max>` | Sets `planEffort` and prints `plan effort: <old> -> <new>` |
+| Command | Result |
+|---------|--------|
+| `/plan-effort` (also `status`) | The status block above |
+| `/plan-effort help` | The status block under the head `help · in plan mode, main-session requests below the plan effort are sent at it; never lowered; subagents and the session effort setting are left alone` |
+| `/plan-effort <medium\|high\|xhigh\|max>` | Sets `planEffort` and prints `plan effort: <old> -> <new>` plus the status rows |
+| `/plan-effort <other word>` | Prints `unknown '<arg>'` plus the status rows |
 
-`/config` has one option, `planEffort` (default `xhigh`). Under `-p` the command cannot set it: use `/config`.
+`/config` has one option, `planEffort` (default `xhigh`). In `claude -p` there is no `/config` row: the command prints `plan effort: cannot set it here (no /config row, e.g. under -p) · set: /config in an interactive session, or settings.json pluginConfigs`.
 
 ## Good to know
 
@@ -61,15 +105,15 @@ claude --plugin-dir ./brewmod-plan-effort   # dev mode, no install
 - Raise only: a session already at or above `planEffort` (for example `max`) is not changed.
 - Rejecting a plan keeps the raise, because Claude is still in plan mode.
 - Works on Team organizations, where the builtin security layer bypasses `classic.*` hooks.
-- Measured on Claude Code 2.1.300: plan mode sent 4 `xhigh` requests, default mode 0, on Team-org and Max profiles, with `--plugin-dir` and installed copies. [Full results](https://doc-claude.brewcode.app/mods/plan-effort/#verified).
+- Live on Claude Code 2.1.301: 78 of 78 checks passed over 10 sessions, both mod load orders, 120x40 and 80x24 terminals; unit tests: 70 pass. Earlier measurement on 2.1.300: plan mode sent 4 `xhigh` requests, default mode 0, on Team-org and Max profiles. [Full results](https://doc-claude.brewcode.app/mods/plan-effort/#verified).
 
 <details>
 <summary>Technical details</summary>
 
 - `hooks/mode.mjs`, a bundled command hook on `UserPromptSubmit` and `PostToolBatch`, writes the main loop's `permission_mode` to `<plugin root>/.state/mode-<session_id>.json`; `turn.step` reads it.
-- Each request in plan mode is rewritten up to `planEffort`, raise-only; nothing to undo when the plan ends.
+- Each request in plan mode is rewritten up to `planEffort`.
 - Fails open: errors never block a prompt or tool batch, and a missing state file counts as not in plan mode.
-- Shift+Tab fires no event, so a switch takes effect at the next prompt or tool batch.
+- Entering plan mode is learned at the next prompt or tool batch: no row and no raise before then. Leaving plan mode is read from the prompt hint label.
 
 Full detail: [Technical details](https://doc-claude.brewcode.app/mods/plan-effort/#technical-details). Background: [anthropics/claude-code#91444](https://github.com/anthropics/claude-code/issues/91444).
 

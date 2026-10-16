@@ -205,12 +205,14 @@ export const spyWrites = (on: On): unknown[] => {
 
 // ---- band: a terminal session whose box mirrors every edit, the band mounted and read as Text rows
 
+// What core's own drawing resolves to beneath every hook (2.1.301 types: `{ type: 'engine', ref }`).
+export const ENGINE_NODE = { type: 'engine', ref: 0 } as const
 export const BAND = { plugin: 'brewmod-placeholders', component: 'AbovePrompt' } as const
 export const bandProps = (maxRows = 24, bodyColumns = 100) => ({ hasSurvey: false, isWorking: false, maxRows, bodyColumns, scroll: { bodyRows: maxRows - 1, offset: 0, total: 0 }, view: {} })
 // The box the stubbed engine answers $.prompt.read with.
 export const box = { text: '', cursor: 0 }
 
-// extra hooks sit above the box bottoms; ui.render falls through to an ENGINE row.
+// extra hooks sit above the box bottoms; ui.render falls through to core's own drawing, as the live engine answers.
 export async function bootBand($: any, on: On, w: Wiring, extra: (o: On) => void = () => {}): Promise<Wired> {
   const wired = wire(on, w)
   extra(on)
@@ -221,7 +223,7 @@ export async function bootBand($: any, on: On, w: Wiring, extra: (o: On) => void
     box.cursor = e.start + e.inputText.length
     return { text: box.text, cursor: box.cursor }
   })
-  on('ui.render', ($$, e) => $$.ui.resolve(e).Text({ children: 'ENGINE' }))
+  on('ui.render', () => ENGINE_NODE as never)
   box.text = ''
   box.cursor = 0
   await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
@@ -232,14 +234,6 @@ export const mountBand = ($: any, maxRows = 24, surface: 'terminal' | 'desktop' 
 export const textsOf = async (ui: any): Promise<string[]> => (await ui.findAll({ type: 'Text' })).map((t: { text: string }) => t.text)
 export async function bandTexts($: any, maxRows = 24, surface: 'terminal' | 'desktop' = 'terminal', bodyColumns = 100): Promise<string[]> {
   const ui = await mountBand($, maxRows, surface, bodyColumns)
-  const texts = await textsOf(ui)
-  await ui.unmount()
-  return texts
-}
-// Band texts after the toggle Button opens it.
-export async function openedTexts($: any, maxRows: number): Promise<string[]> {
-  const ui = await mountBand($, maxRows)
-  await ui.press({ key: 'toggle' })
   const texts = await textsOf(ui)
   await ui.unmount()
   return texts

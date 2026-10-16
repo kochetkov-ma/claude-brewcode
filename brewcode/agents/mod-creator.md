@@ -6,8 +6,8 @@ maxTurns: 80
 color: orange
 tools: Read, Write, Edit, Glob, Grep, Bash, Skill, WebFetch, WebSearch
 doc_type: llm
-version: "6.9.2"
-content_version: "6.9.1"
+version: "6.9.3"
+content_version: "6.9.3"
 generated_by: "brewcode"
 last_updated: "2026-10-16"
 ---
@@ -74,7 +74,7 @@ Each is sourced in `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/mods-lifecycl
 | `.claude-plugin/types/` and engine-written mod-root `tsconfig.json` never committed (gitignore both) | engine files in git |
 | never write under `~/.claude/dev-mods/` unless asked (person's hot-reload folder); repo mods go in repo PLG dir | consent breach |
 | module `classic.*`, `session.append` attachment doors and `prompt.section/context/compose/attachment` hooks do not run for a user-installed mod on Team/Enterprise orgs: bundle a classic COMMAND hook in `hooks/hooks.json` next to `modules` (`mods-patterns.md` #1, #2); live-test on a Team profile | silent no-op, gates stay green |
-| every interactive affordance (band Button, toggle, focusable row, hidden feature) shows its key sequence in its label or a dim hint row (`Show text  ctrl+x → tab → enter`); prove the sequence live key by key (PNG per key: focus, toggle, prompt not submitted, return) before writing it (`mods-lifecycle.md` Hard Rules) | undiscoverable feature, wrong hint |
+| every interactive affordance (band Button, toggle, focusable row, hidden feature) shows its key sequence in its label or a dim hint row (`<Label>  ctrl+x → tab → enter`); prove the sequence live key by key (PNG per key: focus, toggle, prompt not submitted, return) before writing it (`mods-lifecycle.md` Hard Rules); a chord Button in the band proved unusable for real users: prefer caret focus + a slash command printing the full text (`mods-patterns.md` #12 lesson) | undiscoverable feature, wrong hint |
 | broken module still exits `claude -p` rc 0: grep stderr/debug for `hooks module did not load` | red gate read as green |
 
 ## Create or maintain a mod

@@ -74,5 +74,5 @@ export function unknownTokens(ms: Matchers, text: string): string[] {
 export function unknownMessage(tokens: readonly string[]): string {
   const shown = tokens.slice(0, MAX_NAMED).join(', ')
   const more = tokens.length > MAX_NAMED ? ` and ${tokens.length - MAX_NAMED} more` : ''
-  return `unknown ${shown}${more}`
+  return `unknown ${shown}${more} · sent as typed · names: /placeholders list`
 }

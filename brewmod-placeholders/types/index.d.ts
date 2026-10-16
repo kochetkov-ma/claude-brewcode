@@ -16,7 +16,6 @@ declare module 'claude-code' {
   interface PluginState {
     'brewmod-placeholders': {
       view: PlaceholderView
-      expanded: boolean
       focus: PlaceholderFocus
     }
   }

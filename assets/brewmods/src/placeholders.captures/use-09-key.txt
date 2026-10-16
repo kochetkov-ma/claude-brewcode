@@ -1,8 +1,8 @@
-✻ Brewed for 7s · done 11:56 PM
-placeholders 2 [ Show text  ctrl+x → tab → enter ]                                  [-]
-++db  Always use the staging DB
+✻ Worked for 8s · done 9:42 AM
+placeholders 2                                                                      [-]
+++db  Always use the staging DB · Claude receives these lines now:
   always use the staging DB
-++r  Two-phase review: review every significant change, then double-check each fin…
+++r  Two-phase review: review every significant… · Claude receives these lines now:
   User typed `++r` — Two-phase review discipline is active for this turn:
 
   [REVIEW DISCIPLINE: DOUBLE-CHECK]
@@ -12,8 +12,8 @@ placeholders 2 [ Show text  ctrl+x → tab → enter ]                          
   2) Double-check - reproduce each finding.
   3) Fix - confirmed findings only.
   Big review -> split by area, never one long pass. Brief each: goal + area +
-  ... +2 lines
-more: put the caret on ++db · send as typed: ++/ · /placeholders help
+  ... 2 more lines · whole text: /placeholders show ++r
+more: put the caret on ++db · send as typed: ++/ · help: /placeholders help
 
 ────────────────────────────────────────────────────────────────────────────────────────
 ❯ ++db ++r +

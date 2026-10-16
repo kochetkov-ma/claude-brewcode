@@ -1,9 +1,10 @@
-// Storyboard v2 of placeholders.gif (design-b2 §4, keys re-verified live on CC 2.1.301, main-screen TUI): times in s.
+// Storyboard v3 of placeholders.gif (keys re-verified live on CC 2.1.301, main-screen TUI, mod 6.9.3 band): times in s.
 // Keys = macOS keycaps (glyph + on-screen word); record-gifs.mjs --check holds them to its allow-list and the facts below.
 window.PH_STORY = {
   term: { cols: 88, rows: 40 },
+  aria: 'Claude Code prompt: type ++ and pick ++r with Up and Tab; with the caret on ++r the band shows the lines Claude receives; Enter sends and Claude reviews a one-line README fix; /placeholders global add ++db saves a new placeholder after one question; then ++db ++r ++m are typed and the caret on ++m shows its text cut to fit, with /placeholders show ++m for the whole text',
   loop: 37, end: 36, fps: 10, still: 7.5,
-  chapters: [[0, 'type ++r'], [5.6, 'full text'], [10.4, 'send'], [15, 'add'], [27, 'use it'], [31.2, 'show text']],
+  chapters: [[0, 'type ++r'], [5.6, 'full text'], [10.4, 'send'], [15, 'add'], [27, 'use it'], [30.5, 'cut to fit']],
   // [from, screen, beat]: the captured screen shown from `from` on; beat names the TODO-CAPTURE slot
   screens: [
     [0, 'type-0-start', 'type'],
@@ -32,18 +33,14 @@ window.PH_STORY = {
     [30.09, 'use-08-key', 'use-it'],
     [30.22, 'use-09-key', 'use-it'],
     [30.35, 'use-10-key', 'use-it'],
-    [30.48, 'use-11-key', 'use-it'],
-    [30.61, 'use-12-key', 'use-it'],
-    [31.5, 'use-13-ctrlx', 'show-text'],
-    [32.2, 'use-14-tab', 'show-text'],
-    [32.9, 'use-15-enter', 'show-text'],
+    [30.48, 'use-11-key', 'cut-to-fit'],
     [36.4, 'type-0-start', 'type'],
   ],
   // prompt-row overlay while typing: `on` screen, prompt row cut to the typed prefix; `from` = chars already typed.
   // `on` = capture after the typed text (non-empty footer); add-0a-cmd shows whole (tmux paste), typing resumes past ++db:
   typing: [
     { at: 0.4, text: 'review the diff +', cps: 12, on: 'type-1-plus' },
-    { at: 15.85, text: '/placeholders global add ++db: always use the staging DB', from: 30, cps: 48, on: 'add-0-typed' },
+    { at: 15.85, text: '/placeholders global add ++db: always use the staging DB', from: 24, cps: 48, on: 'add-0-typed' },
   ],
   // `↑` from no selection wraps to the last row (++rr, later ++db); `↓` starts at the first row; Tab adds a trailing space
   keys: [
@@ -57,26 +54,23 @@ window.PH_STORY = {
     { at: 22.2, glyph: '⏎', word: 'enter' },
     { at: 28.2, glyph: '↑', word: '' },
     { at: 28.9, glyph: '⇥', word: 'tab' },
-    { at: 31.5, glyph: '⌃X', word: 'ctrl+x' },
-    { at: 32.2, glyph: '⇥', word: 'tab' },
-    { at: 32.9, glyph: '⏎', word: 'enter' },
   ],
-  // compressed spans: title-bar chip `⏩ <factor>x`; factor = real elapsed (keys.log) / shown
+  // compressed spans: title-bar chip `⏩ <factor>x`; factor = real elapsed (session transcript timestamps) / shown
   skips: [
-    { at: 11.0, until: 12.6, factor: 3 },
-    { at: 17.2, until: 19.0, factor: 2 },
-    { at: 22.5, until: 23.4, factor: 4 },
+    { at: 11.0, until: 12.6, factor: 5 },
+    { at: 17.2, until: 19.0, factor: 2.5 },
+    { at: 22.5, until: 23.4, factor: 5.5 },
   ],
   captions: [
     [0, 'Type <k>++</k>, pick a name with <k>↑</k>, then <k>Tab</k>'],
-    [5.9, 'Caret on <k>++r</k>: its full text'],
-    [9.5, 'Caret off: a short preview'],
+    [5.9, 'Caret on <k>++r</k>: the lines Claude receives'],
+    [9.5, 'Caret off: the band lists each placeholder'],
     [10.7, '<k>Enter</k> sends; the block rides along hidden'],
     [15.3, 'Add your own in plain words'],
     [19.0, 'One question, then it is saved (global)'],
     [27.3, 'Your <k>++db</k> works in every project'],
-    [31.5, '<k>ctrl+x</k> → <k>tab</k> → <k>enter</k>, one key after another'],
-    [32.9, 'Show text: what each placeholder adds'],
+    [30.6, 'Caret on <k>++m</k>: its text, cut to fit the band'],
+    [33.2, 'Whole text: <k>/placeholders show ++m</k>'],
     [36, ''],
     [36.4, 'Type <k>++</k>, pick a name with <k>↑</k>, then <k>Tab</k>'],
   ],
@@ -84,16 +78,19 @@ window.PH_STORY = {
   facts: [
     { screen: 'type-5-tab', has: 'review the diff ++r\n', why: 'Tab inserts ++r, not ++rr (prompt glyph is ❯ + U+00A0)' },
     { screen: 'full-1-left', has: 'return verdict first, then findings.', why: 'caret on ++r shows the last body line' },
-    { screen: 'full-2-right', has: 'more: put the caret on ++r · send as typed: ++/ · /placeholders help', why: 'compact foot' },
+    { screen: 'full-1-left', has: '++r · Claude receives these lines now:', why: 'focus head (band.tsx)' },
+    { screen: 'full-2-right', has: 'more: put the caret on ++r · send as typed: ++/ · help: /placeholders help', why: 'compact foot' },
     { screen: 'add-1-enter', has: 'Scope: global (I said it; skip only the Where question).', why: 'hand-off scope line (command.ts)' },
     { screen: 'add-2-dialog', has: 'Save ++db as drafted?\n', why: 'Q1 never names a layer (command.ts)' },
-    { screen: 'add-2-dialog', has: 'Save as drafted (Recommended)', why: 'first option' },
+    { screen: 'add-2-dialog', has: '❯ 1. Save as drafted ', why: 'first option, selected' },
+    { screen: 'add-2-dialog', has: '(Recommended)', why: 'first option is the recommended one' },
     { screen: 'add-4-saved', has: 'saved ++db (global): ~/.claude/placeholders/db.md', why: 'home-relative saved path' },
     { screen: 'use-03-up1', has: '❯ ++db', why: 'one ↑ wraps to the last row, ++db' },
     { screen: 'use-04-tab', has: '++db\n', why: 'Tab inserts ++db' },
-    { screen: 'use-12-key', has: '[ Show text  ctrl+x → tab → enter ]', why: '3 tokens offer the toggle' },
-    { screen: 'use-15-enter', has: '[ Hide text  ctrl+x → tab → enter ]', why: 'enter opened the band' },
-    { screen: 'use-15-enter', has: '  always use the staging DB', why: 'the new ++db body is shown' },
+    { screen: 'use-11-key', has: '❯\u00a0++db ++r ++m\n', why: 'three tokens typed, caret on ++m' },
+    { screen: 'use-11-key', has: '++m · Claude receives these lines now:', why: 'focus band on ++m' },
+    { screen: 'use-11-key', has: ' more lines · whole text: /placeholders show ++m\n', why: 'cut row names the whole-text command' },
+    { screen: 'use-11-key', has: 'close: move the caret off ++m · send as typed: ++/', why: 'focus foot' },
   ],
   // fermenter beats: kick when a token is accepted, burst on each send/save
   kicks: [4.5, 28.9], bursts: [10.7, 16.9, 22.2], labels: [[4.5, '++r · batch 01'], [28.9, '++db · batch 02']],
