@@ -45,11 +45,11 @@ Each codeword reads one file name in those folders:
 | Override file | Codeword |
 |---------------|----------|
 | `full.md` | `++m` |
-| `planmode.md` | `++m` in Plan mode |
+| `planmode.md` | `++m` plan-mode addition |
 | `architect.md` | `++a` |
 | `review-double.md` | `++r` |
 | `review-regression.md` | `++rr` |
-| `cron-plan.md` | `+++` (Plan mode only) |
+| `cron-plan.md` | `+++` plan-mode addition |
 
 To change codeword text, describe the change, for example `/placeholders make ++r shorter`. Claude shows one confirm dialog and saves your own file; it does not edit the override files above. Without a scope word the dialog asks where to save (Global recommended: `~/.claude/placeholders/<name>.md`, all projects; Project: `.claude/placeholders/<name>.md`); start with `global` or `project` to skip the question. A project save outranks both brewtools override folders, a global save only the global one. Full rules: [Prompt placeholders](/mods/placeholders/). `/brewtools:manager-setup status` lists the override files.
 

@@ -10,7 +10,7 @@ model: sonnet
 
 # Manager
 
-Manager mode is the opt-in HARD wall plus the task-graph tools key. The prompt codewords (`++m` / `++a` / `++rr` / `++r` / bare `+++`) are NOT part of this plugin: the `brewmod-placeholders` mod provides them (Claude Code 2.1.301+). This skill neither installs nor toggles them; `status` only reports where they come from.
+Manager mode is the opt-in HARD wall plus the task-graph tools key. The prompt codewords (`++m` / `++a` / `++rr` / `++r` / `+++`) are NOT part of this plugin: the `brewmod-placeholders` mod provides them (Claude Code 2.1.301+). This skill neither installs nor toggles them; `status` only reports where they come from.
 
 **Codewords — provided by `brewmod-placeholders`.** Install: `claude plugin install brewmod-placeholders@claude-brewcode`. Text override files are read by the mod's legacy layer: it reads `<project>/.claude/brewtools/manager/prompts/<mode>.md` and `<config dir>/manager/prompts/<mode>.md` as its legacy layer (`<mode>` = `full`, `planmode`, `architect`, `review-regression`, `review-double`, `cron-plan`). This skill never reads, writes or deletes them. Codeword list, `/placeholders` command: the mod's README.
 
@@ -675,7 +675,7 @@ Shape (`references/hard.md` rendered with `hard`, `level`, `stateSource`):
 # Manager — status
 
 ## Codewords
-codewords: provided by brewmod-placeholders (Claude Code 2.1.301+) — ++m, ++a, ++rr, ++r, bare +++ (Plan mode). Not part of this plugin; this skill neither enables nor disables them.
+codewords: provided by brewmod-placeholders (Claude Code 2.1.301+) — ++m, ++a, ++rr, ++r, +++. Not part of this plugin; this skill neither enables nor disables them.
 Install:   claude plugin install brewmod-placeholders@claude-brewcode
 Overrides: <legacyOverrides, one path per line, or "none found"> — files under .claude/brewtools/manager/prompts/ and <config dir>/manager/prompts/ are read through the mod's legacy layer.
 

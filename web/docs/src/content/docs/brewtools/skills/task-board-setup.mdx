@@ -127,7 +127,7 @@ Baseline work: confirm scope and corrections, assign bounded work, implement, si
 
 Completion, cancellation or parking stops this task's timers and verifies their absence; a failed deletion stays a reported cleanup gap.
 
-**Planning and `+++`.** Plan mode stays read-only: the plan carries methodology, base work, graph reconciliation, the task prompt, a timer execution step and a final PROGRESS refresh. Timers and file writes wait for authorized execution. With the brewmod-placeholders mod (Claude Code 2.1.301+), typing `+++` in Plan mode injects this requirement through the default `+` placeholder (`when: plan`); outside Plan mode it adds no cron instruction. See [mods](/mods/overview/).
+**Planning and `+++`.** Plan mode stays read-only: the plan carries methodology, base work, graph reconciliation, the task prompt, a timer execution step and a final PROGRESS refresh. Timers and file writes wait for authorized execution. With the brewmod-placeholders mod (Claude Code 2.1.301+), typing `+++` works in every mode: outside Plan mode Claude creates one anti-drift cron for the current task right away; in Plan mode the plan part of the default `+` placeholder (`+.plan.md`) makes Claude plan the cron as an execution step instead. See [mods](/mods/overview/).
 
 </Spoiler>
 

@@ -65,14 +65,14 @@ Claude reads  ++r check the diff                     <- your prompt, unchanged
 
 | Token | Normal mode | Plan mode |
 |---|---|---|
-| `++m` | `Manager mode is active`: `[ROLE: MANAGER]`, delegate, never code (29 lines) | `Manager + Plan Mode is active`: the same text **+ `[ADDON: PLAN MODE]`**: stay read-only; the plan opens with the role and the full task graph, plus a deferred anti-drift cron (59 lines) |
+| `++m` | `Manager mode is active`: `[ROLE: MANAGER]`, delegate, never code (29 lines) | `Manager + Plan Mode is active`: the same text **+ `[ADDON: PLAN MODE]`**: stay read-only; the plan opens with the role and the full task graph (48 lines) |
 | `++a` | `Architecture-first`: delegate the design to expert agents before implementing | same text: `++a` has no plan part |
 | `++r` | `[REVIEW DISCIPLINE: DOUBLE-CHECK]`: review, reproduce, fix confirmed findings only (11 lines) | same text: `++r` has no plan part |
 | `++rr` | `Anti-regression review`: regression, project standard and functional correctness axes | same text: `++rr` has no plan part |
-| `+++` | nothing | `[ADDON: ANTI-DRIFT CRON PLAN]` |
+| `+++` | `Anti-drift cron is active`: `[ADDON: ANTI-DRIFT CRON]`, asks Claude to create one unique session cron for the current task now (9 lines) | `plan the task anti-drift cron`: the same text **+ `[ADDON: ANTI-DRIFT CRON PLAN]`**: create no cron now, plan it as an execution step (13 lines) |
 | `++rr` + `++r` | only `++rr` is sent (one review per message) | same |
 
-Line counts are lines of the sent text, header line included: the numbers the band uses.
+Every placeholder is sent in every mode. A placeholder with a plan part sends that part as an addition in plan mode only. Line counts are lines of the sent text, header line included: the numbers the band uses.
 
 <Spoiler title="++r text as sent">
 
@@ -131,8 +131,8 @@ Plan mode: the first line becomes ``User typed `++m` — Manager + Plan Mode is 
 ```text
 [ADDON: PLAN MODE]
 
-Stay read-only: no code, board/task-state writes, installation, configuration,
-or cron creation. Read-only expert exploration is allowed.
+Stay read-only: no code, board/task-state writes, installation or
+configuration. Read-only expert exploration is allowed.
 
 Include in the plan (English, token economy):
 - PREAMBLE: [ROLE: MANAGER] + the 5-step protocol restated verbatim as the
@@ -146,18 +146,31 @@ Include in the plan (English, token economy):
   agent, bounded scope+acceptance per spawn), dependencies marked, parallel
   branches explicit, critical path named.
 
-Include the task-board execution step: announce and create one unique session
-anti-drift cron per top-level task, hourly unless the user chooses another tick;
-during execution record its task-specific methodology/prompt, timezone, ID,
-tick count and stop rule. Scheduling unavailable -> explicit gap, never a
-claimed schedule. Each tick: reread methodology/anti-drift rules, collect agent
-updates, reconcile status/dependencies/goal, keep all unfinished + latest 10
-completed graph entries, preserve older evidence outside the active graph.
-The tick report is `HH:MM TZ · tick N · elapsed`, then only the nonempty rows:
-🟢 completed, 🔵 active/remaining/next, 🔴 problems/blockers/questions,
-⚪ anti-drift verdict. Completion/cancellation -> stop and verify cron removal.
+Deliver the embedded role + graph, not implementation code.
+```
 
-Deliver the embedded role + graph + deferred cron step, not implementation code.
+</Spoiler>
+
+<Spoiler title="+++ text as sent, normal and plan mode">
+
+```text
+User typed `+++` — Anti-drift cron is active for this turn:
+
+# [ADDON: ANTI-DRIFT CRON]
+
+Now: announce and create one unique session cron for the current task, hourly unless the user's interval differs, using available native scheduling tools. Record its task-specific prompt, schedule ID, timezone, tick count and stop rule. If scheduling is unavailable, report the gap without claiming a schedule exists.
+
+Each tick rereads the goal, task-specific methodology and anti-drift rules; collects active agent updates; reconciles task statuses, dependencies and remaining work; updates the task graph, keeping all unfinished entries and only the latest 10 completed entries, with older completion evidence preserved outside the active graph. It checks delivered work against the end goal, corrects drift, and names remaining acceptance criteria, problems, blockers and user questions.
+
+Then it emits an extremely compact report: `HH:MM TZ · tick N · elapsed`; `🟢 completed`; `🔵 active / remaining / next`; `🔴 problems / blockers / questions`; `⚪ anti-drift verdict`. Omit empty rows; use only these circles. On task completion or cancellation, stop the cron and verify its removal.
+```
+
+Plan mode: the first line becomes ``User typed `+++` in Plan mode — plan the task anti-drift cron:``; the normal text stays, then a blank line and this addition:
+
+```text
+# [ADDON: ANTI-DRIFT CRON PLAN]
+
+Stay read-only in Plan mode: create no cron now. Plan it as an execution step instead: on exit, announce and create one unique session cron per top-level task, with its task-specific prompt, interval and stop rule recorded in that task's methodology.
 ```
 
 </Spoiler>
@@ -177,7 +190,7 @@ Your own placeholder can have a plan part too: see [Examples](#examples).
 ## Read the full text
 
 <p align="center">
-  <img src="/brewmods/placeholders-full-text.gif" alt="Claude Code terminal, real session: the caret on ++m shows its text cut to fit; ? then Enter fills /placeholders show ++m, and Enter again prints the whole text in the chat without a Claude turn." width="800" loading="lazy" />
+  <img src="/brewmods/placeholders-full-text.gif" alt="Claude Code terminal, real session: the caret on ++m shows its text cut to fit, then a teal `not sent now · plan mode adds 18 lines`; ? then Enter fills /placeholders show ++m, and Enter again prints the whole text in the chat without a Claude turn." width="800" loading="lazy" />
   <br /><small>Real Claude Code 2.1.301 screens. Caret on <code>++m</code>; <code>?</code> and <code>⏎</code> fill the show command, nothing is sent; <code>⏎</code> again prints the whole text.</small>
 </p>
 
@@ -191,26 +204,28 @@ Your own placeholder can have a plan part too: see [Examples](#examples).
 
 While the name menu is open (typing `++r` offers `++rr`), it caps the band, and a `?` right after the token closes it. If the whole text then fits in 15 rows, the cut row ends with `· type ? after ++r to see all`. `++m` never shows that hint: its 29 lines do not fit in 15 rows. Otherwise the band looks the same with or without the `?`: the caret already shows the text.
 
-Band with the caret on `++m` (default mode, 120x40). Colours come from your Claude Code theme.
+Band with the caret on `++m` (default mode, 120x40). Colours come from your Claude Code theme; the `not sent now` row is in the plan-mode colour.
 
 ```text
 ++m · Claude receives these lines now:
   User typed `++m` — Manager mode is active ...
   ... 12 more text rows (13 in all) ...
   ... 16 more lines · whole text: /placeholders show ++m or ++m? alone [Enter]
-  not sent now · plan mode adds 29 lines
+  not sent now · plan mode adds 18 lines
 close: move the caret off ++m · send as typed: ++/
 ```
 
 | Looks like | Means | In the band above |
 |---|---|---|
-| Bold, placeholder blue (the theme's suggestion colour) | A placeholder name; an unknown one is bold yellow | `++m`, `++zz` |
+| Bold, placeholder blue (the theme's suggestion colour) | A placeholder name; an unknown one is bold yellow (the theme's warning colour) | `++m`, `++zz` |
 | Bold, theme text colour (white on a dark theme, black on a light one) | Text Claude receives with this message | the `User typed ...` rows |
+| Bold, plan-mode colour (Claude Code's `planMode` theme colour: teal on a dark theme, a darker teal on a light one) | The plan-mode addition Claude receives only in plan mode | the `[ADDON: PLAN MODE]` rows in plan mode |
+| Plain, plan-mode colour | Marks that name plan mode | `plan mode adds:`, `not sent now · plan mode adds 18 lines`, `plan +`, ` · plan mode` after `placeholders 2` |
 | Underlined, theme text colour | An action: what to type or do | `/placeholders show ++m`, `++m?`, `move the caret off ++m`, `++/` |
 | Plain, theme text colour | A key to press | `[Enter]` |
-| Grey (dim) | Labels and notes; never sent. Text that is not sent now (the other mode's text) is grey too | `close:`, `more:`, `... 16 more lines`, `plan mode adds:`, `not sent now · plan mode adds 29 lines` |
+| Grey (dim) | Labels and notes; never sent. Text that is not sent (a skipped token, an escaped message) is grey too | `close:`, `more:`, `... 16 more lines`, `placeholders 2` |
 
-The text under the head holds up to 15 rows, the cut row and the plan note included; the head and foot rows (and an `also:` row) come on top. The text rows are wrapped to the terminal width, so how many fit changes with it. `K more lines` counts the lines of the sent text left out (its header line and blank line included): `++m` is 29 lines, 13 text rows shown at 120x40 (13 + the cut row + the plan note = 15). `plan mode adds N lines` counts the lines of the plan part. In plan mode the band shows the plan header, the normal rows, a grey `plan mode adds:` and then `[ADDON: PLAN MODE]` with its rows. A plan-only token outside plan mode reads `+++ · not sent now (plan only):` with a grey text.
+The text under the head holds up to 15 rows, the cut row and the plan note included; the head and foot rows (and an `also:` row) come on top. The text rows are wrapped to the terminal width, so how many fit changes with it. `K more lines` counts the lines of the sent text left out (its header line and blank line included): `++m` is 29 lines, 13 text rows shown at 120x40 (13 + the cut row + the plan note = 15). `plan mode adds N lines` counts the lines of the plan part; an empty plan part counts as none, so it gets no `plan +` tag and no note. In plan mode the band shows the plan header, the normal rows, a `plan mode adds:` row in the plan-mode colour and then `[ADDON: PLAN MODE]` with its rows in bold plan-mode colour. Outside plan mode a name with a plan part ends with the note `not sent now · plan mode adds N lines` in the plan-mode colour; `+++` shows its own text there, sent and bold, with the note `not sent now · plan mode adds 3 lines`.
 
 Hint rows, as drawn. A custom `prefix` replaces `++` in all of them.
 
@@ -231,10 +246,11 @@ The `or ++m? alone [Enter]` part is the query from [What `?` does](#read-the-ful
 | Do | You type | What happens |
 |---|---|---|
 | Add | `/placeholders add ++db: always use the staging DB` | Claude drafts it and asks once: `Save ++db as drafted?` with `Save as drafted (Recommended)` or `Change it` (the question never names a layer; scope words count only outside the placeholder's own text); with no scope word, the same dialog also asks `Where to save ++db?` with `Global (Recommended)` or `Project`; starting with `global` or `project` skips it. Reply: `saved ++db (global): ~/.claude/placeholders/db.md` |
-| Add with a plan part | `/placeholders add ++ship: run the tests; in plan mode also list the release steps` | The same dialog adds `Add this plan-mode part to ++ship?` (`Add it (Recommended)` or `No plan part`). Saved as `ship.md` (`run the tests`) and `ship.plan.md` (`also list the release steps`, `plan: add`) |
+| Add with a plan part | `/placeholders add ++ship: run the tests; in plan mode also list the release steps` | The same dialog adds `Add this plan-mode part to ++ship?` (`Add it (Recommended)` or `No plan part`). Saved as `ship.md` (`run the tests`) and `ship.plan.md` (`also list the release steps`, `plan: add`). A plan-mode part with no normal text to join is refused, so it is never sent in every mode: `++ship has no text yet: send text too` (an inline normal text: `a plan-mode part needs a normal text that is not inline`) |
 | Change | `/placeholders make ++r shorter` | Claude starts from the current text; the change stays in its layer (a plugin default -> asks where) |
-| Remove | `/placeholders remove ++db` | Asks once: `Remove it (Recommended)` or `Keep it`; if the name is in both layers, it also asks where. Removing your override of a built-in brings the built-in back; plugin defaults are never removed (`++r is built in and cannot be removed`). Reply: `removed ++db (global): ~/.claude/placeholders/db.md · ++db is no longer defined` |
+| Remove | `/placeholders remove ++db` | Asks once: `Remove it (Recommended)` or `Keep it`; if the name is in both layers, it also asks where. Removing your override of a built-in brings the built-in back; plugin defaults are never removed (`++r is built in and cannot be removed`). Reply: `removed ++db (global): ~/.claude/placeholders/db.md · ++db is no longer defined`. When another layer keeps only a plan part for the name, the reply ends `· its plan-mode part is now sent in every mode` |
 | Remove a plan part | `/placeholders remove the plan part of ++ship` | Asks `Remove the plan-mode part of ++ship (global)?`, then deletes `ship.plan.md`; `++ship` keeps its normal text |
+| Remove the normal text only | `/placeholders remove the normal text of ++ship` | Refused while `ship.plan.md` would be left alone, since that part would then be sent in every mode; nothing is deleted: `removing only the normal text of ++ship would leave its plan-mode part alone, and that part would then be sent in every mode · remove both parts (part all), or change the normal text instead`. If another layer still holds the normal text, only the file in the chosen layer goes |
 | Show | `/placeholders show ++r ++m`, or `++r?` alone + Enter | Prints the exact text with no Claude turn: outside plan mode `normal:` then `plan mode adds:`; in plan mode one block `normal + plan mode part:` as sent. An inline placeholder that does not expand shows `stays as typed`; an empty body silences the token, in plan mode too. For `++r?` see [Read the full text](#read-the-full-text) |
 | List | `/placeholders list` | Prints every placeholder with its text as sent, normal and plan mode, with no Claude turn |
 | Escape | `++/ what does ++r do?` | Sent exactly as typed: no block, `++/` stays in the text |
@@ -243,26 +259,45 @@ The `or ++m? alone [Enter]` part is the query from [What `?` does](#read-the-ful
 ## Commands
 | Command | What it does |
 |---------|--------------|
-| `/placeholders` (also `status`) | One row per name with layer and tags (`plan +`, `plan only`), plus hints for reading texts (caret, `/placeholders show`), escape and scope |
+| `/placeholders` (also `status`) | One row per name with layer and tags (`plan +` for a plan part with text, `inline`), plus hints for reading texts (caret, `/placeholders show`), escape and scope |
 | `/placeholders show ++<name> ...`, `list`, `help` | Print the exact text sent (`list` = all, normal and plan), or the full help, with no Claude turn |
 | `/placeholders <anything else>` | Claude answers, or drafts, asks once and saves; any language. A first word `global` or `project` picks the layer; without it your words decide, else one question (Global first) |
+
+The status view explains the `plan +` tag, and `/placeholders help` describes the two file kinds, in these lines (default prefix):
+
+```text
+`plan +`: its `<name>.plan.md` adds text in Plan mode; `<name>.md` is sent in every mode
+Plan mode: `<name>.md` is sent in every mode; an optional `<name>.plan.md` (`plan: add`) adds its text in Plan mode (`++m`, `+++`), marked `plan +`. One review per message: `++rr` wins over `++r`.
+Files: `<name>.md` = optional front matter (description, insert: context|inline, order, group, priority, header) + the text; `<name>.plan.md` = its Plan mode addition. Edit by hand any time; the next prompt reads it.
+```
 
 ## Prompt box
 | State | What you see |
 |-------|--------------|
-| Highlight, typeahead | Terminal UI only. A known token is underlined; after the prefix, matching names appear, `Tab` inserts one. The one option, `prefix` (default `++`, 2-8 punctuation characters), is set in `/config` |
-| Compact band | Header `placeholders 3` (` · plan mode` is appended in plan mode), then one row per token: `++r  <description>` (name in bold blue, description grey), with `· Claude receives these lines now:` and the text under it when the text is drawn. Rows past the space fold into `... K more placeholders`. Foot (actions underlined): `more: put the caret on ++r · send as typed: ++/ · help: /placeholders help`. `plan +` marks a name with a plan part; a skipped token says why, for example `(not sent: ++rr wins)` |
-| Caret on a token | The band shown in [Read the full text](#read-the-full-text). A plan part that replaces the normal text reads `plan mode sends N lines instead`; other tokens sit on one `also: ++m ++a` row |
-| Rows from other mods | Rows another mod draws above the prompt, for example the yellow plan-mode row of [brewmod-plan-effort](/mods/plan-effort/), stay visible above the band; the band fits into the rows that are left, in the default and the fullscreen view alike, whichever of the two mods loads first: head, text, cut row and foot all stay on screen |
+| Highlight, typeahead | Terminal UI only. A known token is underlined; after the prefix, matching names appear, `Tab` inserts one. After `Tab` or `Enter` on a name row, a history recall (arrow keys) or an undo, the band shows at once; the underline in the box appears with the next key (an engine limit). The one option, `prefix` (default `++`, 2-8 punctuation characters), is set in `/config` |
+| Compact band | Header `placeholders 3` in grey (` · plan mode` is appended in the plan-mode colour in plan mode), then one row per token: `++r  <description>` (name in bold blue, description grey), with `· Claude receives these lines now:` and the text under it when the text is drawn. Rows past the space fold into `... K more placeholders`. Foot (actions underlined): `more: put the caret on ++r · send as typed: ++/ · help: /placeholders help`. `plan +`, in the plan-mode colour, marks a name with a plan part that has text; a skipped token says why, for example `(not sent: ++rr wins)` |
+| Caret on a token | The band shown in [Read the full text](#read-the-full-text). A name with a plan part that has text ends with `not sent now · plan mode adds N lines` in the plan-mode colour; other tokens sit on one `also: ++m ++a` row |
+| Rows from other mods | Rows another mod draws above the prompt, for example the plan-mode row of [brewmod-plan-effort](/mods/plan-effort/) (same plan-mode colour), stay visible above the band; the band fits into the rows that are left, in the default and the fullscreen view alike, whichever of the two mods loads first: head, text, cut row and foot all stay on screen |
 | Escaped | `++/` in the message: header `++/  placeholders off: this message is sent exactly as typed` and every token `(not sent: ++/ in this message)` (markers and names bold blue, reasons grey), foot `turn back on: delete ++/` |
 | Unknown | An unknown `++zz` shows bold yellow with `unknown placeholder` grey; while the caret is on it the foot reads `names: /placeholders list`, otherwise the compact foot. On submit a toast names it and the prompt is sent unchanged |
 
 ## Your own files
 | File | Means |
 |---|---|
-| `<name>.md` in `~/.claude/placeholders/` (global) or `.claude/placeholders/` (project, wins) | The text; the file name is the token name; front matter is optional |
-| `<name>.plan.md` with `plan: add` (front matter `when: plan`, `plan: add`) | Appended to `<name>.md` in plan mode only. Example: `ship.md` = `run the tests`, `ship.plan.md` = `also list the release steps` |
-| `<name>.plan.md` without `plan: add` | Replaces the text in plan mode. A `<name>.md` with `when: plan` alone is plan-only, like `+++` |
+| `<name>.md` in `~/.claude/placeholders/` (global) or `.claude/placeholders/` (project, wins) | The text, sent in every mode; the file name is the token name; front matter is optional |
+| `<name>.plan.md` (front matter `plan: add`), optional | Added after `<name>.md` in plan mode only. Example: `ship.md` = `run the tests`, `ship.plan.md` = `also list the release steps` |
+
+Old files keep working, with one status line each (`/placeholders` status and a toast):
+
+| Old file | What happens now | Status line |
+|---|---|---|
+| `<name>.md` with `when: plan`, `when: not-plan` or any value but `always` | Sent in every mode | `<layer>/<name>.md: when: plan is gone; sent in every mode` |
+| `<name>.plan.md` without `plan: add` | Its text is added in plan mode | `<layer>/<name>.plan.md: no plan: add; its text is added in plan mode` |
+| A brewtools `planmode` / `cron-plan` override | Its text is added in plan mode; it no longer replaces the normal text, so a full-text file repeats the role: trim it | `<dir>/planmode.md: brewtools file: its text is added in plan mode; to clear this, move it to placeholders/m.plan.md with plan: add` (`<dir>` = the real brewtools prompts directory of that file; `<name>` = the placeholder it extends) |
+| `<name>.md` with a `plan:` key | The key is ignored | `<layer>/<name>.md: plan: is for <name>.plan.md; ignored` |
+| `<name>.plan.md` with no `<name>.md` in any layer | Sent in every mode | `<layer>/<name>.plan.md: no <name>.md; sent in every mode` |
+
+Two files that resolve to the same placeholder name and part (through a front matter `name:`) do not both count: the first one is sent, and the status line of the other reads `<layer>/<file>.md: shadowed by <layer>/<file>.md; not sent`.
 
 Layers, highest wins file by file: project > its brewtools override > global > its brewtools override > plugin defaults. Keys and verification tables: [definition files](#definition-files), [verified](#verified).
 
@@ -281,8 +316,7 @@ One Markdown file per placeholder. The file name is the placeholder name. Front 
 | `name` | 1-32 letters, digits or `_`, or ASCII punctuation | file name | Token name, case-insensitive |
 | `description` | text | none | Shown in the typeahead and band |
 | `insert` | `context`, `inline` | `context` | `context` adds hidden context and keeps the token. `inline` replaces the token |
-| `when` | `always`, `plan`, `not-plan` | `always` | Applies only in that permission mode. `plan` is plan mode; `not-plan` is every other mode |
-| `plan` | `add`, `replace` | `replace` | On a `when: plan` file: `add` appends its body to the normal text of the same name; `replace` (or absent) swaps the whole text in plan mode. `add` without `when: plan` is reported and the file is sent as a normal text |
+| `plan` | `add` | none | Marks `<name>.plan.md` as an addition: its body is appended to the normal text of the same name in plan mode. A `.plan.md` without it is still added, with a warning; on a `<name>.md` the key is ignored, with a warning |
 | `order` | integer | `100` | Blocks join from the lowest `order` up |
 | `group` | text | none | Placeholders in one group exclude each other; the loser shows `not sent: ++rr wins` |
 | `priority` | integer | `0` | In a group, the highest wins |
@@ -291,7 +325,7 @@ One Markdown file per placeholder. The file name is the placeholder name. Front 
 
 - **Body.** With fenced blocks, only the fenced text counts. Otherwise the trimmed text after the front matter.
 - **Empty body.** Suppresses the token. Keys are inherited from the layer below, the body is not.
-- **Plan part.** Without front matter, `<name>.plan.md` is read as the plan part of `<name>`. A `when: plan` file with no normal text of the same name is plan-only, like `+++`. In plan mode a `plan` file beats an `always` file of the same name.
+- **Plan part.** `<name>.plan.md` is the plan part of `<name>`, with or without front matter. In plan mode its body follows the normal text after a blank line, under the plan part's header when it has one. An empty plan part adds nothing: no `plan +` tag and no `plan mode adds` note. A plan part with no `<name>.md` in any layer is sent in every mode, with a warning.
 - **Cap.** Blocks are sorted by `order`, joined with a `---` line and cut at 9000 characters (`...[truncated]`).
 
 A plan part that adds to a normal text:
@@ -306,13 +340,12 @@ run the tests
 ~/.claude/placeholders/ship.plan.md
 ---
 description: "Run the tests; in plan mode also list the release steps"
-when: plan
 plan: add
 ---
 also list the release steps
 ```
 
-`++ship` sends `run the tests` in normal modes. In plan mode it sends `run the tests`, a blank line, then `also list the release steps`. Without `plan: add`, `ship.plan.md` would replace the text instead.
+`++ship` sends `run the tests` in normal modes. In plan mode it sends `run the tests`, a blank line, then `also list the release steps`. Without `plan: add` the text is still added, and the status view warns.
 
 The highest layer wins, file by file:
 
@@ -334,7 +367,7 @@ The highest layer wins, file by file:
 
 - **Load.** Unreadable or invalid definition files are skipped, with a toast and a line in the status view.
 - **Match.** A name must stand alone: `++rr` is not `++r`. `++/` or `++\` anywhere in a message turns every placeholder off for that message.
-- **Inject.** The module expands only inline placeholders and names unknown tokens in a toast. The command hook builds the context blocks, picks plan variants from the permission mode and skips subagent deliveries.
+- **Inject.** The module expands only inline placeholders and names unknown tokens in a toast. The command hook builds the context blocks, adds plan parts when the permission mode is plan and skips subagent deliveries.
 - **Show.** `/placeholders show`, `list` and `help` are answered by the module with no Claude turn; `++r?` alone in a prompt hands off to `show` the same way. The text shown is a port of the hook's assembly, checked against it byte by byte.
 - **Mod tools.** Free-text `/placeholders` requests hand off to Claude with `list_placeholders`, `save_placeholder`, `remove_placeholder` and `placeholders_help`. Saving refuses symlinks; removing never touches plugin defaults or legacy brewtools files. Each save or remove asks once through one dialog; no permission prompt follows.
 - **Plan mode.** The hook records the permission mode in `.state/mode-<session_id>.json` in the plugin root. There is no live plan-mode signal for the band: it learns plan mode from your first prompt in it.
@@ -347,13 +380,14 @@ Live runs drive the terminal UI in tmux (default and fullscreen, 80x24 to 200x60
 
 | Check | Result |
 |-------|--------|
-| `node tests/inject-parity.mjs`: frozen texts, layers, state file, fail-open | 312 checks pass: 98 golden vectors, 12 escape, 23 plan-part, 3 cap, 35 layer fixtures |
-| Unit tests (`claude plugin test`) | 425 pass, 0 fail, 17 files |
-| Pre-release live check (build fingerprint `eeaa3efb`, Claude Code 2.1.301), terminal UI in default and fullscreen mode, 80x24 to 200x60: band colours and hint rows, caret focus, `++r?` query and its fill, compact band, cut rows, plan-mode `++m` and `+++`, Shift+Tab, `++/` escape, inline, unknown token, `status`, `help`, `list`, `show`, add and remove with `global` first word | 187 of 187 cases PASS: 181 terminal UI cases and 6 `claude -p` cases |
-| Same check, the 6 `-p` received-context e2e cases, mod tools denied so the answer comes from the received context: `++r`, `++/ ++r`, plan-mode `++m`, plan-mode `++m` with an empty global `m.md`, an inline placeholder | PASS, counted apart from the terminal UI cases: Claude quotes the `r` block, receives no block when escaped, quotes `[ADDON: PLAN MODE]`, receives nothing for the empty `m.md`, and gets the inline body in place of the token |
-| Both mods together (brewmod-placeholders and brewmod-plan-effort), both load orders, default and fullscreen, 80x24 and 120x40 | PASS: the plan-effort row `plan mode · effort xhigh for this mode · change: /plan-effort <level>` stays above the placeholders band, and the band keeps its head, text, cut row and foot |
-| Band colours, 22 cases per load order (placeholders first, plan-effort first), dark theme and `theme: "light"`: caret on `++m` in default and plan mode, compact band, escaped message | 22 of 22 PASS in each order. Checked on the terminal's colour codes: token names bold blue, sent rows bold in the text colour, actions underlined, labels grey, `[Enter]` plain. In 40 captures of both orders every blue run in the band is a bold placeholder name |
-| `/placeholders` dialogs (S4), terminal UI, Haiku, part of the 165 | Add (global and project), add with a plan part (`ship.md` + `ship.plan.md`), remove, remove the plan part, remove from the project layer when the name is in both layers (`the global ++two is served now`), refusal to remove built-in `++r`; each asks once and writes without a permission prompt |
+| `node tests/inject-parity.mjs`: frozen texts, layers, state file, fail-open | 316 checks pass: 101 golden, 98 `sent.ts` golden, 37 layer, 26 differential, 25 plan-part, 14 escape, 10 state, 3 jobs cap, 2 fail-open |
+| Unit tests (`claude plugin test`) | brewmod-placeholders 443 pass, 0 fail, 17 files; [brewmod-plan-effort](/mods/plan-effort/) 71 pass, 0 fail, 1 file. `tsc` and `claude plugin validate --strict` of both mods, `check-defaults` and the mode test all exit 0 |
+| Full pre-release live check, run before the review fixes (build fingerprint `8d91c3c7`, Claude Code 2.1.301), installed load order with brewmod-plan-effort loaded, terminal UI in default and fullscreen mode, 80x24 to 200x60: band colours and hint rows, caret focus, band right after `Tab` or `Enter` on a typeahead row, history recall and undo, `++r?` query and its fill, compact band, cut rows, plan-mode `++m`, `+++` in every mode, Shift+Tab, `++/` escape, inline, unknown token, `status`, `help`, `list`, `show`, add and remove with `global` first word | 225 of 225 cases PASS: 217 terminal UI cases and 8 `claude -p` cases |
+| Live subset after the review fixes (build fingerprint `6c4dfa44`, Claude Code 2.1.301), terminal UI, no `claude -p` cases: `++m` in default mode (88x40), `+++` in default mode (120x40) and plan-mode `++m` (120x40), each in the default and the fullscreen view; `/placeholders` status, plan tags and `show m`; the caret and whole-text line of `status` (default and fullscreen, 120x40) | 11 of 11 PASS. The 225 above is the full run before the fixes |
+| Same check, the `claude -p` received-context e2e cases, mod tools denied so the answer comes from the received context: `++r`, `++/ ++r`, plan-mode `++m`, plan-mode `++m` with an empty global `m.md`, `+++` in default mode, `+++` in plan mode, an inline placeholder (7 cases plus the check that the tools are denied) | PASS, counted apart from the terminal UI cases: Claude quotes the `r` block, receives no block when escaped, quotes `[ADDON: PLAN MODE]`, receives nothing for the empty `m.md`, quotes the `[ADDON: ANTI-DRIFT CRON]` text without the plan addon in default mode and with `[ADDON: ANTI-DRIFT CRON PLAN]` in plan mode, and gets the inline body in place of the token |
+| Both mods together (brewmod-placeholders and brewmod-plan-effort), default and fullscreen, 80x24 and 120x40 | PASS in the installed load order (inside the 225 cases) and, with brewmod-plan-effort loading first, on the colour, hint-row and `+++` subset: the plan-effort row `plan mode · effort xhigh for this mode · change: /plan-effort <level>` stays above the placeholders band, and the band keeps its head, text, cut row and foot. In that subset 12 cases first failed on wrong expectations in the test cases (the hooks were unchanged); after the correction the 12 pass, 12 of 12 |
+| Band colours, 22 colour cases (dark theme and `theme: "light"`): caret on `++m` in default and plan mode, compact band, escaped message, unknown token | 22 of 22 PASS. Checked on the terminal's colour codes: token names bold blue, sent rows bold in the text colour, plan-mode rows (`plan mode adds:`, `not sent now · plan mode adds N lines`, `plan +`, ` · plan mode`) in the plan-mode colour `38;5;73` on a dark theme (on the light theme the `not sent now` note was captured in `38;5;30`), the sent plan addition bold in that colour, actions underlined, labels grey, `[Enter]` plain. A terminal may split a coloured run per word, so a row can carry the colour code once per word |
+| `/placeholders` dialogs (S4), terminal UI, Haiku, part of the 225 | Add (global and project), add with a plan part (`ship.md` + `ship.plan.md`), remove, remove the plan part, remove from the project layer when the name is in both layers (`the global ++two is served now`), refusal to remove built-in `++r`; each asks once and writes without a permission prompt |
 | Team-org and Max profiles, `--plugin-dir` and marketplace copies, Sonnet: `++r` (2.1.300 run) | 1 block, 571 characters |
 | Custom prefix `@@`, Max, Sonnet: `@@r ++r` (2.1.300 run) | Only the `@@r` block |
 | Latency, p50 (2.1.300 run): typing per keystroke (mod minus control, drafts of 0 / 4,000 / 19,700 chars) and band repaint after a token keystroke | Typing -2.6 / +6.6 / +2.1 ms, token keystrokes +2.4 / +6.6 / +5.6 ms, noise as large as the deltas. Repaint 19 to 21 ms at p50, 44 to 61 ms at p99 |
@@ -363,7 +397,7 @@ Not covered live: the light theme as a rendered image (it is checked through its
 </Spoiler>
 
 <Callout type="warning" title="Known limits">
-  A token inserted with `Tab` and a recalled history entry show no highlight or band until the next keystroke. Drafts over 20,000 characters get no highlight or band, but expansion on submit still works.
+  The band shows at once after `Tab` or `Enter` on a typeahead row, a history recall and an undo; the underline in the prompt box appears with the next key (engine limit). Drafts over 20,000 characters get no highlight or band, but expansion on submit still works.
 </Callout>
 
 </Spoiler>
