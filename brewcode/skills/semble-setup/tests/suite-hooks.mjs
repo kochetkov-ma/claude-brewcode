@@ -2496,11 +2496,12 @@ const SESSION_OK = (p) => ({
   const p = freshProject({ state: READY_STATE() });
   const deep = deepDir(p, 'packages', 'app', 'src');
   const shRoot = (cwd, extra, fn) => {
-    const env = { ...process.env, ...(extra || {}) };
+    // Lib path reaches bash via env (T_LIB), never spliced into the command text.
+    const env = { ...process.env, ...(extra || {}), T_LIB: LIB_COPY };
     for (const k of ['SEMBLE_PROJECT_ROOT', 'CLAUDE_PROJECT_DIR']) {
       if (!Object.prototype.hasOwnProperty.call(extra || {}, k)) delete env[k];
     }
-    const r = spawnSync('bash', ['-c', `. "${LIB_COPY}"; ${fn || 'sc_project_root'}`], {
+    const r = spawnSync('bash', ['-c', `. "$T_LIB"; ${fn || 'sc_project_root'}`], {
       cwd, env, encoding: 'utf8', timeout: 15000,
     });
     return [(r.stdout || '').trim(), r.status];

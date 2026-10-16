@@ -143,8 +143,9 @@ function snapshot(root) {
   return out;
 }
 
+// Paths reach bash as env vars (T_ARG, T_SCRIPT), never spliced into the command text.
 function repoHash(p) {
-  const r = spawnSync('bash', ['-c', `cd "${p}" && pwd -P`], { encoding: 'utf8' });
+  const r = spawnSync('bash', ['-c', 'cd "$T_ARG" && pwd -P'], { encoding: 'utf8', env: { ...process.env, T_ARG: p } });
   return createHash('sha256').update(r.stdout.trim()).digest('hex');
 }
 
@@ -911,9 +912,9 @@ function forcePhase(root, phase) {
 // Sourced with `--help` so its main() returns 0 and only the function is used.
 function projectVerdict(from, to) {
   forcePhase(PH_A, from);
-  const r = spawnSync('bash', ['-c', `. "${PROJECT_SH}" --help >/dev/null 2>&1; sp_set_phase "${to}"`], {
+  const r = spawnSync('bash', ['-c', '. "$T_SCRIPT" --help >/dev/null 2>&1; sp_set_phase "$T_ARG"'], {
     encoding: 'utf8',
-    env: { ...process.env, ...baseEnv(), SEMBLE_PROJECT_ROOT: PH_A },
+    env: { ...process.env, ...baseEnv(), SEMBLE_PROJECT_ROOT: PH_A, T_SCRIPT: PROJECT_SH, T_ARG: to },
     timeout: 30000,
   });
   return [r.status === 0 ? 'ok' : 'refused', stateOf(PH_A).phase || 'absent'];
@@ -965,9 +966,9 @@ function legacyRoot(testHome) {
     'semble-docs');
 }
 function runLegacyCleanup(testHome) {
-  return spawnSync('bash', ['-c', `. "${REMOVE_SH}" --help >/dev/null; sr_cleanup_legacy_docs_root`], {
+  return spawnSync('bash', ['-c', '. "$T_SCRIPT" --help >/dev/null; sr_cleanup_legacy_docs_root'], {
     encoding: 'utf8', timeout: 30000,
-    env: { ...process.env, ...baseEnv(), SEMBLE_TEST_HOME: testHome },
+    env: { ...process.env, ...baseEnv(), SEMBLE_TEST_HOME: testHome, T_SCRIPT: REMOVE_SH },
   });
 }
 

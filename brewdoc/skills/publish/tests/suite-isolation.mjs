@@ -27,12 +27,14 @@ writeFileSync(mock, [
   'process.stdout.write(process.env.CURL_RESPONSE);',
 ].join('\n'));
 chmodSync(mock, 0o755);
-function run(code, suffix, extraEnv = {}) {
+// `script`: lib code, or a shipped() fill { code, env }; skill dir and path slots arrive as env refs, never in the command text.
+function run(script, suffix, extraEnv = {}) {
+  const { code, env } = typeof script === 'string' ? { code: script, env: {} } : script;
   return spawnSync('bash', ['-c', 'set -euo pipefail\n. "$LIB"\n' + code], {
     cwd: root, encoding: 'utf8', timeout: 10000,
-    env: { ...process.env, LIB: lib, CLAUDE_SKILL_DIR: join(here, '..'), CLAUDE_PROJECT_DIR: root, TMPDIR: tmp, PATH: bin + ':' + process.env.PATH,
-      CURL_ARGS: join(base, 'args-' + suffix), CURL_HEADERS: join(base, 'headers-' + suffix),
-      CURL_RESPONSE: JSON.stringify({ link: 'https://example.invalid/result', ownerToken: 'fixture-owner' }), ...extraEnv },
+    env: { ...process.env, LIB: lib, CLAUDE_SKILL_DIR: join(here, '..'), SUBST_SKILL_DIR: join(here, '..'), CLAUDE_PROJECT_DIR: root, TMPDIR: tmp,
+      PATH: bin + ':' + process.env.PATH, CURL_ARGS: join(base, 'args-' + suffix), CURL_HEADERS: join(base, 'headers-' + suffix),
+      CURL_RESPONSE: JSON.stringify({ link: 'https://example.invalid/result', ownerToken: 'fixture-owner' }), ...env, ...extraEnv },
   });
 }
 function prepare() {
@@ -136,10 +138,19 @@ try {
   const blocks = [...skill.matchAll(/```bash\n([\s\S]*?)```/g)].map(match => match[1]);
   for (const block of blocks) assert.equal(spawnSync('bash', ['-n'], { input: block }).status, 0,
     'THEN every shipped Bash block parses');
-  // Load-time substitution, as Claude Code does it, then the slots the model fills (single-quoted, '\'' escaped).
+  // Load-time substitution, then the slots the model fills (single-quoted, '\'' escaped), as { code, env }:
+  // skill dir and path slots become env refs set by run().
   const quote = value => value.replaceAll("'", "'\\''");
-  const shipped = (marker, slots) => Object.entries(slots).reduce((code, [key, value]) => code.replaceAll('{' + key + '}', quote(value)),
-    blocks.find(block => block.includes(marker)).replaceAll('${CLAUDE_SKILL_DIR}', join(here, '..')));
+  const PATH_SLOTS = { path: 'SUBST_PATH', password_file: 'SUBST_PASSWORD_FILE' };
+  const shipped = (marker, slots) => {
+    const env = {};
+    const code = Object.entries(slots).reduce((text, [key, value]) => {
+      if (!(key in PATH_SLOTS)) return text.replaceAll('{' + key + '}', quote(value));
+      env[PATH_SLOTS[key]] = value;
+      return text.replaceAll('{' + key + '}', `'"$${PATH_SLOTS[key]}"'`);
+    }, blocks.find(block => block.includes(marker)).replaceAll('${CLAUDE_SKILL_DIR}', '${SUBST_SKILL_DIR}'));
+    return { code, env };
+  };
   const runNames = () => readdirSync(tmp).filter(name => name.startsWith('brewpage.'));
   // GIVEN actual shipped text command WHEN run with hostile text THEN argv carries it verbatim and nothing executes.
   const hostile = "Fixture it's $(touch injected) `id`; && | markdown";
@@ -166,10 +177,10 @@ try {
   const second = run(shipped('stage --run', { run_id: staged, chunk: "part two's" }), 'stage-2');
   assert.equal(second.stdout, 'RUN: ' + staged + '\nBYTES: 19\n', 'THEN the second chunk appends to the same run');
   const runPublish = shipped("--password-file '{password_file}' --run '{run_id}'", { type: 'html', delivery_mode: '', password_file: '', run_id: staged });
-  const badFlag = run(runPublish.replaceAll('{ns}', 'Bad NS').replaceAll('{days}', '15'), 'staged-bad');
+  const badFlag = run({ ...runPublish, code: runPublish.code.replaceAll('{ns}', 'Bad NS').replaceAll('{days}', '15') }, 'staged-bad');
   assert.deepEqual([badFlag.status, badFlag.stdout, runNames()], [1, 'FAILED: namespace must be 1-32 chars of a-z0-9-\n', [staged]],
     'THEN a bad flag fails before the staged run is touched, so the text survives a retry');
-  const stagedPublish = run(runPublish.replaceAll('{ns}', 'my').replaceAll('{days}', ''), 'staged');
+  const stagedPublish = run({ ...runPublish, code: runPublish.code.replaceAll('{ns}', 'my').replaceAll('{days}', '') }, 'staged');
   assert.equal(stagedPublish.stdout, 'OK https://example.invalid/result\n', 'THEN the staged run publishes');
   assert.equal(JSON.parse(readFileSync(join(base, 'args-staged'), 'utf8'))[3], 'https://brewpage.app/api/html?ns=my&ttl=15&format=markdown',
     'THEN an empty ttl slot means the 15-day default');
@@ -274,7 +285,7 @@ try {
     assert.equal(uploadBlocks.length, 3, 'THEN existing upload formats remain unchanged');
     assert.equal(uploadBlocks.every(block => block.includes("--delivery-mode '{delivery_mode}'")), true,
       'THEN every existing upload block carries the optional header');
-    const html = uploadBlocks.find(block => block.includes("--text '{content}'")).replaceAll('${CLAUDE_SKILL_DIR}', join(here, '..'))
+    const html = uploadBlocks.find(block => block.includes("--text '{content}'")).replaceAll('${CLAUDE_SKILL_DIR}', '${SUBST_SKILL_DIR}')
       .replaceAll('{type}', 'html').replaceAll('{password_file}', '');
     const textCode = mode => html.replaceAll('{ns}', 'public').replaceAll('{days}', '15')
       .replaceAll('{delivery_mode}', mode).replaceAll('{content}', 'Fixture markdown');

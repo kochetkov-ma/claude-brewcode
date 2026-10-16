@@ -97,8 +97,9 @@ function prepare(name, body) {
 
 const scriptA = prepare('runA', 'transformed A');
 const scriptB = prepare('runB', 'transformed B');
-const run = spawnSync('bash', ['-c', `bash "${scriptA}" & bash "${scriptB}" & wait`], {
-  encoding: 'utf8', timeout: 60000, env: { ...process.env, STUB_LOG: LOG },
+// Script paths reach bash via env, never spliced into the command text.
+const run = spawnSync('bash', ['-c', 'bash "$T_SCRIPT_A" & bash "$T_SCRIPT_B" & wait'], {
+  encoding: 'utf8', timeout: 60000, env: { ...process.env, STUB_LOG: LOG, T_SCRIPT_A: scriptA, T_SCRIPT_B: scriptB },
 });
 const stdout = run.stdout || '';
 const read = (p) => (existsSync(p) ? readFileSync(p, 'utf8') : '(missing)');

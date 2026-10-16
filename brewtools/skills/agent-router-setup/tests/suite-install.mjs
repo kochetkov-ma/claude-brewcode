@@ -306,8 +306,9 @@ try {
     return join(base, `plugin-${label}`);
   };
   const contentAgainst = pluginRoot => {
-    const loadedCv = statusBlock.replaceAll('${CLAUDE_PROJECT_DIR}', cvProject);
-    const r = spawnSync('bash', ['-c', loadedCv], { cwd: cvProject, encoding: 'utf8', env: { ...statusEnv, CLAUDE_PLUGIN_ROOT: pluginRoot }, timeout: 30000 });
+    // Token -> env ref: the project dir reaches bash via env, never spliced into the command text.
+    const loadedCv = statusBlock.replaceAll('${CLAUDE_PROJECT_DIR}', '${SUBST_PROJECT_DIR}');
+    const r = spawnSync('bash', ['-c', loadedCv], { cwd: cvProject, encoding: 'utf8', env: { ...statusEnv, CLAUDE_PLUGIN_ROOT: pluginRoot, SUBST_PROJECT_DIR: cvProject }, timeout: 30000 });
     const line = r.stdout.split('\n').find(l => l.startsWith('content_version:')) ?? `NO content_version: LINE ${r.stderr}`;
     return { rc: r.status, ...Object.fromEntries(['hook', 'template', 'config', 'contract', 'stale'].map(k => [k, line.match(new RegExp(` ${k}=(\\S+)`))?.[1] ?? 'absent'])) };
   };

@@ -1283,8 +1283,9 @@ writeFileSync(BREW_LOG, '');
     'under SEMBLE_TEST_HOME only SEMBLE_TEST_CONFIG_DIR selects a config dir');
 
   // GIVEN no test home WHEN the library resolves paths THEN it mirrors Claude Code
-  const lib = (fn, env) => spawnSync('bash', ['-c', `. "${join(STAGE, 'lib', 'semble-common.sh')}"; ${fn}`], {
-    encoding: 'utf8', env: { PATH: ENV.PATH, HOME: HOME_DIR, ...env },
+  // Lib path reaches bash via env (T_LIB), never spliced into the command text.
+  const lib = (fn, env) => spawnSync('bash', ['-c', `. "$T_LIB"; ${fn}`], {
+    encoding: 'utf8', env: { PATH: ENV.PATH, HOME: HOME_DIR, T_LIB: join(STAGE, 'lib', 'semble-common.sh'), ...env },
   }).stdout.trim();
   check('104-paths', [
     lib('sc_claude_json', {}), lib('sc_user_settings', {}),
@@ -1389,8 +1390,8 @@ writeFileSync(BREW_LOG, '');
     return acc.map((l) => l.split('|')[0]).filter((p) => p.endsWith('/state.json')).map((p) => p.slice(W.length));
   };
 
-  const cand = spawnSync('bash', ['-c', `. "${REAL_LIB}"; sc_root_candidate; echo "rc=$?"`],
-    { cwd: NOTES, encoding: 'utf8', env: mcpEnv });
+  const cand = spawnSync('bash', ['-c', '. "$T_LIB"; sc_root_candidate; echo "rc=$?"'],
+    { cwd: NOTES, encoding: 'utf8', env: { ...mcpEnv, T_LIB: REAL_LIB } });
   check('120-walk-skips-home-claude', cand.stdout, `${NOTES}\nrc=1\n`,
     "HOME's .claude is the profile, never a project marker: no root found, PWD with rc 1");
 

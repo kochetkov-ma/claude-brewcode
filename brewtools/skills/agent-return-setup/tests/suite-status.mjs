@@ -45,15 +45,16 @@ try {
   const configPath = join(project, '.claude', 'agent-return.json');
   const currentConfig = JSON.parse(readFileSync(configPath, 'utf8'));
   assert.equal(currentConfig.version, '1.0.0', 'fixture retains deliberately older release provenance');
-  // Claude Code substitutes the braced session dir into SKILL.md at load; mirror that here.
+  // Claude Code substitutes the braced session dir into SKILL.md at load; mirror it as an env ref, path never in the command text.
   const statusBlock = blockAfter(readFileSync(join(SKILL_DIR, 'SKILL.md'), 'utf8'), '## Step 1 — STATUS FIRST, always', '```bash\n')
-    .replaceAll('${CLAUDE_PROJECT_DIR}', project);
-  const probe = () => spawnSync('bash', ['-c', statusBlock], { cwd: project, env, encoding: 'utf8', timeout: 30000 });
+    .replaceAll('${CLAUDE_PROJECT_DIR}', '${SUBST_PROJECT_DIR}');
+  const statusEnv = { ...env, SUBST_PROJECT_DIR: project };
+  const probe = () => spawnSync('bash', ['-c', statusBlock], { cwd: project, env: statusEnv, encoding: 'utf8', timeout: 30000 });
 
   // GIVEN: the shell cwd drifted into a subdirectory. WHEN: status probes. THEN: the session dir is the project scope.
   const drifted = join(project, 'sub');
   mkdirSync(drifted, { recursive: true });
-  const fromSub = spawnSync('bash', ['-c', statusBlock], { cwd: drifted, env, encoding: 'utf8', timeout: 30000 });
+  const fromSub = spawnSync('bash', ['-c', statusBlock], { cwd: drifted, env: statusEnv, encoding: 'utf8', timeout: 30000 });
   assert.equal(fromSub.status, 0, `status from a subdirectory exits successfully: ${fromSub.stderr}`);
   assert.match(fromSub.stdout, new RegExp(`PROJECT_ROOT=${project}\\n[^]*project: hook_files=3/3`), 'project scope keys on the session dir, not the shell cwd');
 
@@ -129,7 +130,7 @@ try {
     return join(base, `plugin-${label}`);
   };
   const contentAgainst = pluginRoot => {
-    const r = spawnSync('bash', ['-c', statusBlock], { cwd: project, env: { ...env, CLAUDE_PLUGIN_ROOT: pluginRoot }, encoding: 'utf8', timeout: 30000 });
+    const r = spawnSync('bash', ['-c', statusBlock], { cwd: project, env: { ...statusEnv, CLAUDE_PLUGIN_ROOT: pluginRoot }, encoding: 'utf8', timeout: 30000 });
     const line = r.stdout.split('\n').find(l => l.startsWith('project:')) ?? `NO project: LINE ${r.stderr}`;
     const keys = ['config_content_version', 'contract_content_version', 'content_state', 'content_findings'];
     return { rc: r.status, ...Object.fromEntries(keys.map(k => [k, line.match(new RegExp(` ${k}=(\\S+)`))?.[1] ?? 'absent'])) };
@@ -161,7 +162,7 @@ try {
   const projCfg = join(proj, '.claude', 'agent-return.json');
   const rawStatus = blockAfter(readFileSync(join(SKILL_DIR, 'SKILL.md'), 'utf8'), '## Step 1 — STATUS FIRST, always', '```bash\n');
   const statusOf = () => {
-    const r = run(rawStatus.replaceAll('${CLAUDE_PROJECT_DIR}', proj));
+    const r = run(rawStatus.replaceAll('${CLAUDE_PROJECT_DIR}', '${SUBST_PROJECT_DIR}'), { SUBST_PROJECT_DIR: proj });
     const pick = prefix => r.stdout.split('\n').find(line => line.startsWith(prefix)) ?? `NO ${prefix} LINE`;
     return [r.status, pick('project:').match(/registrations=\d\/3/)?.[0], pick('global:').match(/registrations=\d\/3/)?.[0], pick('governing_config=')];
   };

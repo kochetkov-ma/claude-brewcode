@@ -93,18 +93,25 @@ const runNames = () => readdirSync(tmp).filter(name => name.startsWith('brewpage
 const runFiles = id => readdirSync(tmp, { recursive: true }).filter(name => name === id || name.startsWith(id + '/')).sort();
 const response = token => JSON.stringify({ link: 'https://example.invalid/result', ownerToken: token });
 
-// The one fence holding `marker`, skill dir substituted, slots single-quote-escaped as the model fills them.
+// The one fence holding `marker` as { code, env }: skill dir and path slots -> env refs (paths never enter the command text),
+// other slots single-quote-escaped as the model fills them.
+const PATH_SLOTS = { path: 'SUBST_PATH', password_file: 'SUBST_PASSWORD_FILE' };
 function fill(copy, marker, slots) {
   const found = fences(copy).filter(f => f.includes(marker));
   assert.equal(found.length, 1, 'GIVEN exactly one ' + copy.name + ' fence contains ' + marker);
-  return Object.entries(slots).reduce((code, [key, value]) => code.replaceAll('{' + key + '}', value.replaceAll("'", "'\\''")),
-    found[0].replaceAll(copy.token, copy.dir));
+  const env = { SUBST_SKILL_DIR: copy.dir };
+  const code = Object.entries(slots).reduce((text, [key, value]) => {
+    if (!(key in PATH_SLOTS)) return text.replaceAll('{' + key + '}', value.replaceAll("'", "'\\''"));
+    env[PATH_SLOTS[key]] = value;
+    return text.replaceAll('{' + key + '}', `'"$${PATH_SLOTS[key]}"'`);
+  }, found[0].replaceAll(copy.token, '${SUBST_SKILL_DIR}'));
+  return { code, env };
 }
-function run(copy, code, suffix, extraEnv = {}, shell = ['bash', '-c']) {
+function run(copy, { code, env }, suffix, extraEnv = {}, shell = ['bash', '-c']) {
   return spawnSync(shell[0], [...shell.slice(1), code], {
     cwd: projectOf(copy), encoding: 'utf8', timeout: 20000,
     env: { ...process.env, CLAUDE_PROJECT_DIR: projectOf(copy), TMPDIR: tmp, PATH: bin + ':' + process.env.PATH,
-      CURL_ARGS: outFile(copy, suffix), CURL_HEADERS: outFile(copy, suffix) + '.headers', CURL_RESPONSE: response('fixture-owner'), ...extraEnv },
+      CURL_ARGS: outFile(copy, suffix), CURL_HEADERS: outFile(copy, suffix) + '.headers', CURL_RESPONSE: response('fixture-owner'), ...env, ...extraEnv },
   });
 }
 const textPublish = (copy, slots) => fill(copy, "--text '{content}'", { type: 'html', ns: 'my', days: '15', delivery_mode: '', password_file: '', ...slots });
@@ -199,8 +206,9 @@ for (const copy of COPIES) {
     assert.equal(spawnSync('zsh', ['-f', '--version']).error, undefined, 'GIVEN zsh on PATH (CI plugins shard installs it)');
     const hostile = "zsh it's $(touch zsh-injected) `id` *.md ~ !";
     const file = join(base, copy.name + '-case.zsh');
-    writeFileSync(file, textPublish(copy, { content: hostile }));
-    const r = run(copy, file, 'zsh', {}, ['zsh', '-f']);
+    const filled = textPublish(copy, { content: hostile });
+    writeFileSync(file, filled.code);
+    const r = run(copy, { ...filled, code: file }, 'zsh', {}, ['zsh', '-f']);
     assert.deepEqual([r.status, r.stdout, JSON.parse(readFileSync(outFile(copy, 'zsh') + '.payload', 'utf8')), existsSync(join(projectOf(copy), 'zsh-injected'))],
       [0, 'OK https://example.invalid/result\n', { content: hostile }, false], 'zsh passes the slot verbatim and runs nothing');
   });
