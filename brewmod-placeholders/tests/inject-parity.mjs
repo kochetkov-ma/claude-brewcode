@@ -23,7 +23,12 @@ const expectedOf = (v) => (v.id === SURROGATE_CUT ? v.expected.slice(0, 8999) + 
 
 let fails = 0;
 let passes = 0;
+// Jobs per group (name lead); the summary prints them, so the parts always add up to the total.
+const GROUP = /^(sent\.ts golden|fail open|plan parts|golden|layer|state|differential|escape|cap)\b/;
+const groups = new Map();
 const report = (name, err) => {
+  const g = GROUP.exec(name)?.[1] ?? 'other';
+  groups.set(g, (groups.get(g) ?? 0) + 1);
   if (err === undefined) passes++;
   else {
     fails++;
@@ -463,7 +468,7 @@ const PLAN_CASES = [
   ['legacy full.md flows into plan mode with the shipped addition', { 'cfg/manager/prompts/full.md': 'FULL OLD' }, '++m', `${MP_HEAD}\n\nFULL OLD\n\n${ADDITION}`, `${M_HEAD}\n\nFULL OLD`, 'add'],
   ['old full-text m.plan.md without front matter is added', { [`proj/${P}/m.plan.md`]: 'OLD FULL PLAN' }, '++m', `${MP_HEAD}\n\n${M_BODY}\n\nOLD FULL PLAN`, vec('spec-1'), 'add'],
   ['old m.plan.md with front matter and no plan key is added under its header', { 'cfg/placeholders/m.plan.md': fm('name: "m"\nwhen: plan\nheader: "OLD {token}"', 'OLDP') }, '++m', `OLD ++m\n\n${M_BODY}\n\nOLDP`, vec('spec-1'), 'add'],
-  ['an empty m.plan.md no longer silences ++m in plan mode', { [`proj/${P}/m.plan.md`]: '' }, '++m', `${MP_HEAD}\n\n${M_BODY}`, vec('spec-1'), 'add'],
+  ['an empty m.plan.md no longer silences ++m in plan mode and adds no text', { [`proj/${P}/m.plan.md`]: '' }, '++m', `${MP_HEAD}\n\n${M_BODY}`, vec('spec-1'), 'none'],
   ['user m.plan.md with plan: add changes only the addition', { [`proj/${P}/m.plan.md`]: fm('plan: add', 'MY ADD') }, '++m', `${MP_HEAD}\n\n${M_BODY}\n\nMY ADD`, vec('spec-1'), 'add'],
   ['a stale plan: replace is added too', { [`proj/${P}/m.plan.md`]: fm('plan: replace', 'R') }, '++m', `${MP_HEAD}\n\n${M_BODY}\n\nR`, vec('spec-1'), 'add'],
   ['empty m.md silences ++m in plan mode too', { [`proj/${P}/m.md`]: '' }, '++m', null, null, 'none'],
@@ -485,7 +490,7 @@ const PLAN_CASES = [
     `DB${JOINER}W`,
     'add',
   ],
-  ['an empty addition sends the normal text alone in plan mode', { [`proj/${P}/w.md`]: 'W', [`proj/${P}/w.plan.md`]: fm('plan: add', '') }, '++w', 'W', 'W', 'add'],
+  ['an empty addition sends the normal text alone in plan mode and adds no text', { [`proj/${P}/w.md`]: 'W', [`proj/${P}/w.plan.md`]: fm('plan: add', '') }, '++w', 'W', 'W', 'none'],
 ];
 for (const [name, tree, text, planText, defaultText, kind] of PLAN_CASES) {
   job(`plan parts: ${name}`, async () => {
@@ -558,5 +563,6 @@ job('escape brought in by an inline body: draft, hook on the expanded prompt and
 
 await Promise.all(jobs);
 fs.rmSync(TMP, { recursive: true, force: true });
-console.log(`inject-parity: ${passes} passed, ${fails} failed (${VECTORS.length} golden vectors, hook and sent.ts; ${ESCAPES.length} escape, ${PLAN_CASES.length} plan-part, ${CAP_CASES.length} cap, ${CASES.length} layer fixtures; files ${Object.keys(GOLDEN_FILES).join(',')})`);
+const parts = [...groups].sort().map(([g, n]) => `${g} ${n}`).join(' + ');
+console.log(`inject-parity: ${passes} passed, ${fails} failed; jobs ${parts} = ${passes + fails} (${VECTORS.length} golden vectors; files ${Object.keys(GOLDEN_FILES).join(',')})`);
 process.exit(fails === 0 ? 0 : 1);

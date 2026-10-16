@@ -114,7 +114,7 @@ export function injectedContext(src: DefsLike, prefix: string, prompt: string, m
   return join(pick(c, prompt, mode === 'plan').picked, prefix).context
 }
 
-// A name's plan-mode text: add (plan = the addition body) or none (no plan part, or an empty normal body that silences both modes).
+// A name's plan-mode text: add (plan = the addition body) or none (no plan part, an empty part, or an empty normal body).
 export type PlanParts = { normal: string; plan: string; kind: 'add' | 'none' }
 export function planParts(defs: readonly Def[], name: string, prefix: string = DEFAULT_PREFIX): PlanParts {
   const key = name.toLowerCase()
@@ -122,7 +122,7 @@ export function planParts(defs: readonly Def[], name: string, prefix: string = D
   const b = n.get(key)
   const p = pp.get(key)
   const normal = b === undefined || b.body === '' ? '' : blockOf(b, prefix).text
-  return b === undefined || p === undefined || b.body === '' ? { normal, plan: '', kind: 'none' } : { normal, plan: p.body, kind: 'add' }
+  return b === undefined || p === undefined || b.body === '' || p.body === '' ? { normal, plan: '', kind: 'none' } : { normal, plan: p.body, kind: 'add' }
 }
 
 // Known names of a draft, first occurrence order.

@@ -175,7 +175,8 @@ function nameBlock(reg: Registry, r: NameRow, prefix: string, isPlan: boolean): 
     if (isPlan) return [head, part('normal + plan mode part:', joined)].join('\n')
     return [head, part('normal:', p.normal), part(PLAN_LABEL.adds, p.plan, joined.length)].join('\n')
   }
-  return [head, part('normal:', p.normal)].join('\n')
+  // An empty plan part adds nothing, but its header still heads the plan-mode block.
+  return [head, part('normal:', isPlan ? sentText(r.name, reg.defs, prefix, true).text : p.normal)].join('\n')
 }
 
 // show (names) or list (null): one block per name; unknown names are listed at the foot.

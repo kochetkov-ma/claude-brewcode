@@ -124,7 +124,7 @@ test('GIVEN an add part with its own order and group WHEN a plan-mode draft is a
   })
 })
 
-test('GIVEN the shipped defs and keyed variants WHEN plan parts are read THEN a part over a normal context def adds, anything else is none, never a shared prefix', async () => {
+test('GIVEN the shipped defs and keyed variants WHEN plan parts are read THEN a non-empty part over a normal context def adds, anything else (an empty part too) is none, never a shared prefix', async () => {
   const x = (body: string, extra: Partial<Def> = {}) => def({ name: 'x', isPlan: true, body, ...extra })
   const kinds = [
     [def({ name: 'x', body: 'A' }), x('C')],
@@ -142,7 +142,7 @@ test('GIVEN the shipped defs and keyed variants WHEN plan parts are read THEN a 
     plus: { normal: PLUS_DEFAULT_SENT, plan: PLUS_SENT.slice(PLUS_SENT.lastIndexOf('\n\n# [ADDON: ANTI-DRIFT CRON PLAN]') + 2), kind: 'add' },
     kinds: [
       { normal: 'A', plan: 'C', kind: 'add' },
-      { normal: 'A', plan: '', kind: 'add' },
+      { normal: 'A', plan: '', kind: 'none' },
       { normal: '', plan: '', kind: 'none' },
       { normal: '', plan: '', kind: 'none' },
       { normal: 'A', plan: '', kind: 'none' },

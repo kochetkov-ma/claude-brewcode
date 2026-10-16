@@ -530,6 +530,22 @@ test('GIVEN short bodies with a plan addition in default mode WHEN the compact b
   })
 })
 
+const EMPTY_PART: Tree = { ...TREE, [`${ROOT}/.claude/placeholders/ee.md`]: file('ee', 'Ee mode', 'E1'), [`${ROOT}/.claude/placeholders/ee.plan.md`]: planAdd('ee', '') }
+
+test('GIVEN an empty plan part in default mode WHEN the compact band mounts THEN neither a plan + tag nor a plan note shows', async ($, on) => {
+  await boot($, on, EMPTY_PART)
+  await typed($, '++ee ')
+
+  expect(await bandTexts($, 40), 'empty part adds nothing').toEqual(['placeholders 1', '++ee', '  Ee mode', RECV, 'E1', compactFoot('++ee')])
+})
+
+test('GIVEN an empty plan part in plan mode WHEN the compact band mounts THEN neither a plan + tag nor a plan mode adds row shows', async ($, on) => {
+  await boot($, on, { ...EMPTY_PART, [STATE_FILE]: JSON.stringify({ mode: 'plan', ts: 1 }) })
+  await typed($, '++ee ')
+
+  expect(await bandTexts($, 40), 'empty part adds nothing').toEqual(['placeholders 1', ' · plan mode', '++ee', '  Ee mode', RECV, 'E1', compactFoot('++ee')])
+})
+
 test('GIVEN an old 2-line plan text without plan: add WHEN the compact band mounts in plan mode THEN it is added under the normal text', async ($, on) => {
   await boot($, on, { ...TREE, ...XX, [STATE_FILE]: JSON.stringify({ mode: 'plan', ts: 1 }) })
   await typed($, '++xx ')

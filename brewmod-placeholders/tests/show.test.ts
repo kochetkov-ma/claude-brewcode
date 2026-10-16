@@ -271,6 +271,17 @@ test('GIVEN ++m with an added plan-mode part WHEN shown in plan mode THEN one fe
   expect(out, 'show m in plan mode').toBe(['++m · full text as sent · plan mode on', '`++m` · plugin · plan +', block('normal + plan mode part:', M_PLAN_SENT.split('\n'))].join('\n'))
 })
 
+test('GIVEN an empty plan part with its own header WHEN status and show run in both modes THEN no plan + tag, no addition, and plan mode shows its header over the normal body', async () => {
+  const reg = await load({ ...defaultsTree(), [`${P_DIR}/ee.md`]: '---\ndescription: "Ee"\n---\nE1', [`${P_DIR}/ee.plan.md`]: '---\nplan: add\nheader: "P {token}"\n---\n' })
+  const status = statusText(reg, '++', DIRS).split('\n')
+
+  expect({ row: status.find((l) => l.startsWith('++ee')), off: fullText(reg, ['ee'], '++', false), on: fullText(reg, ['ee'], '++', true) }, 'empty part').toEqual({
+    row: `++ee  project${' '.repeat(10)}Ee`,
+    off: ['++ee · full text as sent · plan mode off', '`++ee` · project', block('normal:', ['E1'])].join('\n'),
+    on: ['++ee · full text as sent · plan mode on', '`++ee` · project', block('normal:', ['P ++ee', '', 'E1'])].join('\n'),
+  })
+})
+
 test('GIVEN a normal text and an added part that fit alone but not joined WHEN shown in both modes THEN the cut note follows the joined length', async () => {
   const reg = await load({
     ...defaultsTree(),
