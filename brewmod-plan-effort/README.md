@@ -9,7 +9,7 @@
 
 <p align="center">
   <a href="https://github.com/kochetkov-ma/claude-brewcode/stargazers"><img src="https://img.shields.io/github/stars/kochetkov-ma/claude-brewcode?style=flat&logo=github" alt="GitHub stars"></a>
-  <img src="https://img.shields.io/badge/Claude_Code-2.1.287%2B-d97706" alt="Requires Claude Code 2.1.287+">
+  <img src="https://img.shields.io/badge/Claude_Code-2.1.301%2B-d97706" alt="Requires Claude Code 2.1.301+">
   <img src="https://img.shields.io/badge/type-mod-8b5cf6" alt="Claude Code mod">
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT">
 </p>
@@ -17,6 +17,8 @@
 > Pairs well with [brewmod-placeholders](../brewmod-placeholders/). Part of the [brewcode mods](../README.md#claude-code-mods).
 
 ## Install
+
+Requires Claude Code 2.1.301+: run `claude update` first.
 
 ```bash
 claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode && claude plugin install brewmod-plan-effort@claude-brewcode
@@ -28,11 +30,12 @@ Then run `/reload-plugins`.
 <summary>Update, dev mode, requirements</summary>
 
 ```bash
+claude update   # Claude Code 2.1.301+ first
 claude plugin marketplace update claude-brewcode && claude plugin update brewmod-plan-effort@claude-brewcode
 claude --plugin-dir ./brewmod-plan-effort   # dev mode, no install
 ```
 
-- Claude Code 2.1.287+ (mods use the hooks module API, early access). The `/plan-effort` command and the plan-mode row are verified on 2.1.301.
+- Claude Code 2.1.301+, updated with `claude update` (mods use the hooks module API, early access).
 - `node` on the `PATH` (runs the bundled command hook `hooks/mode.mjs`).
 - Update anytime with `/brewtools:plugin-update`.
 

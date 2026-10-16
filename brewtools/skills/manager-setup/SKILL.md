@@ -10,7 +10,7 @@ model: sonnet
 
 # Manager
 
-Manager mode is the opt-in HARD wall plus the task-graph tools key. The prompt codewords (`++m` / `++a` / `++rr` / `++r` / bare `+++`) are NOT part of this plugin: the `brewmod-placeholders` mod provides them (Claude Code 2.1.292+). This skill neither installs nor toggles them; `status` only reports where they come from.
+Manager mode is the opt-in HARD wall plus the task-graph tools key. The prompt codewords (`++m` / `++a` / `++rr` / `++r` / bare `+++`) are NOT part of this plugin: the `brewmod-placeholders` mod provides them (Claude Code 2.1.301+). This skill neither installs nor toggles them; `status` only reports where they come from.
 
 **Codewords — provided by `brewmod-placeholders`.** Install: `claude plugin install brewmod-placeholders@claude-brewcode`. Text override files are read by the mod's legacy layer: it reads `<project>/.claude/brewtools/manager/prompts/<mode>.md` and `<config dir>/manager/prompts/<mode>.md` as its legacy layer (`<mode>` = `full`, `planmode`, `architect`, `review-regression`, `review-double`, `cron-plan`). This skill never reads, writes or deletes them. Codeword list, `/placeholders` command: the mod's README.
 
@@ -593,7 +593,7 @@ node <ABS_CWD>/.claude/brewtools/manager/manager-state.mjs set level=LEVEL
 ### status  (the MAIN user-facing explainer — ALWAYS the teaching surface)
 
 Read-only: read merged state, detect wall registration, list legacy codeword override files, render the `references/hard.md` explainer with these additions:
-1. **Codewords** — one line, no block text: `codewords: provided by brewmod-placeholders (Claude Code 2.1.292+)`, the install line `claude plugin install brewmod-placeholders@claude-brewcode`, and the legacy-overrides note (shape below). An armed wall injects nothing per prompt: the guard's deny reason is the explanation, plus one SessionStart notice (259 B at `balanced`) naming the mechanism and the exit.
+1. **Codewords** — one line, no block text: `codewords: provided by brewmod-placeholders (Claude Code 2.1.301+)`, the install line `claude plugin install brewmod-placeholders@claude-brewcode`, and the legacy-overrides note (shape below). An armed wall injects nothing per prompt: the guard's deny reason is the explanation, plus one SessionStart notice (259 B at `balanced`) naming the mechanism and the exit.
 2. **Wall delivery and state** — report both registered? and armed (`hard`)?, the `level`, and a brief allowlist summary (what the main session may and may not do).
 3. **Verbs** — as listed in the shape below.
 4. **Task-graph tools** — report whether `TaskCreate`/`TaskUpdate`/`TaskGet`/`TaskList` are actually available: the running Claude Code version, and the layer and value of `env.CLAUDE_CODE_ENABLE_TODO_TOOLS` in `<ROOT>/.claude/settings.local.json`, `<ROOT>/.claude/settings.json` or the user `<config dir>/settings.json` (`install` step 4 rule; that layer's opt-out also outranks a shell export). Set nowhere on CC >= 2.1.233 → the session env decides, else the tools are off and there is no task graph; give the one-line remedy.
@@ -675,7 +675,7 @@ Shape (`references/hard.md` rendered with `hard`, `level`, `stateSource`):
 # Manager — status
 
 ## Codewords
-codewords: provided by brewmod-placeholders (Claude Code 2.1.292+) — ++m, ++a, ++rr, ++r, bare +++ (Plan mode). Not part of this plugin; this skill neither enables nor disables them.
+codewords: provided by brewmod-placeholders (Claude Code 2.1.301+) — ++m, ++a, ++rr, ++r, bare +++ (Plan mode). Not part of this plugin; this skill neither enables nor disables them.
 Install:   claude plugin install brewmod-placeholders@claude-brewcode
 Overrides: <legacyOverrides, one path per line, or "none found"> — files under .claude/brewtools/manager/prompts/ and <config dir>/manager/prompts/ are read through the mod's legacy layer.
 
@@ -728,7 +728,7 @@ Same as `manager-run`: the gentle default for a bare task.
 
 After any non-status action, end with the resolved status (run the `status` Bash block, or reuse a result you already have). At minimum print:
 ```
-registered · armed(hard) · level · state source (project/global/default) · codewords: provided by brewmod-placeholders (Claude Code 2.1.292+), install line, legacy overrides
+registered · armed(hard) · level · state source (project/global/default) · codewords: provided by brewmod-placeholders (Claude Code 2.1.301+), install line, legacy overrides
 ```
 For `install`/`upgrade` that newly registered, and for `uninstall`/`purge`, also surface the hook note. When the wall ended up armed (`install`, `enable`, `hard-one-shot` while running), the full Bash block is denied: use the armed-wall path of the `status` section, and always include the literal exit command.
 

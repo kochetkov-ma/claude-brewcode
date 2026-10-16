@@ -4,9 +4,11 @@
 
 ## v6.9.4 (2026-10-16)
 
-> Docs: [placeholders](https://doc-claude.brewcode.app/mods/placeholders/) | [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/)
+> Docs: [placeholders](https://doc-claude.brewcode.app/mods/placeholders/) | [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/) | [mods overview](https://doc-claude.brewcode.app/mods/overview/) | [installation](https://doc-claude.brewcode.app/installation/) | [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/)
 
 Hotfix: the `brewmod-placeholders` band fits its slot in fullscreen plan mode and reads clearer; `brewmod-plan-effort` hands the band one row less.
+
+**Requirement:** both mods now require Claude Code 2.1.301+ (run `claude update` first); CI pins Claude Code 2.1.301.
 
 ### brewmod-placeholders
 

@@ -17,7 +17,7 @@ The codewords `++m`, `++a`, `++r`, `++rr` and `+++` come from the
 </Callout>
 
 <Callout type="tip" title="Install the mod">
-  Requires Claude Code 2.1.292+. Install the mod, then run `/reload-plugins`:
+  Requires Claude Code 2.1.301+: run `claude update` first. Install the mod, then run `/reload-plugins`:
 
   ```bash
   claude plugin install brewmod-placeholders@claude-brewcode
@@ -51,11 +51,11 @@ Each codeword reads one file name in those folders:
 | `review-regression.md` | `++rr` |
 | `cron-plan.md` | `+++` (Plan mode only) |
 
-To change codeword text, describe the change, for example `/placeholders make ++r shorter` (Claude Code 2.1.300+; older builds show the status view and the line `changing placeholders by words needs Claude Code 2.1.300+ · meanwhile: edit the <name>.md files by hand`). Claude shows one confirm dialog and saves your own file; it does not edit the override files above. Without a scope word the dialog asks where to save (Global recommended: `~/.claude/placeholders/<name>.md`, all projects; Project: `.claude/placeholders/<name>.md`); start with `global` or `project` to skip the question. A project save outranks both brewtools override folders, a global save only the global one. Full rules: [Prompt placeholders](/mods/placeholders/). `/brewtools:manager-setup status` lists the override files.
+To change codeword text, describe the change, for example `/placeholders make ++r shorter`. Claude shows one confirm dialog and saves your own file; it does not edit the override files above. Without a scope word the dialog asks where to save (Global recommended: `~/.claude/placeholders/<name>.md`, all projects; Project: `.claude/placeholders/<name>.md`); start with `global` or `project` to skip the question. A project save outranks both brewtools override folders, a global save only the global one. Full rules: [Prompt placeholders](/mods/placeholders/). `/brewtools:manager-setup status` lists the override files.
 
 ## Older Claude Code and Codex
 
-The mod needs Claude Code 2.1.292+. On an older build, keep brewtools 6.7.x, which still ships the codeword hook. Codex keeps its own codeword hook in the Codex mirror of brewtools; the mod does not apply to it.
+The mod needs Claude Code 2.1.301+ (`claude update`). On an older build, keep brewtools 6.7.x, which still ships the codeword hook. Codex keeps its own codeword hook in the Codex mirror of brewtools; the mod does not apply to it.
 
 ## Related
 

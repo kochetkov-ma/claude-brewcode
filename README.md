@@ -57,7 +57,7 @@ After all commands succeed, run `/reload-plugins`. If `/reload-plugins` is unava
 | [brewmod-plan-effort](brewmod-plan-effort/README.md) | Enter plan mode: effort goes to `xhigh` while Claude plans. `/plan-effort max` sets the level | `claude plugin install brewmod-plan-effort@claude-brewcode` |
 | [brewmod-placeholders](brewmod-placeholders/README.md) | `++r` in a prompt: a whole review block. `/placeholders <what you want>`: Claude drafts your own | `claude plugin install brewmod-placeholders@claude-brewcode` |
 
-First time: `claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode`, then `/reload-plugins` after installing. Needs Claude Code 2.1.287+ (placeholders 2.1.292+) and `node` on the `PATH`; the `/plan-effort` and `/placeholders` commands are verified on 2.1.301.
+First time: `claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode`, then `/reload-plugins` after installing. Both mods require Claude Code 2.1.301+ (run `claude update` first) and `node` on the `PATH`.
 
 Team/Enterprise organizations, the brewtools 6.7.x double injection and legacy codeword overrides: [mods overview](https://doc-claude.brewcode.app/mods/overview/).
 
