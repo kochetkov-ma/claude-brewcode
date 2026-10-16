@@ -246,8 +246,8 @@ clean_plugin_dir "$CACHE_ROOT/brewcode"
 clean_plugin_dir "$CACHE_ROOT/brewdoc"
 clean_plugin_dir "$CACHE_ROOT/brewtools"
 clean_plugin_dir "$CACHE_ROOT/brewui"
-clean_plugin_dir "$CACHE_ROOT/brewmod-plan-effort"
 clean_plugin_dir "$CACHE_ROOT/brewmod-placeholders"
+clean_plugin_dir "$CACHE_ROOT/brewmod-plan-effort"
 
 # --- Versions a running session may still use ---
 echo "=== Kept by grace (${GRACE_DAYS}d, BREWCODE_CACHE_GRACE_DAYS) ==="

@@ -1,6 +1,6 @@
 ---
 title: "Installation"
-description: "How to install the brewcode, brewdoc, brewtools, and brewui plugins"
+description: "Install the brewcode, brewdoc, brewtools and brewui plugins and both brewcode mods, with Claude Code updated first."
 order: 2
 ---
 
@@ -8,19 +8,19 @@ import { Card, CardGrid, Callout, Steps, Tabs, TabItem, InstallPrompt, Spoiler, 
 
 # Installation
 
-These four products run in Claude Code: 27 skills, 9 agents, and 3 registered plugin hooks.
+These four products run in Claude Code: 27 skills, 9 agents, and 3 registered plugin hooks. The prompt below also installs the two [brewcode mods](#mods), placeholders first, after it checks that Claude Code is 2.1.301 or newer.
 
 <InstallPrompt plugin="all" mode="install" />
 
 <Callout type="note" title="Claude Code only">
-  The repository's native Codex instructions are separate; this installation does not enable Codex plugins or configure Codex authentication or runtime state.
+  The repository keeps separate native instructions for Codex. This installation does not enable Codex plugins or change Codex authentication or runtime state.
 </Callout>
 
 ## Requirements
 
 | Component | Version | Purpose |
 |-----------|---------|---------|
-| Claude Code CLI | 2.1.296 authoring reference | Runtime contracts checked for this release; not a declared minimum version |
+| Claude Code CLI | 2.1.296 authoring reference | Runtime contracts checked for this release; not a declared minimum for the four plugins. The [mods](#mods) need 2.1.301 or newer |
 | Node.js | 20+ | Hook runtime |
 | macOS | 13+ | Supported OS |
 
@@ -34,22 +34,26 @@ These four products run in Claude Code: 27 skills, 9 agents, and 3 registered pl
   <TabItem label="Marketplace (recommended)">
     Permanent installation through the Claude Code plugin system. Plugins load automatically with every session.
 
-    **1. Add the marketplace** -- registers the plugin source:
+    **1. Update Claude Code** -- the mods need 2.1.301 or newer. Check `claude --version`; if it is lower, run `claude update`, then restart Claude Code (`exit`, then `claude`).
+
+    **2. Add the marketplace** -- registers the plugin source:
 
     ```bash
     claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
     ```
 
-    **2. Install the plugins** -- installs all four products:
+    **3. Install the mods and the plugins** -- both mods, then all four products, one name per command:
 
     ```bash
+    claude plugin install brewmod-placeholders@claude-brewcode
+    claude plugin install brewmod-plan-effort@claude-brewcode
     claude plugin install brewcode@claude-brewcode
     claude plugin install brewdoc@claude-brewcode
     claude plugin install brewtools@claude-brewcode
     claude plugin install brewui@claude-brewcode
     ```
 
-    **3. Reload the plugins** -- run `/reload-plugins` inside a session. If the command is unavailable, type `exit` and run `claude` again.
+    **4. Reload the plugins** -- run `/reload-plugins` inside a session. If the command is unavailable, or you just ran `claude update`, type `exit` and run `claude` again.
   </TabItem>
   <TabItem label="Local directory (developers only)">
     Run from a cloned repository. Suitable for plugin development or one-off use.
@@ -61,13 +65,13 @@ These four products run in Claude Code: 27 skills, 9 agents, and 3 registered pl
     cd claude-brewcode
     ```
 
-    **2. Launch with the `--plugin-dir` flag** (developers only):
+    **2. Launch with the `--plugin-dir` flag:**
 
     ```bash
     claude --plugin-dir ./brewcode --plugin-dir ./brewdoc --plugin-dir ./brewtools --plugin-dir ./brewui
     ```
 
-    For a single plugin (developers only):
+    For a single plugin:
 
     ```bash
     claude --plugin-dir ./brewcode
@@ -83,7 +87,7 @@ These four products run in Claude Code: 27 skills, 9 agents, and 3 registered pl
   <li class="step step-primary">
     <div>
       <strong>Check the plugin list</strong>
-      <p>Run <code>/reload-plugins</code> in your session (or restart Claude Code if the command is unavailable), then run in your terminal. It lists <code>brewcode</code>, <code>brewdoc</code>, <code>brewtools</code> and <code>brewui</code>.</p>
+      <p>Run <code>/reload-plugins</code> in your session (or restart Claude Code if the command is unavailable or you just ran <code>claude update</code>), then run the command below in your terminal. It lists <code>brewmod-placeholders</code>, <code>brewmod-plan-effort</code>, <code>brewcode</code>, <code>brewdoc</code>, <code>brewtools</code> and <code>brewui</code>.</p>
       <pre><code>claude plugin list</code></pre>
     </div>
   </li>
@@ -103,34 +107,42 @@ These four products run in Claude Code: 27 skills, 9 agents, and 3 registered pl
   </li>
 </Steps>
 
-## Mods (optional)
+## Mods
 
-[Brewcode mods](/mods/overview/) are separate plugins that extend Claude Code itself through the hooks module API. They are not part of the four-plugin suite and are never installed with it. After adding the marketplace, install the ones you want: [`brewmod-plan-effort`](/mods/plan-effort/) and [`brewmod-placeholders`](/mods/placeholders/). Both require Claude Code 2.1.301+: run `claude update` first.
+[Brewcode mods](/mods/overview/) are separate plugins that extend Claude Code itself through the hooks module API. They are counted apart from the four plugins, and the install above covers both: [`brewmod-placeholders`](/mods/placeholders/) first, then [`brewmod-plan-effort`](/mods/plan-effort/).
+
+<Callout type="warning" title="Update Claude Code first">
+  The mods need Claude Code 2.1.301 or newer. Check with `claude --version`; if it is lower, run `claude update` and restart Claude Code (`exit`, then `claude`).
+</Callout>
+
+To add the mods to a machine that already has the plugins, run:
 
 ```bash
 claude update
-claude plugin install brewmod-plan-effort@claude-brewcode
 claude plugin install brewmod-placeholders@claude-brewcode
+claude plugin install brewmod-plan-effort@claude-brewcode
 ```
 
-Then run `/reload-plugins`. [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/) keeps installed mods current.
+Restart Claude Code after `claude update`. When Claude Code was already 2.1.301 or newer, `/reload-plugins` is enough. [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/) keeps the installed mods current.
 
 <Spoiler id="updating" title="Updating">
   <Callout type="tip" title="Easy path: plugin-update skill">
     Run <a href="/brewtools/skills/plugin-update/"><code>/brewtools:plugin-update</code></a> inside a Claude Code session. It checks versions, runs the full update chain, and prompts you to reload.
   </Callout>
 
-  Or run the update commands manually:
+  Or run the update commands manually. The mods need Claude Code 2.1.301 or newer: if `claude --version` is lower, run `claude update` and restart Claude Code first. Run one `claude plugin update` per installed plugin; a second name in one call is silently ignored:
 
   ```bash
   claude plugin marketplace update claude-brewcode
+  claude plugin update brewmod-placeholders@claude-brewcode
+  claude plugin update brewmod-plan-effort@claude-brewcode
   claude plugin update brewcode@claude-brewcode
   claude plugin update brewdoc@claude-brewcode
   claude plugin update brewtools@claude-brewcode
   claude plugin update brewui@claude-brewcode
   ```
 
-  Run `/reload-plugins` inside your session (preferred), or type `exit` and run `claude` again. Updates are not active until a reload. Then rerun setup-status: plugin updates do not replace artifacts that a setup copied into your project, so follow its scope-specific upgrade commands.
+  Skip the lines of plugins you did not install. Run `/reload-plugins` inside your session (preferred), or type `exit` and run `claude` again. Updates are not active until a reload. Then rerun setup-status: plugin updates do not replace artifacts that a setup copied into your project, so follow its scope-specific upgrade commands.
 
   <InstallPrompt plugin="all" mode="update" />
 </Spoiler>

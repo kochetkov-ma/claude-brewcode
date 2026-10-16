@@ -134,6 +134,16 @@ for (const m of HX) {
   SESSIONS[`hx-${m.tag}`] = { size: m.size, mode: 'default', tui: m.tui }
   SESSIONS[`hxp-${m.tag}`] = { size: m.size, mode: 'plan', tui: m.tui, warm: true }
 }
+// The ++rr typeahead row (its description; the ++rr band head says "review discipline"), a band body row, menu-capped cut rows at 80x24 (default TUI only: fullscreen cuts to its slot, never to the menu).
+const RR_MENU = 'Anti-regression review: regression'
+const BAND_ROW = (s) => new RegExp(`^  ${RX(s)}`, 'm')
+const R_CAPPED24 = '... 8 more lines · whole text: /placeholders show ++r'
+const RR_CAPPED24 = '... 14 more lines · whole text: /placeholders show ++rr'
+// ++r with the name menu open, then ?: the 4b311fd9 race at 80x24 (the band must not grow under the closing menu).
+const R_MENU_Q = () => [
+  t('++r'), c([B(RECV('++r')), B(R_HEAD), B(FOCUS('++r')), M('++rr')], [B(COMPACT_ANY), B(R_DESC_ROW)]),
+  t('?'), c([B(RECV('++r')), B(R_HEAD), B(FOCUS('++r'))], [M(RR_ROW), B(QUERY_R), B(COMPACT_ANY), B(R_DESC_ROW)]),
+]
 const hx = (base, title, build, fam = 'hx') => HX.map((m) => ({ id: `${base}-${m.tag}`, cp: 4, session: `${fam}-${m.tag}`, title: `${title} [${m.tui} ${m.size}]`, steps: build(m.tui === 'fullscreen', m.size === '80x24') }))
 // fam null = a fresh session per case (default mode); tuis narrows the combos.
 const matrix = (base, cp, title, build, { fam = 'm', tuis = ['default', 'fullscreen'] } = {}) =>
@@ -290,9 +300,32 @@ export const CASES = [
 
   // Hotfix 6.9.3: caret band on ++r / ++m, ++r? with the menu open then closed, P1 fill without a typeahead row, manual show still suggests, status/help wording.
   // Fullscreen has no tmux scrollback: transcript checks read the screen there (its tail at 80x24).
-  ...hx('hx-r-menu', '++r with the name menu open, then ?: focus band both times, ? closes the menu', () => [
-    t('++r'), c([B(RECV('++r')), B(R_HEAD), B(FOCUS('++r')), M('++rr')], [B(COMPACT_ANY), B(R_DESC_ROW)]),
-    t('?'), c([B(RECV('++r')), B(R_HEAD), B(FOCUS('++r'))], [M(RR_ROW), B(QUERY_R), B(COMPACT_ANY), B(R_DESC_ROW)]),
+  ...hx('hx-r-menu', '++r with the name menu open, then ?: focus band both times, ? closes the menu', R_MENU_Q),
+  // 6.9.6: the 80x24 race (? while the ++rr row shows) 20 more times at 80x24, 10 in fullscreen 80x24: the band never grows under the closing menu.
+  ...[['d80', 20], ['fs80', 10]].flatMap(([tag, n]) => Array.from({ length: n }, (_, i) => ({ id: `hx-race-${tag}-${i + 1}`, cp: 4, session: `hx-${tag}`, title: `race run ${i + 1}: ++r with the menu, then ? [${tag}]`, steps: R_MENU_Q() }))),
+  // 6.9.6: a hold ends without our answer. No typeahead while a recalled entry is shown: never menu-capped, never stuck.
+  // Band rows are indented 2, printed show output 5: BAND_ROW keeps a check off the transcript above the band.
+  ...hx('hx-hist', 'show ++m, show ++r sent; Up recalls show ++r: no menu, uncapped band; Up again to show ++m: uncapped ++m band, not stuck', (fs, small) => [
+    t('/placeholders show ++m'), enter(), c([P(/^❯\s*$/m)], [], { debugForbid: [SUBMITTED] }),
+    t('/placeholders show ++r'), enter(), c([P(/^❯\s*$/m)], [], { debugForbid: [SUBMITTED] }),
+    k('Up'), c([P('/placeholders show ++r'), B(RECV('++r')), B(FOCUS('++r')), ...(!fs && small ? [B(BAND_ROW('Every significant change: multi-agent review'))] : [])], [M(RR_MENU), ...(!fs && small ? [B(R_CAPPED24)] : [])]),
+    k('Up'), c([P('/placeholders show ++m'), B(RECV('++m')), B(FOCUS('++m')), ...(!fs && small ? [B(BAND_ROW('Manage; never code/build/test/hand-debug'))] : [])], [B(FOCUS('++r')), M(RR_MENU)]),
+  ]),
+  // Esc drops the rows and the engine asks nothing for the same text: the hold timer grows the band (80x24 default: capped 14 more, grown shows row 4).
+  ...hx('hx-esc-move', '++rr, Left shows the ++rr row, Esc drops it, Right: the band grows by itself', (fs, small) => [
+    t('++rr'), c([B(RECV('++rr')), B(FOCUS('++rr'))], [M(RR_MENU)]),
+    k('Left'), c([B(RECV('++rr')), M(RR_MENU)]),
+    k('Escape'), c([B(RECV('++rr'))], [M(RR_MENU)]),
+    k('Right'), c([B(RECV('++rr')), B(FOCUS('++rr')), ...(!fs && small ? [B(BAND_ROW('Every significant phase: one review'))] : [])], [M(RR_MENU), ...(!fs && small ? [B(RR_CAPPED24)] : [])]),
+  ]),
+  // Down puts the draft back with the caret at its start (compact); End asks again: our ++rr row and a capped focus band, its top kept.
+  ...hx('hx-hist-draft', 'fix ++r with the ++rr row, Esc, Up recalls an entry, Down puts the draft back, End: row and capped band, top kept', () => [
+    t('/placeholders show ++m'), enter(), c([P(/^❯\s*$/m)], [], { debugForbid: [SUBMITTED] }),
+    t('fix ++r'), c([B(RECV('++r')), M(RR_MENU)]),
+    k('Escape'), c([B(RECV('++r'))], [M(RR_MENU)]),
+    k('Up'), c([P('/placeholders show ++m')], [P('fix ++r')]),
+    k('Down'), c([P('fix ++r'), B(COMPACT('++r'))], [P('/placeholders show ++m'), M(RR_MENU)]),
+    k('End'), c([P('fix ++r'), B(RECV('++r')), B(R_HEAD), B(FOCUS('++r')), M(RR_MENU)], [B(COMPACT_ANY)]),
   ]),
   ...hx('hx-m-cut', '++m (29 sent lines): focus band capped at 15 rows (fewer in fullscreen 80x24), cut line names the show command', (fs, small) => [t('++m'), c([B(M_HEAD), ...(fs && small ? [] : [B(M_TOP)]), B(FOCUS('++m')), B(W(CUT('m'))), B(RECV('++m')), B(PLAN_NOTE)], [B(COMPACT_ANY), B(PLAN_PLUS)])]),
   ...hx('hx-no-button', 'no Show text / Hide text / ctrl+x in compact (3 tokens), focus, escaped and unknown bands', () => [

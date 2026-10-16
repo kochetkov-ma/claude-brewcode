@@ -30,8 +30,8 @@
 | brewdoc plugin.json | `brewdoc/.claude-plugin/plugin.json` |
 | brewtools plugin.json | `brewtools/.claude-plugin/plugin.json` |
 | brewui plugin.json | `brewui/.claude-plugin/plugin.json` |
-| brewmod-plan-effort plugin.json | `brewmod-plan-effort/.claude-plugin/plugin.json` |
 | brewmod-placeholders plugin.json | `brewmod-placeholders/.claude-plugin/plugin.json` |
+| brewmod-plan-effort plugin.json | `brewmod-plan-effort/.claude-plugin/plugin.json` |
 | Marketplace product entries | `.claude-plugin/marketplace.json` |
 | brewcode package version | `brewcode/package.json` |
 | Derived stamps, versioned docs, compatibility mirror | Current coverage in `.claude/scripts/bump-version.sh` |
@@ -65,7 +65,7 @@
 |------|---------|
 | `> Docs:` line | MUST list doc pages for ALL affected skills/agents/hooks |
 | URL pattern | `https://doc-claude.brewcode.app/{plugin}/{skills\|agents}/{name}/` |
-| Group by plugin | Separate `### brewcode`, `### brewdoc`, `### brewtools`, `### brewui`, `### brewmod-plan-effort`, `### brewmod-placeholders` |
+| Group by plugin | Separate `### brewcode`, `### brewdoc`, `### brewtools`, `### brewui`, `### brewmod-placeholders`, `### brewmod-plan-effort` |
 | Group by type | `#### Added`, `#### Changed`, `#### Fixed` under each plugin |
 | Category prefix | Bold: `**skill:**`, `**hook:**`, `**agent:**`, `**script:**` |
 
@@ -92,8 +92,8 @@ current repo from its top-level layout:
 | `brewdoc/` | brewdoc |
 | `brewtools/` | brewtools |
 | `brewui/` | brewui |
-| `brewmod-plan-effort/` | brewmod-plan-effort |
 | `brewmod-placeholders/` | brewmod-placeholders |
+| `brewmod-plan-effort/` | brewmod-plan-effort |
 | `.claude/`, `.github/` | infrastructure (under brewcode) |
 
 ## EXAMPLE — Tag + CI Conventions (claude-brewcode repo)

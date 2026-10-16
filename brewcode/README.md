@@ -6,7 +6,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 6.9.5 |
+| Version | 6.9.6 |
 | Skills | 9 |
 | Agents | 6 |
 | Hooks | 2 |
@@ -26,16 +26,22 @@ After install, run `/reload-plugins` (or `exit` + `claude`).
 ```
 
 <details>
-<summary>Or install the whole suite</summary>
+<summary>Or install the whole suite (plugins and mods)</summary>
+
+❗ **Update Claude Code first:** mods need Claude Code 2.1.301 or newer. Check with `claude --version`; below that, run `claude update`, then restart Claude Code (type `exit`, then run `claude`).
 
 ```
+First run `claude --version`. The mods need Claude Code 2.1.301 or newer. If it is lower, stop and tell me to run `claude update`, restart Claude Code (type `exit`, then run `claude`) and paste this prompt again.
+
 Execute these commands in this Claude Code session, one by one, show full output for each, do not skip any, do not summarize:
 
 1. claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
-2. claude plugin install brewcode@claude-brewcode
-3. claude plugin install brewdoc@claude-brewcode
-4. claude plugin install brewtools@claude-brewcode
-5. claude plugin install brewui@claude-brewcode
+2. claude plugin install brewmod-placeholders@claude-brewcode
+3. claude plugin install brewmod-plan-effort@claude-brewcode
+4. claude plugin install brewcode@claude-brewcode
+5. claude plugin install brewdoc@claude-brewcode
+6. claude plugin install brewtools@claude-brewcode
+7. claude plugin install brewui@claude-brewcode
 
 After all commands succeed, run `/reload-plugins`. If `/reload-plugins` is unavailable, tell me to type `exit` and run `claude` again. Run the commands now.
 ```
@@ -50,11 +56,22 @@ claude plugin update brewcode@claude-brewcode
 
 Dev mode (no install): `claude --plugin-dir ./brewcode`
 
-Optional [brewcode mods](https://doc-claude.brewcode.app/mods/overview/) (plan-mode effort, prompt placeholders): `claude plugin install brewmod-plan-effort@claude-brewcode`
+## Claude Code mods
+
+Brewcode mods from the same marketplace: [overview](https://doc-claude.brewcode.app/mods/overview/), [placeholders](https://doc-claude.brewcode.app/mods/placeholders/), [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/).
+
+❗ **Update Claude Code first:** mods need Claude Code 2.1.301 or newer. Check with `claude --version`; below that, run `claude update`, then restart Claude Code (type `exit`, then run `claude`).
+
+```bash
+claude plugin install brewmod-placeholders@claude-brewcode
+claude plugin install brewmod-plan-effort@claude-brewcode
+```
+
+`claude plugin install` takes one name per call. Run `/reload-plugins` afterwards.
 
 ## Overview
 
-Brewcode keeps long tasks on track across Claude Code compaction: the `compact-recall` hook re-anchors the plan, intent and task graph, so the session continues from recorded state. Skills cover semantic code search, multi-agent review, conventions, e2e, project rules and meta-tooling for skills, agents and teams. Agents are specialists only; implementation, testing and review roles are generated per project by `/brewcode:teams-setup`.
+After a Claude Code compaction, the `compact-recall` hook re-anchors the plan, intent and task graph, so the session continues from recorded state. Skills cover semantic code search, multi-agent review, conventions, e2e, project rules and meta-tooling for skills, agents and teams. The shipped agents are specialists only; `/brewcode:teams-setup` generates the implementation, testing and review roles per project.
 
 ## Quick Start
 
@@ -67,7 +84,7 @@ Brewcode keeps long tasks on track across Claude Code compaction: the `compact-r
 
 ## Skills
 
-A `-setup` suffix marks a skill that installs a mechanism you use afterwards; bare names (`agents`, `rules`, `skills`, `e2e`) are recurring tools. Every `-setup` skill takes `status | install | upgrade | enable | disable | uninstall | purge`, in that order; extras come after (`semble-setup`: `reindex | optimize | resume`; `teams-setup`: `[name]`). Bare call: `status` when installed, else `install`; `semble-setup` always `status`, `convention-setup` `install`.
+A `-setup` suffix marks a skill that installs a mechanism you use afterwards; bare names (`agents`, `rules`, `skills`, `e2e`) are recurring tools. Every `-setup` skill takes `status | install | upgrade | enable | disable | uninstall | purge`, in that order; extras come after (`semble-setup`: `reindex | optimize | resume`; `teams-setup`: `[name]`). Bare call: `status` when installed, else `install`; `semble-setup` and the four brewtools guard setups (manager, agent-deadline, agent-return, agent-router) always `status`, `convention-setup` `install`.
 
 | Skill | Purpose |
 |-------|---------|
@@ -81,7 +98,7 @@ A `-setup` suffix marks a skill that installs a mechanism you use afterwards; ba
 | [`/brewcode:agents`](skills/agents/README.md) | Agent management: status, create, improve, sync, review |
 | [`/brewcode:e2e`](skills/e2e/README.md) | E2E orchestration, BDD scenarios; modes `status \| install \| create \| update \| review \| rules` |
 
-> **Run setups one at a time.** Each is an interactive generator that fans out subagents and asks questions; two in a session degrade each other. `/brewcode:setup-status` prints the command; run it yourself, ideally in a fresh session.
+> **Run setups one at a time.** Most are interactive generators that fan out subagents and ask questions; two in a session degrade each other. `/brewcode:setup-status` prints the command; run it yourself, ideally in a fresh session.
 
 ## Agents
 
@@ -111,7 +128,7 @@ Full docs: [doc-claude.brewcode.app/brewcode/overview](https://doc-claude.brewco
 |----------|------|
 | Skills, agents, hooks | [Skills](https://doc-claude.brewcode.app/brewcode/skills/) \| [Agents](https://doc-claude.brewcode.app/brewcode/agents/) \| [Hooks](https://doc-claude.brewcode.app/brewcode/hooks/) |
 | Setup workflow | [Full Setup](https://doc-claude.brewcode.app/full-setup/) |
-| Mods | [Mods overview](https://doc-claude.brewcode.app/mods/overview/) \| [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/) \| [placeholders](https://doc-claude.brewcode.app/mods/placeholders/) |
+| Mods | [Mods overview](https://doc-claude.brewcode.app/mods/overview/) \| [placeholders](https://doc-claude.brewcode.app/mods/placeholders/) \| [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/) |
 | Release Notes | [RELEASE-NOTES.md](../RELEASE-NOTES.md) |
 
 Author: Maksim Kochetkov | License: MIT

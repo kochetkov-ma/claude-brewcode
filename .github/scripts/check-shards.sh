@@ -15,7 +15,7 @@ while IFS= read -r runner; do
     name=$(basename "$suite" .mjs); name=${name#suite-}
     grep -qE " ${name}( |\$)" <<< "$lines" || missing "$runner $name"
   done
-done < <(find brewcode brewdoc brewtools .claude/scripts -path '*/fixtures/*' -prune -o -path '*/tests/run.sh' -print | LC_ALL=C sort)
+done < <(find brewcode brewdoc brewtools .claude/scripts .claude/skills -path '*/fixtures/*' -prune -o -path '*/tests/run.sh' -print | LC_ALL=C sort)
 
 for glob in '.codex/tests/*.test.mjs' '.codex/tests/*.test.py'; do
   grep -qF "for test in $glob; do" "$wf" || missing "$glob"

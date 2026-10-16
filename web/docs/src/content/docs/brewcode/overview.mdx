@@ -31,7 +31,7 @@ Brewcode is a Claude Code authoring toolkit: skills (recipes) define what to bre
 
 ## How it fits
 
-Brewcode layers on top of Claude Code with no external runtime. Skills spawn agents, agents write rules and project files, and the two SessionStart hooks keep sessions anchored. Generic implementation and review roles are generated per project into `.claude/agents/` by [`/brewcode:teams-setup`](/brewcode/skills/teams-setup/). Optional [brewcode mods](/mods/overview/) add plan-mode effort and prompt placeholders.
+Brewcode layers on top of Claude Code with no external runtime. Skills spawn agents, agents write rules and project files, and the two SessionStart hooks keep sessions anchored. Generic implementation and review roles are generated per project into `.claude/agents/` by [`/brewcode:teams-setup`](/brewcode/skills/teams-setup/). The [brewcode mods](/mods/overview/) add prompt placeholders and plan-mode effort.
 
 ## Quick start
 
@@ -63,14 +63,14 @@ Brewcode layers on top of Claude Code with no external runtime. Skills spawn age
 </Steps>
 
 <Callout type="caution" title="One setup per session">
-  Every `-setup` skill is an interactive generator that fans out subagents and asks real questions. Two in one session degrade each other, so `setup-status` reports and stops. Run setups one at a time, ideally in a fresh session.
+  Most `-setup` skills are interactive generators that fan out subagents and ask you questions. Two in one session degrade each other, so `setup-status` reports and stops. Run setups one at a time, ideally in a fresh session.
 </Callout>
 
 ## Technical details
 
 <Spoiler id="naming" title="Naming: -setup vs bare">
 
-A **`-setup`** skill installs a mechanism (agents, hooks, a rule, a generated skill) that you then use. Run it once, `upgrade` it later. Bare-named skills are recurring tools. Every setup answers `status`, `install`, `upgrade`, `enable`, `disable`, `uninstall`, `purge`. A bare call means status when installed and install when absent; [`semble-setup`](/brewcode/skills/semble-setup/) always defaults to status, [`convention-setup`](/brewcode/skills/convention-setup/) to install. Full rule: [Skills](/brewcode/skills/).
+A **`-setup`** skill installs a mechanism (agents, hooks, a rule, a generated skill) that you then use. Run it once, `upgrade` it later. Bare-named skills are recurring tools. Every setup answers `status`, `install`, `upgrade`, `enable`, `disable`, `uninstall`, `purge`. A bare call means status when installed and install when absent; [`semble-setup`](/brewcode/skills/semble-setup/) and the four brewtools guard setups (manager, agent-deadline, agent-return, agent-router) always default to status, [`convention-setup`](/brewcode/skills/convention-setup/) to install. Full rule: [Skills](/brewcode/skills/).
 
 </Spoiler>
 
@@ -115,7 +115,7 @@ Full tree: [file-tree.md](https://github.com/kochetkov-ma/claude-brewcode/blob/m
 
 <Spoiler id="agents-and-contracts" title="Agent contracts and tests">
 
-Creator agents and their on-demand references follow Claude Code authoring contracts checked through 2.1.296. They distinguish ordinary agents, conversation forks and skill forks, and return unresolved decisions to the main caller. Local regression suites cover creator contracts, hooks, team lifecycle, convention lifecycle and semantic search; their output gives current pass/fail totals and does not replace live evaluation.
+Creator agents and their on-demand references follow Claude Code authoring contracts checked through 2.1.296. They distinguish ordinary agents, conversation forks and skill forks, and return unresolved decisions to the main caller. Local regression suites cover creator contracts, hooks, team lifecycle, convention lifecycle and semantic search; each prints current pass/fail totals, and none replaces a live evaluation.
 
 </Spoiler>
 
@@ -126,7 +126,7 @@ Creator agents and their on-demand references follow Claude Code authoring contr
     Full setup, update and troubleshooting.
   </Card>
   <Card title="Brewcode mods" icon="puzzle" href="/mods/overview/">
-    Plan-mode effort and prompt placeholders.
+    Prompt placeholders and plan-mode effort.
   </Card>
   <Card title="View on GitHub" icon="github" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/">
     Source code, README and configuration.

@@ -1,6 +1,6 @@
 ---
 title: "Skills"
-description: "All 5 Brewdoc skills: commands, parameters, examples, and the -setup naming rule"
+description: "All 5 Brewdoc skills: commands, arguments, models, and the -setup naming rule"
 order: 22
 ---
 
@@ -8,11 +8,13 @@ import { Card, CardGrid, Callout, UpdateNotice } from '../../../components/mdx';
 
 # Skills
 
-Skills (recipes) are slash commands that define *what* to do. Brewdoc includes 5 skills focused on doc-staleness tracking, memory-sync generation, Markdown → PDF conversion and content publishing -- each works independently with no prior setup required.
+Skills (recipes) are slash commands defined in `SKILL.md` files. Brewdoc ships 5: doc-staleness tracking, Claude Code installation docs, memory-sync generation, Markdown → PDF conversion and content publishing. Each works on its own.
 
 <Callout type="note" title="The -setup naming rule">
-  A `-setup` suffix marks a skill that **installs a mechanism you afterwards use instead of the skill** (project-local hooks, a generated `/memory-sync`). Both setup skills implement `status | install | upgrade | enable | disable | uninstall | purge`. Every brewdoc skill except `/brewdoc:publish` is user-invoked only (`user-invocable: true` + `disable-model-invocation: true`); `publish` is model-invocable, see the [FAQ](/faq/#auto-invoke).
+  A `-setup` suffix marks a skill that **installs a mechanism you afterwards use instead of the skill** (project-local hooks, a generated `/memory-sync`).
 </Callout>
+
+Both setup skills implement `status | install | upgrade | enable | disable | uninstall | purge`. Every brewdoc skill except `/brewdoc:publish` is user-invoked only (`user-invocable: true` + `disable-model-invocation: true`); `publish` is model-invocable, see the [FAQ](/faq/#auto-invoke).
 
 ## Summary table
 
@@ -25,7 +27,7 @@ Skills (recipes) are slash commands that define *what* to do. Brewdoc includes 5
 | 5 | publish | [/brewdoc:publish](/brewdoc/skills/publish/) | haiku | Publish text, files, or multi-file sites to brewpage.app — returns a shareable URL | `<text\|file_path\|directory_path\|zip_path> [--ttl N] [--entry filename] [--delivery-mode path\|subdomain]` |
 
 <Callout type="tip" title="Standalone">
-  All five skills can be used independently -- they require no dependency on the other plugins in the suite. Optional [brewcode mods](/mods/overview/) add plan-mode effort and prompt placeholders.
+  All five skills work without the other plugins in the suite. The [brewcode mods](/mods/overview/) add prompt placeholders and plan-mode effort.
 </Callout>
 
 <CardGrid>

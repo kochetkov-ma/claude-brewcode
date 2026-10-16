@@ -1,13 +1,3 @@
-     one-line task is never enough.
-     GOAL: task + why it exists - without the why it cannot rank the work.
-     ROLE: what it owns, must not touch - else two agents edit one file.
-     SCOPE: paths/commands in bounds and out - else the task widens.
-     CONTEXT: done, by whom, in parallel; only what this agent needs - else work is
-     redone or overwritten.
-     CONSUMER: who or what uses the result next + the shape it must fit - else a correct
-     result fails the next step.
-     DONE: acceptance, what counts as a finding, return (verdict first; evidence:
-     command, result, unchecked; bounded; long output to a file it can write, path
      returned) - else it stops early or returns a dump.
      Code/test briefs add: follow the closest well-built repo counterpart's
      principles - additive to conventions/rules/docs, never instead.

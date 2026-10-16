@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
-import type { Register } from 'claude-code'
+import type { Register, Timer } from 'claude-code'
 import { editorMatchers, getEditorEntries, setEditorEntries } from './lib/editor-state'
-import { caretFocus, highlight, isMenuOpen, sameFocus, sameView, suggest, type CaretFocus } from './lib/editor'
+import { caretFocus, heldFocus, highlight, isMenuOpen, sameFocus, sameView, suggest, type CaretFocus } from './lib/editor'
 import { escapeMarkers, isEscaped, markerOf, validatePrefix, type PlaceholderView } from './lib/match'
 import { memoCompile, type Compiled } from './lib/compiled'
 import { FILES_GONE, PluginFilesGone, configDirOf, issuesMessage, loadRegistry, newRegistryCache, toEditorEntries, type Registry } from './lib/defs'
@@ -17,6 +17,10 @@ const viewAtom = atom({ plugin: 'brewmod-placeholders', key: 'view' } as const, 
 const focusAtom = atom({ plugin: 'brewmod-placeholders', key: 'focus' } as const, { name: null, isQuery: false, isMenuOpen: false })
 
 const REFRESH_MS = 1000
+// The engine drops a token's unanswered rows 150 ms after it asks (2.1.301): a hold outlasts that, then ends.
+const HOLD_MS = 300
+
+type Writers = { view: (v: PlaceholderView) => Promise<unknown>; focus: (f: CaretFocus) => Promise<unknown>; after: (ms: number, fn: () => void) => Timer }
 
 // No guards around the mod's own logic: the engine skips a failing hook and the chain goes on (reference.md:78).
 // `$` is never passed on, so each registry load spells its `$.fs.*` lambdas at the call site.
@@ -33,6 +37,12 @@ export const register: Register = (on, options) => {
   let published: Registry | null = null
   let shown: PlaceholderView | null = null // last view written to viewAtom
   let focused: CaretFocus | null = null // last focus written to focusAtom
+  // The engine may ask prompt.autocomplete before prompt.edit's writes land: answers read `want` and wait for `pending`.
+  let at: { text: string; cursor: number } | null = null // box of the last publish
+  let want: CaretFocus | null = null // focus published for box `at`, its write maybe still in flight
+  let pending: Promise<void> = Promise.resolve() // the atom writes queued so far, focus writes in order; never rejects
+  let held: CaretFocus | null = null // true focus of box `at` while heldFocus keeps the menu open
+  let holdTimer: Timer | null = null
   let refreshedAt = -REFRESH_MS // clock of the last typeahead registry refresh
   let wasDraft: boolean | null = null // isDraft of the last hint-line draw
   let isGone = false // the plugin's own placeholders/ folder vanished: the cached list stays, the band shows the reload line
@@ -121,36 +131,76 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
-  // The box's view and focus, each atom written only when it changed; writers spelled at the call site. Returns the highlight.
-  const publish = async (text: string, cursor: number, writeView: (v: PlaceholderView) => Promise<unknown>, writeFocus: (f: CaretFocus) => Promise<unknown>) => {
-    const h = highlight(editorMatchers(prefix), text)
-    const f = { ...caretFocus(h.view, text, cursor), isMenuOpen: isMenuOpen(prefix, text, cursor, getEditorEntries()) }
-    try {
-      if (shown === null || !sameView(h.view, shown)) {
-        await writeView(h.view)
-        shown = h.view
-      }
-      if (focused === null || !sameFocus(f, focused)) {
+  // Writes `f` as the box's focus after every write queued before it, if `want` is still `from` (no later publish or release).
+  const replace = (from: CaretFocus, f: CaretFocus, writeFocus: (f: CaretFocus) => Promise<unknown>): Promise<void> =>
+    (pending = pending.then(async () => {
+      if (want !== from) return
+      want = f
+      try {
         await writeFocus(f)
         focused = f
+      } catch {
+        // write refused: the atom keeps the last focus
       }
-    } catch {
-      // state write failed: keep the highlight, retry on the next edit
-    }
+    }))
+
+  // Ends a hold with the true focus, unless a later publish or our rows ended it first.
+  const release = (wait: CaretFocus, writeFocus: (f: CaretFocus) => Promise<unknown>) => {
+    const from = want
+    if (held !== wait || from === null) return
+    held = null
+    holdTimer?.cancel()
+    void replace(from, wait, writeFocus)
+  }
+
+  // The box's view and focus, each atom written only when it changed; writers spelled at the call site. Returns the highlight.
+  // A recall: no menu, no hold (no typeahead while an entry is shown; a draft put back is corrected by our rows).
+  const publish = async (text: string, cursor: number, io: Writers, isRecall = false) => {
+    const h = highlight(editorMatchers(prefix), text)
+    const real = { ...caretFocus(h.view, text, cursor), isMenuOpen: !isRecall && isMenuOpen(prefix, text, cursor, getEditorEntries()) }
+    const f = isRecall ? real : heldFocus(real, want, text, cursor)
+    at = { text, cursor }
+    want = f
+    holdTimer?.cancel()
+    const wait = f === real ? null : real
+    held = wait
+    // No answer comes when the engine asks nothing (Esc dropped the rows, bash mode): the hold ends on its own.
+    holdTimer = wait === null ? null : io.after(HOLD_MS, () => release(wait, io.focus))
+    const prior = pending
+    pending = (async () => {
+      try {
+        if (shown === null || !sameView(h.view, shown)) {
+          await io.view(h.view)
+          shown = h.view
+        }
+        // A focus write in flight (the last key's, a release) lands first: compared with it, this one is never lost.
+        await prior
+        if (focused === null || !sameFocus(f, focused)) {
+          await io.focus(f)
+          focused = f
+        }
+      } catch {
+        // state write failed: keep the highlight, retry on the next edit; a refused view write still keeps the order
+        await prior
+      }
+    })()
+    await pending
     return h
   }
 
   // Zero I/O except the view and focus atoms, each written only when it changes; caret moves arrive here too (inputText '').
   on('prompt.edit', async ($, e, next) => {
     const r = await next(e)
-    const h = await publish(r.text, r.cursor, (v) => update($, viewAtom, () => v), (f) => update($, focusAtom, () => f))
+    const io: Writers = { view: (v) => update($, viewAtom, () => v), focus: (f) => update($, focusAtom, () => f), after: (ms, fn) => $.clock.after(ms, fn) }
+    const h = await publish(r.text, r.cursor, io)
     return h.decorations.length === 0 ? r : { ...r, decorations: [...(r.decorations ?? []), ...h.decorations] }
   })
 
   // A taken row, a recall, an undo, a dropped draft put back or a fill change the box without prompt.edit: the band follows here.
   // No paint channel here: the box underline waits for the next key.
   on('prompt.change', async ($, e, next) => {
-    await publish(e.text, e.cursor, (v) => update($, viewAtom, () => v), (f) => update($, focusAtom, () => f))
+    const io: Writers = { view: (v) => update($, viewAtom, () => v), focus: (f) => update($, focusAtom, () => f), after: (ms, fn) => $.clock.after(ms, fn) }
+    await publish(e.text, e.cursor, io, e.origin.kind === 'history')
     return next(e)
   })
 
@@ -190,6 +240,17 @@ export const register: Register = (on, options) => {
       // keep the entries we have: a failed refresh must not drop the typeahead rows
     }
     const rows = suggest(prefix, e.token, getEditorEntries(), /\s/.test(e.text.charAt(e.cursor)))
+    const isShown = at !== null && at.text === e.text && at.cursor === e.cursor
+    const wait = held
+    // No rows closes the held menu: the true focus goes out after this answer (clock.after), so the band grows only once the rows are gone.
+    if (wait !== null && isShown && rows.length === 0 && r.suggestions.length === 0) $.clock.after(0, () => release(wait, (f) => update($, focusAtom, () => f)))
+    // Our rows for the box shown: the menu is open whatever publish assumed (a draft a recall put back); written before the rows go out.
+    if (isShown && rows.length > 0) {
+      held = null
+      holdTimer?.cancel()
+      const from = want
+      if (from !== null && !from.isMenuOpen) await replace(from, { ...from, isMenuOpen: true }, (f) => update($, focusAtom, () => f))
+    }
     return rows.length === 0 ? r : { suggestions: [...r.suggestions, ...rows] }
   })
 

@@ -9,7 +9,7 @@ Recipes for two brewcode mods and any other mod. `proven` = validate + `plugin t
 | # | Recipe | Status | Used by |
 |---|--------|--------|---------|
 | 1 | bundled command hook for context injection (org-managed safe) | proven live on Team + Max via `--plugin-dir` and a git-source marketplace install (F1, C43, T6P) | placeholders (`hooks/inject.mjs`) |
-| 2 | plan mode via command-hook state file + `turn.step` read | proven live on Team + Max (F1, C41) | plan-effort (`hooks/mode.mjs`, `register.ts`), placeholders band |
+| 2 | plan mode via command-hook state file + `turn.step` read | proven live on Team + Max (F1, C41) | placeholders band, plan-effort (`hooks/mode.mjs`, `register.ts`) |
 | 3 | `turn.step` streaming rewrite | proven live (T11, X, F1); same mod | plan-effort |
 | 4 | decorations + state atom + band | proven (X, S, R3, TTY) | placeholders |
 | 5 | autocomplete | proven live (S) | placeholders |
@@ -18,7 +18,7 @@ Recipes for two brewcode mods and any other mod. `proven` = validate + `plugin t
 | 8 | fail-open / `.catch` guards | proven (V, X); R:78-79 | both |
 | 9 | defaults via `$.fs` from `$.plugin.root`, project root | proven (S, X) | placeholders |
 | 10 | `rm` after realpath check | unit-proven (X) | placeholders |
-| 11 | status-first slash command + own `/config` option + model hand-off + mod tool (no-prompt save) | shipped + live-proven in placeholders on 2.1.300 (IPH; probes PE, PH); Team seat: `config.set` only | plan-effort (status/option), placeholders (all) |
+| 11 | status-first slash command + own `/config` option + model hand-off + mod tool (no-prompt save) | shipped + live-proven in placeholders on 2.1.300 (IPH; probes PE, PH); Team seat: `config.set` only | placeholders (all), plan-effort (status/option) |
 | 12 | hints: toast vs status, key hint on every interactive affordance (sequence live-proven key by key), band auto-show, exact sent text, caret focus | live (PE Q5, PH 5, 8, IPH, SB, S2) | placeholders |
 
 ## 1. Bundled Command Hook For Context Injection

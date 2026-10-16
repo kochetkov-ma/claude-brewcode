@@ -10,8 +10,8 @@ model: sonnet
 
 # Brewcode Plugin Update
 
-> Check/install/update brewcode, brewdoc, brewtools, brewui; check/update the optional
-> brewmod-plan-effort and brewmod-placeholders mods only when installed, never install them. The
+> Check/install/update brewcode, brewdoc, brewtools, brewui; check/update the
+> brewmod-placeholders and brewmod-plan-effort mods only when installed, never install them. The
 > `/plugin` UI, reload and marketplace-command acceptance are user handoffs, never invented tool actions.
 
 ## Prompt contract
@@ -74,7 +74,7 @@ bash "${CLAUDE_SKILL_DIR}/scripts/discover-plugins.sh" && echo "✅ discover OK"
 
 Both fail -> inventory unknown (!=missing plugins): report versions/status and the reload notice,
 skip install/update/prune. Partition: `suite = {brewcode, brewdoc, brewtools, brewui}`, `other` =
-the rest. Mods (optional, never installed by this skill) = `{brewmod-plan-effort, brewmod-placeholders}`
+the rest. Mods (never installed by this skill) = `{brewmod-placeholders, brewmod-plan-effort}`
 (ids `<mod>@claude-brewcode`): a mod is in play only when Phase 0 lists it; `other` excludes them. Details: [references/discovery.md](references/discovery.md).
 
 ## Phase 1 — Fetch Latest Versions
@@ -210,4 +210,4 @@ Print this notice ([references/reload-notice.md](references/reload-notice.md)):
 > Fallback: type `exit`, then run `claude` again.
 
 Then a final summary listing the plugins installed, updated and skipped this run, and every error.
-If a mod is not installed, add one line: optional mod `<mod>` not installed (opt-in: `claude plugin install <mod>@claude-brewcode`); never run it.
+If a mod is not installed, add one line: mod `<mod>` not installed; it needs Claude Code 2.1.301+ (run `claude update`, then restart Claude Code (type `exit`, then run `claude`)), then `claude plugin install <mod>@claude-brewcode`; never run it.

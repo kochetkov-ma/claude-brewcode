@@ -1,0 +1,30 @@
+❯ which DB should I run the migration against? one line ++db
+
+⏺ Run it against the staging DB, as your ++db rule says. I didn't find any migration or
+  DB config in this repo, so that answer comes only from the rule.
+
+✻ Baked for 4s · done 5:21 PM
+plan mode · effort xhigh for this mode · change: /plan-effort <level>               [-]
+++m · Claude receives these lines now:
+  User typed `++m` — Manager + Plan Mode is active for this turn:
+
+  [ROLE: MANAGER]
+
+  Manage; never code/build/test/hand-debug: the main context is for orchestration.
+
+  ... 23 more lines
+  plan mode adds:
+  [ADDON: PLAN MODE]
+
+  Stay read-only: no code, board/task-state writes, installation or
+  configuration. Read-only expert exploration is allowed.
+
+  ... 13 more lines · whole text: /placeholders show ++m or ++m? alone [Enter]
+also: ++db
+close: move the caret off ++m · send as typed: ++/
+
+────────────────────────────────────────────────────────────────────────────────────────
+❯ plan the users table migration ++db ++m
+────────────────────────────────────────────────────────────────────────────────────────
+  ⏸ plan mode on (shift+tab to cycle)                               ◐ medium · /effort
+

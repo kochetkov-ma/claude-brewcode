@@ -14,10 +14,7 @@ placeholders 1                                                                  
   Manage; never code/build/test/hand-debug: the main context is for orchestration.
 
   Protocol: 1) TaskList; graph exists -> reuse it, else TaskCreate the full graph
-  before any work. 2) addBlockedBy/addBlocks only for real data-handoffs, else
-  parallel. 3) TaskUpdate owner, then launch. 4) Validate reports, integrate;
-  completed only when truly done; failure -> follow-up task + re-delegate. 5) all
-  ... 19 more lines · whole text: /placeholders show ++m or ++m? alone [Enter]
+  ... 22 more lines · whole text: /placeholders show ++m or ++m? alone [Enter]
   not sent now · plan mode adds 18 lines
 more: put the caret on ++m · send as typed: ++/ · help: /placeholders help
 
@@ -25,13 +22,6 @@ more: put the caret on ++m · send as typed: ++/ · help: /placeholders help
 ❯ /placeholders show ++m
 ────────────────────────────────────────────────────────────────────────────────────────
   ⏸ manual mode on
-
-
-
-
-
-
-
 
 
 

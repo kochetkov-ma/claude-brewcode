@@ -5,7 +5,7 @@
 
 ❯ what does README.md cover? one line
 
-✶ Blanching…
+✻ Calculating…
 plan mode · effort xhigh for this mode · change: /plan-effort <level>               [-]
 
 ────────────────────────────────────────────────────────────────────────────────────────
@@ -13,24 +13,6 @@ plan mode · effort xhigh for this mode · change: /plan-effort <level>         
 ────────────────────────────────────────────────────────────────────────────────────────
   ⏸ plan mode on (shift+tab to cycle) · esc to interrupt · ← for agents
                                brewmod-plan-effort: plan mode · effort raised to xhigh
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

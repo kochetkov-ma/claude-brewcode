@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Optional brewmod-* mods: fetched and updated when installed, never installed by this skill.
+// brewmod-* mods: fetched and updated when installed, never installed by this skill.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
@@ -29,8 +29,8 @@ const r = spawnSync('/bin/bash', [join(ROOT, 'scripts', 'fetch-latest-versions.s
 assert.equal(r.status, 0, 'THEN the fetch script exits 0');
 assert.deepEqual(JSON.parse(r.stdout), {
     brewcode: '9.9.9', brewdoc: '9.9.9', brewtools: '9.9.9', brewui: '9.9.9',
-    'brewmod-plan-effort': '9.9.9', 'brewmod-placeholders': '9.9.9',
-}, 'THEN the fetch output lists suite plugins and optional mods');
+    'brewmod-placeholders': '9.9.9', 'brewmod-plan-effort': '9.9.9',
+}, 'THEN the fetch output lists suite plugins and mods');
 
 // GIVEN Phase 3 WHEN it describes installs THEN mods are never installed and never offered.
 assert.deepEqual(phase('## Phase 3', '## Phase 4').split('\n').filter(l => l.includes('Mods are never installed')), [

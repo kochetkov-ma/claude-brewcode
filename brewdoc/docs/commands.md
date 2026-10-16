@@ -4,7 +4,7 @@ description: Detailed description of all brewdoc plugin commands
 
 # Brewdoc Plugin Commands
 
-> **Version:** 6.9.5 | **Author:** Maksim Kochetkov | **License:** MIT
+> **Version:** 6.9.6 | **Author:** Maksim Kochetkov | **License:** MIT
 
 ## Quick Reference
 
@@ -205,4 +205,4 @@ Password access, owner operations and hosting changes: [publish README](../skill
 | No `.html`/`.htm` in SITE bundle | publish | Fail loudly, never guess an entry |
 | Dependency install or conversion fails | md-to-pdf | `INSTALL_FAILED` and stop, or one fix + retry, else report |
 
-brewdoc has no hooks; skills resolve their own files via `${CLAUDE_SKILL_DIR}`. Optional mods: [overview](https://doc-claude.brewcode.app/mods/overview/).
+brewdoc has no hooks; skills resolve their own files via `${CLAUDE_SKILL_DIR}`. Brewcode mods: [overview](https://doc-claude.brewcode.app/mods/overview/).

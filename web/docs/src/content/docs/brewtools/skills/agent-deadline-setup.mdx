@@ -9,7 +9,7 @@ import { Badge, Card, CardGrid, Spoiler, Steps, UpdateNotice } from '../../../..
 
 <Badge variant="primary" text="sonnet" /> <Badge variant="accent" text="opt-in" /> <Badge variant="secondary" text="project | global" />
 
-Claude Code has no wall-clock timeout for subagents, and reaching `maxTurns` returns a partial result with unwritten analysis lost. These hooks add a soft elapsed-time budget that nudges the agent to finalize. They kill nothing.
+Claude Code has no wall-clock timeout for subagents. An agent that hits `maxTurns` returns a partial result and loses any analysis it hasn't written down. These hooks add a soft elapsed-time budget that nudges the agent to finalize. They kill nothing.
 
 ## Quick reference
 
@@ -67,7 +67,7 @@ The finalization set is `Read, Write, Edit, NotebookEdit, TodoWrite, TaskUpdate,
 | `agent-deadline-guard.mjs` | `PreToolUse` on `.*` | Tracks elapsed time per `agent_id`; warns at 80%; past 100% denies tools outside the finalization set; past `hardStopRatio` x budget allows only `Write, Edit, SubagentHandback` (deny reason starts `Time budget far exceeded`) |
 | `agent-deadline-cleanup.mjs` | `SubagentStop` | Stamps the stop on the agent's state file, never deletes it, prunes old state. A call under 5 minutes after the stop continues the original clock; later gets a fresh window |
 
-`SubagentHandback` stays allowed at every stage: in auto mode it is how a subagent reports.  `AskUserQuestion` is denied past the deadline: a subagent parked on a human answer is exactly the unbounded time this guard stops. Read-only agent types (`readOnlyAgentTypes`) are told to return what they have instead of saving a file.
+`SubagentHandback` stays allowed at every stage: in auto mode it is how a subagent reports. `AskUserQuestion` is denied past the deadline: a subagent parked on a human answer is the unbounded wait this guard stops. Read-only agent types (`readOnlyAgentTypes`) are told to return what they have instead of saving a file.
 
 </Spoiler>
 
@@ -120,11 +120,11 @@ Budget is `byAgentType[agent_type] ?? defaultMinutes`. `upgrade` keeps `defaultM
 
 <Spoiler id="limits--read-before-trusting-it" title="Limits: read before trusting it">
 
-- **Not a timeout.** Time is sampled only at tool-call boundaries; cap long commands separately with `BASH_MAX_TIMEOUT_MS`.
-- **The clock starts at the first tool call**, not at spawn. A stop does not reset it (see the cleanup hook above), so an over-budget agent blocked once by another guard can only finalize.
-- **`agent_type` for plugin agents is unverified** (`brewcode:skill-creator` vs `skill-creator`). A non-matching `byAgentType` key silently falls back to `defaultMinutes`.
-- **Fail-open.** Any hook error lets the call through.
-- **Cost on every tool call, main session included.** The matcher is `.*` because the guard must see `SubagentHandback`. Measured on one Apple M-series machine (Node v24.1.0, 30 runs): median 58.3 ms, p90 62.5 ms. A global install charges this in every session; re-measure before relying on it.
+- Not a timeout. Time is sampled only at tool-call boundaries; cap long commands separately with `BASH_MAX_TIMEOUT_MS`.
+- The clock starts at the first tool call, not at spawn. A stop does not reset it (see the cleanup hook above), so an over-budget agent blocked once by another guard can only finalize.
+- `agent_type` for plugin agents is unverified (`brewcode:skill-creator` vs `skill-creator`). A non-matching `byAgentType` key silently falls back to `defaultMinutes`.
+- Fail-open: any hook error lets the call through.
+- Cost on every tool call, main session included. The matcher is `.*` because the guard must see `SubagentHandback`. Measured on one Apple M-series machine (Node v24.1.0, 30 runs): median 58.3 ms, p90 62.5 ms. A global install charges this in every session; re-measure before relying on it.
 
 </Spoiler>
 

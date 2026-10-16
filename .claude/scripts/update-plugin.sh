@@ -1,5 +1,5 @@
 #!/bin/bash
-# update-plugin.sh [brewcode|brewdoc|brewtools|brewui|brewmod-plan-effort|brewmod-placeholders|all] [--dry-run|--help]: marketplace -> user-scope install/update -> project/local-scope updates (from each projectPath) -> prune old cache (orphans marked .orphaned_at, deleted after a 14-day grace unless a live session pins them).
+# update-plugin.sh [brewcode|brewdoc|brewtools|brewui|brewmod-placeholders|brewmod-plan-effort|all] [--dry-run|--help]: marketplace -> user-scope install/update -> project/local-scope updates (from each projectPath) -> prune old cache (orphans marked .orphaned_at, deleted after a 14-day grace unless a live session pins them).
 # Profile = $CLAUDE_CONFIG_DIR: `env -u CLAUDE_CONFIG_DIR bash update-plugin.sh` (~/.claude) | `CLAUDE_CONFIG_DIR=~/.claude-a bash update-plugin.sh`
 
 set -euo pipefail
@@ -22,7 +22,7 @@ log() { echo "$*" | tee -a "$LOG"; }
 err() { log ""; log "ERROR: $*"; exit 1; }
 
 # --- Argument parsing ---
-PLUGINS="brewcode brewdoc brewtools brewui brewmod-plan-effort brewmod-placeholders"
+PLUGINS="brewcode brewdoc brewtools brewui brewmod-placeholders brewmod-plan-effort"
 PLUGIN_ALT="${PLUGINS// /|}"
 TARGET="all"
 DRY_RUN=false

@@ -42,7 +42,7 @@ Expected result: an executable `.sh` with strict mode, usage header and `help` s
   <li><div><strong>Report</strong><p>File path, purpose, platform and a checklist of verified properties.</p></div></li>
 </Steps>
 
-Refuses: batches such as "write the whole CI toolchain" (returns a split proposal), and any brief missing consumer or acceptance (states an assumption or returns the question). Generic rules: [scope guard](/brewcode/agents/#scope-guard). It has no `Agent` tool and records each script's status in `.claude/reports/YYYYMMDD-HHMMSS_bash-expert/report.md`; on `maxTurns` (80) exhaustion the caller resumes with `SendMessage`.
+It refuses batches such as "write the whole CI toolchain" and returns a split proposal instead. A brief missing consumer or acceptance gets a stated assumption or the question back. Generic rules: [scope guard](/brewcode/agents/#scope-guard). The agent has no `Agent` tool and records each script's status in `.claude/reports/YYYYMMDD-HHMMSS_bash-expert/report.md`. If it exhausts `maxTurns` (80), the caller resumes it with `SendMessage`.
 
 <Spoiler id="internals" title="Conventions, templates and platform handling">
 

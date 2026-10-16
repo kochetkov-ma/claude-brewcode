@@ -355,9 +355,10 @@ try {
   const release = parse(releaseSrc), relStep = step(release, 'Extract changelog for tag version').run;
   const footer = readFileSync(join(ROOT, '.github/release-footer.md'), 'utf8');
   const NOTES = '## v9.8.7 (2026-10-13)\n- fixture note\n\n## v9.8.6 (2026-10-12)\n- older\n';
-  // Actions default `run:` shell (no `shell:` key, no `set -e` in the body): errexit + pipefail.
-  const actionsBash = (body, env, cwd) => spawnSync('/bin/bash', ['--noprofile', '--norc', '-eo', 'pipefail', '-c', body],
-    { cwd, env: { ...base, ...env }, encoding: 'utf8' });
+  // PyYAML reads the `on:` key as boolean true; the tag filter must exclude suffixed tags like v3.4.24-docs.
+  check(release.true.push.tags, ['v[0-9]+.[0-9]+.[0-9]+'], 'release.yml: the trigger matches only vX.Y.Z tags');
+  // Actions default `run:` shell (no `shell:` key) is `bash -e {0}`: errexit, NO pipefail.
+  const actionsBash = (body, env, cwd) => spawnSync('/bin/bash', ['-e', '-c', body], { cwd, env: { ...base, ...env }, encoding: 'utf8' });
   const relDir = join(temp, 'release'), runnerTemp = join(temp, 'runner-temp');
   mkdirSync(join(relDir, '.github'), { recursive: true }); mkdirSync(runnerTemp);
   writeFileSync(join(relDir, 'RELEASE-NOTES.md'), NOTES);
@@ -372,18 +373,40 @@ try {
     fixedTmp: releaseSrc.split('\n').filter((line) => line.includes('/tmp')),
   }, {
     status: 0, stderr: '', runnerTemp: 'release-body.md\n',
-    body: '## v9.8.7 (2026-10-13)\n- fixture note\n\n---\n\n' + footer,
+    body: '## v9.8.7 (2026-10-13)\n- fixture note\n\n---\n\n' + footer.replaceAll('__TAG__', 'v9.8.7'),
     bodyPath: '${{ runner.temp }}/release-body.md', fixedTmp: [],
-  }, 'release.yml: whole body = changelog section + separator + footer bytes, in $RUNNER_TEMP, no fixed /tmp path');
-  // GIVEN no .github/release-footer.md WHEN the step runs as Actions does THEN it fails before the preview.
+  }, 'release.yml: whole body = changelog section + separator + footer with __TAG__ -> tag, in $RUNNER_TEMP, no fixed /tmp path');
+  // GIVEN a footer with __TAG__ twice on one line WHEN the step runs THEN both become the tag (sed /g).
+  const tagDir = join(temp, 'release-tag-footer'), tagTemp = join(temp, 'runner-temp-tag-footer');
+  mkdirSync(join(tagDir, '.github'), { recursive: true }); mkdirSync(tagTemp);
+  writeFileSync(join(tagDir, 'RELEASE-NOTES.md'), NOTES);
+  writeFileSync(join(tagDir, '.github/release-footer.md'), 'Notes for __TAG__: https://github.com/o/r/releases/tag/__TAG__\n');
+  const tagRun = actionsBash(relStep,
+    { GITHUB_REF_NAME: 'v9.8.7', GITHUB_OUTPUT: join(tagDir, 'output'), RUNNER_TEMP: tagTemp }, tagDir);
+  const tagBody = readFileSync(join(tagTemp, 'release-body.md'), 'utf8');
+  check({ status: tagRun.status, stderr: tagRun.stderr, body: tagBody }, {
+    status: 0, stderr: '',
+    body: '## v9.8.7 (2026-10-13)\n- fixture note\n\n---\n\nNotes for v9.8.7: https://github.com/o/r/releases/tag/v9.8.7\n',
+  }, 'release.yml: both __TAG__ tokens in one footer line are replaced with the release tag, none left');
+  // GIVEN a suffixed tag WHEN the step runs THEN it is rejected before any body is written.
+  const docsTagDir = join(temp, 'release-docs-tag'), docsTagTemp = join(temp, 'runner-temp-docs-tag');
+  mkdirSync(join(docsTagDir, '.github'), { recursive: true }); mkdirSync(docsTagTemp);
+  writeFileSync(join(docsTagDir, 'RELEASE-NOTES.md'), NOTES);
+  writeFileSync(join(docsTagDir, '.github/release-footer.md'), footer);
+  const docsTag = actionsBash(relStep,
+    { GITHUB_REF_NAME: 'v9.8.7-docs', GITHUB_OUTPUT: join(docsTagDir, 'output'), RUNNER_TEMP: docsTagTemp }, docsTagDir);
+  check({ status: docsTag.status, stdout: docsTag.stdout, stderr: docsTag.stderr, runnerTemp: spawnSync('ls', [docsTagTemp], { encoding: 'utf8' }).stdout }, {
+    status: 1, stdout: '::error::Release tag v9.8.7-docs is not vX.Y.Z\n', stderr: '', runnerTemp: '',
+  }, 'release.yml: a suffixed tag fails the step (status 1) and writes no release-body.md');
+  // GIVEN no .github/release-footer.md WHEN the step runs as Actions does (bash -e, no pipefail) THEN it fails before the preview.
   const noFooterDir = join(temp, 'release-no-footer'), noFooterTemp = join(temp, 'runner-temp-no-footer');
   mkdirSync(noFooterDir); mkdirSync(noFooterTemp);
   writeFileSync(join(noFooterDir, 'RELEASE-NOTES.md'), NOTES);
   const noFooter = actionsBash(relStep,
     { GITHUB_REF_NAME: 'v9.8.7', GITHUB_OUTPUT: join(noFooterDir, 'output'), RUNNER_TEMP: noFooterTemp }, noFooterDir);
   check({ status: noFooter.status, stdout: noFooter.stdout, stderr: noFooter.stderr }, {
-    status: 1, stdout: '', stderr: 'cat: .github/release-footer.md: No such file or directory\n',
-  }, 'release.yml: a missing footer fails the step (status 1) and no preview is printed');
+    status: 1, stdout: '::error::.github/release-footer.md not found\n', stderr: '',
+  }, 'release.yml: a missing footer fails the step (status 1) with the ::error:: line and no preview');
   console.log('PASS provenance: ' + count + ' assertions; shipped producer/verifiers executed without network');
 } finally {
   rmSync(temp, { recursive: true, force: true });

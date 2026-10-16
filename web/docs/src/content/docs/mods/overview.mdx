@@ -1,48 +1,52 @@
 ---
 title: "brewcode mods"
-description: "Tiny add-ons that change how Claude Code behaves: plan-mode effort and ++ prompt placeholders. One feature each, one prompt installs both."
+description: "Tiny add-ons that change how Claude Code behaves: ++ prompt placeholders and plan-mode effort. One feature each, one prompt installs both."
 order: 40
 ---
 
-import { Badge, Card, CardGrid, InstallPrompt, SourceLink, Spoiler, UpdateNotice } from '../../../components/mdx';
+import { Badge, Callout, Card, CardGrid, InstallPrompt, SourceLink, Spoiler, UpdateNotice } from '../../../components/mdx';
+import { mods } from '../../../utils/mods';
 
 # brewcode mods
 
 <Badge variant="mod" text="early access" /> <Badge variant="mod" text="Claude Code 2.1.301+" />
 
-Mods are small, optional Claude Code add-ons: one feature each, no skills, no agents, no setup. Install one or both; they work without the brewcode plugins.
+Mods are small Claude Code add-ons: one feature each, no skills, no agents, no setup. Install one or both; they work without the brewcode plugins.
 
 <p align="center">
-  <img src="/brewmods/hub.gif" alt="Terminal-style animation of the brewcode mods hub: an ASCII brewcode logo and a four-slide walkthrough of the mods" width="560" loading="lazy" />
+  <img src="/brewmods/hub.gif" alt="Terminal-style animation of the brewcode mods hub: an ASCII brewcode tap pours the mods' source code into a glass in four stages: slide in, pour, head, served" width="560" loading="lazy" />
 </p>
 
 ## Pick a mod
 
 <CardGrid>
-  <Card variant="mod" size="lg" title="Plan-mode effort" icon="brain" href="/mods/plan-effort/" meta="Try: /plan-effort max">
-    xhigh while Claude plans, your session effort everywhere else.
-  </Card>
-  <Card variant="mod" size="lg" title="Prompt placeholders" icon="puzzle" href="/mods/placeholders/" meta="Try: ++r">
-    Type ++r, get a whole instruction block.
-  </Card>
+  {mods.map((m) => (
+    <Card variant="mod" size="lg" title={m.name} icon={m.icon} href={`/mods/${m.slug}/`} meta={`Try: ${m.try}`}>
+      {m.pitch}
+    </Card>
+  ))}
 </CardGrid>
-
-<SourceLink path="brewmod-plan-effort" label="brewmod-plan-effort on GitHub" variant="mod" />
 
 <SourceLink path="brewmod-placeholders" label="brewmod-placeholders on GitHub" variant="mod" />
 
+<SourceLink path="brewmod-plan-effort" label="brewmod-plan-effort on GitHub" variant="mod" />
+
 ## Install all
 
-Requires Claude Code 2.1.301+ (run `claude update` first) and `node` on the `PATH`.
+<Callout type="warning" title="Update Claude Code first">
+  The mods need Claude Code 2.1.301 or newer. Check with `claude --version`; if it is lower, run `claude update`, then restart Claude Code (exit, run `claude`).
+</Callout>
+
+Needs `node` on the `PATH`.
 
 <InstallPrompt plugin="mods" mode="install" />
 
-Only one? Run `claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode`, then `claude plugin install brewmod-plan-effort@claude-brewcode` or `claude plugin install brewmod-placeholders@claude-brewcode`, then `/reload-plugins`. To update later, run `/brewtools:plugin-update`.
+Only one? Run `claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode`, then `claude plugin install brewmod-placeholders@claude-brewcode` or `claude plugin install brewmod-plan-effort@claude-brewcode`, then `/reload-plugins`. To update later, run `/brewtools:plugin-update`.
 
 <Spoiler title="How mods differ from plugins" id="technical-details">
   A mod ships no skills and no agents. Its `hooks.json` lists TypeScript hooks modules that the engine loads, plus a small bundled command hook for the parts that need one. Mods are on by default from Claude Code 2.1.287 and are in early access, so the module API can change between releases.
 
-  On a Team or Enterprise organization, Claude Code's builtin security layer bypasses the `classic.*` hooks of a mod a person installs. Both brewcode mods bundle a command hook for the parts that need them. Verified live on Claude Code 2.1.300 on a Team-organization profile and on a Max profile, with `--plugin-dir` and installed copies. An Enterprise organization was not run.
+  On a Team or Enterprise organization, Claude Code's builtin security layer bypasses the `classic.*` hooks of a mod a person installs, but a bundled command hook still runs. Both brewcode mods ship one. Verified live on Claude Code 2.1.300 on a Team-organization profile and on a Max profile, with `--plugin-dir` and installed copies. An Enterprise organization was not run.
 
   brewtools 6.7.x together with `brewmod-placeholders` injects each codeword twice. Update brewtools to 6.8.0 or later; from 6.8.0 the mod is the only source of the codewords.
 </Spoiler>

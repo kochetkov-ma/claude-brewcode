@@ -1,12 +1,13 @@
 # Approaches
 
-This page indexes every engineering approach the brewcode plugin suite applies, and the links between
-them: which setup skill installs which hook, which skill writes which agent, which text is injected at
-which moment. It is for the maintainer who forgot where a file comes from, and for the user who wants to
-know what a plugin actually does to a session.
+This page lists every approach the brewcode suite (four plugins and two mods) applies and how they connect:
+which setup skill installs which hook, which skill writes which agent, which text is injected at which
+moment. It is for the maintainer who forgot where a file comes from, and for the user who wants to know
+what a plugin or mod does to a session. The [Mods](#mods) come first: they act on the prompt you type and
+on plan mode.
 
-Rule: every new hook, agent, generated skill or injection gets a row here - in its domain table and in
-"Where each thing lives". A feature without a row is undocumented.
+Rule: every new hook, agent, generated skill or injection gets a row here - in its domain table (a mod's
+pieces: in [Mods](#mods)) and in "Where each thing lives". A feature without a row is undocumented.
 
 ## How to read this page
 
@@ -14,7 +15,7 @@ Column meanings are the same in every table below.
 
 | Column | Meaning |
 |---|---|
-| Scope | `plugin-shipped` = live as soon as the plugin is installed. `global` = written into the Claude Code config dir (`CLAUDE_CONFIG_DIR`, else `~/.claude/`). `project` = written into `<repo>/.claude/`. `choice` = the skill asks you which, and never guesses. |
+| Scope | `plugin-shipped` = live as soon as the plugin or mod is installed. `global` = written into the Claude Code config dir (`CLAUDE_CONFIG_DIR`, else `~/.claude/`). `project` = written into `<repo>/.claude/`. `choice` = the skill asks you which, and never guesses. |
 | Trigger | The Claude Code hook event, "context auto-load" for always-loaded text, or "user runs the skill". |
 | Fires when | The real condition, not the event name. |
 | Excerpt | Real quoted text from the file; `...` marks a cut. Never the whole prompt. |
@@ -22,7 +23,7 @@ Column meanings are the same in every table below.
 
 Two conventions across the suite:
 
-- **Fail-open, with deliberate exceptions.** A discipline hook returns `{}` when anything goes wrong, so a
+- Fail-open, with deliberate exceptions. A discipline hook returns `{}` when anything goes wrong, so a
   broken layer costs a good habit, never the ability to work. Five hooks block on purpose: the hard wall,
   the agent router, the deadline guard, the return guard and the docsync gate. Two depart from the rule.
   `compact-recall.mjs` fails open *loudly*: every error path, its outer `catch` included, degrades to the
@@ -31,20 +32,117 @@ Two conventions across the suite:
   an internal error denies; it exits only 0 or 2, and its registration carries `onFailure: "block"`
   (Claude Code >= 2.1.295) so a guard that cannot start blocks too. Its only pass-throughs are "no manager
   installed here" and a real subagent; the self-exempt exit CLI survives both.
-- **Say it at the moment it applies.** Contracts are injected at session open, prompt submit, subagent
+- Say it at the moment it applies. Contracts are injected at session open, prompt submit, subagent
   spawn or tool call - never left to be remembered from earlier in the context.
+
+## Mods
+
+A mod is a Claude Code plugin with no skills and no agents. It changes the prompt box and the request loop
+through a TypeScript hooks module that the engine loads, plus a small bundled command hook. Two mods ship
+here. They install from the same marketplace as the four plugins and run without them.
+
+| Mod | What you get | Try |
+|---|---|---|
+| `brewmod-placeholders` (flagship) | Type `++r` in a prompt and Claude receives a saved instruction block with it, as hidden context. The prompt box underlines the token, completes names and previews the exact lines before you send; `/placeholders` adds your own | `++r check the diff` |
+| `brewmod-plan-effort` | Claude plans at `xhigh` (the `planEffort` setting) and your session effort applies everywhere else; a row above the prompt shows it | `/plan-effort max` |
+
+❗ **Update Claude Code first:** mods need Claude Code 2.1.301 or newer (`claude --version`; `claude update`,
+then restart Claude Code: exit, run `claude`).
+
+Install both. They need `node` on the `PATH`; run `/reload-plugins` afterwards:
+
+```bash
+claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode && claude plugin install brewmod-placeholders@claude-brewcode && claude plugin install brewmod-plan-effort@claude-brewcode
+```
+
+For one mod, keep only its `claude plugin install`. Update later with `/brewtools:plugin-update`. Docs:
+[mods overview](https://doc-claude.brewcode.app/mods/overview/) |
+[placeholders](https://doc-claude.brewcode.app/mods/placeholders/) |
+[plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/). Sources:
+[`brewmod-placeholders/`](brewmod-placeholders/README.md) | [`brewmod-plan-effort/`](brewmod-plan-effort/README.md).
+
+### How a mod is built
+
+| Part | Where | What it does | Why it exists |
+|---|---|---|---|
+| Hooks module | `hooks/register.ts` (placeholders also `hooks/lib/*.ts`), named in `hooks/hooks.json` as `{ "modules": ["./register.ts"] }` | TypeScript handlers on engine events (`prompt.edit`, `ui.render`, `turn.step`, `command.run`, `tool.call`, ...): prompt-box UI, slash commands, model tools, rewriting a request | Only a module can draw above the prompt, register `/placeholders` or `/plan-effort`, or change the `effort` of a request |
+| Bundled command hook | `hooks/inject.mjs` (placeholders), `hooks/mode.mjs` (plan-effort); both on `UserPromptSubmit` and `PostToolBatch` in the same `hooks.json`, timeout 5 s | Plain Node, no dependencies; any error prints `{}` | On Team/Enterprise organizations the builtin security layer bypasses a user mod's `classic.*` module hooks, the ones that add context; a command hook still runs. Verified live on a Team-organization and a Max profile; Enterprise was not run |
+| Mode file | `<plugin root>/.state/mode-<session_id>.json`, `{mode,ts}`, gitignored, pruned after 7 days | The command hook writes the main loop's `permission_mode` (a payload with an `agent_id` is ignored; the session id must match `[A-Za-z0-9_-]+`); the module reads it | A module gets no live permission-mode signal: plan mode is learned at the next prompt or tool batch |
+
+- Fail-open. A command hook ends in a `catch` that prints `{}`; the engine skips a failing module hook
+  and the chain goes on. A broken mod costs its feature, never a prompt or a tool batch.
+- Two mode files, one format. Each mod writes `.state/mode-<session_id>.json` under its own plugin root,
+  so either runs alone. With both loaded, the plan-effort row stays visible above the placeholders band in
+  either load order: the row takes one row of the band's budget.
+- Early access. Mods use the hooks module API, which can change between Claude Code releases.
+
+### brewmod-placeholders (flagship)
+
+Type `++name` anywhere in a prompt. Your prompt stays as typed; the saved text for that name reaches Claude
+as hidden context for that turn, in every mode. `++/` anywhere in the message sends it exactly as typed. Five
+defaults ship (`++m`, `++a`, `++r`, `++rr`, `+++`, rows in [section 2](#2-delegation-and-manager-discipline));
+your own live in files you edit. The bytes: [worked example F](#f-a-placeholder-in-a-prompt).
+
+| Piece | Engine hook | What it does |
+|---|---|---|
+| Context blocks | command hook `inject.mjs`, `UserPromptSubmit` | Reads the definitions, finds the prefixed names in the prompt and prints each matching block once as `additionalContext`, capped at 9000 chars (cut note `...[truncated]`). Skips a subagent delivery (`<task-notification>`, `<agent-message from=`) and a message holding `++/`. On `PostToolBatch` it only records the mode |
+| Inline definitions | module `prompt.submit` | Swaps `insert: inline` tokens for their body in a typed prompt; toasts `unknown ++x · sent as typed · names: /placeholders list` for an undefined token (always on) |
+| Highlight, typeahead | module `prompt.edit`, `prompt.autocomplete` | Underlines known tokens, colours unknown ones, offers matching names while you type; re-reads the definitions at most once a second |
+| Preview band | module `ui.render` (`AbovePrompt`, `PromptHint`), `prompt.change` | Compact rows above the prompt, one per token. Caret on a token: up to 15 rows of what it sends, the cut row and the plan note `not sent now · plan mode adds N lines` (a name with a plan part, outside plan mode) included. Plan-mode items are drawn in Claude Code's `planMode` colour. Typeahead accept, history recall and undo redraw the band at once (`prompt.change`); the underline in the box waits for the next key |
+| Query `++name?` | module `prompt.submit` | A message made only of `++name?` items is dropped (notice `... · not sent to Claude · press Enter to print it`) and the box is filled with `/placeholders show ++<name> `, trailing space; Enter prints the text with no Claude turn. Needs the mod tools; in a longer message `?` is ordinary text |
+| `/placeholders` | module `command.run`, `session.start` | No args or `status` = status; `help`, `list` and `show <names>` print locally. Any other text goes to Claude's one-confirm dialog |
+| Model tools | registered at `session.start`, handled in `tool.call` | `list_placeholders`, `save_placeholder`, `remove_placeholder`, `placeholders_help`; no permission prompt. A save needs a scope (`global` or `project`) and refuses a plan part with no normal text; a remove refuses to leave a plan part alone, because that part would then be sent in every mode |
+| Mode for the band | `session.start`, `turn.complete` | Read from the mode file, so the band shows plan mode after the first prompt that ran in it |
+
+Two kinds of definition file, nothing else (no plan-only, not-plan or replace kind):
+
+| File | Sent |
+|---|---|
+| `<name>.md` | In every mode. Front matter: `description`, `insert: context\|inline`, `order`, `group`, `priority`, `header` |
+| `<name>.plan.md` (front matter `plan: add`) | Added after `<name>.md` in plan mode only. With no `<name>.md` in any layer it is sent in every mode |
+
+Layers, low to high; a higher file replaces the one below it field by field. A legacy file applies only to the
+default whose `legacy:` key names it. The prefix is the one `userConfig` key (`prefix`, default `++`, 2-8
+punctuation characters, set in `/config`). A bad definition file is skipped with a warning.
+
+| Layer | Directory |
+|---|---|
+| plugin default | `brewmod-placeholders/placeholders/` |
+| global legacy | `<config dir>/manager/prompts/<mode>.md` |
+| global | `<config dir>/placeholders/` |
+| project legacy | `<repo>/.claude/brewtools/manager/prompts/<mode>.md` |
+| project | `<repo>/.claude/placeholders/` (the launch directory is the project root) |
+
+Resolved in `brewmod-placeholders/hooks/lib/defs.ts`, ported to `inject.mjs` and pinned by
+`brewmod-placeholders/tests/inject-parity.mjs`:
+``Layers low to high, keyed by lower-case stem; a legacy file maps to the key whose def carries that `legacy`. Unusable files are skipped.``
+
+### brewmod-plan-effort
+
+While Claude is in plan mode, each main-loop request below `planEffort` (default `xhigh`; `medium`, `high`,
+`xhigh`, `max`, the one `userConfig` key) is sent at `planEffort`. The rewrite only raises: an equal or higher
+effort, a numeric or absent one, a subagent step and a missing or corrupt mode file pass untouched, and the
+session effort setting is never written.
+
+| Piece | Engine hook | What it does |
+|---|---|---|
+| Mode file | command hook `mode.mjs`, `UserPromptSubmit`, `PostToolBatch` | Records the main loop's permission mode; plan mode is learned at the next prompt or tool batch, never at the keypress |
+| Raise | module `turn.step` | Reads the mode file and rewrites the step `effort`: `return yield* next(target === undefined ? e : { ...e, effort: target })` |
+| Row and toast | module `ui.render` (`AbovePrompt`, `PromptHint`), `turn.step` | A row in the `planMode` colour above the prompt, e.g. `plan mode · effort xhigh for this mode · change: /plan-effort <level>`; Shift+Tab out of plan mode drops it. One toast per plan visit, only when the mod raised the effort: `plan mode · effort raised to xhigh` |
+| `/plan-effort` | module `command.run`, `session.start` | `[status\|help\|<level>]`: status and help print locally; a level sets the `planEffort` /config row (the module reloads). Under `-p` there is no row: use `/config` |
 
 ## Map
 
 Two pictures: how the sections act on one another, then one turn in time. Blue = live the moment the plugin
-is installed. Amber = the one file two generators contend over. Every other box is opt-in, or a convention
-that is text rather than code. A solid arrow acts on its target; a dotted arrow means conforms to or
-reuses, never a second write.
+or mod is installed. Amber = the one file two generators contend over. Every other box is opt-in, or a
+convention that is text rather than code. A solid arrow acts on its target; a dotted arrow means conforms to
+or reuses, never a second write.
 
 ```mermaid
 classDiagram
   direction TB
 
+  class S0["Mods - placeholders (flagship), plan-effort"]
   class S1["1 - Always-on hooks"]
   class S2["2 - Delegation and manager discipline"]
   class S3["3 - Subagent control"]
@@ -55,6 +153,7 @@ classDiagram
   class S8["8 - Skill contract"]
   class IG["intent-guard - one file two writers"]
 
+  S0 --> S2 : the placeholders mod supplies the codewords ++m ++a ++r ++rr +++
   S1 --> S2 : announces the armed hard wall at session open
   S6 --> S2 : arms the inert hard wall
   S6 --> S3 : installs the router deadline and return hooks
@@ -69,11 +168,12 @@ classDiagram
   S3 --> S7 : Return sections name its budget
   S8 ..> S7 : shares the provenance stamp keys
 
+  style S0 fill:#1f6feb,stroke:#0b3d91,color:#ffffff
   style S1 fill:#1f6feb,stroke:#0b3d91,color:#ffffff
   style IG fill:#bf8700,stroke:#7d5300,color:#ffffff
 ```
 
-**One turn in time.** Blue band = main session, violet = inside a subagent; the band note names the hook
+One turn in time. Blue band = main session, violet = inside a subagent; the band note names the hook
 event. A crossed arrow marks a mechanism that can deny the call or block the return - everything else fails
 open and stays silent. The compaction band fires whenever the context is squeezed, mid-turn included, and
 can fire several times per session.
@@ -82,9 +182,10 @@ can fire several times per session.
 sequenceDiagram
   autonumber
   actor U as User
+  participant PM as brewmod-placeholders mod
+  participant PE as brewmod-plan-effort mod
   participant BC as brewcode hooks
   participant BT as brewtools hooks
-  participant PM as brewmod-placeholders mod
   participant MS as Main session
   participant PH as Installed hooks and rules
   participant SA as Subagent
@@ -107,7 +208,13 @@ sequenceDiagram
   rect rgba(31,111,235,0.14)
     Note over U,PH: UserPromptSubmit, every typed prompt
     U->>MS: prompt
-    PM->>MS: codewords +++ ++m ++a ++rr ++r, only with the mod installed
+    PM->>MS: hidden context for +++ ++m ++a ++rr ++r and your own placeholders
+    PE->>PE: mode.mjs records the permission mode
+  end
+
+  rect rgba(31,111,235,0.14)
+    Note over PE,MS: turn.step, every main-loop request
+    PE->>MS: plan mode, effort below planEffort: sent at planEffort
   end
 
   rect rgba(31,111,235,0.14)
@@ -150,7 +257,8 @@ sequenceDiagram
 
 ## 1. Always-on hooks
 
-These run the moment the plugin is installed. No setup skill, no config file, no opt-in.
+These run the moment the plugin is installed. No setup skill, no config file, no opt-in. The hooks of the two
+mods are in [Mods](#mods).
 
 | Approach | File | Scope | Trigger | Fires when | Excerpt | Purpose | Problem solved | Project-specific |
 |---|---|---|---|---|---|---|---|---|
@@ -158,8 +266,6 @@ These run the moment the plugin is installed. No setup skill, no config file, no
 | Plan, intent and task graph re-anchored after a compaction | `brewcode/hooks/compact-recall.mjs` | plugin-shipped | `SessionStart` matcher `compact`, timeout 2 s | After every compaction, auto or `/compact`; anything but `source === 'compact'` returns `{}`, and on `compact` it always injects. Scans only this session's `transcript_path` - a regular file of at most `MAX_TRANSCRIPT_BYTES` (64 MB) - with `Buffer.lastIndexOf`/`includes`, no JSONL parsing. Ladder, first match wins: `plan-file` -> `plan-latest` -> `plan-missing` -> `plan-in-summary` -> `intent`. `plan-latest` accepts `LATEST.md` only as a symlink session-start made, and tells the model to check it against the summary. `[TASKS]` is added only when the transcript holds `"name":"TaskCreate"` | `[PLAN] Read <path> with the Read tool before doing any work.` / `It is the plan for this session: follow it, do not re-derive it.`; last rung `[INTENT] Re-read the user ORIGINAL task and intent from the compact summary and keep executing THAT.`; plus `[TASKS] Then call TaskList: a task graph created before the compact ALREADY EXISTS in this session.` | Say what we were doing, from this session's own record | The session loses the original task and starts a second task graph on top of the first | no |
 | Hard-wall awareness at session open | `brewtools/hooks/session-start.mjs` | plugin-shipped, reads project state | `SessionStart`, timeout 2 s | Every session start; speaks only when the project root's `.claude/brewtools/manager/state.json` has `hard: true` | `Manager HARD wall active (project, level=...): a PreToolUse guard denies Write/Edit and ... in the main session; subagents are not restricted, so implementation goes through the Agent tool. /brewtools:manager-setup disable to exit.` | Tell the model at turn zero that its tools are walled, and how to leave | A session of unexplained denials | yes |
 | Main-session tool wall, shipped but not registered | `brewtools/hooks/hardmode-guard.mjs` | project, only after install; **not** in `brewtools/hooks/hooks.json` | `PreToolUse` matcher `*`, `onFailure: "block"` | Before every tool call when all hold: (1) `/brewtools:manager-setup install` copied it to `<repo>/.claude/brewtools/manager/` and registered it in `.claude/settings.local.json`; (2) the project `state.json` has `hard: true` - no manager dir at any candidate root returns `{}`, but a manager dir whose `state.json` is missing or unreadable resolves to `{ hard: true, level: 'strict' }` and denies; (3) the payload has no non-empty `agent_id` (`isSubagent`). A real subagent passes; a `claude --agent <name>` main session carries only `agent_type` and stays walled | `Hard wall: Write is blocked in the main session. Manager mode keeps the main context for orchestration, so pass this step to a subagent with the Agent tool: ...` | Make the manager role a machine rule, not advice | The model reads "delegate" and edits a file anyway | yes |
-| Plan-mode effort raise (mod) | `brewmod-plan-effort/hooks/register.ts`, listed in `brewmod-plan-effort/hooks/hooks.json` as `{ "modules": ["./register.ts"] }` | plugin-shipped (a mod: a TypeScript hooks module plus bundled command hooks) | module `session.start`, `command.run`, `turn.step`; command hooks `UserPromptSubmit`, `PostToolBatch` -> `hooks/mode.mjs` | Plan mode is known and the main loop is about to run a step below `planEffort` (DEF `xhigh`, the only `userConfig` key). The bundled command hook `mode.mjs` reads `permission_mode` (main loop only: a payload with an `agent_id` is ignored) and writes `<CLAUDE_PLUGIN_ROOT>/.state/mode-<session_id>.json` `{mode,ts}` (gitignored, 7-day prune); it runs on Team/Enterprise orgs where module `classic.*` hooks are bypassed. `turn.step` reads that file and rewrites the step `effort`; raise-only, so a lower or equal-rank, numeric or absent effort, a missing or corrupt file and every subagent step pass untouched. It toasts `plan mode: effort <level> · /plan-effort to change` once per plan visit. `command.run` serves `/plan-effort [status|help|<level>]`: status, or sets the `planEffort` /config row (`-p` has no row: use /config). Every path fails open; the session effort setting is never touched | `return yield* next(target === undefined ? e : { ...e, effort: target })` | Plan turns get the deep-thinking effort without the user changing the session setting and forgetting to lower it again | Planning at the effort chosen for routine edits; a session-wide bump that outlives plan mode | no |
-| Placeholders (mod) | `brewmod-placeholders/hooks/register.ts` plus `hooks/lib/*.ts`, listed in `brewmod-placeholders/hooks/hooks.json` as `{ "modules": ["./register.ts"] }`; defs in `brewmod-placeholders/placeholders/{+,+.plan,a,m,m.plan,r,rr}.md` | plugin-shipped (a mod: a TypeScript hooks module plus bundled command hooks; Claude Code 2.1.301+, `claude plugin install brewmod-placeholders@claude-brewcode`) | module `session.start`, `turn.complete`, `prompt.edit`, `prompt.autocomplete`, `prompt.submit`, `ui.render` (`AbovePrompt`, `PromptHint`), `command.run`, `tool.call`; command hooks `UserPromptSubmit`, `PostToolBatch` -> `hooks/inject.mjs` | A prompt holds the prefix (DEF `++`, the only `userConfig` key `prefix`) and is not a subagent delivery. The bundled command hook `inject.mjs` assembles the `insert: context` defs (`<name>.md` in every mode, plus an optional `<name>.plan.md` addition appended in plan mode), prints them as `additionalContext` once each, capped at 9000 chars, and writes `.state/mode-<session_id>.json` (the module reads it at `session.start` and `turn.complete` for the band); it runs on Team/Enterprise orgs where module `classic.*` hooks are bypassed. `prompt.submit` swaps `insert: inline` tokens for their body in a typed prompt and toasts `unknown ++x` for an undefined token (always on). `prompt.edit` colours known and unknown tokens; `prompt.autocomplete` offers matching names; `ui.render` draws a compact preview band above the prompt (caret on a token = its full text, `++name?` shows the text in the band and printing takes Enter twice: drop + fill, then Enter, `++/` sends the message as typed; a plan part shows as `plan mode adds:`). `prompt.submit` also drops a message made only of `++name?` items and fills the box with `/placeholders show ++<name>`; a second Enter prints it. `command.run` serves `/placeholders`: no args and `status` show the status, `help` prints the help text, `list` and `show <names>` print the full texts as sent with no Claude turn; any other text goes to Claude's dialog, which uses the mod tools `list_placeholders`, `save_placeholder`, `remove_placeholder` and `placeholders_help` (registered at `session.start`, handled in `tool.call`, no permission prompt); saving and removing confirm once (`/placeholders change r`, `/placeholders remove ship`); a save needs a scope, `Global (Recommended)` in the dialog, global when no dialog is possible. Defs layer plugin < global legacy < global < project legacy < project; a bad def file is skipped with a warning; every hook fails open | ``User typed `++r` — Two-phase review discipline is active for this turn:`` (the `header` of `placeholders/r.md`) | Codewords (`++m`, `++a`, `++r`, `++rr`, `+++`) expand into prompt context from editable definition files with live highlighting, typeahead and user-defined placeholders | A mistyped codeword fails silently; a codeword text that only a plugin update can change | yes: a definition file in `.claude/placeholders/` or `<config dir>/placeholders/` (or a legacy override file in `manager/prompts`) replaces the plugin default per name |
 | No hooks at all | `brewdoc/hooks/hooks.json` | plugin-shipped | none | Never. The file is `{"hooks":{}}` | - | brewdoc is a pure skill plugin, zero runtime cost | A hook process on every prompt for a plugin with nothing to inject | no |
 | No hooks and no `hooks.json` | `brewui/` | plugin-shipped | none | Never. There is no `brewui/hooks/`, and `brewui/skills/` holds only `.gitkeep` | - | A registered placeholder that costs a session nothing | Assuming every plugin in the suite has a hook layer | no |
 | One stdin/stdout/logging helper per hook plugin | `brewcode/hooks/lib/utils.mjs`, `brewtools/hooks/lib/utils.mjs` | plugin-shipped | none | Never on its own; imported by the entry hooks for `readStdin`, `output`, `log`, `projectRoot`. The brewcode copy also holds `capText`/`TEXT_CHANNEL_CAP`, the state helpers and the plans-dir resolver shared by its two hooks. The two copies differ | `export function projectRoot(hookCwd)` ... `export function output(response)` | One place per plugin for the fail-open stdin/stdout shape | Each hook re-implementing stdin parsing and the empty-`{}` reply, each with its own bug | no |
@@ -175,7 +281,7 @@ Notes for this section:
   calling session (`brewcode/skills/agents/references/hooks-io-contract.md`).
 - brewcode registers two hooks, both on `SessionStart`: `session-start.mjs` unmatched (human-only
   `systemMessage`), `compact-recall.mjs` in a `"matcher": "compact"` group (model-only `additionalContext`).
-- **One project-root recipe, copied on purpose.** Every hook and installer resolves the root in this order:
+- One project-root recipe, copied on purpose. Every hook and installer resolves the root in this order:
   `CLAUDE_PROJECT_DIR` -> git toplevel -> upward walk for `.git`/`.claude` -> `PWD`
   (`brewcode/skills/agents/references/hooks-env.md`; the plugin JS form skips the git step). Hook processes
   always get `CLAUDE_PROJECT_DIR`; an interactive or Bash-tool shell does not, which is expected. `input.cwd`
@@ -183,7 +289,7 @@ Notes for this section:
   config, state or logs. Plugin hooks import `projectRoot` from `lib/utils.mjs`; every **generated** hook
   and `hardmode-guard.mjs` inline a copy (Node built-ins only), because they land alone in someone else's
   repo. A hook never exits non-zero over an ambiguous root; an installer about to write aborts.
-- **`${CLAUDE_PLUGIN_DATA}`** (`~/.claude/plugins/data/<plugin-id>/`) survives plugin updates; a hook writes
+- `${CLAUDE_PLUGIN_DATA}` (`~/.claude/plugins/data/<plugin-id>/`) survives plugin updates; a hook writes
   there freely, a `Write`/`Edit` tool call gets a permission ask, so unattended runs use
   `${CLAUDE_PROJECT_DIR}/.claude/<subdir>/` (`hooks-env.md`).
 - Installing brewtools does **not** arm the wall. Only `/brewtools:manager-setup install` does.
@@ -194,12 +300,14 @@ Notes for this section:
 
 ## 2. Delegation and manager discipline
 
-Codewords ship with the `brewmod-placeholders` mod (Claude Code 2.1.301+), not with brewtools; the wall must be installed first with
-`/brewtools:manager-setup`. Nothing here is injected unless you type a codeword.
+The codeword rows at the top (`++m` with its spawn brief and plan part, `+++`, `++a`, `++rr`, `++r`) are
+default definitions of the `brewmod-placeholders` mod ([Mods](#brewmod-placeholders-flagship)): they come with
+the mod, not with brewtools, and nothing is injected unless you type the codeword. The hard-wall rows come
+from `/brewtools:manager-setup`, which must be run first; installing brewtools does not arm the wall.
 
 | Approach | Installed by | Scope | Trigger | Fires when | Excerpt | Purpose | Problem solved | Project-specific |
 |---|---|---|---|---|---|---|---|---|
-| `++m` manager role | `brewmod-placeholders/placeholders/m.md`; `/placeholders change m` re-texts it (free text) | plugin-shipped | `UserPromptSubmit` | You type `++m` outside plan mode. One turn only | `Manage; never code/build/test/hand-debug: the main context is for orchestration.` ... `Protocol: 1) TaskList; graph exists -> reuse it, else TaskCreate the full graph` | Orchestrator mode for one turn | The model works instead of fanning out | no |
+| `++m` manager role | `brewmod-placeholders/placeholders/m.md`; `/placeholders change m` re-texts it (free text) | plugin-shipped | `UserPromptSubmit` | You type `++m`, in any mode (plan mode appends the addition in the `++m` plan row below). One turn only | `Manage; never code/build/test/hand-debug: the main context is for orchestration.` ... `Protocol: 1) TaskList; graph exists -> reuse it, else TaskCreate the full graph` | Orchestrator mode for one turn | The model works instead of fanning out | no |
 | 6-field spawn brief, part of the `++m` block | same def (`m.md`) | plugin-shipped | `UserPromptSubmit` | Same turn as `++m` | `Spawn brief: six labeled fields. A subagent starts with an empty context, so a bare one-line task is never enough.` then `GOAL:` `ROLE:` `SCOPE:` `CONTEXT:` `CONSUMER:` `DONE:`, each naming the failure it prevents (`ROLE: what it owns, must not touch - else two agents edit one file.`) | Every brief carries six named fields | The agent invents its own scope and returns an unusable report shape | no |
 | `++m` in plan mode | `brewmod-placeholders/placeholders/m.plan.md`: only the plan addition (front matter `plan: add`), appended to the `m.md` text in plan mode; it carries no cron step (that lives in `+.plan.md`); `plan` is per file, not inherited, and a legacy plan file is an addition too | plugin-shipped | `UserPromptSubmit` with `permission_mode === 'plan'` | You type `++m` in plan mode | `STEP 0, stated literally: "Re-assume the MANAGER role. Call TaskList; if no` ... and the plan carries the role because `this addon expires` | Carry the role across the plan-mode boundary | The role evaporates on exit and implementation starts hand-coding | no |
 | `+++` anti-drift cron | `brewmod-placeholders/placeholders/+.md` (every mode) plus `+.plan.md` (plan-mode addition) | plugin-shipped | `UserPromptSubmit` (any `permission_mode`) | You type `+++`, in any mode | Outside plan mode: `Now: announce and create one unique session cron for the current task`; in plan mode its plan part adds `Stay read-only in Plan mode: create no cron now. Plan it as an execution step instead`; each tick reports `HH:MM TZ · tick N · elapsed` | One session cron for the current task that re-checks work against the goal (planned as an execution step in plan mode) | Drift during a long run that nobody checks between user turns | no |
@@ -211,12 +319,11 @@ Codewords ship with the `brewmod-placeholders` mod (Claude Code 2.1.301+), not w
 | Per-binary flag vetting on the Bash allowlist | same install | project | `PreToolUse` matcher `*` | Every balanced-level `Bash`/`Monitor` command. A listed binary still fails if an argument can make it exec or write | `git` rejects `-c`/`--config-env`/`--exec-path`/`--upload-pack`/`--receive-pack`/`--ext-diff`/`-C`/`--output`/`--textconv` (`GIT_EXEC_FLAG`), and `git branch` must be bare or listing flags only (`GIT_BRANCH_READ_FLAG`), so `git branch -D` is denied; `rg`/`grep` reject `--pre`/`--pre-glob`/`--hostname-bin`/`--search-zip`/`-z`; `find` rejects `-exec`/`-execdir`/`-ok`/`-okdir`/`-delete`/`-fprint`/`-fprint0`/`-fprintf`/`-fls` (`FIND_EXEC_ACTION`); `node` passes only as `node --check <file>`; `gh` read verbs are positional (`vetGh`), so a value such as `gh issue comment 1 --body list` cannot launder a write verb | Close the bypasses a listed binary still has | A "read-only" allowlist that writes a file, deletes a branch or posts a comment | yes |
 | Self-exempt off-switch | same install | project | `PreToolUse` matcher `*` | One command shape passes at every level and with a broken state: `node` + the absolute path of the helper this project installed, then its own CLI arguments. No shell operator outside quotes, no `$` expansion, no eval flag | `node <ABS>/.claude/brewtools/manager/manager-state.mjs set hard=false` | You can always leave the wall | Being locked in; a planted `manager-state.mjs` elsewhere on disk being exempt (the anchor is the installed path, not the filename) | yes |
 | Wall state, project-only | `brewtools/hooks/lib/manager-state.mjs`, copied into the project as the off-switch CLI | project state, with a global twin for `mode` only | none of its own | `session-start.mjs` imports `resolveState`; the self-contained guard reads the same project `state.json` itself (`readProjectState`) | `` SECURITY: `hard` and `level` come ONLY from the PROJECT state.json — a global `` ... `state.json must never enable the HARD wall in projects without their own state.` | A wall that cannot be armed from `~/.claude` | A global setting silently arming every repo you open | yes |
-| Codeword text resolved by layer | `brewmod-placeholders/hooks/lib/defs.ts` | plugin default, overridable at `project` or `global` | none of its own - imported by `register.ts` | On every codeword hit, low to high: plugin `placeholders/<name>.md`, global legacy `<config dir>/manager/prompts/<mode>.md`, global `<config dir>/placeholders/`, project legacy `<repo>/.claude/brewtools/manager/prompts/<mode>.md`, project `<repo>/.claude/placeholders/`. A legacy file maps to the def whose `legacy:` key names it | ``Layers low to high; a stem is a file name without `.md`, keyed lower-case. Legacy files map to the key whose def carries that `legacy`.`` | Retext a codeword for one repo or all repos without touching the plugin | An edited plugin file lost on the next update | yes when overridden |
 
 ## 3. Subagent control
 
 Three opt-in setups, none in `brewtools/hooks/hooks.json`: each skill delegates file work to
-`brewcode:hook-creator` along its `assets/INSTALL.md` runbook. Global scope = `${CLAUDE_CONFIG_DIR:-$HOME/.claude}`.
+`brewcode:hook-creator` with its own `assets/INSTALL.md` runbook. Global scope = `${CLAUDE_CONFIG_DIR:-$HOME/.claude}`.
 Sharing `SubagentStop` is safe: the deadline cleanup hook always returns `{}`.
 
 | Approach | Installed by | Scope | Files | Trigger | Fires when | Excerpt | Config and defaults | Off switch | Purpose | Problem solved |
@@ -248,7 +355,7 @@ every non-destructive step, then ends its final return with an envelope the CALL
 | Destructive is enumerated, not judged | same contract | `rm`/`mv` over existing paths, service restart/stop, firewall/user/permission changes, secret rotation, `docker system prune`, any remote `ssh` mutation; `deploy-admin` adds force-push, tag delete, DB writes/migrations, deploy/rollback | The agent does not decide what counts | An agent classifying its own risky step as routine |
 | The gate stays with the skill | `brewtools/skills/ssh/SKILL.md`, `brewtools/skills/deploy/SKILL.md` | deploy: `This skill owns every spawn and acceptance; delegates never nest and return unresolved decisions.`; ssh presents each envelope as a Phase 5 Step 3 confirmation | The one context that still has `AskUserQuestion` owns the gate | A skill delegating its confirmation into a subagent that cannot confirm |
 
-The six-field block is the interoperability contract between writer and reader. It appears in
+Writer and reader share one contract: the six-field block. It appears in
 `brewtools/skills/ssh/references/safety-rules.md`, `brewtools/skills/deploy/SKILL.md`, both
 `templates/*-admin-agent.md.template` and both shipped agents `brewtools/agents/{ssh,deploy}-admin.md`;
 `ssh/SKILL.md` names the fields and points at `safety-rules.md`. The one asymmetry is the `HOST:` value:
@@ -268,7 +375,7 @@ repeated here. Every semble hook stays silent unless `semble_code` is registered
 | semble session directive | same | project | `SessionStart`, timeout 5 s | Session start, when `.claude/semble/state.json` phase is `ready` (the directive) or `awaiting_reload` (a usable-now note plus `resume`). Without a registration only a `systemMessage`: `semble: semble_code MCP is not registered for this profile — run /brewcode:semble-setup status` | `semble: use ONE mcp__semble_code__search first (repo=<root>, top_k=5, max_snippet_lines=10), then open the hit at start_line. Search routing: intent/behaviour -> semble; symbol definitions/references -> LSP; literals/paths/regex/counts -> rg.` | `enabled` flag | The contract with the real repo path, plus the routing line every semble hook ends with | The MCP called without `repo`, which is required and never inferred | yes |
 | semble subagent nudge | same | project | `SubagentStart`, unmatched | Every spawn, unless the agent's definition has a `tools:` list without the semble tools (`why:"agent-no-tool"`) | `semble: mcp__semble_code__search is already available to you — no ToolSearch needed.` only under `alwaysLoad: true`, else `available to you (load it via ToolSearch if deferred).`; then the exact call and the routing line | `enabled` flag | Tell a context-less subagent the tool exists | A subagent greps because it never saw the rule | yes |
 | semble agent migration | same, `semble-agents.sh apply` | project `.claude/agents/**/*.md`; `--scope global` = `<config dir>/agents` | one-off at install, upgrade or resume | An agent declares a `tools:` allowlist that lacks the two MCP tool names | Appends `mcp__semble_code__search, mcp__semble_code__find_related` to `tools:` in whatever list form it uses | `--revert` removes exactly what `apply` added | Every project agent can call the tool the rule names | A rule ordering semble-first inside an agent with no permission to call it | yes |
-| semble telemetry - `semble-stats.mjs` | same | project | `PostToolUse` and `PostToolUseFailure`, matcher `mcp__semble_code__search\|mcp__semble_code__find_related\|Bash\|Grep\|Glob\|Read` | After every matching call, success or failure. One file registered twice, which is why 5 semble hook files produce 6 settings entries; the only hook in the suite on `PostToolUseFailure` | None - pure observer, always `{}`. Log `.claude/semble/telemetry.jsonl`, trimmed at 2 MB | `enabled` flag | Measure whether semble displaced grep-shaped calls | Adoption claims with no numbers | yes |
+| semble telemetry - `semble-stats.mjs` | same | project | `PostToolUse` and `PostToolUseFailure`, matcher `mcp__semble_code__search\|mcp__semble_code__find_related\|Bash\|Grep\|Glob\|Read` | After every matching call, success or failure. One file registered twice, which is why 3 semble hook files produce 4 settings entries; the only hook in the suite on `PostToolUseFailure` | None - pure observer, always `{}`. Log `.claude/semble/telemetry.jsonl`, trimmed at 2 MB | `enabled` flag | Measure whether semble displaced grep-shaped calls | Adoption claims with no numbers | yes |
 | Session learnings compacted into the rule layer | `/brewcode:rules` | project `.claude/rules/` only, **never** `~/.claude/rules/` | user runs the skill | After a session that produced a lesson: syncs `KNOWLEDGE.jsonl` or the session's learnings into `avoid.md`, `best-practice.md` and `{prefix}-avoid.md` / `{prefix}-best-practice.md` | `Syncs KNOWLEDGE.jsonl or session learnings to project rules.` | not a `-setup` skill: trim or delete the rule file | Grow the always-loaded layer in its cheapest shape, table rows | A lesson learned twice; a rule file that turns into an essay | yes |
 | Convention documents and loading rule | `/brewcode:convention-setup` | project | user runs the setup | Canonical modes plus `full`, `conventions`, `rules`, `paths <p1,p2>` | three convention documents in `.claude/convention/` and `.claude/rules/convention.md` (lazy-loading guidance) | `disable` parks the rule as `convention.md.disabled`; `uninstall` keeps the docs, `purge` removes the owned docs | Establish architecture, coding and testing patterns before agents consume them | Repeated, inconsistent rediscovery of project patterns | yes |
 
@@ -365,8 +472,8 @@ over the 9 shipped agents (`grep` per file; heading wording varies).
 | Return-guard numbers | last line of the Return Contract | same block | `If the agent-return guard is installed, a return over ~2500 est-tokens (chars/4) is blocked for compression; over ~6000 file the detail` | The agent knows the runtime numbers before it is blocked | A huge return, a block, a wasted turn | 5/9 state the 2500/6000 numbers (the four creators, `text-optimizer`) |
 | Scope section with a split rule | after the Return Contract | hand-carried; the Guardrails block emits only `Scope Fit`, `Delegation` and `Return Contract` | e.g. `agent-creator`: work that spans several independent deliverables -> stop and return a split proposal | Force a split proposal instead of an unbounded run | One agent working unobserved for an hour | 9/9 (`Scope and never`, `Scope & Checkpoints`, `Scope`, `Scope guard`) |
 | Checkpointing sized to risk | `agent-creator` `### Turn Budget + Checkpointing` | prose, not scripted | `long-running/writing/fan-out roles checkpoint after each milestone and resume from the last checkpoint; short read-only roles need only their Return Contract` | Survive a `maxTurns` abort; make a resume cheap | Hitting `maxTurns` destroys the final report | 9/9 mention a checkpoint |
-| Explicit `maxTurns` sized to the role | frontmatter | role table: explorer 40, reviewer/architect/tester 60, docs/generator 80, developer/orchestrator 120 | six shipped agents at 80, three at 60 | Anti-loop stop, deliberately generous | A tight cap aborts a healthy run | 9/9 |
-| `## Scope Fit` for code-writing agents | body, conditional | Guardrails block; checklist `` Generic code-writing AG -> `## Scope Fit` incl. etalon-first `` | `Build for the actual scale and the problems that exist today` ... `Etalon-first` | Keep generated code proportionate to the repo | Speculative abstraction; a new file that ignores repo idiom | 4/9 (`agent-creator`, `bc-rules-organizer`, `hook-creator`, `skill-creator`) |
+| Explicit `maxTurns` sized to the role | frontmatter | role table: explorer 40, reviewer/architect/tester 60, docs/generator 80, developer/orchestrator 120 | seven shipped agents at 80, two at 60 | Anti-loop stop, deliberately generous | A tight cap aborts a healthy run | 9/9 |
+| `## Scope Fit` for code-writing agents | body, conditional | Guardrails block; checklist `` Generic code-writing AG -> `## Scope Fit` incl. etalon-first `` | `Build for the actual scale and the problems that exist today` ... `Etalon-first` | Keep generated code proportionate to the repo | Speculative abstraction; a new file that ignores repo idiom | 6/9 (`agent-creator`, `bash-expert`, `bc-rules-organizer`, `hook-creator`, `mod-creator`, `skill-creator`) |
 | Searching agent declares `Bash` | frontmatter `tools:` | checklist | `` Searching AG: `Bash`, or `Glob`/`Grep` WITHOUT `Bash` (next to `Bash` both are dropped on macOS/Linux/WSL) `` | Search works on every platform | An agent with no working search tool | 9/9 declare `Bash` |
 | `${CLAUDE_PLUGIN_ROOT}` for in-plugin paths | agent body | native substitution at spawn | `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/agent-template.md` | Reference plugin files without the versioned cache dir | A hard-coded cache path breaks on every release | 8/9 (not `bash-expert`) |
 | Bare kebab `name`, one-line `description` with `Triggers:` | frontmatter | checklist: `name` matches `[a-z0-9-]+`, no `:`; `description` single line + `Triggers:` | `description: "Creates and improves Claude Code agents. Triggers: create agent, improve agent, scaffold agent."` | Claude Code prepends the plugin name itself | A `:` in `name` fails validation | name 9/9; `Triggers:` 8/9 (`bc-rules-organizer` is internal) |
@@ -385,7 +492,7 @@ The generated families follow other contracts:
 | `intent-guard` | `/brewcode:superreview-setup` `generate.sh emit-agent` | `.claude/agents/intent-guard.md` | own `## 2. Evidence budget` and `## 5. Output` (`intent-guard.md.template`) |
 | `e2e-*`, 5 members | `/brewcode:e2e install` via `agent-creator`, from `e2e/references/agent-template.md` | `.claude/agents/e2e-*.md` | `## Scope Constraint`, `## Rules Loading Protocol`, `## Task Acceptance Protocol`, `## Self-Check Protocol` |
 | `ssh-admin`, `deploy-admin` project copies | `/brewtools:ssh setup`, `/brewtools:deploy setup`, from a `.template` | `.claude/agents/{ssh,deploy}-admin.md` | inventory sections plus `## APPROVAL REQUIRED`; no `maxTurns`, unlike the shipped agents (80) |
-| `docs-writer` | hand-maintained, this repo only | `.claude/agents/docs-writer.md` | none of the above; not one of the 8 and excluded from every count |
+| `docs-writer` | hand-maintained, this repo only | `.claude/agents/docs-writer.md` | none of the above; not one of the 9 and excluded from every count |
 
 ### What the creator agents teach, and the test that pins it
 
@@ -439,8 +546,8 @@ contract exemption, hard-coded in `validate-skill.sh`, and still accepts `[promp
 
 ### Regression harnesses
 
-The load-bearing half of each contract is pinned by a runnable suite, so an edit that breaks a contract fails
-a test instead of shipping. Every suite dir has a `tests/run.sh` (rc 0 = green): `brewcode/hooks/tests`,
+Each contract's load-bearing half is pinned by a runnable suite: an edit that breaks one turns a test red
+before it ships. Every suite dir has a `tests/run.sh` (rc 0 = green): `brewcode/hooks/tests`,
 `brewcode/skills/{convention-setup,semble-setup,setup-status,superreview-setup,teams-setup}/tests`,
 `brewdoc/skills/{docsync-setup,md-to-pdf,memory-sync-setup,publish}/tests` and
 `brewtools/skills/{agent-deadline-setup,agent-return-setup,agent-router-setup,context-slim,deploy,manager-setup,provider-switch,secrets-scan,ssh,text-optimize}/tests`;
@@ -477,7 +584,7 @@ brewcode's `session-start.mjs` writes one field, and it is not a model field:
 }
 ```
 
-**What the model sees:** nothing; `systemMessage` is printed to the human. Hooks that do speak to the
+What the model sees: nothing; `systemMessage` is printed to the human. Hooks that do speak to the
 model at session start (semble, the wall notice) add `hookSpecificOutput.additionalContext` instead.
 
 ### B. A tool call denied by the hard wall
@@ -555,22 +662,44 @@ lags after a compaction. Trade-offs: with two plans in one session the LAST `pla
 markers (`"type":"plan_mode"`, `"type":"plan_mode_reentry"`, `"permissionMode":"plan"`) are stamped on
 *entering* plan mode, so that rung claims only that the session ran in plan mode.
 
+### F. A placeholder in a prompt
+
+You type `++r check the diff` in the default permission mode. The command hook
+`brewmod-placeholders/hooks/inject.mjs` (`UserPromptSubmit`) writes one field; your prompt is not rewritten:
+
+```json
+{
+  "hookSpecificOutput": {
+    "hookEventName": "UserPromptSubmit",
+    "additionalContext": "User typed `++r` — Two-phase review discipline is active for this turn:\n\n[REVIEW DISCIPLINE: DOUBLE-CHECK]\nEvery significant change: multi-agent review (matching reviewer expert, else\ngeneral-purpose), simplification pass first.\n1) Review - finding = defect with path:line + evidence (failing command/input).\n2) Double-check - reproduce each finding.\n3) Fix - confirmed findings only.\nBig review -> ... return verdict first, then findings."
+  }
+}
+```
+
+What the model sees: your prompt as typed, plus this block as hidden context; the `ctrl+o` transcript
+shows the prompt and the answer only, not the block. The same call writes `.state/mode-<session_id>.json` as
+`{"mode":"default","ts":...}`. In plan mode `permission_mode` is `plan`, so `++m` and `+++` append their
+`<name>.plan.md` text after the normal block; `++r` has no plan part and sends the same text. `++rr` and `++r`
+in one message send only `++rr`: both defs carry `group: review`, and the higher `priority` wins.
+
 ## Where each thing lives
 
 `<config dir>` = `CLAUDE_CONFIG_DIR`, else `~/.claude`.
 
 | Thing | Created by | Installed where | Turn it off with |
 |---|---|---|---|
+| `register.ts`, `lib/*.ts`, `hooks/inject.mjs` and the seven `placeholders/*.md` defaults of `brewmod-placeholders` | ships with the mod | `brewmod-placeholders/hooks/` (the `modules` list and both command hooks in its `hooks/hooks.json`) and `brewmod-placeholders/placeholders/` | uninstall the mod; the defaults are read-only to the command, so replace one with an own-layer file (`/placeholders change <name>`) rather than delete it |
+| Own placeholder definition files (`<name>.md`, `<name>.plan.md`) | `/placeholders add ++ship: ...` (new text) or `/placeholders change r` (copy of the effective text), both free text; by hand works too | `<config dir>/placeholders/` (global, recommended in the dialog; the scope is required) or `<repo>/.claude/placeholders/` (project, when you say so); brewtools override files stay read from `<repo>/.claude/brewtools/manager/prompts/` and `<config dir>/manager/prompts/` | `/placeholders remove <name>` (free text; `part` all, normal or plan; say "global" or "project" for a layer) removes a plain own-layer file only, never a plugin default or a brewtools override file; the files live outside the mod directory, so uninstalling the mod leaves them |
+| Legacy codeword text overrides | by hand; the mod reads them, `/brewtools:manager-setup` only lists them | `<repo>/.claude/brewtools/manager/prompts/` or `~/.claude/manager/prompts/` | delete the file; `manager-setup purge` keeps them |
+| `.state/mode-<session_id>.json` of `brewmod-placeholders` | `hooks/inject.mjs` at runtime, on `UserPromptSubmit` and `PostToolBatch` | `<plugin root>/.state/`, gitignored; files older than 7 days are pruned | delete the file; the next prompt rewrites it, and a missing file reads as not in plan mode |
+| `register.ts` and `hooks/mode.mjs` of `brewmod-plan-effort` | ships with the mod | `brewmod-plan-effort/hooks/` (the `modules` list and both command hooks in its `hooks/hooks.json`) | uninstall the mod |
+| `.state/mode-<session_id>.json` of `brewmod-plan-effort` | `hooks/mode.mjs` at runtime, on `UserPromptSubmit` and `PostToolBatch` | `<plugin root>/.state/`, gitignored; files older than 7 days are pruned | delete the file; a missing or corrupt file means not in plan mode, so no raise |
 | brewcode `session-start.mjs` | ships with brewcode | `brewcode/hooks/`, unmatched `SessionStart` group of `brewcode/hooks/hooks.json` | uninstall the plugin |
 | `compact-recall.mjs` | ships with brewcode | `brewcode/hooks/`, `SessionStart` group with `"matcher": "compact"` | uninstall the plugin; no flag, no config file |
 | `.claude/plans/LATEST.md` + `_planLink` | brewcode `session-start.mjs` at runtime | `<repo>/.claude/plans/`, `<repo>/.claude/tasks/cfg/brewcode.state.json` | delete the link; it is recreated on the next fresh plan |
 | brewtools `session-start.mjs` | ships with brewtools | `brewtools/hooks/` | uninstall the plugin, or disable the wall so it goes silent |
 | `hardmode-guard.mjs` copy | `/brewtools:manager-setup install` | `<repo>/.claude/brewtools/manager/`, registered in `.claude/settings.local.json` as `PreToolUse "*"` with `onFailure: "block"` | `/brewtools:manager-setup disable`, or `uninstall` to unwire (then `/reload`) |
 | `manager-state.mjs` + `state.json` | `/brewtools:manager-setup install` | `<repo>/.claude/brewtools/manager/` | `node <ABS>/.claude/brewtools/manager/manager-state.mjs set hard=false`; `purge` deletes it |
-| `register.ts` of `brewmod-plan-effort` | ships with the mod | `brewmod-plan-effort/hooks/`, `modules` list in its `hooks/hooks.json` | uninstall the mod; `statusLine: false` only hides the status text |
-| `register.ts`, `lib/*.ts` and the six `placeholders/*.md` defaults of `brewmod-placeholders` | ships with the mod | `brewmod-placeholders/hooks/`, `brewmod-placeholders/placeholders/`; `modules` list in its `hooks/hooks.json` | uninstall the mod; the defaults are read-only to the command, so replace one with an own-layer file (`/placeholders change <name>`) rather than delete it |
-| Own placeholder definition files (`<name>.md`, `<name>.plan.md`) | `/placeholders add ++ship: ...` (new text) or `/placeholders change r` (copy of the effective text), both free text; by hand works too | `<config dir>/placeholders/` (global, recommended in the dialog; the scope is required) or `<repo>/.claude/placeholders/` (project, when you say so); brewtools override files stay read from `<repo>/.claude/brewtools/manager/prompts/` and `<config dir>/manager/prompts/` | `/placeholders remove <name>` (free text; `part` all, normal or plan; say "global" or "project" for a layer) removes a plain own-layer file only, never a plugin default or a brewtools override file; the files live outside the mod directory, so uninstalling the mod leaves them |
-| Legacy codeword text overrides | by hand; the mod reads them, `/brewtools:manager-setup` only lists them | `<repo>/.claude/brewtools/manager/prompts/` or `~/.claude/manager/prompts/` | delete the file; `manager-setup purge` keeps them |
 | `semble_code` MCP entry | `/brewcode:semble-setup install` | `<config dir or $HOME>/.claude.json`, user scope, pinned `semble[mcp]==0.6.2`, corpus `code docs config` | `/brewcode:semble-setup disable` (flag), `uninstall` to remove |
 | semble shared content-variant cache | searches through the MCP, project warm/reindex scripts | macOS `~/Library/Caches/semble-code`, Linux `${XDG_CACHE_HOME:-$HOME/.cache}/semble-code`; one dir per repo hash, each content selection a sibling | `reindex` replaces only the selected variant; `purge` removes this project's entry only |
 | `.claude/rules/semble-first.md` + the CLAUDE.md marker block | `/brewcode:semble-setup install` | project | `uninstall` or `purge`; `disable` leaves the text and silences the hooks |
@@ -606,9 +735,9 @@ markers (`"type":"plan_mode"`, `"type":"plan_mode_reentry"`, `"permissionMode":"
 ## Keeping this page current
 
 When you add a hook, an agent, a generated skill or an injection, add two rows: one in the matching domain
-table, one in "Where each thing lives". Quote real text only, cut the middle with `...`, name a concrete file,
-and skip line numbers - they decay. A new injection point also gets a worked example. When this page,
-`CLAUDE.md` and the code disagree, the code wins.
+table (for a mod, the piece tables in [Mods](#mods)), one in "Where each thing lives". Quote real text only,
+cut the middle with `...`, name a concrete file, and skip line numbers - they decay. A new injection point
+also gets a worked example. When this page, `CLAUDE.md` and the code disagree, the code wins.
 
 Runtime facts - the hook-event roster, the subagent tool filters, the spawn limits - are not this page's to
 invent. They live in `brewcode/agents/{agent-creator,hook-creator,skill-creator}.md` and

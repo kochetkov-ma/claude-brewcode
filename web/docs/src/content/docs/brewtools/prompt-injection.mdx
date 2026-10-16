@@ -3,26 +3,15 @@ title: "Codewords"
 description: "The codewords ++m ++a ++r ++rr +++ are provided by the brewmod-placeholders mod. Install the mod to use them in any prompt."
 order: 3100
 ---
-import { Badge, Callout, Card, CardGrid, UpdateNotice } from '../../../components/mdx';
+import { Badge, Card, CardGrid, UpdateNotice } from '../../../components/mdx';
 
 # Codewords
 
 <Badge variant="primary" text="brewmod-placeholders" />
 
-The codewords `++m`, `++a`, `++r`, `++rr` and `+++` come from the
-[brewmod-placeholders](/mods/placeholders/) mod. Type one in any prompt and the mod adds its instruction block; your prompt still reaches the model as typed.
+The codewords `++m`, `++a`, `++r`, `++rr` and `+++` come from the [brewmod-placeholders](/mods/placeholders/) mod. Type one in any prompt and the mod adds its instruction block; your prompt still reaches the model as typed.
 
-<Callout type="warning" title="Update brewtools with the mod">
-  brewtools 6.7.x also injects these blocks, so each one would appear twice. Use brewtools 6.8.0+ with the mod.
-</Callout>
-
-<Callout type="tip" title="Install the mod">
-  Requires Claude Code 2.1.301+: run `claude update` first. Install the mod, then run `/reload-plugins`:
-
-  ```bash
-  claude plugin install brewmod-placeholders@claude-brewcode
-  ```
-</Callout>
+Install the mod from its [install section](/mods/placeholders/#install); it needs Claude Code 2.1.301 or newer, so run `claude update`, then restart Claude Code (type `exit`, then run `claude`).
 
 ## Quick reference
 
@@ -55,7 +44,7 @@ To change codeword text, describe the change, for example `/placeholders make ++
 
 ## Older Claude Code and Codex
 
-The mod needs Claude Code 2.1.301+ (`claude update`). On an older build, keep brewtools 6.7.x, which still ships the codeword hook. Codex keeps its own codeword hook in the Codex mirror of brewtools; the mod does not apply to it.
+Brewtools 6.7.x also injects these blocks, so next to the mod each one would appear twice: use brewtools 6.8.0+ with the mod. On a Claude Code build older than 2.1.301, keep brewtools 6.7.x, which still ships the codeword hook. Codex keeps its own codeword hook in the Codex mirror of brewtools; the mod does not apply to it.
 
 ## Related
 

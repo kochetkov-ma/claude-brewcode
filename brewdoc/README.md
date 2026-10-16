@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 6.9.5 |
+| Version | 6.9.6 |
 | Skills | 5 |
 | Agents | 0 |
 | Hooks | 0 |
@@ -23,16 +23,22 @@ After install, run `/reload-plugins` (or `exit` + `claude`).
 ```
 
 <details>
-<summary>Or install the whole suite</summary>
+<summary>Or install the whole suite (plugins and mods)</summary>
+
+❗ **Update Claude Code first:** mods need Claude Code 2.1.301 or newer. Check with `claude --version`; below that, run `claude update`, then restart Claude Code (type `exit`, then run `claude`).
 
 ```
+First run `claude --version`. The mods need Claude Code 2.1.301 or newer. If it is lower, stop and tell me to run `claude update`, restart Claude Code (type `exit`, then run `claude`) and paste this prompt again.
+
 Execute these commands in this Claude Code session, one by one, show full output for each, do not skip any, do not summarize:
 
 1. claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
-2. claude plugin install brewcode@claude-brewcode
-3. claude plugin install brewdoc@claude-brewcode
-4. claude plugin install brewtools@claude-brewcode
-5. claude plugin install brewui@claude-brewcode
+2. claude plugin install brewmod-placeholders@claude-brewcode
+3. claude plugin install brewmod-plan-effort@claude-brewcode
+4. claude plugin install brewcode@claude-brewcode
+5. claude plugin install brewdoc@claude-brewcode
+6. claude plugin install brewtools@claude-brewcode
+7. claude plugin install brewui@claude-brewcode
 
 After all commands succeed, run `/reload-plugins`. If `/reload-plugins` is unavailable, tell me to type `exit` and run `claude` again. Run the commands now.
 ```
@@ -47,7 +53,7 @@ claude plugin update brewdoc@claude-brewcode
 
 ## Overview
 
-Brewdoc keeps documentation in sync with the codebase, generates installation docs, and exports documents to ready-made formats. Each skill is self-contained.
+Brewdoc tracks stale docs and syncs them with the codebase, and documents your Claude Code installation. It also generates a project-tailored `/memory-sync` skill, converts Markdown to PDF and publishes text, files and sites to brewpage.app. Each skill is self-contained.
 
 Dev mode (no install): `claude --plugin-dir ./brewdoc`.
 
@@ -100,6 +106,17 @@ Full docs: [doc-claude.brewcode.app/brewdoc/overview](https://doc-claude.brewcod
 | Setup Status (brewcode) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) |
 | Release Notes | [RELEASE-NOTES.md](../RELEASE-NOTES.md) |
 
-Optional mods: [overview](https://doc-claude.brewcode.app/mods/overview/), [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/), [placeholders](https://doc-claude.brewcode.app/mods/placeholders/). Install: `claude plugin install brewmod-plan-effort@claude-brewcode`
+## Claude Code mods
+
+Brewcode mods from the same marketplace: [overview](https://doc-claude.brewcode.app/mods/overview/), [placeholders](https://doc-claude.brewcode.app/mods/placeholders/), [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/).
+
+❗ **Update Claude Code first:** mods need Claude Code 2.1.301 or newer. Check with `claude --version`; below that, run `claude update`, then restart Claude Code (type `exit`, then run `claude`).
+
+```bash
+claude plugin install brewmod-placeholders@claude-brewcode
+claude plugin install brewmod-plan-effort@claude-brewcode
+```
+
+`claude plugin install` takes one name per call. Run `/reload-plugins` afterwards.
 
 Author: Maksim Kochetkov | License: MIT

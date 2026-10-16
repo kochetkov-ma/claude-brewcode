@@ -46,8 +46,11 @@ RESULT: <the report the user ends up holding; name the settings.json write when 
 
 ## Why it does not run the setups
 
-Each setup skill is an interactive generator: it fans out subagents, analyses the repo and asks the
-user real questions. Two back-to-back in one session degrade both: the second one's questions get
+Each setup skill is interactive: it asks the user real questions and writes into the project. Five
+(`convention-setup`, `teams-setup`, `superreview-setup`, `memory-sync-setup`, `task-board-setup`) fan out
+subagents that analyse the repo; three hook installers (`agent-deadline-setup`, `agent-return-setup`,
+`agent-router-setup`) spawn a `hook-creator`; `semble-setup`, `docsync-setup` and `manager-setup` spawn
+none. Two back-to-back in one session degrade both: the second one's questions get
 answered against the first one's stale findings. So this skill reports and the user runs each setup
 by hand, ideally one per fresh session. There is no `--run`, no `--fix` and no auto mode; if the user
 asks for one, say this paragraph and print the run-list instead.
@@ -428,8 +431,8 @@ Run in this order, ONE PER SESSION:
     10. /brewdoc:memory-sync-setup install
     11. /brewdoc:docsync-setup install
 
-⚠️  Nothing above was run for you, by design. Each of these is an interactive generator: it
-    fans out several subagents, analyses the repo and asks you real questions. Two in one
+⚠️  Nothing above was run for you, by design. Each of these is an interactive setup: it asks
+    you real questions, writes into the project and, for most, spawns subagents. Two in one
     session degrade each other — the context fills with the first one's analysis and the
     second one's questions get answered against stale findings. Start a fresh session per
     command, one row at a time.

@@ -22,7 +22,7 @@ Agents are specialist roles defined in markdown with their own model, toolset an
 
 Each agent sizes the task before starting. **One bounded unit = one deliverable, ~5 files, ~10 steps.** Anything bigger, or spanning several independent deliverables, makes the agent stop and return a split proposal: 2-N bounded subtasks, each with its scope and a suggested owner. Mid-flight the rule is the same: stop at the next clean boundary, report done / remaining / how to split.
 
-A brief missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance criteria is not invented: the agent states its assumption in the report or asks once. The result is written for the CONSUMER, whoever picks it up next, not for the literal wording of the request.
+The agent doesn't invent a missing GOAL, SCOPE, CONTEXT, CONSUMER or acceptance criteria: it states its assumption in the report or asks once. The result is written for the CONSUMER, whoever picks it up next, not for the literal wording of the request.
 
 Subagents have no `AskUserQuestion` (removed in Claude Code 2.1.233). `ssh-admin` and `deploy-admin` return a `## APPROVAL REQUIRED` envelope to the caller for a destructive or privileged step, or proceed only if the prompt pre-approved it.
 

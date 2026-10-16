@@ -28,14 +28,14 @@ import { Badge, Callout, Card, CardGrid, SourceLink, Spoiler, Steps, UpdateNotic
 
 ## What it does
 
-SSH Admin administers Linux servers over SSH: health checks, Docker deployments, firewalls, reverse proxies, and hardening. It loads the host inventory from `CLAUDE.local.md` first and never guesses connection details. Read-only work runs freely; every destructive command returns as an envelope that needs sign-off.
+SSH Admin manages Linux servers over SSH: health checks, Docker deployments, firewalls, reverse proxies, and hardening. It loads the host inventory from `CLAUDE.local.md` first and never guesses connection details. Read-only work runs freely; every destructive command returns as an envelope that needs sign-off.
 
 ## When to use
 
-- **Health check** — disk, memory, CPU, containers, failed services
-- **Docker deployment** — pull image, write compose file, start, update, stop
-- **Firewall and proxy** — UFW rules, Caddy or Nginx virtual hosts with auto-TLS
-- **Hardening and cleanup** — SSH config, fail2ban, keys, Docker prune
+- Health check: disk, memory, CPU, containers, failed services.
+- Docker deployment: pull image, write compose file, start, update, stop.
+- Firewall and proxy: UFW rules, Caddy or Nginx virtual hosts with auto-TLS.
+- Hardening and cleanup: SSH config, fail2ban, keys, Docker prune.
 
 ## Example
 
@@ -134,10 +134,10 @@ In `/etc/ssh/sshd_config`: `PermitRootLogin no` (no root SSH), `PasswordAuthenti
     Configure server inventory and SSH connections before spawning ssh-admin.
   </Card>
   <Card title="Deploy Admin" icon="rocket" href="/brewtools/agents/deploy-admin/">
-    GitHub Actions, workflows, and releases — pairs with ssh-admin for full deploy pipelines.
+    GitHub Actions workflows and releases. Pairs with SSH Admin for a full deploy pipeline.
   </Card>
   <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">
-    All brewtools skills and agents in one place.
+    Every brewtools skill and agent.
   </Card>
 </CardGrid>
 

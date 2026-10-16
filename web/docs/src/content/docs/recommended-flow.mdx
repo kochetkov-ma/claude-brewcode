@@ -1,0 +1,171 @@
+---
+title: "Recommended flow"
+description: "A day-to-day way to use brewcode: install once, set up each project, run tasks with ++m, review as you go, then share and stay current."
+order: 1.5
+---
+
+import { Card, CardGrid, Callout, Icon, Steps, UpdateNotice } from '../../components/mdx';
+
+# Recommended flow
+
+Five steps from a fresh install to a reviewed, shared change: install once, set up each project once, then repeat steps 3 and 4 for every bigger task.
+
+This page is for anyone new to brewcode who wants one path instead of 27 skills. Every step names the exact command and links the page that explains it. Skip what you already have: `/brewcode:setup-status` shows what is installed.
+
+## The flow at a glance
+
+<div class="not-prose my-8 flex flex-col gap-2" role="group" aria-label="Recommended flow: five steps in three stages">
+  <div class="rounded-lg border border-base-300 bg-base-200 p-4">
+    <div class="mb-3 text-xs font-semibold uppercase tracking-wider text-base-content/60">Once per machine, once per project</div>
+    <div class="flex flex-col gap-2 md:flex-row md:items-stretch">
+      <a href="#step-1-install-once" class="flex-1 rounded-lg border border-base-300 bg-base-100 p-3 transition-colors hover:border-primary/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">
+        <span class="flex items-center gap-2"><span class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-content">1</span><span class="font-headline font-semibold">Install</span></span>
+        <span class="mt-2 block text-sm text-base-content/70">Claude Code 2.1.301+, the plugins and both mods.</span>
+      </a>
+      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6 shrink-0 self-center text-primary rotate-90 md:rotate-0"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+      <a href="#step-2-set-up-each-project-once" class="flex-1 rounded-lg border border-base-300 bg-base-100 p-3 transition-colors hover:border-primary/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">
+        <span class="flex items-center gap-2"><span class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-content">2</span><span class="font-headline font-semibold">Set up the project</span></span>
+        <span class="mt-2 block text-sm text-base-content/70">Code search, conventions, agents and a review skill.</span>
+      </a>
+    </div>
+  </div>
+  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6 shrink-0 self-center text-primary"><path d="M12 5v14"/><path d="m6 13 6 6 6-6"/></svg>
+  <div class="rounded-lg border border-primary/40 bg-primary/5 p-4">
+    <div class="mb-3 text-xs font-semibold uppercase tracking-wider text-base-content/60">Every bigger task</div>
+    <div class="flex flex-col gap-2 md:flex-row md:items-stretch">
+      <a href="#step-3-start-every-bigger-task-with-m" class="flex-1 rounded-lg border border-base-300 bg-base-100 p-3 transition-colors hover:border-primary/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">
+        <span class="flex items-center gap-2"><span class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-content">3</span><span class="font-headline font-semibold">Plan and run</span></span>
+        <span class="mt-2 block text-sm text-base-content/70">`++m` manager, plan mode for the design, `+++` for long runs.</span>
+      </a>
+      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6 shrink-0 self-center text-primary rotate-90 md:rotate-0"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+      <a href="#step-4-review-as-you-go" class="flex-1 rounded-lg border border-base-300 bg-base-100 p-3 transition-colors hover:border-primary/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">
+        <span class="flex items-center gap-2"><span class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-content">4</span><span class="font-headline font-semibold">Review</span></span>
+        <span class="mt-2 block text-sm text-base-content/70">`++r` or `++rr` after each phase, `/superreview` before merge.</span>
+      </a>
+    </div>
+    <div class="mt-3 flex items-center justify-center gap-2 rounded-lg border border-dashed border-primary/40 px-3 py-2 text-sm text-base-content/70"><Icon name="refresh-cw" size="sm" class="text-primary" /><span>Next phase: back to step 3. Next task: start again at step 3.</span></div>
+  </div>
+  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6 shrink-0 self-center text-primary"><path d="M12 5v14"/><path d="m6 13 6 6 6-6"/></svg>
+  <div class="rounded-lg border border-secondary/40 bg-secondary/10 p-4">
+    <div class="mb-3 text-xs font-semibold uppercase tracking-wider text-base-content/60">When it ships</div>
+    <a href="#step-5-share-and-stay-current" class="block rounded-lg border border-base-300 bg-base-100 p-3 transition-colors hover:border-primary/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">
+      <span class="flex items-center gap-2"><span class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-content">5</span><span class="font-headline font-semibold">Share and stay current</span></span>
+      <span class="mt-2 block text-sm text-base-content/70">`/brewdoc:publish` returns a link; `/brewtools:plugin-update` brings new versions.</span>
+    </a>
+  </div>
+</div>
+
+Select a step to jump to it. Steps 3 and 4 repeat: review each phase, then return to step 3 for the next one.
+
+## Step 1: Install once
+
+<Callout type="warning" title="Update Claude Code first">
+  The mods need Claude Code 2.1.301 or newer. Check `claude --version`; if it is lower, run `claude update` and restart Claude Code (`exit`, then `claude`).
+</Callout>
+
+Why: the plugins hold the setup, publish and update skills used in steps 2 and 5; the mods add the `++` tokens and the plan-mode effort that steps 3 and 4 rely on.
+
+Run these in a terminal, then restart Claude Code (`exit`, then `claude`). `/reload-plugins` alone is enough only when `claude update` changed nothing.
+
+```bash
+claude update
+claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
+claude plugin install brewmod-placeholders@claude-brewcode
+claude plugin install brewmod-plan-effort@claude-brewcode
+claude plugin install brewcode@claude-brewcode
+claude plugin install brewdoc@claude-brewcode
+claude plugin install brewtools@claude-brewcode
+claude plugin install brewui@claude-brewcode
+```
+
+The mods also need `node` on the `PATH`. To let Claude run the commands for you, paste the prompt from [Installation](/installation/): it checks the Claude Code version, then installs both mods and the four plugins. More on each mod: [Prompt placeholders](/mods/placeholders/), [Plan-mode effort](/mods/plan-effort/).
+
+## Step 2: Set up each project once
+
+Why: each setup writes something into the project (a code index, conventions, agents, a review skill), so every later prompt starts from your codebase instead of generic defaults. Run them in this order, each in its own fresh session, and read the generated files before you commit them.
+
+| Order | Command | What it adds |
+|-------|---------|--------------|
+| 1 | [`/brewcode:semble-setup install`](/brewcode/skills/semble-setup/) | Semantic code search, so agents find code by meaning |
+| 2 | [`/brewcode:convention-setup install`](/brewcode/skills/convention-setup/) | Your conventions and etalon classes in `.claude/convention/`, loaded through a rule |
+| 3 | [`/brewcode:teams-setup install core "one agent per bounded context"`](/brewcode/skills/teams-setup/) | Domain agents built on those conventions |
+| 4 | [`/brewcode:superreview-setup install`](/brewcode/skills/superreview-setup/) | A project `/superreview` skill, used in step 4 |
+| 5 | [`/brewdoc:docsync-setup install`](/brewdoc/skills/docsync-setup/) | Docs-heavy repos only: tracks which documents went stale |
+
+Check progress at any point with [`/brewcode:setup-status`](/brewcode/skills/setup-status/). It lists what is installed, stale or missing, prints the exact command for each, and runs no setup itself. It also offers to enable Claude Code's task tools, which `++m` uses for its task graph in step 3. The remaining setups (task board, agent guards, memory sync) are in [Full Setup](/full-setup/).
+
+## Step 3: Start every bigger task with ++m
+
+Why: `++m` turns the main session into a manager. It builds a task graph and hands the work to agents, so the main context stays free for orchestration.
+
+Type the token anywhere in the prompt box, followed by the task:
+
+```text
+++m Add CSV export to the invoice list; follow the existing export pattern
+```
+
+Claude receives your prompt unchanged plus a hidden instruction block. To read exactly what is sent, put the caret on the token or run `/placeholders show ++m`.
+
+- **To get a design first:** switch to plan mode (`Shift+Tab` twice from the default mode, or `/plan`), then send `++m <task>`. The plan opens with the manager role and the full task graph. The plan-effort mod raises plan-mode requests to `xhigh` by default and never changes your session effort.
+- **For a long run:** add `+++`: `++m +++ <task>`. Claude creates one session cron for the current task, hourly by default, that re-reads the goal and reports drift. In plan mode it plans the cron as a step instead.
+
+Tokens combine, except that `++rr` wins over `++r`. `++a` (architecture first) and your own tokens work the same way. The [Prompt placeholders](/mods/placeholders/) page opens with a recorded terminal session of `++` in action; [Plan-mode effort](/mods/plan-effort/) has one for plan mode.
+
+## Step 4: Review as you go
+
+Why: a review after each phase finds regressions before the next phase builds on them.
+
+- **After a significant change:** `++r check the diff`. A multi-agent review, then every finding is reproduced before anything is fixed.
+- **After each phase:** `++rr review phase 1`. A review on three axes: regression first, project standard, functional correctness. At task end it asks for a final cross-review of all phases.
+- **Before merge:** `/superreview "deep review of the CSV export"`. The skill generated in step 2 runs your build, lint and test gates and an intent check (was the delivered change the asked one?) by default. A depth word such as `deep` adds domain experts, scope checks and a validator that re-checks every finding. See [superreview-setup](/brewcode/skills/superreview-setup/).
+
+## Step 5: Share and stay current
+
+Why: a link lets a colleague read the result without your repo, and an update keeps the skills and mods current.
+
+Share a file, folder or text as a link:
+
+```text
+/brewdoc:publish docs/csv-export.md
+```
+
+[`/brewdoc:publish`](/brewdoc/skills/publish/) uploads to brewpage.app and returns a URL. Publishing is unlisted by default: anyone who has the link can open it.
+
+Stay current with [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/): `check` only reports versions, a bare call walks through the update. Run `/reload-plugins` afterwards (restart Claude Code instead after `claude update`). Plugin updates do not replace files a setup already copied into your project, so run `/brewcode:setup-status` after an update and follow its upgrade commands. A paste-in update prompt for Claude Code is in [UPDATE.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/UPDATE.md) on GitHub.
+
+## One task, start to finish
+
+The same flow on one feature, using only what steps 1 and 2 installed.
+
+<Steps>
+  <li><div><strong>Plan</strong><p>Press `Shift+Tab` twice for plan mode and send `++m +++ Add CSV export to the invoice list`. The plan-effort mod runs plan mode at `xhigh`, and the plan opens with the manager role and the task graph.</p></div></li>
+  <li><div><strong>Run</strong><p>Approve the plan. Claude leaves plan mode, delegates the graph to agents and creates the cron that `+++` planned.</p></div></li>
+  <li><div><strong>Review each phase</strong><p>When a phase is done, send `++rr review phase 1`, then continue with phase 2.</p></div></li>
+  <li><div><strong>Review before merge</strong><p>Run `/superreview "deep review of the CSV export"` and fix what the report confirms.</p></div></li>
+  <li><div><strong>Share</strong><p>Run `/brewdoc:publish docs/csv-export.md` and send the link.</p></div></li>
+</Steps>
+
+## Related
+
+<CardGrid>
+  <Card title="Installation" icon="package" href="/installation/">
+    Add the marketplace, then install the mods and plugins.
+  </Card>
+  <Card title="Quick Start" icon="play" href="/quickstart/">
+    Conventions, task board and deep review in ten minutes.
+  </Card>
+  <Card title="Full Setup" icon="clipboard" href="/full-setup/">
+    All 11 `-setup` skills in one ordered run list.
+  </Card>
+  <Card title="Prompt placeholders" icon="puzzle" variant="mod" href="/mods/placeholders/">
+    `++m`, `++r`, `+++` and your own tokens, with a recorded terminal session.
+  </Card>
+  <Card title="Plan-mode effort" icon="brain" variant="mod" href="/mods/plan-effort/">
+    `xhigh` while Claude plans, your session effort everywhere else.
+  </Card>
+  <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode">
+    Source code, README, and releases.
+  </Card>
+</CardGrid>
+
+<UpdateNotice />

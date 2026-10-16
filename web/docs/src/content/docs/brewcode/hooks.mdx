@@ -54,7 +54,7 @@ First match wins:
 
 `plan-latest` exists because a plan that predates the transcript (after `--resume` or `/clear`) leaves no marker to scan. A plain file or foreign symlink never qualifies, so this rung only points at this project's own latest plan. `[TASKS]` is appended whenever the transcript contains a `TaskCreate`, ordered before the plan is acted on; `TaskList` is the authority, since the built-in reminder can lag.
 
-**Guarantee:** on `source === 'compact'` it always injects something; every failure degrades to `[INTENT]`, never silence, and it never names a foreign plan. **Trade-off:** with two plans in one session the last recorded plan path wins.
+On `source === 'compact'` it always injects something: every failure degrades to `[INTENT]`, never silence, and it never names a foreign plan. The trade-off: with two plans in one session the last recorded plan path wins.
 
 </Spoiler>
 

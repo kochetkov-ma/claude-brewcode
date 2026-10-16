@@ -30,7 +30,7 @@ The read-only [setup dashboard](/brewcode/skills/setup-status/) lists it in this
 
 - Establish shared coding and testing patterns before generating project agents.
 - Refresh conventions after a major refactor with `upgrade`.
-- Analyse selected modules with `paths`.
+- Analyze selected modules with `paths`.
 - Pause convention loading while keeping the documents and accepted rules.
 
 ## Example
@@ -39,7 +39,7 @@ The read-only [setup dashboard](/brewcode/skills/setup-status/) lists it in this
 /brewcode:convention-setup install
 ```
 
-The skill inspects status, analyses the code, and proposes conventions and rules for review. It then writes three documents under `.claude/convention/` and a loading rule at `.claude/rules/convention.md`. Details are under the spoiler below.
+The skill inspects status, analyzes the code, and proposes conventions and rules for review. It then writes three documents under `.claude/convention/` and a loading rule at `.claude/rules/convention.md`. Details are under the spoiler below.
 
 ## Modes
 
@@ -87,7 +87,7 @@ All four carry provenance metadata that `setup-status` reads. Extra project rule
 
 <Steps>
   <li><div><strong>Resolve intent and report status</strong><p>The skill prints its PLAN block and probes the installation. Read-only status asks no questions; ownership or live/disabled collisions stop the operation.</p></div></li>
-  <li><div><strong>Analyse active layers</strong><p>Detect the stack, then analyse the applicable code and test layers with bounded agents.</p></div></li>
+  <li><div><strong>Analyze active layers</strong><p>Detect the stack, then analyze the applicable code and test layers with bounded agents.</p></div></li>
   <li><div><strong>Select reference implementations</strong><p>An architecture-capable agent or Plan agent resolves overlapping candidates. The chosen references anchor the three documents.</p></div></li>
   <li><div><strong>Generate, compact, and review</strong><p>Three document owners work independently. With brewtools installed, text optimization compacts the output; otherwise that step is skipped and reported.</p></div></li>
   <li><div><strong>Organize accepted rules</strong><p>Full extraction proposes avoid and best-practice rules, checks duplicates, and asks for acceptance. CLAUDE.md references are added only on request.</p></div></li>

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>brewmods GIF source (?story=&lt;name&gt;)</title>
+<title>brewmods GIF source (?story=&lt;name&gt;, &amp;bottle=1 for the README bottle)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Work+Sans:wght@400;500&display=swap" rel="stylesheet">
@@ -12,35 +12,37 @@
 html, body { margin: 0; background: #161616; }
 body { width: 1200px; font: 400 16px/1.5 "Work Sans", system-ui, sans-serif; }
 .mono, .term, .chap, .chip, .kbd, .cap k, #ferm { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; }
-#hero { position: relative; width: 1168px; height: 747px; overflow: hidden; background: #161616;
-  background-image: radial-gradient(520px 420px at 80% 58%, rgba(235,187,64,.075), transparent 70%); }
-.win { position: absolute; left: 24px; top: 24px; width: 790px; height: 663px; border-radius: 12px; overflow: hidden; background: var(--cc-bg);
-  box-shadow: 0 40px 90px -30px rgba(0,0,0,.85), 0 0 0 1px rgba(255,255,255,.08), 0 0 80px -20px rgba(235,187,64,.12); }
-.tb { height: 32px; background: var(--cc-chrome); display: flex; align-items: center; gap: 8px; padding: 0 13px; position: relative; }
-.tb > i { width: 12px; height: 12px; border-radius: 50%; display: block; }
+/* terminal-only frame: the window is the whole GIF (no bottle); size set from story.term in the script */
+#hero { position: relative; overflow: hidden; background: var(--cc-bg); }
+.tb { height: 28px; background: var(--cc-chrome); display: flex; align-items: center; gap: 7px; padding: 0 12px; position: relative; }
+.tb > i { width: 11px; height: 11px; border-radius: 50%; display: block; }
 .tb > i:nth-child(1) { background: #FF5F57; } .tb > i:nth-child(2) { background: #FEBC2E; } .tb > i:nth-child(3) { background: #28C840; }
 .tb .title { position: absolute; left: 0; right: 0; text-align: center; font: 500 12.5px "Work Sans", system-ui, sans-serif; color: #B9B9BE; }
-.tb .right { position: absolute; right: 14px; display: flex; gap: 10px; align-items: center; }
-.chap { white-space: nowrap; font-size: 11.5px; font-weight: 500; color: var(--cc-dim); }
+.tb .right { position: absolute; right: 12px; display: flex; gap: 10px; align-items: center; }
+.chap { white-space: nowrap; font-size: 12px; font-weight: 500; color: var(--cc-dim); }
 .chap i { font-style: normal; color: var(--gold); font-weight: 700; }
-.chip { font-size: 11px; font-weight: 700; color: #161616; background: var(--gold); border-radius: 5px; padding: 1px 6px; opacity: 0; }
+.chip { font-size: 11.5px; font-weight: 700; color: #161616; background: var(--gold); border-radius: 5px; padding: 1px 6px; opacity: 0; }
 .prog { position: relative; height: 3px; background: rgba(255,255,255,.08); overflow: hidden; }
-.prog .fill { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--gold); box-shadow: 0 0 8px rgba(235,187,64,.5); }
-.prog .gap { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--cc-bg); }
-.term { position: absolute; top: 35px; left: 0; right: 0; bottom: 0; padding: 16px 20px 12px; font-size: 14px; line-height: 20px; color: var(--cc-fg); }
+.prog .fill { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--gold); }
+.prog .gap { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--cc-bg); }
+.term { padding: 10px 14px 8px; font-size: 14px; line-height: 20px; color: var(--cc-fg); }
 .row { height: 20px; white-space: pre; overflow: hidden; }
 .row .blk { display: inline-block; transform: scaleY(1.12); }
 .row .cur { background: #E8E8E6; color: var(--cc-bg); }
 .todo { color: #FF8A80; font-weight: 700; } .todo-dim { color: var(--cc-dim); }
-.kbd { position: absolute; height: 46px; padding: 0 12px; border-radius: 9px; border: 1px solid rgba(250,233,111,.7); display: flex; align-items: center; gap: 8px;
-  color: var(--gold-hi); font-weight: 700; font-size: 20px; background: rgba(40,36,24,.94);
+.kbd { position: absolute; height: 42px; padding: 0 12px; border-radius: 9px; border: 1px solid rgba(250,233,111,.7); display: flex; align-items: center; gap: 8px;
+  color: var(--gold-hi); font-weight: 700; font-size: 19px; background: rgba(40,36,24,.96);
   box-shadow: 0 4px 0 rgba(235,187,64,.35), 0 10px 24px rgba(0,0,0,.5); opacity: 0; white-space: nowrap; }
 .kbd small { font: 500 12px "Work Sans", system-ui, sans-serif; color: #D9CFA8; letter-spacing: .02em; }
-.cap { position: absolute; left: 24px; top: 701px; width: 790px; height: 26px; color: #D9D5CC; font: 400 16px/26px "Work Sans", system-ui, sans-serif;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cap.on::before { content: "›"; color: var(--gold); font-weight: 500; margin-right: 10px; }
-.cap k { color: var(--gold-hi); font-size: 14.5px; font-weight: 700; }
-#ferm { position: absolute; top: 60px; left: 752.4px; margin: 0; font-size: 13px; line-height: 14.3px; white-space: pre; color: #6b6b6b; }
+.cap { height: 36px; padding: 0 14px; background: var(--cc-chrome); border-top: 1px solid rgba(255,255,255,.07); color: #E2DED5;
+  font: 400 15.5px/35px "Work Sans", system-ui, sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cap span { display: inline-block; }
+.cap.on span::before { content: "›"; color: var(--gold); font-weight: 500; margin-right: 10px; }
+.cap k { color: var(--gold-hi); font-size: 14px; font-weight: 700; }
+/* README bottle (?bottle=1): the ASCII carboy alone, a separate image above the terminal GIF */
+#bottle { display: none; position: relative; width: 420px; height: 628px; overflow: hidden; background: #161616;
+  background-image: radial-gradient(260px 320px at 50% 70%, rgba(235,187,64,.09), transparent 70%); }
+#ferm { position: absolute; top: -4px; left: -28px; margin: 0; font-size: 13px; line-height: 14.3px; white-space: pre; color: #6b6b6b; }
 #ferm .gl { color: rgba(184,204,212,.85); } #ferm .gh { color: rgba(242,248,250,.75); } #ferm .gb { color: rgba(214,228,234,.9); }
 #ferm .w1 { color: #6E4D1A; } #ferm .w2 { color: #A9772A; } #ferm .w3 { color: #EBBB40; } #ferm .w4 { color: #FAE96F; }
 #ferm .f1 { color: #A3967A; } #ferm .f2 { color: #E3D6B6; } #ferm .f3 { color: #FFF7E0; }
@@ -52,15 +54,13 @@ body { width: 1200px; font: 400 16px/1.5 "Work Sans", system-ui, sans-serif; }
 </head>
 <body>
 <section id="hero">
-  <pre id="ferm" aria-hidden="true"></pre>
-  <div class="win" aria-hidden="true">
-    <div class="tb"><i></i><i></i><i></i><span class="title">Claude Code</span><span class="right"><span class="chip" id="chip"></span><span class="chap" id="chap"></span></span></div>
-    <div class="prog" id="prog"><div class="fill" id="progFill"></div></div>
-    <div class="term" id="term"></div>
-  </div>
-  <div class="cap" id="cap" aria-hidden="true"></div>
-  <div class="kbd" id="kbd"></div>
+  <div class="tb" aria-hidden="true"><i></i><i></i><i></i><span class="title">Claude Code</span><span class="right"><span class="chip" id="chip"></span><span class="chap" id="chap"></span></span></div>
+  <div class="prog" id="prog" aria-hidden="true"><div class="fill" id="progFill"></div></div>
+  <div class="term" id="term" aria-hidden="true"></div>
+  <div class="cap" id="cap" aria-hidden="true"><span id="capText"></span></div>
+  <div class="kbd" id="kbd" aria-hidden="true"></div>
 </section>
+<section id="bottle"><pre id="ferm" aria-hidden="true"></pre></section>
 <script>
 // ?story=<name> (default placeholders) loads <name>.story.js and <name>.data.js before the renderer runs
 (() => { const n = new URLSearchParams(location.search).get('story') || 'placeholders';
@@ -71,20 +71,148 @@ body { width: 1200px; font: 400 16px/1.5 "Work Sans", system-ui, sans-serif; }
 (() => {
   const S = window.PH_STORY, D = window.PH_SCREENS || {}, qs = new URLSearchParams(location.search);
   const $ = (id) => document.getElementById(id);
-  if (S.aria) $('hero').setAttribute('aria-label', S.aria);
   const rnd = (i) => { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
   const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
   const span = (t, a, b) => clamp((t - a) / (b - a));
   const ease = (v) => v * v * (3 - 2 * v);
   const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  const LOOP = S.loop, END = S.end, FPS = S.fps, TAU = Math.PI * 2, W0 = TAU / LOOP, ROWS = S.term.rows;
-  // window height follows the captured terminal rows; caption under it, carboy bottom-aligned with it
-  const WIN_H = 35 + 16 + ROWS * 20 + 12;
-  document.querySelector('.win').style.height = WIN_H + 'px';
-  $('cap').style.top = (24 + WIN_H + 14) + 'px';
-  $('hero').style.height = (24 + WIN_H + 60) + 'px';
-  $('ferm').style.top = (24 + WIN_H - 629) + 'px';
+  const TAU = Math.PI * 2;
   const last = (list, t) => list.reduce((k, e, i) => (t >= (Array.isArray(e) ? e[0] : e.at) ? i : k), -1);
+  // in-range t untouched: ((t % L) + L) % L turns 14.4 into 14.3999…, drawing every change point a frame late
+  const wrap = (t, L) => (t >= 0 && t < L ? t : ((t % L) + L) % L);
+  const isBottle = qs.get('bottle') === '1';
+
+  // ---------- fermenter: glass carboy, amber wort, krausen, airlock (README bottle only) ----------
+  // cfg: loop s, fps, intensity(t), blips (airlock times), word (tape label text), labelWidth
+  function fermenter(fpre, cfg) {
+    const FC = 60, FR = 47, C = 30, RAMP_W = ['·', '-', '~', '~', '=', '≈', '≈', '*'], LOOP = cfg.loop, W0 = TAU / LOOP;
+    const GL = new Array(FC * FR).fill(''), GK = new Array(FC * FR).fill(''), IN = [];
+    const gput = (r, c, s, k = 'gl') => { if (c >= 0 && c < FC) { GL[r * FC + c] = s; GK[r * FC + c] = k; } };
+    const grun = (r, a, b, s = '_', k = 'gl') => { for (let c = a; c <= b; c++) gput(r, c, s, k); };
+    const HW = { 23: 4, 24: 4, 25: 4, 26: 6, 27: 9, 28: 12, 29: 14, 30: 16, 31: 17, 32: 18, 44: 17 };
+    for (let r = 33; r <= 43; r++) HW[r] = 18;
+    for (let r = 23; r <= 44; r++) {
+      const h = HW[r], hp = HW[r - 1] || h;
+      if (h === hp) { gput(r, C - h, '│'); gput(r, C + h, '│'); IN[r] = [C - h + 1, C + h - 1]; }
+      else if (h > hp) { grun(r, C - h + 1, C - hp - 1); gput(r, C - hp, '/'); gput(r, C + hp, '\\'); grun(r, C + hp + 1, C + h - 1); IN[r] = [C - hp + 1, C + hp - 1]; }
+      else { gput(r, C - hp, '\\'); gput(r, C + hp, '/'); IN[r] = [C - hp + 1, C + hp - 1]; }
+    }
+    gput(45, C - 17, '\\'); grun(45, C - 16, C + 16); gput(45, C + 17, '/');
+    grun(12, C - 3, C + 3); gput(13, C - 4, '│'); grun(13, C - 3, C + 3); gput(13, C + 4, '│');
+    for (let r = 14; r <= 18; r++) { gput(r, C - 4, '│'); gput(r, C + 4, '│'); }
+    gput(17, C, '|', 'gb'); gput(18, C, '|', 'gb');
+    gput(19, C - 4, '\\'); grun(19, C - 3, C - 1); gput(19, C, '|', 'gb'); grun(19, C + 1, C + 3); gput(19, C + 4, '/');
+    gput(20, C, '|', 'gb'); gput(23, C, '|', 'gb');
+    for (let c = C - 5; c <= C + 5; c++) gput(21, c, c === C ? '|' : c === C - 5 ? '▗' : c === C + 5 ? '▖' : '▄', c === C ? 'gb' : 'ru2');
+    for (let c = C - 4; c <= C + 4; c++) gput(22, c, c === C ? '|' : '█', c === C ? 'gb' : 'ru');
+    for (let r = 34; r <= 41; r++) gput(r, C - 16, '¦', 'gh');
+    gput(29, C + 10, '\\', 'gh'); gput(30, C + 12, '\\', 'gh');
+    const SURF = 67.4, BOT = 89, LABW = cfg.labelWidth, GRAIN = 3;
+
+    return function ferment(t) {
+      // gr = grain tick: wort/krausen/trub/airlock noise re-rolls every GRAIN frames; waves at 0.4-0.6 Hz, not
+      // near the 3 Hz Nyquist of 6 fps, where they flickered every cell each frame (bottle GIF bytes)
+      const I = cfg.intensity(t), Ic = Math.min(1, I), gr = Math.floor(Math.floor(t * cfg.fps) / GRAIN);
+      const head = 3.2 + 5 * Ic + 1.6 * Math.max(0, I - 1) / .35;
+      const ch = GL.slice(), cl = GK.slice();
+      const set = (r, c, s, k) => { if (r >= 0 && r < FR && c >= 0 && c < FC) { ch[r * FC + c] = s; cl[r * FC + c] = k; } };
+      for (let r = 26; r <= 44; r++) {
+        const [a, b] = IN[r];
+        for (let c = a; c <= b; c++) {
+          if (GL[r * FC + c]) continue;
+          const y = r * 2 + 1, x = c - C, nx = x / 18;
+          const surf = SURF + .45 * Math.sin(c * .5 + t * W0 * 3);
+          const top = surf - head - 1.1 * rnd(c * 3.1) - .9 * Math.sin(c * .7 + t * W0 * 2 + rnd(c) * 6) - .9 * Ic * rnd(c + 50);
+          if (y >= surf) {
+            const depth = clamp((y - surf) / (BOT - surf));
+            let l = (.52 + .4 * (1 - nx * nx) - .14 * nx) * (1 - .4 * depth);
+            l += .1 * Math.sin(y * .34 - t * W0 * 3 + nx * 2.2) + .12 * Ic * (1 - depth) + (rnd(c * 7.3 + r * 31 + gr * 13.1) - .5) * .1;
+            l = clamp(l);
+            if (r >= 44) set(r, c, rnd(c + gr * 3) < .5 ? '%' : '#', 'tr');
+            else if (y - surf < 1.6) set(r, c, '~', 'w4');
+            else set(r, c, RAMP_W[Math.min(7, Math.floor(l * 8))], l < .34 ? 'w1' : l < .56 ? 'w2' : l < .8 ? 'w3' : 'w4');
+          } else if (y >= top - .8) {
+            const n = rnd(c * 17.3 + r * 131.7 + gr * 7), d = y - top;
+            const s = d < .6 ? (n < .5 ? '·' : '°') : d < 2 ? (n < .5 ? 'o' : '°') : n < .4 ? 'O' : n < .9 ? 'o' : '@';
+            set(r, c, s, d < 1.2 ? 'f3' : surf - y < 1.8 ? 'f1' : 'f2');
+          }
+        }
+      }
+      const dens = .22 + .78 * Ic;
+      for (let b = 0; b < 36; b++) {
+        if (rnd(b + 70) > dens) continue;
+        const k = 1 + Math.floor(rnd(b + 40) * 3), life = (t * k * 3 / LOOP + rnd(b + 90)) % 1;
+        const y = (BOT - 3) - (BOT - 3 - SURF) * life, r = Math.floor(y / 2);
+        const c = Math.round(C + (rnd(b + 20) - .5) * 31 + .7 * Math.sin(life * 14 + b)), i = r * FC + c;
+        if (r < 33 || r > 43 || GL[i] || cl[i] === 'lb') continue;
+        set(r, c, life < .14 ? '·' : rnd(b + 3) < .4 ? 'o' : '°', 'bb');
+      }
+      let lift = 0;
+      for (const b of cfg.blips) { const dt = (t - b + LOOP) % LOOP; if (dt < .55) lift = Math.max(lift, Math.sin(Math.PI * dt / .55)); }
+      const bell = lift > .66 ? [15, '_'] : lift > .25 ? [16, '-'] : [16, '_'];
+      for (let c = C - 2; c <= C + 2; c++) set(bell[0], c, bell[1], 'gb');
+      for (const c of [C - 3, C - 2, C - 1, C + 1, C + 2, C + 3]) set(18, c, lift > .25 && c < C ? '~' : (gr + c) % 4 ? '≈' : '~', 'aw');
+      if (lift > .25) for (const c of [C + 1, C + 2, C + 3]) set(17, c, '~', 'aw');
+      for (const [bi, b] of cfg.blips.entries()) {
+        const dt = (t - b + LOOP) % LOOP;
+        if (dt < .4) set(dt < .2 ? 18 : 17, C + 2, 'o', 'bb');
+        for (let p = 0; p < 3; p++) {
+          const pt = dt - .3 - p * .16, life = pt / 2.6;
+          if (pt < 0 || life > 1) continue;
+          const sd = bi * 3 + p, y = 23 - life * 23, x = C + (rnd(sd) - .5) * 3 + (rnd(sd + 9) - .5) * 26 * life + Math.sin(life * 9 + sd) * 1.2;
+          set(Math.floor(y / 2), Math.round(x), life < .28 ? 'o' : life < .62 ? '°' : '·', life < .28 ? 'p1' : life < .62 ? 'p2' : 'p3');
+        }
+      }
+      // masking-tape label: the story's token written on it
+      const LR = 39, L0 = C - Math.floor(LABW / 2);
+      for (let k = 0; k < LABW; k++) {
+        const s = k < cfg.word.length ? cfg.word[k] : ' ';
+        set(LR, L0 + k, s === ' ' ? '·' : s, s === ' ' ? 'lb0' : 'lb');
+      }
+      let html = '';
+      for (let r = 3; r < FR; r++) {
+        let cur = null;
+        for (let c = 0; c < FC; c++) {
+          const i = r * FC + c, s = ch[i] || ' ', k = s === ' ' ? '' : cl[i];
+          if (k !== cur) { if (cur) html += '</span>'; cur = k; if (k) html += `<span class="${k}">`; }
+          html += s;
+        }
+        if (cur) html += '</span>';
+        html += '\n';
+      }
+      fpre.innerHTML = html;
+    };
+  }
+
+  // ---------- README bottle: steady ferment, label written, seamless over bottle.loop ----------
+  if (isBottle) {
+    const B = S.bottle, LOOP = B.loop, word = ` ${B.label} `;
+    $('hero').style.display = 'none';
+    $('bottle').style.display = 'block';
+    $('bottle').setAttribute('aria-label', `ASCII glass fermenter bubbling, label "${B.label}"`);
+    const blips = Array.from({ length: B.blips }, (_, i) => +(i * LOOP / B.blips + .2).toFixed(3));
+    const ferment = fermenter($('ferm'), { loop: LOOP, fps: B.fps, blips, labelWidth: word.length + 2,
+      intensity: (t) => .82 + .18 * Math.sin(TAU * t / LOOP), word });
+    window.hero = { render: (t) => ferment(wrap(t, LOOP)), fps: B.fps, loop: LOOP };
+    const freeze = qs.get('t');
+    ferment(freeze !== null ? wrap(parseFloat(freeze), LOOP) : 0);
+    if (freeze !== null) return;
+    const t0 = performance.now(); let lastF = -1;
+    (function tick(now) {
+      const f = Math.floor((now - t0) / (1000 / B.fps));
+      if (f !== lastF) { lastF = f; ferment(((now - t0) / 1000) % LOOP); }
+      requestAnimationFrame(tick);
+    })(t0);
+    return;
+  }
+
+  if (S.aria) $('hero').setAttribute('aria-label', S.aria);
+  const LOOP = S.loop, END = S.end, FPS = S.fps, ROWS = S.term.rows, COLS = S.term.cols;
+  // frame = the window: JetBrains Mono advance 0.6 em (8.4 px at 14 px) x cols + padding; rows x 20 px
+  const CW = 8.4, TB = 28 + 3, PADT = 10, LH = 20, TERM_H = PADT + ROWS * LH + 8, CAP_H = 36;
+  const W = Math.ceil(COLS * CW) + 28 + 2, H = TB + TERM_H + CAP_H;
+  Object.assign($('hero').style, { width: W + 'px', height: H + 'px' });
+  $('term').style.height = TERM_H + 'px';
 
   // ---------- terminal: captured screens, xterm-256 colours ----------
   const BASIC = ['#000000', '#CD3131', '#0DBC79', '#E5E510', '#2472C8', '#BC3FBC', '#11A8CD', '#E5E5E5',
@@ -123,52 +251,65 @@ body { width: 1200px; font: 400 16px/1.5 "Work Sans", system-ui, sans-serif; }
   const isRule = (segs) => /^─{8,}$/.test(plain(segs).trim());
   // prompt row = the last `❯` row that sits under a rule
   const promptRow = (lines) => { for (let r = lines.length - 1; r > 0; r--) if (plain(lines[r]).startsWith('❯') && isRule(lines[r - 1])) return r; return -1; };
+  // captured prompt row cut to `len` chars, styles kept; a styled token cut midway is drawn plain until complete
+  function cutRow(segs, len) {
+    const out = [];
+    let col = 0;
+    for (const [text, style] of segs) {
+      const cs = [...text], k = Math.min(cs.length, len - col);
+      if (k <= 0) break;
+      out.push([cs.slice(0, k).join(''), k < cs.length ? '' : style]);
+      col += k;
+    }
+    return out;
+  }
 
   function screenAt(t) {
     const i = last(S.screens, t), [, name, beat] = S.screens[Math.max(0, i)];
     let ov = null;
     for (const ty of S.typing) {
-      const n = Math.min([...ty.text].length, (ty.from || 0) + Math.floor((t - ty.at) * ty.cps) + 1);
+      // 1e-6: (14.5 - 14.4) * 40 = 3.99…, one char short at an exact frame boundary
+      const n = Math.min([...ty.text].length, (ty.from || 0) + Math.floor((t - ty.at) * ty.cps + 1e-6) + 1);
       const nextScreen = S.screens.find((s) => s[0] > ty.at && s[1] !== ty.on);
       if (t >= ty.at && (!nextScreen || t < nextScreen[0])) ov = { on: ty.on, text: [...ty.text].slice(0, n).join('') };
     }
     return ov ? { name: ov.on, beat: (S.screens.find((s) => s[1] === ov.on) || [, , beat])[2], typed: ov.text } : { name, beat, typed: null };
   }
 
-  let shownKey = '', shownRow = ROWS - 4;
+  // keycap row: prompt row of the screen shown at t, ROWS - 4 when it has none (dialog, TODO screen)
+  const rowAt = (t) => { const sc = D[screenAt(t).name], pr = sc && typeof sc === 'object' ? promptRow(sc.lines) : -1; return pr < 0 ? ROWS - 4 : pr; };
+
+  let shownKey = '';
   function terminal(t) {
     const st = screenAt(t), sc = D[st.name];
     const key = st.name + '|' + st.typed;
-    if (key === shownKey) return shownRow;
+    if (key === shownKey) return;
     shownKey = key;
-    let html = '', pr = -1;
+    let html = '';
     if (!sc || typeof sc === 'string') {
       const mark = typeof sc === 'string' ? sc : `TODO-CAPTURE:${st.beat}`;
-      pr = ROWS - 4;
       for (let r = 0; r < ROWS; r++) {
         if (r === 10) html += `<div class="row todo">${esc(mark)}  ·  screen ${esc(st.name)}</div>`;
         else if (r === 11) html += '<div class="row todo-dim">capture it: bash assets/brewmods/src/capture.sh &lt;pane&gt; ' + esc(st.name) + '</div>';
-        else if (r === pr) html += rowHtml([['❯ ' + (st.typed ?? ''), '']], st.typed !== null ? 2 + [...st.typed].length : -1);
+        else if (r === ROWS - 4) html += rowHtml([['❯ ' + (st.typed ?? ''), '']], st.typed !== null ? 2 + [...st.typed].length : -1);
         else html += '<div class="row"></div>';
       }
     } else {
-      pr = promptRow(sc.lines);
-      const cur = sc.cursor && sc.cursor[2] ? sc.cursor : null;
+      const pr = promptRow(sc.lines), cur = sc.cursor && sc.cursor[2] ? sc.cursor : null;
       sc.lines.forEach((segs, r) => {
-        if (st.typed !== null && r === pr) html += rowHtml([['❯ ' + st.typed, '']], 2 + [...st.typed].length);
+        // typing: the capture's own prompt row (= ❯ + typed text, gated by --check) cut to the typed prefix
+        if (st.typed !== null && r === pr) { const len = 2 + [...st.typed].length; html += rowHtml(cutRow(segs, len), len); }
         else html += rowHtml(segs, st.typed === null && cur && cur[1] === r ? cur[0] : -1);
       });
     }
     $('term').innerHTML = html;
-    shownRow = pr < 0 ? ROWS - 4 : pr;
-    return shownRow;
   }
 
-  // ---------- title bar: chapter label, progress, ⏩ chip; caption; keycap ----------
-  const fill = $('progFill'), chap = $('chap'), chip = $('chip'), cap = $('cap'), kbd = $('kbd');
+  // ---------- title bar: chapter label, progress, ⏩ chip; caption bar; keycap ----------
+  const fill = $('progFill'), chap = $('chap'), chip = $('chip'), cap = $('cap'), capText = $('capText'), kbd = $('kbd');
   S.chapters.slice(1).forEach(([s]) => { const g = document.createElement('div'); g.className = 'gap'; g.style.left = (s / END * 100) + '%'; $('prog').appendChild(g); });
   let shownChap = '', shownCap = null, shownKbd = '';
-  function chrome(t, full, row) {
+  function chrome(t, full) {
     const i = Math.max(0, last(S.chapters, t)), done = !full && t >= END;
     fill.style.width = (full ? 100 : clamp(t / END) * 100).toFixed(2) + '%';
     fill.style.opacity = !full && t > LOOP - .3 ? ((LOOP - t) / .3).toFixed(3) : 1;
@@ -178,133 +319,22 @@ body { width: 1200px; font: 400 16px/1.5 "Work Sans", system-ui, sans-serif; }
     chip.textContent = sk ? `⏩ ${sk.factor}x` : '';
     chip.style.opacity = sk ? 1 : 0;
     const j = Math.max(0, last(S.captions, t)), c = S.captions[j][1];
-    if (c !== shownCap) { shownCap = c; cap.innerHTML = c; cap.classList.toggle('on', !!c); }
+    if (c !== shownCap) { shownCap = c; capText.innerHTML = c; cap.classList.toggle('on', !!c); }
     const ca = S.captions[j][0], cb = (S.captions[j + 1] || [LOOP])[0];
-    cap.style.opacity = full ? 1 : Math.min(1, ca === 0 ? 1 : (t - ca) / .3, (cb - t) / .2).toFixed(3);
+    capText.style.opacity = full ? 1 : Math.min(1, ca === 0 ? 1 : (t - ca) / .3, (cb - t) / .2).toFixed(3);
     const k = S.keys.find((e) => t >= e.at && t < e.at + .8);
     const kd = k ? esc(k.glyph) + (k.word ? '<small>' + esc(k.word) + '</small>' : '') : '';
     if (kd !== shownKbd) { shownKbd = kd; kbd.innerHTML = kd; }
     kbd.style.opacity = k ? (1 - span(t, k.at + .55, k.at + .8)).toFixed(3) : 0;
-    kbd.style.left = (24 + 790 - 22 - kbd.offsetWidth) + 'px';
-    kbd.style.top = (24 + 35 + 16 + row * 20 + 10 - 23) + 'px';
-  }
-
-  // ---------- fermenter: glass carboy, amber wort, krausen, airlock ----------
-  const FC = 60, FR = 47, C = 30, RAMP_W = ['·', '-', '~', '~', '=', '≈', '≈', '*'];
-  const fpre = $('ferm');
-  const GL = new Array(FC * FR).fill(''), GK = new Array(FC * FR).fill(''), IN = [];
-  const gput = (r, c, s, k = 'gl') => { if (c >= 0 && c < FC) { GL[r * FC + c] = s; GK[r * FC + c] = k; } };
-  const grun = (r, a, b, s = '_', k = 'gl') => { for (let c = a; c <= b; c++) gput(r, c, s, k); };
-  const HW = { 23: 4, 24: 4, 25: 4, 26: 6, 27: 9, 28: 12, 29: 14, 30: 16, 31: 17, 32: 18, 44: 17 };
-  for (let r = 33; r <= 43; r++) HW[r] = 18;
-  for (let r = 23; r <= 44; r++) {
-    const h = HW[r], hp = HW[r - 1] || h;
-    if (h === hp) { gput(r, C - h, '│'); gput(r, C + h, '│'); IN[r] = [C - h + 1, C + h - 1]; }
-    else if (h > hp) { grun(r, C - h + 1, C - hp - 1); gput(r, C - hp, '/'); gput(r, C + hp, '\\'); grun(r, C + hp + 1, C + h - 1); IN[r] = [C - hp + 1, C + hp - 1]; }
-    else { gput(r, C - hp, '\\'); gput(r, C + hp, '/'); IN[r] = [C - hp + 1, C + hp - 1]; }
-  }
-  gput(45, C - 17, '\\'); grun(45, C - 16, C + 16); gput(45, C + 17, '/');
-  grun(12, C - 3, C + 3); gput(13, C - 4, '│'); grun(13, C - 3, C + 3); gput(13, C + 4, '│');
-  for (let r = 14; r <= 18; r++) { gput(r, C - 4, '│'); gput(r, C + 4, '│'); }
-  gput(17, C, '|', 'gb'); gput(18, C, '|', 'gb');
-  gput(19, C - 4, '\\'); grun(19, C - 3, C - 1); gput(19, C, '|', 'gb'); grun(19, C + 1, C + 3); gput(19, C + 4, '/');
-  gput(20, C, '|', 'gb'); gput(23, C, '|', 'gb');
-  for (let c = C - 5; c <= C + 5; c++) gput(21, c, c === C ? '|' : c === C - 5 ? '▗' : c === C + 5 ? '▖' : '▄', c === C ? 'gb' : 'ru2');
-  for (let c = C - 4; c <= C + 4; c++) gput(22, c, c === C ? '|' : '█', c === C ? 'gb' : 'ru');
-  for (let r = 34; r <= 41; r++) gput(r, C - 16, '¦', 'gh');
-  gput(29, C + 10, '\\', 'gh'); gput(30, C + 12, '\\', 'gh');
-
-  // calm until the first token is accepted, bursts on sends, calm again by the loop end (seam)
-  function intensity(t) {
-    const k0 = S.kicks[0];
-    if (t < k0) return 0;
-    let I = ease(span(t, k0, k0 + .8));
-    for (const b of S.bursts) if (t >= b && t < b + 1) I = Math.max(I, 1 + .35 * Math.sin(Math.PI * span(t, b, b + 1)));
-    return I * (1 - ease(span(t, END - 1.5, END + .3)));
-  }
-  const BLIPS = [1.4];
-  for (let b = S.kicks[0] + .25; b < END - 1.5; b += .55) BLIPS.push(+b.toFixed(2));
-  for (const s of S.bursts) [.15, .45, .75, 1.05, 1.5].forEach((d) => BLIPS.push(s + d));
-  const SURF = 67.4, BOT = 89;
-  const LABW = Math.max(...S.labels.map((l) => l[1].length)) + 2;
-
-  function ferment(t) {
-    const I = intensity(t), Ic = Math.min(1, I), fr = Math.floor(t * FPS);
-    const head = 3.2 + 5 * Ic + 1.6 * Math.max(0, I - 1) / .35;
-    const ch = GL.slice(), cl = GK.slice();
-    const set = (r, c, s, k) => { if (r >= 0 && r < FR && c >= 0 && c < FC) { ch[r * FC + c] = s; cl[r * FC + c] = k; } };
-    for (let r = 26; r <= 44; r++) {
-      const [a, b] = IN[r];
-      for (let c = a; c <= b; c++) {
-        if (GL[r * FC + c]) continue;
-        const y = r * 2 + 1, x = c - C, nx = x / 18;
-        const surf = SURF + .45 * Math.sin(c * .5 + t * W0 * 15);
-        const top = surf - head - 1.1 * rnd(c * 3.1) - .9 * Math.sin(c * .7 + t * W0 * 8 + rnd(c) * 6) - .9 * Ic * rnd(c + 50);
-        if (y >= surf) {
-          const depth = clamp((y - surf) / (BOT - surf));
-          let l = (.52 + .4 * (1 - nx * nx) - .14 * nx) * (1 - .4 * depth);
-          l += .1 * Math.sin(y * .34 - t * W0 * 12 + nx * 2.2) + .12 * Ic * (1 - depth) + (rnd(c * 7.3 + r * 31 + fr * 13.1) - .5) * .1;
-          l = clamp(l);
-          if (r >= 44) set(r, c, rnd(c + fr * 3) < .5 ? '%' : '#', 'tr');
-          else if (y - surf < 1.6) set(r, c, '~', 'w4');
-          else set(r, c, RAMP_W[Math.min(7, Math.floor(l * 8))], l < .34 ? 'w1' : l < .56 ? 'w2' : l < .8 ? 'w3' : 'w4');
-        } else if (y >= top - .8) {
-          const n = rnd(c * 17.3 + r * 131.7 + Math.floor(t * 3) * 7), d = y - top;
-          const s = d < .6 ? (n < .5 ? '·' : '°') : d < 2 ? (n < .5 ? 'o' : '°') : n < .4 ? 'O' : n < .9 ? 'o' : '@';
-          set(r, c, s, d < 1.2 ? 'f3' : surf - y < 1.8 ? 'f1' : 'f2');
-        }
-      }
-    }
-    const dens = .22 + .78 * Ic;
-    for (let b = 0; b < 36; b++) {
-      if (rnd(b + 70) > dens) continue;
-      const k = 1 + Math.floor(rnd(b + 40) * 3), life = (t * k * 3 / LOOP + rnd(b + 90)) % 1;
-      const y = (BOT - 3) - (BOT - 3 - SURF) * life, r = Math.floor(y / 2);
-      const c = Math.round(C + (rnd(b + 20) - .5) * 31 + .7 * Math.sin(life * 14 + b)), i = r * FC + c;
-      if (r < 33 || r > 43 || GL[i] || cl[i] === 'lb') continue;
-      set(r, c, life < .14 ? '·' : rnd(b + 3) < .4 ? 'o' : '°', 'bb');
-    }
-    let lift = 0;
-    for (const b of BLIPS) { const dt = (t - b + LOOP) % LOOP; if (dt < .55) lift = Math.max(lift, Math.sin(Math.PI * dt / .55)); }
-    const bell = lift > .66 ? [15, '_'] : lift > .25 ? [16, '-'] : [16, '_'];
-    for (let c = C - 2; c <= C + 2; c++) set(bell[0], c, bell[1], 'gb');
-    for (const c of [C - 3, C - 2, C - 1, C + 1, C + 2, C + 3]) set(18, c, lift > .25 && c < C ? '~' : (fr + c) % 4 ? '≈' : '~', 'aw');
-    if (lift > .25) for (const c of [C + 1, C + 2, C + 3]) set(17, c, '~', 'aw');
-    for (const [bi, b] of BLIPS.entries()) {
-      const dt = (t - b + LOOP) % LOOP;
-      if (dt < .4) set(dt < .2 ? 18 : 17, C + 2, 'o', 'bb');
-      for (let p = 0; p < 3; p++) {
-        const pt = dt - .3 - p * .16, life = pt / 2.6;
-        if (pt < 0 || life > 1) continue;
-        const sd = bi * 3 + p, y = 23 - life * 23, x = C + (rnd(sd) - .5) * 3 + (rnd(sd + 9) - .5) * 26 * life + Math.sin(life * 9 + sd) * 1.2;
-        set(Math.floor(y / 2), Math.round(x), life < .28 ? 'o' : life < .62 ? '°' : '·', life < .28 ? 'p1' : life < .62 ? 'p2' : 'p3');
-      }
-    }
-    // masking-tape label: the accepted token is written on it, wiped before the loop restarts
-    const LR = 39, L0 = C - Math.floor(LABW / 2), wipe = [END, END + .4];
-    const li = last(S.labels, t), word = li < 0 ? '' : ` ${S.labels[li][1]} `;
-    const shown = li < 0 || t >= wipe[1] ? 0 : Math.floor(span(t, S.labels[li][0], S.labels[li][0] + .7) * word.length);
-    for (let k = 0; k < LABW; k++) {
-      const s = k < shown && t < wipe[0] && k < word.length ? word[k] : ' ';
-      set(LR, L0 + k, s === ' ' ? '·' : s, s === ' ' ? 'lb0' : 'lb');
-    }
-    if (t >= wipe[0] && t < wipe[1]) for (let k = 0; k < LABW; k++) if (rnd(k + fr) < span(t, wipe[0], wipe[1])) set(LR, L0 + k, '·', 'lb0');
-    let html = '';
-    for (let r = 3; r < FR; r++) {
-      let cur = null;
-      for (let c = 0; c < FC; c++) {
-        const i = r * FC + c, s = ch[i] || ' ', k = s === ' ' ? '' : cl[i];
-        if (k !== cur) { if (cur) html += '</span>'; cur = k; if (k) html += `<span class="${k}">`; }
-        html += s;
-      }
-      if (cur) html += '</span>';
-      html += '\n';
-    }
-    fpre.innerHTML = html;
+    if (!k) return;
+    // pinned to the screen at the key press for the cap's whole 0.8 s life (no jump when the screen changes)
+    const row = rowAt(k.at);
+    kbd.style.left = (W - 18 - kbd.offsetWidth) + 'px';
+    kbd.style.top = Math.min(TB + TERM_H - 46, Math.max(TB + 4, TB + PADT + row * LH + LH / 2 - 21)) + 'px';
   }
 
   let full = false;
-  function frame(t) { t = ((t % LOOP) + LOOP) % LOOP; ferment(t); chrome(t, full, terminal(t)); }
+  function frame(t) { t = wrap(t, LOOP); terminal(t); chrome(t, full); }
   window.hero = { render: frame, fps: FPS, loop: LOOP, steps: S.chapters.map((s) => [s[0], s[1]]) };
   const freeze = qs.get('t'), reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const still = freeze !== null || reduce, TS = freeze !== null ? parseFloat(freeze) : S.still;

@@ -21,9 +21,9 @@ import { Badge, Card, CardGrid, SourceLink, Spoiler, Steps, UpdateNotice } from 
 | Tools | Read, Write, Edit, Glob, Grep, Bash, Skill, WebFetch, WebSearch |
 | Output | Mod files, gate exit codes, drift verdict |
 
-Mod Creator builds Claude Code mods: hooks-module plugins whose TypeScript `register.ts` registers handlers on engine events and `$` nouns. Mods are early access, on by default from Claude Code 2.1.287. See [Brewcode mods](/mods/overview/); [plan-mode effort](/mods/plan-effort/) and [prompt placeholders](/mods/placeholders/) were built with this agent.
+Mod Creator builds Claude Code mods: hooks-module plugins whose TypeScript `register.ts` registers handlers on engine events and `$` nouns. Mods are early access, on by default from Claude Code 2.1.287. See [Brewcode mods](/mods/overview/); [prompt placeholders](/mods/placeholders/) and [plan-mode effort](/mods/plan-effort/) were built with this agent.
 
-The installed engine decides what the API accepts, not memory: every run starts with a drift check against the live types file, and a symbol missing there does not exist for the agent. Every interactive affordance a mod ships carries its key hint, proven live key by key (reference `mods-patterns.md` section 12).
+The installed engine decides what the API accepts, not memory: every run starts with a drift check against the live types file, and a symbol missing there does not exist for the agent. Every interactive control a mod ships carries its key hint, proven live key by key (reference `mods-patterns.md` section 12).
 
 ## When to use
 
@@ -87,7 +87,7 @@ Full list in the agent file; each rule is sourced from `validate` output or a li
 | Never commit `.claude-plugin/types/` or the engine-written `tsconfig.json` | Engine files land in git |
 | A broken module still exits `claude -p` with rc 0: grep stderr for `hooks module did not load` | Red gate read as green |
 | Behavior that must survive Team/Enterprise orgs ships a bundled command hook | Module `classic.*` hooks are bypassed: silent no-op |
-| Every interactive affordance shows its key sequence (label or dim row) | Undiscoverable control |
+| Every interactive control shows its key sequence (label or dim row) | Undiscoverable control |
 
 </Spoiler>
 

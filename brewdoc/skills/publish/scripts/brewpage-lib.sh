@@ -82,21 +82,21 @@ bp_history_append() {
   fi
 }
 
-# BD02: ns/ttl/entry reach the shell as literals inside single quotes, so they
-# never expand; these re-check them as data before they reach the URL.
+# BD02: ns/ttl/entry arrive as single-quoted literals; re-checked here as data before the URL.
+# Explicit char lists, never a-z ranges: bash 3.2 en_US.UTF-8 collation lets [a-z] match A-Z and accents.
 bp_validate() {
   local ns="$1" days="$2" entry="$3"
   case "$ns" in
-    *[!a-z0-9-]* | '') echo "FAILED: namespace must be 1-32 chars of a-z0-9-"; return 1 ;;
+    *[!abcdefghijklmnopqrstuvwxyz0123456789-]* | '') echo "FAILED: namespace must be 1-32 chars of a-z0-9-"; return 1 ;;
   esac
   [ "${#ns}" -ge 1 ] && [ "${#ns}" -le 32 ] || { echo "FAILED: namespace must be 1-32 chars"; return 1; }
   case "$days" in
-    '' | *[!0-9]*) echo "FAILED: ttl must be a positive integer"; return 1 ;;
+    '' | *[!0123456789]*) echo "FAILED: ttl must be a positive integer"; return 1 ;;
   esac
   [ "$days" -ge 1 ] || { echo "FAILED: ttl must be >= 1"; return 1; }
   if [ -n "$entry" ]; then
     case "$entry" in
-      *[!A-Za-z0-9._/-]* | */../* | ../* | */..) echo "FAILED: entry must be a plain relative file name"; return 1 ;;
+      *[!ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._/-]* | */../* | ../* | */..) echo "FAILED: entry must be a plain relative file name"; return 1 ;;
     esac
   fi
   return 0
@@ -114,7 +114,7 @@ bp_run_dir() {
     brewpage.??????) : ;;
     *) echo "FAILED: invalid publish run id"; return 1 ;;
   esac
-  case "$id" in *[!A-Za-z0-9.]*) echo "FAILED: invalid publish run id"; return 1 ;; esac
+  case "$id" in *[!ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.]*) echo "FAILED: invalid publish run id"; return 1 ;; esac
   BP_RUN_DIR="$BP_TMPDIR/$id"
   [ -d "$BP_RUN_DIR" ] && [ ! -L "$BP_RUN_DIR" ] && [ -O "$BP_RUN_DIR" ] &&
     [ -n "$(find "$BP_RUN_DIR" -maxdepth 0 -type d -perm 0700 -print)" ] || {

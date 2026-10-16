@@ -11,7 +11,7 @@ import { Badge, Callout, Card, CardGrid, Spoiler, SourceLink, Steps, UpdateNotic
 
 <SourceLink path="brewtools/skills/manager-setup/README.md" anchor="manager" />
 
-Manager Setup installs a guard into your project that blocks Write, Edit and mutating Bash in the main chat, so Claude hands hands-on work to subagents. It is opt-in, per project, and off until you arm it.
+Manager Setup installs a guard into your project that blocks Write, Edit and mutating Bash in the main chat, so Claude has to delegate the hands-on work to subagents. It is opt-in, per project, and off until you arm it.
 
 ## Quick reference
 
@@ -58,7 +58,7 @@ Canonical order, shared by every `-setup` skill: `status | install | upgrade | e
 </Callout>
 
 <Callout type="note" title="Codewords live in a mod">
-The codewords `++m`, `++a`, `++rr`, `++r` and `+++` are provided by the [brewmod-placeholders](/mods/placeholders/) mod (Claude Code 2.1.301+), not by this skill. Install it with `claude plugin install brewmod-placeholders@claude-brewcode`. The mod reads override files under `.claude/brewtools/manager/prompts/`; `status` lists them.
+The codewords `++m`, `++a`, `++rr`, `++r` and `+++` are provided by the [brewmod-placeholders](/mods/placeholders/) mod, not by this skill. The mod needs Claude Code 2.1.301+: run `claude update`, then restart Claude Code (type `exit`, then run `claude`), then `claude plugin install brewmod-placeholders@claude-brewcode`. The mod reads override files under `.claude/brewtools/manager/prompts/`; `status` lists them.
 </Callout>
 
 ## The wall in action
@@ -211,7 +211,7 @@ Exit:      node <ABS project root>/.claude/brewtools/manager/manager-state.mjs s
     Read-only dashboard across every `-setup` skill.
   </Card>
   <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">
-    All brewtools skills and agents in one place.
+    Every brewtools skill and agent.
   </Card>
 </CardGrid>
 

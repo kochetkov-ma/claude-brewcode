@@ -3,8 +3,8 @@
 [38;5;174m ▝▝[39m   [38;5;174m▝▝[39m   [38;5;246m~/brewery[39m
 
 
-[38;5;220m⏺[39m [38;5;220mPrompt dropped by a hook: ++m? = /placeholders show ++m · not sent to Claude ·[39m
-  [38;5;220mpress Enter to print it[39m
+[38;5;220m⏺[39m [38;5;220mPrompt[39m [38;5;220mdropped[39m [38;5;220mby[39m [38;5;220ma[39m [38;5;220mhook:[39m [38;5;220m++m?[39m [38;5;220m=[39m [38;5;220m/placeholders[39m [38;5;220mshow[39m [38;5;220m++m[39m [38;5;220m·[39m [38;5;220mnot[39m [38;5;220msent[39m [38;5;220mto[39m [38;5;220mClaude[39m [38;5;220m·[39m
+  [38;5;220mpress[39m [38;5;220mEnter[39m [38;5;220mto[39m [38;5;220mprint[39m [38;5;220mit[39m
 
 [38;5;246m[48;5;237m❯[39m [38;5;231m/placeholders show ++m[39m [49m
 [38;5;246m  ⎿  [39mbrewmod-placeholders: ++m · full text as sent · plan mode off
@@ -26,15 +26,5 @@
 
      [38;5;153mSizing: one subagent = 1 deliverable, ~<=5 files, ~<=10 steps, ~<=20 min;[39m
      [38;5;153mlarger -> split. An hour-long agent = drift nobody can observe.[39m
-     [38;5;153mScan all agents: best-matching expert per task, else general-purpose.[39m
+     [38;5;153mScan[39m [38;5;153mall[39m [38;5;153magents:[39m [38;5;153mbest-matching[39m [38;5;153mexpert[39m [38;5;153mper[39m [38;5;153mtask,[39m [38;5;153melse[39m [38;5;153mgeneral-purpose.[39m
 
-     [38;5;153mSpawn brief: six labeled fields. A subagent starts with an empty context, so a bare
-[39m     [38;5;153mone-line task is never enough.[39m
-     [38;5;153mGOAL: task + why it exists - without the why it cannot rank the work.[39m
-     [38;5;153mROLE:[39m [38;5;153mwhat[39m [38;5;153mit[39m [38;5;153mowns,[39m [38;5;153mmust[39m [38;5;153mnot[39m [38;5;153mtouch[39m [38;5;153m-[39m [38;5;153melse[39m [38;5;153mtwo[39m [38;5;153magents[39m [38;5;153medit[39m [38;5;153mone[39m [38;5;153mfile.[39m
-     [38;5;153mSCOPE:[39m [38;5;153mpaths/commands[39m [38;5;153min[39m [38;5;153mbounds[39m [38;5;153mand[39m [38;5;153mout[39m [38;5;153m-[39m [38;5;153melse[39m [38;5;153mthe[39m [38;5;153mtask[39m [38;5;153mwidens.[39m
-     [38;5;153mCONTEXT:[39m [38;5;153mdone,[39m [38;5;153mby[39m [38;5;153mwhom,[39m [38;5;153min[39m [38;5;153mparallel;[39m [38;5;153monly[39m [38;5;153mwhat[39m [38;5;153mthis[39m [38;5;153magent[39m [38;5;153mneeds[39m [38;5;153m-[39m [38;5;153melse[39m [38;5;153mwork[39m [38;5;153mis[39m
-     [38;5;153mredone[39m [38;5;153mor[39m [38;5;153moverwritten.[39m
-     [38;5;153mCONSUMER:[39m [38;5;153mwho[39m [38;5;153mor[39m [38;5;153mwhat[39m [38;5;153muses[39m [38;5;153mthe[39m [38;5;153mresult[39m [38;5;153mnext[39m [38;5;153m+[39m [38;5;153mthe[39m [38;5;153mshape[39m [38;5;153mit[39m [38;5;153mmust[39m [38;5;153mfit[39m [38;5;153m-[39m [38;5;153melse[39m [38;5;153ma[39m [38;5;153mcorrect
-[39m     [38;5;153mresult[39m [38;5;153mfails[39m [38;5;153mthe[39m [38;5;153mnext[39m [38;5;153mstep.[39m
-     [38;5;153mDONE:[39m [38;5;153macceptance,[39m [38;5;153mwhat[39m [38;5;153mcounts[39m [38;5;153mas[39m [38;5;153ma[39m [38;5;153mfinding,[39m [38;5;153mreturn[39m [38;5;153m(verdict[39m [38;5;153mfirst;[39m [38;5;153mevidence:[39m

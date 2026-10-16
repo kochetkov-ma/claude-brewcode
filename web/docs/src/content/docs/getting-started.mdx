@@ -1,6 +1,6 @@
 ---
 title: "Introduction"
-description: "Meet the Brewcode Claude Code plugin suite: conventions, project agents, review, task methodology, semantic search, and text utilities."
+description: "Overview of the Brewcode plugin suite for Claude Code: conventions, project agents, review, task methodology, semantic search and text utilities."
 order: 1
 ---
 
@@ -8,31 +8,37 @@ import { Card, CardGrid, Callout, InstallPrompt, ModPromo, UpdateNotice } from '
 
 # Introduction
 
-<Callout type="warning" title="++m ++a ++r ++rr +++ do nothing?">
-  Since [brewtools v6.8.0](https://github.com/kochetkov-ma/claude-brewcode/releases/tag/v6.8.0) the prompt-injection codewords `++m`, `++a`, `++r`, `++rr` and `+++` live in the `brewmod-placeholders` mod, not in brewtools. The mod is easier to use and lets you add your own placeholders. Install it (Claude Code 2.1.301+: run `claude update` first), then run `/reload-plugins`:
-
-  ```bash
-  claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode && claude plugin install brewmod-placeholders@claude-brewcode
-  ```
-
-  Docs: [Prompt placeholders](/mods/placeholders/).
+<Callout type="note" title="Looking for ++m, ++r or +++?">
+  The codewords `++m`, `++a`, `++r`, `++rr` and `+++` come with the [Prompt placeholders](/mods/placeholders/) mod. Install it once and they work in every prompt, next to placeholders you write yourself.
 </Callout>
 
-**Brewcode** is a plugin suite for Claude Code: project conventions and rules, domain agent teams, multi-agent quorum review, semantic code search, and tooling to build your own skills, agents and hooks. Recipes (skills) define what to brew, brewers (agents) do the work, and a few hooks handle session start and post-compact recall. Two optional [brewcode mods](/mods/overview/) from the same marketplace extend Claude Code itself; they install separately and are not counted among the four plugins.
+<Callout type="warning" title="Update Claude Code first">
+  The mods need Claude Code 2.1.301 or newer. Check with `claude --version`; if it is lower, run `claude update` and restart Claude Code (`exit`, then `claude`).
+</Callout>
+
+```bash
+claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode && claude plugin install brewmod-placeholders@claude-brewcode
+```
+
+Then run `/reload-plugins`.
+
+**Brewcode** is a plugin suite for Claude Code: project conventions and rules, domain agent teams, multi-agent quorum review, semantic code search, and tooling to build your own skills, agents and hooks. Recipes (skills) define what to brew, brewers (agents) do the work, and a few hooks handle session start and post-compact recall. Two [brewcode mods](/mods/overview/) from the same marketplace extend Claude Code itself; they are separate plugins, not counted among the four below.
 
 Every skill except `/brewdoc:publish`, `/brewtools:text-optimize` and `/brewtools:text-human` runs only when you type `/plugin:skill`; see the [FAQ](/faq/#auto-invoke) for why.
 
 <ModPromo />
 
 <Callout type="tip" title="Start with the project foundation">
-  Run setup-status first. Establish semantic search, run convention-setup before teams-setup, configure agent consumers, then install the task board and finish with documentation sync. Follow the [Full Setup](/full-setup/) run list one setup per session.
+  Run setup-status first. Set up semantic search, run convention-setup before teams-setup, configure the agent consumers, then install the task board and finish with documentation sync. Follow the [Full Setup](/full-setup/) run list, one setup per session.
 </Callout>
 
 ## Pick a path
 
+New here? Follow the [recommended flow](/recommended-flow/).
+
 <CardGrid>
   <Card title="Installation" icon="file" href="/installation/">
-    One command adds the marketplace, one installs the plugins.
+    Add the marketplace, then install the mods and plugins.
   </Card>
   <Card title="Quick Start" icon="play" href="/quickstart/">
     Conventions, task board and deep review in ten minutes.
@@ -43,6 +49,8 @@ Every skill except `/brewdoc:publish`, `/brewtools:text-optimize` and `/brewtool
 </CardGrid>
 
 ## Install
+
+The prompt checks that Claude Code is 2.1.301 or newer, then adds the marketplace and installs the two mods ([placeholders](/mods/placeholders/) first) and the four plugins.
 
 <InstallPrompt plugin="all" mode="install" />
 
@@ -65,8 +73,8 @@ All four install from a single marketplace and load with every Claude Code sessi
   <Card title="Task board and methodology" icon="document" href="/brewtools/skills/task-board-setup/">
     Domain methodology, per-task work/review/test plans and a task graph. Active top-level tasks get hourly anti-drift timers unless you override them; specs are optional.
   </Card>
-  <Card title="Quorum code review" icon="search" href="/brewcode/skills/superreview-setup/">
-    3 to 5 independent reviewers, merged at 2/3 agreement, deduplicated and ranked by severity.
+  <Card title="Project code review" icon="search" href="/brewcode/skills/superreview-setup/">
+    A generated `/superreview` skill. The default runs your build, lint and test gates plus an intent check; a depth word such as `deep` adds domain experts, scope checks and a validator that re-checks every finding.
   </Card>
   <Card title="Convention setup" icon="book" href="/brewcode/skills/convention-setup/">
     Etalon classes and patterns become convention docs, then rules in `.claude/rules/`.

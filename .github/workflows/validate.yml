@@ -111,6 +111,11 @@ jobs:
         if: ${{ !cancelled() }}
         run: node .claude/scripts/check-install-blocks.mjs
 
+      # Pure bash over the docs MDX: internal links, JSX <code> hazards, code inside <Callout>.
+      - name: Docs links and Callout code (check-links.sh)
+        if: ${{ !cancelled() }}
+        run: bash .claude/skills/docs/scripts/check-links.sh
+
       - name: Codex tests
         if: ${{ !cancelled() }}
         run: |
@@ -198,6 +203,7 @@ jobs:
               bash brewcode/agents/tests/run.sh
               bash brewtools/skills/plugin-update/tests/run.sh
               bash .claude/scripts/tests/run.sh
+              bash .claude/skills/docs/tests/run.sh
           - shard: teams-others
             tokenizer: true
             suites: |

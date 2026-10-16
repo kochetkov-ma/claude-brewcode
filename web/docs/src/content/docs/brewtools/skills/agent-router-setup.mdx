@@ -155,7 +155,7 @@ The file also carries `version`, `content_version`, `generated_by` and `last_upd
 - Tier 1 matches trigger words, not meaning; the intent regexes are English.
 - No writable tmp dir means no denies, only notices.
 - `agent-router: override` (also `allow`, `skip`) in the task passes a spawn silently.
-- Everything fails open, so a typo in the config cannot quietly change routing.
+- Everything fails open: a config that does not parse turns routing off, a route whose `match` does not compile is skipped, and neither blocks a spawn.
 
 </Spoiler>
 
@@ -163,7 +163,7 @@ The file also carries `version`, `content_version`, `generated_by` and `last_upd
 
 <CardGrid>
   <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">
-    All brewtools skills and agents in one place.
+    Every brewtools skill and agent.
   </Card>
   <Card title="Agent Deadline Setup" icon="clock" href="/brewtools/skills/agent-deadline-setup/">
     Another opt-in hook for subagents: a soft wall-clock budget.

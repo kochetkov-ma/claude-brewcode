@@ -8,7 +8,7 @@ import { Card, CardGrid, Callout, Steps, Spoiler, UpdateNotice } from '../../com
 
 # Quick Start
 
-The first ten minutes: conventions, domain agents, a task board and a project-tailored review skill. Run each setup generator in its own fresh session.
+The first ten minutes: conventions, domain agents, a task board and a project-tailored review skill. Run each setup generator in its own fresh session. New here? Follow the [recommended flow](/recommended-flow/).
 
 <Callout type="note" title="Before you begin">
   Install Claude Code and the plugins first: see [Installation](/installation/). A skill ending in `-setup` installs a mechanism you use afterwards; the ordered list lives in [Full Setup](/full-setup/).
@@ -20,7 +20,7 @@ The first ten minutes: conventions, domain agents, a task board and a project-ta
   <li class="step step-primary">
     <div>
       <strong>Install the plugins</strong>
-      <p>Add the marketplace and install brewcode (once per machine); brewtools, needed for the task board, follows below.</p>
+      <p>Add the marketplace and install brewcode once per machine. The task board needs brewtools, so install it too.</p>
       <pre><code>claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
 claude plugin install brewcode@claude-brewcode
 claude plugin install brewtools@claude-brewcode</code></pre>
@@ -64,7 +64,7 @@ claude plugin install brewtools@claude-brewcode</code></pre>
   <li class="step step-primary">
     <div>
       <strong>Generate the deep review skill</strong>
-      <p>Merges code review and standards checking into one quorum skill installed at `.claude/skills/`.</p>
+      <p>Writes a project-tailored `/superreview` skill into `.claude/skills/`. The default depth runs your build, lint and test gates plus an intent check; a depth word such as `deep` adds domain experts and a validator.</p>
       <pre><code>{"/brewcode:superreview-setup install \"QUICK depth; gate on the existing build and lint commands\""}</code></pre>
     </div>
   </li>
@@ -75,7 +75,7 @@ claude plugin install brewtools@claude-brewcode</code></pre>
 
   Remove a team later by name: `uninstall core`, or `purge core` to drop its archive and trace files too.
 
-  The board returns the task ID, which `/task-spec` accepts if titles overlap. If the spec layer was omitted, run task-board setup's `upgrade` and select it. It researches the codebase, asks clarifying questions and fans out to domain agents; methodology, spec and design land under `.claude/features/`.
+  The board returns the task ID, which `/task-spec` accepts if titles overlap. If the spec layer was omitted, run task-board setup's `upgrade` and select it. `/task-spec` researches the codebase, asks clarifying questions and fans out to domain agents; methodology, spec and design land under `.claude/features/`.
 
   When a top-level task becomes active, the main session's task-board announces its hourly anti-drift cron, with a cadence you choose or an opt-out. Timers depend on the active session and runtime limits.
 
@@ -84,12 +84,16 @@ claude plugin install brewtools@claude-brewcode</code></pre>
 
 ## What's next
 
+<Callout type="warning" title="Update Claude Code first">
+  The mods in the last row need Claude Code 2.1.301 or newer. Check with `claude --version`; if it is lower, run `claude update` and restart Claude Code (`exit`, then `claude`).
+</Callout>
+
 | Goal | Command |
 |------|---------|
 | [Deep review](/brewcode/skills/superreview-setup/): invoke the generated skill | `/superreview` |
 | [Extract rules](/brewcode/skills/rules/) from conventions and commits | `/brewcode:rules "derive rules from .claude/convention/, one file per domain"` |
 | [Optimize prompts](/brewtools/skills/text-optimize/) and agents | `/brewtools:text-optimize .claude/agents/` |
-| [Add-on mods](/mods/overview/): plan-mode effort, prompt placeholders | `claude plugin install brewmod-plan-effort@claude-brewcode`<br />`claude plugin install brewmod-placeholders@claude-brewcode` |
+| [Brewcode mods](/mods/overview/): prompt placeholders, plan-mode effort | `claude plugin install brewmod-placeholders@claude-brewcode`<br />`claude plugin install brewmod-plan-effort@claude-brewcode` |
 
 All 27 skills are listed on the plugin pages: [brewcode](/brewcode/overview/), [brewtools](/brewtools/overview/), [brewdoc](/brewdoc/overview/), [brewui](/brewui/overview/).
 

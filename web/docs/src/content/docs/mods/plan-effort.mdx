@@ -1,7 +1,7 @@
 ---
 title: "Plan-mode effort"
 description: "xhigh while Claude plans, your session effort everywhere else. A plan-mode coloured row above the prompt shows when the raise is active."
-order: 41
+order: 42
 ---
 import { Badge, Callout, Card, CardGrid, InstallPrompt, SourceLink, Spoiler, UpdateNotice } from '../../../components/mdx';
 
@@ -11,8 +11,9 @@ import { Badge, Callout, Card, CardGrid, InstallPrompt, SourceLink, Spoiler, Upd
 
 By default `xhigh` while Claude plans. Your session effort everywhere else.
 
-<p align="center">
-  <img src="/brewmods/plan-effort.gif" alt="Claude Code terminal, session effort high: Shift+Tab into plan mode shows no row, the first prompt shows a toast and a teal plan-mode row (Claude Code's plan-mode colour) above the prompt, and Shift+Tab out removes the row." width="800" loading="lazy" />
+{/* Stable deep link, shared outside the docs: /mods/plan-effort/#demo. Keep the id. */}
+<p align="center" id="demo">
+  <img src="/brewmods/plan-effort.gif" alt="Claude Code terminal, session effort high: Shift+Tab into plan mode shows no row, the first prompt shows a toast and a teal plan-mode row (Claude Code's plan-mode colour) above the prompt, and Shift+Tab out removes the row." width="800" height="546" loading="lazy" />
   <br /><small>Recorded in a real Claude Code 2.1.301 session (session effort <code>high</code>), sped up where the title bar shows ⏩.</small>
 </p>
 
@@ -20,7 +21,11 @@ By default `xhigh` while Claude plans. Your session effort everywhere else.
 
 ## Install
 
-Requires Claude Code 2.1.301+ (run `claude update` first) and `node` on the `PATH`.
+<Callout type="warning" title="Update Claude Code first">
+  The mods need Claude Code 2.1.301 or newer. Check with `claude --version`; if it is lower, run `claude update`, then restart Claude Code (exit, run `claude`).
+</Callout>
+
+Needs `node` on the `PATH`.
 
 <InstallPrompt plugin="brewmod-plan-effort" mode="install" />
 
@@ -38,7 +43,7 @@ Dev mode without installing: `claude --plugin-dir ./brewmod-plan-effort`
 
 | You do | You get |
 |--------|---------|
-| `Shift+Tab` twice from the default mode (`manual mode on` → `accept edits on` → `plan mode on`), or `/plan` | Nothing shows at the keypress itself: Claude Code gives mods no live mode signal, so the mod learns plan mode at the first prompt or tool batch. From that prompt, requests run at `xhigh`, a row in Claude Code's plan-mode colour (teal) appears above the prompt and a toast shows once per plan visit |
+| `Shift+Tab` twice from the default mode (`manual mode on` → `accept edits on` → `plan mode on`), or `/plan` | Nothing shows at the keypress itself: Claude Code gives mods no live mode signal, so the mod learns plan mode at the first prompt or tool batch. From that prompt on, requests run at `xhigh`, a row in Claude Code's plan-mode colour (teal) appears above the prompt, and a toast shows once per plan visit |
 | `Shift+Tab` out of plan mode | The row disappears at once (about 0.1 s), because the hint line Claude Code draws names the mode just left. The next request is already at your session effort. The status line keeps showing your session effort: the mod raises effort per request and never changes the session setting |
 | `Shift+Tab` back into plan mode, then a prompt | A second plan visit: the row and the toast show again |
 | Approve the plan | The next request is back at your session effort, nothing to undo |
@@ -63,7 +68,7 @@ In plan mode the row above the prompt, drawn in Claude Code's plan-mode colour (
 
 Claude Code adds the `brewmod-plan-effort:` prefix to the toast and to the first line of command output; the mod supplies the text after it.
 
-The row stays through turns and typing, sits above any other prompt-area UI and steps aside while a survey is open. With [brewmod-placeholders](/mods/placeholders/) loaded, it stays visible above the placeholders band in either load order. The row takes one row from the band's budget, so the band below keeps its full layout and does not overflow in fullscreen.
+The row stays through turns and typing, sits above any other prompt-area UI and steps aside while a survey is open. With [brewmod-placeholders](/mods/placeholders/) loaded, it stays visible above the placeholders band in either load order. It uses one of the rows the band would otherwise get, so the band below keeps its full layout and does not overflow in fullscreen.
 
 `/plan-effort` prints a status block:
 
@@ -95,11 +100,11 @@ mode now     plan
 
 `/config` has one option, `planEffort` (default `xhigh`). In `claude -p` there is no `/config` row: the command prints `plan effort: cannot set it here (no /config row, e.g. under -p) · set: /config in an interactive session, or settings.json pluginConfigs`.
 
-<Callout type="note" title="Good to know">
-  - Your session `/effort` setting is never written, and subagents keep their own effort.
-  - The mod only raises: a session already at or above `planEffort` stays as it is.
-  - Rejecting a plan keeps the raise, because Claude is still in plan mode.
-</Callout>
+## Good to know
+
+- Your session `/effort` setting is never written, and subagents keep their own effort.
+- The mod only raises: a session already at or above `planEffort` stays as it is.
+- Rejecting a plan keeps the raise, because Claude is still in plan mode.
 
 <Spoiler title="Technical details" id="technical-details" meta="how it works, verification">
 
@@ -178,9 +183,9 @@ The `/plan-effort` command and the toast were checked live on 2.1.301; unit test
 ## Related
 
 <CardGrid>
-  <Card variant="mod" title="Mods overview" icon="puzzle" href="/mods/overview/">All brewcode mods and how they load.</Card>
+  <Card variant="mod" title="Mods overview" icon="package" href="/mods/overview/">All brewcode mods and how they load.</Card>
   <Card variant="mod" title="Source on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewmod-plan-effort">Mod manifest, hooks module, and tests.</Card>
-  <Card variant="mod" title="Prompt placeholders" icon="terminal" href="/mods/placeholders/">The other brewcode mod: expand short codes in your prompt.</Card>
+  <Card variant="mod" title="Prompt placeholders" icon="puzzle" href="/mods/placeholders/">The other brewcode mod: expand short codes in your prompt.</Card>
   <Card variant="mod" title="Project page" icon="globe" href="https://brewcode.app/mods/plan-effort/">The mod on brewcode.app.</Card>
 </CardGrid>
 

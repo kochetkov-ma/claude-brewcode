@@ -6,8 +6,8 @@ maxTurns: 80
 color: cyan
 tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch, WebSearch
 doc_type: llm
-version: "6.9.5"
-content_version: "6.6.0"
+version: "6.9.6"
+content_version: "6.9.6"
 generated_by: "brewcode"
 last_updated: "2026-10-16"
 ---
@@ -121,7 +121,8 @@ turn samples: SA Resource Limits in `agent-context-and-execution.md`).
 | developer / orchestrator | 120 |
 
 ~10-20 s/turn -> 120 turns ~= 20-30 min ceiling. `maxTurns` != time limit: an AG stuck in one
-25-min `Bash` is 1 turn -> use `BASH_MAX_TIMEOUT_MS` + `PreToolUse` soft-deadline hook.
+long `Bash` call (up to `BASH_MAX_TIMEOUT_MS`, 10 min by default) is 1 turn -> use
+`BASH_MAX_TIMEOUT_MS` + `PreToolUse` soft-deadline hook.
 
 For generic AGs, size checkpoint instructions to risk: long-running/writing/fan-out roles
 checkpoint after each milestone and resume from the last checkpoint; short read-only roles need
