@@ -174,7 +174,8 @@ export type Io = {
 
 export type LayerKind = 'native' | 'legacy'
 export type LayerSpec = { id: string; kind: LayerKind; dir: string }
-export type LayerFiles = { id: string; kind: LayerKind; files: ReadonlyMap<string, string> }
+// dir = the layer's real dir, named in a legacy file's warning.
+export type LayerFiles = { id: string; kind: LayerKind; dir?: string; files: ReadonlyMap<string, string> }
 export type Roots = { pluginRoot: string; root?: string; configDir?: string }
 export type Resolved = { defs: Def[]; issues: string[]; skipped: string[]; sources: Map<string, string> }
 export type Registry = { defs: readonly Def[]; issues: readonly string[]; skipped: readonly string[]; sources: ReadonlyMap<string, string> }
@@ -222,15 +223,18 @@ export function stemBase(stem: string): Partial<Def> {
 }
 
 // One 6.9.5 migration warning per file: `when` is gone, a plan part needs `plan: add`, `plan:` belongs in a plan file.
-function modeIssue(def: Def, meta: DefMeta): string | null {
+function modeIssue(def: Def, meta: DefMeta, isLegacy: boolean): string | null {
+  const plan = `${def.name.toLowerCase()}.plan.md`
+  if (def.isPlan && isLegacy) return `brewtools file: its text is added in plan mode; to clear this, move it to placeholders/${plan} with plan: add`
   if (def.isPlan) return meta.plan === 'add' ? null : 'no plan: add; its text is added in plan mode'
   if (meta.when !== undefined && meta.when !== 'always') return `when: ${meta.when} is gone; sent in every mode`
-  return meta.plan === undefined ? null : `plan: is for ${def.name.toLowerCase()}.plan.md; ignored`
+  return meta.plan === undefined ? null : `plan: is for ${plan}; ignored`
 }
 
-// Layers low to high; a stem is a file name without `.md`, keyed lower-case. Legacy files map to the key whose def carries that `legacy`.
-// A file that cannot be a definition (unclosed front matter, no or unusable name) is skipped with an issue, never injected raw.
-// D1: a plan part whose name has no normal def in any layer is sent in every mode, with a warning.
+const partId = (d: Def): string => `${d.name.toLowerCase()}${d.isPlan ? '.plan' : ''}`
+
+// Layers low to high, keyed by lower-case stem; a legacy file maps to the key whose def carries that `legacy`. Unusable files are skipped.
+// D1: a plan part with no normal def of its name in any layer is sent in every mode; a shadowed file's mode warning says it is not sent.
 export function resolveDefs(layers: readonly LayerFiles[]): Resolved {
   const cur = new Map<string, Def>()
   const sources = new Map<string, string>()
@@ -239,8 +243,7 @@ export function resolveDefs(layers: readonly LayerFiles[]): Resolved {
   const legacyStem = new Map<string, string>()
   // Served file per key and the index of its mode warning (-1 = none), so an orphan warning replaces it.
   const served = new Map<string, { where: string; at: number }>()
-  const put = (id: string, stem: string, key: string, parsed: Parsed, base: Partial<Def> | undefined): void => {
-    const where = `${id}/${stem}.md`
+  const put = (id: string, where: string, key: string, parsed: Parsed, base: Partial<Def> | undefined, isLegacy = false): void => {
     for (const i of parsed.issues) issues.push(`${where}: ${i}`)
     const def = parsed.skip === true ? null : toDef(parsed, base)
     if (def === null) {
@@ -253,7 +256,7 @@ export function resolveDefs(layers: readonly LayerFiles[]): Resolved {
       skipped.push(where)
       return
     }
-    const warn = modeIssue(def, parsed.meta)
+    const warn = modeIssue(def, parsed.meta, isLegacy)
     if (warn !== null) issues.push(`${where}: ${warn}`)
     served.set(key, { where, at: warn === null ? -1 : issues.length - 1 })
     cur.set(key, def)
@@ -264,11 +267,11 @@ export function resolveDefs(layers: readonly LayerFiles[]): Resolved {
     for (const [file, raw] of [...layer.files].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))) {
       if (layer.kind === 'native') {
         const key = file.toLowerCase()
-        put(layer.id, file, key, parseDefinition(raw), cur.get(key) ?? stemBase(key))
+        put(layer.id, `${layer.id}/${file}.md`, key, parseDefinition(raw), cur.get(key) ?? stemBase(key))
         continue
       }
       const stem = legacyStem.get(file)
-      if (stem !== undefined) put(layer.id, stem, stem, parseLegacy(raw), cur.get(stem))
+      if (stem !== undefined) put(layer.id, `${layer.dir ?? layer.id}/${file}.md`, stem, parseLegacy(raw), cur.get(stem), true)
     }
   }
   const normal = new Set([...cur.values()].filter((d) => !d.isPlan).map((d) => d.name.toLowerCase()))
@@ -279,7 +282,23 @@ export function resolveDefs(layers: readonly LayerFiles[]): Resolved {
     const s = served.get(key)
     const msg = `${s?.where ?? key}: no ${name}.md; sent in every mode`
     if (s !== undefined && s.at >= 0) issues[s.at] = msg
-    else issues.push(msg)
+    else {
+      issues.push(msg)
+      if (s !== undefined) served.set(key, { ...s, at: issues.length - 1 })
+    }
+  }
+  // Per name and part the first context def is sent, else the first def (sent.ts parts, inline.ts inlineBodies).
+  const winner = new Map<string, string>()
+  for (const isCtx of [true, false]) {
+    for (const [key, d] of cur) {
+      if ((!isCtx || d.insert === 'context') && !winner.has(partId(d))) winner.set(partId(d), key)
+    }
+  }
+  for (const [key, d] of cur) {
+    const won = winner.get(partId(d))
+    const s = served.get(key)
+    if (won === undefined || won === key || s === undefined || s.at < 0) continue
+    issues[s.at] = `${s.where}: shadowed by ${served.get(won)?.where ?? won}; not sent`
   }
   return { defs: [...cur.values()], issues, skipped, sources }
 }
@@ -350,7 +369,7 @@ export async function loadRegistry(io: Io, roots: Roots, cache: RegistryCache): 
     for (const [stem, c] of kept) if (c.error !== undefined) unreadable.push(`${spec.id}/${stem}.md: unreadable (${c.error})`)
     nextFiles.set(spec.id, kept)
     nextSig.set(spec.id, sig)
-    layers.push({ id: spec.id, kind: spec.kind, files: new Map([...kept].filter(([, v]) => v.error === undefined).map(([k, v]) => [k, v.raw])) })
+    layers.push({ id: spec.id, kind: spec.kind, dir: spec.dir, files: new Map([...kept].filter(([, v]) => v.error === undefined).map(([k, v]) => [k, v.raw])) })
     if (spec.id === 'default' && changed) {
       const names = new Set<string>()
       for (const raw of kept.values()) {

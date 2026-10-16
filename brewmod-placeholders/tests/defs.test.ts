@@ -183,7 +183,7 @@ test('GIVEN a plan part overridden by a legacy file in one stack and by a native
   expect({ legacy: { defs: legacy.defs, issues: legacy.issues }, native: { defs: native.defs, issues: native.issues } }, 'resolved').toStrictEqual({
     legacy: {
       defs: [m, { ...mp, body: 'PM', header: '' }, x, { ...db, name: 'db', body: 'DB', isPlan: false }, { ...db, name: 'db', body: 'DB ADD', isPlan: true }],
-      issues: [xIssue, 'global-legacy/m.plan.md: no plan: add; its text is added in plan mode'],
+      issues: [xIssue, 'global-legacy/planmode.md: brewtools file: its text is added in plan mode; to clear this, move it to placeholders/m.plan.md with plan: add'],
     },
     native: { defs: [m, { ...mp, body: 'NATIVE', header: 'N {token}' }, x], issues: [xIssue, 'project/m.plan.md: no plan: add; its text is added in plan mode'] },
   })
@@ -206,6 +206,29 @@ test('GIVEN stale when values, a misplaced plan key and orphan plan parts WHEN l
       'global/p.plan.md: no p.md; sent in every mode',
     ],
   })
+})
+
+test('GIVEN a legacy planmode.md in a layer with its dir WHEN layers resolve THEN the warning names that real file and how to clear it', async () => {
+  const defaults = layer('default', 'native', { m: '---\nname: m\nlegacy: full\n---\nM', 'm.plan': '---\nname: m\nplan: add\nlegacy: planmode\n---\nADD' })
+  const legacy = { ...layer('project-legacy', 'legacy', { planmode: '' }), dir: '/w/p/.claude/brewtools/manager/prompts' }
+
+  expect(resolveDefs([defaults, legacy]).issues, 'issues').toStrictEqual([
+    '/w/p/.claude/brewtools/manager/prompts/planmode.md: brewtools file: its text is added in plan mode; to clear this, move it to placeholders/m.plan.md with plan: add',
+  ])
+})
+
+test('GIVEN files whose name an earlier file of the same part holds WHEN layers resolve THEN their mode warnings say shadowed and not sent, never sent in every mode', async () => {
+  const out = resolveDefs([
+    layer('default', 'native', { m: '---\nname: m\n---\nM', 'm.plan': '---\nname: m\nplan: add\n---\nADD' }),
+    layer('project', 'native', { foo: '---\nname: m\nwhen: plan\nplan: add\n---\nPLANX', 'bar.plan': '---\nname: m\n---\nBAR', 'q.plan': 'Q1', 'z.plan': '---\nname: q\n---\nQ2' }),
+  ])
+
+  expect(out.issues, 'issues').toStrictEqual([
+    'project/bar.plan.md: shadowed by default/m.plan.md; not sent',
+    'project/foo.md: shadowed by default/m.md; not sent',
+    'project/q.plan.md: no q.md; sent in every mode',
+    'project/z.plan.md: shadowed by project/q.plan.md; not sent',
+  ])
 })
 
 test('GIVEN every shipped definition WHEN parsed THEN there are no front-matter issues and no empty body', async () => {
