@@ -1,16 +1,16 @@
 {
   "gif": {
     "file": "placeholders-full-text.gif",
-    "bytes": 3041742,
-    "sha256": "9ce907b88ba17221b8e7a6663686f10d3135a2351d7f8ab17cdb7c945e3989af",
+    "bytes": 3145361,
+    "sha256": "05335beb73eb44b08b6a2f8e495d92c638605c59875d52b770aaa558eccf6a76",
     "width": 800,
     "height": 648,
     "seconds": 26
   },
   "sources": {
     "render.html": "66bf935f460d6b8bdc55b170e13e8c75b303230db57a7540f3120486972c7409",
-    "placeholders-full-text.story.js": "15ac6a502976b423478e3fb0fbd48e41fe2a17f64158212d2a0275a40ae96178",
-    "placeholders-full-text.data.js": "e5952d5d4b34ace5f398f19241da627b05ca72108c3b2e092c3b1203a91d8919",
+    "placeholders-full-text.story.js": "4eac326fa9255f7f8b05ed5ef89ef61064bfc568079b3560276d6ff475d12886",
+    "placeholders-full-text.data.js": "03c05d49876ec38bc49bbdf1219c356f7dcd404ef868bc7d219bbcb39da06117",
     "record-gifs.mjs": "cba6693c2afb098d856d1f50e5833a965105476d8489b15d9a08bb0602d875d7"
   },
   "ccVersion": "2.1.301",
@@ -21,5 +21,5 @@
     "gifsicle": "1.96",
     "node": "v24.19.0"
   },
-  "recorded": "2026-10-16T09:24:10.501Z"
+  "recorded": "2026-10-16T11:01:47.186Z"
 }

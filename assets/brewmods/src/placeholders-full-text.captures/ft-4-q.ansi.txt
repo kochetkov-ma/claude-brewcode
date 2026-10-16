@@ -2,28 +2,28 @@
 [38;5;174m▝▜[48;5;16m█████[49m█▀[39m  [38;5;246mOpus[39m [38;5;246m5.5[39m [38;5;246m·[39m [38;5;246mClaude[39m [38;5;246mMax[39m
 [38;5;174m ▝▝[39m   [38;5;174m▝▝[39m   [38;5;246m~/brewery[39m
 
-[38;5;153m++m[38;5;246m · Claude receives these lines now:[39m                                              [38;5;246m[-][39m
-  [1mUser typed `++m` — Manager mode is active for this turn:[0m
-
-  [ROLE: MANAGER]
-
-  Manage; never code/build/test/hand-debug: the main context is for orchestration.
-
-  Protocol: 1) TaskList; graph exists -> reuse it, else TaskCreate the full graph
-  before any work. 2) addBlockedBy/addBlocks only for real data-handoffs, else
-  parallel. 3) TaskUpdate owner, then launch. 4) Validate reports, integrate;
-  completed only when truly done; failure -> follow-up task + re-delegate. 5) all
-  code written -> final task: simplify, strip over-engineering.
-  No Task tools (CLAUDE_CODE_ENABLE_TODO_TOOLS=1 unset) -> same numbered graph
-  in the plan or .claude/features/<task>.md.
-  [38;5;246m... 16 more lines · whole text: /placeholders show ++m[39m
+[1m[38;5;153m++m[0m[38;5;246m · Claude receives these lines now:[39m                                              [38;5;246m[-][39m
+  [1m[38;5;231mUser typed `++m` — Manager mode is active for this turn:[0m
+  [1m[38;5;231m [0m
+  [1m[38;5;231m[ROLE: MANAGER][0m
+  [1m[38;5;231m [0m
+  [1m[38;5;231mManage; never code/build/test/hand-debug: the main context is for orchestration.[0m
+  [1m[38;5;231m [0m
+  [1m[38;5;231mProtocol: 1) TaskList; graph exists -> reuse it, else TaskCreate the full graph[0m
+  [1m[38;5;231mbefore any work. 2) addBlockedBy/addBlocks only for real data-handoffs, else[0m
+  [1m[38;5;231mparallel. 3) TaskUpdate owner, then launch. 4) Validate reports, integrate;[0m
+  [1m[38;5;231mcompleted only when truly done; failure -> follow-up task + re-delegate. 5) all[0m
+  [1m[38;5;231mcode written -> final task: simplify, strip over-engineering.[0m
+  [1m[38;5;231mNo Task tools (CLAUDE_CODE_ENABLE_TODO_TOOLS=1 unset) -> same numbered graph[0m
+  [1m[38;5;231min the plan or .claude/features/<task>.md.[0m
+  [38;5;246m... 16 more lines · whole text: [4m[38;5;231m/placeholders show ++m[0m[38;5;246m or [4m[38;5;231m++m?[0m[38;5;246m alone [38;5;231m[Enter][39m
   [38;5;246mnot sent now · plan mode adds 29 lines[39m
-[38;5;246mclose: move the caret off ++m · send as typed: ++/[39m
+[38;5;246mclose: [4m[38;5;231mmove the caret off ++m[0m[38;5;246m · send as typed: [4m[38;5;231m++/[0m
 
 [38;5;244m────────────────────────────────────────────────────────────────────────────────────────
 [39m❯ [4m[38;5;153m++m[0m?
 [38;5;244m────────────────────────────────────────────────────────────────────────────────────────
-[39m  [38;5;246m⏸ manual mode on[39m
+[39m  [38;5;246m⏸ manual mode on[39m                                                  [38;5;246m◐ medium · /effort[39m
 
 
 

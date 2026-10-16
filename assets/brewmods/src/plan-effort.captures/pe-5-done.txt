@@ -7,10 +7,10 @@
 
   Read 1 file (ctrl+o to expand)
 
-⏺ README.md is a short intro to the repo, "Homebrew recipes and fermentation logs", with
-  a list of two batches: 01 pale ale and 02 stout.
+⏺ It's a short README for a homebrew project ("brewery"), covering recipes and
+  fermentation logs, with a batch list of 01 pale ale and 02 stout.
 
-✻ Churned for 6s · done 10:04 AM
+✻ Crunched for 8s · done 11:50 AM
 plan mode · effort xhigh for this mode · change: /plan-effort <level>               [-]
 
 ────────────────────────────────────────────────────────────────────────────────────────

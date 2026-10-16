@@ -28,7 +28,7 @@ window.PH_STORY = {
   ],
   // the model turn, real seconds (pe-timings.txt) / shown span
   skips: [
-    { at: 9.0, until: 10.2, factor: 4.5 },
+    { at: 9.0, until: 10.2, factor: 7.3 },
   ],
   captions: [
     [0, 'Manual mode, session effort <k>high</k>'],

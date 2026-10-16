@@ -5,7 +5,7 @@
 
 ❯ what does README.md cover? one line
 
-· Transfiguring…
+✢ Generating…
 plan mode · effort xhigh for this mode · change: /plan-effort <level>               [-]
 
 ────────────────────────────────────────────────────────────────────────────────────────

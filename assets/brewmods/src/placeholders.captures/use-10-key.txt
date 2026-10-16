@@ -1,4 +1,4 @@
-✻ Worked for 8s · done 9:42 AM
+✻ Crunched for 8s · done 11:49 AM
 placeholders 2                                                                      [-]
 ++db  Always use the staging DB · Claude receives these lines now:
   always use the staging DB
@@ -11,7 +11,7 @@ placeholders 2                                                                  
   1) Review - finding = defect with path:line + evidence (failing command/input).
   2) Double-check - reproduce each finding.
   3) Fix - confirmed findings only.
-  ... 3 more lines · whole text: /placeholders show ++r
+  ... 3 more lines · whole text: /placeholders show ++r or ++r? alone [Enter]
 more: put the caret on ++db · send as typed: ++/ · help: /placeholders help
 
 ────────────────────────────────────────────────────────────────────────────────────────

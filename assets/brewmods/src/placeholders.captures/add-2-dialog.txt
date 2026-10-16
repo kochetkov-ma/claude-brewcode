@@ -1,3 +1,5 @@
+     /placeholders show ++r, or ++r? alone + Enter twice · /placeholders list for all
+     Send one message as typed: put ++/ anywhere in it
      Add, change, remove: /placeholders <your words> in any language, e.g. /placeholders
      add ++db: use the staging DB
      Where: global = all projects (~/.claude/placeholders), project = this one
@@ -21,20 +23,18 @@
      on plan addon, active in Plan mode only
      # [ADDON: ANTI-DRIFT CRON PLAN]
      … +112 lines (ctrl+o to expand)
-
 ────────────────────────────────────────────────────────────────────────────────────────
  ☐ Placeholder
 
 Save ++db as drafted?
 
-❯ 1. Save as drafted              ┌──────────────────────────────────────────┐
-    (Recommended)                 │ always use the staging DB                │
-  2. Change it                    └──────────────────────────────────────────┘
-
-                                  Notes: press n to add notes
-
+❯ 1. Save as drafted (Recommended)
+     Text: "always use the staging DB"
+  2. Change it
+     Edit the name or text before saving
+  3. Type something.
 ────────────────────────────────────────────────────────────────────────────────────────
-  Chat about this
+  4. Chat about this
 
-Enter to select · ↑/↓ to navigate · n to add notes · Esc to cancel
+Enter to select · ↑/↓ to navigate · Esc to cancel
 

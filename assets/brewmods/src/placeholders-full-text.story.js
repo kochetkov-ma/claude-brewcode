@@ -1,8 +1,8 @@
-// Storyboard of placeholders-full-text.gif (keys verified live on CC 2.1.301, main-screen TUI, mod 6.9.3): times in s.
+// Storyboard of placeholders-full-text.gif (keys verified live on CC 2.1.301, main-screen TUI, mod 6.9.4): times in s.
 // Same renderer and gates as placeholders.story.js; window = this story's loop bounds for record-gifs.mjs --check.
 window.PH_STORY = {
   term: { cols: 88, rows: 40 },
-  aria: 'Claude Code prompt: type ++m and the caret on it shows the lines Claude receives, cut to fit with a "... more lines · whole text: /placeholders show ++m" row; type ? to make ++m?, Enter fills the box with /placeholders show ++m and sends nothing to Claude, Enter again prints the whole ++m text in the chat; scrolled up it starts with "++m · full text as sent"',
+  aria: 'Claude Code prompt: type ++m and the caret on it shows the lines Claude receives, cut to fit with a "... more lines · whole text: /placeholders show ++m or ++m? alone [Enter]" row; type ? to make ++m?, Enter fills the box with /placeholders show ++m and sends nothing to Claude, Enter again prints the whole ++m text in the chat; scrolled up it starts with "++m · full text as sent"',
   window: [20, 30],
   loop: 26, end: 25, fps: 10, still: 4,
   chapters: [[0, 'type ++m'], [2.0, 'cut to fit'], [9.0, '++m?'], [11.5, 'enter'], [16.5, 'enter again']],
@@ -41,7 +41,7 @@ window.PH_STORY = {
   facts: [
     { screen: 'ft-3-m', has: '❯\u00a0++m\n', why: '++m typed, caret on it' },
     { screen: 'ft-3-m', has: '++m · Claude receives these lines now:', why: 'focus head (band.tsx)' },
-    { screen: 'ft-3-m', has: ' more lines · whole text: /placeholders show ++m\n', why: 'cut row' },
+    { screen: 'ft-3-m', has: ' more lines · whole text: /placeholders show ++m or ++m? alone [Enter]\n', why: 'cut row (band.tsx)' },
     { screen: 'ft-3-m', has: '  not sent now · plan mode adds ', why: 'plan note' },
     { screen: 'ft-4-q', has: '❯\u00a0++m?\n', why: '? typed right after the token' },
     { screen: 'ft-5-fill', has: '++m? = /placeholders show ++m · not sent to Claude ·', why: 'P1 notice (show.ts)' },
