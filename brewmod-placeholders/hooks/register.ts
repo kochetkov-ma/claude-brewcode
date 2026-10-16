@@ -25,6 +25,9 @@ export const register: Register = (on, options) => {
   const prefix = check.prefix
   const cache = newRegistryCache()
   let hasTools = false // the model tools were registered at session.start
+  // Settles with hasTools once session.start's registration ends: a command typed right after launch waits for it.
+  let toolsSettled: (v: boolean) => void = () => undefined
+  const toolsReady = new Promise<boolean>((resolve) => (toolsSettled = resolve))
   let isPlan = false // permission_mode of the last state file hooks/inject.mjs wrote for this session
   let compiled: Compiled | null = null
   let published: Registry | null = null
@@ -78,6 +81,7 @@ export const register: Register = (on, options) => {
     } catch {
       hasTools = false
     }
+    toolsSettled(hasTools)
     if (check.warning !== null) $.ui.toast(check.warning)
     const reg = await settle(
       loadRegistry(
@@ -271,15 +275,17 @@ export const register: Register = (on, options) => {
     const reg = await settle(loadRegistry({ exists: (p) => $.fs.exists(p), list: (p) => $.fs.list(p), read: (p) => $.fs.read(p) }, roots, cache), (t) => $.ui.toast(t, { timeoutMs: 8000 }), () => $.ui.invalidate('ui.render'))
     if (reg === null) return { text: FILES_GONE }
     adopt(reg)
+    // A command run before the tools registered waits for them, at most 3 s.
+    const withTools = hasTools || (await Promise.race([toolsReady, new Promise<boolean>((resolve) => $.clock.after(3000, () => resolve(false)))]))
     // status, help, show and list answer here; the rest goes to Claude.
     const act = parseArgs(e.args, prefix, reg.defs.map((d) => d.name))
     const dirs = shownDirs(roots, home)
     const one = oneLayer(reg, roots)
-    if (act.kind === 'help') return { text: helpText(prefix, dirs, hasTools) }
+    if (act.kind === 'help') return { text: helpText(prefix, dirs, withTools) }
     if (act.kind === 'list' || act.kind === 'show') return { text: fullText(one, act.kind === 'list' ? null : act.names, prefix, isPlan) }
-    const status = statusText(one, prefix, dirs, hasTools)
+    const status = statusText(one, prefix, dirs, withTools)
     if (act.kind === 'status') return { text: status }
-    if (!hasTools) return { text: `${status}\n${NEEDS_NEW_CC}` }
+    if (!withTools) return { text: `${status}\n${NEEDS_NEW_CC}` }
     // submit is refused inside command.run: hand off from a timer; fill is the fallback when submit refuses.
     const text = handoffText(act.request, prefix, act.scope)
     $.clock.after(250, () => {

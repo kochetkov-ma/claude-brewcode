@@ -157,6 +157,9 @@ export const CASES = [
   ...matrix('acc-undo', 4, 'hello ++r, Tab takes ++rr: band names ++rr at once; undo drops the token: band gone', () => [t('hello '), c([P('hello')]), t('++r'), c([M('++rr')]), k('Tab'), c([P('hello ++rr'), B('placeholders 1'), B(COMPACT('++rr'))], [B(R_HEAD)]), k('C-_'), c([P(/^❯ (?:hello)?\s*$/m)], [B(COMPACT_ANY), B(FOCUS_ANY)])]),
   // The recalled entry names ++r while the last edit saw ++m (then an empty box): a band of ++r can only come from the recall.
   ...matrix('acc-hist', 4, '/placeholders show ++r sent; ++m typed and killed; Up recalls the command: ++r focus band at once', () => [t('/placeholders show ++r'), enter(), c([P(/^❯\s*$/m)], [], { debugForbid: [SUBMITTED] }), t('++m'), c([B(M_HEAD)]), k('C-u'), c([P(/^❯\s*$/m)], [B(M_HEAD)]), k('Up'), c([P('/placeholders show ++r'), B(R_HEAD), B(FOCUS('++r'))], [B(M_HEAD)])]),
+  // P1 drop: the engine puts ++r? back, then the fill lands; the band must be the filled line's, as typed by hand (acc-p1-typed, also run on 6.9.4), never the dropped draft's focus.
+  ...matrix('acc-p1', 4, 'Enter on ++r? alone: filled show command, compact ++r band of the filled line, no stale focus', () => [t('++r?'), c([B(FOCUS('++r'))]), k('Enter'), c([P('/placeholders show ++r'), B('placeholders 1'), B(COMPACT('++r'))], [B(FOCUS_ANY), B(R_HEAD)], { debugForbid: [SUBMITTED] })]),
+  ...matrix('acc-p1-typed', 4, '/placeholders show ++r + space typed by hand: compact ++r band', () => [t('/placeholders show ++r '), c([P('/placeholders show ++r'), B('placeholders 1'), B(COMPACT('++r'))], [B(FOCUS_ANY), B(R_HEAD)])]),
 
   // CP1: band at sizes outside the matrix, default TUI.
   { id: 'r-end-menu-80', cp: 1, session: 'd80', title: '++r at 80x24, typeahead open: capped; ? would not show it all, so the show hint', steps: [t('++r'), c([B(R_TOP), B(CUT('r')), M('++rr')], [B(R_LAST), B(QUERY_R), B(COMPACT_ANY)])] },
