@@ -365,16 +365,31 @@ try {
   const relRun = actionsBash(relStep, { GITHUB_REF_NAME: 'v9.8.7', GITHUB_OUTPUT: join(relDir, 'output'), RUNNER_TEMP: runnerTemp }, relDir);
   const relBody = join(runnerTemp, 'release-body.md');
   check(existsSync(relBody), true, 'release.yml: step writes $RUNNER_TEMP/release-body.md ' + relRun.stderr);
+  const builtBody = readFileSync(relBody, 'utf8');
   check({
     status: relRun.status, stderr: relRun.stderr, runnerTemp: spawnSync('ls', [runnerTemp], { encoding: 'utf8' }).stdout,
-    body: readFileSync(relBody, 'utf8'),
+    body: builtBody,
     bodyPath: step(release, 'Create GitHub Release').with.body_path,
     fixedTmp: releaseSrc.split('\n').filter((line) => line.includes('/tmp')),
   }, {
     status: 0, stderr: '', runnerTemp: 'release-body.md\n',
-    body: '## v9.8.7 (2026-10-13)\n- fixture note\n\n---\n\n' + footer,
+    body: '## v9.8.7 (2026-10-13)\n- fixture note\n\n---\n\n' + footer.replaceAll('__TAG__', 'v9.8.7'),
     bodyPath: '${{ runner.temp }}/release-body.md', fixedTmp: [],
-  }, 'release.yml: whole body = changelog section + separator + footer bytes, in $RUNNER_TEMP, no fixed /tmp path');
+  }, 'release.yml: whole body = changelog section + separator + footer with __TAG__ -> tag, in $RUNNER_TEMP, no fixed /tmp path');
+  check(builtBody.split('__TAG__').length - 1, 0, 'release.yml: built body from the live footer keeps no __TAG__ placeholder');
+  // GIVEN a footer with __TAG__ twice on one line WHEN the step runs THEN both become the tag (sed /g).
+  const tagDir = join(temp, 'release-tag-footer'), tagTemp = join(temp, 'runner-temp-tag-footer');
+  mkdirSync(join(tagDir, '.github'), { recursive: true }); mkdirSync(tagTemp);
+  writeFileSync(join(tagDir, 'RELEASE-NOTES.md'), NOTES);
+  writeFileSync(join(tagDir, '.github/release-footer.md'), 'Notes for __TAG__: https://github.com/o/r/releases/tag/__TAG__\n');
+  const tagRun = actionsBash(relStep,
+    { GITHUB_REF_NAME: 'v9.8.7', GITHUB_OUTPUT: join(tagDir, 'output'), RUNNER_TEMP: tagTemp }, tagDir);
+  const tagBody = readFileSync(join(tagTemp, 'release-body.md'), 'utf8');
+  check({ status: tagRun.status, stderr: tagRun.stderr, body: tagBody, leftover: tagBody.split('__TAG__').length - 1 }, {
+    status: 0, stderr: '',
+    body: '## v9.8.7 (2026-10-13)\n- fixture note\n\n---\n\nNotes for v9.8.7: https://github.com/o/r/releases/tag/v9.8.7\n',
+    leftover: 0,
+  }, 'release.yml: both __TAG__ tokens in one footer line are replaced with the release tag, none left');
   // GIVEN no .github/release-footer.md WHEN the step runs as Actions does THEN it fails before the preview.
   const noFooterDir = join(temp, 'release-no-footer'), noFooterTemp = join(temp, 'runner-temp-no-footer');
   mkdirSync(noFooterDir); mkdirSync(noFooterTemp);

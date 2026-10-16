@@ -12,7 +12,7 @@ const REPO = join(SCRIPTS, '..', '..');
 const VER = JSON.parse(readFileSync(join(REPO, 'brewcode/.claude-plugin/plugin.json'), 'utf8')).version;
 const OLD = '0.0.1';
 const ID = 'brewcode@claude-brewcode';
-const OTHERS = ['brewdoc', 'brewtools', 'brewui', 'brewmod-plan-effort', 'brewmod-placeholders'];
+const OTHERS = ['brewdoc', 'brewtools', 'brewui', 'brewmod-placeholders', 'brewmod-plan-effort'];
 
 // Stub `claude`: logs {cwd,args}; `update` moves rows of that scope to $STUB_VERSION; $STUB_LIST_FAIL fails `list`, $STUB_FAIL_RC sets the failure rc.
 const STUB = `#!/usr/bin/env node
@@ -282,7 +282,7 @@ function runIn(root, sb, args) {
 // GIVEN a marketplace.json listing the plugins in reverse order WHEN update-plugin.sh all --dry-run runs THEN versions are read by name and all six rows match.
 {
     const sb = sandbox();
-    const root = scratchRepo(['brewmod-placeholders', 'brewmod-plan-effort', 'brewui', 'brewtools', 'brewdoc', 'brewcode']);
+    const root = scratchRepo(['brewmod-plan-effort', 'brewmod-placeholders', 'brewui', 'brewtools', 'brewdoc', 'brewcode']);
     const r = runIn(root, sb, ['all', '--dry-run']);
     assert.deepEqual({ rc: r.rc, table: r.lines.filter(l => l.startsWith('| brew')) },
         { rc: 0, table: ['brewcode', ...OTHERS].map(n => `| ${n} | ${VER} | ${VER} | OK |`) },
@@ -304,7 +304,7 @@ for (const args of [['brewmod-placeholders'], ['all']]) {
     const sb = sandbox();
     const r = run(sb, 'update-plugin.sh', ['brewmod-nope']);
     assert.deepEqual({ rc: r.rc, errors: r.lines.filter(l => l.startsWith('ERROR')) },
-        { rc: 1, errors: ["ERROR: Unknown argument 'brewmod-nope'. Use: brewcode | brewdoc | brewtools | brewui | brewmod-plan-effort | brewmod-placeholders | all | --dry-run | --help"] },
+        { rc: 1, errors: ["ERROR: Unknown argument 'brewmod-nope'. Use: brewcode | brewdoc | brewtools | brewui | brewmod-placeholders | brewmod-plan-effort | all | --dry-run | --help"] },
         'THEN the unknown name is rejected with the full list');
 }
 console.log('suite-project-scope: PASS');

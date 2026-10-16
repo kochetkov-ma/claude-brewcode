@@ -28,6 +28,11 @@ jobs:
         run: |
           # Strip "v" prefix from tag to get version number (e.g. v2.15.4 -> 2.15.4)
           TAG="${GITHUB_REF_NAME}"
+          # Strict vX.Y.Z: TAG is spliced into the footer sed below
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Release tag ${TAG} is not vX.Y.Z"
+            exit 1
+          fi
           VERSION="${TAG#v}"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
@@ -63,8 +68,8 @@ jobs:
           # Write changelog to the per-job private RUNNER_TEMP dir
           echo "$BODY" > "$RUNNER_TEMP/release-body.md"
 
-          # Append separator + install/docs footer (single source)
-          printf '\n---\n\n' >> "$RUNNER_TEMP/release-body.md" && cat .github/release-footer.md >> "$RUNNER_TEMP/release-body.md"
+          # Append separator + install/docs footer (single source), every __TAG__ -> release tag
+          printf '\n---\n\n' >> "$RUNNER_TEMP/release-body.md" && cat .github/release-footer.md | sed "s/__TAG__/${TAG}/g" >> "$RUNNER_TEMP/release-body.md"
 
           echo "Release body written to $RUNNER_TEMP/release-body.md"
           echo "--- Preview (first 20 lines) ---"

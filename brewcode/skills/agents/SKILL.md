@@ -135,7 +135,7 @@ For `status` mode the report is the Step 5 table.
 `create`: the ONE batch (max 4 questions per invocation) asks only what the prompt leaves open:
 (Q1) scope: Project `.claude/agents/` / Global `~/.claude/agents/` / Plugin `brewcode/agents/` -
 Plugin only when `test -d brewcode/.claude-plugin` succeeds (elsewhere it writes a junk
-`<cwd>/brewcode/agents/<name>.md`); never under `${CLAUDE_PLUGIN_ROOT}` (installed, read-only);
+`<cwd>/brewcode/agents/<name>.md`); never under the installed plugin root (read-only);
 (Q2) model: sonnet (Recommended) / opus-or-fable / haiku / inherit (`model: inherit`, not omission);
 (Q3) update CLAUDE.md agents table? yes/no. Description: the Description Budget of
 `references/agent-template.md` (<=150 tokens, lead <=160 chars, 3-7 triggers); <=100 chars is an
