@@ -73,6 +73,8 @@ export const register: Register = (on, options) => {
     try {
       for (const t of tools(prefix)) await $.tool.register({ name: t.name, description: t.description, inputSchema: t.inputSchema, isDeferred: false })
       hasTools = true
+      // A band drawn while the tools were registering lacks the `P<name>?` hand-off: draw it again.
+      $.ui.invalidate('ui.render')
     } catch {
       hasTools = false
     }

@@ -1,6 +1,6 @@
 import { test, expect } from 'claude-code/testing'
 import type { On } from 'claude-code'
-import { BAND, ENGINE_NODE, ROOT, STATE_FILE, bandProps, bandTexts, bootBand, box, textsOf, defaultsTree, typed, type Tree } from './layer-io'
+import { BAND, ENGINE_NODE, ROOT, STATE_FILE, bandProps, bandTexts, bootBand, box, textsOf, defaultsTree, typed, withTools, type Tree } from './layer-io'
 import { autoBudget, bandBudget, bandRows, cells, clip, shareRows, treeRows } from '../hooks/lib/band'
 
 const SURFACES = ['terminal', 'desktop'] as const
@@ -293,6 +293,16 @@ for (const [mode, expected] of [['plan', ['ui.render']], ['default', []]] as con
     expect(log, `invalidations for a ${mode} state file at session.start`).toEqual([...expected])
   })
 }
+
+test('GIVEN the mod tools register at session start WHEN it settles THEN the band is invalidated once, so a band drawn meanwhile gains the ++m? hand-off', async ($, on) => {
+  const log: string[] = []
+  await boot($, on, '++zz', (o) => {
+    invalidateRecorder(log)(o)
+    withTools(o)
+  })
+
+  expect(log, 'invalidations with tools and a default-mode start').toEqual(['ui.render'])
+})
 
 test('GIVEN the state read fails WHEN the band mounts THEN it fails open to the engine tree', async ($, on) => {
   const down = { value: false }
