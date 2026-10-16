@@ -2,6 +2,47 @@
 
 ---
 
+## v6.9.5 (2026-10-16)
+
+> Docs: [placeholders](https://doc-claude.brewcode.app/mods/placeholders/) | [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/) | [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [task-board-setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) | [prompt-injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/)
+
+Placeholders get two kinds only, `+++` works in every mode, and everything plan-mode is drawn in Claude Code's plan-mode colour.
+
+**Requirement:** both mods require Claude Code 2.1.301+ (run `claude update` first).
+
+**Migration:** user files with `when: plan` are now sent in every mode; check the `/placeholders status` warnings.
+
+### brewmod-placeholders
+
+#### Fixed
+
+- **band after accept:** the band shows at once after a typeahead accept (Tab/Enter), a history recall or an undo.
+- **`/placeholders` at launch:** run right after launch, it waits for the mod tools.
+- **remove/save:** refuse to leave a plan part that would then be sent in every mode.
+- **empty plan part:** adds nothing in the band, status and show.
+- **warnings:** the legacy plan warning names the real brewtools file; a shadowed file is warned as not sent.
+
+#### Changed
+
+- **two kinds only:** `<name>.md` is sent in every mode; an optional `<name>.plan.md` (`plan: add`) adds its text in plan mode. Plan-only, not-plan and replace are removed; old files load as every-mode or an addition, with one status warning per file.
+- **`+++` in every mode:** outside plan mode it creates one anti-drift cron for the current task; in plan mode it plans the cron as an execution step. The anti-drift text lives only in `+++` (removed from `m.plan.md`).
+- **plan-mode colour:** plan-mode items are drawn in Claude Code's plan-mode colour (teal); the sent plan text is bold.
+- **help/status:** short two-kind texts.
+
+### brewmod-plan-effort
+
+#### Changed
+
+- **plan-mode row:** drawn in Claude Code's plan-mode colour (was yellow).
+
+### brewtools
+
+#### Changed
+
+- **manager-setup / task-board-setup docs:** `+++` works in every mode.
+
+---
+
 ## v6.9.4 (2026-10-16)
 
 > Docs: [placeholders](https://doc-claude.brewcode.app/mods/placeholders/) | [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/) | [mods overview](https://doc-claude.brewcode.app/mods/overview/) | [installation](https://doc-claude.brewcode.app/installation/) | [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/)
