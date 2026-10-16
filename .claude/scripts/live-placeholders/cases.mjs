@@ -153,8 +153,8 @@ export const CASES = [
   // Typeahead accept, recall and undo change the box without prompt.edit: prompt.change redraws the band at once (the box underline still waits for the next key).
   ...matrix('acc-tab', 4, '++ then Down x4 onto ++r, Tab takes it: band at once, no extra key', () => [t('++'), c([M('++a')]), k('Down', 4), c([M(/❯ \+\+r\s+Two-phase/)]), k('Tab'), c([P('++r'), B('placeholders 1'), B(COMPACT('++r'))], [M(RR_ROW), B(FOCUS_ANY)])]),
   ...matrix('acc-enter', 4, '++ then Down x4 onto ++r, Enter takes it: band at once, nothing submitted', () => [t('++'), c([M('++a')]), k('Down', 4), c([M(/❯ \+\+r\s+Two-phase/)]), k('Enter'), c([P('++r'), B('placeholders 1'), B(COMPACT('++r'))], [M(RR_ROW), B(FOCUS_ANY)], { debugForbid: [SUBMITTED] })]),
-  // Undo groups the typed burst with the accept (seen live): one undo empties the box.
-  ...matrix('acc-undo', 4, 'hello ++r, Tab takes ++rr: band names ++rr at once; undo empties the box: band gone', () => [t('hello '), c([P('hello')]), t('++r'), c([M('++rr')]), k('Tab'), c([P('hello ++rr'), B('placeholders 1'), B(COMPACT('++rr'))], [B(R_HEAD)]), k('C-_'), c([P(/^❯\s*$/m)], [B(COMPACT_ANY), B(FOCUS_ANY)])]),
+  // Undo may group the typed burst with the accept (seen live both ways): one undo leaves hello or an empty box.
+  ...matrix('acc-undo', 4, 'hello ++r, Tab takes ++rr: band names ++rr at once; undo drops the token: band gone', () => [t('hello '), c([P('hello')]), t('++r'), c([M('++rr')]), k('Tab'), c([P('hello ++rr'), B('placeholders 1'), B(COMPACT('++rr'))], [B(R_HEAD)]), k('C-_'), c([P(/^❯ (?:hello)?\s*$/m)], [B(COMPACT_ANY), B(FOCUS_ANY)])]),
   // The recalled entry names ++r while the last edit saw ++m (then an empty box): a band of ++r can only come from the recall.
   ...matrix('acc-hist', 4, '/placeholders show ++r sent; ++m typed and killed; Up recalls the command: ++r focus band at once', () => [t('/placeholders show ++r'), enter(), c([P(/^❯\s*$/m)], [], { debugForbid: [SUBMITTED] }), t('++m'), c([B(M_HEAD)]), k('C-u'), c([P(/^❯\s*$/m)], [B(M_HEAD)]), k('Up'), c([P('/placeholders show ++r'), B(R_HEAD), B(FOCUS('++r'))], [B(M_HEAD)])]),
 

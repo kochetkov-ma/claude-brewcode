@@ -143,10 +143,10 @@ export const register: Register = (on, options) => {
     return h.decorations.length === 0 ? r : { ...r, decorations: [...(r.decorations ?? []), ...h.decorations] }
   })
 
-  // A taken typeahead row, a history recall or an undo changes the box without prompt.edit: the band follows it here. No paint channel: the underline waits for the next key.
-  // A plugin's fill (the P1 show command, the hand-off fallback) keeps its old band.
+  // A taken row, a recall, an undo, a dropped draft put back or a fill change the box without prompt.edit: the band follows here.
+  // No paint channel here: the box underline waits for the next key.
   on('prompt.change', async ($, e, next) => {
-    if (e.origin.kind !== 'plugin') await publish(e.text, e.cursor, (v) => update($, viewAtom, () => v), (f) => update($, focusAtom, () => f))
+    await publish(e.text, e.cursor, (v) => update($, viewAtom, () => v), (f) => update($, focusAtom, () => f))
     return next(e)
   })
 

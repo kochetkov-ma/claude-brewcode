@@ -382,7 +382,7 @@ test('GIVEN an empty box WHEN a history recall puts fix ++m back (caret at its e
   expect(await bandTexts($, 40), 'recalled focus band').toEqual(['++m', RECV, M_HEAD, ' ', ...M_BODY, '... 16 more lines · whole text: /placeholders show ++m', M_NOTE, M_FOOT])
 })
 
-test('GIVEN box changes from the engine, history, undo and a plugin fill WHEN prompt.change runs THEN the atoms follow every change but the fill and are written only when they change', async ($, on) => {
+test('GIVEN box changes from the engine, history, undo and a plugin fill WHEN prompt.change runs THEN the atoms follow every change and are written only when they change', async ($, on) => {
   const writes: unknown[] = []
   on('state.set', (_$, e, next) => {
     writes.push({ key: e.key, value: e.value })
@@ -399,7 +399,7 @@ test('GIVEN box changes from the engine, history, undo and a plugin fill WHEN pr
   expect(writes, 'state writes').toEqual([
     { key: 'view', value: { tokens: [{ text: '++r', name: 'r', isKnown: true, start: 0, end: 3 }] } },
     { key: 'focus', value: { name: null, isQuery: false, isMenuOpen: false } },
-    { key: 'view', value: { tokens: [{ text: '++m', name: 'm', isKnown: true, start: 0, end: 3 }] } },
+    { key: 'view', value: { tokens: [{ text: '++m', name: 'm', isKnown: true, start: 19, end: 22 }] } },
     { key: 'focus', value: { name: 'm', isQuery: false, isMenuOpen: false } },
     { key: 'view', value: { tokens: [] } },
     { key: 'focus', value: { name: null, isQuery: false, isMenuOpen: false } },
