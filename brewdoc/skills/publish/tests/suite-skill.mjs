@@ -196,6 +196,25 @@ for (const [ns, days, entry, want, why] of [
   check(`validate.${JSON.stringify([ns, days, entry])}`, r.status, want, why);
 }
 {
+  // GIVEN LANG=en_US.UTF-8 with LC_ALL unset WHEN validating THEN collation never widens a-z, A-Z or 0-9 (bash 3.2 did).
+  const utf8 = { LANG: 'en_US.UTF-8', LC_ALL: undefined, LC_COLLATE: undefined, LC_CTYPE: undefined };
+  const probe = (code, vars) => { const r = sh(code, { cwd: BASE, env: { ...utf8, ...vars } }); return [r.status, r.out]; };
+  const nsMsg = 'FAILED: namespace must be 1-32 chars of a-z0-9-';
+  check('validate.locale.utf8', [
+    probe('bp_validate "$T_NS" 15 ""', { T_NS: 'My' }),
+    probe('bp_validate "$T_NS" 15 ""', { T_NS: 'xÄ' }),
+    probe('bp_validate "$T_NS" 15 ""', { T_NS: 'é' }),
+    probe('bp_validate my 15 "$T_ENTRY"', { T_ENTRY: 'é.html' }),
+    probe('bp_run_dir "$T_ID"', { T_ID: 'brewpage.é12345' }),
+    probe('bp_validate "$T_NS" 15 "$T_ENTRY"', { T_NS: 'my-site-2026', T_ENTRY: 'Sub/Page.html' }),
+  ], [
+    [1, nsMsg], [1, nsMsg], [1, nsMsg],
+    [1, 'FAILED: entry must be a plain relative file name'],
+    [1, 'FAILED: invalid publish run id'],
+    [0, ''],
+  ], 'uppercase and accented letters are rejected with the exact message in a UTF-8 locale, ASCII entry letters still pass');
+}
+{
   // Single-quoted substitution is what keeps the value inert: proof that the
   // BD02 vector does not fire even before bp_validate sees it.
   const r = sh(`NS='p$(id -un)x'; printf %s "$NS"`, { cwd: BASE });
