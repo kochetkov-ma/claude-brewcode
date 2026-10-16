@@ -1,6 +1,6 @@
 # Plugin Update
 
-Checks the installed brewcode plugins (brewcode, brewdoc, brewtools, brewui), installs missing ones and updates outdated ones at their installed scope. Installed mods `brewmod-plan-effort` and `brewmod-placeholders` are updated too; a mod is never installed by this skill. Ends with a reload notice.
+Checks the installed brewcode plugins (brewcode, brewdoc, brewtools, brewui), installs missing ones and updates outdated ones at their installed scope. Installed mods `brewmod-placeholders` and `brewmod-plan-effort` are updated too; a mod is never installed by this skill. Ends with a reload notice.
 
 ## Install
 
@@ -20,8 +20,11 @@ claude plugin install brewtools@claude-brewcode
 Manual equivalent:
 
 ```bash
-claude plugin marketplace update claude-brewcode && claude plugin update {brewcode,brewdoc,brewtools,brewui,brewmod-plan-effort,brewmod-placeholders}@claude-brewcode
+claude plugin marketplace update claude-brewcode
+for p in brewcode brewdoc brewtools brewui brewmod-placeholders brewmod-plan-effort; do claude plugin update "$p@claude-brewcode"; done
 ```
+
+One name per call: `claude plugin update` updates only the first name and silently ignores the rest (exit code 0), so the brace form `{a,b}@claude-brewcode` and a list of names both update a single plugin. Drop a mod from the loop if it is not installed.
 
 Run `/reload-plugins` afterwards: plugins are not active until reloaded. Discovery uses `claude plugin list --json` (CC 2.1.163+) with a `scripts/discover-plugins.sh` fallback; `check` is always safe to run.
 

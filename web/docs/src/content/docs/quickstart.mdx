@@ -8,7 +8,7 @@ import { Card, CardGrid, Callout, Steps, Spoiler, UpdateNotice } from '../../com
 
 # Quick Start
 
-The first ten minutes: conventions, domain agents, a task board and a project-tailored review skill. Run each setup generator in its own fresh session.
+The first ten minutes: conventions, domain agents, a task board and a project-tailored review skill. Run each setup generator in its own fresh session. New here? Follow the [recommended flow](/recommended-flow/).
 
 <Callout type="note" title="Before you begin">
   Install Claude Code and the plugins first: see [Installation](/installation/). A skill ending in `-setup` installs a mechanism you use afterwards; the ordered list lives in [Full Setup](/full-setup/).
@@ -89,7 +89,7 @@ claude plugin install brewtools@claude-brewcode</code></pre>
 | [Deep review](/brewcode/skills/superreview-setup/): invoke the generated skill | `/superreview` |
 | [Extract rules](/brewcode/skills/rules/) from conventions and commits | `/brewcode:rules "derive rules from .claude/convention/, one file per domain"` |
 | [Optimize prompts](/brewtools/skills/text-optimize/) and agents | `/brewtools:text-optimize .claude/agents/` |
-| [Add-on mods](/mods/overview/): plan-mode effort, prompt placeholders | `claude plugin install brewmod-plan-effort@claude-brewcode`<br />`claude plugin install brewmod-placeholders@claude-brewcode` |
+| [Add-on mods](/mods/overview/): prompt placeholders, plan-mode effort | `claude plugin install brewmod-placeholders@claude-brewcode`<br />`claude plugin install brewmod-plan-effort@claude-brewcode` |
 
 All 27 skills are listed on the plugin pages: [brewcode](/brewcode/overview/), [brewtools](/brewtools/overview/), [brewdoc](/brewdoc/overview/), [brewui](/brewui/overview/).
 

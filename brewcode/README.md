@@ -50,7 +50,7 @@ claude plugin update brewcode@claude-brewcode
 
 Dev mode (no install): `claude --plugin-dir ./brewcode`
 
-Optional [brewcode mods](https://doc-claude.brewcode.app/mods/overview/) (plan-mode effort, prompt placeholders): `claude plugin install brewmod-plan-effort@claude-brewcode`
+[Brewcode mods](https://doc-claude.brewcode.app/mods/overview/) (prompt placeholders, plan-mode effort): `claude plugin install brewmod-placeholders@claude-brewcode`
 
 ## Overview
 
@@ -111,7 +111,7 @@ Full docs: [doc-claude.brewcode.app/brewcode/overview](https://doc-claude.brewco
 |----------|------|
 | Skills, agents, hooks | [Skills](https://doc-claude.brewcode.app/brewcode/skills/) \| [Agents](https://doc-claude.brewcode.app/brewcode/agents/) \| [Hooks](https://doc-claude.brewcode.app/brewcode/hooks/) |
 | Setup workflow | [Full Setup](https://doc-claude.brewcode.app/full-setup/) |
-| Mods | [Mods overview](https://doc-claude.brewcode.app/mods/overview/) \| [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/) \| [placeholders](https://doc-claude.brewcode.app/mods/placeholders/) |
+| Mods | [Mods overview](https://doc-claude.brewcode.app/mods/overview/) \| [placeholders](https://doc-claude.brewcode.app/mods/placeholders/) \| [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/) |
 | Release Notes | [RELEASE-NOTES.md](../RELEASE-NOTES.md) |
 
 Author: Maksim Kochetkov | License: MIT

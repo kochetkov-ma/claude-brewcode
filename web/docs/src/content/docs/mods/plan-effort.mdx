@@ -1,7 +1,7 @@
 ---
 title: "Plan-mode effort"
 description: "xhigh while Claude plans, your session effort everywhere else. A plan-mode coloured row above the prompt shows when the raise is active."
-order: 41
+order: 42
 ---
 import { Badge, Callout, Card, CardGrid, InstallPrompt, SourceLink, Spoiler, UpdateNotice } from '../../../components/mdx';
 
@@ -11,8 +11,9 @@ import { Badge, Callout, Card, CardGrid, InstallPrompt, SourceLink, Spoiler, Upd
 
 By default `xhigh` while Claude plans. Your session effort everywhere else.
 
-<p align="center">
-  <img src="/brewmods/plan-effort.gif" alt="Claude Code terminal, session effort high: Shift+Tab into plan mode shows no row, the first prompt shows a toast and a teal plan-mode row (Claude Code's plan-mode colour) above the prompt, and Shift+Tab out removes the row." width="800" loading="lazy" />
+{/* Stable deep link, shared outside the docs: /mods/plan-effort/#demo. Keep the id. */}
+<p align="center" id="demo">
+  <img src="/brewmods/plan-effort.gif" alt="Claude Code terminal, session effort high: Shift+Tab into plan mode shows no row, the first prompt shows a toast and a teal plan-mode row (Claude Code's plan-mode colour) above the prompt, and Shift+Tab out removes the row." width="800" height="546" loading="lazy" />
   <br /><small>Recorded in a real Claude Code 2.1.301 session (session effort <code>high</code>), sped up where the title bar shows ⏩.</small>
 </p>
 
@@ -20,7 +21,11 @@ By default `xhigh` while Claude plans. Your session effort everywhere else.
 
 ## Install
 
-Requires Claude Code 2.1.301+ (run `claude update` first) and `node` on the `PATH`.
+<Callout type="warning" title="Update Claude Code first">
+  The mods need Claude Code 2.1.301 or newer. Check with `claude --version`; if it is lower, run `claude update`.
+</Callout>
+
+Needs `node` on the `PATH`.
 
 <InstallPrompt plugin="brewmod-plan-effort" mode="install" />
 

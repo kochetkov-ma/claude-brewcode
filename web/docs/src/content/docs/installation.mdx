@@ -20,7 +20,7 @@ These four products run in Claude Code: 27 skills, 9 agents, and 3 registered pl
 
 | Component | Version | Purpose |
 |-----------|---------|---------|
-| Claude Code CLI | 2.1.296 authoring reference | Runtime contracts checked for this release; not a declared minimum version |
+| Claude Code CLI | 2.1.296 authoring reference | Runtime contracts checked for this release; not a declared minimum for the four plugins. The [mods](#mods) have their own minimum |
 | Node.js | 20+ | Hook runtime |
 | macOS | 13+ | Supported OS |
 
@@ -103,14 +103,18 @@ These four products run in Claude Code: 27 skills, 9 agents, and 3 registered pl
   </li>
 </Steps>
 
-## Mods (optional)
+## Mods
 
-[Brewcode mods](/mods/overview/) are separate plugins that extend Claude Code itself through the hooks module API. They are not part of the four-plugin suite and are never installed with it. After adding the marketplace, install the ones you want: [`brewmod-plan-effort`](/mods/plan-effort/) and [`brewmod-placeholders`](/mods/placeholders/). Both require Claude Code 2.1.301+: run `claude update` first.
+[Brewcode mods](/mods/overview/) are separate plugins that extend Claude Code itself through the hooks module API. They are not part of the four-plugin suite and are never installed with it. After adding the marketplace, install the ones you want: [`brewmod-placeholders`](/mods/placeholders/) and [`brewmod-plan-effort`](/mods/plan-effort/).
+
+<Callout type="warning" title="Update Claude Code first">
+  The mods need Claude Code 2.1.301 or newer. Check with `claude --version`; if it is lower, run `claude update`.
+</Callout>
 
 ```bash
 claude update
-claude plugin install brewmod-plan-effort@claude-brewcode
 claude plugin install brewmod-placeholders@claude-brewcode
+claude plugin install brewmod-plan-effort@claude-brewcode
 ```
 
 Then run `/reload-plugins`. [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/) keeps installed mods current.

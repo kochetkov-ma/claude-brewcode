@@ -100,6 +100,6 @@ Full docs: [doc-claude.brewcode.app/brewdoc/overview](https://doc-claude.brewcod
 | Setup Status (brewcode) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) |
 | Release Notes | [RELEASE-NOTES.md](../RELEASE-NOTES.md) |
 
-Optional mods: [overview](https://doc-claude.brewcode.app/mods/overview/), [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/), [placeholders](https://doc-claude.brewcode.app/mods/placeholders/). Install: `claude plugin install brewmod-plan-effort@claude-brewcode`
+Mods: [overview](https://doc-claude.brewcode.app/mods/overview/), [placeholders](https://doc-claude.brewcode.app/mods/placeholders/), [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/). Install: `claude plugin install brewmod-placeholders@claude-brewcode`
 
 Author: Maksim Kochetkov | License: MIT

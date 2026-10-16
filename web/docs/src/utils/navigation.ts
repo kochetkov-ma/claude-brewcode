@@ -20,6 +20,7 @@ export const navigation: NavSection[] = [
     kind: 'start',
     items: [
       { title: 'Introduction', slug: 'getting-started' },
+      { title: 'Recommended flow', slug: 'recommended-flow' },
       { title: 'Installation', slug: 'installation' },
       { title: 'Quick Start', slug: 'quickstart' },
       { title: 'Full Setup', slug: 'full-setup' },
@@ -31,8 +32,8 @@ export const navigation: NavSection[] = [
     kind: 'mod',
     items: [
       { title: 'All mods', slug: 'mods/overview' },
-      { title: 'Plan-mode effort', slug: 'mods/plan-effort' },
       { title: 'Prompt placeholders', slug: 'mods/placeholders' },
+      { title: 'Plan-mode effort', slug: 'mods/plan-effort' },
       { title: 'Codewords', slug: 'brewtools/prompt-injection' },
     ],
   },

@@ -1,7 +1,7 @@
 ---
 title: "Prompt placeholders"
 description: "Prompt shortcuts for Claude Code: type ++r to attach a saved instruction block, read its text before you send, add your own with /placeholders."
-order: 42
+order: 41
 ---
 
 import { Badge, Callout, Card, CardGrid, InstallPrompt, SourceLink, Spoiler, UpdateNotice } from '../../../components/mdx';
@@ -10,28 +10,25 @@ import { Badge, Callout, Card, CardGrid, InstallPrompt, SourceLink, Spoiler, Upd
 
 <Badge variant="mod" text="Claude Code 2.1.301+" /> <Badge variant="secondary" text="Works on Team orgs" /> <Badge variant="primary" text="brewmod-placeholders" />
 
-<Callout type="warning" title="++m ++a ++r ++rr +++ do nothing?">
-  Since [brewtools v6.8.0](https://github.com/kochetkov-ma/claude-brewcode/releases/tag/v6.8.0) the prompt-injection codewords `++m`, `++a`, `++r`, `++rr` and `+++` live in the `brewmod-placeholders` mod, not in brewtools. The mod is easier to use and lets you add your own placeholders. Install it (Claude Code 2.1.301+: run `claude update` first), then run `/reload-plugins`:
-
-  ```bash
-  claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode && claude plugin install brewmod-placeholders@claude-brewcode
-  ```
-
-  Start here: [Quick start](#quick-start).
+<Callout type="note" title="Looking for ++m, ++r or +++?">
+  The codewords `++m`, `++a`, `++r`, `++rr` and `+++` come with this mod. Install it once and they work in every prompt, next to placeholders you write yourself: see [Install](#install) and the [Quick start](#quick-start).
 </Callout>
 
 Prompt shortcuts for Claude Code: type `++r` to attach a saved instruction block, read its text before you send, add your own with `/placeholders`.
 
-<p align="center">
-  <img src="/brewmods/placeholders.gif" alt="Claude Code terminal, real session: ++ opens the placeholder list, Tab inserts ++r, the caret on it shows the lines Claude receives, and /placeholders global add ++db saves your own after one question." width="800" loading="lazy" />
-  <br /><small>Real Claude Code 2.1.301 screens, sped up where the title bar shows ⏩. <code>++</code>, <code>↑</code>, <code>⇥</code> insert <code>++r</code>; <code>⏎</code> sends; <code>/placeholders global add ++db: …</code> saves your own.</small>
+{/* Stable deep link, shared outside the docs: /mods/placeholders/#demo. Keep the id. */}
+<p align="center" id="demo">
+  <img src="/brewmods/placeholders.gif" alt="Claude Code terminal, real session: ++ opens the placeholder list, Up and Tab insert ++r, the band above the prompt shows the lines Claude receives, and Enter sends: Claude reviews by the ++r rules. /placeholders global add ++db saves a new one after one question. In plan mode Claude answers with the ++db rule, the caret on ++m shows its teal plan-mode part, and ++/ sends the message exactly as typed." width="800" height="711" loading="lazy" />
+  <br /><small>Real Claude Code 2.1.301 screens, sped up where the title bar shows ⏩. <code>++</code> <code>↑</code> <code>⇥</code> insert a placeholder, the band shows what Claude receives, <code>⏎</code> sends; <code>⇧⇥</code> twice = plan mode; <code>++/</code> = send as typed.</small>
 </p>
 
 <SourceLink path="brewmod-placeholders/README.md" anchor="prompt-placeholders" variant="mod" />
 
 ## Install
 
-Requires Claude Code 2.1.301+: run `claude update` first.
+<Callout type="warning" title="Update Claude Code first">
+  The mods need Claude Code 2.1.301 or newer. Check with `claude --version`; if it is lower, run `claude update`.
+</Callout>
 
 <InstallPrompt plugin="brewmod-placeholders" mode="install" />
 
@@ -41,7 +38,7 @@ Then run `/reload-plugins`. Works on Team organizations.
 
 <InstallPrompt plugin="brewmod-placeholders" mode="update" />
 
-Update Claude Code first: `claude update` (**2.1.301+**). Dev mode, no install: `claude --plugin-dir ./brewmod-placeholders`. Needs `node` on the `PATH` (the bundled command hook runs as plain Node). Mods use the hooks module API, which is early access.
+Dev mode, no install: `claude --plugin-dir ./brewmod-placeholders`. Needs `node` on the `PATH` (the bundled command hook runs as plain Node). Mods use the hooks module API, which is early access.
 
 </Spoiler>
 
@@ -189,8 +186,9 @@ Your own placeholder can have a plan part too: see [Examples](#examples).
 
 ## Read the full text
 
-<p align="center">
-  <img src="/brewmods/placeholders-full-text.gif" alt="Claude Code terminal, real session: the caret on ++m shows its text cut to fit, then a teal `not sent now · plan mode adds 18 lines`; ? then Enter fills /placeholders show ++m, and Enter again prints the whole text in the chat without a Claude turn." width="800" loading="lazy" />
+{/* Stable deep link, shared outside the docs: /mods/placeholders/#full-text-demo. Keep the id. */}
+<p align="center" id="full-text-demo">
+  <img src="/brewmods/placeholders-full-text.gif" alt="Claude Code terminal, real session: the caret on ++m shows its text cut to fit, then a teal `not sent now · plan mode adds 18 lines`; ? then Enter fills /placeholders show ++m, and Enter again prints the whole text in the chat without a Claude turn." width="800" height="711" loading="lazy" />
   <br /><small>Real Claude Code 2.1.301 screens. Caret on <code>++m</code>; <code>?</code> and <code>⏎</code> fill the show command, nothing is sent; <code>⏎</code> again prints the whole text.</small>
 </p>
 

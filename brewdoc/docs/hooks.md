@@ -21,4 +21,4 @@ A `PreToolUse:Task` hook previously handled plugin root injection for subagents 
 | Plugin root injection (subagents) | not used -- named `BC_PLUGIN_ROOT` injection was removed in v4 | not needed -- native `${CLAUDE_PLUGIN_ROOT}` |
 | Session init / compaction recall | `session-start.mjs` (session init, permission_mode tag) and a compact-matcher SessionStart command, `compact-recall.mjs`, that re-anchors plan and task graph after a compaction; no per-prompt reminder | not needed |
 
-Optional [brewcode mods](https://doc-claude.brewcode.app/mods/overview/) (hooks-module add-ons) install separately.
+[Brewcode mods](https://doc-claude.brewcode.app/mods/overview/): hooks-module plugins, installed separately.

@@ -1,3 +1,7 @@
+<!-- Stable deep link, shared outside the repo: #demo. Keep the id. -->
+<p align="center">
+  <a id="demo"></a><img src="../assets/brewmods/plan-effort-bottle.gif" width="260" alt="ASCII glass fermenter, bubbling; the tape label reads xhigh · batch 04">
+</p>
 <p align="center">
   <img src="../assets/brewmods/plan-effort.gif" width="800" alt="Claude Code terminal, session effort high: Shift+Tab into plan mode shows no row, the first prompt shows a toast and a teal plan-mode row (Claude Code's plan-mode colour) above the prompt, and Shift+Tab out removes the row.">
   <br><sub>Recorded in a real Claude Code 2.1.301 session (session effort <code>high</code>), sped up where the title bar shows ⏩.</sub>
@@ -18,7 +22,7 @@
 
 ## Install
 
-Requires Claude Code 2.1.301+: run `claude update` first.
+> ❗ **Update Claude Code first:** the mods need Claude Code 2.1.301 or newer. Check with `claude --version`; if it is lower, run `claude update`.
 
 ```bash
 claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode && claude plugin install brewmod-plan-effort@claude-brewcode
@@ -30,12 +34,12 @@ Then run `/reload-plugins`.
 <summary>Update, dev mode, requirements</summary>
 
 ```bash
-claude update   # Claude Code 2.1.301+ first
+claude update   # Claude Code first
 claude plugin marketplace update claude-brewcode && claude plugin update brewmod-plan-effort@claude-brewcode
 claude --plugin-dir ./brewmod-plan-effort   # dev mode, no install
 ```
 
-- Claude Code 2.1.301+, updated with `claude update` (mods use the hooks module API, early access).
+- Mods use the hooks module API, which is early access.
 - `node` on the `PATH` (runs the bundled command hook `hooks/mode.mjs`).
 - Update anytime with `/brewtools:plugin-update`.
 

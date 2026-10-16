@@ -44,7 +44,7 @@ The dashboard groups its run-list into the same seven stages, shown in the Stage
 | 10 | 7 | [memory-sync-setup](/brewdoc/skills/memory-sync-setup/) | Sync auto-loaded context after agents, rules and tasks exist | `/brewdoc:memory-sync-setup install` |
 | 11 | 7 | [docsync-setup](/brewdoc/skills/docsync-setup/) | Track documents for staleness | `/brewdoc:docsync-setup install` |
 
-Optional after the run: the [brewcode mods](/mods/overview/) change Claude Code itself, for example `claude plugin install brewmod-plan-effort@claude-brewcode` raises effort while you plan ([plan-effort](/mods/plan-effort/)).
+After the run, add the [brewcode mods](/mods/overview/), which change Claude Code itself: `claude plugin install brewmod-placeholders@claude-brewcode` expands `++` tokens such as `++r` into instruction blocks ([placeholders](/mods/placeholders/)), and `claude plugin install brewmod-plan-effort@claude-brewcode` raises effort while you plan ([plan-effort](/mods/plan-effort/)).
 
 <Spoiler id="what-the-eleven-setups-install" title="What the eleven setups install">
 
@@ -109,7 +109,7 @@ Rerun `/brewcode:setup-status` after plugin updates and follow its commands to r
   <Card title="Brewcode overview" icon="document" href="/brewcode/overview/">Project analysis, conventions, agents, and review tools.</Card>
   <Card title="Setup Status" icon="eye" href="/brewcode/skills/setup-status/">Artifact probes, verdicts, and the run-list.</Card>
   <Card title="Task Board Setup" icon="graph" href="/brewtools/skills/task-board-setup/">Task methodology, graph reconciliation, and session anti-drift.</Card>
-  <Card title="Brewcode mods" icon="link" href="/mods/overview/">Optional plugins for plan effort and prompt placeholders.</Card>
+  <Card title="Brewcode mods" icon="link" href="/mods/overview/">Add-ons for prompt placeholders and plan effort.</Card>
   <Card title="GitHub source" icon="github" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/setup-status">The authoritative setup roster and run-list.</Card>
 </CardGrid>
 

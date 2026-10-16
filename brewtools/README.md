@@ -132,11 +132,11 @@ Full docs: [doc-claude.brewcode.app/brewtools/overview](https://doc-claude.brewc
 
 ## Claude Code mods
 
-Optional add-ons from the same marketplace: [overview](https://doc-claude.brewcode.app/mods/overview/), [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/), [placeholders](https://doc-claude.brewcode.app/mods/placeholders/). `brewmod-placeholders` provides the prompt codewords `++m`, `++a`, `++rr`, `++r` and `+++` (Claude Code 2.1.301+).
+Brewcode mods from the same marketplace: [overview](https://doc-claude.brewcode.app/mods/overview/), [placeholders](https://doc-claude.brewcode.app/mods/placeholders/), [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/). `brewmod-placeholders` provides the prompt codewords `++m`, `++a`, `++rr`, `++r` and `+++` (Claude Code 2.1.301+).
 
 ```bash
-claude plugin install brewmod-plan-effort@claude-brewcode
 claude plugin install brewmod-placeholders@claude-brewcode
+claude plugin install brewmod-plan-effort@claude-brewcode
 ```
 
 Author: Maksim Kochetkov | License: MIT

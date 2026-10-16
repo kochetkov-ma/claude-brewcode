@@ -1,0 +1,21 @@
+# brewcode
+
+> Claude Code plugin suite (4 plugins, 27 skills, 9 agents) and two mods: `++r`-style prompt placeholders and plan-mode effort.
+
+Requirement: the mods need Claude Code 2.1.301 or newer. Run `claude --version`; below that run `claude update`.
+
+## Docs
+
+- [Install or update, written for an LLM](https://raw.githubusercontent.com/kochetkov-ma/claude-brewcode/main/UPDATE.md): exact commands for a first install and for an update, what to tell the user after.
+- [Recommended flow](https://doc-claude.brewcode.app/recommended-flow/): install once, set up each project, work a task with `++m`, review with `++r`, share.
+- [Prompt placeholders mod](https://doc-claude.brewcode.app/mods/placeholders/): `++r`, `++m`, `+++` and your own, with `/placeholders`.
+- [Console recording of placeholders](https://brewcode.app/mods/placeholders.gif): `++` typeahead, the text shown before Enter, `/placeholders`.
+- [Getting started](https://doc-claude.brewcode.app/getting-started/): what the suite contains.
+- [Installation](https://doc-claude.brewcode.app/installation/): requirements, install methods, verifying, mods.
+- [Approaches](https://raw.githubusercontent.com/kochetkov-ma/claude-brewcode/main/APPROACHES.md): every hook, agent and injection the suite installs.
+
+## Optional
+
+- [Mods overview](https://doc-claude.brewcode.app/mods/overview/)
+- [Release notes](https://raw.githubusercontent.com/kochetkov-ma/claude-brewcode/main/RELEASE-NOTES.md)
+- [Source](https://github.com/kochetkov-ma/claude-brewcode)

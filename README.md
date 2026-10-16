@@ -1,66 +1,161 @@
 # claude-brewcode
 
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Plugin-blueviolet?logo=anthropic&logoColor=white)](https://code.claude.com)
+[![Mods](https://img.shields.io/badge/Mods-%2B%2Br_placeholders_%C2%B7_plan_effort-d97706?logo=claude&logoColor=white)](https://doc-claude.brewcode.app/mods/overview/)
+[![Approaches](https://img.shields.io/badge/Approaches-hooks_%C2%B7_agents_%C2%B7_injections-8b5cf6?logo=readme&logoColor=white)](APPROACHES.md)
 [![Latest Release](https://img.shields.io/github/v/release/kochetkov-ma/claude-brewcode?label=latest&color=blue)](https://github.com/kochetkov-ma/claude-brewcode/releases/latest)
 [![Documentation](https://img.shields.io/badge/Docs-doc--claude.brewcode.app-4A90D9?logo=bookstack&logoColor=white)](https://doc-claude.brewcode.app/getting-started/)
+[![GitHub stars](https://img.shields.io/github/stars/kochetkov-ma/claude-brewcode?style=flat&logo=github&label=stars)](https://github.com/kochetkov-ma/claude-brewcode/stargazers)
 
-**Claude Code plugin suite.** A regular session hands a big task to one agent and loses sight of it. Brewcode splits work into bounded units, gives every spawn a six-field brief, and re-anchors the plan and task graph after a compaction. Four plugins, 27 skills, 9 agents, plus two optional [mods](#claude-code-mods).
+**Claude Code mods:** type `++r` and get a whole review block, read it before you send, add your own with `/placeholders`; plan mode raises effort to `xhigh`. [See the mods](#claude-code-mods)
 
-[**Full documentation**](https://doc-claude.brewcode.app/getting-started/) | [**Approaches**](APPROACHES.md) -- every hook, agent and injection the suite installs.
+**Claude Code plugin suite.** Keeps big tasks on track: bounded units, a six-field brief per spawn, the plan re-anchored after a compaction. 4 plugins, 27 skills, 9 agents. [**Full documentation**](https://doc-claude.brewcode.app/getting-started/) | [**Approaches**](APPROACHES.md) | [**Update**](UPDATE.md)
 
 > **Security:** code is scanned on every commit ([Gitleaks](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/gitleaks.yml), [CodeQL](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/codeql.yml), [Semgrep](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/semgrep.yml)); no personal data is collected or transmitted.
 
 ## Install in 30 seconds
 
-Paste this prompt into any Claude Code session -- Claude will run the full install for you:
+❗ **Update Claude Code first:** mods need 2.1.301+, run `claude update`. Paste this prompt:
 
 ```
-Execute these commands in this Claude Code session, one by one, show full output for each, do not skip any, do not summarize:
-
+Run these commands in order in this session, show full output, then run `/reload-plugins`:
 1. claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
-2. claude plugin install brewcode@claude-brewcode
-3. claude plugin install brewdoc@claude-brewcode
-4. claude plugin install brewtools@claude-brewcode
-5. claude plugin install brewui@claude-brewcode
-
-After all commands succeed, run `/reload-plugins`. If `/reload-plugins` is unavailable, tell me to type `exit` and run `claude` again. Run the commands now.
+2. claude plugin install brewmod-placeholders@claude-brewcode
+3. claude plugin install brewmod-plan-effort@claude-brewcode
+4. claude plugin install brewcode@claude-brewcode && claude plugin install brewdoc@claude-brewcode
+5. claude plugin install brewtools@claude-brewcode && claude plugin install brewui@claude-brewcode
 ```
 
-Already installed? Update with this prompt:
+<details>
+<summary>Already installed? Update</summary>
+
+Short steps for you and your LLM, including what to try after the update: [UPDATE.md](UPDATE.md). Or paste this prompt:
 
 ```
-Execute these commands in this Claude Code session, one by one, show full output for each, do not skip any, do not summarize:
-
+Run these commands in order in this session, show full output, then run `/reload-plugins`:
 1. claude plugin marketplace update claude-brewcode
-2. claude plugin update brewcode@claude-brewcode
-3. claude plugin update brewdoc@claude-brewcode
-4. claude plugin update brewtools@claude-brewcode
-5. claude plugin update brewui@claude-brewcode
-
-After all commands succeed, run `/reload-plugins`. If `/reload-plugins` is unavailable, tell me to type `exit` and run `claude` again. Run the commands now.
+2. claude plugin update brewmod-placeholders@claude-brewcode
+3. claude plugin update brewmod-plan-effort@claude-brewcode
+4. claude plugin update brewcode@claude-brewcode && claude plugin update brewdoc@claude-brewcode
+5. claude plugin update brewtools@claude-brewcode && claude plugin update brewui@claude-brewcode
 ```
 
-> Mods are optional: see [Claude Code mods](#claude-code-mods) below. After install or update, run `/reload-plugins` (or `exit` + `claude`). Requirements and local install: [Installation](#installation).
+</details>
 
 ## Claude Code mods
 
-> Tiny add-ons that change how Claude Code behaves. One feature each, one command to install, no suite needed. [brewcode.app/mods](https://brewcode.app/mods/) | [Docs](https://doc-claude.brewcode.app/mods/overview/)
-
-[![GitHub stars](https://img.shields.io/github/stars/kochetkov-ma/claude-brewcode?style=flat&logo=github&label=stars)](https://github.com/kochetkov-ma/claude-brewcode/stargazers)
+> Tiny add-ons, one feature each, one command to install. [brewcode.app/mods](https://brewcode.app/mods/) | [Docs](https://doc-claude.brewcode.app/mods/overview/)
 
 <p align="center">
-  <img src="assets/brewmods/hub.gif" width="640" alt="Terminal-style animation of the brewcode mods hub: an ASCII brewcode logo and a four-slide walkthrough of the mods">
+  <a id="mods-demo"></a><img src="assets/brewmods/hub.gif" width="640" alt="Terminal-style animation of the brewcode mods hub: an ASCII brewcode logo and a four-slide walkthrough of the mods">
 </p>
 
 | Mod | Type this, get that | Install |
 |-----|---------------------|---------|
-| [brewmod-plan-effort](brewmod-plan-effort/README.md) | Enter plan mode: effort goes to `xhigh` while Claude plans. `/plan-effort max` sets the level | `claude plugin install brewmod-plan-effort@claude-brewcode` |
 | [brewmod-placeholders](brewmod-placeholders/README.md) | `++r` in a prompt: a whole review block. `/placeholders <what you want>`: Claude drafts your own | `claude plugin install brewmod-placeholders@claude-brewcode` |
+| [brewmod-plan-effort](brewmod-plan-effort/README.md) | Enter plan mode: effort goes to `xhigh` while Claude plans. `/plan-effort max` sets the level | `claude plugin install brewmod-plan-effort@claude-brewcode` |
 
 First time: `claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode`, then `/reload-plugins` after installing. Both mods require Claude Code 2.1.301+ (run `claude update` first) and `node` on the `PATH`.
 
 Team/Enterprise organizations, the brewtools 6.7.x double injection and legacy codeword overrides: [mods overview](https://doc-claude.brewcode.app/mods/overview/).
 
+## Top 5 features
+
+### ⚡ 1. Prompt placeholders: the headline feature
+
+Type `++r` and Claude receives a whole review-discipline block. A band above the prompt shows exactly the text it will get before you press Enter. Your own placeholders take one command: `/placeholders add ...`.
+
+<p align="center">
+  <a id="placeholders-demo"></a><img src="assets/brewmods/placeholders.gif" width="720" alt="Terminal-style recording of Claude Code: typing ++ opens the placeholder list, Tab inserts ++r, the caret on it shows the text Claude receives, and /placeholders saves your own">
+</p>
+
+| You do | What happens |
+|--------|--------------|
+| Type `++` | Typeahead lists the names; `Tab` inserts one |
+| Put the caret on `++r` | The band shows what Claude receives (up to 15 rows, the plan-mode addition marked) |
+| Press Enter | Your prompt is sent as typed; the block goes along as hidden context, absent from the transcript |
+| `++r?` alone, Enter twice, or `/placeholders show ++r` | Prints the whole text locally, no Claude turn |
+| `/placeholders add ++ship: run the tests; in plan mode also list the release steps` | Claude drafts it, asks once, saves `ship.md` and `ship.plan.md` |
+| `++/` in a message | The message is sent exactly as typed, no block |
+
+Built in: `++m` (manager mode: delegate, never code), `++a` (architecture first), `++r` (two-phase review: review, reproduce, fix confirmed findings only), `++rr` (anti-regression review) and `+++` (an anti-drift cron for the current task).
+
+Your files are `<name>.md` in `~/.claude/placeholders/` (global) or `.claude/placeholders/` (project, wins). A `<name>.plan.md` adds text in plan mode only. [Docs](https://doc-claude.brewcode.app/mods/placeholders/) | [brewmod-placeholders](brewmod-placeholders/README.md)
+
+### 2. Skills and agents built with their own tooling
+
+We create our skills and agents with the same commands you get:
+
+| Command | Modes | Spawns |
+|---------|-------|--------|
+| [`/brewcode:skills`](https://doc-claude.brewcode.app/brewcode/skills/skills/) | `status`, `list`, `create`, `improve`, `review`, `sync` | `skill-creator` |
+| [`/brewcode:agents`](https://doc-claude.brewcode.app/brewcode/skills/agents/) | `status`, `list`, `create`, `improve`, `review`, `sync` | `agent-creator` |
+
+`sync` re-verifies each skill or agent against the code and cuts before it adds. `hook-creator` and `mod-creator` do the same job for hooks and Claude Code mods ([agents](https://doc-claude.brewcode.app/brewcode/agents/)).
+
+### 3. Domain teams of subagents
+
+[`/brewcode:teams-setup`](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) reads your project and builds a team of domain agents under `.claude/teams/<name>/` and `.claude/agents/`. Each agent profile has six ordered headings (Mission, Owned surfaces, Exclusions, Must-load references, Unique invariants, Unique verification). The roster gets one review-only `intent-guard` that checks what was asked against what was delivered.
+
+```
+/brewcode:teams-setup install a team for the payments module
+```
+
+Modes: `status | install | upgrade | enable | disable | uninstall | purge`. `disable` parks the roster; nothing is deleted.
+
+### 4. Docs that stay current
+
+[`/brewdoc:docsync-setup`](https://doc-claude.brewcode.app/brewdoc/skills/docsync-setup/) installs three project-local hooks: `docsync-track` logs every `.md` edit, `docsync-watch` logs reads, `docsync-gate` runs when Claude finishes a turn. For a doc edited in the session whose `last_updated` is missing or more than `threshold_days` behind the file, the gate blocks once and tells Claude to sync it. `sync` syncs the stale docs on demand.
+
+[`/brewdoc:memory-sync-setup`](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/) generates a project-local `/memory-sync` skill. It syncs everything Claude loads on its own (CLAUDE.md at any depth, rules, agents, skills, memory) against the code, without growing the files.
+
+### 5. Publish to <img src="assets/brewpage-logo.svg" width="20" height="20" alt="BrewPage logo"> [brewpage.app](https://brewpage.app)
+
+[`/brewdoc:publish`](https://doc-claude.brewcode.app/brewdoc/skills/publish/) shares text, Markdown, JSON, a file, a folder or a ZIP site as a public link. Your content lives at your own URL, not in a Claude artifact. No sign-up; pages expire after their TTL (default 15 days). Claude may run it mid-task when you ask it to share something.
+
+```
+/brewdoc:publish report.pdf --ttl 1
+/brewdoc:publish docs/v1/ --entry hub.html
+```
+
+A private slug is unlisted, not locked: anyone with the link can open the page unless you set a password.
+
+### More
+
+| Command | What you get |
+|---------|--------------|
+| [`/brewcode:superreview-setup`](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | A project-tailored deep-review skill: intent pass and mechanical gates, plus expert fan-out and adversarial validation at extended depth |
+| [`/brewcode:semble-setup`](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | A pinned `semble_code` MCP: semantic code search by intent |
+| [`/brewcode:convention-setup`](https://doc-claude.brewcode.app/brewcode/skills/convention-setup/), [`/brewcode:rules`](https://doc-claude.brewcode.app/brewcode/skills/rules/) | Conventions behind a reversible loading rule (`.claude/rules/convention.md`); session learnings turned into project rules |
+| [`/brewtools:manager-setup`](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | Opt-in hard wall: a PreToolUse guard denies main-session edits and mutating shell commands, so the main agent delegates; subagents stay free |
+| Subagent guards: [`agent-deadline-setup`](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline-setup/), [`agent-return-setup`](https://doc-claude.brewcode.app/brewtools/skills/agent-return-setup/), [`agent-router-setup`](https://doc-claude.brewcode.app/brewtools/skills/agent-router-setup/) | A wall-clock budget per subagent (warning at 80%), a size budget on its final report, and a router that denies a generic spawn when a project expert owns the task (experimental) |
+| [`/brewtools:task-board-setup`](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) | A file-based task board for any repo with a derived task graph and session anti-drift timers |
+| [compact-recall](https://doc-claude.brewcode.app/brewcode/hooks/) (hook, automatic) | After a compaction, re-injects the plan or intent and the task graph |
+| [brewmod-plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/) | Plan mode raises effort to `xhigh`; `/plan-effort max` sets the level; your session effort is untouched elsewhere |
+| [`/brewtools:secrets-scan`](https://doc-claude.brewcode.app/brewtools/skills/secrets-scan/) | Scans git-tracked files for leaked secrets; `--fix` walks through remediation |
+| [`/brewtools:text-optimize`](https://doc-claude.brewcode.app/brewtools/skills/text-optimize/), [`/brewtools:text-human`](https://doc-claude.brewcode.app/brewtools/skills/text-human/) | Cut tokens from prompts and docs in place (`-l`, `-s`, `-d`, `-x`); strip AI artifacts from code, docs and commits |
+
+Also shipped: `/brewtools:ssh`, `/brewtools:deploy`, `/brewtools:provider-switch`, `/brewtools:context-slim`, `/brewcode:e2e`, `/brewdoc:md-to-pdf`. Full list: [Skills Reference](#skills-reference).
+
+## Recommended flow
+
+How the pieces fit, in the order they are used. Full page: [doc-claude.brewcode.app/recommended-flow](https://doc-claude.brewcode.app/recommended-flow/).
+
+1. **Install once.** ❗ Claude Code 2.1.301+ first (`claude --version`, below that `claude update`), then the install prompt above or [UPDATE.md](UPDATE.md).
+2. **Once per project.** `/brewcode:semble-setup install`, `/brewcode:convention-setup install`, `/brewcode:teams-setup install`, `/brewcode:superreview-setup install`; docs-heavy repos also `/brewdoc:docsync-setup install`. Check with `/brewcode:setup-status`.
+3. **Every bigger task.** Start with `++m` (manager: task graph and delegation); design in plan mode with `++m` (plan-effort raises effort to `xhigh`); long runs add `+++` (anti-drift cron).
+4. **Review.** `++r` or `++rr` after each phase, the generated `/superreview` before merge.
+5. **Share and stay current.** `/brewdoc:publish` returns a link; update with the release prompt or `/brewtools:plugin-update`.
+
+```mermaid
+flowchart TD
+    A["Install once<br/>Claude Code 2.1.301+<br/>mods and plugins"] --> B["Once per project<br/>semble, conventions,<br/>teams, superreview"]
+    B --> C["Every bigger task<br/>++m, plan mode,<br/>+++ for long runs"]
+    C --> D["Review<br/>++r or ++rr per phase,<br/>/superreview before merge"]
+    D --> E["Share and update<br/>/brewdoc:publish,<br/>/brewtools:plugin-update"]
+    D -. "next task" .-> C
+    E -. "new release" .-> A
+```
 
 ## Plugin Suite
 
@@ -81,7 +176,7 @@ claude --plugin-dir ./brewcode --plugin-dir ./brewdoc --plugin-dir ./brewtools -
 
 | Component | Version | Purpose |
 |-----------|---------|---------|
-| Claude Code CLI | latest | Plugin runtime |
+| Claude Code CLI | latest (mods: 2.1.301+) | Plugin runtime |
 | Node.js | 20+ | Hook runtime |
 | macOS | 13+ | Supported OS (Linux and Windows planned) |
 

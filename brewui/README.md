@@ -50,10 +50,10 @@ Placeholder for future UI/visual/creative tools: no skills, agents, or hooks yet
 
 ## Claude Code mods
 
-Optional add-ons live in separate plugins: [overview](https://doc-claude.brewcode.app/mods/overview/), [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/), [placeholders](https://doc-claude.brewcode.app/mods/placeholders/).
+Brewcode mods live in separate plugins: [overview](https://doc-claude.brewcode.app/mods/overview/), [placeholders](https://doc-claude.brewcode.app/mods/placeholders/), [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/).
 
 ```bash
-claude plugin install brewmod-plan-effort@claude-brewcode
+claude plugin install brewmod-placeholders@claude-brewcode
 ```
 
 ## Documentation

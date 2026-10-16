@@ -1,6 +1,6 @@
 ---
 interface Props {
-  plugin?: 'brewcode' | 'brewdoc' | 'brewtools' | 'brewui' | 'brewmod-plan-effort' | 'brewmod-placeholders' | 'mods' | 'all';
+  plugin?: 'brewcode' | 'brewdoc' | 'brewtools' | 'brewui' | 'brewmod-placeholders' | 'brewmod-plan-effort' | 'mods' | 'all';
   mode?: 'install' | 'update';
   compact?: boolean;
   collapsed?: boolean;
@@ -9,7 +9,7 @@ interface Props {
 const { plugin = 'all', mode = 'install', compact = true, collapsed = false } = Astro.props;
 
 const allPlugins = ['brewcode', 'brewdoc', 'brewtools', 'brewui'] as const;
-const allMods = ['brewmod-plan-effort', 'brewmod-placeholders'] as const;
+const allMods = ['brewmod-placeholders', 'brewmod-plan-effort'] as const;
 
 function buildPrompt(plugin: typeof Astro.props['plugin'], mode: 'install' | 'update'): string {
   const isUpdate = mode === 'update';
