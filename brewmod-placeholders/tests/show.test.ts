@@ -28,6 +28,7 @@ const heads = (text: string): string[] => text.split('\n').filter((l) => /^`[^`]
 const STATUS_FOOT = [
   'Caret on a token: the band shows up to 15 rows of what it sends · whole text: `/placeholders show ++r`, or `++r?` alone + Enter twice · `/placeholders list` for all',
   'Send one message as typed: put `++/` anywhere in it',
+  '`plan +`: its `<name>.plan.md` adds text in Plan mode; `<name>.md` is sent in every mode',
   'Add, change, remove: `/placeholders <your words>` in any language, e.g. `/placeholders add ++db: use the staging DB`',
   'Where: global = all projects (`~/.claude/placeholders`), project = this one (`.claude/placeholders`, wins over global); start with `global` or `project`, or just say it',
   'Commands (`list`, `show`, `help`) are only faster; plain words work too · full help: `/placeholders help`',
@@ -207,6 +208,27 @@ test('GIVEN user layers, a plan part from another layer and a bad key WHEN the s
   ])
 })
 
+test('GIVEN old when:, plan: and orphan plan files WHEN the status is built THEN one warning per file sits in the issues block', async () => {
+  const tree: Tree = {
+    ...defaultsTree(),
+    [`${P_DIR}/wp.md`]: '---\nwhen: plan\n---\nWP',
+    [`${P_DIR}/pk.md`]: '---\nplan: add\n---\nPK',
+    [`${P_DIR}/db.md`]: 'DB',
+    [`${P_DIR}/db.plan.md`]: '---\nwhen: plan\n---\nSTEPS',
+    [`${G_DIR}/solo.plan.md`]: '---\nplan: add\n---\nSOLO',
+  }
+
+  const out = statusText(await load(tree), '++', DIRS).split('\n')
+
+  expect(out.slice(out.indexOf('') + 1, out.indexOf('```', 2)), 'issues').toEqual([
+    'issues (4):',
+    '  project/db.plan.md: no plan: add; its text is added in plan mode',
+    '  project/pk.md: plan: is for pk.plan.md; ignored',
+    '  project/wp.md: when: plan is gone; sent in every mode',
+    '  global/solo.plan.md: no solo.md; sent in every mode',
+  ])
+})
+
 test('GIVEN the default prefix WHEN the help is built THEN every topic line and both doc links come back', async () => {
   expect(helpText('++', DIRS).split('\n'), 'help').toEqual([
     'placeholders help · a placeholder is a short token (++name) that adds saved text to your prompt',
@@ -214,11 +236,11 @@ test('GIVEN the default prefix WHEN the help is built THEN every topic line and 
     'Caret on a token (arrows, Home, End): the band shows up to 15 rows of what it sends; `?` right after the token only makes room for those rows while the name menu is open.',
     'Whole text, printed in the chat, not sent to Claude: `/placeholders show ++r` (several: `/placeholders show ++r ++m`) · or `++r?` alone in a message: Enter fills that command, Enter again prints it · all: `/placeholders list`.',
     'Send as typed: `++/` (or `++\\`) anywhere in a message turns every placeholder in it off; the marker stays in the text.',
-    'Plan mode: `<name>.plan.md` with `plan: add` adds its text to `<name>.md` only in Plan mode (built-in `++m` works this way); without `plan: add` it replaces the text; `when: plan` in `<name>.md` alone = plan-only (`+++`). The band marks `plan +` and shows "plan mode adds:"; one review per message (`++rr` wins over `++r`).',
+    'Plan mode: `<name>.md` is sent in every mode; an optional `<name>.plan.md` (`plan: add`) adds its text in Plan mode (`++m`, `+++`), marked `plan +`. One review per message: `++rr` wins over `++r`.',
     'Add, change, remove: `/placeholders <your words, any language>`; Claude drafts, asks once, saves. E.g. `/placeholders add ++db: use the staging DB` · `/placeholders global make ++r shorter` · `/placeholders удали ++db` · `/placeholders add a plan-mode part to ++db: plan first, then build`.',
     'Remove: `/placeholders remove ++db` (both parts) · `/placeholders удали план у ++db` (plan part only) · removing your override brings the built-in back; built-ins cannot be removed.',
     'Where: global = all projects, `~/.claude/placeholders/<name>.md`; project = this project, `.claude/placeholders/<name>.md`, wins over global; plugin defaults sit below both. A first word `global` or `project` decides, else your words do; unclear -> one question, Global first. A change keeps its layer; a remove asks when the name is in both.',
-    'Files: `<name>.md` = optional front matter (description, when: always|plan|not-plan, insert: context|inline, order, group, priority, header) + the text. Edit by hand any time; the next prompt reads it.',
+    'Files: `<name>.md` = optional front matter (description, insert: context|inline, order, group, priority, header) + the text; `<name>.plan.md` = its Plan mode addition. Edit by hand any time; the next prompt reads it.',
     'Prefix: `/config` -> Placeholder prefix (2-8 punctuation characters, default `++`).',
     'Commands: `/placeholders` status · `list` · `show ++<name> ...` · `help` · anything else goes to Claude. Commands are shortcuts; plain words work too.',
     'Docs: https://doc-claude.brewcode.app/mods/placeholders/',
@@ -464,7 +486,7 @@ test('GIVEN a build without the mod tools WHEN status and help are built THEN ne
   const status = statusText(await load(defaultsTree()), '++', DIRS, false).split('\n')
   const help = helpText('++', DIRS, false).split('\n')
 
-  expect([status[status.length - 5], help[3]], 'whole-text lines').toEqual([
+  expect([status[status.length - 6], help[3]], 'whole-text lines').toEqual([
     'Caret on a token: the band shows up to 15 rows of what it sends · whole text: `/placeholders show ++r` · `/placeholders list` for all',
     'Whole text, printed in the chat, not sent to Claude: `/placeholders show ++r` (several: `/placeholders show ++r ++m`) · all: `/placeholders list`.',
   ])

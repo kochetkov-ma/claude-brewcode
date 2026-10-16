@@ -8,7 +8,9 @@ export const EMPTY_VIEW: PlaceholderView = { tokens: [] }
 
 export const KNOWN_COLOR = 'suggestion'
 export const UNKNOWN_COLOR = 'warning'
-export type EditorEntry = { name: string; description?: string; body?: string; planOnly?: boolean; isInline?: boolean }
+// Claude Code's plan-mode colour: every plan-mode label, tag and addition.
+export const PLAN_COLOR = 'planMode'
+export type EditorEntry = { name: string; description?: string; body?: string; isInline?: boolean }
 export type Highlight = { view: PlaceholderView; decorations: PromptDecoration[] }
 export type { CaretFocus }
 

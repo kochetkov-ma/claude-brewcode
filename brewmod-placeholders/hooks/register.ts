@@ -193,7 +193,7 @@ export const register: Register = (on, options) => {
     return rows.length === 0 ? r : { suggestions: [...r.suggestions, ...rows] }
   })
 
-  // Inline defs are expanded in the submitted text; context defs go through hooks/inject.mjs. No mode here: plan/not-plan inline defs stay verbatim.
+  // Inline defs are expanded in the submitted text; context defs go through hooks/inject.mjs. No mode here: an inline plan part never expands.
   // The unknown-token toast fires here (a command hook has no UI): only for text the person typed, after the expansion.
   on('prompt.submit', async ($, e, next) => {
     const own: SubmitLike = e // isMeta is absent from the 2.1.296 types

@@ -237,7 +237,7 @@ export const mountBand = ($: any, maxRows = 24, surface: 'terminal' | 'desktop' 
 const shown = (n: any): string => (typeof n === 'string' ? n : n !== null && typeof n === 'object' ? (n.children ?? []).map(shown).join('') : '')
 const outer = (n: any): string[] => (n === null || typeof n !== 'object' ? [] : n.type === 'Text' ? [shown(n)] : (n.children ?? []).flatMap(outer))
 export const textsOf = async (ui: any): Promise<string[]> => outer(await ui.drawn())
-// Each drawn run as [style, text]: tok/unk = token name, sent = text Claude receives, act = what to type or do, key = a key, dim = explanation; other props as JSON.
+// Each drawn run as [style, text]: tok/unk = token name, sent/plansent = text Claude receives, plan = plan-mode label, act = to type or do, key, dim; else JSON.
 const STYLES: Record<string, string> = {
   '{"color":"suggestion","bold":true}': 'tok',
   '{"color":"warning","bold":true}': 'unk',
@@ -245,6 +245,9 @@ const STYLES: Record<string, string> = {
   '{"color":"text","underline":true}': 'act',
   '{"color":"text"}': 'key',
   '{"dimColor":true}': 'dim',
+  '{"color":"planMode"}': 'plan',
+  '{"color":"planMode","wrap":"truncate-end"}': 'plan',
+  '{"color":"planMode","bold":true,"wrap":"truncate-end"}': 'plansent',
   '{"dimColor":true,"wrap":"truncate-end"}': 'dim',
 }
 const runs = (n: any): [string, string][] => {

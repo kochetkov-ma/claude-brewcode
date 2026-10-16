@@ -36,9 +36,10 @@ try {
 
     // GIVEN ordinary modes, absent mode, misleading fields, or malformed input.
     // WHEN the hook evaluates +++.
-    // THEN it must never infer Plan mode from user text or unrelated fields.
+    // THEN it creates the cron now and never infers Plan mode from user text or unrelated fields.
     for (const permission_mode of ['default', 'acceptEdits', 'bypassPermissions', 'PLAN', undefined, null, {}, true]) {
-      assert.deepEqual(invoke(file, { ...input, permission_mode, collaboration_mode: 'plan' }, env), {}, `${runtime} must reject non-plan mode ${JSON.stringify(permission_mode)}`);
+      const now = invoke(file, { ...input, permission_mode, collaboration_mode: 'plan' }, env).hookSpecificOutput?.additionalContext ?? '';
+      assert.deepEqual([now.startsWith('# [ADDON: ANTI-DRIFT CRON]'), now.includes('ANTI-DRIFT CRON PLAN'), now.includes('create one unique session cron for the current task')], [true, false, true], `${runtime} non-plan mode ${JSON.stringify(permission_mode)} creates the cron now`);
     }
     assert.deepEqual(invoke(file, '{malformed', env), {}, `${runtime} malformed JSON must fail open without injection`);
     assert.deepEqual(invoke(file, { ...input, permission_mode: 'plan', prompt: { codeword: '+++' } }, env), {}, `${runtime} non-string prompt must not inject`);

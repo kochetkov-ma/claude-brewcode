@@ -1794,6 +1794,7 @@ The future implementation prompt must begin with Step 0: re-assume [ROLE: MANAGE
     const prompts = {
       'full.md': managerFull,
       'planmode.md': managerPlan,
+      'cron.md': readModDefault('+'),
       'cron-plan.md': `${readModDefault('+')}\n\n${readModDefault('+.plan')}`,
       'architect.md': `Start from system boundaries, data flow, ownership, failure modes, and compatibility constraints before choosing an implementation. ${ETALON_ARCHITECT}`,
       'review-regression.md': 'Before the review proper, pass the code for simplification: over-engineered? simpler? Then review for behavioral regressions first. Compare old and new contracts, exercise negative paths, and require evidence for compatibility claims.',

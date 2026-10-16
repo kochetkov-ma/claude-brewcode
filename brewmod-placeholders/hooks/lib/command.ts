@@ -256,12 +256,12 @@ export async function saveTool(io: CmdIo, roots: Roots, input: SaveInput, prefix
 const servedLabel = (id: string): string => (id.endsWith('-legacy') ? `brewtools ${id.slice(0, -'-legacy'.length)}` : id)
 
 // What the name sends after the removal: the layer now serving the removed part, else what is left.
-function after(reg: Registry, stem: string, token: string, isPlanOnly: boolean): string {
-  const now = reg.sources.get(isPlanOnly ? `${stem}${PLAN}` : stem)
-  const what = isPlanOnly ? `plan-mode part of ${token}` : token
+function after(reg: Registry, stem: string, token: string, isPlanPart: boolean): string {
+  const now = reg.sources.get(isPlanPart ? `${stem}${PLAN}` : stem)
+  const what = isPlanPart ? `plan-mode part of ${token}` : token
   if (now !== undefined) return now === 'default' ? `the built-in ${what} is back` : `the ${servedLabel(now)} ${what} is served now`
-  if (!reg.sources.has(isPlanOnly ? stem : `${stem}${PLAN}`)) return `${token} is no longer defined`
-  return isPlanOnly ? `${token} keeps its normal text` : `${token} keeps only its plan-mode part`
+  if (!reg.sources.has(isPlanPart ? stem : `${stem}${PLAN}`)) return `${token} is no longer defined`
+  return isPlanPart ? `${token} keeps its normal text` : `${token} keeps only its plan-mode part`
 }
 
 // No user file to remove: a legacy brewtools file, a built-in, a missing plan part or an unknown name.
@@ -317,9 +317,9 @@ export async function removeTool(io: CmdIo, roots: Roots, input: RemoveInput, pr
     const registry = await load(io, roots)
     const shown = shownDirs(roots, home)[target.scope]
     const paths = target.files.map((f) => `${shown}/${f}`).join(', ')
-    const isPlanOnly = target.files.every(isPlanFile)
-    const what = isPlanOnly ? `the plan-mode part of ${token}` : token
-    return { text: `removed ${what} (${target.scope}): ${paths} · ${after(registry, stem, token, isPlanOnly)}`, registry }
+    const isPlanPart = target.files.every(isPlanFile)
+    const what = isPlanPart ? `the plan-mode part of ${token}` : token
+    return { text: `removed ${what} (${target.scope}): ${paths} · ${after(registry, stem, token, isPlanPart)}`, registry }
   } catch (e) {
     return fail(`failed: ${why(e)}`)
   }

@@ -12,14 +12,16 @@ const spans = async ($: any, maxRows = 40, columns = 118): Promise<[string, stri
   return out
 }
 // Every run but the sent ones, which only count: the mockup's labels, tokens and actions.
-const rest = (s: [string, string][]) => ({ sent: s.filter(([k]) => k === 'sent').length, other: s.filter(([k]) => k !== 'sent') })
+const isSent = (k: string): boolean => k === 'sent' || k === 'plansent'
+const rest = (s: [string, string][]) => ({ sent: s.filter(([k]) => k === 'sent').length, plansent: s.filter(([k]) => k === 'plansent').length, other: s.filter(([k]) => !isSent(k)) })
 
-test('GIVEN the caret on ++m in default mode and the mod tools WHEN the band mounts THEN the token is bold placeholder colour, the cut row offers show or ++m? alone [Enter] and the foot actions are underlined', async ($, on) => {
+test('GIVEN the caret on ++m in default mode and the mod tools WHEN the band mounts THEN the token is bold placeholder colour, the cut row offers show or ++m? alone [Enter], the plan note is plan colour and the foot actions are underlined', async ($, on) => {
   await boot($, on)
   await typed($, '++m')
 
   expect(rest(await spans($)), 'state 1 runs').toEqual({
     sent: 13,
+    plansent: 0,
     other: [
       ['tok', '++m'],
       ['dim', ' · Claude receives these lines now:'],
@@ -29,7 +31,7 @@ test('GIVEN the caret on ++m in default mode and the mod tools WHEN the band mou
       ['act', '++m?'],
       ['dim', ' alone '],
       ['key', '[Enter]'],
-      ['dim', 'not sent now · plan mode adds 18 lines'],
+      ['plan', 'not sent now · plan mode adds 18 lines'],
       ['dim', 'close: '],
       ['act', 'move the caret off ++m'],
       ['dim', ' · send as typed: '],
@@ -38,17 +40,18 @@ test('GIVEN the caret on ++m in default mode and the mod tools WHEN the band mou
   })
 })
 
-test('GIVEN plan mode and the caret on ++m WHEN the band mounts THEN the addition is marked dim and the cut row and foot keep their actions', async ($, on) => {
+test('GIVEN plan mode and the caret on ++m WHEN the band mounts THEN the addition label is plan colour, the addition bold plan colour and the cut row and foot keep their actions', async ($, on) => {
   await boot($, on, PLAN)
   await typed($, '++m')
 
   expect(rest(await spans($)), 'state 2 runs').toEqual({
-    sent: 12,
+    sent: 6,
+    plansent: 6,
     other: [
       ['tok', '++m'],
       ['dim', ' · Claude receives these lines now:'],
       ['dim', '... 23 more lines'],
-      ['dim', 'plan mode adds:'],
+      ['plan', 'plan mode adds:'],
       ['dim', '... 12 more lines · whole text: '],
       ['act', '/placeholders show ++m'],
       ['dim', ' or '],
@@ -144,5 +147,18 @@ test('GIVEN 20-line bodies WHEN the cut row narrows THEN the hand-off goes first
     [['dim', '... 11 more lines · '], ['act', '/placeholders show ++long']],
     [['dim', '... 11 more lines · '], ['act', '/placeholders show ++long']],
     [['act', '/placeholders show ++long']],
+  ])
+})
+
+test('GIVEN plan mode and a compact ++m row WHEN the band mounts THEN the head count is dim and its plan mode suffix and the plan + tag are plan colour', async ($, on) => {
+  await boot($, on, PLAN)
+  await typed($, '++m go')
+
+  expect((await spans($)).filter(([k]) => !k.endsWith('sent')).slice(0, 5), 'head and tag runs').toEqual([
+    ['dim', 'placeholders 1'],
+    ['plan', ' · plan mode'],
+    ['tok', '++m'],
+    ['dim', '  Manager mode: orchestrate and delegate, never code in the main context'],
+    ['plan', ' plan +'],
   ])
 })

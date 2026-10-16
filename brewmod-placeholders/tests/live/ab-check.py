@@ -7,11 +7,20 @@ GOLDEN = os.path.join(HERE, '..', 'parity', 'golden.generated.ts')
 JOINER = '\n\n---\n\n'
 
 
+def literal(src, head, close):
+    # JSON literal after `head` up to the line holding only `close`
+    at = src.index(head)
+    start = src.index(close == ']' and '[' or '{', at + len(head) - 1)
+    return json.loads(src[start:src.index('\n' + close + '\n', start) + 2])
+
+
 def golden(vid):
-    # frozen spec: expected additionalContext of the vector `vid` in tests/parity/golden.generated.ts
+    # spec: expected additionalContext of vector `vid`, the reviewed BREAKS_6_9_5 overlay applied (golden-read.mjs)
     s = open(GOLDEN, encoding='utf-8').read()
-    j = s.index('= [', s.index('export const VECTORS')) + 2
-    for v in json.loads(s[j:s.rindex(']') + 1]):
+    breaks = literal(s, 'export const BREAKS_6_9_5: Record<string, GoldenBreak> = {', '}')
+    if vid in breaks:
+        return breaks[vid]['expected']
+    for v in literal(s, 'export const VECTORS: GoldenVector[] = [', ']'):
         if v['id'] == vid:
             return v['expected']
     raise KeyError(vid)
@@ -43,7 +52,7 @@ UNITS = [
     ('1.rr', 'default ++rr', 'c1-rr', ['++rr'], ['spec-5']),
     ('2.m', 'plan ++m (m.plan)', 'c2-m', ['++m'], ['spec-2']),
     ('2.cron', 'plan +++ (cron)', 'c2-cron', ['+++'], ['spec-6']),
-    ('2.cron-def', 'default +++ (none)', 'c2-cron-default', [], []),
+    ('2.cron-def', 'default +++ (cron now)', 'c2-cron-default', ['+++'], ['x07-cron-default']),
     ('3a', 'subdir launch, overrides at git root', 'c3a-deep', ['++r'], 'subdir'),
     ('3b', 'root launch, overrides at root', 'c3b-root', ['++r'], 'native'),
     ('3c', 'subdir launch, overrides in launch dir', 'c3c-local', ['++r'], 'native'),
