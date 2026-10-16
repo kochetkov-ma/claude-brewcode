@@ -5,20 +5,20 @@
   [1m[38;5;231m [0m
   [1m[38;5;231m[REVIEW DISCIPLINE: DOUBLE-CHECK][0m
   [1m[38;5;231mEvery significant change: multi-agent review (matching reviewer expert, else[0m
-  [1m[38;5;231mgeneral-purpose),[0m [1m[38;5;231msimplification[0m [1m[38;5;231mpass[0m [1m[38;5;231mfirst.[0m
-  [1m[38;5;231m1)[0m [1m[38;5;231mReview[0m [1m[38;5;231m-[0m [1m[38;5;231mfinding[0m [1m[38;5;231m=[0m [1m[38;5;231mdefect[0m [1m[38;5;231mwith[0m [1m[38;5;231mpath:line[0m [1m[38;5;231m+[0m [1m[38;5;231mevidence[0m [1m[38;5;231m(failing[0m [1m[38;5;231mcommand/input).[0m
-  [1m[38;5;231m2)[0m [1m[38;5;231mDouble-check[0m [1m[38;5;231m-[0m [1m[38;5;231mreproduce[0m [1m[38;5;231meach[0m [1m[38;5;231mfinding.[0m
-  [1m[38;5;231m3)[0m [1m[38;5;231mFix[0m [1m[38;5;231m-[0m [1m[38;5;231mconfirmed[0m [1m[38;5;231mfindings[0m [1m[38;5;231monly.[0m
-  [1m[38;5;231mBig[0m [1m[38;5;231mreview[0m [1m[38;5;231m->[0m [1m[38;5;231msplit[0m [1m[38;5;231mby[0m [1m[38;5;231marea,[0m [1m[38;5;231mnever[0m [1m[38;5;231mone[0m [1m[38;5;231mlong[0m [1m[38;5;231mpass.[0m [1m[38;5;231mBrief[0m [1m[38;5;231meach:[0m [1m[38;5;231mgoal[0m [1m[38;5;231m+[0m [1m[38;5;231marea[0m [1m[38;5;231m+[0m
-  [1m[38;5;231macceptance,[0m [1m[38;5;231mwhat's[0m [1m[38;5;231mcovered[0m [1m[38;5;231m(don't[0m [1m[38;5;231mre-litigate),[0m [1m[38;5;231mwho[0m [1m[38;5;231mconsumes[0m [1m[38;5;231mthe[0m [1m[38;5;231mverdict;[0m
-  [1m[38;5;231mreturn[0m [1m[38;5;231mverdict[0m [1m[38;5;231mfirst,[0m [1m[38;5;231mthen[0m [1m[38;5;231mfindings.[0m
-[38;5;246mclose:[39m [4m[38;5;231mmove the caret off ++r[0m[38;5;246m ·[39m [38;5;246msend[39m [38;5;246mas[39m [38;5;246mtyped:[39m [4m[38;5;231m++/[0m
+  [1m[38;5;231mgeneral-purpose),[0m [1m[38;5;231msimplification pass[0m [1m[38;5;231mfirst.[0m
+  [1m[38;5;231m1) Review - finding = defect with path:line + evidence (failing command/input).[0m
+  [1m[38;5;231m2)[0m [1m[38;5;231mDouble-check - reproduce each finding.[0m
+  [1m[38;5;231m3)[0m [1m[38;5;231mFix - confirmed findings[0m [1m[38;5;231monly.[0m
+  [1m[38;5;231mBig review -> split by area, never one long pass. Brief each: goal + area +[0m
+  [1m[38;5;231macceptance, what's covered (don't re-litigate), who consumes the verdict;[0m
+  [1m[38;5;231mreturn verdict first, then[0m [1m[38;5;231mfindings.[0m
+[38;5;246mclose: [4m[38;5;231mmove the caret off ++r[0m[38;5;246m · send as typed: [4m[38;5;231m++/[0m
 
 [38;5;244m────────────────────────────────────────────────────────────────────────────────────────
 [39m❯ review the diff [4m[38;5;153m++r[0m
 [38;5;244m────────────────────────────────────────────────────────────────────────────────────────
-[39m  [38;5;246m [39m [38;5;246m++rr[39m   [38;5;246mAnti-regression[39m [38;5;246mreview:[39m [38;5;246mregression,[39m [38;5;246mproject[39m [38;5;246mstandard[39m [38;5;246mand[39m [38;5;246mfunctional[39m
-           [38;5;246mcorrectness[39m [38;5;246maxes[39m
+[39m  [38;5;246m  ++rr   Anti-regression review: regression, project standard and functional[39m
+           [38;5;246mcorrectness axes[39m
 
 
 

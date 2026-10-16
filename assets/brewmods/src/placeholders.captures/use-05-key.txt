@@ -1,5 +1,4 @@
-     # [ADDON: ANTI-DRIFT CRON PLAN]
-     … +112 lines (ctrl+o to expand)
+     … +105 lines (ctrl+o to expand)
 
 ⏺ User answered Claude's questions:
   ⎿  · Save ++db as drafted? → Save as drafted (Recommended)
@@ -10,9 +9,10 @@
   ⎿  saved ++db (global): ~/.claude/placeholders/db.md
 
 ⏺ I saved ++db as a global placeholder in ~/.claude/placeholders/db.md, so it works in
-  all your projects. Typing ++db in a prompt inserts "always use the staging DB".
+  all your projects. Typing ++db in a prompt now inserts "always use the staging DB". It
+  has no extra text for Plan mode.
 
-✻ Crunched for 8s · done 11:49 AM
+✻ Brewed for 9s · done 3:52 PM
 placeholders 1                                                                      [-]
 ++db  Always use the staging DB · Claude receives these lines now:
   always use the staging DB

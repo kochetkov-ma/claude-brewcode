@@ -2,7 +2,7 @@
 // Same renderer and gates as placeholders.story.js; facts: `has` must be on the screen, `lacks` must not.
 window.PH_STORY = {
   term: { cols: 88, rows: 40 },
-  aria: 'Claude Code terminal recorded from a real session, session effort high: Shift+Tab twice from manual mode through accept edits into plan mode, no row yet; the first prompt shows the toast "brewmod-plan-effort: plan mode · effort raised to xhigh" and a yellow row "plan mode · effort xhigh for this mode · change: /plan-effort <level>" above the prompt; Shift+Tab out of plan mode (to auto mode) removes the row',
+  aria: 'Claude Code terminal recorded from a real session, session effort high: Shift+Tab twice from manual mode through accept edits into plan mode, no row yet; the first prompt shows the toast "brewmod-plan-effort: plan mode · effort raised to xhigh" and a teal (plan-mode colour) row "plan mode · effort xhigh for this mode · change: /plan-effort <level>" above the prompt; Shift+Tab out of plan mode (to auto mode) removes the row',
   window: [20, 30],
   loop: 23, end: 22, fps: 10, still: 12,
   chapters: [[0, 'default'], [3.2, 'plan mode'], [8.4, 'first prompt'], [16, 'leave plan']],
@@ -28,13 +28,13 @@ window.PH_STORY = {
   ],
   // the model turn, real seconds (pe-timings.txt) / shown span
   skips: [
-    { at: 9.0, until: 10.2, factor: 7.3 },
+    { at: 9.0, until: 10.2, factor: 23.3 },
   ],
   captions: [
     [0, 'Manual mode, session effort <k>high</k>'],
     [1.6, '<k>⇧⇥</k> once: accept edits'],
     [3.2, '<k>⇧⇥</k> again: plan mode; no row until the first prompt'],
-    [8.4, '<k>⏎</k>: toast, and the yellow row above the prompt'],
+    [8.4, '<k>⏎</k>: toast, and the teal plan-mode row above the prompt'],
     [11.2, 'Plan mode runs at <k>xhigh</k>; the row stays'],
     [16, '<k>⇧⇥</k> out of plan mode: the row is gone'],
     [22, ''],

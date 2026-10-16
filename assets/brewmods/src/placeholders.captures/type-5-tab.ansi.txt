@@ -2,25 +2,25 @@
 [38;5;174m▝▜[48;5;16m█████[49m█▀[39m  [38;5;246mOpus[39m [38;5;246m5.5[39m [38;5;246m·[39m [38;5;246mClaude[39m [38;5;246mMax[39m
 [38;5;174m ▝▝[39m   [38;5;174m▝▝[39m   [38;5;246m~/brewery[39m
 
+[38;5;246mplaceholders 1[39m                                                                      [38;5;246m[-][39m
+[1m[38;5;153m++r[0m[38;5;246m  Two-phase review: review every significant… · Claude receives these lines now:[39m
+  [1m[38;5;231mUser typed `++r` — Two-phase review discipline is active for this turn:[0m
+  [1m[38;5;231m [0m
+  [1m[38;5;231m[REVIEW DISCIPLINE: DOUBLE-CHECK][0m
+  [1m[38;5;231mEvery[0m [1m[38;5;231msignificant[0m [1m[38;5;231mchange:[0m [1m[38;5;231mmulti-agent[0m [1m[38;5;231mreview[0m [1m[38;5;231m(matching[0m [1m[38;5;231mreviewer[0m [1m[38;5;231mexpert,[0m [1m[38;5;231melse[0m
+  [1m[38;5;231mgeneral-purpose),[0m [1m[38;5;231msimplification[0m [1m[38;5;231mpass[0m [1m[38;5;231mfirst.[0m
+  [1m[38;5;231m1)[0m [1m[38;5;231mReview[0m [1m[38;5;231m-[0m [1m[38;5;231mfinding[0m [1m[38;5;231m=[0m [1m[38;5;231mdefect[0m [1m[38;5;231mwith[0m [1m[38;5;231mpath:line[0m [1m[38;5;231m+[0m [1m[38;5;231mevidence[0m [1m[38;5;231m(failing[0m [1m[38;5;231mcommand/input).[0m
+  [1m[38;5;231m2)[0m [1m[38;5;231mDouble-check[0m [1m[38;5;231m-[0m [1m[38;5;231mreproduce[0m [1m[38;5;231meach[0m [1m[38;5;231mfinding.[0m
+  [1m[38;5;231m3)[0m [1m[38;5;231mFix[0m [1m[38;5;231m-[0m [1m[38;5;231mconfirmed[0m [1m[38;5;231mfindings[0m [1m[38;5;231monly.[0m
+  [1m[38;5;231mBig[0m [1m[38;5;231mreview[0m [1m[38;5;231m->[0m [1m[38;5;231msplit[0m [1m[38;5;231mby[0m [1m[38;5;231marea,[0m [1m[38;5;231mnever[0m [1m[38;5;231mone[0m [1m[38;5;231mlong[0m [1m[38;5;231mpass.[0m [1m[38;5;231mBrief[0m [1m[38;5;231meach:[0m [1m[38;5;231mgoal[0m [1m[38;5;231m+[0m [1m[38;5;231marea[0m [1m[38;5;231m+[0m
+  [1m[38;5;231macceptance,[0m [1m[38;5;231mwhat's[0m [1m[38;5;231mcovered[0m [1m[38;5;231m(don't[0m [1m[38;5;231mre-litigate),[0m [1m[38;5;231mwho[0m [1m[38;5;231mconsumes[0m [1m[38;5;231mthe[0m [1m[38;5;231mverdict;[0m
+  [1m[38;5;231mreturn[0m [1m[38;5;231mverdict[0m [1m[38;5;231mfirst,[0m [1m[38;5;231mthen[0m [1m[38;5;231mfindings.[0m
+[38;5;246mmore:[39m [4m[38;5;231mput the caret on ++r[0m[38;5;246m ·[39m [38;5;246msend[39m [38;5;246mas[39m [38;5;246mtyped:[39m [4m[38;5;231m++/[0m[38;5;246m ·[39m [38;5;246mhelp:[39m [4m[38;5;231m/placeholders help[0m
 
 [38;5;244m────────────────────────────────────────────────────────────────────────────────────────
 [39m❯ review the diff ++r
 [38;5;244m────────────────────────────────────────────────────────────────────────────────────────
-[39m  [38;5;246m⏸[39m [38;5;246mmanual[39m [38;5;246mmode on[39m
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+[39m  [38;5;246m⏸[39m [38;5;246mmanual[39m [38;5;246mmode[39m [38;5;246mon[39m
 
 
 

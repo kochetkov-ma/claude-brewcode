@@ -17,13 +17,13 @@
   No Task tools (CLAUDE_CODE_ENABLE_TODO_TOOLS=1 unset) -> same numbered graph
   in the plan or .claude/features/<task>.md.
   ... 16 more lines · whole text: /placeholders show ++m or ++m? alone [Enter]
-  not sent now · plan mode adds 29 lines
+  not sent now · plan mode adds 18 lines
 close: move the caret off ++m · send as typed: ++/
 
 ────────────────────────────────────────────────────────────────────────────────────────
 ❯ ++m?
 ────────────────────────────────────────────────────────────────────────────────────────
-  ⏸ manual mode on                                                  ◐ medium · /effort
+  ⏸ manual mode on
 
 
 

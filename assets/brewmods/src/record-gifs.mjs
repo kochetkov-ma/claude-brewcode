@@ -235,12 +235,30 @@ async function capture(browser, times, dir) {
   return errors;
 }
 
-function encode(dir, frames, fps, outFile) {
-  const raw = join(dir, 'raw.gif');
+// mirror of render.html x256(): capture colour spec -> #rrggbb
+const BASIC = ['#000000', '#CD3131', '#0DBC79', '#E5E510', '#2472C8', '#BC3FBC', '#11A8CD', '#E5E5E5', '#666666', '#F14C4C', '#23D18B', '#F5F543', '#3B8EEA', '#D670D6', '#29B8DB', '#FFFFFF'];
+const LV = [0, 95, 135, 175, 215, 255], hx = (v) => v.toString(16).padStart(2, '0');
+const hexOf = (spec) => spec[0] === '#' ? spec : ((n) => n < 16 ? BASIC[n] : n < 232 ? '#' + [Math.floor((n - 16) / 36), Math.floor((n - 16) / 6) % 6, (n - 16) % 6].map((i) => hx(LV[i])).join('') : '#' + hx(8 + 10 * (n - 232)).repeat(3))(Number(spec));
+// every fg colour the captures draw: a few-second colour (plan-mode teal) otherwise loses its palette slot to grey
+const keepColours = () => uniq(Object.values(loadJs(DATA, 'PH_SCREENS') || {}).filter((s) => typeof s === 'object')
+  .flatMap((s) => s.lines.flat().map((seg) => seg[1].match(/(?:^| )f(\S+)/)?.[1]).filter(Boolean)).map(hexOf).map((h) => h.toLowerCase()));
+
+// one swatch frame of stripes, ~1000 rows of each kept colour across `n` palette-only frames
+function swatch(dir, colours) {
+  const png = readFileSync(join(dir, 'f_0000.png')), w = png.readUInt32BE(16), h = png.readUInt32BE(20), stripe = Math.ceil(h / colours.length);
+  const out = join(dir, 'swatch.png'), ins = colours.flatMap((c) => ['-f', 'lavfi', '-i', `color=c=0x${c.slice(1)}:s=${w}x${stripe}:d=1`]);
+  run('ffmpeg', ['-nostdin', '-v', 'error', '-y', ...ins, '-filter_complex', `${colours.map((_, i) => `[${i}:v]`).join('')}vstack=inputs=${colours.length},crop=${w}:${h}:0:0`, '-frames:v', '1', out]);
+  return { out, n: Math.ceil((colours.length * 1000 * w) / (WIDTH * h)) };
+}
+
+function encode(dir, frames, fps, outFile, colours) {
+  const raw = join(dir, 'raw.gif'), sw = colours.length > 1 ? swatch(dir, colours) : null;
+  const inputs = ['-framerate', String(fps), '-i', join(dir, 'f_%04d.png'), ...(sw ? ['-loop', '1', '-framerate', String(fps), '-t', String(sw.n / fps), '-i', sw.out] : [])];
+  const feed = sw ? `[0:v]scale=${WIDTH}:-2:flags=lanczos,split[a][b];[1:v]scale=${WIDTH}:-2:flags=neighbor[s];[a][s]concat=n=2:v=1:a=0[pa];[pa]` : `[0:v]scale=${WIDTH}:-2:flags=lanczos,split[a][b];[a]`;
   let best = null;
   for (const step of LADDER) {
-    run('ffmpeg', ['-nostdin', '-v', 'error', '-y', '-framerate', String(fps), '-i', join(dir, 'f_%04d.png'), '-frames:v', String(frames),
-      '-vf', `scale=${WIDTH}:-2:flags=lanczos,split[a][b];[a]palettegen=max_colors=${step.colors}:stats_mode=full[p];[b][p]paletteuse=dither=none:diff_mode=rectangle`, '-loop', '0', raw]);
+    run('ffmpeg', ['-nostdin', '-v', 'error', '-y', ...inputs, '-frames:v', String(frames),
+      '-filter_complex', `${feed}palettegen=max_colors=${step.colors}:stats_mode=full[p];[b][p]paletteuse=dither=none:diff_mode=rectangle`, '-loop', '0', raw]);
     const tmp = join(dir, `try_${step.colors}.gif`);
     run('gifsicle', ['-O3', ...(step.lossy ? [`--lossy=${step.lossy}`] : []), raw, '-o', tmp]);
     const bytes = statSync(tmp).size;
@@ -270,7 +288,7 @@ async function record(story, opt, gates) {
     const times = Array.from({ length: n }, (_, i) => i / story.fps);
     const errors = await capture(browser, [...times, story.still], dir);
     const outFile = test ? join(outDir, `${NAME}.gif`) : GIF;
-    const enc = encode(dir, n, story.fps, outFile), info = gifInfo(outFile);
+    const enc = encode(dir, n, story.fps, outFile, keepColours()), info = gifInfo(outFile);
     const seam = ssim(f(n - 1), f(0)), still = join(test ? outDir : tmpdir(), `${NAME}-still.png`);
     run('ffmpeg', ['-nostdin', '-v', 'error', '-y', '-i', f(n), '-vf', `scale=${WIDTH}:-2:flags=lanczos`, still]);
     gates.push(['record-bytes', enc.bytes <= MAX_BYTES, `${(enc.bytes / 1e6).toFixed(2)} MB, colors ${enc.colors}${enc.lossy ? ` lossy ${enc.lossy}` : ''}${enc.bytes > TARGET_BYTES ? ' (over target)' : ''}`]);

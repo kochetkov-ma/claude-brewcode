@@ -1,17 +1,17 @@
 {
   "gif": {
     "file": "placeholders.gif",
-    "bytes": 3456644,
-    "sha256": "cfcbea2333e67bfc91c9d1088dfad426c8d1292311a62c3579f26957d27ecc0c",
+    "bytes": 3390234,
+    "sha256": "6e91d8c454136573ed4d157d2294cf1de9f93f2002cad02f12c5b3aabde8753a",
     "width": 800,
     "height": 648,
     "seconds": 37
   },
   "sources": {
     "render.html": "66bf935f460d6b8bdc55b170e13e8c75b303230db57a7540f3120486972c7409",
-    "placeholders.story.js": "35c848e1cb0464386e14bfb7825e251922c9d71b2a592ab6ab6a8b1200c6c466",
-    "placeholders.data.js": "600bf247ef1312a69513a25f535b4c5560825116613ac42ae000cf4e25a7b807",
-    "record-gifs.mjs": "cba6693c2afb098d856d1f50e5833a965105476d8489b15d9a08bb0602d875d7"
+    "placeholders.story.js": "8572a96851cb2ed73bf8b703c006fc8e8c0886833befbcf9a2b3918c15e73941",
+    "placeholders.data.js": "702767daa87c383fc09219e1ffc7b3ab6608610be7d077ba163dfea343965b8c",
+    "record-gifs.mjs": "b2108f5acba6806d0757be6181886a4d2e06f56d729241d3f9b7caa3b7a87d60"
   },
   "ccVersion": "2.1.301",
   "still": 7.5,
@@ -21,5 +21,5 @@
     "gifsicle": "1.96",
     "node": "v24.19.0"
   },
-  "recorded": "2026-10-16T11:00:35.332Z"
+  "recorded": "2026-10-16T15:09:21.940Z"
 }
