@@ -25,12 +25,14 @@ const FRONTMATTER = {
     'argument-hint: "<text|file_path|directory_path|zip_path> [--ttl N] [--entry filename] [--delivery-mode path|subdomain]"',
     "allowed-tools: [Read, 'Bash(bash ${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh *)', AskUserQuestion, Glob]",
     'model: haiku',
+    'license: MIT',
   ],
   openclaw: [
     'name: brewpage-publish',
     'description: "Publish HTML, markdown, text, any file, or a multi-file site to brewpage.app — free hosting with no sign-up. Paste text, share a file, upload a site, or host a temporary page and get an instant public URL to share a link. Asks namespace and password, returns the public URL. Triggers: publish, publish HTML, share link, share a link, share a file, upload to brewpage, host page, host a temporary page, host a website, free hosting, paste text, instant public URL, no sign-up, brewpage, publish site, upload site, upload directory, deploy site, сделай публичную ссылку, опубликуй."',
     'homepage: https://brewpage.app',
     'user-invocable: true',
+    'license: MIT',
   ],
 };
 // Reference text -> copy text: [from, to] pairs, each `from` present exactly once in the brewdoc script.

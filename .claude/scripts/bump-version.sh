@@ -41,6 +41,7 @@ brewcode/agents/bc-rules-organizer.md|fmd|brewcode
 brewcode/agents/hook-creator.md|fmd|brewcode
 brewcode/agents/mod-creator.md|fmd|brewcode
 brewcode/agents/skill-creator.md|fmd|brewcode
+brewcode/agents/setup-upgrader.md|fmd|brewcode
 brewcode/skills/setup-status/references/artifact-metadata.md|fmd|brewcode
 brewdoc/skills/docsync-setup/assets/docsync-track.mjs|mjs|brewdoc:docsync-setup
 brewdoc/skills/docsync-setup/assets/docsync-watch.mjs|mjs|brewdoc:docsync-setup
@@ -185,13 +186,19 @@ DOCS
 
 # --- Content-version helpers ---
 # content_version advances to $NEW only when the meta-stripped body changed since tag v<content_version>.
+# License markers never count: frontmatter `license: MIT`, SPDX/Copyright lines + one blank line right above each.
 strip_meta_for_diff() {
     _kind="$1"
     if [ "$_kind" = "fm" ] || [ "$_kind" = "fmd" ]; then
-        sed -E '2,/^---$/{/^version: "/d;/^content_version: "/d;/^generated_by: "/d;/^last_updated: "/d;}'
+        sed -E '2,/^---$/{/^version: "/d;/^content_version: "/d;/^generated_by: "/d;/^last_updated: "/d;/^license: MIT$/d;}'
     else
-        sed -E '/brewcode-meta:/d'
-    fi
+        sed -E -e '/brewcode-meta: version=[0-9]+\.[0-9]+\.[0-9]+ content_version=/d' -e '2,/^---$/{/^license: MIT$/d;}'
+    fi | awk '
+        /^<!-- Copyright \(c\) [0-9][0-9][0-9][0-9](-[0-9][0-9][0-9][0-9])? Maksim Kochetkov, https:\/\/github\.com\/kochetkov-ma\/claude-brewcode\. SPDX-License-Identifier: MIT -->$/ ||
+        /^\/\/ SPDX-License-Identifier: MIT$/ ||
+        /^\/\/ Copyright \(c\) [0-9][0-9][0-9][0-9](-[0-9][0-9][0-9][0-9])? Maksim Kochetkov$/ { if (held && hold == "") held = 0; next }
+        { if (held) print hold; hold = $0; held = 1 }
+        END { if (held) print hold }'
 }
 
 # Body identical to tag v<old> -> keep old; no old value/tag/copy or any diff -> $NEW.

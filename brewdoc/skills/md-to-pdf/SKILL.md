@@ -6,8 +6,9 @@ disable-model-invocation: true
 argument-hint: "[prompt] <file.md> [--engine name] [\"llm prompt\"] | styles | test | (no args = help)"
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion]
 model: sonnet
+license: MIT
 ---
-<!-- brewcode-meta: version=6.9.6 content_version=6.5.3 generated_by=brewdoc:md-to-pdf -->
+<!-- brewcode-meta: version=6.10.0 content_version=6.5.3 generated_by=brewdoc:md-to-pdf -->
 
 # MD to PDF
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: MIT
 
 import { readInput, respond } from './lib/io.mjs';
 import { state } from './lib/manager.mjs';

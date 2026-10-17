@@ -1,0 +1,30 @@
+⏺ The review found five real problems in the diff, and I've fixed all of them: three in
+  batches.js and two in batches.test.js. Before fixing, I reproduced each one myself,
+  and all 6 tests now pass.
+
+  Fixes in batches.js
+
+  Problem: SQL injection in findBatch. The name was pasted into the SQL text.
+  How I confirmed it: Searching for nope' OR '1'='1 returned batch 1, and a name with an
+
+  apostrophe didn't match.
+  Fix: The name is now passed as a ? parameter.
+  ────────────────────────────────────────
+  Problem: bottle wasn't atomic. It made two updates with no transaction.
+  How I confirmed it: With the tank update forced to fail, batch 1 ended up bottled but
+  still held its tank.
+  Fix: Both updates are now wrapped in transaction(), like startBatch. Repeating the
+  forced failure now leaves both tables unchanged.
+  ────────────────────────────────────────
+  Problem: listWithTastings ran one extra query per batch.
+  How I confirmed it: It ran 3 queries for the 2 sample batches.
+  Fix: It now fetches all tastings in one query and groups them in code, so it always
+  runs 2. This also removed its string-built SQL.
+
+  Fixes in batches.test.js
+
+  ┌──────────────────────────┬─────────────────────┬───────────────────────────────┐
+  │         Problem          │ How I confirmed it  │              Fix              │
+  ├──────────────────────────┼─────────────────────┼───────────────────────────────┤
+  │                          │ Deleting the line   │ The test now checks that tank │
+  │ The bottle test didn't   │ that frees the tank │  1 is freed, tank 2 is        │

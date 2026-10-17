@@ -1,0 +1,30 @@
+     … +105 lines (ctrl+o to expand)
+
+⏺ User answered Claude's questions:
+  ⎿  · Save ++db as drafted? → Save as drafted (Recommended)
+
+⏺ brewmod-placeholders - save_placeholder (MCP)(name: "db", text: "bind SQL params, no
+                                               query in a loop, use transactions",
+                                               description: "DB code rules: bound
+                                               params, no N+1, transactions", scope:
+                                               "global")
+  ⎿  saved ++db (global): ~/.claude/placeholders/db.md
+
+⏺ I saved ++db as a global placeholder in ~/.claude/placeholders/db.md, so you can use
+  it in any project. Typing ++db in a prompt inserts "bind SQL params, no query in a
+  loop, use transactions".
+
+✻ Brewed for 6s · done 11:27 PM
+
+❯ how should the tasting import write rows? one line ++db
+
+· Tempering…
+
+────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────
+  ⏸ plan mode on (shift+tab to cycle) · esc to interrupt · ← for agents
+
+
+
+

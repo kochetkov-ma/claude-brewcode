@@ -4,7 +4,7 @@ description: Detailed description of all brewdoc plugin commands
 
 # Brewdoc Plugin Commands
 
-> **Version:** 6.9.6 | **Author:** Maksim Kochetkov | **License:** MIT
+> **Version:** 6.10.0 | **Author:** Maksim Kochetkov | **License:** MIT
 
 ## Quick Reference
 
@@ -12,7 +12,7 @@ All 5 brewdoc skills are documented below, one section each.
 
 | # | Command | Purpose | Model | Args |
 |---|---------|---------|-------|------|
-| 1 | `/brewdoc:my-claude` | Generate docs about Claude Code installation and environment | opus | `[prompt] [ext [context]] \| [r <query>]` |
+| 1 | `/brewdoc:my-claude` | Generate docs about Claude Code installation and environment; `refresh` regenerates stale guides | opus | `[prompt] [ext [context]] \| [r <query>] \| [refresh]` |
 | 2 | `/brewdoc:memory-sync-setup` | Generate a project-tailored `/memory-sync` skill into the target repo | opus | `[prompt] [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [fine-tune-prompt]` |
 | 3 | `/brewdoc:docsync-setup` | Install project-local doc-staleness tracking hooks; report/force sync | sonnet | `[prompt] [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [sync [--all]\|reread\|frontmatter] \| free-text` |
 | 4 | `/brewdoc:md-to-pdf` | Convert Markdown to PDF via reportlab or weasyprint | sonnet | `[prompt] <file.md> [--engine name] ["prompt"] \| styles \| test` |
@@ -22,7 +22,7 @@ All 5 brewdoc skills are documented below, one section each.
 
 A `-setup` suffix marks a skill that installs a mechanism -- afterwards you use the installed hooks or the generated skill, not the setup skill. Recurring tools keep bare names.
 
-Setup skills share one verb vocabulary, in this order: `status | install | upgrade | enable | disable | uninstall | purge`. No argument = `status` if installed, `install` if not. Skill-specific extras come after the canonical verb. v5.0.0 dropped the aliases `init`, `on`, `off`, `setup`, `remove` and `reset` with no back-compat shims. Both brewdoc setup skills implement `enable`/`disable` -- `docsync-setup` flips the `enabled` key in `.claude/docsync/config.json` (and refreshes its provenance stamp on that write), `memory-sync-setup` renames `SKILL.md` <-> `SKILL.md.disabled` -- and both implement `purge`; the per-command Args column is authoritative.
+Setup skills share one verb vocabulary, in this order: `status | install | upgrade | enable | disable | uninstall | purge`. No argument = `status` if installed, `install` if not. Skill-specific extras come after the canonical verb. Both brewdoc setup skills implement `enable`/`disable` -- `docsync-setup` flips the `enabled` key in `.claude/docsync/config.json` (and refreshes its provenance stamp on that write), `memory-sync-setup` renames `SKILL.md` <-> `SKILL.md.disabled` -- and both implement `purge`; the per-command Args column is authoritative.
 
 Every brewdoc skill except `/brewdoc:publish` carries `disable-model-invocation: true`: Claude never fires those on its own, you type the command. `/brewdoc:publish` is `disable-model-invocation: false`, so Claude can also run it mid-task to share a link. `/brewcode:setup-status` reports what is installed, stale or missing across all plugins.
 
@@ -30,27 +30,34 @@ Every brewdoc skill except `/brewdoc:publish` carries `disable-model-invocation:
 
 ## 1. `/brewdoc:my-claude`
 
-**Purpose:** Documents your Claude Code installation. Output goes to `.claude/brewdoc/my-claude/` in the current project, tracked in `.claude/brewdoc/INDEX.jsonl`. An existing entry for the same mode triggers an update offer (version bump).
+**Purpose:** Documents your Claude Code installation. Output goes to `.claude/brewdoc/my-claude/` in the current project, tracked in `.claude/brewdoc/INDEX.jsonl`. An existing entry for the same mode triggers an update offer (version bump); `refresh` takes the "update" answer itself and asks nothing.
 
 | Parameter | Value |
 |-----------|-------|
-| **Arguments** | `[prompt] [ext [context]] \| [r <query>]` |
+| **Arguments** | `[prompt] [ext [context]] \| [r <query>] \| [refresh]` |
 | **Model** | `opus` |
-| **Allowed tools** | `Read`, `Write`, `Edit`, `Glob`, `Grep`, `Bash`, `Agent`, `WebFetch`, `WebSearch`, `AskUserQuestion` |
+| **Allowed tools** | `Read`, `Glob`, `Grep`, `Bash`, `Agent`, `WebFetch`, `WebSearch`, `AskUserQuestion` |
 
 | Arguments | Mode | Output file |
 |-----------|------|-------------|
-| *(empty)* | INTERNAL: local setup inventory (active config dir `CLAUDE_CONFIG_DIR`, default `~/.claude`; project `CLAUDE.md`, rules, memory) | `.claude/brewdoc/my-claude/YYYYMMDD_my-claude-internal.md` |
+| *(empty)* | INTERNAL: local setup inventory (active config dir `CLAUDE_CONFIG_DIR`, default `~/.claude`; project `CLAUDE.md`, rules, memory; installed plugins and mods) | `.claude/brewdoc/my-claude/YYYYMMDD_my-claude-internal.md` |
 | `ext` or `external` | EXTERNAL: hook/context/agent architecture from official sources | `.claude/brewdoc/my-claude/YYYYMMDD_my-claude-external.md` |
 | `ext context` | EXTERNAL context-schema (`additionalContext`, `updatedInput`) | `.claude/brewdoc/my-claude/external/YYYYMMDD_context-schema.md` |
 | `r <query>` or `research <query>` | RESEARCH: query split into 2-5 source groups | `.claude/brewdoc/my-claude/YYYYMMDD_research-{slug}.md` |
+| `refresh` (keywords `update`, `regenerate`; other words name research slugs to include) | REFRESH: regenerates every guide whose `version` is below the installed brewdoc; no question asked | a new dated file per stale guide, same names as above |
 
 **Workflow:** load the mode reference (`references/internal-mode.md` or `external-mode.md`), gather in parallel (INTERNAL: 3 `Explore` agents for global config, project config, memory; EXTERNAL and RESEARCH: `general-purpose` agents per source group, RESEARCH keeps a source URL per fact), write the document, then an independent read-only agent re-checks it (paths exist, counts match, sources hold), its fixes are applied and the INDEX entry is added.
+
+**Plugins and mods:** the INTERNAL guide adds a `## Plugins and mods` table from `claude plugin list --json` (mods first, `brewmod-placeholders` first) and ends with `## Keeping this current`, the four update commands. Details: [my-claude README](../skills/my-claude/README.md#output).
+
+**Refresh:** `refresh` regenerates each guide whose provenance `version` is below the installed brewdoc into a new dated file, leaves current guides alone and asks nothing. Scan results and report format: [my-claude README](../skills/my-claude/README.md#refresh).
 
 ```
 /brewdoc:my-claude
 /brewdoc:my-claude ext context
 /brewdoc:my-claude r "how do PreToolUse hooks modify agent prompts"
+/brewdoc:my-claude refresh
+/brewdoc:my-claude refresh hooks   # also refreshes research/hooks
 ```
 
 ---
@@ -204,5 +211,7 @@ Password access, owner operations and hosting changes: [publish README](../skill
 | `settings.json` invalid JSON | docsync-setup | Abort before any write; report |
 | No `.html`/`.htm` in SITE bundle | publish | Fail loudly, never guess an entry |
 | Dependency install or conversion fails | md-to-pdf | `INSTALL_FAILED` and stop, or one fix + retry, else report |
+| INDEX row points to a file that is gone | my-claude `refresh` | Reported as missing, never regenerated; run the guide's own mode for a new one |
+| `claude plugin list --json` fails | my-claude (INTERNAL) | `## Plugins and mods` becomes one `Plugin inventory unavailable` line with the reason; the rest of the guide is written |
 
 brewdoc has no hooks; skills resolve their own files via `${CLAUDE_SKILL_DIR}`. Brewcode mods: [overview](https://doc-claude.brewcode.app/mods/overview/).

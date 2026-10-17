@@ -6,6 +6,7 @@ disable-model-invocation: true
 argument-hint: "[prompt] [setup|connect|configure|update-agent] — free-form description of what to do"
 allowed-tools: [Read, Write, Edit, Bash, Agent, AskUserQuestion, Glob, Grep]
 model: opus
+license: MIT
 ---
 
 # SSH Server Management

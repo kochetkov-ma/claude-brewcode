@@ -96,6 +96,40 @@ Checkpoint: <abs>/.claude/semble/state.json
 | a tool call without `repo` | `repo` is a REQUIRED absolute path (or `https://` git URL) on both tools. |
 | that a shell-out ran unbounded, or that `coreutils`/`gtimeout` is missing/required | `sc_timeout` bounds every shell-out: `timeout`/`gtimeout` when one exists, else a pure-bash watchdog. `.timeout.bounded` is always `true`; `gtimeout` only changes how the bound is enforced. |
 
+## Honest limits — state these to the user, never oversell
+
+Moved verbatim from `SKILL.md`, as is the next section: "Step N" and Constants name `SKILL.md` sections.
+
+| Fact | Consequence |
+|------|-------------|
+| No watcher, no daemon in semble 0.6.2 | Never report a daemon as running or stopped. Staleness is re-checked inside each tool call, behind a `3x last-build-duration` cooldown |
+| The embedding model loads at server start; calls block until it is ready | The first query on a cold cache downloads it (hundreds of MB, up to 600 s: Step 4.1). Offline with a cold HuggingFace cache = every call errors |
+| The corpus is `SEMBLE_CONTENT_ARGS` (Constants) | `.json`/`.json5`/`.csv`/`.tsv`/`.psv` are excluded from every content type, even `--content all`; `.mdx`/`.txt` are in no bucket. Use `rg` for those (`references/language-coverage.md`) |
+| …except a `.gitignore`/`.sembleignore` `!` negation ending in a file extension, which bypasses the extension filter (`_is_ignored`'s `found` flag) | That `.json` or `.png` is indexed at any `--content`, as decoded binary. Cure: a re-ignore in `.sembleignore` (its lines are appended last), never a content-set change |
+| Retrieval split — semble 0.5.4 measurement, not rerun on 0.6.2 | At `k=5` semble took behaviour and vocabulary-mismatch questions 8 of 9; `rg` took exhaustive enumeration (semble lost 2 of 5) and exact identifiers. "every"/"all"/"how many" is an `rg` question — say so instead of searching |
+| Each exact content selection has its own variant under one hashed repo directory | Registered corpus (and `all`, the same `code config docs` set) = `index-code-config-docs`; code-only = `index`; per-call `docs`/`config` = narrower siblings. A combined corpus at bare `index` is pre-0.5.5, never current |
+| The hooks are insurance, not a measured adoption mechanism | Never report a conversion percentage for a nudge. `SubagentStart` is proven to deliver its text, not to change tool choice |
+| `semble` has no `status`/`serve`; argv outside `_CLI_DISPATCH_ARGS` starts a blocking stdio server (`--version`/`-V` joined it in 0.5.4) | Never run bare `semble`. Resolvability: `uvx --from 'semble[mcp]==0.6.2' semble --version` -> `0.6.2`, exit 0. `sc_semble_probe_arg` uses `--help` for pins below 0.5.4 |
+| `semble install` writes an unpinned server named `semble` into `~/.claude.json` | Never run it. An existing `semble` server is reported as a conflict, never auto-removed |
+| `semble clear index` wipes every repo and variant under the shared cache root | No per-repo rebuild CLI: `reindex` stages, verifies and replaces only the selected `index-code-config-docs` variant |
+| Windows | print `⚠️ Windows is unsupported by this skill` and refuse every mutation |
+| Stock macOS ships no `timeout` binary | Every shell-out is still bounded (`sc_timeout`: `timeout`/`gtimeout`, else a bash watchdog); `coreutils` is optional, never a reason to fail (Step 3.1) |
+
+## Reading the Step 1 status JSON
+
+`.versions` checks the active profile (Constants, Scope):
+
+- Registered spec vs pin: `.versions.verdict` is `ok | stale | ahead | drift | unpinned | not_registered | malformed`, `.detail` names both versions (`registered 0.5.4, pin 0.6.2`), `.action` the fixing mode. Human line: `version: ok | stale (registered X, pin Y) -> run: /brewcode:semble-setup upgrade | not registered (pin Y) -> run: /brewcode:semble-setup install`, then the config file read.
+- Pin vs upstream: `.versions.upstream` compares the pin with PyPI latest, advisory only (`pin behind upstream (X < Y)`; `unknown (offline)`), never a failure.
+- `not_registered` beside a `ready` project: wired from another profile; `install` registers this one.
+- All profiles: `semble-status.sh --versions --all-profiles [--json]` prints `# semble-versions schema=1 pin=... upstream=... upstream_status=... reason=...`, then one `dir | registered spec or none | pin | verdict | config file` row per profile.
+
+> Leftover retired hooks (`.guidance.retired` files, `.guidance.retiredWired` registrations, e.g. 6.4.0 `semble-reminder.mjs`/`semble-prefetch.mjs`) print `retired: <names> - stale (remove via upgrade)` (verdict reason `stale (remove via upgrade): <names>`); a `.guidance.rule == "stale"` (pristine prior-release copy) gives reason `semble-first rule is a prior-release copy`. On an otherwise `ready` project both make the verdict `partial` and set `.nextStep` to `Run /brewcode:semble-setup upgrade`; never report them as missing hooks.
+>
+> `.guidance.permissionsWired` is `true` when any settings layer Claude Code reads grants both tools (`.claude/settings.json`, `.claude/settings.local.json`, the profile's `settings.json`), the server-wide `mcp__semble_code` / `mcp__semble_code__*` included; `.guidance.permissionsSource` names the granting layers (`project`, `local`, `user`).
+>
+> An errored `guidance` probe ("unit not installed" included) makes the verdict `partial` (`guidance probe failed: <error>`), never `ready` or a passing `--strict`; an unrequested (null) section never downgrades; `cache`/`agents` carry their own error.
+
 ## Minimal example — empty prompt on an unconfigured project
 
 ```text

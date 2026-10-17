@@ -22,15 +22,16 @@ function check(name, actual, expected, message) {
 }
 
 check('frontmatter.keys', FM.map((l) => l.split(':')[0]),
-  ['name', 'description', 'user-invocable', 'disable-model-invocation', 'argument-hint', 'allowed-tools', 'model'],
+  ['name', 'description', 'user-invocable', 'disable-model-invocation', 'argument-hint', 'allowed-tools', 'model', 'license'],
   'GIVEN text-optimize frontmatter WHEN its keys are listed THEN the house key order holds, DMI key explicit');
-check('frontmatter.invocation', FM.filter((l) => /^(name|user-invocable|disable-model-invocation|allowed-tools|model):/.test(l)), [
+check('frontmatter.invocation', FM.filter((l) => /^(name|user-invocable|disable-model-invocation|allowed-tools|model|license):/.test(l)), [
   'name: text-optimize',
   'user-invocable: true',
   'disable-model-invocation: false',
   `allowed-tools: [Read, '${RULE.replace('bash ', 'Bash(bash ')} *)', Grep, Glob, Agent, AskUserQuestion]`,
   'model: sonnet',
-], 'GIVEN text-optimize frontmatter WHEN invocation keys are read THEN user- and model-invocable, one scoped Bash rule, no bare Bash/Write/Edit');
+  'license: MIT',
+], 'GIVEN text-optimize frontmatter WHEN invocation keys are read THEN user- and model-invocable, one scoped Bash rule, no bare Bash/Write/Edit, license line exactly MIT');
 
 // GIVEN the one allowed-tools Bash rule WHEN every shipped bash fence is read THEN each is that single command.
 const fences = [...SKILL.matchAll(/```bash\n([\s\S]*?)```/g)].map((m) => m[1].replace(/\n$/, ''));

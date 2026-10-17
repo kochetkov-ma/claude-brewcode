@@ -1,5 +1,6 @@
 #!/bin/sh
-# brewcode-meta: version=6.9.6 content_version=6.3.0 generated_by=brewcode:teams-setup
+# brewcode-meta: version=6.10.0 content_version=6.10.0 generated_by=brewcode:teams-setup
+# shellcheck disable=SC2016 # every node -e program is single-quoted on purpose
 set -eu
 
 USAGE="Usage: trace-ops.sh <add|read|cursor|migrate|archive> <team_dir> [args...]"
@@ -411,11 +412,12 @@ cmd_add() {
 
   [ "${#_sid}" -eq 8 ] \
     || die "Invalid sid: expected exactly 8 ASCII marker characters"
+  # Explicit ASCII lists: bash 3.2 under a UTF-8 locale lets a-z ranges match accented letters.
   case "$_sid" in
-    *[!A-Za-z0-9._-]*) die "Invalid sid: expected exactly 8 ASCII marker characters" ;;
+    *[!ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-]*) die "Invalid sid: expected exactly 8 ASCII marker characters" ;;
   esac
   case "$_agent" in
-    ''|*[!a-z0-9-]*|[!a-z0-9]*) \
+    ''|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*|[!abcdefghijklmnopqrstuvwxyz0123456789]*) \
       die "Invalid agent: expected ^[a-z0-9][a-z0-9-]*$" ;;
   esac
 

@@ -1,0 +1,30 @@
+[38;5;231m⏺[39m The review found five real problems in the diff, and I've fixed all of them: three in
+  [38;5;153mbatches.js[39m and two in [38;5;153mbatches.test.js[39m. Before fixing, I reproduced each one myself,
+  and all 6 tests now pass.
+
+  [1mFixes in [38;5;153mbatches.js[0m
+
+  [1mProblem:[0m [1mSQL[0m [1minjection[0m [1min[0m [1m[38;5;153mfindBatch[39m.[0m The name was pasted into the SQL text.
+  [1mHow[0m [1mI[0m [1mconfirmed[0m [1mit:[0m Searching for [38;5;153mnope'[39m [38;5;153mOR[39m [38;5;153m'1'='1[39m returned batch 1, and a name with an
+
+  apostrophe didn't match.
+  [1mFix:[0m The name is now passed as a [38;5;153m?[39m parameter.
+  ────────────────────────────────────────
+  [1mProblem:[0m [1m[38;5;153mbottle[39m wasn't[0m [1matomic.[0m It made two updates with no transaction.
+  [1mHow[0m [1mI[0m [1mconfirmed[0m [1mit:[0m With the tank update forced to fail, batch 1 ended up [38;5;153mbottled[39m but
+  still held its tank.
+  [1mFix:[0m Both updates are now wrapped in [38;5;153mtransaction()[39m, like [38;5;153mstartBatch[39m. Repeating the
+  forced failure now leaves both tables unchanged.
+  ────────────────────────────────────────
+  [1mProblem:[0m [1m[38;5;153mlistWithTastings[39m ran[0m [1mone[0m [1mextra[0m [1mquery[0m [1mper[0m [1mbatch.[0m
+  [1mHow[0m [1mI[0m [1mconfirmed[0m [1mit:[0m It ran 3 queries for the 2 sample batches.
+  [1mFix:[0m It now fetches all tastings in one query and groups them in code, so it always
+  runs 2. This also removed its string-built SQL.
+
+  [1mFixes[0m [1min[0m [1m[38;5;153mbatches.test.js[0m
+
+  ┌──────────────────────────┬─────────────────────┬───────────────────────────────┐
+  │         Problem          │ How I confirmed it  │              Fix              │
+  ├──────────────────────────┼─────────────────────┼───────────────────────────────┤
+  │                          │ Deleting the line   │ The test now checks that tank │
+  │ [1mThe[0m [1m[38;5;153mbottle[39m test[0m [1mdidn't[0m   │ that frees the tank │  1 is freed, tank 2 is        │

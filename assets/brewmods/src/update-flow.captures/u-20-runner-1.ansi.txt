@@ -1,0 +1,30 @@
+[38;5;231m⏺[39m The plan has 4 auto rows, all quick, and none left for you to run. Next I'll read the
+  runner reference.
+
+  [38;5;246mRead [1m1[0m[38;5;246m file (ctrl+o to expand)[39m
+
+[38;5;231m⏺[39m Rows to run: 4: 4 class A on sonnet.
+
+[38;5;114m⏺[39m [1mBash[0m(cd "/Volumes/luf-demo/luf-fWEUj9/l1/proj" || exit 1
+      T="${TMPDIR:-/tmp}"…)
+[38;5;246m  ⎿  [39mLOCK /tmp/brewcode-setup-upgrade-2794583322
+     SCOPE snapshot 1 dirty path(s) -> /Volumes/luf-demo/luf-fWEUj9/l1/proj/.git/br
+     ewcode-scope-setup-status-row11.snap
+     [2m… +2 lines (ctrl+o to expand)[0m
+
+[38;5;114m⏺[39m [1m[38;5;16m[48;5;110mbrewcode:setup-upgrader[0m(upgrade agent-return-setup) [38;5;246mSonnet 5.5[39m
+[38;5;246m  ⎿  [39mBackgrounded agent[38;5;246m (↓ to manage · ctrl+o to expand)[39m
+
+[38;5;231m⏺[39m 1/4 brewtools:agent-return-setup running. I'm waiting for it to finish before the next
+  row.
+
+[38;5;246m✻[39m [38;5;246mWaiting for [1m1[0m[38;5;246m background agent to finish[39m
+
+[38;5;244m────────────────────────────────────────────────────────────────────────────────────────
+[39m❯ 
+[38;5;244m────────────────────────────────────────────────────────────────────────────────────────
+[39m  [38;5;211m⏵⏵ bypass permissions on[38;5;246m (shift+tab to cycle) · ↓ to manage[39m
+
+[1m [0m [1m⏺[0m [1mmain[0m
+[38;5;246m [39m [38;5;246m◯[39m [38;5;246mbrewcode:setup-upgrader[39m  [38;5;246mupgrade[39m [38;5;246magent-return-setup[39m            [38;5;246m4s · ↓[39m [38;5;246m32.4k[39m [38;5;246mtokens[39m
+

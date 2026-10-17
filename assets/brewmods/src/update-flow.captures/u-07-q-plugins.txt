@@ -1,0 +1,30 @@
+     ✅ marketplace update OK
+
+⏺ Bash(node "/Volumes/luf-demo/luf-fWEUj9/l1/plugins/cache/claude-brewcode/brewtools/6.1
+      0.0/skills/plugin-update/scripts/update-flow.mjs" latest > "/tmp/plugin-update.…)
+  ⎿  ✅ latest OK
+
+⏺ Bash(node "/Volumes/luf-demo/luf-fWEUj9/l1/plugins/cache/claude-brewcode/brewtools/6.1
+      0.0/skills/plugin-update/scripts/update-flow.mjs" plan "/tmp/plugin-update.1Iha…)
+  ⎿  {
+       "mode": "update",
+       "range": {
+     … +78 lines (ctrl+o to expand)
+────────────────────────────────────────────────────────────────────────────────────────
+←  ☒ Mods  ☐ Plugins  ✔ Submit  →
+
+Install the missing plugins?
+
+❯ 1. [ ] brewui
+         placeholder for future UI tools, no skills yet
+  2. [ ] Skip
+         Install no plugins now
+  3. [ ] Type something
+     Submit
+────────────────────────────────────────────────────────────────────────────────────────
+  4. Chat about this
+
+Enter to select · Tab/Arrow keys to navigate · Esc to cancel
+
+
+

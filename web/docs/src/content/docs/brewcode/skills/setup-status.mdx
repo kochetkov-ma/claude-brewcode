@@ -1,6 +1,6 @@
 ---
 title: "Setup Status"
-description: "Inspect all eleven setups across the plugin suite, detect missing or stale artifacts, and get commands ordered by search, conventions, agents, and process."
+description: "See which brewcode setups are current, stale or missing, then upgrade the stale ones in one run with safety checks and a list for the rest."
 order: 1118
 ---
 
@@ -8,22 +8,26 @@ import { Badge, Callout, Card, CardGrid, SourceLink, Spoiler, Steps, UpdateNotic
 
 # Setup Status
 
-<Badge text="sonnet" /> <Badge text="read-only probes" /> <Badge text="11 setups" />
+<Badge text="sonnet" /> <Badge text="report + upgrade" /> <Badge text="11 setups" />
 
 <SourceLink path="brewcode/skills/setup-status/README.md" anchor="setup-status" />
 
-Use it to inspect a repository, or to check copied artifacts after a plugin update. It reports
-each setup as current, disabled, missing, partial, stale or modified, and prints the exact next
-command. It runs no setup itself and spawns no agents.
+Shows, for each of the eleven setups in brewcode, brewtools and brewdoc, whether it is installed in this project, which plugin release it came from and what to run next. Use it to inspect a repository, or to check copied artifacts after a plugin update. It reports each setup as current, disabled, missing, partial, stale or modified.
+
+`upgrade` goes one step further. It runs the owner's own `upgrade` for every stale setup, one fresh [`brewcode:setup-upgrader`](/brewcode/agents/setup-upgrader/) subagent per setup, and probes each setup again afterwards. It stops at the first failure and hands everything it may not run to you as a numbered list.
+
+A report changes nothing unless you accept its upgrade offer or the task-tools key merge.
 
 ## Quick reference
 
 | Field | Value |
 |-------|-------|
 | Command | `/brewcode:setup-status` |
-| Input | Free-text prompt; optional plugin or skill filter |
+| Arguments | `[prompt] [report\|upgrade] [<plugin>\|<skill>]` — no args = full report + one upgrade offer |
+| Model | sonnet |
+| Tools | Read, Bash, Glob, Grep, AskUserQuestion, Agent |
 | Covers | Eleven setups across brewcode, brewtools, and brewdoc |
-| Writes | No setup artifacts; one optional, explicitly accepted task-tools settings key |
+| Writes | `report`: nothing unless you accept its upgrade offer or the task-tools key. `upgrade`: each setup's own files, written by the setup-upgrader subagents (the skill itself has no `Write` or `Edit`) |
 
 ## When to use
 
@@ -32,52 +36,141 @@ command. It runs no setup itself and spawns no agents.
 | Inspect the whole project | `/brewcode:setup-status` |
 | Inspect one plugin | `/brewcode:setup-status brewtools` |
 | Inspect conventions and their loading rule | `/brewcode:setup-status convention-setup` |
+| Bring every stale setup current after a plugin update | `/brewcode:setup-status upgrade` |
+| Upgrade one plugin's setups only | `/brewcode:setup-status upgrade brewtools` |
 
-Filters can sit in a free-text RU/EN prompt; other text gives the full report. Commands stay literal.
+Mode words and filters can sit anywhere in a free-text prompt. `upgrade`, `update`, `refresh`, `fix` and `apply` select the upgrade; other text gives the report. Commands stay literal.
 
 ## Example
 
 ```text
-/brewcode:setup-status convention-setup
+/brewcode:setup-status upgrade
 ```
 
-Without conventions, expect a `missing` row pointing to `/brewcode:convention-setup install`.
+```text
+Rows to run: 4: 3 class A on sonnet, 1 class B on the owner's model; 🌐 agent-return-setup: every project of this profile
 
-<Callout type="warning" title="Run setups yourself, one per session">
-  Setups are interactive generators. Follow the report's commands separately, in fresh sessions. There is no `--run`, `--fix`, or automatic mode.
+## 🔵 Setups upgraded: 3 of 4 done, 1 needs you
+
+| # | Setup | Before | After | Result |
+|---|---|---|---|---|
+| 1 | **agent-return-setup** (global) | 6.5.0 | **6.9.6** | 🟢 upgraded, thresholds kept |
+| 2 | **semble-setup** | 6.6.0 | **6.9.6** | 🟢 upgraded |
+| 3 | **task-board-setup** | 6.5.6 | 6.5.6 | 🔵 partial: 2 edits wait for your OK |
+| 4 | **docsync-setup** | 6.6.0 | **6.9.6** | 🟢 upgraded |
+
+### Run these yourself, one per session
+
+1. 🔵 `/brewcode:convention-setup upgrade "regenerate the documents"`: class C: an interview upgrade, run it yourself
+2. 🔵 `/brewtools:task-board-setup upgrade "apply the 2 pending edits: TRACKER.md, rules/tasks.md"`: 2 edits wait for your OK
+```
+
+Versions are illustrative. The run line comes first and gives the counts: class A is a quick setup, class B a long one, and each global setup being upgraded gets a `🌐` part because its upgrade reaches every project of the profile. The `Run these yourself` list follows run stage order: conventions (stage 3) before the task board (stage 6). The report ends with the dependency table and the task-tools line. A report for a single setup is shorter: without conventions, `/brewcode:setup-status convention-setup` shows a `missing` row pointing to `/brewcode:convention-setup install`.
+
+{/* Stable deep link, shared outside the docs: /brewcode/skills/setup-status/#demo. Keep the id. */}
+<p align="center" id="demo">
+  <img src="/brewmods/update-flow.gif" alt="Claude Code terminal, real session: /brewtools:plugin-update updates every brewcode plugin and mod in one run, /reload-plugins reloads them, then /brewcode:setup-status upgrade prints its PLAN and runs one brewcode:setup-upgrader subagent per stale setup, one at a time. It ends with Setups upgraded: 4 of 4 done and There's nothing left for you to run." width="800" height="711" loading="lazy" />
+  <br /><small>Update the plugins, reload, then upgrade every stale setup. Real Claude Code 2.1.302 screens, sped up where the title bar shows ⏩.</small>
+</p>
+
+<Callout type="warning" title="Reload before you upgrade">
+After a plugin update run `/reload-plugins`: a session still on the old release prints the report and refuses `upgrade`. The full chain is on [Plugin Update](/brewtools/skills/plugin-update/).
 </Callout>
+
+## What the upgrade leaves to you
+
+<Callout type="note" title="Permission prompts">
+In `default` and `acceptEdits` mode each setup's upgrade asks several times, because its shell commands and `.claude/` writes are not pre-approved: a live `default` run of nine setups asked about 80 times, so approve them as they appear. `bypassPermissions` runs the upgrade without prompts, while `dontAsk` denies them.
+</Callout>
+
+The upgrade runs a setup only when its fix is the owner's own `upgrade`, which can run unattended (every setup but `convention-setup`; its questions are declined and left pending). It never runs `install`, `enable`, `uninstall`, `purge` or `--force`, an interview upgrade, or a re-copy over a file you edited. Each of these goes to the `Run these yourself, one per session` list, with its reason:
+
+| Reason | Why it is not automatic |
+|--------|-------------------------|
+| Interview setup | `convention-setup` asks real questions |
+| Modified | A hand edit or a missed re-copy: the upgrade would overwrite your edits, so diff first. A disabled setup whose copied files differ under a current stamp is listed here too |
+| Custom registration | Hooks run through your own launcher; the setup is report-only |
+| Parked | A parked setup whose upgrade refuses while parked: `enable`, `upgrade` and `disable` run by hand |
+| Another mode or `--force` | The fix is an `install`, or needs `--force`: your call |
+| Missing scope or team name | The row cannot tell `project` from `global`, or which team |
+| Subagent limit | `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` is `1` (setups whose upgrade spawns a subagent are listed) or `0` (every setup is listed) |
+| Quick run | After `Only the quick ones (K)`, the long setups are listed |
+
+The list is ordered by the run-list's seven stages, on the setups that ran and the ones handed back alike. Within a stage the setups that ran come first, then the rest in plan order. Each line is a concrete command with its reason.
+
+## How the upgrade stays safe
+
+| Check | What it does |
+|-------|--------------|
+| Reload guard | The release this session loaded is compared with the release installed for this project's scope (local, else project, else user). A mismatch prints `RELOAD-NEEDED loaded=X installed=Y scope=S`: the report still prints, `upgrade` and the offer are refused. A newer install for another scope only does not trigger it |
+| One run per project | A lock directory in the temp root. A second `upgrade` runs nothing and prints the command to remove the lock if no run is active |
+| Before each setup | Snapshot of the project's files, the git HEAD and the stash count |
+| After each setup | The setup is probed again, and that probe is the verdict. Only the setup's own files may differ, and HEAD and the stash must not move. The first failure stops the run: setups after it are marked as not run, each with its command |
+| Scope check that cannot run | If the check fails without naming a path (git cannot hash the tree, the snapshot is missing), nothing was judged. The run stops there, as it does for a path outside the scope |
+| Runtime files | Files that hooks and Claude Code write while a setup runs (logs, telemetry, state, plans, reports) never count as out-of-scope writes. Only untracked files are skipped: a tracked runtime file that changes still stops the run |
+| Never | Reverts, resets, stashes or commits, or deletes what a stopped setup wrote. The report names the paths, the commits or the stash to review |
+| No git | The files and HEAD checks are skipped; one line says so |
+
+## The unattended flag
+
+`upgrade` passes `--unattended` to each stale setup's own `upgrade`. Ten of the eleven setups accept it; `convention-setup` does not, because it is an interview and always stays on your list. Under the flag a setup asks nothing: a gate that would ask is declined and reported as pending (result `partial`), a precondition it would ask about makes it skip with nothing written, and it ends with one `RESULT` line that the runner reads. The flag belongs to this runner; it is not an option for you to type.
 
 ## How it works
 
 <Steps>
-  <li><div><strong>Resolve plugin roots</strong><p>Find the installed plugins and their versions. A missing plugin gives an `n/a` row; an unresolved version is reported, never guessed.</p></div></li>
+  <li><div><strong>State the plan</strong><p>Print a `PLAN — brewcode:setup-status` block before any probe: the input, the mode, the scope and what the run will do.</p></div></li>
+  <li><div><strong>Resolve plugin roots</strong><p>Find the installed plugins and their versions. A missing plugin gives an `n/a` row; an unresolved version is reported, never guessed. A session older than the release installed for this project's scope is flagged `RELOAD-NEEDED loaded=X installed=Y scope=S` and refuses the upgrade.</p></div></li>
   <li><div><strong>Probe artifacts and off-switches</strong><p>Check anchors, secondary files, settings, and parked entries.</p></div></li>
   <li><div><strong>Compare content, ownership, bytes</strong><p>Compare each artifact's content version with its own plugin source, check `generated_by`, and compare copied files byte by byte.</p></div></li>
-  <li><div><strong>Print verdicts and the run-list</strong><p>Partial installs come first within a stage, then stale and modified, then missing.</p></div></li>
-  <li><div><strong>Check roster and task tools</strong><p>Warn about unknown setups, else print `roster: 11/11 in sync`. Offer the task-tools key merge if no layer sets it.</p></div></li>
+  <li><div><strong>Print verdicts and the run-list</strong><p>Partial installs come first within a stage, then stale and modified, then missing. Rows the upgrade may run end with `(auto)`.</p></div></li>
+  <li><div><strong>Check roster and task tools</strong><p>Warn about unknown setups, else print `roster: 11/11 in sync`. Offer the task-tools key merge if no layer sets it, on Claude Code 2.1.233 or newer or when its version is unknown.</p></div></li>
+  <li><div><strong>Plan the upgrade</strong><p>Split the stale rows into those that run automatically and those that go to your list. Teams get one row per team that is not current, and agent-deadline-setup and agent-return-setup one row per installed scope that is not current. `report` asks `Upgrade N setups now?` once, naming the quick and long counts, marking setups that apply to every project of your profile, and bundled with the task-tools question; `upgrade` asks no upgrade question.</p></div></li>
+  <li><div><strong>Upgrade one setup at a time</strong><p>Print the run line, lock the project, then run the rows in stage order. Each upgrader is awaited before the next step, and each row goes through the checks in [How the upgrade stays safe](#how-the-upgrade-stays-safe).</p></div></li>
+  <li><div><strong>Print the upgrade report</strong><p>The table of results, the list to run yourself, the dependency table and the task-tools line.</p></div></li>
 </Steps>
 
 ## The eleven setups
 
-| Setup | Anchor |
-|-------|--------|
-| [teams-setup](/brewcode/skills/teams-setup/) | `.claude/teams/*/team.md` |
-| [semble-setup](/brewcode/skills/semble-setup/) | `.claude/rules/semble-first.md` |
-| [convention-setup](/brewcode/skills/convention-setup/) | `.claude/rules/convention.md` |
-| [superreview-setup](/brewcode/skills/superreview-setup/) | Emitted `.claude/skills/superreview/SKILL.md` |
-| [task-board-setup](/brewtools/skills/task-board-setup/) | `.claude/features/board.md` |
-| [agent-deadline-setup](/brewtools/skills/agent-deadline-setup/) | Deadline guard, project or global scope |
-| [agent-router-setup](/brewtools/skills/agent-router-setup/) | `.claude/hooks/agent-router.mjs` |
-| [manager-setup](/brewtools/skills/manager-setup/) | `.claude/brewtools/manager/state.json` |
-| [agent-return-setup](/brewtools/skills/agent-return-setup/) | Return guard, project or global scope |
-| [memory-sync-setup](/brewdoc/skills/memory-sync-setup/) | Emitted `.claude/skills/memory-sync/SKILL.md` |
-| [docsync-setup](/brewdoc/skills/docsync-setup/) | `.claude/docsync/config.json` |
+Quick setups ask nothing under `upgrade` and run on sonnet. Long setups are judgment upgrades run with every question declined, on the model their owner skill declares.
 
-Recurring tools have no installed state and stay out of the roster. The run-list follows seven stages, from agent-return and semble through
-conventions, teams, consumers, task-board and memory-sync with docsync. The order and install
-commands live on [Full Setup](/full-setup/).
+| Setup | Anchor | `upgrade` runs |
+|-------|--------|----------------|
+| [teams-setup](/brewcode/skills/teams-setup/) | `.claude/teams/*/team.md` | Long: plumbing only (migration, scripts, header), tuning stays interactive |
+| [semble-setup](/brewcode/skills/semble-setup/) | `.claude/rules/semble-first.md` | Quick |
+| [convention-setup](/brewcode/skills/convention-setup/) | `.claude/rules/convention.md` | You run it: class C, an interview |
+| [superreview-setup](/brewcode/skills/superreview-setup/) | Emitted `.claude/skills/superreview/SKILL.md` | Long |
+| [task-board-setup](/brewtools/skills/task-board-setup/) | `.claude/features/board.md` | Long |
+| [agent-deadline-setup](/brewtools/skills/agent-deadline-setup/) | Deadline guard, project or global scope | Quick |
+| [agent-router-setup](/brewtools/skills/agent-router-setup/) | `.claude/hooks/agent-router.mjs` | Quick |
+| [manager-setup](/brewtools/skills/manager-setup/) | `.claude/brewtools/manager/state.json` | Quick |
+| [agent-return-setup](/brewtools/skills/agent-return-setup/) | Return guard, project or global scope | Quick |
+| [memory-sync-setup](/brewdoc/skills/memory-sync-setup/) | Emitted `.claude/skills/memory-sync/SKILL.md` | Long |
+| [docsync-setup](/brewdoc/skills/docsync-setup/) | `.claude/docsync/config.json` | Quick |
+
+Recurring tools have no installed state and stay out of the roster. The run-list follows seven stages, from agent-return and semble through conventions, teams, consumers, task-board and memory-sync with docsync. The order and install commands live on [Full Setup](/full-setup/).
 
 ## Technical details
+
+<Spoiler id="upgrade-internals" title="Upgrade internals: flag, owned paths, outcomes">
+
+**The RESULT line.** Under `--unattended` the owner also makes no git commit, push, stash or reset, and scratch files live only in a private temporary directory. The line's format is the [return contract](/brewcode/agents/setup-upgrader/#return-contract) of the upgrader agent.
+
+**Owned paths.** Each subagent may write only its setup's paths (listed in `references/upgrade-runner.md`), plus the two settings files `.claude/settings.json` and `.claude/settings.local.json`, which five setups merge into. A write anywhere else stops the run. Runtime files that hooks, Claude Code and other sessions write (logs, telemetry, state, plans, reports) never count: `scope-guard.sh` skips them itself, untracked files only, so the runner and each owner's own gate judge alike.
+
+**Awaiting an upgrader.** The runner spawns one `brewcode:setup-upgrader` and waits for its `RESULT` line before it re-probes and moves on. Where the Agent tool has a `run_in_background` key (`claude -p`, the SDK) the spawn runs in the foreground. A default interactive session has no such key, so the run prints `<i>/<M> <setup> running`, ends the turn and resumes on that upgrader's completion notification. The resumed turn is a new one, so in `default` mode its checks and the unlock can ask for approval; `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` at launch keeps every upgrader in the foreground.
+
+**Outcome of one setup**, first match wins:
+
+| Condition | Result | Then |
+|-----------|--------|------|
+| A check in [How the upgrade stays safe](#how-the-upgrade-stays-safe) fails (a scope check that cannot run and a probe that still reads stale after `RESULT ok` included), the turn limit is hit, or there is no `RESULT` line or `RESULT failed` | Failed | Stop |
+| `RESULT ok` and the second probe reads current | Upgraded | Next setup |
+| `RESULT partial` | Partial | Next setup; the remaining command joins your list |
+| `RESULT skipped` | Skipped | Next setup; the setup's command joins your list |
+
+With agent-deadline installed, its budget (20 minutes by default) applies to each upgrader. A long setup cut by it returns no `RESULT` line and counts as a failure. A re-run re-classifies the project: finished setups drop out, so `upgrade` again resumes after a fix. No state file is kept; the stamps are the state.
+
+</Spoiler>
 
 <Spoiler id="verdicts" title="Verdicts and off-switches">
 
@@ -106,7 +199,7 @@ Convention checks the loader plus its three generated documents; a parked loader
 | agent-deadline, agent-return | Config `enabled` is not `true`; missing key means off |
 | agent-router, docsync | Config `enabled` is false; missing key means on |
 
-Disabled wins over the repair verdicts. A manager `state.json` alone is not a wall, so the row reads `missing`. A disabled row behind the plugin gets `upgrade` (stays disabled) for semble, agent-deadline, agent-router, manager, docsync, agent-return, and convention; teams, superreview, task-board, and memory-sync refuse `upgrade` while parked, so the row gets `enable`, `upgrade`, then `disable`.
+Disabled wins over the repair verdicts. A manager `state.json` alone is not a wall, so the row reads `missing`. A disabled row behind the plugin gets `upgrade` (stays disabled) for semble, agent-deadline, agent-router, manager, docsync, agent-return, and convention; teams, superreview, task-board, and memory-sync refuse `upgrade` while parked, so the row gets `enable`, `upgrade`, then `disable`. The keep-it-disabled `upgrade` lines run automatically only when the stamp is behind. When just the copied files differ under a current stamp, the row counts as `modified` and goes to your list, as do the three-step lines.
 
 </Spoiler>
 
@@ -133,10 +226,14 @@ An edited `semble-first.md` is never sent to plain `upgrade`: review the `diff -
 
 <Spoiler id="task-tools" title="Task-tools offer and probe safety">
 
+The check applies on Claude Code 2.1.233 or newer, and when `claude --version` gives no version:
+the release is then treated as one that gates the tools. On an older release the tools are on by
+default, so the report says the check was skipped and makes no offer.
+
 The highest settings layer that sets `CLAUDE_CODE_ENABLE_TODO_TOOLS` decides (local, project,
 global); only `1`, `true`, `yes` or `on` turns it on. A higher layer's `"0"` reports
-`off (<layer>)` with no offer. Otherwise the report asks once to add it to global or project
-`settings.json`; `Leave off` changes nothing. The merge holds `settings.json.lock` and aborts
+`off (<layer>)` with no offer. Otherwise, on a release where the check applies, the report asks
+once to add it to global or project `settings.json`; `Leave off` changes nothing. The merge holds `settings.json.lock` and aborts
 after 10 s if another setup holds it.
 
 Probe fences run inline or through `scripts/fence-run.sh` (private 0700 temp directory, removed on exit).
@@ -146,9 +243,12 @@ Probe fences run inline or through `scripts/fence-run.sh` (private 0700 temp dir
 ## Related
 
 <CardGrid>
-  <Card title="Brewcode overview" icon="document" href="/brewcode/overview/">Analysis, agents, conventions, and review tools.</Card>
+  <Card title="Setup Upgrader" icon="bot" href="/brewcode/agents/setup-upgrader/">The internal agent that runs one setup's upgrade.</Card>
+  <Card title="Plugin Update" icon="refresh-cw" href="/brewtools/skills/plugin-update/">The step before: update the plugins, then reload.</Card>
   <Card title="Convention Setup" icon="clipboard" href="/brewcode/skills/convention-setup/">Install the foundation before creating project agents.</Card>
   <Card title="Full Setup" icon="settings" href="/full-setup/">The complete dependency order and setup examples.</Card>
+  <Card title="GitHub source" icon="github" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/setup-status">Roster, probes, references and the upgrade runner.</Card>
+  <Card title="Brewcode overview" icon="document" href="/brewcode/overview/">Analysis, agents, conventions, and review tools.</Card>
 </CardGrid>
 
 <UpdateNotice />

@@ -54,13 +54,13 @@ The prompt checks that Claude Code is 2.1.301 or newer, then adds the marketplac
 
 <InstallPrompt plugin="all" mode="install" />
 
-Full instructions: [Installation](/installation/). Upgrading: [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/).
+Full instructions: [Installation](/installation/). Updating: run [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/), then `/reload-plugins`, then [`/brewcode:setup-status upgrade`](/brewcode/skills/setup-status/) in each project.
 
 ## Four plugins, one suite
 
 | Plugin | Purpose | Skills | Agents | Hooks |
 |--------|---------|--------|--------|-------|
-| [**brewcode**](/brewcode/overview/) | Conventions and rules, agent teams, semantic search, quorum review, skill/agent/hook/mod creation | 9 | 6 | 2 |
+| [**brewcode**](/brewcode/overview/) | Conventions and rules, agent teams, semantic search, quorum review, skill/agent/hook/mod creation | 9 | 7 | 2 |
 | [**brewtools**](/brewtools/overview/) | Text utilities, secrets scanning, SSH, deploy, manager mode, the opt-in hook layer | 13 | 3 | 1 |
 | [**brewui**](/brewui/overview/) | UI / visual / creative tools (placeholder, empty) | 0 | 0 | — |
 | [**brewdoc**](/brewdoc/overview/) | Doc-staleness tracking, memory sync, setup docs, PDF, publishing | 5 | 0 | — |
@@ -80,7 +80,7 @@ All four install from a single marketplace and load with every Claude Code sessi
     Etalon classes and patterns become convention docs, then rules in `.claude/rules/`.
   </Card>
   <Card title="One setup dashboard" icon="clipboard" href="/brewcode/skills/setup-status/">
-    `/brewcode:setup-status` shows which of the 11 setups are installed, stale, disabled, partial or missing, with the exact command for each.
+    `/brewcode:setup-status` shows which of the 11 setups are installed, stale, disabled, partial or missing, with the exact command for each. `/brewcode:setup-status upgrade` brings the stale ones current.
   </Card>
 </CardGrid>
 

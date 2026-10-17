@@ -1,0 +1,30 @@
+                                               description: "DB code rules: bound
+                                               params, no N+1, transactions", scope:
+                                               "global")
+  ⎿  saved ++db (global): ~/.claude/placeholders/db.md
+
+⏺ I saved ++db as a global placeholder in ~/.claude/placeholders/db.md, so you can use
+  it in any project. Typing ++db in a prompt inserts "bind SQL params, no query in a
+  loop, use transactions".
+
+✻ Brewed for 6s · done 11:27 PM
+
+❯ how should the tasting import write rows? one line ++db
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+⏺ Updated plan
+  ⎿  /plan to preview
+
+⏺ Wrap the import in transaction() and write all rows with one multi-row INSERT INTO
+  tastings (id, batch_id, score) VALUES (?, ?, ?), (?, ?, ?), … with every value as a
+  bound param (db.js handles that form), so nothing queries in a loop and one bad row
+  rolls back the whole import.
+
+✻ Sautéed for 11s · done 11:27 PM
+
+────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────
+  ⏸ plan mode on (shift+tab to cycle) · ← for agents
+

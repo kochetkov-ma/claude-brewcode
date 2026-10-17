@@ -12,7 +12,9 @@ const allPlugins = ['brewcode', 'brewdoc', 'brewtools', 'brewui'] as const;
 const allMods = ['brewmod-placeholders', 'brewmod-plan-effort'] as const;
 
 const EXECUTE = 'Execute these commands in this Claude Code session, one by one, show full output for each, do not skip any, do not summarize:';
-const CLOSING = 'After all commands succeed, run `/reload-plugins`. If `/reload-plugins` is unavailable, tell me to type `exit` and run `claude` again. Run the commands now.';
+const RELOAD = 'After all commands succeed, run `/reload-plugins`. If `/reload-plugins` is unavailable, tell me to type `exit` and run `claude` again.';
+const UPGRADE_SETUPS = 'Then, if brewcode is installed, tell me to run `/brewcode:setup-status upgrade` in this project and in each other project that uses brewcode. It upgrades the stale setups. Do not run it yourself: I type it.';
+const RUN_NOW = 'Run the commands now.';
 const VERSION_CHECK = 'First run `claude --version`. The mods need Claude Code 2.1.301 or newer. If it is lower, stop and tell me to run `claude update`, restart Claude Code (type `exit`, then run `claude`) and paste this prompt again.';
 const NOT_INSTALLED = 'If a command fails because that plugin is not installed, say so, treat it as done and continue with the next one.';
 
@@ -31,6 +33,9 @@ function buildPrompt(plugin: NonNullable<typeof Astro.props['plugin']>, mode: 'i
   const needsVersionCheck = plugin === 'all' || plugin === 'mods' || plugin.startsWith('brewmod-');
   const commands = [marketplaceCmd, ...names.map((name) => `claude plugin ${verb} ${name}@claude-brewcode`)];
   const skipNote = isUpdate && names.length > 1 ? [NOT_INSTALLED, ''] : [];
+  // Only suite plugins ship setups; mods and brewui have nothing to upgrade
+  const hasSetups = plugin === 'all' || plugin === 'brewcode' || plugin === 'brewdoc' || plugin === 'brewtools';
+  const closing = [RELOAD, ...(isUpdate && hasSetups ? [UPGRADE_SETUPS] : []), RUN_NOW].join(' ');
 
   return [
     ...(needsVersionCheck ? [VERSION_CHECK, ''] : []),
@@ -39,7 +44,7 @@ function buildPrompt(plugin: NonNullable<typeof Astro.props['plugin']>, mode: 'i
     ...commands.map((cmd, i) => `${i + 1}. ${cmd}`),
     '',
     ...skipNote,
-    CLOSING,
+    closing,
   ].join('\n');
 }
 

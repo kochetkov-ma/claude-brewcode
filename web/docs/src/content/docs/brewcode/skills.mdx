@@ -19,7 +19,7 @@ Skills (recipes) are slash commands defined in `SKILL.md` files. Brewcode ships 
 | 3 | [`/brewcode:e2e`](/brewcode/skills/e2e/) | opus | E2E orchestration: BDD scenarios, Playwright autotests |
 | 4 | [`/brewcode:rules`](/brewcode/skills/rules/) | sonnet | Syncs KNOWLEDGE.jsonl or session learnings to project rules |
 | 5 | [`/brewcode:semble-setup`](/brewcode/skills/semble-setup/) | opus | Installs, audits and maintains the semble_code search MCP |
-| 6 | [`/brewcode:setup-status`](/brewcode/skills/setup-status/) | sonnet | Read-only state of 11 setups and 23 carriers (brewcode 7, brewtools 13, brewdoc 3) with next commands |
+| 6 | [`/brewcode:setup-status`](/brewcode/skills/setup-status/) | sonnet | State of 11 setups and 23 carriers (brewcode 7, brewtools 13, brewdoc 3) with next commands; `upgrade` brings the stale ones current |
 | 7 | [`/brewcode:skills`](/brewcode/skills/skills/) | opus | Lists, improves, creates, syncs Claude Code skills |
 | 8 | [`/brewcode:superreview-setup`](/brewcode/skills/superreview-setup/) | opus | Generates a project-tailored deep-review skill |
 | 9 | [`/brewcode:teams-setup`](/brewcode/skills/teams-setup/) | opus | Creates and manages dynamic teams of domain agents |
@@ -41,7 +41,7 @@ Run order: `setup-status`, `semble-setup`, `convention-setup`, `teams-setup`, `s
 
 <Spoiler id="delegation" title="Delegation: one contract for skills that spawn agents">
 
-Every skill here except `setup-status` and `semble-setup` (neither has the `Agent` tool) fans work out to subagents under one sizing rule. A big task handed to one agent means an agent gone for an hour that you cannot observe or correct, and it usually drifts.
+Every skill here except `semble-setup` (it has no `Agent` tool) fans work out to subagents under one sizing rule; `setup-status upgrade` spawns one [`setup-upgrader`](/brewcode/agents/setup-upgrader/) per stale setup. A big task handed to one agent means an agent gone for an hour that you cannot observe or correct, and it usually drifts.
 
 One subagent = **one bounded unit**: one deliverable, roughly 5 files, roughly 10 steps. Larger work splits into independent parallel assignments. Convention setup partitions layer analysis, E2E partitions scenarios, teams setup creates agents one file per spawn.
 
@@ -63,7 +63,7 @@ The same brief lives in E2E references, convention-setup's rules guide, teams-se
 <Spoiler id="skill-dependencies" title="Skill dependencies">
 
 ```
-setup-status  (read-only: what is already here)
+setup-status  (what is already here; upgrade refreshes the stale ones)
       |
 semble-setup  (search foundation, when applicable)
       |

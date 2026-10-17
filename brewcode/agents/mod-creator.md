@@ -6,10 +6,10 @@ maxTurns: 80
 color: orange
 tools: Read, Write, Edit, Glob, Grep, Bash, Skill, WebFetch, WebSearch
 doc_type: llm
-version: "6.9.6"
+version: "6.10.0"
 content_version: "6.9.3"
 generated_by: "brewcode"
-last_updated: "2026-10-16"
+last_updated: "2026-10-17"
 ---
 
 [DICT: CC=Claude Code, PLG=plugin, TF=live types file]
@@ -98,3 +98,5 @@ Directory `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/`:
 | `mods-patterns.md` | Building behaviour: bundled command hook (context injection), plan mode via state file, `turn.step` rewrite, decorations/band (`prompt.change`, budget), autocomplete, slash command, status-first command with own /config option + model hand-off + mod tool (#11), toast/status/key hints (#12), userConfig, fail-open guards, `$.fs` defaults, `rm` after realpath |
 | `mods-testing.md` | Writing tests: `claude-code/testing` kit, stub bottoms, raising events, `ui.mount`, latency, CI wiring, headless A/B and tmux checks |
 | `mods-changes.md` | A new CC build, or mod written for older one: per-version changes, "Did Not Reproduce", self-update procedure |
+
+<!-- Copyright (c) 2025-2026 Maksim Kochetkov, https://github.com/kochetkov-ma/claude-brewcode. SPDX-License-Identifier: MIT -->

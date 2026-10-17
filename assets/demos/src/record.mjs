@@ -23,6 +23,13 @@ const { model, blocks } = require('./engine.js');
 
 const die = (m, code = 1) => { console.error(m); process.exit(code); };
 const sha = (p) => createHash('sha256').update(readFileSync(p)).digest('hex');
+// Source hash minus the release stamps bump-version.sh stamp_rewrite rewrites (brewcode-meta, leading-frontmatter keys).
+function srcHash(p) {
+  let t = readFileSync(p, 'utf8').replace(/brewcode-meta: version=\d+\.\d+\.\d+ content_version=\d+\.\d+\.\d+ generated_by=\S*/g, 'brewcode-meta');
+  const fm = t.match(/^---\n[\s\S]*?\n---\n/);
+  if (fm) t = fm[0].replace(/^(version|content_version|generated_by|last_updated): ".*"\n/gm, '') + t.slice(fm[0].length);
+  return createHash('sha256').update(t).digest('hex');
+}
 
 function parseArgs(argv) {
   const pos = [], opt = {};
@@ -165,10 +172,17 @@ function encode(dir, kept, outFile, S) {
   return best;
 }
 
+// Walks GIF blocks: a raw byte scan for 21 F9 04 also hits LZW image data (skill-creator read 608 s).
 function gifInfo(file) {
   const b = readFileSync(file);
-  let total = 0, frames = 0;
-  for (let i = 0; i < b.length - 7; i++) if (b[i] === 0x21 && b[i + 1] === 0xf9 && b[i + 2] === 0x04) { total += b.readUInt16LE(i + 4); frames++; }
+  const ct = (packed) => (packed & 0x80 ? 3 << ((packed & 7) + 1) : 0);
+  const skipSubBlocks = (i) => { while (b[i] !== 0) { if (i >= b.length) throw new Error(`${file}: truncated GIF`); i += b[i] + 1; } return i + 1; };
+  let total = 0, frames = 0, i = 13 + ct(b[10]);
+  while (i < b.length && b[i] !== 0x3b) {
+    if (b[i] === 0x21) { if (b[i + 1] === 0xf9) { total += b.readUInt16LE(i + 4); frames++; } i = skipSubBlocks(i + 2); }
+    else if (b[i] === 0x2c) i = skipSubBlocks(i + 10 + ct(b[i + 9]) + 1);
+    else throw new Error(`${file}: unexpected GIF block 0x${b[i].toString(16)} at ${i}`);
+  }
   return { width: b.readUInt16LE(6), height: b.readUInt16LE(8), seconds: total / 100, frames };
 }
 
@@ -185,7 +199,7 @@ async function main() {
   for (const name of names) {
     const S = loadScenario(name), gates = [];
     const { facts } = checkText(S, gates);
-    const hashes = Object.fromEntries([...new Set(facts.map((f) => f.src))].map((s) => [s, existsSync(join(ROOT, s)) ? sha(join(ROOT, s)) : null]));
+    const hashes = Object.fromEntries([...new Set(facts.map((f) => f.src))].map((s) => [s, existsSync(join(ROOT, s)) ? srcHash(join(ROOT, s)) : null]));
     const old = manifest.demos[name];
     if (opt.check && old) { const drift = Object.keys(hashes).filter((s) => old.sources[s] !== hashes[s]); gates.push(['manifest-hash', drift.length === 0, drift.length ? `source changed since last record: ${drift.join(', ')}` : 'sources unchanged since last record']); }
     let gif = null;

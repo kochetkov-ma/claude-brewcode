@@ -51,6 +51,4 @@ window.PH_STORY = {
     { screen: 'ft-7-top', has: '❯ /placeholders show ++m\n', why: 'the command that printed it' },
     { screen: 'ft-7-top', has: 'brewmod-placeholders: ++m · full text as sent · plan mode off', why: 'show output head (show.ts)' },
   ],
-  // README bottle (separate placeholders-full-text-bottle.gif above the terminal GIF): seamless loop, airlock blips, the label on the tape
-  bottle: { loop: 5, fps: 6, blips: 9, label: '++m · batch 03' },
 };

@@ -1,0 +1,30 @@
+  docsync is the last row and runs after this one.
+
+⏺ Agent "upgrade agent-deadline-setup" finished · 1m 12s
+
+⏺ Bash(cd "/Volumes/luf-demo/luf-fWEUj9/l1/proj" || exit 1
+      BT=/Volumes/luf-demo/luf-fWEUj9/l1/plugins/cache/claude-brewcode/brewtools/6.10.0…
+      )
+  ⎿  SAME agent-deadline-guard
+     SAME agent-deadline-cleanup
+     "enabled": true
+     … +13 lines (ctrl+o to expand)
+
+⏺ 🟢 3/4 brewtools:agent-deadline-setup
+
+⏺ brewcode:setup-upgrader(upgrade docsync-setup) Sonnet 5.5
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+
+⏺ 4/4 brewdoc:docsync-setup is running. It's the last row. The first three are done and
+  checked.
+
+────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · /tasks to see subagents · ↓ to mana…
+
+  ⏺ main
+  ◯ brewcode:setup-upgrader  upgrade docsync-setup                 3s · ↓ 10.7k tokens
+
+
+

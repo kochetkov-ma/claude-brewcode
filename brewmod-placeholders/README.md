@@ -3,7 +3,7 @@
   <a id="demo"></a><img src="../assets/brewmods/placeholders-bottle.gif" width="260" alt="ASCII glass fermenter, bubbling; the tape label reads ++r · batch 01">
 </p>
 <p align="center">
-  <img src="../assets/brewmods/placeholders.gif" width="800" alt="Claude Code terminal, real session: ++ opens the placeholder list, Up and Tab insert ++r, the band above the prompt shows the lines Claude receives, and Enter sends: Claude reviews by the ++r rules. /placeholders global add ++db saves a new one after one question. In plan mode Claude answers with the ++db rule, the caret on ++m shows its teal plan-mode part, and ++/ sends the message exactly as typed."><br><sub>Real Claude Code 2.1.301 screens, sped up where the title bar shows ⏩. <code>++</code> <code>↑</code> <code>⇥</code> insert a placeholder, the band shows what Claude receives, <code>⏎</code> sends; <code>⇧⇥</code> twice = plan mode; <code>++/</code> = send as typed.</sub>
+  <img src="../assets/brewmods/placeholders.gif" width="800" alt="Claude Code: ++ opens the placeholder list and ++r goes in; the band shows the exact text Claude receives; the ++r review finds three DB bugs; /placeholders global add ++db saves a new placeholder after one question; in plan mode ++db shapes the plan, and ++db ++m together add the manager task graph (teal plan part)."><br><sub>Pick <code>++r</code>, read the band, send: the review finds DB bugs. Add <code>++db</code> in one line, then use it with <code>++m</code> in plan mode. Real Claude Code 2.1.301 screens, sped up where the title bar shows ⏩.</sub>
 </p>
 <h1 align="center">Prompt placeholders</h1>
 <p align="center">Prompt shortcuts for Claude Code: type <code>++r</code> to attach a saved instruction block, read its text before you send, add your own with <code>/placeholders</code>.</p>
@@ -29,7 +29,7 @@ Then run `/reload-plugins`. Works on Team organizations.
 <details>
 <summary>Update, dev mode, requirements</summary>
 
-Update: run `claude update` and restart Claude Code, then `claude plugin marketplace update claude-brewcode && claude plugin update brewmod-placeholders@claude-brewcode`. Dev mode, no install: `claude --plugin-dir ./brewmod-placeholders`. Needs Claude Code 2.1.301 or newer and `node` on the `PATH` (the bundled command hook runs as plain Node). Mods use the hooks module API, which is early access.
+Update: run `claude update` and restart Claude Code, then `claude plugin marketplace update claude-brewcode && claude plugin update brewmod-placeholders@claude-brewcode`, then `/reload-plugins`. With brewtools installed, `/brewtools:plugin-update` does the same for every plugin and mod. Dev mode, no install: `claude --plugin-dir ./brewmod-placeholders`. Needs Claude Code 2.1.301 or newer and `node` on the `PATH` (the bundled command hook runs as plain Node). Mods use the hooks module API, which is early access.
 
 </details>
 
@@ -175,8 +175,7 @@ Your own placeholder can have a plan part too: see [Examples](#examples).
 
 ## Read the full text
 <!-- Stable deep link, shared outside the repo: #full-text-demo. Keep the id. -->
-<p align="center"><a id="full-text-demo"></a><img src="../assets/brewmods/placeholders-full-text-bottle.gif" width="200" alt="ASCII glass fermenter, bubbling; the tape label reads ++m · batch 03"></p>
-<p align="center"><img src="../assets/brewmods/placeholders-full-text.gif" width="800" alt="Claude Code terminal, real session: the caret on ++m shows its text cut to fit, then a teal `not sent now · plan mode adds 18 lines`; ? then Enter fills /placeholders show ++m, and Enter again prints the whole text in the chat without a Claude turn."><br><sub>Real Claude Code 2.1.301 screens. Caret on <code>++m</code>; <code>?</code> and <code>⏎</code> fill the show command, nothing is sent; <code>⏎</code> again prints the whole text.</sub></p>
+<p align="center"><a id="full-text-demo"></a><img src="../assets/brewmods/placeholders-full-text.gif" width="800" alt="Claude Code terminal, real session: the caret on ++m shows its text cut to fit, then a teal `not sent now · plan mode adds 18 lines`; ? then Enter fills /placeholders show ++m, and Enter again prints the whole text in the chat without a Claude turn."><br><sub>Real Claude Code 2.1.301 screens. Caret on <code>++m</code>; <code>?</code> and <code>⏎</code> fill the show command, nothing is sent; <code>⏎</code> again prints the whole text.</sub></p>
 
 | Where you look | It shows | How |
 |---|---|---|

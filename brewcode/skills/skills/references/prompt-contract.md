@@ -139,13 +139,15 @@ first mutation; a read-only mode prints it immediately before its report.
 
 ## 5. Exemptions
 
-A pure reference / lookup skill that neither mutates anything nor chooses between modes is exempt
-from the section, the mode table and the PLAN block; it still accepts `[prompt]` in position 1 and
-uses it to scope its answer. Exhaustive list (mirrored by `is_exempt_skill` in `validate-skill.sh`):
+Two exemption kinds, exhaustive (mirrored exactly by `is_exempt_skill` in `validate-skill.sh`):
 
-| Skill | Why |
-|-------|-----|
-| `.claude/skills/claude-plugin-guide` | reference lookup, no modes, no writes |
+| Kind | Matches (absolute skill dir) | Exempt from (validator checks) | Why |
+|------|------------------------------|--------------------------------|-----|
+| `reference` | path ends in `/.claude/skills/claude-plugin-guide` | section, mode table, PLAN block (8-10); still needs the `[prompt]`-first hint (7) and uses the prompt to scope its answer | pure reference lookup: no modes, no writes |
+| `standalone` | `<root>/skills/<name>` or `<root>/openclaw/<name>`, where `<root>/.claude-plugin/` has `marketplace.json` and no `plugin.json` | the hint too (7-10) | portable copy outside any plugin, run by other agent runtimes (today: `skills/brewpage-publish`, `openclaw/brewpage-publish`) |
+
+Both kinds may also place one `$ARGUMENTS` occurrence anywhere in prose (check 20: their first
+occurrence, not the `## Prompt contract` slot).
 
 Any other skill missing the prompt-first hint, the section, the keyword table (2+ modes) or the PLAN
 block is a defect reported by `/brewcode:skills review` and `validate-skill.sh`.

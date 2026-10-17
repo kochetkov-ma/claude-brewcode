@@ -22,7 +22,7 @@ import { Badge, Callout, Card, CardGrid, Spoiler, SourceLink, Steps, UpdateNotic
 
 | Field | Value |
 |-------|-------|
-| Command | `/brewcode:superreview-setup [prompt] [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [scope]` |
+| Command | `/brewcode:superreview-setup [prompt] [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [scope] [--unattended]` |
 | Arguments | Free-text focus, an optional lifecycle verb anywhere in the prompt, an optional scope hint |
 | Model | opus |
 | Depth (emitted skill) | `QUICK` (default) or `EXTENDED`, read from the prompt at run time in any language; no flag |
@@ -41,6 +41,8 @@ An explicit verb anywhere in the prompt wins. With no verb, prompt evidence deci
 | `disable` | Renames `SKILL.md` to `SKILL.md.disabled`; nothing deleted | one rename |
 | `uninstall` | Deletes the skill dir; keeps review reports and `intent-guard.md`. Confirms once | skill dir |
 | `purge` | `uninstall` plus every `.claude/reports/*_superreview/`; `intent-guard.md` still survives. Confirms once | skill dir, reports |
+
+Under `--unattended`, `upgrade` skips when the emitted skill is parked or not installed; see [how the flag works](/brewcode/skills/setup-status/#the-unattended-flag).
 
 ## When to use
 
@@ -326,7 +328,7 @@ Every artifact this skill writes (`SKILL.md`, `references/agent-prompt.md`, `rep
     Establish coding, testing and architecture conventions first.
   </Card>
   <Card title="setup-status" icon="clipboard" href="/brewcode/skills/setup-status/">
-    Read-only dashboard: installed or stale, from `.template-baseline/`.
+    Dashboard: installed or stale, from `.template-baseline/`; `upgrade` refreshes it.
   </Card>
 </CardGrid>
 

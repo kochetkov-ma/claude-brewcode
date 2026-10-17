@@ -3,7 +3,8 @@
 Contents: Delivery · Tool buckets · Levels (`mcpAllow`, balanced Bash) · `agent_id` linchpin · Off-switch safety · Status explainer.
 
 Read on demand by `SKILL.md` (`status`, `level`), not hook-injected. `SKILL.md` holds the
-exempt-command box, guard table, recovery and every lifecycle block; this file adds the install
+exempt-command box, recovery and every lifecycle block (programs: `scripts/lifecycle.mjs`, `upgrade`
+inline); the guard table is `guard-enforcement.md`; this file adds the install
 model, per-tool and per-level policy and status one-liners. Authority: `hooks/hardmode-guard.mjs`.
 
 The HARD wall is Manager mode's second, opt-in layer. While `state.hard === true` for the current
@@ -78,14 +79,14 @@ delegation and session schedules re-enter the wall for later main-session work.
 |------|--------|
 | Where | Optional `mcpAllow: string[]` in project `state.json`; consulted before the classifier, at `balanced` ONLY |
 | Entry forms | Exact scoped name `mcp__server__tool`, or whole-server prefix `mcp__server__*`. Nothing else — a bare `mcp__*` is NOT a form, and is dropped by both the helper CLI and the guard |
-| When you need it | The classifier is default-deny per token: an unrecognised write verb denies (intended), and so does an unrecognised domain noun (`mcp__x__get_widgets`), the false denial this key exists for. Ambiguous verbs (`query`/`resolve`): `SKILL.md` guard table, row MCP; allowlist one only if that server's `query` really cannot write |
+| When you need it | The classifier is default-deny per token: an unrecognised write verb denies (intended), and so does an unrecognised domain noun (`mcp__x__get_widgets`), the false denial this key exists for. Ambiguous verbs (`query`/`resolve`): `guard-enforcement.md`, row MCP; allowlist one only if that server's `query` really cannot write |
 | Set, clear | `SKILL.md` "Recovery" item 2. Self-exempt at every level; one invalid entry → exit 2, nothing written; a malformed stored value allows nothing and does not count as broken state |
 
 ### balanced — Bash read-only classifier
 
 A `Bash` or `Monitor` command passes only when every segment (split on `&&`, `||`, `;`, `|`, `&`,
 newline) is an allowlisted read-only base command (default-deny; not a shell evaluator, not a list
-of mutation words). Binaries and denied flags: `SKILL.md` guard table,
+of mutation words). Binaries and denied flags: `guard-enforcement.md`,
 row "`balanced` Bash, `Monitor`" (code: `READONLY`, `GIT_EXEC_FLAG`, `RG_EXEC_FLAG`,
 `FIND_EXEC_ACTION`). What that row leaves out:
 

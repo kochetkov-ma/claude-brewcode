@@ -11,7 +11,7 @@ Inspect repository instructions, architecture, tests, and recent changes, then c
 
 Follow every phase below. When a phase delegates work, use Codex collaboration with only `task_name` and `message`; treat each "Codex delegation brief" block as role and message content, not executable syntax. Required approval: main presents a concrete, reviewable proposal in chat and waits for an actual user reply before dependent action. Existing authorization for the same scope remains valid; do not ask again. Optional clarification: use `request_user_input_async` only if exposed, or `request_user_input` only if available in the current runtime/mode, for optional choices and never approval. Otherwise ask in main chat. Delegated agents return unresolved questions to main. Silence, elapsed time and tool errors are not approval. Resolve `<skill-directory>`, `<plugin-root>`, `<project-root>`, and `<arguments>` before running commands.
 
-<!-- brewcode-meta: version=6.9.6 content_version=6.5.6 generated_by=brewcode:superreview-setup -->
+<!-- brewcode-meta: version=6.10.0 content_version=6.10.0 generated_by=brewcode:superreview-setup -->
 
 # Super Review Generator (brewcode:superreview-setup)
 
@@ -41,9 +41,10 @@ optional `[scope]` hint.
 
 ## Prompt contract
 
-`<arguments>` is one free-form RU/EN prompt; verb tokens and flags may sit anywhere in it.
+`<arguments>` is one free-form RU/EN prompt; verb tokens and flags (`--unattended`) may sit anywhere in it.
 
-1. Verb: an explicit verb token wins outright (the seven canonical verbs: Verb routing table below);
+1. Verb: strip `--unattended` first: a flag, never a verb or fine-tune text (Phase 2b, **Unattended**).
+   Then an explicit verb token wins outright (the seven canonical verbs: Verb routing table below);
    else the most distinct whole-word keyword hits in that table. Tie with `purge` (destructive) ->
    `main-chat user gate`; with `status` -> `status`; of two mutating verbs -> the keyword that comes
    first. No hit or empty -> `status` if `.codex/skills/superreview/SKILL.md` or its `.disabled`
@@ -142,7 +143,7 @@ rather than emit one agent that owns half the repo.
 
 ### Phase 0 — Pre-analysis (read THIS skill's emit material)
 
-1. Read the emit templates this generator ships (relative to `<skill-directory>`):
+1. Read the emit templates this generator ships (relative to `<skill-directory>/`):
    - `references/SKILL.md.template` — the emitted SKILL.md (with `{PLACEHOLDER}` slots)
    - `references/agent-prompt.md` — runtime expert selection + domain-owner prompt contract (emitted, substituted)
    - `references/scope.md.template` — scope-discipline reference (emitted as the target's `references/scope.md`)
@@ -163,22 +164,7 @@ bash "<skill-directory>/scripts/generate.sh" scan && echo "✅ scan" || echo "�
 The scan reports: build files, `.codex/agents/**`, `.codex/rules/*` + `.codex/convention/*`, test dirs, source dirs.
 From it (plus your own reads) determine:
 
-| Aspect | How to detect | Drives placeholder |
-|--------|---------------|--------------------|
-| Tech stack | build files: `pom.xml`/`build.gradle*` -> Java/Kotlin; `package.json`+react/ts -> Node/TS; `pyproject.toml`/`requirements*.txt` -> Python; `go.mod` -> Go | `STACK_LABEL`, `STACK_REF`, `SOURCE_GLOB`, `PATHSPEC_GLOBS` |
-| Project agents | `.codex/agents/**/*.toml` (recursive, name + description); map each to the path group it owns; flag READ-ONLY recon agents (cloud/SaaS/tracker consoles) as NON-reviewers | `DOMAIN_AGENTS_TABLE`, `FILE_GROUP_MAP`, `GENERAL_AGENTS_TABLE` |
-| Arbiter / validator | an architecture/reviewer agent in `.codex/agents/`, else built-in `general-purpose` | `ARBITER_AGENT`, `VALIDATOR_AGENT` |
-| Rule + convention files | `.codex/rules/*.md` + `.codex/convention/*.md` + `AGENTS.md` | `RULE_POINTER_TABLE`, `RULE_PREFLIGHT_LIST` |
-| Source path groups | top-level source dirs / service dirs / module layout | `FILE_GROUP_MAP` |
-| **Mechanical gates** | the REAL build/lint/type/test commands (`package.json` scripts, Makefile, gradle tasks, `pytest`, `go test`), plus where they run from | `GATE_COMMANDS` |
-| **Scope tracker** | `.codex/features/**` board, `gh` + `.github/`, Jira/Linear config, branch naming `<type>/<issue>-<slug>` | `TRACKER_LABEL`, `BASELINE_RESOLUTION_BASH`, `SANCTION_PRECEDENCE_TABLE`, `SCOPE_AGENT_A/B` |
-| **Shared surfaces** | public API/contract dirs, DB migrations, schema/registry files, CI workflows, dependency manifests, design tokens | `SHARED_SURFACES_TABLE`, `OWNERSHIP_SIGNALS_BASH` |
-| Team parallelism | contributors in `git shortlog -sn --since=3.months`, owner columns on the board | `TEAM_NOTE` |
-| DB / test stack | testcontainers, JPA/JOOQ, pytest, jest, etc. | folded into the per-stack reference note |
-| **Intent tier sources** | Tier 2 = spec/design-doc dirs (`.codex/specs/**`, `docs/specs/**`, an ADR dir); Tier 3 = plan / task board / task graph (`.codex/features/**`, `TASKS.md`); Tier 4 = policy (root + nested `AGENTS.md`, `.codex/rules/**`, `.codex/convention/**`). Tier 1 is `TRACKER_LABEL`, already detected. Absent -> the literal string `none` | `SPEC_LOCATION`, `PLAN_LOCATION`, `POLICY_LOCATION` |
-| **Project invariants** | Read them, do not guess — each cited by source file: planned scale (users/RPS/data volume stated in README/AGENTS.md/specs — "personal tool" and "10k RPS" produce opposite drift verdicts); testing policy (the project's own rule: few scenario tests vs full-coverage); dependency policy (pinning rule, "reuse before adding", vendored/allowed sets); file-layout policy (one-file-per-what, module boundaries, naming conventions); architecture stance (the pattern committed to, and what it explicitly rejected) | `PROJECT_INVARIANTS_TABLE` |
-| **Known drift instances** | past over-engineering in this repo's history + what its rules explicitly forbid (an `avoid.md` row is a drift class someone already hit) + the vocabulary this team uses for it | `DRIFT_EXAMPLES_TABLE` |
-| **Cheap evidence commands** | this repo's real one-liners: `git diff --stat` on the resolved range, the dependency-manifest diff for THIS manifest (`package.json` / `pom.xml` / `pyproject.toml` / `go.mod`), new-file listing, test-file count under the real test dirs | `EVIDENCE_COMMANDS_BASH` |
+Details: `<skill-directory>/references/generator/phase1-aspects.md` — Read it now: one row per aspect, how to detect it, the placeholder it drives.
 
 **Multi-stack repos:** pick the dominant stack for the emitted `STACK_REF` and note the secondary stack(s) in
 `DOMAIN_AGENTS_TABLE` / `FILE_GROUP_MAP`. One stack reference doc is emitted; the rule pointers cover the rest.
@@ -290,6 +276,29 @@ REFUSES on a live installation. When it does:
 
 > **Scope (normative):** `upgrade` edits only this setup's owned paths: `.codex/skills/superreview/`, `.codex/agents/intent-guard.toml`, `.codex/reports/`. Any other change (application source, tests, docs, CI, mirrors, other setups' files) is a defect to report, never to apply: name the path and the finding, edit nothing there, and pass no such edit to a subagent.
 
+**Unattended (`--unattended` anywhere in the prompt; set by `$brewcode:setup-status upgrade`).**
+1. A flag, never a mode or name: strip it first. Any resolved mode other than `upgrade` -> no write, `RESULT skipped <id> cv=?->? pending=0 note="not-upgrade"`.
+2. No `main-chat user gate` at all. Every gate in this section takes its decline branch; a declined gate is pending, never applied.
+3. A precondition this section would ask about (not installed, parked, custom/wrapped registration, orphan config,
+   user-modified managed file, missing tokenizer) -> no write, `RESULT skipped <id> cv=?->? pending=0 note="<reason>"`.
+4. Write only what this section already writes. No git commit, push, stash or reset; scratch only in a private `mktemp -d`.
+5. Last line, exactly once: `RESULT <ok|partial|skipped|failed> <id> cv=<before>-><after> pending=<n> note="<one line>"`,
+   `<id>` = `<plugin>:<skill>` [` scope=<project|global>`|` team=<name>`], `?` = unknown version.
+
+Here `<id>` = `brewcode:superreview-setup`, `cv` = the emitted `SKILL.md`'s `content_version`:
+- Run the `status` block first: `not_installed` or `installed: DISABLED` -> `skipped` (note `not installed` /
+  `parked`) before the snapshot; never `install` or `enable` on the user's behalf.
+- `DIFFERS` -> port it with Edit as below; a conflicting section (Error Handling) is declined, one pending each.
+- `MISSING -> restored RAW`, `NO BASELINE` and `UPGRADE_STACK=none` -> one pending each: no Phase 3 placeholder
+  guessing, no hand review of the staged copy, no guessed `STACK_REF`.
+- A Phase 4 `validate` ❌ that no pending item explains is one more pending item, its first ❌ line named in the
+  note: never `partial pending=0`.
+- Promote after Phase 4, not before it: only when pending is 0 and `validate` passed, run the promote command
+  `upgrade` printed, `rm -rf <baseline> && mv <staging>/.template <baseline> && rm -rf <staging>` (`validate`
+  already ran). Otherwise leave `.upgrade-staging/` and `.template-baseline/` in place: `partial`.
+- `ok` = pending 0, `validate` ✅, baseline promoted, scope ✅. `failed` = `upgrade` ❌ for any other reason, or
+  `❌ FAILED scope`.
+
 **EXECUTE** using shell (snapshot first; no git -> `SCOPE n/a`, the rule is checked by hand):
 ```bash
 bash "<skill-directory>/../teams-setup/scripts/scope-guard.sh" snapshot "${CODEX_PROJECT_DIR}" superreview-upgrade && echo "OK" || echo "FAILED"
@@ -339,7 +348,8 @@ byte-untouched, so `upgrade` never leaves it in a state `validate` rejects.
 
 Once the delta is applied (and any restored file has been through Phase 3), promote the new templates to the
 baseline with the command the script printed —
-`rm -rf <baseline> && mv <staging>/.template <baseline> && rm -rf <staging>` — then go to Phase 4. Both
+`rm -rf <baseline> && mv <staging>/.template <baseline> && rm -rf <staging>` — then go to Phase 4
+(unattended: after Phase 4, only per the **Unattended** rule above). Both
 directories carry a `.gitignore` of `*`, so they never enter the user's commits.
 
 > `SUPERREVIEW_FORCE=1 ... emit` overwrites and destroys those corrections — only when the user asks for a clean
@@ -449,21 +459,7 @@ Run it:  /superreview "<focus>" [scope]              -> QUICK: intent + gates, 1
 
 ## How the emitted skill behaves (what you are generating)
 
-Recap of the shape the emitted SKILL.md implements (full text in `references/SKILL.md.template`):
-
-| Phase | Behavior |
-|-------|----------|
-| Mode detection | Deterministic `FULL_PROJECT \| EXPLICIT \| UNCOMMITTED \| LAST_COMMITS`, computed not guessed; corpus = git-tracked-or-will-be (ignored = OUT) |
-| Depth detection | Semantic, from the prompt, after the mode: `QUICK` (default — no depth word, or a speed word) \| `EXTENDED` (depth/completeness/expertise asked, any language). Depth words are stripped before the rest becomes `{FOCUS}`; both axes are announced, with how to escalate |
-| Mechanical gates | Real build/lint/type/test first, both depths; output = `CONFIRMED-BY-EXECUTION`, passed to every agent so nobody re-runs it |
-| Intent pass | `intent-guard`, both depths, unconditional, never via the roster procedure; the entire review at `QUICK`. Rows are `CONFIRMED-BY-EVIDENCE` (verbatim ASKED quote + source tier + delivered path/count) and bypass the adversarial validator by design; category `intent`, rules `intent#<class>` |
-| Scope baseline | `EXTENDED` only (at `QUICK` intent-guard resolves its own tiers). Task + issue + recorded decisions, read-only; none -> `UNKNOWN` and a permanent P2 cap on scope findings |
-| Routing | `EXTENDED` only. Experts picked at runtime from the live roster; non-empty groups only; recon agents excluded; no owner -> `Explore` + DEGRADED marker; `{0,1,2}` general agents by judgement |
-| Fan-out | One parallel message. `QUICK`: `intent-guard` alone. `EXTENDED`: + domain experts + scope pass A (diff side, creep shapes 1-6 minus the NOT-creep exclusion list) + scope pass B (baseline side, delivery D1-D5 with proof of absence + closeout C1-C4); shared JSON finding contract; search-first before a reuse/duplication finding (rank 3, 90/70/50% reuse matrix) |
-| Validation | `EXTENDED` only. A non-owning validator reverse-validates every verdictless candidate (per finding, batched <=40), merges + de-dups + prioritizes P0-P3; unvalidatable -> `UNVALIDATED` and the run is `INCOMPLETE`. `QUICK` rows are all self-verdicted: the coordinator merges + ranks in-session and the run is never `INCOMPLETE` |
-| Scope gate (Phase 3b) | `EXTENDED` only. `main-chat user gate` on unsanctioned expansion / unproven absence; rewrites priorities only — adds no finding, never lifts the UNKNOWN cap; intent rows never enter it |
-| Self-sync (Phase 4b) | `EXTENDED` only, coordinator only, after the report: corrects the emitted SKILL.md + `references/scope.md` in place from data already in context (routing table vs live roster, a gate `not run` because its command is missing, an `UNKNOWN`/mismatched scope baseline, a shared surface a scope finding named). Line delta `<= 0`, facts only; decisions, missing experts and `intent-guard.toml` are proposals in the summary, never writes |
-| Report | One merged report at `.codex/reports/{TIMESTAMP}_superreview/REPORT.md`, sorted P0->P3, a verdict on every row, plus a Scope Discipline / Blast Radius section; read-only: recommends `/simplify` + a Manager-mode fix session, never edits code |
+Details: `<skill-directory>/references/generator/emitted-skill.md` — phase-by-phase recap (full text in `references/SKILL.md.template`).
 
 ## Configuration
 

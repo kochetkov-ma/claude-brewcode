@@ -50,7 +50,7 @@ This page is for anyone new to brewcode who wants one path instead of 27 skills.
     <div class="mb-3 text-xs font-semibold uppercase tracking-wider text-base-content/60">When it ships</div>
     <a href="#step-5-share-and-stay-current" class="block rounded-lg border border-base-300 bg-base-100 p-3 transition-colors hover:border-primary/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">
       <span class="flex items-center gap-2"><span class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-content">5</span><span class="font-headline font-semibold">Share and stay current</span></span>
-      <span class="mt-2 block text-sm text-base-content/70">`/brewdoc:publish` returns a link; `/brewtools:plugin-update` brings new versions.</span>
+      <span class="mt-2 block text-sm text-base-content/70">`/brewdoc:publish` returns a link; `/brewtools:plugin-update` and `/brewcode:setup-status upgrade` keep it current.</span>
     </a>
   </div>
 </div>
@@ -92,7 +92,7 @@ Why: each setup writes something into the project (a code index, conventions, ag
 | 4 | [`/brewcode:superreview-setup install`](/brewcode/skills/superreview-setup/) | A project `/superreview` skill, used in step 4 |
 | 5 | [`/brewdoc:docsync-setup install`](/brewdoc/skills/docsync-setup/) | Docs-heavy repos only: tracks which documents went stale |
 
-Check progress at any point with [`/brewcode:setup-status`](/brewcode/skills/setup-status/). It lists what is installed, stale or missing, prints the exact command for each, and runs no setup itself. It also offers to enable Claude Code's task tools, which `++m` uses for its task graph in step 3. The remaining setups (task board, agent guards, memory sync) are in [Full Setup](/full-setup/).
+Check progress at any point with [`/brewcode:setup-status`](/brewcode/skills/setup-status/). It lists what is installed, stale or missing, prints the exact command for each and installs nothing; for stale setups it offers one upgrade. It also offers to enable Claude Code's task tools, which `++m` uses for its task graph in step 3. The remaining setups (task board, agent guards, memory sync) are in [Full Setup](/full-setup/).
 
 ## Step 3: Start every bigger task with ++m
 
@@ -131,7 +131,15 @@ Share a file, folder or text as a link:
 
 [`/brewdoc:publish`](/brewdoc/skills/publish/) uploads to brewpage.app and returns a URL. Publishing is unlisted by default: anyone who has the link can open it.
 
-Stay current with [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/): `check` only reports versions, a bare call walks through the update. Run `/reload-plugins` afterwards (restart Claude Code instead after `claude update`). Plugin updates do not replace files a setup already copied into your project, so run `/brewcode:setup-status` after an update and follow its upgrade commands. A paste-in update prompt for Claude Code is in [UPDATE.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/UPDATE.md) on GitHub.
+Stay current with [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/), then reload and upgrade the setups of each project:
+
+```text
+/brewtools:plugin-update
+/reload-plugins
+/brewcode:setup-status upgrade
+```
+
+[`/brewcode:setup-status upgrade`](/brewcode/skills/setup-status/) is needed because a plugin update does not replace files a setup already copied into your project. A paste-in update prompt for Claude Code is in [UPDATE.md](https://github.com/kochetkov-ma/claude-brewcode/blob/main/UPDATE.md) on GitHub.
 
 ## One task, start to finish
 

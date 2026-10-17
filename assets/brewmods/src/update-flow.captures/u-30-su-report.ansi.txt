@@ -1,0 +1,30 @@
+[38;5;231m⏺[39m [1m🟢 Setups upgraded: 4 of 4 done[0m
+
+  ┌─────┬──────────────────────┬────────┬────────┬───────────────────────────────────┐
+  │  #  │        Setup         │ Before │ After  │              Result               │
+  ├─────┼──────────────────────┼────────┼────────┼───────────────────────────────────┤
+  │     │                      │        │        │ 🟢 upgraded: hooks re-copied,     │
+  │ 1   │ [1magent-return-setup[0m   │ 6.5.2  │ 6.5.2  │ restamped to 6.10.0, thresholds   │
+  │     │                      │        │        │ 2500/6000 kept                    │
+  ├─────┼──────────────────────┼────────┼────────┼───────────────────────────────────┤
+  │ 2   │ [1magent-router-setup[0m   │ 6.5.6  │ 6.5.6  │ 🟢 upgraded: hook re-copied,      │
+  │     │                      │        │        │ level [38;5;153mfast[39m kept                   │
+  ├─────┼──────────────────────┼────────┼────────┼───────────────────────────────────┤
+  │ 3   │ [1magent-deadline-setup[0m │ 6.5.0  │ 6.5.0  │ 🟢 upgraded: restamped to 6.10.0, │
+  │     │                      │        │        │  20-minute budget kept            │
+  ├─────┼──────────────────────┼────────┼────────┼───────────────────────────────────┤
+  │ 4   │ [1mdocsync-setup[0m        │ 6.5.2  │ [1m6.10.0[0m │ 🟢 upgraded: [38;5;153mthreshold_days[39m 7 and │
+  │     │                      │        │        │  [38;5;153menabled[39m kept                     │
+  └─────┴──────────────────────┴────────┴────────┴───────────────────────────────────┘
+
+  I re-checked each row myself after its upgrade:
+  - [1mFiles:[0m every hook now matches the 6.10.0 plugin file byte for byte.
+  - [1mHook[0m [1mregistrations:[0m all present in the current format.
+  - [1mScope:[0m each upgrade changed only its own files.
+  - [1mGit:[0m HEAD ([38;5;153m3b62b4e[39m) and the stash didn't move.
+
+  Rows 1–3 had no real changes. Their hooks only lacked the 6.10.0 version line and the
+  new license header lines.
+
+  There's nothing left for you to run. The other seven setups (teams, semble,
+  superreview, task-board, manager, memory-sync, convention) aren't installed in this

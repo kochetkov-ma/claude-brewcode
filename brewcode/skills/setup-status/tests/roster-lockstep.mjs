@@ -17,8 +17,9 @@ const flagProbe = blocks.find(block => block.includes('flag agent-deadline'));
 const parkProbe = blocks.find(block => block.includes('echo "CONFLICT $f"'));
 const roster = Object.fromEntries(lines.filter(line => /^\| \d+ \| `\/brew/.test(line)).map(line => {
   const cells = line.split('|').map(cell => cell.trim());
-  return [cells[1], { command: cells[2].replaceAll('`', ''), offSwitch: cells[6].split(/[:,]/)[0] }];
+  return [cells[1], { command: cells[2].replaceAll('`', ''), offSwitch: cells[6].split(/[:,]/)[0], unattended: cells.at(-2) }];
 }));
+const rosterHeader = lines.find(line => line.startsWith('| # | Skill (command) |')) ?? 'NO ROSTER HEADER';
 const mechanismRows = name => lines.find(line => line.startsWith(`| **${name}** |`))
   .split('|').at(-2).split(',').map(id => id.trim());
 const read = rel => readFileSync(join(ROOT, rel), 'utf8');
@@ -39,6 +40,17 @@ test('GIVEN the roster WHEN reading each off-switch THEN Phase 1b maps flag and 
     offSwitch: Object.fromEntries(Object.entries(roster).map(([id, row]) => [id, row.offSwitch])) };
   assert.deepEqual(actual, { flag: FLAG_ROWS, parking: PARK_ROWS, offSwitch: expected },
     'mechanism table and roster off-switch column must agree row by row');
+});
+
+test('GIVEN the roster WHEN reading its last column THEN Unattended upgrade holds each row class for Phase 3b', () => {
+  const actual = {
+    lastHeader: rosterHeader.split('|').at(-2).trim(),
+    classes: Object.fromEntries(Object.entries(roster).map(([id, row]) => [id, row.unattended])),
+  };
+  assert.deepEqual(actual, {
+    lastHeader: 'Unattended upgrade',
+    classes: { 1: 'B', 2: 'A', 3: 'B', 4: 'B', 6: 'A', 7: 'A', 8: 'A', 9: 'B', 10: 'A', 11: 'A', 12: 'C' },
+  }, 'new columns go last; A = asks nothing (sonnet), B = judgment run decline-by-default, C = interview, never run');
 });
 
 test('GIVEN every -setup SKILL.md WHEN reading argument-hint THEN each offers both enable and disable', () => {

@@ -1,6 +1,6 @@
 ---
 title: "Brewcode Overview"
-description: "Brewcode toolkit overview: 9 skills, 6 agents and 2 hooks for authoring, search, conventions, review, teams and post-compaction recovery"
+description: "Brewcode toolkit overview: 9 skills, 7 agents and 2 hooks for authoring, search, conventions, review, teams and post-compaction recovery"
 order: 10
 ---
 
@@ -18,13 +18,13 @@ Brewcode is a Claude Code authoring toolkit: skills (recipes) define what to bre
 
 | Part | What it does | Page |
 |------|--------------|------|
-| `setup-status` | Read-only dashboard: 11 setups and 23 stamp carriers across brewcode, brewtools, brewdoc | [Skill](/brewcode/skills/setup-status/) |
+| `setup-status` | Dashboard of 11 setups and 23 stamp carriers across brewcode, brewtools, brewdoc; `upgrade` brings the stale ones current | [Skill](/brewcode/skills/setup-status/) |
 | `semble-setup` | Semantic code-search MCP: install, audit, reindex | [Skill](/brewcode/skills/semble-setup/) |
 | `convention-setup` | Coding, testing and architecture conventions with reversible loading | [Skill](/brewcode/skills/convention-setup/) |
 | `teams-setup` | Dynamic project agent teams (5-20) with tracing and tuning | [Skill](/brewcode/skills/teams-setup/) |
 | `superreview-setup` | Generates a project-tailored deep-review skill | [Skill](/brewcode/skills/superreview-setup/) |
 | `rules`, `skills`, `agents`, `e2e` | Recurring tools: rules, skill and agent management, E2E tests | [All skills](/brewcode/skills/) |
-| 6 agents | skill-, agent-, hook-, mod-creator, bash-expert, internal bc-rules-organizer | [Agents](/brewcode/agents/) |
+| 7 agents | skill-, agent-, hook-, mod-creator, bash-expert, internal bc-rules-organizer and setup-upgrader | [Agents](/brewcode/agents/) |
 | 2 hooks | `session-start` and `compact-recall` (plan, intent, task graph after compaction) | [Hooks](/brewcode/hooks/) |
 
 <ModPromo variant="strip" />
@@ -63,7 +63,7 @@ Brewcode layers on top of Claude Code with no external runtime. Skills spawn age
 </Steps>
 
 <Callout type="caution" title="One setup per session">
-  Most `-setup` skills are interactive generators that fan out subagents and ask you questions. Two in one session degrade each other, so `setup-status` reports and stops. Run setups one at a time, ideally in a fresh session.
+  Interactive `-setup` runs (install, interviews) fan out subagents and ask questions, so run them one at a time, ideally in a fresh session. [`setup-status upgrade`](/brewcode/skills/setup-status/) refreshes the stale setups itself, one agent after another.
 </Callout>
 
 ## Technical details
@@ -104,7 +104,7 @@ Every artifact a `-setup` skill installs carries the same stamp across brewcode,
 brewcode/
 ├── .claude-plugin/plugin.json   # manifest
 ├── hooks/                       # hooks.json, session-start.mjs, compact-recall.mjs, lib/utils.mjs
-├── agents/                      # 6 agents (5 public + bc-rules-organizer, haiku)
+├── agents/                      # 7 agents (5 public + 2 internal: bc-rules-organizer, setup-upgrader)
 ├── skills/                      # 9 skills
 └── templates/                   # rule templates
 ```

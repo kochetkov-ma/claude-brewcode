@@ -22,7 +22,7 @@ Wires the `semble_code` MCP server into a project so Claude finds code by intent
 
 | Field | Value |
 |-------|-------|
-| Command | `/brewcode:semble-setup [status\|install\|upgrade\|enable\|disable\|uninstall\|purge\|reindex\|optimize\|resume]` |
+| Command | `/brewcode:semble-setup [status\|install\|upgrade\|enable\|disable\|uninstall\|purge\|reindex\|optimize\|resume] [--unattended]` |
 | Arguments | a mode keyword, or free text in RU/EN |
 | No-arg default | always `status` (read-only) |
 | Model | opus |
@@ -47,6 +47,8 @@ Unlike most `-setup` skills, `semble-setup` never falls back to `install`: it ru
 | `resume` | after the reload: smoke query, self-repairing re-run, `phase=ready` | yes |
 
 The first six rows hold the seven modes shared by every `-setup` skill; `reindex`, `optimize` and `resume` are semble-specific. `setup`, `update` and `remove` stay accepted as free-text synonyms.
+
+Under `--unattended`, `upgrade` never repairs the MCP pin (drift is reported as pending) and skips when `uv` or `uvx` is absent; see [how the flag works](/brewcode/skills/setup-status/#the-unattended-flag).
 
 ## When to use
 
@@ -259,7 +261,7 @@ Every script takes `--json`. Exit codes: `0` ok, `1` hard failure, `2` bad usage
     Manages the agent roster whose `tools:` lists `install` patches.
   </Card>
   <Card title="setup-status" icon="clipboard" href="/brewcode/skills/setup-status/">
-    Read-only dashboard that flags stale semble wiring.
+    Dashboard that flags stale semble wiring; `upgrade` refreshes it.
   </Card>
 </CardGrid>
 

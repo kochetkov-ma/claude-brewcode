@@ -8,7 +8,7 @@ import { Card, CardGrid, Callout, Steps, Tabs, TabItem, InstallPrompt, Spoiler, 
 
 # Installation
 
-These four products run in Claude Code: 27 skills, 9 agents, and 3 registered plugin hooks. The prompt below also installs the two [brewcode mods](#mods), placeholders first, after it checks that Claude Code is 2.1.301 or newer.
+These four products run in Claude Code: 27 skills, 10 agents, and 3 registered plugin hooks. The prompt below also installs the two [brewcode mods](#mods), placeholders first, after it checks that Claude Code is 2.1.301 or newer.
 
 <InstallPrompt plugin="all" mode="install" />
 
@@ -94,7 +94,7 @@ These four products run in Claude Code: 27 skills, 9 agents, and 3 registered pl
   <li class="step step-primary">
     <div>
       <strong>Inspect project setup</strong>
-      <p>Inside a session, the dashboard probes eleven setups and orders their commands by dependency. It runs no setup.</p>
+      <p>Inside a session, the dashboard probes eleven setups and orders their commands by dependency. It never installs a setup; a stale one is upgraded only when you accept its offer or type <code>upgrade</code>.</p>
       <pre><code>/brewcode:setup-status</code></pre>
     </div>
   </li>
@@ -123,14 +123,12 @@ claude plugin install brewmod-placeholders@claude-brewcode
 claude plugin install brewmod-plan-effort@claude-brewcode
 ```
 
-Restart Claude Code after `claude update`. When Claude Code was already 2.1.301 or newer, `/reload-plugins` is enough. [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/) keeps the installed mods current.
+Restart Claude Code after `claude update`. When Claude Code was already 2.1.301 or newer, `/reload-plugins` is enough.
 
 <Spoiler id="updating" title="Updating">
-  <Callout type="tip" title="Easy path: plugin-update skill">
-    Run <a href="/brewtools/skills/plugin-update/"><code>/brewtools:plugin-update</code></a> inside a Claude Code session. It checks versions, runs the full update chain, and prompts you to reload.
-  </Callout>
+  Run [`/brewtools:plugin-update`](/brewtools/skills/plugin-update/) in a session to update every installed plugin and mod and offer the missing ones in one question, then `/reload-plugins`, then `/brewcode:setup-status upgrade` in each project.
 
-  Or run the update commands manually. The mods need Claude Code 2.1.301 or newer: if `claude --version` is lower, run `claude update` and restart Claude Code first. Run one `claude plugin update` per installed plugin; a second name in one call is silently ignored:
+  Or run the update commands manually, then reload and upgrade as above. The mods need Claude Code 2.1.301 or newer: if `claude --version` is lower, run `claude update` and restart Claude Code first. Run one `claude plugin update` per installed plugin; a second name in one call is silently ignored:
 
   ```bash
   claude plugin marketplace update claude-brewcode
@@ -142,7 +140,7 @@ Restart Claude Code after `claude update`. When Claude Code was already 2.1.301 
   claude plugin update brewui@claude-brewcode
   ```
 
-  Skip the lines of plugins you did not install. Run `/reload-plugins` inside your session (preferred), or type `exit` and run `claude` again. Updates are not active until a reload. Then rerun setup-status: plugin updates do not replace artifacts that a setup copied into your project, so follow its scope-specific upgrade commands.
+  Skip the lines of plugins you did not install.
 
   <InstallPrompt plugin="all" mode="update" />
 </Spoiler>
@@ -167,7 +165,7 @@ Restart Claude Code after `claude update`. When Claude Code was already 2.1.301 
     The 11 `-setup` skills in recommended order.
   </Card>
   <Card title="Brewcode Overview" icon="building" href="/brewcode/overview/">
-    Architecture, 9 skills, 6 agents and 2 registered hooks.
+    Architecture, 9 skills, 7 agents and 2 registered hooks.
   </Card>
 </CardGrid>
 

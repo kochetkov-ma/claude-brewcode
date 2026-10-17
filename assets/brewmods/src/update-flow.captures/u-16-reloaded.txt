@@ -1,0 +1,30 @@
+
+  1. 🔵 /reload-plugins: activates the new versions in this session (or exit, then
+     claude).
+  2. 🔵 /brewcode:setup-status upgrade: brings this project's setups up to 6.10.0 in one
+     run; repeat it in every project you use.
+
+  🔵 Auto-update is off for claude-brewcode: /plugin -> Marketplaces -> claude-brewcode
+  -> Enable auto-update.
+
+✻ Cogitated for 33s · done 1:45 AM
+
+❯ /reload-plugins
+  ⎿  Reloaded: 3 plugins · 27 skills · 16 agents · 3 hooks · 0 plugin MCP servers · 0
+     plugin LSP servers
+
+────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle)
+
+
+
+
+
+
+
+
+
+
+

@@ -21,7 +21,7 @@ Both setup skills implement `status | install | upgrade | enable | disable | uni
 | # | Skill | Command | Model | Purpose | Arguments |
 |---|-------|---------|-------|---------|-----------|
 | 1 | docsync-setup | [/brewdoc:docsync-setup](/brewdoc/skills/docsync-setup/) | sonnet | Track and fix stale project docs via hooks | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [sync [--all]\|reread\|frontmatter] \| free-text` |
-| 2 | my-claude | [/brewdoc:my-claude](/brewdoc/skills/my-claude/) | opus | Generate documentation about Claude Code installation | `[ext [context]] \| [r <query>]` — no args = internal installation docs |
+| 2 | my-claude | [/brewdoc:my-claude](/brewdoc/skills/my-claude/) | opus | Generate documentation about Claude Code installation; `refresh` regenerates guides older than the installed brewdoc | `[ext [context]] \| [r <query>] \| [refresh]` — no args = internal installation docs |
 | 3 | memory-sync-setup | [/brewdoc:memory-sync-setup](/brewdoc/skills/memory-sync-setup/) | opus | Generator: emits a project-tailored `/memory-sync` skill into the target repo — it never syncs memory itself | `[status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [fine-tune-prompt]` |
 | 4 | md-to-pdf | [/brewdoc:md-to-pdf](/brewdoc/skills/md-to-pdf/) | sonnet | Convert Markdown to PDF (reportlab / weasyprint) | `<file.md> [--engine name] ["prompt"] \| styles \| test` — no args = help |
 | 5 | publish | [/brewdoc:publish](/brewdoc/skills/publish/) | haiku | Publish text, files, or multi-file sites to brewpage.app — returns a shareable URL | `<text\|file_path\|directory_path\|zip_path> [--ttl N] [--entry filename] [--delivery-mode path\|subdomain]` |

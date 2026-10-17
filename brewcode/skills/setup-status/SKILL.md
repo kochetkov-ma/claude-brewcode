@@ -1,63 +1,71 @@
 ---
 name: setup-status
-description: "Reports which brewcode setup skills are installed, stale, partial or missing in this project, compares the version each installed artifact was generated under against the installed plugin, and prints the exact command to run for each. Triggers: setup status, what is installed, what version is installed, что установлено."
+description: "Reports which brewcode setup skills are installed, stale, partial or missing in this project, compares the version each installed artifact was generated under against the installed plugin, prints the exact command to run for each, and upgrades the stale ones on request, one fresh subagent per setup, re-probed after each. Triggers: setup status, what is installed, upgrade setups, что установлено, обнови сетапы."
 user-invocable: true
 disable-model-invocation: true
-argument-hint: "[prompt] [<plugin>|<skill>] - no args = full cross-plugin report"
-allowed-tools: [Read, Bash, Glob, Grep, AskUserQuestion]
+argument-hint: "[prompt] [report|upgrade] [<plugin>|<skill>] - no args = full report + one upgrade offer"
+allowed-tools: [Read, Bash, Glob, Grep, AskUserQuestion, Agent]
 model: sonnet
+license: MIT
 ---
 
 <instructions>
 
 # Setup Status
 
-Read-only dashboard over every **setup skill** in the brewcode suite: what is set up in this
-project, at which version against the plugin in use, what drifted or was never installed, and the
-exact command to run for each row. Every probe is an existence check, a stamp read, a `cmp` or a
-JSON read; `allowed-tools` carries no `Write`, no `Edit`, no `Agent`. The one exception is Phase
-1c's opt-in one-key merge into a `settings.json`, after the user picks it.
+Dashboard over every **setup skill** in the brewcode suite: what is set up in this project, at
+which version against the plugin in use, what drifted or was never installed, and the exact command
+for each row. `upgrade`, or a yes to the one offer, then brings every stale row it may run current
+(Phase 3b): one fresh `brewcode:setup-upgrader` subagent per row, re-probed after each. Every probe
+is an existence check, a stamp read, a `cmp` or a JSON read; `allowed-tools` carries no `Write` and
+no `Edit`: the subagents write, each through its owner's own `upgrade` section.
 
 ## Prompt contract
 
-`$ARGUMENTS` is one free-form RU/EN prompt. Report is the only behavior, so the prompt carries
-exactly one optional decision: which plugin or skill to filter to.
+`$ARGUMENTS` is one free-form RU/EN prompt; mode tokens may sit anywhere in it.
 
-1. Mode: single — `report`. No flags, no destructive path.
+1. Mode: an explicit mode token wins outright; else the most distinct whole-word keyword hits
+   (table below). A tie -> `report`. No hit or empty -> `report`.
 2. Scope: a plugin name (`brewcode`, `brewtools`, `brewdoc`) or a skill name (`semble-setup`,
-   `docsync`, `task board`, ...) anywhere in the prose is the filter, never the first word as a
-   positional filter. Prose naming neither, or empty arguments -> full cross-plugin report, not an
-   error.
-3. Ask: `AskUserQuestion` fires at most ONCE per run, and only for Phase 1c's task-tools offer — the
-   one outcome-changing choice this skill has. The filter is never asked about.
+   `docsync`, `task board`, ...) anywhere in the prose is the filter, in both modes, never the first
+   word as a positional filter. Prose naming neither, or empty arguments -> every row, not an error.
+3. Ask: at most ONE `AskUserQuestion` call per run, at most 2 questions, never about mode or filter:
+   Q1 "Upgrade N setups now?" (`report` only, >=1 Phase 3b `auto` row, no `RELOAD-NEEDED`) and Q2,
+   Phase 1c's task-tools offer, bundled into that one call. `upgrade` asks no Q1: the typed word is
+   the consent; it still carries Q2 when Q2 applies.
 
-Print once, right before the report (Phase 4) — the only possible mutation is the Phase 1c env key,
-and it comes after the report (labels literal, values in the conversation language):
+| Mode | EN keywords | RU keywords | Mutates? |
+|------|-------------|-------------|----------|
+| `report` (default) | *(empty)*, `status`, `report`, `check`, `what`, `show` | `статус`, `отчёт`, `проверь`, `что`, `покажи` | no, except an accepted offer |
+| `upgrade` | `upgrade`, `update`, `refresh`, `fix`, `apply` | `обнови`, `апгрейд`, `почини`, `примени` | yes |
+
+**First output:** the PLAN block below, as plain text, before any tool call.
+Once, filled from the prompt alone (labels literal, values in the conversation language), never re-printed:
 
 ```
 PLAN — brewcode:setup-status
 INPUT:  <arguments verbatim, or "(empty)">
-MODE:   report — <full cross-plugin | filtered: <plugin/skill>>
-SCOPE:  <resolved plugin(s)/skill(s) in scope>
-DO:     <2-5 imperative bullets: resolve plugin roots, probe artifacts, read stamps, classify;
-         add "offer to enable the task-graph tools" when Phase 1c's verdict is `off`>
-RESULT: <the report the user ends up holding; name the settings.json write when one is offered>
+MODE:   <report | upgrade> — <explicit | matched keyword: X | default>; <full cross-plugin | filtered: <plugin/skill>>
+SCOPE:  <PROJECT path>; <plugin(s)/skill(s) in scope>; upgrade runs only Phase 3b's auto rows, counted before the first spawn
+DO:     <2-5 imperative bullets: probe, read stamps, classify, plan; report: offer the upgrade and/or the task-graph
+         tools; upgrade: one brewcode:setup-upgrader per row in stage order, re-probe each, stop on the first 🔴.
+         Warn: their Write/Edit into .claude/ prompts in default/acceptEdits mode and is denied in dontAsk>
+RESULT: <report: the report, plus what an accepted offer writes; upgrade: the upgrade report and the commands left to you>
 ```
 
-## Why it does not run the setups
+## What it runs and what it never runs
 
-Each setup skill is interactive: it asks the user real questions and writes into the project. Five
-(`convention-setup`, `teams-setup`, `superreview-setup`, `memory-sync-setup`, `task-board-setup`) fan out
-subagents that analyse the repo; three hook installers (`agent-deadline-setup`, `agent-return-setup`,
-`agent-router-setup`) spawn a `hook-creator`; `semble-setup`, `docsync-setup` and `manager-setup` spawn
-none. Two back-to-back in one session degrade both: the second one's questions get
-answered against the first one's stale findings. So this skill reports and the user runs each setup
-by hand, ideally one per fresh session. There is no `--run`, no `--fix` and no auto mode; if the user
-asks for one, say this paragraph and print the run-list instead.
+`report` runs nothing. `upgrade` runs the owner's own `upgrade` section with `--unattended` for each
+Phase 3b `auto` row, one fresh subagent per row, sequentially in run-list stage order. Under the flag
+an owner asks nothing: every gate takes its decline branch and stays pending for you. Each row is then
+re-probed here (the verdict, never the subagent's claim); the first 🔴 stops the run. Fresh subagent
+contexts start empty, so rows never answer against each other's stale findings.
 
-The one carve-out is not a setup: Phase 1c's `CLAUDE_CODE_ENABLE_TODO_TOOLS` offer merges one key
-into one `settings.json`, spawns no subagent and asks one question. Outside that env key, this skill
-creates, edits and deletes nothing.
+Never run: `install`, `enable`, `uninstall`, `purge`, `--force`, an interview upgrade (roster class
+`C`), a re-copy over a `modified` row. Those ask real questions or may overwrite your edits, and two in
+one session degrade each other; they stay in the run-list, one per fresh session. Never a revert,
+reset or stash. Main-session writes: the runner's lock dir under the temp root, `scope-guard.sh`'s
+snapshot in the git dir, and Phase 1c's one-key `settings.json` merge after the user picks it.
 
 ---
 
@@ -68,51 +76,38 @@ contract (`version`, `content_version`, `generated_by`, `last_updated`, `doc_typ
 type's carrier) lives in [`references/artifact-metadata.md`](references/artifact-metadata.md); this
 skill consumes it and never restates it.
 
-| Kind | Signal | The question it answers | Read by |
-|------|--------|-------------------------|---------|
-| artifact | **`content_version` stamp** — the headline | has this artifact's own content moved since it was installed here? | Phase 2a: the artifact's stamp vs the plugin's current `content_version` for that same artifact |
-| artifact | **`version` stamp** — provenance | which plugin release produced this install? It bumps on every release whether or not the artifact changed: shown on every row, decisive only for an artifact with no `content_version` | Phase 2a |
-| artifact | **owner stamp** | did the setup that owns this path actually write it? A file written by the wrong setup can be current and byte-perfect | Phase 2a: `generated_by` vs the roster row's `<plugin>:<skill>` |
-| artifact | **bytes** | does the installed copy still equal what the plugin in use would install? A hand-edited hook keeps the stamp it was copied with, so only bytes see the edit | Phase 2b: `cmp` against `$BC` / `$BT` / `$BD` |
-| dependency | **semble MCP pin** | is the registered `semble[mcp]==X.Y.Z` the pin this plugin ships, in each Claude Code profile? | Phase 2c |
-
-`last_updated` and `doc_type` are written but not read: a date defines no state, and `doc_type` is
-user-owned and preserved across re-installs. Add no reader without an actionable verdict to attach.
-
-| Artifact kind | Stamped | Signals that reach it |
-|---------------|---------|-----------------------|
-| byte-copied asset (`.mjs`, `.sh`, `semble-first.md`) | baked at release by `bump-version.sh` | stamp and bytes: the installed copy stays byte-identical to the plugin asset |
-| generated artifact (emitted `SKILL.md`, `team.md`, `config.json`) | substituted at install from `{PLUGIN_VERSION}` / `{CONTENT_VERSION}` | stamp only: it is authored per project and never byte-equal to any asset |
-| byte-copied asset the install then fills (`memory-sync`'s `references/hard-sync.md`, the repo-root `.sembleignore`) | baked at release | no bytes: a healthy copy differs by construction. `hard-sync.md` gets no stamp read either (frozen at the release that emitted it) |
-| pristine template baseline (`.template-baseline/`) | not stamped: raw template, tokens unresolved, on purpose | bytes only, raw against raw. Never read a version out of it |
+Signal and artifact-kind tables: [`references/signals.md`](references/signals.md), read on demand.
 
 ---
 
 ## The Roster — SINGLE SOURCE OF TRUTH
 
 Every fact about a setup lives in this table, plus its carrier lines in the Phase 2a `STAMPS`
-heredoc and its byte pairs in the Phase 2b `PAIRS` heredoc. Adding a setup = one row here + its
-lines there.
-Both heredocs live in `references/phase2-stamps.md`.
+heredoc and its byte pairs in the Phase 2b `PAIRS` heredoc, both in `references/phase2-stamps.md`.
+Adding a setup = one row here + its lines there + its stage in `scripts/upgrade-plan.mjs` `STAGES` and
+the `references/run-list.md` stage table, plus `DELEGATES` when its `upgrade` spawns a subagent and
+`SCOPED` when it installs per scope (`tests/upgrade-plan-lockstep.mjs` pins all of them).
 
-| # | Skill (command) | Plugin | Anchor artifact | Secondary artifacts | Off-switch: the row is `disabled` when (Phase 1b) | Hook registrations: `<event>` `<matcher>` `<script>` (Phase 1) | Byte pairs (Phase 2b) |
-|---|-----------------|--------|-----------------|---------------------|-----------------------------------------------------|------------------------------------------------------------------|------------------------|
-| 1 | `/brewcode:teams-setup` | brewcode | `.claude/teams/*/team.md` | `.claude/teams/*/trace.jsonl`, `.claude/teams/*/trace-ops.sh` | parking: every roster member named in `team.md`'s `## Agents` table is `.claude/agents/<member>.md.disabled`. `intent-guard` is never parked (`toggle-team.sh` skips it: shared with `superreview-setup`), so exclude it; exclude too every member `$BC/skills/teams-setup/scripts/agent-generator.sh` names as owned by another generator (Phase 1b `FOREIGN`, e.g. `task-tracker`), which `toggle-team.sh` never moves either. The filename is the authority, not the `Status` cell (a hand `Edit` step that can lag) | none | `trace-ops.sh` vs `$BC/skills/teams-setup/scripts/trace-ops.sh` (byte-copied, meta line baked at release) |
-| 2 | `/brewcode:semble-setup` | brewcode | `.claude/rules/semble-first.md` | `.claude/hooks/semble-session.mjs`, `semble-stats.mjs`, `semble-subagent.mjs`, `.claude/semble/state.json` | flag: `.enabled` is `false` in `.claude/semble/state.json` (phase `disabled`); every file stays in place | read from Phase 2c's `guidance` (`wiredCount`/`wantCount`, `retired`, `retiredWired`, `staleEntries`, `absoluteCount`), not from the `REG` lines | the three live hooks vs `$BC/skills/semble-setup/assets/*.mjs`, plus the rule vs `assets/semble-first.md.template` (a pure byte-copy, not restamped), and nothing else. The repo-root `.sembleignore` is never byte-stable: never compared. Retired hooks (`semble-explore.mjs`, `semble-reminder.mjs`, `semble-prefetch.mjs`) have no asset, so no pair: Phase 2c reports them |
-| 3 | `/brewcode:superreview-setup` | brewcode | `.claude/skills/superreview/SKILL.md` | `.claude/skills/superreview/references/agent-prompt.md`, `.../report-template.md`, `.../scope.md`, `.claude/skills/superreview/.template-baseline/` | parking: `.claude/skills/superreview/SKILL.md.disabled` present and `SKILL.md` absent; `references/` and `.template-baseline/` stay live and readable | none | the `.template-baseline/` copies vs the plugin templates, raw on both sides: answers "did the plugin's templates move since this project was tailored", which the emitted stamp cannot. Never read a version out of that dir |
-| 4 | `/brewtools:task-board-setup` | brewtools | `.claude/features/board.md` | `.claude/agents/task-tracker.md`, `.claude/skills/task-board/SKILL.md`, `.claude/skills/task-spec/SKILL.md` (required unless Phase 1 proves `TASK_SPEC_MODE=off`), `.claude/rules/tasks.md`, `.claude/features/PROGRESS.md`, `.claude/features/TRACKER.md`, `.claude/features/INDEX.md`, `.claude/features/backlog/README.md`, `.claude/features/METHODOLOGY.md`, `.claude/features/ANTI-DRIFT.md`, `.claude/features/task-graph.md` | parking: every deployed one of the four entry files (`.claude/agents/task-tracker.md`, `.claude/skills/task-board/SKILL.md`, `.claude/skills/task-spec/SKILL.md`, `.claude/rules/tasks.md`) is `<name>.disabled`. `.claude/features/**` stays, so the anchor stays present; a `task-spec` that never existed (spec layer off) is absent, not parked | none | none copied verbatim (every artifact is generated). Phase 2a expands this row from the anchor and secondary cells and checks each carrier against the same source `content_version` |
-| 6 | `/brewtools:agent-deadline-setup` | brewtools | `.claude/hooks/agent-deadline-guard.mjs` (or `GLOBAL/hooks/`) | `agent-deadline-cleanup.mjs` beside it, `.claude/agent-deadline.json` (or `GLOBAL/agent-deadline.json`) | flag, opt-in: live only on `"enabled": true`. `false`, no key, unparsable or no config = inert: the guard returns on `cfg.enabled !== true` and nothing is enforced | `PreToolUse` `.*` `agent-deadline-guard.mjs`; `SubagentStop` `-` `agent-deadline-cleanup.mjs`; in the scope's `settings.json` | both `.mjs` vs `$BT/skills/agent-deadline-setup/assets/`, per scope |
-| 7 | `/brewtools:agent-router-setup` | brewtools | `.claude/hooks/agent-router.mjs` | `.claude/brewtools/agent-router.json` | flag, opt-out: `"enabled": false`. No key = enabled: the hook defaults `enabled: true` and flips it only on a literal `raw.enabled === false` | read with the owner's `--probe` (Phase 1), not from the `REG` lines: `PreToolUse` `Agent` `agent-router.mjs`, plus at `level strict` the judge (`type: agent`, no `model` key) and `PreToolUse` `StructuredOutput` `agent-router.mjs`, all in `.claude/settings.json` | the hook vs `$BT/skills/agent-router-setup/assets/agent-router.mjs` |
-| 8 | `/brewtools:manager-setup` | brewtools | `.claude/brewtools/manager/state.json` | `.claude/brewtools/manager/hardmode-guard.mjs`, `manager-state.mjs` beside it | flag: `.hard` is not `true`, on an installed wall (the copied guard or a `REG` line). Registration stays and the guard no-ops: the disarmed wall, not a broken one. `state.json` alone is no wall: Phase 3 rule 3 | `PreToolUse` `*` `hardmode-guard.mjs` `onFailure=block`, in `.claude/settings.local.json` (scope `local`) | the copied guard vs `$BT/hooks/hardmode-guard.mjs` and the copied helper vs `$BT/hooks/lib/manager-state.mjs`: `install` and `upgrade` overwrite both every run, so `DIFFERS` means neither ran since the plugin update |
-| 9 | `/brewdoc:memory-sync-setup` | brewdoc | `.claude/skills/memory-sync/SKILL.md` | `references/memory-guide.md`, `references/agent-audit.md`, `references/hard-sync.md`, `references/prompting-guide.md` under it (`EMITTED_REFS`) | parking: `.claude/skills/memory-sync/SKILL.md.disabled` present and `SKILL.md` absent; the references and every hand-edit stay byte-identical | none | `memory-guide.md`, `agent-audit.md` and `prompting-guide.md` vs `$BD/skills/memory-sync-setup/references/<same name>`. Never `hard-sync.md`: never byte-stable, out of `PAIRS` and `STAMPS` alike. The anchor is generated and has no partner |
-| 10 | `/brewdoc:docsync-setup` | brewdoc | `.claude/docsync/config.json` | `.claude/hooks/docsync-track.mjs`, `docsync-watch.mjs`, `docsync-gate.mjs` | flag, opt-out: `"enabled": false`. No key = enabled (`loadConfig` reads `c.enabled !== false`), so installs written before the key existed are live | `PostToolUse` `Write\|Edit` `docsync-track.mjs` twice (`if=Write(**/*.md)` and `if=Edit(**/*.md)`); `PostToolUse` `Read` `docsync-watch.mjs` `if=Read(**/*.md)`; `Stop` `-` `docsync-gate.mjs`; in `.claude/settings.json` | the 3 hooks vs `$BD/skills/docsync-setup/assets/` |
-| 11 | `/brewtools:agent-return-setup` | brewtools | `.claude/hooks/agent-return-guard.mjs` (or `GLOBAL/hooks/`) | `agent-return-contract.mjs` and `agent-return-budget.mjs` beside it, `.claude/agent-return.json` (or `GLOBAL/agent-return.json`) | flag, opt-in: live only on `"enabled": true` (the shared module gates on `CONFIG.enabled === true`); `false`, no key, unparsable or no config = inert: no contract is injected and no return is sized | `SubagentStart` `-` `agent-return-contract.mjs`; `SubagentStop` `-` `agent-return-guard.mjs`; `PreToolUse` `SubagentHandback` `agent-return-guard.mjs`; in the scope's `settings.json`. `agent-return-budget.mjs` is a shared module and is never registered | all three `.mjs`, per scope |
-| 12 | `/brewcode:convention-setup` | brewcode | `.claude/rules/convention.md` | `.claude/convention/reference-patterns.md`, `testing-conventions.md`, `project-architecture.md` | parking: `.claude/rules/convention.md.disabled` present and the live file absent; the documents stay readable | none | none: generated evidence and local wording legitimately vary |
+| # | Skill (command) | Plugin | Anchor artifact | Secondary artifacts | Off-switch: the row is `disabled` when (Phase 1b) | Hook registrations: `<event>` `<matcher>` `<script>` (Phase 1) | Byte pairs (Phase 2b) | Unattended upgrade |
+|---|-----------------|--------|-----------------|---------------------|-----------------------------------------------------|------------------------------------------------------------------|------------------------|--------------------|
+| 1 | `/brewcode:teams-setup` | brewcode | `.claude/teams/*/team.md` | `.claude/teams/*/trace.jsonl`, `.claude/teams/*/trace-ops.sh` | parking: every roster member named in `team.md`'s `## Agents` table is `.claude/agents/<member>.md.disabled`. `intent-guard` is never parked (`toggle-team.sh` skips it: shared with `superreview-setup`), so exclude it; exclude too every member `$BC/skills/teams-setup/scripts/agent-generator.sh` names as owned by another generator (Phase 1b `FOREIGN`, e.g. `task-tracker`), which `toggle-team.sh` never moves either. The filename is the authority, not the `Status` cell (a hand `Edit` step that can lag) | none | `trace-ops.sh` vs `$BC/skills/teams-setup/scripts/trace-ops.sh` (byte-copied, meta line baked at release) | B |
+| 2 | `/brewcode:semble-setup` | brewcode | `.claude/rules/semble-first.md` | `.claude/hooks/semble-session.mjs`, `semble-stats.mjs`, `semble-subagent.mjs`, `.claude/semble/state.json` | flag: `.enabled` is `false` in `.claude/semble/state.json` (phase `disabled`); every file stays in place | read from Phase 2c's `guidance` (`wiredCount`/`wantCount`, `retired`, `retiredWired`, `staleEntries`, `absoluteCount`), not from the `REG` lines | the three live hooks vs `$BC/skills/semble-setup/assets/*.mjs`, plus the rule vs `assets/semble-first.md.template` (a pure byte-copy, not restamped), and nothing else. The repo-root `.sembleignore` is never byte-stable: never compared. Retired hooks (`semble-explore.mjs`, `semble-reminder.mjs`, `semble-prefetch.mjs`) have no asset, so no pair: Phase 2c reports them | A |
+| 3 | `/brewcode:superreview-setup` | brewcode | `.claude/skills/superreview/SKILL.md` | `.claude/skills/superreview/references/agent-prompt.md`, `.../report-template.md`, `.../scope.md`, `.claude/skills/superreview/.template-baseline/` | parking: `.claude/skills/superreview/SKILL.md.disabled` present and `SKILL.md` absent; `references/` and `.template-baseline/` stay live and readable | none | the `.template-baseline/` copies vs the plugin templates, raw on both sides: answers "did the plugin's templates move since this project was tailored", which the emitted stamp cannot. Never read a version out of that dir | B |
+| 4 | `/brewtools:task-board-setup` | brewtools | `.claude/features/board.md` | `.claude/agents/task-tracker.md`, `.claude/skills/task-board/SKILL.md`, `.claude/skills/task-spec/SKILL.md` (required unless Phase 1 proves `TASK_SPEC_MODE=off`), `.claude/rules/tasks.md`, `.claude/features/PROGRESS.md`, `.claude/features/TRACKER.md`, `.claude/features/INDEX.md`, `.claude/features/backlog/README.md`, `.claude/features/METHODOLOGY.md`, `.claude/features/ANTI-DRIFT.md`, `.claude/features/task-graph.md` | parking: every deployed one of the four entry files (`.claude/agents/task-tracker.md`, `.claude/skills/task-board/SKILL.md`, `.claude/skills/task-spec/SKILL.md`, `.claude/rules/tasks.md`) is `<name>.disabled`. `.claude/features/**` stays, so the anchor stays present; a `task-spec` that never existed (spec layer off) is absent, not parked | none | none copied verbatim (every artifact is generated). Phase 2a expands this row from the anchor and secondary cells and checks each carrier against the same source `content_version` | B |
+| 6 | `/brewtools:agent-deadline-setup` | brewtools | `.claude/hooks/agent-deadline-guard.mjs` (or `GLOBAL/hooks/`) | `agent-deadline-cleanup.mjs` beside it, `.claude/agent-deadline.json` (or `GLOBAL/agent-deadline.json`) | flag, opt-in: live only on `"enabled": true`. `false`, no key, unparsable or no config = inert: the guard returns on `cfg.enabled !== true` and nothing is enforced | `PreToolUse` `.*` `agent-deadline-guard.mjs`; `SubagentStop` `-` `agent-deadline-cleanup.mjs`; in the scope's `settings.json` | both `.mjs` vs `$BT/skills/agent-deadline-setup/assets/`, per scope | A |
+| 7 | `/brewtools:agent-router-setup` | brewtools | `.claude/hooks/agent-router.mjs` | `.claude/brewtools/agent-router.json` | flag, opt-out: `"enabled": false`. No key = enabled: the hook defaults `enabled: true` and flips it only on a literal `raw.enabled === false` | read with the owner's `--probe` (Phase 1), not from the `REG` lines: `PreToolUse` `Agent` `agent-router.mjs`, plus at `level strict` the judge (`type: agent`, no `model` key) and `PreToolUse` `StructuredOutput` `agent-router.mjs`, all in `.claude/settings.json` | the hook vs `$BT/skills/agent-router-setup/assets/agent-router.mjs` | A |
+| 8 | `/brewtools:manager-setup` | brewtools | `.claude/brewtools/manager/state.json` | `.claude/brewtools/manager/hardmode-guard.mjs`, `manager-state.mjs` beside it | flag: `.hard` is not `true`, on an installed wall (the copied guard or a `REG` line). Registration stays and the guard no-ops: the disarmed wall, not a broken one. `state.json` alone is no wall: Phase 3 rule 3 | `PreToolUse` `*` `hardmode-guard.mjs` `onFailure=block`, in `.claude/settings.local.json` (scope `local`) | the copied guard vs `$BT/hooks/hardmode-guard.mjs` and the copied helper vs `$BT/hooks/lib/manager-state.mjs`: `install` and `upgrade` overwrite both every run, so `DIFFERS` means neither ran since the plugin update | A |
+| 9 | `/brewdoc:memory-sync-setup` | brewdoc | `.claude/skills/memory-sync/SKILL.md` | `references/memory-guide.md`, `references/agent-audit.md`, `references/hard-sync.md`, `references/prompting-guide.md` under it (`EMITTED_REFS`) | parking: `.claude/skills/memory-sync/SKILL.md.disabled` present and `SKILL.md` absent; the references and every hand-edit stay byte-identical | none | `memory-guide.md`, `agent-audit.md` and `prompting-guide.md` vs `$BD/skills/memory-sync-setup/references/<same name>`. Never `hard-sync.md`: never byte-stable, out of `PAIRS` and `STAMPS` alike. The anchor is generated and has no partner | B |
+| 10 | `/brewdoc:docsync-setup` | brewdoc | `.claude/docsync/config.json` | `.claude/hooks/docsync-track.mjs`, `docsync-watch.mjs`, `docsync-gate.mjs` | flag, opt-out: `"enabled": false`. No key = enabled (`loadConfig` reads `c.enabled !== false`), so installs written before the key existed are live | `PostToolUse` `Write\|Edit` `docsync-track.mjs` twice (`if=Write(**/*.md)` and `if=Edit(**/*.md)`); `PostToolUse` `Read` `docsync-watch.mjs` `if=Read(**/*.md)`; `Stop` `-` `docsync-gate.mjs`; in `.claude/settings.json` | the 3 hooks vs `$BD/skills/docsync-setup/assets/` | A |
+| 11 | `/brewtools:agent-return-setup` | brewtools | `.claude/hooks/agent-return-guard.mjs` (or `GLOBAL/hooks/`) | `agent-return-contract.mjs` and `agent-return-budget.mjs` beside it, `.claude/agent-return.json` (or `GLOBAL/agent-return.json`) | flag, opt-in: live only on `"enabled": true` (the shared module gates on `CONFIG.enabled === true`); `false`, no key, unparsable or no config = inert: no contract is injected and no return is sized | `SubagentStart` `-` `agent-return-contract.mjs`; `SubagentStop` `-` `agent-return-guard.mjs`; `PreToolUse` `SubagentHandback` `agent-return-guard.mjs`; in the scope's `settings.json`. `agent-return-budget.mjs` is a shared module and is never registered | all three `.mjs`, per scope | A |
+| 12 | `/brewcode:convention-setup` | brewcode | `.claude/rules/convention.md` | `.claude/convention/reference-patterns.md`, `testing-conventions.md`, `project-architecture.md` | parking: `.claude/rules/convention.md.disabled` present and the live file absent; the documents stay readable | none | none: generated evidence and local wording legitimately vary | C |
 
 `$BC` / `$BT` / `$BD` = the resolved plugin roots from Phase 0; `GLOBAL` = the config dir it prints
 (`CLAUDE_CONFIG_DIR`, else `~/.claude`). Row ids are stable: a removed setup leaves a gap. Per-row
 exceptions and remedies: [`references/row-notes.md`](references/row-notes.md), read on demand in
-Phase 3.
+Phase 3. `Unattended upgrade` (Phase 3b): `A` = the owner's `upgrade` asks nothing (runs on sonnet),
+`B` = a judgment upgrade run decline-by-default (the owner's model), `C` = an interview, never run.
+New columns go last: every parser indexes cells from the left.
 
 Runtime state is never an artifact, a stamp source or a defect, present or absent:
 `.claude/semble/state.json` beyond its `enabled` flag (its `approvedVersion` is the semble package
@@ -153,7 +148,7 @@ FENCE
 
 The body goes between the markers unchanged, one fence per call; a saved copy is never reused.
 
-Phases 1-1c, 2a-2b and Phase 4's task-tools offer keep their fences in `references/`, each file
+Phases 1-1c, 2a-2b, Phase 4's task-tools offer and Phase 6 keep their fences in `references/`, each file
 read with `Read` at its point of use, never ahead of it. Claude Code substitutes path tokens only in
 this file, so a reference fence still holds them literally: fill each like any other placeholder.
 
@@ -162,8 +157,7 @@ this file, so a reference fence still holds them literally: fill each like any o
 | `CLAUDE_PROJECT_DIR`, braced | the `PROJECT=` path Phase 0 prints |
 | `CLAUDE_SKILL_DIR`, braced | `<brewcode ROOT>/skills/setup-status`, the root from Phase 0's `brewcode ROOT=` line |
 
-A token left unfilled reaches the shell unset: `cd ""` stays in the current dir and Phase 2a's
-roster read aborts.
+An unfilled token reaches the shell unset: `cd ""` stays put and Phase 2a's roster read aborts.
 
 ## Phase 0 — Resolve plugin roots
 
@@ -178,7 +172,7 @@ hooks get), never the shell's current dir: Bash cwd persists across calls, so af
 probes would read a subtree and Phase 4's project write would land where Claude Code never loads it.
 Every fence that reads or writes the project opens with that `cd`.
 
-**EXECUTE** using Bash tool:
+**EXECUTE** using Bash tool, after the PLAN block (the reply's first text):
 
 ```bash
 cd "${CLAUDE_PROJECT_DIR}" || exit 1
@@ -197,6 +191,17 @@ for p in brewcode brewdoc brewtools brewui; do
     { find "$r/skills" -maxdepth 1 -type d -name '*-setup' 2>/dev/null || true; } | sed "s|.*/|SETUP $p:|" | sort
   else echo "$p ROOT=none VERSION=none"; fi
 done
+case "${BC%/}" in
+  "$PLUGINS_ROOT/cache/claude-brewcode/brewcode/"*)
+    IV=$(node -e 'const fs = require("fs"), [p, q, ...files] = process.argv.slice(1); let d;
+      for (const f of files) try { d = JSON.parse(fs.readFileSync(f, "utf8")); break; } catch {}
+      const rows = [].concat(d?.plugins?.["brewcode@claude-brewcode"] ?? []), at = s => rows.find(e => (e?.scope ?? "user") === s && (s === "user" || [p, q].includes(e.projectPath)));
+      const e = at("local") ?? at("project") ?? at("user"); if (e?.version) console.log(e.version + " " + (e.scope ?? "user"));' \
+      "$PWD" "$(pwd -P)" "$PLUGINS_ROOT/installed_plugins.json" "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/installed_plugins.json" 2>/dev/null || true)
+    LV=$(basename "${BC%/}"); IS=${IV#* }; IV=${IV%% *}
+    if [ -n "$IV" ] && [ "$LV" != "$IV" ] && [ "$(printf '%s\n%s\n' "$LV" "$IV" | sort -V | tail -1)" = "$IV" ]; then echo "RELOAD-NEEDED loaded=$LV installed=$IV scope=$IS"; fi ;;
+esac
+echo "SPAWN_DEPTH=${CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH:-default}"
 echo "GLOBAL=${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 echo "PROJECT=$PWD"
 test -d "$PWD/.claude" && echo "DOTCLAUDE=yes" || echo "DOTCLAUDE=no"
@@ -205,16 +210,28 @@ echo "OK"
 
 > **STOP if FAILED** — report it and stop rather than calling everything `missing`.
 
-Bind `$BC`, `$BT`, `$BD` and their versions, `GLOBAL` and the `SETUP` lines (Phase 5) from the
-output. A plugin at `ROOT=none` makes all its rows `n/a`, never `missing`. `DOTCLAUDE=no` is a
-legitimate answer: every row is `missing`, print the table anyway. `VERSION=unknown` on an installed
-plugin means no comparison is possible: report `version unknown (plugin version unresolved)` and
-say why.
+Bind `$BC`, `$BT`, `$BD` and their versions, `GLOBAL` and the `SETUP` lines (Phase 5) from the output.
+A plugin at `ROOT=none` makes all its rows `n/a`, never `missing`. `DOTCLAUDE=no` is a legitimate
+answer: every row is `missing`, print the table anyway. `VERSION=unknown` on an installed plugin means
+no comparison is possible: report `version unknown (plugin version unresolved)` and say why.
+
+### Phase 0b — Reload guard and spawn depth
+
+`RELOAD-NEEDED loaded=X installed=Y scope=S`: this session still runs brewcode X while this project's
+effective install (`installed_plugins.json`: local, else project, else user scope; S) is Y, an update
+without `/reload-plugins`, so verdicts mix two releases and `upgrade` would run old owners. The report
+still prints, its summary adding `verdicts compare against brewcode X (Y installed)`; `upgrade` and Q1
+are refused: `run /reload-plugins, then re-run`. No line = no guard: current, a root outside the cache
+(`--plugin-dir`), no readable install record (fail-open), or a newer install for another scope only.
+`SPAWN_DEPTH` echoes `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` (`default` = unset): `1` = an upgrader
+cannot spawn, so Phase 3b sends rows 4, 6, 7 and 11 (owners that delegate) to manual; `0` sends every
+row there.
 
 ## Phase 1 — Probe artifacts
 
-**Read** `${CLAUDE_SKILL_DIR}/references/phase1-probes.md` now and run its fences in this order;
-each is followed there by the table that reads its output:
+**Read** `${CLAUDE_SKILL_DIR}/references/phase1-probes.md` now and run its fences in this order, as
+written (placeholders filled), never a hand-written substitute (bare globs abort in zsh); each is
+followed there by the table that reads its output:
 
 | Phase | Fence | Output it binds |
 |-------|-------|-----------------|
@@ -316,14 +333,40 @@ or router probe, `ROW2 stale`. `AHEAD` (the plugin is behind), `META` and `SAME`
 | no drift | `disabled` | `enable`, as the user's optional choice; a `META` pair adds an optional `upgrade` that restamps | the version read, `switched off by choice` |
 
 `enable` alone never answers drift: it switches the stale copy back on and the files still differ.
-Row 2's `ROW2 partial edited-stale` keeps its report-only route (Phase 4) whether or not the row is
-disabled.
+Row 2's `ROW2 partial edited-stale` keeps its report-only route (Phase 4), the row disabled or not.
+
+## Phase 3b — Upgrade plan
+
+Both modes: which rows `upgrade` may run. Paste every classified row in scope as a JSON array, one
+object per row; row 1: one per team not `current` (`team`); rows 6, 11: one per installed scope not
+`current` (`scope`, agreeing with the Command's word after `upgrade`, else rc 1). `class` = the roster's
+last column, `state`/`command` as Phases 3-4 print them, `before`/`plugin` the Installed/Plugin cells; a
+`disabled` row with drift adds `drift`: `"differs"` when it is only `DIFFERS` pairs under a `CURRENT`
+stamp, else `"behind"` (a clean `disabled` row omits it).
+One `--root` per plugin with a root; `--spawn-depth <n>` on `SPAWN_DEPTH` `0`/`1`; `--quick` after Q1's
+`Only the quick ones`. **EXECUTE** using Bash tool:
+
+```bash
+node "${CLAUDE_SKILL_DIR}/scripts/upgrade-plan.mjs" --root brewcode=/abs/brewcode/root --root brewtools=/abs/brewtools/root --root brewdoc=/abs/brewdoc/root <<'ROWS' && echo "✅" || echo "❌ FAILED"
+[{"row":6,"setup":"/brewtools:agent-deadline-setup","scope":"project","class":"A","state":"stale (installed 6.5.0, plugin 6.9.6)","before":"6.5.0","plugin":"6.9.6","command":"/brewtools:agent-deadline-setup upgrade project \"re-copy both hooks\""}]
+ROWS
+```
+
+> **STOP if ❌** — name the error line; the report prints without an upgrade offer.
+
+`auto` = Phase 6's rows in stage order, each with its `model` and `brief`; `manual` = other rows that
+need a command, each with its `reason`; both carry the run-list `stage` (1-7); `counts` feeds Phase 6's
+run line and Q1. A row runs only when its class is `A`/`B` and its Command is the owner's `upgrade` (or `current
+(restamp pending)`); never `modified` (nor `differs` drift), `(custom)`, `install`, `enable`, `--force`,
+a chain or a missing scope/team token.
 
 ## Phase 4 — Output
 
-Print in this order: Phase 5 warnings, the PLAN block (Prompt contract above), the summary, the
-setups table, the dependency table, the run-list, the task-tools line. Answer in the user's language
-(RU or EN): translate the prose, never the paths or the commands.
+After the PLAN block that opened the reply, `report` prints in this order: Phase 5 warnings, the
+summary, the setups table, the dependency table, the run-list, the task-tools line, the one question.
+`upgrade`: Phase 5 warnings, Q2 when it applies, Phase 6, then Phase 7 in place of the summary, the
+setups table and the run-list. Answer in the user's language (RU or EN): translate the prose, never
+the paths or the commands.
 
 Summary, two lines:
 
@@ -380,68 +423,9 @@ Below it, name every `not_registered` profile in one sentence: its sessions have
 
 ### The run-list — grouped by real dependency, not just tier
 
-Several rows consume what `teams-setup` creates (agent names for routing/`byAgentType`, the shared
-`intent-guard`) or run faster once `semble-setup`'s code index exists. Group the run-list into these
-seven stages, fixed order; a row not in scope (`n/a`, `current`, a clean `disabled`, filtered out) is
-skipped, never renumbered, and a stage with no rows in scope prints no header:
+**Read** `${CLAUDE_SKILL_DIR}/references/run-list.md` before printing it: stages, order within a stage, template, headers.
 
-| Stage | Rows (roster #) | Why this stage, in one clause |
-|-------|------------------|--------------------------------|
-| 1 🔧 Fix global drift | 11 agent-return | global scope: a stale install taxes every session and every subagent spawn in every stage below. Cheapest fix, biggest leverage |
-| 2 🔍 Search foundation | 2 semble-setup | every later stage fans out subagents that read this repo, faster and more accurately with the index built |
-| 3 📚 Convention foundation | 12 convention-setup | extracts architecture, coding and testing patterns before agents and review consume them; no teams prerequisite |
-| 4 👥 Agent root | 1 teams-setup | creates the project's own agents plus the shared `intent-guard`; stage 5 references them by name and installs into a vacuum without it |
-| 5 🔗 Agent consumers | 7 agent-router, 8 manager, 6 agent-deadline, 3 superreview | router dispatches `Agent` calls to real agent names; deadline's `byAgentType` needs those names; manager's delegate-to-specialist model assumes agents exist; superreview reuses `intent-guard` instead of re-emitting it |
-| 6 📋 Process layer | 4 task-board-setup | its board and `task-tracker` agent are what `manager-setup`'s hard wall and the TSK-graph instructions point at |
-| 7 📚 Final docs sync | 9 memory-sync, then 10 docsync | memory-sync snapshots the FINISHED config (in stage 1 it would freeze an empty project as the baseline); docsync then tracks drift against docs that already exist |
-
-Within a stage: `partial` (broken install) before `stale` and `modified` before `missing`.
-A `disabled` row with drift is listed in its stage, after `stale`, with its keep-it-disabled
-command: the switch is a choice, the outdated copy is not. A clean `disabled` row, `current` and
-`n/a` never appear in the run-list. Mention each `disabled` row once, below the list, with its
-optional `enable` command and the stage it would occupy. Number rows continuously across stages and keep every line
-copy-pasteable on its own. Print the closing paragraph every time, even for one entry: it is the
-one place the user sees why commands are handed back instead of run.
-
-```
-Run in this order, ONE PER SESSION:
-
-  🔧 Stage 1 — fix global drift first (cheap, unlocks every stage below)
-    1. /brewtools:agent-return-setup upgrade "..."
-
-  🔍 Stage 2 — search foundation
-    2. /brewcode:semble-setup install
-
-  📚 Stage 3 — conventions (before agents and review)
-    3. /brewcode:convention-setup install
-
-  👥 Stage 4 — agent root
-    4. /brewcode:teams-setup install
-
-  🔗 Stage 5 — agent consumers (needs stage 4's agents)
-    5. /brewtools:agent-router-setup install
-    6. /brewtools:manager-setup install
-    7. /brewtools:agent-deadline-setup install
-    8. /brewcode:superreview-setup install
-
-  📋 Stage 6 — process layer
-    9. /brewtools:task-board-setup install
-
-  📚 Stage 7 — final docs sync (snapshots the finished config)
-    10. /brewdoc:memory-sync-setup install
-    11. /brewdoc:docsync-setup install
-
-⚠️  Nothing above was run for you, by design. Each of these is an interactive setup: it asks
-    you real questions, writes into the project and, for most, spawns subagents. Two in one
-    session degrade each other — the context fills with the first one's analysis and the
-    second one's questions get answered against stale findings. Start a fresh session per
-    command, one row at a time.
-```
-
-The sample lists every stage; a real run prints only rows that need a command, each under its stage
-header.
-
-### The one offer — task-graph tools
+### The one question — upgrade offer and task-graph tools
 
 Below the run-list, print Phase 1c's verdict as one line, always:
 
@@ -452,10 +436,16 @@ Task tools: OFF — TaskCreate/TaskUpdate/TaskList/TaskGet and TodoWrite are not
             model. CLAUDE_CODE_ENABLE_TODO_TOOLS is unset in the session env and all three settings layers.
 ```
 
-Only when the verdict is a bare `off` and Phase 1c said the gate applies or is assumed: **Read**
-`${CLAUDE_SKILL_DIR}/references/task-tools-offer.md` and follow it: the one `AskUserQuestion`
-(`Global` / `This project only` / `Leave off`), the `node` merge fence (never `Write`/`Edit`) and the
-two-line report. Any other verdict: the line above is all, no offer.
+Then at most ONE `AskUserQuestion` call holding the questions that apply: after the report
+(`report`), or after the PLAN and before the first spawn (`upgrade`, Q2 only). None applies: no call.
+
+| Question | When | Options |
+|----------|------|---------|
+| Q1 `Upgrade N setups now?`, naming the mix (`K quick, M long`, from `counts`) and each global row as `🌐 <setup>: every project of this profile` | `report`, Phase 3b `counts.auto` >= 1, no `RELOAD-NEEDED` | `Upgrade all N` / `Only the quick ones (K)`, only when 0 < K < N / `No, just the report` |
+| Q2 task-graph tools | the verdict is a bare `off` and Phase 1c said the gate applies or is assumed | **Read** `${CLAUDE_SKILL_DIR}/references/task-tools-offer.md`: its question (`Global` / `This project only` / `Leave off`) is Q2 of this call; its `node` merge fence (never `Write`/`Edit`) and two-line report follow the answer |
+
+Q2's merge runs first. Then Q1 `Upgrade all N` -> Phase 6 over every `auto` row; `Only the quick ones
+(K)` -> Phase 3b again with `--quick`, then Phase 6; `No, just the report` -> done.
 
 ## Phase 5 — Roster self-check
 
@@ -470,11 +460,31 @@ environment prerequisite with no `*-setup` dir, not a twelfth row: the count sta
 
 Print warnings above the table so they are not lost under it. Never edit the roster to fix one.
 
+## Phase 6 — Upgrade runner
+
+Q2 pending (`upgrade` mode) -> ask it now, before the run line and the first spawn; its merge runs
+before row 1. Phase 6 runs on `upgrade`, or after Q1's `Upgrade all N` / `Only the quick ones (K)`,
+with >=1 `auto` row and no `RELOAD-NEEDED`. **Read** `${CLAUDE_SKILL_DIR}/references/upgrade-runner.md`
+now and follow it: the run line, lock; per row, sequential in plan order: HEAD, stash count,
+`scope-guard.sh` snapshot; one `brewcode:setup-upgrader` spawn, `model`: class A `sonnet`, class B the
+owner's frontmatter `model`; `run_in_background: false` (boolean) only where the Agent tool's schema
+lists that key, else omit it and wait for its notification, no other call; its last `RESULT` line; the
+re-probe of that row alone (the verdict); `scope-guard.sh check`, the HEAD/stash compare; the outcome.
+The first 🔴 stops the run, the rest print as commands. Never revert, reset or stash. Unlock always.
+
+## Phase 7 — Upgrade report
+
+`upgrade-runner.md` section 6: `## <marker> Setups upgraded: N of M done, K need you, S stopped`, the
+`| # | Setup | Before | After | Result |` table, `### Run these yourself, one per session`, then Phase
+4's dependency table and task-tools line.
+
 ## Guards
 
 | Condition | Response |
 |-----------|----------|
-| User asks this skill to run a setup, "install everything", "fix them all", or for a `--fix` / auto flag | Refuse once, plainly, with the reason from "Why it does not run the setups". Print the run-list. Offer no compromise mode: none exists. |
+| User asks to run a setup, "install everything", "fix them all", or for `--force` | `upgrade` runs only Phase 3b's `auto` rows ("What it runs and what it never runs"); say so once, run those, print the rest with their reasons. No other mode exists. |
+| `RELOAD-NEEDED` (Phase 0b) | As Phase 0b says: report only, flagged; `upgrade` and Q1 refused. |
+| Runner lock `LOCKED` | Another `upgrade` holds this project: nothing runs; print its `rmdir` line. |
 | A sibling plugin is `ROOT=none` | Its rows are `n/a`, with `claude plugin install <p>@claude-brewcode` as the command. |
 | Running with `--plugin-dir` | brewcode's root is the checkout, and that is the plugin in use; sibling plugins still resolve from the cache. |
 | Project has no `.claude/` | Every row `missing`. Print the table and the install run-list. |

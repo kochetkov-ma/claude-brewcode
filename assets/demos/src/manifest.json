@@ -3,85 +3,85 @@
     "superreview": {
       "gif": {
         "file": "superreview.gif",
-        "bytes": 1897750,
-        "sha256": "05a2be6efa45c304edebea03c899fbdcdbe70c7adbc5d254ec480fdc93d7b492",
+        "bytes": 1897767,
+        "sha256": "e7c399107f96f7a610410ad7ce5d73ef0bc43f7fb2163690c60c479e12efba73",
         "width": 800,
         "seconds": 20.04
       },
       "sources": {
-        "brewcode/skills/superreview-setup/SKILL.md": "e0e9ff432cf5c48f44da483c03bd7ec2154303a885673fe8e376508cadeb3759",
-        "brewcode/skills/superreview-setup/scripts/generate.sh": "6ed997548e8d3405d1ab0a3e1fbaa4c65339b0d6dad5b2d0bb96a77138a4297f",
-        "brewcode/skills/superreview-setup/references/SKILL.md.template": "3d3580f84297e9c7ae2c5cb7514510f1cde7c99a2e274aaa0672f010cd85c47f",
-        "brewcode/skills/superreview-setup/references/intent-guard.md.template": "ddb772d6b3b418ca9a95b3eb25eb298e1c909f5f5f556221349604aeb3a59c4a"
+        "brewcode/skills/superreview-setup/SKILL.md": "05e8e0931d03d2a4bdcc58fff6e44d7e84893dd827bb62ee805e9f2ea0e6c7d1",
+        "brewcode/skills/superreview-setup/scripts/generate.sh": "a928b0828bef9998b0a0bd592c5bf25dc707349f8152cc94a7120c69dfb9c7f1",
+        "brewcode/skills/superreview-setup/references/SKILL.md.template": "796faf750b1c07d33f1b840404e74446ba520a3cb84980b8d4d426416e8dfe6d",
+        "brewcode/skills/superreview-setup/references/intent-guard.md.template": "8e6a61f93e3c716e7116b45046a3bb46a274d369d7ff331f5d2b928ab8deeab8"
       },
       "ccVersion": "2.1.300",
-      "recorded": "2026-10-15T16:10:31.019Z"
+      "recorded": "2026-10-16T23:34:31.863Z"
     },
     "skill-creator": {
       "gif": {
         "file": "skill-creator.gif",
-        "bytes": 751166,
-        "sha256": "4190f644b5b2b7703b2aef04da6ae1d5ee5ca1e6d040a015a9b4ea375c74f379",
+        "bytes": 744272,
+        "sha256": "6c88f9149de0e743c6993fae2755ce443258d77eb7303fb1915294733e32c9ee",
         "width": 800,
         "seconds": 20.04
       },
       "sources": {
-        "brewcode/agents/skill-creator.md": "fcbbcefaf18acd32318d5f10c735e8b0c305f10adbb7a519a3200882f07406e9",
-        "brewcode/skills/skills/SKILL.md": "f256d5342342871242f7d7b3f1dfc07b38f8f861cd9af1bcda2244f858dac32d",
-        "brewcode/skills/skills/scripts/validate-skill.sh": "c60996ba37b77d629f343bd852d1f5a2d190d009a9d43e7af1b835d8511492df",
-        "brewcode/skills/skills/references/prompt-contract.md": "a26a7ea9195dce7ad682bc73727ad6be608896fd7bec5b89dbf5f07f84733a02"
+        "brewcode/agents/skill-creator.md": "857ba3cc639dcd932467c10887584de8ab8d62903153d9c3cff211cdf3bba695",
+        "brewcode/skills/skills/SKILL.md": "c7c2702e275714f3a77e5b37463ce25e00a36b898c6a941363afed813d4281f6",
+        "brewcode/skills/skills/scripts/validate-skill.sh": "cd1248f7a02af4bcf8b547747c28b84a9743e5af256a8663a7737f5a38d18035",
+        "brewcode/skills/skills/references/prompt-contract.md": "606ae4802944958d7298bddcd6454382253cab48eb76aea089a6a7801606581b"
       },
       "ccVersion": "2.1.300",
-      "recorded": "2026-10-15T16:11:59.510Z"
+      "recorded": "2026-10-16T23:34:01.953Z"
     },
     "semble": {
       "gif": {
         "file": "semble.gif",
-        "bytes": 996070,
-        "sha256": "24adc8e370e7a7f12154a79e8fa249e7e143615100c5c48ee8aec1ab3d4a67e8",
+        "bytes": 912218,
+        "sha256": "612e8cbcd4938146c98008b1223d2f9e0e22a873dc14e63d20e07f2f2734f700",
         "width": 800,
         "seconds": 20.04
       },
       "sources": {
-        "brewcode/skills/semble-setup/SKILL.md": "e43003ccb91a76bf3268181e0c5ec6aecb96e52293ad71c6c192a134745556d0",
-        "brewcode/skills/semble-setup/references/output-contract.md": "b155c6911489f32923440a3da883e14e06e0468c888e19fb14e2cd012b8074bf"
+        "brewcode/skills/semble-setup/SKILL.md": "7a3e279b25cdaad603ef505b366aa25cbf499ba9dfa18f77772e446fccab04a9",
+        "brewcode/skills/semble-setup/references/output-contract.md": "d13249722fe5faa0fcd86f957b7a5ad5cbc02846ecf625740f597ee215a9aa20"
       },
       "ccVersion": "2.1.300",
-      "recorded": "2026-10-15T16:13:28.468Z"
+      "recorded": "2026-10-16T23:33:38.071Z"
     },
     "teams-setup": {
       "gif": {
         "file": "teams-setup.gif",
-        "bytes": 906889,
-        "sha256": "2a45b2efdc9de5367ef8290a24604a58611e00119ca08809d66d3bf763e9109b",
+        "bytes": 896986,
+        "sha256": "9c2eefb7cee4d7b028790fdf444fe2d7b5c61d10b497d2f04f3a1698eadbb502",
         "width": 800,
         "seconds": 20.04
       },
       "sources": {
-        "brewcode/skills/teams-setup/SKILL.md": "7c1d948c48fc5ac191e3888eb610249bb190b00d577fbf8aebf313fe0bda9543",
+        "brewcode/skills/teams-setup/SKILL.md": "a7c80bcd14e9a1a26a87589ed8164a306f7e4fa53f7972c9a8f1d7c3ae9ae508",
         "brewcode/skills/teams-setup/references/mode-install.md": "c13e612a15300d0195fffef36a23f4874c84f80009e080cbaac2c6183e96682a",
-        "brewcode/skills/teams-setup/references/framework-files.md": "a53aa098303595430ed9387de6d7d1c76290293351b5b4a0ad06e6de46a4037a",
-        "brewcode/skills/teams-setup/scripts/verify-team.sh": "22b4ce745ee9da94e5deb34bfd36ffafc3e9d8a74d533bc37d49e756a2824254",
-        "brewcode/skills/superreview-setup/scripts/generate.sh": "6ed997548e8d3405d1ab0a3e1fbaa4c65339b0d6dad5b2d0bb96a77138a4297f",
-        "brewcode/skills/teams-setup/scripts/trace-ops.sh": "05895373e5b0362ee3baf87ed33fe4d33f3882627781850d89afa12194c00e01"
+        "brewcode/skills/teams-setup/references/framework-files.md": "9214bcfa4c79935bac1ee270c04bd379ef387e8d37f6f78034a2ffa2f8f9a35f",
+        "brewcode/skills/teams-setup/scripts/verify-team.sh": "cc00ba15d695c749d33e5442bfa7e23a2d6d3db60c14854578ed519f006898b1",
+        "brewcode/skills/superreview-setup/scripts/generate.sh": "a928b0828bef9998b0a0bd592c5bf25dc707349f8152cc94a7120c69dfb9c7f1",
+        "brewcode/skills/teams-setup/scripts/trace-ops.sh": "13935f48a28d41b3c09433cefbd4515108646ba4455003d324420f2a68f7d3f3"
       },
       "ccVersion": "2.1.300",
-      "recorded": "2026-10-15T16:22:53.367Z"
+      "recorded": "2026-10-16T23:35:18.254Z"
     },
     "text-optimize": {
       "gif": {
         "file": "text-optimize.gif",
-        "bytes": 810759,
-        "sha256": "66477d691565e50ece9feb09a77b267b7b0aa3cb0188bb471a99cf54a0669ea4",
+        "bytes": 810215,
+        "sha256": "67223d5a51f4fbe29b21566c42443d1978f68c219b9fc6267260f16645137ecf",
         "width": 800,
         "seconds": 18.04
       },
       "sources": {
-        "brewtools/skills/text-optimize/SKILL.md": "d26587e576bd097c8ce00f339ef856d6d3b259919a648c0d5747b83c286921b2",
+        "brewtools/skills/text-optimize/SKILL.md": "a2a4a79480073f0d370c1891a2bd4290c60246481493ae1079e0b8777825ecd1",
         "brewtools/skills/text-optimize/scripts/text-guard.sh": "24cfb7a2ad82f8420b5ef40d75e7c55d2b5142518ba8e59589a2424b36d30da4"
       },
       "ccVersion": "2.1.300",
-      "recorded": "2026-10-15T16:23:30.914Z"
+      "recorded": "2026-10-16T23:35:39.163Z"
     },
     "task-board-setup": {
       "gif": {
@@ -92,14 +92,14 @@
         "seconds": 20.04
       },
       "sources": {
-        "brewtools/skills/task-board-setup/SKILL.md": "ede35238e2730c57e20a28a2fd16e092dcc98f9dc57de9186afc8ee107e34db0",
-        "brewtools/skills/task-board-setup/references/12-verify-report.md": "e8c399a1f7676ed7ae6bb7d6383c9d3e39ded37b8d037571065c1f4a84bde943",
+        "brewtools/skills/task-board-setup/SKILL.md": "06f6a34e9105dfe77f608617acb14ddefe034d21ba666171f6ca51368f782473",
+        "brewtools/skills/task-board-setup/references/12-verify-report.md": "8aac5bebd83bb0b2617d248d84f2c553b10c36d1cd76ba7aefba9a9ac50fa505",
         "brewtools/skills/task-board-setup/references/01-analysis.md": "1b81aff97c9651f10359163298ebbd179e3f832ce2484276c3761523f743569a",
         "brewtools/skills/task-board-setup/references/03-task-board-skill.md": "c2692077f1399a93d7a80a78f17ae48bce909315cd5f2527c277919f444b9148",
         "brewtools/skills/task-board-setup/references/05-features-templates.md": "8453471d84a749e3afacde50b43e181713667667948c13f846421f159f193f1e"
       },
       "ccVersion": "2.1.300",
-      "recorded": "2026-10-15T16:23:54.536Z"
+      "recorded": "2026-10-16T23:34:55.257Z"
     }
   },
   "tools": {

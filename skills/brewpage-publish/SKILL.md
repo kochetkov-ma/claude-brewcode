@@ -6,6 +6,7 @@ disable-model-invocation: false
 argument-hint: "<text|file_path|directory_path|zip_path> [--ttl N] [--entry filename] [--delivery-mode path|subdomain]"
 allowed-tools: [Read, 'Bash(bash ${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh *)', AskUserQuestion, Glob]
 model: haiku
+license: MIT
 ---
 
 # brewpage-publish

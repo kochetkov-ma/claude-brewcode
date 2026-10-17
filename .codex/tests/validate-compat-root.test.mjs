@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const VALIDATOR_INPUTS = ['.agents', '.codex', 'assets', 'brewcode', 'brewdoc', 'brewtools'];
+const VALIDATOR_INPUTS = ['.agents', '.codex', 'assets', 'brewcode', 'brewdoc', 'brewtools', 'LICENSE'];
 const SKIPPED = new Set(['node_modules', '__pycache__', '.DS_Store']);
 const STALE_ARTIFACT = '- task-board-setup Codex variant contains a stale foreign-assistant artifact';
 
@@ -58,6 +58,18 @@ test('GIVEN dist README body text drifted from canonical WHEN validate-compat ru
   const result = validate(fixture.root);
   assert.equal(result.status, 1, `dist drift must fail:\n${result.stdout}`);
   assert.deepEqual(result.stderr.trim().split('\n'), ['- brewcode/superreview-setup: dist resource differs from canonical README.md'], 'exactly the dist drift error');
+  fs.rmSync(fixture.base, { recursive: true, force: true });
+});
+
+test('GIVEN a dist LICENSE drifted from the root LICENSE WHEN validate-compat runs THEN it fails on that plugin only', () => {
+  const fixture = checkoutUnderClaudeParent();
+  const license = path.join(fixture.root, '.codex', 'plugins', 'brewdoc', 'LICENSE');
+  const original = fs.readFileSync(license, 'utf8');
+  assert.equal(original.includes('Maksim Kochetkov'), true, 'fixture LICENSE carries the drift anchor');
+  fs.writeFileSync(license, original.replace('Maksim Kochetkov', 'Someone Else'));
+  const result = validate(fixture.root);
+  assert.equal(result.status, 1, `dist LICENSE drift must fail:\n${result.stdout}`);
+  assert.deepEqual(result.stderr.trim().split('\n'), ['- brewdoc: dist LICENSE missing or differs from the repo root LICENSE'], 'exactly the dist LICENSE error');
   fs.rmSync(fixture.base, { recursive: true, force: true });
 });
 

@@ -1,0 +1,30 @@
+⏺ Wrap the import in transaction() and write all rows with one multi-row INSERT INTO
+  tastings (id, batch_id, score) VALUES (?, ?, ?), (?, ?, ?), … with every value as a
+  bound param (db.js handles that form), so nothing queries in a loop and one bad row
+  rolls back the whole import.
+
+✻ Sautéed for 11s · done 11:27 PM
+++m · Claude receives these lines now:                                              [-]
+  User typed `++m` — Manager + Plan Mode is active for this turn:
+
+  [ROLE: MANAGER]
+
+  Manage; never code/build/test/hand-debug: the main context is for orchestration.
+
+  ... 23 more lines
+  plan mode adds:
+  [ADDON: PLAN MODE]
+
+  Stay read-only: no code, board/task-state writes, installation or
+  configuration. Read-only expert exploration is allowed.
+
+  Include in the plan (English, token economy):
+  ... 12 more lines · whole text: /placeholders show ++m or ++m? alone [Enter]
+also: ++db
+close: move the caret off ++m · send as typed: ++/
+
+────────────────────────────────────────────────────────────────────────────────────────
+❯ plan the tasting import ++db ++m
+────────────────────────────────────────────────────────────────────────────────────────
+  ⏸ plan mode on (shift+tab to cycle)
+

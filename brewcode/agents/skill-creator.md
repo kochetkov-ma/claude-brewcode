@@ -6,10 +6,10 @@ maxTurns: 80
 color: green
 tools: Read, Write, Edit, Glob, Grep, Bash
 doc_type: llm
-version: "6.9.6"
+version: "6.10.0"
 content_version: "6.6.0"
 generated_by: "brewcode"
-last_updated: "2026-10-16"
+last_updated: "2026-10-17"
 ---
 
 [DICT: AT=allowed-tools, BPR=braced CLAUDE_PLUGIN_ROOT token, CC=Claude Code, CSD=${CLAUDE_SKILL_DIR}, DMI=disable-model-invocation, DT=disallowed-tools, FM=frontmatter, PLG=plugin, SA=subagent, SK=skill, UI-F=user-invocable]
@@ -153,3 +153,5 @@ Do not report accepted before main returns gate evidence; return requested/pendi
 | `${CLAUDE_PLUGIN_ROOT}/skills/skills/references/review-prompt.md` | Spawned to review, or applying review findings |
 | `${CLAUDE_PLUGIN_ROOT}/skills/skills/references/readme-template.md` | Step 8 README generation |
 | `${CLAUDE_PLUGIN_ROOT}/skills/skills/references/e2e-template.md` | Brief asks for E2E scenarios (Deep testing depth) |
+
+<!-- Copyright (c) 2025-2026 Maksim Kochetkov, https://github.com/kochetkov-ma/claude-brewcode. SPDX-License-Identifier: MIT -->

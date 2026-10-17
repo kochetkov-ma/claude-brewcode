@@ -6,8 +6,9 @@ disable-model-invocation: true
 argument-hint: "[prompt] [status|install|create|update|review|rules]"
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion, Skill, WebSearch, WebFetch]
 model: opus
+license: MIT
 ---
-<!-- brewcode-meta: version=6.9.6 content_version=6.5.0 generated_by=brewcode:e2e -->
+<!-- brewcode-meta: version=6.10.0 content_version=6.5.0 generated_by=brewcode:e2e -->
 
 <instructions>
 

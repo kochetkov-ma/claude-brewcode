@@ -18,7 +18,7 @@ Manager Setup installs a guard into your project that blocks Write, Edit and mut
 | Field | Value |
 |-------|-------|
 | Command | `/brewtools:manager-setup` |
-| Arguments | `[prompt] [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [level strict\|balanced]` |
+| Arguments | `[prompt] [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [level strict\|balanced] [--unattended]` |
 | Model | sonnet |
 | Scope | Project only; the wall has no global scope |
 | Default | `status` with no argument |
@@ -52,6 +52,8 @@ Canonical order, shared by every `-setup` skill: `status | install | upgrade | e
 | `uninstall` | Deregister and delete the copied guard. State, overrides and the task-tools key are kept |
 | `purge` | `uninstall` + delete state and helpers. The only destructive action |
 | `level <strict\|balanced>` | `balanced` = read-only Bash allowed; `strict` = all Bash denied |
+
+Under `--unattended`, `upgrade` skips with nothing written when no wall is installed and never arms one; see [how the flag works](/brewcode/skills/setup-status/#the-unattended-flag).
 
 <Callout type="note">
 `on`, `off` and `reset` are not commands; as free text they route to `enable`, `disable`, `purge`. There is no `edit` command; change codeword text in the [placeholders mod](/mods/placeholders/).
@@ -208,7 +210,7 @@ Exit:      node <ABS project root>/.claude/brewtools/manager/manager-state.mjs s
     Domain methodology, work plans and session anti-drift timers.
   </Card>
   <Card title="Setup Status" icon="clipboard" href="/brewcode/skills/setup-status/">
-    Read-only dashboard across every `-setup` skill.
+    Dashboard across every `-setup` skill; `upgrade` brings the stale ones current.
   </Card>
   <Card title="Brewtools overview" icon="document" href="/brewtools/overview/">
     Every brewtools skill and agent.

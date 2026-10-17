@@ -13,8 +13,9 @@ case "$ACTION" in
 esac
 [ -n "$TEAM_NAME" ] || { echo "ERROR:empty team name"; exit 1; }
 # Same name rule as detect-mode.sh: a `/` or `..` here reads a roster outside `.codex/teams/`.
+# Explicit ASCII list: bash 3.2 under a UTF-8 locale lets a-z ranges match accented letters.
 case "$TEAM_NAME" in
-  -*|*[!a-zA-Z0-9_-]*) echo "ERROR:invalid team name (alphanumeric, dash, underscore only; no leading dash)"; exit 1 ;;
+  -*|*[!ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-]*) echo "ERROR:invalid team name (alphanumeric, dash, underscore only; no leading dash)"; exit 1 ;;
 esac
 # A mistyped flag (`--dryrun`) must not fall through to a real move.
 case "$DRY" in
@@ -23,7 +24,7 @@ case "$DRY" in
 esac
 [ "$#" -le 3 ] || { echo "ERROR:too many arguments; nothing was touched"; exit 1; }
 
-SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 TEAM_DIR=".codex/teams/$TEAM_NAME"
 AGENTS_DIR=".codex/agents"
 TEAM_MD="$TEAM_DIR/team.md"
@@ -42,8 +43,9 @@ CONFLICT=0
 # Roster ids feed move/probe/delete paths (`| ../../../outside/README |` escaped project) -> bare `^[a-z0-9][a-z0-9-]*$`.
 # Same guard: verify-team.sh, cleanup-flow.md delete/purge steps.
 valid_agent_id() {
+  # Explicit ASCII lists: bash 3.2 under a UTF-8 locale lets ranges and [:lower:] match accented letters.
   case "$1" in
-    ''|*[![:lower:][:digit:]-]*|[![:lower:][:digit:]]*) return 1 ;;
+    ''|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*|[!abcdefghijklmnopqrstuvwxyz0123456789]*) return 1 ;;
   esac
   return 0
 }

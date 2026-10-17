@@ -1,5 +1,8 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.9.6 content_version=6.5.2 generated_by=brewdoc:docsync-setup
+// brewcode-meta: version=6.10.0 content_version=6.5.2 generated_by=brewdoc:docsync-setup
+
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025-2026 Maksim Kochetkov
 
 // PostToolUse Read of a tracked .md (main session): log one silent `read` event; the Stop gate ignores reads.
 // Self-contained (Node built-ins), state in <projectRoot>/.claude/docsync/; never throws, exit 0.

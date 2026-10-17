@@ -1,0 +1,30 @@
+⏺ 🟢 brewcode updated: 4 of 5 components
+
+  ┌──────────────────────┬────────┬────────┬────────────────────┐
+  │      Component       │ Before │ After  │                    │
+  ├──────────────────────┼────────┼────────┼────────────────────┤
+  │ brewmod-placeholders │ —      │ 6.10.0 │ 🟢 installed       │
+  ├──────────────────────┼────────┼────────┼────────────────────┤
+  │ brewmod-plan-effort  │ —      │ 6.10.0 │ 🟢 installed       │
+  ├──────────────────────┼────────┼────────┼────────────────────┤
+  │ brewcode             │ 6.9.6  │ 6.10.0 │ 🟢 updated         │
+  ├──────────────────────┼────────┼────────┼────────────────────┤
+  │ brewdoc              │ 6.9.6  │ 6.10.0 │ 🟢 updated         │
+  ├──────────────────────┼────────┼────────┼────────────────────┤
+  │ brewtools            │ 6.10.0 │ 6.10.0 │ ⚪ already current │
+  ├──────────────────────┼────────┼────────┼────────────────────┤
+  │ brewui               │ —      │ —      │ ⚪ not installed   │
+  └──────────────────────┴────────┴────────┴────────────────────┘
+
+  🔵 brewui is not installed (placeholder for future UI tools, no skills yet): claude
+  plugin install brewui@claude-brewcode
+
+  What changed for you (6.9.6 → 6.10.0)
+
+  - v6.10.0: /brewtools:plugin-update now does the whole update in one run: it updates
+    every installed plugin and mod without asking, prints versions before and after,
+    what changed for you and the next steps, and asks once whether to install the mods
+    and plugins you are missing (brewmod-placeholders first). See plugin-update.
+  - v6.10.0: New: /brewcode:setup-status upgrade brings the setups generated in a
+    project up to date in one run. After the update and /reload-plugins, type it in each
+    project: it upgrades every stale setup it may run for you, one subagent at a time,

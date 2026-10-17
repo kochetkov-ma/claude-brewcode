@@ -6,9 +6,10 @@ disable-model-invocation: true
 argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge|full|conventions|rules|paths <p1,p2>]"
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion, Skill]
 model: opus
+license: MIT
 ---
 
-<!-- brewcode-meta: version=6.9.6 content_version=6.6.0 generated_by=brewcode:convention-setup -->
+<!-- brewcode-meta: version=6.10.0 content_version=6.6.0 generated_by=brewcode:convention-setup -->
 
 <instructions>
 

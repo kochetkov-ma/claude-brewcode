@@ -1,11 +1,13 @@
 {
   "gif": {
     "file": "plan-effort.gif",
-    "bytes": 496833,
-    "sha256": "43758d4136aa9cf05ad39262aa5afb20bc0c484001a21668e52157943ed0cd89",
+    "bytes": 494964,
+    "sha256": "8146f95f8731b168ea9a724f0837712c0e4ec0e869bac2d545f41b6de6b4c69f",
     "width": 1152,
     "height": 786,
-    "seconds": 23
+    "seconds": 23,
+    "colors": 256,
+    "lossy": 0
   },
   "still": {
     "file": "plan-effort-still.png",
@@ -16,18 +18,18 @@
   },
   "bottle": {
     "file": "plan-effort-bottle.gif",
-    "bytes": 441218,
-    "sha256": "ac833f4100288e00b855add493afea905a2d54fdd127d7a0cd8cb28748275b6b",
+    "bytes": 436857,
+    "sha256": "891ac7f900da5ddef8d4d7dfb368f5700d7e1128f3861c43be8d243eafd23360",
     "width": 420,
     "height": 628,
     "seconds": 5,
     "label": "xhigh · batch 04"
   },
   "sources": {
-    "render.html": "6faee2f039b952c59250572e6b6212ceae3d5be49921a890f56194fbbdfe5f31",
+    "render.html": "0042136b38cdd12bc06b7590461d71dfa22b5489e6934f37a1719647e16cd107",
     "plan-effort.story.js": "5f21183f7129f57b7c06ca7220296a27ceb68b85025adb9b153f68b574f06ac5",
     "plan-effort.data.js": "4fe1c71ca623e80f7fc0584f993953043fdda01a594522ac40b7c55d58dc0742",
-    "record-gifs.mjs": "57c8dc6d77cf4d7707cdd02f0ff090c85ad30c4dbaaf02bb78f682ac13ba99eb"
+    "record-gifs.mjs": "3bfa14c1d6a00cbf0adb6f2458171a7334c8183b7503065da18cbe44511714bd"
   },
   "ccVersion": "2.1.301",
   "tools": {
@@ -36,5 +38,5 @@
     "gifsicle": "1.96",
     "node": "v24.19.0"
   },
-  "recorded": "2026-10-16T17:09:14.139Z"
+  "recorded": "2026-10-17T00:29:23.941Z"
 }

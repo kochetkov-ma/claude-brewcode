@@ -8,24 +8,25 @@ import { Card, CardGrid, Callout, Badge, Spoiler, UpdateNotice } from '../../com
 
 # Full Setup
 
-<Badge variant="primary" text="11 setups" /> <Badge variant="secondary" text="27 skills · 9 agents" /> <Badge variant="accent" text="24 of 27 user-only" />
+<Badge variant="primary" text="11 setups" /> <Badge variant="secondary" text="27 skills · 10 agents" /> <Badge variant="accent" text="24 of 27 user-only" />
 
 Install the plugins and the two [brewcode mods](/mods/overview/) first ([Installation](/installation/)). Update Claude Code before the mods: they need 2.1.301 or newer (`claude --version`; if it is lower, run `claude update` and restart Claude Code).
 
-Run `/brewcode:setup-status` first. It lists the setups still to run, with search and conventions before the agents that consume them. Run each one yourself, one per fresh session, and inspect the generated files before committing them.
+Run `/brewcode:setup-status` first. It lists the setups still to run, with search and conventions before the agents that consume them. Run each missing setup yourself, one per fresh session, and inspect the generated files before committing them. Setups that are already installed but stale are the exception: `/brewcode:setup-status upgrade` refreshes them for you (see [After setup](#after-setup)).
 
 A `-setup` skill installs a mechanism (agents, hooks, a generated skill, rules, a task board). Use the installed mechanism afterwards; rerun the setup to inspect, refresh, disable or remove it.
 
-```text
-/brewcode:setup-status
-/brewcode:setup-status brewtools
-/brewcode:setup-status convention-setup
-```
+| Command | Does |
+|---------|------|
+| `/brewcode:setup-status` | Reports the setups of every installed plugin and offers one upgrade for the stale setups |
+| `/brewcode:setup-status upgrade` | Upgrades the stale setups with no confirmation question |
+| `/brewcode:setup-status brewtools` | Reports one plugin |
+| `/brewcode:setup-status convention-setup` | Reports one setup |
 
-The first command reports every installed plugin; the others filter by plugin or setup. The dashboard runs no setup; its one optional write is an accepted task-tools settings key.
+The dashboard never installs a setup: its writes are the upgrades you accept and, if you accept it, a task-tools settings key.
 
 <Callout type="warning" title="Run setups separately">
-  Setups analyse the repository, delegate work and ask for choices, so run them one at a time and supply known choices in your prompt; later analysis then sees the earlier artifacts. Only you start them: see [why Claude does not run skills on its own](/faq/#auto-invoke).
+  Setups analyse the repository, delegate work and ask for choices, so run installs one at a time and supply known choices in your prompt; later analysis then sees the earlier artifacts. Only you start them: see [why Claude does not run skills on its own](/faq/#auto-invoke).
 </Callout>
 
 ## Recommended order
@@ -83,6 +84,8 @@ Task methodology and the session timer: [Task Board Setup](/brewtools/skills/tas
 
 All eleven accept these seven modes. A bare call picks its own default: semble, manager, agent-deadline, agent-return and agent-router run `status`; convention runs `install`; teams, superreview, task-board, memory-sync and docsync run `status` when installed and `install` when absent. Use explicit modes. Convention setup also accepts `full`, `conventions`, `rules` and `paths`; semble adds `reindex`, `optimize` and `resume`.
 
+`--unattended` is a flag, not a mode, and only `upgrade` acts on it; `/brewcode:setup-status upgrade` passes it for you ([the unattended flag](/brewcode/skills/setup-status/#the-unattended-flag)).
+
 <Spoiler id="disarm-the-manager-wall" title="Disarm the manager wall">
 
 The installed hard wall can block main-session file and shell tools. Disarm it with:
@@ -103,13 +106,13 @@ Use the actual project path and call the helper directly: shell operators, expan
 
 ## After setup
 
-Rerun `/brewcode:setup-status` after plugin updates and follow its commands to repair partial installs. A plugin update does not replace files a setup already copied into your project.
+After a plugin update, run `/reload-plugins`, then `/brewcode:setup-status upgrade` in each project: a plugin update does not replace files a setup already copied into your project. What the upgrade leaves on your list, with a reason each: [what the upgrade leaves to you](/brewcode/skills/setup-status/#what-the-upgrade-leaves-to-you).
 
 ## Related
 
 <CardGrid>
   <Card title="Brewcode overview" icon="document" href="/brewcode/overview/">Project analysis, conventions, agents, and review tools.</Card>
-  <Card title="Setup Status" icon="eye" href="/brewcode/skills/setup-status/">Artifact probes, verdicts, and the run-list.</Card>
+  <Card title="Setup Status" icon="eye" href="/brewcode/skills/setup-status/">Artifact probes, verdicts, the run-list and the upgrade runner.</Card>
   <Card title="Task Board Setup" icon="graph" href="/brewtools/skills/task-board-setup/">Task methodology, graph reconciliation, and session anti-drift.</Card>
   <Card title="Brewcode mods" icon="link" href="/mods/overview/">Prompt placeholders and plan-mode effort for Claude Code.</Card>
   <Card title="GitHub source" icon="github" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewcode/skills/setup-status">The authoritative setup roster and run-list.</Card>

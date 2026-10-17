@@ -20,7 +20,7 @@ Point the skill at any repo. It analyzes the domains, confirms the findings with
 | Field | Value |
 |-------|-------|
 | Command | `/brewtools:task-board-setup` |
-| Arguments | `[prompt] [status \| install \| upgrade \| enable \| disable \| uninstall \| purge] [target repo path \| empty = cwd] [free-text directive]` |
+| Arguments | `[prompt] [status \| install \| upgrade \| enable \| disable \| uninstall \| purge] [target repo path \| empty = cwd] [free-text directive] [--unattended]` |
 | No verb | A deployed board reports `status`, a fresh repo gets `install`; a bare path installs into that path |
 | Model | opus |
 | Emits | `task-tracker` agent, `task-board` skill, `tasks` rule, board tree, methodology, anti-drift controls; with `SPEC_MODE` also `task-spec` skill and spec templates |
@@ -60,6 +60,8 @@ Canonical order, shared by every `-setup` skill:
 | `disable` | deployed board | Parks `task-tracker.md`, `task-board/SKILL.md`, `task-spec/SKILL.md` (if deployed) and `tasks.md` as `.disabled` twins. Tasks stay untouched |
 | `uninstall` | deployed board | Removes the generated machinery, KEEPS `.claude/features/**` |
 | `purge` | deployed board | `uninstall` plus deletion of `.claude/features/**`: every task you wrote |
+
+Under `--unattended`, `upgrade` writes the missing additions and leaves patches to existing files pending (result `partial`); see [how the flag works](/brewcode/skills/setup-status/#the-unattended-flag).
 
 ## How it works
 
@@ -232,7 +234,7 @@ Self-review loop: A finds (one adversarial reviewer per domain), B verifies each
 
 <CardGrid>
   <Card title="Setup Status" icon="list" href="/brewcode/skills/setup-status/">
-    Read-only dashboard across every `-setup` skill, with the hand-run command for each.
+    Dashboard across every `-setup` skill; `upgrade` brings the stale ones current and lists the rest to run by hand.
   </Card>
   <Card title="Manager Setup" icon="clipboard" href="/brewtools/skills/manager-setup/">
     Arm a HARD wall that forces the main session to orchestrate via subagents.

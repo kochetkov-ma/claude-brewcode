@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | 6.9.6 |
+| Version | 6.10.0 |
 | Skills | 13 |
 | Agents | 3 |
 | Hooks | 1 |
@@ -51,6 +51,8 @@ claude plugin marketplace update claude-brewcode
 claude plugin update brewtools@claude-brewcode
 ```
 
+After an update, run `/reload-plugins`, then `/brewcode:setup-status upgrade` in each project to bring stale setups current. The `/brewtools:plugin-update` report lists the same next steps.
+
 Dev mode, no install: `claude --plugin-dir ./brewtools`.
 
 ## Overview
@@ -66,6 +68,7 @@ Utilities for text, ops and subagent control: token-efficient text optimization,
 /brewtools:text-human "humanize this blog post: <text>"
 /brewtools:secrets-scan --fix                   # scan and fix interactively
 /brewtools:context-slim                         # measure the permanent context surface
+/brewtools:plugin-update                        # update every installed plugin and mod, one offer for the missing ones
 /brewtools:plugin-update check                  # status table only
 ```
 
@@ -78,6 +81,7 @@ Utilities for text, ops and subagent control: token-efficient text optimization,
 /brewtools:agent-return-setup install global 800 2000  # size budget on subagent returns
 /brewtools:task-board-setup install ~/repos/api      # Kanban into another repo
 /brewcode:setup-status                          # what is installed / stale / missing
+/brewcode:setup-status upgrade                  # bring stale setups current, one subagent per setup
 ```
 
 ## Skills
@@ -92,7 +96,7 @@ A `-setup` suffix marks a skill that installs a mechanism; recurring tools keep 
 | [`ssh`](skills/ssh/README.md) | SSH server management and configuration | opus |
 | [`deploy`](skills/deploy/README.md) | GitHub Actions deployment with safety gates | opus |
 | [`manager-setup`](skills/manager-setup/README.md) | Opt-in per-project hard delegation wall (`level strict\|balanced`); `status` also reports the task-tools key and legacy codeword override files | sonnet |
-| [`plugin-update`](skills/plugin-update/README.md) | Check/install/update brewcode plugins (`check\|update\|all`) | sonnet |
+| [`plugin-update`](skills/plugin-update/README.md) | Update every installed brewcode plugin and mod in one run, with one offer for the missing ones; prints versions before and after, what changed and the next steps (`update\|check\|all`) | sonnet |
 | [`provider-switch`](skills/provider-switch/README.md) | Alternative API providers: DeepSeek, Z.ai/GLM, Qwen, MiniMax, OpenRouter | opus |
 | [`agent-deadline-setup`](skills/agent-deadline-setup/README.md) | Soft wall-clock budget for subagents: warns at 80%, blocks non-finalizing tools at 100% | sonnet |
 | [`agent-return-setup`](skills/agent-return-setup/README.md) | Size budget on every subagent return (`passTokens` 2500, `fileTokens` 6000, `chars/4`); blocks at most once | sonnet |

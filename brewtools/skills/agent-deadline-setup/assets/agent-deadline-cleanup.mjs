@@ -1,5 +1,8 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.9.6 content_version=6.5.0 generated_by=brewtools:agent-deadline-setup
+// brewcode-meta: version=6.10.0 content_version=6.5.0 generated_by=brewtools:agent-deadline-setup
+
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025-2026 Maksim Kochetkov
 
 // agent-deadline SubagentStop (fires several times per agent_id): stamp `stopped` (never delete: a fresh budget), prune
 // stale entries by age, lstat-only (shared tmp, no symlink follow). Fail-open `{}`, never blocks a stop.

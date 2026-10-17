@@ -13,7 +13,7 @@ Docs go stale the moment code moves on. Docsync installs three project-local hoo
 
 | Field | Value |
 |-------|-------|
-| Command | `/brewdoc:docsync-setup [prompt] [mode]` |
+| Command | `/brewdoc:docsync-setup [prompt] [mode] [--unattended]` |
 | Canonical modes | `status` · `install` · `upgrade` · `enable` · `disable` · `uninstall` · `purge` |
 | Extras | `sync [--all]` · `reread` · `frontmatter` · free text (RU/EN) |
 | No argument | `status` when installed, `install` when not |
@@ -71,6 +71,8 @@ Fits repos with hand-maintained prose docs (README, SKILL.md, design notes). Ski
 | `purge` | `uninstall` plus deletes `.claude/docsync/` |
 | `sync [--all]` | Per-doc `sync_procedure`, then `last_updated` = today; depth follows `doc_type` (`llm` deep, `user` light) |
 | `reread` / `frontmatter` | Re-read tracked docs / opt-in retro-add of frontmatter |
+
+Under `--unattended`, `upgrade` skips with nothing written when docsync is not installed or wrapped by a launcher; see [how the flag works](/brewcode/skills/setup-status/#the-unattended-flag).
 
 Removed aliases: `init`, `on`, `off`, `setup`, `remove`, `reset`, `create`, `update`, `cleanup`.
 
@@ -132,7 +134,7 @@ Install and upgrade snapshot every destination and publish each file by atomic r
     Every brewdoc skill and what it does.
   </Card>
   <Card title="Setup Status" icon="clipboard" href="/brewcode/skills/setup-status/">
-    Dashboard across every `-setup` skill: installed, stale or missing.
+    Dashboard across every `-setup` skill; `upgrade` brings the stale ones current.
   </Card>
 </CardGrid>
 

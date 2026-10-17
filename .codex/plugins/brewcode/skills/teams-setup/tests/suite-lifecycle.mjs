@@ -61,6 +61,12 @@ function run(script, args, cwd) {
   return { stdout: r.stdout || '', stderr: r.stderr || '', status: r.status };
 }
 
+// macOS /bin/bash 3.2 under a UTF-8 locale: a-z ranges and [:lower:] match accented letters there.
+function runUtf8(script, args, cwd) {
+  const r = spawnSync('/bin/bash', [script, ...args], { cwd, encoding: 'utf8', timeout: 180000, env: { ...process.env, LC_ALL: 'en_US.UTF-8' } });
+  return { stdout: r.stdout || '', stderr: r.stderr || '', status: r.status };
+}
+
 // Trailing `KEY:VALUE` summary of toggle-team.sh; LAST occurrence wins (progress lines share `MOVED:`).
 function summary(stdout) {
   const out = {};
@@ -459,6 +465,8 @@ const TRAVERSAL = '../../../outside/README';
     [...reject.map(() => 'REJECT'), ...accept.map(() => 'ACCEPT')],
     'the collapsed guard rejects every traversal/charset shape and accepts every ordinary id',
   );
+  check('a9.nonAscii', runUtf8(probe, ['é1', 'café'], BASE).stdout, 'REJECT\nREJECT\n',
+    'GIVEN non-ASCII ids under /bin/bash and a UTF-8 locale WHEN the guard runs THEN each is rejected');
 }
 
 // A10 — separator recognition is exact: triple hyphens inside a valid agent id
@@ -547,6 +555,14 @@ const TRAVERSAL = '../../../outside/README';
       'GIVEN prose with a command substitution WHEN parsed THEN only the first word is the name'],
   ];
   for (const [args, expected, message] of cases) check(`a11.detect[${args}]`, detect(args), expected, message);
+  const accented = runUtf8(DETECT, ['install café'], root);
+  check('a11.nonAsciiName', [accented.status, linesStartingWith(accented.stdout, 'ERROR:')], [1, [`ERROR:${NAME_CHARS}`]],
+    'GIVEN a non-ASCII team name under /bin/bash and a UTF-8 locale WHEN parsed THEN it is refused');
+  const unattended = ['--unattended upgrade payments', 'upgrade payments --unattended',
+    'upgrade --unattended payments', 'payments upgrade --unattended'];
+  check('a11.unattendedPositions', Object.fromEntries(unattended.map((args) => [args, detect(args)])),
+    Object.fromEntries(unattended.map((args) => [args, ok('upgrade', 'payments')])),
+    'GIVEN --unattended before, between or after the mode and the team WHEN parsed THEN every position is upgrade of payments');
   check('a11.nothingExecuted', existsSync(marker), false,
     'GIVEN hostile arguments WHEN detect-mode.sh ran THEN no command substitution was executed');
 }
@@ -571,6 +587,9 @@ const TRAVERSAL = '../../../outside/README';
   const hostile = run(TOGGLE, [`my te"am $(touch ${marker})`, 'disable'], root);
   check('a12.hostileTeam', [hostile.status, hostile.stdout, existsSync(marker)], [1, NAME_ERROR, false],
     'GIVEN a team name with a space, a quote and a command substitution WHEN disable runs THEN nothing executes');
+  const accented = runUtf8(TOGGLE, ['café', 'disable'], root);
+  check('a12.nonAsciiTeam', [accented.status, accented.stdout], [1, NAME_ERROR],
+    'GIVEN a non-ASCII team name under /bin/bash and a UTF-8 locale WHEN disable runs THEN it is refused before any read');
   check('a12.tree', ls(agentsDir), ['intent-guard.toml', 'worker-one.toml'],
     'GIVEN three refused runs WHEN the agents dir is listed THEN every member is still live');
 }
@@ -709,7 +728,13 @@ ${'Board lifecycle rule. '.repeat(200)}
     [1, '', 'ERROR:not an agent id: ../outside (must match ^[a-z0-9][a-z0-9-]*$)\n'],
     [1, '', 'Usage: agent-generator.sh <agent-name>   (run from the project root)\n'],
   ], 'GIVEN a traversal value or no argument WHEN agent-generator.sh runs THEN it refuses with rc 1 and reads nothing');
+  const accentedGen = runUtf8(GENERATOR, ['é1'], root);
+  check('a17.generatorNonAscii', [accentedGen.status, accentedGen.stdout, linesStartingWith(accentedGen.stderr, 'ERROR:')],
+    [1, '', ['ERROR:not an agent id: é1 (must match ^[a-z0-9][a-z0-9-]*$)']],
+    'GIVEN a non-ASCII agent id under /bin/bash and a UTF-8 locale WHEN agent-generator.sh runs THEN it refuses with rc 1');
 }
+
+// Unattended upgrade cases run in the source suite only: references/mode-upgrade.md is not projected.
 
 // ── report ──────────────────────────────────────────────────────────────────
 rmSync(BASE, { recursive: true, force: true });

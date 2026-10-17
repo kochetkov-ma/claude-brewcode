@@ -1,0 +1,132 @@
+# session rows (local time, Europe/Lisbon) behind the ⏩ factors in update-flow.story.js: real span / shown seconds
+# plugin-update 13.39/2.0=6.7 (enter+0.4 -> AskUserQuestion), after the answers 19.11/1.3=14.7 (enter+0.4 -> report TEXT), setup-status upgrade 319.09/5.4=59.1 (enter+0.4 -> report TEXT)
+# lane: live-update-flow run.sh --lanes l1 --old v6.9.6 --prepare-only, LUF_TARGET=6.10.0, LUF_ROWS=11,7,6,10, LUF_SCRATCH_ROOT=/Volumes/luf-demo (disk image: no /Users/ or /private/ in rows); bypassPermissions, effort medium
+# launched like launch.sh minus --debug-file (its "Debug mode" row names the repo path), env -i + CLAUDE_CODE_DISABLE_CLAUDE_MDS/AUTO_MEMORY; lane settings + spinnerTipsEnabled false, env CLAUDE_CODE_ENABLE_TODO_TOOLS=1 (no task-tools question)
+# /clear before u-00-start drops brewcode 6.9.6 startup hook row (it always prints; brewcode disabled at boot stays unloaded after /reload-plugins: tried, discarded); mods uninstalled after boot (startup sync); views "N rows up" = PH_SCROLL_UP
+01:44:04.956 USER <command-name>/clear</command-name> <command-message>clear</
+01:44:07.511 CAPTURE u-00-start
+01:44:07.773 TYPE /brewtools:plugin-update
+01:44:09.045 CAPTURE u-01-typed
+01:44:20.242 KEY enter
+01:44:20.263 USER <command-message>brewtools:plugin-update</command-message> <
+01:44:20.812 CAPTURE u-02-sent
+01:44:23.572 TEXT PLAN — brewtools:plugin-update INPUT: (empty) MODE
+01:44:24.267 TOOL Bash (Create scratch directory)
+01:44:24.823 RESULT
+01:44:26.125 CAPTURE u-02b-pu-plan (2 s sample a-0011)
+01:44:26.609 TOOL Bash (Capture version and plugin inventory)
+01:44:27.005 RESULT
+01:44:28.859 TOOL Bash (Refresh claude-brewcode marketplace)
+01:44:29.290 RESULT
+01:44:29.440 TOOL Bash (Read latest versions from marketplace clone)
+01:44:29.551 RESULT
+01:44:31.473 TOOL Bash (Build the update plan)
+01:44:31.597 RESULT
+01:44:34.030 TOOL AskUserQuestion
+01:44:41.314 CAPTURE u-03-q
+01:44:41.863 KEY enter
+01:44:42.610 CAPTURE u-04-q-ph
+01:44:42.624 KEY down
+01:44:43.294 CAPTURE u-05-q-down
+01:44:43.308 KEY enter
+01:44:44.083 CAPTURE u-06-q-pe
+01:44:44.097 KEY tab
+01:44:44.866 CAPTURE u-07-q-plugins
+01:44:44.881 KEY down
+01:44:45.547 CAPTURE u-08-q-down
+01:44:45.562 KEY enter
+01:44:46.328 CAPTURE u-09-q-skip
+01:44:46.343 KEY tab
+01:44:47.118 CAPTURE u-10-review
+01:44:54.162 RESULT
+01:44:54.169 KEY enter
+01:44:54.841 CAPTURE u-11-submitted
+01:44:58.868 TOOL Bash (Update brewcode plugin)
+01:44:59.257 RESULT
+01:44:59.294 TOOL Bash (Update brewdoc plugin)
+01:44:59.770 RESULT
+01:45:01.557 CAPTURE u-11b-updated (2 s sample a-0039)
+01:45:01.567 TOOL Bash (Install brewmod-placeholders mod)
+01:45:01.990 RESULT
+01:45:02.013 TOOL Bash (Install brewmod-plan-effort mod)
+01:45:02.423 RESULT
+01:45:04.151 TOOL Bash (Capture after snapshot)
+01:45:04.527 RESULT
+01:45:06.548 TOOL Bash (Generate update report)
+01:45:06.632 CAPTURE u-11c-mods (2 s sample a-0043)
+01:45:06.656 RESULT
+01:45:08.492 TOOL Bash (Remove scratch directory)
+01:45:08.593 RESULT
+01:45:13.677 TEXT ## 🟢 brewcode updated: 4 of 5 components | Compon
+01:45:23.457 CAPTURE u-12-table (view 25 rows up)
+01:45:23.494 CAPTURE u-13-changed (view 5 rows up)
+01:45:23.530 CAPTURE u-14-done
+01:45:23.722 TYPE /reload-plugins
+01:45:24.994 CAPTURE u-15-reload-typed
+01:45:25.624 USER <command-name>/reload-plugins</command-name> <command-messag
+01:45:25.634 KEY enter
+01:45:28.730 CAPTURE u-16-reloaded
+01:45:34.310 TYPE /brewcode:setup-status upgrade
+01:45:35.606 CAPTURE u-17-su-typed
+01:45:43.429 USER <command-message>brewcode:setup-status</command-message> <co
+01:45:43.430 KEY enter
+01:45:44.023 CAPTURE u-18-su-sent
+01:45:46.845 TEXT PLAN — brewcode:setup-status INPUT: upgrade MODE: 
+01:45:50.016 CAPTURE u-18b-su-plan (2 s sample b-0010)
+01:45:52.858 TOOL Bash (Resolve plugin roots and project)
+01:45:53.062 RESULT
+01:45:53.448 TOOL Read
+01:45:53.524 RESULT
+01:45:56.696 TOOL Bash (List project .claude contents)
+01:45:56.814 RESULT
+01:45:59.520 TOOL Read
+01:45:59.836 RESULT
+01:46:01.673 TOOL Bash (Probe installed artifacts and configs)
+01:46:01.767 RESULT
+01:46:09.126 TOOL Bash (Read stamps, sources, byte pairs and router probe)
+01:46:09.313 RESULT
+01:46:15.011 TOOL Bash (Check meta-only byte differences, read run-list)
+01:46:15.224 RESULT
+01:46:18.020 TOOL Bash (Show diff of one hook against asset)
+01:46:18.139 RESULT
+01:46:23.928 TOOL Bash (Build the upgrade plan)
+01:46:24.074 RESULT
+01:46:25.823 TEXT The plan has 4 auto rows, all quick, and none left
+01:46:26.355 TOOL Read
+01:46:26.453 RESULT
+01:46:28.385 TEXT Rows to run: 4: 4 class A on sonnet.
+01:46:30.616 TOOL Bash (Lock project and snapshot before row 1)
+01:46:30.843 RESULT
+01:46:36.814 TOOL Agent (upgrade agent-return-setup)
+01:46:36.876 RESULT
+01:46:38.291 TEXT 1/4 brewtools:agent-return-setup running. I'm wait
+01:46:41.850 CAPTURE u-20-runner-1 (2 s sample b-0043)
+01:47:42.094 USER <task-notification> <task-id>a1afb5252cb993aea</task-id> <ou
+01:47:48.498 TOOL Bash (Re-probe row 11 and check scope)
+01:47:48.785 RESULT
+01:47:49.746 TEXT 🟢 1/4 brewtools:agent-return-setup
+01:47:51.619 TOOL Bash (Snapshot before row 7)
+01:47:51.837 RESULT
+01:47:59.417 TOOL Agent (upgrade agent-router-setup)
+01:47:59.468 RESULT
+01:48:00.953 TEXT Row 1 (agent-return) is done and checked. Row 2, b
+01:48:41.939 USER <task-notification> <task-id>a5396b1de4a4be982</task-id> <ou
+01:48:46.963 TOOL Bash (Re-probe row 7, check scope, snapshot row 6)
+01:48:47.308 RESULT
+01:48:48.178 TEXT 🟢 2/4 brewtools:agent-router-setup
+01:48:55.020 TOOL Agent (upgrade agent-deadline-setup)
+01:48:55.079 RESULT
+01:48:55.960 TEXT 3/4 brewtools:agent-deadline-setup is running. Row
+01:50:07.424 USER <task-notification> <task-id>a3bc7819dbf3e9100</task-id> <ou
+01:50:13.145 TOOL Bash (Re-probe row 6, check scope, snapshot row 10)
+01:50:13.501 RESULT
+01:50:14.459 TEXT 🟢 3/4 brewtools:agent-deadline-setup
+01:50:21.835 TOOL Agent (upgrade docsync-setup)
+01:50:21.888 RESULT
+01:50:22.742 TEXT 4/4 brewdoc:docsync-setup is running. It's the las
+01:50:26.095 CAPTURE u-21-runner-4 (2 s sample b-0186)
+01:50:43.813 USER <task-notification> <task-id>a890fbd03b330eaaf</task-id> <to
+01:50:51.102 TOOL Bash (Re-probe row 10, check scope, unlock, read semble )
+01:50:51.536 RESULT
+01:51:02.917 TEXT ## 🟢 Setups upgraded: 4 of 4 done | # | Setup | B
+01:51:38.277 CAPTURE u-30-su-report (view 37 rows up)

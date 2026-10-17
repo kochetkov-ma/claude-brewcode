@@ -1,0 +1,30 @@
+ Tasting scores need to be bulk-loaded into the [38;5;153mtastings[39m table. Nothing exists yet;
+ [38;5;153mbatches.js[39m was just hardened, so the import must follow the same DB rules from the
+ start: bind SQL params, no query in a loop, use transactions.
+
+ Facts from [38;5;153mdb.js[39m (in-memory stand-in) that shape the design:
+ - [38;5;153mquery()[39m supports [38;5;153mINSERT[39m [38;5;153mINTO[39m [38;5;153mt[39m [38;5;153m(cols)[39m [38;5;153mVALUES[39m [38;5;153m(?,[39m [38;5;153m?),[39m [38;5;153m(?,[39m [38;5;153m?)[39m, with params bound in
+   order across tuples.
+ - INSERT does not auto-assign [38;5;153mid[39m; seed tastings carry [38;5;153mid[39m.
+ - [38;5;153mtransaction(fn)[39m logs BEGIN/COMMIT, and on throw restores the tables and logs
+   ROLLBACK.
+ - [38;5;153mVALUES[39m with no tuples is meaningless, so empty input must short-circuit.
+
+ [1mContract[0m [1m(decided;[0m [1magents[0m [1mmust[0m [1mnot[0m [1mreopen)[0m
+
+ - New module [38;5;153mtastings.js[39m exports [38;5;153mimportTastings(rows)[39m, where [38;5;153mrows[39m [38;5;153m=[39m [38;5;153m[{[39m [38;5;153mbatch_id,[39m [38;5;153mscore[39m
+   [38;5;153m}][39m is already parsed. File/CSV parsing is out of scope.
+ - Inside one [38;5;153mtransaction()[39m:
+   a. One query loads the batch ids, plus one for the existing tastings to get the max
+      [38;5;153mid[39m.
+   b. Every row is validated in JS: [38;5;153mbatch_id[39m must exist and [38;5;153mscore[39m must be an integer
+      1–10. If any row is invalid, it throws and nothing is written.
+   c. One multi-row [38;5;153mINSERT[39m [38;5;153mINTO[39m [38;5;153mtastings[39m [38;5;153m(id,[39m [38;5;153mbatch_id,[39m [38;5;153mscore)[39m [38;5;153mVALUES[39m [38;5;153m(?,[39m [38;5;153m?,[39m [38;5;153m?),[39m [38;5;153m...[39m
+      runs with ids [38;5;153mmax[39m [38;5;153m+[39m [38;5;153m1..n[39m, and every value is a bound param.
+ - Empty [38;5;153mrows[39m -> return 0 with no queries. Otherwise return the inserted count.
+ - The style mirrors [38;5;153mbatches.js[39m (CommonJS, [38;5;153mrequire('./db')[39m, small functions).
+
+ [1mTaskGraph[0m
+
+ [1m#:[0m T1
+ [1mTask:[0m Implement [38;5;153mimportTastings[39m

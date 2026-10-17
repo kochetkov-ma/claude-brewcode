@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025-2026 Maksim Kochetkov
+
 // Command hook (UserPromptSubmit + PostToolBatch): injects placeholder context blocks and records permission_mode for register.ts.
 // Plain Node, no deps: module `classic.*` hooks are bypassed on Team/Enterprise orgs, a command hook is not. Fail open: any error -> `{}`.
 import fs from 'node:fs'

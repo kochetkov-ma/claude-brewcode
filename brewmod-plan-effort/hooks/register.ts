@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025-2026 Maksim Kochetkov
+
 import type { Register } from 'claude-code'
 import type { PlanSeen } from '../types'
 

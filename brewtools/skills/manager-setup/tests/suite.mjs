@@ -465,18 +465,14 @@ check(
   'fail-closed applies to the main session only; subagents stay free by design',
 );
 
-// ---- BT-F16 — uninstall ordering, run against the block SHIPPED in SKILL.md -------------
-// Step-2 node program extracted verbatim from the skill: a documented-block regression fails here.
+// ---- BT-F16 — uninstall ordering, run against the script SHIPPED with the skill ----------
+// install/enable/uninstall/purge run scripts/lifecycle.mjs exactly as SKILL.md calls it: a regression fails here.
 
 const SKILL_MD = join(HERE, '..', 'SKILL.md');
 const NODE_E = 'node --input-type=module -e "';
-
-function uninstallScript() {
-  const md = readFileSync(SKILL_MD, 'utf8');
-  const from = md.indexOf(NODE_E, md.indexOf('**EXECUTE step 2**'));
-  const to = md.indexOf('\n"', from);
-  return md.slice(from + NODE_E.length, to);
-}
+const LIFECYCLE = join(HERE, '..', 'scripts', 'lifecycle.mjs');
+const lifecycle = (action, proj, args, env = process.env) =>
+  spawnSync(process.execPath, [LIFECYCLE, action, join(HERE, '..', '..', '..'), proj, ...args], { encoding: 'utf8', timeout: 8000, env });
 
 /** A project that looks exactly like `install` left it: entry registered, both files copied. */
 function makeInstalledProject(name) {
@@ -499,9 +495,7 @@ function makeInstalledProject(name) {
 }
 
 function runUninstall(proj, tag) {
-  const file = join(BASE, `uninstall-${tag}.mjs`);
-  writeFileSync(file, uninstallScript().split("'${ROOT}'").join(JSON.stringify(proj)));
-  const r = spawnSync(process.execPath, [file], { encoding: 'utf8', timeout: 8000 });
+  const r = lifecycle('uninstall', proj, []);
   const settings = join(proj, '.claude', 'settings.local.json');
   const raw = existsSync(settings) ? readFileSync(settings, 'utf8') : '';
   return {
@@ -570,14 +564,7 @@ check(
 );
 
 function runPurge(proj, cfg) {
-  const md = readFileSync(SKILL_MD, 'utf8');
-  const from = md.indexOf(NODE_E, md.indexOf('### purge'));
-  const body = md.slice(from + NODE_E.length, md.indexOf('\n"', from))
-    .split('${BT_ROOT}').join(join(HERE, '..', '..', '..'))
-    .split("'${ROOT}'").join(JSON.stringify(proj));
-  const file = join(BASE, `purge-${passed + failed}.mjs`);
-  writeFileSync(file, body);
-  const r = spawnSync(process.execPath, [file], { encoding: 'utf8', timeout: 8000, env: { ...process.env, CLAUDE_CONFIG_DIR: cfg } });
+  const r = lifecycle('purge', proj, [], { ...process.env, CLAUDE_CONFIG_DIR: cfg });
   return { code: r.status, out: safeParse(r.stdout || '') };
 }
 // GIVEN codeword overrides (the mod's legacy layer) in the project and the profile WHEN purge runs
@@ -630,6 +617,42 @@ check(
   'a settings file left {} is deleted, not rewritten; purge then removes the empty .claude/',
 );
 
+// GIVEN other settings beside the task-graph key WHEN purge runs THEN only a key install added goes; the rest is rewritten intact
+function purgeKeyCase(name, state) {
+  const proj = makeInstalledProject(name);
+  writeFileSync(join(proj, '.claude', 'brewtools', 'manager', 'state.json'), JSON.stringify(state));
+  const file = join(proj, '.claude', 'settings.local.json');
+  writeFileSync(file, JSON.stringify({ permissions: { allow: ['Read(**)'] }, env: { CLAUDE_CODE_ENABLE_TODO_TOOLS: '1', OTHER: 'x' } }));
+  writeFileSync(`${file}.bak`, '{}');
+  const r = runPurge(proj, P_CFG);
+  return { code: r.code, out: r.out, settings: safeParse(readFileSync(file, 'utf8')), bakLeft: existsSync(`${file}.bak`) };
+}
+const kAdded = purgeKeyCase('purge-key-added', { hard: false, level: 'balanced', todoToolsAdded: true });
+const kUser = purgeKeyCase('purge-key-user-set', { hard: false, level: 'balanced' });
+const purgeOut = (proj, removed, kept) => ({ removedDir: true, dir: join(BASE, proj, '.claude', 'brewtools', 'manager'), promptsKept: false,
+  todoKeyRemoved: removed, todoKeyKept: kept, bakRemoved: true, settingsRemoved: false });
+check(
+  '44n-purge-removes-only-the-key-it-added-and-keeps-other-settings',
+  { added: kAdded, user: kUser },
+  { added: { code: 0, out: purgeOut('purge-key-added', true, null), settings: { permissions: { allow: ['Read(**)'] }, env: { OTHER: 'x' } }, bakLeft: false },
+    user: { code: 0, out: purgeOut('purge-key-user-set', false, 'task-graph key kept: it was set before install, or by an install that recorded no provenance'),
+      settings: { permissions: { allow: ['Read(**)'] }, env: { CLAUDE_CODE_ENABLE_TODO_TOOLS: '1', OTHER: 'x' } }, bakLeft: false } },
+  'todoToolsAdded provenance decides the key; other settings survive the rewrite and the legacy .bak goes',
+);
+
+// REGRESSION (p08): purge without .claude/ waited 5 s on a lock it could not create, then aborted "held by another setup skill".
+// GIVEN a project with no .claude/ WHEN purge runs THEN it reports that nothing existed, exit 0, and creates nothing
+const NO_CLAUDE = join(BASE, 'purge-no-claude-dir');
+mkdirSync(NO_CLAUDE, { recursive: true });
+const ncPurge = lifecycle('purge', NO_CLAUDE, [], { ...process.env, CLAUDE_CONFIG_DIR: P_CFG });
+check(
+  '44o-purge-without-a-claude-dir-reports-nothing-existed',
+  { code: ncPurge.status, stdout: ncPurge.stdout, stderr: ncPurge.stderr, entries: readdirSync(NO_CLAUDE) },
+  { code: 0, stdout: JSON.stringify({ removedDir: false, dir: join(NO_CLAUDE, '.claude', 'brewtools', 'manager'), promptsKept: false,
+    todoKeyRemoved: false, todoKeyKept: null, bakRemoved: false, settingsRemoved: false }) + '\n', stderr: '', entries: [] },
+  'nothing to purge is the success path: no lock wait, no "held by another setup skill", no .claude/ created',
+);
+
 // REGRESSION: the root recipe tried unbraced $CLAUDE_PROJECT_DIR (unset in the Bash tool) -> git
 // toplevel, so a session started in a subdirectory got its wall written where settings never load.
 const md45 = readFileSync(SKILL_MD, 'utf8');
@@ -663,18 +686,21 @@ function runShipped(heading, proj, { local, project, user, env, arm } = {}) {
   put(join(proj, '.claude', 'settings.local.json'), local);
   put(join(proj, '.claude', 'settings.json'), project);
   put(join(cfg, 'settings.json'), user);
-  const md = readFileSync(SKILL_MD, 'utf8');
-  const from = md.indexOf(NODE_E, md.indexOf(heading));
-  const body = md.slice(from + NODE_E.length, md.indexOf('\n"', from))
-    .split('${BT_ROOT}').join(BT_DIR).split("'${ROOT}'").join(JSON.stringify(proj))
-    .split("'${CCVER}'").join("'2.1.296'").split("'${ARM}'").join(arm ? "'true'" : "'false'")
-    .replace(/\\([$`"\\])/g, '$1');
-  const file = join(BASE, `todo-${passed + failed}-${proj.split('/').pop()}.mjs`);
-  writeFileSync(file, body);
   const runEnv = { ...process.env, CLAUDE_CONFIG_DIR: cfg };
   delete runEnv.CLAUDE_CODE_ENABLE_TODO_TOOLS;
   if (env !== undefined) runEnv.CLAUDE_CODE_ENABLE_TODO_TOOLS = env;
-  const r = spawnSync(process.execPath, [file], { encoding: 'utf8', timeout: 8000, env: runEnv });
+  let r;
+  if (heading === '### install') r = lifecycle('install', proj, ['2.1.296', arm ? 'true' : 'false'], runEnv);
+  else {
+    const md = readFileSync(SKILL_MD, 'utf8');
+    const from = md.indexOf(NODE_E, md.indexOf(heading));
+    const body = md.slice(from + NODE_E.length, md.indexOf('\n"', from))
+      .split('${BT_ROOT}').join(BT_DIR).split("'${ROOT}'").join(JSON.stringify(proj))
+      .split("'${CCVER}'").join("'2.1.296'").replace(/\\([$`"\\])/g, '$1');
+    const file = join(BASE, `todo-${passed + failed}-${proj.split('/').pop()}.mjs`);
+    writeFileSync(file, body);
+    r = spawnSync(process.execPath, [file], { encoding: 'utf8', timeout: 8000, env: runEnv });
+  }
   const after = safeParse(existsSync(join(proj, '.claude', 'settings.local.json')) ? readFileSync(join(proj, '.claude', 'settings.local.json'), 'utf8') : '{}');
   const stateFile = join(proj, '.claude', 'brewtools', 'manager', 'state.json');
   const state = existsSync(stateFile) ? safeParse(readFileSync(stateFile, 'utf8')) : {};
@@ -744,12 +770,34 @@ const soUpgrade = runShipped('### upgrade', SO);
 const inStatus = runShipped('### status', makeInstalledProject('status-installed'));
 const pick = r => ({ code: r.code, registered: r.out.registered, guardPresent: r.out.guardPresent, installed: r.out.installed, stale: r.out.stale });
 check(
-  '44i-status-installed-flag-matches-the-upgrade-abort',
+  '44m-status-installed-flag-matches-the-upgrade-abort',
   { stateOnly: pick(soStatus), stateOnlyUpgrade: { code: soUpgrade.code, stderr: soUpgrade.stderr }, installed: pick(inStatus) },
   { stateOnly: { code: 0, registered: false, guardPresent: false, installed: false, stale: true },
     stateOnlyUpgrade: { code: 1, stderr: 'ABORT: the wall is not installed in this project — run install instead\n' },
     installed: { code: 0, registered: true, guardPresent: true, installed: true, stale: null } },
   'status must call a state.json-only project not installed, the exact case upgrade refuses',
+);
+
+// GIVEN a stamped wall, an unstamped wall and no wall WHEN the shipped upgrade block runs
+// THEN cv spans the restamp and the Unattended note maps the exact no-wall ABORT the block prints
+const CV_NOW = /content_version=(\d+\.\d+\.\d+)/.exec(readFileSync(join(BT_DIR, 'hooks', 'lib', 'manager-state.mjs'), 'utf8').split('\n')[0])[1];
+const UN_STAMPED = makeInstalledProject('unattended-stamped');
+writeFileSync(join(UN_STAMPED, '.claude', 'brewtools', 'manager', 'state.json'), JSON.stringify({ hard: false, level: 'balanced', version: '6.5.0', content_version: '6.5.0' }));
+const unStamped = runShipped('### upgrade', UN_STAMPED);
+const unBare = runShipped('### upgrade', makeInstalledProject('unattended-unstamped'));
+const UN_NONE = join(BASE, 'unattended-no-wall');
+mkdirSync(UN_NONE, { recursive: true });
+const unNone = runShipped('### upgrade', UN_NONE);
+const unMd = readFileSync(SKILL_MD, 'utf8');
+const unUp = unMd.indexOf('### upgrade');
+const unNote = unMd.slice(unMd.indexOf('**Unattended (', unUp), unMd.indexOf('**EXECUTE**', unUp));
+check(
+  '44l-unattended-upgrade-reports-cv-and-maps-the-no-wall-abort',
+  { stamped: { code: unStamped.code, cv: unStamped.out.cv }, unstamped: { code: unBare.code, cv: unBare.out.cv },
+    noWall: { code: unNone.code, stderr: unNone.stderr, mapped: (/The block's `(ABORT: [^`]+)` \(exit 1, nothing written\) -> `skipped`/.exec(unNote) || [])[1] } },
+  { stamped: { code: 0, cv: `6.5.0->${CV_NOW}` }, unstamped: { code: 0, cv: `?->${CV_NOW}` },
+    noWall: { code: 1, stderr: 'ABORT: the wall is not installed in this project — run install instead\n', mapped: 'ABORT: the wall is not installed in this project — run install instead' } },
+  'RESULT cv comes from the block itself; the skipped mapping quotes the very ABORT line the block prints for no wall',
 );
 
 // GIVEN a legacy codeword override in the project WHEN status runs THEN it is listed (the mod reads it), never opened
@@ -774,8 +822,9 @@ check(
     installLine: skillText.includes('claude plugin install brewmod-placeholders@claude-brewcode'),
     deadRefs: skillText.match(/manager-prompts|resolvePrompt|VALID_MODES|references\/(full|planmode|architect|review-double|review-regression|cron-plan)\.md/g) || [],
     editMode: /^\| `edit` \|/m.test(skillText), leftovers: readdirSync(join(HERE, '..', 'references')).sort() },
-  { codewordsLine: true, installLine: true, deadRefs: [], editMode: false, leftovers: ['hard.md', 'intent-routing.md'] },
-  'status carries the mod pointer and install line; no import of the deleted prompt helper, no edit row, only hard.md and intent-routing.md remain',
+  { codewordsLine: true, installLine: true, deadRefs: [], editMode: false,
+    leftovers: ['guard-enforcement.md', 'hard.md', 'install-steps.md', 'intent-routing.md', 'status-shape.md'] },
+  'status carries the mod pointer and install line; no import of the deleted prompt helper, no edit row, only hard.md, intent-routing.md and the moved-text references remain',
 );
 
 // REGRESSION (M1): process.exit inside the locked try skips finally; the lock leaked and the next
@@ -1465,6 +1514,10 @@ check(
 }
 
 try { rmSync(BASE, { recursive: true, force: true }); } catch { /* ignore */ }
+
+// GIVEN every check run so far WHEN numbered ids are collected THEN none repeats
+const ids = results.map(l => /^ {2}(?:PASS|FAIL) {2}(\d+[a-z]?)-/.exec(l)).filter(Boolean).map(m => m[1]);
+check('93-numbered-test-ids-are-unique', ids.filter((id, i) => ids.indexOf(id) !== i), [], 'a repeated id hides which of two tests failed');
 
 console.log('\n=== manager-setup E2E TEST REPORT ===');
 for (const line of results) console.log(line);

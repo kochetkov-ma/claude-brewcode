@@ -6,6 +6,7 @@ disable-model-invocation: false
 argument-hint: "[prompt] [-l|-s|-d|-x|--max] [file|folder|path1,path2] — -l light, -s standard (30-50%), -d deep (LLM-only), -x|--max max (LLM-only, atomic fact-lines, 2-round verify), no flag = medium or auto-detect"
 allowed-tools: [Read, 'Bash(bash ${CLAUDE_SKILL_DIR}/scripts/text-guard.sh *)', Grep, Glob, Agent, AskUserQuestion]
 model: sonnet
+license: MIT
 ---
 
 # Text & File Optimizer

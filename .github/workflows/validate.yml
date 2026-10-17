@@ -101,9 +101,29 @@ jobs:
         run: |
           set -uo pipefail
           fail=0
-          for skill in brewcode/skills/*/ brewdoc/skills/*/ brewtools/skills/*/ brewui/skills/*/ brewmod-*/skills/*/ skills/*/ .claude/skills/*/; do
+          for skill in brewcode/skills/*/ brewdoc/skills/*/ brewtools/skills/*/ brewui/skills/*/ brewmod-*/skills/*/ skills/*/ openclaw/*/ .claude/skills/*/; do
             [ -f "${skill}SKILL.md" ] || continue
             sh brewcode/skills/skills/scripts/validate-skill.sh "${skill%/}" || { echo "::error file=${skill}SKILL.md::validate-skill.sh failed"; fail=1; }
+          done
+          exit "$fail"
+
+      # Hook entries = plugin/mod hook files + assets a setup copies into projects + manager-state.mjs; hooks/lib/utils.mjs are plugin-internal.
+      - name: License markers (skills, agents, hooks)
+        if: ${{ !cancelled() }}
+        run: |
+          set -uo pipefail
+          fail=0
+          miss() { echo "::error file=$2::$1"; fail=1; }
+          for f in brew*/skills/*/SKILL.md skills/*/SKILL.md openclaw/*/SKILL.md; do
+            [ "$(awk 'NR>1&&/^---$/{print p;exit}{p=$0}' "$f")" = 'license: MIT' ] || miss "NOLICENSE: last frontmatter key must be 'license: MIT'" "$f"
+          done
+          for f in brew*/agents/*.md; do
+            last=$(tail -n 1 "$f")
+            case "$last" in *'SPDX-License-Identifier: MIT'*) ;; *) miss "NOSPDX: last line must carry SPDX-License-Identifier: MIT" "$f" ;; esac
+          done
+          for f in brew*/hooks/*.mjs brewmod-*/hooks/*.ts brew*/skills/*/assets/*.mjs brewtools/hooks/lib/manager-state.mjs; do
+            grep -qxF '// SPDX-License-Identifier: MIT' "$f" || miss "NOSPDX: missing '// SPDX-License-Identifier: MIT'" "$f"
+            grep -qxF '// Copyright (c) 2025-2026 Maksim Kochetkov' "$f" || miss "NOCOPYRIGHT: missing '// Copyright (c) 2025-2026 Maksim Kochetkov'" "$f"
           done
           exit "$fail"
 
@@ -181,6 +201,7 @@ jobs:
               bash brewtools/skills/agent-router-setup/tests/run.sh
               bash brewtools/skills/agent-deadline-setup/tests/run.sh
               bash brewdoc/skills/publish/tests/run.sh
+              bash brewdoc/skills/my-claude/tests/run.sh
               bash brewcode/skills/superreview-setup/tests/run.sh
               bash brewcode/.codex/skills/superreview-setup/tests/run.sh
               bash brewdoc/skills/memory-sync-setup/tests/run.sh

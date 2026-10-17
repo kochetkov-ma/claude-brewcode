@@ -1,0 +1,30 @@
+⏺ 🟢 Setups upgraded: 4 of 4 done
+
+  ┌─────┬──────────────────────┬────────┬────────┬───────────────────────────────────┐
+  │  #  │        Setup         │ Before │ After  │              Result               │
+  ├─────┼──────────────────────┼────────┼────────┼───────────────────────────────────┤
+  │     │                      │        │        │ 🟢 upgraded: hooks re-copied,     │
+  │ 1   │ agent-return-setup   │ 6.5.2  │ 6.5.2  │ restamped to 6.10.0, thresholds   │
+  │     │                      │        │        │ 2500/6000 kept                    │
+  ├─────┼──────────────────────┼────────┼────────┼───────────────────────────────────┤
+  │ 2   │ agent-router-setup   │ 6.5.6  │ 6.5.6  │ 🟢 upgraded: hook re-copied,      │
+  │     │                      │        │        │ level fast kept                   │
+  ├─────┼──────────────────────┼────────┼────────┼───────────────────────────────────┤
+  │ 3   │ agent-deadline-setup │ 6.5.0  │ 6.5.0  │ 🟢 upgraded: restamped to 6.10.0, │
+  │     │                      │        │        │  20-minute budget kept            │
+  ├─────┼──────────────────────┼────────┼────────┼───────────────────────────────────┤
+  │ 4   │ docsync-setup        │ 6.5.2  │ 6.10.0 │ 🟢 upgraded: threshold_days 7 and │
+  │     │                      │        │        │  enabled kept                     │
+  └─────┴──────────────────────┴────────┴────────┴───────────────────────────────────┘
+
+  I re-checked each row myself after its upgrade:
+  - Files: every hook now matches the 6.10.0 plugin file byte for byte.
+  - Hook registrations: all present in the current format.
+  - Scope: each upgrade changed only its own files.
+  - Git: HEAD (3b62b4e) and the stash didn't move.
+
+  Rows 1–3 had no real changes. Their hooks only lacked the 6.10.0 version line and the
+  new license header lines.
+
+  There's nothing left for you to run. The other seven setups (teams, semble,
+  superreview, task-board, manager, memory-sync, convention) aren't installed in this

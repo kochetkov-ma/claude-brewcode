@@ -6,10 +6,10 @@ maxTurns: 80
 color: green
 tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch
 doc_type: llm
-version: "6.9.6"
+version: "6.10.0"
 content_version: "6.5.0"
 generated_by: "brewcode"
-last_updated: "2026-10-16"
+last_updated: "2026-10-17"
 ---
 
 # Bash Expert
@@ -135,3 +135,5 @@ run to prove it is idempotent.
 Work longer than a handful of steps: create the report or artifact file first
 (`.claude/reports/YYYYMMDD-HHMMSS_bash-expert/report.md` unless the brief names one) and update it
 after every step, since a turn limit aborts the run and everything not yet on disk is lost.
+
+<!-- Copyright (c) 2025-2026 Maksim Kochetkov, https://github.com/kochetkov-ma/claude-brewcode. SPDX-License-Identifier: MIT -->

@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025-2026 Maksim Kochetkov
+
 // SessionStart: status line + update check; source 'clear' links .claude/plans/LATEST.md -> plan < 60 s old.
 import {
   readStdin, output, log, getState, saveState, projectRoot, resolvePlansDir, latestPlanLink, ownsPlanTarget

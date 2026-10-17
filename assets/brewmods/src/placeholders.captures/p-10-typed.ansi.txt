@@ -1,0 +1,30 @@
+  │ sample data already has  │ passed every test.  │ also checks the tank          │
+  │ batch 1 fermenting.      │                     │ assignment.                   │
+  └──────────────────────────┴─────────────────────┴───────────────────────────────┘
+
+  I also made the tastings test look batches up by id instead of by row position, and
+  check both batches. I added a test that [38;5;153mfindBatch[39m returns nothing for an injected or
+  apostrophe-containing name. I ran the original version of your diff against the new
+  tests and 2 of them fail, so they catch the bugs. Breaking [38;5;153mbottle[39m or [38;5;153mstartBatch[39m the
+  same way as before now also fails a test.
+
+  [1mYour[0m [1mcall,[0m [1mleft[0m [1munchanged:[0m
+  - [38;5;153mbottle(999)[39m on an id that doesn't exist does nothing and raises no error, so callers
+    can't tell it failed.
+  - [38;5;153mbottle[39m marks a batch as bottled whatever its current status, including one that was
+    never started or is already bottled.
+
+  Whether either should be an error depends on how you want a batch's life to go.
+
+  Nothing is committed.
+
+[38;5;246m✻[39m [38;5;246mChurned for 1m 48s[39m [38;5;246m· done 11:25 PM[39m
+[38;5;246mplaceholders 1[39m                                                                      [38;5;246m[-][39m
+[1m[38;5;220m++db[0m[38;5;246m  unknown placeholder[39m
+[38;5;246mmore: [4m[38;5;231mput the caret on ++db[0m[38;5;246m · send as typed: [4m[38;5;231m++/[0m[38;5;246m · help: [4m[38;5;231m/placeholders help[0m
+
+[38;5;244m────────────────────────────────────────────────────────────────────────────────────────
+[39m❯ [38;5;153m/placeholders[39m global add [38;5;220m++db[39m: bind SQL params, no query in a loop, use transactions
+[38;5;244m────────────────────────────────────────────────────────────────────────────────────────
+[39m  [38;5;246m⏸[39m [38;5;246mmanual[39m [38;5;246mmode[39m [38;5;246mon[39m
+

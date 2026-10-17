@@ -208,7 +208,7 @@ const CLAUDE_ONLY_TEAMS_REFERENCES = [
 
 function resourceTarget(plugin, skill, relative) {
   if (relative === 'SKILL.md' || relative.startsWith('.claude/') || relative.includes('/__pycache__/') || relative.endsWith('.pyc')) return null;
-  if (plugin === 'brewtools' && skill === 'manager-setup' && (['references/hard.md', 'references/intent-routing.md'].includes(relative) || relative.startsWith('tests/'))) return null;
+  if (plugin === 'brewtools' && skill === 'manager-setup' && (['references/hard.md', 'references/intent-routing.md', 'references/guard-enforcement.md', 'references/install-steps.md', 'references/status-shape.md'].includes(relative) || relative.startsWith('tests/') || relative.startsWith('scripts/'))) return null;
   if (plugin === 'brewcode' && skill === 'agents' && (CLAUDE_ONLY_AGENT_REFERENCES.includes(relative) || relative.startsWith('scripts/') || relative.startsWith('tests/'))) return null;
   if (plugin === 'brewcode' && skill === 'teams-setup' && CLAUDE_ONLY_TEAMS_REFERENCES.includes(relative)) return null;
   // Claude-only invocation contract suites (DMI, allowed-tools); the generator drops them from the mirror.
@@ -260,6 +260,8 @@ for (const [plugin, [skillCount, agentCount]] of Object.entries(EXPECTED)) {
   if (JSON.stringify(canonicalManifest) !== JSON.stringify(manifest)) fail(`${plugin}: dist manifest differs from canonical .codex/package/plugin.json`);
   if (fs.existsSync(path.join(pluginRoot, '.codex-plugin'))) fail(`${plugin}: source-root .codex-plugin shim must not exist`);
   if (!fs.lstatSync(distRoot).isDirectory() || fs.lstatSync(distRoot).isSymbolicLink()) fail(`${plugin}: dist root must be a real directory`);
+  const distLicense = path.join(distRoot, 'LICENSE');
+  if (!fs.existsSync(distLicense) || !fs.readFileSync(distLicense).equals(fs.readFileSync(path.join(ROOT, 'LICENSE')))) fail(`${plugin}: dist LICENSE missing or differs from the repo root LICENSE`);
 
   const skillsRoot = path.join(pluginRoot, '.codex', 'skills');
   const skills = fs.readdirSync(skillsRoot, { withFileTypes: true }).filter(entry => entry.isDirectory());

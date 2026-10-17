@@ -49,16 +49,20 @@ echo "OK"
 | `OPTIONAL` | outside the required set (only `task-spec`, only under `off`): no MISS/ABSENT, no parked member, no Phase 3 defect. All other row-4 artifacts and content-version checks stay required |
 
 Row 12 counts its documents itself: the roster names only the three the generator writes, while a
-project may keep any number of `.claude/convention/*.md`, hand-written or generated. **EXECUTE** using Bash tool:
+project may keep any number of `.claude/convention/*.md`, hand-written or generated. The list comes
+from `find`, never a bare glob: zsh aborts an unmatched `*.md` with "no matches found". **EXECUTE** using Bash tool:
 
 ```bash
 cd "${CLAUDE_PROJECT_DIR}" || exit 1
 docs=0; owned=0; names=""
-for f in .claude/convention/*.md; do
+list=$({ find .claude/convention -mindepth 1 -maxdepth 1 -name '*.md' ! -name '.*' 2>/dev/null || true; } | sort)
+while IFS= read -r f; do
   [ -f "$f" ] || continue
   docs=$((docs + 1)); names="$names ${f##*/}"
   if sed -n '1,40p' "$f" | grep -Eq '^generated_by: "?brewcode:convention(-setup)?"?$|brewcode-meta:.*generated_by=brewcode:convention'; then owned=$((owned + 1)); fi
-done
+done <<EOF
+$list
+EOF
 rule=absent; [ -f .claude/rules/convention.md.disabled ] && rule=parked; [ -f .claude/rules/convention.md ] && rule=live
 echo "CONV docs=$docs owned=$owned rule=$rule names=${names# }"
 echo "OK"

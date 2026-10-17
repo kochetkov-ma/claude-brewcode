@@ -1,0 +1,30 @@
+     ✅ marketplace update OK
+
+⏺ Bash(node "/Volumes/luf-demo/luf-fWEUj9/l1/plugins/cache/claude-brewcode/brewtools/6.1
+      0.0/skills/plugin-update/scripts/update-flow.mjs" latest > "/tmp/plugin-update.…)
+  ⎿  ✅ latest OK
+
+⏺ Bash(node "/Volumes/luf-demo/luf-fWEUj9/l1/plugins/cache/claude-brewcode/brewtools/6.1
+      0.0/skills/plugin-update/scripts/update-flow.mjs" plan "/tmp/plugin-update.1Iha…)
+  ⎿  {
+       "mode": "update",
+       "range": {
+     … +78 lines (ctrl+o to expand)
+────────────────────────────────────────────────────────────────────────────────────────
+←  ☒ Mods  ☐ Plugins  ✔ Submit  →
+
+Install the missing mods?
+
+  1. [✔] brewmod-placeholders
+         `++r` and other prompt blocks - replaces the codewords you used
+❯ 2. [✔] brewmod-plan-effort
+         effort `xhigh` in plan mode
+  3. [ ] Skip
+         Install no mods now
+  4. [ ] Type something
+     Next
+────────────────────────────────────────────────────────────────────────────────────────
+  5. Chat about this
+
+Enter to select · Tab/Arrow keys to navigate · Esc to cancel
+

@@ -29,7 +29,7 @@ claude plugin install brewtools@claude-brewcode</code></pre>
   <li class="step step-primary">
     <div>
       <strong>Check the setup dashboard</strong>
-      <p>The dashboard probes eleven setups and prints the command for each. It runs no setup itself.</p>
+      <p>The dashboard probes eleven setups and prints the command for each. It installs nothing; it only offers to upgrade setups that are already stale.</p>
       <pre><code>/brewcode:setup-status</code></pre>
     </div>
   </li>
@@ -93,6 +93,7 @@ claude plugin install brewtools@claude-brewcode</code></pre>
 | [Deep review](/brewcode/skills/superreview-setup/): invoke the generated skill | `/superreview` |
 | [Extract rules](/brewcode/skills/rules/) from conventions and commits | `/brewcode:rules "derive rules from .claude/convention/, one file per domain"` |
 | [Optimize prompts](/brewtools/skills/text-optimize/) and agents | `/brewtools:text-optimize .claude/agents/` |
+| [Stay current](/brewtools/skills/plugin-update/): update plugins and mods, then upgrade the stale setups | `/brewtools:plugin-update`<br />`/reload-plugins`<br />[`/brewcode:setup-status upgrade`](/brewcode/skills/setup-status/) |
 | [Brewcode mods](/mods/overview/): prompt placeholders, plan-mode effort | `claude plugin install brewmod-placeholders@claude-brewcode`<br />`claude plugin install brewmod-plan-effort@claude-brewcode` |
 
 All 27 skills are listed on the plugin pages: [brewcode](/brewcode/overview/), [brewtools](/brewtools/overview/), [brewdoc](/brewdoc/overview/), [brewui](/brewui/overview/).

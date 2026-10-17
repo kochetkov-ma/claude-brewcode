@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025-2026 Maksim Kochetkov
+
 import { atom, read, update } from 'claude-code'
 import type { Register, Timer } from 'claude-code'
 import { editorMatchers, getEditorEntries, setEditorEntries } from './lib/editor-state'

@@ -6,13 +6,13 @@
   },
   "metadata": {
     "description": "Claude Code plugin suite: brewcode for skill/agent/rule authoring and project setups, brewdoc for documentation tools, brewtools for text, ops and subagent-guard utilities, brewui placeholder for UI/visual/creative tools, brewmod-placeholders and brewmod-plan-effort mods (Claude Code 2.1.301+)",
-    "version": "6.9.6"
+    "version": "6.10.0"
   },
   "plugins": [
     {
       "name": "brewcode",
       "description": "Brewcode - Claude Code authoring toolkit: skill, agent and rule creation and sync, semantic code search (semble), project conventions, E2E tests, generated review and domain-team skills, setup dashboard, post-compact plan re-anchor",
-      "version": "6.9.6",
+      "version": "6.10.0",
       "category": "productivity",
       "keywords": [
         "brewcode",
@@ -45,7 +45,7 @@
     {
       "name": "brewdoc",
       "description": "Brewdoc - Claude Code documentation tools: doc-staleness tracking, memory-sync generator, my-claude installation docs, Markdown to PDF, publishing to brewpage.app",
-      "version": "6.9.6",
+      "version": "6.10.0",
       "category": "productivity",
       "keywords": [
         "brewdoc",
@@ -74,7 +74,7 @@
     {
       "name": "brewtools",
       "description": "Brewtools - Claude Code utilities: text optimization and humanization, secrets scanning, SSH and GitHub Actions deploy, manager hard-wall guard, subagent deadline/return-size/routing guards, task board, context slimming, plugin updates, alternative API providers",
-      "version": "6.9.6",
+      "version": "6.10.0",
       "category": "productivity",
       "keywords": [
         "brewtools",
@@ -107,7 +107,7 @@
     {
       "name": "brewui",
       "description": "Brewui -- placeholder for future UI/visual/creative tools",
-      "version": "6.9.6",
+      "version": "6.10.0",
       "category": "productivity",
       "keywords": [
         "brewui",
@@ -135,7 +135,7 @@
     {
       "name": "brewmod-placeholders",
       "description": "Brewmod placeholders -- expands ++m, ++a, ++r, ++rr and +++ style placeholders into prompt context, with live highlighting and user-defined placeholders (Claude Code 2.1.301+ mod)",
-      "version": "6.9.6",
+      "version": "6.10.0",
       "category": "productivity",
       "keywords": [
         "brewmod",
@@ -163,7 +163,7 @@
     {
       "name": "brewmod-plan-effort",
       "description": "Raises the main loop to the configured effort (default xhigh) while in plan mode, by rewriting each request; the session effort setting is never touched (Claude Code 2.1.301+ mod)",
-      "version": "6.9.6",
+      "version": "6.10.0",
       "category": "productivity",
       "keywords": [
         "brewmod",

@@ -1,0 +1,30 @@
+ ▐▛███▛█   Claude Code v2.1.301
+▝▜██████▀  Opus 5.5 with medium effort · Claude Max
+ ▝▝   ▝▝   ~/brewery
+
+
+❯ review the diff with agents ++r
+
+✢ Hashing…
+
+────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────
+  ⏸ manual mode on · esc to interrupt · ← for agents
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

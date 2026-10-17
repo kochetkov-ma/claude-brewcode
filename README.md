@@ -9,13 +9,13 @@
 
 **Claude Code mods:** type `++r` and get a whole review block; read it before you send, add your own with `/placeholders`. Plan mode raises effort to `xhigh`. [See the mods](#claude-code-mods)
 
-**Claude Code plugin suite.** Keeps big tasks on track: bounded units, a six-field brief per spawn, the plan re-anchored after a compaction. 4 plugins, 27 skills, 9 agents. [**Full documentation**](https://doc-claude.brewcode.app/getting-started/) | [**Approaches**](APPROACHES.md) | [**Update**](UPDATE.md)
+**Claude Code plugin suite.** Keeps big tasks on track: bounded units, a six-field brief per spawn, the plan re-anchored after a compaction. 4 plugins, 27 skills, 10 agents. [**Full documentation**](https://doc-claude.brewcode.app/getting-started/) | [**Approaches**](APPROACHES.md) | [**Update**](UPDATE.md)
 
 > **Security:** code is scanned on every commit ([Gitleaks](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/gitleaks.yml), [CodeQL](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/codeql.yml), [Semgrep](https://github.com/kochetkov-ma/claude-brewcode/actions/workflows/semgrep.yml)); no personal data is collected or transmitted.
 
 ## Install in 30 seconds
 
-❗ **Update Claude Code first:** mods need 2.1.301+. Run `claude update`, restart, then paste this prompt:
+❗ **Update Claude Code first:** mods need Claude Code 2.1.301 or newer. Run `claude update`, restart, then paste this prompt:
 
 ```
 Run in order, show full output; stop if `claude --version` < 2.1.301; end with `/reload-plugins`:
@@ -29,10 +29,10 @@ Run in order, show full output; stop if `claude --version` < 2.1.301; end with `
 <details>
 <summary>Already installed? Update</summary>
 
-Short steps for you and your LLM, including what to try after the update: [UPDATE.md](UPDATE.md). Or paste this prompt:
+Short steps for you and your LLM, including what to try after the update: [UPDATE.md](UPDATE.md). With brewtools installed, `/brewtools:plugin-update` does the whole update in one run and offers the mods and plugins you are missing. Then `/reload-plugins`, and in each project `/brewcode:setup-status upgrade` brings the setups generated there current. Or paste this prompt:
 
 ```
-Run in order, show full output; stop if `claude --version` < 2.1.301; end with `/reload-plugins`:
+Run in order, show full output; stop if `claude --version` < 2.1.301; end with `/reload-plugins`, then tell me to type `/brewcode:setup-status upgrade` in each project:
 1. claude plugin marketplace update claude-brewcode
 2. claude plugin update brewmod-placeholders@claude-brewcode
 3. claude plugin update brewmod-plan-effort@claude-brewcode
@@ -47,10 +47,17 @@ Run in order, show full output; stop if `claude --version` < 2.1.301; end with `
 > Tiny add-ons, one feature each, one command to install. [brewcode.app/mods](https://brewcode.app/mods/) | [Docs](https://doc-claude.brewcode.app/mods/overview/)
 
 <p align="center">
-  <a id="mods-demo"></a><img src="assets/brewmods/hub.gif" width="640" alt="Terminal-style animation of the brewcode mods hub: an ASCII brewcode tap pours the mods' source code into a glass in four stages: slide in, pour, head, served">
+  <a id="mods-demo"></a>
+  <picture>
+    <source media="(prefers-color-scheme: dark) and (prefers-reduced-motion: reduce)" srcset="assets/brewmods/hub-mini-dark-still.png">
+    <source media="(prefers-reduced-motion: reduce)" srcset="assets/brewmods/hub-mini-light-still.png">
+    <source media="(prefers-color-scheme: dark)" srcset="assets/brewmods/hub-mini-dark.gif">
+    <img src="assets/brewmods/hub-mini-light.gif" width="640" alt="A brewcode tap pours into a glass that slides in; the beer rises, a foam head forms, the glass is served">
+  </picture>
+  <br><sub><a href="assets/brewmods/hub.gif">Full animation</a></sub>
 </p>
 
-❗ **Update Claude Code first:** mods need 2.1.301+ (`claude --version`; `claude update`, then restart Claude Code) and `node` on the `PATH`.
+❗ **Update Claude Code first:** mods need Claude Code 2.1.301 or newer (`claude --version`; `claude update`, then restart Claude Code) and `node` on the `PATH`.
 
 | Mod | Type this, get that | Install |
 |-----|---------------------|---------|
@@ -63,12 +70,12 @@ Team/Enterprise organizations, the brewtools 6.7.x double injection and legacy c
 
 ## Top 5 features
 
-### ⚡ 1. Prompt placeholders: the headline feature
+### 1. Prompt placeholders: the headline feature
 
 Type `++r` and Claude receives a whole review-discipline block. A band above the prompt shows exactly the text it will get before you press Enter. Your own placeholders take one command: `/placeholders add ...`.
 
 <p align="center">
-  <a id="placeholders-demo"></a><img src="assets/brewmods/placeholders.gif" width="720" alt="Claude Code terminal, real session: ++ opens the placeholder list, Up and Tab insert ++r, the band above the prompt shows the lines Claude receives, and Enter sends: Claude reviews by the ++r rules. /placeholders global add ++db saves a new one after one question. In plan mode Claude answers with the ++db rule, the caret on ++m shows its teal plan-mode part, and ++/ sends the message exactly as typed.">
+  <a id="placeholders-demo"></a><img src="assets/brewmods/placeholders.gif" width="720" alt="Claude Code: ++ opens the placeholder list and ++r goes in; the band shows the exact text Claude receives; the ++r review finds three DB bugs; /placeholders global add ++db saves a new placeholder after one question; in plan mode ++db shapes the plan, and ++db ++m together add the manager task graph (teal plan part).">
 </p>
 
 | You do | What happens |
@@ -143,18 +150,18 @@ Also shipped: `/brewtools:ssh`, `/brewtools:deploy`, `/brewtools:provider-switch
 
 How the pieces fit, in the order they are used. Full page: [doc-claude.brewcode.app/recommended-flow](https://doc-claude.brewcode.app/recommended-flow/).
 
-1. **Install once.** ❗ Claude Code 2.1.301+ first (`claude --version`; below that `claude update`, then restart Claude Code), then the install prompt above or [UPDATE.md](UPDATE.md).
+1. **Install once.** ❗ Update Claude Code first: mods need Claude Code 2.1.301 or newer (`claude --version`; below that `claude update`, then restart Claude Code), then the install prompt above or [UPDATE.md](UPDATE.md).
 2. **Once per project.** `/brewcode:semble-setup install`, `/brewcode:convention-setup install`, `/brewcode:teams-setup install`, `/brewcode:superreview-setup install`; docs-heavy repos also `/brewdoc:docsync-setup install`. Check with `/brewcode:setup-status`.
 3. **Every bigger task.** Start with `++m` (manager: task graph and delegation); design in plan mode with `++m` (plan-effort raises effort to `xhigh`); long runs add `+++` (anti-drift cron).
 4. **Review.** `++r` or `++rr` after each phase, the generated `/superreview` before merge.
-5. **Share and stay current.** `/brewdoc:publish` returns a link; update with the release prompt or `/brewtools:plugin-update`.
+5. **Share and stay current.** `/brewdoc:publish` returns a link; update with the release prompt or `/brewtools:plugin-update`, then `/reload-plugins` and, in each project, `/brewcode:setup-status upgrade`.
 
 ```mermaid
 flowchart TD
     A["Install once<br/>Claude Code 2.1.301+<br/>mods and plugins"] --> B["Once per project<br/>semble, conventions,<br/>teams, superreview"]
     B --> C["Every bigger task<br/>++m, plan mode,<br/>+++ for long runs"]
     C --> D["Review<br/>++r or ++rr per phase,<br/>/superreview before merge"]
-    D --> E["Share and update<br/>/brewdoc:publish,<br/>/brewtools:plugin-update"]
+    D --> E["Share and update<br/>/brewdoc:publish,<br/>/brewtools:plugin-update,<br/>/reload-plugins,<br/>/brewcode:setup-status upgrade"]
     D -. "next task" .-> C
     E -. "new release" .-> A
 ```
@@ -170,7 +177,7 @@ flowchart TD
 
 ## Installation
 
-Install with the prompts above or run `claude plugin install <plugin>@claude-brewcode` per plugin. Update with `/brewtools:plugin-update`. Run from source:
+Install with the prompts above or run `claude plugin install <plugin>@claude-brewcode` per plugin. To update, open the update block under [Install in 30 seconds](#install-in-30-seconds) or follow [UPDATE.md](UPDATE.md). Run from source:
 
 ```bash
 claude --plugin-dir ./brewcode --plugin-dir ./brewdoc --plugin-dir ./brewtools --plugin-dir ./brewui
@@ -185,7 +192,7 @@ claude --plugin-dir ./brewcode --plugin-dir ./brewdoc --plugin-dir ./brewtools -
 ## Quick Start
 
 ```bash
-/brewcode:setup-status       # Inspect setup state and the recommended order
+/brewcode:setup-status       # Inspect setup state and the recommended order; "upgrade" brings stale setups current
 /brewcode:convention-setup   # Establish coding and testing patterns first
 /brewcode:teams-setup        # Create agents that use those conventions
 /brewcode:superreview-setup  # Generate a project-tailored deep-review skill
@@ -226,7 +233,7 @@ Self-contained `SKILL.md` folders that ship outside the four plugins -- drop the
 | `brewpage-publish` | Claude Code | [`skills/brewpage-publish`](skills/brewpage-publish/) |
 | `brewpage-publish` | OpenClaw / AgentSkills | [`openclaw/brewpage-publish`](openclaw/brewpage-publish/) |
 
-## Agents (9 total)
+## Agents (10 total)
 
 | Agent | Plugin | Model | Purpose |
 |-------|--------|-------|---------|
@@ -236,11 +243,12 @@ Self-contained `SKILL.md` folders that ship outside the four plugins -- drop the
 | bash-expert | brewcode | inherit | Create professional shell scripts |
 | mod-creator | brewcode | inherit | Create, test and ship Claude Code mods |
 | bc-rules-organizer | brewcode | haiku | Internal: spawned by /brewcode:rules and /brewcode:convention-setup |
+| setup-upgrader | brewcode | inherit | Internal: spawned by /brewcode:setup-status upgrade, one stale setup per spawn |
 | text-optimizer | brewtools | sonnet | Optimize text and docs for LLM efficiency |
 | ssh-admin | brewtools | inherit | Linux server administration via SSH |
 | deploy-admin | brewtools | inherit | GitHub Actions deployment and CI/CD |
 
-Every shipped agent stops and returns a split proposal when a task exceeds one bounded unit: [scope guard](https://doc-claude.brewcode.app/brewcode/agents/#scope-guard).
+Every public agent stops and returns a split proposal when a task exceeds one bounded unit: [scope guard](https://doc-claude.brewcode.app/brewcode/agents/#scope-guard). The two internal agents take one bounded unit by design.
 
 ## Documentation
 
@@ -263,4 +271,6 @@ bash .claude/scripts/bump-version.sh X.Y.Z      # Bump version everywhere
 
 ## License
 
-MIT -- see [LICENSE](LICENSE)
+MIT, see [LICENSE](LICENSE). Copyright (c) 2025-2026 Maksim Kochetkov ([kochetkov-ma](https://github.com/kochetkov-ma)).
+
+Reuse keeps the copyright notice from the license file and credits the project: [claude-brewcode](https://github.com/kochetkov-ma/claude-brewcode).

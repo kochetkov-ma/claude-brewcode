@@ -52,6 +52,8 @@ Output: one merged P0-P3 report at `.claude/reports/{TIMESTAMP}_superreview/REPO
 | `scripts/generate.sh` | `scan` / `emit` / `emit-agent` / `upgrade` / `enable` / `disable` / `uninstall` / `purge` / `validate` |
 | `references/*.template`, `agent-prompt.md`, `report-template.md` | Emitted skill, agent contract, scope reference, report layout |
 | `references/{python,java-kotlin,typescript-react,go}.md` | Per-stack reference, one emitted |
+| `references/generator/phase1-aspects.md` | Phase 1 aspects: how each is detected, the placeholder it drives (generator-only, never emitted) |
+| `references/generator/emitted-skill.md` | Phase-by-phase recap of the emitted skill's behavior (generator-only, never emitted) |
 
 ## Run the emitted skill
 

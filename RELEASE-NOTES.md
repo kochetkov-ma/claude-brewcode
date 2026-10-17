@@ -2,6 +2,97 @@
 
 ---
 
+## v6.10.0 (2026-10-17)
+
+> Docs: [placeholders](https://doc-claude.brewcode.app/mods/placeholders/) | [mods overview](https://doc-claude.brewcode.app/mods/overview/) | [recommended flow](https://doc-claude.brewcode.app/recommended-flow/) | [getting started](https://doc-claude.brewcode.app/getting-started/) | [installation](https://doc-claude.brewcode.app/installation/) | [quick start](https://doc-claude.brewcode.app/quickstart/) | [full setup](https://doc-claude.brewcode.app/full-setup/) | [FAQ](https://doc-claude.brewcode.app/faq/) | [license](https://doc-claude.brewcode.app/license/) | [brewcode agents](https://doc-claude.brewcode.app/brewcode/agents/) | [setup-upgrader](https://doc-claude.brewcode.app/brewcode/agents/setup-upgrader/) | [brewcode overview](https://doc-claude.brewcode.app/brewcode/overview/) | [brewcode skills](https://doc-claude.brewcode.app/brewcode/skills/) | [convention-setup](https://doc-claude.brewcode.app/brewcode/skills/convention-setup/) | [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) | [superreview-setup](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | [teams-setup](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) | [brewdoc skills](https://doc-claude.brewcode.app/brewdoc/skills/) | [docsync-setup](https://doc-claude.brewcode.app/brewdoc/skills/docsync-setup/) | [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/) | [my-claude](https://doc-claude.brewcode.app/brewdoc/skills/my-claude/) | [brewtools overview](https://doc-claude.brewcode.app/brewtools/overview/) | [brewtools skills](https://doc-claude.brewcode.app/brewtools/skills/) | [agent-deadline-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline-setup/) | [agent-return-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-return-setup/) | [agent-router-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-router-setup/) | [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) | [task-board-setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/)
+
+**What changed for you**
+
+❗ **Update Claude Code first:** the mods need Claude Code 2.1.301 or newer. Run `claude update`, restart Claude Code (exit, then run `claude`), and check with `claude --version`.
+
+- `/brewtools:plugin-update` now does the whole update in one run: it updates every installed plugin and mod without asking, prints versions before and after, what changed for you and the next steps, and asks once whether to install the mods and plugins you are missing (`brewmod-placeholders` first). See [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) and [watch the whole update run](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/#demo).
+- New: `/brewcode:setup-status upgrade` brings the setups generated in a project up to date in one run. After the update and `/reload-plugins`, type it in each project: it upgrades every stale setup it may run for you, one subagent at a time, stops at the first problem, never commits, and lists the few commands left for you. Approve the prompts for its writes into `.claude/` (asked in `default` and `acceptEdits` mode, denied in `dontAsk`). See [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/).
+- New: `/brewdoc:my-claude refresh` regenerates the installation guides that are older than your brewdoc, asks nothing and keeps the old files; the guide now also lists your installed plugins and mods. See [my-claude](https://doc-claude.brewcode.app/brewdoc/skills/my-claude/).
+- New recording of `brewmod-placeholders`: pick `++r`, read the band, send, and the review finds database bugs; then add `++db` in one line and use it with `++m` in plan mode. Watch it at [#demo](https://doc-claude.brewcode.app/mods/placeholders/#demo).
+- Every skill, agent and hook entry file now carries an MIT license marker, and each plugin ships its `LICENSE`. Reuse keeps the copyright notice and credits the project: see the [license](https://doc-claude.brewcode.app/license/).
+
+![Claude Code terminal: ++r from the placeholder list, the band shows the text Claude receives, the review finds three DB bugs, then ++db is saved and used with ++m in plan mode](https://brewcode.app/mods/placeholders.gif)
+
+### brewcode
+
+#### Added
+
+- **setup-upgrader:** an internal agent that `/brewcode:setup-status upgrade` spawns, one per stale setup. It runs that setup's own `upgrade` without questions, writes only inside the setup's own paths and makes no git write. brewcode ships 7 agents, the four plugins 10. See [setup-upgrader](https://doc-claude.brewcode.app/brewcode/agents/setup-upgrader/).
+- **setup-status upgrade:** a second mode next to `report`, the default. After each agent it re-checks the setup: the re-check is the verdict, not the agent's claim. It runs one upgrade per team and per installed scope and lists the commands left to you in stage order, with a reason per row. `install`, `enable`, `uninstall`, `purge`, `--force` and a re-copy over an edited file are never run for you; a disabled setup whose files differ from the plugin's copy is listed as "diff it first". When the session still runs an older brewcode than the one installed, it prints `RELOAD-NEEDED loaded=X installed=Y scope=S`, refuses to upgrade and asks you to run `/reload-plugins` first. See [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/).
+- **--unattended:** the flag `setup-status upgrade` passes to ten setups, all but `convention-setup` (here `semble-setup`, `superreview-setup`, `teams-setup`). Nothing is asked: every question takes its decline branch and the item stays pending, and nothing is committed. `teams-setup` runs only its plumbing (migration, re-copied scripts, restamp, verify); tuning stays interactive. `superreview-setup` promotes its new `.template-baseline/` only when nothing is pending and `validate` passes; otherwise the new templates stay staged and the run ends `partial`.
+
+#### Fixed
+
+- **scope check:** the check that `setup-status upgrade` runs around every row (shipped with `teams-setup`, `task-board-setup` and `memory-sync-setup`) now sees new files under `.claude/` even when a global gitignore ignores that folder; before, a write there went unnoticed. It also ignores the runtime files that hooks, Claude Code and other sessions write there (`logs/`, `plans/`, `reports/`, `tmp/`, `worktrees/`, `settings.local.json` and similar), so they no longer count as a write outside the setup.
+- **teams-setup:** `upgrade`, `enable` and `disable` restamp the `team.md` header together with the cells `verify` checks against it (the `Agent defaults` date and version, the `intent-guard` row), so `verify` passes right after. Team and agent names with accented letters are rejected on every shell, including bash 3.2 under a UTF-8 locale.
+
+### brewtools
+
+#### Added
+
+- **--unattended:** `agent-deadline-setup`, `agent-return-setup`, `agent-router-setup`, `manager-setup` and `task-board-setup` take the flag `setup-status upgrade` sets. The three `agent-*` setups skip a setup you uninstalled (its config is kept) and a `settings.json` that is invalid, and say which. `agent-deadline-setup` and `agent-return-setup` need exactly one of `project` or `global` in the prompt, else they skip with `no scope token`. `manager-setup` skips with `no wall installed`. `task-board-setup` reports `partial` when it leaves edits for you.
+
+#### Changed
+
+- **plugin-update modes:** `update` (default), `check` and `all`. The old default `interactive` mode, with its question per phase, the optional token-cost table and the auto-update and prune questions are gone; the report prints the auto-update hint instead. `update` updates every outdated plugin and mod in every scope without asking, and asks only when offers exist. `check` changes nothing and asks nothing. `all` is `update` plus every offer, the rows of other marketplaces and a `claude plugin prune` of orphaned auto-installed dependencies (once per installed scope), without asking.
+- **plugin-update report:** a title (`brewcode updated: N of M components`, `brewcode is current` or a failure count), a table of versions before and after per plugin and mod, `What changed for you` from the `RELEASE-NOTES.md` of your local marketplace copy (3 bullets per version, 10 in total, never the network) and numbered next steps: `/reload-plugins` first, then `/brewcode:setup-status upgrade` (in every project listed), then `/brewdoc:my-claude refresh` when an installation guide is out of date. When that copy has no notes for the newest versions, the report says `Notes for versions after X are not in your local marketplace copy yet` and links the release notes.
+- **plugin-update offers:** one question at most, two questions in it: `Install the missing mods?` (`brewmod-placeholders` first; a user of the old codewords sees that it replaces them) and `Install the missing plugins?` (up to 3, else `Install all N`), each with `Skip`. Mods are offered only on Claude Code 2.1.301 or newer; below it, or when its version cannot be read, a line says to update Claude Code first. It never runs `/reload-plugins`, installs a mod outside the offer or patches settings.
+- **plugin-update, offline and failures:** when the latest versions cannot be read, the title is `latest versions unknown (offline?)` (`check`: `check: latest versions unknown`) and the cells say `latest unknown`, never `is current`. A failed marketplace refresh or prune prints a red line, an unreadable plugin list gives `update result unknown (plugin list unreadable)` with `not verified` cells, and an install whose project folder is gone shows `orphan install` and does not count as failed.
+
+#### Fixed
+
+- **manager-setup:** `purge` in a project without `.claude/` reports that nothing existed and succeeds; before, it waited five seconds on a lock it could not create and then aborted.
+- **task-board-setup:** the leftover-placeholder check scans only the 15 files the generator emits, so task cards that quote `${{ secrets.X }}` no longer fail `install` or `upgrade`.
+
+### brewdoc
+
+#### Added
+
+- **my-claude refresh:** `/brewdoc:my-claude refresh` (also `update`, `regenerate`) regenerates each guide that is older than the installed brewdoc, has no version or still holds unfilled `{...}` placeholders, into a new dated file with its INDEX row updated and the old file kept. It asks nothing. Research guides are regenerated only when you name their slug; guides whose file is gone are only reported; with nothing stale it writes nothing.
+- **my-claude guide:** the internal guide has a "Plugins and mods" section from `claude plugin list --json` (mods first, `brewmod-placeholders` first), a Summary row and a "Keeping this current" section with the four update commands.
+- **--unattended:** `docsync-setup` and `memory-sync-setup` take the flag `setup-status upgrade` sets. `docsync-setup` skips with `not installed` or `wrapped by <launcher>` and upgrades a disabled install without enabling it.
+
+### brewmod-placeholders
+
+#### Changed
+
+- **docs:** the README embeds the new recording under `#demo`.
+
+### repo
+
+#### Added
+
+- **license:** `SKILL.md` frontmatter carries `license: MIT`; agents, hook scripts (also the hook assets a setup copies into a project) and the mods' hook modules carry an SPDX and copyright comment; each plugin and mod ships its `LICENSE`. Validate fails a file without its marker. License lines alone never make `/brewcode:setup-status` call an installed hook copy modified. The README License section names the copyright holder.
+- **recordings:** `placeholders.gif` re-recorded from a new story; new light and dark `hub-mini` GIFs with stills for reduced motion, shown in the README through a `<picture>`, with the full `hub.gif` one link away; `plan-effort-bottle.gif` re-rendered; `placeholders-full-text-bottle.gif` removed; new `update-flow.gif` (with a still) of a real update from 6.9.6 to 6.10.0: `/brewtools:plugin-update`, `/reload-plugins`, then `/brewcode:setup-status upgrade`, at `https://doc-claude.brewcode.app/brewmods/update-flow.gif`.
+
+#### Changed
+
+- **update chain:** the README, UPDATE.md and the update prompt in each GitHub release describe the chain `/brewtools:plugin-update`, `/reload-plugins`, then `/brewcode:setup-status upgrade` in each project. UPDATE.md tells an LLM to use the "What changed for you" part of the plugin-update report, and that the file grants no permission to run a skill: both commands run only when the user's message names them, otherwise the user types them.
+
+### docs
+
+#### Added
+
+- **pages:** the `setup-upgrader` page, listed under brewcode agents in the navigation, and a rewritten `setup-status` page: report and upgrade, the left-to-you table and how the upgrade stays safe.
+
+#### Changed
+
+- **update chain:** the FAQ shows the four update commands as a table; the installation, getting started, quick start, full setup and Recommended flow pages, the plugin READMEs and the pages of the changed commands describe the new commands, and the agent counts follow.
+
+### docs site
+
+#### Changed
+
+- **update prompt and notice:** the install prompt in update mode for `all`, `brewcode`, `brewdoc` and `brewtools` ends with `/reload-plugins`, then asks you to type `/brewcode:setup-status upgrade` in each project (the model is told not to run it); the update notice at the bottom of a page shows the same chain.
+- **mods overview:** the page shows the small hub GIF under `#demo`.
+
+---
+
 ## v6.9.6 (2026-10-16)
 
 > Docs: [placeholders](https://doc-claude.brewcode.app/mods/placeholders/) | [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/) | [mods overview](https://doc-claude.brewcode.app/mods/overview/) | [recommended flow](https://doc-claude.brewcode.app/recommended-flow/) | [getting started](https://doc-claude.brewcode.app/getting-started/) | [installation](https://doc-claude.brewcode.app/installation/) | [quick start](https://doc-claude.brewcode.app/quickstart/) | [full setup](https://doc-claude.brewcode.app/full-setup/) | [FAQ](https://doc-claude.brewcode.app/faq/) | [license](https://doc-claude.brewcode.app/license/) | [brewcode agents](https://doc-claude.brewcode.app/brewcode/agents/) | [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [bash-expert](https://doc-claude.brewcode.app/brewcode/agents/bash-expert/) | [bc-rules-organizer](https://doc-claude.brewcode.app/brewcode/agents/bc-rules-organizer/) | [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [mod-creator](https://doc-claude.brewcode.app/brewcode/agents/mod-creator/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [brewcode hooks](https://doc-claude.brewcode.app/brewcode/hooks/) | [brewcode overview](https://doc-claude.brewcode.app/brewcode/overview/) | [brewcode skills](https://doc-claude.brewcode.app/brewcode/skills/) | [agents skill](https://doc-claude.brewcode.app/brewcode/skills/agents/) | [convention-setup](https://doc-claude.brewcode.app/brewcode/skills/convention-setup/) | [e2e](https://doc-claude.brewcode.app/brewcode/skills/e2e/) | [review](https://doc-claude.brewcode.app/brewcode/skills/review/) | [rules](https://doc-claude.brewcode.app/brewcode/skills/rules/) | [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) | [teams-setup](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) | [brewdoc overview](https://doc-claude.brewcode.app/brewdoc/overview/) | [brewdoc skills](https://doc-claude.brewcode.app/brewdoc/skills/) | [docsync-setup](https://doc-claude.brewcode.app/brewdoc/skills/docsync-setup/) | [md-to-pdf](https://doc-claude.brewcode.app/brewdoc/skills/md-to-pdf/) | [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/) | [my-claude](https://doc-claude.brewcode.app/brewdoc/skills/my-claude/) | [publish](https://doc-claude.brewcode.app/brewdoc/skills/publish/) | [brewtools agents](https://doc-claude.brewcode.app/brewtools/agents/) | [deploy-admin](https://doc-claude.brewcode.app/brewtools/agents/deploy-admin/) | [ssh-admin](https://doc-claude.brewcode.app/brewtools/agents/ssh-admin/) | [text-optimizer](https://doc-claude.brewcode.app/brewtools/agents/text-optimizer/) | [brewtools overview](https://doc-claude.brewcode.app/brewtools/overview/) | [prompt-injection](https://doc-claude.brewcode.app/brewtools/prompt-injection/) | [agent-deadline-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline-setup/) | [agent-return-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-return-setup/) | [agent-router-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-router-setup/) | [context-slim](https://doc-claude.brewcode.app/brewtools/skills/context-slim/) | [deploy](https://doc-claude.brewcode.app/brewtools/skills/deploy/) | [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) | [secrets-scan](https://doc-claude.brewcode.app/brewtools/skills/secrets-scan/) | [ssh](https://doc-claude.brewcode.app/brewtools/skills/ssh/) | [task-board-setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) | [text-human](https://doc-claude.brewcode.app/brewtools/skills/text-human/) | [text-optimize](https://doc-claude.brewcode.app/brewtools/skills/text-optimize/) | [brewui agents](https://doc-claude.brewcode.app/brewui/agents/) | [brewui overview](https://doc-claude.brewcode.app/brewui/overview/) | [brewui skills](https://doc-claude.brewcode.app/brewui/skills/)

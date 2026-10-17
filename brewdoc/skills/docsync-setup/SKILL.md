@@ -3,11 +3,12 @@ name: docsync-setup
 description: "Installs project-local doc-staleness tracking (hooks) and reports/forces doc sync. Triggers: docsync, track doc staleness, doc sync status, stale docs, doc frontmatter."
 user-invocable: true
 disable-model-invocation: true
-argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge] [sync [--all]|reread|frontmatter]"
+argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge] [sync [--all]|reread|frontmatter] [--unattended]"
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion]
 model: sonnet
+license: MIT
 ---
-<!-- brewcode-meta: version=6.9.6 content_version=6.5.2 generated_by=brewdoc:docsync-setup -->
+<!-- brewcode-meta: version=6.10.0 content_version=6.10.0 generated_by=brewdoc:docsync-setup -->
 
 # docsync-setup
 
@@ -24,7 +25,8 @@ model: sonnet
 1. Mode: an explicit mode token wins outright; else the most distinct whole-word keyword hits
    (table below). Tie with a destructive mode -> `AskUserQuestion`; with `status` -> `status`; of two
    mutating modes -> the keyword that comes first. No hit or empty -> `status` if installed, else
-   `install`.
+   `install`. Strip `--unattended` before routing: a flag, never a mode, keyword or id; only `upgrade`
+   honours it (Mode: upgrade), and it never asks.
 2. Scope: prose that is not a mode/id/path is still input: take the id, path or target from it.
 3. Ask: at most ONE `AskUserQuestion` (max 4 questions) to resolve mode and scope, before any work, only when the answer
    changes what gets written. A read-only run asks nothing.
@@ -92,9 +94,23 @@ if [ -f "$ROOT/.claude/hooks/docsync-gate.mjs" ] && grep -q 'docsync-gate.mjs' "
 else
   echo "docsync: NOT_INSTALLED"
 fi
+# Launcher = first word of command, unquoted, basename; not node = the project wraps the hook (a fork).
+node -e '
+const fs = require("fs");
+const launcher = c => { const m = /^\s*(?:"([^"]*)"|\x27([^\x27]*)\x27|(\S+))/.exec(c); return m ? String(m[1] ?? m[2] ?? m[3]).split(/[\\/]/).pop() : ""; };
+const seen = new Set();
+for (const f of process.argv.slice(1)) {
+  let j; try { j = JSON.parse(fs.readFileSync(f, "utf8")); } catch { continue; }
+  for (const gs of Object.values((j && j.hooks) || {})) for (const g of Array.isArray(gs) ? gs : []) for (const h of Array.isArray(g.hooks) ? g.hooks : [])
+    if (typeof h.command === "string" && /docsync-(track|watch|gate)\.mjs/.test([h.command, ...(Array.isArray(h.args) ? h.args : [])].join(" ")) && !/^node(\.exe)?$/i.test(launcher(h.command))) seen.add(launcher(h.command));
+}
+if (seen.size) console.log("docsync: WRAPPED " + [...seen].join(","));
+' "$ROOT/.claude/settings.json" "$ROOT/.claude/settings.local.json"
 ```
 
 - No explicit mode: `NOT_INSTALLED` -> **install**; `INSTALLED` (either state) -> **status**.
+- `docsync: WRAPPED <launcher>`: a project launcher runs docsync hooks (a user fork). `upgrade`
+  keeps those registrations but re-copies the hook files over the fork: the user's call.
 - `install` on a `DISABLED` install: refuse and point at `enable`, so a deliberate pause
   is never reinstalled over.
 
@@ -214,7 +230,22 @@ they need `node` on `PATH`. Suggest `frontmatter` next when docs lack `last_upda
 
 Refresh an existing install to the current plugin version.
 
-1. Require `INSTALLED` (first-run detection); `NOT_INSTALLED` -> say so, run `install` instead.
+**Unattended (`--unattended` anywhere in the prompt; set by `/brewcode:setup-status upgrade`).**
+1. A flag, never a mode or name: strip it first. Any resolved mode other than `upgrade` -> no write, `RESULT skipped <id> cv=?->? pending=0 note="not-upgrade"`.
+2. No `AskUserQuestion` at all. Every gate in this section takes its decline branch; a declined gate is pending, never applied.
+3. A precondition this section would ask about (not installed, parked, custom/wrapped registration, orphan config,
+   user-modified managed file, missing tokenizer) -> no write, `RESULT skipped <id> cv=?->? pending=0 note="<reason>"`.
+4. Write only what this section already writes. No git commit, push, stash or reset; scratch only in a private `mktemp -d`.
+5. Last line, exactly once: `RESULT <ok|partial|skipped|failed> <id> cv=<before>-><after> pending=<n> note="<one line>"`,
+   `<id>` = `<plugin>:<skill>` [` scope=<project|global>`|` team=<name>`], `?` = unknown version.
+
+Here `<id>` = `brewdoc:docsync-setup`; `cv` = `content_version` (else `version`) of `.claude/docsync/config.json`
+before and after step 2. Skipped before any write: `docsync: NOT_INSTALLED` (note `not installed`, never
+`install`) or a `docsync: WRAPPED <launcher>` line (note `wrapped by <launcher>`). `INSTALLED (DISABLED)`
+upgrades and stays disabled. `VERIFY OK` -> `ok`, `pending=0`; any ❌ -> `failed`.
+
+1. Require `INSTALLED` (first-run detection); `NOT_INSTALLED` -> say so, run `install` instead
+   (unattended: skipped, above).
 2. Run the install Step 2 block with `MODE=upgrade`. It keeps `threshold_days`, `exclude`,
    `enabled` and unknown config keys, refreshes the four provenance keys, and rewrites
    every docsync registration into today's shape. On meeting a legacy registration (a

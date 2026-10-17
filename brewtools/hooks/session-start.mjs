@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025-2026 Maksim Kochetkov
+
 import { readStdin, output, log, projectRoot } from './lib/utils.mjs';
 
 async function main() {

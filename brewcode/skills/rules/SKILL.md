@@ -6,6 +6,7 @@ disable-model-invocation: true
 argument-hint: "[prompt] [status|list|create|improve|review]"
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion, Skill]
 model: sonnet
+license: MIT
 ---
 
 # rules Skill

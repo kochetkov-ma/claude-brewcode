@@ -1,0 +1,30 @@
+[48;5;237m  [38;5;231mUse the mcp__brewmod-placeholders__* tools (list_placeholders first); a placeholder [39m
+  [38;5;231mis inserted into prompts as ++name (not in this message: ++/).[39m
+
+[38;5;114m[49m⏺[39m [1mbrewmod-placeholders - list_placeholders (MCP)[0m
+[38;5;246m  ⎿  [39m## +++ · layer: plugin · files: none · plan: add · Anti-drift cron for the cur
+     rent task; plan mode plans it as a step
+     # [ADDON: ANTI-DRIFT CRON]
+     [2m… +105 lines (ctrl+o to expand)[0m
+
+[38;5;246m⏺ [39mUser answered Claude's questions:
+[38;5;246m  ⎿  · Save ++db as drafted? → Save as drafted (Recommended)[39m
+
+[38;5;114m⏺[39m [1mbrewmod-placeholders - save_placeholder (MCP)[0m(name: "db", text: "bind SQL params, no
+                                               query in a loop, use transactions",
+                                               description: "DB code rules: bound
+                                               params, no N+1, transactions", scope:
+                                               "global")
+[38;5;246m  ⎿  [39msaved ++db (global): ~/.claude/placeholders/db.md
+
+[38;5;231m⏺[39m I saved [38;5;153m++db[39m as a global placeholder in [38;5;153m~/.claude/placeholders/db.md[39m, so you can use
+  it in any project. Typing [38;5;153m++db[39m in a prompt inserts "bind SQL params, no query in a
+  loop, use transactions".
+
+[38;5;246m✻[39m [38;5;246mBrewed for 6s · done 11:27 PM[39m
+
+[38;5;244m────────────────────────────────────────────────────────────────────────────────────────
+[39m❯ 
+[38;5;244m────────────────────────────────────────────────────────────────────────────────────────
+[39m  [38;5;246m⏸[39m [38;5;246mmanual[39m [38;5;246mmode[39m [38;5;246mon[39m [38;5;246m·[39m [38;5;246m? for shortcuts · ← for agents[39m                 [38;5;246m◐[39m [38;5;246mmedium[39m [38;5;246m·[39m [38;5;246m/effort[39m
+

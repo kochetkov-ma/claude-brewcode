@@ -6,6 +6,7 @@ disable-model-invocation: false
 argument-hint: "[prompt] [path|commit|folder|text] [custom instructions]"
 allowed-tools: [Read, Grep, Glob, Agent, AskUserQuestion]
 model: sonnet
+license: MIT
 ---
 
 # Text Humanizer

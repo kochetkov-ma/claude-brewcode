@@ -1,0 +1,30 @@
+  Confirmed: batches.js:7-10. listWithTastings runs one database query for each batch.
+  With the 2 sample batches it ran 3 queries: one for the batches, then one per batch
+  for its tastings. The fix is to fetch all tastings in one query and group them by
+  batch in code, so it always takes 2 queries.
+
+  The correctness and test agents are still running. I'll make the fixes once all the
+  findings are confirmed.
+
+✻ Waiting for 2 background agents to finish
+
+⏺ Agent "Correctness/security review of diff" finished · 31s
+
+⏺ Bash(node -e "const db=require('./db');const
+      b=require('./batches');db.reset();console.log(b.findBatch(\"nope' OR '1'='1\"),
+      b.findBatch(\"Brewer's stout\"))" && nod…)
+  ⎿  { id: 1, name: '01 pale ale', status: 'fermenting' } undefined
+     threw tanks fail
+     [ { id: 1, name: '01 pale ale', status: 'bottled' } ] [ { id: 1, batch_id: 1 }
+      ]
+
+✳ Julienning… (8s · ↓ 437 tokens · thinking with medium effort)
+
+────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────
+  ⏸ manual mode on · /tasks to see subagents · esc to interrupt · ← for agents · ↓ to…
+
+  ⏺ main
+  ◯ general-purpose  Running batches.test.js mutation checks      36s · ↓ 33.5k tokens
+

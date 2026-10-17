@@ -254,13 +254,14 @@ const RUN_LINES = RUN.split('\n');
 const countRun = (re) => RUN_LINES.filter((l) => re.test(l)).length;
 const FM = LINES.slice(1, LINES.indexOf('---', 1));
 check('skill.frontmatter.keys', FM.map((l) => l.split(':')[0]),
-  ['name', 'description', 'user-invocable', 'disable-model-invocation', 'argument-hint', 'allowed-tools', 'model'],
+  ['name', 'description', 'user-invocable', 'disable-model-invocation', 'argument-hint', 'allowed-tools', 'model', 'license'],
   'GIVEN publish frontmatter WHEN its keys are listed THEN the house key order holds, DMI key explicit');
-check('skill.frontmatter.invocation', FM.filter((l) => /^(user-invocable|disable-model-invocation|allowed-tools):/.test(l)), [
+check('skill.frontmatter.invocation', FM.filter((l) => /^(user-invocable|disable-model-invocation|allowed-tools|license):/.test(l)), [
   'user-invocable: true',
   'disable-model-invocation: false',
   "allowed-tools: [Read, 'Bash(bash ${CLAUDE_SKILL_DIR}/scripts/brewpage-run.sh *)', AskUserQuestion, Glob]",
-], 'GIVEN publish frontmatter WHEN invocation keys are read THEN user- and model-invocable, one scoped Bash rule, no Write/Edit');
+  'license: MIT',
+], 'GIVEN publish frontmatter WHEN invocation keys are read THEN user- and model-invocable, one scoped Bash rule, no Write/Edit, license line exactly MIT');
 {
   // GIVEN the one allowed-tools Bash rule WHEN every shipped bash fence is read THEN each is that single command.
   const rules = [...FM.join('\n').matchAll(/'Bash\(([^)]*) \*\)'/g)].map((m) => m[1]);

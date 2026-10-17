@@ -29,18 +29,26 @@ done
 ```
 > If `SPEC_MODE=off`, skip that loop -- and assert the inverse: none of those three paths may exist.
 
-**Leftover-placeholder gate**, both brace families (double `{{...}}` and the four single-brace metadata tokens), in both modes over every emitted path: every hit is an unresolved placeholder. `|| true` keeps a clean run's rc=1 from aborting, so the `TARGET` assert comes first (gate rule in P0). **EXECUTE** using shell:
+**Leftover-placeholder gate**, both brace families (the generator's `{{` + uppercase-name tokens and the four single-brace metadata tokens), in both modes. It scans the 15 files P2-P4b emit (absent ones skipped, so `SPEC_MODE=off` needs no branch), never the 4c sweep's migrated docs under `backlog/`, `todo/`, `progress/`, `closed/`: user content that may quote `${{ secrets.X }}`. A grep error or zero files scanned is a `MISS`, never a pass. Byte-identical to `10-upgrade.md` U6's block (lockstep: `brewcode/skills/setup-status/tests/task-board-leftover-gate.mjs`). **EXECUTE** using shell:
 ```bash
 TARGET="<absolute path resolved in P0>"
 test -n "$TARGET" && test -d "$TARGET" || { echo "MISS TARGET unresolved -- re-resolve per P0"; exit 1; }
-test -d "$TARGET/.codex/features" || { echo "MISS nothing emitted -- gate did not run"; exit 1; }
-LEFT="$(grep -rnE '\{\{|\{(PLUGIN_VERSION|CONTENT_VERSION|GENERATED_BY|LAST_UPDATED)\}' \
-  "$TARGET/.codex/features" "$TARGET/.codex/rules/tasks.md" \
-  "$TARGET/.codex/agents/task-tracker.toml" "$TARGET/.codex/skills/task-board" \
-  "$TARGET/.codex/skills/task-spec" 2>/dev/null || true)"
-test -z "$LEFT" && echo "OK  no leftover placeholders" || { echo "MISS leftover placeholders:"; echo "$LEFT"; }
+gen=()
+for rel in .codex/features/board.md .codex/features/TRACKER.md .codex/features/INDEX.md \
+           .codex/features/PROGRESS.md .codex/features/backlog/README.md \
+           .codex/features/METHODOLOGY.md .codex/features/ANTI-DRIFT.md .codex/features/task-graph.md \
+           .codex/agents/task-tracker.toml .codex/rules/tasks.md \
+           .codex/skills/task-board/SKILL.md .codex/skills/task-spec/SKILL.md \
+           .codex/features/TASK_TEMPLATE.md .codex/features/specs/SPEC_TEMPLATE.md .codex/features/specs/DESIGN_TEMPLATE.md; do
+  if test -f "$TARGET/$rel"; then gen+=("$TARGET/$rel"); fi
+done
+test "${#gen[@]}" -gt 0 || { echo "MISS no generated file found -- gate did NOT run"; exit 1; }
+LEFT="$(LC_ALL=C grep -nHE '\{\{[A-Z]|\{(PLUGIN_VERSION|CONTENT_VERSION|GENERATED_BY|LAST_UPDATED)\}' "${gen[@]}")"; rc=$?
+test "$rc" -le 1 || { echo "MISS grep rc=$rc -- gate did NOT run"; exit 1; }
+test -z "$LEFT" && echo "OK  no leftover placeholders" \
+  || { echo "MISS leftover placeholders:"; echo "$LEFT"; }
 ```
-> A clean run PRINTS `OK  no leftover placeholders`. No output at all = the block did not run, !=PASS -- fix the block and re-run.
+> A clean run PRINTS `OK  no leftover placeholders`. No output at all = the block did not run, !=PASS -- fix the block and re-run. Every `MISS` hit names a generated file: re-substitute that line, never touch a migrated card.
 
 **Prompt-contract gate.** Every emitted skill must carry the workspace prompt contract: the
 `argument-hint` starts with `[prompt]` and the body contains a `PLAN — ` block. **EXECUTE** using shell:

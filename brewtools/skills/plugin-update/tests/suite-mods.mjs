@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// brewmod-* mods: fetched and updated when installed, never installed by this skill.
+// brewmod-* mods: fetched and offered with the suite, placeholders first everywhere; install placement is pinned in suite-default.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
@@ -9,7 +9,9 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SKILL = readFileSync(join(ROOT, 'SKILL.md'), 'utf8');
-const phase = (from, to) => SKILL.slice(SKILL.indexOf(from), SKILL.indexOf(to));
+const REF = file => readFileSync(join(ROOT, 'references', file), 'utf8');
+const SECTIONS = SKILL.split(/^(?=## )/m).map(s => ({ head: s.split('\n')[0], lines: s.split('\n') }));
+const where = re => SECTIONS.flatMap(s => s.lines.filter(l => re.test(l)).map(l => [s.head, l]));
 const base = realpathSync(mkdtempSync(join(tmpdir(), 'plugin-update-mods-')));
 process.on('exit', () => rmSync(base, { recursive: true, force: true }));
 const bin = join(base, 'bin');
@@ -32,23 +34,21 @@ assert.deepEqual(JSON.parse(r.stdout), {
     'brewmod-placeholders': '9.9.9', 'brewmod-plan-effort': '9.9.9',
 }, 'THEN the fetch output lists suite plugins and mods');
 
-// GIVEN Phase 3 WHEN it describes installs THEN mods are never installed and never offered.
-assert.deepEqual(phase('## Phase 3', '## Phase 4').split('\n').filter(l => l.includes('Mods are never installed')), [
-    '`update` skips install. Mods are never installed here, in any mode, even when named in the prompt.',
-], 'THEN Phase 3 forbids installing mods in every mode');
-assert.deepEqual(phase('## Phase 3', '## Phase 4').match(/claude plugin install [^\n]*/g), ['claude plugin install <plugin>@claude-brewcode && echo "✅ install <plugin> OK" || echo "❌ install <plugin> FAILED"'],
-    'THEN the only install command in Phase 3 is the suite template');
+// GIVEN SKILL.md WHEN it names the mod floor THEN the only rule is the 2.1.301 gate on offers.
+assert.deepEqual(where(/2\.1\.301/), [
+    ['## Critical Rules', '- Mods need Claude Code 2.1.301 or newer: below that, `plan` offers no mod and the report prints'],
+    ['## Phase 6 — Report', 'for missing mods and plugins (the Claude Code 2.1.301 line, the codewords **Moved** line, install'],
+], 'THEN mods are offered only on Claude Code 2.1.301+');
 
-// GIVEN Phase 4 WHEN the update set is built THEN installed mods join it.
-assert.deepEqual(phase('## Phase 4', '## Phase 5').split('\n').filter(l => l.includes('installed mods')), [
-    'Update set from that answer only: "Update all" = outdated suite + outdated installed mods + every `other` marketplace row',
-    '(latest unknown; update is a no-op when current); "Update suite only" = outdated suite + outdated installed mods; "Update',
-], 'THEN Phase 4 updates installed mods');
-
-// GIVEN install-prompt.md THEN it stays at the four suite plugins.
-const install = readFileSync(join(ROOT, 'references', 'install-prompt.md'), 'utf8');
-assert.deepEqual(install.match(/claude plugin install \S+/g), [
+// GIVEN install-prompt.md THEN it installs the 2 mods and the 4 plugins, placeholders first.
+assert.deepEqual(REF('install-prompt.md').match(/claude plugin install \S+/g), [
+    'claude plugin install brewmod-placeholders@claude-brewcode', 'claude plugin install brewmod-plan-effort@claude-brewcode',
     'claude plugin install brewcode@claude-brewcode', 'claude plugin install brewdoc@claude-brewcode',
     'claude plugin install brewtools@claude-brewcode', 'claude plugin install brewui@claude-brewcode',
-], 'THEN install-prompt.md has no mod install');
+], 'THEN install-prompt.md lists the 6 installs in the documented order');
+
+// GIVEN update-commands.md THEN its manual loop updates one name per call, placeholders first.
+assert.deepEqual(REF('update-commands.md').split('\n').filter(l => l.startsWith('for p in ')), [
+    'for p in brewmod-placeholders brewmod-plan-effort brewcode brewdoc brewtools brewui; do claude plugin update "$p@claude-brewcode"; done',
+], 'THEN the manual loop keeps the documented order');
 console.log('suite-mods: PASS');

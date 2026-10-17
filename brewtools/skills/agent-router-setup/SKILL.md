@@ -3,9 +3,10 @@ name: agent-router-setup
 description: "Installs, configures or removes the agent-router hook (routes a generic Agent spawn to the real project/plugin expert). Triggers: agent-router, wrong agent, route to expert, роутер агентов, не тот агент."
 user-invocable: true
 disable-model-invocation: true
-argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge] [level fast|strict]"
+argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge] [level fast|strict] [--unattended]"
 allowed-tools: [Read, Bash, AskUserQuestion, Agent]
 model: sonnet
+license: MIT
 ---
 
 # Agent Router
@@ -14,15 +15,17 @@ model: sonnet
 
 ## Prompt contract
 
-`$ARGUMENTS` is one free-form RU/EN prompt; mode tokens and flags may sit anywhere in it.
+`$ARGUMENTS` is one free-form RU/EN prompt; mode tokens and flags (`--unattended`) may sit anywhere in it.
 
-1. Mode: an explicit mode token wins outright; else the most distinct whole-word keyword hits
+1. Mode: strip `--unattended` first: a flag, never a mode, level or name (Modes, **Unattended**).
+   Then an explicit mode token wins outright; else the most distinct whole-word keyword hits
    (table in Step 2). Tie with a destructive mode (`purge`) or of `install` with a removal mode
    (`uninstall`) -> `AskUserQuestion`; with `status` -> `status`; of two other mutating modes -> the
    keyword that comes first. No hit or empty -> `status`.
 2. Scope: prose that is not a mode/id/path is still input: take the id, path or target from it.
 3. Ask: at most ONE `AskUserQuestion` (max 4 questions) to resolve mode and scope, before any work, only when the answer
-   changes what gets written. A read-only run asks nothing.
+   changes what gets written. A read-only run asks nothing. `--unattended` asks nothing: an open
+   question there ends in `RESULT skipped` (Modes, **Unattended**).
 
 Print once, before the first action (labels literal, values in the conversation language):
 
@@ -358,6 +361,20 @@ Re-run the Step 1 status block and print the refreshed table, plus:
 | `level strict` (extra) | add the tier-2 entry (judge prompt inlined) and the heartbeat entry | kept | both appended | `level:"strict"` | kept |
 
 `upgrade` asks nothing: it reads `level` from the existing config and replays the install (fresh `agent-router.mjs`, freshly inlined judge prompt). Not installed -> it is an `install`, so ask the level question.
+
+**Unattended (`--unattended` anywhere in the prompt; set by `/brewcode:setup-status upgrade`).**
+1. A flag, never a mode or name: strip it first. Any resolved mode other than `upgrade` -> no write, `RESULT skipped <id> cv=?->? pending=0 note="not-upgrade"`.
+2. No `AskUserQuestion` at all. Every gate in this section takes its decline branch; a declined gate is pending, never applied.
+3. A precondition this section would ask about (not installed, parked, custom/wrapped registration, orphan config,
+   user-modified managed file, missing tokenizer) -> no write, `RESULT skipped <id> cv=?->? pending=0 note="<reason>"`.
+4. Write only what this section already writes. No git commit, push, stash or reset; scratch only in a private `mktemp -d`.
+5. Last line, exactly once: `RESULT <ok|partial|skipped|failed> <id> cv=<before>-><after> pending=<n> note="<one line>"`,
+   `<id>` = `<plugin>:<skill>` [` scope=<project|global>`|` team=<name>`], `?` = unknown version.
+
+Here `<id>` = `brewtools:agent-router-setup` (project only: no scope part, a passed scope token is ignored):
+- Step 1 decides, first hit wins, before the Smoke Test: `config=none`, or `hook_file=no` with every `*_refs` count `0` (`uninstall` keeps the config; the replay would undo it) -> skipped, note `not installed`; `wrapped_refs` not `0` (Custom above included) -> skipped, note `custom launcher`; `settings_valid=no` -> skipped, note `settings.json invalid`; `level_recorded=strict` with `tier2_refs=0` -> skipped, note `level mismatch: strict recorded, judge not wired` (the replay would wire a paid judge that status asks about).
+- Otherwise Steps 3-4 are skipped: Smoke Test, then the one `hook-creator` spawn with `MODE=upgrade`. The read-back `ABORT:` (UPGRADE step 1, nothing written yet) -> skipped, its text as note; an `ABORT:` from a later block (the hook copy already ran), a `❌` in Step 1 or the Smoke Test, or a failed spawn -> `failed`.
+- Step 6 status: `stale=no` -> `ok`, else `failed`. `cv` = `content_version` `config=` before -> after (`n/a` -> `?`); `pending=0` (this upgrade has no gate); a kept `enabled=false` is named in `note`.
 
 Upgrading an install from brewtools 6.4.0 or older changes `settings.json` at `level strict`: the tier-2 handler loses its `model` key (a pinned ID ages out, an omitted one cannot) and the heartbeat entry appears. At `level fast` only the hook file changes. Old anti-loop markers are not migrated: one already-denied task per live session can be denied once more.
 
