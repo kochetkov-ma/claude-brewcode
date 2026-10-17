@@ -6,10 +6,10 @@ maxTurns: 80
 color: yellow
 tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch, WebSearch
 doc_type: llm
-version: "6.9.6"
+version: "6.10.0"
 content_version: "6.5.0"
 generated_by: "brewcode"
-last_updated: "2026-10-16"
+last_updated: "2026-10-17"
 ---
 
 [DICT: AC=additionalContext, CC=Claude Code, MD=MessageDisplay, PCD=PostCompact, POT=PostToolUse, PR=PermissionRequest, PTU=PreToolUse, SA=subagent, SS=SessionStart, UI=updatedInput]
@@ -113,3 +113,5 @@ conventions/rules/docs, !=a replacement.
 | `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/hooks-env.md` | Referencing an env var, or resolving the project root inside a hook |
 | `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/hooks-templates.md` | Writing a new hook -- bash/JS skeletons, fail-safe design, common patterns, Test, Validation Checklist |
 | `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/hooks-changes.md` | Updating a hook written for an older CLI -- changes 2.1.270 -> 2.1.296, older floors still in force, probe limits |
+
+<!-- Copyright (c) 2025-2026 Maksim Kochetkov, https://github.com/kochetkov-ma/claude-brewcode. SPDX-License-Identifier: MIT -->

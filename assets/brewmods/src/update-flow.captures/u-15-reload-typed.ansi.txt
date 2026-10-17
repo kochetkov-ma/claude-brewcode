@@ -1,0 +1,30 @@
+
+  1. 🔵 [1m[38;5;153m/reload-plugins[0m: activates the new versions in this session (or [38;5;153mexit[39m, then
+     [38;5;153mclaude[39m).
+  2. 🔵 [1m[38;5;153m/brewcode:setup-status upgrade[0m: brings this project's setups up to [1m6.10.0[0m in one
+     run; repeat it in every project you use.
+
+  🔵 Auto-update is off for claude-brewcode: [38;5;153m/plugin[39m -> Marketplaces -> claude-brewcode
+  -> [1mEnable auto-update[0m.
+
+[38;5;246m✻[39m [38;5;246mCogitated for 33s · done 1:45 AM[39m
+
+[38;5;244m────────────────────────────────────────────────────────────────────────────────────────
+[39m❯ [38;5;153m/reload-plugins[39m
+[38;5;244m────────────────────────────────────────────────────────────────────────────────────────
+[39m  [38;5;153m❯ /[1mreload-plugins[0m[38;5;153m                    Activate pending plugin changes in the current[39m
+                                       [38;5;153msession[39m
+
+
+
+
+
+
+
+
+
+
+
+
+
+

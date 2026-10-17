@@ -6,6 +6,7 @@ disable-model-invocation: true
 argument-hint: "[prompt] [status|list|create|improve|review|sync]"
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Agent, WebSearch, WebFetch, AskUserQuestion, Skill]
 model: opus
+license: MIT
 ---
 
 # skills Skill
@@ -180,7 +181,7 @@ Optional does not mean skippable. Type, token regex and the `cli` denylist (gene
 ### Prompt contract (mandatory, create + improve + review)
 
 Every SK this skill creates, improves or reviews satisfies `references/prompt-contract.md` (items in
-Phase 2 DONE; sole exemption: its section 5 table, pure reference/lookup SKs), enforced by
+Phase 2 DONE; exemptions: its section 5 table, kinds `reference` and `standalone`), enforced by
 `${CLAUDE_PLUGIN_ROOT}/skills/skills/scripts/validate-skill.sh`: a failing SK is not done.
 
 ### Prerequisite (improve only): Resolve Target

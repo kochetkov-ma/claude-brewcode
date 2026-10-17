@@ -21,15 +21,16 @@ function check(name, actual, expected, message) {
 }
 
 check('frontmatter.keys', FM.map((l) => l.split(':')[0]),
-  ['name', 'description', 'user-invocable', 'disable-model-invocation', 'argument-hint', 'allowed-tools', 'model'],
+  ['name', 'description', 'user-invocable', 'disable-model-invocation', 'argument-hint', 'allowed-tools', 'model', 'license'],
   'GIVEN text-human frontmatter WHEN its keys are listed THEN the house key order holds, DMI key explicit');
-check('frontmatter.invocation', FM.filter((l) => /^(name|user-invocable|disable-model-invocation|allowed-tools|model):/.test(l)), [
+check('frontmatter.invocation', FM.filter((l) => /^(name|user-invocable|disable-model-invocation|allowed-tools|model|license):/.test(l)), [
   'name: text-human',
   'user-invocable: true',
   'disable-model-invocation: false',
   'allowed-tools: [Read, Grep, Glob, Agent, AskUserQuestion]',
   'model: sonnet',
-], 'GIVEN text-human frontmatter WHEN invocation keys are read THEN user- and model-invocable, no Bash/Write/Edit pre-approval');
+  'license: MIT',
+], 'GIVEN text-human frontmatter WHEN invocation keys are read THEN user- and model-invocable, no Bash/Write/Edit pre-approval, license line exactly MIT');
 
 // GIVEN the Phase 0.5 gate WHEN its shell fences are read THEN it is one read-only git command, single-quoted path.
 const commands = [...SKILL.matchAll(/```bash\n([\s\S]*?)```/g)].map((m) => m[1].replace(/\n$/, ''))

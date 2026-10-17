@@ -10,14 +10,15 @@ if [ -z "$SKILL_DIR" ]; then
 fi
 
 # Exemptions (prompt-contract.md section 5). EXEMPT_KIND=reference: pure reference skill, skips 8-10.
-# EXEMPT_KIND=standalone: marketplace-root skills/<name> outside any plugin, skips 7-10.
+# EXEMPT_KIND=standalone: marketplace-root skills/<name> or openclaw/<name>, outside any plugin, skips 7-10.
 EXEMPT_KIND=""
 is_exempt_skill() {
     case "$1" in
         */.claude/skills/claude-plugin-guide) EXEMPT_KIND=reference; return 0 ;;
     esac
     _gp=$(dirname "$(dirname "$1")")
-    if [ "$(basename "$(dirname "$1")")" = "skills" ] && [ -f "$_gp/.claude-plugin/marketplace.json" ] \
+    case "$(basename "$(dirname "$1")")" in skills|openclaw) ;; *) return 1 ;; esac
+    if [ -f "$_gp/.claude-plugin/marketplace.json" ] \
         && [ ! -f "$_gp/.claude-plugin/plugin.json" ]; then
         EXEMPT_KIND=standalone; return 0
     fi

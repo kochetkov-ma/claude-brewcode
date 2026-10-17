@@ -6,7 +6,7 @@ TEAMS_DIR=".claude/teams"
 
 # Plugin version by SELF-LOCATION (scripts/ -> <plugin root>): dev checkout + cache; NEVER hardcoded.
 # `|| true`: under `set -e` failing command substitution aborts script.
-SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 PLUGIN_JSON="$SCRIPT_DIR/../../../.claude-plugin/plugin.json"
 PLUGIN_VERSION=""
 if [ -f "$PLUGIN_JSON" ]; then
@@ -38,7 +38,8 @@ esac
 validate_name() {
   case "$1" in
     -*) printf 'ERROR:invalid team name (must not start with a dash)\n'; exit 1 ;;
-    *[!a-zA-Z0-9_-]*) printf 'ERROR:invalid team name (alphanumeric, dash, underscore only)\n'; exit 1 ;;
+    # Explicit ASCII list: under bash 3.2 and a UTF-8 locale an a-z range also matches accented letters.
+    *[!ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-]*) printf 'ERROR:invalid team name (alphanumeric, dash, underscore only)\n'; exit 1 ;;
     "") printf 'ERROR:empty team name\n'; exit 1 ;;
   esac
 }
@@ -46,7 +47,7 @@ validate_name() {
 # Flags sit anywhere and the skill reads them itself: drop them before the positional parse,
 # else `--skip-review install x` named a team `--skip-review`. awk splits: no glob, any shell.
 ARGS=$(printf '%s' "$ARGS" | awk '
-  { for (i = 1; i <= NF; i++) if ($i != "--skip-review" && $i != "--review") out = out (out == "" ? "" : " ") $i }
+  { for (i = 1; i <= NF; i++) if ($i != "--skip-review" && $i != "--review" && $i != "--unattended") out = out (out == "" ? "" : " ") $i }
   END { print out }')
 
 # Parse first word (shell expansion, no sed regex injection)

@@ -169,6 +169,20 @@ for (const [name, sid, agent, reason] of [
 }
 
 {
+  // GIVEN: an empty trace and sh under a UTF-8 locale, where bash 3.2 a-z ranges match accented letters.
+  const teamDir = newTeam('non-ascii-ids');
+  const env = { ...process.env, LC_ALL: 'en_US.UTF-8' };
+  // WHEN: add runs once with a non-ASCII agent and once with a non-ASCII 8-character sid.
+  const runs = [['sid00000', 'é1'], ['abcdefé1', 'agent-a']].map(([sid, agent]) => spawnSync('sh',
+    [TRACE_OPS, 'add', teamDir, sid, agent, 'track', 'completed', 'text'], { encoding: 'utf8', timeout: 8000, env }));
+  // THEN: both die with their own reason and nothing is appended.
+  check('nonAsciiIds.refused', JSON.stringify(runs.map((r) => [r.status, r.stderr.split('\n').filter((l) => l.startsWith('Invalid'))])),
+    JSON.stringify([[1, ['Invalid agent: expected ^[a-z0-9][a-z0-9-]*$']], [1, ['Invalid sid: expected exactly 8 ASCII marker characters']]]),
+    'GIVEN a non-ASCII agent or sid WHEN add runs THEN each is refused with rc 1');
+  check('nonAsciiIds.file', readFileSync(join(teamDir, 'trace.jsonl'), 'utf8'), '', 'a refused id appends nothing');
+}
+
+{
   // GIVEN: three legacy sources, with a valid tracking row before a later invalid UTF-8 issue row.
   const teamDir = newTeam('migration-transaction');
   const traceBefore = Buffer.from('{"preexisting":true}\n');

@@ -1,0 +1,30 @@
+  ⎿  {
+       "mode": "update",
+       "range": {
+     … +78 lines (ctrl+o to expand)
+
+⏺ User answered Claude's questions:
+  ⎿  · Install the missing mods? → brewmod-placeholders, brewmod-plan-effort
+     · Install the missing plugins? → Skip
+
+⏺ Bash(claude plugin update "brewcode@claude-brewcode" --scope "user" && echo "✅ update
+      brewcode@claude-brewcode OK" || echo "❌ update brewcode@claude-brewcode FAILED")
+  ⎿  Checking for updates for plugin "brewcode@claude-brewcode" at user scope…
+     ✔ Plugin "brewcode" updated from 6.9.6 to 6.10.0 for scope user. Restart to ap
+     ply changes.
+     ✅ update brewcode@claude-brewcode OK
+
+⏺ Bash(claude plugin update "brewdoc@claude-brewcode" --scope "user" && echo "✅ update
+      brewdoc@claude-brewcode OK" || echo "❌ update brewdoc@claude-brewcode FAILED")
+  ⎿  Checking for updates for plugin "brewdoc@claude-brewcode" at user scope…
+     ✔ Plugin "brewdoc" updated from 6.9.6 to 6.10.0 for scope user. Restart to app
+     ly changes.
+     ✅ update brewdoc@claude-brewcode OK
+
+✢ Undulating… (21s · ↓ 1.7k tokens)
+
+────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt  ◐ medium · /effort
+

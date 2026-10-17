@@ -320,6 +320,24 @@ try {
       PreToolUse: [{ matcher: 'SubagentHandback', hooks: [exec('agent-return-guard.mjs')] }],
     } },
   }, 'a missing registration must still read missing, and only it is added beside a wrapped one');
+
+  // GIVEN: settings.json shapes from absent to non-object. WHEN: status reads each, then the project merge runs over it.
+  const mergeBlock = blockAfter(runbookText, '**EXECUTE** merge settings (project)', '```\n');
+  const shapes = { absent: null, empty: '', object: '{}', broken: '{bad', array: '[]', jsonNull: 'null' };
+  const validity = Object.fromEntries(Object.entries(shapes).map(([name, body]) => {
+    rmSync(wrapSettings, { force: true });
+    if (body !== null) writeFileSync(wrapSettings, body);
+    const status = spawnSync('bash', ['-c', rawStatus], { cwd: wrapProj, env: wrapEnv, encoding: 'utf8', timeout: 30000 })
+      .stdout.split('\n').find(line => line.startsWith('project:'))?.match(/registrations=\S+ wrapped=\S+ settings_valid=\S+/)?.[0];
+    const merge = /✅ settings|❌ FAILED/.exec(spawnSync('bash', ['-c', mergeBlock], { cwd: wrapProj, env: wrapEnv, encoding: 'utf8', timeout: 30000 }).stdout)?.[0];
+    return [name, { status, merge }];
+  }));
+
+  // THEN: settings_valid=no exactly where the merge ABORTs, so an unattended upgrade skips before the hook copy.
+  const ok = { status: 'registrations=0/3 wrapped=0 settings_valid=yes', merge: '✅ settings' };
+  const bad = { status: 'registrations=0/3 wrapped=0 settings_valid=no', merge: '❌ FAILED' };
+  assert.deepEqual(validity, { absent: ok, empty: ok, object: ok, broken: bad, array: bad, jsonNull: bad },
+    'settings_valid must be the merge block\'s own test: a gap lets an unattended upgrade copy hooks, then ABORT');
 } finally {
   rmSync(base, { recursive: true, force: true });
 }

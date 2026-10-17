@@ -3,11 +3,12 @@ name: task-board-setup
 description: "Deploys a file-based task board with domain/task methodology, derived task graph and unique session anti-drift timers; optional spec/design layer and CLAUDE.md optimization. Upgrade adds missing control layers without replacing task decisions. Triggers: scaffold task board, task tracker, upgrade task board, канбан-доска, спек-слой."
 user-invocable: true
 disable-model-invocation: true
-argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge] [target repo path | empty = cwd] [free-text directive, e.g. 'also dedupe rules', 'skip module split']"
+argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge] [target repo path | empty = cwd] [free-text directive, e.g. 'also dedupe rules', 'skip module split'] [--unattended]"
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, Agent, AskUserQuestion, CronCreate, CronList, CronDelete, 'Skill(brewtools:text-optimize *)']
 model: opus
+license: MIT
 ---
-<!-- brewcode-meta: version=6.9.6 content_version=6.6.0 generated_by=brewtools:task-board-setup -->
+<!-- brewcode-meta: version=6.10.0 content_version=6.10.0 generated_by=brewtools:task-board-setup -->
 
 [DICT: TT=task-tracker agent (generated), TB=task-board skill (generated), BRD=board.md, FEAT=.claude/features, EXCL=source-path exclusions, REL=release style (vX.Y.Z tag | commit SHA | no tag), DOM=domain id segment, FM=frontmatter, TS=task-spec skill (generated), SPEC_MODE=spec+design layer opt-in, PS=status phase, PU=upgrade phase, PR=uninstall/purge phase]
 
@@ -82,6 +83,7 @@ A bare one-line task is never enough. Full brief shapes, used as written: P1 age
 ## P0: Resolve verb + target repo + parse directive
 
 The prompt carries three optional, order-independent things: (a) a MODE verb, (b) a target repo PATH, (c) a free-text DIRECTIVE that tunes the optional CLAUDE.md-optimization phase (e.g. "also dedupe rules", "skip module split", "report only"). Disambiguate:
+- Strip `--unattended` first: a flag (PU, **Unattended**), never the verb, the PATH or part of `DIR`.
 - A standalone token (case-insensitive) from the canonical set `status | install | upgrade | enable | disable | uninstall | purge` sets `MODE` and is consumed -- it never reaches `DIR`. A word merely containing one of them inside a sentence (e.g. "upgrade the rules wording") is not the verb. Two conflicting verbs -> `AskUserQuestion`.
 - A token that resolves to an existing directory (abs, or relative to cwd) = the PATH; an ambiguous bare word is the PATH only if it resolves to an existing dir, else `DIR`. Empty / unresolvable-as-dir -> `TARGET`=cwd.
 - Everything else (the remaining free text) = `DIR`, passed verbatim to P5.5.
@@ -208,6 +210,22 @@ Rules that bind the whole phase:
 - **Every edit of an existing file is gated:** show the exact diff, then **AskUserQuestion** per file. Declined = no edit, continue cleanly.
 - **The metadata restamp (`10-upgrade.md` U5b) runs whenever no content row is pending**, including when every content row is already SKIP: it rewrites only the metadata quartet in the twelve stamped control artifacts, nothing task-local. The board anchor stamp clears the `stale` verdict read by setup-status. Any declined or unasked (headless) `PATCH`/`ABSENT` row withholds it: the run reports `partial` with the pending list, never `current`.
 - **Never renumber, never delete.** Existing task ids, scope ids and closed tasks are untouchable. `board.md` rows are never reordered and existing cell content is never changed -- the one allowed row edit is appending the new `spec` cell holding `--` to each existing Progress/Todo row, per `10-upgrade.md` U4 (header + separator cells patch with it). `spec:` FM backfill is opt-in, !=run by default; when accepted, the value is `pending` or `none` -- never `full`.
+
+**Unattended (`--unattended` anywhere in the prompt; set by `/brewcode:setup-status upgrade`).**
+1. A flag, never a mode or name: strip it first. Any resolved mode other than `upgrade` -> no write, `RESULT skipped <id> cv=?->? pending=0 note="not-upgrade"`.
+2. No `AskUserQuestion` at all. Every gate in this section takes its decline branch; a declined gate is pending, never applied.
+3. A precondition this section would ask about (not installed, parked, custom/wrapped registration, orphan config,
+   user-modified managed file, missing tokenizer) -> no write, `RESULT skipped <id> cv=?->? pending=0 note="<reason>"`.
+4. Write only what this section already writes. No git commit, push, stash or reset; scratch only in a private `mktemp -d`.
+5. Last line, exactly once: `RESULT <ok|partial|skipped|failed> <id> cv=<before>-><after> pending=<n> note="<one line>"`,
+   `<id>` = `<plugin>:<skill>` [` scope=<project|global>`|` team=<name>`], `?` = unknown version.
+
+Here `<id>` = `brewtools:task-board-setup`, `cv` = the anchor `.claude/features/board.md`'s `content_version`, and "this section" includes `references/10-upgrade.md`:
+- `upgrade` on a `FRESH` board or a DISABLED one (Guards) -> `skipped` (note `not installed` / `parked`).
+- U2: unambiguous recovered values are used without the re-confirm question. A recovery conflict, an unrecoverable value, or a closing marker a drift-ADD needs and no sibling carries -> `skipped` before any write, the note naming the value.
+- U3 ADDs, drift-ADDs included, are written. Every U4 PATCH file is declined, U4b leaves half-states as-is, U5 takes option 1 (task files untouched).
+- U5b's pending gate then withholds the restamp while any row is `PATCH`/`ABSENT`: `partial`, `pending` = the label count, the note lists them. Nothing pending -> U5b restamps and U6 runs: `ok`.
+- `failed` = any `FAIL`, `MISS` or `❌` in U3, U5b or U6 (placeholder, stamp or scope gate).
 
 > `PU` is a thin handoff: `10-upgrade.md` owns detect, verify and report. Do not reuse P5 here.
 
@@ -378,38 +396,7 @@ echo "LAST_UPDATED=$(date +%F)"
 
 ### Gated placeholders -- the convention
 
-Gated blocks sit inside otherwise-unchanged templates. Every gated placeholder has exactly one of two kinds -- `line` or `inline` -- declared with its expansion in the header of its owning reference file. That header is the source of truth for the expansion text and the whitespace handling; the inventory below is the complete name / kind / gate index.
-
-| Rule | Detail |
-|------|--------|
-| Every gate is per-token | A gated placeholder carries its own gate condition -- `SPEC_MODE=on`, `SPEC_MODE=off`, or `CMD_DECOMPOSED=true`; "emitted" always means that condition is true. Two gate variables, one with an `off` arm: !=assume the condition is `SPEC_MODE=on`, !=key any removal off `SPEC_MODE` alone |
-| Kind `line` | the token is the only reason its line exists. Condition true -> replace the whole line with the expansion; false -> remove the whole line: no blank line left behind, no orphan heading, no trailing separator |
-| `_ON` / `_OFF` arms | an `_ON`/`_OFF` pair is one gate written as two adjacent `line` placeholders: `_ON` emits when the gate is `on`, `_OFF` when it is `off`, and the other arm's line is removed. Exactly one arm survives every run, in both modes -- !=both, !=neither, !=a third kind. The `_OFF` arm is how a `line` placeholder rewrites a baseline line back to its byte-identical original |
-| Kind `inline` | the token sits inside a line that exists in both modes. Condition true -> replace the token with the expansion; false -> delete the token only, the line stays |
-| inline whitespace | declared per site by its own reference file; both forms are legal, do not unify them: some sites carry a single space BEFORE the token, deleted together with it (`02`); others carry no leading space and the expansion supplies its own (`03`, `05`). Follow the reference header, never a global rule |
-| `SPEC_MODE=off` result | the emitted artifact is byte-identical to the pre-spec-layer output. This holds only if every token was resolved against its own condition -- an `_OFF` arm dropped as if it were an `on` token breaks byte-identity |
-| Verification | any `{{...}}` or single-brace metadata token surviving in a written file is an unresolved placeholder and a defect; P5's leftover-placeholder gate greps every emitted path |
-
-#### Gated placeholder inventory (complete)
-
-| Owner ref | Kind | Emitted when | Placeholders |
-|-----------|------|--------------|--------------|
-| 02 | line | `CMD_DECOMPOSED=true` | `{{CMD_DECOMPOSED_NOTE}}`, `{{CMD_DECOMPOSED_INVARIANT}}` |
-| 02 | inline | `SPEC_MODE=on` | `{{SPEC_TRIGGERS}}`, `{{SPEC_BRD_COL}}` |
-| 02 | line | `SPEC_MODE=on` | `{{SPEC_TRIAGE_BLOCK}}`, `{{SPEC_CHECKLIST}}`, `{{SPEC_BRD_FEATURES_ON}}` |
-| 02 | line | `SPEC_MODE=off` | `{{SPEC_BRD_FEATURES_OFF}}` |
-| 03 | inline | `SPEC_MODE=on` | `{{SPEC_DESC_TRIGGERS}}`, `{{SPEC_ADD_ROW_COL}}` |
-| 03 | line | `SPEC_MODE=on` | `{{SPEC_INVARIANTS}}`, `{{SPEC_ADD_STEP}}`, `{{SPEC_MOVE_STEPS}}`, `{{SPEC_VIEW_FLOW}}` |
-| 04 | inline | `SPEC_MODE=on` | `{{SPEC_FM_FIELD}}` |
-| 04 | line | `SPEC_MODE=on` | `{{SPEC_RULES}}` |
-| 05 | inline | `SPEC_MODE=on` | `{{SPEC_COL_H}}`, `{{SPEC_COL_S}}`, `{{SPEC_LC_CLOSE}}` |
-| 05 | line | `SPEC_MODE=on` | `{{SPEC_FEATURE_TABLE_HEAD_ON}}`, `{{SPEC_FM_LINE}}`, `{{SPEC_SCOPE_BLOCK}}`, `{{SPEC_BOARD_COL_NOTE}}`, `{{SPEC_TRACKER_SECTION}}`, `{{SPEC_INDEX_ROWS}}` |
-| 05 | line | `SPEC_MODE=off` | `{{SPEC_FEATURE_TABLE_HEAD_OFF}}` |
-
-Two `_ON`/`_OFF` pairs exist: `{{SPEC_BRD_FEATURES_*}}` (02, board section-6 line) and `{{SPEC_FEATURE_TABLE_HEAD_*}}` (05, `board.md` `## Feature specs` header + separator).
-
-> Names are file-scoped: resolve every gated token against its owner's header, never across files (`{{SPEC_INVARIANTS}}` lives in `03` only).
-> Refs 01, 06, 07, 08, 09, 10, 11 declare no gated placeholders. `08` and `09` are gated at whole-file granularity (emitted only when `SPEC_MODE=on`); ref 11 is always emitted. A `{{TOKEN}}` in `10` is prose, not a placeholder.
+Read `${CLAUDE_SKILL_DIR}/references/13-gated-placeholders.md` before any emit (the Fence rule's paths): the `line` / `inline` kinds, `_ON` / `_OFF` arms, the `SPEC_MODE=off` byte-identity rule and the complete name / kind / gate inventory.
 
 ---
 

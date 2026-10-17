@@ -1,0 +1,30 @@
+✻ Cogitated for 33s · done 1:45 AM
+
+❯ /reload-plugins
+  ⎿  Reloaded: 3 plugins · 27 skills · 16 agents · 3 hooks · 0 plugin MCP servers · 0
+     plugin LSP servers
+
+❯ /brewcode:setup-status upgrade
+  ⎿  1 agent type available
+
+⏺ PLAN — brewcode:setup-status
+  INPUT:  upgrade
+  MODE:   upgrade — explicit; full cross-plugin
+  SCOPE:  /Volumes/luf-demo/luf-fWEUj9/l1/proj; brewcode, brewtools, brewdoc setups;
+  upgrade runs only Phase 3b's auto rows, counted before the first spawn
+  DO:
+  - Resolve plugin roots, probe artifacts, read stamps and byte pairs
+  - Classify each setup row and build the upgrade plan
+  - Run one brewcode:setup-upgrader per auto row in stage order, re-probing each, and
+    stop on the first 🔴
+  - Warn: their Write/Edit into .claude/ prompts in default/acceptEdits mode and is
+    denied in dontAsk
+    RESULT: The upgrade report and the commands left to you.
+
+✻ Manifesting… (6s · ↓ 395 tokens)
+
+────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+

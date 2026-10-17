@@ -7,7 +7,7 @@ import { test } from 'node:test';
 
 const STATUS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ROOT = resolve(STATUS_DIR, '../../..');
-const source = ['SKILL.md', 'references/phase1-probes.md', 'references/phase2-stamps.md', 'references/task-tools-offer.md']
+const source = ['SKILL.md', 'references/phase1-probes.md', 'references/phase2-stamps.md', 'references/task-tools-offer.md', 'references/run-list.md']
   .map(f => readFileSync(join(STATUS_DIR, f), 'utf8')).join('\n');
 const notes = readFileSync(join(STATUS_DIR, 'references/row-notes.md'), 'utf8');
 const ROOTS = { $BC: 'brewcode', $BT: 'brewtools', $BD: 'brewdoc' };

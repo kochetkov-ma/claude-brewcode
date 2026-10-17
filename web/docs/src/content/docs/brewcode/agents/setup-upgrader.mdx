@@ -1,0 +1,129 @@
+---
+title: "Setup Upgrader"
+description: "Internal agent that /brewcode:setup-status spawns once per stale setup: runs that setup's upgrade without questions and ends with one RESULT line."
+order: 1211
+---
+import { Badge, Callout, Card, CardGrid, SourceLink, Spoiler, Steps, UpdateNotice } from '../../../../components/mdx';
+
+# Setup Upgrader
+
+<Badge text="inherit" /> <Badge variant="secondary" text="internal" /> <Badge variant="accent" text="unattended" />
+
+<SourceLink path="brewcode/agents/setup-upgrader.md" kind="file" label="View agent file on GitHub" />
+
+<Callout type="note" title="Internal agent">
+You never start it: [`/brewcode:setup-status upgrade`](/brewcode/skills/setup-status/) spawns it, one stale setup per spawn.
+</Callout>
+
+## Quick reference
+
+| Field | Value |
+|-------|-------|
+| Agent | `brewcode:setup-upgrader` |
+| Invocation | Spawned by `/brewcode:setup-status upgrade`, or by a yes to its `Upgrade N setups now?` offer; no direct or automatic use |
+| Model | `inherit`: the spawn sets it, per [quick and long setup](/brewcode/skills/setup-status/#the-eleven-setups) |
+| Tools | Read, Write, Edit, Bash, Agent |
+| Writes | The `OWNED` path prefixes of the brief; no git write. Project rows: the row's project prefixes plus `.claude/settings.json` and `.claude/settings.local.json`. Global rows (agent-deadline, agent-return with `scope=global`): the global prefixes, the global `settings.json` included |
+| Turn limit | `maxTurns: 80`, an anti-loop stop |
+| Output | At most 12 lines, then one `RESULT` line |
+
+## What it does
+
+After a plugin update, installed setups such as semble, docsync or agent-deadline can sit behind the plugin version. `/brewcode:setup-status upgrade` hands each stale setup to a fresh Setup Upgrader, one agent per setup, one after another, so no setup answers against another's findings. Which setups qualify is on [setup-status](/brewcode/skills/setup-status/#the-eleven-setups).
+
+The agent reads the setup owner's skill file and runs only that skill's `upgrade` section with the `--unattended` flag. Nothing is asked: every confirmation gate takes its decline branch and counts as pending for you. A setup that needs a decision (not installed, parked, a file you edited) is skipped with nothing written.
+
+The agent writes only inside the `OWNED` paths, makes no git write and never uses `--force`. It ends with one `RESULT` line. setup-status treats that line as a claim and re-probes the setup itself: the re-probe is the verdict.
+
+## Example
+
+Run the command in a project whose setups are behind the installed plugins; the report it prints is on [setup-status](/brewcode/skills/setup-status/#example):
+
+```text
+/brewcode:setup-status upgrade
+```
+
+The agent's last line, one per result status:
+
+```text
+RESULT ok brewtools:agent-deadline-setup scope=project cv=6.5.0->6.9.6 pending=0 note="upgraded, 20 min budget kept"
+RESULT partial brewtools:task-board-setup cv=6.5.6->6.5.6 pending=2 note="2 PATCH edits declined: TRACKER.md, rules/tasks.md"
+RESULT skipped brewcode:superreview-setup cv=?->? pending=0 note="parked"
+RESULT failed brewcode:semble-setup cv=?->? pending=0 note="unfilled-token CLAUDE_SKILL_DIR"
+```
+
+## How it works
+
+<Steps>
+  <li><div><strong>Check the brief</strong><p>Seven values must be filled: `ID`, `SKILL`, `CLAUDE_SKILL_DIR`, `CLAUDE_PLUGIN_ROOT`, `CLAUDE_PROJECT_DIR`, `ARGUMENTS`, `OWNED`. A missing one returns `failed` with `unfilled-token <NAME>` and writes nothing; only `ID` is rebuilt from the owner.</p></div></li>
+  <li><div><strong>Read the owner</strong><p>Reads the owner's `SKILL.md` whole and finds its `upgrade` section. The section must carry the unattended block; without it the result is `skipped` with `no-unattended-block`.</p></div></li>
+  <li><div><strong>Fill the path tokens</strong><p>Owner skills cannot be loaded through the `Skill` tool, so `Read` returns raw text and the agent fills each load-time token from the brief itself. Runtime shell variables and runbook files stay untouched.</p></div></li>
+  <li><div><strong>Run the section</strong><p>Strips the unattended flag, takes the decline branch of every gate, skips on a precondition the section names. Each `**EXECUTE**` fence runs as written, one per Bash call; a `STOP if ❌` hit ends the run with `failed`.</p></div></li>
+  <li><div><strong>Delegate only where the owner does</strong><p>Spawns a helper only for steps the section names, one foreground spawn per step, never to verify its own work.</p></div></li>
+  <li><div><strong>Check and return</strong><p>Runs the checks the section names, reads the setup's `content_version` after the run, then returns the short summary and the `RESULT` line.</p></div></li>
+</Steps>
+
+<Spoiler id="return-contract" title="Return contract and RESULT line">
+
+At most 12 lines, then exactly one final line: the `RESULT` line. Nothing follows it and no other line starts with `RESULT`. The 12 lines give the verdict first, each path written, each pending gate as the command you run, and a failure as the failing command or `path:line` plus its first error line. No file bodies, fence output, diffs, logs or preamble, and no report or checkpoint file. A return without the line counts as `failed`.
+
+```text
+RESULT <ok|partial|skipped|failed> <id> cv=<before>-><after> pending=<n> note="<one line>"
+```
+
+| Field | Value |
+|-------|-------|
+| status | `ok`: the section ran to its end, nothing pending. `partial`: it ran, some gates were declined. `skipped`: a precondition stopped it before any write. `failed`: a command, check or write failed, or the section did not finish |
+| `<id>` | The brief's `ID`, verbatim: `<plugin>:<skill>`, then `scope=project` or `scope=global`, or `team=<name>`, when the row has one |
+| `cv` | The setup's `content_version` before the first write and after the last; `?` = unknown |
+| `pending` | Declined gates and items left for you |
+| `note` | One line, no double quote: the skip reason, the migration or the failing check |
+
+What setup-status does with each status is under [Outcome of one setup](/brewcode/skills/setup-status/#upgrade-internals).
+
+</Spoiler>
+
+<Spoiler id="brief" title="The brief setup-status sends">
+
+setup-status sends the six labeled fields (GOAL, ROLE, SCOPE, CONTEXT, CONSUMER, DONE). The agent reads these values from them by bare name; a value that is missing, empty or still a placeholder counts as unfilled.
+
+| Value | Field | Holds |
+|-------|-------|-------|
+| `ID` | SCOPE | The id of the `RESULT` line, e.g. `brewtools:agent-deadline-setup scope=project` |
+| `SKILL` | SCOPE | Absolute path of the owner's `SKILL.md` |
+| `CLAUDE_SKILL_DIR` | SCOPE | The directory holding that `SKILL.md` |
+| `CLAUDE_PLUGIN_ROOT` | SCOPE | The owner's plugin root: brewtools' or brewdoc's on their rows, never brewcode's |
+| `CLAUDE_PROJECT_DIR` | SCOPE | Absolute project root |
+| `ARGUMENTS` | SCOPE | `upgrade`, the row's scope or team name when it has one, and the unattended flag |
+| `OWNED` | ROLE | Path prefixes this row may change. Project row: its prefixes joined to the project root, plus `.claude/settings.json` and `.claude/settings.local.json`. Global row: its global prefixes joined to the global config directory, the global `settings.json` included, nothing else |
+
+</Spoiler>
+
+<Spoiler id="limits" title="Limits and delegation">
+
+| Never | Instead / consequence |
+|-------|-----------------------|
+| A git write: `add`, `commit`, `push`, `stash`, `reset`, `checkout`, `restore`, `revert`, `clean`, `tag`, `merge`, `rebase`, `worktree` | Read-only git is fine: `status`, `diff`, `log`, `rev-parse`, `ls-files`, `hash-object` |
+| `--force` on any command | The agent never passes it |
+| Scratch anywhere but one private `mktemp -d`: no `/tmp/*.log`, no file in the project or config directory | The directory is never deleted through a variable path |
+| A write outside `OWNED`, by Write, Edit or Bash | The scope check passes a project row's `OWNED` paths plus both project settings files, and a global row's two project settings files alone (its global paths lie outside the project), reports any other changed path as `OUTSIDE` and stops the whole run. Untracked runtime files that hooks and Claude Code write (logs, telemetry, state, plans, reports) are skipped by the check itself; the agent never writes one |
+| Another mode (`install` included), another owner's section, or a fix the section does not prescribe | Only the owner's `upgrade` section runs; a setup that is not installed is `skipped` |
+| Shell the permission checker cannot parse: `sh -c` or `bash -c` on a dynamic string, `eval`, `source <(...)`, `rm -rf` on a variable path | Longer logic goes into a script in the scratch directory, run as `bash /abs/path.sh` |
+| Running past the budget | A section not finished near turn 60 stops at the next clean boundary with `failed` and `turn budget`; an abort without a `RESULT` line stops the whole run |
+
+Delegation: [`brewcode:hook-creator`](/brewcode/agents/hook-creator/) for agent-deadline, agent-router and agent-return, and task-board-setup's own analysis agent. The agent forwards the section's own brief plus four lines: no git commit, push, stash or reset; no questions; scratch only in a private `mktemp -d`; write only under: the brief's `OWNED` value, pasted literally. If a section spawns while `Agent` is missing from the agent's tools (spawn-depth limit), the result is `skipped` with `no-agent-tool`.
+
+The checks around the agent (HEAD, stash and scope), the spawn-depth rule and the permission-prompt note belong to setup-status: see [How the upgrade stays safe](/brewcode/skills/setup-status/#how-the-upgrade-stays-safe) and [What the upgrade leaves to you](/brewcode/skills/setup-status/#what-the-upgrade-leaves-to-you).
+
+</Spoiler>
+
+## Related
+
+<CardGrid>
+  <Card title="setup-status" icon="clipboard" href="/brewcode/skills/setup-status/">The dashboard and the upgrade run that spawns this agent.</Card>
+  <Card title="Brewcode overview" icon="document" href="/brewcode/overview/">All brewcode skills and agents in one place.</Card>
+  <Card title="Hook Creator" icon="wrench" href="/brewcode/agents/hook-creator/">The agent that does the file work for the hook-based setups.</Card>
+  <Card title="GitHub source" icon="github" href="https://github.com/kochetkov-ma/claude-brewcode/blob/main/brewcode/agents/setup-upgrader.md">Agent definition, return contract and limits in full.</Card>
+</CardGrid>
+
+<UpdateNotice />

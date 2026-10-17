@@ -6,6 +6,7 @@ disable-model-invocation: true
 argument-hint: "[prompt] [--fix] — no args = scan only, --fix = interactive remediation"
 allowed-tools: [Read, Agent, Write, Bash, AskUserQuestion]
 model: sonnet
+license: MIT
 ---
 
 # Secrets Scan

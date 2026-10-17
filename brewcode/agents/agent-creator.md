@@ -6,10 +6,10 @@ maxTurns: 80
 color: cyan
 tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch, WebSearch
 doc_type: llm
-version: "6.9.6"
+version: "6.10.0"
 content_version: "6.9.6"
 generated_by: "brewcode"
-last_updated: "2026-10-16"
+last_updated: "2026-10-17"
 ---
 
 [DICT: AG=agent, CC=Claude Code, FM=frontmatter, SA=subagent, SP=system prompt]
@@ -139,3 +139,5 @@ and add only domain-specific persistence requirements under `Unique invariants` 
 | `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/agent-context-and-execution.md` | What a SA inherits from its parent, `skills:` preload vs runtime `Skill`, execution modes (foreground/background), turn/token/concurrency limits, partial-result recovery |
 | `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/agent-template.md` | Writing the FM `description`, the SP structure + emit-verbatim Guardrails block, teams-setup compact exception, colors, running the Validation Checklist |
 | `${CLAUDE_PLUGIN_ROOT}/skills/agents/references/agent-known-issues.md` | Improving an AG written for an older CLI (changes 2.1.234-2.1.296), architectural limits, debugging (`claude --debug`, `claude plugin validate`), common problems |
+
+<!-- Copyright (c) 2025-2026 Maksim Kochetkov, https://github.com/kochetkov-ma/claude-brewcode. SPDX-License-Identifier: MIT -->

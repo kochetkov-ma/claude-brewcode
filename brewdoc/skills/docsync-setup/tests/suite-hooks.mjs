@@ -751,6 +751,71 @@ function legacyInstall(name, extra = {}) {
   check('a wrapped handler without timeout is not a legacy registration', readJsonFile(join(root, '.claude/docsync/config.json')).exclude, ['vendor/**']);
 }
 
+{
+  // GIVEN the project-dusk fork, a plain install and a bare project (the unattended upgrade preconditions).
+  const skill = readFileSync(join(ASSETS, '../SKILL.md'), 'utf8');
+  const detect = skill.slice(skill.indexOf('### First-run detection')).match(/```bash\n([\s\S]*?)\n```/)[1];
+  const W = n => ({ type: 'command', command: `"$CLAUDE_PROJECT_DIR/.claude/scripts/toolchain_preflight.py" exec node -- "$CLAUDE_PROJECT_DIR/.claude/hooks/docsync-${n}.mjs"` });
+  const fork = makeProject('detect-wrapped', { enabled: true, threshold_days: 30, exclude: [] }, {});
+  mkdirSync(join(fork, '.claude/hooks'));
+  for (const n of ['track', 'gate']) writeFileSync(join(fork, `.claude/hooks/docsync-${n}.mjs`), 'fork bytes\n');
+  writeFileSync(join(fork, '.claude/settings.json'), JSON.stringify({ hooks: { PostToolUse: [{ matcher: 'Write|Edit|MultiEdit', hooks: [W('track')] }], Stop: [{ hooks: [W('gate')] }] } }));
+  const plain = join(BASE, 'detect-plain');
+  mkdirSync(plain);
+  const plainRc = install(plain).status;
+  const bare = join(BASE, 'detect-bare');
+  mkdirSync(bare);
+  // WHEN first-run detection runs in each.
+  const out = root => { const r = spawnSync('bash', ['-c', detect], { cwd: root, encoding: 'utf8', env: childEnv({ projectDir: root }) }); return [r.status, r.stdout, r.stderr]; };
+  // THEN only the fork prints the WRAPPED line the Unattended rule skips on, naming its launcher.
+  check('first-run detection names a wrapping launcher; a plain install and a bare project print none',
+    { plainRc, fork: out(fork), plain: out(plain), bare: out(bare) },
+    { plainRc: 0, fork: [0, 'docsync: INSTALLED\ndocsync: WRAPPED toolchain_preflight.py\n', ''],
+      plain: [0, 'docsync: INSTALLED\n', ''], bare: [0, 'docsync: NOT_INSTALLED\n', ''] });
+}
+
+{
+  // GIVEN the WRAPPED probe (SKILL.md First-run detection) and the installer predicates it copies (INSTALL.md).
+  const skill = readFileSync(join(ASSETS, '../SKILL.md'), 'utf8');
+  const detect = skill.slice(skill.indexOf('### First-run detection')).match(/```bash\n([\s\S]*?)\n```/)[1];
+  const probe = detect.match(/node -e '\n([\s\S]*?)\n' "\$ROOT\//)?.[1] ?? 'process.exit(9)';
+  // The probe sits in a bash single-quoted string, so it spells `'` as `\x27`; nothing else differs.
+  const shared = (src, label) => {
+    const line = src.split('\n').find(l => l.startsWith('const launcher = ')) ?? '';
+    return {
+      launcherRe: /const m = (\/.+?\/)\.exec\(/.exec(line)?.[1] ?? `NO launcher regex in ${label}`,
+      basename: / return m \? (.+?) : /.exec(line)?.[1] ?? `NO basename in ${label}`,
+      nodeRe: /!(\/\^node[^/]*\/i)\.test\(launcher\(/.exec(src)?.[1] ?? `NO node test in ${label}`,
+    };
+  };
+  const defs = ['names', 'isDocsync', 'launcher', 'isWrapped'].map(n => installBlock.split('\n').find(l => l.startsWith(`const ${n} = `)) ?? `throw new Error('NO ${n} in INSTALL.md');`);
+  const { launcher, isWrapped } = new Function(`${defs.join('\n')}\nreturn { launcher, isWrapped };`)();
+  const corpus = [
+    { type: 'command', command: 'node', args: [TRACK] },
+    { type: 'command', command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/docsync-gate.mjs"' },
+    { type: 'command', command: '"C:\\Program Files\\nodejs\\node.exe" "%CLAUDE_PROJECT_DIR%\\.claude\\hooks\\docsync-watch.mjs"' },
+    { type: 'command', command: '/usr/local/bin/NODE', args: [GATE] },
+    { type: 'command', command: '"$CLAUDE_PROJECT_DIR/.claude/scripts/toolchain_preflight.py" exec node -- "$CLAUDE_PROJECT_DIR/.claude/hooks/docsync-track.mjs"' },
+    { type: 'command', command: "'/opt/hooks/wrap.sh' node docsync-watch.mjs" },
+    { type: 'command', command: 'bun', args: ['run', GATE] },
+    { type: 'command', command: '  uv run .claude/hooks/docsync-track.mjs' },
+    { type: 'command', command: 'node-wrapper docsync-gate.mjs' },
+    { type: 'command', command: 'wrap docsync-other.mjs' },
+    { type: 'command', command: 'bash .claude/scripts/lint.sh' },
+    { type: 'command', args: [TRACK] },
+  ];
+  const settings = join(BASE, 'lockstep-settings.json');
+  writeFileSync(settings, JSON.stringify({ hooks: { PostToolUse: [{ matcher: 'Write|Edit', hooks: corpus }], Stop: [{ hooks: corpus }] } }));
+  // WHEN the probe runs on that registration and the installer predicates classify the same hooks.
+  const r = spawnSync(process.execPath, ['-e', probe, settings, join(BASE, 'lockstep-absent.json')], { encoding: 'utf8' });
+  const installer = [...new Set(corpus.filter(isWrapped).map(launcher))];
+  // THEN both copies share one launcher parse and both name exactly the wrapping launchers.
+  check('WRAPPED probe stays in lockstep with INSTALL.md launcher/isWrapped (V3-6)',
+    { shared: shared(probe.replaceAll('\\x27', "'"), 'SKILL.md'), installer, probe: [r.status, r.stdout, r.stderr] },
+    { shared: shared(installBlock, 'INSTALL.md'), installer: ['toolchain_preflight.py', 'wrap.sh', 'bun', 'uv', 'node-wrapper'],
+      probe: [0, 'docsync: WRAPPED toolchain_preflight.py,wrap.sh,bun,uv,node-wrapper\n', ''] });
+}
+
 // ── uninstall / purge leave nothing of docsync behind ────────────────────────
 console.log('uninstall / purge — lifecycle');
 {

@@ -1,0 +1,30 @@
+ Tasting scores need to be bulk-loaded into the tastings table. Nothing exists yet;
+ batches.js was just hardened, so the import must follow the same DB rules from the
+ start: bind SQL params, no query in a loop, use transactions.
+
+ Facts from db.js (in-memory stand-in) that shape the design:
+ - query() supports INSERT INTO t (cols) VALUES (?, ?), (?, ?), with params bound in
+   order across tuples.
+ - INSERT does not auto-assign id; seed tastings carry id.
+ - transaction(fn) logs BEGIN/COMMIT, and on throw restores the tables and logs
+   ROLLBACK.
+ - VALUES with no tuples is meaningless, so empty input must short-circuit.
+
+ Contract (decided; agents must not reopen)
+
+ - New module tastings.js exports importTastings(rows), where rows = [{ batch_id, score
+   }] is already parsed. File/CSV parsing is out of scope.
+ - Inside one transaction():
+   a. One query loads the batch ids, plus one for the existing tastings to get the max
+      id.
+   b. Every row is validated in JS: batch_id must exist and score must be an integer
+      1–10. If any row is invalid, it throws and nothing is written.
+   c. One multi-row INSERT INTO tastings (id, batch_id, score) VALUES (?, ?, ?), ...
+      runs with ids max + 1..n, and every value is a bound param.
+ - Empty rows -> return 0 with no queries. Otherwise return the inserted count.
+ - The style mirrors batches.js (CommonJS, require('./db'), small functions).
+
+ TaskGraph
+
+ #: T1
+ Task: Implement importTastings

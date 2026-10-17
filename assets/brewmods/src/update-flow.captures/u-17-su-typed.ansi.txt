@@ -1,0 +1,30 @@
+     run; repeat it in every project you use.
+
+  🔵 Auto-update is off for claude-brewcode: [38;5;153m/plugin[39m -> Marketplaces -> claude-brewcode
+  -> [1mEnable auto-update[0m.
+
+[38;5;246m✻[39m [38;5;246mCogitated for 33s · done 1:45 AM[39m
+
+[38;5;246m[48;5;237m❯[39m [38;5;231m/reload-plugins[39m
+[38;5;246m[49m  ⎿  [39mReloaded: 3 plugins · 27 skills · 16 agents · 3 hooks · 0 plugin MCP servers · 0
+     plugin LSP servers
+
+[38;5;244m────────────────────────────────────────────────────────────────────────────────────────
+[39m❯ [38;5;153m/brewcode:setup-status[39m upgrade
+[38;5;244m────────────────────────────────────────────────────────────────────────────────────────
+[39m  [38;5;211m⏵⏵ bypass permissions on[38;5;246m (shift+tab to cycle)[39m
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

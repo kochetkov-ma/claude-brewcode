@@ -1,0 +1,33 @@
+{
+  "gif": {
+    "file": "update-flow.gif",
+    "bytes": 3111920,
+    "sha256": "c236c7608509b8a04c9f77e893974effb91f87216710dc4a09c7f1459b4915de",
+    "width": 1152,
+    "height": 1024,
+    "seconds": 35,
+    "colors": 256,
+    "lossy": 0
+  },
+  "still": {
+    "file": "update-flow-still.png",
+    "sha256": "222fee49b159f787af8314feb5b1cd036a25bd4456b6c36a2359ba998493e920",
+    "width": 1152,
+    "height": 1024,
+    "t": 12.5
+  },
+  "sources": {
+    "render.html": "0042136b38cdd12bc06b7590461d71dfa22b5489e6934f37a1719647e16cd107",
+    "update-flow.story.js": "f5534d486edaaba574bc94f8b716d870c8c4e418fe94307565f52ad8582bfca7",
+    "update-flow.data.js": "49a547d2ea7ccf30d60608a13bfb3e31a600ba20632ba339f22334f146c545e4",
+    "record-gifs.mjs": "3bfa14c1d6a00cbf0adb6f2458171a7334c8183b7503065da18cbe44511714bd"
+  },
+  "ccVersion": "2.1.302",
+  "tools": {
+    "playwrightCore": "1.64.0",
+    "ffmpeg": "9.0.2",
+    "gifsicle": "1.96",
+    "node": "v24.19.0"
+  },
+  "recorded": "2026-10-17T00:54:38.010Z"
+}

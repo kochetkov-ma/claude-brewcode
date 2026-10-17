@@ -3,9 +3,10 @@ name: agent-return-setup
 description: "Installs, configures or removes the agent-return hooks (size budget on every subagent's final return message). Triggers: agent-return, subagent return budget, return too large, бюджет ответа агента, размер отчёта саб-агента."
 user-invocable: true
 disable-model-invocation: true
-argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge] [project|global] [pass] [file]"
+argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge] [project|global] [pass] [file] [--unattended]"
 allowed-tools: [Read, Bash, AskUserQuestion, Agent]
 model: sonnet
+license: MIT
 ---
 
 # Agent Return
@@ -16,15 +17,17 @@ Subagent reports are the largest context cost of a delegating session, and a pro
 
 ## Prompt contract
 
-`$ARGUMENTS` is one free-form RU/EN prompt; mode tokens and flags may sit anywhere in it.
+`$ARGUMENTS` is one free-form RU/EN prompt; mode tokens and flags (`--unattended`) may sit anywhere in it.
 
-1. Mode: an explicit mode token wins outright; else the most distinct whole-word keyword hits
+1. Mode: strip `--unattended` first: a flag, never a mode, scope or name (Modes, **Unattended**).
+   Then an explicit mode token wins outright; else the most distinct whole-word keyword hits
    (table in Step 2). Tie with a destructive mode (`purge`) or of `install` with a removal mode
    (`uninstall`) -> `AskUserQuestion`; with `status` -> `status`; of two other mutating modes -> the
    keyword that comes first. No hit or empty -> `status`.
 2. Scope: prose that is not a mode/id/path is still input: take the id, path or target from it.
 3. Ask: at most ONE `AskUserQuestion` (max 4 questions) to resolve mode and scope, before any work, only when the answer
-   changes what gets written. A read-only run asks nothing.
+   changes what gets written. A read-only run asks nothing. `--unattended` asks nothing: an open
+   question there ends in `RESULT skipped` (Modes, **Unattended**).
 
 Print once, before the first action (labels literal, values in the conversation language):
 
@@ -144,9 +147,12 @@ NODE
 registrations() {
   SETTINGS="${1}/settings.json" node <<'NODE'
 const fs=require("fs");
-let n=0, w=0;
+let n=0, w=0, v="yes", s={};
+// valid = the merge block's own test: absent/empty, or a JSON object
+try{ const f=process.env.SETTINGS, raw=fs.existsSync(f)?fs.readFileSync(f,"utf8"):""; if(raw.trim()) s=JSON.parse(raw); }catch{ v="no"; }
+if(s===null||typeof s!=="object"||Array.isArray(s)){ v="no"; s={}; }
 try{
-  const h=JSON.parse(fs.readFileSync(process.env.SETTINGS,"utf8")).hooks||{};
+  const h=s.hooks||{};
   const has=(ev,script,matcher)=>(Array.isArray(h[ev])?h[ev]:[]).some(g=>g&&(matcher===undefined||g.matcher===matcher)&&JSON.stringify(g.hooks||[]).includes(script));
   n=[has("SubagentStart","agent-return-contract.mjs"),has("SubagentStop","agent-return-guard.mjs"),has("PreToolUse","agent-return-guard.mjs","SubagentHandback")].filter(Boolean).length;
   // First word of `command` != node: the project's own launcher, report-only (still counted above).
@@ -154,7 +160,7 @@ try{
   w=Object.values(h).filter(Array.isArray).flat().flatMap(g=>(g&&Array.isArray(g.hooks))?g.hooks:[])
     .filter(x=>x&&typeof x.command==="string"&&!/^node(\.exe)?$/i.test(launcher(x.command))&&/agent-return-(contract|guard)\.mjs/.test(JSON.stringify(x))).length;
 }catch{}
-console.log(n+" "+w);
+console.log(n+" "+w+" "+v);
 NODE
 }
 for S in "$ROOT/.claude:project" "${CLAUDE_CONFIG_DIR:-$HOME/.claude}:global"; do
@@ -164,14 +170,14 @@ for S in "$ROOT/.claude:project" "${CLAUDE_CONFIG_DIR:-$HOME/.claude}:global"; d
   F=0
   for f in agent-return-budget.mjs agent-return-contract.mjs agent-return-guard.mjs; do [ -f "$D/hooks/$f" ] && F=$((F+1)); done
   W=$({ grep -o 'agent-return-\(contract\|guard\)\.mjs' "$D/settings.json" 2>/dev/null || true; } | sort -u | wc -l | tr -d ' '); W=${W:-0}
-  RW=$(registrations "$D"); R=${RW%% *}; R=${R:-0}; WR=${RW##* }; WR=${WR:-0}
+  RW=$(registrations "$D"); R=${RW%% *}; R=${R:-0}; REST=${RW#* }; WR=${REST%% *}; WR=${WR:-0}; SV=${RW##* }; SV=${SV:-no}
   CFG=none; [ -s "$C/agent-return.json" ] && CFG=$(tr -d '\n ' < "$C/agent-return.json"); CFG=${CFG:-none}
   EN=n/a; case "$CFG" in *'"enabled":true'*) EN=true;; *'"enabled":false'*) EN=false;; esac
   PT=$({ jq -r '.passTokens // empty' "$C/agent-return.json" 2>/dev/null || true; }); PT=${PT:-n/a}
   FT=$({ jq -r '.fileTokens // empty' "$C/agent-return.json" 2>/dev/null || true; }); FT=${FT:-n/a}
   CV=$({ jq -r '.version // empty' "$C/agent-return.json" 2>/dev/null || true; }); CV=${CV:-n/a}
   IFS='|' read -r CCV KCV RCV CONTENT FINDINGS <<< "$(content_state "$D" "$C")"
-  echo "$N: hook_files=$F/3 settings_refs=$W enabled=$EN registrations=$R/3 wrapped=$WR pass=$PT file=$FT config_version=$CV config_content_version=$CCV contract_content_version=$KCV runbook_content_version=$RCV content_state=$CONTENT content_findings=$FINDINGS config_dir=$C config=$CFG"
+  echo "$N: hook_files=$F/3 settings_refs=$W enabled=$EN registrations=$R/3 wrapped=$WR settings_valid=$SV pass=$PT file=$FT config_version=$CV config_content_version=$CCV contract_content_version=$KCV runbook_content_version=$RCV content_state=$CONTENT content_findings=$FINDINGS config_dir=$C config=$CFG"
   if [ "$N" = project ]; then P_REG=$R; else G_REG=$R; fi
 done
 # governing config, resolved like the hooks' loadConfig: climb from projectRoot() (session dir, else the
@@ -214,6 +220,7 @@ Project = `PROJECT_ROOT/.claude`: the session's start dir (what hooks get as `CL
 | `hook_files` | how many of the three files are in that scope's `hooks/`; `1/3`-`2/3` = broken install |
 | `registrations` | how many of the three expected `settings.json` entries (table above) exist, parsed from the JSON; an unreadable file counts `0/3` |
 | `wrapped` | how many of those handlers run through the project's own launcher (first word of `command` is not `node`, e.g. `"$CLAUDE_PROJECT_DIR/.claude/scripts/preflight.py" exec node -- ".../agent-return-guard.mjs"`). They count in `registrations`; user-owned, report-only: `install`/`upgrade` keep them and add no unwrapped copy beside them, so never prescribe either for a wrapped registration |
+| `settings_valid` | `yes` only when that scope's `settings.json` is absent/empty or parses as a JSON object (the merge block's own test); `no` = every merge ABORTs and `registrations` reads `0/3` blind: name it in the Registrations cell |
 | `settings_refs` | textual count of distinct registered script names (`0`-`2`); blind to a missing event, so judge wiring by `registrations` |
 | `enabled` | `true`/`false` from the config; `n/a` = no config or no `enabled` key |
 | `pass` / `file` | configured `passTokens` / `fileTokens`; `n/a` = the hook falls through to env vars, then `2500` / `6000` |
@@ -414,6 +421,21 @@ Re-run the Step 1 status block and print the refreshed table. Then tell the user
 State = `agent-return-state/` beside the config that enabled the feature: a `.gitignore` plus one `<sha256(agent_id)>.json` marker per challenged agent, pruned after 24 h at the next challenge. The contract hook writes nothing.
 
 `upgrade` asks nothing and is the only way a plugin update reaches an installed scope, one scope per run. One migration, once: exactly `1000`/`2500` with no `readOnlyAgentTypes` key (the defaults before 6.5) becomes `2500`/`6000`, and the runbook prints `NOTE:`; any other pair is preserved. Not installed in that scope -> an `install`: ask scope and thresholds.
+
+**Unattended (`--unattended` anywhere in the prompt; set by `/brewcode:setup-status upgrade`).**
+1. A flag, never a mode or name: strip it first. Any resolved mode other than `upgrade` -> no write, `RESULT skipped <id> cv=?->? pending=0 note="not-upgrade"`.
+2. No `AskUserQuestion` at all. Every gate in this section takes its decline branch; a declined gate is pending, never applied.
+3. A precondition this section would ask about (not installed, parked, custom/wrapped registration, orphan config,
+   user-modified managed file, missing tokenizer) -> no write, `RESULT skipped <id> cv=?->? pending=0 note="<reason>"`.
+4. Write only what this section already writes. No git commit, push, stash or reset; scratch only in a private `mktemp -d`.
+5. Last line, exactly once: `RESULT <ok|partial|skipped|failed> <id> cv=<before>-><after> pending=<n> note="<one line>"`,
+   `<id>` = `<plugin>:<skill>` [` scope=<project|global>`|` team=<name>`], `?` = unknown version.
+
+Here `<id>` = `brewtools:agent-return-setup scope=<project|global>`; setup-status passes the scope:
+- The prompt names exactly one of `project`/`global`, else `RESULT skipped brewtools:agent-return-setup cv=?->? pending=0 note="no scope token"`.
+- Step 1 decides for that scope, first hit wins, before the Smoke Test: `orphan_config=yes` -> skipped, note `orphan config: purge project or keep it`; `config_dir` is not that scope's dir (Guards, shared config) -> skipped, note `shared config in ~/.claude: upgrade by hand`; `config=none` -> skipped, note `not installed`; `hook_files=0/3` and `registrations=0/3` (`uninstall` keeps the config; the replay would undo it) -> skipped, note `not installed (uninstalled, config kept)`; `wrapped` not `0` -> skipped, note `custom launcher`; `settings_valid=no` -> skipped, note `settings.json invalid` (the merge would ABORT after the hook copy).
+- Otherwise Steps 3-4 are skipped: Smoke Test, then the one `hook-creator` spawn with `MODE=upgrade` and the pair status printed. The one migration above is part of this upgrade, not a gate: it runs, and its `NOTE:` becomes note `migrated 1000/2500 -> 2500/6000`. The read-back `ABORT:` (UPGRADE step 1, nothing written yet) -> skipped, its text as note; an `ABORT:` from a later block (step 2 already copied the hooks: the Config block, or the settings merge on a held lock or a failed verification), a `❌` in Step 1 or the Smoke Test, or a failed spawn -> `failed`.
+- Step 6 status for that scope: `content_state=current` -> `ok`, else `failed`. `cv` = `config_content_version` before -> after (`n/a` -> `?`); `pending=0` (this upgrade has no gate); a kept `enabled=false` is named in `note`.
 
 ## Guards
 

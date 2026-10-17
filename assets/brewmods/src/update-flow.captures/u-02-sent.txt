@@ -1,0 +1,30 @@
+ ▐▛███▛█   Claude Code v2.1.302
+▝▜██████▀  Opus 5.5 with medium effort · Claude Max
+ ▝▝   ▝▝   /Volumes/luf-demo/luf-fWEUj9/l1/proj
+
+
+❯ /clear
+
+❯ /brewtools:plugin-update
+
+✳ Undulating…
+
+────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -6,10 +6,10 @@ maxTurns: 60
 color: purple
 tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch
 doc_type: llm
-version: "6.9.6"
+version: "6.10.0"
 content_version: "6.6.0"
 generated_by: "brewtools"
-last_updated: "2026-10-16"
+last_updated: "2026-10-17"
 ---
 
 # Text Optimizer Agent
@@ -165,3 +165,5 @@ paths/versions/flags/thresholds/model IDs, incident-tied `!=`/NEVER and gated re
 > A.1 fused / A.3 paraphrased facts count as kept/merged. A.4 elisions labeled `elided-known` —
 > count as loss against the 95% gate. A.2 drops are ledgered but gate-neutral: if a drop degrades a
 > fact's meaning, label that fact `distorted`.
+
+<!-- Copyright (c) 2025-2026 Maksim Kochetkov, https://github.com/kochetkov-ma/claude-brewcode. SPDX-License-Identifier: MIT -->

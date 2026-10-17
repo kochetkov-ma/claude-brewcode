@@ -1,0 +1,30 @@
+
+❯ /clear
+
+❯ /brewtools:plugin-update
+
+⏺ PLAN — brewtools:plugin-update
+  INPUT:  (empty)
+  MODE:   update — default
+  SCOPE:  every installed claude-brewcode plugin and mod, every scope; missing ones
+  update: one question
+  DO:
+  - Take the inventory and refresh the marketplace to get the latest versions
+  - Build the plan, then ask once if any mods or plugins are missing
+  - Update every outdated row at its own scope, then install what you chose
+  - Take the after snapshot and print the report
+    RESULT: All installed claude-brewcode plugins and mods are updated, with a before ->
+    after report and next steps.
+
+⏺ Bash(D="$(mktemp -d "${TMPDIR:-/tmp}/plugin-update.XXXXXX")" && echo "SCRATCH $D" &&
+      echo "✅ scratch OK" || echo "❌ scratch FAILED")
+  ⎿  SCRATCH /tmp/plugin-update.1IhaGI
+     ✅ scratch OK
+
+✽ Undulating… (5s · ↓ 384 tokens)
+
+────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt
+

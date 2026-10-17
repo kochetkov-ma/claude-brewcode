@@ -1,0 +1,30 @@
+
+  [1mWhat[0m [1mchanged[0m [1mfor[0m [1myou[0m [1m(6.9.6[0m [1m→[0m [1m6.10.0)[0m
+
+  - [1mv6.10.0:[0m [38;5;153m/brewtools:plugin-update[39m now does the whole update in one run: it updates
+    every installed plugin and mod without asking, prints versions before and after,
+    what changed for you and the next steps, and asks once whether to install the mods
+    and plugins you are missing ([38;5;153mbrewmod-placeholders[39m first). See [94m]8;id=1tonk76;https://doc-claude.brewcode.app/brewtools/skills/plugin-update/\plugin-update[39m]8;;\.
+  - [1mv6.10.0:[0m New: [38;5;153m/brewcode:setup-status[39m [38;5;153mupgrade[39m brings the setups generated in a
+    project up to date in one run. After the update and [38;5;153m/reload-plugins[39m, type it in each
+    project: it upgrades every stale setup it may run for you, one subagent at a time,
+    stops at the first problem, never commits, and lists the few commands left for you.
+    Approve the prompts for its writes into [38;5;153m.claude/[39m (asked in [38;5;153mdefault[39m and [38;5;153macceptEdits[39m
+    mode, denied in [38;5;153mdontAsk[39m). See [94m]8;id=1ekre3j;https://doc-claude.brewcode.app/brewcode/skills/setup-status/\setup-status[39m]8;;\.
+  - [1mv6.10.0:[0m New: [38;5;153m/brewdoc:my-claude[39m [38;5;153mrefresh[39m regenerates the installation guides that
+    are older than your brewdoc, asks nothing and keeps the old files; the guide now
+    also lists your installed plugins and mods. See [94m]8;id=jvvfkz;https://doc-claude.brewcode.app/brewdoc/skills/my-claude/\my-claude[39m]8;;\.
+  - [3m+2[0m [3mmore:[0m [94m]8;id=1maqfdp;https://github.com/kochetkov-ma/claude-brewcode/blob/main/RELEASE-NOTES.md\release notes[39m]8;;\
+
+  [1mNext[0m [1msteps[0m
+
+  1. 🔵 [1m[38;5;153m/reload-plugins[0m: activates the new versions in this session (or [38;5;153mexit[39m, then
+     [38;5;153mclaude[39m).
+  2. 🔵 [1m[38;5;153m/brewcode:setup-status upgrade[0m: brings this project's setups up to [1m6.10.0[0m in one
+     run; repeat it in every project you use.
+
+  🔵 Auto-update is off for claude-brewcode: [38;5;153m/plugin[39m -> Marketplaces -> claude-brewcode
+  -> [1mEnable auto-update[0m.
+
+[38;5;246m✻[39m [38;5;246mCogitated for 33s · done 1:45 AM[39m
+

@@ -6,8 +6,9 @@ set -eu
 
 AGENT="${1:-}"
 [ "$#" -eq 1 ] && [ -n "$AGENT" ] || { echo "Usage: agent-generator.sh <agent-name>   (run from the project root)" >&2; exit 1; }
+# Explicit ASCII lists: bash 3.2 under a UTF-8 locale lets [:lower:] match accented letters.
 case "$AGENT" in
-  *[![:lower:][:digit:]-]*|[![:lower:][:digit:]]*)
+  *[!abcdefghijklmnopqrstuvwxyz0123456789-]*|[!abcdefghijklmnopqrstuvwxyz0123456789]*)
     printf 'ERROR:not an agent id: %s (must match ^[a-z0-9][a-z0-9-]*$)\n' "$AGENT" >&2; exit 1 ;;
 esac
 

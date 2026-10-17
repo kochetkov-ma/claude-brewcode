@@ -2,12 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>brewmods GIF source (?story=&lt;name&gt;, &amp;bottle=1 for the README bottle)</title>
+<title>brewmods GIF source (?story=&lt;name&gt;, &amp;bottle=1 for the README bottle, &amp;scene=1 for a drawn scene)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Work+Sans:wght@400;500&display=swap" rel="stylesheet">
 <style>
-:root { --cc-bg: #1C1D20; --cc-chrome: #2A2B2F; --cc-fg: #E6E6E3; --cc-dim: #9C9CA1; --gold: #EBBB40; --gold-hi: #FAE96F; }
+:root { --cc-bg: #1C1D20; --cc-chrome: #2A2B2F; --cc-fg: #E6E6E3; --cc-dim: #9C9CA1; --gold: #EBBB40; --gold-hi: #FAE96F; --plan: #5FAFAF; }
 * { box-sizing: border-box; }
 html, body { margin: 0; background: #161616; }
 body { width: 1200px; font: 400 16px/1.5 "Work Sans", system-ui, sans-serif; }
@@ -33,6 +33,10 @@ body { width: 1200px; font: 400 16px/1.5 "Work Sans", system-ui, sans-serif; }
 .kbd { position: absolute; height: 42px; padding: 0 12px; border-radius: 9px; border: 1px solid rgba(250,233,111,.7); display: flex; align-items: center; gap: 8px;
   color: var(--gold-hi); font-weight: 700; font-size: 19px; background: rgba(40,36,24,.96);
   box-shadow: 0 4px 0 rgba(235,187,64,.35), 0 10px 24px rgba(0,0,0,.5); opacity: 0; white-space: nowrap; }
+/* story.marks: highlight boxes over captured rows (pool of two, under the keycap); teal = plan mode (xterm 73) */
+.mark { position: absolute; border: 2px solid var(--gold); border-radius: 6px; background: rgba(235,187,64,.06);
+  box-shadow: 0 0 8px rgba(235,187,64,.45); opacity: 0; pointer-events: none; }
+.mark.teal { border-color: var(--plan); background: rgba(95,175,175,.08); box-shadow: 0 0 8px rgba(95,175,175,.5); }
 .kbd small { font: 500 12px "Work Sans", system-ui, sans-serif; color: #D9CFA8; letter-spacing: .02em; }
 .cap { height: 36px; padding: 0 14px; background: var(--cc-chrome); border-top: 1px solid rgba(255,255,255,.07); color: #E2DED5;
   font: 400 15.5px/35px "Work Sans", system-ui, sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -50,6 +54,9 @@ body { width: 1200px; font: 400 16px/1.5 "Work Sans", system-ui, sans-serif; }
 #ferm .p1 { color: rgba(255,246,214,.95); } #ferm .p2 { color: rgba(255,246,214,.6); } #ferm .p3 { color: rgba(255,246,214,.32); }
 #ferm .tr { color: #5E451A; }
 #ferm .lb { background: #E6DBBC; color: #3A2D14; font-weight: 700; } #ferm .lb0 { background: #E6DBBC; color: #E6DBBC; }
+/* drawn scene (&scene=1, story.scene): flat SVG card, size and colours from the story */
+#scene { display: none; position: relative; overflow: hidden; }
+#scene svg { display: block; }
 </style>
 </head>
 <body>
@@ -58,14 +65,17 @@ body { width: 1200px; font: 400 16px/1.5 "Work Sans", system-ui, sans-serif; }
   <div class="prog" id="prog" aria-hidden="true"><div class="fill" id="progFill"></div></div>
   <div class="term" id="term" aria-hidden="true"></div>
   <div class="cap" id="cap" aria-hidden="true"><span id="capText"></span></div>
+  <div class="mark" id="mark0" aria-hidden="true"></div><div class="mark" id="mark1" aria-hidden="true"></div>
   <div class="kbd" id="kbd" aria-hidden="true"></div>
 </section>
 <section id="bottle"><pre id="ferm" aria-hidden="true"></pre></section>
+<section id="scene" role="img"><svg id="sceneSvg" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"></svg></section>
 <script>
 // ?story=<name> (default placeholders) loads <name>.story.js and <name>.data.js before the renderer runs
-(() => { const n = new URLSearchParams(location.search).get('story') || 'placeholders';
+(() => { const q = new URLSearchParams(location.search), n = q.get('story') || 'placeholders';
   if (!/^[a-z0-9-]+$/.test(n)) throw new Error('bad story name: ' + n);
-  document.write(`<script src="${n}.story.js"><\/script><script src="${n}.data.js"><\/script>`); })();
+  // &scene=1: a drawn scene (story.scene) has no captured screens, so no data.js
+  document.write(`<script src="${n}.story.js"><\/script>` + (q.get('scene') === '1' ? '' : `<script src="${n}.data.js"><\/script>`)); })();
 </script>
 <script>
 (() => {
@@ -206,6 +216,67 @@ body { width: 1200px; font: 400 16px/1.5 "Work Sans", system-ui, sans-serif; }
     return;
   }
 
+  // ---------- drawn scene (story.scene 'hub-mini'): glass slides in, tap pours, head forms, served, slides out ----------
+  if (S.scene === 'hub-mini') {
+    const P = Object.fromEntries(Object.entries(S.palette).map(([k, v]) => [k, v[0]])), LOOP = S.loop, [SW, SH] = S.size;
+    const box = $('scene'), svg = $('sceneSvg'), n2 = (v) => Math.round(v * 100) / 100;
+    $('hero').style.display = 'none';
+    Object.assign(box.style, { display: 'block', width: SW + 'px', height: SH + 'px', background: P.bg });
+    for (const [k, v] of Object.entries({ width: SW, height: SH, viewBox: `0 0 ${SW} ${SH}` })) svg.setAttribute(k, v);
+    if (S.aria) box.setAttribute('aria-label', S.aria);
+    // ease-out-back, s = .414: a 2 px overshoot on the 380 px slide
+    const backOut = (v) => 1 + 1.414 * (v - 1) ** 3 + .414 * (v - 1) ** 2;
+    const TX = 320, RIM = 92, FLOOR = 218, DEPTH = FLOOR - RIM, SPOUT = 68, SCALLOP = [-28, -14, 0, 14, 28];
+    const BUB = [[-15, 34, 0], [-5, 27, 41], [6, 40, 78], [16, 30, 22]];
+    const R = (x, y, w, h, fill, more = '') => `<rect x="${n2(x)}" y="${n2(y)}" width="${n2(w)}" height="${n2(h)}" fill="${fill}"${more}/>`;
+    const C = (x, y, r, more) => `<circle cx="${n2(x)}" cy="${n2(y)}" r="${n2(r)}"${more}/>`;
+    function scene(t) {
+      t = wrap(t, LOOP);
+      const gx = t < 1.2 ? -60 + 380 * backOut(span(t, 0, 1.2)) : t < 6 ? TX : TX + 380 * span(t, 6, 6.8) ** 2;
+      const head = ease(span(t, 4, 5)), settle = ease(span(t, 5, 6)), tilt = -24 * (t < 3.9 ? ease(span(t, 1.2, 1.45)) : 1 - ease(span(t, 3.9, 4.15)));
+      const level = .8 * ease(span(t, 1.45, 3.95)) + .04 * head, ly = FLOOR - level * DEPTH;
+      const foam = Math.min(4 + 18 * head - 3 * settle, level * DEPTH), r = 8.5 * head, dome = 6 * head, y0 = ly - foam + r;
+      const glass = `M${n2(gx - 38)} ${RIM} L${n2(gx - 30)} ${FLOOR} L${n2(gx + 30)} ${FLOOR} L${n2(gx + 38)} ${RIM}`;
+      let s = `<defs><clipPath id="gc"><path d="${glass} Z"/></clipPath></defs>` + R(0, 0, SW, SH, P.bg) + R(.5, .5, SW - 1, SH - 1, 'none', ` stroke="${P[S.border]}"`);
+      s += R(64, 224, 512, 8, P.counter) + R(64, 223.25, 512, 1.5, P.line);
+      // beer font behind the glass: column + foot, arm to the faucet; lever tilts about its base (hidden end in the block)
+      s += R(392, 22, 12, 202, P.line, ' rx="6"') + R(386, 216, 24, 8, P.line, ' rx="2"') + R(326, 44, 72, 10, P.line);
+      s += `<path d="M317 46 L314 18 A6 6 0 0 1 326 18 L323 46 Z" fill="${P.handle}" transform="rotate(${n2(tilt)} ${TX} 40)"/>`;
+      s += R(316, 54, 8, SPOUT - 54, P.tapBody, ' rx="1.5"') + R(308, 40, 24, 18, P.tapBody, ' rx="4"');
+      // stream: drops to the floor, rides the surface, then its tail falls in
+      const drop = span(t, 1.2, 1.45), tail = span(t, 3.9, 4.15);
+      const st = t >= 3.9 ? SPOUT + (ly - SPOUT) * tail * tail : SPOUT, sb = t < 1.45 ? SPOUT + (FLOOR - SPOUT) * drop * drop : ly;
+      if (t >= 1.2 && t < 4.15 && sb - st > .5) s += R(TX - 2, st, 4, sb - st, P.handle);
+      if (level > 0) {
+        s += `<g clip-path="url(#gc)">` + R(gx - 42, ly, 84, FLOOR - ly + 1, P.beer);
+        if (FLOOR - ly - foam > 10) s += R(gx - 23, ly + foam + 2, 4, FLOOR - ly - foam - 6, P.beerHi, ' rx="2"');
+        for (const [bx, v, ph] of BUB) {
+          const run = (t * v + ph) % 120, y = FLOOR - 4 - run;
+          if (y > ly + foam + 2) s += C(gx + bx + 1.2 * Math.sin(run * .08), y, 1.6, ` fill="${P.foamHi}"`);
+        }
+        s += '</g>';
+        const cy = (x) => y0 - dome * (1 - (x / 42) ** 2);
+        // scallops: stroked circles under the fills leave one outline around the head
+        if (r > .3) s += SCALLOP.map((x) => C(gx + x, cy(x), r, ` fill="none" stroke="${P.line}" stroke-width="5"`)).join('');
+        s += `<g clip-path="url(#gc)"><path d="M${n2(gx - 42)} ${n2(ly + .5)} L${n2(gx - 42)} ${n2(y0)} Q${n2(gx)} ${n2(y0 - 2 * dome)} ${n2(gx + 42)} ${n2(y0)} L${n2(gx + 42)} ${n2(ly + .5)} Z" fill="${P.foam}"/></g>`;
+        if (r > .3) s += SCALLOP.map((x) => C(gx + x, cy(x), r, ` fill="${P.foam}"`) + C(gx + x - .3 * r, cy(x) - .35 * r, .38 * r, ` fill="${P.foamHi}"`)).join('');
+      }
+      s += `<path d="${glass}" fill="none" stroke="${P.line}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>` + R(gx - 30, FLOOR, 60, 6, P.line, ' rx="1"');
+      svg.innerHTML = s;
+    }
+    window.hero = { render: scene, fps: S.fps, loop: LOOP };
+    const freeze = qs.get('t'), reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    scene(freeze !== null ? parseFloat(freeze) : reduce ? S.still : 0);
+    if (freeze !== null || reduce) return;
+    const t0 = performance.now(); let lastF = -1;
+    (function tick(now) {
+      const f = Math.floor((now - t0) / (1000 / S.fps));
+      if (f !== lastF) { lastF = f; scene((now - t0) / 1000); }
+      requestAnimationFrame(tick);
+    })(t0);
+    return;
+  }
+
   if (S.aria) $('hero').setAttribute('aria-label', S.aria);
   const LOOP = S.loop, END = S.end, FPS = S.fps, ROWS = S.term.rows, COLS = S.term.cols;
   // frame = the window: JetBrains Mono advance 0.6 em (8.4 px at 14 px) x cols + padding; rows x 20 px
@@ -232,7 +303,10 @@ body { width: 1200px; font: 400 16px/1.5 "Work Sans", system-ui, sans-serif; }
     return (fg ? `color:${fg};` : '') + (bg ? `background:${bg};` : '') + out;
   }
   const BLOCK = /[▀-▟]/;
-  const seg = (text, style) => text ? `<span${BLOCK.test(text) ? ' class="blk"' : ''}${style ? ` style="${css(style)}"` : ''}>${esc(text)}</span>` : '';
+  // box-drawing glyphs with a vertical stroke: stretched like .blk so table borders join across the 20 px rows
+  const BOX = /([│┃║├┤┬┴┼┌┐└┘╭╮╰╯╞╡╪╟╢╫╠╣╬╔╗╚╝╤╧╦╩]+)/;
+  const boxed = (text) => text.split(BOX).map((p, i) => (i % 2 ? `<span class="blk">${esc(p)}</span>` : esc(p))).join('');
+  const seg = (text, style) => text ? `<span${BLOCK.test(text) ? ' class="blk"' : ''}${style ? ` style="${css(style)}"` : ''}>${BLOCK.test(text) ? esc(text) : boxed(text)}</span>` : '';
   // one row of [text, style] segments; curX = column of the drawn caret, or -1
   function rowHtml(segs, curX) {
     let html = '', col = 0;
@@ -322,7 +396,8 @@ body { width: 1200px; font: 400 16px/1.5 "Work Sans", system-ui, sans-serif; }
     if (c !== shownCap) { shownCap = c; capText.innerHTML = c; cap.classList.toggle('on', !!c); }
     const ca = S.captions[j][0], cb = (S.captions[j + 1] || [LOOP])[0];
     capText.style.opacity = full ? 1 : Math.min(1, ca === 0 ? 1 : (t - ca) / .3, (cb - t) / .2).toFixed(3);
-    const k = S.keys.find((e) => t >= e.at && t < e.at + .8);
+    // overlapping caps (fast presses): the latest press wins
+    const k = S.keys.findLast((e) => t >= e.at && t < e.at + .8);
     const kd = k ? esc(k.glyph) + (k.word ? '<small>' + esc(k.word) + '</small>' : '') : '';
     if (kd !== shownKbd) { shownKbd = kd; kbd.innerHTML = kd; }
     kbd.style.opacity = k ? (1 - span(t, k.at + .55, k.at + .8)).toFixed(3) : 0;
@@ -333,8 +408,30 @@ body { width: 1200px; font: 400 16px/1.5 "Work Sans", system-ui, sans-serif; }
     kbd.style.top = Math.min(TB + TERM_H - 46, Math.max(TB + 4, TB + PADT + row * LH + LH / 2 - 21)) + 'px';
   }
 
+  // ---------- marks: {at, until, screen, rows:[r0,r1], cols?:[c0,c1], tone} boxes, 0.25 s fade in and out inside [at, until) ----------
+  const MARKS = S.marks || [], markEls = [$('mark0'), $('mark1')], MPAD = 4;
+  function markBox(m) {
+    const sc = D[m.screen], lines = sc && typeof sc === 'object' ? sc.lines : [], [r0, r1] = m.rows;
+    // no cols: column 0 to the longest captured row in the range
+    // cells, not chars: an emoji-presentation glyph (🟢, ✅) takes two terminal cells
+    const cells = (s) => [...s].reduce((n, ch) => n + (/\p{Emoji_Presentation}/u.test(ch) ? 2 : 1), 0);
+    const [c0, c1] = m.cols || [0, Math.max(1, ...lines.slice(r0, r1 + 1).map((l) => cells(plain(l).trimEnd()))) - 1];
+    return { left: 14 + c0 * CW - MPAD, top: TB + PADT + r0 * LH - 2, width: (c1 - c0 + 1) * CW + 2 * MPAD, height: (r1 - r0 + 1) * LH + 4 };
+  }
+  function marks(t, full) {
+    const on = MARKS.filter((m) => t >= m.at && t < m.until);
+    markEls.forEach((el, k) => {
+      const m = on[k];
+      if (!m) { el.style.opacity = 0; return; }
+      const b = markBox(m);
+      el.className = 'mark' + (m.tone === 'teal' ? ' teal' : '');
+      Object.assign(el.style, { left: b.left + 'px', top: b.top + 'px', width: b.width + 'px', height: b.height + 'px' });
+      el.style.opacity = full ? 1 : Math.min(1, (t - m.at) / .25, (m.until - t) / .25).toFixed(3);
+    });
+  }
+
   let full = false;
-  function frame(t) { t = wrap(t, LOOP); terminal(t); chrome(t, full); }
+  function frame(t) { t = wrap(t, LOOP); terminal(t); chrome(t, full); marks(t, full); }
   window.hero = { render: frame, fps: FPS, loop: LOOP, steps: S.chapters.map((s) => [s[0], s[1]]) };
   const freeze = qs.get('t'), reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const still = freeze !== null || reduce, TS = freeze !== null ? parseFloat(freeze) : S.still;

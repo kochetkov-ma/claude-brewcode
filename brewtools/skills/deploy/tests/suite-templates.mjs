@@ -272,11 +272,13 @@ check('f09.no-pr-target', blocks.flatMap((b) => b.split('\n').filter((l) => l.in
 {
   const fm = skillText.split('---')[1].split('\n').filter((l) => l.trim() !== '');
   check('skill.fm-keys', fm.map((l) => l.split(':')[0]),
-    ['name', 'description', 'user-invocable', 'disable-model-invocation', 'argument-hint', 'allowed-tools', 'model'],
-    'frontmatter carries the seven keys in the mandated order');
+    ['name', 'description', 'user-invocable', 'disable-model-invocation', 'argument-hint', 'allowed-tools', 'model', 'license'],
+    'frontmatter carries the eight keys in the mandated order');
   check('skill.name', fm[0], 'name: deploy', 'the name is bare and equals the directory name');
   check('skill.invocation', [fm[2], fm[3]], ['user-invocable: true', 'disable-model-invocation: true'],
     'user-invoked only — the model never auto-activates this skill');
+  check('skill.license', fm.filter((l) => /^license:/.test(l)), ['license: MIT'],
+    'the license frontmatter line is exactly `license: MIT`, not just the key');
   check('skill.plan-block', (skillText.match(/^PLAN — brewtools:deploy$/m) || []).length, 1,
     'the prompt contract PLAN block is present exactly once');
 }

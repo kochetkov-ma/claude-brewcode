@@ -1,0 +1,30 @@
+  docsync is the last row and runs after this one.
+
+[38;5;114m⏺[39m Agent "upgrade agent-deadline-setup" finished[38;5;246m · 1m 12s[39m
+
+[38;5;114m⏺[39m [1mBash[0m(cd "/Volumes/luf-demo/luf-fWEUj9/l1/proj" || exit 1
+      BT=/Volumes/luf-demo/luf-fWEUj9/l1/plugins/cache/claude-brewcode/brewtools/6.10.0…
+      )
+[38;5;246m  ⎿  [39mSAME agent-deadline-guard
+     SAME agent-deadline-cleanup
+     "enabled": true
+     [2m… +13 lines (ctrl+o to expand)[0m
+
+[38;5;231m⏺[39m 🟢 3/4 brewtools:agent-deadline-setup
+
+[38;5;114m⏺[39m [1m[38;5;16m[48;5;110mbrewcode:setup-upgrader[0m(upgrade docsync-setup) [38;5;246mSonnet 5.5[39m
+[38;5;246m  ⎿  [39mBackgrounded agent[38;5;246m (↓ to manage · ctrl+o to expand)[39m
+
+[38;5;231m⏺[39m 4/4 brewdoc:docsync-setup is running. It's the last row. The first three are done and
+  checked.
+
+[38;5;244m────────────────────────────────────────────────────────────────────────────────────────
+[39m❯ 
+[38;5;244m────────────────────────────────────────────────────────────────────────────────────────
+[39m  [38;5;211m⏵⏵ bypass permissions on[38;5;246m (shift+tab to cycle) · /tasks to see subagents · ↓ to mana…[39m
+
+[1m  ⏺ main[0m
+[38;5;246m  ◯ brewcode:setup-upgrader[39m  [38;5;246mupgrade docsync-setup[39m                 [38;5;246m3s · ↓ 10.7k tokens[39m
+
+
+

@@ -1,6 +1,6 @@
 ---
 title: "Agents"
-description: "All 6 brewcode agents: models, tools, triggers, and the shared Scope guard that stops oversized tasks."
+description: "All 7 brewcode agents: models, tools, triggers, and the shared Scope guard that stops oversized tasks."
 order: 12
 ---
 
@@ -8,13 +8,13 @@ import { Card, CardGrid, Spoiler, ModPromo, UpdateNotice } from '../../../compon
 
 # Agents
 
-Agents (brewers) are specialized roles defined in markdown files with their own model, toolset and system prompt. Brewcode ships 6 (5 public + 1 internal helper), specialists only: skills, agents, hooks, mods and shell scripts.
+Agents (brewers) are specialized roles defined in markdown files with their own model, toolset and system prompt. Brewcode ships 7 (5 public + 2 internal helpers). The five public agents are specialists only: skills, agents, hooks, mods and shell scripts.
 
 Generic roles (developer, tester, reviewer, architect) are not shipped. Every project generates its own into `.claude/agents/` with [/brewcode:teams-setup](/brewcode/skills/teams-setup/) or [/brewcode:agents](/brewcode/skills/agents/); skills that need a reviewer or implementer pick the project's agent, falling back to `general-purpose`. Brewcode skills spawn the relevant agent automatically via the `Agent` tool.
 
 ## Summary table
 
-| Agent | Model | Write tools | Description (verbatim from frontmatter) |
+| Agent | Model | Write tools | Description (from frontmatter) |
 |-------|-------|-------------|------------------------------------------|
 | [skill-creator](/brewcode/agents/skill-creator/) | inherit | Read, Write, Edit, Bash | Creates and improves Claude Code skills. Triggers: create skill, improve skill, fix activation. |
 | [agent-creator](/brewcode/agents/agent-creator/) | inherit | Read, Write, Edit, Bash | Creates and improves Claude Code agents. Triggers: create agent, improve agent, scaffold agent. |
@@ -22,8 +22,9 @@ Generic roles (developer, tester, reviewer, architect) are not shipped. Every pr
 | [bash-expert](/brewcode/agents/bash-expert/) | inherit | Read, Write, Edit, Bash | Creates sh/bash scripts for Mac/Linux. Triggers: create script, bash script, shell script. |
 | [mod-creator](/brewcode/agents/mod-creator/) | inherit | Read, Write, Edit, Bash, Skill | Creates, tests and ships Claude Code mods (hooks-module plugins). Triggers: create mod, hooks module, mod API. |
 | [bc-rules-organizer](/brewcode/agents/bc-rules-organizer/) | haiku | Read, Write, Edit, Bash | Internal. Spawned only by /brewcode:rules and /brewcode:convention-setup. No direct/auto use. |
+| [setup-upgrader](/brewcode/agents/setup-upgrader/) | inherit | Read, Write, Edit, Bash, Agent | Internal. Spawned only by /brewcode:setup-status upgrade. No direct/auto use. |
 
-`inherit` runs on the session's model, so you control the tier. Only the internal `bc-rules-organizer` is pinned to haiku (cheap file reorganization). The description string is what Claude matches against when auto-selecting an agent.
+`inherit` runs on the session's model unless the spawn sets one, so you control the tier. Only the internal `bc-rules-organizer` is pinned to haiku (cheap file reorganization). The description string is what Claude matches against when auto-selecting an agent.
 
 <ModPromo variant="strip" />
 

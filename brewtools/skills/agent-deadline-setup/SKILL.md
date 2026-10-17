@@ -3,9 +3,10 @@ name: agent-deadline-setup
 description: "Installs, configures or removes the agent-deadline hooks (soft wall-clock budget for subagents). Triggers: agent-deadline, subagent timeout, agent time limit, дедлайн агента, таймаут саб-агента."
 user-invocable: true
 disable-model-invocation: true
-argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge] [project|global] [minutes]"
+argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge] [project|global] [minutes] [--unattended]"
 allowed-tools: [Read, Bash, AskUserQuestion, Agent]
 model: sonnet
+license: MIT
 ---
 
 # Agent Deadline
@@ -16,15 +17,17 @@ Claude Code has no wall-clock timeout for subagents. `maxTurns` stops a run at i
 
 ## Prompt contract
 
-`$ARGUMENTS` is one free-form RU/EN prompt; mode tokens and flags may sit anywhere in it.
+`$ARGUMENTS` is one free-form RU/EN prompt; mode tokens and flags (`--unattended`) may sit anywhere in it.
 
-1. Mode: an explicit mode token wins outright; else the most distinct whole-word keyword hits
+1. Mode: strip `--unattended` first: a flag, never a mode, scope or name (Modes, **Unattended**).
+   Then an explicit mode token wins outright; else the most distinct whole-word keyword hits
    (table in Step 2). Tie with a destructive mode (`purge`) or of `install` with a removal mode
    (`uninstall`) -> `AskUserQuestion`; with `status` -> `status`; of two other mutating modes -> the
    keyword that comes first. No hit or empty -> `status`.
 2. Scope: prose that is not a mode/id/path is still input: take the id, path or target from it.
 3. Ask: at most ONE `AskUserQuestion` (max 4 questions) to resolve mode and scope, before any work, only when the answer
-   changes what gets written. A read-only run asks nothing.
+   changes what gets written. A read-only run asks nothing. `--unattended` asks nothing: an open
+   question there ends in `RESULT skipped` (Modes, **Unattended**).
 
 Print once, before the first action (labels literal, values in the conversation language):
 
@@ -435,6 +438,21 @@ Re-run the Step 1 status block; print the refreshed table plus:
 State removal = the runbook's `## STATE REMOVAL` block (uninstall step 2, purge step 3): deletes state files whose `config` equals this scope's config path, plus any untouched for 24 h (pre-6.5 state has no `config` and ages out). The `brewtools-agent-deadline` root (shared by every project and the global install) and a session dir go only when empty: wiping the root resets every live agent's clock.
 
 `upgrade` asks nothing and keeps `defaultMinutes`, `byAgentType`, `hardStopRatio` and a disabled state. Not installed in that scope -> `install`: ask scope and budget.
+
+**Unattended (`--unattended` anywhere in the prompt; set by `/brewcode:setup-status upgrade`).**
+1. A flag, never a mode or name: strip it first. Any resolved mode other than `upgrade` -> no write, `RESULT skipped <id> cv=?->? pending=0 note="not-upgrade"`.
+2. No `AskUserQuestion` at all. Every gate in this section takes its decline branch; a declined gate is pending, never applied.
+3. A precondition this section would ask about (not installed, parked, custom/wrapped registration, orphan config,
+   user-modified managed file, missing tokenizer) -> no write, `RESULT skipped <id> cv=?->? pending=0 note="<reason>"`.
+4. Write only what this section already writes. No git commit, push, stash or reset; scratch only in a private `mktemp -d`.
+5. Last line, exactly once: `RESULT <ok|partial|skipped|failed> <id> cv=<before>-><after> pending=<n> note="<one line>"`,
+   `<id>` = `<plugin>:<skill>` [` scope=<project|global>`|` team=<name>`], `?` = unknown version.
+
+Here `<id>` = `brewtools:agent-deadline-setup scope=<project|global>`; setup-status passes the scope:
+- The prompt names exactly one of `project`/`global`, else `RESULT skipped brewtools:agent-deadline-setup cv=?->? pending=0 note="no scope token"`.
+- Step 1 decides for that scope, first hit wins, before the Smoke Test: `orphan_config=yes` -> skipped, note `orphan config: purge project or keep it`; `config=none` -> skipped, note `not installed`; `guard=no`, `cleanup=no` and every `*_refs`/`*_wrapped` count `0` (`uninstall` keeps the config; the replay would undo it) -> skipped, note `not installed (uninstalled, config kept)`; `guard_wrapped` or `cleanup_wrapped` not `0` -> skipped, note `custom launcher`; `settings_valid=no` -> skipped, note `settings.json invalid`.
+- Otherwise Steps 3-4 are skipped: Smoke Test, then the one `hook-creator` spawn with `MODE=upgrade`. The read-back `ABORT:` (UPGRADE step 1, nothing written yet) -> skipped, its text as note; an `ABORT:` from a later block (the hook copy already ran), a `❌` in Step 1 or the Smoke Test, or a failed spawn -> `failed`.
+- Step 6 status for that scope: `content_state=current` -> `ok`, else `failed`. `cv` = `config_content_version` before -> after (`n/a` -> `?`); `pending=0` (this upgrade has no gate); a kept `enabled=false` is named in `note`.
 
 ---
 

@@ -6,6 +6,7 @@ disable-model-invocation: true
 argument-hint: "[prompt] [status|install|verify|model-check|help|<provider-name>] — no args/empty prompt = read-only status, never an install"
 allowed-tools: [Read, Write, Edit, Bash, Agent, AskUserQuestion, Glob, Grep]
 model: opus
+license: MIT
 ---
 
 [DICT: P=Phase, PRV=provider, EXEC=EXECUTE using Bash tool, AUQ=AskUserQuestion, REF=references, ALIAS=shell alias, CFG=configured, BASE=ANTHROPIC_BASE_URL, MOD=ANTHROPIC_DEFAULT_OPUS_MODEL]

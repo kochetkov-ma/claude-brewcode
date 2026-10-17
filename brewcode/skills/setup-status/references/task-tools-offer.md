@@ -2,8 +2,9 @@
 
 Read in Phase 4 only on a bare `off` verdict. Path tokens in these fences are literal: fill them as `SKILL.md` "Running the fences" says.
 
-Only when the verdict is a bare `off` and Phase 1c said the gate applies or is assumed, ask exactly
-one `AskUserQuestion` — header `Task tools`, three options in this order:
+Only when the verdict is a bare `off` and Phase 1c said the gate applies or is assumed, this is Q2 of
+the run's one bundled `AskUserQuestion` call (`SKILL.md` "The one question"), beside Q1 when Q1 applies,
+never a call of its own — header `Task tools`, three options in this order:
 
 | Option | Effect |
 |--------|--------|

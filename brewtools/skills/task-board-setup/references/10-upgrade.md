@@ -159,11 +159,11 @@ Values already baked into the installed artifacts are RECOVERED by reading, !=re
 | `{{REPO_NAME}}` / `{{TODAY}}` | trivial | basename of TARGET / ISO date |
 | `{PLUGIN_VERSION}` / `{CONTENT_VERSION}` / `{GENERATED_BY}` / `{LAST_UPDATED}` | NEVER recovered | re-resolve fresh per the SKILL.md "Resolving `{PLUGIN_VERSION}`..." bash block: an upgrade is a NEW write by a NEW plugin version |
 
-Recovery conflicts (e.g. `tasks.md` and `task-tracker.md` disagree on DOMAINS) -> surface both, let the user pick via AskUserQuestion. A value that cannot be recovered at all -> ask, !=guess.
+Recovery conflicts (e.g. `tasks.md` and `task-tracker.md` disagree on DOMAINS) -> surface both, let the user pick via AskUserQuestion. A value that cannot be recovered at all -> ask, !=guess. Unattended (SKILL.md PU): either case -> `skipped` before any write, !=pick, !=guess.
 
-> `RELEASE_STYLE` is NOT re-derived from git. `{{CLOSE_MARKER}}` / `{{CLOSE_MARKER_SHORT}}` are recovered verbatim from an installed sibling per the rows above; if no sibling carries one and a drift-ADD needs it -> ASK. Never emit an unresolved `{{TOKEN}}` into a live repo.
+> `RELEASE_STYLE` is NOT re-derived from git. `{{CLOSE_MARKER}}` / `{{CLOSE_MARKER_SHORT}}` are recovered verbatim from an installed sibling per the rows above; if no sibling carries one and a drift-ADD needs it -> ASK (unattended: `skipped`, same rule). Never emit an unresolved `{{TOKEN}}` into a live repo.
 
-Then ONE AskUserQuestion to re-confirm:
+Then ONE AskUserQuestion to re-confirm (unattended: not asked, the unambiguous recovered values are used as-is):
 
 > **Recovered from the installed board:** DOMAINS=`<...>`, LANG=`<...>`, EXCLUSIONS=`<...>`, CLOSE_MARKER=`<...>`.
 > **Newly discovered:** DOMAIN_AGENTS=`<N agents>`, ARCHITECT_AGENT=`<name>`, AGENT_GAPS=`<domains with no agent, or none>`.
@@ -244,7 +244,7 @@ The `## Feature specs` arm swap decides whether the patch can run at all:
 | header + separator only, NO data rows | reshape them `id \| title \| file` -> `task \| spec \| design` (the `_ON` arm). In scope, and REQUIRED -- skipping it installs a subset |
 | one or more data rows | the reshape would remap real cells -> DECLINE the WHOLE board.md patch (all-or-nothing), report under `manual`, tell the user which table needs a hand remap |
 
-One AskUserQuestion PER FILE (matches `SKILL.md`) covering every PATCH row of that file, showing the full diff:
+One AskUserQuestion PER FILE (matches `SKILL.md`) covering every PATCH row of that file, showing the full diff (unattended: not asked, every file takes **Skip this file** and its rows stay `PATCH`, pending):
 
 > **`<file>` needs an additive patch** [+X lines]: `<one-line description of every gated site>`.
 > Nothing is overwritten; every insertion is a new block (row `1d` alone moves the old `description:` text into the body, word for word).
@@ -277,6 +277,8 @@ Re-run the PROBE BLOCK and report every half-state -- a rule installed while its
 | `7` installed, `3` absent | a column nothing ever populates |
 | ref 11 control files added, ANY row `1m`-`6m` still PATCH/ABSENT | method/timer policy has missing runtime/template/discovery consumers; report exact missing rows |
 
+Unattended: not asked, every half-state takes **Leave as-is**.
+
 > **Half-state detected:** `<pair>`. The rule is installed but its enforcer is not.
 > - Complete it -- apply the missing patch now
 > - Leave as-is (recorded under `half-state`; a later rerun can pick it up)
@@ -292,7 +294,7 @@ Re-run the PROBE BLOCK and report every half-state -- a rule installed while its
 3. A file with no frontmatter is SKIPPED entirely -- no edit, and never synthesize an FM block into someone's pasted log. Report each by name under `skipped-no-frontmatter`.
 4. For each eligible file lacking `^spec:`, apply the needs-spec heuristic (`TRACKER.md` section 10.1: >1 domain, >~5 files, new integration/dependency, schema/API/contract change, ambiguous requirements or open questions, user asked for a design) and produce a SUGGESTION with a one-line reason.
 5. Suggested values: `progress/` + `todo/` heuristic hits -> `pending`; everything else -> `none`.
-6. Show the table, then AskUserQuestion.
+6. Show the table, then AskUserQuestion (unattended: not asked, option 1 -- task files untouched).
 
 | task id | status | suggested `spec:` | why |
 |---------|--------|-------------------|-----|
@@ -443,20 +445,28 @@ guard), so `enable` first, then `upgrade`.
 
 ## U6. Verify + report
 
-**Leftover-placeholder gate**, owned by this file (`PU` does not run P5). It scans the same path set as P5's gate, not just the ADD set: a drift-ADD writes whole files under `.claude/agents/`, `.claude/rules/` and `.claude/features/`.
+**Leftover-placeholder gate**, owned by this file (`PU` does not run P5). It scans every file the generator emits, not just the ADD set (a drift-ADD writes whole files): the twelve U5b controls plus the three unstamped templates `TASK_TEMPLATE.md`, `specs/SPEC_TEMPLATE.md`, `specs/DESIGN_TEMPLATE.md` (refs 02-05, 08, 09, 11). User data is never scanned: task cards under `backlog/`, `todo/`, `progress/`, `closed/`, the `specs/<ID>-spec.md` / `-design.md` docs, any other file under the owned roots. The double-brace pattern is the generator's token grammar, `{{` + an uppercase name: the controls also carry live task text (board rows, `PROGRESS.md`, `task-graph.md`, `METHODOLOGY.md` commands) that may quote `${{ secrets.X }}`, which is no leftover.
 
 **EXECUTE** using Bash tool -- re-run the U1 PROBE BLOCK verbatim (it re-establishes its own `TARGET`/`T`/`F`), then, as a SEPARATE self-contained block:
 ```bash
 TARGET="<absolute path resolved in P0>"
-test -n "$TARGET" && test -d "$TARGET" || { echo "MISS TARGET unset or not a dir -- gate did NOT run"; exit 1; }
-T="$TARGET"; F="$T/.claude/features"
-LEFT="$(grep -rnE '\{\{|\{(PLUGIN_VERSION|CONTENT_VERSION|GENERATED_BY|LAST_UPDATED)\}' \
-  "$F" "$T/.claude/rules/tasks.md" "$T/.claude/agents/task-tracker.md" \
-  "$T/.claude/skills/task-board" "$T/.claude/skills/task-spec" 2>/dev/null || true)"
+test -n "$TARGET" && test -d "$TARGET" || { echo "MISS TARGET unresolved -- re-resolve per P0"; exit 1; }
+gen=()
+for rel in .claude/features/board.md .claude/features/TRACKER.md .claude/features/INDEX.md \
+           .claude/features/PROGRESS.md .claude/features/backlog/README.md \
+           .claude/features/METHODOLOGY.md .claude/features/ANTI-DRIFT.md .claude/features/task-graph.md \
+           .claude/agents/task-tracker.md .claude/rules/tasks.md \
+           .claude/skills/task-board/SKILL.md .claude/skills/task-spec/SKILL.md \
+           .claude/features/TASK_TEMPLATE.md .claude/features/specs/SPEC_TEMPLATE.md .claude/features/specs/DESIGN_TEMPLATE.md; do
+  if test -f "$TARGET/$rel"; then gen+=("$TARGET/$rel"); fi
+done
+test "${#gen[@]}" -gt 0 || { echo "MISS no generated file found -- gate did NOT run"; exit 1; }
+LEFT="$(LC_ALL=C grep -nHE '\{\{[A-Z]|\{(PLUGIN_VERSION|CONTENT_VERSION|GENERATED_BY|LAST_UPDATED)\}' "${gen[@]}")"; rc=$?
+test "$rc" -le 1 || { echo "MISS grep rc=$rc -- gate did NOT run"; exit 1; }
 test -z "$LEFT" && echo "OK  no leftover placeholders" \
   || { echo "MISS leftover placeholders:"; echo "$LEFT"; }
 ```
-A clean run prints `OK  no leftover placeholders` -- silence means the block did not run, !=PASS. Any `MISS` = an unresolved token shipped into a live repo -> re-emit that file with the value from U2 (`{{CMD_DECOMPOSED_*}}` hits mean the two placeholder LINES were left in instead of deleted), then re-run this block until it prints `OK`.
+A clean run prints `OK  no leftover placeholders` -- silence means the block did not run, !=PASS. Every `MISS` hit names a generated file (nothing else is scanned) holding an unresolved token: substitute the value from U2 into that hit LINE with `Edit`, never `Write` over the file (U4 limit); `{{CMD_DECOMPOSED_*}}` hits mean the two placeholder LINES were left in instead of deleted -> delete them. A file this run ADDed (U3, drift-ADD) may instead be re-emitted whole. A hit on a line this run did not write is proposed first (same per-file question as U4; unattended: not asked, the `MISS` stands). Never edit a task card or any path the gate did not name. Re-run this block until it prints `OK`.
 
 Read the probe output as:
 

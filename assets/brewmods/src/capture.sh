@@ -18,7 +18,8 @@ ok=0
 for _ in 1 2 3 4 5 6 7 8 9 10; do
   "${tm[@]}" capture-pane -p ${range[@]+"${range[@]}"} -t "$target" > "$dir/$name.txt"
   "${tm[@]}" capture-pane -p -e ${range[@]+"${range[@]}"} -t "$target" > "$dir/$name.ansi.txt"
-  a=$(perl -pe 's/\e\[[0-9;:]*[A-Za-z]//g; s/[ \t]+$//' "$dir/$name.ansi.txt"); p=$(perl -pe 's/[ \t]+$//' "$dir/$name.txt")
+  # OSC (e.g. OSC 8 hyperlinks) dropped as in record-gifs.mjs parseAnsi, then CSI
+  a=$(perl -pe 's/\e\][^\a\e]*(?:\a|\e\\)//g; s/\e\[[0-9;:]*[A-Za-z]//g; s/[ \t]+$//' "$dir/$name.ansi.txt"); p=$(perl -pe 's/[ \t]+$//' "$dir/$name.txt")
   [ "$a" = "$p" ] && { ok=1; break; }
 done
 [ "$ok" = 1 ] || { echo "capture $name: ANSI and plain text never matched in 10 reads" >&2; exit 3; }

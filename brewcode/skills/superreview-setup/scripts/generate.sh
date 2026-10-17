@@ -765,7 +765,7 @@ upgrade_skill() {
   echo "keeping every self-synced correction."
   [ "$_restored" -gt 0 ] && echo "$_restored restored file(s) are RAW templates — run Phase 3 on them BEFORE validate."
   echo "Then promote the new templates to the baseline and clean up:"
-  echo "  rm -rf \"$BASELINE\" && mv \"$STAGING/.template\" \"$BASELINE\" && rm -rf \"$STAGING\" && generate.sh validate"
+  echo "  rm -rf \"$BASELINE\" && mv \"$STAGING/.template\" \"$BASELINE\" && rm -rf \"$STAGING\""
 }
 
 # Metadata frontmatter gate: 5 keys, D2 order, quoted like brewcode/skills/rules/scripts/rules.sh; one line per defect, rc 1.

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# run.sh - offline regression for validate-skill.sh: Cyrillic mode-table check is locale-independent.
-# Each case runs under sh and bash x LC_ALL=C, LANG=C.UTF-8, inherited locale; rc 1 on any failure.
+# run.sh - offline regression for validate-skill.sh: locale-independent Cyrillic check, standalone exemption.
+# Cyrillic cases run under sh and bash x LC_ALL=C, LANG=C.UTF-8, inherited locale; rc 1 on any failure.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VALIDATE="$SCRIPT_DIR/../scripts/validate-skill.sh"
@@ -80,5 +80,26 @@ for shell in sh bash; do
   done
 done
 
-printf '=== validate-skill Cyrillic regression: %s passed, %s failed ===\n' "$pass" "$fail"
+# make_bare <parent> -> contract-less skill under a marketplace root (marketplace.json, no plugin.json).
+MKT="$WORK/mkt"
+mkdir -p "$MKT/.claude-plugin"
+printf '{}\n' > "$MKT/.claude-plugin/marketplace.json"
+make_bare() {
+  local dir="$MKT/$1/bare"
+  mkdir -p "$dir"
+  printf -- '---\nname: bare\ndescription: Fixture standalone skill without a prompt contract.\n---\n\n# Bare\n\nBody.\n' > "$dir/SKILL.md"
+  (cd "$dir" && pwd)
+}
+for parent in skills openclaw; do
+  dir="$(make_bare "$parent")"
+  for shell in sh bash; do
+    expect "standalone-$parent" "$dir" "✅ argument-hint exempt (standalone root skill): $dir" 0 "$shell"
+  done
+done
+OTHER="$(make_bare other)"
+for shell in sh bash; do
+  expect "not-standalone-other" "$OTHER" '❌ argument-hint missing in frontmatter — prompt contract requires a prompt-first hint (section 1)' 1 "$shell"
+done
+
+printf '=== validate-skill regression (Cyrillic, standalone): %s passed, %s failed ===\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

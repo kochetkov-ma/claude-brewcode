@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025-2026 Maksim Kochetkov
+
 // SessionStart "compact": re-anchor plan/intent/tasks; ALWAYS injects, any failure -> [INTENT].
 
 import { statSync, readFileSync } from 'fs';

@@ -6,6 +6,7 @@ disable-model-invocation: true
 argument-hint: "[prompt] [measure|preview|slim|hard|bodies|restore] [--target=N%] [--global] [--memory] [--noask] [ts]"
 allowed-tools: [Read, Edit, Write, Bash, Grep, Glob, Agent, AskUserQuestion]
 model: opus
+license: MIT
 ---
 
 # Context Slim

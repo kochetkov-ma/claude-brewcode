@@ -22,7 +22,7 @@ import { Badge, Callout, Card, CardGrid, Spoiler, SourceLink, Steps, UpdateNotic
 | Field | Value |
 |-------|-------|
 | Command | `/brewtools:agent-router-setup` |
-| Arguments | `[prompt] [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [level fast\|strict]` |
+| Arguments | `[prompt] [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [level fast\|strict] [--unattended]` |
 | Model | sonnet |
 | Scope | Project only |
 | Default | `status` with no argument |
@@ -103,6 +103,8 @@ Built-in intents: skill authoring -> `brewcode:skill-creator`, agent authoring -
 
 `upgrade` asks nothing and keeps `level`. Upgrading an install from brewtools 6.4.0 or older changes `settings.json` at `level strict` (the tier-2 entry loses its `model` key, the heartbeat appears); at `level fast` only the hook file changes. Foreign hook entries are never touched.
 
+Under `--unattended`, `upgrade` skips with nothing written when the router is not installed, a custom launcher wraps its hook, `settings.json` is invalid or `level strict` is recorded without the judge wired. A config kept by `uninstall` is not an install: the note is `not installed` and the hook is not wired again. See [how the flag works](/brewcode/skills/setup-status/#the-unattended-flag).
+
 ### Where it installs
 
 | What | Path |
@@ -169,7 +171,7 @@ The file also carries `version`, `content_version`, `generated_by` and `last_upd
     Another opt-in hook for subagents: a soft wall-clock budget.
   </Card>
   <Card title="Setup Status" icon="clipboard" href="/brewcode/skills/setup-status/">
-    Read-only dashboard across every `-setup` skill.
+    Dashboard across every `-setup` skill; `upgrade` brings the stale ones current.
   </Card>
 </CardGrid>
 

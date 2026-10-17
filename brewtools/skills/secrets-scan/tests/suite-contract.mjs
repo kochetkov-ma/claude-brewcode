@@ -50,8 +50,10 @@ function count(hay, needle) {
 const fm = SKILL.split('---\n')[1];
 check('fm.keys', fm.split('\n').filter((l) => l.length > 0).map((l) => l.slice(0, l.indexOf(':'))), [
   'name', 'description', 'user-invocable', 'disable-model-invocation', 'argument-hint',
-  'allowed-tools', 'model',
-], 'frontmatter carries the seven workspace keys in the mandated order');
+  'allowed-tools', 'model', 'license',
+], 'frontmatter carries the eight workspace keys in the mandated order');
+check('fm.license', fm.split('\n').filter((l) => l.startsWith('license:')), ['license: MIT'],
+  'the license frontmatter line is exactly `license: MIT`, not just the key');
 check('fm.name', count(fm, 'name: secrets-scan\n'), 1,
   'the name is bare and equals the directory name');
 check('fm.name.dir', basename(SKILL_DIR), 'secrets-scan', 'the directory is the one the name claims');

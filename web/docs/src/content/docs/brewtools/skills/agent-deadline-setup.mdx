@@ -16,7 +16,7 @@ Claude Code has no wall-clock timeout for subagents. An agent that hits `maxTurn
 | Field | Value |
 |-------|-------|
 | Command | `/brewtools:agent-deadline-setup` |
-| Args | `[prompt] [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [project\|global] [minutes]` |
+| Args | `[prompt] [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [project\|global] [minutes] [--unattended]` |
 | Model | sonnet |
 | Defaults | no args = `status`; budget 20 min; ABSENT config = DISABLED (`enabled` must be exactly `true`) |
 | Output | 2 hook files, 2 `settings.json` entries, `agent-deadline.json` |
@@ -32,6 +32,8 @@ Claude Code has no wall-clock timeout for subagents. An agent that hits `maxTurn
 | `disable` | Set `enabled: false`, files stay |
 | `uninstall` | Unwire and delete hooks, keep config |
 | `purge` | Uninstall and delete config |
+
+Under `--unattended`, `upgrade` covers one scope and skips with nothing written unless the prompt names exactly one of `project` or `global`; it also skips when that scope has an orphan config, is not installed, uses a custom launcher or has an invalid `settings.json`. A config kept by `uninstall` is not an install: the note is `not installed (uninstalled, config kept)` and the hooks are not wired again. See [how the flag works](/brewcode/skills/setup-status/#the-unattended-flag).
 
 ## Example
 
@@ -140,7 +142,7 @@ Provenance keys and version checks: see [Artifact metadata](/brewcode/overview/#
     Size budget for subagent final returns; installs side by side with this skill.
   </Card>
   <Card title="Setup Status" icon="clipboard" href="/brewcode/skills/setup-status/">
-    Read-only dashboard across every `-setup` skill.
+    Dashboard across every `-setup` skill; `upgrade` brings the stale ones current.
   </Card>
   <Card title="GitHub source" icon="github" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/agent-deadline-setup">
     SKILL.md, the install runbook and both hook scripts.

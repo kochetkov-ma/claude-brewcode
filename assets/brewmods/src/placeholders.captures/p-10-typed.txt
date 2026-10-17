@@ -1,0 +1,30 @@
+  │ sample data already has  │ passed every test.  │ also checks the tank          │
+  │ batch 1 fermenting.      │                     │ assignment.                   │
+  └──────────────────────────┴─────────────────────┴───────────────────────────────┘
+
+  I also made the tastings test look batches up by id instead of by row position, and
+  check both batches. I added a test that findBatch returns nothing for an injected or
+  apostrophe-containing name. I ran the original version of your diff against the new
+  tests and 2 of them fail, so they catch the bugs. Breaking bottle or startBatch the
+  same way as before now also fails a test.
+
+  Your call, left unchanged:
+  - bottle(999) on an id that doesn't exist does nothing and raises no error, so callers
+    can't tell it failed.
+  - bottle marks a batch as bottled whatever its current status, including one that was
+    never started or is already bottled.
+
+  Whether either should be an error depends on how you want a batch's life to go.
+
+  Nothing is committed.
+
+✻ Churned for 1m 48s · done 11:25 PM
+placeholders 1                                                                      [-]
+++db  unknown placeholder
+more: put the caret on ++db · send as typed: ++/ · help: /placeholders help
+
+────────────────────────────────────────────────────────────────────────────────────────
+❯ /placeholders global add ++db: bind SQL params, no query in a loop, use transactions
+────────────────────────────────────────────────────────────────────────────────────────
+  ⏸ manual mode on
+

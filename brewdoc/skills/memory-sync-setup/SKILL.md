@@ -3,11 +3,12 @@ name: memory-sync-setup
 description: "Generates a project-tailored memory-sync skill: memory surface batches, checkable-fact catalogue, non-growth sync, independent verify, self-sync, agent re-audit. Triggers: memory sync init, generate memory sync, sync memory skill, установи memory-sync, синхронизируй память"
 user-invocable: true
 disable-model-invocation: true
-argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge] [fine-tune-prompt]"
+argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge] [fine-tune-prompt] [--unattended]"
 allowed-tools: [Read, Edit, Glob, Grep, Bash, Agent, AskUserQuestion]
 model: opus
+license: MIT
 ---
-<!-- brewcode-meta: version=6.9.6 content_version=6.5.7 generated_by=brewdoc:memory-sync-setup -->
+<!-- brewcode-meta: version=6.10.0 content_version=6.10.0 generated_by=brewdoc:memory-sync-setup -->
 
 # Memory Sync Generator (brewdoc:memory-sync-setup)
 
@@ -22,9 +23,10 @@ rule or hook). `<target>` = the git toplevel, or `MEMORY_SYNC_ROOT=<abs path>`.
 
 ## Prompt contract
 
-`$ARGUMENTS` is one free-form RU/EN prompt; mode tokens, flags and the fine-tune text may sit anywhere in it.
+`$ARGUMENTS` is one free-form RU/EN prompt; mode tokens, flags (`--unattended`) and the fine-tune text may sit anywhere in it.
 
-1. Mode: an explicit mode token wins outright; else the most distinct whole-word keyword hits (table in
+1. Mode: strip `--unattended` first: a flag, never a mode or fine-tune text (Mode: upgrade, **Unattended**).
+   Then an explicit mode token wins outright; else the most distinct whole-word keyword hits (table in
    `## Modes` below). Tie with a destructive mode -> `AskUserQuestion`; with `status` -> `status`; of two
    mutating modes -> the keyword that comes first. No hit or empty -> `status` if installed, else `install`.
 2. Scope: prose that is not a mode/id/path is still input: take the id, path or target from it -- never
@@ -119,6 +121,24 @@ that output enriched with your own reads and STOPS. `upgrade` takes the drift li
 ### Mode: upgrade
 
 > **Scope (normative):** `upgrade` edits only this setup's owned paths: `.claude/skills/memory-sync/`. Any other change (application source, tests, docs, CI, mirrors, `CLAUDE.md`, rules, agents, other setups' files) is a defect to report, never to apply: the drift it finds there is the emitted `/memory-sync`'s job, run later by the user.
+
+**Unattended (`--unattended` anywhere in the prompt; set by `/brewcode:setup-status upgrade`).**
+1. A flag, never a mode or name: strip it first. Any resolved mode other than `upgrade` -> no write, `RESULT skipped <id> cv=?->? pending=0 note="not-upgrade"`.
+2. No `AskUserQuestion` at all. Every gate in this section takes its decline branch; a declined gate is pending, never applied.
+3. A precondition this section would ask about (not installed, parked, custom/wrapped registration, orphan config,
+   user-modified managed file, missing tokenizer) -> no write, `RESULT skipped <id> cv=?->? pending=0 note="<reason>"`.
+4. Write only what this section already writes. No git commit, push, stash or reset; scratch only in a private `mktemp -d`.
+5. Last line, exactly once: `RESULT <ok|partial|skipped|failed> <id> cv=<before>-><after> pending=<n> note="<one line>"`,
+   `<id>` = `<plugin>:<skill>` [` scope=<project|global>`|` team=<name>`], `?` = unknown version.
+
+Here `<id>` = `brewdoc:memory-sync-setup`, `cv` = the emitted `SKILL.md`'s `content_version`:
+- Step 1 `NOT INSTALLED` or `INSTALLED=parked` -> `skipped` (note `not installed` / `parked`) before the snapshot.
+- Step 2: every hand-edited-section replacement is declined (no edit, one pending each); Phase 1.5 is never asked:
+  an ambiguous param keeps its installed value, a change that needs the answer is pending. No provenance
+  frontmatter (Error Handling) -> additive Edits only, every replacement pending.
+- Steps 3 and 4 run whatever is pending: `restamp`, `validate`, the scope gate. `REF DIFFERS:` is never ported:
+  healthy on `hard-sync.md`, one pending on any other reference.
+- `ok` = pending 0 and all three ✅; `partial` = pending > 0 and all three ✅; `failed` = any of the three ❌.
 
 Refresh against the current repo AND plugin version. Every hand-edit survives: no `emit`, no re-copy of a file
 that carries content, the stamp touched only through the metadata-only `restamp`.

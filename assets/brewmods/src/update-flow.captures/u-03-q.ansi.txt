@@ -1,0 +1,30 @@
+     ✅ marketplace update OK
+
+[38;5;114m⏺[39m [1mBash[0m(node "/Volumes/luf-demo/luf-fWEUj9/l1/plugins/cache/claude-brewcode/brewtools/6.1
+      0.0/skills/plugin-update/scripts/update-flow.mjs" latest > "/tmp/plugin-update.…)
+[38;5;246m  ⎿  [39m✅ latest OK
+
+[38;5;114m⏺[39m [1mBash[0m(node "/Volumes/luf-demo/luf-fWEUj9/l1/plugins/cache/claude-brewcode/brewtools/6.1
+      0.0/skills/plugin-update/scripts/update-flow.mjs" plan "/tmp/plugin-update.1Iha…)
+[38;5;246m  ⎿  [39m{
+       "mode": "update",
+       "range": {
+     [2m… +78 lines (ctrl+o to expand)[0m
+[38;5;246m────────────────────────────────────────────────────────────────────────────────────────
+← [38;5;16m[48;5;153m ☐ Mods [39m[49m ☐ Plugins  ✔ Submit  →
+
+[1m[38;5;231mInstall the missing mods?[0m
+
+[38;5;153m❯[39m [38;5;246m1.[39m [ ] [38;5;153mbrewmod-placeholders[39m
+         [38;5;246m`++r` and other prompt blocks -[39m [38;5;246mreplaces[39m [38;5;246mthe[39m [38;5;246mcodewords you used[39m
+  [38;5;246m2.[39m [ ] brewmod-plan-effort
+         [38;5;246meffort[39m [38;5;246m`xhigh`[39m [38;5;246min[39m [38;5;246mplan[39m [38;5;246mmode[39m
+  [38;5;246m3.[39m [ ] Skip
+         [38;5;246mInstall[39m [38;5;246mno[39m [38;5;246mmods[39m [38;5;246mnow[39m
+  [38;5;246m4.[39m [ ] [38;5;246mType[39m [38;5;246msomething[39m
+     [1mNext[0m
+[38;5;246m────────────────────────────────────────────────────────────────────────────────────────
+[39m  5. Chat about this
+
+[38;5;246mEnter[39m [38;5;246mto[39m [38;5;246mselect[39m [38;5;246m·[39m [38;5;246mTab/Arrow[39m [38;5;246mkeys[39m [38;5;246mto[39m [38;5;246mnavigate[39m [38;5;246m·[39m [38;5;246mEsc[39m [38;5;246mto[39m [38;5;246mcancel[39m
+

@@ -983,8 +983,9 @@ PY
 }
 
 valid_report_root() {
+  # Explicit ASCII list: bash 3.2 under a UTF-8 locale lets A-Z/a-z ranges match accented letters.
   case "$1" in
-    ''|/*|*/|~*|*//*|*[!A-Za-z0-9._/-]*) return 1 ;;
+    ''|/*|*/|~*|*//*|*[!ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._/-]*) return 1 ;;
   esac
   _old_ifs=$IFS
   IFS=/
@@ -1767,6 +1768,9 @@ esac
   if (plugin === 'brewtools' && skill === 'manager-setup') {
     fs.rmSync(path.join(targetDir, 'references', 'hard.md'), { force: true });
     fs.rmSync(path.join(targetDir, 'references', 'intent-routing.md'), { force: true });
+    // Claude-only: HARD-wall guard docs, settings.local.json status/install steps, and the lifecycle script that edits them.
+    for (const name of ['guard-enforcement.md', 'install-steps.md', 'status-shape.md']) fs.rmSync(path.join(targetDir, 'references', name), { force: true });
+    fs.rmSync(path.join(targetDir, 'scripts'), { recursive: true, force: true });
     // Source suite drives the Claude-only HARD-wall guard (hooks/hardmode-guard.mjs), absent from this variant.
     fs.rmSync(path.join(targetDir, 'tests'), { recursive: true, force: true });
     writeFile(path.join(targetDir, 'README.md'), '# Manager for Codex\n\nAmbient manager, architecture, and review prompt guidance. This variant provides no hard security wall and no parent-only enforcement.\n');
@@ -2037,6 +2041,7 @@ New teams use one review-only \`intent-guard\` outside the domain count. Its sha
       const file = path.join(targetDir, 'tests', name);
       let value = rewriteNativeLifecycleSuite(fs.readFileSync(file, 'utf8'), nativeTeamMatch[1]);
       if (name === 'suite-lifecycle.mjs') value = value.replace('nativeTeam(root, rows)', 'nativeTeam(root, rows, separator)');
+      if (name === 'suite-lifecycle.mjs') value = replaceMarked(value, '// BEGIN SOURCE UNATTENDED UPGRADE', '// END SOURCE UNATTENDED UPGRADE', '// Unattended upgrade cases run in the source suite only: references/mode-upgrade.md is not projected.');
       writeFile(file, value, 0o755);
     }
 
@@ -2335,6 +2340,8 @@ function buildDistribution() {
     const dist = path.join(pluginsRoot, plugin);
     fs.mkdirSync(path.join(dist, '.codex-plugin'), { recursive: true });
     fs.copyFileSync(path.join(canonical, 'package', 'plugin.json'), path.join(dist, '.codex-plugin', 'plugin.json'));
+    // MIT notice must travel with every copy: root LICENSE byte-for-byte at each package root.
+    fs.copyFileSync(path.join(REPO_ROOT, 'LICENSE'), path.join(dist, 'LICENSE'));
     fs.cpSync(path.join(canonical, 'skills'), path.join(dist, 'skills'), { recursive: true });
     // Agents ship too: skill assets resolve the roster as `$SKILL_DIR/../../agents`; without it they abort installed.
     fs.cpSync(path.join(canonical, 'agents'), path.join(dist, 'agents'), { recursive: true });

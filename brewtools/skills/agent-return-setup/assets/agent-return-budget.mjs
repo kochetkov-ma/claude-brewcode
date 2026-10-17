@@ -1,5 +1,8 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.9.6 content_version=6.5.2 generated_by=brewtools:agent-return-setup
+// brewcode-meta: version=6.10.0 content_version=6.5.2 generated_by=brewtools:agent-return-setup
+
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025-2026 Maksim Kochetkov
 
 // agent-return shared config + thresholds, imported by contract and guard so announced == enforced budget.
 // Per threshold: config `passTokens`/`fileTokens` > AGENT_RETURN_PASS/_FILE > 2500/6000; resolved once at load.

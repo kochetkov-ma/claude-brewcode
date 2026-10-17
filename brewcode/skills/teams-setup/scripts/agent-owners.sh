@@ -17,8 +17,9 @@ usage() {
 # Byte-identical rule to toggle-team.sh / verify-team.sh: an agent id is a bare
 # `^[a-z0-9][a-z0-9-]*$`. One guard, mirrored, never a second dialect.
 valid_agent_id() {
+  # Explicit ASCII lists: bash 3.2 under a UTF-8 locale lets ranges and [:lower:] match accented letters.
   case "$1" in
-    ''|*[![:lower:][:digit:]-]*|[![:lower:][:digit:]]*) return 1 ;;
+    ''|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*|[!abcdefghijklmnopqrstuvwxyz0123456789]*) return 1 ;;
   esac
   return 0
 }

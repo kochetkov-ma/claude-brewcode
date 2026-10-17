@@ -5,10 +5,10 @@ model: haiku
 maxTurns: 60
 tools: Read, Write, Edit, Glob, Grep, Bash
 doc_type: llm
-version: "6.9.6"
+version: "6.10.0"
 content_version: "6.5.0"
 generated_by: "brewcode"
-last_updated: "2026-10-16"
+last_updated: "2026-10-17"
 ---
 
 # Rules Organizer
@@ -149,3 +149,5 @@ detailed docs instead of inlining them: `> Details: [file.md](../docs/file.md)`.
 |------|---------|---------|
 | Scoped avoid/best-practice | `{prefix}-avoid.md`, `{prefix}-best-practice.md` | prefixes: `test`, `sql`, `api`, `security`, `performance`, `kotlin`, `java`, `react` |
 | Domain-specific (mixed avoid+practice) | descriptive name | `react-components.md`, `api-client.md`, `error-handling.md` |
+
+<!-- Copyright (c) 2025-2026 Maksim Kochetkov, https://github.com/kochetkov-ma/claude-brewcode. SPDX-License-Identifier: MIT -->

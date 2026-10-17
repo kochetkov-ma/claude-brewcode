@@ -3,11 +3,12 @@ name: teams-setup
 description: "Creates and manages dynamic teams of domain agents. Triggers: create team, agent team, team status, cleanup team."
 user-invocable: true
 disable-model-invocation: true
-argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge] [name]"
+argument-hint: "[prompt] [status|install|upgrade|enable|disable|uninstall|purge] [name] [--unattended]"
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Agent, AskUserQuestion, Skill]
 model: opus
+license: MIT
 ---
-<!-- brewcode-meta: version=6.9.6 content_version=6.6.0 generated_by=brewcode:teams-setup -->
+<!-- brewcode-meta: version=6.10.0 content_version=6.10.0 generated_by=brewcode:teams-setup -->
 
 <instructions>
 
@@ -24,7 +25,7 @@ only assigned files, preserve concurrent changes, and never re-delegate or mutat
 ## Prompt contract
 
 `$ARGUMENTS` is one free-form RU/EN prompt; the mode, the `[name]` positional and the flags
-(`--skip-review`, `--review`) may sit anywhere in it.
+(`--skip-review`, `--review`, `--unattended`) may sit anywhere in it.
 
 | Mode | EN keywords | RU keywords | Mutates? |
 |------|-------------|-------------|----------|
@@ -47,7 +48,8 @@ only assigned files, preserve concurrent changes, and never re-delegate or mutat
    `detect-mode.sh`'s literal first-word parse is only correct for a bare `mode [name]` shape; see
    Error Handling below for the prose case.
 3. Ask: at most ONE `AskUserQuestion` (max 4 questions) to resolve mode and scope, before any work, only when the answer
-   changes what gets written. `status` asks nothing.
+   changes what gets written. `status` asks nothing. `--unattended` asks nothing: an open question
+   there ends in `RESULT skipped` (`## Mode: UPGRADE`).
 
 Print once, before the first action (`## Universal Prelude` Step 0.4); `status` prints it without
 questions (labels literal, authored plan values English, INPUT verbatim):
@@ -140,7 +142,8 @@ fill it like any placeholder with this skill's dir, the prefix of `${CLAUDE_SKIL
    ```
    If it is missing, retain the emitted `REPAIR: ... prepare` command. `status` reports the missing
    prerequisite and does not run team verification. A mutating mode waits for step 5 approval before
-   preparation. If the preflight passes and the team exists, verify:
+   preparation; `--unattended` never prepares (`RESULT skipped`, `## Mode: UPGRADE`). If the
+   preflight passes and the team exists, verify:
    ```bash
    bash "${CLAUDE_SKILL_DIR}/scripts/verify-team.sh" "TEAM_NAME_HERE" && echo "PASS" || echo "FAIL"
    ```
@@ -148,7 +151,7 @@ fill it like any placeholder with this skill's dir, the prefix of `${CLAUDE_SKIL
 4. Print the **PLAN** block (`## Prompt contract` above) once, before step 5's confirmation and any
    mutation. `status` prints it too, then goes straight to its report — no AskUserQuestion.
 
-5. Mutating modes only — **ASK** using AskUserQuestion: "PLAN above. Continue?"
+5. Mutating modes only, skipped under `--unattended` — **ASK** using AskUserQuestion: "PLAN above. Continue?"
    Options: "Yes, continue" | "No, I want changes" | "Cancel"
    - "changes" -> AskUserQuestion for details, revise the PLAN and reprint it
    - "Cancel" -> **STOP**
@@ -299,6 +302,34 @@ Recommendations: underperformers -> suggest `/brewcode:teams-setup upgrade`; >20
 
 > **Scope (normative):** `upgrade` edits only this setup's owned paths: `.claude/teams/{TEAM_NAME}/`, `.claude/agents/` (roster members and `intent-guard.md`), and the team block of `CLAUDE.md` / `.claude/CLAUDE.local.md` only after the Epilogue E1 "yes". Any other change (application source, tests, docs, CI, mirrors, other setups' files) is a defect to report, never to apply: name the path and the finding, edit nothing there, and pass no such edit to a subagent.
 
+**Unattended (`--unattended` anywhere in the prompt; set by `/brewcode:setup-status upgrade`).**
+1. A flag, never a mode or name: strip it first. Any resolved mode other than `upgrade` -> no write, `RESULT skipped <id> cv=?->? pending=0 note="not-upgrade"`.
+2. No `AskUserQuestion` at all. Every gate in this section takes its decline branch; a declined gate is pending, never applied.
+3. A precondition this section would ask about (not installed, parked, custom/wrapped registration, orphan config,
+   user-modified managed file, missing tokenizer) -> no write, `RESULT skipped <id> cv=?->? pending=0 note="<reason>"`.
+4. Write only what this section already writes. No git commit, push, stash or reset; scratch only in a private `mktemp -d`.
+5. Last line, exactly once: `RESULT <ok|partial|skipped|failed> <id> cv=<before>-><after> pending=<n> note="<one line>"`,
+   `<id>` = `<plugin>:<skill>` [` scope=<project|global>`|` team=<name>`], `?` = unknown version.
+
+Teams under the flag = plumbing only, `<id>` = `brewcode:teams-setup team=<name>`, `<name>` = Phase 1
+`TEAM_NAME:` (`detect-mode.sh` already dropped the flag). Run in order: Universal Prelude steps 1-4
+(step 3's `verify-team.sh` FAIL is not a stop, U1b decides), the scope snapshot below,
+`mode-upgrade.md` U1 -> U1b -> U1c, the final scope gate, Epilogue E2 (read-only), then the `RESULT`
+line. Never run: step 5's confirm, step 6's tokenizer prepare, U2-U4 (no tuning, deletion or agent
+spawn), Epilogue E1, the cursor write. The first write is U1b's first `team.md` edit or `trace-ops.sh`
+copy. The flag never changes `INTENT_GUARD_POLICY`: a `legacy-absent` roster never gains `intent-guard`.
+
+| Under `--unattended` | Last line |
+|----------------------|-----------|
+| resolved mode other than `upgrade` | `RESULT skipped brewcode:teams-setup team=<name> cv=?->? pending=0 note="not-upgrade"` |
+| team not found | `RESULT skipped brewcode:teams-setup team=<name> cv=?->? pending=0 note="not installed"` |
+| step 3 tokenizer preflight missing | `RESULT skipped brewcode:teams-setup team=<name> cv=?->? pending=0 note="missing tokenizer"` |
+| U1 prints a `PARKED` row | `RESULT skipped brewcode:teams-setup team=<name> cv=?->? pending=0 note="parked: <members>"` |
+| U1c `check` prints `HEADER legacy` | `RESULT skipped brewcode:teams-setup team=<name> cv=?->? pending=0 note="legacy team.md header"` |
+| any other STOP or `❌` before the first write | `RESULT skipped brewcode:teams-setup team=<name> cv=?->? pending=0 note="<reason>"` |
+| STOP, `❌` or `OUTSIDE` after the first write | `RESULT failed brewcode:teams-setup team=<name> cv=<before>->? pending=0 note="<step>: <reason>"` |
+| U1c `write` printed `RESTAMPED`, scope gate ✅ | `RESULT ok brewcode:teams-setup team=<name> cv=<before>-><after> pending=0 note="tuning not run"` |
+
 Snapshot the dirty-file state before the first read-write step (git repos; elsewhere it prints `SCOPE n/a` and the rule above is checked by hand):
 
 ```bash
@@ -307,7 +338,8 @@ bash "${CLAUDE_SKILL_DIR}/scripts/scope-guard.sh" snapshot "${CLAUDE_PROJECT_DIR
 
 Read `${CLAUDE_SKILL_DIR}/references/mode-upgrade.md` and execute U1-U4 in order: U1 Load & Parse
 (refuses a parked member), U1b Shared Contract Migration Gate, U2 Analyze Performance, U3 Present &
-Confirm, U4 Apply Changes (sets the cursor). Then the final scope gate below.
+Confirm, U4 Apply Changes (sets the cursor). Under `--unattended`: U1, U1b, U1c instead (table above).
+Then the final scope gate below.
 
 Final scope gate, the last step of the mode (before the Epilogue, which may touch `CLAUDE.md` only on its own "yes"):
 

@@ -1,0 +1,30 @@
+[38;5;246m✻[39m [38;5;246mCogitated for 33s · done 1:45 AM[39m
+
+[38;5;246m[48;5;237m❯[39m [38;5;231m/reload-plugins[39m
+[38;5;246m[49m  ⎿  [39mReloaded: 3 plugins · 27 skills · 16 agents · 3 hooks · 0 plugin MCP servers · 0
+     plugin LSP servers
+
+[38;5;246m[48;5;237m❯[39m [38;5;231m/brewcode:setup-status upgrade[39m
+[38;5;246m[49m  ⎿  [1m1[0m[38;5;246m agent type available[39m
+
+[38;5;231m⏺[39m PLAN — brewcode:setup-status
+  INPUT:  upgrade
+  MODE:   upgrade — explicit; full cross-plugin
+  SCOPE:  /Volumes/luf-demo/luf-fWEUj9/l1/proj; brewcode, brewtools, brewdoc setups;
+  upgrade runs only Phase 3b's auto rows, counted before the first spawn
+  DO:
+  - Resolve plugin roots, probe artifacts, read stamps and byte pairs
+  - Classify each setup row and build the upgrade plan
+  - Run one brewcode:setup-upgrader per auto row in stage order, re-probing each, and
+    stop on the first 🔴
+  - Warn: their Write/Edit into .claude/ prompts in default/acceptEdits mode and is
+    denied in dontAsk
+    RESULT: The upgrade report and the commands left to you.
+
+[38;5;174m✻[39m [38;5;174mManifesting… [38;5;246m(6s · ↓[39m [38;5;246m395 tokens)[39m
+
+[38;5;244m────────────────────────────────────────────────────────────────────────────────────────
+[38;5;246m❯ [39m
+[38;5;244m────────────────────────────────────────────────────────────────────────────────────────
+[39m  [38;5;211m⏵⏵[39m [38;5;211mbypass[39m [38;5;211mpermissions[39m [38;5;211mon[38;5;246m (shift+tab[39m [38;5;246mto[39m [38;5;246mcycle)[39m [38;5;246m·[39m [38;5;246mesc[39m [38;5;246mto[39m [38;5;246minterrupt[39m
+

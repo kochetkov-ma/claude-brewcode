@@ -1,5 +1,8 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.9.6 content_version=6.5.1 generated_by=brewcode:semble-setup
+// brewcode-meta: version=6.10.0 content_version=6.5.1 generated_by=brewcode:semble-setup
+
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025-2026 Maksim Kochetkov
 
 // SubagentStart, NO matcher = every agent type (predecessor semble-explore.mjs, was pinned to "Explore").
 // ADVISORY: one additionalContext line per spawn, no throttle; never spawns; one JSON object, exit 0; no imports.

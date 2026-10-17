@@ -1,0 +1,30 @@
+     ✅ marketplace update OK
+
+[38;5;114m⏺[39m [1mBash[0m(node "/Volumes/luf-demo/luf-fWEUj9/l1/plugins/cache/claude-brewcode/brewtools/6.1
+      0.0/skills/plugin-update/scripts/update-flow.mjs" latest > "/tmp/plugin-update.…)
+[38;5;246m  ⎿  [39m✅ latest OK
+
+[38;5;114m⏺[39m [1mBash[0m(node "/Volumes/luf-demo/luf-fWEUj9/l1/plugins/cache/claude-brewcode/brewtools/6.1
+      0.0/skills/plugin-update/scripts/update-flow.mjs" plan "/tmp/plugin-update.1Iha…)
+[38;5;246m  ⎿  [39m{
+       "mode": "update",
+       "range": {
+     [2m… +78 lines (ctrl+o to expand)[0m
+[38;5;246m────────────────────────────────────────────────────────────────────────────────────────
+[39m←  ☒ Mods [38;5;16m[48;5;153m ☐ Plugins [39m[49m ✔ Submit  →
+
+[1m[38;5;231mInstall the missing plugins?[0m
+
+[38;5;153m❯[39m [38;5;246m1.[39m [ ] [38;5;153mbrewui[39m
+         [38;5;246mplaceholder for future UI tools, no skills yet[39m
+  [38;5;246m2.[39m [ ] Skip
+         [38;5;246mInstall no plugins now[39m
+  [38;5;246m3. [39m[ ] [38;5;246mType something[39m
+     [1mSubmit[0m
+[38;5;246m────────────────────────────────────────────────────────────────────────────────────────
+[39m  4. Chat about this
+
+[38;5;246mEnter to select · Tab/Arrow keys to navigate · Esc to cancel[39m
+
+
+

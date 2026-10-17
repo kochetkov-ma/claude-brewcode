@@ -1,5 +1,8 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.9.6 content_version=6.5.0 generated_by=brewtools:agent-return-setup
+// brewcode-meta: version=6.10.0 content_version=6.5.0 generated_by=brewtools:agent-return-setup
+
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025-2026 Maksim Kochetkov
 
 // agent-return SubagentStop (`last_assistant_message`, block) + PreToolUse SubagentHandback (`tool_input.message`, deny):
 // <=PASS pass, PASS..FILE compress, >FILE write to file; at most once per agent_id (marker file). Fail-open, never exit 2.

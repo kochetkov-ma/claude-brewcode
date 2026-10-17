@@ -16,7 +16,7 @@ CONFLICT=0
 # Roster rows another generator owns (agent-generator.sh, e.g. task-tracker): WARN, never a teams check.
 FOREIGN=0
 
-SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 TOKEN_COUNTER="$SCRIPT_DIR/count-tokens.py"
 TOKENIZER_PREPARER="$SCRIPT_DIR/prepare-tokenizer.py"
 if ! TOKENIZER_INFO=$(python3 -I -S "$TOKENIZER_PREPARER" run "$TOKEN_COUNTER" --check); then
@@ -172,8 +172,9 @@ PY
 }
 
 valid_report_root() {
+  # Explicit ASCII list: bash 3.2 under a UTF-8 locale lets A-Z/a-z ranges match accented letters.
   case "$1" in
-    ''|/*|*/|~*|*//*|*[!A-Za-z0-9._/-]*) return 1 ;;
+    ''|/*|*/|~*|*//*|*[!ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._/-]*) return 1 ;;
   esac
   _old_ifs=$IFS
   IFS=/
@@ -203,8 +204,9 @@ count_literal_occurrences() {
 # Roster ids reach `-f` here, `mv`/`rm -f` in toggle-team.sh + cleanup-flow.md (`| ../../../outside/README |`)
 # -> bare `^[a-z0-9][a-z0-9-]*$` keeps paths in `.codex/agents/`; byte-identical in toggle-team.sh.
 valid_agent_id() {
+  # Explicit ASCII lists: bash 3.2 under a UTF-8 locale lets ranges and [:lower:] match accented letters.
   case "$1" in
-    ''|*[![:lower:][:digit:]-]*|[![:lower:][:digit:]]*) return 1 ;;
+    ''|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*|[!abcdefghijklmnopqrstuvwxyz0123456789]*) return 1 ;;
   esac
   return 0
 }

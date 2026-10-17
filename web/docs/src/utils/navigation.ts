@@ -70,6 +70,7 @@ export const navigation: NavSection[] = [
           { title: 'bash-expert', slug: 'brewcode/agents/bash-expert' },
           { title: 'mod-creator', slug: 'brewcode/agents/mod-creator' },
           { title: 'bc-rules-organizer', slug: 'brewcode/agents/bc-rules-organizer' },
+          { title: 'setup-upgrader', slug: 'brewcode/agents/setup-upgrader' },
         ],
       },
       { title: 'Hooks', slug: 'brewcode/hooks' },

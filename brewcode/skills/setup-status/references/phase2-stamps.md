@@ -262,13 +262,27 @@ complete set; paste the three `ROOT=` values from Phase 0 (`none` skips that plu
 cd "${CLAUDE_PROJECT_DIR}" || exit 1
 BC=/abs/brewcode/root; BT=/abs/brewtools/root; BD=/abs/brewdoc/root
 G="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
-# Metadata only: the `brewcode-meta:` comment line and the leading frontmatter's stamp keys.
-meta_strip() { awk 'NR==1&&/^---$/{fm=1;print;next} fm&&/^---$/{fm=0;print;next} fm&&/^(version|content_version|generated_by|last_updated):/{next} /^[[:space:]]*(\/\/|#|<!--)[[:space:]]*brewcode-meta:/{next} {print}' "${1}"; }
+# Metadata only, as bump-version.sh strip_meta_for_diff (parity: tests/pair-meta.mjs): `brewcode-meta:` line, frontmatter stamp
+# keys, `license: MIT` (line 2 to the first `---`), SPDX/Copyright lines + the one blank line right above each.
+meta_strip() { awk '
+  function keep(l) { if (held) print hold; hold = l; held = 1 }
+  NR >= 3 && /^---$/ { lic = 1 }
+  NR >= 2 && !lic && /^license: MIT$/ { next }
+  NR == 1 && /^---$/ { fm = 1; keep($0); next }
+  fm && /^---$/ { fm = 0; keep($0); next }
+  fm && /^(version|content_version|generated_by|last_updated):/ { next }
+  /^[[:space:]]*(\/\/|#|<!--)[[:space:]]*brewcode-meta:/ { next }
+  /^<!-- Copyright \(c\) [0-9][0-9][0-9][0-9](-[0-9][0-9][0-9][0-9])? Maksim Kochetkov, https:\/\/github\.com\/kochetkov-ma\/claude-brewcode\. SPDX-License-Identifier: MIT -->$/ ||
+  /^\/\/ SPDX-License-Identifier: MIT$/ ||
+  /^\/\/ Copyright \(c\) [0-9][0-9][0-9][0-9](-[0-9][0-9][0-9][0-9])? Maksim Kochetkov$/ { if (held && hold == "") held = 0; next }
+  { keep($0) }
+  END { if (held) print hold }' "${1}"; }
+# Compared as bump-version.sh compares: command substitution, so trailing newlines never count.
 pair() {
   if   [ ! -f "${1}" ]; then echo "ABSENT  ${1}"
   elif [ ! -f "${2}" ]; then echo "NOSRC   ${2}"
   elif cmp -s "${1}" "${2}"; then echo "SAME    ${1}"
-  elif cmp -s <(meta_strip "${1}") <(meta_strip "${2}"); then echo "META    ${1}"
+  elif [ "$(meta_strip "${1}")" = "$(meta_strip "${2}")" ]; then echo "META    ${1}"
   else echo "DIFFERS ${1}"; fi
 }
 while IFS='|' read -r pl a b; do
@@ -321,7 +335,7 @@ echo "OK"
 | Line | Reading |
 |------|---------|
 | `SAME` | the copy equals the plugin asset |
-| `META` | only the stamp differs (the `brewcode-meta:` line, or frontmatter `version` / `content_version` / `generated_by` / `last_updated`): the release bump restamped the plugin asset, the content is the same. `current (restamp pending)`, never `modified` |
+| `META` | only the stamp or a license marker differs (the `brewcode-meta:` line, frontmatter `version` / `content_version` / `generated_by` / `last_updated` / `license: MIT`, an SPDX or Copyright line with the blank line above it): the release bump restamped the plugin asset or added a marker `bump-version.sh` ignores, the content is the same. `current (restamp pending)`, never `modified` |
 | `DIFFERS` beside a `CURRENT` stamp | `modified (stamp current, bytes differ)`: the content itself differs (a hand-edit, or a copy never refreshed after a same-version rebuild). Name the file |
 | `DIFFERS` beside a `BEHIND` stamp | expected: the stamp verdict already says `stale` |
 | `ABSENT` | not deployed there. Normal for the scope that is not installed, for the superreview stack references the install did not pick, and for a row Phase 1 found `missing` |

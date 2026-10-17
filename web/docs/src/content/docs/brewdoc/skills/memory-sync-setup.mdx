@@ -13,7 +13,7 @@ A generic memory sweep cannot tell an intentional Russian trigger alias from a l
 
 | Field | Value |
 |-------|-------|
-| Command | `/brewdoc:memory-sync-setup [prompt] [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [fine-tune-prompt]` |
+| Command | `/brewdoc:memory-sync-setup [prompt] [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [fine-tune-prompt] [--unattended]` |
 | Canonical modes | `status` · `install` · `upgrade` · `enable` · `disable` · `uninstall` · `purge` |
 | No argument | `status` when `.claude/skills/memory-sync/` exists, `install` when not |
 | Invocation | user-invoked only (`disable-model-invocation: true`) |
@@ -79,6 +79,8 @@ Counts are illustrative; real ones come from the scanned project.
 | `disable` | one rename | `SKILL.md` -> `SKILL.md.disabled`. Claude Code discovers a project skill only through `SKILL.md`, so references and hand-edits stay byte-identical |
 | `uninstall` | deletes manifest | Removes `SKILL.md` (or parked form) plus the 4 references, after confirmation; user-added files are kept and listed |
 | `purge` | deletes dir | The whole `.claude/skills/memory-sync/`, plus crashed `.memory-sync-emit.*` staging |
+
+Under `--unattended`, `upgrade` skips when the emitted skill is parked or not installed; see [how the flag works](/brewcode/skills/setup-status/#the-unattended-flag).
 
 Enable/disable is entry-file parking, not a flag: `status` reports `INSTALLED=parked`, never `NOT INSTALLED`. Removed aliases: `init`, `on`, `off`, `setup`, `remove`, `reset`, `create`, `update`, `cleanup`.
 

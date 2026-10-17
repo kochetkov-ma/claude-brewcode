@@ -1054,6 +1054,17 @@ part(() => {
 });
 
 part(() => {
+  // bash 3.2 under a UTF-8 locale let an A-Z/a-z range match accented letters.
+  const world = makeWorld({ reportRoot: `${SOURCE_CLIENT_DIR}/réports` });
+  const result = runVerifier(world, { ...verifierEnv, LC_ALL: 'en_US.UTF-8' });
+  check('verifier.nonAsciiReportRoot.refused',
+    JSON.stringify([result.status, result.output.includes(`unsafe or unresolved project-relative path: '${SOURCE_CLIENT_DIR}/réports'`)]),
+    JSON.stringify([1, true]),
+    'GIVEN a non-ASCII report root under a UTF-8 locale WHEN the verifier runs THEN it fails as unsafe');
+  removeWorld(world);
+});
+
+part(() => {
   const world = makeWorld();
   const teamPath = join(world, '.codex', 'teams', 'dusk', 'team.md');
   const bulk = `Bulk -> \`${SOURCE_CLIENT_DIR}/reports/YYYYMMDD-HHMMSS_{AGENT_NAME}/\``;

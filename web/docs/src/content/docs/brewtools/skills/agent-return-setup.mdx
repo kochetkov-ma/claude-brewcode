@@ -16,7 +16,7 @@ Subagent reports are the largest single context cost of a session that delegates
 | Field | Value |
 |-------|-------|
 | Command | `/brewtools:agent-return-setup` |
-| Args | `[prompt] [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [project\|global] [pass] [file]` |
+| Args | `[prompt] [status\|install\|upgrade\|enable\|disable\|uninstall\|purge] [project\|global] [pass] [file] [--unattended]` |
 | Model | sonnet |
 | Defaults | no args = `status`; `passTokens` 2500, `fileTokens` 6000; ABSENT config = DISABLED (`enabled` must be exactly `true`) |
 | Output | 3 hook files, 3 `settings.json` entries, `agent-return.json` |
@@ -32,6 +32,8 @@ Subagent reports are the largest single context cost of a session that delegates
 | `disable` | Set `enabled: false`, files stay |
 | `uninstall` | Unwire and delete hooks, keep config |
 | `purge` | Uninstall and delete config |
+
+Under `--unattended`, `upgrade` covers one scope and skips with nothing written unless the prompt names exactly one of `project` or `global`; it also skips when that scope has an orphan config, shares a config from `~/.claude` (upgrade by hand), is not installed, uses a custom launcher or has an invalid `settings.json`. A config kept by `uninstall` is not an install: the note is `not installed (uninstalled, config kept)` and the hooks are not wired again. See [how the flag works](/brewcode/skills/setup-status/#the-unattended-flag).
 
 ## Example
 
@@ -188,7 +190,7 @@ Tests: `tests/run.sh` in the [skill source](https://github.com/kochetkov-ma/clau
     Soft wall-clock budget for subagents; installs side by side with this skill.
   </Card>
   <Card title="Setup Status" icon="clipboard" href="/brewcode/skills/setup-status/">
-    Read-only dashboard across every `-setup` skill.
+    Dashboard across every `-setup` skill; `upgrade` brings the stale ones current.
   </Card>
   <Card title="GitHub source" icon="github" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewtools/skills/agent-return-setup">
     SKILL.md, the install runbook and the hook files.

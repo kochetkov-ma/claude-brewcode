@@ -1,0 +1,37 @@
+{
+  "gif": {
+    "file": "hub-mini-light.gif",
+    "bytes": 131432,
+    "sha256": "3f48a7c98e2af98133c211406b8d36e16dfc7b95ad17d5cf9c8cddc42d51f5bf",
+    "width": 800,
+    "height": 310,
+    "seconds": 7,
+    "colors": 256,
+    "lossy": 0
+  },
+  "still": {
+    "file": "hub-mini-light-still.png",
+    "sha256": "434b4ecac371f2f47afabea79a0f6dc55f9f3a9073cb29802ab6425d08343cae",
+    "width": 800,
+    "height": 310,
+    "t": 5.5
+  },
+  "scene": {
+    "kind": "hub-mini",
+    "theme": "light",
+    "twin": "hub-mini-dark",
+    "topBand": true
+  },
+  "sources": {
+    "render.html": "0042136b38cdd12bc06b7590461d71dfa22b5489e6934f37a1719647e16cd107",
+    "hub-mini-light.story.js": "e66f0f951918c2ca83d0d9fd1989a3004907d5c087d9a0b020c62c81b84372e5",
+    "record-gifs.mjs": "3bfa14c1d6a00cbf0adb6f2458171a7334c8183b7503065da18cbe44511714bd"
+  },
+  "tools": {
+    "playwrightCore": "1.64.0",
+    "ffmpeg": "9.0.2",
+    "gifsicle": "1.96",
+    "node": "v24.19.0"
+  },
+  "recorded": "2026-10-17T00:29:32.855Z"
+}

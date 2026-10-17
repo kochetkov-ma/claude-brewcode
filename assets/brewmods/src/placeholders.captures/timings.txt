@@ -1,23 +1,98 @@
-# session transcript rows (local time, run3) behind the ⏩ factors in placeholders.story.js: real span / shown seconds
-16:20:59.540 USER review the diff ++r
-16:21:02.006 TOOL Bash
-16:21:02.578 RESULT
-16:21:05.308 TOOL Bash
-16:21:05.452 RESULT
-16:21:07.884 TOOL Edit
-16:21:07.910 RESULT
-16:21:09.014 TOOL Edit
-16:21:09.042 RESULT
-16:21:09.708 TOOL Bash
-16:21:09.846 RESULT
-16:21:14.049 TEXT I found one bug in the diff, and I've fixed it. I 
-16:21:19.335 USER Placeholder helper. My request: <request>global add ++db: always use t
-16:21:20.906 TOOL mcp__brewmod-placeholders__list_placeholders
-16:21:20.916 RESULT
-16:21:22.644 TOOL AskUserQuestion
-16:21:23.692 RESULT
-16:21:25.244 TOOL mcp__brewmod-placeholders__save_placeholder
-16:21:25.256 RESULT
-16:21:26.520 TEXT I saved `++db` as a global placeholder in `~/.clau
-16:21:33.212 USER which DB should I run the migration against? one line ++db
-16:21:37.879 TEXT Run it against the staging DB, as your `++db` rule
+# session transcript rows (local time, Europe/Lisbon) behind the ⏩ factors in placeholders.story.js: real span / shown seconds
+# run 107.36/2.0=53.7 (enter+0.4 -> TEXT), dialog 4.11/0.5=8.2 (enter+0.2 -> AskUserQuestion), save 2.78/0.4=6.9 (enter+0.1 -> TEXT), plan-mode answer 10.91/0.6=18.2 (enter+0.4 -> TEXT)
+# two tokens 33.24/0.4=83.1 (enter+0.4 -> plan dialog on screen: absent in the 23:34:02.047 sample, shown in 23:34:04.129; ExitPlanMode was still pending at stop, so no TOOL row)
+# p-00-start: same bytes as a fresh start of this build (CC 2.1.301, kept); NOTIFY = a background reviewer agent finished
+23:23:52.066 CAPTURE p-01-plus
+23:23:53.136 CAPTURE p-02-menu
+23:23:53.154 KEY up
+23:23:54.261 CAPTURE p-03-up1
+23:23:54.279 KEY up
+23:23:55.393 CAPTURE p-04-up2
+23:23:55.413 KEY tab
+23:23:56.923 CAPTURE p-05-tab
+23:24:01.736 KEY enter
+23:24:01.737 USER review the diff with agents ++r
+23:24:02.182 CAPTURE p-06-send
+23:24:04.351 TOOL Bash
+23:24:04.767 RESULT
+23:24:13.292 TOOL Agent (Simplification pass on diff)
+23:24:13.302 RESULT
+23:24:17.496 TOOL Agent (Correctness/security review of diff)
+23:24:17.507 RESULT
+23:24:21.204 TOOL Agent (Test review of diff)
+23:24:21.211 RESULT
+23:24:24.357 TEXT I've started three agents to review the diff (22 l
+23:24:28.146 NOTIFY agent finished
+23:24:30.499 TOOL Bash
+23:24:30.560 RESULT
+23:24:33.513 TEXT I've reproduced the simplification agent's one fin
+23:24:48.677 NOTIFY agent finished
+23:24:52.768 TOOL Bash
+23:24:52.888 RESULT
+23:24:57.499 CAPTURE p-07-repro
+23:24:58.409 TEXT The correctness agent's two high-severity findings
+23:25:00.181 NOTIFY agent finished
+23:25:04.106 TOOL Bash
+23:25:04.255 RESULT
+23:25:06.727 TOOL Bash
+23:25:06.834 RESULT
+23:25:09.804 TOOL Read
+23:25:09.840 RESULT
+23:25:10.096 TOOL Read
+23:25:10.104 RESULT
+23:25:14.019 TEXT All three agents have reported, and I've confirmed
+23:25:17.289 TOOL Edit
+23:25:17.321 RESULT
+23:25:23.949 TOOL Edit
+23:25:23.984 RESULT
+23:25:27.789 TOOL Edit
+23:25:27.822 RESULT
+23:25:35.103 TOOL Bash
+23:25:35.555 RESULT
+23:25:40.818 TOOL Bash
+23:25:40.935 RESULT
+23:25:49.498 TEXT The review found five real problems in the diff, a
+23:26:54.074 CAPTURE p-08-done (view 32 rows up)
+23:27:05.056 CAPTURE p-09-cmd
+23:27:06.644 CAPTURE p-10-typed
+23:27:11.539 KEY enter
+23:27:11.815 USER Placeholder helper. My request: <request>global add ++db: bi
+23:27:11.993 CAPTURE p-11-handoff
+23:27:13.410 TOOL mcp__brewmod-placeholders__list_placeholders
+23:27:13.439 RESULT
+23:27:15.846 TOOL AskUserQuestion
+23:27:16.191 CAPTURE p-12-dialog
+23:27:23.123 RESULT
+23:27:23.131 KEY enter
+23:27:23.606 CAPTURE p-13-confirm
+23:27:24.850 TOOL mcp__brewmod-placeholders__save_placeholder
+23:27:24.859 RESULT
+23:27:26.010 TEXT I saved `++db` as a global placeholder in `~/.clau
+23:27:27.797 CAPTURE p-14-saved
+23:27:37.441 KEY btab
+23:27:38.593 CAPTURE p-15-btab1
+23:27:38.613 KEY btab
+23:27:39.750 CAPTURE p-16-btab2
+23:27:41.047 CAPTURE p-17-q
+23:27:42.341 CAPTURE p-18-qdb
+23:27:45.361 USER how should the tasting import write rows? one line ++db
+23:27:45.365 KEY enter
+23:27:45.841 CAPTURE p-19-qsent
+23:27:48.539 TOOL Grep
+23:27:48.578 RESULT
+23:27:51.674 TOOL Write
+23:27:51.708 RESULT
+23:27:53.392 TOOL ToolSearch
+23:27:53.406 RESULT
+23:27:56.674 TEXT Wrap the import in `transaction()` and write all r
+23:27:57.684 CAPTURE p-20-answer
+23:33:20.294 CAPTURE p-22-plan
+23:33:21.568 CAPTURE p-23-pdb
+23:33:23.156 CAPTURE p-24-pm
+23:33:30.487 USER plan the tasting import ++db ++m
+23:33:30.491 KEY enter
+23:33:30.951 CAPTURE p-25-psent
+23:34:02.051 TOOL Write
+23:34:02.068 RESULT
+23:34:04.129 SCREEN plan dialog shown (2 s sample; absent at 23:34:02.047)
+23:34:31.531 CAPTURE p-26-plan (view 62 rows up)

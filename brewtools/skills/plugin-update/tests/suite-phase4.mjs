@@ -60,7 +60,7 @@ const COMMANDS = REF('update-commands.md');
 assert.deepEqual([...REF('update-prompt.md').split('\n'), ...COMMANDS.split('\n')].filter(l => l.includes('claude plugin update <id>')), [
     '3. for every brewcode/brewdoc/brewtools/brewui row, and every installed brewmod-placeholders/brewmod-plan-effort row (never install a missing mod), from step 1 with scope user or managed: claude plugin update <id> --scope <scope of that row>',
     '4. for every such row with scope project or local: (cd "<projectPath of that row>" && claude plugin update <id> --scope <scope of that row>); if that projectPath is not a directory, run nothing for it and report it as an orphan install',
-    'claude plugin update <id> --scope <scope>      # user/managed rows, repeat per selected plugin',
+    'claude plugin update <id> --scope <scope>      # user/managed rows, one per update[] row',
     '(cd "<projectPath>" && claude plugin update <id> --scope <scope>)      # project/local rows',
 ], 'THEN update-prompt.md and update-commands.md template project/local updates from projectPath, never the session cwd');
 

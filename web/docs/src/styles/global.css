@@ -196,7 +196,7 @@
 }
 
 /* Mod terminal GIFs: full content width, no height cap (text must stay readable) */
-.prose p[align='center'] img[src^='/brewmods/'][src$='.gif']:not([src$='hub.gif']) {
+.prose p[align='center'] img[src^='/brewmods/'][src$='.gif']:not([src^='/brewmods/hub']) {
   max-height: none;
   width: 100%;
   height: auto;
@@ -204,7 +204,7 @@
 }
 
 /* Caption sits right under the GIF: drop the <br /> line box (typography margin was 32px + 28px) */
-.prose p[align='center'] img[src^='/brewmods/'][src$='.gif']:not([src$='hub.gif']) + br {
+.prose p[align='center'] img[src^='/brewmods/'][src$='.gif']:not([src^='/brewmods/hub']) + br {
   display: none;
 }
 

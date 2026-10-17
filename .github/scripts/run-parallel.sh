@@ -5,8 +5,17 @@ set -uo pipefail
 
 JOBS="${JOBS:-$(nproc 2>/dev/null || sysctl -n hw.ncpu)}"
 LOGS="$(mktemp -d)"
-mapfile -t LINES < <(grep -vE '^[[:space:]]*(#|$)' || true)
+# Read loop, not mapfile: macOS /bin/bash 3.2 has no mapfile; keeps an unterminated last line.
+LINES=()
+while IFS= read -r line || [ -n "$line" ]; do LINES+=("$line"); done < <(grep -vE '^[[:space:]]*(#|$)' || true)
 [ "${#LINES[@]}" -gt 0 ] || { echo "::error::run-parallel.sh: no commands on stdin"; exit 1; }
+
+# bash < 4.3 (macOS 3.2) lacks `wait -n`: free a slot by waiting on the oldest running job.
+if [ "${BASH_VERSINFO[0]}" -gt 4 ] || { [ "${BASH_VERSINFO[0]}" -eq 4 ] && [ "${BASH_VERSINFO[1]}" -ge 3 ]; }; then
+  wait_slot() { wait -n || true; }
+else
+  wait_slot() { local pid; pid=$(jobs -rp | head -n 1); [ -z "$pid" ] || wait "$pid" || true; }
+fi
 
 launch() {
   local i="$1" start rc
@@ -18,7 +27,7 @@ launch() {
 }
 
 for i in "${!LINES[@]}"; do
-  while [ "$(jobs -rp | wc -l)" -ge "$JOBS" ]; do wait -n || true; done
+  while [ "$(jobs -rp | wc -l)" -ge "$JOBS" ]; do wait_slot; done
   launch "$i" &
 done
 wait

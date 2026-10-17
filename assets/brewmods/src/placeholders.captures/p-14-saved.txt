@@ -1,0 +1,30 @@
+  Use the mcp__brewmod-placeholders__* tools (list_placeholders first); a placeholder
+  is inserted into prompts as ++name (not in this message: ++/).
+
+⏺ brewmod-placeholders - list_placeholders (MCP)
+  ⎿  ## +++ · layer: plugin · files: none · plan: add · Anti-drift cron for the cur
+     rent task; plan mode plans it as a step
+     # [ADDON: ANTI-DRIFT CRON]
+     … +105 lines (ctrl+o to expand)
+
+⏺ User answered Claude's questions:
+  ⎿  · Save ++db as drafted? → Save as drafted (Recommended)
+
+⏺ brewmod-placeholders - save_placeholder (MCP)(name: "db", text: "bind SQL params, no
+                                               query in a loop, use transactions",
+                                               description: "DB code rules: bound
+                                               params, no N+1, transactions", scope:
+                                               "global")
+  ⎿  saved ++db (global): ~/.claude/placeholders/db.md
+
+⏺ I saved ++db as a global placeholder in ~/.claude/placeholders/db.md, so you can use
+  it in any project. Typing ++db in a prompt inserts "bind SQL params, no query in a
+  loop, use transactions".
+
+✻ Brewed for 6s · done 11:27 PM
+
+────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────
+  ⏸ manual mode on · ? for shortcuts · ← for agents                 ◐ medium · /effort
+

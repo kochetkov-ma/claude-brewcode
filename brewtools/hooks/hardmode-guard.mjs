@@ -1,5 +1,8 @@
 #!/usr/bin/env node
-// brewcode-meta: version=6.9.6 content_version=6.5.2 generated_by=brewtools:manager-setup
+// brewcode-meta: version=6.10.0 content_version=6.5.2 generated_by=brewtools:manager-setup
+
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025-2026 Maksim Kochetkov
 
 // brewtools:manager-setup — HARD wall guard (PreToolUse "*"), self-contained copy in <project>/.claude/brewtools/manager/:
 // state.hard -> deny main-session tools except delegate/read/track; subagents free. Fail-closed once installed.

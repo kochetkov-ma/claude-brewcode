@@ -61,6 +61,12 @@ function run(script, args, cwd) {
   return { stdout: r.stdout || '', stderr: r.stderr || '', status: r.status };
 }
 
+// macOS /bin/bash 3.2 under a UTF-8 locale: a-z ranges and [:lower:] match accented letters there.
+function runUtf8(script, args, cwd) {
+  const r = spawnSync('/bin/bash', [script, ...args], { cwd, encoding: 'utf8', timeout: 180000, env: { ...process.env, LC_ALL: 'en_US.UTF-8' } });
+  return { stdout: r.stdout || '', stderr: r.stderr || '', status: r.status };
+}
+
 // Trailing `KEY:VALUE` summary of toggle-team.sh; LAST occurrence wins (progress lines share `MOVED:`).
 function summary(stdout) {
   const out = {};
@@ -465,6 +471,8 @@ const TRAVERSAL = '../../../outside/README';
     [...reject.map(() => 'REJECT'), ...accept.map(() => 'ACCEPT')],
     'the collapsed guard rejects every traversal/charset shape and accepts every ordinary id',
   );
+  check('a9.nonAscii', runUtf8(probe, ['é1', 'café'], BASE).stdout, 'REJECT\nREJECT\n',
+    'GIVEN non-ASCII ids under /bin/bash and a UTF-8 locale WHEN the guard runs THEN each is rejected');
 }
 
 // A10 — separator recognition is exact: triple hyphens inside a valid agent id
@@ -553,6 +561,14 @@ const TRAVERSAL = '../../../outside/README';
       'GIVEN prose with a command substitution WHEN parsed THEN only the first word is the name'],
   ];
   for (const [args, expected, message] of cases) check(`a11.detect[${args}]`, detect(args), expected, message);
+  const accented = runUtf8(DETECT, ['install café'], root);
+  check('a11.nonAsciiName', [accented.status, linesStartingWith(accented.stdout, 'ERROR:')], [1, [`ERROR:${NAME_CHARS}`]],
+    'GIVEN a non-ASCII team name under /bin/bash and a UTF-8 locale WHEN parsed THEN it is refused');
+  const unattended = ['--unattended upgrade payments', 'upgrade payments --unattended',
+    'upgrade --unattended payments', 'payments upgrade --unattended'];
+  check('a11.unattendedPositions', Object.fromEntries(unattended.map((args) => [args, detect(args)])),
+    Object.fromEntries(unattended.map((args) => [args, ok('upgrade', 'payments')])),
+    'GIVEN --unattended before, between or after the mode and the team WHEN parsed THEN every position is upgrade of payments');
   check('a11.nothingExecuted', existsSync(marker), false,
     'GIVEN hostile arguments WHEN detect-mode.sh ran THEN no command substitution was executed');
 }
@@ -577,6 +593,9 @@ const TRAVERSAL = '../../../outside/README';
   const hostile = run(TOGGLE, [`my te"am $(touch ${marker})`, 'disable'], root);
   check('a12.hostileTeam', [hostile.status, hostile.stdout, existsSync(marker)], [1, NAME_ERROR, false],
     'GIVEN a team name with a space, a quote and a command substitution WHEN disable runs THEN nothing executes');
+  const accented = runUtf8(TOGGLE, ['café', 'disable'], root);
+  check('a12.nonAsciiTeam', [accented.status, accented.stdout], [1, NAME_ERROR],
+    'GIVEN a non-ASCII team name under /bin/bash and a UTF-8 locale WHEN disable runs THEN it is refused before any read');
   check('a12.tree', ls(agentsDir), ['intent-guard.md', 'worker-one.md'],
     'GIVEN three refused runs WHEN the agents dir is listed THEN every member is still live');
 }
@@ -717,7 +736,248 @@ ${'Board lifecycle rule. '.repeat(200)}
     [1, '', 'ERROR:not an agent id: ../outside (must match ^[a-z0-9][a-z0-9-]*$)\n'],
     [1, '', 'Usage: agent-generator.sh <agent-name>   (run from the project root)\n'],
   ], 'GIVEN a traversal value or no argument WHEN agent-generator.sh runs THEN it refuses with rc 1 and reads nothing');
+  const accentedGen = runUtf8(GENERATOR, ['é1'], root);
+  check('a17.generatorNonAscii', [accentedGen.status, accentedGen.stdout, linesStartingWith(accentedGen.stderr, 'ERROR:')],
+    [1, '', ['ERROR:not an agent id: é1 (must match ^[a-z0-9][a-z0-9-]*$)']],
+    'GIVEN a non-ASCII agent id under /bin/bash and a UTF-8 locale WHEN agent-generator.sh runs THEN it refuses with rc 1');
 }
+
+// BEGIN SOURCE UNATTENDED UPGRADE
+// Claude-only: `mode-upgrade.md` and this SKILL.md text are not projected into the Codex mirror.
+const SKILL = join(HERE, '..', 'SKILL.md');
+const MODE_UPGRADE = join(HERE, '..', 'references', 'mode-upgrade.md');
+const flat = (text) => text.replace(/\s+/g, ' ');
+
+// The shipped U1c fence, placeholders filled as the agent fills them, run by bash from the project root.
+const UPGRADE_DOC = readFileSync(MODE_UPGRADE, 'utf8');
+const FENCE_FROM = UPGRADE_DOC.indexOf('```bash\n', UPGRADE_DOC.indexOf('### U1c:')) + '```bash\n'.length;
+const FENCE = UPGRADE_DOC.slice(FENCE_FROM, UPGRADE_DOC.indexOf('\n```', FENCE_FROM));
+const STAMP = {
+  PLUGIN_VERSION: '6.10.0', CONTENT_VERSION: '6.7.0', GENERATED_BY: 'brewcode:teams-setup', LAST_UPDATED: '2026-10-16',
+};
+let fenceScripts = 0;
+const restamp = (root, step, values = STAMP) => {
+  const script = join(BASE, `u1c-fence-${fenceScripts++}.sh`);
+  writeFileSync(script, Object.entries({ STEP: step, TEAM_NAME: 't1', ...values })
+    .reduce((text, [key, value]) => text.replaceAll(`{${key}}`, value), FENCE));
+  const r = run(script, [], root);
+  return [r.status, r.stdout];
+};
+const teamPath = (root) => join(root, '.claude', 'teams', 't1', 'team.md');
+const edit = (root, ...pairs) => writeFileSync(teamPath(root),
+  pairs.reduce((text, [a, b]) => text.replace(a, b), readFileSync(teamPath(root), 'utf8')));
+const OLD_DEFAULTS = '|Agent defaults|active;2026-08-16;domain;6.1.4|';
+const NEW_DEFAULTS = '|Agent defaults|active;2026-10-16;domain;6.10.0|';
+const OLD_GUARD_CELLS = '|active|2026-08-16|review-only|6.1.4|';
+const NEW_GUARD_CELLS = '|active|2026-10-16|review-only|6.10.0|';
+const verdict = (root) => {
+  const r = run(VERIFY, ['t1'], root);
+  return [r.status, linesStartingWith(r.stdout, 'VERIFY:'), linesStartingWith(r.stdout, 'CHECK: intent-guard roster contract')];
+};
+const blank = (name) => [`|${name}|api|fixture mission|active|2026-08-16|domain|6.1.4|`, `|${name}|api|fixture mission|||||`];
+
+// A18 — U1c restamps the header quartet plus the cells verify-team.sh pins to it; legacy, unfilled or doubled input writes nothing.
+{
+  const current = makeProject('a18-current', ['worker-one', 'intent-guard'], ['worker-one', 'intent-guard']);
+  const original = readFileSync(teamPath(current), 'utf8');
+  const checked = restamp(current, 'check');
+  const written = restamp(current, 'write');
+  check('a18.currentHeader', { checked, written, team: readFileSync(teamPath(current), 'utf8') }, {
+    checked: [0, 'HEADER ok cv=6.1.0\n✅ restamp\n'],
+    written: [0, 'RESTAMPED cv=6.1.0->6.7.0\n✅ restamp\n'],
+    team: original.replace('|Version|6.1.4|', '|Version|6.10.0|')
+      .replace('|Content version|6.1.0|', '|Content version|6.7.0|')
+      .replace('|Last update|2026-08-16|', '|Last update|2026-10-16|')
+      .replace(OLD_DEFAULTS, NEW_DEFAULTS)
+      .replace(OLD_GUARD_CELLS, NEW_GUARD_CELLS),
+  }, 'GIVEN a current team.md WHEN check then write run THEN header, Agent defaults and intent-guard Updated/Version move and the explicit worker-one row keeps 2026-08-16/6.1.4');
+
+  const padded = makeProject('a18-padded', ['worker-one'], ['worker-one']);
+  edit(padded, ['|Version|6.1.4|', '| Version | 6.1.4 |'], ['|Content version|6.1.0|', '| Content Version | 6.1.0 |'],
+    ['|Generated by|brewcode:teams-setup|', '| Generated by | brewcode:teams-setup |'],
+    ['|Last update|2026-08-16|', '| Last update | 2026-08-16 |'],
+    [OLD_DEFAULTS, '| Agent defaults | active;2026-08-16;domain;6.1.4 |']);
+  const paddedBefore = readFileSync(teamPath(padded), 'utf8');
+  check('a18.paddedHeader', [restamp(padded, 'write'), readFileSync(teamPath(padded), 'utf8')], [
+    [0, 'RESTAMPED cv=6.1.0->6.7.0\n✅ restamp\n'],
+    paddedBefore.replace('| Version | 6.1.4 |', '| Version | 6.10.0 |')
+      .replace('| Content Version | 6.1.0 |', '| Content Version | 6.7.0 |')
+      .replace('| Last update | 2026-08-16 |', '| Last update | 2026-10-16 |')
+      .replace('| Agent defaults | active;2026-08-16;domain;6.1.4 |', '| Agent defaults | active;2026-10-16;domain;6.10.0 |'),
+  ], 'GIVEN a space-padded header and Agent defaults WHEN write runs THEN the values change and the padding and key spelling stay');
+
+  const mirrors = {
+    doubledDefaults: [OLD_DEFAULTS, `${OLD_DEFAULTS}\n${OLD_DEFAULTS}`],
+    malformedDefaults: [OLD_DEFAULTS, '|Agent defaults|active;2026-08-16;6.1.4|'],
+    doubledGuard: [OLD_GUARD_CELLS, `${OLD_GUARD_CELLS}\n|intent-guard|--|x${OLD_GUARD_CELLS}`],
+    shortGuard: [OLD_GUARD_CELLS, '|active|2026-08-16|review-only|'],
+  };
+  const broken = Object.fromEntries(Object.entries(mirrors).map(([label, pair]) => {
+    const root = makeProject(`a18-${label}`, ['worker-one', 'intent-guard'], ['worker-one', 'intent-guard']);
+    edit(root, pair);
+    const bytes = readFileSync(teamPath(root), 'utf8');
+    return [label, [...restamp(root, 'write'), readFileSync(teamPath(root), 'utf8') === bytes]];
+  }));
+  check('a18.mirrorRefusals', broken, {
+    doubledDefaults: [0, 'ERROR doubled Agent defaults row\n❌ FAILED restamp\n', true],
+    malformedDefaults: [0, 'ERROR malformed Agent defaults row\n❌ FAILED restamp\n', true],
+    doubledGuard: [0, 'ERROR doubled intent-guard row\n❌ FAILED restamp\n', true],
+    shortGuard: [0, 'ERROR intent-guard row lacks Updated/Version cells\n❌ FAILED restamp\n', true],
+  }, 'GIVEN a doubled or malformed Agent defaults or intent-guard row WHEN write runs THEN it refuses and team.md is byte-identical, header included');
+
+  const legacy = makeProject('a18-legacy', ['worker-one'], ['worker-one']);
+  edit(legacy, ['|Content version|6.1.0|\n', '']);
+  const swapped = makeProject('a18-swapped', ['worker-one'], ['worker-one']);
+  edit(swapped, ['|Version|6.1.4|\n|Content version|6.1.0|\n', '|Content version|6.1.0|\n|Version|6.1.4|\n']);
+  const unfilled = makeProject('a18-unfilled', ['worker-one'], ['worker-one']);
+  const before = [legacy, swapped, unfilled].map((root) => readFileSync(teamPath(root), 'utf8'));
+  const refusals = {
+    legacyCheck: restamp(legacy, 'check'),
+    legacyWrite: restamp(legacy, 'write'),
+    swappedCheck: restamp(swapped, 'check'),
+    unfilledWrite: restamp(unfilled, 'write', { ...STAMP, PLUGIN_VERSION: '{PLUGIN_VERSION}' }),
+    unchanged: [legacy, swapped, unfilled].map((root, i) => readFileSync(teamPath(root), 'utf8') === before[i]),
+  };
+  check('a18.refusals', refusals, {
+    legacyCheck: [0, 'HEADER legacy\n✅ restamp\n'],
+    legacyWrite: [0, 'HEADER legacy\n❌ FAILED restamp\n'],
+    swappedCheck: [0, 'HEADER legacy\n✅ restamp\n'],
+    unfilledWrite: [0, 'ERROR unfilled or malformed stamp value\n❌ FAILED restamp\n'],
+    unchanged: [true, true, true],
+  }, 'GIVEN a header missing Content version, one out of order and an unfilled value WHEN the fence runs THEN it reports legacy or refuses and every team.md is byte-identical');
+}
+
+// A20 — e2e P1 regression: install-shaped team (blank default rows) passes verify-team.sh before and after U1c write.
+{
+  const required = makeProject('a20-required', ['intent-guard', 'worker-one', 'worker-two'], ['intent-guard', 'worker-one', 'worker-two']);
+  edit(required, blank('worker-one'), blank('worker-two'));
+  const absent = makeProject('a20-absent', ['worker-one', 'worker-two'], ['worker-one', 'worker-two']);
+  edit(absent, blank('worker-one'));
+  const restamped = (bytes) => bytes.replace('|Version|6.1.4|', '|Version|6.10.0|')
+    .replace('|Content version|6.1.0|', '|Content version|6.7.0|')
+    .replace('|Last update|2026-08-16|', '|Last update|2026-10-16|')
+    .replace(OLD_DEFAULTS, NEW_DEFAULTS)
+    .replace(OLD_GUARD_CELLS, NEW_GUARD_CELLS);
+  const requiredBytes = readFileSync(teamPath(required), 'utf8');
+  const absentBytes = readFileSync(teamPath(absent), 'utf8');
+  const cycle = (root) => ({
+    before: verdict(root),
+    checked: restamp(root, 'check'),
+    written: restamp(root, 'write'),
+    after: verdict(root),
+    team: readFileSync(teamPath(root), 'utf8'),
+  });
+  const pass = (guardLine) => [0, ['VERIFY: PASS'], guardLine];
+  check('a20.required', cycle(required), {
+    before: pass(['CHECK: intent-guard roster contract ... OK']),
+    checked: [0, 'HEADER ok cv=6.1.0\n✅ restamp\n'],
+    written: [0, 'RESTAMPED cv=6.1.0->6.7.0\n✅ restamp\n'],
+    after: pass(['CHECK: intent-guard roster contract ... OK']),
+    team: restamped(requiredBytes),
+  }, 'GIVEN a required team with blank default rows WHEN U1c check then write runs THEN verify passes after and only header, defaults and intent-guard cells moved');
+  check('a20.legacyAbsent', cycle(absent), {
+    before: pass([]),
+    checked: [0, 'HEADER ok cv=6.1.0\n✅ restamp\n'],
+    written: [0, 'RESTAMPED cv=6.1.0->6.7.0\n✅ restamp\n'],
+    after: pass([]),
+    team: restamped(absentBytes),
+  }, 'GIVEN a legacy-absent team (no intent-guard row) WHEN U1c check then write runs THEN verify passes after, no guard row appears, explicit worker-two keeps 6.1.4');
+}
+
+// A21 — ENABLE/DISABLE step 5 restamps through the U1c fence, so step 6 verify passes after a version move.
+{
+  const toggleDoc = flat(readFileSync(join(HERE, '..', 'references', 'mode-enable-disable.md'), 'utf8'));
+  check('a21.docSteps', {
+    enable: toggleDoc.includes('Then restamp the header with the U1c fence of `${CLAUDE_SKILL_DIR}/references/mode-upgrade.md`, `{STEP}` = `write`, values from the Phase 1 lines; never hand-edit the header.'),
+    disable: toggleDoc.includes('then restamp the header as in ENABLE step 5.'),
+    handRefresh: /refresh (all )?(the )?four header rows/.test(toggleDoc),
+  }, { enable: true, disable: true, handRefresh: false },
+  'GIVEN mode-enable-disable.md WHEN both steps 5 are read THEN each restamps through the U1c fence and none hand-refreshes the header');
+
+  const control = makeProject('a21-control', ['intent-guard', 'worker-one'], ['intent-guard', 'worker-one']);
+  edit(control, blank('worker-one'), ['|Version|6.1.4|', '|Version|6.10.0|'],
+    ['|Content version|6.1.0|', '|Content version|6.7.0|'], ['|Last update|2026-08-16|', '|Last update|2026-10-16|']);
+  const handOnly = run(VERIFY, ['t1'], control);
+  check('a21.headerOnlyControl', [handOnly.status, linesStartingWith(handOnly.stdout, 'CHECK: Agent defaults'), linesStartingWith(handOnly.stdout, 'VERIFY:')],
+    [1, ['CHECK: Agent defaults ... FAIL (expected exactly: |Agent defaults|active;2026-10-16;domain;6.10.0|)'], ['VERIFY: FAIL']],
+    'GIVEN only the four header rows moved by hand (the old step 5) WHEN verify runs THEN Agent defaults fails: the mirror cells are required');
+
+  const NEXT = { PLUGIN_VERSION: '6.11.0', CONTENT_VERSION: '6.8.0', GENERATED_BY: 'brewcode:teams-setup', LAST_UPDATED: '2026-10-20' };
+  const parked = (name) => [`|${name}|api|fixture mission|||||`, `|${name}|api|fixture mission|disabled||||`];
+  const restored = (name) => [...parked(name)].reverse();
+  const state = (r) => [r.status, linesStartingWith(r.stdout, 'VERIFY:'), linesStartingWith(r.stdout, 'DISABLED_AGENTS:'),
+    linesStartingWith(r.stdout, 'CHECK: intent-guard roster contract')];
+  const root = makeProject('a21', ['intent-guard', 'worker-one', 'worker-two'], ['intent-guard', 'worker-one', 'worker-two']);
+  edit(root, blank('worker-one'), blank('worker-two'));
+  const original = readFileSync(teamPath(root), 'utf8');
+  const off = run(TOGGLE, ['t1', 'disable'], root).status;
+  edit(root, parked('worker-one'), parked('worker-two'));
+  const offStamp = restamp(root, 'write');
+  const offVerify = state(run(VERIFY, ['t1'], root));
+  const on = run(TOGGLE, ['t1', 'enable'], root).status;
+  edit(root, restored('worker-one'), restored('worker-two'));
+  const onStamp = restamp(root, 'write', NEXT);
+  const onVerify = state(run(VERIFY, ['t1'], root));
+  check('a21.disableThenEnable', { off, offStamp, offVerify, on, onStamp, onVerify, team: readFileSync(teamPath(root), 'utf8') }, {
+    off: 0,
+    offStamp: [0, 'RESTAMPED cv=6.1.0->6.7.0\n✅ restamp\n'],
+    offVerify: [0, ['VERIFY: PASS (team DISABLED -- 2 agent file(s) parked as .md.disabled)'], ['DISABLED_AGENTS:2'],
+      ['CHECK: intent-guard roster contract ... OK']],
+    on: 0,
+    onStamp: [0, 'RESTAMPED cv=6.7.0->6.8.0\n✅ restamp\n'],
+    onVerify: [0, ['VERIFY: PASS'], ['DISABLED_AGENTS:0'], ['CHECK: intent-guard roster contract ... OK']],
+    team: original.replace('|Version|6.1.4|', '|Version|6.11.0|')
+      .replace('|Content version|6.1.0|', '|Content version|6.8.0|')
+      .replace('|Last update|2026-08-16|', '|Last update|2026-10-20|')
+      .replace(OLD_DEFAULTS, '|Agent defaults|active;2026-10-20;domain;6.11.0|')
+      .replace(OLD_GUARD_CELLS, '|active|2026-10-20|review-only|6.11.0|'),
+  }, 'GIVEN a required team with blank rows WHEN DISABLE then ENABLE each run toggle, the Status edit and the U1c write at a new version THEN step 6 verify passes both times');
+}
+
+// A19 — SKILL.md + mode-upgrade.md unattended contract: block once after the Scope rule, RESULT table, interactive-only steps.
+{
+  const skill = readFileSync(SKILL, 'utf8');
+  const doc = flat(readFileSync(MODE_UPGRADE, 'utf8'));
+  const HEAD = '**Unattended (`--unattended` anywhere in the prompt; set by `/brewcode:setup-status upgrade`).**';
+  const scopeEnd = skill.indexOf('\n', skill.indexOf('> **Scope (normative):** `upgrade` edits only'));
+  check('a19.blockPlacement', [skill.split(HEAD).length - 1, skill.indexOf(HEAD) - scopeEnd], [1, 2],
+    'GIVEN SKILL.md WHEN the unattended block is located THEN it appears once, right after the UPGRADE Scope rule');
+
+  const tableAt = skill.indexOf('| Under `--unattended` | Last line |');
+  const table = Object.fromEntries(skill.slice(tableAt).split('\n\n')[0].split('\n').slice(2)
+    .map((row) => row.slice(2, -2).split(' | ')));
+  const id = 'RESULT skipped brewcode:teams-setup team=<name> cv=?->? pending=0 note=';
+  check('a19.resultTable', table, {
+    'resolved mode other than `upgrade`': `\`${id}"not-upgrade"\``,
+    'team not found': `\`${id}"not installed"\``,
+    'step 3 tokenizer preflight missing': `\`${id}"missing tokenizer"\``,
+    'U1 prints a `PARKED` row': `\`${id}"parked: <members>"\``,
+    'U1c `check` prints `HEADER legacy`': `\`${id}"legacy team.md header"\``,
+    'any other STOP or `❌` before the first write': `\`${id}"<reason>"\``,
+    'STOP, `❌` or `OUTSIDE` after the first write':
+      '`RESULT failed brewcode:teams-setup team=<name> cv=<before>->? pending=0 note="<step>: <reason>"`',
+    'U1c `write` printed `RESTAMPED`, scope gate ✅':
+      '`RESULT ok brewcode:teams-setup team=<name> cv=<before>-><after> pending=0 note="tuning not run"`',
+  }, 'GIVEN the UPGRADE unattended table WHEN parsed THEN every skip path and the plumbing-only ok carry their exact RESULT line');
+  const grammar = /^`RESULT (ok|partial|skipped|failed) brewcode:teams-setup team=<name> cv=\S+->\S+ pending=\d+ note="[^"]+"`$/;
+  check('a19.resultGrammar', Object.values(table).filter((line) => !grammar.test(line)), [],
+    'GIVEN every RESULT line in the table WHEN matched against the canonical grammar THEN none deviates');
+
+  check('a19.interactiveOnly', {
+    neverRun: /Never run: (.*?)\. /.exec(flat(skill))?.[1],
+    step5: skill.includes('5. Mutating modes only, skipped under `--unattended` — **ASK**'),
+    tokenizer: flat(skill).includes('`--unattended` never prepares (`RESULT skipped`, `## Mode: UPGRADE`)'),
+    policy: flat(skill).includes('The flag never changes `INTENT_GUARD_POLICY`: a `legacy-absent` roster never gains `intent-guard`.'),
+    intro: doc.includes('Under `--unattended` (SKILL.md `## Mode: UPGRADE`, its table maps every stop to the `RESULT` line): U1, U1b and U1c only; U2-U4 never run and the cursor is never set.'),
+    parked: doc.includes('Under `--unattended` this is `RESULT skipped`, note `parked: <members>`.'),
+    legacy: doc.includes('`HEADER legacy` -> `RESULT skipped`, note `legacy team.md header`, nothing written.'),
+    cursor: doc.includes('Set cursor (never under `--unattended`: no U2 analysis consumed the entries, so the next interactive `upgrade` reads them):'),
+  }, {
+    neverRun: "step 5's confirm, step 6's tokenizer prepare, U2-U4 (no tuning, deletion or agent spawn), Epilogue E1, the cursor write",
+    step5: true, tokenizer: true, policy: true, intro: true, parked: true, legacy: true, cursor: true,
+  }, 'GIVEN SKILL.md and mode-upgrade.md WHEN the unattended rules are read THEN the confirm, prepare, U2-U4, E1 and the cursor stay interactive-only and every skip is stated');
+}
+// END SOURCE UNATTENDED UPGRADE
 
 // ── report ──────────────────────────────────────────────────────────────────
 rmSync(BASE, { recursive: true, force: true });

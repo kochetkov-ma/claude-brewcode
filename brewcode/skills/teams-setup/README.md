@@ -17,19 +17,21 @@ claude plugin install brewcode@claude-brewcode
 /brewcode:teams-setup install my-project
 ```
 
-Argument hint: `[prompt] [status|install|upgrade|enable|disable|uninstall|purge] [name]`
+Argument hint: `[prompt] [status|install|upgrade|enable|disable|uninstall|purge] [name] [--unattended]`
 
 | Mode | Invocation | Description |
 |------|-----------|-------------|
 | Status | `/brewcode:teams-setup status <name>` | Read-only report: agent health, success rates, issues, insights |
 | Install | `/brewcode:teams-setup install <name> [prompt]` | Analyze project, propose team, create agents + tracking framework |
 | Upgrade | `/brewcode:teams-setup upgrade <name>` | Analyze performance, tune or replace underperformers |
-| Enable | `/brewcode:teams-setup enable <name>` | Restore a disabled team: every parked `<agent>.md.disabled` is renamed back to `<agent>.md` |
-| Disable | `/brewcode:teams-setup disable <name>` | Park the team without deleting it: each `<agent>.md` becomes `<agent>.md.disabled`. `team.md`, `trace.jsonl` and the archive are untouched |
+| Enable | `/brewcode:teams-setup enable <name>` | Restore a disabled team: every parked `<agent>.md.disabled` is renamed back to `<agent>.md`; the `team.md` rows return to `active` and its header is restamped |
+| Disable | `/brewcode:teams-setup disable <name>` | Park the team without deleting it: each `<agent>.md` becomes `<agent>.md.disabled`. In `team.md` only the parked rows' `Status` cells and the header change; `trace.jsonl` and the archive are untouched |
 | Uninstall | `/brewcode:teams-setup uninstall <name>` | Archive old tracking data, remove inactive agents |
 | Purge | `/brewcode:teams-setup purge <name>` | Total removal: every domain agent + `.claude/teams/<name>/` incl. the archive. Confirmed once, not recoverable |
 
-No arguments: `status` of the first existing team, or `install` of a team named `default` when none exists. In a bare `mode [name]` pair the verb comes first, so `install enable` creates a team named `enable`; in a sentence the name comes from the text ("disable the payments team" names `payments`). `enable` and `disable` take effect for the NEXT session.
+No arguments: `status` of the first existing team, or `install` of a team named `default` when none exists. In a bare `mode [name]` pair the verb comes first, so `install enable` creates a team named `enable`; in a sentence the name comes from the text ("disable the payments team" names `payments`). `enable` and `disable` take effect for the NEXT session. Team names use ASCII letters, digits, `-` and `_`, with no leading dash.
+
+`--unattended` (set by `/brewcode:setup-status upgrade`) lets only `upgrade` run, asks nothing and does the plumbing: migration, re-copied scripts, header restamp and verify. Tuning stays interactive.
 
 `purge` keeps `.claude/agents/intent-guard.md` (shared with `/brewcode:superreview-setup`). Agents owned by another generator are never touched.
 

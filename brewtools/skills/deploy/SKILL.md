@@ -6,6 +6,7 @@ disable-model-invocation: true
 argument-hint: "[prompt] [setup|create|release|deploy|monitor|update-agent]"
 allowed-tools: [Read, Write, Edit, Bash, Agent, AskUserQuestion, Glob, Grep]
 model: opus
+license: MIT
 ---
 
 [DICT: P=Phase, EXEC=EXECUTE using Bash tool, AUQ=AskUserQuestion, WF=workflow, CFG=config, REF=references, GH=gh CLI, TPL=template]

@@ -1,7 +1,8 @@
 # Intent routing — `brewcode:semble-setup`
 
-Normative for `SKILL.md`: lowercase free-text RU/EN `$ARGUMENTS`, strip punctuation, match whole words;
-multi-word keywords (`set up`, `turn off`, `удали полностью`) match whole phrases.
+Normative for `SKILL.md`: strip the `--unattended` flag first (set by `/brewcode:setup-status upgrade`; never a
+mode, keyword or name; only `upgrade` honours it, SKILL.md `upgrade`), then lowercase free-text RU/EN `$ARGUMENTS`,
+strip punctuation, match whole words; multi-word keywords (`set up`, `turn off`, `удали полностью`) match whole phrases.
 
 ## Routing table
 
@@ -17,6 +18,23 @@ multi-word keywords (`set up`, `turn off`, `удали полностью`) matc
 | `reindex` | `reindex`, `rebuild`, `refresh`, `reset index`, `warm` | `переиндексируй`, `пересобери`, `обнови индекс`, `прогрей` | yes |
 | `optimize` | `optimize`, `tune`, `improve`, `review config` | `оптимизируй`, `настрой лучше`, `улучши` | no by default |
 | `resume` | `resume`, `continue`, `verify`, `after reload`, `restarted` | `продолжи`, `возобнови`, `проверь после перезапуска` | yes (verify only) |
+
+## Mode -> script routing
+
+Moved verbatim from `SKILL.md` Step 2; Step N names `SKILL.md` steps.
+
+| Mode | Route |
+|------|-------|
+| `status` | `semble-status.sh --section all --json` (Step 1 output only) |
+| `install` | Step 3: `semble-install.sh all --json` (exit 4 = confirm) -> `all --yes` or the `coreutils --yes` offer -> `semble-mcp.sh detect`/`add`/`repair` -> `semble-guidance.sh install` + `semble-agents.sh apply` -> reload checkpoint |
+| `upgrade` | prerequisite + MCP probes -> approved repair -> Step 3.2b block, always -> reload checkpoint only if registration changed or still `awaiting_reload` |
+| `enable` | `semble-project.sh enable --yes --json` |
+| `disable` | `semble-project.sh disable --yes --json` |
+| `uninstall` | `AskUserQuestion` flavour -> `semble-remove.sh <integration\|mcp\|cli> --yes --json` |
+| `purge` | `semble-remove.sh purge --yes --confirm-text "purge semble code cache" --json` |
+| `reindex` | `semble-project.sh reindex --json` (dry, prints the target) -> confirm -> same with `--yes` |
+| `optimize` | read-only `semble-project.sh audit` + `semble-cache.sh info` + `semble-guidance.sh status` + `semble-agents.sh audit` |
+| `resume` | Step 4: `semble-state.sh phase verifying` -> `semble-project.sh smoke` -> `semble-guidance.sh install` -> `semble-agents.sh apply` -> `semble-state.sh phase ready` |
 
 ## Resolution algorithm — in this order, no reordering
 

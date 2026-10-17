@@ -1,0 +1,30 @@
+⏺ brewmod-placeholders - list_placeholders (MCP)
+  ⎿  ## +++ · layer: plugin · files: none · plan: add · Anti-drift cron for the cur
+     rent task; plan mode plans it as a step
+     # [ADDON: ANTI-DRIFT CRON]
+     … +105 lines (ctrl+o to expand)
+
+⏺ User answered Claude's questions:
+  ⎿  · Save ++db as drafted? → Save as drafted (Recommended)
+
+⏺ brewmod-placeholders - save_placeholder (MCP)(name: "db", text: "bind SQL params, no
+                                               query in a loop, use transactions",
+                                               description: "DB code rules: bound
+                                               params, no N+1, transactions", scope:
+                                               "global")
+  ⎿  saved ++db (global): ~/.claude/placeholders/db.md
+
+⏺ I saved ++db as a global placeholder in ~/.claude/placeholders/db.md, so you can use
+  it in any project. Typing ++db in a prompt inserts "bind SQL params, no query in a
+  loop, use transactions".
+
+✻ Brewed for 6s · done 11:27 PM
+++db · Claude receives these lines now:                                             [-]
+  bind SQL params, no query in a loop, use transactions
+close: move the caret off ++db · send as typed: ++/
+
+────────────────────────────────────────────────────────────────────────────────────────
+❯ how should the tasting import write rows? one line ++db
+────────────────────────────────────────────────────────────────────────────────────────
+  ⏸ plan mode on (shift+tab to cycle)
+

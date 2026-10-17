@@ -1,6 +1,6 @@
 ---
 title: "My Claude"
-description: "Document your Claude Code installation: local setup overview, official architecture docs, or custom web research from forums, GitHub, and marketplaces."
+description: "Document your Claude Code installation: local setup with plugins and mods, official architecture, web research. Refresh regenerates stale guides."
 order: 24
 ---
 import { Badge, Card, CardGrid, Spoiler, Steps, UpdateNotice } from '../../../../components/mdx';
@@ -9,31 +9,36 @@ import { Badge, Card, CardGrid, Spoiler, Steps, UpdateNotice } from '../../../..
 
 <Badge variant="primary" text="opus" /> <Badge variant="secondary" text="user-invoked" />
 
-Maps your Claude Code setup into one shareable Markdown doc: the local config and project `.claude` (internal), the official architecture (external), or a cited answer from live sources (research). An independent agent re-checks every path and count before the run ends.
+Maps your Claude Code setup into one shareable Markdown doc: the local config, project `.claude` and installed plugins and mods (internal), the official architecture (external), or a cited answer from live sources (research). `refresh` regenerates the guides that a plugin update left behind. An independent agent re-checks every path and count before a run ends.
 
 ## Quick reference
 
 | Field | Value |
 |-------|-------|
 | Command | `/brewdoc:my-claude` |
-| Arguments | `[prompt] [ext [context]]` \| `[r <query>]`; no args = internal installation docs |
+| Arguments | `[prompt] [ext [context]]` \| `[r <query>]` \| `[refresh]`; no args = internal installation docs |
 | Model | opus |
+| Tools | `Read`, `Glob`, `Grep`, `Bash`, `Agent`, `WebFetch`, `WebSearch`, `AskUserQuestion` |
 
 ## Modes
 
 | Argument | Mode | What it does | Output (in `.claude/brewdoc/my-claude/`) |
 |----------|------|--------------|------|
-| *(none)*, or no keyword match | INTERNAL (default) | Rules, agents, skills, memories of the config dir and the project | `YYYYMMDD_my-claude-internal.md` |
+| *(none)*, or no keyword match | INTERNAL (default) | Rules, agents, skills, memories of the config dir and the project, plus a table of installed plugins and mods | `YYYYMMDD_my-claude-internal.md` |
 | `ext` or `external` | EXTERNAL | Official docs, local hook analysis, recent releases | `YYYYMMDD_my-claude-external.md` |
 | `ext context` | EXTERNAL, context-schema | `additionalContext`, `updatedInput`, `decision` | `external/YYYYMMDD_context-schema.md` |
 | `r <query>` or `research <query>` | RESEARCH | GitHub, Reddit, forums, marketplaces, with citations | `YYYYMMDD_research-{slug}.md` |
+| `refresh` | REFRESH | Regenerates every guide older than the installed brewdoc; asks nothing. [Details](#refresh) | A new dated file per stale guide, same names as above |
 
 ## When to use
 
-- Hand a new teammate a map of your setup.
-- Before a release, snapshot current skills, agents, hooks and rules.
-- When writing hooks, run `ext context` for a fresh reference on which channels work for which events.
-- Research any topic across live sources with `r <query>`.
+| Scenario | Command |
+|----------|---------|
+| Hand a new teammate a map of your setup | `/brewdoc:my-claude` |
+| Before a release, snapshot skills, agents, hooks, rules and plugin versions | `/brewdoc:my-claude` |
+| Write hooks and need a fresh reference on which channels work for which events | `/brewdoc:my-claude ext context` |
+| Research any topic across live sources | `/brewdoc:my-claude r <query>` |
+| Bring the guides up to date after a plugin update | `/brewdoc:my-claude refresh` |
 
 ## Example
 
@@ -41,20 +46,54 @@ Maps your Claude Code setup into one shareable Markdown doc: the local config an
 /brewdoc:my-claude                      # internal: your local setup
 /brewdoc:my-claude ext context          # context injection schema
 /brewdoc:my-claude r plugin hooks additionalContext regression
+/brewdoc:my-claude refresh              # regenerate guides older than the installed brewdoc
 ```
+
+Expected report of the last command, with one stale guide:
+
+```text
+## 🟢 my-claude guides: 1 refreshed, 1 current (brewdoc 6.10.0)
+
+| Guide | Doc version | Result |
+|---|---|---|
+| **internal** | 6.9.6 -> **6.10.0** | 🟢 refreshed: `.claude/brewdoc/my-claude/20261016_my-claude-internal.md` |
+| **external/context-schema** | 6.10.0 | ⚪ current |
+```
+
+Versions and paths are illustrative.
 
 ## Flow
 
 <Steps>
-  <li><div><strong>Detect mode</strong><p>Picks INTERNAL, EXTERNAL, or RESEARCH and loads its reference file.</p></div></li>
-  <li><div><strong>Parallel discovery</strong><p>Internal spawns 3 `Explore` agents (global config, project config, memory); external and research spawn `general-purpose` agents per source group. Each spawn gets one bounded unit and a six-field brief; research runs 2 to 5 groups. Contract: [Delegation](/brewcode/skills/#delegation).</p></div></li>
+  <li><div><strong>Detect mode</strong><p>Picks INTERNAL, EXTERNAL, RESEARCH, or REFRESH and loads its reference file.</p></div></li>
+  <li><div><strong>Parallel discovery</strong><p>Internal spawns 3 `Explore` agents (global config, project config, memory) and builds the plugins and mods table itself from `claude plugin list --json`; external and research spawn `general-purpose` agents per source group. Each spawn gets one bounded unit and a six-field brief; research runs 2 to 5 groups. Contract: [Delegation](/brewcode/skills/#delegation).</p></div></li>
   <li><div><strong>Write and validate</strong><p>Merges findings into one doc, writes it under `.claude/brewdoc/my-claude/`, then an independent agent checks paths, counts, and sources.</p></div></li>
   <li><div><strong>INDEX entry</strong><p>Appends a record to `.claude/brewdoc/INDEX.jsonl`; asks to bump or add when the mode already has one.</p></div></li>
 </Steps>
 
+## Refresh
+
+`refresh` regenerates every guide that the installed brewdoc has outgrown, so the guides follow plugin updates. It asks nothing: each regeneration takes the "Yes, update" answer of the INDEX question. A regenerated guide lands in a new dated file and its INDEX row is edited in place; the older file stays on disk.
+
+It first scans `.claude/brewdoc/INDEX.jsonl` without writing and labels the newest row of each guide:
+
+| Scan result | When | Action |
+|-------------|------|--------|
+| STALE | The guide's `version` is below the installed brewdoc, absent, or still holds a `{...}` placeholder | Regenerated |
+| CURRENT | The guide's `version` equals the installed brewdoc | Left alone |
+| SKIP | A research guide whose slug the prompt does not name, or a guide with `doc_type: skip` | Left alone |
+| MISSING | The file the guide's INDEX row points to is gone | Reported, never regenerated |
+| NONE | The project has no INDEX file, or no guide row in it | One line pointing to `/brewdoc:my-claude`; nothing written |
+
+Each stale guide runs through its own mode and is saved as an update; a guide that fails is reported and the next one still runs. With nothing stale, the run writes nothing and reports that the guides are current. The closing report is the table in the [example](#example). Its heading follows the outcome: `## 🔴 my-claude guides: N refreshed, M failed (brewdoc <version>)` when any guide failed, `## ⚪ my-claude guides are current (brewdoc <version>)` only when nothing was stale, `## 🟢 my-claude guides: N refreshed, K current (brewdoc <version>)` otherwise. Research guides are point-in-time, so they refresh only when named: `/brewdoc:my-claude refresh hooks` includes the `research/hooks` guide.
+
+## Keeping this current
+
+Run `refresh` after a plugin update ([update chain](/brewtools/skills/plugin-update/)). The `plugin-update` report suggests it only when a guide in the project is stale.
+
 <Spoiler id="technical-details" title="Technical details">
 
-**Mode selection.** The argument is one free-form prompt (RU or EN). An explicit prefix (`ext`, `external`, `r `, `research `) wins; otherwise the most distinct keyword picks the mode, a tie triggers one question, no match falls back to Internal. The prefix needs a trailing space: `rsome query` is not research mode.
+**Mode selection.** The argument is one free-form prompt (RU or EN). An explicit prefix (`ext`, `external`, `r `, `research `, `refresh`) wins; otherwise the most distinct keyword picks the mode, a tie triggers one question, no match falls back to Internal. A tie that includes `refresh` goes to `refresh` without a question; its keywords are `refresh`, `update`, `regenerate`. The prefix needs a trailing space: `rsome query` is not research mode.
 
 **Internal config path.** Internal mode reads the active config directory (`CLAUDE_CONFIG_DIR`, default `~/.claude`) and the project `.claude`.
 
@@ -62,17 +101,21 @@ Maps your Claude Code setup into one shareable Markdown doc: the local config an
 
 **Common mistakes.** Research mode produces documentation, not code; delegate implementation to a project agent. `ext` documents the external architecture; use no arguments for your own setup. Internal mode never copies secret values, only their names.
 
-**Output paths.** Files are listed in the Modes table. Writes under `.claude/` are protected: prompted in `default` and `acceptEdits`, allowed under `bypassPermissions`, never pre-approved by allow rules; headless without bypass fails.
+**Output paths.** Files are listed in the Modes table. `.claude/` is a protected path: a `Write`/`Edit` tool call or shell redirect there is prompted in `default` and `acceptEdits` and denied headless, and allow rules never pre-approve it. The skill holds no `Write` or `Edit` tool; it writes there only through one node save fence under its `Bash` grant.
 
 **Validation.** Internal uses `Explore` (read-only path and count check). External and research use `general-purpose`, which re-opens sources with `WebFetch` and `WebSearch`. Fixes land in the written doc.
 
-**Provenance frontmatter.** Every generated doc opens with `doc_type: user`, `version`, `generated_by: "brewdoc:my-claude"`, `last_updated`. `version` comes from the plugin's own `plugin.json`; re-generating refreshes the three stamps and keeps a hand-edited `doc_type` (`llm` or `skip`).
+**Provenance frontmatter.** Every generated doc opens with `doc_type: user`, `version`, `generated_by: "brewdoc:my-claude"`, `last_updated`. `version` comes from the plugin's own `plugin.json`; re-generating refreshes the three stamps and keeps a hand-edited `doc_type` (`llm` or `skip`). The save step refuses a document whose `version` is not the installed brewdoc version.
+
+**Staleness check.** `refresh` compares the doc file's frontmatter `version` with the installed brewdoc version, numerically per dot-separated number, so `6.10.0` is newer than `6.9.6`. The `version` in the INDEX row counts saves of that row and plays no part.
+
+**Plugins and mods table.** The skill builds the internal guide's `## Plugins and mods` table itself, with no subagent, from `claude plugin list --json`. Rows: user and managed scope, plus project and local rows whose project path is this project. Kind is `mod` when the installation's `hooks/hooks.json` has a top-level `modules` key, else `plugin`. Order: mods first with `brewmod-placeholders` first among them, then by id, then scope (managed, user, project, local). Columns: Plugin, Version, Scope, Enabled, Kind; the Summary table gets a matching row. Setup states are not listed, one line points to `/brewcode:setup-status`. When the CLI is missing or fails, the section is one `Plugin inventory unavailable` line with the reason and the rest of the guide is still written.
 
 **Internal sources.** `<config>/CLAUDE.md`, `rules/*.md`, `agents/*.md`, `skills/`, project `CLAUDE.md` and `.claude/rules/*.md`, `<config>/projects/*/memory/*.md` (`MEMORY.md` is the index), and `agent-memory/*/`.
 
-**INDEX and legacy migration.** One JSON line per run with `ts`, `mode`, `path`, `title`, `version`. If `~/.claude/brewdoc/INDEX.jsonl` exists and the project INDEX is empty, its entries are merged once (read-only) with a notice; the legacy file is never written.
+**INDEX and legacy migration.** One JSON line per run with `ts`, `mode`, `path`, `title`, `version`. The `title` is the first `# ` heading of the saved document; a document without one keeps the row's title on `update` and gets the guide key on `append`. If `~/.claude/brewdoc/INDEX.jsonl` exists and the project INDEX is empty, its entries are merged once (read-only) with a notice; the legacy file is never written. During `refresh`, a merged row whose `path` ends `_context-schema.md` (in any directory, `~/.claude/brewdoc/external/` included) counts as the context-schema guide, not the external one.
 
-**Doc structure.** Internal: Global Configuration, Project Configuration, Memory, Summary table. Research: Findings per source group, Sources table (fact, source, reliability), Review Verdict.
+**Doc structure.** Internal: Global Configuration, Plugins and mods, Project Configuration, Memory, Summary table, Keeping this current. Research: Findings per source group, Sources table (fact, source, reliability), Review Verdict.
 
 </Spoiler>
 
@@ -82,6 +125,12 @@ Maps your Claude Code setup into one shareable Markdown doc: the local config an
   </Card>
   <Card title="memory-sync-setup" icon="brain" href="/brewdoc/skills/memory-sync-setup/">
     Project-local `/memory-sync` for CLAUDE.md, rules, and conventions.
+  </Card>
+  <Card title="plugin-update" icon="package" href="/brewtools/skills/plugin-update/">
+    Updates every plugin and mod; its report suggests `refresh` when a guide is stale.
+  </Card>
+  <Card title="setup-status" icon="clipboard" href="/brewcode/skills/setup-status/">
+    Upgrades this project's stale setups after a plugin update.
   </Card>
   <Card title="GitHub source" icon="github" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewdoc/skills/my-claude">
     Source code, reference files, and mode instructions.

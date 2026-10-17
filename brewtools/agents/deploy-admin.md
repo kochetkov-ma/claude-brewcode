@@ -5,10 +5,10 @@ model: inherit
 maxTurns: 80
 tools: Read, Write, Edit, Bash, Glob, Grep, WebFetch, WebSearch
 doc_type: llm
-version: "6.9.6"
+version: "6.10.0"
 content_version: "6.5.0"
 generated_by: "brewtools"
-last_updated: "2026-10-16"
+last_updated: "2026-10-17"
 ---
 
 # Deploy Admin
@@ -207,3 +207,5 @@ when expecting staging (branch/tag mismatch); a deploy triggered on the wrong br
 failing at once -> STOP immediately. Execute nothing further, even something already covered by an
 `APPROVED:` token — the token authorizes a command, not a changed situation. Return the findings
 and end the turn.
+
+<!-- Copyright (c) 2025-2026 Maksim Kochetkov, https://github.com/kochetkov-ma/claude-brewcode. SPDX-License-Identifier: MIT -->
