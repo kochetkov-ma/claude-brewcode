@@ -68,7 +68,8 @@ function parseDueZ(raw) {
   return d.getUTCMonth() === +m[2] - 1 && d.getUTCDate() === +m[3] && +m[4] < 24 && +m[5] < 60 && +(m[6] ?? 0) < 60 ? ms : null
 }
 
-// -> { id, name, due (ms|null), dueRaw, status, created, done, cancelled, result, title }; header keys only, first wins.
+// -> { id, name, due (ms|null), dueRaw, someday, kind ('action'|'note'), status, created, done, cancelled, result, title }; header keys only, first wins.
+// `due: none` = someday (no date, never fires); `kind: note` = read-and-close, anything else = action.
 export function parseItem(name, text) {
   const lines = String(text ?? '').replace(/^\uFEFF/, '').split(/\r?\n/)
   const { start, end, fenced } = headerRange(lines)
@@ -84,6 +85,8 @@ export function parseItem(name, text) {
     name,
     due: parseDueZ(h.due),
     dueRaw: h.due ?? '',
+    someday: (h.due ?? '').toLowerCase() === 'none',
+    kind: (h.kind ?? '').toLowerCase() === 'note' ? 'note' : 'action',
     status: (h.status ?? '').toLowerCase(),
     created: h.created ?? '',
     done: h.done ?? '',
@@ -93,7 +96,7 @@ export function parseItem(name, text) {
   }
 }
 
-// Rewrites header keys only; a leading BOM and everything from the blank line on stay byte for byte.
+// Rewrites header keys only (value null removes the key); a leading BOM and everything from the blank line on stay byte for byte.
 export function patchHeader(text, patch) {
   const bom = text.startsWith(BOM) ? BOM : ''
   const parts = text.slice(bom.length).split(/(\r?\n)/)
@@ -103,19 +106,53 @@ export function patchHeader(text, patch) {
   const head = lines.slice(0, r.end)
   for (const [key, value] of Object.entries(patch)) {
     const idx = head.findIndex((l, i) => i >= r.start && KEY_RE.exec(l)?.[1].toLowerCase() === key)
-    if (idx >= 0) head[idx] = `${key}: ${value}`
+    if (value === null) {
+      if (idx >= 0) head.splice(idx, 1)
+    } else if (idx >= 0) head[idx] = `${key}: ${value}`
     else head.push(`${key}: ${value}`)
   }
   return bom + head.join(eol) + (head.length > 0 && r.end < lines.length ? eol : '') + parts.slice(2 * r.end).join('')
 }
 
-export function buildItem({ dueMs, text, now }) {
-  return `due: ${isoZ(dueMs)}\nstatus: pending\ncreated: ${isoZ(now)}\n\n${String(text).trim()}\n`
+// dueMs null = someday (`due: none`); kind omitted = no `kind:` line (reads as action).
+export function buildItem({ dueMs, text, now, kind }) {
+  const k = kind === 'note' || kind === 'action' ? `kind: ${kind}\n` : ''
+  return `due: ${dueMs === null || dueMs === undefined ? 'none' : isoZ(dueMs)}\nstatus: pending\n${k}created: ${isoZ(now)}\n\n${String(text).trim()}\n`
 }
+
+// Replaces the body (everything after the header, fence included), header bytes and BOM untouched.
+export function patchBody(text, body) {
+  const bom = text.startsWith(BOM) ? BOM : ''
+  const parts = text.slice(bom.length).split(/(\r?\n)/)
+  const lines = parts.filter((_, i) => i % 2 === 0)
+  const r = headerRange(lines)
+  const eol = parts[1] ?? '\n'
+  const close = r.fenced && lines[r.end]?.trim() === '---'
+  const head = lines.slice(0, r.end + (close ? 1 : 0))
+  const b = String(body).trim()
+  return bom + (head.length === 0 ? '' : head.join(eol) + eol + (close ? '' : eol)) + b + eol
+}
+
+// Edit one item file: text/kind/dueMs (number = date, null = someday, undefined = keep); a date or someday also sets status pending.
+export function editText(text, { text: body, kind, dueMs }) {
+  const patch = {}
+  if (kind === 'note' || kind === 'action') patch.kind = kind
+  if (dueMs !== undefined) Object.assign(patch, dueMs === null ? somedayPatch() : datePatch(dueMs))
+  const withHead = Object.keys(patch).length > 0 ? patchHeader(text, patch) : text
+  return body === undefined ? withHead : patchBody(withHead, body)
+}
+
+// Header patches: snooze/give a date (turns someday into a normal item), park as someday, bring a closed item back.
+export const datePatch = (ms) => ({ due: isoZ(ms), status: 'pending' })
+export const somedayPatch = () => ({ due: 'none', status: 'pending' })
+export const reopenPatch = (ms) => ({ ...(ms === undefined || ms === null ? {} : { due: isoZ(ms) }), status: 'pending', done: null, cancelled: null, result: null })
 export function slugify(s) {
   return String(s).toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/, '') || 'reminder'
 }
+// Someday names `someday_<slug>.md` never start with digits, so they cannot collide with dated names.
+export const isSomedayName = (name) => /^someday_/i.test(name)
 export function itemName(dueMs, slug) {
+  if (dueMs === null || dueMs === undefined) return `someday_${slugify(slug)}.md`
   const d = new Date(dueMs)
   return `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}-${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}_${slugify(slug)}.md`
 }
@@ -129,14 +166,41 @@ export function parseClaim(text) {
 }
 export const claimLive = (claim, now) => claim !== null && claim !== undefined && now - claim.at < CLAIM_TTL_MS && claim.at <= now + 60000
 
-// -> 'due' | 'pending' | 'running' | 'done' | 'cancelled' | 'unparseable' (pending, bad due) | 'ignored' (no/unknown status)
+// -> 'due' | 'pending' | 'running' | 'someday' | 'done' | 'cancelled' | 'unparseable' (pending, bad due) | 'ignored' (no/unknown status)
 export function classify(item, claim, now) {
   if (item.status === 'done') return 'done'
   if (item.status === 'cancelled') return 'cancelled'
   if (item.status !== 'pending') return 'ignored'
-  if (item.due === null) return 'unparseable'
+  if (item.due === null) return item.someday ? 'someday' : 'unparseable'
   if (claimLive(claim, now)) return 'running'
   return item.due <= now ? 'due' : 'pending'
+}
+
+// ---- sections, history, cleanup
+
+const closedAt = (item) => {
+  const ms = Date.parse(item.status === 'cancelled' ? item.cancelled : item.done)
+  return Number.isNaN(ms) ? null : ms
+}
+// 'shown' (closed note) | 'done' | 'cancelled' | '' (not closed)
+export const closedLabel = (item) => (item.status === 'cancelled' ? 'cancelled' : item.status === 'done' ? (item.kind === 'note' ? 'shown' : 'done') : '')
+
+// rows [{ item, state }] -> { fired, running, waiting, someday, history }; fired/running/waiting by due, someday by created, history newest closed first.
+export function sections(rows) {
+  const out = { fired: [], running: [], waiting: [], someday: [], history: [] }
+  const into = { due: 'fired', running: 'running', pending: 'waiting', someday: 'someday', done: 'history', cancelled: 'history' }
+  for (const r of rows) if (into[r.state]) out[into[r.state]].push(r)
+  const byId = (a, b) => (a.item.id < b.item.id ? -1 : a.item.id > b.item.id ? 1 : 0)
+  for (const k of ['fired', 'running', 'waiting']) out[k].sort((a, b) => a.item.due - b.item.due || byId(a, b))
+  out.someday.sort((a, b) => (a.item.created < b.item.created ? -1 : a.item.created > b.item.created ? 1 : byId(a, b)))
+  out.history.sort((a, b) => (closedAt(b.item) ?? -Infinity) - (closedAt(a.item) ?? -Infinity) || byId(a, b))
+  return out
+}
+
+// items -> ids of done/cancelled items closed more than keepDays ago (invalid keepDays -> 30); no readable close time = kept; never pending/someday.
+export function expiredIds(items, now, keepDays) {
+  const days = Number.isFinite(keepDays) && keepDays > 0 ? keepDays : 30
+  return items.filter((i) => (i.status === 'done' || i.status === 'cancelled') && closedAt(i) !== null && now - closedAt(i) > days * 86400000).map((i) => i.id)
 }
 
 // -> { ok:true, ms } | { ok:false, error }; offset/Z ISO, local `YYYY-MM-DD[ HH:MM[:SS]]` in tz (date only = 00:00), or +<n>m|h|d|w; no past check.

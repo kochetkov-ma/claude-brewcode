@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { run } from '../hooks/remind.mjs'
-import { formatWhen, parseItem, parseWhen, parseWhenNatural, patchHeader, rangeOf, windowOf } from '../hooks/lib/items.mjs'
+import { buildItem, classify, closedLabel, editText, expiredIds, formatWhen, itemName, matchId, parseItem, parseWhen, parseWhenNatural, patchBody, patchHeader, rangeOf, reopenPatch, sections, windowOf } from '../hooks/lib/items.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SCRIPT = join(HERE, '..', 'hooks', 'remind.mjs')
@@ -225,4 +225,89 @@ const ranges = [
 ]
 test('GIVEN from/to values WHEN rangeOf runs in Lisbon THEN the range is exact', () => {
   assert.deepEqual(ranges.map(([, [a, b]]) => rangeOf(a, b, W_NOW, LIS)), ranges.map((r) => r[2]), 'range rows')
+})
+
+const N0 = Date.parse('2026-10-21T14:00:00Z')
+const parsedRows = [
+  ['prototype file without kind', PROTO, item('2026-10-22T08:03:00Z', 'pending'), { kind: 'action', someday: false, due: Date.parse('2026-10-22T08:03:00Z'), state: 'pending' }],
+  ['note kind, due in the past', 'a.md', 'due: 2026-10-20T08:00:00Z\nstatus: pending\nkind: Note\n\nrenew\n', { kind: 'note', someday: false, due: Date.parse('2026-10-20T08:00:00Z'), state: 'due' }],
+  ['unknown kind reads as action', 'a.md', 'due: 2026-10-20T08:00:00Z\nstatus: pending\nkind: weird\n\nx\n', { kind: 'action', someday: false, due: Date.parse('2026-10-20T08:00:00Z'), state: 'due' }],
+  ['due none is someday', 'someday_x.md', 'due: NONE\nstatus: pending\n\nx\n', { kind: 'action', someday: true, due: null, state: 'someday' }],
+  ['naive due stays unparseable', 'a.md', item('2026-10-21T08:00:00', 'pending'), { kind: 'action', someday: false, due: null, state: 'unparseable' }],
+  ['done someday is done', 'someday_x.md', 'due: none\nstatus: done\n\nx\n', { kind: 'action', someday: true, due: null, state: 'done' }],
+]
+test('GIVEN kind and someday headers WHEN parseItem and classify run THEN kind, someday, due and state are exact', () => {
+  const got = parsedRows.map(([, name, text]) => {
+    const i = parseItem(name, text)
+    return { kind: i.kind, someday: i.someday, due: i.due, state: classify(i, null, N0) }
+  })
+  assert.deepEqual(got, parsedRows.map((r) => r[3]), 'parse rows')
+})
+
+test('GIVEN dated, someday and colliding slugs WHEN itemName, buildItem and matchId run THEN names and files are exact', () => {
+  const got = {
+    dated: itemName(Date.parse('2026-10-22T08:03:00Z'), 'Check prod'),
+    someday: itemName(null, 'Check prod'),
+    file: [buildItem({ dueMs: null, text: ' x ', now: N0, kind: 'note' }), buildItem({ dueMs: N0, text: 'x', now: N0 })],
+    match: matchId(['20261022-0803_check-prod', 'someday_check-prod'], 'check-prod'),
+  }
+  assert.deepEqual(got, {
+    dated: '20261022-0803_check-prod.md',
+    someday: 'someday_check-prod.md',
+    file: ['due: none\nstatus: pending\nkind: note\ncreated: 2026-10-21T14:00:00Z\n\nx\n', 'due: 2026-10-21T14:00:00Z\nstatus: pending\ncreated: 2026-10-21T14:00:00Z\n\nx\n'],
+    match: { error: 'ambiguous', candidates: ['20261022-0803_check-prod', 'someday_check-prod'] },
+  }, 'names, built files and slug ambiguity')
+})
+
+const mk = (id, status, f = {}) => parseItem(`${id}.md`, `due: ${f.due ?? '2026-10-20T08:00:00Z'}\nstatus: ${status}\n${f.kind ? `kind: ${f.kind}\n` : ''}${f.created ? `created: ${f.created}\n` : ''}${f.done ? `done: ${f.done}\n` : ''}${f.cancelled ? `cancelled: ${f.cancelled}\n` : ''}\nbody\n`)
+const bundle = [
+  mk('f2', 'pending', { due: '2026-10-21T10:00:00Z' }),
+  mk('f1', 'pending', { due: '2026-10-21T09:00:00Z' }),
+  mk('w1', 'pending', { due: '2026-10-25T09:00:00Z' }),
+  mk('s2', 'pending', { due: 'none', created: '2026-10-19T00:00:00Z' }),
+  mk('s1', 'pending', { due: 'none', created: '2026-10-18T00:00:00Z' }),
+  mk('h1', 'done', { done: '2026-10-20T00:00:00Z', kind: 'note' }),
+  mk('h2', 'cancelled', { cancelled: '2026-10-21T00:00:00Z' }),
+  mk('h3', 'done', { done: '2026-10-19T00:00:00Z' }),
+  mk('x', 'weird'),
+]
+test('GIVEN fired, waiting, someday and closed items WHEN sections and closedLabel run THEN order and labels are exact', () => {
+  const s = sections(bundle.map((item) => ({ item, state: classify(item, null, N0) })))
+  const ids = (rows) => rows.map((r) => r.item.id)
+  assert.deepEqual(
+    { fired: ids(s.fired), running: ids(s.running), waiting: ids(s.waiting), someday: ids(s.someday), history: ids(s.history), labels: s.history.map((r) => closedLabel(r.item)) },
+    { fired: ['f1', 'f2'], running: [], waiting: ['w1'], someday: ['s1', 's2'], history: ['h2', 'h1', 'h3'], labels: ['cancelled', 'shown', 'done'] },
+    'sections and history labels',
+  )
+})
+
+const old30 = '2026-09-20T00:00:00Z'
+const expRows = [
+  ['default 30 days', 30, ['d-old', 'c-old']],
+  ['7 days', 7, ['d-old', 'c-old', 'd-mid']],
+  ['invalid falls back to 30', Number.NaN, ['d-old', 'c-old']],
+]
+test('GIVEN old closed, recent closed, pending, someday and undated-closed items WHEN expiredIds runs THEN only old closed ids return', () => {
+  const items = [
+    mk('d-old', 'done', { done: old30 }),
+    mk('c-old', 'cancelled', { cancelled: old30 }),
+    mk('d-mid', 'done', { done: '2026-10-10T00:00:00Z' }),
+    mk('d-new', 'done', { done: '2026-10-20T00:00:00Z' }),
+    mk('d-bad', 'done', {}),
+    mk('p', 'pending', { due: '2026-01-01T00:00:00Z' }),
+    mk('s', 'pending', { due: 'none', created: '2025-01-01T00:00:00Z' }),
+  ]
+  assert.deepEqual(expRows.map(([, d]) => expiredIds(items, N0, d)), expRows.map((r) => r[2]), 'expired rows')
+})
+
+const edits = [
+  ['reopen with a new time', 'due: A\nstatus: done\ndone: Z\nresult: ok\n\nb\n', patchHeader('due: A\nstatus: done\ndone: Z\nresult: ok\n\nb\n', reopenPatch(N0)), 'due: 2026-10-21T14:00:00Z\nstatus: pending\n\nb\n'],
+  ['reopen keeps the old due', 'due: A\nstatus: cancelled\ncancelled: Z\n\nb\n', patchHeader('due: A\nstatus: cancelled\ncancelled: Z\n\nb\n', reopenPatch()), 'due: A\nstatus: pending\n\nb\n'],
+  ['someday gets a date and kind', 'due: none\nstatus: pending\n\nb\n', editText('due: none\nstatus: pending\n\nb\n', { dueMs: N0, kind: 'note' }), 'due: 2026-10-21T14:00:00Z\nstatus: pending\nkind: note\n\nb\n'],
+  ['dated goes someday with new text (CRLF)', 'due: A\r\nstatus: pending\r\n\r\nold\r\n', editText('due: A\r\nstatus: pending\r\n\r\nold\r\n', { dueMs: null, text: ' new ' }), 'due: none\r\nstatus: pending\r\n\r\nnew\r\n'],
+  ['BOM and fenced body replace', '\uFEFF---\ndue: A\nstatus: pending\n---\nold\n', patchBody('\uFEFF---\ndue: A\nstatus: pending\n---\nold\n', 'new'), '\uFEFF---\ndue: A\nstatus: pending\n---\nnew\n'],
+  ['no change returns the text', 'due: A\nstatus: pending\n\nb\n', editText('due: A\nstatus: pending\n\nb\n', {}), 'due: A\nstatus: pending\n\nb\n'],
+]
+test('GIVEN closed, someday, CRLF and fenced files WHEN reopen/edit helpers run THEN the new file texts are exact', () => {
+  assert.deepEqual(edits.map((r) => r[2]), edits.map((r) => r[3]), 'edit rows')
 })
