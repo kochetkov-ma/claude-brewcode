@@ -761,8 +761,8 @@ const NONE = (text: string) => ({ text, label: 'no reminders · ask Claude "remi
 const allPicks: [string, () => Tree, string, unknown[]][] = [
   ['no reminders', () => ({}), '**', [NONE('**'), HINT]],
   ['no reminders', () => ({}), Q, [NONE(Q)]],
-  ['only a file without a status header', ODD_TREE, '**', [NONE('**'), HINT]],
-  ['only a file without a status header', ODD_TREE, Q, [{ text: Q, label: 'no open or closed reminders · 1 file without a status header' }]],
+  ['only a file with an unknown status', ODD_TREE, '**', [NONE('**'), HINT]],
+  ['only a file with an unknown status', ODD_TREE, Q, [{ text: Q, label: 'no open or closed reminders · 1 file with no known status' }]],
   ['only a waiting item', () => ({ [LATER]: item('2026-10-23T08:00:00Z', 'Rotate keys') }), '**', [HINT]],
   ['a closed item without a close time', () => ({ [`${P_DIR}/20261020-0900_notime.md`]: item('2026-10-20T09:00:00Z', 'No time', 'done') }), Q, [div('history', 1), { text: Q, label: '✓ ▶ No time', description: 'done ? · project' }]],
   [
@@ -921,6 +921,8 @@ const submitRows: [string, string, string, string][] = [
   ['a unique id prefix', '**hot now', 'composer', `${RUN_HOT}\nMy extra words: now`],
   ['an ambiguous id prefix', 'see **20261021- now', 'composer', 'see **20261021- now'],
   ['an unknown name', 'a **nope here', 'composer', 'a **nope here'],
+  ['a scoped number (fired list spans both folders)', '**global:1 now', 'composer', '**global:1 now'],
+  ['a project-scoped number', '**project:1', 'composer', '**project:1'],
   ['a repeated number', '**1 **1', 'composer', RUN_HOT],
   ['an unknown longer number before a fired one', 'go **12 **1', 'composer', `${RUN_HOT}\nMy extra words: go **12`],
 ]

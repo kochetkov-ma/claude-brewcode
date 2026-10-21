@@ -220,8 +220,10 @@ function resolve(items: Entry[], token: string, scope: string | undefined): Entr
 }
 const RUNNABLE: ReadonlySet<string> = new Set(['due', 'pending', 'running', 'someday'])
 // A `<prefix>[project:|global:]<name>` token's reminder via the /remind run resolver; closed, unreadable, ambiguous or unknown -> null (left as text).
+// A scoped number (`global:1`) stays text: N counts the fired list of both folders, the picker never writes one.
 const runnable = (items: Entry[], name: string): Entry | null => {
   const [, scope, id = name] = /^(project|global):(.+)$/.exec(name) ?? []
+  if (scope !== undefined && isNum(id)) return null
   const e = resolve(items, id, scope)
   return typeof e === 'string' || !RUNNABLE.has(e.state) ? null : e
 }
@@ -597,7 +599,7 @@ export const register: Register = (on, options) => {
         ...part('unreadable', bad.map((i) => ({ text: e.token, label: `${mark(i)} ${nameOf(i)}`, description: `bad due "${i.dueRaw}" · ${where(i)}` }))),
         ...part('history', [...histRows, ...(more > 0 ? [{ text: e.token, label: `+${more} more · /remind history` }] : [])], history.length),
       ]
-      const blank = ignored === 0 ? none : { text: e.token, label: `no open or closed reminders · ${ignored} file${ignored === 1 ? '' : 's'} without a status header` }
+      const blank = ignored === 0 ? none : { text: e.token, label: `no open or closed reminders · ${ignored} file${ignored === 1 ? '' : 's'} with no known status` }
       return { suggestions: [...r.suggestions, ...(rows.length === 0 ? [blank] : rows)] }
     }
     const rows = [...firedRows, ...(fired.length > 0 && someday.length > 0 ? [{ text: e.token, label: '── someday ──' }] : []), ...somedayRows]
