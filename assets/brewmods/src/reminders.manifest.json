@@ -1,25 +1,25 @@
 {
   "gif": {
     "file": "reminders.gif",
-    "bytes": 1700482,
-    "sha256": "106afda998c40eb213ad1be349fa2b16984102f04818a7f55732c8790717a607",
+    "bytes": 1968918,
+    "sha256": "cf327011a67d6b29c97d749e8afb08433f90389d7991d13be39182727ca0fb40",
     "width": 1152,
     "height": 906,
-    "seconds": 30,
+    "seconds": 33.4,
     "colors": 256,
     "lossy": 0
   },
   "still": {
     "file": "reminders-still.png",
-    "sha256": "b7d45ce7348eec676f7bd7b76b14fdf7bef1f6cd959e45c3ed7a36113aa6ac5b",
+    "sha256": "a145a6140f55363822df829d61450ae30c27cdea886d4ffad4e3970bafd89a0f",
     "width": 1152,
     "height": 906,
-    "t": 13
+    "t": 15.5
   },
   "sources": {
     "render.html": "0042136b38cdd12bc06b7590461d71dfa22b5489e6934f37a1719647e16cd107",
-    "reminders.story.js": "5f71299070d4caa4c661bcf3899f3353cbe9cfadbe1b3b940fb3c6bd75002a5d",
-    "reminders.data.js": "1bffdfc3573fc97c75ab7a43dfb87e37df589c8896da0d2043a73b096900f022",
+    "reminders.story.js": "ec01d878ce2f5c2062bd9708dc416771128a8c526dce97b261e14baedae8eb62",
+    "reminders.data.js": "40a6cdecf2e8de33a6cb299b8018249be4b3a6ce16a8fbfcd2d1e18cffeeb4cc",
     "record-gifs.mjs": "3bfa14c1d6a00cbf0adb6f2458171a7334c8183b7503065da18cbe44511714bd"
   },
   "ccVersion": "2.1.306",
@@ -29,5 +29,5 @@
     "gifsicle": "1.98",
     "node": "v24.19.0"
   },
-  "recorded": "2026-10-21T17:15:59.822Z"
+  "recorded": "2026-10-21T20:08:19.050Z"
 }

@@ -1,0 +1,26 @@
+ ▐▛███▛█   Claude Code v2.1.306
+▝▜██████▀  Haiku 5.5 with medium effort · Claude Max
+ ▝▝   ▝▝   /Volumes/brewery
+
+reminders · 1 fired                                                                 [-]
+1: ▶ Run npm test.  1 min ago
+press 1 then Enter to run · ** to pick · **? all · /remind snooze · done
+
+────────────────────────────────────────────────────────────────────────────────────────
+❯ **?
+────────────────────────────────────────────────────────────────────────────────────────
+    ── fired (1) ──
+    **1 ▶ Run npm test.                1 min ago · project
+    ── waiting (1) ──
+    …ly to Ana: new tier is 49/month.  in 20 h · project
+
+
+
+
+
+
+
+
+
+
+

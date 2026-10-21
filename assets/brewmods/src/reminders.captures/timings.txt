@@ -1,21 +1,27 @@
-18:10:40.3N CAPTURE a-0-start
-18:10:41.3N CAPTURE a-1-typed
-18:10:44.3N CAPTURE a-2-wait
-18:10:59.3N CAPTURE a-4-saved
-18:11:03.3N CAPTURE c-0-typed
-18:11:19.3N CAPTURE c-1-saved
-18:11:23 SESSION-A-END
-18:11:36.3N CAPTURE b-0-band
-18:11:37.3N CAPTURE b-1-typed
-18:11:56.3N CAPTURE b-1-typed
-18:11:57.3N CAPTURE b-0-band
-18:11:58.3N CAPTURE b-1-typed
-18:11:58 KEY Enter
-18:12:01.3N CAPTURE b-2-running
-18:12:12.3N CAPTURE b-3-done
-18:13:45 SESSION-B-START
-18:13:45.3N CAPTURE b-0-band
-18:13:46.3N CAPTURE b-1-typed
-18:13:46 KEY Enter
-18:13:49.3N CAPTURE b-2-running
-18:13:59.3N CAPTURE b-3-done
+21:03:36 SESSION-A-START
+21:03:36 CAPTURE a-0-start
+21:03:36 CAPTURE a-1-typed
+21:03:36 KEY Enter
+21:03:40 CAPTURE a-4-saved
+21:03:49 CAPTURE c-0-typed
+21:03:49 KEY Enter
+21:03:49 CAPTURE c-1-saved (early, recaptured)
+(after c-1-saved early) CAPTURE c-1-saved once the turn was idle (Worked for 3s)
+21:04:05 SESSION-A-END
+21:04:14 STAGE due of run-npm-test set to 2026-10-21T20:03:14Z (next morning)
+21:04:23 SESSION-B-START
+21:04:27 CAPTURE b-0-band
+21:04:28 CAPTURE b-q-all
+(after b-q-all) KEY Escape -> picker closed, prompt keeps **? (b-q-esc); KEY Escape, KEY Escape (double) -> prompt cleared
+21:04:56 CAPTURE b-q-clear
+21:04:57 CAPTURE b-1-typed
+21:04:57 KEY Enter
+21:05:04 CAPTURE b-3-done
+21:05:13 SESSION-B-END
+21:05:13 STAGE due of reply-ana-new-tier set to 2026-10-21T20:04:13Z (later that day)
+21:05:14 SESSION-D-START
+21:05:18 CAPTURE d-0-band
+21:05:18 CAPTURE d-1-typed
+21:05:18 KEY Enter
+21:05:25 CAPTURE d-3-done
+21:05:25 SESSION-D-END

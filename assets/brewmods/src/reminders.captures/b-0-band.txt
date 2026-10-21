@@ -3,8 +3,8 @@
  ▝▝   ▝▝   /Volumes/brewery
 
 reminders · 1 fired                                                                 [-]
-1: ▶ Run npm test  now
-press 1 then Enter to run · ** to pick · /remind all · snooze · done
+1: ▶ Run npm test.  1 min ago
+press 1 then Enter to run · ** to pick · **? all · /remind snooze · done
 
 ────────────────────────────────────────────────────────────────────────────────────────
 ❯ 

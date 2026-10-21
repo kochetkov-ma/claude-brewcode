@@ -1,23 +1,23 @@
                                            "start")
 [38;5;246m [39m [38;5;246m⎿[39m [38;5;246m [39mstarted 20261022-0800_run-npm-test; carry out the text below, then update_remi
      nder {id, action:"done", result}.
-     due: 2026-10-21T17:12:41Z
+     due: 2026-10-21T20:03:14Z
      [2m…[0m [2m+5[0m [2mlines[0m [2m(ctrl+o[0m [2mto[0m [2mexpand)[0m
 
-[38;5;114m⏺[39m [1mBash[0m(npm test 2>&1 | tail -n 60)
+[38;5;114m⏺[39m [1mBash[0m(npm test)
 [38;5;246m  ⎿  [39m> brewery@1.0.0 test
      > node --test
      [2m… +10 lines (ctrl+o to expand)[0m
 
 [38;5;114m⏺[39m [1mbrewmod-reminders - update_reminder (MCP)[0m(id: "20261022-0800_run-npm-test", action:
-                                           "done", result: "npm test passed: 2 tests, 0
-                                           failed (node --test, /Volumes/brewery)")
-[38;5;246m  ⎿  [39mdone: Run npm test (20261022-0800_run-npm-test)
+                                           "done", result: "npm test passed: 2 of 2
+                                           tests, 0 failures.")
+[38;5;246m  ⎿  [39mdone: Run npm test. (20261022-0800_run-npm-test)
 
-[38;5;231m⏺[39m [38;5;153mnpm test[39m passed in [38;5;153m/Volumes/brewery[39m: 2 tests, 0 failed, 0 skipped. The reminder is
-  marked done.
+[38;5;231m⏺[39m The reminder "Run npm test." is done. [38;5;153mnpm test[39m in [38;5;153m/Volumes/brewery[39m passed: 2 of 2
+  tests, 0 failures. I've marked the reminder done with that result.
 
-[38;5;246m✻[39m [38;5;246mChurned for 7s · done 6:13 PM[39m
+[38;5;246m✻[39m [38;5;246mBaked for 6s · done 9:05 PM[39m
 
 [38;5;244m────────────────────────────────────────────────────────────────────────────────────────
 [39m❯ 

@@ -5,22 +5,22 @@
 
 [38;5;246m[48;5;237m❯ [38;5;231mremind me tomorrow at 9 to have you run npm test, short text[39m
 
-[38;5;114m[49m⏺[39m [1mbrewmod-reminders - add_reminder (MCP)[0m(scope: "project", kind: "action", when:
-                                        "tomorrow 9:00", text: "Run npm test", slug:
-                                        "run-npm-test")
+[38;5;114m[49m⏺[39m [1mbrewmod-reminders - add_reminder (MCP)[0m(scope: "project", kind: "action", text: "Run
+                                        npm test.", slug: "run-npm-test", when:
+                                        "2026-10-22 09:00")
 [38;5;246m  ⎿  [39msaved 20261022-0800_run-npm-test (project) | ▶ action | due Thu 22 Oct 09:00 L
-     isbon (08:00 UTC), in 15 h | /Volumes/brewery/.claude/scheduled/20261022-0800_
+     isbon (08:00 UTC), in 12 h | /Volumes/brewery/.claude/scheduled/20261022-0800_
      run-npm-test.md
      change it by saying so · /remind cancel 20261022-0800_run-npm-test
 
-[38;5;231m⏺[39m Reminder set for tomorrow (Thu 22 Oct) at 09:00 Lisbon time: "Run npm test." It's
-  saved to this project.
+[38;5;231m⏺[39m Reminder saved for tomorrow, Thu 22 Oct at 09:00 (Lisbon time). When it fires, I'll
+  run [38;5;153mnpm test[39m. It's a project reminder, so it lives in this repo.
 
-[38;5;246m✻[39m [38;5;246mBaked for 3s · done 6:10 PM[39m
+[38;5;246m✻[39m [38;5;246mBaked for 4s · done 9:03 PM[39m
 
 [38;5;244m────────────────────────────────────────────────────────────────────────────────────────
 [39m❯ 
 [38;5;244m────────────────────────────────────────────────────────────────────────────────────────
-[39m  [38;5;246m⏸ manual mode on · ? for shortcuts[39m
+[39m  [38;5;246m⏸[39m [38;5;246mmanual[39m [38;5;246mmode[39m [38;5;246mon[39m [38;5;246m·[39m [38;5;246m? for shortcuts[39m
 
 
