@@ -67,12 +67,13 @@ function prune(dir, now) {
   }
 }
 
-// Closed items older than keepDays: file and stale claim go; pending/someday never. keepProject (git mode): project files stay, returned.
-function cleanup(items, now, keepDays, keepProject) {
+const KEEP_DAYS = 30
+// Closed items older than KEEP_DAYS: file and stale claim go; pending/someday never. keepProject (git mode): project files stay, returned.
+function cleanup(items, now, keepProject) {
   const kept = []
   for (const dir of new Set(items.map((i) => i.dir))) {
     const mine = items.filter((i) => i.dir === dir)
-    const ids = new Set(expiredIds(mine, now, keepDays))
+    const ids = new Set(expiredIds(mine, now, KEEP_DAYS))
     for (const i of mine.filter((x) => ids.has(x.id))) {
       const keep = keepProject && !i.global
       if (keep) kept.push(i)
@@ -89,10 +90,10 @@ function cleanup(items, now, keepDays, keepProject) {
 }
 
 // Git mode: expired project files are left for Claude to delete and commit, never as silent unstaged deletions.
-function expiredOffer(items, keepDays, git) {
+function expiredOffer(items, git) {
   if (items.length === 0) return []
   return [
-    `Expired reminder files (${items.length}), closed over ${keepDays} days ago; kept because .claude/reminders.json sets git: ${git}. Delete each file, then commit only these deletions${git === 'commit-push' ? ' and push' : ' (no push)'} following the repo's conventions; never stage anything else. Mention it to the user in one line.`,
+    `Expired reminder files (${items.length}), closed over ${KEEP_DAYS} days ago; kept because .claude/reminders.json sets git: ${git}. Delete each file, then commit only these deletions${git === 'commit-push' ? ' and push' : ' (no push)'} following the repo's conventions; never stage anything else. Mention it to the user in one line.`,
     ...items.map((i) => `- ${tagOf(i)} | ${i.path}`),
   ]
 }
@@ -123,8 +124,7 @@ export function run(e, env, now = nowOf(env)) {
     ...loadDir(env.REMIND_GLOBAL_DIR || path.join(configDir, 'reminders'), true, now),
   ]
   const git = parseConfig(readText(path.join(project, '.claude', 'reminders.json')) ?? '').git
-  const keepDays = optNumber(env.CLAUDE_PLUGIN_OPTION_KEEPDAYS, 30, 1)
-  const expired = cleanup(items, now, keepDays, git !== 'off')
+  const expired = cleanup(items, now, git !== 'off')
   const offeredFile = path.join(state, offeredStateName(e.session_id))
   const offeredText = readText(offeredFile) ?? ''
   const offered = parseOffered(offeredText)
@@ -136,7 +136,7 @@ export function run(e, env, now = nowOf(env)) {
   const cooldownMs = optNumber(env.CLAUDE_PLUGIN_OPTION_COOLDOWNMINUTES, 60) * 60000
   if (!offerNow({ last: parseLastOffer(offeredText), hasNew: due.some(fresh) || bad.length > 0 || gone.length > 0, hasDue: due.length > 0, now, cooldownMs })) return {}
   const legacy = ['settings.json', 'settings.local.json'].some((f) => (readText(path.join(project, '.claude', f)) ?? '').includes('due-checks.sh'))
-  const text = [buildOffer({ due, bad, now, tz: systemTz(), git, legacy }), ...expiredOffer(gone, keepDays, git)].filter((l) => l !== '').join('\n')
+  const text = [buildOffer({ due, bad, now, tz: systemTz(), git, legacy }), ...expiredOffer(gone, git)].filter((l) => l !== '').join('\n')
   try {
     for (const i of [...due, ...bad]) offered[itemKey(i)] = now
     for (const i of gone) offered[expiredKey(i)] = now

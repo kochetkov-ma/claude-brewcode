@@ -61,7 +61,7 @@ Every reminder needs a time or "someday"; if you give none, Claude asks once ("W
 | `/remind snooze <N\|id> <when>` | New time (`+2h`, `tomorrow 9:00`, `fri 14:00`) |
 | `/remind help` | Summary, folders, desktop alert state |
 
-All commands, settings (`prefix`, `cooldownMinutes`, `notify`, `keepDays`, git mode), file format and tools: [full docs](https://doc-claude.brewcode.app/mods/reminders/).
+All commands, settings (`prefix`, `cooldownMinutes`, `notify`, git mode), file format (closed items kept 30 days) and tools: [full docs](https://doc-claude.brewcode.app/mods/reminders/).
 
 [Project page](https://brewcode.app/mods/reminders/) | [Source](https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewmod-reminders) | [All mods](../README.md#claude-code-mods) | [Release notes](../RELEASE-NOTES.md)
 

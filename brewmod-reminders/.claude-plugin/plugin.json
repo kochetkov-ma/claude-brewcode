@@ -37,13 +37,6 @@
       "title": "Reminder desktop alert",
       "description": "Send a terminal/desktop notification when a reminder fires in an open session (default on)",
       "default": true
-    },
-    "keepDays": {
-      "type": "number",
-      "title": "History kept (days)",
-      "description": "Closed reminders older than this are deleted (default 30)",
-      "default": 30,
-      "min": 1
     }
   }
 }
