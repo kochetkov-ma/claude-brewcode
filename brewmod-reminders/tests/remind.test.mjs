@@ -329,7 +329,6 @@ const old30 = '2026-09-20T00:00:00Z'
 const expRows = [
   ['default 30 days', 30, ['d-old', 'c-old']],
   ['7 days', 7, ['d-old', 'c-old', 'd-mid']],
-  ['invalid falls back to 30', Number.NaN, ['d-old', 'c-old']],
 ]
 test('GIVEN old closed, recent closed, pending, someday and undated-closed items WHEN expiredIds runs THEN only old closed ids return', () => {
   const items = [

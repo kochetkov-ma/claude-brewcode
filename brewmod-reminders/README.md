@@ -57,7 +57,7 @@ Every reminder needs a time or "someday"; if you give none, Claude asks once ("W
 |---------|--------|
 | `/remind` | Fired reminders, numbered like the band |
 | `**` / `**1` | Picker of fired and someday reminders / run the first one |
-| `**?` | Picker of every reminder by state (fired, running, waiting, someday, history), each marked project or global; a bare `**` or `**?` + Enter prints `/remind all` |
+| `**?` | Picker of every reminder by state (fired, running, waiting, someday, unreadable, history: the 10 newest closed), each marked project or global; Enter on a bare `**` prints `/remind all`, on `**?` the same plus that history |
 | `/remind all` | Fired, Waiting and Someday |
 | `/remind snooze <N\|id> <when>` | New time (`+2h`, `tomorrow 9:00`, `fri 14:00`) |
 | `/remind help` | Summary, folders, desktop alert state |

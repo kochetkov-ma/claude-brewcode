@@ -19,7 +19,7 @@ const item = (due: string, title: string, status = 'pending', extra = ''): strin
 // Stubs beneath the mod: an in-memory file system over `tree`, fixed env and session, recorders for toasts, tools, command, submits.
 function wire(on: On, tree: Tree) {
   const live = { root: ROOT, sid: SID }
-  const ops = { vars: {} as Record<string, string>, live, writes: [] as [string, string][], toasts: [] as string[], notifies: [] as [string, string | undefined][], tools: [] as string[], defs: [] as { name: string; description: string; inputSchema: { required?: string[] } }[], cmds: [] as unknown[], submits: [] as string[], fills: [] as string[], logs: [] as string[] }
+  const ops = { vars: {} as Record<string, string>, live, writes: [] as [string, string][], toasts: [] as string[], notifies: [] as [string, string | undefined][], tools: [] as string[], defs: [] as { name: string; description: string; inputSchema: { required?: string[] } }[], cmds: [] as unknown[], submits: [] as string[], fills: [] as string[], logs: [] as string[], box: { text: '' } }
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
   on('fs.exists', (_$, e) => ({ value: e.path in tree || Object.keys(tree).some((k) => k.startsWith(`${e.path}/`)) }) as never)
   on('fs.list', (_$, e) => {
@@ -49,6 +49,7 @@ function wire(on: On, tree: Tree) {
   on('turn.complete', (_$, e) => ({ text: e.answer }))
   on('prompt.fill', (_$, e) => (ops.fills.push(e.text), { isFilled: true }) as never)
   on('ui.log', (_$, e) => (ops.logs.push(e.text), { value: undefined }) as never)
+  on('prompt.read', () => ({ value: { text: ops.box.text, cursor: ops.box.text.length } }) as never)
   on('ui.notify', (_$, e) => (ops.notifies.push([e.text, e.title]), { value: { isSent: true, channel: 'kitty' } }) as never)
   on('ui.render', () => ENGINE as never)
   on('prompt.autocomplete', () => ({ suggestions: [] }))
@@ -725,13 +726,25 @@ for (const [name, text, expected] of picks) {
   })
 }
 
+// [k, status, sign, local close day, age]: H<k> due 2026-10-<10+k> 09:00Z, closed the same day 10:00Z.
+const CLOSED_ROWS: [number, string, string, string, string][] = [
+  [10, 'cancelled', '✗', 'Tue 20 Oct', '28 h'],
+  [9, 'done', '✓', 'Mon 19 Oct', '2 d'],
+  [8, 'done', '✓', 'Sun 18 Oct', '3 d'],
+  [7, 'done', '✓', 'Sat 17 Oct', '4 d'],
+  [6, 'done', '✓', 'Fri 16 Oct', '5 d'],
+  [5, 'done', '✓', 'Thu 15 Oct', '6 d'],
+  [4, 'done', '✓', 'Wed 14 Oct', '7 d'],
+  [3, 'done', '✓', 'Tue 13 Oct', '8 d'],
+  [2, 'done', '✓', 'Mon 12 Oct', '9 d'],
+  [1, 'done', '✓', 'Sun 11 Oct', '10 d'],
+  [0, 'done', '✓', 'Sat 10 Oct', '11 d'],
+]
 const closedTree = (): Tree =>
-  Object.fromEntries(
-    Array.from({ length: 11 }, (_, k) => [
-      `${P_DIR}/202610${10 + k}-0900_h${k}.md`,
-      k === 10 ? item(`2026-10-${10 + k}T09:00:00Z`, `H${k}`, 'cancelled', `cancelled: 2026-10-${10 + k}T10:00:00Z\n`) : item(`2026-10-${10 + k}T09:00:00Z`, `H${k}`, 'done', `done: 2026-10-${10 + k}T10:00:00Z\n`),
-    ]),
-  )
+  Object.fromEntries(CLOSED_ROWS.map(([k, status]) => [`${P_DIR}/202610${10 + k}-0900_h${k}.md`, item(`2026-10-${10 + k}T09:00:00Z`, `H${k}`, status, `${status}: 2026-10-${10 + k}T10:00:00Z\n`)]))
+const Q = '**?'
+const HIST_ROWS = CLOSED_ROWS.slice(0, 10).map(([k, status, sign, , ago]) => ({ text: Q, label: `${sign} ▶ H${k}`, description: `${status} ${ago} ago · project` }))
+const HIST_LINES = CLOSED_ROWS.slice(0, 10).map(([k, status, sign, day, ago]) => `- ${sign} ▶ 202610${10 + k}-0900_h${k} | ${status} ${day} 11:00 Lisbon (10:00 UTC), ${ago} ago | H${k}`)
 const ALL_TREE = (): Tree => ({
   ...PICK_TREE(),
   ...closedTree(),
@@ -740,15 +753,24 @@ const ALL_TREE = (): Tree => ({
   [`${P_DIR}/.claims/20261021-0800_run.json`]: gclaim('other', NOW - 1000),
   [`${P_DIR}/20261024-0800_bad.md`]: item('garbage', 'Bad'),
 })
-const Q = '**?'
+const G_LATER = `${G_DIR}/20261023-0800_later.md`
+const TWIN_TREE = (): Tree => ({ [LATER]: item('2026-10-23T08:00:00Z', 'Rotate keys'), [G_LATER]: item('2026-10-23T08:00:00Z', 'Rotate keys g') })
+const ODD_TREE = (): Tree => ({ [`${P_DIR}/20261023-0800_odd.md`]: item('2026-10-23T08:00:00Z', 'Odd', 'paused') })
 const div = (name: string, n: number) => ({ text: Q, label: `── ${name} (${n}) ──` })
-const hist = (k: number, ago: string) => ({ text: Q, label: `${k === 10 ? '✗' : '✓'} ▶ H${k}`, description: `${k === 10 ? 'cancelled' : 'done'} ${ago} ago · project` })
-const AGES = ['28 h', '2 d', '3 d', '4 d', '5 d', '6 d', '7 d', '8 d', '9 d', '10 d']
-const EMPTY = (text: string) => ({ text, label: 'no reminders · ask Claude "remind me ..."' })
+const NONE = (text: string) => ({ text, label: 'no reminders · ask Claude "remind me ..."' })
 const allPicks: [string, () => Tree, string, unknown[]][] = [
-  ['no reminders', () => ({}), '**', [EMPTY('**'), HINT]],
-  ['no reminders', () => ({}), Q, [EMPTY(Q)]],
-  ['only a waiting item', () => ({ [LATER]: item('2026-10-23T08:00:00Z', 'Rotate keys') }), '**', [{ text: '**', label: 'nothing fired · **? lists the rest' }, HINT]],
+  ['no reminders', () => ({}), '**', [NONE('**'), HINT]],
+  ['no reminders', () => ({}), Q, [NONE(Q)]],
+  ['only a file without a status header', ODD_TREE, '**', [NONE('**'), HINT]],
+  ['only a file without a status header', ODD_TREE, Q, [{ text: Q, label: 'no open or closed reminders · 1 file without a status header' }]],
+  ['only a waiting item', () => ({ [LATER]: item('2026-10-23T08:00:00Z', 'Rotate keys') }), '**', [HINT]],
+  ['a closed item without a close time', () => ({ [`${P_DIR}/20261020-0900_notime.md`]: item('2026-10-20T09:00:00Z', 'No time', 'done') }), Q, [div('history', 1), { text: Q, label: '✓ ▶ No time', description: 'done ? · project' }]],
+  [
+    'the same id open in project and global',
+    TWIN_TREE,
+    Q,
+    [div('waiting', 2), { text: '**project:20261023-0800_later', label: '▶ Rotate keys', description: 'in 42 h · project' }, { text: '**global:20261023-0800_later', label: '▶ Rotate keys g', description: 'in 42 h · global' }],
+  ],
   [
     'every state, project and global, 11 closed',
     ALL_TREE,
@@ -759,7 +781,7 @@ const allPicks: [string, () => Tree, string, unknown[]][] = [
       div('waiting', 2), { text: '**20261022-0800_g', label: '▶ Global thing', description: 'in 18 h · global' }, { text: '**20261023-0800_later', label: '▶ Rotate keys', description: 'in 42 h · project' },
       div('someday', 1), RSD,
       div('unreadable', 1), { text: Q, label: '▶ Bad', description: 'bad due "garbage" · project' },
-      div('history', 11), ...AGES.map((a, i) => hist(10 - i, a)), { text: Q, label: '+1 more · /remind history' },
+      div('history', 11), ...HIST_ROWS, { text: Q, label: '+1 more · /remind history' },
     ],
   ],
 ]
@@ -775,17 +797,101 @@ for (const [name, tree, text, suggestions] of allPicks) {
   })
 }
 
-for (const text of ['**', '**?', ' **? ']) {
-  test(`GIVEN 2 fired and 1 someday WHEN a bare ${JSON.stringify(text)} is submitted THEN the /remind all lines are logged, nothing is sent and the box is cleared`, async ($, on) => {
+const L_FRESH = '- 2 ✎ 20261021-1359_fresh | Wed 21 Oct 14:59 Lisbon (13:59 UTC), now | Fresh'
+const OPEN_LINES = [NOW_LINE, 'Fired (2):', L_HOT, L_FRESH, 'Waiting (1):', L_LATER, 'Someday (1):', L_SD]
+const DROP = { drop: 'reminders listed above · no Claude turn' }
+const bareRows: [string, () => Tree, string[]][] = [
+  ['**', PICK_TREE, [...OPEN_LINES, WHERE]],
+  ['**?', () => ({ ...PICK_TREE(), ...closedTree() }), [...OPEN_LINES, 'History (11):', ...HIST_LINES, '+1 more · /remind history', WHERE]],
+  [' **? ', PICK_TREE, [...OPEN_LINES, WHERE]],
+]
+for (const [text, tree, logs] of bareRows) {
+  test(`GIVEN 2 fired, 1 waiting and 1 someday WHEN a bare ${JSON.stringify(text)} is submitted THEN the exact list is logged, nothing is sent and the box is cleared`, async ($, on) => {
     const clock = mock.clock(on, { now: NOW })
-    const ops = wire(on, PICK_TREE())
+    const ops = wire(on, tree())
     await start($)
-    const all = (await remind($, 'all')).text.split('\n')
+    ops.box.text = text
 
     const r = await $.prompt.submit({ text, origin: { kind: 'composer' }, wait: false } as never)
     await clock.advance(50)
 
-    expect({ r, submits: ops.submits, logs: ops.logs, fills: ops.fills }, text).toEqual({ r: { drop: 'reminders listed above · no Claude turn' }, submits: [], logs: all, fills: [''] })
+    expect({ r, submits: ops.submits, logs: ops.logs, fills: ops.fills }, text).toEqual({ r: DROP, submits: [], logs, fills: [''] })
+  })
+}
+
+// [case, box 50 ms after Enter on a bare **, fills]: the engine restores the dropped draft before or (live) after later keys.
+const boxRows: [string, string, string[]][] = [
+  ['only the restored draft', '**', ['']],
+  ['keys typed after Enter', '**ab', ['ab']],
+  ['keys typed before the restore', 'ab\n**', ['ab']],
+  ['text ending in the token on the same line', 'ab **', []],
+  ['an empty box', '', []],
+  ['other text', 'hello', []],
+]
+for (const [name, box, fills] of boxRows) {
+  test(`GIVEN ${name} in the box after a bare ** WHEN the clear timer fires THEN the fills are exact`, async ($, on) => {
+    const clock = mock.clock(on, { now: NOW })
+    const ops = wire(on, PICK_TREE())
+    await start($)
+
+    await $.prompt.submit({ text: '**', origin: { kind: 'composer' }, wait: false } as never)
+    ops.box.text = box
+    await clock.advance(50)
+
+    expect(ops.fills, name).toEqual(fills)
+  })
+}
+
+for (const kind of ['sdk', 'bridge']) {
+  test(`GIVEN a bare ** from origin ${kind} WHEN it is submitted THEN it passes through unchanged, nothing logged or filled`, async ($, on) => {
+    const clock = mock.clock(on, { now: NOW })
+    const ops = wire(on, PICK_TREE())
+    await start($)
+    ops.box.text = '**'
+
+    await $.prompt.submit({ text: '**', origin: { kind }, wait: false } as never)
+    await clock.advance(50)
+
+    expect({ submits: ops.submits, logs: ops.logs, fills: ops.fills }, kind).toEqual({ submits: ['**'], logs: [], fills: [] })
+  })
+}
+
+const twinRun = (title: string, global: string[]): string =>
+  [
+    `Run reminder 20261023-0800_later (${title}, action): ${title}`,
+    'This is an action: call update_reminder {id:"20261023-0800_later", action:"start"}, carry out its text above, then update_reminder {id:"20261023-0800_later", action:"done", result:<one line>}.',
+    ...global,
+  ].join('\n')
+const twinRows: [string, string][] = [
+  ['**project:20261023-0800_later', twinRun('Rotate keys', [])],
+  ['**global:20261023-0800_later', twinRun('Rotate keys g', ['It is global: pass scope:"global" in every update_reminder call.'])],
+  ['**20261023-0800_later', '**20261023-0800_later'],
+]
+for (const [text, sent] of twinRows) {
+  test(`GIVEN the same id open in project and global WHEN ${text} is submitted THEN the text sent is exact`, async ($, on) => {
+    mock.clock(on, { now: NOW })
+    const ops = wire(on, TWIN_TREE())
+    await start($)
+
+    await $.prompt.submit({ text, origin: { kind: 'composer' }, wait: false } as never)
+
+    expect(ops.submits, text).toEqual([sent])
+  })
+}
+
+const helpRows: [string, string][] = [
+  ['**', '** / **?  typeahead: fired + someday / every reminder by state, project and global; **N or **<id> + Enter runs one; a bare ** + Enter prints /remind all, **? also the 10 newest closed (no Claude turn)'],
+  ['!!', '!! / !!?  typeahead: fired + someday / every reminder by state, project and global; !!N or !!<id> + Enter runs one; a bare !! + Enter prints /remind all, !!? also the 10 newest closed (no Claude turn)'],
+]
+for (const [prefix, line] of helpRows) {
+  test(`GIVEN prefix ${prefix} WHEN /remind help runs THEN its picker line is exact`, { options: { prefix } }, async ($, on) => {
+    mock.clock(on, { now: NOW })
+    wire(on, {})
+    await start($)
+
+    const text = (await remind($, 'help')).text
+
+    expect(text.split('\n')[1], prefix).toEqual(line)
   })
 }
 

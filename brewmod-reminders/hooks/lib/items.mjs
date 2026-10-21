@@ -218,10 +218,9 @@ export function sections(rows) {
   return out
 }
 
-// items -> ids of done/cancelled items closed more than keepDays ago (remind.mjs passes 30; invalid -> 30); no readable close time = kept; never pending/someday.
+// items -> ids of done/cancelled items closed more than keepDays ago (remind.mjs passes 30); no readable close time = kept; never pending/someday.
 export function expiredIds(items, now, keepDays) {
-  const days = Number.isFinite(keepDays) && keepDays > 0 ? keepDays : 30
-  return items.filter((i) => (i.status === 'done' || i.status === 'cancelled') && closedAt(i) !== null && now - closedAt(i) > days * 86400000).map((i) => i.id)
+  return items.filter((i) => (i.status === 'done' || i.status === 'cancelled') && closedAt(i) !== null && now - closedAt(i) > keepDays * 86400000).map((i) => i.id)
 }
 
 // Accepted forms per caller, for the "unrecognised time" error.
