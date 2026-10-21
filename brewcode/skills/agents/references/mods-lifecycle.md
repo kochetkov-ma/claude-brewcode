@@ -1,6 +1,6 @@
 # Mods Lifecycle Reference
 
-> verified_on: 2.1.300
+> verified_on: 2.1.306
 
 Road of a CC mod (hooks-module plugin): scaffold, module, validate, tsc, test, run, debug, ship, maintain. `src` legend: `mods-api.md`.
 
@@ -13,16 +13,16 @@ Table and pass criteria: `mod-creator.md`. Types path ephemeral (re-derive via `
 | Rule | Why | src |
 |------|-----|-----|
 | no dynamic `import()`; static `import` declarations only | module does not load: `a dynamic import(); a hooks module imports its own files with an import declaration` | V; X; R:14 |
-| `$.env.get/set` take string literal; `$.state` refs `{ plugin, key } as const` literals (only family member's `id` may be computed) | validate lists them, refuses variable name (`takes a literal name`) | V; X; T:3483 |
-| fail open everywhere: mod never blocks prompt, tool or turn it did not mean to | engine skips a failing hook (throw, overrun, wrong shape), chain goes on, a throw after `await next(e)` keeps the downstream result: no blanket try/catch (only to keep partial work); refusing guards get `.catch` | R:78-79; T:1205, 4036-4051; W |
+| `$.env.get/set` take string literal; `$.state` refs `{ plugin, key } as const` literals (only family member's `id` may be computed) | validate lists them, refuses variable name (`takes a literal name`) | V; X; T:3489 |
+| fail open everywhere: mod never blocks prompt, tool or turn it did not mean to | engine skips a failing hook (throw, overrun, wrong shape), chain goes on, a throw after `await next(e)` keeps the downstream result: no blanket try/catch (only to keep partial work); refusing guards get `.catch` | R:78-79; T:1208, 4064-4079; W |
 | `on('<event>')` is a literal; an event the build lacks (`prompt.change` < 2.1.300) refuses the WHOLE module, no gating; a second unmatched hook of one event fails validate | one owner per event; newer event = higher minimum build | W |
-| zero I/O in `prompt.edit` (no `$.fs`, `$.process`, `$.http`, `$.store`) | runs per keystroke; budget is own-time 10,000 ms, no documented 50 ms figure, so targets are self-imposed (p99 < 2 ms at 4k chars, < 8 ms at 20k, no decoration above 20k chars) | T:5230; P; D (plan Risks) |
+| zero I/O in `prompt.edit` (no `$.fs`, `$.process`, `$.http`, `$.store`) | runs per keystroke; budget is own-time 10,000 ms in the 2.1.306 types but the official Limits (`OD`) say 50 ms for `prompt.edit` (types win; record both), so targets are self-imposed (p99 < 2 ms at 4k chars, < 8 ms at 20k, no decoration above 20k chars) | T:5277; OD; P; D (plan Risks) |
 | `.claude-plugin/types/` and mod-root `tsconfig.json` never committed | engine-written on interactive loads (types carry own `.gitignore`; root `tsconfig.json` does not): add `brewmod-*/.claude-plugin/types/` and `brewmod-*/tsconfig.json` to repo `.gitignore` (`-p`, `validate` write nothing); departs from R:112 ("tsconfig.json at the top level stays"): it `extends` the gitignored types one, so a committed copy breaks on a fresh clone | R:112; PLAN S.1; T11 Q6 |
 | never pass `$` to function or alias it: spell `$.noun.event(...)` at every call site | validate refuses `$ is passed to "log"`; module does not load | V; X |
 | never write under `~/.claude/dev-mods/` unless person asks; repo mods go in repo plugin dir | person's hot-reload mods folder (consent question) | D15; PLAN TLA |
 | `hooks/hooks.json` = `{ "modules": ["./register.ts"] }`: ONE path, in ARRAY; a classic command hook may sit beside it under `"hooks"` (accepted, both run) | string -> `expected array, received string`; second entry refused | V; X; S.4 (2.1.296); F1 §5; C41 |
 | no JSON or `.md` import in module; read shipped data via `$.fs` from `$.plugin.root` | only files named `.ts .tsx .jsx .js .mjs .cjs .mts .cts` load | R:14; P |
-| no `require`, no DOM, no Node, no timers (use `$.clock`) | module environment | T:20-24, 15420 |
+| no `require`, no DOM, no Node, no timers (use `$.clock`) | module environment | T:20-24, 15668 |
 | `plugin.json` has `author`, `version`, `description` | `--strict` fails without `author` | V; X |
 | module `classic.*`, `session.append` (doors `attachment`, `hook-context`), `prompt.section/context/compose/attachment`, `attribution.text` hooks are bypassed for a user-installed mod on Team/Enterprise orgs: behaviour that depends on them ships a bundled classic COMMAND hook in `hooks/hooks.json` next to `"modules"` (`mods-patterns.md` #1, #2), never a `session.append` fallback; `turn.step`, `prompt.submit`, `prompt.edit`, `ui.render`, `command.run` still run | module's context injection or mode tracking silently does nothing on the org's machines; `validate` rc 0 does not catch it | V; F1; C41; C43 |
 | HARD: every interactive affordance a mod draws (band `Button`, toggle, focusable row, hidden feature) shows its key sequence in its own label or a dim hint row (`<Label>  ctrl+x → tab → enter`; arrows mark a sequence, `·` reads as alternatives); people cannot discover ctrl+x band focus (a chord Button was dropped as unusable: `mods-patterns.md` #12 lesson). A sequence is written into a label only after it is proven live step by step, one PNG after each key: focus, toggle, prompt NOT submitted, return to the prompt (`mods-testing.md` tmux) | undiscoverable feature; a wrong hint is worse than none | user ruling 2026-10-15; PH 8a, 8c; IPH; MF; S |
@@ -33,11 +33,11 @@ Table and pass criteria: `mod-creator.md`. Types path ephemeral (re-derive via `
 | Phase | Command / action | Pass | src |
 |-------|------------------|------|-----|
 | scaffold | three files: `.claude-plugin/plugin.json`, `hooks/hooks.json`, `hooks/register.ts[x]`; plus `types/index.d.ts` when `$.state` is used (named in `plugin.json` `"types"`), `tests/*.test.ts[x]`, `LICENSE`, `README.md` (via `/docs`); `hooks/*.mjs` command hooks (declared under `"hooks"` in `hooks.json`) when behaviour must survive Team/Enterprise orgs. `claude plugin init` scaffolds another kind of plugin: do not use it for mods | files exist | R:9; skill text |
-| module | `export const register: Register = (on, options) => {...}`, `import type { Register } from 'claude-code'` (empty at run time); JSX compiles against global `h`; elements from `$.ui.resolve(e)` | | T:9695; R:14-24 |
+| module | `export const register: Register = (on, options) => {...}`, `import type { Register } from 'claude-code'` (empty at run time); JSX compiles against global `h`; elements from `$.ui.resolve(e)` | | T:9753; R:14-24 |
 | validate | `claude plugin validate --strict <mod dir>` (`--json` for CI); output lists hooks, `$` calls, `gating hook with/without .catch` (a fact, not warning), state reads/writes, managed-org note for `classic.*`/`prompt.*`/`session.compact`/`attribution.text` hooks; it reports only the module part of a mixed `hooks.json` | rc 0 unpiped | V; X; R:66 |
 | tsc | "Type check" below | rc 0 | R:40-53; X |
 | test | `claude plugin test <mod dir>` runs every `*.test.ts[x]` in a child process, 5 s per test, rc 1 on a failing test | rc 0 unpiped; >=1 test per behaviour asked | CLI help; X; `mods-testing.md` |
-| run | `claude --plugin-dir <mod dir>` (repeatable), `CLAUDE_CODE_PLUGIN_DIRS` for hosts without the flag; interactive sessions hot-reload the folder on save (after the editing turn, or when a plugin tool/command is about to run); `claude -p` always loads fresh; `/reload-plugins` re-reads installed plugins | debug line `hooks module <name>@inline loaded ...` | R:72-76; X |
+| run | `claude --plugin-dir <mod dir>` (repeatable), `CLAUDE_CODE_PLUGIN_DIRS` for hosts without the flag (desktop app, SDK): absolute paths (`~` allowed) separated by `:` (`;` on Windows), from the process env or the `env` block of `~/.claude/settings.json`, never a project's settings, each loaded as a `--plugin-dir` and watched in an interactive session (`CLAUDE_CODE_PLUGIN_DIR_WATCH=1` makes a long-running non-interactive one reload on save, `OD`); interactive sessions hot-reload the folder on save (after the editing turn, or when a plugin tool/command is about to run); `claude -p` always loads fresh; `/reload-plugins` re-reads installed plugins | debug line `hooks module <name>@inline loaded ...` | R:72-76; X |
 | debug | "Debug lines" below | no `did not load` / `refused` / `skipped` lines | R:78-81; X |
 | live, ship, maintain | headless `claude -p` and tmux checks: `mods-testing.md`; "Ship", "Maintain" below | | D16 |
 
@@ -49,7 +49,7 @@ Table and pass criteria: `mod-creator.md`. Types path ephemeral (re-derive via `
 | before first load / under `claude -p` / SDK host | tsconfig kept OUTSIDE mod folder: header options below, `include` = [types file, `<mod>/hooks`, `<mod>/types`, `<mod>/tests`] (`types` needed for a `$.state` contract the module does not import) | R:50-53; T:67-77 |
 | tsc version | registry-verified 2026-10-14: `npm view typescript version` = `7.0.2`; same mod rc 0 on `7.0.2` and `5.9.3`; types need TS >= 5.4. Pin exactly (`avoid#4`): `npx -y -p typescript@7.0.2 tsc -p <tsconfig>`; re-verify quarterly | X; T:8 |
 | `.ts` suffix in relative import | tsc error TS5097 under header options; use extensionless (`./lib/a`) or `./lib/a.js` | X |
-| test files | `prompt.edit/change/autocomplete` not typed on test `$` (`EventCalls.prompt`): cast one call (`($.prompt as any).edit(...)`) | X; T:4841-4850 |
+| test files | `prompt.edit/change/autocomplete` not typed on test `$` (`EventCalls.prompt`): cast one call (`($.prompt as any).edit(...)`) | X; T:4888-4897 |
 
 Header tsconfig (T:67-77):
 

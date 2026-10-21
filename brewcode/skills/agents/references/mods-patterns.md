@@ -1,8 +1,8 @@
 # Mods Patterns Reference
 
-> verified_on: 2.1.300
+> verified_on: 2.1.306
 
-Recipes for two brewcode mods and any other mod. `proven` = validate + `plugin test` + tsc rc 0 on 2.1.300 (`X`) and/or live (`S`, `AB`, `TTY`, `R3`, `W`, `T11`, `F1`, `T6P`, `PE`, `PH`, `IPH`, `SB`, `S2`, `S3`, `S4`); none open. Legend and event/noun facts: `mods-api.md`; test stubs: `mods-testing.md`.
+Recipes for two brewcode mods and any other mod. `proven` = validate + `plugin test` + tsc rc 0 on 2.1.300 (`X`; not re-run on 2.1.306, `verified_on` = refs re-read against the 2.1.306 types) and/or live (`S`, `AB`, `TTY`, `R3`, `W`, `T11`, `F1`, `T6P`, `PE`, `PH`, `IPH`, `SB`, `S2`, `S3`, `S4`); none open. Legend and event/noun facts: `mods-api.md`; test stubs: `mods-testing.md`.
 
 ## Recipe Index
 
@@ -49,7 +49,7 @@ process.stdout.write(JSON.stringify(out))
 | stdin = classic payload (`prompt`, `permission_mode`, `session_id`, `cwd`, `agent_id`); options = `CLAUDE_PLUGIN_OPTION_<KEY>`; project = `CLAUDE_PROJECT_DIR` (launch dir) or `e.cwd`; root = `CLAUDE_PLUGIN_ROOT`. Synthetic prompts (`<task-notification>`, `<agent-message from=`) skipped | C43 (`inject.mjs`) |
 | no UI from a command hook: toasts (unknown token) and other UI stay in the module (`prompt.submit`), which runs on Team orgs | F1 §2; C43 |
 | no TypeScript in a command hook: logic shared with the module is ported to `.mjs`, and a CI gate keeps the copy honest (golden vectors, layer fixtures, differential vs the TS lib: `node brewmod-placeholders/tests/inject-parity.mjs`; defaults: `check-defaults.mjs`) | C43; `validate.yml` |
-| `e.permission_mode` is exact, any of the six `PermissionMode` strings (`default`, `acceptEdits`, `bypassPermissions`, `plan`, `dontAsk`, `auto`; typed `string`); `source` is absent in `-p`: never filter on it | S; T:7633 |
+| `e.permission_mode` is exact, any of the six `PermissionMode` strings (`default`, `acceptEdits`, `bypassPermissions`, `plan`, `dontAsk`, `auto`; typed `string`); `source` is absent in `-p`: never filter on it | S; T:7689 |
 | a prompt typed mid-turn fires `UserPromptSubmit` ONCE, at queue time (seen on a module hook; same event); entries of other hooks reach the model untouched | TTY; S |
 | module-only alternatives on Team: `prompt.submit` `next({ ...e, context: [...(e.context ?? []), block] })` = hidden block (model answered PINEAPPLE-7), `next({ ...e, text })` = visible inline rewrite (MANGO-9); neither carries `permission_mode`, so mode-specific blocks need the command hook | F1 §3 (A1, A2) |
 
@@ -101,9 +101,9 @@ Module `let` persistence: `mods-api.md` Budgets. After `--resume` a module flag 
 
 | Fact | src |
 |------|-----|
-| hook is an `async function*`; `return yield* next(e2)` forwards chunks + result; only generator form loads on this event; `model`/`effort` rewritable, rest pinned (`mods-api.md` catalog); `xhigh` may be downgraded silently on a model without it | R:28-31; T:12703, 14086-14125, 14105, 875 |
+| hook is an `async function*`; `return yield* next(e2)` forwards chunks + result; only generator form loads on this event; `model`/`effort` rewritable, rest pinned (`mods-api.md` catalog); `xhigh` may be downgraded silently on a model without it | R:28-31; T:14330-14369, 14349, 875 |
 | raise only: higher session effort never lowered; numeric/absent/unknown-string untouched (`have >= 0 && have < rank(wanted)`); `agentId !== undefined` untouched | PLAN Mod 1; register.ts |
-| rewrite is per request (T:4569 "sends another"), not session setting (inference); API effect, main loop only, `e.effort` still shows incoming value; footer/spinner never show it (`mods-api.md` Budgets): indicator = `$.ui.status('plan: xhigh')` while raised (D3) | T11 Q2, Q7; X |
+| rewrite is per request (T:4597 "sends another"), not session setting (inference); API effect, main loop only, `e.effort` still shows incoming value; footer/spinner never show it (`mods-api.md` Budgets): indicator = `$.ui.status('plan: xhigh')` while raised (D3) | T11 Q2, Q7; X |
 
 ```ts
 const RANK = ['low', 'medium', 'high', 'xhigh', 'max'] as const
@@ -121,15 +121,15 @@ on('turn.step', async function* ($, e, next) {
 
 | Fact | src |
 |------|-----|
-| `prompt.edit`: `r = await next(e)`, scan `r.text` in memory, return `{ ...r, decorations: [...(r.decorations ?? []), mine] }`; `{start,end,color,underline,bold,virtualText}`; offsets are UTF-16 units, out-of-range clamped | T:8764-8870 |
-| draft is not on band's props: write atom from `prompt.edit` only when token view changed, read it in the `AbovePrompt` hook | T:10649; R:143 |
+| `prompt.edit`: `r = await next(e)`, scan `r.text` in memory, return `{ ...r, decorations: [...(r.decorations ?? []), mine] }`; `{start,end,color,underline,bold,virtualText}`; offsets are UTF-16 units, out-of-range clamped | T:8822-8928 |
+| draft is not on band's props: write atom from `prompt.edit` only when token view changed, read it in the `AbovePrompt` hook | T:10790; R:143 |
 | `$.state`/atom contract: `mods-api.md` Manifest; state persists across mounts in one `plugin test` (reset it there) | V; S; X |
 | hover: visible KEYED Box holds an UN-keyed inner Box `display="none"` + `hover={{ display: 'flex' }}` (rules: api Budgets) | T:889-957; S; X |
 | hover dead in default TUI (fullscreen only): a `Button` toggle works (`ctrl+x`, Tab, Enter or click) but real users could not trigger the chord: prefer caret focus + a slash command (#12 lesson) | S |
-| `prompt.edit` sees keystrokes only: Tab-accept, Esc Esc, history recall leave band and paint stale. 2.1.300+: `on('prompt.change')` scans, writes the atom, re-fills the SAME text with `decorations` (`$.prompt.fill` `replace`) when `e.origin.kind !== 'plugin'` (own fill), `e.cursor === e.text.length` (replace puts the caret at the end) and `$.prompt.read()` still equals `e.text`/`e.cursor`. Mid-draft accept and history Down stay unpainted until the next key. Proven T2.R rev3; not shipped (needs >= 2.1.300, plan L15). Known limitation of `brewmod-placeholders` (floor 2.1.292): a Tab-accepted row (`++r` -> `++rr`) leaves the band one key behind. No feature detection: on 2.1.296 even `if (options.x) on('prompt.change', ...)` fails `validate` (`"prompt.change" is not an event`) and `-p` logs `hooks module did not load` | T:8464-8545, 8885-8940; R3; MF (F5 probe) |
-| any build: a render hook cannot write `$.state`; hide the band on an empty box (`$.prompt.read()` in `AbovePrompt`, terminal only), redraw on Esc Esc/submit from a `PromptHint` hook calling `$.ui.invalidate('ui.render')` when `e.props.isDraft` flips (loads on 2.1.296: W) | T:10603-10615, 2393; TTY D2; W |
+| `prompt.edit` sees keystrokes only: Tab-accept, Esc Esc, history recall leave band and paint stale. 2.1.300+: `on('prompt.change')` scans, writes the atom, re-fills the SAME text with `decorations` (`$.prompt.fill` `replace`) when `e.origin.kind !== 'plugin'` (own fill), `e.cursor === e.text.length` (replace puts the caret at the end) and `$.prompt.read()` still equals `e.text`/`e.cursor`. Mid-draft accept and history Down stay unpainted until the next key. Proven T2.R rev3; not shipped (needs >= 2.1.300, plan L15). Known limitation of `brewmod-placeholders` (floor 2.1.292): a Tab-accepted row (`++r` -> `++rr`) leaves the band one key behind. No feature detection: on 2.1.296 even `if (options.x) on('prompt.change', ...)` fails `validate` (`"prompt.change" is not an event`) and `-p` logs `hooks module did not load` | T:8520-8601, 8943-8998; R3; MF (F5 probe) |
+| any build: a render hook cannot write `$.state`; hide the band on an empty box (`$.prompt.read()` in `AbovePrompt`, terminal only), redraw on Esc Esc/submit from a `PromptHint` hook calling `$.ui.invalidate('ui.render')` when `e.props.isDraft` flips (loads on 2.1.296: W) | T:10744-10756, 2396; TTY D2; W |
 | band size: budget from `e.props.maxRows` (`mods-api.md` Budgets); unbounded rows or bodies clip at the top | R3; TTY D4 |
-| band (surfaces, height cap: `mods-api.md` Budgets): `hasSurvey` -> yield with `next(e)`; redraw throttle 10/s (web docs, research 01 row 8) | T:10640-10700; S |
+| band (surfaces, height cap: `mods-api.md` Budgets): `hasSurvey` -> yield with `next(e)`; redraw throttle 10/s (web docs, research 01 row 8) | T:10781-10841; S |
 
 ```tsx
 const view = atom({ plugin: 'myplug', key: 'view' } as const, { tokens: [] } as View)
@@ -175,8 +175,8 @@ Never write `$.state` while drawing; write from `onPress` or another event. `upd
 | Fact | src |
 |------|-----|
 | literal matcher `{ token: /^[^\w\s]{2}/ }` validates (`prompt.autocomplete{token=/"^[^\\w\\s]{2}"/}`) and fires; filter to prefix in code (dynamic prefix cannot be matcher) | S; V |
-| `e.token` = non-whitespace run ending at cursor, `e.start` its offset | T:8376-8400 |
-| rows `{ text, label?, description? }`; `text` replaces whole token, cursor after it, never empty; rows join beneath engine's | T:8405-8440 |
+| `e.token` = non-whitespace run ending at cursor, `e.start` its offset | T:8432-8456 |
+| rows `{ text, label?, description? }`; `text` replaces whole token, cursor after it, never empty; rows join beneath engine's | T:8461-8496 |
 | row with trailing space (`'++r '`) accepted with Tab, menu closes, hook NOT asked again; exact-match rows do not loop; drop the trailing space when the char after the caret is whitespace (else `x ++r  y`) | S; R3 |
 
 Etalon: `brewmod-placeholders/hooks/register.ts` (`prompt.autocomplete` hook, `lib/editor.ts` `suggest`): rows `{ text: `${prefix}${name} `, label, description }` for names that start with `e.token` and differ from it, appended to `r.suggestions`.
@@ -194,7 +194,7 @@ on('command.run', { command: 'placeholders' }, async ($, e) => ({ text: await ru
   .catch(($, e, next) => (next.called ? next(e) : { text: 'placeholders failed' }))
 ```
 
-`e.args` = raw string after name; `{ text }` = transcript row model also reads, shown as `<plugin>: <text>` (do not repeat the name; `ui.toast` likewise) and rendered as MARKDOWN: a row starting `+`, `-`, `*` or `1)` turns into a list. Keep line 1 plain (the prefix is glued to it, so a fence cannot open the text), put tables in a fence longer than any backtick run inside (TTY C1-C2; T:1863, 2465); command can open pane with `$.ui.open` (skill `examples/pane.tsx:20-21`; T:2533).
+`e.args` = raw string after name; `{ text }` = transcript row model also reads, shown as `<plugin>: <text>` (do not repeat the name; `ui.toast` likewise) and rendered as MARKDOWN: a row starting `+`, `-`, `*` or `1)` turns into a list. Keep line 1 plain (the prefix is glued to it, so a fence cannot open the text), put tables in a fence longer than any backtick run inside (TTY C1-C2; T:1866, 2468); command can open pane with `$.ui.open` (skill `examples/pane.tsx:20-21`; T:2536).
 
 ## 7. userConfig Pickers
 
@@ -206,18 +206,18 @@ No `enum`: use `string` + `options` (picker in `/config`; `default` must be amon
   "warnUnknown": { "type": "boolean", "title": "Warn", "description": "Toast on unknown token", "default": true } }
 ```
 
-A picker option needs no code-side fallback (`const wanted = rank(options.planEffort)`, no `?? 'xhigh'`): unset, absent or outside `options` -> `default` (T:7800; the `turbo` test passes without it, X). `options` values are `string | number | boolean | string[]` (T:7804); free-text fields (prefix, colors) still get a code-side check (prefix regex, theme-key list) and a toast on a bad value. Tests pass values via `test(name, { options }, body)`.
+A picker option needs no code-side fallback (`const wanted = rank(options.planEffort)`, no `?? 'xhigh'`): unset, absent or outside `options` -> `default` (T:7858; the `turbo` test passes without it, X). `options` values are `string | number | boolean | string[]` (T:7860); free-text fields (prefix, colors) still get a code-side check (prefix regex, theme-key list) and a toast on a bad value. Tests pass values via `test(name, { options }, body)`.
 
 ## 8. Fail-Open And `.catch` Guards
 
 | Case | Pattern | src |
 |------|---------|-----|
-| observer/rewriter | no try/catch: engine skips a failing hook and its last `next` result stands (a throw after `await next(e)` keeps downstream); try/catch only to keep partial work (typeahead rows when a refresh fails, decorations when a state write fails) | R:78; T:4036; W |
+| observer/rewriter | no try/catch: engine skips a failing hook and its last `next` result stands (a throw after `await next(e)` keeps downstream); try/catch only to keep partial work (typeahead rows when a refresh fails, decorations when a state write fails) | R:78; T:4064; W |
 | guard that refuses (`tool.call`, `prompt.submit`, `command.run`, `config.set`) | `.catch(($, e, next) => next.called ? next(e) : { deny: 'why' })`; `{ deny }` is event's own refusal | R:79; `tool-call.ts` |
 | `tool.check` | handler answers `{ decision: 'deny' }` | R:79 |
-| `prompt.submit` | `{ drop: 'why' }` | T:4200 |
-| `command.run` | `{ text: 'why' }` | T:4350 |
-| handler throws | hook stays skipped; handler gets 1,000 ms | T:5238 |
+| `prompt.submit` | `{ drop: 'why' }` | T:4228 |
+| `command.run` | `{ text: 'why' }` | T:4378 |
+| handler throws | hook stays skipped; handler gets 1,000 ms | T:5285 |
 | validate lists `gating hook with/without .catch` | fact, not warning: decide per hook | R:66 |
 
 Non-guards fail open: a broken mod leaves prompts, tools and turns as they were; only its own additions are lost (kit: `mods-testing.md`).
@@ -234,10 +234,10 @@ const text = (await $.fs.read(file)) as string
 
 | Fact | src |
 |------|-----|
-| call `exists`/`list` before `read`: real `read` rejects when missing or over 4 MiB | T:3311; test stubs: `mods-testing.md` |
-| `mtimeMs` from `fs.list` = cheap change cache | T:3334-3341 |
+| call `exists`/`list` before `read`: real `read` rejects when missing or over 4 MiB | T:3317; test stubs: `mods-testing.md` |
+| `mtimeMs` from `fs.list` = cheap change cache | T:3340-3347 |
 | `$.env.get('CLAUDE_PROJECT_DIR')` is `undefined` inside mod (also from subdirectory) | S; X |
-| project root: `await $.session.root()` = launch dir (= classic `e.cwd`), NOT git root; equals settings hook's `CLAUDE_PROJECT_DIR` (after `/cd` or worktree move: not checked). Overrides at the git root are NOT seen from a subdirectory launch (brewtools and mod alike): docs say "launch directory" | S; X; AB 3a; T:2832-2839 |
+| project root: `await $.session.root()` = launch dir (= classic `e.cwd`), NOT git root; equals settings hook's `CLAUDE_PROJECT_DIR` (after `/cd` or worktree move: not checked). Overrides at the git root are NOT seen from a subdirectory launch (brewtools and mod alike): docs say "launch directory" | S; X; AB 3a; T:2835-2842 |
 | config dir: `$.env.get('CLAUDE_CONFIG_DIR')` (literal name) + `$.fs`; no accessor | P |
 | `Io` lambdas `(p) => $.fs.read(p)` close over the hook's own `$` and go to pure helpers; `$` itself is never passed (validate refuses) | V; W |
 
@@ -252,7 +252,7 @@ if (root === undefined || target?.realPath === undefined || !target.realPath.sta
 await $.process.run(['rm', '--', target.realPath])
 ```
 
-Own-layer files only: never defaults, never legacy paths. Missing path rejects `ENOENT` (T:3364); CLI-only `$.process` does not exist on remote surfaces.
+Own-layer files only: never defaults, never legacy paths. Missing path rejects `ENOENT` (T:3370); CLI-only `$.process` does not exist on remote surfaces.
 
 ## 11. Status-First Command, Own Config, Model Hand-Off, Mod Tool
 
@@ -260,7 +260,7 @@ Goal: `/<mod>` with no args prints the state and the next step; a word changes t
 
 | Part | Do | src |
 |------|----|-----|
-| register | `$.command.register({ name, description, argumentHint })` in the one `session.start` hook, `.catch(() => undefined)`; `name` = letters, digits, `_`, `-`, <= 64, no colon; idempotent (re-fires after every reload) | T:1919-1928; PE Q2 |
+| register | `$.command.register({ name, description, argumentHint })` in the one `session.start` hook, `.catch(() => undefined)`; `name` = letters, digits, `_`, `-`, <= 64, no colon; idempotent (re-fires after every reload) | T:1922-1931; PE Q2 |
 | status first | no args -> `{ text }` block: first line plain (engine glues `<plugin>: ` to it, never repeat the name), table or aligned rows in a fence, last lines = how to change and how to ask (`/x <level>`, `/x <what you want>`) | PE Q4; PH 5c |
 | own option | key = `row.key` found in `await $.config.list()` (`endsWith('.<field>')` + `provider` plugin starts with `$.plugin.name`), never hardcoded; `const r = await $.config.set({ key, value })` -> `{ value }` or `{ deny }` (out-of-options text: `takes one of: medium, high, xhigh, max`): answer `deny` verbatim | PE Q1, Q2 |
 | after a set | module reloads (locals reset, `session.start` re-fires, engine row `options changed - reloaded`); the handler's closure and `options` still hold the OLD value: reply `old -> new (applies from the next request)`, read the new value from `$.config.list()`; keep what status needs in `$.state` (contract file) or print `n/a until the next request`; command hooks see `CLAUDE_PLUGIN_OPTION_<KEY>` from the next prompt and need their own default | PE Q2 |
@@ -282,7 +282,7 @@ on('command.run', { command: 'mymod' }, async ($, e) => {
 }).catch(($, e, next) => (next.called ? next(e) : { text: 'mymod failed' }))
 ```
 
-Team seat: `command.run` and `$.config.set` (own row, reload, next status) ran there (PE Q6); deferred `$.prompt.submit` and the mod tool there are NOT run: live-test before claiming it. Floor: 2.1.300 verified; 2.1.287 only proves the API validates, own-row set there unverified (PE Q7).
+Team seat: `command.run` and `$.config.set` (own row, reload, next status) ran there (PE Q6); deferred `$.prompt.submit` and the mod tool there are UNVERIFIED (never exercised live; do not claim they do not run): live-test before relying on them. Floor: 2.1.300 verified; 2.1.287 only proves the API validates, own-row set there unverified (PE Q7).
 
 ## 12. Hints: Toast, Status, Key Hints, Band Auto-Show
 
