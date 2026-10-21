@@ -179,7 +179,7 @@ Say "move it to Friday" and a someday item becomes a normal reminder.
 
 Say "global" or "in every project", or start with `/remind global …`, to pick global.
 
-When you give no time, Claude asks one question, "When should it fire?", with options built from your request, a "No date (someday)" option and Other. The kind or scope joins that dialog only when unclear.
+When you give no time, Claude asks one question, "When should it fire?", with 2-3 options built from your request, each showing a concrete local time (a day-level answer such as "in 1 week" is saved at 09:00 local, never midnight), a "No date (someday)" option and Other. The kind or scope joins that dialog only when unclear.
 
 ## When it fires
 
@@ -216,8 +216,8 @@ When you give no time, Claude asks one question, "When should it fire?", with op
 | `/remind history` | Closed reminders (done, shown notes, cancelled), newest first |
 | `/remind someday` | Only the undated ones |
 | `/remind run <N\|id> [words]` | Run an action, or show a note and close it |
-| `/remind snooze <N\|id> <when>` | `+1h`, `tomorrow 9:00`, `fri 14:00` or `YYYY-MM-DD HH:MM`; gives a someday item a date |
-| `/remind edit <N\|id> <change>` | Claude changes text, kind, time or scope and shows `- …` and `+ …` lines |
+| `/remind snooze <N\|id> <when>` | `+1h`, `today` or `tomorrow` (09:00, or add a time: `tomorrow 9:00`), a weekday (`fri` = next Friday 09:00, `fri 14:00`), `YYYY-MM-DD` (09:00 local) or `YYYY-MM-DD HH:MM`; gives a someday item a date |
+| `/remind edit <N\|id> <change>` | Claude changes text, kind, time or scope and shows `- …` and `+ …` lines. Claude keeps the old version: say "undo" and it restores it, including a move back between project and global |
 | `/remind done <N\|id>` | You did it yourself |
 | `/remind cancel <N\|id>` | Drop it |
 | `/remind reopen <id> [when]` | Bring a closed one back |
@@ -251,7 +251,7 @@ Aliases: `show active|all|done`, `list`. The id is the file name without `.md`; 
 
 **Claims.** Starting an action writes `.claims/<id>.json` in its folder (the folder carries its own `.gitignore` with `*`), so a second open session cannot run it too. A claim from a crashed session expires after 6 h. Claude finishes with `update_reminder done` and a result, which sets `status: done`, `done:` and `result:`.
 
-**Tools Claude uses.** `list_reminders` (`scope`, `state` active, all, someday or done, `from`, `to`), `add_reminder` (`scope`, `when` or `someday`, `text`, `slug`, `kind`, `tz`; saves at once) and `update_reminder` (`action` start, done, snooze, cancel, edit or reopen, plus `until`, `result`, `text`, `kind`, `when`, `scope`, `from_scope`).
+**Tools Claude uses.** `list_reminders` (`scope`, `state` active, all, someday or done, `from`, `to`), `add_reminder` (`scope`, `when` or `someday`, `text`, `slug`, `kind`, `tz`; saves at once; `when` is optional: called without it, the tool saves nothing, returns a short calendar of the next days and asks Claude to ask you once, so weekday options are right) and `update_reminder` (`action` start, done, snooze, cancel, edit or reopen, plus `until`, `result`, `text`, `kind`, `when`, `scope`, `from_scope`).
 
 **Migrating a hand-written hook.** Items from a custom SessionStart hook (for example `due-checks.sh` with `.claude/scheduled/*.md`) parse unchanged. Remove the hook block from `.claude/settings.json` or `.claude/settings.local.json` and the script; while it is still registered, the offer reminds you to do so.
 
