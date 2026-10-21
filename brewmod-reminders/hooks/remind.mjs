@@ -8,7 +8,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   CLAIMS_DIR, STATE_NAME_RE, STATE_TTL_MS, bodyOf, buildOffer, claimName, classify, expiredIds, isItemName, itemKey, offerNow, offeredJson, offeredStateName,
-  optNumber, parseClaim, parseConfig, parseItem, parseLastOffer, parseOffered, parseSessionState, sessionStateName, shouldOffer, systemTz, validSid,
+  optNumber, parseClaim, parseConfig, parseItem, parseLastOffer, parseOffered, parseSessionState, sessionStateName, shouldOffer, systemTz, tagOf, validSid,
 } from './lib/items.mjs'
 
 const readText = (p) => {
@@ -67,12 +67,16 @@ function prune(dir, now) {
   }
 }
 
-// Closed items older than keepDays: the file and its stale claim go; pending and someday never. Fail-open per file.
-function cleanup(items, now, keepDays) {
+// Closed items older than keepDays: file and stale claim go; pending/someday never. keepProject (git mode): project files stay, returned.
+function cleanup(items, now, keepDays, keepProject) {
+  const kept = []
   for (const dir of new Set(items.map((i) => i.dir))) {
     const mine = items.filter((i) => i.dir === dir)
-    for (const id of expiredIds(mine, now, keepDays)) {
-      for (const f of [path.join(dir, `${id}.md`), path.join(dir, CLAIMS_DIR, claimName(id))]) {
+    const ids = new Set(expiredIds(mine, now, keepDays))
+    for (const i of mine.filter((x) => ids.has(x.id))) {
+      const keep = keepProject && !i.global
+      if (keep) kept.push(i)
+      for (const f of [...(keep ? [] : [i.path]), path.join(dir, CLAIMS_DIR, claimName(i.id))]) {
         try {
           fs.unlinkSync(f)
         } catch {
@@ -81,6 +85,16 @@ function cleanup(items, now, keepDays) {
       }
     }
   }
+  return kept.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+}
+
+// Git mode: expired project files are left for Claude to delete and commit, never as silent unstaged deletions.
+function expiredOffer(items, keepDays, git) {
+  if (items.length === 0) return []
+  return [
+    `Expired reminder files (${items.length}), closed over ${keepDays} days ago; kept because .claude/reminders.json sets git: ${git}. Delete each file, then commit only these deletions${git === 'commit-push' ? ' and push' : ' (no push)'} following the repo's conventions; never stage anything else. Mention it to the user in one line.`,
+    ...items.map((i) => `- ${tagOf(i)} | ${i.path}`),
+  ]
 }
 
 function nowOf(env) {
@@ -108,20 +122,24 @@ export function run(e, env, now = nowOf(env)) {
     ...loadDir(path.join(project, '.claude', 'scheduled'), false, now),
     ...loadDir(env.REMIND_GLOBAL_DIR || path.join(configDir, 'reminders'), true, now),
   ]
-  cleanup(items, now, optNumber(env.CLAUDE_PLUGIN_OPTION_KEEPDAYS, 30, 1))
+  const git = parseConfig(readText(path.join(project, '.claude', 'reminders.json')) ?? '').git
+  const keepDays = optNumber(env.CLAUDE_PLUGIN_OPTION_KEEPDAYS, 30, 1)
+  const expired = cleanup(items, now, keepDays, git !== 'off')
   const offeredFile = path.join(state, offeredStateName(e.session_id))
   const offeredText = readText(offeredFile) ?? ''
   const offered = parseOffered(offeredText)
   const fresh = (i) => offered[itemKey(i)] === undefined
+  const expiredKey = (i) => `expired:${itemKey(i)}`
+  const gone = expired.filter((i) => offered[expiredKey(i)] === undefined)
   const due = items.filter((i) => i.state === 'due')
   const bad = items.filter((i) => i.state === 'unparseable' && fresh(i))
   const cooldownMs = optNumber(env.CLAUDE_PLUGIN_OPTION_COOLDOWNMINUTES, 60) * 60000
-  if (!offerNow({ last: parseLastOffer(offeredText), hasNew: due.some(fresh) || bad.length > 0, hasDue: due.length > 0, now, cooldownMs })) return {}
-  const git = parseConfig(readText(path.join(project, '.claude', 'reminders.json')) ?? '').git
+  if (!offerNow({ last: parseLastOffer(offeredText), hasNew: due.some(fresh) || bad.length > 0 || gone.length > 0, hasDue: due.length > 0, now, cooldownMs })) return {}
   const legacy = ['settings.json', 'settings.local.json'].some((f) => (readText(path.join(project, '.claude', f)) ?? '').includes('due-checks.sh'))
-  const text = buildOffer({ due, bad, now, tz: systemTz(), git, legacy })
+  const text = [buildOffer({ due, bad, now, tz: systemTz(), git, legacy }), ...expiredOffer(gone, keepDays, git)].filter((l) => l !== '').join('\n')
   try {
     for (const i of [...due, ...bad]) offered[itemKey(i)] = now
+    for (const i of gone) offered[expiredKey(i)] = now
     writeAtomic(offeredFile, offeredJson(offered, now))
   } catch {
     // marks are best effort: the offer still goes out

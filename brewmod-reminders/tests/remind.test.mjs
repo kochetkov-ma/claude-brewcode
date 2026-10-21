@@ -339,24 +339,28 @@ test('GIVEN plain, fenced and header-less files WHEN bodyOf runs THEN the trimme
 
 const T0Z = Date.parse(NOW)
 const min = (n) => new Date(T0Z + n * 60000).toISOString()
+const B = '20261022-0905_b'
+const noSeed = () => {}
+const seedB = (ctx) => sched(ctx, `${B}.md`, item('2026-10-22T09:05:00Z', 'pending'))
+const LABEL = { [A]: 'A', [B]: 'B', none: 'none' }
 const cooldownRows = [
-  ['default 60 min: silent at +30, nudge at +61', {}, [[0, 'A'], [30, 'none'], [61, 'A']]],
-  ['5 min cooldown: nudge at +30', { CLAUDE_PLUGIN_OPTION_COOLDOWNMINUTES: '5' }, [[0, 'A'], [3, 'none'], [30, 'A']]],
-  ['0 min cooldown: every prompt', { CLAUDE_PLUGIN_OPTION_COOLDOWNMINUTES: '0' }, [[0, 'A'], [1, 'A']]],
-  ['an unusable option falls back to 60', { CLAUDE_PLUGIN_OPTION_COOLDOWNMINUTES: 'abc' }, [[0, 'A'], [30, 'none'], [61, 'A']]],
-  ['a newly fired item skips the cooldown and lists both', {}, [[0, 'A'], [10, 'AB']]],
+  ['default 60 min: silent at +30, nudge at +61', {}, [[0, 'A', noSeed], [30, 'none', noSeed], [61, 'A', noSeed]]],
+  ['5 min cooldown: nudge at +30', { CLAUDE_PLUGIN_OPTION_COOLDOWNMINUTES: '5' }, [[0, 'A', noSeed], [3, 'none', noSeed], [30, 'A', noSeed]]],
+  ['0 min cooldown: every prompt', { CLAUDE_PLUGIN_OPTION_COOLDOWNMINUTES: '0' }, [[0, 'A', noSeed], [1, 'A', noSeed]]],
+  ['an unusable option falls back to 60', { CLAUDE_PLUGIN_OPTION_COOLDOWNMINUTES: 'abc' }, [[0, 'A', noSeed], [30, 'none', noSeed], [61, 'A', noSeed]]],
+  ['a newly fired item skips the cooldown and lists both', {}, [[0, 'A', noSeed], [10, 'AB', seedB]]],
 ]
 for (const [name, env, steps] of cooldownRows) {
   test(`GIVEN ${name} WHEN prompts arrive at those minutes THEN each offers exactly the listed items`, async (t) => {
     const ctx = newCtx(t)
     old(ctx)
     const got = []
-    for (const [m] of steps) {
-      if (m === 10) sched(ctx, '20261022-0905_b.md', item('2026-10-22T09:05:00Z', 'pending'))
+    for (const [m, , seed] of steps) {
+      seed(ctx)
       const r = await call(ctx, { ...env, REMIND_NOW: min(m) }, {})
-      got.push([m, r.ids === null ? 'none' : r.ids.map((x) => (x === A ? 'A' : 'B')).join('')])
+      got.push([m, (r.ids ?? ['none']).map((x) => LABEL[x]).join('')])
     }
-    assert.deepEqual(got, steps, name)
+    assert.deepEqual(got, steps.map(([m, want]) => [m, want]), name)
   })
 }
 
@@ -380,24 +384,40 @@ test('GIVEN a fired note and a fired action WHEN remind.mjs runs THEN the note t
   ], 'exact offer lines')
 })
 
+const PEND = '20261020-0800_pending'
+const KEPT = ['20260901-0800_new-done.md', `${PEND}.md`, 'someday_s.md']
+const OLD = ['20260702-0800_old-cancelled', '20260801-0800_old-done']
+const expiredHead = (git, tail) =>
+  `Expired reminder files (2), closed over 30 days ago; kept because .claude/reminders.json sets git: ${git}. Delete each file, then commit only these deletions${tail} following the repo's conventions; never stage anything else. Mention it to the user in one line.`
 const cleanRows = [
-  ['default 30 days', {}, ['20260901-0800_new-done.md', '20261020-0800_pending.md', 'someday_s.md', '.claims']],
-  ['keepDays 90', { CLAUDE_PLUGIN_OPTION_KEEPDAYS: '90' }, ['20260801-0800_old-done.md', '20260901-0800_new-done.md', '20261020-0800_pending.md', 'someday_s.md', '.claims']],
-  ['an unusable keepDays falls back to 30', { CLAUDE_PLUGIN_OPTION_KEEPDAYS: '0' }, ['20260901-0800_new-done.md', '20261020-0800_pending.md', 'someday_s.md', '.claims']],
+  ['default 30 days', {}, '{}', KEPT, [], [], [PEND], []],
+  ['keepDays 90', { CLAUDE_PLUGIN_OPTION_KEEPDAYS: '90' }, '{}', ['20260801-0800_old-done.md', ...KEPT], ['20260801-0800_old-done.json'], ['20260801-0800_g-done.md'], [PEND], []],
+  ['an unusable keepDays falls back to 30', { CLAUDE_PLUGIN_OPTION_KEEPDAYS: '0' }, '{}', KEPT, [], [], [PEND], []],
+  ['git commit keeps project files and offers them', {}, '{"git":"commit"}', [...OLD.map((n) => `${n}.md`), ...KEPT], [], [], [PEND, ...OLD], [expiredHead('commit', ' (no push)')]],
+  ['git commit-push keeps project files and offers them', {}, '{"git":"commit-push"}', [...OLD.map((n) => `${n}.md`), ...KEPT], [], [], [PEND, ...OLD], [expiredHead('commit-push', ' and push')]],
 ]
-for (const [name, env, left] of cleanRows) {
-  test(`GIVEN old and recent closed, pending, someday items and a stale claim WHEN a prompt arrives with ${name} THEN only old closed items and their claims are deleted`, async (t) => {
+for (const [name, env, config, files, claims, global, ids, heads] of cleanRows) {
+  test(`GIVEN old and recent closed project and global items, pending, someday and a stale claim WHEN a prompt arrives with ${name} THEN the listed files, claims and offer remain`, async (t) => {
     const ctx = newCtx(t)
     const dir = join(ctx.proj, '.claude', 'scheduled')
+    const gdir = join(ctx.cfg, 'reminders')
+    put(join(ctx.proj, '.claude'), 'reminders.json', config)
     sched(ctx, '20260801-0800_old-done.md', item('2026-08-01T08:00:00Z', 'done', 'x').replace('status: done', 'status: done\ndone: 2026-08-01T09:00:00Z'))
     sched(ctx, '20260901-0800_new-done.md', item('2026-09-01T08:00:00Z', 'done', 'x').replace('status: done', 'status: done\ndone: 2026-10-10T09:00:00Z'))
     sched(ctx, '20260702-0800_old-cancelled.md', item('2026-07-02T08:00:00Z', 'cancelled', 'x').replace('status: cancelled', 'status: cancelled\ncancelled: 2026-07-02T09:00:00Z'))
-    sched(ctx, '20261020-0800_pending.md', item('2025-01-01T08:00:00Z', 'pending'))
+    sched(ctx, `${PEND}.md`, item('2025-01-01T08:00:00Z', 'pending'))
     sched(ctx, 'someday_s.md', item('none', 'pending'))
     put(join(dir, '.claims'), '20260801-0800_old-done.json', JSON.stringify({ session: 'o', at: 1 }))
-    await call(ctx, env, {})
-    const left0 = readdirSync(dir).filter((n) => n !== '.claims')
-    const claims = readdirSync(join(dir, '.claims'))
-    assert.deepEqual({ files: left0.sort(), claims }, { files: left.filter((n) => n !== '.claims').sort(), claims: env.CLAUDE_PLUGIN_OPTION_KEEPDAYS === '90' ? ['20260801-0800_old-done.json'] : [] }, name)
+    put(gdir, '20260701-0800_g-old.md', item('2026-07-01T08:00:00Z', 'done', 'x').replace('status: done', 'status: done\ndone: 2026-07-01T09:00:00Z'))
+    put(gdir, '20260801-0800_g-done.md', item('2026-08-01T08:00:00Z', 'done', 'x').replace('status: done', 'status: done\ndone: 2026-08-01T09:00:00Z'))
+    const r = await call(ctx, env, {})
+    const got = {
+      files: readdirSync(dir).filter((n) => n !== '.claims').sort(),
+      claims: readdirSync(join(dir, '.claims')),
+      global: readdirSync(gdir),
+      ids: r.ids,
+      heads: r.text.split('\n').filter((l) => l.startsWith('Expired reminder files')),
+    }
+    assert.deepEqual(got, { files: [...files].sort(), claims, global, ids, heads }, name)
   })
 }
