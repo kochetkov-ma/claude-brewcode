@@ -1,6 +1,6 @@
 {
   "name": "brewmod-placeholders",
-  "version": "6.11.0",
+  "version": "6.11.1",
   "description": "Brewmod placeholders -- expands ++m, ++a, ++r, ++rr and +++ style placeholders into prompt context, with live highlighting and user-defined placeholders (Claude Code 2.1.301+ mod)",
   "author": {
     "name": "Maksim Kochetkov",

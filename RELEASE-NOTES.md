@@ -2,6 +2,30 @@
 
 ---
 
+## v6.11.1 (2026-10-21)
+
+> Docs: [reminders](https://doc-claude.brewcode.app/mods/reminders/)
+
+**What changed for you**
+
+- Type `**?` to see every reminder by state: fired, running, waiting, someday and the 10 newest closed, each row tagged `project` or `global`. See [pick and run](https://doc-claude.brewcode.app/mods/reminders/) and [watch it work](https://doc-claude.brewcode.app/mods/reminders/#demo).
+- Plain `**` always ends with a `**?  all reminders · project + global` row, and says `no reminders · ask Claude "remind me ..."` when there are none, so an empty list no longer looks like a broken picker.
+- Press Enter on a bare `**` or `**?` in the terminal to print the full list without a Claude turn.
+- The `keepDays` setting is gone from `/config`: closed reminders are kept 30 days.
+
+![Claude Code terminal: the reminders band with the new footer, **? lists every reminder by state with project tags, then **1 runs the fired one](https://brewcode.app/mods/reminders.gif)
+
+### brewmod-reminders
+
+#### Added
+
+- **`**?` picker:** sections with counts (fired `**N`, running, waiting, someday, unreadable, history capped at 10 plus `+N more · /remind history`); open rows insert `**<id>`, an id open in both folders inserts `**project:<id>` / `**global:<id>`. Band footer: `** to pick · **? all · /remind snooze · done`.
+- **bare Enter:** `**` prints `/remind all`, `**?` adds the history; terminal prompts only, Remote Control and SDK prompts pass through to Claude. The prompt box keeps keys typed right after Enter.
+
+#### Changed
+
+- **settings:** `/config` rows are `prefix`, `cooldownMinutes`, `notify`; closed reminders are deleted after 30 days (with `git` set in `.claude/reminders.json`, Claude is asked to delete and commit expired project files).
+
 ## v6.11.0 (2026-10-21)
 
 > Docs: [reminders](https://doc-claude.brewcode.app/mods/reminders/) | [mods overview](https://doc-claude.brewcode.app/mods/overview/) | [installation](https://doc-claude.brewcode.app/installation/) | [FAQ](https://doc-claude.brewcode.app/faq/) | [quick start](https://doc-claude.brewcode.app/quickstart/) | [full setup](https://doc-claude.brewcode.app/full-setup/) | [recommended flow](https://doc-claude.brewcode.app/recommended-flow/) | [license](https://doc-claude.brewcode.app/license/) | [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [mod-creator](https://doc-claude.brewcode.app/brewcode/agents/mod-creator/) | [getting started](https://doc-claude.brewcode.app/getting-started/) | [placeholders](https://doc-claude.brewcode.app/mods/placeholders/) | [plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/)
