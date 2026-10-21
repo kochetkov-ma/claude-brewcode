@@ -295,19 +295,25 @@ export function rangeOf(from, to, now, tz) {
   return !a.ok ? a : !b.ok ? b : { ok: true, from: a.ms, to: b.ms }
 }
 
-// parseWhen plus `today|tomorrow H[:MM]` as wall time in tz (date-only: 00:00 local).
+// parseWhen plus `today|tomorrow H[:MM]` and `<weekday> [H[:MM]]` (next such day after today, default 09:00) as wall time in tz.
+const DAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
+const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
 export function parseWhenNatural(input, now, tz) {
   const s = String(input ?? '').trim()
-  const m = /^(today|tomorrow)\s+(\d{1,2})(?::(\d{2}))?$/i.exec(s)
-  if (!m) return parseWhen(s, now, tz)
+  const m = /^(?:(today|tomorrow)\s+|([a-z]+)(?:\s+|$))(\d{1,2})?(?::(\d{2}))?$/i.exec(s)
+  const word = m ? (m[1] ?? m[2] ?? '').toLowerCase() : ''
+  const wd = DAYS.indexOf(word) >= 0 ? DAYS.indexOf(word) : DAY_NAMES.indexOf(word)
+  if (!m || (m[1] ? m[3] === undefined : wd < 0 || (m[3] === undefined && m[4] !== undefined))) return parseWhen(s, now, tz)
   let p
   try {
     p = zoneParts(now, tz, 'numeric')
   } catch {
     return { ok: false, error: `unknown time zone "${tz}"` }
   }
-  const d = new Date(Date.UTC(+p.year, +p.month - 1, +p.day + (m[1].toLowerCase() === 'tomorrow' ? 1 : 0)))
-  return parseWhen(`${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(+m[2])}:${m[3] ?? '00'}`, now, tz)
+  const today = Date.UTC(+p.year, +p.month - 1, +p.day)
+  const add = m[1] ? (word === 'tomorrow' ? 1 : 0) : ((wd - new Date(today).getUTCDay() + 6) % 7) + 1
+  const d = new Date(today + add * 86400000)
+  return parseWhen(`${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(+(m[3] ?? 9))}:${m[4] ?? '00'}`, now, tz)
 }
 
 function zoneParts(ms, tz, month = 'short') {

@@ -308,7 +308,7 @@ const HELP = (dirs: Dirs, hasTools: boolean, alert: string): string =>
     '/remind history [filters]    = closed: done, shown notes, cancelled   |   /remind someday = only the undated ones   (show active|all|done and list still work)',
     '/remind run <N|id> [words]   Claude runs it (action) or shows it and closes it (note); N = number in /remind',
     '/remind done|cancel [project|global] <N|id>   close without running (id = file name, slug or unique prefix; no Claude turn)',
-    '/remind snooze [project|global] <N|id> <when>   +2h | +1d | tomorrow 9:00 | today 17:30 | 2026-10-22 09:00 (your local zone; gives a someday item a date; no Claude turn)',
+    '/remind snooze [project|global] <N|id> <when>   +2h | +1d | tomorrow 9:00 | today 17:30 | fri 14:00 (next Friday, default 09:00) | 2026-10-22 09:00 (your local zone; gives a someday item a date; no Claude turn)',
     '/remind reopen <id> [when]   bring a closed one back, with a new time if given   |   /remind edit <N|id> <change>   Claude changes text, kind, time or scope and shows old and new',
     '/remind <words>              add or ask in your words: /remind check prod tomorrow 9:00',
     '/remind project|global <words>   same with the folder fixed (default project)',

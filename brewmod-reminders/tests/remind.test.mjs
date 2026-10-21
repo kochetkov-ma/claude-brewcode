@@ -174,6 +174,19 @@ const natural = [
   ['plain forms pass through', '+30m', LIS, { ok: true, ms: NAT_NOW + 1800000, iso: '2026-10-24T23:00:00Z' }],
   ['unknown zone', 'tomorrow 9:00', 'Mars/Base', { ok: false, error: 'unknown time zone "Mars/Base"' }],
 ]
+const WED = Date.parse('2026-10-21T12:00:00Z')
+const FRI = Date.parse('2026-10-23T12:00:00Z')
+const SAT = Date.parse('2026-10-24T22:30:00Z')
+const weekdays = [
+  ['Wed -> fri 14:00 is the same week (WEST, +1)', 'fri 14:00', WED, LIS, { ok: true, ms: Date.parse('2026-10-23T13:00:00Z'), iso: '2026-10-23T13:00:00Z' }],
+  ['Fri -> fri is next week', 'fri 14:00', FRI, LIS, { ok: true, ms: Date.parse('2026-10-30T14:00:00Z'), iso: '2026-10-30T14:00:00Z' }],
+  ['full name, case-insensitive, default 09:00 (after DST end, +0)', 'Monday', FRI, LIS, { ok: true, ms: Date.parse('2026-10-26T09:00:00Z'), iso: '2026-10-26T09:00:00Z' }],
+  ['Lisbon week across the DST end (Sat 22:30Z is Sat 23:30 WEST -> sun 8)', 'sun 8', SAT, LIS, { ok: true, ms: Date.parse('2026-10-25T08:00:00Z'), iso: '2026-10-25T08:00:00Z' }],
+  ['bad hour is rejected', 'fri 25:00', WED, LIS, { ok: false, error: 'invalid date/time "2026-10-23 25:00"' }],
+]
+test('GIVEN weekday names WHEN parseWhenNatural runs THEN it picks the next such day strictly after today', () => {
+  assert.deepEqual(weekdays.map(([, s, now, tz]) => parseWhenNatural(s, now, tz)), weekdays.map((r) => r[4]), 'weekday rows')
+})
 test('GIVEN today/tomorrow wall times near the Lisbon DST end WHEN parseWhenNatural runs THEN the results are exact', () => {
   assert.deepEqual(natural.map(([, s, tz]) => parseWhenNatural(s, NAT_NOW, tz)), natural.map((r) => r[3]), 'natural rows')
 })
