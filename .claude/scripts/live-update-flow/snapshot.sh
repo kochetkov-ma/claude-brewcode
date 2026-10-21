@@ -1,5 +1,5 @@
 #!/bin/bash
-# Candidate marketplace: working-tree snapshot -> scratch clone (tags kept for content_version) -> bump 6.10.0, tag, bump 6.10.1.
+# Candidate marketplace: working-tree snapshot -> scratch clone (tags kept for content_version) -> bump 6.10.0, tag, bump 6.10.1. Synthetic tags are luf-v<V> (real v6.10.0 exists since the release).
 # Usage: snapshot.sh <repo> <scratch> <old-tag> <file-list (NUL)> <log-dir> <ver1> <ver2>; rc 0 ok, 1 step failed, 2 usage.
 set -u -o pipefail
 [ $# -eq 7 ] || { echo "usage: snapshot.sh <repo> <scratch> <old-tag> <list> <log-dir> <ver1> <ver2>" >&2; exit 2; }
@@ -13,7 +13,7 @@ git clone -q "$REPO" "$S/cand" > "$LOG/snapshot-clone.log" 2>&1 || die "clone"
 "${GIT[@]}" -C "$S/cand" rm -rq . > /dev/null || die "git rm"
 rsync -a --from0 --files-from="$LIST" "$REPO/" "$S/cand/" || die "rsync working tree"
 "${GIT[@]}" -C "$S/cand" add -A -f || die "add"
-"${GIT[@]}" -C "$S/cand" commit -qm "candidate: working tree snapshot" || die "commit snapshot"
+"${GIT[@]}" -C "$S/cand" commit -q --allow-empty -m "candidate: working tree snapshot" || die "commit snapshot"
 echo "snapshot $("${GIT[@]}" -C "$S/cand" rev-parse HEAD) files $(git -C "$S/cand" ls-files | wc -l | tr -d ' ')"
 
 for V in "$V1" "$V2"; do
@@ -24,7 +24,7 @@ for V in "$V1" "$V2"; do
     [ "${other:-1}" = 0 ] && grep -q 'validate-compat.mjs' "$LOG/snapshot-bump-$V.log" || die "bump-version $V (see $LOG/snapshot-bump-$V.log)"
     echo "BUMP-CODEX-ONLY $V"
   fi
-  "${GIT[@]}" -C "$S/cand" add -A && "${GIT[@]}" -C "$S/cand" commit -qm "release: v$V" && "${GIT[@]}" -C "$S/cand" tag "v$V" || die "commit/tag $V"
+  "${GIT[@]}" -C "$S/cand" add -A && "${GIT[@]}" -C "$S/cand" commit -qm "release: v$V" && "${GIT[@]}" -C "$S/cand" tag "luf-v$V" || die "commit/tag $V"
 done
 
 step "marketplace repo: main = $OLD, then stage refs for $V1 and $V2 (linear history)"
@@ -36,8 +36,8 @@ put() {
   "${GIT[@]}" -C "$S/mwork" rev-parse HEAD
 }
 M1=$(put "$REPO" "$OLD" "marketplace $OLD") || exit 1
-M2=$(put "$S/cand" "v$V1" "marketplace v$V1") || exit 1
-M3=$(put "$S/cand" "v$V2" "marketplace v$V2") || exit 1
+M2=$(put "$S/cand" "luf-v$V1" "marketplace v$V1") || exit 1
+M3=$(put "$S/cand" "luf-v$V2" "marketplace v$V2") || exit 1
 "${GIT[@]}" init -q --bare -b main "$S/market.git" || die "init bare"
 "${GIT[@]}" -C "$S/mwork" push -q "$S/market.git" "$M1:refs/heads/main" "$M1:refs/heads/stage-old" "$M2:refs/heads/stage-$V1" "$M3:refs/heads/stage-$V2" || die "push"
 echo "M_OLD=$M1"
