@@ -78,6 +78,15 @@ for (const [name, setup, extras, expected] of rows) {
   })
 }
 
+test('GIVEN REMIND_GLOBAL_DIR WHEN remind.mjs runs THEN that folder, not CLAUDE_CONFIG_DIR/reminders, is the global one', () => {
+  const ctx = { proj: mkdtempSync(join(tmpdir(), 'remind-p-')), cfg: mkdtempSync(join(tmpdir(), 'remind-c-')), plugin: mkdtempSync(join(tmpdir(), 'remind-r-')) }
+  const over = mkdtempSync(join(tmpdir(), 'remind-g-'))
+  put(over, 'o.md', item('2026-10-21T08:00:00Z', 'pending'))
+  put(join(ctx.cfg, 'reminders'), 'c.md', item('2026-10-21T08:00:00Z', 'pending'))
+  const { rc, ids } = call(ctx, { REMIND_GLOBAL_DIR: over }, {})
+  assert.deepEqual({ rc, ids }, { rc: 0, ids: ['o (global)'] }, 'override wins')
+})
+
 test('GIVEN the prototype file verbatim WHEN remind.mjs runs THEN the offer text is exact', () => {
   const ctx = { proj: mkdtempSync(join(tmpdir(), 'remind-p-')), cfg: mkdtempSync(join(tmpdir(), 'remind-c-')), plugin: mkdtempSync(join(tmpdir(), 'remind-r-')) }
   mkdirSync(join(ctx.proj, '.claude', 'scheduled'), { recursive: true })

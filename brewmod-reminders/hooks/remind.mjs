@@ -83,7 +83,7 @@ export function run(e, env, now = nowOf(env)) {
   const configDir = env.CLAUDE_CONFIG_DIR || path.join(env.HOME || env.USERPROFILE || os.homedir(), '.claude')
   const items = [
     ...loadDir(path.join(project, '.claude', 'scheduled'), false, now),
-    ...loadDir(path.join(configDir, 'reminders'), true, now),
+    ...loadDir(env.REMIND_GLOBAL_DIR || path.join(configDir, 'reminders'), true, now),
   ]
   const offeredFile = path.join(state, offeredStateName(e.session_id))
   const offered = parseOffered(readText(offeredFile) ?? '')

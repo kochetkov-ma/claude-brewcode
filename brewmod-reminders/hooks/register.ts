@@ -29,9 +29,10 @@ type Dirs = { project: string; global: string | null; config: string }
 type Out = { text: string; isError?: true }
 type View = { due: number; open: number; rows: { text: string; isDue: boolean }[]; more: number }
 
-const dirsOf = (root: string | undefined, cfg: string | undefined, home: string | undefined): Dirs => ({
+// override = REMIND_GLOBAL_DIR: the global folder itself (live tests; unset in normal use).
+const dirsOf = (root: string | undefined, cfg: string | undefined, home: string | undefined, override?: string): Dirs => ({
   project: `${root ?? '.'}/.claude/scheduled`,
-  global: cfg !== undefined && cfg !== '' ? `${cfg}/reminders` : home !== undefined && home !== '' ? `${home}/.claude/reminders` : null,
+  global: override !== undefined && override !== '' ? override : cfg !== undefined && cfg !== '' ? `${cfg}/reminders` : home !== undefined && home !== '' ? `${home}/.claude/reminders` : null,
   config: `${root ?? '.'}/.claude/reminders.json`,
 })
 const fail = (text: string): Out => ({ text, isError: true })
@@ -118,7 +119,7 @@ async function claimTo(io: Io, e: Entry, sid: string, now: number): Promise<Out 
   if (!(await io.exists(`${e.dir}/${CLAIMS_DIR}/.gitignore`).catch(() => false))) await io.write(`${e.dir}/${CLAIMS_DIR}/.gitignore`, '*\n')
   await io.write(file, claimJson(sid, now))
   const back = parseClaim(await io.read(file).catch(() => ''))
-  return back !== null && back.session === sid ? null : fail(`${e.id} is running in session ${back?.session ?? '?'}`)
+  return back !== null && back.session === sid ? null : fail(`${e.id} is running in session ${back?.session ?? '?'}; do not run it, tell the user`)
 }
 
 type Act = { id: string; action: string; until?: string; result?: string; scope?: string }
@@ -133,7 +134,7 @@ async function act(io: Io, dirs: Dirs, a: { req: Act; sid: string; now: number; 
   const e = found
   if (e.state === 'done' || e.state === 'cancelled') return fail(`${e.id} is already ${e.state}`)
   const foreign = claimLive(e.claim, now) && e.claim !== null && e.claim.session !== sid
-  if (foreign && a.by === 'model') return fail(`${e.id} is running in session ${e.claim?.session} since ${e.claim === null ? '?' : formatWhen(e.claim.at, tz, now)}`)
+  if (foreign && a.by === 'model') return fail(`${e.id} is running in session ${e.claim?.session} since ${e.claim === null ? '?' : formatWhen(e.claim.at, tz, now)}; do not run it or change it, tell the user`)
   if (req.action === 'start') {
     if (e.state === 'unparseable') return fail(`${e.id} has an unreadable due line; fix the header first`)
     const lost = await claimTo(io, e, sid, now)
@@ -267,7 +268,7 @@ export const register: Register = (on) => {
     }
     if (e.isInteractive) {
       const io: Io = { exists: (p) => $.fs.exists(p), list: (p) => $.fs.list(p), read: (p) => $.fs.read(p), write: (p, t) => $.fs.write(p, t) }
-      const dirs = dirsOf(await $.session.root().catch(() => undefined), await $.env.get('CLAUDE_CONFIG_DIR'), (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE')))
+      const dirs = dirsOf(await $.session.root().catch(() => undefined), await $.env.get('CLAUDE_CONFIG_DIR'), (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE')), await $.env.get('REMIND_GLOBAL_DIR'))
       refresh = async () => {
         const t = await $.clock.now()
         const items = await loadAll(io, dirs, t)
@@ -314,7 +315,7 @@ export const register: Register = (on) => {
 
   on('command.run', { command: 'remind' }, async ($, e) => {
     const io: Io = { exists: (p) => $.fs.exists(p), list: (p) => $.fs.list(p), read: (p) => $.fs.read(p), write: (p, t) => $.fs.write(p, t) }
-    const dirs = dirsOf(await $.session.root().catch(() => undefined), await $.env.get('CLAUDE_CONFIG_DIR'), (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE')))
+    const dirs = dirsOf(await $.session.root().catch(() => undefined), await $.env.get('CLAUDE_CONFIG_DIR'), (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE')), await $.env.get('REMIND_GLOBAL_DIR'))
     const now = await $.clock.now()
     const tz = tzOf(await $.env.get('TZ'))
     const words = e.args.trim().split(/\s+/).filter((w) => w !== '')
@@ -351,7 +352,7 @@ export const register: Register = (on) => {
   // The model's tools: answered here, so no permission prompt for the file writes.
   on('tool.call', { tool: /^mcp__brewmod-reminders__/ }, async ($, e) => {
     const io: Io = { exists: (p) => $.fs.exists(p), list: (p) => $.fs.list(p), read: (p) => $.fs.read(p), write: (p, t) => $.fs.write(p, t) }
-    const dirs = dirsOf(await $.session.root().catch(() => undefined), await $.env.get('CLAUDE_CONFIG_DIR'), (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE')))
+    const dirs = dirsOf(await $.session.root().catch(() => undefined), await $.env.get('CLAUDE_CONFIG_DIR'), (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE')), await $.env.get('REMIND_GLOBAL_DIR'))
     const now = await $.clock.now()
     const tz = tzOf(await $.env.get('TZ'))
     const git = parseConfig(await io.read(dirs.config).catch(() => '')).git

@@ -144,7 +144,7 @@ test('GIVEN a live claim of another session WHEN start is called THEN it is refu
   const out = await tool($, 'update_reminder', { id: 'hotfix', action: 'start' })
 
   expect({ text: out.text, isError: out.isError, writes: ops.writes.length - before }, 'refusal').toEqual({
-    text: '20261021-0803_hotfix is running in session other since Wed 21 Oct 14:00 Lisbon (13:00 UTC), 1 h ago',
+    text: '20261021-0803_hotfix is running in session other since Wed 21 Oct 14:00 Lisbon (13:00 UTC), 1 h ago; do not run it or change it, tell the user',
     isError: true,
     writes: 0,
   })
