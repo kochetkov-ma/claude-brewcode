@@ -1,0 +1,33 @@
+{
+  "gif": {
+    "file": "reminders.gif",
+    "bytes": 1636192,
+    "sha256": "3029d4b72a350c28a066231c7bc28280752180ceb3e72409400d2e2ff9ff0b4d",
+    "width": 1152,
+    "height": 906,
+    "seconds": 34.8,
+    "colors": 256,
+    "lossy": 0
+  },
+  "still": {
+    "file": "reminders-still.png",
+    "sha256": "6b3cb83a7b19b599acc2566743475d2ada28e20c7731a04f24207ac0a314b6d5",
+    "width": 1152,
+    "height": 906,
+    "t": 14.5
+  },
+  "sources": {
+    "render.html": "0042136b38cdd12bc06b7590461d71dfa22b5489e6934f37a1719647e16cd107",
+    "reminders.story.js": "8ebf8ca5ae6aa97365675904eb1fd50d70b80b59f91bc74ac624c9e156f104ab",
+    "reminders.data.js": "96fc22e6a06d61613e476c160f9cfcfa5a5745271ebb06e1cef3e60232191c4d",
+    "record-gifs.mjs": "3bfa14c1d6a00cbf0adb6f2458171a7334c8183b7503065da18cbe44511714bd"
+  },
+  "ccVersion": "2.1.306",
+  "tools": {
+    "playwrightCore": "1.64.0",
+    "ffmpeg": "9.0.2",
+    "gifsicle": "1.98",
+    "node": "v24.19.0"
+  },
+  "recorded": "2026-10-21T14:58:02.553Z"
+}

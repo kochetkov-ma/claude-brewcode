@@ -1,0 +1,26 @@
+ ▐▛███▛█   Claude Code v2.1.306
+▝▜██████▀  Sonnet 5.5 with medium effort · Claude Max
+ ▝▝   ▝▝   /Volumes/brewery
+
+reminders · 1 due · 0 upcoming                                                      [-]
+  Run the test suite for this project and report the results.  now
+/remind  list · done · snooze · or say what to add
+
+────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────
+  ⏸ manual mode on · ? for shortcuts · ← for agents                 ◐ medium · /effort
+
+
+
+
+
+
+
+
+
+
+
+
+
+

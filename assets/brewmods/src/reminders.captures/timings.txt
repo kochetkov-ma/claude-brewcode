@@ -1,0 +1,23 @@
+# session log (local time, Europe/Lisbon) behind the skips factors in reminders.story.js: real span / shown seconds
+# request -> question 9 s / 3.5 s shown = 3.5; save 6 s / 0.6 = 10; offer 3 s / 0.4 = 7.5; run 14 s / 3.0 = 4.7 (enter 15:50:52 -> result ~15:51:06). Sessions A and B are separate claude starts; the item is due 15:50:16
+15:48:59.583 CAPTURE a-0-start
+15:48:59.590 TYPE /remind project in 1 min: run the test suite
+15:49:01.134 CAPTURE a-1-typed
+15:49:03.394 KEY Enter
+15:49:06.441 CAPTURE a-2-handoff
+15:49:14.387 CAPTURE a-3-ask
+15:49:14.394 KEY Enter
+15:49:23.447 CAPTURE a-4-saved
+15:49:31 SESSION-A-END (new session B)
+15:50:38.528 CAPTURE b-0-band
+15:50:40.700 TYPE hi
+15:50:41.735 CAPTURE b-1-typed
+15:50:41.742 KEY Enter
+15:50:48.793 CAPTURE b-2-offer
+15:50:51.213 TYPE run it
+15:50:52.270 CAPTURE b-3-typed
+15:50:52.280 KEY Enter
+15:50:54.822 CAPTURE b-4-running
+15:51:02.881 CAPTURE b-5-done
+15:56:09.737 CAPTURE b-6-result
+15:56:09 END

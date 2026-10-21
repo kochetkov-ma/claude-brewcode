@@ -1,0 +1,26 @@
+  - Mark done: close it without running
+  - Cancel: drop it
+
+✻ Brewed for 3s · done 3:50 PM
+
+❯ run it
+
+⏺ brewmod-reminders - update_reminder (MCP)(id: "20261021-1450_run-test-suite", action:
+                                           "start")
+  ⎿  started 20261021-1450_run-test-suite; carry out the text below, then update_re
+     minder {id, action:"done", result}.
+     due: 2026-10-21T14:50:16Z
+     … +4 lines (ctrl+o to expand)
+
+  Reading 1 file… (ctrl+o to expand)
+
+· Zesting… (2s · ↓ 7 tokens)
+reminders · 0 due · 1 upcoming                                                      [-]
+  Run the test suite for this project and report the results.  now · running
+/remind  list · done · snooze · or say what to add
+
+────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────
+  ⏸ manual mode on · esc to interrupt
+
