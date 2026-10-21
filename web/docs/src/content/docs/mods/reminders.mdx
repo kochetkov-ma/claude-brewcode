@@ -57,7 +57,7 @@ Each item is offered once per session and again after `/compact`. It is never ru
 
 | Where | Text | When |
 |-------|------|------|
-| Band header | `reminders · 1 due · 2 upcoming` | At session start while open items exist |
+| Band header | `reminders · 1 due · 2 upcoming`, plus `· N running` when items are running | At session start while open items exist; upcoming counts pending items only |
 | Band rows | `  <title>  <relative time>`, up to 3 | Time reads `now` (due for under a minute), `in <1 min`, `5 min ago` or `2 d ago` (due for longer); `(global)` marks a global item, `· running` one in progress |
 | Band footer | `+N more · /remind  list · done · snooze · or say what to add` | Under the rows; the `+N more ·` prefix appears only when more than 3 items are open |
 | Toast, 8 s | `reminder due: <title> · /remind` or `N reminders due · /remind` | An item falls due mid-session; a 60 s tick refreshes the band. The next prompt carries the offer |
@@ -68,11 +68,11 @@ Each item is offered once per session and again after `/compact`. It is never ru
 | Command | Result |
 |---------|--------|
 | `/remind` or `/remind list` | Prints, in this order, due, running, pending, unreadable, done (last 10) and cancelled (last 10) items in local time, no Claude turn |
-| `/remind help` | Prints the help text |
-| `/remind done <id>` | `done: <title> (<id>)` |
-| `/remind cancel <id>` | `cancelled: <title> (<id>)` |
-| `/remind snooze <id> <when>` | `snoozed: <title> (<id>) until <ISO>` |
-| `/remind [global\|project\|default] <any words>` | Handed to Claude, which adds the reminder |
+| `/remind help` | Prints the help text; `help` and `list` act only when typed alone |
+| `/remind done [project\|global] <id>` | `done: <title> (<id>)` |
+| `/remind cancel [project\|global] <id>` | `cancelled: <title> (<id>)` |
+| `/remind snooze [project\|global] <id> <when>` | `snoozed: <title> (<id>) until <ISO>` |
+| `/remind [global\|project\|default] <any words>` | Handed to Claude, which adds the reminder. Text that starts with `done`, `cancel` or `snooze` but whose id does not resolve goes here too |
 
 The id is the file name without `.md`; a unique prefix of the slug also matches. `snooze` takes `+2h`, `+30m`, `+3d`, `tomorrow 9:00`, `today 18`, a local `YYYY-MM-DD HH:MM` or an ISO time with an offset or `Z`. A time in the past is rejected. Times are stored in UTC and shown in the system time zone, daylight saving included.
 

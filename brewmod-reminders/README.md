@@ -78,6 +78,8 @@ reminders · 1 due · 2 upcoming
 /remind  list · done · snooze · or say what to add
 ```
 
+The header counts due items and upcoming (pending) items; when a session is carrying items out, it adds `· N running`, for example `reminders · 0 due · 1 upcoming · 1 running`. Running items are not counted as upcoming.
+
 | Row text | Meaning |
 |----------|---------|
 | `now` | Due |
@@ -97,11 +99,13 @@ reminders · 1 due · 2 upcoming
 |---------|--------|
 | `/remind` or `/remind list` | Prints due, running, pending, unreadable, done (last 10) and cancelled (last 10) in your local time; no Claude turn |
 | `/remind help` | Command summary and the folders in use |
-| `/remind done <id>` | `done: <title> (<id>)` |
-| `/remind cancel <id>` | `cancelled: <title> (<id>)` |
-| `/remind snooze <id> <when>` | `snoozed: <title> (<id>) until <ISO>` |
+| `/remind done [project\|global] <id>` | `done: <title> (<id>)` |
+| `/remind cancel [project\|global] <id>` | `cancelled: <title> (<id>)` |
+| `/remind snooze [project\|global] <id> <when>` | `snoozed: <title> (<id>) until <ISO>` |
 | `/remind <words>` | Handed to Claude: add, ask or change in your own words |
 | `/remind project\|global <words>` | Same with the folder fixed |
+
+`help` and `list` act only when typed alone. `done`, `cancel` and `snooze` act only when the id resolves; the optional `project` or `global` word picks the folder. Any other text, such as `/remind cancel the old backup job`, goes to Claude like `/remind <words>`.
 
 `<id>` is the file name without `.md`; the slug or a unique prefix also matches. `<when>` is `+2h`, `+1d`, `tomorrow 9:00`, `today 17:30`, `2026-10-22 09:00` (your local zone) or an ISO time with an offset or `Z`. A time in the past is rejected. Times are stored in UTC and shown in your system time zone, daylight saving included.
 
