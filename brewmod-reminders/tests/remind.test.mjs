@@ -152,7 +152,7 @@ const when = [
   ['local in the DST gap', '2026-03-29 01:30', LIS, { ok: false, error: '"2026-03-29 01:30" does not exist in Europe/Lisbon (DST gap)' }],
   ['relative hours', '+2h', LIS, { ok: true, ms: T0 + 7200000, iso: '2026-03-01T02:00:00Z' }],
   ['past is rejected', '2026-02-01 09:00', LIS, { ok: false, error: '2026-02-01T09:00:00Z is in the past' }],
-  ['garbage is rejected', 'tomorrow', LIS, { ok: false, error: 'unrecognised time "tomorrow": use ISO with offset/Z, "YYYY-MM-DD HH:MM", "YYYY-MM-DD" (00:00 local) or +<n>m|h|d|w' }],
+  ['garbage is rejected', 'tomorrow', LIS, { ok: false, error: 'unrecognised time "tomorrow": use ISO with offset/Z, "YYYY-MM-DD HH:MM", "YYYY-MM-DD" (00:00 local), a weekday like "fri 14:00" or +<n>m|h|d|w' }],
   ['relative weeks', '+1w', LIS, { ok: true, ms: T0 + 7 * 86400000, iso: '2026-03-08T00:00:00Z' }],
   ['date only before the DST change (00:00 WET)', '2026-03-28', LIS, { ok: true, ms: Date.parse('2026-03-28T00:00:00Z'), iso: '2026-03-28T00:00:00Z' }],
   ['date only after the DST change (00:00 WEST)', '2026-03-30', LIS, { ok: true, ms: Date.parse('2026-03-29T23:00:00Z'), iso: '2026-03-29T23:00:00Z' }],
@@ -237,7 +237,7 @@ const ranges = [
   ['a window word alone', ['week', undefined], { ok: true, from: W_NOW, to: z('2026-10-26T00:00:00Z') }],
   ['ISO from and to', ['2026-10-22T00:00:00Z', '2026-10-23T00:00:00Z'], { ok: true, from: z('2026-10-22T00:00:00Z'), to: z('2026-10-23T00:00:00Z') }],
   ['a date-only to runs through that day', ['2026-10-22', '2026-10-22'], { ok: true, from: z('2026-10-21T23:00:00Z'), to: z('2026-10-22T23:00:00Z') }],
-  ['garbage', ['soon', undefined], { ok: false, error: 'unrecognised time "soon": use ISO with offset/Z, "YYYY-MM-DD HH:MM", "YYYY-MM-DD" (00:00 local) or +<n>m|h|d|w' }],
+  ['garbage', ['soon', undefined], { ok: false, error: 'unrecognised time "soon": use ISO with offset/Z, "YYYY-MM-DD HH:MM", "YYYY-MM-DD" (00:00 local), a weekday like "fri 14:00" or +<n>m|h|d|w' }],
 ]
 test('GIVEN from/to values WHEN rangeOf runs in Lisbon THEN the range is exact', () => {
   assert.deepEqual(ranges.map(([, [a, b]]) => rangeOf(a, b, W_NOW, LIS)), ranges.map((r) => r[2]), 'range rows')

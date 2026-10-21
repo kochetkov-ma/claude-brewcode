@@ -231,7 +231,7 @@ function parseTime(input, now, tz) {
   if (rel) ms = now + +rel[1] * { m: 60000, h: 3600000, d: 86400000, w: 7 * 86400000 }[rel[2]]
   else {
     const m = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?(Z|[+-]\d{2}(?::?\d{2})?)?)?$/.exec(s)
-    if (!m) return { ok: false, error: `unrecognised time "${s}": use ISO with offset/Z, "YYYY-MM-DD HH:MM", "YYYY-MM-DD" (00:00 local) or +<n>m|h|d|w` }
+    if (!m) return { ok: false, error: `unrecognised time "${s}": use ISO with offset/Z, "YYYY-MM-DD HH:MM", "YYYY-MM-DD" (00:00 local), a weekday like "fri 14:00" or +<n>m|h|d|w` }
     const [y, mo, d, h, mi, sec] = [+m[1], +m[2], +m[3], +(m[4] ?? 0), +(m[5] ?? 0), +(m[6] ?? 0)]
     const naive = Date.UTC(y, mo - 1, d, h, mi, sec)
     const nd = new Date(naive)

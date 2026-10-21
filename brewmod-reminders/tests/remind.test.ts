@@ -122,7 +122,7 @@ const shows: { name: string; run: Run; text: string }[] = [
   {
     name: 'list_reminders {from garbage}',
     run: ($) => tool($, 'list_reminders', { from: 'soon' }),
-    text: 'unrecognised time "soon": use ISO with offset/Z, "YYYY-MM-DD HH:MM", "YYYY-MM-DD" (00:00 local) or +<n>m|h|d|w',
+    text: 'unrecognised time "soon": use ISO with offset/Z, "YYYY-MM-DD HH:MM", "YYYY-MM-DD" (00:00 local), a weekday like "fri 14:00" or +<n>m|h|d|w',
   },
 ]
 for (const { name, run, text } of shows) {
