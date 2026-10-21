@@ -1,13 +1,13 @@
 # claude-brewcode
 
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Plugin-blueviolet?logo=anthropic&logoColor=white)](https://code.claude.com)
-[![Mods](https://img.shields.io/badge/Mods-%2B%2Br_placeholders_%C2%B7_plan_effort-d97706?logo=claude&logoColor=white)](https://doc-claude.brewcode.app/mods/overview/)
+[![Mods](https://img.shields.io/badge/Mods-%2B%2Br_placeholders_%C2%B7_plan_effort_%C2%B7_reminders-d97706?logo=claude&logoColor=white)](https://doc-claude.brewcode.app/mods/overview/)
 [![Approaches](https://img.shields.io/badge/Approaches-hooks_%C2%B7_agents_%C2%B7_injections-8b5cf6?logo=readme&logoColor=white)](APPROACHES.md)
 [![Latest Release](https://badgen.net/github/release/kochetkov-ma/claude-brewcode?label=latest&color=blue)](https://github.com/kochetkov-ma/claude-brewcode/releases/latest)
 [![Documentation](https://img.shields.io/badge/Docs-doc--claude.brewcode.app-4A90D9?logo=bookstack&logoColor=white)](https://doc-claude.brewcode.app/getting-started/)
 [![GitHub stars](https://badgen.net/github/stars/kochetkov-ma/claude-brewcode?icon=github&label=stars)](https://github.com/kochetkov-ma/claude-brewcode/stargazers)
 
-**Claude Code mods:** type `++r` and get a whole review block; read it before you send, add your own with `/placeholders`. Plan mode raises effort to `xhigh`. [See the mods](#claude-code-mods)
+**Claude Code mods:** type `++r` and get a whole review block; read it before you send, add your own with `/placeholders`. Plan mode raises effort to `xhigh`. `/remind` keeps a reminder in a file until a later session shows it. [See the mods](#claude-code-mods)
 
 **Claude Code plugin suite.** Keeps big tasks on track: bounded units, a six-field brief per spawn, the plan re-anchored after a compaction. 4 plugins, 27 skills, 10 agents. [**Full documentation**](https://doc-claude.brewcode.app/getting-started/) | [**Approaches**](APPROACHES.md) | [**Update**](UPDATE.md)
 
@@ -21,7 +21,7 @@
 Run in order, show full output; stop if `claude --version` < 2.1.301; end with `/reload-plugins`:
 1. claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
 2. claude plugin install brewmod-placeholders@claude-brewcode
-3. claude plugin install brewmod-plan-effort@claude-brewcode
+3. claude plugin install brewmod-plan-effort@claude-brewcode && claude plugin install brewmod-reminders@claude-brewcode
 4. claude plugin install brewcode@claude-brewcode && claude plugin install brewdoc@claude-brewcode
 5. claude plugin install brewtools@claude-brewcode && claude plugin install brewui@claude-brewcode
 ```
@@ -35,7 +35,7 @@ Short steps for you and your LLM, including what to try after the update: [UPDAT
 Run in order, show full output; stop if `claude --version` < 2.1.301; end with `/reload-plugins`, then tell me to type `/brewcode:setup-status upgrade` in each project:
 1. claude plugin marketplace update claude-brewcode
 2. claude plugin update brewmod-placeholders@claude-brewcode
-3. claude plugin update brewmod-plan-effort@claude-brewcode
+3. claude plugin update brewmod-plan-effort@claude-brewcode && claude plugin update brewmod-reminders@claude-brewcode
 4. claude plugin update brewcode@claude-brewcode && claude plugin update brewdoc@claude-brewcode
 5. claude plugin update brewtools@claude-brewcode && claude plugin update brewui@claude-brewcode
 ```
@@ -63,6 +63,7 @@ Run in order, show full output; stop if `claude --version` < 2.1.301; end with `
 |-----|---------------------|---------|
 | [brewmod-placeholders](brewmod-placeholders/README.md) | `++r` in a prompt: a whole review block. `/placeholders <what you want>`: Claude drafts your own | `claude plugin install brewmod-placeholders@claude-brewcode` |
 | [brewmod-plan-effort](brewmod-plan-effort/README.md) | Enter plan mode: effort goes to `xhigh` while Claude plans. `/plan-effort max` sets the level | `claude plugin install brewmod-plan-effort@claude-brewcode` |
+| [brewmod-reminders](brewmod-reminders/README.md) | Say "remind me tomorrow 9:00 to check prod": a Markdown file in the repo, shown above the prompt in any later session and offered at your first prompt once due. `/remind` lists, snoozes, marks done | `claude plugin install brewmod-reminders@claude-brewcode` |
 
 First time: `claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode`, then `/reload-plugins` after installing.
 
@@ -141,6 +142,7 @@ A private slug is unlisted, not locked: anyone with the link can open the page u
 | [`/brewtools:task-board-setup`](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/) | A file-based task board for any repo with a derived task graph and session anti-drift timers |
 | [compact-recall](https://doc-claude.brewcode.app/brewcode/hooks/) (hook, automatic) | After a compaction, re-injects the plan or intent and the task graph |
 | [brewmod-plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/) | Plan mode raises effort to `xhigh`; `/plan-effort max` sets the level; your session effort is untouched elsewhere |
+| [brewmod-reminders](https://doc-claude.brewcode.app/mods/reminders/) | Durable reminders and checks as files (`.claude/scheduled/` or `~/.claude/reminders/`) that outlive the session, unlike a cron or `/loop`; `/remind` lists, snoozes, marks done or cancels |
 | [`/brewtools:secrets-scan`](https://doc-claude.brewcode.app/brewtools/skills/secrets-scan/) | Scans git-tracked files for leaked secrets; `--fix` walks through remediation |
 | [`/brewtools:text-optimize`](https://doc-claude.brewcode.app/brewtools/skills/text-optimize/), [`/brewtools:text-human`](https://doc-claude.brewcode.app/brewtools/skills/text-human/) | Cut tokens from prompts and docs in place (`-l`, `-s`, `-d`, `-x`); strip AI artifacts from code, docs and commits |
 

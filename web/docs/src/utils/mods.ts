@@ -25,6 +25,14 @@ export const mods: ModInfo[] = [
     requires: 'Claude Code 2.1.301+',
     icon: 'brain',
   },
+  {
+    name: 'Reminders',
+    slug: 'reminders',
+    pitch: 'Remind me tomorrow 9:00: a file in your repo, offered next session.',
+    try: '/remind tomorrow 9:00 check prod',
+    requires: 'Claude Code 2.1.301+',
+    icon: 'clock',
+  },
 ];
 
 // Build-time guard: every mod slug must have a docs page.

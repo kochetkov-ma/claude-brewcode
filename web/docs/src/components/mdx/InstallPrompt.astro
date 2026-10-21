@@ -1,6 +1,6 @@
 ---
 interface Props {
-  plugin?: 'brewcode' | 'brewdoc' | 'brewtools' | 'brewui' | 'brewmod-placeholders' | 'brewmod-plan-effort' | 'mods' | 'all';
+  plugin?: 'brewcode' | 'brewdoc' | 'brewtools' | 'brewui' | 'brewmod-placeholders' | 'brewmod-plan-effort' | 'brewmod-reminders' | 'mods' | 'all';
   mode?: 'install' | 'update';
   compact?: boolean;
   collapsed?: boolean;
@@ -9,7 +9,7 @@ interface Props {
 const { plugin = 'all', mode = 'install', compact = true, collapsed = false } = Astro.props;
 
 const allPlugins = ['brewcode', 'brewdoc', 'brewtools', 'brewui'] as const;
-const allMods = ['brewmod-placeholders', 'brewmod-plan-effort'] as const;
+const allMods = ['brewmod-placeholders', 'brewmod-plan-effort', 'brewmod-reminders'] as const;
 
 const EXECUTE = 'Execute these commands in this Claude Code session, one by one, show full output for each, do not skip any, do not summarize:';
 const RELOAD = 'After all commands succeed, run `/reload-plugins`. If `/reload-plugins` is unavailable, tell me to type `exit` and run `claude` again.';
@@ -63,7 +63,7 @@ const preClass = compact
 {collapsed ? (
   <details class="not-prose my-4">
     <summary class="cursor-pointer text-sm font-semibold py-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 rounded">
-      {title}: {plugin === 'mods' ? 'both mods' : plugin === 'all' ? 'plugins and mods' : plugin}
+      {title}: {plugin === 'mods' ? 'all mods' : plugin === 'all' ? 'plugins and mods' : plugin}
     </summary>
     <pre class={preClass + ' mt-2'} tabindex="0"><code>{prompt}</code></pre>
   </details>

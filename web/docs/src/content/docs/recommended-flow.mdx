@@ -20,7 +20,7 @@ This page is for anyone new to brewcode who wants one path instead of 27 skills.
     <div class="flex flex-col gap-2 md:flex-row md:items-stretch">
       <a href="#step-1-install-once" class="flex-1 rounded-lg border border-base-300 bg-base-100 p-3 transition-colors hover:border-primary/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">
         <span class="flex items-center gap-2"><span class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-content">1</span><span class="font-headline font-semibold">Install</span></span>
-        <span class="mt-2 block text-sm text-base-content/70">Claude Code 2.1.301+, the plugins and both mods.</span>
+        <span class="mt-2 block text-sm text-base-content/70">Claude Code 2.1.301+, the plugins and the three mods.</span>
       </a>
       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6 shrink-0 self-center text-primary rotate-90 md:rotate-0"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
       <a href="#step-2-set-up-each-project-once" class="flex-1 rounded-lg border border-base-300 bg-base-100 p-3 transition-colors hover:border-primary/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">
@@ -72,13 +72,14 @@ claude update
 claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode
 claude plugin install brewmod-placeholders@claude-brewcode
 claude plugin install brewmod-plan-effort@claude-brewcode
+claude plugin install brewmod-reminders@claude-brewcode
 claude plugin install brewcode@claude-brewcode
 claude plugin install brewdoc@claude-brewcode
 claude plugin install brewtools@claude-brewcode
 claude plugin install brewui@claude-brewcode
 ```
 
-The mods also need `node` on the `PATH`. To let Claude run the commands for you, paste the prompt from [Installation](/installation/): it checks the Claude Code version, then installs both mods and the four plugins. More on each mod: [Prompt placeholders](/mods/placeholders/), [Plan-mode effort](/mods/plan-effort/).
+The mods also need `node` on the `PATH`. To let Claude run the commands for you, paste the prompt from [Installation](/installation/): it checks the Claude Code version, then installs the three mods and the four plugins. More on each mod: [Prompt placeholders](/mods/placeholders/), [Plan-mode effort](/mods/plan-effort/), [Reminders](/mods/reminders/).
 
 ## Step 2: Set up each project once
 
@@ -170,6 +171,9 @@ The same flow on one feature, using only what steps 1 and 2 installed.
   </Card>
   <Card title="Plan-mode effort" icon="brain" variant="mod" href="/mods/plan-effort/">
     `xhigh` while Claude plans, your session effort everywhere else.
+  </Card>
+  <Card title="Reminders" icon="clock" variant="mod" href="/mods/reminders/">
+    Reminders kept in the repo, shown again in a later session.
   </Card>
   <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode">
     Source code, README, and releases.

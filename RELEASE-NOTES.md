@@ -2,6 +2,43 @@
 
 ---
 
+## v6.11.0 (2026-10-21)
+
+> Docs: [reminders](https://doc-claude.brewcode.app/mods/reminders/) | [mods overview](https://doc-claude.brewcode.app/mods/overview/) | [installation](https://doc-claude.brewcode.app/installation/) | [FAQ](https://doc-claude.brewcode.app/faq/) | [quick start](https://doc-claude.brewcode.app/quickstart/) | [full setup](https://doc-claude.brewcode.app/full-setup/) | [recommended flow](https://doc-claude.brewcode.app/recommended-flow/) | [license](https://doc-claude.brewcode.app/license/) | [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) | [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/) | [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) | [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/) | [mod-creator](https://doc-claude.brewcode.app/brewcode/agents/mod-creator/)
+
+**What changed for you**
+
+- New mod `brewmod-reminders`: say "remind me tomorrow 9:00 to check prod" (or type `/remind`) and the reminder is saved as a Markdown file in your repo, so it survives the session. The next time you open Claude Code there, a band above the prompt shows what is due. See [reminders](https://doc-claude.brewcode.app/mods/reminders/) and [watch it work](https://doc-claude.brewcode.app/mods/reminders/#demo).
+- At your first prompt of a session, Claude tells you about due reminders and offers to run, snooze, mark done or cancel each one. It never runs one unasked, and it stays quiet in headless runs (`claude -p`, CI).
+- Install it with `claude plugin marketplace update claude-brewcode && claude plugin install brewmod-reminders@claude-brewcode` (Claude Code 2.1.301 or newer), or let `/brewtools:plugin-update` offer it. The update command now covers the third mod too: see [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/).
+- The expert agents (`skill-creator`, `hook-creator`, `agent-creator`, `mod-creator`) know the skill-scoped hooks of Claude Code 2.1.306 and the current mod reference, so skills, hooks and mods they build match it.
+
+![Claude Code terminal: /remind project in 1 min to run the test suite shows a preview and one time question, the reminder is saved and the band shows one upcoming; in a new session the band shows it due, Claude offers run, snooze, done or cancel, runs the tests and marks it done](https://brewcode.app/mods/reminders.gif)
+
+### brewmod-reminders
+
+#### Added
+
+- **band and offer:** while open items exist, a band above the prompt shows what is due and upcoming (a 60 s tick refreshes it and toasts when an item becomes due). At your first real prompt of a session Claude tells you about due items and offers run now, snooze, done or cancel; it never runs one unasked.
+- **/remind and tools:** `/remind` and `/remind list` print due, running, pending, unreadable, done (last 10) and cancelled (last 10) in local time without a Claude turn; `done`, `cancel` and `snooze` act directly, other text goes to Claude. `add_reminder`, `list_reminders` and `update_reminder` write without a permission prompt after one confirmation.
+- **scopes and git config:** `project` (default, `<project>/.claude/scheduled/`) and `global` (`${CLAUDE_CONFIG_DIR:-~/.claude}/reminders/`, never put in git); `.claude/reminders.json` `{"git": "off" | "commit" | "commit-push"}` (default `off`) tells Claude to commit only that item file, the mod never runs git.
+- **safety:** a claim stops a second open session from running the same item (6 h TTL); `claude -p`, CI, the SDK, subagents and `/`-prefixed prompts get no offer; proven live on a Team seat with Claude Code 2.1.306. Details: [reminders](https://doc-claude.brewcode.app/mods/reminders/).
+
+### brewcode
+
+#### Changed
+
+- **skill-creator, hook-creator, agent-creator:** carry the skill-scoped hooks facts of 2.1.306: a `hooks:` block in `SKILL.md` lives for the rest of the session, `once: true` works only in skills, and `${CLAUDE_SKILL_DIR}` and a braced `${CLAUDE_PLUGIN_ROOT}` are not substituted in hook commands, so write `"$CLAUDE_PLUGIN_ROOT"`. See [skill-creator](https://doc-claude.brewcode.app/brewcode/agents/skill-creator/), [hook-creator](https://doc-claude.brewcode.app/brewcode/agents/hook-creator/) and [agent-creator](https://doc-claude.brewcode.app/brewcode/agents/agent-creator/).
+- **mod-creator and mods references:** refreshed to Claude Code 2.1.306 with the official Mods reference cited, the Team-seat live evidence and the mod-load floors. See [mod-creator](https://doc-claude.brewcode.app/brewcode/agents/mod-creator/).
+
+### brewtools
+
+#### Changed
+
+- **plugin-update:** knows `brewmod-reminders`: it updates it with the other mods, offers it once when missing, and its manual chain lists it. The release train is now 7 packages: brewcode, brewdoc, brewtools, brewui and the mods `brewmod-placeholders`, `brewmod-plan-effort`, `brewmod-reminders`. See [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/).
+
+---
+
 ## v6.10.0 (2026-10-17)
 
 > Docs: [placeholders](https://doc-claude.brewcode.app/mods/placeholders/) | [mods overview](https://doc-claude.brewcode.app/mods/overview/) | [recommended flow](https://doc-claude.brewcode.app/recommended-flow/) | [getting started](https://doc-claude.brewcode.app/getting-started/) | [installation](https://doc-claude.brewcode.app/installation/) | [quick start](https://doc-claude.brewcode.app/quickstart/) | [full setup](https://doc-claude.brewcode.app/full-setup/) | [FAQ](https://doc-claude.brewcode.app/faq/) | [license](https://doc-claude.brewcode.app/license/) | [brewcode agents](https://doc-claude.brewcode.app/brewcode/agents/) | [setup-upgrader](https://doc-claude.brewcode.app/brewcode/agents/setup-upgrader/) | [brewcode overview](https://doc-claude.brewcode.app/brewcode/overview/) | [brewcode skills](https://doc-claude.brewcode.app/brewcode/skills/) | [convention-setup](https://doc-claude.brewcode.app/brewcode/skills/convention-setup/) | [semble-setup](https://doc-claude.brewcode.app/brewcode/skills/semble-setup/) | [setup-status](https://doc-claude.brewcode.app/brewcode/skills/setup-status/) | [superreview-setup](https://doc-claude.brewcode.app/brewcode/skills/superreview-setup/) | [teams-setup](https://doc-claude.brewcode.app/brewcode/skills/teams-setup/) | [brewdoc skills](https://doc-claude.brewcode.app/brewdoc/skills/) | [docsync-setup](https://doc-claude.brewcode.app/brewdoc/skills/docsync-setup/) | [memory-sync-setup](https://doc-claude.brewcode.app/brewdoc/skills/memory-sync-setup/) | [my-claude](https://doc-claude.brewcode.app/brewdoc/skills/my-claude/) | [brewtools overview](https://doc-claude.brewcode.app/brewtools/overview/) | [brewtools skills](https://doc-claude.brewcode.app/brewtools/skills/) | [agent-deadline-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-deadline-setup/) | [agent-return-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-return-setup/) | [agent-router-setup](https://doc-claude.brewcode.app/brewtools/skills/agent-router-setup/) | [manager-setup](https://doc-claude.brewcode.app/brewtools/skills/manager-setup/) | [plugin-update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/) | [task-board-setup](https://doc-claude.brewcode.app/brewtools/skills/task-board-setup/)

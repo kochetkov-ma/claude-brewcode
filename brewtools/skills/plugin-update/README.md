@@ -23,12 +23,13 @@ A mode word can sit anywhere in a free-form prompt. The prompt never narrows wha
 ## The report
 
 ```text
-## 🟢 brewcode updated: 5 of 6 components
+## 🟢 brewcode updated: 6 of 7 components
 
 | Component | Before | After | |
 |---|---|---|---|
 | **brewmod-placeholders** | 6.9.5 | **6.9.6** | 🟢 updated |
 | **brewmod-plan-effort** | — | **6.9.6** | 🟢 installed |
+| **brewmod-reminders** | — | **6.9.6** | 🟢 installed |
 | **brewcode** | 6.9.5 | **6.9.6** | 🟢 updated |
 | **brewdoc** | 6.9.6 | 6.9.6 | ⚪ already current |
 | **brewtools** | 6.9.5 | **6.9.6** | 🟢 updated |

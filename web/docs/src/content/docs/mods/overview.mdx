@@ -1,6 +1,6 @@
 ---
 title: "brewcode mods"
-description: "Tiny add-ons that change how Claude Code behaves: ++ prompt placeholders and plan-mode effort. One feature each, one prompt installs both."
+description: "Tiny add-ons that change how Claude Code behaves: ++ prompt placeholders, plan-mode effort and durable reminders. One feature each, one prompt installs all."
 order: 40
 ---
 
@@ -11,7 +11,7 @@ import { mods } from '../../../utils/mods';
 
 <Badge variant="mod" text="early access" /> <Badge variant="mod" text="Claude Code 2.1.301+" />
 
-Mods are small Claude Code add-ons: one feature each, no skills, no agents, no setup. Install one or both; they work without the brewcode plugins.
+Mods are small Claude Code add-ons: one feature each, no skills, no agents, no setup. Install any of them; they work without the brewcode plugins.
 
 <p align="center" id="demo">
   <img src="/brewmods/hub-mini-dark.gif" alt="A brewcode tap pours into a glass that slides in; the beer rises, a foam head forms, the glass is served" width="560" height="217" loading="lazy" />
@@ -31,6 +31,8 @@ Mods are small Claude Code add-ons: one feature each, no skills, no agents, no s
 
 <SourceLink path="brewmod-plan-effort" label="brewmod-plan-effort on GitHub" variant="mod" />
 
+<SourceLink path="brewmod-reminders" label="brewmod-reminders on GitHub" variant="mod" />
+
 ## Install all
 
 <Callout type="warning" title="Update Claude Code first">
@@ -41,12 +43,12 @@ Needs `node` on the `PATH`.
 
 <InstallPrompt plugin="mods" mode="install" />
 
-Only one? Run `claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode`, then `claude plugin install brewmod-placeholders@claude-brewcode` or `claude plugin install brewmod-plan-effort@claude-brewcode`, then `/reload-plugins`. To update later, run `/brewtools:plugin-update`.
+Only one? Run `claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode`, then `claude plugin install brewmod-placeholders@claude-brewcode`, `claude plugin install brewmod-plan-effort@claude-brewcode` or `claude plugin install brewmod-reminders@claude-brewcode`, then `/reload-plugins`. To update later, run `/brewtools:plugin-update`.
 
 <Spoiler title="How mods differ from plugins" id="technical-details">
   A mod ships no skills and no agents. Its `hooks.json` lists TypeScript hooks modules that the engine loads, plus a small bundled command hook for the parts that need one. Mods are on by default from Claude Code 2.1.287 and are in early access, so the module API can change between releases.
 
-  On a Team or Enterprise organization, Claude Code's builtin security layer bypasses the `classic.*` hooks of a mod a person installs, but a bundled command hook still runs. Both brewcode mods ship one. Verified live on Claude Code 2.1.300 on a Team-organization profile and on a Max profile, with `--plugin-dir` and installed copies. An Enterprise organization was not run.
+  On a Team or Enterprise organization, Claude Code's builtin security layer bypasses the `classic.*` hooks of a mod a person installs, but a bundled command hook still runs. All three brewcode mods ship one. Verified live on Claude Code 2.1.300 on a Team-organization profile and on a Max profile, with `--plugin-dir` and installed copies; `brewmod-reminders` was also proven on a Team seat with Claude Code 2.1.306. An Enterprise organization was not run.
 
   brewtools 6.7.x together with `brewmod-placeholders` injects each codeword twice. Update brewtools to 6.8.0 or later; from 6.8.0 the mod is the only source of the codewords.
 </Spoiler>
@@ -65,7 +67,7 @@ The [Mod Creator](/brewcode/agents/mod-creator/) agent scaffolds a mod, writes i
     The brewcode agent that builds, tests and ships a new mod.
   </Card>
   <Card title="View on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode">
-    Source code and release notes for the suite and both mods.
+    Source code and release notes for the suite and all three mods.
   </Card>
 </CardGrid>
 

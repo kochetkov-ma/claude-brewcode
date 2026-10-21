@@ -1,6 +1,6 @@
 # brewcode
 
-> Claude Code plugin suite (4 plugins, 27 skills, 10 agents) and two mods: `++r`-style prompt placeholders and plan-mode effort.
+> Claude Code plugin suite (4 plugins, 27 skills, 10 agents) and three mods: `++r`-style prompt placeholders, plan-mode effort and repo-kept reminders.
 
 Requirement: the mods need Claude Code 2.1.301 or newer. Run `claude --version`; below that run `claude update` and restart Claude Code.
 
@@ -8,10 +8,12 @@ Requirement: the mods need Claude Code 2.1.301 or newer. Run `claude --version`;
 
 - [Install or update, written for an LLM](https://raw.githubusercontent.com/kochetkov-ma/claude-brewcode/main/UPDATE.md): exact commands for a first install and for an update (`/brewtools:plugin-update`, `/reload-plugins`, then `/brewcode:setup-status upgrade` in each project), what to tell the user after.
 - [Recommended flow](https://doc-claude.brewcode.app/recommended-flow/): install once, set up each project, work a task with `++m`, review with `++r`, share.
-- [Mods overview](https://doc-claude.brewcode.app/mods/overview/): the two Claude Code mods, what each does, how to install them.
+- [Mods overview](https://doc-claude.brewcode.app/mods/overview/): the three Claude Code mods, what each does, how to install them.
 - [Prompt placeholders mod](https://doc-claude.brewcode.app/mods/placeholders/): `++r`, `++m`, `+++` and your own, with `/placeholders`.
 - [Console recording of placeholders](https://brewcode.app/mods/placeholders.gif): `++` typeahead, the text shown before Enter, a `++r` review, adding your own with `/placeholders`, plan mode.
 - [Plan-mode effort mod](https://doc-claude.brewcode.app/mods/plan-effort/): plan mode raises the effort to `xhigh` by default; `/plan-effort` sets the level.
+- [Reminders mod](https://doc-claude.brewcode.app/mods/reminders/): reminders kept in the repo, shown again in a later session.
+- [Console recording of reminders](https://brewcode.app/mods/reminders.gif): adding, listing and finishing reminders in a terminal.
 - [Getting started](https://doc-claude.brewcode.app/getting-started/): what the suite contains.
 - [Installation](https://doc-claude.brewcode.app/installation/): requirements, install methods, verifying, mods.
 - [Plugin update](https://doc-claude.brewcode.app/brewtools/skills/plugin-update/): `/brewtools:plugin-update` updates every installed plugin and mod in one run, offers the missing ones once and prints what changed.

@@ -1,0 +1,110 @@
+---
+title: "Reminders"
+description: "Durable reminders for Claude Code: a Markdown file in your repo, a band at session start, offered at the first prompt, never run unasked."
+order: 43
+---
+import { Badge, Callout, Card, CardGrid, InstallPrompt, SourceLink, Spoiler, UpdateNotice } from '../../../components/mdx';
+
+# Reminders
+
+<Badge variant="mod" text="Claude Code 2.1.301+" /> <Badge variant="secondary" text="Works on Team orgs" /> <Badge variant="primary" text="brewmod-reminders" />
+
+Tell Claude what to remember and when. The reminder is a Markdown file that outlives the session: any later session in that repo shows it and offers to run it.
+
+Session cron jobs and `/loop` die with the session, and cloud `/schedule` has no access to your SSH keys, local scripts or VPS. A file-based reminder runs where you work.
+
+{/* Stable deep link, shared outside the docs: /mods/reminders/#demo. Keep the id. */}
+<p align="center" id="demo">
+  <img src="/brewmods/reminders.gif" alt="Claude Code terminal: /remind project in 1 min: run the test suite shows a preview and one time question, then the reminders band reads 0 due, 1 upcoming. In a new session the band reads 1 due before any prompt, Claude offers run, snooze, done or cancel at the first prompt, runs npm test on request, marks the reminder done and the band disappears." width="800" height="629" loading="lazy" />
+  <br /><small>Recorded in a real Claude Code 2.1.306 session, sped up where the title bar shows ⏩.</small>
+</p>
+
+<SourceLink path="brewmod-reminders/README.md" anchor="demo" variant="mod" />
+
+## Install
+
+<Callout type="warning" title="Update Claude Code first">
+  The mods need Claude Code 2.1.301 or newer. Check with `claude --version`; if it is lower, run `claude update`, then restart Claude Code (exit, run `claude`).
+</Callout>
+
+Needs `node` on the `PATH`.
+
+<InstallPrompt plugin="brewmod-reminders" mode="install" />
+
+Run `/reload-plugins` afterwards.
+
+<Spoiler title="Update, dev mode" id="update">
+
+<InstallPrompt plugin="brewmod-reminders" mode="update" />
+
+Dev mode without installing: `claude --plugin-dir ./brewmod-reminders`
+
+</Spoiler>
+
+## Use it
+
+| You do | You get |
+|--------|---------|
+| Say it in plain words: `remind me tomorrow 9:00 to check prod` | Claude shows a preview (`Preview, nothing written: Thu 22 Oct 09:00 Lisbon (08:00 UTC), in 18 h \| project \| 20261022-0800_check-prod`) and asks once. With no scope given, the one question has two tabs: Time and Where (Project, recommended, or Global). The file is written without a permission prompt |
+| `/remind project in 1 min: run the test suite` | The text is handed to Claude (`Handing this to Claude: ...`), same preview and one question. Start with `global`, `project` or `default` to pick the scope |
+| Open a session while a reminder is open | A band above the prompt lists open items. Nothing goes to Claude yet |
+| Send the first prompt | Claude tells you which items are due first, then offers to run now, snooze, mark done or cancel. It says so when one is more than 24 h late |
+| Answer `run it` | Claude claims the item, runs its text, records the result and marks it done |
+
+Each item is offered once per session and again after `/compact`. It is never run unasked. A `/remind <text>` hand-off turn never carries the offer; the next prompt does.
+
+## What you see
+
+| Where | Text | When |
+|-------|------|------|
+| Band header | `reminders · 1 due · 2 upcoming` | At session start while open items exist |
+| Band rows | `  <title>  <relative time>`, up to 3 | Time reads `now` (due for under a minute), `in <1 min`, `5 min ago` or `2 d ago` (due for longer); `(global)` marks a global item, `· running` one in progress |
+| Band footer | `+N more · /remind  list · done · snooze · or say what to add` | Under the rows; the `+N more ·` prefix appears only when more than 3 items are open |
+| Toast, 8 s | `reminder due: <title> · /remind` or `N reminders due · /remind` | An item falls due mid-session; a 60 s tick refreshes the band. The next prompt carries the offer |
+| Running | `<id> is running in session <sid> since <time>` | A second open session tries an item another one claimed |
+
+## Commands
+
+| Command | Result |
+|---------|--------|
+| `/remind` or `/remind list` | Prints, in this order, due, running, pending, unreadable, done (last 10) and cancelled (last 10) items in local time, no Claude turn |
+| `/remind help` | Prints the help text |
+| `/remind done <id>` | `done: <title> (<id>)` |
+| `/remind cancel <id>` | `cancelled: <title> (<id>)` |
+| `/remind snooze <id> <when>` | `snoozed: <title> (<id>) until <ISO>` |
+| `/remind [global\|project\|default] <any words>` | Handed to Claude, which adds the reminder |
+
+The id is the file name without `.md`; a unique prefix of the slug also matches. `snooze` takes `+2h`, `+30m`, `+3d`, `tomorrow 9:00`, `today 18`, a local `YYYY-MM-DD HH:MM` or an ISO time with an offset or `Z`. A time in the past is rejected. Times are stored in UTC and shown in the system time zone, daylight saving included.
+
+## Good to know
+
+- **Scopes.** Project (default) lives in `.claude/scheduled/` of the repo and shows in that project's sessions. Global lives in `${CLAUDE_CONFIG_DIR:-~/.claude}/reminders/` (per Claude profile), shows in every session, and is never put in git.
+- **Headless runs.** `claude -p`, CI, the SDK and subagents get no offer; it is made only for an interactive prompt, and prompts that start with `/` are skipped.
+- **Team organizations.** Checked live on a Team seat with Claude Code 2.1.306: band, offer through the bundled command hook, `/remind` hand-off and the mod tools.
+- **Worktrees and clones.** Claims and status are per checkout. A tracked item marked done in one checkout shows pending in another until the change is pulled.
+- **State resets on update.** Session and offered marks live under the plugin root (`.state/`, pruned after 7 days). An update installs a new version directory, so an open item can be offered once more.
+- **Git is your call.** `.claude/reminders.json` takes `{"git": "off"}` (default), `"commit"` or `"commit-push"`. The mod never runs git; it tells Claude to commit, and push, only that item file, so your permission mode and repo rules stay in force. `.gitignore` is untouched.
+
+<Spoiler title="Technical details" id="technical-details" meta="item files, claims, migration">
+
+**Item file.** `<YYYYMMDD-HHMM>_<slug>.md`, where the prefix is the due time in UTC. Header lines at the top, up to the first blank line (optional `---` fences): `due: 2026-10-22T08:00:00Z`, `status: pending`, `done:` or `cancelled:` with a UTC time, optional `created:` and `result:`. The body is the text Claude runs. A `README.md` in the folder is skipped. A time without `Z` is listed as unreadable with the hint to add `Z`. If the mod tools are unavailable, edit the header by hand: `status: done` plus `done: <UTC>`.
+
+**Claims.** Starting an item writes `.claims/<id>.json` in its folder (the folder carries its own `.gitignore` with `*`), so a second open session cannot run it too. A claim from a crashed session expires after 6 h. Claude finishes with `update_reminder done` and a result, which sets `status: done`, `done:` and `result:`.
+
+**Migrating a hand-written hook.** Items from a custom SessionStart hook (for example `due-checks.sh` with `.claude/scheduled/*.md`) parse unchanged. Remove the hook block from `.claude/settings.json` or `.claude/settings.local.json` and the script; while it is still registered, the offer reminds you to do so.
+
+**How it works.** A bundled command hook, `hooks/remind.mjs`, runs on `UserPromptSubmit` and on `SessionStart` with the `compact` matcher, so the offer reaches Claude on Team organizations, where a module's own `classic.*` hooks are bypassed. The module draws the band, runs the tick and the `/remind` command, and registers the tools `add_reminder`, `list_reminders` and `update_reminder`. Every path fails open.
+
+</Spoiler>
+
+## Related
+
+<CardGrid>
+  <Card variant="mod" title="Mods overview" icon="package" href="/mods/overview/">All brewcode mods and how they load.</Card>
+  <Card variant="mod" title="Source on GitHub" icon="link" href="https://github.com/kochetkov-ma/claude-brewcode/tree/main/brewmod-reminders">Mod manifest, hooks module, and tests.</Card>
+  <Card variant="mod" title="Prompt placeholders" icon="puzzle" href="/mods/placeholders/">Another brewcode mod: expand short codes in your prompt.</Card>
+  <Card variant="mod" title="Plan-mode effort" icon="brain" href="/mods/plan-effort/">Another brewcode mod: raises effort while Claude plans.</Card>
+  <Card variant="mod" title="Project page" icon="globe" href="https://brewcode.app/mods/reminders/">The mod on brewcode.app.</Card>
+</CardGrid>
+
+<UpdateNotice />

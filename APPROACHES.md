@@ -1,6 +1,6 @@
 # Approaches
 
-This page lists every approach the brewcode suite (four plugins and two mods) applies and how they connect:
+This page lists every approach the brewcode suite (four plugins and three mods) applies and how they connect:
 which setup skill installs which hook, which skill writes which agent, which text is injected at which
 moment. It is for the maintainer who forgot where a file comes from, and for the user who wants to know
 what a plugin or mod does to a session. The [Mods](#mods) come first: they act on the prompt you type and
@@ -38,40 +38,44 @@ Two conventions across the suite:
 ## Mods
 
 A mod is a Claude Code plugin with no skills and no agents. It changes the prompt box and the request loop
-through a TypeScript hooks module that the engine loads, plus a small bundled command hook. Two mods ship
+through a TypeScript hooks module that the engine loads, plus a small bundled command hook. Three mods ship
 here. They install from the same marketplace as the four plugins and run without them.
 
 | Mod | What you get | Try |
 |---|---|---|
 | `brewmod-placeholders` (flagship) | Type `++r` in a prompt and Claude receives a saved instruction block with it, as hidden context. The prompt box underlines the token, completes names and previews the exact lines before you send; `/placeholders` adds your own | `++r check the diff` |
 | `brewmod-plan-effort` | Claude plans at `xhigh` (the `planEffort` setting) and your session effort applies everywhere else; a row above the prompt shows it | `/plan-effort max` |
+| `brewmod-reminders` | Durable reminders and checks as Markdown files: a band above the prompt lists them in any later session, and Claude offers the due ones at your first prompt; `/remind` lists, snoozes, finishes | `remind me tomorrow 9:00 to check prod` |
 
 ❗ **Update Claude Code first:** mods need Claude Code 2.1.301 or newer (`claude --version`; `claude update`,
 then restart Claude Code: exit, run `claude`).
 
-Install both. They need `node` on the `PATH`; run `/reload-plugins` afterwards:
+Install all three. They need `node` on the `PATH`; run `/reload-plugins` afterwards:
 
 ```bash
-claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode && claude plugin install brewmod-placeholders@claude-brewcode && claude plugin install brewmod-plan-effort@claude-brewcode
+claude plugin marketplace add https://github.com/kochetkov-ma/claude-brewcode && claude plugin install brewmod-placeholders@claude-brewcode && claude plugin install brewmod-plan-effort@claude-brewcode && claude plugin install brewmod-reminders@claude-brewcode
 ```
 
 For one mod, keep only its `claude plugin install`. Update later with `/brewtools:plugin-update`: one run updates every installed plugin and mod, offers the mods you lack and prints the next steps (`/reload-plugins`, then `/brewcode:setup-status upgrade`). Docs:
 [mods overview](https://doc-claude.brewcode.app/mods/overview/) |
 [placeholders](https://doc-claude.brewcode.app/mods/placeholders/) |
-[plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/). Sources:
-[`brewmod-placeholders/`](brewmod-placeholders/README.md) | [`brewmod-plan-effort/`](brewmod-plan-effort/README.md).
+[plan-effort](https://doc-claude.brewcode.app/mods/plan-effort/) |
+[reminders](https://doc-claude.brewcode.app/mods/reminders/). Sources:
+[`brewmod-placeholders/`](brewmod-placeholders/README.md) | [`brewmod-plan-effort/`](brewmod-plan-effort/README.md) |
+[`brewmod-reminders/`](brewmod-reminders/README.md).
 
 ### How a mod is built
 
 | Part | Where | What it does | Why it exists |
 |---|---|---|---|
-| Hooks module | `hooks/register.ts` (placeholders also `hooks/lib/*.ts`), named in `hooks/hooks.json` as `{ "modules": ["./register.ts"] }` | TypeScript handlers on engine events (`prompt.edit`, `ui.render`, `turn.step`, `command.run`, `tool.call`, ...): prompt-box UI, slash commands, model tools, rewriting a request | Only a module can draw above the prompt, register `/placeholders` or `/plan-effort`, or change the `effort` of a request |
-| Bundled command hook | `hooks/inject.mjs` (placeholders), `hooks/mode.mjs` (plan-effort); both on `UserPromptSubmit` and `PostToolBatch` in the same `hooks.json`, timeout 5 s | Plain Node, no dependencies; any error prints `{}` | On Team/Enterprise organizations the builtin security layer bypasses a user mod's `classic.*` module hooks, the ones that add context; a command hook still runs. Verified live on a Team-organization and a Max profile; Enterprise was not run |
+| Hooks module | `hooks/register.ts` (placeholders also `hooks/lib/*.ts`), named in `hooks/hooks.json` as `{ "modules": ["./register.ts"] }` | TypeScript handlers on engine events (`prompt.edit`, `ui.render`, `turn.step`, `command.run`, `tool.call`, ...): prompt-box UI, slash commands, model tools, rewriting a request | Only a module can draw above the prompt, register `/placeholders`, `/plan-effort` or `/remind`, or change the `effort` of a request |
+| Bundled command hook | `hooks/inject.mjs` (placeholders), `hooks/mode.mjs` (plan-effort), both on `UserPromptSubmit` and `PostToolBatch`; `hooks/remind.mjs` (reminders), on `UserPromptSubmit` and `SessionStart` matcher `compact`; same `hooks.json`, timeout 5 s | Plain Node, no dependencies; any error prints `{}` | On Team/Enterprise organizations the builtin security layer bypasses a user mod's `classic.*` module hooks, the ones that add context; a command hook still runs. Verified live on a Team-organization and a Max profile; Enterprise was not run |
 | Mode file | `<plugin root>/.state/mode-<session_id>.json`, `{mode,ts}`, gitignored, pruned after 7 days | The command hook writes the main loop's `permission_mode` (a payload with an `agent_id` is ignored; the session id must match `[A-Za-z0-9_-]+`); the module reads it | A module gets no live permission-mode signal: plan mode is learned at the next prompt or tool batch |
 
 - Fail-open. A command hook ends in a `catch` that prints `{}`; the engine skips a failing module hook
   and the chain goes on. A broken mod costs its feature, never a prompt or a tool batch.
-- Two mode files, one format. Each mod writes `.state/mode-<session_id>.json` under its own plugin root,
+- Two mode files, one format (placeholders and plan-effort; reminders keeps its own `.state/session-*` and
+  `offered-*` files). Each of the two writes `.state/mode-<session_id>.json` under its own plugin root,
   so either runs alone. With both loaded, the plan-effort row stays visible above the placeholders band in
   either load order: the row takes one row of the band's budget.
 - Early access. Mods use the hooks module API, which can change between Claude Code releases.
@@ -131,6 +135,48 @@ session effort setting is never written.
 | Row and toast | module `ui.render` (`AbovePrompt`, `PromptHint`), `turn.step` | A row in the `planMode` colour above the prompt, e.g. `plan mode · effort xhigh for this mode · change: /plan-effort <level>`; Shift+Tab out of plan mode drops it. One toast per plan visit, only when the mod raised the effort: `plan mode · effort raised to xhigh` |
 | `/plan-effort` | module `command.run`, `session.start` | `[status\|help\|<level>]`: status and help print locally; a level sets the `planEffort` /config row (the module reloads). Under `-p` there is no row: use `/config` |
 
+### brewmod-reminders
+
+A reminder is a Markdown file in the repo (project scope) or in the Claude config dir (global scope), so it
+outlives the session: a cron or `/loop` job dies with its session, and the cloud `/schedule` has no local SSH
+keys, scripts or VPS access. While open items exist, a band above the prompt lists them; the first real prompt
+of a session makes Claude tell you about the due ones and offer to run, snooze, finish or cancel each. Nothing
+runs unasked.
+
+| Piece | Engine hook | What it does |
+|---|---|---|
+| Band | module `ui.render` (`AbovePrompt`), `session.start` | While open items exist: header `reminders · 1 due · 2 upcoming`, up to 3 rows (`<title>  <relative time>`: `now`, `in <1 min`, `2 d ago`, `(global)`, `· running`), `+N more`, footer `/remind  list · done · snooze · or say what to add`. Nothing goes to Claude at session start |
+| Tick and toast | module `session.start` (60 s timer) | Refreshes the band; one toast `reminder due: <title> · /remind` (or `N reminders due · /remind`) when an item becomes due mid-session. No automatic turn |
+| Offer | command hook `remind.mjs`, `UserPromptSubmit`, and `SessionStart` matcher `compact`, timeout 5 s | On the first real interactive prompt, adds the due items to Claude's context: tell the user first, offer run now, snooze, done or cancel, never run unasked, call out an item more than 24 h late. Once per session per item; re-offered after `/compact`. No offer for a `/`-prefixed prompt, a `/remind <text>` hand-off turn, `claude -p`, CI, the SDK or a subagent |
+| Model tools | registered at `session.start`, handled in `tool.call` | `list_reminders`, `add_reminder`, `update_reminder`; no permission prompt. `add_reminder` without `confirm` returns only a preview (`Preview, nothing written: ...`) and writes nothing; Claude asks once (time, and Project (Recommended) or Global when the request named no scope), then calls it again with `confirm: true`. `update_reminder start` claims an item, `done` records a `result:` |
+| `/remind` | module `command.run`, `session.start` | `/remind` or `list` prints due, running, pending, unreadable, done (last 10) and cancelled (last 10) in local time; `help`; `done <id>`, `cancel <id>`, `snooze <id> <+2h\|tomorrow 9:00>` print locally, no Claude turn. Any other text is handed to Claude (`Handing this to Claude: <request>`). An id is the file basename; a unique slug prefix matches |
+| Git option | `.claude/reminders.json` | `{"git": "off" \| "commit" \| "commit-push"}`, default `off`. The mod never runs git: the offer tells Claude to commit (and push) only that item file, under your permission mode and repo rules. Global items never get a git line; `.gitignore` is untouched |
+
+Item file `<YYYYMMDD-HHMM>_<slug>.md` (the prefix is the due time in UTC): header lines at the top, up to the first
+blank line, optional `---` fences:
+
+```
+due: 2026-10-22T08:00:00Z
+status: pending
+```
+
+`status` is `pending`, `done` or `cancelled`; `done:` or `cancelled:` hold a UTC time, `created:` and `result:` are
+optional. The body is the text Claude runs. Times are stored as UTC `Z` and shown in the system time zone; a
+naive time without `Z` is listed as unreadable. `README.md` in the directory is skipped.
+
+| Scope | Directory | Shown in | Git |
+|---|---|---|---|
+| project (default) | `<repo>/.claude/scheduled/` | that project's sessions | per `.claude/reminders.json` |
+| global | `<config dir>/reminders/`, per Claude profile | every session, rows marked `(global)` | never |
+
+Claims: `<dir>/.claims/<id>.json` marks an item as running in one session, so a second open session does not run
+it too (`<id> is running in session <sid> since <time>`); the directory carries its own `.gitignore` (`*`) and a
+claim expires after 6 h, for a crashed session. Claims and status are per checkout: an item finished in one
+worktree reads pending in another until the change is merged. Plugin state: `.state/session-<sid>.json` (the
+module records that the session is interactive) and `.state/offered-<sid>.json` (which items were offered), under
+the plugin root, gitignored, pruned after 7 days; an update installs a new version directory, so the offered
+marks reset once. Every path fails open.
+
 ## Map
 
 Two pictures: how the sections act on one another, then one turn in time. Blue = live the moment the plugin
@@ -142,7 +188,7 @@ or reuses, never a second write.
 classDiagram
   direction TB
 
-  class S0["Mods - placeholders (flagship), plan-effort"]
+  class S0["Mods - placeholders (flagship), plan-effort, reminders"]
   class S1["1 - Always-on hooks"]
   class S2["2 - Delegation and manager discipline"]
   class S3["3 - Subagent control"]
@@ -697,6 +743,11 @@ in one message send only `++rr`: both defs carry `group: review`, and the higher
 | `.state/mode-<session_id>.json` of `brewmod-placeholders` | `hooks/inject.mjs` at runtime, on `UserPromptSubmit` and `PostToolBatch` | `<plugin root>/.state/`, gitignored; files older than 7 days are pruned | delete the file; the next prompt rewrites it, and a missing file reads as not in plan mode |
 | `register.ts` and `hooks/mode.mjs` of `brewmod-plan-effort` | ships with the mod | `brewmod-plan-effort/hooks/` (the `modules` list and both command hooks in its `hooks/hooks.json`) | uninstall the mod |
 | `.state/mode-<session_id>.json` of `brewmod-plan-effort` | `hooks/mode.mjs` at runtime, on `UserPromptSubmit` and `PostToolBatch` | `<plugin root>/.state/`, gitignored; files older than 7 days are pruned | delete the file; a missing or corrupt file means not in plan mode, so no raise |
+| `register.ts` and `hooks/remind.mjs` of `brewmod-reminders` | ships with the mod | `brewmod-reminders/hooks/` (the `modules` list and both command hooks in its `hooks/hooks.json`) | uninstall the mod; your reminder files stay |
+| Reminder item files `<YYYYMMDD-HHMM>_<slug>.md` | the mod tool `add_reminder` (after one confirmation) or `/remind <text>`; by hand works too | `<repo>/.claude/scheduled/` (project, default) or `<config dir>/reminders/` (global, per Claude profile) | `/remind cancel <id>`, or delete the file; the files live outside the mod directory, so uninstalling the mod leaves them |
+| `.claims/<id>.json` of `brewmod-reminders` | `update_reminder start` | `.claims/` inside the item directory, with its own `.gitignore` (`*`) | expires after 6 h, or delete the file |
+| `.state/session-<sid>.json` and `.state/offered-<sid>.json` of `brewmod-reminders` | module `session.start` and `hooks/remind.mjs` at runtime | `<plugin root>/.state/`, gitignored; files older than 7 days are pruned | delete the files; the due items are offered again once |
+| `.claude/reminders.json` | by hand | `<repo>/.claude/reminders.json`; absent = defaults | delete the file; `{"git": "off"}` is the default (`commit`, `commit-push` are the other values) |
 | brewcode `session-start.mjs` | ships with brewcode | `brewcode/hooks/`, unmatched `SessionStart` group of `brewcode/hooks/hooks.json` | uninstall the plugin |
 | `compact-recall.mjs` | ships with brewcode | `brewcode/hooks/`, `SessionStart` group with `"matcher": "compact"` | uninstall the plugin; no flag, no config file |
 | `.claude/plans/LATEST.md` + `_planLink` | brewcode `session-start.mjs` at runtime | `<repo>/.claude/plans/`, `<repo>/.claude/tasks/cfg/brewcode.state.json` | delete the link; it is recreated on the next fresh plan |
