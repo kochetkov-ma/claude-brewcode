@@ -19,7 +19,7 @@ const item = (due: string, title: string, status = 'pending', extra = ''): strin
 // Stubs beneath the mod: an in-memory file system over `tree`, fixed env and session, recorders for toasts, tools, command, submits.
 function wire(on: On, tree: Tree) {
   const live = { root: ROOT, sid: SID }
-  const ops = { vars: {} as Record<string, string>, live, writes: [] as [string, string][], toasts: [] as string[], notifies: [] as [string, string | undefined][], tools: [] as string[], cmds: [] as unknown[], submits: [] as string[] }
+  const ops = { vars: {} as Record<string, string>, live, writes: [] as [string, string][], toasts: [] as string[], notifies: [] as [string, string | undefined][], tools: [] as string[], cmds: [] as unknown[], submits: [] as string[], fills: [] as string[] }
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
   on('fs.exists', (_$, e) => ({ value: e.path in tree || Object.keys(tree).some((k) => k.startsWith(`${e.path}/`)) }) as never)
   on('fs.list', (_$, e) => {
@@ -47,7 +47,7 @@ function wire(on: On, tree: Tree) {
   on('tool.register', (_$, e) => (ops.tools.push(e.name), { value: { tool: `${TOOL}${e.name}` } }) as never)
   on('prompt.submit', (_$, e) => (ops.submits.push(e.text), { text: e.text }))
   on('turn.complete', (_$, e) => ({ text: e.answer }))
-  on('prompt.fill', () => ({ isFilled: true }) as never)
+  on('prompt.fill', (_$, e) => (ops.fills.push(e.text), { isFilled: true }) as never)
   on('ui.notify', (_$, e) => (ops.notifies.push([e.text, e.title]), { value: { isSent: true, channel: 'kitty' } }) as never)
   on('ui.render', () => ENGINE as never)
   on('prompt.autocomplete', () => ({ suggestions: [] }))
@@ -212,11 +212,11 @@ const rows: AddRow[] = [
     writes: [],
   },
 ]
-for (const { name, input, text, writes, tree = {}, tz } of rows) {
+for (const { name, input, text, writes, tree = {}, tz = 'Europe/Lisbon' } of rows) {
   test(`GIVEN add_reminder with ${name} WHEN the model calls it THEN the answer and the writes are exact`, async ($, on) => {
     mock.clock(on, { now: NOW })
     const ops = wire(on, tree)
-    if (tz !== undefined) ops.vars.TZ = tz
+    ops.vars.TZ = tz
     await start($)
     const before = ops.writes.length
 
@@ -542,8 +542,13 @@ const bands: { name: string; tree: Tree; rows: string[] }[] = [
     rows: [],
   },
   {
-    name: '2 due and 1 upcoming',
-    tree: { [HOTFIX]: item('2026-10-21T08:03:00Z', 'Hotfix'), [FRESH]: item('2026-10-21T13:59:30Z', 'Fresh'), [LATER]: item('2026-10-23T08:00:00Z', 'Rotate keys') },
+    name: '2 due, 1 upcoming and 1 someday',
+    tree: {
+      [HOTFIX]: item('2026-10-21T08:03:00Z', 'Hotfix'),
+      [FRESH]: item('2026-10-21T13:59:30Z', 'Fresh'),
+      [LATER]: item('2026-10-23T08:00:00Z', 'Rotate keys'),
+      [SOMEDAY]: item('none', 'Try semble', 'pending', 'kind: note\n'),
+    },
     rows: ['reminders · 2 fired', '1: ▶ Hotfix  6 h ago', '2: ▶ Fresh  now', FOOT(2)],
   },
   {
@@ -573,9 +578,9 @@ const ticks: { name: string; options: { notify?: boolean }; notifies: [string, s
   { name: 'notify off', options: { notify: false }, notifies: [], before: 'Desktop alert: off (/config -> Reminder desktop alert)', after: 'Desktop alert: off (/config -> Reminder desktop alert)' },
 ]
 for (const { name, options, notifies, before, after } of ticks) {
-  test(`GIVEN ${name} and an item due in 30 s WHEN the 60 s tick fires THEN one toast and the alerts are exact, and /remind help reports the alert`, { options }, async ($, on) => {
+  test(`GIVEN ${name}, a someday item and an item due in 30 s WHEN the 60 s tick fires THEN one toast and the alerts are exact, and /remind help reports the alert`, { options }, async ($, on) => {
     const clock = mock.clock(on, { now: NOW })
-    const ops = wire(on, { [LATER]: item('2026-10-21T14:00:30Z', 'Rotate keys') })
+    const ops = wire(on, { [LATER]: item('2026-10-21T14:00:30Z', 'Rotate keys'), [SOMEDAY]: item('none', 'Try semble', 'pending', 'kind: note\n') })
     await start($)
     const helpBefore = await helpLine($)
 
@@ -639,6 +644,14 @@ const submitRows: [string, string, string, string][] = [
   ['an unknown number', 'use **9 now', 'composer', 'use **9 now'],
   ['a glued prefix', 'x**1', 'composer', 'x**1'],
   ['a non-typed origin', '**1', 'plugin', '**1'],
+  ['a bold phrase opened by a fired number', 'a **1 thing** here', 'composer', 'a **1 thing** here'],
+  ['a fired number before a bold word', '**1 and **bold** x', 'composer', `${RUN_HOT}\nMy extra words: and **bold** x`],
+  ['a slug', '**semble', 'composer', noteBlock('someday_semble', 'Try semble')],
+  ['a unique id prefix', '**hot now', 'composer', `${RUN_HOT}\nMy extra words: now`],
+  ['an ambiguous id prefix', 'see **20261021- now', 'composer', 'see **20261021- now'],
+  ['an unknown name', 'a **nope here', 'composer', 'a **nope here'],
+  ['a repeated number', '**1 **1', 'composer', RUN_HOT],
+  ['an unknown longer number before a fired one', 'go **12 **1', 'composer', `${RUN_HOT}\nMy extra words: go **12`],
 ]
 for (const [name, text, kind, expected] of submitRows) {
   test(`GIVEN 2 fired and 1 someday WHEN ${name} (${JSON.stringify(text)}, origin ${kind}) is submitted THEN the text sent is exact`, async ($, on) => {
@@ -652,16 +665,71 @@ for (const [name, text, kind, expected] of submitRows) {
   })
 }
 
-test('GIVEN a draft with a fired number, a bold word and an unknown number WHEN the box is edited THEN only the fired number is decorated', async ($, on) => {
+test('GIVEN a draft with fired numbers, a slug prefix, a bold word, a bold phrase and unknown tokens WHEN the box is edited THEN only the expanding tokens are decorated', async ($, on) => {
   mock.clock(on, { now: NOW })
   wire(on, PICK_TREE())
   await start($)
-  const text = 'run **1 and **bold** and **7 and **2'
+  const text = 'run **1 and **bold** and **7 and **2 **sem **zz **1 thing** end'
 
   const r = await ($ as any).prompt.edit({ origin: { kind: 'composer' }, text, cursor: text.length, start: text.length, end: text.length, inputText: '2' } as never)
 
   expect((r as { decorations?: unknown }).decorations, 'decorations').toEqual([
     { start: 4, end: 7, bold: true, color: 'warning' },
     { start: 33, end: 36, bold: true, color: 'warning' },
+    { start: 37, end: 42, bold: true, color: 'warning' },
   ])
 })
+
+test('GIVEN the band numbered at start WHEN fired #1 is closed on disk by another session and **1 is submitted THEN the fresh #1 runs and the band redraws', async ($, on) => {
+  mock.clock(on, { now: NOW })
+  const tree = PICK_TREE()
+  const ops = wire(on, tree)
+  await start($)
+  const before = await band($)
+  tree[HOTFIX] = item('2026-10-21T08:03:00Z', 'Post-hotfix prod check', 'done', 'done: 2026-10-21T13:00:00Z\n')
+
+  await $.prompt.submit({ text: '**1', origin: { kind: 'composer' }, wait: false } as never)
+
+  expect({ before, submits: ops.submits, after: await band($) }, 'fresh numbering').toEqual({
+    before: ['reminders · 2 fired', '1: ▶ Post-hotfix prod check  6 h ago', '2: ✎ Fresh  now', FOOT(2)],
+    submits: [RUN_FRESH],
+    after: ['reminders · 1 fired', '1: ✎ Fresh  now', FOOT(1)],
+  })
+})
+
+test('GIVEN 2 fired in the band WHEN row 2 is pressed THEN the prompt is filled with **2', async ($, on) => {
+  mock.clock(on, { now: NOW })
+  const ops = wire(on, PICK_TREE())
+  await start($)
+  const ui = await $.ui.mount({
+    plugin: 'brewmod-reminders',
+    component: 'AbovePrompt',
+    surface: 'terminal',
+    props: { hasSurvey: false, isWorking: false, maxRows: 24, bodyColumns: 100, scroll: { bodyRows: 23, offset: 0 }, view: {} },
+  } as never)
+
+  await (ui as any).press({ key: 'r2' })
+  await (ui as any).unmount()
+
+  expect(ops.fills, 'filled text').toEqual(['**2'])
+})
+
+const BAD_PREFIX = 'reminder prefix must be 2-8 ASCII punctuation characters (not _), using ** · change: /config -> Reminder picker prefix'
+const SLASH_PREFIX = 'reminder prefix starting with / clashes with slash commands, using ** · change: /config -> Reminder picker prefix'
+const prefixes: { name: string; prefix: string; text: string; submits: string[]; toasts: string[] }[] = [
+  { name: 'a custom prefix !!', prefix: '!!', text: '!!1 now', submits: [`${RUN_HOT}\nMy extra words: now`], toasts: [] },
+  { name: 'a custom prefix !! and the default token', prefix: '!!', text: '**1', submits: ['**1'], toasts: [] },
+  { name: 'an invalid prefix (letters)', prefix: 'ab', text: '**1 now', submits: [`${RUN_HOT}\nMy extra words: now`], toasts: [BAD_PREFIX] },
+  { name: 'a slash-leading prefix', prefix: '//', text: '**1 now', submits: [`${RUN_HOT}\nMy extra words: now`], toasts: [SLASH_PREFIX] },
+]
+for (const { name, prefix, text, submits, toasts } of prefixes) {
+  test(`GIVEN ${name} WHEN the session starts and ${JSON.stringify(text)} is submitted THEN the text sent and the toasts are exact`, { options: { prefix } }, async ($, on) => {
+    mock.clock(on, { now: NOW })
+    const ops = wire(on, PICK_TREE())
+    await start($)
+
+    await $.prompt.submit({ text, origin: { kind: 'composer' }, wait: false } as never)
+
+    expect({ submits: ops.submits, toasts: ops.toasts }, name).toEqual({ submits, toasts })
+  })
+}

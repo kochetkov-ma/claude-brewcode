@@ -11,11 +11,34 @@ import {
 import type { ReminderView } from '../types'
 
 // The band reads this view; the atom is declared in this file only (the scan reads it).
-const viewAtom = atom({ plugin: 'brewmod-reminders', key: 'view' } as const, { due: 0, rows: [], fired: [] })
+const viewAtom = atom({ plugin: 'brewmod-reminders', key: 'view' } as const, { due: 0, rows: [] })
 
 const DEFAULT_PREFIX = '**'
 const PREFIX_RE = /^[!-/:-@[-^`{-~]{2,8}$/
+const PREFIX_FIX = '/config -> Reminder picker prefix'
+// Local copy of brewmod-placeholders validatePrefix (hooks/lib/match.ts); here a `/`-leading prefix is refused, not only warned.
+const validatePrefix = (raw: unknown): { prefix: string; warning: string | null } =>
+  raw === undefined
+    ? { prefix: DEFAULT_PREFIX, warning: null }
+    : typeof raw !== 'string' || !PREFIX_RE.test(raw)
+      ? { prefix: DEFAULT_PREFIX, warning: `reminder prefix must be 2-8 ASCII punctuation characters (not _), using ${DEFAULT_PREFIX} · change: ${PREFIX_FIX}` }
+      : raw.startsWith('/')
+        ? { prefix: DEFAULT_PREFIX, warning: `reminder prefix starting with / clashes with slash commands, using ${DEFAULT_PREFIX} · change: ${PREFIX_FIX}` }
+        : { prefix: raw, warning: null }
 const escRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+type Tok = { start: number; end: number; name: string }
+// Standalone `<prefix><name>` tokens; `**1 thing**` is bold: skipped when the next prefix on its line follows a non-space (a closer).
+// An opener (` **x`) or no further prefix keeps it, so `**1 and **bold** x` expands **1.
+function tokensOf(text: string, prefix: string): Tok[] {
+  const re = new RegExp(`(^|\\s)${escRe(prefix)}([\\w-]+)(?=\\s|$)`, 'g')
+  return [...text.matchAll(re)].flatMap((m) => {
+    const start = (m.index ?? 0) + (m[1] ?? '').length
+    const end = start + prefix.length + (m[2] ?? '').length
+    const eol = text.indexOf('\n', end)
+    const at = text.slice(end, eol === -1 ? undefined : eol).indexOf(prefix)
+    return at !== -1 && !/\s/.test(text.charAt(end + at - 1)) ? [] : [{ start, end, name: m[2] ?? '' }]
+  })
+}
 // Origins whose text is the person's own typed prompt (same rule as brewmod-placeholders).
 const TYPED_ORIGINS: ReadonlySet<string> = new Set(['composer', 'bridge', 'sdk'])
 const TICK_MS = 60_000
@@ -97,7 +120,6 @@ function viewOf(items: Entry[], now: number): ReminderView {
   return {
     due: due.length,
     rows: due.map((i) => `${mark(i)} ${nameOf(i)}  ${relative(i.due ?? now, now)}${i.global ? ' (global)' : ''}`).slice(0, BAND_ROWS),
-    fired: due.map((i) => ({ id: i.id, global: i.global })),
   }
 }
 
@@ -177,6 +199,12 @@ function pick(items: Entry[], id: string, scope: string | undefined): Entry | st
 function resolve(items: Entry[], token: string, scope: string | undefined): Entry | string {
   if (!isNum(token)) return pick(items, token, scope)
   return firedList(items)[Number(token) - 1] ?? `no fired reminder ${token}; /remind shows the numbered list`
+}
+const RUNNABLE: ReadonlySet<string> = new Set(['due', 'pending', 'running', 'someday'])
+// A `<prefix><name>` token's reminder via the /remind run resolver; closed, unreadable, ambiguous or unknown -> null (left as text).
+const runnable = (items: Entry[], name: string): Entry | null => {
+  const e = resolve(items, name, undefined)
+  return typeof e === 'string' || !RUNNABLE.has(e.state) ? null : e
 }
 
 async function claimTo(io: Io, e: Entry, sid: string, now: number): Promise<Out | null> {
@@ -411,13 +439,18 @@ const TOOLS = [
 
 // No guards around the mod's own logic: the engine skips a failing hook and the chain goes on; `$` is never passed on.
 export const register: Register = (on, options) => {
-  const prefix = typeof options.prefix === 'string' && PREFIX_RE.test(options.prefix) ? options.prefix : DEFAULT_PREFIX
+  const check = validatePrefix(options.prefix)
+  const prefix = check.prefix
   const notifyOn = options.notify !== false // userConfig `notify`, default on
   let lastNotify = '' // the last $.ui.notify result, one line for /remind help
   let hintTail = ''
-  let somedayIds = new Set<string>() // ids the picker listed: known to the highlight (prompt.edit does no I/O)
+  let known: Entry[] = [] // items of the last load: the highlight resolves against them (prompt.edit does no I/O)
   let hasTools = false
-  let refresh: (() => Promise<void>) | null = null // the band/toast refresh of this session, set at session.start
+  // Settles with hasTools once session.start's registration ends: a /remind typed right after launch waits for it.
+  let toolsSettled: (v: boolean) => void = () => undefined
+  const toolsReady = new Promise<boolean>((resolve) => (toolsSettled = resolve))
+  // The band/toast refresh of this session, set at session.start; `loaded` = items a hook just read (one numbering source).
+  let refresh: ((loaded?: { items: Entry[]; t: number }) => Promise<void>) | null = null
   let shownKey = ''
   let seenDue: Set<string> | null = null
   let io: Io // set at session.start; `$` is never passed on, so the hooks share these closures
@@ -426,6 +459,9 @@ export const register: Register = (on, options) => {
   let stateSid = ''
 
   on('session.start', async ($, e, next) => {
+    io = { exists: (p) => $.fs.exists(p), list: (p) => $.fs.list(p), read: (p) => $.fs.read(p), write: (p, t) => $.fs.write(p, t) }
+    env = { cfg: await $.env.get('CLAUDE_CONFIG_DIR'), home: (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE')), override: await $.env.get('REMIND_GLOBAL_DIR') }
+    if (check.warning !== null) $.ui.toast(check.warning)
     const now = await $.clock.now()
     const sid = await $.session.id()
     // remind.mjs reads this file to tell a typed prompt from a headless one when the hook payload lacks `source`.
@@ -443,13 +479,12 @@ export const register: Register = (on, options) => {
     } catch {
       // older build: /remind still lists and edits, only the hand-off needs the tools
     }
-    io = { exists: (p) => $.fs.exists(p), list: (p) => $.fs.list(p), read: (p) => $.fs.read(p), write: (p, t) => $.fs.write(p, t) }
-    env = { cfg: await $.env.get('CLAUDE_CONFIG_DIR'), home: (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE')), override: await $.env.get('REMIND_GLOBAL_DIR') }
+    toolsSettled(hasTools)
     if (e.isInteractive) {
-      refresh = async () => {
-        const t = await $.clock.now()
-        const dirs = dirsOf(await $.session.root().catch(() => undefined), env)
-        const items = await loadAll(io, dirs, t)
+      refresh = async (loaded) => {
+        const t = loaded?.t ?? (await $.clock.now())
+        const items = loaded?.items ?? (await loadAll(io, dirsOf(await $.session.root().catch(() => undefined), env), t))
+        known = items
         const view = viewOf(items, t)
         const key = JSON.stringify(view)
         if (key !== shownKey) {
@@ -500,7 +535,8 @@ export const register: Register = (on, options) => {
     const hit = (i: Entry, n?: number): boolean => (isNum(want) ? n !== undefined && String(n).startsWith(want) : want === '' || `${i.id} ${i.title}`.toLowerCase().includes(want.toLowerCase()))
     const fired = firedList(all).flatMap((i, k) => (hit(i, k + 1) ? [{ i, n: k + 1 }] : []))
     const someday = isNum(want) ? [] : sections(all.map((item) => ({ item, state: item.state }))).someday.map((x) => x.item).filter((i) => hit(i))
-    somedayIds = new Set(all.filter((i) => i.state === 'someday').map((i) => i.id))
+    known = all
+    await refresh?.({ items: all, t: now }).catch(() => undefined)
     const rows = [
       ...fired.map(({ i, n }) => ({ text: `${prefix}${n}`, label: `${prefix}${n}  ${mark(i)} ${nameOf(i)}`, description: relative(i.due ?? now, now) })),
       ...(fired.length > 0 && someday.length > 0 ? [{ text: e.token, label: '── someday ──' }] : []),
@@ -509,57 +545,49 @@ export const register: Register = (on, options) => {
     return rows.length === 0 ? r : { suggestions: [...r.suggestions, ...rows] }
   })
 
-  // Highlight standalone tokens that would expand (a fired number or a known someday id); no I/O. `**bold**`, `**2**` never match.
+  // Highlight tokens that would expand: the submit resolver over the last loaded items; no I/O. `**bold**`, `**2**` never match.
   on('prompt.edit', async ($, e, next) => {
     const r = await next(e)
-    const fired = (await read($, viewAtom)).fired
-    const re = new RegExp(`(^|\\s)(${escRe(prefix)}([\\w-]+))(?=\\s|$)`, 'g')
-    const deco: { start: number; end: number; bold: boolean; color: 'warning' }[] = []
-    for (const m of r.text.matchAll(re)) {
-      const name = m[3] ?? ''
-      if (!(isNum(name) ? Number(name) >= 1 && Number(name) <= fired.length : somedayIds.has(name) || fired.some((f) => f.id === name))) continue
-      const start = (m.index ?? 0) + (m[1] ?? '').length
-      deco.push({ start, end: start + (m[2] ?? '').length, bold: true, color: 'warning' })
-    }
+    const deco = tokensOf(r.text, prefix).flatMap(({ start, end, name }) => (runnable(known, name) === null ? [] : [{ start, end, bold: true, color: 'warning' as const }]))
     hintTail = deco.length > 0 ? `${prefix}N expands on Enter to "Run reminder ..."` : ''
     return deco.length === 0 ? r : { ...r, decorations: [...(r.decorations ?? []), ...deco] }
   })
 
   on('ui.render', { component: 'PromptHint' }, ($, e, next) => (hintTail === '' ? next(e) : next({ ...e, props: { ...e.props, tail: hintTail } })))
 
-  // `<prefix>N` / `<prefix><id>` standalone tokens -> runPrompt blocks (the /remind run text), the other words follow as extra words; `**bold**` untouched.
+  // `<prefix>N` / `<prefix><id|slug|prefix>` tokens -> runPrompt blocks (the /remind run text, one per reminder), other words follow as extra words.
   on('prompt.submit', async ($, e, next) => {
     if (!TYPED_ORIGINS.has(e.origin.kind) || e.command !== undefined || e.isMeta !== undefined || !e.text.includes(prefix)) return next(e)
-    const re = new RegExp(`(^|\\s)${escRe(prefix)}([\\w-]+)(?=\\s|$)`, 'g')
-    const tokens = [...e.text.matchAll(re)]
+    const tokens = tokensOf(e.text, prefix)
     if (tokens.length === 0) return next(e)
     const now = await $.clock.now()
     const sid = await $.session.id()
     const tz = tzOf(await $.env.get('TZ'))
-    const dirs = dirsOf(await $.session.root().catch(() => undefined), env)
-    const all = await loadAll(io, dirs, now)
-    const band = (await read($, viewAtom)).fired
+    const all = await loadAll(io, dirsOf(await $.session.root().catch(() => undefined), env), now)
+    known = all
+    await refresh?.({ items: all, t: now }).catch(() => undefined)
     const blocks: string[] = []
-    let rest = e.text
-    for (const m of tokens) {
-      const name = m[2] ?? ''
-      const ref = isNum(name) ? band[Number(name) - 1] : undefined
-      const hit = isNum(name)
-        ? ref === undefined
-          ? firedList(all)[Number(name) - 1]
-          : all.find((i) => i.id === ref.id && i.global === ref.global)
-        : all.find((i) => i.id === name)
-      if (hit === undefined || hit.state === 'done' || hit.state === 'cancelled' || hit.state === 'unparseable' || hit.state === 'ignored') continue
+    const seen = new Set<string>()
+    const cut: Tok[] = []
+    for (const t of tokens) {
+      const hit = runnable(all, t.name)
+      if (hit === null) continue
       const foreign = foreignClaim(hit, sid, now)
       if (foreign !== null) {
         $.ui.toast(`${hit.id} is already running in another session since ${formatWhen(foreign.at, tz, now)}`, { timeoutMs: 8000 })
         continue
       }
+      cut.push(t)
+      const key = `${hit.global ? 'global' : 'project'}:${hit.id}`
+      if (seen.has(key)) continue
+      seen.add(key)
       blocks.push(runPrompt(hit, bodyOf(await io.read(hit.path)), ''))
-      rest = rest.replace(m[0], m[1] ?? '')
     }
     if (blocks.length === 0) return next(e)
-    const extra = rest.replace(/\s+/g, ' ').trim()
+    const extra = cut
+      .reduceRight((s, t) => `${s.slice(0, t.start)}${s.slice(t.end)}`, e.text)
+      .replace(/\s+/g, ' ')
+      .trim()
     return next({ ...e, text: `${blocks.join('\n\n')}${extra === '' ? '' : `\nMy extra words: ${extra}`}` })
   })
 
@@ -596,10 +624,11 @@ export const register: Register = (on, options) => {
     const now = await $.clock.now()
     const tz = tzOf(await $.env.get('TZ'))
     const dirs = dirsOf(await $.session.root().catch(() => undefined), env)
+    const tools = hasTools || (await Promise.race([toolsReady, new Promise<boolean>((resolve) => $.clock.after(3000, () => resolve(false)))]))
     const words = e.args.trim().split(/\s+/).filter((w) => w !== '')
     const [head = '', ...rest] = words
     const verb = head.toLowerCase()
-    if (verb === 'help' && words.length === 1) return { text: HELP(dirs, hasTools, notifyOn ? `on, last ${lastNotify === '' ? 'none sent yet' : lastNotify}` : 'off (/config -> Reminder desktop alert)') }
+    if (verb === 'help' && words.length === 1) return { text: HELP(dirs, tools, notifyOn ? `on, last ${lastNotify === '' ? 'none sent yet' : lastNotify}` : 'off (/config -> Reminder desktop alert)') }
     const shown =
       words.length === 0
         ? query('active')
@@ -633,7 +662,7 @@ export const register: Register = (on, options) => {
         const sid = await $.session.id()
         const where = found.global ? 'global' : 'project'
         if (verb === 'run' || verb === 'edit') {
-          if (!hasTools) return { text: NEEDS_TOOLS }
+          if (!tools) return { text: NEEDS_TOOLS }
           if (found.state === 'done' || found.state === 'cancelled') return { text: `${found.id} is already ${found.state}; /remind reopen ${found.id} brings it back` }
           if (verb === 'run' && (found.state === 'unparseable' || found.state === 'ignored')) return { text: `${found.id} has an unreadable header; fix the file first` }
           const foreign = verb === 'run' ? foreignClaim(found, sid, now) : null
@@ -654,7 +683,7 @@ export const register: Register = (on, options) => {
       const fixed = verb === 'global' ? 'global' : verb === 'project' || verb === 'default' ? 'project' : null
       const request = (fixed === null ? words : rest).join(' ')
       if (request === '') return { text: `usage: /remind ${verb} <what and when>` }
-      if (!hasTools) return { text: refused === '' ? NEEDS_TOOLS : refused }
+      if (!tools) return { text: refused === '' ? NEEDS_TOOLS : refused }
       outbound = { text: handoff(request, fixed, now, tz), ack: `Handing this to Claude: ${request}` }
     }
     const send = outbound.text
