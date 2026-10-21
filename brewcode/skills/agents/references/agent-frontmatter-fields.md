@@ -40,7 +40,7 @@ Detailed instructions for the AG...
 
 ### OPT Fields
 
-Verified against live [SA docs](https://code.claude.com/docs/en/sub-agents) + changelog through CC 2.1.296. PLG AGs ignore `hooks`, `mcpServers`, `permissionMode`, and `initialPrompt`. `--agents` JSON ignores `color`/`experimental` (read from files only). `Scope` below distinguishes these channels; !=assume every remaining field works in every execution context. Emit only fields from this table: an unknown key is ignored without an error (`claude --debug` names it, 2.1.296). `autoCompactWindow` (2.1.296) is changelog-only, absent from the docs field table -- !=emit.
+Verified against live [SA docs](https://code.claude.com/docs/en/sub-agents) + changelog through CC 2.1.306. PLG AGs ignore `hooks`, `mcpServers`, `permissionMode`, and `initialPrompt`. `--agents` JSON ignores `color`/`experimental` (read from files only). `Scope` below distinguishes these channels; !=assume every remaining field works in every execution context. Emit only fields from this table: an unknown key is ignored without an error (`claude --debug` names it, 2.1.296). `autoCompactWindow` (2.1.296) is changelog-only, absent from the docs field table -- !=emit.
 
 | Field | Values | DEF | Scope | Description |
 |-------|--------|-----|-------|-------------|
@@ -57,7 +57,7 @@ Verified against live [SA docs](https://code.claude.com/docs/en/sub-agents) + ch
 | `isolation` | `worktree` | None | both | !=add by DEF; `remote` is invocation-level, not FM -- see the note below |
 | `permissionMode` | see Permission Modes below | main's mode | local | Ignored for PLG AGs |
 | `mcpServers` | server name or inline definition | All inherited | local | Ignored for PLG AGs |
-| `hooks` | YAML structure, any hook event | None | local | Ignored for PLG AGs; a PROJECT AG's FM hooks need workspace trust (v2.1.218+) -- see Trust under Hook Events |
+| `hooks` | YAML structure, any hook event | None | local | Ignored for PLG AGs; `once: true` is ignored here (honored only in SK frontmatter); an AG's hooks live only while it runs, `Stop` -> `SubagentStop`; ask label `[settings]`; a PROJECT AG's FM hooks need workspace trust (v2.1.218+) -- see Trust under Hook Events |
 | `initialPrompt` | string | None | local | First user turn when THIS definition runs as MAIN (`--agent <name>` / `agent` setting); commands + SKs are processed, prepended to any user prompt. Ignored for PLG AGs and ordinary SA spawn |
 | `experimental.cacheTtl` | `"5m"`, `"1h"` | none | files | 2.1.248+: per-agent prompt-cache TTL. Invalid values and `1h` while a Claude subscription uses usage credits are ignored; pairs with `promptCacheTtl`/`subagentPromptCacheTtl` (2.1.243) |
 

@@ -126,13 +126,13 @@ Re-check a state: `gh api repos/anthropics/claude-code/issues/<N> --jq '[.state,
 |---|---|---|---|---|
 | [#39686](https://github.com/anthropics/claude-code/issues/39686) | claude.ai skills silently injected (~6000 tokens in report) | Reported 37% listing-budget use | Closed NOT PLANNED | Opt out with `syncClaudeAiSkills: false`; check the listing budget |
 | [#22345](https://github.com/anthropics/claude-code/issues/22345) | PLG skills ignore DMI | Reported ~4400 tokens; contradicts supported DMI contract | Open; runtime unverified | Reproduce on installed version before copying/moving a skill |
-| [#17688](https://github.com/anthropics/claude-code/issues/17688) | SK-scoped hooks don't fire in PLGs | Historical skill-hook failure | Closed completed | Live docs support skill hooks; use PLG `hooks.json` for plugin-wide behavior |
+| [#17688](https://github.com/anthropics/claude-code/issues/17688) | SK-scoped hooks don't fire in PLGs | Historical skill-hook failure | Closed completed | Docs verified 2.1.306: skill hooks register on invoke, last the session; probe 2.1.306 fired a plugin-skill PreToolUse hook. Use PLG `hooks.json` for plugin-wide behavior |
 | [#35641](https://github.com/anthropics/claude-code/issues/35641) | `/reload-plugins` doesn't load new PLG skills | Historical reload failure | Closed duplicate | `/reload-skills` (v2.1.152); 2.1.246 fixed same-symptom "0 skills" case; verify installed version |
 | [#33080](https://github.com/anthropics/claude-code/issues/33080) | Same-name skill resolution surprises users | Non-bundled skill overrides bundled skill | Closed NOT PLANNED | Namespace prefix (e.g. `my-`) if collision unwanted |
 | [#17417](https://github.com/anthropics/claude-code/issues/17417) | `skill.md` lowercase ignored | SK not discovered; uppercase remains required | Closed completed | Use `SKILL.md` uppercase |
 | [#36031](https://github.com/anthropics/claude-code/issues/36031) | User-level skills listed but not invoked in Desktop | Historical Desktop loading report | Closed NOT PLANNED; runtime unverified | Compare installed Desktop/CLI versions |
 
-## Version-dependent behavior (through 2.1.296)
+## Version-dependent behavior (through 2.1.306)
 
 - 2.1.257+: a symlinked command/agent/skill/hooks path that leaves the plugin's own directory is
   refused with an error.
@@ -142,6 +142,7 @@ Re-check a state: `gh api repos/anthropics/claude-code/issues/<N> --jq '[.state,
   assumed plugin source.
 - 2.1.295+: a skill's `allowed-tools` and `effort` are no longer dropped in `-p` runs — headless
   evals that drive a skill through `claude -p` are meaningful only from this version.
+- 2.1.299-2.1.304: skill-frontmatter hooks, see `frontmatter-fields.md` Hooks field detail (first-prompt `UserPromptSubmit`, `[skill]` ask label, per-source caps, `once` isolation, hooks-from-plugins-only policy drops the skill's `allowed-tools`).
 
 ## Validation checklist (Step 6, alongside `validate-skill.sh`)
 

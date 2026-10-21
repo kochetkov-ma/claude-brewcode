@@ -131,7 +131,7 @@ FORK body. Multi-line -> a fenced block opened with ` ```! `.
 
 Complete set; nothing else is substituted. Each is TEXT spliced into the whole SKILL.md at load
 (prose, inline code, every fence), never a variable the Bash tool can read: all are unset there.
-Hooks and agents have no CSD; use `${CLAUDE_PLUGIN_ROOT}` there.
+Hooks and agents have no CSD (a SK-frontmatter hook command gets no substitution of CSD or of the braced PLUGIN_ROOT token; probe 2.1.306). In hook commands rely on the exported env `"$CLAUDE_PLUGIN_ROOT"` (shell form; verified by probe, docs silent for skill hooks) or `${CLAUDE_PROJECT_DIR}`; in agent bodies use `${CLAUDE_PLUGIN_ROOT}`.
 
 | Variable | Description | Since |
 |---|---|---|
